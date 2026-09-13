@@ -44,15 +44,29 @@ UnityProject/Assets/ArenaMapPort/Editor/** -- and asserts:
      rather than silently skipped, since SS B.WP6's task instruction explicitly asks for this
      cross-check.
 
-s1-fix-r1 update: `m_AssemblyName` on a MonoScript emitted by *this project's own* Unity Editor
-build (via a GameRefs-sourced precompiled Assembly-CSharp.dll) is now observed on real output --
-it reads back as `SptGameRefs-AssemblyCSharp.dll`, because tools/gamerefs-fixup now renames that
-DLL (file *and* embedded assembly identity) away from Unity's reserved `Assembly-CSharp` name (see
-that tool's header comment / docs/progress/s1-fix-r1.md for why: it's what was silently blocking
-every AddComponent<T>() for a GameRefs-sourced MonoBehaviour). WP3's validate_preset.py separately
-confirmed plain "Assembly-CSharp" (no ".dll") for the *donor* SPT-built preset bundle's own
-`EFT.ScenesPreset` MonoScript, a different, untouched build pipeline -- this script accepts every
-spelling seen so far and logs which one it actually saw.
+identity-fix update (STRICT now -- this reverses s1-fix-r1's own judgment call): `m_AssemblyName`
+on a MonoScript emitted by *this project's own* Unity Editor build (via a GameRefs-sourced
+precompiled Assembly-CSharp.dll) used to read back as `SptGameRefs-AssemblyCSharp.dll`, because
+tools/gamerefs-fixup renames that DLL (file *and* embedded assembly identity) away from Unity's
+reserved `Assembly-CSharp` name to get past the AddComponent<T>() blocker at BUILD time (see that
+tool's header comment / docs/progress/s1-fix-r1.md). Every prior pass
+(s1-fix-r1/s1-fix-r2/s1-validate-r2/s1-validate-r3) accepted `SptGameRefs-AssemblyCSharp[.dll]`
+here as "intentional, load-bearing, not a defect" -- **that was WRONG**: the REAL SPT/EFT client
+never loads a `SptGameRefs-AssemblyCSharp.dll`, only `Assembly-CSharp.dll`/
+`Assembly-CSharp-firstpass.dll` (confirmed directly this pass by reading 200 real MonoScripts out
+of `D:/SPT41/EscapeFromTarkov_Data/globalgamemanagers.assets` -- every EFT/BSG one reads
+`m_AssemblyName == 'Assembly-CSharp'` or `'Assembly-CSharp-firstpass'`, note: NO `.dll` suffix,
+matching validate_preset.py's own `EXPECTED_MONOSCRIPT` for the donor preset bundle's
+`EFT.ScenesPreset`). Unity resolves a MonoBehaviour's script by (assembly, namespace, class)
+against assemblies actually loaded in the running process -- a `SptGameRefs-AssemblyCSharp.dll`
+MonoScript is UNRESOLVABLE in the real game, i.e. every one of the 5 SSD components would render
+as a "missing script" the moment a real raid loads this bundle. The fix is
+`tools/bundle/patch_monoscript_identity.py`, a MANDATORY post-build step (see
+`tools/build_all.ps1`) that rewrites the built bundle's MonoScript identity back to the real
+spelling *after* the Editor-time rename has served its only purpose (getting past AddComponent).
+`ACCEPTED_ASSEMBLY_NAMES` is now strict: only the two real spellings pass; any `SptGameRefs-*`
+name is a hard FAIL, on the theory that a green validator run must mean "safe to ship", not merely
+"built without a C# exception".
 
 Exit code 0 + "OK" summary on success. Exit code 1 with specific, actionable messages (never a
 bare stack trace) on any failure -- including "the bundle does not exist", which is reported as a
@@ -97,20 +111,17 @@ EXPECTED_EFT_COMPONENTS = {
     "LocationExportInfo": "EFT",
     "SpawnPointMarker": "EFT.Game.Spawning",
 }
-# s1-fix-r1: the GameRefs copy of Assembly-CSharp.dll is now intentionally renamed on disk AND in
-# its own embedded assembly identity (tools/gamerefs-fixup, see its header comment / the
-# ROOT-CAUSE-#2 evidence in docs/progress/s1-fix-r1.md) -- "Assembly-CSharp"/"Assembly-CSharp-
-# firstpass" are Unity's own RESERVED names for the implicit legacy script assemblies its Editor
-# compiles from loose project .cs files, and a precompiled Plugin DLL under those exact literal
-# names is permanently stuck "not finished compilation" for AddComponent purposes. This is REAL,
-# now-confirmed-live data (the first genuine round trip of a GameRefs-sourced MonoBehaviour into a
-# built bundle ever observed): SS D's MonoScript.m_AssemblyName reads back as
-# 'SptGameRefs-AssemblyCSharp.dll' for every one of the 5 components. The two original spellings
-# are kept accepted too, for a donor/future GameRefs setup that hasn't applied this rename.
-ACCEPTED_ASSEMBLY_NAMES = {
-    "Assembly-CSharp", "Assembly-CSharp.dll",
-    "SptGameRefs-AssemblyCSharp", "SptGameRefs-AssemblyCSharp.dll",
-}
+# identity-fix (STRICT): the ONLY two spellings the real EFT client ever loads MonoScripts from,
+# empirically verified by reading D:/SPT41/EscapeFromTarkov_Data/globalgamemanagers.assets
+# directly with UnityPy this pass (200 real MonoScripts scanned -- every EFT/BSG one reads exactly
+# one of these two, NEVER with a ".dll" suffix). tools/gamerefs-fixup's Editor-time rename
+# (SptGameRefs-AssemblyCSharp[Firstpass][.dll]) is a real, necessary, BUILD-time-only workaround
+# for Unity's AddComponent blocker (docs/progress/s1-fix-r1.md) -- but it must never survive into
+# a bundle that ships, because the real client cannot resolve a MonoScript under that name (see
+# this file's module docstring "identity-fix update" above). Any SptGameRefs-* name here is now a
+# hard FAIL, not an accepted alternate spelling -- tools/bundle/patch_monoscript_identity.py is the
+# mandatory post-build step that removes it (tools/build_all.ps1 runs it automatically).
+ACCEPTED_ASSEMBLY_NAMES = {"Assembly-CSharp", "Assembly-CSharp-firstpass"}
 MONOBEHAVIOUR_HEADER_ONLY_BYTES = 40  # generous upper bound for enabled+m_Script+m_Name w/ no custom fields
 
 # s1-fix-r1: Arena_Equator_Scripts is entirely WP2-authored (SS B.WP2.6) -- it never has a
@@ -161,6 +172,22 @@ def load_json(path: Path) -> Any:
 # ---------------------------------------------------------------------------
 
 def load_package_expected(package: Path) -> dict:
+    """Loads manifest.json + every scenes/*.json and computes both the raw package totals
+    (mesh_count/material_count/texture_count -- every asset the WP1 extractor pulled in, incl.
+    ones reachable only from a `skip_import: true` SkinnedMeshRenderer) and the IN-SCOPE totals
+    WP2 is actually expected to build a Unity Renderer for (mesh_count_in_scope/
+    material_count_in_scope/texture_count_in_scope): assets reachable from a non-skinned
+    MeshFilter/MeshCollider/MeshRenderer.
+
+    Why both exist (root-caused across three independent passes -- s1-fix-r1, s2-build,
+    s2-validate-r1, see docs/progress/s2-fix-r1.md): SPEC.md §B.WP1 step 2 extracts every Mesh/
+    Material/Texture reachable from a SkinnedMeshRenderer too ("dereference, don't skip"), but
+    §B.WP2's own decision #8 (static-mesh-only spike scope) never imports a SkinnedMeshRenderer or
+    builds any Renderer for it -- so Unity's own dependency-based AssetBundle inclusion correctly
+    never pulls those assets into the built bundle. Comparing the bundle's actual counts against
+    the raw package total was therefore comparing against the wrong baseline; comparing against
+    the in-scope total is the check that actually answers "did the importer skip something it
+    shouldn't have"."""
     manifest = load_json(package / "manifest.json")
     expected = {
         "manifest": manifest,
@@ -172,6 +199,8 @@ def load_package_expected(package: Path) -> dict:
         "box_colliders": 0, "sphere_colliders": 0, "capsule_colliders": 0,
         "lights": 0, "lod_groups": 0, "game_objects": 0,
     }
+    in_scope_mesh_ids: set[str] = set()
+    in_scope_material_ids: set[str] = set()
     for scene_name in manifest.get("scenes", []):
         scene_path = package / "scenes" / f"{scene_name}.json"
         if not scene_path.is_file():
@@ -185,12 +214,24 @@ def load_package_expected(package: Path) -> dict:
                 t = comp.get("type")
                 if t == "MeshFilter":
                     expected["mesh_filters"] += 1
+                    mid = comp.get("mesh_id")
+                    if mid:
+                        in_scope_mesh_ids.add(mid)
                 elif t == "MeshRenderer":
                     expected["mesh_renderers"] += 1
+                    for mid in comp.get("material_ids") or []:
+                        in_scope_material_ids.add(mid)
                 elif t == "SkinnedMeshRenderer":
                     expected["skinned_mesh_renderers"] += 1
+                    # skip_import: true (SPEC §B.WP1 edge case, §B.WP2 decision #8) -- WP2 never
+                    # builds a Renderer from this, so any Mesh/Material/Texture reachable ONLY from
+                    # here is correctly absent from the bundle. Deliberately NOT added to either
+                    # in-scope set above -- this is the fix (see the function docstring).
                 elif t == "MeshCollider":
                     expected["mesh_colliders"] += 1
+                    mid = comp.get("mesh_id")
+                    if mid:
+                        in_scope_mesh_ids.add(mid)
                     if comp.get("convex"):
                         expected["convex_colliders"] += 1
                     else:
@@ -205,6 +246,32 @@ def load_package_expected(package: Path) -> dict:
                     expected["lights"] += 1
                 elif t == "LODGroup":
                     expected["lod_groups"] += 1
+
+    in_scope_texture_ids: set[str] = set()
+    materials_dir = package / "materials"
+    package_materials_all = manifest.get("materials", {})
+    for mat_id in in_scope_material_ids:
+        if mat_id not in package_materials_all:
+            warn(f"in-scope material {mat_id!r} (referenced by a MeshRenderer) is not listed in "
+                 f"manifest.materials")
+            continue
+        mat_path = materials_dir / f"{mat_id}.json"
+        if not mat_path.is_file():
+            warn(f"in-scope material {mat_id!r} (referenced by a MeshRenderer) has no "
+                 f"materials/{mat_id}.json file in the package")
+            continue
+        mat = load_json(mat_path)
+        for slot in (mat.get("tex_envs") or {}).values():
+            tid = slot.get("texture_id") if isinstance(slot, dict) else None
+            if tid:
+                in_scope_texture_ids.add(tid)
+
+    expected["mesh_ids_in_scope"] = in_scope_mesh_ids
+    expected["mesh_count_in_scope"] = len(in_scope_mesh_ids)
+    expected["material_ids_in_scope"] = in_scope_material_ids
+    expected["material_count_in_scope"] = len(in_scope_material_ids)
+    expected["texture_ids_in_scope"] = in_scope_texture_ids
+    expected["texture_count_in_scope"] = len(in_scope_texture_ids)
     return expected
 
 
@@ -288,10 +355,26 @@ def validate_scenes_bundle_contents(env, expected: dict, material_shaders: dict 
         return len(objs_by_type.get(type_name, []))
 
     # --- aggregate counts vs package -------------------------------------------------
+    # Mesh/Texture2D are compared against the IN-SCOPE totals (assets reachable from a non-skinned
+    # MeshFilter/MeshCollider/MeshRenderer), not the raw package totals -- see
+    # load_package_expected()'s docstring. A skip_import-only SkinnedMeshRenderer asset is
+    # correctly excluded from the built bundle by Unity's own dependency-based AssetBundle
+    # inclusion; comparing against the raw total previously produced a false FAIL here for every
+    # real map containing one (docs/progress/s2-build.md §5 / s2-validate-r1.md §2).
+    mesh_excluded = expected["mesh_count"] - expected["mesh_count_in_scope"]
+    material_excluded = expected["material_count"] - expected["material_count_in_scope"]
+    texture_excluded = expected["texture_count"] - expected["texture_count_in_scope"]
+    print(f"[validate_bundle_roundtrip]   package totals vs in-scope (non-skinned) totals: "
+          f"meshes {expected['mesh_count']} vs {expected['mesh_count_in_scope']} "
+          f"({mesh_excluded} excluded, skip_import-only), "
+          f"materials {expected['material_count']} vs {expected['material_count_in_scope']} "
+          f"({material_excluded} excluded), "
+          f"textures {expected['texture_count']} vs {expected['texture_count_in_scope']} "
+          f"({texture_excluded} excluded)")
     exact_checks = [
         ("GameObject", n("GameObject"), expected["game_objects"]),
-        ("Mesh", n("Mesh"), expected["mesh_count"]),
-        ("Texture2D", n("Texture2D"), expected["texture_count"]),
+        ("Mesh", n("Mesh"), expected["mesh_count_in_scope"]),
+        ("Texture2D", n("Texture2D"), expected["texture_count_in_scope"]),
         ("MeshFilter", n("MeshFilter"), expected["mesh_filters"]),
         ("MeshRenderer", n("MeshRenderer"), expected["mesh_renderers"]),
         ("MeshCollider", n("MeshCollider"), expected["mesh_colliders"]),
@@ -306,8 +389,9 @@ def validate_scenes_bundle_contents(env, expected: dict, material_shaders: dict 
 
     # Material/Shader: extra built-in defaults (Skybox/RenderSettings dependencies) are a known,
     # benign artifact (WP2's own prior partial-pipeline run observed exactly +1/+1) -- under is a
-    # real defect, over is only a warning.
-    for label, exp in (("Material", expected["material_count"]),):
+    # real defect, over is only a warning. Compared against the in-scope total (see
+    # load_package_expected()'s docstring), not the raw package total.
+    for label, exp in (("Material", expected["material_count_in_scope"]),):
         actual = n(label)
         if actual < exp:
             check(False, f"{label} count in bundle ({actual}) >= package ({exp})")
@@ -725,8 +809,10 @@ def main() -> None:
         expected["game_objects"] += SCRIPTS_SCENE_EXTRA_GAME_OBJECTS
         expected["box_colliders"] += SCRIPTS_SCENE_EXTRA_BOX_COLLIDERS
     print(f"[validate_bundle_roundtrip] package expectations loaded from {args.package}: "
-          f"{expected['game_objects']} objects, {expected['mesh_count']} meshes, "
-          f"{expected['material_count']} materials, {expected['texture_count']} textures")
+          f"{expected['game_objects']} objects, {expected['mesh_count']} meshes "
+          f"({expected['mesh_count_in_scope']} in-scope), "
+          f"{expected['material_count']} materials ({expected['material_count_in_scope']} in-scope), "
+          f"{expected['texture_count']} textures ({expected['texture_count_in_scope']} in-scope)")
 
     material_shaders = None
     if args.material_shaders.is_file():

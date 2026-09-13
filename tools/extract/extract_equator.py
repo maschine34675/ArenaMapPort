@@ -70,7 +70,7 @@ SCENE_REGISTRY = {
 ALL5 = [51, 53, 55, 57, 58]
 
 ANALYSIS_DIR = os.path.normpath(os.path.join(_HERE, "..", "..", "analysis"))
-DEFAULT_SOURCE = "X:/Escape from Tarkov Arena/EscapeFromTarkovArena_Data"
+DEFAULT_SOURCE = "D:/Battlestate Games/Escape from Tarkov Arena/EscapeFromTarkovArena_Data"
 
 
 # --------------------------------------------------------------------------
@@ -126,6 +126,55 @@ def load_environment(source: str, scene_indices: list[int]):
 
     env = UnityPy.load(*paths)
     return env, exact_paths
+
+
+def compute_spawn_anchors(env, scene_dict: dict[int, str], source: str, warnings: list[str]) -> dict:
+    """Wraps analysis/scripts/census.py's spawn_zone_anchors(), matching it against the files WE
+    actually loaded (--source) instead of census.py's own hardcoded common.BASE.
+
+    Real, confirmed bug this fixes (docs/progress/s2-validate-r1.md SS1, re-verified ground truth
+    2026-09-13: X: is not mounted in this session at all -- only C:/D:/Y:/Z: are -- confirming
+    docs/progress/SOURCE-PATH.md's lead note that X: really is gone and D:/Battlestate Games/... is
+    now the correct, current --source): census.py's is_scene_file()/scene_exact_paths() build their
+    match-set from `common.BASE` ("X:/Escape from Tarkov Arena/EscapeFromTarkovArena_Data"), a
+    constant imported into census.py's own module namespace at `from common import BASE` time.
+    analysis/ is READ-ONLY for every WP (SPEC.md's directory table, "nobody writes here except
+    re-running an already-documented script") so that file cannot be edited here -- but every file
+    UnityPy actually loaded into `env` is keyed by our real, source-prefixed path, so comparing
+    against X:-prefixed paths silently matched ZERO loaded files whenever --source != X: (true for
+    every run on this machine right now), and spawn_zone_anchors() returned {} with no exception,
+    no warning -- manifest.anchors_reference silently lost all 20 real SpawnPointMarker entries.
+
+    Fix: monkey-patch the one name census.py's own functions actually read at call time
+    (`census.BASE`, a plain module attribute, looked up fresh on every call -- reassigning it here
+    does not touch or persist beyond this process, and does not edit analysis/scripts/*.py on disk)
+    to our real --source for the duration of this one call, then restore it. This makes
+    is_scene_file()'s exact-path matching agree with what `env` was actually built from, regardless
+    of where on disk the Arena install currently lives.
+
+    Also: the original code's silent-empty-on-mismatch behavior is exactly why the s2-build/
+    s2-validate-r1 bug went unnoticed for two whole passes -- so besides fixing the match, an empty
+    result is now always surfaced as an explicit warning rather than treated as an unremarkable
+    'this map has no anchors'.
+    """
+    prev_base = getattr(arena_census, "BASE", None)
+    arena_census.BASE = source
+    try:
+        anchors = arena_census.spawn_zone_anchors(env, scene_dict)
+    except Exception as e:
+        warnings.append(f"spawn_zone_anchors failed: {e} -- anchors_reference left empty")
+        return {}
+    finally:
+        if prev_base is not None:
+            arena_census.BASE = prev_base
+    if not anchors:
+        warnings.append(
+            "anchors_reference came back EMPTY after spawn_zone_anchors() -- this is either a "
+            "genuine 'this scene set has no spawn/zone MonoBehaviours' or a silent --source/BASE "
+            "path mismatch (docs/progress/s2-validate-r1.md SS1); do not assume the former without "
+            "checking -- a raw scan for e.g. EFT.Game.Spawning.SpawnPointMarker is cheap"
+        )
+    return anchors
 
 
 # --------------------------------------------------------------------------
@@ -607,16 +656,47 @@ def write_textures(ctx: ExtractionContext, output: str) -> dict:
         prop_names = entry["prop_names"]
         tt = tex_obj.read_typetree()
         width, height = tt.get("m_Width", 0), tt.get("m_Height", 0)
-        fmt_code = tt.get("m_TextureFormat")
+        # Texture3D's typetree names the same concept "m_Format", not
+        # "m_TextureFormat" (confirmed this pass on the real object below) --
+        # fall back so volume textures don't silently report "FormatNone".
+        fmt_code = tt.get("m_TextureFormat", tt.get("m_Format"))
         cs_code = tt.get("m_ColorSpace")
         src_name = tt.get("m_Name", "")
         is_normal = _is_normal_map_heuristic(src_name, prop_names)
         out_path = os.path.join(textures_dir, f"{cid}.png")
+        is_volume = tex_obj.type.name == "Texture3D"
+        volume_depth = int(tt.get("m_Depth", 1)) or 1 if is_volume else 1
         try:
             data = tex_obj.read()
-            img = data.image
-            if img is None:
-                raise ValueError("UnityPy returned no image data")
+            if is_volume:
+                # Real data exposes a class UnityPy's own `.image` property never
+                # handles (Texture2DConverter.get_image_from_texture2d is hard-wired
+                # to Texture2D/Cubemap fields) -- found this pass on Equator's real
+                # `EquatorParticleTex3 lineScale` Texture3D (sharedassets55.assets),
+                # referenced by material `Equator_LocalDustParticles`'s `_ParticleTex`
+                # TexEnv, which IS reachable from an in-scope MeshRenderer, so this is
+                # not a rare/skippable case for a full S2 run. Texture3D has no `.image`
+                # attribute at all (a real AttributeError, not a decode failure) --
+                # decode manually via the same low-level `parse_image_data` Texture2D
+                # itself calls, treating the volume as `m_Depth` stacked width x height
+                # slices flattened into one width x (height*depth) PNG (deterministic,
+                # lossless w.r.t. the source raw texel data; WP2 only ever needs a
+                # single 2D Texture2D asset per texture id, §C.3 -- 3D-ness is not a
+                # concept the import pipeline or any in-scope shader property needs).
+                from UnityPy.export.Texture2DConverter import parse_image_data
+
+                depth = int(getattr(data, "m_Depth", 1)) or 1
+                raw = bytes(data.image_data)
+                fmt = data.m_Format
+                ver = getattr(tex_obj, "version", (0, 0, 0, 0))
+                plat = getattr(tex_obj, "platform", 0)
+                img = parse_image_data(raw, width, height * depth, fmt, ver, plat, None, True)
+                if img is None:
+                    raise ValueError("parse_image_data returned no image data for Texture3D")
+            else:
+                img = data.image
+                if img is None:
+                    raise ValueError("UnityPy returned no image data")
             img = img.convert("RGBA")
             img.save(out_path)
         except Exception as e:
@@ -625,15 +705,29 @@ def write_textures(ctx: ExtractionContext, output: str) -> dict:
                 f"decode failed: {e} -- placeholder emitted (§B.WP1 edge case)"
             )
             Image.new("RGBA", (64, 64), (255, 0, 255, 255)).save(out_path)
-        out[cid] = {
+        # Manifest width/height must match the SAVED PNG's actual pixel size
+        # (validate_extract.py asserts this) -- for a flattened volume texture
+        # that is width x (height*depth), not the source m_Width/m_Height alone.
+        out_width, out_height = (width, height * volume_depth) if is_volume else (width, height)
+        entry_out = {
             "file": f"textures/{cid}.png",
             "source_name": src_name,
-            "width": width,
-            "height": height,
+            "width": out_width,
+            "height": out_height,
             "format_src": texture_format_name(fmt_code),
             "color_space": COLOR_SPACE.get(cs_code, f"Unknown({cs_code})"),
             "is_normal_map": is_normal,
         }
+        if is_volume:
+            entry_out["is_volume_texture"] = True
+            entry_out["volume_source_depth"] = volume_depth
+            entry_out["volume_source_height"] = height
+            ctx.warnings.append(
+                f"texture {cid} ({src_name!r}): Texture3D (depth={volume_depth}) flattened to a "
+                f"single {out_width}x{out_height} PNG (stacked slices) -- real decoded data, not a "
+                f"placeholder; WP2 imports it as an ordinary 2D Texture2D asset."
+            )
+        out[cid] = entry_out
     return out
 
 
@@ -799,11 +893,7 @@ def main():
 
     print("Computing spawn/zone anchor reference block...", file=sys.stderr)
     scene_dict_for_anchors = {idx: arena_common.EQUATOR[idx] for idx in scene_indices}
-    try:
-        anchors = arena_census.spawn_zone_anchors(env, scene_dict_for_anchors)
-    except Exception as e:
-        ctx.warnings.append(f"spawn_zone_anchors failed: {e} -- anchors_reference left empty")
-        anchors = {}
+    anchors = compute_spawn_anchors(env, scene_dict_for_anchors, args.source, ctx.warnings)
 
     manifest = {
         "schema_version": SCHEMA_VERSION,

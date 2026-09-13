@@ -53,6 +53,11 @@ namespace ArenaMapPort.Editor.Import
                 {
                     foreach (var t in texEnvs.Properties())
                     {
+                        // s2-build: skip an empty property name outright (StandinShaderGenerator
+                        // doesn't declare a slot for it either, see its own CollectFromPackage
+                        // comment for the real material this was found on) -- Material.SetTexture/
+                        // SetFloat/SetColor("", ...) has no meaningful target to write to.
+                        if (string.IsNullOrEmpty(t.Name)) continue;
                         var entry = (JObject)t.Value;
                         var texIdTok = entry["texture_id"];
                         if (texIdTok != null && texIdTok.Type != JTokenType.Null)
@@ -78,12 +83,13 @@ namespace ArenaMapPort.Editor.Import
                 var floats = (JObject)matJson["floats"];
                 if (floats != null)
                     foreach (var f in floats.Properties())
-                        mat.SetFloat(f.Name, (float)f.Value);
+                        if (!string.IsNullOrEmpty(f.Name)) mat.SetFloat(f.Name, (float)f.Value);
 
                 var colors = (JObject)matJson["colors"];
                 if (colors != null)
                     foreach (var c in colors.Properties())
                     {
+                        if (string.IsNullOrEmpty(c.Name)) continue;
                         var arr = (JArray)c.Value;
                         mat.SetColor(c.Name, new Color((float)arr[0], (float)arr[1], (float)arr[2], (float)arr[3]));
                     }

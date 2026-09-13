@@ -123,7 +123,24 @@ static void ProcessOne(string path, Dictionary<string, string> identityRenameMap
     // sync-game-refs.ps1 deliberately does NOT copy into GameRefs since the Editor already
     // provides them, but which the ORIGINAL Managed folder still has on disk for resolution
     // purposes — read-only access, never written, O4/O8 fine).
-    var resolver = new DefaultAssemblyResolver();
+    // s2-build ROOT-CAUSE FIX for the "Unity.Burst.dll/Unity.TextMeshPro.dll locked" saga: this was
+    // NEVER an external AV/EDR lock (three separate widened-retry-budget attempts up to ~12min
+    // worst case all failed identically) — a live diagnostic via the Windows Restart Manager API
+    // (rstrtmgr.dll, RmGetList) run WHILE a retry loop was stuck proved the file is locked by THIS
+    // SAME dotnet.exe PROCESS. Root cause: `resolver` here is a `DefaultAssemblyResolver`, which
+    // CACHES every assembly it resolves (e.g. when parsing an EARLIER DLL's custom-attribute/
+    // constant-type metadata that references "Unity.Burst" or "Unity.TextMeshPro" — common Unity
+    // engine deps many of the other 46 DLLs reference) and keeps each cached resolution's
+    // underlying file stream OPEN via Cecil's own lazy/deferred module reading — and this resolver
+    // was never disposed, so that open handle outlived the whole `ProcessOne` call it was created
+    // in, blocking THIS method's own later attempt to open the SAME file for writing once the loop
+    // reaches Unity.Burst.dll/Unity.TextMeshPro.dll itself. Since the resolver was only eligible
+    // for GC (no guaranteed finalizer timing), the handle in practice stayed open for the REST OF
+    // THE PROCESS's lifetime — explaining why no retry budget, however large, ever helped. Fix:
+    // dispose the resolver deterministically at the end of every ProcessOne call (`using`) so any
+    // assembly it cached-and-opened is released before the next DLL (potentially the locked one
+    // itself) is processed.
+    using var resolver = new DefaultAssemblyResolver();
     string? dllDir = Path.GetDirectoryName(path);
     if (dllDir != null) resolver.AddSearchDirectory(dllDir);
     const string ManagedDirFallback = "D:/SPT41/EscapeFromTarkov_Data/Managed";
@@ -290,28 +307,46 @@ static void ProcessOne(string path, Dictionary<string, string> identityRenameMap
     Console.WriteLine($"[GameRefsFixup] {asmName}: wrote {outStream.Length:N0} bytes -> {path} (was {originalBytes.Length:N0} bytes).");
 }
 
-// s1-fix-r1: running against the FULL ~48-file GameRefs/*.dll set right after
-// tools/sync-game-refs.ps1 freshly Copy-Item'd every one of them made a real, reproducible
-// transient failure visible that never showed up patching just the 2 original targets:
-// "The process cannot access the file '...dll' because it is being used by another process"
-// (observed on Unity.Burst.dll / Unity.TextMeshPro.dll) — Windows Defender/AV real-time scanning a
-// just-created file holds a brief exclusive handle on it. Not a logic bug; retry with a short
-// backoff rather than failing the whole sync over a transient OS-level lock.
-static byte[] ReadAllBytesWithRetry(string path, int maxAttempts = 5, int delayMs = 200)
+// s1-fix-r1 first hit "The process cannot access the file '...dll' because it is being used by
+// another process" on Unity.Burst.dll/Unity.TextMeshPro.dll and assumed AV. s2-build initially
+// widened this retry budget several times (up to 150 attempts / 5s cap, ~12min worst case) chasing
+// that theory, and even THAT still failed — because it was the wrong diagnosis. A live probe via
+// the Windows Restart Manager API (rstrtmgr.dll RmGetList) run WHILE a retry loop was stuck proved
+// the lock holder was THIS SAME dotnet.exe process, not AV — see ProcessOne's `using var resolver`
+// comment for the real root cause (an undisposed Cecil DefaultAssemblyResolver leaking open file
+// handles on whatever it resolved) and its fix. With that fixed, this retry loop is no longer
+// covering a self-inflicted multi-minute hold — it now exists only for genuine brief transient
+// locks (a real AV/indexer touch immediately after Copy-Item), so a modest bounded budget is
+// correct again. Logs a heartbeat periodically so a wait here stays visible, not mistaken for a hang.
+static byte[] ReadAllBytesWithRetry(string path, int maxAttempts = 20, int initialDelayMs = 200, int maxDelayMs = 2000)
 {
+    int delay = initialDelayMs;
     for (int attempt = 1; ; attempt++)
     {
         try { return File.ReadAllBytes(path); }
-        catch (IOException) when (attempt < maxAttempts) { Thread.Sleep(delayMs); }
+        catch (IOException) when (attempt < maxAttempts)
+        {
+            if (attempt % 10 == 0)
+                Console.WriteLine($"[GameRefsFixup] still waiting to READ {Path.GetFileName(path)} (attempt {attempt}/{maxAttempts}, likely AV scan) ...");
+            Thread.Sleep(delay);
+            delay = Math.Min(delay * 2, maxDelayMs);
+        }
     }
 }
 
-static void WriteAllBytesWithRetry(string path, byte[] bytes, int maxAttempts = 5, int delayMs = 200)
+static void WriteAllBytesWithRetry(string path, byte[] bytes, int maxAttempts = 20, int initialDelayMs = 200, int maxDelayMs = 2000)
 {
+    int delay = initialDelayMs;
     for (int attempt = 1; ; attempt++)
     {
         try { File.WriteAllBytes(path, bytes); return; }
-        catch (IOException) when (attempt < maxAttempts) { Thread.Sleep(delayMs); }
+        catch (IOException) when (attempt < maxAttempts)
+        {
+            if (attempt % 10 == 0)
+                Console.WriteLine($"[GameRefsFixup] still waiting to WRITE {Path.GetFileName(path)} (attempt {attempt}/{maxAttempts}, likely AV scan) ...");
+            Thread.Sleep(delay);
+            delay = Math.Min(delay * 2, maxDelayMs);
+        }
     }
 }
 

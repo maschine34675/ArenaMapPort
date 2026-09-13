@@ -131,30 +131,41 @@
 
   <!--
     §B.WP2.8's own words: "Output written to work/build/ ..., then copied into
-    dist/BepInEx/plugins/ArenaMapPort/bundles/ by a deploy step WP4 owns." This is that step —
-    best-effort staging of whatever WP2 (scenes/navmesh bundles + material-shaders.json) and WP3
-    (preset bundle) have produced under work/build/ so far, run after every Release build. Still O4/O7-safe
-    (work/ and dist/ only). Exact WP2 output filenames/subfolder are not yet fixed as of this pass (WP2
-    had not produced them when this target was written) — Plugin.cs's own Awake() banner logs clearly per
-    expected file if one of the 3 bundles or material-shaders.json is missing/misnamed once staged, so a
-    naming mismatch here is diagnosable rather than a silent failure.
+    dist/BepInEx/plugins/ArenaMapPort/bundles/ by a deploy step WP4 owns." This is that step, run after
+    every Release build. Still O4/O7-safe (work/ and dist/ only).
+
+    S3 FIX (dist-manifest pass): this used to be a recursive `work\build\**\*.bundle` glob (minus
+    `_donor_*`) — which also matches `work/build/s1/arena_equator_scenes.bundle` and
+    `work/build/s1/arena_equator_navmesh.bundle` (SAME filenames as the full build's, since both were
+    built by the same BuildBundles.Run). MSBuild's glob enumeration order is filesystem-dependent, not
+    guaranteed path-sorted, so which one last-writes to dist/.../bundles/<name>.bundle was
+    non-deterministic — the exact "never S1/stale ones" risk this pass exists to close. Fixed: name the
+    THREE known-good source files explicitly (full build's 2 scene/navmesh bundles + WP3's one preset
+    bundle) instead of globbing the whole work/build/ tree. A missing expected file is a build-time
+    error (below), not a silent skip; nothing under work/build/s1*/work/build/s1_diag/ is ever
+    considered.
   -->
   <Target Name="ArenaMapPortStageWpOutputs" AfterTargets="ArenaMapPortDistCopy" Condition="'$(Configuration)'=='Release'">
+    <PropertyGroup>
+      <ArenaMapPortFullBuildDir>$(MSBuildThisFileDirectory)..\work\build\full</ArenaMapPortFullBuildDir>
+      <ArenaMapPortPresetBuildDir>$(MSBuildThisFileDirectory)..\work\build\preset</ArenaMapPortPresetBuildDir>
+    </PropertyGroup>
     <ItemGroup>
-      <ArenaMapPortBundles Include="$(MSBuildThisFileDirectory)..\work\build\**\*.bundle"
-                            Exclude="$(MSBuildThisFileDirectory)..\work\build\**\_donor_*.bundle" />
-      <ArenaMapPortShaderSidecar Include="$(MSBuildThisFileDirectory)..\work\build\**\material-shaders.json" />
+      <ArenaMapPortBundles Include="$(ArenaMapPortFullBuildDir)\arena_equator_scenes.bundle" />
+      <ArenaMapPortBundles Include="$(ArenaMapPortFullBuildDir)\arena_equator_navmesh.bundle" />
+      <ArenaMapPortBundles Include="$(ArenaMapPortPresetBuildDir)\arena_equator_preset.bundle" />
+      <ArenaMapPortShaderSidecar Include="$(ArenaMapPortFullBuildDir)\material-shaders.json" />
     </ItemGroup>
-    <MakeDir Directories="$(ArenaMapPortDistDir)\bundles" Condition="'@(ArenaMapPortBundles)' != ''" />
-    <Copy SourceFiles="@(ArenaMapPortBundles)" DestinationFolder="$(ArenaMapPortDistDir)\bundles"
-          SkipUnchangedFiles="false" Condition="'@(ArenaMapPortBundles)' != ''" />
-    <Copy SourceFiles="@(ArenaMapPortShaderSidecar)" DestinationFolder="$(ArenaMapPortDistDir)"
-          SkipUnchangedFiles="false" Condition="'@(ArenaMapPortShaderSidecar)' != ''" />
+    <Error Text="[ArenaMapPort] expected bundle missing: %(ArenaMapPortBundles.Identity) -- run tools/build_all.ps1 (full) and tools/preset/patch_preset.py first"
+           Condition="!Exists('%(ArenaMapPortBundles.Identity)')" />
+    <Error Text="[ArenaMapPort] expected material-shaders.json missing: %(ArenaMapPortShaderSidecar.Identity)"
+           Condition="!Exists('%(ArenaMapPortShaderSidecar.Identity)')" />
+    <MakeDir Directories="$(ArenaMapPortDistDir)\bundles" />
+    <Copy SourceFiles="@(ArenaMapPortBundles)" DestinationFolder="$(ArenaMapPortDistDir)\bundles" SkipUnchangedFiles="false" />
+    <Copy SourceFiles="@(ArenaMapPortShaderSidecar)" DestinationFolder="$(ArenaMapPortDistDir)" SkipUnchangedFiles="false" />
     <Message Importance="high"
-             Text="[ArenaMapPort] staged %(ArenaMapPortBundles.Filename)%(ArenaMapPortBundles.Extension) from work/build into dist/.../bundles/"
-             Condition="'@(ArenaMapPortBundles)' != ''" />
-    <Message Importance="high" Text="[ArenaMapPort] staged material-shaders.json from work/build into dist/.../ArenaMapPort/"
-             Condition="'@(ArenaMapPortShaderSidecar)' != ''" />
+             Text="[ArenaMapPort] staged %(ArenaMapPortBundles.Filename)%(ArenaMapPortBundles.Extension) from $(ArenaMapPortFullBuildDir)/$(ArenaMapPortPresetBuildDir) into dist/.../bundles/" />
+    <Message Importance="high" Text="[ArenaMapPort] staged material-shaders.json from $(ArenaMapPortFullBuildDir) into dist/.../ArenaMapPort/" />
   </Target>
 
 </Project>

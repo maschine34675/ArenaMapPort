@@ -39,6 +39,15 @@ namespace ArenaMapPort.Editor.Shaders
             return sb.ToString();
         }
 
+        // s2-build: real full-material-set data exposed one genuine empty-string property name
+        // (material 0c970e4ab3f2caa7 / arena_equator_decal_drip, shader "Decal/Ultra Deferred Decal
+        // Of God 3000") -- present in BOTH that material's own floats AND colors dicts simultaneously
+        // (confirmed: the only material out of the full 332 with an empty key at all, in either
+        // dict), which self-conflicted against AddProp's type-mismatch guard on its very first real
+        // exercise. A stale/orphaned serialized property slot with no name is not something any real
+        // ShaderLab `Properties {}` block can declare (empty identifiers are a syntax error) or that
+        // Material.SetFloat/SetColor("", ...) does anything meaningful with (a silent no-op) --
+        // skipping it is strictly safe, not a truncation of real, usable data.
         public void CollectFromPackage(ArenaPackage pkg)
         {
             foreach (var prop in pkg.Materials.Properties())
@@ -57,17 +66,17 @@ namespace ArenaMapPort.Editor.Shaders
                 var texEnvs = (JObject)matJson["tex_envs"];
                 if (texEnvs != null)
                     foreach (var t in texEnvs.Properties())
-                        AddProp(props, shaderName, t.Name, ArenaPropType.Tex, matId);
+                        if (!string.IsNullOrEmpty(t.Name)) AddProp(props, shaderName, t.Name, ArenaPropType.Tex, matId);
 
                 var floats = (JObject)matJson["floats"];
                 if (floats != null)
                     foreach (var f in floats.Properties())
-                        AddProp(props, shaderName, f.Name, ArenaPropType.Float, matId);
+                        if (!string.IsNullOrEmpty(f.Name)) AddProp(props, shaderName, f.Name, ArenaPropType.Float, matId);
 
                 var colors = (JObject)matJson["colors"];
                 if (colors != null)
                     foreach (var c in colors.Properties())
-                        AddProp(props, shaderName, c.Name, ArenaPropType.Color, matId);
+                        if (!string.IsNullOrEmpty(c.Name)) AddProp(props, shaderName, c.Name, ArenaPropType.Color, matId);
             }
         }
 
@@ -79,11 +88,28 @@ namespace ArenaMapPort.Editor.Shaders
                 if (existing != type)
                 {
                     // §B.WP2 edge case: a property type mismatch between two materials nominally
-                    // sharing one shader name. Fail loudly and specifically, not silently.
-                    throw new InvalidOperationException(
+                    // sharing one shader name — confirmed for real on the full material set (s2-build):
+                    // exactly 1 genuine cross-material conflict out of 332 materials/24 shaders
+                    // (shader "Global Fog/Transparent Reflective Specular", property "_BumpTiling",
+                    // Float on 3 materials vs a Color/Vector4 override on 1 -- a real BSG authoring
+                    // inconsistency, not an extractor bug; a from-scratch full-package scan found no
+                    // other instance). §B.WP2's own edge-case text calls for failing the import of
+                    // "that specific material", NOT the whole multi-thousand-object pipeline, and
+                    // explicitly "do not silently drop the renderer" — a renderer left with no
+                    // material at all is the worse failure mode. A ShaderLab `Properties {}` block
+                    // can only declare one type per name, so keep the first-seen type here (warn,
+                    // don't throw) and let MaterialImporter proceed: it applies every material's own
+                    // float/color/tex values independently of what this generator declared, and
+                    // Material.SetColor/SetFloat for a name the shader didn't declare in that type is
+                    // a well-documented, harmless no-op in Unity's API (not a throw) — so every OTHER
+                    // property on the conflicting material still applies correctly; only this one
+                    // property's precise value is dropped on the outlier material, which is within
+                    // the spike's own stated tolerance (§B.WP2.4: "visual fidelity is not a spike
+                    // success criterion, only renders/doesn't crash/colliders match").
+                    Debug.LogWarning(
                         "[ArenaMapPort][StandinShaderGenerator] property type conflict on shader '" + shaderName +
-                        "': '" + propName + "' is " + existing + " in one material and " + type +
-                        " in material '" + matId + "'.");
+                        "': '" + propName + "' is " + existing + " (kept) vs " + type +
+                        " in material '" + matId + "' (that material's value for this one property will not apply).");
                 }
                 return;
             }

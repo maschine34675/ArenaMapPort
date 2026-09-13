@@ -8,18 +8,25 @@ Shader "Hidden/ArenaMapPort/Decal/Ultra Deferred Decal Of God 3000"
     Properties
     {
         _AddAlpha ("_AddAlpha", Float) = 0
+        _Alpha ("_Alpha", Float) = 0
         _AlphaMultiplier ("_AlphaMultiplier", Float) = 0
         _BumpMap ("_BumpMap", 2D) = "white" {}
         _BumpScale ("_BumpScale", Float) = 0
         _BumpTiling ("_BumpTiling", Float) = 0
         _Color ("_Color", Color) = (1,1,1,1)
+        _CubemapIntensity ("_CubemapIntensity", Float) = 0
         _Cutoff ("_Cutoff", Float) = 0
         _DefVals ("_DefVals", Color) = (1,1,1,1)
         _DetailNormalMapScale ("_DetailNormalMapScale", Float) = 0
         _DropsSpec ("_DropsSpec", Float) = 0
         _DstBlend ("_DstBlend", Float) = 0
+        _Emission ("_Emission", Color) = (1,1,1,1)
         _EmissionColor ("_EmissionColor", Color) = (1,1,1,1)
+        _EmissionLM ("_EmissionLM", Float) = 0
         _Factor ("_Factor", Float) = 0
+        _FadeStrength ("_FadeStrength", Float) = 0
+        _Fresnel ("_Fresnel", Float) = 0
+        _GIIntensity ("_GIIntensity", Float) = 0
         _GlossMapScale ("_GlossMapScale", Float) = 0
         _Glossiness ("_Glossiness", Float) = 0
         _Glossness ("_Glossness", Float) = 0
@@ -34,10 +41,12 @@ Shader "Hidden/ArenaMapPort/Decal/Ultra Deferred Decal Of God 3000"
         _NormalPower ("_NormalPower", Float) = 0
         _OcclusionStrength ("_OcclusionStrength", Float) = 0
         _Parallax ("_Parallax", Float) = 0
+        _RainIntensity ("_RainIntensity", Float) = 0
         _ReflectColor ("_ReflectColor", Color) = (1,1,1,1)
         _ReflectionStrength ("_ReflectionStrength", Float) = 0
         _RippleFakeLightIntensityOffset ("_RippleFakeLightIntensityOffset", Float) = 0
         _RippleTexScale ("_RippleTexScale", Float) = 0
+        _SSRPow ("_SSRPow", Float) = 0
         _Shininess ("_Shininess", Float) = 0
         _SkinnedMeshMaterial ("_SkinnedMeshMaterial", Float) = 0
         _Smoothness ("_Smoothness", Float) = 0
@@ -53,12 +62,18 @@ Shader "Hidden/ArenaMapPort/Decal/Ultra Deferred Decal Of God 3000"
         _SrcBlend ("_SrcBlend", Float) = 0
         _StencilType ("_StencilType", Float) = 0
         _Temperature ("_Temperature", Color) = (1,1,1,1)
+        _Temperature1 ("_Temperature1", Color) = (1,1,1,1)
         _USERAIN ("_USERAIN", Float) = 0
+        _UVMult ("_UVMult", Color) = (1,1,1,1)
         _UVSec ("_UVSec", Float) = 0
         _Units ("_Units", Float) = 0
+        _WaterLevel ("_WaterLevel", Float) = 0
         _ZWrite ("_ZWrite", Float) = 0
         _alphaCutoff ("_alphaCutoff", Float) = 0
         _intensiv ("_intensiv", Float) = 0
+        _lifeTime ("_lifeTime", Float) = 0
+        _lifetime ("_lifetime", Float) = 0
+        _radius ("_radius", Float) = 0
         _specular ("_specular", Color) = (1,1,1,1)
         _transparency ("_transparency", Float) = 0
     }

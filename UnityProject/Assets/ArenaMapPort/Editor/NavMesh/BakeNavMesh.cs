@@ -125,6 +125,27 @@ namespace ArenaMapPort.Editor.NavMesh
                       " agentSlope=" + AgentSlope + " agentClimb=" + AgentClimb + " tileSize=" + TileSize +
                       " bounds=" + bounds + " sources=" + sources.Count +
                       " (root=null collected " + allSources.Count + " total, " + sources.Count + " kept after filtering to this bake's own content-scene roots)");
+
+            // s2-build: report vertex/triangle counts for comparison against Arena's own bake
+            // (analysis/equator_census.json's navmesh block: 41 tiles for Equator's full geometry,
+            // Arena's own agent 287145453/radius 0.28). NavMeshData has no public tile-count
+            // property in this Unity version -- tile count is read back out-of-band via UnityPy
+            // against the built bundle's NavMeshData.m_NavMeshTiles (same field census.py itself
+            // used, analysis/scripts/census.py:486). Vertices/triangles ARE available in-Editor via
+            // the real public API: temporarily add this bake's data to the active NavMesh, ask for
+            // its triangulation, then remove it again (does not affect the returned `data` asset).
+            var addedHandle = UnityEngine.AI.NavMesh.AddNavMeshData(data);
+            try
+            {
+                UnityEngine.AI.NavMeshTriangulation tri = UnityEngine.AI.NavMesh.CalculateTriangulation();
+                Debug.Log("[ArenaMapPort][BakeNavMesh] triangulation: vertices=" + tri.vertices.Length +
+                          " triangles=" + (tri.indices.Length / 3) + " (indices=" + tri.indices.Length + ")");
+            }
+            finally
+            {
+                addedHandle.Remove();
+            }
+
             return data;
         }
 
