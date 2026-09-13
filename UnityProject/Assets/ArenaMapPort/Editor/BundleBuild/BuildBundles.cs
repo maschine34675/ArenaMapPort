@@ -8,6 +8,22 @@
 //
 // O7: every path is a parameter (-packageDir/-outputDir on the Unity.exe command line after
 // -executeMethod), defaulting to the S1 slice paths.
+//
+// s1-finish fix — Scripts-scene authoring now yields to a real EditorApplication.update tick:
+// `AddComponent<T>()` for a §D EFT type (living in the precompiled GameRefs/Assembly-CSharp.dll
+// plugin) reproducibly returned null ("Script X has not finished compilation yet") for the WHOLE
+// remaining lifetime of a synchronous -executeMethod call — confirmed NOT a caching issue (same
+// result against a from-scratch Library) and NOT fixable by waiting longer on the SAME thread
+// (80 retries / 20s of Thread.Sleep inside the synchronous call, 100% failure), because sleeping
+// the main thread never lets Unity's own EditorApplication.update loop tick — and ticking that
+// loop is exactly what finishes whatever deferred linking step a precompiled-plugin MonoScript
+// needs here. Fix: everything up to and including per-content-scene assembly still runs
+// synchronously (unaffected — confirmed working every run); Scripts-scene authoring onward runs
+// from an EditorApplication.update callback instead (retried across real ticks, not real time),
+// and this method now owns calling EditorApplication.Exit() explicitly at every exit path — the
+// Unity.exe command line must NOT pass -quit for this to work (see docs/sync-game-refs and
+// docs/progress/s1-finish.md for the full diagnosis and the exact command line used).
+using System;
 using System.Collections.Generic;
 using System.IO;
 using ArenaMapPort.Editor.Common;
@@ -28,7 +44,121 @@ namespace ArenaMapPort.Editor.BundleBuild
         // drift"). WP5's base.json UnixDateTime must be set to this same value.
         public const long BuildUnixDateTime = 1757707200L; // 2025-09-13T00:00:00Z placeholder build stamp
 
+        private sealed class PendingContext
+        {
+            public ArenaPackage pkg;
+            public bool bakeNavMesh;
+            public bool verify;
+            public string packageDir;
+            public string outputDir;
+            public List<string> scenePaths;
+            public List<GameObject> contentSceneRoots;
+            public bool scriptsSceneIsFirst;
+        }
+
+        // s1-finish found (docs/progress/s1-finish.md "Second, separate blocker") that yielding to
+        // real EditorApplication.update ticks alone did NOT resolve the "Script X has not finished
+        // compilation yet" AddComponent failure (0/2000 ticks ever succeeded there) — the tick-based
+        // retry was kept anyway as a cheap, harmless best-effort mechanism.
+        //
+        // s1-fix-r1 (docs/progress/s1-fix-r1.md) found and fixed the REAL root cause: "Assembly-
+        // CSharp"/"Assembly-CSharp-firstpass" are Unity's own RESERVED names for its implicit
+        // project-compiled script assemblies — a precompiled Plugin DLL under those literal names is
+        // permanently stuck "not finished compilation" for AddComponent, independent of ticks/time/
+        // caching. tools/gamerefs-fixup now renames the GameRefs copies (file + embedded assembly
+        // identity) away from those names — confirmed fixed: AddComponent<LevelSettings>() (and
+        // every other SS D type) now succeeds on the very first attempt, tick 1, every real run
+        // since. This tick-based retry loop is kept exactly as-is (harmless, now effectively a
+        // single-iteration fast path) rather than simplified back to a synchronous call, to avoid
+        // touching more than necessary of an already-verified-working mechanism.
+        private const int MaxScriptsSceneTicks = 50;
+
+        private static PendingContext _pending;
+        private static int _scriptsSceneTicks;
+
+        // s1-finish DIAGNOSTIC ONLY (not part of the real S1/S2 pipeline, not invoked by Run()):
+        // isolates whether AddComponent<LevelSettings>() ever succeeds in THIS Editor/GameRefs
+        // setup independent of everything else Run() does first (85+ texture/material/mesh
+        // imports, 2 content-scene assemblies, dozens of AssetDatabase.Refresh() calls) — tests
+        // the theory that this project's OWN heavy asset-import activity earlier in the same
+        // session is what keeps re-triggering whatever "not finished compilation" state Unity
+        // reports, rather than a one-time startup cost. Logs one line and exits; nothing is
+        // written under work/build.
+        public static void TestAddComponentOnly()
+        {
+            try
+            {
+                var go1 = new GameObject("DiagnosticTest_GameObjectAPI");
+                var comp1 = go1.AddComponent<LevelSettings>();
+                Debug.Log("[ArenaMapPort][DIAGNOSTIC] GameObject.AddComponent<LevelSettings>: " +
+                          (comp1 != null ? "SUCCEEDED" : "returned NULL"));
+
+                var go2 = new GameObject("DiagnosticTest_ObjectFactoryAPI");
+                Component comp2 = null;
+                string via2 = "ObjectFactory.AddComponent";
+                try
+                {
+                    comp2 = UnityEditor.ObjectFactory.AddComponent(go2, typeof(LevelSettings));
+                }
+                catch (Exception exObjFactory)
+                {
+                    Debug.Log("[ArenaMapPort][DIAGNOSTIC] " + via2 + " threw: " + exObjFactory.GetType().Name + ": " + exObjFactory.Message);
+                }
+                Debug.Log("[ArenaMapPort][DIAGNOSTIC] " + via2 + "<LevelSettings>: " +
+                          (comp2 != null ? "SUCCEEDED" : "returned NULL/threw"));
+
+                // Third path: resolve the System.Type via reflection from the loaded assembly by
+                // name (instead of a compile-time `typeof(LevelSettings)` reference) in case the
+                // compile-time reference itself is somehow bound to a stale/duplicate assembly
+                // identity.
+                var go3 = new GameObject("DiagnosticTest_ReflectionType");
+                Component comp3 = null;
+                Type reflType = null;
+                foreach (var asm in AppDomain.CurrentDomain.GetAssemblies())
+                {
+                    // s1-fix-r1: the GameRefs copy's own assembly identity is now
+                    // "SptGameRefs-AssemblyCSharp" (renamed away from the reserved "Assembly-CSharp"
+                    // name that was this diagnostic's whole reason for existing — see
+                    // tools/gamerefs-fixup/Program.cs's header comment / docs/progress/s1-fix-r1.md).
+                    if (asm.GetName().Name != "SptGameRefs-AssemblyCSharp") continue;
+                    reflType = asm.GetType("LevelSettings", false);
+                    Debug.Log("[ArenaMapPort][DIAGNOSTIC] found loaded assembly 'Assembly-CSharp' (" + asm.FullName + "), GetType(\"LevelSettings\") = " + (reflType != null ? reflType.AssemblyQualifiedName : "null"));
+                }
+                if (reflType != null)
+                    comp3 = go3.AddComponent(reflType);
+                Debug.Log("[ArenaMapPort][DIAGNOSTIC] go.AddComponent(reflectedType): " +
+                          (comp3 != null ? "SUCCEEDED" : "returned NULL/no type found"));
+
+                bool anySucceeded = comp1 != null || comp2 != null || comp3 != null;
+                EditorApplication.Exit(anySucceeded ? 0 : 1);
+            }
+            catch (Exception ex)
+            {
+                Debug.LogError("[ArenaMapPort][DIAGNOSTIC] threw: " + ex);
+                EditorApplication.Exit(1);
+            }
+        }
+
         public static void Run()
+        {
+            // s1-finish fix (file header): the Unity.exe invocation for this method must NOT pass
+            // -quit (Scripts-scene authoring needs real EditorApplication.update ticks, which only
+            // happen if the process stays alive) — which means THIS method is now solely
+            // responsible for the process ever terminating. Wrap the whole synchronous prefix so a
+            // failure here (before the deferred stage even starts) still calls
+            // EditorApplication.Exit(1) instead of leaving a hung batchmode process behind.
+            try
+            {
+                RunSynchronousPrefix();
+            }
+            catch (Exception ex)
+            {
+                Debug.LogError("[ArenaMapPort][BuildBundles] pipeline failed before Scripts-scene authoring: " + ex);
+                EditorApplication.Exit(1);
+            }
+        }
+
+        private static void RunSynchronousPrefix()
         {
             string packageDir = ArenaPaths.GetArg("-packageDir", ArenaPaths.DefaultPackageDirS1);
             string outputDir = ArenaPaths.GetArg("-outputDir", ArenaPaths.DefaultOutputDirS1);
@@ -82,73 +212,170 @@ namespace ArenaMapPort.Editor.BundleBuild
                 scenePaths.Add(path);
             }
 
+            var ctx = new PendingContext
+            {
+                pkg = pkg,
+                bakeNavMesh = bakeNavMesh,
+                verify = verify,
+                packageDir = packageDir,
+                outputDir = outputDir,
+                scenePaths = scenePaths,
+                contentSceneRoots = contentSceneRoots,
+                scriptsSceneIsFirst = !firstSceneCreated,
+            };
+
             // §B.WP2.6 — Scripts scene, fresh-authored, added last (its own scene, per §D "all five
             // live in the single fresh-authored Arena_Equator_Scripts scene").
-            if (!skipScriptsScene)
+            if (skipScriptsScene)
             {
-                Scene scriptsScene = AuthorScriptsScene.Build(pkg, BuildUnixDateTime, !firstSceneCreated);
+                Debug.LogWarning("[ArenaMapPort][BuildBundles] skipScriptsScene=true - Scripts scene NOT authored, §D is NOT satisfied by this run (diagnostic only).");
+                FinishPipeline(ctx);
+                return;
+            }
+
+            // s1-finish fix (see file header): don't call AuthorScriptsScene.Build synchronously
+            // here — retry it from a real EditorApplication.update tick instead, since that's the
+            // only thing that has ever let a GameRefs EFT MonoScript become AddComponent-able in
+            // testing. The Unity.exe invocation for this method must omit -quit; this method now
+            // owns the process's exit via EditorApplication.Exit() on every path (see
+            // FinishPipeline/ScriptsSceneTick).
+            _pending = ctx;
+            _scriptsSceneTicks = 0;
+            Debug.Log("[ArenaMapPort][BuildBundles] yielding to EditorApplication.update to author the Scripts scene (s1-finish fix)...");
+            EditorApplication.update += ScriptsSceneTick;
+        }
+
+        private static void ScriptsSceneTick()
+        {
+            _scriptsSceneTicks++;
+            try
+            {
+                Scene scriptsScene = AuthorScriptsScene.Build(_pending.pkg, BuildUnixDateTime, _pending.scriptsSceneIsFirst);
                 string scriptsScenePath = ArenaPaths.ScenesDir + "/" + ArenaPaths.ScriptsSceneName + ".unity";
                 bool scriptsOk = EditorSceneManager.SaveScene(scriptsScene, scriptsScenePath);
                 if (!scriptsOk) throw new IOException("[ArenaMapPort][BuildBundles] failed to save Scripts scene -> " + scriptsScenePath);
-                scenePaths.Add(scriptsScenePath);
+                _pending.scenePaths.Add(scriptsScenePath);
+
+                EditorApplication.update -= ScriptsSceneTick;
+                Debug.Log("[ArenaMapPort][BuildBundles] Scripts scene authored successfully after " + _scriptsSceneTicks + " EditorApplication.update tick(s).");
+                FinishPipeline(_pending);
             }
-            else
+            catch (Exception ex)
             {
-                Debug.LogWarning("[ArenaMapPort][BuildBundles] skipScriptsScene=true - Scripts scene NOT authored, §D is NOT satisfied by this run (diagnostic only).");
-            }
+                if (_scriptsSceneTicks == 1)
+                    Debug.LogWarning("[ArenaMapPort][BuildBundles] Scripts-scene authoring not ready on tick 1 (" + ex.GetType().Name + ": " + ex.Message + ") - retrying on subsequent EditorApplication.update ticks (this is the s1-finish fix in action, not a failure by itself)...");
 
-            string navMeshAssetPath = null;
-            if (bakeNavMesh)
-            {
-                UnityEngine.AI.NavMeshData data = ArenaMapPort.Editor.NavMesh.BakeNavMesh.Bake(contentSceneRoots.ToArray());
-                navMeshAssetPath = ArenaPaths.NavMeshAssetDir + "/arena_equator.asset";
-                ArenaMapPort.Editor.NavMesh.BakeNavMesh.SaveAsset(data, navMeshAssetPath);
-            }
-
-            AssetDatabase.SaveAssets();
-            AssetDatabase.Refresh();
-
-            // Bundles land directly under outputDir (e.g. work/build/s1/arena_equator_scenes.bundle),
-            // NOT a nested "bundles/" subfolder — matches tools/validate/validate_preset.py's
-            // `s1_dir.glob("*scenes*.bundle")` auto-probe and WP4's own file-name expectations
-            // (docs/progress/wp3.md/wp4.md, cross-checked this pass). WP4's own deploy step is what
-            // copies the built file into dist/BepInEx/plugins/ArenaMapPort/bundles/ — a different,
-            // later "bundles" folder under dist/, not here.
-            string bundleOutputDir = outputDir.Replace('\\', '/');
-            Directory.CreateDirectory(bundleOutputDir);
-
-            var builds = new List<AssetBundleBuild>
-            {
-                new AssetBundleBuild
+                // s1-finish fix (round 2): a failed attempt that got past
+                // EditorSceneManager.NewScene(..., Additive) but threw before
+                // EditorSceneManager.SaveScene() leaves a dangling UNTITLED (unsaved, empty
+                // .path) scene open as the active scene — confirmed this pass: attempt 1 failed
+                // on AddComponent<LevelSettings> (the real, expected, now-fixed-by-yielding
+                // issue), attempt 2 then failed on an UNRELATED "Cannot create a new scene
+                // additively with an untitled scene unsaved" because attempt 1's own dangling
+                // scene was still open — masking that attempt 2 would otherwise have succeeded.
+                // Only applies to Additive mode (Single mode's own NewScene call on the next
+                // retry discards whatever is open unconditionally, so it self-heals) — Additive
+                // mode is what every real S1/S2 run uses, since content scenes are always
+                // authored before the Scripts scene (§B.WP2.6).
+                if (!_pending.scriptsSceneIsFirst)
                 {
-                    assetBundleName = "arena_equator_scenes.bundle",
-                    assetNames = scenePaths.ToArray(),
+                    Scene maybeDangling = EditorSceneManager.GetActiveScene();
+                    if (maybeDangling.IsValid() && string.IsNullOrEmpty(maybeDangling.path) && EditorSceneManager.sceneCount > 1)
+                        EditorSceneManager.CloseScene(maybeDangling, true);
                 }
-            };
-            if (bakeNavMesh && navMeshAssetPath != null)
-            {
-                builds.Add(new AssetBundleBuild
+
+                if (_scriptsSceneTicks >= MaxScriptsSceneTicks)
                 {
-                    assetBundleName = "arena_equator_navmesh.bundle",
-                    assetNames = new[] { navMeshAssetPath },
-                });
+                    EditorApplication.update -= ScriptsSceneTick;
+                    Debug.LogError("[ArenaMapPort][BuildBundles] Scripts-scene authoring never succeeded after " + _scriptsSceneTicks + " EditorApplication.update ticks. Last error: " + ex);
+                    EditorApplication.Exit(1);
+                }
+                // else: leave the delegate subscribed, try again on the next tick.
             }
+        }
 
-            // §B.WP2.8 / §H risk #12: BuildTarget passed explicitly, never
-            // EditorUserBuildSettings.activeBuildTarget.
-            AssetBundleManifest bundleManifest = UnityEditor.BuildPipeline.BuildAssetBundles(
-                bundleOutputDir, builds.ToArray(), BuildAssetBundleOptions.None, BuildTarget.StandaloneWindows64);
+        private static void FinishPipeline(PendingContext ctx)
+        {
+            try
+            {
+                string navMeshAssetPath = null;
+                if (ctx.bakeNavMesh)
+                {
+                    UnityEngine.AI.NavMeshData data = ArenaMapPort.Editor.NavMesh.BakeNavMesh.Bake(ctx.contentSceneRoots.ToArray());
+                    navMeshAssetPath = ArenaPaths.NavMeshAssetDir + "/arena_equator.asset";
+                    ArenaMapPort.Editor.NavMesh.BakeNavMesh.SaveAsset(data, navMeshAssetPath);
+                }
 
-            if (bundleManifest == null)
-                throw new IOException("[ArenaMapPort][BuildBundles] BuildAssetBundles returned null (build failed) - see the Editor log above for the specific asset/shader error.");
+                AssetDatabase.SaveAssets();
+                AssetDatabase.Refresh();
 
-            Debug.Log("[ArenaMapPort][BuildBundles] built " + builds.Count + " bundle(s) -> " + bundleOutputDir +
-                      " : " + string.Join(", ", bundleManifest.GetAllAssetBundles()));
+                // Bundles land directly under outputDir (e.g. work/build/s1/arena_equator_scenes.bundle),
+                // NOT a nested "bundles/" subfolder — matches tools/validate/validate_preset.py's
+                // `s1_dir.glob("*scenes*.bundle")` auto-probe and WP4's own file-name expectations
+                // (docs/progress/wp3.md/wp4.md, cross-checked this pass). WP4's own deploy step is what
+                // copies the built file into dist/BepInEx/plugins/ArenaMapPort/bundles/ — a different,
+                // later "bundles" folder under dist/, not here.
+                string bundleOutputDir = ctx.outputDir.Replace('\\', '/');
+                Directory.CreateDirectory(bundleOutputDir);
 
-            if (verify)
-                VerifyBuild.Run(scenePaths, outputDir);
+                var builds = new List<AssetBundleBuild>
+                {
+                    new AssetBundleBuild
+                    {
+                        assetBundleName = "arena_equator_scenes.bundle",
+                        assetNames = ctx.scenePaths.ToArray(),
+                    }
+                };
+                if (ctx.bakeNavMesh && navMeshAssetPath != null)
+                {
+                    builds.Add(new AssetBundleBuild
+                    {
+                        assetBundleName = "arena_equator_navmesh.bundle",
+                        assetNames = new[] { navMeshAssetPath },
+                    });
+                }
 
-            Debug.Log("[ArenaMapPort][BuildBundles] DONE packageDir=" + packageDir + " outputDir=" + outputDir);
+                // s1-finish task item 3 (O3 gap): PlayerSettings.stripUnusedMeshComponents defaults
+                // to true, which strips a Mesh's normals/tangents/colors/etc. at BUILD time when
+                // nothing in the built player's OWN shaders/materials samples that channel — a
+                // per-project Editor setting read at AssetBundle build time, not something
+                // MeshImporter.cs can compensate for per-mesh. Our stand-in shaders (§B.WP2.3/O1)
+                // are placeholders with different (or no) property usage than the real BSG shaders
+                // WP4's runtime rebind swaps back in — so Unity's stripping heuristic, run against
+                // the STAND-IN shader, can silently drop a channel (e.g. tangents for a
+                // normal-mapped material) that the REAL BSG shader needs once rebound in-game, with
+                // no error anywhere in this pipeline to catch it. Must be set before
+                // BuildAssetBundles, which is where stripping actually happens (Mesh data is
+                // already finalized in the imported .asset files by this point; this setting
+                // controls what BuildAssetBundles re-serializes into the bundle, not what
+                // MeshImporter wrote to Assets/ArenaImport/Meshes/*.asset).
+                bool prevStripUnusedMeshComponents = PlayerSettings.stripUnusedMeshComponents;
+                PlayerSettings.stripUnusedMeshComponents = false;
+                Debug.Log("[ArenaMapPort][BuildBundles] PlayerSettings.stripUnusedMeshComponents: " +
+                          prevStripUnusedMeshComponents + " -> false (forced off for the bundle build, s1-finish item 3)");
+
+                // §B.WP2.8 / §H risk #12: BuildTarget passed explicitly, never
+                // EditorUserBuildSettings.activeBuildTarget.
+                AssetBundleManifest bundleManifest = UnityEditor.BuildPipeline.BuildAssetBundles(
+                    bundleOutputDir, builds.ToArray(), BuildAssetBundleOptions.None, BuildTarget.StandaloneWindows64);
+
+                if (bundleManifest == null)
+                    throw new IOException("[ArenaMapPort][BuildBundles] BuildAssetBundles returned null (build failed) - see the Editor log above for the specific asset/shader error.");
+
+                Debug.Log("[ArenaMapPort][BuildBundles] built " + builds.Count + " bundle(s) -> " + bundleOutputDir +
+                          " : " + string.Join(", ", bundleManifest.GetAllAssetBundles()));
+
+                if (ctx.verify)
+                    VerifyBuild.Run(ctx.scenePaths, ctx.outputDir);
+
+                Debug.Log("[ArenaMapPort][BuildBundles] DONE packageDir=" + ctx.packageDir + " outputDir=" + ctx.outputDir);
+                EditorApplication.Exit(0);
+            }
+            catch (Exception ex)
+            {
+                Debug.LogError("[ArenaMapPort][BuildBundles] pipeline failed in FinishPipeline: " + ex);
+                EditorApplication.Exit(1);
+            }
         }
     }
 }

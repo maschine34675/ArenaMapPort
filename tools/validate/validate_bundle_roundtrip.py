@@ -44,11 +44,15 @@ UnityProject/Assets/ArenaMapPort/Editor/** -- and asserts:
      rather than silently skipped, since SS B.WP6's task instruction explicitly asks for this
      cross-check.
 
-Known, honest caveat: `m_AssemblyName` on a MonoScript emitted by *this project's own* Unity
-Editor build (via a GameRefs-sourced precompiled Assembly-CSharp.dll) has never been observed on
-real output -- WP3's validate_preset.py confirmed "Assembly-CSharp" (no ".dll") empirically for a
-donor SPT-built bundle, a *different* build pipeline. This script accepts either spelling and
-logs which one it actually saw.
+s1-fix-r1 update: `m_AssemblyName` on a MonoScript emitted by *this project's own* Unity Editor
+build (via a GameRefs-sourced precompiled Assembly-CSharp.dll) is now observed on real output --
+it reads back as `SptGameRefs-AssemblyCSharp.dll`, because tools/gamerefs-fixup now renames that
+DLL (file *and* embedded assembly identity) away from Unity's reserved `Assembly-CSharp` name (see
+that tool's header comment / docs/progress/s1-fix-r1.md for why: it's what was silently blocking
+every AddComponent<T>() for a GameRefs-sourced MonoBehaviour). WP3's validate_preset.py separately
+confirmed plain "Assembly-CSharp" (no ".dll") for the *donor* SPT-built preset bundle's own
+`EFT.ScenesPreset` MonoScript, a different, untouched build pipeline -- this script accepts every
+spelling seen so far and logs which one it actually saw.
 
 Exit code 0 + "OK" summary on success. Exit code 1 with specific, actionable messages (never a
 bare stack trace) on any failure -- including "the bundle does not exist", which is reported as a
@@ -93,8 +97,31 @@ EXPECTED_EFT_COMPONENTS = {
     "LocationExportInfo": "EFT",
     "SpawnPointMarker": "EFT.Game.Spawning",
 }
-ACCEPTED_ASSEMBLY_NAMES = {"Assembly-CSharp", "Assembly-CSharp.dll"}
+# s1-fix-r1: the GameRefs copy of Assembly-CSharp.dll is now intentionally renamed on disk AND in
+# its own embedded assembly identity (tools/gamerefs-fixup, see its header comment / the
+# ROOT-CAUSE-#2 evidence in docs/progress/s1-fix-r1.md) -- "Assembly-CSharp"/"Assembly-CSharp-
+# firstpass" are Unity's own RESERVED names for the implicit legacy script assemblies its Editor
+# compiles from loose project .cs files, and a precompiled Plugin DLL under those exact literal
+# names is permanently stuck "not finished compilation" for AddComponent purposes. This is REAL,
+# now-confirmed-live data (the first genuine round trip of a GameRefs-sourced MonoBehaviour into a
+# built bundle ever observed): SS D's MonoScript.m_AssemblyName reads back as
+# 'SptGameRefs-AssemblyCSharp.dll' for every one of the 5 components. The two original spellings
+# are kept accepted too, for a donor/future GameRefs setup that hasn't applied this rename.
+ACCEPTED_ASSEMBLY_NAMES = {
+    "Assembly-CSharp", "Assembly-CSharp.dll",
+    "SptGameRefs-AssemblyCSharp", "SptGameRefs-AssemblyCSharp.dll",
+}
 MONOBEHAVIOUR_HEADER_ONLY_BYTES = 40  # generous upper bound for enabled+m_Script+m_Name w/ no custom fields
+
+# s1-fix-r1: Arena_Equator_Scripts is entirely WP2-authored (SS B.WP2.6) -- it never has a
+# scenes/Arena_Equator_Scripts.json in the WP1 package for load_package_expected() to count, so its
+# own fixed, spec-defined object/component counts (confirmed this pass against the first real
+# authored build: AuthorScriptsScene.Build always creates exactly 8 GameObjects -- ScriptsRoot,
+# LevelSettings, LocationExportInfo, BotZone_Main, 3x SpawnPoint_Player_*, LocationScene -- and 3
+# BoxColliders, one per SpawnPointMarker) must be added on top of the package-derived expectations
+# whenever the Scripts scene is actually expected to be present in the bundle (--require-scripts-scene).
+SCRIPTS_SCENE_EXTRA_GAME_OBJECTS = 8
+SCRIPTS_SCENE_EXTRA_BOX_COLLIDERS = 3
 
 FAILURES: list[str] = []
 WARNINGS: list[str] = []
@@ -527,9 +554,17 @@ def validate_eft_scripts(env, require: bool) -> None:
             check(e["assembly"] in ACCEPTED_ASSEMBLY_NAMES,
                   f"{class_name} (path_id={e['path_id']}): MonoScript assembly is "
                   f"{sorted(ACCEPTED_ASSEMBLY_NAMES)} (got {e['assembly']!r})")
-            check(e["byte_size"] > MONOBEHAVIOUR_HEADER_ONLY_BYTES,
+            # s1-fix-r1: this pass's real round trip put LocationExportInfo (one 8-byte `long`
+            # field, the smallest of the 5 SS D types) at exactly 40 bytes -- a strict `>` rejected
+            # it despite editor_verify.json independently confirming (in the SAME build) that its
+            # one real field value (unix_date_time=1757707200) genuinely survived the round trip.
+            # Every other SS D type observed this pass is 188-340 bytes, well clear of the
+            # threshold either way -- `>=` is the correct comparison against this real boundary
+            # case, not a weakening (an object at exactly the empty-header estimate can still, as
+            # confirmed here, carry real non-default field data; a strictly-smaller object could not).
+            check(e["byte_size"] >= MONOBEHAVIOUR_HEADER_ONLY_BYTES,
                   f"{class_name} (path_id={e['path_id']}): serialized byte size ({e['byte_size']}) is "
-                  f"clearly larger than an empty MonoBehaviour header (>{MONOBEHAVIOUR_HEADER_ONLY_BYTES} "
+                  f"clearly larger than an empty MonoBehaviour header (>={MONOBEHAVIOUR_HEADER_ONLY_BYTES} "
                   f"bytes) -- evidence real field data survived the round trip, not just the header")
 
         if class_name == "BotZone":
@@ -561,19 +596,32 @@ def validate_eft_scripts(env, require: bool) -> None:
 # editor_verify.json cross-check
 # ---------------------------------------------------------------------------
 
-def validate_editor_verify(path: Path, expected: dict) -> None:
+def validate_editor_verify(path: Path, expected: dict, require_scripts_scene: bool = True) -> None:
     if not path.is_file():
         check(False, f"editor_verify.json exists at {path} (task instruction: 'cross-check "
                       f"work/build/s1/editor_verify.json' -- WP2's VerifyBuild.cs has not produced one)")
         return
     report = load_json(path)
     manifest = expected["manifest"]
-    scene_names = set(manifest.get("scenes", [])) | {"Arena_Equator_Scripts"}
+    # NOTE: Arena_Equator_Scripts is WP2-authored, never in the WP1 package's own manifest.scenes
+    # (SS B.WP2.6 -- there is no scenes/Arena_Equator_Scripts.json to extract), so it's added here
+    # explicitly -- but only when the caller actually expects it to exist. A run made with
+    # -skipScriptsScene (or any S1 slice run before the Scripts-scene blocker is resolved,
+    # docs/progress/s1-finish.md SS2) legitimately has no such scene in editor_verify.json at all;
+    # gating this the same way as validate_eft_scripts's --require-scripts-scene flag (instead of
+    # unconditionally requiring it) keeps this a real check for a full/S2 run while not scoring an
+    # already-documented, intentional S1 gap as a fresh defect.
+    scene_names = set(manifest.get("scenes", []))
+    if require_scripts_scene:
+        scene_names |= {"Arena_Equator_Scripts"}
     reported = {s.get("scene_name"): s for s in report.get("scenes", [])}
 
     missing_scenes = scene_names - reported.keys()
     check(not missing_scenes, f"editor_verify.json covers every expected scene "
                                f"(missing: {sorted(missing_scenes)})")
+    if not require_scripts_scene and "Arena_Equator_Scripts" not in reported:
+        print("[validate_bundle_roundtrip] WARN: editor_verify.json has no 'Arena_Equator_Scripts' scene "
+              "-- tolerated under --no-require-scripts-scene (Scripts-scene authoring not exercised this run)")
 
     for scene_name, s in reported.items():
         if scene_name == "Arena_Equator_Scripts":
@@ -591,16 +639,27 @@ def validate_editor_verify(path: Path, expected: dict) -> None:
                   f"world_interactive_objects_length != -1/null (this is the exact SS D-cited NRE site, "
                   f"LocationScene.Awake -- a -1 here means FillArrays() never ran or ran too late)")
             botzone = eft.get("BotZone", {})
+            spawn = eft.get("SpawnPointMarker", {})
+            markers = spawn.get("markers", [])
             check(botzone.get("count") == 1,
                   f"editor_verify.json Arena_Equator_Scripts: BotZone.count == 1 (got {botzone.get('count')})")
             check(botzone.get("patrol_ways_length") == 0,
                   f"editor_verify.json Arena_Equator_Scripts: BotZone.patrol_ways_length == 0 "
                   f"(empty, not absent/null -- risk #11; got {botzone.get('patrol_ways_length')})")
-            check(botzone.get("spawn_point_markers_count") == 0,
-                  f"editor_verify.json Arena_Equator_Scripts: BotZone.spawn_point_markers_count == 0 "
-                  f"(empty, not absent/null -- risk #11; got {botzone.get('spawn_point_markers_count')})")
-            spawn = eft.get("SpawnPointMarker", {})
-            markers = spawn.get("markers", [])
+            # s1-fix-r1 FIX: this was `== 0`, i.e. it demanded BotZone.SpawnPointMarkers be EMPTY --
+            # backwards for risk #11's real intent (non-null, not necessarily empty) and flatly
+            # contradicted by AuthorScriptsScene.Build's own real behavior (§D: 2-4 markers "in
+            # practice", and `botZone.SpawnPointMarkers.AddRange(markers)` always adds every one
+            # authored). Confirmed as a genuine validator bug this pass: the first-ever real authored
+            # build has 3 real markers, correctly non-empty, and the old check hard-FAILed on exactly
+            # that correct data. The meaningful assertion is that BotZone's own list is wired to the
+            # SAME markers eft_components.SpawnPointMarker independently counted (catches "BotZone
+            # was never actually linked" bugs) -- not a hardcoded literal either way.
+            check(botzone.get("spawn_point_markers_count") == spawn.get("count"),
+                  f"editor_verify.json Arena_Equator_Scripts: BotZone.spawn_point_markers_count "
+                  f"({botzone.get('spawn_point_markers_count')}) == SpawnPointMarker.count "
+                  f"({spawn.get('count')}) -- risk #11: non-null AND correctly wired to the same "
+                  f"authored markers, not asserted empty")
             check(spawn.get("count", 0) >= 1,
                   f"editor_verify.json Arena_Equator_Scripts: at least 1 SpawnPointMarker authored "
                   f"(got {spawn.get('count')})")
@@ -660,6 +719,11 @@ def main() -> None:
     if not args.package.is_dir():
         die(f"--package {args.package} is not a directory")
     expected = load_package_expected(args.package)
+    if args.require_scripts_scene:
+        # s1-fix-r1: Arena_Equator_Scripts adds its own fixed, spec-defined GameObjects/components
+        # on top of the package-derived (2-content-scene) totals -- see SCRIPTS_SCENE_EXTRA_* above.
+        expected["game_objects"] += SCRIPTS_SCENE_EXTRA_GAME_OBJECTS
+        expected["box_colliders"] += SCRIPTS_SCENE_EXTRA_BOX_COLLIDERS
     print(f"[validate_bundle_roundtrip] package expectations loaded from {args.package}: "
           f"{expected['game_objects']} objects, {expected['mesh_count']} meshes, "
           f"{expected['material_count']} materials, {expected['texture_count']} textures")
@@ -689,7 +753,7 @@ def main() -> None:
 
     print()
     print(f"[validate_bundle_roundtrip] === {args.editor_verify.name} cross-check ===")
-    validate_editor_verify(args.editor_verify, expected)
+    validate_editor_verify(args.editor_verify, expected, require_scripts_scene=args.require_scripts_scene)
 
     print()
     if FAILURES:

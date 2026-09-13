@@ -16,6 +16,26 @@
   setup step every fresh checkout runs once (and re-runs whenever the live SPT install's Managed
   folder changes).
 
+  s1-finish fix (2026-09-13, lead-confirmed root cause): after copying, this script also
+  post-processes the GameRefs COPIES of Assembly-CSharp.dll and Assembly-CSharp-firstpass.dll with
+  tools/gamerefs-fixup (Mono.Cecil, referencing the local D:/SPT41/BepInEx/core/Mono.Cecil.dll —
+  no NuGet needed) to remove Unity's compiler-generated
+  `UnitySourceGeneratedAssemblyMonoScriptTypes_v1` type. SPT's deobfuscation remapper renamed that
+  type's static data method from the Editor-expected name `Get` to a generic `CG_smethod_0` — the
+  Unity 2022.3.43f1 Editor's native `MonoScriptInfoScraper::ScanForSourceGeneratedMonoScriptInfo`
+  invokes the method it expects by that exact name during the first post-compile domain reload,
+  finds nothing there, and crashes natively (SIGSEGV) before any of this project's own
+  `-executeMethod` code ever runs — see docs/progress/wp2.md ("S1 crash diagnosis") for the full
+  isolation matrix and docs/progress/s1-finish.md for this fix's verification. The fixup tool
+  first verifies nothing else in the module references the type before removing it (incl. nested
+  types); if that verification ever fails for a future SPT build, it falls back to renaming the
+  method back to `Get` instead and logs why removal was skipped — never a silent no-op. This fix
+  eliminates the SIGSEGV (confirmed) but does NOT by itself make the Scripts-scene's five §D EFT
+  types AddComponent-able — that turned out to be a second, independent Unity-Editor limitation
+  with no known workaround from application code (tested: removal vs. rename made no difference
+  either way, ruling out this type's own data as the cause) — see docs/progress/s1-finish.md's
+  "Second, separate blocker" section for the full diagnostic trail.
+
   After copying, this script also regenerates
   UnityProject/Assets/ArenaMapPort/Editor/ArenaMapPort.Editor.asmdef's `precompiledReferences`
   array so it exactly matches what actually landed in GameRefs/ (every other asmdef field is left
@@ -173,19 +193,49 @@ Write-Host "To copy: $($toCopy.Count)   Excluded: $($excluded.Count)"
 
 # ---------------------------------------------------------------------------
 # 4. Clean + copy into GameRefs/.
+#
+#    s1-fix-r1 RENAME (2026-09-13, root-cause fix for the "second blocker" documented in
+#    docs/progress/s1-finish.md): "Assembly-CSharp.dll" / "Assembly-CSharp-firstpass.dll" are
+#    Unity's own RESERVED file names for the legacy implicit script assemblies its Editor compiles
+#    from loose .cs files directly under Assets/ (and Assets/Plugins/ for the firstpass one) — see
+#    docs/progress/s1-fix-r1.md for the full evidence trail. Dropping a PRECOMPILED plugin DLL under
+#    those exact literal file names makes the Editor's own compilation-pipeline bookkeeping
+#    (`EditorCompilationInterface`) treat the two GameRefs DLLs as "the predefined Assembly-CSharp[
+#    -firstpass] assembly, still waiting to be compiled by Roslyn from project .cs files" — compile
+#    tracking for that reserved name never reaches "finished" because nothing in THIS project ever
+#    triggers a compile of a script assembly by that name, so every `AddComponent<T>()` for a type
+#    living in it permanently reports "Script X has not finished compilation yet." Renaming the file
+#    (identity/type metadata inside the DLL is untouched — that's what Cecil/reference-resolution/
+#    the built bundle's serialized MonoScript.m_AssemblyName all still key off, so nothing downstream
+#    needs to change) sidesteps the reserved-name special case entirely.
 # ---------------------------------------------------------------------------
 if (Test-Path $GameRefsDir) {
-    Get-ChildItem $GameRefsDir -Filter "*.dll" -ErrorAction SilentlyContinue | Remove-Item -Force
+    # Also remove *.dll.meta (not just *.dll) — otherwise a DLL that gets renamed or dropped across
+    # re-syncs (e.g. the s1-fix-r1 Assembly-CSharp[-firstpass] -> SptGameRefs-* rename) leaves an
+    # orphaned .meta with no matching asset behind. Unity regenerates fresh .meta/GUIDs for whatever
+    # actually lands in GameRefs/ on its next import regardless, so nothing here is load-bearing to
+    # preserve.
+    Get-ChildItem $GameRefsDir -Filter "*.dll*" -ErrorAction SilentlyContinue | Remove-Item -Force
 } else {
     New-Item -ItemType Directory -Force -Path $GameRefsDir | Out-Null
 }
 
+# Maps a closure entry's real assembly Name to the ON-DISK file name it should land under in
+# GameRefs/ — only the two reserved names need remapping; everything else keeps its own name.
+$reservedNameRemap = @{
+    "Assembly-CSharp"           = "SptGameRefs-AssemblyCSharp.dll"
+    "Assembly-CSharp-firstpass" = "SptGameRefs-AssemblyCSharpFirstpass.dll"
+}
+
 foreach ($e in $toCopy) {
-    $dest = Join-Path $GameRefsDir (Split-Path $e.Path -Leaf)
+    $leaf = if ($reservedNameRemap.ContainsKey($e.Name)) { $reservedNameRemap[$e.Name] } else { Split-Path $e.Path -Leaf }
+    $dest = Join-Path $GameRefsDir $leaf
     Copy-Item -Path $e.Path -Destination $dest -Force
 }
 
-$manifest = $toCopy | Sort-Object Name | ForEach-Object { "$($_.Name).dll" }
+$manifest = $toCopy | Sort-Object Name | ForEach-Object {
+    if ($reservedNameRemap.ContainsKey($_.Name)) { $reservedNameRemap[$_.Name] } else { "$($_.Name).dll" }
+}
 $manifestFile = Join-Path $GameRefsDir "_gamerefs-manifest.txt"
 "# Generated by tools/sync-game-refs.ps1 — DO NOT EDIT. $(Get-Date -Format o)" | Set-Content -Path $manifestFile -Encoding UTF8
 $manifest | Add-Content -Path $manifestFile -Encoding UTF8
@@ -207,6 +257,36 @@ if (Test-Path $asmdefPath) {
     Write-Host "Updated $asmdefPath -> precompiledReferences ($($manifest.Count) entries)"
 } else {
     Write-Warning "asmdef not found at $asmdefPath — skipping precompiledReferences sync (create it first)."
+}
+
+# ---------------------------------------------------------------------------
+# 6. GameRefsFixup: (fix #1, s1-finish) strip UnitySourceGeneratedAssemblyMonoScriptTypes_v1 from
+#    the two GameRefs COPIES that carry it, AND (fix #2, s1-fix-r1) rename those two DLLs' embedded
+#    assembly identity to match their now-renamed on-disk file names + rewrite any OTHER GameRefs
+#    DLL's AssemblyReference that still points at the old reserved name — see Program.cs's header
+#    comment and docs/progress/s1-fix-r1.md for why file rename alone isn't sufficient (Unity
+#    enforces "assembly name == file name" for every precompiled Plugin DLL). Passed the FULL
+#    GameRefs/*.dll set (not just the two) so fix #2's cross-reference pass can see every DLL that
+#    might reference them. Runs against GameRefsDir only — never D:/SPT41's originals (O4/O8, also
+#    enforced inside the tool itself as a second guard).
+# ---------------------------------------------------------------------------
+$fixupToolDir = Join-Path $RepoRoot "tools/gamerefs-fixup"
+$fixupToolDll = Join-Path $fixupToolDir "bin/Release/net9.0/GameRefsFixup.dll"
+
+# Always rebuild — this tool is small/fast to build and actively evolving (s1-fix-r1 added fix #2);
+# a stale cached bin/ from before that change would silently skip the new identity-rename logic.
+Write-Host "Building GameRefsFixup tool..."
+dotnet build $fixupToolDir -c Release | Write-Host
+if ($LASTEXITCODE -ne 0) { throw "GameRefsFixup build failed (exit $LASTEXITCODE)" }
+
+$fixupTargets = Get-ChildItem $GameRefsDir -Filter "*.dll" -ErrorAction SilentlyContinue | ForEach-Object { $_.FullName }
+
+if ($fixupTargets.Count -gt 0) {
+    Write-Host "Running GameRefsFixup on $($fixupTargets.Count) DLL(s) under $GameRefsDir"
+    dotnet $fixupToolDll @fixupTargets | Write-Host
+    if ($LASTEXITCODE -ne 0) { throw "GameRefsFixup failed (exit $LASTEXITCODE) — see output above for which file/reference blocked it" }
+} else {
+    Write-Warning "GameRefsDir has no *.dll files — skipping GameRefsFixup (nothing to patch)."
 }
 
 Write-Host "== sync-game-refs complete =="

@@ -11,8 +11,8 @@
   "precompiledReferences": [
     "Accessibility.dll",
     "AnimationSystem.Types.dll",
-    "Assembly-CSharp.dll",
-    "Assembly-CSharp-firstpass.dll",
+    "SptGameRefs-AssemblyCSharp.dll",
+    "SptGameRefs-AssemblyCSharpFirstpass.dll",
     "bsg.componentace.compression.libs.zlib.dll",
     "bsg.console.core.dll",
     "bsg.microsoft.extensions.objectpool.dll",

@@ -31,11 +31,23 @@ namespace ArenaMapPort.Editor.GameRefsSetup
             // comment dates from isolation-tested a reproducible native Editor SIGSEGV
             // (MonoScriptInfoScraper::ScanForSourceGeneratedMonoScriptInfo during domain reload)
             // against BOTH "Editor + StandaloneWindows64" and "Editor-only" for this flag — the
-            // crash occurs either way, triggered by Assembly-CSharp.dll successfully resolving+
-            // loading at all (confirmed: absent -> no crash, present under either compatibility
-            // combination -> crash). Since the flag choice doesn't change the outcome, this stays
-            // on O2's literal instruction ("Editor + StandaloneWindows64 from the start") rather
-            // than the narrower Editor-only that was only ever a diagnostic branch.
+            // crash occurred either way (now FIXED separately, s1-finish task item 1, by removing
+            // the type the crash was choking on via tools/gamerefs-fixup — see sync-game-refs.ps1).
+            //
+            // s1-finish EXPERIMENT (this pass, reverted): with the SIGSEGV fixed, a NEW, separate
+            // symptom appeared — `AddComponent<LevelSettings>()` (and every other §D EFT type)
+            // permanently returns null with Unity logging "Script X has not finished compilation
+            // yet" for the rest of the batchmode process's life. Tried Editor-ONLY compatibility
+            // here to test whether the dual-platform flag was the cause (never itself tested
+            // against THIS symptom — WP2's run 13 only tested it against the SIGSEGV) — result:
+            // IDENTICAL failure under Editor-only too (confirmed, docs/progress/s1-finish.md), so
+            // this flag is not the cause either. Reverted to O2's literal "Editor +
+            // StandaloneWindows64 from the start" since it's evidence-neutral and matches the
+            // lead's original instruction. This AddComponent issue remains UNRESOLVED as of
+            // s1-finish (see docs/progress/s1-finish.md "Second, separate blocker" for the full
+            // diagnostic trail and every mitigation tried, none successful) — BuildBundles.cs's
+            // EditorApplication.update-tick retry around AuthorScriptsScene.Build is a cheap
+            // best-effort mechanism kept for forward-compatibility, not a confirmed fix.
             bool alreadyConfigured =
                 importer.GetCompatibleWithEditor()
                 && importer.GetCompatibleWithPlatform(BuildTarget.StandaloneWindows64)

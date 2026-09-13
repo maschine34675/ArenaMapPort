@@ -36,6 +36,28 @@ namespace ArenaMapPort.Editor.Import
         private static readonly string[] SpawnDefNames = { "SpawnPoint_Player_All", "SpawnPoint_Player_Usec", "SpawnPoint_Player_Bear" };
         private static readonly EPlayerSideMask[] SpawnDefSides = { EPlayerSideMask.All, EPlayerSideMask.Usec, EPlayerSideMask.Bear };
 
+        // s1-finish fix: `AddComponent<T>()` for a MonoBehaviour living in a PRECOMPILED plugin
+        // DLL (GameRefs/Assembly-CSharp.dll) can return NULL the first few times it's used in a
+        // fresh batchmode process — Unity logs "Script <Name> has not finished compilation yet.
+        // Please wait until compilation of the script has finished and try again." and returns
+        // null rather than throwing. Empirically NOT a matter of waiting longer on THIS thread
+        // (confirmed: 80 retries over 20s of Thread.Sleep, all against the same synchronous call
+        // stack, 100% failure — because sleeping the main thread never lets
+        // EditorApplication.update actually tick, and ticking the update loop is exactly what
+        // finishes whatever deferred linking step Unity needs here). The real fix
+        // (BuildBundles.Run) retries this whole method from an EditorApplication.update callback
+        // instead, which DOES yield back to Unity's own loop between attempts — see
+        // docs/progress/s1-finish.md. This helper just fails fast (throws) on a null result so the
+        // outer update-tick retry knows to try again; it does not itself sleep or loop.
+        private static T AddComponentOrThrow<T>(GameObject go) where T : Component
+        {
+            T comp = go.AddComponent<T>();
+            if (comp == null)
+                throw new InvalidOperationException("[ArenaMapPort][AuthorScriptsScene] AddComponent<" + typeof(T).Name +
+                    "> returned null (Unity: script not yet ready in this process).");
+            return comp;
+        }
+
         public static Scene Build(ArenaPackage pkg, long unixDateTime, bool isFirstScene = false)
         {
             // See SceneAssembler.Assemble's matching comment — Additive throws on the very first
@@ -52,7 +74,7 @@ namespace ArenaMapPort.Editor.Import
             // --- LevelSettings (§D row 1) ---
             var levelSettingsGo = new GameObject("LevelSettings");
             levelSettingsGo.transform.SetParent(root.transform, false);
-            var levelSettings = levelSettingsGo.AddComponent<LevelSettings>();
+            var levelSettings = AddComponentOrThrow<LevelSettings>(levelSettingsGo);
             levelSettings.AmbientMode = UnityEngine.Rendering.AmbientMode.Flat;
             levelSettings.SkyColor = new Color(0.5f, 0.5f, 0.5f, 1f);
             levelSettings.EquatorColor = new Color(0.5f, 0.5f, 0.5f, 1f);
@@ -66,13 +88,13 @@ namespace ArenaMapPort.Editor.Import
             // --- LocationExportInfo (§D row 4) ---
             var exportGo = new GameObject("LocationExportInfo");
             exportGo.transform.SetParent(root.transform, false);
-            var exportInfo = exportGo.AddComponent<LocationExportInfo>();
+            var exportInfo = AddComponentOrThrow<LocationExportInfo>(exportGo);
             exportInfo._unixDateTime = unixDateTime;
 
             // --- BotZone (§D row 3) ---
             var botZoneGo = new GameObject("BotZone_Main");
             botZoneGo.transform.SetParent(root.transform, false);
-            var botZone = botZoneGo.AddComponent<global::BotZone>();
+            var botZone = AddComponentOrThrow<global::BotZone>(botZoneGo);
             botZone.Id = 0;
             botZone.CanSpawnBoss = false;
             botZone.SnipeZone = false;
@@ -98,7 +120,7 @@ namespace ArenaMapPort.Editor.Import
                 box.size = new Vector3(1f, 2f, 1f);
                 box.enabled = true;
 
-                var marker = go.AddComponent<SpawnPointMarker>();
+                var marker = AddComponentOrThrow<SpawnPointMarker>(go);
                 marker._collider = box;
                 var spawnPoint = new SpawnPoint();
                 spawnPoint.Id = Guid.NewGuid().ToString();
@@ -119,7 +141,7 @@ namespace ArenaMapPort.Editor.Import
             // --- LocationScene (§D row 2) — added last, FillArrays() scans siblings/children ---
             var locationSceneGo = new GameObject("LocationScene");
             locationSceneGo.transform.SetParent(root.transform, false);
-            var locationScene = locationSceneGo.AddComponent<global::LocationScene>();
+            var locationScene = AddComponentOrThrow<global::LocationScene>(locationSceneGo);
             locationScene.FillArrays(); // populates every one of the ~30 array fields, non-null by construction
 
             // Now, and only now, activate: Awake/OnEnable/Start fire once, against fully-wired data.

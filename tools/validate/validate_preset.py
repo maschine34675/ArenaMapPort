@@ -165,11 +165,23 @@ def validate_container(bundle_tt: dict | None, mono_path_id: int) -> None:
               f"MonoBehaviour field is correct")
 
 
-def validate_scenes_cross_check(scenes_bundle_path: Path) -> None:
+def validate_scenes_cross_check(scenes_bundle_path: Path, allow_missing_scenes: bool = False) -> None:
     """Optional: cross-check SCENE_TABLE's rcids against the actual scene names inside a
     WP2-built scenes bundle. SPEC.md SS B.WP3 edge cases flags a typo here as 'the single
     highest-leverage typo risk in this whole pipeline' -- a mismatch means
-    SceneManager.LoadSceneAsync silently finds nothing, no exception."""
+    SceneManager.LoadSceneAsync silently finds nothing, no exception.
+
+    A *slice* build (S1: a handful of hand-picked objects, deliberately built with
+    ``-skipScriptsScene`` and only a subset of the 6 scenes actually authored/imported) will
+    legitimately have most of SCENE_TABLE's rcids absent from the bundle -- that is not a typo,
+    it's the slice doing exactly what it was asked to do. A *typo* (rcid spelled differently than
+    the Unity scene name WP2 actually saved) is indistinguishable from "the slice never built this
+    scene" by inspecting the bundle alone -- only the caller knows which one applies for a given
+    run, hence the explicit ``--allow-missing-scenes`` opt-in below rather than auto-detecting
+    "bundle has <6 scenes -> must be a slice" (that heuristic would just as happily hide a real
+    missing-scene regression in a supposedly-full 6-scene build). When the flag is not passed
+    (the default), a missing rcid is still a hard FAIL, unchanged from the original behaviour --
+    this preserves the check's value for a real S2/full build, where every rcid MUST resolve."""
     if not scenes_bundle_path.is_file():
         print(f"[validate_preset] --scenes-bundle {scenes_bundle_path} not found -- skipping scene cross-check")
         return
@@ -201,13 +213,29 @@ def validate_scenes_cross_check(scenes_bundle_path: Path) -> None:
     short_names = {scene_short_name(p) for p in scene_paths}
     print(f"[validate_preset] --scenes-bundle scene short names found: {sorted(short_names)}")
 
+    present, absent = [], []
     for rcid in SCENE_TABLE:
         # match case-insensitively against the short scene name, mirroring
         # AssetBundleExtension.FixAssetName's own case-insensitive suffix matching for scenes
         # loaded by name (SPEC.md SS B.WP2.5's "name-based, not bundle-scoped" note).
         found = any(rcid.lower() == n.lower() for n in short_names)
-        check(found, f"preset rcid {rcid!r} matches a scene name inside {scenes_bundle_path.name} "
-                      f"(available: {sorted(short_names)})")
+        if found:
+            present.append(rcid)
+            check(True, f"preset rcid {rcid!r} matches a scene name inside {scenes_bundle_path.name} "
+                        f"(available: {sorted(short_names)})")
+        else:
+            absent.append(rcid)
+            msg = (f"preset rcid {rcid!r} matches a scene name inside {scenes_bundle_path.name} "
+                   f"(available: {sorted(short_names)})")
+            if allow_missing_scenes:
+                print(f"[validate_preset] WARN: {msg} -- absent, tolerated under --allow-missing-scenes "
+                      f"(slice build; not scored as a failure)")
+            else:
+                check(False, msg)
+
+    print(f"[validate_preset] scene cross-check summary: {len(present)}/{len(SCENE_TABLE)} rcids present "
+          f"{sorted(present)}, {len(absent)} absent {sorted(absent)}"
+          + (" (absent ones tolerated: --allow-missing-scenes)" if allow_missing_scenes and absent else ""))
 
 
 def main() -> None:
@@ -216,6 +244,12 @@ def main() -> None:
     ap.add_argument("--scenes-bundle", type=Path, default=None,
                      help="optional WP2-built scenes bundle to cross-check rcids against "
                           "(default: auto-probe work/build/s1/ for a scenes bundle if not given)")
+    ap.add_argument("--allow-missing-scenes", action="store_true",
+                     help="treat a SCENE_TABLE rcid with no matching scene inside --scenes-bundle as "
+                          "a WARN instead of a FAIL -- for validating an intentionally partial slice "
+                          "build (e.g. S1, or any -skipScriptsScene run) where most of the 6 scenes "
+                          "were deliberately never imported/authored. Do NOT pass this for a real "
+                          "S2/full 6-scene build -- there, a missing rcid is a genuine defect.")
     args = ap.parse_args()
 
     env, (mono_obj, mono_tt), bundle = load_bundle_objects(args.bundle)
@@ -236,7 +270,7 @@ def main() -> None:
             print(f"[validate_preset] no scenes bundle found under {s1_dir} -- running preset-only checks "
                   f"(pass --scenes-bundle explicitly once WP2 has produced one)")
     if scenes_bundle is not None:
-        validate_scenes_cross_check(scenes_bundle)
+        validate_scenes_cross_check(scenes_bundle, allow_missing_scenes=args.allow_missing_scenes)
 
     print()
     if FAILURES:
