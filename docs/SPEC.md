@@ -476,7 +476,12 @@ target is caught at WP6's offline check rather than at the most expensive point 
 
 ### WP3 — Preset bundle patcher (Python / UnityPy)
 
-**Owns**: `tools/extract/patch_preset.py`, writes `work/build/arena_equator_preset.bundle` (gitignored).
+**Owns**: `tools/preset/patch_preset.py`, writes `work/build/preset/arena_equator_preset.bundle`
+(gitignored). (Corrected fix-cs pass, 2026-09-13 — the actual, intentional convention: both the
+`tools/preset/` location and the `work/build/preset/` subfolder are established across WP3/WP4/WP6's own
+output and progress docs; `validate_preset.py`'s `DEFAULT_BUNDLE` already matches. This section previously
+said `tools/extract/patch_preset.py` / `work/build/arena_equator_preset.bundle`, which was never what got
+built. WP4's staging target globs `work/build/**/*.bundle` recursively so this never affected `dist/`.)
 
 **Inputs**: a **donor** SPT 4.1 preset bundle — `D:/SPT41/EscapeFromTarkov_Data/StreamingAssets/Windows/maps/develop_preset.bundle`
 (read-only). Confirmed live on this exact install via direct UnityPy read this pass: one `MonoBehaviour`
@@ -550,7 +555,7 @@ SPT client"*).
    convention for the *containing bundle asset name* — `arena_equator.scenespreset.asset`, §0 — the
    `m_Name` on the object itself follows BSG's `<id>.ScenesPreset` capitalization convention observed on
    the donor, e.g. `develop.ScenesPreset`).
-9. `obj.save_typetree(tt)`, then `env.file.save()` to `work/build/arena_equator_preset.bundle`.
+9. `obj.save_typetree(tt)`, then `env.file.save()` to `work/build/preset/arena_equator_preset.bundle`.
 
 **Edge cases**:
 - **`rcid` misspelled relative to WP2's actual saved scene name** (the single highest-leverage typo risk
@@ -566,7 +571,7 @@ SPT client"*).
   unchanged): verified by WP6's re-read check (§B.WP6) — read the saved bundle back and confirm
   `m_Script`'s `PPtr` target file+path-id is byte-identical to the donor's.
 
-**Outputs**: `work/build/arena_equator_preset.bundle`.
+**Outputs**: `work/build/preset/arena_equator_preset.bundle`.
 
 **Acceptance criteria**:
 - UnityPy re-read of the saved bundle shows exactly 6 `_scenesResourceKeys` entries, in the order above,
@@ -666,9 +671,21 @@ be finalized, since we `.Add()` a brand-new key):
    for the spike** (bots are out of scope, decision #8; `critic.md` §1's own "not urgent for this spike"
    note applies verbatim). Leave a `// TODO(bots-milestone)` comment pointing at `ref-manimal.md` §1's
    punch-list so the next milestone doesn't have to re-derive it.
-6. Locale keys: `"<Key> Name"` and `"arena_equator Description"` at minimum (`LocationInfoPanel` reads
-   these, not `Base.Name`/`Base.Description`, per `ref-manimal.md` §1's decompiled citation) — placeholder
-   English text is fine for the spike ("Arena: Equator (spike)" / "Internal test build").
+6. Locale keys: `"<IdField> Name"` and `"<IdField> Description"` at minimum (`LocationInfoPanel` reads
+   `location._Id`, which the client deserializes from `base.json`'s wire `"_Id"` field — i.e. our
+   `IdField`/MongoId `"e9b8e12c60dfd2820e949462"`, **not** the location key `"arena_equator"` — the JSON
+   property named `"Id"` is a distinct field carrying the key; only `"_Id"` maps to `IdField`. Confirmed
+   this pass by decompiling both sides: `SPTarkov.Server.Core.dll`'s `LocationBase` has
+   `[JsonPropertyName("_Id")] public MongoId IdField` separate from `[JsonPropertyName("Id")] public
+   required string Id`; the client's `JsonType/LocationSettings.cs:243/245/433` deserializes that same
+   `"_Id"` wire value into its own `_Id` field and reads `LocalizedName => (_Id + " Name").Localized()`
+   (`LocationInfoPanel.cs:131/138` for the description). Icebreaker's own reference implementation
+   registers this identically — `IcebreakerMod.cs:252/258` uses `IcebreakerLocation.Id + " Name"` where
+   `IcebreakerLocation.Id` is itself the MongoId (`Directory.Build.props: ModLocationId=882b2fa04bbd616567022938`),
+   not the location key — placeholder English text is fine for the spike ("Arena: Equator (spike)" /
+   "Internal test build"). (Corrected fix-cs pass, 2026-09-13 — this section previously said `"<Key>
+   Name"`, contradicting both the decompiled evidence above and `ref-manimal.md` §1's own citation of the
+   same convention; see `ArenaMapPort.Server/ArenaEquatorRegistration.cs`'s `ApplyLocale`.)
 7. **Banners**: either supply zero entries in `base.json`'s `Banners` array, or wire real files via
    `imageRouter.AddRoute` — do **not** ship a `Banners` array with unresolvable ids (Icebreaker's own
    documented landmine, `ref-manimal.md` §1: *"a ripped base.json ships retail's Banners array with
@@ -724,7 +741,7 @@ the one check that genuinely needs a live raid (§G.S4).
 |---|---|---|
 | `validate_extract.py` | `work/extract/equator/manifest.json` | WP1's acceptance criteria (§B.WP1) programmatically: `errors == []`, every reference resolves, id determinism (run twice, diff) |
 | `validate_bundle_roundtrip.py` | `work/build/*.bundle` | Re-reads the built scene bundle with UnityPy: scene names present match §E.1's table exactly (no typo, no missing scene); mesh/material/texture counts are non-zero and roughly match the extracted package's counts (catches "importer silently skipped everything" class of bug); NavMesh bundle contains exactly one `NavMeshData` with `tile_count > 0`; **every bundle's serialized-file header reports target platform `StandaloneWindows64`** (§B.WP2.8 — catches a wrong-`BuildTarget` build offline instead of at S4); **no built `LODGroup.GetLODs()` entry contains a null renderer** (§B.WP2.5's two-pass ordering requirement) |
-| `validate_preset.py` | `work/build/arena_equator_preset.bundle` | WP3's acceptance criteria (§B.WP3) — the `rcid` cross-check against the scene bundle's actual scene names is here, not in WP3 itself, since it needs *both* artifacts |
+| `validate_preset.py` | `work/build/preset/arena_equator_preset.bundle` | WP3's acceptance criteria (§B.WP3) — the `rcid` cross-check against the scene bundle's actual scene names is here, not in WP3 itself, since it needs *both* artifacts |
 | `validate_server_db.py` | `dist/SPT_Runtime/user/mods/ArenaMapPort/db/base.json` | Every field `spt-location-contract.md` §5.1 marks "required to start" is present and non-empty: `Scene.path`/`Scene.rcid` match §0's constants exactly, `Id`/`IdField` match §0, `SpawnPointParams` is **absent/null, not `[]`** (critic.md §6 — an empty-but-present array actively deletes every scene-authored `SpawnPointMarker` on load, `SpawnPointsCollection.FixSpawns`, `spt-location-contract.md` §3) |
 | `validate_spawn_authoring.py` | the exported `Arena_Equator_Scripts.unity` scene (read via UnityPy against the built bundle, or against the raw `.unity` YAML pre-build) | At least one `SpawnPointMarker`-typed object exists with `Categories` including `Player` and `Sides == All`(or a superset covering the test profile's side); a `Collider` component is present and enabled on the same object; exactly one `BotZone` exists with `PatrolWays` serialized as an empty array (`[]`), never absent/null; **the same `BotZone`'s `SpawnPointMarkers` is also serialized as an empty array (`[]`), never absent/null** (§D — a `null` here throws `NullReferenceException` on every raid start via `SpawnPointsCollection.CalculateCanSpawnPmcBots`/`BotsController.Init`, before the player ever spawns) |
 
@@ -951,8 +968,8 @@ inherits sane empty/false/0 defaults per `JsonType.LocationSettings.Location`'s 
 
 | Field | Value | Why |
 |---|---|---|
-| `Id` / `_Id` | `"arena_equator"` | §0. Used for exfil MongoID derivation + `"<_Id> Name"` locale keys — irrelevant for exfils (out of scope) but the locale convention still applies (`ref-manimal.md` §1). |
-| `IdField` | `"e9b8e12c60dfd2820e949462"` | §0. |
+| `Id` (wire JSON key `"Id"`) | `"arena_equator"` | §0. The location key — `LocationTable` dictionary key, folder-safe name. Distinct from `IdField`/wire `"_Id"` below (separate `[JsonPropertyName]`s on the server model). |
+| `IdField` (wire JSON key `"_Id"`) | `"e9b8e12c60dfd2820e949462"` | §0. Used for exfil MongoID derivation, **and** this — not `Id` — is what the client's `location._Id` deserializes to and looks locale keys up by (`"<_Id> Name"`/`"<_Id> Description"`, see corrected §E.5). |
 | `Name` | `"Arena: Equator (spike)"` | display only |
 | `Scene.path` | `"maps/arena_equator_preset.bundle"` | §0 |
 | `Scene.rcid` | `"arena_equator.scenespreset.asset"` | §0 |
@@ -971,10 +988,14 @@ inherits sane empty/false/0 defaults per `JsonType.LocationSettings.Location`'s 
 
 ### E.5 Locale keys (WP5, §B.WP5 step 6)
 
+Keyed by `IdField` (wire `"_Id"`, the MongoId), **not** by the location key `Id` (`"arena_equator"`) — see
+§B.WP5 step 6 and §E.4's `IdField` row for the decompiled evidence. (Corrected fix-cs pass, 2026-09-13;
+was previously, and wrongly, `"arena_equator Name"`/`"arena_equator Description"`.)
+
 | Key | Value |
 |---|---|
-| `"arena_equator Name"` | `"Arena: Equator (spike)"` |
-| `"arena_equator Description"` | `"Internal test build — geometry/collision/NavMesh spike."` |
+| `"e9b8e12c60dfd2820e949462 Name"` | `"Arena: Equator (spike)"` |
+| `"e9b8e12c60dfd2820e949462 Description"` | `"Internal test build — geometry/collision/NavMesh spike."` |
 
 ### E.6 Menu visibility
 

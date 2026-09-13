@@ -1,0 +1,25 @@
+{
+  "Id": "arena_equator",
+  "_Id": "e9b8e12c60dfd2820e949462",
+  "Name": "Arena: Equator (spike)",
+  "Scene": {
+    "path": "maps/arena_equator_preset.bundle",
+    "rcid": "arena_equator.scenespreset.asset"
+  },
+  "Enabled": true,
+  "Locked": false,
+  "UnixDateTime": 1789257600,
+  "DisabledForScav": true,
+  "Banners": [],
+  "MinPlayers": 1,
+  "MaxPlayers": 1,
+  "AveragePlayTime": 10,
+  "EscapeTimeLimit": 15,
+  "exits": [],
+  "IconX": 500,
+  "IconY": 500,
+  "Loot": [],
+  "doors": [],
+  "limits": [],
+  "maxItemCountInLocation": []
+}

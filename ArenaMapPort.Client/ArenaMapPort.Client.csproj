@@ -1,0 +1,160 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    WP4 client plugin. Target framework and reference list per docs/SPEC.md §F.0/§B.WP4, verified against
+    the sibling D:/SPT41/Development/ArenaMode/ArenaMode.Client/ArenaMode.Client.csproj which already
+    builds and runs for this exact SPT 4.1 install: netstandard2.1 (Unity's Mono runtime accepts it even
+    though vanilla net472 nominally doesn't fully implement that surface — a known, working convention,
+    not a novel risk), same DLL set.
+
+    O4 (deployment safety): unlike ArenaMode.Client.csproj's SPTClientDeploy target (which xcopies into
+    $(SPTPath)\BepInEx\plugins\), this project's build output goes ONLY to D:/ArenaMapPort/dist/ — see the
+    ArenaMapPortDistCopy target below. No target here writes into D:/SPT41 or X:/. Promoting dist/ into
+    the live install is a separate, user-run, explicitly-approved step (decision #9 / O4).
+  -->
+
+  <PropertyGroup>
+    <TargetFramework>netstandard2.1</TargetFramework>
+    <AssemblyName>maschine-ArenaMapPort.Client</AssemblyName>
+    <RootNamespace>ArenaMapPort.Client</RootNamespace>
+    <Description>ArenaMapPort client plugin - serves the Arena Equator location port (spike)</Description>
+    <Company>https://github.com/maschine34675/ArenaMapPort</Company>
+    <Authors>maschine</Authors>
+    <Version>0.1.0</Version>
+    <LangVersion>latest</LangVersion>
+    <Nullable>disable</Nullable>
+    <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
+    <Configurations>Debug;Release</Configurations>
+    <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
+
+    <!-- Read-only source of the game's Managed DLLs (O8). Never written to from this project. -->
+    <EftManagedDir>D:/SPT41/EscapeFromTarkov_Data/Managed</EftManagedDir>
+
+    <!-- O7/O4: build output lands under the repo's own dist/, never under D:/SPT41. -->
+    <ArenaMapPortDistDir>$(MSBuildThisFileDirectory)..\dist\BepInEx\plugins\ArenaMapPort</ArenaMapPortDistDir>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- ArenaMode convention (ArenaMode.Client.csproj:19-26): link the shared source file directly
+         rather than a project/binary reference, so client and server compile it independently. -->
+    <Compile Include="..\ArenaMapPort.Shared\ArenaEquatorLocation.cs" Link="Shared\ArenaEquatorLocation.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Reference Include="Assembly-CSharp">
+      <HintPath>$(EftManagedDir)\Assembly-CSharp.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="Assembly-CSharp-firstpass">
+      <HintPath>$(EftManagedDir)\Assembly-CSharp-firstpass.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="Comfort">
+      <HintPath>$(EftManagedDir)\Comfort.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="Comfort.Unity">
+      <HintPath>$(EftManagedDir)\Comfort.Unity.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="Newtonsoft.Json">
+      <HintPath>$(EftManagedDir)\Newtonsoft.Json.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="UnityEngine">
+      <HintPath>$(EftManagedDir)\UnityEngine.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="UnityEngine.CoreModule">
+      <HintPath>$(EftManagedDir)\UnityEngine.CoreModule.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <!-- NavMesh.AddNavMeshData / NavMeshData (§F.2) -->
+    <Reference Include="UnityEngine.AIModule">
+      <HintPath>$(EftManagedDir)\UnityEngine.AIModule.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <!-- AssetBundle / AssetBundle.LoadFromFile (§F.1/§F.2) -->
+    <Reference Include="UnityEngine.AssetBundleModule">
+      <HintPath>$(EftManagedDir)\UnityEngine.AssetBundleModule.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="UnityEngine.PhysicsModule">
+      <HintPath>$(EftManagedDir)\UnityEngine.PhysicsModule.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="UnityEngine.AnimationModule">
+      <HintPath>$(EftManagedDir)\UnityEngine.AnimationModule.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="UnityEngine.AudioModule">
+      <HintPath>$(EftManagedDir)\UnityEngine.AudioModule.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="UnityEngine.TextRenderingModule">
+      <HintPath>$(EftManagedDir)\UnityEngine.TextRenderingModule.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="UnityEngine.IMGUIModule">
+      <HintPath>$(EftManagedDir)\UnityEngine.IMGUIModule.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="UnityEngine.InputLegacyModule">
+      <HintPath>$(EftManagedDir)\UnityEngine.InputLegacyModule.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="UnityEngine.UnityWebRequestModule">
+      <HintPath>$(EftManagedDir)\UnityEngine.UnityWebRequestModule.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="UnityEngine.UI">
+      <HintPath>$(EftManagedDir)\UnityEngine.UI.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="UnityEngine.UIModule">
+      <HintPath>$(EftManagedDir)\UnityEngine.UIModule.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+
+    <PackageReference Include="BepInEx.Analyzers" Version="1.*" PrivateAssets="all" />
+    <PackageReference Include="BepInEx.Core" Version="5.*" />
+    <PackageReference Include="BepInEx.PluginInfoProps" Version="1.*" />
+  </ItemGroup>
+
+  <!-- O4/O7: copy the built DLL into dist/ only. No target in this file ever references $(SPTPath) or
+       any path under D:/SPT41 or X:/ as a WRITE destination. -->
+  <Target Name="ArenaMapPortDistCopy" AfterTargets="PostBuildEvent" Condition="'$(Configuration)'=='Release'">
+    <MakeDir Directories="$(ArenaMapPortDistDir)" Condition="!Exists('$(ArenaMapPortDistDir)')" />
+    <Copy SourceFiles="$(TargetPath)" DestinationFolder="$(ArenaMapPortDistDir)" SkipUnchangedFiles="false" />
+    <Message Importance="high" Text="[ArenaMapPort] deployed $(TargetFileName) -&gt; $(ArenaMapPortDistDir)" />
+  </Target>
+
+  <!--
+    §B.WP2.8's own words: "Output written to work/build/ ..., then copied into
+    dist/BepInEx/plugins/ArenaMapPort/bundles/ by a deploy step WP4 owns." This is that step —
+    best-effort staging of whatever WP2 (scenes/navmesh bundles + material-shaders.json) and WP3
+    (preset bundle) have produced under work/build/ so far, run after every Release build. Still O4/O7-safe
+    (work/ and dist/ only). Exact WP2 output filenames/subfolder are not yet fixed as of this pass (WP2
+    had not produced them when this target was written) — Plugin.cs's own Awake() banner logs clearly per
+    expected file if one of the 3 bundles or material-shaders.json is missing/misnamed once staged, so a
+    naming mismatch here is diagnosable rather than a silent failure.
+  -->
+  <Target Name="ArenaMapPortStageWpOutputs" AfterTargets="ArenaMapPortDistCopy" Condition="'$(Configuration)'=='Release'">
+    <ItemGroup>
+      <ArenaMapPortBundles Include="$(MSBuildThisFileDirectory)..\work\build\**\*.bundle"
+                            Exclude="$(MSBuildThisFileDirectory)..\work\build\**\_donor_*.bundle" />
+      <ArenaMapPortShaderSidecar Include="$(MSBuildThisFileDirectory)..\work\build\**\material-shaders.json" />
+    </ItemGroup>
+    <MakeDir Directories="$(ArenaMapPortDistDir)\bundles" Condition="'@(ArenaMapPortBundles)' != ''" />
+    <Copy SourceFiles="@(ArenaMapPortBundles)" DestinationFolder="$(ArenaMapPortDistDir)\bundles"
+          SkipUnchangedFiles="false" Condition="'@(ArenaMapPortBundles)' != ''" />
+    <Copy SourceFiles="@(ArenaMapPortShaderSidecar)" DestinationFolder="$(ArenaMapPortDistDir)"
+          SkipUnchangedFiles="false" Condition="'@(ArenaMapPortShaderSidecar)' != ''" />
+    <Message Importance="high"
+             Text="[ArenaMapPort] staged %(ArenaMapPortBundles.Filename)%(ArenaMapPortBundles.Extension) from work/build into dist/.../bundles/"
+             Condition="'@(ArenaMapPortBundles)' != ''" />
+    <Message Importance="high" Text="[ArenaMapPort] staged material-shaders.json from work/build into dist/.../ArenaMapPort/"
+             Condition="'@(ArenaMapPortShaderSidecar)' != ''" />
+  </Target>
+
+</Project>

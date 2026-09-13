@@ -1,0 +1,108 @@
+<!--
+  ArenaMapPort.Server — SPT 4.1.5 mod that registers the new `arena_equator` location.
+  docs/SPEC.md §B.WP5. Never write into D:/SPT41 or X:/ from any target here (O4) —
+  the DeployToDist target below only ever touches this repo's own dist/ folder; a
+  separate, user-run step promotes dist/ into the live D:/SPT41 install.
+-->
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <!--
+      TargetFramework net10.0 — NOT net9.0.
+
+      The task brief's shorthand ("SPT 4.1.5 (net9)") and docs/SPEC.md §B.WP5's own
+      hedge both say net9.0, but SPEC explicitly told WP5 to verify rather than assume
+      ("do not assume 4.1.0 is correct without checking; ... re-verify ... didn't
+      drift"). Verified this pass, two ways:
+        1. D:/SPT41/SPT_Runtime/SPT.Server.runtimeconfig.json (the LIVE deployed
+           server's own runtime config) declares "tfm": "net10.0", targeting
+           Microsoft.NETCore.App 10.0.0 + Microsoft.AspNetCore.App 10.0.0.
+        2. ArenaMode.Server.csproj — a sibling mod already built, deployed and
+           playtested against this exact SPT 4.1.5 install (see its own CLAUDE.md
+           "M0-M7 are done and playtested") — targets net10.0 itself.
+      net9.0 would be a regression against both pieces of hard evidence.
+    -->
+    <TargetFramework>net10.0</TargetFramework>
+    <RootNamespace>ArenaMapPort.Server</RootNamespace>
+    <AssemblyName>maschine-ArenaMapPort.Server</AssemblyName>
+    <Authors>maschine</Authors>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <OutputType>Library</OutputType>
+    <LangVersion>latest</LangVersion>
+    <Version>0.1.0</Version>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- ArenaMode convention: ArenaMode.Client.csproj:19-26 links Shared/*.cs the same way. -->
+    <Compile Include="..\ArenaMapPort.Shared\ArenaEquatorLocation.cs" Link="Shared\ArenaEquatorLocation.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!--
+      SPTushonka.* packages, version 4.1.5 — NOT the official SPTarkov.* feed, and NOT
+      4.1.0 (the version ArenaMode.Server.csproj itself pins, and the task brief's
+      shorthand). Verified this pass:
+
+        - api.nuget.org/v3-flatcontainer/sptarkov.server.core/index.json tops out at
+          4.1.2 — no 4.1.x release matching the live 4.1.5 binary exists on the
+          official feed yet.
+        - The live D:/SPT41/SPT_Runtime/SPTarkov.Server.Core.dll (ilspycmd 11 decompile,
+          this pass) reports FileVersion 4.1.5 and its Utils.Json.LazyLoad<T> class has
+          the constructor `(Func<T> deserialize, bool cacheValue = false)` — a shape
+          that does NOT exist in the 4.1.2 SPTarkov.Server.Core NuGet package (still
+          the old 1-arg `(Func<T> deserialize)` only).
+        - SPTushonka.Server.Core 4.1.5 (also on nuget.org) matches the live DLL exactly
+          on both points checked: FileVersion 4.1.5, and the identical two-arg LazyLoad
+          constructor (byte-for-byte identical decompile of that one type). The overall
+          assembly hash differs slightly (build/PDB metadata), but the compiled API
+          surface used here is confirmed identical.
+        - Icebreaker's own server project — the MIT reference this file's registration
+          pattern (EnsureAvailable/Register) and loot-LazyLoad shape are ported from —
+          already pins exactly this: icebreaker-server.csproj references
+          SPTushonka.Common/.DI/.Server.Core Version="4.1.5".
+
+      Reflection and Server.Web are intentionally NOT referenced here, unlike
+      ArenaMode.Server.csproj — that project needs them for Harmony-adjacent reflection
+      helpers and its Blazor config page; this spike's registration-only mod uses
+      neither (icebreaker-server.csproj, doing the same registration job, references
+      the same three packages and nothing else).
+
+      ExcludeAssets="runtime": the live server process supplies these assemblies
+      itself at runtime (ArenaMode.Server.csproj:39-43 uses the identical pattern) —
+      only the compile-time API surface is needed from the package.
+    -->
+    <PackageReference Include="SPTushonka.Common" Version="4.1.5" ExcludeAssets="runtime" />
+    <PackageReference Include="SPTushonka.DI" Version="4.1.5" ExcludeAssets="runtime" />
+    <PackageReference Include="SPTushonka.Server.Core" Version="4.1.5" ExcludeAssets="runtime" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Content Include="db\**\*.json" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <PropertyGroup Condition="'$(Configuration)'=='Release'">
+    <DebugType>None</DebugType>
+    <DebugSymbols>false</DebugSymbols>
+    <GenerateDependencyFile>false</GenerateDependencyFile>
+  </PropertyGroup>
+
+  <!--
+    O4: dist/ only, never D:/SPT41 or X:/. This mirrors ArenaMode.Server.csproj's own
+    DeployToSpt target in shape (copy dll + db/*.json into the mod folder after build)
+    but targets this repo's dist/ tree instead of a live SPT_UserPath — promoting
+    dist/ -> D:/SPT41 is a separate, user-approved step, never run from here.
+  -->
+  <Target Name="DeployToDist" AfterTargets="Build">
+    <PropertyGroup>
+      <DistModDir>$(MSBuildThisFileDirectory)..\dist\SPT_Runtime\user\mods\ArenaMapPort</DistModDir>
+    </PropertyGroup>
+    <ItemGroup>
+      <ArenaMapPortDbFiles Include="$(MSBuildThisFileDirectory)db\**\*.json" />
+    </ItemGroup>
+    <MakeDir Directories="$(DistModDir)\db" />
+    <Copy SourceFiles="$(TargetPath)" DestinationFolder="$(DistModDir)" SkipUnchangedFiles="true" />
+    <Copy SourceFiles="@(ArenaMapPortDbFiles)" DestinationFiles="@(ArenaMapPortDbFiles->'$(DistModDir)\db\%(RecursiveDir)%(Filename)%(Extension)')" SkipUnchangedFiles="true" />
+  </Target>
+
+</Project>

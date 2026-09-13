@@ -1,0 +1,839 @@
+#!/usr/bin/env python3
+"""ArenaMapPort WP1 extractor -- docs/SPEC.md §B.WP1 (algorithm) / §C (package
+format contract).
+
+Reuses, per §B.WP1's explicit instruction, analysis/scripts/common.py's
+EQUATOR scene-index->suffix table and analysis/scripts/census.py's
+spawn_zone_anchors()/resolve_script_name() machinery -- the proven
+exact-full-path file matching and MonoScript-pool dereferencing this project
+already validated against real Arena data (arena-census.md Method notes).
+
+CLI:
+    python extract_equator.py --source <ArenaData dir> --scenes <51,53,...|all5>
+        [--slice-roots "SCENE_IDX:id1,id2,..."]... --output <package dir>
+        [--fixed-timestamp <ISO8601>]
+
+    python extract_equator.py --source <dir> --scenes all5 --census-only
+        (fast, no writes -- proves the same code path covers the full 5-scene
+        set per §B.WP1's "make sure the full 5-scene run is supported by the
+        same code" requirement, without doing a full multi-hundred-MB extract.)
+
+See docs/progress/wp1.md for the S1 slice's exact object selection and the
+ground-truth field-shape findings this implementation is based on.
+"""
+from __future__ import annotations
+
+import argparse
+import datetime
+import json
+import os
+import sys
+from collections import Counter
+
+_HERE = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, _HERE)
+sys.path.insert(0, os.path.normpath(os.path.join(_HERE, "..", "..", "analysis", "scripts")))
+
+import UnityPy  # noqa: E402
+from PIL import Image  # noqa: E402
+
+from common_ids import (  # noqa: E402
+    CAST_SHADOWS,
+    COLOR_SPACE,
+    HardExtractError,
+    LIGHT_PROBE_USAGE,
+    LIGHT_TYPE,
+    PHYSIC_COMBINE,
+    SHADOW_TYPE,
+    content_id,
+    reflection_probe_usage,
+    resolve_tag,
+    texture_format_name,
+)
+from mesh_bin import write_mesh_bin  # noqa: E402
+
+import common as arena_common  # analysis/scripts/common.py -- EQUATOR table  # noqa: E402
+import census as arena_census  # analysis/scripts/census.py -- spawn_zone_anchors  # noqa: E402
+
+SCHEMA_VERSION = 1
+
+# §E.1 -- the 5 content scenes WP1 is ever asked to extract. "Scripts" (54)
+# is WP2-authored fresh (never extracted); TeamFight_AI(52)/Sound(56)/
+# TeamFight_Culling(59) are dropped per §E.1's own table.
+SCENE_REGISTRY = {
+    51: "Arena_Equator",
+    53: "Arena_Equator_DesignStuff",
+    55: "Arena_Equator_Lighting",
+    57: "Arena_Equator_TeamFight_DesignStuff",
+    58: "Arena_Equator_TeamFight",
+}
+ALL5 = [51, 53, 55, 57, 58]
+
+ANALYSIS_DIR = os.path.normpath(os.path.join(_HERE, "..", "..", "analysis"))
+DEFAULT_SOURCE = "X:/Escape from Tarkov Arena/EscapeFromTarkovArena_Data"
+
+
+# --------------------------------------------------------------------------
+# Environment loading
+# --------------------------------------------------------------------------
+
+def load_tags():
+    with open(os.path.join(ANALYSIS_DIR, "arena_gm.json"), encoding="utf-8") as f:
+        gm = json.load(f)
+    return gm["TagManager"]["tags"]
+
+
+def load_environment(source: str, scene_indices: list[int]):
+    """Loads level<N>+sharedassets<N>.assets for every requested scene, plus
+    every external file scene_externals.json's level_externals lists for
+    that scene (§B.WP1 step 1), plus globalgamemanagers.assets/resources.assets
+    (needed for the MonoScript pool census.spawn_zone_anchors uses). Returns
+    (env, exact_paths) where exact_paths[idx] = {"level":..., "sharedassets":...}
+    -- the exact-full-path keys is_scene_file()-style code must match against
+    (analysis/arena-census.md Method note 3's double-registration pitfall)."""
+    with open(os.path.join(ANALYSIS_DIR, "scene_externals.json"), encoding="utf-8") as f:
+        scene_ext = json.load(f)["Equator"]
+
+    paths: list[str] = []
+    seen: set[str] = set()
+
+    def add(p: str):
+        if p not in seen:
+            seen.add(p)
+            paths.append(p)
+
+    add(f"{source}/globalgamemanagers.assets")
+    add(f"{source}/resources.assets")
+
+    exact_paths: dict[int, dict[str, str]] = {}
+    for idx in scene_indices:
+        lvl = f"{source}/level{idx}"
+        sa = f"{source}/sharedassets{idx}.assets"
+        add(lvl)
+        add(sa)
+        exact_paths[idx] = {"level": lvl, "sharedassets": sa}
+        key = f"{idx}_{arena_common.EQUATOR[idx]}"
+        externals = scene_ext.get(key, {}).get("level_externals", [])
+        for ext_name in externals:
+            if ext_name in ("unity default resources",):
+                continue  # built-in engine resource, not a file on disk
+            add(f"{source}/{ext_name}")
+
+    for p in paths:
+        if not os.path.exists(p):
+            print(f"WARNING: expected input file missing, skipping: {p}", file=sys.stderr)
+    paths = [p for p in paths if os.path.exists(p)]
+
+    env = UnityPy.load(*paths)
+    return env, exact_paths
+
+
+# --------------------------------------------------------------------------
+# Scene graph (GameObject/Transform) -- built once per scene's level<N> file
+# --------------------------------------------------------------------------
+
+def build_scene_graph(f):
+    """f: the level<N> SerializedFile (env.files[exact_level_path]).
+    Returns (go_map, tf_map, go_of_tf). Only GameObject/Transform objects
+    live in level<N> (confirmed, arena-census.md §2.1's per-file breakdown --
+    Mesh/Texture2D/Material/Shader live in sharedassets<N>.assets or an
+    external shared-pool file instead)."""
+    go_map: dict[int, dict] = {}
+    tf_map: dict[int, dict] = {}
+    for obj in f.objects.values():
+        tn = obj.type.name
+        if tn == "GameObject":
+            t = obj.read_typetree()
+            comps = []
+            for c in t.get("m_Component", []):
+                cp = c.get("component", c)
+                pid = cp.get("m_PathID", 0)
+                if pid:
+                    comps.append(pid)
+            go_map[obj.path_id] = {
+                "name": t.get("m_Name", ""),
+                "layer": t.get("m_Layer", 0),
+                "tag_raw": t.get("m_Tag", 0),
+                "active": bool(t.get("m_IsActive", True)),
+                "components": comps,
+            }
+        elif tn == "Transform":
+            t = obj.read_typetree()
+            father = t.get("m_Father", {})
+            father_id = father.get("m_PathID", 0) if father.get("m_FileID", 0) == 0 else -1
+            children = [c.get("m_PathID", 0) for c in t.get("m_Children", []) if c.get("m_FileID", 0) == 0]
+            go_id = t.get("m_GameObject", {}).get("m_PathID", 0)
+            lp, lr, ls = t["m_LocalPosition"], t["m_LocalRotation"], t["m_LocalScale"]
+            tf_map[obj.path_id] = {
+                "go_id": go_id,
+                "father_id": father_id,
+                "children": children,
+                "pos": [lp["x"], lp["y"], lp["z"]],
+                "rot": [lr["x"], lr["y"], lr["z"], lr["w"]],
+                "scale": [ls["x"], ls["y"], ls["z"]],
+            }
+    go_of_tf = {t["go_id"]: tid for tid, t in tf_map.items()}
+    return go_map, tf_map, go_of_tf
+
+
+def subtree_ids(tf_map: dict, root: int) -> list[int]:
+    out: list[int] = []
+    seen: set[int] = set()
+    stack = [root]
+    while stack:
+        cur = stack.pop()
+        if cur in seen or cur not in tf_map:
+            continue
+        seen.add(cur)
+        out.append(cur)
+        stack.extend(tf_map[cur]["children"])
+    return out
+
+
+# --------------------------------------------------------------------------
+# Extraction context (mutable dedup work-queues + diagnostics)
+# --------------------------------------------------------------------------
+
+class ExtractionContext:
+    def __init__(self, env):
+        self.env = env
+        self.mesh_work: dict[str, tuple] = {}      # cid -> (mesh_obj, basename)
+        self.material_work: dict[str, tuple] = {}  # cid -> (mat_obj, basename)
+        self.texture_work: dict[str, dict] = {}    # cid -> {"obj","basename","prop_names"}
+        self.errors: list[str] = []
+        self.warnings: list[str] = []
+        self._basename_cache: dict[int, str] = {}
+
+    def owning_basename(self, obj) -> str:
+        af = obj.assets_file
+        cached = self._basename_cache.get(id(af))
+        if cached:
+            return cached
+        for fname, f2 in self.env.files.items():
+            if f2 is af:
+                b = os.path.basename(fname)
+                self._basename_cache[id(af)] = b
+                return b
+        return "unknown"
+
+    def queue_mesh(self, mesh_obj) -> str:
+        basename = self.owning_basename(mesh_obj)
+        cid = content_id(basename, mesh_obj.path_id, "Mesh")
+        self.mesh_work.setdefault(cid, (mesh_obj, basename))
+        return cid
+
+    def queue_material(self, mat_obj) -> str:
+        basename = self.owning_basename(mat_obj)
+        cid = content_id(basename, mat_obj.path_id, "Material")
+        self.material_work.setdefault(cid, (mat_obj, basename))
+        return cid
+
+
+# --------------------------------------------------------------------------
+# Component builders (§C.6)
+# --------------------------------------------------------------------------
+
+def resolve_physic_material(mptr, ctx: ExtractionContext):
+    if mptr is None or mptr.path_id == 0:
+        return None
+    pm_obj = mptr.deref()
+    pt = pm_obj.read_typetree()
+    return {
+        "dynamic_friction": pt.get("m_DynamicFriction", 0.6),
+        "static_friction": pt.get("m_StaticFriction", 0.6),
+        "bounciness": pt.get("m_Bounciness", 0.0),
+        "friction_combine": PHYSIC_COMBINE.get(pt.get("m_FrictionCombine", 0), "Average"),
+        "bounce_combine": PHYSIC_COMBINE.get(pt.get("m_BounceCombine", 0), "Average"),
+    }
+
+
+def build_meshfilter(obj, ctx: ExtractionContext):
+    typed = obj.read()
+    if typed.m_Mesh.path_id == 0:
+        ctx.warnings.append(f"MeshFilter {obj.path_id}: no mesh assigned, component skipped")
+        return None
+    mesh_id = ctx.queue_mesh(typed.m_Mesh.deref())
+    return {"type": "MeshFilter", "mesh_id": mesh_id}
+
+
+def build_meshrenderer(obj, ctx: ExtractionContext):
+    tt = obj.read_typetree()
+    typed = obj.read()
+    mat_ids = [ctx.queue_material(mp.deref()) for mp in typed.m_Materials if mp.path_id != 0]
+    return {
+        "type": "MeshRenderer",
+        "material_ids": mat_ids,
+        "cast_shadows": CAST_SHADOWS.get(tt.get("m_CastShadows", 1), "On"),
+        "receive_shadows": bool(tt.get("m_ReceiveShadows", 1)),
+        "light_probe_usage": LIGHT_PROBE_USAGE.get(tt.get("m_LightProbeUsage", 1), "Off"),
+        "reflection_probe_usage": reflection_probe_usage(tt.get("m_ReflectionProbeUsage", 1)),
+    }
+
+
+def build_skinnedmeshrenderer(obj, ctx: ExtractionContext):
+    tt = obj.read_typetree()
+    typed = obj.read()
+    mat_ids = [ctx.queue_material(mp.deref()) for mp in typed.m_Materials if mp.path_id != 0]
+    # §B.WP1 step 2: extract every Mesh reachable from a SkinnedMeshRenderer
+    # too ("dereference, don't skip") even though skip_import means the
+    # scene JSON never references it by id -- shares the meshes/ dedup pool
+    # with anything else that happens to use the same source mesh.
+    if typed.m_Mesh.path_id != 0:
+        ctx.queue_mesh(typed.m_Mesh.deref())
+    bone_names = []
+    for bp in (typed.m_Bones or []):
+        if bp.path_id == 0:
+            continue
+        try:
+            bone_tf_obj = bp.deref()
+            btt = bone_tf_obj.read_typetree()
+            go_pid = btt.get("m_GameObject", {}).get("m_PathID", 0)
+            if go_pid:
+                go_obj = bone_tf_obj.assets_file.objects.get(go_pid)
+                if go_obj is not None:
+                    bone_names.append(go_obj.read_typetree().get("m_Name", ""))
+        except Exception as e:  # pragma: no cover -- defensive, not hit by S1 slice
+            ctx.warnings.append(f"SkinnedMeshRenderer {obj.path_id}: bone deref failed: {e}")
+    return {
+        "type": "SkinnedMeshRenderer",
+        "material_ids": mat_ids,
+        "cast_shadows": CAST_SHADOWS.get(tt.get("m_CastShadows", 1), "On"),
+        "receive_shadows": bool(tt.get("m_ReceiveShadows", 1)),
+        "light_probe_usage": LIGHT_PROBE_USAGE.get(tt.get("m_LightProbeUsage", 1), "Off"),
+        "reflection_probe_usage": reflection_probe_usage(tt.get("m_ReflectionProbeUsage", 1)),
+        "bind_pose_bone_names": bone_names,
+        "skip_import": True,
+    }
+
+
+def build_meshcollider(obj, ctx: ExtractionContext):
+    tt = obj.read_typetree()
+    typed = obj.read()
+    if typed.m_Mesh.path_id == 0:
+        ctx.warnings.append(f"MeshCollider {obj.path_id}: no mesh assigned")
+        mesh_id = None
+    else:
+        mesh_id = ctx.queue_mesh(typed.m_Mesh.deref())
+    return {
+        "type": "MeshCollider",
+        "mesh_id": mesh_id,
+        "convex": bool(tt.get("m_Convex")),
+        "is_trigger": bool(tt.get("m_IsTrigger")),
+        "physic_material": resolve_physic_material(typed.m_Material, ctx),
+    }
+
+
+def build_boxcollider(obj, ctx: ExtractionContext):
+    tt = obj.read_typetree()
+    typed = obj.read()
+    c, s = tt["m_Center"], tt["m_Size"]
+    return {
+        "type": "BoxCollider",
+        "center": [c["x"], c["y"], c["z"]],
+        "size": [s["x"], s["y"], s["z"]],
+        "is_trigger": bool(tt.get("m_IsTrigger")),
+        "physic_material": resolve_physic_material(typed.m_Material, ctx),
+    }
+
+
+def build_spherecollider(obj, ctx: ExtractionContext):
+    tt = obj.read_typetree()
+    typed = obj.read()
+    c = tt["m_Center"]
+    return {
+        "type": "SphereCollider",
+        "center": [c["x"], c["y"], c["z"]],
+        "radius": tt.get("m_Radius", 0.5),
+        "is_trigger": bool(tt.get("m_IsTrigger")),
+        "physic_material": resolve_physic_material(typed.m_Material, ctx),
+    }
+
+
+def build_capsulecollider(obj, ctx: ExtractionContext):
+    tt = obj.read_typetree()
+    typed = obj.read()
+    c = tt["m_Center"]
+    return {
+        "type": "CapsuleCollider",
+        "center": [c["x"], c["y"], c["z"]],
+        "radius": tt.get("m_Radius", 0.5),
+        "height": tt.get("m_Height", 2.0),
+        "direction": tt.get("m_Direction", 1),
+        "is_trigger": bool(tt.get("m_IsTrigger")),
+        "physic_material": resolve_physic_material(typed.m_Material, ctx),
+    }
+
+
+def build_light(obj, ctx: ExtractionContext):
+    tt = obj.read_typetree()
+    color = tt.get("m_Color", {"r": 1, "g": 1, "b": 1, "a": 1})
+    shadows = tt.get("m_Shadows", {}) or {}
+    return {
+        "type": "Light",
+        "light_type": LIGHT_TYPE.get(tt.get("m_Type"), f"Unknown({tt.get('m_Type')})"),
+        "color": [color["r"], color["g"], color["b"], color["a"]],
+        "intensity": tt.get("m_Intensity", 1.0),
+        "range": tt.get("m_Range", 10.0),
+        "spot_angle": tt.get("m_SpotAngle", 30.0),
+        "lightmapping_mode": tt.get("m_Lightmapping", 4),
+        "shadow_type": SHADOW_TYPE.get(shadows.get("m_Type"), f"Unknown({shadows.get('m_Type')})"),
+    }
+
+
+def build_lodgroup(obj, f, ctx: ExtractionContext):
+    tt = obj.read_typetree()
+    lods_out = []
+    for lod in tt.get("m_LODs", []):
+        renderer_ids = []
+        for r in lod.get("renderers", []):
+            rp = r.get("renderer", r)
+            pid = rp.get("m_PathID", 0)
+            if not pid:
+                continue  # a null renderer slot -- §B.WP2.5 notes LODGroup.SetLODs accepts this silently
+            if rp.get("m_FileID", 0) != 0:
+                ctx.warnings.append(f"LODGroup {obj.path_id}: cross-file renderer ref {rp} skipped (not expected, §B.WP1 step 5)")
+                continue
+            robj = f.objects.get(pid)
+            if robj is None:
+                ctx.warnings.append(f"LODGroup {obj.path_id}: renderer path_id {pid} missing from file")
+                continue
+            go_pid = robj.read_typetree().get("m_GameObject", {}).get("m_PathID", 0)
+            if go_pid:
+                renderer_ids.append(str(go_pid))
+        lods_out.append({
+            "screen_relative_height": lod.get("screenRelativeHeight", 0.0),
+            "renderer_object_ids": renderer_ids,
+            "fade_transition_width": lod.get("fadeTransitionWidth", 0.0),
+        })
+    return {
+        "type": "LODGroup",
+        "lods": lods_out,
+        "size": tt.get("m_Size", 1.0),
+        "fade_mode": tt.get("m_FadeMode", 0),
+    }
+
+
+COMPONENT_BUILDERS = {
+    "MeshFilter": lambda obj, f, ctx: build_meshfilter(obj, ctx),
+    "MeshRenderer": lambda obj, f, ctx: build_meshrenderer(obj, ctx),
+    "SkinnedMeshRenderer": lambda obj, f, ctx: build_skinnedmeshrenderer(obj, ctx),
+    "MeshCollider": lambda obj, f, ctx: build_meshcollider(obj, ctx),
+    "BoxCollider": lambda obj, f, ctx: build_boxcollider(obj, ctx),
+    "SphereCollider": lambda obj, f, ctx: build_spherecollider(obj, ctx),
+    "CapsuleCollider": lambda obj, f, ctx: build_capsulecollider(obj, ctx),
+    "Light": lambda obj, f, ctx: build_light(obj, ctx),
+    "LODGroup": lambda obj, f, ctx: build_lodgroup(obj, f, ctx),
+    "ReflectionProbe": lambda obj, f, ctx: {"type": "ReflectionProbe", "skip_import": True},
+}
+
+
+def build_components(f, comp_ids: list[int], scene_idx: int, ctx: ExtractionContext) -> list[dict]:
+    out = []
+    for cid in comp_ids:
+        obj = f.objects.get(cid)
+        if obj is None:
+            ctx.warnings.append(f"scene {scene_idx}: component path_id {cid} missing from file")
+            continue
+        builder = COMPONENT_BUILDERS.get(obj.type.name)
+        if builder is None:
+            continue  # §C.6: exhaustive list for the spike, everything else intentionally unrecorded
+        rec = builder(obj, f, ctx)
+        if rec is not None:
+            out.append(rec)
+    return out
+
+
+# --------------------------------------------------------------------------
+# Per-scene hierarchy walk (§C.5)
+# --------------------------------------------------------------------------
+
+def extract_scene(scene_idx: int, f, tags_array: list[str], node_tf_ids: list[int], ctx: ExtractionContext) -> dict:
+    go_map, tf_map, _go_of_tf = build_scene_graph(f)
+    node_set = set(node_tf_ids)
+    objects = []
+    for tf_id in node_tf_ids:
+        tf = tf_map.get(tf_id)
+        if tf is None:
+            ctx.warnings.append(f"scene {scene_idx}: requested transform {tf_id} not found")
+            continue
+        go_id = tf["go_id"]
+        go = go_map.get(go_id)
+        if go is None:
+            ctx.warnings.append(f"scene {scene_idx}: transform {tf_id} has no owning GameObject in-file, skipped")
+            continue
+        parent_tf = tf["father_id"]
+        parent_go_id = None
+        if parent_tf not in (0, -1) and parent_tf in node_set:
+            parent_tf_rec = tf_map.get(parent_tf)
+            if parent_tf_rec is not None:
+                parent_go_id = parent_tf_rec["go_id"]
+        tag_name, tag_ok = resolve_tag(go["tag_raw"], tags_array)
+        if not tag_ok:
+            ctx.warnings.append(
+                f"scene {scene_idx}: GameObject {go_id} ({go['name']!r}) has unresolved tag index {go['tag_raw']}"
+            )
+        objects.append({
+            "id": str(go_id),
+            "name": go["name"],
+            "active": go["active"],
+            "layer": go["layer"],
+            "tag": tag_name,
+            "parent_id": str(parent_go_id) if parent_go_id is not None else None,
+            "local_position": tf["pos"],
+            "local_rotation": tf["rot"],
+            "local_scale": tf["scale"],
+            "components": build_components(f, go["components"], scene_idx, ctx),
+        })
+    objects.sort(key=lambda o: int(o["id"]))
+    return {"scene_name": SCENE_REGISTRY[scene_idx], "objects": objects}
+
+
+# --------------------------------------------------------------------------
+# Dedup write pass (§C.2/§C.3/§C.4)
+# --------------------------------------------------------------------------
+
+def write_meshes(ctx: ExtractionContext, output: str) -> dict:
+    out = {}
+    for cid, (mesh_obj, basename) in sorted(ctx.mesh_work.items()):
+        out_path = os.path.join(output, "meshes", f"{cid}.mesh.bin")
+        res = write_mesh_bin(mesh_obj, basename, out_path)  # raises HardExtractError on m_MeshCompression != 0
+        assert res.content_id == cid, f"mesh id mismatch: queued {cid} != computed {res.content_id}"
+        if res.had_nonzero_topology:
+            ctx.warnings.append(f"mesh {cid} ({res.source_object_name}): non-triangle submesh topology present")
+        out[cid] = {
+            "file": f"meshes/{cid}.mesh.bin",
+            "source_object_name": res.source_object_name,
+            "vertex_count": res.vertex_count,
+            "submesh_count": res.submesh_count,
+        }
+    return out
+
+
+def resolve_shader_name(mat_typed):
+    sptr = mat_typed.m_Shader
+    if sptr.path_id == 0:
+        return None
+    try:
+        sh_obj = sptr.deref()
+        sh_tt = sh_obj.read_typetree()
+    except Exception:
+        return None
+    if sh_tt is None:
+        return None
+    pf = sh_tt.get("m_ParsedForm") or {}
+    return pf.get("m_Name") or sh_tt.get("m_Name")
+
+
+def write_materials(ctx: ExtractionContext, output: str) -> dict:
+    out = {}
+    materials_dir = os.path.join(output, "materials")
+    for cid, (mat_obj, basename) in sorted(ctx.material_work.items()):
+        tt = mat_obj.read_typetree()
+        typed = mat_obj.read()
+        shader_name = resolve_shader_name(typed)
+        if not shader_name:
+            raise HardExtractError(
+                f"material {cid} (path_id={mat_obj.path_id} in {basename}, "
+                f"name={tt.get('m_Name')!r}): UNRESOLVED shader -- §B.WP1 step 4 hard failure"
+            )
+        sp = tt.get("m_SavedProperties", {}) or {}
+        tex_envs_tt = sp.get("m_TexEnvs", [])
+        sp_typed = getattr(typed, "m_SavedProperties", None)
+        tex_envs_typed = list(sp_typed.m_TexEnvs) if sp_typed is not None else []
+        assert len(tex_envs_tt) == len(tex_envs_typed), (
+            f"material {cid}: m_TexEnvs typetree/typed length mismatch "
+            f"({len(tex_envs_tt)} vs {len(tex_envs_typed)})"
+        )
+
+        tex_envs_out = {}
+        for (name_tt, te_tt), (_name_typed, te_typed) in zip(tex_envs_tt, tex_envs_typed):
+            tref = te_tt.get("m_Texture", {})
+            scale = te_tt.get("m_Scale", {"x": 1, "y": 1})
+            offset = te_tt.get("m_Offset", {"x": 0, "y": 0})
+            tex_id = None
+            if tref.get("m_PathID", 0) and te_typed.m_Texture.path_id != 0:
+                tex_obj = te_typed.m_Texture.deref()
+                tex_basename = ctx.owning_basename(tex_obj)
+                tex_id = content_id(tex_basename, tex_obj.path_id, "Texture2D")
+                entry = ctx.texture_work.setdefault(
+                    tex_id, {"obj": tex_obj, "basename": tex_basename, "prop_names": set()}
+                )
+                entry["prop_names"].add(name_tt)
+            tex_envs_out[name_tt] = {
+                "texture_id": tex_id,
+                "scale": [scale.get("x", 1), scale.get("y", 1)],
+                "offset": [offset.get("x", 0), offset.get("y", 0)],
+            }
+
+        floats_out = {n: v for n, v in sp.get("m_Floats", [])}
+        colors_out = {
+            n: [c.get("r", 0.0), c.get("g", 0.0), c.get("b", 0.0), c.get("a", 1.0)]
+            for n, c in sp.get("m_Colors", [])
+        }
+        keywords = set(tt.get("m_ValidKeywords") or [])
+        keywords.update((tt.get("m_ShaderKeywords") or "").split())
+
+        mat_json = {
+            "source_name": tt.get("m_Name", ""),
+            "shader": shader_name,
+            "render_queue": tt.get("m_CustomRenderQueue", -1),
+            "keywords": sorted(keywords),
+            "tex_envs": tex_envs_out,
+            "floats": floats_out,
+            "colors": colors_out,
+        }
+        with open(os.path.join(materials_dir, f"{cid}.json"), "w", encoding="utf-8") as fh:
+            json.dump(mat_json, fh, indent=2, sort_keys=True, ensure_ascii=False)
+        out[cid] = {"file": f"materials/{cid}.json", "source_name": mat_json["source_name"], "shader": shader_name}
+    return out
+
+
+def _is_normal_map_heuristic(src_name: str, prop_names: set) -> bool:
+    lname = (src_name or "").lower()
+    if lname.endswith(("_n", "_normal", "_nrm")):
+        return True
+    for p in prop_names:
+        pl = p.lower()
+        if "bump" in pl or "normal" in pl:
+            return True
+    return False
+
+
+def write_textures(ctx: ExtractionContext, output: str) -> dict:
+    out = {}
+    textures_dir = os.path.join(output, "textures")
+    for cid, entry in sorted(ctx.texture_work.items()):
+        tex_obj = entry["obj"]
+        prop_names = entry["prop_names"]
+        tt = tex_obj.read_typetree()
+        width, height = tt.get("m_Width", 0), tt.get("m_Height", 0)
+        fmt_code = tt.get("m_TextureFormat")
+        cs_code = tt.get("m_ColorSpace")
+        src_name = tt.get("m_Name", "")
+        is_normal = _is_normal_map_heuristic(src_name, prop_names)
+        out_path = os.path.join(textures_dir, f"{cid}.png")
+        try:
+            data = tex_obj.read()
+            img = data.image
+            if img is None:
+                raise ValueError("UnityPy returned no image data")
+            img = img.convert("RGBA")
+            img.save(out_path)
+        except Exception as e:
+            ctx.errors.append(
+                f"texture {cid} ({src_name!r}, path_id={tex_obj.path_id} in {entry['basename']}): "
+                f"decode failed: {e} -- placeholder emitted (§B.WP1 edge case)"
+            )
+            Image.new("RGBA", (64, 64), (255, 0, 255, 255)).save(out_path)
+        out[cid] = {
+            "file": f"textures/{cid}.png",
+            "source_name": src_name,
+            "width": width,
+            "height": height,
+            "format_src": texture_format_name(fmt_code),
+            "color_space": COLOR_SPACE.get(cs_code, f"Unknown({cs_code})"),
+            "is_normal_map": is_normal,
+        }
+    return out
+
+
+# --------------------------------------------------------------------------
+# navmesh_ref (§C.8) -- static copy of Arena's own bake settings, reference only
+# --------------------------------------------------------------------------
+
+def write_navmesh_ref(output: str):
+    data = {
+        "note": (
+            "Arena's OWN NavMesh bake settings for Equator, reference only -- "
+            "NOT consumed by WP2's bake (decision #6, §B.WP2.7 bakes fresh "
+            "for SPT's agent-0 values). Source: analysis/arena-census.md §10."
+        ),
+        "agent_type_id": 287145453,
+        "agent_radius": 0.28,
+        "agent_height": 1.60,
+        "agent_slope": 48,
+        "agent_climb": 0.38,
+        "cell_size": 0.07,
+        "tile_size": 256,
+        "source_bounds_center": [0.0, 2.0, 0.0],
+        "source_bounds_extent": [71.65, 10.05, 86.35],
+        "tile_count": 41,
+    }
+    with open(os.path.join(output, "navmesh_ref", "equator_source_navmesh.json"), "w", encoding="utf-8") as f:
+        json.dump(data, f, indent=2, sort_keys=True, ensure_ascii=False)
+
+
+def ensure_dirs(output: str):
+    for d in ("meshes", "textures", "materials", "scenes", "navmesh_ref"):
+        os.makedirs(os.path.join(output, d), exist_ok=True)
+
+
+def utcnow_iso() -> str:
+    return datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+# --------------------------------------------------------------------------
+# census-only mode
+# --------------------------------------------------------------------------
+
+def run_census_only(env, scene_indices: list[int], exact_paths: dict):
+    for idx in scene_indices:
+        f = env.files.get(exact_paths[idx]["level"])
+        if f is None:
+            print(f"{SCENE_REGISTRY[idx]} (level{idx}): FILE NOT LOADED", file=sys.stderr)
+            continue
+        counts = Counter(obj.type.name for obj in f.objects.values())
+        print(f"{SCENE_REGISTRY[idx]} (level{idx}): {dict(counts.most_common())}")
+        saf = env.files.get(exact_paths[idx]["sharedassets"])
+        if saf is not None:
+            sa_counts = Counter(obj.type.name for obj in saf.objects.values())
+            print(f"  sharedassets{idx}.assets: {dict(sa_counts.most_common())}")
+
+
+# --------------------------------------------------------------------------
+# main
+# --------------------------------------------------------------------------
+
+def parse_slice_roots(entries: list[str]) -> dict[int, list[int]]:
+    slice_map: dict[int, list[int]] = {}
+    for entry in entries:
+        if ":" not in entry:
+            print(f"ERROR: --slice-roots entry {entry!r} must be SCENE_IDX:id1,id2,...", file=sys.stderr)
+            sys.exit(2)
+        scene_str, ids_str = entry.split(":", 1)
+        idx = int(scene_str)
+        ids = [int(x) for x in ids_str.split(",") if x.strip()]
+        slice_map.setdefault(idx, []).extend(ids)
+    return slice_map
+
+
+def main():
+    parser = argparse.ArgumentParser(description="ArenaMapPort WP1 extractor (docs/SPEC.md §B.WP1/§C)")
+    parser.add_argument("--source", default=DEFAULT_SOURCE, help="Arena EscapeFromTarkovArena_Data dir (read-only)")
+    parser.add_argument("--scenes", default="all5", help="comma-separated scene indices from {51,53,55,57,58}, or 'all5'")
+    parser.add_argument(
+        "--slice-roots", action="append", default=[],
+        help='SCENE_IDX:id1,id2,... (Transform OR GameObject path_id) -- restrict that scene to these '
+             "root subtrees. Repeatable. A scene index with no --slice-roots entry is extracted in full.",
+    )
+    parser.add_argument("--output", default=None, help="package output directory (required unless --census-only)")
+    parser.add_argument("--census-only", action="store_true", help="print per-scene object counts, write nothing")
+    parser.add_argument(
+        "--fixed-timestamp", default=None,
+        help="override manifest.json's source.extracted_utc (ISO8601) -- for a true byte-identical "
+             "determinism check across two runs; omit for a real wall-clock timestamp",
+    )
+    args = parser.parse_args()
+
+    if args.scenes.strip().lower() == "all5":
+        scene_indices = list(ALL5)
+    else:
+        scene_indices = [int(x) for x in args.scenes.split(",") if x.strip()]
+    for idx in scene_indices:
+        if idx not in SCENE_REGISTRY:
+            print(f"ERROR: scene index {idx} is not in the §E.1 content-scene set {sorted(SCENE_REGISTRY)}", file=sys.stderr)
+            sys.exit(2)
+
+    slice_map = parse_slice_roots(args.slice_roots)
+    for idx in slice_map:
+        if idx not in scene_indices:
+            print(f"ERROR: --slice-roots given for scene {idx} which is not in --scenes {scene_indices}", file=sys.stderr)
+            sys.exit(2)
+
+    print(f"Loading environment for scenes {scene_indices} from {args.source} ...", file=sys.stderr)
+    tags_array = load_tags()
+    env, exact_paths = load_environment(args.source, scene_indices)
+    print(f"Loaded {len(env.files)} files.", file=sys.stderr)
+
+    if args.census_only:
+        run_census_only(env, scene_indices, exact_paths)
+        return
+
+    if not args.output:
+        print("ERROR: --output is required unless --census-only", file=sys.stderr)
+        sys.exit(2)
+
+    ctx = ExtractionContext(env=env)
+    ensure_dirs(args.output)
+
+    scenes_out: dict[int, dict] = {}
+    for idx in scene_indices:
+        f = env.files[exact_paths[idx]["level"]]
+        roots = slice_map.get(idx)
+        if roots:
+            _go_map, tf_map, go_of_tf = build_scene_graph(f)
+            node_ids: set[int] = set()
+            for r in roots:
+                rr = r
+                if rr not in tf_map:
+                    rr = go_of_tf.get(r)
+                    if rr is None:
+                        print(f"ERROR: --slice-roots id {r} for scene {idx} is not a known Transform or GameObject id", file=sys.stderr)
+                        sys.exit(2)
+                node_ids.update(subtree_ids(tf_map, rr))
+            node_id_list = sorted(node_ids)
+            print(f"  scene {idx} ({SCENE_REGISTRY[idx]}): slice of {len(node_id_list)} objects from {len(roots)} root(s)", file=sys.stderr)
+        else:
+            _go_map, tf_map, _go_of_tf = build_scene_graph(f)
+            node_id_list = list(tf_map.keys())
+            print(f"  scene {idx} ({SCENE_REGISTRY[idx]}): FULL scene, {len(node_id_list)} objects", file=sys.stderr)
+        scenes_out[idx] = extract_scene(idx, f, tags_array, node_id_list, ctx)
+
+    try:
+        print(f"Writing {len(ctx.mesh_work)} meshes...", file=sys.stderr)
+        meshes_manifest = write_meshes(ctx, args.output)
+        print(f"Writing {len(ctx.material_work)} materials...", file=sys.stderr)
+        materials_manifest = write_materials(ctx, args.output)
+        print(f"Writing {len(ctx.texture_work)} textures...", file=sys.stderr)
+        textures_manifest = write_textures(ctx, args.output)
+    except HardExtractError as e:
+        print(f"EXTRACTION FAILED (hard error, §B.WP1): {e}", file=sys.stderr)
+        sys.exit(2)
+
+    write_navmesh_ref(args.output)
+
+    for idx, scene_json in scenes_out.items():
+        path = os.path.join(args.output, "scenes", f"{scene_json['scene_name']}.json")
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump(scene_json, f, indent=2, sort_keys=True, ensure_ascii=False)
+
+    print("Computing spawn/zone anchor reference block...", file=sys.stderr)
+    scene_dict_for_anchors = {idx: arena_common.EQUATOR[idx] for idx in scene_indices}
+    try:
+        anchors = arena_census.spawn_zone_anchors(env, scene_dict_for_anchors)
+    except Exception as e:
+        ctx.warnings.append(f"spawn_zone_anchors failed: {e} -- anchors_reference left empty")
+        anchors = {}
+
+    manifest = {
+        "schema_version": SCHEMA_VERSION,
+        "source": {
+            "arena_data_root": args.source,
+            "extractor_script": "tools/extract/extract_equator.py",
+            "extracted_utc": args.fixed_timestamp or utcnow_iso(),
+        },
+        "scenes": [SCENE_REGISTRY[idx] for idx in scene_indices],
+        "slice": {str(idx): sorted(slice_map[idx]) for idx in slice_map},
+        "meshes": meshes_manifest,
+        "textures": textures_manifest,
+        "materials": materials_manifest,
+        "anchors_reference": anchors,
+        "errors": ctx.errors,
+        "warnings": ctx.warnings,
+    }
+    with open(os.path.join(args.output, "manifest.json"), "w", encoding="utf-8") as f:
+        json.dump(manifest, f, indent=2, sort_keys=True, ensure_ascii=False)
+
+    total_objects = sum(len(s["objects"]) for s in scenes_out.values())
+    print(
+        f"DONE. {total_objects} objects, {len(meshes_manifest)} meshes, "
+        f"{len(materials_manifest)} materials, {len(textures_manifest)} textures. "
+        f"{len(ctx.errors)} errors, {len(ctx.warnings)} warnings.",
+        file=sys.stderr,
+    )
+    if ctx.errors:
+        print(f"WARNING: manifest.json.errors is non-empty ({len(ctx.errors)}) -- this run fails WP6's acceptance gate.", file=sys.stderr)
+
+
+if __name__ == "__main__":
+    main()

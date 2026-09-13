@@ -1,0 +1,42 @@
+<!--
+  Offline unit tests for the WP5 server mod — no live server required. Convention
+  matches ArenaMode.Tests.csproj (xunit, net10.0, ProjectReference to the mod project).
+-->
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.11.1" />
+    <PackageReference Include="xunit" Version="2.9.2" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="2.8.2" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\ArenaMapPort.Server\ArenaMapPort.Server.csproj" />
+  </ItemGroup>
+
+  <!--
+    Referenced again here WITHOUT ExcludeAssets, matching ArenaMode.Tests.csproj's own
+    note: the server project sets ExcludeAssets="runtime" because the live SPT process
+    supplies these assemblies itself. A test host does not, so without this every test
+    that touches an SPTarkov model type fails to load the assembly rather than failing
+    an assertion.
+  -->
+  <ItemGroup>
+    <PackageReference Include="SPTushonka.Common" Version="4.1.5" />
+    <PackageReference Include="SPTushonka.DI" Version="4.1.5" />
+    <PackageReference Include="SPTushonka.Server.Core" Version="4.1.5" />
+  </ItemGroup>
+
+  <!-- db/base.json, copied so tests read the exact file the mod ships, not a duplicate. -->
+  <ItemGroup>
+    <Content Include="..\ArenaMapPort.Server\db\**\*.json" Link="db\%(RecursiveDir)%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+</Project>
