@@ -1,0 +1,25 @@
+# Unity
+UnityProject/[Ll]ibrary/
+UnityProject/[Tt]emp/
+UnityProject/[Oo]bj/
+UnityProject/[Bb]uild/
+UnityProject/[Bb]uilds/
+UnityProject/[Ll]ogs/
+UnityProject/[Uu]ser[Ss]ettings/
+UnityProject/*.csproj
+UnityProject/*.sln
+UnityProject/.vs/
+# Game-derived data and build outputs (never commit BSG content)
+arena-src/
+work/
+dist/
+UnityProject/Assets/ArenaImport/
+# .NET
+**/bin/
+**/obj/
+# Python
+__pycache__/
+*.pyc
+# Logs
+*.log
+analysis/tex_samples_*/
