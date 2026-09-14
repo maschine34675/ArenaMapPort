@@ -1,6 +1,7 @@
 using ArenaMapPort.Server;
 using SPTarkov.Server.Core.Models.Eft.Common;
 using SPTarkov.Server.Core.Models.Eft.Common.Tables;
+using SPTarkov.Server.Core.Models.Spt.Config;
 using SPTarkov.Server.Core.Models.Spt.Tables;
 using Xunit;
 
@@ -199,5 +200,43 @@ public class LocationRegistrationTests
         var result = ArenaEquatorRegistration.ApplyLocale(null);
 
         Assert.Null(result);
+    }
+
+    // Regression coverage for the raid-start KeyNotFound (2026-09-14): configs/location.json
+    // has per-map multiplier entries but no "default", so an unlisted map fails loot
+    // generation in LocationLootGenerator.GetLooseLootMultiplierForLocation.
+    [Fact]
+    public void ApplyLocationConfig_AddsKey_ToEveryIndexedTable()
+    {
+        var staticMult = new Dictionary<string, double> { ["factory4_day"] = 1.5, ["woods"] = 1 };
+        var looseMult = new Dictionary<string, double> { ["factory4_day"] = 2, ["woods"] = 1 };
+        var scavMaps = new Dictionary<string, ScavRaidTimeLocationSettings?>
+        {
+            ["factory4_day"] = new() { MinStaticLootPercent = 40 },
+        };
+
+        ArenaEquatorRegistration.ApplyLocationConfig(staticMult, looseMult, scavMaps, s => s with { });
+
+        Assert.Equal(1.5, staticMult[ArenaEquatorRegistration.Key]);
+        Assert.Equal(2, looseMult[ArenaEquatorRegistration.Key]);
+        var scav = scavMaps[ArenaEquatorRegistration.Key];
+        Assert.NotNull(scav);
+        Assert.NotSame(scavMaps[ArenaEquatorRegistration.TemplateKey], scav);
+        Assert.Equal(40, scav!.MinStaticLootPercent);
+    }
+
+    [Fact]
+    public void ApplyLocationConfig_FallsBack_WhenTemplateEntriesAreMissing()
+    {
+        var staticMult = new Dictionary<string, double>();
+        var looseMult = new Dictionary<string, double>();
+        var scavMaps = new Dictionary<string, ScavRaidTimeLocationSettings?>();
+
+        ArenaEquatorRegistration.ApplyLocationConfig(staticMult, looseMult, scavMaps, s => s with { });
+
+        Assert.Equal(1, staticMult[ArenaEquatorRegistration.Key]);
+        Assert.Equal(1, looseMult[ArenaEquatorRegistration.Key]);
+        Assert.True(scavMaps.ContainsKey(ArenaEquatorRegistration.Key));
+        Assert.Null(scavMaps[ArenaEquatorRegistration.Key]);
     }
 }

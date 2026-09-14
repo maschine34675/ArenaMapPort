@@ -15,8 +15,10 @@ using SPTarkov.DI.Annotations;
 using SPTarkov.Server.Core.DI;
 using SPTarkov.Server.Core.Models.Common;
 using SPTarkov.Server.Core.Models.Eft.Common;
+using SPTarkov.Server.Core.Models.Spt.Config;
 using SPTarkov.Server.Core.Models.Spt.Tables;
 using SPTarkov.Server.Core.Utils;
+using SPTarkov.Server.Core.Utils.Cloners;
 using SPTarkov.Server.Core.Utils.Json;
 
 namespace ArenaMapPort.Server;
@@ -31,6 +33,9 @@ public static class ArenaEquatorRegistration
 {
     public const string Key = ArenaEquatorLocation.Key;
     public const string Id = ArenaEquatorLocation.IdField;
+
+    // base.json is generated from factory4_day (tools/server/make_base_json.py).
+    public const string TemplateKey = "factory4_day";
 
     // Locale display text (SPEC §E.5). Placeholder English, spike-only.
     public const string LocaleName = "Arena: Equator (spike)";
@@ -132,6 +137,35 @@ public static class ArenaEquatorRegistration
     }
 
     /// <summary>
+    /// Adds <see cref="Key"/> to the location-keyed server config tables that the raid
+    /// path reads with a bare indexer. Pattern ported (MIT) from IcebreakerMod.cs:231-239.
+    /// Without these, /client/match/local/start throws KeyNotFound ('default' was not
+    /// present) in LocationLootGenerator.GetLooseLootMultiplierForLocation — configs/
+    /// location.json has no "default" key for either multiplier table — and scav raid-time
+    /// adjustment indexes ScavRaidTimeSettings.Maps the same way
+    /// (RaidTimeAdjustmentService.GetMapSettings). The other per-map tables on that path
+    /// (MaxBotCap, LootMaxSpawnLimits, LooseLootBlacklist, CustomPmcWaves) fall back safely.
+    /// Pure — no DI — so it is directly unit testable.
+    /// </summary>
+    public static void ApplyLocationConfig(
+        Dictionary<string, double> staticLootMultiplier,
+        Dictionary<string, double> looseLootMultiplier,
+        Dictionary<string, ScavRaidTimeLocationSettings?> scavRaidTimeMaps,
+        Func<ScavRaidTimeLocationSettings, ScavRaidTimeLocationSettings> clone)
+    {
+        // Loot tables are empty for the spike, so the multiplier only has to exist;
+        // Factory's value keeps any user override consistent with the template map.
+        staticLootMultiplier[Key] = staticLootMultiplier.GetValueOrDefault(TemplateKey, 1);
+        looseLootMultiplier[Key] = looseLootMultiplier.GetValueOrDefault(TemplateKey, 1);
+
+        // A null entry is also accepted (GetMapSettings falls back to defaults with a
+        // warning), so a missing Factory entry still leaves the key present.
+        scavRaidTimeMaps[Key] = scavRaidTimeMaps.GetValueOrDefault(TemplateKey) is { } factory
+            ? clone(factory)
+            : null;
+    }
+
+    /// <summary>
     /// Stamps the map-select locale keys into a deserialized locale dictionary and
     /// returns it (mutate-in-place, matching <see cref="LazyLoad{T}.AddTransformer"/>'s
     /// signature so this can be passed straight to it). Pure — no DI, directly unit
@@ -176,6 +210,8 @@ public static class ArenaEquatorRegistration
 public class ArenaMapPortMod(
     LocationTable locationTable,
     LocaleTable localeTable,
+    LocationConfig locationConfig,
+    ICloner cloner,
     JsonUtil jsonUtil,
     ISptLogger<ArenaMapPortMod> logger) : IOnLoad
 {
@@ -209,10 +245,15 @@ public class ArenaMapPortMod(
         ArenaEquatorRegistration.EnsureAvailable(locationTable);
         var location = ArenaEquatorRegistration.BuildLocation(newBase);
 
-        // TODO(bots-milestone): bot cap (BotConfig.MaxBotCap) / ScavRaidTimeSettings /
-        // StaticLootMultiplier / LooseLootMultiplier / NonMaps — skipped for the spike
-        // (SPEC decision #8, bots out of scope; analysis/ref-manimal.md §1's punch-list
-        // has the retail levers Icebreaker uses for these, next milestone starts there).
+        ArenaEquatorRegistration.ApplyLocationConfig(
+            locationConfig.StaticLootMultiplier,
+            locationConfig.LooseLootMultiplier,
+            locationConfig.ScavRaidTimeSettings.Maps,
+            settings => cloner.Clone(settings)!);
+
+        // TODO(bots-milestone): bot cap (BotConfig.MaxBotCap, falls back to "default") /
+        // NonMaps — skipped for the spike (SPEC decision #8, bots out of scope;
+        // analysis/ref-manimal.md §1's punch-list has the retail levers Icebreaker uses).
 
         try
         {
