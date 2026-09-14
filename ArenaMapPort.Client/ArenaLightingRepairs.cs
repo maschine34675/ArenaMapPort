@@ -61,7 +61,7 @@ namespace ArenaMapPort.Client
         static ConfigEntry<float> _globalLightIntensityMultiplier;
         static ConfigEntry<float> _sunIntensityMultiplier;
         static ConfigEntry<float> _sunColorWhiteBlend;
-        static ConfigEntry<bool> _fogEnabled;
+        static ConfigEntry<float> _fogDensity;
         static ConfigEntry<float> _fillLightIntensity;
 
         static bool _installed;
@@ -142,11 +142,11 @@ namespace ArenaMapPort.Client
                     "toward white. 0 = authored color unchanged, 1 = pure white.",
                     new AcceptableValueRange<float>(0f, 1f)));
 
-            _fogEnabled = Plugin.Instance.Config.Bind(ConfigSection, "FogEnabled", false,
-                "Toggles RenderSettings.fog on/off. Off matches the current authored value (no-op " +
-                "default). NOTE: the authored fogDensity is currently 0, so enabling this has no visible " +
-                "effect until a future bundle rebuild also authors real fog density/color — kept here so " +
-                "the knob exists for that rebuild rather than needing another client change.");
+            _fogDensity = Plugin.Instance.Config.Bind(ConfigSection, "FogDensity", 0f,
+                new ConfigDescription(
+                    "Density of a light grey distance fog (exponential squared). 0 = no fog. Around 0.01 is " +
+                    "a light haze, 0.04 is roughly Arena's own authored fog.",
+                    new AcceptableValueRange<float>(0f, 0.06f)));
 
             _fillLightIntensity = Plugin.Instance.Config.Bind(ConfigSection, "FillLightIntensity", 0.4f,
                 new ConfigDescription(
@@ -161,7 +161,7 @@ namespace ArenaMapPort.Client
             _globalLightIntensityMultiplier.SettingChanged += (_, __) => ReapplyIfLoaded();
             _sunIntensityMultiplier.SettingChanged += (_, __) => ReapplyIfLoaded();
             _sunColorWhiteBlend.SettingChanged += (_, __) => ReapplyIfLoaded();
-            _fogEnabled.SettingChanged += (_, __) => ReapplyIfLoaded();
+            _fogDensity.SettingChanged += (_, __) => ReapplyIfLoaded();
         }
 
         static void OnSceneLoaded(Scene scene, LoadSceneMode mode)
@@ -190,6 +190,7 @@ namespace ArenaMapPort.Client
             // LevelSettings of its own (e.g. a results/menu scene) would otherwise inherit whatever we
             // last wrote. Restore the authored no-op values explicitly so nothing outlives this raid.
             RenderSettings.fog = false; // AuthorScriptsScene.cs:83 authors LevelSettings.fog = false
+            RenderSettings.fogDensity = 0f;
             if (_ambientFallbackWritten)
             {
                 RenderSettings.ambientMode = AmbientMode.Flat;
@@ -238,7 +239,7 @@ namespace ArenaMapPort.Client
             // Enabled=false applies neutral values instead of returning, so switching it off live
             // restores the authored look rather than freezing the last tuned state.
             bool on = _enabled.Value;
-            bool levelSettingsFound = ApplyAmbient(on ? _ambientColorMultiplier.Value : 1f, on && _fogEnabled.Value);
+            bool levelSettingsFound = ApplyAmbient(on ? _ambientColorMultiplier.Value : 1f, on ? _fogDensity.Value : 0f);
             int lightsApplied = ApplyLights(
                 on ? _globalLightIntensityMultiplier.Value : 1f,
                 on ? _sunIntensityMultiplier.Value : 1f,
@@ -252,7 +253,7 @@ namespace ArenaMapPort.Client
                     $"(ambientColorMultiplier={_ambientColorMultiplier.Value:0.00}), {lightsApplied} light(s) " +
                     $"(globalMultiplier={_globalLightIntensityMultiplier.Value:0.00}, " +
                     $"sunMultiplier={_sunIntensityMultiplier.Value:0.00}, sunWhiteBlend={_sunColorWhiteBlend.Value:0.00}), " +
-                    $"fillLight={(fillActive ? _fillLightIntensity.Value.ToString("0.00") : "off")}, fog={_fogEnabled.Value}");
+                    $"fillLight={(fillActive ? _fillLightIntensity.Value.ToString("0.00") : "off")}, fogDensity={_fogDensity.Value:0.000}");
             }
         }
 
@@ -299,11 +300,22 @@ namespace ArenaMapPort.Client
         // Returns true if a live LevelSettings singleton was found and tuned (the expected, confirmed
         // case — see class doc comment), false if it fell back to writing RenderSettings directly
         // (defensive only; should not happen given the component is authored and confirmed present).
-        static bool ApplyAmbient(float m, bool fog)
+        static bool ApplyAmbient(float m, float fogDensity)
         {
             var levelSettings = Singleton<LevelSettings>.Instantiated ? Singleton<LevelSettings>.Instance : null;
             if (levelSettings != null)
             {
+                // The authored LevelSettings leaves fogMode at default(FogMode) = 0 and fogColor black,
+                // and ApplySettings copies both into RenderSettings (LevelSettings.cs:206-211). The FPS
+                // camera's GlobalFog image effect ignores RenderSettings.fog and computes its fog factor
+                // only for modes 1-3, so mode 0 yields factor 0: every non-sky pixel becomes fogColor
+                // (black). Patch the LevelSettings fields too, since OnPostLoadingScene re-applies them.
+                levelSettings.fogMode = FogMode.ExponentialSquared;
+                levelSettings.fogDensity = fogDensity;
+                levelSettings.fogColor = FogColor;
+                levelSettings.fog = fogDensity > 0f;
+                ApplyFog(fogDensity);
+
                 if (!_levelSettingsBaselineCaptured)
                 {
                     _baseSkyColor = levelSettings.SkyColor;
@@ -317,10 +329,7 @@ namespace ArenaMapPort.Client
                 levelSettings.GroundColor = ScaleColor(_baseGroundColor, m);
                 // LevelSettings.OnPreCullCallback (decompile, LevelSettings.cs:240-263) re-pushes these
                 // exact fields into RenderSettings every camera pre-cull on its own — we only need to
-                // update the fields it reads from. fog does NOT get re-pushed per-frame (only
-                // ApplySettings(), called at Awake/OnPostLoadingScene, touches RenderSettings.fog), so
-                // we still write RenderSettings.fog directly below for FogEnabled to take effect live.
-                RenderSettings.fog = fog;
+                // update the fields it reads from. Fog is not re-pushed per frame, hence ApplyFog above.
                 return true;
             }
 
@@ -333,12 +342,22 @@ namespace ArenaMapPort.Client
             RenderSettings.ambientSkyColor = fallback;
             RenderSettings.ambientEquatorColor = fallback;
             RenderSettings.ambientGroundColor = fallback;
-            RenderSettings.fog = fog;
+            ApplyFog(fogDensity);
             Plugin.Log.LogWarning("[ArenaMapPort][Lighting] LevelSettings singleton not found at apply time — " +
                                    "wrote RenderSettings ambient directly as a fallback (should not happen; the " +
                                    "component is authored in AuthorScriptsScene.cs and was confirmed present in " +
                                    "the shipped bundle — see docs/progress/fix-lighting-movement.md).");
             return false;
+        }
+
+        static readonly Color FogColor = new Color(0.62f, 0.66f, 0.70f, 1f);
+
+        static void ApplyFog(float density)
+        {
+            RenderSettings.fogMode = FogMode.ExponentialSquared;
+            RenderSettings.fogDensity = density;
+            RenderSettings.fogColor = FogColor;
+            RenderSettings.fog = density > 0f;
         }
 
         static int ApplyLights(float globalMultiplier, float sunMultiplier, float sunWhiteBlend)

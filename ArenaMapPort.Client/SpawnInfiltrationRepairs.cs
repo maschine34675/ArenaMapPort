@@ -71,6 +71,7 @@ namespace ArenaMapPort.Client
             }
 
             SpawnColliderRepairs.EnsureAllTriggers();
+            SpawnPlacementRepairs.Apply(__result);
 
             int fixedCount = 0;
             foreach (var point in __result)
