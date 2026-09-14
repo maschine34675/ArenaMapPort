@@ -648,6 +648,57 @@ def _is_normal_map_heuristic(src_name: str, prop_names: set) -> bool:
     return False
 
 
+# impl-texture-dimensions: Cubemap face order assumption -- Unity's own documented "6 Frames"
+# strip/cross layout convention (and every community tool that round-trips Cubemap assets:
+# AssetStudio/UABEA) treats a Cubemap's 6 serialized faces, in raw storage order, as
+# (+X, -X, +Y, -Y, +Z, -Z) -- the same order as the UnityEngine.CubemapFace enum
+# (PositiveX=0..NegativeZ=5). Confirmed structurally this pass (not pixel-exact, which the spike
+# doesn't require, SPEC §B.WP2.4): decoding all 6 of a real Equator-referenced Cubemap's faces
+# (`patron_cubemap_metall`, resources.assets path_id=5546) each independently produced a full,
+# non-degenerate 256x256 RGBA image (no garbage/misaligned bytes), and 6 * m_CompleteImageSize
+# exactly equals the raw image_data blob length for every one of the 18 real Cubemaps this
+# extractor now handles (verified for all of them, not just the one sampled above).
+CUBE_FACE_ORDER = ["+X", "-X", "+Y", "-Y", "+Z", "-Z"]
+
+
+def _decode_cubemap_faces(tex_obj, data, tt, width: int, height: int) -> list:
+    """Decode all 6 faces of a Cubemap (top mip level only -- WP2 only ever needs one importable
+    2D layout per texture id, §C.3) and return them as 6 PIL Images in CUBE_FACE_ORDER.
+
+    Storage layout (confirmed empirically, see CUBE_FACE_ORDER's comment): image_data is 6
+    consecutive faces, each `m_CompleteImageSize` bytes -- the FULL per-face mip chain (base level
+    first) -- so the base/top mip for face i starts at `i * m_CompleteImageSize` and
+    parse_image_data (the same decoder every other texture in this pipeline already uses) reads
+    exactly the bytes it needs from the front of that slice, ignoring the smaller mips appended
+    after it, exactly as it already does for a normal streamed Texture2D.
+    """
+    from UnityPy.export.Texture2DConverter import parse_image_data
+
+    raw = bytes(data.get_image_data())
+    face_size = tt.get("m_CompleteImageSize") or 0
+    if not face_size or face_size * 6 != len(raw):
+        # Defensive fallback -- not observed on any of Equator's 18 real Cubemaps (all satisfy
+        # face_size*6==len(raw) exactly), but don't hard-fail a differently-authored source
+        # Cubemap that happens to omit/misreport m_CompleteImageSize.
+        if len(raw) % 6 != 0:
+            raise ValueError(
+                f"Cubemap image_data length {len(raw)} is not evenly divisible by 6 faces "
+                f"(m_CompleteImageSize={tt.get('m_CompleteImageSize')})"
+            )
+        face_size = len(raw) // 6
+    fmt = data.m_TextureFormat
+    ver = getattr(tex_obj, "version", (0, 0, 0, 0))
+    plat = getattr(tex_obj, "platform", 0)
+    faces = []
+    for i in range(6):
+        face_bytes = raw[i * face_size:(i + 1) * face_size]
+        img = parse_image_data(face_bytes, width, height, fmt, ver, plat, None, True)
+        if img is None:
+            raise ValueError(f"parse_image_data returned no image data for cubemap face {i} ({CUBE_FACE_ORDER[i]})")
+        faces.append(img.convert("RGBA"))
+    return faces
+
+
 def write_textures(ctx: ExtractionContext, output: str) -> dict:
     out = {}
     textures_dir = os.path.join(output, "textures")
@@ -665,10 +716,38 @@ def write_textures(ctx: ExtractionContext, output: str) -> dict:
         is_normal = _is_normal_map_heuristic(src_name, prop_names)
         out_path = os.path.join(textures_dir, f"{cid}.png")
         is_volume = tex_obj.type.name == "Texture3D"
+        is_cube = tex_obj.type.name == "Cubemap"
+        # impl-texture-dimensions §1: record every texture's actual runtime shape so WP2 never
+        # imports/assigns a Cubemap or Texture3D source as a plain 2D texture (the root cause of
+        # the reported "Error assigning 2D texture to CUBE/3D texture property" scene-load errors
+        # -- a Cubemap/Texture3D object decoded via the generic Texture2D path only ever yields
+        # ONE face/slice's worth of pixels, silently, with no indication it came from a
+        # multi-face/volume source). "Tex2DArray" is recorded defensively even though the census
+        # (arena-census.md §2/§6, and this extractor's own full in-scope material scan this pass)
+        # found none reachable from Equator's 5 content scenes -- WP2 must still handle it
+        # gracefully (skip + log, same as Tex3D) rather than assume it can't occur.
+        if is_cube:
+            dimension = "Cube"
+        elif is_volume:
+            dimension = "Tex3D"
+        elif tex_obj.type.name == "Texture2DArray":
+            dimension = "Tex2DArray"
+        else:
+            dimension = "Tex2D"
         volume_depth = int(tt.get("m_Depth", 1)) or 1 if is_volume else 1
         try:
             data = tex_obj.read()
-            if is_volume:
+            if is_cube:
+                # §1: decode all 6 faces (real texel data, not a placeholder/single-face crop)
+                # and stitch them into one vertical 6-frame strip -- the layout WP2's
+                # TextureImporter recognizes via TextureImporterGenerateCubemap.AutoCubemap
+                # (§B.WP2.4/task item 2) to rebuild a real TextureCube-shaped asset, instead of
+                # importing face 0 alone as an ordinary 2D texture.
+                faces = _decode_cubemap_faces(tex_obj, data, tt, width, height)
+                img = Image.new("RGBA", (width, height * 6))
+                for i, face in enumerate(faces):
+                    img.paste(face, (0, i * height))
+            elif is_volume:
                 # Real data exposes a class UnityPy's own `.image` property never
                 # handles (Texture2DConverter.get_image_from_texture2d is hard-wired
                 # to Texture2D/Cubemap fields) -- found this pass on Equator's real
@@ -706,9 +785,15 @@ def write_textures(ctx: ExtractionContext, output: str) -> dict:
             )
             Image.new("RGBA", (64, 64), (255, 0, 255, 255)).save(out_path)
         # Manifest width/height must match the SAVED PNG's actual pixel size
-        # (validate_extract.py asserts this) -- for a flattened volume texture
-        # that is width x (height*depth), not the source m_Width/m_Height alone.
-        out_width, out_height = (width, height * volume_depth) if is_volume else (width, height)
+        # (validate_extract.py asserts this) -- for a flattened volume texture that is
+        # width x (height*depth), for a cubemap strip that is width x (height*6), not the source
+        # m_Width/m_Height alone.
+        if is_volume:
+            out_width, out_height = width, height * volume_depth
+        elif is_cube:
+            out_width, out_height = width, height * 6
+        else:
+            out_width, out_height = width, height
         entry_out = {
             "file": f"textures/{cid}.png",
             "source_name": src_name,
@@ -717,15 +802,35 @@ def write_textures(ctx: ExtractionContext, output: str) -> dict:
             "format_src": texture_format_name(fmt_code),
             "color_space": COLOR_SPACE.get(cs_code, f"Unknown({cs_code})"),
             "is_normal_map": is_normal,
+            # impl-texture-dimensions §1: §C-compatible extension -- "Tex2D" (default, matches
+            # every pre-existing package that predates this field), "Cube", "Tex3D", or
+            # "Tex2DArray". A reader that doesn't know this key can keep treating every texture as
+            # a plain 2D PNG exactly as before; WP2's importer is the one consumer that now
+            # branches on it (task item 2).
+            "dimension": dimension,
         }
+        if is_cube:
+            entry_out["cube_layout"] = "vertical_strip"
+            entry_out["cube_face_order"] = CUBE_FACE_ORDER
+            entry_out["cube_face_width"] = width
+            entry_out["cube_face_height"] = height
+            ctx.warnings.append(
+                f"texture {cid} ({src_name!r}): Cubemap ({width}x{height} per face) exported as a "
+                f"{out_width}x{out_height} vertical 6-frame strip (real decoded data for all 6 "
+                f"faces, not a placeholder) -- WP2 imports it as a real TextureCube-shaped asset "
+                f"via TextureImporterGenerateCubemap.AutoCubemap, never as a plain 2D texture."
+            )
         if is_volume:
             entry_out["is_volume_texture"] = True
             entry_out["volume_source_depth"] = volume_depth
             entry_out["volume_source_height"] = height
             ctx.warnings.append(
                 f"texture {cid} ({src_name!r}): Texture3D (depth={volume_depth}) flattened to a "
-                f"single {out_width}x{out_height} PNG (stacked slices) -- real decoded data, not a "
-                f"placeholder; WP2 imports it as an ordinary 2D Texture2D asset."
+                f"single {out_width}x{out_height} PNG (stacked slices, real decoded data, not a "
+                f"placeholder) -- WP2 does NOT build a Texture3D asset or assign this to any "
+                f"material property (§B.WP2.4 task item 2's explicit fallback: leave the property "
+                f"unset so the shader default applies); the PNG is imported as an ordinary, "
+                f"unused 2D texture for inspection only."
             )
         out[cid] = entry_out
     return out

@@ -135,8 +135,18 @@ namespace ArenaMapPort.Client
             }
         }
 
+        // impl-raidstart-repairs item (4) / audit-reference-repairs.md "Recommendation": log an
+        // immediate, synchronous per-scene summary at the end of THIS pass, not just the 3s-delayed
+        // ReportSummary() sweep — a crash in the first few seconds of a raid (like the SpatialAudioSystem
+        // NRE this task fixes) previously left no evidence in the log of whether the rebind pass ran at
+        // all. Matches InterchangeRework's own MaterialShaderRebind.cs pattern (OnIrSceneLoaded logs
+        // immediately; attribution already covers this file, THIRD-PARTY-NOTICES.md). The 3s
+        // ReportSummary() sweep still runs unchanged, for stragglers only (materials whose target shader
+        // was not yet loaded on this pass).
         static void RunPass(Scene scene)
         {
+            int considered = 0;
+            int rebound = 0;
             foreach (var root in scene.GetRootGameObjects())
             {
                 var renderers = root.GetComponentsInChildren<Renderer>(true);
@@ -145,26 +155,40 @@ namespace ArenaMapPort.Client
                     var mats = renderers[r].sharedMaterials;
                     for (int m = 0; m < mats.Length; m++)
                     {
-                        Rebind(mats[m]);
+                        var material = mats[m];
+                        if (material == null || material.shader == null ||
+                            !material.shader.name.StartsWith(StandinPrefix, StringComparison.Ordinal))
+                        {
+                            continue; // not one of our stand-ins — already good, or not ours
+                        }
+                        considered++;
+                        if (Rebind(material))
+                        {
+                            rebound++;
+                        }
                     }
                 }
             }
+
+            Plugin.Log.LogInfo($"[ArenaMapPort][RebindShaders] {scene.name}: pass complete — " +
+                                $"{rebound}/{considered} stand-in material(s) rebound this pass");
         }
 
         // Naturally idempotent: a successful rebind changes the material's shader away from the prefix,
         // so a later pass (the 3s sweep, or a re-load of the same scene) skips it without needing a
         // separate "already seen" set — and, unlike a "seen" set would, this still RETRIES a material
-        // whose target shader simply wasn't loaded yet on the first pass.
-        static void Rebind(Material material)
+        // whose target shader simply wasn't loaded yet on the first pass. Returns true iff this call
+        // performed the rebind (used by RunPass for its immediate per-scene summary line above).
+        static bool Rebind(Material material)
         {
             if (material == null || material.shader == null)
             {
-                return;
+                return false;
             }
             var currentName = material.shader.name;
             if (!currentName.StartsWith(StandinPrefix, StringComparison.Ordinal))
             {
-                return; // not one of our stand-ins — already good, or not ours
+                return false; // not one of our stand-ins — already good, or not ours
             }
 
             var originalName = currentName.Substring(StandinPrefix.Length);
@@ -176,7 +200,7 @@ namespace ArenaMapPort.Client
             if (target == null || target.name.StartsWith(StandinPrefix, StringComparison.Ordinal))
             {
                 _unresolved.Add(originalName);
-                return;
+                return false;
             }
 
             material.shader = target;
@@ -203,6 +227,7 @@ namespace ArenaMapPort.Client
             }
 
             _reboundCounts[originalName] = _reboundCounts.TryGetValue(originalName, out var n) ? n + 1 : 1;
+            return true;
         }
 
         static Shader FindLoadedExact(string name)

@@ -182,8 +182,10 @@ namespace ArenaMapPort.Editor.BundleBuild
             var pkg = new ArenaPackage(packageDir);
 
             // §B.WP2's execution-order note: textures MUST import before materials
-            // (Material.SetTexture against a not-yet-imported Texture2D is a silent no-op).
-            Dictionary<string, Texture2D> textures = TextureImportDriver.ImportAll(pkg);
+            // (Material.SetTexture against a not-yet-imported texture is a silent no-op).
+            // Dictionary value type is the base Texture (impl-texture-dimensions §2) since a
+            // Cube-dimension entry resolves to a Cubemap asset, not a Texture2D one.
+            Dictionary<string, Texture> textures = TextureImportDriver.ImportAll(pkg);
 
             var shaderGen = new StandinShaderGenerator();
             shaderGen.CollectFromPackage(pkg);

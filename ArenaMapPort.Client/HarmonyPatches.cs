@@ -1,5 +1,9 @@
 using System;
+using System.Linq;
 using System.Reflection;
+using System.Threading;
+using System.Threading.Tasks;
+using Audio.SpatialSystem;
 using EFT;
 using EFT.AssetsManager;
 using HarmonyLib;
@@ -27,6 +31,16 @@ namespace ArenaMapPort.Client
             InstallBundleHost(harmony);
             InstallNavMesh(harmony);
             InstallPerfectCullingSkip(harmony);
+
+            // impl-raidstart-repairs — see docs/progress/impl-raidstart-repairs.md for the audit trail.
+            InstallSpatialAudioCreateDefaults(harmony);
+            InstallSpatialAudioInitSkip(harmony);
+            InstallSpatialAudioOcclusionGuard(harmony);
+            InstallSpatialAudioInteractiveOcclusionGuard(harmony);
+            InstallEnsureEnvironment(harmony);
+            InstallEffectsControllerFrostbite(harmony);
+            InstallAIVoxelesDataGuard(harmony);
+            InstallAIStationaryControllerEnsure(harmony);
         }
 
         // §F.1 — BundlesManager.LoadBundleAsync(string bundleName, bool logErrors = true), instance method.
@@ -84,6 +98,172 @@ namespace ArenaMapPort.Client
             harmony.Patch(target, prefix: new HarmonyMethod(prefix));
             Plugin.Log.LogInfo("[ArenaMapPort][Harmony] patched " +
                                 "PerfectCullingCrossSceneSampler.InitializeAutoCulling (§F.6)");
+        }
+
+        // impl-raidstart-repairs item (1a) — SpatialAudioSystem.CreateSpatialAudioSystem(Transform),
+        // static factory. Verified: D:/SPT41/Development/_decompiled/Audio.SpatialSystem/
+        // SpatialAudioSystem.cs:286. See SpatialAudioRepairs.cs for the full decision writeup.
+        static void InstallSpatialAudioCreateDefaults(Harmony harmony)
+        {
+            var target = AccessTools.Method(
+                typeof(SpatialAudioSystem),
+                nameof(SpatialAudioSystem.CreateSpatialAudioSystem));
+
+            if (!Verify(target, typeof(SpatialAudioSystem), nameof(SpatialAudioSystem.CreateSpatialAudioSystem)))
+            {
+                return;
+            }
+
+            var postfix = AccessTools.Method(typeof(SpatialAudioCreateDefaultsPostfix), "Postfix");
+            harmony.Patch(target, postfix: new HarmonyMethod(postfix));
+            Plugin.Log.LogInfo("[ArenaMapPort][Harmony] patched SpatialAudioSystem.CreateSpatialAudioSystem " +
+                                "(impl-raidstart-repairs 1a)");
+        }
+
+        // impl-raidstart-repairs item (1b) — SpatialAudioSystem.Initialize(CancellationToken,
+        // IProgress<float>), instance, async Task. Verified: same file, lines 139-182.
+        static void InstallSpatialAudioInitSkip(Harmony harmony)
+        {
+            var target = AccessTools.Method(
+                typeof(SpatialAudioSystem),
+                nameof(SpatialAudioSystem.Initialize),
+                new[] { typeof(CancellationToken), typeof(IProgress<float>) });
+
+            if (!Verify(target, typeof(SpatialAudioSystem), nameof(SpatialAudioSystem.Initialize)))
+            {
+                return;
+            }
+
+            var prefix = AccessTools.Method(typeof(SpatialAudioInitSkipPrefix), "Prefix");
+            harmony.Patch(target, prefix: new HarmonyMethod(prefix));
+            Plugin.Log.LogInfo("[ArenaMapPort][Harmony] patched SpatialAudioSystem.Initialize (impl-raidstart-repairs 1b)");
+        }
+
+        // impl-raidstart-repairs item (1c) — every public instance overload of
+        // SpatialAudioSystem.ProcessSourceOcclusion (3 in this build: IPlayer-, GameObject-, and
+        // BetterSource-keyed). Resolved by reflection (name match, not a fixed signature) — same
+        // technique ManimalIcebreaker's own Patch_OcclusionWhenUninitialized/Patch_OcclusionNeverThrows
+        // use for this exact target, because listing 3 full parameter-type arrays by hand is exactly
+        // the kind of brittle-against-a-future-overload-change situation this file's own header
+        // comment warns about; reflection-by-name is *more* robust here, not less.
+        static void InstallSpatialAudioOcclusionGuard(Harmony harmony)
+        {
+            var targets = typeof(SpatialAudioSystem)
+                .GetMethods(BindingFlags.Public | BindingFlags.Instance)
+                .Where(m => m.Name == nameof(SpatialAudioSystem.ProcessSourceOcclusion))
+                .ToArray();
+
+            if (targets.Length == 0)
+            {
+                Plugin.Log.LogError(
+                    "[ArenaMapPort][Harmony] target not found: Audio.SpatialSystem.SpatialAudioSystem." +
+                    "ProcessSourceOcclusion (no overload matched by name) — this hook is DISABLED for this " +
+                    "session. Every OTHER ArenaMapPort hook still installs and runs normally.");
+                return;
+            }
+
+            var prefix = new HarmonyMethod(AccessTools.Method(typeof(SpatialAudioOcclusionGuard), "Prefix"));
+            var finalizer = new HarmonyMethod(AccessTools.Method(typeof(SpatialAudioOcclusionGuard), "Finalizer"));
+            foreach (var target in targets)
+            {
+                harmony.Patch(target, prefix: prefix, finalizer: finalizer);
+            }
+            Plugin.Log.LogInfo($"[ArenaMapPort][Harmony] patched SpatialAudioSystem.ProcessSourceOcclusion " +
+                                $"({targets.Length} overload(s)) (impl-raidstart-repairs 1c)");
+        }
+
+        // fix-raidstart — SpatialAudioSystem.ProcessInteractiveObjectOcclusion(string, BetterSource,
+        // Vector3, EOcclusionTest), instance, void, single overload (resolved by name only, same
+        // convention as InstallEnsureEnvironment below). A second, previously-unguarded
+        // Initialized-independent NRE entry point found by re-review — see SpatialAudioRepairs.cs's
+        // SpatialAudioInteractiveOcclusionGuard doc comment for the full writeup.
+        // Verified: D:/SPT41/Development/_decompiled/Audio.SpatialSystem/SpatialAudioSystem.cs:554.
+        static void InstallSpatialAudioInteractiveOcclusionGuard(Harmony harmony)
+        {
+            var target = AccessTools.Method(
+                typeof(SpatialAudioSystem),
+                nameof(SpatialAudioSystem.ProcessInteractiveObjectOcclusion));
+
+            if (!Verify(target, typeof(SpatialAudioSystem), nameof(SpatialAudioSystem.ProcessInteractiveObjectOcclusion)))
+            {
+                return;
+            }
+
+            var prefix = AccessTools.Method(typeof(SpatialAudioInteractiveOcclusionGuard), "Prefix");
+            var finalizer = AccessTools.Method(typeof(SpatialAudioInteractiveOcclusionGuard), "Finalizer");
+            harmony.Patch(target, prefix: new HarmonyMethod(prefix), finalizer: new HarmonyMethod(finalizer));
+            Plugin.Log.LogInfo("[ArenaMapPort][Harmony] patched SpatialAudioSystem.ProcessInteractiveObjectOcclusion " +
+                                "(fix-raidstart)");
+        }
+
+        // impl-raidstart-repairs item (2) — Player.Init(...), instance, async Task (many parameters —
+        // resolved by name only since exactly one method named "Init" is declared directly on EFT.Player).
+        // Verified: D:/SPT41/Development/_decompiled/EFT/Player.cs:28167.
+        static void InstallEnsureEnvironment(Harmony harmony)
+        {
+            var target = AccessTools.Method(typeof(Player), nameof(Player.Init));
+
+            if (!Verify(target, typeof(Player), nameof(Player.Init)))
+            {
+                return;
+            }
+
+            var prefix = AccessTools.Method(typeof(EnsureEnvironmentPrefix), "Prefix");
+            harmony.Patch(target, prefix: new HarmonyMethod(prefix));
+            Plugin.Log.LogInfo("[ArenaMapPort][Harmony] patched Player.Init (impl-raidstart-repairs 2)");
+        }
+
+        // impl-raidstart-repairs item (3) — EffectsController.Awake(), public void.
+        // Verified: D:/SPT41/Development/_decompiled/EffectsController.cs:1217.
+        static void InstallEffectsControllerFrostbite(Harmony harmony)
+        {
+            var target = AccessTools.Method(typeof(EffectsController), "Awake");
+
+            if (!Verify(target, typeof(EffectsController), "Awake"))
+            {
+                return;
+            }
+
+            var prefix = AccessTools.Method(typeof(EffectsControllerFrostbitePrefix), "Prefix");
+            harmony.Patch(target, prefix: new HarmonyMethod(prefix));
+            Plugin.Log.LogInfo("[ArenaMapPort][Harmony] patched EffectsController.Awake (impl-raidstart-repairs 3)");
+        }
+
+        // impl-raidstart-repairs — AIVoxelesData.RestoreData(Dictionary<int, GroupPoint>, AICoversData),
+        // public void. Verified: D:/SPT41/Development/_decompiled/AIVoxelesData.cs:52.
+        static void InstallAIVoxelesDataGuard(Harmony harmony)
+        {
+            var target = AccessTools.Method(
+                typeof(AIVoxelesData),
+                nameof(AIVoxelesData.RestoreData),
+                new[] { typeof(System.Collections.Generic.Dictionary<int, GroupPoint>), typeof(AICoversData) });
+
+            if (!Verify(target, typeof(AIVoxelesData), nameof(AIVoxelesData.RestoreData)))
+            {
+                return;
+            }
+
+            var prefix = AccessTools.Method(typeof(AIVoxelesDataGuardPrefix), "Prefix");
+            harmony.Patch(target, prefix: new HarmonyMethod(prefix));
+            Plugin.Log.LogInfo("[ArenaMapPort][Harmony] patched AIVoxelesData.RestoreData (impl-raidstart-repairs)");
+        }
+
+        // impl-raidstart-repairs — BotsController.Init(...), same target §F.2's NavMeshInstallerPrefix
+        // already patches; installed as an ADDITIONAL, independent prefix (Harmony supports multiple
+        // prefixes per target). Verified: D:/SPT41/Development/_decompiled/EFT/BotsController.cs:168.
+        static void InstallAIStationaryControllerEnsure(Harmony harmony)
+        {
+            var target = AccessTools.Method(typeof(BotsController), nameof(BotsController.Init));
+
+            if (!Verify(target, typeof(BotsController), nameof(BotsController.Init)))
+            {
+                return;
+            }
+
+            var prefix = AccessTools.Method(typeof(AIStationaryControllerEnsurePrefix), "Prefix");
+            harmony.Patch(target, prefix: new HarmonyMethod(prefix));
+            Plugin.Log.LogInfo("[ArenaMapPort][Harmony] patched BotsController.Init for AIStationaryController " +
+                                "ensure (impl-raidstart-repairs, additional prefix alongside §F.2)");
         }
 
         static bool Verify(MethodBase method, Type declaringType, string methodName)

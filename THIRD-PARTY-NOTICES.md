@@ -107,6 +107,84 @@ runtime (see `patch_preset.py`'s module docstring "CORRECTION" section, and
 
 ---
 
+## ManimalIcebreaker (impl-raidstart-repairs — client raid-start crash fixes)
+
+Source: `D:/sptmaps/_sources/ManimalIcebreaker-main/icebreaker-client/RaidFixPatches.cs`
+
+```
+MIT License
+
+Copyright (c) 2026 danauraborealis
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+```
+
+Reused in `ArenaMapPort.Client/SpatialAudioRepairs.cs`:
+
+- **Skip `SpatialAudioSystem.Initialize` when unstaged** — the "staging unavailable" branch of
+  `Patch_SpatialAudioInit` (`RaidFixPatches.cs:36-51`): a Harmony prefix that sets
+  `__result = Task.CompletedTask; return false;` instead of running the original body. We always take
+  this branch (no acoustics sidecar/bake data authored for the spike — audio explicitly out of scope),
+  unlike their newer, richer version which first tries a "staged real init" branch we have no data to
+  feed.
+- **Degrade `ProcessSourceOcclusion` to -1 when uninitialized** — `Patch_OcclusionWhenUninitialized`
+  (prefix, gate on `!SpatialAudioSystem.Initialized`, `RaidFixPatches.cs:60-76`) and
+  `Patch_OcclusionNeverThrows` (finalizer belt-and-braces, `RaidFixPatches.cs:133-153`), both ported
+  near-verbatim including the `TargetMethods()` reflection technique (match every public instance
+  overload named `ProcessSourceOcclusion` by name, rather than hard-coding each overload's parameter
+  types) and the "log at most 5 times" spam guard.
+
+Reused in `ArenaMapPort.Client/EnvironmentRepairs.cs`:
+
+- **Ensure `EnvironmentManager.Instance` exists before use** — the bare-manager fallback line from
+  `Patch_EnsureEnvironmentManager.EnsureEnvAndWeather()` (`RaidFixPatches.cs:262-263`,
+  `new GameObject(...).AddComponent<EnvironmentManager>()`), anchored directly on `Player.Init` — the
+  same "universal safety net" reasoning as their separate `Patch_EnsureEnvBeforeAnyPlayerInit`
+  (`RaidFixPatches.cs:275-280`), collapsed into one prefix since this spike has no Fika-specific
+  player-creation path to also cover. Their weather rebuild and full indoor-trigger rehydration
+  (needs sidecar data we do not have) are NOT ported.
+
+Reused in `ArenaMapPort.Client/EffectsControllerRepairs.cs`:
+
+- **Add a missing `FrostbiteEffect` to the Cam2 fallback camera** — the `FrostbiteEffect` half of
+  `Patch_EffectsControllerFrostbite` (`RaidFixPatches.cs:378-389`,
+  `if (GetComponent<FrostbiteEffect>()==null) AddComponent<FrostbiteEffect>()` as an
+  `EffectsController.Awake` prefix). The rest of that patch (TOD_Camera/PostProcessResources healing,
+  `RaidFixPatches.cs:391-474`) is NOT ported — gated behind their weather/TOD system, out of scope here.
+
+Reused in `ArenaMapPort.Client/BotsDataRepairs.cs`:
+
+- **Ensure `AIStationaryController` exists before `BotsController.Init` uses it** — the
+  `AIStationaryController` half of the prefix inside `Patch_EnsureStationaryController`
+  (`RaidFixPatches.cs:4118-4126`), as an additional `BotsController.Init` prefix. Their companion
+  `ObservedCullingManager` half and the whole Postfix (flares/sealed-doors/spawn-trigger rebuild) are
+  NOT ported — `ObservedCullingManager` is already ensured earlier by `EnvironmentRepairs.cs`, and
+  doors/flares are out of scope.
+- The `AIVoxelesData.VoxelsList` null-list fix in the same file is NOT a port — the equivalent
+  Icebreaker patch (`Patch_CoversRestore`, `RaidFixPatches.cs:3711-3884`) is a broad
+  exception-swallowing Finalizer that reconstructs partial recovered bake data; we have no bake data at
+  all, so a one-line "ensure the list is a non-null empty list before the original method runs" is both
+  simpler and (verified against our own decompiled `AIVoxelesData.cs`) sufficient — an original-source
+  analysis, not adapted code.
+
+---
+
 ## SPT-InterchangeRework (WP4 — client NavMesh install + shader rebind structure)
 
 Source: `D:/sptmaps/_sources/SPT-InterchangeRework-main/InterchangeRework.Client`
@@ -170,4 +248,7 @@ Everything else in `ArenaMapPort.Client` (`BundleHost.cs`, `PerfectCullingSkip.c
 repository — `BundleHost.cs`'s mechanism is independently derived from this project's own
 decompiled `BundlesManager.cs` (§F.1's own note: simpler than either reference mod's bundle-hosting
 code, since the relevant members are public on this specific decompiled build and need no
-`AccessTools` reflection at all).
+`AccessTools` reflection at all). `HarmonyPatches.cs`'s target-resolution/install wiring for the
+impl-raidstart-repairs hooks follows this file's own pre-existing AccessTools+Verify convention and is
+original; the small pieces of those hooks' own logic that ARE adapted from ManimalIcebreaker are
+attributed in the "impl-raidstart-repairs" ManimalIcebreaker section above, per file.

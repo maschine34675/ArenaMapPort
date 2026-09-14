@@ -14,7 +14,7 @@ Shader "Hidden/ArenaMapPort/Custom/LocalDustParticlesLighted"
         _FocusSize ("_FocusSize", Float) = 0
         _HideDist ("_HideDist", Float) = 0
         _HideFade ("_HideFade", Float) = 0
-        _ParticleTex ("_ParticleTex", 2D) = "white" {}
+        _ParticleTex ("_ParticleTex", 3D) = "white" {}
     }
     SubShader
     {

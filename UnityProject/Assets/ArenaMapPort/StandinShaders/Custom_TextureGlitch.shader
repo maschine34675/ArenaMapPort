@@ -13,7 +13,7 @@ Shader "Hidden/ArenaMapPort/Custom/TextureGlitch"
         _Color ("_Color", Color) = (1,1,1,1)
         _ColorDrift ("_ColorDrift", Float) = 0
         _ColorSwitchFilterRadius ("_ColorSwitchFilterRadius", Float) = 0
-        _Cube ("_Cube", 2D) = "white" {}
+        _Cube ("_Cube", Cube) = "white" {}
         _Cutoff ("_Cutoff", Float) = 0
         _DefVals ("_DefVals", Color) = (1,1,1,1)
         _DetailNormalMapScale ("_DetailNormalMapScale", Float) = 0

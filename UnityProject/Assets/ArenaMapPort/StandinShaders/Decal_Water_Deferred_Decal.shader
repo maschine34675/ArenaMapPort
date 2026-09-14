@@ -9,7 +9,7 @@ Shader "Hidden/ArenaMapPort/Decal/Water Deferred Decal"
     {
         _Alpha ("_Alpha", Float) = 0
         _Color ("_Color", Color) = (1,1,1,1)
-        _Cube ("_Cube", 2D) = "white" {}
+        _Cube ("_Cube", Cube) = "white" {}
         _CubemapColor ("_CubemapColor", Color) = (1,1,1,1)
         _CubemapIntensity ("_CubemapIntensity", Float) = 0
         _Cutoff ("_Cutoff", Float) = 0

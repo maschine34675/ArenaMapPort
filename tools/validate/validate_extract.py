@@ -413,6 +413,9 @@ def validate_meshes(manifest: dict, package: Path) -> None:
 # 7: textures/<id>.png
 # ---------------------------------------------------------------------------
 
+TEXTURE_DIMENSIONS = {"Tex2D", "Cube", "Tex3D", "Tex2DArray"}
+
+
 def validate_textures(manifest: dict, package: Path) -> None:
     try:
         from PIL import Image
@@ -422,9 +425,43 @@ def validate_textures(manifest: dict, package: Path) -> None:
 
     bad = 0
     n = 0
+    dim_counts: dict[str, int] = {}
     for tex_id, meta in manifest.get("textures", {}).items():
         n += 1
         tex_path = package / meta["file"]
+
+        # impl-texture-dimensions §1: manifest.textures[tex_id].dimension (§C-compatible
+        # extension) must be one of the known shapes WP2's importer branches on -- an unknown
+        # value here would silently import as a plain 2D texture downstream (WP2's own
+        # ArenaPackage.TextureDimension() defaults unknown/absent to "Tex2D"), reintroducing
+        # exactly the "2D texture assigned to a CUBE/3D property" bug this task fixes.
+        dimension = meta.get("dimension", "Tex2D")
+        dim_counts[dimension] = dim_counts.get(dimension, 0) + 1
+        if dimension not in TEXTURE_DIMENSIONS:
+            bad += 1
+            check(False, f"textures/{tex_id}.png: manifest dimension {dimension!r} is one of "
+                          f"{sorted(TEXTURE_DIMENSIONS)}")
+
+        if dimension == "Cube":
+            face_w = meta.get("cube_face_width")
+            face_h = meta.get("cube_face_height")
+            layout = meta.get("cube_layout")
+            face_order = meta.get("cube_face_order")
+            if layout != "vertical_strip" or not isinstance(face_order, list) or len(face_order) != 6:
+                bad += 1
+                check(False, f"textures/{tex_id}.png: Cube dimension has cube_layout=='vertical_strip' "
+                              f"and a 6-entry cube_face_order (got layout={layout!r}, "
+                              f"face_order={face_order!r})")
+            if not (isinstance(face_w, int) and isinstance(face_h, int) and face_w > 0 and face_h > 0):
+                bad += 1
+                check(False, f"textures/{tex_id}.png: Cube dimension has positive integer "
+                              f"cube_face_width/cube_face_height (got {face_w!r}/{face_h!r})")
+            elif meta.get("width") != face_w or meta.get("height") != face_h * 6:
+                bad += 1
+                check(False, f"textures/{tex_id}.png: Cube strip width/height ({meta.get('width')}x"
+                              f"{meta.get('height')}) == cube_face_width x (cube_face_height*6) "
+                              f"({face_w}x{face_h * 6})")
+
         if not tex_path.is_file():
             bad += 1
             check(False, f"textures/{tex_id}.png: file exists at manifest-declared path ({meta['file']})")
@@ -447,8 +484,9 @@ def validate_textures(manifest: dict, package: Path) -> None:
             bad += 1
             check(False, f"textures/{tex_id}.png: opens as a valid image (Pillow raised: {e})")
 
-    if bad == 0 and Image is not None:
-        print(f"[validate_extract]  ok : all {n} textures/*.png open cleanly, dimensions match manifest")
+    if bad == 0:
+        print(f"[validate_extract]  ok : all {n} textures/*.png open cleanly, dimensions match manifest, "
+              f"every dimension field valid ({dict(sorted(dim_counts.items()))})")
 
 
 # ---------------------------------------------------------------------------

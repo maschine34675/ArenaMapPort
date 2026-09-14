@@ -76,6 +76,27 @@ namespace ArenaMapPort.Editor.Common
             return (string)((JObject)Textures[texId])["color_space"];
         }
 
+        // impl-texture-dimensions §2: one of "Tex2D" (default -- matches every package that
+        // predates this §C-compatible manifest field), "Cube", "Tex3D", "Tex2DArray". Defaulting
+        // to "Tex2D" when the key is absent keeps this package reader compatible with an older
+        // extractor run that never wrote the field, per §C's own "extend compatibly" instruction.
+        public string TextureDimension(string texId)
+        {
+            var entry = (JObject)Textures[texId];
+            var tok = entry["dimension"];
+            return tok != null && tok.Type != JTokenType.Null ? (string)tok : "Tex2D";
+        }
+
+        public int TextureCubeFaceWidth(string texId)
+        {
+            return (int)((JObject)Textures[texId])["cube_face_width"];
+        }
+
+        public int TextureCubeFaceHeight(string texId)
+        {
+            return (int)((JObject)Textures[texId])["cube_face_height"];
+        }
+
         public string MaterialShaderName(string matId)
         {
             return (string)((JObject)Materials[matId])["shader"];

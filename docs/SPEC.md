@@ -814,6 +814,26 @@ Little-endian, no padding beyond what's stated. One file per distinct mesh.
 Plain PNG under `textures/<id>.png`, RGBA8, losslessly decoded from source (§B.WP1 step 3). Metadata
 (`format_src`/`color_space`/`is_normal_map`) lives in `manifest.json`, not embedded in the PNG.
 
+**`dimension`** (added task `impl-texture-dimensions`, compatible extension — absent/unknown means
+`"Tex2D"`): one of `"Tex2D"` (default), `"Cube"`, `"Tex3D"`, `"Tex2DArray"` — the source object's
+real Unity runtime shape, so WP2's importer never imports/assigns a Cubemap or Texture3D source as
+a plain 2D texture (a Texture2D bound to a shader property declared `Cube`/`3D` is a hard runtime
+error at scene load: `Error assigning 2D texture to CUBE texture property ...: Dimensions must
+match`). For `"Cube"`, the PNG is a **vertical 6-frame strip** (`width x height*6`, one source face
+per `height`-tall band, face order `+X,-X,+Y,-Y,+Z,-Z` — Unity's own strip-layout/`CubemapFace`
+convention), decoded from all 6 real serialized faces (never just face 0); three extra manifest
+keys accompany it: `cube_layout` (currently always `"vertical_strip"`), `cube_face_order` (the
+6-entry list above), `cube_face_width`/`cube_face_height` (one face's own dimensions — `width`/
+`height` above are the whole strip). WP2 imports a `"Cube"` texture as a real `Cubemap` asset
+(`TextureImporterShape.TextureCube` + `TextureImporterGenerateCubemap.AutoCubemap`, which
+auto-detects this exact strip layout) and assigns it normally. For `"Tex3D"`/`"Tex2DArray"`
+(the latter recorded defensively — none observed in Equator's package), WP2 does **not** attempt a
+real Texture3D/Texture2DArray Unity asset from the flattened/placeholder PNG; per this task's own
+explicit fallback, the property is left **unassigned** (so the real shader's own default applies)
+rather than ever binding a 2D texture to a 3D/array-declared property. A `"Tex3D"` entry also
+carries `is_volume_texture`/`volume_source_depth`/`volume_source_height` (pre-existing, unchanged)
+describing the stacked-slices flatten.
+
 ### C.4 `materials/<id>.json`
 
 ```jsonc

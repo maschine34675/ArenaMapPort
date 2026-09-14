@@ -20,7 +20,19 @@ using UnityEngine;
 
 namespace ArenaMapPort.Editor.Shaders
 {
-    public enum ArenaPropType { Tex, Float, Color }
+    // impl-texture-dimensions §2: Tex split into Tex2D/TexCube/Tex3D -- "Check the stand-in
+    // shader property declarations use the right types" (task item 2). Every stand-in TexEnv
+    // property used to be declared "2D" unconditionally, which is exactly how a Cubemap/Texture3D
+    // source ends up bound to a mismatched-dimension shader slot in the first place (a 2D-typed
+    // property accepts a Texture2D SetTexture call with no error, silently). Declaring the real
+    // dimension here doesn't by itself fix anything at runtime (WP4 rebinds every material onto
+    // the game's own REAL compiled shader before a frame renders, §F.3 -- our stand-in's own
+    // declared types are never seen by the player), but it keeps this Editor-only asset correct
+    // and self-consistent with what MaterialImporter actually assigns (§2's own dimension-gated
+    // SetTexture calls), and gives validate_bundle_roundtrip.py's new cross-check (task item 3)
+    // real Cube/3D dimension metadata to read back out of the built bundle's compiled Shader
+    // objects instead of only ever seeing "2D".
+    public enum ArenaPropType { Tex2D, TexCube, Tex3D, Tex2DArray, Float, Color }
 
     public class StandinShaderGenerator
     {
@@ -30,6 +42,17 @@ namespace ArenaMapPort.Editor.Shaders
 
         // originalShaderName -> Shader asset (the stand-in, named Hidden/ArenaMapPort/<original>)
         public readonly Dictionary<string, Shader> Shaders = new Dictionary<string, Shader>();
+
+        private static ArenaPropType TexPropTypeForDimension(string dimension)
+        {
+            switch (dimension)
+            {
+                case "Cube": return ArenaPropType.TexCube;
+                case "Tex3D": return ArenaPropType.Tex3D;
+                case "Tex2DArray": return ArenaPropType.Tex2DArray;
+                default: return ArenaPropType.Tex2D;
+            }
+        }
 
         public static string SanitizeFileName(string shaderName)
         {
@@ -50,6 +73,16 @@ namespace ArenaMapPort.Editor.Shaders
         // skipping it is strictly safe, not a truncation of real, usable data.
         public void CollectFromPackage(ArenaPackage pkg)
         {
+            // impl-texture-dimensions §2: a tex-prop name whose ONLY material references so far
+            // all have texture_id == null carries no dimension signal yet -- collected here
+            // separately and defaulted to Tex2D in the finalize pass below, ONLY if no material
+            // anywhere in the whole package ever resolves it to something else. This two-pass
+            // split (instead of calling AddProp with a Tex2D placeholder inline) matters
+            // precisely because AddProp's conflict logic is first-wins: if a placeholder Tex2D
+            // were written before a later material's real Cube/Tex3D resolution is seen, AddProp
+            // would incorrectly "keep" the placeholder and warn about a spurious conflict.
+            var unresolvedTexPropsByShader = new Dictionary<string, HashSet<string>>();
+
             foreach (var prop in pkg.Materials.Properties())
             {
                 string matId = prop.Name;
@@ -65,8 +98,33 @@ namespace ArenaMapPort.Editor.Shaders
 
                 var texEnvs = (JObject)matJson["tex_envs"];
                 if (texEnvs != null)
+                {
                     foreach (var t in texEnvs.Properties())
-                        if (!string.IsNullOrEmpty(t.Name)) AddProp(props, shaderName, t.Name, ArenaPropType.Tex, matId);
+                    {
+                        if (string.IsNullOrEmpty(t.Name)) continue;
+                        var entry = (JObject)t.Value;
+                        var texIdTok = entry["texture_id"];
+                        if (texIdTok != null && texIdTok.Type != JTokenType.Null)
+                        {
+                            // A real texture reference -- resolve its actual dimension from the
+                            // package (task item 2: "Check the stand-in shader property
+                            // declarations use the right types") instead of always declaring 2D.
+                            string texId = (string)texIdTok;
+                            ArenaPropType resolvedType = TexPropTypeForDimension(pkg.TextureDimension(texId));
+                            AddProp(props, shaderName, t.Name, resolvedType, matId);
+                        }
+                        else
+                        {
+                            HashSet<string> set;
+                            if (!unresolvedTexPropsByShader.TryGetValue(shaderName, out set))
+                            {
+                                set = new HashSet<string>();
+                                unresolvedTexPropsByShader[shaderName] = set;
+                            }
+                            set.Add(t.Name);
+                        }
+                    }
+                }
 
                 var floats = (JObject)matJson["floats"];
                 if (floats != null)
@@ -77,6 +135,17 @@ namespace ArenaMapPort.Editor.Shaders
                 if (colors != null)
                     foreach (var c in colors.Properties())
                         if (!string.IsNullOrEmpty(c.Name)) AddProp(props, shaderName, c.Name, ArenaPropType.Color, matId);
+            }
+
+            // Finalize: default any tex-prop name that NEVER resolved to a real dimension
+            // anywhere in the package to Tex2D (the old, always-2D behavior) -- without ever
+            // overriding a real resolution already written into `props` above.
+            foreach (var kv in unresolvedTexPropsByShader)
+            {
+                Dictionary<string, ArenaPropType> props = _propsByShader[kv.Key];
+                foreach (string propName in kv.Value)
+                    if (!props.ContainsKey(propName))
+                        props[propName] = ArenaPropType.Tex2D;
             }
         }
 
@@ -154,8 +223,20 @@ namespace ArenaMapPort.Editor.Shaders
                 string safe = kv.Key;
                 switch (kv.Value)
                 {
-                    case ArenaPropType.Tex:
+                    case ArenaPropType.Tex2D:
                         sb.Append("        ").Append(safe).Append(" (\"").Append(safe).Append("\", 2D) = \"white\" {}\n");
+                        break;
+                    case ArenaPropType.TexCube:
+                        // impl-texture-dimensions §2 -- declared with the REAL dimension
+                        // (matches the real BSG shader's own property type) so this Editor-only
+                        // asset never mismatches what MaterialImporter actually assigns.
+                        sb.Append("        ").Append(safe).Append(" (\"").Append(safe).Append("\", Cube) = \"white\" {}\n");
+                        break;
+                    case ArenaPropType.Tex3D:
+                        sb.Append("        ").Append(safe).Append(" (\"").Append(safe).Append("\", 3D) = \"white\" {}\n");
+                        break;
+                    case ArenaPropType.Tex2DArray:
+                        sb.Append("        ").Append(safe).Append(" (\"").Append(safe).Append("\", 2DArray) = \"white\" {}\n");
                         break;
                     case ArenaPropType.Float:
                         sb.Append("        ").Append(safe).Append(" (\"").Append(safe).Append("\", Float) = 0\n");

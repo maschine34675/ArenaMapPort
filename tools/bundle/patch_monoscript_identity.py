@@ -160,17 +160,31 @@ def get_top_bundle_file(env):
     return f
 
 
-def snapshot_non_monoscript_objects(env) -> dict[tuple[str, int], bytes]:
+def snapshot_non_monoscript_objects(env, only_files: set[str] | None = None) -> dict[tuple[str, int], bytes]:
     """Every object EXCEPT MonoScript, raw bytes, keyed by (owning SerializedFile name, path_id) —
     used to independently verify (task item 4) that nothing but the targeted MonoScript string
-    fields changed."""
+    fields changed.
+
+    `only_files`, when given, restricts the (expensive, one get_raw_data() call per object) scan
+    to objects owned by a nested SerializedFile whose name is in that set — see
+    `blocks_needing_full_verify()`'s docstring for why that restriction is still a fully rigorous
+    byte-identity guarantee for this script's specific patch operation, not a weaker sample."""
     snap: dict[tuple[str, int], bytes] = {}
     for sf in iter_serialized_files(env):
+        if only_files is not None and sf.name not in only_files:
+            continue
         for path_id, obj in sf.objects.items():
             if obj.type.name == "MonoScript":
                 continue
             snap[(sf.name, path_id)] = obj.get_raw_data()
     return snap
+
+
+def object_counts_per_file(env) -> dict[str, int]:
+    """name -> object count, one entry per nested SerializedFile (cheap: len(), no per-object
+    read) -- the sanity check this script still runs even for a file it skips the expensive
+    byte-identity scan for (see blocks_needing_full_verify)."""
+    return {sf.name: len(sf.objects) for sf in iter_serialized_files(env)}
 
 
 def read_cstr(buf: bytes, offset: int) -> tuple[str, int]:
@@ -245,14 +259,45 @@ def patch_env(env) -> list[dict]:
             continue
         tt["m_AssemblyName"] = new_asm
         obj.save_typetree(tt)
+        owning_file = getattr(getattr(obj, "assets_file", None), "name", None)
         patched.append({
             "class_name": tt.get("m_ClassName"),
             "namespace": tt.get("m_Namespace", ""),
             "path_id": obj.path_id,
             "old_assembly": old_asm,
             "new_assembly": new_asm,
+            "owning_file": owning_file,
         })
     return patched
+
+
+def blocks_needing_full_verify(patched: list[dict], before_blocks: dict[str, int],
+                                after_blocks: dict[str, int]) -> set[str]:
+    """impl-texture-dimensions perf follow-up (system-prompt-flagged technical debt from
+    docs/progress/s2-build.md SS4: the exhaustive byte-identity snapshot took 35+ minutes at S2's
+    ~120k-object scale -- "fine to add a faster mode but keep correctness checks"). Rigorously
+    (not statistically) narrows the expensive per-object snapshot_non_monoscript_objects() scan to
+    ONLY the nested SerializedFile ("block") names that could possibly have changed:
+
+      (a) every block that directly owns a patched MonoScript object, PLUS
+      (b) every block whose own total serialized byte size differs before vs after (belt-and-
+          suspenders in case (a)'s owning-file bookkeeping ever misses one, or a future
+          RENAME_MAP entry pair happens to appear together in the SAME file).
+
+    Why this is still a full guarantee, not a sample: patch_env() calls obj.save_typetree() on
+    NOTHING but MonoScript objects matching RENAME_MAP -- so bundle_file.save() re-serializes
+    every OTHER object (in every OTHER nested file) from data it never mutated. A nested file this
+    function excludes was never written to by this script and its own serialized byte size is
+    separately confirmed unchanged (object_counts_per_file() cross-check in main()) -- there is no
+    code path in patch_env() that could alter such a file's content. Every RENAME_MAP entry pair
+    (old, new) has a different string length (confirmed: 30->16, 39->25 chars etc.), so ANY real
+    content change inside a block is guaranteed to shift that block's own total byte count -- (b)
+    exists purely as a defensive second signal, not because (a) is expected to ever need it."""
+    blocks = {p["owning_file"] for p in patched if p["owning_file"]}
+    for name in set(before_blocks) | set(after_blocks):
+        if before_blocks.get(name) != after_blocks.get(name):
+            blocks.add(name)
+    return blocks
 
 
 def write_bytes_with_retry(path: Path, data: bytes, attempts: int = 5, delay: float = 0.2) -> None:
@@ -296,6 +341,15 @@ def main() -> None:
                      help="normally, if 0 MonoScripts need patching the input file is left "
                           "completely untouched (exit 0) rather than re-serialized for no reason; "
                           "pass this to force a re-save (e.g. to normalize --packer) even then")
+    ap.add_argument("--full-verify", action="store_true",
+                     help="run the exhaustive byte-identity scan (task item 4) over EVERY "
+                          "non-MonoScript object in the whole bundle, not just the nested "
+                          "SerializedFile(s) that actually own a patched MonoScript or changed "
+                          "size (the default, fast mode -- see blocks_needing_full_verify()'s "
+                          "docstring for why that default is a full guarantee, not a sample; this "
+                          "flag exists for extra paranoia / re-confirming after a UnityPy upgrade, "
+                          "at the cost of the ~35-minute runtime docs/progress/s2-build.md SS4 "
+                          "measured at S2's full ~120k-object scale)")
     args = ap.parse_args()
 
     if not args.bundle.is_file():
@@ -351,15 +405,13 @@ def main() -> None:
         print("[patch_monoscript_identity] OK -- nothing to patch")
         return
 
-    # A real patch (or --force-rewrite-if-clean) is about to happen -- NOW pay the expensive
-    # precomputation costs, exactly as before this perf fix (nothing about the actual
-    # verification below is weakened or skipped).
+    # A real patch (or --force-rewrite-if-clean) is about to happen.
     # nested-file (Unity 'block') sizes MUST be captured before patch_env() mutates any object's
     # .data in place within this same `env` -- otherwise "before" would already reflect the patch.
     before_blocks = nested_file_sizes(env)
-    # snapshot every non-MonoScript object's raw bytes BEFORE any mutation, for the byte-identity
-    # check after saving (task item 4).
-    pre_snapshot = snapshot_non_monoscript_objects(env)
+    # Cheap, whole-bundle, no-per-object-read count table (task item 4's coarser second net for
+    # every file the expensive scan below does NOT cover -- see main()'s post-reload cross-check).
+    before_counts = object_counts_per_file(env)
 
     patched = patch_env(env)
 
@@ -367,7 +419,28 @@ def main() -> None:
     for p in patched:
         ns = (p["namespace"] + ".") if p["namespace"] else ""
         print(f"    {ns}{p['class_name']} (path_id={p['path_id']}): "
-              f"{p['old_assembly']!r} -> {p['new_assembly']!r}")
+              f"{p['old_assembly']!r} -> {p['new_assembly']!r} (in {p['owning_file']!r})")
+
+    # Perf fix (system-prompt-flagged technical debt, docs/progress/s2-build.md SS4: the
+    # exhaustive byte-identity snapshot took 35+ minutes at S2's ~120k-object scale) --
+    # blocks_needing_full_verify()'s docstring is the correctness argument; --full-verify opts
+    # back into scanning literally everything. `patched` already tells us, with certainty and
+    # BEFORE any save/reload, every file this script's own mutations could possibly have touched
+    # -- capturing pre_snapshot restricted to just those files is safe precisely because
+    # snapshot_non_monoscript_objects() already excludes MonoScript-type objects (the only ones
+    # patch_env() mutates), so nothing this restricted scan captures has been touched yet.
+    verify_files = None if args.full_verify else {p["owning_file"] for p in patched if p["owning_file"]}
+    if args.full_verify:
+        print("[patch_monoscript_identity] --full-verify passed -- scanning every non-MonoScript "
+              "object in the whole bundle (slow path).")
+    else:
+        print(f"[patch_monoscript_identity] fast verify: restricting the byte-identity scan to "
+              f"{len(verify_files)} nested file(s) that own a patched MonoScript "
+              f"({sorted(verify_files)}) -- pass --full-verify to scan the whole bundle instead.")
+    # snapshot every non-MonoScript object's raw bytes in the (restricted, unless --full-verify)
+    # file set, for the byte-identity check after saving (task item 4). Safe to do AFTER
+    # patch_env() -- see the comment above.
+    pre_snapshot = snapshot_non_monoscript_objects(env, only_files=verify_files)
 
     # save to a temp file next to the destination, then atomically replace — never leave a
     # half-written bundle at out_path on failure. BundleFile.save()'s own packer semantics accept
@@ -411,6 +484,8 @@ def main() -> None:
     after_dataflags = int(bundle_file2.dataflags)
     after_block_flags = getattr(bundle_file2, "_block_info_flags", None)
     after_names = list_assembly_names(env2)
+    after_blocks = nested_file_sizes(env2)
+    after_counts = object_counts_per_file(env2)
 
     print(f"[patch_monoscript_identity] AFTER: {after_size:,} bytes, "
           f"compression: {decode_compression(after_dataflags, after_block_flags)}")
@@ -429,9 +504,42 @@ def main() -> None:
         print(f"[patch_monoscript_identity]  ok : every MonoScript now carries a real assembly name "
               f"({sorted(REAL_ASSEMBLY_NAMES)})")
 
-    # byte-identity check: every non-MonoScript object, re-read from the FRESH reload, must be
-    # byte-for-byte identical to its pre-patch snapshot.
-    post_snapshot = snapshot_non_monoscript_objects(env2)
+    # Defensive net for the fast (non---full-verify) path: if some file OUTSIDE verify_files
+    # nonetheless changed size, patch_env() touched something this script didn't anticipate --
+    # that's a hard FAIL (not silently ignorable), even though we no longer hold a pre-snapshot
+    # to byte-diff it against (report it as a named, actionable gap instead of pretending it was
+    # checked; --full-verify re-runs with the exhaustive scan for full detail).
+    if verify_files is not None:
+        # The authoritative (a)+(b) block set, now that after_blocks is finally known -- any name
+        # in here NOT already in verify_files is exactly the "unexpected" case (b) exists to catch.
+        full_blocks = blocks_needing_full_verify(patched, before_blocks, after_blocks)
+        unexpected_changed = full_blocks - verify_files
+        if unexpected_changed:
+            print(f"[patch_monoscript_identity] FAIL: {len(unexpected_changed)} nested file(s) "
+                  f"changed size WITHOUT owning any patched MonoScript ({sorted(unexpected_changed)}) "
+                  f"-- the fast-verify file-selection assumption (blocks_needing_full_verify) did "
+                  f"not hold this run; re-run with --full-verify for a byte-level diagnosis",
+                  file=sys.stderr)
+            ok = False
+        # Cheap (no per-object read) object-COUNT cross-check for every file the expensive
+        # byte-identity scan below does NOT cover -- catches a silently added/dropped object even
+        # in a file whose total byte size happens to end up unchanged.
+        uncovered = (set(before_counts) | set(after_counts)) - verify_files
+        count_mismatches = {name: (before_counts.get(name), after_counts.get(name))
+                             for name in uncovered if before_counts.get(name) != after_counts.get(name)}
+        if count_mismatches:
+            print(f"[patch_monoscript_identity] FAIL: object count changed in {len(count_mismatches)} "
+                  f"nested file(s) outside the fast-verify scan: {count_mismatches}", file=sys.stderr)
+            ok = False
+        elif uncovered:
+            print(f"[patch_monoscript_identity]  ok : {len(uncovered)} nested file(s) outside the "
+                  f"fast-verify scan have an unchanged object count each (coarse net; byte size also "
+                  f"confirmed unchanged above) -- {sorted(uncovered)}")
+
+    # byte-identity check: every non-MonoScript object in the (restricted, unless --full-verify)
+    # file set, re-read from the FRESH reload, must be byte-for-byte identical to its pre-patch
+    # snapshot.
+    post_snapshot = snapshot_non_monoscript_objects(env2, only_files=verify_files)
     missing = set(pre_snapshot) - set(post_snapshot)
     extra = set(post_snapshot) - set(pre_snapshot)
     if missing or extra:
@@ -446,8 +554,9 @@ def main() -> None:
               f"{mismatched[:5]}", file=sys.stderr)
         ok = False
     else:
-        print(f"[patch_monoscript_identity]  ok : all {len(pre_snapshot)} non-MonoScript objects "
-              f"(MonoBehaviour/Mesh/Material/Texture2D/GameObject/... — everything but the "
+        scope = "the whole bundle" if verify_files is None else f"{len(verify_files)} affected nested file(s)"
+        print(f"[patch_monoscript_identity]  ok : all {len(pre_snapshot)} non-MonoScript objects in "
+              f"{scope} (MonoBehaviour/Mesh/Material/Texture2D/GameObject/... — everything but the "
               f"{len(patched)} patched MonoScript(s)) are byte-for-byte identical before vs after "
               f"the patch")
 
@@ -469,14 +578,14 @@ def main() -> None:
                   f"passed over", file=sys.stderr)
 
     # AssetBundle m_Container / m_PreloadTable structural check (task item 5) — the AssetBundle
-    # object's type is "AssetBundle", not "MonoScript", so it is already covered by the general
-    # non-MonoScript byte-identity check above (pre_snapshot/post_snapshot) — a byte-level
-    # comparison is strictly stronger than a field-level m_Container/m_PreloadTable diff, so no
-    # separate check is needed; called out explicitly here so this requirement is traceable.
-    assetbundle_keys = [k for k in pre_snapshot if k[1] in {
-        oid for sf in iter_serialized_files(env2) for oid, o in sf.objects.items() if o.type.name == "AssetBundle"
-    }]
-    if assetbundle_keys and not mismatched:
+    # object's type is "AssetBundle", not "MonoScript". Found via a direct type scan (not derived
+    # from pre_snapshot's key set, which may be restricted to verify_files in the default fast
+    # path) so this check's own "found N" count is never an artifact of the verify-scope
+    # restriction.
+    assetbundle_keys = [(sf.name, oid) for sf in iter_serialized_files(env2) for oid, o in sf.objects.items()
+                         if o.type.name == "AssetBundle"]
+    assetbundle_keys_checked = [k for k in assetbundle_keys if k in pre_snapshot]
+    if assetbundle_keys and len(assetbundle_keys_checked) == len(assetbundle_keys) and not mismatched:
         print(f"[patch_monoscript_identity]  ok : AssetBundle object ({len(assetbundle_keys)} found) "
               f"— including m_Container/m_PreloadTable/m_AssetBundleName/m_Dependencies — is part of "
               f"the byte-identity check above and is confirmed unchanged")
@@ -484,6 +593,11 @@ def main() -> None:
         print("[patch_monoscript_identity] WARN: no AssetBundle object found in this bundle to check "
               "m_Container/m_PreloadTable against (unexpected for a built .bundle, but not fatal by "
               "itself)")
+    elif not assetbundle_keys_checked:
+        print(f"[patch_monoscript_identity]  ok : AssetBundle object ({len(assetbundle_keys)} found) "
+              f"lives in a nested file the fast-verify scan didn't need to cover (no patched "
+              f"MonoScript there, size unchanged -- covered by the coarse count cross-check above "
+              f"instead); pass --full-verify for a direct byte-identity check of it too")
 
     # header/flags/block-size comparison (task item 5): a raw, UnityPy-independent parse of the
     # UnityFS primary header, plus the nested-file (one per Unity "block"/serialized sub-file)
@@ -508,7 +622,6 @@ def main() -> None:
               f"the {sum(len(p['new_assembly']) - len(p['old_assembly']) for p in patched):+d}-byte "
               f"aggregate string-length delta from the {len(patched)} patched field(s))")
 
-    after_blocks = nested_file_sizes(env2)
     print("[patch_monoscript_identity] nested file (Unity 'block') sizes, before vs after:")
     for name in sorted(set(before_blocks) | set(after_blocks)):
         b, a = before_blocks.get(name), after_blocks.get(name)

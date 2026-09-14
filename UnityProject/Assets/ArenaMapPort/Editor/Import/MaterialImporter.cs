@@ -24,12 +24,13 @@ namespace ArenaMapPort.Editor.Import
         public static Dictionary<string, Material> ImportAll(
             ArenaPackage pkg,
             Dictionary<string, Shader> standinShaders,
-            Dictionary<string, Texture2D> textures,
+            Dictionary<string, Texture> textures,
             string outputDir)
         {
             Directory.CreateDirectory(ArenaPaths.MaterialsDir);
             var result = new Dictionary<string, Material>();
             var sidecar = new JObject();
+            int skippedUnassignable = 0;
 
             foreach (var prop in pkg.Materials.Properties())
             {
@@ -63,12 +64,34 @@ namespace ArenaMapPort.Editor.Import
                         if (texIdTok != null && texIdTok.Type != JTokenType.Null)
                         {
                             string texId = (string)texIdTok;
-                            Texture2D tex;
-                            if (textures.TryGetValue(texId, out tex) && tex != null)
-                                mat.SetTexture(t.Name, tex);
+                            string dimension = pkg.TextureDimension(texId);
+                            if (dimension == "Tex3D" || dimension == "Tex2DArray")
+                            {
+                                // impl-texture-dimensions §2 (task item 2's explicit fallback):
+                                // a correct import isn't attempted for this shape (see
+                                // TextureImportDriver's own comment) -- leave the property
+                                // UNASSIGNED so the stand-in/real shader's own declared default
+                                // applies, instead of ever binding a 2D texture to a CUBE/3D
+                                // slot. This is an expected, logged skip, not an error.
+                                Debug.Log("[ArenaMapPort][MaterialImporter] material " + matId + " prop " +
+                                          t.Name + ": texture " + texId + " has dimension '" + dimension +
+                                          "' (no correct Unity import path for the spike) -- leaving the " +
+                                          "property unassigned rather than binding a 2D texture to it.");
+                                skippedUnassignable++;
+                            }
                             else
-                                Debug.LogWarning("[ArenaMapPort][MaterialImporter] material " + matId + " prop " +
-                                                  t.Name + " references missing texture_id " + texId);
+                            {
+                                // "Tex2D" or "Cube" -- TextureImportDriver built a real
+                                // Texture2D/Cubemap asset matching this exact dimension (never a
+                                // 2D texture standing in for a Cube slot).
+                                Texture tex;
+                                if (textures.TryGetValue(texId, out tex) && tex != null)
+                                    mat.SetTexture(t.Name, tex);
+                                else
+                                    Debug.LogWarning("[ArenaMapPort][MaterialImporter] material " + matId + " prop " +
+                                                      t.Name + " references missing texture_id " + texId +
+                                                      " (dimension=" + dimension + ")");
+                            }
                         }
                         // texture_id == null is a real, valid "declared but unassigned" state (§C.4) -
                         // skip SetTexture for that slot rather than treating it as an error.
@@ -125,8 +148,9 @@ namespace ArenaMapPort.Editor.Import
             string sidecarPath = Path.Combine(outputDir, "material-shaders.json").Replace('\\', '/');
             File.WriteAllText(sidecarPath, sidecar.ToString(Formatting.Indented));
 
-            Debug.Log("[ArenaMapPort][MaterialImporter] imported " + result.Count + " materials -> " +
-                      ArenaPaths.MaterialsDir + "; sidecar -> " + sidecarPath);
+            Debug.Log("[ArenaMapPort][MaterialImporter] imported " + result.Count + " materials (" +
+                      skippedUnassignable + " Tex3D/Tex2DArray texture slot(s) left unassigned, " +
+                      "impl-texture-dimensions §2) -> " + ArenaPaths.MaterialsDir + "; sidecar -> " + sidecarPath);
             return result;
         }
     }

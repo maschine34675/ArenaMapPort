@@ -43,6 +43,15 @@ UnityProject/Assets/ArenaMapPort/Editor/** -- and asserts:
      describe the same built scenes) -- absence is reported as a named, non-crashing failure
      rather than silently skipped, since SS B.WP6's task instruction explicitly asks for this
      cross-check.
+ 10. impl-texture-dimensions task item 3: for every Material in the bundle, reads its own
+     compiled Shader's declared per-property texture dimension (2D/Cube/3D/2DArray, straight off
+     the built Shader object's m_ParsedForm.m_PropInfo) and asserts every assigned texture's own
+     UnityPy class actually matches it -- i.e. independently re-proves no material in the built
+     bundle references a Texture2D object on a property its shader declares Cube/3D/2DArray (the
+     exact "Error assigning 2D texture to CUBE/3D texture property: Dimensions must match"
+     scene-load failure mode). Also splits the Texture2D/Cubemap object-count check (item 2 above)
+     by the package's own per-texture "dimension" field instead of assuming every in-scope
+     texture becomes a Texture2D.
 
 identity-fix update (STRICT now -- this reverses s1-fix-r1's own judgment call): `m_AssemblyName`
 on a MonoScript emitted by *this project's own* Unity Editor build (via a GameRefs-sourced
@@ -123,6 +132,30 @@ EXPECTED_EFT_COMPONENTS = {
 # mandatory post-build step that removes it (tools/build_all.ps1 runs it automatically).
 ACCEPTED_ASSEMBLY_NAMES = {"Assembly-CSharp", "Assembly-CSharp-firstpass"}
 MONOBEHAVIOUR_HEADER_ONLY_BYTES = 40  # generous upper bound for enabled+m_Script+m_Name w/ no custom fields
+
+# impl-texture-dimensions task item 3 -- UnityEngine.Rendering.TextureDimension (as serialized in
+# a compiled Shader's m_ParsedForm.m_PropInfo.m_Props[].m_DefTexture.m_TexDim), confirmed
+# empirically this pass by reading a real compiled stand-in Shader object out of a built bundle
+# (every non-texture property reads m_TexDim==1 "Any"/unused; a real "2D"-declared property reads
+# 2; before this task's fix, `_Cube` also read 2 -- now Cube/3D/2DArray). Maps each declared
+# dimension to the UnityPy object class its assigned texture PPtr must resolve to.
+TEXDIM_TO_CLASS = {
+    2: "Texture2D",
+    3: "Texture3D",
+    4: "Cubemap",
+    5: "Texture2DArray",
+    6: "CubemapArray",
+}
+
+# impl-texture-dimensions §1/§2 -- the §C-compatible manifest.textures[...].dimension values WP1
+# now emits and WP2 branches on. "Tex2D"/"Cube" become real, correctly-shaped bundle assets
+# (Texture2D/Cubemap respectively) and ARE expected in the bundle's object counts; "Tex3D"/
+# "Tex2DArray" are the task's explicit "don't assign" fallback (no correct Unity import path for
+# the spike) -- MaterialImporter.cs never calls SetTexture for them, so they correctly never end
+# up referenced by any Material and are therefore correctly ABSENT from the built bundle (Unity's
+# own dependency-based AssetBundle inclusion).
+TEXTURE_DIMENSIONS_BUILT_AS_ASSET = {"Tex2D": "Texture2D", "Cube": "Cubemap"}
+TEXTURE_DIMENSIONS_NEVER_ASSIGNED = {"Tex3D", "Tex2DArray"}
 
 # s1-fix-r1: Arena_Equator_Scripts is entirely WP2-authored (SS B.WP2.6) -- it never has a
 # scenes/Arena_Equator_Scripts.json in the WP1 package for load_package_expected() to count, so its
@@ -272,6 +305,29 @@ def load_package_expected(package: Path) -> dict:
     expected["material_count_in_scope"] = len(in_scope_material_ids)
     expected["texture_ids_in_scope"] = in_scope_texture_ids
     expected["texture_count_in_scope"] = len(in_scope_texture_ids)
+
+    # impl-texture-dimensions §3: split the in-scope texture set by manifest dimension --
+    # "Tex2D"/"Cube" each become a real, correctly-shaped bundle asset (Texture2D/Cubemap
+    # respectively, TEXTURE_DIMENSIONS_BUILT_AS_ASSET) and belong in the bundle's object counts;
+    # "Tex3D"/"Tex2DArray" (TEXTURE_DIMENSIONS_NEVER_ASSIGNED) are MaterialImporter's explicit
+    # "don't assign" fallback and are correctly ABSENT from the built bundle -- comparing the
+    # OLD flat "every in-scope texture becomes a Texture2D" assumption against a package
+    # containing any Cube/Tex3D texture would now produce a false FAIL (a Cubemap is not a
+    # Texture2D; a skipped Tex3D is in no bundle object type at all).
+    package_textures_all = manifest.get("textures", {})
+    texture_ids_in_scope_by_class: dict[str, set[str]] = {}
+    texture_ids_in_scope_never_assigned: set[str] = set()
+    for tid in in_scope_texture_ids:
+        dim = package_textures_all.get(tid, {}).get("dimension", "Tex2D")
+        cls = TEXTURE_DIMENSIONS_BUILT_AS_ASSET.get(dim)
+        if cls is not None:
+            texture_ids_in_scope_by_class.setdefault(cls, set()).add(tid)
+        else:
+            texture_ids_in_scope_never_assigned.add(tid)
+    expected["texture_ids_in_scope_by_class"] = texture_ids_in_scope_by_class
+    expected["texture_count_in_scope_2d"] = len(texture_ids_in_scope_by_class.get("Texture2D", ()))
+    expected["texture_count_in_scope_cube"] = len(texture_ids_in_scope_by_class.get("Cubemap", ()))
+    expected["texture_ids_in_scope_never_assigned"] = texture_ids_in_scope_never_assigned
     return expected
 
 
@@ -364,17 +420,27 @@ def validate_scenes_bundle_contents(env, expected: dict, material_shaders: dict 
     mesh_excluded = expected["mesh_count"] - expected["mesh_count_in_scope"]
     material_excluded = expected["material_count"] - expected["material_count_in_scope"]
     texture_excluded = expected["texture_count"] - expected["texture_count_in_scope"]
+    never_assigned_count = len(expected.get("texture_ids_in_scope_never_assigned", ()))
     print(f"[validate_bundle_roundtrip]   package totals vs in-scope (non-skinned) totals: "
           f"meshes {expected['mesh_count']} vs {expected['mesh_count_in_scope']} "
           f"({mesh_excluded} excluded, skip_import-only), "
           f"materials {expected['material_count']} vs {expected['material_count_in_scope']} "
           f"({material_excluded} excluded), "
           f"textures {expected['texture_count']} vs {expected['texture_count_in_scope']} "
-          f"({texture_excluded} excluded)")
+          f"({texture_excluded} excluded) -- in-scope split by dimension: "
+          f"{expected['texture_count_in_scope_2d']} Tex2D, {expected['texture_count_in_scope_cube']} "
+          f"Cube, {never_assigned_count} Tex3D/Tex2DArray (impl-texture-dimensions: the last group "
+          f"is MaterialImporter's explicit never-assign fallback, correctly absent from the bundle)")
     exact_checks = [
         ("GameObject", n("GameObject"), expected["game_objects"]),
         ("Mesh", n("Mesh"), expected["mesh_count_in_scope"]),
-        ("Texture2D", n("Texture2D"), expected["texture_count_in_scope"]),
+        # impl-texture-dimensions §3: Texture2D/Cubemap compared against their OWN in-scope,
+        # dimension-split totals -- a Cube-dimension texture correctly builds a Cubemap object,
+        # never a Texture2D one (the old flat "all in-scope textures are Texture2D" comparison
+        # would false-FAIL here the moment a package contains any real Cubemap, exactly as this
+        # task's fix now guarantees for a correctly-imported one).
+        ("Texture2D", n("Texture2D"), expected["texture_count_in_scope_2d"]),
+        ("Cubemap", n("Cubemap"), expected["texture_count_in_scope_cube"]),
         ("MeshFilter", n("MeshFilter"), expected["mesh_filters"]),
         ("MeshRenderer", n("MeshRenderer"), expected["mesh_renderers"]),
         ("MeshCollider", n("MeshCollider"), expected["mesh_colliders"]),
@@ -532,6 +598,97 @@ def validate_scenes_bundle_contents(env, expected: dict, material_shaders: dict 
                     null_slots += 1
     check(null_slots == 0, f"no LODGroup.GetLODs() renderer slot is null in the bundle (SS B.WP2.5's "
                             f"two-pass ordering requirement; found {null_slots} null slot(s))")
+
+
+# ---------------------------------------------------------------------------
+# impl-texture-dimensions task item 3 -- independent re-derivation, from the built bundle's own
+# compiled Shader objects, of what dimension each Material's shader declares for every texture
+# property it assigns, cross-checked against the assigned texture's own UnityPy object class.
+# ---------------------------------------------------------------------------
+
+def validate_texture_dimension_consistency(env) -> None:
+    """Never imports/reads anything from WP1's package or WP2's own C# source -- entirely
+    self-contained against the BUILT bundle: for every Material, resolve its Shader's own
+    compiled property list (m_ParsedForm.m_PropInfo.m_Props[].m_DefTexture.m_TexDim, confirmed
+    empirically this pass -- e.g. a "2D"-declared property reads m_TexDim==2, "Cube" reads 4),
+    then for every non-null assigned texture PPtr on that material, assert the ACTUAL referenced
+    object's UnityPy class (Texture2D/Cubemap/Texture3D/...) matches what that declared dimension
+    requires. This is a direct re-check of the reported bug's exact failure mode: 'Error assigning
+    2D texture to CUBE texture property _Cube: Dimensions must match' is precisely a Texture2D
+    object bound to a property whose compiled shader declares TexDim==4 (Cube)."""
+    shader_tex_dims_cache: dict[int, dict[str, int]] = {}  # shader path_id -> {prop_name: m_TexDim}
+
+    def shader_tex_dims(shader_obj) -> dict[str, int]:
+        cached = shader_tex_dims_cache.get(shader_obj.path_id)
+        if cached is not None:
+            return cached
+        try:
+            tt = shader_obj.read_typetree()
+        except Exception:  # noqa: BLE001
+            shader_tex_dims_cache[shader_obj.path_id] = {}
+            return {}
+        props = tt.get("m_ParsedForm", {}).get("m_PropInfo", {}).get("m_Props", [])
+        dims = {p.get("m_Name"): p.get("m_DefTexture", {}).get("m_TexDim")
+                for p in props if p.get("m_Type") == 4}  # kTexture
+        shader_tex_dims_cache[shader_obj.path_id] = dims
+        return dims
+
+    materials = [o for o in env.objects if o.type.name == "Material"]
+    checked = 0
+    mismatches = 0
+    unresolved = 0
+    for mat_obj in materials:
+        try:
+            tt = mat_obj.read_typetree()
+            typed = mat_obj.read()
+        except Exception as e:  # noqa: BLE001
+            check(False, f"Material path_id={mat_obj.path_id}: read()/read_typetree() succeed for "
+                          f"the texture-dimension cross-check (FAILED: {e})")
+            continue
+        mat_name = tt.get("m_Name") or f"path_id={mat_obj.path_id}"
+        shader_ptr = getattr(typed, "m_Shader", None)
+        if shader_ptr is None or shader_ptr.path_id == 0:
+            continue
+        try:
+            shader_obj = shader_ptr.deref()
+        except Exception:  # noqa: BLE001
+            continue
+        dims = shader_tex_dims(shader_obj)
+
+        tex_envs_tt = tt.get("m_SavedProperties", {}).get("m_TexEnvs", [])
+        sp_typed = getattr(typed, "m_SavedProperties", None)
+        tex_envs_typed = list(sp_typed.m_TexEnvs) if sp_typed is not None else []
+        if len(tex_envs_tt) != len(tex_envs_typed):
+            continue  # shouldn't happen (mirrors the extractor's own paired-length assumption)
+        for (prop_name, _te_tt), (_n, te_typed) in zip(tex_envs_tt, tex_envs_typed):
+            tex_ptr = getattr(te_typed, "m_Texture", None)
+            if tex_ptr is None or tex_ptr.path_id == 0:
+                continue  # unassigned slot -- nothing to cross-check (§C.4's valid "declared but unassigned" state)
+            declared_dim = dims.get(prop_name)
+            if declared_dim is None:
+                continue  # property not declared as a texture on this material's own shader -- not this check's concern
+            try:
+                tex_obj = tex_ptr.deref()
+            except Exception as e:  # noqa: BLE001
+                unresolved += 1
+                check(False, f"Material {mat_name!r} prop {prop_name!r}: assigned texture PPtr "
+                              f"resolves to a readable object (FAILED: {e})")
+                continue
+            checked += 1
+            actual_class = tex_obj.type.name
+            expected_class = TEXDIM_TO_CLASS.get(declared_dim)
+            if expected_class is not None and actual_class != expected_class:
+                mismatches += 1
+                check(False, f"Material {mat_name!r} prop {prop_name!r}: shader declares this "
+                              f"texture property dimension={declared_dim} ({expected_class}) but "
+                              f"the assigned texture object is a {actual_class} -- this is exactly "
+                              f"the reported 'Error assigning 2D texture to CUBE/3D texture "
+                              f"property: Dimensions must match' scene-load failure mode")
+    if mismatches == 0 and unresolved == 0:
+        check(True, f"{checked} assigned Material texture slot(s) cross-checked against their "
+                     f"shader's own compiled property dimension -- no material references a "
+                     f"Texture2D on a property whose shader declares Cube/3D/2DArray (or any other "
+                     f"dimension mismatch)")
 
 
 # ---------------------------------------------------------------------------
@@ -828,6 +985,7 @@ def main() -> None:
     if env is not None:
         validate_target_platform(env, "arena_equator_scenes.bundle")
         validate_scenes_bundle_contents(env, expected, material_shaders)
+        validate_texture_dimension_consistency(env)
         validate_eft_scripts(env, args.require_scripts_scene)
     else:
         check(False, "GameObject/Mesh/Material/collider/LODGroup/EFT-component checks run "

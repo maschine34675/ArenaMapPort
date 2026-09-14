@@ -14,7 +14,7 @@ Shader "Hidden/ArenaMapPort/p0/Reflective/Bumped Specular SMap"
         _BumpScale ("_BumpScale", Float) = 0
         _BumpTiling ("_BumpTiling", Float) = 0
         _Color ("_Color", Color) = (1,1,1,1)
-        _Cube ("_Cube", 2D) = "white" {}
+        _Cube ("_Cube", Cube) = "white" {}
         _Cutoff ("_Cutoff", Float) = 0
         _DXT1_NM ("_DXT1_NM", Float) = 0
         _DefVals ("_DefVals", Color) = (1,1,1,1)
