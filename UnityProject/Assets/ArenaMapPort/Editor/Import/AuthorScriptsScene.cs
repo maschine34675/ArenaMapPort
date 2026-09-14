@@ -129,7 +129,13 @@ namespace ArenaMapPort.Editor.Import
                 spawnPoint.Rotation = Quaternion.identity;
                 spawnPoint.Sides = sides;
                 spawnPoint.Categories = ESpawnCategoryMask.Player;
-                spawnPoint.Infiltration = null;
+                // fix-gamestart, finding F1 (blocker): null here crashes SPT's own EmptyInfilFixPatch at
+                // raid-start (BaseLocalGame.cs:790 tolerates null _entryPoint, but SPT's Harmony prefix on
+                // the same vmethod_6 does not — see ArenaMapPort.Client/SpawnInfiltrationRepairs.cs for the
+                // full chain). The runtime Harmony postfix there is what actually ships this fix without a
+                // bundle rebuild; this literal just keeps a future rebuild correct-by-construction. Keep in
+                // sync with SpawnInfiltrationFixPostfix.InfiltrationName — must be the identical string.
+                spawnPoint.Infiltration = "ArenaEquator";
                 spawnPoint.BotZone = null; // §D: no BotZone linkage needed — global spawn-point scan.
                 spawnPoint.DelayToCanSpawnSec = 4f;
                 spawnPoint.CorePointId = 0;

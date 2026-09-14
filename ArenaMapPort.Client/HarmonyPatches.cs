@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 using Audio.SpatialSystem;
 using EFT;
 using EFT.AssetsManager;
+using EFT.Game.Spawning;
 using HarmonyLib;
 using Koenigz.PerfectCulling.EFT;
 
@@ -28,6 +29,10 @@ namespace ArenaMapPort.Client
     {
         internal static void InstallAll(Harmony harmony)
         {
+            // fix-gamestart, finding F1 (blocker) — CreateFromScene runs in BaseLocalGame.Run before spawn
+            // selection; install order here is irrelevant, all patches are in place before any raid.
+            InstallSpawnInfiltrationFix(harmony);
+
             InstallBundleHost(harmony);
             InstallNavMesh(harmony);
             InstallPerfectCullingSkip(harmony);
@@ -41,6 +46,26 @@ namespace ArenaMapPort.Client
             InstallEffectsControllerFrostbite(harmony);
             InstallAIVoxelesDataGuard(harmony);
             InstallAIStationaryControllerEnsure(harmony);
+        }
+
+        // fix-gamestart, finding F1 — SpawnPointsCollection.CreateFromScene(DateTime?, SpawnPointParams[]),
+        // static, single overload. Verified: D:/SPT41/Development/_decompiled/EFT.Game.Spawning/
+        // SpawnPointsCollection.cs:152. See SpawnInfiltrationRepairs.cs for the full root-cause chain.
+        static void InstallSpawnInfiltrationFix(Harmony harmony)
+        {
+            var target = AccessTools.Method(
+                typeof(SpawnPointsCollection),
+                nameof(SpawnPointsCollection.CreateFromScene));
+
+            if (!Verify(target, typeof(SpawnPointsCollection), nameof(SpawnPointsCollection.CreateFromScene)))
+            {
+                return;
+            }
+
+            var postfix = AccessTools.Method(typeof(SpawnInfiltrationFixPostfix), "Postfix");
+            harmony.Patch(target, postfix: new HarmonyMethod(postfix));
+            Plugin.Log.LogInfo("[ArenaMapPort][Harmony] patched SpawnPointsCollection.CreateFromScene " +
+                                "(fix-gamestart F1 — entry-point blocker fix)");
         }
 
         // §F.1 — BundlesManager.LoadBundleAsync(string bundleName, bool logErrors = true), instance method.
