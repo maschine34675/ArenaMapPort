@@ -1,6 +1,6 @@
 using System.Text.Json;
 using SPTarkov.Server.Core.Models.Eft.Common;
-using SPTarkov.Server.Core.Utils.Json.Converters;
+using SPTarkov.Server.Core.Utils.Json;
 using Xunit;
 
 namespace ArenaMapPort.Server.Tests;
@@ -17,13 +17,17 @@ public class BaseJsonTests
     private const string ExpectedScenePath = "maps/arena_equator_preset.bundle";
     private const string ExpectedSceneRcid = "arena_equator.scenespreset.asset";
 
-    // Plain System.Text.Json needs StringToMongoIdConverter explicitly here — the live
-    // server registers it (and others) via JsonUtil's IJsonConverterRegistrator DI
-    // pipeline, which a bare test host doesn't run.
-    private static readonly JsonSerializerOptions Options = new()
+    // Same converter set the live server's JsonUtil registers (SptJsonConverterRegistrator),
+    // so these tests parse db/base.json exactly as the server does at load.
+    private static readonly JsonSerializerOptions Options = CreateServerOptions();
+
+    private static JsonSerializerOptions CreateServerOptions()
     {
-        Converters = { new StringToMongoIdConverter() },
-    };
+        var options = new JsonSerializerOptions { ReadCommentHandling = JsonCommentHandling.Skip };
+        foreach (var converter in new SptJsonConverterRegistrator().GetJsonConverters())
+            options.Converters.Add(converter);
+        return options;
+    }
 
     private static string BaseJsonPath => Path.Combine(AppContext.BaseDirectory, "db", "base.json");
 
@@ -125,5 +129,20 @@ public class BaseJsonTests
 
         Assert.Equal(1, location.MinPlayers);
         Assert.Equal(1, location.MaxPlayers);
+    }
+
+    // The map selection screen calls location.BossLocationSpawn.Any(...) and the raid start
+    // reads location.waves without null checks (MatchMakerSelectionLocationScreen.cs:439/451,
+    // LocationInfoPanel.cs:174, BaseLocalGame.cs:415, LocalGame.cs:143/147). A missing array
+    // throws while the button is built, so the location silently never appears.
+    [Fact]
+    public void ClientDereferencedArrays_ArePresentAndEmpty()
+    {
+        var location = Deserialize();
+
+        Assert.NotNull(location.BossLocationSpawn);
+        Assert.Empty(location.BossLocationSpawn!);
+        Assert.NotNull(location.Waves);
+        Assert.Empty(location.Waves!);
     }
 }
