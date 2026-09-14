@@ -22,6 +22,9 @@
     1. tools/sync-game-refs.ps1                                (skip with -SkipGameRefsSync)
     2. Unity.exe -batchmode ... BuildBundles.Run                (skip with -SkipUnityBuild, e.g.
        to only re-patch+re-validate an already-built work/build/<slice>)
+       Passes only if Unity exited 0, logged `[BuildBundles] DONE`, and its log has no compile
+       error, batchmode abort, crash signal or non-allowlisted exception -- see
+       tools/unity-log-scan.ps1 for the exact rules and the one allowlisted editor-startup source.
     3. tools/bundle/patch_monoscript_identity.py against every
        *.bundle BuildBundles.Run produced (scenes AND navmesh)  -- MANDATORY, never skippable
     4. tools/validate/validate_extract.py
@@ -76,6 +79,8 @@ param(
 
 $ErrorActionPreference = "Stop"
 
+. (Join-Path $PSScriptRoot "unity-log-scan.ps1")
+
 function Write-Step($msg) {
     Write-Host ""
     Write-Host "==== [build_all] $msg ====" -ForegroundColor Cyan
@@ -120,11 +125,20 @@ if (-not $SkipUnityBuild) {
     )
     Write-Host "[build_all] $UnityExe $($unityArgs -join ' ')"
     $proc = Start-Process -FilePath $UnityExe -ArgumentList $unityArgs -PassThru -Wait -NoNewWindow
-    $badLines = Select-String -Path $logFile -Pattern "error CS|Exception|Aborting batchmode|Received signal" -ErrorAction SilentlyContinue
-    if ($proc.ExitCode -ne 0 -or $badLines) {
-        Write-Host "[build_all] Unity log tail ($logFile):" -ForegroundColor Yellow
-        Get-Content $logFile -Tail 60
-        Fail "Unity BuildBundles.Run failed (exit=$($proc.ExitCode), $($badLines.Count) suspicious log line(s)) -- see $logFile"
+    $scan = Test-UnityBuildLog -LogFile $logFile -ExitCode $proc.ExitCode
+    foreach ($l in $scan.IgnoredLines) {
+        Write-Host "[build_all] ignored benign Unity log line $($l.Line) ($($l.Category)): $($l.Text)" -ForegroundColor DarkYellow
+    }
+    if (-not $scan.Ok) {
+        if (Test-Path -LiteralPath $logFile) {
+            Write-Host "[build_all] Unity log tail ($logFile):" -ForegroundColor Yellow
+            Get-Content $logFile -Tail 60
+        }
+        foreach ($l in ($scan.FatalLines | Select-Object -First 20)) {
+            Write-Host "[build_all] fatal Unity log line $($l.Line): $($l.Text)" -ForegroundColor Red
+        }
+        if ($scan.FatalLines.Count -gt 20) { Write-Host "[build_all] ... and $($scan.FatalLines.Count - 20) more fatal line(s)" -ForegroundColor Red }
+        Fail "Unity BuildBundles.Run failed ($($scan.Problems -join '; ')) -- see $logFile"
     }
     Write-Host "[build_all] Unity BuildBundles.Run OK -- log: $logFile"
 } else {

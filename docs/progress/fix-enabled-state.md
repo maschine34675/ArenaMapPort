@@ -139,6 +139,13 @@ only match a real C# build/runtime exception from our own assemblies — flagged
 out of this task's scope) and proceeded manually with the mandatory steps 3+4 against the bundles
 Unity did successfully build, running the exact same commands `build_all.ps1` itself would have.
 
+**Follow-up (fixed later the same day):** `build_all.ps1` step 2 now uses `tools/unity-log-scan.ps1`.
+A run passes only if Unity exits 0, the log has the `[BuildBundles] DONE` marker, no line matches
+`error CS`/`Aborting batchmode`/`Received signal`, and every `Exception` line belongs to a
+warn-or-lower `Unity.AspNetCore.NamedPipeSupport.*` logger entry. Re-scanned, this run's log passes
+with line 191 reported as ignored. No other historic Unity log under `work/build` that the old scan
+rejected is accepted now.
+
 ## 5) Unity build results (manual step 2, since `build_all.ps1` stopped early)
 
 Ran directly: `Unity.exe -batchmode -nographics -projectPath UnityProject -executeMethod
