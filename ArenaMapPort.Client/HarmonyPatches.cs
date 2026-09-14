@@ -46,6 +46,12 @@ namespace ArenaMapPort.Client
             InstallEffectsControllerFrostbite(harmony);
             InstallAIVoxelesDataGuard(harmony);
             InstallAIStationaryControllerEnsure(harmony);
+
+            // fix-combat findings F1/F2 (explosives-items) + one additional confirmed same-class gap —
+            // see docs/progress/fix-combat.md and EffectsControllerRepairs.cs's guard doc comments.
+            InstallEyeBurnGuard(harmony);
+            InstallFlashAccumulatorGuard(harmony);
+            InstallCombatScreenEffectsGuard(harmony);
         }
 
         // fix-gamestart, finding F1 — SpawnPointsCollection.CreateFromScene(DateTime?, SpawnPointParams[]),
@@ -289,6 +295,69 @@ namespace ArenaMapPort.Client
             harmony.Patch(target, prefix: new HarmonyMethod(prefix));
             Plugin.Log.LogInfo("[ArenaMapPort][Harmony] patched BotsController.Init for AIStationaryController " +
                                 "ensure (impl-raidstart-repairs, additional prefix alongside §F.2)");
+        }
+
+        // fix-combat F1 (explosives-items) — EffectsController.OnHealthBurnEyes(Vector3, float, float) and
+        // .OnClientPlayerEffectsPauseEvent(ClientPlayerEffectsPauseEvent), both public instance, single
+        // overload each. Verified: D:/SPT41/Development/_decompiled/EffectsController.cs:1256,1404.
+        static void InstallEyeBurnGuard(Harmony harmony)
+        {
+            var burnEyes = AccessTools.Method(typeof(EffectsController), "OnHealthBurnEyes");
+            if (Verify(burnEyes, typeof(EffectsController), "OnHealthBurnEyes"))
+            {
+                var prefix = AccessTools.Method(typeof(EyeBurnGuardPrefix), "Prefix");
+                harmony.Patch(burnEyes, prefix: new HarmonyMethod(prefix));
+                Plugin.Log.LogInfo("[ArenaMapPort][Harmony] patched EffectsController.OnHealthBurnEyes (fix-combat F1)");
+            }
+
+            var pauseEvent = AccessTools.Method(typeof(EffectsController), "OnClientPlayerEffectsPauseEvent");
+            if (Verify(pauseEvent, typeof(EffectsController), "OnClientPlayerEffectsPauseEvent"))
+            {
+                var prefix = AccessTools.Method(typeof(EyeBurnPauseGuardPrefix), "Prefix");
+                harmony.Patch(pauseEvent, prefix: new HarmonyMethod(prefix));
+                Plugin.Log.LogInfo("[ArenaMapPort][Harmony] patched EffectsController.OnClientPlayerEffectsPauseEvent " +
+                                    "(fix-combat F1)");
+            }
+        }
+
+        // fix-combat F2 (explosives-items) — the nested EffectsController.FlashAccumulator.AddEffect
+        // (IHealthEffect), public instance override, single overload.
+        // Verified: D:/SPT41/Development/_decompiled/EffectsController.cs:619,634.
+        static void InstallFlashAccumulatorGuard(Harmony harmony)
+        {
+            var target = AccessTools.Method(typeof(EffectsController.FlashAccumulator), "AddEffect");
+            if (!Verify(target, typeof(EffectsController.FlashAccumulator), "AddEffect"))
+            {
+                return;
+            }
+
+            var prefix = AccessTools.Method(typeof(FlashAccumulatorGuardPrefix), "Prefix");
+            harmony.Patch(target, prefix: new HarmonyMethod(prefix));
+            Plugin.Log.LogInfo("[ArenaMapPort][Harmony] patched EffectsController.FlashAccumulator.AddEffect " +
+                                "(fix-combat F2)");
+        }
+
+        // fix-combat, additional finding alongside F1/F2 — EffectsController.OnHealthApplyDamage
+        // (EBodyPart, float, DamageInfo) and .OnPlayerDamaged(float, EBodyPart, EDamageType, float,
+        // MaterialType), both public instance, single overload each.
+        // Verified: D:/SPT41/Development/_decompiled/EffectsController.cs:1410,1421.
+        static void InstallCombatScreenEffectsGuard(Harmony harmony)
+        {
+            var applyDamage = AccessTools.Method(typeof(EffectsController), "OnHealthApplyDamage");
+            if (Verify(applyDamage, typeof(EffectsController), "OnHealthApplyDamage"))
+            {
+                var prefix = AccessTools.Method(typeof(CombatScreenEffectsGuard), "Prefix");
+                harmony.Patch(applyDamage, prefix: new HarmonyMethod(prefix));
+                Plugin.Log.LogInfo("[ArenaMapPort][Harmony] patched EffectsController.OnHealthApplyDamage (fix-combat)");
+            }
+
+            var playerDamaged = AccessTools.Method(typeof(EffectsController), "OnPlayerDamaged");
+            if (Verify(playerDamaged, typeof(EffectsController), "OnPlayerDamaged"))
+            {
+                var finalizer = AccessTools.Method(typeof(CombatScreenEffectsGuard), "Finalizer");
+                harmony.Patch(playerDamaged, finalizer: new HarmonyMethod(finalizer));
+                Plugin.Log.LogInfo("[ArenaMapPort][Harmony] patched EffectsController.OnPlayerDamaged (fix-combat)");
+            }
         }
 
         static bool Verify(MethodBase method, Type declaringType, string methodName)
