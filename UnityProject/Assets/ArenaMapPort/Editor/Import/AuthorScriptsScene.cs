@@ -119,6 +119,16 @@ namespace ArenaMapPort.Editor.Import
                 box.center = Vector3.zero;
                 box.size = new Vector3(1f, 2f, 1f);
                 box.enabled = true;
+                // fix-lighting-movement, item 1: BSG always creates spawn colliders as triggers
+                // (EFT.Game.Spawning/SpawnPointParamsExtension.cs:38-58, AddSpawnCollider sets
+                // isTrigger=true) and its own runtime code can never flip this flag on a collider that
+                // already exists (TryAddSpawnCollider, same file :22-36, early-returns any pre-existing
+                // Collider untouched) — so a solid box authored here stays solid forever. Without this,
+                // the player spawns physically embedded in the box: unable to move, and a grenade
+                // thrown from inside it collides immediately at the player's own feet (2026-09-14
+                // playtest). The client's SpawnColliderRepairs.cs Harmony postfix already ships this fix
+                // without a bundle rebuild; this line just keeps a future rebuild correct-by-construction.
+                box.isTrigger = true;
 
                 var marker = AddComponentOrThrow<SpawnPointMarker>(go);
                 marker._collider = box;

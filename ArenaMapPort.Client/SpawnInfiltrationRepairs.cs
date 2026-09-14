@@ -70,6 +70,8 @@ namespace ArenaMapPort.Client
                 return; // every other map's raid — untouched
             }
 
+            SpawnColliderRepairs.EnsureAllTriggers();
+
             int fixedCount = 0;
             foreach (var point in __result)
             {

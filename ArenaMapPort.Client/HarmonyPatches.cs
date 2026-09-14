@@ -33,6 +33,10 @@ namespace ArenaMapPort.Client
             // selection; install order here is irrelevant, all patches are in place before any raid.
             InstallSpawnInfiltrationFix(harmony);
 
+            // fix-lighting-movement, item 1 — spawn colliders authored solid/non-trigger; see
+            // SpawnColliderRepairs.cs for the full root-cause chain.
+            InstallSpawnColliderFix(harmony);
+
             InstallBundleHost(harmony);
             InstallNavMesh(harmony);
             InstallPerfectCullingSkip(harmony);
@@ -72,6 +76,25 @@ namespace ArenaMapPort.Client
             harmony.Patch(target, postfix: new HarmonyMethod(postfix));
             Plugin.Log.LogInfo("[ArenaMapPort][Harmony] patched SpawnPointsCollection.CreateFromScene " +
                                 "(fix-gamestart F1 — entry-point blocker fix)");
+        }
+
+        // fix-lighting-movement, item 1 — SpawnPointMarker.Start(), public instance, no args, single
+        // overload. Verified: D:/SPT41/Development/_decompiled/EFT.Game.Spawning/SpawnPointMarker.cs:96.
+        // See SpawnColliderRepairs.cs for the full root-cause chain (BSG's own runtime code can never
+        // flip isTrigger on a pre-existing collider).
+        static void InstallSpawnColliderFix(Harmony harmony)
+        {
+            var target = AccessTools.Method(typeof(SpawnPointMarker), nameof(SpawnPointMarker.Start));
+
+            if (!Verify(target, typeof(SpawnPointMarker), nameof(SpawnPointMarker.Start)))
+            {
+                return;
+            }
+
+            var postfix = AccessTools.Method(typeof(SpawnColliderRepairs), "Postfix");
+            harmony.Patch(target, postfix: new HarmonyMethod(postfix));
+            Plugin.Log.LogInfo("[ArenaMapPort][Harmony] patched SpawnPointMarker.Start " +
+                                "(fix-lighting-movement — spawn collider trigger fix)");
         }
 
         // §F.1 — BundlesManager.LoadBundleAsync(string bundleName, bool logErrors = true), instance method.

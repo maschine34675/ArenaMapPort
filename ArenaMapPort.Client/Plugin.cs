@@ -52,6 +52,12 @@ namespace ArenaMapPort.Client
             SceneDiagnostics.Install();
             ShaderRebind.Install();
 
+            // fix-lighting-movement, items 2-4 — gated ambient/light brightness repair, its live
+            // ConfigEntries, and the once-per-raid diagnostic dump. See docs/progress/
+            // fix-lighting-movement.md.
+            ArenaLightingRepairs.Install();
+            LightingDiagnosticProbe.Install();
+
             Log.LogInfo($"[ArenaMapPort] {PluginName} {PluginVersion} loaded — " +
                         $"{ArenaEquatorLocation.AllSceneNames.Length} owned scenes, Harmony patches applied.");
         }

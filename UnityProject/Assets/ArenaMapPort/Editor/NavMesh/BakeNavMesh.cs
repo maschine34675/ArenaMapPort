@@ -88,6 +88,19 @@ namespace ArenaMapPort.Editor.NavMesh
             // time inside the real pipeline, the just-authored Arena_Equator_Scripts scene is also
             // open; its 3 SpawnPointMarker BoxColliders are non-trigger and would otherwise leak
             // into the navmesh as bogus tiny obstacles without this filter).
+            //
+            // fix-lighting-movement, item 1 (2026-09-14): AuthorScriptsScene.cs now authors these same
+            // 3 BoxColliders as isTrigger=true (they were non-trigger when the paragraph above was
+            // written -- see SpawnColliderRepairs.cs for why that was itself a bug: BSG's own runtime
+            // code can never flip isTrigger on a pre-existing collider). This filter's own correctness
+            // never depended on the trigger flag either way: it keeps only sources whose Transform is a
+            // child of (or is) one of THIS bake's own content-scene roots (geometryRoots --
+            // Arena_Equator/_Lighting/etc.), and the Scripts scene these 3 markers live in is never
+            // passed as one of those roots, trigger or not. (Separately, Unity's PhysicsColliders
+            // geometry mode is commonly documented as skipping trigger colliders entirely -- not
+            // independently verified against this exact Editor/version in this pass -- which would mean
+            // these 3 sources no longer even reach `allSources` post-fix; harmless either way, since the
+            // explicit filter below already excludes them unconditionally.)
             var allSources = new List<NavMeshBuildSource>();
             UnityEngine.AI.NavMeshBuilder.CollectSources(null, ~0, NavMeshCollectGeometry.PhysicsColliders, 0, new List<NavMeshBuildMarkup>(), allSources);
 
