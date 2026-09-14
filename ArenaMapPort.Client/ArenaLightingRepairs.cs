@@ -191,6 +191,7 @@ namespace ArenaMapPort.Client
             // last wrote. Restore the authored no-op values explicitly so nothing outlives this raid.
             RenderSettings.fog = false; // AuthorScriptsScene.cs:83 authors LevelSettings.fog = false
             RenderSettings.fogDensity = 0f;
+            RenderSettings.fogColor = new Color(0.5f, 0.5f, 0.5f, 1f); // Unity's default; fogMode stays valid
             if (_ambientFallbackWritten)
             {
                 RenderSettings.ambientMode = AmbientMode.Flat;

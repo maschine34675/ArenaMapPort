@@ -34,6 +34,9 @@ namespace ArenaMapPort.Client
             int mask = PlayerCollisionMask();
             var boothBounds = new List<Bounds>();
             int barriersDisabled = ScanOwnedScenes(boothBounds);
+            // EFT can switch Physics.autoSyncTransforms off (PhysicsExtensions.cs:332); make the disabled
+            // barriers visible to the queries below either way.
+            Physics.SyncTransforms();
 
             var placed = new List<Vector3>();
             var log = new StringBuilder();
@@ -54,6 +57,14 @@ namespace ArenaMapPort.Client
                 if (TryFindFree(origin, mask, boothBounds, placed, out var position))
                 {
                     spawn.Position = position;
+                    // Move the marker too: its BoxCollider bounds back ISpawnPointCollider.Contains
+                    // (SpawnPointMarker.cs:139-165), which bot and group spawn checks read
+                    // (SpawnPointExtension.cs:88/141/207).
+                    if (spawnPoints._dictionary != null &&
+                        spawnPoints._dictionary.TryGetValue(point, out var marker) && marker != null)
+                    {
+                        marker.transform.position = position;
+                    }
                     placed.Add(position);
                     log.Append($" '{spawn.Name}' {origin} -> {position} ({Vector3.Distance(origin, position):0.0} m);");
                 }
