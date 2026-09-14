@@ -316,6 +316,13 @@ def build_meshrenderer(obj, ctx: ExtractionContext):
         "receive_shadows": bool(tt.get("m_ReceiveShadows", 1)),
         "light_probe_usage": LIGHT_PROBE_USAGE.get(tt.get("m_LightProbeUsage", 1), "Off"),
         "reflection_probe_usage": reflection_probe_usage(tt.get("m_ReflectionProbeUsage", 1)),
+        # fix-enabled-state: Arena disables a handful of renderers per-object (e.g. stencil
+        # ceiling/floor cutouts, leftover 'colider N'/'Cube' placeholder meshes) rather than
+        # removing them -- the importer never read this before, so every one of them came back
+        # enabled in our bundle: large flat untextured blocks sitting in walkways. Default true
+        # when the field is absent (back-compat with any package extracted before this field
+        # existed) via tt.get's own default below.
+        "enabled": bool(tt.get("m_Enabled", 1)),
     }
 
 
@@ -352,6 +359,9 @@ def build_skinnedmeshrenderer(obj, ctx: ExtractionContext):
         "reflection_probe_usage": reflection_probe_usage(tt.get("m_ReflectionProbeUsage", 1)),
         "bind_pose_bone_names": bone_names,
         "skip_import": True,
+        # fix-enabled-state: recorded for schema completeness/parity with MeshRenderer even
+        # though skip_import means WP2 never attaches a SkinnedMeshRenderer at all right now.
+        "enabled": bool(tt.get("m_Enabled", 1)),
     }
 
 
@@ -369,6 +379,11 @@ def build_meshcollider(obj, ctx: ExtractionContext):
         "convex": bool(tt.get("m_Convex")),
         "is_trigger": bool(tt.get("m_IsTrigger")),
         "physic_material": resolve_physic_material(typed.m_Material, ctx),
+        # fix-enabled-state: Arena disables ~25 'colider N'/'ballistic' MeshColliders per scene
+        # (leftover/duplicate collision meshes) -- BakeNavMesh.Bake's CollectSources filter
+        # already honors Collider.enabled at bake time, so once SceneAssembler applies this the
+        # NavMesh bake is correct for free.
+        "enabled": bool(tt.get("m_Enabled", 1)),
     }
 
 
@@ -382,6 +397,10 @@ def build_boxcollider(obj, ctx: ExtractionContext):
         "size": [s["x"], s["y"], s["z"]],
         "is_trigger": bool(tt.get("m_IsTrigger")),
         "physic_material": resolve_physic_material(typed.m_Material, ctx),
+        # fix-enabled-state: e.g. Arena_Equator_DesignStuff disables 380 mannequin-gear
+        # BoxColliders (decorative bodies, not meant to block movement) and
+        # Arena_Equator_Lighting disables 19 stencil-cube BoxColliders.
+        "enabled": bool(tt.get("m_Enabled", 1)),
     }
 
 
@@ -395,6 +414,9 @@ def build_spherecollider(obj, ctx: ExtractionContext):
         "radius": tt.get("m_Radius", 0.5),
         "is_trigger": bool(tt.get("m_IsTrigger")),
         "physic_material": resolve_physic_material(typed.m_Material, ctx),
+        # fix-enabled-state: none of Equator's real SphereColliders are disabled (recomputed via
+        # the same census this task's root-cause analysis used), recorded for schema parity.
+        "enabled": bool(tt.get("m_Enabled", 1)),
     }
 
 
@@ -410,6 +432,9 @@ def build_capsulecollider(obj, ctx: ExtractionContext):
         "direction": tt.get("m_Direction", 1),
         "is_trigger": bool(tt.get("m_IsTrigger")),
         "physic_material": resolve_physic_material(typed.m_Material, ctx),
+        # fix-enabled-state: none of Equator's real CapsuleColliders are disabled, recorded for
+        # schema parity.
+        "enabled": bool(tt.get("m_Enabled", 1)),
     }
 
 
@@ -426,6 +451,9 @@ def build_light(obj, ctx: ExtractionContext):
         "spot_angle": tt.get("m_SpotAngle", 30.0),
         "lightmapping_mode": tt.get("m_Lightmapping", 4),
         "shadow_type": SHADOW_TYPE.get(shadows.get("m_Type"), f"Unknown({shadows.get('m_Type')})"),
+        # fix-enabled-state: no Light is disabled in any of Equator's 5 content scenes (recomputed
+        # this pass), recorded for schema parity.
+        "enabled": bool(tt.get("m_Enabled", 1)),
     }
 
 
@@ -459,6 +487,10 @@ def build_lodgroup(obj, f, ctx: ExtractionContext):
         "lods": lods_out,
         "size": tt.get("m_Size", 1.0),
         "fade_mode": tt.get("m_FadeMode", 0),
+        # fix-enabled-state: no LODGroup is disabled in any of Equator's 5 content scenes
+        # (recomputed this pass), recorded for schema parity/completeness with every other
+        # component type this fix covers.
+        "enabled": bool(tt.get("m_Enabled", 1)),
     }
 
 

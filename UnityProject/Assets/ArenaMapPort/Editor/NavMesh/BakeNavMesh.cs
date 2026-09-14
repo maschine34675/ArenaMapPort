@@ -101,6 +101,19 @@ namespace ArenaMapPort.Editor.NavMesh
             // independently verified against this exact Editor/version in this pass -- which would mean
             // these 3 sources no longer even reach `allSources` post-fix; harmless either way, since the
             // explicit filter below already excludes them unconditionally.)
+            // fix-enabled-state: confirmed this pass that this is safe wrt the newly-applied
+            // per-component "enabled" flags (SceneAssembler.cs's AttachMeshCollider/AttachBoxCollider/
+            // etc. now set Collider.enabled from the extracted record instead of leaving Unity's
+            // AddComponent default of always-true) — CollectSources(null, ...) reads LIVE component
+            // state from every currently-open scene at the moment it is called, and
+            // BuildBundles.FinishPipeline only calls Bake() after every content scene's
+            // SceneAssembler.Assemble() (and the Scripts scene) has already run and set every
+            // component's final .enabled value, all within the same synchronous batchmode process
+            // (scenes are saved but never closed/reopened in between) — so a Collider disabled in
+            // Arena (e.g. the ~25 duplicate 'colider N'/'ballistic' MeshColliders per scene) is
+            // already disabled by the time this runs, and DiagCollectSources's own
+            // "enabled && !isTrigger && activeInHierarchy" cross-check below confirms
+            // PhysicsColliders geometry mode itself respects Collider.enabled.
             var allSources = new List<NavMeshBuildSource>();
             UnityEngine.AI.NavMeshBuilder.CollectSources(null, ~0, NavMeshCollectGeometry.PhysicsColliders, 0, new List<NavMeshBuildMarkup>(), allSources);
 

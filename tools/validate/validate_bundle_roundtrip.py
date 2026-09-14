@@ -167,6 +167,16 @@ TEXTURE_DIMENSIONS_NEVER_ASSIGNED = {"Tex3D", "Tex2DArray"}
 SCRIPTS_SCENE_EXTRA_GAME_OBJECTS = 8
 SCRIPTS_SCENE_EXTRA_BOX_COLLIDERS = 3
 
+# fix-enabled-state -- same component-type set validate_extract.py checks the "enabled" field on;
+# see that script's own KNOWN_ARENA_DISABLED_COUNTS/ENABLED_COMPONENT_TYPES comment for the root
+# cause (Arena disables these on a handful of leftover/decorative objects per scene; left enabled
+# by the importer before this fix, they rendered as untextured blocks/invisible walls). Duplicated
+# here rather than imported -- "each WP6 script must stand alone" (this file's own module docstring).
+ENABLED_COMPONENT_TYPES = {
+    "MeshRenderer", "SkinnedMeshRenderer", "MeshCollider", "BoxCollider",
+    "SphereCollider", "CapsuleCollider", "Light", "LODGroup",
+}
+
 FAILURES: list[str] = []
 WARNINGS: list[str] = []
 
@@ -692,6 +702,106 @@ def validate_texture_dimension_consistency(env) -> None:
 
 
 # ---------------------------------------------------------------------------
+# fix-enabled-state: per-scene disabled-component counts, bundle vs package
+# ---------------------------------------------------------------------------
+
+def count_disabled_in_package_scenes(package: Path, manifest: dict) -> dict[str, dict[str, int]]:
+    """Per-scene, per-type count of components whose extracted record has "enabled": false --
+    same contract as validate_extract.py's count_disabled_in_package() (missing key or explicit
+    true both mean enabled), duplicated here rather than imported since this script is meant to
+    stand alone against just the built bundle + package."""
+    counts: dict[str, dict[str, int]] = {}
+    for scene_name in manifest.get("scenes", []):
+        scene_path = package / "scenes" / f"{scene_name}.json"
+        if not scene_path.is_file():
+            continue
+        scene = load_json(scene_path)
+        scene_counts: dict[str, int] = {}
+        for obj in scene.get("objects", []):
+            for comp in obj.get("components", []):
+                ctype = comp.get("type")
+                if ctype not in ENABLED_COMPONENT_TYPES:
+                    continue
+                if comp.get("enabled", True) is False:
+                    scene_counts[ctype] = scene_counts.get(ctype, 0) + 1
+        counts[scene_name] = scene_counts
+    return counts
+
+
+def count_disabled_in_bundle_scenes(env, scene_names: list[str]) -> dict[str, dict[str, int]]:
+    """Per-scene, per-type count of disabled components actually built into the bundle, read back
+    independently of WP2's own C# importer. Unity's multi-scene AssetBundleBuild serializes each
+    content scene's own GameObject/Transform/component data into its own nested SerializedFile
+    named exactly "BuildPlayer-<SceneName>" (confirmed empirically this pass against a real built
+    bundle -- its object-type counts for Arena_Equator, e.g. 13143 MeshRenderer/4730 MeshCollider,
+    exactly match Arena's own per-scene totals; the sibling "BuildPlayer-<SceneName>.sharedAssets"
+    nested file holds only shared Mesh/Material/Texture/Shader dependencies, no
+    GameObject/component data) -- so this only ever needs to look inside that one nested file per
+    scene, never the whole bundle's flat object list (which would double-count nothing here since
+    components aren't shared across scenes, but would make a missing/renamed nested file silently
+    invisible instead of a named, actionable failure)."""
+    by_name = {sf.name: sf for sf in iter_serialized_files(env)}
+    out: dict[str, dict[str, int]] = {}
+    for scene_name in scene_names:
+        sf = by_name.get(f"BuildPlayer-{scene_name}")
+        if sf is None:
+            check(False, f"fix-enabled-state: bundle has a nested SerializedFile named "
+                          f"'BuildPlayer-{scene_name}' to read disabled-component counts from "
+                          f"(not found among: {sorted(by_name)})")
+            continue
+        scene_counts: dict[str, int] = {}
+        for obj in sf.objects.values():
+            t = obj.type.name
+            if t not in ENABLED_COMPONENT_TYPES:
+                continue
+            try:
+                tt = obj.read_typetree()
+            except Exception:  # noqa: BLE001
+                continue
+            if tt.get("m_Enabled", 1) == 0:
+                scene_counts[t] = scene_counts.get(t, 0) + 1
+        out[scene_name] = scene_counts
+    return out
+
+
+def validate_disabled_component_counts_bundle(env, package: Path, manifest: dict) -> None:
+    """fix-enabled-state acceptance check, bundle side: every scene's per-type disabled-component
+    count actually built into the bundle must match the extracted package's own count exactly --
+    i.e. SceneAssembler.cs's ReadEnabled()/component.enabled assignment round-trips through Unity's
+    AssetBundle build faithfully, component-for-component. (validate_extract.py's own
+    validate_disabled_component_counts() separately checks package-vs-Arena; chained together the
+    two checks cover extraction -> package -> bundle end to end, matching the task's "per-scene
+    disabled component counts in the extraction and in the built bundle match Arena's".) Arena_Equator_Scripts
+    is WP2-authored, never in manifest.scenes, and authors nothing that starts disabled (its 3
+    spawn-trigger BoxColliders are always enabled=true) -- correctly excluded here by only
+    iterating manifest.scenes, not the bundle's full scene list."""
+    package_counts = count_disabled_in_package_scenes(package, manifest)
+    scene_names = manifest.get("scenes", [])
+    bundle_counts = count_disabled_in_bundle_scenes(env, scene_names)
+
+    total_bad = 0
+    for scene_name in scene_names:
+        expected = package_counts.get(scene_name, {})
+        actual = bundle_counts.get(scene_name, {})
+        types = sorted(set(expected) | set(actual))
+        scene_bad = 0
+        for t in types:
+            exp_n = expected.get(t, 0)
+            act_n = actual.get(t, 0)
+            if exp_n != act_n:
+                scene_bad += 1
+                check(False, f"{scene_name}: disabled {t} count in bundle ({act_n}) == package "
+                              f"({exp_n})")
+        if scene_bad == 0:
+            print(f"[validate_bundle_roundtrip]  ok : {scene_name}: disabled-component counts in "
+                  f"bundle match package exactly ({dict(sorted(expected.items())) or '{}'})")
+        total_bad += scene_bad
+    if total_bad == 0:
+        print("[validate_bundle_roundtrip]  ok : every scene's disabled-component counts in the "
+              "built bundle match the extracted package exactly")
+
+
+# ---------------------------------------------------------------------------
 # NavMesh bundle (optional for S1)
 # ---------------------------------------------------------------------------
 
@@ -986,6 +1096,7 @@ def main() -> None:
         validate_target_platform(env, "arena_equator_scenes.bundle")
         validate_scenes_bundle_contents(env, expected, material_shaders)
         validate_texture_dimension_consistency(env)
+        validate_disabled_component_counts_bundle(env, args.package, expected["manifest"])
         validate_eft_scripts(env, args.require_scripts_scene)
     else:
         check(False, "GameObject/Mesh/Material/collider/LODGroup/EFT-component checks run "

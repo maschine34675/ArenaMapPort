@@ -883,17 +883,32 @@ role) is **out of scope for the spike** and is not recorded at all — WP1 does 
 passthrough mechanism for the spike, since decision #8's scope list is exhaustive for what must
 render/collide.
 
+fix-enabled-state: `MeshRenderer`/`SkinnedMeshRenderer`/`MeshCollider`/`BoxCollider`/
+`SphereCollider`/`CapsuleCollider`/`Light`/`LODGroup` records additionally carry `"enabled": bool`
+(from the component's own `m_Enabled`, **not** the owning GameObject's `active` field above it —
+Unity distinguishes "this GameObject is active" from "this component on it is enabled", and Arena
+uses the latter for a handful of leftover/placeholder objects per scene: disabled `MeshRenderer`s
+on stencil ceiling/floor cutouts and `colider N`/`Cube` placeholder meshes, disabled `MeshCollider`s
+on duplicate `colider N`/`ballistic` collision meshes, disabled `BoxCollider`s on decorative
+mannequin-gear and stencil-cube objects — see `docs/progress/fix-enabled-state.md` for the full
+per-scene counts). §B.WP1 step 5's schema was extended to record this field additively — a package
+extracted before this field existed has no `"enabled"` key on these records at all, and every
+reader (the importer, both validators) treats a missing key as `true`, so an old package remains
+valid without re-extraction. `ReflectionProbe` has no `enabled` field since it is never imported
+(`skip_import: true` unconditionally, see below) and `MeshFilter` has no enabled concept of its own
+(a `MeshFilter` is not a `Behaviour`, it has no `m_Enabled` field in Unity itself).
+
 | `type` | Fields |
 |---|---|
 | `MeshFilter` | `mesh_id` |
-| `MeshRenderer` | `material_ids: [id,...]` (one per submesh, ordered), `cast_shadows: "On"|"Off"|"TwoSided"|"ShadowsOnly"` (from `m_CastShadows`), `receive_shadows: bool`, `light_probe_usage: "Off"|"BlendProbes"|"UseProxyVolume"` (from `m_LightProbeUsage`; record but §D notes light-probe *assets* themselves are out of scope — a renderer requesting probes with none baked degrades gracefully, Unity's own documented fallback), `reflection_probe_usage: "Off"|"BlendProbes"` (record only — no `ReflectionProbe` import per decision #8's scope list) |
-| `SkinnedMeshRenderer` | same as `MeshRenderer` plus `bind_pose_bone_names: [string,...]`; **always flagged** `"skip_import": true` (§B.WP1 edge case — recorded for completeness, WP2 does not build a skinned mesh from this) |
-| `MeshCollider` | `mesh_id`, `convex: bool`, `is_trigger: bool`, `physic_material: {dynamic_friction, static_friction, bounciness, friction_combine: "Average"|"Minimum"|"Maximum"|"Multiply", bounce_combine: same enum}|null` |
-| `BoxCollider` | `center: [x,y,z]`, `size: [x,y,z]`, `is_trigger: bool`, `physic_material` (same shape as above)`|null` |
-| `SphereCollider` | `center`, `radius`, `is_trigger`, `physic_material|null` |
-| `CapsuleCollider` | `center`, `radius`, `height`, `direction: 0|1|2` (X/Y/Z axis), `is_trigger`, `physic_material|null` |
-| `Light` | `light_type: "Spot"|"Directional"|"Point"` (from `m_Type` 0/1/2), `color: [r,g,b,a]`, `intensity`, `range`, `spot_angle`, `lightmapping_mode: int` (record verbatim — `4`=Realtime dominant per census; WP2 forces Realtime regardless since no baking occurs), `shadow_type: "None"|"Hard"|"Soft"` |
-| `LODGroup` | `lods: [{screen_relative_height: float, renderer_object_ids: [id,...], fade_transition_width: float}]`, `size: float`, `fade_mode: int` — **note the level of each field**: `fade_mode` is Unity's single, group-level `LODFadeMode` enum (`None`/`CrossFade`/`SpeedTree`) and is recorded once per `LODGroup`, not per LOD entry; `fade_transition_width` is a field of Unity's per-LOD `LOD` struct and legitimately differs between transitions, so it is recorded per `lods[]` entry, not once for the group (the reverse of an earlier draft of this schema — 3,601 `LODGroup` components on Equator, `arena-census.md` §8.1, so this is not a rare case) |
+| `MeshRenderer` | `material_ids: [id,...]` (one per submesh, ordered), `cast_shadows: "On"|"Off"|"TwoSided"|"ShadowsOnly"` (from `m_CastShadows`), `receive_shadows: bool`, `light_probe_usage: "Off"|"BlendProbes"|"UseProxyVolume"` (from `m_LightProbeUsage`; record but §D notes light-probe *assets* themselves are out of scope — a renderer requesting probes with none baked degrades gracefully, Unity's own documented fallback), `reflection_probe_usage: "Off"|"BlendProbes"` (record only — no `ReflectionProbe` import per decision #8's scope list), `enabled: bool` (fix-enabled-state, see note above; default `true` if absent) |
+| `SkinnedMeshRenderer` | same as `MeshRenderer` plus `bind_pose_bone_names: [string,...]` and `enabled: bool`; **always flagged** `"skip_import": true` (§B.WP1 edge case — recorded for completeness, WP2 does not build a skinned mesh from this) |
+| `MeshCollider` | `mesh_id`, `convex: bool`, `is_trigger: bool`, `physic_material: {dynamic_friction, static_friction, bounciness, friction_combine: "Average"|"Minimum"|"Maximum"|"Multiply", bounce_combine: same enum}|null`, `enabled: bool` (fix-enabled-state; default `true` if absent) |
+| `BoxCollider` | `center: [x,y,z]`, `size: [x,y,z]`, `is_trigger: bool`, `physic_material` (same shape as above)`|null`, `enabled: bool` (fix-enabled-state; default `true` if absent) |
+| `SphereCollider` | `center`, `radius`, `is_trigger`, `physic_material|null`, `enabled: bool` (fix-enabled-state; default `true` if absent) |
+| `CapsuleCollider` | `center`, `radius`, `height`, `direction: 0|1|2` (X/Y/Z axis), `is_trigger`, `physic_material|null`, `enabled: bool` (fix-enabled-state; default `true` if absent) |
+| `Light` | `light_type: "Spot"|"Directional"|"Point"` (from `m_Type` 0/1/2), `color: [r,g,b,a]`, `intensity`, `range`, `spot_angle`, `lightmapping_mode: int` (record verbatim — `4`=Realtime dominant per census; WP2 forces Realtime regardless since no baking occurs), `shadow_type: "None"|"Hard"|"Soft"`, `enabled: bool` (fix-enabled-state; default `true` if absent) |
+| `LODGroup` | `lods: [{screen_relative_height: float, renderer_object_ids: [id,...], fade_transition_width: float}]`, `size: float`, `fade_mode: int` — **note the level of each field**: `fade_mode` is Unity's single, group-level `LODFadeMode` enum (`None`/`CrossFade`/`SpeedTree`) and is recorded once per `LODGroup`, not per LOD entry; `fade_transition_width` is a field of Unity's per-LOD `LOD` struct and legitimately differs between transitions, so it is recorded per `lods[]` entry, not once for the group (the reverse of an earlier draft of this schema — 3,601 `LODGroup` components on Equator, `arena-census.md` §8.1, so this is not a rare case); `enabled: bool` (fix-enabled-state; default `true` if absent) |
 | `ReflectionProbe` | recorded, **always** `"skip_import": true` (out of scope, decision #8; Equator has exactly 1, `arena-census.md` §8.1 — negligible loss) |
 
 ### C.7 Anchors (reference-only, §C.1's `anchors_reference` block)

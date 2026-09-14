@@ -90,6 +90,29 @@ KNOWN_COMPONENT_TYPES = {
 }
 RENDERER_COMPONENT_TYPES = {"MeshRenderer", "SkinnedMeshRenderer"}
 
+# fix-enabled-state -- the component types §C.6's schema records an "enabled" field for (every
+# type with a real Unity m_Enabled field; MeshFilter has none, ReflectionProbe is never imported).
+ENABLED_COMPONENT_TYPES = {
+    "MeshRenderer", "SkinnedMeshRenderer", "MeshCollider", "BoxCollider",
+    "SphereCollider", "CapsuleCollider", "Light", "LODGroup",
+}
+
+# fix-enabled-state -- ground truth, computed directly against Arena's own level51/53/55/57/58 via
+# UnityPy during this task's root-cause investigation (docs/progress/fix-enabled-state.md; the
+# playtest finding of large white untextured blocks blocking walkways traced to these components
+# being enabled in our bundle despite being disabled in Arena). Used as a fallback ONLY when
+# Arena's source tree is not reachable from this machine right now (same SKIP-not-FAIL pattern as
+# run_reproducibility_checks below) -- count_disabled_in_arena() recomputes this fresh from source
+# whenever it is reachable, since a stale hardcoded table would silently stop catching a real
+# regression (e.g. a future Arena content update, or this check itself rotting).
+KNOWN_ARENA_DISABLED_COUNTS: dict[str, dict[str, int]] = {
+    "Arena_Equator": {"MeshRenderer": 4, "MeshCollider": 25},
+    "Arena_Equator_DesignStuff": {"MeshRenderer": 2, "MeshCollider": 6, "BoxCollider": 380},
+    "Arena_Equator_Lighting": {"MeshRenderer": 25, "BoxCollider": 19},
+    "Arena_Equator_TeamFight_DesignStuff": {"MeshRenderer": 49},
+    "Arena_Equator_TeamFight": {},
+}
+
 FAILURES: list[str] = []
 WARNINGS: list[str] = []
 
@@ -544,6 +567,154 @@ def check_orphans(manifest: dict, package: Path) -> None:
 
 
 # ---------------------------------------------------------------------------
+# fix-enabled-state: per-scene disabled-component counts match Arena's own authored state
+# ---------------------------------------------------------------------------
+
+def count_disabled_in_package(manifest: dict, package: Path) -> dict[str, dict[str, int]]:
+    """Per-scene, per-type count of components whose extracted record has "enabled": false --
+    an explicit false only; a missing key or true both mean enabled, matching the importer's
+    (SceneAssembler.cs's ReadEnabled) and this validator's own default-true contract, so a package
+    extracted before this field existed correctly counts as "nothing disabled" here rather than
+    erroring."""
+    counts: dict[str, dict[str, int]] = {}
+    for scene_name in manifest.get("scenes", []):
+        scene_path = package / "scenes" / f"{scene_name}.json"
+        if not scene_path.is_file():
+            continue
+        scene = load_json(scene_path)
+        scene_counts: dict[str, int] = {}
+        for obj in scene.get("objects", []):
+            for comp in obj.get("components", []):
+                ctype = comp.get("type")
+                if ctype not in ENABLED_COMPONENT_TYPES:
+                    continue
+                if comp.get("enabled", True) is False:
+                    scene_counts[ctype] = scene_counts.get(ctype, 0) + 1
+        counts[scene_name] = scene_counts
+    return counts
+
+
+def count_disabled_in_arena(source_root: str | None, manifest: dict) -> dict[str, dict[str, int]] | None:
+    """Recomputes ground-truth per-scene disabled-component counts directly against Arena's own
+    level<N> files via UnityPy -- independent of tools/extract/extract_equator.py's own internals
+    (imports it read-only for SCENE_REGISTRY only, never re-executes its extraction logic), mirroring
+    run_reproducibility_checks' own "trust the real source, not the pipeline" approach. Component
+    records (GameObject/Transform/MeshRenderer/etc.) live entirely inside level<N> itself, never in
+    sharedassets<N>.assets or an external file (extract_equator.py's own build_scene_graph()/
+    build_components() only ever read from the level<N> SerializedFile) -- so this only needs to
+    load that one file per scene, not the full multi-file environment extraction needs. Returns
+    None (with a warning already recorded) if the source tree is not reachable right now."""
+    if not source_root:
+        warn("disabled-component ground-truth check: manifest.source.arena_data_root missing -- "
+             "falling back to the hardcoded reference table (KNOWN_ARENA_DISABLED_COUNTS)")
+        return None
+    if not Path(source_root).is_dir():
+        warn(f"disabled-component ground-truth check: Arena source root {source_root!r} is not "
+             f"reachable from this machine right now -- falling back to the hardcoded reference "
+             f"table from docs/progress/fix-enabled-state.md's root-cause pass "
+             f"(KNOWN_ARENA_DISABLED_COUNTS) rather than failing outright (an environment gap, not "
+             f"necessarily a WP1 defect)")
+        return None
+    if not EXTRACTOR_SCRIPT.is_file():
+        warn(f"disabled-component ground-truth check: extractor script not found at "
+             f"{EXTRACTOR_SCRIPT} -- falling back to the hardcoded reference table")
+        return None
+    sys.path.insert(0, str(EXTRACTOR_SCRIPT.parent))
+    try:
+        import extract_equator as _ex  # type: ignore  # noqa: PLC0415
+    except Exception as e:  # noqa: BLE001
+        warn(f"disabled-component ground-truth check: could not import extract_equator.py to "
+             f"recover its SCENE_REGISTRY ({e}) -- falling back to the hardcoded reference table")
+        return None
+    try:
+        import UnityPy  # noqa: PLC0415
+    except ImportError:
+        warn("disabled-component ground-truth check: UnityPy not importable -- falling back to "
+             "the hardcoded reference table")
+        return None
+
+    name_to_idx = {v: k for k, v in _ex.SCENE_REGISTRY.items()}
+    out: dict[str, dict[str, int]] = {}
+    for scene_name in manifest.get("scenes", []):
+        idx = name_to_idx.get(scene_name)
+        if idx is None:
+            warn(f"disabled-component ground-truth check: {scene_name!r} not in extract_equator.py's "
+                 f"SCENE_REGISTRY -- skipped")
+            continue
+        level_path = Path(source_root) / f"level{idx}"
+        if not level_path.is_file():
+            warn(f"disabled-component ground-truth check: {level_path} not found -- skipped {scene_name}")
+            continue
+        env = UnityPy.load(str(level_path))
+        scene_counts: dict[str, int] = {}
+        for obj in env.objects:
+            t = obj.type.name
+            if t not in ENABLED_COMPONENT_TYPES:
+                continue
+            try:
+                tt = obj.read_typetree()
+            except Exception:  # noqa: BLE001 -- defensive; not expected against a real level file
+                continue
+            if tt.get("m_Enabled", 1) == 0:
+                scene_counts[t] = scene_counts.get(t, 0) + 1
+        out[scene_name] = scene_counts
+    return out
+
+
+def validate_disabled_component_counts(manifest: dict, package: Path) -> None:
+    """fix-enabled-state acceptance check: every scene's per-type disabled-component count in the
+    extracted package must match Arena's own authored state exactly. Catches both "the extractor
+    stopped recording m_Enabled" (a silent regression back to the reported root cause -- large
+    untextured blocks blocking walkways) and "the extractor's node selection silently dropped a
+    disabled object" (a slice/hierarchy-walk bug). A full (--scenes all5, no --slice-roots) package
+    is expected to match exactly, with zero difference to explain -- every in-scope component type
+    is recorded unconditionally by the corresponding build_* function (§C.6), regardless of its
+    enabled state, so nothing this check compares is ever intentionally skipped for a full run. A
+    sliced package (--slice-roots) legitimately differs whenever a disabled object falls outside
+    the requested subtree(s); reported as a WARN with the slice noted, not a FAIL, since that is
+    expected slicing behavior, not a defect."""
+    package_counts = count_disabled_in_package(manifest, package)
+    source_root = manifest.get("source", {}).get("arena_data_root")
+    arena_counts = count_disabled_in_arena(source_root, manifest)
+    used_fallback = arena_counts is None
+    if arena_counts is None:
+        arena_counts = KNOWN_ARENA_DISABLED_COUNTS
+    is_sliced = bool(manifest.get("slice"))
+
+    total_bad = 0
+    for scene_name in manifest.get("scenes", []):
+        expected = arena_counts.get(scene_name, {})
+        actual = package_counts.get(scene_name, {})
+        types = sorted(set(expected) | set(actual))
+        scene_bad = 0
+        for t in types:
+            exp_n = expected.get(t, 0)
+            act_n = actual.get(t, 0)
+            if exp_n == act_n:
+                continue
+            if is_sliced and act_n <= exp_n:
+                warn(f"scenes/{scene_name}.json: disabled {t} count ({act_n}) is less than Arena's "
+                     f"full-scene count ({exp_n}) -- expected for a --slice-roots package (some "
+                     f"disabled objects fall outside the requested subtree(s)), not a defect")
+                continue
+            scene_bad += 1
+            fallback_note = " [Arena side: hardcoded reference table, source unreachable]" if used_fallback else ""
+            check(False, f"scenes/{scene_name}.json: disabled {t} count ({act_n}) == Arena's own "
+                          f"authored count ({exp_n}){fallback_note}")
+        if scene_bad == 0:
+            print(f"[validate_extract]  ok : scenes/{scene_name}.json: disabled-component counts "
+                  f"match Arena exactly ({dict(sorted(expected.items())) or '{}'})")
+        total_bad += scene_bad
+
+    if total_bad == 0:
+        source_desc = ("recomputed fresh from Arena's own level<N> files" if not used_fallback else
+                        "compared against the hardcoded fix-enabled-state.md reference table "
+                        "(Arena source unreachable this run)")
+        print(f"[validate_extract]  ok : every scene's disabled-component counts match Arena "
+              f"exactly ({source_desc})")
+
+
+# ---------------------------------------------------------------------------
 # 8: reproducibility -- literally re-run the extractor
 # ---------------------------------------------------------------------------
 
@@ -694,6 +865,7 @@ def main() -> None:
     validate_meshes(manifest, package)
     validate_textures(manifest, package)
     check_orphans(manifest, package)
+    validate_disabled_component_counts(manifest, package)
 
     if args.skip_reproducibility:
         print("[validate_extract] reproducibility check SKIPPED (--skip-reproducibility)")

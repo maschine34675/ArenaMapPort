@@ -195,6 +195,11 @@ namespace ArenaMapPort.Editor.Import
             mr.receiveShadows = (bool)comp["receive_shadows"];
             mr.lightProbeUsage = (LightProbeUsage)Enum.Parse(typeof(LightProbeUsage), (string)comp["light_probe_usage"]);
             mr.reflectionProbeUsage = (ReflectionProbeUsage)Enum.Parse(typeof(ReflectionProbeUsage), (string)comp["reflection_probe_usage"]);
+            // fix-enabled-state: Arena disables a handful of MeshRenderers per scene (stencil
+            // ceiling/floor cutouts, leftover 'colider N'/'Cube' placeholder meshes) instead of
+            // removing them — left at the AddComponent default (enabled=true) before this, every
+            // one of them rendered as a large flat untextured block blocking a walkway.
+            mr.enabled = ReadEnabled(comp);
             return mr;
         }
 
@@ -217,6 +222,12 @@ namespace ArenaMapPort.Editor.Import
             mc.sharedMesh = mesh;
             mc.isTrigger = isTrigger;
             mc.sharedMaterial = physicMaterials.GetOrCreate(comp["physic_material"] as JObject);
+            // fix-enabled-state: Arena_Equator disables ~25 duplicate 'colider N'/'ballistic'
+            // MeshColliders per scene — applied before BakeNavMesh.Bake ever runs (§B.WP2.7:
+            // FinishPipeline bakes only after every content scene is assembled), so its own
+            // "enabled && !isTrigger && activeInHierarchy" CollectSources filter correctly
+            // excludes these without any change to BakeNavMesh.cs itself.
+            mc.enabled = ReadEnabled(comp);
         }
 
         private static void AttachBoxCollider(GameObject go, JObject comp, PhysicMaterialCache physicMaterials)
@@ -226,6 +237,11 @@ namespace ArenaMapPort.Editor.Import
             c.size = ReadVector3(comp["size"]);
             c.isTrigger = (bool)comp["is_trigger"];
             c.sharedMaterial = physicMaterials.GetOrCreate(comp["physic_material"] as JObject);
+            // fix-enabled-state: e.g. 380 mannequin-gear BoxColliders in
+            // Arena_Equator_DesignStuff and 19 stencil-cube ones in Arena_Equator_Lighting are
+            // disabled in Arena — left enabled before this fix, they blocked movement as invisible
+            // walls.
+            c.enabled = ReadEnabled(comp);
         }
 
         private static void AttachSphereCollider(GameObject go, JObject comp, PhysicMaterialCache physicMaterials)
@@ -235,6 +251,7 @@ namespace ArenaMapPort.Editor.Import
             c.radius = (float)comp["radius"];
             c.isTrigger = (bool)comp["is_trigger"];
             c.sharedMaterial = physicMaterials.GetOrCreate(comp["physic_material"] as JObject);
+            c.enabled = ReadEnabled(comp);
         }
 
         private static void AttachCapsuleCollider(GameObject go, JObject comp, PhysicMaterialCache physicMaterials)
@@ -246,6 +263,7 @@ namespace ArenaMapPort.Editor.Import
             c.direction = (int)comp["direction"];
             c.isTrigger = (bool)comp["is_trigger"];
             c.sharedMaterial = physicMaterials.GetOrCreate(comp["physic_material"] as JObject);
+            c.enabled = ReadEnabled(comp);
         }
 
         private static void AttachLight(GameObject go, JObject comp)
@@ -262,6 +280,7 @@ namespace ArenaMapPort.Editor.Import
             // a dark light.
             l.lightmapBakeType = LightmapBakeType.Realtime;
             l.shadows = (LightShadows)Enum.Parse(typeof(LightShadows), (string)comp["shadow_type"]);
+            l.enabled = ReadEnabled(comp);
         }
 
         private static void AttachLodGroup(GameObject go, JObject comp, Dictionary<string, Renderer> rendererById, string sceneName, string objId)
@@ -303,6 +322,20 @@ namespace ArenaMapPort.Editor.Import
             // by a geometry-derived guess).
             lodGroup.size = (float)comp["size"];
             lodGroup.fadeMode = (LODFadeMode)(int)comp["fade_mode"];
+            // fix-enabled-state: no LODGroup is disabled anywhere in Equator's 5 content scenes
+            // today, but this is recorded/applied for schema completeness with every other
+            // component type this fix covers, not because a real disabled instance was found.
+            lodGroup.enabled = ReadEnabled(comp);
+        }
+
+        /// <summary>fix-enabled-state: a component record's "enabled" key is additive to the WP1
+        /// package schema — a package extracted before this field existed (or a hand-authored one)
+        /// has no such key at all, and that must mean "enabled" (Unity's own AddComponent default,
+        /// and what every one of these components had before this fix), not "disabled".</summary>
+        private static bool ReadEnabled(JObject comp)
+        {
+            JToken tok = comp["enabled"];
+            return tok == null || tok.Type == JTokenType.Null || (bool)tok;
         }
 
         private static void ApplyTag(GameObject go, string tag, string sceneName, string id)

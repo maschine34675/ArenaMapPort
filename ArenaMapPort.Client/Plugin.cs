@@ -58,6 +58,12 @@ namespace ArenaMapPort.Client
             ArenaLightingRepairs.Install();
             LightingDiagnosticProbe.Install();
 
+            // Playtest finding 2026-09-14 20:09 — large flat white untextured blocks blocking movement.
+            // Removes Arena's own TeamFight play-area borders (config-gated) plus a narrow name-based
+            // safety net for components disabled in Arena that the current extractor/importer still
+            // ships enabled. See MapBorderRepairs.cs doc comment for the full root-cause breakdown.
+            MapBorderRepairs.Install();
+
             Log.LogInfo($"[ArenaMapPort] {PluginName} {PluginVersion} loaded — " +
                         $"{ArenaEquatorLocation.AllSceneNames.Length} owned scenes, Harmony patches applied.");
         }

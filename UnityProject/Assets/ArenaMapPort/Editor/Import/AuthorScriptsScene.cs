@@ -81,6 +81,19 @@ namespace ArenaMapPort.Editor.Import
             levelSettings.GroundColor = new Color(0.5f, 0.5f, 0.5f, 1f);
             levelSettings.AmbientIntensity = 1f;
             levelSettings.fog = false;
+            // fix-lighting-movement / fix-enabled-state: the runtime ArenaLightingRepairs.cs
+            // Harmony postfix (ArenaMapPort.Client) already forces these same 3 fields at raid
+            // start (levelSettings.fogMode=ExponentialSquared, fogColor=(0.62,0.66,0.70,1),
+            // fogDensity from a live-tunable config, default 0 = no fog) because the authored
+            // default here — fogMode=default(FogMode)=0/"Linear" with fogColor black — makes EFT's
+            // GlobalFog image effect (which only computes a fog factor for modes 1-3) treat every
+            // non-sky pixel as fully-fogged black. Authoring the SAME values here too means a
+            // rebuilt bundle is correct on its own, without depending on the client patch ever
+            // running (e.g. a bundle inspected/loaded outside the client, or a future client build
+            // that drops the repair once this is fixed upstream).
+            levelSettings.fogMode = FogMode.ExponentialSquared;
+            levelSettings.fogDensity = 0f;
+            levelSettings.fogColor = new Color(0.62f, 0.66f, 0.70f, 1f);
             levelSettings.skybox = null;
             levelSettings.CameraPrefab = null;
             levelSettings.PostProcessProfilePrefab = null;
