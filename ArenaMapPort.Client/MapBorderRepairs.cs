@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Text.RegularExpressions;
+using ArenaMapPort.Shared;
 using BepInEx.Configuration;
 using UnityEngine;
 using UnityEngine.SceneManagement;
@@ -14,15 +15,23 @@ namespace ArenaMapPort.Client
     /// never reads m_Enabled for components and the importer never sets .enabled, so every component
     /// Arena itself ships DISABLED comes back ENABLED in our bundle.
     ///
-    /// Item 1 — TeamFight play-area borders. Arena's own Arena_Equator_TeamFight_DesignStuff (level57)
-    /// scene authors 41 objects under a 'LEVEL-BORDERS TF' parent, layer 29 ("LevelBorder" in Arena's own
-    /// TagManager — unnamed/blank at layer 29 in ours, see TagManager.asset), each carrying a BoxCollider
-    /// + MeshFilter + MeshRenderer. In Arena these MeshRenderers are DISABLED (49 counted) but the
-    /// BoxColliders stay ENABLED — they are invisible walls that exist only to bound Arena's own
-    /// TeamFight game mode; for a normal (non-TeamFight) Equator raid they read as solid geometry cutting
-    /// the map in half. Our extractor/importer gap makes the renderers enabled too (the reported white
-    /// blocks) on top of the pre-existing wall. Gated on <see cref="ArenaEquatorRaid.IsOwnedScene"/> /
-    /// <see cref="ArenaEquatorRaid.IsLoaded"/> throughout — every other map's raid is untouched.
+    /// Item 1 — TeamFight play-area borders. Arena's own *_TeamFight_DesignStuff scene authors a batch
+    /// of objects under a 'LEVEL-BORDERS TF' parent, layer 29 ("LevelBorder" in Arena's own TagManager —
+    /// unnamed/blank at layer 29 in ours, see TagManager.asset), each carrying a BoxCollider + MeshFilter
+    /// + MeshRenderer. In Arena these MeshRenderers are DISABLED (Equator: 49 counted; Bay5: 951 objects
+    /// on the same layer per the multimap-generalize.md scout data) but the BoxColliders stay ENABLED —
+    /// they are invisible walls that exist only to bound Arena's own TeamFight game mode; for a normal
+    /// raid they read as solid geometry cutting the map in half. Our extractor/importer gap makes the
+    /// renderers enabled too (the reported white blocks) on top of the pre-existing wall.
+    ///
+    /// Multimap generalization (docs/progress/multimap-generalize.md): Item 1's own mechanism is already
+    /// map-agnostic — it walks every owned scene's hierarchy matching on LAYER or a NAME PREFIX, neither
+    /// of which is Equator-specific — so generalizing it is only per-map STATE (its own
+    /// "RemoveTeamFightBorders" config toggle and border list per map, config section
+    /// "Map (&lt;key&gt;)") plus resolving the map from scene events the same ordering-hazard-free way
+    /// every other repair file does (see ArenaMapRaid's own doc comment). No `TeamFightDesignStuffSceneName`
+    /// descriptor field was added for this — Item 1 never gates on a specific scene name, only on the
+    /// LevelBorder layer/name-prefix, confirmed by re-reading this file's own logic.
     ///
     /// Item 2 — narrow, name-based safety net for the bundle that is CURRENTLY deployed (built before any
     /// m_Enabled-aware importer fix), so the user gets relief before a rebuild/redeploy. It matches only
@@ -34,25 +43,18 @@ namespace ArenaMapPort.Client
     /// 'colider &lt;N&gt;' (e.g. 'colider 46'/'colider 45'/'colider 2' — MeshRenderer+MeshCollider both
     /// disabled in Arena; Arena's own literal spelling, not a typo introduced here).
     ///
-    /// It is NOT exhaustive — cross-checked against the playtest's root-cause dump
-    /// (work/extract/equator/scenes/*.json), these three patterns miss roughly 400 other
-    /// disabled-in-Arena components with unrelated names: essentially everything in
-    /// Arena_Equator_DesignStuff (level53 — 388 objects: mannequin-gear BoxColliders like 'Loot',
-    /// 'CR_ctacticall_body_lod0', 'AR_6B2_lod0/1'; 'Graffiti_Art_21' MeshRenderers; 'mustache_LOD1'
-    /// MeshCollider — none of them named 'Cube', '*_stencil' or 'colider &lt;N&gt;'), the ~21
-    /// 'ballistic'-named MeshColliders disabled in Arena_Equator alongside the 3 'colider &lt;N&gt;'
-    /// ones this check does catch, the 3 duplicate-suffixed stencil renderers noted above in
-    /// Arena_Equator_Lighting, and the 8 'AreaLight'/'AreaLight_GreenExit_small (1)' MeshRenderers
-    /// disabled in Arena_Equator_TeamFight_DesignStuff alongside the 41 'LevelBorder (N)' ones Item 1
-    /// already handles. Deliberately narrow and name-based rather than a general m_Enabled fix (that
-    /// belongs in the extractor/importer, out of scope for this plugin) — every match here becomes a
-    /// no-op once the bundle is rebuilt from an importer that honors m_Enabled, since the objects will
-    /// already come in disabled; the ~400 objects it never matched become correct too, but via the
-    /// rebuilt bundle's own enabled=false, not via anything this safety net does.
+    /// It is NOT exhaustive (see the pre-generalization history for the exact counted gap), and — per
+    /// docs/progress/multimap-generalize.md's explicit decision — it is deliberately NOT generalized to
+    /// Bay5 or any future map: it is a one-time stopgap for the specific already-shipped, pre-fix Equator
+    /// bundle. A freshly-built map goes through the m_Enabled-aware importer from the start and needs no
+    /// name-based safety net (Bay5 in particular has ~10-40x Equator's disabled-component count with no
+    /// exhaustive name pattern that would safely cover it — a disabled ceiling object literally named
+    /// "Stensil", a typo, is one confirmed counter-example). If a freshly-built map ever appears to need
+    /// this kind of fallback, that is a sign the m_Enabled round-trip fix itself regressed — investigate
+    /// that, don't extend this name-based net.
     /// </summary>
     internal static class MapBorderRepairs
     {
-        const string ConfigSection = "Map (arena_equator)";
         const string LevelBorderLayerName = "LevelBorder";
         const string LevelBorderNamePrefix = "LevelBorder";
 
@@ -62,23 +64,33 @@ namespace ArenaMapPort.Client
         static readonly int LevelBorderLayer = LayerMask.NameToLayer(LevelBorderLayerName);
 
         // Arena's own literal (misspelled) authoring: "colider 46", "colider 45", "colider 2", etc.
+        // Item 2 only — Equator-only, see class doc comment.
         static readonly Regex ColiderNamePattern = new Regex(@"^colider \d+$", RegexOptions.Compiled);
 
-        static ConfigEntry<bool> _removeTeamFightBorders;
-        static bool _installed;
-        static bool _loggedThisRaid;
-
         // TeamFight border collider/renderer pairs found this raid — captured once per owned-scene load,
-        // reapplied live on SettingChanged without rescanning the hierarchy.
+        // reapplied live on SettingChanged without rescanning the hierarchy. One MapState per registered
+        // map (Item 1 only — Item 2's counters below stay global/Equator-only, see class doc comment).
         struct BorderEntry
         {
             internal Collider Collider;
             internal MeshRenderer Renderer;
         }
-        static readonly List<BorderEntry> _borders = new List<BorderEntry>();
+
+        sealed class MapState
+        {
+            internal ConfigEntry<bool> RemoveTeamFightBorders;
+            internal readonly List<BorderEntry> Borders = new List<BorderEntry>();
+            internal bool LoggedThisRaid;
+        }
+
+        static readonly Dictionary<string, MapState> _states = new Dictionary<string, MapState>();
+        static bool _installed;
 
         // Item 2 counts only — those objects are forced off unconditionally (no config, nothing to
         // re-toggle live), so nothing but the count needs to survive past each scene's own scan.
+        // Deliberately NOT per-map: Item 2 only ever fires while scanning Equator's own owned
+        // scenes (Arena_Equator + Arena_Equator_Lighting — see ScanScene's isEquator gate), never
+        // Bay5's or any future map's.
         static int _safetyNetCubeCount;
         static int _safetyNetStencilCount;
         static int _safetyNetColiderCount;
@@ -91,10 +103,16 @@ namespace ArenaMapPort.Client
             }
             _installed = true;
 
-            _removeTeamFightBorders = Plugin.Instance.Config.Bind(ConfigSection, "RemoveTeamFightBorders", true,
-                "Removes the invisible TeamFight play-area walls so the whole Equator map is walkable. " +
-                "false keeps Arena's TeamFight boundaries.");
-            _removeTeamFightBorders.SettingChanged += (_, __) => ReapplyIfLoaded();
+            foreach (var map in ArenaMapRegistry.All)
+            {
+                var state = new MapState();
+                string configSection = $"Map ({map.Key})";
+                state.RemoveTeamFightBorders = Plugin.Instance.Config.Bind(configSection, "RemoveTeamFightBorders", true,
+                    $"Removes the invisible TeamFight play-area walls so the whole {map.Key} map is walkable. " +
+                    "false keeps Arena's TeamFight boundaries.");
+                state.RemoveTeamFightBorders.SettingChanged += (_, __) => ReapplyIfLoaded(map, state);
+                _states[map.Key] = state;
+            }
 
             SceneManager.sceneLoaded += OnSceneLoaded;
             SceneManager.sceneUnloaded += OnSceneUnloaded;
@@ -102,43 +120,78 @@ namespace ArenaMapPort.Client
 
         static void OnSceneLoaded(Scene scene, LoadSceneMode mode)
         {
-            if (!ArenaEquatorRaid.IsOwnedScene(scene.name))
+            if (!ArenaMapRaid.IsOwnedScene(scene.name))
             {
                 return; // every other map's raid — untouched
             }
 
-            ScanScene(scene);
-            ApplyBorders();
-            MaybeLogSummary();
+            // Scene is already registered with SceneManager by the time sceneLoaded fires (see
+            // ArenaMapRaid's own doc comment), so CurrentMap resolves even on the Scripts scene's own
+            // load event.
+            var map = ArenaMapRaid.CurrentMap;
+            if (map == null || !_states.TryGetValue(map.Key, out var state))
+            {
+                return;
+            }
+
+            ScanScene(scene, state, map);
+            ApplyBorders(state);
+            MaybeLogSummary(map, state);
         }
 
         static void OnSceneUnloaded(Scene scene)
         {
-            if (scene.name != ArenaMapPort.Shared.ArenaEquatorLocation.ScriptsSceneName)
+            // Stateless resolution (not ArenaMapRaid.CurrentMap) — see ArenaMapRaid's own doc comment
+            // for why an unload handler must never depend on a shared mutable "current map" field.
+            var map = ArenaMapRaid.MapForScriptsScene(scene.name);
+            if (map == null || !_states.TryGetValue(map.Key, out var state))
             {
                 return; // reset once per raid, on the raid's own Scripts-scene teardown
             }
 
-            _borders.Clear(); // next raid gets fresh Collider/MeshRenderer instances — old refs would be stale/destroyed
-            _safetyNetCubeCount = 0;
-            _safetyNetStencilCount = 0;
-            _safetyNetColiderCount = 0;
-            _loggedThisRaid = false;
+            state.Borders.Clear(); // next raid gets fresh Collider/MeshRenderer instances — old refs would be stale/destroyed
+            state.LoggedThisRaid = false;
+
+            if (map == ArenaMapRegistry.Equator)
+            {
+                // Item 2 is Equator-only (see class doc comment) — its counters only ever get
+                // incremented while scanning Equator's own owned scenes.
+                _safetyNetCubeCount = 0;
+                _safetyNetStencilCount = 0;
+                _safetyNetColiderCount = 0;
+            }
         }
 
-        static void ReapplyIfLoaded()
+        static void ReapplyIfLoaded(ArenaMapDescriptor map, MapState state)
         {
-            if (ArenaEquatorRaid.IsLoaded())
+            if (ArenaMapRaid.CurrentMap == map)
             {
-                ApplyBorders();
+                ApplyBorders(state);
             }
         }
 
         // Single walk of this scene's hierarchy covering both items — cheap (scene-load-time only, no
         // per-frame cost) and avoids a second GetComponentsInChildren pass over the same objects.
-        static void ScanScene(Scene scene)
+        static void ScanScene(Scene scene, MapState state, ArenaMapDescriptor map)
         {
-            bool isLightingScene = scene.name == ArenaMapPort.Shared.ArenaEquatorLocation.LightingSceneName;
+            // Item 2 is Equator-only (see class doc comment) — gated on the resolved map, not a
+            // per-check name/scene literal, so every one of its three sub-checks (Cube/_stencil/
+            // 'colider N') is uniformly excluded from every other registered map, including Bay5.
+            // Fixed 2026-09-15: only the Cube sub-check used to carry this gate (as
+            // `isLightingScene`) — the _stencil/'colider N' checks ran unconditionally for every
+            // owned scene of every map, including Bay5's imported scenes, which carry real objects
+            // matching both patterns (e.g. 'Bay5_Warehouse_STENCIL' in the imported Light/Main
+            // scenes) — contradicting this class's own doc comment ("Item 2 only ever fires while
+            // scanning Equator's own Lighting scene", true only for Cube).
+            bool isEquator = map == ArenaMapRegistry.Equator;
+            // Cube additionally stays scene-scoped within Equator — Arena's own 19 'Cube' objects
+            // live only in Arena_Equator_Lighting (docs/progress/fix-enabled-state.md), never in
+            // Arena_Equator itself, so this narrower check is intentional, not a second copy of the
+            // map gate. _stencil/'colider N' are NOT scene-scoped: Arena's own authoring puts both
+            // patterns in Arena_Equator (main) too (e.g. 'PKTS-6281_Admiral_opened_STENCIL',
+            // 'colider 46'/'45'/'2' — same doc), so narrowing them to the Lighting scene the way
+            // Cube is scoped would silently stop covering Arena_Equator's own matches.
+            bool isLightingScene = isEquator && scene.name == ArenaEquatorLocation.LightingSceneName;
 
             foreach (var root in scene.GetRootGameObjects())
             {
@@ -154,10 +207,17 @@ namespace ArenaMapPort.Client
                         var renderer = go.GetComponent<MeshRenderer>();
                         if (collider != null || renderer != null)
                         {
-                            _borders.Add(new BorderEntry { Collider = collider, Renderer = renderer });
+                            state.Borders.Add(new BorderEntry { Collider = collider, Renderer = renderer });
                         }
                     }
 
+                    // Item 2 in its entirety (Cube/_stencil/'colider N') is Equator-only (see class
+                    // doc comment and the isEquator/isLightingScene setup above). Fixed 2026-09-15:
+                    // the _stencil/'colider N' checks below used to run unconditionally for every
+                    // owned scene of every registered map (including Bay5's own imported scenes,
+                    // which carry real objects matching both patterns, e.g.
+                    // 'Bay5_Warehouse_STENCIL' in the imported Light/Main scenes) -- only the Cube
+                    // check was ever actually gated, contradicting this class's own doc comment.
                     if (isLightingScene && name == "Cube")
                     {
                         var collider = go.GetComponent<Collider>();
@@ -176,8 +236,9 @@ namespace ArenaMapPort.Client
                         }
                     }
 
-                    if (name.EndsWith("_stencil", StringComparison.Ordinal) ||
-                        name.EndsWith("_STENCIL", StringComparison.Ordinal))
+                    if (isEquator &&
+                        (name.EndsWith("_stencil", StringComparison.Ordinal) ||
+                         name.EndsWith("_STENCIL", StringComparison.Ordinal)))
                     {
                         var renderer = go.GetComponent<MeshRenderer>();
                         if (renderer != null)
@@ -187,7 +248,7 @@ namespace ArenaMapPort.Client
                         }
                     }
 
-                    if (ColiderNamePattern.IsMatch(name))
+                    if (isEquator && ColiderNamePattern.IsMatch(name))
                     {
                         var renderer = go.GetComponent<MeshRenderer>();
                         var meshCollider = go.GetComponent<MeshCollider>();
@@ -221,12 +282,12 @@ namespace ArenaMapPort.Client
             return go.name.StartsWith(LevelBorderNamePrefix, StringComparison.Ordinal);
         }
 
-        static void ApplyBorders()
+        static void ApplyBorders(MapState state)
         {
-            bool remove = _removeTeamFightBorders.Value;
-            for (int i = 0; i < _borders.Count; i++)
+            bool remove = state.RemoveTeamFightBorders.Value;
+            for (int i = 0; i < state.Borders.Count; i++)
             {
-                var entry = _borders[i];
+                var entry = state.Borders[i];
                 if (entry.Collider != null)
                 {
                     entry.Collider.enabled = !remove;
@@ -240,32 +301,35 @@ namespace ArenaMapPort.Client
             }
         }
 
-        // Fires exactly once per raid: every OnSceneLoaded call for one of our 6 owned scenes re-checks
-        // whether all 6 are now loaded, and only the one call where that first becomes true logs — so the
-        // single summary line is correct regardless of the actual per-scene load order.
-        static void MaybeLogSummary()
+        // Fires exactly once per raid: every OnSceneLoaded call for one of this map's owned scenes
+        // re-checks whether all of them are now loaded, and only the one call where that first becomes
+        // true logs — so the single summary line is correct regardless of the actual per-scene load order.
+        static void MaybeLogSummary(ArenaMapDescriptor map, MapState state)
         {
-            if (_loggedThisRaid || !AllOwnedScenesLoaded())
+            if (state.LoggedThisRaid || !AllOwnedScenesLoaded(map))
             {
                 return;
             }
-            _loggedThisRaid = true;
+            state.LoggedThisRaid = true;
 
             int safetyNetTotal = _safetyNetCubeCount + _safetyNetStencilCount + _safetyNetColiderCount;
             Plugin.Log.LogInfo(
-                $"[ArenaMapPort][RaidFix] TeamFight borders: {_borders.Count} object(s) matched " +
+                $"[ArenaMapPort][RaidFix] {map.Key} TeamFight borders: {state.Borders.Count} object(s) matched " +
                 $"(layer '{LevelBorderLayerName}'={LevelBorderLayer}, name-prefix fallback " +
                 $"{(LevelBorderLayer < 0 ? "active" : "unused")}) — RemoveTeamFightBorders=" +
-                $"{_removeTeamFightBorders.Value} (colliders " +
-                $"{(_removeTeamFightBorders.Value ? "disabled" : "left enabled")}, renderers always " +
-                $"disabled). Legacy safety net for the currently deployed bundle (no-op once rebuilt): " +
-                $"{safetyNetTotal} object(s) forced off (Cube={_safetyNetCubeCount}, " +
-                $"*_stencil={_safetyNetStencilCount}, 'colider N'={_safetyNetColiderCount}).");
+                $"{state.RemoveTeamFightBorders.Value} (colliders " +
+                $"{(state.RemoveTeamFightBorders.Value ? "disabled" : "left enabled")}, renderers always " +
+                $"disabled)." +
+                (map == ArenaMapRegistry.Equator
+                    ? $" Legacy safety net for the currently deployed bundle (no-op once rebuilt): " +
+                      $"{safetyNetTotal} object(s) forced off (Cube={_safetyNetCubeCount}, " +
+                      $"*_stencil={_safetyNetStencilCount}, 'colider N'={_safetyNetColiderCount})."
+                    : string.Empty));
         }
 
-        static bool AllOwnedScenesLoaded()
+        static bool AllOwnedScenesLoaded(ArenaMapDescriptor map)
         {
-            var names = ArenaMapPort.Shared.ArenaEquatorLocation.AllSceneNames;
+            var names = map.AllSceneNames;
             for (int i = 0; i < names.Length; i++)
             {
                 var scene = SceneManager.GetSceneByName(names[i]);

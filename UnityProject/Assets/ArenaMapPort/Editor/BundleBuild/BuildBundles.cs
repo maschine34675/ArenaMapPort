@@ -253,7 +253,7 @@ namespace ArenaMapPort.Editor.BundleBuild
             try
             {
                 Scene scriptsScene = AuthorScriptsScene.Build(_pending.pkg, BuildUnixDateTime, _pending.scriptsSceneIsFirst);
-                string scriptsScenePath = ArenaPaths.ScenesDir + "/" + ArenaPaths.ScriptsSceneName + ".unity";
+                string scriptsScenePath = ArenaPaths.ScenesDir + "/" + ArenaPaths.Map.scripts_scene_name + ".unity";
                 bool scriptsOk = EditorSceneManager.SaveScene(scriptsScene, scriptsScenePath);
                 if (!scriptsOk) throw new IOException("[ArenaMapPort][BuildBundles] failed to save Scripts scene -> " + scriptsScenePath);
                 _pending.scenePaths.Add(scriptsScenePath);
@@ -304,7 +304,11 @@ namespace ArenaMapPort.Editor.BundleBuild
                 if (ctx.bakeNavMesh)
                 {
                     UnityEngine.AI.NavMeshData data = ArenaMapPort.Editor.NavMesh.BakeNavMesh.Bake(ctx.contentSceneRoots.ToArray());
-                    navMeshAssetPath = ArenaPaths.NavMeshAssetDir + "/arena_equator.asset";
+                    // Multimap generalization (docs/progress/multimap-generalize.md): was the literal
+                    // "arena_equator.asset" — the asset name itself is not load-bearing (§B.WP2.7), but
+                    // keying it off the map avoids two maps' intermediate .asset files colliding if
+                    // Assets/ArenaImport/ is ever shared across a single Editor session building both.
+                    navMeshAssetPath = ArenaPaths.NavMeshAssetDir + "/" + ArenaPaths.Map.key + ".asset";
                     ArenaMapPort.Editor.NavMesh.BakeNavMesh.SaveAsset(data, navMeshAssetPath);
                 }
 
@@ -320,11 +324,17 @@ namespace ArenaMapPort.Editor.BundleBuild
                 string bundleOutputDir = ctx.outputDir.Replace('\\', '/');
                 Directory.CreateDirectory(bundleOutputDir);
 
+                // Multimap generalization (docs/progress/multimap-generalize.md): output bundle
+                // filenames were the literals "arena_equator_scenes.bundle"/"arena_equator_navmesh.bundle"
+                // — even with -packageDir pointed at a different map's extraction, the produced bundle
+                // used to still be internally named for Equator, a hard collision once staged next to
+                // Equator's own file in the shared dist/.../bundles/ folder. Now read from the loaded map
+                // descriptor, defaulting to those exact same literals when -mapDescriptor is omitted.
                 var builds = new List<AssetBundleBuild>
                 {
                     new AssetBundleBuild
                     {
-                        assetBundleName = "arena_equator_scenes.bundle",
+                        assetBundleName = ArenaPaths.Map.ScenesBundleFileName,
                         assetNames = ctx.scenePaths.ToArray(),
                     }
                 };
@@ -332,7 +342,7 @@ namespace ArenaMapPort.Editor.BundleBuild
                 {
                     builds.Add(new AssetBundleBuild
                     {
-                        assetBundleName = "arena_equator_navmesh.bundle",
+                        assetBundleName = ArenaPaths.Map.NavMeshBundleFileName,
                         assetNames = new[] { navMeshAssetPath },
                     });
                 }

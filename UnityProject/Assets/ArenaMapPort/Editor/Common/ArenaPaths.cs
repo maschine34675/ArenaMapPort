@@ -1,10 +1,64 @@
 // ArenaMapPort WP2 — shared path constants + command-line parameter parsing (O7: "Tools must
 // accept these as parameters" — every pipeline entry point reads package/output dirs from
 // -executeMethod command-line args, falling back to O7's default S1 paths.)
+//
+// Multimap generalization (docs/progress/multimap-generalize.md): added the -mapDescriptor CLI
+// arg + Map property. Every OTHER const/method here is unchanged — an unparameterized
+// -executeMethod invocation (no -mapDescriptor passed) keeps working exactly as before, because
+// Map falls back to Equator's own literal values (matching
+// ArenaMapPort.Shared.ArenaMapRegistry.Equator / tools/maps/equator.json byte-for-byte) when the
+// flag is absent.
 using System;
+using System.IO;
+using UnityEngine;
 
 namespace ArenaMapPort.Editor.Common
 {
+    /// <summary>
+    /// JsonUtility-compatible mirror of tools/maps/&lt;key&gt;.json (same field names, snake_case
+    /// to match the Python side exactly) — see that directory's own files for the canonical
+    /// values. JsonUtility requires public fields (not properties) and supports only primitive
+    /// arrays, no dictionaries — this shape is deliberately flat for that reason.
+    /// </summary>
+    [Serializable]
+    public class ArenaMapDescriptorData
+    {
+        public string key;
+        public string id_field;
+        public string scripts_scene_name;
+        public string[] all_scene_names;
+        public string infiltration_name;
+        public string locale_name;
+        public string locale_description;
+        public int icon_x;
+        public int icon_y;
+        public string template_key;
+        public string db_base_json_path;
+        // bay5-port: per-map authored-fog color (r,g,b — always length 3), read by
+        // AuthorScriptsScene.cs instead of a single hardcoded Equator-blue-tinted literal.
+        // Sourced from that map's OWN Arena_<Key>_Scripts scene RenderSettings.m_FogColor (Bay5:
+        // level85, r=0.132285476 g=0.147871643 b=0.137986973 — a dark harbor grey-green, distinct
+        // from Equator's (0.62,0.66,0.70) blue-grey, which is itself Arena_Equator_Scripts'
+        // (level54) own real fog color, not an arbitrary constant). FogColorOrDefault() below
+        // falls back to Equator's literal for any older map JSON missing this field.
+        public float[] fog_color;
+
+        static readonly float[] DefaultFogColor = { 0.62f, 0.66f, 0.70f };
+
+        public float[] FogColorOrDefault() => (fog_color != null && fog_color.Length == 3) ? fog_color : DefaultFogColor;
+
+        // Bundle served-key/asset-name/filename naming follows the project-wide convention
+        // (docs/progress/multimap-generalize.md): never stored in the JSON itself, always derived
+        // from `key` — the exact trap NavMeshInstaller.cs/BuildBundles.cs fell into pre-
+        // generalization (storing the bundle filename as an independent literal that could drift
+        // from the served key) is structurally impossible here.
+        public string ScenesBundleFileName => key + "_scenes.bundle";
+        public string NavMeshBundleFileName => key + "_navmesh.bundle";
+        public string PresetBundleFileName => key + "_preset.bundle";
+        public string PresetAssetName => key + ".scenespreset.asset";
+        public string PresetMName => key + ".ScenesPreset";
+    }
+
     public static class ArenaPaths
     {
         // O7 default paths.
@@ -27,7 +81,88 @@ namespace ArenaMapPort.Editor.Common
         // ambiguously resolve to our stand-in (that's the entire point of the prefix).
         public const string ShaderNamePrefix = "Hidden/ArenaMapPort/";
 
+        // Equator-only default — kept for any caller that still wants the bare literal (e.g. a
+        // diagnostic script never updated to read Map.scripts_scene_name). Every real pipeline
+        // entry point (BuildBundles/AuthorScriptsScene/VerifyPatchedBundleLoads) reads
+        // Map.scripts_scene_name instead, which equals this exact string when -mapDescriptor is
+        // omitted.
         public const string ScriptsSceneName = "Arena_Equator_Scripts";
+
+        static ArenaMapDescriptorData _map;
+
+        /// <summary>
+        /// The map descriptor for this invocation, loaded once from -mapDescriptor's JSON file
+        /// (tools/maps/&lt;key&gt;.json) or, if that flag is absent, Equator's own literal values
+        /// (byte-identical to this pipeline's pre-generalization, Equator-only behavior — see
+        /// docs/progress/multimap-generalize.md). Every BuildBundles.cs/AuthorScriptsScene.cs/
+        /// VerifyPatchedBundleLoads.cs consumer reads through this instead of a bare Equator
+        /// const.
+        /// </summary>
+        public static ArenaMapDescriptorData Map
+        {
+            get
+            {
+                if (_map != null)
+                {
+                    return _map;
+                }
+
+                string path = GetArg("-mapDescriptor", null);
+                if (string.IsNullOrEmpty(path))
+                {
+                    _map = EquatorDefault();
+                    return _map;
+                }
+
+                if (!File.Exists(path))
+                {
+                    throw new InvalidOperationException(
+                        "[ArenaMapPort][ArenaPaths] -mapDescriptor '" + path + "' does not exist");
+                }
+
+                string json = File.ReadAllText(path);
+                var parsed = JsonUtility.FromJson<ArenaMapDescriptorData>(json);
+                if (parsed == null || string.IsNullOrEmpty(parsed.key))
+                {
+                    throw new InvalidOperationException(
+                        "[ArenaMapPort][ArenaPaths] -mapDescriptor '" + path + "' did not parse to a " +
+                        "valid ArenaMapDescriptorData (missing/empty 'key' — JsonUtility silently returns " +
+                        "a zeroed object on most shape mismatches instead of throwing, so this check is " +
+                        "the only signal)");
+                }
+
+                _map = parsed;
+                Debug.Log("[ArenaMapPort][ArenaPaths] loaded map descriptor '" + _map.key + "' from " + path);
+                return _map;
+            }
+        }
+
+        static ArenaMapDescriptorData EquatorDefault()
+        {
+            return new ArenaMapDescriptorData
+            {
+                key = "arena_equator",
+                id_field = "e9b8e12c60dfd2820e949462",
+                scripts_scene_name = ScriptsSceneName,
+                all_scene_names = new[]
+                {
+                    "Arena_Equator_Scripts",
+                    "Arena_Equator",
+                    "Arena_Equator_Lighting",
+                    "Arena_Equator_DesignStuff",
+                    "Arena_Equator_TeamFight",
+                    "Arena_Equator_TeamFight_DesignStuff",
+                },
+                infiltration_name = "ArenaEquator",
+                locale_name = "Arena: Equator (spike)",
+                locale_description = "Internal test build — geometry/collision/NavMesh spike.",
+                icon_x = 150,
+                icon_y = 760,
+                template_key = "factory4_day",
+                db_base_json_path = "base.json",
+                fog_color = new[] { 0.62f, 0.66f, 0.70f },
+            };
+        }
 
         /// <summary>Reads a "-flagName value" pair out of Environment.GetCommandLineArgs(), as
         /// passed after -executeMethod on the Unity.exe command line. Falls back to

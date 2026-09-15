@@ -58,7 +58,7 @@ namespace ArenaMapPort.Client
     /// never runs on our map), but keeps the object internally consistent if anything ever calls
     /// Initialize a second time or reads the fields directly.
     ///
-    /// All gated on <see cref="ArenaEquatorRaid.IsLoaded()"/> — valid at both hook points: scenes are
+    /// All gated on <see cref="ArenaMapRaid.IsLoaded()"/> — valid at both hook points: scenes are
     /// loaded (per <c>TarkovApplication.LoadMapAndData</c>'s own sequence, confirmed by the audit —
     /// <c>LoadScenesFromPresetOperation</c> completes before <c>SpatialAudioSystem.Initialize</c> is
     /// even reached) whenever either patch below can fire.
@@ -69,7 +69,7 @@ namespace ArenaMapPort.Client
         // Audio.SpatialSystem/SpatialAudioSystem.cs:286-296.
         internal static void Postfix(SpatialAudioSystem __result)
         {
-            if (__result == null || !ArenaEquatorRaid.IsLoaded())
+            if (__result == null || !ArenaMapRaid.IsLoaded())
             {
                 return;
             }
@@ -99,7 +99,7 @@ namespace ArenaMapPort.Client
         // `Task.CompletedTask` supplies an already-completed Task instead.
         internal static bool Prefix(ref Task __result)
         {
-            if (!ArenaEquatorRaid.IsLoaded())
+            if (!ArenaMapRaid.IsLoaded())
             {
                 return true; // vanilla behaviour for every other map's raid
             }
@@ -122,7 +122,7 @@ namespace ArenaMapPort.Client
     /// (<c>SpatialAudioSystem.cs:348-363</c>) — the sound itself still plays, it is just never occluded.
     ///
     /// GATING NOTE (task brief asks every hook's gate to be documented): the <see cref="Prefix"/> below
-    /// is intentionally NOT map-gated with <see cref="ArenaEquatorRaid.IsLoaded()"/> — it only branches
+    /// is intentionally NOT map-gated with <see cref="ArenaMapRaid.IsLoaded()"/> — it only branches
     /// on the static <c>Initialized</c> flag, matching ManimalIcebreaker's own upstream choice. This is
     /// safe and correct on every map, not just ours: <c>Initialized</c> is false on a normal map only in
     /// the narrow window before ITS OWN <c>Initialize</c> completes, and degrading an early call to -1
@@ -159,7 +159,7 @@ namespace ArenaMapPort.Client
             {
                 return null;
             }
-            if (!ArenaEquatorRaid.IsLoaded())
+            if (!ArenaMapRaid.IsLoaded())
             {
                 return __exception; // vanilla behaviour for every other map's raid
             }
@@ -214,7 +214,7 @@ namespace ArenaMapPort.Client
             {
                 return null;
             }
-            if (!ArenaEquatorRaid.IsLoaded())
+            if (!ArenaMapRaid.IsLoaded())
             {
                 return __exception; // vanilla behaviour for every other map's raid
             }

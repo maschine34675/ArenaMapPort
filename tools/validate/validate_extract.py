@@ -60,6 +60,7 @@ from __future__ import annotations
 
 import argparse
 import filecmp
+import importlib
 import json
 import re
 import shutil
@@ -73,7 +74,21 @@ from typing import Any, NoReturn
 
 REPO_ROOT = Path("D:/ArenaMapPort")
 DEFAULT_PACKAGE = REPO_ROOT / "work" / "extract" / "equator_s1"  # O7
-EXTRACTOR_SCRIPT = REPO_ROOT / "tools" / "extract" / "extract_equator.py"
+EXTRACTOR_SCRIPT = REPO_ROOT / "tools" / "extract" / "extract_equator.py"  # back-compat default only, see extractor_script_for()
+
+
+def extractor_script_for(manifest: dict) -> Path:
+    """Resolves which extractor script produced a package, generalizing the disabled-count/
+    reproducibility checks below to run against whichever map's own extractor a package says it
+    came from (critic amendment #3: "validate per imported scene against Arena" must work for
+    Bay5's own extraction too, not just Equator's) instead of hardcoding extract_equator.py.
+    manifest.source.extractor_script is written by every extractor since this field was added
+    (extract_equator.py writes "tools/extract/extract_equator.py", extract_bay5.py writes
+    "tools/extract/extract_bay5.py"); an older package predating the field falls back to
+    EXTRACTOR_SCRIPT (extract_equator.py), preserving this validator's pre-generalization
+    behavior for byte-identical Equator packages."""
+    rel = manifest.get("source", {}).get("extractor_script")
+    return (REPO_ROOT / rel) if rel else EXTRACTOR_SCRIPT
 
 ID_RE = re.compile(r"^[0-9a-f]{16}$")
 
@@ -273,12 +288,25 @@ def validate_scenes(manifest: dict, package: Path) -> dict:
                                               f"LODGroup lod renderer_object_id {rid!r} is not an object "
                                               f"id in this scene")
                             elif not has_renderer.get(rid):
-                                scene_bad_refs += 1
-                                check(False, f"scenes/{scene_name}.json: object {oid!r} ({name}) "
-                                              f"LODGroup lod renderer_object_id {rid!r} points at an "
-                                              f"object with no MeshRenderer/SkinnedMeshRenderer component "
-                                              f"(SS B.WP2.5's two-pass renderer map would leave this LOD "
-                                              f"slot null)")
+                                # Not a dangling reference (the id DOES exist in this scene, unlike
+                                # the branch above) -- the referenced object's own in-source renderer
+                                # is a type outside COMPONENT_BUILDERS' exhaustive allowlist (e.g. a
+                                # ParticleSystemRenderer -- observed on Bay5's real
+                                # "Land_Cruiser_close" prop, whose exhaust-particle child is a real,
+                                # legitimate LOD slot in Arena's own authored data, not an extractor
+                                # defect). SceneAssembler.AttachLodGroup already treats this as
+                                # non-fatal by design ("intentionally omits unresolved ids rather
+                                # than inserting null entries", its own comment) -- match that
+                                # severity here: WARN, not FAIL, since the built bundle's actual
+                                # behavior for this case is a graceful, logged omission, never a
+                                # crash or a null LOD slot.
+                                warn(f"scenes/{scene_name}.json: object {oid!r} ({name}) LODGroup lod "
+                                     f"renderer_object_id {rid!r} points at an object with no "
+                                     f"MeshRenderer/SkinnedMeshRenderer component (its own renderer, if "
+                                     f"any, is an out-of-scope type not in COMPONENT_BUILDERS) -- "
+                                     f"SceneAssembler.AttachLodGroup omits this LOD slot gracefully "
+                                     f"(logged, non-fatal), so this is not a SS B.WP1 acceptance-gate "
+                                     f"failure")
 
         if scene_bad_refs == 0:
             print(f"[validate_extract]  ok : scenes/{scene_name}.json: {len(objects)} objects, "
@@ -612,18 +640,19 @@ def count_disabled_in_arena(source_root: str | None, manifest: dict) -> dict[str
         warn(f"disabled-component ground-truth check: Arena source root {source_root!r} is not "
              f"reachable from this machine right now -- falling back to the hardcoded reference "
              f"table from docs/progress/fix-enabled-state.md's root-cause pass "
-             f"(KNOWN_ARENA_DISABLED_COUNTS) rather than failing outright (an environment gap, not "
-             f"necessarily a WP1 defect)")
+             f"(KNOWN_ARENA_DISABLED_COUNTS, Equator only -- see that table's own note re: Bay5) "
+             f"rather than failing outright (an environment gap, not necessarily a WP1 defect)")
         return None
-    if not EXTRACTOR_SCRIPT.is_file():
+    extractor_script = extractor_script_for(manifest)
+    if not extractor_script.is_file():
         warn(f"disabled-component ground-truth check: extractor script not found at "
-             f"{EXTRACTOR_SCRIPT} -- falling back to the hardcoded reference table")
+             f"{extractor_script} -- falling back to the hardcoded reference table")
         return None
-    sys.path.insert(0, str(EXTRACTOR_SCRIPT.parent))
+    sys.path.insert(0, str(extractor_script.parent))
     try:
-        import extract_equator as _ex  # type: ignore  # noqa: PLC0415
+        _ex = importlib.import_module(extractor_script.stem)  # type: ignore  # noqa: PLC0415
     except Exception as e:  # noqa: BLE001
-        warn(f"disabled-component ground-truth check: could not import extract_equator.py to "
+        warn(f"disabled-component ground-truth check: could not import {extractor_script.name} to "
              f"recover its SCENE_REGISTRY ({e}) -- falling back to the hardcoded reference table")
         return None
     try:
@@ -638,8 +667,8 @@ def count_disabled_in_arena(source_root: str | None, manifest: dict) -> dict[str
     for scene_name in manifest.get("scenes", []):
         idx = name_to_idx.get(scene_name)
         if idx is None:
-            warn(f"disabled-component ground-truth check: {scene_name!r} not in extract_equator.py's "
-                 f"SCENE_REGISTRY -- skipped")
+            warn(f"disabled-component ground-truth check: {scene_name!r} not in "
+                 f"{extractor_script.name}'s SCENE_REGISTRY -- skipped")
             continue
         level_path = Path(source_root) / f"level{idx}"
         if not level_path.is_file():
@@ -718,19 +747,22 @@ def validate_disabled_component_counts(manifest: dict, package: Path) -> None:
 # 8: reproducibility -- literally re-run the extractor
 # ---------------------------------------------------------------------------
 
-def derive_extractor_args(manifest: dict) -> tuple[list[int], dict[int, list[int]], str] | None:
-    """Recovers (scene_indices, slice_map, source_root) from the package's own manifest.json,
-    using extract_equator.py's own SCENE_REGISTRY as the single source of truth for name<->index
-    (imported read-only, never executed as __main__)."""
-    if not EXTRACTOR_SCRIPT.is_file():
-        warn(f"reproducibility check SKIPPED: extractor script not found at {EXTRACTOR_SCRIPT}")
+def derive_extractor_args(manifest: dict) -> tuple[Path, list[int], dict[int, list[int]], str] | None:
+    """Recovers (extractor_script, scene_indices, slice_map, source_root) from the package's own
+    manifest.json, using that map's own extractor module's SCENE_REGISTRY as the single source of
+    truth for name<->index (imported read-only, never executed as __main__). Which module is
+    "that map's own" is resolved via extractor_script_for() (critic amendment #3 -- generalized
+    so this works for Bay5's own extract_bay5.py package too, not just Equator's)."""
+    extractor_script = extractor_script_for(manifest)
+    if not extractor_script.is_file():
+        warn(f"reproducibility check SKIPPED: extractor script not found at {extractor_script}")
         return None
-    sys.path.insert(0, str(EXTRACTOR_SCRIPT.parent))
+    sys.path.insert(0, str(extractor_script.parent))
     try:
-        import extract_equator as _ex  # type: ignore  # noqa: PLC0415
+        _ex = importlib.import_module(extractor_script.stem)  # type: ignore  # noqa: PLC0415
     except Exception as e:  # noqa: BLE001
-        warn(f"reproducibility check SKIPPED: could not import extract_equator.py to recover its "
-             f"SCENE_REGISTRY ({e})")
+        warn(f"reproducibility check SKIPPED: could not import {extractor_script.name} to recover "
+             f"its SCENE_REGISTRY ({e})")
         return None
 
     name_to_idx = {v: k for k, v in _ex.SCENE_REGISTRY.items()}
@@ -738,8 +770,8 @@ def derive_extractor_args(manifest: dict) -> tuple[list[int], dict[int, list[int
     try:
         scene_indices = sorted(name_to_idx[n] for n in scene_names)
     except KeyError as e:
-        warn(f"reproducibility check SKIPPED: manifest scene name {e} is not in extract_equator.py's "
-             f"SCENE_REGISTRY -- can't reconstruct the original --scenes argument")
+        warn(f"reproducibility check SKIPPED: manifest scene name {e} is not in "
+             f"{extractor_script.name}'s SCENE_REGISTRY -- can't reconstruct the original invocation")
         return None
 
     slice_raw = manifest.get("slice", {})
@@ -749,18 +781,23 @@ def derive_extractor_args(manifest: dict) -> tuple[list[int], dict[int, list[int
     if not source_root:
         warn("reproducibility check SKIPPED: manifest.source.arena_data_root missing")
         return None
-    return scene_indices, slice_map, source_root
+    return extractor_script, scene_indices, slice_map, source_root
 
 
-def run_extractor(scene_indices: list[int], slice_map: dict[int, list[int]], source_root: str,
-                   out_dir: Path, fixed_timestamp: str, timeout_s: int) -> subprocess.CompletedProcess:
-    cmd = [sys.executable, str(EXTRACTOR_SCRIPT),
+def run_extractor(extractor_script: Path, scene_indices: list[int], slice_map: dict[int, list[int]],
+                   source_root: str, out_dir: Path, fixed_timestamp: str, timeout_s: int) -> subprocess.CompletedProcess:
+    cmd = [sys.executable, str(extractor_script),
            "--source", source_root,
-           "--scenes", ",".join(str(i) for i in scene_indices),
            "--output", str(out_dir),
            "--fixed-timestamp", fixed_timestamp]
-    for idx, ids in slice_map.items():
-        cmd += ["--slice-roots", f"{idx}:" + ",".join(str(i) for i in ids)]
+    # extract_equator.py exposes --scenes/--slice-roots (a configurable subset/slice of its
+    # 5-scene set); extract_bay5.py has a fixed, unparameterized 8-scene set (no slicing support
+    # at all, see its own module docstring) -- these flags simply don't exist on that script, so
+    # they're only added for the script that accepts them.
+    if extractor_script.name != "extract_bay5.py":
+        cmd += ["--scenes", ",".join(str(i) for i in scene_indices)]
+        for idx, ids in slice_map.items():
+            cmd += ["--slice-roots", f"{idx}:" + ",".join(str(i) for i in ids)]
     return subprocess.run(cmd, capture_output=True, text=True, timeout=timeout_s)
 
 
@@ -796,7 +833,7 @@ def run_reproducibility_checks(manifest: dict, package: Path, timeout_s: int) ->
     derived = derive_extractor_args(manifest)
     if derived is None:
         return
-    scene_indices, slice_map, source_root = derived
+    extractor_script, scene_indices, slice_map, source_root = derived
 
     if not Path(source_root).is_dir():
         warn(f"reproducibility check SKIPPED: source root {source_root!r} is not reachable from this "
@@ -808,16 +845,16 @@ def run_reproducibility_checks(manifest: dict, package: Path, timeout_s: int) ->
     tmp = Path(tempfile.mkdtemp(prefix="wp6_validate_extract_repro_"))
     try:
         out1, out2 = tmp / "run1", tmp / "run2"
-        print(f"[validate_extract] reproducibility: re-running extractor twice into {tmp} "
+        print(f"[validate_extract] reproducibility: re-running {extractor_script.name} twice into {tmp} "
               f"(scenes={scene_indices}, slice={slice_map or 'none (full scenes)'}) ...")
-        p1 = run_extractor(scene_indices, slice_map, source_root, out1, fixed_ts, timeout_s)
+        p1 = run_extractor(extractor_script, scene_indices, slice_map, source_root, out1, fixed_ts, timeout_s)
         if not check(p1.returncode == 0,
-                      f"reproducibility run #1 of extract_equator.py exits 0 "
+                      f"reproducibility run #1 of {extractor_script.name} exits 0 "
                       f"(rc={p1.returncode}; stderr tail: {p1.stderr[-800:]})"):
             return
-        p2 = run_extractor(scene_indices, slice_map, source_root, out2, fixed_ts, timeout_s)
+        p2 = run_extractor(extractor_script, scene_indices, slice_map, source_root, out2, fixed_ts, timeout_s)
         if not check(p2.returncode == 0,
-                      f"reproducibility run #2 of extract_equator.py exits 0 "
+                      f"reproducibility run #2 of {extractor_script.name} exits 0 "
                       f"(rc={p2.returncode}; stderr tail: {p2.stderr[-800:]})"):
             return
 

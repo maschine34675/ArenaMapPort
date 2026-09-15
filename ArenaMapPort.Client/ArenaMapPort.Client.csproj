@@ -38,6 +38,7 @@
     <!-- ArenaMode convention (ArenaMode.Client.csproj:19-26): link the shared source file directly
          rather than a project/binary reference, so client and server compile it independently. -->
     <Compile Include="..\ArenaMapPort.Shared\ArenaEquatorLocation.cs" Link="Shared\ArenaEquatorLocation.cs" />
+    <Compile Include="..\ArenaMapPort.Shared\ArenaMapDescriptor.cs" Link="Shared\ArenaMapDescriptor.cs" />
   </ItemGroup>
 
   <ItemGroup>
@@ -149,23 +150,46 @@
     <PropertyGroup>
       <ArenaMapPortFullBuildDir>$(MSBuildThisFileDirectory)..\work\build\full</ArenaMapPortFullBuildDir>
       <ArenaMapPortPresetBuildDir>$(MSBuildThisFileDirectory)..\work\build\preset</ArenaMapPortPresetBuildDir>
+      <!-- Multimap generalization (docs/progress/multimap-generalize.md, docs/progress/bay5-port.md):
+           Bay5's own tools/build_all.ps1 -MapKey arena_bay5 -OutputDir output, separate from
+           Equator's work/build/full (its own explicit list stays Equator-only, unchanged; see
+           below). Bay5's preset bundle lands in the SAME shared work/build/preset dir Equator's
+           does (patch_preset.py's own output default is work/build/preset/<key>_preset.bundle). -->
+      <ArenaMapPortBay5BuildDir>$(MSBuildThisFileDirectory)..\work\build\bay5</ArenaMapPortBay5BuildDir>
     </PropertyGroup>
     <ItemGroup>
       <ArenaMapPortBundles Include="$(ArenaMapPortFullBuildDir)\arena_equator_scenes.bundle" />
       <ArenaMapPortBundles Include="$(ArenaMapPortFullBuildDir)\arena_equator_navmesh.bundle" />
       <ArenaMapPortBundles Include="$(ArenaMapPortPresetBuildDir)\arena_equator_preset.bundle" />
       <ArenaMapPortShaderSidecar Include="$(ArenaMapPortFullBuildDir)\material-shaders.json" />
+      <!-- Bay5, kept as its own explicit list rather than folded into the two ItemGroups above or
+           switched to a wildcard: dist-manifest.md's "exactly N expected files" invariant is a
+           real, already-relied-on regression check (docs/progress/multimap-generalize.md SS8 note
+           2/SS9 item 5); an explicit per-map list keeps that check meaningful for each map
+           independently instead of silently accepting a stray leftover .bundle file. -->
+      <ArenaMapPortBundles Include="$(ArenaMapPortBay5BuildDir)\arena_bay5_scenes.bundle" />
+      <ArenaMapPortBundles Include="$(ArenaMapPortBay5BuildDir)\arena_bay5_navmesh.bundle" />
+      <ArenaMapPortBundles Include="$(ArenaMapPortPresetBuildDir)\arena_bay5_preset.bundle" />
+      <!-- ShaderRebind.SidecarFileName: Equator keeps its pre-generalization "material-shaders.json"
+           (already deployed under that exact name); every other map gets its own
+           "material-shaders.<map.Key>.json". Bay5's map.Key is "arena_bay5", not the short "bay5"
+           tools/maps/ file stem, so the staged/renamed dist filename below must match that exactly. -->
+      <ArenaMapPortBay5ShaderSidecarSrc Include="$(ArenaMapPortBay5BuildDir)\material-shaders.json" />
     </ItemGroup>
-    <Error Text="[ArenaMapPort] expected bundle missing: %(ArenaMapPortBundles.Identity) -- run tools/build_all.ps1 (full) and tools/preset/patch_preset.py first"
+    <Error Text="[ArenaMapPort] expected bundle missing: %(ArenaMapPortBundles.Identity) -- run tools/build_all.ps1 (full, and -MapKey arena_bay5) and tools/preset/patch_preset.py (both maps) first"
            Condition="!Exists('%(ArenaMapPortBundles.Identity)')" />
     <Error Text="[ArenaMapPort] expected material-shaders.json missing: %(ArenaMapPortShaderSidecar.Identity)"
            Condition="!Exists('%(ArenaMapPortShaderSidecar.Identity)')" />
+    <Error Text="[ArenaMapPort] expected Bay5 material-shaders.json missing: %(ArenaMapPortBay5ShaderSidecarSrc.Identity) -- run tools/build_all.ps1 -MapKey arena_bay5 first"
+           Condition="!Exists('%(ArenaMapPortBay5ShaderSidecarSrc.Identity)')" />
     <MakeDir Directories="$(ArenaMapPortDistDir)\bundles" />
     <Copy SourceFiles="@(ArenaMapPortBundles)" DestinationFolder="$(ArenaMapPortDistDir)\bundles" SkipUnchangedFiles="false" />
     <Copy SourceFiles="@(ArenaMapPortShaderSidecar)" DestinationFolder="$(ArenaMapPortDistDir)" SkipUnchangedFiles="false" />
+    <Copy SourceFiles="@(ArenaMapPortBay5ShaderSidecarSrc)" DestinationFiles="$(ArenaMapPortDistDir)\material-shaders.arena_bay5.json" SkipUnchangedFiles="false" />
     <Message Importance="high"
-             Text="[ArenaMapPort] staged %(ArenaMapPortBundles.Filename)%(ArenaMapPortBundles.Extension) from $(ArenaMapPortFullBuildDir)/$(ArenaMapPortPresetBuildDir) into dist/.../bundles/" />
+             Text="[ArenaMapPort] staged %(ArenaMapPortBundles.Filename)%(ArenaMapPortBundles.Extension) from $(ArenaMapPortFullBuildDir)/$(ArenaMapPortPresetBuildDir)/$(ArenaMapPortBay5BuildDir) into dist/.../bundles/" />
     <Message Importance="high" Text="[ArenaMapPort] staged material-shaders.json from $(ArenaMapPortFullBuildDir) into dist/.../ArenaMapPort/" />
+    <Message Importance="high" Text="[ArenaMapPort] staged material-shaders.arena_bay5.json from $(ArenaMapPortBay5BuildDir) into dist/.../ArenaMapPort/" />
   </Target>
 
 </Project>

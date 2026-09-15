@@ -42,11 +42,15 @@ namespace ArenaMapPort.Client
 
         static string BundlesDir => Path.Combine(PluginDir, "bundles");
 
-        // §F.1: "OurBundles maps all 3 served keys (§0) -> their absolute file paths under
-        // <plugin dir>/bundles/". The navmesh bundle is, in practice, loaded directly by
+        // §F.1: "OurBundles maps every registered map's 3 served keys (§0) -> their absolute file paths
+        // under <plugin dir>/bundles/". The navmesh bundle is, in practice, loaded directly by
         // NavMeshInstaller (nothing in the vanilla load chain ever requests it by served key, since it
         // is not referenced from the patched ScenesPreset's _scenesResourceKeys) — registered here anyway
         // per §F.1's instruction and as cheap insurance if that ever changes.
+        //
+        // Multimap generalization (docs/progress/multimap-generalize.md): loops ArenaMapRegistry.All
+        // instead of one hardcoded map's 3 consts — Equator's own 3 entries are byte-identical to the
+        // pre-generalization dict literal (same served keys, same "arena_equator_*.bundle" filenames).
         static Dictionary<string, string> OurBundles()
         {
             if (_ourBundles != null)
@@ -54,12 +58,13 @@ namespace ArenaMapPort.Client
                 return _ourBundles;
             }
 
-            _ourBundles = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+            _ourBundles = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var map in ArenaMapRegistry.All)
             {
-                [ArenaEquatorLocation.PresetBundleKey] = Path.Combine(BundlesDir, "arena_equator_preset.bundle"),
-                [ArenaEquatorLocation.ScenesBundleKey] = Path.Combine(BundlesDir, "arena_equator_scenes.bundle"),
-                [ArenaEquatorLocation.NavMeshBundleKey] = Path.Combine(BundlesDir, "arena_equator_navmesh.bundle"),
-            };
+                _ourBundles[map.PresetBundleKey] = Path.Combine(BundlesDir, map.PresetBundleFileName);
+                _ourBundles[map.ScenesBundleKey] = Path.Combine(BundlesDir, map.ScenesBundleFileName);
+                _ourBundles[map.NavMeshBundleKey] = Path.Combine(BundlesDir, map.NavMeshBundleFileName);
+            }
             return _ourBundles;
         }
 

@@ -36,7 +36,7 @@ namespace ArenaMapPort.Client
     /// (<c>IcebreakerAcoustics.TryBuildEnvironmentTriggers</c>) both need sidecar data we do not have and
     /// are out of scope (SPEC: weather/TOD defaults are acceptable for the spike).
     ///
-    /// Gated on <see cref="ArenaEquatorRaid.IsLoaded()"/> — valid here: <c>Player.Init</c> only ever
+    /// Gated on <see cref="ArenaMapRaid.IsLoaded()"/> — valid here: <c>Player.Init</c> only ever
     /// runs after <c>TarkovApplication.LoadMapAndData</c> has finished loading our scenes (raid-start
     /// order), so the Scripts scene is already present.
     /// </summary>
@@ -44,7 +44,7 @@ namespace ArenaMapPort.Client
     {
         internal static void Prefix()
         {
-            if (!ArenaEquatorRaid.IsLoaded())
+            if (!ArenaMapRaid.IsLoaded())
             {
                 return; // every other map's raid — untouched
             }

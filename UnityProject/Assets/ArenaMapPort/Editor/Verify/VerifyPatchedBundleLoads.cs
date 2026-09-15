@@ -25,8 +25,11 @@ namespace ArenaMapPort.Editor.Verify
     {
         public static void Run()
         {
+            // Multimap generalization (docs/progress/multimap-generalize.md): default derived from
+            // the loaded map descriptor instead of the literal "arena_equator_scenes.bundle" — equals
+            // that exact string when -mapDescriptor is omitted.
             string scenesBundlePath = ArenaPaths.GetArg(
-                "-scenesBundle", ArenaPaths.DefaultOutputDirS1 + "/arena_equator_scenes.bundle");
+                "-scenesBundle", ArenaPaths.DefaultOutputDirS1 + "/" + ArenaPaths.Map.ScenesBundleFileName);
 
             try
             {
@@ -60,9 +63,9 @@ namespace ArenaMapPort.Editor.Verify
                 // something a Unity player needs" -- is exactly what a successful
                 // AssetBundle.LoadFromFile + asset-name enumeration proves either way.)
                 bool foundScriptsScene = scenePaths.Any(p =>
-                    p.IndexOf(ArenaPaths.ScriptsSceneName, StringComparison.OrdinalIgnoreCase) >= 0);
+                    p.IndexOf(ArenaPaths.Map.scripts_scene_name, StringComparison.OrdinalIgnoreCase) >= 0);
                 if (!foundScriptsScene)
-                    throw new Exception("'" + ArenaPaths.ScriptsSceneName + "' not found among "
+                    throw new Exception("'" + ArenaPaths.Map.scripts_scene_name + "' not found among "
                                          + scenePaths.Length + " scene path(s) reported by Unity's own "
                                          + "AssetBundle.GetAllScenePaths() -- expected it to be present "
                                          + "and readable post-patch");
@@ -70,7 +73,7 @@ namespace ArenaMapPort.Editor.Verify
                 bundle.Unload(false);
                 Debug.Log("[ArenaMapPort][VerifyPatchedBundleLoads] OK -- Unity's native AssetBundle reader "
                           + "loaded the patched bundle, enumerated " + scenePaths.Length + " scene path(s) + "
-                          + allAssetNames.Length + " asset name(s), and found '" + ArenaPaths.ScriptsSceneName
+                          + allAssetNames.Length + " asset name(s), and found '" + ArenaPaths.Map.scripts_scene_name
                           + "' among them.");
                 EditorApplication.Exit(0);
             }

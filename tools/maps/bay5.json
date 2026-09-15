@@ -1,0 +1,24 @@
+{
+  "key": "arena_bay5",
+  "id_field": "f4f851a5fee201ad20a257dc",
+  "scripts_scene_name": "Arena_Bay5_Scripts",
+  "all_scene_names": [
+    "Arena_Bay5_Scripts",
+    "Arena_Bay5_Main",
+    "Arena_Bay5_Light",
+    "Arena_Bay5_DesignStuff",
+    "Arena_Bay5_TeamFight",
+    "Arena_Bay5_TeamFight_DesignStuff",
+    "Arena_Bay5_DEPOT",
+    "Arena_Bay5_WAREHOUSE",
+    "Arena_Bay5_HANGAR"
+  ],
+  "infiltration_name": "ArenaBay5",
+  "locale_name": "Arena: Bay 5 (spike)",
+  "locale_description": "Internal test build — outdoor harbor geometry/collision/NavMesh spike.",
+  "icon_x": 150,
+  "icon_y": 830,
+  "template_key": "factory4_day",
+  "db_base_json_path": "arena_bay5/base.json",
+  "fog_color": [0.132285476, 0.147871643, 0.137986973]
+}

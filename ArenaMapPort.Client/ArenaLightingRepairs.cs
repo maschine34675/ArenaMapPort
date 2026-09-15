@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using ArenaMapPort.Shared;
 using BepInEx.Configuration;
 using Comfort.Common;
 using UnityEngine;
@@ -46,56 +47,71 @@ namespace ArenaMapPort.Client
     /// from whatever the previous config change already produced, so repeated live edits via
     /// F12/ConfigurationManager never compound.
     ///
-    /// Gated on ArenaEquatorRaid.IsLoaded() throughout — a complete no-op for every other map's raid.
-    /// Every Light this touches is one actually authored in our own owned scenes (found by walking each
-    /// owned Scene's own root GameObjects, the same technique ShaderRebind.cs already uses for
-    /// materials) — never the player's weapon flashlight/muzzle-flash lights or another bot's, which
-    /// live under an entirely different (DontDestroyOnLoad/player) hierarchy.
+    /// Multimap generalization (docs/progress/multimap-generalize.md): every ConfigEntry set and every
+    /// piece of per-raid captured state (LevelSettings baseline colors, per-Light baselines, fill-light
+    /// GameObjects, the ambient-fallback-written flag) is now keyed per map instead of a single unkeyed
+    /// instance. Equator keeps its exact pre-generalization config section name "Lighting (arena_equator)"
+    /// and default values, so a user's already-tuned config values keep applying without a reset; Bay5
+    /// gets its own section "Lighting (arena_bay5)" with the SAME defaults (no Bay5-specific tuning has
+    /// been done yet — a playtest-based re-tune is future work, see docs/progress/multimap-generalize.md).
+    /// Gated on <see cref="ArenaMapRaid.IsLoaded()"/> throughout — a complete no-op for every other map's
+    /// raid. Every Light this touches is one actually authored in the CURRENT map's own owned scenes
+    /// (found by walking each owned Scene's own root GameObjects, the same technique ShaderRebind.cs
+    /// already uses for materials) — never the player's weapon flashlight/muzzle-flash lights or another
+    /// bot's, which live under an entirely different (DontDestroyOnLoad/player) hierarchy.
     /// </summary>
     internal static class ArenaLightingRepairs
     {
-        const string ConfigSection = "Lighting (arena_equator)";
-
-        static ConfigEntry<bool> _enabled;
-        static ConfigEntry<float> _ambientColorMultiplier;
-        static ConfigEntry<float> _globalLightIntensityMultiplier;
-        static ConfigEntry<float> _sunIntensityMultiplier;
-        static ConfigEntry<float> _sunColorWhiteBlend;
-        static ConfigEntry<float> _fogDensity;
-        static ConfigEntry<float> _fillLightIntensity;
-
-        static bool _installed;
-
-        // Shadowless directional fill pair (down + weaker up), parented to a GameObject in our Scripts
-        // scene so it unloads with the raid. Stand-in for EFT's missing deferred ambient pass: the
-        // dominant p0/* shaders get their ambient from AmbientLight's "Custom Ambient" command buffer
-        // (AmbientLight.cs:311, fed via SetSH by ToDController/TODSkySimple, ToDController.cs:265), which
-        // does not exist in our scenes, so RenderSettings ambient alone never reaches them.
+        // Shadowless directional fill pair (down + weaker up), parented to a GameObject in the current
+        // map's Scripts scene so it unloads with the raid. Stand-in for EFT's missing deferred ambient
+        // pass: the dominant p0/* shaders get their ambient from AmbientLight's "Custom Ambient" command
+        // buffer (AmbientLight.cs:311, fed via SetSH by ToDController/TODSkySimple, ToDController.cs:265),
+        // which does not exist in our scenes, so RenderSettings ambient alone never reaches them.
         const string FillLightName = "ArenaMapPort_FillLight";
-        static Light _fillDown;
-        static Light _fillUp;
 
-        // --- LevelSettings baseline (captured once per raid, from the pristine authored values) -------
-        static bool _levelSettingsBaselineCaptured;
-        static Color _baseSkyColor;
-        static Color _baseEquatorColor;
-        static Color _baseGroundColor;
+        sealed class ConfigBundle
+        {
+            internal ConfigEntry<bool> Enabled;
+            internal ConfigEntry<float> AmbientColorMultiplier;
+            internal ConfigEntry<float> GlobalLightIntensityMultiplier;
+            internal ConfigEntry<float> SunIntensityMultiplier;
+            internal ConfigEntry<float> SunColorWhiteBlend;
+            internal ConfigEntry<float> FogDensity;
+            internal ConfigEntry<float> FillLightIntensity;
+        }
 
-        // Set whenever ApplyAmbient() takes its defensive RenderSettings-direct fallback path (see
-        // below) — unlike every other field this repair touches, RenderSettings is true global engine
-        // state, not owned by any scene/component, so nothing naturally resets it when our scenes
-        // unload. Tracked so OnSceneUnloaded knows whether it must restore RenderSettings.ambient*
-        // itself before the next scene (which may or may not carry its own LevelSettings) runs.
-        static bool _ambientFallbackWritten;
-
-        // --- Light baseline (captured once per raid, per Light actually found in our own scenes) ------
         struct LightBaseline
         {
             internal Light Light;
             internal float Intensity;
             internal Color Color;
         }
-        static readonly List<LightBaseline> _lights = new List<LightBaseline>();
+
+        sealed class MapState
+        {
+            // --- LevelSettings baseline (captured once per raid, from the pristine authored values) ---
+            internal bool LevelSettingsBaselineCaptured;
+            internal Color BaseSkyColor;
+            internal Color BaseEquatorColor;
+            internal Color BaseGroundColor;
+
+            // Set whenever ApplyAmbient() takes its defensive RenderSettings-direct fallback path — unlike
+            // every other field this repair touches, RenderSettings is true global engine state, not
+            // owned by any scene/component, so nothing naturally resets it when this map's scenes unload.
+            // Tracked so OnSceneUnloaded knows whether it must restore RenderSettings.ambient* itself
+            // before the next scene (which may or may not carry its own LevelSettings) runs.
+            internal bool AmbientFallbackWritten;
+
+            // --- Light baseline (captured once per raid, per Light actually found in this map's scenes) ---
+            internal readonly List<LightBaseline> Lights = new List<LightBaseline>();
+
+            internal Light FillDown;
+            internal Light FillUp;
+        }
+
+        static readonly Dictionary<string, ConfigBundle> _configs = new Dictionary<string, ConfigBundle>();
+        static readonly Dictionary<string, MapState> _states = new Dictionary<string, MapState>();
+        static bool _installed;
 
         internal static void Install()
         {
@@ -105,85 +121,110 @@ namespace ArenaMapPort.Client
             }
             _installed = true;
 
-            BindConfig();
+            foreach (var map in ArenaMapRegistry.All)
+            {
+                _configs[map.Key] = BindConfig(map);
+                _states[map.Key] = new MapState();
+            }
 
             SceneManager.sceneLoaded += OnSceneLoaded;
             SceneManager.sceneUnloaded += OnSceneUnloaded;
         }
 
-        static void BindConfig()
+        static ConfigBundle BindConfig(ArenaMapDescriptor map)
         {
-            _enabled = Plugin.Instance.Config.Bind(ConfigSection, "Enabled", true,
-                "Master switch for every repair below. Only ever applies during an arena_equator raid — " +
+            // Equator's section name is byte-identical to the pre-generalization literal
+            // ("Lighting (arena_equator)", since map.Key == "arena_equator") — a user's already-tuned
+            // config values keep applying without a config reset.
+            string section = $"Lighting ({map.Key})";
+            var cfg = new ConfigBundle();
+
+            cfg.Enabled = Plugin.Instance.Config.Bind(section, "Enabled", true,
+                $"Master switch for every repair below. Only ever applies during a {map.Key} raid — " +
                 "every other map's raid is untouched regardless of this value.");
 
-            _ambientColorMultiplier = Plugin.Instance.Config.Bind(ConfigSection, "AmbientColorMultiplier", 0.5f,
+            cfg.AmbientColorMultiplier = Plugin.Instance.Config.Bind(section, "AmbientColorMultiplier", 0.5f,
                 new ConfigDescription(
                     "Multiplies LevelSettings' own authored ambient colors (Sky/Equator/Ground, each " +
                     "0.5 grey) before they reach RenderSettings. 1.0 = authored value (the dim flat grey " +
                     "fill from the 2026-09-14 dark playtest); 2.0 = full-bright white flat ambient.",
                     new AcceptableValueRange<float>(0.2f, 6f)));
 
-            _globalLightIntensityMultiplier = Plugin.Instance.Config.Bind(ConfigSection, "GlobalLightIntensityMultiplier", 0.5f,
+            cfg.GlobalLightIntensityMultiplier = Plugin.Instance.Config.Bind(section, "GlobalLightIntensityMultiplier", 0.5f,
                 new ConfigDescription(
-                    "Multiplies every non-directional (point/spot) Light's own authored intensity in the " +
-                    "Equator scenes. 1.0 = authored value.",
+                    "Multiplies every non-directional (point/spot) Light's own authored intensity in this " +
+                    "map's scenes. 1.0 = authored value.",
                     new AcceptableValueRange<float>(0.2f, 6f)));
 
-            _sunIntensityMultiplier = Plugin.Instance.Config.Bind(ConfigSection, "SunIntensityMultiplier", 0.2f,
+            cfg.SunIntensityMultiplier = Plugin.Instance.Config.Bind(section, "SunIntensityMultiplier", 0.2f,
                 new ConfigDescription(
-                    "Multiplies the one Directional light's (\"FAKE_SUN\") own authored intensity (1.7). " +
-                    "1.0 = authored value.",
+                    "Multiplies the one Directional light's own authored intensity (Equator: \"FAKE_SUN\", " +
+                    "1.7). 1.0 = authored value.",
                     new AcceptableValueRange<float>(0.2f, 8f)));
 
-            _sunColorWhiteBlend = Plugin.Instance.Config.Bind(ConfigSection, "SunColorWhiteBlend", 0.1f,
+            cfg.SunColorWhiteBlend = Plugin.Instance.Config.Bind(section, "SunColorWhiteBlend", 0.1f,
                 new ConfigDescription(
-                    "Blends the Directional light's own dim/desaturated authored color (~0.18,0.18,0.20) " +
-                    "toward white. 0 = authored color unchanged, 1 = pure white.",
+                    "Blends the Directional light's own dim/desaturated authored color toward white. " +
+                    "0 = authored color unchanged, 1 = pure white.",
                     new AcceptableValueRange<float>(0f, 1f)));
 
-            _fogDensity = Plugin.Instance.Config.Bind(ConfigSection, "FogDensity", 0f,
+            cfg.FogDensity = Plugin.Instance.Config.Bind(section, "FogDensity", 0f,
                 new ConfigDescription(
                     "Density of a light grey distance fog (exponential squared). 0 = no fog. Around 0.01 is " +
                     "a light haze, 0.04 is roughly Arena's own authored fog.",
                     new AcceptableValueRange<float>(0f, 0.06f)));
 
-            _fillLightIntensity = Plugin.Instance.Config.Bind(ConfigSection, "FillLightIntensity", 0.2f,
+            cfg.FillLightIntensity = Plugin.Instance.Config.Bind(section, "FillLightIntensity", 0.2f,
                 new ConfigDescription(
                     "Intensity of a shadowless directional fill light (from above, plus half as much from " +
                     "below) that stands in for EFT's missing ambient pass — the main lever if surfaces stay " +
                     "dark away from lamps. 0 = off.",
                     new AcceptableValueRange<float>(0f, 3f)));
 
-            _enabled.SettingChanged += (_, __) => ReapplyIfLoaded();
-            _fillLightIntensity.SettingChanged += (_, __) => ReapplyIfLoaded();
-            _ambientColorMultiplier.SettingChanged += (_, __) => ReapplyIfLoaded();
-            _globalLightIntensityMultiplier.SettingChanged += (_, __) => ReapplyIfLoaded();
-            _sunIntensityMultiplier.SettingChanged += (_, __) => ReapplyIfLoaded();
-            _sunColorWhiteBlend.SettingChanged += (_, __) => ReapplyIfLoaded();
-            _fogDensity.SettingChanged += (_, __) => ReapplyIfLoaded();
+            cfg.Enabled.SettingChanged += (_, __) => ReapplyIfLoaded(map);
+            cfg.FillLightIntensity.SettingChanged += (_, __) => ReapplyIfLoaded(map);
+            cfg.AmbientColorMultiplier.SettingChanged += (_, __) => ReapplyIfLoaded(map);
+            cfg.GlobalLightIntensityMultiplier.SettingChanged += (_, __) => ReapplyIfLoaded(map);
+            cfg.SunIntensityMultiplier.SettingChanged += (_, __) => ReapplyIfLoaded(map);
+            cfg.SunColorWhiteBlend.SettingChanged += (_, __) => ReapplyIfLoaded(map);
+            cfg.FogDensity.SettingChanged += (_, __) => ReapplyIfLoaded(map);
+
+            return cfg;
         }
 
         static void OnSceneLoaded(Scene scene, LoadSceneMode mode)
         {
-            if (!ArenaEquatorRaid.IsOwnedScene(scene.name))
+            if (!ArenaMapRaid.IsOwnedScene(scene.name))
             {
                 return;
             }
-            CaptureLightsFromScene(scene);
-            ApplyAll(logSummary: true);
+
+            // Scene is already registered with SceneManager by the time sceneLoaded fires (see
+            // ArenaMapRaid's own doc comment), so CurrentMap resolves even on the Scripts scene's own
+            // load event.
+            var map = ArenaMapRaid.CurrentMap;
+            if (map == null || !_states.TryGetValue(map.Key, out var state))
+            {
+                return;
+            }
+
+            CaptureLightsFromScene(scene, state);
+            ApplyAll(map, logSummary: true);
         }
 
         static void OnSceneUnloaded(Scene scene)
         {
-            if (scene.name != ArenaMapPort.Shared.ArenaEquatorLocation.ScriptsSceneName)
+            // Stateless resolution (not ArenaMapRaid.CurrentMap) — see ArenaMapRaid's own doc comment
+            // for why an unload handler must never depend on a shared mutable "current map" field.
+            var map = ArenaMapRaid.MapForScriptsScene(scene.name);
+            if (map == null || !_states.TryGetValue(map.Key, out var state))
             {
                 return; // reset once per raid, on the raid's own Scripts-scene teardown
             }
 
             // RenderSettings.fog and (on the defensive fallback path only) RenderSettings.ambient* are
             // true global engine state, not scoped to any of our components — unlike LevelSettings'
-            // own fields and each Light's intensity/color, nothing destroys them when our scenes
+            // own fields and each Light's intensity/color, nothing destroys them when this map's scenes
             // unload. In the common case the NEXT raid's own LevelSettings.Awake()/OnPostLoadingScene()
             // (decompile: LevelSettings.cs:166-171,173-185 -> ApplySettings() at :194-218) overwrites
             // these again before it matters — but a scene loaded between raids that carries no
@@ -192,7 +233,7 @@ namespace ArenaMapPort.Client
             RenderSettings.fog = false; // AuthorScriptsScene.cs:83 authors LevelSettings.fog = false
             RenderSettings.fogDensity = 0f;
             RenderSettings.fogColor = new Color(0.5f, 0.5f, 0.5f, 1f); // Unity's default; fogMode stays valid
-            if (_ambientFallbackWritten)
+            if (state.AmbientFallbackWritten)
             {
                 RenderSettings.ambientMode = AmbientMode.Flat;
                 var authored = new Color(0.5f, 0.5f, 0.5f, 1f); // AuthorScriptsScene.cs:79-81
@@ -200,16 +241,16 @@ namespace ArenaMapPort.Client
                 RenderSettings.ambientSkyColor = authored;
                 RenderSettings.ambientEquatorColor = authored;
                 RenderSettings.ambientGroundColor = authored;
-                _ambientFallbackWritten = false;
+                state.AmbientFallbackWritten = false;
             }
 
-            _levelSettingsBaselineCaptured = false;
-            _lights.Clear(); // next raid gets fresh Light instances — old baselines would be stale/destroyed
-            _fillDown = null; // destroyed with the Scripts scene
-            _fillUp = null;
+            state.LevelSettingsBaselineCaptured = false;
+            state.Lights.Clear(); // next raid gets fresh Light instances — old baselines would be stale/destroyed
+            state.FillDown = null; // destroyed with the Scripts scene
+            state.FillUp = null;
         }
 
-        static void CaptureLightsFromScene(Scene scene)
+        static void CaptureLightsFromScene(Scene scene, MapState state)
         {
             foreach (var root in scene.GetRootGameObjects())
             {
@@ -217,72 +258,75 @@ namespace ArenaMapPort.Client
                 for (int i = 0; i < lights.Length; i++)
                 {
                     var light = lights[i];
-                    _lights.Add(new LightBaseline { Light = light, Intensity = light.intensity, Color = light.color });
+                    state.Lights.Add(new LightBaseline { Light = light, Intensity = light.intensity, Color = light.color });
                 }
             }
         }
 
-        static void ReapplyIfLoaded()
+        static void ReapplyIfLoaded(ArenaMapDescriptor map)
         {
-            if (ArenaEquatorRaid.IsLoaded())
+            if (ArenaMapRaid.CurrentMap == map)
             {
-                ApplyAll(logSummary: false);
+                ApplyAll(map, logSummary: false);
             }
         }
 
-        static void ApplyAll(bool logSummary)
+        static void ApplyAll(ArenaMapDescriptor map, bool logSummary)
         {
-            if (!ArenaEquatorRaid.IsLoaded())
+            if (ArenaMapRaid.CurrentMap != map)
             {
                 return;
             }
+            var cfg = _configs[map.Key];
+            var state = _states[map.Key];
 
             // Enabled=false applies neutral values instead of returning, so switching it off live
             // restores the authored look rather than freezing the last tuned state.
-            bool on = _enabled.Value;
-            bool levelSettingsFound = ApplyAmbient(on ? _ambientColorMultiplier.Value : 1f, on ? _fogDensity.Value : 0f);
+            bool on = cfg.Enabled.Value;
+            bool levelSettingsFound = ApplyAmbient(state, on ? cfg.AmbientColorMultiplier.Value : 1f, on ? cfg.FogDensity.Value : 0f);
             int lightsApplied = ApplyLights(
-                on ? _globalLightIntensityMultiplier.Value : 1f,
-                on ? _sunIntensityMultiplier.Value : 1f,
-                on ? _sunColorWhiteBlend.Value : 0f);
-            bool fillActive = ApplyFillLight(on ? _fillLightIntensity.Value : 0f);
+                state,
+                on ? cfg.GlobalLightIntensityMultiplier.Value : 1f,
+                on ? cfg.SunIntensityMultiplier.Value : 1f,
+                on ? cfg.SunColorWhiteBlend.Value : 0f);
+            bool fillActive = ApplyFillLight(map, state, on ? cfg.FillLightIntensity.Value : 0f);
 
             if (logSummary)
             {
                 Plugin.Log.LogInfo(
-                    $"[ArenaMapPort][Lighting] applied (Enabled={on}): LevelSettings-found={levelSettingsFound} " +
-                    $"(ambientColorMultiplier={_ambientColorMultiplier.Value:0.00}), {lightsApplied} light(s) " +
-                    $"(globalMultiplier={_globalLightIntensityMultiplier.Value:0.00}, " +
-                    $"sunMultiplier={_sunIntensityMultiplier.Value:0.00}, sunWhiteBlend={_sunColorWhiteBlend.Value:0.00}), " +
-                    $"fillLight={(fillActive ? _fillLightIntensity.Value.ToString("0.00") : "off")}, fogDensity={_fogDensity.Value:0.000}");
+                    $"[ArenaMapPort][Lighting] {map.Key} applied (Enabled={on}): LevelSettings-found={levelSettingsFound} " +
+                    $"(ambientColorMultiplier={cfg.AmbientColorMultiplier.Value:0.00}), {lightsApplied} light(s) " +
+                    $"(globalMultiplier={cfg.GlobalLightIntensityMultiplier.Value:0.00}, " +
+                    $"sunMultiplier={cfg.SunIntensityMultiplier.Value:0.00}, sunWhiteBlend={cfg.SunColorWhiteBlend.Value:0.00}), " +
+                    $"fillLight={(fillActive ? cfg.FillLightIntensity.Value.ToString("0.00") : "off")}, fogDensity={cfg.FogDensity.Value:0.000}");
             }
         }
 
-        // Returns whether the fill light is active. Created lazily inside our Scripts scene.
-        static bool ApplyFillLight(float intensity)
+        // Returns whether the fill light is active. Created lazily inside the current map's Scripts scene.
+        static bool ApplyFillLight(ArenaMapDescriptor map, MapState state, float intensity)
         {
-            if (_fillDown == null || _fillUp == null)
+            if (state.FillDown == null || state.FillUp == null)
             {
                 if (intensity <= 0f)
                 {
                     return false;
                 }
-                var scripts = SceneManager.GetSceneByName(ArenaMapPort.Shared.ArenaEquatorLocation.ScriptsSceneName);
+                var scripts = SceneManager.GetSceneByName(map.ScriptsSceneName);
                 if (!scripts.IsValid() || !scripts.isLoaded)
                 {
                     return false;
                 }
                 var root = new GameObject(FillLightName);
                 SceneManager.MoveGameObjectToScene(root, scripts);
-                _fillDown = CreateFillLight(root, "Down", Quaternion.Euler(90f, 0f, 0f));
-                _fillUp = CreateFillLight(root, "Up", Quaternion.Euler(-90f, 0f, 0f));
+                state.FillDown = CreateFillLight(root, "Down", Quaternion.Euler(90f, 0f, 0f));
+                state.FillUp = CreateFillLight(root, "Up", Quaternion.Euler(-90f, 0f, 0f));
             }
 
             bool active = intensity > 0f;
-            _fillDown.enabled = active;
-            _fillUp.enabled = active;
-            _fillDown.intensity = intensity;
-            _fillUp.intensity = intensity * 0.5f;
+            state.FillDown.enabled = active;
+            state.FillUp.enabled = active;
+            state.FillDown.intensity = intensity;
+            state.FillUp.intensity = intensity * 0.5f;
             return active;
         }
 
@@ -301,7 +345,7 @@ namespace ArenaMapPort.Client
         // Returns true if a live LevelSettings singleton was found and tuned (the expected, confirmed
         // case — see class doc comment), false if it fell back to writing RenderSettings directly
         // (defensive only; should not happen given the component is authored and confirmed present).
-        static bool ApplyAmbient(float m, float fogDensity)
+        static bool ApplyAmbient(MapState state, float m, float fogDensity)
         {
             var levelSettings = Singleton<LevelSettings>.Instantiated ? Singleton<LevelSettings>.Instance : null;
             if (levelSettings != null)
@@ -317,17 +361,17 @@ namespace ArenaMapPort.Client
                 levelSettings.fog = fogDensity > 0f;
                 ApplyFog(fogDensity);
 
-                if (!_levelSettingsBaselineCaptured)
+                if (!state.LevelSettingsBaselineCaptured)
                 {
-                    _baseSkyColor = levelSettings.SkyColor;
-                    _baseEquatorColor = levelSettings.EquatorColor;
-                    _baseGroundColor = levelSettings.GroundColor;
-                    _levelSettingsBaselineCaptured = true;
+                    state.BaseSkyColor = levelSettings.SkyColor;
+                    state.BaseEquatorColor = levelSettings.EquatorColor;
+                    state.BaseGroundColor = levelSettings.GroundColor;
+                    state.LevelSettingsBaselineCaptured = true;
                 }
 
-                levelSettings.SkyColor = ScaleColor(_baseSkyColor, m);
-                levelSettings.EquatorColor = ScaleColor(_baseEquatorColor, m);
-                levelSettings.GroundColor = ScaleColor(_baseGroundColor, m);
+                levelSettings.SkyColor = ScaleColor(state.BaseSkyColor, m);
+                levelSettings.EquatorColor = ScaleColor(state.BaseEquatorColor, m);
+                levelSettings.GroundColor = ScaleColor(state.BaseGroundColor, m);
                 // LevelSettings.OnPreCullCallback (decompile, LevelSettings.cs:240-263) re-pushes these
                 // exact fields into RenderSettings every camera pre-cull on its own — we only need to
                 // update the fields it reads from. Fog is not re-pushed per frame, hence ApplyFog above.
@@ -336,7 +380,7 @@ namespace ArenaMapPort.Client
 
             // Defensive fallback — belt-and-braces only, see class doc comment; keeps the raid from
             // being pitch black if LevelSettings is ever genuinely absent again (future scene change).
-            _ambientFallbackWritten = true; // so OnSceneUnloaded knows to restore RenderSettings.ambient*
+            state.AmbientFallbackWritten = true; // so OnSceneUnloaded knows to restore RenderSettings.ambient*
             RenderSettings.ambientMode = AmbientMode.Flat;
             var fallback = ScaleColor(new Color(0.5f, 0.5f, 0.5f, 1f), m);
             RenderSettings.ambientLight = fallback;
@@ -361,12 +405,12 @@ namespace ArenaMapPort.Client
             RenderSettings.fog = density > 0f;
         }
 
-        static int ApplyLights(float globalMultiplier, float sunMultiplier, float sunWhiteBlend)
+        static int ApplyLights(MapState state, float globalMultiplier, float sunMultiplier, float sunWhiteBlend)
         {
             int applied = 0;
-            for (int i = 0; i < _lights.Count; i++)
+            for (int i = 0; i < state.Lights.Count; i++)
             {
-                var baseline = _lights[i];
+                var baseline = state.Lights[i];
                 if (baseline.Light == null)
                 {
                     continue; // destroyed/unloaded since capture

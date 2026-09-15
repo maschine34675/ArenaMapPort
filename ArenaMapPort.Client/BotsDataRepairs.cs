@@ -37,7 +37,7 @@ namespace ArenaMapPort.Client
         /// against our door-free scenes — verified against <c>AIVoxelesData.cs</c> in full). Coverless,
         /// zero-voxel bots is the correct outcome for a spike with bots out of scope (SPEC).
         ///
-        /// Gated on <see cref="ArenaEquatorRaid.IsLoaded()"/>: on any other map <c>VoxelsList</c> is
+        /// Gated on <see cref="ArenaMapRaid.IsLoaded()"/>: on any other map <c>VoxelsList</c> is
         /// already populated by scene data, so this check is always a no-op there regardless, but the
         /// explicit gate keeps every repair in this plugin scoped the same way.
         /// </summary>
@@ -46,7 +46,7 @@ namespace ArenaMapPort.Client
         // AIVoxelesData/GroupPoint/AICoversData/NavGraphVoxelSimple).
         internal static void Prefix(AIVoxelesData __instance)
         {
-            if (!ArenaEquatorRaid.IsLoaded() || __instance == null)
+            if (!ArenaMapRaid.IsLoaded() || __instance == null)
             {
                 return;
             }
@@ -94,7 +94,7 @@ namespace ArenaMapPort.Client
         /// </summary>
         internal static void Prefix()
         {
-            if (!ArenaEquatorRaid.IsLoaded())
+            if (!ArenaMapRaid.IsLoaded())
             {
                 return;
             }

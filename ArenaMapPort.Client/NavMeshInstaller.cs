@@ -1,5 +1,7 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
+using ArenaMapPort.Shared;
 using EFT;
 using UnityEngine;
 using UnityEngine.AI;
@@ -29,24 +31,29 @@ namespace ArenaMapPort.Client
     /// original body runs. Fires on every raid regardless of bot count (BotsController.Init runs
     /// unconditionally per §F.2), which is exactly the reliable, raid-start-adjacent hook point the
     /// spike's "player can walk" criterion needs.
+    ///
+    /// Multimap generalization (docs/progress/multimap-generalize.md): every cache field is now keyed by
+    /// <see cref="ArenaMapDescriptor.Key"/> instead of a single unkeyed instance — a session that plays
+    /// Equator, returns to the main menu, then plays Bay5 (and possibly Equator again after that) loads
+    /// and installs each map's own navmesh bundle independently, without a stale/wrong-map cache entry
+    /// from a previous raid.
     /// </summary>
     internal static class NavMeshInstaller
     {
-        const string BundleFileName = "arena_equator_navmesh.bundle";
-
-        static NavMeshData _data;
-        static bool _loadTried;
-        static NavMeshDataInstance _instance;
+        static readonly Dictionary<string, NavMeshData> _data = new Dictionary<string, NavMeshData>();
+        static readonly Dictionary<string, bool> _loadTried = new Dictionary<string, bool>();
+        static readonly Dictionary<string, NavMeshDataInstance> _instances = new Dictionary<string, NavMeshDataInstance>();
         static bool _unloadHooked;
 
         internal static void OnBotsControllerInit()
         {
-            if (!ArenaEquatorRaid.IsLoaded())
+            var map = ArenaMapRaid.CurrentMap;
+            if (map == null)
             {
                 return; // every other map's raid — untouched
             }
 
-            var data = LoadOnce();
+            var data = LoadOnce(map);
             if (data == null)
             {
                 return; // already logged inside LoadOnce()
@@ -60,16 +67,22 @@ namespace ArenaMapPort.Client
                     SceneManager.sceneUnloaded += OnSceneUnloaded;
                 }
 
-                Drop();
+                Drop(map.Key);
                 // Order matters: remove BEFORE add, or ours is dropped along with the map's own
-                // (InterchangeRework's own documented ordering note, NavMeshExtension.cs).
+                // (InterchangeRework's own documented ordering note, NavMeshExtension.cs). Only OUR
+                // instance for THIS map is tracked/removed here — RemoveAllNavMeshData() clears every
+                // NavMeshData in the process (there is only ever one raid's worth loaded at a time, so
+                // this is still correct for the multi-map case: whichever map's data was previously
+                // added was already dropped by that raid's own OnSceneUnloaded before a new raid's
+                // BotsController.Init can run).
                 NavMesh.RemoveAllNavMeshData();
-                _instance = NavMesh.AddNavMeshData(data);
+                _instances[map.Key] = NavMesh.AddNavMeshData(data);
 
                 var triangulation = NavMesh.CalculateTriangulation();
                 int vertices = triangulation.vertices?.Length ?? 0;
                 int triangles = (triangulation.indices?.Length ?? 0) / 3;
-                Plugin.Log.LogInfo($"[ArenaMapPort][NavMesh] added navmesh: {vertices} vertices, {triangles} triangles");
+                Plugin.Log.LogInfo($"[ArenaMapPort][NavMesh] added navmesh for '{map.Key}': " +
+                                    $"{vertices} vertices, {triangles} triangles");
             }
             catch (Exception e)
             {
@@ -79,35 +92,38 @@ namespace ArenaMapPort.Client
 
         static void OnSceneUnloaded(Scene scene)
         {
-            if (scene.name == ArenaMapPort.Shared.ArenaEquatorLocation.ScriptsSceneName)
+            // Stateless resolution (not ArenaMapRaid.CurrentMap) — see ArenaMapRaid's own doc comment
+            // for why an unload handler must never depend on a shared mutable "current map" field.
+            var map = ArenaMapRaid.MapForScriptsScene(scene.name);
+            if (map != null)
             {
-                Drop();
+                Drop(map.Key);
             }
         }
 
-        static void Drop()
+        static void Drop(string mapKey)
         {
-            if (!_instance.valid)
+            if (!_instances.TryGetValue(mapKey, out var instance) || !instance.valid)
             {
                 return;
             }
-            _instance.Remove();
-            _instance = default;
+            instance.Remove();
+            _instances[mapKey] = default;
         }
 
-        // Loaded once per process, kept alive via HideFlags.DontUnloadUnusedAsset (matches
+        // Loaded once per process per map, kept alive via HideFlags.DontUnloadUnusedAsset (matches
         // NavMeshExtension.cs's own comment: "Unload(false) keeps the asset; DontUnloadUnusedAsset keeps
         // it through sweeps").
-        static NavMeshData LoadOnce()
+        static NavMeshData LoadOnce(ArenaMapDescriptor map)
         {
-            if (_loadTried)
+            if (_loadTried.TryGetValue(map.Key, out var tried) && tried)
             {
-                return _data;
+                return _data.TryGetValue(map.Key, out var cached) ? cached : null;
             }
-            _loadTried = true;
+            _loadTried[map.Key] = true;
 
             var pluginDir = Path.GetDirectoryName(typeof(NavMeshInstaller).Assembly.Location) ?? ".";
-            var path = Path.Combine(Path.Combine(pluginDir, "bundles"), BundleFileName);
+            var path = Path.Combine(Path.Combine(pluginDir, "bundles"), map.NavMeshBundleFileName);
             if (!File.Exists(path))
             {
                 Plugin.Log.LogError($"[ArenaMapPort][NavMesh] expected bundle at '{path}' but it is missing");
@@ -134,9 +150,10 @@ namespace ArenaMapPort.Client
                     return null;
                 }
 
-                _data = (NavMeshData)assets[0];
-                _data.hideFlags |= HideFlags.DontUnloadUnusedAsset;
-                return _data;
+                var data = (NavMeshData)assets[0];
+                data.hideFlags |= HideFlags.DontUnloadUnusedAsset;
+                _data[map.Key] = data;
+                return data;
             }
             catch (Exception e)
             {

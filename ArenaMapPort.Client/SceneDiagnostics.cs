@@ -24,7 +24,7 @@ namespace ArenaMapPort.Client
 
         static void OnSceneLoaded(Scene scene, LoadSceneMode mode)
         {
-            if (!ArenaEquatorRaid.IsOwnedScene(scene.name))
+            if (!ArenaMapRaid.IsOwnedScene(scene.name))
             {
                 return;
             }
@@ -33,7 +33,7 @@ namespace ArenaMapPort.Client
 
         static void OnSceneUnloaded(Scene scene)
         {
-            if (!ArenaEquatorRaid.IsOwnedScene(scene.name))
+            if (!ArenaMapRaid.IsOwnedScene(scene.name))
             {
                 return;
             }

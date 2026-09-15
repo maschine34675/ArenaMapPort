@@ -91,9 +91,15 @@ namespace ArenaMapPort.Editor.Import
             // rebuilt bundle is correct on its own, without depending on the client patch ever
             // running (e.g. a bundle inspected/loaded outside the client, or a future client build
             // that drops the repair once this is fixed upstream).
+            // bay5-port: fog color is per-map (ArenaPaths.Map.fog_color, sourced from that map's
+            // own Arena_<Key>_Scripts RenderSettings.m_FogColor) — was the single Equator-blue-
+            // tinted (0.62,0.66,0.70) literal reused unconditionally for every map; equals that
+            // exact value for Equator (FogColorOrDefault()'s own fallback), so this is behavior-
+            // preserving there while giving Bay5 its own real, darker harbor grey-green.
+            float[] fc = ArenaPaths.Map.FogColorOrDefault();
             levelSettings.fogMode = FogMode.ExponentialSquared;
             levelSettings.fogDensity = 0f;
-            levelSettings.fogColor = new Color(0.62f, 0.66f, 0.70f, 1f);
+            levelSettings.fogColor = new Color(fc[0], fc[1], fc[2], 1f);
             levelSettings.skybox = null;
             levelSettings.CameraPrefab = null;
             levelSettings.PostProcessProfilePrefab = null;
@@ -156,9 +162,16 @@ namespace ArenaMapPort.Editor.Import
                 // raid-start (BaseLocalGame.cs:790 tolerates null _entryPoint, but SPT's Harmony prefix on
                 // the same vmethod_6 does not — see ArenaMapPort.Client/SpawnInfiltrationRepairs.cs for the
                 // full chain). The runtime Harmony postfix there is what actually ships this fix without a
-                // bundle rebuild; this literal just keeps a future rebuild correct-by-construction. Keep in
-                // sync with SpawnInfiltrationFixPostfix.InfiltrationName — must be the identical string.
-                spawnPoint.Infiltration = "ArenaEquator";
+                // bundle rebuild; this just keeps a future rebuild correct-by-construction. Multimap
+                // generalization (docs/progress/multimap-generalize.md): was the literal "ArenaEquator" —
+                // now read from the loaded map descriptor (ArenaPaths.Map.infiltration_name), which equals
+                // that exact string when -mapDescriptor is omitted. Must stay in sync with
+                // ArenaMapPort.Client's SpawnInfiltrationFixPostfix, which reads the same value from
+                // ArenaMapRaid.CurrentMap.InfiltrationName at runtime instead of a duplicated literal — the
+                // two assemblies still can't share a constant (Editor assembly domain, §1.3.3), so this is
+                // the cross-assembly duplicate; tools/validate/validate_infiltration_name.py (not built
+                // this pass, see docs/progress/multimap-generalize.md open questions) would cross-check it.
+                spawnPoint.Infiltration = ArenaPaths.Map.infiltration_name;
                 spawnPoint.BotZone = null; // §D: no BotZone linkage needed — global spawn-point scan.
                 spawnPoint.DelayToCanSpawnSec = 4f;
                 spawnPoint.CorePointId = 0;
@@ -176,7 +189,7 @@ namespace ArenaMapPort.Editor.Import
             // Now, and only now, activate: Awake/OnEnable/Start fire once, against fully-wired data.
             root.SetActive(true);
 
-            Debug.Log("[ArenaMapPort][AuthorScriptsScene] built '" + ArenaPaths.ScriptsSceneName + "': LevelSettings=1, " +
+            Debug.Log("[ArenaMapPort][AuthorScriptsScene] built '" + ArenaPaths.Map.scripts_scene_name + "': LevelSettings=1, " +
                       "LocationScene=1 (BotZones=" + locationScene.BotZones.Length + ", SpawnPointMarkers=" +
                       locationScene.SpawnPointMarkers.Length + "), BotZone=1 (SpawnPointMarkers=" +
                       botZone.SpawnPointMarkers.Count + "), LocationExportInfo=1, SpawnPointMarker=" + markers.Count);

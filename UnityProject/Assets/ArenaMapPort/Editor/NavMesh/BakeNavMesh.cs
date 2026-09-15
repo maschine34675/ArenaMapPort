@@ -114,8 +114,24 @@ namespace ArenaMapPort.Editor.NavMesh
             // already disabled by the time this runs, and DiagCollectSources's own
             // "enabled && !isTrigger && activeInHierarchy" cross-check below confirms
             // PhysicsColliders geometry mode itself respects Collider.enabled.
+            // Verification fix-up (2026-09-15, Bay5): Arena's own harbor water plane(s) sit on
+            // Unity's built-in "Water" layer (layer 4 in both Arena's TagManager and ours) with an
+            // ENABLED, non-trigger MeshCollider covering the whole bay -- e.g. Arena_Bay5_Main's
+            // 'Plane' object, world pos (726.25, -8.65, -1144.95), scale (599.68, 1, 690.19),
+            // layer=Water. With `layerMask = ~0` this collider was a valid PhysicsColliders source
+            // like any other, so CollectSources(null, ...) picked it up and the resulting
+            // NavMeshData's m_SourceBounds ballooned to that plane's own footprint (extent
+            // ~3003x51x3456, ~2900x more tiles than the real playable geometry needs) -- the water
+            // itself became "walkable" ground as far as the bake was concerned. Equator never hit
+            // this (no Water-layer collider large enough to matter in its own content), so the gap
+            // was latent there. Excluding the Water layer from the source layer mask is the
+            // generic fix (not a per-object/per-map special case): no ported Arena map should ever
+            // treat its water surface as bot-walkable navmesh.
+            int waterLayer = LayerMask.NameToLayer("Water");
+            int sourceLayerMask = waterLayer >= 0 ? ~0 & ~(1 << waterLayer) : ~0;
+
             var allSources = new List<NavMeshBuildSource>();
-            UnityEngine.AI.NavMeshBuilder.CollectSources(null, ~0, NavMeshCollectGeometry.PhysicsColliders, 0, new List<NavMeshBuildMarkup>(), allSources);
+            UnityEngine.AI.NavMeshBuilder.CollectSources(null, sourceLayerMask, NavMeshCollectGeometry.PhysicsColliders, 0, new List<NavMeshBuildMarkup>(), allSources);
 
             var rootTransforms = new List<Transform>();
             foreach (var root in geometryRoots)
@@ -132,6 +148,16 @@ namespace ArenaMapPort.Editor.NavMesh
                 }
             }
 
+            // Verification fix-up (2026-09-15, Bay5), continued: bounds is a SEPARATE pass over
+            // every Renderer in geometryRoots, independent of `sources` above -- excluding the
+            // Water layer from sourceLayerMask alone left this loop untouched, so the water plane's
+            // own (still-enabled) MeshRenderer kept inflating `bounds` to its full footprint even
+            // after its MeshCollider stopped contributing navmesh sources (confirmed: a first
+            // attempt at this fix baked correctly-filtered sources but an unchanged, still-huge
+            // m_SourceBounds). Same Water-layer exclusion applied here, symmetric with the source
+            // filter above -- a renderer-only object (no collider) was never going to contribute
+            // walkable geometry anyway, but it can still legitimately need to be IN the bake volume
+            // (e.g. a rendered-only prop standing on real ground); only Water is special-cased out.
             var bounds = new Bounds();
             bool first = true;
             foreach (var root in geometryRoots)
@@ -139,6 +165,7 @@ namespace ArenaMapPort.Editor.NavMesh
                 if (root == null) continue;
                 foreach (var r in root.GetComponentsInChildren<Renderer>(true))
                 {
+                    if (waterLayer >= 0 && r.gameObject.layer == waterLayer) continue;
                     if (first) { bounds = r.bounds; first = false; }
                     else bounds.Encapsulate(r.bounds);
                 }
@@ -150,7 +177,8 @@ namespace ArenaMapPort.Editor.NavMesh
             Debug.Log("[ArenaMapPort][BakeNavMesh] baked NavMeshData: agentRadius=" + AgentRadius + " agentHeight=" + AgentHeight +
                       " agentSlope=" + AgentSlope + " agentClimb=" + AgentClimb + " tileSize=" + TileSize +
                       " bounds=" + bounds + " sources=" + sources.Count +
-                      " (root=null collected " + allSources.Count + " total, " + sources.Count + " kept after filtering to this bake's own content-scene roots)");
+                      " (root=null collected " + allSources.Count + " total, " + sources.Count + " kept after filtering to this bake's own content-scene roots" +
+                      ", Water layer(" + waterLayer + ") " + (waterLayer >= 0 ? "excluded from sourceLayerMask" : "not found in TagManager, no exclusion applied") + ")");
 
             // s2-build: report vertex/triangle counts for comparison against Arena's own bake
             // (analysis/equator_census.json's navmesh block: 41 tiles for Equator's full geometry,

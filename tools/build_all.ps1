@@ -29,7 +29,11 @@
        *.bundle BuildBundles.Run produced (scenes AND navmesh)  -- MANDATORY, never skippable
     4. tools/validate/validate_extract.py
        tools/validate/validate_bundle_roundtrip.py (strict, default flags)
-       tools/validate/validate_preset.py --allow-missing-scenes -- MANDATORY, never skippable
+       tools/validate/validate_preset.py --allow-missing-scenes
+       tools/validate/validate_map_descriptors.py -- MANDATORY, never skippable. The last one
+       cross-checks tools/maps/*.json against ArenaMapDescriptor.cs's ArenaMapRegistry entries and
+       ArenaPaths.cs's EquatorDefault() (not just the map under test) -- it is a whole-registry
+       consistency check, independent of $MapKey/$MapDescriptor.
 
 .PARAMETER PackageDir
   WP1 package to build from. Defaults to the S1 slice (O7).
@@ -68,6 +72,15 @@
 [CmdletBinding()]
 param(
     [string]$RepoRoot = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path,
+    # Multimap generalization (docs/progress/multimap-generalize.md): -MapKey defaults to
+    # "arena_equator" so every existing invocation (no -MapKey passed) is byte-for-byte
+    # unchanged. -MapDescriptor defaults to tools/maps/<key-without-"arena_"-prefix>.json (the
+    # naming convention tools/maps/equator.json / tools/maps/bay5.json already follow) and is
+    # passed to BuildBundles.Run as -mapDescriptor; PackageDir/OutputDir stay independent
+    # parameters (still S1-Equator defaults) since which extraction package to build FROM is
+    # orthogonal to which map identity to build AS.
+    [string]$MapKey = "arena_equator",
+    [string]$MapDescriptor = $null,
     [string]$PackageDir = "D:/ArenaMapPort/work/extract/equator_s1",
     [string]$OutputDir = "D:/ArenaMapPort/work/build/s1",
     [bool]$BakeNavMesh = $true,
@@ -78,6 +91,18 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
+
+if (-not $MapDescriptor) {
+    $mapFileStem = $MapKey -replace '^arena_', ''
+    $MapDescriptor = Join-Path $RepoRoot "tools/maps/$mapFileStem.json"
+}
+if (-not (Test-Path -LiteralPath $MapDescriptor)) {
+    Write-Host "[build_all] FATAL: map descriptor not found: $MapDescriptor (pass -MapDescriptor explicitly, or add tools/maps/<key>.json)" -ForegroundColor Red
+    exit 1
+}
+$ScenesBundleName = "${MapKey}_scenes.bundle"
+$NavmeshBundleName = "${MapKey}_navmesh.bundle"
+$MapScriptsSceneName = (Get-Content -LiteralPath $MapDescriptor -Raw | ConvertFrom-Json).scripts_scene_name
 
 . (Join-Path $PSScriptRoot "unity-log-scan.ps1")
 
@@ -116,6 +141,7 @@ if (-not $SkipUnityBuild) {
         "-executeMethod", "ArenaMapPort.Editor.BundleBuild.BuildBundles.Run",
         "-packageDir", $PackageDir,
         "-outputDir", $OutputDir,
+        "-mapDescriptor", $MapDescriptor,
         "-bakeNavMesh", $(if ($BakeNavMesh) { "true" } else { "false" }),
         "-verify", $(if ($Verify) { "true" } else { "false" }),
         "-logFile", $logFile
@@ -169,17 +195,23 @@ Write-Step "4/4 validators (strict/default flags)"
 & python (Join-Path $RepoRoot "tools/validate/validate_extract.py") --package $PackageDir
 if ($LASTEXITCODE -ne 0) { Fail "validate_extract.py FAILED (exit $LASTEXITCODE)" }
 
-$scenesBundle = Join-Path $OutputDir "arena_equator_scenes.bundle"
-$navmeshBundle = Join-Path $OutputDir "arena_equator_navmesh.bundle"
+$scenesBundle = Join-Path $OutputDir $ScenesBundleName
+$navmeshBundle = Join-Path $OutputDir $NavmeshBundleName
 $materialShaders = Join-Path $OutputDir "material-shaders.json"
 $editorVerify = Join-Path $OutputDir "editor_verify.json"
 & python (Join-Path $RepoRoot "tools/validate/validate_bundle_roundtrip.py") `
     --scenes-bundle $scenesBundle --navmesh-bundle $navmeshBundle --package $PackageDir `
-    --material-shaders $materialShaders --editor-verify $editorVerify
+    --material-shaders $materialShaders --editor-verify $editorVerify `
+    --scripts-scene-name $MapScriptsSceneName
 if ($LASTEXITCODE -ne 0) { Fail "validate_bundle_roundtrip.py FAILED (exit $LASTEXITCODE) -- a SptGameRefs-* assembly name surviving to this point is now a hard FAIL, not a warning" }
 
-& python (Join-Path $RepoRoot "tools/validate/validate_preset.py") --scenes-bundle $scenesBundle --allow-missing-scenes
+& python (Join-Path $RepoRoot "tools/validate/validate_preset.py") --map $MapDescriptor --scenes-bundle $scenesBundle --allow-missing-scenes
 if ($LASTEXITCODE -ne 0) { Fail "validate_preset.py FAILED (exit $LASTEXITCODE)" }
+
+# Whole-registry check, independent of which map this invocation built -- catches tools/maps/*.json
+# drifting from ArenaMapDescriptor.cs's ArenaMapRegistry or ArenaPaths.cs's EquatorDefault().
+& python (Join-Path $RepoRoot "tools/validate/validate_map_descriptors.py")
+if ($LASTEXITCODE -ne 0) { Fail "validate_map_descriptors.py FAILED (exit $LASTEXITCODE)" }
 
 Write-Host ""
 Write-Host "[build_all] OK -- build + mandatory identity patch + all validators passed. $OutputDir is safe to copy into dist/." -ForegroundColor Green

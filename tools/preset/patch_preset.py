@@ -84,6 +84,7 @@ this is an addition, not a removal or contradiction.
 from __future__ import annotations
 
 import argparse
+import json
 import shutil
 import sys
 from pathlib import Path
@@ -93,10 +94,20 @@ import UnityPy
 
 # ----------------------------------------------------------------------------------------
 # Constants (SPEC.md SS0 / SS B.WP3 / SS E.1 / SS E.3)
+#
+# Multimap generalization (docs/progress/multimap-generalize.md): every one of these used to be
+# an Equator-only literal with no override. They are now DEFAULTS for the arena_equator map
+# specifically (tools/maps/equator.json) -- main() loads a --map descriptor (default: that same
+# equator.json) and overwrites these module globals from it before any of the patch_* functions
+# below read them, so an unparameterized invocation is byte-for-byte unchanged from before this
+# generalization (verified: py_compile + a full run against the donor bundle reproduces the exact
+# same _scenesResourceKeys/ServerName/_activeSceneName/m_Name/m_Container output as before, see
+# docs/progress/multimap-generalize.md).
 # ----------------------------------------------------------------------------------------
 
+REPO = Path(__file__).resolve().parents[2]
+DEFAULT_MAP = REPO / "tools" / "maps" / "equator.json"
 DEFAULT_SRC = Path("D:/SPT41/EscapeFromTarkov_Data/StreamingAssets/Windows/maps/develop_preset.bundle")
-DEFAULT_OUT = Path("D:/ArenaMapPort/work/build/preset/arena_equator_preset.bundle")
 
 SCENE_BUNDLE_KEY = "arena_equator/arena_equator_scenes.bundle"  # SPEC.md SS0 / SS E.2
 PRESET_BUNDLE_KEY = "maps/arena_equator_preset.bundle"          # SPEC.md SS0 -- served key
@@ -115,6 +126,33 @@ SCENE_TABLE = [
 SERVER_NAME = "arena_equator_tdm"            # SPEC.md SS E.3 -- see module docstring, unused by load chain
 ACTIVE_SCENE_NAME = "Arena_Equator_Scripts"  # SPEC.md SS B.WP3 step 5
 PRESET_M_NAME = "arena_equator.ScenesPreset"  # SPEC.md SS B.WP3 step 8
+
+
+def load_map(map_path: Path) -> dict:
+    """Reads one tools/maps/<key>.json descriptor (the same file the Editor's ArenaPaths.cs and
+    tools/server/make_base_json.py load) -- see either file's own doc comment for the field list."""
+    return json.loads(map_path.read_text(encoding="utf-8"))
+
+
+def apply_map(map_data: dict) -> None:
+    """Overwrites this module's Equator-only-by-default globals from a loaded map descriptor.
+    Bundle served-key/asset-name naming follows the project-wide convention
+    (docs/progress/multimap-generalize.md): scenes served key "<key>/<key>_scenes.bundle", preset
+    served key "maps/<key>_preset.bundle", preset asset name "<key>.scenespreset.asset",
+    ScenesPreset m_Name "<key>.ScenesPreset" -- so the descriptor doesn't need to spell any of
+    those out, only the scene-name table and identity/display fields that have no derivable
+    convention."""
+    global SCENE_BUNDLE_KEY, PRESET_BUNDLE_KEY, PRESET_ASSET_NAME, SCENE_TABLE
+    global SERVER_NAME, ACTIVE_SCENE_NAME, PRESET_M_NAME
+
+    key = map_data["key"]
+    SCENE_BUNDLE_KEY = f"{key}/{key}_scenes.bundle"
+    PRESET_BUNDLE_KEY = f"maps/{key}_preset.bundle"
+    PRESET_ASSET_NAME = f"{key}.scenespreset.asset"
+    SCENE_TABLE = list(map_data["all_scene_names"])
+    SERVER_NAME = f"{key}_tdm"
+    ACTIVE_SCENE_NAME = map_data["scripts_scene_name"]
+    PRESET_M_NAME = f"{key}.ScenesPreset"
 
 # EFT.ScenesPreset's real field set (D:/SPT41/Development/_decompiled/EFT/ScenesPreset.cs:10-99,
 # directly re-read this pass). No `GameModes` member exists on this class -- an earlier
@@ -330,15 +368,27 @@ def save_and_verify(env, mono_obj, mono_path_id: int, bundle_obj, out_path: Path
 
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument("--map", type=Path, default=DEFAULT_MAP,
+                     help="tools/maps/<key>.json descriptor (default: equator.json, byte-identical "
+                          "to this script's pre-generalization behavior)")
     ap.add_argument("--src", type=Path, default=DEFAULT_SRC, help="donor develop_preset.bundle (read-only source)")
-    ap.add_argument("--out", type=Path, default=DEFAULT_OUT, help="patched output bundle path")
+    ap.add_argument("--out", type=Path, default=None,
+                     help="patched output bundle path (default: work/build/preset/<key>_preset.bundle)")
     ap.add_argument("--donor-copy", type=Path, default=None,
                      help="where to stage the read-only donor's copy before patching "
                           "(default: <out's dir>/_donor_develop_preset.bundle)")
-    ap.add_argument("--server-name", default=SERVER_NAME, help=f"ScenesPreset.ServerName value (default {SERVER_NAME!r})")
+    ap.add_argument("--server-name", default=None,
+                     help="ScenesPreset.ServerName value (default: '<key>_tdm', e.g. 'arena_equator_tdm')")
     ap.add_argument("--packer", choices=["none", "lz4", "lzma", "original"], default="none",
                      help="BundleFile.save() compression (default: none, matches the Icebreaker reference script)")
     args = ap.parse_args()
+
+    map_data = load_map(args.map)
+    apply_map(map_data)
+    if args.out is None:
+        args.out = REPO / "work" / "build" / "preset" / f"{map_data['key']}_preset.bundle"
+    if args.server_name is None:
+        args.server_name = SERVER_NAME  # apply_map already derived "<key>_tdm"
 
     donor_copy = args.donor_copy or (args.out.parent / "_donor_develop_preset.bundle")
 

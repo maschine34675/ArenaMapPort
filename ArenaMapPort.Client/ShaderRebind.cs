@@ -2,6 +2,7 @@ using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.IO;
+using ArenaMapPort.Shared;
 using Newtonsoft.Json.Linq;
 using UnityEngine;
 using UnityEngine.SceneManagement;
@@ -35,7 +36,12 @@ namespace ArenaMapPort.Client
     internal static class ShaderRebind
     {
         internal const string StandinPrefix = "Hidden/ArenaMapPort/";
-        const string SidecarFileName = "material-shaders.json";
+
+        // Equator's sidecar keeps its pre-generalization filename exactly — it is already
+        // deployed at dist/BepInEx/plugins/ArenaMapPort/material-shaders.json and must keep
+        // loading from there without a redeploy (multimap-generalize.md). Every OTHER map gets
+        // its own file instead of overwriting/merging into Equator's already-verified one.
+        const string EquatorSidecarFileName = "material-shaders.json";
         const float SweepDelaySeconds = 3f;
 
         sealed class SidecarEntry
@@ -46,7 +52,10 @@ namespace ArenaMapPort.Client
         }
 
         static bool _installed;
-        static Dictionary<string, SidecarEntry> _sidecar; // material asset name -> sidecar entry
+        // Loaded lazily, once per map key — only one map's scenes are ever loaded in a given raid,
+        // so this never needs merging, just per-map isolation (multimap-generalize.md).
+        static readonly Dictionary<string, Dictionary<string, SidecarEntry>> _sidecarByMap =
+            new Dictionary<string, Dictionary<string, SidecarEntry>>();
         static Dictionary<string, List<Shader>> _byName;  // loaded-shader exact name -> candidates
         static readonly Dictionary<string, int> _reboundCounts = new Dictionary<string, int>();
         static readonly HashSet<string> _unresolved = new HashSet<string>();      // shader names, reported by ReportSummary
@@ -54,6 +63,10 @@ namespace ArenaMapPort.Client
         static GameObject _sweepHost;
 
         static string PluginDir => Path.GetDirectoryName(typeof(ShaderRebind).Assembly.Location) ?? ".";
+
+        // internal, not private: Plugin.cs's startup banner also logs this file's expected path per map.
+        internal static string SidecarFileName(ArenaMapDescriptor map) =>
+            map.Key == ArenaMapRegistry.Equator.Key ? EquatorSidecarFileName : $"material-shaders.{map.Key}.json";
 
         internal static void Install()
         {
@@ -69,23 +82,33 @@ namespace ArenaMapPort.Client
 
         static void OnSceneLoaded(Scene scene, LoadSceneMode mode)
         {
-            if (!ArenaEquatorRaid.IsOwnedScene(scene.name))
+            if (!ArenaMapRaid.IsOwnedScene(scene.name))
             {
                 return;
             }
 
-            LoadSidecar();
+            // Scene is already registered with SceneManager by the time sceneLoaded fires (see
+            // ArenaMapRaid's own doc comment), so CurrentMap resolves even on the Scripts scene's
+            // own load event.
+            var map = ArenaMapRaid.CurrentMap;
+            if (map == null)
+            {
+                return;
+            }
+
+            LoadSidecar(map);
             BuildShaderIndex();
-            RunPass(scene);
-            ScheduleSweep();
+            RunPass(scene, map);
+            ScheduleSweep(map);
         }
 
         static void OnSceneUnloaded(Scene scene)
         {
             // Reset once per raid, on the raid's own scene teardown — the loaded-shader set can differ
             // between raids/maps, so a stale index must not carry over (matches InterchangeRework's own
-            // per-raid reset, MaterialShaderRebind.cs's sceneUnloaded handler).
-            if (scene.name != ArenaMapPort.Shared.ArenaEquatorLocation.ScriptsSceneName)
+            // per-raid reset, MaterialShaderRebind.cs's sceneUnloaded handler). Stateless resolution
+            // (not ArenaMapRaid.CurrentMap) — see ArenaMapRaid's own doc comment for why.
+            if (ArenaMapRaid.MapForScriptsScene(scene.name) == null)
             {
                 return;
             }
@@ -101,7 +124,7 @@ namespace ArenaMapPort.Client
             _sweepHost = null;
         }
 
-        static void ScheduleSweep()
+        static void ScheduleSweep(ArenaMapDescriptor map)
         {
             if (_sweepHost != null)
             {
@@ -109,28 +132,28 @@ namespace ArenaMapPort.Client
             }
             _sweepHost = new GameObject("ArenaMapPort_ShaderSweep") { hideFlags = HideFlags.HideAndDontSave };
             UnityEngine.Object.DontDestroyOnLoad(_sweepHost);
-            _sweepHost.AddComponent<Sweeper>().StartCoroutine(Sweeper.RunAfter(SweepDelaySeconds));
+            _sweepHost.AddComponent<Sweeper>().StartCoroutine(Sweeper.RunAfter(SweepDelaySeconds, map));
         }
 
         sealed class Sweeper : MonoBehaviour
         {
-            internal static IEnumerator RunAfter(float seconds)
+            internal static IEnumerator RunAfter(float seconds, ArenaMapDescriptor map)
             {
                 yield return new WaitForSeconds(seconds);
-                RunPassOverAllOwnedScenes();
+                RunPassOverAllOwnedScenes(map);
                 ReportSummary();
             }
         }
 
-        static void RunPassOverAllOwnedScenes()
+        static void RunPassOverAllOwnedScenes(ArenaMapDescriptor map)
         {
             int count = SceneManager.sceneCount;
             for (int i = 0; i < count; i++)
             {
                 var scene = SceneManager.GetSceneAt(i);
-                if (scene.isLoaded && ArenaEquatorRaid.IsOwnedScene(scene.name))
+                if (scene.isLoaded && ArenaMapRaid.IsOwnedScene(scene.name))
                 {
-                    RunPass(scene);
+                    RunPass(scene, map);
                 }
             }
         }
@@ -143,7 +166,7 @@ namespace ArenaMapPort.Client
         // immediately; attribution already covers this file, THIRD-PARTY-NOTICES.md). The 3s
         // ReportSummary() sweep still runs unchanged, for stragglers only (materials whose target shader
         // was not yet loaded on this pass).
-        static void RunPass(Scene scene)
+        static void RunPass(Scene scene, ArenaMapDescriptor map)
         {
             int considered = 0;
             int rebound = 0;
@@ -162,7 +185,7 @@ namespace ArenaMapPort.Client
                             continue; // not one of our stand-ins — already good, or not ours
                         }
                         considered++;
-                        if (Rebind(material))
+                        if (Rebind(material, map))
                         {
                             rebound++;
                         }
@@ -179,7 +202,7 @@ namespace ArenaMapPort.Client
         // separate "already seen" set — and, unlike a "seen" set would, this still RETRIES a material
         // whose target shader simply wasn't loaded yet on the first pass. Returns true iff this call
         // performed the rebind (used by RunPass for its immediate per-scene summary line above).
-        static bool Rebind(Material material)
+        static bool Rebind(Material material, ArenaMapDescriptor map)
         {
             if (material == null || material.shader == null)
             {
@@ -205,7 +228,8 @@ namespace ArenaMapPort.Client
 
             material.shader = target;
 
-            if (_sidecar != null && _sidecar.TryGetValue(MaterialKey(material.name), out var entry))
+            var sidecar = _sidecarByMap.TryGetValue(map.Key, out var s) ? s : null;
+            if (sidecar != null && sidecar.TryGetValue(MaterialKey(material.name), out var entry))
             {
                 // Defensive cross-check: the sidecar's recorded shader for this material should agree
                 // with the name we just derived from the stand-in shader's own name — a mismatch means
@@ -213,10 +237,11 @@ namespace ArenaMapPort.Client
                 if (!string.IsNullOrEmpty(entry.Shader) && entry.Shader != originalName &&
                     _warnedOnce.Add("sidecar-mismatch:" + material.name))
                 {
-                    Plugin.Log.LogWarning($"[ArenaMapPort][RebindShaders] '{material.name}': material-shaders.json " +
-                                           $"says shader '{entry.Shader}', but the stand-in shader on the material " +
-                                           $"names '{originalName}' — using '{originalName}' (derived from the " +
-                                           "material itself); renderQueue/keywords still restored from the sidecar.");
+                    Plugin.Log.LogWarning($"[ArenaMapPort][RebindShaders] '{material.name}': " +
+                                           $"{SidecarFileName(map)} says shader '{entry.Shader}', but the stand-in " +
+                                           $"shader on the material names '{originalName}' — using '{originalName}' " +
+                                           "(derived from the material itself); renderQueue/keywords still " +
+                                           "restored from the sidecar.");
                 }
 
                 if (entry.RenderQueue >= 0)
@@ -280,18 +305,20 @@ namespace ArenaMapPort.Client
             return marker >= 0 ? name.Substring(0, marker) : name;
         }
 
-        static void LoadSidecar()
+        static void LoadSidecar(ArenaMapDescriptor map)
         {
-            if (_sidecar != null)
+            if (_sidecarByMap.ContainsKey(map.Key))
             {
-                return; // sidecar content is static for the process lifetime
+                return; // sidecar content is static for the process lifetime, per map
             }
-            _sidecar = new Dictionary<string, SidecarEntry>();
+            var sidecar = new Dictionary<string, SidecarEntry>();
+            _sidecarByMap[map.Key] = sidecar;
 
-            var path = Path.Combine(PluginDir, SidecarFileName);
+            var fileName = SidecarFileName(map);
+            var path = Path.Combine(PluginDir, fileName);
             if (!File.Exists(path))
             {
-                Plugin.Log.LogWarning($"[ArenaMapPort][RebindShaders] {SidecarFileName} not found at '{path}'; " +
+                Plugin.Log.LogWarning($"[ArenaMapPort][RebindShaders] {fileName} not found at '{path}'; " +
                                        "shader identity rebind still runs, but per-material renderQueue/keywords " +
                                        "cannot be restored.");
                 return;
@@ -323,14 +350,14 @@ namespace ArenaMapPort.Client
                         entry.Keywords = list;
                     }
 
-                    _sidecar[pair.Key] = entry;
+                    sidecar[pair.Key] = entry;
                 }
 
-                Plugin.Log.LogInfo($"[ArenaMapPort][RebindShaders] {SidecarFileName}: {_sidecar.Count} material entries");
+                Plugin.Log.LogInfo($"[ArenaMapPort][RebindShaders] {fileName}: {sidecar.Count} material entries");
             }
             catch (Exception e)
             {
-                Plugin.Log.LogError($"[ArenaMapPort][RebindShaders] {SidecarFileName} could not be read: " +
+                Plugin.Log.LogError($"[ArenaMapPort][RebindShaders] {fileName} could not be read: " +
                                      $"{e.GetType().Name}: {e.Message}");
             }
         }

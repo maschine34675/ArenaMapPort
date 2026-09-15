@@ -36,6 +36,7 @@
   <ItemGroup>
     <!-- ArenaMode convention: ArenaMode.Client.csproj:19-26 links Shared/*.cs the same way. -->
     <Compile Include="..\ArenaMapPort.Shared\ArenaEquatorLocation.cs" Link="Shared\ArenaEquatorLocation.cs" />
+    <Compile Include="..\ArenaMapPort.Shared\ArenaMapDescriptor.cs" Link="Shared\ArenaMapDescriptor.cs" />
   </ItemGroup>
 
   <ItemGroup>

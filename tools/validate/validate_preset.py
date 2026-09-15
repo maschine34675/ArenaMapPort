@@ -18,12 +18,23 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import json
 import sys
 import traceback
 from pathlib import Path
 from typing import NoReturn
 
 import UnityPy
+
+# Multimap generalization (docs/progress/multimap-generalize.md): every one of these below used
+# to be an Equator-only literal with no override. They are now DEFAULTS sourced from
+# tools/maps/equator.json -- main() loads a --map descriptor (default: that same equator.json)
+# and overwrites these module globals from it via apply_map() before anything reads them, so an
+# unparameterized invocation is unchanged (verified: a full run against the deployed Equator
+# bundles reproduces the exact same "OK -- all checks passed" result as before this
+# generalization, see docs/progress/multimap-generalize.md).
+REPO = Path(__file__).resolve().parents[2]
+DEFAULT_MAP = REPO / "tools" / "maps" / "equator.json"
 
 DEFAULT_BUNDLE = Path("D:/ArenaMapPort/work/build/preset/arena_equator_preset.bundle")
 
@@ -41,6 +52,23 @@ SCENE_TABLE = [  # SPEC.md SS B.WP3 step 3 / SS E.1 -- exact order, Scripts scen
 
 SERVER_NAME = "arena_equator_tdm"            # SPEC.md SS E.3
 ACTIVE_SCENE_NAME = "Arena_Equator_Scripts"  # SPEC.md SS E.3
+
+
+def load_map(map_path: Path) -> dict:
+    """Reads one tools/maps/<key>.json descriptor -- see tools/preset/patch_preset.py's own
+    load_map()/apply_map() for the sibling function this mirrors."""
+    return json.loads(map_path.read_text(encoding="utf-8"))
+
+
+def apply_map(map_data: dict) -> None:
+    global SCENE_BUNDLE_KEY, PRESET_ASSET_NAME, SCENE_TABLE, SERVER_NAME, ACTIVE_SCENE_NAME, DEFAULT_BUNDLE
+    key = map_data["key"]
+    SCENE_BUNDLE_KEY = f"{key}/{key}_scenes.bundle"
+    PRESET_ASSET_NAME = f"{key}.scenespreset.asset"
+    SCENE_TABLE = list(map_data["all_scene_names"])
+    SERVER_NAME = f"{key}_tdm"
+    ACTIVE_SCENE_NAME = map_data["scripts_scene_name"]
+    DEFAULT_BUNDLE = REPO / "work" / "build" / "preset" / f"{key}_preset.bundle"
 
 EXPECTED_MONOSCRIPT = {"m_ClassName": "ScenesPreset", "m_Namespace": "EFT", "m_AssemblyName": "Assembly-CSharp"}
 # donor develop_preset.bundle's embedded MonoScript path_id, confirmed by direct UnityPy read
@@ -240,7 +268,11 @@ def validate_scenes_cross_check(scenes_bundle_path: Path, allow_missing_scenes: 
 
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--bundle", type=Path, default=DEFAULT_BUNDLE, help="patched preset bundle to validate")
+    ap.add_argument("--map", type=Path, default=DEFAULT_MAP,
+                     help="tools/maps/<key>.json descriptor (default: equator.json, byte-identical "
+                          "to this script's pre-generalization behavior)")
+    ap.add_argument("--bundle", type=Path, default=None, help="patched preset bundle to validate "
+                     "(default: work/build/preset/<key>_preset.bundle)")
     ap.add_argument("--scenes-bundle", type=Path, default=None,
                      help="optional WP2-built scenes bundle to cross-check rcids against "
                           "(default: auto-probe work/build/s1/ for a scenes bundle if not given)")
@@ -251,6 +283,10 @@ def main() -> None:
                           "were deliberately never imported/authored. Do NOT pass this for a real "
                           "S2/full 6-scene build -- there, a missing rcid is a genuine defect.")
     args = ap.parse_args()
+
+    apply_map(load_map(args.map))
+    if args.bundle is None:
+        args.bundle = DEFAULT_BUNDLE
 
     env, (mono_obj, mono_tt), bundle = load_bundle_objects(args.bundle)
     print(f"[validate_preset] validating {args.bundle} (MonoBehaviour path_id={mono_obj.path_id})")

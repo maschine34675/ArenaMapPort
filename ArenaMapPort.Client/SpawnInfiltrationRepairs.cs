@@ -52,12 +52,6 @@ namespace ArenaMapPort.Client
     /// </summary>
     internal static class SpawnInfiltrationFixPostfix
     {
-        /// <summary>
-        /// Must stay in sync with AuthorScriptsScene.cs:132's own literal, and with any future base.json
-        /// Exit.EntryPoints CSV entries (none exist yet — exits are empty by design this milestone).
-        /// </summary>
-        internal const string InfiltrationName = "ArenaEquator";
-
         // Target: SpawnPointsCollection.CreateFromScene(DateTime?, SpawnPointParams[]), static, single
         // overload, [NotNull] return. Verified: EFT.Game.Spawning/SpawnPointsCollection.cs:152-170 — the
         // dictionary is keyed on marker.SpawnPoint itself (:169), the identical instance every marker's
@@ -65,7 +59,16 @@ namespace ArenaMapPort.Client
         // collection exposes reaches the same object BaseLocalGame reads from later.
         internal static void Postfix(SpawnPointsCollection __result)
         {
-            if (__result == null || !ArenaEquatorRaid.IsLoaded())
+            // Multimap generalization (docs/progress/multimap-generalize.md): InfiltrationName now
+            // comes from the currently-loaded map's own descriptor (ArenaMapRegistry.Equator.
+            // InfiltrationName == this file's old "ArenaEquator" literal, byte-identical) instead of
+            // one hardcoded const, so each map can (and Bay5 does) use its own Infiltration string. Must
+            // stay in sync with AuthorScriptsScene.cs's own per-map literal (Editor assembly domain,
+            // cannot reference ArenaMapPort.Shared — see that file for the cross-assembly duplicate),
+            // and with any future base.json Exit.EntryPoints CSV entries (none exist yet — exits are
+            // empty by design this milestone).
+            var map = ArenaMapRaid.CurrentMap;
+            if (__result == null || map == null)
             {
                 return; // every other map's raid — untouched
             }
@@ -78,14 +81,14 @@ namespace ArenaMapPort.Client
             {
                 if (point is SpawnPoint concrete && string.IsNullOrEmpty(concrete.Infiltration))
                 {
-                    concrete.Infiltration = InfiltrationName;
+                    concrete.Infiltration = map.InfiltrationName;
                     fixedCount++;
                 }
             }
 
             if (fixedCount > 0) // once per raid — CreateFromScene runs exactly once per BaseLocalGame.Run
             {
-                Plugin.Log.LogInfo($"[ArenaMapPort][RaidFix] set Infiltration=\"{InfiltrationName}\" on " +
+                Plugin.Log.LogInfo($"[ArenaMapPort][RaidFix] set Infiltration=\"{map.InfiltrationName}\" on " +
                                     $"{fixedCount} SpawnPointMarker(s) with no Infiltration authored " +
                                     "(prevents SPT.SinglePlayer.Patches.RaidFix.EmptyInfilFixPatch's NRE " +
                                     "at raid-start countdown end)");

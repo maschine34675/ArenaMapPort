@@ -35,7 +35,7 @@ namespace ArenaMapPort.Client
     {
         static bool Prefix(ref Task __result)
         {
-            if (!ArenaEquatorRaid.IsLoaded())
+            if (!ArenaMapRaid.IsLoaded())
             {
                 return true; // vanilla behaviour for every other map's raid
             }

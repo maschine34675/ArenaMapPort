@@ -1,0 +1,21 @@
+{
+  "key": "arena_equator",
+  "id_field": "e9b8e12c60dfd2820e949462",
+  "scripts_scene_name": "Arena_Equator_Scripts",
+  "all_scene_names": [
+    "Arena_Equator_Scripts",
+    "Arena_Equator",
+    "Arena_Equator_Lighting",
+    "Arena_Equator_DesignStuff",
+    "Arena_Equator_TeamFight",
+    "Arena_Equator_TeamFight_DesignStuff"
+  ],
+  "infiltration_name": "ArenaEquator",
+  "locale_name": "Arena: Equator (spike)",
+  "locale_description": "Internal test build — geometry/collision/NavMesh spike.",
+  "icon_x": 150,
+  "icon_y": 760,
+  "template_key": "factory4_day",
+  "db_base_json_path": "base.json",
+  "fog_color": [0.62, 0.66, 0.70]
+}

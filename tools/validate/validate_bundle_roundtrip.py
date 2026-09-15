@@ -947,55 +947,58 @@ def validate_eft_scripts(env, require: bool) -> None:
 # editor_verify.json cross-check
 # ---------------------------------------------------------------------------
 
-def validate_editor_verify(path: Path, expected: dict, require_scripts_scene: bool = True) -> None:
+def validate_editor_verify(path: Path, expected: dict, require_scripts_scene: bool = True,
+                            scripts_scene_name: str = "Arena_Equator_Scripts") -> None:
     if not path.is_file():
         check(False, f"editor_verify.json exists at {path} (task instruction: 'cross-check "
                       f"work/build/s1/editor_verify.json' -- WP2's VerifyBuild.cs has not produced one)")
         return
     report = load_json(path)
     manifest = expected["manifest"]
-    # NOTE: Arena_Equator_Scripts is WP2-authored, never in the WP1 package's own manifest.scenes
-    # (SS B.WP2.6 -- there is no scenes/Arena_Equator_Scripts.json to extract), so it's added here
-    # explicitly -- but only when the caller actually expects it to exist. A run made with
-    # -skipScriptsScene (or any S1 slice run before the Scripts-scene blocker is resolved,
-    # docs/progress/s1-finish.md SS2) legitimately has no such scene in editor_verify.json at all;
-    # gating this the same way as validate_eft_scripts's --require-scripts-scene flag (instead of
-    # unconditionally requiring it) keeps this a real check for a full/S2 run while not scoring an
-    # already-documented, intentional S1 gap as a fresh defect.
+    # NOTE: the Scripts scene (default "Arena_Equator_Scripts", --scripts-scene-name /
+    # --map-overridable -- multimap generalization, docs/progress/multimap-generalize.md) is
+    # authored fresh by the Editor pipeline, never in the WP1 package's own manifest.scenes
+    # (SS B.WP2.6 -- there is no scenes/<name>.json to extract), so it's added here explicitly --
+    # but only when the caller actually expects it to exist. A run made with -skipScriptsScene (or
+    # any S1 slice run before the Scripts-scene blocker is resolved, docs/progress/s1-finish.md
+    # SS2) legitimately has no such scene in editor_verify.json at all; gating this the same way as
+    # validate_eft_scripts's --require-scripts-scene flag (instead of unconditionally requiring
+    # it) keeps this a real check for a full/S2 run while not scoring an already-documented,
+    # intentional S1 gap as a fresh defect.
     scene_names = set(manifest.get("scenes", []))
     if require_scripts_scene:
-        scene_names |= {"Arena_Equator_Scripts"}
+        scene_names |= {scripts_scene_name}
     reported = {s.get("scene_name"): s for s in report.get("scenes", [])}
 
     missing_scenes = scene_names - reported.keys()
     check(not missing_scenes, f"editor_verify.json covers every expected scene "
                                f"(missing: {sorted(missing_scenes)})")
-    if not require_scripts_scene and "Arena_Equator_Scripts" not in reported:
-        print("[validate_bundle_roundtrip] WARN: editor_verify.json has no 'Arena_Equator_Scripts' scene "
+    if not require_scripts_scene and scripts_scene_name not in reported:
+        print(f"[validate_bundle_roundtrip] WARN: editor_verify.json has no '{scripts_scene_name}' scene "
               "-- tolerated under --no-require-scripts-scene (Scripts-scene authoring not exercised this run)")
 
     for scene_name, s in reported.items():
-        if scene_name == "Arena_Equator_Scripts":
+        if scene_name == scripts_scene_name:
             eft = s.get("eft_components", {})
             level_settings = eft.get("LevelSettings", {})
             check(level_settings.get("count") == 1,
-                  f"editor_verify.json Arena_Equator_Scripts: LevelSettings.count == 1 "
+                  f"editor_verify.json {scene_name}: LevelSettings.count == 1 "
                   f"(got {level_settings.get('count')})")
             loc_scene = eft.get("LocationScene", {})
             check(loc_scene.get("count") == 1,
-                  f"editor_verify.json Arena_Equator_Scripts: LocationScene.count == 1 "
+                  f"editor_verify.json {scene_name}: LocationScene.count == 1 "
                   f"(got {loc_scene.get('count')})")
             check(loc_scene.get("world_interactive_objects_length", -1) != -1,
-                  f"editor_verify.json Arena_Equator_Scripts: LocationScene."
+                  f"editor_verify.json {scene_name}: LocationScene."
                   f"world_interactive_objects_length != -1/null (this is the exact SS D-cited NRE site, "
                   f"LocationScene.Awake -- a -1 here means FillArrays() never ran or ran too late)")
             botzone = eft.get("BotZone", {})
             spawn = eft.get("SpawnPointMarker", {})
             markers = spawn.get("markers", [])
             check(botzone.get("count") == 1,
-                  f"editor_verify.json Arena_Equator_Scripts: BotZone.count == 1 (got {botzone.get('count')})")
+                  f"editor_verify.json {scene_name}: BotZone.count == 1 (got {botzone.get('count')})")
             check(botzone.get("patrol_ways_length") == 0,
-                  f"editor_verify.json Arena_Equator_Scripts: BotZone.patrol_ways_length == 0 "
+                  f"editor_verify.json {scene_name}: BotZone.patrol_ways_length == 0 "
                   f"(empty, not absent/null -- risk #11; got {botzone.get('patrol_ways_length')})")
             # s1-fix-r1 FIX: this was `== 0`, i.e. it demanded BotZone.SpawnPointMarkers be EMPTY --
             # backwards for risk #11's real intent (non-null, not necessarily empty) and flatly
@@ -1007,12 +1010,12 @@ def validate_editor_verify(path: Path, expected: dict, require_scripts_scene: bo
             # SAME markers eft_components.SpawnPointMarker independently counted (catches "BotZone
             # was never actually linked" bugs) -- not a hardcoded literal either way.
             check(botzone.get("spawn_point_markers_count") == spawn.get("count"),
-                  f"editor_verify.json Arena_Equator_Scripts: BotZone.spawn_point_markers_count "
+                  f"editor_verify.json {scene_name}: BotZone.spawn_point_markers_count "
                   f"({botzone.get('spawn_point_markers_count')}) == SpawnPointMarker.count "
                   f"({spawn.get('count')}) -- risk #11: non-null AND correctly wired to the same "
                   f"authored markers, not asserted empty")
             check(spawn.get("count", 0) >= 1,
-                  f"editor_verify.json Arena_Equator_Scripts: at least 1 SpawnPointMarker authored "
+                  f"editor_verify.json {scene_name}: at least 1 SpawnPointMarker authored "
                   f"(got {spawn.get('count')})")
             has_player_all = any(
                 "player" in (m.get("categories") or "").lower() and m.get("collider_attached")
@@ -1020,7 +1023,7 @@ def validate_editor_verify(path: Path, expected: dict, require_scripts_scene: bo
                 for m in markers
             )
             check(has_player_all,
-                  f"editor_verify.json Arena_Equator_Scripts: at least one SpawnPointMarker has "
+                  f"editor_verify.json {scene_name}: at least one SpawnPointMarker has "
                   f"Categories including Player with an attached+enabled collider (markers: {markers})")
             continue
 
@@ -1063,6 +1066,15 @@ def main() -> None:
     ap.add_argument("--require-scripts-scene", dest="require_scripts_scene", action="store_true", default=True,
                      help="fail if none of the 5 SS D EFT MonoBehaviours are found (default: on, SS G.S1)")
     ap.add_argument("--no-require-scripts-scene", dest="require_scripts_scene", action="store_false")
+    # Multimap generalization (docs/progress/multimap-generalize.md): the one genuinely map-specific
+    # literal validate_editor_verify() special-cases (the Scripts scene's own 5 SS D
+    # EFT-MonoBehaviour checks) is now a flag instead of a hardcoded "Arena_Equator_Scripts" -- every
+    # other default in this file (DEFAULT_PACKAGE/_SCENES_BUNDLE/_NAVMESH_BUNDLE/etc.) was already
+    # fully overridable via the flags above, so build_all.ps1 (and this pass's own verification run)
+    # never relied on their Equator-only defaults in the first place.
+    ap.add_argument("--scripts-scene-name", default="Arena_Equator_Scripts",
+                     help="authored-fresh Scripts scene name to special-case in the editor_verify.json "
+                          "cross-check (default: 'Arena_Equator_Scripts')")
     args = ap.parse_args()
 
     DEFAULT_PACKAGE_HOLDER["package"] = args.package
@@ -1108,7 +1120,8 @@ def main() -> None:
 
     print()
     print(f"[validate_bundle_roundtrip] === {args.editor_verify.name} cross-check ===")
-    validate_editor_verify(args.editor_verify, expected, require_scripts_scene=args.require_scripts_scene)
+    validate_editor_verify(args.editor_verify, expected, require_scripts_scene=args.require_scripts_scene,
+                            scripts_scene_name=args.scripts_scene_name)
 
     print()
     if FAILURES:

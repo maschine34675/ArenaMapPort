@@ -64,10 +64,18 @@ namespace ArenaMapPort.Client
             // ships enabled. See MapBorderRepairs.cs doc comment for the full root-cause breakdown.
             MapBorderRepairs.Install();
 
+            int totalOwnedScenes = 0;
+            foreach (var map in ArenaMapRegistry.All)
+            {
+                totalOwnedScenes += map.AllSceneNames.Length;
+            }
             Log.LogInfo($"[ArenaMapPort] {PluginName} {PluginVersion} loaded — " +
-                        $"{ArenaEquatorLocation.AllSceneNames.Length} owned scenes, Harmony patches applied.");
+                        $"{ArenaMapRegistry.All.Count} map(s), {totalOwnedScenes} owned scenes, " +
+                        "Harmony patches applied.");
         }
 
+        // Multimap generalization (docs/progress/multimap-generalize.md): loops ArenaMapRegistry.All
+        // instead of 3 hardcoded Equator literals — same 3 filenames logged for Equator as before.
         void LogStartupBanner()
         {
             var pluginDir = Path.GetDirectoryName(typeof(Plugin).Assembly.Location) ?? ".";
@@ -75,10 +83,13 @@ namespace ArenaMapPort.Client
 
             Log.LogInfo($"[ArenaMapPort] plugin dir: {pluginDir}");
 
-            LogExpectedFile(Path.Combine(bundlesDir, "arena_equator_preset.bundle"));
-            LogExpectedFile(Path.Combine(bundlesDir, "arena_equator_scenes.bundle"));
-            LogExpectedFile(Path.Combine(bundlesDir, "arena_equator_navmesh.bundle"));
-            LogExpectedFile(Path.Combine(pluginDir, "material-shaders.json"));
+            foreach (var map in ArenaMapRegistry.All)
+            {
+                LogExpectedFile(Path.Combine(bundlesDir, map.PresetBundleFileName));
+                LogExpectedFile(Path.Combine(bundlesDir, map.ScenesBundleFileName));
+                LogExpectedFile(Path.Combine(bundlesDir, map.NavMeshBundleFileName));
+                LogExpectedFile(Path.Combine(pluginDir, ShaderRebind.SidecarFileName(map)));
+            }
         }
 
         void LogExpectedFile(string path)

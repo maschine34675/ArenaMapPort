@@ -44,7 +44,7 @@ namespace ArenaMapPort.Client
         // EFT.Game.Spawning/SpawnPointMarker.cs:96-116.
         internal static void Postfix(SpawnPointMarker __instance)
         {
-            if (__instance == null || !ArenaEquatorRaid.IsLoaded())
+            if (__instance == null || !ArenaMapRaid.IsLoaded())
             {
                 return; // every other map's raid — untouched
             }

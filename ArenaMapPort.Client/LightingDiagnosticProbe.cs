@@ -15,7 +15,7 @@ namespace ArenaMapPort.Client
 {
     /// <summary>
     /// fix-lighting-movement, item 4 — one bounded, once-per-raid diagnostic dump, gated on
-    /// ArenaEquatorRaid.IsLoaded(), fired a few seconds after the Scripts scene loads (long enough for
+    /// ArenaMapRaid.IsLoaded(), fired a few seconds after the Scripts scene loads (long enough for
     /// the local player to have spawned and this file's own repairs — ArenaLightingRepairs,
     /// SpawnColliderRepairs — to have already run at least once). Every section here exists to
     /// directly confirm or refute one specific claim from the investigator/verifier reports (see
@@ -51,7 +51,9 @@ namespace ArenaMapPort.Client
 
         static void OnSceneLoaded(Scene scene, LoadSceneMode mode)
         {
-            if (scene.name != ArenaMapPort.Shared.ArenaEquatorLocation.ScriptsSceneName || _ranThisRaid)
+            // Stateless resolution (not ArenaMapRaid.CurrentMap) — see ArenaMapRaid's own doc comment
+            // for why an unload/reset handler must never depend on a shared mutable "current map" field.
+            if (ArenaMapRaid.MapForScriptsScene(scene.name) == null || _ranThisRaid)
             {
                 return;
             }
@@ -66,7 +68,7 @@ namespace ArenaMapPort.Client
 
         static void OnSceneUnloaded(Scene scene)
         {
-            if (scene.name != ArenaMapPort.Shared.ArenaEquatorLocation.ScriptsSceneName)
+            if (ArenaMapRaid.MapForScriptsScene(scene.name) == null)
             {
                 return;
             }
@@ -111,14 +113,15 @@ namespace ArenaMapPort.Client
 
         static void RunProbe()
         {
-            if (!ArenaEquatorRaid.IsLoaded() || _ranThisRaid)
+            var map = ArenaMapRaid.CurrentMap;
+            if (map == null || _ranThisRaid)
             {
                 return;
             }
             _ranThisRaid = true;
 
             var sb = new StringBuilder();
-            sb.AppendLine("[ArenaMapPort][Diag] ==== lighting/movement probe (once per raid) ====");
+            sb.AppendLine($"[ArenaMapPort][Diag] ==== lighting/movement probe ({map.Key}, once per raid) ====");
 
             ProbePlayerAndColliders(sb);
             ProbeSpawnColliders(sb);
@@ -126,8 +129,8 @@ namespace ArenaMapPort.Client
             ProbeAmbientGlobals(sb);
             ProbeCameraAndPostEffects(sb);
             ProbeLightingRigPresence(sb);
-            ProbeLights(sb);
-            ProbeSampleMaterials(sb);
+            ProbeLights(sb, map);
+            ProbeSampleMaterials(sb, map);
 
             Plugin.Log.LogInfo(sb.ToString());
         }
@@ -308,11 +311,11 @@ namespace ArenaMapPort.Client
 
         // Confirms/refutes: RC3 (sun light presence/intensity/color) and the general "are lights even
         // active" question — top-5 by intensity plus a type breakdown, never all ~477.
-        static void ProbeLights(StringBuilder sb)
+        static void ProbeLights(StringBuilder sb, ArenaMapPort.Shared.ArenaMapDescriptor map)
         {
             sb.AppendLine("-- lights --");
             var lights = new List<Light>();
-            foreach (var sceneName in ArenaMapPort.Shared.ArenaEquatorLocation.AllSceneNames)
+            foreach (var sceneName in map.AllSceneNames)
             {
                 var scene = SceneManager.GetSceneByName(sceneName);
                 if (!scene.IsValid() || !scene.isLoaded)
@@ -354,13 +357,13 @@ namespace ArenaMapPort.Client
         // Confirms/refutes: materials lens M1/M7/M8 — whether the ALREADY-REBOUND (post-ShaderRebind)
         // materials near spawn carry plausible, non-black color/texture data at runtime, not just in
         // the extraction JSON.
-        static void ProbeSampleMaterials(StringBuilder sb)
+        static void ProbeSampleMaterials(StringBuilder sb, ArenaMapPort.Shared.ArenaMapDescriptor map)
         {
             sb.AppendLine("-- sample materials --");
             var seen = new HashSet<string>();
             int logged = 0;
 
-            foreach (var sceneName in ArenaMapPort.Shared.ArenaEquatorLocation.AllSceneNames)
+            foreach (var sceneName in map.AllSceneNames)
             {
                 if (logged >= SampleMaterialsCount)
                 {

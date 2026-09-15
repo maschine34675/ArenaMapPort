@@ -36,7 +36,7 @@ namespace ArenaMapPort.Client
     /// <c>EffectsController.Init()</c> immediately disables it again on the very next line once it
     /// stops NREing.
     ///
-    /// Gated on <see cref="ArenaEquatorRaid.IsLoaded()"/> — valid here: <c>EffectsController.Awake</c>
+    /// Gated on <see cref="ArenaMapRaid.IsLoaded()"/> — valid here: <c>EffectsController.Awake</c>
     /// fires during local-player camera setup (<c>CameraManager.SetCameraFromPrefab</c>, called from
     /// <c>PlayerCameraController.Create</c>), which only happens after our scenes are loaded and
     /// <c>Player.Init</c> has run.
@@ -47,7 +47,7 @@ namespace ArenaMapPort.Client
         // EffectsController is declared in the global namespace in this build (no `using` needed).
         internal static void Prefix(EffectsController __instance)
         {
-            if (!ArenaEquatorRaid.IsLoaded())
+            if (!ArenaMapRaid.IsLoaded())
             {
                 return; // every other map's raid — untouched (retail camera prefabs ship the component)
             }
@@ -89,7 +89,7 @@ namespace ArenaMapPort.Client
     /// field) the same way <see cref="HarmonyPatches.Verify"/> treats a missing method target: fall back to
     /// vanilla behaviour (<c>return true</c> / rethrow) rather than risk NREing inside the guard itself.
     ///
-    /// All gated on <see cref="ArenaEquatorRaid.IsLoaded()"/> — same reasoning as
+    /// All gated on <see cref="ArenaMapRaid.IsLoaded()"/> — same reasoning as
     /// <see cref="EffectsControllerFrostbitePrefix"/> (these hooks only ever fire once
     /// <c>PlayerCameraControllerCreated</c>/<c>Init</c> have run, i.e. after our scenes are loaded).
     /// </summary>
@@ -109,7 +109,7 @@ namespace ArenaMapPort.Client
 
         static bool ShouldSkip(EffectsController instance)
         {
-            if (!ArenaEquatorRaid.IsLoaded())
+            if (!ArenaMapRaid.IsLoaded())
             {
                 return false; // every other map's raid — untouched (retail camera prefabs ship EyeBurn)
             }
@@ -139,7 +139,7 @@ namespace ArenaMapPort.Client
         // EffectsController.cs:1256-1266, dereferences _eyeBurn.IsPaused/.ClearEyeBurnRT() unguarded.
         internal static bool Prefix(EffectsController __instance)
         {
-            if (!ArenaEquatorRaid.IsLoaded())
+            if (!ArenaMapRaid.IsLoaded())
             {
                 return true;
             }
@@ -164,7 +164,7 @@ namespace ArenaMapPort.Client
 
         internal static bool Prefix(EffectsController.FlashAccumulator __instance)
         {
-            if (!ArenaEquatorRaid.IsLoaded())
+            if (!ArenaMapRaid.IsLoaded())
             {
                 return true;
             }
@@ -221,7 +221,7 @@ namespace ArenaMapPort.Client
         // Target: EffectsController.OnHealthApplyDamage(EBodyPart, float, DamageInfo) — cs:1410-1419.
         internal static bool Prefix(EffectsController __instance)
         {
-            if (!ArenaEquatorRaid.IsLoaded())
+            if (!ArenaMapRaid.IsLoaded())
             {
                 return true;
             }
@@ -252,7 +252,7 @@ namespace ArenaMapPort.Client
             {
                 return null;
             }
-            if (!ArenaEquatorRaid.IsLoaded())
+            if (!ArenaMapRaid.IsLoaded())
             {
                 return __exception; // vanilla behaviour for every other map's raid
             }
