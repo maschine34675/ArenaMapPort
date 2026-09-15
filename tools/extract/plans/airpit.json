@@ -1,0 +1,78 @@
+{
+  "schema_version": 1,
+  "key": "arena_airpit",
+  "source_preset": "arena_airpit_preset.bundle",
+  "source_mode": "TeamFight",
+  "scenes": [
+    {
+      "name": "Arena_AirPit_ShootOut",
+      "asset_path": "Assets/Content/Locations/Arena_Airpit/Arena_Airpit_ShootOut/Arena_AirPit_ShootOut.unity",
+      "index": 324
+    },
+    {
+      "name": "Arena_AirPit_ShootOut_Light",
+      "asset_path": "Assets/Content/Locations/Arena_Airpit/Arena_Airpit_ShootOut/Arena_AirPit_ShootOut_Light.unity",
+      "index": 325
+    },
+    {
+      "name": "Arena_Airpit_DesignStuff",
+      "asset_path": "Assets/Content/Locations/Arena_Airpit/Arena_Airpit_DesignStuff.unity",
+      "index": 40
+    },
+    {
+      "name": "Arena_Airpit_TeamFight",
+      "asset_path": "Assets/Content/Locations/Arena_Airpit/Arena_Airpit_TeamFight.unity",
+      "index": 29
+    },
+    {
+      "name": "Arena_Airpit_TeamFight_DesignStuff",
+      "asset_path": "Assets/Content/Locations/Arena_Airpit/Arena_Airpit_TeamFight_DesignStuff.unity",
+      "index": 28
+    }
+  ],
+  "anchor_scenes": [
+    {
+      "name": "Arena_Airpit_TeamFight_DesignStuff",
+      "asset_path": "Assets/Content/Locations/Arena_Airpit/Arena_Airpit_TeamFight_DesignStuff.unity",
+      "index": 28
+    }
+  ],
+  "navmesh_scenes": [
+    {
+      "name": "Arena_Airpit_TeamFight_AI",
+      "asset_path": "Assets/Content/Locations/Arena_Airpit/Arena_Airpit_TeamFight_AI.unity",
+      "index": 33
+    }
+  ],
+  "fog_color": [
+    0.0992923229932785,
+    0.11644228547811508,
+    0.12249535322189331
+  ],
+  "excluded_scenes": [
+    {
+      "name": "Arena_Airpit_Scripts",
+      "asset_path": "Assets/Content/Locations/Arena_Airpit/Arena_Airpit_Scripts.unity",
+      "index": 36,
+      "reason": "Replaced by the freshly authored SPT Scripts scene; source scripts and seasonal runtime objects are not imported."
+    },
+    {
+      "name": "Arena_Airpit_Sound",
+      "asset_path": "Assets/Content/Locations/Arena_Airpit/Arena_Airpit_Sound.unity",
+      "index": 39,
+      "reason": "Source Arena sound/audio runtime is outside the existing port contract."
+    },
+    {
+      "name": "Arena_Airpit_TeamFight_Culling",
+      "asset_path": "Assets/Content/Locations/Arena_Airpit/Arena_Airpit_TeamFight_Culling.unity",
+      "index": 30,
+      "reason": "Source PerfectCulling data is outside the existing port contract."
+    },
+    {
+      "name": "Arena_Airpit_TeamFight_AI",
+      "asset_path": "Assets/Content/Locations/Arena_Airpit/Arena_Airpit_TeamFight_AI.unity",
+      "index": 33,
+      "reason": "Source AI/gameplay scene is metadata reference only; port bakes a fresh SPT NavMesh."
+    }
+  ]
+}

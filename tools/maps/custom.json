@@ -1,0 +1,25 @@
+{
+  "key": "arena_custom",
+  "id_field": "8d293d9d2a8fd179128bea17",
+  "scripts_scene_name": "Arena_Custom_Scripts",
+  "all_scene_names": [
+    "Arena_Custom_Scripts",
+    "Arena_Custom_LH",
+    "Arena_Custom_LH_Light",
+    "Arena_Custom_LH_Terrain",
+    "Arena_NY_Custom_LH_DesignStuff",
+    "Arena_NY_Custom_LastHero_DesignStuff"
+  ],
+  "infiltration_name": "ArenaCustom",
+  "locale_name": "Arena: Custom (spike)",
+  "locale_description": "Internal test build — LastHero geometry/collision/NavMesh port.",
+  "icon_x": 875,
+  "icon_y": 830,
+  "template_key": "factory4_day",
+  "db_base_json_path": "arena_custom/base.json",
+  "fog_color": [
+    0.11345554143190384,
+    0.1334303915500641,
+    0.13564203679561615
+  ]
+}

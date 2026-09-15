@@ -1,0 +1,26 @@
+{
+  "key": "arena_yard",
+  "id_field": "187d5cbc21744c97e8348e76",
+  "scripts_scene_name": "Arena_Yard_Scripts",
+  "all_scene_names": [
+    "Arena_Yard_Scripts",
+    "Arena_Yard",
+    "Arena_Yard_Grass",
+    "Arena_Yard_DesignStuff",
+    "Arena_Yard_TeamFight",
+    "Arena_Yard_TeamFight_DesignStuff",
+    "Arena_Yard_Light"
+  ],
+  "infiltration_name": "ArenaYard",
+  "locale_name": "Arena: Yard (spike)",
+  "locale_description": "Internal test build — TeamFight geometry/collision/NavMesh port.",
+  "icon_x": 730,
+  "icon_y": 760,
+  "template_key": "factory4_day",
+  "db_base_json_path": "arena_yard/base.json",
+  "fog_color": [
+    0.20999999344348907,
+    0.20343641936779022,
+    0.20075999200344086
+  ]
+}

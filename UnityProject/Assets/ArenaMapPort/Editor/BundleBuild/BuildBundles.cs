@@ -42,7 +42,7 @@ namespace ArenaMapPort.Editor.BundleBuild
         // Fixed build-time Unix timestamp (§D's LocationExportInfo row: "captured once and
         // hardcoded at WP2/WP5 coordination time, not regenerated per-build, so the two never
         // drift"). WP5's base.json UnixDateTime must be set to this same value.
-        public const long BuildUnixDateTime = 1757707200L; // 2025-09-13T00:00:00Z placeholder build stamp
+        public const long BuildUnixDateTime = 1789257600L; // 2026-09-13T00:00:00Z, matches make_base_json.py
 
         private sealed class PendingContext
         {
@@ -180,6 +180,8 @@ namespace ArenaMapPort.Editor.BundleBuild
                       (skipScriptsScene ? " skipScriptsScene=true (DIAGNOSTIC ONLY, not a real S1 pass)" : ""));
 
             var pkg = new ArenaPackage(packageDir);
+            if (VerifySpawnPlacement.Required(pkg) && (!bakeNavMesh || skipScriptsScene))
+                throw new IOException("Generic full-map builds require fresh NavMesh baking and a Scripts scene for verified player starts.");
 
             // §B.WP2's execution-order note: textures MUST import before materials
             // (Material.SetTexture against a not-yet-imported texture is a silent no-op).
@@ -301,9 +303,11 @@ namespace ArenaMapPort.Editor.BundleBuild
             try
             {
                 string navMeshAssetPath = null;
+                UnityEngine.AI.NavMeshData placementNavMesh = null;
                 if (ctx.bakeNavMesh)
                 {
                     UnityEngine.AI.NavMeshData data = ArenaMapPort.Editor.NavMesh.BakeNavMesh.Bake(ctx.contentSceneRoots.ToArray());
+                    placementNavMesh = data;
                     // Multimap generalization (docs/progress/multimap-generalize.md): was the literal
                     // "arena_equator.asset" — the asset name itself is not load-bearing (§B.WP2.7), but
                     // keying it off the map avoids two maps' intermediate .asset files colliding if
@@ -311,6 +315,9 @@ namespace ArenaMapPort.Editor.BundleBuild
                     navMeshAssetPath = ArenaPaths.NavMeshAssetDir + "/" + ArenaPaths.Map.key + ".asset";
                     ArenaMapPort.Editor.NavMesh.BakeNavMesh.SaveAsset(data, navMeshAssetPath);
                 }
+
+                if (VerifySpawnPlacement.Required(ctx.pkg))
+                    VerifySpawnPlacement.Place(ctx.pkg, placementNavMesh, ctx.contentSceneRoots.ToArray(), ctx.outputDir);
 
                 AssetDatabase.SaveAssets();
                 AssetDatabase.Refresh();
@@ -368,8 +375,13 @@ namespace ArenaMapPort.Editor.BundleBuild
 
                 // §B.WP2.8 / §H risk #12: BuildTarget passed explicitly, never
                 // EditorUserBuildSettings.activeBuildTarget.
+                // New generic maps use LZ4 chunks: identity patching can preserve
+                // compression without repeatedly expanding/recompressing a huge LZMA blob.
+                // Existing Equator/Bay5 entrypoints retain their previous build option.
+                BuildAssetBundleOptions bundleOptions = VerifySpawnPlacement.Required(ctx.pkg)
+                    ? BuildAssetBundleOptions.ChunkBasedCompression : BuildAssetBundleOptions.None;
                 AssetBundleManifest bundleManifest = UnityEditor.BuildPipeline.BuildAssetBundles(
-                    bundleOutputDir, builds.ToArray(), BuildAssetBundleOptions.None, BuildTarget.StandaloneWindows64);
+                    bundleOutputDir, builds.ToArray(), bundleOptions, BuildTarget.StandaloneWindows64);
 
                 if (bundleManifest == null)
                     throw new IOException("[ArenaMapPort][BuildBundles] BuildAssetBundles returned null (build failed) - see the Editor log above for the specific asset/shader error.");

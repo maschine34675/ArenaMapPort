@@ -1,0 +1,83 @@
+{
+  "schema_version": 1,
+  "key": "arena_railwaystation",
+  "source_preset": "arena_railwaystation_preset.bundle",
+  "source_mode": "TeamFight",
+  "scenes": [
+    {
+      "name": "Arena_Train",
+      "asset_path": "Assets/Content/Locations/Arena_Train/Arena_Train.unity",
+      "index": 161
+    },
+    {
+      "name": "Arena_Train_DesignStuff",
+      "asset_path": "Assets/Content/Locations/Arena_Train/Arena_Train_DesignStuff.unity",
+      "index": 155
+    },
+    {
+      "name": "Arena_Train_Grass",
+      "asset_path": "Assets/Content/Locations/Arena_Train/Arena_Train_Grass.unity",
+      "index": 192
+    },
+    {
+      "name": "Arena_Train_TeamFight",
+      "asset_path": "Assets/Content/Locations/Arena_Train/Arena_Train_TeamFight.unity",
+      "index": 158
+    },
+    {
+      "name": "Arena_Train_TeamFight_DesignStuff",
+      "asset_path": "Assets/Content/Locations/Arena_Train/Arena_Train_TeamFight_DesignStuff.unity",
+      "index": 159
+    },
+    {
+      "name": "Arena_Train_Light_TeamFight",
+      "asset_path": "Assets/Content/Locations/Arena_Train/Arena_Train_Light_TeamFight.unity",
+      "index": 156
+    }
+  ],
+  "anchor_scenes": [
+    {
+      "name": "Arena_Train_TeamFight_DesignStuff",
+      "asset_path": "Assets/Content/Locations/Arena_Train/Arena_Train_TeamFight_DesignStuff.unity",
+      "index": 159
+    }
+  ],
+  "navmesh_scenes": [
+    {
+      "name": "Arena_Train_AI",
+      "asset_path": "Assets/Content/Locations/Arena_Train/Arena_Train_AI.unity",
+      "index": 154
+    }
+  ],
+  "fog_color": [
+    0.20999999344348907,
+    0.20343641936779022,
+    0.20075999200344086
+  ],
+  "excluded_scenes": [
+    {
+      "name": "Arena_Train_Scripts",
+      "asset_path": "Assets/Content/Locations/Arena_Train/Arena_Train_Scripts.unity",
+      "index": 157,
+      "reason": "Replaced by the freshly authored SPT Scripts scene; source scripts and seasonal runtime objects are not imported."
+    },
+    {
+      "name": "Arena_Train_Sound_new",
+      "asset_path": "Assets/Content/Locations/Arena_Train/Arena_Train_Sound_new.unity",
+      "index": 266,
+      "reason": "Source Arena sound/audio runtime is outside the existing port contract."
+    },
+    {
+      "name": "Arena_Train_TeamFight_Culling",
+      "asset_path": "Assets/Content/Locations/Arena_Train/Arena_Train_TeamFight_Culling.unity",
+      "index": 202,
+      "reason": "Source PerfectCulling data is outside the existing port contract."
+    },
+    {
+      "name": "Arena_Train_AI",
+      "asset_path": "Assets/Content/Locations/Arena_Train/Arena_Train_AI.unity",
+      "index": 154,
+      "reason": "Source AI/gameplay scene is metadata reference only; port bakes a fresh SPT NavMesh."
+    }
+  ]
+}

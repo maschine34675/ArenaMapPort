@@ -49,6 +49,12 @@ namespace ArenaMapPort.Editor.Import
             foreach (var prop in pkg.Textures.Properties())
             {
                 string texId = prop.Name;
+                var metadata = (JObject)prop.Value;
+                if ((bool?)metadata["generated_terrain_array"] == true)
+                {
+                    result[texId] = ImportTerrainArray(pkg, texId, metadata);
+                    continue;
+                }
                 string srcPng = pkg.TexturePngPath(texId);
                 string assetPath = ArenaPaths.TexturesDir + "/" + texId + ".png";
 
@@ -114,6 +120,19 @@ namespace ArenaMapPort.Editor.Import
 
                 importer.SaveAndReimport();
 
+                if ((bool?)metadata["generated_terrain_control"] == true)
+                {
+                    if (dimension != "Tex2D" || pkg.TextureColorSpace(texId) != "Linear" || isNormalMap)
+                        throw new InvalidDataException("Invalid generated terrain control flags: " + texId);
+                    importer.textureType = TextureImporterType.Default;
+                    importer.sRGBTexture = false;
+                    importer.alphaIsTransparency = false;
+                    importer.mipmapEnabled = false;
+                    importer.wrapMode = TextureWrapMode.Clamp;
+                    importer.filterMode = FilterMode.Bilinear;
+                    importer.textureCompression = TextureImporterCompression.Uncompressed;
+                    importer.SaveAndReimport();
+                }
                 result[texId] = AssetDatabase.LoadAssetAtPath<Texture2D>(assetPath);
             }
             AssetDatabase.SaveAssets();
@@ -123,6 +142,71 @@ namespace ArenaMapPort.Editor.Import
                       " Tex3D/Tex2DArray source(s) never assignable to any material property) -> " +
                       ArenaPaths.TexturesDir);
             return result;
+        }
+
+        private static Texture2DArray ImportTerrainArray(ArenaPackage pkg, string texId, JObject metadata)
+        {
+            int width = (int?)metadata["width"] ?? 0;
+            int height = (int?)metadata["height"] ?? 0;
+            int depth = (int?)metadata["depth"] ?? 0;
+            string role = (string)metadata["terrain_role"];
+            bool linear = role == "normalSAO";
+            var slices = metadata["array_slices"] as JArray;
+            if ((role != "diffuse" && !linear) || pkg.TextureDimension(texId) != "Tex2DArray" ||
+                pkg.TextureIsNormalMap(texId) || pkg.TextureColorSpace(texId) != (linear ? "Linear" : "sRGB") ||
+                width <= 0 || height <= 0 || depth != 12 || slices == null || slices.Count != depth ||
+                (string)metadata["file"] != (string)slices[0])
+                throw new InvalidDataException("Invalid generated terrain array metadata: " + texId);
+
+            var array = new Texture2DArray(width, height, depth, TextureFormat.RGBA32, true, linear)
+            {
+                name = texId,
+                wrapMode = TextureWrapMode.Repeat,
+                filterMode = FilterMode.Trilinear,
+                anisoLevel = 4,
+            };
+            var paths = new HashSet<string>(System.StringComparer.OrdinalIgnoreCase);
+            bool saved = false;
+            try
+            {
+                for (int layer = 0; layer < depth; layer++)
+                {
+                    string path = Path.GetFullPath(pkg.ResolvePath((string)slices[layer]));
+                    string textureRoot = Path.GetFullPath(pkg.ResolvePath("textures")).TrimEnd('\\', '/') + Path.DirectorySeparatorChar;
+                    if (!path.StartsWith(textureRoot, System.StringComparison.OrdinalIgnoreCase) || !paths.Add(path))
+                        throw new InvalidDataException("Terrain array slice path escaped or repeated: " + path);
+                    byte[] bytes = File.ReadAllBytes(path);
+                    // PNG IHDR: byte depth 8 and RGBA color type 6 are required. NormalSAO's
+                    // four packed channels must never enter Unity's normal-map importer.
+                    if (bytes.Length < 33 || bytes[0] != 137 || bytes[1] != 80 || bytes[2] != 78 || bytes[3] != 71 ||
+                        bytes[24] != 8 || bytes[25] != 6)
+                        throw new InvalidDataException("Terrain array slice is not an RGBA8 PNG: " + path);
+                    var slice = new Texture2D(2, 2, TextureFormat.RGBA32, false, linear);
+                    try
+                    {
+                        if (!ImageConversion.LoadImage(slice, bytes, false) || slice.width != width || slice.height != height)
+                            throw new InvalidDataException("Terrain array slice dimensions/decode mismatch: " + path);
+                        array.SetPixels32(slice.GetPixels32(), layer, 0);
+                    }
+                    finally { UnityEngine.Object.DestroyImmediate(slice); }
+                }
+                array.Apply(true, false);
+                string assetPath = ArenaPaths.TexturesDir + "/" + texId + ".asset";
+                var existing = AssetDatabase.LoadAssetAtPath<Texture2DArray>(assetPath);
+                if (existing != null)
+                {
+                    EditorUtility.CopySerialized(array, existing);
+                    UnityEngine.Object.DestroyImmediate(array);
+                    array = existing;
+                    EditorUtility.SetDirty(array);
+                }
+                else AssetDatabase.CreateAsset(array, assetPath);
+                saved = true;
+                Debug.Log("[ArenaMapPort][TextureImportDriver] terrain " + role + " array " + texId +
+                          ": " + width + "x" + height + "x" + depth + " (" + (linear ? "Linear" : "sRGB") + ")");
+                return array;
+            }
+            finally { if (!saved && array != null) UnityEngine.Object.DestroyImmediate(array); }
         }
 
         private static HashSet<string> CollectAlphaCutoutTextureIds(ArenaPackage pkg)

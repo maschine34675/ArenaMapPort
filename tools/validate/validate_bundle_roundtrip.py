@@ -89,8 +89,12 @@ Usage:
 from __future__ import annotations
 
 import argparse
+from collections import Counter
+import hashlib
 import json
+import math
 import re
+import struct
 import sys
 import traceback
 from pathlib import Path
@@ -156,6 +160,20 @@ TEXDIM_TO_CLASS = {
 # own dependency-based AssetBundle inclusion).
 TEXTURE_DIMENSIONS_BUILT_AS_ASSET = {"Tex2D": "Texture2D", "Cube": "Cubemap"}
 TEXTURE_DIMENSIONS_NEVER_ASSIGNED = {"Tex3D", "Tex2DArray"}
+
+
+def built_texture_class(meta: dict) -> str | None:
+    if meta.get("generated_terrain_array") is True:
+        return "Texture2DArray" if meta.get("dimension") == "Tex2DArray" else None
+    return TEXTURE_DIMENSIONS_BUILT_AS_ASSET.get(meta.get("dimension", "Tex2D"))
+
+
+def expected_shader_name(meta: dict) -> str:
+    if meta.get("preserve_shader") is True:
+        if meta.get("shader") != "ArenaMapPort/Terrain":
+            raise ValueError("only the exact owned ArenaMapPort/Terrain shader may bypass a stand-in")
+        return "ArenaMapPort/Terrain"
+    return SHADER_PREFIX + meta["shader"]
 
 # s1-fix-r1: Arena_Equator_Scripts is entirely WP2-authored (SS B.WP2.6) -- it never has a
 # scenes/Arena_Equator_Scripts.json in the WP1 package for load_package_expected() to count, so its
@@ -244,6 +262,8 @@ def load_package_expected(package: Path) -> dict:
     }
     in_scope_mesh_ids: set[str] = set()
     in_scope_material_ids: set[str] = set()
+    special_ids = {record.get("mesh_id") for record in manifest.get("mesh_compatibility", [])}
+    expected["special_mesh_bindings"] = Counter()
     for scene_name in manifest.get("scenes", []):
         scene_path = package / "scenes" / f"{scene_name}.json"
         if not scene_path.is_file():
@@ -255,6 +275,8 @@ def load_package_expected(package: Path) -> dict:
         for obj in objects:
             for comp in obj.get("components", []):
                 t = comp.get("type")
+                if t in ("MeshFilter", "MeshCollider") and comp.get("mesh_id") in special_ids:
+                    expected["special_mesh_bindings"][(t, comp["mesh_id"])] += 1
                 if t == "MeshFilter":
                     expected["mesh_filters"] += 1
                     mid = comp.get("mesh_id")
@@ -263,7 +285,8 @@ def load_package_expected(package: Path) -> dict:
                 elif t == "MeshRenderer":
                     expected["mesh_renderers"] += 1
                     for mid in comp.get("material_ids") or []:
-                        in_scope_material_ids.add(mid)
+                        if mid is not None:
+                            in_scope_material_ids.add(mid)
                 elif t == "SkinnedMeshRenderer":
                     expected["skinned_mesh_renderers"] += 1
                     # skip_import: true (SPEC §B.WP1 edge case, §B.WP2 decision #8) -- WP2 never
@@ -328,8 +351,7 @@ def load_package_expected(package: Path) -> dict:
     texture_ids_in_scope_by_class: dict[str, set[str]] = {}
     texture_ids_in_scope_never_assigned: set[str] = set()
     for tid in in_scope_texture_ids:
-        dim = package_textures_all.get(tid, {}).get("dimension", "Tex2D")
-        cls = TEXTURE_DIMENSIONS_BUILT_AS_ASSET.get(dim)
+        cls = built_texture_class(package_textures_all.get(tid, {}))
         if cls is not None:
             texture_ids_in_scope_by_class.setdefault(cls, set()).add(tid)
         else:
@@ -337,6 +359,7 @@ def load_package_expected(package: Path) -> dict:
     expected["texture_ids_in_scope_by_class"] = texture_ids_in_scope_by_class
     expected["texture_count_in_scope_2d"] = len(texture_ids_in_scope_by_class.get("Texture2D", ()))
     expected["texture_count_in_scope_cube"] = len(texture_ids_in_scope_by_class.get("Cubemap", ()))
+    expected["texture_count_in_scope_array"] = len(texture_ids_in_scope_by_class.get("Texture2DArray", ()))
     expected["texture_ids_in_scope_never_assigned"] = texture_ids_in_scope_never_assigned
     return expected
 
@@ -451,6 +474,7 @@ def validate_scenes_bundle_contents(env, expected: dict, material_shaders: dict 
         # task's fix now guarantees for a correctly-imported one).
         ("Texture2D", n("Texture2D"), expected["texture_count_in_scope_2d"]),
         ("Cubemap", n("Cubemap"), expected["texture_count_in_scope_cube"]),
+        ("Texture2DArray", n("Texture2DArray"), expected["texture_count_in_scope_array"]),
         ("MeshFilter", n("MeshFilter"), expected["mesh_filters"]),
         ("MeshRenderer", n("MeshRenderer"), expected["mesh_renderers"]),
         ("MeshCollider", n("MeshCollider"), expected["mesh_colliders"]),
@@ -499,6 +523,10 @@ def validate_scenes_bundle_contents(env, expected: dict, material_shaders: dict 
 
     # --- Mesh detail: name -> vertex_count/submesh_count -------------------------------
     package_meshes = expected["manifest"].get("meshes", {})
+    generic_package = expected["manifest"].get("source", {}).get("extractor_script") == "tools/extract/extract_map.py"
+    special_meshes = {record["mesh_id"]: record for record in expected["manifest"].get("mesh_compatibility", [])}
+    special_reader_ids = {}
+    mesh_id_counts = Counter()
     matched = 0
     mismatched = 0
     unmatched_names = []
@@ -519,6 +547,24 @@ def validate_scenes_bundle_contents(env, expected: dict, material_shaders: dict 
                           f"manifest.meshes -- MeshImporter.cs names assets by mesh_id (SS B.WP2.2), "
                           f"this looks like a stray/leftover asset")
             continue
+        mesh_id_counts[name] += 1
+        if name in special_meshes:
+            special_reader_ids[(id(obj.assets_file), obj.path_id)] = name
+            if special_meshes[name].get("kind") == "source_empty":
+                errors = empty_built_mesh_errors(tt)
+                for error in errors:
+                    check(False, f"source_empty mesh {name}: {error}")
+                if not errors:
+                    check(True, f"source_empty mesh {name}: built asset remains exactly empty, without replacement geometry")
+        if generic_package and meta.get("vertex_count", 0) > 0:
+            try:
+                errors = built_mesh_geometry_errors(obj, DEFAULT_PACKAGE_HOLDER["package"] / meta["file"])
+            except Exception as exc:
+                errors = [f"cannot decode built/package geometry: {exc}"]
+            for error in errors:
+                check(False, f"mesh {name}: {error}")
+            if not errors:
+                check(True, f"mesh {name}: every built position/channel and submesh index matches the source-checked package")
         vcount = tt.get("m_VertexData", {}).get("m_VertexCount")
         scount = len(tt.get("m_SubMeshes", []))
         local_bad = False
@@ -534,9 +580,29 @@ def validate_scenes_bundle_contents(env, expected: dict, material_shaders: dict 
             matched += 1
     check(mismatched == 0, f"all {matched + mismatched} id-named Mesh objects in the bundle match the "
                             f"package's vertex_count/submesh_count ({mismatched} mismatch(es))")
+    if generic_package:
+        check(mesh_id_counts == Counter({mid: 1 for mid in expected["mesh_ids_in_scope"]}),
+              "generic bundle contains every in-scope mesh ID exactly once; duplicates cannot hide a missing mesh")
     if unmatched_names:
         print(f"[validate_bundle_roundtrip]   ({len(unmatched_names)} Mesh object(s) with non-id names, "
               f"presumably Unity built-ins, ignored for this check: {unmatched_names[:10]})")
+
+    if special_meshes:
+        actual_bindings = Counter()
+        for kind in ("MeshFilter", "MeshCollider"):
+            for obj in objs_by_type.get(kind, []):
+                pointer = obj.read().m_Mesh
+                if pointer is None or pointer.path_id == 0:
+                    continue
+                try:
+                    mesh = pointer.deref()
+                except Exception:
+                    continue  # Missing required special references fail the exact counts below.
+                name = special_reader_ids.get((id(mesh.assets_file), mesh.path_id))
+                if name is not None:
+                    actual_bindings[(kind, name)] += 1
+        check(actual_bindings == expected.get("special_mesh_bindings", Counter()),
+              "every special source mesh retains its exact MeshFilter/MeshCollider attachment counts in the bundle")
 
     # --- Material detail: name -> O1-prefixed stand-in shader --------------------------
     package_materials = expected["manifest"].get("materials", {})
@@ -560,13 +626,18 @@ def validate_scenes_bundle_contents(env, expected: dict, material_shaders: dict 
             continue
         shader_name = shader_display_name(getattr(typed, "m_Shader", None))
         expected_original = meta["shader"]
-        expected_standin = SHADER_PREFIX + expected_original
+        try:
+            expected_standin = expected_shader_name(meta)
+        except ValueError as exc:
+            check(False, f"Material {name!r}: {exc}")
+            mat_mismatched += 1
+            continue
         local_bad = False
         if shader_name is None:
             local_bad = True
             check(False, f"Material {name!r}: m_Shader PPtr resolves to a readable Shader object "
                           f"(got None -- dangling/unresolved reference)")
-        elif not shader_name.startswith(SHADER_PREFIX):
+        elif not shader_name.startswith(SHADER_PREFIX) and expected_standin != "ArenaMapPort/Terrain":
             local_bad = True
             check(False, f"Material {name!r}: shader name {shader_name!r} starts with O1's "
                           f"{SHADER_PREFIX!r} prefix (a bare/unprefixed name means the SDK Editor's own "
@@ -585,12 +656,15 @@ def validate_scenes_bundle_contents(env, expected: dict, material_shaders: dict 
                 local_bad = True
                 check(False, f"Material {name!r}: material-shaders.json sidecar shader "
                               f"({sidecar_entry.get('shader')!r}) == package original ({expected_original!r})")
+            elif meta.get("preserve_shader") is True and sidecar_entry.get("preserveShader") is not True:
+                local_bad = True
+                check(False, f"Material {name!r}: owned terrain shader preservation is explicit in the sidecar")
         if local_bad:
             mat_mismatched += 1
         else:
             mat_matched += 1
     check(mat_mismatched == 0, f"all {mat_matched + mat_mismatched} id-named Material objects in the "
-                                f"bundle carry an O1-compliant stand-in shader name matching the package "
+                                f"bundle carry the declared stand-in or exact owned terrain shader "
                                 f"({mat_mismatched} mismatch(es))")
 
     # --- LODGroup null-renderer check ---------------------------------------------------
@@ -701,6 +775,233 @@ def validate_texture_dimension_consistency(env) -> None:
                      f"dimension mismatch)")
 
 
+def validate_generated_terrain_arrays(env, manifest: dict) -> None:
+    wanted = {key: value for key, value in manifest.get("textures", {}).items()
+              if value.get("generated_terrain_array") is True}
+    if not wanted:
+        return
+    actual = {}
+    for obj in env.objects:
+        if obj.type.name != "Texture2DArray":
+            continue
+        tree = obj.read_typetree()
+        name = tree.get("m_Name")
+        if name in wanted:
+            check(name not in actual, f"generated terrain array {name}: exactly one bundle asset")
+            actual[name] = tree
+    check(set(actual) == set(wanted), "every generated terrain array is present under its exact asset ID")
+    for key, tree in actual.items():
+        meta = wanted[key]
+        check(tree.get("m_Width") == meta["width"] and tree.get("m_Height") == meta["height"]
+              and tree.get("m_Depth") == meta["depth"], f"terrain array {key}: full slice dimensions/depth preserved")
+        color = 1 if meta["color_space"] == "sRGB" else 0
+        check(tree.get("m_ColorSpace") == color, f"terrain array {key}: {meta['color_space']} sampling preserved")
+        check(tree.get("m_MipCount", 0) > 1 and tree.get("m_DataSize", 0) > 0,
+              f"terrain array {key}: nonempty pixel data and generated mip chain")
+
+
+def ampm_mesh_geometry(path: Path):
+    """Independent AMPM reader for exact built mesh data checks, including channels."""
+    import numpy as np
+    data = path.read_bytes()
+    magic, version, count, mask, fmt, submesh_count = struct.unpack_from("<4sIIHBB", data)
+    if magic != b"AMPM" or version != 1 or not mask & 1 or mask >> 12 or fmt not in (0, 1):
+        raise ValueError("invalid AMPM mesh header")
+    channels, offset = {}, 16
+    for bit, (name, width) in enumerate([("positions", 3), ("normals", 3), ("tangents", 4), ("colors", 4)] + [(f"uv{i}", 2) for i in range(8)]):
+        if mask & (1 << bit):
+            channels[name] = np.frombuffer(data, "<f4", count * width, offset).reshape(count, width)
+            offset += count * width * 4
+    submeshes = [struct.unpack_from("<IIB", data, offset + number * 9) for number in range(submesh_count)]
+    offset += submesh_count * 9
+    indices = np.frombuffer(data, "<u2" if fmt == 0 else "<u4", offset=offset)
+    if len(indices) != sum(sm[1] for sm in submeshes):
+        raise ValueError("AMPM index buffer length differs from submesh table")
+    return channels, indices, submeshes
+
+
+def built_mesh_geometry_errors(reader, package_mesh: Path) -> list[str]:
+    """Compare Unity's built raw channels with independent source-checked AMPM data."""
+    import numpy as np
+    from UnityPy.helpers.MeshHelper import MeshHandler
+    channels, indices, submeshes = ampm_mesh_geometry(package_mesh)
+    tree = reader.read_typetree()
+    handler = MeshHandler(reader.read())
+    handler.process()
+    errors = []
+    attributes = {"positions": "m_Vertices", "normals": "m_Normals", "tangents": "m_Tangents", "colors": "m_Colors",
+                  **{f"uv{i}": f"m_UV{i}" for i in range(8)}}
+    for name, attribute in attributes.items():
+        decoded = getattr(handler, attribute, None)
+        if name not in channels:
+            if decoded is not None and len(decoded):
+                errors.append(f"built mesh has a source-absent {name} channel")
+            continue
+        target = channels[name]
+        actual = np.asarray(decoded, dtype=np.float64)
+        if actual.shape != target.shape:
+            errors.append(f"built {name} values differ from package/source (shape {actual.shape} != {target.shape})")
+        else:
+            different = ~np.isfinite(actual) | ~np.isclose(actual, target, rtol=1e-6, atol=1e-7)
+            if name.startswith("uv"):
+                # Three source Ford Shelby meshes contain Float16 UV1 infinities.
+                # Preserve the exact signed infinity in those coordinates; never
+                # accept newly introduced infinities, NaNs, or nonfinite geometry.
+                different &= ~(np.isinf(actual) & (actual == target))
+            if different.any():
+                index = tuple(int(i) for i in np.argwhere(different)[0])
+                errors.append(f"built {name} values differ from package/source "
+                              f"({np.count_nonzero(different)} values; first {index}: {actual[index]} != {target[index]})")
+    actual_submeshes = tree.get("m_SubMeshes", [])
+    actual_indices = handler.m_IndexBuffer
+    if len(actual_submeshes) != len(submeshes) or actual_indices is None:
+        errors.append("built submesh/index buffer is missing or has changed length")
+        return errors
+    actual_indices = np.asarray(actual_indices, dtype=np.int64)
+    size = 2 if tree["m_IndexFormat"] == 0 else 4
+    for number, (expected_start, expected_count, expected_topology) in enumerate(submeshes):
+        sm = actual_submeshes[number]
+        first_byte, count = sm["firstByte"], sm["indexCount"]
+        if first_byte % size or count != expected_count or sm["topology"] != expected_topology:
+            errors.append(f"built submesh {number} topology/count/offset differs from package/source")
+            continue
+        start = first_byte // size
+        actual = actual_indices[start:start + count] + sm.get("baseVertex", 0)
+        if not np.array_equal(actual, indices[expected_start:expected_start + expected_count]):
+            errors.append(f"built submesh {number} index values differ from package/source")
+    if len(actual_indices) != len(indices):
+        errors.append("built index buffer contains extra or missing indices")
+    return errors
+
+
+def empty_built_mesh_errors(tree: dict) -> list[str]:
+    """Zero source geometry stays a real referenced Mesh, never an invented proxy."""
+    errors = []
+    vertex = tree.get("m_VertexData") or {}
+    if vertex.get("m_VertexCount") != 0 or vertex.get("m_DataSize") or tree.get("m_IndexBuffer"):
+        errors.append("built source-empty asset contains raw geometry")
+    if (tree.get("m_StreamData") or {}).get("size"):
+        errors.append("built source-empty asset contains streamed geometry")
+    for key, value in (tree.get("m_CompressedMesh") or {}).items():
+        if isinstance(value, dict) and (value.get("m_NumItems") or value.get("m_Data")):
+            errors.append(f"built source-empty asset contains compressed {key}")
+    for submesh in tree.get("m_SubMeshes", []):
+        if any(submesh.get(key, 0) for key in ("firstByte", "indexCount", "firstVertex", "vertexCount", "baseVertex", "topology")):
+            errors.append("built source-empty asset contains a nonempty submesh")
+    return errors
+
+
+def dxbc_stage(code: bytes) -> int:
+    """Validate a DXBC container and return its actual tokenized program stage."""
+    if len(code) < 36 or code[:4] != b"DXBC":
+        raise ValueError("missing/truncated DXBC header")
+    size, count = struct.unpack_from("<II", code, 24)
+    if size != len(code) or count == 0 or count > (len(code) - 32) // 4:
+        raise ValueError("invalid DXBC length/chunk table")
+    stages = []
+    for index in range(count):
+        offset = struct.unpack_from("<I", code, 32 + index * 4)[0]
+        if offset < 32 + count * 4 or offset + 8 > len(code):
+            raise ValueError("DXBC chunk offset outside its container")
+        chunk_size = struct.unpack_from("<I", code, offset + 4)[0]
+        if offset + 8 + chunk_size > len(code):
+            raise ValueError("truncated DXBC chunk")
+        if code[offset:offset + 4] in (b"SHDR", b"SHEX"):
+            if chunk_size < 8 or chunk_size % 4:
+                raise ValueError("invalid tokenized shader program length")
+            version, words = struct.unpack_from("<II", code, offset + 8)
+            if words * 4 != chunk_size:
+                raise ValueError("tokenized shader program is truncated")
+            stages.append(version >> 16)
+    if len(stages) != 1:
+        raise ValueError("DXBC must contain exactly one executable shader program")
+    return stages[0]  # D3D tokenized program types: pixel=0, vertex=1.
+
+
+def validate_terrain_shader_bytecode(shader) -> dict[str, int]:
+    """Decode the built D3D11 program blobs and ask Microsoft's reader to accept each.
+
+    This proves real vertex/pixel bytecode survived the build. It is independent
+    of Shader.name and importer success, and does not claim GPU/rendering proof.
+    """
+    import ctypes
+    from UnityPy.helpers.CompressionHelper import decompress_lz4
+
+    platforms = list(shader.platforms or [])
+    if 4 not in platforms:  # Unity ShaderCompilerPlatform D3D11
+        raise ValueError("owned terrain shader has no D3D11 platform data")
+    compiler = ctypes.WinDLL("d3dcompiler_47.dll")
+    compiler.D3DDisassemble.argtypes = [ctypes.c_void_p, ctypes.c_size_t, ctypes.c_uint,
+                                      ctypes.c_char_p, ctypes.POINTER(ctypes.c_void_p)]
+    compiler.D3DDisassemble.restype = ctypes.c_long
+    blob = bytes(shader.compressedBlob or b"")
+    seen: set[bytes] = set()
+    counts = {"vertex": 0, "pixel": 0}
+    for platform_index, platform in enumerate(platforms):
+        if platform != 4:
+            continue
+        tables = [table[platform_index] for table in
+                  (shader.offsets, shader.compressedLengths, shader.decompressedLengths)]
+        tables = [value if isinstance(value, (list, tuple)) else [value] for value in tables]
+        if not tables[0] or len({len(value) for value in tables}) != 1:
+            raise ValueError("D3D11 compressed segment tables are incomplete")
+        for offset, compressed, decompressed in zip(*tables):
+            if min(offset, compressed, decompressed) < 0 or compressed == 0 or decompressed == 0 or offset + compressed > len(blob):
+                raise ValueError("D3D11 shader segment is empty or outside its blob")
+            raw = decompress_lz4(blob[offset:offset + compressed], decompressed)
+            if len(raw) != decompressed:
+                raise ValueError("D3D11 shader segment decompression length mismatch")
+            cursor = 0
+            while (cursor := raw.find(b"DXBC", cursor)) >= 0:
+                if cursor + 32 > len(raw):
+                    raise ValueError("truncated DXBC container in D3D11 blob")
+                length = struct.unpack_from("<I", raw, cursor + 24)[0]
+                if length < 36 or cursor + length > len(raw):
+                    raise ValueError("invalid DXBC container length in D3D11 blob")
+                code = raw[cursor:cursor + length]
+                cursor += length
+                if code in seen:
+                    continue
+                seen.add(code)
+                stage = dxbc_stage(code)
+                native = ctypes.create_string_buffer(code)
+                disassembly = ctypes.c_void_p()
+                result = compiler.D3DDisassemble(native, len(code), 0, None, ctypes.byref(disassembly))
+                try:
+                    if result != 0 or not disassembly:
+                        raise ValueError(f"D3DDisassemble rejected compiled shader bytecode: {result}")
+                finally:
+                    if disassembly:
+                        vtable = ctypes.cast(disassembly, ctypes.POINTER(ctypes.POINTER(ctypes.c_void_p))).contents
+                        ctypes.WINFUNCTYPE(ctypes.c_ulong, ctypes.c_void_p)(vtable[2])(disassembly)
+                if stage == 0:
+                    counts["pixel"] += 1
+                elif stage == 1:
+                    counts["vertex"] += 1
+    if not counts["vertex"] or not counts["pixel"]:
+        raise ValueError(f"owned terrain shader needs executable D3D11 vertex AND pixel programs: {counts}")
+    return counts
+
+
+def validate_owned_terrain_shader(env, manifest: dict) -> None:
+    if not any(meta.get("preserve_shader") is True for meta in manifest.get("materials", {}).values()):
+        return
+    candidates = []
+    for obj in env.objects:
+        if obj.type.name == "Shader":
+            tree = obj.read_typetree()
+            if tree.get("m_ParsedForm", {}).get("m_Name") == "ArenaMapPort/Terrain":
+                candidates.append(obj)
+    if not check(len(candidates) == 1, "exactly one owned ArenaMapPort/Terrain Shader asset is built"):
+        return
+    try:
+        counts = validate_terrain_shader_bytecode(candidates[0].read())
+    except Exception as exc:
+        check(False, f"owned terrain shader has valid executable D3D11 vertex/pixel bytecode: {exc}")
+        return
+    check(True, f"owned terrain shader has independently decoded D3D11 bytecode: {counts}")
+
+
 # ---------------------------------------------------------------------------
 # fix-enabled-state: per-scene disabled-component counts, bundle vs package
 # ---------------------------------------------------------------------------
@@ -804,6 +1105,247 @@ def validate_disabled_component_counts_bundle(env, package: Path, manifest: dict
 # ---------------------------------------------------------------------------
 # NavMesh bundle (optional for S1)
 # ---------------------------------------------------------------------------
+
+def reference_material_values(pointer) -> dict | None:
+    if pointer is None or pointer.path_id == 0:
+        return None
+    obj = pointer.deref()
+    if obj.type.name != "PhysicMaterial":
+        raise ValueError("collider physical material reference has the wrong object type")
+    tree = obj.read_typetree()
+    combine = {0: "Average", 1: "Minimum", 2: "Multiply", 3: "Maximum"}
+    # Arena/Unity 6000 and the Unity 2022 target serialize this native class
+    # with different field names. Require one complete observed schema; a
+    # missing value must never silently become a default friction/material.
+    source_fields = ("m_DynamicFriction", "m_StaticFriction", "m_Bounciness", "m_FrictionCombine", "m_BounceCombine")
+    target_fields = ("dynamicFriction", "staticFriction", "bounciness", "frictionCombine", "bounceCombine")
+    fields = source_fields if "m_DynamicFriction" in tree else target_fields
+    if any(key not in tree for key in fields):
+        raise ValueError("physical material has an incomplete or unsupported field schema")
+    dynamic, static, bounce, friction_combine, bounce_combine = (tree[key] for key in fields)
+    if not all(math.isfinite(value) for value in (dynamic, static, bounce)):
+        raise ValueError("physical material contains nonfinite values")
+    return {"dynamic_friction": dynamic, "static_friction": static, "bounciness": bounce,
+            "friction_combine": combine[friction_combine], "bounce_combine": combine[bounce_combine]}
+
+
+def reference_state(kind: str, tree: dict, typed=None) -> dict:
+    state = {"type": kind}
+    if kind == "MeshCollider":
+        state.update(enabled=bool(tree["m_Enabled"]), convex=bool(tree["m_Convex"]),
+                     is_trigger=bool(tree["m_IsTrigger"]), physic_material=reference_material_values(typed.m_Material))
+    return state
+
+
+def package_reference_state(comp: dict) -> dict:
+    keys = ("type", "enabled", "convex", "is_trigger", "physic_material") if comp["type"] == "MeshCollider" else ("type",)
+    return {key: comp[key] for key in keys}
+
+
+def source_reference_expectations(manifest: dict, scenes: dict) -> tuple[dict, list]:
+    """Independent live census: source-null MCs and every mixed renderer array.
+
+    Source-null MeshFilters omitted by the inherited extractor remain outside the
+    accepted scope; any explicitly emitted null MeshFilter still needs source proof.
+    """
+    import UnityPy
+    root = Path(manifest["source"]["arena_data_root"])
+    env = UnityPy.Environment(path=str(root))
+    registry = {record["name"]: record for record in manifest["source"]["scene_registry"]}
+    nulls, mixed = {}, []
+    for scene_name, scene in scenes.items():
+        source_name = f"level{registry[scene_name]['index']}"
+        sf = env.load_file(str(root / source_name))
+        emitted_mf = {o["id"] for o in scene["objects"] for c in o["components"]
+                      if c["type"] == "MeshFilter" and "mesh_id" in c and c["mesh_id"] is None}
+        records = []
+        for reader in sf.objects.values():
+            kind = reader.type.name
+            if kind not in ("MeshCollider", "MeshFilter", "MeshRenderer"):
+                continue
+            tree = reader.read_typetree()
+            if kind in ("MeshCollider", "MeshFilter"):
+                if tree["m_Mesh"] != {"m_FileID": 0, "m_PathID": 0}:
+                    continue
+                go_id = str(tree["m_GameObject"]["m_PathID"])
+                if kind == "MeshFilter" and go_id not in emitted_mf:
+                    continue
+                typed = reader.read()
+                go = typed.m_GameObject.deref().read_typetree()
+                records.append({"go_id": go_id, "name": go["m_Name"], "active": bool(go["m_IsActive"]),
+                                "layer": go["m_Layer"], **reference_state(kind, tree, typed)})
+            else:
+                slots = tree["m_Materials"]
+                empty = [i for i, pointer in enumerate(slots) if pointer == {"m_FileID": 0, "m_PathID": 0}]
+                if not empty or len(empty) == len(slots):
+                    continue
+                typed = reader.read()
+                ids, sources = [], []
+                for pointer in typed.m_Materials:
+                    if pointer.path_id == 0:
+                        ids.append(None)
+                        sources.append(None)
+                    else:
+                        material = pointer.deref()
+                        if material.type.name != "Material":
+                            raise ValueError("source mixed renderer has a non-Material reference")
+                        basename = Path(material.assets_file.name).name
+                        ids.append(hashlib.sha1(f"{basename}:{material.path_id}:Material".encode()).hexdigest()[:16])
+                        sources.append({"source_file": basename, "source_path_id": material.path_id})
+                mixed.append({"schema_version": 1, "scene": scene_name, "source_file": source_name,
+                              "source_renderer_path_id": reader.path_id,
+                              "source_game_object_path_id": tree["m_GameObject"]["m_PathID"],
+                              "source_object_sha256": hashlib.sha256(reader.get_raw_data()).hexdigest(),
+                              "material_ids": ids, "source_materials": sources, "null_slots": empty, "slot_count": len(ids)})
+        nulls[scene_name] = records
+    return nulls, mixed
+
+
+def package_object_chain(obj: dict, objects: dict) -> list:
+    chain, seen = [], set()
+    while True:
+        if obj["id"] in seen:
+            raise ValueError("cyclic package GameObject hierarchy")
+        seen.add(obj["id"])
+        chain.append((obj["name"], obj["local_position"], obj["local_rotation"], obj["local_scale"]))
+        parent = obj.get("parent_id")
+        if parent is None:
+            return chain
+        obj = objects[parent]
+
+
+def built_reference_go(reader, cache: dict) -> dict:
+    go_reader = reader.read().m_GameObject.deref()
+    sf = go_reader.assets_file
+
+    def read_local(pointer, kind=None):
+        if pointer["m_FileID"] != 0 or not pointer["m_PathID"]:
+            raise ValueError("scene object hierarchy reference must be local and non-null")
+        obj = sf.objects[pointer["m_PathID"]]
+        if kind is not None and obj.type.name != kind:
+            raise ValueError(f"scene reference requires {kind}, got {obj.type.name}")
+        key = (id(sf), obj.path_id)
+        if key not in cache:
+            cache[key] = obj.read_typetree()
+        return obj, cache[key]
+
+    _, first = read_local({"m_FileID": 0, "m_PathID": go_reader.path_id}, "GameObject")
+    if reader.path_id not in {entry["component"]["m_PathID"] for entry in first["m_Component"]
+                              if entry["component"]["m_FileID"] == 0}:
+        raise ValueError("component is not attached to its declared GameObject")
+    current, chain, seen = first, [], set()
+    while True:
+        transforms = [read_local(entry["component"]) for entry in current["m_Component"]]
+        transforms = [(obj, tree) for obj, tree in transforms if obj.type.name == "Transform"]
+        if len(transforms) != 1:
+            raise ValueError("affected GameObject must have exactly one Transform")
+        transform, tree = transforms[0]
+        if transform.path_id in seen:
+            raise ValueError("cyclic built GameObject hierarchy")
+        seen.add(transform.path_id)
+        chain.append((current["m_Name"], _vector(tree["m_LocalPosition"]),
+                      _vector(tree["m_LocalRotation"], "xyzw"), _vector(tree["m_LocalScale"])))
+        parent = tree["m_Father"]
+        if parent == {"m_FileID": 0, "m_PathID": 0}:
+            break
+        _, parent_transform = read_local(parent, "Transform")
+        _, current = read_local(parent_transform["m_GameObject"], "GameObject")
+    return {"name": first["m_Name"], "active": bool(first["m_IsActive"]), "layer": first["m_Layer"], "chain": chain}
+
+
+def reference_chain_matches(first: list, second: list) -> bool:
+    return len(first) == len(second) and all(
+        a[0] == b[0] and all(len(x) == len(y) and all(math.isclose(v, w, rel_tol=1e-6, abs_tol=1e-7)
+        for v, w in zip(x, y)) for x, y in zip(a[1:], b[1:])) for a, b in zip(first, second))
+
+
+def reference_records_errors(expected: list, actual: list) -> list[str]:
+    """Bind to complete hierarchy/TRS, then compare state without name-only matches."""
+    remaining, errors = list(actual), []
+    for wanted in expected:
+        candidates = [i for i, candidate in enumerate(remaining)
+                      if candidate["type"] == wanted["type"] and reference_chain_matches(wanted["chain"], candidate["chain"])]
+        exact = [i for i in candidates if {k: v for k, v in remaining[i].items() if k != "chain"}
+                 == {k: v for k, v in wanted.items() if k != "chain"}]
+        if exact:
+            remaining.pop(exact[0])
+        elif candidates:
+            observed = remaining.pop(candidates[0])
+            differences = [key for key in wanted if key != "chain" and wanted[key] != observed.get(key)]
+            errors.append(f"{wanted['name']} {wanted['type']}: changed {differences}")
+        else:
+            errors.append(f"{wanted['name']} {wanted['type']}: missing at its source hierarchy/local transform")
+    if remaining:
+        errors.append(f"{len(remaining)} extra null-reference component(s) in built scene")
+    return errors
+
+
+def validate_generic_null_references(env, package: Path, manifest: dict) -> None:
+    if manifest.get("source", {}).get("extractor_script") != "tools/extract/extract_map.py":
+        return
+    try:
+        scenes = {name: load_json(package / "scenes" / f"{name}.json") for name in manifest["scenes"]}
+        source_nulls, source_mixed = source_reference_expectations(manifest, scenes)
+        canonical = lambda value: json.dumps(value, sort_keys=True, separators=(",", ":"))
+        check(Counter(map(canonical, source_mixed)) == Counter(map(canonical, manifest.get("material_slot_preservation", []))),
+              "every live source mixed material array has exact complete provenance in the package")
+        by_name = {sf.name: sf for sf in iter_serialized_files(env)}
+        for name, scene in scenes.items():
+            objects = {obj["id"]: obj for obj in scene["objects"]}
+            required, package_nulls, package_mixed = [], [], []
+            for obj in objects.values():
+                for comp in obj["components"]:
+                    kind = comp["type"]
+                    null_mesh = kind in ("MeshFilter", "MeshCollider") and "mesh_id" in comp and comp["mesh_id"] is None
+                    null_slots = kind == "MeshRenderer" and None in comp["material_ids"]
+                    if not null_mesh and not null_slots:
+                        continue
+                    local = {key: obj[key] for key in ("name", "active", "layer")}
+                    state = package_reference_state(comp) if null_mesh else {"type": kind, "material_ids": comp["material_ids"]}
+                    required.append({**local, **state, "chain": package_object_chain(obj, objects)})
+                    if null_mesh:
+                        package_nulls.append({"go_id": obj["id"], **local, **state})
+                    else:
+                        package_mixed.append((int(obj["id"]), comp["material_ids"]))
+            check(Counter(map(canonical, package_nulls)) == Counter(map(canonical, source_nulls[name])),
+                  f"{name}: emitted null mesh component counts, source GO state and collider flags/physical materials match live source")
+            expected_mixed = [(record["source_game_object_path_id"], record["material_ids"])
+                              for record in source_mixed if record["scene"] == name]
+            check(Counter(map(canonical, package_mixed)) == Counter(map(canonical, expected_mixed)),
+                  f"{name}: package mixed material arrays retain every source ID and null position")
+            sf = by_name[f"BuildPlayer-{name}"]
+            actual, cache = [], {}
+            for reader in sf.objects.values():
+                kind = reader.type.name
+                if kind not in ("MeshCollider", "MeshFilter", "MeshRenderer"):
+                    continue
+                tree = reader.read_typetree()
+                if kind in ("MeshCollider", "MeshFilter"):
+                    if tree["m_Mesh"] != {"m_FileID": 0, "m_PathID": 0}:
+                        continue
+                    state = reference_state(kind, tree, reader.read())
+                else:
+                    if not any(pointer == {"m_FileID": 0, "m_PathID": 0} for pointer in tree["m_Materials"]):
+                        continue
+                    ids = []
+                    for pointer in reader.read().m_Materials:
+                        if pointer.path_id == 0:
+                            ids.append(None)
+                        else:
+                            material = pointer.deref()
+                            if material.type.name != "Material":
+                                raise ValueError("built mixed renderer references non-Material")
+                            ids.append(material.read_typetree()["m_Name"])
+                    state = {"type": kind, "material_ids": ids}
+                actual.append({**built_reference_go(reader, cache), **state})
+            errors = reference_records_errors(required, actual)
+            for error in errors:
+                check(False, f"{name}: {error}")
+            if not errors:
+                check(True, f"{name}: all {len(required)} explicit null-reference components retain exact hierarchy, local GO state and asset slots/flags")
+    except Exception as exc:
+        check(False, f"generic null-reference source/package/bundle proof failed: {exc}")
+
 
 def validate_navmesh_bundle(path: Path, require: bool) -> None:
     if not path.is_file():
@@ -1036,11 +1578,15 @@ def validate_editor_verify(path: Path, expected: dict, require_scripts_scene: bo
               f"editor_verify.json {scene_name}: game_object_count ({s.get('game_object_count')}) == "
               f"package object count ({pkg_object_count})")
         mf = s.get("mesh_filters", {})
-        check(mf.get("null_mesh", -1) == 0,
-              f"editor_verify.json {scene_name}: mesh_filters.null_mesh == 0 (got {mf.get('null_mesh')})")
+        generic = manifest.get("source", {}).get("extractor_script") == "tools/extract/extract_map.py"
+        components = [comp for obj in pkg_scene.get("objects", []) for comp in obj.get("components", [])]
+        null_mesh_count = sum(c["type"] == "MeshFilter" and "mesh_id" in c and c["mesh_id"] is None for c in components) if generic else 0
+        check(mf.get("null_mesh", -1) == null_mesh_count,
+              f"editor_verify.json {scene_name}: mesh_filters.null_mesh == package ({null_mesh_count}; got {mf.get('null_mesh')})")
         renderers = s.get("renderers", {})
-        check(renderers.get("has_null_material_slot", -1) == 0,
-              f"editor_verify.json {scene_name}: renderers.has_null_material_slot == 0 "
+        null_renderer_count = sum(c["type"] == "MeshRenderer" and None in c["material_ids"] for c in components) if generic else 0
+        check(renderers.get("has_null_material_slot", -1) == null_renderer_count,
+              f"editor_verify.json {scene_name}: renderers.has_null_material_slot == source-proven package ({null_renderer_count}) "
               f"(got {renderers.get('has_null_material_slot')})")
         lg = s.get("lod_groups", {})
         check(lg.get("null_renderer_entries", -1) == 0,
@@ -1049,6 +1595,151 @@ def validate_editor_verify(path: Path, expected: dict, require_scripts_scene: bo
 
 
 DEFAULT_PACKAGE_HOLDER: dict[str, Path] = {}
+
+
+SPAWN_SIDES = {"SpawnPoint_Player_All": 7, "SpawnPoint_Player_Usec": 1, "SpawnPoint_Player_Bear": 2}
+
+
+def _vector(value, dimensions: str = "xyz") -> list[float]:
+    result = [float(value[key]) for key in dimensions] if isinstance(value, dict) else [float(v) for v in value]
+    if len(result) != len(dimensions) or not all(math.isfinite(v) for v in result):
+        raise ValueError("spawn transform/position must contain finite coordinates")
+    return result
+
+
+def _apply_trs(point: list[float], transform: dict) -> list[float]:
+    position = _vector(transform["m_LocalPosition"])
+    scale = _vector(transform["m_LocalScale"])
+    qx, qy, qz, qw = _vector(transform["m_LocalRotation"], "xyzw")
+    if abs(qx * qx + qy * qy + qz * qz + qw * qw - 1) > 0.001:
+        raise ValueError("spawn transform quaternion must have unit length")
+    x, y, z = (point[i] * scale[i] for i in range(3))
+    tx, ty, tz = 2 * (qy * z - qz * y), 2 * (qz * x - qx * z), 2 * (qx * y - qy * x)
+    return [position[0] + x + qw * tx + qy * tz - qz * ty,
+            position[1] + y + qw * ty + qz * tx - qx * tz,
+            position[2] + z + qw * tz + qx * ty - qy * tx]
+
+
+def read_built_spawn_records(scene_file) -> list[dict]:
+    """Read only the already-loaded Scripts serialized file, with local PPtr checks."""
+    cache = {}
+
+    def resolve(pointer: dict, kind: str | None = None):
+        if pointer.get("m_FileID") != 0 or not pointer.get("m_PathID"):
+            raise ValueError("spawn scene reference must resolve inside its own Scripts file")
+        obj = scene_file.objects[pointer["m_PathID"]]
+        if kind is not None and obj.type.name != kind:
+            raise ValueError(f"spawn reference requires {kind}, got {obj.type.name}")
+        if obj.path_id not in cache:
+            cache[obj.path_id] = obj.read_typetree()
+        return obj, cache[obj.path_id]
+
+    records = []
+    for obj in scene_file.objects.values():
+        if obj.type.name != "MonoBehaviour":
+            continue
+        marker = obj.read_typetree()
+        if "_spawnPoint" not in marker:
+            continue
+        script = obj.read().m_Script.deref().read_typetree()
+        if (script.get("m_ClassName"), script.get("m_Namespace")) != ("SpawnPointMarker", "EFT.Game.Spawning"):
+            raise ValueError("serialized spawn data is not the required SpawnPointMarker type")
+        go_obj, go = resolve(marker["m_GameObject"], "GameObject")
+        transforms = []
+        attached_ids = set()
+        for component in go["m_Component"]:
+            # Unity serializes component entries as {component: PPtr}.
+            comp_obj, comp = resolve(component["component"])
+            attached_ids.add(comp_obj.path_id)
+            if comp_obj.type.name == "Transform":
+                transforms.append((comp_obj, comp))
+        if len(transforms) != 1 or obj.path_id not in attached_ids:
+            raise ValueError("spawn marker must be attached beside exactly one Transform")
+        transform_obj, transform = transforms[0]
+        point = [0.0, 0.0, 0.0]
+        active = bool(marker.get("m_Enabled"))
+        visited = set()
+        while True:
+            if transform_obj.path_id in visited or len(visited) > 100:
+                raise ValueError("cyclic or excessive spawn transform hierarchy")
+            visited.add(transform_obj.path_id)
+            _, ancestor = resolve(transform["m_GameObject"], "GameObject")
+            active = active and bool(ancestor.get("m_IsActive"))
+            point = _apply_trs(point, transform)
+            father = transform["m_Father"]
+            if father.get("m_PathID") == 0:
+                break
+            transform_obj, transform = resolve(father, "Transform")
+        collider_obj, collider = resolve(marker["_collider"])
+        collider_valid = (collider_obj.type.name in ("BoxCollider", "SphereCollider", "CapsuleCollider")
+                          and collider_obj.path_id in attached_ids
+                          and collider.get("m_GameObject") == marker["m_GameObject"]
+                          and collider.get("m_Enabled") == 1 and collider.get("m_IsTrigger") == 1)
+        spawn = marker["_spawnPoint"]
+        records.append({"name": go["m_Name"], "spawn_name": spawn["Name"], "id": spawn["Id"],
+                        "position": _vector(spawn["Position"]), "world_position": point,
+                        "active": active, "trigger_collider": collider_valid,
+                        "infiltration": spawn["Infiltration"], "sides": spawn["Sides"],
+                        "categories": spawn["Categories"]})
+    return records
+
+
+def spawn_record_errors(records: list[dict], starts: list[dict], infiltration: str) -> list[str]:
+    errors = []
+    expected_names = set(SPAWN_SIDES)
+    if len(records) != 3 or {record.get("name") for record in records} != expected_names:
+        return ["bundle must contain exactly the three named authored player starts"]
+    if len(starts) != 3 or {start.get("name") for start in starts} != expected_names:
+        return ["spawn placement report must contain exactly the three named accepted starts"]
+    if len({record.get("id") for record in records}) != 3 or any(not record.get("id") for record in records):
+        errors.append("built player spawn IDs must be nonempty and distinct")
+    accepted = {start["name"]: start for start in starts}
+    for record in records:
+        name = record["name"]
+        start = accepted[name]
+        if start.get("accepted") is not True:
+            errors.append(f"{name}: placement report did not accept this start")
+        try:
+            target = _vector(start["accepted_position"])
+            for field in ("position", "world_position"):
+                actual = _vector(record[field])
+                if math.dist(actual, target) > 0.001:
+                    errors.append(f"{name}: built {field} {actual} differs from accepted {target}")
+        except (KeyError, TypeError, ValueError) as exc:
+            errors.append(f"{name}: invalid serialized/accepted position: {exc}")
+        if record.get("spawn_name") != name or record.get("sides") != SPAWN_SIDES[name] or record.get("categories") != 1:
+            errors.append(f"{name}: serialized name, sides or Player category changed")
+        if not infiltration or record.get("infiltration") != infiltration:
+            errors.append(f"{name}: serialized infiltration differs from the map descriptor")
+        if record.get("active") is not True or record.get("trigger_collider") is not True:
+            errors.append(f"{name}: built marker must be active with its attached enabled trigger collider")
+    return errors
+
+
+def validate_spawn_placement_bundle(env, path: Path, manifest: dict, scene_name: str) -> None:
+    report = load_json(path)
+    source = manifest.get("source", {})
+    key = source.get("map_key", "")
+    if not check(bool(re.fullmatch(r"arena_[a-z0-9_]+", key)), "spawn bundle check has a valid generic map key"):
+        return
+    check(report.get("status") == "passed" and report.get("map_key") == key
+          and report.get("source_plan_sha256") == source.get("source_plan_sha256"),
+          "spawn placement report passed for the exact package map/source plan")
+    descriptor = load_json(REPO_ROOT / "tools/maps" / f"{key.removeprefix('arena_')}.json")
+    check(descriptor.get("key") == key and descriptor.get("scripts_scene_name") == scene_name,
+          "spawn placement uses the descriptor's exact Scripts scene")
+    files = [file for file in env.assets if file.name == "BuildPlayer-" + scene_name]
+    if not check(len(files) == 1, "exactly one authored Scripts serialized file exists for spawn roundtrip"):
+        return
+    try:
+        records = read_built_spawn_records(files[0])
+        errors = spawn_record_errors(records, report.get("starts", []), descriptor.get("infiltration_name", ""))
+    except Exception as exc:
+        errors = [f"spawn scene serialization could not be independently read: {exc}"]
+    for error in errors:
+        check(False, error)
+    if not errors:
+        check(True, "all three built spawn Position/Transform positions match accepted placement within 1mm, with active trigger colliders and exact sides/category/infiltration")
 
 
 # ---------------------------------------------------------------------------
@@ -1061,6 +1752,8 @@ def main() -> None:
                      help="WP1 package to cross-check counts against (default: O7's S1 path)")
     ap.add_argument("--material-shaders", type=Path, default=DEFAULT_MATERIAL_SHADERS)
     ap.add_argument("--editor-verify", type=Path, default=DEFAULT_EDITOR_VERIFY)
+    ap.add_argument("--spawn-placement", type=Path,
+                    help="require the actual Scripts bundle starts to match this accepted placement report")
     ap.add_argument("--require-navmesh", action="store_true",
                      help="fail if arena_equator_navmesh.bundle is missing (default: optional for S1)")
     ap.add_argument("--require-scripts-scene", dest="require_scripts_scene", action="store_true", default=True,
@@ -1082,6 +1775,8 @@ def main() -> None:
     if not args.package.is_dir():
         die(f"--package {args.package} is not a directory")
     expected = load_package_expected(args.package)
+    if expected["manifest"].get("source", {}).get("map_key") and args.spawn_placement is None:
+        args.spawn_placement = args.scenes_bundle.parent / "spawn-placement.json"
     if args.require_scripts_scene:
         # s1-fix-r1: Arena_Equator_Scripts adds its own fixed, spec-defined GameObjects/components
         # on top of the package-derived (2-content-scene) totals -- see SCRIPTS_SCENE_EXTRA_* above.
@@ -1108,8 +1803,13 @@ def main() -> None:
         validate_target_platform(env, "arena_equator_scenes.bundle")
         validate_scenes_bundle_contents(env, expected, material_shaders)
         validate_texture_dimension_consistency(env)
+        validate_generated_terrain_arrays(env, expected["manifest"])
+        validate_owned_terrain_shader(env, expected["manifest"])
         validate_disabled_component_counts_bundle(env, args.package, expected["manifest"])
+        validate_generic_null_references(env, args.package, expected["manifest"])
         validate_eft_scripts(env, args.require_scripts_scene)
+        if args.spawn_placement is not None:
+            validate_spawn_placement_bundle(env, args.spawn_placement, expected["manifest"], args.scripts_scene_name)
     else:
         check(False, "GameObject/Mesh/Material/collider/LODGroup/EFT-component checks run "
                       "(SKIPPED -- no bundle to read)")

@@ -139,8 +139,212 @@ namespace ArenaMapPort.Shared
             IconX: 150, IconY: 830,
             DbBaseJsonPath: "arena_bay5/base.json");
 
+        // Source scene selection: tools/extract/plans/airpit.json. Identity is permanent.
+        public static readonly ArenaMapDescriptor AirPit = new(
+            Key: "arena_airpit",
+            IdField: "b7ed175254b3c9dce8653ae5",
+            PresetBundleKey: "maps/arena_airpit_preset.bundle",
+            PresetAssetName: "arena_airpit.scenespreset.asset",
+            ScenesBundleKey: "arena_airpit/arena_airpit_scenes.bundle",
+            NavMeshBundleKey: "arena_airpit/arena_airpit_navmesh.bundle",
+            ScriptsSceneName: "Arena_AirPit_Scripts",
+            AllSceneNames: new[] { "Arena_AirPit_Scripts", "Arena_AirPit_ShootOut", "Arena_AirPit_ShootOut_Light", "Arena_Airpit_DesignStuff", "Arena_Airpit_TeamFight", "Arena_Airpit_TeamFight_DesignStuff" },
+            InfiltrationName: "ArenaAirPit",
+            LocaleName: "Arena: Air Pit (spike)",
+            LocaleDescription: "Internal test build — TeamFight geometry/collision/NavMesh port.",
+            IconX: 295,
+            IconY: 760,
+            DbBaseJsonPath: "arena_airpit/base.json");
+
+        // Source scene selection: tools/extract/plans/airpit2.json. Identity is permanent.
+        public static readonly ArenaMapDescriptor AirPit2 = new(
+            Key: "arena_airpit2",
+            IdField: "191e2e3e2e4add9f785844cb",
+            PresetBundleKey: "maps/arena_airpit2_preset.bundle",
+            PresetAssetName: "arena_airpit2.scenespreset.asset",
+            ScenesBundleKey: "arena_airpit2/arena_airpit2_scenes.bundle",
+            NavMeshBundleKey: "arena_airpit2/arena_airpit2_navmesh.bundle",
+            ScriptsSceneName: "Arena_AirPit2_Scripts",
+            AllSceneNames: new[] { "Arena_AirPit2_Scripts", "Arena_AirPit_2.0", "Arena_AirPit_2.0_Light", "Arena_AirPit_2.0_DesignStuff", "Arena_AirPit_2.0_CheckPoint_DesignStuff" },
+            InfiltrationName: "ArenaAirPit2",
+            LocaleName: "Arena: Air Pit 2.0 (spike)",
+            LocaleDescription: "Internal test build — CheckPoint geometry/collision/NavMesh port.",
+            IconX: 295,
+            IconY: 830,
+            DbBaseJsonPath: "arena_airpit2/base.json");
+
+        // Source scene selection: tools/extract/plans/autoservice.json. Identity is permanent.
+        public static readonly ArenaMapDescriptor AutoService = new(
+            Key: "arena_autoservice",
+            IdField: "e6aa4591d3e1a59835d625b3",
+            PresetBundleKey: "maps/arena_autoservice_preset.bundle",
+            PresetAssetName: "arena_autoservice.scenespreset.asset",
+            ScenesBundleKey: "arena_autoservice/arena_autoservice_scenes.bundle",
+            NavMeshBundleKey: "arena_autoservice/arena_autoservice_navmesh.bundle",
+            ScriptsSceneName: "Arena_AutoService_Scripts",
+            AllSceneNames: new[] { "Arena_AutoService_Scripts", "Arena_AutoService", "Arena_AutoService_DesignStuff", "Arena_AutoService_TeamFight_DesignStuff", "Arena_AutoService_Light" },
+            InfiltrationName: "ArenaAutoService",
+            LocaleName: "Arena: Auto Service (spike)",
+            LocaleDescription: "Internal test build — TeamFight geometry/collision/NavMesh port.",
+            IconX: 440,
+            IconY: 760,
+            DbBaseJsonPath: "arena_autoservice/base.json");
+
+        // Source scene selection: tools/extract/plans/bowl.json. Identity is permanent.
+        public static readonly ArenaMapDescriptor Bowl = new(
+            Key: "arena_bowl",
+            IdField: "3151df68a9deac47a2f83afe",
+            PresetBundleKey: "maps/arena_bowl_preset.bundle",
+            PresetAssetName: "arena_bowl.scenespreset.asset",
+            ScenesBundleKey: "arena_bowl/arena_bowl_scenes.bundle",
+            NavMeshBundleKey: "arena_bowl/arena_bowl_navmesh.bundle",
+            ScriptsSceneName: "Arena_Bowl_Scripts",
+            AllSceneNames: new[] { "Arena_Bowl_Scripts", "Arena_Bowl", "Arena_Bowl_Building", "Arena_Bowl_Grass", "Arena_Bowl_Light", "Arena_Bowl_DesignStuff", "Arena_Bowl_TeamFight", "Arena_Bowl_TeamFight_DesignStuff" },
+            InfiltrationName: "ArenaBowl",
+            LocaleName: "Arena: Bowl (spike)",
+            LocaleDescription: "Internal test build — TeamFight geometry/collision/NavMesh port.",
+            IconX: 440,
+            IconY: 830,
+            DbBaseJsonPath: "arena_bowl/base.json");
+
+        // Source scene selection: tools/extract/plans/prison.json. Identity is permanent.
+        public static readonly ArenaMapDescriptor Prison = new(
+            Key: "arena_prison",
+            IdField: "1da5bcb15506b795f1e8bd82",
+            PresetBundleKey: "maps/arena_prison_preset.bundle",
+            PresetAssetName: "arena_prison.scenespreset.asset",
+            ScenesBundleKey: "arena_prison/arena_prison_scenes.bundle",
+            NavMeshBundleKey: "arena_prison/arena_prison_navmesh.bundle",
+            ScriptsSceneName: "Arena_Prison_Scripts",
+            AllSceneNames: new[] { "Arena_Prison_Scripts", "Arena_Prison", "Arena_Prison_Grass", "Arena_Prison_DesignStuff", "Arena_Prison_TeamFight", "Arena_Prison_Light", "Arena_Prison_TeamFight_DesignStuff" },
+            InfiltrationName: "ArenaPrison",
+            LocaleName: "Arena: Prison (spike)",
+            LocaleDescription: "Internal test build — TeamFight geometry/collision/NavMesh port.",
+            IconX: 585,
+            IconY: 760,
+            DbBaseJsonPath: "arena_prison/base.json");
+
+        // Source scene selection: tools/extract/plans/railwaystation.json. Identity is permanent.
+        public static readonly ArenaMapDescriptor RailwayStation = new(
+            Key: "arena_railwaystation",
+            IdField: "94a181a24efce46d1e7eb359",
+            PresetBundleKey: "maps/arena_railwaystation_preset.bundle",
+            PresetAssetName: "arena_railwaystation.scenespreset.asset",
+            ScenesBundleKey: "arena_railwaystation/arena_railwaystation_scenes.bundle",
+            NavMeshBundleKey: "arena_railwaystation/arena_railwaystation_navmesh.bundle",
+            ScriptsSceneName: "Arena_RailwayStation_Scripts",
+            AllSceneNames: new[] { "Arena_RailwayStation_Scripts", "Arena_Train", "Arena_Train_DesignStuff", "Arena_Train_Grass", "Arena_Train_TeamFight", "Arena_Train_TeamFight_DesignStuff", "Arena_Train_Light_TeamFight" },
+            InfiltrationName: "ArenaRailwayStation",
+            LocaleName: "Arena: Railway Station (spike)",
+            LocaleDescription: "Internal test build — TeamFight geometry/collision/NavMesh port.",
+            IconX: 585,
+            IconY: 830,
+            DbBaseJsonPath: "arena_railwaystation/base.json");
+
+        // Source scene selection: tools/extract/plans/yard.json. Identity is permanent.
+        public static readonly ArenaMapDescriptor Yard = new(
+            Key: "arena_yard",
+            IdField: "187d5cbc21744c97e8348e76",
+            PresetBundleKey: "maps/arena_yard_preset.bundle",
+            PresetAssetName: "arena_yard.scenespreset.asset",
+            ScenesBundleKey: "arena_yard/arena_yard_scenes.bundle",
+            NavMeshBundleKey: "arena_yard/arena_yard_navmesh.bundle",
+            ScriptsSceneName: "Arena_Yard_Scripts",
+            AllSceneNames: new[] { "Arena_Yard_Scripts", "Arena_Yard", "Arena_Yard_Grass", "Arena_Yard_DesignStuff", "Arena_Yard_TeamFight", "Arena_Yard_TeamFight_DesignStuff", "Arena_Yard_Light" },
+            InfiltrationName: "ArenaYard",
+            LocaleName: "Arena: Yard (spike)",
+            LocaleDescription: "Internal test build — TeamFight geometry/collision/NavMesh port.",
+            IconX: 730,
+            IconY: 760,
+            DbBaseJsonPath: "arena_yard/base.json");
+
+        // Source scene selection: tools/extract/plans/iceberg.json. Identity is permanent.
+        public static readonly ArenaMapDescriptor Iceberg = new(
+            Key: "arena_iceberg",
+            IdField: "2e2d6dadf4ebb29e53a69aae",
+            PresetBundleKey: "maps/arena_iceberg_preset.bundle",
+            PresetAssetName: "arena_iceberg.scenespreset.asset",
+            ScenesBundleKey: "arena_iceberg/arena_iceberg_scenes.bundle",
+            NavMeshBundleKey: "arena_iceberg/arena_iceberg_navmesh.bundle",
+            ScriptsSceneName: "Arena_Iceberg_Scripts",
+            AllSceneNames: new[] { "Arena_Iceberg_Scripts", "Arena_Sanatorium", "Arena_Sanatorium_Grass", "Arena_Sanatorium_Light", "Arena_Sanatorium_DesignStuff", "Arena_Sanatorium_CheckPoint", "Arena_Sanatorium_CheckPoint_DesignStuff" },
+            InfiltrationName: "ArenaIceberg",
+            LocaleName: "Arena: Iceberg (spike)",
+            LocaleDescription: "Internal test build — CheckPoint geometry/collision/NavMesh port.",
+            IconX: 730,
+            IconY: 830,
+            DbBaseJsonPath: "arena_iceberg/base.json");
+
+        // Source scene selection: tools/extract/plans/factory.json. Identity is permanent.
+        public static readonly ArenaMapDescriptor Factory = new(
+            Key: "arena_factory",
+            IdField: "8c710054b674251da2e5bf02",
+            PresetBundleKey: "maps/arena_factory_preset.bundle",
+            PresetAssetName: "arena_factory.scenespreset.asset",
+            ScenesBundleKey: "arena_factory/arena_factory_scenes.bundle",
+            NavMeshBundleKey: "arena_factory/arena_factory_navmesh.bundle",
+            ScriptsSceneName: "Arena_Factory_Scripts",
+            AllSceneNames: new[] { "Arena_Factory_Scripts", "Arena_Factory", "Arena_Factory_Light", "Arena_Factory_DesignStuff", "Arena_Factory_SO_DesignStuff" },
+            InfiltrationName: "ArenaFactory",
+            LocaleName: "Arena: Factory (spike)",
+            LocaleDescription: "Internal test build — ShootOutDuo geometry/collision/NavMesh port.",
+            IconX: 875,
+            IconY: 760,
+            DbBaseJsonPath: "arena_factory/base.json");
+
+        // Source scene selection: tools/extract/plans/custom.json. Identity is permanent.
+        public static readonly ArenaMapDescriptor Custom = new(
+            Key: "arena_custom",
+            IdField: "8d293d9d2a8fd179128bea17",
+            PresetBundleKey: "maps/arena_custom_preset.bundle",
+            PresetAssetName: "arena_custom.scenespreset.asset",
+            ScenesBundleKey: "arena_custom/arena_custom_scenes.bundle",
+            NavMeshBundleKey: "arena_custom/arena_custom_navmesh.bundle",
+            ScriptsSceneName: "Arena_Custom_Scripts",
+            AllSceneNames: new[] { "Arena_Custom_Scripts", "Arena_Custom_LH", "Arena_Custom_LH_Light", "Arena_Custom_LH_Terrain", "Arena_NY_Custom_LH_DesignStuff", "Arena_NY_Custom_LastHero_DesignStuff" },
+            InfiltrationName: "ArenaCustom",
+            LocaleName: "Arena: Custom (spike)",
+            LocaleDescription: "Internal test build — LastHero geometry/collision/NavMesh port.",
+            IconX: 875,
+            IconY: 830,
+            DbBaseJsonPath: "arena_custom/base.json");
+
+        // Source scene selection: tools/extract/plans/shoreline.json. Identity is permanent.
+        public static readonly ArenaMapDescriptor Shoreline = new(
+            Key: "arena_shoreline",
+            IdField: "ac3fe0b02d506baeb62f6de4",
+            PresetBundleKey: "maps/arena_shoreline_preset.bundle",
+            PresetAssetName: "arena_shoreline.scenespreset.asset",
+            ScenesBundleKey: "arena_shoreline/arena_shoreline_scenes.bundle",
+            NavMeshBundleKey: "arena_shoreline/arena_shoreline_navmesh.bundle",
+            ScriptsSceneName: "Arena_Shoreline_Scripts",
+            AllSceneNames: new[] { "Arena_Shoreline_Scripts", "Arena_Shoreline_LH", "Arena_Shoreline_LH_Terrain", "Arena_Shoreline_LH_Light", "Arena_Shoreline_LH_DesignStuff", "Arena_NY_Shoreline_LastHero_DesignStuff" },
+            InfiltrationName: "ArenaShoreline",
+            LocaleName: "Arena: Shoreline (spike)",
+            LocaleDescription: "Internal test build — LastHero geometry/collision/NavMesh port.",
+            IconX: 1020,
+            IconY: 760,
+            DbBaseJsonPath: "arena_shoreline/base.json");
+
+        // Source scene selection: tools/extract/plans/woods.json. Identity is permanent.
+        public static readonly ArenaMapDescriptor Woods = new(
+            Key: "arena_woods",
+            IdField: "88ca77b5e9af71bf064f8666",
+            PresetBundleKey: "maps/arena_woods_preset.bundle",
+            PresetAssetName: "arena_woods.scenespreset.asset",
+            ScenesBundleKey: "arena_woods/arena_woods_scenes.bundle",
+            NavMeshBundleKey: "arena_woods/arena_woods_navmesh.bundle",
+            ScriptsSceneName: "Arena_Woods_Scripts",
+            AllSceneNames: new[] { "Arena_Woods_Scripts", "Arena_Woods_LH", "Arena_Woods_LH_Terrain", "Arena_Woods_LH_Light", "Arena_NY_Woods_LH_DesignStuff", "Arena_NY_Woods_LastHero_DesignStuff" },
+            InfiltrationName: "ArenaWoods",
+            LocaleName: "Arena: Woods (spike)",
+            LocaleDescription: "Internal test build — LastHero geometry/collision/NavMesh port.",
+            IconX: 1020,
+            IconY: 830,
+            DbBaseJsonPath: "arena_woods/base.json");
+
         /// <summary>All registered maps, in registration order. Iterate this — never hardcode
         /// <see cref="Equator"/> alone — everywhere a map-generic loop is needed.</summary>
-        public static readonly IReadOnlyList<ArenaMapDescriptor> All = new[] { Equator, Bay5 };
+        public static readonly IReadOnlyList<ArenaMapDescriptor> All = new[] { Equator, Bay5, AirPit, AirPit2, AutoService, Bowl, Prison, RailwayStation, Yard, Iceberg, Factory, Custom, Shoreline, Woods };
     }
 }

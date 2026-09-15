@@ -1,0 +1,26 @@
+{
+  "key": "arena_railwaystation",
+  "id_field": "94a181a24efce46d1e7eb359",
+  "scripts_scene_name": "Arena_RailwayStation_Scripts",
+  "all_scene_names": [
+    "Arena_RailwayStation_Scripts",
+    "Arena_Train",
+    "Arena_Train_DesignStuff",
+    "Arena_Train_Grass",
+    "Arena_Train_TeamFight",
+    "Arena_Train_TeamFight_DesignStuff",
+    "Arena_Train_Light_TeamFight"
+  ],
+  "infiltration_name": "ArenaRailwayStation",
+  "locale_name": "Arena: Railway Station (spike)",
+  "locale_description": "Internal test build — TeamFight geometry/collision/NavMesh port.",
+  "icon_x": 585,
+  "icon_y": 830,
+  "template_key": "factory4_day",
+  "db_base_json_path": "arena_railwaystation/base.json",
+  "fog_color": [
+    0.20999999344348907,
+    0.20343641936779022,
+    0.20075999200344086
+  ]
+}

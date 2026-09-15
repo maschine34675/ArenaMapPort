@@ -1,0 +1,24 @@
+{
+  "key": "arena_airpit2",
+  "id_field": "191e2e3e2e4add9f785844cb",
+  "scripts_scene_name": "Arena_AirPit2_Scripts",
+  "all_scene_names": [
+    "Arena_AirPit2_Scripts",
+    "Arena_AirPit_2.0",
+    "Arena_AirPit_2.0_Light",
+    "Arena_AirPit_2.0_DesignStuff",
+    "Arena_AirPit_2.0_CheckPoint_DesignStuff"
+  ],
+  "infiltration_name": "ArenaAirPit2",
+  "locale_name": "Arena: Air Pit 2.0 (spike)",
+  "locale_description": "Internal test build — CheckPoint geometry/collision/NavMesh port.",
+  "icon_x": 295,
+  "icon_y": 830,
+  "template_key": "factory4_day",
+  "db_base_json_path": "arena_airpit2/base.json",
+  "fog_color": [
+    0.10291736572980881,
+    0.12126664072275162,
+    0.13035738468170166
+  ]
+}

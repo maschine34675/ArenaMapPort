@@ -1,0 +1,25 @@
+{
+  "key": "arena_airpit",
+  "id_field": "b7ed175254b3c9dce8653ae5",
+  "scripts_scene_name": "Arena_AirPit_Scripts",
+  "all_scene_names": [
+    "Arena_AirPit_Scripts",
+    "Arena_AirPit_ShootOut",
+    "Arena_AirPit_ShootOut_Light",
+    "Arena_Airpit_DesignStuff",
+    "Arena_Airpit_TeamFight",
+    "Arena_Airpit_TeamFight_DesignStuff"
+  ],
+  "infiltration_name": "ArenaAirPit",
+  "locale_name": "Arena: Air Pit (spike)",
+  "locale_description": "Internal test build — TeamFight geometry/collision/NavMesh port.",
+  "icon_x": 295,
+  "icon_y": 760,
+  "template_key": "factory4_day",
+  "db_base_json_path": "arena_airpit/base.json",
+  "fog_color": [
+    0.0992923229932785,
+    0.11644228547811508,
+    0.12249535322189331
+  ]
+}

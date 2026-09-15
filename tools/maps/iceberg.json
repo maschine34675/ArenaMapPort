@@ -1,0 +1,26 @@
+{
+  "key": "arena_iceberg",
+  "id_field": "2e2d6dadf4ebb29e53a69aae",
+  "scripts_scene_name": "Arena_Iceberg_Scripts",
+  "all_scene_names": [
+    "Arena_Iceberg_Scripts",
+    "Arena_Sanatorium",
+    "Arena_Sanatorium_Grass",
+    "Arena_Sanatorium_Light",
+    "Arena_Sanatorium_DesignStuff",
+    "Arena_Sanatorium_CheckPoint",
+    "Arena_Sanatorium_CheckPoint_DesignStuff"
+  ],
+  "infiltration_name": "ArenaIceberg",
+  "locale_name": "Arena: Iceberg (spike)",
+  "locale_description": "Internal test build — CheckPoint geometry/collision/NavMesh port.",
+  "icon_x": 730,
+  "icon_y": 830,
+  "template_key": "factory4_day",
+  "db_base_json_path": "arena_iceberg/base.json",
+  "fog_color": [
+    0.5,
+    0.5,
+    0.5
+  ]
+}

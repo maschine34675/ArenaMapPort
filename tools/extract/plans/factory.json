@@ -1,0 +1,73 @@
+{
+  "schema_version": 1,
+  "key": "arena_factory",
+  "source_preset": "arena_factory_preset.bundle",
+  "source_mode": "ShootOutDuo",
+  "scenes": [
+    {
+      "name": "Arena_Factory",
+      "asset_path": "Assets/Content/Locations/Arena_Factory/Arena_Factory.unity",
+      "index": 373
+    },
+    {
+      "name": "Arena_Factory_Light",
+      "asset_path": "Assets/Content/Locations/Arena_Factory/Arena_Factory_Light.unity",
+      "index": 374
+    },
+    {
+      "name": "Arena_Factory_DesignStuff",
+      "asset_path": "Assets/Content/Locations/Arena_Factory/Arena_Factory_DesignStuff.unity",
+      "index": 375
+    },
+    {
+      "name": "Arena_Factory_SO_DesignStuff",
+      "asset_path": "Assets/Content/Locations/Arena_Factory/Arena_Factory_SO_DesignStuff.unity",
+      "index": 370
+    }
+  ],
+  "anchor_scenes": [
+    {
+      "name": "Arena_Factory_SO_DesignStuff",
+      "asset_path": "Assets/Content/Locations/Arena_Factory/Arena_Factory_SO_DesignStuff.unity",
+      "index": 370
+    }
+  ],
+  "navmesh_scenes": [
+    {
+      "name": "Arena_Factory_AI",
+      "asset_path": "Assets/Content/Locations/Arena_Factory/Arena_Factory_AI.unity",
+      "index": 377
+    }
+  ],
+  "fog_color": [
+    0.20999999344348907,
+    0.20343641936779022,
+    0.20075999200344086
+  ],
+  "excluded_scenes": [
+    {
+      "name": "Arena_Factory_Scripts",
+      "asset_path": "Assets/Content/Locations/Arena_Factory/Arena_Factory_Scripts.unity",
+      "index": 372,
+      "reason": "Replaced by the freshly authored SPT Scripts scene; source scripts and seasonal runtime objects are not imported."
+    },
+    {
+      "name": "Arena_Factory_Sound",
+      "asset_path": "Assets/Content/Locations/Arena_Factory/Arena_Factory_Sound.unity",
+      "index": 376,
+      "reason": "Source Arena sound/audio runtime is outside the existing port contract."
+    },
+    {
+      "name": "Arena_Factory_AI",
+      "asset_path": "Assets/Content/Locations/Arena_Factory/Arena_Factory_AI.unity",
+      "index": 377,
+      "reason": "Source AI/gameplay scene is metadata reference only; port bakes a fresh SPT NavMesh."
+    },
+    {
+      "name": "Arena_Factory_SO_Culling",
+      "asset_path": "Assets/Content/Locations/Arena_Factory/Arena_Factory_SO_Culling.unity",
+      "index": 371,
+      "reason": "Source PerfectCulling data is outside the existing port contract."
+    }
+  ]
+}

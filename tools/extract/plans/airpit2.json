@@ -1,0 +1,67 @@
+{
+  "schema_version": 1,
+  "key": "arena_airpit2",
+  "source_preset": "arena_airpit_2.0_preset.bundle",
+  "source_mode": "CheckPoint",
+  "scenes": [
+    {
+      "name": "Arena_AirPit_2.0",
+      "asset_path": "Assets/Content/Locations/Arena_AirPit_2.0/Arena_AirPit_2.0.unity",
+      "index": 343
+    },
+    {
+      "name": "Arena_AirPit_2.0_Light",
+      "asset_path": "Assets/Content/Locations/Arena_AirPit_2.0/Arena_AirPit_2.0_Light.unity",
+      "index": 344
+    },
+    {
+      "name": "Arena_AirPit_2.0_DesignStuff",
+      "asset_path": "Assets/Content/Locations/Arena_AirPit_2.0/Arena_AirPit_2.0_DesignStuff.unity",
+      "index": 345
+    },
+    {
+      "name": "Arena_AirPit_2.0_CheckPoint_DesignStuff",
+      "asset_path": "Assets/Content/Locations/Arena_AirPit_2.0/Arena_AirPit_2.0_CheckPoint_DesignStuff.unity",
+      "index": 341
+    }
+  ],
+  "anchor_scenes": [
+    {
+      "name": "Arena_AirPit_2.0_CheckPoint_DesignStuff",
+      "asset_path": "Assets/Content/Locations/Arena_AirPit_2.0/Arena_AirPit_2.0_CheckPoint_DesignStuff.unity",
+      "index": 341
+    }
+  ],
+  "navmesh_scenes": [
+    {
+      "name": "Arena_AirPit_2.0_AI",
+      "asset_path": "Assets/Content/Locations/Arena_AirPit_2.0/Arena_AirPit_2.0_AI.unity",
+      "index": 347
+    }
+  ],
+  "fog_color": [
+    0.10291736572980881,
+    0.12126664072275162,
+    0.13035738468170166
+  ],
+  "excluded_scenes": [
+    {
+      "name": "Arena_AirPit_2.0_Scripts",
+      "asset_path": "Assets/Content/Locations/Arena_AirPit_2.0/Arena_AirPit_2.0_Scripts.unity",
+      "index": 342,
+      "reason": "Replaced by the freshly authored SPT Scripts scene; source scripts and seasonal runtime objects are not imported."
+    },
+    {
+      "name": "Arena_AirPit_2.0_Sound",
+      "asset_path": "Assets/Content/Locations/Arena_AirPit_2.0/Arena_AirPit_2.0_Sound.unity",
+      "index": 346,
+      "reason": "Source Arena sound/audio runtime is outside the existing port contract."
+    },
+    {
+      "name": "Arena_AirPit_2.0_AI",
+      "asset_path": "Assets/Content/Locations/Arena_AirPit_2.0/Arena_AirPit_2.0_AI.unity",
+      "index": 347,
+      "reason": "Source AI/gameplay scene is metadata reference only; port bakes a fresh SPT NavMesh."
+    }
+  ]
+}

@@ -1,0 +1,78 @@
+{
+  "schema_version": 1,
+  "key": "arena_woods",
+  "source_preset": "arena_woods_preset.bundle",
+  "source_mode": "LastHero",
+  "scenes": [
+    {
+      "name": "Arena_Woods_LH",
+      "asset_path": "Assets/Content/Locations/Arena_NY_Woods_LH/Arena_Woods_LH.unity",
+      "index": 350
+    },
+    {
+      "name": "Arena_Woods_LH_Terrain",
+      "asset_path": "Assets/Content/Locations/Arena_NY_Woods_LH/Arena_Woods_LH_Terrain.unity",
+      "index": 356
+    },
+    {
+      "name": "Arena_Woods_LH_Light",
+      "asset_path": "Assets/Content/Locations/Arena_NY_Woods_LH/Arena_Woods_LH_Light.unity",
+      "index": 351
+    },
+    {
+      "name": "Arena_NY_Woods_LH_DesignStuff",
+      "asset_path": "Assets/Content/Locations/Arena_NY_Woods_LH/Arena_NY_Woods_LH_DesignStuff.unity",
+      "index": 288
+    },
+    {
+      "name": "Arena_NY_Woods_LastHero_DesignStuff",
+      "asset_path": "Assets/Content/Locations/Arena_NY_Woods_LH/Arena_NY_Woods_LastHero_DesignStuff.unity",
+      "index": 292
+    }
+  ],
+  "anchor_scenes": [
+    {
+      "name": "Arena_NY_Woods_LastHero_DesignStuff",
+      "asset_path": "Assets/Content/Locations/Arena_NY_Woods_LH/Arena_NY_Woods_LastHero_DesignStuff.unity",
+      "index": 292
+    }
+  ],
+  "navmesh_scenes": [
+    {
+      "name": "Arena_NY_Woods_LH_AI",
+      "asset_path": "Assets/Content/Locations/Arena_NY_Woods_LH/Arena_NY_Woods_LH_AI.unity",
+      "index": 290
+    }
+  ],
+  "fog_color": [
+    0.5,
+    0.5,
+    0.5
+  ],
+  "excluded_scenes": [
+    {
+      "name": "Arena_Woods_LH_Scripts",
+      "asset_path": "Assets/Content/Locations/Arena_NY_Woods_LH/Arena_Woods_LH_Scripts.unity",
+      "index": 349,
+      "reason": "Replaced by the freshly authored SPT Scripts scene; source scripts and seasonal runtime objects are not imported."
+    },
+    {
+      "name": "Arena_NY_Woods_LH_Sound",
+      "asset_path": "Assets/Content/Locations/Arena_NY_Woods_LH/Arena_NY_Woods_LH_Sound.unity",
+      "index": 289,
+      "reason": "Source Arena sound/audio runtime is outside the existing port contract."
+    },
+    {
+      "name": "Arena_NY_Woods_LH_AI",
+      "asset_path": "Assets/Content/Locations/Arena_NY_Woods_LH/Arena_NY_Woods_LH_AI.unity",
+      "index": 290,
+      "reason": "Source AI/gameplay scene is metadata reference only; port bakes a fresh SPT NavMesh."
+    },
+    {
+      "name": "Arena_NY_Woods_LH_Culling",
+      "asset_path": "Assets/Content/Locations/Arena_NY_Woods_LH/Arena_NY_Woods_LH_Culling.unity",
+      "index": 291,
+      "reason": "Source PerfectCulling data is outside the existing port contract."
+    }
+  ]
+}

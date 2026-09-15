@@ -12,6 +12,7 @@
 using System.Collections.Generic;
 using System.IO;
 using ArenaMapPort.Editor.Common;
+using ArenaMapPort.Editor.Shaders;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using UnityEditor;
@@ -40,7 +41,16 @@ namespace ArenaMapPort.Editor.Import
                 string shaderName = (string)matJson["shader"];
 
                 Shader shader;
-                if (!standinShaders.TryGetValue(shaderName, out shader) || shader == null)
+                bool preserveShader = (bool?)matJson["preserve_shader"] == true;
+                if (preserveShader)
+                {
+                    if (shaderName != "ArenaMapPort/Terrain")
+                        throw new IOException("Only the owned terrain shader may bypass a stand-in: " + shaderName);
+                    shader = AssetDatabase.LoadAssetAtPath<Shader>("Assets/ArenaMapPort/Shaders/Terrain.shader");
+                    if (shader == null || shader.name != shaderName || ShaderUtil.ShaderHasError(shader))
+                        throw new IOException("Owned terrain shader missing or failed compilation: " + shaderName);
+                }
+                else if (!standinShaders.TryGetValue(shaderName, out shader) || shader == null)
                 {
                     throw new IOException("[ArenaMapPort][MaterialImporter] no stand-in shader for '" + shaderName +
                                            "' (material " + matId + ") - StandinShaderGenerator must run first.");
@@ -58,14 +68,17 @@ namespace ArenaMapPort.Editor.Import
                         // doesn't declare a slot for it either, see its own CollectFromPackage
                         // comment for the real material this was found on) -- Material.SetTexture/
                         // SetFloat/SetColor("", ...) has no meaningful target to write to.
-                        if (string.IsNullOrEmpty(t.Name)) continue;
+                        if (!StandinShaderGenerator.ShouldImportProperty(t.Name, shaderName, matId)) continue;
                         var entry = (JObject)t.Value;
                         var texIdTok = entry["texture_id"];
                         if (texIdTok != null && texIdTok.Type != JTokenType.Null)
                         {
                             string texId = (string)texIdTok;
                             string dimension = pkg.TextureDimension(texId);
-                            if (dimension == "Tex3D" || dimension == "Tex2DArray")
+                            bool terrainArray = (bool?)((JObject)pkg.Textures[texId])["generated_terrain_array"] == true;
+                            if (terrainArray && (!preserveShader || dimension != "Tex2DArray"))
+                                throw new IOException("Generated terrain array may only bind to its owned terrain shader: " + texId);
+                            if (dimension == "Tex3D" || (dimension == "Tex2DArray" && !terrainArray))
                             {
                                 // impl-texture-dimensions §2 (task item 2's explicit fallback):
                                 // a correct import isn't attempted for this shape (see
@@ -86,7 +99,13 @@ namespace ArenaMapPort.Editor.Import
                                 // 2D texture standing in for a Cube slot).
                                 Texture tex;
                                 if (textures.TryGetValue(texId, out tex) && tex != null)
+                                {
+                                    if (terrainArray && !(tex is Texture2DArray))
+                                        throw new IOException("Generated terrain array was not imported as Texture2DArray: " + texId);
                                     mat.SetTexture(t.Name, tex);
+                                }
+                                else if (preserveShader)
+                                    throw new IOException("Required terrain texture missing: " + texId);
                                 else
                                     Debug.LogWarning("[ArenaMapPort][MaterialImporter] material " + matId + " prop " +
                                                       t.Name + " references missing texture_id " + texId +
@@ -106,13 +125,13 @@ namespace ArenaMapPort.Editor.Import
                 var floats = (JObject)matJson["floats"];
                 if (floats != null)
                     foreach (var f in floats.Properties())
-                        if (!string.IsNullOrEmpty(f.Name)) mat.SetFloat(f.Name, (float)f.Value);
+                        if (StandinShaderGenerator.ShouldImportProperty(f.Name, shaderName, matId)) mat.SetFloat(f.Name, (float)f.Value);
 
                 var colors = (JObject)matJson["colors"];
                 if (colors != null)
                     foreach (var c in colors.Properties())
                     {
-                        if (string.IsNullOrEmpty(c.Name)) continue;
+                        if (!StandinShaderGenerator.ShouldImportProperty(c.Name, shaderName, matId)) continue;
                         var arr = (JArray)c.Value;
                         mat.SetColor(c.Name, new Color((float)arr[0], (float)arr[1], (float)arr[2], (float)arr[3]));
                     }
@@ -139,6 +158,7 @@ namespace ArenaMapPort.Editor.Import
                 sidecarEntry["shader"] = shaderName;
                 sidecarEntry["renderQueue"] = mat.renderQueue; // actual applied queue (explicit or stand-in shader default)
                 sidecarEntry["keywords"] = new JArray(keywordList);
+                if (preserveShader) sidecarEntry["preserveShader"] = true;
                 sidecar[matId] = sidecarEntry;
             }
 

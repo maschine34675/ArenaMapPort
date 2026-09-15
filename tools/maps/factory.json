@@ -1,0 +1,24 @@
+{
+  "key": "arena_factory",
+  "id_field": "8c710054b674251da2e5bf02",
+  "scripts_scene_name": "Arena_Factory_Scripts",
+  "all_scene_names": [
+    "Arena_Factory_Scripts",
+    "Arena_Factory",
+    "Arena_Factory_Light",
+    "Arena_Factory_DesignStuff",
+    "Arena_Factory_SO_DesignStuff"
+  ],
+  "infiltration_name": "ArenaFactory",
+  "locale_name": "Arena: Factory (spike)",
+  "locale_description": "Internal test build — ShootOutDuo geometry/collision/NavMesh port.",
+  "icon_x": 875,
+  "icon_y": 760,
+  "template_key": "factory4_day",
+  "db_base_json_path": "arena_factory/base.json",
+  "fog_color": [
+    0.20999999344348907,
+    0.20343641936779022,
+    0.20075999200344086
+  ]
+}

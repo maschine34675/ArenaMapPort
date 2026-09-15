@@ -1,0 +1,89 @@
+{
+  "schema_version": 1,
+  "key": "arena_yard",
+  "source_preset": "arena_yard_preset.bundle",
+  "source_mode": "TeamFight",
+  "scenes": [
+    {
+      "name": "Arena_Yard",
+      "asset_path": "Assets/Content/Locations/Arena_Yard/Arena_Yard.unity",
+      "index": 72
+    },
+    {
+      "name": "Arena_Yard_Grass",
+      "asset_path": "Assets/Content/Locations/Arena_Yard/Arena_Yard_Grass.unity",
+      "index": 162
+    },
+    {
+      "name": "Arena_Yard_DesignStuff",
+      "asset_path": "Assets/Content/Locations/Arena_Yard/Arena_Yard_DesignStuff.unity",
+      "index": 73
+    },
+    {
+      "name": "Arena_Yard_TeamFight",
+      "asset_path": "Assets/Content/Locations/Arena_Yard/Arena_Yard_TeamFight.unity",
+      "index": 309
+    },
+    {
+      "name": "Arena_Yard_TeamFight_DesignStuff",
+      "asset_path": "Assets/Content/Locations/Arena_Yard/Arena_Yard_TeamFight_DesignStuff.unity",
+      "index": 316
+    },
+    {
+      "name": "Arena_Yard_Light",
+      "asset_path": "Assets/Content/Locations/Arena_Yard/Arena_Yard_Light.unity",
+      "index": 74
+    }
+  ],
+  "anchor_scenes": [
+    {
+      "name": "Arena_Yard_TeamFight_DesignStuff",
+      "asset_path": "Assets/Content/Locations/Arena_Yard/Arena_Yard_TeamFight_DesignStuff.unity",
+      "index": 316
+    }
+  ],
+  "navmesh_scenes": [
+    {
+      "name": "Arena_Yard_AI",
+      "asset_path": "Assets/Content/Locations/Arena_Yard/Arena_Yard_AI.unity",
+      "index": 319
+    }
+  ],
+  "fog_color": [
+    0.20999999344348907,
+    0.20343641936779022,
+    0.20075999200344086
+  ],
+  "excluded_scenes": [
+    {
+      "name": "Arena_Yard_Scripts",
+      "asset_path": "Assets/Content/Locations/Arena_Yard/Arena_Yard_Scripts.unity",
+      "index": 75,
+      "reason": "Replaced by the freshly authored SPT Scripts scene; source scripts and seasonal runtime objects are not imported."
+    },
+    {
+      "name": "Arena_Yard_Scripts_Winter",
+      "asset_path": "Assets/Content/Locations/Arena_Yard/Arena_Yard_Scripts_Winter.unity",
+      "index": 254,
+      "reason": "Replaced by the freshly authored SPT Scripts scene; source scripts and seasonal runtime objects are not imported."
+    },
+    {
+      "name": "Arena_Yard_Sound",
+      "asset_path": "Assets/Content/Locations/Arena_Yard/Arena_Yard_Sound.unity",
+      "index": 163,
+      "reason": "Source Arena sound/audio runtime is outside the existing port contract."
+    },
+    {
+      "name": "Arena_Yard_TeamFight_Culling",
+      "asset_path": "Assets/Content/Locations/Arena_Yard/Arena_Yard_TeamFight_Culling.unity",
+      "index": 153,
+      "reason": "Source PerfectCulling data is outside the existing port contract."
+    },
+    {
+      "name": "Arena_Yard_AI",
+      "asset_path": "Assets/Content/Locations/Arena_Yard/Arena_Yard_AI.unity",
+      "index": 319,
+      "reason": "Source AI/gameplay scene is metadata reference only; port bakes a fresh SPT NavMesh."
+    }
+  ]
+}

@@ -1,0 +1,25 @@
+{
+  "key": "arena_woods",
+  "id_field": "88ca77b5e9af71bf064f8666",
+  "scripts_scene_name": "Arena_Woods_Scripts",
+  "all_scene_names": [
+    "Arena_Woods_Scripts",
+    "Arena_Woods_LH",
+    "Arena_Woods_LH_Terrain",
+    "Arena_Woods_LH_Light",
+    "Arena_NY_Woods_LH_DesignStuff",
+    "Arena_NY_Woods_LastHero_DesignStuff"
+  ],
+  "infiltration_name": "ArenaWoods",
+  "locale_name": "Arena: Woods (spike)",
+  "locale_description": "Internal test build — LastHero geometry/collision/NavMesh port.",
+  "icon_x": 1020,
+  "icon_y": 830,
+  "template_key": "factory4_day",
+  "db_base_json_path": "arena_woods/base.json",
+  "fog_color": [
+    0.5,
+    0.5,
+    0.5
+  ]
+}

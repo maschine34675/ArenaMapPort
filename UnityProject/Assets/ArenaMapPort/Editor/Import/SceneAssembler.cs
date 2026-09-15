@@ -32,6 +32,7 @@ namespace ArenaMapPort.Editor.Import
         {
             JObject sceneJson = pkg.LoadSceneJson(sceneName);
             var objectsJson = (JArray)sceneJson["objects"];
+            bool requireResolvedAssets = !string.IsNullOrEmpty((string)pkg.Manifest["source"]?["map_key"]);
 
             // EditorSceneManager.NewScene(..., Additive) throws InvalidOperationException
             // ("Cannot create a new scene additively with an untitled scene unsaved") the very
@@ -93,11 +94,11 @@ namespace ArenaMapPort.Editor.Import
                     switch (type)
                     {
                         case "MeshFilter":
-                            AttachMeshFilter(go, comp, meshes, sceneName, id, ref missingMeshWarnings);
+                            AttachMeshFilter(go, comp, meshes, sceneName, id, requireResolvedAssets, ref missingMeshWarnings);
                             break;
                         case "MeshRenderer":
                         {
-                            Renderer r = AttachMeshRenderer(go, comp, materials, sceneName, id, ref missingMaterialWarnings);
+                            Renderer r = AttachMeshRenderer(go, comp, materials, sceneName, id, requireResolvedAssets, ref missingMaterialWarnings);
                             if (r != null) rendererById[id] = r;
                             break;
                         }
@@ -106,7 +107,7 @@ namespace ArenaMapPort.Editor.Import
                             // completeness only) — static-mesh-only import, no skinning reconstruction.
                             break;
                         case "MeshCollider":
-                            AttachMeshCollider(go, comp, meshes, physicMaterials, sceneName, id, ref missingMeshWarnings);
+                            AttachMeshCollider(go, comp, meshes, physicMaterials, sceneName, id, requireResolvedAssets, ref missingMeshWarnings);
                             break;
                         case "BoxCollider":
                             AttachBoxCollider(go, comp, physicMaterials);
@@ -156,20 +157,15 @@ namespace ArenaMapPort.Editor.Import
         // Per-component attachers
         // ---------------------------------------------------------------------------------------
 
-        private static void AttachMeshFilter(GameObject go, JObject comp, Dictionary<string, Mesh> meshes, string sceneName, string id, ref int warnCount)
+        private static void AttachMeshFilter(GameObject go, JObject comp, Dictionary<string, Mesh> meshes, string sceneName, string id, bool requireResolvedAssets, ref int warnCount)
         {
-            string meshId = (string)comp["mesh_id"];
             Mesh mesh;
-            if (!meshes.TryGetValue(meshId, out mesh) || mesh == null)
-            {
-                if (warnCount++ < 10)
-                    Debug.LogWarning("[ArenaMapPort][SceneAssembler] " + sceneName + ": object " + id + " MeshFilter references unresolved mesh_id " + meshId);
+            if (!TryResolveMesh(comp, meshes, sceneName, id, "MeshFilter", requireResolvedAssets, ref warnCount, out mesh))
                 return;
-            }
             go.AddComponent<MeshFilter>().sharedMesh = mesh;
         }
 
-        private static Renderer AttachMeshRenderer(GameObject go, JObject comp, Dictionary<string, Material> materials, string sceneName, string id, ref int warnCount)
+        private static Renderer AttachMeshRenderer(GameObject go, JObject comp, Dictionary<string, Material> materials, string sceneName, string id, bool requireResolvedAssets, ref int warnCount)
         {
             var mr = go.AddComponent<MeshRenderer>();
 
@@ -177,7 +173,10 @@ namespace ArenaMapPort.Editor.Import
             var mats = new Material[idsJson.Count];
             for (int i = 0; i < idsJson.Count; i++)
             {
-                string matId = (string)idsJson[i];
+                string context = sceneName + ": object " + id + " MeshRenderer slot " + i;
+                string matId = ReadOptionalAssetId(idsJson[i], context + " material_id");
+                if (matId == null)
+                    continue; // An explicit null slot stays in its original array position.
                 Material m;
                 if (materials.TryGetValue(matId, out m) && m != null)
                 {
@@ -185,6 +184,8 @@ namespace ArenaMapPort.Editor.Import
                 }
                 else
                 {
+                    if (requireResolvedAssets)
+                        throw new InvalidOperationException(context + " references unresolved material_id " + matId);
                     if (warnCount++ < 10)
                         Debug.LogWarning("[ArenaMapPort][SceneAssembler] " + sceneName + ": object " + id + " MeshRenderer slot " + i + " references unresolved material_id " + matId);
                 }
@@ -203,16 +204,11 @@ namespace ArenaMapPort.Editor.Import
             return mr;
         }
 
-        private static void AttachMeshCollider(GameObject go, JObject comp, Dictionary<string, Mesh> meshes, PhysicMaterialCache physicMaterials, string sceneName, string id, ref int warnCount)
+        private static void AttachMeshCollider(GameObject go, JObject comp, Dictionary<string, Mesh> meshes, PhysicMaterialCache physicMaterials, string sceneName, string id, bool requireResolvedAssets, ref int warnCount)
         {
-            string meshId = (string)comp["mesh_id"];
             Mesh mesh;
-            if (!meshes.TryGetValue(meshId, out mesh) || mesh == null)
-            {
-                if (warnCount++ < 10)
-                    Debug.LogWarning("[ArenaMapPort][SceneAssembler] " + sceneName + ": object " + id + " MeshCollider references unresolved mesh_id " + meshId);
+            if (!TryResolveMesh(comp, meshes, sceneName, id, "MeshCollider", requireResolvedAssets, ref warnCount, out mesh))
                 return;
-            }
             var mc = go.AddComponent<MeshCollider>();
             bool convex = (bool)comp["convex"];
             bool isTrigger = (bool)comp["is_trigger"];
@@ -228,6 +224,37 @@ namespace ArenaMapPort.Editor.Import
             // "enabled && !isTrigger && activeInHierarchy" CollectSources filter correctly
             // excludes these without any change to BakeNavMesh.cs itself.
             mc.enabled = ReadEnabled(comp);
+        }
+
+        // A source null reference is a valid component state, unlike an ID whose
+        // asset failed to import. Keep the component and every source flag while
+        // leaving sharedMesh null; never query Dictionary with a null key.
+        private static bool TryResolveMesh(JObject comp, Dictionary<string, Mesh> meshes, string sceneName,
+            string id, string componentName, bool requireResolvedAssets, ref int warnCount, out Mesh mesh)
+        {
+            string context = sceneName + ": object " + id + " " + componentName;
+            string meshId = ReadOptionalAssetId(comp["mesh_id"], context + " mesh_id");
+            mesh = null;
+            if (meshId == null)
+                return true;
+            if (meshes.TryGetValue(meshId, out mesh) && mesh != null)
+                return true;
+            if (requireResolvedAssets)
+                throw new InvalidOperationException(context + " references unresolved mesh_id " + meshId);
+            if (warnCount++ < 10)
+                Debug.LogWarning("[ArenaMapPort][SceneAssembler] " + context + " references unresolved mesh_id " + meshId);
+            return false;
+        }
+
+        private static string ReadOptionalAssetId(JToken token, string context)
+        {
+            if (token == null)
+                throw new InvalidOperationException(context + " is missing; an unassigned source asset must be explicit JSON null");
+            if (token.Type == JTokenType.Null)
+                return null;
+            if (token.Type != JTokenType.String || string.IsNullOrEmpty((string)token))
+                throw new InvalidOperationException(context + " must be a nonempty asset ID or explicit JSON null");
+            return (string)token;
         }
 
         private static void AttachBoxCollider(GameObject go, JObject comp, PhysicMaterialCache physicMaterials)

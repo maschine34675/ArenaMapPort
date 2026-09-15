@@ -18,23 +18,43 @@ namespace ArenaMapPort.Editor.Import
         {
             Directory.CreateDirectory(ArenaPaths.MeshesDir);
             var result = new Dictionary<string, Mesh>();
-            foreach (var prop in pkg.Meshes.Properties())
+            bool refreshFromPackage = !string.IsNullOrEmpty((string)pkg.Manifest["source"]?["map_key"]);
+            int refreshed = 0;
+            // Generic map IDs identify source objects, not their current geometry.
+            // Reconstruct from this package even when an earlier map imported the ID.
+            // Batch asset creation so thousands of meshes need only one refresh.
+            if (refreshFromPackage) AssetDatabase.StartAssetEditing();
+            try
             {
-                string meshId = prop.Name;
-                string assetPath = ArenaPaths.MeshesDir + "/" + meshId + ".asset";
-                Mesh existing = AssetDatabase.LoadAssetAtPath<Mesh>(assetPath);
-                if (existing != null)
+                foreach (var prop in pkg.Meshes.Properties())
                 {
-                    result[meshId] = existing;
-                    continue;
+                    string meshId = prop.Name;
+                    string assetPath = ArenaPaths.MeshesDir + "/" + meshId + ".asset";
+                    Mesh existing = AssetDatabase.LoadAssetAtPath<Mesh>(assetPath);
+                    if (existing != null && !refreshFromPackage)
+                    {
+                        result[meshId] = existing;
+                        continue;
+                    }
+                    string binPath = pkg.MeshBinPath(meshId);
+                    Mesh mesh = ImportOne(binPath, meshId);
+                    if (existing != null)
+                    {
+                        EditorUtility.CopySerialized(mesh, existing);
+                        UnityEngine.Object.DestroyImmediate(mesh);
+                        EditorUtility.SetDirty(existing);
+                        mesh = existing;
+                        refreshed++;
+                    }
+                    else AssetDatabase.CreateAsset(mesh, assetPath);
+                    result[meshId] = mesh;
                 }
-                string binPath = pkg.MeshBinPath(meshId);
-                Mesh mesh = ImportOne(binPath, meshId);
-                AssetDatabase.CreateAsset(mesh, assetPath);
-                result[meshId] = mesh;
             }
+            finally { if (refreshFromPackage) AssetDatabase.StopAssetEditing(); }
             AssetDatabase.SaveAssets();
             Debug.Log("[ArenaMapPort][MeshImporter] imported " + result.Count + " meshes -> " + ArenaPaths.MeshesDir);
+            if (refreshFromPackage)
+                Debug.Log("[ArenaMapPort][MeshImporter] read current package geometry for every mesh; refreshed " + refreshed + " existing asset(s) with stable references");
             return result;
         }
 

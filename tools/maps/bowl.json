@@ -1,0 +1,27 @@
+{
+  "key": "arena_bowl",
+  "id_field": "3151df68a9deac47a2f83afe",
+  "scripts_scene_name": "Arena_Bowl_Scripts",
+  "all_scene_names": [
+    "Arena_Bowl_Scripts",
+    "Arena_Bowl",
+    "Arena_Bowl_Building",
+    "Arena_Bowl_Grass",
+    "Arena_Bowl_Light",
+    "Arena_Bowl_DesignStuff",
+    "Arena_Bowl_TeamFight",
+    "Arena_Bowl_TeamFight_DesignStuff"
+  ],
+  "infiltration_name": "ArenaBowl",
+  "locale_name": "Arena: Bowl (spike)",
+  "locale_description": "Internal test build — TeamFight geometry/collision/NavMesh port.",
+  "icon_x": 440,
+  "icon_y": 830,
+  "template_key": "factory4_day",
+  "db_base_json_path": "arena_bowl/base.json",
+  "fog_color": [
+    0.1219530701637268,
+    0.1385263055562973,
+    0.14121440052986145
+  ]
+}

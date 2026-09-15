@@ -1,0 +1,88 @@
+{
+  "schema_version": 1,
+  "key": "arena_bowl",
+  "source_preset": "arena_bowl_preset.bundle",
+  "source_mode": "TeamFight",
+  "scenes": [
+    {
+      "name": "Arena_Bowl",
+      "asset_path": "Assets/Content/Locations/Arena_Bowl/Arena_Bowl.unity",
+      "index": 41
+    },
+    {
+      "name": "Arena_Bowl_Building",
+      "asset_path": "Assets/Content/Locations/Arena_Bowl/Arena_Bowl_Building.unity",
+      "index": 46
+    },
+    {
+      "name": "Arena_Bowl_Grass",
+      "asset_path": "Assets/Content/Locations/Arena_Bowl/Arena_Bowl_Grass.unity",
+      "index": 95
+    },
+    {
+      "name": "Arena_Bowl_Light",
+      "asset_path": "Assets/Content/Locations/Arena_Bowl/Arena_Bowl_Light.unity",
+      "index": 45
+    },
+    {
+      "name": "Arena_Bowl_DesignStuff",
+      "asset_path": "Assets/Content/Locations/Arena_Bowl/Arena_Bowl_DesignStuff.unity",
+      "index": 43
+    },
+    {
+      "name": "Arena_Bowl_TeamFight",
+      "asset_path": "Assets/Content/Locations/Arena_Bowl/Arena_Bowl_TeamFight.unity",
+      "index": 47
+    },
+    {
+      "name": "Arena_Bowl_TeamFight_DesignStuff",
+      "asset_path": "Assets/Content/Locations/Arena_Bowl/Arena_Bowl_TeamFight_DesignStuff.unity",
+      "index": 48
+    }
+  ],
+  "anchor_scenes": [
+    {
+      "name": "Arena_Bowl_TeamFight_DesignStuff",
+      "asset_path": "Assets/Content/Locations/Arena_Bowl/Arena_Bowl_TeamFight_DesignStuff.unity",
+      "index": 48
+    }
+  ],
+  "navmesh_scenes": [
+    {
+      "name": "Arena_Bowl_TeamFight_AI",
+      "asset_path": "Assets/Content/Locations/Arena_Bowl/Arena_Bowl_TeamFight_AI.unity",
+      "index": 128
+    }
+  ],
+  "fog_color": [
+    0.1219530701637268,
+    0.1385263055562973,
+    0.14121440052986145
+  ],
+  "excluded_scenes": [
+    {
+      "name": "Arena_Bowl_Scripts",
+      "asset_path": "Assets/Content/Locations/Arena_Bowl/Arena_Bowl_Scripts.unity",
+      "index": 44,
+      "reason": "Replaced by the freshly authored SPT Scripts scene; source scripts and seasonal runtime objects are not imported."
+    },
+    {
+      "name": "Arena_Bowl_Sound",
+      "asset_path": "Assets/Content/Locations/Arena_Bowl/Arena_Bowl_Sound.unity",
+      "index": 111,
+      "reason": "Source Arena sound/audio runtime is outside the existing port contract."
+    },
+    {
+      "name": "Arena_Bowl_TeamFight_Culling",
+      "asset_path": "Assets/Content/Locations/Arena_Bowl/Arena_Bowl_TeamFight_Culling.unity",
+      "index": 96,
+      "reason": "Source PerfectCulling data is outside the existing port contract."
+    },
+    {
+      "name": "Arena_Bowl_TeamFight_AI",
+      "asset_path": "Assets/Content/Locations/Arena_Bowl/Arena_Bowl_TeamFight_AI.unity",
+      "index": 128,
+      "reason": "Source AI/gameplay scene is metadata reference only; port bakes a fresh SPT NavMesh."
+    }
+  ]
+}

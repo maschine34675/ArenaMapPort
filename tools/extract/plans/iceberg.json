@@ -1,0 +1,83 @@
+{
+  "schema_version": 1,
+  "key": "arena_iceberg",
+  "source_preset": "arena_iceberg_preset.bundle",
+  "source_mode": "CheckPoint",
+  "scenes": [
+    {
+      "name": "Arena_Sanatorium",
+      "asset_path": "Assets/Content/Locations/Arena_Sanatorium/Arena_Sanatorium.unity",
+      "index": 256
+    },
+    {
+      "name": "Arena_Sanatorium_Grass",
+      "asset_path": "Assets/Content/Locations/Arena_Sanatorium/Arena_Sanatorium_Grass.unity",
+      "index": 260
+    },
+    {
+      "name": "Arena_Sanatorium_Light",
+      "asset_path": "Assets/Content/Locations/Arena_Sanatorium/Arena_Sanatorium_Light.unity",
+      "index": 258
+    },
+    {
+      "name": "Arena_Sanatorium_DesignStuff",
+      "asset_path": "Assets/Content/Locations/Arena_Sanatorium/Arena_Sanatorium_DesignStuff.unity",
+      "index": 257
+    },
+    {
+      "name": "Arena_Sanatorium_CheckPoint",
+      "asset_path": "Assets/Content/Locations/Arena_Sanatorium/Arena_Sanatorium_CheckPoint.unity",
+      "index": 366
+    },
+    {
+      "name": "Arena_Sanatorium_CheckPoint_DesignStuff",
+      "asset_path": "Assets/Content/Locations/Arena_Sanatorium/Arena_Sanatorium_CheckPoint_DesignStuff.unity",
+      "index": 367
+    }
+  ],
+  "anchor_scenes": [
+    {
+      "name": "Arena_Sanatorium_CheckPoint_DesignStuff",
+      "asset_path": "Assets/Content/Locations/Arena_Sanatorium/Arena_Sanatorium_CheckPoint_DesignStuff.unity",
+      "index": 367
+    }
+  ],
+  "navmesh_scenes": [
+    {
+      "name": "Arena_Sanatorium_CheckPoint_AI",
+      "asset_path": "Assets/Content/Locations/Arena_Sanatorium/Arena_Sanatorium_CheckPoint_AI.unity",
+      "index": 368
+    }
+  ],
+  "fog_color": [
+    0.5,
+    0.5,
+    0.5
+  ],
+  "excluded_scenes": [
+    {
+      "name": "Arena_Sanatorium_Scripts",
+      "asset_path": "Assets/Content/Locations/Arena_Sanatorium/Arena_Sanatorium_Scripts.unity",
+      "index": 255,
+      "reason": "Replaced by the freshly authored SPT Scripts scene; source scripts and seasonal runtime objects are not imported."
+    },
+    {
+      "name": "Arena_Sanatorium_Sound",
+      "asset_path": "Assets/Content/Locations/Arena_Sanatorium/Arena_Sanatorium_Sound.unity",
+      "index": 259,
+      "reason": "Source Arena sound/audio runtime is outside the existing port contract."
+    },
+    {
+      "name": "Arena_Sanatorium_CheckPoint_AI",
+      "asset_path": "Assets/Content/Locations/Arena_Sanatorium/Arena_Sanatorium_CheckPoint_AI.unity",
+      "index": 368,
+      "reason": "Source AI/gameplay scene is metadata reference only; port bakes a fresh SPT NavMesh."
+    },
+    {
+      "name": "Arena_Sanatorium_CheckPoint_Culling",
+      "asset_path": "Assets/Content/Locations/Arena_Sanatorium/Arena_Sanatorium_CheckPoint_Culling.unity",
+      "index": 369,
+      "reason": "Source PerfectCulling data is outside the existing port contract."
+    }
+  ]
+}

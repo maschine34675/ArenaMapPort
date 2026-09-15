@@ -1,0 +1,26 @@
+{
+  "key": "arena_prison",
+  "id_field": "1da5bcb15506b795f1e8bd82",
+  "scripts_scene_name": "Arena_Prison_Scripts",
+  "all_scene_names": [
+    "Arena_Prison_Scripts",
+    "Arena_Prison",
+    "Arena_Prison_Grass",
+    "Arena_Prison_DesignStuff",
+    "Arena_Prison_TeamFight",
+    "Arena_Prison_Light",
+    "Arena_Prison_TeamFight_DesignStuff"
+  ],
+  "infiltration_name": "ArenaPrison",
+  "locale_name": "Arena: Prison (spike)",
+  "locale_description": "Internal test build — TeamFight geometry/collision/NavMesh port.",
+  "icon_x": 585,
+  "icon_y": 760,
+  "template_key": "factory4_day",
+  "db_base_json_path": "arena_prison/base.json",
+  "fog_color": [
+    0.5254902243614197,
+    0.4117647111415863,
+    0.32156863808631897
+  ]
+}

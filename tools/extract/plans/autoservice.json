@@ -1,0 +1,79 @@
+{
+  "schema_version": 1,
+  "key": "arena_autoservice",
+  "source_preset": "arena_autoservice_preset.bundle",
+  "source_mode": "TeamFight",
+  "scenes": [
+    {
+      "name": "Arena_AutoService",
+      "asset_path": "Assets/Content/Locations/Arena_AutoService/Arena_AutoService.unity",
+      "index": 62
+    },
+    {
+      "name": "Arena_AutoService_DesignStuff",
+      "asset_path": "Assets/Content/Locations/Arena_AutoService/Arena_AutoService_DesignStuff.unity",
+      "index": 65
+    },
+    {
+      "name": "Arena_AutoService_TeamFight_DesignStuff",
+      "asset_path": "Assets/Content/Locations/Arena_AutoService/Arena_AutoService_TeamFight_DesignStuff.unity",
+      "index": 136
+    },
+    {
+      "name": "Arena_AutoService_Light",
+      "asset_path": "Assets/Content/Locations/Arena_AutoService/Arena_AutoService_Light.unity",
+      "index": 66
+    }
+  ],
+  "anchor_scenes": [
+    {
+      "name": "Arena_AutoService_TeamFight_DesignStuff",
+      "asset_path": "Assets/Content/Locations/Arena_AutoService/Arena_AutoService_TeamFight_DesignStuff.unity",
+      "index": 136
+    }
+  ],
+  "navmesh_scenes": [
+    {
+      "name": "Arena_AutoService_AI",
+      "asset_path": "Assets/Content/Locations/Arena_AutoService/Arena_AutoService_AI.unity",
+      "index": 63
+    }
+  ],
+  "fog_color": [
+    0.005309707950800657,
+    0.00802699290215969,
+    0.015462025068700314
+  ],
+  "excluded_scenes": [
+    {
+      "name": "Arena_AutoService_Scripts",
+      "asset_path": "Assets/Content/Locations/Arena_AutoService/Arena_AutoService_Scripts.unity",
+      "index": 69,
+      "reason": "Replaced by the freshly authored SPT Scripts scene; source scripts and seasonal runtime objects are not imported."
+    },
+    {
+      "name": "Arena_AutoService_Scripts_Winter",
+      "asset_path": "Assets/Content/Locations/Arena_AutoService/Arena_AutoService_Scripts_Winter.unity",
+      "index": 243,
+      "reason": "Replaced by the freshly authored SPT Scripts scene; source scripts and seasonal runtime objects are not imported."
+    },
+    {
+      "name": "Arena_AutoService_AI",
+      "asset_path": "Assets/Content/Locations/Arena_AutoService/Arena_AutoService_AI.unity",
+      "index": 63,
+      "reason": "Source AI/gameplay scene is metadata reference only; port bakes a fresh SPT NavMesh."
+    },
+    {
+      "name": "Arena_AutoService_Sound",
+      "asset_path": "Assets/Content/Locations/Arena_AutoService/Arena_AutoService_Sound.unity",
+      "index": 112,
+      "reason": "Source Arena sound/audio runtime is outside the existing port contract."
+    },
+    {
+      "name": "Arena_AutoService_Culling",
+      "asset_path": "Assets/Content/Locations/Arena_AutoService/Arena_AutoService_Culling.unity",
+      "index": 135,
+      "reason": "Source PerfectCulling data is outside the existing port contract."
+    }
+  ]
+}

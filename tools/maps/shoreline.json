@@ -1,0 +1,25 @@
+{
+  "key": "arena_shoreline",
+  "id_field": "ac3fe0b02d506baeb62f6de4",
+  "scripts_scene_name": "Arena_Shoreline_Scripts",
+  "all_scene_names": [
+    "Arena_Shoreline_Scripts",
+    "Arena_Shoreline_LH",
+    "Arena_Shoreline_LH_Terrain",
+    "Arena_Shoreline_LH_Light",
+    "Arena_Shoreline_LH_DesignStuff",
+    "Arena_NY_Shoreline_LastHero_DesignStuff"
+  ],
+  "infiltration_name": "ArenaShoreline",
+  "locale_name": "Arena: Shoreline (spike)",
+  "locale_description": "Internal test build — LastHero geometry/collision/NavMesh port.",
+  "icon_x": 1020,
+  "icon_y": 760,
+  "template_key": "factory4_day",
+  "db_base_json_path": "arena_shoreline/base.json",
+  "fog_color": [
+    0.5,
+    0.5,
+    0.5
+  ]
+}

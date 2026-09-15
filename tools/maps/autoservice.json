@@ -1,0 +1,24 @@
+{
+  "key": "arena_autoservice",
+  "id_field": "e6aa4591d3e1a59835d625b3",
+  "scripts_scene_name": "Arena_AutoService_Scripts",
+  "all_scene_names": [
+    "Arena_AutoService_Scripts",
+    "Arena_AutoService",
+    "Arena_AutoService_DesignStuff",
+    "Arena_AutoService_TeamFight_DesignStuff",
+    "Arena_AutoService_Light"
+  ],
+  "infiltration_name": "ArenaAutoService",
+  "locale_name": "Arena: Auto Service (spike)",
+  "locale_description": "Internal test build — TeamFight geometry/collision/NavMesh port.",
+  "icon_x": 440,
+  "icon_y": 760,
+  "template_key": "factory4_day",
+  "db_base_json_path": "arena_autoservice/base.json",
+  "fog_color": [
+    0.005309707950800657,
+    0.00802699290215969,
+    0.015462025068700314
+  ]
+}

@@ -13,6 +13,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text;
+using System.Text.RegularExpressions;
 using ArenaMapPort.Editor.Common;
 using Newtonsoft.Json.Linq;
 using UnityEditor;
@@ -36,6 +37,26 @@ namespace ArenaMapPort.Editor.Shaders
 
     public class StandinShaderGenerator
     {
+        private static readonly Regex PropertyIdentifier = new Regex(@"\A[A-Za-z_][A-Za-z0-9_]*\z", RegexOptions.CultureInvariant);
+
+        // Source saved-property dictionaries can retain orphaned serialization
+        // placeholders. Their original values remain in the extracted JSON.
+        // Nature/SpeedTreeEFT's actual source property table has no <noninit> slot.
+        public static bool ShouldImportProperty(string name, string shaderName, string matId)
+        {
+            if (string.IsNullOrEmpty(name)) return false; // Existing source empty-slot policy.
+            if (name == "<noninit>")
+            {
+                Debug.LogWarning("[ArenaMapPort][MaterialProperty] material " + matId + " shader '" + shaderName +
+                                 "': skipping source saved-property placeholder '<noninit>'; original value remains in package JSON.");
+                return false;
+            }
+            if (!PropertyIdentifier.IsMatch(name))
+                throw new IOException("Invalid ShaderLab property identifier '" + name + "' on material " + matId +
+                                      " (shader '" + shaderName + "'); requires source investigation, refusing to drop it.");
+            return true;
+        }
+
         // originalShaderName -> (propertyName -> type)
         private readonly Dictionary<string, Dictionary<string, ArenaPropType>> _propsByShader =
             new Dictionary<string, Dictionary<string, ArenaPropType>>();
@@ -88,6 +109,12 @@ namespace ArenaMapPort.Editor.Shaders
                 string matId = prop.Name;
                 JObject matJson = pkg.LoadMaterialJson(matId);
                 string shaderName = (string)matJson["shader"];
+                if ((bool?)matJson["preserve_shader"] == true)
+                {
+                    if (shaderName != "ArenaMapPort/Terrain")
+                        throw new IOException("Only ArenaMapPort/Terrain may bypass stand-in generation: " + shaderName);
+                    continue;
+                }
 
                 Dictionary<string, ArenaPropType> props;
                 if (!_propsByShader.TryGetValue(shaderName, out props))
@@ -101,7 +128,7 @@ namespace ArenaMapPort.Editor.Shaders
                 {
                     foreach (var t in texEnvs.Properties())
                     {
-                        if (string.IsNullOrEmpty(t.Name)) continue;
+                        if (!ShouldImportProperty(t.Name, shaderName, matId)) continue;
                         var entry = (JObject)t.Value;
                         var texIdTok = entry["texture_id"];
                         if (texIdTok != null && texIdTok.Type != JTokenType.Null)
@@ -129,12 +156,12 @@ namespace ArenaMapPort.Editor.Shaders
                 var floats = (JObject)matJson["floats"];
                 if (floats != null)
                     foreach (var f in floats.Properties())
-                        if (!string.IsNullOrEmpty(f.Name)) AddProp(props, shaderName, f.Name, ArenaPropType.Float, matId);
+                        if (ShouldImportProperty(f.Name, shaderName, matId)) AddProp(props, shaderName, f.Name, ArenaPropType.Float, matId);
 
                 var colors = (JObject)matJson["colors"];
                 if (colors != null)
                     foreach (var c in colors.Properties())
-                        if (!string.IsNullOrEmpty(c.Name)) AddProp(props, shaderName, c.Name, ArenaPropType.Color, matId);
+                        if (ShouldImportProperty(c.Name, shaderName, matId)) AddProp(props, shaderName, c.Name, ArenaPropType.Color, matId);
             }
 
             // Finalize: default any tex-prop name that NEVER resolved to a real dimension
@@ -200,12 +227,126 @@ namespace ArenaMapPort.Editor.Shaders
                 AssetDatabase.ImportAsset(assetPath, ImportAssetOptions.ForceSynchronousImport);
 
                 Shader shader = AssetDatabase.LoadAssetAtPath<Shader>(assetPath);
-                if (shader == null)
+                if (shader == null || shader.name != standinName || ShaderUtil.ShaderHasError(shader))
+                {
+                    if (shader != null)
+                        foreach (var message in ShaderUtil.GetShaderMessages(shader))
+                            Debug.LogError("[ArenaMapPort][StandinShaderGenerator] " + assetPath + ":" + message.line +
+                                           " " + message.severity + ": " + message.message);
                     throw new IOException("[ArenaMapPort][StandinShaderGenerator] failed to compile stand-in shader for '" + originalName + "' (" + assetPath + ") - check Editor log for shader compile errors.");
+                }
                 Shaders[originalName] = shader;
             }
             AssetDatabase.SaveAssets();
             Debug.Log("[ArenaMapPort][StandinShaderGenerator] generated " + Shaders.Count + " stand-in shaders -> " + ArenaPaths.StandinShadersDir);
+        }
+
+        // Bounded import/compiler diagnosis. This creates only transient shader objects,
+        // never scenes or bundles. Invoke with -executeMethod and inspect the JSON/log.
+        public static void DiagnoseCompile()
+        {
+            var report = new JObject();
+            var cases = new JArray();
+            report["unity_version"] = Application.unityVersion;
+            report["graphics_device"] = SystemInfo.graphicsDeviceType.ToString();
+            report["cases"] = cases;
+            int exitCode = 0;
+            try
+            {
+                string standardPath = ArenaPaths.StandinShadersDir + "/Standard.shader";
+                foreach (string path in new[] { standardPath, "Assets/ArenaMapPort/Shaders/Terrain.shader" })
+                {
+                    Shader existing = AssetDatabase.LoadAssetAtPath<Shader>(path);
+                    cases.Add(DescribeDiagnosticShader("existing:" + path, existing));
+                }
+
+                string minimal = "Shader \"Hidden/ArenaMapPort/Diagnostic/Minimal\" { SubShader { Pass { } } }";
+                string properties = "Shader \"Hidden/ArenaMapPort/Diagnostic/Properties\" { Properties { " +
+                    "_AlphaTestRef (\"_AlphaTestRef\", Float) = 0 " +
+                    "_BumpMap (\"_BumpMap\", 2D) = \"white\" {} " +
+                    "_Color (\"_Color\", Color) = (1,1,1,1) } SubShader { Pass { } } }";
+                AddDiagnosticCase(cases, "minimal-reference", minimal);
+                AddDiagnosticCase(cases, "property-reference", properties);
+                var props = new Dictionary<string, ArenaPropType>
+                {
+                    { "_AlphaTestRef", ArenaPropType.Float }, { "_BumpMap", ArenaPropType.Tex2D },
+                    { "_Color", ArenaPropType.Color }
+                };
+                AddDiagnosticCase(cases, "current-generator", BuildShaderSource(
+                    ArenaPaths.ShaderNamePrefix + "Diagnostic/Current", props));
+                if (File.Exists(standardPath))
+                {
+                    string source = File.ReadAllText(standardPath).Replace(
+                        "Shader \"Hidden/ArenaMapPort/Standard\"", "Shader \"Hidden/ArenaMapPort/Diagnostic/Standard\"");
+                    AddDiagnosticCase(cases, "actual-standard", source);
+                    AddDiagnosticCase(cases, "actual-standard-ascii", new string(source.Select(c => c <= 127 ? c : ' ').ToArray()));
+                    AddDiagnosticCase(cases, "actual-standard-without-comments", string.Join("\n", source.Split('\n').Where(
+                        line => !line.TrimStart().StartsWith("//", StringComparison.Ordinal))));
+                }
+                // Optional real-package preflight: every actual property set is
+                // collected and compiled before any texture or scene import.
+                string[] args = Environment.GetCommandLineArgs();
+                int packageIndex = Array.IndexOf(args, "-packageDir");
+                if (packageIndex >= 0)
+                {
+                    if (packageIndex + 1 >= args.Length || args[packageIndex + 1].StartsWith("-", StringComparison.Ordinal))
+                        throw new ArgumentException("-packageDir requires an extracted package directory");
+                    var package = new ArenaPackage(args[packageIndex + 1]);
+                    var generator = new StandinShaderGenerator();
+                    generator.CollectFromPackage(package);
+                    generator.GenerateAll();
+                    foreach (var shader in generator.Shaders.OrderBy(entry => entry.Key, StringComparer.Ordinal))
+                        cases.Add(DescribeDiagnosticShader("package:" + shader.Key, shader.Value));
+                    report["package"] = Path.GetFullPath(package.Root);
+                    report["package_material_count"] = package.Materials.Count;
+                    report["package_shader_count"] = generator.Shaders.Count;
+                }
+            }
+            catch (Exception error)
+            {
+                report["exception"] = error.ToString();
+                exitCode = 1;
+            }
+            string output = Path.GetFullPath(Path.Combine(Application.dataPath, "../../work/shader-compile-diagnostic.json"));
+            Directory.CreateDirectory(Path.GetDirectoryName(output));
+            File.WriteAllText(output, report.ToString());
+            Debug.Log("[ArenaMapPort][ShaderDiagnostic] " + report.ToString());
+            Debug.Log("[ArenaMapPort][ShaderDiagnostic] report=" + output);
+            EditorApplication.Exit(exitCode);
+        }
+
+        private static void AddDiagnosticCase(JArray cases, string label, string source)
+        {
+            Shader shader = null;
+            try
+            {
+                shader = ShaderUtil.CreateShaderAsset(source);
+                JObject result = DescribeDiagnosticShader(label, shader);
+                result["source"] = source;
+                cases.Add(result);
+            }
+            catch (Exception error)
+            {
+                cases.Add(new JObject { ["label"] = label, ["exception"] = error.ToString(), ["source"] = source });
+            }
+            finally
+            {
+                if (shader != null) UnityEngine.Object.DestroyImmediate(shader);
+            }
+        }
+
+        private static JObject DescribeDiagnosticShader(string label, Shader shader)
+        {
+            var result = new JObject { ["label"] = label, ["exists"] = shader != null };
+            if (shader == null) return result;
+            result["name"] = shader.name;
+            result["has_error"] = ShaderUtil.ShaderHasError(shader);
+            result["supported"] = shader.isSupported;
+            var messages = new JArray();
+            foreach (var message in ShaderUtil.GetShaderMessages(shader))
+                messages.Add(new JObject { ["line"] = message.line, ["severity"] = message.severity.ToString(), ["message"] = message.message });
+            result["messages"] = messages;
+            return result;
         }
 
         private static string BuildShaderSource(string standinName, Dictionary<string, ArenaPropType> props)
@@ -221,6 +362,8 @@ namespace ArenaMapPort.Editor.Shaders
             foreach (var kv in props.OrderBy(p => p.Key, StringComparer.Ordinal))
             {
                 string safe = kv.Key;
+                if (!PropertyIdentifier.IsMatch(safe))
+                    throw new IOException("Cannot emit invalid ShaderLab identifier: " + safe);
                 switch (kv.Value)
                 {
                     case ArenaPropType.Tex2D:

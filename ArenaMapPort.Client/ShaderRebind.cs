@@ -209,6 +209,10 @@ namespace ArenaMapPort.Client
                 return false;
             }
             var currentName = material.shader.name;
+            // This shader implements the ported source terrain arrays and is the final
+            // runtime material, with no matching EFT shader to rebind onto.
+            if (currentName == "ArenaMapPort/Terrain")
+                return false;
             if (!currentName.StartsWith(StandinPrefix, StringComparison.Ordinal))
             {
                 return false; // not one of our stand-ins — already good, or not ours

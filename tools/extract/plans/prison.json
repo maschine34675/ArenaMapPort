@@ -1,0 +1,89 @@
+{
+  "schema_version": 1,
+  "key": "arena_prison",
+  "source_preset": "arena_prison_preset.bundle",
+  "source_mode": "TeamFight",
+  "scenes": [
+    {
+      "name": "Arena_Prison",
+      "asset_path": "Assets/Content/Locations/Arena_Prison/Arena_Prison.unity",
+      "index": 98
+    },
+    {
+      "name": "Arena_Prison_Grass",
+      "asset_path": "Assets/Content/Locations/Arena_Prison/Arena_Prison_Grass.unity",
+      "index": 226
+    },
+    {
+      "name": "Arena_Prison_DesignStuff",
+      "asset_path": "Assets/Content/Locations/Arena_Prison/Arena_Prison_DesignStuff.unity",
+      "index": 100
+    },
+    {
+      "name": "Arena_Prison_TeamFight",
+      "asset_path": "Assets/Content/Locations/Arena_Prison/Arena_Prison_TeamFight.unity",
+      "index": 102
+    },
+    {
+      "name": "Arena_Prison_Light",
+      "asset_path": "Assets/Content/Locations/Arena_Prison/Arena_Prison_Light.unity",
+      "index": 101
+    },
+    {
+      "name": "Arena_Prison_TeamFight_DesignStuff",
+      "asset_path": "Assets/Content/Locations/Arena_Prison/Arena_Prison_TeamFight_DesignStuff.unity",
+      "index": 103
+    }
+  ],
+  "anchor_scenes": [
+    {
+      "name": "Arena_Prison_TeamFight_DesignStuff",
+      "asset_path": "Assets/Content/Locations/Arena_Prison/Arena_Prison_TeamFight_DesignStuff.unity",
+      "index": 103
+    }
+  ],
+  "navmesh_scenes": [
+    {
+      "name": "Arena_Prison_Ai",
+      "asset_path": "Assets/Content/Locations/Arena_Prison/Arena_Prison_Ai.unity",
+      "index": 99
+    }
+  ],
+  "fog_color": [
+    0.5254902243614197,
+    0.4117647111415863,
+    0.32156863808631897
+  ],
+  "excluded_scenes": [
+    {
+      "name": "Arena_Prison_Scripts",
+      "asset_path": "Assets/Content/Locations/Arena_Prison/Arena_Prison_Scripts.unity",
+      "index": 97,
+      "reason": "Replaced by the freshly authored SPT Scripts scene; source scripts and seasonal runtime objects are not imported."
+    },
+    {
+      "name": "Arena_Prison_Scripts_Winter",
+      "asset_path": "Assets/Content/Locations/Arena_Prison/Arena_Prison_Scripts_Winter.unity",
+      "index": 234,
+      "reason": "Replaced by the freshly authored SPT Scripts scene; source scripts and seasonal runtime objects are not imported."
+    },
+    {
+      "name": "Arena_Prison_Sound",
+      "asset_path": "Assets/Content/Locations/Arena_Prison/Arena_Prison_Sound.unity",
+      "index": 205,
+      "reason": "Source Arena sound/audio runtime is outside the existing port contract."
+    },
+    {
+      "name": "Arena_Prison_Ai",
+      "asset_path": "Assets/Content/Locations/Arena_Prison/Arena_Prison_Ai.unity",
+      "index": 99,
+      "reason": "Source AI/gameplay scene is metadata reference only; port bakes a fresh SPT NavMesh."
+    },
+    {
+      "name": "Arena_Prison_TeamFight_Culling",
+      "asset_path": "Assets/Content/Locations/Arena_Prison/Arena_Prison_TeamFight_Culling.unity",
+      "index": 239,
+      "reason": "Source PerfectCulling data is outside the existing port contract."
+    }
+  ]
+}

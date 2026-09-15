@@ -9,7 +9,7 @@
        (and Unity itself exits non-zero on an executeMethod abort), so this is the primary signal.
     2. The log contains the `[ArenaMapPort][BuildBundles] DONE` marker, which BuildBundles.cs only
        writes after BuildAssetBundles and VerifyBuild.Run have both finished.
-    3. No line anywhere matches `error CS`, `Aborting batchmode` or `Received signal` (compile
+    3. No line anywhere matches `error CS`, `Shader error`, `Aborting batchmode` or `Received signal` (compile
        errors, executeMethod aborts, native crashes). This rule has no exceptions.
     4. No line matches `Exception`, UNLESS it belongs to a Microsoft.Extensions.Logging console
        entry (a `<level>: <Category>[<EventId>]` header plus its 6-space-indented continuation
@@ -32,7 +32,7 @@
   Test-UnityBuildLog -LogFile work/build/full/unity_build_all_20260914_203554.log -ExitCode 0
 #>
 
-$UnityLogFatalPattern = "error CS|Aborting batchmode|Received signal"
+$UnityLogFatalPattern = "error CS|Shader error|Aborting batchmode|Received signal"
 $UnityLogExceptionPattern = "Exception"
 $UnityLogBenignLoggerCategories = @("Unity.AspNetCore.NamedPipeSupport.")
 $BuildBundlesDoneMarker = "[ArenaMapPort][BuildBundles] DONE"

@@ -34,6 +34,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import re
 import sys
 from pathlib import Path
@@ -239,6 +240,67 @@ def check_map_against_registry_entry(
         actual = resolve(registry_args[cs_field], ref_scope, local_consts=None)
         check_field(errors, where, json_field, map_json[json_field], actual)
 
+    key = map_json.get("key", "")
+    for field, expected in {
+        "PresetBundleKey": f"maps/{key}_preset.bundle",
+        "PresetAssetName": f"{key}.scenespreset.asset",
+        "ScenesBundleKey": f"{key}/{key}_scenes.bundle",
+        "NavMeshBundleKey": f"{key}/{key}_navmesh.bundle",
+    }.items():
+        actual = resolve(registry_args.get(field), ref_scope, local_consts=None)
+        check_field(errors, where, field, expected, actual)
+
+
+def registry_entries(text: str) -> dict[str, dict]:
+    clean = strip_line_comments(text)
+    names = re.findall(r"ArenaMapDescriptor\s+(\w+)\s*=\s*new\s*\(", clean)
+    if not names or len(names) != len(set(names)):
+        fail("registry descriptor declarations are absent or duplicated")
+    return {name: extract_named_args(clean, rf"ArenaMapDescriptor\s+{re.escape(name)}\s*=\s*new\s*")
+            for name in names}
+
+
+def registry_membership_errors(text: str, entries: dict) -> list[str]:
+    clean = strip_line_comments(text)
+    match = re.search(r"IReadOnlyList<ArenaMapDescriptor>\s+All\s*=\s*new\[\]\s*\{([^}]+)\}", clean, re.S)
+    if not match:
+        return ["ArenaMapRegistry.All membership array could not be parsed"]
+    names = [part.strip() for part in match.group(1).split(",") if part.strip()]
+    errors = []
+    if len(names) != len(set(names)):
+        errors.append("ArenaMapRegistry.All contains duplicate entries")
+    if set(names) != set(entries):
+        errors.append(f"ArenaMapRegistry.All membership differs from descriptor declarations: "
+                      f"missing={sorted(set(entries) - set(names))}, unknown={sorted(set(names) - set(entries))}")
+    return errors
+
+
+def registry_identity_errors(entries: dict, ref_scope: dict) -> list[str]:
+    errors = []
+    for field in ("Key", "IdField", "ScriptsSceneName", "InfiltrationName"):
+        seen = {}
+        for name, entry in entries.items():
+            value = resolve(entry.get(field), ref_scope)
+            if not isinstance(value, str) or not value:
+                errors.append(f"{name}: {field} is missing or invalid")
+                continue
+            normalized = value.casefold()
+            if normalized in seen:
+                errors.append(f"duplicate registry {field}: {seen[normalized]} / {name}")
+            seen[normalized] = name
+            if field == "Key" and not re.fullmatch(r"arena_[a-z0-9_]+", value):
+                errors.append(f"{name}: invalid map key {value!r}")
+            if field == "IdField" and not re.fullmatch(r"[0-9a-f]{24}", value):
+                errors.append(f"{name}: IdField must be 24 lowercase hexadecimal characters")
+    for name, entry in entries.items():
+        scenes = resolve(entry.get("AllSceneNames"), ref_scope)
+        script = resolve(entry.get("ScriptsSceneName"), ref_scope)
+        if not isinstance(scenes, list) or not scenes or scenes[0] != script:
+            errors.append(f"{name}: Scripts scene must be first in AllSceneNames")
+        elif len(scenes) != len(set(scenes)):
+            errors.append(f"{name}: duplicate AllSceneNames")
+    return errors
+
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
@@ -278,28 +340,43 @@ def main() -> int:
     equator_consts["AllSceneNames"] = resolved_scene_names
     ref_scope = {"ArenaEquatorLocation": equator_consts}
 
-    equator_args = extract_named_args(descriptor_text, r"ArenaMapDescriptor\s+Equator\s*=\s*new")
-    bay5_args = extract_named_args(descriptor_text, r"ArenaMapDescriptor\s+Bay5\s*=\s*new")
-
+    entries = registry_entries(descriptor_text)
+    errors.extend(registry_membership_errors(descriptor_text, entries))
+    errors.extend(registry_identity_errors(entries, ref_scope))
+    registry_by_key = {resolve(entry.get("Key"), ref_scope): (name, entry) for name, entry in entries.items()}
     maps_dir: Path = args.maps_dir
+    paths = sorted(maps_dir.glob("*.json"))
+    if not paths:
+        fail(f"no map descriptors found in {maps_dir}")
+    map_keys = set()
+    for path in paths:
+        data = load_map(path)
+        key = data.get("key")
+        if not isinstance(key, str):
+            errors.append(f"{path.name}: missing map key")
+            continue
+        if key in map_keys:
+            errors.append(f"duplicate map descriptor key {key}")
+        map_keys.add(key)
+        if path.stem != key.removeprefix("arena_"):
+            errors.append(f"{path.name}: descriptor filename does not match key {key}")
+        if key not in registry_by_key:
+            errors.append(f"{path.name}: map {key} has no runtime registry descriptor")
+            continue
+        name, entry = registry_by_key[key]
+        check_map_against_registry_entry(data, entry, ref_scope, path, name, errors)
+        fog = data.get("fog_color")
+        if not isinstance(fog, list) or len(fog) != 3 or any(
+            isinstance(v, bool) or not isinstance(v, (int, float)) or not math.isfinite(v) for v in fog
+        ):
+            errors.append(f"{path.name}: fog_color must contain three finite numbers")
+    for missing in sorted(set(registry_by_key) - map_keys):
+        errors.append(f"runtime registry map {missing} has no tools/maps JSON descriptor")
+
     equator_json_path = maps_dir / "equator.json"
-    bay5_json_path = maps_dir / "bay5.json"
     if not equator_json_path.exists():
         fail(f"{equator_json_path} does not exist")
-    if not bay5_json_path.exists():
-        fail(f"{bay5_json_path} does not exist")
-
     equator_map = load_map(equator_json_path)
-    bay5_map = load_map(bay5_json_path)
-
-    # 1) tools/maps/equator.json vs ArenaMapRegistry.Equator (delegated fields resolved through
-    #    ArenaEquatorLocation.cs's own consts; the rest — InfiltrationName/Locale*/Icon*/
-    #    DbBaseJsonPath — are ArenaMapRegistry.cs's own literals, checked directly).
-    check_map_against_registry_entry(equator_map, equator_args, ref_scope, equator_json_path, "Equator", errors)
-
-    # 2) tools/maps/bay5.json vs ArenaMapRegistry.Bay5 (every field is Bay5's own literal — no
-    #    delegation, ref_scope only matters if a future edit adds one).
-    check_map_against_registry_entry(bay5_map, bay5_args, ref_scope, bay5_json_path, "Bay5", errors)
 
     # 3) tools/maps/equator.json vs ArenaPaths.cs's EquatorDefault() (the Editor-assembly fallback
     #    used when -mapDescriptor is omitted — Bay5 has no equivalent by design, see module doc).
@@ -366,8 +443,8 @@ def main() -> int:
         return 1
 
     print(
-        "OK — tools/maps/equator.json, tools/maps/bay5.json, ArenaMapDescriptor.cs's "
-        "ArenaMapRegistry.{Equator,Bay5}, and ArenaPaths.cs's EquatorDefault() all agree."
+        f"OK — {len(paths)} tools/maps descriptors, all {len(entries)} runtime registry entries, "
+        "All membership, and ArenaPaths.cs's EquatorDefault() all agree."
     )
     return 0
 

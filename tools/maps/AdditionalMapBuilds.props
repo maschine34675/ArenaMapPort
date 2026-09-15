@@ -1,0 +1,89 @@
+<Project>
+  <!-- Each entry names a complete validated map. Existing Equator/Bay5 remain in the client project. -->
+  <ItemGroup>
+    <ArenaMapPortAdditionalMap Include="airpit" />
+    <ArenaMapPortAdditionalBundle Include="$(MSBuildThisFileDirectory)..\..\work\build\airpit\arena_airpit_scenes.bundle" />
+    <ArenaMapPortAdditionalBundle Include="$(MSBuildThisFileDirectory)..\..\work\build\airpit\arena_airpit_navmesh.bundle" />
+    <ArenaMapPortAdditionalBundle Include="$(MSBuildThisFileDirectory)..\..\work\build\preset\arena_airpit_preset.bundle" />
+    <ArenaMapPortAdditionalSidecar Include="$(MSBuildThisFileDirectory)..\..\work\build\airpit\material-shaders.json">
+      <DistFilename>material-shaders.arena_airpit.json</DistFilename>
+    </ArenaMapPortAdditionalSidecar>
+    <ArenaMapPortAdditionalMap Include="airpit2" />
+    <ArenaMapPortAdditionalBundle Include="$(MSBuildThisFileDirectory)..\..\work\build\airpit2\arena_airpit2_scenes.bundle" />
+    <ArenaMapPortAdditionalBundle Include="$(MSBuildThisFileDirectory)..\..\work\build\airpit2\arena_airpit2_navmesh.bundle" />
+    <ArenaMapPortAdditionalBundle Include="$(MSBuildThisFileDirectory)..\..\work\build\preset\arena_airpit2_preset.bundle" />
+    <ArenaMapPortAdditionalSidecar Include="$(MSBuildThisFileDirectory)..\..\work\build\airpit2\material-shaders.json">
+      <DistFilename>material-shaders.arena_airpit2.json</DistFilename>
+    </ArenaMapPortAdditionalSidecar>
+    <ArenaMapPortAdditionalMap Include="autoservice" />
+    <ArenaMapPortAdditionalBundle Include="$(MSBuildThisFileDirectory)..\..\work\build\autoservice\arena_autoservice_scenes.bundle" />
+    <ArenaMapPortAdditionalBundle Include="$(MSBuildThisFileDirectory)..\..\work\build\autoservice\arena_autoservice_navmesh.bundle" />
+    <ArenaMapPortAdditionalBundle Include="$(MSBuildThisFileDirectory)..\..\work\build\preset\arena_autoservice_preset.bundle" />
+    <ArenaMapPortAdditionalSidecar Include="$(MSBuildThisFileDirectory)..\..\work\build\autoservice\material-shaders.json">
+      <DistFilename>material-shaders.arena_autoservice.json</DistFilename>
+    </ArenaMapPortAdditionalSidecar>
+    <ArenaMapPortAdditionalMap Include="bowl" />
+    <ArenaMapPortAdditionalBundle Include="$(MSBuildThisFileDirectory)..\..\work\build\bowl\arena_bowl_scenes.bundle" />
+    <ArenaMapPortAdditionalBundle Include="$(MSBuildThisFileDirectory)..\..\work\build\bowl\arena_bowl_navmesh.bundle" />
+    <ArenaMapPortAdditionalBundle Include="$(MSBuildThisFileDirectory)..\..\work\build\preset\arena_bowl_preset.bundle" />
+    <ArenaMapPortAdditionalSidecar Include="$(MSBuildThisFileDirectory)..\..\work\build\bowl\material-shaders.json">
+      <DistFilename>material-shaders.arena_bowl.json</DistFilename>
+    </ArenaMapPortAdditionalSidecar>
+    <ArenaMapPortAdditionalMap Include="prison" />
+    <ArenaMapPortAdditionalBundle Include="$(MSBuildThisFileDirectory)..\..\work\build\prison\arena_prison_scenes.bundle" />
+    <ArenaMapPortAdditionalBundle Include="$(MSBuildThisFileDirectory)..\..\work\build\prison\arena_prison_navmesh.bundle" />
+    <ArenaMapPortAdditionalBundle Include="$(MSBuildThisFileDirectory)..\..\work\build\preset\arena_prison_preset.bundle" />
+    <ArenaMapPortAdditionalSidecar Include="$(MSBuildThisFileDirectory)..\..\work\build\prison\material-shaders.json">
+      <DistFilename>material-shaders.arena_prison.json</DistFilename>
+    </ArenaMapPortAdditionalSidecar>
+    <ArenaMapPortAdditionalMap Include="railwaystation" />
+    <ArenaMapPortAdditionalBundle Include="$(MSBuildThisFileDirectory)..\..\work\build\railwaystation\arena_railwaystation_scenes.bundle" />
+    <ArenaMapPortAdditionalBundle Include="$(MSBuildThisFileDirectory)..\..\work\build\railwaystation\arena_railwaystation_navmesh.bundle" />
+    <ArenaMapPortAdditionalBundle Include="$(MSBuildThisFileDirectory)..\..\work\build\preset\arena_railwaystation_preset.bundle" />
+    <ArenaMapPortAdditionalSidecar Include="$(MSBuildThisFileDirectory)..\..\work\build\railwaystation\material-shaders.json">
+      <DistFilename>material-shaders.arena_railwaystation.json</DistFilename>
+    </ArenaMapPortAdditionalSidecar>
+    <ArenaMapPortAdditionalMap Include="yard" />
+    <ArenaMapPortAdditionalBundle Include="$(MSBuildThisFileDirectory)..\..\work\build\yard\arena_yard_scenes.bundle" />
+    <ArenaMapPortAdditionalBundle Include="$(MSBuildThisFileDirectory)..\..\work\build\yard\arena_yard_navmesh.bundle" />
+    <ArenaMapPortAdditionalBundle Include="$(MSBuildThisFileDirectory)..\..\work\build\preset\arena_yard_preset.bundle" />
+    <ArenaMapPortAdditionalSidecar Include="$(MSBuildThisFileDirectory)..\..\work\build\yard\material-shaders.json">
+      <DistFilename>material-shaders.arena_yard.json</DistFilename>
+    </ArenaMapPortAdditionalSidecar>
+    <ArenaMapPortAdditionalMap Include="iceberg" />
+    <ArenaMapPortAdditionalBundle Include="$(MSBuildThisFileDirectory)..\..\work\build\iceberg\arena_iceberg_scenes.bundle" />
+    <ArenaMapPortAdditionalBundle Include="$(MSBuildThisFileDirectory)..\..\work\build\iceberg\arena_iceberg_navmesh.bundle" />
+    <ArenaMapPortAdditionalBundle Include="$(MSBuildThisFileDirectory)..\..\work\build\preset\arena_iceberg_preset.bundle" />
+    <ArenaMapPortAdditionalSidecar Include="$(MSBuildThisFileDirectory)..\..\work\build\iceberg\material-shaders.json">
+      <DistFilename>material-shaders.arena_iceberg.json</DistFilename>
+    </ArenaMapPortAdditionalSidecar>
+    <ArenaMapPortAdditionalMap Include="factory" />
+    <ArenaMapPortAdditionalBundle Include="$(MSBuildThisFileDirectory)..\..\work\build\factory\arena_factory_scenes.bundle" />
+    <ArenaMapPortAdditionalBundle Include="$(MSBuildThisFileDirectory)..\..\work\build\factory\arena_factory_navmesh.bundle" />
+    <ArenaMapPortAdditionalBundle Include="$(MSBuildThisFileDirectory)..\..\work\build\preset\arena_factory_preset.bundle" />
+    <ArenaMapPortAdditionalSidecar Include="$(MSBuildThisFileDirectory)..\..\work\build\factory\material-shaders.json">
+      <DistFilename>material-shaders.arena_factory.json</DistFilename>
+    </ArenaMapPortAdditionalSidecar>
+    <ArenaMapPortAdditionalMap Include="custom" />
+    <ArenaMapPortAdditionalBundle Include="$(MSBuildThisFileDirectory)..\..\work\build\custom\arena_custom_scenes.bundle" />
+    <ArenaMapPortAdditionalBundle Include="$(MSBuildThisFileDirectory)..\..\work\build\custom\arena_custom_navmesh.bundle" />
+    <ArenaMapPortAdditionalBundle Include="$(MSBuildThisFileDirectory)..\..\work\build\preset\arena_custom_preset.bundle" />
+    <ArenaMapPortAdditionalSidecar Include="$(MSBuildThisFileDirectory)..\..\work\build\custom\material-shaders.json">
+      <DistFilename>material-shaders.arena_custom.json</DistFilename>
+    </ArenaMapPortAdditionalSidecar>
+    <ArenaMapPortAdditionalMap Include="shoreline" />
+    <ArenaMapPortAdditionalBundle Include="$(MSBuildThisFileDirectory)..\..\work\build\shoreline\arena_shoreline_scenes.bundle" />
+    <ArenaMapPortAdditionalBundle Include="$(MSBuildThisFileDirectory)..\..\work\build\shoreline\arena_shoreline_navmesh.bundle" />
+    <ArenaMapPortAdditionalBundle Include="$(MSBuildThisFileDirectory)..\..\work\build\preset\arena_shoreline_preset.bundle" />
+    <ArenaMapPortAdditionalSidecar Include="$(MSBuildThisFileDirectory)..\..\work\build\shoreline\material-shaders.json">
+      <DistFilename>material-shaders.arena_shoreline.json</DistFilename>
+    </ArenaMapPortAdditionalSidecar>
+    <ArenaMapPortAdditionalMap Include="woods" />
+    <ArenaMapPortAdditionalBundle Include="$(MSBuildThisFileDirectory)..\..\work\build\woods\arena_woods_scenes.bundle" />
+    <ArenaMapPortAdditionalBundle Include="$(MSBuildThisFileDirectory)..\..\work\build\woods\arena_woods_navmesh.bundle" />
+    <ArenaMapPortAdditionalBundle Include="$(MSBuildThisFileDirectory)..\..\work\build\preset\arena_woods_preset.bundle" />
+    <ArenaMapPortAdditionalSidecar Include="$(MSBuildThisFileDirectory)..\..\work\build\woods\material-shaders.json">
+      <DistFilename>material-shaders.arena_woods.json</DistFilename>
+    </ArenaMapPortAdditionalSidecar>
+  </ItemGroup>
+</Project>

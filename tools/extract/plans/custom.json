@@ -1,0 +1,78 @@
+{
+  "schema_version": 1,
+  "key": "arena_custom",
+  "source_preset": "arena_custom_preset.bundle",
+  "source_mode": "LastHero",
+  "scenes": [
+    {
+      "name": "Arena_Custom_LH",
+      "asset_path": "Assets/Content/Locations/Arena_NY_Custom_LH/Arena_Custom_LH.unity",
+      "index": 360
+    },
+    {
+      "name": "Arena_Custom_LH_Light",
+      "asset_path": "Assets/Content/Locations/Arena_NY_Custom_LH/Arena_Custom_LH_Light.unity",
+      "index": 359
+    },
+    {
+      "name": "Arena_Custom_LH_Terrain",
+      "asset_path": "Assets/Content/Locations/Arena_NY_Custom_LH/Arena_Custom_LH_Terrain.unity",
+      "index": 358
+    },
+    {
+      "name": "Arena_NY_Custom_LH_DesignStuff",
+      "asset_path": "Assets/Content/Locations/Arena_NY_Custom_LH/Arena_NY_Custom_LH_DesignStuff.unity",
+      "index": 304
+    },
+    {
+      "name": "Arena_NY_Custom_LastHero_DesignStuff",
+      "asset_path": "Assets/Content/Locations/Arena_NY_Custom_LH/Arena_NY_Custom_LastHero_DesignStuff.unity",
+      "index": 308
+    }
+  ],
+  "anchor_scenes": [
+    {
+      "name": "Arena_NY_Custom_LastHero_DesignStuff",
+      "asset_path": "Assets/Content/Locations/Arena_NY_Custom_LH/Arena_NY_Custom_LastHero_DesignStuff.unity",
+      "index": 308
+    }
+  ],
+  "navmesh_scenes": [
+    {
+      "name": "Arena_NY_Custom_LH_AI",
+      "asset_path": "Assets/Content/Locations/Arena_NY_Custom_LH/Arena_NY_Custom_LH_AI.unity",
+      "index": 305
+    }
+  ],
+  "fog_color": [
+    0.11345554143190384,
+    0.1334303915500641,
+    0.13564203679561615
+  ],
+  "excluded_scenes": [
+    {
+      "name": "Arena_Custom_LH_Scripts",
+      "asset_path": "Assets/Content/Locations/Arena_NY_Custom_LH/Arena_Custom_LH_Scripts.unity",
+      "index": 355,
+      "reason": "Replaced by the freshly authored SPT Scripts scene; source scripts and seasonal runtime objects are not imported."
+    },
+    {
+      "name": "Arena_NY_Custom_LH_AI",
+      "asset_path": "Assets/Content/Locations/Arena_NY_Custom_LH/Arena_NY_Custom_LH_AI.unity",
+      "index": 305,
+      "reason": "Source AI/gameplay scene is metadata reference only; port bakes a fresh SPT NavMesh."
+    },
+    {
+      "name": "Arena_NY_Custom_LH_Sound",
+      "asset_path": "Assets/Content/Locations/Arena_NY_Custom_LH/Arena_NY_Custom_LH_Sound.unity",
+      "index": 306,
+      "reason": "Source Arena sound/audio runtime is outside the existing port contract."
+    },
+    {
+      "name": "Arena_NY_Custom_LH_Culling",
+      "asset_path": "Assets/Content/Locations/Arena_NY_Custom_LH/Arena_NY_Custom_LH_Culling.unity",
+      "index": 307,
+      "reason": "Source PerfectCulling data is outside the existing port contract."
+    }
+  ]
+}

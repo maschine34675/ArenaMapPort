@@ -192,4 +192,16 @@
     <Message Importance="high" Text="[ArenaMapPort] staged material-shaders.arena_bay5.json from $(ArenaMapPortBay5BuildDir) into dist/.../ArenaMapPort/" />
   </Target>
 
+  <!-- Explicit full-map outputs only. Never glob slice or diagnostic bundles into dist. -->
+  <Import Project="..\tools\maps\AdditionalMapBuilds.props" />
+  <Target Name="ArenaMapPortStageAdditionalMaps" AfterTargets="ArenaMapPortStageWpOutputs" Condition="'$(Configuration)'=='Release'">
+    <Exec Command="python &quot;$(MSBuildThisFileDirectory)..\tools\validate\validate_port.py&quot; --map %(ArenaMapPortAdditionalMap.Identity)"
+          WorkingDirectory="$(MSBuildThisFileDirectory).." />
+    <Error Text="[ArenaMapPort] validated full-map bundle missing: %(ArenaMapPortAdditionalBundle.Identity)"
+           Condition="!Exists('%(ArenaMapPortAdditionalBundle.Identity)')" />
+    <Copy SourceFiles="@(ArenaMapPortAdditionalBundle)" DestinationFolder="$(ArenaMapPortDistDir)\bundles" SkipUnchangedFiles="true" />
+    <Copy SourceFiles="@(ArenaMapPortAdditionalSidecar)"
+          DestinationFiles="@(ArenaMapPortAdditionalSidecar->'$(ArenaMapPortDistDir)\%(DistFilename)')" SkipUnchangedFiles="true" />
+    <Message Importance="high" Text="[ArenaMapPort] staged all validated additional maps into dist." />
+  </Target>
 </Project>

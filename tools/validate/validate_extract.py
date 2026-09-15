@@ -59,9 +59,12 @@ Usage:
 from __future__ import annotations
 
 import argparse
+from collections import Counter
 import filecmp
+import hashlib
 import importlib
 import json
+import math
 import re
 import shutil
 import struct
@@ -72,7 +75,7 @@ import traceback
 from pathlib import Path
 from typing import Any, NoReturn
 
-REPO_ROOT = Path("D:/ArenaMapPort")
+REPO_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_PACKAGE = REPO_ROOT / "work" / "extract" / "equator_s1"  # O7
 EXTRACTOR_SCRIPT = REPO_ROOT / "tools" / "extract" / "extract_equator.py"  # back-compat default only, see extractor_script_for()
 
@@ -88,7 +91,27 @@ def extractor_script_for(manifest: dict) -> Path:
     EXTRACTOR_SCRIPT (extract_equator.py), preserving this validator's pre-generalization
     behavior for byte-identical Equator packages."""
     rel = manifest.get("source", {}).get("extractor_script")
-    return (REPO_ROOT / rel) if rel else EXTRACTOR_SCRIPT
+    if not rel:
+        return EXTRACTOR_SCRIPT
+    allowed = {f"tools/extract/{name}.py" for name in ("extract_equator", "extract_bay5", "extract_map")}
+    if rel not in allowed:
+        die(f"unrecognized extractor entrypoint: {rel!r}; package metadata cannot choose code to execute")
+    return REPO_ROOT / rel
+
+
+def is_generic_package(manifest: dict) -> bool:
+    return manifest.get("source", {}).get("extractor_script") == "tools/extract/extract_map.py"
+
+
+def generic_plan_for(manifest: dict):
+    sys.path.insert(0, str(REPO_ROOT / "tools" / "extract"))
+    from source_plan import PlanError, validate_manifest_plan
+    try:
+        if not (REPO_ROOT / "tools" / "extract" / "extract_map.py").is_file():
+            raise PlanError("generic extractor entrypoint missing")
+        return validate_manifest_plan(manifest, repo=REPO_ROOT)
+    except PlanError as exc:
+        die(f"generic package source provenance FAILED: {exc}")
 
 ID_RE = re.compile(r"^[0-9a-f]{16}$")
 
@@ -190,6 +213,31 @@ def validate_manifest_shape(manifest: dict, package: Path) -> None:
 # 4: scenes -- structural + cross-reference integrity
 # ---------------------------------------------------------------------------
 
+def census_null_mesh_colliders(manifest: dict) -> Counter:
+    """Read null collider references from every selected source scene, not package claims."""
+    import UnityPy
+    _, plan = generic_plan_for(manifest)
+    source = Path(manifest["source"]["arena_data_root"]).resolve()
+    env = UnityPy.Environment(path=str(source))
+    result = Counter()
+    for scene in plan["scenes"]:
+        file = env.load_file(str(source / f"level{scene['index']}"))
+        for obj in file.objects.values():
+            if obj.type.name != "MeshCollider":
+                continue
+            tree = obj.read_typetree()
+            pointer = tree.get("m_Mesh")
+            if not isinstance(pointer, dict) or type(pointer.get("m_PathID")) is not int:
+                raise ValueError("source MeshCollider has no readable mesh pointer")
+            if pointer["m_PathID"] != 0:
+                continue
+            owner = tree["m_GameObject"]
+            if owner.get("m_FileID") != 0 or not owner.get("m_PathID"):
+                raise ValueError("source null MeshCollider owner is not a local GameObject")
+            result[(scene["name"], str(owner["m_PathID"]))] += 1
+    return result
+
+
 def validate_scenes(manifest: dict, package: Path) -> dict:
     """Returns aggregate stats for the closing summary."""
     stats = {
@@ -201,6 +249,13 @@ def validate_scenes(manifest: dict, package: Path) -> dict:
     }
     mesh_ids = set(manifest.get("meshes", {}).keys())
     material_ids = set(manifest.get("materials", {}).keys())
+    source_null_colliders, actual_null_colliders = Counter(), Counter()
+    generic = is_generic_package(manifest)
+    if generic:
+        try:
+            source_null_colliders = census_null_mesh_colliders(manifest)
+        except Exception as exc:
+            check(False, f"source null MeshCollider census failed: {exc}")
 
     for scene_name in manifest.get("scenes", []):
         scene_path = package / "scenes" / f"{scene_name}.json"
@@ -256,6 +311,9 @@ def validate_scenes(manifest: dict, package: Path) -> dict:
                 elif ctype in ("MeshRenderer", "SkinnedMeshRenderer"):
                     stats["mesh_renderers" if ctype == "MeshRenderer" else "skinned_mesh_renderers"] += 1
                     for mat_id in comp.get("material_ids", []):
+                        if generic and ctype == "MeshRenderer" and mat_id is None:
+                            # Accepted only after the independent exact source-slot check below.
+                            continue
                         if mat_id not in material_ids:
                             scene_bad_refs += 1
                             check(False, f"scenes/{scene_name}.json: object {oid!r} ({name}) "
@@ -264,7 +322,11 @@ def validate_scenes(manifest: dict, package: Path) -> dict:
                     stats["mesh_colliders"] += 1
                     stats["convex_colliders" if comp.get("convex") else "nonconvex_colliders"] += 1
                     mid = comp.get("mesh_id")
-                    if mid not in mesh_ids:
+                    source_null = (generic and "mesh_id" in comp and mid is None
+                                   and source_null_colliders[(scene_name, oid)] > 0)
+                    if source_null:
+                        actual_null_colliders[(scene_name, oid)] += 1
+                    elif mid not in mesh_ids:
                         scene_bad_refs += 1
                         check(False, f"scenes/{scene_name}.json: object {oid!r} ({name}) "
                                       f"MeshCollider.mesh_id {mid!r} resolves under manifest.meshes")
@@ -312,7 +374,114 @@ def validate_scenes(manifest: dict, package: Path) -> dict:
             print(f"[validate_extract]  ok : scenes/{scene_name}.json: {len(objects)} objects, "
                   f"all component references resolve")
 
+    if generic:
+        check(actual_null_colliders == source_null_colliders,
+              "explicit null MeshCollider references exactly match source scene/object counts")
     return stats
+
+
+def census_mixed_material_slots(manifest: dict) -> list[dict]:
+    """Independently reconstruct mixed arrays from all selected source renderers.
+
+    Discovery never relies on package provenance: dropping the record together
+    with a null slot must still fail. Only mixed arrays are the new contract.
+    """
+    import UnityPy
+    _, plan = generic_plan_for(manifest)
+    source = Path(manifest['source']['arena_data_root']).resolve()
+    env = UnityPy.Environment(path=str(source))
+    result = []
+    for scene in plan['scenes']:
+        basename = f"level{scene['index']}"
+        file = env.load_file(str(source / basename))
+        for renderer in sorted(file.objects.values(), key=lambda obj: obj.path_id):
+            if renderer.type.name != 'MeshRenderer':
+                continue
+            tree = renderer.read_typetree()
+            pointers = tree['m_Materials']
+            null_slots = [i for i, pointer in enumerate(pointers) if pointer['m_PathID'] == 0]
+            if not null_slots or len(null_slots) == len(pointers):
+                continue
+            owner = tree['m_GameObject']
+            if owner['m_FileID'] != 0 or not owner['m_PathID']:
+                raise ValueError('source mixed renderer has no local GameObject owner')
+            ids, materials = [], []
+            for pointer in renderer.read().m_Materials:
+                if pointer.path_id == 0:
+                    ids.append(None)
+                    materials.append(None)
+                    continue
+                material = pointer.deref()
+                if material.type.name != 'Material':
+                    raise ValueError('source renderer points to a non-Material asset')
+                name = Path(material.assets_file.name).name
+                ids.append(hashlib.sha1(f'{name}:{material.path_id}:Material'.encode()).hexdigest()[:16])
+                materials.append({'source_file': name, 'source_path_id': material.path_id})
+            if len(ids) != len(pointers) or [i for i, value in enumerate(ids) if value is None] != null_slots:
+                raise ValueError('typed source material array disagrees with serialized PPtrs')
+            result.append({'schema_version': 1, 'scene': scene['name'], 'source_file': basename,
+                           'source_renderer_path_id': renderer.path_id,
+                           'source_game_object_path_id': owner['m_PathID'],
+                           'source_object_sha256': hashlib.sha256(renderer.get_raw_data()).hexdigest(),
+                           'slot_count': len(ids), 'null_slots': null_slots,
+                           'material_ids': ids, 'source_materials': materials})
+    return result
+
+
+def material_slot_preservation_errors(records, required: list[dict], scenes: dict,
+                                      material_ids: set) -> list[str]:
+    """Compare manifest and exact scene slots to fresh, independently read source."""
+    errors = []
+    if not isinstance(records, list) or any(not isinstance(record, dict) for record in records):
+        return ['material_slot_preservation must be a list of source records']
+    if any(not isinstance(record.get('scene'), str) or type(record.get('source_renderer_path_id')) is not int
+           for record in records):
+        return ['material slot provenance has invalid renderer identity']
+    key = lambda record: (record['scene'], record['source_renderer_path_id'])
+    expected = {key(record): record for record in required}
+    recorded = {key(record): record for record in records}
+    if len(recorded) != len(records) or set(recorded) != set(expected):
+        errors.append('material slot provenance does not exactly cover source mixed renderers')
+    for identity, record in recorded.items():
+        if record != expected.get(identity):
+            errors.append(f'{identity}: material slot provenance differs from actual source')
+    expected_owners = {(record['scene'], str(record['source_game_object_path_id'])) for record in required}
+    for record in required:
+        scene, owner = record['scene'], str(record['source_game_object_path_id'])
+        objects = [obj for obj in scenes.get(scene, {}).get('objects', []) if obj.get('id') == owner]
+        if len(objects) != 1:
+            errors.append(f'{scene}:{owner}: source mixed renderer owner missing or duplicated')
+            continue
+        components = [comp for comp in objects[0].get('components', []) if comp.get('type') == 'MeshRenderer']
+        if len(components) != 1 or components[0].get('material_ids') != record['material_ids']:
+            errors.append(f'{scene}:{owner}: material slot positions/assignments differ from actual source')
+        if any(value is not None and value not in material_ids for value in record['material_ids']):
+            errors.append(f'{scene}:{owner}: assigned source material is absent from the package')
+    for scene, payload in scenes.items():
+        for obj in payload.get('objects', []):
+            for comp in obj.get('components', []):
+                if (comp.get('type') == 'MeshRenderer' and None in comp.get('material_ids', [])
+                        and (scene, obj.get('id')) not in expected_owners):
+                    errors.append(f'{scene}:{obj.get("id")}: null material slots lack a matching source mixed renderer')
+    return errors
+
+
+def validate_material_slot_preservation(manifest: dict, package: Path) -> None:
+    records = manifest.get('material_slot_preservation', [])
+    if not is_generic_package(manifest):
+        if records:
+            check(False, 'material slot preservation belongs only to generic source-plan packages')
+        return
+    try:
+        required = census_mixed_material_slots(manifest)
+        scenes = {name: load_json(package / 'scenes' / (name + '.json')) for name in manifest['scenes']}
+        errors = material_slot_preservation_errors(records, required, scenes, set(manifest['materials']))
+        for error in errors:
+            check(False, error)
+        if not errors:
+            check(True, f'exact mixed material slot positions match all selected source renderers ({len(required)} records)')
+    except Exception as exc:
+        check(False, f'material slot source validation failed: {exc}')
 
 
 def collect_shader_and_texture_stats(manifest: dict, package: Path, stats: dict) -> None:
@@ -348,6 +517,9 @@ def validate_materials(manifest: dict, package: Path) -> None:
             bad += 1
             check(False, f"materials/{mat_id}.json: manifest.materials[{mat_id}].shader "
                           f"({declared_shader!r}) matches the material file's own shader field ({shader!r})")
+        for error in generated_terrain_material_errors(mat, meta, manifest.get("textures", {})):
+            bad += 1
+            check(False, f"materials/{mat_id}.json: {error}")
         for prop, tex_env in (mat.get("tex_envs") or {}).items():
             tid = tex_env.get("texture_id")
             if tid is not None and tid not in texture_ids:
@@ -460,11 +632,335 @@ def validate_meshes(manifest: dict, package: Path) -> None:
               f"vertex/submesh counts match manifest, index buffer length matches submesh totals exactly")
 
 
+MESH_CHANNELS = [("positions", 3), ("normals", 3), ("tangents", 4), ("colors", 4)] + [(f"uv{i}", 2) for i in range(8)]
+
+
+def independent_packed_numbers(field: dict, floating: bool = False):
+    """Independent bit-matrix decoder; never calls the extractor or UnityPy's decoder."""
+    import numpy as np
+    n, width = field["m_NumItems"], field["m_BitSize"]
+    data = bytes(field["m_Data"])
+    if type(n) is not int or n < 0 or type(width) is not int or not 0 <= width <= 32 or len(data) * 8 < n * width:
+        raise ValueError("invalid/truncated source packed bit vector")
+    if width:
+        bits = np.unpackbits(np.frombuffer(data, np.uint8), bitorder="little")[:n * width]
+        values = bits.reshape(n, width).astype(np.uint64) @ (np.uint64(1) << np.arange(width, dtype=np.uint64))
+    else:
+        values = np.zeros(n, dtype=np.uint64)
+    if not floating:
+        return values
+    start, span = field["m_Start"], field["m_Range"]
+    if not math.isfinite(start) or not math.isfinite(span) or span < 0:
+        raise ValueError("nonfinite/negative packed float range")
+    return values.astype(np.float64) * (span / ((1 << width) - 1) if width else 0) + start
+
+
+def independent_special_mesh(tree: dict, kind: str) -> dict:
+    """Reconstruct the supported source geometry directly from serialized fields."""
+    import numpy as np
+    raw = tree.get("m_VertexData") or {}
+    stream = tree.get("m_StreamData") or {}
+    packed = tree.get("m_CompressedMesh") or {}
+    if raw.get("m_VertexCount") != 0 or raw.get("m_DataSize") or tree.get("m_IndexBuffer") or stream.get("size") or stream.get("path"):
+        raise ValueError("special source mesh contains unexpected raw/streamed geometry")
+    if tree.get("m_BindPose") or tree.get("m_BoneNameHashes") or (tree.get("m_VariableBoneCountWeights") or {}).get("m_Data"):
+        raise ValueError("special source mesh contains unsupported skin data")
+    if any((tree.get("m_Shapes") or {}).get(key) for key in ("vertices", "shapes", "channels", "fullWeights")):
+        raise ValueError("special source mesh contains unsupported blendshape data")
+    fmt = tree.get("m_IndexFormat")
+    if fmt not in (0, 1):
+        raise ValueError("invalid source mesh index format")
+    submeshes = [(sm["firstByte"] // (2 if fmt == 0 else 4), sm["indexCount"], sm["topology"])
+                 for sm in tree["m_SubMeshes"]]
+    if any(sm["firstByte"] % (2 if fmt == 0 else 4) or sm.get("baseVertex", 0) for sm in tree["m_SubMeshes"]):
+        raise ValueError("unaligned source submesh or unsupported base vertex")
+    if kind == "source_empty":
+        if tree.get("m_MeshCompression") != 0:
+            raise ValueError("source_empty provenance cannot conceal compressed geometry")
+        for key in ("m_Vertices", "m_Normals", "m_Tangents", "m_Colors", "m_UV", "m_UV1", "m_Skin", "m_ShapeVertices", "m_CollisionTriangles"):
+            if tree.get(key):
+                raise ValueError(f"source_empty mesh contains {key}")
+        for key, field in packed.items():
+            if key == "m_UVInfo":
+                if field:
+                    raise ValueError("source_empty mesh has compressed UV declarations")
+            elif field and (field.get("m_NumItems") or field.get("m_Data")):
+                raise ValueError("source_empty mesh contains packed geometry")
+        if any(any(sm.get(key, 0) for key in ("firstByte", "indexCount", "topology", "baseVertex", "firstVertex", "vertexCount"))
+               for sm in tree["m_SubMeshes"]):
+            raise ValueError("source_empty mesh contains nonempty submesh records")
+        channels = {"positions": np.empty((0, 3), dtype=np.float64)}
+        for index, channel in enumerate(raw.get("m_Channels", [])):
+            dimension = channel.get("dimension", 0)
+            if dimension:
+                if index >= len(MESH_CHANNELS) or dimension != MESH_CHANNELS[index][1]:
+                    raise ValueError("source_empty vertex declaration is unsupported")
+                channels[MESH_CHANNELS[index][0]] = np.empty((0, dimension), dtype=np.float64)
+        indices = np.empty(0, dtype=np.uint64)
+    elif kind == "packed_bit_vectors":
+        if tree.get("m_MeshCompression") not in (1, 2, 3) or any(c.get("dimension") for c in raw.get("m_Channels", [])):
+            raise ValueError("packed provenance must describe a completely compressed mesh")
+        for key in ("m_Weights", "m_BoneIndices", "m_BindPoses", "m_Colors"):
+            if (packed.get(key) or {}).get("m_NumItems"):
+                raise ValueError(f"unsupported packed channel {key}")
+        positions = independent_packed_numbers(packed["m_Vertices"], True).reshape(-1, 3)
+        count = len(positions)
+        if count == 0:
+            raise ValueError("packed positions are empty")
+        channels = {"positions": positions}
+        for key, name, sign_key, sign_width in (("m_Normals", "normals", "m_NormalSigns", 1),
+                                                ("m_Tangents", "tangents", "m_TangentSigns", 2)):
+            if not packed[key]["m_NumItems"]:
+                if packed[sign_key]["m_NumItems"]:
+                    raise ValueError("packed signs without their channel")
+                continue
+            xy = independent_packed_numbers(packed[key], True).reshape(count, 2)
+            signs = independent_packed_numbers(packed[sign_key]).reshape(count, sign_width)
+            if np.any(signs > 1):
+                raise ValueError("invalid packed normal/tangent signs")
+            length_squared = np.sum(xy * xy, axis=1)
+            z = np.sqrt(np.maximum(0, 1 - length_squared))
+            outside = length_squared > 1
+            xy[outside] /= np.sqrt(length_squared[outside])[:, None]
+            z[signs[:, 0] == 0] *= -1
+            channels[name] = np.column_stack((xy, z, np.where(signs[:, 1] > 0, 1., -1.))) if sign_width == 2 else np.column_stack((xy, z))
+        if packed["m_FloatColors"]["m_NumItems"]:
+            channels["colors"] = independent_packed_numbers(packed["m_FloatColors"], True).reshape(count, 4)
+        uv = independent_packed_numbers(packed["m_UV"], True)
+        info = packed.get("m_UVInfo") or 0
+        declarations = [(number, (info >> (number * 4)) & 15) for number in range(8)] if info else [(number, 5) for number in range(len(uv) // (count * 2))]
+        offset = 0
+        for number, declaration in declarations:
+            if declaration == 0:
+                continue
+            if declaration != 5 or number >= 8:
+                raise ValueError("unsupported source packed UV declaration")
+            channels[f"uv{number}"] = uv[offset:offset + count * 2].reshape(count, 2)
+            offset += count * 2
+        if offset != len(uv):
+            raise ValueError("source UV data is not completely accounted for")
+        indices = independent_packed_numbers(packed["m_Triangles"])
+        if not len(indices) or np.any(indices >= count):
+            raise ValueError("packed indices missing or outside source vertex buffer")
+    else:
+        raise ValueError(f"unknown mesh compatibility kind: {kind}")
+    if sum(sm[1] for sm in submeshes) != len(indices) or any(sm[2] != 0 for sm in submeshes):
+        raise ValueError("source submesh ranges do not account for all triangle indices")
+    mask = sum(1 << index for index, (name, _) in enumerate(MESH_CHANNELS) if name in channels)
+    return {"channels": channels, "indices": indices, "submeshes": submeshes, "channel_mask": mask,
+            "index_format": fmt, "vertex_count": len(channels["positions"]), "submesh_count": len(submeshes)}
+
+
+def special_mesh_output_errors(tree: dict, record: dict, path: Path) -> list[str]:
+    import numpy as np
+    expected = independent_special_mesh(tree, record["kind"])
+    parsed = parse_mesh_bin(path)
+    errors = []
+    for field in ("vertex_count", "submesh_count", "channel_mask", "index_format"):
+        if record.get(field) != expected[field] or parsed[field] != expected[field]:
+            errors.append(f"{field} differs from actual source geometry")
+    if parsed["magic"] != MESH_MAGIC or parsed["version"] != MESH_VERSION or parsed["submeshes"] != expected["submeshes"]:
+        errors.append("AMPM header/submesh table differs from source")
+    raw = path.read_bytes()
+    offset = 16
+    for bit, (name, width) in enumerate(MESH_CHANNELS):
+        if not parsed["channel_mask"] & (1 << bit):
+            continue
+        values = np.frombuffer(raw, "<f4", parsed["vertex_count"] * width, offset).reshape(-1, width)
+        offset += values.size * 4
+        target = expected["channels"].get(name)
+        if target is None or values.shape != target.shape or not np.isfinite(values).all() or not np.allclose(values, target.astype("<f4"), rtol=1e-6, atol=1e-7):
+            errors.append(f"{name} values differ from independently decoded source")
+    indices = np.frombuffer(raw, "<u2" if parsed["index_format"] == 0 else "<u4", offset=parsed["header_and_data_end_offset"])
+    if not np.array_equal(indices, expected["indices"]):
+        errors.append("index buffer differs from source")
+    return errors
+
+
+def census_special_source_meshes(manifest: dict):
+    """Find special meshes through the selected scenes' real MF/MC references.
+
+    Source objects are deduplicated before reading mesh metadata. This visits the
+    imported scene scope only; source skinned renderers remain the legacy exclusion.
+    """
+    from collections import Counter
+    import UnityPy
+    _, plan = generic_plan_for(manifest)
+    source = Path(manifest["source"]["arena_data_root"]).resolve()
+    env = UnityPy.Environment(path=str(source))
+    seen, special = set(), {}
+    bindings = Counter()
+    for scene in plan["scenes"]:
+        file = env.load_file(str(source / f"level{scene['index']}"))
+        for component in file.objects.values():
+            kind = component.type.name
+            if kind not in ("MeshFilter", "MeshCollider"):
+                continue
+            pointer = component.read().m_Mesh
+            if pointer is None or pointer.path_id == 0:
+                continue
+            reader = pointer.deref()
+            if reader.type.name != "Mesh":
+                raise ValueError("source mesh component points to a non-Mesh asset")
+            name = Path(reader.assets_file.name).name
+            mesh_id = hashlib.sha1(f"{name}:{reader.path_id}:Mesh".encode()).hexdigest()[:16]
+            bindings[(kind, mesh_id)] += 1
+            if mesh_id in seen:
+                continue
+            seen.add(mesh_id)
+            tree = reader.read_typetree()
+            if tree.get("m_MeshCompression") != 0 or (tree.get("m_VertexData") or {}).get("m_VertexCount") == 0:
+                special[mesh_id] = (name, reader.path_id, reader, tree)
+    return special, Counter({key: count for key, count in bindings.items() if key[1] in special})
+
+
+def validate_mesh_compatibility(manifest: dict, package: Path) -> None:
+    from collections import Counter
+    records = manifest.get("mesh_compatibility", [])
+    zeros = {key for key, meta in manifest.get("meshes", {}).items() if meta.get("vertex_count") == 0}
+    if not is_generic_package(manifest) and not records:
+        return
+    if not check(is_generic_package(manifest) and isinstance(records, list), "mesh compatibility provenance belongs to a generic source-plan package"):
+        return
+    try:
+        required, source_bindings = census_special_source_meshes(manifest)
+    except Exception as exc:
+        check(False, f"selected source scene mesh census failed: {exc}")
+        return
+    zero_records = {r.get("mesh_id") for r in records if r.get("kind") == "source_empty"}
+    check(zero_records == zeros, "every zero-vertex mesh has exact source_empty provenance")
+    ids = [r.get("mesh_id") for r in records]
+    check(len(ids) == len(set(ids)), "mesh compatibility records have unique asset identities")
+    check(set(ids) == set(required), "mesh compatibility provenance exactly covers special meshes required by selected source scenes")
+    references = Counter()
+    for name in manifest["scenes"]:
+        scene = load_json(package / "scenes" / (name + ".json"))
+        references.update((c["type"], c["mesh_id"]) for obj in scene["objects"] for c in obj.get("components", [])
+                          if c.get("type") in ("MeshFilter", "MeshCollider") and c.get("mesh_id") in required)
+    check(references == source_bindings, "every special mesh preserves exact selected-source MeshFilter/MeshCollider attachment counts")
+    source = Path(manifest["source"]["arena_data_root"]).resolve()
+    for record in records:
+        mesh_id = record.get("mesh_id")
+        try:
+            name, source_id = record["source_file"], record["source_path_id"]
+            path = (source / name).resolve()
+            if not isinstance(name, str) or Path(name).name != name or not path.is_relative_to(source) or type(source_id) is not int:
+                raise ValueError("invalid mesh source file/path ID")
+            expected_id = hashlib.sha1(f"{name}:{source_id}:Mesh".encode()).hexdigest()[:16]
+            if mesh_id != expected_id or mesh_id not in manifest["meshes"] or mesh_id not in required:
+                raise ValueError("source mesh identity is missing, substituted or detached from the package scenes")
+            actual_name, actual_id, reader, tree = required[mesh_id]
+            if name != actual_name or source_id != actual_id:
+                raise ValueError("provenance source identity differs from actual scene mesh reference")
+            if reader.type.name != "Mesh" or hashlib.sha256(reader.get_raw_data()).hexdigest() != record.get("source_object_sha256"):
+                raise ValueError("mesh source type/hash differs from provenance")
+            if record.get("schema_version") != 1 or record.get("geometry_substituted") is not False or record.get("source_name") != tree["m_Name"] or record.get("source_mesh_compression") != tree["m_MeshCompression"]:
+                raise ValueError("mesh compatibility provenance does not match source metadata")
+            decoder = "source_empty" if record["kind"] == "source_empty" else "UnityPy.MeshHandler"
+            if record.get("decoder") != decoder:
+                raise ValueError("unsupported mesh decoder provenance")
+            output = (package / manifest["meshes"][mesh_id]["file"]).resolve()
+            if not output.is_relative_to((package / "meshes").resolve()):
+                raise ValueError("special mesh output escapes package meshes")
+            errors = special_mesh_output_errors(tree, record, output)
+            for error in errors:
+                check(False, f"mesh {mesh_id}: {error}")
+            if not errors:
+                check(True, f"mesh {mesh_id}: source hash, geometry/channels/indices and attached identity preserved ({record['kind']})")
+        except Exception as exc:
+            check(False, f"mesh {mesh_id}: source compatibility validation failed: {exc}")
+
+
 # ---------------------------------------------------------------------------
 # 7: textures/<id>.png
 # ---------------------------------------------------------------------------
 
 TEXTURE_DIMENSIONS = {"Tex2D", "Cube", "Tex3D", "Tex2DArray"}
+
+
+def generated_terrain_texture_errors(meta: dict, package: Path) -> list[str]:
+    """Strict, narrow exception to the legacy unsupported arbitrary-array fallback."""
+    array = meta.get("generated_terrain_array") is True
+    control = meta.get("generated_terrain_control") is True
+    if not array and not control:
+        return []
+    errors = []
+    if array and control:
+        errors.append("texture cannot be both a terrain array and a control")
+    if meta.get("dimension", "Tex2D") != ("Tex2DArray" if array else "Tex2D"):
+        errors.append("generated terrain texture has wrong dimension")
+    expected_color = "sRGB" if array and meta.get("terrain_role") == "diffuse" else "Linear"
+    if meta.get("color_space") != expected_color or meta.get("is_normal_map") is not False:
+        errors.append("generated terrain color-space/normal import flags are incorrect")
+    if array and meta.get("terrain_role") not in ("diffuse", "normalSAO"):
+        errors.append("generated terrain array role must be diffuse or normalSAO")
+    width, height = meta.get("width"), meta.get("height")
+    if type(width) is not int or type(height) is not int or min(width, height) <= 0:
+        errors.append("generated terrain texture dimensions must be positive integers")
+    if array:
+        slices = meta.get("array_slices")
+        depth = meta.get("depth")
+        if type(depth) is not int or depth != 12:
+            errors.append("generated terrain array must preserve all 12 source layers")
+        if (not isinstance(slices, list) or len(slices) != depth or not slices
+                or any(not isinstance(s, str) for s in slices)):
+            errors.append("array_slices must contain exactly depth file paths")
+            return errors
+        if len(set(slices)) != len(slices) or meta.get("file") != slices[0]:
+            errors.append("array slices must be unique and file must identify slice zero")
+    else:
+        slices = [meta.get("file")]
+    from PIL import Image
+    for rel in slices:
+        if not isinstance(rel, str):
+            errors.append("generated terrain texture path missing")
+            continue
+        path = (package / rel).resolve()
+        if not path.is_relative_to((package / "textures").resolve()):
+            errors.append(f"generated terrain texture escapes package textures: {rel}")
+            continue
+        try:
+            with Image.open(path) as img:
+                img.load()
+                if img.size != (width, height) or img.mode != "RGBA":
+                    errors.append(f"terrain slice {rel} must be RGBA {width}x{height}; got {img.mode} {img.size}")
+        except (OSError, ValueError) as exc:
+            errors.append(f"terrain slice {rel} is missing or unreadable: {exc}")
+    return errors
+
+
+def generated_terrain_material_errors(mat: dict, meta: dict, textures: dict) -> list[str]:
+    shader = mat.get("shader")
+    preserve = mat.get("preserve_shader") is True or meta.get("preserve_shader") is True
+    if shader != "ArenaMapPort/Terrain" and not preserve:
+        return []
+    errors = []
+    if shader != "ArenaMapPort/Terrain" or mat.get("preserve_shader") is not True or meta.get("preserve_shader") is not True:
+        errors.append("only the exact owned ArenaMapPort/Terrain shader may be preserved")
+    tex_envs, floats, colors = (mat.get(k, {}) for k in ("tex_envs", "floats", "colors"))
+    for slot, role in (("_DiffuseArray", "diffuse"), ("_NormalSAOArray", "normalSAO")):
+        tex = textures.get(tex_envs.get(slot, {}).get("texture_id"), {})
+        if tex.get("generated_terrain_array") is not True or tex.get("terrain_role") != role or tex.get("depth") != 12:
+            errors.append(f"{slot} must reference the complete generated {role} array")
+    resolution = floats.get("_ControlResolution")
+    if not isinstance(resolution, (float, int)) or not math.isfinite(resolution) or resolution < 2:
+        errors.append("terrain control resolution must be finite and >= 2")
+    for slot in ("_Control0", "_Control1", "_Control2"):
+        tex = textures.get(tex_envs.get(slot, {}).get("texture_id"), {})
+        if (tex.get("generated_terrain_control") is not True or tex.get("color_space") != "Linear"
+                or tex.get("width") != resolution or tex.get("height") != resolution):
+            errors.append(f"{slot} must reference a linear control at the declared resolution")
+    if floats.get("_LayerCount") != 12:
+        errors.append("terrain material must use all 12 layers")
+    contrast = floats.get("_Contrast")
+    if not isinstance(contrast, (int, float)) or not math.isfinite(contrast) or contrast <= 0:
+        errors.append("terrain height-blend contrast must be finite and positive")
+    for name in ["_UVScale"] + [f"_LayerUV{i}" for i in range(12)] + [f"_LayerAdjust{i}" for i in range(12)]:
+        vec = colors.get(name)
+        if (not isinstance(vec, list) or len(vec) != 4 or any(
+                isinstance(v, bool) or not isinstance(v, (int, float)) or not math.isfinite(v) for v in vec)):
+            errors.append(f"terrain material {name} must contain four finite source values")
+    return errors
 
 
 def validate_textures(manifest: dict, package: Path) -> None:
@@ -480,6 +976,10 @@ def validate_textures(manifest: dict, package: Path) -> None:
     for tex_id, meta in manifest.get("textures", {}).items():
         n += 1
         tex_path = package / meta["file"]
+        terrain_errors = generated_terrain_texture_errors(meta, package)
+        for error in terrain_errors:
+            bad += 1
+            check(False, f"texture {tex_id}: {error}")
 
         # impl-texture-dimensions §1: manifest.textures[tex_id].dimension (§C-compatible
         # extension) must be one of the known shapes WP2's importer branches on -- an unknown
@@ -622,7 +1122,128 @@ def count_disabled_in_package(manifest: dict, package: Path) -> dict[str, dict[s
     return counts
 
 
-def count_disabled_in_arena(source_root: str | None, manifest: dict) -> dict[str, dict[str, int]] | None:
+def terrain_scene_adjustments(scene_name: str, file, manifest: dict, package: Path) -> dict[str, int]:
+    """Derive synthetic terrain counts from live source cells and inspect their output.
+
+    Never subtract generated objects wholesale: every generated mesh and collider must
+    correspond to a real source Terrain and preserve all its non-hole cells.
+    """
+    import numpy as np
+    records = [r for r in manifest.get("terrain_conversion", []) if r.get("scene") == scene_name]
+    terrains = [o for o in file.objects.values() if o.type.name == "Terrain"]
+    terrain_colliders = [o for o in file.objects.values() if o.type.name == "TerrainCollider"]
+    if not records and not terrains and not terrain_colliders:
+        return {}
+    by_terrain = {r.get("source_terrain_id"): r for r in records}
+    if not check(len(by_terrain) == len(records) and set(by_terrain) == {o.path_id for o in terrains},
+                 f"{scene_name}: converted Terrain records exactly cover source Terrain components"):
+        return {}
+    scene = load_json(package / "scenes" / (scene_name + ".json"))
+    objects = {o["id"]: o for o in scene["objects"]}
+    collider_by_go = {}
+    for obj in terrain_colliders:
+        tt = obj.read_typetree()
+        collider_go = tt["m_GameObject"]["m_PathID"]
+        check(collider_go not in collider_by_go, f"{scene_name}: no duplicate TerrainCollider on source object {collider_go}")
+        collider_by_go[collider_go] = (obj, tt)
+    terrain_gos = {obj.read_typetree()["m_GameObject"]["m_PathID"] for obj in terrains}
+    check(set(collider_by_go) <= terrain_gos, f"{scene_name}: every source TerrainCollider has a converted Terrain")
+    extras = {}
+    for terrain_obj in terrains:
+        record = by_terrain[terrain_obj.path_id]
+        typed = terrain_obj.read()
+        terrain = terrain_obj.read_typetree()
+        data_obj = typed.m_TerrainData.deref()
+        data = data_obj.read_typetree()
+        heightmap = data["m_Heightmap"]
+        n = heightmap["m_Resolution"]
+        heights = np.asarray(heightmap["m_Heights"], dtype=np.float64).reshape(n, n)
+        scale = [heightmap["m_Scale"][axis] for axis in ("x", "y", "z")]
+        holes = heightmap.get("m_Holes", [])
+        solid = np.asarray(holes).reshape(n - 1, n - 1) != 0 if holes else np.ones((n - 1, n - 1), dtype=bool)
+        go = terrain["m_GameObject"]["m_PathID"]
+        coll_entry = collider_by_go.get(go)
+        enabled = bool(terrain.get("m_Enabled", 1)) and bool(terrain.get("m_DrawHeightmap", True))
+        coll_enabled = bool(coll_entry[1].get("m_Enabled", 1)) if coll_entry else None
+        source_data_file = Path(data_obj.assets_file.name).name
+        expected_identity = {"source_gameobject_id": go, "source_terrain_id": terrain_obj.path_id,
+                             "source_collider_id": coll_entry[0].path_id if coll_entry else None,
+                             "terrain_data_file": source_data_file, "terrain_data_path_id": data_obj.path_id,
+                             "height_resolution": n, "height_sample_count": n * n,
+                             "height_denominator": 32766.0, "renderer_enabled": enabled,
+                             "collider_enabled": coll_enabled, "triangle_count": int(solid.sum()) * 2,
+                             "hole_cell_count": int(solid.size - solid.sum())}
+        for key, value in expected_identity.items():
+            check(record.get(key) == value, f"{scene_name} Terrain {terrain_obj.path_id}: source {key} preserved")
+        expected_meshes = []
+        for z in range(0, n - 1, 128):
+            for x in range(0, n - 1, 128):
+                x1, z1 = min(x + 128, n - 1), min(z + 128, n - 1)
+                cell_count = int(solid[z:z1, x:x1].sum())
+                if cell_count == 0:
+                    continue
+                mesh_id = hashlib.sha1(f"{source_data_file}:{data_obj.path_id}:TerrainV1:mesh:{x}:{z}".encode()).hexdigest()[:16]
+                expected_meshes.append(mesh_id)
+                raw_id = hashlib.sha1(f"{Path(file.name).name}:{terrain_obj.path_id}:TerrainV1:object:{x}:{z}:{x1}:{z1}".encode()).hexdigest()[:16]
+                child_id = str(-(int(raw_id, 16) & ((1 << 63) - 1)) - 1)
+                child = objects.get(child_id, {})
+                check(child.get("parent_id") == str(go) and child.get("local_position") == [0, 0, 0]
+                      and child.get("local_rotation") == [0, 0, 0, 1] and child.get("local_scale") == [1, 1, 1],
+                      f"{scene_name} Terrain chunk {x},{z}: source parent and identity child transform preserved")
+                comps = {c.get("type"): c for c in child.get("components", [])}
+                check(comps.get("MeshFilter", {}).get("mesh_id") == mesh_id
+                      and comps.get("MeshRenderer", {}).get("enabled") == enabled,
+                      f"{scene_name} Terrain chunk {x},{z}: exact source mesh/render state")
+                if coll_entry:
+                    coll = comps.get("MeshCollider", {})
+                    check(coll.get("mesh_id") == mesh_id and coll.get("enabled") == coll_enabled
+                          and coll.get("convex") is False and coll.get("is_trigger") is False,
+                          f"{scene_name} Terrain chunk {x},{z}: collision uses the identical nonconvex ground mesh")
+                else:
+                    check("MeshCollider" not in comps, f"{scene_name} Terrain chunk {x},{z}: no extra source-absent collider")
+                mesh_meta = manifest.get("meshes", {}).get(mesh_id)
+                if not check(mesh_meta is not None, f"{scene_name} Terrain chunk {x},{z}: mesh manifest entry exists"):
+                    continue
+                path = package / mesh_meta["file"]
+                parsed = parse_mesh_bin(path)
+                vertices = (x1 - x + 1) * (z1 - z + 1)
+                check(parsed["vertex_count"] == vertices and parsed["actual_total_indices"] == cell_count * 6,
+                      f"{scene_name} Terrain chunk {x},{z}: every height vertex and solid-cell triangle retained")
+                raw = path.read_bytes()
+                positions = np.frombuffer(raw, dtype="<f4", count=vertices * 3, offset=16).reshape(-1, 3)
+                xx, zz = np.meshgrid(np.arange(x, x1 + 1), np.arange(z, z1 + 1))
+                expected_positions = np.stack((xx * scale[0], heights[z:z1 + 1, x:x1 + 1] * scale[1] / 32766.0,
+                                               zz * scale[2]), axis=-1).reshape(-1, 3)
+                check(np.allclose(positions, expected_positions, rtol=1e-6, atol=1e-5),
+                      f"{scene_name} Terrain chunk {x},{z}: all positions independently match source heights")
+                expected_indices = []
+                width = x1 - x + 1
+                for row in range(z, z1):
+                    for col in range(x, x1):
+                        if solid[row, col]:
+                            corner = (row - z) * width + col - x
+                            expected_indices.extend((corner, corner + width, corner + 1,
+                                                     corner + 1, corner + width, corner + width + 1))
+                indices = np.frombuffer(raw, dtype="<u2" if parsed["index_format"] == 0 else "<u4",
+                                        offset=parsed["header_and_data_end_offset"])
+                check(np.array_equal(indices, expected_indices),
+                      f"{scene_name} Terrain chunk {x},{z}: exact upward cell triangles and source holes preserved")
+                has_channels = parsed["channel_mask"] == 23
+                check(has_channels, f"{scene_name} Terrain chunk {x},{z}: normals, tangents and full terrain UV0 retained")
+                if has_channels:
+                    uv = np.frombuffer(raw, dtype="<f4", count=vertices * 2, offset=16 + vertices * 40).reshape(-1, 2)
+                    expected_uv = np.stack((xx / (n - 1), zz / (n - 1)), axis=-1).reshape(-1, 2)
+                    check(np.allclose(uv, expected_uv, rtol=1e-6, atol=1e-7),
+                          f"{scene_name} Terrain chunk {x},{z}: UV0 addresses the entire source terrain")
+                if not enabled:
+                    extras["MeshRenderer"] = extras.get("MeshRenderer", 0) + 1
+                if coll_entry and not coll_enabled:
+                    extras["MeshCollider"] = extras.get("MeshCollider", 0) + 1
+        check(record.get("mesh_ids") == expected_meshes, f"{scene_name} Terrain {terrain_obj.path_id}: complete ordered chunk mesh set")
+    return extras
+
+
+def count_disabled_in_arena(source_root: str | None, manifest: dict, package: Path | None = None) -> dict[str, dict[str, int]] | None:
     """Recomputes ground-truth per-scene disabled-component counts directly against Arena's own
     level<N> files via UnityPy -- independent of tools/extract/extract_equator.py's own internals
     (imports it read-only for SCENE_REGISTRY only, never re-executes its extraction logic), mirroring
@@ -632,6 +1253,8 @@ def count_disabled_in_arena(source_root: str | None, manifest: dict) -> dict[str
     build_components() only ever read from the level<N> SerializedFile) -- so this only needs to
     load that one file per scene, not the full multi-file environment extraction needs. Returns
     None (with a warning already recorded) if the source tree is not reachable right now."""
+    strict = is_generic_package(manifest)
+    generic_plan = generic_plan_for(manifest)[1] if strict else None
     if not source_root:
         warn("disabled-component ground-truth check: manifest.source.arena_data_root missing -- "
              "falling back to the hardcoded reference table (KNOWN_ARENA_DISABLED_COUNTS)")
@@ -648,30 +1271,39 @@ def count_disabled_in_arena(source_root: str | None, manifest: dict) -> dict[str
         warn(f"disabled-component ground-truth check: extractor script not found at "
              f"{extractor_script} -- falling back to the hardcoded reference table")
         return None
-    sys.path.insert(0, str(extractor_script.parent))
-    try:
-        _ex = importlib.import_module(extractor_script.stem)  # type: ignore  # noqa: PLC0415
-    except Exception as e:  # noqa: BLE001
-        warn(f"disabled-component ground-truth check: could not import {extractor_script.name} to "
-             f"recover its SCENE_REGISTRY ({e}) -- falling back to the hardcoded reference table")
-        return None
+    if generic_plan is not None:
+        name_to_idx = {r["name"]: r["index"] for r in generic_plan["scenes"]}
+    else:
+        sys.path.insert(0, str(extractor_script.parent))
+        try:
+            _ex = importlib.import_module(extractor_script.stem)  # type: ignore  # noqa: PLC0415
+        except Exception as e:  # noqa: BLE001
+            warn(f"disabled-component ground-truth check: could not import {extractor_script.name} to "
+                 f"recover its SCENE_REGISTRY ({e}) -- falling back to the hardcoded reference table")
+            return None
+        name_to_idx = {v: k for k, v in _ex.SCENE_REGISTRY.items()}
     try:
         import UnityPy  # noqa: PLC0415
     except ImportError:
+        if strict:
+            die("generic package disabled-component check requires UnityPy")
         warn("disabled-component ground-truth check: UnityPy not importable -- falling back to "
              "the hardcoded reference table")
         return None
 
-    name_to_idx = {v: k for k, v in _ex.SCENE_REGISTRY.items()}
     out: dict[str, dict[str, int]] = {}
     for scene_name in manifest.get("scenes", []):
         idx = name_to_idx.get(scene_name)
         if idx is None:
+            if strict:
+                die(f"generic package scene absent from verified registry: {scene_name}")
             warn(f"disabled-component ground-truth check: {scene_name!r} not in "
                  f"{extractor_script.name}'s SCENE_REGISTRY -- skipped")
             continue
         level_path = Path(source_root) / f"level{idx}"
         if not level_path.is_file():
+            if strict:
+                die(f"required generic source scene missing: {level_path}")
             warn(f"disabled-component ground-truth check: {level_path} not found -- skipped {scene_name}")
             continue
         env = UnityPy.load(str(level_path))
@@ -682,10 +1314,16 @@ def count_disabled_in_arena(source_root: str | None, manifest: dict) -> dict[str
                 continue
             try:
                 tt = obj.read_typetree()
-            except Exception:  # noqa: BLE001 -- defensive; not expected against a real level file
+            except Exception as exc:  # noqa: BLE001 -- defensive; not expected against a real level file
+                if strict:
+                    die(f"cannot read disabled-component source {level_path} {obj.path_id}: {exc}")
                 continue
             if tt.get("m_Enabled", 1) == 0:
                 scene_counts[t] = scene_counts.get(t, 0) + 1
+        if strict and package is not None:
+            source_file = env.files[str(level_path)]
+            for kind, count in terrain_scene_adjustments(scene_name, source_file, manifest, package).items():
+                scene_counts[kind] = scene_counts.get(kind, 0) + count
         out[scene_name] = scene_counts
     return out
 
@@ -704,7 +1342,7 @@ def validate_disabled_component_counts(manifest: dict, package: Path) -> None:
     expected slicing behavior, not a defect."""
     package_counts = count_disabled_in_package(manifest, package)
     source_root = manifest.get("source", {}).get("arena_data_root")
-    arena_counts = count_disabled_in_arena(source_root, manifest)
+    arena_counts = count_disabled_in_arena(source_root, manifest, package)
     used_fallback = arena_counts is None
     if arena_counts is None:
         arena_counts = KNOWN_ARENA_DISABLED_COUNTS
@@ -747,13 +1385,19 @@ def validate_disabled_component_counts(manifest: dict, package: Path) -> None:
 # 8: reproducibility -- literally re-run the extractor
 # ---------------------------------------------------------------------------
 
-def derive_extractor_args(manifest: dict) -> tuple[Path, list[int], dict[int, list[int]], str] | None:
+def derive_extractor_args(manifest: dict) -> tuple[Path, list[int], dict[int, list[int]], str, Path | None] | None:
     """Recovers (extractor_script, scene_indices, slice_map, source_root) from the package's own
     manifest.json, using that map's own extractor module's SCENE_REGISTRY as the single source of
     truth for name<->index (imported read-only, never executed as __main__). Which module is
     "that map's own" is resolved via extractor_script_for() (critic amendment #3 -- generalized
     so this works for Bay5's own extract_bay5.py package too, not just Equator's)."""
     extractor_script = extractor_script_for(manifest)
+    if is_generic_package(manifest):
+        plan_path, plan = generic_plan_for(manifest)
+        if not extractor_script.is_file():
+            die(f"generic extractor entrypoint missing: {extractor_script}")
+        return (extractor_script, [r["index"] for r in plan["scenes"]], {},
+                manifest["source"]["arena_data_root"], plan_path)
     if not extractor_script.is_file():
         warn(f"reproducibility check SKIPPED: extractor script not found at {extractor_script}")
         return None
@@ -781,11 +1425,12 @@ def derive_extractor_args(manifest: dict) -> tuple[Path, list[int], dict[int, li
     if not source_root:
         warn("reproducibility check SKIPPED: manifest.source.arena_data_root missing")
         return None
-    return extractor_script, scene_indices, slice_map, source_root
+    return extractor_script, scene_indices, slice_map, source_root, None
 
 
 def run_extractor(extractor_script: Path, scene_indices: list[int], slice_map: dict[int, list[int]],
-                   source_root: str, out_dir: Path, fixed_timestamp: str, timeout_s: int) -> subprocess.CompletedProcess:
+                   source_root: str, out_dir: Path, fixed_timestamp: str, timeout_s: int,
+                   plan_path: Path | None = None) -> subprocess.CompletedProcess:
     cmd = [sys.executable, str(extractor_script),
            "--source", source_root,
            "--output", str(out_dir),
@@ -794,7 +1439,11 @@ def run_extractor(extractor_script: Path, scene_indices: list[int], slice_map: d
     # 5-scene set); extract_bay5.py has a fixed, unparameterized 8-scene set (no slicing support
     # at all, see its own module docstring) -- these flags simply don't exist on that script, so
     # they're only added for the script that accepts them.
-    if extractor_script.name != "extract_bay5.py":
+    if extractor_script.name == "extract_map.py":
+        if plan_path is None:
+            die("generic reproducibility requires a verified source plan")
+        cmd += ["--plan", str(plan_path)]
+    elif extractor_script.name != "extract_bay5.py":
         cmd += ["--scenes", ",".join(str(i) for i in scene_indices)]
         for idx, ids in slice_map.items():
             cmd += ["--slice-roots", f"{idx}:" + ",".join(str(i) for i in ids)]
@@ -833,9 +1482,11 @@ def run_reproducibility_checks(manifest: dict, package: Path, timeout_s: int) ->
     derived = derive_extractor_args(manifest)
     if derived is None:
         return
-    extractor_script, scene_indices, slice_map, source_root = derived
+    extractor_script, scene_indices, slice_map, source_root, plan_path = derived
 
     if not Path(source_root).is_dir():
+        if is_generic_package(manifest):
+            die("generic package source disappeared before reproducibility; cannot skip")
         warn(f"reproducibility check SKIPPED: source root {source_root!r} is not reachable from this "
              f"machine right now (environment gap, not a WP1 defect) -- re-run with this path mounted "
              f"to exercise SS B.WP1's determinism acceptance criterion")
@@ -847,12 +1498,12 @@ def run_reproducibility_checks(manifest: dict, package: Path, timeout_s: int) ->
         out1, out2 = tmp / "run1", tmp / "run2"
         print(f"[validate_extract] reproducibility: re-running {extractor_script.name} twice into {tmp} "
               f"(scenes={scene_indices}, slice={slice_map or 'none (full scenes)'}) ...")
-        p1 = run_extractor(extractor_script, scene_indices, slice_map, source_root, out1, fixed_ts, timeout_s)
+        p1 = run_extractor(extractor_script, scene_indices, slice_map, source_root, out1, fixed_ts, timeout_s, plan_path)
         if not check(p1.returncode == 0,
                       f"reproducibility run #1 of {extractor_script.name} exits 0 "
                       f"(rc={p1.returncode}; stderr tail: {p1.stderr[-800:]})"):
             return
-        p2 = run_extractor(extractor_script, scene_indices, slice_map, source_root, out2, fixed_ts, timeout_s)
+        p2 = run_extractor(extractor_script, scene_indices, slice_map, source_root, out2, fixed_ts, timeout_s, plan_path)
         if not check(p2.returncode == 0,
                       f"reproducibility run #2 of {extractor_script.name} exits 0 "
                       f"(rc={p2.returncode}; stderr tail: {p2.stderr[-800:]})"):
@@ -895,11 +1546,17 @@ def main() -> None:
     manifest = load_json(manifest_path)
     print(f"[validate_extract] validating {package} (schema_version={manifest.get('schema_version')})")
 
+    extractor_script_for(manifest)  # Reject executable-path injection even with reproducibility disabled.
+    if is_generic_package(manifest):
+        generic_plan_for(manifest)  # Source, plan digest, registry and finite complete anchors are mandatory.
+
     validate_manifest_shape(manifest, package)
     stats = validate_scenes(manifest, package)
+    validate_material_slot_preservation(manifest, package)
     collect_shader_and_texture_stats(manifest, package, stats)
     validate_materials(manifest, package)
     validate_meshes(manifest, package)
+    validate_mesh_compatibility(manifest, package)
     validate_textures(manifest, package)
     check_orphans(manifest, package)
     validate_disabled_component_counts(manifest, package)
