@@ -117,14 +117,14 @@ namespace ArenaMapPort.Client
                 "Master switch for every repair below. Only ever applies during an arena_equator raid — " +
                 "every other map's raid is untouched regardless of this value.");
 
-            _ambientColorMultiplier = Plugin.Instance.Config.Bind(ConfigSection, "AmbientColorMultiplier", 0.4f,
+            _ambientColorMultiplier = Plugin.Instance.Config.Bind(ConfigSection, "AmbientColorMultiplier", 0.5f,
                 new ConfigDescription(
                     "Multiplies LevelSettings' own authored ambient colors (Sky/Equator/Ground, each " +
                     "0.5 grey) before they reach RenderSettings. 1.0 = authored value (the dim flat grey " +
                     "fill from the 2026-09-14 dark playtest); 2.0 = full-bright white flat ambient.",
                     new AcceptableValueRange<float>(0.2f, 6f)));
 
-            _globalLightIntensityMultiplier = Plugin.Instance.Config.Bind(ConfigSection, "GlobalLightIntensityMultiplier", 1.7f,
+            _globalLightIntensityMultiplier = Plugin.Instance.Config.Bind(ConfigSection, "GlobalLightIntensityMultiplier", 0.5f,
                 new ConfigDescription(
                     "Multiplies every non-directional (point/spot) Light's own authored intensity in the " +
                     "Equator scenes. 1.0 = authored value.",
@@ -136,7 +136,7 @@ namespace ArenaMapPort.Client
                     "1.0 = authored value.",
                     new AcceptableValueRange<float>(0.2f, 8f)));
 
-            _sunColorWhiteBlend = Plugin.Instance.Config.Bind(ConfigSection, "SunColorWhiteBlend", 0.5f,
+            _sunColorWhiteBlend = Plugin.Instance.Config.Bind(ConfigSection, "SunColorWhiteBlend", 0.1f,
                 new ConfigDescription(
                     "Blends the Directional light's own dim/desaturated authored color (~0.18,0.18,0.20) " +
                     "toward white. 0 = authored color unchanged, 1 = pure white.",
@@ -148,7 +148,7 @@ namespace ArenaMapPort.Client
                     "a light haze, 0.04 is roughly Arena's own authored fog.",
                     new AcceptableValueRange<float>(0f, 0.06f)));
 
-            _fillLightIntensity = Plugin.Instance.Config.Bind(ConfigSection, "FillLightIntensity", 0.6f,
+            _fillLightIntensity = Plugin.Instance.Config.Bind(ConfigSection, "FillLightIntensity", 0.2f,
                 new ConfigDescription(
                     "Intensity of a shadowless directional fill light (from above, plus half as much from " +
                     "below) that stands in for EFT's missing ambient pass — the main lever if surfaces stay " +
