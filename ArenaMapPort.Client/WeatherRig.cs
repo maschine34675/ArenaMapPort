@@ -6,6 +6,7 @@ using Comfort.Common;
 using EFT.CameraControl;
 using EFT.Weather;
 using UnityEngine;
+using UnityEngine.Rendering;
 using UnityEngine.SceneManagement;
 
 namespace ArenaMapPort.Client
@@ -270,23 +271,68 @@ namespace ArenaMapPort.Client
             GameObject weatherRoot = null;
             GameObject clone = null;
 
-            // Step 1: load. Synchronous LoadScene — donor scenes here are small (Reserve_Base_Scripts is
-            // 0.6 MB per LIGHTING-DESIGN.md) and this only ever runs outside any raid. NOTE: the
-            // (string, LoadSceneMode) overload of SceneManager.LoadScene returns void on this exact
-            // decompiled build (verified against UnityEngine.CoreModule.dll) — only the
-            // (string, LoadSceneParameters) overload returns the loaded Scene, hence the explicit struct.
+            // Pre-load snapshot for the post-harvest identity check. Must be taken BEFORE the donor loads:
+            // the donor's own LevelSettings/LocationScene/EnvironmentManager register during its load and
+            // release again on unload, so a snapshot taken after loading always reads as "changed".
+            bool lsBefore = Singleton<LevelSettings>.Instantiated;
+            int locBefore = LocationScene.LoadedScenes.Count;
+            bool envBefore = EnvironmentManagerBase.Instance != null;
+
+            // The donor's LevelSettings.Awake pushes its fog/ambient/skybox into RenderSettings
+            // (LevelSettings.cs:194-218) and nothing resets them on unload; restore them afterwards.
+            var renderSettingsBefore = RenderSettingsSnapshot.Capture();
+
+            // Unload any copy of the donor left loaded by an earlier failed attempt this session.
+            foreach (var leftover in LoadedScenesNamed(donorName))
+            {
+                AsyncOperation leftoverOp = null;
+                try
+                {
+                    leftoverOp = SceneManager.UnloadSceneAsync(leftover);
+                }
+                catch (Exception e)
+                {
+                    Plugin.Log.LogWarning($"[ArenaMapPort][WeatherRig] could not unload leftover '{donorName}': " +
+                        $"{e.GetType().Name}: {e.Message}");
+                }
+                if (leftoverOp != null)
+                {
+                    yield return leftoverOp;
+                }
+            }
+
+            // Step 1: load. SceneManager.LoadScene only loads on the NEXT frame (the returned Scene is not
+            // loaded yet), so use LoadSceneAsync and wait for it. It returns null (and Unity logs an error)
+            // when the name is not a BuildSettings scene of this client.
+            AsyncOperation loadOp = null;
             try
             {
-                donorScene = SceneManager.LoadScene(donorName, new LoadSceneParameters(LoadSceneMode.Additive));
-                if (!donorScene.IsValid() || !donorScene.isLoaded)
+                loadOp = SceneManager.LoadSceneAsync(donorName, new LoadSceneParameters(LoadSceneMode.Additive));
+                if (loadOp == null)
                 {
-                    throw new InvalidOperationException("LoadScene returned an invalid/unloaded scene");
+                    throw new InvalidOperationException("LoadSceneAsync returned null");
                 }
             }
             catch (Exception e)
             {
                 Fail(donorName, $"load failed: {e.GetType().Name}: {e.Message} " +
                     "(donor scene name not in this client's BuildSettings? typo in the Donor config?)");
+                yield break;
+            }
+            yield return loadOp;
+
+            try
+            {
+                var loaded = LoadedScenesNamed(donorName);
+                donorScene = loaded.Count > 0 ? loaded[loaded.Count - 1] : default;
+                if (!donorScene.IsValid() || !donorScene.isLoaded)
+                {
+                    throw new InvalidOperationException("scene not loaded after LoadSceneAsync completed");
+                }
+            }
+            catch (Exception e)
+            {
+                Fail(donorName, $"load failed: {e.GetType().Name}: {e.Message}");
                 yield break;
             }
 
@@ -310,14 +356,9 @@ namespace ArenaMapPort.Client
             {
                 Fail(donorName, $"rig-root lookup failed: {e.GetType().Name}: {e.Message}");
                 SafeUnload(donorScene);
+                renderSettingsBefore.Restore();
                 yield break;
             }
-
-            // Step 3: pre-clone snapshot for the post-harvest identity check (the pre-flight gate already
-            // guarantees these are all null/empty/zero right now — this just re-reads them for the log line).
-            bool lsBefore = Singleton<LevelSettings>.Instantiated;
-            int locBefore = LocationScene.LoadedScenes.Count;
-            bool envBefore = EnvironmentManagerBase.Instance != null;
 
             // Step 4: SetActive(false) on the DONOR original before cloning, so the CLONE's own Awake/
             // OnEnable/Start are deferred until WE SetActive(true) it later (once the FPS camera/raid
@@ -404,6 +445,7 @@ namespace ArenaMapPort.Client
                     UnityEngine.Object.Destroy(clone);
                 }
                 SafeUnload(donorScene);
+                renderSettingsBefore.Restore();
                 yield break;
             }
 
@@ -430,6 +472,7 @@ namespace ArenaMapPort.Client
             // Step 7: post-unload identity check + the one confirmed-persistent side effect: rebuild the
             // physics broadphase regions the donor's own load/unload disturbed. Never reverted by anything
             // else in this repo (AuthorScriptsScene.cs never authors a LevelPhysicsSettings of its own).
+            renderSettingsBefore.Restore();
             bool lsUnchanged = Singleton<LevelSettings>.Instantiated == lsBefore;
             bool locUnchanged = LocationScene.LoadedScenes.Count == locBefore;
             bool envUnchanged = (EnvironmentManagerBase.Instance != null) == envBefore;
@@ -501,6 +544,70 @@ namespace ArenaMapPort.Client
                     "attempts this session — every map configured with this Donor falls back to the existing " +
                     "ArenaLightingRepairs workaround for the rest of this session.");
             }
+        }
+
+        // RenderSettings fields LevelSettings.ApplySettings writes (LevelSettings.cs:194-218).
+        struct RenderSettingsSnapshot
+        {
+            AmbientMode _ambientMode;
+            Color _ambientSky, _ambientEquator, _ambientGround, _ambientLight;
+            float _ambientIntensity;
+            bool _fog;
+            Color _fogColor;
+            float _fogDensity, _fogStart, _fogEnd;
+            FogMode _fogMode;
+            Material _skybox;
+
+            internal static RenderSettingsSnapshot Capture() => new RenderSettingsSnapshot
+            {
+                _ambientMode = RenderSettings.ambientMode,
+                _ambientSky = RenderSettings.ambientSkyColor,
+                _ambientEquator = RenderSettings.ambientEquatorColor,
+                _ambientGround = RenderSettings.ambientGroundColor,
+                _ambientLight = RenderSettings.ambientLight,
+                _ambientIntensity = RenderSettings.ambientIntensity,
+                _fog = RenderSettings.fog,
+                _fogColor = RenderSettings.fogColor,
+                _fogDensity = RenderSettings.fogDensity,
+                _fogStart = RenderSettings.fogStartDistance,
+                _fogEnd = RenderSettings.fogEndDistance,
+                _fogMode = RenderSettings.fogMode,
+                _skybox = RenderSettings.skybox,
+            };
+
+            internal void Restore()
+            {
+                RenderSettings.ambientMode = _ambientMode;
+                RenderSettings.ambientSkyColor = _ambientSky;
+                RenderSettings.ambientEquatorColor = _ambientEquator;
+                RenderSettings.ambientGroundColor = _ambientGround;
+                RenderSettings.ambientLight = _ambientLight;
+                RenderSettings.ambientIntensity = _ambientIntensity;
+                RenderSettings.fog = _fog;
+                RenderSettings.fogColor = _fogColor;
+                RenderSettings.fogDensity = _fogDensity;
+                RenderSettings.fogStartDistance = _fogStart;
+                RenderSettings.fogEndDistance = _fogEnd;
+                if (_fogMode != 0)
+                {
+                    RenderSettings.fogMode = _fogMode;
+                }
+                RenderSettings.skybox = _skybox;
+            }
+        }
+
+        static List<Scene> LoadedScenesNamed(string sceneName)
+        {
+            var result = new List<Scene>();
+            for (int i = 0; i < SceneManager.sceneCount; i++)
+            {
+                var scene = SceneManager.GetSceneAt(i);
+                if (scene.isLoaded && scene.name == sceneName)
+                {
+                    result.Add(scene);
+                }
+            }
+            return result;
         }
 
         static void SafeUnload(Scene scene)

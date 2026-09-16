@@ -150,7 +150,10 @@ def repository_inputs(repo):
     paths = []
     for name in ('tools/extract', 'tools/validate', 'tools/bundle', 'tools/preset', 'tools/server', 'analysis/scripts'):
         paths += tree_files(repo / name, {'.py'}, {'__pycache__', 'tests'})
-    for name in ('tools/gamerefs-closure', 'tools/gamerefs-fixup', 'ArenaMapPort.Shared', 'ArenaMapPort.Client', 'ArenaMapPort.Server'):
+    # ArenaMapPort.Client is runtime plugin code: it never influences extraction or bundle content, and
+    # including it invalidated every map receipt on each client change. The staged DLL is checked by
+    # the distribution validators instead.
+    for name in ('tools/gamerefs-closure', 'tools/gamerefs-fixup', 'ArenaMapPort.Shared', 'ArenaMapPort.Server'):
         paths += tree_files(repo / name, {'.cs', '.csproj', '.props', '.targets', '.config'}, {'bin', 'obj', 'db'})
     paths += list((repo / 'tools').glob('*.ps1'))
     paths += tree_files(repo / 'tools/maps', {'.json', '.props'})

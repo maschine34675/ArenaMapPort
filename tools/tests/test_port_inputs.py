@@ -128,7 +128,8 @@ class PortInputTests(unittest.TestCase):
                          'UnityProject/Assets/ArenaMapPort/Editor/GameRefs.meta',
                          'UnityProject/Assets/ArenaMapPort/StandinShaders.meta',
                          'UnityProject/Assets/ArenaImport/Mesh.asset',
-                         'UnityProject/Assets/ArenaMapPort/StandinShaders/Generated.shader', 'tools/tests/test_fake.py', 'docs/note.md'):
+                         'UnityProject/Assets/ArenaMapPort/StandinShaders/Generated.shader', 'tools/tests/test_fake.py', 'docs/note.md',
+                         'ArenaMapPort.Client/Plugin.cs', 'ArenaMapPort.Client/ArenaMapPort.Client.csproj'):
             (repo / relative).write_text('not an input')
         self.assertEqual(P.repository_inputs(repo), [wanted.resolve()])
 
