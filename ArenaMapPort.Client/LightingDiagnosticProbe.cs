@@ -129,6 +129,7 @@ namespace ArenaMapPort.Client
             ProbeAmbientGlobals(sb);
             ProbeCameraAndPostEffects(sb);
             ProbeLightingRigPresence(sb);
+            ProbeWeatherRig(sb, map);
             ProbeLights(sb, map);
             ProbeSampleMaterials(sb, map);
 
@@ -220,16 +221,23 @@ namespace ArenaMapPort.Client
         {
             sb.AppendLine("-- EFT-custom ambient/reflection shader globals (live readback) --");
             // _EFT_Ambient is written with SetGlobalVector (AmbientLight.cs:677), so read it as a vector.
-            sb.AppendLine($"  _SHAr={Shader.GetGlobalVector("_SHAr")} _EFT_Ambient={Shader.GetGlobalVector("_EFT_Ambient")}");
+            var shar = Shader.GetGlobalVector("_SHAr");
+            sb.AppendLine($"  _SHAr={shar} _EFT_Ambient={Shader.GetGlobalVector("_EFT_Ambient")}");
+            // weather-rig-stage0: PASS bar for the Stage-0 exit criteria — non-zero once a rig is
+            // active and its AmbientLight has actually pushed SH into this global; 0 today (no rig),
+            // confirmed unbound.
+            sb.AppendLine($"  _SHAr.magnitude={shar.magnitude:0.000} (PASS bar: non-zero once a rig is active; " +
+                           "0 today with no rig, confirmed unbound)");
             sb.AppendLine($"  _MyGlobalReflectionProbe-bound={(Shader.GetGlobalTexture("_MyGlobalReflectionProbe") != null)} " +
                            $"_MySimpleGlobalReflectionProbe-bound={(Shader.GetGlobalTexture("_MySimpleGlobalReflectionProbe") != null)}");
         }
 
         // Confirms/refutes: RC5 (Cam2 fallback camera's own baked exposure/tonemap preset applying
         // unmodified).
-        static void ProbeCameraAndPostEffects(StringBuilder sb)
+        // Factored out of this method so ProbeWeatherRig (weather-rig-stage0) can resolve the same
+        // active camera without duplicating the try/catch — no behavior change to the resolution itself.
+        static Camera ResolveActiveCamera(StringBuilder sb)
         {
-            sb.AppendLine("-- camera --");
             Camera cam = null;
             try
             {
@@ -243,6 +251,13 @@ namespace ArenaMapPort.Client
             {
                 cam = Camera.main;
             }
+            return cam;
+        }
+
+        static void ProbeCameraAndPostEffects(StringBuilder sb)
+        {
+            sb.AppendLine("-- camera --");
+            Camera cam = ResolveActiveCamera(sb);
 
             if (cam == null)
             {
@@ -307,6 +322,108 @@ namespace ArenaMapPort.Client
                            $"TOD_Sky.Instantiated={MonoBehaviourSingleton<TOD_Sky>.Instantiated} " +
                            $"TODSkySimple.Instantiated={MonoBehaviourSingleton<TODSkySimple>.Instantiated} " +
                            $"WeatherController.Instance-set={(WeatherController.Instance != null)}");
+        }
+
+        // weather-rig-stage0: confirms/refutes every open question LIGHTING-DESIGN.md's own diagnostics
+        // section raised plus the two verification reports' amendments (OnRenderObjectManager presence,
+        // the FPS camera's TOD_Scattering.Sky wiring, the InitWeather-ordering tripwire) — the harvest
+        // half is logged once at harvest time too (WeatherRig.HarvestOne); this re-prints the SAME cached
+        // result here so a single post-raid log read has everything in one place. Every line below the
+        // harvest summary assumes an activated rig and is skipped otherwise.
+        static void ProbeWeatherRig(StringBuilder sb, ArenaMapPort.Shared.ArenaMapDescriptor map)
+        {
+            sb.AppendLine("-- weather rig (WeatherRig.cs) --");
+            bool active = WeatherRig.IsActiveForCurrentMap();
+            string donor = WeatherRig.DonorForMap(map);
+            sb.AppendLine($"  configured donor for {map.Key}='{donor}' " +
+                           $"active-this-raid={active} skyboxMode={WeatherRig.SkyboxModeForCurrentMap()}");
+
+            var harvest = WeatherRig.LastHarvestResult(donor); // may be null
+            if (harvest != null)
+            {
+                sb.AppendLine($"  harvest: loaded={harvest.LoadOk} cloned={harvest.CloneOk} " +
+                               $"unloaded={harvest.UnloadOk} validated={harvest.ValidationOk} " +
+                               $"keptComponents={harvest.KeptComponents}");
+                sb.AppendLine($"  post-unload identity unchanged: LevelSettings={harvest.LevelSettingsUnchanged} " +
+                               $"LocationScene={harvest.LocationSceneUnchanged} " +
+                               $"EnvironmentManager={harvest.EnvironmentManagerUnchanged}");
+            }
+            else
+            {
+                sb.AppendLine("  harvest: (no result cached — Donor='Off', or still pending/permanently failed)");
+            }
+
+            if (!active)
+            {
+                return; // nothing further to probe — every line below assumes an activated rig
+            }
+
+            // is the LIVE instance our clone, in a DontDestroyOnLoad scene, never one of our owned scenes.
+            var wc = EFT.Weather.WeatherController.Instance;
+            sb.AppendLine($"  WeatherController.Instance-scene='{(wc != null ? wc.gameObject.scene.name : "null")}' " +
+                           "(expect a DontDestroyOnLoad scene, never an owned map scene)");
+
+            var ambientLight = UnityEngine.Object.FindObjectOfType<AmbientLight>();
+            sb.AppendLine($"  AmbientLight found={ambientLight != null} " +
+                           $"shaderFieldsSet={(ambientLight != null &&
+                               ambientLight.DepthWriteShader != null && ambientLight.ClearStencilShader != null &&
+                               ambientLight.WriteStencilShader != null && ambientLight.ScreenAmbientShader != null &&
+                               ambientLight.AnalyticSourceShader != null)}");
+
+            var cloud = wc != null ? wc.CloudController : null;
+            sb.AppendLine($"  CloudController.Settings-set={(cloud != null && cloud.Settings != null)}");
+
+            sb.AppendLine($"  OnRenderObjectManager present={UnityEngine.Object.FindObjectOfType<OnRenderObjectManager>() != null}");
+
+            // sun light resolved.
+            var sky = MonoBehaviourSingleton<TOD_Sky>.Instantiated ? MonoBehaviourSingleton<TOD_Sky>.Instance : null;
+            var sunLight = sky != null ? sky.LightObject : null;
+            if (sunLight != null)
+            {
+                sb.AppendLine($"  sun: '{sunLight.name}' intensity={sunLight.intensity:0.00} color={sunLight.color} " +
+                               $"forward={sunLight.transform.forward}");
+            }
+            else
+            {
+                sb.AppendLine("  sun: (TOD_Sky.LightObject null — no active rig sun this frame)");
+            }
+
+            // ambient globals magnitude — extends the EXISTING ProbeAmbientGlobals (one added line there,
+            // not duplicated here).
+
+            // FPS camera's TOD_Scattering.Sky wiring (amendment 2).
+            Camera cam = ResolveActiveCamera(sb);
+            var scattering = cam != null ? cam.GetComponent<TOD_Scattering>() : null;
+            sb.AppendLine($"  FPS camera TOD_Scattering present={scattering != null} " +
+                           $"Sky-set={(scattering != null && scattering.Sky != null)}");
+
+            // reflections.
+            sb.AppendLine($"  ReflectionProbe count={UnityEngine.Object.FindObjectsOfType<ReflectionProbe>().Length}");
+
+            // fog side-by-side (which system last wrote fogColor this frame). Review fix-ups #3: TOD_Sky.
+            // UpdateFog only writes RenderSettings.fogColor for Fog.Mode Color/Directional — for Mode==None
+            // it writes nothing, so ArenaLightingRepairs skipping its own fogColor write (because a rig is
+            // active) would leave fogColor stale with nobody driving it. Not independently verified this
+            // pass whether Reserve_Base_Scripts' authored TOD_Sky.Fog.Mode is ever None (would need the
+            // donor scene open in Unity) — logged explicitly so a playtest can confirm/refute it directly.
+            sb.AppendLine($"  fogColor(live)={RenderSettings.fogColor} ArenaLightingRepairs.FogColor={ArenaLightingRepairs.FogColor} " +
+                           $"TOD_Sky.Fog.Mode={(sky != null ? sky.Fog.Mode.ToString() : "n/a")} " +
+                           "(if fogColor differs from ArenaLightingRepairs.FogColor and a rig is active, TOD_Sky is " +
+                           "correctly winning fogColor; if Fog.Mode=None and they DO match, fogColor is stale — " +
+                           "nobody is writing it)");
+
+            // current TOD time / weather, and the InitWeather-ordering tripwire.
+            var gdt = TODSkyProvider.IsAvailable ? TODSkyProvider.Instance.CurrentTime.GameDateTime : null;
+            sb.AppendLine($"  TODSkyProvider.CurrentTime.GameDateTime-set={gdt != null} " +
+                           "(null here means BaseLocalGame.InitWeather's gate ran BEFORE this rig activated — " +
+                           "the ordering tripwire; if this is ever false, the activation hook needs the " +
+                           "Harmony-prefix fallback documented in docs/progress/weather-rig-stage0.md)");
+            if (wc != null)
+            {
+                var curve = wc.WeatherCurve;
+                sb.AppendLine($"  weather: fog={curve.Fog:0.00} cloudiness={curve.Cloudiness:0.00} " +
+                               $"wind={curve.Wind} rain={curve.Rain:0.00}");
+            }
         }
 
         // Confirms/refutes: RC3 (sun light presence/intensity/color) and the general "are lights even

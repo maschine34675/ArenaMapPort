@@ -185,6 +185,53 @@ Reused in `ArenaMapPort.Client/BotsDataRepairs.cs`:
 
 ---
 
+## ManimalIcebreaker (weather-rig-stage0 — frozen-skybox fallback)
+
+Source: `D:/sptmaps/_sources/ManimalIcebreaker-main/icebreaker-client/IcebreakerSky.cs`
+
+```
+MIT License
+
+Copyright (c) 2026 danauraborealis
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+```
+
+Reused in `ArenaMapPort.Client/WeatherRig.cs`:
+
+- **"Disable dome painter GameObjects" pattern** — `WeatherRig.ApplySkyboxMode`'s `FrozenStatic` mode
+  adapts the dome-freezing half of `IcebreakerSky.FreezeSkybox` (`icebreaker-client/IcebreakerSky.cs:
+  65-83`): `SetActive(false)` on `TOD_Components.Atmosphere/Clear/Space/Sun/Moon` and the
+  `CloudRenderer`'s `GameObject`, leaving `AmbientLight`/`TOD_Time`/wind/rain/the `ReflectionProbe`
+  running. Their reasoning (the procedural dome painters are what render a broken flat-white/black
+  atmosphere with a horizon seam on a cross-build sky rip) is the same failure mode `SkyboxMode` exists
+  to work around here.
+- **NOT ported**: `FreezeSkybox`'s own `RenderSettings.skybox = skybox_night` line (assigning a
+  replacement retail skybox material) — `ApplySkyboxMode` deliberately does not source/author a
+  replacement skybox material for Stage 0 (see its own doc comment for why); and none of
+  `IcebreakerSky.TryApply`'s retail-TOD-JSON-reflection-apply half (`Apply`/`Convert`, the bulk of
+  `IcebreakerSky.cs`) — not needed here, since this project clones a live, already-correctly-valued
+  donor `TOD_Sky` instance rather than reconstructing one field-by-field from a JSON dump of a
+  different build's sky.
+
+---
+
 ## SPT-InterchangeRework (WP4 — client NavMesh install + shader rebind structure)
 
 Source: `D:/sptmaps/_sources/SPT-InterchangeRework-main/InterchangeRework.Client`

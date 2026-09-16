@@ -289,7 +289,15 @@ namespace ArenaMapPort.Client
                 on ? cfg.GlobalLightIntensityMultiplier.Value : 1f,
                 on ? cfg.SunIntensityMultiplier.Value : 1f,
                 on ? cfg.SunColorWhiteBlend.Value : 0f);
-            bool fillActive = ApplyFillLight(map, state, on ? cfg.FillLightIntensity.Value : 0f);
+            // weather-rig-stage0: while a WeatherRig clone is active for this raid, its real
+            // AmbientLight/_SHAr feeds ambient instead — this fill light becomes redundant (and can
+            // visibly double up interior brightness), unless KeepFillLight explicitly asks to keep it.
+            float fillLightIntensity = on ? cfg.FillLightIntensity.Value : 0f;
+            if (on && WeatherRig.IsActiveForCurrentMap() && !WeatherRig.KeepFillLightForCurrentMap())
+            {
+                fillLightIntensity = 0f;
+            }
+            bool fillActive = ApplyFillLight(map, state, fillLightIntensity);
 
             if (logSummary)
             {
@@ -348,6 +356,17 @@ namespace ArenaMapPort.Client
         static bool ApplyAmbient(MapState state, float m, float fogDensity)
         {
             var levelSettings = Singleton<LevelSettings>.Instantiated ? Singleton<LevelSettings>.Instance : null;
+
+            // weather-rig-stage0: TOD_Sky.UpdateFog (runs every LateUpdate once a rig is active) writes
+            // ONLY RenderSettings.fogColor — never fogMode/fogDensity/the fog enabled flag (confirmed
+            // directly from the decompiled switch body). Our own one-shot fogColor write would just be
+            // silently overridden from the next frame onward, so skip writing it (and the LevelSettings
+            // fogColor field, which only ever feeds ApplySettings()'s own one-shot push and is otherwise
+            // inert once the rig owns the live value) while a rig is active — everything else here
+            // (fogMode/fogDensity/the enabled flag, and every ambient color field) stays under this
+            // repair's control regardless of rig state.
+            bool ownFogColor = !WeatherRig.IsActiveForCurrentMap();
+
             if (levelSettings != null)
             {
                 // The authored LevelSettings leaves fogMode at default(FogMode) = 0 and fogColor black,
@@ -357,9 +376,12 @@ namespace ArenaMapPort.Client
                 // (black). Patch the LevelSettings fields too, since OnPostLoadingScene re-applies them.
                 levelSettings.fogMode = FogMode.ExponentialSquared;
                 levelSettings.fogDensity = fogDensity;
-                levelSettings.fogColor = FogColor;
+                if (ownFogColor)
+                {
+                    levelSettings.fogColor = FogColor;
+                }
                 levelSettings.fog = fogDensity > 0f;
-                ApplyFog(fogDensity);
+                ApplyFog(fogDensity, ownFogColor);
 
                 if (!state.LevelSettingsBaselineCaptured)
                 {
@@ -387,7 +409,7 @@ namespace ArenaMapPort.Client
             RenderSettings.ambientSkyColor = fallback;
             RenderSettings.ambientEquatorColor = fallback;
             RenderSettings.ambientGroundColor = fallback;
-            ApplyFog(fogDensity);
+            ApplyFog(fogDensity, ownFogColor);
             Plugin.Log.LogWarning("[ArenaMapPort][Lighting] LevelSettings singleton not found at apply time — " +
                                    "wrote RenderSettings ambient directly as a fallback (should not happen; the " +
                                    "component is authored in AuthorScriptsScene.cs and was confirmed present in " +
@@ -395,13 +417,18 @@ namespace ArenaMapPort.Client
             return false;
         }
 
-        static readonly Color FogColor = new Color(0.62f, 0.66f, 0.70f, 1f);
+        // internal, not private: weather-rig-stage0's LightingDiagnosticProbe.ProbeWeatherRig reads this
+        // side-by-side with TOD_Sky's own live fogColor to show which system last won the write.
+        internal static readonly Color FogColor = new Color(0.62f, 0.66f, 0.70f, 1f);
 
-        static void ApplyFog(float density)
+        static void ApplyFog(float density, bool ownFogColor)
         {
             RenderSettings.fogMode = FogMode.ExponentialSquared;
             RenderSettings.fogDensity = density;
-            RenderSettings.fogColor = FogColor;
+            if (ownFogColor)
+            {
+                RenderSettings.fogColor = FogColor;
+            }
             RenderSettings.fog = density > 0f;
         }
 

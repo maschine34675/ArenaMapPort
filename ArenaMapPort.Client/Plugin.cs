@@ -52,6 +52,15 @@ namespace ArenaMapPort.Client
             SceneDiagnostics.Install();
             ShaderRebind.Install();
 
+            // weather-rig-stage0 — harvests a vanilla donor scene's Weather rig and activates it per
+            // raid. Must install BEFORE ArenaLightingRepairs: both subscribe to the same static
+            // SceneManager.sceneLoaded event, and ArenaLightingRepairs.OnSceneLoaded reads
+            // WeatherRig.IsActiveForCurrentMap() on THIS SAME dispatch (C# multicast delegates invoke
+            // subscribers in subscription order) — it must see this raid's own activation, not a stale
+            // false left over from before this raid's Scripts scene loaded. See docs/progress/
+            // weather-rig-stage0.md.
+            WeatherRig.Install();
+
             // fix-lighting-movement, items 2-4 — gated ambient/light brightness repair, its live
             // ConfigEntries, and the once-per-raid diagnostic dump. See docs/progress/
             // fix-lighting-movement.md.
