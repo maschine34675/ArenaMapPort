@@ -56,6 +56,27 @@ namespace ArenaMapPort.Client
             InstallEyeBurnGuard(harmony);
             InstallFlashAccumulatorGuard(harmony);
             InstallCombatScreenEffectsGuard(harmony);
+
+            // Weather rig on the fallback camera — see RainControllerRepairs.cs.
+            InstallRainControllerCameraGuard(harmony);
+        }
+
+        // RainController.AbstractStateSummer.CameraChanged(CameraManager), public override, nested type.
+        // Verified: D:/SPT41/Development/_decompiled/RainController.cs:151,163.
+        static void InstallRainControllerCameraGuard(Harmony harmony)
+        {
+            var summer = AccessTools.Inner(typeof(RainController), "AbstractStateSummer");
+            var target = summer != null ? AccessTools.Method(summer, "CameraChanged") : null;
+
+            if (!Verify(target, typeof(RainController), "AbstractStateSummer.CameraChanged"))
+            {
+                return;
+            }
+
+            var prefix = AccessTools.Method(typeof(RainControllerCameraGuard), "Prefix");
+            harmony.Patch(target, prefix: new HarmonyMethod(prefix));
+            Plugin.Log.LogInfo("[ArenaMapPort][Harmony] patched RainController.AbstractStateSummer.CameraChanged " +
+                                "(weather rig on fallback camera)");
         }
 
         // fix-gamestart, finding F1 — SpawnPointsCollection.CreateFromScene(DateTime?, SpawnPointParams[]),
