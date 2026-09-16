@@ -109,7 +109,35 @@ namespace ArenaMapPort.Client
                 return;
             }
 
-            manager._bundles[bundleName] = new BundlesManager.AssetBundleReference(bundle);
+            // fix-preset-cab-and-bundle-lifetime, item 5: this Harmony hook is installed as a VOID
+            // Prefix (HarmonyPatches.InstallBundleHost), and a void Prefix can never skip Harmony's
+            // call to the original method (only a bool Prefix returning false can) -- so
+            // BundlesManager.LoadBundleAsync's own body (BundleLoadOperation.Run,
+            // EFT.AssetsManager/BundlesManager.cs:64-82) ALWAYS still runs immediately after this
+            // method returns. That body's very first check is
+            // `if (manager._bundles.TryGetValue(bundleName, out var value)) { value.Counter++; ... }`
+            // -- since we just added `bundleName` to `manager._bundles` above, it always finds our
+            // freshly-created reference and increments its Counter a second time. Combined with
+            // AssetBundleReference's own constructor (which always sets Counter = 1,
+            // BundlesManager.cs:20-24, not overridable via any constructor argument), every one of
+            // our bundles' FIRST load ends up with Counter == 2 for what is, from the caller's own
+            // point of view, exactly ONE logical load request -- a silent double-count BSG's own
+            // bundles never have (their AssetBundleReference is only ever constructed once, by
+            // BundleLoadOperation.Coroutine itself, never pre-populated by a second, earlier writer).
+            // A single call to BundlesManager.UnloadBundle for one of our bundles would then only
+            // decrement Counter to 1, never actually reaching the 0 that triggers
+            // AssetBundle.Unload() -- so our bundle would need one extra, unmatched Unload call
+            // before it could ever be released, unlike an equivalent vanilla bundle.
+            //
+            // Fix: reset Counter to 0 on OUR OWN freshly-created reference, for OUR OWN bundle only,
+            // immediately before handing control back to the original method. The original method's
+            // own increment (which still unavoidably runs right after this) then brings it to
+            // exactly 1 -- correctly representing the single real load request that triggered this
+            // call, byte-for-byte consistent with what BSG's own bookkeeping would have produced for
+            // an equivalent bundle it loaded itself. This never touches any other bundle's Counter
+            // (vanilla or another mod's) -- only the entry this exact call just created.
+            var reference = new BundlesManager.AssetBundleReference(bundle) { Counter = 0 };
+            manager._bundles[bundleName] = reference;
 
             long bytes = SafeFileLength(filePath);
             Plugin.Log.LogInfo($"[ArenaMapPort][Bundles] loaded '{bundleName}' from '{filePath}' ({bytes} bytes)");

@@ -18,6 +18,7 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import sys
 import traceback
@@ -25,6 +26,7 @@ from pathlib import Path
 from typing import NoReturn
 
 import UnityPy
+from UnityPy.files.SerializedFile import SerializedFile
 
 # Multimap generalization (docs/progress/multimap-generalize.md): every one of these below used
 # to be an Equator-only literal with no override. They are now DEFAULTS sourced from
@@ -53,6 +55,21 @@ SCENE_TABLE = [  # SPEC.md SS B.WP3 step 3 / SS E.1 -- exact order, Scripts scen
 SERVER_NAME = "arena_equator_tdm"            # SPEC.md SS E.3
 ACTIVE_SCENE_NAME = "Arena_Equator_Scripts"  # SPEC.md SS E.3
 
+# fix-preset-cab-and-bundle-lifetime (docs/progress/fix-preset-cab-and-bundle-lifetime.md):
+# every preset bundle's internal SerializedFile ("CAB-...") name must be unique per map, or
+# Unity refuses to load a second map's preset once a different map's preset is already resident
+# in the same client session (root cause + evidence in tools/preset/patch_preset.py's own module
+# docstring "SECOND CORRECTION" section, which this mirrors -- kept independently duplicated
+# rather than imported, matching this file's existing SCENE_BUNDLE_KEY/etc. convention of a
+# from-scratch re-derivation the patcher can be cross-checked against).
+MAP_KEY = "arena_equator"
+EXPECTED_CAB_NAME = ""  # set for real by apply_map() below; every real invocation goes through it
+
+
+def unique_cab_name(map_key: str) -> str:
+    digest = hashlib.md5(f"arenamapport:{map_key}:preset".encode("utf-8")).hexdigest()
+    return f"CAB-{digest}"
+
 
 def load_map(map_path: Path) -> dict:
     """Reads one tools/maps/<key>.json descriptor -- see tools/preset/patch_preset.py's own
@@ -62,6 +79,7 @@ def load_map(map_path: Path) -> dict:
 
 def apply_map(map_data: dict) -> None:
     global SCENE_BUNDLE_KEY, PRESET_ASSET_NAME, SCENE_TABLE, SERVER_NAME, ACTIVE_SCENE_NAME, DEFAULT_BUNDLE
+    global MAP_KEY, EXPECTED_CAB_NAME
     key = map_data["key"]
     SCENE_BUNDLE_KEY = f"{key}/{key}_scenes.bundle"
     PRESET_ASSET_NAME = f"{key}.scenespreset.asset"
@@ -69,6 +87,8 @@ def apply_map(map_data: dict) -> None:
     SERVER_NAME = f"{key}_tdm"
     ACTIVE_SCENE_NAME = map_data["scripts_scene_name"]
     DEFAULT_BUNDLE = REPO / "work" / "build" / "preset" / f"{key}_preset.bundle"
+    MAP_KEY = key
+    EXPECTED_CAB_NAME = unique_cab_name(key)
 
 EXPECTED_MONOSCRIPT = {"m_ClassName": "ScenesPreset", "m_Namespace": "EFT", "m_AssemblyName": "Assembly-CSharp"}
 # donor develop_preset.bundle's embedded MonoScript path_id, confirmed by direct UnityPy read
@@ -193,6 +213,22 @@ def validate_container(bundle_tt: dict | None, mono_path_id: int) -> None:
               f"MonoBehaviour field is correct")
 
 
+def validate_cab_name(env) -> None:
+    """fix-preset-cab-and-bundle-lifetime: this bundle's single nested SerializedFile must carry
+    the deterministic per-map name EXPECTED_CAB_NAME, not the shared donor literal
+    (CAB-db2b26ca214c6211c4fae58b5cbe8d61) every preset used to inherit unpatched -- see this
+    file's own EXPECTED_CAB_NAME comment and tools/preset/patch_preset.py's module docstring for
+    the full root-cause evidence (LogOutput.log, 19:50:19: a second map's preset bundle refuses
+    to load while a different map's preset -- sharing this same internal name -- is still
+    resident)."""
+    names = [name for name, f in env.file.files.items() if isinstance(f, SerializedFile)]
+    check(names == [EXPECTED_CAB_NAME],
+          f"nested SerializedFile (CAB) name == {EXPECTED_CAB_NAME!r} for map {MAP_KEY!r} "
+          f"(got {names!r}) -- a mismatch here means this bundle will collide with ANY other "
+          f"map's preset bundle still loaded in the same client session (Unity refuses to load "
+          f"a second AssetBundle whose serialized file shares an already-loaded internal name)")
+
+
 def validate_scenes_cross_check(scenes_bundle_path: Path, allow_missing_scenes: bool = False) -> None:
     """Optional: cross-check SCENE_TABLE's rcids against the actual scene names inside a
     WP2-built scenes bundle. SPEC.md SS B.WP3 edge cases flags a typo here as 'the single
@@ -294,6 +330,7 @@ def main() -> None:
     validate_scenespreset(mono_obj, mono_tt)
     validate_monoscript_identity(env, mono_tt)
     validate_container(bundle[1] if bundle else None, mono_obj.path_id)
+    validate_cab_name(env)
 
     scenes_bundle = args.scenes_bundle
     if scenes_bundle is None:

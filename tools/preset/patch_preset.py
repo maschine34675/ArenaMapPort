@@ -80,10 +80,60 @@ load-bearing, but costs nothing and avoids a confusing internal name mismatch).
 This is flagged here as a deviation from SPEC.md's literal WP3 step list for the lead to
 review -- the *fields* SPEC.md's SS E.3 table asserts are still produced exactly as written;
 this is an addition, not a removal or contradiction.
+
+--------------------------------------------------------------------------------------------
+SECOND CORRECTION (fix-preset-cab-and-bundle-lifetime, 2026-09-16): the donor's own internal
+bundle-directory name must also be made unique per map, or a second map's preset silently fails
+to load in the same client session
+--------------------------------------------------------------------------------------------
+Every preset bundle this script has ever produced is a patched *copy* of the same SPT donor,
+`develop_preset.bundle` (see DEFAULT_SRC above). Unity's own bundle packer gave that donor's
+single nested SerializedFile the internal name `CAB-db2b26ca214c6211c4fae58b5cbe8d61` -- an
+identifier Unity uses purely as a within-process de-duplication key for already-loaded
+serialized files, stored ONLY in the outer BundleFile's directory table (confirmed by direct
+UnityPy inspection: this string never appears inside the ScenesPreset MonoBehaviour's own
+typetree, the AssetBundle object's m_Container/m_Dependencies/m_Name/m_AssetBundleName, or the
+SerializedFile's own (empty) externals list -- renaming it changes nothing else about the
+bundle's resolvable content).
+
+Because this script starts every invocation from a fresh copy of the SAME donor and never
+touched that name, all 14 of this project's preset bundles carry the exact same CAB name.
+Confirmed empirically against the shipped `dist/` bundles (UnityPy, 2026-09-16): all 14
+`*_preset.bundle` files' single nested SerializedFile is named
+`CAB-db2b26ca214c6211c4fae58b5cbe8d61`, while every `*_scenes.bundle`/`*_navmesh.bundle` pair
+already has unique names (Unity itself derives those from the authored scene names /
+a fresh per-bake hash, so this collision is preset-bundle-specific).
+
+Runtime symptom (`D:/SPT41vanilla/BepInEx/LogOutput.log`, 19:50:19, reproduced by raiding
+`arena_bay5` then `arena_equator` in the same client session): Unity's AssetBundle system
+refuses the SECOND `AssetBundle.LoadFromFile` call whose bundle contains a serialized file
+already loaded under that same internal name --
+
+    The AssetBundle '...\\arena_equator_preset.bundle' can't be loaded because another
+    AssetBundle with the same files is already loaded.
+    [ArenaMapPort][Bundles] AssetBundle.LoadFromFile returned null for '...arena_equator_preset.bundle'
+    Exception: Can't load bundle: maps/arena_equator_preset.bundle HTTP/1.1 404 Not Found
+
+-- silently aborting the raid start, with no indication the actual cause is a name collision
+against whichever OTHER map's preset bundle the same session already loaded.
+
+Fix: `unique_cab_name()` below derives a deterministic `CAB-<md5>` name from the map's own key
+(`md5("arenamapport:<key>:preset")` -- same length as the donor's own name, 36 characters
+total, so the rename does not need to be paired with a matching in-file padding change
+anywhere), and `patch_bundle_cab_name()` renames the donor copy's single nested SerializedFile
+to it (both the `BundleFile.files` dict key UnityPy reads/writes the directory-table "path"
+entry from, and the nested file's own `.name` attribute, kept in sync for consistency though
+only the former is ever serialized). This is independent of, and in addition to, the
+`m_Container` rename `patch_container_entry()` already performs above -- that one lets the
+*client's asset lookup* (`FixAssetName`/`AssetBundle.LoadAsset(rcid)`) find the right object
+inside a bundle that has already loaded; this one lets *Unity's own bundle loader* load a
+second map's preset bundle at all once a different map's preset is already resident. Full
+writeup: docs/progress/fix-preset-cab-and-bundle-lifetime.md.
 """
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import shutil
 import sys
@@ -91,6 +141,7 @@ from pathlib import Path
 from typing import NoReturn
 
 import UnityPy
+from UnityPy.files.SerializedFile import SerializedFile
 
 # ----------------------------------------------------------------------------------------
 # Constants (SPEC.md SS0 / SS B.WP3 / SS E.1 / SS E.3)
@@ -294,6 +345,48 @@ def patch_mono_typetree(mono_tt: dict, server_name: str) -> dict:
     return mono_tt
 
 
+def unique_cab_name(map_key: str) -> str:
+    """Deterministic per-map internal bundle-directory name (see module docstring's "SECOND
+    CORRECTION" section for the full root-cause evidence and why this must be unique across
+    every map's preset bundle, not just readable/valid). `CAB-` + an md5 hex digest matches the
+    donor's own naming convention and length (36 chars total) exactly, so this never needs a
+    padding change anywhere it's referenced."""
+    digest = hashlib.md5(f"arenamapport:{map_key}:preset".encode("utf-8")).hexdigest()
+    return f"CAB-{digest}"
+
+
+def patch_bundle_cab_name(env, new_cab_name: str) -> str:
+    """Renames the donor copy's single nested SerializedFile's internal bundle-directory entry
+    (its 'CAB-...' name) to `new_cab_name`. Fails loudly if the bundle doesn't have exactly one
+    nested SerializedFile -- this project's preset bundles never have a second nested file (no
+    streamed .resS -- the ScenesPreset MonoBehaviour has no resource-stream fields), so more or
+    fewer than 1 is unexpected and this script must not guess which one to rename.
+
+    Only touches the outer BundleFile.files dict key (what UnityPy's BundleFile.save_fs()
+    actually serializes as the directory-table "path" for each nested file) plus the nested
+    file's own .name attribute for consistency -- see module docstring for why nothing else in
+    the bundle's serialized content ever references this string."""
+    bundle_file = env.file
+    matches = [name for name, f in bundle_file.files.items() if isinstance(f, SerializedFile)]
+    if len(matches) != 1:
+        fail(
+            f"expected exactly 1 nested SerializedFile in the donor bundle to rename for CAB "
+            f"uniqueness, found {len(matches)}: {matches} -- refusing to guess which one to rename"
+        )
+    old_cab_name = matches[0]
+    if old_cab_name == new_cab_name:
+        fail(
+            f"donor's CAB name {old_cab_name!r} already equals the target {new_cab_name!r} -- "
+            f"unexpected (a real collision fix should always change this string), refusing to "
+            f"silently no-op the rename"
+        )
+    f = bundle_file.files.pop(old_cab_name)
+    f.name = new_cab_name
+    bundle_file.files[new_cab_name] = f
+    info(f"patched BundleFile nested SerializedFile (CAB) name: {old_cab_name!r} -> {new_cab_name!r}")
+    return old_cab_name
+
+
 def patch_container_entry(bundle_tt: dict, mono_path_id: int) -> dict:
     """CORRECTION (see module docstring): rename the AssetBundle's container entry so
     FixAssetName()/AssetBundle.LoadAsset(rcid) can still find the ScenesPreset asset."""
@@ -324,7 +417,8 @@ def patch_container_entry(bundle_tt: dict, mono_path_id: int) -> dict:
     return bundle_tt
 
 
-def save_and_verify(env, mono_obj, mono_path_id: int, bundle_obj, out_path: Path, packer: str) -> None:
+def save_and_verify(env, mono_obj, mono_path_id: int, bundle_obj, out_path: Path, packer: str,
+                     expected_cab_name: str) -> None:
     donor_script_ptr = None
     for obj in env.objects:
         if obj.type.name == "MonoBehaviour" and obj.path_id == mono_path_id:
@@ -360,6 +454,17 @@ def save_and_verify(env, mono_obj, mono_path_id: int, bundle_obj, out_path: Path
         if not any(k.endswith(PRESET_ASSET_NAME) for k in keys):
             fail(f"re-read of saved bundle: no m_Container entry ends with {PRESET_ASSET_NAME!r} (keys={keys})")
         info(f"re-read verification: m_Container has an entry ending with {PRESET_ASSET_NAME!r}")
+
+    # re-read verification (fix-preset-cab-and-bundle-lifetime): the CAB rename must have
+    # actually landed in the bytes written to disk, from a fresh, independent load -- not just
+    # in the in-memory `env` this function already had a reference to before saving.
+    reread_names = [name for name, f in reread.file.files.items() if isinstance(f, SerializedFile)]
+    if reread_names != [expected_cab_name]:
+        fail(
+            f"re-read of saved bundle: nested SerializedFile name(s) {reread_names!r} != expected "
+            f"[{expected_cab_name!r}] -- the CAB rename did not survive the save/reload round-trip"
+        )
+    info(f"re-read verification: nested SerializedFile (CAB) name is {expected_cab_name!r}")
 
 
 # ----------------------------------------------------------------------------------------
@@ -408,7 +513,15 @@ def main() -> None:
     bundle_tt = patch_container_entry(bundle_tt, mono_path_id)
     bundle_obj.save_typetree(bundle_tt)
 
-    save_and_verify(env, mono_obj, mono_path_id, bundle_obj, args.out, args.packer)
+    # fix-preset-cab-and-bundle-lifetime (module docstring "SECOND CORRECTION"): every map's
+    # preset bundle must carry a unique internal name, or a second map's preset silently fails
+    # to load (Unity refuses a second AssetBundle whose serialized file shares an
+    # already-loaded internal name) once a different map's preset is already resident in the
+    # same client session.
+    new_cab_name = unique_cab_name(map_data["key"])
+    patch_bundle_cab_name(env, new_cab_name)
+
+    save_and_verify(env, mono_obj, mono_path_id, bundle_obj, args.out, args.packer, new_cab_name)
 
     # the staged donor copy served its purpose (UnityPy never writes to it either way, since
     # we always save to a fresh writer -- but SPEC.md O8 wants the read-only source untouched

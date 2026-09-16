@@ -34,6 +34,13 @@
        cross-checks tools/maps/*.json against ArenaMapDescriptor.cs's ArenaMapRegistry entries and
        ArenaPaths.cs's EquatorDefault() (not just the map under test) -- it is a whole-registry
        consistency check, independent of $MapKey/$MapDescriptor.
+       validate_preset.py itself now also asserts this map's preset bundle carries a unique,
+       deterministic internal CAB name (fix-preset-cab-and-bundle-lifetime,
+       docs/progress/fix-preset-cab-and-bundle-lifetime.md) -- the whole-DISTRIBUTION check that
+       no two STAGED preset/scenes/navmesh bundles share an internal name either lives in
+       tools/validate/validate_bundle_names.py, wired into tools/validate/validate_distribution.py
+       (run by tools/build_remaining.ps1 -Stage, the multi-map "safe to ship dist/" gate) since
+       that is the earliest point a full dist/ actually exists to check.
 
 .PARAMETER PackageDir
   WP1 package to build from. Defaults to the S1 slice (O7).

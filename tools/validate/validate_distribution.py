@@ -22,6 +22,14 @@ def validate():
     actual_bundles = {p.name for p in (plugin/'bundles').iterdir() if p.is_file()}
     if actual_bundles != expected_bundles:
         raise ValueError(f'Bundle set mismatch: missing={sorted(expected_bundles-actual_bundles)} unexpected={sorted(actual_bundles-expected_bundles)}')
+    # fix-preset-cab-and-bundle-lifetime: every dist bundle's internal UnityFS directory-table
+    # name (its 'CAB-...'/'BuildPlayer-...' entry) must be unique across the WHOLE distribution --
+    # a duplicate (as every *_preset.bundle used to share, before that fix) makes Unity's own
+    # AssetBundle.LoadFromFile refuse to load the second bundle while the first is still resident
+    # in the same client session. See tools/validate/validate_bundle_names.py's module docstring
+    # for the full root-cause evidence.
+    subprocess.run([sys.executable, str(REPO/'tools/validate/validate_bundle_names.py'),
+                    '--bundles-dir', str(plugin/'bundles')], cwd=REPO, check=True)
     expected_sidecars = {'material-shaders.json' if key == 'arena_equator' else f'material-shaders.{key}.json' for key in keys}
     actual_sidecars = {p.name for p in plugin.glob('material-shaders*.json')}
     if actual_sidecars != expected_sidecars:
