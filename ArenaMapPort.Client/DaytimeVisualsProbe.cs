@@ -118,6 +118,7 @@ namespace ArenaMapPort.Client
             ProbeDecals(tag);
             ProbeAmbient(tag);
             ProbeSea(tag);
+            ProbeWeatherTestOverride(tag, map);
         }
 
         // F1 — TimeOfDayRepairs. "actual" is only meaningfully readable back via TODSkyProvider when a
@@ -231,6 +232,17 @@ namespace ArenaMapPort.Client
         {
             Plugin.Log.LogInfo($"{tag} F6 Sea: enabled={SeaPlaceholderRepairs.Enabled} " +
                                $"lastResult={SeaPlaceholderRepairs.LastResult ?? "n/a (pass hasn't run yet)"}");
+        }
+
+        // donor-settings-camera-weather §D — WeatherTestOverride's currently configured mode. The
+        // Postfix itself logs "[WeatherTestOverride] applied '<mode>'" (expected twice per raid when
+        // active — once from InitWeather, once from SPT's PVE_OFFLINE server re-sync); this line just
+        // confirms what was CONFIGURED for this raid, for a single-log-read summary.
+        static void ProbeWeatherTestOverride(string tag, ArenaMapPort.Shared.ArenaMapDescriptor map)
+        {
+            Plugin.Log.LogInfo($"{tag} WeatherTestOverride: configured='{WeatherTestOverride.Mode}' (map={map.Key}) " +
+                               "— Server means no change; any other value should show two " +
+                               "'[WeatherTestOverride] applied' lines above for this raid");
         }
 
         // Same resolution CameraEffectsRepairs/LightingDiagnosticProbe use — CameraManager.Instance.Camera,

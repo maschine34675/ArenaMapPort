@@ -5,8 +5,10 @@ using ArenaMapPort.Shared;
 using Comfort.Common;
 using EFT.CameraControl;
 using EFT.Weather;
+using Prism.Utils;
 using UnityEngine;
 using UnityEngine.Rendering;
+using UnityEngine.Rendering.PostProcessing;
 using UnityEngine.SceneManagement;
 
 namespace ArenaMapPort.Client
@@ -58,15 +60,48 @@ namespace ArenaMapPort.Client
         internal enum SkyboxMode { Dome, FrozenStatic }
         internal enum RigKind { Full, Simplified }
 
+        // donor-settings-camera-weather §A.3 — LevelSettings.MaxMapTextureMemory is a Vector4 streaming
+        // budget (LevelSettings.cs:111), not something worth exposing as 4 raw floats in the config UI.
+        // ReserveTier's numbers are Reserve_Base_Scripts' own authored value (critic review,
+        // 2026-09-17 — exact match against levelsettings_raw.json); Customs/LaboratoryTier are left as
+        // TODOs (same enum shape, not yet measured) since only Reserve has been harvested this pass —
+        // Stub = today's stub value (1024,1024,1024,1024), the untouched C# class default.
+        internal enum TextureBudgetTier { Stub, ReserveTier, CustomsTier, LaboratoryTier }
+
         const string OffDonor = "Off";
         const float PollIntervalSeconds = 3f;
         const int MaxHarvestAttempts = 5;
+
+        // donor-settings-camera-weather §A.1 — Reserve's own authored MaxMapTextureMemory (critic
+        // review: numerically confirmed against levelsettings_raw.json). Customs/Laboratory are not yet
+        // measured this pass (TextureBudgetTier.CustomsTier/LaboratoryTier fall back to Stub with a
+        // warning if ever selected — see TierToVector4).
+        static readonly Vector4 ReserveTextureBudget = new Vector4(2000f, 2450f, 2850f, 3100f);
+        static readonly Vector4 StubTextureBudget = new Vector4(1024f, 1024f, 1024f, 1024f); // LevelSettings.cs class default
 
         sealed class RigConfigBundle
         {
             internal BepInEx.Configuration.ConfigEntry<string> Donor;
             internal BepInEx.Configuration.ConfigEntry<SkyboxMode> SkyboxModeEntry;
             internal BepInEx.Configuration.ConfigEntry<bool> KeepFillLight;
+
+            // donor-settings-camera-weather §A.3 — donor-consistent LevelSettings overrides, applied only
+            // while a rig is active for this map (ApplyDonorLevelSettingsOverrides). New key names
+            // throughout (never "ZeroLevel"/"HeightFalloff" etc verbatim) per the project's hard rule:
+            // BepInEx persists a user's saved value under the OLD key even after a default changes, so a
+            // stale "ZeroLevel" key from some earlier build could otherwise silently resurrect a value
+            // that no longer means what it used to.
+            internal BepInEx.Configuration.ConfigEntry<float> ZeroLevelOverride;
+            internal BepInEx.Configuration.ConfigEntry<float> HeightFalloffOverride;
+            internal BepInEx.Configuration.ConfigEntry<TextureBudgetTier> TextureBudgetTierEntry;
+            internal BepInEx.Configuration.ConfigEntry<Vector3> RainBoundsCenter;
+            internal BepInEx.Configuration.ConfigEntry<Vector3> RainBoundsSize;
+            internal BepInEx.Configuration.ConfigEntry<float> NorthDirectionOverride;
+
+            // donor-settings-camera-weather §B.2/§B.3 — donor camera/PrismPreset/PostProcessProfile
+            // takeover (ApplyDonorCameraPrefab). False falls straight back to today's Cam2 fallback path
+            // (LevelSettings.CameraPrefab stays AuthorScriptsScene.cs's authored null) — see §B.3.
+            internal BepInEx.Configuration.ConfigEntry<bool> UseDonorCameraPrefab;
         }
 
         // Internal (not the default private) — LightingDiagnosticProbe.LastHarvestResult returns this
@@ -78,6 +113,19 @@ namespace ArenaMapPort.Client
             internal WeatherController Controller;   // null for Simplified
             internal TOD_Sky Sky;                    // null for Simplified
             internal TODSkySimple SimpleSky;         // null for Full
+
+            // donor-settings-camera-weather §B.1 (critic amendment 1, 2026-09-17): captured DIRECTLY off
+            // the donor's LevelSettings singleton while the donor scene is still loaded — NOT
+            // Instantiate()'d/SetActive(false)'d the way "Weather" is. Reserve/Laboratory/Customs'
+            // CameraPrefab all resolve to the identical m_PathID:691 object in sharedassets15.assets — a
+            // persistent, cross-map, process-wide shared asset that survives SceneManager.
+            // UnloadSceneAsync(donorScene) on its own, unlike a scene-local object such as "Weather".
+            // Null for a donor whose LevelSettings never authors one (defensive; every donor surveyed so
+            // far does). PrismPreset/PostProcessProfile are almost always null too (Reserve authors
+            // neither) — carried through generically for whatever future donor does.
+            internal Camera CameraPrefab;
+            internal PrismPreset PrismPreset;
+            internal PostProcessProfile PostProcessProfile;
 
             // One-time harvest-health snapshot, surfaced by LightingDiagnosticProbe. A HarvestedRig is
             // only ever constructed on full success (every failure path returns before one is built), so
@@ -93,6 +141,19 @@ namespace ArenaMapPort.Client
             // tells OnSceneLoaded whether to run VerifyFirstActivation's Awake-postcondition check (only
             // meaningful the first time) versus just ReestablishSingletons (needed every time after).
             internal bool EverActivated;
+
+            // Review fix-ups (docs/progress/donor-settings-camera-weather.md) #1 — RainController's own
+            // vanilla-authored PuddleWaterLevel.y (0.95, RainController.cs:417), captured once at harvest
+            // time, BEFORE any raid's RainWetnessRepairs.ApplyPuddleClamp call can overwrite the field.
+            // Needed because this clone is a session-persistent, SetActive(true)/SetActive(false)-only
+            // object — never Destroy()'d (see OnSceneUnloaded's own comment) — reused across every raid on
+            // this donor for the rest of the session: without a captured original, turning
+            // MaxLyingWaterOverrideEnabled back off after a raid that had it on has nothing correct to
+            // restore PuddleWaterLevel.y to, and the clamped value would otherwise leak into every later
+            // raid on this donor regardless of the config. Defaults to the vanilla constant for a
+            // Simplified rig (no RainController) or the defensive null-Controller case; never actually read
+            // in that case since ApplyPuddleClamp is only called for RigKind.Full.
+            internal float OriginalPuddleWaterLevelY = 0.95f;
         }
 
         static readonly Dictionary<string, RigConfigBundle> _configs = new Dictionary<string, RigConfigBundle>();
@@ -144,6 +205,10 @@ namespace ArenaMapPort.Client
         {
             string section = $"Lighting ({map.Key})";
             string defaultDonor = map.Key == "arena_bay5" ? "Reserve_Base_Scripts" : OffDonor;
+            // donor-settings-camera-weather Tier-1/Tier-2 split — real defaults only for the one map this
+            // pass actually harvests a rig for (Bay5); every other map keeps Donor="Off" above, so none
+            // of §A/§B/§C ever reads these values for it regardless of what they default to.
+            bool bay5Defaults = map.Key == ArenaMapRegistry.Bay5.Key;
             var cfg = new RigConfigBundle();
 
             cfg.Donor = Plugin.Instance.Config.Bind(section, "Donor", defaultDonor,
@@ -169,14 +234,94 @@ namespace ArenaMapPort.Client
                     "own value, since the rig's real AmbientLight/_SHAr now feeds ambient instead. Set true to " +
                     "keep the fill light on top of the real rig (e.g. as extra interior fill)."));
 
+            // donor-settings-camera-weather §A.3 — Tier-1 default ON for a rig-active map (Bay5): the
+            // "vanilla-consistent set" itself. ZeroLevel is explicitly NOT a blind donor copy (plan §A.1 /
+            // critic — Reserve's own ZeroLevel is Reserve-geometry-relative, not transferable) — seeded
+            // with the project brief's own starting guess instead (ground ~ -3, sky dome much higher;
+            // -8.2 split the difference for the first playtest). HeightFalloff DOES match the donor
+            // exactly (Reserve AND Customs both author 0.025 — critic-confirmed against
+            // levelsettings_raw.json), so it's copied straight.
+            cfg.ZeroLevelOverride = Plugin.Instance.Config.Bind(section, "ZeroLevelOverride", bay5Defaults ? -8.2f : 0f,
+                "TOD_Scattering reads Singleton<LevelSettings>.Instance.ZeroLevel every rendered frame " +
+                "(TOD_Scattering.cs:165-176) once a rig is active (CameraEffectsRepairs adds the " +
+                "component) — our stub LevelSettings ships ZeroLevel=-78.64 (Laboratory's own authored " +
+                "value, coincidentally equal to the raw C# class default), wrong by roughly 10x for an " +
+                "outdoor map. This is a per-map, geometry-relative tuning value, NOT a donor copy — see " +
+                "docs/progress/donor-settings-camera-weather.md for the evidence trail and how to re-tune " +
+                "it. Applied only while a rig is active for this map (Donor != 'Off' and harvested).");
+
+            cfg.HeightFalloffOverride = Plugin.Instance.Config.Bind(section, "HeightFalloffOverride", bay5Defaults ? 0.025f : 0.029f,
+                "TOD_Scattering's other per-frame ZeroLevel/HeightFalloff read (see ZeroLevelOverride). " +
+                "0.025 is Reserve's (and Customs') own authored value, byte-for-byte, vs. our stub's " +
+                "0.029 (Laboratory's authored value / the raw C# class default) — a real donor copy, not a " +
+                "guess. Applied only while a rig is active for this map.");
+
+            cfg.TextureBudgetTierEntry = Plugin.Instance.Config.Bind(section, "TextureBudgetTier",
+                bay5Defaults ? TextureBudgetTier.ReserveTier : TextureBudgetTier.Stub,
+                "LevelSettings.MaxMapTextureMemory (a Vector4 streaming-texture budget, LevelSettings.cs:" +
+                "111,198) — our stub ships (1024,1024,1024,1024), the raw C# class default. ReserveTier " +
+                "= Reserve_Base_Scripts' own authored (2000,2450,2850,3100) — streaming-quality only, no " +
+                "plausible visual-correctness downside. Applied only while a rig is active for this map.");
+
+            cfg.RainBoundsCenter = Plugin.Instance.Config.Bind(section, "RainBoundsCenter", Vector3.zero,
+                "LevelSettings.RainBounds' center (LevelSettings.cs:30). Default = the class's own default " +
+                "center (0,0,0) — a deliberate no-op until Bay5's real play-area coordinates are measured " +
+                "(see docs/progress/donor-settings-camera-weather.md, deferred). Applied only while a rig " +
+                "is active for this map.");
+            cfg.RainBoundsSize = Plugin.Instance.Config.Bind(section, "RainBoundsSize", new Vector3(1000f, 220f, 1000f),
+                "LevelSettings.RainBounds' size. Default = the class's own default size — see " +
+                "RainBoundsCenter's own description for why this ships as a no-op this pass.");
+
+            cfg.NorthDirectionOverride = Plugin.Instance.Config.Bind(section, "NorthDirectionOverride", 0f,
+                new BepInEx.Configuration.ConfigDescription(
+                    "LevelSettings._northDirection (LevelSettings.cs:108, degrees). Default 0 = our current " +
+                    "authored value (unset) — the 2026-09-17 playtest already confirmed the sun direction " +
+                    "correct at this value once the dome-recenter fix landed, so this ships as a deliberate " +
+                    "no-op, NOT a donor copy (donor North is Reserve-map-relative, meaningless here). " +
+                    "Tune only after its own dedicated playtest. Applied only while a rig is active for " +
+                    "this map.",
+                    new BepInEx.Configuration.AcceptableValueRange<float>(0f, 360f)));
+
+            // donor-settings-camera-weather §B.2/§B.3 (critic amendment: capture-only, no Instantiate of
+            // the donor's original — see HarvestedRig's own doc comment). Default true for a rig-active
+            // map — the core of the "consistent donor set" strategy (rig + LevelSettings + camera all
+            // from the same donor) — but a real, single-click toggle: falling back to the Cam2 fallback
+            // path (§B.3) needs no other config change.
+            cfg.UseDonorCameraPrefab = Plugin.Instance.Config.Bind(section, "UseDonorCameraPrefab", bay5Defaults,
+                "Assigns the harvested donor's own CameraPrefab/PrismPresetPrefab/PostProcessProfilePrefab " +
+                "onto this map's LevelSettings while a rig is active, so CameraManager.SetCameraFromSettings " +
+                "instantiates the donor's real camera (with its own baked TOD_Scattering/PrismEffects." +
+                "useExposure) instead of falling back to Cam2. false = always Cam2, matching today's " +
+                "behavior regardless of the rig. Takes effect on the next raid.");
+
             // Deliberately NO SettingChanged handlers on these three for re-apply purposes — "changes apply
             // on the next raid" is a hard requirement here (unlike ArenaLightingRepairs' own live-tunable
             // knobs): re-toggling SetActive or re-running the harvest mid-raid is not supported. The one
             // exception: Donor's own SettingChanged pre-warms the harvest for a newly-typed donor name
-            // between raids, never reacting during an active one.
+            // between raids, never reacting during an active one. Same "next raid only" rule applies to
+            // every §A/§B ConfigEntry added above — none of them re-apply live either.
             cfg.Donor.SettingChanged += (_, __) => OnDonorConfigChanged();
 
             return cfg;
+        }
+
+        static Vector4 TierToVector4(TextureBudgetTier tier)
+        {
+            switch (tier)
+            {
+                case TextureBudgetTier.ReserveTier:
+                    return ReserveTextureBudget;
+                case TextureBudgetTier.CustomsTier:
+                case TextureBudgetTier.LaboratoryTier:
+                    // Not measured this pass (only Reserve was harvested/inspected) — fall back to Stub
+                    // rather than guess at a plausible-looking wrong number.
+                    Plugin.Log.LogWarning($"[ArenaMapPort][WeatherRig] TextureBudgetTier={tier} has no measured " +
+                        "value yet this pass — falling back to Stub. See docs/progress/" +
+                        "donor-settings-camera-weather.md §Deferred.");
+                    return StubTextureBudget;
+                default:
+                    return StubTextureBudget;
+            }
         }
 
         // ---------------------------------------------------------------------------------------------
@@ -270,6 +415,12 @@ namespace ArenaMapPort.Client
             Scene donorScene = default;
             GameObject weatherRoot = null;
             GameObject clone = null;
+            // donor-settings-camera-weather §B.1 — captured (not cloned) while the donor scene is still
+            // loaded; see the doc comment where these land on HarvestedRig for why a plain reference is
+            // correct here and Instantiate()/SetActive(false) (the "Weather" root technique) is not.
+            Camera donorCameraPrefab = null;
+            PrismPreset donorPrismPreset = null;
+            PostProcessProfile donorPostProcessProfile = null;
 
             // Pre-load snapshot for the post-harvest identity check. Must be taken BEFORE the donor loads:
             // the donor's own LevelSettings/LocationScene/EnvironmentManager register during its load and
@@ -358,6 +509,36 @@ namespace ArenaMapPort.Client
                 SafeUnload(donorScene);
                 renderSettingsBefore.Restore();
                 yield break;
+            }
+
+            // donor-settings-camera-weather §B.1 (critic amendment, 2026-09-17): capture the donor's
+            // LevelSettings.CameraPrefab/PrismPresetPrefab/PostProcessProfilePrefab as plain references,
+            // taken from the donor's OWN LevelSettings singleton while the donor scene is still loaded —
+            // deliberately NOT Instantiate()'d/SetActive(false)'d here, unlike "Weather" above. Reserve's
+            // CameraPrefab resolves to a shared, cross-map, process-wide asset in sharedassets15.assets
+            // (m_PathID:691, confirmed identical for Laboratory/Customs too) that survives
+            // SceneManager.UnloadSceneAsync(donorScene) below on its own — mutating the ORIGINAL (as an
+            // earlier draft of this plan did) would have been a real, session-wide side effect on a BSG
+            // asset shared by every future real Reserve/Laboratory/Customs raid this session; a bare
+            // reference has no such risk, and CameraManager.SetCameraFromPrefab's own Instantiate() (at
+            // the correct per-raid moment — see ApplyDonorCameraPrefab) does all the real work anyway.
+            // Best-effort only: a null CameraPrefab here (the expected case for most donors surveyed) just
+            // means ApplyDonorCameraPrefab later has nothing to assign — never a harvest failure.
+            try
+            {
+                var donorLevelSettings = Singleton<LevelSettings>.Instantiated ? Singleton<LevelSettings>.Instance : null;
+                if (donorLevelSettings != null)
+                {
+                    donorCameraPrefab = donorLevelSettings.CameraPrefab;
+                    donorPrismPreset = donorLevelSettings.PrismPresetPrefab;
+                    donorPostProcessProfile = donorLevelSettings.PostProcessProfilePrefab;
+                }
+            }
+            catch (Exception e)
+            {
+                // Non-fatal — see this block's own comment; the rig itself (Weather root) is unaffected.
+                Plugin.Log.LogWarning($"[ArenaMapPort][WeatherRig] '{donorName}': donor camera/preset capture " +
+                    $"failed (non-fatal, rig harvest continues without it): {e.GetType().Name}: {e.Message}");
             }
 
             // Step 4: SetActive(false) on the DONOR original before cloning, so the CLONE's own Awake/
@@ -503,13 +684,25 @@ namespace ArenaMapPort.Client
                 yield break;
             }
 
+            // Review fix-ups (docs/progress/donor-settings-camera-weather.md) #1 — hoisted out of the
+            // object initializer below (was inline as `cloneSky != null ? clone.GetComponentInChildren
+            // <WeatherController>(true) : null` for Controller alone) so OriginalPuddleWaterLevelY can
+            // read RainController off the SAME lookup instead of a second GetComponentInChildren call.
+            var harvestedController = cloneSky != null ? clone.GetComponentInChildren<WeatherController>(true) : null;
+
             var rig = new HarvestedRig
             {
                 Root = clone,
                 Kind = cloneSky != null ? RigKind.Full : RigKind.Simplified,
-                Controller = cloneSky != null ? clone.GetComponentInChildren<WeatherController>(true) : null,
+                Controller = harvestedController,
                 Sky = cloneSky,
+                CameraPrefab = donorCameraPrefab,
+                PrismPreset = donorPrismPreset,
+                PostProcessProfile = donorPostProcessProfile,
                 SimpleSky = cloneSimple,
+                OriginalPuddleWaterLevelY = harvestedController != null && harvestedController.RainController != null
+                    ? harvestedController.RainController.PuddleWaterLevel.y
+                    : 0.95f, // vanilla authored default (RainController.cs:417) — defensive fallback only
                 LoadOk = true,
                 CloneOk = true,
                 UnloadOk = true,
@@ -527,7 +720,11 @@ namespace ArenaMapPort.Client
 
             Plugin.Log.LogInfo($"[ArenaMapPort][WeatherRig] harvested '{donorName}' ({rig.Kind}) — " +
                 $"{keptBefore} MonoBehaviour(s) on the clone; post-unload identity unchanged: " +
-                $"LevelSettings={lsUnchanged} LocationScene={locUnchanged} EnvironmentManager={envUnchanged}");
+                $"LevelSettings={lsUnchanged} LocationScene={locUnchanged} EnvironmentManager={envUnchanged}; " +
+                $"donor camera captured={donorCameraPrefab != null} " +
+                $"(name='{(donorCameraPrefab != null ? donorCameraPrefab.name : "n/a")}') " +
+                $"prism={donorPrismPreset != null} postfx={donorPostProcessProfile != null} " +
+                "(donor-settings-camera-weather §B.1)");
         }
 
         static void Fail(string donorName, string reason)
@@ -547,6 +744,19 @@ namespace ArenaMapPort.Client
         }
 
         // RenderSettings fields LevelSettings.ApplySettings writes (LevelSettings.cs:194-218).
+        //
+        // donor-settings-camera-weather §A (critic amendment 3, 2026-09-17): ApplySettings also pushes
+        // four Shader.SetGlobal* values that are true PROCESS-WIDE globals, not scoped to RenderSettings
+        // at all (LevelSettings.cs:213-217: "_DirectionLightShadow"/"_WaterLevel"/"_MinAmbientColor"/
+        // "_SSRFactor"). The donor's own LevelSettings.Awake() (which runs once, synchronously, as part
+        // of the harvest's additive scene load — LevelSettings.cs:166-169) pushes THESE globals too,
+        // using the DONOR's authored values, not ours. Reserve's values happen to numerically coincide
+        // with the plain C# class defaults (SSRFactor=1, LyingWater=0, DirectionLightShadow=0,
+        // _minSmokeAmbientColor=clear — critic-verified against levelsettings_raw.json), so nothing
+        // currently leaks past this harvest in practice — but that harmlessness is a fact about Reserve's
+        // specific values, not a structural guarantee. Capturing/restoring them here (alongside the
+        // pre-existing RenderSettings.* fields) closes the leak window generically, for whatever future
+        // donor's values actually differ.
         struct RenderSettingsSnapshot
         {
             AmbientMode _ambientMode;
@@ -557,6 +767,10 @@ namespace ArenaMapPort.Client
             float _fogDensity, _fogStart, _fogEnd;
             FogMode _fogMode;
             Material _skybox;
+            float _directionLightShadow; // shader global "_DirectionLightShadow" (LevelSettings.cs:213)
+            float _lyingWater;           // shader global "_WaterLevel" (LevelSettings.cs:214)
+            Color _minAmbientColor;      // shader global "_MinAmbientColor" (LevelSettings.cs:215)
+            float _ssrFactor;            // shader global "_SSRFactor" (LevelSettings.cs:217)
 
             internal static RenderSettingsSnapshot Capture() => new RenderSettingsSnapshot
             {
@@ -573,6 +787,10 @@ namespace ArenaMapPort.Client
                 _fogEnd = RenderSettings.fogEndDistance,
                 _fogMode = RenderSettings.fogMode,
                 _skybox = RenderSettings.skybox,
+                _directionLightShadow = Shader.GetGlobalFloat("_DirectionLightShadow"),
+                _lyingWater = Shader.GetGlobalFloat("_WaterLevel"),
+                _minAmbientColor = Shader.GetGlobalColor("_MinAmbientColor"),
+                _ssrFactor = Shader.GetGlobalFloat("_SSRFactor"),
             };
 
             internal void Restore()
@@ -593,6 +811,10 @@ namespace ArenaMapPort.Client
                     RenderSettings.fogMode = _fogMode;
                 }
                 RenderSettings.skybox = _skybox;
+                Shader.SetGlobalFloat("_DirectionLightShadow", _directionLightShadow);
+                Shader.SetGlobalFloat("_WaterLevel", _lyingWater);
+                Shader.SetGlobalColor("_MinAmbientColor", _minAmbientColor);
+                Shader.SetGlobalFloat("_SSRFactor", _ssrFactor);
             }
         }
 
@@ -750,6 +972,22 @@ namespace ArenaMapPort.Client
                 Plugin.Log.LogInfo($"[ArenaMapPort][WeatherRig] {map.Key}: activated '{donorName}' " +
                     $"({rig.Kind}) for this raid. SkyboxMode={cfg.SkyboxModeEntry.Value}.");
                 ApplySkyboxMode(rig, cfg.SkyboxModeEntry.Value);
+
+                // donor-settings-camera-weather §A/§B — AFTER the rig itself is fully activated (so
+                // IsActiveForCurrentMap() already reads true for anything these two log/branch on) and
+                // BEFORE this handler returns, per this method's own ordering argument: PlayerCameraController
+                // .Construct/CameraManager.SetCameraFromSettings and TOD_Scattering's per-frame LevelSettings
+                // read both happen strictly later in the same startup sequence.
+                ApplyDonorLevelSettingsOverrides(map, cfg);
+                ApplyDonorCameraPrefab(map, cfg, rig);
+                if (rig.Kind == RigKind.Full)
+                {
+                    // §C.4 — always writes now (Review fix-ups (docs/progress/donor-settings-camera-weather.md)
+                    // #1): restores rig.OriginalPuddleWaterLevelY when MaxLyingWaterOverrideEnabled=false,
+                    // not just a no-op, since this same RainController persists across every raid this
+                    // session (see HarvestedRig.OriginalPuddleWaterLevelY's own doc comment).
+                    RainWetnessRepairs.ApplyPuddleClamp(map, rig.Controller, rig.OriginalPuddleWaterLevelY);
+                }
             }
             catch (Exception e)
             {
@@ -757,9 +995,96 @@ namespace ArenaMapPort.Client
                     $"{e.GetType().Name}: {e.Message}. Falling back to the ArenaLightingRepairs workaround " +
                     "for this raid.");
                 try { rig.Root.SetActive(false); } catch { /* best-effort */ }
+                // donor-settings-camera-weather §B.2 — never leave a half-assigned LevelSettings.CameraPrefab
+                // behind on ANY failure in the block above (not just a camera-specific one): reset it back to
+                // AuthorScriptsScene.cs's own authored null so CameraManager falls straight through to Cam2.
+                try
+                {
+                    if (Singleton<LevelSettings>.Instantiated)
+                    {
+                        var ls = Singleton<LevelSettings>.Instance;
+                        ls.CameraPrefab = null;
+                        ls.PrismPresetPrefab = null;
+                        ls.PostProcessProfilePrefab = null;
+                    }
+                }
+                catch { /* best-effort */ }
                 _activeMap = null;
                 _activeRig = null;
             }
+        }
+
+        // donor-settings-camera-weather §A.2 — same hook WeatherRig already uses, run AFTER the rig
+        // activation block above succeeds. A no-rig map never reaches here (OnSceneLoaded already
+        // returned earlier for Donor=="Off"), so Equator's own fresh-every-scene-load LevelSettings
+        // (AuthorScriptsScene.cs) is never touched by this method.
+        static void ApplyDonorLevelSettingsOverrides(ArenaMapDescriptor map, RigConfigBundle cfg)
+        {
+            var ls = Singleton<LevelSettings>.Instantiated ? Singleton<LevelSettings>.Instance : null;
+            if (ls == null)
+            {
+                Plugin.Log.LogWarning($"[ArenaMapPort][WeatherRig] {map.Key}: LevelSettings singleton not found " +
+                    "at donor-override apply time — skipped (should not happen; AuthorScriptsScene.cs authors " +
+                    "one in every owned scene).");
+                return;
+            }
+
+            float oldZeroLevel = ls.ZeroLevel;
+            float oldHeightFalloff = ls.HeightFalloff;
+            Vector4 oldBudget = ls.MaxMapTextureMemory;
+            float oldNorth = ls._northDirection;
+
+            ls.ZeroLevel = cfg.ZeroLevelOverride.Value;
+            ls.HeightFalloff = cfg.HeightFalloffOverride.Value;
+            ls.MaxMapTextureMemory = TierToVector4(cfg.TextureBudgetTierEntry.Value);
+            ls.RainBounds = new Bounds(cfg.RainBoundsCenter.Value, cfg.RainBoundsSize.Value);
+            ls._northDirection = cfg.NorthDirectionOverride.Value;
+
+            // ApplySettings() is idempotent (LevelSettings.cs:194-218) and pushes MaxMapTextureMemory's
+            // streaming-budget refresh plus the four Shader.SetGlobal* fields (§A "no action" list) with
+            // our just-written values — those are one-shot writes (only made from Awake()/
+            // OnPostLoadingScene(), never re-applied per-frame), so without this call TextureBudgetTier
+            // would silently have no effect this raid. Any RenderSettings ambient/fog values it also
+            // re-pushes are immediately superseded by ArenaLightingRepairs' own gated write, which runs
+            // right after this handler in the same sceneLoaded dispatch (WeatherRig installs before
+            // ArenaLightingRepairs — see Plugin.cs) — no net visible change from calling it here.
+            ls.ApplySettings();
+
+            Plugin.Log.LogInfo($"[ArenaMapPort][LevelSettingsOverride] map={map.Key} " +
+                $"ZeroLevel={ls.ZeroLevel:0.00} (was {oldZeroLevel:0.00}) " +
+                $"HeightFalloff={ls.HeightFalloff:0.000} (was {oldHeightFalloff:0.000}) " +
+                $"TextureBudget={cfg.TextureBudgetTierEntry.Value} (was {oldBudget}, now {ls.MaxMapTextureMemory}) " +
+                $"RainBounds=center({ls.RainBounds.center}) size({ls.RainBounds.size}) " +
+                $"NorthDirection={(Mathf.Approximately(ls._northDirection, oldNorth) ? "unchanged" : ls._northDirection.ToString("0.0"))}");
+        }
+
+        // donor-settings-camera-weather §B.2 (critic amendment — see HarvestedRig's own doc comment for
+        // why CameraPrefab/PrismPreset/PostProcessProfile are plain captured references, never cloned).
+        static void ApplyDonorCameraPrefab(ArenaMapDescriptor map, RigConfigBundle cfg, HarvestedRig rig)
+        {
+            if (!cfg.UseDonorCameraPrefab.Value)
+            {
+                return; // §B.3 — LevelSettings.CameraPrefab stays AuthorScriptsScene.cs's authored null; Cam2 fallback, unchanged
+            }
+            if (rig.CameraPrefab == null)
+            {
+                Plugin.Log.LogInfo($"[ArenaMapPort][CameraPrefabTakeover] {map.Key}: UseDonorCameraPrefab=true but " +
+                    "the harvested rig has no donor CameraPrefab (donor's own LevelSettings.CameraPrefab was null) " +
+                    "— falling back to Cam2 for this raid.");
+                return;
+            }
+
+            var ls = Singleton<LevelSettings>.Instantiated ? Singleton<LevelSettings>.Instance : null;
+            if (ls == null)
+            {
+                return; // ApplyDonorLevelSettingsOverrides already warned about this above
+            }
+
+            ls.CameraPrefab = rig.CameraPrefab;
+            ls.PrismPresetPrefab = rig.PrismPreset;             // may be null — SetCameraFromPrefab's own null-check covers it
+            ls.PostProcessProfilePrefab = rig.PostProcessProfile; // may be null
+            Plugin.Log.LogInfo($"[ArenaMapPort][CameraPrefabTakeover] assigned donor camera for map={map.Key} " +
+                $"camera='{rig.CameraPrefab.name}' prism={rig.PrismPreset != null} postfx={rig.PostProcessProfile != null}");
         }
 
         // Review fix-ups #1 — see OnSceneLoaded's own comment for why this, and not the try/catch around
@@ -971,5 +1296,13 @@ namespace ArenaMapPort.Client
 
         internal static HarvestedRig LastHarvestResult(string donorName) =>
             donorName != null && _harvested.TryGetValue(donorName, out var rig) ? rig : null;
+
+        // donor-settings-camera-weather — the rig THIS raid actually activated (null if none), so
+        // LightingDiagnosticProbe/DaytimeVisualsProbe can read back CameraPrefab/PrismPreset/
+        // PostProcessProfile without re-deriving the donor lookup themselves.
+        internal static HarvestedRig ActiveRig => _activeRig;
+
+        internal static bool UseDonorCameraPrefabForCurrentMap() =>
+            _activeMap != null && _configs.TryGetValue(_activeMap.Key, out var cfg) && cfg.UseDonorCameraPrefab.Value;
     }
 }

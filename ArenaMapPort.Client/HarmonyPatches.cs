@@ -62,6 +62,49 @@ namespace ArenaMapPort.Client
 
             // daytime-and-visuals F1 — see TimeOfDayRepairs.cs.
             InstallTimeOfDayFix(harmony);
+
+            // donor-settings-camera-weather §C.3 + §D — see RainWetnessRepairs.cs / WeatherTestOverride.cs.
+            InstallWetRendererDamper(harmony);
+            InstallWeatherTestOverride(harmony);
+        }
+
+        // donor-settings-camera-weather §D — EFT.Weather.WeatherController.SetWeatherNodes(WeatherNode[]),
+        // public instance, single overload. Verified:
+        // D:/SPT41/Development/_decompiled/EFT.Weather/WeatherController.cs:99.
+        static void InstallWeatherTestOverride(Harmony harmony)
+        {
+            var target = AccessTools.Method(typeof(EFT.Weather.WeatherController), "SetWeatherNodes");
+
+            if (!Verify(target, typeof(EFT.Weather.WeatherController), "SetWeatherNodes"))
+            {
+                return;
+            }
+
+            var postfix = AccessTools.Method(typeof(WeatherTestOverride), "Postfix");
+            harmony.Patch(target, postfix: new HarmonyMethod(postfix));
+            Plugin.Log.LogInfo("[ArenaMapPort][Harmony] patched EFT.Weather.WeatherController.SetWeatherNodes " +
+                                "(donor-settings-camera-weather §D)");
+        }
+
+        // donor-settings-camera-weather §C.3 — the nested RainController.AbstractStateSummer.SetWetting
+        // (float, float, Vector2, float), public override. Verified:
+        // D:/SPT41/Development/_decompiled/RainController.cs (AbstractStateSummer.SetWetting).
+        static void InstallWetRendererDamper(Harmony harmony)
+        {
+            var summer = AccessTools.Inner(typeof(RainController), "AbstractStateSummer");
+            var target = summer != null
+                ? AccessTools.Method(summer, "SetWetting", new[] { typeof(float), typeof(float), typeof(UnityEngine.Vector2), typeof(float) })
+                : null;
+
+            if (!Verify(target, typeof(RainController), "AbstractStateSummer.SetWetting"))
+            {
+                return;
+            }
+
+            var postfix = AccessTools.Method(typeof(RainWetnessRepairs), "Postfix");
+            harmony.Patch(target, postfix: new HarmonyMethod(postfix));
+            Plugin.Log.LogInfo("[ArenaMapPort][Harmony] patched RainController.AbstractStateSummer.SetWetting " +
+                                "(donor-settings-camera-weather §C.3)");
         }
 
         // daytime-and-visuals F1 — LocalGame.InitWeather(TimeAndWeatherSettings), public instance,

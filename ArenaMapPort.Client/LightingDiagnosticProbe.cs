@@ -424,6 +424,43 @@ namespace ArenaMapPort.Client
                 sb.AppendLine($"  weather: fog={curve.Fog:0.00} cloudiness={curve.Cloudiness:0.00} " +
                                $"wind={curve.Wind} rain={curve.Rain:0.00}");
             }
+
+            // donor-settings-camera-weather §A — live readback of the donor-consistent LevelSettings
+            // overrides (WeatherRig.ApplyDonorLevelSettingsOverrides already logged one line on apply;
+            // this confirms the values actually stuck through to probe time, same convention as
+            // ProbeRenderSettings above).
+            var ls = Singleton<LevelSettings>.Instantiated ? Singleton<LevelSettings>.Instance : null;
+            if (ls != null)
+            {
+                sb.AppendLine($"  LevelSettingsOverride (live): ZeroLevel={ls.ZeroLevel:0.00} " +
+                               $"HeightFalloff={ls.HeightFalloff:0.000} MaxMapTextureMemory={ls.MaxMapTextureMemory} " +
+                               $"RainBounds=center({ls.RainBounds.center}) size({ls.RainBounds.size}) " +
+                               $"NorthDirection={ls._northDirection:0.0}");
+            }
+
+            // donor-settings-camera-weather §B — camera prefab takeover state. absent-with-warning here
+            // (rather than "present=false") means the Cam2 fallback path is silently in use this raid.
+            var activeRig = WeatherRig.ActiveRig;
+            bool donorCameraEnabled = WeatherRig.UseDonorCameraPrefabForCurrentMap();
+            sb.AppendLine($"  CameraPrefabTakeover: enabled={donorCameraEnabled} " +
+                           $"harvestedDonorCamera={(activeRig != null && activeRig.CameraPrefab != null)} " +
+                           $"live LevelSettings.CameraPrefab-set={(ls != null && ls.CameraPrefab != null)} " +
+                           $"(expect all three true together for the donor path to actually be live; if " +
+                           "enabled=true but the other two are false, the harvest had no donor camera and " +
+                           "this raid silently fell back to Cam2)");
+
+            // donor-settings-camera-weather §C — Tier-2 wetness mitigations' current config + live state.
+            var rain = wc != null ? wc.RainController : null;
+            sb.AppendLine($"  wetness mitigations: groundMaterialFix={ShaderRebind.GroundMaterialWetnessFixEnabled} " +
+                           $"hideProjectorDecalsV2={DecalRepairs.Enabled} " +
+                           $"wetRendererMultiplier={RainWetnessRepairs.WetRendererIntensityMultiplier:0.00} " +
+                           $"maxLyingWaterOverrideEnabled={RainWetnessRepairs.MaxLyingWaterOverrideEnabled} " +
+                           $"maxLyingWaterOverrideValue={RainWetnessRepairs.MaxLyingWaterOverrideValue:0.00}");
+            if (rain != null)
+            {
+                sb.AppendLine($"  wetness live: PuddleWaterLevel={rain.PuddleWaterLevel} " +
+                               $"WetRenderer.Intensity={(rain._wetRenderer != null ? rain._wetRenderer.Intensity.ToString("0.00") : "n/a")}");
+            }
         }
 
         // Confirms/refutes: RC3 (sun light presence/intensity/color) and the general "are lights even

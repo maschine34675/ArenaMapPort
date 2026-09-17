@@ -50,6 +50,12 @@ namespace ArenaMapPort.Client
             // LocalGame.InitWeather, whose prefix (TimeOfDayRepairs.Prefix) reads it. See TimeOfDayRepairs.cs.
             TimeOfDayRepairs.Install();
 
+            // donor-settings-camera-weather §C.3/§D — same reasoning as TimeOfDayRepairs.Install() above:
+            // config must be bound before HarmonyPatches.InstallAll patches the methods whose
+            // prefix/postfix reads it. See RainWetnessRepairs.cs / WeatherTestOverride.cs.
+            RainWetnessRepairs.Install();
+            WeatherTestOverride.Install();
+
             _harmony = new Harmony(PluginGuid);
             HarmonyPatches.InstallAll(_harmony);
 

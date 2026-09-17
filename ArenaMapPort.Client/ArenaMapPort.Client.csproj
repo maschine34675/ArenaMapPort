@@ -116,6 +116,13 @@
       <HintPath>$(EftManagedDir)\UnityEngine.UIModule.dll</HintPath>
       <Private>false</Private>
     </Reference>
+    <!-- donor-settings-camera-weather §B: LevelSettings.PostProcessProfilePrefab's type
+         (UnityEngine.Rendering.PostProcessing.PostProcessProfile) lives in its own managed DLL, not
+         Assembly-CSharp — PrismPreset (Prism.Utils) is a BSG type and needs no extra reference. -->
+    <Reference Include="Unity.Postprocessing.Runtime">
+      <HintPath>$(EftManagedDir)\Unity.Postprocessing.Runtime.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
 
     <PackageReference Include="BepInEx.Analyzers" Version="1.*" PrivateAssets="all" />
     <PackageReference Include="BepInEx.Core" Version="5.*" />

@@ -29,3 +29,6 @@ analysis/tex_samples_*/
 analysis/decompiled-server/
 analysis/decompiled-server-415/
 analysis/decompiled-server-415-full/
+
+# Playtest screenshots (game content)
+analysis/screenshots/

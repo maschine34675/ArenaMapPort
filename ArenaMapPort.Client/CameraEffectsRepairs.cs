@@ -135,6 +135,15 @@ namespace ArenaMapPort.Client
             }
             if (prism.useExposure)
             {
+                // donor-settings-camera-weather §B.4 — this early-return already existed pre-donor-camera;
+                // it now also covers a donor camera's own baked useExposure=true (PrismPresetTakeover, §B),
+                // which is exactly the "no double-apply" guard §B.4 requires. Tagged so a log read can tell
+                // the two paths apart.
+                string source = WeatherRig.UseDonorCameraPrefabForCurrentMap() && WeatherRig.ActiveRig?.CameraPrefab != null
+                    ? "donor" : "fallback (already fixed for this camera)";
+                Plugin.Log.LogInfo($"[ArenaMapPort][Camera] PrismEffects.useExposure already true on '{cam.name}' " +
+                                   $"(middleGrey={prism.exposureMiddleGrey:0.000} lower={prism.exposureLowerLimit:0.0} " +
+                                   $"upper={prism.exposureUpperLimit:0.0}) — source={source}, no changes made");
                 return; // already on (real camera prefab, or this fix already ran for this camera)
             }
 
@@ -144,7 +153,7 @@ namespace ArenaMapPort.Client
             prism.exposureUpperLimit = _exposureUpperLimit.Value;
             Plugin.Log.LogInfo($"[ArenaMapPort][Camera] enabled PrismEffects.useExposure on '{cam.name}' " +
                                $"(middleGrey={prism.exposureMiddleGrey:0.000} lower={prism.exposureLowerLimit:0.0} " +
-                               $"upper={prism.exposureUpperLimit:0.0}) — daytime-and-visuals F2");
+                               $"upper={prism.exposureUpperLimit:0.0}) — daytime-and-visuals F2, source=fallback (added)");
         }
 
         static void ApplyTodFixes(Camera cam)
@@ -169,7 +178,14 @@ namespace ArenaMapPort.Client
             var todCamera = cam.GetComponent<TOD_Camera>();
             if (todCamera != null)
             {
+                // donor-settings-camera-weather §B.4 (critic point 3, verified): the donor camera itself
+                // carries no TOD_Camera component (cross-referenced against all 59 resolved donor-camera
+                // components), so this unconditional destroy is a safe no-op on the donor path too —
+                // logged here so that verification is visible in a real playtest's log, not just this
+                // comment.
                 UnityEngine.Object.Destroy(todCamera);
+                Plugin.Log.LogInfo($"[ArenaMapPort][Camera] destroyed stray TOD_Camera on '{cam.name}' " +
+                                   "(donor camera never carries one — should only fire on the Cam2 fallback path)");
             }
 
             if (_enableTodScatteringFix != null && _enableTodScatteringFix.Value)
@@ -185,7 +201,16 @@ namespace ArenaMapPort.Client
                 {
                     Plugin.Log.LogInfo($"[ArenaMapPort][Camera] added TOD_Scattering to '{cam.name}' " +
                                        "(FromLevelSettings=true), wired to the active rig's TOD_Sky — " +
-                                       "daytime-and-visuals F3");
+                                       "daytime-and-visuals F3, source=fallback (added)");
+                }
+                else
+                {
+                    // donor-settings-camera-weather §B.4 — the donor camera ships TOD_Scattering already
+                    // enabled with its own tuned FromLevelSettings/GlobalDensity/etc fields; skip the add
+                    // entirely and leave those baked values untouched, just re-point Sky at this raid's
+                    // rig (harmless even on a second activation of the same camera).
+                    Plugin.Log.LogInfo($"[ArenaMapPort][Camera] TOD_Scattering already present on '{cam.name}' " +
+                                       "— daytime-and-visuals F3, source=donor (already present, no changes made)");
                 }
             }
         }
