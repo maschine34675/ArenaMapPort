@@ -7,29 +7,15 @@ using UnityEngine.SceneManagement;
 namespace ArenaMapPort.Client
 {
     /// <summary>
-    /// daytime-and-visuals, F4 — 2026-09-17 playtest symptom B: the ground/asphalt looked almost white
-    /// with large dark/black blotches across the whole yard. Root cause confirmed directly in
-    /// work/extract/bay5/materials/*.json: e.g. <c>0cad361327fe76c5.json</c>
-    /// (<c>source_name: "Bay5_Decal_dirt_dark"</c>) — <c>shader: "Decal/Ultra Deferred Decal Of God
-    /// 3000"</c>, <c>_SrcBlend=1 _DstBlend=0 _ZWrite=1</c> (fully OPAQUE, not blended — the deferred
-    /// decal projector pass these shaders expect never runs in our scenes) with
-    /// <c>_Color≈(0.40,0.40,0.40,0.62)</c> — drawn as a plain, opaque <c>MeshRenderer</c> quad this
-    /// becomes a near-white/grey overwrite box sitting on top of the real ground, squarely matching the
-    /// symptom. Mesh decal shaders ending in <c>_Decal</c> are deliberately NOT matched: they render
-    /// correctly as ordinary renderers.
+    /// Optional diagnostic: hides renderers drawn purely with BSG's deferred-decal projector shaders
+    /// ("Decal/Water Deferred Decal", "Decal/Ultra Deferred Decal Of God 3000"), which expect the
+    /// StaticDeferredDecal command-buffer pass our scenes do not run.
     ///
-    /// Proper fix (authoring these as real <c>StaticDeferredDecal</c> projectors) needs a tools/
-    /// change and invalidates the 12 maps' full-map-validation receipts — deferred, see
-    /// docs/progress/daytime-and-visuals.md's Priority-2 section. This is the client-only stopgap:
-    /// disable the Renderer outright once its (real, post-rebind) shader name matches one of these
-    /// generic patterns — no ground texture where the decal would have projected, but no white/black
-    /// overwrite blotch either.
-    ///
-    /// Runs one pass per raid, timed to fire AFTER <see cref="ShaderRebind"/>'s own 3s sweep
-    /// (ShaderRebind.cs) has already turned each material's stand-in shader
-    /// (<c>Hidden/ArenaMapPort/&lt;name&gt;</c>) back into its real name — checking shader names before
-    /// that sweep completes would see only stand-ins and never match. Not Bay5-specific: any owned
-    /// scene, any map, is scanned the same way.
+    /// History: shipped enabled on 2026-09-17 as the suspected cause of Bay5's white ground with dark
+    /// blotches. The playtest refuted that (blotches unchanged) and exposed a bug: any renderer with a
+    /// decal material SLOT was hidden, which removed Bay5's cargo containers. Now off by default and
+    /// limited to renderers whose every slot is a projector decal. Runs after ShaderRebind's sweep so
+    /// real shader names are visible.
     /// </summary>
     internal static class DecalRepairs
     {
@@ -55,11 +41,13 @@ namespace ArenaMapPort.Client
             }
             _installed = true;
 
-            _enabled = Plugin.Instance.Config.Bind("Decals", "DisableUnsupportedDecalRenderers", true,
-                "Disables any Renderer whose (real, post-ShaderRebind) shader is 'Decal/Water Deferred " +
-                "Decal' or 'Decal/Ultra Deferred Decal Of God 3000' — these were authored " +
-                "as deferred-decal projectors, which our scenes don't run, and render as an opaque near-" +
-                "white/grey overwrite box instead. Cosmetic stopgap only; see this file's own doc comment.");
+            // New key (was "DisableUnsupportedDecalRenderers", default true): the 2026-09-17 14:54 playtest
+            // showed the blotches are NOT caused by these decals, and hiding renderers that merely carry a
+            // decal material slot removed Bay5's cargo containers. Off by default; a renamed key so the
+            // previously saved "true" does not carry over.
+            _enabled = Plugin.Instance.Config.Bind("Decals", "HideProjectorDecals", false,
+                "Hides renderers whose materials are ALL deferred-decal projector shaders ('Decal/Water " +
+                "Deferred Decal', 'Decal/Ultra Deferred Decal Of God 3000'). Diagnostic option, off by default.");
 
             SceneManager.sceneLoaded += OnSceneLoaded;
             SceneManager.sceneUnloaded += OnSceneUnloaded;
@@ -111,8 +99,7 @@ namespace ArenaMapPort.Client
         {
             if (_enabled == null || !_enabled.Value)
             {
-                Plugin.Log.LogInfo("[ArenaMapPort][Decals] DisableUnsupportedDecalRenderers=false — skipped");
-                return;
+                return; // off by default
             }
 
             int scanned = 0;
@@ -151,22 +138,23 @@ namespace ArenaMapPort.Client
                                 "(unsupported deferred-decal shader) — daytime-and-visuals F4");
         }
 
+        // True only when EVERY material slot is a projector-decal shader: multi-material meshes (e.g. the
+        // cargo containers, which carry a decal slot next to their body material) must stay visible.
         static bool UsesUnsupportedDecalShader(Renderer renderer)
         {
             var mats = renderer.sharedMaterials;
+            int decalSlots = 0;
             for (int m = 0; m < mats.Length; m++)
             {
                 var material = mats[m];
-                if (material == null || material.shader == null)
+                if (material == null || material.shader == null ||
+                    !IsUnsupportedDecalShaderName(material.shader.name))
                 {
-                    continue;
+                    return false;
                 }
-                if (IsUnsupportedDecalShaderName(material.shader.name))
-                {
-                    return true;
-                }
+                decalSlots++;
             }
-            return false;
+            return decalSlots > 0;
         }
 
         static bool IsUnsupportedDecalShaderName(string shaderName)
