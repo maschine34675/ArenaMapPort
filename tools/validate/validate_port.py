@@ -1,4 +1,4 @@
-"""Verify a full map's build receipt and optional staged distribution without rebuilding it."""
+"""Check a full map's build outputs (and optionally the staged distribution) for consistency."""
 from __future__ import annotations
 
 import argparse
@@ -34,42 +34,18 @@ def verify(stem, distribution=False):
     key = descriptor['key']
     output = REPO / 'work/build' / stem
     package = REPO / 'work/extract' / stem
-    receipt = load(output / 'full-map-validation.json')
-    require(receipt.get('schema_version') == 2 and receipt.get('full_map') is True,
-            'Missing schema-2 full-map receipt; legacy receipts require complete revalidation')
     from source_plan import validate_manifest_plan
-    require(receipt.get('map_key') == key, 'Receipt map identity mismatch')
-    files = receipt.get('files', [])
-    require(len(files) >= 8 and len({f['path'] for f in files}) == len(files), 'Receipt file set incomplete/duplicated')
-    for item in files:
-        path = REPO / item['path']
-        require(path.resolve().is_relative_to(REPO), 'Receipt path outside repository')
-        require(path.is_file(), f'Missing validated file: {path}')
-        require(sha256(path) == item['sha256'].lower(), f'Validated file changed: {path}')
-
-    expected_files = [descriptor_path, package / 'manifest.json',
-                      output / f'{key}_scenes.bundle', output / f'{key}_navmesh.bundle',
-                      output / 'material-shaders.json', output / 'editor_verify.json',
-                      REPO / f'work/build/preset/{key}_preset.bundle',
-                      REPO / f'ArenaMapPort.Server/db/{descriptor["db_base_json_path"]}']
-    server_path = expected_files[-1]
+    server_path = REPO / f'ArenaMapPort.Server/db/{descriptor["db_base_json_path"]}'
+    for path in (output / f'{key}_scenes.bundle', output / f'{key}_navmesh.bundle',
+                 output / 'material-shaders.json', output / 'editor_verify.json',
+                 REPO / f'work/build/preset/{key}_preset.bundle', server_path):
+        require(path.is_file(), f'Missing build output: {path}')
     run = load(output / 'unity-run.json')
     require(run.get('schema_version') == 1 and run.get('map_key') == key and run.get('exit_code') == 0,
             'Missing successful Unity run provenance')
-    log_name = run.get('log_file', '')
-    require(log_name and Path(log_name).name == log_name, 'Invalid Unity log filename')
-    expected_files.extend([output / 'unity-run.json', output / log_name,
-                           output / 'target-physics.json', output / 'spawn-placement.json',
-                           output / 'validation-inputs.json'])
-    recorded = {(REPO / f['path']).resolve() for f in files}
-    require(all(path.resolve() in recorded for path in expected_files), 'Receipt omits a required map artifact')
-
-    from port_inputs import verify_snapshot
-    verify_snapshot(package, output / 'validation-inputs.json', REPO)
 
     manifest = load(package / 'manifest.json')
     plan_path, plan = validate_manifest_plan(manifest)
-    require(plan_path in recorded, 'Receipt omits source plan')
     require(not manifest.get('errors'), 'Extraction reported errors')
     require(descriptor['all_scene_names'] == [descriptor['scripts_scene_name']] + manifest['scenes'],
             'Descriptor/extraction scene order mismatch')

@@ -1,5 +1,7 @@
 # Remaining Arena maps: source coverage and port progress
 
+> Update 2026-09-17: the schema-2 receipt layer described below (`full-map-validation.json`, `validation-inputs.json`, `port_inputs.py`) has been removed; `validate_port.py` now checks build outputs directly and reproducibility is opt-in. The rest of this document is kept as the historical record.
+
 Verified: 2026-09-15, 20:34 CEST. The task extends the existing Equator/Bay5 geometry spike to every other independent Arena layout with locally available source scenes. **All twelve additions are extracted, built, validated with current schema-2 receipts and staged in `dist/`.** All twelve `validate_port.py --distribution` checks passed. The full 14-map distribution, Release DLL hashes, baseline preservation and deployment dry run also passed. Live deployment and GPU raid validation have not been performed.
 
 ## Source inventory

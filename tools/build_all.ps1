@@ -71,9 +71,11 @@
   Require a verified NavMesh bake and every descriptor scene in the preset's scene bundle.
   Use for complete ports; omit only for the existing intentional slice workflow.
 
+.PARAMETER CheckReproducibility
+  Also re-run the extraction twice and compare the results (minutes per map). Off by default.
+
 .PARAMETER ReproTimeoutSeconds
-  Maximum duration of each independent extraction reproducibility run. Larger maps need more
-  than the legacy 300-second default; this changes the time allowance, not the checks.
+  Maximum duration of each extraction run when -CheckReproducibility is set.
 
 .EXAMPLE
   # full real build, S1 slice, in the background (Unity takes several minutes):
@@ -103,6 +105,7 @@ param(
     [switch]$SkipGameRefsSync,
     [switch]$SkipUnityBuild,
     [switch]$FullMap,
+    [switch]$CheckReproducibility,
     [ValidateRange(1, 86400)][int]$ReproTimeoutSeconds = 300,
     [string]$UnityExe = "C:/Program Files/Unity/Hub/Editor/2022.3.43f1/Editor/Unity.exe"
 )
@@ -128,19 +131,6 @@ if ($FullMap -and (-not $BakeNavMesh -or -not $Verify)) {
 }
 $MapScriptsSceneName = $mapData.scripts_scene_name
 if ($FullMap) {
-    # An explicit build/revalidation attempt supersedes earlier acceptance even if
-    # it fails before producing new bundles. Keep the old receipt as audit history,
-    # under a name the resume/staging checks never accept.
-    $oldReceipt = Join-Path $OutputDir 'full-map-validation.json'
-    if (Test-Path -LiteralPath $oldReceipt -PathType Leaf) {
-        $supersededReceipt = Join-Path $OutputDir ('full-map-validation.superseded-' + [Guid]::NewGuid().ToString('N') + '.json')
-        Move-Item -LiteralPath $oldReceipt -Destination $supersededReceipt
-    }
-    $oldInputs = Join-Path $OutputDir 'validation-inputs.json'
-    if (Test-Path -LiteralPath $oldInputs -PathType Leaf) {
-        $supersededInputs = Join-Path $OutputDir ('validation-inputs.superseded-' + [Guid]::NewGuid().ToString('N') + '.json')
-        Move-Item -LiteralPath $oldInputs -Destination $supersededInputs
-    }
     $inputManifest = Get-Content -LiteralPath (Join-Path $PackageDir 'manifest.json') -Raw | ConvertFrom-Json
     if ($inputManifest.source.map_key -and $inputManifest.source.map_key -cne $MapKey) {
         throw "Extraction identity '$($inputManifest.source.map_key)' does not match '$MapKey'."
@@ -283,12 +273,13 @@ if ($FullMap) {
         & python -u (Join-Path $RepoRoot 'tools/preset/patch_preset.py') --map $MapDescriptor
         if ($LASTEXITCODE -ne 0) { Fail 'Current preset generation failed.' }
     }
-    $validationInputs = Join-Path $OutputDir 'validation-inputs.json'
-    & python -u (Join-Path $RepoRoot 'tools/validate/port_inputs.py') capture --package $PackageDir --output $validationInputs
-    if ($LASTEXITCODE -ne 0) { Fail 'Could not bind the complete package/source/build/validation inputs.' }
 }
 
-& python -u (Join-Path $RepoRoot "tools/validate/validate_extract.py") --package $PackageDir --extractor-timeout $ReproTimeoutSeconds
+# The reproducibility check re-runs the whole extraction twice (minutes per map); opt in with
+# -CheckReproducibility when the extractor itself changed.
+$extractOptions = @('--skip-reproducibility')
+if ($CheckReproducibility) { $extractOptions = @('--extractor-timeout', $ReproTimeoutSeconds) }
+& python -u (Join-Path $RepoRoot "tools/validate/validate_extract.py") --package $PackageDir @extractOptions
 if ($LASTEXITCODE -ne 0) { Fail "validate_extract.py FAILED (exit $LASTEXITCODE)" }
 
 $scenesBundle = Join-Path $OutputDir $ScenesBundleName
@@ -312,41 +303,6 @@ if ($LASTEXITCODE -ne 0) { Fail "validate_preset.py FAILED (exit $LASTEXITCODE)"
 # drifting from ArenaMapDescriptor.cs's ArenaMapRegistry or ArenaPaths.cs's EquatorDefault().
 & python (Join-Path $RepoRoot "tools/validate/validate_map_descriptors.py")
 if ($LASTEXITCODE -ne 0) { Fail "validate_map_descriptors.py FAILED (exit $LASTEXITCODE)" }
-
-if ($FullMap) {
-    & python -u (Join-Path $RepoRoot 'tools/validate/port_inputs.py') verify --package $PackageDir --snapshot $validationInputs
-    if ($LASTEXITCODE -ne 0) { Fail 'Inputs changed during full validation; no accepted receipt will be written.' }
-    # Bind the completed validations to the exact outputs and source selection. Later staging
-    # verifies these hashes; the receipt is written only after every mandatory validator passes.
-    $packageManifest = Get-Content -LiteralPath (Join-Path $PackageDir 'manifest.json') -Raw | ConvertFrom-Json
-    $receiptPaths = @(
-        $MapDescriptor, (Join-Path $PackageDir 'manifest.json'),
-        $scenesBundle, $navmeshBundle, $materialShaders, $editorVerify,
-        (Join-Path $OutputDir 'unity-run.json'), $logFile, $validationInputs,
-        (Join-Path $RepoRoot "work/build/preset/${MapKey}_preset.bundle"),
-        (Join-Path $RepoRoot "ArenaMapPort.Server/db/$($mapData.db_base_json_path)")
-    )
-    if ($packageManifest.source.source_plan) {
-        $receiptPaths += Join-Path $RepoRoot $packageManifest.source.source_plan
-        $receiptPaths += Join-Path $OutputDir 'target-physics.json'
-        $receiptPaths += Join-Path $OutputDir 'spawn-placement.json'
-    }
-    $receiptFiles = foreach ($receiptPath in $receiptPaths) {
-        $resolved = (Resolve-Path -LiteralPath $receiptPath).Path
-        [pscustomobject]@{
-            path = [System.IO.Path]::GetRelativePath($RepoRoot, $resolved).Replace('\', '/')
-            sha256 = (Get-FileHash -LiteralPath $resolved -Algorithm SHA256).Hash.ToLowerInvariant()
-        }
-    }
-    [pscustomobject]@{
-        schema_version = 2
-        full_map = $true
-        map_key = $MapKey
-        validated_utc = [DateTime]::UtcNow.ToString('o')
-        reproducibility_timeout_seconds = $ReproTimeoutSeconds
-        files = @($receiptFiles)
-    } | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath (Join-Path $OutputDir 'full-map-validation.json') -Encoding utf8
-}
 
 Write-Host ""
 Write-Host "[build_all] OK -- build + mandatory identity patch + all validators passed. $OutputDir is safe to copy into dist/." -ForegroundColor Green

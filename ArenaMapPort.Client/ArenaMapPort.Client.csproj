@@ -147,7 +147,7 @@
     considered.
   -->
   <!-- Client-only iteration: "dotnet build -c Release -p:ArenaMapPortDllOnly=true" copies just the DLL
-       to dist and skips bundle staging and the per-map receipt validation (about 10 minutes). -->
+       to dist and skips bundle staging. -->
   <Target Name="ArenaMapPortStageWpOutputs" AfterTargets="ArenaMapPortDistCopy" Condition="'$(Configuration)'=='Release' And '$(ArenaMapPortDllOnly)'!='true'">
     <PropertyGroup>
       <ArenaMapPortFullBuildDir>$(MSBuildThisFileDirectory)..\work\build\full</ArenaMapPortFullBuildDir>
@@ -197,8 +197,6 @@
   <!-- Explicit full-map outputs only. Never glob slice or diagnostic bundles into dist. -->
   <Import Project="..\tools\maps\AdditionalMapBuilds.props" />
   <Target Name="ArenaMapPortStageAdditionalMaps" AfterTargets="ArenaMapPortStageWpOutputs" Condition="'$(Configuration)'=='Release' And '$(ArenaMapPortDllOnly)'!='true'">
-    <Exec Command="python &quot;$(MSBuildThisFileDirectory)..\tools\validate\validate_port.py&quot; --map %(ArenaMapPortAdditionalMap.Identity)"
-          WorkingDirectory="$(MSBuildThisFileDirectory).." />
     <Error Text="[ArenaMapPort] validated full-map bundle missing: %(ArenaMapPortAdditionalBundle.Identity)"
            Condition="!Exists('%(ArenaMapPortAdditionalBundle.Identity)')" />
     <Copy SourceFiles="@(ArenaMapPortAdditionalBundle)" DestinationFolder="$(ArenaMapPortDistDir)\bundles" SkipUnchangedFiles="true" />

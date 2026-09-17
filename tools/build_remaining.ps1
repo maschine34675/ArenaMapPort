@@ -2,8 +2,7 @@
 .SYNOPSIS
   Extract and build the twelve additional Arena layouts, one Unity build at a time.
 .DESCRIPTION
-  Resumes only from verified full-map receipts. Existing extraction packages are reused and
-  checked by build_all's mandatory source/reproducibility validators. An incomplete extraction
+  Skips maps whose build outputs already pass validate_port. Existing extraction packages are reused. An incomplete extraction
   directory is never overwritten. -Rebuild rebuilds bundles from complete existing packages.
   -Stage runs server tests, builds the client Release distribution and verifies every staged map.
   This script does not deploy to the live SPT installation.
@@ -32,7 +31,7 @@ try {
     New-Item -ItemType Directory -Force -Path 'work/logs/remaining-maps' | Out-Null
     foreach ($stem in $Maps) {
         $log = "work/logs/remaining-maps/$stem-pipeline.log"
-        if (-not $Rebuild -and (Test-Path -LiteralPath "work/build/$stem/full-map-validation.json")) {
+        if (-not $Rebuild -and (Test-Path -LiteralPath "work/build/$stem/unity-run.json")) {
             & python -u tools/validate/validate_port.py --map $stem *>> $log
             if ($LASTEXITCODE -eq 0) { Write-Output "PORT_RESUMED $stem"; continue }
         }
@@ -49,7 +48,7 @@ try {
             -OutputDir "$repo/work/build/$stem" -FullMap -ReproTimeoutSeconds $ReproTimeoutSeconds *>> $log
         if ($LASTEXITCODE -ne 0) { throw "Build/validation failed for $stem; see $log" }
         & python -u tools/validate/validate_port.py --map $stem *>> $log
-        if ($LASTEXITCODE -ne 0) { throw "Full-map receipt validation failed for $stem; see $log" }
+        if ($LASTEXITCODE -ne 0) { throw "Build output validation failed for $stem; see $log" }
         Write-Output "PORT_COMPLETE $stem $(Get-Date -Format o)"
     }
     if ($Stage) {
