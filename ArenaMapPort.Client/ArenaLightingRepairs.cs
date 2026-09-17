@@ -367,6 +367,17 @@ namespace ArenaMapPort.Client
             // repair's control regardless of rig state.
             bool ownFogColor = !WeatherRig.IsActiveForCurrentMap();
 
+            // daytime-and-visuals F5 — confirmed double-ambient write: while a WeatherRig is active,
+            // its own AmbientLight/_SHAr already feeds ambient every frame (ToDController.Update ->
+            // AmbientLightScript.SetSH), and this repair's own SkyColor/EquatorColor/GroundColor push
+            // below (which LevelSettings.OnPreCullCallback re-applies into RenderSettings.ambient* every
+            // camera pre-cull) was landing UNGATED on top of it — live-confirmed as exactly 0.5x the
+            // authored base ambient (ambientLight=(0.25,0.25,0.25) while this repair's own
+            // AmbientColorMultiplier default is 0.5). ownFogColor (above) and the fill light
+            // (ApplyFillLight/ApplyAll) already gate the same way; this closes the one remaining ungated
+            // write.
+            bool ownAmbientColor = !WeatherRig.IsActiveForCurrentMap();
+
             if (levelSettings != null)
             {
                 // The authored LevelSettings leaves fogMode at default(FogMode) = 0 and fogColor black,
@@ -391,9 +402,12 @@ namespace ArenaMapPort.Client
                     state.LevelSettingsBaselineCaptured = true;
                 }
 
-                levelSettings.SkyColor = ScaleColor(state.BaseSkyColor, m);
-                levelSettings.EquatorColor = ScaleColor(state.BaseEquatorColor, m);
-                levelSettings.GroundColor = ScaleColor(state.BaseGroundColor, m);
+                if (ownAmbientColor)
+                {
+                    levelSettings.SkyColor = ScaleColor(state.BaseSkyColor, m);
+                    levelSettings.EquatorColor = ScaleColor(state.BaseEquatorColor, m);
+                    levelSettings.GroundColor = ScaleColor(state.BaseGroundColor, m);
+                }
                 // LevelSettings.OnPreCullCallback (decompile, LevelSettings.cs:240-263) re-pushes these
                 // exact fields into RenderSettings every camera pre-cull on its own — we only need to
                 // update the fields it reads from. Fog is not re-pushed per frame, hence ApplyFog above.

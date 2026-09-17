@@ -46,6 +46,10 @@ namespace ArenaMapPort.Client
 
             LogStartupBanner();
 
+            // daytime-and-visuals F1 — config must be bound before HarmonyPatches.InstallAll patches
+            // LocalGame.InitWeather, whose prefix (TimeOfDayRepairs.Prefix) reads it. See TimeOfDayRepairs.cs.
+            TimeOfDayRepairs.Install();
+
             _harmony = new Harmony(PluginGuid);
             HarmonyPatches.InstallAll(_harmony);
 
@@ -72,6 +76,13 @@ namespace ArenaMapPort.Client
             // safety net for components disabled in Arena that the current extractor/importer still
             // ships enabled. See MapBorderRepairs.cs doc comment for the full root-cause breakdown.
             MapBorderRepairs.Install();
+
+            // daytime-and-visuals F2-F7 — 2026-09-17 playtest symptom B follow-up. See
+            // docs/progress/daytime-and-visuals.md and each file's own doc comment.
+            CameraEffectsRepairs.Install();
+            DecalRepairs.Install();
+            SeaPlaceholderRepairs.Install();
+            DaytimeVisualsProbe.Install();
 
             int totalOwnedScenes = 0;
             foreach (var map in ArenaMapRegistry.All)

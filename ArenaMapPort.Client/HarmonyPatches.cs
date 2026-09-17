@@ -59,6 +59,30 @@ namespace ArenaMapPort.Client
 
             // Weather rig on the fallback camera — see RainControllerRepairs.cs.
             InstallRainControllerCameraGuard(harmony);
+
+            // daytime-and-visuals F1 — see TimeOfDayRepairs.cs.
+            InstallTimeOfDayFix(harmony);
+        }
+
+        // daytime-and-visuals F1 — LocalGame.InitWeather(TimeAndWeatherSettings), public instance,
+        // inherited from BaseLocalGame<EftGamePlayerOwner> and never overridden by LocalGame itself.
+        // AccessTools.Method resolves it via the concrete closed type: InitWeather is public, and
+        // Type.GetMethod (which AccessTools.Method wraps) already searches the full inheritance chain
+        // for public instance members without needing FlattenHierarchy — unlike the open generic
+        // BaseLocalGame<>, which is never a runtime-patchable method target.
+        // Verified: D:/SPT41/Development/_decompiled/EFT/BaseLocalGame.cs:489; EFT/LocalGame.cs:29.
+        static void InstallTimeOfDayFix(Harmony harmony)
+        {
+            var target = AccessTools.Method(typeof(LocalGame), nameof(LocalGame.InitWeather));
+
+            if (!Verify(target, typeof(LocalGame), nameof(LocalGame.InitWeather)))
+            {
+                return;
+            }
+
+            var prefix = AccessTools.Method(typeof(TimeOfDayRepairs), nameof(TimeOfDayRepairs.Prefix));
+            harmony.Patch(target, prefix: new HarmonyMethod(prefix));
+            Plugin.Log.LogInfo("[ArenaMapPort][Harmony] patched LocalGame.InitWeather (daytime-and-visuals F1)");
         }
 
         // RainController.AbstractStateSummer.CameraChanged(CameraManager), public override, nested type.
