@@ -800,6 +800,15 @@ namespace ArenaMapPort.Client
         {
             if (rig.Kind == RigKind.Full)
             {
+                // TOD_Sky aims the sun light relative to the dome's WORLD position (TOD_Sky.cs:1097/1103:
+                // LookRotation(DomeTransform.position - <unit sun vector>)), so the dome must sit at the
+                // world origin exactly as on vanilla maps (Reserve: (0,0,0), scale 1000).
+                var dome = rig.Sky != null && rig.Sky.Components != null ? rig.Sky.Components.DomeTransform : null;
+                if (dome != null)
+                {
+                    dome.position = Vector3.zero;
+                    dome.localScale = Vector3.one * 1000f;
+                }
                 Singleton<TOD_Sky>.Create(rig.Sky);
                 WeatherController.Instance = rig.Controller;
                 if (CameraManager.Exist)

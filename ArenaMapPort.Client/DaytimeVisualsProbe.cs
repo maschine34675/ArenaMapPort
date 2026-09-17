@@ -159,7 +159,6 @@ namespace ArenaMapPort.Client
             var todCamera = cam != null ? cam.GetComponent<TOD_Camera>() : null;
             var scattering = cam != null ? cam.GetComponent<TOD_Scattering>() : null;
             Plugin.Log.LogInfo($"{tag} F3 TOD: rigActive={rigActive} " +
-                               $"cameraFixEnabled={CameraEffectsRepairs.TodCameraFixEnabled} " +
                                $"scatteringFixEnabled={CameraEffectsRepairs.TodScatteringFixEnabled} " +
                                $"TOD_Camera-present={todCamera != null} TOD_Camera-sky-set={(todCamera != null && todCamera.sky != null)} " +
                                $"TOD_Scattering-present={scattering != null} TOD_Scattering-sky-set={(scattering != null && scattering.Sky != null)}");
@@ -194,7 +193,11 @@ namespace ArenaMapPort.Client
                     $"sunZenith={sky.SunZenith:0.0} lerp={sky.LerpValue:0.00} isDay={sky.IsDay} isNight={sky.IsNight} " +
                     $"fogginess={sky.Atmosphere.Fogginess:0.00} dayLightIntensity={sky.Day.LightIntensity:0.00} " +
                     $"light.intensity={(sunLight != null ? sunLight.intensity.ToString("0.00") : "n/a")} " +
-                    $"light.enabled={(sunLight != null && sunLight.enabled)} light.shadows={(sunLight != null ? sunLight.shadows.ToString() : "n/a")}");
+                    $"light.enabled={(sunLight != null && sunLight.enabled)} light.shadows={(sunLight != null ? sunLight.shadows.ToString() : "n/a")} " +
+                    // Must agree: TOD_Sky aims the light assuming the dome sits at the world origin.
+                    $"light.forward={(sunLight != null ? sunLight.transform.forward.ToString("0.00") : "n/a")} " +
+                    $"expected(-sunDirection)={(-sky.SunDirection).ToString("0.00")} " +
+                    $"domeLocalScale={(sky.Components != null && sky.Components.DomeTransform != null ? sky.Components.DomeTransform.localScale.x.ToString("0") : "n/a")}");
                 Plugin.Log.LogInfo(
                     $"{tag} TOD time: component={(time != null)} enabled={(time != null && time.isActiveAndEnabled)} " +
                     $"lockCurrentTime={(time != null && time.LockCurrentTime)} dayLengthMinutes={(time != null ? time.DayLengthInMinutes : 0f):0.0} " +

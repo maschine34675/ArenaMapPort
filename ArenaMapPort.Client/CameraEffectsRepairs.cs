@@ -57,7 +57,6 @@ namespace ArenaMapPort.Client
         static ConfigEntry<float> _exposureMiddleGrey;
         static ConfigEntry<float> _exposureLowerLimit;
         static ConfigEntry<float> _exposureUpperLimit;
-        static ConfigEntry<bool> _enableTodCameraFix;
         static ConfigEntry<bool> _enableTodScatteringFix;
         static bool _installed;
 
@@ -80,20 +79,10 @@ namespace ArenaMapPort.Client
             _exposureLowerLimit = Plugin.Instance.Config.Bind("Camera", "ExposureLowerLimit", -10.0f,
                 "PrismEffects.exposureLowerLimit applied when FixExposure=true. Pre-seeded from Cam2's own " +
                 "baked value.");
-            _exposureUpperLimit = Plugin.Instance.Config.Bind("Camera", "ExposureUpperLimit", 4.0f,
-                "PrismEffects.exposureUpperLimit applied when FixExposure=true. Cam2's own baked value was " +
-                "1.3 (script/class default is 6) — a severe, confirmed ceiling on how far auto-exposure " +
-                "can darken a bright frame (light-levels F3: ~0.093 minimum multiplier at 1.3 vs. ~0.0019 " +
-                "at the script default — roughly 50x less headroom). Raised to 4.0 as the first test value. " +
-                "Only takes effect on a fresh raid load: ApplyExposureFix early-outs once " +
-                "prism.useExposure=true for a given camera, and this file has no SettingChanged wiring " +
-                "(unlike ArenaLightingRepairs.cs), so changing this via F12 mid-raid does NOT apply live " +
-                "(adversarial review) — reload the raid after changing it.");
+            _exposureUpperLimit = Plugin.Instance.Config.Bind("Camera", "ExposureUpperLimit", 1.3f,
+                "PrismEffects.exposureUpperLimit applied when FixExposure=true. Pre-seeded from Cam2's own " +
+                "baked value (the script default is 6). Applies on the next raid load, not live.");
 
-            _enableTodCameraFix = Plugin.Instance.Config.Bind("Camera", "EnableTODCameraFix", true,
-                "Adds a TOD_Camera component to the fallback camera while a WeatherRig is active for this " +
-                "map, wired to the rig's own TOD_Sky. Re-centers/rescales the sky dome onto the camera " +
-                "every frame — leading hypothesis for a dome/quad stranded at a stale position.");
             _enableTodScatteringFix = Plugin.Instance.Config.Bind("Camera", "EnableTODScatteringFix", true,
                 "Adds a TOD_Scattering component to the fallback camera while a WeatherRig is active for " +
                 "this map (atmospheric scattering / aerial perspective). Ships with FromLevelSettings=true " +
@@ -170,20 +159,17 @@ namespace ArenaMapPort.Client
                 return; // defensive — should not happen while a rig reports active, see WeatherRig.ReestablishSingletons
             }
 
-            if (_enableTodCameraFix != null && _enableTodCameraFix.Value)
+            // No TOD_Camera: BSG's TOD_Sky aims the sun light with
+            // Quaternion.LookRotation(DomeTransform.position - <unit sun vector>) (TOD_Sky.cs:1097/1103),
+            // which is only correct while the dome sits at the world origin, as it does on vanilla maps
+            // (Reserve: Sky Dome at (0,0,0), scale 1000). TOD_Camera moves the dome onto the camera, which
+            // turned the sun into a horizontal light along the camera's position vector (2026-09-17:
+            // forward=(0.99,-0.06,-0.12) at camera (52.7,-2.3,-6.1) while SunZenith was 35 degrees) —
+            // blown-out sunlit surfaces and glare on the ground. Remove one a previous build added.
+            var todCamera = cam.GetComponent<TOD_Camera>();
+            if (todCamera != null)
             {
-                var todCamera = cam.GetComponent<TOD_Camera>();
-                bool added = todCamera == null;
-                if (added)
-                {
-                    todCamera = cam.gameObject.AddComponent<TOD_Camera>();
-                }
-                todCamera.sky = sky;
-                if (added)
-                {
-                    Plugin.Log.LogInfo($"[ArenaMapPort][Camera] added TOD_Camera to '{cam.name}', wired to the " +
-                                       "active rig's TOD_Sky — daytime-and-visuals F3");
-                }
+                UnityEngine.Object.Destroy(todCamera);
             }
 
             if (_enableTodScatteringFix != null && _enableTodScatteringFix.Value)
@@ -206,7 +192,6 @@ namespace ArenaMapPort.Client
 
         // Exposed for DaytimeVisualsProbe's consolidated F1-F6 summary line.
         internal static bool ExposureFixEnabled => _fixExposure != null && _fixExposure.Value;
-        internal static bool TodCameraFixEnabled => _enableTodCameraFix != null && _enableTodCameraFix.Value;
         internal static bool TodScatteringFixEnabled => _enableTodScatteringFix != null && _enableTodScatteringFix.Value;
     }
 }

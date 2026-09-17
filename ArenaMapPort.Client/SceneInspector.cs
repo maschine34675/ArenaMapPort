@@ -120,15 +120,25 @@ namespace ArenaMapPort.Client
                 // (players/bots), and any other Renderer subtype in one pass.
                 Renderer[] renderers = UnityEngine.Object.FindObjectsOfType<Renderer>();
                 var hits = new List<(float dist, Renderer r)>(_maxResults.Value * 4);
+                int skyLayer = LayerMask.NameToLayer("Sky");
+                Vector3 camPos = cam.transform.position;
                 foreach (Renderer r in renderers)
                 {
-                    if (r == null) continue; // guards a destroyed-this-frame object mid-scan
+                    if (r == null || !r.enabled) continue; // destroyed this frame, or not drawn anyway
                     try
                     {
+                        // The first version listed only the weather rig's sky dome and rain volumes: the
+                        // camera sits inside their enormous bounds, so their entry distance is hugely
+                        // negative and they filled every slot (2026-09-17 16:25).
+                        if (r.gameObject.layer == skyLayer) continue;
                         Bounds b = r.bounds;
+                        Vector3 e = b.extents;
+                        if (float.IsNaN(e.x) || float.IsInfinity(e.x) || e.magnitude > 5000f) continue;
+                        if (b.Contains(camPos) && e.magnitude > 150f) continue; // surrounding volume, not a target
+                        if (r.GetComponentInParent<EFT.Player>() != null) continue; // the local player's own body
                         if (b.IntersectRay(ray, out float dist) && dist <= _maxDistance.Value)
                         {
-                            hits.Add((dist, r));
+                            hits.Add((Mathf.Max(dist, 0f), r));
                         }
                     }
                     catch
@@ -181,11 +191,25 @@ namespace ArenaMapPort.Client
         {
             try
             {
-                if (Physics.Raycast(ray, out RaycastHit hit, _maxDistance.Value))
+                // Skip the local player's own colliders (the first version always hit the player's head).
+                int mask = ~LayerMask.GetMask("Player", "HitCollider", "PlayerCollisionTest", "PlayerSpiritAura");
+                if (Physics.Raycast(ray, out RaycastHit hit, _maxDistance.Value, mask, QueryTriggerInteraction.Ignore))
                 {
                     sb.AppendLine($"  Physics.Raycast: hit '{GetPath(hit.collider.transform)}' " +
                         $"dist={hit.distance:F2} layer={LayerMask.LayerToName(hit.collider.gameObject.layer)} " +
                         $"isTrigger={hit.collider.isTrigger}");
+                    // Colliders are usually siblings of the visible LOD renderers under one prop root —
+                    // list those renderers' materials, the reliable way to identify e.g. the ground.
+                    Transform root = hit.collider.transform.parent != null ? hit.collider.transform.parent : hit.collider.transform;
+                    var related = root.GetComponentsInChildren<Renderer>(false);
+                    int shown = 0;
+                    for (int i = 0; i < related.Length && shown < 3; i++)
+                    {
+                        if (related[i] == null || !related[i].enabled) continue;
+                        AppendRendererBlock(sb, shown, hit.distance, related[i]);
+                        shown++;
+                    }
+                    sb.AppendLine($"  (renderers under the hit collider's parent '{root.name}': {related.Length}, shown {shown})");
                 }
                 else
                 {
