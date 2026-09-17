@@ -3,6 +3,7 @@ using System.Collections;
 using System.Collections.Generic;
 using System.IO;
 using ArenaMapPort.Shared;
+using BepInEx.Configuration;
 using Newtonsoft.Json.Linq;
 using UnityEngine;
 using UnityEngine.SceneManagement;
@@ -44,6 +45,39 @@ namespace ArenaMapPort.Client
         const string EquatorSidecarFileName = "material-shaders.json";
         const float SweepDelaySeconds = 3f;
 
+        // docs/progress/shader-compat-and-inspector.md §a1. Materials are pipeline-generated and named
+        // by their extraction hash, NOT their human-readable source name (MaterialImporter.cs:60,
+        // `mat.name = matId`) — confirmed against work/extract/bay5/materials/be005d9cd5d9384e.json,
+        // whose "source_name" field is "Bay5_Vertex_Paint_Ground". A first draft of this fix matched on
+        // the human name and was a silent no-op (adversarial review F2); matching on the hash is what
+        // actually identifies the material at runtime. This is pipeline-derived, fragile content — a
+        // re-extraction of Bay5 can change the hash — so ApplyKnownValueFixes logs a loud one-time
+        // warning if a material with this hash is ever found but its pre-fix _BlendStrength doesn't
+        // match what was measured when this hash was captured (see ExpectedBlendStrengthBeforeFix).
+        const string Bay5GroundMaterialHash = "be005d9cd5d9384e";
+        const float Bay5GroundExpectedBlendStrengthBeforeFix = 5.0f;
+
+        // Arena shader names with no compiled SPT equivalent at all (shader-compat-audit F2) — real
+        // bug, tentative/unverified substitutes. See ApplyShaderFallback and MaterialFixes.
+        // EnableShaderFallbacks default OFF. Nature/SpeedTree8 intentionally omitted: its SPT analog
+        // (Nature/SpeedTreeEFT) has a materially different property set — an obviously-wrong magenta
+        // stand-in is a more honest failure state than a plausible-looking wrong tree.
+        static readonly Dictionary<string, string> ShaderNameFallbacks = new Dictionary<string, string>
+        {
+            ["Custom/WorldTriplanarFresnelPro"] = "p0/Reflective/Bumped Specular SMap",
+            ["ANGRYMESH/PBR Rocks/PBR BlendTopDetail (Legacy)"] = "MK4/Rock",
+            ["Cloth/ClothShader"] = "p0/Cutout/Bumped Diffuse",
+            ["Cloth/ClothShader_backface"] = "p0/Cutout/Bumped Diffuse",
+            ["Custom/Billboard_FogSheet_Simple"] = "Unlit/Transparent Colored",
+            ["p0/Reflective/Bumped Specular SMap Baked"] = "p0/Reflective/Bumped Specular SMap",
+        };
+
+        static ConfigEntry<bool> _fixBay5GroundBlendStrength;
+        static ConfigEntry<float> _bay5GroundBlendStrengthValue;
+        static ConfigEntry<bool> _fixBay5GroundSmoothness;
+        static ConfigEntry<float> _bay5GroundSmoothnessScale;
+        static ConfigEntry<bool> _enableShaderFallbacks;
+
         sealed class SidecarEntry
         {
             internal string Shader;
@@ -75,6 +109,36 @@ namespace ArenaMapPort.Client
                 return;
             }
             _installed = true;
+
+            // docs/progress/shader-compat-and-inspector.md §a1/§a2. [MaterialFixes] section.
+            _fixBay5GroundBlendStrength = Plugin.Instance.Config.Bind("MaterialFixes", "FixBay5GroundBlendStrength", true,
+                $"Corrects {Bay5GroundMaterialHash}'s (Bay5_Vertex_Paint_Ground) vertex-paint layer-blend " +
+                "sharpness (_BlendStrength=5.0 authored). NOT a confirmed statistical outlier — vanilla's " +
+                "own sampled population has _BlendStrength median=5.0/max=17.45, so 5.0 is within the " +
+                "shader's normal authored range (adversarial review). Mechanistically the sharpening is " +
+                "real (weight_i = (Heights_i*vertexColor_i)^BlendStrength, confirmed from the shader's " +
+                "own disassembly) — this is a plausible-contributor value-tuning experiment, not a known-" +
+                "wrong-value correction.");
+            _bay5GroundBlendStrengthValue = Plugin.Instance.Config.Bind("MaterialFixes", "Bay5GroundBlendStrengthValue", 2.0f,
+                "Replacement _BlendStrength applied to Bay5_Vertex_Paint_Ground when the above is enabled. " +
+                "Requires a fresh raid load to change — this hook runs once per material, on scene load.");
+            _fixBay5GroundSmoothness = Plugin.Instance.Config.Bind("MaterialFixes", "FixBay5GroundSmoothness", true,
+                "Scales _Smoothness0-2/_FresnelSpecular2 on Bay5_Vertex_Paint_Ground, measured near-mirror " +
+                "(0.85-0.87) on all 3 layers simultaneously vs. vanilla's broad-sample medians (0.24-0.31, " +
+                "max 0.75) — an independently-measured, strong candidate for the small blown-white zones. " +
+                "Elevated to co-primary (default ON, alongside FixBay5GroundBlendStrength) per adversarial " +
+                "review: BlendStrength alone was not a confirmed sole cause, and testing both together " +
+                "has no isolation cost once the material-identity bug is fixed.");
+            _bay5GroundSmoothnessScale = Plugin.Instance.Config.Bind("MaterialFixes", "Bay5GroundSmoothnessScale", 0.6f,
+                "Multiplier applied to _Smoothness0-2 and _FresnelSpecular2 when the above is enabled.");
+            _enableShaderFallbacks = Plugin.Instance.Config.Bind("MaterialFixes", "EnableShaderFallbacks", false,
+                "Substitutes a real SPT shader for Arena shader names with no compiled SPT equivalent at " +
+                "all (162 materials / 6,942 renderers port-wide, currently stuck on the magenta stand-in " +
+                "fragment). Mappings are inferred/unverified (shader-compat-audit F2). OFF by default, and " +
+                "when ON this pass, applies ONLY to arena_bay5 — several of the same shader names " +
+                "(Cloth/ClothShader, Custom/Billboard_FogSheet_Simple) are also used on arena_equator, " +
+                "which was never evaluated with these substitutes; widen the scope only after a dedicated " +
+                "per-map review.");
 
             SceneManager.sceneLoaded += OnSceneLoaded;
             SceneManager.sceneUnloaded += OnSceneUnloaded;
@@ -221,6 +285,25 @@ namespace ArenaMapPort.Client
             var originalName = currentName.Substring(StandinPrefix.Length);
             var target = FindLoadedExact(originalName) ?? Shader.Find(originalName);
 
+            // §a2 — real bug (14 Arena shader names have no compiled SPT shader at all), tentative
+            // fallback mapping, OFF by default. Scope-guarded to arena_bay5 even when enabled: several
+            // of these shader names (Cloth/ClothShader, Custom/Billboard_FogSheet_Simple) are also used
+            // on arena_equator, which was never evaluated with these unverified substitutes (adversarial
+            // review) — widening this to other maps needs its own dedicated review, not a silent
+            // side-effect of flipping one global switch.
+            if (target == null && _enableShaderFallbacks != null && _enableShaderFallbacks.Value &&
+                map.Key == ArenaMapRegistry.Bay5.Key &&
+                ShaderNameFallbacks.TryGetValue(originalName, out var fallbackName))
+            {
+                target = FindLoadedExact(fallbackName) ?? Shader.Find(fallbackName);
+                if (target != null)
+                {
+                    Plugin.Log.LogInfo($"[ArenaMapPort][RebindShaders] '{originalName}' has no SPT shader — " +
+                                        $"using fallback '{fallbackName}' (tentative, unverified visual " +
+                                        $"correctness, map={map.Key})");
+                }
+            }
+
             // O1: never rebind to a prefixed shader — by construction FindLoadedExact/Shader.Find on the
             // stripped name cannot return one of our own stand-ins, but guard explicitly anyway since this
             // is the one invariant O1 calls out by name.
@@ -255,8 +338,76 @@ namespace ArenaMapPort.Client
                 material.shaderKeywords = entry.Keywords;
             }
 
+            ApplyKnownValueFixes(material, originalName, map);
+
             _reboundCounts[originalName] = _reboundCounts.TryGetValue(originalName, out var n) ? n + 1 : 1;
             return true;
+        }
+
+        // §a1 (docs/progress/shader-compat-and-inspector.md). Runs immediately after the shader swap
+        // above, using the REAL post-swap shader name — property values themselves survive the
+        // reassignment untouched (Unity keeps a material's named property values regardless of which
+        // shader is currently assigned; independently evidenced by the sidecar restore two lines above
+        // already relying on the same fact for renderQueue/keywords). Gated on the registry key
+        // (ArenaMapRegistry.Bay5.Key = "arena_bay5"), not a hand-typed literal — a first draft compared
+        // against the literal "bay5" and was a silent no-op for every raid, including Bay5 itself
+        // (adversarial review F1).
+        static void ApplyKnownValueFixes(Material material, string realShaderName, ArenaMapDescriptor map)
+        {
+            if (map.Key != ArenaMapRegistry.Bay5.Key || realShaderName != "Custom/Vert Paint Shader Solid")
+            {
+                return; // scoped strictly to the evidenced case
+            }
+
+            var key = MaterialKey(material.name);
+            if (key != Bay5GroundMaterialHash)
+            {
+                return; // NOT Bay5_road_asphalt_01 (hash c0cee7841b421fb1) — its own _BlendStrength=2.0
+                        // sits inside vanilla's observed range; no evidence it needs correction
+            }
+
+            // Drift guard: material.name is a pipeline-generated extraction hash (MaterialImporter.cs:60),
+            // not a stable identifier — a re-extraction of Bay5 can reassign it. If a material with this
+            // exact hash is ever found but doesn't look like the material this hash was captured against,
+            // log a loud one-time warning instead of silently mis-applying the fix a second time (exactly
+            // the class of bug the adversarial review caught here once already).
+            float preFixBlendStrength = material.GetFloat("_BlendStrength");
+            if (Math.Abs(preFixBlendStrength - Bay5GroundExpectedBlendStrengthBeforeFix) > 0.01f &&
+                _warnedOnce.Add("bay5-ground-blendstrength-drift"))
+            {
+                Plugin.Log.LogWarning($"[ArenaMapPort][MaterialFixes] material '{Bay5GroundMaterialHash}' " +
+                                       $"found (map={map.Key}, shader={realShaderName}) but its pre-fix " +
+                                       $"_BlendStrength={preFixBlendStrength:0.0}, not the expected " +
+                                       $"{Bay5GroundExpectedBlendStrengthBeforeFix:0.0} captured when this " +
+                                       "hash was identified as Bay5_Vertex_Paint_Ground — a re-extraction " +
+                                       "may have reassigned the hash to a different material. Fixes below " +
+                                       "still apply to whatever this material actually is; verify with the " +
+                                       "F10 inspector (SceneInspector.cs) before trusting them.");
+            }
+
+            if (_fixBay5GroundBlendStrength != null && _fixBay5GroundBlendStrength.Value)
+            {
+                float after = _bay5GroundBlendStrengthValue.Value;
+                material.SetFloat("_BlendStrength", after);
+                Plugin.Log.LogInfo($"[ArenaMapPort][MaterialFixes] '{material.name}' " +
+                                    $"(Bay5_Vertex_Paint_Ground): _BlendStrength {preFixBlendStrength:0.0} -> " +
+                                    $"{after:0.0}");
+            }
+
+            if (_fixBay5GroundSmoothness != null && _fixBay5GroundSmoothness.Value)
+            {
+                float scale = _bay5GroundSmoothnessScale.Value;
+                foreach (var prop in new[] { "_Smoothness0", "_Smoothness1", "_Smoothness2" })
+                {
+                    material.SetFloat(prop, material.GetFloat(prop) * scale);
+                }
+                material.SetFloat("_FresnelSpecular2", material.GetFloat("_FresnelSpecular2") * scale);
+                // _ReflectionStrength (1.0) intentionally left untouched — it already matches vanilla's
+                // 1.0 (shader-compat-audit F3 table); nothing about it is an outlier for this material.
+                Plugin.Log.LogInfo($"[ArenaMapPort][MaterialFixes] '{material.name}' " +
+                                    $"(Bay5_Vertex_Paint_Ground): _Smoothness0-2/_FresnelSpecular2 scaled " +
+                                    $"by {scale:0.00}");
+            }
         }
 
         static Shader FindLoadedExact(string name)

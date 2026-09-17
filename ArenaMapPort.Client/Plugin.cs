@@ -84,6 +84,10 @@ namespace ArenaMapPort.Client
             SeaPlaceholderRepairs.Install();
             DaytimeVisualsProbe.Install();
 
+            // docs/progress/shader-compat-and-inspector.md §b — F10 live diagnostic hotkey (any map, no
+            // gate/dependency on the repairs above; order doesn't matter, placed last for clarity).
+            SceneInspector.Install();
+
             int totalOwnedScenes = 0;
             foreach (var map in ArenaMapRegistry.All)
             {

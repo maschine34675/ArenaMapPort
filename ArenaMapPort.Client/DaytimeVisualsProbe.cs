@@ -181,6 +181,30 @@ namespace ArenaMapPort.Client
             var sunPos = sunLight != null ? sunLight.transform.position.ToString() : "n/a (no LightObject)";
             var camPos = cam != null ? cam.transform.position.ToString() : "n/a (no active camera)";
             Plugin.Log.LogInfo($"{tag} F3 TOD: cameraWorldPos={camPos} domeWorldPos={domePos} sunWorldPos={sunPos}");
+
+            // Does the sky's own clock follow the raid clock? 2026-09-17 14:54: GameDateTime said 12:00
+            // while the sun sat on the horizon with Light.intensity 0.
+            try
+            {
+                var time = sky.Components != null ? sky.Components.Time : null;
+                var cycle = sky.Cycle;
+                Plugin.Log.LogInfo(
+                    $"{tag} TOD state: cycle={cycle.Year}-{cycle.Month:00}-{cycle.Day:00} hour={cycle.Hour:0.00} " +
+                    $"lat={sky.World.Latitude:0.0} lon={sky.World.Longitude:0.0} utc={sky.World.UTC:0.0} " +
+                    $"sunZenith={sky.SunZenith:0.0} lerp={sky.LerpValue:0.00} isDay={sky.IsDay} isNight={sky.IsNight} " +
+                    $"fogginess={sky.Atmosphere.Fogginess:0.00} dayLightIntensity={sky.Day.LightIntensity:0.00} " +
+                    $"light.intensity={(sunLight != null ? sunLight.intensity.ToString("0.00") : "n/a")} " +
+                    $"light.enabled={(sunLight != null && sunLight.enabled)} light.shadows={(sunLight != null ? sunLight.shadows.ToString() : "n/a")}");
+                Plugin.Log.LogInfo(
+                    $"{tag} TOD time: component={(time != null)} enabled={(time != null && time.isActiveAndEnabled)} " +
+                    $"lockCurrentTime={(time != null && time.LockCurrentTime)} dayLengthMinutes={(time != null ? time.DayLengthInMinutes : 0f):0.0} " +
+                    $"gameDateTime-set={(time != null && time.GameDateTime != null)} " +
+                    $"gameDateTime-now={(time != null && time.GameDateTime != null ? time.GameDateTime.Calculate().ToString("HH:mm:ss") : "n/a")}");
+            }
+            catch (Exception e)
+            {
+                Plugin.Log.LogWarning($"{tag} TOD state probe failed: {e.GetType().Name}: {e.Message}");
+            }
         }
 
         // F4 — DecalRepairs.

@@ -80,9 +80,15 @@ namespace ArenaMapPort.Client
             _exposureLowerLimit = Plugin.Instance.Config.Bind("Camera", "ExposureLowerLimit", -10.0f,
                 "PrismEffects.exposureLowerLimit applied when FixExposure=true. Pre-seeded from Cam2's own " +
                 "baked value.");
-            _exposureUpperLimit = Plugin.Instance.Config.Bind("Camera", "ExposureUpperLimit", 1.3f,
-                "PrismEffects.exposureUpperLimit applied when FixExposure=true. Pre-seeded from Cam2's own " +
-                "baked value.");
+            _exposureUpperLimit = Plugin.Instance.Config.Bind("Camera", "ExposureUpperLimit", 4.0f,
+                "PrismEffects.exposureUpperLimit applied when FixExposure=true. Cam2's own baked value was " +
+                "1.3 (script/class default is 6) — a severe, confirmed ceiling on how far auto-exposure " +
+                "can darken a bright frame (light-levels F3: ~0.093 minimum multiplier at 1.3 vs. ~0.0019 " +
+                "at the script default — roughly 50x less headroom). Raised to 4.0 as the first test value. " +
+                "Only takes effect on a fresh raid load: ApplyExposureFix early-outs once " +
+                "prism.useExposure=true for a given camera, and this file has no SettingChanged wiring " +
+                "(unlike ArenaLightingRepairs.cs), so changing this via F12 mid-raid does NOT apply live " +
+                "(adversarial review) — reload the raid after changing it.");
 
             _enableTodCameraFix = Plugin.Instance.Config.Bind("Camera", "EnableTODCameraFix", true,
                 "Adds a TOD_Camera component to the fallback camera while a WeatherRig is active for this " +
