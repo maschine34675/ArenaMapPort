@@ -23,11 +23,15 @@ namespace ArenaMapPort.Client
     ///
     /// Seven independently-flippable candidates (A-G), each a thin, isolated lever so a tester can flip
     /// ONE at a time (F12) and press F9 to snapshot which one removes the veil:
-    ///  A) UnityAmbient — Stub/DonorBlack/Custom, written into the live LevelSettings fields (never
-    ///     RenderSettings directly — LevelSettings.OnPreCullCallback re-applies RenderSettings.ambient*
-    ///     FROM LevelSettings every camera pre-cull, confirmed in ArenaLightingRepairs.cs's own doc
-    ///     comment and re-verified against the decompile this pass). Isolates Unity's own implicit
-    ///     default environment reflection (no ReflectionProbe exists anywhere in these scenes).
+    ///  A) UnityAmbient — Off/DonorBlack/StubGrey/Custom (§12, docs/progress/
+    ///     donor-settings-camera-weather.md §12: renamed from "AmbientPreset"/Stub-default to
+    ///     "AmbientOverride"/Off-default once WeatherRig.ApplyDonorLevelSettingsOverrides took over the
+    ///     real Donor-ambient fix by default — this candidate now isolates/overrides that fix rather than
+    ///     being the only source of it), written into the live LevelSettings fields (never RenderSettings
+    ///     directly — LevelSettings.OnPreCullCallback re-applies RenderSettings.ambient* FROM
+    ///     LevelSettings every camera pre-cull, confirmed in ArenaLightingRepairs.cs's own doc comment and
+    ///     re-verified against the decompile this pass). Isolates Unity's own implicit default
+    ///     environment reflection (no ReflectionProbe exists anywhere in these scenes).
     ///  B) GlobalReflection — Rig/Black/Grey/OffStrength, overrides the '_MyGlobalReflectionProbe' shader
     ///     global with a tiny generated Cubemap via a Harmony postfix on AmbientLight.method_2 (wins
     ///     regardless of AmbientLight.RenderDelay timing), or (OffStrength) zeroes
@@ -88,20 +92,23 @@ namespace ArenaMapPort.Client
     /// </summary>
     internal static class LightingLab
     {
-        internal enum AmbientPreset { Stub, DonorBlack, Custom }
+        // §12 (docs/progress/donor-settings-camera-weather.md) goal 2 — renamed from
+        // {Stub, DonorBlack, Custom} (BepInEx ConfigEntry<T> serializes/deserializes an enum by NAME, so
+        // renaming the type is safe on its own, but the project's hard rule is a config KEY never gets
+        // reused with new semantics — the bind below renames "AmbientPreset" to "AmbientOverride" too,
+        // leaving "AmbientPreset" orphaned in a tester's existing config file). Off replaces Stub as the
+        // true no-op default: WeatherRig.ApplyDonorLevelSettingsOverrides now owns the real ambient fix
+        // (goal 1, defaults to Donor for a rig-active map) — Off here means "don't override what that
+        // already wrote", not "force the stub". StubGrey is new: forces the PRE-goal-1 stub even while
+        // WeatherRig's own default is active, for A/B isolation.
+        internal enum AmbientPreset { Off, DonorBlack, StubGrey, Custom }
         internal enum ReflectionPreset { Rig, Black, Grey, OffStrength }
 
         const float GroundScanDelaySeconds = 5f; // after ShaderRebind's own 3s stand-in-shader sweep
 
-        // Reserve_Base_Scripts' own authored LevelSettings values (donor-settings-camera-weather §A.1,
-        // re-verified this pass against LevelSettings.cs:35,37,39,41 — SkyColor=Color.black class default
-        // override, EquatorColor/GroundColor are literally the untouched C# class defaults since Reserve
-        // never overrides them, AmbientIntensity=0). AmbientMode stays Flat (both our stub and Reserve's
-        // own authored value), under which only SkyColor/AmbientIntensity are visually live
-        // (RenderSettings.ambientLight = SkyColor; Equator/Ground only matter under Trilight) — copied
-        // here anyway for fidelity, per the doc comment's own reasoning.
-        static readonly Color DonorBlackSky = Color.black;
-        static readonly Color DonorBlackEquatorGround = new Color(0.6039216f, 54f / 85f, 0.6509804f, 1f);
+        // §12 goal 2 — Reserve_Base_Scripts' own authored LevelSettings ambient values now live in
+        // WeatherRig.GetDonorAmbient (WeatherRig.cs) — single source of truth, "do not duplicate
+        // constants". This file no longer keeps its own copy.
 
         sealed class LabConfigBundle
         {
@@ -236,12 +243,21 @@ namespace ArenaMapPort.Client
             string section = $"LightingLab ({map.Key})";
             var cfg = new LabConfigBundle();
 
-            cfg.AmbientPresetEntry = Plugin.Instance.Config.Bind(section, "AmbientPreset", AmbientPreset.Stub,
-                "A — UnityAmbient. Stub = today's behavior, untouched (whatever WeatherRig/ArenaLightingRepairs " +
-                "already wrote into LevelSettings this raid). DonorBlack = Reserve_Base_Scripts' own authored " +
-                "ambient (SkyColor=black, EquatorColor/GroundColor=(0.604,0.635,0.651), AmbientIntensity=0 — " +
-                "only SkyColor/AmbientIntensity are visually live under AmbientMode.Flat). Custom = " +
-                "AmbientCustomColor/AmbientCustomIntensity below. Written into the live LevelSettings fields " +
+            // §12 goal 2 — renamed from "AmbientPreset"/Stub-default to "AmbientOverride"/Off-default; see
+            // this class's own AmbientPreset enum doc comment and docs/progress/
+            // donor-settings-camera-weather.md §12. "AmbientPreset" stays orphaned in a tester's existing
+            // config file (BepInEx persists a saved value under its old key regardless).
+            cfg.AmbientPresetEntry = Plugin.Instance.Config.Bind(section, "AmbientOverride", AmbientPreset.Off,
+                "A — UnityAmbient override, for isolating/overriding WeatherRig's own UnityAmbient fix (§12 " +
+                "goal 1). Off = write nothing at load; switching back to Off live re-applies this raid's own " +
+                "captured baseline (whatever WeatherRig/ArenaLightingRepairs already wrote before this file " +
+                "ran). DonorBlack = Reserve_Base_Scripts' own authored ambient (SkyColor=black, " +
+                "EquatorColor/GroundColor=(0.604,0.635,0.651), AmbientIntensity=0 — only SkyColor/" +
+                "AmbientIntensity are visually live under AmbientMode.Flat; same values WeatherRig." +
+                "GetDonorAmbient supplies, not a separate copy). StubGrey = force the PRE-§12 stub (0.5 " +
+                "grey / intensity 1, AuthorScriptsScene.cs's own authored values) even while WeatherRig's " +
+                "own UnityAmbient=Donor default is active, for A/B isolation. Custom = AmbientCustomColor/" +
+                "AmbientCustomIntensity below. Written into the live LevelSettings fields " +
                 "(LevelSettings.OnPreCullCallback re-applies RenderSettings.ambient* FROM these fields every " +
                 "camera pre-cull — a direct RenderSettings write would not stick) plus " +
                 "DynamicGI.UpdateEnvironment(). Isolates: Unity's own implicit default environment reflection " +
@@ -494,7 +510,7 @@ namespace ArenaMapPort.Client
             }
 
             var preset = cfg.AmbientPresetEntry.Value;
-            if (preset == AmbientPreset.Stub && !state.AmbientOverrideApplied)
+            if (preset == AmbientPreset.Off && !state.AmbientOverrideApplied)
             {
                 return; // true no-op path — nothing has ever diverged from baseline this raid, nothing to write
             }
@@ -504,15 +520,19 @@ namespace ArenaMapPort.Client
             switch (preset)
             {
                 case AmbientPreset.DonorBlack:
-                    sky = DonorBlackSky;
-                    equator = ground = DonorBlackEquatorGround;
-                    intensity = 0f;
+                    // §12 goal 2 — single source of truth (WeatherRig.cs), not a duplicate copy.
+                    WeatherRig.GetDonorAmbient(out sky, out var donorEquatorGround, out intensity);
+                    equator = ground = donorEquatorGround;
+                    break;
+                case AmbientPreset.StubGrey:
+                    sky = equator = ground = new Color(0.5f, 0.5f, 0.5f, 1f); // AuthorScriptsScene.cs:78-82's own authored stub
+                    intensity = 1f;
                     break;
                 case AmbientPreset.Custom:
                     sky = equator = ground = cfg.AmbientCustomColor.Value;
                     intensity = cfg.AmbientCustomIntensity.Value;
                     break;
-                default: // Stub, but AmbientOverrideApplied — restore this raid's own captured baseline
+                default: // Off, but AmbientOverrideApplied — restore this raid's own captured baseline
                     sky = state.BaseSkyColor;
                     equator = state.BaseEquatorColor;
                     ground = state.BaseGroundColor;
@@ -553,7 +573,7 @@ namespace ArenaMapPort.Client
             Shader.SetGlobalColor(_minAmbientColorId, minAmbientBefore);
 
             DynamicGI.UpdateEnvironment();
-            state.AmbientOverrideApplied = preset != AmbientPreset.Stub;
+            state.AmbientOverrideApplied = preset != AmbientPreset.Off;
 
             Plugin.Log.LogInfo($"[ArenaMapPort][LightingLab] A: applied preset={preset} SkyColor={ls.SkyColor} " +
                 $"EquatorColor={ls.EquatorColor} GroundColor={ls.GroundColor} " +

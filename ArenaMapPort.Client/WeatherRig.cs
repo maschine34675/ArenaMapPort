@@ -68,6 +68,42 @@ namespace ArenaMapPort.Client
         // Stub = today's stub value (1024,1024,1024,1024), the untouched C# class default.
         internal enum TextureBudgetTier { Stub, ReserveTier, CustomsTier, LaboratoryTier }
 
+        // §12 (docs/progress/donor-settings-camera-weather.md) goal 1 — real ambient fix. Donor = write
+        // Reserve's own authored ambient (SkyColor=black, EquatorColor=GroundColor=(0.604,0.635,0.651),
+        // AmbientIntensity=0, AmbientMode stays Flat) into this map's LevelSettings before
+        // ApplySettings(), so Unity's own implicit default environment reflection (no ReflectionProbe
+        // exists anywhere in these scenes) sees a black ambient the way every vanilla map's own Unity
+        // ambient does — confirmed by the 2026-09-18 14:52 playtest (LightingLab candidate A=DonorBlack)
+        // to remove the outdoor white ground veil. Stub = leave AuthorScriptsScene.cs's freshly-authored
+        // stub (0.5 grey / intensity 1) untouched — a diagnostic fallback, not expected to be selected
+        // for a rig-active map.
+        internal enum AmbientSource { Donor, Stub }
+
+        // §12 goal 3 — rain-cover fix for ported maps. No ArenaMapPort map authors a WeatherObstacle/
+        // DryPlane/Terrain-layer the way a vanilla donor does, so DepthPhotograper's top-down depth photo
+        // is empty and every point on the map reads "uncovered" (RainCoverRepairs.cs). RoofDepth computes
+        // LevelSettings.RainBounds from the map's own static geometry once per raid and widens the depth
+        // camera's cullingMask to the layers that geometry actually uses. Off = today's behavior
+        // (class-default RainBounds, Terrain-only cullingMask).
+        internal enum RainCoverMode { RoofDepth, Off }
+
+        // §12 goal 1 — Reserve_Base_Scripts' own authored LevelSettings ambient values, re-verified
+        // against LevelSettings.cs:35,37,39,41 (SkyColor=Color.black class default override,
+        // EquatorColor/GroundColor are literally the untouched C# class defaults since Reserve never
+        // overrides them, AmbientIntensity=0). Single source of truth — LightingLab's own Candidate A
+        // reads these via GetDonorAmbient instead of keeping its own duplicate copy (goal 2's "do not
+        // duplicate constants").
+        static readonly Color DonorBlackSky = Color.black;
+        static readonly Color DonorBlackEquatorGround = new Color(0.6039216f, 54f / 85f, 0.6509804f, 1f);
+        const float DonorBlackAmbientIntensity = 0f;
+
+        internal static void GetDonorAmbient(out Color sky, out Color equatorGround, out float intensity)
+        {
+            sky = DonorBlackSky;
+            equatorGround = DonorBlackEquatorGround;
+            intensity = DonorBlackAmbientIntensity;
+        }
+
         const string OffDonor = "Off";
         const float PollIntervalSeconds = 3f;
         const int MaxHarvestAttempts = 5;
@@ -102,6 +138,10 @@ namespace ArenaMapPort.Client
             // takeover (ApplyDonorCameraPrefab). False falls straight back to today's Cam2 fallback path
             // (LevelSettings.CameraPrefab stays AuthorScriptsScene.cs's authored null) — see §B.3.
             internal BepInEx.Configuration.ConfigEntry<bool> UseDonorCameraPrefab;
+
+            // §12 goal 1/3 — new keys, see AmbientSource/RainCoverMode's own doc comments.
+            internal BepInEx.Configuration.ConfigEntry<AmbientSource> UnityAmbientEntry;
+            internal BepInEx.Configuration.ConfigEntry<RainCoverMode> RainCoverEntry;
         }
 
         // Internal (not the default private) — LightingDiagnosticProbe.LastHarvestResult returns this
@@ -293,6 +333,30 @@ namespace ArenaMapPort.Client
                 "instantiates the donor's real camera (with its own baked TOD_Scattering/PrismEffects." +
                 "useExposure) instead of falling back to Cam2. false = always Cam2, matching today's " +
                 "behavior regardless of the rig. Takes effect on the next raid.");
+
+            // §12 goal 1 — real ambient fix, unconditional default Donor (harmless for a no-rig map —
+            // Donor="Off" above means OnSceneLoaded never reaches ApplyDonorLevelSettingsOverrides for it).
+            cfg.UnityAmbientEntry = Plugin.Instance.Config.Bind(section, "UnityAmbient", AmbientSource.Donor,
+                "§12 goal 1 — Donor = write Reserve_Base_Scripts' own authored ambient (SkyColor=black, " +
+                "EquatorColor=GroundColor=(0.604,0.635,0.651), AmbientIntensity=0) into this map's " +
+                "LevelSettings before ApplySettings(), every sceneLoaded — fixes the outdoor white ground " +
+                "veil (2026-09-18 14:52 playtest, LightingLab candidate A=DonorBlack). Stub = leave " +
+                "AuthorScriptsScene.cs's freshly-authored stub (0.5 grey / intensity 1) untouched. No " +
+                "effect on a map with no active rig (Donor='Off' above). Applied on the NEXT raid, then " +
+                "kept live every camera pre-cull by LevelSettings.OnPreCullCallback (BSG code) once " +
+                "written — see docs/progress/donor-settings-camera-weather.md §12.");
+
+            // §12 goal 3 — rain-cover fix, unconditional default RoofDepth (same reasoning as
+            // UnityAmbientEntry above).
+            cfg.RainCoverEntry = Plugin.Instance.Config.Bind(section, "RainCover", RainCoverMode.RoofDepth,
+                "§12 goal 3 — RoofDepth computes LevelSettings.RainBounds from this map's own static " +
+                "geometry once per raid and widens DepthPhotograper's depth-camera cullingMask to the " +
+                "layers that geometry actually uses, so a ported map (which authors no WeatherObstacle/" +
+                "DryPlane/Terrain layer) gets a real roof/floor coverage photo instead of an empty one — " +
+                "fixes the indoor wet-floor/sky-reflection veil (2026-09-18 14:52 playtest, " +
+                "spiegelung-innen1/2.png). Off = today's behavior (class-default RainBounds, Terrain-only " +
+                "cullingMask — an empty depth map). See RainCoverRepairs.cs. Applied fresh every raid, not " +
+                "live.");
 
             // Deliberately NO SettingChanged handlers on these three for re-apply purposes — "changes apply
             // on the next raid" is a hard requirement here (unlike ArenaLightingRepairs' own live-tunable
@@ -979,6 +1043,7 @@ namespace ArenaMapPort.Client
                 // .Construct/CameraManager.SetCameraFromSettings and TOD_Scattering's per-frame LevelSettings
                 // read both happen strictly later in the same startup sequence.
                 ApplyDonorLevelSettingsOverrides(map, cfg);
+                RainCoverRepairs.ApplyForCurrentMap(map, cfg.RainCoverEntry.Value, cfg.RainBoundsCenter, cfg.RainBoundsSize); // §12 goal 3
                 ApplyDonorCameraPrefab(map, cfg, rig);
                 if (rig.Kind == RigKind.Full)
                 {
@@ -1014,6 +1079,21 @@ namespace ArenaMapPort.Client
             }
         }
 
+        // §12 goal 1 — the same 4 shader globals LevelSettings.ApplySettings() unconditionally re-asserts
+        // (LevelSettings.cs:213-217), bracketed around ApplyDonorLevelSettingsOverrides' own one-shot
+        // ApplySettings() call below so a live LightingLab Candidate C/D override can't be silently
+        // clobbered — the same narrow bracket LightingLab.ApplyAmbient's own review fix-up #1 already uses
+        // around its own ApplySettings() call (LightingLab.cs). Deliberately NOT the full
+        // RenderSettingsSnapshot struct above: that also resets RenderSettings.ambient* back to their
+        // PRE-write values on Restore(), which would silently undo the ambient write this method makes
+        // below — RenderSettingsSnapshot is reserved for HarvestOne's own one-time donor-scene bracket
+        // (see its own doc comment). Defined locally here rather than shared across files, matching this
+        // codebase's existing per-file Shader.PropertyToID caching convention.
+        static readonly int _ssrFactorId = Shader.PropertyToID("_SSRFactor");
+        static readonly int _waterLevelId = Shader.PropertyToID("_WaterLevel");
+        static readonly int _directionLightShadowId = Shader.PropertyToID("_DirectionLightShadow");
+        static readonly int _minAmbientColorId = Shader.PropertyToID("_MinAmbientColor");
+
         // donor-settings-camera-weather §A.2 — same hook WeatherRig already uses, run AFTER the rig
         // activation block above succeeds. A no-rig map never reaches here (OnSceneLoaded already
         // returned earlier for Donor=="Off"), so Equator's own fresh-every-scene-load LevelSettings
@@ -1033,12 +1113,40 @@ namespace ArenaMapPort.Client
             float oldHeightFalloff = ls.HeightFalloff;
             Vector4 oldBudget = ls.MaxMapTextureMemory;
             float oldNorth = ls._northDirection;
+            Color oldSky = ls.SkyColor;
+            Color oldEquator = ls.EquatorColor;
+            Color oldGround = ls.GroundColor;
+            float oldAmbientIntensity = ls.AmbientIntensity;
 
             ls.ZeroLevel = cfg.ZeroLevelOverride.Value;
             ls.HeightFalloff = cfg.HeightFalloffOverride.Value;
             ls.MaxMapTextureMemory = TierToVector4(cfg.TextureBudgetTierEntry.Value);
             ls.RainBounds = new Bounds(cfg.RainBoundsCenter.Value, cfg.RainBoundsSize.Value);
             ls._northDirection = cfg.NorthDirectionOverride.Value;
+
+            // §12 goal 1 — the real ambient fix. Unity's own implicit default environment
+            // reflection/ambient (no ReflectionProbe exists anywhere in these scenes) is derived from
+            // RenderSettings.ambient*, which LevelSettings.OnPreCullCallback (BSG code) re-pushes every
+            // camera pre-cull FROM these exact fields — writing RenderSettings directly would not stick
+            // past the next pre-cull. Donor = Reserve_Base_Scripts' own authored values, confirmed by the
+            // 2026-09-18 14:52 playtest (LightingLab candidate A=DonorBlack) to remove the outdoor white
+            // ground veil. Stub leaves AuthorScriptsScene.cs's freshly-authored stub untouched.
+            if (cfg.UnityAmbientEntry.Value == AmbientSource.Donor)
+            {
+                GetDonorAmbient(out var sky, out var equatorGround, out var intensity);
+                ls.SkyColor = sky;
+                ls.EquatorColor = equatorGround;
+                ls.GroundColor = equatorGround;
+                ls.AmbientIntensity = intensity;
+            }
+
+            // §12 goal 1 (spec §0(a)) — capture the 4 shader globals immediately before ApplySettings()
+            // clobbers them from LevelSettings' own fields (see the cached-ID fields' own doc comment
+            // above), restored right after.
+            float ssrBefore = Shader.GetGlobalFloat(_ssrFactorId);
+            float waterBefore = Shader.GetGlobalFloat(_waterLevelId);
+            float shadowBefore = Shader.GetGlobalFloat(_directionLightShadowId);
+            Color minAmbientBefore = Shader.GetGlobalColor(_minAmbientColorId);
 
             // ApplySettings() is idempotent (LevelSettings.cs:194-218) and pushes MaxMapTextureMemory's
             // streaming-budget refresh plus the four Shader.SetGlobal* fields (§A "no action" list) with
@@ -1047,15 +1155,31 @@ namespace ArenaMapPort.Client
             // would silently have no effect this raid. Any RenderSettings ambient/fog values it also
             // re-pushes are immediately superseded by ArenaLightingRepairs' own gated write, which runs
             // right after this handler in the same sceneLoaded dispatch (WeatherRig installs before
-            // ArenaLightingRepairs — see Plugin.cs) — no net visible change from calling it here.
+            // ArenaLightingRepairs — see Plugin.cs) — EXCEPT for SkyColor/EquatorColor/GroundColor/
+            // AmbientIntensity, which ArenaLightingRepairs' own ApplyAmbient never touches while a rig is
+            // active (ownAmbientColor = !WeatherRig.IsActiveForCurrentMap(), ArenaLightingRepairs.cs) — so
+            // the ambient write above is the one that actually sticks.
             ls.ApplySettings();
+
+            Shader.SetGlobalFloat(_ssrFactorId, ssrBefore);
+            Shader.SetGlobalFloat(_waterLevelId, waterBefore);
+            Shader.SetGlobalFloat(_directionLightShadowId, shadowBefore);
+            Shader.SetGlobalColor(_minAmbientColorId, minAmbientBefore);
+
+            // §12 goal 1 — recompute Unity's implicit environment reflection/light-probe data from the new
+            // RenderSettings.ambient* state (same mechanism LightingLab candidate A already uses).
+            DynamicGI.UpdateEnvironment();
 
             Plugin.Log.LogInfo($"[ArenaMapPort][LevelSettingsOverride] map={map.Key} " +
                 $"ZeroLevel={ls.ZeroLevel:0.00} (was {oldZeroLevel:0.00}) " +
                 $"HeightFalloff={ls.HeightFalloff:0.000} (was {oldHeightFalloff:0.000}) " +
                 $"TextureBudget={cfg.TextureBudgetTierEntry.Value} (was {oldBudget}, now {ls.MaxMapTextureMemory}) " +
                 $"RainBounds=center({ls.RainBounds.center}) size({ls.RainBounds.size}) " +
-                $"NorthDirection={(Mathf.Approximately(ls._northDirection, oldNorth) ? "unchanged" : ls._northDirection.ToString("0.0"))}");
+                $"NorthDirection={(Mathf.Approximately(ls._northDirection, oldNorth) ? "unchanged" : ls._northDirection.ToString("0.0"))} " +
+                $"UnityAmbient={cfg.UnityAmbientEntry.Value} " +
+                $"SkyColor={ls.SkyColor} (was {oldSky}) EquatorColor={ls.EquatorColor} (was {oldEquator}) " +
+                $"GroundColor={ls.GroundColor} (was {oldGround}) " +
+                $"AmbientIntensity={ls.AmbientIntensity:0.00} (was {oldAmbientIntensity:0.00})");
         }
 
         // donor-settings-camera-weather §B.2 (critic amendment — see HarvestedRig's own doc comment for
@@ -1234,6 +1358,10 @@ namespace ArenaMapPort.Client
 
         internal static bool KeepFillLightForCurrentMap() =>
             _activeMap != null && _configs.TryGetValue(_activeMap.Key, out var c) && c.KeepFillLight.Value;
+
+        // §12 goal 3 — mirrors KeepFillLightForCurrentMap's own accessor pattern.
+        internal static RainCoverMode RainCoverForCurrentMap() =>
+            _activeMap != null && _configs.TryGetValue(_activeMap.Key, out var c) ? c.RainCoverEntry.Value : RainCoverMode.Off;
 
         // SetActive(true)/SetActive(false) are never called mid-raid in response to a config
         // SettingChanged — matches "changes apply on the next raid" and avoids any re-entrancy question

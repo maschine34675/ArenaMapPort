@@ -457,6 +457,12 @@ All paths under `D:/SPT41/Development/_decompiled/`.
 section for the F9 hotkey — deliberately separate from `Lighting (<map.Key>)`, WeatherRig/
 ArenaLightingRepairs' own section, so a key-name collision is structurally impossible)
 
+**Superseded by §12 (2026-09-18):** the playtest below confirmed Candidate A=`DonorBlack` fixes the
+outdoor veil, so §12 moved that write into `WeatherRig` as the new default behavior (key renamed
+`AmbientPreset`→`AmbientOverride`, enum `Stub`→`Off` as the new true-no-op default, `StubGrey` added) —
+see §12 for the current key table. The row below documents what candidate A meant AT THE TIME this Lab
+was built, for historical accuracy; it is no longer the live key name.
+
 | Candidate | Key | Type | Default | Effect |
 |---|---|---|---|---|
 | A | `AmbientPreset` | enum (`Stub`/`DonorBlack`/`Custom`) | `Stub` | Written into live `LevelSettings.SkyColor/EquatorColor/GroundColor/AmbientIntensity` + `ApplySettings()` + `DynamicGI.UpdateEnvironment()`. `Stub` = today's behavior untouched. |
@@ -596,3 +602,240 @@ dist DLL hash (SHA-256) == bin DLL hash, both:
 
 No `tools/`, `Server`, or `base.json` file changed — zero receipts invalidated. No git commit made
 (workspace rule unchanged: the lead commits).
+
+---
+
+## 12) Ambient and rain cover fix (2026-09-18)
+
+Role: builder. Task: implement the §11.6 playtest's own findings — the Lighting Lab isolated the exact
+mechanism behind the grazing-angle white ground veil (outdoors) and a second, structurally different veil
+(indoors) — as the new default behavior, client-only (`ArenaMapPort.Client`). No git commit made
+(workspace rule unchanged: the lead commits).
+
+### 12.1) Evidence — 2026-09-18 14:52-14:59 playtest
+
+User playtest, log `D:\SPT41vanilla\BepInEx\LogOutput.log` lines 1474-1760, screenshots
+`analysis/screenshots/spiegelung2.png`, `spiegelung-innen1.png`, `spiegelung-innen2.png`:
+
+- **Outdoors** the white ground veil disappears with LightingLab `AmbientPreset=DonorBlack` (as it was
+  named before this pass — see §11.4's own note above). The yard then looks like vanilla wet asphalt with
+  correct puddle reflections. Cause: Unity's flat ambient (and the default environment reflection derived
+  from it with no `ReflectionProbe` anywhere in these scenes) — vanilla maps run with a black Unity
+  ambient because EFT's own `AmbientLight`/rig provides the real ambient on top; our stub ships 0.5 grey /
+  intensity 1 instead.
+- **Indoors** (warehouse) the veil stayed with `AmbientPreset=DonorBlack` and only disappeared with
+  `GlobalReflection=Black` (Candidate B): the indoor floor read fully wet (F9 snapshot: live
+  `_WaterLevel=0.76` while standing indoors) and mirrored the bright sky cubemap. Root cause: on ported
+  maps the rain cover system has no data. `DepthPhotograper.Render()` (decompile
+  `D:/SPT41/Development/_decompiled/DepthPhotograper.cs`, called from
+  `RainController.AbstractState.CameraChanged` on every camera change — `RainController.Awake()`
+  subscribes `CameraManager.Instance.OnCameraChanged` directly, a separate subscription from
+  `WeatherController.Awake()`'s own) photographs a top-down orthographic depth of ONLY layer "Terrain"
+  plus `WeatherObstacle.Instance`'s combined `DryPlane` mesh, drawn in black onto that same layer. Our
+  maps author no `WeatherObstacle`/`DryPlane` and no Terrain-layer geometry, so the depth map comes back
+  empty and every point reads "uncovered" — an indoor floor gets treated exactly like open sky.
+  `LevelSettings.RainBounds` on our maps was the class default, center `(0,0,0)` size
+  `(1000,220,1000)` (Reserve authors `(400,110,400)` at origin).
+- SSR (Candidate C, `_SSRFactor`) showed no visible change in this playtest. `AmbientLight.IsSSREnable`
+  reads `CameraManager.Instance.GetSSREnabled()` — EFT's own Graphics-options SSR toggle, a separate
+  mechanism from `_SSRFactor` — and when it's on, `AmbientLight.method_3` pins the "Custom Ambient"
+  screen-space reflection compositing term to `1.0` regardless of wetness. Whether the user's install has
+  this on was not logged anywhere before this pass — §12.4 below adds it to the diagnostics.
+
+### 12.2) Goal 1 — real ambient fix (`WeatherRig.cs`)
+
+`WeatherRig.ApplyDonorLevelSettingsOverrides` now writes Reserve's own authored ambient
+(`SkyColor=Color.black`, `EquatorColor=GroundColor=(0.6039216, 0.635294, 0.6509804)`,
+`AmbientIntensity=0`) into the live `LevelSettings` before its existing `ls.ApplySettings()` call, gated
+on a new per-map `UnityAmbient` key (default `Donor`). The values live in one place —
+`WeatherRig.GetDonorAmbient` — and `LightingLab`'s own Candidate A now reads them from there instead of
+keeping a duplicate copy.
+
+Two things confirmed safe against the decompile before landing this:
+- **`ArenaLightingRepairs` never overwrites it.** Its own `ApplyAmbient`'s `SkyColor/EquatorColor/
+  GroundColor` write is gated `ownAmbientColor = !WeatherRig.IsActiveForCurrentMap()`
+  (`ArenaLightingRepairs.cs`) — already false whenever this fix's write matters, both at initial
+  `sceneLoaded` (it runs right after `WeatherRig` in the same dispatch — `Plugin.cs`'s install order) and
+  on every later live `AmbientColorMultiplier` F12 change (same gate, re-checked every call). Its
+  `OnSceneUnloaded` restore only fires if `AmbientFallbackWritten` was set, which only happens on the
+  defensive `LevelSettings == null` fallback path — never true while a rig is active. **No code change
+  needed in `ArenaLightingRepairs.cs`.**
+- **`LevelSettings.OnPreCullCallback`** (BSG code, decompile `LevelSettings.cs:240-263`) re-pushes
+  `RenderSettings.ambient*` from these exact fields every camera pre-cull whenever
+  `AmbientType == AmbientType.Default` — confirmed nothing in this codebase ever sets `ls.AmbientType`
+  away from its C# default, so a one-time field write here is durable for the whole raid with zero extra
+  per-frame work of our own.
+
+`ApplySettings()` (decompile `LevelSettings.cs:194-218`) also unconditionally re-asserts four
+`Shader.SetGlobal*` process-wide globals (`_SSRFactor`/`_WaterLevel`/`_DirectionLightShadow`/
+`_MinAmbientColor`) from `LevelSettings`' own fields — the same globals `LightingLab.ApplyAmbient`'s own
+review fix-up #1 (§11.8) already brackets around its own `ApplySettings()` call. This pass adds the same
+narrow bracket (4 cached `Shader.PropertyToID`s, capture-before/restore-after) around
+`ApplyDonorLevelSettingsOverrides`'s call too, so a live LightingLab Candidate C/D override can't be
+silently clobbered by this fix. **Deliberately not the full `RenderSettingsSnapshot` struct** — that
+would also reset `RenderSettings.ambient*` back to its pre-write value on `Restore()`, undoing the very
+ambient write this goal makes; `RenderSettingsSnapshot` stays scoped to `HarvestOne`'s own one-time
+donor-scene load/unload bracket, as it already was. `DynamicGI.UpdateEnvironment()` runs after, same
+mechanism Candidate A already used.
+
+### 12.3) Goal 2 — Lighting Lab candidate A rename (`LightingLab.cs`)
+
+`AmbientPreset` (enum `{Stub, DonorBlack, Custom}`, key `AmbientPreset`) is now `AmbientPreset` (enum
+`{Off, DonorBlack, StubGrey, Custom}`, key **`AmbientOverride`**). BepInEx `ConfigEntry<T>` serializes an
+enum by name, so renaming the type is safe on its own — but the key name itself also changed, per this
+project's hard rule that a key is never reused with new semantics. **`AmbientPreset` is now orphaned** in
+any tester's existing `BepInEx.cfg` — harmless (BepInEx just leaves it in the file unread) but worth
+knowing if grepping a config for it turns up nothing live.
+
+`Off` replaces `Stub` as the new true no-op default: since goal 1 made `WeatherRig` own the real ambient
+fix (defaulting to `Donor`), "Off" here means "don't override what that already wrote" — not "force the
+stub". The existing "capture this raid's baseline on first `ApplyAmbient` call, restore it when the
+preset reads Off but was previously applied" mechanism (`state.AmbientBaselineCaptured`/
+`state.AmbientOverrideApplied`) already satisfies "switching back to Off live re-applies WeatherRig's own
+values" with **no new code** — the baseline is captured from the live `LevelSettings` fields the first
+time `ApplyAmbient` runs each raid, which is strictly after `WeatherRig.ApplyDonorLevelSettingsOverrides`
+in the same `sceneLoaded` dispatch (confirmed install order, `Plugin.cs`), so it already equals whatever
+goal 1 just wrote.
+
+`StubGrey` is new: forces the pre-goal-1 stub (`(0.5,0.5,0.5,1)` / intensity 1, `AuthorScriptsScene.cs`'s
+own authored values) even while `WeatherRig`'s own `UnityAmbient=Donor` default is active, for A/B
+isolation against the new default.
+
+### 12.4) Goal 3 — rain cover for ported maps (new `RainCoverRepairs.cs`)
+
+New per-map key `RainCover` (enum `{RoofDepth, Off}`, default `RoofDepth`), two independent pieces both
+driven once per raid from `WeatherRig.OnSceneLoaded` (`RainCoverRepairs.ApplyForCurrentMap`, called right
+after `ApplyDonorLevelSettingsOverrides`, inside the same `try` block — a throw here falls back cleanly
+via that method's own existing failure handling):
+
+- **(a) `LevelSettings.RainBounds` from static geometry.** Walks every enabled `MeshRenderer` in the
+  map's own owned scenes (`ArenaMapRaid.IsOwnedScene`), excluding layers `Water`/`Sky`/`LevelBorder`
+  (resolved by name, never hardcoded indices — tolerant of `-1`, since this project's own `TagManager`
+  leaves `LevelBorder` unnamed at layer 29), renderers under the local player's own body
+  (`GetComponentInParent<EFT.Player>()`, a hierarchy check, not a layer check), and any renderer whose
+  bounds extents exceed 600m (the sea placeholder plane / sky dome). Pads the result 10m horizontally,
+  extends the Y range from min to max+5m, and writes it into `LevelSettings.RainBounds` — confirmed safe
+  to overwrite `WeatherRig`'s own default-value write from the same dispatch: `RainBounds` is never
+  referenced by `LevelSettings.ApplySettings()` (decompile `LevelSettings.cs:194-218` never mentions it),
+  it is read fresh, later, directly off the live singleton by `DepthPhotograper.Render()`
+  (`DepthPhotograper.cs:59`). The existing `RainBoundsCenter`/`RainBoundsSize` config keys still work as a
+  manual override — if either is set away from the class default, the scan still runs (for its own log
+  line) but the manual values win.
+- **(b) Depth-camera `cullingMask` widening.** A Harmony postfix on `DepthPhotograper.SetupDepthCamera`
+  (verified `DepthPhotograper.cs:117`, public, no args, single overload) ORs in every layer the bounds
+  scan found (never narrows the original `1 << Terrain` bit) when `ArenaMapRaid.IsLoaded()` and
+  `RainCover=RoofDepth`. Timing: `SetupDepthCamera()` runs inside `Render()` before
+  `RenderObstacles()`/`_depthCamera.Render()` and before the camera GameObject is
+  `DestroyImmediate`'d at the end of the same call, so widening the mask in this postfix is read by that
+  very same render. `DepthPhotograper._depthCamera` is a private field, read via `AccessTools.Field`
+  (this project's stated preference over Harmony's `___fieldName` injection, `EffectsControllerRepairs.cs`).
+- **(c) A synthetic `WeatherObstacle` for `DepthPhotograper.CheckIfCameraUnderRain`** (the separate
+  "rain drops on screen indoors" mechanism — a physics raycast against `WeatherObstacle.MeshCollider`,
+  structurally independent of the depth-map coverage (a) and (b) target) — **deferred, not implemented
+  this pass.** It is a real, separate scope item (building and keeping in sync a combined roof mesh +
+  `MeshCollider` at runtime) for a purely cosmetic screen-space effect; `WeatherObstacle.Instance` stays
+  null on every ported map, so `DepthPhotograper.RenderObstacles()`'s own
+  `Debug.LogError("WeatherObstacle.Instance is null")` still fires once per camera-change event —
+  cosmetic log noise, not a per-frame cost, left alone (a Harmony transpiler removing just that
+  `ldstr`+`call Debug.LogError` IL pair is the documented, not implemented, mechanism if it's ever wanted
+  — this codebase already has that exact precedent in the `QuietBrainLog-Mod` project, per the lead's own
+  memory).
+
+### 12.5) Goal 4 — diagnostics (`DaytimeVisualsProbe.cs`)
+
+One new line, `ProbeRainCoverAndSSR`, added to the existing once-per-raid probe block:
+`CameraManager.Instance.GetSSREnabled()` (EFT's own PostProcessing-v2 SSR toggle, the Graphics-options
+"SSR" dropdown), `AmbientLight.IsSSREnable` (reads the SAME toggle — confirmed
+`AmbientLight.cs:225-235` — and per `AmbientLight.method_3`, `AmbientLight.cs:434-438`, pins the "Custom
+Ambient" screen-space reflection compositing term to `1.0` whenever it's on, independent of wetness), the
+live `RainBounds`, the depth-camera `cullingMask` actually applied this raid (cached at postfix time —
+`DepthPhotograper._depthCamera`'s GameObject is long destroyed by the time this once-per-raid probe runs,
+seconds later), and `RenderSettings.ambient*` after every override this raid.
+
+**If `PostFxSSR` reads `false` in this line, enable SSR in EFT's own graphics settings (the SSR
+dropdown, `Off/Low/Medium/High/Ultra`) for indoor reflections to be dominated by the real screen-space
+raymarch instead of the wetness-gated cubemap term** — this is well-documented standard Unity
+PostProcessing-v2 SSR behavior (it raymarches against the depth/color buffer of what's actually
+rendered), corroborated by but not directly provable from this decompile beyond `AmbientLight.method_3`'s
+own behavior above (PPv2's own raymarch implementation is a Unity package, not part of this decompile).
+
+### 12.6) Config keys (new/changed this pass)
+
+| Section | Key | Type | Default | Notes |
+|---|---|---|---|---|
+| `Lighting (<map.Key>)` | `UnityAmbient` | enum (`Donor`/`Stub`) | `Donor` | Goal 1. Unconditional default — harmless no-op for a no-rig map (`Donor="Off"` never reaches this code). |
+| `Lighting (<map.Key>)` | `RainCover` | enum (`RoofDepth`/`Off`) | `RoofDepth` | Goal 3. Same unconditional-default reasoning. |
+| `LightingLab (<map.Key>)` | `AmbientOverride` (was `AmbientPreset`) | enum (`Off`/`DonorBlack`/`StubGrey`/`Custom`) | `Off` (was `Stub`) | Goal 2 rename — `AmbientPreset` orphaned. |
+
+Every other §11.4 Lighting Lab key (`AmbientCustomColor`, `AmbientCustomIntensity`, `GlobalReflection`,
+`SSRFactor`, `WaterLevelOverrideEnabled`, `WaterLevelOverrideValue`, `RainOff`,
+`GroundSmoothnessMultiplier`, `SunIntensityMultiplier`, `SnapshotHotkey`) is unchanged by this pass.
+
+### 12.7) Log lines to check
+
+- `grep '\[LevelSettingsOverride\]'` — extended this pass: now also reports
+  `UnityAmbient=<Donor|Stub> SkyColor=... (was ...) EquatorColor=... (was ...) GroundColor=... (was ...)
+  AmbientIntensity=... (was ...)` alongside the existing `ZeroLevel`/`HeightFalloff`/`TextureBudget`/
+  `RainBounds`/`NorthDirection` fields.
+- `grep '\[RainCover\]'` — new this pass. One block per raid: `RainCover=<mode>` (or `RainCover=Off — no
+  bounds/mask computed`), then either `RainBounds manual override in use ...` or `RainBounds computed from
+  N renderer(s) (excluded M oversized): center=... size=...`, then `depth-camera cover layers=0x...`, then
+  — once the depth camera is actually set up (first camera change) — `depth camera cullingMask=0x...
+  (added 0x...)`. **This is the line with the FINAL RainBounds/mask, not `[LevelSettingsOverride]`** —
+  `RainCoverRepairs` overwrites `WeatherRig`'s own default-value `RainBounds` write later in the same
+  `sceneLoaded` dispatch.
+- `grep '\[DaytimeVisualsProbe\] RainCover/SSR:'` — new this pass, once per raid: RainCover mode, live
+  RainBounds, the applied depth-camera cullingMask, both SSR readbacks, and `RenderSettings.ambient*`.
+- `grep '\[Harmony\] patched DepthPhotograper.SetupDepthCamera'` — confirms the new Harmony hook
+  installed (logged once at plugin `Awake()`).
+
+### 12.8) Test steps
+
+1. Load `arena_bay5` (Clear weather).
+2. **Outdoor** — stand at the spot `spiegelung2.png` was taken from. Expect: no white veil, correct dark
+   wet-asphalt look with a genuine mirror puddle — **without touching any Lighting Lab toggle** (Lab stays
+   at its own defaults, `AmbientOverride=Off`/everything else default — the fix now lives in `WeatherRig`).
+3. **Indoor** — stand at the spot `spiegelung-innen1.png` was taken from (warehouse). Expect: dry-looking
+   floor, no bright sky-cubemap mirror, no veil — again with the Lab untouched.
+4. Read the log lines in §12.7 to confirm: `UnityAmbient=Donor` with the expected donor color values;
+   `RainCover=RoofDepth` with a computed `RainBounds` noticeably smaller than the old class default
+   `(1000,220,1000)` and a non-zero `cullingMask`; the `DaytimeVisualsProbe` summary line agrees.
+5. If the indoor floor still looks wet/mirror-bright, check `PostFxSSR` in the probe line — if `false`,
+   enable SSR in EFT's graphics settings (§12.5) and re-test before concluding the rain-cover fix itself
+   needs more work.
+6. Sanity-check a no-rig map (`arena_equator`) still looks byte-for-byte like before this pass — `Donor`
+   stays `"Off"` for it, so none of goals 1-3's code ever runs.
+
+### 12.9) Build
+
+```
+dotnet build D:\ArenaMapPort\ArenaMapPort.Client\ArenaMapPort.Client.csproj -c Release -p:ArenaMapPortDllOnly=true
+```
+Clean rebuild (removed `bin`/`obj` first): **0 warnings, 0 errors.**
+
+dist DLL hash (SHA-256) == bin DLL hash, both:
+`d770531b8f522bf129a7ffc9be5cda04a29f35e49bb3b99cc9b7951d73a00a3e`
+
+Files touched: `WeatherRig.cs` (goals 1 + 3a config/call-site), `LightingLab.cs` (goal 2 rename/dedup),
+`HarmonyPatches.cs` (one new installer, goal 3b), new `RainCoverRepairs.cs` (goal 3a/3b logic),
+`DaytimeVisualsProbe.cs` (goal 4). No `Plugin.cs` change needed — `RainCoverRepairs` has no config of its
+own to bind early, and `HarmonyPatches.InstallAll` already runs before `WeatherRig.Install()`, which is
+fine since patching doesn't depend on any per-raid state being populated yet. No `tools/`, `Server`, or
+`base.json` file changed — zero receipts invalidated. No git commit made (workspace rule unchanged: the
+lead commits). Not yet playtested against this exact build — the evidence in §12.1 is from the pre-fix
+Lighting Lab session; this pass turns those findings into the new default behavior.
+
+### 12.x) Review fix-ups (lead)
+
+- **Scan timing.** The reviewer found that `RainCoverRepairs` scanned the map's geometry from
+  `WeatherRig.OnSceneLoaded`, which fires on the Scripts scene — the first scene of the raid to load,
+  before any geometry scene exists — so the scan would have found 0 renderers and silently fallen back
+  to the class-default bounds. The scan now runs in a Harmony prefix on `DepthPhotograper.Render()`
+  (first camera change of the raid, all scenes loaded); `ApplyForCurrentMap` only arms it. An empty
+  scan is retried on the next camera change, at most 3 times.
+- **LevelBorder exclusion.** `LayerMask.NameToLayer("LevelBorder")` is -1 in this project, so the scan
+  now also excludes renderers named `LevelBorder*` (MapBorderRepairs' own fallback). In practice those
+  renderers are already disabled by MapBorderRepairs before the first camera change.
+- Log lines to look for: `[RainCover] ... armed`, then on camera change
+  `[RainCover] ... RainBounds computed from N renderer(s) ... center=... size=...`,
+  `[RainCover] ... depth-camera cover layers=0x...`, `[RainCover] ... depth camera cullingMask=0x...`.

@@ -119,6 +119,7 @@ namespace ArenaMapPort.Client
             ProbeAmbient(tag);
             ProbeSea(tag);
             ProbeWeatherTestOverride(tag, map);
+            ProbeRainCoverAndSSR(tag, map);
         }
 
         // F1 — TimeOfDayRepairs. "actual" is only meaningfully readable back via TODSkyProvider when a
@@ -243,6 +244,46 @@ namespace ArenaMapPort.Client
             Plugin.Log.LogInfo($"{tag} WeatherTestOverride: configured='{WeatherTestOverride.Mode}' (map={map.Key}) " +
                                "— Server means no change; any other value should show two " +
                                "'[WeatherTestOverride] applied' lines above for this raid");
+        }
+
+        // §12 goal 4 — SSR/rain-cover diagnostics. CameraManager.GetSSREnabled() reads back EFT's own
+        // PostProcessing-v2 ScreenSpaceReflections toggle (EFT's Graphics-options "SSR" dropdown,
+        // CameraManager.cs:974-985); AmbientLight.IsSSREnable reads the SAME toggle
+        // (CameraManager.Instance.GetSSREnabled(), AmbientLight.cs:225-235) and, per AmbientLight.method_3
+        // (AmbientLight.cs:434-438), pins the "Custom Ambient" screen-space reflection compositing term to
+        // 1.0 whenever it's on, independent of wetness — well-documented Unity PPv2 SSR behavior
+        // (raymarches against the depth/color buffer of what's actually rendered), corroborated by but not
+        // directly provable from this decompile beyond that corroboration. If PostFxSSR is false, the real
+        // scene never feeds indoor reflections — see docs/progress/donor-settings-camera-weather.md §12
+        // for the "enable SSR in EFT's graphics settings" guidance this line exists to support.
+        static void ProbeRainCoverAndSSR(string tag, ArenaMapPort.Shared.ArenaMapDescriptor map)
+        {
+            bool ppSSR = false;
+            try
+            {
+                ppSSR = CameraManager.Instance != null && CameraManager.Instance.GetSSREnabled();
+            }
+            catch
+            {
+                // CameraManager mid-teardown — leave ppSSR false, same defensive convention ResolveActiveCamera uses
+            }
+
+            var ambient = WeatherRig.ActiveRig?.Controller?.TimeOfDayController?.AmbientLightScript; // same accessor LightingLab.cs uses
+            bool ambientIsSSR = ambient != null && ambient.IsSSREnable;
+
+            var ls = Singleton<LevelSettings>.Instantiated ? Singleton<LevelSettings>.Instance : null;
+            string rainBounds = ls != null ? $"center={ls.RainBounds.center} size={ls.RainBounds.size}" : "n/a";
+            // CACHED — DepthPhotograper._depthCamera is long destroyed by the time this once-per-raid probe
+            // runs (see RainCoverRepairs.LastAppliedCullingMaskForCurrentMap's own doc comment).
+            int mask = RainCoverRepairs.LastAppliedCullingMaskForCurrentMap();
+
+            Plugin.Log.LogInfo($"{tag} RainCover/SSR: RainCover={WeatherRig.RainCoverForCurrentMap()} " +
+                               $"RainBounds=({rainBounds}) depthCameraCullingMask=0x{mask:X} " +
+                               $"PostFxSSR(CameraManager.GetSSREnabled)={ppSSR} AmbientLight.IsSSREnable={ambientIsSSR} " +
+                               $"RenderSettings: ambientMode={RenderSettings.ambientMode} " +
+                               $"ambientLight={RenderSettings.ambientLight} ambientIntensity={RenderSettings.ambientIntensity:0.00} " +
+                               $"ambientEquatorColor={RenderSettings.ambientEquatorColor} " +
+                               $"ambientGroundColor={RenderSettings.ambientGroundColor}");
         }
 
         // Same resolution CameraEffectsRepairs/LightingDiagnosticProbe use — CameraManager.Instance.Camera,

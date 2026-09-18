@@ -70,6 +70,9 @@ namespace ArenaMapPort.Client
             // "Lighting Lab" (docs/progress/donor-settings-camera-weather.md) — see LightingLab.cs.
             InstallLightingLabReflectionOverride(harmony);
             InstallLightingLabWaterLevelOverride(harmony);
+
+            // donor-settings-camera-weather §12 goal 3 — see RainCoverRepairs.cs.
+            InstallRainCoverDepthMask(harmony);
         }
 
         // Lighting Lab candidate B — AmbientLight.method_2(), public instance, no args (the task brief's
@@ -147,6 +150,33 @@ namespace ArenaMapPort.Client
             harmony.Patch(target, postfix: new HarmonyMethod(postfix));
             Plugin.Log.LogInfo("[ArenaMapPort][Harmony] patched RainController.AbstractStateSummer.SetWetting " +
                                 "(donor-settings-camera-weather §C.3)");
+        }
+
+        // donor-settings-camera-weather §12 goal 3 — DepthPhotograper.SetupDepthCamera(), public instance,
+        // no args, single overload. Verified: D:/SPT41/Development/_decompiled/DepthPhotograper.cs:117.
+        static void InstallRainCoverDepthMask(Harmony harmony)
+        {
+            var target = AccessTools.Method(typeof(DepthPhotograper), nameof(DepthPhotograper.SetupDepthCamera));
+
+            if (!Verify(target, typeof(DepthPhotograper), nameof(DepthPhotograper.SetupDepthCamera)))
+            {
+                return;
+            }
+
+            var postfix = AccessTools.Method(typeof(RainCoverRepairs), nameof(RainCoverRepairs.SetupDepthCameraPostfix));
+            harmony.Patch(target, postfix: new HarmonyMethod(postfix));
+            Plugin.Log.LogInfo("[ArenaMapPort][Harmony] patched DepthPhotograper.SetupDepthCamera (§12 rain cover mask)");
+
+            // DepthPhotograper.Render(), public instance, no args (DepthPhotograper.cs:55). The prefix computes
+            // RainBounds/cover layers on the raid's first camera change, when every scene is loaded.
+            var render = AccessTools.Method(typeof(DepthPhotograper), nameof(DepthPhotograper.Render));
+            if (!Verify(render, typeof(DepthPhotograper), nameof(DepthPhotograper.Render)))
+            {
+                return;
+            }
+            var prefix = AccessTools.Method(typeof(RainCoverRepairs), nameof(RainCoverRepairs.RenderPrefix));
+            harmony.Patch(render, prefix: new HarmonyMethod(prefix));
+            Plugin.Log.LogInfo("[ArenaMapPort][Harmony] patched DepthPhotograper.Render (§12 rain cover bounds)");
         }
 
         // daytime-and-visuals F1 — LocalGame.InitWeather(TimeAndWeatherSettings), public instance,
