@@ -85,6 +85,13 @@ namespace ArenaMapPort.Client
             // candidate overrides on top. See LightingLab.cs.
             LightingLab.Install();
 
+            // docs/progress/donor-settings-camera-weather.md §14 — live RainCoverLab experiments
+            // (DrawTransform/CoverAll/RerenderHotkey) for the RoofDepthBlack rain-cover investigation. Must
+            // install AFTER WeatherRig.Install() (its own live re-render path reads
+            // WeatherRig.IsActiveForCurrentMap()) — same ordering reasoning as LightingLab.Install() above;
+            // order relative to LightingLab.Install() itself does not matter, neither reads the other's state.
+            RainCoverRepairs.InstallLab();
+
             // Playtest finding 2026-09-14 20:09 — large flat white untextured blocks blocking movement.
             // Removes Arena's own TeamFight play-area borders (config-gated) plus a narrow name-based
             // safety net for components disabled in Arena that the current extractor/importer still

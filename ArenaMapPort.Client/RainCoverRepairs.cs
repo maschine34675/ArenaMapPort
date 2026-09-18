@@ -5,6 +5,7 @@ using System.Text;
 using ArenaMapPort.Shared;
 using BepInEx.Configuration;
 using Comfort.Common;
+using EFT.CameraControl;
 using HarmonyLib;
 using UnityEngine;
 using UnityEngine.SceneManagement;
@@ -71,6 +72,29 @@ namespace ArenaMapPort.Client
     /// — each Harmony hook here runs for ANY loaded <c>DepthPhotograper</c>, including a real vanilla raid
     /// played earlier in the same session, same "mandatory first check" convention
     /// <see cref="RainWetnessRepairs"/>/<see cref="WeatherTestOverride"/> already document.
+    ///
+    /// §14 (docs/progress/donor-settings-camera-weather.md) — the 2026-09-18 21:17 playtest confirmed
+    /// <c>RoofDepthBlack</c> DOES photograph something both outdoors (the yard's own ground, a scan bug —
+    /// see goal 5 below) and indoors (something ~8.9m above the warehouse floor), yet both spots still show
+    /// full puddle wetness. Three live-switchable EXPERIMENTS, new per-map section
+    /// <c>RainCoverLab (&lt;key&gt;)</c> (<see cref="InstallLab"/>/<see cref="BindLabConfig"/>), let a
+    /// tester isolate which hypothesis (H1 orientation mismatch / H2 the wetting shader ignores the depth
+    /// map / H3 a height-band compare) explains it, all re-rendering the depth photo immediately
+    /// (<see cref="RerenderNow"/>, also bound to a new hotkey) so no new raid is needed between tries:
+    ///  - <see cref="DrawTransformMode"/> (H1) — mirrors/swaps the elevated-mesh draws about the live
+    ///    <c>RainBounds</c> center before they hit the depth camera (<see cref="BuildMirrorMatrix"/>).
+    ///  - <c>CoverAll</c> (H2) — draws one extra black quad over the WHOLE <c>RainBounds</c> footprint
+    ///    (<see cref="GetOrCreateCoverAllQuadMesh"/>), so "is anything drawn at this pixel at all" is
+    ///    trivially true everywhere; if the floor is still wet with this on, the ground-wetness shader most
+    ///    likely never reads <c>_WeatherDepthMap</c> for puddles in the first place.
+    ///  - Goal 5's own elevated-mesh filter fix (in <see cref="ScanStaticGeometry"/>) — the root cause the
+    ///    playtest's own outdoor readback exposed: the old downward raycast started BELOW the candidate
+    ///    renderer's own bounds, so a FLOOR's own collider (at/above that origin) was never hit, and the
+    ///    "no hit → elevated if above the map's own min.y" fallback then wrongly classified the yard's own
+    ///    ground as an elevated roof. Fixed by starting the raycast just inside the renderer's own bottom
+    ///    and treating "no hit" as "not elevated" — see that method's own comment for the full reasoning.
+    /// See docs/progress/donor-settings-camera-weather.md §14 for the full test script and how each switch
+    /// maps to an observable outcome.
     /// </summary>
     internal static class RainCoverRepairs
     {
@@ -89,6 +113,14 @@ namespace ArenaMapPort.Client
         // §13 goal 2 — elevated-mesh raycast (renderer-vs-ground) and goal 1's own ground-under-camera
         // diagnostic raycast both use this. Generous for these maps' vertical extents.
         const float ColliderRaycastMaxDistance = 200f;
+
+        // §14 (H1) — RainCoverLab's DrawTransform experiment. Pre-multiplies each elevated mesh's
+        // localToWorld by a world-space mirror/swap about the live RainBounds center before it is drawn
+        // onto the depth camera (RenderObstaclesPrefix), to test whether the consuming wetting shader
+        // samples _WeatherDepthMap with a different orientation than DepthPhotograper.SetShaderValues' own
+        // math implies. See BuildMirrorMatrix for the exact per-mode math and BindLabConfig's own doc
+        // comment for why mirroring (which reverses mesh winding) needs no material/Cull change here.
+        internal enum DrawTransformMode { None, FlipX, FlipZ, FlipXZ, SwapXZ }
 
         sealed class CoverState
         {
@@ -119,6 +151,25 @@ namespace ArenaMapPort.Client
         const int MaxEmptyScans = 3;
 
         static readonly Dictionary<string, CoverState> _states = new Dictionary<string, CoverState>();
+
+        // §14 — RainCoverLab (<key>) per-map experiment config. A separate dictionary/Install path from
+        // CoverState above (which is armed once per raid from WeatherRig.OnSceneLoaded): these ConfigEntries
+        // are bound once at plugin Awake (InstallLab, called from Plugin.cs) and read live, every
+        // RenderObstaclesPrefix call, exactly like every other Lab-style knob in this codebase
+        // (LightingLab.cs's own convention).
+        sealed class LabConfigBundle
+        {
+            internal ConfigEntry<DrawTransformMode> DrawTransform;
+            internal ConfigEntry<bool> CoverAll;
+        }
+
+        static readonly Dictionary<string, LabConfigBundle> _labConfigs = new Dictionary<string, LabConfigBundle>();
+        static ConfigEntry<KeyboardShortcut> _rerenderHotkey;
+        static bool _labInstalled;
+
+        // §14 (H2) — CoverAll's own runtime-built quad mesh, created once and reused (same "persistent,
+        // never destroyed" convention as _blackMaterial below).
+        static Mesh _coverAllQuadMesh;
 
         // Project convention: AccessTools.Field over Harmony's ___fieldName injection, matching
         // EffectsControllerRepairs.cs's own stated preference for explicit, verifiable reflection over
@@ -413,8 +464,6 @@ namespace ArenaMapPort.Client
             // Pad 10m each side horizontally; vertical range stays min(bounds) to max(bounds)+5m (task's
             // own spec numbers — a little headroom above the highest surviving renderer, e.g. a roof lip,
             // without ballooning the ortho footprint the way including the oversized sea/sky volumes would).
-            float rawMinY = bounds.min.y; // captured BEFORE padding — Y is never padded downward, so this
-                                           // doubles as "the scanned map's own min.y" for §13's elevation fallback below.
             Vector3 min = bounds.min;
             Vector3 max = bounds.max;
             min.x -= HorizontalPadding; max.x += HorizontalPadding;
@@ -449,7 +498,20 @@ namespace ArenaMapPort.Client
                     consideredForCover++;
 
                     var rb = renderer.bounds;
-                    Vector3 origin = new Vector3(rb.center.x, rb.min.y - 0.05f, rb.center.z);
+                    // §14 goal 5 fix (2026-09-18 21:17 playtest, außen.png/F9: the yard's own ground
+                    // photographed itself as "covered"). The OLD origin (bounds.min.y - 0.05, i.e. BELOW the
+                    // renderer's own bottom) pointed a downward ray away from that same renderer's own
+                    // collider surface — for a FLOOR renderer (whose collider sits at/near its own
+                    // bounds.min.y) this always came back "no hit", and the old fallback below then read
+                    // "no hit" as "elevated if above the whole map's own min.y" — true for nearly every
+                    // floor on a map whose lowest point is a basement/underside tens of meters down. New
+                    // origin sits 2cm INSIDE the renderer's own bottom: a downward ray from there still
+                    // misses that SAME renderer's own upward-facing surface (the ray moves further away from
+                    // it, exactly as before) but DOES reach a real ground/floor collider sitting further
+                    // below an ACTUALLY elevated mesh (a roof/overhang has empty air, not its own floor,
+                    // between bounds.min.y and the real ground). "No hit at all" now means "not elevated" —
+                    // this IS the ground/floor itself — the mapMin.y fallback is removed entirely.
+                    Vector3 origin = new Vector3(rb.center.x, rb.min.y + 0.02f, rb.center.z);
                     bool elevated;
                     if (Physics.Raycast(origin, Vector3.down, out var hit, ColliderRaycastMaxDistance, colliderMask, QueryTriggerInteraction.Ignore))
                     {
@@ -457,9 +519,7 @@ namespace ArenaMapPort.Client
                     }
                     else
                     {
-                        // No collider hit below at all — only elevated if it clearly sits above the whole
-                        // scanned map's own floor (task's own spec fallback rule).
-                        elevated = rb.min.y > (rawMinY + coverMinHeight);
+                        elevated = false; // no collider hit below at all => not elevated (§14 goal 5)
                     }
 
                     if (!elevated)
@@ -620,8 +680,20 @@ namespace ArenaMapPort.Client
                 return;
             }
 
+            // §14 — live RainCoverLab overrides for the currently loaded map. None/false = byte-identical
+            // §13 behavior (both read fresh every call — cheap ConfigEntry.Value reads, no caching needed;
+            // this prefix already only runs once per camera change, never per frame).
+            DrawTransformMode drawTransform = DrawTransformMode.None;
+            bool coverAll = false;
+            if (_labConfigs.TryGetValue(map.Key, out var lab))
+            {
+                drawTransform = lab.DrawTransform.Value;
+                coverAll = lab.CoverAll.Value;
+            }
+
             var meshes = state.ElevatedMeshes;
-            if (meshes == null || meshes.Count == 0)
+            bool haveMeshes = meshes != null && meshes.Count > 0;
+            if (!haveMeshes && !coverAll)
             {
                 if (!state.DrawLogSent)
                 {
@@ -638,32 +710,73 @@ namespace ArenaMapPort.Client
                 return; // ShadersFinder.Find("Hidden/Black") failed — logged once inside GetOrCreateBlackMaterial
             }
 
+            var ls = Singleton<LevelSettings>.Instantiated ? Singleton<LevelSettings>.Instance : null;
+
             // Task's own §4 investigation note: the LAYER argument to Graphics.DrawMesh is matched against
             // the CAMERA's cullingMask, not the mesh's own GameObject layer — must be Terrain to be seen by
             // this depth camera (SetupDepthCamera sets cullingMask = 1 << Terrain, DepthPhotograper.cs:126),
             // exactly like vanilla's own WeatherObstacle draw call (DepthPhotograper.cs:155).
             int terrainLayer = LayerMask.NameToLayer("Terrain");
             int submeshDraws = 0;
-            for (int i = 0; i < meshes.Count; i++)
+            int meshCount = 0;
+            if (haveMeshes)
             {
-                var em = meshes[i];
-                if (em.mesh == null)
+                meshCount = meshes.Count;
+                // §14 (H1) — computed once for the whole draw pass (not per submesh): the live RainBounds
+                // center this raid, or Vector3.zero (a harmless no-op fallback — DrawTransform is only
+                // ever meaningful with a live LevelSettings anyway) if the singleton isn't around.
+                Matrix4x4 mirror = drawTransform == DrawTransformMode.None
+                    ? Matrix4x4.identity
+                    : BuildMirrorMatrix(drawTransform, ls != null ? ls.RainBounds.center : Vector3.zero);
+
+                for (int i = 0; i < meshes.Count; i++)
                 {
-                    continue;
+                    var em = meshes[i];
+                    if (em.mesh == null)
+                    {
+                        continue;
+                    }
+                    var localToWorld = drawTransform == DrawTransformMode.None ? em.localToWorld : mirror * em.localToWorld;
+                    int subCount = Mathf.Max(1, em.mesh.subMeshCount);
+                    for (int s = 0; s < subCount; s++)
+                    {
+                        Graphics.DrawMesh(em.mesh, localToWorld, material, terrainLayer, cam, s);
+                        submeshDraws++;
+                    }
                 }
-                int subCount = Mathf.Max(1, em.mesh.subMeshCount);
-                for (int s = 0; s < subCount; s++)
+            }
+
+            // §14 (H2) — CoverAll: one extra black quad over the whole live RainBounds footprint, drawn
+            // regardless of DrawTransform/whether any elevated meshes exist this raid (so CoverAll can be
+            // tested in isolation even with 0 elevated meshes found — the earlier haveMeshes||coverAll gate
+            // already let an all-CoverAll, no-meshes raid reach this point).
+            if (coverAll && ls != null)
+            {
+                var quad = GetOrCreateCoverAllQuadMesh();
+                if (quad != null)
                 {
-                    Graphics.DrawMesh(em.mesh, em.localToWorld, material, terrainLayer, cam, s);
+                    var rb = ls.RainBounds;
+                    var quadTRS = Matrix4x4.TRS(
+                        new Vector3(rb.center.x, rb.max.y - 1f, rb.center.z),
+                        Quaternion.identity,
+                        new Vector3(Mathf.Max(rb.size.x, 0.01f), 1f, Mathf.Max(rb.size.z, 0.01f)));
+                    Graphics.DrawMesh(quad, quadTRS, material, terrainLayer, cam, 0);
                     submeshDraws++;
                 }
+            }
+            else if (coverAll && ls == null)
+            {
+                Plugin.Log.LogWarning($"[ArenaMapPort][RainCoverLab] map={map.Key} CoverAll=true but " +
+                    "LevelSettings singleton not found at draw time — CoverAll quad skipped this camera change.");
             }
 
             if (!state.DrawLogSent)
             {
                 state.DrawLogSent = true;
-                Plugin.Log.LogInfo($"[ArenaMapPort][RainCover] map={map.Key} RoofDepthBlack: drew {meshes.Count} " +
-                    $"elevated mesh(es) ({submeshDraws} submesh draw call(s)) onto the depth camera (Terrain layer, Hidden/Black material).");
+                Plugin.Log.LogInfo($"[ArenaMapPort][RainCover] map={map.Key} RoofDepthBlack: drew {meshCount} " +
+                    $"elevated mesh(es) ({submeshDraws} submesh draw call(s), CoverAll={coverAll}" +
+                    (drawTransform != DrawTransformMode.None ? $", DrawTransform={drawTransform}" : string.Empty) +
+                    ") onto the depth camera (Terrain layer, Hidden/Black material).");
             }
         }
 
@@ -690,6 +803,274 @@ namespace ArenaMapPort.Client
             // Render() call (DepthPhotograper.cs:66,78); this one is ours and outlives any one render.
             _blackMaterial = new Material(shader) { hideFlags = HideFlags.HideAndDontSave };
             return _blackMaterial;
+        }
+
+        // -----------------------------------------------------------------------------------------------
+        // §14 — RainCoverLab experiments (docs/progress/donor-settings-camera-weather.md §14). Called from
+        // Plugin.cs, AFTER WeatherRig.Install() (reads WeatherRig.IsActiveForCurrentMap(), same ordering
+        // reasoning LightingLab.Install()'s own doc comment already establishes) — order relative to
+        // LightingLab.Install() itself does not matter, the two files don't read each other's state.
+        // -----------------------------------------------------------------------------------------------
+        internal static void InstallLab()
+        {
+            if (_labInstalled)
+            {
+                return;
+            }
+            _labInstalled = true;
+
+            foreach (var map in ArenaMapRegistry.All)
+            {
+                _labConfigs[map.Key] = BindLabConfig(map);
+            }
+
+            _rerenderHotkey = Plugin.Instance.Config.Bind("RainCoverLab", "RerenderHotkey",
+                new KeyboardShortcut(KeyCode.F8),
+                "§14 goal 4 — re-renders DepthPhotograper's depth photo immediately " +
+                "(DepthPhotograper.Instance.Render(), the same call a real camera change makes) and logs a " +
+                "fresh depth readback (the same line F9/LightingLab's own snapshot appends) at the live " +
+                "camera position, so a DrawTransform/CoverAll change below is visible without a new raid. " +
+                "Same 'poll a KeyboardShortcut every Update' pattern as LightingLab.cs's own F9 hotkey. Only " +
+                "acts while ArenaMapRaid.IsLoaded() && WeatherRig.IsActiveForCurrentMap().");
+
+            // Plugin.Instance.gameObject is the same always-alive host LightingLab.cs/SceneInspector.cs
+            // already add their own hotkey pollers to — no new persistent GameObject needed.
+            Plugin.Instance.gameObject.AddComponent<LabHotkeyRunner>();
+
+            // §14 investigation note (task's own "verify the Hidden/Black cull question" requirement) —
+            // settled from the game data, not guessed: a UnityPy read of
+            // D:\SPT41vanilla\EscapeFromTarkov_Data\globalgamemanagers.assets (pathid=245, m_Name=
+            // "Hidden/Black") shows m_ParsedForm.m_PropInfo.m_Props is EMPTY — this shader exposes no
+            // material properties at all, so there is no "_Cull" to SetInt() on. But its single compiled
+            // SubShader pass's own m_State.culling.val already reads 0 (UnityEngine.Rendering.CullMode.Off)
+            // — Cull Off is baked into the shader itself, not something a caller sets — so a mirrored
+            // (winding-reversed) DrawTransform draw needs no material swap/double-draw workaround; the
+            // existing persistent _blackMaterial (GetOrCreateBlackMaterial) is reused unchanged for every
+            // DrawTransform mode and for the CoverAll quad below.
+            Plugin.Log.LogInfo("[ArenaMapPort][RainCoverLab] installed — 'Hidden/Black' has no exposed shader " +
+                "properties (m_PropInfo.m_Props empty, confirmed via UnityPy against globalgamemanagers.assets " +
+                "pathid=245) but its own compiled pass already bakes Cull=Off, so DrawTransform's " +
+                "winding-reversing mirrors need no material change. RerenderHotkey=F8.");
+        }
+
+        static LabConfigBundle BindLabConfig(ArenaMapDescriptor map)
+        {
+            // Own section, "RainCoverLab (<key>)" — never "Lighting (<key>)"/"LightingLab (<key>)" (the
+            // other two files' own sections), same "structurally impossible key collision, F12-UI
+            // discoverability as its own group" reasoning LightingLab.cs's own BindConfig already documents.
+            string section = $"RainCoverLab ({map.Key})";
+            var cfg = new LabConfigBundle();
+
+            cfg.DrawTransform = Plugin.Instance.Config.Bind(section, "DrawTransform", DrawTransformMode.None,
+                "§14 (H1) — pre-multiplies every RoofDepthBlack elevated-mesh draw's localToWorld matrix by " +
+                "a world-space mirror/swap about the live LevelSettings.RainBounds center before it hits the " +
+                "depth camera. None = today's RoofDepthBlack behavior, unchanged. FlipX: x'=2*cx-x. FlipZ: " +
+                "z'=2*cz-z. FlipXZ: both. SwapXZ: (x'-cx)=(z-cz) and (z'-cz)=(x-cx) — a diagonal mirror that " +
+                "swaps which world axis maps to which depth-texture axis. Tests H1: whether the ground- " +
+                "wetness shader samples _WeatherDepthMap with a different orientation than " +
+                "DepthPhotograper.SetShaderValues' own _MapStart/_MapScale math implies, so a roof's shadow " +
+                "on the depth map lands in the wrong place. Every mode reverses mesh winding — verified safe " +
+                "with no material change (see InstallLab's own log line: 'Hidden/Black' bakes Cull=Off). " +
+                "Re-renders the depth photo immediately on change (goal 4) — no new raid needed. Only " +
+                "applied while ArenaMapRaid.IsLoaded() && WeatherRig.IsActiveForCurrentMap().");
+
+            cfg.CoverAll = Plugin.Instance.Config.Bind(section, "CoverAll", false,
+                "§14 (H2) — additionally draws one black quad (two triangles, built at runtime) over the " +
+                "WHOLE live RainBounds footprint at RainBounds.max.y - 1, so the depth map reads 'covered' " +
+                "everywhere regardless of DrawTransform/the elevated-mesh scan. If the hall AND the yard " +
+                "both dry out with this on, the depth map genuinely drives ground wetness end-to-end and the " +
+                "bug is narrowed to geometry/orientation (H1/H3), not the consuming shader. If either stays " +
+                "wet with the WHOLE map covered, that consuming shader most likely never reads " +
+                "_WeatherDepthMap for ground puddles at all (H2). false = today's RoofDepthBlack behavior. " +
+                "Re-renders immediately on change (goal 4). Only applied while ArenaMapRaid.IsLoaded() && " +
+                "WeatherRig.IsActiveForCurrentMap().");
+
+            // "Applies live, not next-raid" (goal 4) — same ReapplyIfLoaded/re-render-on-SettingChanged
+            // pattern LightingLab.cs's own F12 knobs already use, scoped to THIS map only (a SettingChanged
+            // fired for a map that isn't the one currently loaded must not re-render some OTHER map's
+            // unrelated depth photo).
+            cfg.DrawTransform.SettingChanged += (_, __) => RerenderIfActive(map, "DrawTransform changed");
+            cfg.CoverAll.SettingChanged += (_, __) => RerenderIfActive(map, "CoverAll changed");
+
+            return cfg;
+        }
+
+        // §14 goal 4 — same "poll a KeyboardShortcut every Update, do real work only inside the keypress
+        // branch" pattern LightingLab.cs's own F9 HotkeyRunner already uses.
+        sealed class LabHotkeyRunner : MonoBehaviour
+        {
+            void Update()
+            {
+                try
+                {
+                    if (_rerenderHotkey != null && _rerenderHotkey.Value.IsDown() && ArenaMapRaid.IsLoaded())
+                    {
+                        RerenderNow("F8 hotkey");
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Plugin.Log.LogWarning($"[ArenaMapPort][RainCoverLab] hotkey Update threw: {ex}");
+                }
+            }
+        }
+
+        static void RerenderIfActive(ArenaMapDescriptor map, string trigger)
+        {
+            if (ArenaMapRaid.CurrentMap != map)
+            {
+                return; // a different map's raid (or none) is loaded — same guard LightingLab.ReapplyIfLoaded
+                        // already uses for its own live F12 knobs, so editing map A's Lab section while
+                        // playing map B never re-renders B's unrelated depth photo.
+            }
+            RerenderNow(trigger);
+        }
+
+        // §14 goal 4 — the actual re-render. DepthPhotograper.Render() is the exact same call
+        // RainController.AbstractState.CameraChanged makes on every real camera change
+        // (RainController.cs:100, Controller._depthPhotograper.Render()) — safe to call again here: it
+        // synchronously rebuilds the transient depth camera (SetupDepthCameraPostfix fires again, refreshing
+        // the goal-1 diagnostic cache), re-runs RenderObstaclesPrefix (this file's own Harmony prefix, which
+        // reads the CURRENT DrawTransform/CoverAll values live), then SetShaderValues() — same flow a real
+        // camera change uses, just invoked on demand instead of waiting for one.
+        static void RerenderNow(string trigger)
+        {
+            if (!ArenaMapRaid.IsLoaded() || !WeatherRig.IsActiveForCurrentMap())
+            {
+                return; // MANDATORY first check, same convention every entry point in this file already follows
+            }
+            var map = ArenaMapRaid.CurrentMap;
+            if (map == null)
+            {
+                return;
+            }
+
+            var photo = DepthPhotograper.Instance;
+            if (photo == null)
+            {
+                Plugin.Log.LogInfo($"[ArenaMapPort][RainCoverLab] map={map.Key} {trigger}: " +
+                    "DepthPhotograper.Instance is null (no camera change yet this raid) — nothing to re-render.");
+                return;
+            }
+
+            DrawTransformMode drawTransform = DrawTransformMode.None;
+            bool coverAll = false;
+            if (_labConfigs.TryGetValue(map.Key, out var lab))
+            {
+                drawTransform = lab.DrawTransform.Value;
+                coverAll = lab.CoverAll.Value;
+            }
+
+            try
+            {
+                photo.Render();
+            }
+            catch (Exception e)
+            {
+                Plugin.Log.LogError($"[ArenaMapPort][RainCoverLab] map={map.Key} {trigger}: " +
+                    $"DepthPhotograper.Render() threw — {e.GetType().Name}: {e.Message}");
+                return;
+            }
+
+            Plugin.Log.LogInfo($"[ArenaMapPort][RainCover] map={map.Key} re-rendered depth photo " +
+                $"(DrawTransform={drawTransform}, CoverAll={coverAll}) [{trigger}]");
+
+            // Goal 4's own "run the F9 depth readback line right after" — the identical readback F9/
+            // LightingLab's own snapshot hotkey appends, at the live camera position, so the effect is
+            // visible without moving.
+            try
+            {
+                var cam = ResolveActiveCamera();
+                Plugin.Log.LogInfo(cam != null
+                    ? "[ArenaMapPort][RainCoverLab] " + BuildDepthReadback(cam.transform.position)
+                    : "[ArenaMapPort][RainCoverLab] re-render readback: n/a (no active camera)");
+            }
+            catch (Exception e)
+            {
+                Plugin.Log.LogWarning($"[ArenaMapPort][RainCoverLab] map={map.Key} post-rerender readback threw: " +
+                    $"{e.GetType().Name}: {e.Message}");
+            }
+        }
+
+        // Same CameraManager-first/Camera.main-fallback resolution LightingLab.cs's own ResolveActiveCamera
+        // already uses — duplicated here (not shared) to keep this file's own gating/dependencies self
+        // contained, matching this file's existing "no cross-file coupling beyond WeatherRig/ArenaMapRaid"
+        // convention.
+        static Camera ResolveActiveCamera()
+        {
+            try
+            {
+                Camera c = CameraManager.Instance?.Camera;
+                if (c != null)
+                {
+                    return c;
+                }
+            }
+            catch
+            {
+                // CameraManager mid-teardown — fall through
+            }
+            return Camera.main;
+        }
+
+        // §14 (H1) — the exact world-space mirror/swap math BindLabConfig's own DrawTransform description
+        // states, built as translate-to-origin / transform / translate-back so it works regardless of
+        // where RainBounds' center actually sits (never assumed to be world origin).
+        static Matrix4x4 BuildMirrorMatrix(DrawTransformMode mode, Vector3 center)
+        {
+            if (mode == DrawTransformMode.SwapXZ)
+            {
+                // Relative to center, (dx,dy,dz) -> (dz,dy,dx): swap the X/Z basis columns, leave Y/W alone.
+                // This has determinant -1 (an improper transform, same as the negative-scale modes below) —
+                // it also reverses winding, same reasoning applies.
+                var swap = Matrix4x4.identity;
+                swap.SetColumn(0, new Vector4(0f, 0f, 1f, 0f)); // new X basis = old Z
+                swap.SetColumn(2, new Vector4(1f, 0f, 0f, 0f)); // new Z basis = old X
+                return Matrix4x4.Translate(center) * swap * Matrix4x4.Translate(-center);
+            }
+
+            Vector3 scale;
+            switch (mode)
+            {
+                case DrawTransformMode.FlipX: scale = new Vector3(-1f, 1f, 1f); break;
+                case DrawTransformMode.FlipZ: scale = new Vector3(1f, 1f, -1f); break;
+                case DrawTransformMode.FlipXZ: scale = new Vector3(-1f, 1f, -1f); break;
+                default: return Matrix4x4.identity; // None — callers already skip building this at all
+            }
+            // Translating by the FULL center (including the untouched axis/axes, whose scale is 1) is
+            // harmless — a translate-then-identity-scale-then-translate-back nets to zero on any axis the
+            // Scale() call leaves at 1, so one shared expression covers FlipX/FlipZ/FlipXZ without a
+            // per-mode axis list.
+            return Matrix4x4.Translate(center) * Matrix4x4.Scale(scale) * Matrix4x4.Translate(-center);
+        }
+
+        // §14 (H2) — CoverAll's own quad: a unit square (two triangles) in the local XZ plane, built once
+        // and reused every raid (never destroyed — same "persistent for the session" convention
+        // GetOrCreateBlackMaterial's own _blackMaterial already uses), scaled/positioned per draw to the
+        // live RainBounds footprint (RenderObstaclesPrefix). Winding doesn't matter here either — same
+        // Cull=Off shader, same InstallLab log line.
+        static Mesh GetOrCreateCoverAllQuadMesh()
+        {
+            if (_coverAllQuadMesh != null)
+            {
+                return _coverAllQuadMesh;
+            }
+            var mesh = new Mesh
+            {
+                name = "ArenaMapPort_RainCoverLab_CoverAllQuad",
+                hideFlags = HideFlags.HideAndDontSave,
+            };
+            mesh.SetVertices(new List<Vector3>
+            {
+                new Vector3(-0.5f, 0f, -0.5f),
+                new Vector3(0.5f, 0f, -0.5f),
+                new Vector3(0.5f, 0f, 0.5f),
+                new Vector3(-0.5f, 0f, 0.5f),
+            });
+            mesh.SetTriangles(new[] { 0, 1, 2, 0, 2, 3 }, 0);
+            mesh.RecalculateBounds();
+            _coverAllQuadMesh = mesh;
+            return _coverAllQuadMesh;
         }
 
         // §13 goal 1 — depth-map readback diagnostic. Called from LightingLab's F9 snapshot at the live
