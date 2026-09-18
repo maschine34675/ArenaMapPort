@@ -1446,3 +1446,16 @@ base multiplier on the same floor/ground/asphalt materials LightingLab's candida
 **Still open:** rain wetness indoors. The depth photo is correct (roof at +5 m over the hall floor in the
 readback) but `WetRenderer` still wets the hall; the §14 experiments (CoverAll, DrawTransform, F8) are
 the next test for that, they were not run yet.
+
+## 16) Reflection intensity scale (2026-09-18 late)
+
+Second host session (teleporting via the UiBridge API): the spawn hall's floor is `Depot_indoor_LOD0`
+with `Custom/Vert Paint Shader Gloss Solid` (authored smoothness 0.69/0.75) — not matched by the
+floor/ground/asphalt name filter, yet just as white. LightingLab `OffStrength` changed nothing: with SSR
+enabled `AmbientLight.method_3` forces `_ReflectionIntensity` to 1 (AmbientLight.cs:436; the wetting
+curve `EaseInOut(0,1 → 1,0)` only applies with SSR off). So per-material smoothness hacks cannot be the
+fix — the reflection source strength is the single lever.
+
+New key `Lighting (<key>) ReflectionIntensity` (0..1, default 1.0 until tuned): a postfix on
+`AmbientLight.method_3` rescales the freshly written block value while a rig is active; live via
+SettingChanged (calls `method_3` again). The F9 snapshot prints it as `B2`.

@@ -1024,6 +1024,7 @@ namespace ArenaMapPort.Client
                     $"WaterLevelOverrideValue={cfg.WaterLevelOverrideValue.Value:0.00} RainOff={cfg.RainOff.Value} " +
                     $"live _WaterLevel={Shader.GetGlobalFloat(_waterLevelId):0.00} " +
                     $"live _SurfaceWetIntensity={Shader.GetGlobalFloat(_surfaceWetIntensityId):0.00}");
+                sb.AppendLine($"  B2 Lighting.ReflectionIntensity: scale={WeatherRig.ReflectionIntensityForCurrentMap():0.00}");
                 sb.AppendLine($"  E GroundSmoothnessMultiplier: configured={cfg.GroundSmoothnessMultiplier.Value:0.00} " +
                     $"base(Lighting.GroundSmoothness)={WeatherRig.GroundSmoothnessBaseForCurrentMap():0.00} " +
                     $"effective={cfg.GroundSmoothnessMultiplier.Value * WeatherRig.GroundSmoothnessBaseForCurrentMap():0.00} " +

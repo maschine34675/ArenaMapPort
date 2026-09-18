@@ -69,10 +69,27 @@ namespace ArenaMapPort.Client
 
             // "Lighting Lab" (docs/progress/donor-settings-camera-weather.md) — see LightingLab.cs.
             InstallLightingLabReflectionOverride(harmony);
+            InstallReflectionIntensityScale(harmony);
             InstallLightingLabWaterLevelOverride(harmony);
 
             // donor-settings-camera-weather §12 goal 3 — see RainCoverRepairs.cs.
             InstallRainCoverDepthMask(harmony);
+        }
+
+        // Lighting (<map>) ReflectionIntensity — AmbientLight.method_3(), public instance, no args
+        // (D:/SPT41/Development/_decompiled/AmbientLight.cs:434). See WeatherRig.ReflectionIntensityPostfix.
+        static void InstallReflectionIntensityScale(Harmony harmony)
+        {
+            var target = AccessTools.Method(typeof(AmbientLight), "method_3");
+
+            if (!Verify(target, typeof(AmbientLight), "method_3"))
+            {
+                return;
+            }
+
+            var postfix = AccessTools.Method(typeof(WeatherRig), nameof(WeatherRig.ReflectionIntensityPostfix));
+            harmony.Patch(target, postfix: new HarmonyMethod(postfix));
+            Plugin.Log.LogInfo("[ArenaMapPort][Harmony] patched AmbientLight.method_3 (Lighting ReflectionIntensity scale)");
         }
 
         // Lighting Lab candidate B — AmbientLight.method_2(), public instance, no args (the task brief's

@@ -157,6 +157,14 @@ namespace ArenaMapPort.Client
             // reflection probes; EFT only has the sky cubemap for these shaders. LightingLab's live
             // multiplier (E) stacks on top of this base value.
             internal BepInEx.Configuration.ConfigEntry<float> GroundSmoothnessBase;
+            // Scale on the sky-cubemap reflection term of AmbientLight's "Custom Ambient" screen pass
+            // (_ReflectionIntensity in its MaterialPropertyBlock). AmbientLight.method_3 forces it to 1
+            // whenever SSR is enabled (AmbientLight.cs:436), so LightingLab's OffStrength (which only
+            // zeroes AmbientLight.ReflectionIntensity) has no effect for most players — this knob is
+            // applied in a postfix on method_3 instead (ReflectionIntensityPostfix). Vanilla materials are
+            // authored for that full-strength sky reflection; Arena's smooth floors mirror it as a white
+            // veil indoors because EFT has no local reflection source for them.
+            internal BepInEx.Configuration.ConfigEntry<float> ReflectionIntensity;
 
             // §13 goal 2 — RoofDepthBlack's elevated-mesh filter threshold. See RainCoverRepairs.cs.
             internal BepInEx.Configuration.ConfigEntry<float> CoverMinHeightEntry;
@@ -362,6 +370,14 @@ namespace ArenaMapPort.Client
                     "hall floor into a white veil (in-game test 2026-09-18). 1.0 = authored values. Live.",
                     new BepInEx.Configuration.AcceptableValueRange<float>(0f, 2f)));
 
+            cfg.ReflectionIntensity = Plugin.Instance.Config.Bind(section, "ReflectionIntensity", 1f,
+                new BepInEx.Configuration.ConfigDescription(
+                    "Scale on the sky-cubemap reflection term of EFT's screen-space ambient pass while a " +
+                    "weather rig is active (1.0 = vanilla, which forces full strength whenever SSR is on). " +
+                    "Lower values dim the sky mirrored by smooth surfaces everywhere on the map, indoors and " +
+                    "in puddles alike. Live.",
+                    new BepInEx.Configuration.AcceptableValueRange<float>(0f, 1f)));
+
             // §12 goal 1 — real ambient fix, unconditional default Donor (harmless for a no-rig map —
             // Donor="Off" above means OnSceneLoaded never reaches ApplyDonorLevelSettingsOverrides for it).
             cfg.UnityAmbientEntry = Plugin.Instance.Config.Bind(section, "UnityAmbient", AmbientSource.Donor,
@@ -394,6 +410,7 @@ namespace ArenaMapPort.Client
                 "draws — an empty depth map). Both RoofDepth/RoofDepthBlack still compute " +
                 "LevelSettings.RainBounds from this map's own static geometry once per raid. See " +
                 "RainCoverRepairs.cs. Applied fresh every raid, not live.");
+            cfg.ReflectionIntensity.SettingChanged += (_, __) => ReapplyReflectionIntensity(map);
 
             // §13 goal 2 — RoofDepthBlack's elevated-mesh filter: a renderer only becomes a black-draw
             // candidate if its bounds.min.y sits at least this far above the ground/collider hit directly
@@ -1420,6 +1437,55 @@ namespace ArenaMapPort.Client
 
         internal static BepInEx.Configuration.ConfigEntry<float> GroundSmoothnessBaseEntry(ArenaMapDescriptor map) =>
             _configs.TryGetValue(map.Key, out var c) ? c.GroundSmoothnessBase : null;
+
+        internal static float ReflectionIntensityForCurrentMap() =>
+            IsActiveForCurrentMap() && _configs.TryGetValue(_activeMap.Key, out var c) ? c.ReflectionIntensity.Value : 1f;
+
+        internal static BepInEx.Configuration.ConfigEntry<float> ReflectionIntensityEntry(ArenaMapDescriptor map) =>
+            _configs.TryGetValue(map.Key, out var c) ? c.ReflectionIntensity : null;
+
+        static readonly System.Reflection.FieldInfo ScreenAmbientBlockField =
+            HarmonyLib.AccessTools.Field(typeof(AmbientLight), "_screenAmbientBlock");
+        static readonly int ReflectionIntensityId = Shader.PropertyToID("_ReflectionIntensity");
+
+        // Harmony postfix on AmbientLight.method_3 (HarmonyPatches.InstallReflectionIntensityScale). method_3
+        // writes a fresh value into the block on every call (every LateUpdate, AmbientLight.cs:287-296,
+        // 434-438), so scaling what it just wrote never compounds. Cheap: two block accesses per frame,
+        // and only while a rig-active ported map is loaded.
+        internal static void ReflectionIntensityPostfix(AmbientLight __instance)
+        {
+            if (!ArenaMapRaid.IsLoaded() || !IsActiveForCurrentMap())
+            {
+                return;
+            }
+            float scale = ReflectionIntensityForCurrentMap();
+            if (scale >= 1f || ScreenAmbientBlockField == null)
+            {
+                return;
+            }
+            var block = ScreenAmbientBlockField.GetValue(__instance) as MaterialPropertyBlock;
+            if (block == null)
+            {
+                return;
+            }
+            block.SetFloat(ReflectionIntensityId, block.GetFloat(ReflectionIntensityId) * scale);
+        }
+
+        // Live re-apply: method_3 recomputes and our postfix rescales in the same call.
+        internal static void ReapplyReflectionIntensity(ArenaMapDescriptor map)
+        {
+            if (!IsActiveForCurrentMap() || _activeMap != map)
+            {
+                return;
+            }
+            var ambient = ActiveRig?.Controller?.TimeOfDayController?.AmbientLightScript;
+            if (ambient == null)
+            {
+                return;
+            }
+            ambient.method_3();
+            Plugin.Log.LogInfo($"[ArenaMapPort][WeatherRig] {map.Key}: ReflectionIntensity scale={ReflectionIntensityForCurrentMap():0.00} applied live");
+        }
 
         internal static RainCoverMode RainCoverForCurrentMap() =>
             _activeMap != null && _configs.TryGetValue(_activeMap.Key, out var c) ? c.RainCoverEntry.Value : RainCoverMode.Off;
