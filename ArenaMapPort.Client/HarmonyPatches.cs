@@ -165,7 +165,7 @@ namespace ArenaMapPort.Client
 
             var postfix = AccessTools.Method(typeof(RainCoverRepairs), nameof(RainCoverRepairs.SetupDepthCameraPostfix));
             harmony.Patch(target, postfix: new HarmonyMethod(postfix));
-            Plugin.Log.LogInfo("[ArenaMapPort][Harmony] patched DepthPhotograper.SetupDepthCamera (§12 rain cover mask)");
+            Plugin.Log.LogInfo("[ArenaMapPort][Harmony] patched DepthPhotograper.SetupDepthCamera (§12/§13 rain cover mask + diagnostics)");
 
             // DepthPhotograper.Render(), public instance, no args (DepthPhotograper.cs:55). The prefix computes
             // RainBounds/cover layers on the raid's first camera change, when every scene is loaded.
@@ -177,6 +177,19 @@ namespace ArenaMapPort.Client
             var prefix = AccessTools.Method(typeof(RainCoverRepairs), nameof(RainCoverRepairs.RenderPrefix));
             harmony.Patch(render, prefix: new HarmonyMethod(prefix));
             Plugin.Log.LogInfo("[ArenaMapPort][Harmony] patched DepthPhotograper.Render (§12 rain cover bounds)");
+
+            // §13 goal 2 — DepthPhotograper.RenderObstacles(), public instance, no args, single overload
+            // (DepthPhotograper.cs:138), verified §1 of the §13 investigation. Draws elevated meshes onto
+            // the depth camera (RainCoverMode.RoofDepthBlack only) before RenderObstacles()' own,
+            // unmodified body calls _depthCamera.Render() a few lines later.
+            var renderObstacles = AccessTools.Method(typeof(DepthPhotograper), nameof(DepthPhotograper.RenderObstacles));
+            if (!Verify(renderObstacles, typeof(DepthPhotograper), nameof(DepthPhotograper.RenderObstacles)))
+            {
+                return;
+            }
+            var obstaclesPrefix = AccessTools.Method(typeof(RainCoverRepairs), nameof(RainCoverRepairs.RenderObstaclesPrefix));
+            harmony.Patch(renderObstacles, prefix: new HarmonyMethod(obstaclesPrefix));
+            Plugin.Log.LogInfo("[ArenaMapPort][Harmony] patched DepthPhotograper.RenderObstacles (§13 rain cover v2 — roof draws)");
         }
 
         // daytime-and-visuals F1 — LocalGame.InitWeather(TimeAndWeatherSettings), public instance,

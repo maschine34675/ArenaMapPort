@@ -1027,6 +1027,20 @@ namespace ArenaMapPort.Client
 
                 AppendReflectionProbeFaces(sb);
 
+                // docs/progress/donor-settings-camera-weather.md §13 goal 1 — rain-cover depth-map
+                // readback at THIS snapshot's own camera position, so "F9 at both spots" (§13 test steps)
+                // tells whether a roof was actually photographed above the tester's feet.
+                try
+                {
+                    sb.AppendLine(cam != null
+                        ? "  " + RainCoverRepairs.BuildDepthReadback(cam.transform.position)
+                        : "  RainCover depth readback: n/a (no active camera)");
+                }
+                catch (Exception ex)
+                {
+                    sb.AppendLine($"  RainCover depth readback threw: {ex.GetType().Name}: {ex.Message}");
+                }
+
                 Plugin.Log.LogInfo(sb.ToString());
             }
             catch (Exception ex)

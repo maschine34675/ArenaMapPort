@@ -79,13 +79,21 @@ namespace ArenaMapPort.Client
         // for a rig-active map.
         internal enum AmbientSource { Donor, Stub }
 
-        // §12 goal 3 — rain-cover fix for ported maps. No ArenaMapPort map authors a WeatherObstacle/
-        // DryPlane/Terrain-layer the way a vanilla donor does, so DepthPhotograper's top-down depth photo
-        // is empty and every point on the map reads "uncovered" (RainCoverRepairs.cs). RoofDepth computes
-        // LevelSettings.RainBounds from the map's own static geometry once per raid and widens the depth
-        // camera's cullingMask to the layers that geometry actually uses. Off = today's behavior
-        // (class-default RainBounds, Terrain-only cullingMask).
-        internal enum RainCoverMode { RoofDepth, Off }
+        // §12 goal 3 / §13 goal 2 — rain-cover fix for ported maps. No ArenaMapPort map authors a
+        // WeatherObstacle/DryPlane/Terrain-layer the way a vanilla donor does, so DepthPhotograper's
+        // top-down depth photo is empty and every point on the map reads "uncovered" (RainCoverRepairs.cs).
+        // RoofDepthBlack (new, §13, the default) mirrors vanilla's own mechanism byte-for-byte: a Harmony
+        // prefix on DepthPhotograper.RenderObstacles draws every elevated static mesh (roofs/overhangs,
+        // found by the same once-per-raid scan) in "Hidden/Black" onto the Terrain layer via
+        // Graphics.DrawMesh(..., depthCamera) — exactly what WeatherObstacle.MeshCollider's combined
+        // DryPlane mesh does on a real donor — and does NOT widen the depth camera's cullingMask (stays
+        // Terrain-only, like vanilla). RoofDepth (legacy, kept for A/B comparison) instead widens the
+        // depth camera's cullingMask to every layer the bounds scan found, so the map's own renderers get
+        // photographed directly — unverified whether this draws anything at all for a Forward-path camera
+        // against deferred-only shaders (see docs/progress/donor-settings-camera-weather.md §13). Both
+        // still compute LevelSettings.RainBounds from the map's own static geometry once per raid. Off =
+        // today's behavior (class-default RainBounds, Terrain-only cullingMask, no obstacle draws).
+        internal enum RainCoverMode { RoofDepth, RoofDepthBlack, Off }
 
         // §12 goal 1 — Reserve_Base_Scripts' own authored LevelSettings ambient values, re-verified
         // against LevelSettings.cs:35,37,39,41 (SkyColor=Color.black class default override,
@@ -142,6 +150,9 @@ namespace ArenaMapPort.Client
             // §12 goal 1/3 — new keys, see AmbientSource/RainCoverMode's own doc comments.
             internal BepInEx.Configuration.ConfigEntry<AmbientSource> UnityAmbientEntry;
             internal BepInEx.Configuration.ConfigEntry<RainCoverMode> RainCoverEntry;
+
+            // §13 goal 2 — RoofDepthBlack's elevated-mesh filter threshold. See RainCoverRepairs.cs.
+            internal BepInEx.Configuration.ConfigEntry<float> CoverMinHeightEntry;
         }
 
         // Internal (not the default private) — LightingDiagnosticProbe.LastHarvestResult returns this
@@ -346,17 +357,42 @@ namespace ArenaMapPort.Client
                 "kept live every camera pre-cull by LevelSettings.OnPreCullCallback (BSG code) once " +
                 "written — see docs/progress/donor-settings-camera-weather.md §12.");
 
-            // §12 goal 3 — rain-cover fix, unconditional default RoofDepth (same reasoning as
-            // UnityAmbientEntry above).
-            cfg.RainCoverEntry = Plugin.Instance.Config.Bind(section, "RainCover", RainCoverMode.RoofDepth,
-                "§12 goal 3 — RoofDepth computes LevelSettings.RainBounds from this map's own static " +
-                "geometry once per raid and widens DepthPhotograper's depth-camera cullingMask to the " +
-                "layers that geometry actually uses, so a ported map (which authors no WeatherObstacle/" +
-                "DryPlane/Terrain layer) gets a real roof/floor coverage photo instead of an empty one — " +
-                "fixes the indoor wet-floor/sky-reflection veil (2026-09-18 14:52 playtest, " +
-                "spiegelung-innen1/2.png). Off = today's behavior (class-default RainBounds, Terrain-only " +
-                "cullingMask — an empty depth map). See RainCoverRepairs.cs. Applied fresh every raid, not " +
-                "live.");
+            // §12 goal 3 / §13 goal 2 — rain-cover fix, unconditional default RoofDepthBlack (same
+            // reasoning as UnityAmbientEntry above). §13: adding RoofDepthBlack as a new enum VALUE (not a
+            // new key) is safe per this project's hard rule — BepInEx serializes an enum ConfigEntry by
+            // NAME, and both old values ("RoofDepth"/"Off") still parse byte-for-byte from an existing
+            // saved config; only the unset/default case changes to the new value.
+            // Key renamed from "RainCover" (saved as RoofDepth in existing configs) so the new default
+            // takes effect; the old key stays orphaned in the cfg.
+            cfg.RainCoverEntry = Plugin.Instance.Config.Bind(section, "RainCoverMethod", RainCoverMode.RoofDepthBlack,
+                "§13 — RoofDepthBlack (default) draws every elevated static mesh (roofs/overhangs, found " +
+                "by the same once-per-raid geometry scan) in black onto DepthPhotograper's depth camera via " +
+                "Graphics.DrawMesh, the same mechanism a real donor's WeatherObstacle/DryPlane does — fixes " +
+                "the indoor wet-floor/sky-reflection veil (2026-09-18 14:52/20:20 playtests) the vanilla-" +
+                "faithful way. RoofDepth (§12, legacy) instead widens the depth camera's cullingMask to " +
+                "every layer the scan found — kept only for A/B comparison; the 2026-09-18 20:20 playtest " +
+                "found it ineffective (SetupDepthCamera forces RenderingPath.Forward, and this map's " +
+                "deferred-only shaders very plausibly draw nothing into a forward-path camera). Off = " +
+                "today's original behavior (class-default RainBounds, Terrain-only cullingMask, no obstacle " +
+                "draws — an empty depth map). Both RoofDepth/RoofDepthBlack still compute " +
+                "LevelSettings.RainBounds from this map's own static geometry once per raid. See " +
+                "RainCoverRepairs.cs. Applied fresh every raid, not live.");
+
+            // §13 goal 2 — RoofDepthBlack's elevated-mesh filter: a renderer only becomes a black-draw
+            // candidate if its bounds.min.y sits at least this far above the ground/collider hit directly
+            // below it (or, with no hit, above the scanned map's own min.y) — mirrors vanilla's own
+            // DryPlane roofs/overhangs never including ground-level geometry. 2.2m is this task's own
+            // starting value (Reserve's 637 DryPlane instances span a rough 5-13m spread above their local
+            // reference height per docs/progress/donor-settings-camera-weather.md §13 investigation (c) —
+            // not a precise per-plane ground-clearance measurement, so treat 2.2m as a reasonable floor,
+            // not a donor-matched constant). Only read when RainCover=RoofDepthBlack.
+            cfg.CoverMinHeightEntry = Plugin.Instance.Config.Bind(section, "CoverMinHeight", 2.2f,
+                new BepInEx.Configuration.ConfigDescription(
+                    "§13 — minimum height (meters) a static renderer's own bounds.min.y must clear the " +
+                    "ground/collider directly below it (or the scanned map's own min.y, if nothing is hit) " +
+                    "to be treated as an elevated roof/overhang and drawn black onto the rain-cover depth " +
+                    "camera. Only used when RainCover=RoofDepthBlack.",
+                    new BepInEx.Configuration.AcceptableValueRange<float>(0f, 50f)));
 
             // Deliberately NO SettingChanged handlers on these three for re-apply purposes — "changes apply
             // on the next raid" is a hard requirement here (unlike ArenaLightingRepairs' own live-tunable
@@ -1043,7 +1079,7 @@ namespace ArenaMapPort.Client
                 // .Construct/CameraManager.SetCameraFromSettings and TOD_Scattering's per-frame LevelSettings
                 // read both happen strictly later in the same startup sequence.
                 ApplyDonorLevelSettingsOverrides(map, cfg);
-                RainCoverRepairs.ApplyForCurrentMap(map, cfg.RainCoverEntry.Value, cfg.RainBoundsCenter, cfg.RainBoundsSize); // §12 goal 3
+                RainCoverRepairs.ApplyForCurrentMap(map, cfg.RainCoverEntry.Value, cfg.RainBoundsCenter, cfg.RainBoundsSize, cfg.CoverMinHeightEntry); // §12 goal 3 / §13 goal 2
                 ApplyDonorCameraPrefab(map, cfg, rig);
                 if (rig.Kind == RigKind.Full)
                 {

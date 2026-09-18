@@ -839,3 +839,352 @@ Lighting Lab session; this pass turns those findings into the new default behavi
 - Log lines to look for: `[RainCover] ... armed`, then on camera change
   `[RainCover] ... RainBounds computed from N renderer(s) ... center=... size=...`,
   `[RainCover] ... depth-camera cover layers=0x...`, `[RainCover] ... depth camera cullingMask=0x...`.
+
+## §13) Rain cover v2 — vanilla-faithful roof depth photo (2026-09-18)
+
+Role: builder. Task: the 2026-09-18 20:20 playtest (log `D:\SPT41vanilla\BepInEx\LogOutput.log` lines
+1485-1680, screenshots `analysis/screenshots/außen.png`/`innen.png`) confirmed §12's outdoor ambient fix
+works (dark wet asphalt, correct puddle mirrors, no veil) but the §12.4 `RoofDepth` cullingMask-widening
+mechanism did not fix the indoor warehouse floor (still full wetness: puddles mirroring the pillars, a
+bright white sheen between them). This pass implements the mechanism vanilla actually uses — a Harmony
+prefix on `DepthPhotograper.RenderObstacles` that draws every elevated static mesh in black onto the
+depth camera, the same way a donor's `WeatherObstacle`/`DryPlane` roofs do — plus a first-class depth-map
+readback diagnostic. Client-only, no git commit made (workspace rule unchanged: the lead commits).
+
+### §13.1) Evidence — why `RoofDepth` (§12.4) plausibly drew nothing
+
+`DepthPhotograper.SetupDepthCamera` (decompile, `DepthPhotograper.cs:131`) sets the depth camera's
+`renderingPath = RenderingPath.Forward` unconditionally. If this map's own p0/deferred/Vert-Paint-style
+shaders author only a `LightMode=Deferred` pass plus a `ShadowCaster` pass (this project's own
+`ShaderRebind.cs`/`material-shaders.json` pipeline — not re-audited this pass, taken from the task's own
+premise), a Forward-path camera skips their color/depth-writing pass entirely: widening the depth camera's
+`cullingMask` to include those renderers' layers (§12.4(b)) very plausibly draws nothing at all, matching
+the playtest's own "ran mechanically, floor still wet" symptom (`RainBounds`/`cullingMask` both computed
+and logged correctly, the F9 snapshot's own `_WaterLevel=0.76`/`PostFxSSR=True`/`AmbientLight.IsSSREnable=
+True` unchanged — DepthPhotograper's actual coverage photo is the only piece never independently verified
+until this pass' own goal 1 diagnostic).
+
+A second, independent finding from the same investigation (full write-up: the task's own SPEC, reproduced
+in `RainCoverRepairs.cs`'s class doc comment and this section) — the *confirmed* `_WeatherDepthMap`-
+consuming shader (`WetRenderer`'s `CameraEvent.BeforeReflections` screen overlay, matched by its own
+`_SurfaceWetBias`/`_SurfaceWetIntensity`/... property IDs turning up together with `_CameraDepthTexture`/
+`_CameraGBufferTexture2` in `globalgamemanagers.assets`' own shader property tables) was measured at
+`_SurfaceWetIntensity=0.00` during the very playtest that showed the bug. That doesn't mean rain-cover
+correctness stopped mattering — it means the 20:20 playtest's own indoor veil may ALSO still be driven by
+`GlobalReflection` (§12.1's own, earlier, already-confirmed Candidate B fix — a Harmony postfix on
+`AmbientLight.method_2` overriding `_MyGlobalReflectionProbe`), which the "everything at defaults" test
+run left at its own default (`Rig`, not `Black`). **§13.6's test steps below therefore keep the
+`GlobalReflection=Black` A/B check alongside the new depth readback**, so a playtest can tell which
+mechanism actually cleared the veil before concluding this pass succeeded or failed on its own.
+
+### §13.2) Goal 1 — depth-map readback diagnostic
+
+`RainCoverRepairs.BuildDepthReadback(Vector3 worldPos)`, called from `LightingLab`'s existing F9 snapshot
+hotkey at the live camera position (extends the snapshot block rather than adding a new hotkey — task's
+own stated preference). Reads:
+
+- `DepthPhotograper.Instance._yBias`/`._depthTextureDimension`/`._depthRT` directly — all three are public
+  fields (`DepthPhotograper.cs:10-27`) and the component itself outlives any one `Render()` call (only its
+  transient `_depthCamera` GameObject/`_cameraRT` are destroyed every camera change, `DepthPhotograper.cs:
+  79-80`), so no caching is needed for these.
+- `_MapStart`/`_MapScale` via `Shader.GetGlobalVector` (process-wide globals `DepthPhotograper.
+  SetShaderValues` publishes, `DepthPhotograper.cs:174-182`) — same reasoning, safe to read live.
+- The transient depth camera's own top-Y (`_rainBounds.max.y`) and far-clip (`_rainBounds.size.y`) DO need
+  caching — the GameObject itself is long gone by the time an F9 keypress runs. Cached in the SAME
+  `SetupDepthCameraPostfix` Harmony postfix §12.4(b) already installs, now for EVERY `RainCover` mode
+  (including `Off`), not just `RoofDepth`.
+- The RFloat readback itself: `_depthRT` is a color-format `RenderTexture` (`RenderTextureFormat.RFloat`),
+  not a native depth buffer (`DepthPhotograper.CreateDepthRT`, `DepthPhotograper.cs:96`), so it reads back
+  like any other render texture — `RenderTexture.active` + a reusable 1x1 `Texture2D(..., TextureFormat.
+  RFloat, false, true).ReadPixels(...)`, the same reusable-scratch-texture pattern `LightingLab.
+  AppendReflectionProbeFaces` already established for its own G candidate.
+- UV → texel: derived directly from `SetShaderValues`' own math (`_MapStart`/`_MapScale`'s exact meaning),
+  not guessed — `px = floor((worldPos.x - mapStart.x) * mapScale.x * dim)`, same for `z`/`py`. The center
+  texel plus its 3x3 neighbourhood (8 more, edge-clamped) are all read back, so a roof edge is visible.
+- Height reconstruction, BOTH formulas logged every time (`SystemInfo.usesReversedZBuffer` says which one
+  is real on this machine, also logged): `height = camTopY - raw*farClip` (non-reversed) and
+  `height = camTopY - (1-raw)*farClip` (reversed-Z, expected true on this D3D11 desktop build).
+- `nothingPhotographed`: the depth camera's `CameraClearFlags.Color` clears color AND depth every render,
+  and the cleared depth value in shader-space is always the platform's own far sentinel — `0` under
+  reversed-Z, `1` otherwise; `raw` equal to that sentinel (within `1e-4`) means nothing drew into this
+  texel at all.
+- Ground Y under the query point: `Physics.Raycast` straight down on `HighPolyCollider`/`LowPolyCollider`/
+  `Terrain`/`Default` (resolved by name, tolerant of any one being absent from this project's TagManager).
+
+### §13.3) Goal 2 — `RainCoverMode.RoofDepthBlack` (new default)
+
+New enum VALUE on the existing `RainCover` key (not a new key — safe per this project's hard rule: BepInEx
+serializes an enum `ConfigEntry` by name, both old values `RoofDepth`/`Off` still parse byte-for-byte from
+an existing saved config, only the *default* changes). `WeatherRig.RainCoverMode` is now
+`{ RoofDepth, RoofDepthBlack, Off }`, default `RoofDepthBlack`.
+
+Mechanism, mirroring vanilla exactly (`DepthPhotograper.RenderObstacles`'s own `WeatherObstacle` draw call,
+decompile lines 152-161, is the direct template):
+
+- A new Harmony **prefix** (void, not bool — the original body still needs to run its terrain-lower/
+  restore loop and its own `_depthCamera.Render()` call) on `DepthPhotograper.RenderObstacles()` —
+  `RainCoverRepairs.RenderObstaclesPrefix`, installed by `HarmonyPatches.InstallRainCoverDepthMask`
+  alongside the existing two §12 hooks. Confirmed valid target: `public void RenderObstacles()`, no
+  parameters, single overload (`DepthPhotograper.cs:138`); `SetupDepthCamera()` already ran earlier inside
+  `Render()` (line 75, before `RenderObstacles()` at line 76), so `_depthCamera` (read via the existing
+  `AccessTools.Field`, same as §12.4(b)) already exists with its final position/cullingMask/RT.
+- For every cached elevated mesh: `Graphics.DrawMesh(mesh, localToWorld, blackMaterial, terrainLayer,
+  depthCamera, submeshIndex)` — the camera-specific overload, confirmed present in this build's
+  `UnityEngine.CoreModule.dll` — once per submesh (`Mesh.subMeshCount`). The **layer** argument passed is
+  always `LayerMask.NameToLayer("Terrain")`, never the mesh's own GameObject layer — `Graphics.DrawMesh`'s
+  `layer` parameter is matched against the CAMERA's `cullingMask` (still `1 << Terrain` only in this mode,
+  never widened), not the object's own layer; vanilla's own call makes the identical choice
+  (`DepthPhotograper.cs:155`) regardless of `WeatherObstacle`'s real layer. `blackMaterial` is our OWN
+  persistent `Material` from `ShadersFinder.Find("Hidden/Black")`, created once and kept — NOT
+  `DepthPhotograper`'s own `_blackMaterial` field, which is deliberately created fresh and
+  `DestroyImmediate`'d every single `Render()` call (`DepthPhotograper.cs:66,78`) and would be a
+  use-after-destroy hazard to reuse.
+- Draws queued in a prefix on `RenderObstacles` are still consumed by the ORIGINAL method's own
+  `_depthCamera.Render()` call a few lines later in the same synchronous call stack — vanilla's own
+  `WeatherObstacle` draw call proves this exact pattern already works (queued via `Graphics.DrawMesh`, no
+  `Camera` argument even, several lines before `_depthCamera.Render()` in the same method body,
+  `DepthPhotograper.cs:155-161`); a Harmony prefix just moves the queuing earlier in the same stack, no
+  frame boundary in between either way.
+- Does **NOT** widen the depth camera's `cullingMask` — stays Terrain-only, exactly like vanilla. §13.1
+  above is why: if the mask-widening approach (`RoofDepth`) really was drawing nothing due to the Forward-
+  path/deferred-shader mismatch, widening it here would add zero value; if it turns out to matter after
+  all, that's a follow-up investigation, not assumed necessary by this pass.
+
+**Elevated-mesh filter** (so the ground doesn't photograph itself — mirrors vanilla, where only roofs are
+ever authored as `DryPlane`s in the first place): computed once per raid, in the SAME renderer walk
+`RainCoverRepairs.ScanStaticGeometry` already does for `RainBounds` (§12.4(a), unchanged) — a second pass,
+after the full map's own bounds (hence its true min.y) are known:
+
+- Candidates are every renderer that already survived the existing Water/Sky/LevelBorder/player/oversized
+  filter (§12.4(a), untouched).
+- **Material exclusion** (new): any renderer with a material whose shader name contains `"Transparent"`,
+  `"Glass"`, or `"Fence"` (case-insensitive), or whose `renderQueue >= 2450`, is dropped before the
+  elevation check — fences/glass/decals/foliage cards should never become black roof cover.
+- **Elevation check** (new, config `CoverMinHeight`, default 2.2m — this task's own starting value;
+  §13.4's own donor measurement below is a rough sanity check only, not a per-plane ground-clearance
+  measurement): `Physics.Raycast` straight down from `(bounds.center.x, bounds.min.y - 0.05, bounds.
+  center.z)` on `HighPolyCollider`/`LowPolyCollider`/`Terrain`/`Default`, max 200m. Elevated if
+  `(bounds.min.y - hit.y) >= CoverMinHeight`; with no hit, elevated only if `bounds.min.y > (map's own
+  min.y + CoverMinHeight)`.
+- Surviving renderers' `MeshFilter.sharedMesh` + `transform.localToWorldMatrix` are cached (no
+  `MeshFilter`/null `sharedMesh` → excluded, logged separately — e.g. a bare `SkinnedMeshRenderer`).
+- One consolidated log line per raid: kept-for-bounds / considered-for-cover / elevated / excluded-by-
+  reason (oversized, material, not-elevated, no-mesh) counts — see §13.5.
+
+**`RainBounds` computation itself is unchanged** (§12.4(a) still applies byte-for-byte) — the new material
+filter only narrows which renderers become black-draw CANDIDATES, never which ones contribute to
+`RainBounds`/the legacy `cullingMask` layer set. Two small, defensive additions to the shared bounds math:
+`size.y` is floored to at least 10m (`DepthPhotograper._MapScale.y = 1/size.y`, `DepthPhotograper.cs:178`
+— a near-zero divisor was never actually observed, but is now provably impossible) and the top of the
+bounds already includes the existing +5m headroom (§12.4(a), unchanged) above the highest surviving
+renderer.
+
+### §13.4) Investigation — settled from the decompile + game data (see also `RainCoverRepairs.cs`'s own
+class doc comment)
+
+- **Harmony target validity**: `RenderObstacles` is `public void RenderObstacles()`, no parameters, single
+  overload (`DepthPhotograper.cs:138`) — an ordinary, unambiguous prefix target, same pattern as the
+  existing `Render`/`SetupDepthCamera` hooks.
+- **`_yBias`/`_depthTextureDimension` on Reserve** (`level139`, UnityPy `TypeTreeGenerator`, the ONE
+  `DepthPhotograper` instance in the level, `path_id=4661`): `_yBias=0.0`, `_depthTextureDimension=4096` —
+  both equal the plain C# class defaults. Reserve does not author either away from default, so this pass'
+  own diagnostics/math don't need to special-case a non-zero `_yBias` for parity with a real donor.
+- **DryPlane statistics on Reserve**: 637 `DryPlane` instances (`EFT.EnvironmentEffect.DryPlane`, fingerprint-
+  matched by exact field-set — confirmed unique against every other class with a bare `public Mesh Mesh`
+  field in the decompile), all sharing one unit-quad mesh asset, individually transformed (non-identity
+  rotation/non-uniform scale per instance — confirmed on a sampled instance). Approximate world-Y spread
+  across all 637 (2-level hierarchy, verified effectively flat for the sample): min≈-9.16, p10≈-4.97,
+  median≈-0.87, p90≈8.06, max≈50.62 — a rough 5-13m spread above whatever local reference height, roughly
+  consistent with roof/overhang placement. This is a sanity check for `CoverMinHeight`'s default, NOT a
+  precise per-plane ground-clearance measurement (that needs a per-plane downward raycast against Reserve's
+  own collision meshes, not attempted this pass).
+- **Wetting shader's `_WeatherDepthMap` comparison direction**: inconclusive (compiled DXBC, not
+  disassembled — out of the 20-minute timebox this investigation step was given). What WAS confirmed: a raw
+  string search of `globalgamemanagers.assets`' shader property tables found exactly one shader block
+  containing BOTH `WetRenderer.cs`'s own property IDs (`_SurfaceWetBias`/`_SurfaceWetDiffuseColor`/
+  `_SurfaceWetIntensity`/`_SurfaceWetSpecColor`) AND `_CameraDepthTexture`/`_CameraGBufferTexture2` — this
+  is `WetRenderer`'s own screen-space compositing shader, confirmed as the "wetting shader" the task set
+  out to find. `SetShaderValues` never publishes the depth camera's `nearClipPlane`/`farClipPlane` as
+  shader globals anywhere (only `_MapStart`/`_MapScale`/`_WeatherDepthMap`), which makes it more likely the
+  shader treats `_WeatherDepthMap` as a binary "was anything drawn here" signal than a magnitude comparison
+  against a reconstructed roof height — an inference from available evidence, not a confirmed shader read.
+  Separately (see §13.1): the exact global name `RainController.cs` writes every frame, `"_WaterLevel"`,
+  does not appear as a string anywhere in `globalgamemanagers.assets`/`resources.assets` — the two largest,
+  most-likely-resident shader data files (a per-map shader variant elsewhere was not ruled out).
+
+### §13.5) Config keys (new/changed this pass)
+
+| Section | Key | Type | Default | Notes |
+|---|---|---|---|---|
+| `Lighting (<map.Key>)` | `RainCover` | enum (`RoofDepth`/`RoofDepthBlack`/`Off`) | `RoofDepthBlack` (was `RoofDepth`) | §13 goal 2 — new enum VALUE on the existing key; old saved `RoofDepth`/`Off` values still parse. |
+| `Lighting (<map.Key>)` | `CoverMinHeight` | float (meters), range 0-50 | `2.2` | §13 goal 2 — new key. Only read when `RainCover=RoofDepthBlack`. |
+
+Every other §12.6 key (`UnityAmbient`, `RainBoundsCenter`/`RainBoundsSize`, and the `LightingLab
+(<map.Key>)` section's own keys) is unchanged by this pass.
+
+### §13.6) Log lines to check
+
+- `grep '\[RainCover\]'` — extended this pass:
+  - `RainCover=<RoofDepth|RoofDepthBlack|Off> armed — ...` (armed message now names the mode and, for
+    `RoofDepthBlack`, mentions "the elevated-mesh draw cache").
+  - The existing `RainBounds computed from N renderer(s) ...`/`depth-camera cover layers=0x...` lines —
+    unchanged, still logged for both `RoofDepth` and `RoofDepthBlack`.
+  - **New**, `RoofDepthBlack` only: `RoofDepthBlack scan: keptForBounds=... consideredForCover=...
+    elevated=... excluded(oversized)=... excluded(material)=... excluded(notElevated)=...
+    excluded(noMesh)=... CoverMinHeight=...` — once per raid, right after the bounds/layer lines.
+  - **New**, `RoofDepthBlack` only, once per raid (first camera change that actually draws or would draw):
+    either `RoofDepthBlack: drew N elevated mesh(es) (M submesh draw call(s)) onto the depth camera
+    (Terrain layer, Hidden/Black material).` or, if the scan found zero elevated meshes, `RoofDepthBlack: 0
+    elevated mesh(es) to draw this raid ...`.
+  - `depth camera cullingMask=0x... (added 0x...)` — unchanged, `RoofDepth` only (never logged for
+    `RoofDepthBlack`, which deliberately never widens the mask).
+- `grep '\[Harmony\] patched DepthPhotograper'` — now three lines (`SetupDepthCamera`, `Render`,
+  `RenderObstacles`), confirming all three §12/§13 hooks installed.
+- The F9 `[LightingLab][Snapshot]` block — new line, no letter prefix (it's a passive readback, not a
+  toggleable candidate): `RainCover depth readback @ (x, y, z): cameraY=... groundY=... yBias=...
+  depthTextureDimension=... mapStart=... mapScale=... usesReversedZBuffer=... depthCamTopY(cached)=...
+  farClip(cached)=... [center px=... py=... raw=... nothingPhotographed=... height(linear)=...
+  height(reversedZ)=...] [(-1,-1) ...] ... [(1,1) ...]` (9 texels total, center + its 3x3 neighbourhood).
+
+### §13.7) Test steps
+
+1. Load `arena_bay5`, Clear weather, everything at config defaults (`RainCover=RoofDepthBlack`,
+   `CoverMinHeight=2.2`, `AmbientOverride=Off` — i.e. don't touch the Lighting Lab). **Caveat found in
+   review (§13.10.1): if `com.maschine.ArenaMapPort.cfg` already has a saved `RainCover = RoofDepth` line
+   for `arena_bay5` (true as of the §12 playtest session, and BepInEx does NOT overwrite an already-saved
+   value with a new code default), "config defaults" is NOT `RoofDepthBlack` until that line is either
+   hand-edited to `RoofDepthBlack` or the map's `[Lighting (...)]` section is deleted so BepInEx regenerates
+   it.** Check the log for the new `RainCover=RoofDepth is the LEGACY ...` warning right after load — its
+   absence confirms `RoofDepthBlack` is really active before trusting any of the steps below.
+2. **Outdoor** — stand at the spot `außen.png` was taken from. Expect: unchanged from the 20:20 playtest —
+   dark wet asphalt, genuine mirror puddles, no veil (§12's own fix, untouched by this pass). Press F9;
+   the depth readback line's `nothingPhotographed` should read `true` for the center texel and most of its
+   neighbourhood (open sky above this spot — nothing SHOULD be photographed here) and `height(reversedZ)`
+   (the real formula on this D3D11 build — check `usesReversedZBuffer=True` in the same line) should be
+   `n/a`/meaningless whenever `nothingPhotographed=true`.
+3. **Indoor** — stand at the spot `innen.png` was taken from (warehouse). Expect: dry-looking floor, no
+   bright sky-cubemap mirror, no veil. Press F9; the depth readback line's center texel should now read
+   `nothingPhotographed=false` with a `height(reversedZ)` close to the warehouse roof's real world Y
+   (compare against `groundY` in the same line — the gap between `height(reversedZ)` and `groundY` should
+   roughly match the roof's actual clearance above the floor). If `nothingPhotographed` is still `true`
+   here, the roof genuinely isn't in the photo (goal 2 not working as intended) rather than a downstream
+   shader/reflection issue — check the `[RainCover] RoofDepthBlack scan`/`drew N elevated mesh(es)` log
+   lines from step 1's load to see whether the roof's renderer was ever found/classified elevated at all.
+4. **A/B the OTHER known mechanism** (§13.1's own finding) before concluding indoor dryness alone fixed the
+   veil, or before blaming goal 2 if it didn't: flip `LightingLab (arena_bay5) / GlobalReflection=Black`
+   (F12, existing knob, no new code) and re-check the same indoor spot. If THAT alone also removes any
+   remaining veil, the reflection/ambient pipeline is still contributing independently of rain-cover
+   coverage — expected, not a regression (§13.1/§13.8 both already say dryness alone may not be sufficient
+   with SSR on and `WetRenderer`'s own `_SurfaceWetIntensity` reading near zero).
+5. Read the `[RainCover]` log lines (§13.6) to confirm: `RainCover=RoofDepthBlack armed`, a non-zero
+   `elevated=` count in the `RoofDepthBlack scan` line, and a `drew N elevated mesh(es)` line (not the "0
+   elevated mesh(es)" one) after the raid's first camera change.
+6. Sanity-check `RainCover=RoofDepth` (legacy) still behaves exactly as §12 described (cullingMask widened,
+   no obstacle draws, no `RoofDepthBlack scan`/`drew N elevated mesh(es)` lines) and `RainCover=Off` still
+   behaves exactly as before this pass (no bounds/mask/obstacle-draw lines at all beyond the initial `Off —
+   no bounds/mask/obstacle draws computed` line).
+7. Sanity-check a no-rig map (`arena_equator`) still looks byte-for-byte like before this pass — no
+   `DepthPhotograper` even exists on it (no rig means no Weather/RainController subtree), so none of §12/
+   §13's code ever runs; the F9 depth readback line should read "DepthPhotograper.Instance is null".
+
+### §13.8) Is dryness alone enough? (goal 4 of the task's own spec)
+
+Stated honestly, not assumed: making the depth map correctly mark the warehouse floor "covered" only
+visibly helps if some ACTIVE shader branches on that coverage. The one confirmed consumer (`WetRenderer`'s
+screen overlay) measured `_SurfaceWetIntensity=0.00` during the very playtest that showed the bug — so it
+wasn't the culprit THAT time, independent of whether this pass' fix is otherwise correct. Even with
+`_SurfaceWetIntensity` at zero, `PostFxSSR=True` in that same playtest means a dry (rough) floor still
+picks up some cubemap/screen-space-reflection sheen — just far weaker than a wet-and-smooth one. Net
+expectation for the test above: `RoofDepthBlack` is necessary for `DepthPhotograper`/`WetRenderer`-driven
+wetness in general, and is the vanilla-faithful, structurally correct fix regardless — but "still faintly
+bright indoors after this pass" is not automatically a goal-2 failure without first re-checking
+`GlobalReflection` (step 4 above), a second, independently-confirmed mechanism capable of causing the same
+visible symptom.
+
+### §13.9) Build
+
+```
+dotnet build D:\ArenaMapPort\ArenaMapPort.Client\ArenaMapPort.Client.csproj -c Release -p:ArenaMapPortDllOnly=true
+```
+Clean rebuild (removed `bin`/`obj` first): **0 warnings, 0 errors.**
+
+dist DLL hash (SHA-256) == bin DLL hash, both:
+`5e1141a83c1952d10bdb68c7a09b725443f61d9f31fb277bbc2a7e0e0751cc6b`
+
+Files touched: `WeatherRig.cs` (`RainCoverMode` enum + `RainCover`/`CoverMinHeight` config, goal 2),
+`RainCoverRepairs.cs` (rewritten — goal 1's `BuildDepthReadback`, goal 2's elevated-mesh scan +
+`RenderObstaclesPrefix`, §12's own three methods carried forward with minimal, targeted changes),
+`HarmonyPatches.cs` (one new installer call — `RenderObstacles` prefix, alongside the existing two §12
+hooks), `LightingLab.cs` (F9 snapshot extended with the depth readback line, no new candidate letter — it's
+a passive readback, not a toggle). No `Plugin.cs` change needed (same reasoning as §12.9 — no new config to
+bind early, `HarmonyPatches.InstallAll` already runs before `WeatherRig.Install()`). No `tools/`, `Server`,
+or `base.json` file changed — zero receipts invalidated. No git commit made (workspace rule unchanged: the
+lead commits). Not yet playtested against this exact build.
+
+### §13.10) Review fix-ups (2026-09-18)
+
+Two findings from a review pass on the §13 diff. Both verified against the actual code/config before
+touching anything; both were real.
+
+**1) HIGH — confirmed real, fixed within this project's own constraints, not the way the finding's
+"fix" first suggested.** `D:\SPT41vanilla\BepInEx\config\com.maschine.ArenaMapPort.cfg` already has an
+explicit `RainCover = RoofDepth` line for every one of its 13 map sections (checked directly —
+`grep -n RainCover` on the live file, lines 130/238/346/454/562/670/778/886/994/1102/1210/1318/1426/1534,
+all reading `RoofDepth`), written by BepInEx during the §12 playtest session when `RoofDepth` was still the
+class default. `BepInEx.Configuration.ConfigEntry.Bind()` reads an already-present key from the saved file
+rather than overwriting it with a new code default — moving `WeatherRig.cs`'s class default to
+`RoofDepthBlack` (§13.3, unchanged by this fix-up) does nothing for a map whose section is already on disk
+with an explicit `RoofDepth` value, `arena_bay5` included. §13.7 step 1's "everything at config defaults"
+premise is therefore false for this exact deployment as it stood after §12 — the next playtest would
+silently keep exercising the legacy, already-shown-not-to-work `RoofDepth` path while believing it was
+testing `RoofDepthBlack`.
+
+This project's own hard rule forbids writing under `D:\SPT41vanilla` (the `.cfg` lives there), so the
+finding's short-term suggestion (delete/rename the file, or hand-edit the 13 lines) is not something this
+client-only pass can do itself. Fix applied instead, both parts client-side:
+
+- `RainCoverRepairs.ApplyForCurrentMap` (`RainCoverRepairs.cs`) now logs a `[ArenaMapPort][RainCover]`
+  **warning**, once per raid, whenever the resolved mode for the current map is the legacy `RoofDepth` —
+  naming the exact cause (an old saved `.cfg` value, not a deliberate choice) and the exact remedy (edit
+  `RainCover=RoofDepthBlack` in that map's `[Lighting (...)]` section, or delete the section so BepInEx
+  regenerates it). This makes the stale-config case impossible to miss in the log the next time someone
+  actually looks, rather than silently reproducing the "ran mechanically, floor still wet" symptom §13 was
+  written to fix.
+- §13.7 step 1 below is corrected to say so explicitly, so a future playtest does not repeat the same silent
+  miss this review caught.
+
+No enum/config-key change (§13.3's "old saved values still parse, only the default changes" contract is
+kept exactly as designed) and no attempt to auto-migrate the saved value from client code — an already-saved
+`RoofDepth` is indistinguishable from a person's own deliberate A/B choice (§13.7 step 6 exists precisely to
+exercise that choice), so overwriting it automatically would be wrong on purpose, not just disallowed by the
+hard rule.
+
+**2) LOW — confirmed real, fixed.** `RainCoverRepairs.AppendTexel` set `RenderTexture.active = rt;`, then
+called `scratch.ReadPixels(...)`, `scratch.Apply()`, `scratch.GetPixel(0, 0)`, then restored
+`RenderTexture.active = prevActive;` — with no `try`/`finally` around the three calls in between. The only
+enclosing exception handling was in the caller, `BuildDepthReadback`'s own `try`/`catch`/`finally` around
+the whole 3x3 texel loop, but that `catch` only appends an error string to the log line and that `finally`
+only destroys the scratch `Texture2D`; neither restores `RenderTexture.active`. An exception partway through
+the 3x3 neighbourhood readback (any single texel) would have left the engine-global
+`RenderTexture.active` pointed at `DepthPhotograper`'s own `_depthRT` (an RFloat render texture) until
+something unrelated happened to reassign it later — a real, if narrow, correctness hazard for anything else
+in the same frame that reads `RenderTexture.active` and expects the screen/default target.
+
+Fixed by wrapping the three calls in their own `try`/`finally` inside `AppendTexel`, restoring
+`RenderTexture.active` unconditionally regardless of which one throws; `raw` is now assigned inside the
+`try` and read after. No behavior change on the non-throwing path (verified by inspection — same three
+calls, same order, same return value).
+
+**Build**: clean rebuild (`bin`/`obj` removed first),
+`dotnet build ArenaMapPort.Client\ArenaMapPort.Client.csproj -c Release -p:ArenaMapPortDllOnly=true` — **0
+warnings, 0 errors**. dist DLL hash (SHA-256) == bin DLL hash, both:
+`460c152f9859f6a1a00998cc0a930c4c357d8eee240f49b58fdc8ddf669d2dc7` (changed from §13.9's
+`5e1141a83c1952d10bdb68c7a09b725443f61d9f31fb277bbc2a7e0e0751cc6b` — expected, `RainCoverRepairs.cs`
+changed). Only `RainCoverRepairs.cs` touched this fix-up pass. No git commit made (workspace rule
+unchanged: the lead commits). Still not playtested against this exact build.
+
+### 13.11) Lead decision: key renamed
+
+The saved-config trap from §13.10.1 is handled the project's usual way: the key is now
+`RainCoverMethod` (default `RoofDepthBlack`); the old `RainCover = RoofDepth` line in existing configs is
+orphaned and ignored. No manual config edit is needed for the next playtest.
