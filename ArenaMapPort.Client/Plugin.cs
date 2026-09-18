@@ -77,6 +77,14 @@ namespace ArenaMapPort.Client
             ArenaLightingRepairs.Install();
             LightingDiagnosticProbe.Install();
 
+            // "Lighting Lab" (docs/progress/donor-settings-camera-weather.md) — live F12 toggles for the
+            // grazing-angle white-ground veil bug. Must install AFTER WeatherRig/ArenaLightingRepairs (both
+            // subscribe to the same static SceneManager.sceneLoaded event; C# multicast delegates invoke
+            // subscribers in subscription order) so its own OnSceneLoaded sees the rig already activated
+            // and ArenaLightingRepairs' own ambient/light pass already applied before layering its
+            // candidate overrides on top. See LightingLab.cs.
+            LightingLab.Install();
+
             // Playtest finding 2026-09-14 20:09 — large flat white untextured blocks blocking movement.
             // Removes Arena's own TeamFight play-area borders (config-gated) plus a narrow name-based
             // safety net for components disabled in Arena that the current extractor/importer still

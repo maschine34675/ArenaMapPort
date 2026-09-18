@@ -133,6 +133,11 @@ namespace ArenaMapPort.Client
 
         // §C.3 — Harmony postfix target: RainController.AbstractStateSummer.SetWetting(float, float,
         // Vector2, float). See HarmonyPatches.InstallWetRendererDamper for the target resolution.
+        //
+        // "Lighting Lab" candidate D (docs/progress/donor-settings-camera-weather.md) added one check at
+        // the top of this method: LightingLab.RainOff, when set, forces wet.Intensity=0 outright and wins
+        // over this class's own WetRendererIntensityMultiplier — a small, additive change to this
+        // already-reviewed file rather than a duplicate Harmony hook on the same target.
         internal static void Postfix(RainController.AbstractStateSummer __instance)
         {
             // MANDATORY first check — see this class's own doc comment: without it this postfix would
@@ -141,17 +146,24 @@ namespace ArenaMapPort.Client
             {
                 return;
             }
-            float multiplier = WetRendererIntensityMultiplier;
-            if (multiplier >= 1f)
-            {
-                return; // 1.0 = off — avoid a pointless write every frame
-            }
 
             var controller = __instance?.Controller;
             var wet = controller != null ? controller._wetRenderer : null;
             if (wet == null)
             {
                 return;
+            }
+
+            if (LightingLab.IsRainOffForCurrentMap())
+            {
+                wet.Intensity = 0f; // Lighting Lab D — RainOff wins over the multiplier below
+                return;
+            }
+
+            float multiplier = WetRendererIntensityMultiplier;
+            if (multiplier >= 1f)
+            {
+                return; // 1.0 = off — avoid a pointless write every frame
             }
 
             wet.Intensity = wet.Intensity * multiplier;

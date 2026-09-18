@@ -66,6 +66,48 @@ namespace ArenaMapPort.Client
             // donor-settings-camera-weather §C.3 + §D — see RainWetnessRepairs.cs / WeatherTestOverride.cs.
             InstallWetRendererDamper(harmony);
             InstallWeatherTestOverride(harmony);
+
+            // "Lighting Lab" (docs/progress/donor-settings-camera-weather.md) — see LightingLab.cs.
+            InstallLightingLabReflectionOverride(harmony);
+            InstallLightingLabWaterLevelOverride(harmony);
+        }
+
+        // Lighting Lab candidate B — AmbientLight.method_2(), public instance, no args (the task brief's
+        // own decompile findings call it "private"; re-verified this pass, it is actually `public` —
+        // resolves identically either way via AccessTools.Method, noted for the record only).
+        // Verified: D:/SPT41/Development/_decompiled/AmbientLight.cs:389.
+        static void InstallLightingLabReflectionOverride(Harmony harmony)
+        {
+            var target = AccessTools.Method(typeof(AmbientLight), "method_2");
+
+            if (!Verify(target, typeof(AmbientLight), "method_2"))
+            {
+                return;
+            }
+
+            var postfix = AccessTools.Method(typeof(LightingLab), nameof(LightingLab.ReflectionPostfix));
+            harmony.Patch(target, postfix: new HarmonyMethod(postfix));
+            Plugin.Log.LogInfo("[ArenaMapPort][Harmony] patched AmbientLight.method_2 (Lighting Lab candidate B)");
+        }
+
+        // Lighting Lab candidate D — RainController.AbstractState.vmethod_15(in Vector3, float, float,
+        // float, float), public virtual, nested. AbstractStateSummer explicitly calls
+        // base.vmethod_15(...) first (a non-virtual base-call), and no AbstractStateWinter subclass
+        // overrides it, so patching THIS base method body catches every season state.
+        // Verified: D:/SPT41/Development/_decompiled/RainController.cs:142.
+        static void InstallLightingLabWaterLevelOverride(Harmony harmony)
+        {
+            var target = AccessTools.Method(typeof(RainController.AbstractState), "vmethod_15");
+
+            if (!Verify(target, typeof(RainController.AbstractState), "vmethod_15"))
+            {
+                return;
+            }
+
+            var postfix = AccessTools.Method(typeof(LightingLab), nameof(LightingLab.WaterLevelPostfix));
+            harmony.Patch(target, postfix: new HarmonyMethod(postfix));
+            Plugin.Log.LogInfo("[ArenaMapPort][Harmony] patched RainController.AbstractState.vmethod_15 " +
+                                "(Lighting Lab candidate D)");
         }
 
         // donor-settings-camera-weather §D — EFT.Weather.WeatherController.SetWeatherNodes(WeatherNode[]),

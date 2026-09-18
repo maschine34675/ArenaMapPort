@@ -348,3 +348,251 @@ dist DLL hash (SHA-256) == bin DLL hash, both:
   `"ReflectionProbe": skip_import`), so smooth surfaces (ground smoothness 0.90-0.98) reflect the sky
   cubemap instead of their surroundings. If the ground stays too bright with the donor camera, porting
   the probes (realtime probes at the Arena positions, or an editor bake) is the next candidate.
+
+## 11) Lighting Lab (2026-09-18)
+
+Role: builder. Task: build a "Lighting Lab" — live F12 toggles, one per candidate mechanism — so a
+tester can isolate which one causes the grazing-angle white/veil ground bug the 2026-09-18 06:19/06:23
+playtest screenshots confirm (`analysis/screenshots/clear-spiegelung1-2.png`,
+`regen-spiegelung1-2.png`): from a steep angle the yard is dark matte asphalt with a genuine mirror
+puddle reflecting the brick building; from a grazing angle (same yard, opposite direction) the *entire*
+ground is a blown-out white/grey veil with no discernible mirror at all — nearly identical between Clear
+and Rain (including at sun intensity 0 in Rain/fog), the signature of a Fresnel-driven specular/
+reflection term reading a bright, non-black environment rather than sun glint or rain. Verified directly
+by opening the four screenshots this pass: the described bug is exactly what they show.
+
+**Result: implemented and built (0 new warnings), dist DLL hash confirmed == bin DLL hash. Not yet
+playtested — this pass is diagnostic tooling, not a fix.** Client-only (`ArenaMapPort.Client`). No git
+commit made (workspace rule: the lead commits).
+
+### 11.1) Files changed
+
+- **New: `ArenaMapPort.Client/LightingLab.cs`** — all seven candidates (A-G), their config, per-map
+  captured baselines/material cache, and the F9 snapshot hotkey. See the file's own class doc comment
+  for the full per-candidate rationale and three deliberate adjustments from the implementation spec
+  this file was built from (noted there, summarized in §11.3 below).
+- **`ArenaMapPort.Client/HarmonyPatches.cs`** — two new installers, `InstallLightingLabReflectionOverride`
+  (postfix on `AmbientLight.method_2`, candidate B) and `InstallLightingLabWaterLevelOverride` (postfix on
+  `RainController.AbstractState.vmethod_15`, candidate D), following the file's existing
+  `AccessTools.Method` + `Verify()` convention, called from `InstallAll` right after
+  `InstallWetRendererDamper`/`InstallWeatherTestOverride`.
+- **`ArenaMapPort.Client/RainWetnessRepairs.cs`** — `Postfix` gained one added check
+  (`LightingLab.IsRainOffForCurrentMap()`) ahead of its own existing `WetRendererIntensityMultiplier`
+  logic: candidate D's `RainOff` forces `wet.Intensity=0` and wins over the multiplier. A small, additive
+  change to this already-reviewed file rather than a duplicate Harmony hook on the same target.
+- **`ArenaMapPort.Client/Plugin.cs`** — `LightingLab.Install()` added right after
+  `ArenaLightingRepairs.Install(); LightingDiagnosticProbe.Install();` and before `MapBorderRepairs.Install()`
+  — after both WeatherRig and ArenaLightingRepairs (subscription-order requirement, same reasoning
+  WeatherRig.cs's own doc comment already documents for itself vs. ArenaLightingRepairs), before
+  SceneInspector.
+
+### 11.2) Decompile findings this pass relied on (re-verified, not re-copied from the task brief)
+
+All paths under `D:/SPT41/Development/_decompiled/`.
+
+- `AmbientLight.cs`: `RenderDelay` (line 127, default 0.05f), `method_2()` (line 389) — called every
+  `LateUpdate` (line 293/294) but only actually re-renders/re-binds `_MyGlobalReflectionProbe` on frames
+  its own throttle allows (line 391); a Harmony **postfix** still runs on every call regardless (postfixes
+  run after the whole method executes, including an early return inside it), so overriding the global
+  texture in the postfix wins every frame irrespective of `RenderDelay`. `method_2` is `public`, not
+  `private` as the task brief's own decompile citation assumed — resolves identically either way via
+  `AccessTools.Method`, no code difference, noted for the record. `ReflectionIntensity`/
+  `SetReflectionIntensity` (lines 123, 237-241) confirmed public, and `SetReflectionIntensity` calls
+  `method_3()` immediately — sticks live with zero Harmony needed. `_MySimpleGlobalReflectionProbe`
+  (`EFT.Weather/TODSkySimple.cs:29,237`) confirmed written only by a Simplified rig's own
+  `TODSkySimple.Initialize()` — never bound during Bay5's Full-rig raid, not a factor here.
+- `LevelSettings.cs`: `ApplySettings()` (line 194) confirmed the only place `_SSRFactor` (line 217,
+  `Shader.SetGlobalFloat`) is ever written anywhere in the whole decompile (grepped the full tree). Field
+  defaults re-verified: `SkyColor=Color.black` (line 35), `EquatorColor=GroundColor=new
+  Color(0.6039216f, 54f/85f, 0.6509804f)` (lines 37/39 — literally the untouched C# class defaults, since
+  Reserve never overrides them), `AmbientIntensity` uninitialized float default 0 (line 41).
+  `OnPreCullCallback` (line 240) re-applies `RenderSettings.ambient*` FROM these `LevelSettings` fields
+  every camera pre-cull — confirms every A-candidate write must go through `LevelSettings`, never
+  `RenderSettings` directly (a direct write would not survive the next pre-cull).
+- `RainController.cs`: `AbstractState.vmethod_15` (line 142, `public virtual`) writes `_WaterLevel` via
+  `Mathf.LerpUnclamped(PuddleWaterLevel.x, PuddleWaterLevel.y, laingWater)` (line 146).
+  `AbstractStateSummer.vmethod_15` (line 214) explicitly calls `base.vmethod_15(...)` first (line 216, a
+  non-virtual base-call) — confirms patching the BASE method body (`RainController.AbstractState`, not
+  `AbstractStateSummer`) catches every season state, since no `AbstractStateWinter` subclass overrides it
+  either. `AbstractState.Controller` (line 37) confirmed `public { get; set; }`.
+- `WetRenderer.cs`: `Update()` (its own `MonoBehaviour.Update`, unconditional) pushes
+  `Shader.SetGlobalFloat("_SurfaceWetIntensity", Intensity)` every frame on its own, independent of
+  whoever last set the `Intensity` field — confirms the existing `WetRendererIntensityMultiplier` knob
+  (`RainWetnessRepairs.cs`) already covers the "SurfaceWetIntensity multiplier" this task's own goal
+  section asked for; not duplicated.
+- `TOD_Sky.cs` / `TOD_DayParameters.cs`: `Day`/`Night` (lines 30/32, plain public fields),
+  `TOD_DayParameters.LightIntensity` (line 85, plain public `float` on a plain `[Serializable]` non-Unity-
+  object class — freely mutable, no reflection needed). `LightIntensity` (property, line 173,
+  `Components.LightSource.intensity`) confirmed the correct live readback.
+
+### 11.3) Where this pass deviates from the implementation spec it was built from
+
+1. **F9's `SnapshotHotkey` — one global `ConfigEntry`, not one per map.** The spec's own pseudocode put it
+   inside each map's per-map `LabConfigBundle`. Implemented instead as a single entry under section
+   `"LightingLab"` (no map suffix), matching `SceneInspector.cs`'s own F10 hotkey convention exactly — only
+   one map's raid can ever be loaded at a time regardless, so N per-map copies of the identical binding
+   would only add confusion (which one is "live"?) with no benefit.
+2. **`WeatherRig.ActiveRig`/`WeatherRig.ActiveRig.Sky` accessed directly instead of a hypothetical
+   `rig.Ambient` field.** `WeatherRig.HarvestedRig` has no `Ambient` field; the spec's own pseudocode named
+   one that doesn't exist. The real accessor, confirmed against `ToDController.cs:165`
+   (`public AmbientLight AmbientLightScript;`), is
+   `WeatherRig.ActiveRig?.Controller?.TimeOfDayController?.AmbientLightScript`.
+3. **"CaptureSunBaseline" folded directly into `ApplySunIntensity`** (captures lazily on the first call
+   this raid) rather than kept as its own separate method — identical information, one fewer moving part.
+4. **`WeatherRig.OnSceneUnloaded` runs BEFORE `LightingLab.OnSceneUnloaded` in the same dispatch**
+   (`WeatherRig.Install()` subscribes first) and already clears `WeatherRig.ActiveRig`/`_activeRig` by the
+   time `LightingLab.OnSceneUnloaded` runs — so candidates B and F cache their own direct component
+   references (`LabState.CachedAmbient`/`CachedSky`) at apply time instead of re-reading
+   `WeatherRig.ActiveRig` at unload time, which would already be null. Not a spec contradiction, just a
+   detail the spec's pseudocode didn't spell out.
+5. **"No per-frame cost when every lab value is at its default" interpreted as "no allocation/scan cost",
+   not literally zero CPU instructions** — the two Harmony postfixes (candidates B/D) still do the
+   project's own mandatory `ArenaMapRaid.IsLoaded() || !WeatherRig.IsActiveForCurrentMap()` gate check
+   every frame they're called, same as every other per-frame Harmony postfix already in this codebase
+   (`RainWetnessRepairs.Postfix`, `WeatherTestOverride.Postfix`) — matches the spec's own more precise
+   framing elsewhere ("genuinely zero extra cost beyond one enum comparison per call when the Lab is
+   untouched").
+
+### 11.4) Config keys (all new; section `LightingLab (<map.Key>)` per map, plus one global `LightingLab`
+section for the F9 hotkey — deliberately separate from `Lighting (<map.Key>)`, WeatherRig/
+ArenaLightingRepairs' own section, so a key-name collision is structurally impossible)
+
+| Candidate | Key | Type | Default | Effect |
+|---|---|---|---|---|
+| A | `AmbientPreset` | enum (`Stub`/`DonorBlack`/`Custom`) | `Stub` | Written into live `LevelSettings.SkyColor/EquatorColor/GroundColor/AmbientIntensity` + `ApplySettings()` + `DynamicGI.UpdateEnvironment()`. `Stub` = today's behavior untouched. |
+| A | `AmbientCustomColor` | Color | `(0.5,0.5,0.5,1)` | Sky/Equator/Ground used when `AmbientPreset=Custom`. |
+| A | `AmbientCustomIntensity` | float, 0-4 | `1.0` | `LevelSettings.AmbientIntensity` used when `AmbientPreset=Custom` (inert under `AmbientMode.Flat`). |
+| B | `GlobalReflection` | enum (`Rig`/`Black`/`Grey`/`OffStrength`) | `Rig` | `Rig` = today's behavior. `Black`/`Grey` override `_MyGlobalReflectionProbe` every frame with a tiny generated Cubemap. `OffStrength` zeroes `AmbientLight.ReflectionIntensity` directly (a narrower, second lever). |
+| C | `SSRFactor` | float, 0-1 | `1.0` | Live `Shader.SetGlobalFloat("_SSRFactor", ...)`. `1.0` = authored no-op. |
+| D | `WaterLevelOverrideEnabled` | bool | `false` | Hard-overrides `_WaterLevel` every frame (Harmony postfix), independent of the existing `Wetness/MaxLyingWaterOverride*` ceiling clamp. |
+| D | `WaterLevelOverrideValue` | float, 0-0.95 | `0.6` | Replacement `_WaterLevel` value when the above is enabled. |
+| D | `RainOff` | bool | `false` | Forces `_WaterLevel=0` (wins over `WaterLevelOverrideEnabled`) and `RainController._wetRenderer.Intensity=0`. Does NOT touch rain VFX. |
+| E | `GroundSmoothnessMultiplier` | float, 0-2 | `1.0` | Live multiplier on every discovered Float/Range shader property named `*smooth*`/`*gloss*`/`*shin*` on materials matched by shader name (`Custom/Vert Paint Shader Solid` or `p0/Reflective*`) AND renderer name (`*floor*`/`*ground*`/`*asphalt*`). Scanned once, 5s after scene load. |
+| F | `SunIntensityMultiplier` | float, 0-4 | `1.0` | Multiplies the rig's own `TOD_Sky.Day/Night.LightIntensity` (captured once per raid as baseline). Only has an effect while a Full rig is active. |
+| G | `SnapshotHotkey` (global section `LightingLab`) | KeyboardShortcut | `F9` | Logs one `[LightingLab][Snapshot]` block — see §11.5. |
+
+Existing keys this pass **reuses, does not duplicate**: `Wetness/WetRendererIntensityMultiplier` and
+`Wetness/MaxLyingWaterOverride*` (`RainWetnessRepairs.cs`) already cover "SurfaceWetIntensity multiplier"
+and the puddle-ceiling clamp respectively — see §11.2's `WetRenderer.cs` finding.
+
+**All defaults equal today's exact behavior** (`Stub`/`Rig`/`1.0`/`false`/`1.0`/`1.0`) — this pass writes
+nothing different from what `WeatherRig`/`ArenaLightingRepairs`/`RainWetnessRepairs` already do until a
+tester flips one value live via F12.
+
+### 11.5) F9 snapshot format
+
+One `[ArenaMapPort][LightingLab][Snapshot]` block, tag `grep '\[LightingLab\]\[Snapshot\]'`:
+
+```
+[ArenaMapPort][LightingLab][Snapshot] ==== arena_bay5 ====
+  camera: pos=(x, y, z) fwd=(x, y, z)
+  A UnityAmbient: preset=... custom=(RGBA(...), intensity=...)
+  B GlobalReflection: preset=...
+  C SSRFactor: configured=... live=...
+  D Wetness: WaterLevelOverrideEnabled=... WaterLevelOverrideValue=... RainOff=... live _WaterLevel=... live _SurfaceWetIntensity=...
+  E GroundSmoothnessMultiplier: configured=... cachedMaterials=N
+  F SunIntensityMultiplier: configured=...
+  RenderSettings: ambientMode=... ambientLight=RGBA(...) ambientIntensity=... ambientEquatorColor=... ambientGroundColor=...
+  G reflection-probe faces (type=... size=WxH mip=m/M): PositiveX=RGBA(...) NegativeX=RGBA(...) PositiveY=RGBA(...) NegativeY=RGBA(...) PositiveZ=RGBA(...) NegativeZ=RGBA(...)
+```
+
+The last line falls back to a "not feasible, logging metadata only" message (type/format/size) if the
+bound texture isn't Cube-dimension, isn't yet created this raid, or the `Graphics.CopyTexture` readback
+throws — per the task's own escape hatch.
+
+### 11.6) Test procedure
+
+1. Load `arena_bay5`, stand at the spot `clear-spiegelung2.png` was taken from (grazing angle, looking
+   toward the fence/gate, ground filling most of the frame) — this is the worst-case view of the veil.
+2. Open the F12 configuration manager, find the `LightingLab (arena_bay5)` section(s).
+3. Flip **one** toggle at a time, in this order (cheapest/most isolating first, matching the spec's own
+   recommendation):
+   - `AmbientPreset = DonorBlack` alone first — isolates the implicit Unity ambient-derived reflection
+     path (no `ReflectionProbe` exists anywhere in these scenes).
+   - `GlobalReflection = Black` alone next (after reverting A back to `Stub`) — isolates
+     `_MyGlobalReflectionProbe` specifically.
+   - Only combine A+B if neither alone kills the veil.
+   - Then, one at a time as needed: `GlobalReflection = OffStrength`, `SSRFactor = 0`,
+     `GroundSmoothnessMultiplier` lowered (e.g. `0.3`), `RainOff = true` (rule out wetness even though the
+     screenshots already show the bug present at sun intensity 0 in Rain).
+4. After each flip, press **F9** and note the resulting snapshot block — in particular whether the veil
+   visually disappeared AND which line changed.
+5. Revert the toggle back to its default before trying the next candidate, so results don't compound.
+6. Report back: which single toggle (or combination) removes the white veil while leaving the correct
+   dark-asphalt-with-mirror-puddle look (as in `clear-spiegelung1.png`) intact from both camera angles.
+
+### 11.7) Build
+
+```
+dotnet build D:\ArenaMapPort\ArenaMapPort.Client\ArenaMapPort.Client.csproj -c Release -p:ArenaMapPortDllOnly=true
+```
+Clean rebuild (removed `bin`/`obj` first): **0 warnings, 0 errors.**
+
+dist DLL hash (SHA-256) == bin DLL hash, both:
+`1e9f1eeed8433c83d15553d7ece6f12eff50b69d0b1e049e13c70d2c1f4daa7c`
+
+No `tools/`, `Server`, or `base.json` file changed — zero receipts invalidated. No git commit made
+(workspace rule unchanged: the lead commits).
+
+### 11.8) Review fix-ups
+
+**#1 — `ApplyAmbient`'s `ls.ApplySettings()` call silently clobbers Candidate C's (and D's) live shader-
+global overrides (High, confirmed).**
+
+`LevelSettings.ApplySettings()` doesn't just push `RenderSettings.ambient*` — it also unconditionally
+re-asserts four `Shader.SetGlobal*` process-wide globals from `LevelSettings`' own fields, not from
+whatever was most recently written live (`LevelSettings.cs:213-217`: `_DirectionLightShadow`,
+`_WaterLevel` ← `LevelSettings.LyingWater`, default `0`; `_MinAmbientColor`; `_SSRFactor` ←
+`LevelSettings.SSRFactor`, default `1`). `ApplyAmbient` calls `ls.ApplySettings()` not just once at raid
+start but on every live F12 change to `AmbientPreset`/`AmbientCustomColor`/`AmbientCustomIntensity`
+(`SettingChanged` bindings), including §11.6 step 5's own "revert to default before trying the next
+candidate" instruction — so a tester who sets `SSRFactor` (Candidate C) away from `1.0` and then reverts
+`AmbientPreset` back to `Stub` silently resets the live `_SSRFactor` shader global back to `1.0` while
+`SSRFactorOverride`'s own config value (and the F9 snapshot's `configured=` field) still reads the
+tester's chosen value — config and rendered state silently disagree, undermining the exact "isolate which
+single toggle works" methodology this whole tool exists for. `WeatherRig.RenderSettingsSnapshot`
+(`WeatherRig.cs:746-819`) already exists specifically to bracket this same set of globals around
+`WeatherRig`'s own one-shot `ApplySettings()` call at harvest time; `ApplyAmbient` didn't apply the same
+bracket.
+
+Fix applied: `ApplyAmbient` now snapshots `Shader.GetGlobalFloat`/`GetGlobalColor` for all four globals
+(`_SSRFactor`, `_WaterLevel`, `_DirectionLightShadow`, `_MinAmbientColor`; two new cached property IDs,
+`_directionLightShadowId`/`_minAmbientColorId`, added alongside the existing `_ssrFactorId`/
+`_waterLevelId`) immediately before `ls.ApplySettings()`, and writes them straight back immediately
+after — same bracket pattern `RenderSettingsSnapshot` already uses, scoped to just the four globals (not
+`RenderSettings.ambient*` itself, which `ApplyAmbient` is deliberately changing). Only runs on the already-
+gated non-Stub-or-previously-applied path, so no new per-frame cost at Lab defaults.
+
+**#2 — Candidate D's live `_WaterLevel` override had no explicit restore on scene unload, unlike
+Candidate C's explicit reset (Low, confirmed).**
+
+`OnSceneUnloaded` explicitly reset Candidate C (`Shader.SetGlobalFloat(_ssrFactorId, 1f)`) and its own
+summary log line claimed a complete restore ("restored SSRFactor=1.00, ... N ground material(s)"), but
+`_WaterLevel` — the same kind of process-wide global, written by the same `WaterLevelPostfix` mechanism —
+was absent from both. Low-impact in practice: `RainController.AbstractState.vmethod_15`
+(`RainController.cs:142-147`, driven every weather `Update` via `WeatherController.ControlRain`)
+recomputes `_WaterLevel` from `PuddleWaterLevel`/`laingWater` unconditionally on the very next frame of
+ANY raid, vanilla or ported, so a stale value from a `WaterLevelOverrideEnabled=true`/`RainOff=true`
+session self-heals almost immediately regardless.
+
+Fix applied: `OnSceneUnloaded` now also does `Shader.SetGlobalFloat(_waterLevelId, 0f)` (mirroring
+`LevelSettings.LyingWater`'s own compiled field default, the same convention the SSRFactor reset to `1`
+already uses for `LevelSettings.SSRFactor`'s default), and the summary log line now lists
+`WaterLevel=0.00` alongside `SSRFactor=1.00` so the log's claim matches what the method actually restores.
+
+Files touched: `ArenaMapPort.Client/LightingLab.cs` only (`_directionLightShadowId`/`_minAmbientColorId`
+fields, the snapshot/restore bracket in `ApplyAmbient`, the `_WaterLevel` reset + log-line update in
+`OnSceneUnloaded`).
+
+### Build (after review fix-ups)
+
+```
+dotnet build D:\ArenaMapPort\ArenaMapPort.Client\ArenaMapPort.Client.csproj -c Release -p:ArenaMapPortDllOnly=true
+```
+Clean rebuild (removed `bin`/`obj` first): **0 warnings, 0 errors.**
+
+dist DLL hash (SHA-256) == bin DLL hash, both:
+`0bf2843c8ec5759d194f8781d422ec824d6d05c16973c0f4c72f59e0b6879415`
+
+No `tools/`, `Server`, or `base.json` file changed — zero receipts invalidated. No git commit made
+(workspace rule unchanged: the lead commits).
