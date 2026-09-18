@@ -1420,3 +1420,29 @@ already installed by §13; goals 1-2 only change what it reads at draw time, no 
 its own section, its own `Install`. No `tools/`, `Server`, or `base.json` file changed — zero receipts
 invalidated. No git commit made (workspace rule unchanged: the lead commits). Not yet playtested against
 this exact build.
+
+## 15) In-game test on the GPU host (2026-09-18 21:5x) and the ground smoothness fix
+
+The lead ran Bay5 on the GPU host (ArenaMapPort deployed to D:\SPT41 by the user; profile ArenaGPU;
+graphics raised from minimum to SSR/HBAO/shadows/textures high) and spawned inside a hall:
+
+| Step | Live state (F9) | Hall floor |
+|---|---|---|
+| defaults | `_WaterLevel` 0.76, `_SurfaceWetIntensity` 0.37 | white veil |
+| LightingLab `RainOff` + `WaterLevelOverride` | `_WaterLevel` 0.00, `_SurfaceWetIntensity` 0.00 | **still white** |
+| LightingLab `GlobalReflection=Black` | cubemap black | **normal dark concrete** |
+| LightingLab `GroundSmoothnessMultiplier` 0.47 (rig cubemap, heavy rain) | wet 1.0 | dark wet concrete, mild sheen |
+
+So the indoor veil is not wetness: it is the sky cubemap (`_MyGlobalReflectionProbe`) mirrored by the
+floor materials (smoothness 0.9-0.98). Arena authored them for its own local reflection probes; EFT has
+no local reflection source for these shaders, only the sky cubemap (plus SSR where the reflected point
+is on screen, which a ceiling above the camera never is).
+
+**Fix:** new per-map key `Lighting (<key>) GroundSmoothness` (float, Bay5 default 0.5, others 1.0), a
+base multiplier on the same floor/ground/asphalt materials LightingLab's candidate E scans; E's
+`GroundSmoothnessMultiplier` stacks on top. Applies only while a rig is active. The F9 snapshot prints
+`base(...)` and `effective`.
+
+**Still open:** rain wetness indoors. The depth photo is correct (roof at +5 m over the hall floor in the
+readback) but `WetRenderer` still wets the hall; the §14 experiments (CoverAll, DrawTransform, F8) are
+the next test for that, they were not run yet.

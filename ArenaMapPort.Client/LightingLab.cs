@@ -342,6 +342,13 @@ namespace ArenaMapPort.Client
             cfg.WaterLevelOverrideValue.SettingChanged += (_, __) => ReapplyIfLoaded(map, (m, c, s) => ApplyWetness(m, c));
             cfg.RainOff.SettingChanged += (_, __) => ReapplyIfLoaded(map, (m, c, s) => ApplyWetness(m, c));
             cfg.GroundSmoothnessMultiplier.SettingChanged += (_, __) => ReapplyIfLoaded(map, (m, c, s) => ReapplyGroundSmoothness(m, c, s));
+            // The per-map base value lives in WeatherRig's "Lighting (<key>)" section (bound before this
+            // Install runs, see Plugin.cs order); a live edit of it re-applies through the same path.
+            var baseEntry = WeatherRig.GroundSmoothnessBaseEntry(map);
+            if (baseEntry != null)
+            {
+                baseEntry.SettingChanged += (_, __) => ReapplyIfLoaded(map, (m, c, s) => ReapplyGroundSmoothness(m, c, s));
+            }
             cfg.SunIntensityMultiplier.SettingChanged += (_, __) => ReapplyIfLoaded(map, (m, c, s) => ApplySunIntensity(m, c, s));
 
             return cfg;
@@ -762,7 +769,7 @@ namespace ArenaMapPort.Client
                 {
                     // Reads the multiplier LIVE (not the value captured when this coroutine was scheduled)
                     // so a config edit made during the 5s delay still takes effect on the first scan.
-                    ScanGroundMaterials(map, state, cfg.GroundSmoothnessMultiplier.Value);
+                    ScanGroundMaterials(map, state, cfg.GroundSmoothnessMultiplier.Value * WeatherRig.GroundSmoothnessBaseForCurrentMap());
                 }
                 catch (Exception e)
                 {
@@ -916,7 +923,7 @@ namespace ArenaMapPort.Client
                 return; // scan hasn't run yet this raid — nothing cached to reapply; the scan itself reads
                         // the multiplier live once it does run
             }
-            float multiplier = cfg.GroundSmoothnessMultiplier.Value;
+            float multiplier = cfg.GroundSmoothnessMultiplier.Value * WeatherRig.GroundSmoothnessBaseForCurrentMap();
             for (int i = 0; i < state.GroundMaterials.Count; i++)
             {
                 var entry = state.GroundMaterials[i];
@@ -1018,6 +1025,8 @@ namespace ArenaMapPort.Client
                     $"live _WaterLevel={Shader.GetGlobalFloat(_waterLevelId):0.00} " +
                     $"live _SurfaceWetIntensity={Shader.GetGlobalFloat(_surfaceWetIntensityId):0.00}");
                 sb.AppendLine($"  E GroundSmoothnessMultiplier: configured={cfg.GroundSmoothnessMultiplier.Value:0.00} " +
+                    $"base(Lighting.GroundSmoothness)={WeatherRig.GroundSmoothnessBaseForCurrentMap():0.00} " +
+                    $"effective={cfg.GroundSmoothnessMultiplier.Value * WeatherRig.GroundSmoothnessBaseForCurrentMap():0.00} " +
                     $"cachedMaterials={(state != null ? state.GroundMaterials.Count : 0)}");
                 sb.AppendLine($"  F SunIntensityMultiplier: configured={cfg.SunIntensityMultiplier.Value:0.00}");
                 sb.AppendLine($"  RenderSettings: ambientMode={RenderSettings.ambientMode} " +

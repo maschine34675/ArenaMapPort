@@ -150,6 +150,13 @@ namespace ArenaMapPort.Client
             // §12 goal 1/3 — new keys, see AmbientSource/RainCoverMode's own doc comments.
             internal BepInEx.Configuration.ConfigEntry<AmbientSource> UnityAmbientEntry;
             internal BepInEx.Configuration.ConfigEntry<RainCoverMode> RainCoverEntry;
+            // In-game test 2026-09-18 21:5x on the GPU host: the white veil on Bay5's hall floors is the
+            // sky cubemap (_MyGlobalReflectionProbe) mirrored by floor materials with smoothness 0.9+.
+            // It stayed with _WaterLevel and _SurfaceWetIntensity pinned to 0 and vanished with the
+            // cubemap black or the smoothness halved. Arena's material values assume Arena's local
+            // reflection probes; EFT only has the sky cubemap for these shaders. LightingLab's live
+            // multiplier (E) stacks on top of this base value.
+            internal BepInEx.Configuration.ConfigEntry<float> GroundSmoothnessBase;
 
             // §13 goal 2 — RoofDepthBlack's elevated-mesh filter threshold. See RainCoverRepairs.cs.
             internal BepInEx.Configuration.ConfigEntry<float> CoverMinHeightEntry;
@@ -344,6 +351,16 @@ namespace ArenaMapPort.Client
                 "instantiates the donor's real camera (with its own baked TOD_Scattering/PrismEffects." +
                 "useExposure) instead of falling back to Cam2. false = always Cam2, matching today's " +
                 "behavior regardless of the rig. Takes effect on the next raid.");
+
+            cfg.GroundSmoothnessBase = Plugin.Instance.Config.Bind(section, "GroundSmoothness",
+                bay5Defaults ? 0.5f : 1f,
+                new BepInEx.Configuration.ConfigDescription(
+                    "Multiplier on the smoothness/gloss properties of the map's floor/ground/asphalt " +
+                    "materials while a weather rig is active (LightingLab's GroundSmoothnessMultiplier stacks " +
+                    "on top of it). Bay5 default 0.5: Arena authored the floors as near-mirrors for its own " +
+                    "local reflection probes; in EFT they only ever mirror the sky cubemap, which turned every " +
+                    "hall floor into a white veil (in-game test 2026-09-18). 1.0 = authored values. Live.",
+                    new BepInEx.Configuration.AcceptableValueRange<float>(0f, 2f)));
 
             // §12 goal 1 — real ambient fix, unconditional default Donor (harmless for a no-rig map —
             // Donor="Off" above means OnSceneLoaded never reaches ApplyDonorLevelSettingsOverrides for it).
@@ -1396,6 +1413,14 @@ namespace ArenaMapPort.Client
             _activeMap != null && _configs.TryGetValue(_activeMap.Key, out var c) && c.KeepFillLight.Value;
 
         // §12 goal 3 — mirrors KeepFillLightForCurrentMap's own accessor pattern.
+        // Base smoothness multiplier for LightingLab's ground-material pass: only while this map's rig is
+        // active (without a rig there is no AmbientLight cubemap to mirror), else the authored 1.0.
+        internal static float GroundSmoothnessBaseForCurrentMap() =>
+            IsActiveForCurrentMap() && _configs.TryGetValue(_activeMap.Key, out var c) ? c.GroundSmoothnessBase.Value : 1f;
+
+        internal static BepInEx.Configuration.ConfigEntry<float> GroundSmoothnessBaseEntry(ArenaMapDescriptor map) =>
+            _configs.TryGetValue(map.Key, out var c) ? c.GroundSmoothnessBase : null;
+
         internal static RainCoverMode RainCoverForCurrentMap() =>
             _activeMap != null && _configs.TryGetValue(_activeMap.Key, out var c) ? c.RainCoverEntry.Value : RainCoverMode.Off;
 
