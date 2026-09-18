@@ -1459,3 +1459,19 @@ fix — the reflection source strength is the single lever.
 New key `Lighting (<key>) ReflectionIntensity` (0..1, default 1.0 until tuned): a postfix on
 `AmbientLight.method_3` rescales the freshly written block value while a rig is active; live via
 SettingChanged (calls `method_3` again). The F9 snapshot prints it as `B2`.
+
+### 16.1) Host survey with the ReflectionIntensity knob (2026-09-18 22:5x, Clear, GroundSmoothness 1.0)
+
+Teleported via the UiBridge API (`POST /v1/teleport` with `reachable=false`; the Bay5 NavMesh has no
+walkable path between the yard and the spawn hall, so the reachability check refuses every point):
+
+| Spot | ReflectionIntensity 1.0 | 0.5 |
+|---|---|---|
+| spawn hall (61,-3.8,-12), Depot_indoor floor | white veil | dark wet concrete, puddles mirror the pillars |
+| yard (56,-3.8,17) | dark asphalt, sky puddles bright white | same, puddles dimmer but still sky mirrors |
+| (85,-3.8,-30) and (20,-3.8,-60) | outside the play area: very dark ground, no reflections to judge | — |
+
+Decision: `ReflectionIntensity` default 0.5 for Bay5 (1.0 for the others until they get a rig),
+`GroundSmoothness` default back to 1.0 (the user's own test: the pleasing smoothness varies strongly by
+spot, so a global material scalar is the wrong lever). A saved `GroundSmoothness = 0.5` from the previous
+build stays in the user's config — press its Reset button in F12 once.

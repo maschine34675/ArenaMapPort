@@ -360,22 +360,23 @@ namespace ArenaMapPort.Client
                 "useExposure) instead of falling back to Cam2. false = always Cam2, matching today's " +
                 "behavior regardless of the rig. Takes effect on the next raid.");
 
-            cfg.GroundSmoothnessBase = Plugin.Instance.Config.Bind(section, "GroundSmoothness",
-                bay5Defaults ? 0.5f : 1f,
+            cfg.GroundSmoothnessBase = Plugin.Instance.Config.Bind(section, "GroundSmoothness", 1f,
                 new BepInEx.Configuration.ConfigDescription(
                     "Multiplier on the smoothness/gloss properties of the map's floor/ground/asphalt " +
                     "materials while a weather rig is active (LightingLab's GroundSmoothnessMultiplier stacks " +
-                    "on top of it). Bay5 default 0.5: Arena authored the floors as near-mirrors for its own " +
-                    "local reflection probes; in EFT they only ever mirror the sky cubemap, which turned every " +
-                    "hall floor into a white veil (in-game test 2026-09-18). 1.0 = authored values. Live.",
+                    "on top of it). 1.0 = authored values (default: the host survey 2026-09-18 showed the " +
+                    "value that looks right differs per spot, so the sky-reflection strength is scaled " +
+                    "instead — see ReflectionIntensity). Live.",
                     new BepInEx.Configuration.AcceptableValueRange<float>(0f, 2f)));
 
-            cfg.ReflectionIntensity = Plugin.Instance.Config.Bind(section, "ReflectionIntensity", 1f,
+            cfg.ReflectionIntensity = Plugin.Instance.Config.Bind(section, "ReflectionIntensity",
+                bay5Defaults ? 0.5f : 1f,
                 new BepInEx.Configuration.ConfigDescription(
                     "Scale on the sky-cubemap reflection term of EFT's screen-space ambient pass while a " +
                     "weather rig is active (1.0 = vanilla, which forces full strength whenever SSR is on). " +
                     "Lower values dim the sky mirrored by smooth surfaces everywhere on the map, indoors and " +
-                    "in puddles alike. Live.",
+                    "in puddles alike. Bay5 default 0.5 (host survey 2026-09-18: hall floors become dark wet " +
+                    "concrete with pillar-mirroring puddles, the yard keeps its sky puddles). Live.",
                     new BepInEx.Configuration.AcceptableValueRange<float>(0f, 1f)));
 
             // §12 goal 1 — real ambient fix, unconditional default Donor (harmless for a no-rig map —
