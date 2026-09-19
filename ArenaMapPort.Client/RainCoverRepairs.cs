@@ -511,22 +511,14 @@ namespace ArenaMapPort.Client
                     // below an ACTUALLY elevated mesh (a roof/overhang has empty air, not its own floor,
                     // between bounds.min.y and the real ground). "No hit at all" now means "not elevated" —
                     // this IS the ground/floor itself — the mapMin.y fallback is removed entirely.
-                    Vector3 origin = new Vector3(rb.center.x, rb.min.y + 0.02f, rb.center.z);
-                    bool elevated;
-                    if (Physics.Raycast(origin, Vector3.down, out var hit, ColliderRaycastMaxDistance, colliderMask, QueryTriggerInteraction.Ignore))
-                    {
-                        elevated = (rb.min.y - hit.point.y) >= coverMinHeight;
-                    }
-                    else
-                    {
-                        elevated = false; // no collider hit below at all => not elevated (§14 goal 5)
-                    }
-
-                    if (!elevated)
-                    {
-                        excludedNotElevated++;
-                        continue;
-                    }
+                    // Host test 2026-09-19: the elevated-vs-ground raycast excluded every building SHELL —
+                    // Bay5's halls are one mesh each (walls + roof, e.g. the depot), so their bounds.min sits
+                    // at ground level and the "clearance" reads 0 → no hall roof ever reached the photo
+                    // (Depot_indoor cover 0/25). The depth camera keeps the HIGHEST surface per pixel, so
+                    // drawing everything is safe: a floor photographed at its own height reads "uncovered"
+                    // for the indoor classifier (roof >= floor + 2.5 m) and, as observed in the 21:17 test,
+                    // for the WetRenderer too. The raycast gate is gone; CoverMinHeight stays an unused key.
+                    _ = coverMinHeight;
 
                     var filter = renderer.GetComponent<MeshFilter>();
                     var mesh = filter != null ? filter.sharedMesh : null;
@@ -933,6 +925,25 @@ namespace ArenaMapPort.Client
         // the goal-1 diagnostic cache), re-runs RenderObstaclesPrefix (this file's own Harmony prefix, which
         // reads the CURRENT DrawTransform/CoverAll values live), then SetShaderValues() — same flow a real
         // camera change uses, just invoked on demand instead of waiting for one.
+        // Full redo: forget this raid's geometry scan (bounds + elevated meshes) and photograph again. The
+        // first camera change — the normal trigger — comes before the preset's remaining scenes
+        // (DEPOT/HANGAR/WAREHOUSE on Bay5) are loaded, so their roofs are missing from the first photo.
+        internal static void RescanAndRerender(string trigger)
+        {
+            if (!ArenaMapRaid.IsLoaded() || !WeatherRig.IsActiveForCurrentMap())
+            {
+                return;
+            }
+            var map = ArenaMapRaid.CurrentMap;
+            if (map != null && _states.TryGetValue(map.Key, out var state))
+            {
+                state.Computed = false;
+                state.EmptyScans = 0;
+                state.ElevatedMeshes = null;
+            }
+            RerenderNow(trigger);
+        }
+
         static void RerenderNow(string trigger)
         {
             if (!ArenaMapRaid.IsLoaded() || !WeatherRig.IsActiveForCurrentMap())

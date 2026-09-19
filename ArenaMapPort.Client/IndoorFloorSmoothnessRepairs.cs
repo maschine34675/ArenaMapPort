@@ -90,6 +90,11 @@ namespace ArenaMapPort.Client
             foreach (var map in ArenaMapRegistry.All)
             {
                 var entry = WeatherRig.IndoorFloorSmoothnessEntry(map);
+                var percentEntry = WeatherRig.IndoorCoverPercentEntry(map);
+                if (percentEntry != null)
+                {
+                    percentEntry.SettingChanged += (_, __) => ReclassifyIfLoaded(map);
+                }
                 if (entry != null)
                 {
                     entry.SettingChanged += (_, __) => ReapplyIfLoaded(map);
@@ -117,15 +122,25 @@ namespace ArenaMapPort.Client
             _states[map.Key] = new IndoorFloorState { SceneLoadTime = Time.time };
         }
 
-        static void OnSceneUnloaded(Scene scene)
+        // Live re-classify (IndoorCoverPercent changed in F12): put the originals back, classify again.
+        internal static void ReclassifyIfLoaded(ArenaMapDescriptor map)
         {
-            var map = ArenaMapRaid.MapForScriptsScene(scene.name);
-            if (map == null || !_states.TryGetValue(map.Key, out var state))
+            if (!ArenaMapRaid.IsLoaded() || !WeatherRig.IsActiveForCurrentMap() || ArenaMapRaid.CurrentMap != map
+                || !_states.TryGetValue(map.Key, out var state) || !state.Done)
             {
                 return;
             }
+            RestoreEntries(state, out int restored, out int destroyed);
+            Plugin.Log.LogInfo($"[ArenaMapPort][IndoorFloorSmoothness] map={map.Key} re-classifying: restored {restored} " +
+                $"renderer(s), destroyed {destroyed} clone(s)");
+            state.Done = false;
+            Classify(map);
+        }
 
-            int restoredRenderers = 0, destroyedClones = 0;
+        static void RestoreEntries(IndoorFloorState state, out int restoredRenderers, out int destroyedClones)
+        {
+            restoredRenderers = 0;
+            destroyedClones = 0;
             foreach (var entry in state.Entries)
             {
                 if (entry.Renderer != null)
@@ -143,6 +158,17 @@ namespace ArenaMapPort.Client
                 }
             }
             state.Entries.Clear();
+        }
+
+        static void OnSceneUnloaded(Scene scene)
+        {
+            var map = ArenaMapRaid.MapForScriptsScene(scene.name);
+            if (map == null || !_states.TryGetValue(map.Key, out var state))
+            {
+                return;
+            }
+
+            RestoreEntries(state, out int restoredRenderers, out int destroyedClones);
             state.Done = false;
             state.Scheduled = false;
             if (_scanHost != null)
@@ -203,8 +229,27 @@ namespace ArenaMapPort.Client
             internal static IEnumerator RunAfter(float seconds, ArenaMapDescriptor map)
             {
                 yield return new WaitForSeconds(seconds);
+                // Host test 2026-09-19: the first camera change (this coroutine's trigger) comes before
+                // the preset's remaining scenes (DEPOT/HANGAR/WAREHOUSE) have loaded — the scan saw only
+                // Arena_Bay5_Main. Wait for the raid to actually start (all scenes loaded, countdown over),
+                // the same anchor DaytimeVisualsProbe uses, plus a short margin.
+                float waited = 0f;
+                while (waited < 180f)
+                {
+                    var game = Comfort.Common.Singleton<EFT.AbstractGame>.Instantiated ? Comfort.Common.Singleton<EFT.AbstractGame>.Instance : null;
+                    if (game != null && game.Status == EFT.GameStatus.Started)
+                    {
+                        break;
+                    }
+                    yield return new WaitForSeconds(1f);
+                    waited += 1f;
+                }
+                yield return new WaitForSeconds(3f);
                 try
                 {
+                    // The first depth photo predates the late scenes (see above): redo the roof scan and
+                    // the photo now that everything is loaded, then classify against the fresh photo.
+                    RainCoverRepairs.RescanAndRerender("IndoorFloorSmoothness pre-classify");
                     Classify(map);
                 }
                 catch (Exception e)
@@ -236,14 +281,16 @@ namespace ArenaMapPort.Client
             }
 
             int floorLike = 0, indoor = 0, clones = 0;
+            var perScene = new List<string>();
             var indoorNames = new List<string>();
+            var rejects = new List<string>();
             Texture2D scratch = null;
             try
             {
                 scratch = new Texture2D(1, 1, TextureFormat.RFloat, false, true);
                 int waterLayer = LayerMask.NameToLayer("Water");
                 int skyLayer = LayerMask.NameToLayer("Sky");
-                int threshold = WeatherRig.IndoorCoverSampleThresholdForCurrentMap();
+                int percent = WeatherRig.IndoorCoverPercentForCurrentMap();
                 float multiplier = WeatherRig.IndoorFloorSmoothnessForCurrentMap();
 
                 int sceneCount = SceneManager.sceneCount;
@@ -255,14 +302,25 @@ namespace ArenaMapPort.Client
                         continue;
                     }
 
+                    int sceneRenderers = 0;
                     foreach (var root in scene.GetRootGameObjects())
                     {
                         var renderers = root.GetComponentsInChildren<MeshRenderer>(true);
+                        sceneRenderers += renderers.Length;
                         for (int r = 0; r < renderers.Length; r++)
                         {
                             var renderer = renderers[r];
-                            if (renderer == null || !renderer.enabled || !renderer.gameObject.activeInHierarchy)
+                            if (renderer == null)
                             {
+                                continue;
+                            }
+                            if (!renderer.enabled || !renderer.gameObject.activeInHierarchy)
+                            {
+                                if (renderer.gameObject.name.IndexOf("indoor", StringComparison.OrdinalIgnoreCase) >= 0
+                                    && renderer.gameObject.name.IndexOf("puddle", StringComparison.OrdinalIgnoreCase) < 0)
+                                {
+                                    Reject(true, rejects, renderer, renderer.bounds, renderer.enabled ? "inactive" : "disabled", -1);
+                                }
                                 continue;
                             }
 
@@ -279,8 +337,20 @@ namespace ArenaMapPort.Client
                             }
 
                             var bounds = renderer.bounds;
-                            if (bounds.size.y > 1.5f)
+                            // Large candidates get their rejection reason logged (max 40 lines) — the
+                            // 2026-09-19 host test classified 41 boards/trusses but not the hall floor.
+                            string goName = renderer.gameObject.name;
+                            bool large = goName.IndexOf("puddle", StringComparison.OrdinalIgnoreCase) < 0
+                                && (goName.IndexOf("indoor", StringComparison.OrdinalIgnoreCase) >= 0
+                                || goName.IndexOf("floor", StringComparison.OrdinalIgnoreCase) >= 0
+                                || goName.IndexOf("ground", StringComparison.OrdinalIgnoreCase) >= 0
+                                || goName.IndexOf("asphalt", StringComparison.OrdinalIgnoreCase) >= 0);
+                            // Host test 2026-09-19: Bay5's hall floor is part of 'Depot_indoor_LOD0', the whole
+                            // interior shell (floor + inner walls, 45x22 m, 8.6 m tall), so a thin-slab test
+                            // rejects exactly the renderer this pass exists for. Only towers/cranes are cut.
+                            if (bounds.size.y > 12f)
                             {
+                                Reject(large, rejects, renderer, bounds, "size.y", -1);
                                 continue;
                             }
                             if (Mathf.Max(bounds.size.x, bounds.size.z) < 4f)
@@ -294,12 +364,15 @@ namespace ArenaMapPort.Client
                             var shared = renderer.sharedMaterials;
                             if (!HasFloorLikeShader(shared) || HasDecalShader(shared))
                             {
+                                Reject(large, rejects, renderer, bounds, HasDecalShader(shared) ? "decal" : "shader", -1);
                                 continue;
                             }
 
                             floorLike++;
-                            if (CountCoveredSamples(map, scratch, bounds) < threshold)
+                            int covered = CountCoveredSamples(map, scratch, bounds);
+                            if (covered * 100 < percent * CoverGridSamples)
                             {
+                                Reject(large, rejects, renderer, bounds, "cover", covered);
                                 continue;
                             }
 
@@ -308,11 +381,16 @@ namespace ArenaMapPort.Client
                             {
                                 indoorNames.Add(renderer.gameObject.name);
                             }
+                            if (large)
+                            {
+                                Reject(true, rejects, renderer, bounds, "ACCEPTED", covered);
+                            }
                             var entry = CloneAndScale(renderer, shared, multiplier);
                             state.Entries.Add(entry);
                             clones += entry.ClonedMaterials.Length;
                         }
                     }
+                    perScene.Add($"{scene.name}={sceneRenderers}");
                 }
             }
             finally
@@ -324,9 +402,14 @@ namespace ArenaMapPort.Client
             }
 
             state.Done = true;
+            for (int i = 0; i < rejects.Count; i++)
+            {
+                Plugin.Log.LogInfo($"[ArenaMapPort][IndoorFloorSmoothness] map={map.Key} rejected large candidate: {rejects[i]}");
+            }
+            Plugin.Log.LogInfo($"[ArenaMapPort][IndoorFloorSmoothness] map={map.Key} scanned scenes (MeshRenderers): {string.Join(", ", perScene)}");
             Plugin.Log.LogInfo($"[ArenaMapPort][IndoorFloorSmoothness] map={map.Key} classified: floorLike={floorLike} " +
                 $"indoor={indoor} materialClones={clones} multiplier={WeatherRig.IndoorFloorSmoothnessForCurrentMap():0.00} " +
-                $"threshold={WeatherRig.IndoorCoverSampleThresholdForCurrentMap()}/9");
+                $"coverPercent={WeatherRig.IndoorCoverPercentForCurrentMap()} grid={CoverGrid}x{CoverGrid}");
             if (indoor > 0)
             {
                 Plugin.Log.LogInfo($"[ArenaMapPort][IndoorFloorSmoothness] map={map.Key} indoor renderer(s) " +
@@ -379,21 +462,38 @@ namespace ArenaMapPort.Client
         // when the depth photo shows something 1.5-60m above this renderer's own top — 1.5m so the
         // renderer's own thickness/nearby low clutter never self-counts as its own roof, 60m so a
         // realistic ceiling/roof height still counts (this project's own maps run tens of meters tall).
+        static void Reject(bool large, List<string> rejects, Renderer renderer, Bounds bounds, string reason, int covered)
+        {
+            if (!large || rejects.Count >= 40)
+            {
+                return;
+            }
+            var t = renderer.transform;
+            string path = t.parent != null ? t.parent.name + "/" + t.name : t.name;
+            rejects.Add($"'{path}' reason={reason}{(covered >= 0 ? $"({covered}/{CoverGridSamples})" : "")} " +
+                $"center={bounds.center:F1} size={bounds.size:F1} scene={renderer.gameObject.scene.name}");
+        }
+
+        const int CoverGrid = 5;
+        const int CoverGridSamples = CoverGrid * CoverGrid;
+
         static int CountCoveredSamples(ArenaMapDescriptor map, Texture2D scratch, Bounds bounds)
         {
             float insetX = (bounds.max.x - bounds.min.x) * 0.1f;
             float insetZ = (bounds.max.z - bounds.min.z) * 0.1f;
             float loX = bounds.min.x + insetX, hiX = bounds.max.x - insetX;
             float loZ = bounds.min.z + insetZ, hiZ = bounds.max.z - insetZ;
-            float coverLoY = bounds.max.y + 1.5f, coverHiY = bounds.max.y + 60f;
+            // Cover is judged from the renderer's FLOOR level (bounds.min.y): an interior shell's own
+            // ceiling structure sits close under the roof, so "roof >= bounds.max.y + 1.5" would fail it.
+            float coverLoY = bounds.min.y + 2.5f, coverHiY = bounds.min.y + 60f;
 
             int covered = 0;
-            for (int gx = 0; gx < 3; gx++)
+            for (int gx = 0; gx < CoverGrid; gx++)
             {
-                float wx = Mathf.Lerp(loX, hiX, gx / 2f);
-                for (int gz = 0; gz < 3; gz++)
+                float wx = Mathf.Lerp(loX, hiX, gx / (float)(CoverGrid - 1));
+                for (int gz = 0; gz < CoverGrid; gz++)
                 {
-                    float wz = Mathf.Lerp(loZ, hiZ, gz / 2f);
+                    float wz = Mathf.Lerp(loZ, hiZ, gz / (float)(CoverGrid - 1));
                     if (RainCoverRepairs.TrySampleDepthAtWorldPoint(map, scratch, wx, wz, out bool nothing, out float height)
                         && !nothing && height >= coverLoY && height <= coverHiY)
                     {
@@ -479,7 +579,7 @@ namespace ArenaMapPort.Client
                 clones += e.ClonedMaterials.Length;
             }
             return $"§19 IndoorFloorSmoothness: multiplier={WeatherRig.IndoorFloorSmoothnessForCurrentMap():0.00} " +
-                $"threshold={WeatherRig.IndoorCoverSampleThresholdForCurrentMap()}/9 done={state.Done} " +
+                $"coverPercent={WeatherRig.IndoorCoverPercentForCurrentMap()} done={state.Done} " +
                 $"indoor={state.Entries.Count} materialClones={clones}";
         }
     }

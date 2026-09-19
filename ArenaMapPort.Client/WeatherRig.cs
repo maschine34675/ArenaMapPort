@@ -184,7 +184,7 @@ namespace ArenaMapPort.Client
             // §19 — per-renderer indoor-floor smoothness scale (RoofDepthBlack's own depth photo drives
             // the classification). See IndoorFloorSmoothnessRepairs.cs.
             internal BepInEx.Configuration.ConfigEntry<float> IndoorFloorSmoothness;
-            internal BepInEx.Configuration.ConfigEntry<int> IndoorCoverSampleThreshold;
+            internal BepInEx.Configuration.ConfigEntry<int> IndoorCoverPercent;
         }
 
         // Internal (not the default private) — LightingDiagnosticProbe.LastHarvestResult returns this
@@ -483,12 +483,14 @@ namespace ArenaMapPort.Client
                     "Only while a rig is active and RainCoverMethod=RoofDepthBlack. Live.",
                     new BepInEx.Configuration.AcceptableValueRange<float>(0f, 1f)));
 
-            cfg.IndoorCoverSampleThreshold = Plugin.Instance.Config.Bind(section, "IndoorCoverSampleThreshold", 6,
+            // Renamed from IndoorCoverSampleThreshold (3x3, count) — the hall's interior shell spans more
+            // than its roof, so a fixed 6/9 missed it; the grid is 5x5 now and the threshold a percentage.
+            cfg.IndoorCoverPercent = Plugin.Instance.Config.Bind(section, "IndoorCoverPercent", 50,
                 new BepInEx.Configuration.ConfigDescription(
-                    "§19 — how many of the 3x3=9 depth-photo samples over a candidate floor renderer's bounds " +
-                    "footprint must read 'covered' to classify it INDOOR. Read once, at classify time (not " +
-                    "live — re-classifying mid-raid is not supported, same as CoverMinHeight above).",
-                    new BepInEx.Configuration.AcceptableValueRange<int>(0, 9)));
+                    "§19 — percentage of the 5x5 depth-photo samples over a candidate renderer's bounds " +
+                    "footprint that must read 'covered' (roof 2.5-60 m above its floor level) to classify " +
+                    "it INDOOR. Live: a change restores the clones and classifies again.",
+                    new BepInEx.Configuration.AcceptableValueRange<int>(10, 100)));
 
             // Deliberately NO SettingChanged handlers on these three for re-apply purposes — "changes apply
             // on the next raid" is a hard requirement here (unlike ArenaLightingRepairs' own live-tunable
@@ -1516,8 +1518,11 @@ namespace ArenaMapPort.Client
         internal static BepInEx.Configuration.ConfigEntry<float> IndoorFloorSmoothnessEntry(ArenaMapDescriptor map) =>
             _configs.TryGetValue(map.Key, out var c) ? c.IndoorFloorSmoothness : null;
 
-        internal static int IndoorCoverSampleThresholdForCurrentMap() =>
-            IsActiveForCurrentMap() && _configs.TryGetValue(_activeMap.Key, out var c) ? c.IndoorCoverSampleThreshold.Value : 6;
+        internal static int IndoorCoverPercentForCurrentMap() =>
+            IsActiveForCurrentMap() && _configs.TryGetValue(_activeMap.Key, out var c) ? c.IndoorCoverPercent.Value : 50;
+
+        internal static BepInEx.Configuration.ConfigEntry<int> IndoorCoverPercentEntry(ArenaMapDescriptor map) =>
+            _configs.TryGetValue(map.Key, out var c) ? c.IndoorCoverPercent : null;
 
         static readonly System.Reflection.FieldInfo ScreenAmbientBlockField =
             HarmonyLib.AccessTools.Field(typeof(AmbientLight), "_screenAmbientBlock");

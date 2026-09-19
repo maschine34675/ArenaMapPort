@@ -1811,3 +1811,39 @@ One defect reported against this section:
   body still contains the formula. No behavior change (same arithmetic, same result), purely the
   duplication removed. Rebuilt per the build rules; dist DLL hash
   `0bd73929b58fad042a368aedb22a985aaabad5a9f5cc66c8031e1f2e4b7e46f3`, matches the bin DLL byte-for-byte.
+
+### 19.2) Host test 2026-09-19: the hall floor is not a slab
+
+First run classified 41 renderers (plywood boards, concrete trusses) but not the hall floor. The
+rejection diagnostics plus the extracted mesh show why: `Depot_indoor_LOD0` is the depot's whole
+interior shell — floor and inner walls in one mesh, world bounds (24.7,-4.0,-14.1)..(69.8,4.6,7.5),
+i.e. 45 x 22 m and **8.6 m tall** — so the "slab" gate `size.y <= 1.5` rejected exactly the renderer
+this pass exists for, and the cover test `roof >= bounds.max.y + 1.5` would have failed it too (the
+shell's ceiling structure ends 0.5 m under the roof).
+
+Changed: height gate `size.y <= 12` (only towers/cranes are cut), cover judged from the renderer's
+floor level: photographed height in `[bounds.min.y + 2.5, bounds.min.y + 60]`. Interior shells and
+also exterior building shells under their own roof now qualify (their walls get the same reduced
+gloss — vertical surfaces, visually harmless). Rejections of floor-ish names are logged (max 80).
+
+### 19.3) Host verification 2026-09-19 15:0x — three causes, all fixed
+
+Between the first build and the working one, three independent reasons kept `Depot_indoor_LOD0` out:
+1. **Slab gate** (`size.y <= 1.5`): the hall floor is the whole interior shell, 8.6 m tall → gate now 12 m,
+   cover judged from the renderer's floor level (`bounds.min.y + 2.5 .. + 60`).
+2. **Scene timing**: the first camera change (trigger of the RainCover scan AND the classifier) comes
+   before the DEPOT/HANGAR/WAREHOUSE scenes are loaded → the classifier now waits for
+   `GameStatus.Started` + 3 s and first calls `RainCoverRepairs.RescanAndRerender` so the roof photo is
+   taken with every scene present.
+3. **Elevated filter**: the roof-vs-ground raycast excluded every building SHELL (walls + roof in one
+   mesh, bounds.min at ground level → clearance 0), so no hall roof ever reached the photo
+   (`cover 0/25` even after the rescan). The gate is gone: all material-qualified static meshes are
+   drawn, the depth camera keeps the highest surface (elevated 1435 → 14339). `CoverMinHeight` is an
+   orphaned key.
+
+Also: `IndoorCoverSampleThreshold` (3x3, count) → `IndoorCoverPercent` (5x5, percent, default 50, live
+re-classify). Result at `ReflectionIntensity` 1.0: `Depot_indoor_LOD0` ACCEPTED (17/25), 649 indoor
+renderers / 1126 clones; the spawn hall floor reads as dark wet concrete with pillar-mirroring puddles
+(`_Smoothness0` 0.689 → 0.345 on the clone), the yard keeps its sky puddles and dark asphalt.
+Diagnostics: rejections/acceptances of floor-ish names (indoor/floor/ground/asphalt, not puddle decals)
+are logged per raid (max 40).
