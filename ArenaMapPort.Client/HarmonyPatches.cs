@@ -50,10 +50,15 @@ namespace ArenaMapPort.Client
             InstallEffectsControllerFrostbite(harmony);
             InstallAIVoxelesDataGuard(harmony);
             InstallAIStationaryControllerEnsure(harmony);
+            // bots-stage1 — a holder with a null CorePoints list made every bot activation throw silently
+            // inside BotCreatorClient.CreateBot. See AICorePointRepairs.cs.
+            AICorePointFallback.Install(harmony);
 
             // bots-stage1 — SAIN soft dependency: resolved by name, no-op without SAIN. See SainLocationShim.cs.
             SainLocationShim.BindConfig();
             SainLocationShim.TryInstall(harmony);
+            // bots-stage1 — spawn-path diagnostics on ported maps only. See BotSpawnProbe.cs.
+            BotSpawnProbe.Install(harmony);
 
             // fix-combat findings F1/F2 (explosives-items) + one additional confirmed same-class gap —
             // see docs/progress/fix-combat.md and EffectsControllerRepairs.cs's guard doc comments.

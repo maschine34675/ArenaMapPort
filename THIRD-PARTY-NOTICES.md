@@ -176,6 +176,12 @@ Reused in `ArenaMapPort.Client/BotsDataRepairs.cs`:
   `ObservedCullingManager` half and the whole Postfix (flares/sealed-doors/spawn-trigger rebuild) are
   NOT ported — `ObservedCullingManager` is already ensured earlier by `EnvironmentRepairs.cs`, and
   doors/flares are out of scope.
+- **Assign the nearest core point when `BotOwner.StartCorePoint` is null** — the postfix of
+  `Patch_BotStartCorePoint` (`RaidFixPatches.cs:4622-4647`), adapted as `AICorePointFallback.CreatePostfix`
+  in `ArenaMapPort.Client/AICorePointRepairs.cs` (same nearest-search loop, our own gate/logging). The
+  primary fix in that file — creating the `AICorePointHolder` list and one synthetic `AICorePoint` before
+  `BotsController.Init` so `GetCorePoint(0)` resolves — is original: Icebreaker generates its cores from
+  recovered bake data, we have none.
 - The `AIVoxelesData.VoxelsList` null-list fix in the same file is NOT a port — the equivalent
   Icebreaker patch (`Patch_CoversRestore`, `RaidFixPatches.cs:3711-3884`) is a broad
   exception-swallowing Finalizer that reconstructs partial recovered bake data; we have no bake data at

@@ -76,6 +76,9 @@
     <PackageReference Include="SPTushonka.Common" Version="4.1.5" ExcludeAssets="runtime" />
     <PackageReference Include="SPTushonka.DI" Version="4.1.5" ExcludeAssets="runtime" />
     <PackageReference Include="SPTushonka.Server.Core" Version="4.1.5" ExcludeAssets="runtime" />
+    <!-- bots-stage1 — SPTarkov.Reflection.Patching.AbstractPatch (+ HarmonyLib) for the soft APBS
+         compatibility patch in ApbsCompat.cs; runtime assemblies ship with the server. -->
+    <PackageReference Include="SPTushonka.Reflection" Version="4.1.5" ExcludeAssets="runtime" />
   </ItemGroup>
 
   <ItemGroup>

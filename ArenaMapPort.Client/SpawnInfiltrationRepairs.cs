@@ -79,7 +79,10 @@ namespace ArenaMapPort.Client
             int fixedCount = 0;
             foreach (var point in __result)
             {
-                if (point is SpawnPoint concrete && string.IsNullOrEmpty(concrete.Infiltration))
+                // bots-stage1: server-shipped Bot-category points carry Infiltration "" on purpose (vanilla
+                // convention); only player points need the map's infiltration for SPT's EmptyInfilFixPatch.
+                if (point is SpawnPoint concrete && string.IsNullOrEmpty(concrete.Infiltration)
+                    && (concrete.Categories & ESpawnCategoryMask.Player) != 0)
                 {
                     concrete.Infiltration = map.InfiltrationName;
                     fixedCount++;

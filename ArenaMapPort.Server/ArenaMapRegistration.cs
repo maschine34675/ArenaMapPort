@@ -172,6 +172,30 @@ public static class ArenaMapRegistration
     /// bots-stage1: mirrors a bot-enabled map's base.json BotMax into BotConfig.MaxBotCap (see the call
     /// site's comment for why). Pure — no DI — so it is directly unit testable.
     /// </summary>
+    /// <summary>The SPT bot.json map key whose brain weights an Arena map borrows (bot.json keys are lowercase).</summary>
+    public static string BrainStandInFor(ArenaMapDescriptor map) =>
+        map.Key == ArenaMapRegistry.Equator.Key ? "interchange" : "factory4_day";
+
+    /// <summary>
+    /// bots-stage1 — copies the stand-in map's row of a per-map brain-weight table (assaultBrainType,
+    /// playerScavBrainType) to the Arena map's lowercased key. Returns true when a row was written; false when
+    /// the map already has one or the stand-in row is missing (nothing to copy, no throw).
+    /// </summary>
+    public static bool ApplyBrainTable<TRow>(IDictionary<string, TRow> table, ArenaMapDescriptor map)
+    {
+        var key = map.Key.ToLowerInvariant();
+        if (table.ContainsKey(key))
+        {
+            return false;
+        }
+        if (!table.TryGetValue(BrainStandInFor(map), out var row))
+        {
+            return false;
+        }
+        table[key] = row;
+        return true;
+    }
+
     public static void ApplyBotCap(Dictionary<string, int> maxBotCap, int botMax, ArenaMapDescriptor map)
     {
         if (botMax > 0)
@@ -290,6 +314,13 @@ public class ArenaMapPortMod(
                 // arena_* key, so without this the cap would silently fall back to the raw JSON value.
                 // A map without bots (BotMax 0, every map but Equator today) is left alone.
                 ArenaMapRegistration.ApplyBotCap(botConfig.MaxBotCap, newBase.BotMax, map);
+                // bots-stage1 (docs/progress/bots-stage1.md, "Host test 8") — SPT's client CustomAiPatch picks a
+                // brain per ASSAULT/player-scav bot from BotConfig.AssaultBrainType[<map id lowercased>] /
+                // PlayerScavBrainType[...] (spt-custom AIBrainSpawnWeightAdjustment.cs:55-66) and throws
+                // "the assault cache still doesn't contain data" for a map the table does not know. Give every
+                // Arena map the stand-in map's row (Equator → interchange, others → factory4_day).
+                ArenaMapRegistration.ApplyBrainTable(botConfig.AssaultBrainType, map);
+                ArenaMapRegistration.ApplyBrainTable(botConfig.PlayerScavBrainType, map);
 
                 // Banners: base.json ships Banners: [] (SPEC §B.WP5 step 7 / §E.4) so there is
                 // nothing to wire through ImageRouter — Icebreaker's own documented landmine
@@ -320,5 +351,13 @@ public class ArenaMapPortMod(
         {
             logger.Warning($"[ArenaMapPort] location locale registration failed: {e.Message}");
         }
-    }
+    
+        // bots-stage1 (docs/progress/bots-stage1.md, "APBS") — once, after every map is registered: a
+        // soft Harmony patch on APBS's per-map weapon-range lookup so bot generation on Arena maps does
+        // not throw "Map '<key>' not found". No-op without APBS. See ApbsCompat.cs.
+        ApbsCompat.TryInstall(
+            ArenaMapRegistry.All,
+            message => logger.Info("[ArenaMapPort] " + message),
+            message => logger.Warning("[ArenaMapPort] " + message));
+}
 }

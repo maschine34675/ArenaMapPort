@@ -282,6 +282,49 @@ public class LocationRegistrationTests
         Assert.Equal(40, scav!.MinStaticLootPercent);
     }
 
+    // bots-stage1 — APBS compatibility: Arena keys map to a vanilla stand-in, everything else passes.
+    [Fact]
+    public void ApbsCompat_RemapsArenaKeysOnly()
+    {
+        var count = ApbsCompat.RegisterStandIns(ArenaMapRegistry.All);
+
+        Assert.Equal(ArenaMapRegistry.All.Count, count);
+        Assert.Equal("Interchange", ApbsCompat.Remap(ArenaMapRegistry.Equator.Key));
+        Assert.Equal("factory4_day", ApbsCompat.Remap(ArenaMapRegistry.Bay5.Key));
+        Assert.Equal("bigmap", ApbsCompat.Remap("bigmap"));
+        Assert.Equal("RezervBase", ApbsCompat.Remap("RezervBase"));
+        Assert.Null(ApbsCompat.Remap(null));
+        Assert.Null(ApbsCompat.FindMapRangeWeightsType()); // APBS is not part of the test process
+    }
+
+    // bots-stage1 — ApplyBrainTable gives an Arena key the stand-in map's brain-weight row, once.
+    [Fact]
+    public void ApplyBrainTable_CopiesTheStandInRow_ToTheLowercasedKey()
+    {
+        var table = new Dictionary<string, Dictionary<string, int>>
+        {
+            ["factory4_day"] = new() { ["assault"] = 1 },
+            ["interchange"] = new() { ["assault"] = 2, ["pmcBot"] = 1 },
+        };
+
+        Assert.True(ArenaMapRegistration.ApplyBrainTable(table, ArenaMapRegistry.Equator));
+        Assert.True(ArenaMapRegistration.ApplyBrainTable(table, ArenaMapRegistry.Bay5));
+
+        Assert.Same(table["interchange"], table[ArenaMapRegistry.Equator.Key.ToLowerInvariant()]);
+        Assert.Same(table["factory4_day"], table[ArenaMapRegistry.Bay5.Key.ToLowerInvariant()]);
+        Assert.False(ArenaMapRegistration.ApplyBrainTable(table, ArenaMapRegistry.Equator)); // already present
+        Assert.Equal(4, table.Count);
+    }
+
+    [Fact]
+    public void ApplyBrainTable_LeavesTheTableAlone_WhenTheStandInIsMissing()
+    {
+        var table = new Dictionary<string, Dictionary<string, int>>();
+
+        Assert.False(ArenaMapRegistration.ApplyBrainTable(table, ArenaMapRegistry.Equator));
+        Assert.Empty(table);
+    }
+
     // bots-stage1 — ApplyBotCap mirrors a bot-enabled map's BotMax into BotConfig.MaxBotCap.
     [Theory]
     [MemberData(nameof(AllMaps))]
