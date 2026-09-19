@@ -70,6 +70,7 @@ namespace ArenaMapPort.Client
             // "Lighting Lab" (docs/progress/donor-settings-camera-weather.md) — see LightingLab.cs.
             InstallLightingLabReflectionOverride(harmony);
             InstallReflectionIntensityScale(harmony);
+            InstallAmbientIntensityScale(harmony);
             InstallLightingLabWaterLevelOverride(harmony);
 
             // donor-settings-camera-weather §12 goal 3 — see RainCoverRepairs.cs.
@@ -90,6 +91,29 @@ namespace ArenaMapPort.Client
             var postfix = AccessTools.Method(typeof(WeatherRig), nameof(WeatherRig.ReflectionIntensityPostfix));
             harmony.Patch(target, postfix: new HarmonyMethod(postfix));
             Plugin.Log.LogInfo("[ArenaMapPort][Harmony] patched AmbientLight.method_3 (Lighting ReflectionIntensity scale)");
+        }
+
+        // §18 — Lighting (<map>) AmbientIntensity — AmbientLight.SetSH(SphericalHarmonicsL2)/
+        // AmbientHighlight.SetSH(SphericalHarmonicsL2), public instance, single overload each
+        // (D:/SPT41/Development/_decompiled/AmbientLight.cs:664, AmbientHighlight.cs:137). See
+        // WeatherRig.AmbientIntensityPrefix/AmbientHighlightIntensityPrefix.
+        static void InstallAmbientIntensityScale(Harmony harmony)
+        {
+            var target = AccessTools.Method(typeof(AmbientLight), nameof(AmbientLight.SetSH));
+            if (Verify(target, typeof(AmbientLight), nameof(AmbientLight.SetSH)))
+            {
+                var prefix = AccessTools.Method(typeof(WeatherRig), nameof(WeatherRig.AmbientIntensityPrefix));
+                harmony.Patch(target, prefix: new HarmonyMethod(prefix));
+                Plugin.Log.LogInfo("[ArenaMapPort][Harmony] patched AmbientLight.SetSH (Lighting AmbientIntensity scale)");
+            }
+
+            var htarget = AccessTools.Method(typeof(AmbientHighlight), nameof(AmbientHighlight.SetSH));
+            if (Verify(htarget, typeof(AmbientHighlight), nameof(AmbientHighlight.SetSH)))
+            {
+                var hprefix = AccessTools.Method(typeof(WeatherRig), nameof(WeatherRig.AmbientHighlightIntensityPrefix));
+                harmony.Patch(htarget, prefix: new HarmonyMethod(hprefix));
+                Plugin.Log.LogInfo("[ArenaMapPort][Harmony] patched AmbientHighlight.SetSH (Lighting AmbientIntensity scale)");
+            }
         }
 
         // Lighting Lab candidate B — AmbientLight.method_2(), public instance, no args (the task brief's

@@ -166,6 +166,18 @@ namespace ArenaMapPort.Client
             // veil indoors because EFT has no local reflection source for them.
             internal BepInEx.Configuration.ConfigEntry<float> ReflectionIntensity;
 
+            // §18 — scale on the analytic diffuse SH ambient ToDController computes and pushes into
+            // AmbientLight.SetSH/AmbientHighlight.SetSH every frame (AmbientLight.cs:664-678,
+            // AmbientHighlight.cs:137-157) — the ONLY indirect-light source on this or any vanilla EFT map
+            // (no baked lightmaps/light probes exist on Reserve, Customs, or even Arena's own Bay5 build —
+            // see docs/progress/donor-settings-camera-weather.md §18). Independent, additive lever on top
+            // of ReflectionIntensity, which the host A/B in §16.2 found ALSO brightens/darkens shadowed
+            // surfaces (contradicting this pass's own decompile-only read that it should only touch the
+            // sky-cubemap/SSR reflection term — see §18's own note on that contradiction). Applies on the
+            // next AmbientLight.SetSH call, i.e. within one frame of a SettingChanged (ToDController.Update
+            // runs every frame) — SettingChanged below re-applies it immediately instead of waiting.
+            internal BepInEx.Configuration.ConfigEntry<float> AmbientIntensity;
+
             // §13 goal 2 — RoofDepthBlack's elevated-mesh filter threshold. See RainCoverRepairs.cs.
             internal BepInEx.Configuration.ConfigEntry<float> CoverMinHeightEntry;
         }
@@ -369,15 +381,32 @@ namespace ArenaMapPort.Client
                     "instead — see ReflectionIntensity). Live.",
                     new BepInEx.Configuration.AcceptableValueRange<float>(0f, 2f)));
 
-            cfg.ReflectionIntensity = Plugin.Instance.Config.Bind(section, "ReflectionIntensity",
-                bay5Defaults ? 0.5f : 1f,
+            // Default 1.0 = vanilla. 0.5 fixed the hall-floor sky mirror but (host A/B 2026-09-19,
+            // doc §16.2) darkens EVERY shadowed surface: the Custom Ambient pass scales its whole
+            // cubemap contribution with _ReflectionIntensity, and that carries most of the shadow light.
+            cfg.ReflectionIntensity = Plugin.Instance.Config.Bind(section, "ReflectionIntensity", 1f,
                 new BepInEx.Configuration.ConfigDescription(
                     "Scale on the sky-cubemap reflection term of EFT's screen-space ambient pass while a " +
                     "weather rig is active (1.0 = vanilla, which forces full strength whenever SSR is on). " +
                     "Lower values dim the sky mirrored by smooth surfaces everywhere on the map, indoors and " +
-                    "in puddles alike. Bay5 default 0.5 (host survey 2026-09-18: hall floors become dark wet " +
-                    "concrete with pillar-mirroring puddles, the yard keeps its sky puddles). Live.",
+                    "in puddles alike — and dims every shadowed surface with them (doc §16.2), so keep 1.0 " +
+                    "unless comparing. Live.",
                     new BepInEx.Configuration.AcceptableValueRange<float>(0f, 1f)));
+
+            cfg.AmbientIntensity = Plugin.Instance.Config.Bind(section, "AmbientIntensity", 1f,
+                new BepInEx.Configuration.ConfigDescription(
+                    "§18 — scale on the analytic diffuse SH ambient ToDController computes and pushes into " +
+                    "AmbientLight.SetSH/AmbientHighlight.SetSH (the same rig-cloned curves Reserve itself " +
+                    "uses) — the only indirect-light mechanism on this or any vanilla EFT map (no baked " +
+                    "lightmaps/light probes on Reserve, Customs, or Arena's own Bay5 build; see §18). " +
+                    "Independent of ReflectionIntensity above, which scales the sky-cubemap/SSR reflection " +
+                    "term the Custom Ambient screen pass composites — though the §16.2 host A/B found that " +
+                    "knob ALSO moves shadowed-surface brightness in practice, contradicting this pass's own " +
+                    "decompile-only read that it should be diffuse-independent; see §18's own note on that " +
+                    "open contradiction. Range 0.25..4 so it can brighten as well as dim. Live: applies on " +
+                    "the next AmbientLight.SetSH call (every frame), reapplied immediately by the " +
+                    "SettingChanged handler below.",
+                    new BepInEx.Configuration.AcceptableValueRange<float>(0.25f, 4f)));
 
             // §12 goal 1 — real ambient fix, unconditional default Donor (harmless for a no-rig map —
             // Donor="Off" above means OnSceneLoaded never reaches ApplyDonorLevelSettingsOverrides for it).
@@ -412,6 +441,7 @@ namespace ArenaMapPort.Client
                 "LevelSettings.RainBounds from this map's own static geometry once per raid. See " +
                 "RainCoverRepairs.cs. Applied fresh every raid, not live.");
             cfg.ReflectionIntensity.SettingChanged += (_, __) => ReapplyReflectionIntensity(map);
+            cfg.AmbientIntensity.SettingChanged += (_, __) => ReapplyAmbientIntensity(map);
 
             // §13 goal 2 — RoofDepthBlack's elevated-mesh filter: a renderer only becomes a black-draw
             // candidate if its bounds.min.y sits at least this far above the ground/collider hit directly
@@ -1486,6 +1516,88 @@ namespace ArenaMapPort.Client
             }
             ambient.method_3();
             Plugin.Log.LogInfo($"[ArenaMapPort][WeatherRig] {map.Key}: ReflectionIntensity scale={ReflectionIntensityForCurrentMap():0.00} applied live");
+        }
+
+        // §18 — scale on the analytic diffuse SH ambient (ToDController.Update -> AmbientLight.SetSH /
+        // AmbientHighlight.SetSH every frame). See AmbientIntensity's own ConfigDescription for the
+        // ReflectionIntensity/§16.2 contradiction this knob is independent of but does not resolve.
+        internal static float AmbientIntensityForCurrentMap() =>
+            IsActiveForCurrentMap() && _configs.TryGetValue(_activeMap.Key, out var c) ? c.AmbientIntensity.Value : 1f;
+
+        internal static BepInEx.Configuration.ConfigEntry<float> AmbientIntensityEntry(ArenaMapDescriptor map) =>
+            _configs.TryGetValue(map.Key, out var c) ? c.AmbientIntensity : null;
+
+        // Harmony prefix on AmbientLight.SetSH (HarmonyPatches.InstallAmbientIntensityScale). `ref` mutates
+        // the by-value SphericalHarmonicsL2 argument in place before the original method reads it — same
+        // proven pattern as TimeOfDayRepairs.Prefix's `ref TimeAndWeatherSettings` (TimeOfDayRepairs.cs:120),
+        // already shipping. SetSH runs every frame from ToDController.Update (ToDController.cs:265), so
+        // scaling here never compounds (each call gets a fresh SH from ToDController's own stored property).
+        internal static void AmbientIntensityPrefix(AmbientLight __instance, ref SphericalHarmonicsL2 sh)
+        {
+            if (!ArenaMapRaid.IsLoaded() || !IsActiveForCurrentMap())
+            {
+                return;
+            }
+            float scale = AmbientIntensityForCurrentMap();
+            // NOTE: not ">= 1f" like ReflectionIntensityPostfix — AmbientIntensity's own range is 0.25..4
+            // and must be able to BRIGHTEN as well as dim, so only the exact no-op (1.0) short-circuits.
+            if (scale == 1f)
+            {
+                return;
+            }
+            for (int c = 0; c < 3; c++)
+            {
+                for (int i = 0; i < 9; i++)
+                {
+                    sh[c, i] *= scale;
+                }
+            }
+        }
+
+        // Harmony prefix on AmbientHighlight.SetSH — same scale, see AmbientIntensity's ConfigDescription
+        // ("same scale, one key" decision) for why this isn't a separate AmbientHighlightIntensity key.
+        internal static void AmbientHighlightIntensityPrefix(AmbientHighlight __instance, ref SphericalHarmonicsL2 sh)
+        {
+            if (!ArenaMapRaid.IsLoaded() || !IsActiveForCurrentMap())
+            {
+                return;
+            }
+            float scale = AmbientIntensityForCurrentMap();
+            if (scale == 1f)
+            {
+                return;
+            }
+            for (int c = 0; c < 3; c++)
+            {
+                for (int i = 0; i < 9; i++)
+                {
+                    sh[c, i] *= scale;
+                }
+            }
+        }
+
+        // Live re-apply: re-runs AmbientLightScript.SetSH(tod.SH) with the stored, last-computed SH
+        // (ToDController.SH is a `{ get; set; }` property, ToDController.cs:231) so the prefix above picks
+        // up the new scale within this call rather than waiting up to one frame for ToDController.Update's
+        // own next natural SetSH call. Deliberately does NOT also re-trigger AmbientHighlightScript.SetSH:
+        // ToDController never caches SHWithoutTop outside the job's own local scope, so an exact live
+        // reapply of the highlight's own (possibly top-harmonics-stripped) SH isn't cheaply available here
+        // — it picks up the new scale on its own next per-frame call instead (ToDController.Update runs
+        // every frame, so this is a sub-frame delay in practice). See §18's own write-up for the fallback
+        // (a separate AmbientHighlightIntensity key) if playtesting ever shows this mismatch is visible.
+        internal static void ReapplyAmbientIntensity(ArenaMapDescriptor map)
+        {
+            if (!IsActiveForCurrentMap() || _activeMap != map)
+            {
+                return;
+            }
+            var tod = ActiveRig?.Controller?.TimeOfDayController;
+            if (tod?.AmbientLightScript == null)
+            {
+                return;
+            }
+            tod.AmbientLightScript.SetSH(tod.SH);
+            Plugin.Log.LogInfo($"[ArenaMapPort][WeatherRig] {map.Key}: AmbientIntensity scale={AmbientIntensityForCurrentMap():0.00} applied live");
         }
 
         internal static RainCoverMode RainCoverForCurrentMap() =>

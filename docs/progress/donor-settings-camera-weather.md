@@ -1506,3 +1506,215 @@ That is the user's "outdoors too dark" report. Decision: Bay5 default back to **
 hall-floor veil needs a per-surface fix instead — reduce the smoothness of floor-like renderers that the
 RoofDepthBlack depth photo shows as covered, on per-renderer material clones so shared materials in
 the yard stay untouched.
+
+## 18) Ambient intensity (2026-09-19)
+
+User report (Bay5, Clear noon, `ReflectionIntensity` 0.5): outdoors, every surface without direct sun is
+still rather dark; sunlit surfaces and the sky are fine, the halls are fine now. Equator looks fine — do
+not touch it. This section adds a live diffuse-ambient knob and diagnostics, and records an open
+contradiction with §16.2 above that the user should know about before tuning it.
+
+### 18.0) Equator check (before touching anything)
+
+Confirmed by re-reading the code, not re-trusting §16.2's own text: `WeatherRig.BindConfig` sets
+`Donor="Off"` for every map except `arena_bay5` (`WeatherRig.cs:285`), and `WeatherRig.OnSceneLoaded`
+returns at the `donorName == OffDonor` check (`WeatherRig.cs:1090`, `_activeMap` stays `null`)
+before any §12/§13/§16/§18 code runs. Equator's ambient instead comes entirely from
+`ArenaLightingRepairs`' own real-time fill lights + `SkyColor`/`EquatorColor`/`GroundColor`
+`RenderSettings` write, gated `ownAmbientColor = !WeatherRig.IsActiveForCurrentMap()`
+(`ArenaLightingRepairs.cs:379`) — independent of `AmbientLight.SetSH`/`ToDController` (there is no
+`ToDController` instance for a no-rig map). Every knob below gates on
+`WeatherRig.IsActiveForCurrentMap()`, permanently `false` for Equator. **Nothing in this section touches
+Equator.**
+
+### 18.1) SH pipeline, and an open contradiction with §16.2
+
+`AmbientLight.SetSH(SphericalHarmonicsL2 sh)` (`AmbientLight.cs:664-678`) writes `_SHAr`/`_SHAg`/`_SHAb`/
+`_SHBr`/`_SHBg`/`_SHBb`/`_SHC`/`_EFT_Ambient` as **global** shader properties (`Shader.SetGlobalVector`) —
+this is the diffuse ambient the deferred `p0/*` shaders read. It is fed every frame by
+`ToDController.Update()` (`ToDController.cs:242-285`, called from `WeatherController`'s own update), which
+completes last frame's `ComputeSphericalHarmonicsContainerJob.CalculateSphericalHarmonics(t, t01)`
+(`ToDController.cs:38-126`, `t = TOD_Sky.SunDirection.y` — sun ELEVATION, not clock time) from this map's
+rig-cloned `AnimationCurve`s (`TopHarmonicIntensity`, `HorizontHarmonicIntensity`, `BounceHarmonicIntensity`,
+`ForwarHarmonicIntensity`/`Multiplyer`, `AmbientBrightness`/`Contrast`/`Saturation`) plus `TOD_Sky`'s own
+`Day.AmbientColor` gradient — byte-identical to Reserve's own authored values on the Bay5 rig clone.
+Verified dead weight in this same pass: `EnvironmentColor`/`HarmonicsDaylight` (`ToDController.cs:118-123`)
+never changes the result — `HarmonicsDaylight` is a `{get;set;}` auto-property nothing in the decompile
+ever assigns (grepped the whole `_decompiled` tree), so it is always `0f`, making
+`result.FullSH = FullSH*1 + sh*0 = FullSH` a no-op on every map, Reserve included. Not worth a config key.
+
+Separately, `AmbientLight.method_3()` (`AmbientLight.cs:434-438`) writes **only** the shader property
+`_ReflectionIntensity` into `_screenAmbientBlock`, a `MaterialPropertyBlock` consumed by the "Custom
+Ambient" `CameraEvent.AfterLighting` screen-space quad draw (`AmbientLight.cs:489`,
+`cbAmbient.DrawMesh(_quadMesh, ..., _screenAmbientMaterial, 0, 0, _screenAmbientBlock)`). At the **C#**
+level these are two independent code paths — `method_3` never touches the SH globals `SetSH` writes, and
+`WeatherRig.ReflectionIntensityPostfix` only rescales `_screenAmbientBlock`'s own float
+(`WeatherRig.cs:1490-1500`). Read at face value, that would mean `ReflectionIntensity` cannot affect the
+diffuse SH term at all.
+
+**But §16.2 (this same file, one commit before this section) reports the opposite from an actual in-game
+A/B**: at the same spot, `ReflectionIntensity` 0.5 → 1.0 visibly brightens every shadowed surface, not
+just glossy mirrors — "the matte steel doors, the brick wall, the dry asphalt". That test is stronger
+evidence than the C# read above, because **the C# decompile cannot see what `_screenAmbientMaterial`'s
+own shader does with `_ReflectionIntensity`** — `ScreenAmbientShader` (`AmbientLight.cs:114`) is a
+serialized `Shader` asset instantiated at runtime (`AmbientLight.cs:611`), not decompiled C#, and it is
+drawn into the same screen-space "Custom Ambient" pass that composites ambient onto the lit buffer. It is
+entirely plausible that this one shader reads the global `_SHAr`/`_SHAg`/`_SHAb` for its diffuse term
+*and* scales the pass's combined output (diffuse + cubemap reflection) by `_ReflectionIntensity` — the C#
+side has no way to rule that out, so **§1a's "confirmed, not inference" framing of this pass's own
+decompile-only read was an overclaim; §16.2's empirical result should be trusted over it.**
+
+Practical upshot: this section's `AmbientIntensity` knob (18.2) is still correct and useful on its own
+merits — it scales the actual `sh` struct going into `Shader.SetGlobalVector`, regardless of how the
+Custom Ambient shader treats `_ReflectionIntensity` — but it is **not necessarily the dominant lever**.
+Per §16.2's own decision, Bay5's `ReflectionIntensity` should already be back at 1.0; **it is currently
+still 0.5 in code** (`WeatherRig.cs:385`, `bay5Defaults ? 0.5f : 1f`) — that decision was written up but
+never implemented. Given §16.2's own finding, this uncommitted default is very plausibly the single
+biggest contributor to the exact complaint reported for this section ("outdoors ... still rather dark").
+Left unchanged here since flipping an existing default was outside this pass's goals (2-4, new keys
+only) — flagged for a deliberate follow-up decision instead of a silent side effect.
+
+### 18.2) Do vanilla maps use baked GI at all?
+
+No, on both sides — refutes "missing baked GI" as the cause on Bay5, independent of the §18.1 question.
+Loaded `LightmapSettings` with `UnityPy.load(...).objects` + `read_typetree()` (read-only):
+
+- Vanilla Reserve (`D:\SPT41vanilla\EscapeFromTarkov_Data\level139`) and Customs (`level15`):
+  `m_Lightmaps: []`, `m_LightProbes` null, `m_GISettings.m_EnableBakedLightmaps/m_EnableRealtimeLightmaps:
+  false`, `LightProbes` object count 0 (re-verified this pass for Reserve: `LightProbes=0`,
+  `ReflectionProbe=1` present but with no baked texture assigned).
+- Arena's own Bay5 source build (`D:\Battlestate Games\Escape from Tarkov Arena\
+  EscapeFromTarkovArena_Data\level84` = `Arena_Bay5_Main`, the real client, read-only): identical —
+  `LightProbes=0`, `ReflectionProbe=0`, `m_Lightmaps: []`, baking disabled.
+
+The analytic SH pipeline (§18.1) is the only indirect-light mechanism that has ever existed for this
+content, on both sides — there is nothing to "carry over" from the port. `AmbientIntensity` (18.2 below)
+is the right lever either way; whether it or `ReflectionIntensity` (§18.1) is the one actually worth
+raising on Bay5 needs the in-game A/B in §18.4.
+
+### 18.3) Implementation — `AmbientIntensity`
+
+New per-map key `Lighting (<key>) AmbientIntensity` (float 0.25..4, default 1.0 — vanilla). A Harmony
+**prefix** on `AmbientLight.SetSH`/`AmbientHighlight.SetSH`, both `public void SetSH(SphericalHarmonicsL2
+sh)` (`AmbientLight.cs:664`, `AmbientHighlight.cs:137`), each declared `ref SphericalHarmonicsL2 sh` and
+multiplying all 27 coefficients (`sh[c, i] *= scale` for `c` in 0..2, `i` in 0..8) before the original
+method runs — the same `ref`-mutates-a-struct-argument pattern `TimeOfDayRepairs.Prefix` already ships
+(`TimeOfDayRepairs.cs:120`, patching `LocalGame.InitWeather`). Gated on `ArenaMapRaid.IsLoaded() &&
+WeatherRig.IsActiveForCurrentMap()`; short-circuits on `scale == 1f` (not `>= 1f` — unlike
+`ReflectionIntensity`'s 0..1 range, this one must brighten as well as dim). `SettingChanged` re-applies
+immediately by re-calling `AmbientLightScript.SetSH(tod.SH)` with `ToDController`'s own stored `SH`
+property, so a live F12 change lands within the same call rather than waiting up to one frame.
+
+Same scale, one key — not a separate `AmbientHighlightIntensity` this pass. `AmbientHighlight.SetSH`
+writes its own local `MaterialPropertyBlock` for a rim-light boost on `Static`/`Characters`/`Hands`
+(`AmbientHighlight.cs:82,152-157`), on top of those objects' normal deferred lighting rather than
+replacing it. Leaving it unscaled while world ambient changes would make highlighted objects visibly
+mismatch the walls around them, so both prefixes share the one scale. `ReapplyAmbientIntensity` does NOT
+re-trigger `AmbientHighlightScript.SetSH` on `SettingChanged` — `ToDController` doesn't cache
+`SHWithoutTop` outside the job's own local scope, so an instant, exactly-correct live reapply isn't
+cheaply available; it picks up the new scale on its own next per-frame call instead (sub-frame in
+practice, `ToDController.Update` runs every frame). Promote to a separate key later if playtesting shows
+that mismatch is visible.
+
+No `EnvironmentColor` boost key — §18.1 already shows that term is dead weight regardless of value.
+
+Files touched: `WeatherRig.cs` (config field/bind/`SettingChanged`, `AmbientIntensityForCurrentMap`,
+`AmbientIntensityPrefix`, `AmbientHighlightIntensityPrefix`, `ReapplyAmbientIntensity`),
+`HarmonyPatches.cs` (`InstallAmbientIntensityScale`, called from `InstallAll`).
+
+### 18.4) Diagnostics
+
+F9 snapshot (`LightingLab.RunSnapshot`, new `AppendAmbientIntensitySnapshot`) adds, right after the
+existing `B2 Lighting.ReflectionIntensity` line:
+
+```
+§18 AmbientIntensity: scale=1.00 _EFT_Ambient=(0.07, 0.10, 0.12, 0.00) _SHAr.w=0.040 _SHAg.w=0.055 _SHAb.w=0.061
+§18 Exposure: useExposure=True middleGrey=0.230 lower=-3.0 upper=3.0 adaptation=RGBA(0.412, 0.412, 0.412, 1.000)
+§18 Sun: color=RGBA(1.000, 0.953, 0.890, 1.000) intensity=1.35
+```
+
+`_SHAr.w` etc. is `sh[c,0]-sh[c,6]` per channel, per `AmbientLight.SetSH`'s own packing
+(`AmbientLight.cs:673`). Exposure reads the active camera's `PrismEffects` the same way
+`DaytimeVisualsProbe.ProbeExposure`/`LightingDiagnosticProbe` already do, plus a one-texel readback of
+`PrismEffects.AdaptationTexture` (a 1x1 `RenderTexture`, `histWidth=histHeight=1`, `PrismEffects.cs:
+168,170,471`) using the same create/destroy-one-scratch-`Texture2D` recipe
+`AppendReflectionProbeFaces`/`RainCoverRepairs.BuildDepthReadback` already use (not a persisted field —
+F9 is a manual hotkey, nothing to reuse across presses worth caching; a deliberate, noted deviation from
+this pass's own draft pseudocode, which sketched a cached field). The sun line reads
+`WeatherRig.ActiveRig.Sky.LightObject` — `n/a` off a no-rig map (Equator), same as every other §18 field
+degrading gracefully there.
+
+Per-raid curve dump (`DaytimeVisualsProbe.ProbeAmbient`, extended — the existing thin `F5 Ambient` home,
+not a new probe method) logs once, only while a rig is active:
+
+```
+[ArenaMapPort][DaytimeVisualsProbe] §18 Curves @t=0.98 t01=0.99: Top=1.20 Horizont=0.85 Bounce=0.30 Forwar=0.40 AmbientBrightness=1.10 AmbientContrast=1.00 AmbientSaturation=1.00 EnvironmentColor=RGBA(0.013, 0.013, 0.013, 0.000) (HarmonicsDaylight=0.00 — always 0 in this decompile, EnvironmentColor's own term is dead weight, see §18)
+```
+
+`t`/`t01` are re-derived exactly as `ToDController.Update` computes them (`ToDController.cs:250,258`),
+since neither is cached outside that method's own local scope. This is what lets the user capture the
+identical line on a vanilla map raid later (Reserve, via `Donor` pointed at itself or a debug rig) for a
+direct curve-value comparison against Bay5's own numbers.
+
+### 18.5) Config keys (new this pass)
+
+| Key | Default | Range | Notes |
+|---|---|---|---|
+| `Lighting (<key>) AmbientIntensity` | 1.0 | 0.25..4 | Scale on the diffuse SH `AmbientLight.SetSH`/`AmbientHighlight.SetSH` receive. Live (SettingChanged re-applies immediately). Only while a rig is active. |
+
+### 18.6) A/B procedure
+
+1. Stand in the Bay5 yard looking at a shadowed wall (not the sky, not a sunlit surface) — e.g. the same
+   (56,-3.8,17) yaw 243 spot §16.1/§16.2 already used.
+2. Press F9 — note `§18 AmbientIntensity: scale=1.00 ...` and the `§18 Exposure`/`§18 Sun` lines as the
+   baseline.
+3. F12 → `Lighting (arena_bay5)` → `AmbientIntensity` → 1.5, then 2.0. Press F9 after each; `_SHAr.w`/
+   `_SHAg.w`/`_SHAb.w` and `_EFT_Ambient` should scale proportionally, while `B2 Lighting.ReflectionIntensity`
+   stays unchanged (confirms this prefix is genuinely independent of that one — the exact check §18.1
+   predicts from the C# read, whatever the truth of §16.2's own broader finding turns out to be).
+4. Compare how the wall actually looks at each step against the `§18 Exposure` line — if `adaptation`
+   barely moves while the wall visibly brightens, the SH term is the dominant lever here; if the wall
+   looks about the same while `adaptation` swings a lot moving the camera between sunlit ground and the
+   wall, auto-exposure (§1b/PrismEffects) is dominant instead and `AmbientIntensity` will feel weaker than
+   expected.
+5. For a direct comparison against a map that never had this problem, repeat step 2 on a raid where
+   `Donor` points at Reserve itself (or any vanilla map) and compare the `§18 Curves` per-raid log line —
+   same curves, so any difference in the resulting `_SHAr.w` numbers at a similar sun angle points at
+   scene-content (albedo/occlusion) rather than the curves themselves.
+6. Once a value looks right, also glance at a highlighted character/hands against the now-brighter walls
+   (18.3's "same scale, one key" decision) — if they look mismatched, that's the trigger to promote to a
+   separate `AmbientHighlightIntensity` key.
+
+### 18.7) "Missing baked GI" vs "SH too weak" — answer
+
+**Not missing baked GI** — §18.2 shows neither Bay5 (on Arena's own real client) nor any checked vanilla
+map (Reserve, Customs) ever had lightmaps or light probes; the analytic SH pipeline is the only indirect
+light source everywhere, by design, not a port gap. Whether Bay5's shadows are "SH too weak" is **open**:
+the curves feeding the SH are Reserve's own, byte-identical on the clone (§18.1), so by construction they
+should produce Reserve's own shadow-fill level for the same sun angle/weather — any weakness would have
+to come from Bay5's own geometry/material response to that identical SH (unverifiable from decompile,
+needs the §18.6 A/B), and/or from the exposure/auto-adaptation interaction §1b describes (very open
+harbor framing vs. Reserve's more enclosed sightlines), and/or — per §16.2's own empirical finding, which
+this pass's C#-only read could not rule out (§18.1) — from `ReflectionIntensity` still sitting at its old
+0.5 default in code rather than the 1.0 §16.2 already decided on. `AmbientIntensity` is a real, working,
+independent lever either way; it is just not proven to be *the* fix on its own until the §18.6 A/B is run
+in-game.
+
+### 18.8) Review fix-ups (2026-09-19)
+
+One defect reported against this section, verified against the actual post-diff working tree (not the
+diff's own line numbers, which this same pass had already outgrown):
+
+- **§18.0 citations drifted from the code they cite.** `WeatherRig.cs:273`/`WeatherRig.cs:1062-1065` for
+  the `defaultDonor`/`Donor="Off"` bind and the `donorName == OffDonor` early return were correct against
+  an earlier state of the file, but this diff's own edits (the `AmbientIntensity` field block, then its
+  config-bind block) had already pushed both further down by the time the section was written — the real
+  lines are `WeatherRig.cs:285` and `WeatherRig.cs:1090`. Confirmed by grepping both anchor strings
+  (`defaultDonor = map.Key ==`, `donorName == OffDonor`) against the current file and reading the
+  surrounding code, which still matches what §18.0 says about it (Equator gets `Donor="Off"`,
+  `OnSceneLoaded` returns before `_activeMap` is set, nothing in §18 touches Equator). Fixed both citations
+  in place. While checking, also re-verified the other two `WeatherRig.cs` citations in this section
+  (`:385` for `bay5Defaults ? 0.5f : 1f`, `:1490-1500` for the `ReflectionIntensityForCurrentMap`
+  postfix) — both still exact, no drift there. No code changed by this fix-up; rebuilt anyway per the
+  build rules and the dist DLL hash is unchanged (`650dad3d…9a04d3af`, byte-identical to before this
+  pass, since only the doc moved).

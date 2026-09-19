@@ -226,6 +226,34 @@ namespace ArenaMapPort.Client
             Plugin.Log.LogInfo($"{tag} F5 Ambient: rigActive={rigActive} " +
                                $"ArenaLightingRepairs-ambientColorWriteSkipped={rigActive} " +
                                $"liveAmbientLight={RenderSettings.ambientLight}");
+
+            // §18 — once-per-raid dump of the ToDController curve values feeding the analytic diffuse SH
+            // (ToDController.cs:38-126). t/t01 are re-derived exactly as ToDController.Update computes
+            // them (sun ELEVATION, not clock time — ToDController.cs:250,258) since neither is cached
+            // outside that method's own local scope. Only meaningful with a rig active (no ToDController
+            // otherwise — see §0's own Equator finding). Lets the user capture the identical line on a
+            // vanilla map raid later (e.g. Reserve via a debug Donor) for a direct curve-value comparison —
+            // see donor-settings-camera-weather.md §18.
+            if (!rigActive)
+            {
+                return;
+            }
+            var rig = WeatherRig.ActiveRig;
+            var tod = rig?.Controller?.TimeOfDayController;
+            if (tod == null || rig.Sky == null)
+            {
+                return;
+            }
+            float y = rig.Sky.SunDirection.y;
+            float t = y;
+            float t01 = y * 0.5f + 0.5f;
+            Plugin.Log.LogInfo($"{tag} §18 Curves @t={t:0.00} t01={t01:0.00}: " +
+                $"Top={tod.TopHarmonicIntensity.Evaluate(t):0.00} Horizont={tod.HorizontHarmonicIntensity.Evaluate(t01):0.00} " +
+                $"Bounce={tod.BounceHarmonicIntensity.Evaluate(t):0.00} Forwar={tod.ForwarHarmonicIntensity.Evaluate(t01):0.00} " +
+                $"AmbientBrightness={tod.AmbientBrightness.Evaluate(t):0.00} AmbientContrast={tod.AmbientContrast.Evaluate(t):0.00} " +
+                $"AmbientSaturation={tod.AmbientSaturation.Evaluate(t):0.00} EnvironmentColor={tod.EnvironmentColor} " +
+                $"(HarmonicsDaylight={tod.HarmonicsDaylight:0.00} — always 0 in this decompile, so " +
+                $"EnvironmentColor's own term is dead weight regardless of its value; see §18)");
         }
 
         // F6 — SeaPlaceholderRepairs.

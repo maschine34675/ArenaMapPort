@@ -200,6 +200,12 @@ namespace ArenaMapPort.Client
         static readonly int _directionLightShadowId = Shader.PropertyToID("_DirectionLightShadow");
         static readonly int _minAmbientColorId = Shader.PropertyToID("_MinAmbientColor");
 
+        // §18 — the diffuse SH globals AmbientLight.SetSH writes (AmbientLight.cs:670-677).
+        static readonly int _shArId = Shader.PropertyToID("_SHAr");
+        static readonly int _shAgId = Shader.PropertyToID("_SHAg");
+        static readonly int _shAbId = Shader.PropertyToID("_SHAb");
+        static readonly int _eftAmbientId = Shader.PropertyToID("_EFT_Ambient");
+
         static readonly string[] SmoothnessPropertyHints = { "smooth", "gloss", "shin" };
 
         internal static void Install()
@@ -1025,6 +1031,7 @@ namespace ArenaMapPort.Client
                     $"live _WaterLevel={Shader.GetGlobalFloat(_waterLevelId):0.00} " +
                     $"live _SurfaceWetIntensity={Shader.GetGlobalFloat(_surfaceWetIntensityId):0.00}");
                 sb.AppendLine($"  B2 Lighting.ReflectionIntensity: scale={WeatherRig.ReflectionIntensityForCurrentMap():0.00}");
+                AppendAmbientIntensitySnapshot(sb, cam);
                 sb.AppendLine($"  E GroundSmoothnessMultiplier: configured={cfg.GroundSmoothnessMultiplier.Value:0.00} " +
                     $"base(Lighting.GroundSmoothness)={WeatherRig.GroundSmoothnessBaseForCurrentMap():0.00} " +
                     $"effective={cfg.GroundSmoothnessMultiplier.Value * WeatherRig.GroundSmoothnessBaseForCurrentMap():0.00} " +
@@ -1057,6 +1064,71 @@ namespace ArenaMapPort.Client
             {
                 Plugin.Log.LogError($"[ArenaMapPort][LightingLab] RunSnapshot threw: {ex}");
             }
+        }
+
+        // §18 — the live SH globals AmbientLight.SetSH writes (AmbientLight.cs:664-678: _SHAr/_SHAg/_SHAb's
+        // .w is sh[c,0]-sh[c,6] per channel, i.e. the SH "DC-ish" term the packing formula subtracts the
+        // 3rd-band coefficient from — see AmbientLight.SetSH's own citation in donor-settings-camera-
+        // weather.md §18 for why), the current AmbientIntensity scale, plus exposure (PrismEffects, same
+        // resolution DaytimeVisualsProbe.ProbeExposure/LightingDiagnosticProbe already use off the active
+        // camera) and the sun Light's own color/intensity (TOD_Sky.LightObject, only meaningful while a rig
+        // is active — null-safe otherwise, same as every other §18 field above degrading to a default off a
+        // no-rig map).
+        static void AppendAmbientIntensitySnapshot(StringBuilder sb, Camera cam)
+        {
+            var shar = Shader.GetGlobalVector(_shArId);
+            var shag = Shader.GetGlobalVector(_shAgId);
+            var shab = Shader.GetGlobalVector(_shAbId);
+            sb.AppendLine($"  §18 AmbientIntensity: scale={WeatherRig.AmbientIntensityForCurrentMap():0.00} " +
+                $"_EFT_Ambient={Shader.GetGlobalVector(_eftAmbientId)} " +
+                $"_SHAr.w={shar.w:0.000} _SHAg.w={shag.w:0.000} _SHAb.w={shab.w:0.000}");
+
+            var prism = cam != null ? cam.GetComponent<PrismEffects>() : null;
+            if (prism != null)
+            {
+                string adapt = "n/a";
+                // AdaptationTexture is a histWidth x histHeight = 1x1 RT (PrismEffects.cs:168,170,471) — a
+                // single-texel readback, same "create/destroy a 1x1 scratch Texture2D around one ReadPixels"
+                // recipe AppendReflectionProbeFaces/RainCoverRepairs.BuildDepthReadback already use (no
+                // persistent field — F9 is a manual, not per-frame, hotkey, so there's nothing to reuse
+                // across calls worth caching).
+                if (prism.AdaptationTexture != null)
+                {
+                    var prevRT = RenderTexture.active;
+                    Texture2D scratch = null;
+                    try
+                    {
+                        RenderTexture.active = prism.AdaptationTexture;
+                        scratch = new Texture2D(1, 1, TextureFormat.RGBA32, false, true);
+                        scratch.ReadPixels(new Rect(0, 0, 1, 1), 0, 0);
+                        scratch.Apply();
+                        adapt = Fmt(scratch.GetPixel(0, 0));
+                    }
+                    catch (Exception e)
+                    {
+                        adapt = $"<readback threw {e.GetType().Name}>";
+                    }
+                    finally
+                    {
+                        RenderTexture.active = prevRT;
+                        if (scratch != null)
+                        {
+                            UnityEngine.Object.Destroy(scratch);
+                        }
+                    }
+                }
+                sb.AppendLine($"  §18 Exposure: useExposure={prism.useExposure} middleGrey={prism.exposureMiddleGrey:0.000} " +
+                    $"lower={prism.exposureLowerLimit:0.0} upper={prism.exposureUpperLimit:0.0} adaptation={adapt}");
+            }
+            else
+            {
+                sb.AppendLine("  §18 Exposure: n/a (no active camera / no PrismEffects found)");
+            }
+
+            var sunLight = WeatherRig.ActiveRig?.Sky?.LightObject;
+            sb.AppendLine(sunLight != null
+                ? $"  §18 Sun: color={Fmt(sunLight.color)} intensity={sunLight.intensity:0.00}"
+                : "  §18 Sun: n/a (no rig active for this map — see TOD_Sky.LightObject)");
         }
 
         // Candidate G's own read-back: the smallest generated mip of a cube face is already a GPU
