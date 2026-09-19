@@ -75,6 +75,9 @@ namespace ArenaMapPort.Client
 
             // donor-settings-camera-weather §12 goal 3 — see RainCoverRepairs.cs.
             InstallRainCoverDepthMask(harmony);
+
+            // §19 — see IndoorFloorSmoothnessRepairs.cs.
+            InstallIndoorFloorSmoothness(harmony);
         }
 
         // Lighting (<map>) ReflectionIntensity — AmbientLight.method_3(), public instance, no args
@@ -231,6 +234,25 @@ namespace ArenaMapPort.Client
             var obstaclesPrefix = AccessTools.Method(typeof(RainCoverRepairs), nameof(RainCoverRepairs.RenderObstaclesPrefix));
             harmony.Patch(renderObstacles, prefix: new HarmonyMethod(obstaclesPrefix));
             Plugin.Log.LogInfo("[ArenaMapPort][Harmony] patched DepthPhotograper.RenderObstacles (§13 rain cover v2 — roof draws)");
+        }
+
+        // §19 — second, independent postfix on the SAME DepthPhotograper.Render() target
+        // InstallRainCoverDepthMask's own prefix (RenderPrefix) already patches (DepthPhotograper.cs:55) —
+        // fires after RenderObstacles()'s own Blit into _depthRT (DepthPhotograper.cs:170), SetShaderValues()
+        // (:77) and the transient camera/cameraRT DestroyImmediate calls (:78-80) have all already run.
+        // Patching the OUTER method instead of RenderObstacles() itself avoids any dependency on Harmony's
+        // patch-ordering between two patches on the SAME inner method. See IndoorFloorSmoothnessRepairs.cs.
+        static void InstallIndoorFloorSmoothness(Harmony harmony)
+        {
+            var render = AccessTools.Method(typeof(DepthPhotograper), nameof(DepthPhotograper.Render));
+            if (!Verify(render, typeof(DepthPhotograper), nameof(DepthPhotograper.Render)))
+            {
+                return;
+            }
+
+            var postfix = AccessTools.Method(typeof(IndoorFloorSmoothnessRepairs), nameof(IndoorFloorSmoothnessRepairs.RenderPostfix));
+            harmony.Patch(render, postfix: new HarmonyMethod(postfix));
+            Plugin.Log.LogInfo("[ArenaMapPort][Harmony] patched DepthPhotograper.Render (§19 indoor floor smoothness classify trigger)");
         }
 
         // daytime-and-visuals F1 — LocalGame.InitWeather(TimeAndWeatherSettings), public instance,

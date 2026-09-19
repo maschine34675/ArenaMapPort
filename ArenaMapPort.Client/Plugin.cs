@@ -92,6 +92,12 @@ namespace ArenaMapPort.Client
             // order relative to LightingLab.Install() itself does not matter, neither reads the other's state.
             RainCoverRepairs.InstallLab();
 
+            // §19 — per-renderer indoor floor smoothness (RoofDepthBlack's own depth photo classifies
+            // covered floor-like renderers). Must install AFTER WeatherRig.Install() — its own OnSceneLoaded
+            // reads WeatherRig.IsActiveForCurrentMap()/RainCoverForCurrentMap(), same ordering reasoning as
+            // LightingLab.Install()/RainCoverRepairs.InstallLab() above. See IndoorFloorSmoothnessRepairs.cs.
+            IndoorFloorSmoothnessRepairs.Install();
+
             // Playtest finding 2026-09-14 20:09 — large flat white untextured blocks blocking movement.
             // Removes Arena's own TeamFight play-area borders (config-gated) plus a narrow name-based
             // safety net for components disabled in Arena that the current extractor/importer still

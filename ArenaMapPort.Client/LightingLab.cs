@@ -834,7 +834,7 @@ namespace ArenaMapPort.Client
                                 continue;
                             }
 
-                            var props = DiscoverSmoothnessProps(material);
+                            var props = DiscoverSmoothnessProps(material, SmoothnessPropertyHints);
                             if (props.Count == 0)
                             {
                                 continue; // shader has no smooth/gloss/shin-named Float/Range property — nothing to touch
@@ -860,7 +860,12 @@ namespace ArenaMapPort.Client
             }
         }
 
-        static List<(int propId, float original)> DiscoverSmoothnessProps(Material material)
+        // §19 — promoted from private/static to internal/static with an explicit nameHints parameter
+        // (was a hard-coded read of SmoothnessPropertyHints) so IndoorFloorSmoothnessRepairs' classifier
+        // can reuse the exact same Shader.GetPropertyCount/Name/Type discovery technique with its own hint
+        // set. This file's own call site (ScanGroundMaterials above) now passes SmoothnessPropertyHints
+        // explicitly — zero behavior change for candidate E.
+        internal static List<(int propId, float original)> DiscoverSmoothnessProps(Material material, string[] nameHints)
         {
             var result = new List<(int, float)>();
             var shader = material.shader;
@@ -890,9 +895,9 @@ namespace ArenaMapPort.Client
                     }
                     var propName = shader.GetPropertyName(i);
                     bool matches = false;
-                    for (int h = 0; h < SmoothnessPropertyHints.Length; h++)
+                    for (int h = 0; h < nameHints.Length; h++)
                     {
-                        if (propName.IndexOf(SmoothnessPropertyHints[h], StringComparison.OrdinalIgnoreCase) >= 0)
+                        if (propName.IndexOf(nameHints[h], StringComparison.OrdinalIgnoreCase) >= 0)
                         {
                             matches = true;
                             break;
@@ -1056,6 +1061,18 @@ namespace ArenaMapPort.Client
                 catch (Exception ex)
                 {
                     sb.AppendLine($"  RainCover depth readback threw: {ex.GetType().Name}: {ex.Message}");
+                }
+
+                // §19 — indoor-floor-smoothness state, same defensive wrapping as the RainCover readback
+                // just above (a separate file's state; one throw here must not blank the rest of this
+                // snapshot).
+                try
+                {
+                    sb.AppendLine("  " + IndoorFloorSmoothnessRepairs.SnapshotLine());
+                }
+                catch (Exception ex)
+                {
+                    sb.AppendLine($"  IndoorFloorSmoothness snapshot threw: {ex.GetType().Name}: {ex.Message}");
                 }
 
                 Plugin.Log.LogInfo(sb.ToString());

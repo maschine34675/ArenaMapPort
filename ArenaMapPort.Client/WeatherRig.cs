@@ -180,6 +180,11 @@ namespace ArenaMapPort.Client
 
             // §13 goal 2 — RoofDepthBlack's elevated-mesh filter threshold. See RainCoverRepairs.cs.
             internal BepInEx.Configuration.ConfigEntry<float> CoverMinHeightEntry;
+
+            // §19 — per-renderer indoor-floor smoothness scale (RoofDepthBlack's own depth photo drives
+            // the classification). See IndoorFloorSmoothnessRepairs.cs.
+            internal BepInEx.Configuration.ConfigEntry<float> IndoorFloorSmoothness;
+            internal BepInEx.Configuration.ConfigEntry<int> IndoorCoverSampleThreshold;
         }
 
         // Internal (not the default private) — LightingDiagnosticProbe.LastHarvestResult returns this
@@ -458,6 +463,32 @@ namespace ArenaMapPort.Client
                     "to be treated as an elevated roof/overhang and drawn black onto the rain-cover depth " +
                     "camera. Only used when RainCover=RoofDepthBlack.",
                     new BepInEx.Configuration.AcceptableValueRange<float>(0f, 50f)));
+
+            // §19 — ReflectionIntensity back at 1.0 (§16.2/§17) re-exposes the hall-floor sky-mirror veil
+            // this multiplier fixes on a per-renderer basis instead of a global scalar. Bay5-only non-1.0
+            // default (bay5Defaults), same "Tier-1 default ON only for the one map this actually matters
+            // for" convention as GroundSmoothnessBase/ReflectionIntensity above. Only read while a rig is
+            // active AND RainCoverMethod=RoofDepthBlack (the depth photo IndoorFloorSmoothnessRepairs'
+            // classifier reads). Live: re-applies to the cached per-renderer material clones on change —
+            // see IndoorFloorSmoothnessRepairs.ReapplyIfLoaded, wired from that file's own Install() (not
+            // here), same "WeatherRig owns the config, the consuming file owns its own re-apply wiring"
+            // convention GroundSmoothnessBaseEntry's own SettingChanged hookup (LightingLab.BindConfig)
+            // already establishes.
+            cfg.IndoorFloorSmoothness = Plugin.Instance.Config.Bind(section, "IndoorFloorSmoothness", bay5Defaults ? 0.5f : 1f,
+                new BepInEx.Configuration.ConfigDescription(
+                    "§19 — multiplier on the smoothness/gloss-like properties of floor-like renderers the " +
+                    "RoofDepthBlack depth photo shows as INDOOR (covered), applied on per-renderer material " +
+                    "CLONES only — shared materials also used by an outdoor renderer (e.g. Bay5's yard floor, " +
+                    "which shares one material with the hall) are never touched. 1.0 = off (authored values). " +
+                    "Only while a rig is active and RainCoverMethod=RoofDepthBlack. Live.",
+                    new BepInEx.Configuration.AcceptableValueRange<float>(0f, 1f)));
+
+            cfg.IndoorCoverSampleThreshold = Plugin.Instance.Config.Bind(section, "IndoorCoverSampleThreshold", 6,
+                new BepInEx.Configuration.ConfigDescription(
+                    "§19 — how many of the 3x3=9 depth-photo samples over a candidate floor renderer's bounds " +
+                    "footprint must read 'covered' to classify it INDOOR. Read once, at classify time (not " +
+                    "live — re-classifying mid-raid is not supported, same as CoverMinHeight above).",
+                    new BepInEx.Configuration.AcceptableValueRange<int>(0, 9)));
 
             // Deliberately NO SettingChanged handlers on these three for re-apply purposes — "changes apply
             // on the next raid" is a hard requirement here (unlike ArenaLightingRepairs' own live-tunable
@@ -1474,6 +1505,19 @@ namespace ArenaMapPort.Client
 
         internal static BepInEx.Configuration.ConfigEntry<float> ReflectionIntensityEntry(ArenaMapDescriptor map) =>
             _configs.TryGetValue(map.Key, out var c) ? c.ReflectionIntensity : null;
+
+        // §19 — mirrors GroundSmoothnessBaseForCurrentMap/GroundSmoothnessBaseEntry's own pair shape: a
+        // live-read accessor for the classifier/clone-scale path, plus a raw ConfigEntry so
+        // IndoorFloorSmoothnessRepairs.Install() can wire its own SettingChanged (this file never
+        // references that class, same as it never references LightingLab).
+        internal static float IndoorFloorSmoothnessForCurrentMap() =>
+            IsActiveForCurrentMap() && _configs.TryGetValue(_activeMap.Key, out var c) ? c.IndoorFloorSmoothness.Value : 1f;
+
+        internal static BepInEx.Configuration.ConfigEntry<float> IndoorFloorSmoothnessEntry(ArenaMapDescriptor map) =>
+            _configs.TryGetValue(map.Key, out var c) ? c.IndoorFloorSmoothness : null;
+
+        internal static int IndoorCoverSampleThresholdForCurrentMap() =>
+            IsActiveForCurrentMap() && _configs.TryGetValue(_activeMap.Key, out var c) ? c.IndoorCoverSampleThreshold.Value : 6;
 
         static readonly System.Reflection.FieldInfo ScreenAmbientBlockField =
             HarmonyLib.AccessTools.Field(typeof(AmbientLight), "_screenAmbientBlock");

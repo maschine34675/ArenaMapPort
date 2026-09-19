@@ -1122,8 +1122,9 @@ namespace ArenaMapPort.Client
                     ? $"depthCamTopY(cached)={camTopY:0.00} farClip(cached)={farClip:0.00}"
                     : "depthCamTopY/farClip=n/a (SetupDepthCamera postfix hasn't run yet this raid)"));
 
-            int px = Mathf.Clamp(Mathf.FloorToInt((worldPos.x - mapStart.x) * mapScale.x * dim), 0, dim - 1);
-            int py = Mathf.Clamp(Mathf.FloorToInt((worldPos.z - mapStart.z) * mapScale.z * dim), 0, dim - 1);
+            // Review fix-up: was its own inline copy of this formula; now calls the extracted helper below
+            // so BuildDepthReadback and TrySampleDepthAtWorldPoint can't silently drift apart.
+            WorldXZToTexel(mapStart, mapScale, dim, worldPos.x, worldPos.z, out int px, out int py);
 
             Texture2D scratch = null;
             try
@@ -1164,17 +1165,19 @@ namespace ArenaMapPort.Client
         // RFloat RT readback recipe — task's own §3 investigation, confirmed against this build's
         // UnityEngine.CoreModule.dll: _depthRT is a color-format RenderTexture (RFloat), not a native depth
         // buffer, so it reads back like any other RenderTexture (RenderTexture.active + ReadPixels).
-        static void AppendTexel(StringBuilder sb, RenderTexture rt, Texture2D scratch, int px, int py,
-            float camTopY, float farClip, bool reversedZ, string label)
+        //
+        // §19 — extracted out of AppendTexel's own try/finally (the §13.10 review fix-up below) so
+        // IndoorFloorSmoothnessRepairs' classifier can reuse the identical dance for its own 3x3-per-
+        // renderer sampling pass, instead of duplicating it.
+        static float ReadTexelRaw(RenderTexture rt, Texture2D scratch, int px, int py)
         {
             var prevActive = RenderTexture.active;
-            float raw;
             try
             {
                 RenderTexture.active = rt;
                 scratch.ReadPixels(new Rect(px, py, 1, 1), 0, 0);
                 scratch.Apply();
-                raw = scratch.GetPixel(0, 0).r;
+                return scratch.GetPixel(0, 0).r;
             }
             finally
             {
@@ -1183,11 +1186,82 @@ namespace ArenaMapPort.Client
                 // (BuildDepthReadback) only destroys the scratch Texture2D, it never restored this global.
                 RenderTexture.active = prevActive;
             }
+        }
 
-            // "Nothing photographed" check (task's own §3): CameraClearFlags.Color clears color AND depth
-            // every render, and the cleared depth value in shader-space is always the platform's own FAR
-            // sentinel — 0 under reversed-Z (this project's D3D11 desktop build), 1 otherwise.
-            bool nothingPhotographed = reversedZ ? raw <= 1e-4f : raw >= 1f - 1e-4f;
+        // §19 — extracted one-liner (was inline in AppendTexel below). "Nothing photographed" check (task's
+        // own §3): CameraClearFlags.Color clears color AND depth every render, and the cleared depth value
+        // in shader-space is always the platform's own FAR sentinel — 0 under reversed-Z (this project's
+        // D3D11 desktop build), 1 otherwise.
+        internal static bool IsNothingPhotographed(float raw, bool reversedZ) =>
+            reversedZ ? raw <= 1e-4f : raw >= 1f - 1e-4f;
+
+        // §19 — the ONE formula that's actually real on this machine (AppendTexel below logs BOTH for a
+        // human to compare; the classifier only ever wants the real one for usesReversedZBuffer).
+        internal static float ReconstructHeightReversedAware(float raw, float camTopY, float farClip, bool reversedZ) =>
+            reversedZ ? camTopY - (1f - raw) * farClip : camTopY - raw * farClip;
+
+        // §19 — new accessor, same shape as LastAppliedCullingMaskForCurrentMap() below.
+        internal static bool TryGetCachedCameraMeta(ArenaMapDescriptor map, out float camTopY, out float farClip)
+        {
+            if (map != null && _states.TryGetValue(map.Key, out var s) && s.LastCameraCaptured)
+            {
+                camTopY = s.LastCamTopY;
+                farClip = s.LastFarClip;
+                return true;
+            }
+            camTopY = float.NaN;
+            farClip = float.NaN;
+            return false;
+        }
+
+        // §19 — extracted from BuildDepthReadback's own inline formula below.
+        internal static void WorldXZToTexel(Vector3 mapStart, Vector3 mapScale, int dim, float worldX, float worldZ,
+            out int px, out int py)
+        {
+            px = Mathf.Clamp(Mathf.FloorToInt((worldX - mapStart.x) * mapScale.x * dim), 0, dim - 1);
+            py = Mathf.Clamp(Mathf.FloorToInt((worldZ - mapStart.z) * mapScale.z * dim), 0, dim - 1);
+        }
+
+        // §19 — the shared entry point IndoorFloorSmoothnessRepairs' classifier calls. Caller owns
+        // `scratch` (reused across a whole 3x3-per-renderer classification pass, unlike BuildDepthReadback's
+        // own single-call scratch below) so a floor-like-renderer scan doesn't allocate/destroy a Texture2D
+        // per sample.
+        internal static bool TrySampleDepthAtWorldPoint(ArenaMapDescriptor map, Texture2D scratch,
+            float worldX, float worldZ, out bool nothingPhotographed, out float height)
+        {
+            nothingPhotographed = true;
+            height = float.NaN;
+            var photo = DepthPhotograper.Instance;
+            if (photo == null || photo._depthRT == null)
+            {
+                return false;
+            }
+
+            Vector3 mapStart = Shader.GetGlobalVector(MapStartId);
+            Vector3 mapScale = Shader.GetGlobalVector(MapScaleId);
+            if (mapScale.x == 0f || mapScale.z == 0f)
+            {
+                return false;
+            }
+            if (!TryGetCachedCameraMeta(map, out float camTopY, out float farClip))
+            {
+                return false;
+            }
+
+            int dim = (int)photo._depthTextureDimension;
+            WorldXZToTexel(mapStart, mapScale, dim, worldX, worldZ, out int px, out int py);
+            bool reversedZ = SystemInfo.usesReversedZBuffer;
+            float raw = ReadTexelRaw(photo._depthRT, scratch, px, py);
+            nothingPhotographed = IsNothingPhotographed(raw, reversedZ);
+            height = ReconstructHeightReversedAware(raw, camTopY, farClip, reversedZ);
+            return true;
+        }
+
+        static void AppendTexel(StringBuilder sb, RenderTexture rt, Texture2D scratch, int px, int py,
+            float camTopY, float farClip, bool reversedZ, string label)
+        {
+            float raw = ReadTexelRaw(rt, scratch, px, py);
+            bool nothingPhotographed = IsNothingPhotographed(raw, reversedZ);
 
             string heightLinear = "n/a";
             string heightReversed = "n/a";

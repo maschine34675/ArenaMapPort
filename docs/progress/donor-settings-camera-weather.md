@@ -1718,3 +1718,96 @@ diff's own line numbers, which this same pass had already outgrown):
   postfix) — both still exact, no drift there. No code changed by this fix-up; rebuilt anyway per the
   build rules and the dist DLL hash is unchanged (`650dad3d…9a04d3af`, byte-identical to before this
   pass, since only the doc moved).
+
+## 19) Indoor floor smoothness (2026-09-19)
+
+`ReflectionIntensity` back at 1.0 (§16.2/§17 — 0.5 fixed the hall floors but also darkened every
+shadowed OUTDOOR surface, which is not what the user wants) re-exposes the hall floors' white
+grazing-angle veil (§15/§16): the hall floor renderers (e.g.
+`SBG_Arena_Bay5_DEPOT/SOO/Depot_indoor/Depot_indoor_LOD0`, materials `Custom/Vert Paint Shader Gloss
+Solid` smoothness 0.69/0.75 and `p0/Reflective/Bumped Specular SMap` `_Glossness` 3.0) are not matched
+by `LightingLab` candidate E's own `floor`/`ground`/`asphalt` renderer-NAME filter, and one of their
+materials is SHARED with the yard floor `Bay5_floor_LOD0` (which keeps its own authored sky puddles at
+1.0 correctly) — a global reflection/smoothness scalar can't fix one without the other, and neither can
+a renderer-name fix to candidate E (the shared material would still be touched from the yard side).
+
+**Mechanism** (`IndoorFloorSmoothnessRepairs.cs`, new file): once per raid, after the RoofDepthBlack
+depth photo exists for this raid's first camera change — a new, independent Harmony **postfix** on
+`DepthPhotograper.Render()` itself (`HarmonyPatches.InstallIndoorFloorSmoothness`), separate from
+`RainCoverRepairs`' own prefix/postfix on that same method so neither depends on Harmony's own
+patch-ordering between two patches on one method — the classifier scans every enabled `MeshRenderer` in
+an owned scene whose bounds are floor-shaped (`size.y <= 1.5m`, footprint `>= 4m`) and whose shader
+FAMILY (not name) is `Vert Paint`/`p0/Reflective` (excluding Water/Sky layers, decal shaders, and
+renderers under `EFT.Player`). Each candidate is sampled on a 3x3 grid over its own bounds footprint
+(10% inset) against the depth photo (reusing `RainCoverRepairs`' own cached camera top-Y/far-clip and a
+newly shared `TrySampleDepthAtWorldPoint` readback helper — refactored out of `AppendTexel`, output
+unchanged); >= 6/9 samples reading "something photographed 1.5-60m above this renderer's own top"
+classifies it INDOOR. INDOOR renderers get their materials **cloned** (`renderer.materials = clones`,
+originals cached) before their smoothness/gloss-like float properties (name contains `Smoothness`,
+`Glossness` or `Gloss`, same `Shader.GetPropertyCount/Name/Type` discovery `LightingLab` candidate E
+uses — promoted to take its own hint list as a parameter) are scaled by the per-map multiplier — the
+yard's still-shared original material is never touched. The classify pass itself is deferred 5s after
+scene load (same margin as candidate E's own `GroundScanDelaySeconds`, for the same reason: `ShaderRebind`
+rebinds stand-in shader names 3s after load, and our own shader-family filter needs the REAL, post-rebind
+names — a not-yet-rebound `Hidden/ArenaMapPort/p0/Reflective/...` name fails `StartsWith("p0/Reflective")`).
+
+**Keys** (`Lighting (<key>)`, both brand-new, no existing key reused/renamed):
+`IndoorFloorSmoothness` (float 0..1, default 0.5 for Bay5 / 1.0 for every other map, live — re-applies to
+the cached clones on change) and `IndoorCoverSampleThreshold` (int 0..9, default 6, read once at
+classify time, no live re-apply — same "changes apply on the next raid" convention `CoverMinHeight`
+already uses).
+
+**Log lines**:
+```
+[ArenaMapPort][IndoorFloorSmoothness] map=arena_bay5 classified: floorLike=<N> indoor=<M> materialClones=<K> multiplier=0.50 threshold=6/9
+[ArenaMapPort][IndoorFloorSmoothness] map=arena_bay5 indoor renderer(s) (showing <min(M,20)> of <M>): Depot_indoor_LOD0, ...
+[ArenaMapPort][IndoorFloorSmoothness] map=arena_bay5 multiplier=0.35 reapplied live to <S> cloned property value(s) across <M> indoor renderer(s).
+[ArenaMapPort][IndoorFloorSmoothness] arena_bay5: raid ended — restored <R> renderer(s), destroyed <D> clone(s).
+```
+plus an F9 `§19 IndoorFloorSmoothness: multiplier=... threshold=.../9 done=... indoor=... materialClones=...`
+snapshot line (`LightingLab.RunSnapshot`, right after the existing RainCover depth readback).
+
+**A/B procedure**: at `ReflectionIntensity=1.0` (Bay5's current default), teleport to the hall spawn
+point (61,-3.8,-12) — the white grazing-angle veil must be gone (dark wet concrete, pillar-mirroring
+puddles, matching §17's own `ReflectionIntensity=0.5` result), and the F9 snapshot at that spot should
+show this renderer counted in `indoor=`. Then teleport to the yard (56,-3.8,17) — the bright sky-mirror
+puddles must be unchanged from today's behavior (this spot's own depth readback already reads
+`nothingPhotographed=true`, §15, so it was never a classification candidate to begin with). Wait at
+least `ClassifyDelaySeconds` (5s) after raid start before judging either spot — the classify pass has
+not run yet before that, and the log's own `classified: ...` line confirms when it has.
+
+**Interactions, documented**:
+- `LightingLab` candidate E never discovers the hall renderer at all (its own name filter does not match
+  `Depot_indoor_LOD0`) — this part of the interaction is a non-issue. It DOES discover the shared
+  `p0/Reflective/Bumped Specular SMap` material via the yard renderer and still mutates that original,
+  shared object directly (E never clones); once this file clones it for the hall renderer, the hall's
+  clone is a separate object, so a later live `GroundSmoothnessMultiplier` (F12) change continues to
+  correctly affect the yard but has zero effect on the hall's now-independent clone — pre-accepted,
+  matching the task's own "document it" outcome.
+- `ShaderRebind`'s fixed 3s-after-load rebind sweep always completes before this section's ~5s classify
+  delay, so the shader-family filter reliably sees the REAL, post-rebind shader names, and each clone
+  inherits ShaderRebind's already-resolved final property values (shader identity + any known-value
+  fixes under `GroundMaterialWetnessFixEnabled`, default off) as its own scaling baseline.
+- A genuine, worth-flagging timing subtlety: candidate E's own scan and this section's classify pass are
+  both scheduled at the same nominal ~5s delay from scene load, independently, so their RELATIVE order
+  within that window is not deterministic — if E's scan happens to run first, a clone's captured
+  "original" baseline is whatever E last wrote to the shared material (a no-op at E's own default
+  multiplier of 1.0). This matches `ShaderRebind.ApplyKnownValueFixes`'s own already-accepted convention
+  ("whatever's on the material when we look") — not a new risk this section introduces.
+
+### 19.1) Review fix-ups (2026-09-19)
+
+One defect reported against this section:
+
+- **`BuildDepthReadback` still duplicated the UV-mapping formula instead of calling the newly extracted
+  `WorldXZToTexel` helper (low severity).** Confirmed: `WorldXZToTexel` (`RainCoverRepairs.cs`) was added
+  specifically so both the F9 readback and the classifier's own `TrySampleDepthAtWorldPoint` share one
+  formula, and the classifier correctly calls it, but `BuildDepthReadback` itself had been left with its
+  own separate inline copy — `int px = Mathf.Clamp(Mathf.FloorToInt((worldPos.x - mapStart.x) *
+  mapScale.x * dim), 0, dim - 1);` and the matching `py` line — two copies that happened to agree today
+  but were free to drift apart on a future edit to either one. Fixed: replaced both inline lines in
+  `BuildDepthReadback` with a call to `WorldXZToTexel(mapStart, mapScale, dim, worldPos.x, worldPos.z,
+  out int px, out int py)`; grepped `mapScale.x * dim` afterward to confirm only `WorldXZToTexel`'s own
+  body still contains the formula. No behavior change (same arithmetic, same result), purely the
+  duplication removed. Rebuilt per the build rules; dist DLL hash
+  `0bd73929b58fad042a368aedb22a985aaabad5a9f5cc66c8031e1f2e4b7e46f3`, matches the bin DLL byte-for-byte.
