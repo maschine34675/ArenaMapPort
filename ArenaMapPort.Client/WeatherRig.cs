@@ -25,8 +25,9 @@ namespace ArenaMapPort.Client
     ///    <see cref="ArenaLightingRepairs"/> stands in for on every other map.
     ///  - Stage 0 scope: <c>arena_bay5</c> only, Donor = "Reserve_Base_Scripts" (level139, full rig — the
     ///    smallest full-rig donor surveyed; Laboratory's "Weather_Simple" is smaller but has no dome/sun,
-    ///    the wrong shape for an outdoor map). Every other map's Donor defaults to "Off" — a complete
-    ///    no-op, byte-identical to today's ArenaLightingRepairs-only behavior.
+    ///    the wrong shape for an outdoor map). Since 2026-09-19 (§20) Equator shares that default (same
+    ///    donor, its own ZeroLevel). Every other map's Donor defaults to "Off" — a complete no-op,
+    ///    byte-identical to today's ArenaLightingRepairs-only behavior.
     ///  - Harvest pre-flight gate (<see cref="PreflightClear"/>): "no raid of ANY kind is currently
     ///    loaded" (not just "not one of ours") — a vanilla SPT raid played earlier in the session authors
     ///    the identical LevelSettings/LocationScene/CullingManager/ObservedCullingManager/
@@ -128,6 +129,9 @@ namespace ArenaMapPort.Client
             internal BepInEx.Configuration.ConfigEntry<string> Donor;
             internal BepInEx.Configuration.ConfigEntry<SkyboxMode> SkyboxModeEntry;
             internal BepInEx.Configuration.ConfigEntry<bool> KeepFillLight;
+            // §20 — which default set this section was last seeded with (see the migration block at the
+            // end of BindConfig). Persisted like every other key, so the re-seed runs exactly once.
+            internal BepInEx.Configuration.ConfigEntry<int> DefaultsRevision;
 
             // donor-settings-camera-weather §A.3 — donor-consistent LevelSettings overrides, applied only
             // while a rig is active for this map (ApplyDonorLevelSettingsOverrides). New key names
@@ -287,11 +291,19 @@ namespace ArenaMapPort.Client
         static RigConfigBundle BindConfig(ArenaMapDescriptor map)
         {
             string section = $"Lighting ({map.Key})";
-            string defaultDonor = map.Key == "arena_bay5" ? "Reserve_Base_Scripts" : OffDonor;
-            // donor-settings-camera-weather Tier-1/Tier-2 split — real defaults only for the one map this
-            // pass actually harvests a rig for (Bay5); every other map keeps Donor="Off" above, so none
-            // of §A/§B/§C ever reads these values for it regardless of what they default to.
+            // donor-settings-camera-weather Tier-1/Tier-2 split — real (rig-active) defaults only for the
+            // maps a rig is meant for: Bay5 (outdoor harbor, tuned 2026-09-17..19) and, since 2026-09-19
+            // (§20), Equator (indoor mall whose roof openings the sun is meant to shine through). Every
+            // other map keeps Donor="Off", so none of §A/§B/§C ever reads these values for it regardless
+            // of what they default to.
             bool bay5Defaults = map.Key == ArenaMapRegistry.Bay5.Key;
+            bool equatorDefaults = map.Key == ArenaMapRegistry.Equator.Key;
+            bool rigDefaults = bay5Defaults || equatorDefaults;
+            string defaultDonor = rigDefaults ? "Reserve_Base_Scripts" : OffDonor;
+            // ZeroLevel is geometry-relative (see ZeroLevelOverride's own description): 4.4 m below the
+            // walkable ground — Bay5's spawn hall floor is at y≈-3.8 (→ -8.2, the first playtest's value,
+            // kept), Equator's spawn markers sit at y≈0.03..0.12 (analysis/equator_census.json) → -4.4.
+            float defaultZeroLevel = bay5Defaults ? -8.2f : equatorDefaults ? -4.4f : 0f;
             var cfg = new RigConfigBundle();
 
             cfg.Donor = Plugin.Instance.Config.Bind(section, "Donor", defaultDonor,
@@ -324,7 +336,7 @@ namespace ArenaMapPort.Client
             // -8.2 split the difference for the first playtest). HeightFalloff DOES match the donor
             // exactly (Reserve AND Customs both author 0.025 — critic-confirmed against
             // levelsettings_raw.json), so it's copied straight.
-            cfg.ZeroLevelOverride = Plugin.Instance.Config.Bind(section, "ZeroLevelOverride", bay5Defaults ? -8.2f : 0f,
+            cfg.ZeroLevelOverride = Plugin.Instance.Config.Bind(section, "ZeroLevelOverride", defaultZeroLevel,
                 "TOD_Scattering reads Singleton<LevelSettings>.Instance.ZeroLevel every rendered frame " +
                 "(TOD_Scattering.cs:165-176) once a rig is active (CameraEffectsRepairs adds the " +
                 "component) — our stub LevelSettings ships ZeroLevel=-78.64 (Laboratory's own authored " +
@@ -333,14 +345,14 @@ namespace ArenaMapPort.Client
                 "docs/progress/donor-settings-camera-weather.md for the evidence trail and how to re-tune " +
                 "it. Applied only while a rig is active for this map (Donor != 'Off' and harvested).");
 
-            cfg.HeightFalloffOverride = Plugin.Instance.Config.Bind(section, "HeightFalloffOverride", bay5Defaults ? 0.025f : 0.029f,
+            cfg.HeightFalloffOverride = Plugin.Instance.Config.Bind(section, "HeightFalloffOverride", rigDefaults ? 0.025f : 0.029f,
                 "TOD_Scattering's other per-frame ZeroLevel/HeightFalloff read (see ZeroLevelOverride). " +
                 "0.025 is Reserve's (and Customs') own authored value, byte-for-byte, vs. our stub's " +
                 "0.029 (Laboratory's authored value / the raw C# class default) — a real donor copy, not a " +
                 "guess. Applied only while a rig is active for this map.");
 
             cfg.TextureBudgetTierEntry = Plugin.Instance.Config.Bind(section, "TextureBudgetTier",
-                bay5Defaults ? TextureBudgetTier.ReserveTier : TextureBudgetTier.Stub,
+                rigDefaults ? TextureBudgetTier.ReserveTier : TextureBudgetTier.Stub,
                 "LevelSettings.MaxMapTextureMemory (a Vector4 streaming-texture budget, LevelSettings.cs:" +
                 "111,198) — our stub ships (1024,1024,1024,1024), the raw C# class default. ReserveTier " +
                 "= Reserve_Base_Scripts' own authored (2000,2450,2850,3100) — streaming-quality only, no " +
@@ -370,7 +382,7 @@ namespace ArenaMapPort.Client
             // map — the core of the "consistent donor set" strategy (rig + LevelSettings + camera all
             // from the same donor) — but a real, single-click toggle: falling back to the Cam2 fallback
             // path (§B.3) needs no other config change.
-            cfg.UseDonorCameraPrefab = Plugin.Instance.Config.Bind(section, "UseDonorCameraPrefab", bay5Defaults,
+            cfg.UseDonorCameraPrefab = Plugin.Instance.Config.Bind(section, "UseDonorCameraPrefab", rigDefaults,
                 "Assigns the harvested donor's own CameraPrefab/PrismPresetPrefab/PostProcessProfilePrefab " +
                 "onto this map's LevelSettings while a rig is active, so CameraManager.SetCameraFromSettings " +
                 "instantiates the donor's real camera (with its own baked TOD_Scattering/PrismEffects." +
@@ -465,16 +477,16 @@ namespace ArenaMapPort.Client
                     new BepInEx.Configuration.AcceptableValueRange<float>(0f, 50f)));
 
             // §19 — ReflectionIntensity back at 1.0 (§16.2/§17) re-exposes the hall-floor sky-mirror veil
-            // this multiplier fixes on a per-renderer basis instead of a global scalar. Bay5-only non-1.0
-            // default (bay5Defaults), same "Tier-1 default ON only for the one map this actually matters
-            // for" convention as GroundSmoothnessBase/ReflectionIntensity above. Only read while a rig is
+            // this multiplier fixes on a per-renderer basis instead of a global scalar. Non-1.0 default only
+            // for the rig-active maps (rigDefaults), same "Tier-1 default ON only for the maps this actually
+            // matters for" convention as the other rig defaults above. Only read while a rig is
             // active AND RainCoverMethod=RoofDepthBlack (the depth photo IndoorFloorSmoothnessRepairs'
             // classifier reads). Live: re-applies to the cached per-renderer material clones on change —
             // see IndoorFloorSmoothnessRepairs.ReapplyIfLoaded, wired from that file's own Install() (not
             // here), same "WeatherRig owns the config, the consuming file owns its own re-apply wiring"
             // convention GroundSmoothnessBaseEntry's own SettingChanged hookup (LightingLab.BindConfig)
             // already establishes.
-            cfg.IndoorFloorSmoothness = Plugin.Instance.Config.Bind(section, "IndoorFloorSmoothness", bay5Defaults ? 0.5f : 1f,
+            cfg.IndoorFloorSmoothness = Plugin.Instance.Config.Bind(section, "IndoorFloorSmoothness", rigDefaults ? 0.5f : 1f,
                 new BepInEx.Configuration.ConfigDescription(
                     "§19 — multiplier on the smoothness/gloss-like properties of floor-like renderers the " +
                     "RoofDepthBlack depth photo shows as INDOOR (covered), applied on per-renderer material " +
@@ -498,6 +510,37 @@ namespace ArenaMapPort.Client
             // exception: Donor's own SettingChanged pre-warms the harvest for a newly-typed donor name
             // between raids, never reacting during an active one. Same "next raid only" rule applies to
             // every §A/§B ConfigEntry added above — none of them re-apply live either.
+            // §20 — one-time re-seed of Equator's rig defaults. BepInEx persists every bound value, so a
+            // config written by an earlier build still holds Equator's old Donor="Off" set although the
+            // code defaults above changed. Keys are never re-purposed (a persisted value keeps its
+            // meaning); instead each value still sitting on its OLD default is moved to the new default
+            // exactly once, tracked by DefaultsRevision. A value the user had tuned away from the old
+            // default is left alone, and a later manual Donor="Off" stays "Off" (revision already 1).
+            // Bay5 was seeded with the rig defaults from day one — nothing to migrate there. Runs BEFORE
+            // Donor's SettingChanged is subscribed below, so the write itself never triggers a harvest
+            // pre-warm (RecomputePendingDonors at Install() reads the final values anyway).
+            cfg.DefaultsRevision = Plugin.Instance.Config.Bind(section, "DefaultsRevision", 0,
+                "Internal — which default set this section was last seeded with (§20 in " +
+                "docs/progress/donor-settings-camera-weather.md). Leave it alone; a lower value than the " +
+                "current build's re-runs the one-time default re-seed for values still on their old default.");
+            if (equatorDefaults && cfg.DefaultsRevision.Value < 1)
+            {
+                int moved = 0;
+                if (cfg.Donor.Value == OffDonor) { cfg.Donor.Value = defaultDonor; moved++; }
+                if (Mathf.Approximately(cfg.ZeroLevelOverride.Value, 0f)) { cfg.ZeroLevelOverride.Value = defaultZeroLevel; moved++; }
+                if (Mathf.Approximately(cfg.HeightFalloffOverride.Value, 0.029f)) { cfg.HeightFalloffOverride.Value = 0.025f; moved++; }
+                if (cfg.TextureBudgetTierEntry.Value == TextureBudgetTier.Stub) { cfg.TextureBudgetTierEntry.Value = TextureBudgetTier.ReserveTier; moved++; }
+                if (!cfg.UseDonorCameraPrefab.Value) { cfg.UseDonorCameraPrefab.Value = true; moved++; }
+                if (Mathf.Approximately(cfg.IndoorFloorSmoothness.Value, 1f)) { cfg.IndoorFloorSmoothness.Value = 0.5f; moved++; }
+                cfg.DefaultsRevision.Value = 1;
+                // Warning (not Info) when something actually moved: a persisted value equal to the old
+                // default is indistinguishable from one the user re-typed, so the one-time flip must be
+                // easy to spot in the log (review note 2026-09-19).
+                string reseed = $"[ArenaMapPort][WeatherRig] {map.Key}: config re-seeded to defaults revision 1 " +
+                    $"({moved} value(s) moved off their pre-§20 defaults; Donor='{cfg.Donor.Value}')";
+                if (moved > 0) Plugin.Log.LogWarning(reseed); else Plugin.Log.LogInfo(reseed);
+            }
+
             cfg.Donor.SettingChanged += (_, __) => OnDonorConfigChanged();
 
             return cfg;

@@ -1847,3 +1847,72 @@ renderers / 1126 clones; the spawn hall floor reads as dark wet concrete with pi
 (`_Smoothness0` 0.689 → 0.345 on the clone), the yard keeps its sky puddles and dark asphalt.
 Diagnostics: rejections/acceptances of floor-ish names (indoor/floor/ground/asphalt, not puddle decals)
 are logged per raid (max 40).
+
+## 20) Equator gets the rig (2026-09-19)
+
+User request after the Bay5 round: try the same changes on Equator — "normally the sun would shine
+through from above" there. Equator so far ran the fill-light workaround only (`Donor = Off`; flat 0.5
+grey ambient × 0.5, fill light 0.2, point/spot lights × 0.5, `FAKE_SUN` × 0.2), which the user rated
+as looking "quite good" — so this is a trial, kept switchable per map.
+
+What changes (`WeatherRig.BindConfig`): the rig-active default set now applies to Bay5 AND Equator
+(`rigDefaults`): `Donor = Reserve_Base_Scripts`, `HeightFalloffOverride 0.025`, `TextureBudgetTier
+ReserveTier`, `UseDonorCameraPrefab true`, `IndoorFloorSmoothness 0.5`. `ZeroLevelOverride` stays
+geometry-relative: 4.4 m below the walkable ground, i.e. -8.2 for Bay5 (spawn hall floor y≈-3.8) and
+-4.4 for Equator (spawn markers y≈0.03..0.12, `analysis/equator_census.json`). Everything else
+(`UnityAmbient Donor`, `RainCoverMethod RoofDepthBlack`, `ReflectionIntensity 1.0`, `AmbientIntensity
+1.0`, `GroundSmoothness 1.0`) already defaulted the same for every map.
+
+Persisted-config rule: BepInEx keeps every bound value, so an existing `Lighting (arena_equator)`
+section still holds the old `Donor = Off` set. Keys are not re-purposed; instead a new `DefaultsRevision`
+key (0 → 1) drives a one-time re-seed: each of the six values still equal to its OLD default is moved to
+the new default, values the user had tuned are left alone, and a later manual `Donor = Off` sticks
+(revision already 1). Bay5 needs no migration (seeded with the rig defaults from the start).
+
+Interplay with the workaround while the rig is active (unchanged code): fill light forced to 0
+(`KeepFillLight false`), flat ambient replaced by the donor's black-sky ambient, the map's own
+point/spot lights keep `GlobalLightIntensityMultiplier` (0.5) and its three authored directional lights
+keep `SunIntensityMultiplier` (0.2 × 1.7 ≈ 0.34, dim and desaturated) on top of the rig's TOD sun.
+Equator's dominant shader family `p0/Reflective/Bumped Specular SMap` (91 of its materials) exposes
+`_Glossiness`/`_Glossness`/`_GlossMapScale`/`_GlossyReflections`, all matched by the indoor classifier's
+hints — so under the closed mall roof the classifier will halve the gloss of walls as well as floors
+(footprint ≥ 4 m, ≤ 12 m tall, covered). Clone count to be read from the log.
+
+### 20.1) Host test 2026-09-19 16:0x (Clear, noon, build 5ed082a2 → d5480f07 log-level only)
+
+Migration: the host's persisted `Lighting (arena_equator)` section went from `Donor = Off / 0 / 0.029 /
+Stub / false / 1` to `Reserve_Base_Scripts / -4.4 / 0.025 / ReserveTier / true / 0.5`, `DefaultsRevision = 1`;
+Bay5's section untouched (`DefaultsRevision = 0`, its values as before). No ArenaMapPort warnings in the
+whole raid.
+
+Raid log: `activated 'Reserve_Base_Scripts' (Full)`, `LevelSettingsOverride ZeroLevel=-4.40 (was -78.64)
+HeightFalloff=0.025 TextureBudget=ReserveTier`, donor camera `Cam2_obshaga_zalupa4` assigned, exposure
+already on (middleGrey 0.23), `WeatherTestOverride applied 'Clear'`, fill light off, 477 map lights at
+×0.5 / sun ×0.2 (workaround values, unchanged). RainCover: RainBounds from 7549 renderers, center
+(-1, 19.5, -10) size (103, 58, 154); 7092 elevated meshes drawn black. Classifier (after
+`GameStatus.Started`): 6 scenes / 14957 MeshRenderers, floorLike=652, **indoor=561, materialClones=1019**;
+`equator_main_floor_LOD0` and ring floors 01–03 ACCEPTED (16/25 each), `equator_floor_04` (top ring,
+y≈21) rejected cover(0/25) — the glass roof is not in the depth photo (its renderer is excluded by
+material), so the top ring counts as uncovered. TOD state: hour 12.07, sunZenith 35.3°, sun intensity 0.80
+color (0.70, 0.63, 0.41); `_EFT_Ambient` (0.07, 0.10, 0.12), `_SHAr.w` 0.037 — the same order as Bay5.
+
+Seen (teleports via UiBridge, `reachable=false`; the navmesh only covers y −8..12, so ring floors 03/04
+cannot be visited):
+- Spawn (-4.5, 0, 38.5), atrium centre (0, 0, 2): the mall reads as a real interior — blue sky and the
+  sun disc visible through the glass roof (`equator_roof_LOD0`, `shadowCastingMode=Off`, so the frame
+  casts no shadow), upper rings and shopfronts lit by the SH ambient, plants/benches/crates plausible,
+  no blow-out. The polished tile/wood floors are dark; their wet footprint/scuff layers mirror the sky
+  as white patches (the veil), noticeably milder than Bay5's hall before §19 but present at 0.5.
+- Ring floor 02 west (-30, 10.8, 3): dark floor, ambient only, no direct sun.
+- Ground-floor corridor (-12, 0, -8): white sky mirrors in the wet tile patches, no sun patch with shadow
+  edges anywhere visited. Not a blocker for the sun itself — Arena's floors are `receiveShadows=False`
+  with separate `*_SHADOW_LOD0` (ShadowsOnly, shader 'shadow') casters, and at a 55° noon sun the
+  4-storey atrium projects the glass opening onto the rings, not the ground.
+- Material detail: Equator's `p0/Reflective/Bumped Specular SMap` materials carry their OWN `_Cube`
+  (512² cubemap) — Arena's local reflection source; in EFT the shader family reflects the global sky
+  cubemap instead, which is where the veil comes from.
+
+Verdict: the rig works on Equator out of the box (sky, sun, ambient, exposure, no errors); open for the
+user's judgement against the fill-light look: floor brightness (`AmbientIntensity`, live) and the wet-patch
+sky veil (`IndoorFloorSmoothness`, live; LightingLab `GlobalReflection=Black` as the blunt A/B). Switching
+back is `Lighting (arena_equator) → Donor = Off` (persisted, the re-seed never runs again).
