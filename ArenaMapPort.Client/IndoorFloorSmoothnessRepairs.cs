@@ -51,6 +51,20 @@ namespace ArenaMapPort.Client
         // DiscoverSmoothnessProps takes the hint list as a parameter precisely so this file can pass its
         // own without disturbing candidate E's existing behavior.
         static readonly string[] IndoorSmoothnessHints = { "Smoothness", "Glossness", "Gloss" };
+        // §20.2 — the p0/Reflective/Bumped Specular family's cubemap reflection tint (Color); scaled by
+        // IndoorReflectionStrength on the same clones. Discovered by exact name + property type Color.
+        const string ReflectColorName = "_ReflectColor";
+        static readonly int ReflectColorId = Shader.PropertyToID(ReflectColorName);
+        // §20.3 — host A/B 2026-09-19 17:3x on Equator's lounge parquet: _ReflectColor 0 and _Glossness 0
+        // both left the sky sheen untouched, LightingLab GlobalReflection=Black removed it. EFT renders
+        // deferred: the environment reflection comes from the deferred reflection pass reading the
+        // G-buffer's specular color, i.e. this family's _SpecColor × _Specularness (parquet: (1.0, 0.97,
+        // 0.90) × 0.9 — a near-metal F0 authored against Arena's own dim interior cubemaps). So the
+        // reflection-strength knob scales those two as well; _ReflectColor stays in for the cubemap term.
+        const string SpecColorName = "_SpecColor";
+        static readonly int SpecColorId = Shader.PropertyToID(SpecColorName);
+        const string SpecularnessName = "_Specularness";
+        static readonly int SpecularnessId = Shader.PropertyToID(SpecularnessName);
 
         sealed class IndoorFloorEntry
         {
@@ -58,6 +72,8 @@ namespace ArenaMapPort.Client
             internal Material[] OriginalMaterials; // cached BEFORE cloning — restore target
             internal Material[] ClonedMaterials;   // renderer.materials after cloning
             internal List<(int matIndex, int propId, float original)> Props;
+            internal List<(int matIndex, int propId, Color original)> ColorProps; // §20.2/§20.3 — _ReflectColor, _SpecColor
+            internal List<(int matIndex, int propId, float original)> ReflectionFloatProps; // §20.3 — _Specularness
         }
 
         sealed class IndoorFloorState
@@ -98,6 +114,39 @@ namespace ArenaMapPort.Client
                 if (entry != null)
                 {
                     entry.SettingChanged += (_, __) => ReapplyIfLoaded(map);
+                }
+                // §20.2
+                var reflectionEntry = WeatherRig.IndoorReflectionStrengthEntry(map);
+                if (reflectionEntry != null)
+                {
+                    reflectionEntry.SettingChanged += (_, __) => ReapplyIfLoaded(map);
+                }
+                var glassEntry = WeatherRig.CoverIncludesGlassEntry(map);
+                if (glassEntry != null)
+                {
+                    // New roof photo first (glass now drawn or not), then classify against it — the same
+                    // order ClassifyRunner.RunAfter uses on raid start.
+                    glassEntry.SettingChanged += (_, __) =>
+                    {
+                        // Review 2026-09-19: the same map guard every other live path here has — a toggle in
+                        // ANOTHER map's F12 section must not re-photograph the raid actually running — and no
+                        // re-classify against a photo that failed to re-render (its cover would silently
+                        // drift from the setting).
+                        if (ArenaMapRaid.CurrentMap != map)
+                        {
+                            return;
+                        }
+                        if (RainCoverRepairs.RescanAndRerender("CoverIncludesGlass changed"))
+                        {
+                            ReclassifyIfLoaded(map);
+                        }
+                        else
+                        {
+                            Plugin.Log.LogWarning($"[ArenaMapPort][IndoorFloorSmoothness] map={map.Key} CoverIncludesGlass " +
+                                "changed but the roof photo did not re-render — classification left as is (toggle again, " +
+                                "or nudge IndoorCoverPercent, to retry).");
+                        }
+                    };
                 }
             }
         }
@@ -292,6 +341,7 @@ namespace ArenaMapPort.Client
                 int skyLayer = LayerMask.NameToLayer("Sky");
                 int percent = WeatherRig.IndoorCoverPercentForCurrentMap();
                 float multiplier = WeatherRig.IndoorFloorSmoothnessForCurrentMap();
+                float reflection = WeatherRig.IndoorReflectionStrengthForCurrentMap(); // §20.2
 
                 int sceneCount = SceneManager.sceneCount;
                 for (int i = 0; i < sceneCount; i++)
@@ -344,7 +394,9 @@ namespace ArenaMapPort.Client
                                 && (goName.IndexOf("indoor", StringComparison.OrdinalIgnoreCase) >= 0
                                 || goName.IndexOf("floor", StringComparison.OrdinalIgnoreCase) >= 0
                                 || goName.IndexOf("ground", StringComparison.OrdinalIgnoreCase) >= 0
-                                || goName.IndexOf("asphalt", StringComparison.OrdinalIgnoreCase) >= 0);
+                                || goName.IndexOf("asphalt", StringComparison.OrdinalIgnoreCase) >= 0
+                                || goName.IndexOf("lounge", StringComparison.OrdinalIgnoreCase) >= 0   // §20.2 Equator parquet
+                                || goName.IndexOf("parquet", StringComparison.OrdinalIgnoreCase) >= 0);
                             // Host test 2026-09-19: Bay5's hall floor is part of 'Depot_indoor_LOD0', the whole
                             // interior shell (floor + inner walls, 45x22 m, 8.6 m tall), so a thin-slab test
                             // rejects exactly the renderer this pass exists for. Only towers/cranes are cut.
@@ -385,7 +437,7 @@ namespace ArenaMapPort.Client
                             {
                                 Reject(true, rejects, renderer, bounds, "ACCEPTED", covered);
                             }
-                            var entry = CloneAndScale(renderer, shared, multiplier);
+                            var entry = CloneAndScale(renderer, shared, multiplier, reflection);
                             state.Entries.Add(entry);
                             clones += entry.ClonedMaterials.Length;
                         }
@@ -409,6 +461,7 @@ namespace ArenaMapPort.Client
             Plugin.Log.LogInfo($"[ArenaMapPort][IndoorFloorSmoothness] map={map.Key} scanned scenes (MeshRenderers): {string.Join(", ", perScene)}");
             Plugin.Log.LogInfo($"[ArenaMapPort][IndoorFloorSmoothness] map={map.Key} classified: floorLike={floorLike} " +
                 $"indoor={indoor} materialClones={clones} multiplier={WeatherRig.IndoorFloorSmoothnessForCurrentMap():0.00} " +
+                $"reflection={WeatherRig.IndoorReflectionStrengthForCurrentMap():0.00} " +
                 $"coverPercent={WeatherRig.IndoorCoverPercentForCurrentMap()} grid={CoverGrid}x{CoverGrid}");
             if (indoor > 0)
             {
@@ -507,10 +560,12 @@ namespace ArenaMapPort.Client
         // ---------------------------------------------------------------------------------------------
         // Material cloning and restore.
         // ---------------------------------------------------------------------------------------------
-        static IndoorFloorEntry CloneAndScale(Renderer renderer, Material[] original, float multiplier)
+        static IndoorFloorEntry CloneAndScale(Renderer renderer, Material[] original, float multiplier, float reflection)
         {
             var clones = new Material[original.Length];
             var props = new List<(int matIndex, int propId, float original)>();
+            var colorProps = new List<(int matIndex, int propId, Color original)>();
+            var reflectionFloats = new List<(int matIndex, int propId, float original)>();
             for (int i = 0; i < original.Length; i++)
             {
                 if (original[i] == null)
@@ -528,6 +583,27 @@ namespace ArenaMapPort.Client
                     props.Add((i, discovered[p].propId, discovered[p].original));
                     clone.SetFloat(discovered[p].propId, discovered[p].original * multiplier);
                 }
+                // §20.2 — reflection tint (Color), exact name, type-checked so a same-named texture/float
+                // on some other shader can never be misread as a color.
+                if (HasColorProperty(clone.shader, ReflectColorName))
+                {
+                    var c = clone.GetColor(ReflectColorId);
+                    colorProps.Add((i, ReflectColorId, c));
+                    clone.SetColor(ReflectColorId, ScaleRgb(c, reflection));
+                }
+                // §20.3 — the G-buffer specular (F0) this family writes: color × intensity.
+                if (HasColorProperty(clone.shader, SpecColorName))
+                {
+                    var c = clone.GetColor(SpecColorId);
+                    colorProps.Add((i, SpecColorId, c));
+                    clone.SetColor(SpecColorId, ScaleRgb(c, reflection));
+                }
+                if (HasFloatProperty(clone.shader, SpecularnessName))
+                {
+                    float f = clone.GetFloat(SpecularnessId);
+                    reflectionFloats.Add((i, SpecularnessId, f));
+                    clone.SetFloat(SpecularnessId, f * reflection);
+                }
             }
             // Per-renderer instances from here on; renderer.sharedMaterials for THIS renderer also returns
             // `clones` from now on (same underlying slot Unity's material/sharedMaterial accessors both
@@ -536,8 +612,53 @@ namespace ArenaMapPort.Client
             // floor's own shared original (found via the YARD renderer) is untouched by this clone — see
             // this file's own class doc comment.
             renderer.materials = clones;
-            return new IndoorFloorEntry { Renderer = renderer, OriginalMaterials = original, ClonedMaterials = clones, Props = props };
+            return new IndoorFloorEntry
+            {
+                Renderer = renderer, OriginalMaterials = original, ClonedMaterials = clones,
+                Props = props, ColorProps = colorProps, ReflectionFloatProps = reflectionFloats,
+            };
         }
+
+        static bool HasFloatProperty(Shader shader, string name)
+        {
+            if (shader == null)
+            {
+                return false;
+            }
+            try
+            {
+                int idx = shader.FindPropertyIndex(name);
+                if (idx < 0)
+                {
+                    return false;
+                }
+                var t = shader.GetPropertyType(idx);
+                return t == UnityEngine.Rendering.ShaderPropertyType.Float || t == UnityEngine.Rendering.ShaderPropertyType.Range;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        static bool HasColorProperty(Shader shader, string name)
+        {
+            if (shader == null)
+            {
+                return false;
+            }
+            try
+            {
+                int idx = shader.FindPropertyIndex(name);
+                return idx >= 0 && shader.GetPropertyType(idx) == UnityEngine.Rendering.ShaderPropertyType.Color;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        static Color ScaleRgb(Color c, float m) => new Color(c.r * m, c.g * m, c.b * m, c.a);
 
         // Live re-apply (SettingChanged, wired from Install() above).
         internal static void ReapplyIfLoaded(ArenaMapDescriptor map)
@@ -547,7 +668,8 @@ namespace ArenaMapPort.Client
                 return;
             }
             float multiplier = WeatherRig.IndoorFloorSmoothnessForCurrentMap();
-            int scaled = 0;
+            float reflection = WeatherRig.IndoorReflectionStrengthForCurrentMap(); // §20.2
+            int scaled = 0, recolored = 0;
             foreach (var entry in state.Entries)
             {
                 foreach (var (matIndex, propId, original) in entry.Props)
@@ -560,9 +682,38 @@ namespace ArenaMapPort.Client
                     mat.SetFloat(propId, original * multiplier);
                     scaled++;
                 }
+                if (entry.ColorProps == null)
+                {
+                    continue;
+                }
+                foreach (var (matIndex, propId, original) in entry.ColorProps)
+                {
+                    var mat = entry.ClonedMaterials[matIndex];
+                    if (mat == null)
+                    {
+                        continue;
+                    }
+                    mat.SetColor(propId, ScaleRgb(original, reflection));
+                    recolored++;
+                }
+                if (entry.ReflectionFloatProps == null)
+                {
+                    continue;
+                }
+                foreach (var (matIndex, propId, original) in entry.ReflectionFloatProps)
+                {
+                    var mat = entry.ClonedMaterials[matIndex];
+                    if (mat == null)
+                    {
+                        continue;
+                    }
+                    mat.SetFloat(propId, original * reflection);
+                    recolored++;
+                }
             }
             Plugin.Log.LogInfo($"[ArenaMapPort][IndoorFloorSmoothness] map={map.Key} multiplier={multiplier:0.00} " +
-                $"reapplied live to {scaled} cloned property value(s) across {state.Entries.Count} indoor renderer(s).");
+                $"reflection={reflection:0.00} reapplied live to {scaled} cloned smoothness value(s) + {recolored} " +
+                $"reflection value(s) (_ReflectColor/_SpecColor/_Specularness) across {state.Entries.Count} indoor renderer(s).");
         }
 
         // F9 snapshot line (LightingLab.RunSnapshot).
@@ -579,6 +730,8 @@ namespace ArenaMapPort.Client
                 clones += e.ClonedMaterials.Length;
             }
             return $"§19 IndoorFloorSmoothness: multiplier={WeatherRig.IndoorFloorSmoothnessForCurrentMap():0.00} " +
+                $"reflection={WeatherRig.IndoorReflectionStrengthForCurrentMap():0.00} " +
+                $"coverIncludesGlass={WeatherRig.CoverIncludesGlassForCurrentMap()} " +
                 $"coverPercent={WeatherRig.IndoorCoverPercentForCurrentMap()} done={state.Done} " +
                 $"indoor={state.Entries.Count} materialClones={clones}";
         }

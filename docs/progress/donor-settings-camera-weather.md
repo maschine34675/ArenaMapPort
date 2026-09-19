@@ -1916,3 +1916,79 @@ Verdict: the rig works on Equator out of the box (sky, sun, ambient, exposure, n
 user's judgement against the fill-light look: floor brightness (`AmbientIntensity`, live) and the wet-patch
 sky veil (`IndoorFloorSmoothness`, live; LightingLab `GlobalReflection=Black` as the blunt A/B). Switching
 back is `Lighting (arena_equator) → Donor = Off` (persisted, the re-seed never runs again).
+
+### 20.2) Lounge parquet: glass roof is not in the depth photo; _ReflectColor is the lever (2026-09-19)
+
+User verdict after the first Equator round: "looks really good", one exception — the parquet of the
+centre lounge reflects too strongly and "is unimpressed by the smoothness sliders" (F9/F10 at 16:58 in the
+vanilla log: `GroundSmoothness` 0.00 and `IndoorFloorSmoothness` 0.00, still mirroring).
+
+Two causes, both in the dump:
+1. **Not classified.** `Lounge_zone_LOD0` (6 × `p0/Reflective/Bumped Specular SMap`) carries its ORIGINAL
+   materials, no "(ArenaMapPort IndoorFloorSmoothness clone)" suffix. The F9 depth readback at the lounge
+   reads `height(reversedZ)=0.32` on all 9 texels — bare ground, no roof photographed above it. The roof
+   frame is a thin grid; its panes use a transparent shader ("Global Fog/Transparent Reflective Specular",
+   9 materials), which `RainCoverRepairs.IsExcludedByMaterial` skipped together with fences and foliage
+   cards (renderQueue ≥ 2450 / 'Transparent' / 'Glass'). So every renderer under the glass counted as
+   outdoors. LightingLab E's name filter (floor/ground/asphalt) misses "Lounge_zone" too.
+2. **Wrong property.** In this shader family the cubemap reflection is `_Cube × _ReflectColor`
+   (lounge parquet: `_ReflectColor` 0.5, `_Glossness` 1.0); in EFT the sampled cubemap is the global sky, so
+   the veil scales with `_ReflectColor`, which no smoothness/gloss multiplier touches.
+
+Changes (`Lighting (<key>)`, new keys only, no default changed):
+- `CoverIncludesGlass` (bool, default true): glass-shader materials ('Glass', or 'Transparent' with
+  'Reflective'/'Specular'; cutout/cutoff/fence/billboard/sheet/decal/water/particle names veto) are drawn
+  into the RoofDepthBlack depth photo like any opaque roof — glass IS rain cover. Scan log gains
+  `included(glass)=N`. Live: re-renders the photo and re-classifies.
+- `IndoorReflectionStrength` (0..1, default 1.0): multiplies `_ReflectColor` RGB on the INDOOR clones
+  (exact name, type-checked Color), live, alongside `IndoorFloorSmoothness`. F9 §19 prints both.
+- Diagnostics: candidates named *lounge*/*parquet* are logged like floor/ground/asphalt ones.
+
+Persisted values from the user's slider test: `Lighting (arena_equator) GroundSmoothness = 0` and
+`IndoorFloorSmoothness = 0` — both should go back to 1.0 / 0.5 (Reset in F12) before judging the result.
+
+### 20.3) Host A/B 2026-09-19 17:2x–17:3x: what actually drives the parquet sheen
+
+Build 64b5c5db (CoverIncludesGlass + IndoorReflectionStrength on _ReflectColor), Equator, Clear noon, at
+the user's F9 spot (1.34, 0.4, 7.19) looking at the lounge parquet:
+
+| Step (live, F12) | Log | Parquet |
+|---|---|---|
+| CoverIncludesGlass on (default) | scan `included(glass)=18`, lounge still `cover(8/25)`, indoor=561 unchanged | white sheen |
+| IndoorReflectionStrength 1.0 → 0.0 (indoor clones only; lounge not among them) | `989 _ReflectColor(s)` reapplied | unchanged — also on the indoor tiles around it |
+| LightingLab GlobalReflection = Black | — | **sheen gone**, dark wood with dust footprints |
+| GlobalReflection back to Rig, IndoorCoverPercent 50 → 30 | re-classify: `Lounge_zone_LOD0 ACCEPTED(8/25)`, indoor=610, clones=1106 | sheen back (gloss ×0.5 now on the parquet) |
+| IndoorFloorSmoothness 0.5 → 0.0 | `957 cloned float(s)` at 0.00 | still there, barely softer |
+
+Reading: the atrium roof is an open lattice — no panes exist (the 18 glass renderers are elsewhere), so
+the lounge is legitimately "under the sky"; its mirror is the real sky. Neither `_ReflectColor` nor
+`_Glossness` touches that mirror; only removing the global reflection source does. EFT renders deferred:
+the environment reflection is applied by the deferred reflection pass from the G-buffer's specular color,
+which this family writes from `_SpecColor × _Specularness` — the parquet's (1.0, 0.97, 0.90) × 0.9 is a
+near-metal F0 authored against Arena's own dim interior `_Cube` maps. Smoothness only chooses the blur.
+
+Changes: `IndoorReflectionStrength` now scales `_SpecColor` (RGB) and `_Specularness` as well as
+`_ReflectColor` on the indoor clones (description updated; the key is new in this build, nobody has a
+persisted value yet). Equator's `IndoorCoverPercent` default → 30 via `DefaultsRevision` 2 (a persisted 50
+moves once; Bay5 stays 50), so the lounge is in the indoor set out of the box. Review fixes from the
+three-lens workflow: the CoverIncludesGlass handler now guards `ArenaMapRaid.CurrentMap == map` and
+re-classifies only when `RescanAndRerender` (now bool) actually re-rendered. Host state after the session:
+GlobalReflection Rig, IndoorReflectionStrength 1.0, IndoorFloorSmoothness 0.5 (all reset), IndoorCoverPercent 30.
+
+Open until the next host raid: whether `_SpecColor × _Specularness` at, say, 0.3 actually tames the parquet
+(prediction from the deferred path: yes, proportionally) and what Equator's default should be.
+
+### 20.4) Host verification 2026-09-19 17:4x–17:5x (build 9e7bbff7)
+
+Fresh start: `Lighting (arena_equator)` re-seeded to revision 2 (`IndoorCoverPercent` 30), no warnings.
+Raid: `Lounge_zone_LOD0 ACCEPTED(8/25)` out of the box, indoor=610, clones=1106. At the F9 spot, live:
+
+| IndoorReflectionStrength | Log | Parquet |
+|---|---|---|
+| 1.0 | — | white sun/sky sheen across the wood (as reported) |
+| 0.0 | `3111 reflection value(s) (_ReflectColor/_SpecColor/_Specularness)` | **sheen gone**, dark wood with dust footprints; two paper mats by the bench turn black (spec-only look) |
+| 0.31 | same count | dark wood, faint sheen; the mats dark grey |
+
+Lever confirmed: the G-buffer specular (`_SpecColor × _Specularness`) is what the deferred reflection pass
+mirrors the sky with. Decision: `IndoorReflectionStrength` default 0.3 for Equator (new key in this build,
+nothing persisted anywhere but the host), 1.0 for Bay5 and every other map. Host state left at 0.31.

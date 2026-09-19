@@ -189,6 +189,9 @@ namespace ArenaMapPort.Client
             // the classification). See IndoorFloorSmoothnessRepairs.cs.
             internal BepInEx.Configuration.ConfigEntry<float> IndoorFloorSmoothness;
             internal BepInEx.Configuration.ConfigEntry<int> IndoorCoverPercent;
+            // §20.2 — glass counts as roof in the depth photo; reflection tint of the indoor clones.
+            internal BepInEx.Configuration.ConfigEntry<bool> CoverIncludesGlass;
+            internal BepInEx.Configuration.ConfigEntry<float> IndoorReflectionStrength;
         }
 
         // Internal (not the default private) — LightingDiagnosticProbe.LastHarvestResult returns this
@@ -497,12 +500,42 @@ namespace ArenaMapPort.Client
 
             // Renamed from IndoorCoverSampleThreshold (3x3, count) — the hall's interior shell spans more
             // than its roof, so a fixed 6/9 missed it; the grid is 5x5 now and the threshold a percentage.
-            cfg.IndoorCoverPercent = Plugin.Instance.Config.Bind(section, "IndoorCoverPercent", 50,
+            // §20.3 — Equator's atrium roof is an open lattice (no panes; the 18 glass renderers found by
+            // CoverIncludesGlass are elsewhere): the centre lounge under it reads 8/25 = 32% covered, so
+            // Equator's default is 30 (Bay5 keeps 50). Existing configs: DefaultsRevision 2 re-seed below.
+            cfg.IndoorCoverPercent = Plugin.Instance.Config.Bind(section, "IndoorCoverPercent", equatorDefaults ? 30 : 50,
                 new BepInEx.Configuration.ConfigDescription(
                     "§19 — percentage of the 5x5 depth-photo samples over a candidate renderer's bounds " +
                     "footprint that must read 'covered' (roof 2.5-60 m above its floor level) to classify " +
-                    "it INDOOR. Live: a change restores the clones and classifies again.",
+                    "it INDOOR. Equator default 30 (its lounge sits under an open roof lattice, 32% covered). " +
+                    "Live: a change restores the clones and classifies again.",
                     new BepInEx.Configuration.AcceptableValueRange<int>(10, 100)));
+
+            // §20.2 — the RoofDepthBlack depth photo skipped every renderer with a Transparent/Glass shader
+            // (meant for fences, foliage cards, decals), which also dropped Equator's glass roof panes: the
+            // photo over the atrium showed bare ground (F9 readback height 0.32 at the lounge), so nothing
+            // under the glass classified INDOOR and the parquet stayed a sky mirror at any smoothness. Glass
+            // IS rain cover. Live: re-photographs the roof and classifies again (wired from
+            // IndoorFloorSmoothnessRepairs.Install, same convention as IndoorCoverPercent).
+            cfg.CoverIncludesGlass = Plugin.Instance.Config.Bind(section, "CoverIncludesGlass", true,
+                "§20.2 — treat glass-shader renderers (glass roofs, skylights, windows: shader name with " +
+                "'Glass', or 'Transparent' together with 'Reflective'/'Specular', never cutout/fence/billboard/" +
+                "sheet/decal/water shaders) as rain and indoor cover in the RoofDepthBlack depth photo instead " +
+                "of skipping them like fences and foliage cards. Live: re-renders the roof photo and " +
+                "re-classifies the indoor floors.");
+
+            // §20.2 — Arena's dominant p0/Reflective/Bumped Specular family mirrors the global sky cubemap
+            // scaled by each material's own _ReflectColor, not by its gloss. Applied to the same per-renderer
+            // INDOOR material clones IndoorFloorSmoothness uses (RGB scaled, alpha kept). 1.0 = authored.
+            cfg.IndoorReflectionStrength = Plugin.Instance.Config.Bind(section, "IndoorReflectionStrength", equatorDefaults ? 0.3f : 1f,
+                new BepInEx.Configuration.ConfigDescription(
+                    "§20.2/§20.3 — multiplier on the reflection-strength properties of every INDOOR-classified " +
+                    "renderer's p0/Reflective materials: _SpecColor and _Specularness (the G-buffer specular the " +
+                    "deferred reflection pass mirrors the sky with — the lever, host A/B 2026-09-19) plus " +
+                    "_ReflectColor, on the same material clones IndoorFloorSmoothness scales. 1.0 = authored " +
+                    "values; lower dims the sky mirrored by polished indoor floors. Equator default 0.3 (host A/B " +
+                    "2026-09-19: the lounge parquet reads as dark wood again; 0.0 turns spec-only props black). Live.",
+                    new BepInEx.Configuration.AcceptableValueRange<float>(0f, 1f)));
 
             // Deliberately NO SettingChanged handlers on these three for re-apply purposes — "changes apply
             // on the next raid" is a hard requirement here (unlike ArenaLightingRepairs' own live-tunable
@@ -539,6 +572,17 @@ namespace ArenaMapPort.Client
                 string reseed = $"[ArenaMapPort][WeatherRig] {map.Key}: config re-seeded to defaults revision 1 " +
                     $"({moved} value(s) moved off their pre-§20 defaults; Donor='{cfg.Donor.Value}')";
                 if (moved > 0) Plugin.Log.LogWarning(reseed); else Plugin.Log.LogInfo(reseed);
+            }
+            // §20.3 — revision 2: Equator's IndoorCoverPercent default 50 → 30 (open atrium lattice, see the
+            // Bind above). Same rule: only a value still on the old default moves.
+            if (equatorDefaults && cfg.DefaultsRevision.Value < 2)
+            {
+                int moved = 0;
+                if (cfg.IndoorCoverPercent.Value == 50) { cfg.IndoorCoverPercent.Value = 30; moved++; }
+                cfg.DefaultsRevision.Value = 2;
+                string reseed2 = $"[ArenaMapPort][WeatherRig] {map.Key}: config re-seeded to defaults revision 2 " +
+                    $"({moved} value(s) moved; IndoorCoverPercent={cfg.IndoorCoverPercent.Value})";
+                if (moved > 0) Plugin.Log.LogWarning(reseed2); else Plugin.Log.LogInfo(reseed2);
             }
 
             cfg.Donor.SettingChanged += (_, __) => OnDonorConfigChanged();
@@ -1566,6 +1610,19 @@ namespace ArenaMapPort.Client
 
         internal static BepInEx.Configuration.ConfigEntry<int> IndoorCoverPercentEntry(ArenaMapDescriptor map) =>
             _configs.TryGetValue(map.Key, out var c) ? c.IndoorCoverPercent : null;
+
+        // §20.2
+        internal static bool CoverIncludesGlassForCurrentMap() =>
+            IsActiveForCurrentMap() && _configs.TryGetValue(_activeMap.Key, out var c) ? c.CoverIncludesGlass.Value : true;
+
+        internal static BepInEx.Configuration.ConfigEntry<bool> CoverIncludesGlassEntry(ArenaMapDescriptor map) =>
+            _configs.TryGetValue(map.Key, out var c) ? c.CoverIncludesGlass : null;
+
+        internal static float IndoorReflectionStrengthForCurrentMap() =>
+            IsActiveForCurrentMap() && _configs.TryGetValue(_activeMap.Key, out var c) ? c.IndoorReflectionStrength.Value : 1f;
+
+        internal static BepInEx.Configuration.ConfigEntry<float> IndoorReflectionStrengthEntry(ArenaMapDescriptor map) =>
+            _configs.TryGetValue(map.Key, out var c) ? c.IndoorReflectionStrength : null;
 
         static readonly System.Reflection.FieldInfo ScreenAmbientBlockField =
             HarmonyLib.AccessTools.Field(typeof(AmbientLight), "_screenAmbientBlock");

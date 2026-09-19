@@ -310,7 +310,9 @@ namespace ArenaMapPort.Client
                     $"keptForBounds={scan.rendererCount} consideredForCover={scan.consideredForCover} " +
                     $"elevated={state.ElevatedMeshes.Count} excluded(oversized)={scan.excludedOversized} " +
                     $"excluded(material)={scan.excludedMaterial} excluded(notElevated)={scan.excludedNotElevated} " +
-                    $"excluded(noMesh)={scan.excludedNoMesh} CoverMinHeight={(state.CoverMinHeight != null ? state.CoverMinHeight.Value : 2.2f):0.0}");
+                    $"excluded(noMesh)={scan.excludedNoMesh} included(glass)={scan.includedGlass} " +
+                    $"CoverIncludesGlass={WeatherRig.CoverIncludesGlassForCurrentMap()} " +
+                    $"CoverMinHeight={(state.CoverMinHeight != null ? state.CoverMinHeight.Value : 2.2f):0.0}");
             }
         }
 
@@ -337,10 +339,11 @@ namespace ArenaMapPort.Client
             internal readonly int excludedMaterial;    // §13 — Transparent/Glass/Fence shader or renderQueue>=2450
             internal readonly int excludedNotElevated; // §13 — too close to the ground/collider below
             internal readonly int excludedNoMesh;      // §13 — elevated but no MeshFilter.sharedMesh to draw
+            internal readonly int includedGlass;       // §20.2 — glass-shader renderers kept as cover (CoverIncludesGlass)
 
             internal ScanResult(Bounds bounds, int layerMask, int rendererCount, int excludedOversized,
                 List<ElevatedMesh> elevatedMeshes, int consideredForCover, int excludedMaterial,
-                int excludedNotElevated, int excludedNoMesh)
+                int excludedNotElevated, int excludedNoMesh, int includedGlass)
             {
                 this.bounds = bounds;
                 this.layerMask = layerMask;
@@ -351,6 +354,7 @@ namespace ArenaMapPort.Client
                 this.excludedMaterial = excludedMaterial;
                 this.excludedNotElevated = excludedNotElevated;
                 this.excludedNoMesh = excludedNoMesh;
+                this.includedGlass = includedGlass;
             }
         }
 
@@ -458,7 +462,7 @@ namespace ArenaMapPort.Client
                 Plugin.Log.LogWarning($"[ArenaMapPort][RainCover] map={map.Key}: static-geometry scan found 0 " +
                     "eligible renderer(s) — class-default RainBounds, no cullingMask widening/obstacle draws (retried on the next camera change).");
                 return new ScanResult(new Bounds(Vector3.zero, new Vector3(1000f, 220f, 1000f)), 0, 0, excludedOversized,
-                    null, 0, 0, 0, 0);
+                    null, 0, 0, 0, 0, 0);
             }
 
             // Pad 10m each side horizontally; vertical range stays min(bounds) to max(bounds)+5m (task's
@@ -480,20 +484,25 @@ namespace ArenaMapPort.Client
             padded.SetMinMax(min, max);
 
             List<ElevatedMesh> elevatedMeshes = null;
-            int consideredForCover = 0, excludedMaterial = 0, excludedNotElevated = 0, excludedNoMesh = 0;
+            int consideredForCover = 0, excludedMaterial = 0, excludedNotElevated = 0, excludedNoMesh = 0, includedGlass = 0;
 
             if (computeElevated)
             {
                 elevatedMeshes = new List<ElevatedMesh>();
                 int colliderMask = BuildGroundColliderMask();
+                bool includeGlass = WeatherRig.CoverIncludesGlassForCurrentMap(); // §20.2
 
                 for (int c = 0; c < candidates.Count; c++)
                 {
                     var renderer = candidates[c];
-                    if (IsExcludedByMaterial(renderer))
+                    if (IsExcludedByMaterial(renderer, includeGlass, out bool glass))
                     {
                         excludedMaterial++;
                         continue;
+                    }
+                    if (glass)
+                    {
+                        includedGlass++;
                     }
                     consideredForCover++;
 
@@ -533,15 +542,20 @@ namespace ArenaMapPort.Client
             }
 
             return new ScanResult(padded, layerMaskAccum, rendererCount, excludedOversized,
-                elevatedMeshes, consideredForCover, excludedMaterial, excludedNotElevated, excludedNoMesh);
+                elevatedMeshes, consideredForCover, excludedMaterial, excludedNotElevated, excludedNoMesh, includedGlass);
         }
 
         // §13 goal 2 — "exclude renderers with any material whose shader name contains 'Transparent',
         // 'Glass', 'Fence' or whose renderQueue >= 2450 (fences, glass, decals, foliage cards)" (task's own
         // spec wording). sharedMaterials, never .materials, to avoid instancing every material we merely
         // inspect. Any ONE matching material on a multi-material renderer excludes the whole renderer.
-        static bool IsExcludedByMaterial(Renderer renderer)
+        // §20.2 — with includeGlass, a GLASS material (IsGlassShaderName) is cover and neither its
+        // transparent render queue nor the 'Transparent'/'Glass' words exclude it; anyGlass reports that
+        // at least one such material was seen (log counter). A renderer mixing glass with a fence/foliage
+        // material is still excluded by the latter.
+        static bool IsExcludedByMaterial(Renderer renderer, bool includeGlass, out bool anyGlass)
         {
+            anyGlass = false;
             var mats = renderer.sharedMaterials;
             for (int m = 0; m < mats.Length; m++)
             {
@@ -550,16 +564,21 @@ namespace ArenaMapPort.Client
                 {
                     continue;
                 }
+                var shader = mat.shader;
+                string name = shader != null ? shader.name : string.Empty;
+                if (includeGlass && IsGlassShaderName(name))
+                {
+                    anyGlass = true;
+                    continue;
+                }
                 if (mat.renderQueue >= 2450)
                 {
                     return true;
                 }
-                var shader = mat.shader;
                 if (shader == null)
                 {
                     continue;
                 }
-                string name = shader.name;
                 if (name.IndexOf("Transparent", StringComparison.OrdinalIgnoreCase) >= 0
                     || name.IndexOf("Glass", StringComparison.OrdinalIgnoreCase) >= 0
                     || name.IndexOf("Fence", StringComparison.OrdinalIgnoreCase) >= 0)
@@ -568,6 +587,33 @@ namespace ArenaMapPort.Client
                 }
             }
             return false;
+        }
+
+        // §20.2 — EFT's glass shaders: anything with 'Glass' in its name, or 'Transparent' together with
+        // 'Reflective'/'Specular' ("Global Fog/Transparent Reflective Specular" is Equator's roof-pane shader,
+        // 9 materials in analysis/equator_census.json). Cutout/cutoff/fence/billboard/sheet/decal/water/
+        // particle words veto: foliage cards, fences, fog sheets and water decals are not cover.
+        static bool IsGlassShaderName(string name)
+        {
+            if (string.IsNullOrEmpty(name))
+            {
+                return false;
+            }
+            string[] veto = { "Cutout", "Cutoff", "Fence", "Billboard", "Sheet", "Decal", "Water", "Particle" };
+            for (int i = 0; i < veto.Length; i++)
+            {
+                if (name.IndexOf(veto[i], StringComparison.OrdinalIgnoreCase) >= 0)
+                {
+                    return false;
+                }
+            }
+            if (name.IndexOf("Glass", StringComparison.OrdinalIgnoreCase) >= 0)
+            {
+                return true;
+            }
+            return name.IndexOf("Transparent", StringComparison.OrdinalIgnoreCase) >= 0
+                && (name.IndexOf("Reflective", StringComparison.OrdinalIgnoreCase) >= 0
+                    || name.IndexOf("Specular", StringComparison.OrdinalIgnoreCase) >= 0);
         }
 
         // §13 goals 1+2 — "collider layers (HighPolyCollider, LowPolyCollider, Terrain, Default)" (task's
@@ -928,11 +974,13 @@ namespace ArenaMapPort.Client
         // Full redo: forget this raid's geometry scan (bounds + elevated meshes) and photograph again. The
         // first camera change — the normal trigger — comes before the preset's remaining scenes
         // (DEPOT/HANGAR/WAREHOUSE on Bay5) are loaded, so their roofs are missing from the first photo.
-        internal static void RescanAndRerender(string trigger)
+        // Returns true when the depth photo was actually re-rendered (review 2026-09-19: a caller that
+        // re-classifies against the photo must not do so after a failed/skipped re-render).
+        internal static bool RescanAndRerender(string trigger)
         {
             if (!ArenaMapRaid.IsLoaded() || !WeatherRig.IsActiveForCurrentMap())
             {
-                return;
+                return false;
             }
             var map = ArenaMapRaid.CurrentMap;
             if (map != null && _states.TryGetValue(map.Key, out var state))
@@ -941,19 +989,19 @@ namespace ArenaMapPort.Client
                 state.EmptyScans = 0;
                 state.ElevatedMeshes = null;
             }
-            RerenderNow(trigger);
+            return RerenderNow(trigger);
         }
 
-        static void RerenderNow(string trigger)
+        static bool RerenderNow(string trigger)
         {
             if (!ArenaMapRaid.IsLoaded() || !WeatherRig.IsActiveForCurrentMap())
             {
-                return; // MANDATORY first check, same convention every entry point in this file already follows
+                return false; // MANDATORY first check, same convention every entry point in this file already follows
             }
             var map = ArenaMapRaid.CurrentMap;
             if (map == null)
             {
-                return;
+                return false;
             }
 
             var photo = DepthPhotograper.Instance;
@@ -961,7 +1009,7 @@ namespace ArenaMapPort.Client
             {
                 Plugin.Log.LogInfo($"[ArenaMapPort][RainCoverLab] map={map.Key} {trigger}: " +
                     "DepthPhotograper.Instance is null (no camera change yet this raid) — nothing to re-render.");
-                return;
+                return false;
             }
 
             DrawTransformMode drawTransform = DrawTransformMode.None;
@@ -980,7 +1028,7 @@ namespace ArenaMapPort.Client
             {
                 Plugin.Log.LogError($"[ArenaMapPort][RainCoverLab] map={map.Key} {trigger}: " +
                     $"DepthPhotograper.Render() threw — {e.GetType().Name}: {e.Message}");
-                return;
+                return false;
             }
 
             Plugin.Log.LogInfo($"[ArenaMapPort][RainCover] map={map.Key} re-rendered depth photo " +
@@ -1001,6 +1049,7 @@ namespace ArenaMapPort.Client
                 Plugin.Log.LogWarning($"[ArenaMapPort][RainCoverLab] map={map.Key} post-rerender readback threw: " +
                     $"{e.GetType().Name}: {e.Message}");
             }
+            return true;
         }
 
         // Same CameraManager-first/Camera.main-fallback resolution LightingLab.cs's own ResolveActiveCamera
