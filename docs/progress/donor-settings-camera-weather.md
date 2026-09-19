@@ -1475,3 +1475,22 @@ Decision: `ReflectionIntensity` default 0.5 for Bay5 (1.0 for the others until t
 `GroundSmoothness` default back to 1.0 (the user's own test: the pleasing smoothness varies strongly by
 spot, so a global material scalar is the wrong lever). A saved `GroundSmoothness = 0.5` from the previous
 build stays in the user's config — press its Reset button in F12 once.
+
+## 17) Rain cover closed: Bay5's puddles are authored art (host session 2026-09-19 07:2x, build 7967f80)
+
+Defaults verified first: F9 shows `B2 Lighting.ReflectionIntensity: scale=0.49`, `GroundSmoothness`
+base 1.0; the spawn hall reads as dark wet concrete with pillar-mirroring puddles without any lab knob.
+
+Then the §14 experiments at the same spot (Clear, `_WaterLevel` 0.76):
+- `CoverAll=true` (whole map photographed as covered, readback confirms the quad at +54 m): hall floor
+  **unchanged**. Hypothesis H2 confirmed — the depth photo does not drive the puddles of these ground
+  materials at all.
+- `WaterLevelOverride` 0.39 (live `_WaterLevel` 0.39): hall floor **unchanged**; the yard's sky
+  puddles keep their shapes, only marginally smaller.
+
+So the puddle shapes on Bay5 are painted into the materials (vertex-paint layers with smoothness
+0.9+ on the yard, the `Depot_indoor` gloss layer in the halls); EFT's rain system only modulates them.
+Arena built Bay5 as a permanently rain-soaked harbor. Nothing to fix on the cover side; `RainCoverMethod`
+stays `RoofDepthBlack` (harmless, correct depth photo for the WetRenderer sheen) and the RainCoverLab
+switches remain diagnostic. What made the halls look wrong was the sky mirrored at full strength —
+handled by `ReflectionIntensity` 0.5 (§16).
