@@ -1494,3 +1494,15 @@ Arena built Bay5 as a permanently rain-soaked harbor. Nothing to fix on the cove
 stays `RoofDepthBlack` (harmless, correct depth photo for the WetRenderer sheen) and the RainCoverLab
 switches remain diagnostic. What made the halls look wrong was the sky mirrored at full strength —
 handled by `ReflectionIntensity` 0.5 (§16).
+
+### 16.2) ReflectionIntensity is not a specular-only knob (host A/B 2026-09-19)
+
+Same yard spot (56,-3.8,17), yaw 243, Clear noon, two screenshots 30 s apart: `ReflectionIntensity`
+0.5 vs 1.0. At 1.0 every shadowed surface is markedly brighter — the matte steel doors, the brick wall,
+the dry asphalt — not only the glossy sky mirrors. AmbientLight's Custom Ambient pass scales its whole
+ambient contribution with `_ReflectionIntensity` (the SH from `ToDController` is small: `_SHAr.w` 0.04,
+`_EFT_Ambient` (0.07, 0.10, 0.12) at Clear noon; the cubemap term carries most of the shadow light).
+That is the user's "outdoors too dark" report. Decision: Bay5 default back to **1.0** (vanilla); the
+hall-floor veil needs a per-surface fix instead — reduce the smoothness of floor-like renderers that the
+RoofDepthBlack depth photo shows as covered, on per-renderer material clones so shared materials in
+the yard stay untouched.
