@@ -169,6 +169,20 @@ public static class ArenaMapRegistration
     }
 
     /// <summary>
+    /// bots-stage1: mirrors a bot-enabled map's base.json BotMax into BotConfig.MaxBotCap (see the call
+    /// site's comment for why). Pure — no DI — so it is directly unit testable.
+    /// </summary>
+    public static void ApplyBotCap(Dictionary<string, int> maxBotCap, int botMax, ArenaMapDescriptor map)
+    {
+        if (botMax > 0)
+        {
+            // BotController.GetBotCap lower-cases its lookup (BotController.cs:281-291); every current Key is
+            // lower-case already, normalising keeps a future map's spelling from silently missing the cap.
+            maxBotCap[map.Key.ToLowerInvariant()] = botMax;
+        }
+    }
+
+    /// <summary>
     /// Stamps <paramref name="map"/>'s map-select locale keys into a deserialized locale
     /// dictionary and returns it (mutate-in-place, matching
     /// <see cref="LazyLoad{T}.AddTransformer"/>'s signature so this can be passed straight to
@@ -215,6 +229,7 @@ public class ArenaMapPortMod(
     LocationTable locationTable,
     LocaleTable localeTable,
     LocationConfig locationConfig,
+    BotConfig botConfig,
     ICloner cloner,
     JsonUtil jsonUtil,
     ISptLogger<ArenaMapPortMod> logger) : IOnLoad
@@ -268,9 +283,13 @@ public class ArenaMapPortMod(
                     settings => cloner.Clone(settings)!,
                     map);
 
-                // TODO(bots-milestone): bot cap (BotConfig.MaxBotCap, falls back to "default") /
-                // NonMaps — skipped for the spike (SPEC decision #8, bots out of scope;
-                // analysis/ref-manimal.md §1's punch-list has the retail levers Icebreaker uses).
+                // bots-stage1 (docs/progress/bots-stage1.md): a map whose base.json ships BotMax > 0 gets
+                // that value into BotConfig.MaxBotCap too. PostDbLoadService.AdjustLocationBotValues runs
+                // from GameCallbacks (OnLoadOrder 200000, i.e. AFTER this Preload+90000 hook) and writes
+                // Location.BotMax only for keys present in that dictionary — configs/bot.json has no
+                // arena_* key, so without this the cap would silently fall back to the raw JSON value.
+                // A map without bots (BotMax 0, every map but Equator today) is left alone.
+                ArenaMapRegistration.ApplyBotCap(botConfig.MaxBotCap, newBase.BotMax, map);
 
                 // Banners: base.json ships Banners: [] (SPEC §B.WP5 step 7 / §E.4) so there is
                 // nothing to wire through ImageRouter — Icebreaker's own documented landmine

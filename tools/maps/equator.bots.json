@@ -1,0 +1,146 @@
+{
+  "_comment": "bots-stage1 (docs/progress/bots-stage1.md): optional sidecar read by tools/server/make_base_json.py next to the map descriptor. Positions are navmesh-verified in-game (UiBridge teleports / player positions, 2026-09-19). Radii follow Factory's SpawnSphereParams (bots 25-35 m). Kept out of equator.json so the Unity editor's JsonUtility reader never sees these fields.",
+  "zone": "BotZone_Main",
+  "max_bots": 8,
+  "player_spawns": [
+    {
+      "id": "arena_equator-player-all",
+      "name": "SpawnPoint_Player_All",
+      "sides": [
+        "All"
+      ],
+      "position": [
+        -4.5,
+        0.1,
+        38.5
+      ],
+      "rotation": 180.0,
+      "radius": 5
+    },
+    {
+      "id": "arena_equator-player-usec",
+      "name": "SpawnPoint_Player_Usec",
+      "sides": [
+        "Usec"
+      ],
+      "position": [
+        -11.7,
+        0.1,
+        48.6
+      ],
+      "rotation": 180.0,
+      "radius": 5
+    },
+    {
+      "id": "arena_equator-player-bear",
+      "name": "SpawnPoint_Player_Bear",
+      "sides": [
+        "Bear"
+      ],
+      "position": [
+        5.0,
+        0.1,
+        -33.5
+      ],
+      "rotation": 0.0,
+      "radius": 5
+    }
+  ],
+  "bot_spawns": [
+    {
+      "id": "arena_equator-bot-atrium",
+      "position": [
+        0.0,
+        0.2,
+        2.0
+      ],
+      "radius": 30
+    },
+    {
+      "id": "arena_equator-bot-west",
+      "position": [
+        -12.0,
+        0.1,
+        -8.0
+      ],
+      "radius": 25
+    },
+    {
+      "id": "arena_equator-bot-east",
+      "position": [
+        11.4,
+        0.1,
+        1.5
+      ],
+      "radius": 25
+    },
+    {
+      "id": "arena_equator-bot-northeast",
+      "position": [
+        9.3,
+        0.1,
+        19.6
+      ],
+      "radius": 25
+    },
+    {
+      "id": "arena_equator-bot-northwest",
+      "position": [
+        -17.4,
+        0.1,
+        13.0
+      ],
+      "radius": 25
+    },
+    {
+      "id": "arena_equator-bot-southwest",
+      "position": [
+        -9.9,
+        0.1,
+        -11.7
+      ],
+      "radius": 25
+    },
+    {
+      "id": "arena_equator-bot-ring2-west",
+      "position": [
+        -30.0,
+        10.8,
+        3.0
+      ],
+      "radius": 20
+    }
+  ],
+  "waves": [
+    {
+      "time_min": 10,
+      "time_max": 30,
+      "slots_min": 2,
+      "slots_max": 3
+    },
+    {
+      "time_min": 90,
+      "time_max": 150,
+      "slots_min": 1,
+      "slots_max": 2
+    },
+    {
+      "time_min": 240,
+      "time_max": 330,
+      "slots_min": 2,
+      "slots_max": 3
+    },
+    {
+      "time_min": 420,
+      "time_max": 540,
+      "slots_min": 1,
+      "slots_max": 2
+    },
+    {
+      "time_min": 600,
+      "time_max": 720,
+      "slots_min": 1,
+      "slots_max": 2
+    }
+  ]
+}

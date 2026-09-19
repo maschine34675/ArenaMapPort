@@ -16,6 +16,9 @@ namespace ArenaMapPort.Client
     /// </summary>
     [BepInPlugin(PluginGuid, PluginName, PluginVersion)]
     [BepInDependency("com.SPT.core", BepInDependency.DependencyFlags.SoftDependency)]
+    // bots-stage1 — SainLocationShim resolves SAIN's LocationClass by name at install time; the soft
+    // dependency only orders our Awake after SAIN's assembly is loaded when SAIN is present.
+    [BepInDependency("me.sol.sain", BepInDependency.DependencyFlags.SoftDependency)]
     public class Plugin : BaseUnityPlugin
     {
         public const string PluginGuid = "com.maschine.ArenaMapPort";

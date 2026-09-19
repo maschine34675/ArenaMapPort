@@ -282,6 +282,32 @@ public class LocationRegistrationTests
         Assert.Equal(40, scav!.MinStaticLootPercent);
     }
 
+    // bots-stage1 — ApplyBotCap mirrors a bot-enabled map's BotMax into BotConfig.MaxBotCap.
+    [Theory]
+    [MemberData(nameof(AllMaps))]
+    public void ApplyBotCap_LeavesTheTableAlone_ForAMapWithoutBots(ArenaMapDescriptor map)
+    {
+        var caps = new Dictionary<string, int> { ["default"] = 18 };
+
+        ArenaMapRegistration.ApplyBotCap(caps, 0, map);
+
+        Assert.Single(caps);
+        Assert.Equal(18, caps["default"]);
+    }
+
+    [Theory]
+    [MemberData(nameof(AllMaps))]
+    public void ApplyBotCap_WritesTheLowercasedKey_ForAMapWithBots(ArenaMapDescriptor map)
+    {
+        var caps = new Dictionary<string, int> { ["default"] = 18 };
+
+        ArenaMapRegistration.ApplyBotCap(caps, 8, map);
+
+        Assert.Equal(2, caps.Count);
+        Assert.Equal(8, caps[map.Key.ToLowerInvariant()]);
+        Assert.Equal(18, caps["default"]);
+    }
+
     [Theory]
     [MemberData(nameof(AllMaps))]
     public void ApplyLocationConfig_FallsBack_WhenTemplateEntriesAreMissing(ArenaMapDescriptor map)

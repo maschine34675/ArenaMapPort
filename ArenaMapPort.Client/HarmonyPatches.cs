@@ -51,6 +51,10 @@ namespace ArenaMapPort.Client
             InstallAIVoxelesDataGuard(harmony);
             InstallAIStationaryControllerEnsure(harmony);
 
+            // bots-stage1 — SAIN soft dependency: resolved by name, no-op without SAIN. See SainLocationShim.cs.
+            SainLocationShim.BindConfig();
+            SainLocationShim.TryInstall(harmony);
+
             // fix-combat findings F1/F2 (explosives-items) + one additional confirmed same-class gap —
             // see docs/progress/fix-combat.md and EffectsControllerRepairs.cs's guard doc comments.
             InstallEyeBurnGuard(harmony);
