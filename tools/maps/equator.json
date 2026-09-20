@@ -17,5 +17,12 @@
   "icon_y": 760,
   "template_key": "factory4_day",
   "db_base_json_path": "base.json",
-  "fog_color": [0.62, 0.66, 0.70]
+  "fog_color": [
+    0.62,
+    0.66,
+    0.7
+  ],
+  "opened_barriers": [
+    "SBG_Arena_Equator/SOO_LOD0/equator_roller_shutters_02 (9)"
+  ]
 }

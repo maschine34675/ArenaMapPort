@@ -206,11 +206,9 @@ namespace ArenaMapPort.Client
     /// swallows the exception that follows — same technique and same "riskier half, so gate hard"
     /// reasoning as <see cref="SpatialAudioOcclusionGuard"/>/<see cref="SpatialAudioInteractiveOcclusionGuard"/>.
     ///
-    /// NOT fixed here (deferred, see docs/progress/fix-combat.md): <c>OnHealthDied</c> (:1488-1497) also
-    /// dereferences <c>_blur</c> unguarded (and possibly <c>_deathFade</c>) — but that event fires at most
-    /// once per raid (player death), so per this task's own severity taxonomy it is "degraded", not
-    /// "error-spam" (no recurring per-shot/per-frame exception), and raid gameplay is already over at that
-    /// point regardless.
+    /// <c>OnHealthDied</c> (:1488-1497) dereferences <c>_deathFade</c> and <c>_blur</c> the same way; it was
+    /// deferred in fix-combat ("fires at most once per raid") and is guarded since stage 1 (2026-09-20) by
+    /// <see cref="DeathScreenEffectsGuard"/> — with bots on the map the player's death is a routine outcome.
     /// </summary>
     internal static class CombatScreenEffectsGuard
     {
@@ -265,6 +263,62 @@ namespace ArenaMapPort.Client
                                       $"{__exception.Message} (fix-combat, EffectsController.cs:1288/1460-1470)");
             }
             return null; // swallow — never let this escape into the player-damage callback chain
+        }
+    }
+
+    /// <summary>
+    /// Stage 1 (docs/HANDOFF.md, 2026-09-20) — the deferred half of <see cref="CombatScreenEffectsGuard"/>:
+    /// <c>EffectsController.OnHealthDied(EDamageType)</c> (EffectsController.cs:1488-1497) does
+    /// <c>_deathFade.enabled = true; _deathFade.EnableEffect(); _blur.enabled = true; _blur.Die();</c> with both
+    /// fields fetched by the unguarded <c>GetComponent</c> at :1288-1289, which return null on the Cam2 fallback
+    /// camera. The method has no other side effect, so the prefix runs whichever half exists and skips the
+    /// original when either component is missing (vanilla behaviour when both are present, as on every real map).
+    /// </summary>
+    internal static class DeathScreenEffectsGuard
+    {
+        static readonly FieldInfo BlurField = AccessTools.Field(typeof(EffectsController), "_blur");
+        static readonly FieldInfo DeathFadeField = AccessTools.Field(typeof(EffectsController), "_deathFade");
+        static bool _logged;
+
+        // Target: EffectsController.OnHealthDied(EDamageType) — cs:1488-1497.
+        internal static bool Prefix(EffectsController __instance)
+        {
+            if (!ArenaMapRaid.IsLoaded())
+            {
+                return true;
+            }
+            if (BlurField == null || DeathFadeField == null)
+            {
+                return true; // reflection target moved — vanilla (pre-existing) behaviour
+            }
+            var blur = BlurField.GetValue(__instance) as FastBlur;
+            var fade = DeathFadeField.GetValue(__instance) as DeathFade;
+            if (blur != null && fade != null)
+            {
+                return true;
+            }
+            if (!__instance.enabled || !__instance.gameObject.activeInHierarchy)
+            {
+                return false; // the original's own early-out
+            }
+            if (fade != null)
+            {
+                fade.enabled = true;
+                fade.EnableEffect();
+            }
+            if (blur != null)
+            {
+                blur.enabled = true;
+                blur.Die();
+            }
+            if (!_logged)
+            {
+                _logged = true;
+                Plugin.Log.LogInfo("[ArenaMapPort][RaidFix] EffectsController.OnHealthDied on Cam2 — " +
+                                   $"death fade {(fade != null ? "played" : "missing")}, death blur " +
+                                   $"{(blur != null ? "played" : "missing")} (stage 1, EffectsController.cs:1488-1497)");
+            }
+            return false;
         }
     }
 }

@@ -42,6 +42,11 @@ namespace ArenaMapPort.Editor.Common
         // (level54) own real fog color, not an arbitrary constant). FogColorOrDefault() below
         // falls back to Equator's literal for any older map JSON missing this field.
         public float[] fog_color;
+        // exfils-stage2 follow-up / stage 1 (2026-09-20): hierarchy paths of the static round-start barriers the
+        // client opens at raid start (BoothDoorRepairs.OpenBarriers, mirrored from ArenaMapDescriptor.OpenedBarriers
+        // by BaseJsonTests.OpenedBarriers_DescriptorMirrorsSidecar). BakeNavMesh excludes their non-frame parts
+        // from the NavMesh sources so the spaces behind them are not islands. Optional (null/empty = none).
+        public string[] opened_barriers;
 
         static readonly float[] DefaultFogColor = { 0.62f, 0.66f, 0.70f };
 
@@ -154,6 +159,7 @@ namespace ArenaMapPort.Editor.Common
                     "Arena_Equator_TeamFight_DesignStuff",
                 },
                 infiltration_name = "ArenaEquator",
+                opened_barriers = new[] { "SBG_Arena_Equator/SOO_LOD0/equator_roller_shutters_02 (9)" },
                 locale_name = "Arena: Equator (spike)",
                 locale_description = "Internal test build — geometry/collision/NavMesh spike.",
                 icon_x = 150,

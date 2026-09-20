@@ -70,6 +70,29 @@ public class BaseJsonTests
         Assert.Empty(ArenaMapRegistration.ExitNameMismatches(exits.Select(e => e.GetProperty("Name").GetString()), ArenaMapRegistry.Equator));
     }
 
+    // stage 1 — tools/maps/equator.json opened_barriers (what BakeNavMesh excludes from the NavMesh sources) and the
+    // compiled descriptor (what BoothDoorRepairs opens at raid start) are one list.
+    [Fact]
+    public void OpenedBarriers_DescriptorMirrorsSidecar()
+    {
+        var dir = new DirectoryInfo(AppContext.BaseDirectory);
+        string? sidecar = null;
+        for (var d = dir; d is not null; d = d.Parent)
+        {
+            var candidate = Path.Combine(d.FullName, "tools", "maps", "equator.json");
+            if (File.Exists(candidate))
+            {
+                sidecar = candidate;
+                break;
+            }
+        }
+        Assert.NotNull(sidecar);
+
+        using var doc = JsonDocument.Parse(File.ReadAllText(sidecar!));
+        var fromSidecar = doc.RootElement.GetProperty("opened_barriers").EnumerateArray().Select(e => e.GetString()).ToList();
+        Assert.Equal(fromSidecar, ArenaMapRegistry.Equator.OpenedBarriers);
+    }
+
     // exfils-stage2 — tools/maps/equator.exits.json (what make_base_json.py reads) and the compiled descriptor
     // (what the client authors) are one table.
     [Fact]

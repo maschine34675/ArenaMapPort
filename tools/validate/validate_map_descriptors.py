@@ -144,6 +144,13 @@ def parse_cs_value(raw: str):
             fail(f"could not parse array literal: {v!r}")
         items = [parse_cs_value(x) for x in split_top_level_args(body_m.group(1))]
         return items
+    if v.startswith("new ArenaExitDescriptor("):
+        # exfils-stage2: Exits are `new ArenaExitDescriptor("Name", x, y, z[, sizes, rotation])` literals;
+        # the sidecar twin is tools/maps/<key>.exits.json (checked by BaseJsonTests, not here).
+        inner = v[len("new ArenaExitDescriptor("):].rstrip()
+        if not inner.endswith(")"):
+            fail(f"could not parse exit literal: {v!r}")
+        return ("exit", [parse_cs_value(x) for x in split_top_level_args(inner[:-1])])
     if re.fullmatch(r"[A-Za-z_]\w*\.[A-Za-z_]\w*", v):
         return ("ref", v)
     if re.fullmatch(r"[A-Za-z_]\w*", v):
@@ -345,7 +352,8 @@ def main() -> int:
     errors.extend(registry_identity_errors(entries, ref_scope))
     registry_by_key = {resolve(entry.get("Key"), ref_scope): (name, entry) for name, entry in entries.items()}
     maps_dir: Path = args.maps_dir
-    paths = sorted(maps_dir.glob("*.json"))
+    # <stem>.bots.json / <stem>.exits.json / <stem>.opened.json are sidecars of a map, not maps (bots-stage1, exfils-stage2)
+    paths = sorted(p for p in maps_dir.glob("*.json") if "." not in p.stem)
     if not paths:
         fail(f"no map descriptors found in {maps_dir}")
     map_keys = set()

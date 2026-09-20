@@ -57,6 +57,7 @@ namespace ArenaMapPort.Client
             ExfilRepairs.Install(harmony);
             ExfilSignals.BindConfig(); // [Exfils] SmokeSignals / SmokeSignalSound / SmokeSignalColor
             BoothDoorRepairs.BindConfig(); // [Spawns] OpenRespawnDoors — runs from SpawnInfiltrationRepairs' postfix
+            BallisticTwinRepairs.BindConfig(); // [Combat] BallisticTwins — same postfix (stage 1)
 
             // bots-stage1 — SAIN soft dependency: resolved by name, no-op without SAIN. See SainLocationShim.cs.
             SainLocationShim.BindConfig();
@@ -68,6 +69,7 @@ namespace ArenaMapPort.Client
             // see docs/progress/fix-combat.md and EffectsControllerRepairs.cs's guard doc comments.
             InstallEyeBurnGuard(harmony);
             InstallFlashAccumulatorGuard(harmony);
+            InstallDeathEffectsGuard(harmony); // stage 1 — the deferred OnHealthDied half of fix-combat
             InstallCombatScreenEffectsGuard(harmony);
 
             // Weather rig on the fallback camera — see RainControllerRepairs.cs.
@@ -590,6 +592,20 @@ namespace ArenaMapPort.Client
                 Plugin.Log.LogInfo("[ArenaMapPort][Harmony] patched EffectsController.OnClientPlayerEffectsPauseEvent " +
                                     "(fix-combat F1)");
             }
+        }
+
+        // Stage 1 (2026-09-20) — EffectsController.OnHealthDied(EDamageType), public instance, single overload.
+        // Verified: D:/SPT41/Development/_decompiled/EffectsController.cs:1488.
+        static void InstallDeathEffectsGuard(Harmony harmony)
+        {
+            var target = AccessTools.Method(typeof(EffectsController), "OnHealthDied");
+            if (!Verify(target, typeof(EffectsController), "OnHealthDied"))
+            {
+                return;
+            }
+            var prefix = AccessTools.Method(typeof(DeathScreenEffectsGuard), "Prefix");
+            harmony.Patch(target, prefix: new HarmonyMethod(prefix));
+            Plugin.Log.LogInfo("[ArenaMapPort][Harmony] patched EffectsController.OnHealthDied (stage 1 death-effects guard)");
         }
 
         // fix-combat F2 (explosives-items) — the nested EffectsController.FlashAccumulator.AddEffect

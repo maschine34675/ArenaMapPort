@@ -137,16 +137,37 @@ namespace ArenaMapPort.Editor.NavMesh
             foreach (var root in geometryRoots)
                 if (root != null) rootTransforms.Add(root.transform);
 
+            // Stage 1 (2026-09-20, docs/progress/exfils-stage2.md "Respawn booths"/"Spawn barriers"): the client opens
+            // Arena's round-start obstacles at raid start (SpawnPlacementRepairs disables SPAWN_BOUND*,
+            // BoothDoorRepairs deactivates the Door_Sliding_Respawn_L/_R leaves and the non-frame parts of every
+            // descriptor-listed opened_barriers path). Baked with them in place, the booth and hall interiors were
+            // NavMesh islands (bots could not path where players walk), so the same objects are excluded here.
+            List<string> unresolvedBarriers;
+            var openedBarriers = ResolveOpenedBarriers(geometryRoots, out unresolvedBarriers);
+            foreach (var missing in unresolvedBarriers)
+                Debug.LogWarning("[ArenaMapPort][BakeNavMesh] opened_barriers path not found in the content scenes: '" + missing + "'");
+            var excludedByReason = new Dictionary<string, int>();
+
             var sources = new List<NavMeshBuildSource>();
             foreach (var s in allSources)
             {
                 Transform t = s.component != null ? s.component.transform : null;
                 if (t == null) continue;
+                string reason = RoundOpenedReason(t, openedBarriers);
+                if (reason != null)
+                {
+                    int n;
+                    excludedByReason.TryGetValue(reason, out n);
+                    excludedByReason[reason] = n + 1;
+                    continue;
+                }
                 foreach (var rt in rootTransforms)
                 {
                     if (t.IsChildOf(rt)) { sources.Add(s); break; }
                 }
             }
+            foreach (var kv in excludedByReason)
+                Debug.Log("[ArenaMapPort][BakeNavMesh] excluded " + kv.Value + " source(s) opened at raid start: " + kv.Key);
 
             // Verification fix-up (2026-09-15, Bay5), continued: bounds is a SEPARATE pass over
             // every Renderer in geometryRoots, independent of `sources` above -- excluding the
@@ -255,6 +276,63 @@ namespace ArenaMapPort.Editor.NavMesh
                 Debug.LogError("[ArenaMapPort][DIAG-NAVMESH] threw: " + ex);
                 EditorApplication.Exit(1);
             }
+        }
+
+        // Stage 1 — the objects the client opens at raid start (see the comment at the source filter above).
+        // "LevelBorder": Arena's TeamFight play-area walls (41 BoxColliders under 'LEVEL-BORDERS TF' on Equator,
+        // layer 29), which MapBorderRepairs removes at raid start (RemoveTeamFightBorders, default on). Baked in,
+        // 'LevelBorder (83)' sat exactly in the FCK hall's doorway and kept the hall a NavMesh island even with the
+        // shutter excluded (host test 2026-09-20 19:05: NavMesh gap x -10.0..-9.2 at z 36).
+        static readonly string[] ExcludedNamePrefixes = { "SPAWN_BOUND", "LevelBorder" };
+        static readonly string[] ExcludedLeafNames = { "Door_Sliding_Respawn_L", "Door_Sliding_Respawn_R" };
+
+        // Resolves ArenaPaths.Map.opened_barriers ("Root/Child/... (n)") against the content-scene roots the
+        // same way the client does (first segment = a root object, the rest via Transform.Find).
+        static List<Transform> ResolveOpenedBarriers(GameObject[] geometryRoots, out List<string> unresolved)
+        {
+            var found = new List<Transform>();
+            unresolved = new List<string>();
+            string[] paths = ArenaPaths.Map.opened_barriers;
+            if (paths == null) return found;
+            foreach (string path in paths)
+            {
+                if (string.IsNullOrEmpty(path)) continue;
+                int slash = path.IndexOf('/');
+                string rootName = slash < 0 ? path : path.Substring(0, slash);
+                string rest = slash < 0 ? null : path.Substring(slash + 1);
+                bool any = false;
+                foreach (var root in geometryRoots)
+                {
+                    if (root == null || root.name != rootName) continue;
+                    Transform t = rest == null ? root.transform : root.transform.Find(rest);
+                    if (t != null) { found.Add(t); any = true; }
+                }
+                if (!any) unresolved.Add(path);
+            }
+            return found;
+        }
+
+        // Non-null when the source's object is one the client opens at raid start: a SPAWN_BOUND* barrier, a
+        // sliding-door leaf, or a non-frame part of a listed barrier (BoothDoorRepairs keeps every child whose
+        // name contains "frame").
+        static string RoundOpenedReason(Transform t, List<Transform> openedBarriers)
+        {
+            for (Transform cur = t; cur != null; cur = cur.parent)
+            {
+                foreach (string prefix in ExcludedNamePrefixes)
+                    if (cur.name.StartsWith(prefix, StringComparison.Ordinal)) return prefix + "*";
+                foreach (string leaf in ExcludedLeafNames)
+                    if (cur.name == leaf) return leaf;
+            }
+            foreach (Transform barrier in openedBarriers)
+            {
+                if (t == barrier || !t.IsChildOf(barrier)) continue;
+                bool frame = false;
+                for (Transform cur = t; cur != null && cur != barrier; cur = cur.parent)
+                    if (cur.name.IndexOf("frame", StringComparison.OrdinalIgnoreCase) >= 0) { frame = true; break; }
+                if (!frame) return "opened_barriers:" + barrier.name;
+            }
+            return null;
         }
 
         public static string SaveAsset(NavMeshData data, string assetPath)
