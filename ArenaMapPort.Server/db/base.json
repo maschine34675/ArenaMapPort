@@ -749,6 +749,36 @@
       ]
     },
     {
+      "BotZoneName": "",
+      "Categories": [
+        "Player"
+      ],
+      "ColliderParams": {
+        "_parent": "SpawnSphereParams",
+        "_props": {
+          "Center": {
+            "x": 0,
+            "y": 0,
+            "z": 0
+          },
+          "Radius": 5
+        }
+      },
+      "CorePointId": 0,
+      "DelayToCanSpawnSec": 4,
+      "Id": "arena_equator-player-south-all",
+      "Infiltration": "ArenaEquator",
+      "Position": {
+        "x": -5,
+        "y": 0.1,
+        "z": -33.5
+      },
+      "Rotation": 0.0,
+      "Sides": [
+        "All"
+      ]
+    },
+    {
       "BotZoneName": "BotZone_Main",
       "Categories": [
         "Bot",
@@ -928,6 +958,130 @@
         "x": -9.9,
         "y": 0.1,
         "z": -11.7
+      },
+      "Rotation": 0.0,
+      "Sides": [
+        "Savage"
+      ]
+    },
+    {
+      "BotZoneName": "BotZone_Main",
+      "Categories": [
+        "Bot",
+        "BotPmc"
+      ],
+      "ColliderParams": {
+        "_parent": "SpawnSphereParams",
+        "_props": {
+          "Center": {
+            "x": 0,
+            "y": 0,
+            "z": 0
+          },
+          "Radius": 25
+        }
+      },
+      "CorePointId": 0,
+      "DelayToCanSpawnSec": 4,
+      "Id": "arena_equator-bot-north-booth-east",
+      "Infiltration": "",
+      "Position": {
+        "x": 4.5,
+        "y": 0.1,
+        "z": 38.5
+      },
+      "Rotation": 180.0,
+      "Sides": [
+        "Savage"
+      ]
+    },
+    {
+      "BotZoneName": "BotZone_Main",
+      "Categories": [
+        "Bot",
+        "BotPmc"
+      ],
+      "ColliderParams": {
+        "_parent": "SpawnSphereParams",
+        "_props": {
+          "Center": {
+            "x": 0,
+            "y": 0,
+            "z": 0
+          },
+          "Radius": 25
+        }
+      },
+      "CorePointId": 0,
+      "DelayToCanSpawnSec": 4,
+      "Id": "arena_equator-bot-north-hall",
+      "Infiltration": "",
+      "Position": {
+        "x": -11.5,
+        "y": 0.1,
+        "z": 37
+      },
+      "Rotation": 180.0,
+      "Sides": [
+        "Savage"
+      ]
+    },
+    {
+      "BotZoneName": "BotZone_Main",
+      "Categories": [
+        "Bot",
+        "BotPmc"
+      ],
+      "ColliderParams": {
+        "_parent": "SpawnSphereParams",
+        "_props": {
+          "Center": {
+            "x": 0,
+            "y": 0,
+            "z": 0
+          },
+          "Radius": 25
+        }
+      },
+      "CorePointId": 0,
+      "DelayToCanSpawnSec": 4,
+      "Id": "arena_equator-bot-south-west",
+      "Infiltration": "",
+      "Position": {
+        "x": -9,
+        "y": 0.1,
+        "z": -28
+      },
+      "Rotation": 0.0,
+      "Sides": [
+        "Savage"
+      ]
+    },
+    {
+      "BotZoneName": "BotZone_Main",
+      "Categories": [
+        "Bot",
+        "BotPmc"
+      ],
+      "ColliderParams": {
+        "_parent": "SpawnSphereParams",
+        "_props": {
+          "Center": {
+            "x": 0,
+            "y": 0,
+            "z": 0
+          },
+          "Radius": 25
+        }
+      },
+      "CorePointId": 0,
+      "DelayToCanSpawnSec": 4,
+      "Id": "arena_equator-bot-south-east",
+      "Infiltration": "",
+      "Position": {
+        "x": 8.7,
+        "y": 0.1,
+        "z": -28.4
       },
       "Rotation": 0.0,
       "Sides": [

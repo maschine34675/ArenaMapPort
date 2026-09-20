@@ -1,5 +1,5 @@
 {
-  "_comment": "bots-stage1 (docs/progress/bots-stage1.md): optional sidecar read by tools/server/make_base_json.py next to the map descriptor. Positions are navmesh-verified in-game (UiBridge teleports / player positions, 2026-09-19). Radii follow Factory's SpawnSphereParams (bots 25-35 m). Kept out of equator.json so the Unity editor's JsonUtility reader never sees these fields. Only the ground floor is playable on Equator; the upper rings are decoration (user, 2026-09-20), so no spawn goes above y 0.2 (the former ring2-west point at y 10.8 was a NavMesh island). bots-stage3 (2026-09-20): PMCs come from BossLocationSpawn entries (BossName pmcUSEC/pmcBEAR), not from waves — Factory ships four such entries; SPT's PmcWaveGenerator only replaces them for maps listed in pmc.json customPmcWaves, so ours survive untouched. boss_zone names the zone explicitly (BossLocationSpawn.FindZoneWithCorrectName searches every BotZone), and the bot spawns carry the BotPmc category so BotZone.HasPmcBotSpawns is true as well.",
+  "_comment": "bots-stage1 (docs/progress/bots-stage1.md): optional sidecar read by tools/server/make_base_json.py next to the map descriptor. Positions are navmesh-verified in-game (UiBridge teleports / player positions, 2026-09-19). Radii follow Factory's SpawnSphereParams (bots 25-35 m). Kept out of equator.json so the Unity editor's JsonUtility reader never sees these fields. Only the ground floor is playable on Equator; the upper rings are decoration (user, 2026-09-20), so no spawn goes above y 0.2 (the former ring2-west point at y 10.8 was a NavMesh island). bots-stage3 (2026-09-20): PMCs come from BossLocationSpawn entries (BossName pmcUSEC/pmcBEAR), not from waves — Factory ships four such entries; SPT's PmcWaveGenerator only replaces them for maps listed in pmc.json customPmcWaves, so ours survive untouched. boss_zone names the zone explicitly (BossLocationSpawn.FindZoneWithCorrectName searches every BotZone), and the bot spawns carry the BotPmc category so BotZone.HasPmcBotSpawns is true as well. Equator ArenaMode integration (2026-09-20): two additional bot points at each end preserve the 25 m Arena bot-distance floor with at least three distant candidate points (the injector requests two bots per burst). All four additions passed UiBridge NavMesh, zone, full path and standing-room checks from the atrium and Usec niche on the 10404-vertex/4572-triangle bake. South-east uses the verified snapped point (8.7, 0.1, -28.4). Four other tested candidates were rejected during independent review because they overlapped player spawn coordinates. The extra All player marker gives both PMC sides a southern entry; ArenaMode respawns use all Player markers.",
   "zone": "BotZone_Main",
   "max_bots": 8,
   "player_spawns": [
@@ -39,6 +39,20 @@
       ],
       "position": [
         5.0,
+        0.1,
+        -33.5
+      ],
+      "rotation": 0.0,
+      "radius": 5
+    },
+    {
+      "id": "arena_equator-player-south-all",
+      "name": "SpawnPoint_Player_South_All",
+      "sides": [
+        "All"
+      ],
+      "position": [
+        -5,
         0.1,
         -33.5
       ],
@@ -119,6 +133,62 @@
         0.1,
         -11.7
       ],
+      "radius": 25,
+      "categories": [
+        "Bot",
+        "BotPmc"
+      ]
+    },
+    {
+      "id": "arena_equator-bot-north-booth-east",
+      "position": [
+        4.5,
+        0.1,
+        38.5
+      ],
+      "rotation": 180.0,
+      "radius": 25,
+      "categories": [
+        "Bot",
+        "BotPmc"
+      ]
+    },
+    {
+      "id": "arena_equator-bot-north-hall",
+      "position": [
+        -11.5,
+        0.1,
+        37
+      ],
+      "rotation": 180.0,
+      "radius": 25,
+      "categories": [
+        "Bot",
+        "BotPmc"
+      ]
+    },
+    {
+      "id": "arena_equator-bot-south-west",
+      "position": [
+        -9,
+        0.1,
+        -28
+      ],
+      "rotation": 0.0,
+      "radius": 25,
+      "categories": [
+        "Bot",
+        "BotPmc"
+      ]
+    },
+    {
+      "id": "arena_equator-bot-south-east",
+      "position": [
+        8.7,
+        0.1,
+        -28.4
+      ],
+      "rotation": 0.0,
       "radius": 25,
       "categories": [
         "Bot",
