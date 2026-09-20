@@ -3,7 +3,22 @@
 Snapshot for whoever continues (human or agent). Verify the commits named here against `git log`; this file
 is updated by hand at each handover, it is not an automatic record. Read [AGENTS.md](AGENTS.md) first.
 
-## State on 2026-09-20 (evening)
+## State on 2026-09-20 (23:20 CEST)
+
+**Distribution validation and Equator ArenaMode integration are deployed and host-tested.**
+Branch `feature/equator-arenamode-integration`: `b12c8fa` repairs descriptor discovery so
+`.bots.json`/`.exits.json` do not crash distribution validation; malformed real descriptors still fail.
+`9547b0b` adds four distant bot markers and one southern All-side player marker (10 bot / 4 player).
+MapPort checks: 86 Python tests, 267 server tests, full distribution 14 maps / 42 bundles / 14 shader
+sidecars. Companion ArenaMode `22ff216` (`feature/equator-map-integration`) admits Equator only for
+Deathmatch and Gun Game, with optional dependency checks and guarded settings migration.
+
+On the restarted SPT 4.1.6 GPU host, both native ARENA modes started, replenished PMCs from the atrium,
+respawned after real combat deaths (two in Deathmatch, one in Gun Game), and returned to MainMenu.
+Entire persisted profiles matched before/after, except the background hideout timestamp. Tactical
+and Team DM tiles are hidden; PitFireTeam rejection is covered offline. Gun Game was tested at tier
+1/24, not through a completed ladder. See [equator-arenamode-integration.md](docs/progress/equator-arenamode-integration.md)
+for timestamps, loaded identities, artifact hashes, profile comparisons and limits.
 
 **Equator (`arena_equator`) — what is verified on the GPU host:**
 - Raid loads from the vanilla menu and from the user's EQUATOR DEBUG button; weather rig, lighting and
@@ -24,7 +39,8 @@ Terrain maps (Custom, Shoreline, Woods) still need their first runtime validatio
 adds bots/exits per map through [docs/MAP-RECIPE.md](docs/MAP-RECIPE.md).
 
 **Installs:** `D:\SPT41` (mirror of the GPU host; deploy target) and `D:\SPT41vanilla` (user's test bed).
-Both hold the stage-1 build (client + rebaked Equator bundles); see `git log` for the commit.
+`D:\SPT41` and its GPU mirror hold the integration above. `D:\SPT41vanilla` was not updated during this
+integration and retains its earlier stage-1 build; verify it separately before testing there.
 
 ## Decisions (user, 2026-09-20) — see docs/SPEC.md "Decisions 2026-09-20"
 
@@ -61,6 +77,7 @@ are 0.1.0.
 
 - GPU host `WIN-Q470OL2A14A`, EFT via SPT launcher, profile `ArenaGPU20260908`; Parsec keeps the A2000
   display alive — do not switch displays. Host server terminal: closing it is how the server restarts.
-- SPT 4.1.6 was released 2026-09-18; both installs and the server mod pin are still 4.1.5.
+- The GPU host ran SPT 4.1.6 / EFT 0.16.9.5-40743 during the 23:02-23:18 acceptance. The source server
+  dependency pin still targets 4.1.5; the vanilla test bed was not verified in this pass.
 - The user's `maschine-ArenaMapDebug.dll` (EQUATOR DEBUG button, penalty-free disconnect) is outside this
   repo and outside version control; host tests rely on it.

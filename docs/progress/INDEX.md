@@ -221,3 +221,11 @@ successor instead unless you're specifically investigating that cycle's history.
 | What is the shader sidecar? | `wp2.md` (origin: `StandinShaderGenerator` + `material-shaders.json`); `dist-manifest.md` (how it's staged into `dist/` and loaded) |
 | How are bundles served to the client? | `dist-manifest.md` (`BundleHost.cs`'s expected paths); `fix-preset-cab-and-bundle-lifetime.md` (the refcount/internal-name fixes to that same class) |
 | Which decisions are fixed (not up for debate)? | `AGENTS.md` "Decisions that shape every task"; `HANDOFF.md` "Decisions (user, 2026-09-20)"; both point to `docs/SPEC.md`'s "Decisions 2026-09-20" section as the source |
+
+## Added 2026-09-20 — distribution repair and ArenaMode acceptance
+
+- [distribution-sidecars.md](distribution-sidecars.md) — descriptor discovery accepts bot/exit
+  sidecars without weakening malformed-descriptor or exact-distribution checks; six regressions.
+- [equator-arenamode-integration.md](equator-arenamode-integration.md) — ten bot/four player markers,
+  distant spawn coverage, independent review, deployment identities, native Deathmatch/Gun Game
+  admission, replenishment, combat respawns and persisted-profile return on the GPU host.
