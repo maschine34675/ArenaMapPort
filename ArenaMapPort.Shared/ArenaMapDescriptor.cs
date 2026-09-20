@@ -70,6 +70,8 @@ namespace ArenaMapPort.Shared
         public int IconY { get; }
         public string DbBaseJsonPath { get; }       // path under ArenaMapPort.Server/db/ this map's base.json lives at
         public ArenaExitDescriptor[] Exits { get; } // exfils-stage2 — runtime-authored exits (empty = raid ends by timer only)
+        public string[] OpenedBarriers { get; }     // hierarchy paths of static scene objects whose non-frame parts are deactivated
+                                                    // at raid start (Arena's round barriers that close a spawn area); empty = none
 
         // Parameter names are PascalCase (unusual for a C# constructor) so every call site below
         // can pass them as named arguments matching the property names 1:1 — this reads like the
@@ -91,7 +93,8 @@ namespace ArenaMapPort.Shared
             int IconY,
             string DbBaseJsonPath,
 #nullable enable
-            ArenaExitDescriptor[]? Exits = null)
+            ArenaExitDescriptor[]? Exits = null,
+            string[]? OpenedBarriers = null)
 #nullable restore
         {
             this.Key = Key;
@@ -109,6 +112,7 @@ namespace ArenaMapPort.Shared
             this.IconY = IconY;
             this.DbBaseJsonPath = DbBaseJsonPath;
             this.Exits = Exits ?? new ArenaExitDescriptor[0];
+            this.OpenedBarriers = OpenedBarriers ?? new string[0];
         }
 
         // Physical bundle filenames are always the served key's basename — never stored
@@ -155,6 +159,15 @@ namespace ArenaMapPort.Shared
                 // gates sit on the far side of each spawn zone, 10 m from the nearest spawn.
                 new ArenaExitDescriptor("Equator North Gate", 2.0f, 0.1f, 46.0f),
                 new ArenaExitDescriptor("Equator South Gate", 5.0f, 0.1f, -44.0f),
+            },
+            OpenedBarriers: new[]
+            {
+                // Spawn barriers (20.09. evening, docs/progress/exfils-stage2.md "Spawn barriers"): the Usec spawn
+                // (-11.7, 48.6) sits in the FCK hall, whose corner exit is this roller shutter at (-9.7, 0, 36.0) —
+                // static geometry Arena opens per round by a script that is not ported. Of Equator's 20 shutters this
+                // is the only one near a spawn; the other 19 line the outer walls. A hierarchy path, not a name: the
+                // "(n)" names repeat in the scene ("equator_roller_shutters_02 (4)" exists twice).
+                "SBG_Arena_Equator/SOO_LOD0/equator_roller_shutters_02 (9)",
             });
 
         /// <summary>

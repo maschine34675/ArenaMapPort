@@ -118,3 +118,32 @@ Host test (13:59): `signal assets from the airdrop crate: material=CyclesSmoke32
 `smoke signal lit at 'Equator North Gate' ((2.0, 0.4, 46.0))` and South Gate — a green column visible from the All
 spawn 10 m away (screenshot). A NotPresent exit gets its signal switched off in the init postfix.
 
+## Spawn barriers — the FCK roller shutter (2026-09-20 evening, user: "noch ein weiteres Rolltor beim Spieler-Spawn")
+
+The user's F10 inspection (D:\SPT41vanilla log 16:01:36, camera (-11.47, 1.61, 36.84) looking east) hit
+`SBG_Arena_Equator/SOO_LOD0/equator_roller_shutters_02 (9)/roller_shutters_02_BALLISTIC_metalthin` at 1.9 m: the roller
+shutter that closes the FCK hall's corner exit. The Usec spawn (-11.7, 48.6) is inside that hall (FCK columns x -20..-12,
+z 37..50; `FCK_border` barricades at z 46.7). The shutter is plain static geometry — LODGroup root at (-9.7, 0, 36.0),
+yaw -135°, children `roller_shutters_02_LOD0..2`, `_SHADOW_LOD0`, `_COLLIDER` (LowPolyCollider), `_BALLISTIC_metalthin`
+(HighPolyCollider) and the same set for `roller_shutters_frame_02` — no door component, no script; Arena opens it per
+round by a script that is not ported. Equator has 20 shutter assemblies (13 `_02`, 6 `_01`, 1 `_adik`); 19 line the outer
+walls at x ≈ ±28 and the south shop row z -26.8 (decoration in front of unmodelled interiors — opening them would expose
+nothing), only (9) closes a spawn area. Object names repeat (`equator_roller_shutters_02 (4)` exists twice), so the
+descriptor names the one to open by hierarchy path: `ArenaMapDescriptor.OpenedBarriers` (Equator only; test
+`OpenedBarriers_EquatorNamesTheFckShutterByPath_OtherMapsNone`). `BoothDoorRepairs.OpenBarriers` resolves the path
+over our loaded scenes' root objects (`Transform.Find` for the rest), deactivates every child whose name does not
+contain "frame" (the shutter meshes, shadow mesh and both colliders; the frame stays) and warns if the path is not
+found. Config `[Spawns] OpenSpawnBarriers` (default on, new key — `OpenRespawnDoors` keeps its meaning). The raycast
+report now covers every opening within 20 m of each player spawn (doors and barriers). The NavMesh still has the
+shutter baked in, as with the booth doors.
+
+Host test (2026-09-20 17:13, client 17:08 build, EFT restarted): `spawn barrier 'equator_roller_shutters_02 (9)' at
+(-9.7, 0.0, 36.0): deactivated 5 part(s), 1 already off, kept 6 frame part(s)` (LOD0-2, `_COLLIDER`, `_BALLISTIC_metalthin`
+off; `_SHADOW_LOD0` was already inactive; the six frame parts stay); `spawn 'arena_equator-player-all' ->
+'equator_roller_shutters_02 (9)' 5.7 m: clear`. Screenshot from the All spawn: the FCK entrance is open with the frame
+standing, the hall (red columns, metal `FCK_border` sheets) visible behind it. Teleported to the Usec spawn (-11.7, 48.6):
+brick wall to the north and east, an `FCK_border` sheet 1.8 m to the south, open to the west into the hall — the way out
+is west along the hall, then out through the shutter at the hall's south-east corner (the rays from that spawn hit the
+sheet/hall wall at ~2 m, which is the niche, not a closed exit). Second `CreateFromScene` pass: `deactivated 0 part(s),
+6 already off`. No warnings. Deployed to D:\SPT41 and D:\SPT41vanilla.
+
