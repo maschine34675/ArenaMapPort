@@ -5,6 +5,8 @@ from pathlib import Path
 import subprocess
 import sys
 
+from validate_map_descriptors import map_descriptor_paths
+
 REPO = Path(__file__).resolve().parents[2]
 
 
@@ -13,7 +15,8 @@ def validate():
     # would otherwise compare the current C# registry with the JSON descriptors.
     subprocess.run([sys.executable, str(REPO/'tools/validate/validate_map_descriptors.py')],
                    cwd=REPO, check=True)
-    descriptors = [json.loads(p.read_text(encoding='utf-8')) for p in sorted((REPO/'tools/maps').glob('*.json'))]
+    descriptors = [json.loads(p.read_text(encoding='utf-8'))
+                   for p in map_descriptor_paths(REPO/'tools/maps')]
     keys = [m['key'] for m in descriptors]
     if len(keys) != len(set(keys)):
         raise ValueError('Duplicate descriptor keys')

@@ -69,6 +69,15 @@ def load_map(map_path: Path) -> dict:
     return json.loads(map_path.read_text(encoding="utf-8"))
 
 
+def map_descriptor_paths(maps_dir: Path) -> list[Path]:
+    """Select map files by name, leaving malformed descriptors visible to validation.
+
+    Dotted stems (<stem>.bots.json, .exits.json, .opened.json) are map sidecars.
+    Both registry and distribution validation must use the same descriptor set.
+    """
+    return sorted(p for p in maps_dir.glob("*.json") if "." not in p.stem)
+
+
 def strip_line_comments(s: str) -> str:
     """Removes `// ...` through end-of-line, string-literal-aware, so a trailing comment on the
     same line as a `Field: "value",` argument never gets glued onto the next argument fragment."""
@@ -352,8 +361,7 @@ def main() -> int:
     errors.extend(registry_identity_errors(entries, ref_scope))
     registry_by_key = {resolve(entry.get("Key"), ref_scope): (name, entry) for name, entry in entries.items()}
     maps_dir: Path = args.maps_dir
-    # <stem>.bots.json / <stem>.exits.json / <stem>.opened.json are sidecars of a map, not maps (bots-stage1, exfils-stage2)
-    paths = sorted(p for p in maps_dir.glob("*.json") if "." not in p.stem)
+    paths = map_descriptor_paths(maps_dir)
     if not paths:
         fail(f"no map descriptors found in {maps_dir}")
     map_keys = set()
