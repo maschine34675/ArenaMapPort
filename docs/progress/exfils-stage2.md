@@ -83,3 +83,22 @@ EQUATOR DEBUG button skips the exit screens, so the result is read from the serv
 Open: the extraction list/timer UI was not inspected (IMGUI-free, UGUI — a `uibridge_snapshot` during the
 countdown would show it); Survived vs Runner needs a longer raid with XP; the spawn-booth NavMesh islands
 (bots cannot path into the spawn zones) belong to the NavMesh bake, not to this stage.
+
+## Respawn booths (2026-09-20, user report: "spawn liegt in einer Box, aus der man nicht rauskommt")
+
+Arena's spawn booths close with sliding doors — five assemblies "Door_Sliding_Respawn (n)" in
+`Arena_Equator.json` (LODGroup root with the frame; leaves "Door_Sliding_Respawn_L"/"_R" carrying their LOD meshes,
+a `_COLLIDER` on LowPolyCollider and a `_BALLISTIC_metalthin` MeshCollider). Arena's round script slides them open;
+it is not ported. `BoothDoorRepairs.cs` (config `[Spawns] OpenRespawnDoors`, default on) deactivates both leaves of
+every assembly in our scenes from the same postfix that places the spawns, and logs a horizontal raycast from each
+player spawn to its nearest door. Host test (13:51): `deactivated 10 sliding-door leaf(s) on 5 door assembly(s)`
+at (-4.3, 0, 40), (4.5, 0, 40), (-4.5, 0, -35), (4.4, 0, -35), (-3.8, 0, -45.9); `spawn 'arena_equator-player-all'
+-> door 1.5 m: clear`, `spawn 'arena_equator-player-bear' -> door 1.7 m: clear`; the Usec spawn (-11.7, 48.6) is 11 m
+from the nearest door and its ray hits `FCK_border_01_COLLIDER` (a barricade prop, `SOO/Barricades`) at 2.4 m — that
+spawn sits among road barriers, not in a booth; whether it is walkable needs the user's feet. (The postfix runs twice
+per raid — EFT calls `CreateFromScene` twice — the second pass finds the leaves already off.)
+
+Still open: the NavMesh was baked with the leaves in place, so the booth interiors stay islands for bots and for
+`uibridge_teleport`'s reachability check; excluding `Door_Sliding_Respawn*` and `SPAWN_BOUND*` from the bake is a
+Unity rebuild (~19 min) for a later pass.
+

@@ -75,6 +75,7 @@ namespace ArenaMapPort.Client
 
             SpawnColliderRepairs.EnsureAllTriggers();
             SpawnPlacementRepairs.Apply(__result);
+            BoothDoorRepairs.OpenAll(__result); // exfils-stage2 follow-up: open Arena's respawn-booth doors
 
             int fixedCount = 0;
             foreach (var point in __result)
