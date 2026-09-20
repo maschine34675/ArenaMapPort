@@ -1368,3 +1368,21 @@ reviewer's citation alone. **15 of 15 issues accepted, 0 rejected.**
 | 2 | Major | §B.WP3 intro / step 6 | **Accepted** | Re-confirmed by reading the full `EFT.ScenesPreset` class this pass: no `GameModes` member exists, no subclass exists anywhere in the decompile. Removed the false "confirmed" `GameModes:null` claim from §B.WP3's intro, added an explicit re-dump-and-diff-against-the-real-field-set instruction before step 6, and removed the unconditional `tt['GameModes'] = []` write; corrected §E.3's field table to match. |
 | 3 | Minor | §B.WP3 step 7 / §E.3 | **Accepted** | Re-confirmed `ScenesPreset.GetTotalSceneCount()` (`ScenesPreset.cs:95-98`) reads `ScenesGuids` for the loading-progress-bar denominator — "unused by the load chain" was overstated. Corrected the wording to "unused for scene identity/gating, but read for progress totals," and changed the blind `[:6]` slice to print the donor's actual length first and pad rather than silently no-op if shorter than 6. |
 | 4 | Minor/informational | §F.6, §H risk #2 | **Accepted** (risk-register correction, not a spec defect) | Independently re-read the full `InitializeAutoCulling` method body this pass and found no path that throws specifically for an occlusion-data-free scene set, matching the review's finding. Down-weighted §H risk #2's probability and reworded §F.6 to note this is no longer the top runtime-risk triage target — risk #11 (`BotZone.SpawnPointMarkers`) fires earlier in the raid-start sequence and is now the primary S4 triage target if a raid fails to start. The §F.6 Harmony prefix mitigation itself is unchanged (cheap, kept as a defensive measure regardless). |
+
+## Decisions 2026-09-20 (user, after the gap analysis — supersede the spike framing above where they conflict)
+
+- **Target: ArenaMode.** The ported maps are meant to be played through the user's ArenaMode mod (arena
+  deathmatch with respawns). Playability as ordinary SPT raid locations is NOT a goal — exfils, raid-end
+  outcomes, insurance and the map-select flow only matter as far as the test vehicle (a plain SPT raid
+  started from the menu) needs them.
+- **No loot, on any map.** Decision #8 stands permanently: the location keeps the empty loot shape
+  (`ArenaMapRegistration.BuildLocation`). Nothing loot-related is to be authored or extracted.
+- **No scav raids.** `DisabledForScav = true` stays; no scav spawn categories, scav exits or scav hostility work.
+- **Distribution: bundles are shipped.** The built `dist/` (BSG-derived bundles included) is distributed the
+  way other SPT map mods do it; the user carries the licensing grey zone ("the player needs a valid EFT
+  installation"). No build-it-yourself pipeline for end users is required. Bundles still never go into git.
+- **Server target framework:** `ArenaMapPort.Server` builds for net10.0 against this SPT 4.1.5 install
+  (WP5's "net9.0" above is the state at spec time).
+- **Order of work:** stage 1 of docs/HANDOFF.md (combat/death correctness and the NavMesh bake on Equator),
+  then the other maps one at a time through the Equator recipe (bots/exits sidecars + host raid), then parity
+  items only where ArenaMode needs them.

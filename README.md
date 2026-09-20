@@ -6,13 +6,17 @@ The port is a **geometry spike**: scene geometry, materials, collision, lighting
 
 ## Current status
 
-The registry contains Equator and Bay5 plus 12 additional source-backed map definitions: AirPit, AirPit2.0, AutoService, Bowl, Prison, RailwayStation, Yard, Iceberg, Factory, Customs, Shoreline and Woods. **All twelve additions are built, validated with schema-2 receipts and staged in `dist/` (verified: 2026-09-15, 20:34 CEST).** Each passed the staged artifact checks. The complete distribution contains 14 maps, 42 bundles, 14 shader sidecars, 14 server base JSON files and both Release DLLs: 72 files, about 11.05 GB.
+**Target: ArenaMode**, not ordinary SPT raid play. These maps are meant to be played through the user's ArenaMode mod (arena deathmatch with respawns); a plain SPT raid from the menu is only the test vehicle. No loot is authored or extracted on any map, and no scav-raid support (spawn categories, exits, hostility) is implemented — both are permanent decisions, not open gaps. `dist/` (BSG-derived bundles included) is distributed the way other SPT map mods do it; the user carries the licensing grey zone ("a valid EFT installation/licence"). See [docs/SPEC.md](docs/SPEC.md), "Decisions 2026-09-20".
 
-Validation passed 86 Python tests, eight PowerShell log tests and 228 server tests. The client Release build completed with zero warnings/errors; both staged DLLs match their Release outputs by SHA256. The deployment dry run passed and copied no files into SPT. Live installation and GPU raid validation remain separate steps.
+The registry contains Equator and Bay5 plus 12 additional source-backed map definitions: AirPit, AirPit2.0, AutoService, Bowl, Prison, RailwayStation, Yard, Iceberg, Factory, Customs, Shoreline and Woods. All twelve additions were built, validated with schema-2 receipts and staged in `dist/` (verified 2026-09-15, 20:34 CEST; receipt layer simplified 2026-09-17). The complete distribution contains 14 maps, 42 bundles, 14 shader sidecars, 14 server base JSON files and both Release DLLs: 72 files, about 11.05 GB. Validation passed 86 Python tests, eight PowerShell log tests and 228 server tests, as of 2026-09-15/17. The server suite has grown with the bots/exits/PMC/stage-1 work: 267 tests green on 2026-09-20.
+
+**Playing Equator.** Equator is the only map with authored bots and exits (Bay5 was raided for visuals only, the other twelve never). A raid there today has: scavs that spawn, activate and patrol ([bots-stage1.md](docs/progress/bots-stage1.md)); PMC squads via `BossLocationSpawn` ([bots-stage3.md](docs/progress/bots-stage3.md)); two runtime-authored exfils with green smoke signals that end the raid on extraction ([exfils-stage2.md](docs/progress/exfils-stage2.md)); and opened spawn enclosures (five sliding-door assemblies plus the FCK roller shutter). It deliberately still lacks loot and scav raids (see above). Stage-1 combat/death correctness (a death-screen NRE guard, ballistic hits on LowPolyCollider-only props, and a NavMesh bake that excludes the now-open booth doors/shutter) is written in the working tree, awaiting its GPU-host raid test — see [HANDOFF.md](HANDOFF.md)'s stage table.
 
 Equator/Bay5 retain their existing identities and artifact locations. The local Saw preset is present, but its 12 distinct referenced scene paths are absent; Saw cannot be ported from this source installation. Bay5's tournament preset is a mode variant, and Draft/the generic test preset are not additional independent maps.
 
 See [remaining maps: source inventory, results and build steps](docs/progress/remaining-maps.md) for the per-map evidence. [Current distribution contract](docs/dist-manifest.md) records the verified file set, baseline preservation, Release hashes and deployment boundary.
+
+Agents: start at [AGENTS.md](AGENTS.md), then [HANDOFF.md](HANDOFF.md) for the dated working state.
 
 ## Build inputs
 
