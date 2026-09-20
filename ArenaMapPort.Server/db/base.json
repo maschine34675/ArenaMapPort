@@ -783,36 +783,6 @@
       "Sides": [
         "Savage"
       ]
-    },
-    {
-      "BotZoneName": "BotZone_Main",
-      "Categories": [
-        "Bot"
-      ],
-      "ColliderParams": {
-        "_parent": "SpawnSphereParams",
-        "_props": {
-          "Center": {
-            "x": 0,
-            "y": 0,
-            "z": 0
-          },
-          "Radius": 20
-        }
-      },
-      "CorePointId": 0,
-      "DelayToCanSpawnSec": 4,
-      "Id": "arena_equator-bot-ring2-west",
-      "Infiltration": "",
-      "Position": {
-        "x": -30.0,
-        "y": 10.8,
-        "z": 3.0
-      },
-      "Rotation": 0.0,
-      "Sides": [
-        "Savage"
-      ]
     }
   ]
 }

@@ -1,5 +1,5 @@
 {
-  "_comment": "bots-stage1 (docs/progress/bots-stage1.md): optional sidecar read by tools/server/make_base_json.py next to the map descriptor. Positions are navmesh-verified in-game (UiBridge teleports / player positions, 2026-09-19). Radii follow Factory's SpawnSphereParams (bots 25-35 m). Kept out of equator.json so the Unity editor's JsonUtility reader never sees these fields.",
+  "_comment": "bots-stage1 (docs/progress/bots-stage1.md): optional sidecar read by tools/server/make_base_json.py next to the map descriptor. Positions are navmesh-verified in-game (UiBridge teleports / player positions, 2026-09-19). Radii follow Factory's SpawnSphereParams (bots 25-35 m). Kept out of equator.json so the Unity editor's JsonUtility reader never sees these fields. Only the ground floor is playable on Equator; the upper rings are decoration (user, 2026-09-20), so no spawn goes above y 0.2 (the former ring2-west point at y 10.8 was a NavMesh island).",
   "zone": "BotZone_Main",
   "max_bots": 8,
   "player_spawns": [
@@ -100,15 +100,6 @@
         -11.7
       ],
       "radius": 25
-    },
-    {
-      "id": "arena_equator-bot-ring2-west",
-      "position": [
-        -30.0,
-        10.8,
-        3.0
-      ],
-      "radius": 20
     }
   ],
   "waves": [

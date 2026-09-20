@@ -228,6 +228,16 @@ The scav walks from the west point across the atrium to the east point, pauses, 
 on our ways, SAIN standing by for combat. No warnings or errors all raid. Stage 1 ("scavs spawn and roam on
 Equator") is reached on the GPU host.
 
+## 2026-09-20 — ground floor only
+
+The user confirmed that only the lower area of Equator is playable; every upper ring is decoration. The
+`arena_equator-bot-ring2-west` spawn (y 10.8, the NavMesh island that became a one-point way in host test 11) is
+removed from `tools/maps/equator.bots.json`: 6 Bot spawns, one NavMesh component, base.json regenerated. The
+3-minute deaths of the test profile were self-inflicted: leaving a raid and skipping the health-treatment screen
+instead of confirming it sets the profile's HP to 0. The user added a mod with a main-menu button (bottom left)
+that starts Equator directly and a disconnect that skips every confirmation and the 0-HP penalty — use it for host
+tests instead of the eight-click menu flow.
+
 ## Stage 1 — what it took (summary)
 
 Everything a ported scene lacks that BSG's bot stack assumes, each found by instrumenting the next silent failure:
