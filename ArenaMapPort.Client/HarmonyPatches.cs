@@ -53,6 +53,8 @@ namespace ArenaMapPort.Client
             // bots-stage1 — a holder with a null CorePoints list made every bot activation throw silently
             // inside BotCreatorClient.CreateBot. See AICorePointRepairs.cs.
             AICorePointFallback.Install(harmony);
+            // exfils-stage2 — runtime-authored exfiltration points. See ExfilRepairs.cs.
+            ExfilRepairs.Install(harmony);
 
             // bots-stage1 — SAIN soft dependency: resolved by name, no-op without SAIN. See SainLocationShim.cs.
             SainLocationShim.BindConfig();

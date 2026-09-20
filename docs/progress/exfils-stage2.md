@@ -1,0 +1,85 @@
+# Exfils — stage 2: a raid you can leave on foot
+
+Goal (user, 2026-09-20): after stage 1 (scavs spawn and roam) the next gap for "wirklich spielbar" is that a raid
+only ends by timer, death or disconnect — never "Survived". This stage authors exfiltration points at runtime.
+
+## How EFT builds exits (decompile, verified by a read-only workflow + adversarial critique, 2026-09-20)
+
+- `ExfiltrationController.InitAllExfiltrationPoints(MongoID, BackendExitTriggerSettings[] settings, …)`
+  (CommonAssets.Scripts.Game/ExfiltrationController.cs:222-262), called from `BaseLocalGame.vmethod_6:793` right
+  after `Profile.Info.EntryPoint` is set from the spawn point's Infiltration: collects every scene
+  `ExfiltrationPoint` via `LocationScene.GetAllObjects<ExfiltrationPoint>()`, matches each by exact
+  `Settings.Name == settings[].Name`, then `LoadSettings` (timing, chance, `EntryPoints` lowercased →
+  `EligibleEntryPoints`) and a chance roll; unmatched points become `NotPresent`. Server exits without a scene
+  object simply do not exist.
+- `ExfiltrationPoint.Awake` (EFT.Interactive/ExfiltrationPoint.cs:167-173) sets layer Triggers and dereferences
+  `GetComponent<BoxCollider>()` — the collider must exist before the component is added. `Settings` is
+  field-initialized; `ExitTriggerSettings.Load` never copies `Name`, so the name is set by the author.
+- `InfiltrationMatch` compares `EligibleEntryPoints` with `Profile.Info.EntryPoint.ToLower()` — i.e. base.json
+  `EntryPoints` must be the map's infiltration name ("ArenaEquator"), not the location key.
+- Trigger → raid end: `OnTriggerEnter → Proceed → OnStartExtraction` → `EndByExitTrigerScenario` counts
+  `ExfiltrationTime` down → `BaseLocalGame.Stop(profileId, Survived|Runner, exitName)`. A fresh short raid yields
+  **Runner** (`SurvivedExpRequirement`/`SurvivedTimeRequirement`), which is still the exit chain working.
+- SPT's `EndLocalRaidAsync` passes the exit name through; nothing validates it against `LocationBase.Exits`.
+- `LocationScene` keeps a private `Dictionary<Type, Array> _typeToContainer` filled once in its Awake
+  (`Register<T>` throws on a second registration), and `GetAllObjects<T>` reads it filtered by
+  `isActiveAndEnabled`. Patching the generic `GetAllObjects<T>` was rejected: Mono shares one body across
+  reference-type instantiations, a postfix typed for ExfiltrationPoint would run for every T.
+
+## What was built
+
+- **Data** — `tools/maps/equator.exits.json` (new sidecar, same discovery pattern as the bots sidecar) and the
+  compiled twin `ArenaMapRegistry.Equator.Exits` (`ArenaMapPort.Shared/ArenaMapDescriptor.cs`,
+  `ArenaExitDescriptor`: name, floor position, box size, yaw). EFT never carries exit positions from the server,
+  so the client needs its own table; `BaseJsonTests.Exits_DescriptorMirrorsSidecar` keeps both identical. Two
+  exits: **Equator North Gate** (-8.0, 0.5, 53.0) beyond the Usec/All spawns and **Equator South Gate**
+  (5.0, 0.5, -38.0) beyond the Bear spawn, both for every side, 8 s, 100 %, Individual, no requirement.
+- **Server** — `make_base_json.py apply_exits` emits Factory-shaped `exits[]` entries (`EntryPoints` =
+  infiltration name); `ApplyExitLocale` adds identity locale entries (vanilla exit names are their own keys);
+  `ExitNameMismatches` warns at startup when base.json and the descriptor disagree. Tests:
+  `Exits_ShipTheDescriptorsExits`, `Exits_DescriptorMirrorsSidecar`, `ApplyExitLocale_…`, `ExitNameMismatches_…`.
+- **Client** — `ExfilRepairs.cs`: prefix on `InitAllExfiltrationPoints` authors one GameObject per descriptor exit
+  (BoxCollider first, isTrigger, layer Triggers, then `ExfiltrationPoint`, then `Settings.Name`), NavMesh-samples
+  the floor point (6 m), and puts the points into the first loaded `LocationScene`'s container for
+  `ExfiltrationPoint` (replacing the entry, so BSG's own lookup finds them). Rebuilt on every call, never cached
+  across raids. A postfix logs each point's `Status` and `EligibleEntryPoints` after init — `NotPresent` means
+  the name matched no server exit.
+
+## Host test 1 (2026-09-20 13:07, client cfcc8f6a, server 847fbbbd) — RUNNER via the south gate
+
+Server restart: all 14 maps registered, no `exit names differ` warning. Raid (via the user's EQUATOR DEBUG button):
+
+```
+[Exfil] authored exit 'Equator North Gate': box (4.00, 3.00, 4.00) at floor (-8.0, 4.3, 53.0) (NavMesh-sampled, 3.8 m from authored)
+[Exfil] authored exit 'Equator South Gate': box (4.00, 3.00, 4.00) at floor (5.0, 0.1, -38.0) (NavMesh-sampled, 0.4 m from authored)
+[Exfil] registered 2 exit(s) with LocationScene 'Arena_Equator_Scripts' (2 ExfiltrationPoint(s) in its container now)
+[Exfil] exit 'Equator North Gate' after init: status=RegularMode eligibleEntryPoints=[arenaequator] chance=100 time=8s
+[Exfil] exit 'Equator South Gate' after init: status=RegularMode eligibleEntryPoints=[arenaequator] chance=100 time=8s
+```
+
+`uibridge_places kind=exfil` lists both as `exfil:pmc:…, status RegularMode, entryPoints arenaequator`. Teleport into
+the south box (`reachable=false`, see below) → 8.6 s later the raid was over; the server logged
+`Raid: arena_equator.Pmc … outcome: RUNNER` (`/client/match/local/end`) — Runner, not Survived, because a
+two-minute raid with no XP fails `SurvivedExpRequirement`/`SurvivedTimeRequirement`, exactly as predicted. The
+whole chain (trigger → EndByExitTrigerScenario → Stop → SPT) works with runtime-authored points.
+
+Two position findings from `uibridge_teleport` dry runs:
+- The **spawn booths are NavMesh islands**: from the All spawn every destination is "not reachable on foot", from
+  the atrium every spawn is. Physically the booths are open (barriers disabled at raid start), the bake kept the
+  barrier walls. Fine for triggers and players, but bots cannot path into the spawn zones (and `uibridge_teleport`
+  needs `reachable=false` for them).
+- The floor ends at z ≈ 49.6 in the north (the authored (-8, 0.5, 53) sampled onto a ledge at y 4.3) and at
+  z ≈ -44 in the south. A box within ~5 m of a spawn point would extract a fresh spawn (spawn radius 5). Gates
+  moved to **(2.0, 0.1, 46.0)** and **(5.0, 0.1, -44.0)** — both on the floor per dry run, 10 m from the nearest
+  spawn.
+
+## Host test 2 (13:14, client ec14a37b) — RUNNER via the north gate
+
+Both gates now sample onto the floor with 0.0 m offset (`(2.0, 0.1, 46.0)` / `(5.0, 0.1, -44.0)`), both
+`RegularMode` with `eligibleEntryPoints=[arenaequator]`. Teleport into the north box → raid over after 8.8 s, server
+`outcome: RUNNER`. Stage 2 reached: a raid on Equator can be left on foot through either gate. The user's
+EQUATOR DEBUG button skips the exit screens, so the result is read from the server log.
+
+Open: the extraction list/timer UI was not inspected (IMGUI-free, UGUI — a `uibridge_snapshot` during the
+countdown would show it); Survived vs Runner needs a longer raid with XP; the spawn-booth NavMesh islands
+(bots cannot path into the spawn zones) belong to the NavMesh bake, not to this stage.

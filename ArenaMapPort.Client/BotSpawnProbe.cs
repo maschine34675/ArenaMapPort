@@ -25,14 +25,23 @@ namespace ArenaMapPort.Client
     ///  - SpawnSystem.SelectAISpawnPoints: candidates vs. returned, plus every candidate's own
     ///    IsValidSpawn verdict, position, sides, categories.
     /// Cheap (a few lines per wave), off with [Bots] SpawnDiagnostics = false.
+    ///
+    /// Second tier, <c>[Bots] ActivationDiagnostics</c> (default OFF, read at plugin start): finalizers on the
+    /// async activation chain, a finalizer on every method <c>BotOwner.method_10</c> calls (46 patches) and a
+    /// 15-second per-bot status dump. That is what found the null holders, the 0×0×0 voxel grid and the missing
+    /// patrol ways (host tests 4–11); it costs a patch per activation step and a log line per 15 s per raid, so it
+    /// stays a switch for the next silent bot problem rather than a default. A new key on purpose: BepInEx
+    /// persists the old <c>SpawnDiagnostics = true</c>, so changing that default would not reach existing configs.
     /// </summary>
     internal static class BotSpawnProbe
     {
         const string Tag = "[ArenaMapPort][BotSpawn]";
         static ConfigEntry<bool> _enabled;
+        static ConfigEntry<bool> _activation;
         static readonly FieldInfo CanSpawnField = AccessTools.Field(typeof(BotsController), "_canSpawn");
 
         static bool On => _enabled != null && _enabled.Value && ArenaMapRaid.IsLoaded();
+        static bool Deep => On && _activation != null && _activation.Value;
         static float _lastPointDump = -999f;
 
         internal static void Install(Harmony harmony)
@@ -40,6 +49,11 @@ namespace ArenaMapPort.Client
             _enabled = Plugin.Instance.Config.Bind("Bots", "SpawnDiagnostics", true,
                 "bots-stage1 — log EFT's bot wave/zone/spawn-point decisions on ported maps (a few lines per wave). " +
                 "Vanilla maps are never logged.");
+            _activation = Plugin.Instance.Config.Bind("Bots", "ActivationDiagnostics", false,
+                "bots-stage1 — deep bot-activation diagnostics on ported maps: finalizers on the async spawn chain and on " +
+                "every step of BotOwner's activation (46 Harmony patches), plus a 15-second status line per living bot " +
+                "(state, position, active BigBrain layer, standby, mover). Read at game start — restart EFT after changing. " +
+                "Turn on when bots register but never move.");
 
             TryPatch(harmony, "BotsController.ActivateBotsByWave(SpawnWave)",
                 AccessTools.Method(typeof(BotsController), nameof(BotsController.ActivateBotsByWave), new[] { typeof(SpawnWave) }),
@@ -54,6 +68,20 @@ namespace ArenaMapPort.Client
                 AccessTools.Method(typeof(SpawnSystem), nameof(SpawnSystem.SelectAISpawnPoints)),
                 postfix: nameof(SelectAISpawnPointsPostfix));
 
+            // tier 1 (light): one line per created bot and per registered bot
+            TryPatch(harmony, "BotOwner.Create (created line)",
+                AccessTools.Method(typeof(BotOwner), nameof(BotOwner.Create)),
+                postfix: nameof(BotOwnerCreatePostfix));
+            TryPatch(harmony, "BotSpawner.ActivateBotCallback",
+                AccessTools.Method(typeof(BotSpawner), nameof(BotSpawner.ActivateBotCallback)),
+                postfix: nameof(ActivateBotCallbackPostfix));
+
+            if (!_activation.Value)
+            {
+                Plugin.Log.LogInfo("[ArenaMapPort][Harmony] bots-stage1: deep activation diagnostics off ([Bots] ActivationDiagnostics)");
+                return;
+            }
+
             // Host test 3 (2026-09-19 20:4x): the body of every spawned scav appeared in the scene, but no bot
             // ever became a living AI (UiBridge: 0 alive, GameWorld: +1 registered player) and no log anywhere
             // — the async activation chain swallows its exception. Finalizers on each link log it.
@@ -65,13 +93,10 @@ namespace ArenaMapPort.Client
                 finalizer: nameof(Method3Finalizer));
             TryPatch(harmony, "BotOwner.Create",
                 AccessTools.Method(typeof(BotOwner), nameof(BotOwner.Create)),
-                postfix: nameof(BotOwnerCreatePostfix), finalizer: nameof(BotOwnerCreateFinalizer));
+                finalizer: nameof(BotOwnerCreateFinalizer));
             TryPatch(harmony, "BotOwner.PreActivate",
                 AccessTools.Method(typeof(BotOwner), nameof(BotOwner.PreActivate)),
                 finalizer: nameof(PreActivateFinalizer));
-            TryPatch(harmony, "BotSpawner.ActivateBotCallback",
-                AccessTools.Method(typeof(BotSpawner), nameof(BotSpawner.ActivateBotCallback)),
-                postfix: nameof(ActivateBotCallbackPostfix));
 
             // Host test 7 (2026-09-19 21:46): bots register (ActivateBotCallback) and then never move.
             // BotOwner.method_10 — the real activation, ~45 sub-system Activate() calls — wraps everything in
@@ -128,7 +153,7 @@ namespace ArenaMapPort.Client
 
         static Exception ActivationStepFinalizer(Exception __exception, MethodBase __originalMethod, object __instance)
         {
-            if (__exception != null && On)
+            if (__exception != null && Deep)
             {
                 Plugin.Log.LogError($"{Tag} activation step {__originalMethod?.DeclaringType?.Name}.{__originalMethod?.Name} THREW " +
                                     $"(instance {__instance?.GetType().Name}): {__exception.GetType().Name}: {__exception.Message}\n{__exception.StackTrace}");
@@ -150,10 +175,10 @@ namespace ArenaMapPort.Client
         static System.Collections.IEnumerator StatusDump()
         {
             var wait = new WaitForSeconds(15f);
-            while (On)
+            while (Deep)
             {
                 yield return wait;
-                if (!On) break;
+                if (!Deep) break;
                 try
                 {
                     // AbstractGame is not a component on GameWorld — EFT registers the game as Singleton<IBotGame>/<AbstractGame>.
@@ -177,8 +202,21 @@ namespace ArenaMapPort.Client
                         string mover;
                         try { mover = bot.Mover == null ? "null" : $"moving={bot.Mover.IsMoving} sprint={bot.Mover.Sprinting} pause={bot.Mover.Pause}"; }
                         catch (Exception e) { mover = "(" + e.GetType().Name + ")"; }
+                        string patrol;
+                        try
+                        {
+                            var pd = bot.PatrollingData;
+                            var target = pd?.CurPatrolPoint?.TargetPoint;
+                            patrol = pd == null ? "null" :
+                                $"patrol={pd.Status} chooser={pd.PointChooser?.GetType().Name ?? "null"} way={pd.Way?.name ?? "null"} " +
+                                $"target={(target == null ? "null" : target.position.ToString("F1"))}";
+                        }
+                        catch (Exception e) { patrol = "patrol=(" + e.GetType().Name + ")"; }
+                        string group;
+                        try { group = $"group={bot.BotsGroup?.MembersCount ?? -1} boss={bot.Boss?.IamBoss} follower={bot.BotFollower?.HaveBoss}"; }
+                        catch (Exception e) { group = "group=(" + e.GetType().Name + ")"; }
                         sb.Append($"\n    '{bot.name}' {bot.Profile?.Info?.Settings?.Role} state={bot.BotState} alive={bot.HealthController?.IsAlive} " +
-                                  $"pos={bot.Position:F1} layer={layer ?? "null"} standBy={standBy} peace={bot.Memory?.IsPeace} {mover}");
+                                  $"pos={bot.Position:F1} layer={layer ?? "null"} standBy={standBy} peace={bot.Memory?.IsPeace} {mover} {patrol} {group}");
                     }
                     Plugin.Log.LogInfo(sb.ToString());
                 }
@@ -192,7 +230,7 @@ namespace ArenaMapPort.Client
 
         static void ActivationPostfix(BotOwner __instance)
         {
-            if (!On) return;
+            if (!Deep) return;
             EnsureStatusDump();
             string layer = null;
             try { layer = __instance?.Brain?.ActiveLayerName(); } catch (Exception e) { layer = "(" + e.GetType().Name + ")"; }

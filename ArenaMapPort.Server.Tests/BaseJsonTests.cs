@@ -1,4 +1,7 @@
+using System.IO;
 using System.Text.Json;
+using ArenaMapPort.Server;
+using ArenaMapPort.Shared;
 using SPTarkov.Server.Core.Models.Eft.Common;
 using SPTarkov.Server.Core.Utils.Json;
 using Xunit;
@@ -46,6 +49,65 @@ public class BaseJsonTests
     public void File_Exists()
     {
         Assert.True(File.Exists(BaseJsonPath), $"db/base.json not found at {BaseJsonPath}");
+    }
+
+    // exfils-stage2 — base.json exits carry the descriptor's names, the map's infiltration as EntryPoints,
+    // and an always-open Individual exit (100 %, no requirement).
+    [Fact]
+    public void Exits_ShipTheDescriptorsExits()
+    {
+        using var doc = JsonDocument.Parse(ReadRawJson());
+        var exits = doc.RootElement.GetProperty("exits").EnumerateArray().ToList();
+        var expected = ArenaMapRegistry.Equator.Exits.Select(e => e.Name).OrderBy(n => n).ToList();
+
+        Assert.NotEmpty(expected);
+        Assert.Equal(expected, exits.Select(e => e.GetProperty("Name").GetString()).OrderBy(n => n).ToList());
+        Assert.All(exits, e => Assert.Equal(ArenaMapRegistry.Equator.InfiltrationName, e.GetProperty("EntryPoints").GetString()));
+        Assert.All(exits, e => Assert.Equal(100.0, e.GetProperty("Chance").GetDouble()));
+        Assert.All(exits, e => Assert.Equal("None", e.GetProperty("PassageRequirement").GetString()));
+        Assert.All(exits, e => Assert.Equal("Individual", e.GetProperty("ExfiltrationType").GetString()));
+        Assert.All(exits, e => Assert.True(e.GetProperty("ExfiltrationTime").GetDouble() > 0));
+        Assert.Empty(ArenaMapRegistration.ExitNameMismatches(exits.Select(e => e.GetProperty("Name").GetString()), ArenaMapRegistry.Equator));
+    }
+
+    // exfils-stage2 — tools/maps/equator.exits.json (what make_base_json.py reads) and the compiled descriptor
+    // (what the client authors) are one table.
+    [Fact]
+    public void Exits_DescriptorMirrorsSidecar()
+    {
+        var dir = new DirectoryInfo(AppContext.BaseDirectory);
+        string? sidecar = null;
+        for (var d = dir; d is not null; d = d.Parent)
+        {
+            var candidate = Path.Combine(d.FullName, "tools", "maps", "equator.exits.json");
+            if (File.Exists(candidate))
+            {
+                sidecar = candidate;
+                break;
+            }
+        }
+        Assert.NotNull(sidecar);
+
+        using var doc = JsonDocument.Parse(File.ReadAllText(sidecar!));
+        var fromSidecar = doc.RootElement.GetProperty("exits").EnumerateArray()
+            .Select(e => (
+                Name: e.GetProperty("name").GetString(),
+                Pos: e.GetProperty("position").EnumerateArray().Select(v => v.GetSingle()).ToArray(),
+                Size: e.GetProperty("box_size").EnumerateArray().Select(v => v.GetSingle()).ToArray(),
+                Rot: e.GetProperty("rotation").GetSingle()))
+            .OrderBy(e => e.Name).ToList();
+        var fromDescriptor = ArenaMapRegistry.Equator.Exits
+            .Select(e => (Name: (string?)e.Name, Pos: new[] { e.X, e.Y, e.Z }, Size: new[] { e.SizeX, e.SizeY, e.SizeZ }, Rot: e.RotationY))
+            .OrderBy(e => e.Name).ToList();
+
+        Assert.Equal(fromSidecar.Count, fromDescriptor.Count);
+        for (var i = 0; i < fromSidecar.Count; i++)
+        {
+            Assert.Equal(fromSidecar[i].Name, fromDescriptor[i].Name);
+            Assert.Equal(fromSidecar[i].Pos, fromDescriptor[i].Pos);
+            Assert.Equal(fromSidecar[i].Size, fromDescriptor[i].Size);
+            Assert.Equal(fromSidecar[i].Rot, fromDescriptor[i].Rot);
+        }
     }
 
     [Fact]

@@ -21,6 +21,38 @@ namespace ArenaMapPort.Shared
     /// compile there (CS0518) without a polyfill. Plain get-only properties avoid the whole
     /// question; nothing here needs record value-equality or `with`-expressions.
     /// </summary>
+    /// <summary>
+    /// exfils-stage2 (docs/progress/exfils-stage2.md) — one exfiltration point the client authors at runtime
+    /// (the ported scenes ship no ExfiltrationPoint components; EFT only carries name/timing/eligibility of an
+    /// exit from the server, never a position). Name must equal the base.json <c>exits[].Name</c> the server mod
+    /// ships (tools/maps/&lt;key&gt;.exits.json is the single source; a unit test keeps this table in step).
+    /// Position is the authored floor point (NavMesh-sampled at runtime), Size the trigger box in metres.
+    /// </summary>
+    public sealed class ArenaExitDescriptor
+    {
+        public string Name { get; }
+        public float X { get; }
+        public float Y { get; }
+        public float Z { get; }
+        public float SizeX { get; }
+        public float SizeY { get; }
+        public float SizeZ { get; }
+        public float RotationY { get; }
+
+        public ArenaExitDescriptor(string Name, float X, float Y, float Z,
+            float SizeX = 4f, float SizeY = 3f, float SizeZ = 4f, float RotationY = 0f)
+        {
+            this.Name = Name;
+            this.X = X;
+            this.Y = Y;
+            this.Z = Z;
+            this.SizeX = SizeX;
+            this.SizeY = SizeY;
+            this.SizeZ = SizeZ;
+            this.RotationY = RotationY;
+        }
+    }
+
     public sealed class ArenaMapDescriptor
     {
         public string Key { get; }                 // "arena_equator" / "arena_bay5" — LocationTable key, base.json Id
@@ -37,6 +69,7 @@ namespace ArenaMapPort.Shared
         public int IconX { get; }
         public int IconY { get; }
         public string DbBaseJsonPath { get; }       // path under ArenaMapPort.Server/db/ this map's base.json lives at
+        public ArenaExitDescriptor[] Exits { get; } // exfils-stage2 — runtime-authored exits (empty = raid ends by timer only)
 
         // Parameter names are PascalCase (unusual for a C# constructor) so every call site below
         // can pass them as named arguments matching the property names 1:1 — this reads like the
@@ -56,7 +89,10 @@ namespace ArenaMapPort.Shared
             string LocaleDescription,
             int IconX,
             int IconY,
-            string DbBaseJsonPath)
+            string DbBaseJsonPath,
+#nullable enable
+            ArenaExitDescriptor[]? Exits = null)
+#nullable restore
         {
             this.Key = Key;
             this.IdField = IdField;
@@ -72,6 +108,7 @@ namespace ArenaMapPort.Shared
             this.IconX = IconX;
             this.IconY = IconY;
             this.DbBaseJsonPath = DbBaseJsonPath;
+            this.Exits = Exits ?? new ArenaExitDescriptor[0];
         }
 
         // Physical bundle filenames are always the served key's basename — never stored
@@ -107,7 +144,18 @@ namespace ArenaMapPort.Shared
             LocaleName: "Arena: Equator (spike)",
             LocaleDescription: "Internal test build — geometry/collision/NavMesh spike.",
             IconX: 150, IconY: 760,
-            DbBaseJsonPath: "base.json"); // unchanged legacy path — ArenaMapPort.Server/db/base.json
+            DbBaseJsonPath: "base.json", // unchanged legacy path — ArenaMapPort.Server/db/base.json
+            Exits: new[]
+            {
+                // exfils-stage2 — ground-floor edges beyond the player spawns (Usec/All spawn north at z 38–49,
+                // Bear south at z -33.5); mirrors tools/maps/equator.exits.json, guarded by
+                // BaseJsonTests.Exits_DescriptorMirrorsSidecar. Human-readable names double as locale keys.
+                // Host test 1 (20.09.): the floor ends at z ≈ 49.6 / -44; the spawn booths are NavMesh islands
+                // (physically open), and a box within 5 m of a spawn point would extract a fresh spawn — so the
+                // gates sit on the far side of each spawn zone, 10 m from the nearest spawn.
+                new ArenaExitDescriptor("Equator North Gate", 2.0f, 0.1f, 46.0f),
+                new ArenaExitDescriptor("Equator South Gate", 5.0f, 0.1f, -44.0f),
+            });
 
         /// <summary>
         /// Bay5 (TeamFight) descriptor. Extracted, built and registered (docs/progress/bay5-port.md)

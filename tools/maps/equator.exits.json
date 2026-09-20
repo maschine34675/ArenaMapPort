@@ -1,0 +1,39 @@
+{
+  "_comment": "exfils-stage2 (docs/progress/exfils-stage2.md): optional sidecar read by tools/server/make_base_json.py next to the map descriptor; emits base.json 'exits'. The client authors the ExfiltrationPoint objects at runtime from ArenaMapRegistry.<Map>.Exits (ArenaMapPort.Shared/ArenaMapDescriptor.cs) — names, positions and box sizes there must equal this file (unit test). Positions are floor points at the ground-floor edges, NavMesh-sampled in-game; EntryPoints is always the map's infiltration name. Host test 1 (2026-09-20): floor ends at z ~49.6 (north) / ~-44 (south); spawn booths are NavMesh islands; gates sit 10 m from the nearest spawn so nobody spawns inside a trigger box.",
+  "exits": [
+    {
+      "name": "Equator North Gate",
+      "position": [
+        2.0,
+        0.1,
+        46.0
+      ],
+      "box_size": [
+        4.0,
+        3.0,
+        4.0
+      ],
+      "rotation": 0.0,
+      "exfiltration_time": 8,
+      "chance": 100,
+      "type": "Individual"
+    },
+    {
+      "name": "Equator South Gate",
+      "position": [
+        5.0,
+        0.1,
+        -44.0
+      ],
+      "box_size": [
+        4.0,
+        3.0,
+        4.0
+      ],
+      "rotation": 0.0,
+      "exfiltration_time": 8,
+      "chance": 100,
+      "type": "Individual"
+    }
+  ]
+}

@@ -87,6 +87,39 @@ def vec(p) -> dict:
     return {"x": p[0], "y": p[1], "z": p[2]}
 
 
+def apply_exits(base: dict, map_data: dict, exits: dict) -> None:
+    """exfils-stage2: base.json 'exits' from tools/maps/<key>.exits.json — the shape of Factory's own entries
+    (factory4_day/base.json exits[]) plus the explicit enum fields SPT's Exit model carries (server decompile
+    Exit.cs: Chance/ChancePVE double, Count/CountPVE int, EntryPoints string, EventAvailable bool,
+    ExfiltrationTime/ExfiltrationTimePVE double, ExfiltrationType enum, Id string, Min/MaxTime(+PVE) double,
+    Name string, PassageRequirement enum, PlayersCount/PlayersCountPVE int, RequirementTip string).
+    Client side (ExfiltrationController.InitAllExfiltrationPoints, ExfiltrationController.cs:222-262) matches a
+    scene ExfiltrationPoint to an entry by exact Name and then loads these settings into it; EntryPoints is
+    lowercased and compared with Profile.Info.EntryPoint, which BaseLocalGame copies from the spawn point's
+    Infiltration — i.e. the map's infiltration_name, never the location key. Positions stay client-side
+    (ArenaMapRegistry.<Map>.Exits); a unit test keeps both tables identical."""
+    infiltration = map_data["infiltration_name"]
+    out = []
+    for e in exits["exits"]:
+        chance = e.get("chance", 100)
+        time = e.get("exfiltration_time", 8)
+        out.append({
+            "Chance": chance, "ChancePVE": chance,
+            "Count": 0, "CountPVE": 0,
+            "EntryPoints": infiltration,
+            "EventAvailable": False,
+            "ExfiltrationTime": time, "ExfiltrationTimePVE": time,
+            "ExfiltrationType": e.get("type", "Individual"),
+            "Id": "",
+            "MaxTime": 0, "MaxTimePVE": 0, "MinTime": 0, "MinTimePVE": 0,
+            "Name": e["name"],
+            "PassageRequirement": "None",
+            "PlayersCount": 0, "PlayersCountPVE": 0,
+            "RequirementTip": "",
+        })
+    base["exits"] = out
+
+
 def apply_bots(base: dict, map_data: dict, bots: dict) -> None:
     """bots-stage1: server JSON becomes the single source of spawn points again, as on vanilla maps.
     Client side (EFT.Game.Spawning/SpawnPointsCollection.cs:152-245): CreateFromScene -> FixSpawns deletes
@@ -175,6 +208,13 @@ def main() -> None:
         base["OpenZones"] = ""  # Factory zone names do not exist in our scenes
     base.update(overrides_for(map_data))
 
+    exits_path = args.map.with_name(args.map.stem + ".exits.json")
+    exits_note = "no exits sidecar"
+    if exits_path.exists():
+        exits = json.loads(exits_path.read_text(encoding="utf-8"))
+        apply_exits(base, map_data, exits)
+        exits_note = f"exits: {len(exits['exits'])} ({exits_path.name})"
+
     bots_path = args.map.with_name(args.map.stem + ".bots.json")
     bots_note = "no bots sidecar"
     if bots_path.exists():
@@ -185,7 +225,7 @@ def main() -> None:
 
     out_path.parent.mkdir(parents=True, exist_ok=True)
     out_path.write_text(json.dumps(base, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
-    print(f"wrote {out_path} ({len(base)} keys) from {args.template} (map={map_data['key']}; {bots_note})")
+    print(f"wrote {out_path} ({len(base)} keys) from {args.template} (map={map_data['key']}; {bots_note}; {exits_note})")
 
 
 if __name__ == "__main__":

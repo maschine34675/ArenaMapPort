@@ -172,6 +172,42 @@ public static class ArenaMapRegistration
     /// bots-stage1: mirrors a bot-enabled map's base.json BotMax into BotConfig.MaxBotCap (see the call
     /// site's comment for why). Pure — no DI — so it is directly unit testable.
     /// </summary>
+    /// <summary>
+    /// exfils-stage2 — exit names double as locale keys (vanilla: "Gate 3" → "Gate 3"); an identity entry per
+    /// runtime-authored exit keeps the extraction list from ever showing an unresolved key. Same
+    /// <see cref="LazyLoad{T}.AddTransformer"/> shape as <see cref="ApplyLocale"/>; never overwrites an existing key.
+    /// </summary>
+    public static GlobalLocaleDictionary? ApplyExitLocale(GlobalLocaleDictionary? locale, ArenaMapDescriptor map)
+    {
+        if (locale is null)
+        {
+            return locale;
+        }
+        foreach (var exit in map.Exits)
+        {
+            if (!locale.ContainsKey(exit.Name))
+            {
+                locale[exit.Name] = exit.Name;
+            }
+        }
+        return locale;
+    }
+
+    /// <summary>
+    /// exfils-stage2 — the names base.json ships and the names the client authors must be one set: an exit only
+    /// in base.json stays NotPresent on the client (no scene object), one only in the descriptor never loads
+    /// settings. Returns every name present on exactly one side, for a startup warning.
+    /// </summary>
+    public static IReadOnlyList<string> ExitNameMismatches(IEnumerable<string?>? baseExitNames, ArenaMapDescriptor map)
+    {
+        var fromBase = new HashSet<string>((baseExitNames ?? []).Where(n => n is not null)!, StringComparer.Ordinal);
+        var fromDescriptor = new HashSet<string>(map.Exits.Select(e => e.Name), StringComparer.Ordinal);
+        return fromBase.Except(fromDescriptor).Select(n => n + " (base.json only)")
+            .Concat(fromDescriptor.Except(fromBase).Select(n => n + " (descriptor only)"))
+            .OrderBy(n => n, StringComparer.Ordinal)
+            .ToList();
+    }
+
     /// <summary>The SPT bot.json map key whose brain weights an Arena map borrows (bot.json keys are lowercase).</summary>
     public static string BrainStandInFor(ArenaMapDescriptor map) =>
         map.Key == ArenaMapRegistry.Equator.Key ? "interchange" : "factory4_day";
@@ -322,6 +358,16 @@ public class ArenaMapPortMod(
                 ArenaMapRegistration.ApplyBrainTable(botConfig.AssaultBrainType, map);
                 ArenaMapRegistration.ApplyBrainTable(botConfig.PlayerScavBrainType, map);
 
+                // exfils-stage2 (docs/progress/exfils-stage2.md): base.json exits and the client's authored
+                // positions (ArenaMapRegistry.<Map>.Exits) must name the same set — regenerate base.json from
+                // tools/maps/<key>.exits.json when this warns.
+                var exitMismatches = ArenaMapRegistration.ExitNameMismatches(newBase.Exits?.Select(e => e.Name), map);
+                if (exitMismatches.Count > 0)
+                {
+                    logger.Warning($"[ArenaMapPort] {map.Key}: exit names differ between base.json and the client table — " +
+                                   string.Join(", ", exitMismatches));
+                }
+
                 // Banners: base.json ships Banners: [] (SPEC §B.WP5 step 7 / §E.4) so there is
                 // nothing to wire through ImageRouter — Icebreaker's own documented landmine
                 // (a Banners array with unresolvable MongoIds -> [UNHANDLED] server log + an
@@ -344,6 +390,7 @@ public class ArenaMapPortMod(
                 foreach (var map in ArenaMapRegistry.All)
                 {
                     lazyLocale.AddTransformer(locale => ArenaMapRegistration.ApplyLocale(locale, map));
+                    lazyLocale.AddTransformer(locale => ArenaMapRegistration.ApplyExitLocale(locale, map)); // exfils-stage2
                 }
             }
         }

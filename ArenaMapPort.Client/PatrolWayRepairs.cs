@@ -29,7 +29,7 @@ namespace ArenaMapPort.Client
     internal static class PatrolWayFallback
     {
         const string Tag = "[ArenaMapPort][RaidFix]";
-        internal const int MaxPointsPerWay = 4;
+        internal const int MaxPointsPerWay = 8; // soak 2 (20.09.): a 4+2 split left one bot shuttling between two points
         const float SampleRadius = 2f;
         const int IdBase = 910000; // PatrolPoint.Id must be non-zero and unique within the zone
 

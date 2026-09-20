@@ -297,6 +297,35 @@ public class LocationRegistrationTests
         Assert.Null(ApbsCompat.FindMapRangeWeightsType()); // APBS is not part of the test process
     }
 
+    // exfils-stage2 — identity locale entries for every authored exit, nothing for maps without exits,
+    // never overwriting an existing translation.
+    [Fact]
+    public void ApplyExitLocale_AddsIdentityEntries_OnlyForAuthoredExits()
+    {
+        var locale = new GlobalLocaleDictionary { ["Equator North Gate"] = "Nordtor" };
+
+        var result = ArenaMapRegistration.ApplyExitLocale(locale, ArenaMapRegistry.Equator);
+        ArenaMapRegistration.ApplyExitLocale(locale, ArenaMapRegistry.Bay5);
+
+        Assert.Same(locale, result);
+        Assert.Equal("Nordtor", locale["Equator North Gate"]);           // kept
+        Assert.Equal("Equator South Gate", locale["Equator South Gate"]); // identity
+        Assert.Equal(2, locale.Count);                                    // Bay5 has no exits
+        Assert.Null(ArenaMapRegistration.ApplyExitLocale(null, ArenaMapRegistry.Equator));
+    }
+
+    [Fact]
+    public void ExitNameMismatches_ReportsEachSideOnlyOnce()
+    {
+        var mismatches = ArenaMapRegistration.ExitNameMismatches(
+            new[] { "Equator North Gate", "Gate 3", null }, ArenaMapRegistry.Equator);
+
+        Assert.Equal(new[] { "Equator South Gate (descriptor only)", "Gate 3 (base.json only)" }, mismatches);
+        Assert.Empty(ArenaMapRegistration.ExitNameMismatches(
+            ArenaMapRegistry.Equator.Exits.Select(e => (string?)e.Name), ArenaMapRegistry.Equator));
+        Assert.Empty(ArenaMapRegistration.ExitNameMismatches(null, ArenaMapRegistry.Bay5));
+    }
+
     // bots-stage1 — ApplyBrainTable gives an Arena key the stand-in map's brain-weight row, once.
     [Fact]
     public void ApplyBrainTable_CopiesTheStandInRow_ToTheLowercasedKey()

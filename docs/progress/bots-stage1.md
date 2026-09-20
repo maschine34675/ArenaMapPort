@@ -238,6 +238,26 @@ instead of confirming it sets the profile's HP to 0. The user added a mod with a
 that starts Equator directly and a disconnect that skips every confirmation and the 0-HP penalty — use it for host
 tests instead of the eight-click menu flow.
 
+## 2026-09-20 — soak raids 1 + 2 (host, full 15 min)
+
+Soak 1 (12:28, old base.json with 7 spawns still loaded on the server): three scavs over the raid, no warnings
+from our code; Bot2 spawned on the ring point and walked the ring (isolated component, one-point way); Bot1
+shuttled between two points and then stood for four minutes. Third-party noise: acidphantasm's Bot Placement
+System throws `TryToSpawnInZonePatch EXCEPTION: ArgumentOutOfRangeException … GetNewValidBotZone` once per wave
+on an unknown map (its own prefix, caught by SPT's ModulePatch wrapper; EFT's original spawn logic then runs —
+harmless, one error line per wave).
+
+Soak 2 (12:56, server restarted on the 6-spawn base.json, `ActivationDiagnostics` on): `built 2 way(s) with
+6 point(s) and 60 sub point(s) … in 1 NavMesh-connected component(s)` — the ring is gone. The richer status line
+explains the shuttling: `patrol=stay/go chooser=PatrolPointChooserBasic way=PatrolWay(ArenaFallback) 1
+target=(-17.4, 0.1, 13.0) group=2` — Bot1 sits on the 4+2 split's two-point way and only ever has one other
+point to go to. `MaxPointsPerWay` is now 8 (one way for a small point set; bots visit the whole floor). `stay`
+phases of 15–60 s between points are BSG's normal patrol pauses.
+
+Probe tiers: `[Bots] SpawnDiagnostics` (default on) keeps the light per-wave/per-bot lines; the new
+`[Bots] ActivationDiagnostics` (default off, read at start) carries the 46 activation-step finalizers and the
+15-s status dump with patrol/group facts.
+
 ## Stage 1 — what it took (summary)
 
 Everything a ported scene lacks that BSG's bot stack assumes, each found by instrumenting the next silent failure:
