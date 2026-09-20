@@ -354,6 +354,23 @@ public class LocationRegistrationTests
         Assert.Empty(table);
     }
 
+    // bots-stage3 — every PMC brain table (pmcbear, pmcusec) gets the stand-in row for an Arena key.
+    [Fact]
+    public void ApplyPmcBrainTables_WritesTheStandInRow_IntoEveryPmcTable()
+    {
+        var pmcType = new Dictionary<string, Dictionary<string, Dictionary<string, double>>>
+        {
+            ["pmcbear"] = new() { ["interchange"] = new() { ["pmcBEAR"] = 10 }, ["factory4_day"] = new() { ["pmcBEAR"] = 5 } },
+            ["pmcusec"] = new() { ["interchange"] = new() { ["pmcUSEC"] = 10 }, ["factory4_day"] = new() { ["pmcUSEC"] = 5 } },
+        };
+
+        Assert.Equal(2, ArenaMapRegistration.ApplyPmcBrainTables(pmcType, ArenaMapRegistry.Equator));
+        Assert.Same(pmcType["pmcbear"]["interchange"], pmcType["pmcbear"][ArenaMapRegistry.Equator.Key.ToLowerInvariant()]);
+        Assert.Same(pmcType["pmcusec"]["interchange"], pmcType["pmcusec"][ArenaMapRegistry.Equator.Key.ToLowerInvariant()]);
+        Assert.Equal(0, ArenaMapRegistration.ApplyPmcBrainTables(pmcType, ArenaMapRegistry.Equator)); // idempotent
+        Assert.Equal(0, ArenaMapRegistration.ApplyPmcBrainTables<Dictionary<string, double>>(null, ArenaMapRegistry.Bay5));
+    }
+
     // bots-stage1 — ApplyBotCap mirrors a bot-enabled map's BotMax into BotConfig.MaxBotCap.
     [Theory]
     [MemberData(nameof(AllMaps))]

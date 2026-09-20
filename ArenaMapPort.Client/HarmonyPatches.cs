@@ -55,6 +55,7 @@ namespace ArenaMapPort.Client
             AICorePointFallback.Install(harmony);
             // exfils-stage2 — runtime-authored exfiltration points. See ExfilRepairs.cs.
             ExfilRepairs.Install(harmony);
+            ExfilSignals.BindConfig(); // [Exfils] SmokeSignals / SmokeSignalSound / SmokeSignalColor
             BoothDoorRepairs.BindConfig(); // [Spawns] OpenRespawnDoors — runs from SpawnInfiltrationRepairs' postfix
 
             // bots-stage1 — SAIN soft dependency: resolved by name, no-op without SAIN. See SainLocationShim.cs.

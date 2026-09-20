@@ -75,6 +75,10 @@
       <HintPath>$(EftManagedDir)\UnityEngine.AIModule.dll</HintPath>
       <Private>false</Private>
     </Reference>
+    <Reference Include="UnityEngine.ParticleSystemModule">
+      <HintPath>$(EftManagedDir)\UnityEngine.ParticleSystemModule.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
     <!-- AssetBundle / AssetBundle.LoadFromFile (§F.1/§F.2) -->
     <Reference Include="UnityEngine.AssetBundleModule">
       <HintPath>$(EftManagedDir)\UnityEngine.AssetBundleModule.dll</HintPath>

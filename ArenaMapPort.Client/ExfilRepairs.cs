@@ -62,6 +62,7 @@ namespace ArenaMapPort.Client
         static void InitPrefix(BackendExitTriggerSettings[] settings)
         {
             _synthetic.Clear();
+            ExfilSignals.ResetCache();
             if (!ArenaMapRaid.IsLoaded())
             {
                 return;
@@ -127,6 +128,7 @@ namespace ArenaMapPort.Client
                 var point = go.AddComponent<ExfiltrationPoint>(); // Awake: layer Triggers, reads the BoxCollider
                 point.Settings.Name = exit.Name;                  // matched against settings[].Name before LoadSettings
                 _synthetic.Add(point);
+                ExfilSignals.Attach(go, exit.Name, floor);        // smoke + light + hiss, see ExfilSignals.cs
                 Plugin.Log.LogInfo($"{Tag} authored exit '{exit.Name}': box {box.size} at floor {floor:F1} ({basis})");
             }
 
@@ -178,6 +180,8 @@ namespace ArenaMapPort.Client
                 if (point.Status == EExfiltrationStatus.NotPresent)
                 {
                     Plugin.Log.LogWarning(line + " — NotPresent: the name matched no server exit or its chance roll failed");
+                    var signal = point.transform.Find(point.Settings?.Name + ExfilSignals.SignalSuffix);
+                    if (signal != null) signal.gameObject.SetActive(false); // no smoke at a dead exit
                 }
                 else
                 {

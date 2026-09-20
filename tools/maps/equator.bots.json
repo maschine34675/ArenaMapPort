@@ -1,5 +1,5 @@
 {
-  "_comment": "bots-stage1 (docs/progress/bots-stage1.md): optional sidecar read by tools/server/make_base_json.py next to the map descriptor. Positions are navmesh-verified in-game (UiBridge teleports / player positions, 2026-09-19). Radii follow Factory's SpawnSphereParams (bots 25-35 m). Kept out of equator.json so the Unity editor's JsonUtility reader never sees these fields. Only the ground floor is playable on Equator; the upper rings are decoration (user, 2026-09-20), so no spawn goes above y 0.2 (the former ring2-west point at y 10.8 was a NavMesh island).",
+  "_comment": "bots-stage1 (docs/progress/bots-stage1.md): optional sidecar read by tools/server/make_base_json.py next to the map descriptor. Positions are navmesh-verified in-game (UiBridge teleports / player positions, 2026-09-19). Radii follow Factory's SpawnSphereParams (bots 25-35 m). Kept out of equator.json so the Unity editor's JsonUtility reader never sees these fields. Only the ground floor is playable on Equator; the upper rings are decoration (user, 2026-09-20), so no spawn goes above y 0.2 (the former ring2-west point at y 10.8 was a NavMesh island). bots-stage3 (2026-09-20): PMCs come from BossLocationSpawn entries (BossName pmcUSEC/pmcBEAR), not from waves — Factory ships four such entries; SPT's PmcWaveGenerator only replaces them for maps listed in pmc.json customPmcWaves, so ours survive untouched. boss_zone names the zone explicitly (BossLocationSpawn.FindZoneWithCorrectName searches every BotZone), and the bot spawns carry the BotPmc category so BotZone.HasPmcBotSpawns is true as well.",
   "zone": "BotZone_Main",
   "max_bots": 8,
   "player_spawns": [
@@ -54,7 +54,11 @@
         0.2,
         2.0
       ],
-      "radius": 30
+      "radius": 30,
+      "categories": [
+        "Bot",
+        "BotPmc"
+      ]
     },
     {
       "id": "arena_equator-bot-west",
@@ -63,7 +67,11 @@
         0.1,
         -8.0
       ],
-      "radius": 25
+      "radius": 25,
+      "categories": [
+        "Bot",
+        "BotPmc"
+      ]
     },
     {
       "id": "arena_equator-bot-east",
@@ -72,7 +80,11 @@
         0.1,
         1.5
       ],
-      "radius": 25
+      "radius": 25,
+      "categories": [
+        "Bot",
+        "BotPmc"
+      ]
     },
     {
       "id": "arena_equator-bot-northeast",
@@ -81,7 +93,11 @@
         0.1,
         19.6
       ],
-      "radius": 25
+      "radius": 25,
+      "categories": [
+        "Bot",
+        "BotPmc"
+      ]
     },
     {
       "id": "arena_equator-bot-northwest",
@@ -90,7 +106,11 @@
         0.1,
         13.0
       ],
-      "radius": 25
+      "radius": 25,
+      "categories": [
+        "Bot",
+        "BotPmc"
+      ]
     },
     {
       "id": "arena_equator-bot-southwest",
@@ -99,7 +119,11 @@
         0.1,
         -11.7
       ],
-      "radius": 25
+      "radius": 25,
+      "categories": [
+        "Bot",
+        "BotPmc"
+      ]
     }
   ],
   "waves": [
@@ -132,6 +156,36 @@
       "time_max": 720,
       "slots_min": 1,
       "slots_max": 2
+    }
+  ],
+  "boss_waves": [
+    {
+      "boss_name": "pmcUSEC",
+      "escort_type": "pmcUSEC",
+      "boss_zone": "BotZone_Main",
+      "boss_chance": 50,
+      "escort_amount": "0,0,0,0,2,2,2,1,1,1,1,1,0,2,3"
+    },
+    {
+      "boss_name": "pmcUSEC",
+      "escort_type": "pmcUSEC",
+      "boss_zone": "BotZone_Main",
+      "boss_chance": 50,
+      "escort_amount": "0,0,0,0,2,2,2,1,1,1,1,1,0,2,3"
+    },
+    {
+      "boss_name": "pmcBEAR",
+      "escort_type": "pmcBEAR",
+      "boss_zone": "BotZone_Main",
+      "boss_chance": 50,
+      "escort_amount": "0,0,0,0,2,2,2,1,1,1,1,1,0,2,3"
+    },
+    {
+      "boss_name": "pmcBEAR",
+      "escort_type": "pmcBEAR",
+      "boss_zone": "BotZone_Main",
+      "boss_chance": 50,
+      "escort_amount": "0,0,0,0,2,2,2,1,1,1,1,1,0,2,3"
     }
   ]
 }

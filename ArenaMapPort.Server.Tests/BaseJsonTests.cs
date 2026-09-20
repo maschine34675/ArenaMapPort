@@ -110,6 +110,29 @@ public class BaseJsonTests
         }
     }
 
+    // bots-stage3 — PMC squads ride on BossLocationSpawn (Factory's shape), on the authored zone, and the bot
+    // spawn points carry the BotPmc category so the zone counts as PMC-capable.
+    [Fact]
+    public void BossLocationSpawn_ShipsPmcSquadsOnTheAuthoredZone()
+    {
+        using var doc = JsonDocument.Parse(ReadRawJson());
+        var root = doc.RootElement;
+        var bosses = root.GetProperty("BossLocationSpawn").EnumerateArray().ToList();
+
+        Assert.NotEmpty(bosses);
+        Assert.All(bosses, b => Assert.Contains(b.GetProperty("BossName").GetString(), new[] { "pmcUSEC", "pmcBEAR" }));
+        Assert.Contains(bosses, b => b.GetProperty("BossName").GetString() == "pmcUSEC");
+        Assert.Contains(bosses, b => b.GetProperty("BossName").GetString() == "pmcBEAR");
+        Assert.All(bosses, b => Assert.Equal("BotZone_Main", b.GetProperty("BossZone").GetString()));
+        Assert.All(bosses, b => Assert.True(b.GetProperty("IgnoreMaxBots").GetBoolean()));
+        Assert.All(bosses, b => Assert.Equal(-1, b.GetProperty("Time").GetDouble()));
+
+        var botPoints = root.GetProperty("SpawnPointParams").EnumerateArray()
+            .Where(p => p.GetProperty("Categories").EnumerateArray().Any(c => c.GetString() == "Bot")).ToList();
+        Assert.NotEmpty(botPoints);
+        Assert.All(botPoints, p => Assert.Contains("BotPmc", p.GetProperty("Categories").EnumerateArray().Select(c => c.GetString())));
+    }
+
     [Fact]
     public void SpawnPointParams_ShipPlayerAndBotSpawns()
     {
@@ -221,7 +244,7 @@ public class BaseJsonTests
         var location = Deserialize();
 
         Assert.NotNull(location.BossLocationSpawn);
-        Assert.Empty(location.BossLocationSpawn!);
+        Assert.NotEmpty(location.BossLocationSpawn!); // bots-stage3: PMC squads ride on BossLocationSpawn
         Assert.NotNull(location.Waves);
         Assert.NotEmpty(location.Waves!);
     }

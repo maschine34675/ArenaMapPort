@@ -208,6 +208,27 @@ public static class ArenaMapRegistration
             .ToList();
     }
 
+    /// <summary>
+    /// bots-stage3 — pmc.json <c>pmcType</c> is {"pmcbear": {map: {brain: weight}}, "pmcusec": {...}}; every inner table gets
+    /// the stand-in row. Returns the number of rows written.
+    /// </summary>
+    public static int ApplyPmcBrainTables<TRow>(IDictionary<string, Dictionary<string, TRow>>? pmcType, ArenaMapDescriptor map)
+    {
+        if (pmcType is null)
+        {
+            return 0;
+        }
+        var written = 0;
+        foreach (var (_, perMap) in pmcType)
+        {
+            if (perMap is not null && ApplyBrainTable(perMap, map))
+            {
+                written++;
+            }
+        }
+        return written;
+    }
+
     /// <summary>The SPT bot.json map key whose brain weights an Arena map borrows (bot.json keys are lowercase).</summary>
     public static string BrainStandInFor(ArenaMapDescriptor map) =>
         map.Key == ArenaMapRegistry.Equator.Key ? "interchange" : "factory4_day";
@@ -290,6 +311,7 @@ public class ArenaMapPortMod(
     LocaleTable localeTable,
     LocationConfig locationConfig,
     BotConfig botConfig,
+    PmcConfig pmcConfig,
     ICloner cloner,
     JsonUtil jsonUtil,
     ISptLogger<ArenaMapPortMod> logger) : IOnLoad
@@ -357,6 +379,9 @@ public class ArenaMapPortMod(
                 // Arena map the stand-in map's row (Equator → interchange, others → factory4_day).
                 ArenaMapRegistration.ApplyBrainTable(botConfig.AssaultBrainType, map);
                 ArenaMapRegistration.ApplyBrainTable(botConfig.PlayerScavBrainType, map);
+                // bots-stage3 (docs/progress/bots-stage3.md): the same lookup for PMCs — pmc.json pmcType[pmcbear|pmcusec][map]
+                // is what spt-custom's GetPmcWildSpawnType indexes without a guard (KeyNotFoundException per PMC otherwise).
+                ArenaMapRegistration.ApplyPmcBrainTables(pmcConfig.PmcType, map);
 
                 // exfils-stage2 (docs/progress/exfils-stage2.md): base.json exits and the client's authored
                 // positions (ArenaMapRegistry.<Map>.Exits) must name the same set — regenerate base.json from

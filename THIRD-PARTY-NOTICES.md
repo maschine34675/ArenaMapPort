@@ -305,3 +305,17 @@ code, since the relevant members are public on this specific decompiled build an
 impl-raidstart-repairs hooks follows this file's own pre-existing AccessTools+Verify convention and is
 original; the small pieces of those hooks' own logic that ARE adapted from ManimalIcebreaker are
 attributed in the "impl-raidstart-repairs" ManimalIcebreaker section above, per file.
+
+## RaiRaiTheRaichu — HiddenCaches (approach only, no code copied)
+
+Source: https://github.com/RaiRaiTheRaichu/HiddenCaches (tag 1.4.0). The repository carries no LICENSE file;
+the Forge listing (sp-mod.com/mod/1265) declares the University of Illinois/NCSA Open Source License.
+
+`ArenaMapPort.Client/ExfilSignals.cs` follows the same idea for the exit smoke signals — retain EFT's airdrop
+crate bundle (`assets/content/location_objects/lootable/prefab/scontainer_crate.bundle`), take the
+`Flare_Smoke` particle material and colour curve and the crate's `FlareSound` clip, and build fresh Light /
+AudioSource / ParticleSystem components — but is an independent re-implementation against the public EFT and
+Unity APIs, written from the decompile (`EFT/EasyAssetsExtensions.cs`, `EFT.Airdrop/ClientAirDrop.cs:238-245`).
+No line of HiddenCaches is reproduced here; credit to RaiRaiTheRaichu for showing that the crate's effect is
+the one reusable always-on smoke in the game.
+

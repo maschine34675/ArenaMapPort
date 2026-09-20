@@ -87,6 +87,41 @@ def vec(p) -> dict:
     return {"x": p[0], "y": p[1], "z": p[2]}
 
 
+def apply_boss_waves(base: dict, bots: dict) -> None:
+    """bots-stage3: PMC squads. SPT 4.1.5 spawns PMCs from base.json BossLocationSpawn entries whose BossName is
+    pmcUSEC/pmcBEAR (factory4_day ships four), not from waves; PmcWaveGenerator.ApplyWaveChangesToMap only
+    strips/replaces them for maps present in pmc.json customPmcWaves, so an Arena key keeps what we ship.
+    Client: LocalGame.cs:199 runs the boss scenario unconditionally, BossSpawnScenario fires Time -1 entries at
+    raid start after the BossChance roll; an explicit BossZone is resolved by FindZoneWithCorrectName over every
+    BotZone (BossLocationSpawn.cs:318-337); IgnoreMaxBots true skips BotMax like Factory."""
+    out = []
+    for w in bots.get("boss_waves", []):
+        out.append({
+            "BossChance": w.get("boss_chance", 50),
+            "BossDifficult": "normal",
+            "BossEscortAmount": w.get("escort_amount", "0,0,0,0,2,2,2,1,1,1,1,1,0,2,3"),
+            "BossEscortDifficult": "normal",
+            "BossEscortType": w.get("escort_type", w["boss_name"]),
+            "BossName": w["boss_name"],
+            "BossPlayer": False,
+            "BossZone": w.get("boss_zone", bots["zone"]),
+            "Delay": w.get("delay", 0),
+            "DependKarma": False,
+            "ForceSpawn": False,
+            "IgnoreMaxBots": True,
+            "RandomTimeSpawn": False,
+            "ShowOnTarkovMap": False,
+            "ShowOnTarkovMapPvE": False,
+            "SpawnMode": ["regular", "pve"],
+            "Supports": None,
+            "Time": w.get("time", -1),
+            "TriggerId": "",
+            "TriggerName": "",
+        })
+    if out:
+        base["BossLocationSpawn"] = out
+
+
 def apply_exits(base: dict, map_data: dict, exits: dict) -> None:
     """exfils-stage2: base.json 'exits' from tools/maps/<key>.exits.json — the shape of Factory's own entries
     (factory4_day/base.json exits[]) plus the explicit enum fields SPT's Exit model carries (server decompile
@@ -147,7 +182,7 @@ def apply_bots(base: dict, map_data: dict, bots: dict) -> None:
     for sp in bots["bot_spawns"]:
         params.append({
             "BotZoneName": zone,
-            "Categories": ["Bot"],
+            "Categories": list(sp.get("categories", ["Bot"])),
             "ColliderParams": sphere(sp.get("radius", 25)),
             "CorePointId": 0,
             "DelayToCanSpawnSec": 4,
@@ -220,8 +255,10 @@ def main() -> None:
     if bots_path.exists():
         bots = json.loads(bots_path.read_text(encoding="utf-8"))
         apply_bots(base, map_data, bots)
+        apply_boss_waves(base, bots)
         bots_note = (f"bots: {len(bots['player_spawns'])} player + {len(bots['bot_spawns'])} bot spawn point(s), "
-                     f"{len(bots['waves'])} wave(s), zone {bots['zone']}, BotMax {bots['max_bots']} ({bots_path.name})")
+                     f"{len(bots['waves'])} wave(s), {len(bots.get('boss_waves', []))} PMC boss wave(s), zone {bots['zone']}, "
+                     f"BotMax {bots['max_bots']} ({bots_path.name})")
 
     out_path.parent.mkdir(parents=True, exist_ok=True)
     out_path.write_text(json.dumps(base, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")

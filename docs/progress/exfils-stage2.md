@@ -102,3 +102,19 @@ Still open: the NavMesh was baked with the leaves in place, so the booth interio
 `uibridge_teleport`'s reachability check; excluding `Door_Sliding_Respawn*` and `SPAWN_BOUND*` from the bake is a
 Unity rebuild (~19 min) for a later pass.
 
+## Smoke signals (2026-09-20, user: "konnte die exfils noch nicht finden")
+
+Vanilla exfils get their smoke from scene art under `ExfiltrationPoint._root`; no BSG component draws one. The only
+always-on smoke EFT ships is the airdrop crate's signal (`AirdropSynchronizableObject.AirdropFlare`, toggled by
+`ClientAirDrop` with SetActive + Play). `ExfilSignals.cs` retains that bundle
+(`assets/content/location_objects/lootable/prefab/scontainer_crate.bundle`), takes the `Flare_Smoke` material
+(`CyclesSmoke32_red`) and colour curve and the crate's `FlareSound` clip (`flare_loop`, read by reflection — the
+component derives from Sirenix' SerializedMonoBehaviour), and builds a Light, a quiet 3D AudioSource and a
+ParticleSystem (`AlwaysSimulate`, world space, 15/s) on a Default-layer child of each authored exit — the approach
+RaiRaiTheRaichu's HiddenCaches uses, re-implemented from the decompile (THIRD-PARTY-NOTICES.md). Config
+`[Exfils] SmokeSignals` / `SmokeSignalSound` / `SmokeSignalColor` (green). The bundle is retained lazily in the
+signal's `Start`, never inside a Harmony patch, and the harvested references are dropped at every raid start.
+Host test (13:59): `signal assets from the airdrop crate: material=CyclesSmoke32_red curve=True clip=flare_loop`,
+`smoke signal lit at 'Equator North Gate' ((2.0, 0.4, 46.0))` and South Gate — a green column visible from the All
+spawn 10 m away (screenshot). A NotPresent exit gets its signal switched off in the init postfix.
+
