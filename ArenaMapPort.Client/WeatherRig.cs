@@ -204,6 +204,7 @@ namespace ArenaMapPort.Client
             internal WeatherController Controller;   // null for Simplified
             internal TOD_Sky Sky;                    // null for Simplified
             internal TODSkySimple SimpleSky;         // null for Full
+            internal readonly DonorCameraSubscriptions CameraSubscriptions = new DonorCameraSubscriptions();
 
             // donor-settings-camera-weather §B.1 (critic amendment 1, 2026-09-17): captured DIRECTLY off
             // the donor's LevelSettings singleton while the donor scene is still loaded — NOT
@@ -1290,6 +1291,7 @@ namespace ArenaMapPort.Client
                 Plugin.Log.LogError($"[ArenaMapPort][WeatherRig] {map.Key}: activation failed — " +
                     $"{e.GetType().Name}: {e.Message}. Falling back to the ArenaLightingRepairs workaround " +
                     "for this raid.");
+                rig.CameraSubscriptions.Unbind(); // activation may have failed after binding the reused full rig
                 try { rig.Root.SetActive(false); } catch { /* best-effort */ }
                 // donor-settings-camera-weather §B.2 — never leave a half-assigned LevelSettings.CameraPrefab
                 // behind on ANY failure in the block above (not just a camera-specific one): reset it back to
@@ -1493,8 +1495,12 @@ namespace ArenaMapPort.Client
                 WeatherController.Instance = rig.Controller;
                 if (CameraManager.Exist)
                 {
-                    CameraManager.Instance.OnCameraChanged -= rig.Controller.OnCameraChanged; // guard against double-subscribe
-                    CameraManager.Instance.OnCameraChanged += rig.Controller.OnCameraChanged;
+                    // CameraManager.Dispose clears its event between raids; these reused components
+                    // never Awake again. RainController.CameraChanged is what renders the roof photo
+                    // and thereby schedules indoor classification. Rebind it together with Weather.
+                    var rain = rig.Controller.RainController;
+                    rig.CameraSubscriptions.Bind(CameraManager.Instance, rig.Controller.OnCameraChanged,
+                        rain != null ? rain.CameraChanged : (Action)null);
                 }
             }
             else
@@ -1546,10 +1552,9 @@ namespace ArenaMapPort.Client
                     if (rig.Kind == RigKind.Full)
                     {
                         Shader.DisableKeyword("_WEATHER_DEFINED");
-                        if (CameraManager.Exist)
-                        {
-                            CameraManager.Instance.OnCameraChanged -= rig.Controller.OnCameraChanged;
-                        }
+                        // Detach from the manager we actually subscribed to, even if its global
+                        // singleton has already been cleared/replaced by camera teardown.
+                        rig.CameraSubscriptions.Unbind();
                         if (Singleton<TOD_Sky>.Instantiated && Singleton<TOD_Sky>.Instance == rig.Sky)
                         {
                             Singleton<TOD_Sky>.Release(rig.Sky);

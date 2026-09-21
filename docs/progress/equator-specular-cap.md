@@ -72,3 +72,41 @@ Native acceptance still belongs to a restarted EFT process with the new DLL: com
 prop/decal at cap 1, 0.30, then 1; verify the existing lounge appearance stays unchanged when already
 below the ceiling, and test Bay5 with its default disabled ceiling. Append actual timestamps and
 observations below after that run. No host visual proof is claimed by this implementation checkpoint.
+
+## 2026-09-21 — reused donor lost its rain-camera callback between raids
+
+During the root's A/B test of `5234d81`, the first Equator raid classified 607 indoor renderers and
+1103 material copies at 06:52:49; cleanup restored 607 renderers at 06:53:47. A second ordinary
+Equator raid in the same EFT process applied the new specular ceiling but never logged a new indoor
+classification. At cap 0.30 it consequently capped 7914 slots rather than the first raid's 7022.
+Those are root-observed symptoms; they are not a second-raid acceptance result for this follow-up.
+
+Read-only trace against the installed decompile identified an existing lifecycle gap:
+
+- `RainController.Awake` subscribes `RainController.CameraChanged` once (`RainController.cs:536–539`).
+- That callback reaches `AbstractState.CameraChanged`, which calls `_depthPhotograper.Render()`
+  (`RainController.cs:97–101`). The indoor repair schedules classification from that Render postfix.
+- `CameraManager.Dispose` clears its `OnCameraChanged` delegate and singleton
+  (`EFT.CameraControl/CameraManager.cs:1252–1256`).
+- A harvested donor is reused via `SetActive`, so its RainController never calls Awake again.
+  `WeatherRig.ReestablishSingletons` already reattached WeatherController's callback on later raids,
+  but omitted RainController's callback. WeatherController's own callback only binds sky/scattering
+  to the camera; it does not render the roof photo (`EFT.Weather/WeatherController.cs:123–140`).
+
+The bounded fix adds `DonorCameraSubscriptions`, used only by WeatherRig's full donor. It reattaches
+both callbacks, removes Awake's first-activation subscriptions before adding them, and retains the
+actual subscribed CameraManager for teardown. Repeated establishment stays at one callback each.
+Unload and failed activation detach from that captured manager even if the global singleton has
+already changed. The simplified donor path and existing lighting settings are unchanged.
+
+Six tests compile the production subscription owner against the installed manager's event/disposal
+contract: first-activation duplicates, repeated binding, second raid after disposal, replacement
+without disposal, idempotent teardown, and missing RainController. Native acceptance requires a new
+client process followed by two raids without manually rendering the roof photo; the second raid
+must classify indoor materials automatically. The F8 diagnostic rerender is only a workaround and
+does not establish that the lifecycle fix succeeded.
+
+Offline result for this follow-up: **6/6 subscription tests executed and passed** (TRX counters
+checked, zero failures); real DLL-only Release client build **0 warnings / 0 errors**. Output was
+staged only inside this repository's `dist/`; no deployment or native verification occurred in
+this implementation pass.

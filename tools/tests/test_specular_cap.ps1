@@ -1,7 +1,7 @@
 [CmdletBinding()]
 param(
-    # Exposed for the no-match negative control; normal gate runs use the production test class.
-    [string]$Filter = 'FullyQualifiedName~SpecularCapTests'
+    # Exposed for the no-match negative control; normal gate runs include material and donor lifecycle tests.
+    [string]$Filter = 'FullyQualifiedName~SpecularCapTests|FullyQualifiedName~DonorCameraSubscriptionsTests'
 )
 $ErrorActionPreference = 'Stop'
 $repoRoot = (Resolve-Path (Join-Path $PSScriptRoot '../..')).Path
