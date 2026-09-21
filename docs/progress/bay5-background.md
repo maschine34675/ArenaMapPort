@@ -56,3 +56,38 @@ The existing Unity output is revalidated with `-FullMap -SkipUnityBuild`, regene
 the cheap base/preset outputs rather than rebuilding geometry. The first failure is
 retained in `D:/.unlazy/bay5-background/build-all-first-stale-preset.log`; the final
 pipeline receipt is `D:/.unlazy/bay5-background/build-all.log`.
+
+## Native candidate and northeast bot clearance — 2026-09-21
+
+Process `23dee6d0` (started 11:26:17 CEST) loaded the matching client and the new
+22,190-vertex / 10,248-triangle NavMesh. At 11:29:03 the background loaded additively;
+all 72 remaining stand-in materials in that scene rebound to real shaders. The northern
+gantry and southeast portal crane were visibly present, with no pink surfaces or new
+Warning/Error lines during the inspected raid. Screenshots are under
+`analysis/screenshots/bay5-background/after-*.png`.
+
+The same north-lane view now shows the gantry where the old screenshot showed sky.
+The second comparison, originally aimed toward the gantry from (77.75, -3.53, 61.74),
+now correctly shows a nearby original container stack blocking that view. A southeast
+view from (89, -3.85, 15) shows the original portal crane. Distant skyline visibility
+was not established from the southwest floor viewpoint because the arena buildings
+occluded it; inclusion in the package is independently verified.
+
+All fourteen authored starts passed full NavMesh/zone/reachability/standing-room probes.
+Depot and warehouse checks also passed, and both eight-second ordinary exits completed.
+RainBounds and indoor classification retained the exact previous values: 641 indoor
+renderers, 1,112 material clones, RainBounds center (24.55, 5.89, -157.84), size
+(351.63, 97.94, 726.13).
+
+Checking the actual runtime-adjusted bot positions exposed one additional issue:
+the original northeast marker (106.267, -3.8574, 64.7033) was automatically moved to
+(107.33, -3.84, 65.76), now a disconnected patch beside the added background containers.
+The native patrol graph reported two components and one isolated point; the strict
+UiBridge path check independently rejected that adjusted position. The east adjusted
+point remained connected.
+
+The northeast marker is moved three metres south in `bay5.bots.json`, to
+(106.267, -3.8574, 61.7033). That point and four offsets of half a metre each passed
+the full native checks, and the player stood there safely. This only regenerates the
+server base; the validated scene/NavMesh bundles and the other starts/exits are unchanged.
+Final deployment and the native patrol-graph repeat follow below.

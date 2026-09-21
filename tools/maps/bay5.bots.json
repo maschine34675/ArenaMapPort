@@ -1,5 +1,5 @@
 {
-  "_comment": "Bay5 ArenaMode integration, 2026-09-21. Coordinates derived from Arena source AI bearing points and checked in the native map. Four Player/All points distribute respawns across both ends; bot markers are separate. Pending final acceptance on the rebaked open-barrier NavMesh, see docs/progress/bay5-arenamode-integration.md. No loot or Scav raids.",
+  "_comment": "Bay5 ArenaMode integration, 2026-09-21. Coordinates derived from Arena source AI bearing points and checked in the native map. Four Player/All points distribute respawns across both ends; bot markers are separate. Background port moves the northeast-lane bot 3 m south to avoid automatic placement on a disconnected container-side patch; see docs/progress/bay5-background.md. No loot or Scav raids.",
   "zone": "BotZone_Main",
   "max_bots": 8,
   "player_spawns": [
@@ -118,7 +118,7 @@
       "position": [
         106.267,
         -3.8574,
-        64.7033
+        61.7033
       ],
       "radius": 25,
       "categories": [
