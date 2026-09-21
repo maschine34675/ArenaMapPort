@@ -167,7 +167,7 @@ namespace ArenaMapPort.Editor.NavMesh
                 }
             }
             foreach (var kv in excludedByReason)
-                Debug.Log("[ArenaMapPort][BakeNavMesh] excluded " + kv.Value + " source(s) opened at raid start: " + kv.Key);
+                Debug.Log("[ArenaMapPort][BakeNavMesh] excluded " + kv.Value + " nonphysical or round-open source(s): " + kv.Key);
 
             // Verification fix-up (2026-09-15, Bay5), continued: bounds is a SEPARATE pass over
             // every Renderer in geometryRoots, independent of `sources` above -- excluding the
@@ -312,11 +312,17 @@ namespace ArenaMapPort.Editor.NavMesh
             return found;
         }
 
-        // Non-null when the source's object is one the client opens at raid start: a SPAWN_BOUND* barrier, a
+        // Non-null for a nonphysical source or one the client opens at raid start: a SPAWN_BOUND* barrier, a
         // sliding-door leaf, or a non-frame part of a listed barrier (BoothDoorRepairs keeps every child whose
         // name contains "frame").
         static string RoundOpenedReason(Transform t, List<Transform> openedBarriers)
         {
+            // Installed EFT names layer 13 Triggers and excludes it from Player collisions. Arena's
+            // original spawn-marker boxes can remain enabled/non-trigger after their scripts are
+            // stripped (Bay5: SPAWNS/Bear house (9)); baking them creates invisible raised islands.
+            // Preserve the source geometry; exclude only this collider owner's numeric layer because
+            // the Editor leaves it unnamed. Solid children of a Triggers parent must still contribute.
+            if (t.gameObject.layer == 13) return "Triggers layer 13";
             // Arena and installed EFT both name layer 29 LevelBorder. The importer preserves
             // numeric layers, but this Editor's TagManager leaves 29 unnamed. Bay5's borders
             // are called Cube, so name-only filtering kept walls removed by MapBorderRepairs.
