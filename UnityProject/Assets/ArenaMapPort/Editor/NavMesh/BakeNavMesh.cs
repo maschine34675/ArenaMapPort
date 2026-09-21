@@ -31,6 +31,16 @@ namespace ArenaMapPort.Editor.NavMesh
 
         public static NavMeshData Bake(GameObject[] geometryRoots)
         {
+            // Background scenes also contain nearby solid props, so retain their original colliders
+            // as navigation sources. Only exclude their distant renderers from the bake volume.
+            var gameplayRoots = new List<GameObject>();
+            foreach (var root in geometryRoots)
+                if (root != null && !ArenaPaths.Map.IsBackgroundScene(root.scene.name))
+                    gameplayRoots.Add(root);
+            int backgroundRoots = geometryRoots.Length - gameplayRoots.Count;
+            if (backgroundRoots > 0)
+                Debug.Log("[ArenaMapPort][BakeNavMesh] excluded " + backgroundRoots + " background scene root(s) from renderer bounds; retained their original collider sources");
+
             var settings = new NavMeshBuildSettings
             {
                 agentTypeID = 0,
@@ -170,7 +180,7 @@ namespace ArenaMapPort.Editor.NavMesh
                 Debug.Log("[ArenaMapPort][BakeNavMesh] excluded " + kv.Value + " nonphysical or round-open source(s): " + kv.Key);
 
             // Verification fix-up (2026-09-15, Bay5), continued: bounds is a SEPARATE pass over
-            // every Renderer in geometryRoots, independent of `sources` above -- excluding the
+            // every gameplay Renderer, independent of `sources` above -- excluding the
             // Water layer from sourceLayerMask alone left this loop untouched, so the water plane's
             // own (still-enabled) MeshRenderer kept inflating `bounds` to its full footprint even
             // after its MeshCollider stopped contributing navmesh sources (confirmed: a first
@@ -181,7 +191,7 @@ namespace ArenaMapPort.Editor.NavMesh
             // (e.g. a rendered-only prop standing on real ground); only Water is special-cased out.
             var bounds = new Bounds();
             bool first = true;
-            foreach (var root in geometryRoots)
+            foreach (var root in gameplayRoots)
             {
                 if (root == null) continue;
                 foreach (var r in root.GetComponentsInChildren<Renderer>(true))

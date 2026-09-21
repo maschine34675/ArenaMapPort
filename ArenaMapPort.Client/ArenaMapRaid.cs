@@ -49,6 +49,15 @@ namespace ArenaMapPort.Client
 
         internal static bool IsLoaded() => CurrentMap != null;
 
+        /// <summary>Owned gameplay geometry; decorative background remains owned for rendering repairs.</summary>
+        internal static bool IsGameplayScene(string sceneName)
+        {
+            foreach (var map in ArenaMapRegistry.All)
+                if (System.Array.IndexOf(map.AllSceneNames, sceneName) >= 0)
+                    return !map.IsBackgroundScene(sceneName);
+            return false;
+        }
+
         /// <summary>True if <paramref name="sceneName"/> is one of ANY registered map's scenes.</summary>
         internal static bool IsOwnedScene(string sceneName)
         {

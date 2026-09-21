@@ -63,6 +63,7 @@ namespace ArenaMapPort.Shared
         public string NavMeshBundleKey { get; }     // served key, e.g. "arena_equator/arena_equator_navmesh.bundle"
         public string ScriptsSceneName { get; }     // authored-fresh Scripts scene, loaded first/Single
         public string[] AllSceneNames { get; }      // load/rcid order, ScriptsSceneName first
+        public string[] BackgroundSceneNames { get; } // loaded visual scenery, excluded from navigation/cover bounds
         public string InfiltrationName { get; }     // SpawnPointMarker.Infiltration value — must be unique per map
         public string LocaleName { get; }
         public string LocaleDescription { get; }
@@ -94,7 +95,8 @@ namespace ArenaMapPort.Shared
             string DbBaseJsonPath,
 #nullable enable
             ArenaExitDescriptor[]? Exits = null,
-            string[]? OpenedBarriers = null)
+            string[]? OpenedBarriers = null,
+            string[]? BackgroundSceneNames = null)
 #nullable restore
         {
             this.Key = Key;
@@ -113,7 +115,11 @@ namespace ArenaMapPort.Shared
             this.DbBaseJsonPath = DbBaseJsonPath;
             this.Exits = Exits ?? new ArenaExitDescriptor[0];
             this.OpenedBarriers = OpenedBarriers ?? new string[0];
+            this.BackgroundSceneNames = BackgroundSceneNames ?? new string[0];
         }
+
+        public bool IsBackgroundScene(string sceneName) =>
+            System.Array.IndexOf(BackgroundSceneNames, sceneName) >= 0;
 
         // Physical bundle filenames are always the served key's basename — never stored
         // separately, never allowed to drift from the served key (the exact trap
@@ -190,7 +196,9 @@ namespace ArenaMapPort.Shared
                 "Arena_Bay5_DesignStuff", "Arena_Bay5_TeamFight",
                 "Arena_Bay5_TeamFight_DesignStuff", "Arena_Bay5_DEPOT",
                 "Arena_Bay5_WAREHOUSE", "Arena_Bay5_HANGAR",
+                "Arena_Bay5_Background",
             },
+            BackgroundSceneNames: new[] { "Arena_Bay5_Background" },
             // Scene load order matches docs/SPEC.md §B.WP3 step 3's ordering rule, extracted and
             // built per docs/progress/bay5-port.md — still worth a playtest-confirm against the
             // real in-game load order, but no longer an unvalidated proposal.

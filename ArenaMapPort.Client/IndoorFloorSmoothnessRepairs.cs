@@ -271,7 +271,7 @@ namespace ArenaMapPort.Client
                 for (int i = 0; i < sceneCount; i++)
                 {
                     var scene = SceneManager.GetSceneAt(i);
-                    if (!scene.isLoaded || !ArenaMapRaid.IsOwnedScene(scene.name))
+                    if (!scene.isLoaded || !ArenaMapRaid.IsGameplayScene(scene.name))
                     {
                         continue;
                     }

@@ -11,8 +11,10 @@
     "Arena_Bay5_TeamFight_DesignStuff",
     "Arena_Bay5_DEPOT",
     "Arena_Bay5_WAREHOUSE",
-    "Arena_Bay5_HANGAR"
+    "Arena_Bay5_HANGAR",
+    "Arena_Bay5_Background"
   ],
+  "background_scene_names": ["Arena_Bay5_Background"],
   "infiltration_name": "ArenaBay5",
   "locale_name": "Arena: Bay 5 (spike)",
   "locale_description": "Internal test build — outdoor harbor geometry/collision/NavMesh spike.",

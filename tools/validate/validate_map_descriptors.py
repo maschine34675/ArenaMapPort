@@ -242,10 +242,30 @@ def check_field(errors: list, where: str, field: str, expected, actual) -> None:
         errors.append(f"{where}: {field} mismatch — expected {expected!r}, got {actual!r}")
 
 
+def background_scene_errors(map_json: dict, registry_args: dict, ref_scope: dict) -> list[str]:
+    """A backdrop must be loaded, unique and never replace the gameplay Scripts scene."""
+    names = map_json.get("background_scene_names", [])
+    if not isinstance(names, list) or any(not isinstance(n, str) or not n for n in names):
+        return ["background_scene_names must be an array of nonempty scene names"]
+    errors = []
+    if len(names) != len(set(names)):
+        errors.append("background_scene_names contains duplicate scenes")
+    for name in names:
+        if name not in map_json.get("all_scene_names", []):
+            errors.append(f"background_scene_names references an unloaded scene: {name}")
+        if name == map_json.get("scripts_scene_name"):
+            errors.append("background_scene_names must not include the Scripts scene")
+    actual = resolve(registry_args.get("BackgroundSceneNames", []), ref_scope)
+    if names != actual:
+        errors.append(f"background_scene_names differs from runtime descriptor: {names!r} != {actual!r}")
+    return errors
+
+
 def check_map_against_registry_entry(
     map_json: dict, registry_args: dict, ref_scope: dict, map_path: Path, cs_var_name: str, errors: list
 ) -> None:
     where = f"{map_path.name} vs ArenaMapRegistry.{cs_var_name}"
+    errors.extend(f"{where}: {error}" for error in background_scene_errors(map_json, registry_args, ref_scope))
     for json_field, cs_field in JSON_TO_CS_FIELD.items():
         if json_field not in map_json:
             errors.append(f"{where}: {map_path.name} is missing field {json_field!r}")

@@ -25,6 +25,26 @@ public sealed class Bay5MapTests
     }
 
     [Fact]
+    public void BackgroundIsOwnedButExcludedFromGameplayWeatherClassification()
+    {
+        using var doc = JsonDocument.Parse(File.ReadAllText(Sidecar("bay5.json")));
+        var names = doc.RootElement.GetProperty("background_scene_names").EnumerateArray().Select(e => e.GetString()).ToArray();
+        Assert.Equal(names, ArenaMapRegistry.Bay5.BackgroundSceneNames);
+        Assert.NotEmpty(names);
+        foreach (var name in names)
+        {
+            Assert.Contains(name, ArenaMapRegistry.Bay5.AllSceneNames);
+            Assert.True(ArenaMapPort.Client.ArenaMapRaid.IsOwnedScene(name!));
+            Assert.False(ArenaMapPort.Client.ArenaMapRaid.IsGameplayScene(name!));
+        }
+        foreach (var map in ArenaMapRegistry.All)
+            foreach (var name in map.AllSceneNames.Except(map.BackgroundSceneNames))
+                Assert.True(ArenaMapPort.Client.ArenaMapRaid.IsGameplayScene(name));
+        Assert.False(ArenaMapPort.Client.ArenaMapRaid.IsGameplayScene("Unknown_Background"));
+        Assert.False(ArenaMapPort.Client.ArenaMapRaid.IsOwnedScene("Unknown_Background"));
+    }
+
+    [Fact]
     public void ExitTransformsMatchTheSidecarAndServerEligibility()
     {
         using var sidecar = JsonDocument.Parse(File.ReadAllText(Sidecar("bay5.exits.json")));

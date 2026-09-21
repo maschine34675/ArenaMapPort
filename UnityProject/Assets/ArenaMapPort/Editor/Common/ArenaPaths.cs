@@ -27,6 +27,11 @@ namespace ArenaMapPort.Editor.Common
         public string id_field;
         public string scripts_scene_name;
         public string[] all_scene_names;
+        // Visual backdrop scenes stay loaded but must not enlarge the playable NavMesh/cover footprint.
+        public string[] background_scene_names;
+
+        public bool IsBackgroundScene(string sceneName) =>
+            background_scene_names != null && Array.IndexOf(background_scene_names, sceneName) >= 0;
         public string infiltration_name;
         public string locale_name;
         public string locale_description;

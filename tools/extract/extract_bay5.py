@@ -13,9 +13,11 @@ Equator's byte-reproducibility guarantee is never put at risk by this file
 (docs/progress/multimap-generalize.md open item #3 deferred generalizing the extractor to
 "whenever Bay5 is actually extracted" -- this is that pass).
 
-Scene set (PLAN.md SS2, critic amendments): 8 always-loaded / TeamFight-mode Bay5 scenes --
+Scene set: 9 always-loaded / TeamFight-mode Bay5 scenes --
 Main(84), DEPOT(80), WAREHOUSE(86), HANGAR(82), DesignStuff(81), TeamFight_DesignStuff(88),
-TeamFight(89), Light(83). Excluded: Background(79, 0 walkable colliders, doubles footprint),
+TeamFight(89), Light(83), Background(79). The original background is decorative; the map
+descriptor excludes its renderers from navigation and gameplay cover bounds, while original
+colliders remain navigation sources within the gameplay bake volume. Excluded:
 Scripts(85)/Scripts_Winter(247) (authored fresh in Unity, never extracted -- Equator
 precedent), TeamFight_AI(78)/Sound(188) (bots/audio out of scope for both maps), Winter
 geometry (confirmed absent from the TeamFight scene set), TeamFight_Culling(90) (PerfectCulling
@@ -26,24 +28,20 @@ copy and never silently take the last match" -- Bay5's own BuildSettings.scenes 
 TeamFight_AI at BOTH idx 78 and 222, and Sound at BOTH idx 188 and 225, same
 repeated-basename-different-full-path-list trap the WP1 brief originally warned about for
 Equator): resolve_scene_indices() below reads BuildSettings.scenes fresh from
-globalgamemanagers, groups by EXACT full asset path (never basename), and for any of our 8
+globalgamemanagers, groups by EXACT full asset path (never basename), and for any selected
 target scenes that turns out to have more than one BuildSettings entry, prefers the index
 whose own sharedassets<N>.assets is the LARGER file (the full, non-stripped copy -- confirmed
 this is what distinguishes the real entry from the empty duplicate for both known pairs, see
-scratchpad bay5's 05_investigate_duplicate_indices.py). None of our 8 targets actually has a
+scratchpad bay5's 05_investigate_duplicate_indices.py). None of the selected targets has a
 duplicate (verified below via an exact-match assertion against the pre-verified expected
 index) -- this still runs the general probe-and-prefer logic so the same function is safe to
 reuse unmodified if a future pass ever adds TeamFight_AI or Sound to the extracted set.
 
 External file dependencies: Bay5 has no analysis/scene_externals.json precomputed entry (that
 file is Equator/AutoService-only, and analysis/ is read-only per docs/SPEC.md) -- this script
-computes each of the 8 scenes' external file dependencies directly via UnityPy's own
-SerializedFile.externals instead (compute_scene_externals() below), unioned across all 8. This
-independently reproduces (and cross-checks by construction, since it fails loudly if a
-required file is missing rather than silently dropping it) the 39-file union the session's own
-scout pass sampled, including 28 shared prop-pool sharedassets<N>.assets files outside Bay5's
-own 8 -- e.g. sharedassets51.assets (Equator's own) and sharedassets62.assets (AutoService's),
-confirming Bay5 draws from the same shared Arena prop library both other ported maps use.
+computes each selected scene's external file dependencies directly via UnityPy's own
+SerializedFile.externals (compute_scene_externals() below). The background joins the same
+deduplicated mesh/material/texture pool as the playable scenes.
 
 CLI:
     python extract_bay5.py --output <package dir> [--source <ArenaData dir>]
@@ -69,7 +67,7 @@ import extract_equator as EQ  # noqa: E402 -- the proven engine, reused unmodifi
 SCHEMA_VERSION = 1
 DEFAULT_SOURCE = "D:/Battlestate Games/Escape from Tarkov Arena/EscapeFromTarkovArena_Data"
 
-# 8 scenes this pass extracts (PLAN.md SS2 final table) -- BuildSettings idx -> full Unity scene
+# Selected scenes -- BuildSettings idx -> full Unity scene
 # name. Order here is the manifest's "scenes" array order (cosmetic -- SceneAssembler.cs just
 # iterates it; the load-bearing rcid ORDER for raid boot lives in tools/maps/bay5.json's
 # all_scene_names, consumed by patch_preset.py, independently of this file).
@@ -82,8 +80,9 @@ BAY5_SCENE_NAMES: dict[int, str] = {
     80: "Arena_Bay5_DEPOT",
     86: "Arena_Bay5_WAREHOUSE",
     82: "Arena_Bay5_HANGAR",
+    79: "Arena_Bay5_Background",
 }
-ALL8 = list(BAY5_SCENE_NAMES.keys())
+ALL_SCENES = list(BAY5_SCENE_NAMES.keys())
 
 # Static alias, same shape/semantics as extract_equator.SCENE_REGISTRY (idx -> full scene name).
 # tools/validate/validate_extract.py's disabled-count/reproducibility checks import whichever
@@ -245,7 +244,7 @@ def main() -> None:
 
     print("Resolving scene BuildSettings indices (duplicate-safe)...", file=sys.stderr)
     registry = resolve_scene_indices(args.source)
-    scene_indices = ALL8
+    scene_indices = ALL_SCENES
     assert set(registry.keys()) == set(scene_indices), f"resolver mismatch: {sorted(registry.keys())} vs {sorted(scene_indices)}"
     for idx in scene_indices:
         print(f"  idx {idx} -> {registry[idx]}", file=sys.stderr)
