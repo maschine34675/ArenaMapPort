@@ -201,7 +201,7 @@ namespace ArenaMapPort.Shared
             DbBaseJsonPath: "arena_bay5/base.json",
             Exits: new[]
             {
-                new ArenaExitDescriptor("Bay5 North Loading Bay", 96f, -2.9252f, 61f),
+                new ArenaExitDescriptor("Bay5 North Loading Bay", 96.0f, -2.9252f, 61.0f),
                 new ArenaExitDescriptor("Bay5 South Container Lane", 99.029f, -3.8574f, -2.8513f),
             },
             OpenedBarriers: new[]
