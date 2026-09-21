@@ -100,9 +100,40 @@ namespace EFT.CameraControl
 {
     public sealed class CameraManager
     {
+        public static CameraManager? instance;
+        public static CameraManager Instance => instance ??= new CameraManager();
+        public static bool Exist => instance != null;
+        public UnityEngine.Camera? Camera;
         public event Action? OnCameraChanged;
         public int SubscriberCount => OnCameraChanged?.GetInvocationList().Length ?? 0;
         public void Raise() => OnCameraChanged?.Invoke();
-        public void Dispose() => OnCameraChanged = null;
+        public void Dispose() { OnCameraChanged = null; if (ReferenceEquals(instance, this)) instance = null; }
+    }
+}
+
+namespace EFT.Weather
+{
+    public sealed class WeatherController
+    {
+        public RainController? RainController;
+        public int CameraRefreshes;
+        public void OnCameraChanged() => CameraRefreshes++;
+    }
+}
+
+public sealed class DepthPhotograper
+{
+    public static DepthPhotograper? Instance;
+    public int Renders;
+    public void Render() => Renders++;
+}
+public sealed class RainController
+{
+    public DepthPhotograper? _depthPhotograper;
+    public UnityEngine.Camera? BoundCamera;
+    public void CameraChanged()
+    {
+        BoundCamera = EFT.CameraControl.CameraManager.Instance.Camera;
+        _depthPhotograper!.Render();
     }
 }

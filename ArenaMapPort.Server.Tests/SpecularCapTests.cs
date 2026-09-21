@@ -14,6 +14,7 @@ using Xunit;
 
 namespace ArenaMapPort.Server.Tests
 {
+    [Collection("MapPort client lifecycle")]
     public sealed class SpecularCapTests : IDisposable
     {
         static readonly int ColorId = Shader.PropertyToID("_SpecColor");
@@ -327,8 +328,15 @@ namespace UnityEngine
     }
     public class MonoBehaviour : Object
     {
-        public void StartCoroutine(IEnumerator run) { while (run.MoveNext()) { } }
+        public static bool DeferCoroutines;
+        public static readonly List<IEnumerator> PendingCoroutines = new();
+        public void StartCoroutine(IEnumerator run)
+        {
+            if (DeferCoroutines) PendingCoroutines.Add(run);
+            else while (run.MoveNext()) { }
+        }
     }
+    public sealed class Camera : Object { }
     public sealed class WaitForSeconds { public WaitForSeconds(float seconds) { } }
     public sealed class MeshRenderer : Object
     {
@@ -406,7 +414,7 @@ namespace UnityEngine.SceneManagement
 namespace EFT
 {
     public sealed class Player { }
-    public enum GameStatus { Started }
+    public enum GameStatus { Starting, Started }
     public sealed class AbstractGame { public GameStatus Status; }
 }
 namespace Comfort.Common
@@ -427,6 +435,12 @@ namespace ArenaMapPort.Client
     }
     internal static class WeatherRig
     {
+        internal enum RainCoverMode { RoofDepthBlack, Off }
+        internal static bool Active;
+        internal static RainCoverMode CoverMode = RainCoverMode.RoofDepthBlack;
+        internal static EFT.Weather.WeatherController Controller;
+        internal static bool IsActiveForCurrentMap() => Active && ArenaMapRaid.IsLoaded();
+        internal static RainCoverMode RainCoverForCurrentMap() => CoverMode;
         static readonly Dictionary<string, TestConfig> Configs = new();
         internal static TestConfig ReflectiveSpecularCapEntry(ArenaMapDescriptor map)
         {

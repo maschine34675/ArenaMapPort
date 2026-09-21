@@ -101,6 +101,7 @@ namespace ArenaMapPort.Client
             // reads WeatherRig.IsActiveForCurrentMap()/RainCoverForCurrentMap(), same ordering reasoning as
             // LightingLab.Install()/RainCoverRepairs.InstallLab() above. See IndoorFloorSmoothnessRepairs.cs.
             IndoorFloorSmoothnessRepairs.Install();
+            RaidCoverBootstrap.Install(); // after indoor state creation; starts from raid/camera readiness
 
             // Playtest finding 2026-09-14 20:09 — large flat white untextured blocks blocking movement.
             // Removes Arena's own TeamFight play-area borders (config-gated) plus a narrow name-based

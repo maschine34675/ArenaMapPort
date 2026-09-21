@@ -1,5 +1,4 @@
 using System;
-using System.Collections;
 using System.Collections.Generic;
 using ArenaMapPort.Shared;
 using UnityEngine;
@@ -26,25 +25,12 @@ namespace ArenaMapPort.Client
     /// never the shared originals, so an indoor renderer sharing a material with an outdoor one never
     /// affects that outdoor renderer.
     ///
-    /// Runs once per raid, gated on <see cref="ArenaMapRaid.IsLoaded"/> +
-    /// <see cref="WeatherRig.IsActiveForCurrentMap"/> + <c>RainCoverMethod=RoofDepthBlack</c> (same
-    /// "mandatory first check" convention every other Harmony entry point in this project documents),
-    /// triggered by <see cref="RenderPostfix"/> — a Harmony postfix on <c>DepthPhotograper.Render()</c>
-    /// itself, installed independently of <see cref="RainCoverRepairs"/>'s own prefix/postfix on that same
-    /// method (see <c>HarmonyPatches.InstallIndoorFloorSmoothness</c>'s own doc comment for why patching
-    /// the OUTER method avoids any Harmony patch-ordering question). The actual scan is deferred
-    /// <see cref="ClassifyDelaySeconds"/> after this raid's Scripts-scene load — the same margin
-    /// <see cref="LightingLab"/>'s own candidate E scan uses (<c>GroundScanDelaySeconds</c>) to let
-    /// <see cref="ShaderRebind"/>'s 3-second stand-in-shader sweep finish first: our own shader-name filter
-    /// (<see cref="HasFloorLikeShader"/>) checks <c>shader.name.StartsWith("p0/Reflective", ...)</c>, which
-    /// FAILS on a not-yet-rebound <c>Hidden/ArenaMapPort/p0/Reflective/...</c> stand-in name.
+    /// Runs once per raid after RaidCoverBootstrap observes a Started raid and its live camera.
+    /// The bootstrap rebinds the reused donor to that camera, renders fresh cover and invokes the
+    /// classifier. It does not depend on receiving a camera event during Scripts-scene loading.
     /// </summary>
     internal static class IndoorFloorSmoothnessRepairs
     {
-        // Same margin LightingLab.cs's own GroundScanDelaySeconds uses, chosen for the identical reason
-        // (ShaderRebind's fixed 3s-after-load sweep must have already completed — see class doc comment).
-        const float ClassifyDelaySeconds = 5f;
-
         // Case-insensitive Contains, matching every float/range shader property whose name mentions any of
         // these — task's own spec: "Smoothness or Glossness or Gloss". Deliberately a DIFFERENT hint set
         // from LightingLab.SmoothnessPropertyHints ("smooth"/"gloss"/"shin") — that file's own
@@ -78,14 +64,11 @@ namespace ArenaMapPort.Client
 
         sealed class IndoorFloorState
         {
-            internal float SceneLoadTime;  // Time.time at this raid's Scripts-scene load
-            internal bool Scheduled;       // RenderPostfix already scheduled the classify coroutine
             internal bool Done;            // Classify() completed
             internal readonly List<IndoorFloorEntry> Entries = new List<IndoorFloorEntry>();
         }
 
         static readonly Dictionary<string, IndoorFloorState> _states = new Dictionary<string, IndoorFloorState>();
-        static GameObject _scanHost;
         static bool _installed;
 
         internal static void Install()
@@ -125,7 +108,7 @@ namespace ArenaMapPort.Client
                 if (glassEntry != null)
                 {
                     // New roof photo first (glass now drawn or not), then classify against it — the same
-                    // order ClassifyRunner.RunAfter uses on raid start.
+                    // order InitializeForCurrentRaid uses on raid start.
                     glassEntry.SettingChanged += (_, __) =>
                     {
                         // Review 2026-09-19: the same map guard every other live path here has — a toggle in
@@ -168,7 +151,7 @@ namespace ArenaMapPort.Client
                 _states.Remove(map.Key); // no stale state from an earlier raid with different settings
                 return;
             }
-            _states[map.Key] = new IndoorFloorState { SceneLoadTime = Time.time };
+            _states[map.Key] = new IndoorFloorState();
         }
 
         // Live re-classify (IndoorCoverPercent changed in F12): put the originals back, classify again.
@@ -221,12 +204,6 @@ namespace ArenaMapPort.Client
             ReflectiveSpecularRepairs.Clear(); // remove the outer layer before destroying its indoor inputs
             RestoreEntries(state, out int restoredRenderers, out int destroyedClones);
             state.Done = false;
-            state.Scheduled = false;
-            if (_scanHost != null)
-            {
-                UnityEngine.Object.Destroy(_scanHost);
-                _scanHost = null;
-            }
 
             if (restoredRenderers > 0 || destroyedClones > 0)
             {
@@ -235,79 +212,23 @@ namespace ArenaMapPort.Client
             }
         }
 
-        // Harmony postfix target — HarmonyPatches.InstallIndoorFloorSmoothness. Fires once per camera
-        // change (DepthPhotograper.Render(), not per frame), strictly after that call's own Blit into
-        // _depthRT and the transient camera/cameraRT DestroyImmediate calls have already run — see that
-        // installer's own doc comment for why the OUTER method is patched instead of RenderObstacles().
-        internal static void RenderPostfix(DepthPhotograper __instance)
+        // Called once per raid by the explicit scene/readiness bootstrap, not a camera-event postfix.
+        internal static bool InitializeForCurrentRaid(ArenaMapDescriptor map)
         {
-            // MANDATORY first check — Render() runs on ANY loaded DepthPhotograper, same convention every
-            // entry point in RainCoverRepairs.cs already documents.
-            if (!ArenaMapRaid.IsLoaded() || !WeatherRig.IsActiveForCurrentMap()
-                || WeatherRig.RainCoverForCurrentMap() != WeatherRig.RainCoverMode.RoofDepthBlack)
+            if (!ArenaMapRaid.IsLoaded() || !WeatherRig.IsActiveForCurrentMap() || ArenaMapRaid.CurrentMap != map
+                || WeatherRig.RainCoverForCurrentMap() != WeatherRig.RainCoverMode.RoofDepthBlack
+                || !_states.TryGetValue(map.Key, out var state)) return false;
+            if (state.Done) return true;
+            using var specularScope = ReflectiveSpecularRepairs.Suspend(map);
+            RestoreEntries(state, out _, out _); // also rolls back a prior incomplete classification
+            if (!RainCoverRepairs.RescanAndRerender("automatic raid bootstrap", refreshCurrentCamera: true)) return false;
+            try { Classify(map); }
+            catch
             {
-                return;
+                RestoreEntries(state, out _, out _);
+                throw;
             }
-            var map = ArenaMapRaid.CurrentMap;
-            if (map == null || !_states.TryGetValue(map.Key, out var state) || state.Scheduled)
-            {
-                return;
-            }
-            if (__instance._depthRT == null)
-            {
-                return; // guard: RT missing — retried on the next camera change
-            }
-
-            state.Scheduled = true;
-            float delay = Mathf.Max(0f, ClassifyDelaySeconds - (Time.time - state.SceneLoadTime));
-            EnsureScanHost();
-            _scanHost.GetComponent<ClassifyRunner>().StartCoroutine(ClassifyRunner.RunAfter(delay, map));
-        }
-
-        static void EnsureScanHost()
-        {
-            if (_scanHost != null)
-            {
-                return;
-            }
-            _scanHost = new GameObject("ArenaMapPort_IndoorFloorSmoothnessScan") { hideFlags = HideFlags.HideAndDontSave };
-            UnityEngine.Object.DontDestroyOnLoad(_scanHost);
-            _scanHost.AddComponent<ClassifyRunner>();
-        }
-
-        sealed class ClassifyRunner : MonoBehaviour
-        {
-            internal static IEnumerator RunAfter(float seconds, ArenaMapDescriptor map)
-            {
-                yield return new WaitForSeconds(seconds);
-                // Host test 2026-09-19: the first camera change (this coroutine's trigger) comes before
-                // the preset's remaining scenes (DEPOT/HANGAR/WAREHOUSE) have loaded — the scan saw only
-                // Arena_Bay5_Main. Wait for the raid to actually start (all scenes loaded, countdown over),
-                // the same anchor DaytimeVisualsProbe uses, plus a short margin.
-                float waited = 0f;
-                while (waited < 180f)
-                {
-                    var game = Comfort.Common.Singleton<EFT.AbstractGame>.Instantiated ? Comfort.Common.Singleton<EFT.AbstractGame>.Instance : null;
-                    if (game != null && game.Status == EFT.GameStatus.Started)
-                    {
-                        break;
-                    }
-                    yield return new WaitForSeconds(1f);
-                    waited += 1f;
-                }
-                yield return new WaitForSeconds(3f);
-                try
-                {
-                    // The first depth photo predates the late scenes (see above): redo the roof scan and
-                    // the photo now that everything is loaded, then classify against the fresh photo.
-                    RainCoverRepairs.RescanAndRerender("IndoorFloorSmoothness pre-classify");
-                    Classify(map);
-                }
-                catch (Exception e)
-                {
-                    Plugin.Log.LogError($"[ArenaMapPort][IndoorFloorSmoothness] map={map.Key} classify threw: {e}");
-                }
-            }
+            return state.Done;
         }
 
         // ---------------------------------------------------------------------------------------------
@@ -322,9 +243,9 @@ namespace ArenaMapPort.Client
             {
                 return;
             }
-            if (DepthPhotograper.Instance?._depthRT == null)
+            if (WeatherRig.DepthPhotographerForCurrentMap()?._depthRT == null)
             {
-                return; // guard — not retried, RenderPostfix already fired once
+                return; // bootstrap retries an unavailable donor photo
             }
             if (!_states.TryGetValue(map.Key, out var state))
             {

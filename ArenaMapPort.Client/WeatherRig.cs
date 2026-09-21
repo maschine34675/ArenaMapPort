@@ -1592,6 +1592,23 @@ namespace ArenaMapPort.Client
         // exactly the "fall back to the existing workaround" behavior required.
         internal static bool IsActiveForCurrentMap() => _activeMap != null && _activeMap == ArenaMapRaid.CurrentMap;
 
+        // DepthPhotograper.Start sets a global Instance only once. A later hideout/vanilla component
+        // can overwrite it and clear it on destruction while our reused donor still owns its photo.
+        // For an active full donor, its serialized RainController reference is authoritative.
+        internal static DepthPhotograper DepthPhotographerForCurrentMap() =>
+            IsActiveForCurrentMap() && _activeRig?.Kind == RigKind.Full
+                ? DonorCameraSubscriptions.Photo(_activeRig.Controller) : null;
+
+        internal static bool RefreshCurrentCameraForCover()
+        {
+            if (!IsActiveForCurrentMap() || _activeRig?.Kind != RigKind.Full || !CameraManager.Exist) return false;
+            // Native call binds the current camera/rain effects and renders the donor-owned photo.
+            // RaidCoverBootstrap invokes this once after full raid readiness, then classifies that photo.
+            if (!_activeRig.CameraSubscriptions.Refresh(CameraManager.Instance, _activeRig.Controller)) return false;
+            Plugin.Log.LogInfo($"[ArenaMapPort][WeatherRig] {_activeMap.Key}: refreshed weather/rain on current raid camera using donor-owned DepthPhotograper.");
+            return true;
+        }
+
         internal static bool KeepFillLightForCurrentMap() =>
             _activeMap != null && _configs.TryGetValue(_activeMap.Key, out var c) && c.KeepFillLight.Value;
 

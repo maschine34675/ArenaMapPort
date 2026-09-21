@@ -865,7 +865,7 @@ namespace ArenaMapPort.Client
             _rerenderHotkey = Plugin.Instance.Config.Bind("RainCoverLab", "RerenderHotkey",
                 new KeyboardShortcut(KeyCode.F8),
                 "§14 goal 4 — re-renders DepthPhotograper's depth photo immediately " +
-                "(DepthPhotograper.Instance.Render(), the same call a real camera change makes) and logs a " +
+                "(the active donor's DepthPhotograper.Render, the same photo a real camera change uses) and logs a " +
                 "fresh depth readback (the same line F9/LightingLab's own snapshot appends) at the live " +
                 "camera position, so a DrawTransform/CoverAll change below is visible without a new raid. " +
                 "Same 'poll a KeyboardShortcut every Update' pattern as LightingLab.cs's own F9 hotkey. Only " +
@@ -976,7 +976,7 @@ namespace ArenaMapPort.Client
         // (DEPOT/HANGAR/WAREHOUSE on Bay5) are loaded, so their roofs are missing from the first photo.
         // Returns true when the depth photo was actually re-rendered (review 2026-09-19: a caller that
         // re-classifies against the photo must not do so after a failed/skipped re-render).
-        internal static bool RescanAndRerender(string trigger)
+        internal static bool RescanAndRerender(string trigger, bool refreshCurrentCamera = false)
         {
             if (!ArenaMapRaid.IsLoaded() || !WeatherRig.IsActiveForCurrentMap())
             {
@@ -989,10 +989,10 @@ namespace ArenaMapPort.Client
                 state.EmptyScans = 0;
                 state.ElevatedMeshes = null;
             }
-            return RerenderNow(trigger);
+            return RerenderNow(trigger, refreshCurrentCamera);
         }
 
-        static bool RerenderNow(string trigger)
+        static bool RerenderNow(string trigger, bool refreshCurrentCamera = false)
         {
             if (!ArenaMapRaid.IsLoaded() || !WeatherRig.IsActiveForCurrentMap())
             {
@@ -1004,11 +1004,11 @@ namespace ArenaMapPort.Client
                 return false;
             }
 
-            var photo = DepthPhotograper.Instance;
+            var photo = WeatherRig.DepthPhotographerForCurrentMap();
             if (photo == null)
             {
                 Plugin.Log.LogInfo($"[ArenaMapPort][RainCoverLab] map={map.Key} {trigger}: " +
-                    "DepthPhotograper.Instance is null (no camera change yet this raid) — nothing to re-render.");
+                    "active donor has no DepthPhotograper — nothing to re-render.");
                 return false;
             }
 
@@ -1022,7 +1022,11 @@ namespace ArenaMapPort.Client
 
             try
             {
-                photo.Render();
+                if (refreshCurrentCamera)
+                {
+                    if (!WeatherRig.RefreshCurrentCameraForCover()) return false;
+                }
+                else photo.Render();
             }
             catch (Exception e)
             {
@@ -1135,7 +1139,7 @@ namespace ArenaMapPort.Client
 
         // §13 goal 1 — depth-map readback diagnostic. Called from LightingLab's F9 snapshot at the live
         // camera position (docs/progress/donor-settings-camera-weather.md §13 test steps: "F9 at both
-        // spots"). DepthPhotograper.Instance/_depthRT/_yBias/_depthTextureDimension are all public
+        // spots"). The donor photo's _depthRT/_yBias/_depthTextureDimension are all public
         // (DepthPhotograper.cs:10-27,45) and the component itself is never destroyed mid-raid — only its
         // transient _depthCamera GameObject/_cameraRT are, once per camera change (DepthPhotograper.cs:
         // 79-80) — so these four are safe to read live, no caching needed. _MapStart/_MapScale/
@@ -1145,10 +1149,10 @@ namespace ArenaMapPort.Client
         // OWN top-Y/farClipPlane need the SetupDepthCameraPostfix cache (see CoverState's own doc comment).
         internal static string BuildDepthReadback(Vector3 worldPos)
         {
-            var photo = DepthPhotograper.Instance;
+            var photo = WeatherRig.DepthPhotographerForCurrentMap();
             if (photo == null)
             {
-                return "RainCover depth readback: DepthPhotograper.Instance is null (no rig active for this " +
+                return "RainCover depth readback: active donor DepthPhotograper is null (no full rig active for this " +
                     "map, or the first camera change hasn't happened yet this raid).";
             }
 
@@ -1291,7 +1295,7 @@ namespace ArenaMapPort.Client
         {
             nothingPhotographed = true;
             height = float.NaN;
-            var photo = DepthPhotograper.Instance;
+            var photo = WeatherRig.DepthPhotographerForCurrentMap();
             if (photo == null || photo._depthRT == null)
             {
                 return false;

@@ -1,6 +1,7 @@
 #nullable disable
 using System;
 using EFT.CameraControl;
+using EFT.Weather;
 
 namespace ArenaMapPort.Client
 {
@@ -14,6 +15,19 @@ namespace ArenaMapPort.Client
         CameraManager _manager;
         Action _weatherChanged;
         Action _rainChanged;
+
+        // The serialized donor reference survives other photographers overwriting/clearing Instance.
+        internal static DepthPhotograper Photo(WeatherController controller) => controller?.RainController?._depthPhotograper;
+
+        internal bool Refresh(CameraManager manager, WeatherController controller)
+        {
+            if (manager?.Camera == null || Photo(controller) == null) return false;
+            var rain = controller.RainController;
+            Bind(manager, controller.OnCameraChanged, rain.CameraChanged);
+            controller.OnCameraChanged();
+            rain.CameraChanged(); // native path binds camera/effects and renders rain._depthPhotograper
+            return true;
+        }
 
         internal void Bind(CameraManager manager, Action weatherChanged, Action rainChanged)
         {
