@@ -23,6 +23,8 @@
     <Compile Include="..\ArenaMapPort.Client\ReflectiveSpecularRepairs.cs" Link="Client\ReflectiveSpecularRepairs.cs" />
     <Compile Include="..\ArenaMapPort.Client\ArenaMapRaid.cs" Link="Client\ArenaMapRaid.cs" />
     <Compile Include="..\ArenaMapPort.Client\DonorCameraSubscriptions.cs" Link="Client\DonorCameraSubscriptions.cs" />
+    <Compile Include="..\ArenaMapPort.Client\RaidCoverBootstrap.cs" Link="Client\RaidCoverBootstrap.cs" />
+    <Compile Include="..\ArenaMapPort.Client\ExfilNavMeshSampling.cs" Link="Client\ExfilNavMeshSampling.cs" />
   </ItemGroup>
 
   <!--
