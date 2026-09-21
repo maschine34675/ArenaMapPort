@@ -229,3 +229,11 @@ successor instead unless you're specifically investigating that cycle's history.
 - [equator-arenamode-integration.md](equator-arenamode-integration.md) — ten bot/four player markers,
   distant spawn coverage, independent review, deployment identities, native Deathmatch/Gun Game
   admission, replenishment, combat respawns and persisted-profile return on the GPU host.
+
+## Added 2026-09-21 — Bay5 gameplay and Equator specular cap
+
+- [bay5-arenamode-integration.md](bay5-arenamode-integration.md) — four player and ten bot markers,
+  distant coverage, native mode admission/respawns/profile protection, two ordinary exits, numeric
+  collision-layer parity in the NavMesh bake, and the final build/deployment acceptance checkpoints.
+- [equator-specular-cap.md](equator-specular-cap.md) — map-wide reversible `p0/Reflective` ceiling,
+  same-view native comparisons, indoor composition, and repeat-raid donor camera/cover initialization.

@@ -235,3 +235,46 @@ The focused TRX oracle executed **55/55 passing tests** (34 cap, 11 subscription
 including natural callback followed by bootstrap, repeated binding/preparation, replacement camera
 or manager, and failed native initialization. The real DLL-only Release build completed with
 **0 warnings / 0 errors** and no host deployment. Native two-raid acceptance remains pending.
+
+## 2026-09-21 08:11–08:32 CEST — final native acceptance
+
+The final client, server and Bay5 bundles were deployed through `deploy-to-spt.ps1 -Confirm`.
+Client source is `d896214` (including `26dd9f2` and `d514957`), SHA-256
+`9957897262AA1F5C0AE9E2BFFB2DA6B1FB80B1EE54F8DD711DDBCE63FFF92D34`.
+In fresh EFT instance `c2a37398`, UiBridge confirmed all 25 maschine plugins and Redeploy Core
+identical across VM mirror, host disk and loaded code, both before and after the tests.
+
+Two ordinary Equator PMC raids ran with AI=None in the same process, separated by extraction,
+MainMenu, a deliberate Hideout visit and return to MainMenu. **No F8 was used.**
+
+| Stage | First raid | Second raid after Hideout |
+|---|---|---|
+| Scripts schedules raid-ready cover | 08:13:04.951 | 08:25:10.697 |
+| Current camera and donor-owned photographer refreshed | 08:13:46.968 | 08:25:38.951 |
+| Indoor classification: 607 renderers / 1,103 clones | 08:13:48.311 | 08:25:40.535 |
+| Automatic post-start cover/classification complete | 08:13:48.311 | 08:25:40.536 |
+| Cap 0.30: 7,022 slots, 349 mesh decals, 6,221 renderers | 08:13:48.977 | 08:25:41.103 |
+
+This closes the previous second-raid failure; the older subscription-only attempt and manual-F8
+diagnosis above remain historical evidence, not the accepted fix. The final second-raid view at
+the same armored-van position retained the reduced sheen. The earlier live 1 → 0.30 → 1
+comparison and unchanged indoor parquet remain valid because the cap implementation is unchanged.
+The user's indoor reflection strength remained approximately 0.31 and the outer cap remained 0.30.
+Both Equator ordinary exits completed on this final build, also exercising near-floor exit sampling.
+
+The Hideout load was unusually slow: its main thread stopped answering UiBridge for roughly
+three minutes and recovered by 08:22:14 without restart, process termination or code changes.
+Hideout was positively identified before returning to MainMenu. A separate source review found
+no bootstrap/subscription recursion; this observation alone does not establish the delay's cause.
+No timing benchmark or clean-log claim is made. Existing missing optional weather/season managers,
+source marker reconciliation and other installed-mod warnings remain outside this acceptance.
+
+The following two Bay5 raids also completed automatic indoor classification (641 renderers /
+1,112 clones). Bay5's reflection ceiling remains disabled at 1.00; ordinary-map/shared-material
+isolation is covered by source review and the focused regression tests, not by a new vanilla raid.
+
+Evidence is retained under ignored `D:/.unlazy/bay5-reflections/`:
+`mapport-accepted-candidate-artifacts.json`, `final-install-verification.json`,
+`native-c2a37398-evidence.json` and the flushed `native-c2a37398.log`.
+The game returned to MainMenu after each extraction and was closed normally at 08:32 to flush
+the logs. The persisted profile finished with 440 HP and empty body-part effect dictionaries.

@@ -1,6 +1,6 @@
 # ArenaMapPort
 
-ArenaMapPort imports locally installed Escape from Tarkov: Arena environments as separate SPT locations. It targets the project's SPT 4.1.5 installation and Unity 2022.3.43f1.
+ArenaMapPort imports locally installed Escape from Tarkov: Arena environments as separate SPT locations. The server dependency pin is SPT 4.1.5; current native acceptance uses SPT 4.1.6 / EFT 0.16.9.5-40743 and Unity 2022.3.43f1.
 
 The port is a **geometry spike**: scene geometry, materials, collision, lighting, LOD groups, a freshly baked NavMesh, and an authored player start. It does not implement Arena match rules or full visual parity.
 
@@ -10,7 +10,9 @@ The port is a **geometry spike**: scene geometry, materials, collision, lighting
 
 The registry contains Equator and Bay5 plus 12 additional source-backed map definitions: AirPit, AirPit2.0, AutoService, Bowl, Prison, RailwayStation, Yard, Iceberg, Factory, Customs, Shoreline and Woods. All twelve additions were built, validated with schema-2 receipts and staged in `dist/` (verified 2026-09-15, 20:34 CEST; receipt layer simplified 2026-09-17). The complete distribution contains 14 maps, 42 bundles, 14 shader sidecars, 14 server base JSON files and both Release DLLs: 72 files, about 11.05 GB. Validation passed 86 Python tests, eight PowerShell log tests and 228 server tests, as of 2026-09-15/17. The server suite has grown with the bots/exits/PMC/stage-1 work: 267 tests green on 2026-09-20.
 
-**Playing Equator.** Equator is the only map with authored bots and exits (Bay5 was raided for visuals only, the other twelve never). A raid there today has: scavs that spawn, activate and patrol ([bots-stage1.md](docs/progress/bots-stage1.md)); PMC squads via `BossLocationSpawn` ([bots-stage3.md](docs/progress/bots-stage3.md)); two runtime-authored exfils with green smoke signals that end the raid on extraction ([exfils-stage2.md](docs/progress/exfils-stage2.md)); and opened spawn enclosures (five sliding-door assemblies plus the FCK roller shutter). It deliberately still lacks loot and scav raids (see above). Stage-1 combat/death correctness (a death-screen NRE guard, ballistic hits on LowPolyCollider-only props, and a NavMesh bake that excludes the now-open booth doors/shutter) is written in the working tree, awaiting its GPU-host raid test — see [HANDOFF.md](HANDOFF.md)'s stage table.
+**Equator and Bay5.** Both maps have four player starts, ten separate bot markers and two ordinary test exits. Both are integrated with the user's ArenaMode for individual Deathmatch and Gun Game; Tactical and team modes are excluded. Native tests have verified mode admission, bot replenishment, combat respawns and protected profile return. See [Equator acceptance](docs/progress/equator-arenamode-integration.md) and [Bay5 integration](docs/progress/bay5-arenamode-integration.md). The latter separates the first native pass from subsequent geometry and exit corrections. The remaining twelve maps still await their gameplay integration and first native acceptance.
+
+**Equator reflections.** F12 → maschine-ArenaMapPort → Lighting (arena_equator) → `ReflectiveSpecularCap` sets a map-wide ceiling on `p0/Reflective` materials, including uncovered props and mesh decals. Default 30%; 100% restores the input materials. Existing indoor settings remain separate. [Reflection evidence](docs/progress/equator-specular-cap.md) records native A/B views and the repeated-raid camera lifecycle repair.
 
 Equator/Bay5 retain their existing identities and artifact locations. The local Saw preset is present, but its 12 distinct referenced scene paths are absent; Saw cannot be ported from this source installation. Bay5's tournament preset is a mode variant, and Draft/the generic test preset are not additional independent maps.
 
@@ -38,9 +40,9 @@ The generic extractor includes scoped compatibility for source BC6H textures, co
 
 Customs, Shoreline and Woods contain seven real terrain heightfields. The converter preserves their height samples and holes and reconstructs the tiled 12-layer MicroSplat surface from source texture arrays, control maps, layer settings and height blending. All three terrain maps have passed the schema-2 full-map checks. Their live runtime validation remains pending.
 
-Active GPUInstancer grass is excluded from the implemented spike. Source investigation found about 7.1 million cached normal-camera grass candidates; native detail data alone would miss part of this vegetation. Existing ordinary tree geometry is retained, and disabled native tree records are not blindly instantiated again. Dynamic grass/wind, secondary terrain systems, source weather/time-of-day parity, audio/acoustics, loot, interactive doors, bot cover/spawn systems, PerfectCulling, ArenaMode integration and Fika remain outside the accepted scope.
+Active GPUInstancer grass is excluded from the implemented spike. Source investigation found about 7.1 million cached normal-camera grass candidates; native detail data alone would miss part of this vegetation. Existing ordinary tree geometry is retained, and disabled native tree records are not blindly instantiated again. Dynamic grass/wind, secondary terrain systems, source weather/time-of-day parity, audio/acoustics, loot, general interactive doors, native bot-cover baking, PerfectCulling and Fika remain outside the implemented scope. Equator/Bay5 spawn systems and ArenaMode integration are documented above.
 
-Offline validation, staged file hashes, live installation and a GPU raid are separate evidence. No new-map live raid pass is claimed. Deployment is a separate reviewed step; `pwsh tools/deploy-to-spt.ps1` is a dry run by default.
+Offline validation, staged file hashes, live installation and a GPU raid are separate evidence. Only the explicitly documented Equator/Bay5 runs establish native acceptance; they do not validate the other twelve maps. `pwsh tools/deploy-to-spt.ps1` is a dry run by default; an authorized install uses `-Confirm`.
 
 ## Earlier work
 
