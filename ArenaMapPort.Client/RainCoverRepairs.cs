@@ -530,7 +530,7 @@ namespace ArenaMapPort.Client
                     _ = coverMinHeight;
 
                     var filter = renderer.GetComponent<MeshFilter>();
-                    var mesh = filter != null ? filter.sharedMesh : null;
+                    var mesh = IndoorSurfaceMesh.StableSource(filter != null ? filter.sharedMesh : null);
                     if (mesh == null)
                     {
                         excludedNoMesh++;
@@ -1284,6 +1284,61 @@ namespace ArenaMapPort.Client
         {
             px = Mathf.Clamp(Mathf.FloorToInt((worldX - mapStart.x) * mapScale.x * dim), 0, dim - 1);
             py = Mathf.Clamp(Mathf.FloorToInt((worldZ - mapStart.z) * mapScale.z * dim), 0, dim - 1);
+        }
+
+        // A partition needs many samples along roof edges. One CPU-readable snapshot avoids a GPU
+        // readback/upload stall for each sample. Ownership is limited to one classification pass.
+        internal sealed class DepthSnapshot : IDisposable
+        {
+            readonly Texture2D _pixels;
+            readonly Vector3 _start, _scale;
+            readonly float _top, _far;
+            readonly int _dimension;
+            readonly bool _reversed;
+
+            internal DepthSnapshot(Texture2D pixels, Vector3 start, Vector3 scale, float top, float far)
+            {
+                _pixels = pixels; _start = start; _scale = scale; _top = top; _far = far;
+                _dimension = pixels.width; _reversed = SystemInfo.usesReversedZBuffer;
+            }
+
+            internal bool TrySample(float x, float z, out bool nothing, out float height)
+            {
+                WorldXZToTexel(_start, _scale, _dimension, x, z, out int px, out int py);
+                float raw = _pixels.GetPixel(px, py).r;
+                nothing = IsNothingPhotographed(raw, _reversed);
+                height = ReconstructHeightReversedAware(raw, _top, _far, _reversed);
+                return true;
+            }
+
+            public void Dispose() { if (_pixels != null) UnityEngine.Object.Destroy(_pixels); }
+        }
+
+        internal static DepthSnapshot CaptureDepthSnapshot(ArenaMapDescriptor map)
+        {
+            var photo = WeatherRig.DepthPhotographerForCurrentMap();
+            if (photo == null || photo._depthRT == null || !TryGetCachedCameraMeta(map, out float top, out float far))
+                return null;
+            Vector3 start = Shader.GetGlobalVector(MapStartId), scale = Shader.GetGlobalVector(MapScaleId);
+            int dim = (int)photo._depthTextureDimension;
+            if (scale.x == 0 || scale.z == 0 || dim <= 0 || dim > 8192
+                || photo._depthRT.width != dim || photo._depthRT.height != dim) return null;
+            var previous = RenderTexture.active;
+            Texture2D pixels = null;
+            try
+            {
+                pixels = new Texture2D(dim, dim, TextureFormat.RFloat, false, true);
+                RenderTexture.active = photo._depthRT;
+                pixels.ReadPixels(new Rect(0, 0, dim, dim), 0, 0, false);
+                // ReadPixels fills CPU pixels. This snapshot is never rendered, so no Apply/upload.
+                return new DepthSnapshot(pixels, start, scale, top, far);
+            }
+            catch
+            {
+                if (pixels != null) UnityEngine.Object.Destroy(pixels);
+                throw;
+            }
+            finally { RenderTexture.active = previous; }
         }
 
         // §19 — the shared entry point IndoorFloorSmoothnessRepairs' classifier calls. Caller owns

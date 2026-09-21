@@ -28,6 +28,9 @@ namespace ArenaMapPort.Client
     /// Runs once per raid after RaidCoverBootstrap observes a Started raid and its live camera.
     /// The bootstrap rebinds the reused donor to that camera, renders fresh cover and invokes the
     /// classifier. It does not depend on receiving a camera event during Scripts-scene loading.
+    /// Bay5's IndoorSurfaceRepair additionally separates covered upward floor portions of mixed
+    /// building meshes, with independent linear reflection/smoothness controls. See
+    /// docs/progress/bay5-indoor-materials.md for the native comparison and boundary limitations.
     /// </summary>
     internal static class IndoorFloorSmoothnessRepairs
     {
@@ -57,6 +60,8 @@ namespace ArenaMapPort.Client
             internal Renderer Renderer;
             internal Material[] OriginalMaterials; // cached BEFORE cloning — restore target
             internal Material[] ClonedMaterials;   // renderer.materials after cloning
+            internal readonly List<Material> OwnedMaterials = new List<Material>();
+            internal IndoorSurfaceMesh.Split Surface;
             internal List<(int matIndex, int propId, float original)> Props;
             internal List<(int matIndex, int propId, Color original)> ColorProps; // §20.2/§20.3 — _ReflectColor, _SpecColor
             internal List<(int matIndex, int propId, float original)> ReflectionFloatProps; // §20.3 — _Specularness
@@ -104,6 +109,12 @@ namespace ArenaMapPort.Client
                 {
                     reflectionEntry.SettingChanged += (_, __) => ReapplyIfLoaded(map);
                 }
+                var surfaceEntry = WeatherRig.IndoorSurfaceRepairEntry(map);
+                if (surfaceEntry != null) surfaceEntry.SettingChanged += (_, __) => ReclassifyIfLoaded(map);
+                var surfaceGloss = WeatherRig.IndoorSurfaceSmoothnessEntry(map);
+                if (surfaceGloss != null) surfaceGloss.SettingChanged += (_, __) => ReapplyIfLoaded(map);
+                var surfaceReflection = WeatherRig.IndoorSurfaceReflectionStrengthEntry(map);
+                if (surfaceReflection != null) surfaceReflection.SettingChanged += (_, __) => ReapplyIfLoaded(map);
                 var glassEntry = WeatherRig.CoverIncludesGlassEntry(map);
                 if (glassEntry != null)
                 {
@@ -167,7 +178,12 @@ namespace ArenaMapPort.Client
             Plugin.Log.LogInfo($"[ArenaMapPort][IndoorFloorSmoothness] map={map.Key} re-classifying: restored {restored} " +
                 $"renderer(s), destroyed {destroyed} clone(s)");
             state.Done = false;
-            Classify(map);
+            try { Classify(map); }
+            catch
+            {
+                RestoreEntries(state, out _, out _);
+                throw;
+            }
         }
 
         static void RestoreEntries(IndoorFloorState state, out int restoredRenderers, out int destroyedClones)
@@ -181,7 +197,8 @@ namespace ArenaMapPort.Client
                     entry.Renderer.materials = entry.OriginalMaterials;
                     restoredRenderers++;
                 }
-                foreach (var clone in entry.ClonedMaterials)
+                IndoorSurfaceMesh.Release(entry.Surface);
+                foreach (var clone in entry.OwnedMaterials)
                 {
                     if (clone != null)
                     {
@@ -252,12 +269,14 @@ namespace ArenaMapPort.Client
                 return;
             }
 
-            int floorLike = 0, indoor = 0, clones = 0;
+            var elapsed = System.Diagnostics.Stopwatch.StartNew();
+            int floorLike = 0, indoor = 0, clones = 0, surfaceMeshes = 0, surfaceTriangles = 0;
             using var specularScope = ReflectiveSpecularRepairs.Suspend(map);
             var perScene = new List<string>();
             var indoorNames = new List<string>();
             var rejects = new List<string>();
             Texture2D scratch = null;
+            RainCoverRepairs.DepthSnapshot roof = null;
             try
             {
                 scratch = new Texture2D(1, 1, TextureFormat.RFloat, false, true);
@@ -266,6 +285,27 @@ namespace ArenaMapPort.Client
                 int percent = WeatherRig.IndoorCoverPercentForCurrentMap();
                 float multiplier = WeatherRig.IndoorFloorSmoothnessForCurrentMap();
                 float reflection = WeatherRig.IndoorReflectionStrengthForCurrentMap(); // §20.2
+                bool surfaceRepair = WeatherRig.IndoorSurfaceRepairForCurrentMap();
+                if (surfaceRepair)
+                {
+                    roof = RainCoverRepairs.CaptureDepthSnapshot(map);
+                    if (roof == null) return; // retry after the donor has a valid, bounded depth photo
+                }
+                // Cache actual coordinates (no rounding across roof edges); shared LOD floor topology
+                // then reuses the readback while different-height floors compare their own roof clearance.
+                var roofSamples = new Dictionary<(float x, float z), (bool found, float height)>();
+                bool CoveredSurface(IndoorSurfaceGeometry.Point point)
+                {
+                    var key = ((float)point.X, (float)point.Z);
+                    if (!roofSamples.TryGetValue(key, out var sample))
+                    {
+                        bool ok = roof.TrySample(key.Item1, key.Item2,
+                            out bool nothing, out float height);
+                        sample = (ok && !nothing, height);
+                        roofSamples.Add(key, sample);
+                    }
+                    return sample.found && sample.height >= point.Y + 2.5 && sample.height <= point.Y + 60;
+                }
 
                 int sceneCount = SceneManager.sceneCount;
                 for (int i = 0; i < sceneCount; i++)
@@ -288,7 +328,7 @@ namespace ArenaMapPort.Client
                             {
                                 continue;
                             }
-                            if (!renderer.enabled || !renderer.gameObject.activeInHierarchy)
+                            if (!renderer.gameObject.activeInHierarchy || (!renderer.enabled && !surfaceRepair))
                             {
                                 if (renderer.gameObject.name.IndexOf("indoor", StringComparison.OrdinalIgnoreCase) >= 0
                                     && renderer.gameObject.name.IndexOf("puddle", StringComparison.OrdinalIgnoreCase) < 0)
@@ -338,6 +378,26 @@ namespace ArenaMapPort.Client
                             // RainCoverRepairs.IsExcludedByMaterial/LightingLab.ScanGroundMaterials already
                             // document (avoids needlessly instancing a material we merely inspect).
                             var shared = renderer.sharedMaterials;
+                            // All active LOD meshes take this path, including renderer.enabled=false.
+                            // An examined-but-uncovered building must not fall back to whole-shell scaling.
+                            if (surfaceRepair && IndoorSurfaceMesh.TryPrepare(renderer, shared, CoveredSurface, out var split))
+                            {
+                                if (split != null)
+                                {
+                                    var surface = CloneAndScale(renderer, shared,
+                                        WeatherRig.IndoorSurfaceSmoothnessForCurrentMap(),
+                                        WeatherRig.IndoorSurfaceReflectionStrengthForCurrentMap(), state, split);
+                                    surfaceMeshes++;
+                                    surfaceTriangles += split.Triangles;
+                                    clones += surface.OwnedMaterials.Count;
+                                    Plugin.Log.LogInfo($"[ArenaMapPort][IndoorSurface] map={map.Key} renderer='{goName}' " +
+                                        $"triangles={split.Triangles} floorSlots={surface.OwnedMaterials.Count} " +
+                                        $"materials={shared.Length}->{surface.ClonedMaterials.Length} " +
+                                        $"vertices={split.Original.vertexCount}->{split.Copy.vertexCount}");
+                                }
+                                continue;
+                            }
+                            if (!renderer.enabled) continue; // retain the legacy path's enabled-only behavior
                             if (!HasFloorLikeShader(shared) || HasDecalShader(shared))
                             {
                                 Reject(large, rejects, renderer, bounds, HasDecalShader(shared) ? "decal" : "shader", -1);
@@ -345,7 +405,7 @@ namespace ArenaMapPort.Client
                             }
 
                             floorLike++;
-                            int covered = CountCoveredSamples(map, scratch, bounds);
+                            int covered = CountCoveredSamples(map, scratch, bounds, roof);
                             if (covered * 100 < percent * CoverGridSamples)
                             {
                                 Reject(large, rejects, renderer, bounds, "cover", covered);
@@ -361,9 +421,8 @@ namespace ArenaMapPort.Client
                             {
                                 Reject(true, rejects, renderer, bounds, "ACCEPTED", covered);
                             }
-                            var entry = CloneAndScale(renderer, shared, multiplier, reflection);
-                            state.Entries.Add(entry);
-                            clones += entry.ClonedMaterials.Length;
+                            var entry = CloneAndScale(renderer, shared, multiplier, reflection, state);
+                            clones += entry.OwnedMaterials.Count;
                         }
                     }
                     perScene.Add($"{scene.name}={sceneRenderers}");
@@ -371,6 +430,7 @@ namespace ArenaMapPort.Client
             }
             finally
             {
+                roof?.Dispose();
                 if (scratch != null)
                 {
                     UnityEngine.Object.Destroy(scratch);
@@ -378,6 +438,10 @@ namespace ArenaMapPort.Client
             }
 
             state.Done = true;
+            Plugin.Log.LogInfo($"[ArenaMapPort][IndoorSurface] map={map.Key} enabled={WeatherRig.IndoorSurfaceRepairForCurrentMap()} " +
+                $"meshes={surfaceMeshes} triangles={surfaceTriangles} " +
+                $"smoothness={WeatherRig.IndoorSurfaceSmoothnessForCurrentMap():0.00} " +
+                $"reflection={WeatherRig.IndoorSurfaceReflectionStrengthForCurrentMap():0.00} elapsedMs={elapsed.ElapsedMilliseconds}");
             for (int i = 0; i < rejects.Count; i++)
             {
                 Plugin.Log.LogInfo($"[ArenaMapPort][IndoorFloorSmoothness] map={map.Key} rejected large candidate: {rejects[i]}");
@@ -454,7 +518,8 @@ namespace ArenaMapPort.Client
         const int CoverGrid = 5;
         const int CoverGridSamples = CoverGrid * CoverGrid;
 
-        static int CountCoveredSamples(ArenaMapDescriptor map, Texture2D scratch, Bounds bounds)
+        static int CountCoveredSamples(ArenaMapDescriptor map, Texture2D scratch, Bounds bounds,
+            RainCoverRepairs.DepthSnapshot roof = null)
         {
             float insetX = (bounds.max.x - bounds.min.x) * 0.1f;
             float insetZ = (bounds.max.z - bounds.min.z) * 0.1f;
@@ -471,7 +536,10 @@ namespace ArenaMapPort.Client
                 for (int gz = 0; gz < CoverGrid; gz++)
                 {
                     float wz = Mathf.Lerp(loZ, hiZ, gz / (float)(CoverGrid - 1));
-                    if (RainCoverRepairs.TrySampleDepthAtWorldPoint(map, scratch, wx, wz, out bool nothing, out float height)
+                    bool nothing; float height;
+                    bool sampled = roof != null ? roof.TrySample(wx, wz, out nothing, out height)
+                        : RainCoverRepairs.TrySampleDepthAtWorldPoint(map, scratch, wx, wz, out nothing, out height);
+                    if (sampled
                         && !nothing && height >= coverLoY && height <= coverHiY)
                     {
                         covered++;
@@ -484,20 +552,31 @@ namespace ArenaMapPort.Client
         // ---------------------------------------------------------------------------------------------
         // Material cloning and restore.
         // ---------------------------------------------------------------------------------------------
-        static IndoorFloorEntry CloneAndScale(Renderer renderer, Material[] original, float multiplier, float reflection)
+        static IndoorFloorEntry CloneAndScale(Renderer renderer, Material[] original, float multiplier, float reflection,
+            IndoorFloorState state, IndoorSurfaceMesh.Split surface = null)
         {
-            var clones = new Material[original.Length];
+            var inputs = surface?.Materials ?? original;
+            var clones = (Material[])inputs.Clone();
             var props = new List<(int matIndex, int propId, float original)>();
             var colorProps = new List<(int matIndex, int propId, Color original)>();
             var reflectionFloats = new List<(int matIndex, int propId, float original)>();
-            for (int i = 0; i < original.Length; i++)
+            var entry = new IndoorFloorEntry
             {
-                if (original[i] == null)
+                Renderer = renderer, OriginalMaterials = original, ClonedMaterials = clones, Surface = surface,
+                Props = props, ColorProps = colorProps, ReflectionFloatProps = reflectionFloats,
+            };
+            // Own resources BEFORE the first material allocation/renderer write, so either classification
+            // caller can roll back partial failures (including a mesh prepared but not yet attached).
+            state.Entries.Add(entry);
+            for (int i = 0; i < inputs.Length; i++)
+            {
+                if (inputs[i] == null || (surface != null && !surface.Selected[i]))
                 {
-                    clones[i] = null;
                     continue;
                 }
-                var clone = new Material(original[i]) { name = original[i].name + " (ArenaMapPort IndoorFloorSmoothness clone)" };
+                var clone = new Material(inputs[i]) { name = inputs[i].name +
+                    (surface == null ? " (ArenaMapPort IndoorFloorSmoothness clone)" : " (ArenaMapPort IndoorSurface clone)") };
+                entry.OwnedMaterials.Add(clone);
                 clones[i] = clone;
                 // Reuses LightingLab's own discovery technique (promoted internal, hint list parameterized)
                 // with this file's own hint set — task's own "same discovery as LightingLab E".
@@ -522,7 +601,7 @@ namespace ArenaMapPort.Client
                     colorProps.Add((i, SpecColorId, c));
                     clone.SetColor(SpecColorId, ScaleRgb(c, reflection));
                 }
-                if (HasFloatProperty(clone.shader, SpecularnessName))
+                if (surface == null && HasFloatProperty(clone.shader, SpecularnessName))
                 {
                     float f = clone.GetFloat(SpecularnessId);
                     reflectionFloats.Add((i, SpecularnessId, f));
@@ -536,11 +615,8 @@ namespace ArenaMapPort.Client
             // floor's own shared original (found via the YARD renderer) is untouched by this clone — see
             // this file's own class doc comment.
             renderer.materials = clones;
-            return new IndoorFloorEntry
-            {
-                Renderer = renderer, OriginalMaterials = original, ClonedMaterials = clones,
-                Props = props, ColorProps = colorProps, ReflectionFloatProps = reflectionFloats,
-            };
+            if (surface != null) surface.Filter.sharedMesh = surface.Copy;
+            return entry;
         }
 
         static bool HasFloatProperty(Shader shader, string name)
@@ -597,6 +673,10 @@ namespace ArenaMapPort.Client
             int scaled = 0, recolored = 0;
             foreach (var entry in state.Entries)
             {
+                multiplier = entry.Surface == null ? WeatherRig.IndoorFloorSmoothnessForCurrentMap()
+                    : WeatherRig.IndoorSurfaceSmoothnessForCurrentMap();
+                reflection = entry.Surface == null ? WeatherRig.IndoorReflectionStrengthForCurrentMap()
+                    : WeatherRig.IndoorSurfaceReflectionStrengthForCurrentMap();
                 foreach (var (matIndex, propId, original) in entry.Props)
                 {
                     var mat = entry.ClonedMaterials[matIndex];
@@ -635,9 +715,25 @@ namespace ArenaMapPort.Client
                     mat.SetFloat(propId, original * reflection);
                     recolored++;
                 }
+                if (entry.Surface != null)
+                {
+                    var values = new List<string>();
+                    foreach (var mat in entry.OwnedMaterials)
+                    {
+                        if (mat == null || !HasColorProperty(mat.shader, SpecColorName)) continue;
+                        var color = mat.GetColor(SpecColorId);
+                        float strength = HasFloatProperty(mat.shader, SpecularnessName) ? mat.GetFloat(SpecularnessId) : 1f;
+                        float gloss = mat.HasProperty("_Glossness") ? mat.GetFloat("_Glossness") : float.NaN;
+                        values.Add($"spec={Mathf.Max(color.r, Mathf.Max(color.g, color.b)) * strength:0.0000}/gloss={gloss:0.0000}");
+                    }
+                    Plugin.Log.LogInfo($"[ArenaMapPort][IndoorSurface] renderer='{entry.Renderer?.name}' uncapped floor values: {string.Join(", ", values)}");
+                }
             }
-            Plugin.Log.LogInfo($"[ArenaMapPort][IndoorFloorSmoothness] map={map.Key} multiplier={multiplier:0.00} " +
-                $"reflection={reflection:0.00} reapplied live to {scaled} cloned smoothness value(s) + {recolored} " +
+            Plugin.Log.LogInfo($"[ArenaMapPort][IndoorFloorSmoothness] map={map.Key} legacySmoothness={WeatherRig.IndoorFloorSmoothnessForCurrentMap():0.00} " +
+                $"legacyReflection={WeatherRig.IndoorReflectionStrengthForCurrentMap():0.00} " +
+                $"surfaceSmoothness={WeatherRig.IndoorSurfaceSmoothnessForCurrentMap():0.00} " +
+                $"surfaceReflection={WeatherRig.IndoorSurfaceReflectionStrengthForCurrentMap():0.00} " +
+                $"reapplied live to {scaled} cloned smoothness value(s) + {recolored} " +
                 $"reflection value(s) (_ReflectColor/_SpecColor/_Specularness) across {state.Entries.Count} indoor renderer(s).");
         }
 
@@ -649,16 +745,21 @@ namespace ArenaMapPort.Client
             {
                 return "§19 IndoorFloorSmoothness: n/a (no state for this map — no rig, or RainCoverMethod != RoofDepthBlack)";
             }
-            int clones = 0;
+            int clones = 0, surfaces = 0, triangles = 0;
             foreach (var e in state.Entries)
             {
-                clones += e.ClonedMaterials.Length;
+                clones += e.OwnedMaterials.Count;
+                if (e.Surface != null) { surfaces++; triangles += e.Surface.Triangles; }
             }
             return $"§19 IndoorFloorSmoothness: multiplier={WeatherRig.IndoorFloorSmoothnessForCurrentMap():0.00} " +
                 $"reflection={WeatherRig.IndoorReflectionStrengthForCurrentMap():0.00} " +
                 $"coverIncludesGlass={WeatherRig.CoverIncludesGlassForCurrentMap()} " +
                 $"coverPercent={WeatherRig.IndoorCoverPercentForCurrentMap()} done={state.Done} " +
-                $"indoor={state.Entries.Count} materialClones={clones}";
+                $"indoor={state.Entries.Count} materialClones={clones} " +
+                $"surfaceRepair={WeatherRig.IndoorSurfaceRepairForCurrentMap()} " +
+                $"surfaceMeshes={surfaces} surfaceTriangles={triangles} " +
+                $"surfaceSmoothness={WeatherRig.IndoorSurfaceSmoothnessForCurrentMap():0.00} " +
+                $"surfaceReflection={WeatherRig.IndoorSurfaceReflectionStrengthForCurrentMap():0.00}";
         }
     }
 }

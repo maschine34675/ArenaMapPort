@@ -3,7 +3,41 @@
 Snapshot for whoever continues (human or agent). Verify the commits named here against `git log`; this file
 is updated by hand at each handover, it is not an automatic record. Read [AGENTS.md](AGENTS.md) first.
 
-## State on 2026-09-21 — Bay5 harbor background accepted at 11:56 CEST
+## State on 2026-09-21 — Bay5 covered-floor reflections accepted at 22:13 CEST
+
+**Bay5's covered Hangar floor now has independent reflection and smoothness controls, built,
+deployed and tested in-game.** Branch `feature/bay5-indoor-materials`, based on `9f8911e`.
+The render-only partition corrects covered floor portions inside mixed building meshes; original
+wall/decal/outdoor slots are retained. All four Hangar LODs follow the same route. F12 section
+`Lighting (arena_bay5)`: `IndoorSurfaceRepair=true`, `IndoorSurfaceReflectionStrength=0.20`,
+`IndoorSurfaceSmoothness=0.50`. Existing Bay5 cap `0.2957746` and legacy settings are preserved.
+Other maps default to the new surface path disabled.
+
+Final client SHA-256:
+`8F8E79C808BDF7D1054C68180443DFE6F82E61CE4F3AD7A84BDB223AF3593CBA`.
+Of 72 deployed artifacts only that client changed; 71 remain byte-identical to the accepted
+background delivery. No scene/NavMesh/server/ArenaMode changes. Release build had zero
+warnings/errors; 348 tests passed and independent review found no blocking issue.
+
+Fresh GPU process `851020e4` (21:53:32) verified matching VM, host and loaded identities. Bay5
+automatically partitioned 32 render meshes including LODs / 21,032 covered triangle fragments.
+Enabled classification took 602–642 ms in six observed passes. Same-view material and independent
+knob controls, exterior on/off control, glass false/true plus F8, and the Bay5–Equator–Bay5 sequence
+passed. Both final Bay5 teardowns restored 642 renderers / destroyed 1,008 owned material clones.
+Equator retained 607 renderers / 1,103 clones with the new path off. No MapPort warnings/errors in
+the recorded final process. EFT returned to MainMenu and was exited normally at about 22:13.
+
+The covered concrete is less reflective. Original puddles still reflect strongly, and small
+material transitions can remain around roof openings: cover is sampled, not exact polygon
+clipping. No new interior-reflection renderer or exhaustive all-distance LOD walk is claimed.
+Full evidence, local screenshot paths, algorithm limits and receipts are in
+[Bay5 covered-floor reflections](docs/progress/bay5-indoor-materials.md).
+
+The next gameplay step remains one additional map through [the map recipe](docs/MAP-RECIPE.md).
+For further Bay5 visual tuning, use the two new controls independently; authored puddles are
+outside this repair. Historical gameplay/profile acceptance below was not repeated by this task.
+
+## Previous acceptance on 2026-09-21 — Bay5 harbor background at 11:56 CEST
 
 **Bay5's original harbor background is built, deployed to the GPU host and tested in-game.**
 The native views show the northern gantry, southeast portal crane and original container stacks.

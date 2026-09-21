@@ -243,3 +243,10 @@ successor instead unless you're specifically investigating that cycle's history.
 - [bay5-background.md](bay5-background.md) — original background extraction and native crane/container
   views, bounded weather/navigation scans, legacy full-map preset regeneration, one corrected bot
   marker, connected runtime patrol graph, both ordinary exits and final Deathmatch/profile acceptance.
+
+## Added 2026-09-21 — Bay5 covered-floor material response
+
+- [bay5-indoor-materials.md](bay5-indoor-materials.md) — mixed Hangar mesh diagnosis, covered-floor
+  subdivision, independent reflection/smoothness controls, bounded client deployment, 348 tests,
+  native interior/exterior comparisons, glass-cover rescans and Bay5–Equator–Bay5 cleanup acceptance.
+  Authored puddles and approximate roof-edge transitions remain explicit visual limits.

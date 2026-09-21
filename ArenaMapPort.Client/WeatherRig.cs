@@ -192,6 +192,9 @@ namespace ArenaMapPort.Client
             // §20.2 — glass counts as roof in the depth photo; reflection tint of the indoor clones.
             internal BepInEx.Configuration.ConfigEntry<bool> CoverIncludesGlass;
             internal BepInEx.Configuration.ConfigEntry<float> IndoorReflectionStrength;
+            internal BepInEx.Configuration.ConfigEntry<bool> IndoorSurfaceRepair;
+            internal BepInEx.Configuration.ConfigEntry<float> IndoorSurfaceSmoothness;
+            internal BepInEx.Configuration.ConfigEntry<float> IndoorSurfaceReflectionStrength;
             internal BepInEx.Configuration.ConfigEntry<float> ReflectiveSpecularCap;
         }
 
@@ -537,6 +540,22 @@ namespace ArenaMapPort.Client
                     "_ReflectColor, on the same material clones IndoorFloorSmoothness scales. 1.0 = authored " +
                     "values; lower dims the sky mirrored by polished indoor floors. Equator default 0.3 (host A/B " +
                     "2026-09-19: the lounge parquet reads as dark wood again; 0.0 turns spec-only props black). Live.",
+                    new BepInEx.Configuration.AcceptableValueRange<float>(0f, 1f)));
+
+            cfg.IndoorSurfaceRepair = Plugin.Instance.Config.Bind(section, "IndoorSurfaceRepair", bay5Defaults,
+                "Separate covered floor triangles in mixed building meshes before adjusting their materials. " +
+                "Leaves walls, decals and uncovered triangles on their existing materials. Bay5 defaults on. " +
+                "Requires the active weather rig and RoofDepthBlack. Live; toggling reclassifies and restores meshes.");
+            cfg.IndoorSurfaceSmoothness = Plugin.Instance.Config.Bind(section, "IndoorSurfaceSmoothness", 0.5f,
+                new BepInEx.Configuration.ConfigDescription(
+                    "Smoothness/gloss multiplier for the covered floor triangles selected by IndoorSurfaceRepair. " +
+                    "Independent of reflection strength. 1 = authored sharpness, lower softens reflections. Live.",
+                    new BepInEx.Configuration.AcceptableValueRange<float>(0f, 1f)));
+            cfg.IndoorSurfaceReflectionStrength = Plugin.Instance.Config.Bind(section, "IndoorSurfaceReflectionStrength", 0.2f,
+                new BepInEx.Configuration.ConfigDescription(
+                    "Linear reflection multiplier for the covered p0/Reflective floor triangles selected by " +
+                    "IndoorSurfaceRepair. Scales specular color once and retains specular intensity; 0.2 = 20% " +
+                    "of authored specular before ReflectiveSpecularCap. Also scales cubemap tint. Live.",
                     new BepInEx.Configuration.AcceptableValueRange<float>(0f, 1f)));
 
             cfg.ReflectiveSpecularCap = Plugin.Instance.Config.Bind(section, "ReflectiveSpecularCap", equatorDefaults ? 0.3f : 1f,
@@ -1658,6 +1677,19 @@ namespace ArenaMapPort.Client
 
         internal static BepInEx.Configuration.ConfigEntry<float> IndoorReflectionStrengthEntry(ArenaMapDescriptor map) =>
             _configs.TryGetValue(map.Key, out var c) ? c.IndoorReflectionStrength : null;
+
+        internal static bool IndoorSurfaceRepairForCurrentMap() =>
+            IsActiveForCurrentMap() && _configs.TryGetValue(_activeMap.Key, out var c) && c.IndoorSurfaceRepair.Value;
+        internal static float IndoorSurfaceSmoothnessForCurrentMap() =>
+            IsActiveForCurrentMap() && _configs.TryGetValue(_activeMap.Key, out var c) ? c.IndoorSurfaceSmoothness.Value : 1f;
+        internal static float IndoorSurfaceReflectionStrengthForCurrentMap() =>
+            IsActiveForCurrentMap() && _configs.TryGetValue(_activeMap.Key, out var c) ? c.IndoorSurfaceReflectionStrength.Value : 1f;
+        internal static BepInEx.Configuration.ConfigEntry<bool> IndoorSurfaceRepairEntry(ArenaMapDescriptor map) =>
+            _configs.TryGetValue(map.Key, out var c) ? c.IndoorSurfaceRepair : null;
+        internal static BepInEx.Configuration.ConfigEntry<float> IndoorSurfaceSmoothnessEntry(ArenaMapDescriptor map) =>
+            _configs.TryGetValue(map.Key, out var c) ? c.IndoorSurfaceSmoothness : null;
+        internal static BepInEx.Configuration.ConfigEntry<float> IndoorSurfaceReflectionStrengthEntry(ArenaMapDescriptor map) =>
+            _configs.TryGetValue(map.Key, out var c) ? c.IndoorSurfaceReflectionStrength : null;
 
         static readonly System.Reflection.FieldInfo ScreenAmbientBlockField =
             HarmonyLib.AccessTools.Field(typeof(AmbientLight), "_screenAmbientBlock");
