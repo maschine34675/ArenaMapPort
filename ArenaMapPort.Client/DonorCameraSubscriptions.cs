@@ -2,6 +2,7 @@
 using System;
 using EFT.CameraControl;
 using EFT.Weather;
+using UnityEngine;
 
 namespace ArenaMapPort.Client
 {
@@ -15,6 +16,7 @@ namespace ArenaMapPort.Client
         CameraManager _manager;
         Action _weatherChanged;
         Action _rainChanged;
+        Camera _initializedRainCamera;
 
         // The serialized donor reference survives other photographers overwriting/clearing Instance.
         internal static DepthPhotograper Photo(WeatherController controller) => controller?.RainController?._depthPhotograper;
@@ -25,12 +27,16 @@ namespace ArenaMapPort.Client
             var rain = controller.RainController;
             Bind(manager, controller.OnCameraChanged, rain.CameraChanged);
             controller.OnCameraChanged();
-            rain.CameraChanged(); // native path binds camera/effects and renders rain._depthPhotograper
+            // RainScreenDrops.Init allocates material/state in the native callback. A natural camera
+            // event may already have initialized this camera; the post-start pass only needs a photo.
+            if (_initializedRainCamera == manager.Camera) Photo(controller).Render();
+            else OnRainCameraChanged();
             return true;
         }
 
         internal void Bind(CameraManager manager, Action weatherChanged, Action rainChanged)
         {
+            if (_manager == manager && _weatherChanged == weatherChanged && _rainChanged == rainChanged) return;
             Unbind();
             if (manager == null) return;
             _manager = manager;
@@ -39,7 +45,20 @@ namespace ArenaMapPort.Client
             manager.OnCameraChanged -= weatherChanged;
             manager.OnCameraChanged -= rainChanged;
             manager.OnCameraChanged += weatherChanged;
-            manager.OnCameraChanged += rainChanged;
+            if (rainChanged != null) manager.OnCameraChanged += OnRainCameraChanged;
+        }
+
+        void OnRainCameraChanged()
+        {
+            var manager = _manager;
+            var camera = manager?.Camera;
+            var rainChanged = _rainChanged;
+            _initializedRainCamera = null;
+            rainChanged?.Invoke();
+            // Record only a completed callback on the still-current binding/camera. Failed native
+            // initialization must remain retryable rather than being accepted as a completed refresh.
+            if (manager == _manager && rainChanged == _rainChanged && manager?.Camera == camera)
+                _initializedRainCamera = camera;
         }
 
         internal void Unbind()
@@ -47,10 +66,11 @@ namespace ArenaMapPort.Client
             if (_manager != null)
             {
                 _manager.OnCameraChanged -= _weatherChanged;
-                _manager.OnCameraChanged -= _rainChanged;
+                _manager.OnCameraChanged -= OnRainCameraChanged;
             }
             _manager = null;
             _weatherChanged = _rainChanged = null;
+            _initializedRainCamera = null;
         }
     }
 }

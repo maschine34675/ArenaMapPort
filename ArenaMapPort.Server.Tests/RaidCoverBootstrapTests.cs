@@ -74,6 +74,20 @@ namespace ArenaMapPort.Server.Tests
             Assert.Equal(1, _ownedPhoto.Renders);
         }
 
+        [Fact]
+        public void NaturalCameraEventBeforeBootstrapDoesNotInitializeRainTwice()
+        {
+            Load(); CameraReady();
+            var controller = WeatherRig.Controller;
+            IndoorFloorSmoothnessRepairs.Owner.Bind(CameraManager.Instance, controller.OnCameraChanged, controller.RainController!.CameraChanged);
+            CameraManager.Instance.Raise();
+            Assert.Equal(1, _ownedPhoto.Renders);
+            Tick(8);
+            Assert.Equal(2, _ownedPhoto.Renders); // natural early photo, then one complete post-start photo
+            Assert.Equal(1, controller.RainController.Initializations);
+            Assert.Equal(1, IndoorFloorSmoothnessRepairs.Classifications);
+        }
+
         [Theory]
         [InlineData(false)]
         [InlineData(true)]

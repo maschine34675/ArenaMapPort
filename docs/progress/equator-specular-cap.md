@@ -217,3 +217,21 @@ the current-camera/donor-owned-photographer refresh log, the depth rerender tagg
 `automatic post-start cover/classification complete` log without F8. Repeat after extraction and
 an intervening Hideout visit in the same EFT process. This offline pass only stages the DLL in
 the repository's `dist/`; deployment and that second-raid acceptance remain the root task's work.
+
+## 2026-09-21 — avoid duplicate native rain initialization during bootstrap
+
+Independent review found that the native summer camera callback calls `RainScreenDrops.Init`
+(`RainController.cs:163–168`), which creates a new drop placer and material
+(`RainScreenDrops.cs:201–212`). The bootstrap must not repeat that initialization when the normal
+camera event already completed it on the same camera.
+
+`DonorCameraSubscriptions` now replaces only its donor's Awake rain callback with an owned wrapper.
+That wrapper records the camera only after the native callback completes successfully. Binding the
+same manager and delegates preserves that observation; a new manager, camera, or unload invalidates
+it. A refresh still updates weather, but an already-initialized camera needs only its donor photo's
+`Render` call. A failed callback remains retryable. Unrelated manager event subscribers remain intact.
+
+The focused TRX oracle executed **55/55 passing tests** (34 cap, 11 subscription, 10 bootstrap cases),
+including natural callback followed by bootstrap, repeated binding/preparation, replacement camera
+or manager, and failed native initialization. The real DLL-only Release build completed with
+**0 warnings / 0 errors** and no host deployment. Native two-raid acceptance remains pending.

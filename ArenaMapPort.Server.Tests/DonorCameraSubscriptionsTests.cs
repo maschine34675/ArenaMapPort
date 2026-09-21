@@ -1,25 +1,37 @@
 using ArenaMapPort.Client;
 using EFT.CameraControl;
+using EFT.Weather;
+using UnityEngine;
 using Xunit;
 
 namespace ArenaMapPort.Server.Tests
 {
-    public sealed class DonorCameraSubscriptionsTests
+    [Collection("MapPort client lifecycle")]
+    public sealed class DonorCameraSubscriptionsTests : IDisposable
     {
+        public DonorCameraSubscriptionsTests() => CameraManager.instance = null;
+        public void Dispose() => CameraManager.instance = null;
+
         [Fact]
         public void FirstActivationReplacesAwakeCallbacksWithoutDoublingThem()
         {
             var manager = new CameraManager();
             var owner = new DonorCameraSubscriptions();
-            int weather = 0, rain = 0;
+            int weather = 0, rain = 0, unrelated = 0;
             Action onWeather = () => weather++, onRain = () => rain++;
             manager.OnCameraChanged += onWeather; // WeatherController.Awake
             manager.OnCameraChanged += onRain;    // RainController.Awake
+            manager.OnCameraChanged += () => unrelated++; // another component must remain subscribed
             owner.Bind(manager, onWeather, onRain);
             manager.Raise();
-            Assert.Equal(2, manager.SubscriberCount);
+            Assert.Equal(3, manager.SubscriberCount);
             Assert.Equal(1, weather);
             Assert.Equal(1, rain);
+            Assert.Equal(1, unrelated);
+            owner.Unbind();
+            manager.Raise();
+            Assert.Equal(2, unrelated);
+            Assert.Equal(1, manager.SubscriberCount);
         }
 
         [Fact]
@@ -91,6 +103,63 @@ namespace ArenaMapPort.Server.Tests
             owner.Unbind();
             Assert.Equal(0, manager.SubscriberCount);
         }
+
+        [Fact]
+        public void NaturalCallbackThenRepeatedBindAndRefreshOnlyRendersThePhoto()
+        {
+            var (owner, controller, manager) = Ready();
+            owner.Bind(manager, controller.OnCameraChanged, controller.RainController!.CameraChanged);
+            manager.Raise();
+            owner.Bind(manager, controller.OnCameraChanged, controller.RainController.CameraChanged);
+            Assert.True(owner.Refresh(manager, controller));
+            Assert.Equal(1, controller.RainController.Initializations);
+            Assert.Equal(2, controller.RainController._depthPhotograper!.Renders);
+            Assert.Equal(2, manager.SubscriberCount);
+        }
+
+        [Theory]
+        [InlineData(false)]
+        [InlineData(true)]
+        public void ReplacementCameraOrManagerRequiresNativeInitialization(bool replaceManager)
+        {
+            var (owner, controller, first) = Ready();
+            Assert.True(owner.Refresh(first, controller));
+            var current = replaceManager ? new CameraManager { Camera = first.Camera } : first;
+            if (!replaceManager) current.Camera = new Camera();
+            CameraManager.instance = current;
+            Assert.True(owner.Refresh(current, controller));
+            Assert.Equal(2, controller.RainController!.Initializations);
+            Assert.Same(current.Camera, controller.RainController.BoundCamera);
+            if (replaceManager) Assert.Equal(0, first.SubscriberCount);
+        }
+
+        [Fact]
+        public void RepeatedPreparationOnSameCameraRerendersWithoutReinitialization()
+        {
+            var (owner, controller, manager) = Ready();
+            for (int retry = 0; retry < 4; retry++) Assert.True(owner.Refresh(manager, controller));
+            Assert.Equal(1, controller.RainController!.Initializations);
+            Assert.Equal(4, controller.RainController._depthPhotograper!.Renders);
+        }
+
+        [Fact]
+        public void FailedNativeCallbackIsNotRecordedAsInitialized()
+        {
+            var (owner, controller, manager) = Ready();
+            controller.RainController!.FailInitializations = 1;
+            Assert.Throws<InvalidOperationException>(() => owner.Refresh(manager, controller));
+            Assert.True(owner.Refresh(manager, controller));
+            Assert.True(owner.Refresh(manager, controller));
+            Assert.Equal(2, controller.RainController.Initializations);
+            Assert.Equal(2, controller.RainController._depthPhotograper!.Renders);
+        }
+
+        static (DonorCameraSubscriptions, WeatherController, CameraManager) Ready()
+        {
+            var controller = new WeatherController { RainController = new RainController { _depthPhotograper = new DepthPhotograper() } };
+            var manager = CameraManager.instance = new CameraManager { Camera = new Camera() };
+            return (new DonorCameraSubscriptions(), controller, manager);
+        }
     }
 }
 
@@ -131,8 +200,11 @@ public sealed class RainController
 {
     public DepthPhotograper? _depthPhotograper;
     public UnityEngine.Camera? BoundCamera;
+    public int Initializations, FailInitializations;
     public void CameraChanged()
     {
+        Initializations++;
+        if (FailInitializations-- > 0) throw new InvalidOperationException("Injected native rain initialization failure");
         BoundCamera = EFT.CameraControl.CameraManager.Instance.Camera;
         _depthPhotograper!.Render();
     }
