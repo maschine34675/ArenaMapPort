@@ -302,15 +302,24 @@ public class LocationRegistrationTests
     [Fact]
     public void ApplyExitLocale_AddsIdentityEntries_OnlyForAuthoredExits()
     {
-        var locale = new GlobalLocaleDictionary { ["Equator North Gate"] = "Nordtor" };
+        var locale = new GlobalLocaleDictionary
+        {
+            ["Equator North Gate"] = "Nordtor",
+            ["Bay5 North Loading Bay"] = "Nordladerampe",
+        };
 
         var result = ArenaMapRegistration.ApplyExitLocale(locale, ArenaMapRegistry.Equator);
-        ArenaMapRegistration.ApplyExitLocale(locale, ArenaMapRegistry.Bay5);
+        Assert.Same(locale, ArenaMapRegistration.ApplyExitLocale(locale, ArenaMapRegistry.Bay5));
 
         Assert.Same(locale, result);
         Assert.Equal("Nordtor", locale["Equator North Gate"]);           // kept
         Assert.Equal("Equator South Gate", locale["Equator South Gate"]); // identity
-        Assert.Equal(2, locale.Count);                                    // Bay5 has no exits
+        Assert.Equal("Nordladerampe", locale["Bay5 North Loading Bay"]); // kept
+        Assert.Equal("Bay5 South Container Lane", locale["Bay5 South Container Lane"]); // identity
+        Assert.Equal(4, locale.Count);
+        Assert.Empty(ArenaMapRegistry.AirPit.Exits);
+        Assert.Same(locale, ArenaMapRegistration.ApplyExitLocale(locale, ArenaMapRegistry.AirPit));
+        Assert.Equal(4, locale.Count); // an unauthored map adds nothing
         Assert.Null(ArenaMapRegistration.ApplyExitLocale(null, ArenaMapRegistry.Equator));
     }
 
@@ -318,12 +327,17 @@ public class LocationRegistrationTests
     public void ExitNameMismatches_ReportsEachSideOnlyOnce()
     {
         var mismatches = ArenaMapRegistration.ExitNameMismatches(
-            new[] { "Equator North Gate", "Gate 3", null }, ArenaMapRegistry.Equator);
+            new[] { "Equator North Gate", "Gate 3", "Gate 3", null }, ArenaMapRegistry.Equator);
 
         Assert.Equal(new[] { "Equator South Gate (descriptor only)", "Gate 3 (base.json only)" }, mismatches);
         Assert.Empty(ArenaMapRegistration.ExitNameMismatches(
             ArenaMapRegistry.Equator.Exits.Select(e => (string?)e.Name), ArenaMapRegistry.Equator));
-        Assert.Empty(ArenaMapRegistration.ExitNameMismatches(null, ArenaMapRegistry.Bay5));
+        Assert.Equal(new[] { "Bay5 North Loading Bay (descriptor only)", "Bay5 South Container Lane (descriptor only)" },
+            ArenaMapRegistration.ExitNameMismatches(null, ArenaMapRegistry.Bay5));
+        Assert.Empty(ArenaMapRegistration.ExitNameMismatches(
+            ArenaMapRegistry.Bay5.Exits.Select(e => (string?)e.Name), ArenaMapRegistry.Bay5));
+        Assert.Empty(ArenaMapRegistry.AirPit.Exits);
+        Assert.Empty(ArenaMapRegistration.ExitNameMismatches(null, ArenaMapRegistry.AirPit));
     }
 
     // bots-stage1 — ApplyBrainTable gives an Arena key the stand-in map's brain-weight row, once.

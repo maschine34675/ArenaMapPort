@@ -54,18 +54,23 @@ public class MapDescriptorConsistencyTests
         Assert.Equal("base.json", ArenaMapRegistry.Equator.DbBaseJsonPath);
     }
 
-    // Spawn barriers (exfils-stage2 follow-up, BoothDoorRepairs.OpenBarriers): only Equator names one, by hierarchy
-    // path (object names repeat in Arena scenes), and every other map keeps the empty default — nothing gets
-    // deactivated on a map nobody has walked yet.
+    // Spawn barriers are authored by hierarchy path only for the walked Equator and Bay5 maps.
+    // Every remaining map keeps the empty default until its own barriers have been checked.
     [Fact]
-    public void OpenedBarriers_EquatorNamesTheFckShutterByPath_OtherMapsNone()
+    public void OpenedBarriers_EquatorAndBay5NameCheckedPaths_OtherMapsNone()
     {
         Assert.Equal(new[] { "SBG_Arena_Equator/SOO_LOD0/equator_roller_shutters_02 (9)" }, ArenaMapRegistry.Equator.OpenedBarriers);
+        Assert.Equal(new[]
+        {
+            "WAREHOUSE_DOORS (1)/Bay5_Warehouse_Gate_Door_01 (3)",
+            "WAREHOUSE_DOORS (1)/Bay5_Warehouse_Gate_Door_01 (4)",
+            "OLD_WAREHOUSE_DOORS/Gates_Depot_Frame",
+        }, ArenaMapRegistry.Bay5.OpenedBarriers);
         foreach (var map in ArenaMapRegistry.All)
         {
             Assert.NotNull(map.OpenedBarriers);
             Assert.All(map.OpenedBarriers, path => Assert.Contains("/", path));
-            if (!ReferenceEquals(map, ArenaMapRegistry.Equator))
+            if (!ReferenceEquals(map, ArenaMapRegistry.Equator) && !ReferenceEquals(map, ArenaMapRegistry.Bay5))
             {
                 Assert.Empty(map.OpenedBarriers);
             }
