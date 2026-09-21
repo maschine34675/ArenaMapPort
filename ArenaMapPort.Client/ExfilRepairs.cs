@@ -39,7 +39,6 @@ namespace ArenaMapPort.Client
     internal static class ExfilRepairs
     {
         const string Tag = "[ArenaMapPort][Exfil]";
-        const float SampleRadius = 6f;
         static readonly List<ExfiltrationPoint> _synthetic = new List<ExfiltrationPoint>();
         static readonly FieldInfo ContainerField = AccessTools.Field(typeof(LocationScene), "_typeToContainer");
 
@@ -109,11 +108,13 @@ namespace ArenaMapPort.Client
                 }
                 var authored = new Vector3(exit.X, exit.Y, exit.Z);
                 Vector3 floor = authored;
-                string basis = $"authored position kept — nothing on the NavMesh within {SampleRadius:0} m, the box may be unreachable";
-                if (NavMesh.SamplePosition(authored, out var hit, SampleRadius, NavMesh.AllAreas))
+                string basis = $"authored position kept — nothing on the NavMesh within {ExfilNavMeshSampling.FallbackRadius:0} m, the box may be unreachable";
+                bool Sample(float radius, out NavMeshHit result)
+                    => NavMesh.SamplePosition(authored, out result, radius, NavMesh.AllAreas);
+                if (ExfilNavMeshSampling.TrySample<NavMeshHit>(Sample, out var hit, out float sampleRadius))
                 {
                     floor = hit.position;
-                    basis = $"NavMesh-sampled, {Vector3.Distance(hit.position, authored):F1} m from authored";
+                    basis = $"NavMesh-sampled within {sampleRadius:0} m, {Vector3.Distance(hit.position, authored):F1} m from authored";
                 }
 
                 var go = new GameObject(exit.Name);
