@@ -179,6 +179,7 @@ namespace ArenaMapPort.Client
             {
                 return;
             }
+            using var specularScope = ReflectiveSpecularRepairs.Suspend(map);
             RestoreEntries(state, out int restored, out int destroyed);
             Plugin.Log.LogInfo($"[ArenaMapPort][IndoorFloorSmoothness] map={map.Key} re-classifying: restored {restored} " +
                 $"renderer(s), destroyed {destroyed} clone(s)");
@@ -217,6 +218,7 @@ namespace ArenaMapPort.Client
                 return;
             }
 
+            ReflectiveSpecularRepairs.Clear(); // remove the outer layer before destroying its indoor inputs
             RestoreEntries(state, out int restoredRenderers, out int destroyedClones);
             state.Done = false;
             state.Scheduled = false;
@@ -330,6 +332,7 @@ namespace ArenaMapPort.Client
             }
 
             int floorLike = 0, indoor = 0, clones = 0;
+            using var specularScope = ReflectiveSpecularRepairs.Suspend(map);
             var perScene = new List<string>();
             var indoorNames = new List<string>();
             var rejects = new List<string>();
@@ -667,6 +670,7 @@ namespace ArenaMapPort.Client
             {
                 return;
             }
+            using var specularScope = ReflectiveSpecularRepairs.Suspend(map);
             float multiplier = WeatherRig.IndoorFloorSmoothnessForCurrentMap();
             float reflection = WeatherRig.IndoorReflectionStrengthForCurrentMap(); // §20.2
             int scaled = 0, recolored = 0;

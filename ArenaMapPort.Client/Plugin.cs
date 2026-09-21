@@ -87,6 +87,7 @@ namespace ArenaMapPort.Client
             // and ArenaLightingRepairs' own ambient/light pass already applied before layering its
             // candidate overrides on top. See LightingLab.cs.
             LightingLab.Install();
+            ReflectiveSpecularRepairs.Install(); // own scene materials only; live outer layer above indoor repairs
 
             // docs/progress/donor-settings-camera-weather.md §14 — live RainCoverLab experiments
             // (DrawTransform/CoverAll/RerenderHotkey) for the RoofDepthBlack rain-cover investigation. Must

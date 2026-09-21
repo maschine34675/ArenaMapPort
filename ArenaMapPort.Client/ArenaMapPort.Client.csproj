@@ -39,6 +39,7 @@
          rather than a project/binary reference, so client and server compile it independently. -->
     <Compile Include="..\ArenaMapPort.Shared\ArenaEquatorLocation.cs" Link="Shared\ArenaEquatorLocation.cs" />
     <Compile Include="..\ArenaMapPort.Shared\ArenaMapDescriptor.cs" Link="Shared\ArenaMapDescriptor.cs" />
+    <Compile Include="..\ArenaMapPort.Shared\SpecularCapPolicy.cs" Link="Shared\SpecularCapPolicy.cs" />
   </ItemGroup>
 
   <ItemGroup>

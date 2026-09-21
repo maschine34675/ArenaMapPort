@@ -786,6 +786,7 @@ namespace ArenaMapPort.Client
 
         static void ScanGroundMaterials(ArenaMapDescriptor map, LabState state, float multiplier)
         {
+            using var specularScope = ReflectiveSpecularRepairs.Suspend(map);
             int renderersScanned = 0;
             int materialsMatched = 0;
 
@@ -934,6 +935,7 @@ namespace ArenaMapPort.Client
                 return; // scan hasn't run yet this raid — nothing cached to reapply; the scan itself reads
                         // the multiplier live once it does run
             }
+            using var specularScope = ReflectiveSpecularRepairs.Suspend(map);
             float multiplier = cfg.GroundSmoothnessMultiplier.Value * WeatherRig.GroundSmoothnessBaseForCurrentMap();
             for (int i = 0; i < state.GroundMaterials.Count; i++)
             {
@@ -1069,6 +1071,7 @@ namespace ArenaMapPort.Client
                 try
                 {
                     sb.AppendLine("  " + IndoorFloorSmoothnessRepairs.SnapshotLine());
+                    sb.AppendLine("  " + ReflectiveSpecularRepairs.SnapshotLine());
                 }
                 catch (Exception ex)
                 {

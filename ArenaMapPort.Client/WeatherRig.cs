@@ -192,6 +192,7 @@ namespace ArenaMapPort.Client
             // §20.2 — glass counts as roof in the depth photo; reflection tint of the indoor clones.
             internal BepInEx.Configuration.ConfigEntry<bool> CoverIncludesGlass;
             internal BepInEx.Configuration.ConfigEntry<float> IndoorReflectionStrength;
+            internal BepInEx.Configuration.ConfigEntry<float> ReflectiveSpecularCap;
         }
 
         // Internal (not the default private) — LightingDiagnosticProbe.LastHarvestResult returns this
@@ -535,6 +536,15 @@ namespace ArenaMapPort.Client
                     "_ReflectColor, on the same material clones IndoorFloorSmoothness scales. 1.0 = authored " +
                     "values; lower dims the sky mirrored by polished indoor floors. Equator default 0.3 (host A/B " +
                     "2026-09-19: the lounge parquet reads as dark wood again; 0.0 turns spec-only props black). Live.",
+                    new BepInEx.Configuration.AcceptableValueRange<float>(0f, 1f)));
+
+            cfg.ReflectiveSpecularCap = Plugin.Instance.Config.Bind(section, "ReflectiveSpecularCap", equatorDefaults ? 0.3f : 1f,
+                new BepInEx.Configuration.ConfigDescription(
+                    "Ceiling on the strongest RGB channel of p0/Reflective specular color × specular strength. " +
+                    "Covers this map's props, floors and mesh decals regardless of roof cover; only values above " +
+                    "the ceiling are reduced. Preserves material hue, alpha and the existing indoor settings. " +
+                    "1 = disabled and restores the uncapped appearance; 0 = no specular. Equator defaults to " +
+                    "0.30; other maps to 1. Live, including when the weather donor is Off.",
                     new BepInEx.Configuration.AcceptableValueRange<float>(0f, 1f)));
 
             // Deliberately NO SettingChanged handlers on these three for re-apply purposes — "changes apply
@@ -1604,6 +1614,9 @@ namespace ArenaMapPort.Client
 
         internal static BepInEx.Configuration.ConfigEntry<float> IndoorFloorSmoothnessEntry(ArenaMapDescriptor map) =>
             _configs.TryGetValue(map.Key, out var c) ? c.IndoorFloorSmoothness : null;
+
+        internal static BepInEx.Configuration.ConfigEntry<float> ReflectiveSpecularCapEntry(ArenaMapDescriptor map) =>
+            _configs.TryGetValue(map.Key, out var c) ? c.ReflectiveSpecularCap : null;
 
         internal static int IndoorCoverPercentForCurrentMap() =>
             IsActiveForCurrentMap() && _configs.TryGetValue(_activeMap.Key, out var c) ? c.IndoorCoverPercent.Value : 50;
