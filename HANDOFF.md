@@ -3,7 +3,46 @@
 Snapshot for whoever continues (human or agent). Verify the commits named here against `git log`; this file
 is updated by hand at each handover, it is not an automatic record. Read [AGENTS.md](AGENTS.md) first.
 
-## State on 2026-09-21 — native acceptance completed at 08:32 CEST
+## State on 2026-09-21 — Bay5 harbor background accepted at 11:56 CEST
+
+**Bay5's original harbor background is built, deployed to the GPU host and tested in-game.**
+The native views show the northern gantry, southeast portal crane and original container stacks.
+Bowl was left unchanged after the user confirmed its stadium is present. Equator's accepted
+reflection/lifecycle behavior below remains the baseline; its bundles and base are byte-identical.
+
+| Repository / artifact | Current accepted implementation |
+|---|---|
+| MapPort | `feature/bay5-background`: background `4f2025e`, legacy preset guard `2ba4d71`, bot marker `b6e0692` plus its generated server base |
+| Bay5 Unity bundle | `unity_build_all_20260921_104434.log`; 10 loaded scenes, 22,190 NavMesh vertices / 10,248 triangles |
+| ArenaMode | Unchanged implementation `75a7430`; no files edited in this task |
+| Final receipts | `D:/.unlazy/bay5-background/distribution-after.json`, `distribution-delta.json`, `install-final-verification.json`, `native-final.json` |
+
+Client SHA-256: `6E12B25466F156A977F39DF3ABA44FA8AF61A6D54D9BCFEE789942B46B8140FD`.
+Bay5 NavMesh SHA-256: `CD7A3308E9D21F54F4FCF19242114B97E3952FB452F2E1F6ADAF0082D7DE64F3`.
+Bay5 base SHA-256: `CEAA30A95521FB80FEE39A623B43E69FF5FA5D32F70914A1A4DF50993A76775C`.
+All 72 deployed files matched their staged hashes; seven intended files changed and 65 remained
+byte-identical. The vanilla test install was not updated.
+
+Fresh process `d1121cb1` (11:48:44 CEST) confirmed all 25 plugins plus Redeploy Core identical
+across VM, host disk and loaded code. At 11:52:47, the ten bot markers formed **one connected
+NavMesh component, zero isolated/off-mesh points**. The northeast marker is now three metres
+south at (106.267, -3.8574, 61.7033), avoiding an automatic move onto an isolated container-side
+patch. Four player starts and all ten effective bot positions passed full path and standing-room
+checks. Deathmatch bots moved, fought and replenished; protected return preserved the full saved
+profile except the background hideout timestamp, including the final flush. EFT was quit at 11:56.
+
+Both ordinary exits completed in process `23dee6d0` on the **same scene/NavMesh bundles** before
+the final single bot-position change. RainBounds and indoor classification stayed unchanged.
+Background colliders participate in navigation, while distant renderer bounds do not enlarge
+the bake volume or weather scans. The skyline is included, but floor-view visibility was not
+established. No new Gun Game ladder, long-session or performance acceptance is claimed.
+
+Full build, native evidence and the separate ArenaMode HUD warning are recorded in
+[Bay5 background acceptance](docs/progress/bay5-background.md). That warning comes from
+`GrenadeInventoryCounter.CollectSummary` during kit setup; this task does not modify ArenaMode.
+Next gameplay work remains one additional map through [the map recipe](docs/MAP-RECIPE.md).
+
+## Previous acceptance on 2026-09-21 — 08:32 CEST (historical artifact identities)
 
 **Bay5 ArenaMode integration and Equator's reflection cap are deployed and host-tested.
 The final MapPort repeat also passed: corrected Bay5 NavMesh, both ordinary exits, and automatic

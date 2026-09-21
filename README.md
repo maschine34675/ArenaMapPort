@@ -14,6 +14,8 @@ The registry contains Equator and Bay5 plus 12 additional source-backed map defi
 
 **Equator reflections.** F12 → maschine-ArenaMapPort → Lighting (arena_equator) → `ReflectiveSpecularCap` sets a map-wide ceiling on `p0/Reflective` materials, including uncovered props and mesh decals. Default 30%; 100% restores the input materials. Existing indoor settings remain separate. [Reflection evidence](docs/progress/equator-specular-cap.md) records native A/B views and the repeated-raid camera lifecycle repair.
 
+**Bay5 background.** The original harbor scene is now included: cranes and container stacks are visible in-game. Native acceptance confirmed connected bot starts, Deathmatch movement/replenishment and both ordinary test exits. Distant scenery does not enlarge weather scans or the NavMesh bake volume. See [background acceptance](docs/progress/bay5-background.md).
+
 Equator/Bay5 retain their existing identities and artifact locations. The local Saw preset is present, but its 12 distinct referenced scene paths are absent; Saw cannot be ported from this source installation. Bay5's tournament preset is a mode variant, and Draft/the generic test preset are not additional independent maps.
 
 See [remaining maps: source inventory, results and build steps](docs/progress/remaining-maps.md) for the per-map evidence. [Current distribution contract](docs/dist-manifest.md) records the verified file set, baseline preservation, Release hashes and deployment boundary.

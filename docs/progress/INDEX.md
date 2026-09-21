@@ -237,3 +237,9 @@ successor instead unless you're specifically investigating that cycle's history.
   collision-layer parity in the NavMesh bake, and the final build/deployment acceptance checkpoints.
 - [equator-specular-cap.md](equator-specular-cap.md) — map-wide reversible `p0/Reflective` ceiling,
   same-view native comparisons, indoor composition, and repeat-raid donor camera/cover initialization.
+
+## Added 2026-09-21 — Bay5 original harbor background
+
+- [bay5-background.md](bay5-background.md) — original background extraction and native crane/container
+  views, bounded weather/navigation scans, legacy full-map preset regeneration, one corrected bot
+  marker, connected runtime patrol graph, both ordinary exits and final Deathmatch/profile acceptance.
