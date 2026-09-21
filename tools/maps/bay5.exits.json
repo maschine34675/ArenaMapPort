@@ -1,0 +1,22 @@
+{
+  "exits": [
+    {
+      "name": "Bay5 North Loading Bay",
+      "position": [91.2427, -2.9252, 65.142],
+      "box_size": [4.0, 3.0, 4.0],
+      "rotation": 0.0,
+      "exfiltration_time": 8,
+      "chance": 100,
+      "type": "Individual"
+    },
+    {
+      "name": "Bay5 South Container Lane",
+      "position": [99.029, -3.8574, -2.8513],
+      "box_size": [4.0, 3.0, 4.0],
+      "rotation": 0.0,
+      "exfiltration_time": 8,
+      "chance": 100,
+      "type": "Individual"
+    }
+  ]
+}

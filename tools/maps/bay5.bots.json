@@ -1,0 +1,257 @@
+{
+  "_comment": "Bay5 ArenaMode integration, 2026-09-21. Coordinates derived from Arena source AI bearing points and checked in the native map. Four Player/All points distribute respawns across both ends; bot markers are separate. Pending final acceptance on the rebaked open-barrier NavMesh, see docs/progress/bay5-arenamode-integration.md. No loot or Scav raids.",
+  "zone": "BotZone_Main",
+  "max_bots": 8,
+  "player_spawns": [
+    {
+      "id": "arena_bay5-player-south-west",
+      "name": "SpawnPoint_Player_south_west",
+      "sides": [
+        "All"
+      ],
+      "position": [
+        56.4,
+        -3.78,
+        1.9
+      ],
+      "rotation": 45,
+      "radius": 5
+    },
+    {
+      "id": "arena_bay5-player-south-east",
+      "name": "SpawnPoint_Player_south_east",
+      "sides": [
+        "All"
+      ],
+      "position": [
+        129.955,
+        -3.7477,
+        3.7287
+      ],
+      "rotation": 315,
+      "radius": 5
+    },
+    {
+      "id": "arena_bay5-player-north-west",
+      "name": "SpawnPoint_Player_north_west",
+      "sides": [
+        "All"
+      ],
+      "position": [
+        54.2,
+        -3.8574,
+        53.8
+      ],
+      "rotation": 135,
+      "radius": 5
+    },
+    {
+      "id": "arena_bay5-player-north-east",
+      "name": "SpawnPoint_Player_north_east",
+      "sides": [
+        "All"
+      ],
+      "position": [
+        120.085,
+        -3.8574,
+        57.7943
+      ],
+      "rotation": 225,
+      "radius": 5
+    }
+  ],
+  "bot_spawns": [
+    {
+      "id": "arena_bay5-bot-south-east",
+      "position": [
+        126.5553,
+        -3.8574,
+        -11.9537
+      ],
+      "radius": 25,
+      "categories": [
+        "Bot",
+        "BotPmc"
+      ]
+    },
+    {
+      "id": "arena_bay5-bot-north-west",
+      "position": [
+        48.1437,
+        -3.7477,
+        60.865
+      ],
+      "radius": 25,
+      "categories": [
+        "Bot",
+        "BotPmc"
+      ]
+    },
+    {
+      "id": "arena_bay5-bot-south-lane",
+      "position": [
+        90.5847,
+        -3.8574,
+        -1.0967
+      ],
+      "radius": 25,
+      "categories": [
+        "Bot",
+        "BotPmc"
+      ]
+    },
+    {
+      "id": "arena_bay5-bot-west-lane",
+      "position": [
+        44.9633,
+        -3.8574,
+        25.7717
+      ],
+      "radius": 25,
+      "categories": [
+        "Bot",
+        "BotPmc"
+      ]
+    },
+    {
+      "id": "arena_bay5-bot-north-east-lane",
+      "position": [
+        106.267,
+        -3.8574,
+        64.7033
+      ],
+      "radius": 25,
+      "categories": [
+        "Bot",
+        "BotPmc"
+      ]
+    },
+    {
+      "id": "arena_bay5-bot-north-lane",
+      "position": [
+        77.7537,
+        -3.5284,
+        61.7423
+      ],
+      "radius": 25,
+      "categories": [
+        "Bot",
+        "BotPmc"
+      ]
+    },
+    {
+      "id": "arena_bay5-bot-south-west-lane",
+      "position": [
+        67.774,
+        -3.8574,
+        12.3923
+      ],
+      "radius": 25,
+      "categories": [
+        "Bot",
+        "BotPmc"
+      ]
+    },
+    {
+      "id": "arena_bay5-bot-south-east-lane",
+      "position": [
+        112.518,
+        -3.8574,
+        15.134
+      ],
+      "radius": 25,
+      "categories": [
+        "Bot",
+        "BotPmc"
+      ]
+    },
+    {
+      "id": "arena_bay5-bot-east-lane",
+      "position": [
+        117.8917,
+        -3.8574,
+        43.099
+      ],
+      "radius": 25,
+      "categories": [
+        "Bot",
+        "BotPmc"
+      ]
+    },
+    {
+      "id": "arena_bay5-bot-west-centre",
+      "position": [
+        63.497,
+        -3.8574,
+        42.2217
+      ],
+      "radius": 25,
+      "categories": [
+        "Bot",
+        "BotPmc"
+      ]
+    }
+  ],
+  "waves": [
+    {
+      "time_min": 10,
+      "time_max": 30,
+      "slots_min": 2,
+      "slots_max": 3
+    },
+    {
+      "time_min": 90,
+      "time_max": 150,
+      "slots_min": 1,
+      "slots_max": 2
+    },
+    {
+      "time_min": 240,
+      "time_max": 330,
+      "slots_min": 2,
+      "slots_max": 3
+    },
+    {
+      "time_min": 420,
+      "time_max": 540,
+      "slots_min": 1,
+      "slots_max": 2
+    },
+    {
+      "time_min": 600,
+      "time_max": 720,
+      "slots_min": 1,
+      "slots_max": 2
+    }
+  ],
+  "boss_waves": [
+    {
+      "boss_name": "pmcUSEC",
+      "escort_type": "pmcUSEC",
+      "boss_zone": "BotZone_Main",
+      "boss_chance": 50,
+      "escort_amount": "0,0,0,0,2,2,2,1,1,1,1,1,0,2,3"
+    },
+    {
+      "boss_name": "pmcUSEC",
+      "escort_type": "pmcUSEC",
+      "boss_zone": "BotZone_Main",
+      "boss_chance": 50,
+      "escort_amount": "0,0,0,0,2,2,2,1,1,1,1,1,0,2,3"
+    },
+    {
+      "boss_name": "pmcBEAR",
+      "escort_type": "pmcBEAR",
+      "boss_zone": "BotZone_Main",
+      "boss_chance": 50,
+      "escort_amount": "0,0,0,0,2,2,2,1,1,1,1,1,0,2,3"
+    },
+    {
+      "boss_name": "pmcBEAR",
+      "escort_type": "pmcBEAR",
+      "boss_zone": "BotZone_Main",
+      "boss_chance": 50,
+      "escort_amount": "0,0,0,0,2,2,2,1,1,1,1,1,0,2,3"
+    }
+  ]
+}

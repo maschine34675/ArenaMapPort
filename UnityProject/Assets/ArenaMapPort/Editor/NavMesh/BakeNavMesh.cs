@@ -317,6 +317,11 @@ namespace ArenaMapPort.Editor.NavMesh
         // name contains "frame").
         static string RoundOpenedReason(Transform t, List<Transform> openedBarriers)
         {
+            // Arena and installed EFT both name layer 29 LevelBorder. The importer preserves
+            // numeric layers, but this Editor's TagManager leaves 29 unnamed. Bay5's borders
+            // are called Cube, so name-only filtering kept walls removed by MapBorderRepairs.
+            // Match the component owner, as the runtime does; do not inherit a parent's layer.
+            if (t.gameObject.layer == 29) return "LevelBorder layer 29";
             for (Transform cur = t; cur != null; cur = cur.parent)
             {
                 foreach (string prefix in ExcludedNamePrefixes)

@@ -198,7 +198,21 @@ namespace ArenaMapPort.Shared
             LocaleName: "Arena: Bay 5 (spike)",
             LocaleDescription: "Internal test build — outdoor harbor geometry/collision/NavMesh spike.",
             IconX: 150, IconY: 830,
-            DbBaseJsonPath: "arena_bay5/base.json");
+            DbBaseJsonPath: "arena_bay5/base.json",
+            Exits: new[]
+            {
+                new ArenaExitDescriptor("Bay5 North Loading Bay", 91.2427f, -2.9252f, 65.142f),
+                new ArenaExitDescriptor("Bay5 South Container Lane", 99.029f, -3.8574f, -2.8513f),
+            },
+            OpenedBarriers: new[]
+            {
+                // Two west-facing USEC warehouse leaves and the first/northern BEAR depot gate.
+                // The latter has a duplicate sibling name; both existing path resolvers select
+                // the first assembly. No claim that its eastern duplicate is opened.
+                "WAREHOUSE_DOORS (1)/Bay5_Warehouse_Gate_Door_01 (3)",
+                "WAREHOUSE_DOORS (1)/Bay5_Warehouse_Gate_Door_01 (4)",
+                "OLD_WAREHOUSE_DOORS/Gates_Depot_Frame",
+            });
 
         // Source scene selection: tools/extract/plans/airpit.json. Identity is permanent.
         public static readonly ArenaMapDescriptor AirPit = new(

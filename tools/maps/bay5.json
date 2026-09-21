@@ -20,5 +20,10 @@
   "icon_y": 830,
   "template_key": "factory4_day",
   "db_base_json_path": "arena_bay5/base.json",
-  "fog_color": [0.132285476, 0.147871643, 0.137986973]
+  "fog_color": [0.132285476, 0.147871643, 0.137986973],
+  "opened_barriers": [
+    "WAREHOUSE_DOORS (1)/Bay5_Warehouse_Gate_Door_01 (3)",
+    "WAREHOUSE_DOORS (1)/Bay5_Warehouse_Gate_Door_01 (4)",
+    "OLD_WAREHOUSE_DOORS/Gates_Depot_Frame"
+  ]
 }
