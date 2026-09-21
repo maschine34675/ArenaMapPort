@@ -41,3 +41,18 @@ Before-build reference views from the old loaded process `c48f7fdd`:
 These images show the old open sky. They are comparison evidence, not acceptance of
 the new bundles. The original south exit completed during this reference raid.
 Build, deployed identity and native acceptance are recorded in the appended checkpoint.
+
+## Build guard correction — 2026-09-21
+
+The first background build passed Unity, component-identity patching and the strict
+geometry/material roundtrip, then correctly failed preset validation: the scene bundle
+had all ten scenes, while the old preset still listed nine. `build_all.ps1` incorrectly
+conditioned full-map base/preset generation on `manifest.source.map_key`, which the
+legacy Bay5 extractor does not emit. That inner guard is removed; descriptor identity,
+any supplied manifest identity and exact scene-order checks remain mandatory. Equator
+without `-FullMap` is unaffected. An independent review confirmed this correction.
+
+The existing Unity output is revalidated with `-FullMap -SkipUnityBuild`, regenerating
+the cheap base/preset outputs rather than rebuilding geometry. The first failure is
+retained in `D:/.unlazy/bay5-background/build-all-first-stale-preset.log`; the final
+pipeline receipt is `D:/.unlazy/bay5-background/build-all.log`.

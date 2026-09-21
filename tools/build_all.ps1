@@ -265,14 +265,13 @@ foreach ($b in $bundles) {
 Write-Step "4/4 validators (strict/default flags)"
 
 if ($FullMap) {
-    if ($inputManifest.source.map_key) {
-        # Regenerate cheap descriptor outputs from the current actual SPT donors,
-        # including an explicit validation pass that reuses existing Unity bundles.
-        & python -u (Join-Path $RepoRoot 'tools/server/make_base_json.py') --map $MapDescriptor
-        if ($LASTEXITCODE -ne 0) { Fail 'Current server base generation failed.' }
-        & python -u (Join-Path $RepoRoot 'tools/preset/patch_preset.py') --map $MapDescriptor
-        if ($LASTEXITCODE -ne 0) { Fail 'Current preset generation failed.' }
-    }
+    # Legacy Bay5 manifests have no source.map_key. FullMap already verifies descriptor
+    # identity and the complete scene order above, so regenerate these cheap outputs for
+    # every full map; otherwise adding a scene leaves a stale, incomplete preset behind.
+    & python -u (Join-Path $RepoRoot 'tools/server/make_base_json.py') --map $MapDescriptor
+    if ($LASTEXITCODE -ne 0) { Fail 'Current server base generation failed.' }
+    & python -u (Join-Path $RepoRoot 'tools/preset/patch_preset.py') --map $MapDescriptor
+    if ($LASTEXITCODE -ne 0) { Fail 'Current preset generation failed.' }
 }
 
 # The reproducibility check re-runs the whole extraction twice (minutes per map); opt in with
