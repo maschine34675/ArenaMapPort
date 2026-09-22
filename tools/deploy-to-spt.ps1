@@ -21,7 +21,8 @@
       asserted, before any write, to fall strictly under
       <SptRoot>/BepInEx/plugins/ArenaMapPort/ or <SptRoot>/SPT_Runtime/user/mods/ArenaMapPort/ in
       standard mode; DynamicMaps mode only writes its two declared files below mpstark-dynamicmaps/
-      Maps/ArenaMapPort_Equator/. Full-path prefix checks protect the destinations -- the script refuses to run
+      Maps/ArenaMapPort_Equator/ or Maps/ArenaMapPort_Bay5/. Full-path prefix checks protect the
+      destinations -- the script refuses to run
       at all if that invariant doesn't hold for every planned file, in EITHER mode.
     - Never reads or writes anything under D:/ArenaMapPort/dist/ other than read-only enumeration
       (source of truth, untouched).
@@ -33,8 +34,9 @@
   Perform the real copy. Without this switch the script only prints the plan and exits 0.
 
 .PARAMETER DynamicMapsPackage
-  Optional Equator data-only package directory. Deploys exactly ArenaMapPort_Equator.jsonc and
-  Layers/Ground.svg into the installed mpstark-dynamicmaps/Maps/ArenaMapPort_Equator folder.
+  Optional Equator or Bay5 data-only package directory. Deploys exactly that map's allowlisted
+  ArenaMapPort_Equator.jsonc or ArenaMapPort_Bay5.jsonc plus Layers/Ground.svg into its fixed
+  installed mpstark-dynamicmaps/Maps/ArenaMapPort_Equator or Maps/ArenaMapPort_Bay5 folder.
   This separate mode never reads dist/ or copies client/server files. It requires DynamicMaps.dll,
   validates the complete package and refuses links in either path. Default remains a dry run.
 
@@ -49,6 +51,10 @@
 .EXAMPLE
   # data-only dry run; add -Confirm for the real copy:
   pwsh tools/deploy-to-spt.ps1 -DynamicMapsPackage work/dynamicmaps/equator/pack
+
+.EXAMPLE
+  # Bay5 data-only dry run; Equator's installed map stays unchanged:
+  pwsh tools/deploy-to-spt.ps1 -DynamicMapsPackage work/dynamicmaps/bay5/pack
 #>
 [CmdletBinding()]
 param(
@@ -125,21 +131,36 @@ function Assert-UniqueJsonKeys([System.Text.Json.JsonElement]$Element) {
     }
 }
 
-function Assert-EquatorPackage([string]$Package) {
+function Assert-DynamicMapsPackage([string]$Package) {
+    # Every identifier and destination is fixed here. Package content selects one complete profile;
+    # no destination or filename is composed from a user-controlled map ID, label or image path.
+    $profiles = @(
+        [PSCustomObject]@{
+            Name = 'Equator'; JsonFile = 'ArenaMapPort_Equator.jsonc'; MapInternalName = 'arena_equator'
+            ImagePath = 'Maps/ArenaMapPort_Equator/Layers/Ground.svg'; TargetRelative = 'Maps/ArenaMapPort_Equator'
+        },
+        [PSCustomObject]@{
+            Name = 'Bay5'; JsonFile = 'ArenaMapPort_Bay5.jsonc'; MapInternalName = 'arena_bay5'
+            ImagePath = 'Maps/ArenaMapPort_Bay5/Layers/Ground.svg'; TargetRelative = 'Maps/ArenaMapPort_Bay5'
+        }
+    )
     $packageFull = Assert-PlainPath $Package 'Directory'
     if (-not (Test-Path -LiteralPath $packageFull -PathType Container)) { throw "Package directory does not exist: $Package" }
     $rootEntries = @(Get-ChildItem -LiteralPath $packageFull -Force)
-    if ($rootEntries.Count -ne 2 -or
-        @($rootEntries | Where-Object { $_.Name -ceq 'ArenaMapPort_Equator.jsonc' -and -not $_.PSIsContainer }).Count -ne 1 -or
+    $rootFiles = @($rootEntries | Where-Object { -not $_.PSIsContainer })
+    if ($rootEntries.Count -ne 2 -or $rootFiles.Count -ne 1 -or
         @($rootEntries | Where-Object { $_.Name -ceq 'Layers' -and $_.PSIsContainer }).Count -ne 1) {
-        throw 'Package must contain only ArenaMapPort_Equator.jsonc and the Layers directory'
+        throw 'Package must contain only one supported map JSON and the Layers directory'
     }
+    $profileMatches = @($profiles | Where-Object { $_.JsonFile -ceq $rootFiles[0].Name })
+    if ($profileMatches.Count -ne 1) { throw 'Unsupported package JSON filename; expected ArenaMapPort_Equator.jsonc or ArenaMapPort_Bay5.jsonc' }
+    $profile = $profileMatches[0]
     $layersPath = Assert-PlainPath (Join-Path $packageFull 'Layers') 'Directory'
     $layerEntries = @(Get-ChildItem -LiteralPath $layersPath -Force)
     if ($layerEntries.Count -ne 1 -or $layerEntries[0].Name -cne 'Ground.svg' -or $layerEntries[0].PSIsContainer) {
         throw 'Layers must contain only Ground.svg'
     }
-    $jsonPath = Assert-PlainPath (Join-Path $packageFull 'ArenaMapPort_Equator.jsonc') 'File'
+    $jsonPath = Assert-PlainPath (Join-Path $packageFull $profile.JsonFile) 'File'
     $svgPath = Assert-PlainPath (Join-Path $layersPath 'Ground.svg') 'File'
     $jsonText = Get-Content -LiteralPath $jsonPath -Raw
     # JsonDocument detects duplicate keys and rejects non-JSON values before PowerShell conversion.
@@ -150,8 +171,8 @@ function Assert-EquatorPackage([string]$Package) {
     try { Assert-UniqueJsonKeys $document.RootElement } finally { $document.Dispose() }
     $map = ConvertFrom-Json -InputObject $jsonText -AsHashtable -Depth 64
     if ($map -isnot [System.Collections.IDictionary] -or $map.MapInternalNames -isnot [array] -or
-        $map.MapInternalNames.Count -ne 1 -or $map.MapInternalNames[0] -isnot [string] -or $map.MapInternalNames[0] -cne 'arena_equator') {
-        throw 'MapInternalNames must be exactly ["arena_equator"]'
+        $map.MapInternalNames.Count -ne 1 -or $map.MapInternalNames[0] -isnot [string] -or $map.MapInternalNames[0] -cne $profile.MapInternalName) {
+        throw "MapInternalNames must be exactly [$($profile.MapInternalName)] for $($profile.JsonFile)"
     }
     Assert-FiniteNumber $map.CoordinateRotation 'CoordinateRotation'
     Assert-FiniteNumber $map.DefaultLevel 'DefaultLevel'
@@ -162,7 +183,7 @@ function Assert-EquatorPackage([string]$Package) {
     if ($layer -isnot [System.Collections.IDictionary]) { throw 'Invalid ground layer' }
     Assert-FiniteNumber $layer.Level 'Layers.Level'
     if ($layer.Level -ne 0) { throw 'Ground layer Level must be 0' }
-    if ($layer.ImagePath -isnot [string] -or $layer.ImagePath -cne 'Maps/ArenaMapPort_Equator/Layers/Ground.svg') { throw 'Invalid ground ImagePath' }
+    if ($layer.ImagePath -isnot [string] -or $layer.ImagePath -cne $profile.ImagePath) { throw "Invalid ground ImagePath for $($profile.Name)" }
     Assert-MapBounds $layer.ImageBounds @('x', 'y') 'ImageBounds'
     if ($layer.GameBounds -isnot [array] -or $layer.GameBounds.Count -eq 0) { throw 'Missing ground GameBounds' }
     foreach ($bounds in $layer.GameBounds) { Assert-MapBounds $bounds @('x', 'y', 'z') 'GameBounds' }
@@ -197,39 +218,42 @@ function Assert-EquatorPackage([string]$Package) {
             throw 'SVG external styles/references are forbidden in this prototype'
         }
     } finally { $reader.Dispose() }
-    return $packageFull
+    return [PSCustomObject]@{ Path = $packageFull; Profile = $profile }
 }
 
 function Invoke-DynamicMapsDeploy {
-    $package = Assert-EquatorPackage $DynamicMapsPackage
+    $validated = Assert-DynamicMapsPackage $DynamicMapsPackage
+    $package = $validated.Path
+    $profile = $validated.Profile
     $pluginRoot = Assert-PlainPath (Join-Path $SptRoot 'BepInEx/plugins/mpstark-dynamicmaps') 'Directory'
     $pluginDll = Assert-PlainPath (Join-Path $pluginRoot 'DynamicMaps.dll') 'File'
     if (-not (Test-Path -LiteralPath $pluginDll -PathType Leaf)) { throw "Installed DynamicMaps.dll is required: $pluginDll" }
-    $target = Assert-PlainPath (Join-Path $pluginRoot 'Maps/ArenaMapPort_Equator') 'Directory'
+    $target = Assert-PlainPath (Join-Path $pluginRoot $profile.TargetRelative) 'Directory'
     $targetPrefix = $target.TrimEnd('\', '/') + [IO.Path]::DirectorySeparatorChar
     if ($target -eq $package -or $target.StartsWith($package.TrimEnd('\', '/') + [IO.Path]::DirectorySeparatorChar, [StringComparison]::OrdinalIgnoreCase) -or
         $package.StartsWith($targetPrefix, [StringComparison]::OrdinalIgnoreCase)) { throw 'Package and deployment target must not overlap' }
-    $plan = @(foreach ($relative in @('ArenaMapPort_Equator.jsonc', 'Layers/Ground.svg')) {
+    $plan = @(foreach ($relative in @($profile.JsonFile, 'Layers/Ground.svg')) {
         $source = Assert-PlainPath (Join-Path $package $relative) 'File'
         $destination = Assert-PlainPath (Join-Path $target $relative) 'File'
-        if (-not $destination.StartsWith($targetPrefix, [StringComparison]::OrdinalIgnoreCase)) { throw 'Destination escapes the Equator map directory' }
+        if (-not $destination.StartsWith($targetPrefix, [StringComparison]::OrdinalIgnoreCase)) { throw 'Destination escapes the selected map directory' }
         $exists = Test-Path -LiteralPath $destination -PathType Leaf
         $hash = (Get-FileHash -LiteralPath $source -Algorithm SHA256).Hash
         $same = $exists -and (Get-FileHash -LiteralPath $destination -Algorithm SHA256).Hash -eq $hash
         [PSCustomObject]@{ Source = $source; Destination = $destination; Hash = $hash; SizeBytes = (Get-Item -LiteralPath $source).Length; Exists = $exists; Same = $same }
     })
-    Write-Step 'DynamicMaps Equator data-only copy plan'
+    Write-Step "DynamicMaps $($profile.Name) data-only copy plan"
     foreach ($row in $plan) {
         $status = if ($row.Same) { 'unchanged (same SHA256)' } elseif ($row.Exists) { 'WILL OVERWRITE (differs)' } else { 'NEW' }
         Write-Host "   $($row.Source) -> $($row.Destination) ($($row.SizeBytes) bytes) [$status]"
     }
-    Write-Host '[deploy-to-spt] plan: 2 file(s), DynamicMaps Equator data only'
+    Write-Host "[deploy-to-spt] plan: 2 file(s), DynamicMaps $($profile.Name) data only"
     if (-not $Confirm) {
         Write-Host '[deploy-to-spt] DRY RUN (default) -- no files were copied.' -ForegroundColor Green
         return
     }
     # Revalidate the complete package and every target before any write, then recheck each copy.
-    $null = Assert-EquatorPackage $package
+    $revalidated = Assert-DynamicMapsPackage $package
+    if ($revalidated.Profile.JsonFile -cne $profile.JsonFile) { throw 'Package profile changed during validation' }
     foreach ($row in $plan) {
         $null = Assert-PlainPath $row.Destination 'File'
         if ((Get-FileHash -LiteralPath $row.Source -Algorithm SHA256).Hash -ne $row.Hash) { throw 'Package changed during validation' }

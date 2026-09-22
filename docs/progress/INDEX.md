@@ -274,3 +274,10 @@ successor instead unless you're specifically investigating that cycle's history.
   proof, actual original material hits, Equator–Bay5–Equator audio playback and teardown,
   unchanged settings/navigation, matched atrium view and final 440/440 return. Technical
   playback passed; muted-host audible balance remains a user check. Supersedes the earlier hold.
+
+## Added 2026-09-22 — Bay5 DynamicMaps preparation
+
+- [bay5-dynamicmaps.md](bay5-dynamicmaps.md) — local ground plan with varying floor heights,
+  native ground projection, independent geometry review, Equator byte-identity regression
+  and exact two-file deployment support. Staged only; host deployment and native tests
+  await explicit user release.

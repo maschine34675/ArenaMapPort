@@ -3,6 +3,26 @@
 Snapshot for whoever continues (human or agent). Verify the commits named here against `git log`; this file
 is updated by hand at each handover, it is not an automatic record. Read [AGENTS.md](AGENTS.md) first.
 
+## State on 2026-09-22 — Bay5 DynamicMaps prepared; shared-host hold
+
+**Staged locally, not deployed or natively accepted.** The user accepted Equator and
+requested Bay5, then explicitly held gameplay tests until release of the shared host.
+No production writes during the hold. Work lives in the isolated
+`D:/ArenaMapPort-DynamicMapsBay5`, branch `feature/bay5-dynamicmaps`, base `cfbbf16`.
+The main checkout's concurrent lighting work must remain untouched.
+
+The generated pack is `work/dynamicmaps/bay5/pack`: exact `arena_bay5` identity,
+108 x 92 m view, 13,737 geometry points. It follows varying native floor heights;
+native projected ground takes priority over false floor-derived obstacle slabs.
+43 exporter tests, 80 deployment cases and independent offline geometry/visual
+review passed. The accepted Equator JSON/SVG/preview remain byte-identical.
+
+The real two-file deployment dry run passed. Deployment and native player/direction/
+exit checks remain pending; recheck host ownership and the recorded live NavMesh
+hash after release. Use this worktree's scoped data-only deploy, not its base DLLs.
+See [Bay5 checkpoint](docs/progress/bay5-dynamicmaps.md) and
+[reproduction](tools/dynamicmaps/README.md). All generated data remain ignored.
+
 ## State on 2026-09-22 — Equator DynamicMaps prototype installed and tested
 
 Branch `feature/equator-dynamicmaps`, based on `2c673e2`. The optional Equator SVG/JSON

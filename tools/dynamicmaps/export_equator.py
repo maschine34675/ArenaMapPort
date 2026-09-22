@@ -1,4 +1,4 @@
-"""Generate a local-only Equator DynamicMaps ground plan from extracted colliders.
+"""Generate local-only Equator or Bay5 DynamicMaps plans from extracted colliders.
 
 No game data ships with this tool. Install requirements in a dedicated venv.
 The drawing is a cartographic approximation, not a navigation or collision mesh.
@@ -17,6 +17,7 @@ import sys
 
 import numpy as np
 from shapely import GeometryCollection, LineString, Point, Polygon, box, make_valid, set_precision
+from shapely import STRtree, points, shortest_line, get_point, get_coordinates
 from shapely.ops import unary_union
 
 
@@ -168,6 +169,8 @@ def project_slab(triangles, low, high):
 
 
 def polygons(geom):
+    if geom.is_empty:
+        return
     if geom.geom_type == "Polygon":
         yield geom
     elif hasattr(geom, "geoms"):
@@ -219,7 +222,7 @@ def render_preview(path, layers, bounds):
     image.save(path)
 
 
-def read_triangulation(path):
+def native_triangles(path, height_range=(-.5, 1.2)):
     data = json.loads(Path(path).read_text(encoding="utf-8-sig"))
     verts = np.array([[v[axis] for axis in ("x", "y", "z")] for v in data["vertices"]], dtype=float)
     indices = np.array(data["indices"])
@@ -227,11 +230,61 @@ def read_triangulation(path):
             or not np.issubdtype(indices.dtype, np.integer) or indices.min() < 0 or indices.max() >= len(verts)):
         raise ValueError("Invalid native triangulation")
     triangles = verts[indices.reshape(-1, 3)]
-    ground = triangles[(triangles[:, :, 1].min(axis=1) >= -.5) & (triangles[:, :, 1].max(axis=1) <= 1.2)]
+    ground = triangles[(triangles[:, :, 1].min(axis=1) >= height_range[0])
+                       & (triangles[:, :, 1].max(axis=1) <= height_range[1])]
+    return ground
+
+
+def read_triangulation(path, height_range=(-.5, 1.2)):
+    ground = native_triangles(path, height_range)
     result = clean(unary_union([Polygon(t[:, (0, 2)]) for t in ground]), min_area=.25, tolerance=.045)
     if result.is_empty:
         raise ValueError("Native triangulation has no ground area")
     return result
+
+
+class GroundSurface:
+    """Sample the nearest native ground triangle in XZ, including its slope.
+
+    Clamped closest points prevent extrapolating ramps far outside their triangles.
+    This supplies cartographic reference heights, not runtime collision queries.
+    """
+    def __init__(self, triangles, region):
+        kept, shapes = [], []
+        for tri in triangles:
+            shape = Polygon(tri[:, (0, 2)])
+            if shape.area > 1e-7 and shape.intersects(region):
+                kept.append(tri)
+                shapes.append(shape)
+        if not kept:
+            raise ValueError("No native ground triangles in the drawing region")
+        self.triangles = np.array(kept)
+        self.shapes = np.array(shapes, dtype=object)
+        self.tree = STRtree(self.shapes)
+
+    def heights(self, xz):
+        queries = points(np.asarray(xz))
+        source, selected = self.tree.query_nearest(queries, all_matches=False)
+        nearest = get_coordinates(get_point(shortest_line(queries[source], self.shapes[selected]), 1))
+        tri = self.triangles[selected]
+        a, b, c = tri[:, 0, :][:, (0, 2)], tri[:, 1, :][:, (0, 2)], tri[:, 2, :][:, (0, 2)]
+        v0, v1, v2 = b-a, c-a, nearest-a
+        cross = lambda u, v: u[:, 0]*v[:, 1]-u[:, 1]*v[:, 0]
+        denominator = cross(v0, v1)
+        wb, wc = cross(v2, v1)/denominator, cross(v0, v2)/denominator
+        result = np.empty(len(xz))
+        result[source] = (1-wb-wc)*tri[:, 0, 1] + wb*tri[:, 1, 1] + wc*tri[:, 2, 1]
+        if not np.isfinite(result).all():
+            raise ValueError("Non-finite native ground sample")
+        return result
+
+
+MAP_PROFILES = {
+    "arena_equator": {"name": "Equator", "folder": "ArenaMapPort_Equator", "title": "EQUATOR",
+                       "heights": (-.5, 1.2), "anchor": (0, 0), "relative": False},
+    "arena_bay5": {"name": "Bay 5", "folder": "ArenaMapPort_Bay5", "title": "BAY 5",
+                    "heights": (-4.5, -2.5), "anchor": (90, 30), "relative": True},
+}
 
 
 def generate(package, descriptor, output, navmesh=None):
@@ -239,12 +292,27 @@ def generate(package, descriptor, output, navmesh=None):
     if package == output or package in output.parents or output in package.parents:
         raise ValueError("Output must be separate from the source package")
     config = json.loads(descriptor.read_text(encoding="utf-8"))
-    if config["key"] != "arena_equator":
-        raise ValueError("This prototype supports arena_equator only")
+    if config["key"] not in MAP_PROFILES:
+        raise ValueError("This prototype supports arena_equator and arena_bay5 only")
+    profile = MAP_PROFILES[config["key"]]
+    if profile["relative"] and navmesh is None:
+        raise ValueError("Bay5 requires native ground triangulation for height calibration")
     inputs = {str(descriptor): digest(descriptor)}
     opened = config.get("opened_barriers", [])
     floor_parts, low_parts, high_parts = [], [], []
     stats = Counter()
+    walkable = read_triangulation(navmesh, profile["heights"]) if navmesh else None
+    connected, drawing_clip, surface = None, None, None
+    if navmesh:
+        inputs[str(Path(navmesh).resolve())] = digest(navmesh)
+        components = [p for p in polygons(walkable) if p.covers(Point(*profile["anchor"]))]
+        if len(components) != 1:
+            raise ValueError("Expected one ground component at the map's reviewed anchor")
+        connected = components[0]
+        if profile["relative"]:
+            xmin, zmin, xmax, zmax = connected.bounds
+            drawing_clip = box(math.floor(xmin)-3, math.floor(zmin)-3, math.ceil(xmax)+3, math.ceil(zmax)+3)
+            surface = GroundSurface(native_triangles(navmesh, profile["heights"]), drawing_clip)
 
     @lru_cache(maxsize=256)
     def mesh(mesh_id):
@@ -255,7 +323,8 @@ def generate(package, descriptor, output, navmesh=None):
         return read_mesh(path)
 
     for scene_path in sorted((package / "scenes").glob("*.json")):
-        if scene_path.stem not in config["all_scene_names"]:
+        if (scene_path.stem not in config["all_scene_names"]
+                or scene_path.stem in config.get("background_scene_names", [])):
             continue
         inputs[str(scene_path)] = digest(scene_path)
         scene = Scene(json.loads(scene_path.read_text(encoding="utf-8")))
@@ -271,7 +340,18 @@ def generate(package, descriptor, output, navmesh=None):
                 verts, indices = mesh(component["mesh_id"]) if kind == "MeshCollider" else primitive(component)
                 world = scene.world(key)
                 verts = verts @ world[:3, :3].T + world[:3, 3]
-                if not len(verts) or verts[:, 1].min() > 1.8 or verts[:, 1].max() < -.45:
+                if not len(verts):
+                    continue
+                if surface is not None:
+                    if (verts[:, 1].min() > profile["heights"][1]+1.8
+                            or verts[:, 1].max() < profile["heights"][0]-.45):
+                        continue
+                    vmin, vmax = verts.min(axis=0), verts.max(axis=0)
+                    if not box(vmin[0], vmin[2], vmax[0], vmax[2]).intersects(drawing_clip):
+                        continue
+                    verts = verts.copy()
+                    verts[:, 1] -= surface.heights(verts[:, (0, 2)])
+                if verts[:, 1].min() > 1.8 or verts[:, 1].max() < -.45:
                     continue
                 stats[kind] += 1
                 tris = verts[indices]
@@ -296,50 +376,54 @@ def generate(package, descriptor, output, navmesh=None):
     # Keep all substantial ground pieces, including spawn booths; remove tiny prop-top islands.
     if floor.is_empty:
         raise ValueError("No ground floor found")
-    walkable = read_triangulation(navmesh) if navmesh else None
-    connected = None
-    if navmesh:
-        inputs[str(Path(navmesh).resolve())] = digest(navmesh)
-        # The verified atrium anchor (0,0) selects the gameplay component. The bake also
-        # contains unreachable outer-floor islands, which must not look like main routes.
-        components = [p for p in polygons(walkable) if p.covers(Point(0, 0))]
-        if len(components) != 1:
-            raise ValueError("Expected one ground component at the Equator atrium anchor")
-        connected = components[0]
     xmin, zmin, xmax, zmax = (connected if connected is not None else floor).bounds
     bounds = [math.floor(xmin)-3, math.floor(zmin)-3, math.ceil(xmax)+3, math.ceil(zmax)+3]
     if bounds[2]-bounds[0] > 180 or bounds[3]-bounds[1] > 180:
-        raise ValueError(f"Unexpected Equator ground extent: {bounds}")
+        raise ValueError(f"Unexpected {profile['name']} ground extent: {bounds}")
     drawing_clip = box(*bounds)
-    low = clean(unary_union(low_parts).intersection(drawing_clip).buffer(.07).buffer(-.07))
-    high = clean(unary_union(high_parts).intersection(drawing_clip).buffer(.07).buffer(-.07))
+    detail_tolerance = .18 if profile["relative"] else .12
+    low = unary_union(low_parts).intersection(drawing_clip).buffer(.07).buffer(-.07)
+    high = unary_union(high_parts).intersection(drawing_clip).buffer(.07).buffer(-.07)
+    if profile["relative"]:
+        # A large flat face can span different nearest ground heights at its corners,
+        # producing a false diagonal slab. This ground plan gives native floor area
+        # priority over projected obstacles; genuine obstacle holes stay unfilled.
+        # Overhangs above otherwise walkable ground are intentionally omitted.
+        low, high = low.difference(walkable), high.difference(walkable)
+    low = clean(low, tolerance=detail_tolerance)
+    high = clean(high, tolerance=detail_tolerance)
     layers = [(floor.intersection(drawing_clip), "#46545e" if walkable is not None else "#a8b1b5")]
     if walkable is not None:
-        layers.append((walkable.intersection(drawing_clip), "#66747d"))
+        # Avoid drawing the main polygon twice on new maps. Keep Equator's accepted
+        # serialization unchanged, including its original overdraw ordering.
+        other_ground = walkable.difference(connected) if profile["relative"] else walkable
+        layers.append((other_ground.intersection(drawing_clip), "#66747d"))
         layers.append((connected, "#b8c1c4"))
     layers.extend([(low, "#8d8167"), (high, "#293641")])
     width, height = bounds[2]-bounds[0], bounds[3]-bounds[1]
     svg = [f'<svg xmlns="http://www.w3.org/2000/svg" width="{width}" height="{height}" viewBox="0 0 {width} {height}">',
            f'<rect x="0" y="0" width="{width}" height="{height}" fill="#151c24"/>']
     point_count = 0
+    layer_points = []
     for geom, color in layers:
         path, count = svg_path(geom, bounds)
         point_count += count
+        layer_points.append({"fill": color, "points": count})
         svg.append(f'<path fill="{color}" fill-rule="evenodd" d="{path}"/>')
     # Geometric north arrow, independent of text support in Unity.VectorGraphics.
     svg.append('<path fill="#d6b56d" d="M5,2 L3.8,5 L5,4.3 L6.2,5 Z"/>')
     svg.append("</svg>\n")
     if point_count > 16000:
-        raise ValueError(f"Drawing too complex for the native tessellator: {point_count} points")
+        raise ValueError(f"Drawing too complex for the native tessellator: {point_count} points; {layer_points}")
     rect = {"Min": {"x": bounds[0], "y": bounds[1]}, "Max": {"x": bounds[2], "y": bounds[3]}}
     definition = {
-        "DisplayName": "Arena: Equator — ground plan", "Author": "ArenaMapPort",
-        "MapInternalNames": ["arena_equator"], "CoordinateRotation": 0, "DefaultLevel": 0,
+        "DisplayName": f"Arena: {profile['name']} — ground plan", "Author": "ArenaMapPort",
+        "MapInternalNames": [config["key"]], "CoordinateRotation": 0, "DefaultLevel": 0,
         "Bounds": rect,
-        "Layers": {"Ground Floor": {"Level": 0, "ImagePath": "Maps/ArenaMapPort_Equator/Layers/Ground.svg",
+        "Layers": {"Ground Floor": {"Level": 0, "ImagePath": f"Maps/{profile['folder']}/Layers/Ground.svg",
             "TesselationIndex": 1, "ImageBounds": rect,
             "GameBounds": [{"Min": {**rect["Min"], "z": -8}, "Max": {**rect["Max"], "z": 12}}]}},
-        "Labels": [{"Text": "EQUATOR / GROUND", "Position": {"x": (bounds[0]+bounds[2])/2, "y": bounds[3]-2, "z": 0},
+        "Labels": [{"Text": f"{profile['title']} / GROUND", "Position": {"x": (bounds[0]+bounds[2])/2, "y": bounds[3]-2, "z": 0},
                     "FontSize": 16}], "StaticMarkers": [],
     }
     exits_path = descriptor.with_suffix(".exits.json")
@@ -352,17 +436,22 @@ def generate(package, descriptor, output, navmesh=None):
     pack = output / "pack"
     (pack / "Layers").mkdir(parents=True, exist_ok=True)
     (pack / "Layers" / "Ground.svg").write_text("\n".join(svg), encoding="utf-8", newline="\n")
-    (pack / "ArenaMapPort_Equator.jsonc").write_text(json.dumps(definition, indent=2, ensure_ascii=False)+"\n", encoding="utf-8", newline="\n")
+    (pack / (profile["folder"]+".jsonc")).write_text(json.dumps(definition, indent=2, ensure_ascii=False)+"\n", encoding="utf-8", newline="\n")
     render_preview(output / "preview.png", layers, bounds)
     if any(digest(path) != expected for path, expected in inputs.items()):
         raise ValueError("An input changed during export")
-    receipt = {"schema": 1, "map": "arena_equator", "bounds_xz": bounds, "svg_points": point_count,
+    receipt = {"schema": 1, "map": config["key"], "bounds_xz": bounds, "svg_points": point_count,
         "colliders": dict(stats), "areas_m2": {"floor": floor.area, "low": low.area, "high": high.area},
         "generator_sha256": digest(__file__), "inputs_sha256": dict(sorted(inputs.items())),
         "output_sha256": {p.relative_to(pack).as_posix(): digest(p) for p in sorted(pack.rglob("*")) if p.is_file()},
         "native_walkable_area_m2": walkable.area if walkable is not None else None,
         "atrium_component_area_m2": connected.area if connected is not None else None,
-        "limitations": ["Ground floor only; decorative upper levels omitted", "Approximate slab projection at 0.4–1.8 m",
+        "ground_profile": profile,
+        "layer_points": layer_points,
+        "obstacle_tolerance_m": detail_tolerance,
+        "limitations": ["Ground floor only; higher surfaces and container tops omitted",
+                        "Approximate slab projection at 0.4–1.8 m above the reference ground",
+                        "Bay5 obstacle overlays omit overhangs above projected native ground",
                         "Round primitive colliders use conservative boxes", "Not a walkability or line-of-sight guarantee"]}
     (output / "receipt.json").write_text(json.dumps(receipt, indent=2)+"\n", encoding="utf-8")
     print(json.dumps({k: v for k, v in receipt.items() if k not in ("inputs_sha256",)}, indent=2))
