@@ -14,35 +14,41 @@ using UnityEngine;
 
 namespace ArenaMapPort.Editor.Import
 {
-    /// <summary>Rebuilds only Bay5's source ambient graph with target native components.
+    /// <summary>Rebuilds Bay5/Equator source ambient graphs with target native components.
     /// The inactive root defers stock Awake/playback until the client has real audio services.</summary>
     public static class Bay5AudioImporter
     {
         public const string RootName = "ArenaMapPort_Bay5NativeAudio";
-        const string AssetDir = ArenaPaths.ImportRoot + "/NativeAudio/Bay5";
+        public const string EquatorRootName = "ArenaMapPort_EquatorNativeAudio";
 
         public static void Build(ArenaPackage package, GameObject scriptsRoot)
         {
             var entry = package.Manifest["native_audio"] as JObject;
             if (entry == null) return;
-            if (ArenaPaths.Map.key != "arena_bay5" || scriptsRoot.activeInHierarchy)
-                throw new InvalidDataException("Bay5 native audio requires its inactive ScriptsRoot.");
+            bool equator = ArenaPaths.Map.key == "arena_equator";
+            if ((!equator && ArenaPaths.Map.key != "arena_bay5") || scriptsRoot.activeInHierarchy)
+                throw new InvalidDataException("Native audio requires a supported map and inactive ScriptsRoot.");
             var payload = ReadVerified(package, (string)entry["file"], (string)entry["sha256"]);
             var data = JObject.Parse(System.Text.Encoding.UTF8.GetString(payload));
-            if ((int)data["schemaVersion"] != 1 || (string)data["mapKey"] != "arena_bay5" || (string)data["sourceScene"] != "level188")
+            int schema = equator ? 2 : 1;
+            if ((int)data["schemaVersion"] != schema || (int)entry["schema_version"] != schema ||
+                (string)data["mapKey"] != ArenaPaths.Map.key || (string)data["sourceScene"] != (equator ? "level56" : "level188"))
                 throw new InvalidDataException("Unsupported native audio identity/schema.");
             var players = (JArray)data["players"];
             var support = (JArray)data["support"];
-            if (players.Count != 24 || support.Count != 6 || ((JArray)data["clips"]).Count != 106 || ((JObject)data["banks"]).Count != 13)
+            if (players.Count != (equator ? 25 : 24) || support.Count != (equator ? 1 : 6) ||
+                ((JArray)data["clips"]).Count != (equator ? 65 : 106) || ((JObject)data["banks"]).Count != (equator ? 11 : 13))
                 throw new InvalidDataException("Native audio source census changed.");
 
-            Directory.CreateDirectory(AssetDir);
+            ValidateMembership(players, support, equator);
+            string assetDir = ArenaPaths.ImportRoot + "/NativeAudio/" + (equator ? "Equator" : "Bay5");
+            Directory.CreateDirectory(assetDir);
             var clips = new Dictionary<string, AudioClip>();
             foreach (JObject item in data["clips"])
             {
                 var decoded = item["decoded"];
                 var bytes = ReadVerified(package, (string)decoded["file"], (string)decoded["sha256"]);
-                string assetPath = AssetDir + "/" + SafeId((string)item["id"]) + ".wav";
+                string assetPath = assetDir + "/" + SafeId((string)item["id"]) + ".wav";
                 File.WriteAllBytes(assetPath, bytes);
                 AssetDatabase.ImportAsset(assetPath, ImportAssetOptions.ForceSynchronousImport);
                 var importer = (AudioImporter)AssetImporter.GetAtPath(assetPath);
@@ -65,7 +71,7 @@ namespace ArenaMapPort.Editor.Import
             foreach (var property in ((JObject)data["banks"]).Properties())
             {
                 var item = property.Value;
-                string assetPath = AssetDir + "/" + SafeId(property.Name) + ".asset";
+                string assetPath = assetDir + "/" + SafeId(property.Name) + ".asset";
                 var bank = AssetDatabase.LoadAssetAtPath<SoundBank>(assetPath);
                 if (bank == null) { bank = ScriptableObject.CreateInstance<SoundBank>(); AssetDatabase.CreateAsset(bank, assetPath); }
                 bank.name = (string)item["name"];
@@ -89,14 +95,15 @@ namespace ArenaMapPort.Editor.Import
                 banks.Add(property.Name, bank);
             }
 
-            var root = new GameObject(RootName);
+            var root = new GameObject(equator ? EquatorRootName : RootName);
             root.SetActive(false);
             root.transform.SetParent(scriptsRoot.transform, false);
             var objects = new Dictionary<string, GameObject>();
+            var hierarchyNodes = new Dictionary<string, JToken>();
             var components = new Dictionary<string, Component>();
             try
             {
-                foreach (JObject item in players.Concat(support)) EnsureHierarchy(root, objects, item);
+                foreach (JObject item in players.Concat(support)) EnsureHierarchy(root, objects, hierarchyNodes, item, equator);
                 foreach (JObject item in players)
                 {
                     var go = objects[(string)item["path"]];
@@ -171,7 +178,8 @@ namespace ArenaMapPort.Editor.Import
                     var component = components[(string)item["id"]];
                     if (component is AmbientSoundPlayerGroup group)
                     {
-                        string expected = group.name == "AmbientPlayersGroup" ? "CommonAmbOutEffects" : "CommonAmbOutBypass";
+                        string expected = equator ? "CommonAmbInEffects" :
+                            group.name == "AmbientPlayersGroup" ? "CommonAmbOutEffects" : "CommonAmbOutBypass";
                         if ((string)item["mixerName"] != expected) throw new InvalidDataException("Unknown ambient mixer routing.");
                         group._soundPlayers = ((JArray)item["soundPlayers"]).Select(p => (BaseAmbientSoundPlayer)components[(string)p["resolved"]]).ToList();
                     }
@@ -195,9 +203,33 @@ namespace ArenaMapPort.Editor.Import
                     }
                 }
                 AssetDatabase.SaveAssets();
-                Debug.Log("[ArenaMapPort][NativeAudio] authored inactive stock graph players=24 banks=13 clips=106 support=6");
+                Debug.Log($"[ArenaMapPort][NativeAudio] authored inactive stock graph map={ArenaPaths.Map.key} players={players.Count} banks={banks.Count} clips={clips.Count} support={support.Count}");
             }
             catch { UnityEngine.Object.DestroyImmediate(root); throw; }
+        }
+
+        static void ValidateMembership(JArray players, JArray support, bool equator)
+        {
+            var ids = players.Select(p => (string)p["id"]).ToArray();
+            var grouped = support.Where(s => (string)s["kind"] == "AmbientSoundPlayerGroup")
+                .SelectMany(s => (JArray)s["soundPlayers"]).Select(p => (string)p["resolved"]).ToArray();
+            var active = players.Where(p => (bool)p["enabled"] && (bool)p["activeInHierarchy"])
+                .Select(p => (string)p["id"]).ToArray();
+            if (ids.Distinct().Count() != ids.Length || grouped.Distinct().Count() != grouped.Length ||
+                !new HashSet<string>(equator ? active : ids).SetEquals(grouped))
+                throw new InvalidDataException("Native audio group membership differs from active source graph.");
+            if (!equator) return;
+            var inactive = players.Where(p => !(bool)p["activeInHierarchy"]).ToArray();
+            if (active.Length != 23 || inactive.Length != 2 || players.Any(p => !(bool)p["enabled"] ||
+                (string)p["kind"] != "AmbientSoundPlayer" || (int)p["sourceAudio"]["m_Enabled"] != 1) ||
+                !new HashSet<string>(inactive.Select(p => ((string)p["path"]).Split('/').Last())).SetEquals(new[] { "far_dogs1", "far_dogs2" }) ||
+                (string)support[0]["kind"] != "AmbientSoundPlayerGroup" || !(bool)support[0]["enabled"] || !(bool)support[0]["activeInHierarchy"] ||
+                ((string)support[0]["path"]).Split('/').Last() != "CommonAmbientInGroup")
+                throw new InvalidDataException("Equator source activation contract changed.");
+            var electricity = players.Where(p => ((string)p["path"]).Split('/').Last() == "electricity").ToArray();
+            if (electricity.Length != 1 || players.Any(p => (bool)p["sourceAudio"]["Loop"] !=
+                (((string)p["path"]).Split('/').Last() == "electricity")))
+                throw new InvalidDataException("Equator original electricity loop changed.");
         }
 
         static byte[] ReadVerified(ArenaPackage package, string relative, string expectedHash)
@@ -244,24 +276,37 @@ namespace ArenaMapPort.Editor.Import
                     if ((float)roundTrip["m_Curve"][i][property.Name] != (float)property.Value)
                         throw new InvalidDataException("Native curve key changed " + field + "/" + property.Name);
         }
-        static void EnsureHierarchy(GameObject root, Dictionary<string, GameObject> objects, JObject item)
+        static void EnsureHierarchy(GameObject root, Dictionary<string, GameObject> objects,
+            Dictionary<string, JToken> hierarchyNodes, JObject item, bool preserveStates)
         {
             var names = ((string)item["path"]).Split('/'); var transforms = (JArray)item["transformChain"];
-            if (names.Length != transforms.Count || !(bool)item["activeInHierarchy"]) throw new InvalidDataException("Unsupported inactive/malformed audio hierarchy.");
+            if (names.Length != transforms.Count || names.Any(string.IsNullOrEmpty) ||
+                (!preserveStates && !(bool)item["activeInHierarchy"])) throw new InvalidDataException("Unsupported inactive/malformed audio hierarchy.");
             Transform parent = root.transform; string path = "";
+            bool active = true;
             for (int i = 0; i < names.Length; i++)
             {
                 path = i == 0 ? names[i] : path + "/" + names[i];
+                var t = transforms[i];
+                if (preserveStates && (t["activeSelf"]?.Type != JTokenType.Boolean ||
+                    t["layer"]?.Type != JTokenType.Integer || (int)t["layer"] < 0 || (int)t["layer"] > 31))
+                    throw new InvalidDataException("Invalid native audio hierarchy state.");
+                active &= !preserveStates || (bool)t["activeSelf"];
+                if (hierarchyNodes.TryGetValue(path, out var previous) && !JToken.DeepEquals(previous, t))
+                    throw new InvalidDataException("Inconsistent shared native audio hierarchy: " + path);
                 if (!objects.TryGetValue(path, out var go))
                 {
                     go = new GameObject(names[i]); go.transform.SetParent(parent, false);
-                    var t = transforms[i]; var q = t["rotation"];
+                    var q = t["rotation"];
                     go.transform.localPosition = Vec3(t["position"]); go.transform.localScale = Vec3(t["scale"]);
                     go.transform.localRotation = new Quaternion((float)q["x"], (float)q["y"], (float)q["z"], (float)q["w"]);
+                    if (preserveStates) { go.layer = (int)t["layer"]; go.SetActive((bool)t["activeSelf"]); }
                     objects.Add(path, go);
+                    hierarchyNodes.Add(path, t);
                 }
                 parent = go.transform;
             }
+            if (active != (bool)item["activeInHierarchy"]) throw new InvalidDataException("Native audio hierarchy activation mismatch.");
         }
     }
 }

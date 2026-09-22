@@ -1430,7 +1430,8 @@ def derive_extractor_args(manifest: dict) -> tuple[Path, list[int], dict[int, li
 
 def run_extractor(extractor_script: Path, scene_indices: list[int], slice_map: dict[int, list[int]],
                    source_root: str, out_dir: Path, fixed_timestamp: str, timeout_s: int,
-                   plan_path: Path | None = None, target_root: str | None = None) -> subprocess.CompletedProcess:
+                   plan_path: Path | None = None, target_root: str | None = None,
+                   native_features: bool = False) -> subprocess.CompletedProcess:
     cmd = [sys.executable, str(extractor_script),
            "--source", source_root,
            "--output", str(out_dir),
@@ -1450,6 +1451,10 @@ def run_extractor(extractor_script: Path, scene_indices: list[int], slice_map: d
         cmd += ["--scenes", ",".join(str(i) for i in scene_indices)]
         for idx, ids in slice_map.items():
             cmd += ["--slice-roots", f"{idx}:" + ",".join(str(i) for i in ids)]
+        if native_features:
+            cmd += ["--native-features"]
+            if target_root is not None:
+                cmd += ["--target", target_root]
     return subprocess.run(cmd, capture_output=True, text=True, timeout=timeout_s)
 
 
@@ -1502,12 +1507,13 @@ def run_reproducibility_checks(manifest: dict, package: Path, timeout_s: int) ->
         print(f"[validate_extract] reproducibility: re-running {extractor_script.name} twice into {tmp} "
               f"(scenes={scene_indices}, slice={slice_map or 'none (full scenes)'}) ...")
         target_root = manifest.get("source", {}).get("target_data_root")
-        p1 = run_extractor(extractor_script, scene_indices, slice_map, source_root, out1, fixed_ts, timeout_s, plan_path, target_root)
+        native_features = "native_features" in manifest
+        p1 = run_extractor(extractor_script, scene_indices, slice_map, source_root, out1, fixed_ts, timeout_s, plan_path, target_root, native_features)
         if not check(p1.returncode == 0,
                       f"reproducibility run #1 of {extractor_script.name} exits 0 "
                       f"(rc={p1.returncode}; stderr tail: {p1.stderr[-800:]})"):
             return
-        p2 = run_extractor(extractor_script, scene_indices, slice_map, source_root, out2, fixed_ts, timeout_s, plan_path, target_root)
+        p2 = run_extractor(extractor_script, scene_indices, slice_map, source_root, out2, fixed_ts, timeout_s, plan_path, target_root, native_features)
         if not check(p2.returncode == 0,
                       f"reproducibility run #2 of {extractor_script.name} exits 0 "
                       f"(rc={p2.returncode}; stderr tail: {p2.stderr[-800:]})"):

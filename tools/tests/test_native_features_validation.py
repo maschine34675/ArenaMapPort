@@ -17,7 +17,7 @@ import validate_native_features as v
 
 class Reader:
     def __init__(self,scene,kind,tree,owner=None,script=None):
-        self.path_id=len(scene.objects)+1;self.assets_file=scene;self.type=SimpleNamespace(name=kind)
+        self.path_id=max(scene.objects,default=0)+1;self.assets_file=scene;self.type=SimpleNamespace(name=kind)
         self.tree=deepcopy(tree);self.owner=owner;self.script=script;self.assembly='Assembly-CSharp';self.samples={}
         scene.objects[self.path_id]=self
     def read_typetree(self):return deepcopy(self.tree)
@@ -116,9 +116,73 @@ def audio_fixture(directory):
     native['calculator'].tree.update(_resolution=80,_calculationRadius=75.,_blendSpeed=3.,_splineEmitter=scene.ref(native['emitter']),_spline=scene.ref(native['spline']))
     native['emitter'].tree.update(_spreadRange={'x':0.,'y':1.},_soundPlayer=scene.ref(native['LoopAmbientSoundPlayer']))
     transform={'position':{'x':0.,'y':0.,'z':0.},'rotation':{'x':0.,'y':0.,'z':0.,'w':1.},'scale':{'x':1.,'y':1.,'z':1.}}
-    for item in players+support:item['transformChain']=[deepcopy(transform),deepcopy(transform)]
-    data={'players':players,'support':support,'clips':[clip],'banks':{bank_id:bank}}
+    for item in players+support:
+        item['transformChain']=[deepcopy(transform),deepcopy(transform)];item['activeInHierarchy']=True
+    data={'schemaVersion':1,'mapKey':'arena_bay5','sourceScene':'level188',
+          'players':players,'support':support,'clips':[clip],'banks':{bank_id:bank}}
     return scene,data,native,gos,clip_reader
+
+
+def equator_fixture(directory):
+    """Synthetic indoor graph with source identity labels, never proprietary assets."""
+    scene,data,_,_,clip_reader=audio_fixture(directory)
+    bank_reader=next(r for r in scene.objects.values() if r.script=='SoundBank')
+    keep={clip_reader.path_id,bank_reader.path_id}
+    scene.objects={k:r for k,r in scene.objects.items() if k in keep}
+    scripts=scene.go('ScriptsRoot',active=True)
+    root=scene.go(v.MAPS['arena_equator']['audio_root'],scripts,False)
+    source=scene.go('AmbientAudioSystem',root)
+    container=scene.go('AmbientPlayersGroup',source)
+    group_go=scene.go('CommonAmbientInGroup',container)
+    path='AmbientAudioSystem/AmbientPlayersGroup/CommonAmbientInGroup'
+    transform={'position':{'x':0.,'y':0.,'z':0.},'rotation':{'x':0.,'y':0.,'z':0.,'w':1.},
+               'scale':{'x':1.,'y':1.,'z':1.},'activeSelf':True,'layer':0}
+    bank_id=next(iter(data['banks']));players=[];native={};gos={}
+    labels=[('level56:965','electricity'),('level56:970','far_dogs2'),('level56:975','far_dogs1')]
+    labels.extend(('level56:'+str(1000+i),'incidental'+str(i)) for i in range(22))
+    for identifier,name in labels:
+        active=not name.startswith('far_dogs')
+        go=scene.go(name,group_go,active);gos[name]=go
+        item=player('AmbientSoundPlayer',path+'/'+name)
+        item.update(id=identifier,activeInHierarchy=active,ambientBank={'resolved':bank_id},
+                    transformChain=[deepcopy(transform) for _ in range(4)])
+        item['transformChain'][-1]['activeSelf']=active
+        item['sourceAudio']['Loop']=name=='electricity'
+        fields=v.player_built_fields(item)
+        fields.update(_mixerGroup=scene.ref(None),_ambientBank=scene.ref(bank_reader))
+        native[identifier]=scene.component(go,'MonoBehaviour',fields,'AmbientSoundPlayer')
+        audio=v.audio_source_built_fields(item);audio.update(m_audioClip=scene.ref(None),OutputAudioMixerGroup=scene.ref(None))
+        scene.component(go,'AudioSource',audio);players.append(item)
+    group={'id':'level56:780','kind':'AmbientSoundPlayerGroup','path':path,'enabled':True,
+           'activeInHierarchy':True,'transformChain':[deepcopy(transform) for _ in range(3)],
+           'mixerName':'CommonAmbInEffects','soundPlayers':[{'resolved':p['id']} for p in players if p['activeInHierarchy']]}
+    native[group['id']]=scene.component(group_go,'MonoBehaviour',{'m_Enabled':1,'_outputMixerGroup':scene.ref(None),
+        '_soundPlayers':[scene.ref(native[p['resolved']]) for p in group['soundPlayers']]},group['kind'])
+    gos['group']=group_go
+    data.update(schemaVersion=2,mapKey='arena_equator',sourceScene='level56',players=players,support=[group])
+    return scene,data,native,gos,clip_reader
+
+
+def manifest_for(key):
+    contract=v.MAPS[key]
+    return {'source':{'map_key':key},'scenes':list(contract['scenes'].values()),
+            'native_features':{'schema_version':1,'required':['ballistics',contract['feature']]},
+            'native_ballistics':{},'native_audio':{}}
+
+
+def write_audio_index(directory,data):
+    """Index-only fixture; bundle/source tests separately verify actual assets."""
+    key=data['mapKey'];contract=v.MAPS[key];data=deepcopy(data)
+    first_bank=next(iter(data['banks'].values()));first_clip=data['clips'][0]
+    data['banks']={**data['banks'],**{'fixture-bank'+str(i):dict(first_bank,id='fixture-bank'+str(i))
+                                     for i in range(contract['banks']-len(data['banks']))}}
+    data['clips'].extend(dict(first_clip,id='fixture-clip'+str(i)) for i in range(contract['clips']-len(data['clips'])))
+    path=Path(directory)/'audio/native-audio.json';path.write_text(json.dumps(data),encoding='utf-8')
+    manifest=manifest_for(key)
+    manifest['native_audio']={'schema_version':contract['schema'],'file':'audio/native-audio.json',
+                             'sha256':v.file_digest(path),'players':len(data['players']),
+                             'banks':len(data['banks']),'clips':len(data['clips'])}
+    return manifest
 
 
 class NativeFeatureTests(unittest.TestCase):
@@ -161,14 +225,20 @@ class NativeFeatureTests(unittest.TestCase):
         self.assertNotEqual(v.audio_wire(item,'AmbientPlayerSplineMappedEmitter'),expected)
 
     def test_ballistic_same_count_field_owner_and_identity_changes(self):
-        scene=Scene();go=scene.go('Wall');scene.component(go,'BoxCollider',{})
+        scene=Scene();go=scene.go('Wall');scene.component(go,'BoxCollider',{'m_Enabled':1,'m_IsTrigger':False})
         c={'enabled':False,'target_material_id':27,'target_preset_id':27,'material':'WoodThin',
            'values':dict(zip(v.FIELDS,[3.,.6,.1,.2,.3,.04])),'source':{'component_id':'source-1'},'type':'BallisticCollider'}
         obj={'id':'1','parent_id':None,'name':'Wall','active':True,'layer':0,'local_position':[0.,0.,0.],
-             'local_rotation':[0.,0.,0.,1.],'local_scale':[1.,1.,1.],'components':[c]}
+             'local_rotation':[0.,0.,0.,1.],'local_scale':[1.,1.,1.],
+             'components':[{'type':'BoxCollider','enabled':True,'is_trigger':False},c]}
         reader=scene.component(go,'MonoBehaviour',v.ballistic_built_fields(c),'BallisticCollider')
         with patch.object(v,'ptr',scene.deref):
             v.validate_ballistic_bundle(list(scene.objects.values()),{'scene':[obj]})
+            collider=next(r for r in scene.objects.values() if r.type.name=='BoxCollider')
+            for field,value in [('m_Enabled',0),('m_IsTrigger',True)]:
+                old=collider.tree[field];collider.tree[field]=value
+                with self.subTest(field=field),self.assertRaises(ValueError):v.validate_ballistic_bundle(list(scene.objects.values()),{'scene':[obj]})
+                collider.tree[field]=old
             for field,value in [('PenetrationLevel',4.),('_presetId',28),('HitType',2),('m_Enabled',1)]:
                 old=reader.tree[field];reader.tree[field]=value
                 with self.subTest(field=field),self.assertRaises(ValueError):v.validate_ballistic_bundle(list(scene.objects.values()),{'scene':[obj]})
@@ -243,6 +313,94 @@ class NativeFeatureTests(unittest.TestCase):
             _,data,_,_,_=audio_fixture(directory);clip=data['clips'][0];path=Path(directory)/clip['decoded']['file']
             v.check_wave(directory,clip);path.write_bytes(path.read_bytes()+b'changed')
             with self.assertRaises(ValueError):v.check_wave(directory,clip)
+
+    def test_map_contract_keeps_legacy_bay5_and_requires_explicit_equator(self):
+        bay5=manifest_for('arena_bay5');bay5.pop('source')
+        self.assertTrue(v.feature_enabled(bay5))
+        equator=manifest_for('arena_equator');self.assertTrue(v.feature_enabled(equator))
+        self.assertFalse(v.feature_enabled({'scenes':['AnyLegacyMap']}))
+        for change in (lambda m:m.pop('source'),lambda m:m['source'].update(map_key='arena_bowl'),
+                       lambda m:m['source'].update(map_key='arena_bay5'),
+                       lambda m:m['native_features'].update(required=['ballistics','harbor_audio']),
+                       lambda m:m['scenes'].pop(),lambda m:m['scenes'].append(m['scenes'][0])):
+            changed=deepcopy(equator);change(changed)
+            with self.subTest(change=change),self.assertRaises(ValueError):v.feature_enabled(changed)
+
+    def test_equator_native_contract_rejects_slice_with_all_scene_names(self):
+        manifest=manifest_for('arena_equator')
+        self.assertTrue(v.feature_enabled(manifest))
+        manifest['slice']={};self.assertTrue(v.feature_enabled(manifest))
+        manifest['slice']={'51':[5]}
+        self.assertEqual(set(manifest['scenes']),set(v.MAPS['arena_equator']['scenes'].values()))
+        with self.assertRaisesRegex(ValueError,'require unsliced scenes'):v.feature_enabled(manifest)
+        legacy={'source':manifest['source'],'scenes':manifest['scenes'],'slice':manifest['slice']}
+        self.assertFalse(v.feature_enabled(legacy))
+
+    def equator_bundle_mutation(self,change):
+        with tempfile.TemporaryDirectory() as directory:
+            scene,data,native,gos,clip=equator_fixture(directory)
+            with patch.object(v,'ptr',scene.deref):
+                v.validate_audio_bundle(list(scene.objects.values()),directory,data)
+                change(scene,data,native,gos,clip)
+                with self.assertRaises(ValueError):v.validate_audio_bundle(list(scene.objects.values()),directory,data)
+
+    def equator_index_mutation(self,change):
+        with tempfile.TemporaryDirectory() as directory:
+            _,data,_,_,_=equator_fixture(directory)
+            manifest=write_audio_index(directory,data);v.load_audio(directory,manifest)
+            changed=v.read_json(Path(directory)/'audio/native-audio.json');change(changed)
+            path=Path(directory)/'audio/native-audio.json';path.write_text(json.dumps(changed),encoding='utf-8')
+            manifest['native_audio']['sha256']=v.file_digest(path)
+            with self.assertRaises(ValueError):v.load_audio(directory,manifest)
+
+    def test_equator_schema_map_scene_and_interior_route(self):
+        for change in (lambda d:d.update(schemaVersion=1),lambda d:d.update(mapKey='arena_bay5'),
+                       lambda d:d.update(sourceScene='level188'),
+                       lambda d:d['support'][0].update(mixerName='CommonAmbOutEffects')):
+            with self.subTest(change=change):self.equator_index_mutation(change)
+
+    def test_equator_inactive_dogs_cannot_join_or_replace_active_members(self):
+        self.equator_index_mutation(lambda d:d['support'][0]['soundPlayers'].append({'resolved':'level56:970'}))
+        self.equator_index_mutation(lambda d:d['support'][0]['soundPlayers'].__setitem__(0,{'resolved':'level56:975'}))
+        self.equator_index_mutation(lambda d:d['support'][0]['soundPlayers'].pop())
+
+    def test_equator_source_ancestry_and_enabled_consistency(self):
+        self.equator_index_mutation(lambda d:d['players'][1]['transformChain'][-1].update(activeSelf=True))
+        self.equator_index_mutation(lambda d:d['players'][0]['transformChain'][0].update(layer=3))
+        self.equator_index_mutation(lambda d:d['players'][0].update(enabled=False))
+        self.equator_index_mutation(lambda d:d['players'][0]['transformChain'][-1].update(activeSelf=1))
+        self.equator_index_mutation(lambda d:d['players'][0]['transformChain'][-1].update(layer=True))
+
+    def test_equator_original_electricity_loop_required(self):
+        self.equator_index_mutation(lambda d:d['players'][0]['sourceAudio'].update(Loop=False))
+        self.equator_bundle_mutation(lambda s,d,n,g,c:next(r for r in s.objects.values()
+            if r.type.name=='AudioSource' and r.owner==g['electricity']).tree.update(Loop=False))
+
+    def test_equator_built_dog_activation_and_layer_mutations(self):
+        self.equator_bundle_mutation(lambda s,d,n,g,c:g['far_dogs2'].tree.update(m_IsActive=True))
+        self.equator_bundle_mutation(lambda s,d,n,g,c:g['far_dogs1'].tree.update(m_Layer=2))
+
+    def test_equator_built_group_order_member_and_missing_player(self):
+        self.equator_bundle_mutation(lambda s,d,n,g,c:n['level56:780'].tree['_soundPlayers'].reverse())
+        self.equator_bundle_mutation(lambda s,d,n,g,c:n['level56:780'].tree['_soundPlayers'].__setitem__(0,s.ref(n['level56:970'])))
+        self.equator_bundle_mutation(lambda s,d,n,g,c:s.objects.pop(n['level56:965'].path_id))
+
+    def test_equator_built_pcm_and_map_root_mutations(self):
+        def corrupt(s,d,n,g,c):
+            payload=bytearray(next(iter(c.samples.values())));payload[-1]^=1;c.samples={'fixture.wav':bytes(payload)}
+        self.equator_bundle_mutation(corrupt)
+        self.equator_bundle_mutation(lambda s,d,n,g,c:d.update(mapKey='arena_bay5'))
+        self.equator_bundle_mutation(lambda s,d,n,g,c:next(r for r in s.objects.values()
+            if r.type.name=='GameObject' and r.tree['m_Name']==v.MAPS['arena_equator']['audio_root']).tree.update(m_Name=v.AUDIO_ROOT))
+
+    def test_physics_states_observe_disabled_and_trigger_colliders(self):
+        scene=Scene();go=scene.go('Wall');native=scene.component(go,'BoxCollider',{'m_Enabled':1,'m_IsTrigger':False})
+        expected=[{'type':'BoxCollider','enabled':True,'is_trigger':False}]
+        self.assertEqual(v.physics_states(expected),v.physics_states([native],True))
+        for field,value in [('m_Enabled',0),('m_IsTrigger',True)]:
+            old=native.tree[field];native.tree[field]=value
+            self.assertNotEqual(v.physics_states(expected),v.physics_states([native],True))
+            native.tree[field]=old
 
 
 if __name__=='__main__':unittest.main()

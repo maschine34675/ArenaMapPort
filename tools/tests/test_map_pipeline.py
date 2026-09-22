@@ -34,6 +34,21 @@ def example_anchors():
     return {SP.PLAYER_MARKER: {"count": 1, "sample_positions": [[1, 2, 3]], "sample_files": ["level1"]}}
 
 
+class SpawnPlacementAdmissionTests(unittest.TestCase):
+    def test_native_equator_keeps_legacy_authored_starts(self):
+        self.assertFalse(VB.requires_spawn_placement({"source": {"map_key": "arena_equator"}}))
+        self.assertFalse(VB.requires_spawn_placement({"source": {}}))
+
+    def test_other_identified_maps_still_require_placement_proof(self):
+        for descriptor in (REPO / "tools/maps").glob("*.json"):
+            data = json.loads(descriptor.read_text(encoding="utf-8-sig"))
+            key = data.get("key") if isinstance(data, dict) else None
+            if key and key != "arena_equator":
+                with self.subTest(map=key):
+                    self.assertTrue(VB.requires_spawn_placement({"source": {"map_key": key}}))
+        self.assertTrue(VB.requires_spawn_placement({"source": {"map_key": "arena_future_map"}}))
+
+
 class SourcePlanTests(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
@@ -159,6 +174,27 @@ class CompleteAnchorTests(unittest.TestCase):
 
 
 class ReproducibilityTests(unittest.TestCase):
+    def test_equator_native_features_reject_partial_and_sliced_source_before_loading(self):
+        cases = (("--scenes", "51"), ("--slice-roots", "51:1"),
+                 ("--scenes", "51,51,53,55,57,58"))
+        for flags in cases:
+            with self.subTest(flags=flags), patch.object(sys, "argv", ["extract_equator.py", "--native-features", *flags]), \
+                 patch.object(EX.EQ, "load_environment") as load:
+                with self.assertRaises(SystemExit) as stopped:
+                    EX.EQ.main()
+                self.assertEqual(stopped.exception.code, 2)
+                load.assert_not_called()
+
+    def test_equator_native_reproduction_retains_feature_opt_in_and_target(self):
+        with patch.object(VE.subprocess, "run") as run:
+            VE.run_extractor(REPO / "tools/extract/extract_equator.py", [51, 53, 55, 57, 58], {},
+                             "source", Path("out"), "fixed", 90,
+                             target_root="custom SPT/EscapeFromTarkov_Data", native_features=True)
+        cmd = run.call_args.args[0]
+        self.assertIn("--native-features", cmd)
+        self.assertEqual(cmd[cmd.index("--target") + 1], "custom SPT/EscapeFromTarkov_Data")
+        self.assertEqual(cmd[cmd.index("--scenes") + 1], "51,53,55,57,58")
+
     def test_bay5_reproduction_retains_the_selected_target_install(self):
         with patch.object(VE.subprocess, "run") as run:
             VE.run_extractor(REPO / "tools/extract/extract_bay5.py", [1], {},
@@ -182,6 +218,7 @@ class ReproducibilityTests(unittest.TestCase):
                 VE.run_extractor(REPO / "tools/extract" / script, [1], {}, "source", Path("out"), "fixed", 90)
                 self.assertEqual("--scenes" in run.call_args.args[0], expected)
                 self.assertNotIn("--plan", run.call_args.args[0])
+                self.assertNotIn("--native-features", run.call_args.args[0])
 
     def test_manifest_cannot_choose_an_executable_path(self):
         for script in ("../../evil.py", "tools/extract/arbitrary.py", str(REPO / "tools/extract/extract_map.py")):

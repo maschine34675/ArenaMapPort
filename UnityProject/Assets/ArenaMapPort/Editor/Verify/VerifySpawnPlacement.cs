@@ -29,7 +29,11 @@ namespace ArenaMapPort.Editor.Verify
 
         public static bool Required(ArenaPackage pkg)
         {
-            return !string.IsNullOrEmpty((string)pkg.Manifest["source"]?["map_key"]);
+            string mapKey = (string)pkg.Manifest["source"]?["map_key"];
+            // Equator's optional native features now declare their map identity.
+            // Its accepted legacy starts must retain the existing authoring path;
+            // only the generic map pipeline relocates starts from source anchors.
+            return !string.IsNullOrEmpty(mapKey) && mapKey != "arena_equator";
         }
 
         public static void Place(ArenaPackage pkg, NavMeshData data, GameObject[] contentRoots, string outputDir)

@@ -1,4 +1,4 @@
-"""Independent source/package/bundle proof for Bay5 material hits and harbor audio.
+"""Independent source/package/bundle proof for Bay5 and Equator native features.
 
 No extractor/importer is used as an oracle. Source MonoBehaviour payloads are
 re-encoded from the package and compared byte for byte; native built fields and
@@ -30,6 +30,26 @@ PLAYERS = {'AmbientSoundPlayer', 'SeasonAmbientSoundPlayer', 'LoopAmbientSoundPl
 SUPPORT = {'AmbientSoundPlayerGroup', 'BezierSpline', 'AmbientSplineEmitterController',
            'SoundAmbientZoneCalculator', 'AmbientPlayerSplineMappedEmitter'}
 AUDIO_ROOT = 'ArenaMapPort_Bay5NativeAudio'
+PHYSICS = {'MeshCollider', 'BoxCollider', 'SphereCollider', 'CapsuleCollider'}
+MAPS = {
+    'arena_bay5': {
+        'scenes':{index:'Arena_Bay5_'+suffix for index,suffix in SCENES.items()},
+        'ballistics':{84:3541,83:44,81:5,89:429,88:65,80:645,86:541,82:159,79:893},
+        'feature':'harbor_audio', 'schema':1, 'audio_scene':'level188', 'audio_root':AUDIO_ROOT,
+        'players':{'AmbientSoundPlayer':17,'SeasonAmbientSoundPlayer':6,'LoopAmbientSoundPlayer':1},
+        'support':{'AmbientSoundPlayerGroup':2,'BezierSpline':1,'AmbientSplineEmitterController':1,
+                   'SoundAmbientZoneCalculator':1,'AmbientPlayerSplineMappedEmitter':1},
+        'banks':13, 'clips':106,
+    },
+    'arena_equator': {
+        'scenes':{51:'Arena_Equator',53:'Arena_Equator_DesignStuff',55:'Arena_Equator_Lighting',
+                  57:'Arena_Equator_TeamFight_DesignStuff',58:'Arena_Equator_TeamFight'},
+        'ballistics':{51:2639,53:25,55:127,57:89,58:12},
+        'feature':'ambient_audio', 'schema':2, 'audio_scene':'level56',
+        'audio_root':'ArenaMapPort_EquatorNativeAudio', 'players':{'AmbientSoundPlayer':25},
+        'support':{'AmbientSoundPlayerGroup':1}, 'banks':11, 'clips':65,
+    },
+}
 SCRIPT_NS = {**{k:'Audio.AmbientSubsystem' for k in PLAYERS | {'AmbientSoundPlayerGroup'}},
              **{k:'Audio.AmbientSubsystem.AmbientSplineEmitter' for k in SUPPORT - {'AmbientSoundPlayerGroup','BezierSpline'}},
              'BezierSpline':'BezierSplineTools', 'SoundBank':'EFT', 'BallisticCollider':'EFT.Ballistics'}
@@ -121,6 +141,21 @@ def scene_objects(package, manifest):
     return {name:read_json(child(package, 'scenes/' + name + '.json'))['objects'] for name in manifest['scenes']}
 
 
+def map_contract(manifest):
+    # Released Bay5 schema 1 predates source.map_key. That exact scene set is
+    # the only implicit identity accepted; Equator always declares its key.
+    key=manifest.get('source',{}).get('map_key')
+    if key is None and set(manifest.get('scenes',[]))==set(MAPS['arena_bay5']['scenes'].values()):
+        key='arena_bay5'
+    require(key in MAPS,'unsupported or missing native map identity')
+    contract=MAPS[key]
+    require(len(manifest['scenes'])==len(contract['scenes']) and
+            set(manifest['scenes'])==set(contract['scenes'].values()), 'native features require full '+key+' scene set')
+    if key=='arena_equator':
+        require(not manifest.get('slice'), 'Equator native features require unsliced scenes')
+    return key,contract
+
+
 def feature_enabled(manifest, scenes=None):
     present = {k for k in ('native_features','native_ballistics','native_audio') if k in manifest}
     if not present:
@@ -129,29 +164,70 @@ def feature_enabled(manifest, scenes=None):
                     'unmarked ballistic components')
         return False
     require(len(present)==3, 'incomplete required feature contract')
-    compare(manifest['native_features'], {'schema_version':1,'required':['ballistics','harbor_audio']}, 'feature contract')
-    require(set(manifest['scenes']) == {'Arena_Bay5_' + n for n in SCENES.values()}, 'native features require full Bay5 scene set')
+    _,contract=map_contract(manifest)
+    compare(manifest['native_features'], {'schema_version':1,'required':['ballistics',contract['feature']]}, 'feature contract')
     if scenes is not None:
         require(not any(c['type']=='WindowBreaker' for objects in scenes.values() for o in objects for c in o['components']), 'glass was deferred by the user')
     return True
 
 
 def load_audio(package, manifest):
+    key,contract=map_contract(manifest)
     meta = manifest['native_audio']
-    require(meta['schema_version']==1 and meta['file']=='audio/native-audio.json', 'audio index schema/path')
+    require(meta['schema_version']==contract['schema'] and meta['file']=='audio/native-audio.json', 'audio index schema/path')
     path = child(package, meta['file'])
     require(file_digest(path)==meta['sha256'], 'audio index hash differs')
     data = read_json(path)
-    require(data['schemaVersion']==1 and data['mapKey']=='arena_bay5' and data['sourceScene']=='level188', 'audio source identity')
-    require(Counter(x['kind'] for x in data['players'])==Counter({'AmbientSoundPlayer':17,'SeasonAmbientSoundPlayer':6,'LoopAmbientSoundPlayer':1}), 'audio player census')
-    require(Counter(x['kind'] for x in data['support'])==Counter({'AmbientSoundPlayerGroup':2,'BezierSpline':1,'AmbientSplineEmitterController':1,'SoundAmbientZoneCalculator':1,'AmbientPlayerSplineMappedEmitter':1}), 'audio support census')
-    for field, count in [('players',24),('banks',13),('clips',106)]:
+    require(data['schemaVersion']==contract['schema'] and data['mapKey']==key and data['sourceScene']==contract['audio_scene'], 'audio source identity')
+    require(Counter(x['kind'] for x in data['players'])==Counter(contract['players']), 'audio player census')
+    require(Counter(x['kind'] for x in data['support'])==Counter(contract['support']), 'audio support census')
+    for field, count in [('players',sum(contract['players'].values())),('banks',contract['banks']),('clips',contract['clips'])]:
         require(meta[field]==len(data[field])==count, 'audio count: ' + field)
     for records in (data['players'] + data['support'], data['clips']):
         require(len({x['id'] for x in records})==len(records), 'duplicate audio source identity')
     require(all(k==v['id'] for k,v in data['banks'].items()), 'bank key/identity disagreement')
-    require(Counter(p['resolved'] for s in data['support'] for p in s.get('soundPlayers',[]))==Counter(p['id'] for p in data['players']), 'audio group coverage')
+    validate_audio_hierarchy(data)
+    grouped=Counter(p['resolved'] for s in data['support'] for p in s.get('soundPlayers',[]))
+    if key=='arena_equator':
+        require(grouped==Counter(p['id'] for p in data['players'] if p['enabled'] and p['activeInHierarchy']) and
+                sum(grouped.values())==23,'Equator active audio group coverage')
+        inactive={p['id']:p['path'].split('/')[-1] for p in data['players'] if not p['activeInHierarchy']}
+        compare(inactive,{'level56:970':'far_dogs2','level56:975':'far_dogs1'},'original inactive Equator players')
+        require(all(p['enabled'] for p in data['players']),'Equator player enabled state')
+        group=data['support'][0]
+        require(group['enabled'] and group['activeInHierarchy'] and group['mixerName']=='CommonAmbInEffects',
+                'Equator indoor group route/state')
+        require({p['id'] for p in data['players'] if p['sourceAudio']['Loop']}=={'level56:965'},
+                'Equator original electricity loop')
+    else:
+        require(grouped==Counter(p['id'] for p in data['players']), 'audio group coverage')
     return data
+
+
+def audio_states(item,schema):
+    """Source-order ancestor states; schema 1 only supports active layer zero."""
+    chain=item['transformChain']
+    require(len(chain)==len(item['path'].split('/')),'audio hierarchy depth')
+    if schema==1:return [(True,0)]*len(chain)
+    require(schema==2,'unsupported audio hierarchy schema')
+    for node in chain:
+        require(type(node['activeSelf']) is bool and type(node['layer']) is int and 0<=node['layer']<=31,
+                'invalid audio hierarchy state')
+    return [(node['activeSelf'],node['layer']) for node in chain]
+
+
+def validate_audio_hierarchy(data):
+    ancestors={};schema=data['schemaVersion']
+    for item in data['players']+data['support']:
+        states=audio_states(item,schema)
+        require(type(item['activeInHierarchy']) is bool and item['activeInHierarchy']==all(s[0] for s in states),
+                'audio activeInHierarchy disagrees with original ancestors')
+        parts=item['path'].split('/')
+        require(all(parts),'empty audio hierarchy path')
+        for index,node in enumerate(item['transformChain']):
+            path='/'.join(parts[:index+1])
+            if path in ancestors:compare_storage(node,ancestors[path],'shared audio source ancestor '+path)
+            ancestors[path]=node
 
 
 def extra_counts(package, manifest):
@@ -267,6 +343,17 @@ def ballistic_expected(reader, source_table, target_table):
             'preset_id':preset,'material_id':material,'surface_sound_id':surface,'hit_type_id':hit,'net_id':net}}
 
 
+def physics_states(components, native=False):
+    states=[]
+    for component in components:
+        kind=component.type.name if native else component['type']
+        if kind not in PHYSICS:continue
+        tree=component.read_typetree() if native else component
+        states.append((kind,bool(tree['m_Enabled' if native else 'enabled']),
+                       bool(tree['m_IsTrigger' if native else 'is_trigger'])))
+    return Counter(states)
+
+
 def validate_ballistic_source(package, manifest, scenes):
     import UnityPy
     root=Path(manifest['source']['arena_data_root']); target=Path(manifest['source']['target_data_root'])
@@ -275,9 +362,8 @@ def validate_ballistic_source(package, manifest, scenes):
     compare_storage(manifest['native_ballistics'],{'schema_version':1,'source_presets':source_proof,'target_presets':target_proof},'independent named preset provenance')
     for name in MATERIALS:
         require(next(p for p in target_table if p['name']==name)['material']==MATERIALS.index(name),'target named material mapping changed')
-    total=0
-    for index,suffix in SCENES.items():
-        scene='Arena_Bay5_'+suffix
+    key,contract=map_contract(manifest);total=0
+    for index,scene in contract['scenes'].items():
         objects={o['id']:o for o in scenes[scene]}
         actual={}
         for obj in objects.values():
@@ -299,9 +385,12 @@ def validate_ballistic_source(package, manifest, scenes):
             compare(package_chain(owner,objects),native['chain'],'ballistic source hierarchy '+key)
             compare((owner['active'],owner['layer']),(native['active'],native['layer']),'ballistic source owner state')
             compare(package_states(owner,objects),native['states'],'ballistic source ancestor states')
-            require(any(x['type'] in ('MeshCollider','BoxCollider','SphereCollider','CapsuleCollider') for x in owner['components']),'ballistic owner lacks imported physical collider')
-        require(set(actual)==found,scene+': extra ballistic source identities');total+=len(found)
-    require(total==6322,'Bay5 ballistic source census changed')
+            require(any(x['type'] in PHYSICS for x in owner['components']),'ballistic owner lacks imported physical collider')
+            compare(dict(physics_states(owner['components'])),dict(physics_states(native['components'],True)),
+                    'ballistic source physical collider states '+key)
+        require(set(actual)==found,scene+': extra ballistic source identities')
+        require(len(found)==contract['ballistics'][index],scene+': ballistic source census changed');total+=len(found)
+    require(total==sum(contract['ballistics'].values()),key+' ballistic source census changed')
 
 
 class Wire:
@@ -383,11 +472,15 @@ def check_wave(package,clip):
 def validate_audio_source(package,manifest,data):
     import UnityPy
     root=Path(manifest['source']['arena_data_root'])
-    require(file_digest(root/'level188')==data['sourceSceneSha256'],'audio scene source bytes changed')
+    key,contract=map_contract(manifest);source_scene=contract['audio_scene']
+    require(data['mapKey']==key and data['sourceScene']==source_scene and data['schemaVersion']==contract['schema'],
+            'audio source identity')
+    validate_audio_hierarchy(data)
+    require(file_digest(root/source_scene)==data['sourceSceneSha256'],'audio scene source bytes changed')
     schema_path=child(root,data['bankSchema']['path'])
     require(file_digest(schema_path)==data['bankSchema']['sha256'],'SoundBank type schema source changed')
-    env=UnityPy.load(str(root/'level188'),str(root/'globalgamemanagers.assets'))
-    scene=next(f for f in env.files.values() if hasattr(f,'objects') and Path(f.name).name=='level188')
+    env=UnityPy.load(str(root/source_scene),str(root/'globalgamemanagers.assets'))
+    scene=next(f for f in env.files.values() if hasattr(f,'objects') and Path(f.name).name==source_scene)
     components={};counts=Counter()
     for obj in list(scene.objects.values()):
         if obj.type.name!='MonoBehaviour':continue
@@ -406,8 +499,11 @@ def validate_audio_source(package,manifest,data):
         go=unity_go(obj);chain=list(reversed(go['chain']))
         compare('/'.join(t[0] for t in chain),item['path'],'source audio hierarchy names')
         expected_chain=[{'position':dict(zip('xyz',t[1])),'rotation':dict(zip('xyzw',t[2])),'scale':dict(zip('xyz',t[3]))} for t in chain]
-        compare(item['transformChain'],expected_chain,'source audio hierarchy transforms')
-        require(item['activeInHierarchy'] and all(active and layer==0 for active,layer in go['states']),'unsupported inactive/nondefault audio hierarchy')
+        if contract['schema']==2:
+            for node,(active,layer) in zip(expected_chain,reversed(go['states'])):
+                node.update(activeSelf=active,layer=layer)
+        compare_storage(item['transformChain'],expected_chain,'source audio hierarchy transforms/states')
+        compare(audio_states(item,contract['schema']),list(reversed(go['states'])),'source audio hierarchy states')
         for p in pointers(item):
             if 'resolved' in p:
                 actual=ptr(obj,p);require(identity(actual)==p['resolved'],'source audio reference target '+item['id'])
@@ -415,7 +511,7 @@ def validate_audio_source(package,manifest,data):
                 elif p['resolved'] in data['banks']:reached_banks.add(p['resolved'])
         if item['kind'] in PLAYERS:
             sources=[x for x in go['components'] if x.type.name=='AudioSource'];require(len(sources)==1,'source player AudioSource cardinality')
-            compare(sources[0].read_typetree(),item['sourceAudio'],'source AudioSource '+item['id'])
+            compare_storage(sources[0].read_typetree(),item['sourceAudio'],'source AudioSource '+item['id'])
             require(item['mixerGroup']['pathId']==0 and item['playOnAwake'] is False,'source mixer/start policy changed')
         if item['kind']=='AmbientSoundPlayerGroup':
             compare(ptr(obj,item['outputMixerGroup']).read().m_Name,item['mixerName'],'source native mixer name')
@@ -441,7 +537,7 @@ def validate_audio_source(package,manifest,data):
         require(script_identity(obj)[:2]==('SoundBank','EFT'),'source bank script')
         require(obj.get_raw_data()==audio_wire(item,'SoundBank'),'source bank payload '+key)
         compare(obj.parse_monobehaviour_head().m_Script.deref().read().m_PropertiesHash,source_script_hash,'source SoundBank schema hash')
-        compare(obj.read_typetree(nodes=node,check_read=True),item['sourceTree'],'independent source bank typetree '+key)
+        compare_storage(obj.read_typetree(nodes=node,check_read=True),item['sourceTree'],'independent source bank typetree '+key)
         for environment in item['environments']:
             for distance in environment:
                 for p in distance:
@@ -449,7 +545,7 @@ def validate_audio_source(package,manifest,data):
     require(reached_clips=={c['id'] for c in data['clips']},'unreachable/missing source clips')
     for clip in data['clips']:
         obj=source_object(clip['id']);require(obj.type.name=='AudioClip','source clip type')
-        compare(obj.read_typetree(),clip['metadata'],'source audio metadata '+clip['id'])
+        compare_storage(obj.read_typetree(),clip['metadata'],'source audio metadata '+clip['id'])
         compare(obj.read().m_Name,clip['name'],'source clip name')
         samples=obj.read().samples;require(len(samples)==1,'source clip decode cardinality')
         compare(check_wave(package,clip),wave_data(next(iter(samples.values()))),'source decoded audio '+clip['id'])
@@ -547,12 +643,18 @@ def validate_ballistic_bundle(readers,scenes):
         reader,go=matches[0];candidates.remove(matches[0])
         compare((go['active'],go['layer']),(obj['active'],obj['layer']),'built ballistic owner state')
         compare(go['states'],states,'built ballistic ancestor state')
-        require(any(c.type.name in ('MeshCollider','BoxCollider','SphereCollider','CapsuleCollider') for c in go['components']),'built ballistic owner physics absent')
+        require(any(c.type.name in PHYSICS for c in go['components']),'built ballistic owner physics absent')
+        compare(dict(physics_states(go['components'],True)),dict(physics_states(obj['components'])),
+                'built ballistic physical collider states '+component['source']['component_id'])
         check_fields(reader.read_typetree(),ballistic_built_fields(component),'built ballistic '+component['source']['component_id'])
 
 
 def validate_audio_bundle(readers,package,data):
     """Check native graph identity, exact hierarchy, all serialized payload fields and links."""
+    key=data['mapKey'];require(key in MAPS,'unsupported built audio map identity')
+    contract=MAPS[key];audio_root=contract['audio_root']
+    require(data['schemaVersion']==contract['schema'],'built audio schema/map disagreement')
+    validate_audio_hierarchy(data)
     native=defaultdict(list)
     for reader in readers:
         if reader.type.name=='MonoBehaviour':
@@ -561,10 +663,10 @@ def validate_audio_bundle(readers,package,data):
                 require_script(reader,kind);native[kind].append(reader)
     expected_counts=Counter(i['kind'] for i in data['players']+data['support']);expected_counts['SoundBank']=len(data['banks'])
     compare({k:len(v) for k,v in native.items()},dict(expected_counts),'built native audio component census')
-    roots=[r for r in readers if r.type.name=='GameObject' and r.read_typetree()['m_Name']==AUDIO_ROOT]
+    roots=[r for r in readers if r.type.name=='GameObject' and r.read_typetree()['m_Name']==audio_root]
     require(len(roots)==1,'built native audio root cardinality')
     root=unity_go(roots[0]);identity_transform=([0.,0.,0.],[0.,0.,0.,1.],[1.,1.,1.])
-    compare(root['chain'],[(AUDIO_ROOT,*identity_transform),('ScriptsRoot',*identity_transform)],'owned audio root ancestry')
+    compare(root['chain'],[(audio_root,*identity_transform),('ScriptsRoot',*identity_transform)],'owned audio root ancestry')
     # AuthorScriptsScene activates ScriptsRoot after authoring; the audio child
     # remains inactive until the runtime driver has listener/season/mixers.
     require(root['states']==[(False,0),(True,0)],'audio root must remain inactive beneath the active ScriptsRoot')
@@ -572,14 +674,15 @@ def validate_audio_bundle(readers,package,data):
     for reader in readers:
         if reader.type.name!='GameObject':continue
         go=unity_go(reader)
-        positions=[i for i,t in enumerate(go['chain']) if t[0]==AUDIO_ROOT]
+        positions=[i for i,t in enumerate(go['chain']) if t[0]==audio_root]
         if not positions or positions[0]==0:continue
         path='/'.join(t[0] for t in reversed(go['chain'][:positions[0]]))
         require(path not in objects,'duplicate built audio hierarchy path '+path)
         objects[path]=go;object_readers[path]=reader
-    expected_paths={}
+    expected_paths={};expected_states={}
     for item in data['players']+data['support']:
         names=item['path'].split('/')
+        states=audio_states(item,contract['schema'])
         for i in range(1,len(names)+1):
             path='/'.join(names[:i]);chain=[]
             for n,t in zip(names[:i],item['transformChain'][:i]):
@@ -587,10 +690,13 @@ def validate_audio_bundle(readers,package,data):
             wanted=list(reversed(chain))+root['chain']
             if path in expected_paths:compare(expected_paths[path],wanted,'shared audio ancestor')
             expected_paths[path]=wanted
+            wanted_states=list(reversed(states[:i]))+root['states']
+            if path in expected_states:compare(expected_states[path],wanted_states,'shared audio ancestor states')
+            expected_states[path]=wanted_states
     require(objects.keys()==expected_paths.keys(),'missing/extra built audio hierarchy objects')
     for path,chain in expected_paths.items():
         compare(objects[path]['chain'],chain,'built audio transform '+path)
-        require(objects[path]['states']==[(True,0)]*(len(chain)-2)+[(False,0),(True,0)],'built audio hierarchy active/layer state '+path)
+        require(objects[path]['states']==expected_states[path],'built audio hierarchy active/layer state '+path)
         wanted=Counter({'Transform':1})
         for item in data['players']+data['support']:
             if item['path']==path:

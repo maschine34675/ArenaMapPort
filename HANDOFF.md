@@ -3,6 +3,46 @@
 Snapshot for whoever continues (human or agent). Verify the commits named here against `git log`; this file
 is updated by hand at each handover, it is not an automatic record. Read [AGENTS.md](AGENTS.md) first.
 
+## State on 2026-09-22 — Equator native features staged; GPU hold
+
+**Built and staged, not deployed or natively accepted.** The user chose original Equator materials
+and environmental audio, then explicitly asked to wait for their release before further GPU tests
+because other sessions are using the host. Do not take over the host or install this candidate
+before that release. Branch `feature/equator-native-materials-audio`, based on `2862da7`.
+
+The opt-in `extract_equator.py --native-features --scenes all5` package adds 2,892 original ballistic
+components and 25 authored ambient players / 11 banks / 65 clips. Original activation is preserved:
+23 active grouped players, two inactive dogs. Runtime uses the native indoor mixer and keeps cleanup
+away from uninitialized players. Glass, crowd/match events and full room acoustics remain excluded.
+
+Unity retry `unity_build_all_20260922_094952.log`, mandatory component-identity patch, two independent
+fresh exports, original-source/bundle comparisons and distribution checks passed. Tests: 182 Python,
+348 .NET, eight PowerShell; final client Release build has zero warnings/errors. Bay5's actual source
+and accepted bundle still pass the shared validator, and a fresh default Bay5 audio export is
+byte-identical to all 107 accepted files. Generated game assets stay ignored.
+
+All original Equator scene objects and 3,645 source asset files are unchanged. The NavMesh is
+byte-identical (10,404 vertices / 4,572 triangles); authored start behavior is identical apart from
+the existing fresh-GUID-per-build policy. Two of 18 cubemaps now retain their original Linear sampling.
+Adding Equator's map identity had exposed an unintended generic spawn-placement path; the bounded
+Equator-only guard preserves its legacy start authoring and bundle build option.
+
+Only two of 72 staged files differ from the installed baseline:
+
+- Client SHA-256: `74A17BB99DF33F897691730AD484F4B776353D7FA1E08AF593F8A92ACE711A96`.
+- Equator scenes SHA-256: `02E687EEE5DB21D9188FDC899F98C9A1E663D6578C13113B63B598C5DA956A7F`.
+
+All 72 installed MapPort files still match the pre-task baseline. The server, other maps, NavMesh,
+presets and shader sidecars are unchanged in the candidate. Resume with the sanctioned deploy script,
+fresh EFT identity check, and Equator–Bay5–Equator tests after host release. Required evidence includes
+real original material hits, 25/23/two-inactive Equator audio, sample/RMS/spatial/mixer behavior,
+23-player/clip teardown with no native Fader errors, Bay5 regression control and the saved central
+reflection view. A muted-host technical signal test cannot establish audible balance.
+
+Full provenance, build issue, artifact receipts and exact acceptance checklist:
+[Equator native features](docs/progress/equator-native-features.md). The previous Bay5 acceptance below
+remains the installed state; this Equator checkpoint does not supersede its runtime evidence.
+
 ## State on 2026-09-22 — Bay5 original materials and harbor ambience
 
 **Built, deployed and natively verified.** Branch `feature/bay5-native-materials-glass-audio`,

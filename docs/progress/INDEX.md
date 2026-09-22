@@ -256,3 +256,10 @@ successor instead unless you're specifically investigating that cycle's history.
 - [bay5-native-features.md](bay5-native-features.md) — original ballistic material components,
   native harbor players and shoreline audio, source and bundle validation, cubemap color-space
   correction, and explicit deferral of the originally inactive breakable-glass objects.
+
+## Added 2026-09-22 — Equator original material response and indoor ambience
+
+- [equator-native-features.md](equator-native-features.md) — opt-in source material/audio port,
+  original active/inactive source graph, native indoor route, source/package/bundle checks,
+  legacy spawn-flow preservation and two cubemap sampling corrections. This is an offline
+  checkpoint: deployment and native acceptance wait for the user's shared-host release.

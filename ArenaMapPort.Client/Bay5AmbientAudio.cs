@@ -13,28 +13,35 @@ using UnityEngine.SceneManagement;
 
 namespace ArenaMapPort.Client
 {
-    /// <summary>Starts Bay5's imported stock ambient players once real raid audio services exist.
+    /// <summary>Starts Bay5/Equator imported stock ambient players once real raid audio services exist.
     /// Arena's ambient singleton/room system is deliberately not recreated. Stock players retain
-    /// their original clip selection, gain, pitch and timing; the stock shoreline calculator ticks
-    /// from this owned driver. Host acceptance is documented in bay5-native-features progress.</summary>
+    /// their original clip selection, gain, pitch and timing; Bay5's stock shoreline calculator
+    /// ticks from this owned driver. Per-map host acceptance lives in native-features progress.</summary>
     internal static class Bay5AmbientAudio
     {
         internal const string RootName = "ArenaMapPort_Bay5NativeAudio";
+        internal const string EquatorRootName = "ArenaMapPort_EquatorNativeAudio";
         static Driver _driver;
-        static ConfigEntry<bool> _diagnostics;
+        static ConfigEntry<bool> _bay5Diagnostics, _equatorDiagnostics;
 
         internal static void Ensure()
         {
-            if (_driver != null || ArenaMapRaid.CurrentMap?.Key != "arena_bay5") return;
-            if (_diagnostics == null) _diagnostics = Plugin.Instance.Config.Bind("Audio (arena_bay5)", "PlaybackDiagnostics", false,
-                "Log native ambient clip/sample and shoreline movement evidence while in Bay5. Takes effect immediately; F10 also logs a snapshot.");
+            string mapKey = ArenaMapRaid.CurrentMap?.Key;
+            if (_driver != null || (mapKey != "arena_bay5" && mapKey != "arena_equator")) return;
+            bool equator = mapKey == "arena_equator";
+            if (equator && _equatorDiagnostics == null)
+                _equatorDiagnostics = Plugin.Instance.Config.Bind("Audio (arena_equator)", "PlaybackDiagnostics", false,
+                    "Log native indoor ambient clip/sample evidence while in Equator. Takes effect immediately; F10 also logs a snapshot.");
+            if (!equator && _bay5Diagnostics == null)
+                _bay5Diagnostics = Plugin.Instance.Config.Bind("Audio (arena_bay5)", "PlaybackDiagnostics", false,
+                    "Log native ambient clip/sample and shoreline movement evidence while in Bay5. Takes effect immediately; F10 also logs a snapshot.");
             var scene = SceneManager.GetSceneByName(ArenaMapRaid.CurrentMap.ScriptsSceneName);
             var roots = scene.GetRootGameObjects().SelectMany(r => r.GetComponentsInChildren<Transform>(true))
-                .Where(t => t.name == RootName).ToArray();
+                .Where(t => t.name == (equator ? EquatorRootName : RootName)).ToArray();
             if (roots.Length == 0) return; // Old packages do not contain this optional feature.
             if (roots.Length != 1) { Plugin.Log.LogError("[ArenaMapPort][NativeAudio] duplicate owned audio roots; refusing playback"); return; }
             _driver = Plugin.Instance.gameObject.AddComponent<Driver>();
-            _driver.Initialize(roots[0].gameObject);
+            _driver.Initialize(roots[0].gameObject, mapKey, equator ? _equatorDiagnostics : _bay5Diagnostics);
         }
 
         internal static void Shutdown()
@@ -52,7 +59,12 @@ namespace ArenaMapPort.Client
         public sealed class Driver : MonoBehaviour
         {
             GameObject _root;
+            string _mapKey;
+            bool _equator;
+            ConfigEntry<bool> _diagnostics;
             BaseAmbientSoundPlayer[] _players = Array.Empty<BaseAmbientSoundPlayer>();
+            BaseAmbientSoundPlayer[] _activePlayers = Array.Empty<BaseAmbientSoundPlayer>();
+            AmbientSoundPlayerGroup[] _groups = Array.Empty<AmbientSoundPlayerGroup>();
             AmbientSplineEmitterController[] _controllers = Array.Empty<AmbientSplineEmitterController>();
             AmbientPlayerSplineMappedEmitter _water;
             readonly Dictionary<AudioSource, Tuple<AudioClip, int>> _samples = new Dictionary<AudioSource, Tuple<AudioClip, int>>();
@@ -69,25 +81,66 @@ namespace ArenaMapPort.Client
             Vector3 _previousEmitter;
             bool _hasEmitterPosition;
 
-            internal void Initialize(GameObject root)
+            internal void Initialize(GameObject root, string mapKey, ConfigEntry<bool> diagnostics)
             {
                 _root = root;
+                _mapKey = mapKey; _equator = mapKey == "arena_equator"; _diagnostics = diagnostics;
                 _players = root.GetComponentsInChildren<BaseAmbientSoundPlayer>(true);
+                _groups = root.GetComponentsInChildren<AmbientSoundPlayerGroup>(true);
                 _controllers = root.GetComponentsInChildren<AmbientSplineEmitterController>(true);
                 _water = root.GetComponentInChildren<AmbientPlayerSplineMappedEmitter>(true);
-                if (root.activeSelf || _players.Length != 24 || _controllers.Length != 1 || _water == null)
+                try
                 {
-                    Plugin.Log.LogError("[ArenaMapPort][NativeAudio] invalid imported graph; refusing playback");
+                    ValidateGraph();
+                }
+                catch (Exception ex)
+                {
+                    Plugin.Log.LogError($"[ArenaMapPort][NativeAudio] invalid imported graph map={_mapKey}; refusing playback: {ex.Message}");
                     Dispose();
                     return;
                 }
-                Plugin.Log.LogInfo("[ArenaMapPort][NativeAudio] waiting for raid listener, season and native mixers; players=24");
+                Plugin.Log.LogInfo($"[ArenaMapPort][NativeAudio] waiting for raid listener and native mixers; map={_mapKey} players={_players.Length} active={_activePlayers.Length}");
+            }
+
+            void ValidateGraph()
+            {
+                if (_root.activeSelf || _players.Length != (_equator ? 25 : 24) ||
+                    _groups.Length != (_equator ? 1 : 2) || _controllers.Length != (_equator ? 0 : 1) ||
+                    (_equator ? _water != null : _water == null) ||
+                    _root.GetComponentsInChildren<AudioSource>(true).Length != _players.Length)
+                    throw new InvalidOperationException("native graph census mismatch");
+                if (_groups.Any(g => !g.enabled || !ActiveUnderOwnedRoot(g.transform) || g._soundPlayers == null))
+                    throw new InvalidOperationException("inactive or incomplete native player group");
+                _activePlayers = _groups.SelectMany(g => g._soundPlayers).ToArray();
+                var active = _players.Where(p => p.enabled && ActiveUnderOwnedRoot(p.transform) &&
+                    p.GetComponent<AudioSource>() != null && p.GetComponent<AudioSource>().enabled).ToArray();
+                if (_activePlayers.Length != (_equator ? 23 : 24) || _activePlayers.Any(p => p == null) ||
+                    _activePlayers.Distinct().Count() != _activePlayers.Length ||
+                    !new HashSet<BaseAmbientSoundPlayer>(active).SetEquals(_activePlayers))
+                    throw new InvalidOperationException("native group membership differs from enabled active players");
+                // Retain Bay5's accepted hierarchy iteration order; Equator follows its
+                // original active member list and never starts ungrouped descendants.
+                if (!_equator) { _activePlayers = _players; return; }
+                var inactive = _players.Where(p => !ActiveUnderOwnedRoot(p.transform)).ToArray();
+                if (_groups[0].name != "CommonAmbientInGroup" || inactive.Length != 2 ||
+                    !new HashSet<string>(inactive.Select(p => p.name)).SetEquals(new[] { "far_dogs1", "far_dogs2" }) ||
+                    _players.Any(p => !(p is AmbientSoundPlayer) || !p.enabled || !p.GetComponent<AudioSource>().enabled) ||
+                    _players.Count(p => p.name == "electricity") != 1 ||
+                    _players.Any(p => p.GetComponent<AudioSource>().loop != (p.name == "electricity")))
+                    throw new InvalidOperationException("Equator original activation/loop contract differs");
+            }
+
+            bool ActiveUnderOwnedRoot(Transform transform)
+            {
+                for (var current = transform; current != null && current != _root.transform; current = current.parent)
+                    if (!current.gameObject.activeSelf) return false;
+                return transform.IsChildOf(_root.transform);
             }
 
             void Update()
             {
                 if (_disposed) return;
-                if (_root == null || ArenaMapRaid.CurrentMap?.Key != "arena_bay5") { Shutdown(); return; }
+                if (_root == null || ArenaMapRaid.CurrentMap?.Key != _mapKey) { Shutdown(); return; }
                 try
                 {
                     if (!_ready)
@@ -106,7 +159,7 @@ namespace ArenaMapPort.Client
                     var game = Singleton<AbstractGame>.Instantiated ? Singleton<AbstractGame>.Instance : null;
                     if (world == null || game == null || game.Status == GameStatus.Stopping || game.Status == GameStatus.Stopped || game.Status == GameStatus.SoftStopping)
                     { Shutdown(); return; }
-                    if (Seasons.Controller != null && Seasons.Controller.Status != _season)
+                    if (!_equator && Seasons.Controller != null && Seasons.Controller.Status != _season)
                         ApplySeason(Seasons.Controller.Status);
                     foreach (var controller in _controllers) controller.Tick();
                     if ((_diagnostics?.Value ?? false) && Time.realtimeSinceStartup >= _nextReport)
@@ -140,19 +193,18 @@ namespace ArenaMapPort.Client
                 var listener = Singleton<AudioListenerConsistencyManager>.Instantiated ? Singleton<AudioListenerConsistencyManager>.Instance : null;
                 if (world == null || world.MainPlayer == null || !Singleton<AbstractGame>.Instantiated || Singleton<AbstractGame>.Instance.Status != GameStatus.Started) return;
                 if (_servicesSince < 0f) _servicesSince = Time.realtimeSinceStartup;
-                if (listener == null || listener.transform.position.y < -500f || Seasons.Controller == null || !BetterAudio.Instantiated)
+                if (listener == null || listener.transform.position.y < -500f || (!_equator && Seasons.Controller == null) || !BetterAudio.Instantiated)
                     return;
                 var audio = BetterAudio.Instance;
                 if (audio.Master == null || audio.AudioMixerData == null) return;
-                var effects = Mixer(audio.Master, "AmbientOut/CommonAmbOutEffects", "CommonAmbOutEffects");
-                var bypass = Mixer(audio.Master, "CommonAmbOutBypass", "CommonAmbOutBypass");
-                if (effects == null || bypass == null) return;
-                var groups = _root.GetComponentsInChildren<AmbientSoundPlayerGroup>(true);
-                if (groups.Length != 2) throw new InvalidOperationException("expected both source ambient groups");
-                foreach (var group in groups)
+                var effects = _equator ? Mixer(audio.Master, "AmbientIn/CommonAmbInEffects", "CommonAmbInEffects") :
+                    Mixer(audio.Master, "AmbientOut/CommonAmbOutEffects", "CommonAmbOutEffects");
+                var bypass = _equator ? null : Mixer(audio.Master, "CommonAmbOutBypass", "CommonAmbOutBypass");
+                if (effects == null || (!_equator && bypass == null)) return;
+                foreach (var group in _groups)
                 {
-                    if (group.name == "AmbientPlayersGroup") group._outputMixerGroup = effects;
-                    else if (group.name == "AmbientSplineEmitterWaterGroup") group._outputMixerGroup = bypass;
+                    if (group.name == (_equator ? "CommonAmbientInGroup" : "AmbientPlayersGroup")) group._outputMixerGroup = effects;
+                    else if (!_equator && group.name == "AmbientSplineEmitterWaterGroup") group._outputMixerGroup = bypass;
                     else throw new InvalidOperationException("unrecognized ambient group " + group.name);
                     group.SetMixerGroup();
                 }
@@ -161,11 +213,14 @@ namespace ArenaMapPort.Client
                 _root.SetActive(true);
                 foreach (var player in _players)
                     if (player.EmptyClip != null) _emptyClips.Add(player.EmptyClip);
+                if (_activePlayers.Any(p => !p.isActiveAndEnabled || p.Fader == null || p.EmptyClip == null) ||
+                    _players.Except(_activePlayers).Any(p => p.Fader != null || p.EmptyClip != null))
+                    throw new InvalidOperationException("native initialization differs from active source graph");
                 foreach (var controller in _controllers) controller.Init(listener.transform);
-                PrepareShoreline();
-                _season = Seasons.Controller.Status;
+                if (!_equator) PrepareShoreline();
+                _season = Seasons.Controller != null ? Seasons.Controller.Status : default(ESeasonStatus);
                 int started = 0, seasonalSilence = 0;
-                foreach (var player in _players)
+                foreach (var player in _activePlayers)
                 {
                     if (player is SeasonAmbientSoundPlayer seasonal)
                     {
@@ -177,7 +232,8 @@ namespace ArenaMapPort.Client
                 }
                 _ready = true;
                 _nextReport = Time.realtimeSinceStartup + 5f;
-                Plugin.Log.LogInfo($"[ArenaMapPort][NativeAudio] ready players={_players.Length} started={started} seasonalSilent={seasonalSilence} season={_season} mixers={effects.name},{bypass.name} shoreline=stock listener={listener.transform.position}");
+                string mixers = effects.name + (bypass != null ? "," + bypass.name : "");
+                Plugin.Log.LogInfo($"[ArenaMapPort][NativeAudio] ready players={_players.Length} started={started} seasonalSilent={seasonalSilence} season={_season} mixers={mixers} shoreline={(_equator ? "none" : "stock")} listener={listener.transform.position} map={_mapKey} sourceInactive={_players.Length - _activePlayers.Length}");
             }
 
             static AudioMixerGroup Mixer(AudioMixer mixer, string path, string exactName)
@@ -232,17 +288,19 @@ namespace ArenaMapPort.Client
 
             void AcquireAmbientVolume(BetterAudio audio)
             {
-                // ResetMasterValues leaves this parent bus at -80 dB. Original Bay5's
-                // AmbientOutMixerBlendParameters has exterior endpoint 1 (= 0 dB).
+                // ResetMasterValues leaves these parent buses at -80 dB. The original
+                // exterior/interior mixer blend endpoint is 1 (= 0 dB).
                 // We own only that neutral bus gain while this graph lives; native earpro,
                 // spatial filters and Main/InGame volumes retain their normal ownership.
                 _ambientMixer = audio.Master;
-                _ambientVolumeParameter = audio.AudioMixerData.AmbientOutMixerVolume;
+                _ambientVolumeParameter = _equator ? audio.AudioMixerData.AmbientInMixerVolume : audio.AudioMixerData.AmbientOutMixerVolume;
+                if (_equator && _ambientVolumeParameter != "AmbientInVolume")
+                    throw new InvalidOperationException("native interior ambient volume contract changed");
                 if (!_ambientMixer.GetFloat(_ambientVolumeParameter, out _previousAmbientVolume) ||
                     !_ambientMixer.SetFloat(_ambientVolumeParameter, 0f))
-                    throw new InvalidOperationException("native exterior ambient volume parameter unavailable");
+                    throw new InvalidOperationException("native ambient volume parameter unavailable");
                 _ownsAmbientVolume = true;
-                Plugin.Log.LogInfo($"[ArenaMapPort][NativeAudio] exterior bus acquired previousDb={_previousAmbientVolume:F2} ownedDb=0.00");
+                Plugin.Log.LogInfo($"[ArenaMapPort][NativeAudio] {(_equator ? "interior" : "exterior")} bus acquired previousDb={_previousAmbientVolume:F2} ownedDb=0.00 map={_mapKey}");
             }
 
             void ReleaseAmbientVolume()
@@ -251,21 +309,21 @@ namespace ArenaMapPort.Client
                 _ownsAmbientVolume = false;
                 if (_ambientMixer == null) return;
                 if (!_ambientMixer.GetFloat(_ambientVolumeParameter, out float current))
-                    throw new InvalidOperationException("native exterior ambient volume could not be read during cleanup");
+                    throw new InvalidOperationException("native ambient volume could not be read during cleanup");
                 if (Mathf.Approximately(current, 0f))
                 {
                     if (!_ambientMixer.SetFloat(_ambientVolumeParameter, _previousAmbientVolume))
-                        throw new InvalidOperationException("native exterior ambient volume could not be restored");
-                    Plugin.Log.LogInfo($"[ArenaMapPort][NativeAudio] exterior bus restored previousDb={_previousAmbientVolume:F2}");
+                        throw new InvalidOperationException("native ambient volume could not be restored");
+                    Plugin.Log.LogInfo($"[ArenaMapPort][NativeAudio] {(_equator ? "interior" : "exterior")} bus restored previousDb={_previousAmbientVolume:F2} map={_mapKey}");
                 }
-                else Plugin.Log.LogInfo($"[ArenaMapPort][NativeAudio] exterior bus changed externally to {current:F2} dB; retaining its current value");
+                else Plugin.Log.LogInfo($"[ArenaMapPort][NativeAudio] {(_equator ? "interior" : "exterior")} bus changed externally to {current:F2} dB; retaining its current value map={_mapKey}");
                 _ambientMixer = null;
             }
 
             void ApplySeason(ESeasonStatus season)
             {
                 int audible = 0, silent = 0;
-                foreach (var player in _players.OfType<SeasonAmbientSoundPlayer>())
+                foreach (var player in _activePlayers.OfType<SeasonAmbientSoundPlayer>())
                 {
                     player.Stop(true);
                     if (player._seasonAmbientBanks.TryGetValue(season, out var bank) && bank != null)
@@ -289,12 +347,16 @@ namespace ArenaMapPort.Client
                     var audio = BetterAudio.Instantiated ? BetterAudio.Instance : null;
                     var data = audio?.AudioMixerData;
                     if (audio?.Master != null && data != null)
-                        Plugin.Log.LogInfo($"[ArenaMapPort][NativeAudio] mix listenerVolume={AudioListener.volume:F3} paused={AudioListener.pause} mainDb={MixerValue(audio.Master, data.MainMixerVolume)} inGameDb={MixerValue(audio.Master, data.InGameVolumeMixer)} ambientOutDb={MixerValue(audio.Master, data.AmbientOutMixerVolume)} worldDb={MixerValue(audio.Master, data.WorldMixerVolume)}");
+                        Plugin.Log.LogInfo($"[ArenaMapPort][NativeAudio] mix listenerVolume={AudioListener.volume:F3} paused={AudioListener.pause} mainDb={MixerValue(audio.Master, data.MainMixerVolume)} inGameDb={MixerValue(audio.Master, data.InGameVolumeMixer)} ambientOutDb={MixerValue(audio.Master, data.AmbientOutMixerVolume)} ambientInDb={MixerValue(audio.Master, data.AmbientInMixerVolume)} worldDb={MixerValue(audio.Master, data.WorldMixerVolume)} map={_mapKey}");
                 }
                 foreach (var player in _players)
                 {
                     if (player == null) continue;
-                    var source = player.Source;
+                    // Inspect authored sources without asking an uninitialized inactive player
+                    // to create/cache native state. The two Equator dogs never execute Awake.
+                    var source = player.GetComponent<AudioSource>();
+                    if (source == null) continue;
+                    bool initialized = player.Fader != null && player.EmptyClip != null;
                     if (source.isPlaying)
                     {
                         playing++;
@@ -311,13 +373,13 @@ namespace ArenaMapPort.Client
                             foreach (float sample in _outputSamples) energy += sample * sample;
                         }
                         float rms = Mathf.Sqrt(energy / _outputSamples.Length);
-                        Plugin.Log.LogInfo($"[ArenaMapPort][NativeAudio] source='{player.name}' clip='{source.clip?.name}' playing={source.isPlaying} virtual={source.isVirtual} sample={source.timeSamples} rms={rms:F6} volume={source.volume:F3} pitch={source.pitch:F3} muted={source.mute} distance={distance:F2} mixer={source.outputAudioMixerGroup?.name} pos={source.transform.position}");
+                        Plugin.Log.LogInfo($"[ArenaMapPort][NativeAudio] source='{player.name}' clip='{source.clip?.name}' playing={source.isPlaying} virtual={source.isVirtual} sample={source.timeSamples} rms={rms:F6} volume={source.volume:F3} pitch={source.pitch:F3} muted={source.mute} distance={distance:F2} mixer={source.outputAudioMixerGroup?.name} pos={source.transform.position} active={player.gameObject.activeInHierarchy} initialized={initialized} loop={source.loop} map={_mapKey}");
                     }
                 }
                 Vector3 emitter = _water != null ? _water.EmitterPosition : Vector3.zero;
                 float moved = _hasEmitterPosition ? Vector3.Distance(emitter, _previousEmitter) : 0f;
                 _previousEmitter = emitter; _hasEmitterPosition = true;
-                Plugin.Log.LogInfo($"[ArenaMapPort][NativeAudio] playback sources={_players.Length} playing={playing} advancing={advanced} shorelinePosition={emitter} moved={moved:F2} season={_season}");
+                Plugin.Log.LogInfo($"[ArenaMapPort][NativeAudio] playback sources={_players.Length} playing={playing} advancing={advanced} shorelinePosition={emitter} moved={moved:F2} season={_season} map={_mapKey} initialized={_players.Count(p => p != null && p.Fader != null && p.EmptyClip != null)} sourceInactive={_players.Length - _activePlayers.Length}");
             }
 
             static string MixerValue(AudioMixer mixer, string parameter) =>
@@ -376,7 +438,7 @@ namespace ArenaMapPort.Client
                         }
                     }
                 }
-                Plugin.Log.LogInfo($"[ArenaMapPort][NativeAudio] stopped ownedPlayers={stopped} emptyClipsReleased={emptyClips} cleanupFailures={failures}; shoreline disposal scheduled");
+                Plugin.Log.LogInfo($"[ArenaMapPort][NativeAudio] stopped ownedPlayers={stopped} emptyClipsReleased={emptyClips} cleanupFailures={failures}; owned graph disposal scheduled map={_mapKey}");
             }
 
             void OnDestroy() { Dispose(); if (_driver == this) _driver = null; }

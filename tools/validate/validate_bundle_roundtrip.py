@@ -1771,6 +1771,13 @@ def validate_spawn_placement_bundle(env, path: Path, manifest: dict, scene_name:
 
 # ---------------------------------------------------------------------------
 
+def requires_spawn_placement(manifest: dict) -> bool:
+    # Native Equator features add identity to the legacy package without opting
+    # into generic-map spawn relocation. Keep all other identified maps strict.
+    key = manifest.get("source", {}).get("map_key")
+    return bool(key) and key != "arena_equator"
+
+
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--scenes-bundle", type=Path, default=DEFAULT_SCENES_BUNDLE)
@@ -1805,7 +1812,7 @@ def main() -> None:
     from validate_native_features import extra_counts, validate_bundle as validate_native_bundle
     native_counts = extra_counts(args.package, expected["manifest"])
     expected["game_objects"] += native_counts.get("GameObject", 0)
-    if expected["manifest"].get("source", {}).get("map_key") and args.spawn_placement is None:
+    if requires_spawn_placement(expected["manifest"]) and args.spawn_placement is None:
         args.spawn_placement = args.scenes_bundle.parent / "spawn-placement.json"
     if args.require_scripts_scene:
         # s1-fix-r1: Arena_Equator_Scripts adds its own fixed, spec-defined GameObjects/components

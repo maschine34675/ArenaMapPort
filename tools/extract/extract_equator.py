@@ -11,7 +11,11 @@ already validated against real Arena data (arena-census.md Method notes).
 CLI:
     python extract_equator.py --source <ArenaData dir> --scenes <51,53,...|all5>
         [--slice-roots "SCENE_IDX:id1,id2,..."]... --output <package dir>
-        [--fixed-timestamp <ISO8601>]
+        [--fixed-timestamp <ISO8601>] [--native-features --target <SptData dir>]
+
+    --native-features requires all five complete scenes. It adds original
+    ballistic fields and the separately reconstructed environmental audio graph;
+    legacy slice/full extraction remains unchanged without this explicit opt-in.
 
     python extract_equator.py --source <dir> --scenes all5 --census-only
         (fast, no writes -- proves the same code path covers the full 5-scene
@@ -59,7 +63,8 @@ SCHEMA_VERSION = 1
 
 # §E.1 -- the 5 content scenes WP1 is ever asked to extract. "Scripts" (54)
 # is WP2-authored fresh (never extracted); TeamFight_AI(52)/Sound(56)/
-# TeamFight_Culling(59) are dropped per §E.1's own table.
+# TeamFight_Culling(59) are dropped per §E.1's own table. The optional native-audio
+# pass reads selected Sound(56) components into a separate graph, not scene geometry.
 SCENE_REGISTRY = {
     51: "Arena_Equator",
     53: "Arena_Equator_DesignStuff",
@@ -941,6 +946,8 @@ def parse_slice_roots(entries: list[str]) -> dict[int, list[int]]:
 def main():
     parser = argparse.ArgumentParser(description="ArenaMapPort WP1 extractor (docs/SPEC.md §B.WP1/§C)")
     parser.add_argument("--source", default=DEFAULT_SOURCE, help="Arena EscapeFromTarkovArena_Data dir (read-only)")
+    parser.add_argument("--target", default="D:/SPT41/EscapeFromTarkov_Data", help="SPT data directory for native material mapping (read-only)")
+    parser.add_argument("--native-features", action="store_true", help="restore original material and environmental audio data; requires all five full scenes")
     parser.add_argument("--scenes", default="all5", help="comma-separated scene indices from {51,53,55,57,58}, or 'all5'")
     parser.add_argument(
         "--slice-roots", action="append", default=[],
@@ -971,6 +978,9 @@ def main():
             print(f"ERROR: --slice-roots given for scene {idx} which is not in --scenes {scene_indices}", file=sys.stderr)
             sys.exit(2)
 
+    if args.native_features and (slice_map or sorted(scene_indices) != sorted(ALL5)):
+        parser.error("--native-features requires all five full Equator scenes without --slice-roots")
+
     print(f"Loading environment for scenes {scene_indices} from {args.source} ...", file=sys.stderr)
     tags_array = load_tags()
     env, exact_paths = load_environment(args.source, scene_indices)
@@ -986,6 +996,10 @@ def main():
 
     ctx = ExtractionContext(env=env)
     ensure_dirs(args.output)
+    ballistic_contract = None
+    if args.native_features:
+        from extract_ballistics import load_contract, augment_scene
+        ballistic_contract = load_contract(args.source, args.target)
 
     scenes_out: dict[int, dict] = {}
     for idx in scene_indices:
@@ -1009,6 +1023,9 @@ def main():
             node_id_list = list(tf_map.keys())
             print(f"  scene {idx} ({SCENE_REGISTRY[idx]}): FULL scene, {len(node_id_list)} objects", file=sys.stderr)
         scenes_out[idx] = extract_scene(idx, f, tags_array, node_id_list, ctx)
+        if ballistic_contract is not None:
+            count = augment_scene(scenes_out[idx], f, ballistic_contract)
+            print(f"    restored {count} original ballistic material components", file=sys.stderr)
 
     try:
         print(f"Writing {len(ctx.mesh_work)} meshes...", file=sys.stderr)
@@ -1048,6 +1065,12 @@ def main():
         "errors": ctx.errors,
         "warnings": ctx.warnings,
     }
+    if args.native_features:
+        from extract_bay5_audio import export as export_audio
+        manifest["source"].update(target_data_root=args.target, map_key="arena_equator")
+        manifest["native_ballistics"] = ballistic_contract
+        manifest["native_audio"] = export_audio(args.source, args.output, map_key="arena_equator")
+        manifest["native_features"] = {"schema_version": 1, "required": ["ballistics", "ambient_audio"]}
     with open(os.path.join(args.output, "manifest.json"), "w", encoding="utf-8") as f:
         json.dump(manifest, f, indent=2, sort_keys=True, ensure_ascii=False)
 
