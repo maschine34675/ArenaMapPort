@@ -26,6 +26,12 @@ See [remaining maps: source inventory, results and build steps](docs/progress/re
 
 Agents: start at [AGENTS.md](AGENTS.md), then [HANDOFF.md](HANDOFF.md) for the dated working state.
 
+**DynamicMaps:** An optional Equator ground-plan pack is generated from local geometry and
+the existing NavMesh. Deployment and native player/direction/exit checks passed on 2026-09-22.
+Open inventory → **MAP** in an Equator raid. This is a simplified ground-floor prototype;
+other maps are not included yet. See [acceptance](docs/progress/equator-dynamicmaps.md)
+and [generation/deployment](tools/dynamicmaps/README.md).
+
 ## Build inputs
 
 - Repository: `D:/ArenaMapPort`.

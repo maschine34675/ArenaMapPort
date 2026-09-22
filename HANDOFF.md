@@ -3,6 +3,24 @@
 Snapshot for whoever continues (human or agent). Verify the commits named here against `git log`; this file
 is updated by hand at each handover, it is not an automatic record. Read [AGENTS.md](AGENTS.md) first.
 
+## State on 2026-09-22 — Equator DynamicMaps prototype installed and tested
+
+Branch `feature/equator-dynamicmaps`, based on `2c673e2`. The optional Equator SVG/JSON
+pack is generated under ignored `work/dynamicmaps/equator/` and installed through the new
+`deploy-to-spt.ps1 -DynamicMapsPackage ... -Confirm` mode. Existing map bundles and mod DLLs
+were not rebuilt. Standard deployment remains the original 72-file mapping.
+
+Fresh EFT process `96ebdca3` (11:36:40 CEST), DynamicMaps 1.2.1, SPT 4.1.6: inventory → MAP
+automatically selected Equator. Four positions, all four cardinal arrow directions and both
+live exits matched. Normal South Gate extraction and main-menu return passed; final HP 440/440,
+ammo 37+1 unchanged. No DynamicMaps warnings/errors. EFT is closed and the host is free.
+
+27 exporter tests, 59 deploy fixture cases and independent format/native review passed.
+Two full exports were byte-identical. Generated data stay out of git. This is a simplified
+ground plan, not exact walkability; upper decoration and extensive labels are absent.
+Bay5 is a future follow-up, not included. See [acceptance](docs/progress/equator-dynamicmaps.md)
+and [reproduction](tools/dynamicmaps/README.md).
+
 ## State on 2026-09-22 — Equator native features deployed and tested
 
 The user released the GPU host, lifting the earlier hold. Candidate `a728428` on

@@ -8,6 +8,10 @@ dated state in one screen; read it before this index if you only have a minute.
 
 ## Current — read these for the area you touch
 
+- [equator-dynamicmaps.md](equator-dynamicmaps.md) — optional local Equator ground-plan pack:
+  reproducible geometry/NavMesh export, scoped data-only deployment, native position/direction/exit
+  acceptance, normal profile return and prototype limitations (2026-09-22).
+
 ### Pipeline (extract → import → bundle → validate)
 
 - [SOURCE-PATH.md](SOURCE-PATH.md) — records the read-only local Arena source path
