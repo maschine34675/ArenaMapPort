@@ -3,6 +3,34 @@
 Snapshot for whoever continues (human or agent). Verify the commits named here against `git log`; this file
 is updated by hand at each handover, it is not an automatic record. Read [AGENTS.md](AGENTS.md) first.
 
+## State on 2026-09-22 — Equator native features deployed and tested
+
+The user released the GPU host, lifting the earlier hold. Candidate `a728428` on
+`feature/equator-native-materials-audio` is now deployed through the sanctioned script.
+All 72 installed hashes match staging; exactly the client and Equator scenes bundle differ
+from the immutable Bay5 baseline. Their SHA-256 values remain those listed below. No further
+production change was needed during native acceptance.
+
+Fresh EFT process `adbbe116` (10:33:05 CEST) confirmed all 25 maschine plugins identical across
+VM, host disk and loaded code before and after Equator → Bay5 → Equator. Ordinary PMC raids
+used the menu's bot amount None. Real WoodThin, MetalThick and Concrete hits selected the original
+values with `defaultFallback=False`. Both Equator visits initialized 23 of 25 authored sources;
+the two original inactive dogs stayed uninitialized. Samples advanced, nearby electricity/wind
+produced nonzero output, and the indoor mixer route was correct. Each Equator exit stopped 23
+players and released 23 empty clips with zero failures; Bay5 retained its 24-source Summer graph,
+moving shoreline and 24/24 cleanup. No native audio lifecycle exception appeared through final
+menu return. Existing F10 shader-inspection and other startup/UI errors are recorded separately.
+
+Equator's saved reflection controls and 10,404-vertex / 4,572-triangle NavMesh remain unchanged.
+The matched atrium view has no obvious visual regression; this is not a universal reflection
+quality claim. All three test diagnostics were restored to false. Final health was 440/440;
+EFT was exited normally and the host is available. Test shots consumed ammunition normally.
+
+**Remaining subjective check:** listen to the environmental mix. The OS was muted, so the
+technical playback evidence does not establish audible balance. Original random volume ranges
+can also produce silent individual sources for a raid; no gain override was introduced. Glass
+remains deferred. See the appended [native acceptance](docs/progress/equator-native-features.md).
+
 ## State on 2026-09-22 — Equator native features staged; GPU hold
 
 **Built and staged, not deployed or natively accepted.** The user chose original Equator materials

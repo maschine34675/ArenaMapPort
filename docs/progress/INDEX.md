@@ -263,3 +263,10 @@ successor instead unless you're specifically investigating that cycle's history.
   original active/inactive source graph, native indoor route, source/package/bundle checks,
   legacy spawn-flow preservation and two cubemap sampling corrections. This is an offline
   checkpoint: deployment and native acceptance wait for the user's shared-host release.
+
+## Added 2026-09-22 — Equator native acceptance after host release
+
+- [equator-native-features.md](equator-native-features.md) — appended deployment and fresh-process
+  proof, actual original material hits, Equator–Bay5–Equator audio playback and teardown,
+  unchanged settings/navigation, matched atrium view and final 440/440 return. Technical
+  playback passed; muted-host audible balance remains a user check. Supersedes the earlier hold.

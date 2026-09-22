@@ -213,3 +213,99 @@ confirmation, actual Equator audio/material hits, teardown test or visual/hearin
 claimed.** Those remain the native checklist above. Local receipts are `build-validation.log`,
 `bay5-compatibility.log`, `distribution-validation.log`, `distribution-candidate.json` and
 `root-build-gates.log` under `D:/.unlazy/equator-native-features/`.
+
+## 2026-09-22 — deployed Equator–Bay5–Equator native acceptance
+
+The user explicitly released the shared GPU host. Sanctioned deployment installed the unchanged
+candidate from commit `a728428`; all 72 installed files match staging, with exactly the two scoped
+changes in the table above. The first installed check raced the still-running copy and failed
+on the Equator bundle; the check after deployment completed passed. This was a verification
+timing issue, not a different candidate or a bypassed check.
+
+Fresh EFT process `adbbe116`, started 10:33:05 CEST, reported all 25 maschine plugins identical
+across VM build, host disk and loaded assembly. The same comparison passed after all three raids.
+SPT 4.1.6 / EFT 0.16.9.5-40743 / Unity 2022.3.43f1. These were ordinary PMC test raids with bot
+amount None, using ordinary extraction; no ArenaMode or third-party configuration was changed.
+
+### Original material hits and preserved scene
+
+Actual X-17 projectiles selected these authored components, each with `defaultFallback=False`:
+
+| Time CEST / log seq | Target | Material / preset | Six original values |
+|---|---|---|---|
+| 10:39:18.360 / #3067 | `Bench_shop (4)/Ballistic/Wood` | WoodThin / 27 | `3/0.68/0.16/0.08/0.17/0.025` |
+| 10:39:38.615 / #3112 | `Coke_automate_update/Coke_automate_BALLISTIC_metalthick` | MetalThick / 17 | `69/0.45/0.34/0.13/0.22/0.031` |
+| 10:40:15.889 / #3185 | `Fortification_wall_02_BALLISTIC_concrete` | Concrete / -900 | `100/0/0.41/0.16/0.23/0.037` |
+
+The metal shot also passed through original Fabric and WoodThin surfaces before stopping in the
+machine; their logged values were native rather than fallback. Both Equator raids loaded 10,404
+NavMesh vertices / 4,572 triangles, with ten bot markers in one connected component and two patrol
+ways. Runtime subpoints are generated and differed (92 and 97); the baked NavMesh itself is
+byte-identical. Several test positions passed the full reachable-path probe, and the north and
+south exits both extracted normally. This focused no-bot run is not a new bot-AI test.
+
+Saved reflection values matched the baseline: specular cap 0.3, indoor strength 0.3051643,
+indoor surface repair false, floor smoothness 0.5, cover 30 and ZeroLevel -4.4. The central view
+at (0,0.2,0), yaw 0 / pitch 8 was compared with the pre-deployment view. Both show consistent
+geometry and material appearance without an obvious regression; weapon pose differs slightly.
+The two source-corrected cubemaps do not imply that every shiny surface has been visually accepted.
+Local images: `analysis/screenshots/equator-native-atrium-before.png` and
+`analysis/screenshots/equator-native-atrium-after.png` (ignored, not release assets).
+
+### Native playback and map transitions
+
+| Visit | Ready time CEST / seq | Native graph | Exit time CEST / seq | Cleanup |
+|---|---|---|---|---|
+| Equator 1 | 10:38:20.765 / #2950 | 25 sources, 23 started, two inactive | 10:43:00.891 / #3266 | 23 stopped, 23 empty clips released, zero failures |
+| Bay5 | 10:46:51.066 / #3446 | 24 sources, 23 started, one Summer bank silent | 10:48:04.192 / #3607 | 24 stopped, 24 empty clips released, zero failures |
+| Equator 2 | 10:50:20.153 / #3771 | 25 sources, 23 started, two inactive | 10:51:52.474 / #3907 | 23 stopped, 23 empty clips released, zero failures |
+
+Each visit acquired its intended mixer parent at 0 dB and restored it to the previous 0 dB on
+exit. Equator used `CommonAmbInEffects`; Bay5 retained `CommonAmbOutEffects` and shoreline
+`CommonAmbOutBypass`. Both Equator dogs remained `active=False initialized=False`, with no clip.
+Electricity retained `loop=True`. Repeated initialization counts and successful teardown show
+no accumulation in the owned audio graph across these three visits.
+
+Playback observations:
+
+- Equator 1: electricity at 1.32 m had sample 53,145 and RMS 0.000058 (#3126); at 3.70 m,
+  sample 139,981 and RMS 0.000052 (#3207). A later 12.56 m observation had RMS 0 (#3241).
+  Nearby indoor wind at 1.61 m produced RMS 0.000007 (#3255). Samples advanced across probes.
+  Listener volume was 1, not paused, and mixer buses reported
+  0 dB. These are spatial/playback observations, not a controlled same-clip gain test.
+- Bay5: the initial shoreline emitter was (64.05,-3.61,109.84), calculated before movement.
+  Moving to (90,-3.9,5) moved the emitter 96.43 m to (80.46,-3.61,14.82). The water loop was
+  13.88 m away, sample 484,624, RMS 0.001428 (#3595–3596), confirming the existing shoreline
+  correction still works after leaving Equator.
+- Equator 2: electricity again produced nonzero output, sample 13,843 / RMS 0.000028 at
+  1.66 m (#3881); the same report counted two advancing sources (#3896). The initial delay
+  before clips began was consistent with the authored randomized timing.
+
+The full in-memory log still covered #1 through #3935 at final review. A targeted lifecycle
+scan returned zero `NullReferenceException`, `BaseAmbientSoundPlayer`, `Fader`, `OnDestroy`,
+source-stop, mixer-cleanup or root-destruction failures, including deferred destruction after
+each exit. The positive control was the unfiltered error query, which returned 26 entries:
+startup microphone initialization and AsyncUploadManager errors, existing F10 inspector
+`_MainTex` queries on dust/shadow shaders, and one inactive MenuScreen coroutine error. The
+session is therefore not described as globally error-free. None of those entries reported an
+ambient lifecycle failure, and all three raids/extractions completed.
+
+### Final state and limits
+
+Both `Audio (arena_*)/PlaybackDiagnostics` keys and `Combat/LogMaterialHits` were restored to
+false and read back. Final health was 440/440 after the three raids; ammunition was
+consumed by test shots, so this is not byte-identical profile preservation. EFT was exited
+normally after final menu return; UiBridge confirmed it unreachable for eight seconds.
+
+The host OS remained muted. Technical sample/RMS/routing proof does **not** establish audible
+balance or approve the mix. Original random volume ranges can clamp individual sources to
+silence: native `GetBaseVolume` samples `volume + Random.Range(-deltaVolume, 0)`, and some
+authored deltas exceed their base volume. For example, water can select zero gain for a raid.
+This behavior was preserved; no louder override or activation of the two dogs was added.
+Glass, crowd/match events and full room acoustics remain outside this feature.
+
+Evidence: ignored `work/equator-native-features/native-acceptance-part1.json` through `part3.json`,
+the comparison screenshots, `distribution-installed.json`, `deployment.log` and
+`deployment-gates.log` under `D:/.unlazy/equator-native-features/`. This acceptance reused the
+already validated candidate (182 Python / 348 .NET / eight PowerShell tests); it introduced no
+additional production change and did not rerun the Unity build merely to record game evidence.
