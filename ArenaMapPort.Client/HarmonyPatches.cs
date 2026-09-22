@@ -58,6 +58,7 @@ namespace ArenaMapPort.Client
             ExfilSignals.BindConfig(); // [Exfils] SmokeSignals / SmokeSignalSound / SmokeSignalColor
             BoothDoorRepairs.BindConfig(); // [Spawns] OpenRespawnDoors — runs from SpawnInfiltrationRepairs' postfix
             BallisticTwinRepairs.BindConfig(); // [Combat] BallisticTwins — same postfix (stage 1)
+            BallisticMaterialDiagnostics.Install(harmony);
 
             // bots-stage1 — SAIN soft dependency: resolved by name, no-op without SAIN. See SainLocationShim.cs.
             SainLocationShim.BindConfig();

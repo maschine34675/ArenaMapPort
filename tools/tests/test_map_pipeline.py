@@ -159,6 +159,15 @@ class CompleteAnchorTests(unittest.TestCase):
 
 
 class ReproducibilityTests(unittest.TestCase):
+    def test_bay5_reproduction_retains_the_selected_target_install(self):
+        with patch.object(VE.subprocess, "run") as run:
+            VE.run_extractor(REPO / "tools/extract/extract_bay5.py", [1], {},
+                             "source", Path("out"), "fixed", 90,
+                             target_root="custom SPT/EscapeFromTarkov_Data")
+        cmd = run.call_args.args[0]
+        self.assertEqual(cmd[cmd.index("--target") + 1], "custom SPT/EscapeFromTarkov_Data")
+        self.assertNotIn("--scenes", cmd)
+
     def test_generic_invocation_uses_only_fixed_script_and_verified_plan_flag(self):
         with patch.object(VE.subprocess, "run") as run:
             VE.run_extractor(REPO / "tools/extract/extract_map.py", [1], {}, "source", Path("out"), "fixed", 90, Path("plan.json"))

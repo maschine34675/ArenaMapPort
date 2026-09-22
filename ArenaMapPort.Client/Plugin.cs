@@ -119,6 +119,16 @@ namespace ArenaMapPort.Client
             // docs/progress/shader-compat-and-inspector.md §b — F10 live diagnostic hotkey (any map, no
             // gate/dependency on the repairs above; order doesn't matter, placed last for clarity).
             SceneInspector.Install();
+            UnityEngine.SceneManagement.SceneManager.sceneLoaded += (scene, mode) =>
+            {
+                if (ArenaMapRaid.MapForScriptsScene(scene.name) != null)
+                    Bay5AmbientAudio.Ensure();
+            };
+            UnityEngine.SceneManagement.SceneManager.sceneUnloaded += scene =>
+            {
+                if (ArenaMapRaid.MapForScriptsScene(scene.name) != null)
+                    Bay5AmbientAudio.Shutdown();
+            };
 
             int totalOwnedScenes = 0;
             foreach (var map in ArenaMapRegistry.All)

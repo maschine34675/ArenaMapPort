@@ -123,6 +123,8 @@ namespace ArenaMapPort.Editor.Import
                             break;
                         case "LODGroup":
                             break; // Pass 2, after every Renderer exists.
+                        case "BallisticCollider":
+                            break; // Pass 2, after every original physics collider exists.
                         case "ReflectionProbe":
                             break; // out of scope, decision #8 — recorded by WP1, not imported.
                         default:
@@ -140,8 +142,10 @@ namespace ArenaMapPort.Editor.Import
                 GameObject go = goById[id];
                 foreach (JObject comp in (JArray)obj["components"])
                 {
-                    if ((string)comp["type"] != "LODGroup") continue;
-                    AttachLodGroup(go, comp, rendererById, sceneName, id);
+                    if ((string)comp["type"] == "LODGroup")
+                        AttachLodGroup(go, comp, rendererById, sceneName, id);
+                    else if ((string)comp["type"] == "BallisticCollider")
+                        BallisticColliderImporter.Attach(go, comp);
                 }
             }
 

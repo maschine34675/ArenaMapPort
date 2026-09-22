@@ -250,3 +250,9 @@ successor instead unless you're specifically investigating that cycle's history.
   subdivision, independent reflection/smoothness controls, bounded client deployment, 348 tests,
   native interior/exterior comparisons, glass-cover rescans and Bay5–Equator–Bay5 cleanup acceptance.
   Authored puddles and approximate roof-edge transitions remain explicit visual limits.
+
+## Added 2026-09-22 — Bay5 original material response and harbor ambience
+
+- [bay5-native-features.md](bay5-native-features.md) — original ballistic material components,
+  native harbor players and shoreline audio, source and bundle validation, cubemap color-space
+  correction, and explicit deferral of the originally inactive breakable-glass objects.

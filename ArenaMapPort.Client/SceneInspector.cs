@@ -91,6 +91,7 @@ namespace ArenaMapPort.Client
         {
             try
             {
+                Bay5AmbientAudio.Probe();
                 Camera cam = ResolveActiveCamera();
                 if (cam == null)
                 {
@@ -198,6 +199,10 @@ namespace ArenaMapPort.Client
                     sb.AppendLine($"  Physics.Raycast: hit '{GetPath(hit.collider.transform)}' " +
                         $"dist={hit.distance:F2} layer={LayerMask.LayerToName(hit.collider.gameObject.layer)} " +
                         $"isTrigger={hit.collider.isTrigger}");
+                    var ballistic = hit.collider.GetComponent<EFT.Ballistics.BallisticCollider>();
+                    if (ballistic == null && hit.collider.transform.parent != null)
+                        ballistic = hit.collider.transform.parent.GetComponent<EFT.Ballistics.BallisticCollider>();
+                    sb.AppendLine("  " + BallisticMaterialDiagnostics.Describe(ballistic));
                     // Colliders are usually siblings of the visible LOD renderers under one prop root —
                     // list those renderers' materials, the reliable way to identify e.g. the ground.
                     Transform root = hit.collider.transform.parent != null ? hit.collider.transform.parent : hit.collider.transform;

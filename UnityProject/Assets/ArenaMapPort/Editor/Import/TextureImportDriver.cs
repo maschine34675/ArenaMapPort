@@ -76,7 +76,12 @@ namespace ArenaMapPort.Editor.Import
                     importer.textureType = TextureImporterType.Default;
                     importer.textureShape = TextureImporterShape.TextureCube;
                     importer.generateCubemap = TextureImporterGenerateCubemap.AutoCubemap;
-                    importer.sRGBTexture = true; // every in-package Cubemap is a reflection/environment map, never a normal map
+                    // Reflection maps can contain either encoded sRGB or already-linear values.
+                    // The source flag, not the texture's purpose, determines GPU decoding.
+                    string colorSpace = pkg.TextureColorSpace(texId);
+                    if (colorSpace != "sRGB" && colorSpace != "Linear")
+                        throw new InvalidDataException("Invalid Cubemap color space: " + texId + " (" + colorSpace + ")");
+                    importer.sRGBTexture = colorSpace == "sRGB";
                     importer.alphaIsTransparency = false;
                     importer.mipmapEnabled = true;
                     importer.textureCompression = TextureImporterCompression.Compressed;

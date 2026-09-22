@@ -180,6 +180,10 @@ namespace ArenaMapPort.Editor.Import
             }
             botZone.SpawnPointMarkers.AddRange(markers);
 
+            // Optional source-backed ambience remains in the existing owned Scripts scene.
+            // Its own root stays inactive until the client has a listener, season and mixers.
+            Bay5AudioImporter.Build(pkg, root);
+
             // --- LocationScene (§D row 2) — added last, FillArrays() scans siblings/children ---
             var locationSceneGo = new GameObject("LocationScene");
             locationSceneGo.transform.SetParent(root.transform, false);

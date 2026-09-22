@@ -3,6 +3,42 @@
 Snapshot for whoever continues (human or agent). Verify the commits named here against `git log`; this file
 is updated by hand at each handover, it is not an automatic record. Read [AGENTS.md](AGENTS.md) first.
 
+## State on 2026-09-22 — Bay5 original materials and harbor ambience
+
+**Built, deployed and natively verified.** Branch `feature/bay5-native-materials-glass-audio`,
+based on `aa5e3cc`. User explicitly deferred glass: all 147 original panes are inactive, and no
+glass activation or WindowBreaker port was added. The task restores 6,322 original ballistic
+components and 24 native ambient sources / 13 banks / 106 original PCM clips. Three Linear
+cubemaps retain their original color space. Original geometry, navigation and reflection knobs
+are preserved. Independent source/package/bundle comparisons and reproducibility passed;
+152 Python tests, 348 .NET tests and eight PowerShell cases passed. Final client build: zero
+warnings/errors. Original assets remain ignored; proprietary audio is not a cleared release asset.
+
+Only two of 72 installed files changed; all other maps, the server and NavMesh are byte-identical:
+
+- Client SHA-256: `24F9753F97D160CD59380EE2442C7EF15A233A5C2350A7ADFC660D68BB1AB015`.
+- Bay5 scenes SHA-256: `3957E836C63C0F76AD8433DDC2236706C76E4E36893A945AA98B9A382E58E261`.
+
+Final process `90bc532c` (08:29:03 CEST) confirmed VM = host disk = loaded. Real WoodThin,
+MetalThick and Concrete projectile hits selected original values, with no default fallback on
+those targets. Native Summer audio started 23 players and retained the one missing seasonal
+bank as silence. Water was correctly placed before any movement and followed the native shoreline;
+sample advancement, nonzero source RMS and both mixer routes were verified. Two SPT shoreline
+initialization defects were corrected only inside the owned Bay5 graph. The host OS output is
+muted: this is technical playback evidence, not an auditory mix-quality approval.
+
+The Bay5–Equator–Bay5 sequence passed. Both Bay5 exits stopped 24 players, released 24 generated
+clips and reported zero cleanup failures; the revisit retained exactly 24 sources. Equator had
+no Bay5 audio and kept its accepted reflection settings. Both Bay5 teardowns restored 642
+renderers / 1,008 clones; Equator restored 607 / 1,103. Bay5 used its ordinary South exfil;
+the Equator Debug disconnect remains scoped to debug-started sessions. Final profile health
+was 440/440, diagnostics were restored to false, and EFT was exited normally around 08:44.
+
+Full source/runtime reasoning, native timestamps, caveats, screenshot paths and local receipts:
+[Bay5 native features](docs/progress/bay5-native-features.md). Next: user hearing/visual approval,
+then one further map through the existing map recipe. Dust/extra decals, full room acoustics
+and glass are separate follow-ups; no additional feature expansion is implicit.
+
 ## State on 2026-09-21 — Bay5 covered-floor reflections accepted at 22:13 CEST
 
 **Bay5's covered Hangar floor now has independent reflection and smoothness controls, built,

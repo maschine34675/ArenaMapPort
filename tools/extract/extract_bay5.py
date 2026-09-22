@@ -19,9 +19,11 @@ TeamFight(89), Light(83), Background(79). The original background is decorative;
 descriptor excludes its renderers from navigation and gameplay cover bounds, while original
 colliders remain navigation sources within the gameplay bake volume. Excluded:
 Scripts(85)/Scripts_Winter(247) (authored fresh in Unity, never extracted -- Equator
-precedent), TeamFight_AI(78)/Sound(188) (bots/audio out of scope for both maps), Winter
+precedent), TeamFight_AI(78) (fresh bot support is authored for SPT), Winter
 geometry (confirmed absent from the TeamFight scene set), TeamFight_Culling(90) (PerfectCulling
-data, out of scope).
+data, out of scope). Source-backed ballistic materials are added after the geometry pass.
+Eligible Sound(188) ambient players and their clip/spline graph are separately exported and
+authored under the existing Scripts scene; Arena match/event audio remains excluded.
 
 Duplicate-BuildSettings-index resolver (critic amendment: "the resolver must prefer the full
 copy and never silently take the last match" -- Bay5's own BuildSettings.scenes lists
@@ -234,6 +236,8 @@ def write_navmesh_ref_bay5(output: str) -> None:
 def main() -> None:
     parser = argparse.ArgumentParser(description="ArenaMapPort Bay5 (TeamFight) extractor")
     parser.add_argument("--source", default=DEFAULT_SOURCE, help="Arena EscapeFromTarkovArena_Data dir (read-only)")
+    parser.add_argument("--target", default="D:/SPT41/EscapeFromTarkov_Data",
+                        help="SPT EscapeFromTarkov_Data for named ballistic preset mapping (read-only)")
     parser.add_argument("--output", default=None, help="package output directory (required unless --census-only)")
     parser.add_argument("--census-only", action="store_true", help="print per-scene object counts, write nothing")
     parser.add_argument(
@@ -266,6 +270,9 @@ def main() -> None:
         print("ERROR: --output is required unless --census-only", file=sys.stderr)
         sys.exit(2)
 
+    from extract_ballistics import load_contract, augment_scene
+    from extract_bay5_audio import export as export_audio
+    ballistic_contract = load_contract(args.source, args.target)
     ctx = EQ.ExtractionContext(env=env)
     EQ.ensure_dirs(args.output)
 
@@ -276,6 +283,8 @@ def main() -> None:
         node_id_list = list(tf_map.keys())
         print(f"  scene {idx} ({registry[idx]}): FULL scene, {len(node_id_list)} objects", file=sys.stderr)
         scenes_out[idx] = EQ.extract_scene(idx, f, tags_array, node_id_list, ctx)
+        count = augment_scene(scenes_out[idx], f, ballistic_contract)
+        print(f"    restored {count} original ballistic material components", file=sys.stderr)
 
     try:
         print(f"Writing {len(ctx.mesh_work)} meshes...", file=sys.stderr)
@@ -335,10 +344,12 @@ def main() -> None:
         file=sys.stderr,
     )
 
+    native_audio = export_audio(args.source, args.output)
     manifest = {
         "schema_version": SCHEMA_VERSION,
         "source": {
             "arena_data_root": args.source,
+            "target_data_root": args.target,
             "extractor_script": "tools/extract/extract_bay5.py",
             "extracted_utc": args.fixed_timestamp or EQ.utcnow_iso(),
         },
@@ -350,6 +361,9 @@ def main() -> None:
         "anchors_reference": anchors,
         "errors": ctx.errors,
         "warnings": ctx.warnings,
+        "native_ballistics": ballistic_contract,
+        "native_audio": native_audio,
+        "native_features": {"schema_version": 1, "required": ["ballistics", "harbor_audio"]},
     }
     with open(os.path.join(args.output, "manifest.json"), "w", encoding="utf-8") as f:
         json.dump(manifest, f, indent=2, sort_keys=True, ensure_ascii=False)

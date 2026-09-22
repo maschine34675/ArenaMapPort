@@ -124,7 +124,7 @@ SUBMESH_ENTRY_SIZE = 9  # uint32 index_start + uint32 index_count + uint8 topolo
 KNOWN_COMPONENT_TYPES = {
     "MeshFilter", "MeshRenderer", "SkinnedMeshRenderer", "MeshCollider",
     "BoxCollider", "SphereCollider", "CapsuleCollider", "Light", "LODGroup",
-    "ReflectionProbe",
+    "ReflectionProbe", "BallisticCollider",
 }
 RENDERER_COMPONENT_TYPES = {"MeshRenderer", "SkinnedMeshRenderer"}
 
@@ -1430,7 +1430,7 @@ def derive_extractor_args(manifest: dict) -> tuple[Path, list[int], dict[int, li
 
 def run_extractor(extractor_script: Path, scene_indices: list[int], slice_map: dict[int, list[int]],
                    source_root: str, out_dir: Path, fixed_timestamp: str, timeout_s: int,
-                   plan_path: Path | None = None) -> subprocess.CompletedProcess:
+                   plan_path: Path | None = None, target_root: str | None = None) -> subprocess.CompletedProcess:
     cmd = [sys.executable, str(extractor_script),
            "--source", source_root,
            "--output", str(out_dir),
@@ -1443,7 +1443,10 @@ def run_extractor(extractor_script: Path, scene_indices: list[int], slice_map: d
         if plan_path is None:
             die("generic reproducibility requires a verified source plan")
         cmd += ["--plan", str(plan_path)]
-    elif extractor_script.name != "extract_bay5.py":
+    elif extractor_script.name == "extract_bay5.py":
+        if target_root is not None:
+            cmd += ["--target", target_root]
+    else:
         cmd += ["--scenes", ",".join(str(i) for i in scene_indices)]
         for idx, ids in slice_map.items():
             cmd += ["--slice-roots", f"{idx}:" + ",".join(str(i) for i in ids)]
@@ -1498,12 +1501,13 @@ def run_reproducibility_checks(manifest: dict, package: Path, timeout_s: int) ->
         out1, out2 = tmp / "run1", tmp / "run2"
         print(f"[validate_extract] reproducibility: re-running {extractor_script.name} twice into {tmp} "
               f"(scenes={scene_indices}, slice={slice_map or 'none (full scenes)'}) ...")
-        p1 = run_extractor(extractor_script, scene_indices, slice_map, source_root, out1, fixed_ts, timeout_s, plan_path)
+        target_root = manifest.get("source", {}).get("target_data_root")
+        p1 = run_extractor(extractor_script, scene_indices, slice_map, source_root, out1, fixed_ts, timeout_s, plan_path, target_root)
         if not check(p1.returncode == 0,
                       f"reproducibility run #1 of {extractor_script.name} exits 0 "
                       f"(rc={p1.returncode}; stderr tail: {p1.stderr[-800:]})"):
             return
-        p2 = run_extractor(extractor_script, scene_indices, slice_map, source_root, out2, fixed_ts, timeout_s, plan_path)
+        p2 = run_extractor(extractor_script, scene_indices, slice_map, source_root, out2, fixed_ts, timeout_s, plan_path, target_root)
         if not check(p2.returncode == 0,
                       f"reproducibility run #2 of {extractor_script.name} exits 0 "
                       f"(rc={p2.returncode}; stderr tail: {p2.stderr[-800:]})"):
@@ -1551,6 +1555,12 @@ def main() -> None:
         generic_plan_for(manifest)  # Source, plan digest, registry and finite complete anchors are mandatory.
 
     validate_manifest_shape(manifest, package)
+    from validate_native_features import validate_package as validate_native_package
+    try:
+        validate_native_package(package, manifest)
+        check(True, "optional native feature source/clip/reference contract validates")
+    except (ValueError, OSError, KeyError) as error:
+        check(False, f"native feature package validation: {error}")
     stats = validate_scenes(manifest, package)
     validate_material_slot_preservation(manifest, package)
     collect_shader_and_texture_stats(manifest, package, stats)

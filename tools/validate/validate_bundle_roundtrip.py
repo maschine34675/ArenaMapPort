@@ -690,6 +690,33 @@ def validate_scenes_bundle_contents(env, expected: dict, material_shaders: dict 
 # property it assigns, cross-checked against the assigned texture's own UnityPy object class.
 # ---------------------------------------------------------------------------
 
+def validate_cubemap_color_space(env, expected: dict) -> None:
+    """Check the built GPU sampling flag, independently of importer settings or .meta files."""
+    wanted = set(expected["texture_ids_in_scope_by_class"].get("Cubemap", ()))
+    metadata = expected["manifest"].get("textures", {})
+    found = Counter()
+    for obj in env.objects:
+        if obj.type.name != "Cubemap":
+            continue
+        try:
+            tree = obj.read_typetree()
+        except Exception as exc:
+            check(False, f"Cubemap {obj.path_id}: can read serialized color space ({exc})")
+            continue
+        key = tree.get("m_Name")
+        if key not in wanted:
+            continue  # Built-in dependencies are not source-authored package textures.
+        found[key] += 1
+        source_space = metadata[key].get("color_space")
+        check(source_space in ("Linear", "sRGB"), f"Cubemap {key}: source color space is known")
+        if source_space in ("Linear", "sRGB"):
+            actual = tree.get("m_ColorSpace")
+            check(actual == (1 if source_space == "sRGB" else 0),
+                  f"Cubemap {key}: built color space {actual!r} preserves source {source_space}")
+    check(set(found) == wanted and all(count == 1 for count in found.values()),
+          f"all {len(wanted)} in-scope source Cubemaps have exactly one built color-space record")
+
+
 def validate_texture_dimension_consistency(env) -> None:
     """Never imports/reads anything from WP1's package or WP2's own C# source -- entirely
     self-contained against the BUILT bundle: for every Material, resolve its Shader's own
@@ -1775,6 +1802,9 @@ def main() -> None:
     if not args.package.is_dir():
         die(f"--package {args.package} is not a directory")
     expected = load_package_expected(args.package)
+    from validate_native_features import extra_counts, validate_bundle as validate_native_bundle
+    native_counts = extra_counts(args.package, expected["manifest"])
+    expected["game_objects"] += native_counts.get("GameObject", 0)
     if expected["manifest"].get("source", {}).get("map_key") and args.spawn_placement is None:
         args.spawn_placement = args.scenes_bundle.parent / "spawn-placement.json"
     if args.require_scripts_scene:
@@ -1800,14 +1830,26 @@ def main() -> None:
     print(f"[validate_bundle_roundtrip] === {args.scenes_bundle.name} ===")
     env = load_bundle(args.scenes_bundle, "arena_equator_scenes.bundle")
     if env is not None:
+        if native_counts:
+            native_types = Counter(obj.type.name for obj in env.objects)
+            check(native_types["AudioSource"] == native_counts["AudioSource"],
+                  "native scene has exactly the source-backed AudioSources, with no extras")
+            check(native_types["Transform"] == native_types["GameObject"],
+                  "native scene has exactly one Transform per GameObject")
         validate_target_platform(env, "arena_equator_scenes.bundle")
         validate_scenes_bundle_contents(env, expected, material_shaders)
+        validate_cubemap_color_space(env, expected)
         validate_texture_dimension_consistency(env)
         validate_generated_terrain_arrays(env, expected["manifest"])
         validate_owned_terrain_shader(env, expected["manifest"])
         validate_disabled_component_counts_bundle(env, args.package, expected["manifest"])
         validate_generic_null_references(env, args.package, expected["manifest"])
         validate_eft_scripts(env, args.require_scripts_scene)
+        try:
+            validate_native_bundle(env, args.package, expected["manifest"])
+            check(True, "native material/audio fields, hierarchy, clips and script identities roundtrip")
+        except (ValueError, OSError, KeyError) as error:
+            check(False, f"native feature bundle validation: {error}")
         if args.spawn_placement is not None:
             validate_spawn_placement_bundle(env, args.spawn_placement, expected["manifest"], args.scripts_scene_name)
     else:
