@@ -3,6 +3,30 @@
 Snapshot for whoever continues (human or agent). Verify the commits named here against `git log`; this file
 is updated by hand at each handover, it is not an automatic record. Read [AGENTS.md](AGENTS.md) first.
 
+## State on 2026-09-22 — Bay5 exterior ground brightened and tested
+
+Branch `feature/bay5-concrete-lighting`, based on `cfbbf16`. The user's clarified problem was
+dark exterior ground. The sampled Concrete collider covers an original layered asphalt material;
+no missing-texture defect was found. New live `Lighting (arena_bay5)/VertexGroundDiffuseMultiplier`
+scales only that shader family's layer RGB. Neutral default 1; local Bay5 setting 2. Reflection
+inputs and other lighting experiments are restored/preserved. F10 now emits complete numbered
+parts so UiBridge can retrieve later material slots.
+
+Release client C02C98D130616F9CA96ECD45870ED193A2852B2C49C318FA30F507EDC330ABDC was deployed
+through the sanctioned script. All 72 installed identities match staging; only the client changed.
+Fresh process `09cca5c0` verified Bay5 → Equator → Bay5, visible yard/north-lane improvement,
+absolute 1 → 2 → 1 scaling, unchanged reflection fields, neutral Equator, saved 2 on revisit,
+and nine-tint cleanup on both Bay5 exits. Health 440/440 and ammunition 37+1 at final extraction.
+The user's preferred brightness is still a visual check; bright authored wet patches remain.
+See [ground visibility evidence](docs/progress/bay5-concrete-lighting.md).
+
+EFT was closed normally after the final menu return; the GPU host is free.
+
+The user has now listened: impacts fit, ambience is audible but very quiet. Only the ground
+complaint was explicitly assigned to Bay5. Audio gain was not changed; source-level volume and
+randomization findings plus a scoped gain follow-up are documented in the same progress entry.
+The DynamicMaps prototype and prior native-feature work below remain intact.
+
 ## State on 2026-09-22 — Equator DynamicMaps prototype installed and tested
 
 Branch `feature/equator-dynamicmaps`, based on `2c673e2`. The optional Equator SVG/JSON

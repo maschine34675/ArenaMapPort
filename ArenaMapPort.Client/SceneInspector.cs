@@ -35,6 +35,10 @@ namespace ArenaMapPort.Client
         static ConfigEntry<float> _maxDistance;
         static ConfigEntry<bool> _verboseShaderProperties;
         static ConfigEntry<bool> _alsoPhysicsRaycast;
+        static int _inspectionSequence;
+        // UiBridge limits each log entry independently. Leave room below 1,500 characters for the
+        // tag and three Int32 labels, even for a path/property line longer than one entry.
+        const int MaxLogPayloadLength = 1400;
 
         internal static void Install()
         {
@@ -166,12 +170,45 @@ namespace ArenaMapPort.Client
                     }
                 }
 
-                Plugin.Log.LogInfo(sb.ToString());
+                LogInspection(sb.ToString());
             }
             catch (Exception ex)
             {
                 Plugin.Log.LogError($"[ArenaMapPort][Inspector] RunInspection threw: {ex}");
             }
+        }
+
+        static void LogInspection(string dump)
+        {
+            var parts = SplitLogPayload(dump);
+            int inspection = unchecked(++_inspectionSequence);
+            for (int i = 0; i < parts.Count; i++)
+                Plugin.Log.LogInfo($"[ArenaMapPort][Inspector] inspection={inspection} part={i + 1}/{parts.Count} " + parts[i]);
+        }
+
+        // Concatenating payloads reproduces the complete input, including line endings. Prefer whole
+        // lines; only an overlong line is continued in the next numbered entry. Never split CRLF or a
+        // UTF-16 surrogate pair, so long hierarchy names remain recoverable without damaged text.
+        static List<string> SplitLogPayload(string dump)
+        {
+            var parts = new List<string>();
+            for (int start = 0; start < dump.Length;)
+            {
+                int end = start + Math.Min(MaxLogPayloadLength, dump.Length - start);
+                if (end < dump.Length)
+                {
+                    int newline = dump.LastIndexOf('\n', end - 1, end - start);
+                    if (newline >= start) end = newline + 1;
+                    else
+                    {
+                        if (dump[end - 1] == '\r' && dump[end] == '\n') end--;
+                        if (char.IsHighSurrogate(dump[end - 1]) && char.IsLowSurrogate(dump[end])) end--;
+                    }
+                }
+                parts.Add(dump.Substring(start, end - start));
+                start = end;
+            }
+            return parts;
         }
 
         // Same resolution pattern as LightingDiagnosticProbe.ResolveActiveCamera (CameraManager.Instance
@@ -211,7 +248,12 @@ namespace ArenaMapPort.Client
                     for (int i = 0; i < related.Length && shown < 3; i++)
                     {
                         if (related[i] == null || !related[i].enabled) continue;
-                        AppendRendererBlock(sb, shown, hit.distance, related[i]);
+                        try { AppendRendererBlock(sb, shown, hit.distance, related[i]); }
+                        catch (Exception ex)
+                        {
+                            sb.AppendLine($"  -- related renderer #{shown}: FAILED to inspect " +
+                                $"({ex.GetType().Name}: {ex.Message}) --");
+                        }
                         shown++;
                     }
                     sb.AppendLine($"  (renderers under the hit collider's parent '{root.name}': {related.Length}, shown {shown})");
@@ -251,7 +293,11 @@ namespace ArenaMapPort.Client
             sb.AppendLine($"    materials ({mats.Length}):");
             for (int m = 0; m < mats.Length; m++)
             {
-                AppendMaterialInfo(sb, m, mats[m]);
+                try { AppendMaterialInfo(sb, m, mats[m]); }
+                catch (Exception ex)
+                {
+                    sb.AppendLine($"      [{m}] FAILED to inspect material ({ex.GetType().Name}: {ex.Message})");
+                }
             }
 
             Component[] comps = go.GetComponents<Component>();
@@ -316,11 +362,20 @@ namespace ArenaMapPort.Client
 
             Shader sh = mat.shader;
             string shaderName = sh != null ? sh.name : "<null shader>";
-            Texture mainTex = null;
-            try { mainTex = mat.mainTexture; } catch { /* not every shader exposes _MainTex */ }
+            string mainTextureInfo;
+            try
+            {
+                Texture mainTex = mat.mainTexture;
+                mainTextureInfo = mainTex != null ? mainTex.name : "<none>";
+            }
+            catch (Exception ex)
+            {
+                // A failed getter does not establish that the material has no texture.
+                mainTextureInfo = $"<unavailable: {ex.GetType().Name}>";
+            }
 
             sb.AppendLine($"      [{slot}] '{mat.name}' shader='{shaderName}' renderQueue={mat.renderQueue} " +
-                $"mainTexture={(mainTex != null ? mainTex.name : "<none>")} " +
+                $"mainTexture={mainTextureInfo} " +
                 $"keywords=[{string.Join(",", mat.shaderKeywords)}]");
 
             if (sh == null) return;
@@ -336,9 +391,10 @@ namespace ArenaMapPort.Client
 
             for (int i = 0; i < propCount; i++)
             {
+                string propName = null;
                 try
                 {
-                    string propName = sh.GetPropertyName(i);
+                    propName = sh.GetPropertyName(i);
                     ShaderPropertyType propType = sh.GetPropertyType(i);
                     switch (propType)
                     {
@@ -372,7 +428,8 @@ namespace ArenaMapPort.Client
                 }
                 catch (Exception ex)
                 {
-                    sb.AppendLine($"        property #{i}: threw ({ex.GetType().Name})");
+                    sb.AppendLine($"        property #{i}{(propName != null ? $" '{propName}'" : "")}: " +
+                        $"<unavailable: {ex.GetType().Name}>");
                 }
             }
         }

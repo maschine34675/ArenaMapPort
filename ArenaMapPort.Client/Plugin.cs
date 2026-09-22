@@ -63,6 +63,7 @@ namespace ArenaMapPort.Client
             HarmonyPatches.InstallAll(_harmony);
 
             SceneDiagnostics.Install();
+            VertexGroundDiffuseRepairs.Install(); // capture source RGB before shader/indoor repair cloning
             ShaderRebind.Install();
 
             // weather-rig-stage0 — harvests a vanilla donor scene's Weather rig and activates it per

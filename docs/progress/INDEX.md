@@ -8,6 +8,9 @@ dated state in one screen; read it before this index if you only have a minute.
 
 ## Current — read these for the area you touch
 
+- [bay5-concrete-lighting.md](bay5-concrete-lighting.md) — exterior diffuse control, native A/B,
+  preserved reflection inputs, map-transition cleanup and quiet-audio follow-up (2026-09-22).
+
 - [equator-dynamicmaps.md](equator-dynamicmaps.md) — optional local Equator ground-plan pack:
   reproducible geometry/NavMesh export, scoped data-only deployment, native position/direction/exit
   acceptance, normal profile return and prototype limitations (2026-09-22).

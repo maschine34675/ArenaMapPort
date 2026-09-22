@@ -309,3 +309,12 @@ the comparison screenshots, `distribution-installed.json`, `deployment.log` and
 `deployment-gates.log` under `D:/.unlazy/equator-native-features/`. This acceptance reused the
 already validated candidate (182 Python / 348 .NET / eight PowerShell tests); it introduced no
 additional production change and did not rerun the Unity build merely to record game evidence.
+
+## User listening feedback — 2026-09-22
+
+The user subsequently heard the port: impact sounds fit and environmental sounds are present,
+but very quiet. The listening feedback did not explicitly identify its map; the later Bay5
+clarification refers to dark exterior ground. This confirms audibility while leaving mix balance
+open. No gain adjustment was included in the subsequent visual correction. Authored low gains,
+spatial attenuation and random per-raid volumes were reviewed; see the source-backed
+[audio follow-up](bay5-concrete-lighting.md#user-audio-feedback-and-follow-up).

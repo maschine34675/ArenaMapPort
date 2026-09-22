@@ -248,10 +248,15 @@ namespace ArenaMapPort.Client
                     for (int m = 0; m < mats.Length; m++)
                     {
                         var material = mats[m];
-                        if (material == null || material.shader == null ||
-                            !material.shader.name.StartsWith(StandinPrefix, StringComparison.Ordinal))
+                        if (material == null || material.shader == null)
                         {
-                            continue; // not one of our stand-ins — already good, or not ours
+                            continue;
+                        }
+                        if (!material.shader.name.StartsWith(StandinPrefix, StringComparison.Ordinal))
+                        {
+                            // Cached bundle materials retain their real shader on a later visit.
+                            VertexGroundDiffuseRepairs.CaptureAndApply(material, material.shader.name, map);
+                            continue;
                         }
                         considered++;
                         if (Rebind(material, map))
@@ -357,6 +362,7 @@ namespace ArenaMapPort.Client
         // hand-typed literal.
         static void ApplyKnownValueFixes(Material material, string realShaderName, ArenaMapDescriptor map)
         {
+            VertexGroundDiffuseRepairs.CaptureAndApply(material, realShaderName, map);
             if (_groundMaterialWetnessFixEnabled == null || !_groundMaterialWetnessFixEnabled.Value)
             {
                 return;
