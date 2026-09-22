@@ -281,3 +281,9 @@ successor instead unless you're specifically investigating that cycle's history.
   native ground projection, independent geometry review, Equator byte-identity regression
   and exact two-file deployment support. Staged only; host deployment and native tests
   await explicit user release.
+
+## Added 2026-09-22 — Bay5 DynamicMaps native acceptance
+
+- [bay5-dynamicmaps.md](bay5-dynamicmaps.md) — appended two-file deployment, fresh-process
+  rendering and coordinate checks, all cardinal directions, raised warehouse ground,
+  both live exits and normal north extraction with 440/440 HP. Supersedes the staging hold.

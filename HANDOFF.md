@@ -3,6 +3,26 @@
 Snapshot for whoever continues (human or agent). Verify the commits named here against `git log`; this file
 is updated by hand at each handover, it is not an automatic record. Read [AGENTS.md](AGENTS.md) first.
 
+## State on 2026-09-22 — Bay5 DynamicMaps installed and natively tested
+
+The user released the shared host. Candidate `dd0dce0` was installed with the scoped
+two-file DynamicMaps deploy from `D:/ArenaMapPort-DynamicMapsBay5`. No client/server
+build or full deployment was performed. The lighting session's installed client from
+main-checkout commit `7147e8e` was retained.
+
+Fresh EFT process `e93a8a10` (19:38:54 CEST) loaded the Bay5 definition and SVG.
+Inventory → MAP selected it automatically. Four positions, all cardinal directions,
+raised warehouse ground and both live exits matched. Moving while the map was open
+updated the player marker. Normal north extraction took 9.4 s; MAIN MENU from the
+result screen returned in 30.2 s, with 440/440 HP. No test shots; ammunition 37+1.
+No DynamicMaps warnings/errors and none from any source from first map opening
+through menu return. All 46 plugins and five libraries matched VM/host/loaded code.
+
+EFT was closed normally and the host is free. Native rendering passed; actual
+tessellated vertex count was not instrumented. Source remains on the isolated
+`feature/bay5-dynamicmaps` branch; the lighting checkout was not modified.
+See [native evidence and preservation audit](docs/progress/bay5-dynamicmaps.md).
+
 ## State on 2026-09-22 — Bay5 DynamicMaps prepared; shared-host hold
 
 **Staged locally, not deployed or natively accepted.** The user accepted Equator and

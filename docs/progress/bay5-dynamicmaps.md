@@ -1,5 +1,8 @@
 # Bay5 DynamicMaps ground plan — 2026-09-22
 
+**Latest status: installed and natively tested after host release.** The initial
+staging record below is retained; see the appended native acceptance section.
+
 ## Status and scope
 
 **Locally generated and reviewed; not deployed or natively tested.** The user accepted
@@ -119,3 +122,76 @@ These native checks remain **pending**, including the actual Unity tessellated
 vertex count/limit. Offline SVG point counts and the PNG preview do not prove the
 native renderer. Extensive landmark labels, roofs and higher container surfaces
 are outside this ground-plan milestone.
+
+## Native acceptance after user release — 2026-09-22 (CEST)
+
+The user released the host with "die andere session ist durch, kannst übernehmen".
+The other session had completed the exterior-ground brightness change on main
+commit `7147e8e`. Its installed client SHA-256
+`c02c98d130616f9ca96ecd45870ed193a2852b2c49c318fa30f507edc330abdc`
+was retained. The live local-mirror Bay5 NavMesh still matched the triangulation's
+`cd7a3308…64f3` input hash, so regeneration was unnecessary.
+
+The sanctioned script installed exactly the two files from candidate `dd0dce0`;
+the JSON/SVG hashes remain those in the table above. A fresh EFT process
+**e93a8a10**, started **19:38:54**, reported no other UiBridge session. All **46 plugin
+DLLs and five libraries** matched VM build, host disk and loaded code before and
+after testing. Environment: DynamicMaps 1.2.1, UiBridge 0.6.1, SPT 4.1.6,
+EFT 0.16.9.5-40743, Unity 2022.3.43f1.
+
+DynamicMaps logged the Bay5 definition at **19:39:16.433**, successful display-name
+load at **19:39:16.459**, SVG precache at **19:39:16.518**, and MapScreen selection
+at **19:42:57.663**. The plain PMC test used bot amount None. In-game navigation
+reported the matching **22,190 vertices / 10,248 triangles**.
+
+| Probe | World X/Y/Z | Yaw | Observed map result |
+|---|---|---|---|
+| Southwest start | 56.40 / -3.78 / 1.90 | 45° | Northeast arrow in the southwest start area |
+| Central yard | 90 / -3.88 / 30 | 0°, 90°, 270° | Up, right and left at the same point |
+| Raised northeast warehouse | 140 / -2.88 / 60 | 180° | Down at the correct raised-floor position |
+| North approach | 96 / -3.83 / 57 | 270° | Four metres south of the north exit; label partly overlaps arrow |
+
+The player's displayed X/Z/height matched every probe. Position updates worked
+while MAP remained open. The initial southwest view was centred on that player
+position and cropped the north edge; reopening MAP from the central yard showed
+the full extent. This is normal viewport positioning, not missing geometry.
+
+Both runtime exit icons matched: North Loading Bay at X/Z **(96,61)** and South
+Container Lane at **(99.029,-2.8513)**. There were no duplicate static exit icons.
+Independent screenshot review measured the full-map rectangle at approximately
+pixels `[471,121]..[1549,1040]`, with the yard player around `(960,560)`, raised-floor
+player `(1459,261)`, and exits `(1020,251)` / `(1050,889)`, matching the world transform
+within approximately two pixels. UiBridge point probes passed NavMesh, hazard-zone,
+reachability and room checks; exfil-place probes passed NavMesh, zone and room checks.
+
+Normal **North Loading Bay extraction completed in 9.4 s**. After the ordinary
+result screen, MAIN MENU returned in **30.2 s**. The PMC selector confirmed
+**440/440 HP**. No test shots were fired; the last in-raid reading retained **37 + 1**
+rounds. EFT was closed normally and UiBridge confirmed it gone (unreachable for 8 s).
+
+DynamicMaps emitted **zero Warning-or-worse entries** throughout this process.
+Across all sources, **zero Warning-or-worse entries** occurred between the first map
+opening and final menu return. Earlier unrelated startup messages are outside the
+latter claim. Native SVG rendering passed without tessellation errors; the actual
+tessellated vertex count was not instrumented and is not the SVG path-point count.
+
+Evidence remains ignored under `work/dynamicmaps/bay5/evidence/`: `native.json`,
+six `dm-*.png` views, `native-baseline.json`, `native-preservation.json` and
+`independent-native-review.md`. The most useful full-map view is `dm-centre-east.png`.
+Acceptance covers this botless PMC test and these probes, not every ArenaMode setting,
+higher prop surface, or future third-party version.
+
+### Post-test preservation
+
+The independent baseline audit confirms **164/164 original files unchanged**, no
+removals, and exactly the two expected Bay5 JSON/SVG additions with matching hashes.
+This includes the installed lighting client, map bundles, server data, Equator pack
+and third-party DynamicMaps files. DynamicMaps' configuration is byte-identical too.
+
+ArenaMapPort's config differs only in **170 bytes of BepInEx comment metadata** for
+Equator's `PlaybackDiagnostics` setting: this Bay5-only process removed its description,
+type and default-value comments. Reinserting those comments **in memory only** reproduced
+the exact pre-test file hash and length. Every actual setting/value, including the
+other session's Bay5 brightness setting, is unchanged. No config restoration or manual
+production write was performed. The audit separates raw-byte inequality from proven
+setting-value preservation; neither should be confused with a changed lighting value.

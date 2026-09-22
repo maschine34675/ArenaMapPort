@@ -68,8 +68,8 @@ selects the profile. Bay5 requires native triangulation. Its exact package files
 `ArenaMapPort_Bay5.jsonc` and `Layers/Ground.svg`; its fixed destination is
 `BepInEx/plugins/mpstark-dynamicmaps/Maps/ArenaMapPort_Bay5/`. Each package deploy
 leaves the other map's files alone. Add `-Confirm` only for the authorized installation.
-**Current Bay5 candidate is staged only: deployment and native testing wait for the
-user's explicit release of the shared host.**
+**Bay5 was installed and natively tested after the user's host release on 2026-09-22.**
+See [acceptance and limits](../../docs/progress/bay5-dynamicmaps.md).
 
 When working in an isolated checkout, pass absolute read-only source/bundle paths.
 Do not launch an editor against another session's Unity project. A separate minimal

@@ -28,10 +28,10 @@ Agents: start at [AGENTS.md](AGENTS.md), then [HANDOFF.md](HANDOFF.md) for the d
 
 **DynamicMaps:** An optional Equator ground-plan pack is generated from local geometry and
 the existing NavMesh. Deployment and native player/direction/exit checks passed on 2026-09-22.
-Open inventory → **MAP** in an Equator raid. Bay5 now has a locally prepared ground-plan
-candidate; deployment and native testing wait for release of the shared GPU host.
+Open inventory → **MAP** in an Equator or Bay5 raid. Both ground-plan packs are now
+installed and natively tested, including player position, direction and active exits.
 These are simplified ground-floor prototypes. See [Equator acceptance](docs/progress/equator-dynamicmaps.md),
-[Bay5 staging](docs/progress/bay5-dynamicmaps.md)
+[Bay5 acceptance](docs/progress/bay5-dynamicmaps.md)
 and [generation/deployment](tools/dynamicmaps/README.md).
 
 ## Build inputs
