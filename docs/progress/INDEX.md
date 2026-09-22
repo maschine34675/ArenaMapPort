@@ -8,6 +8,9 @@ dated state in one screen; read it before this index if you only have a minute.
 
 ## Current — read these for the area you touch
 
+- [bay5-shadows-menu.md](bay5-shadows-menu.md) — shadow/veil diagnosis, packed-normal import
+  repair, hands highlight, focused F12 configuration and Bay5 quick start (2026-09-22).
+
 - [bay5-concrete-lighting.md](bay5-concrete-lighting.md) — exterior diffuse control, native A/B,
   preserved reflection inputs, map-transition cleanup and quiet-audio follow-up (2026-09-22).
 

@@ -85,7 +85,7 @@ pwsh -NoProfile -File tools/tests/test_unity_log_scan.ps1
 # rebuild Equator's bundles + NavMesh from its extracted package (≈ 15 min). The [bool] parameters only parse
 # from a PowerShell prompt or `pwsh -Command "& '...build_all.ps1' ... -BakeNavMesh \$true"`; `-File` from bash
 # turns "$true"/1 into strings and the script refuses them.
-pwsh tools/build_all.ps1 -MapKey arena_equator -MapDescriptor tools/maps/equator.json -PackageDir D:/ArenaMapPort/work/extract/equator -OutputDir D:/ArenaMapPort/work/build/full -BakeNavMesh $true -Verify $true -SkipGameRefsSync
+pwsh tools/build_all.ps1 -MapKey arena_equator -MapDescriptor tools/maps/equator.json -PackageDir D:/ArenaMapPort/work/extract/equator-native-features -OutputDir D:/ArenaMapPort/work/build/full -BakeNavMesh $true -Verify $true -SkipGameRefsSync
 # then a client Release build WITHOUT DllOnly stages the new bundles into dist/, and:
 pwsh -NoProfile -File tools/deploy-to-spt.ps1 -SptRoot 'D:\SPT41' -Confirm
 ```
@@ -93,6 +93,11 @@ pwsh -NoProfile -File tools/deploy-to-spt.ps1 -SptRoot 'D:\SPT41' -Confirm
 Equator's package predates the `-FullMap` convention (its manifest lists the scenes in a different order
 than the descriptor), so Equator is built WITHOUT `-FullMap`. Every other map uses `-FullMap` with
 `work/build/<stem>/` and `tools/maps/<stem>.json` (exact commands in `docs/progress/remaining-maps.md`).
+Current accepted inputs are `work/extract/equator-native-features` and
+`work/extract/bay5-native-features`. The older `equator`, `bay5` and `bay5-background` packages
+omit later native features (and old Bay5 omits the harbor background). Do not rebuild either
+accepted map from those older packages. Bay5 uses the native-feature package with `-FullMap`
+and `-OutputDir D:/ArenaMapPort/work/build/bay5`.
 `-FullMap` also regenerates that map's base.json and preset from the sidecars; to regenerate only base.json
 after a sidecar change, add `-SkipUnityBuild` (reuses the bundles). For Equator, base.json is regenerated
 with `python tools/server/make_base_json.py` (see its header for the arguments).
@@ -101,7 +106,8 @@ After a deploy, Syncthing delivers to the host within ~20 s. A new client DLL ne
 server DLL or base.json needs a server restart (the host server is restarted by closing its terminal
 window and double-clicking the desktop shortcut; Syncthing only replaces the server DLL once the process
 is closed). Both installs carry the user's own `maschine-ArenaMapDebug.dll`: a main-menu button
-"EQUATOR DEBUG" that starts an Equator raid without the menu flow, and a disconnect that skips the
+"EQUATOR DEBUG" and "BAY5 DEBUG" that start the selected PMC raid without the menu flow or countdown,
+and a disconnect that skips the
 confirmations and the vanilla 0-HP penalty for a skipped heal screen.
 
 ## Host testing (GPU host, via MCP)
@@ -115,13 +121,18 @@ Two MCP servers drive the test host: `uibridge` (sees inside the running EFT) an
 2. Restart EFT when the client DLL changed: click points from `uibridge_snapshot contains=EXIT` / `YES`,
    `uibridge_wait unreachableFor=5`, launcher START GAME (1396,323; the "Wipe Profile" checkbox sits left of
    it, never click it), then `uibridge_wait screen=MainMenu afterRestart=true`.
-3. Start the raid with the EQUATOR DEBUG button (`uibridge_snapshot contains=Equator`), then
+3. Start the raid with EQUATOR DEBUG or BAY5 DEBUG (`uibridge_snapshot contains=DEBUG`), then
    `uibridge_wait raidStarted=true`.
 4. Observe: `uibridge_log` (BepInEx log, filter by `[ArenaMapPort]` tags), `uibridge_player`,
    `uibridge_bots` (positions, brain layers), `uibridge_teleport` (has a NavMesh reachability check —
    `reachable=false` for islands; `dryRun=true` to probe connectivity), `uibridge_look`, screenshots via
    `windows-gpu Screenshot`. Letter keys do not reach EFT; use `uibridge_command` for game commands.
 5. Leave: `uibridge_command Escape`, click `DISCONNECT` from `uibridge_snapshot`, `uibridge_wait inRaid=false`.
+
+Keep diagnostic raids short and leave before doing extended source analysis. The pause menu does not
+stop raid time or energy/hydration loss; an expired raid still receives normal MIA treatment. Fresh EFT
+processes can reset offline bot settings, so select bot amount None through the normal menu before a
+botless comparison. Disable bosses before selecting None, while that checkbox is still enabled.
 
 Log evidence goes into the milestone's `docs/progress/*.md` with timestamps; a change is "verified" only
 after such a host raid. The in-game `F10` hotkey (SceneInspector) dumps the object under the crosshair to

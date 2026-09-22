@@ -3,6 +3,37 @@
 Snapshot for whoever continues (human or agent). Verify the commits named here against `git log`; this file
 is updated by hand at each handover, it is not an automatic record. Read [AGENTS.md](AGENTS.md) first.
 
+## State on 2026-09-23 — Bay5 shadows, veil and debugging controls verified
+
+Branch `feature/bay5-shadows-menu`, based on `7147e8e`. All four requested parts have passed
+build, deployment and native checks. ArenaMapDebug commit `86f9524` is installed;
+F12 shows per-map options only for Equator and Bay5 while keeping other maps' saved values.
+The final client also retains a map-specific hands ambient-highlight scale (neutral 1;
+local Bay5 0.35), restoring original fields on teardown.
+
+Source and bundle comparisons identified an actual packed-normal defect behind incorrect
+lighting: PNG normal-map import repacked an already encoded alpha/X channel to opaque.
+Two PNG-import workarounds passed a small fixture but failed full-map checks and were rejected.
+The accepted importer uses native Texture2D assets, preserving source channels, color space,
+compression, complete mipmaps, filtering and stable GUIDs. Full builds and independent checks
+passed all 519 normals across Equator/Bay5. Only the client and those two scene bundles changed
+among the 72 installed files; no failed candidate bundle was deployed. Fresh EFT instance
+`453175d3` verified Bay5 → Equator → Bay5: coherent exterior shadows, natural cardboard instead
+of the blue-white veil, reduced knife highlight, neutral Equator hands, repeated Bay5 settings
+and clean restoration. Both buttons skip selection/countdown and return directly with living
+HP protection. Final control point: 440/440 HP; EFT closed normally at about 00:33 CEST.
+See [complete evidence](docs/progress/bay5-shadows-menu.md).
+
+Current inputs must remain `equator-native-features` and `bay5-native-features`. CPU-readable
+compressed normal copies total about 178 MiB for Equator / 305 MiB for Bay5; the actual increase
+in total game memory has not been measured. Local Bay5 ground brightness remains 2 and hands
+highlight 0.35. The ineffective BuildBundles startup workaround was removed. The GPU host is free.
+
+During an earlier long diagnostic raid, time expired and normal MIA penalties applied.
+The test character was healed and replenished through normal game UI, reaching 440/440 HP,
+100 energy and 100 hydration before EFT was closed at 22:24. The MIA record and consumed
+medical/food items remain; no profile-file edits were made. Keep later test raids short.
+
 ## State on 2026-09-22 — Bay5 exterior ground brightened and tested
 
 Branch `feature/bay5-concrete-lighting`, based on `cfbbf16`. The user's clarified problem was

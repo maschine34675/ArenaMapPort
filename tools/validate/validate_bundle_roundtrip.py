@@ -717,6 +717,77 @@ def validate_cubemap_color_space(env, expected: dict) -> None:
           f"all {len(wanted)} in-scope source Cubemaps have exactly one built color-space record")
 
 
+def normal_texture_channel_errors(meta: dict, source, texture) -> list[str]:
+    """Compare decoded RGBA, not importer settings or inferred normals from texture names.
+
+    Already-packed R*A/G normals must retain alpha. Cloth's sRGB RGB-normal/mask
+    exceptions also retain raw RGBA; their shader-specific vector decoder is not assumed.
+    Fixed tolerances allow recompression: per-channel MAE <=3 and P99 error <=16 bytes.
+    """
+    from PIL import ImageChops, ImageStat
+
+    errors = []
+    color_space = {"Linear": 0, "sRGB": 1}.get(meta.get("color_space"))
+    if color_space is None or texture.m_ColorSpace != color_space:
+        errors.append("built color space does not preserve source metadata")
+    compression = {"DXT5": 12, "DXT5Crunched": 12, "Format29": 12, "BC7": 25, "DXT1": 10}
+    expected_format = compression.get(meta.get("format_src"))
+    if expected_format is None or texture.m_TextureFormat != expected_format:
+        errors.append("built format does not preserve the declared source compression family")
+    dimensions = (meta.get("width"), meta.get("height"))
+    if source.size != dimensions or (texture.m_Width, texture.m_Height) != dimensions:
+        return errors + ["source/built dimensions differ from manifest"]
+    with texture.image as decoded, source.convert("RGBA") as src, decoded.convert("RGBA") as dst:
+        if dst.size != dimensions:
+            return errors + ["decoded built dimensions differ from manifest"]
+        with ImageChops.difference(src, dst) as difference:
+            means = ImageStat.Stat(difference).mean
+            histogram = difference.histogram()
+            pixels = dimensions[0] * dimensions[1]
+            for channel, label in enumerate("RGBA"):
+                above_tolerance = sum(histogram[channel * 256 + 17:(channel + 1) * 256])
+                if means[channel] > 3.0 or above_tolerance > pixels * 0.01:
+                    errors.append(f"{label} channel differs beyond compression tolerance "
+                                  f"(MAE={means[channel]:.3f}, >16 bytes={above_tolerance}/{pixels})")
+        # Detect the original NormalMap-importer defect even if most source pixels
+        # happen to be opaque and the global error statistics otherwise conceal it.
+        if src.getextrema()[3][0] < 250 and dst.getextrema()[3][0] == 255:
+            errors.append("source normal alpha collapsed to opaque")
+    return errors
+
+
+def validate_normal_texture_channels(env, expected: dict, package: Path) -> None:
+    """Check every required normal in this build's existing material-reachability set."""
+    from PIL import Image
+
+    metadata = expected["manifest"].get("textures", {})
+    wanted = {key for key in expected["texture_ids_in_scope_by_class"].get("Texture2D", ())
+              if metadata.get(key, {}).get("is_normal_map")}
+    found = Counter()
+    for obj in env.objects:
+        if obj.type.name != "Texture2D":
+            continue
+        try:
+            texture = obj.read()
+            key = texture.m_Name
+            if key not in wanted:
+                continue
+            found[key] += 1
+            meta = metadata[key]
+            source_path = (package / meta["file"]).resolve()
+            if not source_path.is_relative_to((package / "textures").resolve()):
+                raise ValueError("source path is outside package textures")
+            with Image.open(source_path) as source:
+                errors = normal_texture_channel_errors(meta, source, texture)
+            check(not errors, f"normal texture {key}: source RGBA/color space/dimensions preserved"
+                  + ("; " + "; ".join(errors) if errors else ""))
+        except Exception as exc:
+            check(False, f"normal texture object {obj.path_id}: cannot validate source/built channels ({exc})")
+    check(set(found) == wanted and all(count == 1 for count in found.values()),
+          f"all {len(wanted)} in-scope source normal textures have exactly one built record; "
+          f"missing={sorted(wanted - found.keys())}")
+
+
 def validate_texture_dimension_consistency(env) -> None:
     """Never imports/reads anything from WP1's package or WP2's own C# source -- entirely
     self-contained against the BUILT bundle: for every Material, resolve its Shader's own
@@ -1846,6 +1917,7 @@ def main() -> None:
         validate_target_platform(env, "arena_equator_scenes.bundle")
         validate_scenes_bundle_contents(env, expected, material_shaders)
         validate_cubemap_color_space(env, expected)
+        validate_normal_texture_channels(env, expected, args.package)
         validate_texture_dimension_consistency(env)
         validate_generated_terrain_arrays(env, expected["manifest"])
         validate_owned_terrain_shader(env, expected["manifest"])

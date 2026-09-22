@@ -1,11 +1,15 @@
 // ArenaMapPort WP2 — §B.WP2.4 texture import (named "Driver" to avoid colliding with
-// UnityEditor.TextureImporter). Copies WP1's already-decoded PNGs into
-// Assets/ArenaImport/Textures/, sets textureType=NormalMap + sRGBTexture=false for anything WP1
-// flagged as a normal map, sRGBTexture=true otherwise (diffuse/albedo convention).
+// UnityEditor.TextureImporter). Copies ordinary WP1 PNGs into Assets/ArenaImport/Textures/.
+// Source normals are ALREADY GPU-encoded: validate their source format/color-space and persist
+// them as native Texture2D assets. A PNG importer can be changed by Unity's material postprocessor after
+// this method returns, repacking R into A and corrupting packed DXT5/BC7 normals whose X is R*A.
+// Native assets have no TextureImporter to repack. Ordinary color textures retain the
+// diffuse/albedo import convention below.
 //
 // LEAD OVERRIDE O3: textures used as alpha-cutout masks must not be quantized lossy-wrong (use
-// BC7/high quality or uncompressed where alpha matters); normal maps: textureType=NormalMap,
-// sRGB off. A texture is flagged alpha-cutout here if any material whose shader name contains
+// BC7/high quality or uncompressed where alpha matters). For source normals, preserve the known
+// source compression and alpha rather than passing already-packed pixels through a normal packer.
+// A texture is flagged alpha-cutout here if any material whose shader name contains
 // "Cutout" (§B.WP1's own texture pool, arena-census.md §6's confirmed shader-name families)
 // references it via any tex_env slot.
 //
@@ -43,9 +47,11 @@ namespace ArenaMapPort.Editor.Import
             Directory.CreateDirectory(ArenaPaths.TexturesDir);
 
             HashSet<string> alphaCutoutTexIds = CollectAlphaCutoutTextureIds(pkg);
+            var normalUsages = CollectNormalTextureUsages(pkg);
 
             var result = new Dictionary<string, Texture>();
             int cubeCount = 0, skippedUnassignableCount = 0;
+            int packedNormalCount = 0, rgbNormalCount = 0, clothMaskCount = 0;
             foreach (var prop in pkg.Textures.Properties())
             {
                 string texId = prop.Name;
@@ -56,17 +62,29 @@ namespace ArenaMapPort.Editor.Import
                     continue;
                 }
                 string srcPng = pkg.TexturePngPath(texId);
-                string assetPath = ArenaPaths.TexturesDir + "/" + texId + ".png";
+                bool isNormalMap = pkg.TextureIsNormalMap(texId);
+                string dimension = pkg.TextureDimension(texId);
+                if (isNormalMap)
+                {
+                    normalUsages.TryGetValue(texId, out var usage);
+                    // Read ONLY the authoritative package PNG, never a previous imported asset.
+                    // No channel conversion/derived PNG means repeated imports cannot double-decode.
+                    var normalPlan = InspectNormalSource(srcPng, texId, metadata, dimension, usage);
+                    result[texId] = ImportPreservedNormal(srcPng, texId, metadata, normalPlan);
+                    if (normalPlan.Encoding == "PackedRaG") packedNormalCount++;
+                    else if (normalPlan.Encoding == "RgbNormal") rgbNormalCount++;
+                    else clothMaskCount++;
+                    continue;
+                }
 
+                string assetPath = ArenaPaths.TexturesDir + "/" + texId + ".png";
                 if (!File.Exists(assetPath) || !FilesIdentical(srcPng, assetPath))
                     File.Copy(srcPng, assetPath, true);
 
                 AssetDatabase.ImportAsset(assetPath, ImportAssetOptions.ForceSynchronousImport);
 
                 var importer = (TextureImporter)AssetImporter.GetAtPath(assetPath);
-                bool isNormalMap = pkg.TextureIsNormalMap(texId);
                 bool isCutoutMask = alphaCutoutTexIds.Contains(texId);
-                string dimension = pkg.TextureDimension(texId);
 
                 if (dimension == "Cube")
                 {
@@ -115,9 +133,9 @@ namespace ArenaMapPort.Editor.Import
                 if (dimension == "Tex3D" || dimension == "Tex2DArray")
                     skippedUnassignableCount++;
 
-                importer.textureType = isNormalMap ? TextureImporterType.NormalMap : TextureImporterType.Default;
-                importer.sRGBTexture = !isNormalMap;
-                importer.alphaIsTransparency = !isNormalMap;
+                importer.textureType = TextureImporterType.Default;
+                importer.sRGBTexture = true;
+                importer.alphaIsTransparency = true;
                 importer.mipmapEnabled = true;
                 importer.textureCompression = isCutoutMask
                     ? TextureImporterCompression.Uncompressed // O3 - no lossy alpha quantization for cutout masks
@@ -144,8 +162,119 @@ namespace ArenaMapPort.Editor.Import
             Debug.Log("[ArenaMapPort][TextureImportDriver] imported " + result.Count + " textures (" +
                       alphaCutoutTexIds.Count + " flagged alpha-cutout uncompressed, " + cubeCount +
                       " imported as real Cubemap assets, " + skippedUnassignableCount +
-                      " Tex3D/Tex2DArray source(s) never assignable to any material property) -> " +
+                      " Tex3D/Tex2DArray source(s) never assignable to any material property, " +
+                      packedNormalCount + " packed normals / " + rgbNormalCount + " RGB normals / " +
+                      clothMaskCount + " Cloth masks saved as native source-encoded Texture2D assets) -> " +
                       ArenaPaths.TexturesDir);
+            return result;
+        }
+
+        private static NormalTextureImportPolicy.Plan InspectNormalSource(string path, string texId, JObject metadata,
+            string dimension, NormalTextureImportPolicy.Usage usage)
+        {
+            byte[] bytes = File.ReadAllBytes(path);
+            // The extractor writes RGBA8 PNGs. A lost alpha channel must be rejected, not invented.
+            if (bytes.Length < 33 || bytes[0] != 137 || bytes[1] != 80 || bytes[2] != 78 || bytes[3] != 71
+                || bytes[24] != 8 || bytes[25] != 6)
+                throw new InvalidDataException("Normal source is not an RGBA8 PNG: " + texId);
+            var source = new Texture2D(2, 2, TextureFormat.RGBA32, false, true);
+            try
+            {
+                int width = (int?)metadata["width"] ?? 0, height = (int?)metadata["height"] ?? 0;
+                if (!ImageConversion.LoadImage(source, bytes, false) || source.width != width || source.height != height)
+                    throw new InvalidDataException("Normal source dimensions/decode mismatch: " + texId);
+                var pixels = new NormalTextureImportPolicy.Pixels();
+                foreach (var pixel in source.GetPixels32()) pixels.Add(pixel.r, pixel.g, pixel.b, pixel.a);
+                return NormalTextureImportPolicy.Classify(texId, (string)metadata["format_src"],
+                    (string)metadata["color_space"], dimension, width, height, pixels, usage);
+            }
+            finally { UnityEngine.Object.DestroyImmediate(source); }
+        }
+
+        private static Texture2D ImportPreservedNormal(string sourcePng, string texId, JObject metadata,
+            NormalTextureImportPolicy.Plan plan)
+        {
+            int width = (int)metadata["width"], height = (int)metadata["height"];
+            TextureFormat format;
+            switch (plan.Compression)
+            {
+                case "DXT5": format = TextureFormat.DXT5; break;
+                case "BC7": format = TextureFormat.BC7; break;
+                case "DXT1": format = TextureFormat.DXT1; break;
+                default: throw new InvalidDataException("Unsupported preserved normal compression: " + plan.Compression);
+            }
+            string assetPath = ArenaPaths.TexturesDir + "/" + texId + ".asset";
+            var existing = AssetDatabase.LoadMainAssetAtPath(assetPath);
+            if ((existing != null && !(existing is Texture2D)) || (existing == null && File.Exists(assetPath)))
+                throw new InvalidDataException("Preserved normal asset has an incompatible or unreadable class: " + assetPath);
+
+            var texture = new Texture2D(2, 2, TextureFormat.RGBA32, true, !plan.Srgb)
+            {
+                name = texId,
+                // Match the existing normal PNG metadata: Repeat, Bilinear, anisotropy 1, bias 0.
+                // Terrain arrays deliberately have different filtering and retain their own path.
+                wrapMode = TextureWrapMode.Repeat,
+                filterMode = FilterMode.Bilinear,
+                anisoLevel = 1,
+                mipMapBias = 0,
+            };
+            bool saved = false;
+            try
+            {
+                bool decoded = ImageConversion.LoadImage(texture, File.ReadAllBytes(sourcePng), false);
+                // LoadImage may change RGBA32 to ARGB32 for PNGs. Both retain the same logical
+                // eight-bit RGBA channels; their native byte layout does not require a swizzle.
+                bool rgba8 = texture.format == TextureFormat.RGBA32 || texture.format == TextureFormat.ARGB32;
+                if (!decoded || texture.width != width || texture.height != height || !rgba8)
+                    throw new InvalidDataException("Native normal dimensions/decode mismatch: " + texId +
+                        " (decoded=" + decoded + ", actual=" + texture.width + "x" + texture.height +
+                        " " + texture.format + ", expected=" + width + "x" + height + " RGBA32/ARGB32)");
+
+                // Generate the complete chain before compression, without normal conversion or
+                // alpha dilation. Keep CPU data readable: discarding it before native serialization
+                // has not been verified safe. Compression keeps this copy in the source-sized format.
+                texture.Apply(true, false);
+                EditorUtility.CompressTexture(texture, format, TextureCompressionQuality.Best);
+                int mipCount = 1;
+                for (int size = Mathf.Max(width, height); size > 1; size >>= 1) mipCount++;
+                if (texture.format != format || texture.width != width || texture.height != height
+                    || texture.mipmapCount != mipCount)
+                    throw new InvalidDataException("Native normal compression/dimensions/mip chain mismatch: " + texId);
+
+                if (existing != null)
+                {
+                    // Keep the GUID and references on a repeated import; never replace asset class.
+                    EditorUtility.CopySerialized(texture, existing);
+                    EditorUtility.SetDirty(existing);
+                    return (Texture2D)existing;
+                }
+                AssetDatabase.CreateAsset(texture, assetPath);
+                saved = true;
+                return texture;
+            }
+            finally { if (!saved) UnityEngine.Object.DestroyImmediate(texture); }
+        }
+
+        private static Dictionary<string, NormalTextureImportPolicy.Usage> CollectNormalTextureUsages(ArenaPackage pkg)
+        {
+            var result = new Dictionary<string, NormalTextureImportPolicy.Usage>();
+            foreach (var material in pkg.Materials.Properties())
+            {
+                var json = pkg.LoadMaterialJson(material.Name);
+                var texEnvs = json["tex_envs"] as JObject;
+                if (texEnvs == null) continue;
+                bool dxt1Keyword = false;
+                if (json["keywords"] is JArray keywords)
+                    foreach (var keyword in keywords) if ((string)keyword == "DXT1_NM") dxt1Keyword = true;
+                foreach (var slot in texEnvs.Properties())
+                {
+                    var entry = slot.Value as JObject;
+                    string id = entry == null ? null : (string)entry["texture_id"];
+                    if (id == null || pkg.Textures[id] == null || !pkg.TextureIsNormalMap(id)) continue;
+                    if (!result.TryGetValue(id, out var usage)) result.Add(id, usage = new NormalTextureImportPolicy.Usage());
+                    usage.Add(pkg.MaterialShaderName(material.Name), slot.Name, dxt1Keyword);
+                }
+            }
             return result;
         }
 

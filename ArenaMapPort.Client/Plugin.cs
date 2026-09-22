@@ -131,6 +131,9 @@ namespace ArenaMapPort.Client
                     Bay5AmbientAudio.Shutdown();
             };
 
+            HandsAmbientHighlight.Install();
+            MapConfigVisibility.Install(); // after all binds; keep F12 focused on Equator and Bay5
+
             int totalOwnedScenes = 0;
             foreach (var map in ArenaMapRegistry.All)
             {
