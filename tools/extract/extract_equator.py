@@ -55,6 +55,7 @@ from common_ids import (  # noqa: E402
     texture_format_name,
 )
 from mesh_bin import write_mesh_bin  # noqa: E402
+from volume_textures import write_volume_texture  # noqa: E402
 
 import common as arena_common  # analysis/scripts/common.py -- EQUATOR table  # noqa: E402
 import census as arena_census  # analysis/scripts/census.py -- spawn_zone_anchors  # noqa: E402
@@ -772,6 +773,7 @@ def write_textures(ctx: ExtractionContext, output: str) -> dict:
         else:
             dimension = "Tex2D"
         volume_depth = int(tt.get("m_Depth", 1)) or 1 if is_volume else 1
+        native_volume = None
         try:
             data = tex_obj.read()
             if is_cube:
@@ -785,30 +787,10 @@ def write_textures(ctx: ExtractionContext, output: str) -> dict:
                 for i, face in enumerate(faces):
                     img.paste(face, (0, i * height))
             elif is_volume:
-                # Real data exposes a class UnityPy's own `.image` property never
-                # handles (Texture2DConverter.get_image_from_texture2d is hard-wired
-                # to Texture2D/Cubemap fields) -- found this pass on Equator's real
-                # `EquatorParticleTex3 lineScale` Texture3D (sharedassets55.assets),
-                # referenced by material `Equator_LocalDustParticles`'s `_ParticleTex`
-                # TexEnv, which IS reachable from an in-scope MeshRenderer, so this is
-                # not a rare/skippable case for a full S2 run. Texture3D has no `.image`
-                # attribute at all (a real AttributeError, not a decode failure) --
-                # decode manually via the same low-level `parse_image_data` Texture2D
-                # itself calls, treating the volume as `m_Depth` stacked width x height
-                # slices flattened into one width x (height*depth) PNG (deterministic,
-                # lossless w.r.t. the source raw texel data; WP2 only ever needs a
-                # single 2D Texture2D asset per texture id, §C.3 -- 3D-ness is not a
-                # concept the import pipeline or any in-scope shader property needs).
-                from UnityPy.export.Texture2DConverter import parse_image_data
-
-                depth = int(getattr(data, "m_Depth", 1)) or 1
-                raw = bytes(data.image_data)
-                fmt = data.m_Format
-                ver = getattr(tex_obj, "version", (0, 0, 0, 0))
-                plat = getattr(tex_obj, "platform", 0)
-                img = parse_image_data(raw, width, height * depth, fmt, ver, plat, None, True)
-                if img is None:
-                    raise ValueError("parse_image_data returned no image data for Texture3D")
+                # m_Format belongs to GraphicsFormat, not TextureFormat: source54
+                # is Alpha8, not ASTC. Preserve native voxels and every source mip;
+                # only the inspection PNG receives a per-slice display flip.
+                native_volume, img = write_volume_texture(tex_obj, cid, output)
             else:
                 img = data.image
                 if img is None:
@@ -836,7 +818,7 @@ def write_textures(ctx: ExtractionContext, output: str) -> dict:
             "source_name": src_name,
             "width": out_width,
             "height": out_height,
-            "format_src": texture_format_name(fmt_code),
+            "format_src": "GraphicsFormat54_Alpha8" if native_volume else texture_format_name(fmt_code),
             "color_space": COLOR_SPACE.get(cs_code, f"Unknown({cs_code})"),
             "is_normal_map": is_normal,
             # impl-texture-dimensions §1: §C-compatible extension -- "Tex2D" (default, matches
@@ -861,13 +843,13 @@ def write_textures(ctx: ExtractionContext, output: str) -> dict:
             entry_out["is_volume_texture"] = True
             entry_out["volume_source_depth"] = volume_depth
             entry_out["volume_source_height"] = height
+            if native_volume is not None:
+                entry_out["native_volume"] = native_volume
             ctx.warnings.append(
-                f"texture {cid} ({src_name!r}): Texture3D (depth={volume_depth}) flattened to a "
-                f"single {out_width}x{out_height} PNG (stacked slices, real decoded data, not a "
-                f"placeholder) -- WP2 does NOT build a Texture3D asset or assign this to any "
-                f"material property (§B.WP2.4 task item 2's explicit fallback: leave the property "
-                f"unset so the shader default applies); the PNG is imported as an ordinary, "
-                f"unused 2D texture for inspection only."
+                f"texture {cid} ({src_name!r}): Texture3D (depth={volume_depth}); native_volume "
+                f"contains validated, unchanged Alpha8 voxels and source mip/sampler metadata. "
+                f"The {out_width}x{out_height} PNG is inspection only; Unity imports the native "
+                f"payload as Texture3D. Failed validation remains an extraction error."
             )
         out[cid] = entry_out
     return out

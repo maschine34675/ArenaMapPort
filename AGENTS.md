@@ -85,7 +85,7 @@ pwsh -NoProfile -File tools/tests/test_unity_log_scan.ps1
 # rebuild Equator's bundles + NavMesh from its extracted package (≈ 15 min). The [bool] parameters only parse
 # from a PowerShell prompt or `pwsh -Command "& '...build_all.ps1' ... -BakeNavMesh \$true"`; `-File` from bash
 # turns "$true"/1 into strings and the script refuses them.
-pwsh tools/build_all.ps1 -MapKey arena_equator -MapDescriptor tools/maps/equator.json -PackageDir D:/ArenaMapPort/work/extract/equator-native-features -OutputDir D:/ArenaMapPort/work/build/full -BakeNavMesh $true -Verify $true -SkipGameRefsSync
+pwsh tools/build_all.ps1 -MapKey arena_equator -MapDescriptor D:/ArenaMapPort/tools/maps/equator.json -PackageDir D:/ArenaMapPort/work/extract/equator-native-dust -OutputDir D:/ArenaMapPort/work/build/full -BakeNavMesh $true -Verify $true -SkipGameRefsSync
 # then a client Release build WITHOUT DllOnly stages the new bundles into dist/, and:
 pwsh -NoProfile -File tools/deploy-to-spt.ps1 -SptRoot 'D:\SPT41' -Confirm
 ```
@@ -93,11 +93,14 @@ pwsh -NoProfile -File tools/deploy-to-spt.ps1 -SptRoot 'D:\SPT41' -Confirm
 Equator's package predates the `-FullMap` convention (its manifest lists the scenes in a different order
 than the descriptor), so Equator is built WITHOUT `-FullMap`. Every other map uses `-FullMap` with
 `work/build/<stem>/` and `tools/maps/<stem>.json` (exact commands in `docs/progress/remaining-maps.md`).
-Current accepted inputs are `work/extract/equator-native-features` and
-`work/extract/bay5-native-features`. The older `equator`, `bay5` and `bay5-background` packages
+Current accepted inputs are `work/extract/equator-native-dust` and
+`work/extract/bay5-native-dust`; see `docs/progress/native-dust.md` for acceptance evidence.
+They preserve all prior native features and add the lossless original dust volume payload.
+The older `equator`, `bay5` and `bay5-background` packages
 omit later native features (and old Bay5 omits the harbor background). Do not rebuild either
-accepted map from those older packages. Bay5 uses the native-feature package with `-FullMap`
-and `-OutputDir D:/ArenaMapPort/work/build/bay5`.
+accepted map from those older packages. Bay5 uses the native-dust package with `-FullMap`
+and `-OutputDir D:/ArenaMapPort/work/build/bay5`. Always give `-MapDescriptor` an absolute
+path: Unity resolves relative descriptor paths from its project directory.
 `-FullMap` also regenerates that map's base.json and preset from the sidecars; to regenerate only base.json
 after a sidecar change, add `-SkipUnityBuild` (reuses the bundles). For Equator, base.json is regenerated
 with `python tools/server/make_base_json.py` (see its header for the arguments).

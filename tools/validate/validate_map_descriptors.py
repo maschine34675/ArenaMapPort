@@ -160,6 +160,15 @@ def parse_cs_value(raw: str):
         if not inner.endswith(")"):
             fail(f"could not parse exit literal: {v!r}")
         return ("exit", [parse_cs_value(x) for x in split_top_level_args(inner[:-1])])
+    if v.startswith("new ArenaDustDescriptor("):
+        inner = v[len("new ArenaDustDescriptor("):].rstrip()
+        if not inner.endswith(")"):
+            fail(f"could not parse dust literal: {v!r}")
+        values = [parse_cs_value(x) for x in split_top_level_args(inner[:-1])]
+        if len(values) != 12:
+            fail(f"dust literal requires exactly 12 source parameters: {v!r}")
+        return dict(zip(("scene", "path", "time_speed", "size", "quad_tile_set_side", "uv_tile_padding"), values[:6]),
+                    bounds_center=values[6:9], bounds_extents=values[9:12])
     if re.fullmatch(r"[A-Za-z_]\w*\.[A-Za-z_]\w*", v):
         return ("ref", v)
     if re.fullmatch(r"[A-Za-z_]\w*", v):
@@ -269,6 +278,28 @@ def check_map_against_registry_entry(
     check_field(errors, where, "restored_shadow_caster_roots",
                 map_json.get("restored_shadow_caster_roots", []),
                 resolve(registry_args.get("RestoredShadowCasterRoots", []), ref_scope))
+    dust = map_json.get("dust")
+    check_field(errors, where, "dust", dust, registry_args.get("Dust"))
+    if dust is not None:
+        if not isinstance(dust, dict):
+            errors.append(f"{where}: dust must be an object")
+        else:
+            if dust.get("scene") not in map_json.get("all_scene_names", []):
+                errors.append(f"{where}: dust scene must belong to the map")
+            if not isinstance(dust.get("path"), str) or not dust["path"]:
+                errors.append(f"{where}: dust path must be nonempty")
+            for name in ("time_speed", "size", "uv_tile_padding"):
+                value = dust.get(name)
+                if not isinstance(value, (int, float)) or not math.isfinite(value) or value < 0:
+                    errors.append(f"{where}: dust {name} must be finite and nonnegative")
+            if type(dust.get("quad_tile_set_side")) is not int or dust["quad_tile_set_side"] < 1:
+                errors.append(f"{where}: dust quad_tile_set_side must be a positive integer")
+            for name in ("bounds_center", "bounds_extents"):
+                values = dust.get(name)
+                if not isinstance(values, list) or len(values) != 3 or any(
+                    not isinstance(value, (int, float)) or not math.isfinite(value)
+                    or (name == "bounds_extents" and value <= 0) for value in values):
+                    errors.append(f"{where}: dust {name} requires three finite values (positive extents)")
     for json_field, cs_field in JSON_TO_CS_FIELD.items():
         if json_field not in map_json:
             errors.append(f"{where}: {map_path.name} is missing field {json_field!r}")

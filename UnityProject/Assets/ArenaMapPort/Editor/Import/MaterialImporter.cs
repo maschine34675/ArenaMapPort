@@ -76,34 +76,37 @@ namespace ArenaMapPort.Editor.Import
                             string texId = (string)texIdTok;
                             string dimension = pkg.TextureDimension(texId);
                             bool terrainArray = (bool?)((JObject)pkg.Textures[texId])["generated_terrain_array"] == true;
+                            bool nativeVolume = ((JObject)pkg.Textures[texId])["native_volume"] != null;
                             if (terrainArray && (!preserveShader || dimension != "Tex2DArray"))
                                 throw new IOException("Generated terrain array may only bind to its owned terrain shader: " + texId);
-                            if (dimension == "Tex3D" || (dimension == "Tex2DArray" && !terrainArray))
+                            if ((dimension == "Tex3D" && !nativeVolume) || (dimension == "Tex2DArray" && !terrainArray))
                             {
-                                // impl-texture-dimensions §2 (task item 2's explicit fallback):
-                                // a correct import isn't attempted for this shape (see
-                                // TextureImportDriver's own comment) -- leave the property
+                                // Legacy packages without a validated native payload retain
+                                // impl-texture-dimensions §2's safe fallback: leave the property
                                 // UNASSIGNED so the stand-in/real shader's own declared default
                                 // applies, instead of ever binding a 2D texture to a CUBE/3D
                                 // slot. This is an expected, logged skip, not an error.
                                 Debug.Log("[ArenaMapPort][MaterialImporter] material " + matId + " prop " +
                                           t.Name + ": texture " + texId + " has dimension '" + dimension +
-                                          "' (no correct Unity import path for the spike) -- leaving the " +
+                                          "' (no validated native payload) -- leaving the " +
                                           "property unassigned rather than binding a 2D texture to it.");
                                 skippedUnassignable++;
                             }
                             else
                             {
-                                // "Tex2D" or "Cube" -- TextureImportDriver built a real
-                                // Texture2D/Cubemap asset matching this exact dimension (never a
-                                // 2D texture standing in for a Cube slot).
+                                // Native shape is required; a preview PNG must never reach a
+                                // volume shader slot even if a future caller bypasses the driver.
                                 Texture tex;
                                 if (textures.TryGetValue(texId, out tex) && tex != null)
                                 {
                                     if (terrainArray && !(tex is Texture2DArray))
                                         throw new IOException("Generated terrain array was not imported as Texture2DArray: " + texId);
+                                    if (nativeVolume && (dimension != "Tex3D" || !(tex is Texture3D)))
+                                        throw new IOException("Native volume was not imported as Texture3D: " + texId);
                                     mat.SetTexture(t.Name, tex);
                                 }
+                                else if (nativeVolume)
+                                    throw new IOException("Required native volume texture missing: " + texId);
                                 else if (preserveShader)
                                     throw new IOException("Required terrain texture missing: " + texId);
                                 else

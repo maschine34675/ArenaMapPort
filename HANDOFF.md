@@ -3,6 +3,35 @@
 Snapshot for whoever continues (human or agent). Verify the commits named here against `git log`; this file
 is updated by hand at each handover, it is not an automatic record. Read [AGENTS.md](AGENTS.md) first.
 
+## State on 2026-09-23 — original Equator and Bay5 dust verified
+
+Branch `feature/native-dust`, based on `29ea1be`. Both maps now import the original lossless
+Alpha8 Texture3D and reuse SPT's native dust animation with the authored particle meshes.
+The runtime restores padded bounds and the native transparent queue on one owned material;
+unload restores renderer state and releases that material. No lighting or audio gain changed.
+
+Both full bundle pipelines and independent byte/binding comparisons passed, including all
+519 normal textures. Navigation bundles and shader sidecars remain identical. Checks:
+356 .NET passes, 222 Python passes /27 expected skips, eight PowerShell cases and the complete
+14-map distribution. Exactly four of72 staged files changed: both DLLs and the two scene bundles.
+Sanctioned deployment and final installed hashes passed.
+
+Fresh EFT `3e1ca2da` verified Equator → Bay5 → Equator with visible moving dust, correct native
+speeds, unchanged meshes, queue3000 and three clean material releases. One existing MenuScreen
+coroutine message appeared on the first Escape; identical pre-change archive entries are recorded
+in [the native evidence](docs/progress/native-dust.md). No dust errors occurred.
+
+Current accepted extraction inputs are `work/extract/equator-native-dust` and
+`work/extract/bay5-native-dust`; canonical built outputs remain `work/build/full` and
+`work/build/bay5`. Use absolute descriptor paths for Unity builds. Older native-feature packages
+lack the new raw volume payload and must not replace these accepted inputs.
+
+Bay5 already has a user-installed DynamicMaps map. Its JSONC/SVG and ArenaMapPort's complete
+configuration were verified unchanged. Final profile: 440/440 HP,100 energy,100 hydration;
+all145 inventory records preserve IDs, templates, parent relationships and slots. All three
+tests were botless and short. EFT closed normally around11:54; server running, GPU host free.
+The remaining quiet-ambience balance is a separate follow-up; glass remains deferred.
+
 ## State on 2026-09-23 — remaining Bay5 barrier and shadow-cache spam fixed
 
 Branch `feature/bay5-barrier-followup`, based on `d842ef8`. The one reported unsuffixed

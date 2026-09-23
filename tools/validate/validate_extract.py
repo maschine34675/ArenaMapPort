@@ -74,6 +74,7 @@ import tempfile
 import traceback
 from pathlib import Path
 from typing import Any, NoReturn
+from native_volume import package_errors as native_volume_errors
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_PACKAGE = REPO_ROOT / "work" / "extract" / "equator_s1"  # O7
@@ -977,6 +978,7 @@ def validate_textures(manifest: dict, package: Path) -> None:
         n += 1
         tex_path = package / meta["file"]
         terrain_errors = generated_terrain_texture_errors(meta, package)
+        terrain_errors.extend(native_volume_errors(meta, package))
         for error in terrain_errors:
             bad += 1
             check(False, f"texture {tex_id}: {error}")

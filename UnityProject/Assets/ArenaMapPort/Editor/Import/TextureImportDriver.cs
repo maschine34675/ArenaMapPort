@@ -17,14 +17,9 @@
 // side) now drives the SHAPE of the imported asset, never just its 2D import settings --
 // "Cube" imports the vertical 6-frame strip WP1 emits as a real TextureImporterShape.TextureCube
 // asset (TextureImporterGenerateCubemap.AutoCubemap auto-detects the 1:6 strip layout and builds
-// an actual Cubemap object), "Tex3D"/"Tex2DArray" are imported as an ordinary, UNUSED 2D texture
-// (kept for inspection only -- MaterialImporter never assigns it to any material property, see
-// that file's own comment) since building a real Texture3D/Texture2DArray asset from a flattened
-// PNG is out of scope for the spike's one real occurrence (§B.WP2.4 task item 2's explicit
-// "if a correct import is not feasible, do not assign" fallback). This is the fix for the
-// reported "Error assigning 2D texture to CUBE/3D texture property" scene-load errors: a
-// Cubemap-shaped asset now actually exists and gets assigned, and a Tex3D one is never assigned
-// at all -- so no material ever carries a 2D Texture2D reference in a CUBE/3D-typed shader slot.
+// an actual Cubemap object). Versioned native_volume payloads import as real Alpha8 Texture3D
+// assets, preserving native bytes, mips, axes and samplers. Legacy unsupported Tex3D/Tex2DArray
+// packages retain the safe fallback: inspection-only PNG, never assigned to a material slot.
 //
 // Return type is the base UnityEngine.Texture (not Texture2D) since a Cube-dimension entry
 // resolves to a Cubemap asset, not a Texture2D one -- Material.SetTexture accepts either.
@@ -33,6 +28,7 @@
 // against a not-yet-imported texture is a silent no-op, not an error.
 using System.Collections.Generic;
 using System.IO;
+using System.Security.Cryptography;
 using ArenaMapPort.Editor.Common;
 using Newtonsoft.Json.Linq;
 using UnityEditor;
@@ -50,12 +46,18 @@ namespace ArenaMapPort.Editor.Import
             var normalUsages = CollectNormalTextureUsages(pkg);
 
             var result = new Dictionary<string, Texture>();
-            int cubeCount = 0, skippedUnassignableCount = 0;
+            int cubeCount = 0, volumeCount = 0, skippedUnassignableCount = 0;
             int packedNormalCount = 0, rgbNormalCount = 0, clothMaskCount = 0;
             foreach (var prop in pkg.Textures.Properties())
             {
                 string texId = prop.Name;
                 var metadata = (JObject)prop.Value;
+                if (metadata["native_volume"] != null)
+                {
+                    result[texId] = ImportNativeVolume(pkg, texId, metadata);
+                    volumeCount++;
+                    continue;
+                }
                 if ((bool?)metadata["generated_terrain_array"] == true)
                 {
                     result[texId] = ImportTerrainArray(pkg, texId, metadata);
@@ -161,12 +163,152 @@ namespace ArenaMapPort.Editor.Import
             AssetDatabase.SaveAssets();
             Debug.Log("[ArenaMapPort][TextureImportDriver] imported " + result.Count + " textures (" +
                       alphaCutoutTexIds.Count + " flagged alpha-cutout uncompressed, " + cubeCount +
-                      " imported as real Cubemap assets, " + skippedUnassignableCount +
+                      " real Cubemap assets, " + volumeCount + " real Texture3D assets, " + skippedUnassignableCount +
                       " Tex3D/Tex2DArray source(s) never assignable to any material property, " +
                       packedNormalCount + " packed normals / " + rgbNormalCount + " RGB normals / " +
                       clothMaskCount + " Cloth masks saved as native source-encoded Texture2D assets) -> " +
                       ArenaPaths.TexturesDir);
             return result;
+        }
+
+        private static int VolumeInt(JToken token, string name, int minimum, int maximum)
+        {
+            if (token == null || token.Type != JTokenType.Integer)
+                throw new InvalidDataException("Missing/non-integer native volume " + name);
+            long value = (long)token;
+            if (value < minimum || value > maximum)
+                throw new InvalidDataException("Out-of-range native volume " + name + ": " + value);
+            return (int)value;
+        }
+
+        private static Texture3D ImportNativeVolume(ArenaPackage pkg, string texId, JObject metadata)
+        {
+            // Native Texture3D.m_Format uses GraphicsFormat. In particular 54 is internal
+            // Alpha8, NOT TextureFormat.ASTC_4x4. A native Unity2022 probe verified the enum,
+            // linear color space and sampled channels (1,1,1,A); dust samples .a only.
+            var volume = metadata["native_volume"] as JObject;
+            if (volume == null || pkg.TextureDimension(texId) != "Tex3D" || pkg.TextureIsNormalMap(texId)
+                || pkg.TextureColorSpace(texId) != "Linear" || (string)volume["color_space"] != "Linear"
+                || VolumeInt(volume["schema_version"], "schema_version", 1, 1) != 1
+                || (string)volume["encoding"] != "Alpha8" || (string)volume["layout"] != "x-fastest-y-z-mips"
+                || VolumeInt(volume["source_graphics_format"], "source_graphics_format", 54, 54) != 54)
+                throw new InvalidDataException("Unsupported native volume metadata: " + texId);
+
+            int width = VolumeInt(volume["width"], "width", 1, 2048);
+            int height = VolumeInt(volume["height"], "height", 1, 2048);
+            int depth = VolumeInt(volume["depth"], "depth", 1, 2048);
+            int maxMips = 1;
+            for (int size = Mathf.Max(width, Mathf.Max(height, depth)); size > 1; size >>= 1) maxMips++;
+            int mipCount = VolumeInt(volume["mip_count"], "mip_count", 1, maxMips);
+            if (VolumeInt(metadata["width"], "preview width", 1, 2048) != width
+                || VolumeInt(metadata["height"], "preview height", 1, 2048 * 2048) != height * depth
+                || VolumeInt(metadata["volume_source_height"], "source height", 1, 2048) != height
+                || VolumeInt(metadata["volume_source_depth"], "source depth", 1, 2048) != depth)
+                throw new InvalidDataException("Native volume source/preview dimensions disagree: " + texId);
+
+            var mips = volume["mips"] as JArray;
+            if (mips == null || mips.Count != mipCount)
+                throw new InvalidDataException("Native volume mip table mismatch: " + texId);
+            var offsets = new int[mipCount];
+            int total = 0;
+            for (int level = 0; level < mipCount; level++)
+            {
+                int w = Mathf.Max(1, width >> level), h = Mathf.Max(1, height >> level), d = Mathf.Max(1, depth >> level);
+                long size = (long)w * h * d;
+                // These tiny dust volumes need 2KiB. Bound resource use before reading an
+                // accidental/hostile multi-gigabyte payload while allowing normal small volumes.
+                if (size > 64 * 1024 * 1024 || total + size > 64 * 1024 * 1024)
+                    throw new InvalidDataException("Native volume exceeds 64MiB payload limit: " + texId);
+                var mip = mips[level] as JObject;
+                if (mip == null || VolumeInt(mip["width"], "mip width", 1, 2048) != w
+                    || VolumeInt(mip["height"], "mip height", 1, 2048) != h
+                    || VolumeInt(mip["depth"], "mip depth", 1, 2048) != d
+                    || VolumeInt(mip["offset"], "mip offset", 0, int.MaxValue) != total
+                    || VolumeInt(mip["byte_length"], "mip byte length", 1, int.MaxValue) != size)
+                    throw new InvalidDataException("Native volume mip layout mismatch: " + texId + "/" + level);
+                offsets[level] = total;
+                total += (int)size;
+            }
+            if (VolumeInt(volume["byte_length"], "byte_length", 1, int.MaxValue) != total)
+                throw new InvalidDataException("Native volume byte length mismatch: " + texId);
+
+            string sourceFile = (string)volume["source_file"];
+            JToken sourceIdToken = volume["source_path_id"];
+            if (sourceFile == null || !System.Text.RegularExpressions.Regex.IsMatch(sourceFile, "^[A-Za-z0-9_.-]+\\.assets$")
+                || sourceIdToken == null || sourceIdToken.Type != JTokenType.Integer || (long)sourceIdToken <= 0)
+                throw new InvalidDataException("Native volume source provenance missing/invalid: " + texId);
+            string identity = sourceFile + ":" + ((long)sourceIdToken).ToString(System.Globalization.CultureInfo.InvariantCulture)
+                + ":Texture2D"; // Existing texture-pool IDs share this historical discriminator.
+            string identityHash;
+            using (var hash = SHA1.Create())
+                identityHash = System.BitConverter.ToString(hash.ComputeHash(System.Text.Encoding.UTF8.GetBytes(identity)))
+                    .Replace("-", "").ToLowerInvariant().Substring(0, 16);
+            if (identityHash != texId)
+                throw new InvalidDataException("Native volume source provenance/texture ID mismatch: " + texId);
+
+            string relative = (string)volume["file"];
+            if (!System.Text.RegularExpressions.Regex.IsMatch(texId, "^[0-9a-f]{16}$")
+                || relative != "textures/" + texId + ".volume.bin")
+                throw new InvalidDataException("Native volume payload path is not its exact owned texture path: " + texId);
+            string sourcePath = pkg.ResolvePath(relative);
+            if (!File.Exists(sourcePath) || new FileInfo(sourcePath).Length != total)
+                throw new InvalidDataException("Native volume payload missing or truncated: " + texId);
+            byte[] data = File.ReadAllBytes(sourcePath);
+            string digest;
+            using (var hash = SHA256.Create())
+                digest = System.BitConverter.ToString(hash.ComputeHash(data)).Replace("-", "").ToLowerInvariant();
+            if (!string.Equals(digest, (string)volume["sha256"], System.StringComparison.Ordinal))
+                throw new InvalidDataException("Native volume payload SHA256 mismatch: " + texId);
+
+            var sampler = volume["sampler"] as JObject;
+            if (sampler == null) throw new InvalidDataException("Missing native volume sampler: " + texId);
+            var filter = (FilterMode)VolumeInt(sampler["filter_mode"], "filter_mode", 0, 2);
+            int aniso = VolumeInt(sampler["aniso_level"], "aniso_level", 0, 16);
+            var wrapU = (TextureWrapMode)VolumeInt(sampler["wrap_u"], "wrap_u", 0, 3);
+            var wrapV = (TextureWrapMode)VolumeInt(sampler["wrap_v"], "wrap_v", 0, 3);
+            var wrapW = (TextureWrapMode)VolumeInt(sampler["wrap_w"], "wrap_w", 0, 3);
+            JToken biasToken = sampler["mip_bias"];
+            if (biasToken == null || (biasToken.Type != JTokenType.Float && biasToken.Type != JTokenType.Integer))
+                throw new InvalidDataException("Missing/non-numeric native volume mip bias: " + texId);
+            double bias = (double)biasToken;
+            if (double.IsNaN(bias) || double.IsInfinity(bias) || bias < -16 || bias > 16)
+                throw new InvalidDataException("Invalid native volume mip bias: " + texId);
+
+            string assetPath = ArenaPaths.TexturesDir + "/" + texId + ".asset";
+            var existing = AssetDatabase.LoadMainAssetAtPath(assetPath);
+            if ((existing != null && !(existing is Texture3D)) || (existing == null && File.Exists(assetPath)))
+                throw new InvalidDataException("Native volume asset has incompatible/unreadable class: " + assetPath);
+            var texture = new Texture3D(width, height, depth, TextureFormat.Alpha8, mipCount)
+            {
+                name = texId,
+                filterMode = filter,
+                anisoLevel = aniso,
+                wrapModeU = wrapU,
+                wrapModeV = wrapV,
+                wrapModeW = wrapW,
+                mipMapBias = (float)bias,
+            };
+            bool saved = false;
+            try
+            {
+                for (int level = 0; level < mipCount; level++) texture.SetPixelData(data, level, offsets[level]);
+                // No regenerated mips, alpha dilation, y/z flip, color conversion or compression.
+                texture.Apply(false, false);
+                if (texture.width != width || texture.height != height || texture.depth != depth
+                    || texture.mipmapCount != mipCount || texture.format != TextureFormat.Alpha8
+                    || (int)texture.graphicsFormat != 54)
+                    throw new InvalidDataException("Unity changed native volume dimensions/mips/encoding: " + texId);
+                if (existing != null)
+                {
+                    EditorUtility.CopySerialized(texture, existing);
+                    EditorUtility.SetDirty(existing);
+                    return (Texture3D)existing;
+                }
+                AssetDatabase.CreateAsset(texture, assetPath);
+                saved = true;
+                return texture;
+            }
+            finally { if (!saved) UnityEngine.Object.DestroyImmediate(texture); }
         }
 
         private static NormalTextureImportPolicy.Plan InspectNormalSource(string path, string texId, JObject metadata,

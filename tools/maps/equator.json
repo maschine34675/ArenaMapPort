@@ -24,5 +24,15 @@
   ],
   "opened_barriers": [
     "SBG_Arena_Equator/SOO_LOD0/equator_roller_shutters_02 (9)"
-  ]
+  ],
+  "dust": {
+    "scene": "Arena_Equator_Lighting",
+    "path": "EQUATOR_DUST",
+    "time_speed": 0.09,
+    "size": 0.03,
+    "quad_tile_set_side": 1,
+    "uv_tile_padding": 1.0,
+    "bounds_center": [2.280590057373047, 1.6160001754760742, 3.3339996337890625],
+    "bounds_extents": [31.478260040283203, 5.016374111175537, 48.85846710205078]
+  }
 }

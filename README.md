@@ -35,7 +35,8 @@ Agents: start at [AGENTS.md](AGENTS.md), then [HANDOFF.md](HANDOFF.md) for the d
 **DynamicMaps:** An optional Equator ground-plan pack is generated from local geometry and
 the existing NavMesh. Deployment and native player/direction/exit checks passed on 2026-09-22.
 Open inventory → **MAP** in an Equator raid. This is a simplified ground-floor prototype;
-other maps are not included yet. See [acceptance](docs/progress/equator-dynamicmaps.md)
+The user also has a Bay5 DynamicMaps map; it is separate from this Equator generator.
+See [acceptance](docs/progress/equator-dynamicmaps.md)
 and [generation/deployment](tools/dynamicmaps/README.md).
 
 ## Build inputs
@@ -53,6 +54,11 @@ From PowerShell in this repository, `./tools/build_remaining.ps1 -Stage` skips m
 Each bundle build ends with the content validators (extraction, bundle round trip incl. MonoScript identity, preset, map descriptors). `tools/validate/validate_port.py` checks a map's build outputs for consistency, and Release staging finishes with `tools/validate/validate_distribution.py`. The earlier hash receipts (`full-map-validation.json`, `port_inputs.py`) were removed on 2026-09-17: they guarded against local tampering that does not happen in this single-developer workflow and cost minutes per client build and hours per refresh. The extraction reproducibility check is opt-in (`build_all.ps1 -CheckReproducibility`).
 
 The generic extractor includes scoped compatibility for source BC6H textures, compressed and genuinely empty meshes, and mixed material arrays with explicit null positions. It also verifies emitted null mesh-collider references against the source. Unsupported layouts fail explicitly; BC6H export retains the inherited 8-bit texture scope. Generic imports refresh mesh data while preserving asset references, and bundle validation compares actual geometry channels and indices with the extracted package. See [source format compatibility](docs/progress/remaining-maps.md#source-format-compatibility) for the limits.
+
+**Ambient dust on Equator and Bay5.** Both now use the original Alpha8 volume texture,
+authored particle meshes and native animation. Source-to-bundle checks and an Equator → Bay5 →
+Equator native sequence passed on 2026-09-23, including visible motion and complete cleanup.
+See [dust acceptance](docs/progress/native-dust.md).
 
 ## Terrain and runtime limits
 

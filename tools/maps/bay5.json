@@ -18,6 +18,16 @@
   "restored_shadow_caster_roots": [
     "SBG_Arena_Bay5_Main/SOO/PROPS/Military_sandbag_barrier_03"
   ],
+  "dust": {
+    "scene": "Arena_Bay5_Light",
+    "path": "DUST",
+    "time_speed": 0.07,
+    "size": 0.04,
+    "quad_tile_set_side": 1,
+    "uv_tile_padding": 0.0,
+    "bounds_center": [99.63274383544922, -1.5299997329711914, 30.428937911987305],
+    "bounds_extents": [52.685890197753906, 12.275176048278809, 42.59858703613281]
+  },
   "infiltration_name": "ArenaBay5",
   "locale_name": "Arena: Bay 5 (spike)",
   "locale_description": "Internal test build — outdoor harbor geometry/collision/NavMesh spike.",

@@ -152,17 +152,16 @@ TEXDIM_TO_CLASS = {
 }
 
 # impl-texture-dimensions §1/§2 -- the §C-compatible manifest.textures[...].dimension values WP1
-# now emits and WP2 branches on. "Tex2D"/"Cube" become real, correctly-shaped bundle assets
-# (Texture2D/Cubemap respectively) and ARE expected in the bundle's object counts; "Tex3D"/
-# "Tex2DArray" are the task's explicit "don't assign" fallback (no correct Unity import path for
-# the spike) -- MaterialImporter.cs never calls SetTexture for them, so they correctly never end
-# up referenced by any Material and are therefore correctly ABSENT from the built bundle (Unity's
-# own dependency-based AssetBundle inclusion).
+# now emits and WP2 branches on. Native volumes and generated terrain arrays have their own
+# verified import contracts. Legacy unsupported 3D/array entries remain unassigned and are
+# correctly absent from Unity's dependency-based bundle inclusion.
 TEXTURE_DIMENSIONS_BUILT_AS_ASSET = {"Tex2D": "Texture2D", "Cube": "Cubemap"}
 TEXTURE_DIMENSIONS_NEVER_ASSIGNED = {"Tex3D", "Tex2DArray"}
 
 
 def built_texture_class(meta: dict) -> str | None:
+    if meta.get("dimension") == "Tex3D" and "native_volume" in meta:
+        return "Texture3D"
     if meta.get("generated_terrain_array") is True:
         return "Texture2DArray" if meta.get("dimension") == "Tex2DArray" else None
     return TEXTURE_DIMENSIONS_BUILT_AS_ASSET.get(meta.get("dimension", "Tex2D"))
@@ -342,8 +341,8 @@ def load_package_expected(package: Path) -> dict:
     # impl-texture-dimensions §3: split the in-scope texture set by manifest dimension --
     # "Tex2D"/"Cube" each become a real, correctly-shaped bundle asset (Texture2D/Cubemap
     # respectively, TEXTURE_DIMENSIONS_BUILT_AS_ASSET) and belong in the bundle's object counts;
-    # "Tex3D"/"Tex2DArray" (TEXTURE_DIMENSIONS_NEVER_ASSIGNED) are MaterialImporter's explicit
-    # "don't assign" fallback and are correctly ABSENT from the built bundle -- comparing the
+    # Legacy unsupported "Tex3D"/"Tex2DArray" entries remain unassigned and absent. Native
+    # volumes and generated terrain arrays are counted by their actual asset class. Comparing the
     # OLD flat "every in-scope texture becomes a Texture2D" assumption against a package
     # containing any Cube/Tex3D texture would now produce a false FAIL (a Cubemap is not a
     # Texture2D; a skipped Tex3D is in no bundle object type at all).
@@ -360,6 +359,7 @@ def load_package_expected(package: Path) -> dict:
     expected["texture_count_in_scope_2d"] = len(texture_ids_in_scope_by_class.get("Texture2D", ()))
     expected["texture_count_in_scope_cube"] = len(texture_ids_in_scope_by_class.get("Cubemap", ()))
     expected["texture_count_in_scope_array"] = len(texture_ids_in_scope_by_class.get("Texture2DArray", ()))
+    expected["texture_count_in_scope_volume"] = len(texture_ids_in_scope_by_class.get("Texture3D", ()))
     expected["texture_ids_in_scope_never_assigned"] = texture_ids_in_scope_never_assigned
     return expected
 
@@ -462,8 +462,9 @@ def validate_scenes_bundle_contents(env, expected: dict, material_shaders: dict 
           f"textures {expected['texture_count']} vs {expected['texture_count_in_scope']} "
           f"({texture_excluded} excluded) -- in-scope split by dimension: "
           f"{expected['texture_count_in_scope_2d']} Tex2D, {expected['texture_count_in_scope_cube']} "
-          f"Cube, {never_assigned_count} Tex3D/Tex2DArray (impl-texture-dimensions: the last group "
-          f"is MaterialImporter's explicit never-assign fallback, correctly absent from the bundle)")
+          f"Cube, {expected['texture_count_in_scope_volume']} native volumes, "
+          f"{expected['texture_count_in_scope_array']} terrain arrays, "
+          f"{never_assigned_count} legacy unsupported volumes/arrays (unassigned and absent)")
     exact_checks = [
         ("GameObject", n("GameObject"), expected["game_objects"]),
         ("Mesh", n("Mesh"), expected["mesh_count_in_scope"]),
@@ -475,6 +476,7 @@ def validate_scenes_bundle_contents(env, expected: dict, material_shaders: dict 
         ("Texture2D", n("Texture2D"), expected["texture_count_in_scope_2d"]),
         ("Cubemap", n("Cubemap"), expected["texture_count_in_scope_cube"]),
         ("Texture2DArray", n("Texture2DArray"), expected["texture_count_in_scope_array"]),
+        ("Texture3D", n("Texture3D"), expected["texture_count_in_scope_volume"]),
         ("MeshFilter", n("MeshFilter"), expected["mesh_filters"]),
         ("MeshRenderer", n("MeshRenderer"), expected["mesh_renderers"]),
         ("MeshCollider", n("MeshCollider"), expected["mesh_colliders"]),
@@ -1917,6 +1919,11 @@ def main() -> None:
         validate_target_platform(env, "arena_equator_scenes.bundle")
         validate_scenes_bundle_contents(env, expected, material_shaders)
         validate_cubemap_color_space(env, expected)
+        from native_volume import source_and_bundle_errors
+        volume_errors = source_and_bundle_errors(env, args.package, expected["manifest"])
+        for error in volume_errors:
+            check(False, "native volume: " + error)
+        check(not volume_errors, "native volume payloads, alpha channels and sampler state match source and bundle")
         validate_normal_texture_channels(env, expected, args.package)
         validate_texture_dimension_consistency(env)
         validate_generated_terrain_arrays(env, expected["manifest"])

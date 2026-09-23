@@ -65,6 +65,7 @@ namespace ArenaMapPort.Client
             SceneDiagnostics.Install();
             VertexGroundDiffuseRepairs.Install(); // capture source RGB before shader/indoor repair cloning
             ShaderRebind.Install();
+            NativeDustRepairs.Install(); // native animation after real shaders are rebound; preserve generated meshes
             ShadowCasterRepairs.Install(); // restore only descriptor-listed authored shadow proxies
 
             // weather-rig-stage0 — harvests a vanilla donor scene's Weather rig and activates it per

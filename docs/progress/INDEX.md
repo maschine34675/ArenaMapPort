@@ -8,6 +8,9 @@ dated state in one screen; read it before this index if you only have a minute.
 
 ## Current — read these for the area you touch
 
+- [native-dust.md](native-dust.md) — original Equator/Bay5 Alpha8 volume import, native dust
+  animation, transparent render queue and lifecycle verification (2026-09-23).
+
 - [bay5-barrier-followup.md](bay5-barrier-followup.md) — targeted authored shadow-proxy restoration
   and live-material DistantShadow cache invalidation (2026-09-23).
 
