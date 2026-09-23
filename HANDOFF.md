@@ -3,6 +3,31 @@
 Snapshot for whoever continues (human or agent). Verify the commits named here against `git log`; this file
 is updated by hand at each handover, it is not an automatic record. Read [AGENTS.md](AGENTS.md) first.
 
+## State on 2026-09-23 — remaining Bay5 barrier and shadow-cache spam fixed
+
+Branch `feature/bay5-barrier-followup`, based on `d842ef8`. The one reported unsuffixed
+`Military_sandbag_barrier_03` had all three separate shadow models inactive already in Arena's
+source. A descriptor-scoped runtime repair activates its existing ShadowsOnly LOD proxies.
+The archived 20,583 null-material exceptions came from DistantShadow keeping retired material
+references after live lighting changes. Clone replacement/restoration now resets its pending
+work and schedules a native snapshot rebuild. F10 also avoids reading absent `_MainTex` slots.
+
+Build and checks passed (353 .NET tests, 190 Python passes /27 expected skips). Only client and
+server DLLs changed among72 installed files; bundles are unchanged. Fresh EFT `71873626`
+verified repeated Bay5 live changes, Equator, two Bay5 reloads and the exact barrier's visible
+shadow (F10 07:21:06.699). The reported exception did not recur. See
+[source, deployment and native evidence](docs/progress/bay5-barrier-followup.md).
+
+The user's current Bay5 lighting settings had been reset before this turn: ground multiplier1,
+hands multiplier1, specular cap1. All temporary tests were restored to these current values;
+do not restore older milestone preferences automatically. Equator cap remains0.3.
+
+One repeated Bay5 visit re-enabled bots; the test character was killed and recovered through
+the existing Redeploy UI. Final check after a botless repeat: 440/440 HP,100 energy,100 hydration,
+all non-structural inventory items preserved. No profile files or third-party configs were
+edited. Set bot amount None and bosses off again before each diagnostic visit, including after
+a map switch. EFT closed normally at about07:22; server running, GPU host free.
+
 ## State on 2026-09-23 — Bay5 shadows, veil and debugging controls verified
 
 Branch `feature/bay5-shadows-menu`, based on `7147e8e`. All four requested parts have passed

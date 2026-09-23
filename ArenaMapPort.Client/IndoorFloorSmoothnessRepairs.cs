@@ -174,20 +174,21 @@ namespace ArenaMapPort.Client
                 return;
             }
             using var specularScope = ReflectiveSpecularRepairs.Suspend(map);
-            RestoreEntries(state, out int restored, out int destroyed);
+            RestoreEntries(map, state, out int restored, out int destroyed);
             Plugin.Log.LogInfo($"[ArenaMapPort][IndoorFloorSmoothness] map={map.Key} re-classifying: restored {restored} " +
                 $"renderer(s), destroyed {destroyed} clone(s)");
             state.Done = false;
             try { Classify(map); }
             catch
             {
-                RestoreEntries(state, out _, out _);
+                RestoreEntries(map, state, out _, out _);
                 throw;
             }
         }
 
-        static void RestoreEntries(IndoorFloorState state, out int restoredRenderers, out int destroyedClones)
+        static void RestoreEntries(ArenaMapDescriptor map, IndoorFloorState state, out int restoredRenderers, out int destroyedClones)
         {
+            bool hadEntries = state.Entries.Count != 0;
             restoredRenderers = 0;
             destroyedClones = 0;
             foreach (var entry in state.Entries)
@@ -208,6 +209,7 @@ namespace ArenaMapPort.Client
                 }
             }
             state.Entries.Clear();
+            if (hadEntries) DistantShadowCache.Invalidate(map, "indoor materials/mesh restore");
         }
 
         static void OnSceneUnloaded(Scene scene)
@@ -219,7 +221,7 @@ namespace ArenaMapPort.Client
             }
 
             ReflectiveSpecularRepairs.Clear(); // remove the outer layer before destroying its indoor inputs
-            RestoreEntries(state, out int restoredRenderers, out int destroyedClones);
+            RestoreEntries(map, state, out int restoredRenderers, out int destroyedClones);
             state.Done = false;
 
             if (restoredRenderers > 0 || destroyedClones > 0)
@@ -237,12 +239,12 @@ namespace ArenaMapPort.Client
                 || !_states.TryGetValue(map.Key, out var state)) return false;
             if (state.Done) return true;
             using var specularScope = ReflectiveSpecularRepairs.Suspend(map);
-            RestoreEntries(state, out _, out _); // also rolls back a prior incomplete classification
+            RestoreEntries(map, state, out _, out _); // also rolls back a prior incomplete classification
             if (!RainCoverRepairs.RescanAndRerender("automatic raid bootstrap", refreshCurrentCamera: true)) return false;
             try { Classify(map); }
             catch
             {
-                RestoreEntries(state, out _, out _);
+                RestoreEntries(map, state, out _, out _);
                 throw;
             }
             return state.Done;
@@ -435,6 +437,7 @@ namespace ArenaMapPort.Client
                 {
                     UnityEngine.Object.Destroy(scratch);
                 }
+                if (state.Entries.Count != 0) DistantShadowCache.Invalidate(map, "indoor materials/mesh apply");
             }
 
             state.Done = true;

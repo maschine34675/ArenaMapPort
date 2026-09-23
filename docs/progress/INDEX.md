@@ -8,6 +8,9 @@ dated state in one screen; read it before this index if you only have a minute.
 
 ## Current — read these for the area you touch
 
+- [bay5-barrier-followup.md](bay5-barrier-followup.md) — targeted authored shadow-proxy restoration
+  and live-material DistantShadow cache invalidation (2026-09-23).
+
 - [bay5-shadows-menu.md](bay5-shadows-menu.md) — shadow/veil diagnosis, packed-normal import
   repair, hands highlight, focused F12 configuration and Bay5 quick start (2026-09-22).
 

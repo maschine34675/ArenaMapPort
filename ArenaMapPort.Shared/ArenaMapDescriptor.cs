@@ -73,6 +73,7 @@ namespace ArenaMapPort.Shared
         public ArenaExitDescriptor[] Exits { get; } // exfils-stage2 — runtime-authored exits (empty = raid ends by timer only)
         public string[] OpenedBarriers { get; }     // hierarchy paths of static scene objects whose non-frame parts are deactivated
                                                     // at raid start (Arena's round barriers that close a spawn area); empty = none
+        public string[] RestoredShadowCasterRoots { get; } // exact active LOD roots with source-disabled shadow proxies to restore
 
         // Parameter names are PascalCase (unusual for a C# constructor) so every call site below
         // can pass them as named arguments matching the property names 1:1 — this reads like the
@@ -96,7 +97,8 @@ namespace ArenaMapPort.Shared
 #nullable enable
             ArenaExitDescriptor[]? Exits = null,
             string[]? OpenedBarriers = null,
-            string[]? BackgroundSceneNames = null)
+            string[]? BackgroundSceneNames = null,
+            string[]? RestoredShadowCasterRoots = null)
 #nullable restore
         {
             this.Key = Key;
@@ -116,6 +118,7 @@ namespace ArenaMapPort.Shared
             this.Exits = Exits ?? new ArenaExitDescriptor[0];
             this.OpenedBarriers = OpenedBarriers ?? new string[0];
             this.BackgroundSceneNames = BackgroundSceneNames ?? new string[0];
+            this.RestoredShadowCasterRoots = RestoredShadowCasterRoots ?? new string[0];
         }
 
         public bool IsBackgroundScene(string sceneName) =>
@@ -220,6 +223,12 @@ namespace ArenaMapPort.Shared
                 "WAREHOUSE_DOORS (1)/Bay5_Warehouse_Gate_Door_01 (3)",
                 "WAREHOUSE_DOORS (1)/Bay5_Warehouse_Gate_Door_01 (4)",
                 "OLD_WAREHOUSE_DOORS/Gates_Depot_Frame",
+            },
+            RestoredShadowCasterRoots: new[]
+            {
+                // Source level84 object25426: all three ShadowsOnly children are inactive,
+                // while the visible LODs have casting Off. User report 2026-09-23 06:43.
+                "SBG_Arena_Bay5_Main/SOO/PROPS/Military_sandbag_barrier_03",
             });
 
         // Source scene selection: tools/extract/plans/airpit.json. Identity is permanent.

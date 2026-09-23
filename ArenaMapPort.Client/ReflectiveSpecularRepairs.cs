@@ -128,6 +128,7 @@ namespace ArenaMapPort.Client
 
         static void Restore(State state)
         {
+            bool hadEntries = state.Entries.Count != 0;
             foreach (var entry in state.Entries)
             {
                 if (entry.Renderer != null)
@@ -149,6 +150,7 @@ namespace ArenaMapPort.Client
             }
             state.Entries.Clear();
             state.Candidates = state.Changed = state.Decals = 0;
+            if (hadEntries) DistantShadowCache.Invalidate(state.Map, "reflective restore");
         }
 
         static void Refresh(State state)
@@ -181,6 +183,7 @@ namespace ArenaMapPort.Client
                     return;
                 }
             }
+            if (state.Entries.Count != 0) DistantShadowCache.Invalidate(state.Map, "reflective apply");
             Plugin.Log.LogInfo($"[ArenaMapPort][SpecularCap] map={state.Map.Key} cap={cap:0.00} " +
                 $"candidates={state.Candidates} capped={state.Changed} meshDecals={state.Decals} " +
                 $"renderers={state.Entries.Count}; RGB-only ceiling on _SpecColor * _Specularness; cap=1 restores inputs.");

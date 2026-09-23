@@ -365,7 +365,9 @@ namespace ArenaMapPort.Client
             string mainTextureInfo;
             try
             {
-                Texture mainTex = mat.mainTexture;
+                // Unity logs an error (without throwing) for mainTexture on shaders lacking
+                // _MainTex, including shadow and layered ground. Other slots are listed below.
+                Texture mainTex = mat.HasProperty("_MainTex") ? mat.GetTexture("_MainTex") : null;
                 mainTextureInfo = mainTex != null ? mainTex.name : "<none>";
             }
             catch (Exception ex)

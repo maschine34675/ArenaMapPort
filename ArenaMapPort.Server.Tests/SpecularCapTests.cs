@@ -313,6 +313,8 @@ namespace UnityEngine
     public class Object
     {
         public bool Destroyed;
+        public static readonly List<Object> Discoverable = new();
+        public static T[] FindObjectsOfType<T>(bool includeInactive) => Discoverable.Where(o => !o.Destroyed).OfType<T>().ToArray();
         public static void Destroy(Object value) { if (value != null) value.Destroyed = true; }
         public static void DontDestroyOnLoad(Object value) { }
     }
@@ -321,6 +323,7 @@ namespace UnityEngine
     {
         public string name;
         public HideFlags hideFlags;
+        public Scene scene;
         public readonly List<MeshRenderer> Renderers = new();
         public GameObject(string name) { this.name = name; }
         public T AddComponent<T>() => (T)Activator.CreateInstance(typeof(T), true);
@@ -392,7 +395,11 @@ namespace UnityEngine.SceneManagement
         public string name;
         public bool isLoaded;
         GameObject[] _roots;
-        public Scene(string name, params GameObject[] roots) { this.name = name; isLoaded = true; _roots = roots; }
+        public Scene(string name, params GameObject[] roots)
+        {
+            this.name = name; isLoaded = true; _roots = roots;
+            foreach (var root in roots) root.scene = this;
+        }
         public GameObject[] GetRootGameObjects() => _roots;
         public bool IsValid() => name != null;
     }
@@ -454,7 +461,9 @@ namespace ArenaMapPort.Client
         internal sealed class TestLog
         {
             internal readonly List<string> Errors = new();
+            internal readonly List<string> Warnings = new();
             internal void LogInfo(string message) { }
+            internal void LogWarning(string message) => Warnings.Add(message);
             internal void LogError(string message) => Errors.Add(message);
         }
     }

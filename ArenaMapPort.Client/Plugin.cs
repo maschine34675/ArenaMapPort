@@ -65,6 +65,7 @@ namespace ArenaMapPort.Client
             SceneDiagnostics.Install();
             VertexGroundDiffuseRepairs.Install(); // capture source RGB before shader/indoor repair cloning
             ShaderRebind.Install();
+            ShadowCasterRepairs.Install(); // restore only descriptor-listed authored shadow proxies
 
             // weather-rig-stage0 — harvests a vanilla donor scene's Weather rig and activates it per
             // raid. Must install BEFORE ArenaLightingRepairs: both subscribe to the same static

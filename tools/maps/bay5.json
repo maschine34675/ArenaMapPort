@@ -15,6 +15,9 @@
     "Arena_Bay5_Background"
   ],
   "background_scene_names": ["Arena_Bay5_Background"],
+  "restored_shadow_caster_roots": [
+    "SBG_Arena_Bay5_Main/SOO/PROPS/Military_sandbag_barrier_03"
+  ],
   "infiltration_name": "ArenaBay5",
   "locale_name": "Arena: Bay 5 (spike)",
   "locale_description": "Internal test build — outdoor harbor geometry/collision/NavMesh spike.",

@@ -266,6 +266,9 @@ def check_map_against_registry_entry(
 ) -> None:
     where = f"{map_path.name} vs ArenaMapRegistry.{cs_var_name}"
     errors.extend(f"{where}: {error}" for error in background_scene_errors(map_json, registry_args, ref_scope))
+    check_field(errors, where, "restored_shadow_caster_roots",
+                map_json.get("restored_shadow_caster_roots", []),
+                resolve(registry_args.get("RestoredShadowCasterRoots", []), ref_scope))
     for json_field, cs_field in JSON_TO_CS_FIELD.items():
         if json_field not in map_json:
             errors.append(f"{where}: {map_path.name} is missing field {json_field!r}")
