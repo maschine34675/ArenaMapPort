@@ -3,6 +3,17 @@
 Snapshot for whoever continues (human or agent). Verify the commits named here against `git log`; this file
 is updated by hand at each handover, it is not an automatic record. Read [AGENTS.md](AGENTS.md) first.
 
+## State on 2026-09-24 — inventory of remaining native content (no code change)
+
+Question answered: what of Arena's Equator/Bay5 is still not ported. A class census over all source scenes
+of both maps (including the excluded TeamFight_AI, Sound, Culling and Scripts scenes; Bay5 had none before)
+is in [native-content-inventory.md](docs/progress/native-content-inventory.md) with a ranked candidate list:
+ambient gain, Arena's own AI anchors (PatrolPoint 23/47, AICorePoint 14/11), Bay5's 669 DryPlane + 30
+IndoorTrigger rain-cover boxes, physics props (391 SmallPhysicsObject + 413 Rigidbody on Equator), NavMesh
+modifiers (124+93 / 304+75), barbed wire (246, Bay5), decals, flares; ArenaMode-side: pickups, lighting
+director allowlist, team starts. Not worth it / blocked: glass (user decision), crowd/monitors/gates
+(Arena-only classes), PerfectCulling, impostors, mannequins. Nothing was built or deployed; GPU host untouched.
+
 ## State on 2026-09-23 — original Equator and Bay5 dust verified
 
 Branch `feature/native-dust`, based on `29ea1be`. Both maps now import the original lossless

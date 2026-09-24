@@ -8,6 +8,10 @@ dated state in one screen; read it before this index if you only have a minute.
 
 ## Current — read these for the area you touch
 
+- [native-content-inventory.md](native-content-inventory.md) — census of every Arena script/engine class
+  on Equator and Bay5 (imported and excluded scenes), what is ported, and the ranked list of what can still be
+  ported for ArenaMode play (2026-09-24).
+
 - [native-dust.md](native-dust.md) — original Equator/Bay5 Alpha8 volume import, native dust
   animation, transparent render queue and lifecycle verification (2026-09-23).
 
