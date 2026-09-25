@@ -8,6 +8,9 @@ dated state in one screen; read it before this index if you only have a minute.
 
 ## Current — read these for the area you touch
 
+- [two-maps-items-1-3.md](two-maps-items-1-3.md) — ambient gain/offset keys, barbed wire on Bay5, release
+  names; host evidence 2026-09-25.
+
 - [../PLAN-TWO-MAPS.md](../PLAN-TWO-MAPS.md) — the ordered, spike-verified plan for the two-map first
   release (Equator + Bay5): nine work items, release checklist, what is deliberately out (2026-09-25).
 

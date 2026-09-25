@@ -27,7 +27,7 @@ Ordered by player-facing value on Equator/Bay5 divided by effort. Items 4–6 sh
 one Bay5 rebuild (see the shared build step at the end of §1.6) so the ≈15 min-per-map Unity/NavMesh bake
 only runs once per map for this whole plan.
 
-### 1. Ambient audio gain (both maps) — no rebuild — BUILT 2026-09-25 (`AmbientGainDb` + `AmbientVolumeOffset` per map in `Bay5AmbientAudio`, applied once in `TryStart`; host test pending)
+### 1. Ambient audio gain (both maps) — no rebuild — VERIFIED 2026-09-25 10:25 (`AmbientGainDb` + `AmbientVolumeOffset` per map; +6 dB on Bay5 logged `adjusted 24 player(s)`, key reset to 0; docs/progress/two-maps-items-1-3.md)
 
 **What.** Add a per-map, additive ambient-gain config key so quiet sources stop randomly going silent.
 
@@ -58,7 +58,7 @@ values.
 **Done when.** Config key exists with neutral default, log line shows the applied gain, user confirms
 ambience is audible without exceeding 1.0.
 
-### 2. Bay5 barbed wire (Bay5 only) — no rebuild — BUILT 2026-09-25 (`BarbedWireRepairs.cs`, `ArenaBarbedWire` skips the sound while no bank exists; host test pending)
+### 2. Bay5 barbed wire (Bay5 only) — no rebuild — VERIFIED 2026-09-25 10:23 (192 triggers attached on Bay5; a jump inside `bruno_helix (6)` cost HP on six body parts; docs/progress/two-maps-items-1-3.md)
 
 **What.** Attach the real `EFT.Interactive.BarbedWire` component to the harbor fence trigger volumes so
 contact damage + sprint penalty work as in vanilla EFT.
@@ -83,7 +83,7 @@ and no existing `BarbedWire`, `gameObject.AddComponent<EFT.Interactive.BarbedWir
 
 **Done when.** Walking into a Bay5 fence line costs HP and slows the player; no other map affected.
 
-### 3. Drop "(spike)" locale text (both maps) — server rebuild, no Unity rebuild — DONE 2026-09-25 (descriptor, sidecars, Editor default, both base.json; host server log 09:01: `Arena: Equator registered`, `Arena: Bay 5 registered`; the twelve deferred maps keep their spike wording)
+### 3. Drop "(spike)" locale text (both maps) — server rebuild, no Unity rebuild — VERIFIED 2026-09-25 10:27 (map-select screen shows `ARENA: EQUATOR` / `ARENA: BAY 5`; the twelve deferred maps keep `(SPIKE)`; docs/progress/two-maps-items-1-3.md)
 
 **What.** Equator/Bay5 still say `"Arena: Equator (spike)"` / `"Internal test build..."` in the map-select
 screen (`ArenaMapPort.Shared/ArenaMapDescriptor.cs:162-163,217-218`), contradicting their status as the

@@ -3,6 +3,15 @@
 Snapshot for whoever continues (human or agent). Verify the commits named here against `git log`; this file
 is updated by hand at each handover, it is not an automatic record. Read [AGENTS.md](AGENTS.md) first.
 
+## State on 2026-09-25 — plan items 1–3 verified and deployed
+
+Branch `feature/native-dust`, commit `a947cce` (+ docs). Ambient gain/offset keys per map (neutral default),
+`BarbedWireRepairs` on Arena's concertina wire (192 triggers on Bay5, damage verified), release names
+"Arena: Equator" / "Arena: Bay 5" (server log + map-select screen). Host raids 10:22–10:27 on EFT `027b491c`;
+deployed to `D:\SPT41` and `D:\SPT41vanilla` (vanilla also received the native-dust scene bundles it was
+missing; its server must be restarted by the user for the new names/base.json). Evidence:
+[two-maps-items-1-3.md](docs/progress/two-maps-items-1-3.md). Next: items 4–6 (one rebuild per map).
+
 ## State on 2026-09-24 — inventory of remaining native content (no code change)
 
 Question answered: what of Arena's Equator/Bay5 is still not ported. A class census over all source scenes
