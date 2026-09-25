@@ -51,6 +51,11 @@ namespace ArenaMapPort.Editor.Import
             if (featureEntry == null)
                 return; // no raincover data in this package (e.g. one of the twelve deferred maps) — nothing to author
 
+            // Same guard as Bay5AudioImporter.Build: IndoorTrigger/TriggerGroup run OnValidate -> Awake/Reinit when
+            // added to an ACTIVE object, which would recompute the Bounds we are about to write from the transform.
+            if (scriptsRoot.activeInHierarchy)
+                throw new InvalidDataException("rain-cover authoring requires the inactive ScriptsRoot (IndoorTrigger/TriggerGroup reentrancy).");
+
             const string relPath = "raincover/raincover.json";
             string fullPath = package.ResolvePath(relPath);
             if (!File.Exists(fullPath))

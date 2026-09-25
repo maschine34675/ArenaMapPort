@@ -181,5 +181,31 @@ class FeatureEnabledAcceptsRaincoverKeyTests(unittest.TestCase):
             self.v.feature_enabled(manifest)
 
 
+class RaincoverExtraCountsTests(unittest.TestCase):
+    """validate_bundle_roundtrip adds validate_native_features.extra_counts()['GameObject'] to the
+    package-derived GameObject expectation; the rain-cover objects RainCoverImporter authors into the
+    Scripts scene must be part of that (first Equator build 2026-09-25 12:03 failed the roundtrip with
+    'GameObject count in bundle (39438) == package (39435)': EnvironmentManager + TriggerGroup + 1
+    IndoorTrigger)."""
+
+    def setUp(self):
+        sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "validate"))
+        import validate_native_features as v
+        self.v = v
+
+    def test_no_raincover_key_adds_nothing(self):
+        self.assertEqual(self.v.raincover_extra_counts({"native_features": {"schema_version": 1}}), 0)
+
+    def test_equator_shape_is_three(self):
+        m = {"native_features": {"raincover": {"schema_version": 1, "indoor_trigger_count": 1,
+                                               "dry_plane_count": 0, "weather_obstacle": False}}}
+        self.assertEqual(self.v.raincover_extra_counts(m), 3)
+
+    def test_bay5_shape_counts_obstacle_and_dry_planes(self):
+        m = {"native_features": {"raincover": {"schema_version": 1, "indoor_trigger_count": 30,
+                                               "dry_plane_count": 669, "weather_obstacle": True}}}
+        self.assertEqual(self.v.raincover_extra_counts(m), 2 + 30 + 1 + 669)
+
+
 if __name__ == "__main__":
     unittest.main()

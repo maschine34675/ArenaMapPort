@@ -12,18 +12,61 @@
 // them -- Unity's own [ExecuteAlways] OnEnable() then registers each live component into
 // NavMeshModifier.activeModifiers / NavMeshModifierVolume.activeModifiers exactly like it would
 // in any authored scene, which is the list BakeNavMesh.Bake() reads (see that file's own
-// "PLAN-TWO-MAPS item 4" comments). Not yet host-verified; see
-// docs/progress/two-maps-item-4-navmesh-modifiers.md for what the lead still needs to run.
+// "PLAN-TWO-MAPS item 4" comments).
+//
+// The components are BAKE-TIME ONLY: after BakeNavMesh has consumed them, StripBakeOnlyComponents()
+// removes them again and re-saves the content scenes before BuildAssetBundles. Left in place they
+// put a 'Unity.AI.Navigation' MonoScript into the scenes bundle, which tools/bundle/
+// patch_monoscript_identity.py rejects (only Assembly-CSharp[-firstpass] identities may ship; first
+// Equator build 2026-09-25 11:41 failed exactly there), and at raid time they would be inert anyway
+// (no NavMeshSurface in a ported scene). See docs/progress/two-maps-item-4-navmesh-modifiers.md.
 using System;
+using System.Collections.Generic;
 using System.IO;
 using Newtonsoft.Json.Linq;
 using Unity.AI.Navigation;
+using UnityEditor.SceneManagement;
 using UnityEngine;
+using UnityEngine.SceneManagement;
 
 namespace ArenaMapPort.Editor.Import
 {
     public static class NavMeshModifierImporter
     {
+        /// <summary>
+        /// Removes every NavMeshModifier / NavMeshModifierVolume under the given content-scene roots and
+        /// re-saves the scenes they live in, so the bundle build (which reads the scene FILES) ships none
+        /// of them. Must run after BakeNavMesh.Bake() (which needs them live) and before BuildAssetBundles.
+        /// </summary>
+        public static void StripBakeOnlyComponents(IList<GameObject> contentSceneRoots)
+        {
+            int modifiers = 0, volumes = 0;
+            var scenes = new List<Scene>();
+            foreach (GameObject root in contentSceneRoots)
+            {
+                if (root == null) continue;
+                foreach (var m in root.GetComponentsInChildren<NavMeshModifier>(true)) { UnityEngine.Object.DestroyImmediate(m); modifiers++; }
+                foreach (var v in root.GetComponentsInChildren<NavMeshModifierVolume>(true)) { UnityEngine.Object.DestroyImmediate(v); volumes++; }
+                if (!scenes.Contains(root.scene)) scenes.Add(root.scene);
+            }
+            int saved = 0;
+            foreach (Scene scene in scenes)
+            {
+                if (!scene.IsValid() || !scene.isLoaded || string.IsNullOrEmpty(scene.path)) continue;
+                EditorSceneManager.MarkSceneDirty(scene);
+                if (!EditorSceneManager.SaveScene(scene))
+                    throw new IOException("[ArenaMapPort][NavMeshModifierImporter] SaveScene failed after stripping bake-only components: " + scene.path);
+                saved++;
+            }
+            int leftover = 0;
+            foreach (GameObject root in contentSceneRoots)
+                if (root != null) leftover += root.GetComponentsInChildren<NavMeshModifier>(true).Length + root.GetComponentsInChildren<NavMeshModifierVolume>(true).Length;
+            if (leftover != 0)
+                throw new InvalidOperationException("[ArenaMapPort][NavMeshModifierImporter] " + leftover + " bake-only NavMesh component(s) survived the strip.");
+            Debug.Log("[ArenaMapPort][NavMeshModifierImporter] stripped bake-only components before the bundle build: " +
+                      modifiers + " NavMeshModifier, " + volumes + " NavMeshModifierVolume; re-saved " + saved + " content scene(s)");
+        }
+
         public static NavMeshModifier AttachModifier(GameObject owner, JObject component)
         {
             string context = "NavMeshModifier on '" + owner.name + "': ";

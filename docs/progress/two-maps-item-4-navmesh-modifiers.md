@@ -231,3 +231,66 @@ substantial and are not reproduced here; see the file's own "PLAN-TWO-MAPS item 
 
 **Done when** (plan's own criterion): Bay5's pump-station machinery blocks movement; Equator's NavMesh is
 numerically identical to the pre-item-4 bake.
+
+## Lead integration 2026-09-25 (merge, review fixes, build evidence)
+
+Merged into `feature/native-dust` together with items 5 and 6 (one shared extraction + rebuild). Two things
+the offline pass could not see surfaced in the first real Unity build (11:41) and are fixed in the same
+commit:
+
+1. **The bake-only components must not ship.** `Unity.AI.Navigation.NavMeshModifier` in the built scenes put a
+   `'Unity.AI.Navigation'` MonoScript into `BuildPlayer-Arena_Equator.sharedAssets`, which
+   `tools/bundle/patch_monoscript_identity.py` rejects by contract (only `Assembly-CSharp[-firstpass]` may
+   ship). `NavMeshModifierImporter.StripBakeOnlyComponents()` now runs in `BuildBundles.FinishPipeline` after
+   `BakeNavMesh.Bake` (which needs the live components) and before `BuildAssetBundles`: it destroys every
+   `NavMeshModifier`/`NavMeshModifierVolume` under the content-scene roots and re-saves those scenes. Build
+   logs: Equator `stripped bake-only components before the bundle build: 31 NavMeshModifier, 0
+   NavMeshModifierVolume; re-saved 5 content scene(s)`, Bay5 `170 NavMeshModifier, 134 NavMeshModifierVolume;
+   re-saved 9 content scene(s)`; `patch_monoscript_identity` then passes (`Assembly-CSharp: 13` only).
+2. **Round-open exclusion vs. the layer rule.** The review asked for the collider sources' `RoundOpenedReason`
+   to apply to markups too. Applied literally it silenced item 4: that function also excluded owners on layer
+   13 (Triggers) and 29 (LevelBorder), and 112 of Bay5's 113 area overrides sit on Triggers-layer trigger
+   boxes (the marker box is the trigger, `applyToChildren` carries "Not Walkable" onto the solid children).
+   The 11:41 Equator build logged `excluded 31 nonphysical or round-open source(s): modifier:Triggers layer
+   13` and `NavMesh modifiers: 0 markup(s) in bake scope`. `BakeNavMesh` now has `NonPhysicalLayerReason`
+   (layers, collider sources only) separate from `RoundOpenedReason` (name prefixes, leaf names, descriptor
+   `opened_barriers`; applied to sources, markups and volumes). Markups/volumes additionally honour
+   `AffectsAgentType(0)` like `NavMeshSurface.CollectSources` (all real instances carry `[-1]`).
+3. `validate_native_features.feature_enabled()` accepts the optional `native_features.navmesh_areas` manifest
+   key (index → name/cost, must start with `0 Walkable`/`1 Not Walkable`); tests in
+   `tools/tests/test_navmesh_modifiers.py` (`FeatureEnabledAcceptsNavmeshAreasKeyTests`).
+
+Bake results (packages `work/extract/equator-native-v3` / `bay5-native-v3`, Unity logs
+`work/build/full/unity_build_all_20260925_*.log`, `work/build/bay5/unity_build_all_20260925_*.log`):
+
+| Map | Markups in bake scope | Volume sources | Triangulation (vertices/triangles) | Previous bake |
+|---|---|---|---|---|
+| Equator | 31 (0 area-override, 31 ignoreFromBuild) | 0 | 10404 / 4572 | 10404 / 4572 (identical; `arena_equator_navmesh.bundle` left byte-identical, mtime 2026-09-23) |
+| Bay5 | 109 (81 area-override, 28 ignoreFromBuild) | 134 (`area1=134`) | 22117 / 10213 | 22190 / 10248 on every 2026-09-22 build (−73 vertices, −35 triangles) |
+
+**Correction to the expected Bay5 numbers (113/57 in the sections above).** Those are raw package counts.
+`NavMeshModifier.activeModifiers` only holds components whose `OnEnable` ran: 32 of the overrides sit under
+the hierarchy-inactive `bruno_helix_combine_04 (7)`… groups of `Arena_Bay5_Main`, and 29 of the
+ignoreFromBuild markers under the inactive `ExplorationZones` of `Arena_Bay5_DesignStuff`. A real
+`NavMeshSurface` bake in Arena's own Editor skips exactly those, so 81/28 is the faithful number (all 134
+volumes are hierarchy-active). Equator's 31 are all trigger-only `ignoreFromBuild` markers — the bake is
+numerically unchanged, as the done criterion demands.
+
+### Host evidence 2026-09-25 (EFT instances 9f0fe0dc 13:07 and 70aeac2c 14:27, SPT 4.1.6 host)
+
+- Bay5 raids 13:09 (v2 bundles) and 14:32 (v3 bundles, byte-identical NavMesh): `[ArenaMapPort][NavMesh] added
+  navmesh for 'arena_bay5': 22117 vertices, 10213 triangles` — the new bake is live (previous builds: 22190 /
+  10248). Equator 14:29: `added navmesh for 'arena_equator': 10404 vertices, 4572 triangles` (unchanged).
+- `uibridge_teleport dryRun=true` at area-override wire rows: (44.52, 0.45, 32.91) and the volume centre
+  (44.9, 0.73, 47.19) → `no navmesh within 2 m of the point`; (26.96, 0.45, 24.32) and (71.2, −1.2, 49.0) →
+  `not reachable on foot` (navmesh exists within the 2 m sampling radius but no path). A real teleport with
+  `reachable=false` to (71.2, −1.2, 49.0) — the point item 2 used inside `bruno_helix (6)` — still lands with
+  `snapped 0.0 m`: that wire's NavMeshModifierVolume (world y −1.04…0.04) floats 16 cm above the floor navmesh
+  at y −1.2, so Arena's own box never marks the floor there (Recast marks spans whose top lies inside the box),
+  and the dry-run's 2 m `SamplePosition` radius cannot resolve sub-2 m features anyway. The quantitative
+  before/after is the bake delta above (−73 vertices / −35 triangles: coil tops that were walkable are not any
+  more); bots were not observed pathing through wire in either raid.
+- No new exceptions attributable to this item in either session.
+
+**Status:** VERIFIED 2026-09-25 (bake numerically identical on Equator, changed as authored on Bay5, bundles
+ship without the bake-only components).

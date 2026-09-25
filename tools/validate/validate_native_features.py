@@ -168,10 +168,19 @@ def feature_enabled(manifest, scenes=None):
     # PLAN-TWO-MAPS item 6: 'raincover' is an OPTIONAL extra native_features entry (extract_raincover.py) --
     # popped before the strict key-equality compare() below so packages with/without it both validate.
     features=dict(manifest['native_features']);raincover=features.pop('raincover',None)
+    # PLAN-TWO-MAPS item 4: 'navmesh_areas' (extract_navmesh_modifiers.read_navmesh_areas: the source project's
+    # NavMesh area table, index -> {name, cost}) is OPTIONAL in the same way.
+    navmesh_areas=features.pop('navmesh_areas',None)
     compare(features, {'schema_version':1,'required':['ballistics',contract['feature']]}, 'feature contract')
     if raincover is not None:
         require(isinstance(raincover,dict) and raincover.get('schema_version')==1 and 'indoor_trigger_count' in raincover,
                 'raincover feature summary shape')
+    if navmesh_areas is not None:
+        require(isinstance(navmesh_areas,dict) and len(navmesh_areas)>0
+                and all(str(k).isdigit() and isinstance(a,dict) and isinstance(a.get('name'),str) and isinstance(a.get('cost'),(int,float))
+                        for k,a in navmesh_areas.items())
+                and navmesh_areas.get('0',{}).get('name')=='Walkable' and navmesh_areas.get('1',{}).get('name')=='Not Walkable',
+                'navmesh_areas feature summary shape')
     if scenes is not None:
         require(not any(c['type']=='WindowBreaker' for objects in scenes.values() for o in objects for c in o['components']), 'glass was deferred by the user')
     return True
@@ -236,6 +245,21 @@ def validate_audio_hierarchy(data):
             ancestors[path]=node
 
 
+def raincover_extra_counts(manifest):
+    """PLAN-TWO-MAPS item 6: RainCoverImporter authors, under the Scripts scene's ScriptsRoot,
+    EnvironmentManager > TriggerGroup > N IndoorTrigger and (weather_obstacle only) WeatherObstacle >
+    M DryPlane -- plain GameObjects with one Transform each and no collider or scene-embedded mesh
+    (DryPlane.Mesh is Unity's built-in Quad). Sized from manifest.native_features.raincover, the
+    summary extract_raincover.py wrote from the same raincover.json the importer reads."""
+    raincover = manifest.get('native_features', {}).get('raincover')
+    if raincover is None:
+        return 0
+    extra = 2 + int(raincover['indoor_trigger_count'])
+    if raincover.get('weather_obstacle'):
+        extra += 1 + int(raincover['dry_plane_count'])
+    return extra
+
+
 def extra_counts(package, manifest):
     if not feature_enabled(manifest):
         return {}
@@ -244,7 +268,8 @@ def extra_counts(package, manifest):
     for record in data['players'] + data['support']:
         parts = record['path'].split('/')
         paths.update('/'.join(parts[:i]) for i in range(1,len(parts)+1))
-    return {'GameObject':len(paths)+1, 'Transform':len(paths)+1, 'AudioSource':len(data['players'])}
+    raincover = raincover_extra_counts(manifest)
+    return {'GameObject':len(paths)+1+raincover, 'Transform':len(paths)+1+raincover, 'AudioSource':len(data['players'])}
 
 
 def package_chain(obj, objects):

@@ -42,20 +42,26 @@ namespace ArenaMapPort.Editor.Import
         /// (D:/SPT41/Development/_decompiled/SmallPhysicsObject.cs:124-158) walks
         /// <c>GetComponentsInChildren(includeInactive: true, ...)</c> for both the moment this
         /// component is added (AddComponent runs Awake synchronously in the Editor when the
-        /// GameObject is active in the loaded scene). Only presence + enabled state is recoverable
-        /// (docs/PLAN-TWO-MAPS.md item 5's own finding: a direct typetree read of the class's custom
-        /// fields fails) -- every other field (SoundType, force multipliers, TimeOfLife, ...) is
-        /// left at the class's compiled default, which plays a plain "Books" impact sound
-        /// (docs/PLAN-TWO-MAPS.md §3: "cosmetic only... not in this plan").
+        /// GameObject is active in the loaded scene). Presence, enabled state and (schema 2, since
+        /// 2026-09-25) SoundType are recoverable -- SoundType is decoded from the raw bytes by
+        /// extract_physics_props.decode_sound_type because the class default (Books) played nothing
+        /// on the first host raid (null WeaponSounds bank -> NullReferenceException on every touch).
+        /// Every other field (force multipliers, TimeOfLife, ...) is left at the class's compiled
+        /// default (docs/PLAN-TWO-MAPS.md §3: "cosmetic only... not in this plan").
         /// </summary>
         public static global::SmallPhysicsObject AttachSmallPhysicsObject(GameObject owner, JObject comp)
         {
             if (owner == null || comp == null)
                 throw new InvalidDataException("SmallPhysicsObject import requires an owner and component.");
             string context = "SmallPhysicsObject on '" + owner.name + "': ";
-            if (Text(comp, "type", context) != "SmallPhysicsObject" || Int(comp, "schema_version", context) != 1)
+            int schema = Int(comp, "schema_version", context);
+            if (Text(comp, "type", context) != "SmallPhysicsObject" || (schema != 1 && schema != 2))
                 throw new InvalidDataException(context + "unsupported component schema.");
             bool enabled = Bool(comp, "enabled", context);
+            // schema 2: Arena's authored SoundType (EPhysicsObjectType, 0..12); schema 1 packages keep the class default.
+            int soundType = schema >= 2 ? Int(comp, "sound_type", context) : (int)global::SmallPhysicsObject.EPhysicsObjectType.Books;
+            if (!Enum.IsDefined(typeof(global::SmallPhysicsObject.EPhysicsObjectType), soundType))
+                throw new InvalidDataException(context + "sound_type " + soundType + " is not an EPhysicsObjectType value.");
 
             // includeInactive: true -- SceneAssembler's own Pass 1a already applied every object's
             // authored active state before this Pass-2 call runs, and Equator's PHYSIC container
@@ -74,6 +80,7 @@ namespace ArenaMapPort.Editor.Import
                 if (spo == null)
                     throw new InvalidDataException(context + "native EFT component is not ready; retry the authoring phase on an Editor update tick.");
                 spo.enabled = enabled;
+                spo.SoundType = (global::SmallPhysicsObject.EPhysicsObjectType)soundType;
                 return spo;
             }
             catch

@@ -20,11 +20,25 @@ def script_reader(class_name, namespace="", path_id=99, deref_ok=True):
     return NS(path_id=path_id, read_typetree=lambda: {"m_ClassName": class_name, "m_Namespace": namespace})
 
 
-def mono_reader(path_id, script, gameobject_path_id, gameobject_file_id=0, enabled=True):
+def raw_small_physics_object(sound_type=11, gameobject_path_id=10, name=b"", size=P.SERIALIZED_SIZE):
+    """Raw MonoBehaviour bytes in the real layout: m_GameObject PPtr, m_Enabled(+align), m_Script PPtr,
+    m_Name (4-aligned), then SoundType int32; padded to the real 116-byte instance size."""
+    import struct
+    raw = struct.pack("<iq", 0, gameobject_path_id) + struct.pack("<B3x", 1) + struct.pack("<iq", 0, 99)
+    raw += struct.pack("<i", len(name)) + name
+    raw += bytes((-len(raw)) % 4)
+    raw += struct.pack("<i", sound_type)
+    return raw + bytes(size - len(raw))
+
+
+def mono_reader(path_id, script, gameobject_path_id, gameobject_file_id=0, enabled=True, sound_type=11, raw=None):
     head = NS(m_Script=script, m_GameObject=(NS(path_id=gameobject_path_id, file_id=gameobject_file_id)
                                               if gameobject_path_id is not None else None),
               m_Enabled=enabled)
-    return NS(path_id=path_id, type=NS(name="MonoBehaviour"), parse_monobehaviour_head=lambda: head)
+    if raw is None:
+        raw = raw_small_physics_object(sound_type, gameobject_path_id or 0)
+    return NS(path_id=path_id, type=NS(name="MonoBehaviour"), parse_monobehaviour_head=lambda: head,
+              get_raw_data=lambda: raw)
 
 
 def fixture(owner_id="10", enabled=True, extra_components=None):
@@ -80,7 +94,8 @@ class AugmentSceneTests(unittest.TestCase):
         file, scene = fixture()
         self.assertEqual(P.augment_scene(scene, file), 1)
         component = scene["objects"][0]["components"][-1]
-        self.assertEqual(component, {"type": "SmallPhysicsObject", "schema_version": 1, "enabled": True})
+        self.assertEqual(component, {"type": "SmallPhysicsObject", "schema_version": 2, "enabled": True,
+                                     "sound_type": 11, "sound_type_name": "SmallPlastic"})
 
     def test_records_disabled_state(self):
         file, scene = fixture(enabled=False)
@@ -137,9 +152,36 @@ class AugmentSceneTests(unittest.TestCase):
     def test_orphaned_marker_with_no_source_counterpart_is_rejected(self):
         file, scene = fixture()
         scene["objects"][0]["components"].append(
-            {"type": "SmallPhysicsObject", "schema_version": 1, "enabled": True})
+            {"type": "SmallPhysicsObject", "schema_version": 2, "enabled": True,
+             "sound_type": 11, "sound_type_name": "SmallPlastic"})
         file.objects = {}  # no source MonoBehaviour claims this marker at all
         with self.assertRaisesRegex(HardExtractError, "no source counterpart"):
+            P.augment_scene(scene, file)
+
+    def test_sound_type_decoded_from_raw_bytes_for_every_enum_value(self):
+        for value, name in enumerate(P.SOUND_TYPE_NAMES):
+            file, scene = fixture()
+            file.objects[20] = mono_reader(20, script_reader("SmallPhysicsObject"), 10, sound_type=value)
+            P.augment_scene(scene, file)
+            comp = scene["objects"][0]["components"][-1]
+            self.assertEqual((comp["sound_type"], comp["sound_type_name"]), (value, name))
+
+    def test_sound_type_decoded_after_a_non_empty_name_with_alignment(self):
+        for name in (b"a", b"ab", b"abc", b"abcd", b"abcde"):
+            raw = raw_small_physics_object(4, 10, name=name)
+            self.assertEqual(P.decode_sound_type(raw), 4, name)
+
+    def test_sound_type_outside_enum_is_rejected(self):
+        file, scene = fixture()
+        file.objects[20] = mono_reader(20, script_reader("SmallPhysicsObject"), 10, sound_type=13)
+        with self.assertRaises(HardExtractError):
+            P.augment_scene(scene, file)
+
+    def test_unexpected_serialized_size_is_rejected(self):
+        file, scene = fixture()
+        file.objects[20] = mono_reader(20, script_reader("SmallPhysicsObject"), 10,
+                                       raw=raw_small_physics_object(3, 10, size=120))
+        with self.assertRaises(HardExtractError):
             P.augment_scene(scene, file)
 
     def test_duplicate_scene_object_ids_rejected(self):

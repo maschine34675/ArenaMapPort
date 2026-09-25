@@ -102,7 +102,7 @@ validator compares them), regenerate both `base.json` for consistency (`make_bas
 
 **Done when.** Neither map's UI text mentions "spike" or "internal test build".
 
-### 4. NavMesh modifiers → real collision at Bay5 pump stations (Bay5 primary; Equator no-op)
+### 4. NavMesh modifiers → real collision at Bay5 pump stations (Bay5 primary; Equator no-op) — VERIFIED 2026-09-25 14:32 (Bay5 bake 22190/10248 → 22117/10213 with 81 live overrides + 134 volumes; Equator 10404/4572 unchanged; bake-only components stripped before the bundle build; docs/progress/two-maps-item-4-navmesh-modifiers.md)
 
 **What.** Extract and bake `NavMeshModifier`/`NavMeshModifierVolume`, currently dropped at three separate
 pipeline layers, so Bay5's `bruno_helix` pump-station machinery is genuinely solid instead of walkable.
@@ -143,7 +143,7 @@ before/after; confirm Equator's bake vertex/triangle count is unchanged (it has 
 **Done when.** Bay5's pump-station machinery blocks movement; Equator's NavMesh is numerically identical to
 today's bake.
 
-### 5. Physics props — Rigidbody + SmallPhysicsObject (both maps)
+### 5. Physics props — Rigidbody + SmallPhysicsObject (both maps) — VERIFIED 2026-09-25 14:33 (391/413 on Equator, 18/18 on Bay5 active by default; SoundType now extracted per prop after the first raid's null-bank NRE; `PhysicsPropSoundRepairs` guard; docs/progress/two-maps-item-5-physics-props.md)
 
 **What.** Attach `Rigidbody` (engine component) and `EFT.SmallPhysicsObject` (native class) to Equator's 391
 and Bay5's 18 movable props (cups, bottles, boxes) so they can be kicked and shot instead of being static
@@ -189,7 +189,7 @@ unbounded per-frame cost for 413 instances.
 **Done when.** Props on both maps react to shots/touches by default; no clipping, no props sinking through
 shelves at raid start, no FPS drop observed.
 
-### 6. Rain-cover geometry — DryPlane + IndoorTrigger (Bay5 primary; Equator's one atrium trigger)
+### 6. Rain-cover geometry — DryPlane + IndoorTrigger (Bay5 primary; Equator's one atrium trigger) — VERIFIED 2026-09-25 14:33 (Bay5 30 IndoorTrigger + 669 DryPlane authored, dry floor under the warehouse roof in forced rain; Equator 1 trigger; docs/progress/two-maps-item-6-raincover.md)
 
 **What.** Author Arena's own `EFT.EnvironmentEffect.DryPlane`/`IndoorTrigger` geometry, replacing
 `RainCoverRepairs.cs`'s ~1400-line depth-photo heuristic and the missing `WeatherObstacle` with ground-truth
@@ -231,7 +231,8 @@ old heuristic is silent on these two maps.
 
 **Shared build step for items 4–6.** Implement all three extractor/importer/bake changes together, then:
 `pwsh tools/build_all.ps1 -MapKey arena_equator -MapDescriptor .../equator.json -PackageDir
-.../equator-native-dust -OutputDir work/build/full -BakeNavMesh $true -Verify $true -SkipGameRefsSync`
+.../equator-native-v3 -OutputDir work/build/full -BakeNavMesh $true -Verify $true -SkipGameRefsSync` (done 2026-09-25; the
+packages are the re-extracted `*-native-v3`, see AGENTS.md)
 (Equator, **without** `-FullMap` per AGENTS.md), then the Bay5 equivalent **with** `-FullMap -OutputDir
 work/build/bay5`. One client Release build (without `DllOnly`) stages both into `dist/`, one
 `deploy-to-spt.ps1 -Confirm`, one combined host raid exercising the checks from §1.4–1.6 in a single session

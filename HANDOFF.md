@@ -3,6 +3,24 @@
 Snapshot for whoever continues (human or agent). Verify the commits named here against `git log`; this file
 is updated by hand at each handover, it is not an automatic record. Read [AGENTS.md](AGENTS.md) first.
 
+## State on 2026-09-25 (afternoon) — plan items 4–6 built, verified and deployed
+
+Branch `feature/native-dust`. The three parallel agent branches (NavMesh modifiers, physics props, rain cover)
+are merged with the review fixes; both maps were re-extracted into `work/extract/equator-native-v3` /
+`bay5-native-v3` (now the accepted inputs, AGENTS.md) and rebuilt. What the first real build/raid taught, all
+fixed in the same commit: bake-only `NavMeshModifier`/`Volume` components must be stripped before the bundle
+build (`NavMeshModifierImporter.StripBakeOnlyComponents`, else `patch_monoscript_identity` rejects the bundle);
+the bake's Triggers/LevelBorder layer rule must not apply to markups (112/113 Bay5 overrides sit on layer 13);
+the roundtrip validator needs the authored rain-cover objects (`raincover_extra_counts`); imported
+`SmallPhysicsObject`s need Arena's `SoundType` (decoded from the raw bytes) plus a null-bank guard
+(`PhysicsPropSoundRepairs`). Host raids 13:09–14:35 on EFT `9f0fe0dc`/`70aeac2c`: Bay5 NavMesh 22117/10213
+(was 22190/10248), Equator 10404/4572 unchanged; 391/413 and 18/18 props active, touch without exception;
+dry floor under Bay5's warehouse roof in forced rain. Evidence: the three `docs/progress/two-maps-item-{4,5,6}-*.md`
+"Lead integration"/"Host evidence" sections. Deployed to `D:\SPT41`; `D:\SPT41vanilla` gets the same build
+(user restarts its server). Known noise: one `SmallPhysicsSystem.Update` NRE per raid end (vanilla teardown
+order), `Books` props are silent (no bank on this SPT build). Next: plan items 7 (light culling), 8 (AI hubs),
+10 (banners), then 9 (release).
+
 ## State on 2026-09-25 — plan items 1–3 verified and deployed
 
 Branch `feature/native-dust`, commit `a947cce` (+ docs). Ambient gain/offset keys per map (neutral default),

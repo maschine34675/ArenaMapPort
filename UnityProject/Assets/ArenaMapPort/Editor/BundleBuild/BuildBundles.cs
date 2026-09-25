@@ -319,6 +319,13 @@ namespace ArenaMapPort.Editor.BundleBuild
                 if (VerifySpawnPlacement.Required(ctx.pkg))
                     VerifySpawnPlacement.Place(ctx.pkg, placementNavMesh, ctx.contentSceneRoots.ToArray(), ctx.outputDir);
 
+                // PLAN-TWO-MAPS item 4: the NavMeshModifier/NavMeshModifierVolume components exist only
+                // for the bake above. Strip them (and re-save the content scenes) BEFORE the bundle build:
+                // a 'Unity.AI.Navigation' MonoScript in the scenes bundle fails patch_monoscript_identity.py
+                // (only Assembly-CSharp[-firstpass] identities may ship). Runs whether or not this build
+                // baked, since the scene files always carry them after SceneAssembler.
+                NavMeshModifierImporter.StripBakeOnlyComponents(ctx.contentSceneRoots);
+
                 AssetDatabase.SaveAssets();
                 AssetDatabase.Refresh();
 

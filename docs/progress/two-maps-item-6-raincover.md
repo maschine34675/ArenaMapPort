@@ -227,3 +227,40 @@ All other logic lives in this task's own new files (`tools/extract/extract_rainc
 task's shared-file list, but reviewed against parallel items 4/5's likely scope: physics props/AI anchors
 touch `extract_equator.py`'s `COMPONENT_BUILDERS`/`SceneAssembler.cs`'s content-scene switch and their own
 new modules, never these weather/rain-cover client files).
+
+## Lead integration 2026-09-25 (merge, review fix, build evidence, first host raid)
+
+- Review fix applied: `RainCoverImporter.Build` throws when `ScriptsRoot` is active in the hierarchy (the same
+  guard as `Bay5AudioImporter`), so `IndoorTrigger`/`TriggerGroup` never run their `OnValidate`/`Awake`
+  against the Bounds being written.
+- `validate_bundle_roundtrip` counts the authored rain-cover objects: `validate_native_features.
+  raincover_extra_counts()` adds `2 + indoor_trigger_count (+ 1 + dry_plane_count with weather_obstacle)`
+  GameObjects/Transforms from `manifest.native_features.raincover` (Equator +3, Bay5 +702; the first Equator
+  build failed with `GameObject count in bundle (39438) == package (39435)`). Tests:
+  `RaincoverExtraCountsTests` in `tools/tests/test_raincover.py`.
+- Build logs: Equator `[RainCoverImporter] authored EnvironmentManager (TriggerGroup=1, IndoorTrigger=1),
+  WeatherObstacle=0`; Bay5 `… IndoorTrigger=30), WeatherObstacle=1 (DryPlane=669)`. The `IndoorTrigger`,
+  `TriggerGroup` and `EnvironmentManager` MonoScripts are patched to `Assembly-CSharp` in
+  `BuildPlayer-Arena_Equator_Scripts.sharedAssets`.
+- Host raid 1 (Bay5, 13:09, instance 9f0fe0dc): `[ArenaMapPort][RainCover] map=arena_bay5 AuthoredRainCover=
+  true — skipping the depth-photo heuristic (RainBounds scan, cullingMask widening, elevated-mesh draws); this
+  map's own EnvironmentManager/WeatherObstacle geometry is used instead (RainCoverImporter.cs)`; no
+  `WeatherObstacle.Instance is null` line in the whole session log (0 matches for "WeatherObstacle" at error
+  level); the only errors were the pre-existing microphone line and the item-5 sound NREs above. Config keys
+  live under `Lighting (<map>) › AuthoredRainCover` (true on both maps).
+
+### Host evidence 2026-09-25 (v3 bundles, EFT instance 70aeac2c, `Weather (test) › Weather = Rain`)
+
+- Bay5 14:32: `[WeatherTestOverride] applied 'Rain' (map=arena_bay5)` (twice, as the probe expects), then
+  `[RainCover] map=arena_bay5 AuthoredRainCover=true — skipping the depth-photo heuristic …`. Outdoors at the
+  spawn the floor is wet and reflective (screenshot 14:32). `uibridge_teleport` to the IndoorTrigger
+  `117 (12)` centre (137.73, 0.30, 71.15) lands inside the warehouse: the floor there is matte/dry while the
+  outdoor floor seen through the open gate stays wet, and no rain drops render (screenshot 14:33) — the
+  authored `WeatherObstacle`/`DryPlane` roof and the `IndoorTrigger` bounds do what the depth-photo heuristic
+  approximated. `WeatherObstacle.Instance is null` does not appear in either session's log.
+- Equator 14:29: `[RainCover] map=arena_equator AuthoredRainCover=true — skipping …`; the whole playable mall
+  lies inside its single IndoorTrigger (centre (1.85, 13.20, 9.63)), so there is no outdoor/indoor boundary to
+  walk — log evidence only, no exception.
+- The `Weather (test)` key was restored to its previous value `Clear` afterwards.
+
+**Status:** VERIFIED 2026-09-25.

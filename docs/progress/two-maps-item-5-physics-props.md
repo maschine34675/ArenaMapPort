@@ -244,3 +244,57 @@ categories plus the known `Land_Cruiser_close` LODGroup warning, unrelated to th
 - `UnityProject/Assets/ArenaMapPort/Editor/Import/SceneAssembler.cs`: two new `case` entries in the Pass-1c
   switch (`"Rigidbody"`, `"SmallPhysicsObject"`) and one new `else if` branch in the Pass-2 loop. Nothing
   else touched or reformatted.
+
+## Lead integration 2026-09-25 (merge, review fix, build evidence, first host raid)
+
+- Review fix applied: `SceneAssembler` now attaches `SmallPhysicsObject` in a separate Pass 3 after the
+  whole Pass-2 loop (BallisticCollider/LODGroup), so `Awake()`'s `GetComponentsInChildren` always sees every
+  child's ballistic component regardless of file order.
+- Build: the `SmallPhysicsObject` MonoScript is patched to `Assembly-CSharp` in `BuildPlayer-Arena_Equator.
+  sharedAssets` (patch_monoscript_identity log); the bundle roundtrip validator passes on both maps.
+- Host raid 1 (Bay5, 13:09, EFT instance 9f0fe0dc, new bundles confirmed by `[NavMesh] added navmesh for
+  'arena_bay5': 22117 vertices`): `[RaidFix] physics props: activated 0 PHYSIC container(s) (1 already at
+  target), 18 SmallPhysicsObject / 18 Rigidbody component(s) found under them 'Arena_Bay5_TeamFight/PHYSIC':
+  activeSelf=True` (twice, the second `CreateFromScene` pass). The props render settled on the floor next to
+  the container barrier (cups, bottles, cans, paint buckets — screenshot 13:12); `uibridge_look` at
+  (143.78, −2.75, 53.66) linecasts `plasticCup_2_BALLISTIC` under `PHYSIC/plasticCup_2_Physic (14)` at 1.4 m.
+- **Finding: impact sounds threw.** Teleporting into / stabbing at the cup cluster produced two
+  `NullReferenceException: BetterAudio.PlayAtPoint(... SoundBank bank ...) <- SmallPhysicsObject.
+  OnCollisionHandler` — once via `CheckPlayerCollision` (player touch) and once via `OnCollisionEnter` (the
+  prop moved and hit something), i.e. the physics reacted but the sound path dereferenced a null bank. Cause:
+  the importer left `SoundType` at the class default (Books) whose `WeaponSounds` bank was null here. Two
+  fixes:
+  1. `SoundType` is now extracted (`extract_physics_props.decode_sound_type`, component schema 2 with
+     `sound_type`/`sound_type_name`): it is the first serialized field after the MonoBehaviour header, read
+     from the raw 116-byte object (probe over the live Arena scenes: Bay5 18 props → SmallPlastic 6, SmallBox
+     6, MediumGeneric 2, GlassBottle 2, HardPlastic 1, SmallPaper 1; Equator 391 → GlassBottle 109,
+     SmallPlastic 94, SmallPaper 65, SmallBox 55, Books 30, MetalCandlestick 10, MediumGeneric 9, CardBoard 9,
+     Monitor 6, HardPlastic 4 — names match: bottles → GlassBottle, pans → MetalCandlestick, pizza →
+     CardBoard). `PhysicsPropImporter` writes it onto the component (schema 1 packages keep the default).
+  2. `PhysicsPropSoundRepairs` (client, Harmony prefix on `SmallPhysicsObject.OnCollisionHandler`, owned raids
+     only): runs the vanilla lazy `SetupSoundBank()`, and if the bank is still null skips only the sound,
+     keeps the 0.5 s collision-tracking timer and logs `[ArenaMapPort][Physics] impact sound skipped for
+     SoundType=…` once per type.
+
+### Host evidence 2026-09-25 (v3 bundles + `PhysicsPropSoundRepairs`, EFT instance 70aeac2c)
+
+- Equator 14:29: `[RaidFix] physics props: activated 1 PHYSIC container(s) (0 already at target), 391
+  SmallPhysicsObject / 413 Rigidbody component(s) found under them 'Arena_Equator/PHYSIC': activeSelf=True`,
+  second `CreateFromScene` pass `activated 0 (1 already at target)`. Props lie settled on the shop floor next
+  to the till (bottle, cups, cans, packs — screenshot 14:29, nothing sunk into the floor); `uibridge_look`
+  linecasts `PHYSIC/paper_cup3_Physic (22)/paper_cup3_BALLISTIC` at 2.3 m. Teleporting into the 9-prop
+  cluster at (−27.3, 0.1, 25.8) moved the props (a cup ends up by the trolley) with **no exception**; the
+  guard fired once: `[ArenaMapPort][Physics] impact sound skipped for SoundType=Books
+  ('shoes_hall_women_2_Physic'): WeaponSounds has no impact SoundBank for this type; prop stays silent` —
+  Books is the only type without a bank on this SPT build (30 Equator props), every other type plays
+  vanilla's impact sound.
+- Bay5 14:33: teleport into the cup cluster at (143.6, −2.9, 54.6) (SmallPlastic/SmallPaper/GlassBottle types)
+  → no error, no guard line: the real SoundTypes resolve to existing banks.
+- Known, not fixed: one `NullReferenceException: SmallPhysicsSystem.Update()` at the Equator raid teardown
+  (14:30:47). `SmallPhysicsSystem` is a plain scene object created lazily by the first prop, props never
+  unregister (`RemoveObject` is unused in the decompile), and `Singleton<GameWorld>.Instance` is already null
+  for the one frame in which the system still ticks — vanilla teardown order, one line per raid end.
+- FPS: no drop noticed while 391 props were active (not measured; `SmallPhysicsSystem` budgets its updates).
+
+**Status:** VERIFIED 2026-09-25 (props react on both maps by default, impact sounds with Arena's authored
+types, no clipping, no exception on contact).

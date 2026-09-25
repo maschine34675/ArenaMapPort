@@ -157,7 +157,20 @@ namespace ArenaMapPort.Editor.Import
                         AttachLodGroup(go, comp, rendererById, sceneName, id);
                     else if ((string)comp["type"] == "BallisticCollider")
                         BallisticColliderImporter.Attach(go, comp);
-                    else if ((string)comp["type"] == "SmallPhysicsObject") // PLAN-TWO-MAPS item 5
+                }
+            }
+
+            // --- Pass 3 (PLAN-TWO-MAPS item 5): SmallPhysicsObject after EVERY BallisticCollider in the scene
+            // exists. Its Awake self-wires from BallisticCollider/Rigidbody children, and objectsJson is in raw
+            // file order (not hierarchy order), so a single interleaved loop could attach a prop before its
+            // children's ballistic components (review finding 2026-09-25). ---
+            foreach (JObject obj in objectsJson)
+            {
+                string id = (string)obj["id"];
+                GameObject go = goById[id];
+                foreach (JObject comp in (JArray)obj["components"])
+                {
+                    if ((string)comp["type"] == "SmallPhysicsObject")
                         PhysicsPropImporter.AttachSmallPhysicsObject(go, comp);
                 }
             }

@@ -156,6 +156,17 @@ namespace ArenaMapPort.Editor.NavMesh
             // list is expected empty-of-overrides there (an ignoreFromBuild-only marker changes
             // nothing observable: PhysicsColliders geometry mode already skips the trigger colliders
             // those markers sit on).
+            // Stage 1 (2026-09-20, docs/progress/exfils-stage2.md "Respawn booths"/"Spawn barriers"): the client opens
+            // Arena's round-start obstacles at raid start (SpawnPlacementRepairs disables SPAWN_BOUND*,
+            // BoothDoorRepairs deactivates the Door_Sliding_Respawn_L/_R leaves and the non-frame parts of every
+            // descriptor-listed opened_barriers path). Baked with them in place, the booth and hall interiors were
+            // NavMesh islands (bots could not path where players walk), so the same objects are excluded here.
+            List<string> unresolvedBarriers;
+            var openedBarriers = ResolveOpenedBarriers(geometryRoots, out unresolvedBarriers);
+            foreach (var missing in unresolvedBarriers)
+                Debug.LogWarning("[ArenaMapPort][BakeNavMesh] opened_barriers path not found in the content scenes: '" + missing + "'");
+            var excludedByReason = new Dictionary<string, int>();
+
             var modifierMarkups = new List<NavMeshBuildMarkup>();
             int overrideAreaCount = 0, ignoreFromBuildCount = 0;
             foreach (var m in Unity.AI.Navigation.NavMeshModifier.activeModifiers)
@@ -163,6 +174,20 @@ namespace ArenaMapPort.Editor.NavMesh
                 bool underRoot = false;
                 foreach (var rt in rootTransforms) { if (m.transform.IsChildOf(rt)) { underRoot = true; break; } }
                 if (!underRoot) continue;
+                // Parity with NavMeshSurface.CollectSources: only modifiers for this bake's agent type (0); the
+                // importer writes affected_agents from the source, so a modifier limited to another agent is skipped.
+                if (!m.AffectsAgentType(0)) continue;
+                // Same round-open exclusion as the collider sources (names/opened barriers only — NOT the
+                // layer rule, see NonPhysicalLayerReason): a modifier under an opened barrier must not carve
+                // a hole the client's runtime removal then walks through.
+                string modifierReason = RoundOpenedReason(m.transform, openedBarriers);
+                if (modifierReason != null)
+                {
+                    int nm;
+                    excludedByReason.TryGetValue("modifier:" + modifierReason, out nm);
+                    excludedByReason["modifier:" + modifierReason] = nm + 1;
+                    continue;
+                }
                 modifierMarkups.Add(new NavMeshBuildMarkup
                 {
                     root = m.transform,
@@ -180,23 +205,12 @@ namespace ArenaMapPort.Editor.NavMesh
             var allSources = new List<NavMeshBuildSource>();
             UnityEngine.AI.NavMeshBuilder.CollectSources(null, sourceLayerMask, NavMeshCollectGeometry.PhysicsColliders, 0, modifierMarkups, allSources);
 
-            // Stage 1 (2026-09-20, docs/progress/exfils-stage2.md "Respawn booths"/"Spawn barriers"): the client opens
-            // Arena's round-start obstacles at raid start (SpawnPlacementRepairs disables SPAWN_BOUND*,
-            // BoothDoorRepairs deactivates the Door_Sliding_Respawn_L/_R leaves and the non-frame parts of every
-            // descriptor-listed opened_barriers path). Baked with them in place, the booth and hall interiors were
-            // NavMesh islands (bots could not path where players walk), so the same objects are excluded here.
-            List<string> unresolvedBarriers;
-            var openedBarriers = ResolveOpenedBarriers(geometryRoots, out unresolvedBarriers);
-            foreach (var missing in unresolvedBarriers)
-                Debug.LogWarning("[ArenaMapPort][BakeNavMesh] opened_barriers path not found in the content scenes: '" + missing + "'");
-            var excludedByReason = new Dictionary<string, int>();
-
             var sources = new List<NavMeshBuildSource>();
             foreach (var s in allSources)
             {
                 Transform t = s.component != null ? s.component.transform : null;
                 if (t == null) continue;
-                string reason = RoundOpenedReason(t, openedBarriers);
+                string reason = NonPhysicalLayerReason(t) ?? RoundOpenedReason(t, openedBarriers);
                 if (reason != null)
                 {
                     int n;
@@ -228,6 +242,8 @@ namespace ArenaMapPort.Editor.NavMesh
                 bool underRoot = false;
                 foreach (var rt in rootTransforms) { if (v.transform.IsChildOf(rt)) { underRoot = true; break; } }
                 if (!underRoot) continue;
+                if (!v.AffectsAgentType(0)) continue; // parity with NavMeshSurface.AppendModifierVolumes
+                if (RoundOpenedReason(v.transform, openedBarriers) != null) continue; // symmetric with the collider filter
                 Vector3 worldCenter = v.transform.TransformPoint(v.center);
                 Vector3 scale = v.transform.lossyScale;
                 Vector3 worldSize = new Vector3(v.size.x * Mathf.Abs(scale.x), v.size.y * Mathf.Abs(scale.y), v.size.z * Mathf.Abs(scale.z));
@@ -398,7 +414,15 @@ namespace ArenaMapPort.Editor.NavMesh
         // Non-null for a nonphysical source or one the client opens at raid start: a SPAWN_BOUND* barrier, a
         // sliding-door leaf, or a non-frame part of a listed barrier (BoothDoorRepairs keeps every child whose
         // name contains "frame").
-        static string RoundOpenedReason(Transform t, List<Transform> openedBarriers)
+        /// <summary>
+        /// Collider-source-only exclusion by the owner's numeric layer. Kept apart from
+        /// <see cref="RoundOpenedReason"/> because a NavMeshModifier markup legitimately sits on a
+        /// Triggers-layer owner (Bay5: 112 of the 113 bruno_helix area overrides are on layer 13; the
+        /// trigger box marks the wire, applyToChildren carries "Not Walkable" onto the solid children) —
+        /// running this rule on markups silenced every override (Equator build 2026-09-25 11:41 logged
+        /// "excluded 31 ... modifier:Triggers layer 13" and "0 markup(s) in bake scope").
+        /// </summary>
+        static string NonPhysicalLayerReason(Transform t)
         {
             // Installed EFT names layer 13 Triggers and excludes it from Player collisions. Arena's
             // original spawn-marker boxes can remain enabled/non-trigger after their scripts are
@@ -411,6 +435,16 @@ namespace ArenaMapPort.Editor.NavMesh
             // are called Cube, so name-only filtering kept walls removed by MapBorderRepairs.
             // Match the component owner, as the runtime does; do not inherit a parent's layer.
             if (t.gameObject.layer == 29) return "LevelBorder layer 29";
+            return null;
+        }
+
+        /// <summary>
+        /// Objects the client opens/removes at raid start (name prefixes, leaf names, descriptor-listed
+        /// opened_barriers). Applied to collider sources AND to NavMeshModifier/Volume markups: a markup
+        /// under such an object must not carve a hole the runtime removal then walks through.
+        /// </summary>
+        static string RoundOpenedReason(Transform t, List<Transform> openedBarriers)
+        {
             for (Transform cur = t; cur != null; cur = cur.parent)
             {
                 foreach (string prefix in ExcludedNamePrefixes)

@@ -93,6 +93,9 @@ namespace ArenaMapPort.Client
 
             // donor-settings-camera-weather §12 goal 3 — see RainCoverRepairs.cs.
             InstallRainCoverDepthMask(harmony);
+
+            // PLAN-TWO-MAPS item 5 follow-up — see PhysicsPropSoundRepairs.cs.
+            PhysicsPropSoundRepairs.Install(harmony);
         }
 
         // Lighting (<map>) ReflectionIntensity — AmbientLight.method_3(), public instance, no args
@@ -629,7 +632,7 @@ namespace ArenaMapPort.Client
             }
         }
 
-        static bool Verify(MethodBase method, Type declaringType, string methodName)
+        internal static bool Verify(MethodBase method, Type declaringType, string methodName)
         {
             if (method != null)
             {

@@ -25,13 +25,24 @@ opted into the same way (only under --native-features). SmallPhysicsObject's own
 unrecoverable -- a direct typetree read fails ("Expected 116 bytes, got 32" this spike) -- but its
 class identity and owning GameObject resolve cleanly through the exact MonoScript-header recipe
 analysis/scripts/census.py's resolve_script_name() already proves for MonoBehaviour class names
-(reused here directly, not reimplemented). Only presence + enabled state is recorded; SoundType and
-the cosmetic per-instance force multipliers stay unrecovered by design (docs/PLAN-TWO-MAPS.md §3:
+(reused here directly, not reimplemented). Presence + enabled state + SoundType are recorded; the
+cosmetic per-instance force multipliers stay unrecovered by design (docs/PLAN-TWO-MAPS.md §3:
 "cosmetic only... not in this plan").
+
+SoundType (2026-09-25 host finding): the first Bay5 raid with the imported props logged
+NullReferenceException in BetterAudio.PlayAtPoint <- SmallPhysicsObject.OnCollisionHandler on every
+prop touch, because the class default SoundType (0 = Books) is not what Arena authored and its
+WeaponSounds bank was null. SoundType is the FIRST serialized field after the generic MonoBehaviour
+header (D:/SPT41/Development/_decompiled/SmallPhysicsObject.cs:37, `public EPhysicsObjectType
+SoundType;`), so it is decoded straight from the raw object bytes without a class typetree:
+header = m_GameObject PPtr (12 B) + m_Enabled (1 B + 3 align) + m_Script PPtr (12 B) + m_Name
+(int32 length + bytes, 4-aligned) -> int32 SoundType. Every real instance on both maps is exactly
+116 bytes (the same 116 the failed typetree read reported), which is enforced as a layout sentinel.
 """
 from __future__ import annotations
 
 import os
+import struct
 import sys
 
 from common_ids import HardExtractError
@@ -42,6 +53,11 @@ sys.path.insert(0, os.path.normpath(os.path.join(_HERE, "..", "..", "analysis", 
 import census as arena_census  # analysis/scripts/census.py -- resolve_script_name()  # noqa: E402
 
 SCRIPT_NAME = "SmallPhysicsObject"  # plain (non-namespaced) Assembly-CSharp class, verified this spike
+
+# EPhysicsObjectType (D:/SPT41/Development/_decompiled/SmallPhysicsObject.cs) -- index == enum value.
+SOUND_TYPE_NAMES = ("Books", "CardBoard", "CoolerBottle", "Cup", "GlassBottle", "HardPlastic", "MediumGeneric",
+                    "MetalCandlestick", "Monitor", "SmallBox", "SmallPaper", "SmallPlastic", "TincanEmpty")
+SERIALIZED_SIZE = 116  # every SmallPhysicsObject instance on Equator (391) and Bay5 (18), 2026-09-25 probe
 
 
 def _require(condition, message):
@@ -68,12 +84,25 @@ def build_rigidbody(obj, ctx):
     }
 
 
+def decode_sound_type(raw):
+    """SoundType from the raw MonoBehaviour bytes (see the module docstring for the layout)."""
+    _require(len(raw) == SERIALIZED_SIZE,
+             f"SmallPhysicsObject serialized size {len(raw)} != {SERIALIZED_SIZE} (class layout changed?)")
+    off = 12 + 4 + 12                       # m_GameObject PPtr, m_Enabled(+align), m_Script PPtr
+    name_len = struct.unpack_from("<i", raw, off)[0]
+    _require(0 <= name_len <= len(raw) - off - 8, "SmallPhysicsObject m_Name length out of range")
+    off = (off + 4 + name_len + 3) & ~3     # m_Name, 4-aligned
+    value = struct.unpack_from("<i", raw, off)[0]
+    _require(0 <= value < len(SOUND_TYPE_NAMES), f"SmallPhysicsObject SoundType {value} outside EPhysicsObjectType")
+    return value
+
+
 def augment_scene(scene_json, source_file):
     """Tag GameObjects carrying the SmallPhysicsObject MonoBehaviour with a
-    {"type":"SmallPhysicsObject","schema_version":1,"enabled":bool} presence marker; identical
-    reruns add zero (pattern of extract_ballistics.augment_scene). No contract/byte-decode needed:
-    SmallPhysicsObject's own fields are unrecoverable, so only class identity + the generic
-    MonoBehaviour header's m_Enabled are ever read."""
+    {"type":"SmallPhysicsObject","schema_version":2,"enabled":bool,"sound_type":int,
+    "sound_type_name":str} marker; identical reruns add zero (pattern of
+    extract_ballistics.augment_scene). Class identity + the generic MonoBehaviour header's m_Enabled
+    come from the header recipe; SoundType is decoded from the raw bytes (decode_sound_type)."""
     objects = scene_json["objects"]
     by_id = {o["id"]: o for o in objects}
     _require(len(by_id) == len(objects), "duplicate scene object IDs")
@@ -98,7 +127,9 @@ def augment_scene(scene_json, source_file):
                  "missing or duplicate SmallPhysicsObject owner")
         source_owners.add(owner_id)
         owner = by_id[owner_id]
-        component = {"type": "SmallPhysicsObject", "schema_version": 1, "enabled": bool(head.m_Enabled)}
+        sound_type = decode_sound_type(reader.get_raw_data())
+        component = {"type": "SmallPhysicsObject", "schema_version": 2, "enabled": bool(head.m_Enabled),
+                     "sound_type": sound_type, "sound_type_name": SOUND_TYPE_NAMES[sound_type]}
         existing = [c for c in owner["components"] if c["type"] == "SmallPhysicsObject"]
         _require(not existing or existing == [component], "conflicting existing SmallPhysicsObject component")
         if not existing:

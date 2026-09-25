@@ -10,23 +10,33 @@ REPO = Path(__file__).resolve().parents[2]
 BAKE = REPO / "UnityProject/Assets/ArenaMapPort/Editor/NavMesh/BakeNavMesh.cs"
 
 
-def filter_source(source):
-    start = source.index("static string RoundOpenedReason(")
+def extract_function(source, signature):
+    start = source.index(signature)
     opening = source.index("{", start)
     depth = 1
     end = opening + 1
     while depth:
         if end >= len(source):
-            raise ValueError("Unterminated RoundOpenedReason")
+            raise ValueError("Unterminated " + signature)
         depth += (source[end] == "{") - (source[end] == "}")
         end += 1
+    return source[start:end]
+
+
+def filter_source(source):
+    # PLAN-TWO-MAPS item 4 (2026-09-25): the layer rule (13 Triggers / 29 LevelBorder) lives in
+    # NonPhysicalLayerReason and applies to collider sources only; RoundOpenedReason (names, opened
+    # barriers) applies to sources AND to NavMeshModifier/Volume markups. The harness mirrors the
+    # collider loop's `NonPhysicalLayerReason(t) ?? RoundOpenedReason(t, openedBarriers)`.
+    functions = "\n".join(extract_function(source, sig) for sig in
+                          ("static string NonPhysicalLayerReason(", "static string RoundOpenedReason("))
     arrays = []
     for name in ("ExcludedNamePrefixes", "ExcludedLeafNames"):
         matches = re.findall(r"static readonly string\[\]\s+" + name + r"\s*=\s*\{[^}]*\};", source)
         if len(matches) != 1:
             raise ValueError(f"Expected one {name} declaration")
         arrays.append(matches[0])
-    return "\n".join(arrays) + "\n" + source[start:end]
+    return "\n".join(arrays) + "\n" + functions
 
 
 HARNESS = r"""
@@ -55,6 +65,15 @@ static class Program
     static int checkedCases;
     static void Check(string label, Transform owner, bool excluded, List<Transform> barriers = null)
     {
+        // collider-source semantics (BakeNavMesh's source loop)
+        string reason = NonPhysicalLayerReason(owner) ?? RoundOpenedReason(owner, barriers ?? new List<Transform>());
+        if ((reason != null) != excluded)
+            throw new Exception(label + ": unexpected exclusion=" + reason);
+        checkedCases++;
+    }
+    static void CheckMarkup(string label, Transform owner, bool excluded, List<Transform> barriers = null)
+    {
+        // NavMeshModifier/Volume semantics: round-open rules only, never the layer rule
         string reason = RoundOpenedReason(owner, barriers ?? new List<Transform>());
         if ((reason != null) != excluded)
             throw new Exception(label + ": unexpected exclusion=" + reason);
@@ -85,6 +104,14 @@ static class Program
         Check("retained-frame", new Transform("Gates_Depot_Frame_COLLIDER", 18, barrier), false, barriers);
         Check("unlisted-east-gate", new Transform("Leaf_COLLIDER", 18,
             new Transform("Gates_Depot_Frame", 0)), false, barriers);
+
+        // Markups: Bay5's bruno_helix area overrides sit on Triggers-layer trigger boxes on purpose and
+        // must survive; the name/opened-barrier rules still apply to them.
+        CheckMarkup("markup-layer-13", new Transform("bruno_helix (47)", 13), false);
+        CheckMarkup("markup-layer-29", new Transform("Marker", 29), false);
+        CheckMarkup("markup-spawn-bound", new Transform("Marker", 13, new Transform("SPAWN_BOUND_FIGHTER", 0)), true);
+        CheckMarkup("markup-opened-door", new Transform("Leaf_MARK", 13, barrier), true, barriers);
+        CheckMarkup("markup-retained-frame", new Transform("Gates_Depot_Frame_MARK", 13, barrier), false, barriers);
         Console.WriteLine("NAVMESH_SOURCE_FILTER_PASSED cases=" + checkedCases);
     }
 }
@@ -110,7 +137,7 @@ class NavMeshSourceLayerTests(unittest.TestCase):
     def test_numeric_layers_preserve_solid_children_and_existing_barrier_rules(self):
         result = run_filter(BAKE.read_text(encoding="utf-8"))
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
-        self.assertIn("NAVMESH_SOURCE_FILTER_PASSED cases=48", result.stdout)
+        self.assertIn("NAVMESH_SOURCE_FILTER_PASSED cases=53", result.stdout)
 
     def test_missing_trigger_exclusion_fails_the_spawn_layer_assertion(self):
         source = BAKE.read_text(encoding="utf-8")

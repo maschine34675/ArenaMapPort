@@ -171,6 +171,55 @@ class NavMeshModifierExtractionTests(unittest.TestCase):
 
 
 @unittest.skipUnless(os.path.isdir(ARENA_SOURCE), "Arena source not reachable from this machine")
+class FeatureEnabledAcceptsNavmeshAreasKeyTests(unittest.TestCase):
+    """validate_native_features.feature_enabled() must accept the extra manifest.native_features
+    ['navmesh_areas'] entry read_navmesh_areas() adds (the merged extractor writes it into every
+    package) without breaking its strict key-equality compare() for packages that do not carry it."""
+
+    def setUp(self):
+        sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "validate"))
+        import validate_native_features as v
+        self.v = v
+
+    def _bay5_manifest(self, areas):
+        contract = self.v.MAPS["arena_bay5"]
+        native_features = {"schema_version": 1, "required": ["ballistics", contract["feature"]]}
+        if areas is not None:
+            native_features["navmesh_areas"] = areas
+        return {
+            "scenes": list(contract["scenes"].values()),
+            "native_features": native_features,
+            "native_ballistics": {}, "native_audio": {},
+        }
+
+    AREAS = {"0": {"name": "Walkable", "cost": 1.0}, "1": {"name": "Not Walkable", "cost": 1.0},
+             "2": {"name": "Jump", "cost": 2.0}, "3": {"name": "Sitdown", "cost": 1.0}}
+
+    def test_accepts_manifest_without_navmesh_areas(self):
+        self.assertTrue(self.v.feature_enabled(self._bay5_manifest(None)))
+
+    def test_accepts_manifest_with_navmesh_areas(self):
+        self.assertTrue(self.v.feature_enabled(self._bay5_manifest(self.AREAS)))
+
+    def test_accepts_navmesh_areas_together_with_raincover(self):
+        manifest = self._bay5_manifest(self.AREAS)
+        manifest["native_features"]["raincover"] = {"schema_version": 1, "indoor_trigger_count": 30,
+                                                    "dry_plane_count": 669, "weather_obstacle": True}
+        self.assertTrue(self.v.feature_enabled(manifest))
+
+    def test_rejects_malformed_navmesh_areas(self):
+        for bad in ({}, {"0": {"name": "Walkable"}}, {"x": {"name": "Walkable", "cost": 1.0}},
+                    {"0": {"name": "Not Walkable", "cost": 1.0}, "1": {"name": "Walkable", "cost": 1.0}}):
+            with self.assertRaises(ValueError, msg=repr(bad)):
+                self.v.feature_enabled(self._bay5_manifest(bad))
+
+    def test_still_rejects_unknown_extra_key(self):
+        manifest = self._bay5_manifest(self.AREAS)
+        manifest["native_features"]["something_else"] = 1
+        with self.assertRaises(ValueError):
+            self.v.feature_enabled(manifest)
+
+
 class NavMeshModifierRealSourceTests(unittest.TestCase):
     """Byte-exact (check_read=True) read of real Bay5 NavMeshModifier/NavMeshModifierVolume
     instances -- the same falsification this module's typetree node lists were proven

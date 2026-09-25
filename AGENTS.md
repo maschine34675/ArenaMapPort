@@ -87,7 +87,7 @@ pwsh -NoProfile -File tools/tests/test_unity_log_scan.ps1
 # rebuild Equator's bundles + NavMesh from its extracted package (≈ 15 min). The [bool] parameters only parse
 # from a PowerShell prompt or `pwsh -Command "& '...build_all.ps1' ... -BakeNavMesh \$true"`; `-File` from bash
 # turns "$true"/1 into strings and the script refuses them.
-pwsh tools/build_all.ps1 -MapKey arena_equator -MapDescriptor D:/ArenaMapPort/tools/maps/equator.json -PackageDir D:/ArenaMapPort/work/extract/equator-native-dust -OutputDir D:/ArenaMapPort/work/build/full -BakeNavMesh $true -Verify $true -SkipGameRefsSync
+pwsh tools/build_all.ps1 -MapKey arena_equator -MapDescriptor D:/ArenaMapPort/tools/maps/equator.json -PackageDir D:/ArenaMapPort/work/extract/equator-native-v3 -OutputDir D:/ArenaMapPort/work/build/full -BakeNavMesh $true -Verify $true -SkipGameRefsSync
 # then a client Release build WITHOUT DllOnly stages the new bundles into dist/, and:
 pwsh -NoProfile -File tools/deploy-to-spt.ps1 -SptRoot 'D:\SPT41' -Confirm
 ```
@@ -95,12 +95,15 @@ pwsh -NoProfile -File tools/deploy-to-spt.ps1 -SptRoot 'D:\SPT41' -Confirm
 Equator's package predates the `-FullMap` convention (its manifest lists the scenes in a different order
 than the descriptor), so Equator is built WITHOUT `-FullMap`. Every other map uses `-FullMap` with
 `work/build/<stem>/` and `tools/maps/<stem>.json` (exact commands in `docs/progress/remaining-maps.md`).
-Current accepted inputs are `work/extract/equator-native-dust` and
-`work/extract/bay5-native-dust`; see `docs/progress/native-dust.md` for acceptance evidence.
-They preserve all prior native features and add the lossless original dust volume payload.
-The older `equator`, `bay5` and `bay5-background` packages
+Current accepted inputs are `work/extract/equator-native-v3` and
+`work/extract/bay5-native-v3` (2026-09-25: the native-dust packages re-extracted with the merged
+extractor, adding NavMesh modifiers/volumes + `navmesh_areas`, Rigidbody + SmallPhysicsObject with
+SoundType, and `raincover/raincover.json`; see `docs/progress/two-maps-item-{4,5,6}-*.md`). A package is
+produced by `extract_equator.py --native-features --scenes all5 --output <dir>` / `extract_bay5.py
+--output <dir>` followed by `python tools/extract/refresh_native_volumes.py <dir>`.
+The older `equator-native-dust`/`bay5-native-dust`, `equator`, `bay5` and `bay5-background` packages
 omit later native features (and old Bay5 omits the harbor background). Do not rebuild either
-accepted map from those older packages. Bay5 uses the native-dust package with `-FullMap`
+accepted map from those older packages. Bay5 uses its v3 package with `-FullMap`
 and `-OutputDir D:/ArenaMapPort/work/build/bay5`. Always give `-MapDescriptor` an absolute
 path: Unity resolves relative descriptor paths from its project directory.
 `-FullMap` also regenerates that map's base.json and preset from the sidecars; to regenerate only base.json
@@ -168,6 +171,12 @@ the log; the user uses it to point at things.
   decoration). Probe connectivity in-game with `uibridge_teleport dryRun=true` (reachability = same NavMesh
   component); offline, `work/extract/<map>/scenes/*.json` + `meshes/*.mesh.bin` give every collider's world
   triangles (see docs/progress/stage1-combat.md for the script pattern).
+- NavMesh modifiers: `NavMeshModifier`/`NavMeshModifierVolume` exist only for the bake. `BuildBundles` strips them
+  (`NavMeshModifierImporter.StripBakeOnlyComponents`, re-saving the content scenes) before `BuildAssetBundles`;
+  without that the scenes bundle carries a `Unity.AI.Navigation` MonoScript and `patch_monoscript_identity.py`
+  fails. In `BakeNavMesh` the Triggers/LevelBorder layer rule applies to collider sources only — the wire markups
+  sit on Triggers-layer owners on purpose. Expect Bay5 `81 area-override, 28 ignoreFromBuild, 134 volume` (only
+  hierarchy-active components register) and Equator `0/31/0` with an unchanged 10404/4572 triangulation.
 - Syncthing replaces the client DLL while EFT runs; EFT keeps the old code until restarted. Trust
   `uibridge_status`'s MVID comparison, not file hashes. The same holds for rebuilt bundles: a loaded map
   bundle stays cached in the EFT process, so a new NavMesh/scenes bundle needs an EFT restart before the next
