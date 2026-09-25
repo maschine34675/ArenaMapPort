@@ -1383,6 +1383,8 @@ reviewer's citation alone. **15 of 15 issues accepted, 0 rejected.**
   installation"). No build-it-yourself pipeline for end users is required. Bundles still never go into git.
 - **Server target framework:** `ArenaMapPort.Server` builds for net10.0 against this SPT 4.1.5 install
   (WP5's "net9.0" above is the state at spec time).
+- **Later, on Equator and Bay5 (user, 2026-09-25):** Team Deathmatch/Tactical and pickups should become
+  possible — faction-split spawn pools and pickup position surveys are in scope when the maps get there.
 - **Order of work:** stage 1 of docs/HANDOFF.md (combat/death correctness and the NavMesh bake on Equator),
   then the other maps one at a time through the Equator recipe (bots/exits sidecars + host raid), then parity
   items only where ArenaMode needs them.

@@ -127,11 +127,23 @@ Mannequins/skinned rigs (no clips, scoped out). Arena's TOD/weather field data (
 ## 5. Untested rather than missing
 
 Ambient balance after any gain change (user's ears); lighting tuning values (user's eyes); full Gun Game
-ladder; PMC crowding/BotMax on long sessions; Bay5's DynamicMaps pack provenance (installed by the user, not
-produced by `tools/dynamicmaps`).
+ladder; PMC crowding/BotMax on long sessions.
 
 ## 6. Open questions for the user
 
 Which of the ArenaMode modes beyond Deathmatch/Gun Game are wanted on these maps (drives the team-start
 survey)? Are pickups wanted on Equator/Bay5? Is bot quality (2, 5) worth a bake + AI-scene extraction round
-before the next map? Should the Bay5 DynamicMaps pack be reproduced through the repo tooling?
+before the next map?
+
+## 7. Answers and corrections (user, 2026-09-25)
+
+- **Team Deathmatch/Tactical and pickups are wanted on Equator and Bay5 later.** That moves two map-side
+  prerequisites up the list: faction-split spawn pools with enough surveyed positions per side (candidates 2
+  and 7 above plus the 41 / 10 SpawnPointMarkers of the TeamFight_AI scenes), and a pickup position survey per
+  map (ArenaMode's F12 capture tool). The ArenaMode-side gate (`ArenaAreaCatalog.TryResolve`) and the pickup
+  layout belong to the ArenaMode repo.
+- **Bay5 DynamicMaps is NOT open.** Both packs exist and are installed:
+  `BepInEx/plugins/mpstark-dynamicmaps/Maps/ArenaMapPort_Equator/ArenaMapPort_Equator.jsonc` and
+  `.../Maps/ArenaMapPort_Bay5/ArenaMapPort_Bay5.jsonc` (the Bay5 pack is the user's own, verified unchanged on
+  2026-09-23). Only the Equator pack is reproducible through `tools/dynamicmaps`; that is a tooling note, not a
+  gap, and it should stop appearing in open-item lists.

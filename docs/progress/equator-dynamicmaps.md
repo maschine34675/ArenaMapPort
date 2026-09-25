@@ -109,3 +109,9 @@ ArenaMode respawn/mode, setting combination or future DynamicMaps version.
 
 Bay5 can reuse this approach after feedback, but needs reviewed height bands, its own
 main-region anchor and native coordinate checks. No Bay5 map pack was built here.
+
+## Note 2026-09-25
+
+Bay5 has its own DynamicMaps pack, installed by the user (`Maps/ArenaMapPort_Bay5/ArenaMapPort_Bay5.jsonc`,
+verified unchanged on 2026-09-23). "No Bay5 map pack was built here" above means "not built by this tooling",
+not "missing" — do not list Bay5 DynamicMaps as an open item.

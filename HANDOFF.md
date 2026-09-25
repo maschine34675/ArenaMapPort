@@ -14,6 +14,10 @@ modifiers (124+93 / 304+75), barbed wire (246, Bay5), decals, flares; ArenaMode-
 director allowlist, team starts. Not worth it / blocked: glass (user decision), crowd/monitors/gates
 (Arena-only classes), PerfectCulling, impostors, mannequins. Nothing was built or deployed; GPU host untouched.
 
+User answers 2026-09-25: Team Deathmatch/Tactical AND pickups are wanted on both maps later — faction spawn
+pools and pickup surveys are therefore real map-side work, not optional polish (inventory §7). Bay5 DynamicMaps
+is installed (`Maps/ArenaMapPort_Bay5/ArenaMapPort_Bay5.jsonc`, user's own pack) and must not be listed as open.
+
 ## State on 2026-09-23 — original Equator and Bay5 dust verified
 
 Branch `feature/native-dust`, based on `29ea1be`. Both maps now import the original lossless
