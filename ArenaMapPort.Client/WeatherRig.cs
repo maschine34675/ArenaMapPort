@@ -154,6 +154,8 @@ namespace ArenaMapPort.Client
             // §12 goal 1/3 — new keys, see AmbientSource/RainCoverMode's own doc comments.
             internal BepInEx.Configuration.ConfigEntry<AmbientSource> UnityAmbientEntry;
             internal BepInEx.Configuration.ConfigEntry<RainCoverMode> RainCoverEntry;
+            // PLAN-TWO-MAPS item 6 — see RainCoverEntry's own bind site for the full doc comment.
+            internal BepInEx.Configuration.ConfigEntry<bool> AuthoredRainCoverEntry;
             // In-game test 2026-09-18 21:5x on the GPU host: the white veil on Bay5's hall floors is the
             // sky cubemap (_MyGlobalReflectionProbe) mirrored by floor materials with smoothness 0.9+.
             // It stayed with _WaterLevel and _SurfaceWetIntensity pinned to 0 and vanished with the
@@ -465,6 +467,23 @@ namespace ArenaMapPort.Client
                 "draws — an empty depth map). Both RoofDepth/RoofDepthBlack still compute " +
                 "LevelSettings.RainBounds from this map's own static geometry once per raid. See " +
                 "RainCoverRepairs.cs. Applied fresh every raid, not live.");
+
+            // PLAN-TWO-MAPS item 6 — Equator/Bay5 packages now carry Arena's own EnvironmentManager/
+            // TriggerGroup/IndoorTrigger (and on Bay5 WeatherObstacle/DryPlane) geometry, authored by
+            // RainCoverImporter.cs from raincover.json. When true, RainCoverEntry's heuristic above is
+            // skipped entirely for this map (RainCoverRepairs.ApplyForCurrentMap) so it never draws its
+            // own elevated-mesh guesses on top of vanilla's now-real WeatherObstacle draw in the same
+            // depth photo. Defaults true only for the two maps this importer actually authors data for;
+            // every other (deferred) map keeps using the heuristic exactly as before (false — same
+            // rigDefaults split RainCoverEntry's own class default does NOT use, since the heuristic
+            // itself has always run on every map with SkyboxMode!=Off/Donor!=Off regardless of rig tier).
+            cfg.AuthoredRainCoverEntry = Plugin.Instance.Config.Bind(section, "AuthoredRainCover", rigDefaults,
+                "When true, this map's real, authored rain-cover geometry (EnvironmentManager/WeatherObstacle/" +
+                "DryPlane/IndoorTrigger — RainCoverImporter.cs, PLAN-TWO-MAPS item 6) is used and RainCoverMethod's " +
+                "depth-photo heuristic above is skipped for this map entirely, avoiding a double-drawn depth photo. " +
+                "false = force the old heuristic even if authored data is present (A/B comparison only). Defaults " +
+                "true for Equator/Bay5 (the only maps with authored rain-cover data today), false for every other " +
+                "map. Applied fresh every raid, not live.");
             cfg.ReflectionIntensity.SettingChanged += (_, __) => ReapplyReflectionIntensity(map);
             cfg.AmbientIntensity.SettingChanged += (_, __) => ReapplyAmbientIntensity(map);
 
@@ -1294,7 +1313,8 @@ namespace ArenaMapPort.Client
                 // .Construct/CameraManager.SetCameraFromSettings and TOD_Scattering's per-frame LevelSettings
                 // read both happen strictly later in the same startup sequence.
                 ApplyDonorLevelSettingsOverrides(map, cfg);
-                RainCoverRepairs.ApplyForCurrentMap(map, cfg.RainCoverEntry.Value, cfg.RainBoundsCenter, cfg.RainBoundsSize, cfg.CoverMinHeightEntry); // §12 goal 3 / §13 goal 2
+                RainCoverRepairs.ApplyForCurrentMap(map, cfg.RainCoverEntry.Value, cfg.RainBoundsCenter, cfg.RainBoundsSize,
+                    cfg.CoverMinHeightEntry, cfg.AuthoredRainCoverEntry.Value); // §12 goal 3 / §13 goal 2 / PLAN-TWO-MAPS item 6
                 ApplyDonorCameraPrefab(map, cfg, rig);
                 if (rig.Kind == RigKind.Full)
                 {

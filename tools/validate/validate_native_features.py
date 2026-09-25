@@ -165,7 +165,13 @@ def feature_enabled(manifest, scenes=None):
         return False
     require(len(present)==3, 'incomplete required feature contract')
     _,contract=map_contract(manifest)
-    compare(manifest['native_features'], {'schema_version':1,'required':['ballistics',contract['feature']]}, 'feature contract')
+    # PLAN-TWO-MAPS item 6: 'raincover' is an OPTIONAL extra native_features entry (extract_raincover.py) --
+    # popped before the strict key-equality compare() below so packages with/without it both validate.
+    features=dict(manifest['native_features']);raincover=features.pop('raincover',None)
+    compare(features, {'schema_version':1,'required':['ballistics',contract['feature']]}, 'feature contract')
+    if raincover is not None:
+        require(isinstance(raincover,dict) and raincover.get('schema_version')==1 and 'indoor_trigger_count' in raincover,
+                'raincover feature summary shape')
     if scenes is not None:
         require(not any(c['type']=='WindowBreaker' for objects in scenes.values() for o in objects for c in o['components']), 'glass was deferred by the user')
     return True

@@ -11,6 +11,15 @@ namespace ArenaMapPort.Client
     /// singletons that only self-register via their own <c>Awake()</c> when a scene GameObject carries
     /// them, and we author neither for the spike.
     ///
+    /// PLAN-TWO-MAPS item 6: Equator/Bay5 packages now DO author a real <c>EnvironmentManager</c>
+    /// (RainCoverImporter.cs, from raincover.json — <c>TriggerGroup</c>/<c>IndoorTrigger</c>, and on Bay5
+    /// <c>WeatherObstacle</c>/<c>DryPlane</c>). Its own <c>Awake()</c> runs during
+    /// <c>TarkovApplication.LoadMapAndData</c>, strictly before <c>Player.Init</c> ever fires (this
+    /// class's own gating argument below), and sets <c>EnvironmentManagerBase.Instance</c> itself — so the
+    /// <c>Instance == null</c> check just below already skips creating the bare fallback for those two
+    /// maps without any further change here. The fallback stays load-bearing for the twelve maps that
+    /// still author no <c>EnvironmentManager</c> at all.
+    ///
     /// <c>EnvironmentManager.Instance</c> is dereferenced UNGUARDED at <c>EFT/Player.cs:28251-28252</c>
     /// (inside <c>Player.Init</c>, for every player — local and AI): once the SpatialAudioSystem fix
     /// lands, this is the very next abort (confirmed via decompile, docs/progress/audit-load-chain.md
@@ -53,7 +62,8 @@ namespace ArenaMapPort.Client
             {
                 new GameObject("EnvironmentManager(ArenaFallback)").AddComponent<EnvironmentManager>();
                 Plugin.Log.LogInfo("[ArenaMapPort][RaidFix] created missing EnvironmentManager singleton " +
-                                    "(bare — no indoor triggers authored for this spike, always-Outdoor)");
+                                    "(bare — no indoor triggers authored for this map, always-Outdoor; " +
+                                    "Equator/Bay5 author their own real one instead, see RainCoverImporter.cs)");
             }
 
             if (!Singleton<ObservedCullingManager>.Instantiated)

@@ -15,6 +15,10 @@ dated state in one screen; read it before this index if you only have a minute.
   `SmallPhysicsObject` on Equator's 391 / Bay5's 18 movable props, on by default. Extractor/importer/client
   built and offline-verified (real extractor runs against live Arena source: exact 413/391 and 22/18 counts,
   full `validate_extract.py` pass on both maps); no Unity rebuild or host raid yet — open item for the lead.
+- [two-maps-item-6-raincover.md](two-maps-item-6-raincover.md) — rain-cover geometry (Arena's own
+  EnvironmentManager/TriggerGroup/IndoorTrigger, and on Bay5 WeatherObstacle/DryPlane) extracted from
+  each map's Scripts scene and authored to replace the depth-photo heuristic; offline-verified 2026-09-25,
+  Unity build and host test still needed.
 
 - [../PLAN-TWO-MAPS.md](../PLAN-TWO-MAPS.md) — the ordered, spike-verified plan for the two-map first
   release (Equator + Bay5): nine work items, release checklist, what is deliberately out (2026-09-25).

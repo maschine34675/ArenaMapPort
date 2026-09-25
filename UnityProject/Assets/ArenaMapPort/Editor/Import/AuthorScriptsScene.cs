@@ -49,7 +49,10 @@ namespace ArenaMapPort.Editor.Import
         // instead, which DOES yield back to Unity's own loop between attempts — see
         // docs/progress/s1-finish.md. This helper just fails fast (throws) on a null result so the
         // outer update-tick retry knows to try again; it does not itself sleep or loop.
-        private static T AddComponentOrThrow<T>(GameObject go) where T : Component
+        // PLAN-TWO-MAPS item 6: widened from private so RainCoverImporter.cs (a sibling importer,
+        // same shape as Bay5AudioImporter) can reuse the exact same s1-finish retry-friendly helper
+        // instead of duplicating it. No behavior change.
+        internal static T AddComponentOrThrow<T>(GameObject go) where T : Component
         {
             T comp = go.AddComponent<T>();
             if (comp == null)
@@ -183,6 +186,10 @@ namespace ArenaMapPort.Editor.Import
             // Optional source-backed ambience remains in the existing owned Scripts scene.
             // Its own root stays inactive until the client has a listener, season and mixers.
             Bay5AudioImporter.Build(pkg, root);
+
+            // PLAN-TWO-MAPS item 6 — optional (only Equator/Bay5 packages carry raincover.json):
+            // EnvironmentManager > TriggerGroup > IndoorTrigger, and on Bay5 WeatherObstacle > DryPlane.
+            RainCoverImporter.Build(pkg, root);
 
             // --- LocationScene (§D row 2) — added last, FillArrays() scans siblings/children ---
             var locationSceneGo = new GameObject("LocationScene");

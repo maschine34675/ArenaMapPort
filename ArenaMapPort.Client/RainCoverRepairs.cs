@@ -192,7 +192,8 @@ namespace ArenaMapPort.Client
         // Called once per raid from WeatherRig.OnSceneLoaded (Scripts scene — geometry scenes are not loaded
         // yet, see the class doc comment). Only records what RenderPrefix needs; nothing is scanned here.
         internal static void ApplyForCurrentMap(ArenaMapDescriptor map, WeatherRig.RainCoverMode mode,
-            ConfigEntry<Vector3> rainBoundsCenter, ConfigEntry<Vector3> rainBoundsSize, ConfigEntry<float> coverMinHeight)
+            ConfigEntry<Vector3> rainBoundsCenter, ConfigEntry<Vector3> rainBoundsSize, ConfigEntry<float> coverMinHeight,
+            bool authoredRainCover = false)
         {
             _states[map.Key] = new CoverState
             {
@@ -201,6 +202,22 @@ namespace ArenaMapPort.Client
                 RainBoundsSize = rainBoundsSize,
                 CoverMinHeight = coverMinHeight,
             };
+            // PLAN-TWO-MAPS item 6 — when this map's scene now carries a REAL, authored
+            // EnvironmentManager/WeatherObstacle/DryPlane (RainCoverImporter.cs), this heuristic must not
+            // also draw its own elevated-mesh guesses into the same depth photo: vanilla's own
+            // DepthPhotograper.RenderObstacles() already draws instance.MeshCollider.sharedMesh once
+            // WeatherObstacle.Instance is non-null (decompile), so RenderObstaclesPrefix's EXTRA draws
+            // would double up on top of it. Forcing Mode=Off here (rather than skipping this method) keeps
+            // this map's CoverState entry in _states — SetupDepthCameraPostfix's §13 goal-1 camera-diagnostics
+            // caching (a no-op for every mode, including Off) still runs unchanged.
+            if (authoredRainCover)
+            {
+                _states[map.Key].Mode = WeatherRig.RainCoverMode.Off;
+                Plugin.Log.LogInfo($"[ArenaMapPort][RainCover] map={map.Key} AuthoredRainCover=true — skipping the " +
+                    "depth-photo heuristic (RainBounds scan, cullingMask widening, elevated-mesh draws); this map's " +
+                    "own EnvironmentManager/WeatherObstacle geometry is used instead (RainCoverImporter.cs)");
+                return;
+            }
             if (mode == WeatherRig.RainCoverMode.Off)
             {
                 Plugin.Log.LogInfo($"[ArenaMapPort][RainCover] map={map.Key} RainCover=Off — no bounds/mask/obstacle draws computed");
