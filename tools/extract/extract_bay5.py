@@ -65,6 +65,7 @@ sys.path.insert(0, os.path.normpath(os.path.join(_HERE, "..", "..", "analysis", 
 import UnityPy  # noqa: E402
 
 import extract_equator as EQ  # noqa: E402 -- the proven engine, reused unmodified (see module docstring)
+import extract_physics_props as physics_props  # PLAN-TWO-MAPS item 5  # noqa: E402
 
 SCHEMA_VERSION = 1
 DEFAULT_SOURCE = "D:/Battlestate Games/Escape from Tarkov Arena/EscapeFromTarkovArena_Data"
@@ -285,6 +286,9 @@ def main() -> None:
         scenes_out[idx] = EQ.extract_scene(idx, f, tags_array, node_id_list, ctx)
         count = augment_scene(scenes_out[idx], f, ballistic_contract)
         print(f"    restored {count} original ballistic material components", file=sys.stderr)
+        # PLAN-TWO-MAPS item 5: tag SmallPhysicsObject owners (no contract needed)
+        physics_count = physics_props.augment_scene(scenes_out[idx], f)
+        print(f"    tagged {physics_count} SmallPhysicsObject owners", file=sys.stderr)
 
     try:
         print(f"Writing {len(ctx.mesh_work)} meshes...", file=sys.stderr)

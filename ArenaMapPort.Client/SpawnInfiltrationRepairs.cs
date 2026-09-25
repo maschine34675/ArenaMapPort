@@ -78,6 +78,7 @@ namespace ArenaMapPort.Client
             BoothDoorRepairs.OpenAll(__result); // exfils-stage2 follow-up: open Arena's respawn-booth doors
             BallisticTwinRepairs.Apply();       // stage 1: HighPolyCollider twins for LowPolyCollider-only props
             BarbedWireRepairs.Apply();          // PLAN-TWO-MAPS item 2: EFT's BarbedWire on Arena's concertina wire
+            PhysicsPropRepairs.Apply();         // PLAN-TWO-MAPS item 5: activate Arena's PHYSIC prop containers
 
             int fixedCount = 0;
             foreach (var point in __result)

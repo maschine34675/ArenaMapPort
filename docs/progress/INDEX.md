@@ -11,6 +11,11 @@ dated state in one screen; read it before this index if you only have a minute.
 - [two-maps-items-1-3.md](two-maps-items-1-3.md) — ambient gain/offset keys, barbed wire on Bay5, release
   names; host evidence 2026-09-25.
 
+- [two-maps-item-5-physics-props.md](two-maps-item-5-physics-props.md) — Rigidbody + native
+  `SmallPhysicsObject` on Equator's 391 / Bay5's 18 movable props, on by default. Extractor/importer/client
+  built and offline-verified (real extractor runs against live Arena source: exact 413/391 and 22/18 counts,
+  full `validate_extract.py` pass on both maps); no Unity rebuild or host raid yet — open item for the lead.
+
 - [../PLAN-TWO-MAPS.md](../PLAN-TWO-MAPS.md) — the ordered, spike-verified plan for the two-map first
   release (Equator + Bay5): nine work items, release checklist, what is deliberately out (2026-09-25).
 

@@ -127,6 +127,11 @@ namespace ArenaMapPort.Editor.Import
                             break; // Pass 2, after every original physics collider exists.
                         case "ReflectionProbe":
                             break; // out of scope, decision #8 — recorded by WP1, not imported.
+                        case "Rigidbody":
+                            PhysicsPropImporter.AttachRigidbody(go, comp); // PLAN-TWO-MAPS item 5
+                            break;
+                        case "SmallPhysicsObject":
+                            break; // PLAN-TWO-MAPS item 5 — Pass 2, after colliders/Rigidbody/BallisticCollider exist.
                         default:
                             Debug.LogWarning("[ArenaMapPort][SceneAssembler] " + sceneName + ": object " + id +
                                               " has unrecognized component type '" + type + "' (ignored)");
@@ -146,6 +151,8 @@ namespace ArenaMapPort.Editor.Import
                         AttachLodGroup(go, comp, rendererById, sceneName, id);
                     else if ((string)comp["type"] == "BallisticCollider")
                         BallisticColliderImporter.Attach(go, comp);
+                    else if ((string)comp["type"] == "SmallPhysicsObject") // PLAN-TWO-MAPS item 5
+                        PhysicsPropImporter.AttachSmallPhysicsObject(go, comp);
                 }
             }
 
