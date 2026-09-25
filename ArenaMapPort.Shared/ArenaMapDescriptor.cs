@@ -159,8 +159,8 @@ namespace ArenaMapPort.Shared
             ScriptsSceneName: ArenaEquatorLocation.ScriptsSceneName,
             AllSceneNames: ArenaEquatorLocation.AllSceneNames,
             InfiltrationName: "ArenaEquator", // SpawnInfiltrationRepairs' pre-generalization literal
-            LocaleName: "Arena: Equator (spike)",
-            LocaleDescription: "Internal test build — geometry/collision/NavMesh spike.",
+            LocaleName: "Arena: Equator",
+            LocaleDescription: "The Equator shopping mall from EFT Arena. Ground floor playable; the upper rings are scenery.",
             IconX: 150, IconY: 760,
             DbBaseJsonPath: "base.json", // unchanged legacy path — ArenaMapPort.Server/db/base.json
             Exits: new[]
@@ -214,8 +214,8 @@ namespace ArenaMapPort.Shared
             // built per docs/progress/bay5-port.md — still worth a playtest-confirm against the
             // real in-game load order, but no longer an unvalidated proposal.
             InfiltrationName: "ArenaBay5",
-            LocaleName: "Arena: Bay 5 (spike)",
-            LocaleDescription: "Internal test build — outdoor harbor geometry/collision/NavMesh spike.",
+            LocaleName: "Arena: Bay 5",
+            LocaleDescription: "The Bay 5 harbour depot from EFT Arena: container yard, hangar, warehouse and depot.",
             IconX: 150, IconY: 830,
             DbBaseJsonPath: "arena_bay5/base.json",
             Exits: new[]

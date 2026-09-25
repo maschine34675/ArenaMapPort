@@ -11,8 +11,8 @@
     "Arena_Equator_TeamFight_DesignStuff"
   ],
   "infiltration_name": "ArenaEquator",
-  "locale_name": "Arena: Equator (spike)",
-  "locale_description": "Internal test build — geometry/collision/NavMesh spike.",
+  "locale_name": "Arena: Equator",
+  "locale_description": "The Equator shopping mall from EFT Arena. Ground floor playable; the upper rings are scenery.",
   "icon_x": 150,
   "icon_y": 760,
   "template_key": "factory4_day",
@@ -32,7 +32,15 @@
     "size": 0.03,
     "quad_tile_set_side": 1,
     "uv_tile_padding": 1.0,
-    "bounds_center": [2.280590057373047, 1.6160001754760742, 3.3339996337890625],
-    "bounds_extents": [31.478260040283203, 5.016374111175537, 48.85846710205078]
+    "bounds_center": [
+      2.280590057373047,
+      1.6160001754760742,
+      3.3339996337890625
+    ],
+    "bounds_extents": [
+      31.478260040283203,
+      5.016374111175537,
+      48.85846710205078
+    ]
   }
 }
