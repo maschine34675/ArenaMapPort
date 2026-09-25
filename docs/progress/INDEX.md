@@ -11,6 +11,11 @@ dated state in one screen; read it before this index if you only have a minute.
 - [two-maps-items-1-3.md](two-maps-items-1-3.md) — ambient gain/offset keys, barbed wire on Bay5, release
   names; host evidence 2026-09-25.
 
+- [two-maps-item-6-raincover.md](two-maps-item-6-raincover.md) — rain-cover geometry (Arena's own
+  EnvironmentManager/TriggerGroup/IndoorTrigger, and on Bay5 WeatherObstacle/DryPlane) extracted from
+  each map's Scripts scene and authored to replace the depth-photo heuristic; offline-verified 2026-09-25,
+  Unity build and host test still needed.
+
 - [../PLAN-TWO-MAPS.md](../PLAN-TWO-MAPS.md) — the ordered, spike-verified plan for the two-map first
   release (Equator + Bay5): nine work items, release checklist, what is deliberately out (2026-09-25).
 

@@ -1053,6 +1053,9 @@ def main():
         manifest["native_ballistics"] = ballistic_contract
         manifest["native_audio"] = export_audio(args.source, args.output, map_key="arena_equator")
         manifest["native_features"] = {"schema_version": 1, "required": ["ballistics", "ambient_audio"]}
+        # PLAN-TWO-MAPS item 6 -- rain-cover geometry (DryPlane/IndoorTrigger) from the Scripts scene.
+        from extract_raincover import export as export_raincover
+        manifest["native_features"]["raincover"] = export_raincover(args.source, args.output, "arena_equator")
     with open(os.path.join(args.output, "manifest.json"), "w", encoding="utf-8") as f:
         json.dump(manifest, f, indent=2, sort_keys=True, ensure_ascii=False)
 

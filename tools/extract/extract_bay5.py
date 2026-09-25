@@ -365,6 +365,9 @@ def main() -> None:
         "native_audio": native_audio,
         "native_features": {"schema_version": 1, "required": ["ballistics", "harbor_audio"]},
     }
+    # PLAN-TWO-MAPS item 6 -- rain-cover geometry (DryPlane/IndoorTrigger) from the Scripts scene.
+    from extract_raincover import export as export_raincover
+    manifest["native_features"]["raincover"] = export_raincover(args.source, args.output, "arena_bay5")
     with open(os.path.join(args.output, "manifest.json"), "w", encoding="utf-8") as f:
         json.dump(manifest, f, indent=2, sort_keys=True, ensure_ascii=False)
 
