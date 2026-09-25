@@ -14,6 +14,10 @@ modifiers (124+93 / 304+75), barbed wire (246, Bay5), decals, flares; ArenaMode-
 director allowlist, team starts. Not worth it / blocked: glass (user decision), crowd/monitors/gates
 (Arena-only classes), PerfectCulling, impostors, mannequins. Nothing was built or deployed; GPU host untouched.
 
+Scope decision 2026-09-25: the first release contains Equator and Bay5 only; the other twelve maps are
+deferred (still built/staged, no further work). Map quality on the two comes before ArenaMode features; the
+ordered plan is docs/PLAN-TWO-MAPS.md (feasibility spikes of 2026-09-25).
+
 User answers 2026-09-25: Team Deathmatch/Tactical AND pickups are wanted on both maps later — faction spawn
 pools and pickup surveys are therefore real map-side work, not optional polish (inventory §7). Bay5 DynamicMaps
 is installed (`Maps/ArenaMapPort_Bay5/ArenaMapPort_Bay5.jsonc`, user's own pack) and must not be listed as open.

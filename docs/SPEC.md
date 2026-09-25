@@ -1385,6 +1385,8 @@ reviewer's citation alone. **15 of 15 issues accepted, 0 rejected.**
   (WP5's "net9.0" above is the state at spec time).
 - **Later, on Equator and Bay5 (user, 2026-09-25):** Team Deathmatch/Tactical and pickups should become
   possible — faction-split spawn pools and pickup position surveys are in scope when the maps get there.
+- **First release scope (user, 2026-09-25):** Equator and Bay5 only; the other twelve built maps are deferred and
+  not part of the first release. Map quality on these two comes before ArenaMode optimisations.
 - **Order of work:** stage 1 of docs/HANDOFF.md (combat/death correctness and the NavMesh bake on Equator),
   then the other maps one at a time through the Equator recipe (bots/exits sidecars + host raid), then parity
   items only where ArenaMode needs them.

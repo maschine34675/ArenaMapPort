@@ -30,7 +30,9 @@ Equator/Bay5 retain their existing identities and artifact locations. The local 
 
 See [remaining maps: source inventory, results and build steps](docs/progress/remaining-maps.md) for the per-map evidence. [Current distribution contract](docs/dist-manifest.md) records the verified file set, baseline preservation, Release hashes and deployment boundary.
 
-Agents: start at [AGENTS.md](AGENTS.md), then [HANDOFF.md](HANDOFF.md) for the dated working state.
+Release scope (2026-09-25): the first release ships Equator and Bay5 only; the other twelve maps remain built
+and staged but are deferred. Agents: start at [AGENTS.md](AGENTS.md), then [HANDOFF.md](HANDOFF.md) for the dated
+working state.
 
 **DynamicMaps:** An optional Equator ground-plan pack is generated from local geometry and
 the existing NavMesh. Deployment and native player/direction/exit checks passed on 2026-09-22.

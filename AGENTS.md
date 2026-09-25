@@ -20,8 +20,10 @@ the end overrides the spike framing. `README.md` is the user-facing summary.
 - **No loot on any map, ever.** The server keeps the empty loot shape. Do not author or extract loot.
 - **No scav raids.** `DisabledForScav = true` stays.
 - **Bundles are distributed as built** (`dist/`), like other SPT map mods. Bundles still never go into git.
-- **Equator first**, then the other maps one at a time through the Equator recipe (bots/exits sidecars +
-  host raid), then parity only where ArenaMode needs it.
+- **First release = Equator and Bay5 only (user, 2026-09-25).** The other twelve maps stay built and staged
+  but are out of the release and off the work list. Make these two maps as good as they can be (native content,
+  bots, audio, lighting, physics — see docs/PLAN-TWO-MAPS.md) BEFORE ArenaMode features such as team starts and
+  pickups, which come later on both maps.
 
 ## Hard rules — never do these
 
