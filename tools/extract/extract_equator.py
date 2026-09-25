@@ -59,6 +59,7 @@ from volume_textures import write_volume_texture  # noqa: E402
 
 import common as arena_common  # analysis/scripts/common.py -- EQUATOR table  # noqa: E402
 import census as arena_census  # analysis/scripts/census.py -- spawn_zone_anchors  # noqa: E402
+import extract_physics_props as physics_props  # PLAN-TWO-MAPS item 5  # noqa: E402
 
 SCHEMA_VERSION = 1
 
@@ -511,6 +512,7 @@ COMPONENT_BUILDERS = {
     "Light": lambda obj, f, ctx: build_light(obj, ctx),
     "LODGroup": lambda obj, f, ctx: build_lodgroup(obj, f, ctx),
     "ReflectionProbe": lambda obj, f, ctx: {"type": "ReflectionProbe", "skip_import": True},
+    "Rigidbody": lambda obj, f, ctx: physics_props.build_rigidbody(obj, ctx),  # PLAN-TWO-MAPS item 5
 }
 
 
@@ -1013,6 +1015,10 @@ def main():
             # PLAN-TWO-MAPS item 4
             nm_mod, nm_vol = augment_navmesh(scenes_out[idx], f)
             print(f"    restored {nm_mod} NavMeshModifier + {nm_vol} NavMeshModifierVolume component(s)", file=sys.stderr)
+        if args.native_features:
+            # PLAN-TWO-MAPS item 5: tag SmallPhysicsObject owners (no contract needed)
+            physics_count = physics_props.augment_scene(scenes_out[idx], f)
+            print(f"    tagged {physics_count} SmallPhysicsObject owners", file=sys.stderr)
 
     try:
         print(f"Writing {len(ctx.mesh_work)} meshes...", file=sys.stderr)

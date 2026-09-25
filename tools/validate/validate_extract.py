@@ -128,11 +128,19 @@ KNOWN_COMPONENT_TYPES = {
     "ReflectionProbe", "BallisticCollider",
     "NavMeshModifier",  # PLAN-TWO-MAPS item 4
     "NavMeshModifierVolume",  # PLAN-TWO-MAPS item 4
+    "Rigidbody",           # PLAN-TWO-MAPS item 5
+    "SmallPhysicsObject",  # PLAN-TWO-MAPS item 5
 }
 RENDERER_COMPONENT_TYPES = {"MeshRenderer", "SkinnedMeshRenderer"}
 
 # fix-enabled-state -- the component types §C.6's schema records an "enabled" field for (every
 # type with a real Unity m_Enabled field; MeshFilter has none, ReflectionProbe is never imported).
+# PLAN-TWO-MAPS item 5: neither new type belongs here either, for the same reason as MeshFilter and
+# as BallisticCollider before it -- Rigidbody has no m_Enabled field at all (verified against real
+# Arena data), and SmallPhysicsObject's "enabled" comes from a MonoBehaviour class name that
+# count_disabled_in_arena() below can never observe (its live source recompute keys off
+# obj.type.name, which is always "MonoBehaviour" for any custom class, never the class name) --
+# adding it here would compare a real package count against a ground truth that is always empty.
 ENABLED_COMPONENT_TYPES = {
     "MeshRenderer", "SkinnedMeshRenderer", "MeshCollider", "BoxCollider",
     "SphereCollider", "CapsuleCollider", "Light", "LODGroup",
