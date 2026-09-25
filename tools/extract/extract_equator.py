@@ -982,6 +982,8 @@ def main():
     if args.native_features:
         from extract_ballistics import load_contract, augment_scene
         ballistic_contract = load_contract(args.source, args.target)
+        # PLAN-TWO-MAPS item 4: NavMesh modifier/volume components (no cross-version contract needed)
+        from extract_navmesh_modifiers import augment_scene as augment_navmesh, read_navmesh_areas
 
     scenes_out: dict[int, dict] = {}
     for idx in scene_indices:
@@ -1008,6 +1010,9 @@ def main():
         if ballistic_contract is not None:
             count = augment_scene(scenes_out[idx], f, ballistic_contract)
             print(f"    restored {count} original ballistic material components", file=sys.stderr)
+            # PLAN-TWO-MAPS item 4
+            nm_mod, nm_vol = augment_navmesh(scenes_out[idx], f)
+            print(f"    restored {nm_mod} NavMeshModifier + {nm_vol} NavMeshModifierVolume component(s)", file=sys.stderr)
 
     try:
         print(f"Writing {len(ctx.mesh_work)} meshes...", file=sys.stderr)
@@ -1053,6 +1058,7 @@ def main():
         manifest["native_ballistics"] = ballistic_contract
         manifest["native_audio"] = export_audio(args.source, args.output, map_key="arena_equator")
         manifest["native_features"] = {"schema_version": 1, "required": ["ballistics", "ambient_audio"]}
+        manifest["native_features"]["navmesh_areas"] = read_navmesh_areas(env, args.source)  # PLAN-TWO-MAPS item 4
     with open(os.path.join(args.output, "manifest.json"), "w", encoding="utf-8") as f:
         json.dump(manifest, f, indent=2, sort_keys=True, ensure_ascii=False)
 

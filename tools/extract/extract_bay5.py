@@ -273,6 +273,8 @@ def main() -> None:
     from extract_ballistics import load_contract, augment_scene
     from extract_bay5_audio import export as export_audio
     ballistic_contract = load_contract(args.source, args.target)
+    # PLAN-TWO-MAPS item 4: NavMesh modifier/volume components (no cross-version contract needed)
+    from extract_navmesh_modifiers import augment_scene as augment_navmesh, read_navmesh_areas
     ctx = EQ.ExtractionContext(env=env)
     EQ.ensure_dirs(args.output)
 
@@ -285,6 +287,9 @@ def main() -> None:
         scenes_out[idx] = EQ.extract_scene(idx, f, tags_array, node_id_list, ctx)
         count = augment_scene(scenes_out[idx], f, ballistic_contract)
         print(f"    restored {count} original ballistic material components", file=sys.stderr)
+        # PLAN-TWO-MAPS item 4
+        nm_mod, nm_vol = augment_navmesh(scenes_out[idx], f)
+        print(f"    restored {nm_mod} NavMeshModifier + {nm_vol} NavMeshModifierVolume component(s)", file=sys.stderr)
 
     try:
         print(f"Writing {len(ctx.mesh_work)} meshes...", file=sys.stderr)
@@ -363,7 +368,8 @@ def main() -> None:
         "warnings": ctx.warnings,
         "native_ballistics": ballistic_contract,
         "native_audio": native_audio,
-        "native_features": {"schema_version": 1, "required": ["ballistics", "harbor_audio"]},
+        "native_features": {"schema_version": 1, "required": ["ballistics", "harbor_audio"],
+                            "navmesh_areas": read_navmesh_areas(env, args.source)},  # PLAN-TWO-MAPS item 4
     }
     with open(os.path.join(args.output, "manifest.json"), "w", encoding="utf-8") as f:
         json.dump(manifest, f, indent=2, sort_keys=True, ensure_ascii=False)

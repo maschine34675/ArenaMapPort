@@ -126,6 +126,8 @@ KNOWN_COMPONENT_TYPES = {
     "MeshFilter", "MeshRenderer", "SkinnedMeshRenderer", "MeshCollider",
     "BoxCollider", "SphereCollider", "CapsuleCollider", "Light", "LODGroup",
     "ReflectionProbe", "BallisticCollider",
+    "NavMeshModifier",  # PLAN-TWO-MAPS item 4
+    "NavMeshModifierVolume",  # PLAN-TWO-MAPS item 4
 }
 RENDERER_COMPONENT_TYPES = {"MeshRenderer", "SkinnedMeshRenderer"}
 

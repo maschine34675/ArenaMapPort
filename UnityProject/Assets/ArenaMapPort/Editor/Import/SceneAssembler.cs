@@ -121,6 +121,12 @@ namespace ArenaMapPort.Editor.Import
                         case "Light":
                             AttachLight(go, comp);
                             break;
+                        case "NavMeshModifier":  // PLAN-TWO-MAPS item 4
+                            NavMeshModifierImporter.AttachModifier(go, comp);
+                            break;
+                        case "NavMeshModifierVolume":  // PLAN-TWO-MAPS item 4
+                            NavMeshModifierImporter.AttachVolume(go, comp);
+                            break;
                         case "LODGroup":
                             break; // Pass 2, after every Renderer exists.
                         case "BallisticCollider":

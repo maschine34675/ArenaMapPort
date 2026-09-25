@@ -140,12 +140,45 @@ namespace ArenaMapPort.Editor.NavMesh
             int waterLayer = LayerMask.NameToLayer("Water");
             int sourceLayerMask = waterLayer >= 0 ? ~0 & ~(1 << waterLayer) : ~0;
 
-            var allSources = new List<NavMeshBuildSource>();
-            UnityEngine.AI.NavMeshBuilder.CollectSources(null, sourceLayerMask, NavMeshCollectGeometry.PhysicsColliders, 0, new List<NavMeshBuildMarkup>(), allSources);
-
             var rootTransforms = new List<Transform>();
             foreach (var root in geometryRoots)
                 if (root != null) rootTransforms.Add(root.transform);
+
+            // PLAN-TWO-MAPS item 4: NavMeshModifier area-override/ignore-from-build markup, scoped
+            // to this bake's own geometryRoots. Unity.AI.Navigation.NavMeshModifier.activeModifiers
+            // is populated by each component's own [ExecuteAlways] OnEnable() the moment
+            // NavMeshModifierImporter attaches it to an owned, active GameObject during Assemble()
+            // -- this list is simply whatever real modifiers exist in the currently-open scenes,
+            // the same source NavMeshSurface.CollectSources() itself reads (com.unity.ai.navigation
+            // @1.1.5/Runtime/NavMeshSurface.cs, mirrored field-for-field below). Ground truth
+            // (2026-09-25 spike): Bay5's bruno_helix pump-station family carries 113 area overrides
+            // (area=1, "Not Walkable"); Equator carries zero override instances anywhere, so this
+            // list is expected empty-of-overrides there (an ignoreFromBuild-only marker changes
+            // nothing observable: PhysicsColliders geometry mode already skips the trigger colliders
+            // those markers sit on).
+            var modifierMarkups = new List<NavMeshBuildMarkup>();
+            int overrideAreaCount = 0, ignoreFromBuildCount = 0;
+            foreach (var m in Unity.AI.Navigation.NavMeshModifier.activeModifiers)
+            {
+                bool underRoot = false;
+                foreach (var rt in rootTransforms) { if (m.transform.IsChildOf(rt)) { underRoot = true; break; } }
+                if (!underRoot) continue;
+                modifierMarkups.Add(new NavMeshBuildMarkup
+                {
+                    root = m.transform,
+                    overrideArea = m.overrideArea,
+                    area = m.area,
+                    ignoreFromBuild = m.ignoreFromBuild,
+                    applyToChildren = m.applyToChildren,
+                    overrideGenerateLinks = m.overrideGenerateLinks,
+                    generateLinks = m.generateLinks,
+                });
+                if (m.overrideArea) overrideAreaCount++;
+                if (m.ignoreFromBuild) ignoreFromBuildCount++;
+            }
+
+            var allSources = new List<NavMeshBuildSource>();
+            UnityEngine.AI.NavMeshBuilder.CollectSources(null, sourceLayerMask, NavMeshCollectGeometry.PhysicsColliders, 0, modifierMarkups, allSources);
 
             // Stage 1 (2026-09-20, docs/progress/exfils-stage2.md "Respawn booths"/"Spawn barriers"): the client opens
             // Arena's round-start obstacles at raid start (SpawnPlacementRepairs disables SPAWN_BOUND*,
@@ -178,6 +211,46 @@ namespace ArenaMapPort.Editor.NavMesh
             }
             foreach (var kv in excludedByReason)
                 Debug.Log("[ArenaMapPort][BakeNavMesh] excluded " + kv.Value + " nonphysical or round-open source(s): " + kv.Key);
+
+            // PLAN-TWO-MAPS item 4: NavMeshModifierVolume -> ModifierBox NavMeshBuildSource, scoped
+            // to this bake's own geometryRoots the same way as the markups above. Box math copied
+            // from NavMeshSurface.AppendModifierVolumes (com.unity.ai.navigation@1.1.5/Runtime/
+            // NavMeshSurface.cs) rather than re-derived: world center via TransformPoint, world size
+            // via the volume's own lossyScale (never the surface/bake root's), area applied straight
+            // through as NavMeshBuildSource.area (same "1 == Not Walkable" convention as a modifier's
+            // overrideArea). Ground truth: all 134 of Bay5's real NavMeshModifierVolume instances
+            // sit on the same bruno_helix pump-station family as the overrides above; Equator has
+            // none, so this adds zero sources there.
+            var areaCounts = new Dictionary<int, int>();
+            int volumeSourceCount = 0;
+            foreach (var v in Unity.AI.Navigation.NavMeshModifierVolume.activeModifiers)
+            {
+                bool underRoot = false;
+                foreach (var rt in rootTransforms) { if (v.transform.IsChildOf(rt)) { underRoot = true; break; } }
+                if (!underRoot) continue;
+                Vector3 worldCenter = v.transform.TransformPoint(v.center);
+                Vector3 scale = v.transform.lossyScale;
+                Vector3 worldSize = new Vector3(v.size.x * Mathf.Abs(scale.x), v.size.y * Mathf.Abs(scale.y), v.size.z * Mathf.Abs(scale.z));
+                sources.Add(new NavMeshBuildSource
+                {
+                    shape = NavMeshBuildSourceShape.ModifierBox,
+                    transform = Matrix4x4.TRS(worldCenter, v.transform.rotation, Vector3.one),
+                    size = worldSize,
+                    area = v.area,
+                });
+                volumeSourceCount++;
+                int n;
+                areaCounts.TryGetValue(v.area, out n);
+                areaCounts[v.area] = n + 1;
+            }
+            {
+                var areaLog = new System.Text.StringBuilder();
+                foreach (var kv in areaCounts) areaLog.Append("area" + kv.Key + "=" + kv.Value + " ");
+                Debug.Log("[ArenaMapPort][BakeNavMesh] NavMesh modifiers: " + modifierMarkups.Count + " markup(s) in bake scope (" +
+                          overrideAreaCount + " area-override, " + ignoreFromBuildCount + " ignoreFromBuild), " +
+                          volumeSourceCount + " volume source(s) added; volume area distribution: " +
+                          (areaLog.Length == 0 ? "(none)" : areaLog.ToString()));
+            }
 
             // Verification fix-up (2026-09-15, Bay5), continued: bounds is a SEPARATE pass over
             // every gameplay Renderer, independent of `sources` above -- excluding the

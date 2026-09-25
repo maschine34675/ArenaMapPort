@@ -1,7 +1,9 @@
 {
   "name": "ArenaMapPort.Editor",
   "rootNamespace": "ArenaMapPort.Editor",
-  "references": [],
+  "references": [
+    "Unity.AI.Navigation"
+  ],
   "includePlatforms": [
     "Editor"
   ],
