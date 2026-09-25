@@ -174,10 +174,10 @@ unbounded per-frame cost for 413 instances.
   a 2-line compile check first. New `SmallPhysicsObjectImporter.cs` (Pass 2, next to
   `BallisticColliderImporter.cs`): `AddComponent<global::SmallPhysicsObject>()` with class defaults — first
   do a trivial compile check that `typeof(global::SmallPhysicsObject)` resolves.
-- *Client (optional, small)*: `Config.Bind("Physics","ForceEnableEquatorProps",false,...)` doing
-  `physicRoot.SetActive(true)` on Equator's `PHYSIC` container, gated `ArenaMapRaid.IsOwnedScene()`, default
-  **false** (preserve Arena's own authored state — see open decision §4.1). One diagnostic log line
-  (active-vs-found `SmallPhysicsObject` count).
+- *Client (small)*: `Config.Bind("Physics","EnablePhysicsProps",true,...)` doing `physicRoot.SetActive(true)`
+  on Equator's `PHYSIC` container (Bay5's is already active), gated `ArenaMapRaid.IsOwnedScene()`, default
+  **true** (user decision 2026-09-25: activate — the check below found no duplicates and no offline reason not
+  to). One diagnostic log line (active-vs-found `SmallPhysicsObject` count).
 
 **Effort.** M.
 
@@ -186,8 +186,8 @@ unbounded per-frame cost for 413 instances.
 `ForceEnableEquatorProps=true`, check no clip/pop on wake and flat FPS when a compound prop (6-fragment
 `Cactus_4`) wakes several rigidbodies at once.
 
-**Done when.** Bay5 props react to shots/touches by default; Equator props react only with the config flag
-on; no clipping or FPS drop observed.
+**Done when.** Props on both maps react to shots/touches by default; no clipping, no props sinking through
+shelves at raid start, no FPS drop observed.
 
 ### 6. Rain-cover geometry — DryPlane + IndoorTrigger (Bay5 primary; Equator's one atrium trigger)
 
@@ -387,15 +387,14 @@ since it packages whatever `dist/` currently holds for Equator/Bay5.
 
 ## 4. Open decisions for the user (blocking)
 
-1. **Equator's physics props ship hierarchy-disabled in Arena's own data** (the `PHYSIC` container,
-   `activeSelf=False`, no toggler found anywhere in the decompile). §1.5's plan defaults to preserving that
-   — Equator gets a config toggle, **default off**, so nothing visibly changes there until switched on. Is
-   that the right call, or should Equator ship with props force-enabled by default (diverging from Arena's
-   own authored choice) as part of "making it perfect"?
-2. **Release versioning and channel.** `PluginVersion`/`ModMetadata.Version` are both still `0.1.0` with no
-   consistency check tying them together — pick a first-release number (e.g. `1.0.0`) and confirm whether
-   "release" (§2) means a public zip now, or stays internal (`dist/` + `deploy-to-spt.ps1`) until more of §1
-   lands.
-3. **How much of §1 gates "release."** The plan orders nine items by value/effort but doesn't itself decide a
-   cut line — should the release checklist (§2) run once items 1-3 (quick, no-rebuild) are done, after the
-   shared rebuild (items 4-6), or only after everything including the lower-confidence item 8?
+1. **Decided 2026-09-25: activate the props.** Equator's `PHYSIC` container (2,192 objects, 973 renderers:
+   94 Baltika bottles, 62 plastic cups, 56 paper cups, 26 cans, …) ships `activeSelf=False` in Arena's data;
+   a scene-dump check found **no** active static duplicate of any of those meshes within 0.3 m, so enabling
+   adds clutter that is simply missing today, without double geometry. Bay5's `PHYSIC` root is already
+   active (44 renderers). Arena's reason is almost certainly networked determinism, irrelevant offline;
+   `SmallPhysicsSystem` only simulates within 5 m of a player under an FPS budget. Default on, config to
+   disable.
+2. **Deferred 2026-09-25: version and release channel.** The user: version and release come last, once
+   everything in §1 is done. Until then `dist/` + `deploy-to-spt.ps1` remain the only delivery; §2 runs after
+   item 8.
+3. **Answered by 2:** the cut line is "everything in §1".
