@@ -8,6 +8,9 @@ dated state in one screen; read it before this index if you only have a minute.
 
 ## Current — read these for the area you touch
 
+- [../PLAN-TWO-MAPS.md](../PLAN-TWO-MAPS.md) — the ordered, spike-verified plan for the two-map first
+  release (Equator + Bay5): nine work items, release checklist, what is deliberately out (2026-09-25).
+
 - [native-content-inventory.md](native-content-inventory.md) — census of every Arena script/engine class
   on Equator and Bay5 (imported and excluded scenes), what is ported, and the ranked list of what can still be
   ported for ArenaMode play (2026-09-24).
