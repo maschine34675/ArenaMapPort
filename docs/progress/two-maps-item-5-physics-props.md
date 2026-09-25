@@ -298,3 +298,12 @@ categories plus the known `Land_Cruiser_close` LODGroup warning, unrelated to th
 
 **Status:** VERIFIED 2026-09-25 (props react on both maps by default, impact sounds with Arena's authored
 types, no clipping, no exception on contact).
+
+### Raid-end exceptions closed (2026-09-25 evening)
+
+The `SmallPhysicsSystem.Update()` NullReferenceException at raid end showed up 1–5 times per raid on both maps
+(`Singleton<GameWorld>.Instance` is already null while the scene-local system still ticks).
+`PhysicsPropTeardownRepairs` (Harmony prefix on `SmallPhysicsSystem.Update`, gated on the system object living
+in one of this mod's scenes) skips the tick while no GameWorld exists. Verified 18:01 (instance bbacc900):
+Equator raid started and left, only the pre-existing `MenuScreen` coroutine line at teardown, no
+`SmallPhysicsSystem` line.

@@ -478,12 +478,13 @@ namespace ArenaMapPort.Client
             // rigDefaults split RainCoverEntry's own class default does NOT use, since the heuristic
             // itself has always run on every map with SkyboxMode!=Off/Donor!=Off regardless of rig tier).
             cfg.AuthoredRainCoverEntry = Plugin.Instance.Config.Bind(section, "AuthoredRainCover", rigDefaults,
-                "When true, this map's real, authored rain-cover geometry (EnvironmentManager/WeatherObstacle/" +
-                "DryPlane/IndoorTrigger — RainCoverImporter.cs, PLAN-TWO-MAPS item 6) is used and RainCoverMethod's " +
-                "depth-photo heuristic above is skipped for this map entirely, avoiding a double-drawn depth photo. " +
-                "false = force the old heuristic even if authored data is present (A/B comparison only). Defaults " +
-                "true for Equator/Bay5 (the only maps with authored rain-cover data today), false for every other " +
-                "map. Applied fresh every raid, not live.");
+                "When true, this map's authored rain-cover data (EnvironmentManager/IndoorTrigger and, if the map " +
+                "ships genuine ones, WeatherObstacle/DryPlane — RainCoverImporter.cs, PLAN-TWO-MAPS item 6) is used; " +
+                "the depth-photo heuristic above stays armed and only its elevated-mesh draws yield to a real " +
+                "WeatherObstacle at render time (2026-09-25: neither Equator nor Bay5 ships one — Arena's Bay5 " +
+                "DryPlanes are Lighthouse leftovers — so the heuristic does the roof work on both). false = ignore " +
+                "the authored data for the heuristic decision (A/B only). Defaults true for Equator/Bay5, false for " +
+                "every other map. Applied fresh every raid, not live.");
             cfg.ReflectionIntensity.SettingChanged += (_, __) => ReapplyReflectionIntensity(map);
             cfg.AmbientIntensity.SettingChanged += (_, __) => ReapplyAmbientIntensity(map);
 

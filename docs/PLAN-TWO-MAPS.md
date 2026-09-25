@@ -189,7 +189,7 @@ unbounded per-frame cost for 413 instances.
 **Done when.** Props on both maps react to shots/touches by default; no clipping, no props sinking through
 shelves at raid start, no FPS drop observed.
 
-### 6. Rain-cover geometry — DryPlane + IndoorTrigger (Bay5 primary; Equator's one atrium trigger) — VERIFIED 2026-09-25 14:33 (Bay5 30 IndoorTrigger + 669 DryPlane authored, dry floor under the warehouse roof in forced rain; Equator 1 trigger; docs/progress/two-maps-item-6-raincover.md)
+### 6. Rain-cover geometry — DryPlane + IndoorTrigger (Bay5 primary; Equator's one atrium trigger) — CORRECTED 2026-09-25 evening: IndoorTriggers authored (30 / 1); Arena's Bay5 DryPlanes turned out to be EFT-Lighthouse leftovers and are dropped at extraction, so the roof work stays with the depth-photo heuristic on both maps (the 14:33 "verified" only checked floor wetness; user saw rain indoors) — docs/progress/two-maps-item-6-raincover.md "Correction"
 
 **What.** Author Arena's own `EFT.EnvironmentEffect.DryPlane`/`IndoorTrigger` geometry, replacing
 `RainCoverRepairs.cs`'s ~1400-line depth-photo heuristic and the missing `WeatherObstacle` with ground-truth

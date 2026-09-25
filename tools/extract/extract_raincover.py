@@ -178,6 +178,57 @@ def _world_matrix_of_transform(tobj, max_depth=64):
     return m
 
 
+def _root_name_of_transform(tobj, max_depth=64):
+    """Name of the top-most ancestor GameObject of a Transform (the WeatherObstacle root a DryPlane hangs
+    under). Bay5 finding 2026-09-25: Arena's 669 DryPlanes all hang under a root called
+    'Lighthouse_DryPlanes' -- the WeatherObstacle prefab of EFT's Lighthouse map copied into the Arena
+    scene, spanning x -383..454 / z -973..566 while Bay5 plays in x -60..160 / z -40..120."""
+    cur = tobj
+    depth = 0
+    last = None
+    while cur is not None and depth < max_depth:
+        last = cur
+        t = cur.read_typetree()
+        father = t.get("m_Father", {})
+        fpid = father.get("m_PathID", 0)
+        cur = cur.assets_file.objects.get(fpid) if fpid and father.get("m_FileID", 0) == 0 else None
+        depth += 1
+    if last is None:
+        return None
+    t = last.read_typetree()
+    go = last.assets_file.objects.get(t.get("m_GameObject", {}).get("m_PathID", 0))
+    return _go_name(go) if go is not None else None
+
+
+def plausible_dry_planes(dry_planes, indoor_triggers, pad=3.0):
+    """Keep only DryPlanes that can roof one of THIS map's indoor rooms: the plane's world xz centre lies
+    inside some IndoorTrigger's xz Bounds (padded by `pad` metres) and the plane is at or above that
+    trigger's floor. Returns (kept, dropped). A plane hundreds of metres from every room protects nothing;
+    Bay5's Lighthouse leftovers (see _root_name_of_transform) fail this for all but a handful of chance hits."""
+    kept, dropped = [], []
+    for dp in dry_planes:
+        px, py, pz = dp["world_position"]
+        ok = False
+        for it in indoor_triggers:
+            cx, cy, cz = it["bounds_center"]
+            sx, sy, sz = it["bounds_size"]
+            if abs(px - cx) <= sx / 2 + pad and abs(pz - cz) <= sz / 2 + pad and py >= cy - sy / 2 - 0.5:
+                ok = True
+                break
+        (kept if ok else dropped).append(dp)
+    return kept, dropped
+
+
+def select_dry_planes(dry_planes, indoor_triggers, pad=3.0):
+    """plausible_dry_planes() plus a whole-set rule: when MOST planes roof none of this map's rooms the set is
+    foreign (Bay5: 667 of 669 Lighthouse quads fail, 2 hit a room by chance) and is dropped entirely, so no
+    chance hit ends up as a fake roof. Returns (kept, dropped, reason)."""
+    kept, dropped = plausible_dry_planes(dry_planes, indoor_triggers, pad)
+    if dry_planes and len(dropped) > len(kept):
+        return [], list(dry_planes), f"foreign set: {len(dropped)} of {len(dry_planes)} planes roof no room"
+    return kept, dropped, ("" if not dropped else f"{len(dropped)} stray plane(s) dropped")
+
+
 def _decompose(m):
     pos = m[:3, 3].tolist()
     sx = float(np.linalg.norm(m[:3, 0]))
@@ -288,7 +339,8 @@ def export(source, package, map_key):
                               "own MeshFilter.m_Mesh -- not the single shared built-in Quad this module assumes; "
                               "re-run the rain-cover spike before trusting this package.")
         pos, rot, scale = _decompose(_world_matrix_of_transform(tf))
-        dry_planes.append({"name": _go_name(go), "world_position": pos, "world_rotation": rot, "world_scale": scale})
+        dry_planes.append({"name": _go_name(go), "world_position": pos, "world_rotation": rot, "world_scale": scale,
+                           "root": _root_name_of_transform(tf)})
 
     # ---- IndoorTrigger ----
     indoor_fields = [_bool("IsBunker"), _float("FadeTime"), _float("BunkerDepth"), _float("BunkerLowPass"),
@@ -323,7 +375,16 @@ def export(source, package, map_key):
             "area_auto_id": t["AreaAutoId"], "world_position": pos, "world_rotation": rot,
         })
 
-    weather_obstacle = len(by_class["WeatherObstacle"]) > 0
+    # 2026-09-25: Arena's Bay5 DryPlanes are Lighthouse leftovers (root 'Lighthouse_DryPlanes', see
+    # _root_name_of_transform) -- only planes that can actually roof one of this map's IndoorTrigger rooms
+    # are authored; the WeatherObstacle root is only worth authoring when at least one plane survives.
+    dry_plane_roots = sorted({dp.get("root") or "?" for dp in dry_planes})
+    dry_planes, dropped_dry_planes, drop_reason = select_dry_planes(dry_planes, indoor_triggers)
+    weather_obstacle = len(by_class["WeatherObstacle"]) > 0 and len(dry_planes) > 0
+    if dropped_dry_planes:
+        print(f"[extract_raincover] {map_key}: dropped {len(dropped_dry_planes)} DryPlane(s) ({drop_reason}; "
+              f"{len(indoor_triggers)} IndoorTrigger rooms; roots: {dry_plane_roots}); kept {len(dry_planes)}",
+              file=sys.stderr)
     # Established plan fact (docs/PLAN-TWO-MAPS.md §6): Equator authors zero WeatherObstacle/DryPlane
     # in Arena's own data; never invent one for Equator. Fail closed if a future Arena patch changes this
     # without the plan/importer being revisited.
@@ -343,6 +404,8 @@ def export(source, package, map_key):
         "indoor_triggers": indoor_triggers,
         "dry_planes": dry_planes,
         "weather_obstacle": weather_obstacle,
+        "dry_planes_dropped": len(dropped_dry_planes),
+        "dry_plane_roots": dry_plane_roots,
     }
     raincover_dir = os.path.join(package, "raincover")
     os.makedirs(raincover_dir, exist_ok=True)
@@ -350,14 +413,15 @@ def export(source, package, map_key):
     with open(os.path.join(raincover_dir, "raincover.json"), "w", encoding="utf-8") as fh:
         json.dump(out, fh, indent=2, sort_keys=True, ensure_ascii=False)
 
-    print(f"[extract_raincover] {map_key}: wrote {len(indoor_triggers)} IndoorTrigger, {len(dry_planes)} DryPlane, "
-          f"weather_obstacle={weather_obstacle}, {bounds_transform_mismatches} baked-vs-live Bounds mismatch(es)",
-          file=sys.stderr)
+    print(f"[extract_raincover] {map_key}: wrote {len(indoor_triggers)} IndoorTrigger, {len(dry_planes)} DryPlane "
+          f"({len(dropped_dry_planes)} dropped as implausible), weather_obstacle={weather_obstacle}, "
+          f"{bounds_transform_mismatches} baked-vs-live Bounds mismatch(es)", file=sys.stderr)
 
     return {
         "schema_version": SCHEMA_VERSION,
         "source_scene": f"Scripts (level{idx})",
         "indoor_trigger_count": len(indoor_triggers),
+        "dry_planes_dropped": len(dropped_dry_planes),
         "dry_plane_count": len(dry_planes),
         "weather_obstacle": weather_obstacle,
         "bounds_transform_mismatches": bounds_transform_mismatches,

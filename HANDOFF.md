@@ -18,8 +18,18 @@ the roundtrip validator needs the authored rain-cover objects (`raincover_extra_
 dry floor under Bay5's warehouse roof in forced rain. Evidence: the three `docs/progress/two-maps-item-{4,5,6}-*.md`
 "Lead integration"/"Host evidence" sections. Deployed to `D:\SPT41`; `D:\SPT41vanilla` gets the same build
 (user restarts its server). Known noise: one `SmallPhysicsSystem.Update` NRE per raid end (vanilla teardown
-order), `Books` props are silent (no bank on this SPT build). Next: plan items 7 (light culling), 8 (AI hubs),
-10 (banners), then 9 (release).
+order), `Books` props are silent (no bank on this SPT build).
+
+**Evening correction (user report: rain indoors on both maps, ambience only audible next to the source).**
+Item 6's rain part was wrong: `AuthoredRainCover=true` had switched the depth-photo heuristic off, Equator has
+no WeatherObstacle, and Arena's 669 Bay5 DryPlanes are EFT-Lighthouse leftovers (root `Lighthouse_DryPlanes`,
+a square kilometre off the map). `extract_raincover.select_dry_planes` now drops foreign sets (Bay5: 669 → 0,
+`weather_obstacle=false`), the client keeps the heuristic armed on every map (a real WeatherObstacle only adds to
+the photo), Bay5 was rebuilt. Ambience: new `Audio (<map>) › AmbientRangeMultiplier` (default 1) stretches the
+authored max distances before the graph's Awake bakes the rolloff curve. `PhysicsPropTeardownRepairs` silences
+the raid-end `SmallPhysicsSystem.Update` NRE. Host-verified 17:49–18:02 (F8 depth readbacks: Equator mall roof
+5.2 m, Bay5 warehouse 8.0 m, container 1.4 m, outdoor control = ground; range line `x3.00 … 25 player(s)`;
+clean teardown). Details: item-6 doc "Correction", items-1-3 doc "Item 1 follow-up", item-5 doc. Next: plan items 7 (light culling), 8 (AI hubs), 10 (banners), then 9 (release).
 
 ## State on 2026-09-25 — plan items 1–3 verified and deployed
 

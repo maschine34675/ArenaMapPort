@@ -139,6 +139,58 @@ class TypetreeNodeShapeTests(unittest.TestCase):
                                 "ExposureOffset", "RainVolume", "Bounds", "AreaAutoId"])
 
 
+class DryPlanePlausibilityTests(unittest.TestCase):
+    """2026-09-25: Arena's Bay5 DryPlanes are EFT-Lighthouse leftovers ('Lighthouse_DryPlanes' root, spread over
+    a square kilometre); only planes that can roof one of the map's own IndoorTrigger rooms are authored."""
+
+    TRIGGERS = [{"bounds_center": [137.7, 0.3, 71.1], "bounds_size": [16.6, 13.4, 61.4]},
+                {"bounds_center": [104.9, 0.1, 40.0], "bounds_size": [3.4, 2.5, 6.4]}]
+
+    def plane(self, x, y, z):
+        return {"name": "Quad", "world_position": [x, y, z], "world_rotation": [0, 0, 0, 1], "world_scale": [5, 3, 0.32]}
+
+    def test_plane_over_a_room_is_kept(self):
+        kept, dropped = R.plausible_dry_planes([self.plane(140.0, 12.0, 60.0)], self.TRIGGERS)
+        self.assertEqual((len(kept), len(dropped)), (1, 0))
+
+    def test_plane_within_pad_of_a_room_edge_is_kept(self):
+        kept, dropped = R.plausible_dry_planes([self.plane(137.7 + 8.3 + 2.5, 12.0, 71.1)], self.TRIGGERS)
+        self.assertEqual((len(kept), len(dropped)), (1, 0))
+
+    def test_plane_far_from_every_room_is_dropped(self):
+        kept, dropped = R.plausible_dry_planes([self.plane(-146.3, 6.7, -710.3)], self.TRIGGERS)
+        self.assertEqual((len(kept), len(dropped)), (0, 1))
+
+    def test_plane_below_the_room_floor_is_dropped(self):
+        kept, dropped = R.plausible_dry_planes([self.plane(140.0, -20.0, 60.0)], self.TRIGGERS)
+        self.assertEqual((len(kept), len(dropped)), (0, 1))
+
+    def test_foreign_set_is_dropped_entirely_even_with_chance_hits(self):
+        planes = [self.plane(-146.3, 6.7, -710.3), self.plane(-83.4, 4.2, -667.1), self.plane(140.0, 12.0, 60.0)]
+        kept, dropped, reason = R.select_dry_planes(planes, self.TRIGGERS)
+        self.assertEqual((len(kept), len(dropped)), (0, 3))
+        self.assertIn("foreign set", reason)
+
+    def test_genuine_set_keeps_planes_and_drops_strays(self):
+        planes = [self.plane(140.0, 12.0, 60.0), self.plane(105.0, 3.0, 40.0), self.plane(-146.3, 6.7, -710.3)]
+        kept, dropped, reason = R.select_dry_planes(planes, self.TRIGGERS)
+        self.assertEqual((len(kept), len(dropped)), (2, 1))
+        self.assertIn("stray", reason)
+
+    def test_real_bay5_package_keeps_almost_nothing(self):
+        path = Path("D:/ArenaMapPort/work/extract/bay5-native-v3/raincover/raincover.json")
+        if not path.exists():
+            self.skipTest("bay5-native-v3 package not present")
+        import json
+        data = json.loads(path.read_text(encoding="utf-8"))
+        planes = data["dry_planes"]
+        if len(planes) < 100:
+            self.skipTest("package already filtered (foreign Lighthouse set dropped at extraction)")
+        kept, dropped = R.plausible_dry_planes(planes, data["indoor_triggers"])
+        self.assertLess(len(kept), 20, "Lighthouse leftovers must not survive as Bay5 roofs")
+        self.assertGreater(len(dropped), 600)
+
+
 class ExportGuardTests(unittest.TestCase):
     def test_rejects_unknown_map_key(self):
         with self.assertRaises(ValueError):

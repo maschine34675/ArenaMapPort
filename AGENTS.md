@@ -177,6 +177,11 @@ the log; the user uses it to point at things.
   fails. In `BakeNavMesh` the Triggers/LevelBorder layer rule applies to collider sources only — the wire markups
   sit on Triggers-layer owners on purpose. Expect Bay5 `81 area-override, 28 ignoreFromBuild, 134 volume` (only
   hierarchy-active components register) and Equator `0/31/0` with an unchanged 10404/4572 triangulation.
+- Rain cover: the falling rain is culled by the shader against the depth photo `DepthPhotograper` renders
+  (Terrain layer + `WeatherObstacle` mesh); `RainCoverRepairs`' heuristic feeds that photo on every ported map and
+  must never be switched off without a replacement. Arena's Bay5 `DryPlane` set is a Lighthouse leftover
+  (`Lighthouse_DryPlanes`, off-map) and is dropped at extraction; Equator ships none. A "verified" rain check needs
+  the F8 depth readback plus a screenshot of the falling streaks, not the floor wetness.
 - Syncthing replaces the client DLL while EFT runs; EFT keeps the old code until restarted. Trust
   `uibridge_status`'s MVID comparison, not file hashes. The same holds for rebuilt bundles: a loaded map
   bundle stays cached in the EFT process, so a new NavMesh/scenes bundle needs an EFT restart before the next

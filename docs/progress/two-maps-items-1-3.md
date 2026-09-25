@@ -53,3 +53,22 @@ the server fills at load, so the server DLL was rebuilt and the host server rest
   raid start (Arena's own exfil-smoke prefab), the microphone error and the MenuScreen coroutine message.
 - Fourteen location tabs crowd one row of the map-select screen (tabs overlap); with the two-map release this
   goes away by itself.
+
+## Item 1 follow-up 2026-09-25 (evening) — `AmbientRangeMultiplier`
+
+User report: even at `AmbientGainDb=12` / `AmbientVolumeOffset=1` the imported ambience is only audible right
+next to a source. Cause (decompile `BaseAmbientSoundPlayer.Awake`, lines 250-261, confirmed by an adversarial
+agent pass): the per-player custom rolloff curve Arena authored — keys (0.002, 1.0), (0.188, 0.267), (1.0, 0.0)
+on the normalised 0…1 distance axis — is baked into the AudioSource once at Awake together with
+`_minDistance`/`_maxDistance`; Equator's players mostly carry `_maxDistance` 10–20 m (Bay5 30–150 m), so the
+volume is down to 27 % at 2–4 m and near zero long before the authored max distance, and the item-1 knobs only
+scale the pre-attenuation `_volume`. New per-map key `Audio (<map>) › AmbientRangeMultiplier` (1…8, default 1 =
+original Arena range) multiplies every player's `_maxDistance` in `Driver.ApplyUserRange()` **before**
+`_root.SetActive(true)` (i.e. before that Awake), so the same curve shape reaches further; the log reports
+`user range x3.00: max distance scaled on N player(s); e.g. …` or `user range neutral`. Suggested start: 3–4 on
+Equator, 2–3 on Bay5, together with a moderate gain.
+
+Host check (17:56 Equator raid, instance 3ee0c3e9) with `AmbientRangeMultiplier=3`: `[NativeAudio] user range
+x3.00: max distance scaled on 25 player(s); e.g. 'water_drops (2)' 10->30 m; 'metal_derbis (1)' 50->150 m;
+'cracles (2)' 60->180 m; map=arena_equator`, followed by the normal `ready players=25 started=23`. The key was
+reset to 1 on the test host afterwards (the user tunes it on their own installs).

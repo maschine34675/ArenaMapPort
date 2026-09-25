@@ -264,3 +264,69 @@ new modules, never these weather/rain-cover client files).
 - The `Weather (test)` key was restored to its previous value `Clear` afterwards.
 
 **Status:** VERIFIED 2026-09-25.
+
+## Correction 2026-09-25 (evening) — the "VERIFIED" above was wrong for the rain itself
+
+The user tested on `D:\SPT41vanilla` with the same build: **it rains indoors on both maps**. The 14:32 host check
+above only looked at floor wetness and one still frame; it never verified the falling rain, and the log of that
+very raid already said so (`DaytimeVisualsProbe … RainCover=RoofDepthBlack … depthCameraCullingMask=0x0`, a
+readback with the class-default `RainBounds`). Root causes, established by two independent read-only agent
+passes with adversarial verification (decompile + repo) and an offline check of the package data:
+
+1. **`AuthoredRainCover=true` switched the depth-photo heuristic off with nothing to replace it.**
+   `RainCoverRepairs.ApplyForCurrentMap` forced `Mode=Off`; vanilla's `DepthPhotograper.RenderObstacles` only draws
+   `WeatherObstacle.Instance.MeshCollider.sharedMesh`. Equator authors no WeatherObstacle at all, so its depth photo
+   was empty and rain fell into the whole mall — a straight regression against the pre-item-6 heuristic.
+2. **Arena's 669 Bay5 DryPlanes are not Bay5's roofs.** Every one hangs under a root named `Lighthouse_DryPlanes`
+   (the WeatherObstacle prefab of EFT's Lighthouse copied into the Arena scene) and they span x −383…454 /
+   z −973…566 while Bay5 plays in x −60…160 / z −40…120; only 17 fall inside the map by chance and none roofs the
+   warehouse or a container. Authoring them gave Bay5 a WeatherObstacle that covers nothing (and a few random
+   quads). Offline coverage check: 0 % of every IndoorTrigger footprint except one room at 22 % (chance hits).
+3. What actually culls the falling drops: `RainFallDrops` (decompile) has no indoor check in C#; its material
+   only gets `_Intensity`/`_FallingVector`/`_RainDensity`, and the roof test happens in the shader against the
+   global `_WeatherDepthMap`/`_MapStart`/`_MapScale` that `DepthPhotograper.SetShaderValues` publishes — i.e. the
+   depth photo the heuristic feeds. `RainController.IsCameraUnderRain` (a raycast against
+   `WeatherObstacle.MeshCollider`) only gates the camera effects (screen drops, ripples, screen water,
+   `Player.IsUnderRoof`), and is `false` whenever no WeatherObstacle exists.
+
+Fix (commit after this section):
+- `extract_raincover.py`: `select_dry_planes()` keeps a DryPlane only if its xz centre lies over one of the map's
+  own IndoorTrigger rooms (3 m pad, at/above the room floor); when most planes fail, the whole set is foreign
+  and dropped (`raincover.json` records `dry_planes_dropped`, `dry_plane_roots`; the manifest summary carries
+  `dry_planes_dropped`). Bay5: `dropped 669 (foreign set: 667 of 669 planes roof no room; roots:
+  ['Lighthouse_DryPlanes']); kept 0`, `weather_obstacle=False`. Equator unchanged (0/0). Tests:
+  `DryPlanePlausibilityTests`.
+- Client: `ApplyForCurrentMap` no longer forces `Mode=Off` for `AuthoredRainCover=true`; the heuristic stays armed
+  on both maps (RainBounds scan + RoofDepthBlack elevated-mesh draws), and a real WeatherObstacle — should a map
+  ever ship genuine DryPlanes — is drawn by vanilla in addition (union of both covers, logged once). The
+  `AuthoredRainCover` key keeps its default and its documented purpose (the authored EnvironmentManager/
+  IndoorTrigger data is used); only its description text was corrected.
+- Bay5 rebuilt from the re-exported package (Scripts scene now: EnvironmentManager > TriggerGroup > 30
+  IndoorTriggers, no WeatherObstacle); Equator's bundle is unchanged (its raincover data did not change).
+
+Host verification recipe this time (what the first check should have done): force rain, then at each test spot
+press **F8** (`RainCoverLab › RerenderHotkey`: re-renders the depth photo and logs `[RainCoverLab] RainCover depth
+readback @ (…)` with the sampled roof depth at the camera) and take a screenshot against a dark background
+where falling streaks are visible. Spots: Equator mall (any), Bay5 warehouse (137.7, 0, 71.1) and a container
+(104.9, 0.1, 40.0), plus one outdoor control.
+
+### Host evidence after the correction (2026-09-25 17:49–18:02, EFT instances 3ee0c3e9 / bbacc900, forced rain)
+
+Both raids logged `[WeatherTestOverride] applied 'Rain'` twice and, for the first time on these maps with
+`AuthoredRainCover=true`, the heuristic's own lines: Equator `RainBounds computed from 8020 renderer(s) …
+size=(102.51, 57.83, 154.24)`, `RoofDepthBlack: drew 7580 elevated mesh(es) (9247 submesh draw call(s))`; Bay5
+`RainBounds computed from 15702 renderer(s) … size=(351.63, 97.94, 726.13)`, `drew 14304 elevated mesh(es)`
+(the rebuilt Bay5 bundle authors `IndoorTrigger=30, WeatherObstacle=0`). F8 (`RainCoverLab › RerenderHotkey`,
+reaches EFT through windows-gpu `Shortcut f8`) then read the depth photo at the camera:
+
+| Spot | Camera y | Ground y | Photographed height | Verdict |
+|---|---|---|---|---|
+| Equator mall, spawn corridor (−4.91, 1.62, −33.38) | 1.62 | 0.03 | 5.23 | covered — no streaks looking up at the dark ceiling |
+| Bay5 spawn yard (119.92, −2.34, 57.78), outdoor control | −2.34 | −3.89 | −3.85 (= ground) | uncovered — rain |
+| Bay5 warehouse (137.77, 1.53, 70.92) | 1.53 | −0.03 | 8.00 | covered — no streaks against the hall roof |
+| Bay5 container (104.72, 0.50, 40.03) | 0.50 | −1.10 | 1.39 | covered — no streaks on the container ceiling |
+
+`nothingPhotographed=False` everywhere; the readback's `height(reversedZ)` is the roof height the rain shader
+compares against, so an outdoor value equal to the ground and indoor values above the camera are exactly the
+two states that matter. No `WeatherObstacle.Instance is null` line appeared. **Status: rain culling under
+roofs verified on both maps (heuristic); IndoorTriggers authored; no WeatherObstacle on either map.**

@@ -137,6 +137,11 @@ namespace ArenaMapPort.Client
             // RainBounds scan, drawn every camera change by RenderObstaclesPrefix).
             internal List<ElevatedMesh> ElevatedMeshes;
             internal bool DrawLogSent;
+            // PLAN-TWO-MAPS item 6 follow-up (2026-09-25): true when this map ships authored rain-cover data.
+            // The depth-photo heuristic stays ARMED regardless; a real WeatherObstacle (vanilla draws it) only adds
+            // to the same photo, it never replaces the heuristic's elevated-mesh draws.
+            internal bool AuthoredRainCover;
+            internal bool AuthoredSkipLogSent;
 
             // §13 goal 1 diagnostics — cached at SetupDepthCameraPostfix time for EVERY mode (the transient
             // depth camera GameObject is DestroyImmediate'd at the end of every Render() call,
@@ -202,21 +207,20 @@ namespace ArenaMapPort.Client
                 RainBoundsSize = rainBoundsSize,
                 CoverMinHeight = coverMinHeight,
             };
-            // PLAN-TWO-MAPS item 6 — when this map's scene now carries a REAL, authored
-            // EnvironmentManager/WeatherObstacle/DryPlane (RainCoverImporter.cs), this heuristic must not
-            // also draw its own elevated-mesh guesses into the same depth photo: vanilla's own
-            // DepthPhotograper.RenderObstacles() already draws instance.MeshCollider.sharedMesh once
-            // WeatherObstacle.Instance is non-null (decompile), so RenderObstaclesPrefix's EXTRA draws
-            // would double up on top of it. Forcing Mode=Off here (rather than skipping this method) keeps
-            // this map's CoverState entry in _states — SetupDepthCameraPostfix's §13 goal-1 camera-diagnostics
-            // caching (a no-op for every mode, including Off) still runs unchanged.
+            // PLAN-TWO-MAPS item 6 follow-up (2026-09-25, user report "rain indoors on both maps"): the first
+            // version forced Mode=Off here whenever AuthoredRainCover was true, assuming the authored
+            // WeatherObstacle/DryPlane geometry replaces the heuristic. It does not: Equator authors none, and
+            // Arena's 669 Bay5 DryPlanes are EFT-Lighthouse leftovers (root 'Lighthouse_DryPlanes', a square
+            // kilometre off the map — extract_raincover.py now drops them). With Mode=Off nothing fed the depth
+            // photo and rain fell into every room. The heuristic therefore stays armed; only the extra
+            // elevated-mesh draws yield to a REAL WeatherObstacle at draw time (RenderObstaclesPrefix), so a map
+            // that ever ships genuine DryPlanes gets vanilla's own draw without a doubled photo.
+            _states[map.Key].AuthoredRainCover = authoredRainCover;
             if (authoredRainCover)
             {
-                _states[map.Key].Mode = WeatherRig.RainCoverMode.Off;
-                Plugin.Log.LogInfo($"[ArenaMapPort][RainCover] map={map.Key} AuthoredRainCover=true — skipping the " +
-                    "depth-photo heuristic (RainBounds scan, cullingMask widening, elevated-mesh draws); this map's " +
-                    "own EnvironmentManager/WeatherObstacle geometry is used instead (RainCoverImporter.cs)");
-                return;
+                Plugin.Log.LogInfo($"[ArenaMapPort][RainCover] map={map.Key} AuthoredRainCover=true — the authored " +
+                    "EnvironmentManager/IndoorTrigger data is in the scene; the depth-photo heuristic stays armed " +
+                    "(a real WeatherObstacle, if the map ships one, is drawn by vanilla in addition)");
             }
             if (mode == WeatherRig.RainCoverMode.Off)
             {
@@ -744,6 +748,20 @@ namespace ArenaMapPort.Client
             {
                 drawTransform = lab.DrawTransform.Value;
                 coverAll = lab.CoverAll.Value;
+            }
+
+            // A real WeatherObstacle (vanilla RenderObstacles draws its merged DryPlane mesh into the same photo)
+            // does not switch the heuristic off: both draws land in one depth photo where the higher surface wins
+            // per pixel, i.e. the union of the two covers. Logged once so the photo's inputs are on record.
+            if (state.AuthoredRainCover && !state.AuthoredSkipLogSent && global::WeatherObstacle.Instance != null
+                && global::WeatherObstacle.Instance.MeshCollider != null)
+            {
+                state.AuthoredSkipLogSent = true;
+                var obstacle = global::WeatherObstacle.Instance; // "global::" cannot sit inside an interpolation hole (':' starts a format)
+                int obstacleVertices = obstacle.MeshCollider.sharedMesh != null ? obstacle.MeshCollider.sharedMesh.vertexCount : 0;
+                Plugin.Log.LogInfo($"[ArenaMapPort][RainCover] map={map.Key} RoofDepthBlack: a real WeatherObstacle " +
+                    $"('{obstacle.name}', {obstacleVertices} vertices) is also present — vanilla draws it, the heuristic's " +
+                    "elevated-mesh draws are added on top (union of both covers)");
             }
 
             var meshes = state.ElevatedMeshes;
