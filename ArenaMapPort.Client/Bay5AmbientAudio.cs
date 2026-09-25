@@ -49,22 +49,26 @@ namespace ArenaMapPort.Client
                 _equatorDiagnostics = Plugin.Instance.Config.Bind("Audio (arena_equator)", "PlaybackDiagnostics", false,
                     "Log native indoor ambient clip/sample evidence while in Equator. Takes effect immediately; F10 also logs a snapshot.");
                 _equatorGainDb = Plugin.Instance.Config.Bind("Audio (arena_equator)", "AmbientGainDb", 0f,
-                    new ConfigDescription("Gain in dB applied to the imported ambient sources' authored volume (and their random dip) on Equator. 0 = original Arena mix. Takes effect on the next raid.", new AcceptableValueRange<float>(-12f, 12f)));
+                    new ConfigDescription("Gain in dB applied to the imported ambient sources' authored volume (and their random dip) on Equator. 0 = original Arena mix. Applied live in a running raid and at every raid start.", new AcceptableValueRange<float>(-12f, 12f)));
                 _equatorOffset = Plugin.Instance.Config.Bind("Audio (arena_equator)", "AmbientVolumeOffset", 0f,
-                    new ConfigDescription("Linear volume added to every imported ambient source on Equator (raises the floor so quiet sources cannot dip to silence). 0 = original Arena mix. Takes effect on the next raid.", new AcceptableValueRange<float>(0f, 1f)));
+                    new ConfigDescription("Linear volume added to every imported ambient source on Equator (raises the floor so quiet sources cannot dip to silence). 0 = original Arena mix. Applied live in a running raid and at every raid start.", new AcceptableValueRange<float>(0f, 1f)));
+                SubscribeLive(_equatorGainDb, _equatorOffset, "arena_equator");
                 _equatorRange = Plugin.Instance.Config.Bind("Audio (arena_equator)", "AmbientRangeMultiplier", 1f,
-                    new ConfigDescription("Multiplies every imported ambient source's Max Distance on Equator (the authored rolloff curve keeps its shape, so sources stay audible further away; most Equator sources are authored at 10-20 m). 1 = original Arena range. Takes effect on the next raid.", new AcceptableValueRange<float>(1f, 8f)));
+                    new ConfigDescription("Multiplies every imported ambient source's Max Distance on Equator (the authored rolloff curve keeps its shape, so sources stay audible further away; most Equator sources are authored at 10-20 m). 1 = original Arena range. Applied live in a running raid and at every raid start.", new AcceptableValueRange<float>(1f, 8f)));
+                _equatorRange.SettingChanged += (_, __) => ApplyLive("arena_equator");
             }
             if (!equator && _bay5Diagnostics == null)
             {
                 _bay5Diagnostics = Plugin.Instance.Config.Bind("Audio (arena_bay5)", "PlaybackDiagnostics", false,
                     "Log native ambient clip/sample and shoreline movement evidence while in Bay5. Takes effect immediately; F10 also logs a snapshot.");
                 _bay5GainDb = Plugin.Instance.Config.Bind("Audio (arena_bay5)", "AmbientGainDb", 0f,
-                    new ConfigDescription("Gain in dB applied to the imported ambient sources' authored volume (and their random dip) on Bay5. 0 = original Arena mix. Takes effect on the next raid.", new AcceptableValueRange<float>(-12f, 12f)));
+                    new ConfigDescription("Gain in dB applied to the imported ambient sources' authored volume (and their random dip) on Bay5. 0 = original Arena mix. Applied live in a running raid and at every raid start.", new AcceptableValueRange<float>(-12f, 12f)));
                 _bay5Offset = Plugin.Instance.Config.Bind("Audio (arena_bay5)", "AmbientVolumeOffset", 0f,
-                    new ConfigDescription("Linear volume added to every imported ambient source on Bay5 (raises the floor so quiet sources cannot dip to silence). 0 = original Arena mix. Takes effect on the next raid.", new AcceptableValueRange<float>(0f, 1f)));
+                    new ConfigDescription("Linear volume added to every imported ambient source on Bay5 (raises the floor so quiet sources cannot dip to silence). 0 = original Arena mix. Applied live in a running raid and at every raid start.", new AcceptableValueRange<float>(0f, 1f)));
+                SubscribeLive(_bay5GainDb, _bay5Offset, "arena_bay5");
                 _bay5Range = Plugin.Instance.Config.Bind("Audio (arena_bay5)", "AmbientRangeMultiplier", 1f,
-                    new ConfigDescription("Multiplies every imported ambient source's Max Distance on Bay5 (the authored rolloff curve keeps its shape, so sources stay audible further away). 1 = original Arena range. Takes effect on the next raid.", new AcceptableValueRange<float>(1f, 8f)));
+                    new ConfigDescription("Multiplies every imported ambient source's Max Distance on Bay5 (the authored rolloff curve keeps its shape, so sources stay audible further away). 1 = original Arena range. Applied live in a running raid and at every raid start.", new AcceptableValueRange<float>(1f, 8f)));
+                _bay5Range.SettingChanged += (_, __) => ApplyLive("arena_bay5");
             }
             var scene = SceneManager.GetSceneByName(ArenaMapRaid.CurrentMap.ScriptsSceneName);
             var roots = scene.GetRootGameObjects().SelectMany(r => r.GetComponentsInChildren<Transform>(true))
@@ -75,6 +79,22 @@ namespace ArenaMapPort.Client
             _driver.Initialize(roots[0].gameObject, mapKey, equator ? _equatorDiagnostics : _bay5Diagnostics,
                 equator ? _equatorGainDb : _bay5GainDb, equator ? _equatorOffset : _bay5Offset,
                 equator ? _equatorRange : _bay5Range);
+        }
+
+        // 2026-09-25 user request: tuning needs the keys to act in the running raid. Bound once per session (the
+        // entries outlive every Driver), so the handlers reach the CURRENT driver through the static field.
+        static void SubscribeLive(ConfigEntry<float> gainDb, ConfigEntry<float> offset, string mapKey)
+        {
+            gainDb.SettingChanged += (_, __) => ApplyLive(mapKey);
+            offset.SettingChanged += (_, __) => ApplyLive(mapKey);
+        }
+
+        static void ApplyLive(string mapKey)
+        {
+            var driver = _driver;
+            if (driver == null || driver.MapKey != mapKey) return;
+            try { driver.ApplyUserSettingsLive(); }
+            catch (Exception ex) { Plugin.Log.LogWarning($"[ArenaMapPort][NativeAudio] live setting apply failed map={mapKey}: {ex.Message}"); }
         }
 
         internal static void Shutdown()
@@ -96,6 +116,11 @@ namespace ArenaMapPort.Client
             bool _equator;
             ConfigEntry<bool> _diagnostics;
             ConfigEntry<float> _gainDb, _offset, _range;
+            internal string MapKey => _mapKey;
+            // Authored (pre-user-mix) values per player: every apply computes from these, never from the fields it
+            // wrote last time, so raid-start and live re-applies are idempotent.
+            struct Baseline { public float Volume, Delta, MaxDistance; }
+            readonly Dictionary<BaseAmbientSoundPlayer, Baseline> _baseline = new Dictionary<BaseAmbientSoundPlayer, Baseline>();
             BaseAmbientSoundPlayer[] _players = Array.Empty<BaseAmbientSoundPlayer>();
             BaseAmbientSoundPlayer[] _activePlayers = Array.Empty<BaseAmbientSoundPlayer>();
             AmbientSoundPlayerGroup[] _groups = Array.Empty<AmbientSoundPlayerGroup>();
@@ -122,6 +147,8 @@ namespace ArenaMapPort.Client
                 _mapKey = mapKey; _equator = mapKey == "arena_equator"; _diagnostics = diagnostics;
                 _gainDb = gainDb; _offset = offset; _range = range;
                 _players = root.GetComponentsInChildren<BaseAmbientSoundPlayer>(true);
+                foreach (var p in _players)
+                    if (p != null) _baseline[p] = new Baseline { Volume = p._volume, Delta = p._deltaVolume, MaxDistance = p._maxDistance };
                 _groups = root.GetComponentsInChildren<AmbientSoundPlayerGroup>(true);
                 _controllers = root.GetComponentsInChildren<AmbientSplineEmitterController>(true);
                 _water = root.GetComponentInChildren<AmbientPlayerSplineMappedEmitter>(true);
@@ -280,6 +307,8 @@ namespace ArenaMapPort.Client
                 float m = _range?.Value ?? 1f;
                 if (Mathf.Approximately(m, 1f) || m <= 0f)
                 {
+                    foreach (var player in _players)
+                        if (player != null && _baseline.TryGetValue(player, out var b0)) player._maxDistance = b0.MaxDistance;
                     Plugin.Log.LogInfo($"[ArenaMapPort][NativeAudio] user range neutral (original Arena max distances) map={_mapKey}");
                     return;
                 }
@@ -288,12 +317,35 @@ namespace ArenaMapPort.Client
                 foreach (var player in _players)
                 {
                     if (player == null) continue;
-                    float before = player._maxDistance;
+                    float before = _baseline.TryGetValue(player, out var b) ? b.MaxDistance : player._maxDistance;
                     player._maxDistance = Mathf.Clamp(before * m, player._minDistance + 0.1f, 1000f);
                     adjusted++;
                     if (adjusted <= 3) examples.Append($" '{player.name}' {before:F0}->{player._maxDistance:F0} m;");
                 }
                 Plugin.Log.LogInfo($"[ArenaMapPort][NativeAudio] user range x{m:F2}: max distance scaled on {adjusted} player(s); e.g.{examples} map={_mapKey}");
+            }
+
+            // Live re-apply from a SettingChanged: recompute the per-player fields from the baseline (ApplyUserRange /
+            // ApplyUserMix), then push them onto the sources that are already playing — BaseAmbientSoundPlayer only reads
+            // _maxDistance in Awake and _volume in FadeIn (decompile), so a running source needs Source.maxDistance and
+            // a Fader re-target to hear the change now (PlayCoroutine copies Fader.Volume into Source.volume every frame).
+            internal void ApplyUserSettingsLive()
+            {
+                if (!_ready || _disposed) return;
+                ApplyUserRange();
+                ApplyUserMix();
+                int pushed = 0;
+                foreach (var player in _activePlayers)
+                {
+                    if (player == null || !player.isActiveAndEnabled || player.Source == null) continue;
+                    player.Source.maxDistance = player._maxDistance;
+                    if (player.IsPlaying && player.Fader != null)
+                    {
+                        player.Fader.FadeTo(player.GetBaseVolume(), 0.5f);
+                        pushed++;
+                    }
+                }
+                Plugin.Log.LogInfo($"[ArenaMapPort][NativeAudio] live settings applied: gainDb={_gainDb?.Value ?? 0f:F1} offset={_offset?.Value ?? 0f:F3} range=x{_range?.Value ?? 1f:F2}; re-targeted {pushed} playing source(s), max distance pushed on {_activePlayers.Length} map={_mapKey}");
             }
 
             // PLAN-TWO-MAPS item 1 — see the field comment on _bay5GainDb. Neutral settings leave every value untouched.
@@ -303,6 +355,8 @@ namespace ArenaMapPort.Client
                 float offset = _offset?.Value ?? 0f;
                 if (Mathf.Approximately(gainDb, 0f) && Mathf.Approximately(offset, 0f))
                 {
+                    foreach (var player in _activePlayers)
+                        if (player != null && _baseline.TryGetValue(player, out var b0)) { player._volume = b0.Volume; player._deltaVolume = b0.Delta; }
                     Plugin.Log.LogInfo($"[ArenaMapPort][NativeAudio] user mix neutral (original Arena volumes) map={_mapKey}");
                     return;
                 }
@@ -311,7 +365,9 @@ namespace ArenaMapPort.Client
                 var examples = new System.Text.StringBuilder();
                 foreach (var player in _activePlayers)
                 {
+                    if (player == null) continue;
                     float volume = player._volume, delta = player._deltaVolume;
+                    if (_baseline.TryGetValue(player, out var b)) { volume = b.Volume; delta = b.Delta; }
                     float newVolume = Mathf.Clamp01(volume * gain + offset);
                     float newDelta = Mathf.Max(0f, delta * gain);
                     if (newDelta > newVolume) { newDelta = newVolume; capped++; }

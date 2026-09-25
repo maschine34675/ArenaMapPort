@@ -72,3 +72,13 @@ Host check (17:56 Equator raid, instance 3ee0c3e9) with `AmbientRangeMultiplier=
 x3.00: max distance scaled on 25 player(s); e.g. 'water_drops (2)' 10->30 m; 'metal_derbis (1)' 50->150 m;
 'cracles (2)' 60->180 m; map=arena_equator`, followed by the normal `ready players=25 started=23`. The key was
 reset to 1 on the test host afterwards (the user tunes it on their own installs).
+
+Live tuning (2026-09-25 evening, user request): `AmbientGainDb`, `AmbientVolumeOffset` and `AmbientRangeMultiplier`
+now apply in the running raid. `Driver` keeps a per-player baseline (authored `_volume`/`_deltaVolume`/
+`_maxDistance`, captured in `Initialize`), both apply methods compute from it (idempotent), and a
+`SettingChanged` handler (`ApplyUserSettingsLive`) re-applies and pushes onto playing sources: `Source.maxDistance`
+directly, and the volume through `Fader.FadeTo(GetBaseVolume(), 0.5 s)` — `BaseAmbientSoundPlayer` only reads
+`_maxDistance` in `Awake` and `_volume` in `FadeIn` (decompile), while `PlayCoroutine` copies `Fader.Volume` into
+`Source.volume` every frame. Log: `[NativeAudio] live settings applied: gainDb=… offset=… range=x…; re-targeted N
+playing source(s)`. Whether a live `Source.maxDistance` change re-stretches Unity's baked custom rolloff curve is
+to be confirmed by ear on the next host session (not yet host-verified: the host server was offline).

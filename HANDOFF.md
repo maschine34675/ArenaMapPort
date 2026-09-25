@@ -29,7 +29,14 @@ the photo), Bay5 was rebuilt. Ambience: new `Audio (<map>) › AmbientRangeMulti
 authored max distances before the graph's Awake bakes the rolloff curve. `PhysicsPropTeardownRepairs` silences
 the raid-end `SmallPhysicsSystem.Update` NRE. Host-verified 17:49–18:02 (F8 depth readbacks: Equator mall roof
 5.2 m, Bay5 warehouse 8.0 m, container 1.4 m, outdoor control = ground; range line `x3.00 … 25 player(s)`;
-clean teardown). Details: item-6 doc "Correction", items-1-3 doc "Item 1 follow-up", item-5 doc. Next: plan items 7 (light culling), 8 (AI hubs), 10 (banners), then 9 (release).
+clean teardown). Details: item-6 doc "Correction", items-1-3 doc "Item 1 follow-up", item-5 doc.
+
+**Round 3 (evening, NOT host-verified — the host server was offline, the user is swapping the test machine):**
+Equator's atrium roof is an open lattice in Arena's data (`equator_roof_Glass_LOD0` ships inactive), so rain fell
+through the cells → new key `Lighting (arena_equator) › FullyIndoorCover` (default true) draws the CoverAll quad;
+the three ambient keys now apply live (`ApplyUserSettingsLive`). Bay5 has no rain-reactive puddle decals in
+Arena's data (content gap, documented, nothing changed). Built and deployed to `D:\SPT41` only; `D:\SPT41vanilla`
+waits for the host verification (F8 at the atrium ≈ 47 m, live-apply log line). Next: plan items 7 (light culling), 8 (AI hubs), 10 (banners), then 9 (release).
 
 ## State on 2026-09-25 — plan items 1–3 verified and deployed
 

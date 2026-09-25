@@ -330,3 +330,34 @@ reaches EFT through windows-gpu `Shortcut f8`) then read the depth photo at the 
 compares against, so an outdoor value equal to the ground and indoor values above the camera are exactly the
 two states that matter. No `WeatherObstacle.Instance is null` line appeared. **Status: rain culling under
 roofs verified on both maps (heuristic); IndoorTriggers authored; no WeatherObstacle on either map.**
+
+## Round 3 (2026-09-25 evening) — Equator's atrium, and why Bay5 has no rain-reactive puddles
+
+User report after round 2: rain still falls in Equator's main hall (visible as falling drops; easy to miss at low
+graphics settings), Bay5 is fine, and Equator's puddles show a "rain hitting the water" animation that Bay5 lacks.
+
+**Equator atrium.** Two F8 readbacks under the dome (18:36 at (1.77, 1.88, 9.50) and 18:37 at (11.02, 1.55,
+19.72), forced rain) read cover at 25.85 m and 25.07 m — beams. The offline scene data explains the drops: the only
+roof renderers over the atrium footprint are `equator_roof_LOD0` (the frame: decor_plastic/metall_02/brown_wood,
+active) and `equator_roof_Glass_LOD0` (material `arena_equator_broken_glass_atlas_roof`, shader "Global
+Fog/Transparent Reflective Specular") which Arena ships **inactive**; the four `FogSheetSimple` billboards at
+19–24 m are excluded by the material rule. So the dome is an open lattice: what looks like glass from below is the
+overcast sky through the cells, the depth photo has rain-sized holes between the beams, and the rain falls through
+exactly as it would in Arena if it ever rained there. `CoverIncludesGlass` cannot help (the pane mesh never
+renders); the 18 included glass renderers are the elevator glazing.
+
+Fix (client only): new key `Lighting (arena_equator) › FullyIndoorCover` (default true on Equator, false
+elsewhere) — `RainCoverRepairs.RenderObstaclesPrefix` draws the RainCoverLab CoverAll quad over the whole
+RainBounds footprint, so the photo reads covered everywhere: no falling rain and no wetness anywhere in the mall
+(the whole playable area is one IndoorTrigger). Trade-off: with it the atrium's `puddle2` decals no longer get
+rained on; set it to false to keep rain through the broken roof and the wet, rippling atrium floor. **Not yet
+host-verified** (the host server was offline when the build was ready; the user is replacing the test machine) —
+verify with F8 at the atrium: `height(reversedZ)` must read ≈ RainBounds.max.y − 1 (≈ 47 m) and no drops.
+
+**Bay5 puddles.** Ripples/splashes on puddles come from the `Decal/Water Deferred Decal` puddle decals with the
+`USERAIN` keyword (`_USERAIN=1`): Equator has 21 `puddle2` decals with that material at ground level. Bay5's package
+contains only two puddle materials and both are the non-reactive kind (`puddle benz` on `puddle_oil` /
+`puddle2_indoornoripple` objects inside the halls, and the shared `puddle indoor static`) — Arena's Bay5 never had
+outdoor rain puddles; its wet yard look is the vertex-painted ground shader. Forcing `USERAIN` onto `puddle benz`
+would animate indoor oil puddles, so nothing was changed. Adding real rain puddles to Bay5 would mean authoring new
+decals (or testing the ground shader's own rain response) — a separate item, not a bug in the port.

@@ -193,6 +193,9 @@ namespace ArenaMapPort.Client
             internal BepInEx.Configuration.ConfigEntry<int> IndoorCoverPercent;
             // §20.2 — glass counts as roof in the depth photo; reflection tint of the indoor clones.
             internal BepInEx.Configuration.ConfigEntry<bool> CoverIncludesGlass;
+            // 2026-09-25 — whole-map rain cover for enclosed maps (Equator's atrium roof is an open lattice in
+            // Arena's data: the pane mesh equator_roof_Glass_LOD0 ships inactive, so rain fell through the cells).
+            internal BepInEx.Configuration.ConfigEntry<bool> FullyIndoorCover;
             internal BepInEx.Configuration.ConfigEntry<float> IndoorReflectionStrength;
             internal BepInEx.Configuration.ConfigEntry<bool> IndoorSurfaceRepair;
             internal BepInEx.Configuration.ConfigEntry<float> IndoorSurfaceSmoothness;
@@ -542,6 +545,18 @@ namespace ArenaMapPort.Client
             // under the glass classified INDOOR and the parquet stayed a sky mirror at any smoothness. Glass
             // IS rain cover. Live: re-photographs the roof and classifies again (wired from
             // IndoorFloorSmoothnessRepairs.Install, same convention as IndoorCoverPercent).
+            // 2026-09-25 (user report: rain in Equator's main hall). The whole playable mall lies inside its one
+            // IndoorTrigger (99.7 x 70.3 x 112.6 m, raincover.json), but the atrium's glass-pane mesh
+            // (equator_roof_Glass_LOD0, "broken glass atlas") is inactive in Arena's own data, so the roof is an open
+            // lattice and the depth photo has rain-sized holes between its beams. This draws one black quad over the
+            // whole RainBounds footprint (the RainCoverLab CoverAll quad) so the depth photo reads "covered"
+            // everywhere: no falling rain, no wetness, anywhere on the map. New key, default true only for Equator.
+            cfg.FullyIndoorCover = Plugin.Instance.Config.Bind(section, "FullyIndoorCover", equatorDefaults,
+                "Treat the whole map as roofed for rain: one black quad over the entire RainBounds footprint in the depth " +
+                "photo (no falling rain and no wetness anywhere). Meant for enclosed maps whose roof art has holes — " +
+                "Equator's atrium glass ships inactive in Arena's data, so rain fell through the lattice. false = only the " +
+                "photographed roof geometry counts (rain through the open lattice, wet atrium floor). Live: the next " +
+                "camera change or F8 re-renders the photo.");
             cfg.CoverIncludesGlass = Plugin.Instance.Config.Bind(section, "CoverIncludesGlass", true,
                 "§20.2 — treat glass-shader renderers (glass roofs, skylights, windows: shader name with " +
                 "'Glass', or 'Transparent' together with 'Reflective'/'Specular', never cutout/fence/billboard/" +
@@ -1685,6 +1700,9 @@ namespace ArenaMapPort.Client
 
         internal static BepInEx.Configuration.ConfigEntry<int> IndoorCoverPercentEntry(ArenaMapDescriptor map) =>
             _configs.TryGetValue(map.Key, out var c) ? c.IndoorCoverPercent : null;
+
+        internal static bool FullyIndoorCoverForCurrentMap() =>
+            IsActiveForCurrentMap() && _configs.TryGetValue(_activeMap.Key, out var c) && c.FullyIndoorCover != null && c.FullyIndoorCover.Value;
 
         // §20.2
         internal static bool CoverIncludesGlassForCurrentMap() =>

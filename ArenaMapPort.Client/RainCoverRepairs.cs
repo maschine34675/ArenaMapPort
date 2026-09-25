@@ -749,6 +749,12 @@ namespace ArenaMapPort.Client
                 drawTransform = lab.DrawTransform.Value;
                 coverAll = lab.CoverAll.Value;
             }
+            // 2026-09-25 — Lighting (<map>) › FullyIndoorCover promotes the lab's CoverAll quad to a per-map setting
+            // (Equator default: its atrium roof is an open lattice in Arena's data). Same draw as the lab toggle.
+            if (WeatherRig.FullyIndoorCoverForCurrentMap())
+            {
+                coverAll = true;
+            }
 
             // A real WeatherObstacle (vanilla RenderObstacles draws its merged DryPlane mesh into the same photo)
             // does not switch the heuristic off: both draws land in one depth photo where the higher surface wins
