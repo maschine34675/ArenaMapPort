@@ -314,6 +314,30 @@ since it packages whatever `dist/` currently holds for Equator/Bay5.
 **Done when.** A packaged Equator+Bay5-only zip validates clean and a host server started from just that
 2-map `db/` subset shows exactly two Arena locations in the map-select screen.
 
+### 10. Location-select banner from Arena's own art (both maps) — no rebuild (added 2026-09-25)
+
+**Verified facts (read-only research, 2026-09-25).** EFT 0.16.9.5's raid-loading screen has no image slot:
+`PreloaderUI.ShowRaidStartInfo → RaidStartIntro.ShowIntro` only types text (raid number, day, player,
+location name) over the shared `Glitch_BG_Loop_*` background; `LocationSettings.Preview` is declared but never
+read. The one per-location image slot the client shows is the location-select `Banners[]` picture
+(`LocationInfoPanel` uses the first entry, `MatchmakerBannersPanel` cycles them), served by the SPT server's
+`ImageRouter` as `/files/<path>`. Arena ships matching art in `resources.assets`: `Matchmaker_Banner_Equator`
+(path_id 3030) and `Matchmaker_Banner_Bay5` (1361), 769×460 — vanilla banners are 764/765×460 — plus
+1920×1080 `AllScreens_Loadingscreen-Equator` (1558) / `-Bay5` (804, NY variant 791) and the main-menu parallax
+sets `Arena_MainMenu_Paralax_<Map>-1..4` (sharedassets1.assets, 2048×1024). Today `make_base_json.py` forces
+`Banners: []` (Factory's banners must not leak), so both maps show the client's default picture.
+
+**Steps.** Extract the two `Matchmaker_Banner_*` textures with UnityPy into `dist/SPT_Runtime/user/mods/
+ArenaMapPort/banners/` (BSG art: staged, never committed); emit one `Banners` entry per map
+(`{"id": "arena_<key>_banner", "pic": {"path": "banners/arena_<key>.jpg", "rcid": ""}}`); inject `ImageRouter`
+into `ArenaMapPortMod` and `AddRoute("/files/banners/arena_<key>", <file>)` per map inside the existing try/catch
+loop (the Icebreaker MIT reference does exactly this); banner `Name`/`Description` locale entries; server
+rebuild + restart; check the location-select screen (an unregistered banner path logs `[UNHANDLED]` and pops an
+empty client dialog — that is the known landmine).
+
+**Effort.** S. **Not included:** showing the 1920×1080 loading art during the raid transition would need a
+custom client overlay (own Canvas/Image on the preloader) — M, optional polish.
+
 ## 2. Release checklist for the two-map package
 
 1. **No registry code change needed.** `ArenaMapRegistration`'s per-map load is already wrapped in its own
