@@ -115,3 +115,30 @@ main-region anchor and native coordinate checks. No Bay5 map pack was built here
 Bay5 has its own DynamicMaps pack, installed by the user (`Maps/ArenaMapPort_Bay5/ArenaMapPort_Bay5.jsonc`,
 verified unchanged on 2026-09-23). "No Bay5 map pack was built here" above means "not built by this tooling",
 not "missing" — do not list Bay5 DynamicMaps as an open item.
+
+## North marker clarification — 2026-09-26
+
+The user found the unlabelled upper-left arrow ambiguous. It is the fixed north marker:
+both definitions use CoordinateRotation 0; world +Z maps to SVG up. Replaced it on both
+existing drawings with a prominent path-drawn N and a two-tone compass needle (gold north,
+muted south), on a dark backing. No SVG text/font dependency is introduced.
+
+Equator's exporter now emits the shared marker; `update_north_marker.py` stages the same
+replacement for the existing user-supplied Bay5 drawing. It replaces exactly the known
+arrow, preserving all other SVG bytes and the complete JSONC. `deploy-to-spt.ps1` now accepts
+the explicit, restricted `-DynamicMapsMap Equator|Bay5` selector; Equator remains the default.
+Both variants still validate and copy exactly their two map-data files.
+
+Verification: 27 exporter tests and 69 deployment fixture cases passed. The final SVGs were
+visually inspected side by side in the local browser at 6 pixels per world unit; the N and
+both needle halves are clearly legible. Real dry runs showed only the SVG changing on each
+map; both packs were installed through the sanctioned data-only deploy mode into D:/SPT41.
+Post-copy checks prove matching staged/installed bytes, unchanged JSONC/bounds and exact
+preservation of all drawing bytes outside the marker. Backups, candidate packs and the
+verification receipt are under ignored `work/dynamicmaps/north-marker/`.
+
+This is offline visual and installed-file verification, not a new native rendering acceptance.
+UiBridge-2 reached the idle main menu, but this session did not expose the matching
+windows-gpu-2 input/screenshot tools. The retired host was not used and the running game was
+left alone. Restart EFT to refresh DynamicMaps' cached sprites; scene bundles, DLLs and
+third-party settings did not change. D:/SPT41vanilla was not changed by this pass.

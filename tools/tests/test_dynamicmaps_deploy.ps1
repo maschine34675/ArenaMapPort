@@ -23,24 +23,24 @@ function Move-FixtureItem([string]$Source, [string]$Destination) {
     Move-Item -LiteralPath $sourceFull -Destination $destinationFull
 }
 
-function New-Fixture {
+function New-Fixture([ValidateSet('Equator', 'Bay5')][string]$MapName = 'Equator') {
     $caseRoot = Join-Path $fixtureRoot ([guid]::NewGuid().ToString('N'))
     $package = Join-Path $caseRoot 'package'
     $spt = Join-Path $caseRoot 'spt'
     $plugin = Join-Path $spt 'BepInEx/plugins/mpstark-dynamicmaps'
     $bounds = @{ Min = @{ x = -20; y = -30 }; Max = @{ x = 40; y = 50 } }
     $map = @{
-        DisplayName = 'Equator (ArenaMapPort)'; Author = 'maschine';
-        MapInternalNames = @('arena_equator'); CoordinateRotation = 0; DefaultLevel = 0;
+        DisplayName = "$MapName (ArenaMapPort)"; Author = 'maschine';
+        MapInternalNames = @("arena_$($MapName.ToLowerInvariant())"); CoordinateRotation = 0; DefaultLevel = 0;
         Bounds = $bounds;
         Layers = @{ 'Ground Floor' = @{
-            Level = 0; ImagePath = 'Maps/ArenaMapPort_Equator/Layers/Ground.svg';
+            Level = 0; ImagePath = "Maps/ArenaMapPort_$MapName/Layers/Ground.svg";
             ImageBounds = $bounds;
             GameBounds = @(@{ Min = @{ x = -20; y = -30; z = -5 }; Max = @{ x = 40; y = 50; z = 10 } })
         } };
         Labels = @(); StaticMarkers = @(@{ ImagePath = 'Markers/exit.png'; Position = @{ x = 0; y = 1; z = 0 } })
     }
-    $json = Join-Path $package 'ArenaMapPort_Equator.jsonc'
+    $json = Join-Path $package "ArenaMapPort_$MapName.jsonc"
     $svg = Join-Path $package 'Layers/Ground.svg'
     Write-FixtureFile $json ($map | ConvertTo-Json -Depth 20)
     Write-FixtureFile $svg '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 60 80"><path d="M 0 0 L 60 80"/></svg>'
@@ -50,7 +50,7 @@ function New-Fixture {
     Write-FixtureFile (Join-Path $spt 'BepInEx/plugins/ArenaMapPort/ArenaMapPort.Client.dll') 'MapPort client sentinel'
     Write-FixtureFile (Join-Path $spt 'SPT_Runtime/user/mods/ArenaMapPort/ArenaMapPort.Server.dll') 'MapPort server sentinel'
     return @{ Root = $caseRoot; Package = $package; Spt = $spt; Plugin = $plugin; Map = $map;
-        Json = $json; Svg = $svg; Target = (Join-Path $plugin 'Maps/ArenaMapPort_Equator') }
+        Json = $json; Svg = $svg; MapName = $MapName; Target = (Join-Path $plugin "Maps/ArenaMapPort_$MapName") }
 }
 
 function Get-TreeState([string]$Path) {
@@ -74,9 +74,14 @@ function Get-TreeState([string]$Path) {
     return (($entries | Sort-Object) -join "`n")
 }
 
-function Invoke-Deploy($Fixture, [switch]$Confirm, [switch]$DefaultMode, [string]$Script = $deployScript) {
+function Invoke-Deploy($Fixture, [switch]$Confirm, [switch]$DefaultMode, [string]$Script = $deployScript, [string]$SelectedMap) {
     $arguments = @('-NoLogo', '-NoProfile', '-NonInteractive', '-File', $Script, '-SptRoot', $Fixture.Spt)
     if (-not $DefaultMode) { $arguments += @('-DynamicMapsPackage', $Fixture.Package) }
+    if ($PSBoundParameters.ContainsKey('SelectedMap')) {
+        $arguments += @('-DynamicMapsMap', $SelectedMap)
+    } elseif (-not $DefaultMode -and $Fixture.MapName -ne 'Equator') {
+        $arguments += @('-DynamicMapsMap', $Fixture.MapName)
+    }
     if ($Confirm) { $arguments += '-Confirm' }
     $output = (& $pwshPath @arguments 2>&1 | Out-String)
     return @{ Code = $LASTEXITCODE; Output = $output }
@@ -91,8 +96,8 @@ function Pass-Case([string]$Name) {
     Write-Output "PASS $Name"
 }
 
-function Test-Rejected([string]$Name, [scriptblock]$Mutate, [string]$Expected, [switch]$DryRunOnly) {
-    $fixture = New-Fixture
+function Test-Rejected([string]$Name, [scriptblock]$Mutate, [string]$Expected, [switch]$DryRunOnly, [string]$MapName = 'Equator') {
+    $fixture = New-Fixture $MapName
     & $Mutate $fixture
     $before = Get-TreeState $fixture.Root
     $result = Invoke-Deploy $fixture -Confirm:(-not $DryRunOnly)
@@ -147,6 +152,56 @@ try {
     $result = Invoke-Deploy $fixture
     Assert-That ($result.Code -eq 0) "JSONC comments rejected: $($result.Output)"
     Pass-Case 'JSONC comments accepted'
+
+    $fixture = New-Fixture 'Bay5'
+    # A Bay5 promotion must preserve the existing Equator map as well as third-party content.
+    Write-FixtureFile (Join-Path $fixture.Plugin 'Maps/ArenaMapPort_Equator/ArenaMapPort_Equator.jsonc') 'Equator JSON sentinel'
+    Write-FixtureFile (Join-Path $fixture.Plugin 'Maps/ArenaMapPort_Equator/Layers/Ground.svg') 'Equator SVG sentinel'
+    $before = Get-TreeState $fixture.Root
+    $result = Invoke-Deploy $fixture
+    Assert-That ($result.Code -eq 0 -and $result.Output -match 'DRY RUN' -and
+        $result.Output -match 'plan: 2 file\(s\), DynamicMaps Bay5 data only') "Bay5 dry run failed: $($result.Output)"
+    Assert-That ((Get-TreeState $fixture.Root) -ceq $before) 'Bay5 dry run modified fixture'
+    Pass-Case 'Bay5 valid package dry run'
+
+    $protectedBefore = Get-TreeState $fixture.Spt
+    $result = Invoke-Deploy $fixture -Confirm -SelectedMap 'bay5'
+    Assert-That ($result.Code -eq 0) "Bay5 real copy failed: $($result.Output)"
+    Assert-That (@(Get-ChildItem -LiteralPath $fixture.Target -File -Recurse).Count -eq 2) 'Bay5 copy did not deploy exactly two files'
+    foreach ($relative in @('ArenaMapPort_Bay5.jsonc', 'Layers/Ground.svg')) {
+        Assert-That ((Get-FileHash -LiteralPath (Join-Path $fixture.Package $relative)).Hash -eq
+            (Get-FileHash -LiteralPath (Join-Path $fixture.Target $relative)).Hash) "Bay5 copied file differs: $relative"
+    }
+    $protectedAfter = ((Get-TreeState $fixture.Spt) -split "`n" | Where-Object { $_ -notmatch 'Maps[\\/]ArenaMapPort_Bay5(?:[\\/ ]|$)' }) -join "`n"
+    Assert-That ($protectedAfter -ceq $protectedBefore) 'Bay5 copy changed Equator or another protected file'
+    Pass-Case 'Bay5 confirmed copy uses canonical destination and preserves Equator'
+
+    foreach ($mismatch in @(@{ PackageMap = 'Bay5'; Selected = 'Equator' }, @{ PackageMap = 'Equator'; Selected = 'Bay5' })) {
+        $fixture = New-Fixture $mismatch.PackageMap
+        $before = Get-TreeState $fixture.Root
+        $result = Invoke-Deploy $fixture -Confirm -SelectedMap $mismatch.Selected
+        Assert-That ($result.Code -ne 0 -and $result.Output -match 'Package must contain only') "Wrong selected map accepted: $($result.Output)"
+        Assert-That ((Get-TreeState $fixture.Root) -ceq $before) 'Wrong selected map changed fixture'
+        Pass-Case "$($mismatch.PackageMap) package rejected for $($mismatch.Selected) selection"
+    }
+    foreach ($selection in @('../Other', 'Bowl')) {
+        $fixture = New-Fixture
+        $before = Get-TreeState $fixture.Root
+        $result = Invoke-Deploy $fixture -Confirm -SelectedMap $selection
+        Assert-That ($result.Code -ne 0 -and $result.Output -match 'ValidateSet|does not belong|validation|validieren') "Unsupported map selection accepted: $($result.Output)"
+        Assert-That ((Get-TreeState $fixture.Root) -ceq $before) 'Unsupported map selection changed fixture'
+        Pass-Case "unsupported map selection $selection rejected"
+    }
+    $fixture = New-Fixture
+    $before = Get-TreeState $fixture.Root
+    $result = Invoke-Deploy $fixture -DefaultMode -Confirm -SelectedMap 'Bay5'
+    Assert-That ($result.Code -ne 0 -and $result.Output -match 'DynamicMapsMap requires DynamicMapsPackage') 'Map selection without package did not fail closed'
+    Assert-That ((Get-TreeState $fixture.Root) -ceq $before) 'Map-only selection changed fixture'
+    Pass-Case 'map selection cannot fall through to standard deployment'
+
+    Test-Rejected 'Bay5 wrong internal map ID' { param($f) $f.Map.MapInternalNames = @('arena_equator'); Save-Map $f } 'MapInternalNames' -MapName 'Bay5'
+    Test-Rejected 'Bay5 image path cannot target Equator' { param($f) $f.Map.Layers['Ground Floor'].ImagePath = 'Maps/ArenaMapPort_Equator/Layers/Ground.svg'; Save-Map $f } 'ground ImagePath' -MapName 'Bay5'
+    Test-Rejected 'Bay5 package rejects additional map file' { param($f) Write-FixtureFile (Join-Path $f.Package 'ArenaMapPort_Equator.jsonc') '{}' } 'Package must contain only' -MapName 'Bay5'
 
     Test-Rejected 'malformed JSON' { param($f) Write-FixtureFile $f.Json '{ broken' } 'FATAL'
     Test-Rejected 'duplicate JSON key' { param($f) $j = Get-Content -LiteralPath $f.Json -Raw; Write-FixtureFile $f.Json ($j -replace '^\{', '{ "CoordinateRotation": 0,') } 'Duplicate JSON property'

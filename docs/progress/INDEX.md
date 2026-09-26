@@ -8,6 +8,9 @@ dated state in one screen; read it before this index if you only have a minute.
 
 ## Current — read these for the area you touch
 
+- [equator-dynamicmaps.md](equator-dynamicmaps.md#north-marker-clarification--2026-09-26) — explicit
+  N and two-tone compass on both existing overview maps; offline visual/deploy checks (2026-09-26).
+
 - [two-maps-items-1-3.md](two-maps-items-1-3.md) — ambient gain/offset keys, barbed wire on Bay5, release
   names; host evidence 2026-09-25.
 

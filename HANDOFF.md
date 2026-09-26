@@ -3,6 +3,20 @@
 Snapshot for whoever continues (human or agent). Verify the commits named here against `git log`; this file
 is updated by hand at each handover, it is not an automatic record. Read [AGENTS.md](AGENTS.md) first.
 
+## State on 2026-09-26 — overview-map north markers clarified
+
+Branch `feature/dynamicmaps-north-marker`, based on `783d065`. Both installed DynamicMaps
+drawings now have a visible N and a gold/gray compass needle at upper left. North is world
++Z / map up. Only the old marker was replaced; all other SVG bytes and both JSONC definitions
+are unchanged. Equator's generator emits the new marker; the separate updater stages it on
+the existing Bay5 pack. The data-only deploy now explicitly supports Equator or Bay5.
+
+27 exporter tests, 69 deploy fixture cases, browser visual review and installed-byte checks
+passed. Installed to D:/SPT41 only. Native rendering was not retested: UiBridge-2 is available,
+but windows-gpu-2 is absent from this session's tools. EFT remains idle at its main menu and
+needs a restart to refresh cached map sprites. See the appended
+[north marker evidence](docs/progress/equator-dynamicmaps.md#north-marker-clarification--2026-09-26).
+
 ## State on 2026-09-26 — round 3 verified on the new host SPT-GPU-2; Equator's atrium rains by design
 
 Branch `feature/native-dust`. The GPU test host is now **SPT-GPU-2** (MCP servers `uibridge-2` / `windows-gpu-2`; same

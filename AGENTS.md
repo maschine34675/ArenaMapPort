@@ -30,7 +30,8 @@ the end overrides the spike framing. `README.md` is the user-facing summary.
 - Never write into `D:\SPT41` by hand. It is a Syncthing mirror of the GPU test host; the only write path is
   `pwsh -NoProfile -File tools/deploy-to-spt.ps1 -SptRoot 'D:\SPT41' -Confirm` (quote the path: an
   unquoted backslash in bash once created a stray folder). Without `-Confirm` the script is a dry run.
-  The optional Equator DynamicMaps pack uses the same script with `-DynamicMapsPackage <pack-folder>`;
+  The optional DynamicMaps packs use the same script with `-DynamicMapsPackage <pack-folder>`
+  and `-DynamicMapsMap Equator|Bay5` (default Equator);
   that separate mode copies only its two owned map-data files (see `tools/dynamicmaps/README.md`).
 - Never write under `C:\SPT41*`, `D:\sptmaps`, `D:\Battlestate Games` (the read-only Arena source) or
   `D:\SPT41\Development\ArenaMode` (the user's other mod; read it if you must, never edit it).

@@ -20,6 +20,17 @@ from shapely import GeometryCollection, LineString, Point, Polygon, box, make_va
 from shapely.ops import unary_union
 
 
+LEGACY_NORTH_ARROW = '<path fill="#d6b56d" d="M5,2 L3.8,5 L5,4.3 L6.2,5 Z"/>'
+# Paths keep the N visible in Unity.VectorGraphics without font/text support.
+# The gold half points to world +Z (SVG up); this is not the live player marker.
+NORTH_MARKER_SVG = '''<g id="arena-north-marker">
+<path fill="#151c24" d="M2,0.5 H8 V10 H2 Z"/>
+<path fill="#f1eee5" d="M3.7,3.7 V1 H4.3 L5.7,2.8 V1 H6.3 V3.7 H5.7 L4.3,1.9 V3.7 Z"/>
+<path fill="#d6b56d" d="M5,4.4 L3.5,7.2 H6.5 Z"/>
+<path fill="#697783" d="M5,9.3 L3.5,7.2 H6.5 Z"/>
+</g>'''
+
+
 def digest(path):
     return hashlib.sha256(Path(path).read_bytes()).hexdigest()
 
@@ -326,8 +337,7 @@ def generate(package, descriptor, output, navmesh=None):
         path, count = svg_path(geom, bounds)
         point_count += count
         svg.append(f'<path fill="{color}" fill-rule="evenodd" d="{path}"/>')
-    # Geometric north arrow, independent of text support in Unity.VectorGraphics.
-    svg.append('<path fill="#d6b56d" d="M5,2 L3.8,5 L5,4.3 L6.2,5 Z"/>')
+    svg.append(NORTH_MARKER_SVG)
     svg.append("</svg>\n")
     if point_count > 16000:
         raise ValueError(f"Drawing too complex for the native tessellator: {point_count} points")

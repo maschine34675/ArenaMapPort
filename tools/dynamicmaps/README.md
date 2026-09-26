@@ -1,4 +1,4 @@
-# Equator DynamicMaps prototype
+# ArenaMapPort DynamicMaps tools
 
 Generates a local map pack for the installed DynamicMaps 1.2.1. The map uses the
 existing extracted Equator colliders and native triangulation of our built NavMesh.
@@ -87,3 +87,26 @@ Do not copy or modify the third-party plugin or its saved settings.
 
 Check logs for load/tessellation errors, then leave the raid normally and verify
 the profile. The repository's progress log records the tested candidate and limits.
+
+## Compass-only updates (Equator and the existing Bay5 pack)
+
+The upper-left compass has a prominent N, a gold north half and a muted south half.
+All shapes, including N, are SVG paths: no native font/text support is required.
+Equator's exporter includes it automatically. Bay5's existing user-supplied drawing
+can receive the same marker without regenerating its geometry or map definition:
+
+```powershell
+& ./work/dynamicmaps/venv/Scripts/python.exe tools/dynamicmaps/update_north_marker.py `
+  --source D:/SPT41/BepInEx/plugins/mpstark-dynamicmaps/Maps/ArenaMapPort_Bay5 `
+  --output work/dynamicmaps/north-marker/Bay5/pack --map Bay5
+pwsh -NoProfile -File tools/deploy-to-spt.ps1 -SptRoot D:/SPT41 `
+  -DynamicMapsPackage work/dynamicmaps/north-marker/Bay5/pack -DynamicMapsMap Bay5
+# Add -Confirm after reviewing the two-file plan. Restart EFT to clear cached SVGs.
+```
+
+The updater requires exactly one original arrow and stages a separate output; it
+refuses an already-updated or unfamiliar drawing. All other SVG bytes and the JSONC
+are preserved. For Equator use `--map Equator` and its matching paths. Deployment
+defaults to Equator for compatibility; `-DynamicMapsMap Bay5` explicitly selects
+the other allowed destination. Both modes validate exactly the map's JSONC and
+`Layers/Ground.svg`, bound to the selected identity and image path.
