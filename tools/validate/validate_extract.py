@@ -130,6 +130,9 @@ KNOWN_COMPONENT_TYPES = {
     "NavMeshModifierVolume",  # PLAN-TWO-MAPS item 4
     "Rigidbody",           # PLAN-TWO-MAPS item 5
     "SmallPhysicsObject",  # PLAN-TWO-MAPS item 5
+    "CullingLightObject",  # PLAN-TWO-MAPS item 7
+    "VolumetricLight",     # PLAN-TWO-MAPS item 7
+    "LightFlicker",        # PLAN-TWO-MAPS item 7
 }
 RENDERER_COMPONENT_TYPES = {"MeshRenderer", "SkinnedMeshRenderer"}
 

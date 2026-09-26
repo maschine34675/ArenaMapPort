@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Reflection;
 using ArenaMapPort.Shared;
 using BepInEx.Configuration;
 using Comfort.Common;
@@ -59,6 +60,29 @@ namespace ArenaMapPort.Client
     /// (found by walking each owned Scene's own root GameObjects, the same technique ShaderRebind.cs
     /// already uses for materials) — never the player's weapon flashlight/muzzle-flash lights or another
     /// bot's, which live under an entirely different (DontDestroyOnLoad/player) hierarchy.
+    ///
+    /// PLAN-TWO-MAPS light-culling item — <see cref="ApplyLights"/> writes <c>Light.intensity</c>
+    /// directly, but on any Light that also carries a <c>CullingLightObject</c> sibling (Equator 472 /
+    /// Bay5 186 of them, per the extractor's manifest counts) that write is only a one-frame illusion:
+    /// <c>CullingLightObject.Awake</c> caches <c>float_1 = _useLightIntensityFromEditor ?
+    /// _maxLightIntensity : _light.intensity</c> once (decompile CullingLightObject.cs), and from then on
+    /// every call to <c>UpdateCullingObject</c> (its own distance/frustum fade update, driven off
+    /// <see cref="CullingManager"/> — see the fallback EnvironmentRepairs.cs now creates) does
+    /// <c>_light.intensity = float_1 * multiplier</c>, silently overwriting whatever this repair last set
+    /// the moment the light's next fade update runs (immediately, if <c>CullingManager</c> is live and the
+    /// light is visible/unfaded, since <c>multiplier</c> is then 1). <see cref="SyncCullingLightIntensity"/>
+    /// keeps that cached <c>float_1</c> in lock-step with the exact same target value <see cref="ApplyLights"/>
+    /// just wrote to <c>Light.intensity</c> — sun/global multipliers keep applying even once
+    /// <c>CullingManager</c> starts pushing its own writes, and turning the master switch off restores
+    /// <c>float_1</c> to the authored baseline too, via the same identity-multiplier codepath that already
+    /// restores <c>Light.intensity</c> (<see cref="ApplyAll"/> passes multiplier 1 / blend 0 when
+    /// <c>Enabled=false</c>, so no separate restore branch is needed). Known gap: a Light whose
+    /// <c>CullingLightObject</c> has an enabled <c>LightFlicker</c> sibling (two on Equator) takes its
+    /// intensity from <c>Flicker.ManualUpdate</c>'s own formula instead of <c>float_1</c>, so the
+    /// multipliers do not reach those two lights. Reflection-only (private field,
+    /// no public setter) — resolved once via <see cref="GetCullingLightFloat1Field"/> and logged-and-skipped
+    /// if ever missing (BSG rename), same "log and skip a missing target" spirit as
+    /// <see cref="HarmonyPatches.Verify"/>, so a missing field disables only this one sub-fix.
     /// </summary>
     internal static class ArenaLightingRepairs
     {
@@ -78,6 +102,7 @@ namespace ArenaMapPort.Client
             internal ConfigEntry<float> SunColorWhiteBlend;
             internal ConfigEntry<float> FogDensity;
             internal ConfigEntry<float> FillLightIntensity;
+            internal ConfigEntry<bool> SyncCullingLightIntensity;
         }
 
         struct LightBaseline
@@ -181,6 +206,14 @@ namespace ArenaMapPort.Client
                     "dark away from lamps. 0 = off.",
                     new AcceptableValueRange<float>(0f, 3f)));
 
+            cfg.SyncCullingLightIntensity = Plugin.Instance.Config.Bind(section, "SyncCullingLightIntensity", true,
+                "Keeps CullingLightObject's own cached intensity field in step with the sun/global " +
+                "multipliers above, on every Light that carries one. Without this, CullingLightObject's " +
+                "own distance/frustum fade update (once CullingManager is running — see EnvironmentRepairs.cs' " +
+                "fallback) overwrites Light.intensity back to the pre-repair authored value on its next " +
+                "update. Independent of Enabled: stays on so the sync itself, not just the multipliers, " +
+                "keeps applying live.");
+
             cfg.Enabled.SettingChanged += (_, __) => ReapplyIfLoaded(map);
             cfg.FillLightIntensity.SettingChanged += (_, __) => ReapplyIfLoaded(map);
             cfg.AmbientColorMultiplier.SettingChanged += (_, __) => ReapplyIfLoaded(map);
@@ -188,6 +221,7 @@ namespace ArenaMapPort.Client
             cfg.SunIntensityMultiplier.SettingChanged += (_, __) => ReapplyIfLoaded(map);
             cfg.SunColorWhiteBlend.SettingChanged += (_, __) => ReapplyIfLoaded(map);
             cfg.FogDensity.SettingChanged += (_, __) => ReapplyIfLoaded(map);
+            cfg.SyncCullingLightIntensity.SettingChanged += (_, __) => ReapplyIfLoaded(map);
 
             return cfg;
         }
@@ -246,6 +280,8 @@ namespace ArenaMapPort.Client
 
             state.LevelSettingsBaselineCaptured = false;
             state.Lights.Clear(); // next raid gets fresh Light instances — old baselines would be stale/destroyed
+            _lastCullingLightCount = 0;
+            _lastEditorIntensityBaselines = 0;
             state.FillDown = null; // destroyed with the Scripts scene
             state.FillUp = null;
         }
@@ -258,7 +294,20 @@ namespace ArenaMapPort.Client
                 for (int i = 0; i < lights.Length; i++)
                 {
                     var light = lights[i];
-                    state.Lights.Add(new LightBaseline { Light = light, Intensity = light.intensity, Color = light.color });
+                    // PLAN-TWO-MAPS item 7: Arena saves many Lights in their culled state (m_Intensity 0 —
+                    // 60+ Equator 'BasePoint' lights) and CullingLightObject owns the real value
+                    // (_useLightIntensityFromEditor ? _maxLightIntensity : Light.intensity, CullingLightObject.Awake).
+                    // Capturing light.intensity there would bake 0 into the baseline, the multiplied target and
+                    // the float_1 sync below, and keep those lights dark for the raid.
+                    float authored = light.intensity;
+                    var culling = light.GetComponent<CullingLightObject>();
+                    if (culling != null) _lastCullingLightCount++;
+                    if (culling != null && culling._useLightIntensityFromEditor)
+                    {
+                        authored = culling._maxLightIntensity;
+                        _lastEditorIntensityBaselines++;
+                    }
+                    state.Lights.Add(new LightBaseline { Light = light, Intensity = authored, Color = light.color });
                 }
             }
         }
@@ -288,7 +337,8 @@ namespace ArenaMapPort.Client
                 state,
                 on ? cfg.GlobalLightIntensityMultiplier.Value : 1f,
                 on ? cfg.SunIntensityMultiplier.Value : 1f,
-                on ? cfg.SunColorWhiteBlend.Value : 0f);
+                on ? cfg.SunColorWhiteBlend.Value : 0f,
+                cfg.SyncCullingLightIntensity.Value); // independent of Enabled — see BindConfig's doc string
             // weather-rig-stage0: while a WeatherRig clone is active for this raid, its real
             // AmbientLight/_SHAr feeds ambient instead — this fill light becomes redundant (and can
             // visibly double up interior brightness), unless KeepFillLight explicitly asks to keep it.
@@ -306,7 +356,9 @@ namespace ArenaMapPort.Client
                     $"(ambientColorMultiplier={cfg.AmbientColorMultiplier.Value:0.00}), {lightsApplied} light(s) " +
                     $"(globalMultiplier={cfg.GlobalLightIntensityMultiplier.Value:0.00}, " +
                     $"sunMultiplier={cfg.SunIntensityMultiplier.Value:0.00}, sunWhiteBlend={cfg.SunColorWhiteBlend.Value:0.00}), " +
-                    $"fillLight={(fillActive ? cfg.FillLightIntensity.Value.ToString("0.00") : "off")}, fogDensity={cfg.FogDensity.Value:0.000}");
+                    $"fillLight={(fillActive ? cfg.FillLightIntensity.Value.ToString("0.00") : "off")}, fogDensity={cfg.FogDensity.Value:0.000}, " +
+                    $"syncCullingLightIntensity={cfg.SyncCullingLightIntensity.Value} (cullingLights={_lastCullingLightCount}, " +
+                    $"editorIntensityBaselines={_lastEditorIntensityBaselines})");
             }
         }
 
@@ -446,8 +498,11 @@ namespace ArenaMapPort.Client
             RenderSettings.fog = density > 0f;
         }
 
-        static int ApplyLights(MapState state, float globalMultiplier, float sunMultiplier, float sunWhiteBlend)
+        static int ApplyLights(MapState state, float globalMultiplier, float sunMultiplier, float sunWhiteBlend,
+            bool syncCullingLightIntensity)
         {
+            var float1Field = syncCullingLightIntensity ? GetCullingLightFloat1Field() : null;
+
             int applied = 0;
             for (int i = 0; i < state.Lights.Count; i++)
             {
@@ -457,18 +512,64 @@ namespace ArenaMapPort.Client
                     continue; // destroyed/unloaded since capture
                 }
 
+                float target;
                 if (baseline.Light.type == LightType.Directional)
                 {
-                    baseline.Light.intensity = baseline.Intensity * sunMultiplier;
+                    target = baseline.Intensity * sunMultiplier;
+                    baseline.Light.intensity = target;
                     baseline.Light.color = Color.Lerp(baseline.Color, Color.white, sunWhiteBlend);
                 }
                 else
                 {
-                    baseline.Light.intensity = baseline.Intensity * globalMultiplier;
+                    target = baseline.Intensity * globalMultiplier;
+                    baseline.Light.intensity = target;
                 }
+
+                if (float1Field != null)
+                {
+                    // Only Lights that actually carry the sibling component are affected — most Arena
+                    // lights on either map do (472/186 of them per the manifest), but not all.
+                    var cullingLight = baseline.Light.GetComponent<CullingLightObject>();
+                    if (cullingLight != null)
+                    {
+                        float1Field.SetValue(cullingLight, target);
+                    }
+                }
+
                 applied++;
             }
             return applied;
+        }
+
+        // Diagnostics for the summary line (PLAN-TWO-MAPS item 7): how many captured Lights carry a
+        // CullingLightObject (472/186 with the v4 bundles, 0 with an older cached scenes bundle) and how many
+        // baselines came from _maxLightIntensity instead of the saved Light.intensity.
+        static int _lastCullingLightCount;
+        static int _lastEditorIntensityBaselines;
+
+        static FieldInfo _cullingLightFloat1Field;
+        static bool _cullingLightFloat1FieldLookupDone;
+
+        // CullingLightObject.float_1 (decompile CullingLightObject.cs) — private, no accessor. Cached
+        // once; if the field is ever renamed/removed by a future game build this logs once and every
+        // subsequent ApplyLights call simply skips the sync (same "log and skip a missing target" spirit
+        // as HarmonyPatches.Verify — everything else in this repair keeps working).
+        static FieldInfo GetCullingLightFloat1Field()
+        {
+            if (_cullingLightFloat1FieldLookupDone)
+            {
+                return _cullingLightFloat1Field;
+            }
+            _cullingLightFloat1FieldLookupDone = true;
+            _cullingLightFloat1Field = typeof(CullingLightObject).GetField("float_1",
+                BindingFlags.NonPublic | BindingFlags.Instance);
+            if (_cullingLightFloat1Field == null)
+            {
+                Plugin.Log.LogWarning("[ArenaMapPort][Lighting] CullingLightObject.float_1 field not found via " +
+                                       "reflection (renamed/removed?) — SyncCullingLightIntensity will not run " +
+                                       "this raid; every other lighting repair keeps applying.");
+            }
+            return _cullingLightFloat1Field;
         }
 
         static Color ScaleColor(Color c, float m)

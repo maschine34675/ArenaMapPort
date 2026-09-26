@@ -50,6 +50,47 @@ namespace ArenaMapPort.Client
     /// belt-and-braces only, and cheap since <see cref="WeatherRig.IsActiveForCurrentMap"/> already
     /// guarantees the singleton is live and is this raid's own rig's sky
     /// (WeatherRig.ReestablishSingletons keeps it current every activation).
+    ///
+    /// PLAN-TWO-MAPS light-culling item — a fourth, independent fix in the same
+    /// <see cref="OnCameraChanged"/> path: <c>VolumetricLightRenderer</c> (decompile
+    /// D:/SPT41/Development/_decompiled/VolumetricLightRenderer.cs), the <c>[RequireComponent(typeof
+    /// (Camera))]</c> companion that actually draws every scene's <c>VolumetricLight</c> components
+    /// (Equator 17, Bay5 1, per the extractor's manifest counts — light-shaft/god-ray cones on a handful
+    /// of spot/point lights). Vanilla ships it pre-attached on the real camera prefab (per this repair
+    /// file's own header: our maps author no <c>LevelSettings.CameraPrefab</c>, so
+    /// <c>CameraManager.SetCameraFromSettings</c> always falls back to the bare "Cam2" prefab, which
+    /// never carries this component either) — without it, every scene's <c>VolumetricLight</c> instances
+    /// stay fully constructed (their own <c>Awake</c>/<c>OnEnable</c> succeed and self-register with
+    /// <c>VolumetricLightRenderer.AddLight</c>) but nothing ever calls
+    /// <c>VolumetricLightRenderer.OnPreRender</c> to iterate <c>_lights</c> and drive
+    /// <c>VolumetricLightPreRender</c> on any of them, so the cones never render at all — an inert
+    /// feature, not a crash, exactly like the CullingManager gap this same package's client fix in
+    /// EnvironmentRepairs.cs addresses for the sibling <c>CullingLightObject</c> components.
+    ///
+    /// Self-destroys harmlessly when unwanted: both <c>VolumetricLight.Awake</c> (VolumetricLight.cs) and
+    /// <c>VolumetricLightRenderer.Awake</c> (VolumetricLightRenderer.cs) open with the identical guard —
+    /// <c>bool flag = instance != null &amp;&amp; !instance.Graphics.Settings.VolumetricLight.Value; if
+    /// (Application.isPlaying &amp;&amp; flag) { GraphicsHelper.SafeDestroy(this); return; }</c> — reading
+    /// the player's own Graphics settings via <c>Singleton&lt;SettingsManager&gt;.Instance</c>, so a
+    /// player with the in-game "Volumetric Light" option off gets the component added and then
+    /// immediately removed again next frame, same as on a vanilla map; this fix does not need to read
+    /// that setting itself. <c>VolumetricLightRenderer.Awake</c> otherwise only resolves its own shaders
+    /// via <c>ShadersFinder.Find</c> (all in <c>ShadersFinder.SHADERS</c>'s pre-registered list, same
+    /// belt-and-braces argument F3 above already makes for <c>TOD_Scattering</c>'s shader), builds its
+    /// point/spot meshes procedurally, and reads <c>CameraManager.Instance.OpticCameraManager.
+    /// OpticRenderResolution</c> unconditionally (even though the optic render textures it feeds are only
+    /// swapped in when <c>IsOptic</c> is true, which we never set — so this fallback always takes the
+    /// default non-optic branch, <c>CreateVolumetricRenderTextures()</c>, sized from the camera's own
+    /// pixel dimensions); by the time <see cref="OnCameraChanged"/> fires, <c>CameraManager.Instance</c>
+    /// is already known live (this method only reaches this fix after <c>CameraManager.Instance?.Camera</c>
+    /// resolved non-null above), but <c>OpticCameraManager</c> itself is unverified against the decompile
+    /// for this pass — hence the try/catch and log line below rather than assuming it can never throw.
+    /// Deliberately NOT nested inside the <see cref="WeatherRig.IsActiveForCurrentMap"/> gate that
+    /// <c>ApplyTodFixes</c> uses for TOD_Scattering: unlike TOD_Scattering (which needs a live TOD_Sky to
+    /// point at), this fix has no WeatherRig dependency at all — it only enables the camera side of a
+    /// feature whose scene-side components (<c>VolumetricLight</c>) exist on every map regardless of
+    /// whether that map's package includes a weather rig, so gating it on rig presence would silently
+    /// drop the fix on any future map extracted without one.
     /// </summary>
     internal static class CameraEffectsRepairs
     {
@@ -58,6 +99,7 @@ namespace ArenaMapPort.Client
         static ConfigEntry<float> _exposureLowerLimit;
         static ConfigEntry<float> _exposureUpperLimit;
         static ConfigEntry<bool> _enableTodScatteringFix;
+        static ConfigEntry<bool> _enableVolumetricLightRendererFix;
         static bool _installed;
 
         internal static void Install()
@@ -87,6 +129,14 @@ namespace ArenaMapPort.Client
                 "Adds a TOD_Scattering component to the fallback camera while a WeatherRig is active for " +
                 "this map (atmospheric scattering / aerial perspective). Ships with FromLevelSettings=true " +
                 "unchanged this pass — reads our own map's authored LevelSettings.HeightFalloff/ZeroLevel.");
+
+            _enableVolumetricLightRendererFix = Plugin.Instance.Config.Bind("Camera", "EnableVolumetricLightRendererFix", true,
+                "Adds a VolumetricLightRenderer component to the fallback camera so the scene's own " +
+                "VolumetricLight components (light-shaft/god-ray cones on a few Equator/Bay5 lights) " +
+                "actually render, the way a real camera prefab already carries one on vanilla maps. " +
+                "VolumetricLight/VolumetricLightRenderer both self-destroy on their own next frame if the " +
+                "player's Graphics > Volumetric Light setting is off, same as on a vanilla map — this key " +
+                "does not need to read that setting itself. Takes effect on the next camera change.");
 
             CameraManager.Instance.OnCameraChanged += OnCameraChanged;
         }
@@ -118,6 +168,7 @@ namespace ArenaMapPort.Client
 
             ApplyExposureFix(cam);
             ApplyTodFixes(cam);
+            ApplyVolumetricLightRendererFix(cam);
         }
 
         static void ApplyExposureFix(Camera cam)
@@ -215,8 +266,49 @@ namespace ArenaMapPort.Client
             }
         }
 
+        // PLAN-TWO-MAPS light-culling item — see class doc comment for why this is independent of the
+        // WeatherRig gate ApplyTodFixes uses, and why VolumetricLight/VolumetricLightRenderer's own
+        // Graphics-setting self-destroy means no config value here needs to read that setting.
+        static Camera _volumetricRendererLoggedCamera;
+
+        static void ApplyVolumetricLightRendererFix(Camera cam)
+        {
+            if (_enableVolumetricLightRendererFix == null || !_enableVolumetricLightRendererFix.Value)
+            {
+                return;
+            }
+            if (cam.GetComponent<VolumetricLightRenderer>() != null)
+            {
+                // Already present: a previous camera change added it, or the donor camera prefab (vanilla Cam2*
+                // ships one baked in) brought it along. Logged once per camera so the host log carries the evidence.
+                if (_volumetricRendererLoggedCamera != cam)
+                {
+                    _volumetricRendererLoggedCamera = cam;
+                    Plugin.Log.LogInfo($"[ArenaMapPort][Camera] VolumetricLightRenderer already present on '{cam.name}' — no changes made");
+                }
+                return;
+            }
+
+            try
+            {
+                cam.gameObject.AddComponent<VolumetricLightRenderer>();
+                Plugin.Log.LogInfo($"[ArenaMapPort][Camera] added VolumetricLightRenderer to '{cam.name}' " +
+                                    "so this map's VolumetricLight components (light-shaft/god-ray cones) render " +
+                                    "— self-destroys next frame if the player's Graphics > Volumetric Light " +
+                                    "setting is off, same as a vanilla camera prefab.");
+            }
+            catch (Exception e)
+            {
+                Plugin.Log.LogWarning($"[ArenaMapPort][Camera] AddComponent<VolumetricLightRenderer> on " +
+                                       $"'{cam.name}' threw: {e.GetType().Name}: {e.Message} — volumetric light " +
+                                       "cones stay unrendered on this camera, everything else in this plugin " +
+                                       "keeps working.");
+            }
+        }
+
         // Exposed for DaytimeVisualsProbe's consolidated F1-F6 summary line.
         internal static bool ExposureFixEnabled => _fixExposure != null && _fixExposure.Value;
         internal static bool TodScatteringFixEnabled => _enableTodScatteringFix != null && _enableTodScatteringFix.Value;
+        internal static bool VolumetricLightRendererFixEnabled => _enableVolumetricLightRendererFix != null && _enableVolumetricLightRendererFix.Value;
     }
 }

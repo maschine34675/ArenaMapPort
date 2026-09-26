@@ -138,6 +138,12 @@ namespace ArenaMapPort.Editor.Import
                             break;
                         case "SmallPhysicsObject":
                             break; // PLAN-TWO-MAPS item 5 — Pass 2, after colliders/Rigidbody/BallisticCollider exist.
+                        case "VolumetricLight":
+                            break; // PLAN-TWO-MAPS item 7 — Pass 4a, after every Light in the scene exists.
+                        case "LightFlicker":
+                            break; // PLAN-TWO-MAPS item 7 — Pass 4b, after every Light in the scene exists.
+                        case "CullingLightObject":
+                            break; // PLAN-TWO-MAPS item 7 — Pass 4c, after its VolumetricLight/LightFlicker siblings (if any) exist.
                         default:
                             Debug.LogWarning("[ArenaMapPort][SceneAssembler] " + sceneName + ": object " + id +
                                               " has unrecognized component type '" + type + "' (ignored)");
@@ -175,11 +181,63 @@ namespace ArenaMapPort.Editor.Import
                 }
             }
 
+            // --- Pass 4a (PLAN-TWO-MAPS item 7): VolumetricLight. Order-independent with respect to
+            // LightFlicker (Pass 4b), but both must precede CullingLightObject (Pass 4c), whose own
+            // Awake caches GetComponent<LightFlicker>()/<VolumetricLight>() exactly once
+            // (CullingLightObject.cs:118-119). The three classes are [ExecuteInEditMode]: their Awake/
+            // OnEnable run here, inside AddComponent, and need the editor stubs installed first. ---
+            LightCullingImporter.EnsureEditorStubs();
+            int volumetricLightCount = 0;
+            foreach (JObject obj in objectsJson)
+            {
+                GameObject go = goById[(string)obj["id"]];
+                foreach (JObject comp in (JArray)obj["components"])
+                {
+                    if ((string)comp["type"] == "VolumetricLight")
+                    {
+                        LightCullingImporter.AttachVolumetricLight(go, comp);
+                        volumetricLightCount++;
+                    }
+                }
+            }
+
+            // --- Pass 4b (PLAN-TWO-MAPS item 7): LightFlicker, likewise before Pass 4c. ---
+            int lightFlickerCount = 0;
+            foreach (JObject obj in objectsJson)
+            {
+                GameObject go = goById[(string)obj["id"]];
+                foreach (JObject comp in (JArray)obj["components"])
+                {
+                    if ((string)comp["type"] == "LightFlicker")
+                    {
+                        LightCullingImporter.AttachLightFlicker(go, comp);
+                        lightFlickerCount++;
+                    }
+                }
+            }
+
+            // --- Pass 4c (PLAN-TWO-MAPS item 7): CullingLightObject last, after every optional
+            // VolumetricLight/LightFlicker sibling above already exists on its owner. ---
+            int cullingLightObjectCount = 0;
+            foreach (JObject obj in objectsJson)
+            {
+                GameObject go = goById[(string)obj["id"]];
+                foreach (JObject comp in (JArray)obj["components"])
+                {
+                    if ((string)comp["type"] == "CullingLightObject")
+                    {
+                        LightCullingImporter.AttachCullingLightObject(go, comp);
+                        cullingLightObjectCount++;
+                    }
+                }
+            }
+
             if (missingParentWarnings > 10) Debug.LogWarning("[ArenaMapPort][SceneAssembler] " + sceneName + ": " + missingParentWarnings + " total missing-parent warnings (only first 10 shown)");
 
             Debug.Log("[ArenaMapPort][SceneAssembler] assembled '" + sceneName + "': " + goById.Count +
                       " GameObjects, " + rendererById.Count + " renderers, " + physicMaterials.DistinctCount +
-                      " distinct PhysicMaterials so far");
+                      " distinct PhysicMaterials so far, " + volumetricLightCount + " VolumetricLight, " +
+                      lightFlickerCount + " LightFlicker, " + cullingLightObjectCount + " CullingLightObject");
             return scene;
         }
 

@@ -171,6 +171,10 @@ def feature_enabled(manifest, scenes=None):
     # PLAN-TWO-MAPS item 4: 'navmesh_areas' (extract_navmesh_modifiers.read_navmesh_areas: the source project's
     # NavMesh area table, index -> {name, cost}) is OPTIONAL in the same way.
     navmesh_areas=features.pop('navmesh_areas',None)
+    # PLAN-TWO-MAPS follow-up: 'light_culling' (extract_light_culling.augment_scene's summed per-map
+    # counts) is an OPTIONAL extra native_features entry in the same way -- it tags existing owner
+    # GameObjects only, no new GameObjects are created, so extra_counts() below is untouched.
+    light_culling=features.pop('light_culling',None)
     compare(features, {'schema_version':1,'required':['ballistics',contract['feature']]}, 'feature contract')
     if raincover is not None:
         require(isinstance(raincover,dict) and raincover.get('schema_version')==1 and 'indoor_trigger_count' in raincover,
@@ -181,6 +185,11 @@ def feature_enabled(manifest, scenes=None):
                         for k,a in navmesh_areas.items())
                 and navmesh_areas.get('0',{}).get('name')=='Walkable' and navmesh_areas.get('1',{}).get('name')=='Not Walkable',
                 'navmesh_areas feature summary shape')
+    if light_culling is not None:
+        require(isinstance(light_culling,dict) and light_culling.get('schema_version')==1
+                and all(isinstance(light_culling.get(k),int) and light_culling[k]>=0 for k in
+                        ('culling_light_object_count','volumetric_light_count','light_flicker_count')),
+                'light_culling feature summary shape')
     if scenes is not None:
         require(not any(c['type']=='WindowBreaker' for objects in scenes.values() for o in objects for c in o['components']), 'glass was deferred by the user')
     return True

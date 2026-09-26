@@ -66,6 +66,7 @@ import UnityPy  # noqa: E402
 
 import extract_equator as EQ  # noqa: E402 -- the proven engine, reused unmodified (see module docstring)
 import extract_physics_props as physics_props  # PLAN-TWO-MAPS item 5  # noqa: E402
+import extract_light_culling as light_culling  # PLAN-TWO-MAPS follow-up  # noqa: E402
 
 SCHEMA_VERSION = 1
 DEFAULT_SOURCE = "D:/Battlestate Games/Escape from Tarkov Arena/EscapeFromTarkovArena_Data"
@@ -279,6 +280,7 @@ def main() -> None:
     ctx = EQ.ExtractionContext(env=env)
     EQ.ensure_dirs(args.output)
 
+    light_culling_totals = {"culling_light_object_count": 0, "volumetric_light_count": 0, "light_flicker_count": 0}
     scenes_out: dict[int, dict] = {}
     for idx in scene_indices:
         f = env.files[exact_paths[idx]["level"]]
@@ -294,6 +296,13 @@ def main() -> None:
         # PLAN-TWO-MAPS item 5: tag SmallPhysicsObject owners (no contract needed)
         physics_count = physics_props.augment_scene(scenes_out[idx], f)
         print(f"    tagged {physics_count} SmallPhysicsObject owners", file=sys.stderr)
+        # PLAN-TWO-MAPS follow-up: tag CullingLightObject/VolumetricLight/LightFlicker owners
+        lc_counts = light_culling.augment_scene(scenes_out[idx], f)
+        for key, value in lc_counts.items():
+            light_culling_totals[key] += value
+        print(f"    tagged {lc_counts['culling_light_object_count']} CullingLightObject + "
+              f"{lc_counts['volumetric_light_count']} VolumetricLight + "
+              f"{lc_counts['light_flicker_count']} LightFlicker owner(s)", file=sys.stderr)
 
     try:
         print(f"Writing {len(ctx.mesh_work)} meshes...", file=sys.stderr)
@@ -378,6 +387,11 @@ def main() -> None:
     # PLAN-TWO-MAPS item 6 -- rain-cover geometry (DryPlane/IndoorTrigger) from the Scripts scene.
     from extract_raincover import export as export_raincover
     manifest["native_features"]["raincover"] = export_raincover(args.source, args.output, "arena_bay5")
+    # PLAN-TWO-MAPS follow-up -- CullingLightObject/VolumetricLight/LightFlicker, summed across all
+    # scenes by the per-scene augment_scene() calls above.
+    manifest["native_features"]["light_culling"] = {
+        "schema_version": light_culling.SCHEMA_VERSION, **light_culling_totals,
+    }
     with open(os.path.join(args.output, "manifest.json"), "w", encoding="utf-8") as f:
         json.dump(manifest, f, indent=2, sort_keys=True, ensure_ascii=False)
 

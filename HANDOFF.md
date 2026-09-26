@@ -17,6 +17,24 @@ but windows-gpu-2 is absent from this session's tools. EFT remains idle at its m
 needs a restart to refresh cached map sprites. See the appended
 [north marker evidence](docs/progress/equator-dynamicmaps.md#north-marker-clarification--2026-09-26).
 
+## State on 2026-09-26 (late) — plan item 7 built, verified and deployed (light culling / volumetrics / flicker)
+
+Branch `feature/native-dust`. Item 7 went the extractor + importer route (Arena tunes fade distances and
+`_maxLightIntensity` per light, so client-side class defaults would have flattened it): `tools/extract/extract_light_culling.py`
+decodes `CullingLightObject` / `VolumetricLight` / `EFT.Visual.LightFlicker` from the raw bytes (three trailing
+`AnimationCurve` ints; the `CullingObject` lists are consumed, counts only), `LightCullingImporter` attaches them in three
+ordered passes, validators/roundtrip/tests extended (345 Python tests). New accepted packages `work/extract/{equator,bay5}-native-v4`,
+both maps rebuilt. Client: `CullingManager` fallback (`EnvironmentRepairs`), `VolumetricLightRenderer` on the raid camera
+(`CameraEffectsRepairs`; the donor Cam2 already carries one), and `ArenaLightingRepairs` now takes the authored baseline
+from `_maxLightIntensity` and writes `CullingLightObject.float_1` alongside `Light.intensity` — without that the culling
+loop erases the brightness uplift, and 79 Equator / 107 Bay5 lights that Arena saved at intensity 0 would stay dark
+(they light up now; expect both maps brighter, `GlobalLightIntensityMultiplier` may want re-tuning). Batch-import trap:
+the three classes are `[ExecuteInEditMode]`, their Awake/OnEnable exceptions are logged by Unity and fail the build's log
+scan — editor stubs (stand-in shader `Sandbox/VolumetricLight`, a `FlickerSystem` on a HideAndDontSave object) keep it
+clean. Host-verified 22:15–22:37 (Lighting summary `cullingLights=472/186`, fallback lines, no errors; fade and god-rays
+not settled by screenshot). Deployed to `D:\SPT41` and `D:\SPT41vanilla`. Details: docs/progress/two-maps-item-7-light-culling.md.
+Next: plan items 8 (AI hubs), 10 (banners), then 9 (release).
+
 ## State on 2026-09-26 — round 3 verified on the new host SPT-GPU-2; Equator's atrium rains by design
 
 Branch `feature/native-dust`. The GPU test host is now **SPT-GPU-2** (MCP servers `uibridge-2` / `windows-gpu-2`; same

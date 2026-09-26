@@ -46,6 +46,7 @@ namespace ArenaMapPort.Client
             InstallSpatialAudioInitSkip(harmony);
             InstallSpatialAudioOcclusionGuard(harmony);
             InstallSpatialAudioInteractiveOcclusionGuard(harmony);
+            EnsureEnvironmentPrefix.BindConfig(); // [Environment] EnableCullingManagerFallback
             InstallEnsureEnvironment(harmony);
             InstallEffectsControllerFrostbite(harmony);
             InstallAIVoxelesDataGuard(harmony);

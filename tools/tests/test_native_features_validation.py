@@ -216,6 +216,19 @@ class NativeFeatureTests(unittest.TestCase):
         with self.assertRaises(ValueError):v.feature_enabled({}, {'scene':[{'components':[{'type':'BallisticCollider'}]}]})
         self.assertFalse(v.feature_enabled({}, {'scene':[{'components':[]}]}))
 
+    def test_light_culling_optional_summary_shape(self):
+        manifest=manifest_for('arena_equator')
+        self.assertTrue(v.feature_enabled(manifest))  # absent entirely: still validates (optional)
+        manifest['native_features']['light_culling']={'schema_version':1,'culling_light_object_count':472,
+            'volumetric_light_count':17,'light_flicker_count':2}
+        self.assertTrue(v.feature_enabled(manifest))
+        for bad in ({'schema_version':2,'culling_light_object_count':0,'volumetric_light_count':0,'light_flicker_count':0},
+                    {'schema_version':1,'culling_light_object_count':-1,'volumetric_light_count':0,'light_flicker_count':0},
+                    {'schema_version':1,'culling_light_object_count':0,'volumetric_light_count':0},
+                    {'schema_version':1,'culling_light_object_count':0.5,'volumetric_light_count':0,'light_flicker_count':0}):
+            broken=manifest_for('arena_equator');broken['native_features']['light_culling']=bad
+            with self.assertRaisesRegex(ValueError,'light_culling feature summary shape'):v.feature_enabled(broken)
+
     def test_independent_wire_fixed_header_and_payload(self):
         item={'gameObject':{'fileId':0,'pathId':12},'enabled':False,'script':{'fileId':1,'pathId':99},'name':'',
               'soundPlayer':{'fileId':0,'pathId':31},'spreadRange':[.25,.75]}

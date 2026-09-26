@@ -22,10 +22,15 @@ dated state in one screen; read it before this index if you only have a minute.
   built and offline-verified (real extractor runs against live Arena source: exact 413/391 and 22/18 counts,
   full `validate_extract.py` pass on both maps); rebuilt and host-verified 2026-09-25 — Arena's per-prop
   SoundType is extracted since the first raid's null-bank exception (`PhysicsPropSoundRepairs` guards the rest).
-- [two-maps-item-6-raincover.md](two-maps-item-6-raincover.md) — rain-cover geometry (Arena's own
-  EnvironmentManager/TriggerGroup/IndoorTrigger, and on Bay5 WeatherObstacle/DryPlane) extracted from
-  each map's Scripts scene and authored to replace the depth-photo heuristic; host-verified 2026-09-25 (dry
-  floor under Bay5's warehouse roof in forced rain).
+- [two-maps-item-6-raincover.md](two-maps-item-6-raincover.md) — rain-cover geometry: Arena's own
+  EnvironmentManager/TriggerGroup/IndoorTrigger extracted from each map's Scripts scene and authored; Bay5's
+  DryPlanes turned out to be Lighthouse leftovers and are dropped, so the depth-photo heuristic stays armed on
+  both maps. Verified 2026-09-26 on SPT-GPU-2 (F8 readbacks + rain screenshots); Equator's atrium rains by
+  design (`FullyIndoorCover` default false), puddle ripples follow the global rain value.
+- [two-maps-item-7-light-culling.md](two-maps-item-7-light-culling.md) — CullingLightObject / VolumetricLight /
+  LightFlicker extracted from Arena's raw bytes and attached by the importer (packages `*-native-v4`), client
+  fallbacks for CullingManager and VolumetricLightRenderer, brightness-uplift coordination; verified 2026-09-26 on
+  SPT-GPU-2 (472/186 components live, 79/107 dark-saved lights lit; fade/god-rays by eye).
 
 - [../PLAN-TWO-MAPS.md](../PLAN-TWO-MAPS.md) — the ordered, spike-verified plan for the two-map first
   release (Equator + Bay5): nine work items, release checklist, what is deliberately out (2026-09-25).

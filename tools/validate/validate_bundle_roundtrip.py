@@ -1203,6 +1203,157 @@ def validate_disabled_component_counts_bundle(env, package: Path, manifest: dict
 
 
 # ---------------------------------------------------------------------------
+# Light culling (PLAN-TWO-MAPS follow-up, optional): CullingLightObject/VolumetricLight/
+# LightFlicker MonoBehaviour counts, package vs. built bundle.
+# ---------------------------------------------------------------------------
+
+LIGHT_CULLING_COMPONENT_TYPES = ("CullingLightObject", "VolumetricLight", "LightFlicker")
+# Census-resolved (namespace.className, or just className) -> the package's own component "type"
+# string (extract_light_culling.py's _COMPONENT_TYPE) -- duplicated rather than imported, same
+# stand-alone-script rationale as count_disabled_in_package_scenes above.
+LIGHT_CULLING_SCRIPT_CLASSES = {
+    "CullingLightObject": "CullingLightObject",
+    "VolumetricLight": "VolumetricLight",
+    "EFT.Visual.LightFlicker": "LightFlicker",
+}
+
+
+def count_light_culling_in_package_scenes(package: Path, manifest: dict) -> dict[str, dict[str, int]]:
+    """Per-scene, per-type count of CullingLightObject/VolumetricLight/LightFlicker component dicts
+    in the extracted package -- same duplication rationale as count_disabled_in_package_scenes."""
+    counts: dict[str, dict[str, int]] = {}
+    for scene_name in manifest.get("scenes", []):
+        scene_path = package / "scenes" / f"{scene_name}.json"
+        if not scene_path.is_file():
+            continue
+        scene = load_json(scene_path)
+        scene_counts: dict[str, int] = {t: 0 for t in LIGHT_CULLING_COMPONENT_TYPES}
+        for obj in scene.get("objects", []):
+            for comp in obj.get("components", []):
+                ctype = comp.get("type")
+                if ctype in scene_counts:
+                    scene_counts[ctype] += 1
+        counts[scene_name] = scene_counts
+    return counts
+
+
+def light_flicker_curve_signatures_in_package(package: Path, manifest: dict) -> Counter:
+    """(key_count, pre_infinity, post_infinity) multiset across every package LightFlicker
+    component -- the wrap-mode mapping cross-check's package-side reference (see
+    validate_light_culling_counts_bundle)."""
+    signatures: Counter = Counter()
+    for scene_name in manifest.get("scenes", []):
+        scene_path = package / "scenes" / f"{scene_name}.json"
+        if not scene_path.is_file():
+            continue
+        scene = load_json(scene_path)
+        for obj in scene.get("objects", []):
+            for comp in obj.get("components", []):
+                if comp.get("type") != "LightFlicker":
+                    continue
+                curve = comp.get("curve") or {}
+                signatures[(len(curve.get("keys", [])), curve.get("pre_infinity"), curve.get("post_infinity"))] += 1
+    return signatures
+
+
+def count_light_culling_in_bundle_scenes(env, scene_names: list[str]):
+    """Per-scene MonoBehaviour counts resolving, via MonoScript identity (the same
+    read_typetree()->m_Script PPtr->MonoScript technique validate_eft_scripts uses, reused here
+    rather than duplicated as a separate helper only for that function), to
+    CullingLightObject/VolumetricLight/LightFlicker -- plus the LightFlicker curve wrap-mode
+    signature multiset (see light_flicker_curve_signatures_in_package). The MonoScript pool is
+    built once from the WHOLE bundle (validate_eft_scripts' own proven approach: a script PPtr can
+    resolve outside its MonoBehaviour's own nested SerializedFile), while MonoBehaviour objects are
+    scoped to each scene's own nested "BuildPlayer-<SceneName>" file (count_disabled_in_bundle_scenes'
+    own per-scene scoping), so counts never mix scenes together."""
+    monoscripts = {o.path_id: o for o in env.objects if o.type.name == "MonoScript"}
+    by_name = {sf.name: sf for sf in iter_serialized_files(env)}
+    counts: dict[str, dict[str, int]] = {}
+    flicker_signatures: Counter = Counter()
+    for scene_name in scene_names:
+        sf = by_name.get(f"BuildPlayer-{scene_name}")
+        if sf is None:
+            check(False, f"light_culling: bundle has a nested SerializedFile named "
+                          f"'BuildPlayer-{scene_name}' to read component counts from "
+                          f"(not found among: {sorted(by_name)})")
+            continue
+        scene_counts: dict[str, int] = {t: 0 for t in LIGHT_CULLING_COMPONENT_TYPES}
+        for obj in sf.objects.values():
+            if obj.type.name != "MonoBehaviour":
+                continue
+            try:
+                tt = obj.read_typetree()
+            except Exception:  # noqa: BLE001
+                continue
+            script_ptr = (tt or {}).get("m_Script") or {}
+            script_obj = monoscripts.get(script_ptr.get("m_PathID"))
+            if script_obj is None:
+                continue
+            try:
+                script_tt = script_obj.read_typetree()
+            except Exception:  # noqa: BLE001
+                continue
+            class_name = script_tt.get("m_ClassName")
+            namespace = script_tt.get("m_Namespace") or ""
+            full_name = f"{namespace}.{class_name}" if namespace else class_name
+            component_type = LIGHT_CULLING_SCRIPT_CLASSES.get(full_name)
+            if component_type is None:
+                continue
+            scene_counts[component_type] += 1
+            if component_type == "LightFlicker":
+                curve = tt.get("Curve") or {}
+                key_count = len(curve.get("m_Curve") or [])
+                flicker_signatures[(key_count, curve.get("m_PreInfinity"), curve.get("m_PostInfinity"))] += 1
+        counts[scene_name] = scene_counts
+    return counts, flicker_signatures
+
+
+def validate_light_culling_counts_bundle(env, package: Path, manifest: dict) -> None:
+    """PLAN-TWO-MAPS follow-up acceptance check: every scene's per-class CullingLightObject/
+    VolumetricLight/LightFlicker MonoBehaviour count actually built into the bundle must match the
+    extracted package's own tagged-component count exactly, and (wrap-mode mapping check) every
+    LightFlicker curve's (key_count, m_PreInfinity, m_PostInfinity) in the bundle must match the
+    package's own recorded curve shape as a multiset. Optional, same convention as
+    validate_native_features.feature_enabled's optional raincover/navmesh_areas keys: only runs
+    when the package's manifest.native_features.light_culling entry is present."""
+    if "light_culling" not in (manifest.get("native_features") or {}):
+        return
+    package_counts = count_light_culling_in_package_scenes(package, manifest)
+    scene_names = manifest.get("scenes", [])
+    bundle_counts, bundle_flicker_signatures = count_light_culling_in_bundle_scenes(env, scene_names)
+    package_flicker_signatures = light_flicker_curve_signatures_in_package(package, manifest)
+
+    total_bad = 0
+    for scene_name in scene_names:
+        expected = package_counts.get(scene_name, {})
+        actual = bundle_counts.get(scene_name, {})
+        scene_bad = 0
+        for t in LIGHT_CULLING_COMPONENT_TYPES:
+            exp_n = expected.get(t, 0)
+            act_n = actual.get(t, 0)
+            if exp_n != act_n:
+                scene_bad += 1
+                check(False, f"{scene_name}: built {t} MonoBehaviour count ({act_n}) == package "
+                              f"tagged-component count ({exp_n})")
+        if scene_bad == 0:
+            print(f"[validate_bundle_roundtrip]  ok : {scene_name}: light-culling component counts in "
+                  f"bundle match package exactly ({dict(sorted(expected.items())) or '{}'})")
+        total_bad += scene_bad
+
+    if bundle_flicker_signatures != package_flicker_signatures:
+        check(False, f"LightFlicker curve wrap-mode/key-count signatures in bundle "
+                      f"{dict(bundle_flicker_signatures)} == package {dict(package_flicker_signatures)}")
+        total_bad += 1
+    elif package_flicker_signatures:
+        print(f"[validate_bundle_roundtrip]  ok : LightFlicker curve wrap-mode mapping round-trips "
+              f"({sum(package_flicker_signatures.values())} instance(s))")
+
+    if total_bad == 0:
+        print("[validate_bundle_roundtrip]  ok : every scene's light-culling component counts in the "
+              "built bundle match the extracted package exactly")
+
+
+# ---------------------------------------------------------------------------
 # NavMesh bundle (optional for S1)
 # ---------------------------------------------------------------------------
 
@@ -1929,6 +2080,7 @@ def main() -> None:
         validate_generated_terrain_arrays(env, expected["manifest"])
         validate_owned_terrain_shader(env, expected["manifest"])
         validate_disabled_component_counts_bundle(env, args.package, expected["manifest"])
+        validate_light_culling_counts_bundle(env, args.package, expected["manifest"])
         validate_generic_null_references(env, args.package, expected["manifest"])
         validate_eft_scripts(env, args.require_scripts_scene)
         try:

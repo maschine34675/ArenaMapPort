@@ -238,7 +238,7 @@ work/build/bay5`. One client Release build (without `DllOnly`) stages both into 
 `deploy-to-spt.ps1 -Confirm`, one combined host raid exercising the checks from §1.4–1.6 in a single session
 per AGENTS.md's host-testing recipe (restart EFT once, walk both debug raids).
 
-### 7. Light culling, volumetric light, flicker (both maps, mostly Equator) — no rebuild
+### 7. Light culling, volumetric light, flicker (both maps, mostly Equator) — no rebuild — VERIFIED 2026-09-26 on SPT-GPU-2 (built the extractor+importer route instead of the "no rebuild" AddComponent assumption because Arena tunes the values per light: packages `*-native-v4`, 472/186 CullingLightObject + 17/1 VolumetricLight + 2 LightFlicker live per the Lighting summary line; `CullingManager` and `VolumetricLightRenderer` are client fallbacks; 79 Equator / 107 Bay5 lights that Arena saved at intensity 0 now light up through `_maxLightIntensity`; distance fade and god-rays still to be judged by eye) — docs/progress/two-maps-item-7-light-culling.md
 
 **What.** Author `CullingLightObject` (472/186 instances) on already-imported `Light`s for distance-based
 fade, `VolumetricLight` (17/1) for god-rays, `LightFlicker` (2, Equator) — all client-side `AddComponent`
