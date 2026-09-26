@@ -550,13 +550,17 @@ namespace ArenaMapPort.Client
             // (equator_roof_Glass_LOD0, "broken glass atlas") is inactive in Arena's own data, so the roof is an open
             // lattice and the depth photo has rain-sized holes between its beams. This draws one black quad over the
             // whole RainBounds footprint (the RainCoverLab CoverAll quad) so the depth photo reads "covered"
-            // everywhere: no falling rain, no wetness, anywhere on the map. New key, default true only for Equator.
-            cfg.FullyIndoorCover = Plugin.Instance.Config.Bind(section, "FullyIndoorCover", equatorDefaults,
+            // everywhere: no falling rain, no wetness, anywhere on the map. Seeded true for Equator by the 2026-09-25
+            // build; 2026-09-26 (user decision after the SPT-GPU-2 check): the broken roof is Arena's authored look —
+            // the pane material is "broken glass atlas", Arena's raw level51 has m_IsActive=false on it and matching
+            // inactive glass-shard debris lies under it (the puddles are generic mall dressing, no evidence) — so
+            // the default is false everywhere and DefaultsRevision 3 moves a persisted true back. Opt-in dry mall.
+            cfg.FullyIndoorCover = Plugin.Instance.Config.Bind(section, "FullyIndoorCover", false,
                 "Treat the whole map as roofed for rain: one black quad over the entire RainBounds footprint in the depth " +
-                "photo (no falling rain and no wetness anywhere). Meant for enclosed maps whose roof art has holes — " +
-                "Equator's atrium glass ships inactive in Arena's data, so rain fell through the lattice. false = only the " +
-                "photographed roof geometry counts (rain through the open lattice, wet atrium floor). Live: the next " +
-                "camera change or F8 re-renders the photo.");
+                "photo (no falling rain and no wetness anywhere). Off by default: Equator's atrium roof is broken on " +
+                "purpose in Arena's data (glass panes inactive, 'broken glass' material, glass-shard debris under it), so rain falls " +
+                "through the lattice like Arena intends. true = dry mall (the puddle ripples stay, they follow the " +
+                "global rain value, not the depth photo). Live: the next camera change or F8 re-renders the photo.");
             cfg.CoverIncludesGlass = Plugin.Instance.Config.Bind(section, "CoverIncludesGlass", true,
                 "§20.2 — treat glass-shader renderers (glass roofs, skylights, windows: shader name with " +
                 "'Glass', or 'Transparent' together with 'Reflective'/'Specular', never cutout/fence/billboard/" +
@@ -648,6 +652,18 @@ namespace ArenaMapPort.Client
                 string reseed2 = $"[ArenaMapPort][WeatherRig] {map.Key}: config re-seeded to defaults revision 2 " +
                     $"({moved} value(s) moved; IndoorCoverPercent={cfg.IndoorCoverPercent.Value})";
                 if (moved > 0) Plugin.Log.LogWarning(reseed2); else Plugin.Log.LogInfo(reseed2);
+            }
+            // 2026-09-26 — revision 3: Equator's FullyIndoorCover default true → false (the one build that seeded
+            // true, 2026-09-25, reached only the two test installs; rain through the broken atrium roof is Arena's
+            // authored look, host check SPT-GPU-2 18:05). Same rule: only a value still on the old default moves.
+            if (equatorDefaults && cfg.DefaultsRevision.Value < 3)
+            {
+                int moved = 0;
+                if (cfg.FullyIndoorCover.Value) { cfg.FullyIndoorCover.Value = false; moved++; }
+                cfg.DefaultsRevision.Value = 3;
+                string reseed3 = $"[ArenaMapPort][WeatherRig] {map.Key}: config re-seeded to defaults revision 3 " +
+                    $"({moved} value(s) moved; FullyIndoorCover={cfg.FullyIndoorCover.Value})";
+                if (moved > 0) Plugin.Log.LogWarning(reseed3); else Plugin.Log.LogInfo(reseed3);
             }
 
             cfg.Donor.SettingChanged += (_, __) => OnDonorConfigChanged();

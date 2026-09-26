@@ -3,6 +3,20 @@
 Snapshot for whoever continues (human or agent). Verify the commits named here against `git log`; this file
 is updated by hand at each handover, it is not an automatic record. Read [AGENTS.md](AGENTS.md) first.
 
+## State on 2026-09-26 — round 3 verified on the new host SPT-GPU-2; Equator's atrium rains by design
+
+Branch `feature/native-dust`. The GPU test host is now **SPT-GPU-2** (MCP servers `uibridge-2` / `windows-gpu-2`; same
+click points, raid start ≈ 9 s, `D:\SPT41` still mirrors it). Round 3 verified there (EFT `cd73afd7`, 18:04–18:06,
+forced rain, max settings): F8 at the atrium reads 47.51 m with `FullyIndoorCover=true` and 23.1 m (a beam) with
+false, streaks visible on the screenshots; `AmbientRangeMultiplier` set live mid-raid logs `live settings applied …
+re-targeted 23 playing source(s)`. User decision: the atrium's broken glass roof is Arena's authored geometry (pane mesh
+`m_IsActive=false` in the raw level, "broken glass atlas" material, inactive glass-shard debris under it, no toggling
+script; the puddles are generic mall dressing and prove nothing either way), so it rains — `FullyIndoorCover` defaults to false everywhere (DefaultsRevision 3 re-seed, `DefaultsRevision = 3` read
+back after the restart) and the key stays as an opt-in dry mall. Correction: the puddle ripple follows the global rain
+value (`RippleController.WaterCucle`), never the depth photo, so no cover setting removes it. Deployed to `D:\SPT41`
+and `D:\SPT41vanilla` (vanilla server restart = user). Details: item-6 doc "Round 3 verified on SPT-GPU-2", items-1-3
+doc tail. Next: plan items 7 (light culling), 8 (AI hubs), 10 (banners), then 9 (release).
+
 ## State on 2026-09-25 (afternoon) — plan items 4–6 built, verified and deployed
 
 Branch `feature/native-dust`. The three parallel agent branches (NavMesh modifiers, physics props, rain cover)
@@ -31,7 +45,8 @@ the raid-end `SmallPhysicsSystem.Update` NRE. Host-verified 17:49–18:02 (F8 de
 5.2 m, Bay5 warehouse 8.0 m, container 1.4 m, outdoor control = ground; range line `x3.00 … 25 player(s)`;
 clean teardown). Details: item-6 doc "Correction", items-1-3 doc "Item 1 follow-up", item-5 doc.
 
-**Round 3 (evening, NOT host-verified — the host server was offline, the user is swapping the test machine):**
+**Round 3 (evening, not host-verified at the time — verified 2026-09-26, see the section above; the default of
+`FullyIndoorCover` has since moved to false):**
 Equator's atrium roof is an open lattice in Arena's data (`equator_roof_Glass_LOD0` ships inactive), so rain fell
 through the cells → new key `Lighting (arena_equator) › FullyIndoorCover` (default true) draws the CoverAll quad;
 the three ambient keys now apply live (`ApplyUserSettingsLive`). Bay5 has no rain-reactive puddle decals in

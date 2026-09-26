@@ -361,3 +361,60 @@ contains only two puddle materials and both are the non-reactive kind (`puddle b
 outdoor rain puddles; its wet yard look is the vertex-painted ground shader. Forcing `USERAIN` onto `puddle benz`
 would animate indoor oil puddles, so nothing was changed. Adding real rain puddles to Bay5 would mean authoring new
 decals (or testing the ground shader's own rain response) — a separate item, not a bug in the port.
+
+## Round 3 verified on SPT-GPU-2 (2026-09-26) — decision: let it rain
+
+User question after the first look at the new test machine: was the atrium rain intended (broken glass roof)? With
+`FullyIndoorCover=true` the drops were gone but the puddle animation stayed — "vielleicht lassen wir es einfach regnen?"
+
+**What the data says (offline, read-only pass: three evidence agents plus two adversarial re-checks).** Arena's
+Equator ships the frame `equator_roof_LOD0` active and the pane mesh `equator_roof_Glass_LOD0` inactive with material
+`arena_equator_broken_glass_atlas_roof` (both under `SBG_Arena_Equator / SOO_LOD0 / equator_roof`). The inactive flag is
+Arena's authored state: a raw UnityPy read of the Arena install's `level51` shows `m_IsActive=False` on that GameObject
+(path_id 13506); the object carries only Transform/MeshFilter/MeshRenderer (no LODGroup, no MonoBehaviour — Arena's
+`WindowBreaker` sits on five other glass objects); the glass ballistic collider stays active with penetration 1.0 /
+fragmentation 0.0; and a dedicated `Glass_Shards` debris prop (materials "glass shards" / "glass shards pile") has four
+of its six placements 1–6 m from the puddles under the dome, all six inactive as well. So the roof is a deliberately
+built "broken glass" art pass (finished or abandoned), and the pane mesh, were it active, would cover the whole lattice
+(262 triangles, one pane per opening). The puddles are a weak signal on their own: of the 21 rain-reactive `puddle2`
+decals (`Decal/Water Deferred Decal`, keyword `USERAIN`) 12 lie inside the glass footprint and 9 outside (5 of them at
+outdoor `Respawns_both` spawns), and the 17 non-reactive `puddle2_indoornoripple` decals split 10/7 the same way with a
+material shared verbatim with Bay5 — generic mall-wide wet-floor dressing, not placement against the hole. The only
+`USERAIN` material in the package is that puddle decal. Arena has no per-map weather preset for Equator
+(`analysis/equator_tdm_preset.json` is a scene table; the Scripts scene carries one `WeatherController`/`RainController`/
+`RippleController` each), and whether Arena's own modes ever rain on Equator is not decidable from static data; the port
+runs the Reserve donor rig with server weather. Conclusion: the open, broken roof is Arena's authored geometry, not a
+porting defect, and rain through the lattice is its faithful rendering whenever the weather rains — the user's call to
+keep it.
+
+**Why the puddles ripple under the CoverAll quad (correction of the Round 3 paragraph above).** The sentence "with it
+the atrium's `puddle2` decals no longer get rained on" was wrong. The decal ripple is driven by `RippleController.Update`
+(decompile): `WaterCucle.Update(deltaTime, Intensity)` advances with the raw `Time.deltaTime` every frame and
+`SetShaderValues` publishes `_WaterRippleCycle`, `_WaterRippleConfig`, `_RippleTexture`, `_RainIntensityRippleScale` … as
+process-wide `Shader.SetGlobal*` values; `Intensity` is `RainController.Intensity`, the map-wide rain amount
+(`AbstractStateSummer.SetIntensity`). Nothing in that path reads `_WeatherDepthMap`/`_MapStart`/`_MapScale`, and
+`IsCameraUnderRain` only gates the separate `EnvironmentCucle` plus the screen/weapon wetness FX (`ScreenWater`,
+`RainScreenDropsPlacer`, `RainCondensator`). So the depth photo — and with it `FullyIndoorCover` — can only remove the
+falling drops; a `USERAIN` puddle ripples wherever it was placed as long as the weather has rain, which is exactly what
+the user saw. Vanilla avoids the mismatch by authoring non-reactive puddles indoors, as Arena did with
+`puddle2_indoornoripple`.
+
+**Host evidence (SPT-GPU-2, EFT instance cd73afd7, 18:04–18:06, forced rain, max graphics settings).**
+
+| Spot | FullyIndoorCover | F8 `height(reversedZ)` | Screenshot |
+|---|---|---|---|
+| atrium (2.08, 0.42, 11.13), 18:05:22 | true | 47.51 on all 9 samples (= RainBounds top 48.41 − 1, y-quantised) | — |
+| atrium (1.95, 1.84, 9.36), 18:05:50 | false (set live, F8 re-render) | 23.10–23.35 (beam) | streaks visible against the elevator tower and the dark upper walls |
+
+The `re-rendered depth photo (… CoverAll=False)` line printed the RainCoverLab value only while the photo was fully
+covered by `FullyIndoorCover`; the line now carries `FullyIndoorCover=<bool>` too.
+
+**Decision and change.** The default of `Lighting (arena_equator) › FullyIndoorCover` moved to false (everywhere); the
+key stays as an opt-in dry mall. Because BepInEx persists the value, `DefaultsRevision` 3 moves a persisted `true` back
+to `false` once (only that value, the same rule as revisions 1–2). Verified after the EFT restart (instance 95e625d7,
+18:11): `uibridge_config` reads `FullyIndoorCover = false (default false)` and `DefaultsRevision = 3` (the re-seed line
+itself is logged before UiBridge starts recording, so the config read is the check); the 18:12 raid logged
+`RoofDepthBlack: drew 7580 elevated mesh(es) (…, CoverAll=False)` and `re-rendered depth photo (DrawTransform=None,
+CoverAll=False, FullyIndoorCover=False) [automatic raid bootstrap]`. Deployed to `D:\SPT41` (18:08) and, host-verified,
+to `D:\SPT41vanilla` (18:15; its server restart is the user's). Bay5's puddle content gap (above) is unchanged.
+**Status: item 6 VERIFIED on both maps; Equator's atrium rains by design.**

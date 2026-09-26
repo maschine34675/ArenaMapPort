@@ -1076,8 +1076,11 @@ namespace ArenaMapPort.Client
                 return false;
             }
 
+            // CoverAll here is the RainCoverLab value only; FullyIndoorCover forces the same quad inside
+            // RenderObstaclesPrefix (host log 2026-09-26 read "CoverAll=False" while the photo was fully covered).
+            bool fullyIndoor = WeatherRig.FullyIndoorCoverForCurrentMap();
             Plugin.Log.LogInfo($"[ArenaMapPort][RainCover] map={map.Key} re-rendered depth photo " +
-                $"(DrawTransform={drawTransform}, CoverAll={coverAll}) [{trigger}]");
+                $"(DrawTransform={drawTransform}, CoverAll={coverAll}, FullyIndoorCover={fullyIndoor}) [{trigger}]");
 
             // Goal 4's own "run the F9 depth readback line right after" — the identical readback F9/
             // LightingLab's own snapshot hotkey appends, at the live camera position, so the effect is

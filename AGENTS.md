@@ -120,8 +120,10 @@ confirmations and the vanilla 0-HP penalty for a skipped heal screen.
 
 ## Host testing (GPU host, via MCP)
 
-Two MCP servers drive the test host: `uibridge` (sees inside the running EFT) and `windows-gpu`
-(clicks, keys, screenshots). Recipe that has worked for every host test so far:
+Two MCP servers drive the test host. Since 2026-09-26 the host is **SPT-GPU-2**, reached through `uibridge-2`
+(sees inside the running EFT) and `windows-gpu-2` (clicks, keys, screenshots); the un-suffixed `uibridge`/`windows-gpu`
+servers belong to the retired first host — do not test there. The tool names below are written without the suffix.
+Same click points as before, raid start ≈ 9 s, `D:\SPT41` still mirrors it. Recipe that has worked for every host test:
 
 1. `uibridge_status`: is another session using the host? Is the loaded ArenaMapPort DLL identical to the
    VM build ("VM build = host disk = loaded")? Is the EFT window focused (the first click into an unfocused
@@ -181,7 +183,13 @@ the log; the user uses it to point at things.
   (Terrain layer + `WeatherObstacle` mesh); `RainCoverRepairs`' heuristic feeds that photo on every ported map and
   must never be switched off without a replacement. Arena's Bay5 `DryPlane` set is a Lighthouse leftover
   (`Lighthouse_DryPlanes`, off-map) and is dropped at extraction; Equator ships none. A "verified" rain check needs
-  the F8 depth readback plus a screenshot of the falling streaks, not the floor wetness.
+  the F8 depth readback plus a screenshot of the falling streaks, not the floor wetness. Equator's atrium roof is
+  broken on purpose (pane mesh inactive in Arena's raw level, "broken glass atlas" material, inactive glass-shard
+  debris under it; the puddles are generic mall dressing): rain through the lattice is by design (user decision
+  2026-09-26), `FullyIndoorCover` is an opt-in dry mall, and puddle ripples follow the global
+  rain value (`RippleController`), never the depth photo — no cover setting removes them.
+- BepInEx config re-seeds (`config re-seeded to defaults revision N`) are logged before UiBridge starts recording;
+  check the result with `uibridge_config … DefaultsRevision` / the key's value instead of waiting for the line.
 - Syncthing replaces the client DLL while EFT runs; EFT keeps the old code until restarted. Trust
   `uibridge_status`'s MVID comparison, not file hashes. The same holds for rebuilt bundles: a loaded map
   bundle stays cached in the EFT process, so a new NavMesh/scenes bundle needs an EFT restart before the next

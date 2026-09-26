@@ -82,3 +82,9 @@ directly, and the volume through `Fader.FadeTo(GetBaseVolume(), 0.5 s)` — `Bas
 `Source.volume` every frame. Log: `[NativeAudio] live settings applied: gainDb=… offset=… range=x…; re-targeted N
 playing source(s)`. Whether a live `Source.maxDistance` change re-stretches Unity's baked custom rolloff curve is
 to be confirmed by ear on the next host session (not yet host-verified: the host server was offline).
+
+Host check of the live path (SPT-GPU-2, instance cd73afd7, 18:06:14, Equator raid): `uibridge_config_set
+AmbientRangeMultiplier 1 → 3` mid-raid logged `[NativeAudio] live settings applied: gainDb=0.0 offset=0.000 range=x3.00;
+re-targeted 23 playing source(s), max distance pushed on 23 map=arena_equator` (reset to 1 afterwards). The live path is
+verified; whether the re-pushed `Source.maxDistance` audibly re-stretches the baked rolloff curve remains the user's
+by-ear check on their own install.
