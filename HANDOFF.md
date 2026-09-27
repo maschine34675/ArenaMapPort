@@ -12,9 +12,9 @@ screen controller's `OnClose` (raid visible) — host 17:40–18:09, both maps, 
 item 8: `tools/maps/{equator,bay5}.ai.json` (Arena's real core points, hubs, subpoints) are staged as
 `ai/<map>.ai.json`; the client authors them plus the id-0 alias, bots patrol the real hubs (host 17:40–17:56).
 The extractor must have run before a deploy, or the maps load behind EFT's default background (no error).
-Floodlight glare (item 7 follow-up) is still open: F7 now logs the camera stack — on the donor camera
-PrismEffects bloom is off and `UltimateBloom` (threshold 2.10, intensity 0.35) is the live bloom.
-Next: glare, then plan item 9 (release packaging; hide the twelve spike maps on location select).
+Floodlight glare (item 7 follow-up) fixed: the donor camera's live bloom is `UltimateBloom` (threshold 2.10);
+`BloomTuning.cs` sets `Lighting (<map>) › BloomThreshold` per map (Equator 1.25, others -1 = camera's own), verified
+18:24 (halo back, letters readable). Next: plan item 9 (release packaging; hide the twelve spike maps on location select).
 
 ## State on 2026-09-26 — overview-map north markers clarified
 

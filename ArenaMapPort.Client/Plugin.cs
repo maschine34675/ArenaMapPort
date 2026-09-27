@@ -115,6 +115,8 @@ namespace ArenaMapPort.Client
             // daytime-and-visuals F2-F7 — 2026-09-17 playtest symptom B follow-up. See
             // docs/progress/daytime-and-visuals.md and each file's own doc comment.
             CameraEffectsRepairs.Install();
+            // Floodlight glare follow-up (2026-09-27): live UltimateBloom knobs. See BloomTuning.cs.
+            BloomTuning.Install();
             DecalRepairs.Install();
             SeaPlaceholderRepairs.Install();
             DaytimeVisualsProbe.Install();

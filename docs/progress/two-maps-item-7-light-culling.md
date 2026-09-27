@@ -208,3 +208,23 @@ Rebuilt 2026-09-27 15:05–15:35 from re-extracted v4 packages (all 472 / 186 Cu
 same spot and view as 14:13, lamp out of view): `'Spotlight (13)' d=7.60 fade=25.00..50.00 visible=True
 multiplier=1.00 float_1=3.76 intensity=3.76` (was `visible=False … intensity=0.00`); "inside fade start, zero" dropped
 from 3 to 1. **Floodlight fix verified.**
+
+## Follow-up 2026-09-27 (evening): floodlight glare — bloom threshold, not the lights
+
+User report after the culling-sphere fix: the atrium floodlights stay lit but no longer dazzle; the first playable build
+(screenshot 2026-09-19 09:28) had a halo around the lamp heads and glowing EQUATOR letters. Earlier A/Bs had ruled out
+`ReflectiveSpecularCap` (cap 1 → no halo) and the donor camera alone (`UseDonorCameraPrefab=false` → no halo).
+
+The F7 probe now also logs the camera's image-effect stack and the bloom components (reflection over public scalar
+fields for `UltimateBloom`/`BloomAndFlares`). Host 17:53 (instance 0680b26b, Equator): PrismEffects `useBloom=False`
+(its own intensity 0.05 / threshold 1.58 are unused); `UltimateBloom` is the live bloom with `m_HDR=On
+m_BloomIntensity=0.35 m_BloomThreshhold=2.10 m_IntensityManagement=Threshold`. The lamp face sits below 2.10.
+
+`BloomTuning.cs` adds per-map keys `Lighting (<map>) › BloomThreshold` / `BloomIntensity` (-1 = camera's own value,
+live, applied on every camera change). Host A/B 18:17 (instance 011a4a56, Equator, 5.6 m from
+`Projector_portable_mask_rezerv (1)`): 2.10 white lamp face, no halo; 1.5 faint glow; **1.25 clear halo, letters glow but
+stay readable (the 09-19 look)**; 1.0 strong halo, letters blown out. Bay5 overcast outdoors: 1.25 and 2.10 look the
+same. Defaults: Equator 1.25, every other map -1. Host 18:24 (instance d0d7c7e8, fresh process, default config):
+`[Bloom] arena_equator 'FPS Camera' (camera changed): threshold 2.10 -> 1.25, intensity 0.35 -> 0.35`, F7 30 s later
+still `m_BloomThreshhold=1.25`, screenshot shows the halo. **Verified.** Bay5 in clear noon sun was not checked; its
+key stays -1.

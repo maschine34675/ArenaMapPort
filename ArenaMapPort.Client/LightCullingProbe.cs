@@ -23,7 +23,9 @@ namespace ArenaMapPort.Client
     /// CullingLightObject of the loaded Arena map into "inside fade start", "inside the fade window" and "beyond fade
     /// end" by its distance to the active camera and reports how many sit at full / partial / zero intensity, lists
     /// the nearest few, reports the VolumetricLight state (graphics setting, live components, renderer on the camera)
-    /// and samples each enabled LightFlicker's intensity ten times over one second. Only in an Arena raid; reads only.
+    /// and samples each enabled LightFlicker's intensity ten times over one second. Since 2026-09-27 it also logs the
+    /// active camera's image-effect stack and PrismEffects' bloom/exposure values (floodlight glare comparison).
+    /// Only in an Arena raid; reads only.
     /// </summary>
     internal static class LightCullingProbe
     {
@@ -189,7 +191,65 @@ namespace ArenaMapPort.Client
             {
                 Plugin.Log.LogInfo($"[ArenaMapPort][LightProbe] {map.Key} flicker: no enabled LightFlicker");
             }
+            LogCameraStack(map.Key, cam);
             _running = false;
+        }
+
+        // Floodlight glare follow-up (2026-09-27): the camera's image-effect stack and PrismEffects' bloom/exposure
+        // values, so the donor camera and the Cam2 fallback can be compared by number instead of by screenshot.
+        static void LogCameraStack(string mapKey, Camera cam)
+        {
+            var sb = new StringBuilder();
+            sb.Append($"[ArenaMapPort][LightProbe] {mapKey} camera stack '{cam.name}' hdr={cam.allowHDR} path={cam.actualRenderingPath}:");
+            foreach (var b in cam.GetComponents<Behaviour>())
+            {
+                if (b != null)
+                    sb.Append($" {b.GetType().Name}{(b.enabled ? "" : "(off)")}");
+            }
+            var prism = cam.GetComponent<PrismEffects>();
+            if (prism != null)
+            {
+                sb.Append($"\n  PrismEffects enabled={prism.enabled} useBloom={prism.useBloom} bloomType={prism.bloomType} " +
+                          $"intensity={F(prism.bloomIntensity)} threshold={F(prism.bloomThreshold)} " +
+                          $"downsample={prism.bloomDownsample} blurPasses={prism.bloomBlurPasses} " +
+                          $"screenBlend={prism.bloomUseScreenBlend} stability={prism.useBloomStability} " +
+                          $"lensDirt={prism.useLensDirt}/{F(prism.dirtIntensity)}" +
+                          $"\n  exposure use={prism.useExposure} middleGrey={F(prism.exposureMiddleGrey)} " +
+                          $"limits={F(prism.exposureLowerLimit)}..{F(prism.exposureUpperLimit)} speed={F(prism.exposureSpeed)} " +
+                          $"tonemap={prism.useTonemap}");
+            }
+            else
+            {
+                sb.Append("\n  PrismEffects: none");
+            }
+            // UltimateBloom and BloomAndFlares (Unity standard assets, not in Assembly-CSharp) by reflection.
+            foreach (var b in cam.GetComponents<Behaviour>())
+            {
+                if (b == null)
+                    continue;
+                var typeName = b.GetType().Name;
+                if (typeName == "UltimateBloom" || typeName == "BloomAndFlares")
+                    sb.Append($"\n  {typeName}{(b.enabled ? "" : "(off)")}:{ScalarFields(b)}");
+            }
+            Plugin.Log.LogInfo(sb.ToString());
+        }
+
+        // Public instance fields of scalar type (float/int/bool/enum), skipping editor-UI toggles.
+        static string ScalarFields(object o)
+        {
+            var sb = new StringBuilder();
+            foreach (var f in o.GetType().GetFields(BindingFlags.Instance | BindingFlags.Public))
+            {
+                var t = f.FieldType;
+                if (f.Name.StartsWith("m_UiShow", StringComparison.Ordinal))
+                    continue;
+                if (t != typeof(float) && t != typeof(int) && t != typeof(bool) && !t.IsEnum)
+                    continue;
+                var v = f.GetValue(o);
+                sb.Append(' ').Append(f.Name).Append('=')
+                  .Append(v is float fv ? F(fv) : v?.ToString());
+            }
+            return sb.ToString();
         }
     }
 }
