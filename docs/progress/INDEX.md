@@ -36,6 +36,15 @@ dated state in one screen; read it before this index if you only have a minute.
 - [two-maps-item-10-banners.md](two-maps-item-10-banners.md) — location-select banners from Arena's own
   Matchmaker_Banner art (extracted into dist/ only, served via ImageRouter, runtime Banners entry only when the file
   exists); verified 2026-09-27 on SPT-GPU-2.
+- [two-maps-item-8-ai-anchors.md](two-maps-item-8-ai-anchors.md) — Arena's own real `PatrolWay`/
+  `AICorePointHolder` topology extracted from the excluded TeamFight_AI scene (14/2+21 core points/hubs+subs
+  on Equator, 11/4+43 on Bay5) and authored by the client in place of the NavMesh-derived/single-point
+  synthesis; also corrects `PLAN-TWO-MAPS.md`'s own wrong "`ConnectionsAtNet` is unrecoverable" claim.
+  Verified 2026-09-27 on SPT-GPU-2 (all anchors reachable except Equator's isolated core points 13/14; bots walk
+  the real hubs, no ActiveFail).
+- [two-maps-item-10b-loadscreens.md](two-maps-item-10b-loadscreens.md) — deploy-screen art from Arena's own loading
+  screen and main-menu backgrounds (five per map, extracted into dist/ only), drawn as the first child of EFT's
+  deploy screen and hidden on its OnClose; verified 2026-09-27 on SPT-GPU-2.
 
 - [../PLAN-TWO-MAPS.md](../PLAN-TWO-MAPS.md) — the ordered, spike-verified plan for the two-map first
   release (Equator + Bay5): nine work items, release checklist, what is deliberately out (2026-09-25).

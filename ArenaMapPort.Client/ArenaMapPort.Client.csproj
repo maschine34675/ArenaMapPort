@@ -150,6 +150,19 @@
     <Message Importance="high" Text="[ArenaMapPort] deployed $(TargetFileName) -&gt; $(ArenaMapPortDistDir)" />
   </Target>
 
+  <!-- PLAN-TWO-MAPS item 8: AiAnchors.cs reads <plugin>/ai/<key>.ai.json at raid start. The sidecars are
+       git-tracked (tools/maps/*.ai.json, written by tools/extract/extract_ai_anchors.py), so they are staged
+       with the DLL on every Release build, DllOnly included. -->
+  <Target Name="ArenaMapPortStageAiSidecars" AfterTargets="ArenaMapPortDistCopy" Condition="'$(Configuration)'=='Release'">
+    <ItemGroup>
+      <ArenaMapPortAiSidecar Include="$(MSBuildThisFileDirectory)..\tools\maps\equator.ai.json" />
+      <ArenaMapPortAiSidecar Include="$(MSBuildThisFileDirectory)..\tools\maps\bay5.ai.json" />
+    </ItemGroup>
+    <Error Condition="!Exists('%(ArenaMapPortAiSidecar.Identity)')" Text="[ArenaMapPort] missing AI sidecar %(ArenaMapPortAiSidecar.Identity)" />
+    <MakeDir Directories="$(ArenaMapPortDistDir)\ai" />
+    <Copy SourceFiles="@(ArenaMapPortAiSidecar)" DestinationFolder="$(ArenaMapPortDistDir)\ai" SkipUnchangedFiles="false" />
+  </Target>
+
   <!--
     §B.WP2.8's own words: "Output written to work/build/ ..., then copied into
     dist/BepInEx/plugins/ArenaMapPort/bundles/ by a deploy step WP4 owns." This is that step, run after

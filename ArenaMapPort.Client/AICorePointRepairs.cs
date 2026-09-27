@@ -58,6 +58,16 @@ namespace ArenaMapPort.Client
     /// id lookup still returned null (a marker with a foreign CorePointId). Adapted from ManimalIcebreaker's
     /// <c>Patch_BotStartCorePoint</c> (RaidFixPatches.cs:4622-4647, MIT — attribution in
     /// THIRD-PARTY-NOTICES.md). Vanilla maps: every method here returns immediately.
+    ///
+    /// PLAN-TWO-MAPS item 8 (docs/progress/two-maps-item-8-ai-anchors.md): when <see cref="AiAnchors"/>
+    /// loads a sidecar for the current map (Equator/Bay5 only), <see cref="EnsureCorePoint"/> authors
+    /// Arena's own real <see cref="AICorePoint"/> net (ids/connection groups/positions, connections left
+    /// empty — see AiAnchors' own doc comment) in place of the single synthetic point below, PLUS the
+    /// same synthetic id-0/group-0 alias still added regardless: <c>tools/server/make_base_json.py</c>
+    /// gives every <c>SpawnPointParams.CorePointId</c> the value 0, while Arena's real ids start at 1, so
+    /// without the alias <c>GetCorePoint(0)</c> would return null and bot creation would regress exactly
+    /// as it did before this whole file existed. Any exception while authoring the real net falls
+    /// through to the untouched single-point synthesis (the twelve deferred maps' own behavior).
     /// </summary>
     internal static class AICorePointFallback
     {
@@ -98,8 +108,18 @@ namespace ArenaMapPort.Client
                 SurveyMarkers(botZones, out Vector3 anchor, out Bounds bounds, out string basis);
                 EnsureCoversHolders();
                 EnsureVoxelGrid(bounds);
-                EnsureCorePoint(anchor, basis);
-                PatrolWayFallback.EnsurePatrolWays(botZones); // see PatrolWayRepairs.cs
+                var map = ArenaMapRaid.CurrentMap;
+                var anchors = AiAnchors.Load(map); // null for every map besides Equator/Bay5, or on a bad sidecar
+                bool authoredFromAnchors = EnsureCorePoint(anchor, basis, anchors, out int realCorePointCount);
+                PatrolWayFallback.EnsurePatrolWays(botZones, authoredFromAnchors ? anchors : null,
+                                                   out int hubCount, out int subPointCount); // see PatrolWayRepairs.cs
+                if (authoredFromAnchors)
+                {
+                    Plugin.Log.LogInfo($"{Tag} {map.Key}: authored {realCorePointCount} real AI core point(s), " +
+                                       $"{hubCount} patrol hub(s), {subPointCount} sub point(s) from " +
+                                       $"ai/{anchors.MapKey}.ai.json, plus the synthetic id-0/group-0 alias " +
+                                       "(SpawnPointParams.CorePointId is always 0)");
+                }
             }
             catch (Exception e)
             {
@@ -179,8 +199,14 @@ namespace ArenaMapPort.Client
             }
         }
 
-        internal static void EnsureCorePoint(Vector3 position, string basis)
+        /// <summary>Returns true iff a real AI-anchors core-point net was authored this call
+        /// (<paramref name="realCorePointCount"/> is then &gt; 0); false for the untouched single-point
+        /// synthesis (no anchors, empty anchors, an authoring exception, or a no-op re-entry). The decompile
+        /// has one <c>BotsController.Init</c> call site per raid (<c>EFT/LocalGame.cs:184</c>); the first check
+        /// below (holder already has core points) keeps the method idempotent by construction anyway.</summary>
+        internal static bool EnsureCorePoint(Vector3 position, string basis, AiAnchors anchors, out int realCorePointCount)
         {
+            realCorePointCount = 0;
             var holder = UnityEngine.Object.FindObjectOfType<AICorePointHolder>();
             bool createdHolder = false;
             if (holder == null)
@@ -198,19 +224,70 @@ namespace ArenaMapPort.Client
                 {
                     Plugin.Log.LogInfo($"{Tag} created {HolderName} (scene had none)");
                 }
-                return;
+                return false; // already populated by an earlier call this raid — idempotent no-op, no new log line
             }
 
+            if (anchors != null && anchors.CorePoints.Count > 0)
+            {
+                try
+                {
+                    foreach (var cp in anchors.CorePoints)
+                    {
+                        var realGo = new GameObject($"AICorePoint(Arena) {cp.Id}");
+                        realGo.transform.position = cp.Position;
+                        var realPoint = realGo.AddComponent<AICorePoint>();
+                        realPoint.ClearConnections(); // no edge data — see AiAnchors.cs's own doc comment
+                        realPoint.SetIds(cp.Id, cp.ConnectionGroupId);
+                        holder.AddCorePoint(realPoint);
+                    }
+                    AddAlias(holder, position, out _);
+                    realCorePointCount = anchors.CorePoints.Count;
+                    return true;
+                }
+                catch (Exception e)
+                {
+                    Plugin.Log.LogWarning($"{Tag} {anchors.MapKey}: authoring the real AI core-point net from " +
+                                          $"ai/{anchors.MapKey}.ai.json failed ({e.GetType().Name}: {e.Message}) — " +
+                                          "falling back to the single synthetic core point");
+                    foreach (Transform child in holder.transform)
+                    {
+                        UnityEngine.Object.Destroy(child.gameObject);
+                    }
+                    holder.CorePoints.Clear();
+                }
+            }
+
+            AddAlias(holder, position, out var addedAlias);
+            if (addedAlias)
+            {
+                Plugin.Log.LogInfo($"{Tag} AICorePointHolder had no core points (no baked bot-nav data for this map) — added " +
+                                   $"synthetic AICore ID:{FallbackId} CG:{FallbackGroup} at {position:F1} ({basis}); " +
+                                   "GetCorePoint(0) now resolves and BotOwner.StartCorePoint is never null" +
+                                   (createdHolder ? $" (holder {HolderName} created as well)" : ""));
+            }
+            return false;
+        }
+
+        /// <summary>The synthetic id-0/group-0 alias (see this class' own doc comment for why it is
+        /// ALWAYS added, real anchors or not) — factored out so both the real-anchors path and the
+        /// pre-existing single-point synthesis share exactly one place that creates it.</summary>
+        static void AddAlias(AICorePointHolder holder, Vector3 position, out bool added)
+        {
+            added = false;
+            foreach (var existing in holder.CorePoints)
+            {
+                if (existing != null && existing.Id == FallbackId)
+                {
+                    return; // already present (defensive — no known path adds it twice)
+                }
+            }
             var go = new GameObject("AICorePoint(ArenaFallback)");
             go.transform.position = position;
             var point = go.AddComponent<AICorePoint>();
             point.ClearConnections();               // the two connection lists, otherwise null too
             point.SetIds(FallbackId, FallbackGroup); // "AICore ID:0 CG:0" — matches SpawnPointParams.CorePointId
             holder.AddCorePoint(point);
-            Plugin.Log.LogInfo($"{Tag} AICorePointHolder had no core points (no baked bot-nav data for this map) — added " +
-                               $"synthetic AICore ID:{FallbackId} CG:{FallbackGroup} at {position:F1} ({basis}); " +
-                               "GetCorePoint(0) now resolves and BotOwner.StartCorePoint is never null" +
-                               (createdHolder ? $" (holder {HolderName} created as well)" : ""));
+            added = true;
         }
 
         /// <summary>Centroid of the Bot spawn markers (anchor for the core point) and the bounds of ALL

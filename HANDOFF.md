@@ -3,6 +3,19 @@
 Snapshot for whoever continues (human or agent). Verify the commits named here against `git log`; this file
 is updated by hand at each handover, it is not an automatic record. Read [AGENTS.md](AGENTS.md) first.
 
+## State on 2026-09-27 (evening) — deploy-screen art (10b) and plan item 8 (AI anchors) verified
+
+Deploy-screen art: `tools/extract/extract_loadscreens.py` stages five Arena images per map (loading screen + four
+main-menu backgrounds) into `dist/.../ArenaMapPort/loadscreens/` only; `LoadingScreenArt.cs` draws one as the first
+child of EFT's `MatchmakerTimeHasCome` screen (caption, progress line and BACK stay on top) and hides it on the
+screen controller's `OnClose` (raid visible) — host 17:40–18:09, both maps, debug start and normal menu flow. Plan
+item 8: `tools/maps/{equator,bay5}.ai.json` (Arena's real core points, hubs, subpoints) are staged as
+`ai/<map>.ai.json`; the client authors them plus the id-0 alias, bots patrol the real hubs (host 17:40–17:56).
+The extractor must have run before a deploy, or the maps load behind EFT's default background (no error).
+Floodlight glare (item 7 follow-up) is still open: F7 now logs the camera stack — on the donor camera
+PrismEffects bloom is off and `UltimateBloom` (threshold 2.10, intensity 0.35) is the live bloom.
+Next: glare, then plan item 9 (release packaging; hide the twelve spike maps on location select).
+
 ## State on 2026-09-26 — overview-map north markers clarified
 
 Branch `feature/dynamicmaps-north-marker`, based on `783d065`. Both installed DynamicMaps

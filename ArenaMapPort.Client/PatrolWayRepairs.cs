@@ -25,16 +25,36 @@ namespace ArenaMapPort.Client
     /// or more ways let bots switch, <c>_canChangeWays</c>); an isolated point becomes a one-point way. Every point
     /// gets its sub points from BSG's own generator (<c>PatrolPoint.CreatSubs</c>, the same three radii
     /// <c>CreateSubPoints</c> uses in the editor). Vanilla maps and zones with authored ways are never touched.
+    ///
+    /// PLAN-TWO-MAPS item 8 (docs/progress/two-maps-item-8-ai-anchors.md): when the caller passes a
+    /// non-null <see cref="AiAnchors"/> (Equator/Bay5 only, and only once <see cref="AICorePointFallback"/>
+    /// has already authored the matching real <see cref="AICorePoint"/> net this raid — see that file),
+    /// <see cref="BuildFromAnchors"/> authors Arena's own real hub/subpoint hierarchy instead of the
+    /// NavMesh-derived synthesis below: one <see cref="PatrolWay"/> per sidecar entry, its <c>Points</c>
+    /// the real hub <see cref="PatrolPoint"/>s (<see cref="PatrolPoint.SetCorePoint"/> to the matching real
+    /// core point — a hub's own <c>_corePointId</c> defaults to 0, which would otherwise silently resolve
+    /// to the id-0 alias instead of Arena's intended core point), each hub's <c>subPoints</c> the literal
+    /// authored subpoint positions (plain C# defaults: <c>CanUseByBoss</c> true, <c>ShallSit</c> false,
+    /// <c>PatrolPointType.checkPoint</c>, no <c>ActionData</c>/<c>PointWithLookSides</c> — exactly what
+    /// <c>AddComponent&lt;PatrolPoint&gt;()</c> already gives, set explicitly here for clarity), bypassing
+    /// <c>CreatSubs</c>/<c>RefreshData</c> entirely. Any exception (a hub referencing a core point id the
+    /// holder does not have, for instance) falls through to the untouched NavMesh-derived synthesis below
+    /// for that zone — the twelve deferred maps' own unchanged behavior.
     /// </summary>
     internal static class PatrolWayFallback
     {
         const string Tag = "[ArenaMapPort][RaidFix]";
         internal const int MaxPointsPerWay = 8; // soak 2 (20.09.): a 4+2 split left one bot shuttling between two points
         const float SampleRadius = 2f;
-        const int IdBase = 910000; // PatrolPoint.Id must be non-zero and unique within the zone
+        const int IdBase = 910000;   // PatrolPoint.Id must be non-zero and unique within the zone
+        const int HubIdBase = 920000; // AI-anchors hubs -- distinct range from IdBase above (the two paths
+                                       // never run for the same zone, but distinct ranges keep log/diagnostic
+                                       // ids unambiguous about which path authored a given PatrolPoint).
 
-        internal static void EnsurePatrolWays(BotZone[] botZones)
+        internal static void EnsurePatrolWays(BotZone[] botZones, AiAnchors anchors, out int hubCount, out int subPointCount)
         {
+            hubCount = 0;
+            subPointCount = 0;
             if (botZones == null)
             {
                 return;
@@ -45,6 +65,25 @@ namespace ArenaMapPort.Client
                 if (zone == null || (zone.PatrolWays != null && zone.PatrolWays.Length > 0))
                 {
                     continue; // authored ways — never touch
+                }
+                if (anchors != null && anchors.PatrolWays.Count > 0)
+                {
+                    try
+                    {
+                        BuildFromAnchors(zone, anchors, out int zoneHubs, out int zoneSubPoints);
+                        hubCount += zoneHubs;
+                        subPointCount += zoneSubPoints;
+                        continue; // real topology authored — do not also run the NavMesh-derived synthesis
+                    }
+                    catch (Exception e)
+                    {
+                        Plugin.Log.LogWarning($"{Tag} zone '{zone.name}': authoring real patrol ways from " +
+                                              $"ai/{anchors.MapKey}.ai.json failed ({e.GetType().Name}: {e.Message}) — " +
+                                              "falling back to the NavMesh-derived synthesis");
+                        // BuildFromAnchors destroyed its partial GameObjects and never reached its zone.PatrolWays
+                        // assignment (see its own doc comment), so the zone is exactly as the "authored ways?" check
+                        // above saw it (null or empty) — BuildForZone below overwrites it either way.
+                    }
                 }
                 try
                 {
@@ -59,6 +98,96 @@ namespace ArenaMapPort.Client
                     }
                 }
             }
+        }
+
+        /// <summary>Authors Arena's own real hub/subpoint <see cref="PatrolWay"/>(s) for one zone from
+        /// <paramref name="anchors"/> — see this class' own doc comment. Builds fully into a local list and
+        /// only assigns <paramref name="zone"/>.PatrolWays on its own final line; a mid-way exception destroys
+        /// the PatrolWay GameObjects created so far and rethrows, leaving the zone exactly as the caller found
+        /// it — nothing for the caller to undo before it falls back to <see cref="BuildForZone"/>.</summary>
+        static void BuildFromAnchors(BotZone zone, AiAnchors anchors, out int hubCount, out int subPointCount)
+        {
+            hubCount = 0;
+            subPointCount = 0;
+            var holder = UnityEngine.Object.FindObjectOfType<AICorePointHolder>();
+            if (holder == null)
+            {
+                throw new InvalidOperationException("no AICorePointHolder in the scene (AICorePointFallback should have created one)");
+            }
+
+            var ways = new List<PatrolWay>();
+            var created = new List<GameObject>();
+            try
+            {
+                foreach (var wayAnchor in anchors.PatrolWays)
+                {
+                    var wayGo = new GameObject($"PatrolWay(Arena) {ways.Count}");
+                    created.Add(wayGo);
+                    wayGo.transform.SetParent(zone.transform, false);
+                    var way = wayGo.AddComponent<PatrolWay>();
+                    way.PatrolType = PatrolType.patrolling;
+                    way._maxPersons = -1;
+                    way.CoefSubPoints = 1f;
+                    way.Points = new List<PatrolPoint>();
+
+                    foreach (var hubAnchor in wayAnchor.Hubs)
+                    {
+                        var corePoint = holder.GetCorePoint(hubAnchor.CorePointId);
+                        if (corePoint == null)
+                        {
+                            throw new InvalidOperationException(
+                                $"hub at {hubAnchor.Position:F1} references core point id {hubAnchor.CorePointId}, " +
+                                "not present in the holder");
+                        }
+
+                        var hubGo = new GameObject($"PatrolPoint(Arena) hub{hubCount}");
+                        hubGo.transform.SetParent(wayGo.transform, false);
+                        hubGo.transform.position = hubAnchor.Position;
+                        var hubPoint = hubGo.AddComponent<PatrolPoint>(); // Awake -> subPoints = RefreshData() (no children yet)
+                        hubPoint.Id = HubIdBase + hubCount;
+                        hubPoint.CanUseByBoss = true;
+                        hubPoint.ShallSit = false;
+                        hubPoint.PatrolPointType = PatrolPointType.checkPoint;
+                        hubPoint.SubManual = false;
+                        hubPoint.SetCorePoint(corePoint); // _corePointId = corePoint.Id -- its own default (0) would
+                                                           // otherwise resolve to the id-0 alias, not this real point
+                        if (hubPoint.subPoints == null)
+                        {
+                            hubPoint.subPoints = new List<PatrolPoint>();
+                        }
+
+                        foreach (var subPos in hubAnchor.SubPoints)
+                        {
+                            var subGo = new GameObject($"SubPoint_{hubPoint.subPoints.Count + 1}");
+                            subGo.transform.SetParent(hubGo.transform, false);
+                            subGo.transform.position = subPos;
+                            var subPoint = subGo.AddComponent<PatrolPoint>(); // C# defaults match Arena's own authored
+                            subPoint.CanUseByBoss = true;                     // subpoints exactly (CanUseByBoss true,
+                            subPoint.ShallSit = false;                        // ShallSit false, checkPoint, _corePointId
+                            subPoint.PatrolPointType = PatrolPointType.checkPoint; // 0/Id 0, no ActionData/PointWithLookSides)
+                            subPoint.SubManual = false;
+                            hubPoint.subPoints.Add(subPoint);
+                            subPointCount++;
+                        }
+
+                        way.Points.Add(hubPoint);
+                        hubCount++;
+                    }
+                    ways.Add(way);
+                }
+            }
+            catch
+            {
+                foreach (var go in created)
+                {
+                    UnityEngine.Object.Destroy(go);
+                }
+                throw;
+            }
+
+            zone.PatrolWays = ways.ToArray();
+            Plugin.Log.LogInfo($"{Tag} zone '{zone.name}' authored {ways.Count} real patrol way(s) from " +
+                               $"ai/{anchors.MapKey}.ai.json ({hubCount} hub(s), {subPointCount} sub point(s))");
         }
 
         static void BuildForZone(BotZone zone, SpawnPointMarker[] markers)

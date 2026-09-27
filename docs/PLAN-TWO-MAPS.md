@@ -269,7 +269,7 @@ volumetric shafts; confirm the player's own volumetric-light graphics setting st
 
 **Done when.** Distant lights fade/cull, Equator's god-rays render, no authored light intensity regresses.
 
-### 8. Arena's own AI patrol hubs / core points (both maps) — no rebuild
+### 8. Arena's own AI patrol hubs / core points (both maps) — no rebuild — VERIFIED 2026-09-27 on SPT-GPU-2 (tools/extract/extract_ai_anchors.py → tools/maps/<map>.ai.json, staged as `ai/<map>.ai.json`; the client authors 14 core points + 2 hubs/21 subpoints on Equator and 11 + 4/43 on Bay5 plus the id-0 alias; every anchor reachable except Equator's two isolated core points 13/14; bots Active under PatrolAssault walk between the real hubs) — docs/progress/two-maps-item-8-ai-anchors.md
 
 **What.** Extract the excluded TeamFight_AI scene's real `PatrolWay→PatrolPoint` hub/subpoint hierarchy and
 `AICorePointHolder→AICorePoint` net, feed them to the client at raid start instead of the current
@@ -279,28 +279,45 @@ single-centroid/marker-chain synthesis.
 `PatrolWay`'s direct children **are** the real hub points, and each hub's own children are the real
 subpoints (already placed by Arena, not regenerated rings) — 2+21=23 (Equator), 4+43=47 (Bay5), matching
 exactly. `AICorePoint.Id`/`ConnectionGroupId` are recoverable from the GameObject **name** string
-(`"AICore ID:{id} CG:{cg}"`, baked at author time). **Critical gap: `ConnectionsAtNet` (the graph edges
-`BotPathFinderCorePoints` walks) is unrecoverable custom data** — every authored core point ships with an
-empty edge list, identical to today's single synthetic point in that respect; the behavioral payoff over
-today's synthesis is **unproven without a host test**. `common.py`'s `scene_files(dict, base=BASE)` binds its
-default `base=` at **import time**; reassigning `common.BASE` later silently produces empty results — always
-pass `base=` explicitly.
+(`"AICore ID:{id} CG:{cg}"`, baked at author time) **and** by raw-decoding `_id`/`_connectionGroupId`
+directly off the MonoBehaviour's own bytes (implemented, `tools/extract/extract_ai_anchors.py`).
+**Correction, 2026-09-27 (implementation pass, docs/progress/two-maps-item-8-ai-anchors.md): the line
+below this originally claimed `ConnectionsAtNet` was "unrecoverable custom data" — that was wrong.** It
+decodes exactly like every other field here (`_connectionsAtNetId: List<int>` + `ConnectionsAtNet:
+List<PPtr<AICorePoint>>`, self-validating same as the rest) and was raw-decoded and cross-validated this
+pass. It is deliberately left **unexported and unauthored** anyway, for a different, verified reason: its
+only populator, `AICorePoint.Restore(List<AICorePoint>)`, is called exclusively from
+`AICorePointHolder.DrawInner()`, itself only reachable from `OnDrawGizmos`/`OnDrawGizmosSelected` — Unity
+Editor Scene-view callbacks that never fire in a built EFT client or a live raid. So every authored core
+point's connections stay empty not because the bytes are unreadable, but because nothing at runtime would
+ever read what we authored there — identical outcome to today's single synthetic point, but for a
+structural reason, not a data-recovery limitation. `BotPathFinderCorePoints`/`FullMapPatrolLayer`/
+`LootPatrolLayer`/etc. do walk `ConnectionsAtNet` at runtime, but only ever see it empty regardless (ported
+maps or vanilla SPT ones), so this item's real payoff is the hub/subpoint **patrol** hierarchy (which
+`PatrolPointChooserBasic`/`PatrolAssault` do walk every raid) and per-spawn core-point/connection-group
+identity, not core-point-graph long-range pathfinding. `common.py`'s `scene_files(dict, base=BASE)` binds
+its default `base=` at **import time**; reassigning `common.BASE` later silently produces empty results —
+always pass `base=` explicitly (`extract_ai_anchors.py` does).
 
-**Steps.** New `tools/extract/extract_ai_anchors.py` (or extend `census.py`) emitting
-`tools/maps/<key>.ai.json` per map (hub/subpoint positions, core-point id/cg/position, `BoundsAll` composed
-with correct world scale — **not** the byte-identical `BoundMinor`/`BoundDown` template leftovers). New
-client runtime path (embedded JSON resource, parsed with the already-referenced Newtonsoft.Json) that
-authors the real topology in place of `PatrolWayFallback`/`AICorePointFallback`'s synthesis, keeping the
-synthesis as fallback for the twelve deferred maps. NavMesh-validate every point with `uibridge_teleport
-dryRun=true` before trusting it — Equator's 2 elevated "near:BotZone" core points (y 3.18/3.45) are a known
-off-current-NavMesh risk.
+**Steps.** New `tools/extract/extract_ai_anchors.py` emitting `tools/maps/<key>.ai.json` per map (core-point
+id/connection-group/position, hub/subpoint positions; no edge/connection data — see the correction above).
+New client runtime path (`ArenaMapPort.Client/AiAnchors.cs`, a loose `ai/<key>.ai.json` sidecar next to the
+plugin DLL, parsed with the already-referenced Newtonsoft.Json — same convention as `ShaderRebind.cs`'s own
+sidecar, not an embedded resource) that authors the real topology in place of
+`PatrolWayFallback`/`AICorePointFallback`'s synthesis, keeping that synthesis as the fallback for the twelve
+deferred maps (and for any exception while authoring the real topology). Implemented this pass
+(docs/progress/two-maps-item-8-ai-anchors.md) for Equator and Bay5; NavMesh-validate every point with
+`uibridge_teleport dryRun=true` before trusting it in a host raid — Equator's 2 elevated "near:BotZone" core
+points (y 3.18/3.45) are a known off-current-NavMesh risk, and the two isolated core points (ids 13/14) are
+expected to report unreachable rather than a bug.
 
-**Effort.** M, but **lowest-confidence payoff** in this plan (empty edge graph, zero cover/GroupPoint data on
-either map already). Do this last among quality items; it sits closer to bot-AI polish than to visual/
-collision "map quality," so it's the natural item to defer first if time runs short.
+**Effort.** M. Implemented and unit-tested this pass; the host-test paragraph above is what turns it from
+"implemented" to "verified" (docs/progress/two-maps-item-8-ai-anchors.md tracks that separately).
 
 **Host test.** Compare bot behavior near patrol hubs/core points before/after in a host raid; specifically
-check whether the extra points produce any measurable difference given the missing edges.
+`uibridge_teleport dryRun=true` on every core point and hub position, `BotSpawnProbe`/`uibridge_bots` checks
+for `ActiveFail`, and the client log's own "authored N real AI core point(s) ... plus the synthetic id-0/
+group-0 alias" summary line.
 
 **Done when.** Real hub/subpoint/core-point data replaces the synthetic anchors on both maps and a host raid
 shows no regression (behavioral improvement is a bonus, not a gate, given the known edge-data gap).
@@ -315,7 +332,7 @@ since it packages whatever `dist/` currently holds for Equator/Bay5.
 **Done when.** A packaged Equator+Bay5-only zip validates clean and a host server started from just that
 2-map `db/` subset shows exactly two Arena locations in the map-select screen.
 
-### 10. Location-select banner from Arena's own art (both maps) — no rebuild (added 2026-09-25) — VERIFIED 2026-09-27 on SPT-GPU-2 (tools/extract/extract_banners.py stages Arena's Matchmaker_Banner_* art into dist/ only; the server wires an ImageRouter route and a runtime Banners entry per map only when the file exists, base.json stays Banners: []; both pictures on the location-select screen, no [UNHANDLED]) — docs/progress/two-maps-item-10-banners.md
+### 10. Location-select banner from Arena's own art (both maps) — no rebuild (added 2026-09-25) — VERIFIED 2026-09-27 on SPT-GPU-2; follow-up 10b (deploy-screen art: five Arena images per map behind EFT's own deploy UI, hidden when the deploy screen closes) VERIFIED 2026-09-27 — docs/progress/two-maps-item-10b-loadscreens.md; (tools/extract/extract_banners.py stages Arena's Matchmaker_Banner_* art into dist/ only; the server wires an ImageRouter route and a runtime Banners entry per map only when the file exists, base.json stays Banners: []; both pictures on the location-select screen, no [UNHANDLED]) — docs/progress/two-maps-item-10-banners.md
 
 **Verified facts (read-only research, 2026-09-25).** EFT 0.16.9.5's raid-loading screen has no image slot:
 `PreloaderUI.ShowRaidStartInfo → RaidStartIntro.ShowIntro` only types text (raid number, day, player,
