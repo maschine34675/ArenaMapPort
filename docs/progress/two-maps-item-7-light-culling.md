@@ -145,3 +145,38 @@ lattice at rain/overcast showed no visible shaft). Flicker variation is not prov
 components are in the bundles and live (counts), the fallbacks run, the float_1 sync runs on 472/186 lights with the
 authored baselines, and no exception surfaced. **Status: item 7 VERIFIED (log + bundle evidence; distance fade and
 god-rays to be judged by eye on the user's install).** Deployed to `D:\SPT41vanilla` afterwards.
+
+## Re-check without bots (2026-09-27 12:54–12:58, SPT-GPU-2, EFT instance 3875f58f)
+
+The host menu now has `EQUATOR / NO BOTS` and `BAY5 / NO BOTS` buttons, so the checks the bots cut short on
+2026-09-26 were redone. New read-only diagnostic `LightCullingProbe` (key `Diagnostics › LightCullingProbeHotkey`,
+F7): it groups every active CullingLightObject of the loaded map by its distance to the camera into *inside fade
+start* / *fade window* / *beyond fade end* and counts full (intensity ≥ 99 % of `float_1`), partial and zero
+intensity, lists the nearest eight, reports the volumetric state and samples each enabled LightFlicker ten times
+over one second.
+
+| Probe | inside fade start | fade window | beyond fade end |
+|---|---|---|---|
+| Equator spawn (−11.8, 1.6, 48.5), 456 active lights, 255 visible | 162 full, 0 partial, 0 zero | 6 full, 83 partial, 4 zero | 0 full, 0 partial, 199 zero |
+| Bay5 spawn (56.6, −2.3, 1.9), 107 active, 40 visible | 27 / 0 / 0 | 1 / 12 / 0 | 0 / 0 / 67 |
+| Bay5 warehouse (137.9, 1.5, 71.1), 107 active, 51 visible | 27 / 0 / 0 | 0 / 22 / 3 | 0 / 0 / 55 |
+
+The distance fade works exactly as authored: every light nearer than its fade start is at full intensity, every
+light beyond its fade end is at zero, and the window in between ramps (the "full"/"zero" entries in the window sit
+at its edges). The bands move with the camera (Bay5 spawn vs. warehouse). Nearest-light lines show
+`float_1 = intensity` at `multiplier=1.00` with the uplift applied (e.g. Equator `BasePoint` authored 0.5 →
+`float_1=0.25` at `GlobalLightIntensityMultiplier` 0.5; Bay5 `MainSpot` 2.94, `SupportLight` 0.50 — two of the
+names Arena saved at intensity 0).
+
+Volumetric: `setting=True components=9 activeAndEnabled=1 [FAKE_SUN_VOLUME] renderer on 'FPS Camera'=enabled`
+(Equator; the other eight VolumetricLights are disabled in Arena's own data), Bay5 `components=1 activeAndEnabled=1
+[MainLight]`. With the test weather set to Clear for one raid (12:55, restored to the user's Rain afterwards), the
+view straight up from the atrium shows a bright haze centred over the dome where `FAKE_SUN_VOLUME` sits (51.6 m
+up), distinct from the sun glare at the edge — the volumetric glow renders.
+
+Flicker (Equator, camera 47 m away, `cullingCoef=1.00`): `'Point Light (11)' min=0.05 max=0.97 samples=[0.05 0.60
+0.73 0.60 0.58 0.97 0.78 0.73 0.95 0.30]`, `'Point Light (8)' min=0.65 max=1.07` — the looping 24-key curves
+animate (the wrap-mode mapping 1 → Loop holds at runtime too). Bay5 has no LightFlicker.
+
+**Status: item 7 fully VERIFIED on both maps** (distance fade, volumetric glow and flicker now measured, not
+inferred). Deployed to `D:\SPT41` and `D:\SPT41vanilla`.

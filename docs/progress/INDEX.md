@@ -30,7 +30,8 @@ dated state in one screen; read it before this index if you only have a minute.
 - [two-maps-item-7-light-culling.md](two-maps-item-7-light-culling.md) — CullingLightObject / VolumetricLight /
   LightFlicker extracted from Arena's raw bytes and attached by the importer (packages `*-native-v4`), client
   fallbacks for CullingManager and VolumetricLightRenderer, brightness-uplift coordination; verified 2026-09-26 on
-  SPT-GPU-2 (472/186 components live, 79/107 dark-saved lights lit; fade/god-rays by eye).
+  SPT-GPU-2 (472/186 components live, 79/107 dark-saved lights lit); distance fade, volumetric glow and flicker
+  measured 2026-09-27 with the F7 `LightCullingProbe` in bot-free raids.
 
 - [../PLAN-TWO-MAPS.md](../PLAN-TWO-MAPS.md) — the ordered, spike-verified plan for the two-map first
   release (Equator + Bay5): nine work items, release checklist, what is deliberately out (2026-09-25).

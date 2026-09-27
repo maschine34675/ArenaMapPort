@@ -133,8 +133,10 @@ Same click points as before, raid start ≈ 9 s, `D:\SPT41` still mirrors it. Re
 2. Restart EFT when the client DLL changed: click points from `uibridge_snapshot contains=EXIT` / `YES`,
    `uibridge_wait unreachableFor=5`, launcher START GAME (1396,323; the "Wipe Profile" checkbox sits left of
    it, never click it), then `uibridge_wait screen=MainMenu afterRestart=true`.
-3. Start the raid with EQUATOR DEBUG or BAY5 DEBUG (`uibridge_snapshot contains=DEBUG`), then
-   `uibridge_wait raidStarted=true`.
+3. Start the raid with the debug buttons (since 2026-09-27: `EQUATOR / WITH BOTS` (299,718), `EQUATOR / NO BOTS`
+   (299,798), `BAY5 / WITH BOTS` (299,878), `BAY5 / NO BOTS` (299,958) — the old single-button positions moved;
+   check with `uibridge_snapshot contains=BOTS`), then `uibridge_wait raidStarted=true`. Use NO BOTS for visual or
+   measurement checks: SAIN bots kill the debug player within ~15–40 s.
 4. Observe: `uibridge_log` (BepInEx log, filter by `[ArenaMapPort]` tags), `uibridge_player`,
    `uibridge_bots` (positions, brain layers), `uibridge_teleport` (has a NavMesh reachability check —
    `reachable=false` for islands; `dryRun=true` to probe connectivity), `uibridge_look`, screenshots via
@@ -197,6 +199,8 @@ the log; the user uses it to point at things.
   and sets `enabled` last. At raid time `CullingLightObject` keeps writing `_light.intensity = float_1 * fade`, so
   `ArenaLightingRepairs` also writes the private `float_1` (reflection) or the brightness uplift is erased; the
   `CullingManager` singleton and the camera's `VolumetricLightRenderer` are client fallbacks, not package data.
+  Verify light work with F7 (`LightCullingProbe`: distance-fade bands, volumetric state, flicker samples), not with
+  screenshots — the SceneInspector (F10) only hits mesh colliders, never lights.
 - BepInEx config re-seeds (`config re-seeded to defaults revision N`) are logged before UiBridge starts recording;
   check the result with `uibridge_config … DefaultsRevision` / the key's value instead of waiting for the line.
 - Syncthing replaces the client DLL while EFT runs; EFT keeps the old code until restarted. Trust

@@ -31,8 +31,10 @@ loop erases the brightness uplift, and 79 Equator / 107 Bay5 lights that Arena s
 (they light up now; expect both maps brighter, `GlobalLightIntensityMultiplier` may want re-tuning). Batch-import trap:
 the three classes are `[ExecuteInEditMode]`, their Awake/OnEnable exceptions are logged by Unity and fail the build's log
 scan — editor stubs (stand-in shader `Sandbox/VolumetricLight`, a `FlickerSystem` on a HideAndDontSave object) keep it
-clean. Host-verified 22:15–22:37 (Lighting summary `cullingLights=472/186`, fallback lines, no errors; fade and god-rays
-not settled by screenshot). Deployed to `D:\SPT41` and `D:\SPT41vanilla`. Details: docs/progress/two-maps-item-7-light-culling.md.
+clean. Host-verified 22:15–22:37 (Lighting summary `cullingLights=472/186`, fallback lines, no errors) and re-checked
+2026-09-27 in bot-free raids (new menu buttons `EQUATOR|BAY5 / NO BOTS`) with the new read-only F7 `LightCullingProbe`:
+every light inside its fade start at full intensity, every light beyond its fade end at zero, the window ramps;
+`FAKE_SUN_VOLUME` active with the renderer on the camera and a visible glow in clear weather; flicker samples 0.05–0.97. Deployed to `D:\SPT41` and `D:\SPT41vanilla`. Details: docs/progress/two-maps-item-7-light-culling.md.
 Next: plan items 8 (AI hubs), 10 (banners), then 9 (release).
 
 ## State on 2026-09-26 — round 3 verified on the new host SPT-GPU-2; Equator's atrium rains by design
