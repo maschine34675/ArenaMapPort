@@ -199,9 +199,13 @@ the log; the user uses it to point at things.
   and sets `enabled` last. At raid time `CullingLightObject` keeps writing `_light.intensity = float_1 * fade`, so
   `ArenaLightingRepairs` also writes the private `float_1` (reflection) or the brightness uplift is erased; the
   `CullingManager` singleton and the camera's `VolumetricLightRenderer` are client fallbacks, not package data.
-- Bloom/glare: on the donor camera `PrismEffects.useBloom` is false; the live bloom is `UltimateBloom` (threshold 2.10,
-  intensity 0.35). Glare around emissive lamps is tuned with `Lighting (<map>) › BloomThreshold` (`BloomTuning.cs`,
-  Equator 1.25), not with lights, specular caps or the camera rig. F7 logs the whole camera stack.
+- Bloom/glare: `UltimateBloom` controls broad glow (donor threshold 2.10, intensity 0.35; Equator's existing
+  `BloomThreshold` default remains 1.25). The early horizontal streak is **BloomAndFlares before Prism**:
+  `AnamorphicFlareTuning` restores it on Equator and moves its native render before HDR-to-LDR, with captured
+  state restored on disable/unload. Merely enabling its HDR mode after Prism cannot recover highlights.
+  New Equator controls: `AnamorphicFlare`, `AnamorphicFlareHDR`, `AnamorphicFlareIntensity`. `CameraRepairHooks`
+  uses SetCamera, not a one-time event subscription (CameraManager.Dispose clears that event between raids).
+  F7 logs each camera effect separately. Details: `docs/progress/equator-anamorphic-hdr.md`.
   Verify light work with F7 (`LightCullingProbe`: distance-fade bands, volumetric state, flicker samples), not with
   screenshots — the SceneInspector (F10) only hits mesh colliders, never lights. Every culling object is also
   frustum-tested on `BoundingSphere(position + _shift, _radius)` unless `_cullByDistanceOnly`; Awake replaces

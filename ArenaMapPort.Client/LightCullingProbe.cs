@@ -206,6 +206,9 @@ namespace ArenaMapPort.Client
                 if (b != null)
                     sb.Append($" {b.GetType().Name}{(b.enabled ? "" : "(off)")}");
             }
+            Plugin.Log.LogInfo(sb.ToString());
+            sb.Clear();
+            sb.Append($"[ArenaMapPort][LightProbe] {mapKey} camera exposure:");
             var prism = cam.GetComponent<PrismEffects>();
             if (prism != null)
             {
@@ -222,6 +225,7 @@ namespace ArenaMapPort.Client
             {
                 sb.Append("\n  PrismEffects: none");
             }
+            Plugin.Log.LogInfo(sb.ToString());
             // UltimateBloom and BloomAndFlares (Unity standard assets, not in Assembly-CSharp) by reflection.
             foreach (var b in cam.GetComponents<Behaviour>())
             {
@@ -229,9 +233,9 @@ namespace ArenaMapPort.Client
                     continue;
                 var typeName = b.GetType().Name;
                 if (typeName == "UltimateBloom" || typeName == "BloomAndFlares")
-                    sb.Append($"\n  {typeName}{(b.enabled ? "" : "(off)")}:{ScalarFields(b)}");
+                    Plugin.Log.LogInfo($"[ArenaMapPort][LightProbe] {mapKey} {typeName}" +
+                        $"{(b.enabled ? "" : "(off)")}:{ScalarFields(b)}");
             }
-            Plugin.Log.LogInfo(sb.ToString());
         }
 
         // Public instance fields of scalar type (float/int/bool/enum), skipping editor-UI toggles.

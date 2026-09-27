@@ -8,6 +8,9 @@ dated state in one screen; read it before this index if you only have a minute.
 
 ## Current — read these for the area you touch
 
+- [equator-anamorphic-hdr.md](equator-anamorphic-hdr.md) — horizontal flare versus broad bloom,
+  HDR/tonemapping order, camera repairs across raids, and Equator ambient contrast (2026-09-27).
+
 - [equator-dynamicmaps.md](equator-dynamicmaps.md#north-marker-clarification--2026-09-26) — explicit
   N and two-tone compass on both existing overview maps; offline visual/deploy checks (2026-09-26).
 

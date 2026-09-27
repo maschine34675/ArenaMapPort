@@ -117,6 +117,9 @@ namespace ArenaMapPort.Client
             CameraEffectsRepairs.Install();
             // Floodlight glare follow-up (2026-09-27): live UltimateBloom knobs. See BloomTuning.cs.
             BloomTuning.Install();
+            AnamorphicFlareTuning.Install();
+            AnamorphicFlareTuning.InstallRenderHooks(_harmony);
+            CameraRepairHooks.Install(_harmony);
             DecalRepairs.Install();
             SeaPlaceholderRepairs.Install();
             DaytimeVisualsProbe.Install();

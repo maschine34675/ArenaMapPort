@@ -138,13 +138,13 @@ namespace ArenaMapPort.Client
                 "player's Graphics > Volumetric Light setting is off, same as on a vanilla map — this key " +
                 "does not need to read that setting itself. Takes effect on the next camera change.");
 
-            CameraManager.Instance.OnCameraChanged += OnCameraChanged;
+            // CameraRepairHooks dispatches from SetCamera on every manager instance.
         }
 
         // CameraManager.OnCameraChanged is a plain event Action (CameraManager.cs:262) — no camera
         // reference is passed, matching WeatherController.OnCameraChanged's own signature this plugin
         // already subscribes elsewhere (WeatherRig.cs).
-        static void OnCameraChanged()
+        internal static void OnCameraChanged()
         {
             if (!ArenaMapRaid.IsLoaded())
             {

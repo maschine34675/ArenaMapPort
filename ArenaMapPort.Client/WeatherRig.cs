@@ -423,8 +423,9 @@ namespace ArenaMapPort.Client
                     "unless comparing. Live.",
                     new BepInEx.Configuration.AcceptableValueRange<float>(0f, 1f)));
 
-            cfg.AmbientIntensity = Plugin.Instance.Config.Bind(section, "AmbientIntensity", 1f,
+            cfg.AmbientIntensity = Plugin.Instance.Config.Bind(section, "AmbientIntensity", equatorDefaults ? 0.85f : 1f,
                 new BepInEx.Configuration.ConfigDescription(
+                    "Equator defaults to 0.85 for more separation between direct light and shade. " +
                     "§18 — scale on the analytic diffuse SH ambient ToDController computes and pushes into " +
                     "AmbientLight.SetSH/AmbientHighlight.SetSH (the same rig-cloned curves Reserve itself " +
                     "uses) — the only indirect-light mechanism on this or any vanilla EFT map (no baked " +
@@ -664,6 +665,17 @@ namespace ArenaMapPort.Client
                 string reseed3 = $"[ArenaMapPort][WeatherRig] {map.Key}: config re-seeded to defaults revision 3 " +
                     $"({moved} value(s) moved; FullyIndoorCover={cfg.FullyIndoorCover.Value})";
                 if (moved > 0) Plugin.Log.LogWarning(reseed3); else Plugin.Log.LogInfo(reseed3);
+            }
+
+            // 2026-09-27 — reduced diffuse fill alongside the restored HDR anamorphic flare.
+            // Only the exact old default moves; independently tuned values remain untouched.
+            if (equatorDefaults && cfg.DefaultsRevision.Value < 4)
+            {
+                bool moved = cfg.AmbientIntensity.Value == 1f;
+                if (moved) cfg.AmbientIntensity.Value = 0.85f;
+                cfg.DefaultsRevision.Value = 4;
+                Plugin.Log.LogInfo($"[ArenaMapPort][WeatherRig] {map.Key}: config re-seeded to defaults revision 4 " +
+                    $"(ambient moved={moved}; AmbientIntensity={cfg.AmbientIntensity.Value:0.00})");
             }
 
             cfg.Donor.SettingChanged += (_, __) => OnDonorConfigChanged();

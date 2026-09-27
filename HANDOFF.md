@@ -3,6 +3,25 @@
 Snapshot for whoever continues (human or agent). Verify the commits named here against `git log`; this file
 is updated by hand at each handover, it is not an automatic record. Read [AGENTS.md](AGENTS.md) first.
 
+## State on 2026-09-27 (late) — Equator horizontal flare/HDR and raid-camera lifecycle
+
+Branch `feature/equator-anamorphic-hdr`. The earlier UltimateBloom threshold fix restored a halo,
+not the original horizontal streak. `AnamorphicFlareTuning` restores the existing native
+BloomAndFlares pass and runs it before Prism converts HDR to LDR (the old fallback did this;
+the donor had it after Prism). Equator-only live controls: AnamorphicFlare/HDR=true,
+AnamorphicFlareIntensity=0.25. Equator diffuse ambient defaults to 0.85 for slightly deeper shade;
+DefaultsRevision 4 migrates only legacy 1. Existing broad-bloom adjustments are preserved.
+
+`CameraRepairHooks` uses SetCamera instead of subscribing once to a CameraManager that is disposed
+between raids. Bloom, exposure, scattering and volumetric repairs now apply on later raids too.
+State is restored/released on teardown; Bay5's appearance is unchanged. F7 emits separate effect lines.
+Release build/tests passed; GPU-2 fresh process `f307691a`, 20:30–20:42: Equator → Bay5 → Equator →
+fallback Equator, automatic settings on each camera, visible stripe, live disable restores original
+fields, fallback exposure now true. Only the known MenuScreen coroutine error appeared, no render errors.
+Deployed to `D:/SPT41` and `D:/SPT41vanilla`; the latter needs the user's EFT restart.
+The host is back at the main menu with the donor camera reselected. See
+[equator-anamorphic-hdr.md](docs/progress/equator-anamorphic-hdr.md) for hashes, config and native evidence.
+
 ## State on 2026-09-27 (evening) — deploy-screen art (10b) and plan item 8 (AI anchors) verified
 
 Deploy-screen art: `tools/extract/extract_loadscreens.py` stages five Arena images per map (loading screen + four
