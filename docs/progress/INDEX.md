@@ -33,6 +33,10 @@ dated state in one screen; read it before this index if you only have a minute.
   SPT-GPU-2 (472/186 components live, 79/107 dark-saved lights lit); distance fade, volumetric glow and flicker
   measured 2026-09-27 with the F7 `LightCullingProbe` in bot-free raids.
 
+- [two-maps-item-10-banners.md](two-maps-item-10-banners.md) — location-select banners from Arena's own
+  Matchmaker_Banner art (extracted into dist/ only, served via ImageRouter, runtime Banners entry only when the file
+  exists); verified 2026-09-27 on SPT-GPU-2.
+
 - [../PLAN-TWO-MAPS.md](../PLAN-TWO-MAPS.md) — the ordered, spike-verified plan for the two-map first
   release (Equator + Bay5): nine work items, release checklist, what is deliberately out (2026-09-25).
 

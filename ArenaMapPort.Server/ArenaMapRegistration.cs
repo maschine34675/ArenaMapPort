@@ -25,6 +25,7 @@ using SPTarkov.Server.Core.Models.Common;
 using SPTarkov.Server.Core.Models.Eft.Common;
 using SPTarkov.Server.Core.Models.Spt.Config;
 using SPTarkov.Server.Core.Models.Spt.Tables;
+using SPTarkov.Server.Core.Routers;
 using SPTarkov.Server.Core.Utils;
 using SPTarkov.Server.Core.Utils.Cloners;
 using SPTarkov.Server.Core.Utils.Json;
@@ -314,6 +315,7 @@ public class ArenaMapPortMod(
     PmcConfig pmcConfig,
     ICloner cloner,
     JsonUtil jsonUtil,
+    ImageRouter imageRouter,
     ISptLogger<ArenaMapPortMod> logger) : IOnLoad
 {
     public async Task OnLoadAsync(CancellationToken cancellationToken)
@@ -321,6 +323,11 @@ public class ArenaMapPortMod(
         cancellationToken.ThrowIfCancellationRequested();
 
         var modDir = Path.GetDirectoryName(typeof(ArenaMapPortMod).Assembly.Location)!;
+        // PLAN-TWO-MAPS item 10 — extract_banners.py writes straight into this same deployed
+        // folder's "banners" subdirectory (dist/SPT_Runtime/user/mods/ArenaMapPort/banners/),
+        // sitting alongside "db" rather than under it, specifically so it needs no csproj
+        // Content/DeployToDist glob change (that folder is never touched by `dotnet build`).
+        var bannersDir = Path.Combine(modDir, "banners");
 
         // Multimap generalization (docs/progress/multimap-generalize.md): one map's bad/missing
         // base.json must not block any OTHER map's registration (both Equator's and Bay5's
@@ -393,10 +400,33 @@ public class ArenaMapPortMod(
                                    string.Join(", ", exitMismatches));
                 }
 
-                // Banners: base.json ships Banners: [] (SPEC §B.WP5 step 7 / §E.4) so there is
-                // nothing to wire through ImageRouter — Icebreaker's own documented landmine
-                // (a Banners array with unresolvable MongoIds -> [UNHANDLED] server log + an
-                // empty client error dialog at the menu) does not apply here.
+                // PLAN-TWO-MAPS item 10 (docs/progress/two-maps-item-10-banners.md): base.json
+                // keeps shipping Banners: [] for every map, unchanged (SPEC §B.WP5 step 7 / §E.4)
+                // — Equator/Bay5 get a real entry assigned here in memory instead, and only when
+                // ArenaMapBanners.Resolve finds the extracted image file already on disk. This
+                // runs in its own try/catch (docs/PLAN-TWO-MAPS.md §10's own instruction) so a
+                // banner-wiring failure can never block this map's own Register() call below —
+                // Icebreaker's own documented landmine (an unresolvable Banners entry -> an
+                // "[UNHANDLED]" server log line + an empty client error dialog at the menu) is
+                // exactly why ArenaMapBanners.Resolve refuses to hand back a Banner at all when
+                // no file backs it, rather than relying on this catch to paper over that case.
+                try
+                {
+                    var resolvedBanner = ArenaMapBanners.Resolve(
+                        map, bannersDir, message => logger.Warning($"[ArenaMapPort] {message}"));
+                    if (resolvedBanner is { } banner)
+                    {
+                        newBase.Banners = new List<Banner> { banner.Banner };
+                        imageRouter.AddRoute(banner.RouteKey, banner.FilePath);
+                        logger.Success(
+                            $"[ArenaMapPort] {map.Key}: location-select banner wired ({banner.RouteKey} -> {banner.FilePath})");
+                    }
+                }
+                catch (Exception e) when (e is not OperationCanceledException)
+                {
+                    logger.Warning(
+                        $"[ArenaMapPort] {map.Key}: banner wiring failed (location-select falls back to the default art): {e.Message}");
+                }
 
                 ArenaMapRegistration.Register(locationTable, location, map);
                 logger.Success($"[Manimal-ArenaMapPort] {map.LocaleName} registered as an independent location");
@@ -416,6 +446,7 @@ public class ArenaMapPortMod(
                 {
                     lazyLocale.AddTransformer(locale => ArenaMapRegistration.ApplyLocale(locale, map));
                     lazyLocale.AddTransformer(locale => ArenaMapRegistration.ApplyExitLocale(locale, map)); // exfils-stage2
+                    lazyLocale.AddTransformer(locale => ArenaMapBanners.ApplyLocale(locale, map)); // two-maps item 10
                 }
             }
         }

@@ -17,6 +17,18 @@ but windows-gpu-2 is absent from this session's tools. EFT remains idle at its m
 needs a restart to refresh cached map sprites. See the appended
 [north marker evidence](docs/progress/equator-dynamicmaps.md#north-marker-clarification--2026-09-26).
 
+## State on 2026-09-27 (afternoon) — floodlight culling fix and plan item 10 (banners) verified
+
+Commit `364ddb0`: CullingLightObject component schema 2 exports the culling sphere (`_radius`/`_shift`); Equator's atrium
+floodlights (Spot, frustum-culled, authored radius 24 m) no longer switch off when the lamp leaves the view (F7 probe
+15:39: `Spotlight (13) visible=True intensity=3.76` where it read 0 before). Plan item 10: Arena's `Matchmaker_Banner_*`
+art is extracted by `tools/extract/extract_banners.py` into `dist/` only and served by the server mod through ImageRouter
+(runtime Banners entry only when the file exists, base.json keeps `Banners: []`); both pictures show on the
+location-select screen (host 16:03, server log `location-select banner wired` x2, no `[UNHANDLED]`). The location-select
+map stacks all fourteen "ARENA: ..." labels — hide the twelve deferred maps in item 9. Deployed to `D:\SPT41` and
+`D:\SPT41vanilla` (vanilla server restart = user; `extract_banners.py` must have run before a deploy, or the maps just
+show the default picture). Next: plan item 8 (AI hubs), then 9 (release).
+
 ## Notes 2026-09-27 — Arena 0.6.0, puddle footsteps
 
 - **Arena patch 0.6.0 (2026-09-18, arena.tarkov.com/news/patch-060):** no changes to Equator or Bay 5 (they appear only

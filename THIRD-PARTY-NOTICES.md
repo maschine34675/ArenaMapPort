@@ -58,6 +58,64 @@ but not copied from its code.
 
 ---
 
+## ManimalIcebreaker (PLAN-TWO-MAPS item 10 — location-select banner routing)
+
+Source: `D:/sptmaps/_sources/ManimalIcebreaker-main`
+
+```
+MIT License
+
+Copyright (c) 2026 danauraborealis
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+```
+
+Reused in `ArenaMapPort.Server/ArenaMapBanners.cs` (called from `ArenaMapRegistration.cs`'s
+`ArenaMapPortMod.OnLoadAsync`):
+
+- **The whole ImageRouter wiring approach** — inject `ImageRouter` as a plain DI constructor
+  parameter into the mod class, resolve each banner's physical file from the mod's own deployed
+  folder (`SysPath.GetDirectoryName(typeof(...).Assembly.Location)`), and on a hit call
+  `imageRouter.AddRoute("/files/banners/<file stem>", <full path>)` — ported (adapted, not
+  verbatim) from the banner-wiring block of `icebreaker-server/IcebreakerMod.cs:367-397`
+  (`IcebreakerMod.OnLoadAsync`'s "LOADING SCREEN BANNERS" section). Icebreaker's own comment there
+  (`IcebreakerMod.cs:374-376`) — "ImageRouter lowercases the key and strips the extension off the
+  REQUEST, so the extension in base.json only has to be plausible, not exact" — is the reasoning
+  `ArenaMapBanners.Resolve`'s own multi-extension probe (`.jpg`/`.jpeg`/`.png`) relies on.
+- **Locale key convention** — `"<bannerId> Name"` / `"<bannerId> Description"`, one literal space,
+  no underscore, matching `IcebreakerMod.cs:352-353`'s own comment and `BannerLocales` array
+  (`IcebreakerMod.cs:86-97`), written into the locale table via the same
+  `LazyLoad<GlobalLocaleDictionary>.AddTransformer` loop this file's own WP5 section already
+  attributes.
+
+**Diverges deliberately** from Icebreaker's version in one respect: Icebreaker iterates
+`newBase.Banners` (already populated from its own `db/base.json`) and only skips *routing* a
+missing file — the `Banner` entry itself stays in the array either way, which can still produce
+the "[UNHANDLED]"/empty-dialog landmine its own comment warns about
+(`ArenaMapPort.Server/ArenaMapBanners.cs`'s class doc comment). `ArenaMapPort.Server/db/*.json`
+keeps shipping `Banners: []` for every map instead; `ArenaMapBanners.Resolve` only ever hands back
+a `Banner` entry — and `ArenaMapPortMod.OnLoadAsync` only ever assigns one to
+`LocationBase.Banners` — once the backing file has already been confirmed to exist on disk, so a
+missing file can never produce a dangling entry.
+
+---
+
 ## ManimalIcebreaker (WP3 — preset bundle patcher)
 
 Source: `D:/sptmaps/_sources/ManimalIcebreaker-main/analysis/patch_icebreaker_preset.py`

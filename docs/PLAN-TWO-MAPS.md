@@ -315,7 +315,7 @@ since it packages whatever `dist/` currently holds for Equator/Bay5.
 **Done when.** A packaged Equator+Bay5-only zip validates clean and a host server started from just that
 2-map `db/` subset shows exactly two Arena locations in the map-select screen.
 
-### 10. Location-select banner from Arena's own art (both maps) — no rebuild (added 2026-09-25)
+### 10. Location-select banner from Arena's own art (both maps) — no rebuild (added 2026-09-25) — VERIFIED 2026-09-27 on SPT-GPU-2 (tools/extract/extract_banners.py stages Arena's Matchmaker_Banner_* art into dist/ only; the server wires an ImageRouter route and a runtime Banners entry per map only when the file exists, base.json stays Banners: []; both pictures on the location-select screen, no [UNHANDLED]) — docs/progress/two-maps-item-10-banners.md
 
 **Verified facts (read-only research, 2026-09-25).** EFT 0.16.9.5's raid-loading screen has no image slot:
 `PreloaderUI.ShowRaidStartInfo → RaidStartIntro.ShowIntro` only types text (raid number, day, player,
