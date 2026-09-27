@@ -99,6 +99,9 @@ namespace ArenaMapPort.Client
             // PLAN-TWO-MAPS item 5 follow-up — see PhysicsPropSoundRepairs.cs / PhysicsPropTeardownRepairs.cs.
             PhysicsPropSoundRepairs.Install(harmony);
             PhysicsPropTeardownRepairs.Install(harmony);
+
+            // PLAN-TWO-MAPS item 10b — deploy-screen art for ported maps. See LoadingScreenArt.cs.
+            LoadingScreenArt.Install(harmony);
         }
 
         // Lighting (<map>) ReflectionIntensity — AmbientLight.method_3(), public instance, no args

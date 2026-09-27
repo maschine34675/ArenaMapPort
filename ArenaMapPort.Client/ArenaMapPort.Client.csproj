@@ -122,6 +122,13 @@
       <HintPath>$(EftManagedDir)\UnityEngine.UIModule.dll</HintPath>
       <Private>false</Private>
     </Reference>
+    <!-- PLAN-TWO-MAPS item 10b: ImageConversion.LoadImage decodes the plugin-local loading-screen
+         JPEGs (see LoadingScreenArt.cs). UnityWebRequestTextureModule is deliberately NOT added —
+         the art ships as plugin-local files, never fetched over HTTP. -->
+    <Reference Include="UnityEngine.ImageConversionModule">
+      <HintPath>$(EftManagedDir)\UnityEngine.ImageConversionModule.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
     <!-- donor-settings-camera-weather §B: LevelSettings.PostProcessProfilePrefab's type
          (UnityEngine.Rendering.PostProcessing.PostProcessProfile) lives in its own managed DLL, not
          Assembly-CSharp — PrismPreset (Prism.Utils) is a BSG type and needs no extra reference. -->
