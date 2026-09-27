@@ -103,6 +103,7 @@ namespace ArenaMapPort.Client
             internal ConfigEntry<float> FogDensity;
             internal ConfigEntry<float> FillLightIntensity;
             internal ConfigEntry<bool> SyncCullingLightIntensity;
+            internal ConfigEntry<float> NightSunMultiplier;
         }
 
         struct LightBaseline
@@ -110,6 +111,7 @@ namespace ArenaMapPort.Client
             internal Light Light;
             internal float Intensity;
             internal Color Color;
+            internal bool IsArtificialSun;
         }
 
         sealed class MapState
@@ -132,6 +134,7 @@ namespace ArenaMapPort.Client
 
             internal Light FillDown;
             internal Light FillUp;
+            internal float LastSunFactor = float.NaN;
         }
 
         static readonly Dictionary<string, ConfigBundle> _configs = new Dictionary<string, ConfigBundle>();
@@ -222,6 +225,15 @@ namespace ArenaMapPort.Client
             cfg.SunColorWhiteBlend.SettingChanged += (_, __) => ReapplyIfLoaded(map);
             cfg.FogDensity.SettingChanged += (_, __) => ReapplyIfLoaded(map);
             cfg.SyncCullingLightIntensity.SettingChanged += (_, __) => ReapplyIfLoaded(map);
+            if (map.SunPaths.Length > 0)
+            {
+                cfg.NightSunMultiplier = Plugin.Instance.Config.Bind(section, "NightSunMultiplier", 0f,
+                    new ConfigDescription("Remaining artificial sunlight at night: 0 = off, 0.1 = 10%, " +
+                        "1 = original day/night-independent behavior. Follows the actual sky's sun visibility. " +
+                        "Affects only the authored fake sun and its volume, not lamps or saved day multipliers. Applies live.",
+                        new AcceptableValueRange<float>(0f, 1f)));
+                cfg.NightSunMultiplier.SettingChanged += (_, __) => ReapplyIfLoaded(map);
+            }
 
             return cfg;
         }
@@ -242,7 +254,7 @@ namespace ArenaMapPort.Client
                 return;
             }
 
-            CaptureLightsFromScene(scene, state);
+            CaptureLightsFromScene(scene, state, map);
             ApplyAll(map, logSummary: true);
         }
 
@@ -284,9 +296,10 @@ namespace ArenaMapPort.Client
             _lastEditorIntensityBaselines = 0;
             state.FillDown = null; // destroyed with the Scripts scene
             state.FillUp = null;
+            state.LastSunFactor = float.NaN;
         }
 
-        static void CaptureLightsFromScene(Scene scene, MapState state)
+        static void CaptureLightsFromScene(Scene scene, MapState state, ArenaMapDescriptor map)
         {
             foreach (var root in scene.GetRootGameObjects())
             {
@@ -307,7 +320,16 @@ namespace ArenaMapPort.Client
                         authored = culling._maxLightIntensity;
                         _lastEditorIntensityBaselines++;
                     }
-                    state.Lights.Add(new LightBaseline { Light = light, Intensity = authored, Color = light.color });
+                    bool artificialSun = false;
+                    if (scene.name == map.SunScene)
+                    {
+                        string path = light.name;
+                        for (var parent = light.transform.parent; parent != null; parent = parent.parent)
+                            path = parent.name + "/" + path;
+                        artificialSun = System.Array.IndexOf(map.SunPaths, path) >= 0;
+                    }
+                    state.Lights.Add(new LightBaseline { Light = light, Intensity = authored,
+                        Color = light.color, IsArtificialSun = artificialSun });
                 }
             }
         }
@@ -338,7 +360,8 @@ namespace ArenaMapPort.Client
                 on ? cfg.GlobalLightIntensityMultiplier.Value : 1f,
                 on ? cfg.SunIntensityMultiplier.Value : 1f,
                 on ? cfg.SunColorWhiteBlend.Value : 0f,
-                cfg.SyncCullingLightIntensity.Value); // independent of Enabled — see BindConfig's doc string
+                cfg.SyncCullingLightIntensity.Value, SunFactor(cfg)); // independent of Enabled — see BindConfig's doc string
+            state.LastSunFactor = float.NaN; // emit a diagnostic on the next sky update, including live setting changes
             // weather-rig-stage0: while a WeatherRig clone is active for this raid, its real
             // AmbientLight/_SHAr feeds ambient instead — this fill light becomes redundant (and can
             // visibly double up interior brightness), unless KeepFillLight explicitly asks to keep it.
@@ -499,7 +522,7 @@ namespace ArenaMapPort.Client
         }
 
         static int ApplyLights(MapState state, float globalMultiplier, float sunMultiplier, float sunWhiteBlend,
-            bool syncCullingLightIntensity)
+            bool syncCullingLightIntensity, float sunFactor)
         {
             var float1Field = syncCullingLightIntensity ? GetCullingLightFloat1Field() : null;
 
@@ -516,14 +539,19 @@ namespace ArenaMapPort.Client
                 if (baseline.Light.type == LightType.Directional)
                 {
                     target = baseline.Intensity * sunMultiplier;
-                    baseline.Light.intensity = target;
                     baseline.Light.color = Color.Lerp(baseline.Color, Color.white, sunWhiteBlend);
                 }
                 else
                 {
                     target = baseline.Intensity * globalMultiplier;
-                    baseline.Light.intensity = target;
                 }
+                if (baseline.IsArtificialSun)
+                {
+                    ApplyArtificialSun(baseline, target * sunFactor);
+                    applied++;
+                    continue;
+                }
+                baseline.Light.intensity = target;
 
                 if (float1Field != null)
                 {
@@ -539,6 +567,60 @@ namespace ArenaMapPort.Client
                 applied++;
             }
             return applied;
+        }
+
+        static float SunFactor(ConfigBundle cfg)
+        {
+            if (!cfg.Enabled.Value || cfg.NightSunMultiplier == null) return 1f;
+            var sky = WeatherRig.IsActiveForCurrentMap() ? WeatherRig.ActiveRig?.Sky : null;
+            float daylight = sky != null && sky.Initialized ? sky.SunVisibility :
+                (TimeOfDayRepairs.ActiveFixedHour == 0 ? 0f : 1f);
+            return Mathf.Lerp(cfg.NightSunMultiplier.Value, 1f, daylight);
+        }
+
+        static float _nextSunUpdate;
+
+        // Small, owned-light-only update; no repeated world searches or writes to ordinary lamps.
+        // LateUpdate may observe the previous sky frame, which is harmless at this 0.5s cadence.
+        internal static void UpdateArtificialSun()
+        {
+            if (Time.unscaledTime < _nextSunUpdate) return;
+            _nextSunUpdate = Time.unscaledTime + 0.5f;
+            var map = ArenaMapRaid.CurrentMap;
+            if (map == null || map.SunPaths.Length == 0 || !_configs.TryGetValue(map.Key, out var cfg)) return;
+            var state = _states[map.Key];
+            float factor = SunFactor(cfg);
+            if (Mathf.Abs(factor - state.LastSunFactor) < 0.001f) return;
+            state.LastSunFactor = factor;
+            foreach (var baseline in state.Lights)
+            {
+                if (!baseline.IsArtificialSun || baseline.Light == null) continue;
+                float multiplier = !cfg.Enabled.Value ? 1f : baseline.Light.type == LightType.Directional
+                    ? cfg.SunIntensityMultiplier.Value : cfg.GlobalLightIntensityMultiplier.Value;
+                float target = baseline.Intensity * multiplier * factor;
+                ApplyArtificialSun(baseline, target);
+                Plugin.Log.LogInfo($"[ArenaMapPort][NightSun] {map.Key}/{baseline.Light.name}: " +
+                    $"factor={factor:0.000} target={target:0.000} live={baseline.Light.intensity:0.000} " +
+                    $"startHour={TimeOfDayRepairs.ActiveFixedHour}");
+            }
+        }
+
+        static void ApplyArtificialSun(LightBaseline baseline, float target)
+        {
+            var light = baseline.Light;
+            light.intensity = target;
+            var culling = light.GetComponent<CullingLightObject>();
+            var field = culling != null ? GetCullingLightFloat1Field() : null;
+            if (field != null)
+            {
+                // Required even if general culling synchronization is disabled: otherwise the volume
+                // returns to its old daylight value on the next culling update. Keep its native fade.
+                field.SetValue(culling, target);
+                if (CullingManager.Instance != null && culling.isActiveAndEnabled)
+                    culling.UpdateCullingObject(culling.CalculateMultiplier(), culling.CalculateShadowMultiplier());
+            }
+            var volume = light.GetComponent<VolumetricLight>();
+            if (volume != null && volume.isActiveAndEnabled) volume.CheckIntensity();
         }
 
         // Diagnostics for the summary line (PLAN-TWO-MAPS item 7): how many captured Lights carry a

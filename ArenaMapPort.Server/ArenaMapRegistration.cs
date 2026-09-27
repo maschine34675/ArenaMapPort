@@ -455,6 +455,10 @@ public class ArenaMapPortMod(
             logger.Warning($"[ArenaMapPort] location locale registration failed: {e.Message}");
         }
     
+        FixedRaidTimeWeather.TryInstall(
+            message => logger.Info("[ArenaMapPort] " + message),
+            message => logger.Warning("[ArenaMapPort] " + message));
+
         // bots-stage1 (docs/progress/bots-stage1.md, "APBS") — once, after every map is registered: a
         // soft Harmony patch on APBS's per-map weapon-range lookup so bot generation on Arena maps does
         // not throw "Map '<key>' not found". No-op without APBS. See ApbsCompat.cs.

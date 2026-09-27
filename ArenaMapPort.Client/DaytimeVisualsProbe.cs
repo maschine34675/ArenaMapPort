@@ -132,7 +132,8 @@ namespace ArenaMapPort.Client
             var gdt = TODSkyProvider.IsAvailable ? TODSkyProvider.Instance.CurrentTime.GameDateTime : null;
             string liveHour = gdt != null ? gdt.Calculate().Hour.ToString("00") : "n/a (no rig's TOD_Sky to read back — see class doc comment)";
             Plugin.Log.LogInfo($"{tag} F1 TimeOfDay: enabled={TimeOfDayRepairs.Enabled} " +
-                               $"fixedHour={TimeOfDayRepairs.FixedHour} appliesToThisMap={arenaMap} liveHour={liveHour}");
+                               $"legacyFixedHour={TimeOfDayRepairs.FixedHour} activeFixedHour={TimeOfDayRepairs.ActiveFixedHour} " +
+                               $"fixedMenu={map.UsesFixedStartTimes} appliesToThisMap={arenaMap} liveHour={liveHour}");
         }
 
         // F2 — CameraEffectsRepairs exposure fix. Live readback off the active camera's own PrismEffects,

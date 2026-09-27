@@ -35,6 +35,8 @@ namespace ArenaMapPort.Client
 
         Harmony _harmony;
 
+        void LateUpdate() => ArenaLightingRepairs.UpdateArtificialSun();
+
         void Awake()
         {
             Instance = this;

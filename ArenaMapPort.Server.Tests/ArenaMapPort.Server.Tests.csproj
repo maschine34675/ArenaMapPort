@@ -40,6 +40,7 @@
     <PackageReference Include="SPTushonka.Common" Version="4.1.5" />
     <PackageReference Include="SPTushonka.DI" Version="4.1.5" />
     <PackageReference Include="SPTushonka.Server.Core" Version="4.1.5" />
+    <PackageReference Include="SPTushonka.Reflection" Version="4.1.5" />
   </ItemGroup>
 
   <!-- db/base.json, copied so tests read the exact file the mod ships, not a duplicate. -->

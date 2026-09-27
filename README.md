@@ -45,6 +45,12 @@ and [generation/deployment](tools/dynamicmaps/README.md).
 
 ## Build inputs
 
+**Equator day/night:** the normal map selector offers fixed start times **12:00** and
+**00:00**. Its artificial sun and sun volume turn off at night; `NightSunMultiplier`
+in Equator's Lighting section allows some remaining light (0.1 = 10%, default 0 = off).
+Existing day lighting settings are preserved. Bay5 keeps its existing time behavior.
+Equator's debug shortcuts still start the day variant. See [native verification](docs/progress/equator-day-night.md).
+
 - Repository: `D:/ArenaMapPort`.
 - Read-only Arena source: `D:/Battlestate Games/Escape from Tarkov Arena/EscapeFromTarkovArena_Data`.
 - Read-only SPT references and donor data: `D:/SPT41`.

@@ -8,6 +8,9 @@ dated state in one screen; read it before this index if you only have a minute.
 
 ## Current — read these for the area you touch
 
+- [equator-day-night.md](equator-day-night.md) — Equator-only 12:00/00:00 selection,
+  night artificial-sun dimming, bot night classification and Clear/Rain host comparisons (2026-09-27).
+
 - [equator-anamorphic-hdr.md](equator-anamorphic-hdr.md) — horizontal flare versus broad bloom,
   HDR/tonemapping order, camera repairs across raids, and Equator ambient contrast (2026-09-27).
 

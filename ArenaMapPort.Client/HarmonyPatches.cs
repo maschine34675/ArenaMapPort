@@ -82,6 +82,7 @@ namespace ArenaMapPort.Client
 
             // daytime-and-visuals F1 — see TimeOfDayRepairs.cs.
             InstallTimeOfDayFix(harmony);
+            FixedRaidTimeSelection.Install(harmony);
 
             // donor-settings-camera-weather §C.3 + §D — see RainWetnessRepairs.cs / WeatherTestOverride.cs.
             InstallWetRendererDamper(harmony);

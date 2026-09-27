@@ -1,8 +1,10 @@
 using System;
 using System.Collections.Generic;
 using System.Reflection;
+using System.ComponentModel;
 using BepInEx.Configuration;
 using EFT;
+using JsonType;
 using HarmonyLib;
 
 namespace ArenaMapPort.Client
@@ -63,6 +65,9 @@ namespace ArenaMapPort.Client
             AccessTools.Field(typeof(BaseLocalGame<EftGamePlayerOwner>), "_specialTimeResolver");
         internal static readonly FieldInfo BackendDateTimeField =
             AccessTools.Field(typeof(BaseLocalGame<EftGamePlayerOwner>), "_backendDateTime");
+        static readonly FieldInfo SelectedDateTimeField =
+            AccessTools.Field(typeof(BaseLocalGame<EftGamePlayerOwner>), "_selectedDateTime");
+        internal static int? ActiveFixedHour { get; private set; }
 
         static ConfigEntry<bool> _enabled;
         static ConfigEntry<int> _fixedHour;
@@ -77,17 +82,30 @@ namespace ArenaMapPort.Client
             _installed = true;
 
             _enabled = Plugin.Instance.Config.Bind("TimeOfDay", "Enabled", true,
-                "Forces every arena_* raid (Location.Id starts with 'arena_') onto a fixed in-game " +
-                "hour (ArenaFixedHour) instead of whatever InitWeather would otherwise pick (often " +
-                "night — see this file's own doc comment). false = vanilla behaviour, every arena map " +
-                "included.");
+                "Legacy fixed-hour override for Arena maps without their own time selection (including Bay5). " +
+                "Equator now always uses its selected 12:00/00:00 start time. Takes effect next raid.");
 
             _fixedHour = Plugin.Instance.Config.Bind("TimeOfDay", "ArenaFixedHour", 12,
                 new ConfigDescription(
-                    "The in-game hour (0-23, local/server time) every arena_* raid is forced onto when " +
-                    "Enabled=true. 12 = noon — matches the 2026-09-17 playtest's own daylight reference " +
-                    "(a third-party mod forcing 12:00).",
+                    "Legacy start hour for Arena maps without fixed menu choices, when Enabled=true. " +
+                    "Equator uses the menu's 12:00/00:00 selection instead. Saved values are retained for Bay5. Next raid.",
                     new AcceptableValueRange<int>(0, 23)));
+
+            var revision = Plugin.Instance.Config.Bind("TimeOfDay", "FixedTimeSelectionRevision", 0,
+                new ConfigDescription("Internal migration marker for fixed menu choices.", null, BrowsableAttribute.No));
+            if (revision.Value < 1)
+            {
+                Plugin.Log.LogInfo("[ArenaMapPort][TimeOfDay] Fixed selection migration 1: Equator now starts at " +
+                    "the selected 12:00/00:00. Legacy Enabled/ArenaFixedHour remain saved for other maps; " +
+                    "no lighting values changed.");
+                revision.Value = 1;
+            }
+            UnityEngine.SceneManagement.SceneManager.sceneUnloaded += scene =>
+            {
+                if (ArenaMapRaid.MapForScriptsScene(scene.name) != null) ActiveFixedHour = null;
+            };
+            if (SelectedDateTimeField == null)
+                Plugin.Log.LogError("[ArenaMapPort][TimeOfDay] _selectedDateTime missing; fixed menu selection cannot be applied.");
 
             // Review fix-up (daytime-and-visuals, 2026-09-17): ResolverField/BackendDateTimeField are
             // resolved by THIS class's own AccessTools.Field calls (above), independent of
@@ -119,16 +137,14 @@ namespace ArenaMapPort.Client
         // writeup. __instance is typed LocalGame (the patched, closed type), not the open generic base.
         internal static void Prefix(LocalGame __instance, ref TimeAndWeatherSettings timeAndWeather)
         {
-            if (_enabled == null || !_enabled.Value)
-            {
-                return; // config not yet bound (Install() never ran), or explicitly disabled
-            }
-
             var location = __instance.Location;
             if (location?.Id == null || !location.Id.StartsWith("arena_", StringComparison.Ordinal))
             {
                 return; // every other map's raid (and the hideout) — untouched
             }
+            var fixedMap = FixedRaidTimeSelection.Find(location.Id);
+            if (fixedMap == null && !Enabled) return;
+            if (fixedMap != null && SelectedDateTimeField == null) return;
 
             if (ResolverField == null || BackendDateTimeField == null)
             {
@@ -146,7 +162,13 @@ namespace ArenaMapPort.Client
             // IsRandomTime branch (BaseLocalGame.cs:491-495) is skipped in favor of the
             // _specialTimeResolver branch (:496-499) we seed on the next line.
             timeAndWeather.IsRandomTime = false;
-            resolver[location.Id] = backendDateTime.Calculate().Date.AddHours(_fixedHour.Value);
+            var selected = fixedMap == null ? EDateTime.CURR : (EDateTime)SelectedDateTimeField.GetValue(__instance);
+            int hour = fixedMap == null ? FixedHour :
+                (selected == EDateTime.PAST ? fixedMap.FixedNightHour.Value : fixedMap.FixedDayHour.Value);
+            resolver[location.Id] = backendDateTime.Calculate().Date.AddHours(hour);
+            ActiveFixedHour = hour;
+            Plugin.Log.LogInfo($"[ArenaMapPort][TimeOfDay] {location.Id}: selected={selected} " +
+                $"start={hour:00}:00 fixedMenu={fixedMap != null}; native weather initialization retained.");
         }
     }
 }

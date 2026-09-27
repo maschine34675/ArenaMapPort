@@ -3,6 +3,28 @@
 Snapshot for whoever continues (human or agent). Verify the commits named here against `git log`; this file
 is updated by hand at each handover, it is not an automatic record. Read [AGENTS.md](AGENTS.md) first.
 
+## State on 2026-09-27 (22:42) — Equator fixed day/night and artificial sun
+
+Branch `feature/equator-day-night`. Equator's normal map picker now offers fixed start
+times 12:00/00:00, including correct confirmation and native weather initialization.
+Server night equipment follows the chosen variant. Bay5 retains its existing behavior.
+The two exact FAKE_SUN / FAKE_SUN_VOLUME lights follow the native sky, with new live
+`Lighting (arena_equator) / NightSunMultiplier=0` (off at night, 0.1=10%, 1=old behavior).
+User light/flare tuning is preserved. Legacy TimeOfDay Enabled/ArenaFixedHour values
+remain saved for other maps; Equator always uses the new choice (migration revision 1).
+
+Release client and 395 server tests plus Python checks passed. GPU-2 `dd071c9b` tested
+Rain night → day → Clear day → Clear night, repeated normal selection and live dimming.
+Actual 00/12 hours and both light intensities verified; ordinary lamp values unchanged.
+Server required a second restart at 22:23:34 after sync; its new startup hook was then
+confirmed in the native console. Existing MenuScreen coroutine error remains.
+Weather test setting is now Clear at the user's request. Debug buttons still select day;
+night is available through the normal menu. Full evidence and hashes:
+[equator-day-night.md](docs/progress/equator-day-night.md).
+
+Both installs received matching client/server files via the owned deploy helper.
+GPU-2 is back in MainMenu with HP 440/440; Vanilla needs both server and game restarted.
+
 ## State on 2026-09-27 (late) — Equator horizontal flare/HDR and raid-camera lifecycle
 
 Branch `feature/equator-anamorphic-hdr`. The earlier UltimateBloom threshold fix restored a halo,
