@@ -1256,6 +1256,27 @@ def light_flicker_curve_signatures_in_package(package: Path, manifest: dict) -> 
     return signatures
 
 
+def _sphere_key(radius, shift) -> tuple:
+    """Rounded (radius, shift.x, shift.y, shift.z) -- the culling-sphere cross-check's multiset key."""
+    return (round(float(radius), 3),) + tuple(round(float(v), 3) for v in shift)
+
+
+def culling_light_spheres_in_package(package: Path, manifest: dict) -> Counter:
+    """(radius, shift) multiset across every package CullingLightObject carrying the schema-2 culling
+    sphere (2026-09-27; schema-1 packages have none, the check is then skipped)."""
+    spheres: Counter = Counter()
+    for scene_name in manifest.get("scenes", []):
+        scene_path = package / "scenes" / f"{scene_name}.json"
+        if not scene_path.is_file():
+            continue
+        scene = load_json(scene_path)
+        for obj in scene.get("objects", []):
+            for comp in obj.get("components", []):
+                if comp.get("type") == "CullingLightObject" and "radius" in comp:
+                    spheres[_sphere_key(comp["radius"], comp.get("shift") or (0.0, 0.0, 0.0))] += 1
+    return spheres
+
+
 def count_light_culling_in_bundle_scenes(env, scene_names: list[str]):
     """Per-scene MonoBehaviour counts resolving, via MonoScript identity (the same
     read_typetree()->m_Script PPtr->MonoScript technique validate_eft_scripts uses, reused here
@@ -1270,6 +1291,7 @@ def count_light_culling_in_bundle_scenes(env, scene_names: list[str]):
     by_name = {sf.name: sf for sf in iter_serialized_files(env)}
     counts: dict[str, dict[str, int]] = {}
     flicker_signatures: Counter = Counter()
+    culling_spheres: Counter = Counter()
     for scene_name in scene_names:
         sf = by_name.get(f"BuildPlayer-{scene_name}")
         if sf is None:
@@ -1304,8 +1326,12 @@ def count_light_culling_in_bundle_scenes(env, scene_names: list[str]):
                 curve = tt.get("Curve") or {}
                 key_count = len(curve.get("m_Curve") or [])
                 flicker_signatures[(key_count, curve.get("m_PreInfinity"), curve.get("m_PostInfinity"))] += 1
+            elif component_type == "CullingLightObject":
+                shift = tt.get("_shift") or {}
+                culling_spheres[_sphere_key(tt.get("_radius", 1.0),
+                                            (shift.get("x", 0.0), shift.get("y", 0.0), shift.get("z", 0.0)))] += 1
         counts[scene_name] = scene_counts
-    return counts, flicker_signatures
+    return counts, flicker_signatures, culling_spheres
 
 
 def validate_light_culling_counts_bundle(env, package: Path, manifest: dict) -> None:
@@ -1320,8 +1346,9 @@ def validate_light_culling_counts_bundle(env, package: Path, manifest: dict) -> 
         return
     package_counts = count_light_culling_in_package_scenes(package, manifest)
     scene_names = manifest.get("scenes", [])
-    bundle_counts, bundle_flicker_signatures = count_light_culling_in_bundle_scenes(env, scene_names)
+    bundle_counts, bundle_flicker_signatures, bundle_spheres = count_light_culling_in_bundle_scenes(env, scene_names)
     package_flicker_signatures = light_flicker_curve_signatures_in_package(package, manifest)
+    package_spheres = culling_light_spheres_in_package(package, manifest)
 
     total_bad = 0
     for scene_name in scene_names:
@@ -1347,6 +1374,20 @@ def validate_light_culling_counts_bundle(env, package: Path, manifest: dict) -> 
     elif package_flicker_signatures:
         print(f"[validate_bundle_roundtrip]  ok : LightFlicker curve wrap-mode mapping round-trips "
               f"({sum(package_flicker_signatures.values())} instance(s))")
+
+    # Culling-sphere check (schema 2): the importer writes the authored _radius/_shift, so the bundle's
+    # (radius, shift) multiset over all CullingLightObjects must equal the package's.
+    if package_spheres:
+        if bundle_spheres != package_spheres:
+            missing = package_spheres - bundle_spheres
+            extra = bundle_spheres - package_spheres
+            check(False, f"CullingLightObject culling spheres (radius, shift) in bundle == package "
+                          f"(missing from bundle: {dict(list(missing.items())[:6])}, "
+                          f"unexpected in bundle: {dict(list(extra.items())[:6])})")
+            total_bad += 1
+        else:
+            print(f"[validate_bundle_roundtrip]  ok : CullingLightObject culling spheres (radius, shift) round-trip "
+                  f"({sum(package_spheres.values())} instance(s), {len(package_spheres)} distinct)")
 
     if total_bad == 0:
         print("[validate_bundle_roundtrip]  ok : every scene's light-culling component counts in the "

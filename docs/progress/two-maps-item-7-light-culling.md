@@ -180,3 +180,31 @@ animate (the wrap-mode mapping 1 → Loop holds at runtime too). Bay5 has no Lig
 
 **Status: item 7 fully VERIFIED on both maps** (distance fade, volumetric glow and flicker now measured, not
 inferred). Deployed to `D:\SPT41` and `D:\SPT41vanilla`.
+
+## Follow-up 2026-09-27: atrium floodlights switch off when the lamp leaves the view
+
+User report: the construction floodlights in Equator's atrium used to dazzle, now they look off, and their floor
+cone disappears as soon as the lamp is out of view. Host check (14:12, Equator NO BOTS, F7 probe from (0.4, 1.6,
+13.9)): `'Spotlight (13)' d=7.87 fade=25.00..50.00 visible=True multiplier=1.00 float_1=3.76 intensity=3.76` while
+looking at it; after turning to the floor next to it (lamp out of view) `'Spotlight (13)' d=7.59 visible=False
+multiplier=0.00 float_1=3.76 intensity=0.00`, and three lights inside their fade start read zero. The lamp is
+`CAPTURE_ZONE/LIGHT/Projector_portable_mask_rezerv (1)` (scene `Arena_Equator_TeamFight`); its lights live in
+`Arena_Equator_TeamFight_DesignStuff` (`Spotlight (13)` ×2 Spot, max intensity 7.52; `Spotlight (14)`/`(15)` Point)
+and are the only CullingLightObjects on the map with `cull_by_distance_only = false`.
+
+Cause (decompile): `CullingManager` registers `BoundingSphere(transform.position + _shift, _radius)` per culling
+object; `VisibilityData.IsObjectVisible()` returns `!IsCulledByDistance` when `CullingByDistanceOnly`, otherwise
+`!IsCulledByDistance && InFpsFrustum` (the CullingGroup's frustum test on that sphere). `CullingLightObject.Awake`
+replaces `_radius` with `Light.range` only for Point lights. The schema-1 extractor skipped `_radius`/`_shift`
+("Awake overwrites / editor-only" — wrong for Spot lights), so the floodlights got the class default sphere of
+1 m at the lamp and were frustum-culled whenever the lamp left the screen. Fix: `CullingLightObject` component
+schema 2 exports `radius` and `shift`; `LightCullingImporter` sets `_radius`/`_shift` (schema 1 still accepted);
+packages re-extracted and both maps rebuilt.
+
+Rebuilt 2026-09-27 15:05–15:35 from re-extracted v4 packages (all 472 / 186 CullingLightObjects schema 2; Equator
+4 and Bay5 6 frustum-culled lights with an authored sphere > 5 m); the roundtrip validator now compares the
+(radius, shift) multiset between package and bundle: `CullingLightObject culling spheres (radius, shift) round-trip
+(472 instance(s), 48 distinct)` / `(186 instance(s), 73 distinct)`. Host check (15:39, EFT 0ccf8d56, Equator NO BOTS,
+same spot and view as 14:13, lamp out of view): `'Spotlight (13)' d=7.60 fade=25.00..50.00 visible=True
+multiplier=1.00 float_1=3.76 intensity=3.76` (was `visible=False … intensity=0.00`); "inside fade start, zero" dropped
+from 3 to 1. **Floodlight fix verified.**

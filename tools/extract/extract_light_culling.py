@@ -89,6 +89,12 @@ for _path in (_HERE, _ANALYSIS_SCRIPTS):  # standalone-importable regardless of 
 import census  # analysis/scripts/census.py -- resolve_script_name()  # noqa: E402
 
 SCHEMA_VERSION = 1
+# CullingLightObject only: schema 2 (2026-09-27) adds CullingObject's culling sphere, `radius` (_radius) and `shift`
+# (_shift). CullingManager registers BoundingSphere(transform.position + _shift, _radius) and, when
+# _cullByDistanceOnly is false, culls the light as soon as that sphere leaves the view frustum; Awake overwrites the
+# radius with Light.range only for Point lights. Schema 1 left the defaults (1 m at the lamp), so Equator's atrium
+# floodlights (Spot, _cullByDistanceOnly=false) switched off whenever the lamp itself left the view.
+CULLING_LIGHT_OBJECT_SCHEMA = 2
 
 CULLING_LIGHT_OBJECT = "CullingLightObject"
 VOLUMETRIC_LIGHT = "VolumetricLight"
@@ -255,9 +261,9 @@ def _curve_dict(keys, pre_infinity, post_infinity):
 def decode_culling_light_object(raw):
     enabled, off = _mb_header(raw)
     c = _Cursor(raw[off:])
-    c.f32()                        # CullDistance -- Awake() overwrites; not exported
-    c.f32()                        # _radius -- Awake() overwrites; not exported
-    c.vector3()                    # _shift -- editor-only gizmo offset; not exported
+    c.f32()                        # CullDistance -- Awake() overwrites it with _fadeEndDistance; not exported
+    radius = c.f32()               # _radius -- culling-sphere radius (Awake overwrites it only for Point lights)
+    shift = c.vector3()            # _shift -- culling-sphere centre offset from the transform
     c.boolean()                    # _drawSphere -- editor-only gizmo toggle; not exported
     cull_by_distance_only = c.boolean()
     turn_off_components, turn_off_default_states, turn_off_objects = _read_culling_object_lists(c)
@@ -278,7 +284,8 @@ def decode_culling_light_object(raw):
     initial_shadows_mode = c.i32()
     _require(c.remaining() == 0, f"CullingLightObject payload has {c.remaining()} trailing byte(s)")
     return {
-        "type": CULLING_LIGHT_OBJECT, "schema_version": SCHEMA_VERSION, "enabled": enabled,
+        "type": CULLING_LIGHT_OBJECT, "schema_version": CULLING_LIGHT_OBJECT_SCHEMA, "enabled": enabled,
+        "radius": radius, "shift": list(shift),
         "cull_by_distance_only": cull_by_distance_only,
         "fade_start_distance": fade_start_distance, "fade_end_distance": fade_end_distance,
         "use_light_intensity_from_editor": use_light_intensity_from_editor,

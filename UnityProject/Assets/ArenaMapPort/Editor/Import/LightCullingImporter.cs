@@ -176,10 +176,12 @@ namespace ArenaMapPort.Editor.Import
         /// exported -- the extractor hard-fails if any real instance's curve deviates from the uniform
         /// AnimationCurve.EaseInOut(0,1,1,0) every one of the 658 real instances carries, so this importer
         /// sets that literal rather than reading a per-instance curve that was never recorded.
-        /// CullDistance/_radius/_shift/_drawSphere, the four *SwitchPerFrame ints and the three
-        /// turn-off/turn-on lists are likewise never set here: CullingLightObject.Awake() overwrites
-        /// CullDistance/_radius unconditionally from _fadeEndDistance/the sibling Light's range, the rest
-        /// is editor-only per the extractor's own hard-fail convention. Leaves _light null -- Awake
+        /// Schema 2 (2026-09-27) also sets the culling sphere, _radius and _shift: CullingManager tests
+        /// BoundingSphere(transform.position + _shift, _radius) against the frustum whenever
+        /// _cullByDistanceOnly is false, and Awake replaces _radius with Light.range only for Point lights, so
+        /// Spot lights (Equator's atrium floodlights, authored radius 24 m) depend on the authored values.
+        /// CullDistance (Awake sets it to _fadeEndDistance), _drawSphere, the four *SwitchPerFrame ints and the
+        /// turn-off lists are not set (runtime-recomputed or editor-only). Leaves _light null -- Awake
         /// self-resolves it via GetComponent&lt;Light&gt;(), and this pass never runs before Pass 1c has
         /// attached that sibling Light.
         /// </summary>
@@ -189,7 +191,8 @@ namespace ArenaMapPort.Editor.Import
                 throw new InvalidDataException("CullingLightObject import requires an owner and component.");
             string context = "CullingLightObject on '" + owner.name + "': ";
             int schema = Int(comp, "schema_version", context);
-            if (Text(comp, "type", context) != "CullingLightObject" || schema != 1)
+            // Schema 2 (2026-09-27) adds the culling sphere (radius, shift); schema 1 packages keep the class defaults.
+            if (Text(comp, "type", context) != "CullingLightObject" || (schema != 1 && schema != 2))
                 throw new InvalidDataException(context + "unsupported component schema.");
             if (owner.GetComponent<Light>() == null)
                 throw new InvalidDataException(context + "requires a sibling Light component.");
@@ -220,7 +223,26 @@ namespace ArenaMapPort.Editor.Import
             float lightShadowStrength = light.shadowStrength;
             LightShadows lightShadows = light.shadows;
 
+            float radius = 1f;
+            Vector3 shift = Vector3.zero;
+            if (schema >= 2)
+            {
+                radius = Float(comp, "radius", context);
+                JArray shiftJson = comp["shift"] as JArray;
+                if (shiftJson == null || shiftJson.Count != 3)
+                    throw new InvalidDataException(context + "'shift' must be a 3-element array.");
+                shift = new Vector3((float)shiftJson[0], (float)shiftJson[1], (float)shiftJson[2]);
+                if (!(radius > 0f) || float.IsInfinity(radius))
+                    throw new InvalidDataException(context + "radius " + radius + " must be a positive finite number.");
+            }
+
             global::CullingLightObject clo = AddNativeComponentTolerant<global::CullingLightObject>(owner, context);
+            // CullingManager's BoundingSphere is transform.position + _shift with _radius; with
+            // _cullByDistanceOnly=false the light is frustum-culled on that sphere. Set for every light type so
+            // the bundle carries Arena's authored values: for Point lights the raid-time Awake replaces _radius
+            // with Light.range anyway (vanilla behaviour; Arena's authored Point radius equals the range).
+            clo._radius = radius;
+            clo._shift = shift;
             clo._cullByDistanceOnly = cullByDistanceOnly;
             clo._fadeStartDistance = fadeStartDistance;
             clo._fadeEndDistance = fadeEndDistance;

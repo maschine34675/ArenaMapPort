@@ -200,7 +200,13 @@ the log; the user uses it to point at things.
   `ArenaLightingRepairs` also writes the private `float_1` (reflection) or the brightness uplift is erased; the
   `CullingManager` singleton and the camera's `VolumetricLightRenderer` are client fallbacks, not package data.
   Verify light work with F7 (`LightCullingProbe`: distance-fade bands, volumetric state, flicker samples), not with
-  screenshots — the SceneInspector (F10) only hits mesh colliders, never lights.
+  screenshots — the SceneInspector (F10) only hits mesh colliders, never lights. Every culling object is also
+  frustum-tested on `BoundingSphere(position + _shift, _radius)` unless `_cullByDistanceOnly`; Awake replaces
+  `_radius` with `Light.range` only for Point lights, so Spot lights need the authored sphere (component schema 2,
+  2026-09-27 — schema 1 left 1 m at the lamp and Equator's atrium floodlights went dark whenever the lamp left the view).
+- Footsteps: EFT picks the step sound from the `BallisticCollider` material under one downward raycast (layers
+  Terrain/HighPolyCollider/TransparentCollider/Water); Arena's puddle decals have no collider at all, so they sound
+  like the floor beneath (before the 2026-09-22 ballistics import every surface sounded like concrete).
 - BepInEx config re-seeds (`config re-seeded to defaults revision N`) are logged before UiBridge starts recording;
   check the result with `uibridge_config … DefaultsRevision` / the key's value instead of waiting for the line.
 - Syncthing replaces the client DLL while EFT runs; EFT keeps the old code until restarted. Trust

@@ -17,6 +17,19 @@ but windows-gpu-2 is absent from this session's tools. EFT remains idle at its m
 needs a restart to refresh cached map sprites. See the appended
 [north marker evidence](docs/progress/equator-dynamicmaps.md#north-marker-clarification--2026-09-26).
 
+## Notes 2026-09-27 — Arena 0.6.0, puddle footsteps
+
+- **Arena patch 0.6.0 (2026-09-18, arena.tarkov.com/news/patch-060):** no changes to Equator or Bay 5 (they appear only
+  in task texts); new maps The Lab Replica / The Lab tactical map, Fort and Iceberg reworked (Iceberg is one of the
+  twelve deferred maps), BlastGang reworked, new hit/kill sounds; nothing on engine, lighting or audio systems. The
+  local install `D:\Battlestate Games\Escape from Tarkov Arena` is still 0.5.4.0 (files dated 2026-08-18) and every
+  accepted package was extracted from it. If the user updates it, new maps can shift the `levelNN` indices the
+  extractors and census use (Equator 51–59, Bay5 78–188) — re-verify the scene mapping before any re-extraction.
+- **Puddle footsteps (user report, deferred by the user):** Arena's puddle decals have no collider, so they sound like
+  the floor under them; EFT has no other puddle/wetness step mechanism. The user still recalls splash steps on Bay5 —
+  Bay5's only Water-material collider is the harbor `Plane` (layer Water). Authoring WaterPuddle colliders would be new
+  content (layer trade-offs: Water blocks prone, HighPolyCollider needs a NavMesh-bake exclusion).
+
 ## State on 2026-09-26 (late) — plan item 7 built, verified and deployed (light culling / volumetrics / flicker)
 
 Branch `feature/native-dust`. Item 7 went the extractor + importer route (Arena tunes fade distances and

@@ -131,7 +131,8 @@ class DecodeCullingLightObjectTests(unittest.TestCase):
         raw = raw_culling_light_object()
         result = L.decode_culling_light_object(raw)
         self.assertEqual(result, {
-            "type": "CullingLightObject", "schema_version": 1, "enabled": True,
+            "type": "CullingLightObject", "schema_version": 2, "enabled": True,
+            "radius": 10.0, "shift": [0.0, 0.0, 0.0],
             "cull_by_distance_only": True, "fade_start_distance": 55.0, "fade_end_distance": 65.0,
             "use_light_intensity_from_editor": True, "max_light_intensity": _f32_roundtrip(0.89),
             "take_flare_parameters_from_this_script": False, "cull_shadows_by_distance": True,
@@ -139,6 +140,17 @@ class DecodeCullingLightObjectTests(unittest.TestCase):
             "initial_shadows_mode": 0,
             "turn_off_component_count": 0, "turn_off_object_count": 0,
         })
+
+    def test_culling_sphere_radius_and_shift_are_exported(self):
+        # Equator's atrium floodlights: Spot lights with _cullByDistanceOnly=false, whose authored sphere must
+        # cover the lit floor, not the lamp (user report 2026-09-27).
+        raw = raw_culling_light_object(base_kwargs={"radius": 6.5, "shift": (0.0, -1.25, 3.5),
+                                                    "cull_by_distance_only": False})
+        result = L.decode_culling_light_object(raw)
+        self.assertEqual(result["schema_version"], 2)
+        self.assertAlmostEqual(result["radius"], 6.5, places=5)
+        self.assertEqual([round(v, 5) for v in result["shift"]], [0.0, -1.25, 3.5])
+        self.assertFalse(result["cull_by_distance_only"])
 
     def test_disabled_state_and_cull_by_distance_only_survive(self):
         raw = raw_culling_light_object(enabled=False, base_kwargs={"cull_by_distance_only": False})
@@ -447,3 +459,30 @@ class ManifestShapeTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class CullingSphereRoundtripTests(unittest.TestCase):
+    """validate_bundle_roundtrip.culling_light_spheres_in_package: the package-side reference for the
+    schema-2 (radius, shift) bundle cross-check (2026-09-27 floodlight fix)."""
+
+    def test_counts_schema2_spheres_and_skips_schema1(self):
+        import json, tempfile
+        sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "validate"))
+        import validate_bundle_roundtrip as V
+        with tempfile.TemporaryDirectory() as tmp:
+            pkg = Path(tmp)
+            (pkg / "scenes").mkdir()
+            scene = {"objects": [
+                {"id": 1, "components": [{"type": "CullingLightObject", "schema_version": 2,
+                                          "radius": 24.0, "shift": [0.0, 0.0, 0.0]}]},
+                {"id": 2, "components": [{"type": "CullingLightObject", "schema_version": 2,
+                                          "radius": 24.0, "shift": [0.0, 0.0, 0.0]}]},
+                {"id": 3, "components": [{"type": "CullingLightObject", "schema_version": 2,
+                                          "radius": 0.92, "shift": [0.0, -0.5, 1.25]}]},
+                {"id": 4, "components": [{"type": "CullingLightObject", "schema_version": 1}]},
+            ]}
+            (pkg / "scenes" / "S.json").write_text(json.dumps(scene), encoding="utf-8")
+            spheres = V.culling_light_spheres_in_package(pkg, {"scenes": ["S"]})
+        self.assertEqual(spheres[(24.0, 0.0, 0.0, 0.0)], 2)
+        self.assertEqual(spheres[(0.92, 0.0, -0.5, 1.25)], 1)
+        self.assertEqual(sum(spheres.values()), 3)
