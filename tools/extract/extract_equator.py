@@ -989,6 +989,7 @@ def main():
         from extract_navmesh_modifiers import augment_scene as augment_navmesh, read_navmesh_areas
 
     light_culling_totals = {"culling_light_object_count": 0, "volumetric_light_count": 0, "light_flicker_count": 0}
+    decal_count = 0
     scenes_out: dict[int, dict] = {}
     for idx in scene_indices:
         f = env.files[exact_paths[idx]["level"]]
@@ -1018,6 +1019,8 @@ def main():
             nm_mod, nm_vol = augment_navmesh(scenes_out[idx], f)
             print(f"    restored {nm_mod} NavMeshModifier + {nm_vol} NavMeshModifierVolume component(s)", file=sys.stderr)
         if args.native_features:
+            from extract_decals import augment_scene as augment_decals
+            decal_count += augment_decals(scenes_out[idx], f, ctx)
             # PLAN-TWO-MAPS item 5: tag SmallPhysicsObject owners (no contract needed)
             physics_count = physics_props.augment_scene(scenes_out[idx], f)
             print(f"    tagged {physics_count} SmallPhysicsObject owners", file=sys.stderr)
@@ -1082,6 +1085,7 @@ def main():
         manifest["native_features"]["light_culling"] = {
             "schema_version": light_culling.SCHEMA_VERSION, **light_culling_totals,
         }
+        manifest["native_features"]["static_decals"] = {"schema_version": 1, "count": decal_count}
     with open(os.path.join(args.output, "manifest.json"), "w", encoding="utf-8") as f:
         json.dump(manifest, f, indent=2, sort_keys=True, ensure_ascii=False)
 

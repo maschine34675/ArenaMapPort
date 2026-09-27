@@ -96,6 +96,9 @@ namespace ArenaMapPort.Editor.Import
                         case "MeshFilter":
                             AttachMeshFilter(go, comp, meshes, sceneName, id, requireResolvedAssets, ref missingMeshWarnings);
                             break;
+                        case "StaticDeferredDecal":
+                            StaticDecalImporter.Attach(go, comp, materials);
+                            break;
                         case "MeshRenderer":
                         {
                             Renderer r = AttachMeshRenderer(go, comp, materials, sceneName, id, requireResolvedAssets, ref missingMaterialWarnings);

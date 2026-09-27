@@ -88,7 +88,7 @@ pwsh -NoProfile -File tools/tests/test_unity_log_scan.ps1
 # rebuild Equator's bundles + NavMesh from its extracted package (≈ 15 min). The [bool] parameters only parse
 # from a PowerShell prompt or `pwsh -Command "& '...build_all.ps1' ... -BakeNavMesh \$true"`; `-File` from bash
 # turns "$true"/1 into strings and the script refuses them.
-pwsh tools/build_all.ps1 -MapKey arena_equator -MapDescriptor D:/ArenaMapPort/tools/maps/equator.json -PackageDir D:/ArenaMapPort/work/extract/equator-native-v4 -OutputDir D:/ArenaMapPort/work/build/full -BakeNavMesh $true -Verify $true -SkipGameRefsSync
+pwsh tools/build_all.ps1 -MapKey arena_equator -MapDescriptor D:/ArenaMapPort/tools/maps/equator.json -PackageDir D:/ArenaMapPort/work/extract/equator-native-v5 -OutputDir D:/ArenaMapPort/work/build/full -BakeNavMesh $true -Verify $true -SkipGameRefsSync
 # then a client Release build WITHOUT DllOnly stages the new bundles into dist/, and:
 pwsh -NoProfile -File tools/deploy-to-spt.ps1 -SptRoot 'D:\SPT41' -Confirm
 ```
@@ -96,8 +96,10 @@ pwsh -NoProfile -File tools/deploy-to-spt.ps1 -SptRoot 'D:\SPT41' -Confirm
 Equator's package predates the `-FullMap` convention (its manifest lists the scenes in a different order
 than the descriptor), so Equator is built WITHOUT `-FullMap`. Every other map uses `-FullMap` with
 `work/build/<stem>/` and `tools/maps/<stem>.json` (exact commands in `docs/progress/remaining-maps.md`).
-Current accepted inputs are `work/extract/equator-native-v4` and
-`work/extract/bay5-native-v4` (2026-09-26: v3 — NavMesh modifiers/volumes + `navmesh_areas`, Rigidbody +
+Current accepted inputs are `work/extract/equator-native-v5` and
+`work/extract/bay5-native-v5` (2026-09-28: v5 adds original StaticDeferredDecal components, their materials
+and textures, and `native_features.static_decals`; see `docs/progress/native-decals.md`). These retain
+the earlier v4 features (2026-09-26: v3 — NavMesh modifiers/volumes + `navmesh_areas`, Rigidbody +
 SmallPhysicsObject with SoundType, `raincover/raincover.json` — plus the light-culling feature: CullingLightObject /
 VolumetricLight / LightFlicker component dicts and `native_features.light_culling`; see
 `docs/progress/two-maps-item-{4,5,6,7}-*.md`). A package is
@@ -105,7 +107,8 @@ produced by `extract_equator.py --native-features --scenes all5 --output <dir>` 
 --output <dir>` followed by `python tools/extract/refresh_native_volumes.py <dir>`.
 The older `equator-native-dust`/`bay5-native-dust`, `equator`, `bay5` and `bay5-background` packages
 omit later native features (and old Bay5 omits the harbor background), and the v3 packages lack the light-culling
-components. Do not rebuild either accepted map from those older packages. Bay5 uses its v4 package with `-FullMap`
+components; v4 lacks native projection decals. Do not rebuild either accepted map from those older packages.
+Bay5 uses its v5 package with `-FullMap`
 and `-OutputDir D:/ArenaMapPort/work/build/bay5`. Always give `-MapDescriptor` an absolute
 path: Unity resolves relative descriptor paths from its project directory.
 `-FullMap` also regenerates that map's base.json and preset from the sidecars; to regenerate only base.json
@@ -214,6 +217,13 @@ the log; the user uses it to point at things.
 - Footsteps: EFT picks the step sound from the `BallisticCollider` material under one downward raycast (layers
   Terrain/HighPolyCollider/TransparentCollider/Water); Arena's puddle decals have no collider at all, so they sound
   like the floor beneath (before the 2026-09-22 ballistics import every surface sounded like concrete).
+- Static projection decals: original material pointers live on the native component, not MeshRenderer.
+  Arena's serialized field order differs from EFT: LastTexSize precedes the material pointer. The importer
+  rescales pixel corners against the actual target texture, retaining normalized atlas regions. Rebind
+  component materials before the native manager clones them. Destroy the owned manager for live off;
+  setting enabled=false does not stop Camera.onPreCull, and ReInitialize duplicates subscriptions.
+  Only one manager may exist. GPU-2 accepted both maps, live comparisons and repeat/cross-map raids
+  on 2026-09-27/28; see `docs/progress/native-decals.md` for counts, cleanup and evidence limits.
 - BepInEx config re-seeds (`config re-seeded to defaults revision N`) are logged before UiBridge starts recording;
   check the result with `uibridge_config … DefaultsRevision` / the key's value instead of waiting for the line.
 - Syncthing replaces the client DLL while EFT runs; EFT keeps the old code until restarted. Trust

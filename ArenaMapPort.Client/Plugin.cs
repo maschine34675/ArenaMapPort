@@ -123,6 +123,7 @@ namespace ArenaMapPort.Client
             AnamorphicFlareTuning.InstallRenderHooks(_harmony);
             CameraRepairHooks.Install(_harmony);
             DecalRepairs.Install();
+            NativeDecalRepairs.Install();
             SeaPlaceholderRepairs.Install();
             DaytimeVisualsProbe.Install();
 

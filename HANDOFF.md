@@ -3,6 +3,32 @@
 Snapshot for whoever continues (human or agent). Verify the commits named here against `git log`; this file
 is updated by hand at each handover, it is not an automatic record. Read [AGENTS.md](AGENTS.md) first.
 
+## State on 2026-09-28 (00:28) — native projection decals on both release maps
+
+Branch `feature/native-decals`. The original StaticDeferredDecal material references are
+recoverable from their own serialized component; the older MeshRenderer-based deferral
+was incomplete. Source-backed v5 packages add all 348 Equator / 499 Bay5 components,
+retaining inactive originals. Native active registrations: 346 / 468. All existing v4
+scene data, asset files and native features were independently compared and preserved.
+
+The Unity importer authors real native components and normalizes the atlas pixel bounds
+against the imported texture dimensions. Client shader rebinding now includes component
+materials. One owned native renderer handles each raid; live off/unload frees its own
+materials, buffers and callbacks. Per-map live comparison: `Decals (<map>) / Enabled=true`.
+
+Both complete bundle pipelines passed, including serialized decal field comparisons.
+Final tests: Python 417 (28 skipped), server 395 passed, client Release no warnings/errors.
+GPU-2 accepted Equator twice in `f2ac85fd`, then Bay5 -> Equator in fresh `4d438dd4`:
+visible original wall/tarp graffiti, live off/on, exact instance counts and repeat/unload
+cleanup. No new rendering errors; the known pause-menu coroutine message remains.
+Native acceptance is representative, not an inspection of every decal or a performance benchmark.
+
+Both installs received the verified artifacts through the owned deploy helper. GPU-2 is
+back in MainMenu, control free, health last verified 440/440. Both decal switches remain
+true; the temporary Bay5 test hour 12 was restored to its original 0. Clear weather and
+saved lighting/flare tuning are retained. Restart Vanilla's server and game before testing.
+See [native-decals.md](docs/progress/native-decals.md) for timestamps, hashes and limits.
+
 ## State on 2026-09-27 (22:42) — Equator fixed day/night and artificial sun
 
 Branch `feature/equator-day-night`. Equator's normal map picker now offers fixed start

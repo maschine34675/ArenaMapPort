@@ -281,6 +281,7 @@ def main() -> None:
     EQ.ensure_dirs(args.output)
 
     light_culling_totals = {"culling_light_object_count": 0, "volumetric_light_count": 0, "light_flicker_count": 0}
+    decal_count = 0
     scenes_out: dict[int, dict] = {}
     for idx in scene_indices:
         f = env.files[exact_paths[idx]["level"]]
@@ -288,6 +289,8 @@ def main() -> None:
         node_id_list = list(tf_map.keys())
         print(f"  scene {idx} ({registry[idx]}): FULL scene, {len(node_id_list)} objects", file=sys.stderr)
         scenes_out[idx] = EQ.extract_scene(idx, f, tags_array, node_id_list, ctx)
+        from extract_decals import augment_scene as augment_decals
+        decal_count += augment_decals(scenes_out[idx], f, ctx)
         count = augment_scene(scenes_out[idx], f, ballistic_contract)
         print(f"    restored {count} original ballistic material components", file=sys.stderr)
         # PLAN-TWO-MAPS item 4
@@ -392,6 +395,7 @@ def main() -> None:
     manifest["native_features"]["light_culling"] = {
         "schema_version": light_culling.SCHEMA_VERSION, **light_culling_totals,
     }
+    manifest["native_features"]["static_decals"] = {"schema_version": 1, "count": decal_count}
     with open(os.path.join(args.output, "manifest.json"), "w", encoding="utf-8") as f:
         json.dump(manifest, f, indent=2, sort_keys=True, ensure_ascii=False)
 

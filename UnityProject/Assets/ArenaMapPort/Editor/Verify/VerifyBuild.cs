@@ -53,6 +53,7 @@ namespace ArenaMapPort.Editor.Verify
             var shaderNames = new SortedSet<string>(StringComparer.Ordinal);
             int meshColliders = 0, boxColliders = 0, sphereColliders = 0, capsuleColliders = 0;
             int lights = 0;
+            int staticDecals = 0, activeStaticDecals = 0;
             int lodGroups = 0, lodGroupNullRendererEntries = 0;
 
             int levelSettingsCount = 0;
@@ -97,6 +98,15 @@ namespace ArenaMapPort.Editor.Verify
                 if (go.GetComponent<SphereCollider>() != null) sphereColliders++;
                 if (go.GetComponent<CapsuleCollider>() != null) capsuleColliders++;
                 if (go.GetComponent<Light>() != null) lights++;
+                var decal = go.GetComponent<StaticDeferredDecal>();
+                if (decal != null)
+                {
+                    staticDecals++;
+                    if (decal.enabled && go.activeInHierarchy) activeStaticDecals++;
+                    if (decal._material == null || !(decal._material.GetTexture("_MainTex") is Texture2D))
+                        throw new System.IO.InvalidDataException("Unresolved static decal material in " + path + "/" + go.name);
+                    shaderNames.Add(decal._material.shader.name);
+                }
 
                 var lg = go.GetComponent<LODGroup>();
                 if (lg != null)
@@ -195,6 +205,7 @@ namespace ArenaMapPort.Editor.Verify
                     ["total"] = meshColliders + boxColliders + sphereColliders + capsuleColliders,
                 },
                 ["lights"] = lights,
+                ["static_decals"] = new JObject { ["count"] = staticDecals, ["active"] = activeStaticDecals },
                 ["lod_groups"] = new JObject { ["count"] = lodGroups, ["null_renderer_entries"] = lodGroupNullRendererEntries },
                 ["eft_components"] = eftComponents,
             };

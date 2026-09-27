@@ -133,6 +133,7 @@ KNOWN_COMPONENT_TYPES = {
     "CullingLightObject",  # PLAN-TWO-MAPS item 7
     "VolumetricLight",     # PLAN-TWO-MAPS item 7
     "LightFlicker",        # PLAN-TWO-MAPS item 7
+    "StaticDeferredDecal",
 }
 RENDERER_COMPONENT_TYPES = {"MeshRenderer", "SkinnedMeshRenderer"}
 
@@ -322,6 +323,10 @@ def validate_scenes(manifest: dict, package: Path) -> dict:
                         scene_bad_refs += 1
                         check(False, f"scenes/{scene_name}.json: object {oid!r} ({name}) "
                                       f"MeshFilter.mesh_id {mid!r} resolves under manifest.meshes")
+                elif ctype == "StaticDeferredDecal":
+                    if comp.get("material_id") not in material_ids or comp.get("schema_version") != 1:
+                        scene_bad_refs += 1
+                        check(False, f"scenes/{scene_name}.json: decal {oid!r} has invalid material/schema")
                 elif ctype in ("MeshRenderer", "SkinnedMeshRenderer"):
                     stats["mesh_renderers" if ctype == "MeshRenderer" else "skinned_mesh_renderers"] += 1
                     for mat_id in comp.get("material_ids", []):
@@ -1076,6 +1081,8 @@ def check_orphans(manifest: dict, package: Path) -> None:
                     referenced_meshes.add(comp["mesh_id"])
                 if t in RENDERER_COMPONENT_TYPES:
                     referenced_materials.update(comp.get("material_ids", []))
+                if t == "StaticDeferredDecal":
+                    referenced_materials.add(comp.get("material_id"))
 
     for mat_id in manifest.get("materials", {}):
         mat_path = package / manifest["materials"][mat_id]["file"]

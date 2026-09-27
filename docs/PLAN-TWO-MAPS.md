@@ -392,7 +392,11 @@ custom client overlay (own Canvas/Image on the preloader) — M, optional polish
 
 ## 3. Deliberately NOT in this plan, and why
 
-- **Decals (`StaticDeferredDecal`, 348/499 instances)** — the decal shaders already work (ArenaMapPort's own
+- **Decals — original deferral, superseded by the source recovery on 2026-09-27:** the material
+  reference is stored on `StaticDeferredDecal` itself, not its sibling MeshRenderer. All 348/499
+  original references have now been recovered. Implementation and validation evidence:
+  [native-decals.md](progress/native-decals.md). The earlier assessment below is retained as history.
+  **Original assessment (`StaticDeferredDecal`, 348/499 instances)** — the decal shaders already work (ArenaMapPort's own
   `ShaderRebind` resolves them); the blocker is that **zero** decal GameObjects have a usable material
   reference (346/348 Equator instances have no `MeshRenderer` at all; 452/499 Bay5 instances have a
   `MeshRenderer` with a **null** material slot). Authoring them would mean inventing which of ~20 orphan

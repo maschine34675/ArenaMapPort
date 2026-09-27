@@ -281,6 +281,8 @@ def load_package_expected(package: Path) -> dict:
                     mid = comp.get("mesh_id")
                     if mid:
                         in_scope_mesh_ids.add(mid)
+                elif t == "StaticDeferredDecal":
+                    in_scope_material_ids.add(comp["material_id"])
                 elif t == "MeshRenderer":
                     expected["mesh_renderers"] += 1
                     for mid in comp.get("material_ids") or []:
@@ -2122,6 +2124,12 @@ def main() -> None:
         validate_owned_terrain_shader(env, expected["manifest"])
         validate_disabled_component_counts_bundle(env, args.package, expected["manifest"])
         validate_light_culling_counts_bundle(env, args.package, expected["manifest"])
+        from validate_decals import bundle_errors as decal_bundle_errors
+        decal_errors = decal_bundle_errors(env, args.package, expected["manifest"], list(iter_serialized_files(env)),
+                                          package_object_chain, built_reference_go)
+        for error in decal_errors:
+            check(False, "native decals: " + error)
+        check(not decal_errors, "native decal identities, hierarchy, materials, UVs and settings roundtrip")
         validate_generic_null_references(env, args.package, expected["manifest"])
         validate_eft_scripts(env, args.require_scripts_scene)
         try:

@@ -241,6 +241,18 @@ namespace ArenaMapPort.Client
             int rebound = 0;
             foreach (var root in scene.GetRootGameObjects())
             {
+                // Native projector decals store their material on the component, not a Renderer.
+                // Resolve before StaticDeferredDecalRenderer clones it into its draw groups.
+                foreach (var decal in root.GetComponentsInChildren<StaticDeferredDecal>(true))
+                {
+                    var material = decal._material;
+                    if (material != null && material.shader != null &&
+                        material.shader.name.StartsWith(StandinPrefix, StringComparison.Ordinal))
+                    {
+                        considered++;
+                        if (Rebind(material, map)) rebound++;
+                    }
+                }
                 var renderers = root.GetComponentsInChildren<Renderer>(true);
                 for (int r = 0; r < renderers.Length; r++)
                 {

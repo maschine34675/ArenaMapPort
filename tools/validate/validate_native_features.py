@@ -175,6 +175,7 @@ def feature_enabled(manifest, scenes=None):
     # counts) is an OPTIONAL extra native_features entry in the same way -- it tags existing owner
     # GameObjects only, no new GameObjects are created, so extra_counts() below is untouched.
     light_culling=features.pop('light_culling',None)
+    static_decals=features.pop('static_decals',None)
     compare(features, {'schema_version':1,'required':['ballistics',contract['feature']]}, 'feature contract')
     if raincover is not None:
         require(isinstance(raincover,dict) and raincover.get('schema_version')==1 and 'indoor_trigger_count' in raincover,
@@ -191,6 +192,14 @@ def feature_enabled(manifest, scenes=None):
                         ('culling_light_object_count','volumetric_light_count','light_flicker_count')),
                 'light_culling feature summary shape')
     if scenes is not None:
+        decals=[c for objects in scenes.values() for o in objects for c in o['components'] if c['type']=='StaticDeferredDecal']
+        if static_decals is not None:
+            require(static_decals.get('schema_version')==1 and static_decals.get('count')==len(decals) and len(decals)>0,
+                    'static decal census differs')
+            require(all(c.get('schema_version')==1 and c.get('material_id') in manifest['materials'] for c in decals),
+                    'static decal material/schema')
+        else:
+            require(not decals, 'unmarked static decal components')
         require(not any(c['type']=='WindowBreaker' for objects in scenes.values() for o in objects for c in o['components']), 'glass was deferred by the user')
     return True
 

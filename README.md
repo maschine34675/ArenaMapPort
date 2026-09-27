@@ -26,6 +26,12 @@ The registry contains Equator and Bay5 plus 12 additional source-backed map defi
 
 **Bay5 background.** The original harbor scene is now included: cranes and container stacks are visible in-game. Native acceptance confirmed connected bot starts, Deathmatch movement/replenishment and both ordinary test exits. Distant scenery does not enlarge weather scans or the NavMesh bake volume. See [background acceptance](docs/progress/bay5-background.md).
 
+**Original projection decals.** Equator and Bay5 import the original graffiti, dirt and markings from
+Arena's `StaticDeferredDecal` components, including their own material references and atlas regions.
+Source-disabled objects remain disabled. Each map has a live `Decals (<map>) / Enabled` comparison
+switch. Existing mesh-based decals keep their separate behavior. See [implementation and native
+verification](docs/progress/native-decals.md).
+
 **Bay5 materials and ambience.** Original ballistic material data now cover 6,322 source components. The port also restores 24 original harbor ambient sources with 106 clips and native shoreline positioning. Three Linear reflection cubemaps now retain their original color space. Build, deployment and a Bay5–Equator–Bay5 native sequence passed on 2026-09-22; audio playback/routing was measured, but the muted host was not auditioned. Glass remains deferred by user choice. See [native feature acceptance](docs/progress/bay5-native-features.md).
 
 Equator/Bay5 retain their existing identities and artifact locations. The local Saw preset is present, but its 12 distinct referenced scene paths are absent; Saw cannot be ported from this source installation. Bay5's tournament preset is a mode variant, and Draft/the generic test preset are not additional independent maps.
