@@ -8,8 +8,8 @@ namespace ArenaMapPort.Client
 {
     /// <summary>
     /// Optional diagnostic: hides renderers drawn purely with BSG's deferred-decal projector shaders
-    /// ("Decal/Water Deferred Decal", "Decal/Ultra Deferred Decal Of God 3000"), which expect the
-    /// StaticDeferredDecal command-buffer pass our scenes do not run.
+    /// ("Decal/Water Deferred Decal", "Decal/Ultra Deferred Decal Of God 3000"). These mesh-renderer
+    /// decals remain separate from the StaticDeferredDecal components restored by NativeDecalRepairs.
     ///
     /// History: shipped enabled on 2026-09-17 as the suspected cause of Bay5's white ground with dark
     /// blotches. The playtest refuted that (blotches unchanged) and exposed a bug: any renderer with a

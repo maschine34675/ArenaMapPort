@@ -8,6 +8,9 @@ dated state in one screen; read it before this index if you only have a minute.
 
 ## Current — read these for the area you touch
 
+- [config-cleanup.md](config-cleanup.md) — complete configuration audit,
+  46 ineffective entries retired, user values preserved and both maps smoke-tested (2026-09-28).
+
 - [lighting-followup.md](lighting-followup.md) — live MultiFlare strength,
   verified exposure, Techlight ceiling and adjacent Bay5 barricade shadows,
   optional SmajlecLights exclusion and BrighterInteriors assessment (2026-09-28).

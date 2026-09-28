@@ -154,8 +154,6 @@ namespace ArenaMapPort.Client
             // §12 goal 1/3 — new keys, see AmbientSource/RainCoverMode's own doc comments.
             internal BepInEx.Configuration.ConfigEntry<AmbientSource> UnityAmbientEntry;
             internal BepInEx.Configuration.ConfigEntry<RainCoverMode> RainCoverEntry;
-            // PLAN-TWO-MAPS item 6 — see RainCoverEntry's own bind site for the full doc comment.
-            internal BepInEx.Configuration.ConfigEntry<bool> AuthoredRainCoverEntry;
             // In-game test 2026-09-18 21:5x on the GPU host: the white veil on Bay5's hall floors is the
             // sky cubemap (_MyGlobalReflectionProbe) mirrored by floor materials with smoothness 0.9+.
             // It stayed with _WaterLevel and _SurfaceWetIntensity pinned to 0 and vanished with the
@@ -183,9 +181,6 @@ namespace ArenaMapPort.Client
             // next AmbientLight.SetSH call, i.e. within one frame of a SettingChanged (ToDController.Update
             // runs every frame) — SettingChanged below re-applies it immediately instead of waiting.
             internal BepInEx.Configuration.ConfigEntry<float> AmbientIntensity;
-
-            // §13 goal 2 — RoofDepthBlack's elevated-mesh filter threshold. See RainCoverRepairs.cs.
-            internal BepInEx.Configuration.ConfigEntry<float> CoverMinHeightEntry;
 
             // §19 — per-renderer indoor-floor smoothness scale (RoofDepthBlack's own depth photo drives
             // the classification). See IndoorFloorSmoothnessRepairs.cs.
@@ -472,41 +467,8 @@ namespace ArenaMapPort.Client
                 "LevelSettings.RainBounds from this map's own static geometry once per raid. See " +
                 "RainCoverRepairs.cs. Applied fresh every raid, not live.");
 
-            // PLAN-TWO-MAPS item 6 — Equator/Bay5 packages now carry Arena's own EnvironmentManager/
-            // TriggerGroup/IndoorTrigger (and on Bay5 WeatherObstacle/DryPlane) geometry, authored by
-            // RainCoverImporter.cs from raincover.json. When true, RainCoverEntry's heuristic above is
-            // skipped entirely for this map (RainCoverRepairs.ApplyForCurrentMap) so it never draws its
-            // own elevated-mesh guesses on top of vanilla's now-real WeatherObstacle draw in the same
-            // depth photo. Defaults true only for the two maps this importer actually authors data for;
-            // every other (deferred) map keeps using the heuristic exactly as before (false — same
-            // rigDefaults split RainCoverEntry's own class default does NOT use, since the heuristic
-            // itself has always run on every map with SkyboxMode!=Off/Donor!=Off regardless of rig tier).
-            cfg.AuthoredRainCoverEntry = Plugin.Instance.Config.Bind(section, "AuthoredRainCover", rigDefaults,
-                "When true, this map's authored rain-cover data (EnvironmentManager/IndoorTrigger and, if the map " +
-                "ships genuine ones, WeatherObstacle/DryPlane — RainCoverImporter.cs, PLAN-TWO-MAPS item 6) is used; " +
-                "the depth-photo heuristic above stays armed and only its elevated-mesh draws yield to a real " +
-                "WeatherObstacle at render time (2026-09-25: neither Equator nor Bay5 ships one — Arena's Bay5 " +
-                "DryPlanes are Lighthouse leftovers — so the heuristic does the roof work on both). false = ignore " +
-                "the authored data for the heuristic decision (A/B only). Defaults true for Equator/Bay5, false for " +
-                "every other map. Applied fresh every raid, not live.");
             cfg.ReflectionIntensity.SettingChanged += (_, __) => ReapplyReflectionIntensity(map);
             cfg.AmbientIntensity.SettingChanged += (_, __) => ReapplyAmbientIntensity(map);
-
-            // §13 goal 2 — RoofDepthBlack's elevated-mesh filter: a renderer only becomes a black-draw
-            // candidate if its bounds.min.y sits at least this far above the ground/collider hit directly
-            // below it (or, with no hit, above the scanned map's own min.y) — mirrors vanilla's own
-            // DryPlane roofs/overhangs never including ground-level geometry. 2.2m is this task's own
-            // starting value (Reserve's 637 DryPlane instances span a rough 5-13m spread above their local
-            // reference height per docs/progress/donor-settings-camera-weather.md §13 investigation (c) —
-            // not a precise per-plane ground-clearance measurement, so treat 2.2m as a reasonable floor,
-            // not a donor-matched constant). Only read when RainCover=RoofDepthBlack.
-            cfg.CoverMinHeightEntry = Plugin.Instance.Config.Bind(section, "CoverMinHeight", 2.2f,
-                new BepInEx.Configuration.ConfigDescription(
-                    "§13 — minimum height (meters) a static renderer's own bounds.min.y must clear the " +
-                    "ground/collider directly below it (or the scanned map's own min.y, if nothing is hit) " +
-                    "to be treated as an elevated roof/overhang and drawn black onto the rain-cover depth " +
-                    "camera. Only used when RainCover=RoofDepthBlack.",
-                    new BepInEx.Configuration.AcceptableValueRange<float>(0f, 50f)));
 
             // §19 — ReflectionIntensity back at 1.0 (§16.2/§17) re-exposes the hall-floor sky-mirror veil
             // this multiplier fixes on a per-renderer basis instead of a global scalar. Non-1.0 default only
@@ -623,9 +585,10 @@ namespace ArenaMapPort.Client
             // Donor's SettingChanged is subscribed below, so the write itself never triggers a harvest
             // pre-warm (RecomputePendingDonors at Install() reads the final values anyway).
             cfg.DefaultsRevision = Plugin.Instance.Config.Bind(section, "DefaultsRevision", 0,
-                "Internal — which default set this section was last seeded with (§20 in " +
+                new BepInEx.Configuration.ConfigDescription("Internal — which default set this section was last seeded with (§20 in " +
                 "docs/progress/donor-settings-camera-weather.md). Leave it alone; a lower value than the " +
-                "current build's re-runs the one-time default re-seed for values still on their old default.");
+                "current build's re-runs the one-time default re-seed for values still on their old default.",
+                    null, System.ComponentModel.BrowsableAttribute.No));
             if (equatorDefaults && cfg.DefaultsRevision.Value < 1)
             {
                 int moved = 0;
@@ -1357,8 +1320,7 @@ namespace ArenaMapPort.Client
                 // .Construct/CameraManager.SetCameraFromSettings and TOD_Scattering's per-frame LevelSettings
                 // read both happen strictly later in the same startup sequence.
                 ApplyDonorLevelSettingsOverrides(map, cfg);
-                RainCoverRepairs.ApplyForCurrentMap(map, cfg.RainCoverEntry.Value, cfg.RainBoundsCenter, cfg.RainBoundsSize,
-                    cfg.CoverMinHeightEntry, cfg.AuthoredRainCoverEntry.Value); // §12 goal 3 / §13 goal 2 / PLAN-TWO-MAPS item 6
+                RainCoverRepairs.ApplyForCurrentMap(map, cfg.RainCoverEntry.Value, cfg.RainBoundsCenter, cfg.RainBoundsSize);
                 ApplyDonorCameraPrefab(map, cfg, rig);
                 if (rig.Kind == RigKind.Full)
                 {

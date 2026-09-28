@@ -30,10 +30,6 @@ namespace ArenaMapPort.Client
 
         public static Plugin Instance { get; private set; }
 
-        // §F.5: "No config beyond a LogLevel toggle — no player-facing settings for the spike."
-        static ConfigEntry<bool> _verboseLogging;
-        public static bool VerboseLogging => _verboseLogging?.Value ?? false;
-
         Harmony _harmony;
 
         void LateUpdate() => ArenaLightingRepairs.UpdateArtificialSun();
@@ -42,13 +38,6 @@ namespace ArenaMapPort.Client
         {
             Instance = this;
             Log = base.Logger;
-
-            _verboseLogging = Config.Bind(
-                "Logging",
-                "Verbose",
-                false,
-                "Extra per-scene/per-material diagnostic detail beyond the always-on §F.5 summary lines. " +
-                "No other settings exist for this spike.");
 
             LogStartupBanner();
 
@@ -152,6 +141,15 @@ namespace ArenaMapPort.Client
             };
 
             HandsAmbientHighlight.Install();
+            try
+            {
+                int removed = RetiredConfiguration.RemoveSavedEntries(Config);
+                Log.LogInfo($"[ArenaMapPort][Config] Removed {removed} retired saved options; active settings preserved.");
+            }
+            catch (Exception e)
+            {
+                Log.LogWarning($"[ArenaMapPort][Config] Retired saved-option cleanup skipped: {e.Message}");
+            }
             MapConfigVisibility.Install(); // after all binds; keep F12 focused on Equator and Bay5
 
             int totalOwnedScenes = 0;

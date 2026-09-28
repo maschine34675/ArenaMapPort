@@ -50,8 +50,8 @@ namespace ArenaMapPort.Client
     ///      doc comment explains why these need caching rather than a live re-derivation.
     ///  (c) <see cref="RenderObstaclesPrefix"/> (§13, new — Harmony prefix on
     ///      <c>DepthPhotograper.RenderObstacles</c>) — mode <c>RoofDepthBlack</c> only, the new default —
-    ///      draws every cached ELEVATED static mesh (found by the very same scan as (a), gated on
-    ///      <c>CoverMinHeight</c>) in "Hidden/Black" onto the depth camera via <c>Graphics.DrawMesh</c>,
+    ///      draws cached static cover meshes in "Hidden/Black" onto the depth camera via
+    ///      <c>Graphics.DrawMesh</c>. Whole building shells are retained even when their bounds touch ground,
     ///      the same mechanism a real donor's <c>WeatherObstacle.MeshCollider</c> (a combined mesh of
     ///      hand-placed <c>DryPlane</c> roofs/overhangs) uses. Does NOT widen the <c>cullingMask</c> —
     ///      stays Terrain-only, matching vanilla exactly. See docs/progress/donor-settings-camera-weather.md
@@ -127,7 +127,6 @@ namespace ArenaMapPort.Client
             internal WeatherRig.RainCoverMode Mode;
             internal ConfigEntry<Vector3> RainBoundsCenter;
             internal ConfigEntry<Vector3> RainBoundsSize;
-            internal ConfigEntry<float> CoverMinHeight; // §13 goal 2
             internal int LayerMask;
             internal int LastAppliedCullingMask;
             internal bool Computed;
@@ -137,10 +136,7 @@ namespace ArenaMapPort.Client
             // RainBounds scan, drawn every camera change by RenderObstaclesPrefix).
             internal List<ElevatedMesh> ElevatedMeshes;
             internal bool DrawLogSent;
-            // PLAN-TWO-MAPS item 6 follow-up (2026-09-25): true when this map ships authored rain-cover data.
-            // The depth-photo heuristic stays ARMED regardless; a real WeatherObstacle (vanilla draws it) only adds
-            // to the same photo, it never replaces the heuristic's elevated-mesh draws.
-            internal bool AuthoredRainCover;
+            // Log genuine native cover once; it shares the photo with the heuristic draws.
             internal bool AuthoredSkipLogSent;
 
             // §13 goal 1 diagnostics — cached at SetupDepthCameraPostfix time for EVERY mode (the transient
@@ -197,31 +193,16 @@ namespace ArenaMapPort.Client
         // Called once per raid from WeatherRig.OnSceneLoaded (Scripts scene — geometry scenes are not loaded
         // yet, see the class doc comment). Only records what RenderPrefix needs; nothing is scanned here.
         internal static void ApplyForCurrentMap(ArenaMapDescriptor map, WeatherRig.RainCoverMode mode,
-            ConfigEntry<Vector3> rainBoundsCenter, ConfigEntry<Vector3> rainBoundsSize, ConfigEntry<float> coverMinHeight,
-            bool authoredRainCover = false)
+            ConfigEntry<Vector3> rainBoundsCenter, ConfigEntry<Vector3> rainBoundsSize)
         {
             _states[map.Key] = new CoverState
             {
                 Mode = mode,
                 RainBoundsCenter = rainBoundsCenter,
                 RainBoundsSize = rainBoundsSize,
-                CoverMinHeight = coverMinHeight,
             };
-            // PLAN-TWO-MAPS item 6 follow-up (2026-09-25, user report "rain indoors on both maps"): the first
-            // version forced Mode=Off here whenever AuthoredRainCover was true, assuming the authored
-            // WeatherObstacle/DryPlane geometry replaces the heuristic. It does not: Equator authors none, and
-            // Arena's 669 Bay5 DryPlanes are EFT-Lighthouse leftovers (root 'Lighthouse_DryPlanes', a square
-            // kilometre off the map — extract_raincover.py now drops them). With Mode=Off nothing fed the depth
-            // photo and rain fell into every room. The heuristic therefore stays armed; only the extra
-            // elevated-mesh draws yield to a REAL WeatherObstacle at draw time (RenderObstaclesPrefix), so a map
-            // that ever ships genuine DryPlanes gets vanilla's own draw without a doubled photo.
-            _states[map.Key].AuthoredRainCover = authoredRainCover;
-            if (authoredRainCover)
-            {
-                Plugin.Log.LogInfo($"[ArenaMapPort][RainCover] map={map.Key} AuthoredRainCover=true — the authored " +
-                    "EnvironmentManager/IndoorTrigger data is in the scene; the depth-photo heuristic stays armed " +
-                    "(a real WeatherObstacle, if the map ships one, is drawn by vanilla in addition)");
-            }
+            // Authored indoor triggers do not replace rain occlusion. Keep the geometric
+            // depth-photo cover active alongside any genuine native WeatherObstacle.
             if (mode == WeatherRig.RainCoverMode.Off)
             {
                 Plugin.Log.LogInfo($"[ArenaMapPort][RainCover] map={map.Key} RainCover=Off — no bounds/mask/obstacle draws computed");
@@ -280,7 +261,7 @@ namespace ArenaMapPort.Client
         static void ComputeAndWrite(ArenaMapDescriptor map, CoverState state)
         {
             bool computeElevated = state.Mode == WeatherRig.RainCoverMode.RoofDepthBlack;
-            var scan = ScanStaticGeometry(map, computeElevated, state.CoverMinHeight != null ? state.CoverMinHeight.Value : 2.2f);
+            var scan = ScanStaticGeometry(map, computeElevated);
             if (scan.rendererCount == 0)
             {
                 state.EmptyScans++;
@@ -332,8 +313,7 @@ namespace ArenaMapPort.Client
                     $"elevated={state.ElevatedMeshes.Count} excluded(oversized)={scan.excludedOversized} " +
                     $"excluded(material)={scan.excludedMaterial} excluded(notElevated)={scan.excludedNotElevated} " +
                     $"excluded(noMesh)={scan.excludedNoMesh} included(glass)={scan.includedGlass} " +
-                    $"CoverIncludesGlass={WeatherRig.CoverIncludesGlassForCurrentMap()} " +
-                    $"CoverMinHeight={(state.CoverMinHeight != null ? state.CoverMinHeight.Value : 2.2f):0.0}");
+                    $"CoverIncludesGlass={WeatherRig.CoverIncludesGlassForCurrentMap()}");
             }
         }
 
@@ -386,7 +366,7 @@ namespace ArenaMapPort.Client
         // candidates then classifies each one elevated/not (§13 goal 2's own spec: needs the FULL scanned
         // map's min.y, which is only known once the first pass has walked every renderer) and caches the
         // elevated ones' (mesh, localToWorld) for RenderObstaclesPrefix to draw every camera change.
-        static ScanResult ScanStaticGeometry(ArenaMapDescriptor map, bool computeElevated, float coverMinHeight)
+        static ScanResult ScanStaticGeometry(ArenaMapDescriptor map, bool computeElevated)
         {
             // Resolved by NAME, never hardcoded indices (SeaPlaceholderRepairs.cs/SceneInspector.cs/
             // SpawnPlacementRepairs.cs's own established convention) — tolerant of -1 (this project's own
@@ -547,8 +527,7 @@ namespace ArenaMapPort.Client
                     // (Depot_indoor cover 0/25). The depth camera keeps the HIGHEST surface per pixel, so
                     // drawing everything is safe: a floor photographed at its own height reads "uncovered"
                     // for the indoor classifier (roof >= floor + 2.5 m) and, as observed in the 21:17 test,
-                    // for the WetRenderer too. The raycast gate is gone; CoverMinHeight stays an unused key.
-                    _ = coverMinHeight;
+                    // for the WetRenderer too. No clearance threshold is applied.
 
                     var filter = renderer.GetComponent<MeshFilter>();
                     var mesh = IndoorSurfaceMesh.StableSource(filter != null ? filter.sharedMesh : null);
@@ -759,7 +738,7 @@ namespace ArenaMapPort.Client
             // A real WeatherObstacle (vanilla RenderObstacles draws its merged DryPlane mesh into the same photo)
             // does not switch the heuristic off: both draws land in one depth photo where the higher surface wins
             // per pixel, i.e. the union of the two covers. Logged once so the photo's inputs are on record.
-            if (state.AuthoredRainCover && !state.AuthoredSkipLogSent && global::WeatherObstacle.Instance != null
+            if (!state.AuthoredSkipLogSent && global::WeatherObstacle.Instance != null
                 && global::WeatherObstacle.Instance.MeshCollider != null)
             {
                 state.AuthoredSkipLogSent = true;

@@ -52,9 +52,9 @@ namespace ArenaMapPort.Client
             _enabled = Plugin.Instance.Config.Bind("Sea", "EnableWaterPlaceholder", true,
                 "Assigns a placeholder water material (FX/SimpleWater4) to any renderer with an empty " +
                 "sharedMaterials array on the built-in 'Water' layer (e.g. Bay5's Sea/Plane) — stands in " +
-                "for a real authored water surface that never made it through the port. Falls back to " +
-                "disabling the renderer if the placeholder shader can't be found. Cosmetic stopgap only, " +
-                "see this file's own doc comment.");
+                "as a fallback when native harbor water is disabled or unavailable. NativeHarborWater " +
+                "replaces it while enabled. Disables the empty renderer if the placeholder shader can't " +
+                "be found. Takes effect on the next raid.");
 
             SceneManager.sceneLoaded += OnSceneLoaded;
             SceneManager.sceneUnloaded += OnSceneUnloaded;

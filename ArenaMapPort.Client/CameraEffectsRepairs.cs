@@ -111,19 +111,19 @@ namespace ArenaMapPort.Client
             _installed = true;
 
             _fixExposure = Plugin.Instance.Config.Bind("Camera", "FixExposure", true,
-                "Enables PrismEffects.useExposure on the fallback camera (Cam2), which never gets its " +
-                "exposure preset applied because our maps have no LevelSettings.CameraPrefab. Cam2's own " +
-                "baked exposure fields (below) are used, not left at the generic engine defaults.");
+                "Repairs missing automatic exposure while a donor weather rig is active. Only applies " +
+                "when the camera's exposure is off; cameras with exposure already enabled retain their " +
+                "existing values. This is a fallback repair, not an exposure on/off switch. Next camera setup.");
 
             _exposureMiddleGrey = Plugin.Instance.Config.Bind("Camera", "ExposureMiddleGrey", 0.23f,
-                "PrismEffects.exposureMiddleGrey applied when FixExposure=true. Pre-seeded from Cam2's own " +
-                "baked value (LogOutput.log-confirmed 2026-09-17).");
+                "Middle grey used only when FixExposure repairs a camera with exposure off. " +
+                "Does not override an already active donor exposure. Next camera setup.");
             _exposureLowerLimit = Plugin.Instance.Config.Bind("Camera", "ExposureLowerLimit", -10.0f,
-                "PrismEffects.exposureLowerLimit applied when FixExposure=true. Pre-seeded from Cam2's own " +
-                "baked value.");
+                "Lower limit used only when FixExposure repairs a camera with exposure off. " +
+                "Does not override an already active donor exposure. Next camera setup.");
             _exposureUpperLimit = Plugin.Instance.Config.Bind("Camera", "ExposureUpperLimit", 1.3f,
-                "PrismEffects.exposureUpperLimit applied when FixExposure=true. Pre-seeded from Cam2's own " +
-                "baked value (the script default is 6). Applies on the next raid load, not live.");
+                "Upper limit used only when FixExposure repairs a camera with exposure off. " +
+                "Does not override an already active donor exposure. Next camera setup.");
 
             _enableTodScatteringFix = Plugin.Instance.Config.Bind("Camera", "EnableTODScatteringFix", true,
                 "Adds a TOD_Scattering component to the fallback camera while a WeatherRig is active for " +

@@ -115,7 +115,6 @@ namespace ArenaMapPort.Client
             // A — UnityAmbient
             internal ConfigEntry<AmbientPreset> AmbientPresetEntry;
             internal ConfigEntry<Color> AmbientCustomColor;
-            internal ConfigEntry<float> AmbientCustomIntensity;
 
             // B — GlobalReflection
             internal ConfigEntry<ReflectionPreset> ReflectionPresetEntry;
@@ -258,12 +257,11 @@ namespace ArenaMapPort.Client
                 "goal 1). Off = write nothing at load; switching back to Off live re-applies this raid's own " +
                 "captured baseline (whatever WeatherRig/ArenaLightingRepairs already wrote before this file " +
                 "ran). DonorBlack = Reserve_Base_Scripts' own authored ambient (SkyColor=black, " +
-                "EquatorColor/GroundColor=(0.604,0.635,0.651), AmbientIntensity=0 — only SkyColor/" +
-                "AmbientIntensity are visually live under AmbientMode.Flat; same values WeatherRig." +
+                "EquatorColor/GroundColor=(0.604,0.635,0.651), AmbientIntensity=0 — only SkyColor " +
+                "is visually live under AmbientMode.Flat; same values WeatherRig." +
                 "GetDonorAmbient supplies, not a separate copy). StubGrey = force the PRE-§12 stub (0.5 " +
                 "grey / intensity 1, AuthorScriptsScene.cs's own authored values) even while WeatherRig's " +
-                "own UnityAmbient=Donor default is active, for A/B isolation. Custom = AmbientCustomColor/" +
-                "AmbientCustomIntensity below. Written into the live LevelSettings fields " +
+                "own UnityAmbient=Donor default is active, for A/B isolation. Custom = AmbientCustomColor below. Written into the live LevelSettings fields " +
                 "(LevelSettings.OnPreCullCallback re-applies RenderSettings.ambient* FROM these fields every " +
                 "camera pre-cull — a direct RenderSettings write would not stick) plus " +
                 "DynamicGI.UpdateEnvironment(). Isolates: Unity's own implicit default environment reflection " +
@@ -273,12 +271,6 @@ namespace ArenaMapPort.Client
             cfg.AmbientCustomColor = Plugin.Instance.Config.Bind(section, "AmbientCustomColor",
                 new Color(0.5f, 0.5f, 0.5f, 1f),
                 "A — SkyColor/EquatorColor/GroundColor used when AmbientPreset=Custom.");
-
-            cfg.AmbientCustomIntensity = Plugin.Instance.Config.Bind(section, "AmbientCustomIntensity", 1f,
-                new ConfigDescription(
-                    "A — LevelSettings.AmbientIntensity used when AmbientPreset=Custom (inert under " +
-                    "AmbientMode.Flat, this project's mode — copied for completeness only).",
-                    new AcceptableValueRange<float>(0f, 4f)));
 
             cfg.ReflectionPresetEntry = Plugin.Instance.Config.Bind(section, "GlobalReflection", ReflectionPreset.Rig,
                 "B — GlobalReflection. Rig = today's behavior, untouched (AmbientLight's own live sky-only " +
@@ -341,7 +333,6 @@ namespace ArenaMapPort.Client
 
             cfg.AmbientPresetEntry.SettingChanged += (_, __) => ReapplyIfLoaded(map, (m, c, s) => ApplyAmbient(m, c, s));
             cfg.AmbientCustomColor.SettingChanged += (_, __) => ReapplyIfLoaded(map, (m, c, s) => ApplyAmbient(m, c, s));
-            cfg.AmbientCustomIntensity.SettingChanged += (_, __) => ReapplyIfLoaded(map, (m, c, s) => ApplyAmbient(m, c, s));
             cfg.ReflectionPresetEntry.SettingChanged += (_, __) => ReapplyIfLoaded(map, (m, c, s) => ApplyReflectionPreset(m, c, s));
             cfg.SSRFactorOverride.SettingChanged += (_, __) => ReapplyIfLoaded(map, (m, c, s) => ApplySSRFactor(m, c, s));
             cfg.WaterLevelOverrideEnabled.SettingChanged += (_, __) => ReapplyIfLoaded(map, (m, c, s) => ApplyWetness(m, c));
@@ -543,7 +534,7 @@ namespace ArenaMapPort.Client
                     break;
                 case AmbientPreset.Custom:
                     sky = equator = ground = cfg.AmbientCustomColor.Value;
-                    intensity = cfg.AmbientCustomIntensity.Value;
+                    intensity = 1f; // Flat ambient uses the colors; preserve the authored intensity baseline.
                     break;
                 default: // Off, but AmbientOverrideApplied — restore this raid's own captured baseline
                     sky = state.BaseSkyColor;
@@ -1029,7 +1020,7 @@ namespace ArenaMapPort.Client
                 sb.AppendLine($"[ArenaMapPort][LightingLab][Snapshot] ==== {map.Key} ====");
                 sb.AppendLine($"  camera: {camInfo}");
                 sb.AppendLine($"  A UnityAmbient: preset={cfg.AmbientPresetEntry.Value} " +
-                    $"custom=({cfg.AmbientCustomColor.Value}, intensity={cfg.AmbientCustomIntensity.Value:0.00})");
+                    $"customColor={cfg.AmbientCustomColor.Value}");
                 sb.AppendLine($"  B GlobalReflection: preset={cfg.ReflectionPresetEntry.Value}");
                 sb.AppendLine($"  C SSRFactor: configured={cfg.SSRFactorOverride.Value:0.00} " +
                     $"live={Shader.GetGlobalFloat(_ssrFactorId):0.00}");

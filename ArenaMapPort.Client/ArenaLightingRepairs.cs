@@ -100,6 +100,8 @@ namespace ArenaMapPort.Client
             internal ConfigEntry<float> GlobalLightIntensityMultiplier;
             internal ConfigEntry<float> SunIntensityMultiplier;
             internal ConfigEntry<float> SunColorWhiteBlend;
+            internal float SunIntensity => SunIntensityMultiplier?.Value ?? 1f;
+            internal float SunWhiteBlend => SunColorWhiteBlend?.Value ?? 0f;
             internal ConfigEntry<float> FogDensity;
             internal ConfigEntry<float> FillLightIntensity;
             internal ConfigEntry<bool> SyncCullingLightIntensity;
@@ -168,14 +170,15 @@ namespace ArenaMapPort.Client
             var cfg = new ConfigBundle();
 
             cfg.Enabled = Plugin.Instance.Config.Bind(section, "Enabled", true,
-                $"Master switch for every repair below. Only ever applies during a {map.Key} raid — " +
-                "every other map's raid is untouched regardless of this value.");
+                $"Enables authored light scaling, fallback ambient/fill and fog repair for {map.Key}. " +
+                "Does not disable the weather rig, reflections, bloom, flares or other repairs in this section. Live.");
 
             cfg.AmbientColorMultiplier = Plugin.Instance.Config.Bind(section, "AmbientColorMultiplier", 0.5f,
                 new ConfigDescription(
                     "Multiplies LevelSettings' own authored ambient colors (Sky/Equator/Ground, each " +
                     "0.5 grey) before they reach RenderSettings. 1.0 = authored value (the dim flat grey " +
-                    "fill from the 2026-09-14 dark playtest); 2.0 = full-bright white flat ambient.",
+                    "fill from the 2026-09-14 dark playtest); 2.0 = full-bright white flat ambient. " +
+                    "Fallback only: used when no donor weather rig is active. Live.",
                     new AcceptableValueRange<float>(0.2f, 6f)));
 
             cfg.GlobalLightIntensityMultiplier = Plugin.Instance.Config.Bind(section, "GlobalLightIntensityMultiplier", 0.5f,
@@ -184,17 +187,24 @@ namespace ArenaMapPort.Client
                     "map's scenes. 1.0 = authored value.",
                     new AcceptableValueRange<float>(0.2f, 6f)));
 
-            cfg.SunIntensityMultiplier = Plugin.Instance.Config.Bind(section, "SunIntensityMultiplier", 0.2f,
-                new ConfigDescription(
-                    "Multiplies the one Directional light's own authored intensity (Equator: \"FAKE_SUN\", " +
-                    "1.7). 1.0 = authored value.",
-                    new AcceptableValueRange<float>(0.2f, 8f)));
+            // Bay5 has no authored directional light; the donor sun is controlled in LightingLab.
+            if (map != ArenaMapRegistry.Bay5)
+            {
+                cfg.SunIntensityMultiplier = Plugin.Instance.Config.Bind(section, "SunIntensityMultiplier", 0.2f,
+                    new ConfigDescription(
+                        "Multiplies the one Directional light's own authored intensity (Equator: \"FAKE_SUN\", " +
+                        "1.7). 1.0 = authored value.",
+                        new AcceptableValueRange<float>(0.2f, 8f)));
 
-            cfg.SunColorWhiteBlend = Plugin.Instance.Config.Bind(section, "SunColorWhiteBlend", 0.1f,
-                new ConfigDescription(
-                    "Blends the Directional light's own dim/desaturated authored color toward white. " +
-                    "0 = authored color unchanged, 1 = pure white.",
-                    new AcceptableValueRange<float>(0f, 1f)));
+                cfg.SunColorWhiteBlend = Plugin.Instance.Config.Bind(section, "SunColorWhiteBlend", 0.1f,
+                    new ConfigDescription(
+                        "Blends the Directional light's own dim/desaturated authored color toward white. " +
+                        "0 = authored color unchanged, 1 = pure white.",
+                        new AcceptableValueRange<float>(0f, 1f)));
+
+                cfg.SunIntensityMultiplier.SettingChanged += (_, __) => ReapplyIfLoaded(map);
+                cfg.SunColorWhiteBlend.SettingChanged += (_, __) => ReapplyIfLoaded(map);
+            }
 
             cfg.FogDensity = Plugin.Instance.Config.Bind(section, "FogDensity", 0f,
                 new ConfigDescription(
@@ -206,7 +216,7 @@ namespace ArenaMapPort.Client
                 new ConfigDescription(
                     "Intensity of a shadowless directional fill light (from above, plus half as much from " +
                     "below) that stands in for EFT's missing ambient pass — the main lever if surfaces stay " +
-                    "dark away from lamps. 0 = off.",
+                    "dark away from lamps. 0 = off. With a donor rig, requires KeepFillLight=true. Live.",
                     new AcceptableValueRange<float>(0f, 3f)));
 
             cfg.SyncCullingLightIntensity = Plugin.Instance.Config.Bind(section, "SyncCullingLightIntensity", true,
@@ -221,8 +231,6 @@ namespace ArenaMapPort.Client
             cfg.FillLightIntensity.SettingChanged += (_, __) => ReapplyIfLoaded(map);
             cfg.AmbientColorMultiplier.SettingChanged += (_, __) => ReapplyIfLoaded(map);
             cfg.GlobalLightIntensityMultiplier.SettingChanged += (_, __) => ReapplyIfLoaded(map);
-            cfg.SunIntensityMultiplier.SettingChanged += (_, __) => ReapplyIfLoaded(map);
-            cfg.SunColorWhiteBlend.SettingChanged += (_, __) => ReapplyIfLoaded(map);
             cfg.FogDensity.SettingChanged += (_, __) => ReapplyIfLoaded(map);
             cfg.SyncCullingLightIntensity.SettingChanged += (_, __) => ReapplyIfLoaded(map);
             if (map.SunPaths.Length > 0)
@@ -358,8 +366,8 @@ namespace ArenaMapPort.Client
             int lightsApplied = ApplyLights(
                 state,
                 on ? cfg.GlobalLightIntensityMultiplier.Value : 1f,
-                on ? cfg.SunIntensityMultiplier.Value : 1f,
-                on ? cfg.SunColorWhiteBlend.Value : 0f,
+                on ? cfg.SunIntensity : 1f,
+                on ? cfg.SunWhiteBlend : 0f,
                 cfg.SyncCullingLightIntensity.Value, SunFactor(cfg)); // independent of Enabled — see BindConfig's doc string
             state.LastSunFactor = float.NaN; // emit a diagnostic on the next sky update, including live setting changes
             // weather-rig-stage0: while a WeatherRig clone is active for this raid, its real
@@ -378,7 +386,7 @@ namespace ArenaMapPort.Client
                     $"[ArenaMapPort][Lighting] {map.Key} applied (Enabled={on}): LevelSettings-found={levelSettingsFound} " +
                     $"(ambientColorMultiplier={cfg.AmbientColorMultiplier.Value:0.00}), {lightsApplied} light(s) " +
                     $"(globalMultiplier={cfg.GlobalLightIntensityMultiplier.Value:0.00}, " +
-                    $"sunMultiplier={cfg.SunIntensityMultiplier.Value:0.00}, sunWhiteBlend={cfg.SunColorWhiteBlend.Value:0.00}), " +
+                    $"sunMultiplier={cfg.SunIntensity:0.00}, sunWhiteBlend={cfg.SunWhiteBlend:0.00}), " +
                     $"fillLight={(fillActive ? cfg.FillLightIntensity.Value.ToString("0.00") : "off")}, fogDensity={cfg.FogDensity.Value:0.000}, " +
                     $"syncCullingLightIntensity={cfg.SyncCullingLightIntensity.Value} (cullingLights={_lastCullingLightCount}, " +
                     $"editorIntensityBaselines={_lastEditorIntensityBaselines})");
@@ -596,7 +604,7 @@ namespace ArenaMapPort.Client
             {
                 if (!baseline.IsArtificialSun || baseline.Light == null) continue;
                 float multiplier = !cfg.Enabled.Value ? 1f : baseline.Light.type == LightType.Directional
-                    ? cfg.SunIntensityMultiplier.Value : cfg.GlobalLightIntensityMultiplier.Value;
+                    ? cfg.SunIntensity : cfg.GlobalLightIntensityMultiplier.Value;
                 float target = baseline.Intensity * multiplier * factor;
                 ApplyArtificialSun(baseline, target);
                 Plugin.Log.LogInfo($"[ArenaMapPort][NightSun] {map.Key}/{baseline.Light.name}: " +

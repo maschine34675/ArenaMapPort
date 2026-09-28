@@ -1,0 +1,58 @@
+using ArenaMapPort.Client;
+using BepInEx.Configuration;
+
+// Exercise real BepInEx load/bind/save/reload, using only an isolated temporary file.
+string path = Path.Combine(Path.GetTempPath(), $"ArenaMapPort-config-check-{Guid.NewGuid():N}.cfg");
+try
+{
+    File.WriteAllText(path, """
+        [Logging]
+        Verbose = true
+        [Lighting (arena_equator)]
+        CoverMinHeight = 9
+        AuthoredRainCover = false
+        AmbientIntensity = 0.25
+        DefaultsRevision = 4
+        VertexGroundDiffuseMultiplier = 2
+        SunIntensityMultiplier = 0.72
+        [Lighting (arena_bay5)]
+        SunIntensityMultiplier = 6
+        SunColorWhiteBlend = 0.8
+        VertexGroundDiffuseMultiplier = 1.4
+        [LightingLab (arena_equator)]
+        AmbientCustomIntensity = 3
+        [LightingLab (arena_bay5)]
+        SunIntensityMultiplier = 0.6
+        [Lighting (arena_bowl)]
+        ReflectionIntensity = 0.43
+        [Future category]
+        PreserveMe = future-value
+        """);
+    var config = new ConfigFile(path, false) { SaveOnConfigSet = false };
+    var ambient = config.Bind("Lighting (arena_equator)", "AmbientIntensity", 0.85f);
+    var revision = config.Bind("Lighting (arena_equator)", "DefaultsRevision", 0);
+    // A live entry must win even if its name is on the retired list.
+    var live = config.Bind("Lighting (arena_equator)", "CoverMinHeight", 2.2f);
+    Check(RetiredConfiguration.RemoveSavedEntries(config) == 6, "Exactly six unbound retired keys must be removed");
+    Check(RetiredConfiguration.RemoveSavedEntries(config) == 0, "Cleanup must be idempotent");
+    Check(ambient.Value == 0.25f && revision.Value == 4 && live.Value == 9f, "Bound values and migration state changed");
+    var reload = new ConfigFile(path, false) { SaveOnConfigSet = false };
+    Check(reload.Bind("Lighting (arena_equator)", "AmbientIntensity", -1f).Value == 0.25f, "Saved tuning lost");
+    Check(reload.Bind("Lighting (arena_equator)", "DefaultsRevision", -1).Value == 4, "Saved migration marker lost");
+    Check(reload.Bind("Lighting (arena_equator)", "SunIntensityMultiplier", -1f).Value == 0.72f, "Equator sun lost");
+    Check(reload.Bind("Lighting (arena_bay5)", "VertexGroundDiffuseMultiplier", -1f).Value == 1.4f, "Bay5 ground lost");
+    Check(reload.Bind("LightingLab (arena_bay5)", "SunIntensityMultiplier", -1f).Value == 0.6f, "Real sun lost");
+    Check(reload.Bind("Lighting (arena_bowl)", "ReflectionIntensity", -1f).Value == 0.43f, "Hidden map tuning lost");
+    Check(reload.Bind("Future category", "PreserveMe", "missing").Value == "future-value", "Unknown orphan lost");
+    Check(reload.Bind("Logging", "Verbose", false).Value == false, "Retired key survived save/reload");
+    Console.WriteLine("CONFIG_RETIREMENT_OK: scoped removal, saved values, unknown orphans, live entries and repeat cleanup");
+}
+finally
+{
+    File.Delete(path);
+}
+
+static void Check(bool condition, string message)
+{
+    if (!condition) throw new InvalidOperationException(message);
+}

@@ -39,6 +39,8 @@ namespace ArenaMapPort.Client
             _installed = true;
             foreach (var map in ArenaMapRegistry.All)
             {
+                // Equator v5 has no layered-ground shader targets. Bay5 and other maps retain the control.
+                if (map == ArenaMapRegistry.Equator) continue;
                 var setting = Plugin.Instance.Config.Bind($"Lighting ({map.Key})", "VertexGroundDiffuseMultiplier", 1f,
                     new ConfigDescription("Diffuse brightness of layered ground materials. 1 preserves the original. " +
                         "Changes only the RGB layer tints of Custom/Vert Paint Shader Solid; leaves reflections, " +

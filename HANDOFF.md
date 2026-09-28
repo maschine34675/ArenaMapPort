@@ -3,6 +3,32 @@
 Snapshot for whoever continues (human or agent). Verify the commits named here against `git log`; this file
 is updated by hand at each handover, it is not an automatic record. Read [AGENTS.md](AGENTS.md) first.
 
+## State on 2026-09-28 — configuration cleanup
+
+Branch `cleanup/obsolete-config-options`, based on `695bb5e`. All 39 config-binding
+classes audited. Removed 46 ineffective entries (10 formerly visible): old rain
+cover flags/threshold, inert custom ambient intensity, nonexistent Bay5 authored
+sun controls, nonexistent Equator layered-ground control, and unused Verbose.
+Internal default revisions remain stored but hidden. Functional fallback controls
+stay, with clearer descriptions. See [config-cleanup.md](docs/progress/config-cleanup.md).
+
+Startup cleanup removes only explicitly retired orphaned entries through the
+plugin's own BepInEx Config.Save. GPU-2 comparison: 911 -> 865 saved assignments;
+all 865 remaining values identical. Bound entries 811 -> 765 after lazy audio
+binding; Equator 67 -> 63, Bay5 64 -> 59. User light/audio tuning is preserved.
+
+Client SHA256 `AEDD90206509B7B3A1278B48286D090D2E6D7BB47F8B94F3087DF653FFBF33EA`.
+GPU-2 `55e2916a`, 20:16–20:21 CEST: exact loaded build, both botless raids,
+roof/cover/shadow/flare/decal checks, no ArenaMapPort warnings/errors. Returned to
+MainMenu. Clean Release build; BepInEx cleanup integration check, 479 Python tests
+(28 expected skips), 397 .NET server tests and distribution validation passed.
+No Unity rebuild; accepted v5 inputs remain current. Saved-key cleanup runs on
+game startup, so the user's own install needs an EFT restart.
+
+Both sanctioned deployments completed; independent hashes match all 103 staged
+files in each install. Vanilla config untouched by deployment, pending its next
+game startup for automatic saved-key retirement. GPU control is free.
+
 ## State on 2026-09-28 — lighting follow-up
 
 Branch `fix/lighting-controls-shadows`, based on `432d22b`. New per-map
