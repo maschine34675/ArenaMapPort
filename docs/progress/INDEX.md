@@ -8,6 +8,9 @@ dated state in one screen; read it before this index if you only have a minute.
 
 ## Current — read these for the area you touch
 
+- [bay5-water.md](bay5-water.md) — source harbor water textures/settings on the native deferred renderer,
+  night/day comparison, shader-mask-based puddle footsteps and historical investigation (2026-09-28).
+
 - [native-decals.md](native-decals.md) — original projection decals on Equator and Bay5,
   source material recovery, native renderer lifecycle and atlas-coordinate validation (2026-09-27).
 

@@ -171,6 +171,21 @@
     <Copy SourceFiles="@(ArenaMapPortAiSidecar)" DestinationFolder="$(ArenaMapPortDistDir)\ai" SkipUnchangedFiles="false" />
   </Target>
 
+  <!-- Original native water settings and raw mip chains; generated from the user's Arena install.
+       Data stays in ignored work/dist. Small enough to stage without rebuilding the scene bundles. -->
+  <Target Name="ArenaMapPortStageWater" AfterTargets="ArenaMapPortDistCopy" Condition="'$(Configuration)'=='Release'">
+    <PropertyGroup>
+      <ArenaMapPortWaterDir>$(MSBuildThisFileDirectory)..\work\extract\bay5-water</ArenaMapPortWaterDir>
+    </PropertyGroup>
+    <ItemGroup>
+      <ArenaMapPortWaterFile Include="$(ArenaMapPortWaterDir)\water.json" />
+      <ArenaMapPortWaterFile Include="$(ArenaMapPortWaterDir)\textures\foam.bin;$(ArenaMapPortWaterDir)\textures\normals.bin;$(ArenaMapPortWaterDir)\textures\normalsDetails.bin;$(ArenaMapPortWaterDir)\textures\rippleTexture.bin" />
+    </ItemGroup>
+    <Error Condition="!Exists('%(ArenaMapPortWaterFile.Identity)')" Text="Missing native water input %(ArenaMapPortWaterFile.Identity); run tools/extract/extract_water.py" />
+    <Copy SourceFiles="$(ArenaMapPortWaterDir)\water.json" DestinationFolder="$(ArenaMapPortDistDir)\water\arena_bay5" />
+    <Copy SourceFiles="$(ArenaMapPortWaterDir)\textures\foam.bin;$(ArenaMapPortWaterDir)\textures\normals.bin;$(ArenaMapPortWaterDir)\textures\normalsDetails.bin;$(ArenaMapPortWaterDir)\textures\rippleTexture.bin" DestinationFolder="$(ArenaMapPortDistDir)\water\arena_bay5\textures" />
+  </Target>
+
   <!--
     §B.WP2.8's own words: "Output written to work/build/ ..., then copied into
     dist/BepInEx/plugins/ArenaMapPort/bundles/ by a deploy step WP4 owns." This is that step, run after

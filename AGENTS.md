@@ -216,7 +216,17 @@ the log; the user uses it to point at things.
   2026-09-27 — schema 1 left 1 m at the lamp and Equator's atrium floodlights went dark whenever the lamp left the view).
 - Footsteps: EFT picks the step sound from the `BallisticCollider` material under one downward raycast (layers
   Terrain/HighPolyCollider/TransparentCollider/Water); Arena's puddle decals have no collider at all, so they sound
-  like the floor beneath (before the 2026-09-22 ballistics import every surface sounded like concrete).
+  like the floor beneath without an explicit mapping. `PuddleFootstepRepairs` now maps Bay5's reviewed water
+  material to the native Puddle audio set using actual mesh triangles, UVs and shader red-channel coverage;
+  dry holes and oil are excluded. Never use texture alpha or whole quad bounds as the wet footprint, and never
+  unconditionally linearize the mask (this EFT project uses Gamma). F10 logs native/result surfaces and clip
+  examples. Historical packages showed no lost water collider; the user's earlier sound remains unexplained.
+- Harbor water: Bay5 now translates the source WaterContainer settings to native `WaterForSSRv3`, using
+  `work/extract/bay5-water` (regenerate with `tools/extract/extract_water.py`). The four original raw texture mip
+  chains and water.json stage with client builds, including DllOnly. They are BSG-derived and must stay ignored.
+  Do not assign Hidden/WaterForSSR as an ordinary mesh material: its two passes need the native deferred renderer.
+  Dispose captured command buffers explicitly after native OnDisable; native cleanup only detaches them.
+  See `docs/progress/bay5-water.md` for source, controls and host evidence.
 - Static projection decals: original material pointers live on the native component, not MeshRenderer.
   Arena's serialized field order differs from EFT: LastTexSize precedes the material pointer. The importer
   rescales pixel corners against the actual target texture, retaining normalized atlas regions. Rebind

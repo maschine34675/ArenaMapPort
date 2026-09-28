@@ -125,6 +125,8 @@ namespace ArenaMapPort.Client
             DecalRepairs.Install();
             NativeDecalRepairs.Install();
             SeaPlaceholderRepairs.Install();
+            NativeWaterRepairs.Install();
+            PuddleFootstepRepairs.Install(_harmony);
             DaytimeVisualsProbe.Install();
 
             // docs/progress/shader-compat-and-inspector.md §b — F10 live diagnostic hotkey (any map, no

@@ -96,6 +96,9 @@ namespace ArenaMapPort.Client
             try
             {
                 Bay5AmbientAudio.Probe();
+                NativeWaterRepairs.Probe();
+                FootstepSurfaceProbe.Probe();
+                PuddleFootstepRepairs.Probe();
                 Camera cam = ResolveActiveCamera();
                 if (cam == null)
                 {

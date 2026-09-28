@@ -36,6 +36,17 @@ public sealed class Bay5MapTests
     }
 
     [Fact]
+    public void PuddleWaterMaterialsMatchTheSidecarAndRemainBay5Only()
+    {
+        using var doc = JsonDocument.Parse(File.ReadAllText(Sidecar("bay5.json")));
+        var names = doc.RootElement.GetProperty("puddle_water_material_names").EnumerateArray().Select(e => e.GetString()).ToArray();
+        Assert.Equal(new[] { "70f045bb011600e7" }, names); // Original "puddle indoor static", not oil decals.
+        Assert.Equal(names, ArenaMapRegistry.Bay5.PuddleWaterMaterialNames);
+        foreach (var map in ArenaMapRegistry.All.Where(m => m != ArenaMapRegistry.Bay5))
+            Assert.Empty(map.PuddleWaterMaterialNames);
+    }
+
+    [Fact]
     public void BackgroundIsOwnedButExcludedFromGameplayWeatherClassification()
     {
         using var doc = JsonDocument.Parse(File.ReadAllText(Sidecar("bay5.json")));

@@ -74,6 +74,7 @@ namespace ArenaMapPort.Shared
         public string[] OpenedBarriers { get; }     // hierarchy paths of static scene objects whose non-frame parts are deactivated
                                                     // at raid start (Arena's round barriers that close a spawn area); empty = none
         public string[] RestoredShadowCasterRoots { get; } // exact active LOD roots with source-disabled shadow proxies to restore
+        public string[] PuddleWaterMaterialNames { get; } // exact imported water-puddle material names; excludes oil decals
         public int? FixedDayHour { get; }
         public int? FixedNightHour { get; }
         public bool UsesFixedStartTimes => FixedDayHour.HasValue && FixedNightHour.HasValue;
@@ -111,7 +112,8 @@ namespace ArenaMapPort.Shared
             int? FixedDayHour = null,
             int? FixedNightHour = null,
             string? SunScene = null,
-            string[]? SunPaths = null)
+            string[]? SunPaths = null,
+            string[]? PuddleWaterMaterialNames = null)
 #nullable restore
         {
             this.Key = Key;
@@ -137,6 +139,7 @@ namespace ArenaMapPort.Shared
             this.FixedNightHour = FixedNightHour;
             this.SunScene = SunScene ?? string.Empty;
             this.SunPaths = SunPaths ?? new string[0];
+            this.PuddleWaterMaterialNames = PuddleWaterMaterialNames ?? new string[0];
         }
 
         public bool IsBackgroundScene(string sceneName) =>
@@ -254,6 +257,11 @@ namespace ArenaMapPort.Shared
                 // Source level84 object25426: all three ShadowsOnly children are inactive,
                 // while the visible LODs have casting Off. User report 2026-09-23 06:43.
                 "SBG_Arena_Bay5_Main/SOO/PROPS/Military_sandbag_barrier_03",
+            },
+            PuddleWaterMaterialNames: new[]
+            {
+                // Original "puddle indoor static" material; oil decals share the shader but are not water.
+                "70f045bb011600e7",
             },
             Dust: new ArenaDustDescriptor("Arena_Bay5_Light", "DUST", 0.07f, 0.04f, 1, 0.0f,
                 99.63274383544922f, -1.5299997329711914f, 30.428937911987305f,

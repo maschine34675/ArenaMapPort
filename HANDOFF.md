@@ -3,6 +3,41 @@
 Snapshot for whoever continues (human or agent). Verify the commits named here against `git log`; this file
 is updated by hand at each handover, it is not an automatic record. Read [AGENTS.md](AGENTS.md) first.
 
+## State on 2026-09-28 — Bay5 harbor water and puddle footsteps
+
+Branch `feature/bay5-water`, based on the accepted native-decals build `17e3d91`.
+Bay5's white night harbor was the old bare SimpleWater4 placeholder. The client
+now transfers original WaterContainer settings plus four raw texture mip chains
+to EFT's native deferred water renderer. Day/night live comparisons on GPU-2
+confirmed waves/reflections and appropriately dark night water. One owned renderer
+is cleaned up completely on toggle and raid unload; original state is restored.
+
+Bay5's reviewed water-puddle material now selects native Puddle footsteps using
+its real triangle/UV/red-channel mask. No new collider or audio file is created.
+Dry holes, oil and other base materials remain unchanged. Current historical
+comparison found no lost water collider; the earlier perceived sound change is
+not conclusively explained. GPU-2 confirmed actual walk_puddle/sprint_puddle banks
+on wet points, Concrete on dry points, and Soil/Metal preservation. Rain alone
+still chose Concrete when the new translation was switched off.
+
+New F12 controls: `Water (arena_bay5) / NativeHarborWater` and `PuddleFootsteps`,
+both true and live. F10 includes water lifecycle and detailed footstep diagnostics.
+Current v5 scene bundles are retained. Additional input is ignored
+`work/extract/bay5-water`, regenerated with `tools/extract/extract_water.py` and
+staged even on DllOnly builds. Do not commit its BSG-derived settings/textures.
+
+Final client SHA256 `A0BE94D2F86319CAD390C2238421B2A61072538C8E10999C8C08F90D916F4440`.
+Build: no client warnings/errors. Tests: Python 425 (28 skipped), server 396 passed.
+GPU-2 process `8afea561`: repeated Bay5 raids, live off/on, then Equator smoke test
+with unchanged native Concrete bank and no new errors. Visual quality and actual
+sound-bank selection verified; subjective listening remains for the user.
+
+Saved Clear weather and Bay5 legacy hour 0 restored. Both new switches stay true.
+Both installs received 91 staged files, all independently hash-matched. GPU-2
+is in MainMenu with control free; last raid health 440/440. Restart Vanilla's
+game/server before testing. No scene bundle rebuild was needed for this change.
+See [bay5-water.md](docs/progress/bay5-water.md) for final host/menu/deploy evidence.
+
 ## State on 2026-09-28 (00:28) — native projection decals on both release maps
 
 Branch `feature/native-decals`. The original StaticDeferredDecal material references are
