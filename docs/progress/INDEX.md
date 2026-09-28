@@ -8,6 +8,9 @@ dated state in one screen; read it before this index if you only have a minute.
 
 ## Current — read these for the area you touch
 
+- [spatial-audio.md](spatial-audio.md) — original Equator/Bay5 acoustic rooms, portals and propagation
+  bakes, native attenuation and room tones; reverb/blending boundary (2026-09-28).
+
 - [bay5-water.md](bay5-water.md) — source harbor water textures/settings on the native deferred renderer,
   night/day comparison, shader-mask-based puddle footsteps and historical investigation (2026-09-28).
 

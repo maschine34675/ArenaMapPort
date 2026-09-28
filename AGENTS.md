@@ -111,6 +111,13 @@ components; v4 lacks native projection decals. Do not rebuild either accepted ma
 Bay5 uses its v5 package with `-FullMap`
 and `-OutputDir D:/ArenaMapPort/work/build/bay5`. Always give `-MapDescriptor` an absolute
 path: Unity resolves relative descriptor paths from its project directory.
+
+Native spatial acoustics use separate ignored `work/extract/spatial-audio/<map>` inputs, regenerated
+by `python tools/extract/extract_spatial_audio.py`. Release/DllOnly builds require and stage their
+graph JSON, original bake and room-tone WAV. Do not rebuild scene bundles for this runtime graph port.
+The native loader needs portal endpoints wired before room initialization; `RoutesDataCount` counts
+pair ranges, not individual routes. Start room tones only after `GameStatus.Started` or the raid audio
+reset stops them. See [spatial-audio.md](docs/progress/spatial-audio.md).
 `-FullMap` also regenerates that map's base.json and preset from the sidecars; to regenerate only base.json
 after a sidecar change, add `-SkipUnityBuild` (reuses the bundles). For Equator, base.json is regenerated
 with `python tools/server/make_base_json.py` (see its header for the arguments).

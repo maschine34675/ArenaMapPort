@@ -171,8 +171,21 @@
     <Copy SourceFiles="@(ArenaMapPortAiSidecar)" DestinationFolder="$(ArenaMapPortDistDir)\ai" SkipUnchangedFiles="false" />
   </Target>
 
-  <!-- Original native water settings and raw mip chains; generated from the user's Arena install.
-       Data stays in ignored work/dist. Small enough to stage without rebuilding the scene bundles. -->
+  <!-- Original acoustic graph, bake and room tones; generated from the user's Arena install.
+       Source-derived data stays in ignored work/dist and is staged without a scene rebuild. -->
+  <Target Name="ArenaMapPortStageAcoustics" AfterTargets="ArenaMapPortDistCopy" Condition="'$(Configuration)'=='Release'">
+    <PropertyGroup>
+      <ArenaMapPortAcousticsDir>$(MSBuildThisFileDirectory)..\work\extract\spatial-audio</ArenaMapPortAcousticsDir>
+    </PropertyGroup>
+    <Error Condition="!Exists('$(ArenaMapPortAcousticsDir)\arena_equator\spatial-audio.json') Or !Exists('$(ArenaMapPortAcousticsDir)\arena_bay5\spatial-audio.json')"
+           Text="Missing native acoustic input; run tools/extract/extract_spatial_audio.py" />
+    <ItemGroup>
+      <ArenaMapPortAcousticFile Include="$(ArenaMapPortAcousticsDir)\**\spatial-audio.json;$(ArenaMapPortAcousticsDir)\**\source.audiobakedata;$(ArenaMapPortAcousticsDir)\**\*.wav" />
+    </ItemGroup>
+    <Copy SourceFiles="@(ArenaMapPortAcousticFile)" DestinationFiles="@(ArenaMapPortAcousticFile->'$(ArenaMapPortDistDir)\acoustics\%(RecursiveDir)%(Filename)%(Extension)')" />
+  </Target>
+
+  <!-- Original native water settings and raw mip chains; generated from the user's Arena install. -->
   <Target Name="ArenaMapPortStageWater" AfterTargets="ArenaMapPortDistCopy" Condition="'$(Configuration)'=='Release'">
     <PropertyGroup>
       <ArenaMapPortWaterDir>$(MSBuildThisFileDirectory)..\work\extract\bay5-water</ArenaMapPortWaterDir>

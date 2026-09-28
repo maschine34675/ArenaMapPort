@@ -431,7 +431,8 @@ namespace ArenaMapPort.Client
             }
 
             var prefix = AccessTools.Method(typeof(SpatialAudioInitSkipPrefix), "Prefix");
-            harmony.Patch(target, prefix: new HarmonyMethod(prefix));
+            var postfix = AccessTools.Method(typeof(SpatialAudioInitSkipPrefix), "Postfix");
+            harmony.Patch(target, prefix: new HarmonyMethod(prefix), postfix: new HarmonyMethod(postfix));
             Plugin.Log.LogInfo("[ArenaMapPort][Harmony] patched SpatialAudioSystem.Initialize (impl-raidstart-repairs 1b)");
         }
 

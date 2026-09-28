@@ -126,6 +126,8 @@ namespace ArenaMapPort.Client
             NativeDecalRepairs.Install();
             SeaPlaceholderRepairs.Install();
             NativeWaterRepairs.Install();
+            NativeSpatialAudio.Install(_harmony);
+            SpatialAudioProbe.Install(_harmony);
             PuddleFootstepRepairs.Install(_harmony);
             DaytimeVisualsProbe.Install();
 

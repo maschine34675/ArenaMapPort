@@ -9,59 +9,11 @@ using UnityEngine;
 namespace ArenaMapPort.Client
 {
     /// <summary>
-    /// impl-raidstart-repairs item (1). Fixes the observed, confirmed crash: <c>SpatialAudioSystem
-    /// .Initialize</c> aborts <c>TarkovApplication.LoadMapAndData</c> with an NRE because our scenes
-    /// carry no <c>SpatialAudioSystem</c> component, forcing BSG's own fallback path
-    /// (<c>CreateSpatialAudioSystem</c>) whose <c>OcclusionSettings</c> field is never assigned.
-    ///
-    /// DECISION (task brief asked for one, with decompiled evidence): SKIP <c>Initialize</c>'s body
-    /// entirely on our map, rather than assigning <c>OcclusionSettings</c> and letting the "real" init
-    /// run against BSG's own <c>SpatialAudioLocationInfo/empty_info</c> fallback asset. Evidence for
-    /// skip over real-init, all from <c>D:/SPT41/Development/_decompiled</c>:
-    ///   - Fixing only <c>OcclusionSettings</c> (the observed crash, <c>SpatialAudioSystem.cs:184-195</c>
-    ///     <c>method_0</c>) does not make <c>Initialize</c> safe to run to completion: the very next
-    ///     statement after the fixed call constructs a <c>SpatialAudioDataLoader</c>
-    ///     (<c>SpatialAudioSystem.cs:152-153</c>) whose <c>LoadDataAsync</c>
-    ///     (<c>SpatialAudioDataLoader.cs:83-107</c>) reads a bake file from
-    ///     <c>Path.Combine(Application.streamingAssetsPath, _locationInfo.relativeBakeDataPath)</c> via a
-    ///     coroutine-driven <c>AudioBakeDataSerializer.ReadAndWriteToDataContainerAsync</c> call whose
-    ///     behaviour for the "empty_info" bake path we do not ship and have never inspected is untested.
-    ///     That whole sequence sits on the exact same unguarded, no-try/catch await chain
-    ///     (<c>EFT/TarkovApplication.cs:2779-2790</c>) that produced the crash we are fixing — any
-    ///     surprise there (a missing file, a disposed container, a path-resolution quirk under our
-    ///     plugin's own bundle-serving setup) reproduces the identical "raid aborts" symptom, just moved
-    ///     one step later and harder to diagnose.
-    ///   - The skip path is exactly what ManimalIcebreaker (MIT, `danauraborealis`, same 0.16.9.5 build)
-    ///     ships and has tested in production for a from-scratch scene set with no acoustics sidecar
-    ///     data (`RaidFixPatches.cs`'s `Patch_SpatialAudioInit`, "staging unavailable" branch) — which is
-    ///     our exact situation (audio explicitly out of scope, no bake data authored).
-    ///   - Every consumer of <c>SpatialAudioSystem</c> that matters for "raid runs cleanly" already
-    ///     gates on the static <c>Initialized</c> flag BSG's own code maintains
-    ///     (<c>CanUpdate</c> at <c>SpatialAudioSystem.cs:107-117</c>, used by both <c>Update()</c> and
-    ///     <c>LateUpdate()</c>) — so leaving <c>Initialized=false</c> for the whole raid makes those two
-    ///     MonoBehaviour callbacks safe no-ops automatically, with no patch needed. TWO public entry
-    ///     points do NOT check <c>Initialized</c> themselves (corrected — a fix-raidstart review found
-    ///     the second one; this comment previously claimed there was only one):
-    ///     <c>ProcessSourceOcclusion</c> (all 3 overloads, routed through on every gunshot/impact via
-    ///     <c>BetterAudio.PlayAtPoint</c>; see <see cref="SpatialAudioOcclusionGuard"/>) and
-    ///     <c>ProcessInteractiveObjectOcclusion</c> (<c>SpatialAudioSystem.cs:554-557</c>, called from
-    ///     <c>WorldInteractiveObject.ProcessOcclusion</c> — doors/switches/levers — and
-    ///     <c>WindowBreaker</c> — breakable glass; dereferences <c>_interactiveObjectOccluder</c>, which
-    ///     is assigned only inside <c>Initialize</c>'s real body and so stays null forever on our map;
-    ///     see <see cref="SpatialAudioInteractiveOcclusionGuard"/>). Dormant on this milestone — the
-    ///     extraction pipeline authors no <c>WorldInteractiveObject</c>/<c>WindowBreaker</c> instances
-    ///     yet — but guarded now so the next milestone that adds doors/interactives doesn't NRE.
-    ///
-    /// We still perform the defensive null-safety this task's item (1) literally asks for
-    /// (<see cref="SpatialAudioCreateDefaultsPostfix"/>) as cheap insurance — it is a no-op in practice
-    /// once the skip prefix below is in place (Initialize's body, where those fields would be read,
-    /// never runs on our map), but keeps the object internally consistent if anything ever calls
-    /// Initialize a second time or reads the fields directly.
-    ///
-    /// All gated on <see cref="ArenaMapRaid.IsLoaded()"/> — valid at both hook points: scenes are
-    /// loaded (per <c>TarkovApplication.LoadMapAndData</c>'s own sequence, confirmed by the audit —
-    /// <c>LoadScenesFromPresetOperation</c> completes before <c>SpatialAudioSystem.Initialize</c> is
-    /// even reached) whenever either patch below can fire.
+    /// Supply native defaults for EFT's fallback SpatialAudioSystem factory. The owned Equator/Bay5
+    /// graphs now permit real initialization through NativeSpatialAudio; other ported maps, disabled
+    /// acoustics, and rejected packages retain the original uninitialized fallback. Keep source and
+    /// interactive entry points guarded because vanilla calls them even while initialization is off.
+    /// See docs/progress/spatial-audio.md for source compatibility and GPU acceptance.
     /// </summary>
     internal static class SpatialAudioCreateDefaultsPostfix
     {
@@ -97,23 +49,33 @@ namespace ArenaMapPort.Client
         // .LoadMapAndData:2789, `await ....Initialize(cancellationToken)`) a null Task -> NRE at the
         // await, turning this fix into the very crash it prevents. `ref Task __result` +
         // `Task.CompletedTask` supplies an already-completed Task instead.
-        internal static bool Prefix(ref Task __result)
+        internal static bool Prefix(SpatialAudioSystem __instance, ref CancellationToken token,
+            ref Task __result, out NativeSpatialAudio.State __state)
         {
+            __state = null;
             if (!ArenaMapRaid.IsLoaded())
             {
                 return true; // vanilla behaviour for every other map's raid
             }
 
+            if (NativeSpatialAudio.Prepare(__instance, ref token, out __state)) return true;
+
             __result = Task.CompletedTask;
             SpatialAudioSystem.Initialized = false; // explicit: this is the invariant every other guard relies on
             Plugin.Log.LogInfo("[ArenaMapPort][RaidFix] skipped SpatialAudioSystem.Initialize " +
-                                "(no acoustics bake/sidecar data for this spike — SPEC: audio out of scope)");
+                                "(native acoustics disabled or no accepted source package for this map)");
             return false; // skip original body entirely
+        }
+
+        internal static void Postfix(ref Task __result, NativeSpatialAudio.State __state)
+        {
+            if (__state != null && __state.Ready)
+                __result = NativeSpatialAudio.ObserveInitialization(__result, __state);
         }
     }
 
     /// <summary>
-    /// Follow-up to the Initialize skip above: with <c>Initialized</c> permanently false on our map,
+    /// Guard the Initialize fallback above: while <c>Initialized</c> is false on an owned map,
     /// every <c>ProcessSourceOcclusion</c> overload would otherwise NRE on its first use of
     /// <c>_containerData</c>/<c>ListenerTransform</c> (only ever assigned inside the now-skipped
     /// <c>Initialize</c> body) — and this method runs on every gunshot/impact sound via

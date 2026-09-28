@@ -96,6 +96,7 @@ namespace ArenaMapPort.Client
             try
             {
                 Bay5AmbientAudio.Probe();
+                NativeSpatialAudio.Probe();
                 NativeWaterRepairs.Probe();
                 FootstepSurfaceProbe.Probe();
                 PuddleFootstepRepairs.Probe();

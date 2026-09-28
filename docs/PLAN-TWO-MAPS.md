@@ -404,7 +404,11 @@ custom client overlay (own Canvas/Image on the preloader) — M, optional polish
 - **Flares (`MultiFlare.FlareLight`, 28/25) and their per-flare scale/color/distance data** — same shape of
   problem: the private `Flare[]` payload is unrecoverable and no sibling Light/Renderer exists to infer it
   from.
-- **Full spatial-audio room/portal import (audio Spike B "Plan B")** — Large effort, unverified importer path
+- **Spatial-audio room/portal import — implemented 2026-09-28.** Original rooms, portals, trigger
+  volumes, bake files and room tones now drive native initialization on both maps. Rooted plugin-local
+  bake paths work with EFT's loader. Room-dependent mixer reverb and outdoor ambience blending remain
+  separate work. See [spatial-audio.md](progress/spatial-audio.md). Historical assessment follows:
+  **Full spatial-audio room/portal import (audio Spike B "Plan B")** — Large effort, unverified importer path
   for an entire additional scene subtree, and produces **zero audible change** without also flipping
   `SpatialAudioInitSkipPrefix` back on (currently a deliberate skip, not just missing data, per
   `SpatialAudioRepairs.cs`). The narrower "Plan A" (ship the real `.audiobakedata` + a `LocationInfo` object,
