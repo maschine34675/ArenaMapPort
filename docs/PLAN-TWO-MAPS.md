@@ -449,3 +449,17 @@ custom client overlay (own Canvas/Image on the preloader) — M, optional polish
    everything in §1 is done. Until then `dist/` + `deploy-to-spt.ps1` remain the only delivery; §2 runs after
    item 8.
 3. **Answered by 2:** the cut line is "everything in §1".
+
+
+## Follow-up 2026-09-28 — MultiFlare recovered
+
+The deferred MultiFlare assessment in section 3 is superseded. Every original
+FlareLight is fully readable and independently checked with a source bundle type
+tree. Equator restores 25 active lights / 33 elements; Bay5 restores 24 / 111.
+Original inactive objects remain inactive. Source textures, atlas rectangles and
+material settings feed isolated native EFT rendering; global weapon lights and
+camera-wide anamorphic effects remain separate. Live switch: NativeMultiFlare in
+each map lighting section. Both maps passed visible/occluded A/B tests and repeat
+raid cleanup on GPU-2. One source-only settings scalar remains explicitly pinned
+to its observed value 1, without assigning an unverified meaning. Details and
+validation limits: [native-multiflare.md](progress/native-multiflare.md).

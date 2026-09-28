@@ -68,6 +68,10 @@
       <HintPath>$(EftManagedDir)\UnityEngine.dll</HintPath>
       <Private>false</Private>
     </Reference>
+    <Reference Include="Unity.Collections">
+      <HintPath>$(EftManagedDir)\Unity.Collections.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
     <Reference Include="Unity.TextMeshPro">
       <HintPath>$(EftManagedDir)\Unity.TextMeshPro.dll</HintPath>
       <Private>false</Private>
@@ -183,6 +187,25 @@
       <ArenaMapPortAcousticFile Include="$(ArenaMapPortAcousticsDir)\**\spatial-audio.json;$(ArenaMapPortAcousticsDir)\**\source.audiobakedata;$(ArenaMapPortAcousticsDir)\**\*.wav" />
     </ItemGroup>
     <Copy SourceFiles="@(ArenaMapPortAcousticFile)" DestinationFiles="@(ArenaMapPortAcousticFile->'$(ArenaMapPortDistDir)\acoustics\%(RecursiveDir)%(Filename)%(Extension)')" />
+  </Target>
+
+  <!-- Original map flares and raw source atlas; isolated native renderer, no scene rebuild. -->
+  <Target Name="ArenaMapPortStageMultiFlare" AfterTargets="ArenaMapPortDistCopy" Condition="'$(Configuration)'=='Release'">
+    <PropertyGroup>
+      <ArenaMapPortFlareDir>$(MSBuildThisFileDirectory)..\work\extract\multiflare</ArenaMapPortFlareDir>
+    </PropertyGroup>
+    <Error Condition="!Exists('$(ArenaMapPortFlareDir)\arena_equator\flares.json') Or !Exists('$(ArenaMapPortFlareDir)\arena_bay5\flares.json')"
+           Text="Missing original flare input; run tools/extract/extract_multiflare.py" />
+    <ItemGroup>
+      <ArenaMapPortFlareFile Include="$(ArenaMapPortFlareDir)\arena_equator\flares.json;$(ArenaMapPortFlareDir)\arena_equator\textures\*.bin">
+        <MapKey>arena_equator</MapKey>
+      </ArenaMapPortFlareFile>
+      <ArenaMapPortFlareFile Include="$(ArenaMapPortFlareDir)\arena_bay5\flares.json;$(ArenaMapPortFlareDir)\arena_bay5\textures\*.bin">
+        <MapKey>arena_bay5</MapKey>
+      </ArenaMapPortFlareFile>
+    </ItemGroup>
+    <Copy SourceFiles="@(ArenaMapPortFlareFile)" DestinationFiles="@(ArenaMapPortFlareFile->'$(ArenaMapPortDistDir)\flares\%(MapKey)\%(Filename)%(Extension)')" Condition="'%(ArenaMapPortFlareFile.Extension)'=='.json'" />
+    <Copy SourceFiles="@(ArenaMapPortFlareFile)" DestinationFiles="@(ArenaMapPortFlareFile->'$(ArenaMapPortDistDir)\flares\%(MapKey)\textures\%(Filename)%(Extension)')" Condition="'%(ArenaMapPortFlareFile.Extension)'=='.bin'" />
   </Target>
 
   <!-- Original native water settings and raw mip chains; generated from the user's Arena install. -->

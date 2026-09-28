@@ -85,6 +85,12 @@ authored particle meshes and native animation. Source-to-bundle checks and an Eq
 Equator native sequence passed on 2026-09-23, including visible motion and complete cleanup.
 See [dust acceptance](docs/progress/native-dust.md).
 
+**Original lamp flares on Equator and Bay5.** `Lighting (<map>) / NativeMultiFlare`
+restores the source per-lamp halos and lens effects (25/24 active lights), with
+native depth occlusion and a live on/off switch. Original inactive lights stay
+inactive. This is independent of the Equator anamorphic streak settings.
+See [MultiFlare recovery and native tests](docs/progress/native-multiflare.md).
+
 ## Terrain and runtime limits
 
 Customs, Shoreline and Woods contain seven real terrain heightfields. The converter preserves their height samples and holes and reconstructs the tiled 12-layer MicroSplat surface from source texture arrays, control maps, layer settings and height blending. All three terrain maps have passed the schema-2 full-map checks. Their live runtime validation remains pending.

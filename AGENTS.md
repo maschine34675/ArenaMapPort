@@ -122,6 +122,13 @@ Room-dependent ambient reverb adds `mixer_effects` to that same graph JSON. Keep
 its original 26-parameter table and detailed-type compatibility mapping together.
 EFT mutes Equator's original hall return; the client scopes its compatible routing
 to the imported ambient group only. See [room-reverb.md](docs/progress/room-reverb.md).
+
+Original per-light flares use ignored `work/extract/multiflare/<arena_map_key>` inputs.
+Generate each with `tools/extract/extract_multiflare.py --map <key> --output <dir>`.
+Release/DllOnly builds stage JSON plus two raw textures per map. The original Arena
+atlas differs from EFT's; keep it. NativeMultiFlare owns isolated native batches,
+never the global weapon-light manager. See `docs/progress/native-multiflare.md`.
+
 `-FullMap` also regenerates that map's base.json and preset from the sidecars; to regenerate only base.json
 after a sidecar change, add `-SkipUnityBuild` (reuses the bundles). For Equator, base.json is regenerated
 with `python tools/server/make_base_json.py` (see its header for the arguments).

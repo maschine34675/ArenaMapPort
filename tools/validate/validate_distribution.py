@@ -21,6 +21,23 @@ def validate():
     if len(keys) != len(set(keys)):
         raise ValueError('Duplicate descriptor keys')
     plugin = REPO/'dist/BepInEx/plugins/ArenaMapPort'
+    sys.path.insert(0, str(REPO/'tools/extract'))
+    from extract_multiflare import validate_graph
+    expected_flare_files = set()
+    for key in ('arena_equator', 'arena_bay5'):
+        flare_dir = plugin/'flares'/key
+        package = json.loads((flare_dir/'flares.json').read_text(encoding='utf-8'))
+        if package['map_key'] != key:
+            raise ValueError('Flare package map mismatch')
+        validate_graph(package)
+        expected_flare_files.add(f'{key}/flares.json')
+        for texture in package['textures']:
+            blob = (flare_dir/texture['file']).read_bytes()
+            if len(blob) != texture['byte_count'] or hashlib.sha256(blob).hexdigest() != texture['sha256']:
+                raise ValueError('Flare texture length/hash mismatch')
+            expected_flare_files.add(f'{key}/{texture["file"]}')
+    if {p.relative_to(plugin/'flares').as_posix() for p in (plugin/'flares').rglob('*') if p.is_file()} != expected_flare_files:
+        raise ValueError('Unexpected or missing flare package files')
     expected_bundles = {f'{key}_{kind}.bundle' for key in keys for kind in ('scenes','navmesh','preset')}
     actual_bundles = {p.name for p in (plugin/'bundles').iterdir() if p.is_file()}
     if actual_bundles != expected_bundles:

@@ -3,6 +3,33 @@
 Snapshot for whoever continues (human or agent). Verify the commits named here against `git log`; this file
 is updated by hand at each handover, it is not an automatic record. Read [AGENTS.md](AGENTS.md) first.
 
+## State on 2026-09-28 — original MultiFlare
+
+Branch `feature/native-multiflare`, based on accepted room-reverb `6164695`.
+Both maps now use original per-light flares: Equator 25 active lights / 33
+elements, Bay5 24 / 111. Original inactive lights stay inactive. New live
+`Lighting (<map>) / NativeMultiFlare=true` is independent of camera bloom/HDR.
+
+Ignored inputs: `work/extract/multiflare/arena_equator` and `arena_bay5`, generated
+by `tools/extract/extract_multiflare.py --map <key> --output <dir>`.
+Six files stage under plugin `flares/`, including the original BC7 atlas (EFT's
+atlas differs). No v5 bundle rebuild. Source provenance and the one pinned,
+semantically unidentified settings scalar are documented in the progress note.
+
+The native renderer owns separate storage/batches/camera buffers; it never resets
+the global weapon-light manager. F7 includes completed-frame native flare counts.
+Client SHA256 `856E40A9B0E06E8964C590AC8E1C0702DA2DA4C0C1466858ADC742F7CF2955EF`.
+Build 0 warnings/errors; 478 pipeline tests (28 expected skips); distribution
+validation passed. GPU-2 `236edef3`, 16:42–16:52 CEST: Equator -> Bay5 -> Equator,
+visible off/on, depth occlusion and all three raid cleanups passed. Empty native
+FlashLight batch works; no new flare exceptions. Optic/NVG/eyewear paths are
+source-reviewed but lack dedicated equipped visual comparisons.
+
+Both installs receive the tested 103-file package via the deploy helper. Final
+host state MainMenu / control free, all 23 plugin identities identical. Both
+flare toggles on; all prior 11 changed ArenaMapPort settings preserved. The
+user's own game needs a restart. See [native-multiflare.md](docs/progress/native-multiflare.md).
+
 ## State on 2026-09-28 — room-dependent ambient reverb
 
 Branch `feature/room-reverb`, based on spatial-acoustics commit `0b841c1`.

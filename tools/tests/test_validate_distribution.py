@@ -1,5 +1,6 @@
 """Distribution discovery must ignore map sidecars without hiding broken maps."""
 from contextlib import redirect_stdout
+import hashlib
 import io
 import json
 from pathlib import Path
@@ -12,7 +13,9 @@ from unittest.mock import patch
 
 REPO = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO / "tools" / "validate"))
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 import validate_distribution as distribution
+from test_multiflare_extraction import graph as flare_graph
 
 
 class DistributionSidecarTests(unittest.TestCase):
@@ -30,6 +33,19 @@ class DistributionSidecarTests(unittest.TestCase):
         for kind in ("scenes", "navmesh", "preset"):
             (bundles / f"arena_equator_{kind}.bundle").write_bytes(b"fixture bundle")
         (self.plugin / "material-shaders.json").write_text("{}", encoding="utf-8")
+        for key, scene in (("arena_equator", "Arena_Equator_Lighting"),
+                           ("arena_bay5", "Arena_Bay5_Light")):
+            package = flare_graph()
+            package["map_key"] = key
+            package["lights"][0]["scene"] = scene
+            flare_dir = self.plugin / "flares" / key
+            for texture in package["textures"]:
+                blob = b"\x7a" * texture["byte_count"]
+                texture["sha256"] = hashlib.sha256(blob).hexdigest()
+                texture_path = flare_dir / texture["file"]
+                texture_path.parent.mkdir(parents=True, exist_ok=True)
+                texture_path.write_bytes(blob)
+            (flare_dir / "flares.json").write_text(json.dumps(package), encoding="utf-8")
         self.server = self.repo / "dist/SPT_Runtime/user/mods/ArenaMapPort"
         for folder in (self.server / "db", self.repo / "ArenaMapPort.Server/db"):
             folder.mkdir(parents=True)
@@ -79,6 +95,31 @@ class DistributionSidecarTests(unittest.TestCase):
         (self.maps / "equator.bots.json").write_text("{}", encoding="utf-8")
         (self.plugin / "bundles/unregistered_scenes.bundle").write_bytes(b"unexpected")
         with self.assertRaisesRegex(ValueError, "Bundle set mismatch"):
+            self.validate()
+
+    def test_distribution_rejects_missing_flare_files_or_texture_hash(self):
+        flare_dir = self.plugin / "flares/arena_equator"
+        package_path = flare_dir / "flares.json"
+        for path in (package_path, flare_dir / "textures/test.bin"):
+            with self.subTest(missing=path.name):
+                original = path.read_bytes()
+                path.unlink()
+                try:
+                    with self.assertRaises(FileNotFoundError):
+                        self.validate()
+                finally:
+                    path.write_bytes(original)
+        package = json.loads(package_path.read_text(encoding="utf-8"))
+        del package["textures"][0]["sha256"]
+        package_path.write_text(json.dumps(package), encoding="utf-8")
+        with self.assertRaisesRegex(KeyError, "sha256"):
+            self.validate()
+
+    def test_distribution_rejects_same_length_modified_flare_texture(self):
+        texture_path = self.plugin / "flares/arena_bay5/textures/test.bin"
+        blob = texture_path.read_bytes()
+        texture_path.write_bytes(bytes([blob[0] ^ 1]) + blob[1:])
+        with self.assertRaisesRegex(ValueError, "Flare texture length/hash mismatch"):
             self.validate()
 
 

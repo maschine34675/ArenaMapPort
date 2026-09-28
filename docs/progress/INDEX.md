@@ -8,6 +8,9 @@ dated state in one screen; read it before this index if you only have a minute.
 
 ## Current — read these for the area you touch
 
+- [native-multiflare.md](native-multiflare.md) — original Equator/Bay5 lamp sprites,
+  source atlas, isolated native rendering and visible/occluded off/on comparisons (2026-09-28).
+
 - [room-reverb.md](room-reverb.md) — original room-dependent ambient mixer tables,
   detailed room-type compatibility, separate gameplay hall path and listener-output tests (2026-09-28).
 

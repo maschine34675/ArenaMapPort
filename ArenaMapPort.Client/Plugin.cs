@@ -121,6 +121,7 @@ namespace ArenaMapPort.Client
             BloomTuning.Install();
             AnamorphicFlareTuning.Install();
             AnamorphicFlareTuning.InstallRenderHooks(_harmony);
+            NativeMultiFlare.Install();
             CameraRepairHooks.Install(_harmony);
             DecalRepairs.Install();
             NativeDecalRepairs.Install();

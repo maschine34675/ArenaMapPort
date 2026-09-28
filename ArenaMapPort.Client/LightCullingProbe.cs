@@ -98,6 +98,7 @@ namespace ArenaMapPort.Client
                 yield break;
             }
             Vector3 camPos = cam.transform.position;
+            NativeMultiFlare.Probe();
             var lights = new List<(CullingLightObject clo, Light light, float dist, bool flicker)>();
             foreach (var clo in UnityEngine.Object.FindObjectsOfType<CullingLightObject>())
             {
