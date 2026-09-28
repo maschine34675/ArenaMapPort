@@ -74,6 +74,7 @@ namespace ArenaMapPort.Shared
         public string[] OpenedBarriers { get; }     // hierarchy paths of static scene objects whose non-frame parts are deactivated
                                                     // at raid start (Arena's round barriers that close a spawn area); empty = none
         public string[] RestoredShadowCasterRoots { get; } // exact active LOD roots with source-disabled shadow proxies to restore
+        public string[] DistantShadowCasterPaths { get; } // active shadow proxies missing native LOD registration
         public string[] PuddleWaterMaterialNames { get; } // exact imported water-puddle material names; excludes oil decals
         public int? FixedDayHour { get; }
         public int? FixedNightHour { get; }
@@ -113,7 +114,8 @@ namespace ArenaMapPort.Shared
             int? FixedNightHour = null,
             string? SunScene = null,
             string[]? SunPaths = null,
-            string[]? PuddleWaterMaterialNames = null)
+            string[]? PuddleWaterMaterialNames = null,
+            string[]? DistantShadowCasterPaths = null)
 #nullable restore
         {
             this.Key = Key;
@@ -134,6 +136,7 @@ namespace ArenaMapPort.Shared
             this.OpenedBarriers = OpenedBarriers ?? new string[0];
             this.BackgroundSceneNames = BackgroundSceneNames ?? new string[0];
             this.RestoredShadowCasterRoots = RestoredShadowCasterRoots ?? new string[0];
+            this.DistantShadowCasterPaths = DistantShadowCasterPaths ?? new string[0];
             this.Dust = Dust;
             this.FixedDayHour = FixedDayHour;
             this.FixedNightHour = FixedNightHour;
@@ -205,7 +208,15 @@ namespace ArenaMapPort.Shared
             FixedDayHour: 12,
             FixedNightHour: 0,
             SunScene: "Arena_Equator_Lighting",
-            SunPaths: new[] { "FAKE_SUN", "FAKE_SUN_VOLUME" });
+            SunPaths: new[] { "FAKE_SUN", "FAKE_SUN_VOLUME" },
+            DistantShadowCasterPaths: new[]
+            {
+                // Original active ceiling proxies lack LOD membership required by EFT DistantShadow.
+                // Floor 04 already has it. Keep original apertures, materials and meshes.
+                "SBG_Arena_Equator/SOO_LOD0/STRUCTURES/Floors/equator_floor_01/equator_floor_01_SHADOW_LOD0",
+                "SBG_Arena_Equator/SOO_LOD0/STRUCTURES/Floors/equator_floor_02/equator_floor_02_SHADOW_LOD0",
+                "SBG_Arena_Equator/SOO_LOD0/STRUCTURES/Floors/equator_floor_03/equator_floor_03_SHADOW_LOD0"
+            });
 
         /// <summary>
         /// Bay5 (TeamFight) descriptor. Extracted, built and registered (docs/progress/bay5-port.md)
@@ -257,6 +268,8 @@ namespace ArenaMapPort.Shared
                 // Source level84 object25426: all three ShadowsOnly children are inactive,
                 // while the visible LODs have casting Off. User report 2026-09-23 06:43.
                 "SBG_Arena_Bay5_Main/SOO/PROPS/Military_sandbag_barrier_03",
+                // Adjacent source object25415 has the same inactive shadow proxies (2026-09-28).
+                "SBG_Arena_Bay5_Main/SOO/PROPS/Military_sandbag_barrier_03 (1)",
             },
             PuddleWaterMaterialNames: new[]
             {

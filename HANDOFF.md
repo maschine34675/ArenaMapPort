@@ -3,6 +3,36 @@
 Snapshot for whoever continues (human or agent). Verify the commits named here against `git log`; this file
 is updated by hand at each handover, it is not an automatic record. Read [AGENTS.md](AGENTS.md) first.
 
+## State on 2026-09-28 — lighting follow-up
+
+Branch `fix/lighting-controls-shadows`, based on `432d22b`. New per-map
+`NativeMultiFlareIntensity=0.5` (0–1, live) for Equator and Bay5. Automatic
+exposure is already active on both maps. Equator's reported Techlight sun leak
+needed native two-sided materials AND DistantShadow enrollment on three existing
+ceiling proxies (`RoofDistantShadows=true`). Bay5's adjacent `(1)` sand-filled
+barricade now receives the same original shadow restoration as its neighbor.
+
+SmajlecLights Apply/Restore writes are excluded on all fourteen registered ports;
+the mod remains installed and operates outside them. BrighterInteriors is left
+alone: both current maps have zero active native stencil overlays. F7 reports
+compatibility counters, stencil inventory and actual roof-cache membership.
+
+Final client SHA256 `23243C89490BC68FA1B7943976FFBDAB7D6DF42E47AFAC0BAA7BA511DD26A7DF`.
+GPU-2 `5eec1f91`, 18:55–19:07 CEST: exact roof on/off/on causality, both
+barricade shadows, Bay5 flare 1/0/0.5, Equator -> Bay5 -> hideout -> Equator,
+outside-port positive control, and material cleanup passed. Equator slider and
+Smajlec Apply/Restore toggles were also tested in preceding candidate `44d8cf4b`.
+All 47 plugins/five libraries match actual loaded code; no ArenaMapPort warnings
+or errors. Build: zero warnings/errors; 397 server tests; 479 pipeline tests
+(28 expected skips); distribution 14 maps/42 bundles/14 sidecars valid.
+
+Both installs receive the tested 103-file package via the helper. Host returned
+to MainMenu. Sliders=0.5, roof fix=true, prior settings preserved, Smajlec enabled.
+Six user ambient adjustments received during testing were retained. Restart the
+user's game. No Unity rebuild; keep current v5 inputs. Exact source causes, test
+coordinates, evidence limits and deployment notes:
+[lighting-followup.md](docs/progress/lighting-followup.md).
+
 ## State on 2026-09-28 — original MultiFlare
 
 Branch `feature/native-multiflare`, based on accepted room-reverb `6164695`.

@@ -2,6 +2,8 @@
 from __future__ import annotations
 
 from copy import deepcopy
+from contextlib import redirect_stderr, redirect_stdout
+from io import StringIO
 import json
 import math
 import hashlib
@@ -228,6 +230,26 @@ class ReproducibilityTests(unittest.TestCase):
 
 
 class RegistryTests(unittest.TestCase):
+    def test_distant_shadow_sidecar_drift_is_rejected(self):
+        original_load = VD.load_map
+        for altered in (False, True):
+            def read_map(path):
+                data = original_load(path)
+                if altered and path.name == "equator.json":
+                    data["distant_shadow_caster_paths"] = ["Unexpected/CeilingShadow"]
+                return data
+
+            output = StringIO()
+            with self.subTest(altered=altered), \
+                 patch.object(sys, "argv", ["validate_map_descriptors.py"]), \
+                 patch.object(VD, "load_map", side_effect=read_map), \
+                 redirect_stdout(output), redirect_stderr(output):
+                # The unchanged repository is the positive control. Alter only the JSON
+                # view, keeping the actual C# registry parser and comparison active.
+                self.assertEqual(VD.main(), 1 if altered else 0)
+                if altered:
+                    self.assertIn("distant_shadow_caster_paths mismatch", output.getvalue())
+
     def test_all_membership_rejects_missing_duplicate_and_unknown_entries(self):
         entries = {"Equator": {}, "Bay5": {}, "Third": {}}
         prefix = "public static readonly IReadOnlyList<ArenaMapDescriptor> All = new[] "

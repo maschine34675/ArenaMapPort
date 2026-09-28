@@ -463,3 +463,14 @@ each map lighting section. Both maps passed visible/occluded A/B tests and repea
 raid cleanup on GPU-2. One source-only settings scalar remains explicitly pinned
 to its observed value 1, without assigning an unverified meaning. Details and
 validation limits: [native-multiflare.md](progress/native-multiflare.md).
+
+## Follow-up 2026-09-28 — lighting balance and shadow defects
+
+Both maps now expose live NativeMultiFlareIntensity (default 0.5, original 1).
+Automatic exposure is verified active. Equator's reported Techlight ceiling leak
+is fixed with existing shadow geometry, native two-sided materials and distant
+shadow registration. Bay5's second adjacent barricade shadow is restored.
+SmajlecLights camera writes are excluded on all registered ports; hideout remains
+a verified outside-port positive control. BrighterInteriors has no active native
+stencil overlays to affect in the current two-map builds. No content/bundle
+rebuild; details: [lighting-followup.md](progress/lighting-followup.md).

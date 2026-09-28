@@ -25,14 +25,29 @@ public sealed class Bay5MapTests
     }
 
     [Fact]
-    public void ShadowCasterRepairIsScopedToTheReportedBay5Assembly()
+    public void ShadowCasterRepairIsScopedToTheReportedBay5Assemblies()
     {
         using var doc = JsonDocument.Parse(File.ReadAllText(Sidecar("bay5.json")));
         var paths = doc.RootElement.GetProperty("restored_shadow_caster_roots").EnumerateArray().Select(e => e.GetString()).ToArray();
-        Assert.Equal(new[] { "SBG_Arena_Bay5_Main/SOO/PROPS/Military_sandbag_barrier_03" }, paths);
+        Assert.Equal(new[] {
+            "SBG_Arena_Bay5_Main/SOO/PROPS/Military_sandbag_barrier_03",
+            "SBG_Arena_Bay5_Main/SOO/PROPS/Military_sandbag_barrier_03 (1)"
+        }, paths);
         Assert.Equal(paths, ArenaMapRegistry.Bay5.RestoredShadowCasterRoots);
         foreach (var map in ArenaMapRegistry.All.Where(m => m != ArenaMapRegistry.Bay5))
             Assert.Empty(map.RestoredShadowCasterRoots);
+    }
+
+    [Fact]
+    public void DistantCeilingCastersMatchSidecarAndRemainEquatorOnly()
+    {
+        using var doc = JsonDocument.Parse(File.ReadAllText(Sidecar("equator.json")));
+        var paths = doc.RootElement.GetProperty("distant_shadow_caster_paths").EnumerateArray().Select(e => e.GetString()).ToArray();
+        Assert.Equal(3, paths.Length);
+        Assert.Equal(paths, ArenaMapRegistry.Equator.DistantShadowCasterPaths);
+        Assert.All(paths, path => Assert.EndsWith("_SHADOW_LOD0", path));
+        foreach (var map in ArenaMapRegistry.All.Where(m => m != ArenaMapRegistry.Equator))
+            Assert.Empty(map.DistantShadowCasterPaths);
     }
 
     [Fact]

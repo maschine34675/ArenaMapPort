@@ -87,9 +87,18 @@ See [dust acceptance](docs/progress/native-dust.md).
 
 **Original lamp flares on Equator and Bay5.** `Lighting (<map>) / NativeMultiFlare`
 restores the source per-lamp halos and lens effects (25/24 active lights), with
-native depth occlusion and a live on/off switch. Original inactive lights stay
-inactive. This is independent of the Equator anamorphic streak settings.
+native depth occlusion and a live on/off switch. `NativeMultiFlareIntensity`
+sets strength independently per map: 0 hides the effects, 0.5 is the new default,
+1 restores original strength. Original inactive lights stay inactive. This is
+independent of the Equator anamorphic streak settings.
 See [MultiFlare recovery and native tests](docs/progress/native-multiflare.md).
+
+**Lighting compatibility and shadows.** SmajlecLights camera adjustments are
+automatically excluded on ported maps; it can stay installed for ordinary maps.
+BrighterInteriors currently has no active stencil overlays to affect on Equator
+or Bay5. Both maps retain automatic exposure. Targeted repairs restore Equator's
+solid ceiling sun shadows and both adjacent Bay5 sand-filled barricades. See
+[lighting follow-up and GPU tests](docs/progress/lighting-followup.md).
 
 ## Terrain and runtime limits
 

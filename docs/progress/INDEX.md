@@ -8,6 +8,10 @@ dated state in one screen; read it before this index if you only have a minute.
 
 ## Current — read these for the area you touch
 
+- [lighting-followup.md](lighting-followup.md) — live MultiFlare strength,
+  verified exposure, Techlight ceiling and adjacent Bay5 barricade shadows,
+  optional SmajlecLights exclusion and BrighterInteriors assessment (2026-09-28).
+
 - [native-multiflare.md](native-multiflare.md) — original Equator/Bay5 lamp sprites,
   source atlas, isolated native rendering and visible/occluded off/on comparisons (2026-09-28).
 

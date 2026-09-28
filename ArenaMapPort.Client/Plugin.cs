@@ -19,6 +19,7 @@ namespace ArenaMapPort.Client
     // bots-stage1 — SainLocationShim resolves SAIN's LocationClass by name at install time; the soft
     // dependency only orders our Awake after SAIN's assembly is loaded when SAIN is present.
     [BepInDependency("me.sol.sain", BepInDependency.DependencyFlags.SoftDependency)]
+    [BepInDependency("com.smajlec.lights", BepInDependency.DependencyFlags.SoftDependency)]
     public class Plugin : BaseUnityPlugin
     {
         public const string PluginGuid = "com.maschine.ArenaMapPort";
@@ -63,12 +64,14 @@ namespace ArenaMapPort.Client
 
             _harmony = new Harmony(PluginGuid);
             HarmonyPatches.InstallAll(_harmony);
+            LightingModCompatibility.Install(_harmony);
 
             SceneDiagnostics.Install();
             VertexGroundDiffuseRepairs.Install(); // capture source RGB before shader/indoor repair cloning
             ShaderRebind.Install();
             NativeDustRepairs.Install(); // native animation after real shaders are rebound; preserve generated meshes
             ShadowCasterRepairs.Install(); // restore only descriptor-listed authored shadow proxies
+            EquatorRoofShadowRepairs.Install(); // register existing structural ceilings for native distant sun shadows
 
             // weather-rig-stage0 — harvests a vanilla donor scene's Weather rig and activates it per
             // raid. Must install BEFORE ArenaLightingRepairs: both subscribe to the same static

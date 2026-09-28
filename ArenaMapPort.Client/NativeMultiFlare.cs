@@ -27,14 +27,21 @@ namespace ArenaMapPort.Client
     {
         const string Tag = "[ArenaMapPort][MultiFlare]";
         static readonly Dictionary<string, ConfigEntry<bool>> Enabled = new Dictionary<string, ConfigEntry<bool>>();
+        static readonly Dictionary<string, ConfigEntry<float>> Intensity = new Dictionary<string, ConfigEntry<float>>();
         static Runner _runner;
 
         internal static void Install()
         {
             foreach (var map in new[] { ArenaMapRegistry.Equator, ArenaMapRegistry.Bay5 })
+            {
                 Enabled[map.Key] = Plugin.Instance.Config.Bind("Lighting (" + map.Key + ")", "NativeMultiFlare", true,
                     "Restore original per-lamp flare sprites and lens effects with native depth occlusion. " +
                     "Separate from camera bloom/anamorphic streaks. Live toggle.");
+                Intensity[map.Key] = Plugin.Instance.Config.Bind("Lighting (" + map.Key + ")", "NativeMultiFlareIntensity", .5f,
+                    new ConfigDescription("Brightness of original lamp flares. 0 = invisible, 0.5 = 50%, 1 = original Arena brightness. " +
+                        "Changes immediately; leaves lamp illumination, camera bloom and anamorphic streaks unchanged.",
+                        new AcceptableValueRange<float>(0f, 1f)));
+            }
             SceneManager.sceneLoaded += (scene, mode) =>
             {
                 var map = ArenaMapRaid.MapForScriptsScene(scene.name);
@@ -57,7 +64,7 @@ namespace ArenaMapPort.Client
         {
             internal string Name;
             internal Transform Position, Original;
-            internal float CullDistance;
+            internal float CullDistance, OriginalAlpha;
         }
 
         sealed class Runner : MonoBehaviour
@@ -98,6 +105,9 @@ namespace ArenaMapPort.Client
                     {
                         var lamp = _lamps[i];
                         var data = _storage._lights[i];
+                        // Always derive from the source value: repeated live edits must not compound.
+                        // Native blindness protection remains a separate multiplier on each batch.
+                        data.Alpha = lamp.OriginalAlpha * Intensity[Map.Key].Value;
                         data.Enabled = (lamp.Original == null || lamp.Original.gameObject.activeInHierarchy) &&
                             _cameras.Any(c => (c.transform.position - lamp.Position.position).sqrMagnitude <= lamp.CullDistance * lamp.CullDistance);
                         _storage._lights[i] = data;
@@ -190,10 +200,12 @@ namespace ArenaMapPort.Client
                         bound++;
                     }
                     int index = _lamps.Count;
-                    var lamp = new Lamp { Name = path, Position = parent, Original = original, CullDistance = F(light["cull_distance"]) };
+                    var lamp = new Lamp { Name = path, Position = parent, Original = original, CullDistance = F(light["cull_distance"]),
+                        OriginalAlpha = F(light["total_alpha"]) };
                     Require(lamp.CullDistance > 0, "invalid cull distance");
                     _lamps.Add(lamp);
-                    _storage._lights.Add(new FlareLightData { Alpha = F(light["total_alpha"]), Scale = F(light["total_scale"]), Enabled = true, WorldPos = parent.position });
+                    _storage._lights.Add(new FlareLightData { Alpha = lamp.OriginalAlpha * Intensity[Map.Key].Value,
+                        Scale = F(light["total_scale"]), Enabled = true, WorldPos = parent.position });
                     _storage._transforms.Add(parent);
                     foreach (var item in (JArray)light["flares"])
                     {
@@ -339,7 +351,7 @@ namespace ArenaMapPort.Client
                 if (_renderer == null) { Plugin.Log.LogInfo($"{Tag} {Map.Key} enabled=false failed={_failed} global={GlobalState()}"); return; }
                 var camera = _cameras.FirstOrDefault();
                 Plugin.Log.LogInfo($"{Tag} {Map.Key} lights={_lamps.Count} cameras={_cameras.Count} frames={_frames} " +
-                    $"batches={_batchSummary} " +
+                    $"intensity={Intensity[Map.Key].Value:F3} batches={_batchSummary} " +
                     $"nv={_settings.NormalBatch.IsNvEnabled} global={GlobalState()}");
                 foreach (var l in _lamps.OrderBy(l => camera == null ? 0 : (l.Position.position - camera.transform.position).sqrMagnitude).Take(6))
                     Plugin.Log.LogInfo($"{Tag} lamp={l.Name} pos={l.Position.position.ToString("F3")} distance={(camera == null ? -1 : Vector3.Distance(l.Position.position, camera.transform.position)):F2}");

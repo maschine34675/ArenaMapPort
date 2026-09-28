@@ -278,6 +278,9 @@ def check_map_against_registry_entry(
     check_field(errors, where, "restored_shadow_caster_roots",
                 map_json.get("restored_shadow_caster_roots", []),
                 resolve(registry_args.get("RestoredShadowCasterRoots", []), ref_scope))
+    check_field(errors, where, "distant_shadow_caster_paths",
+                map_json.get("distant_shadow_caster_paths", []),
+                resolve(registry_args.get("DistantShadowCasterPaths", []), ref_scope))
     dust = map_json.get("dust")
     check_field(errors, where, "dust", dust, registry_args.get("Dust"))
     if dust is not None:

@@ -21,6 +21,11 @@
   "fixed_night_hour": 0,
   "sun_scene": "Arena_Equator_Lighting",
   "sun_paths": ["FAKE_SUN", "FAKE_SUN_VOLUME"],
+  "distant_shadow_caster_paths": [
+    "SBG_Arena_Equator/SOO_LOD0/STRUCTURES/Floors/equator_floor_01/equator_floor_01_SHADOW_LOD0",
+    "SBG_Arena_Equator/SOO_LOD0/STRUCTURES/Floors/equator_floor_02/equator_floor_02_SHADOW_LOD0",
+    "SBG_Arena_Equator/SOO_LOD0/STRUCTURES/Floors/equator_floor_03/equator_floor_03_SHADOW_LOD0"
+  ],
   "fog_color": [
     0.62,
     0.66,

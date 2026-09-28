@@ -99,6 +99,8 @@ namespace ArenaMapPort.Client
             }
             Vector3 camPos = cam.transform.position;
             NativeMultiFlare.Probe();
+            LightingModCompatibility.Probe();
+            EquatorRoofShadowRepairs.Probe();
             var lights = new List<(CullingLightObject clo, Light light, float dist, bool flicker)>();
             foreach (var clo in UnityEngine.Object.FindObjectsOfType<CullingLightObject>())
             {
