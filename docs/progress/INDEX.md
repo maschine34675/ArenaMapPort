@@ -8,6 +8,9 @@ dated state in one screen; read it before this index if you only have a minute.
 
 ## Current — read these for the area you touch
 
+- [room-reverb.md](room-reverb.md) — original room-dependent ambient mixer tables,
+  detailed room-type compatibility, separate gameplay hall path and listener-output tests (2026-09-28).
+
 - [spatial-audio.md](spatial-audio.md) — original Equator/Bay5 acoustic rooms, portals and propagation
   bakes, native attenuation and room tones; reverb/blending boundary (2026-09-28).
 

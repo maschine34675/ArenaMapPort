@@ -3,6 +3,35 @@
 Snapshot for whoever continues (human or agent). Verify the commits named here against `git log`; this file
 is updated by hand at each handover, it is not an automatic record. Read [AGENTS.md](AGENTS.md) first.
 
+## State on 2026-09-28 — room-dependent ambient reverb
+
+Branch `feature/room-reverb`, based on spatial-acoustics commit `0b841c1`.
+Both maps now use the original 26 room-dependent ambient reverb/delay/send
+parameters. Exact native room types are mapped to source indoor/isolated/outdoor
+categories. `Audio (<map>) / NativeRoomReverb=true` is live and requires the
+original spatial graph. The additive `mixer_effects` data is extracted into the
+existing graph JSON; still six acoustic files, no bundle rebuild.
+
+Important compatibility finding: EFT permanently mutes the original
+Returns/Reverb group used by Equator ambience (Arena leaves it unmuted).
+Only Equator's 23 imported active ambient players use the functioning original
+AmbCommonEffects route while enabled, with their dry path preserved and guarded
+restoration. Bay5 keeps CommonAmbOutEffects. Gameplay/MetaXR/SurroundAudio are
+unchanged; this work does not claim restored gun/step reverb.
+
+Final client SHA256 `963EFD5A0060DFFB77673B9C8F661F61C38620787107189C24394638F0D972D0`.
+Build zero warnings/errors; 461 pipeline tests (28 expected skips), distribution
+validation passed. GPU-2 `c09a0c2b`: Equator -> Bay5 -> Equator passed 15:48–15:55
+with actual map-bus pulse tails, live off/on, original source routing, outdoor
+and detailed-room transitions, complete teardown and no new audio errors.
+All 97 package files hash-match both installs; all 23 host plugin identities match.
+
+Both hall switches on; diagnostics off/default bus, prior 11 changed settings
+and all SurroundAudio settings preserved. Host MainMenu/control free. Digital
+output is verified; subjective balance remains a listening check (Windows
+output muted). Restart the user's game. Full evidence and limits:
+[room-reverb.md](docs/progress/room-reverb.md).
+
 ## State on 2026-09-28 — native spatial acoustics
 
 Branch `feature/spatial-audio`, based on accepted water commit `12b0363`.

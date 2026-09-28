@@ -37,8 +37,11 @@ verification](docs/progress/native-decals.md).
 **Spatial acoustics.** Equator and Bay5 now use their original acoustic rooms,
 openings and baked sound paths for native sound attenuation, plus their original
 indoor room tones. F12: `Audio (<map>) / NativeSpatialAudio` (next raid).
-Room-dependent mixer reverb and outdoor ambience blending remain separate work.
-See [source data and native verification](docs/progress/spatial-audio.md).
+Original room-dependent ambient reverb/delay tables are also restored:
+`Audio (<map>) / NativeRoomReverb` applies live. Gameplay hall retains native
+indoor/outdoor snapshots; outdoor ambience blending remains separate work.
+See [spatial acoustics](docs/progress/spatial-audio.md) and
+[room reverb](docs/progress/room-reverb.md).
 
 Equator/Bay5 retain their existing identities and artifact locations. The local Saw preset is present, but its 12 distinct referenced scene paths are absent; Saw cannot be ported from this source installation. Bay5's tournament preset is a mode variant, and Draft/the generic test preset are not additional independent maps.
 
@@ -86,7 +89,7 @@ See [dust acceptance](docs/progress/native-dust.md).
 
 Customs, Shoreline and Woods contain seven real terrain heightfields. The converter preserves their height samples and holes and reconstructs the tiled 12-layer MicroSplat surface from source texture arrays, control maps, layer settings and height blending. All three terrain maps have passed the schema-2 full-map checks. Their live runtime validation remains pending.
 
-Active GPUInstancer grass is excluded from the implemented spike. Source investigation found about 7.1 million cached normal-camera grass candidates; native detail data alone would miss part of this vegetation. Existing ordinary tree geometry is retained, and disabled native tree records are not blindly instantiated again. Dynamic grass/wind, secondary terrain systems, source weather/time-of-day parity, room-dependent mixer reverb, spatial acoustics and audio on other maps, loot, general interactive doors, native bot-cover baking, PerfectCulling and Fika remain outside the implemented scope. Equator/Bay5 spawn systems and ArenaMode integration are documented above.
+Active GPUInstancer grass is excluded from the implemented spike. Source investigation found about 7.1 million cached normal-camera grass candidates; native detail data alone would miss part of this vegetation. Existing ordinary tree geometry is retained, and disabled native tree records are not blindly instantiated again. Dynamic grass/wind, secondary terrain systems, source weather/time-of-day parity, outdoor ambience blending, spatial acoustics and audio on other maps, loot, general interactive doors, native bot-cover baking, PerfectCulling and Fika remain outside the implemented scope. Equator/Bay5 spawn systems and ArenaMode integration are documented above.
 
 Offline validation, staged file hashes, live installation and a GPU raid are separate evidence. Only the explicitly documented Equator/Bay5 runs establish native acceptance; they do not validate the other twelve maps. `pwsh tools/deploy-to-spt.ps1` is a dry run by default; an authorized install uses `-Confirm`.
 

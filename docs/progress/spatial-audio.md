@@ -193,3 +193,11 @@ probe off and position zero. The original 11 changed settings (including saved
 lighting and Clear weather) match the pre-test snapshot. No config file was
 edited or deployed. Restart the user's game to load the client; server code is
 unchanged. Vanilla's own in-game acceptance remains separate from GPU-2 testing.
+
+## Follow-up — room-dependent ambient reverb, 2026-09-28
+
+The separate mixer-reverb item is now implemented and GPU-tested on both maps.
+The original 26 parameters are an additive part of the same graph JSON. Equator
+needs a scoped ambient routing adaptation because EFT mutes its original hall
+return. Actual map-channel tests and the unchanged gameplay scope are documented
+in [room-reverb.md](room-reverb.md). Outdoor ambience blending remains separate.

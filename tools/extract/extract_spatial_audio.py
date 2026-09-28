@@ -10,6 +10,7 @@ sys.path.insert(0,str(Path(__file__).resolve().parent))
 from extract_bay5_audio import Reader,deref,script,identity,hierarchy,validate_wav
 import UnityPy
 from spatial_audio_bake import parse_bake
+import room_reverb
 ROOT=Path('D:/Battlestate Games/Escape from Tarkov Arena/EscapeFromTarkovArena_Data')
 
 def short(r):
@@ -94,6 +95,7 @@ def export(source, output, key):
    result['nodes'].append({'id':pid,'parent_id':parent_go,'name':t['m_Name'],'active_self':bool(t['m_IsActive']),'layer':t['m_Layer'],'position':tr['m_LocalPosition'],'rotation':tr['m_LocalRotation'],'scale':tr['m_LocalScale']})
   for pid in sorted(relevant_nodes):ensure_node(pid)
   validate_graph(result)
+  result['mixer_effects']=room_reverb.extract(f,ROOT,result)
   info=result['systems'][0]['location_info']
   bakepath=ROOT/'StreamingAssets'/Path(info['relative_bake_data_path'].replace('\\','/'))
   bake=bakepath.read_bytes()

@@ -96,3 +96,13 @@ builds stage them even with `ArenaMapPortDllOnly=true`. Existing v5 bundles,
 server data and original ambient-player clips are retained. All source-derived
 audio and graph files remain outside git. Final build, host and installation
 evidence is in [spatial-audio.md](progress/spatial-audio.md).
+
+## Room-dependent ambient reverb — 2026-09-28
+
+The 97-file layout is unchanged. Both existing spatial-audio JSON files now also
+contain the original 26 mixer parameters and provenance; `room_reverb.py` is part
+of their existing extraction entrypoint. Scene bundles and server files are unchanged.
+Final client SHA256 `963EFD5A0060DFFB77673B9C8F661F61C38620787107189C24394638F0D972D0`.
+All 97 installed files independently hash-match dist in both installations after
+the approved deployment. Build, actual map-bus DSP tests and scoped Equator mixer
+compatibility are recorded in [room-reverb.md](progress/room-reverb.md).

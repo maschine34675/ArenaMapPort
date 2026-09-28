@@ -109,6 +109,11 @@ namespace ArenaMapPort.Client
         /// <summary>Explicit diagnostic hook; automatic summaries also prove playback sample advancement.</summary>
         internal static void Probe() { if (_driver != null) _driver.Report(true); }
 
+        internal static AudioMixerGroup CurrentEffectsMixer(string mapKey) =>
+            _driver != null && _driver.MapKey == mapKey ? _driver.EffectsMixer : null;
+
+        internal static void RestoreReverbRouting() { if (_driver != null) _driver.RefreshReverbRouting(false); }
+
         public sealed class Driver : MonoBehaviour
         {
             GameObject _root;
@@ -133,6 +138,10 @@ namespace ArenaMapPort.Client
             string _ambientVolumeParameter;
             float _previousAmbientVolume;
             bool _ownsAmbientVolume;
+            AmbientSoundPlayerGroup _effectsGroup;
+            AudioMixerGroup _originalEffects, _reverbEffects;
+            bool _reverbRouted, _reverbRouteYielded;
+            internal AudioMixerGroup EffectsMixer => _effectsGroup != null ? _effectsGroup._outputMixerGroup : null;
             float _servicesSince = -1f, _nextReport, _nextReadyCheck;
             int _reports;
             bool _ready, _disposed;
@@ -242,7 +251,11 @@ namespace ArenaMapPort.Client
             void LateUpdate()
             {
                 if (!_ready || _disposed) return;
-                try { foreach (var controller in _controllers) controller.LateTick(); }
+                try
+                {
+                    RefreshReverbRouting(RoomReverb.IsActive(_mapKey));
+                    foreach (var controller in _controllers) controller.LateTick();
+                }
                 catch (Exception ex)
                 {
                     Plugin.Log.LogError("[ArenaMapPort][NativeAudio] shoreline update failed; stopping owned sources: " + ex);
@@ -266,12 +279,15 @@ namespace ArenaMapPort.Client
                 if (effects == null || (!_equator && bypass == null)) return;
                 foreach (var group in _groups)
                 {
-                    if (group.name == (_equator ? "CommonAmbientInGroup" : "AmbientPlayersGroup")) group._outputMixerGroup = effects;
+                    if (group.name == (_equator ? "CommonAmbientInGroup" : "AmbientPlayersGroup"))
+                    { group._outputMixerGroup = effects; _effectsGroup = group; }
                     else if (!_equator && group.name == "AmbientSplineEmitterWaterGroup") group._outputMixerGroup = bypass;
                     else throw new InvalidOperationException("unrecognized ambient group " + group.name);
                     group.SetMixerGroup();
                 }
                 AcquireAmbientVolume(audio);
+                _originalEffects = effects;
+                _reverbEffects = audio.CommonAmbientEffectsMixer;
                 ApplyUserRange(); // must precede SetActive: BaseAmbientSoundPlayer.Awake bakes _maxDistance into the AudioSource once
                 // All serialized fields and links exist before any stock Awake executes.
                 _root.SetActive(true);
@@ -296,9 +312,36 @@ namespace ArenaMapPort.Client
                     started++;
                 }
                 _ready = true;
+                RefreshReverbRouting(RoomReverb.IsActive(_mapKey));
                 _nextReport = Time.realtimeSinceStartup + 5f;
                 string mixers = effects.name + (bypass != null ? "," + bypass.name : "");
                 Plugin.Log.LogInfo($"[ArenaMapPort][NativeAudio] ready players={_players.Length} started={started} seasonalSilent={seasonalSilence} season={_season} mixers={mixers} shoreline={(_equator ? "none" : "stock")} listener={listener.transform.position} map={_mapKey} sourceInactive={_players.Length - _activePlayers.Length}");
+            }
+
+            internal void RefreshReverbRouting(bool requested)
+            {
+                if (!_equator || _effectsGroup == null || _originalEffects == null || _reverbEffects == null || _reverbRouteYielded) return;
+                // EFT permanently mutes the original Returns/Reverb group. This original alternative
+                // ambient bus reaches TarkovReverb. Its dry path is equivalent while the owned parent
+                // gain is neutral (no skipped filters/effects); preserve external non-neutral gains.
+                float volume = float.NaN;
+                bool neutralParent = _ownsAmbientVolume && _ambientMixer != null &&
+                    _ambientMixer.GetFloat(_ambientVolumeParameter, out volume) && Mathf.Approximately(volume, 0f);
+                bool useReverb = requested && neutralParent;
+                if (useReverb == _reverbRouted) return;
+                var expected = _reverbRouted ? _reverbEffects : _originalEffects;
+                if (_effectsGroup._outputMixerGroup != expected || _effectsGroup._soundPlayers.Any(p =>
+                    p != null && (p._mixerGroup != expected || p.GetComponent<AudioSource>()?.outputAudioMixerGroup != expected)))
+                {
+                    _reverbRouteYielded = true;
+                    Plugin.Log.LogWarning(RoomReverb.Tag + " Equator ambient routing changed externally; retaining it");
+                    return;
+                }
+                _effectsGroup._outputMixerGroup = useReverb ? _reverbEffects : _originalEffects;
+                _effectsGroup.SetMixerGroup(); // Also updates live sources; no restart/random delay reset.
+                _reverbRouted = useReverb;
+                Plugin.Log.LogInfo($"{RoomReverb.Tag} Equator owned ambient route={_effectsGroup._outputMixerGroup.name}, " +
+                    $"players={_effectsGroup._soundPlayers.Count}, original indoor bus={volume:F2}dB");
             }
 
             // See the field comment on _bay5Range. Runs on the still-inactive graph; 1.0 leaves every value untouched.
@@ -536,6 +579,7 @@ namespace ArenaMapPort.Client
                 int stopped = 0, emptyClips = 0, failures = 0;
                 try
                 {
+                    RefreshReverbRouting(false);
                     foreach (var player in _players)
                     {
                         if (player == null) continue;

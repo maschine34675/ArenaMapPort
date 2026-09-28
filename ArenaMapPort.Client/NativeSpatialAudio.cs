@@ -299,6 +299,7 @@ namespace ArenaMapPort.Client
             void Update()
             {
                 var state = _state;
+                RoomReverb.Tick(state);
                 if (state == null) { _reportedFailure = false; return; }
                 if (_reportedFailure || !state.Finished || (state.RoomTones != null && !state.RefreshTones) ||
                     !Singleton<AbstractGame>.Instantiated || Singleton<AbstractGame>.Instance.Status != GameStatus.Started ||
@@ -420,6 +421,8 @@ namespace ArenaMapPort.Client
             state.Cancellation?.Cancel();
             try
             {
+                CleanupStep(RoomReverb.Stop);
+                CleanupStep(ReverbAudioProbe.Stop);
                 ReleaseRoomTones(state);
                 CleanupStep(SpatialAudioProbe.Stop);
                 if (state.OwnsIndoorBus && MonoBehaviourSingleton<BetterAudio>.Instantiated)
@@ -489,8 +492,7 @@ namespace ArenaMapPort.Client
                     $"samples={source.timeSamples} load={source.clip?.loadState} volume={source.volume:F4} " +
                     $"indoorBusDb={bus:F1} mixer={source.outputAudioMixerGroup?.name} listenerPaused={AudioListener.pause}");
             }
-            Plugin.Log.LogInfo($"{Tag} native ambient manager={MonoBehaviourSingleton<AmbientAudioSystem>.Instantiated}; " +
-                "room-dependent mixer reverb and outdoor ambience blending are not enabled by this graph port");
+            RoomReverb.Log();
             SpatialAudioProbe.Log();
             foreach (var r in _state.Group.AudioRooms)
                 Plugin.Log.LogInfo($"{Tag} room {r.ID} '{r.name}' type={r.Type} center={r.Bounds.center:F2} size={r.Bounds.size:F2} areas={r.Areas.Count}");

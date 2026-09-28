@@ -406,8 +406,9 @@ custom client overlay (own Canvas/Image on the preloader) — M, optional polish
   from.
 - **Spatial-audio room/portal import — implemented 2026-09-28.** Original rooms, portals, trigger
   volumes, bake files and room tones now drive native initialization on both maps. Rooted plugin-local
-  bake paths work with EFT's loader. Room-dependent mixer reverb and outdoor ambience blending remain
-  separate work. See [spatial-audio.md](progress/spatial-audio.md). Historical assessment follows:
+  bake paths work with EFT's loader. Original room-dependent ambient mixer reverb is now restored too;
+  outdoor ambience blending remains separate work. See [spatial-audio.md](progress/spatial-audio.md)
+  and [room-reverb.md](progress/room-reverb.md). Historical assessment follows:
   **Full spatial-audio room/portal import (audio Spike B "Plan B")** — Large effort, unverified importer path
   for an entire additional scene subtree, and produces **zero audible change** without also flipping
   `SpatialAudioInitSkipPrefix` back on (currently a deliberate skip, not just missing data, per

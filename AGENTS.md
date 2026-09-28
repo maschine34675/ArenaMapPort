@@ -118,6 +118,10 @@ graph JSON, original bake and room-tone WAV. Do not rebuild scene bundles for th
 The native loader needs portal endpoints wired before room initialization; `RoutesDataCount` counts
 pair ranges, not individual routes. Start room tones only after `GameStatus.Started` or the raid audio
 reset stops them. See [spatial-audio.md](docs/progress/spatial-audio.md).
+Room-dependent ambient reverb adds `mixer_effects` to that same graph JSON. Keep
+its original 26-parameter table and detailed-type compatibility mapping together.
+EFT mutes Equator's original hall return; the client scopes its compatible routing
+to the imported ambient group only. See [room-reverb.md](docs/progress/room-reverb.md).
 `-FullMap` also regenerates that map's base.json and preset from the sidecars; to regenerate only base.json
 after a sidecar change, add `-SkipUnityBuild` (reuses the bundles). For Equator, base.json is regenerated
 with `python tools/server/make_base_json.py` (see its header for the arguments).
