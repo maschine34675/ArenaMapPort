@@ -394,7 +394,7 @@ class GroupSourcesTests(unittest.TestCase):
         self.assertTrue(EA.COMMENTATOR_SOURCE["file"])
 
     def test_all_groups_lists_every_group_once(self):
-        self.assertEqual(set(EA.ALL_GROUPS), set(EA.GROUP_SOURCES) | {EA.COMMENTATOR_GROUP})
+        self.assertEqual(set(EA.ALL_GROUPS), set(EA.GROUP_SOURCES) | {EA.COMMENTATOR_GROUP, EA.OTHER_GROUP})
         self.assertEqual(len(EA.ALL_GROUPS), len(set(EA.ALL_GROUPS)))
 
 
@@ -543,6 +543,150 @@ class OutputPathTests(unittest.TestCase):
         with self.assertRaises(HardExtractError):
             EA.clip_output_path("out", "not_a_group", "clip")
 
+    def test_other_commentator_path(self):
+        path = EA.other_commentator_output_path("out", "eng_commentator_bg_toxin_start", "eng_commentator_bg_toxin_start_01")
+        self.assertEqual(path, Path("out") / "other" / "commentator" / "eng_commentator_bg_toxin_start"
+                         / "eng_commentator_bg_toxin_start_01.ogg")
+
+    def test_other_arena_path(self):
+        path = EA.other_arena_output_path("out", "resources", "arena_button_click")
+        self.assertEqual(path, Path("out") / "other" / "arena" / "resources" / "arena_button_click.ogg")
+
+
+class GuessKindTests(unittest.TestCase):
+    """guess_kind() -- name-only heuristic, always a guess for the 'other/arena' part."""
+
+    def test_ui_tokens(self):
+        for name in ("arena_button_click", "arena_button_over", "arena_tab_click", "arena_menu_checkbox",
+                    "arena_menu_dropdown", "arena_menu_dropdown_select", "arena_menu_escape",
+                    "arena_preset_click", "arena_presets_screen_show", "arena_inspect_click",
+                    "arena_magnifier_click", "arena_popup_generic", "arena_wtask_complete"):
+            self.assertEqual(EA.guess_kind(name), "ui", name)
+
+    def test_music_tokens(self):
+        for name in ("arena_track_02", "arena_track_03", "arena_wait_match_background_music"):
+            self.assertEqual(EA.guess_kind(name), "music", name)
+
+    def test_voice_tokens(self):
+        for name in ("usec_03_ending_03", "bear_02_sergei_eng_ending_03", "terminal_cutscene_ending_03"):
+            self.assertEqual(EA.guess_kind(name), "voice", name)
+
+    def test_defaults_to_sfx(self):
+        for name in ("blastgang_flare_explosion", "arena_bomb_exploded_signal_01",
+                    "arena_railway_station_notification", "blast_gang_notebook_diffuse_loop"):
+            self.assertEqual(EA.guess_kind(name), "sfx", name)
+
+    def test_whole_token_match_not_substring(self):
+        # "bolt_click" must not be mistaken for a UI "click" sound just because "click" is a substring --
+        # it has no whole token in _OTHER_KIND_UI_TOKENS (only "button"/"tab"/... do, never "click" alone).
+        self.assertEqual(EA.guess_kind("bolt_click"), "sfx")
+
+    def test_case_insensitive(self):
+        self.assertEqual(EA.guess_kind("ARENA_BUTTON_CLICK"), "ui")
+
+
+class ArenaClaimedNamesTests(unittest.TestCase):
+    def test_includes_commentator_names_and_arena_rooted_group_clips(self):
+        claimed = EA.arena_claimed_names({"eng_commentator_start_01", "eng_commentator_bg_toxin_start_01"})
+        # arena-rooted GROUP_SOURCES clips (crowd/spectator_glitch/capture/round_signal/result_music):
+        self.assertIn("arena_fans_ambient_postmatch", claimed)
+        self.assertIn("asrena_start_signal_dry", claimed)
+        self.assertIn("result_music_start", claimed)
+        # commentator bank names passed in:
+        self.assertIn("eng_commentator_start_01", claimed)
+        self.assertIn("eng_commentator_bg_toxin_start_01", claimed)
+
+    def test_excludes_eft_rooted_group_clips(self):
+        # stingers is root "eft" -- arena_claimed_names() only adds root=="arena" GROUP_SOURCES clips;
+        # eft_audio_clip_names()'s own EFT-shared filter is what actually keeps these out of "other/arena".
+        claimed = EA.arena_claimed_names(set())
+        self.assertNotIn("arena_start", claimed)
+        self.assertNotIn("arena_win", claimed)
+        self.assertNotIn("arena_lose", claimed)
+
+
+class PlanOtherArenaSelectionTests(unittest.TestCase):
+    """Pure selection/dedupe/EFT-name-filter logic for the 'other/arena' part -- fake data only."""
+
+    def _meta(self, path_id, name):
+        return {"path_id": path_id, "name": name, "channels": 2, "frequency": 44100, "length_s": 1.0}
+
+    def test_selects_unclaimed_non_eft_clips(self):
+        source_clip_lists = [("resources", [self._meta(1, "arena_button_click"), self._meta(2, "footstep_grass")])]
+        selected, duplicates = EA.plan_other_arena_selection(
+            source_clip_lists, eft_names={"footstep_grass"}, claimed_names=set())
+        self.assertEqual([n for _, m in selected for n in [m["name"]]], ["arena_button_click"])
+        self.assertEqual(duplicates, [])
+
+    def test_eft_shared_name_is_dropped_not_selected(self):
+        source_clip_lists = [("resources", [self._meta(1, "footstep_grass")])]
+        selected, duplicates = EA.plan_other_arena_selection(
+            source_clip_lists, eft_names={"footstep_grass"}, claimed_names=set())
+        self.assertEqual(selected, [])
+        self.assertEqual(duplicates, [])  # dropped outright, never counted as a duplicate
+
+    def test_already_claimed_name_is_dropped_not_selected(self):
+        source_clip_lists = [("resources", [self._meta(1, "arena_fans_ambient_postmatch")])]
+        selected, duplicates = EA.plan_other_arena_selection(
+            source_clip_lists, eft_names=set(), claimed_names={"arena_fans_ambient_postmatch"})
+        self.assertEqual(selected, [])
+        self.assertEqual(duplicates, [])
+
+    def test_duplicate_name_across_sources_keeps_first_records_rest(self):
+        source_clip_lists = [
+            ("resources", [self._meta(1, "big_score")]),
+            ("arenaaudio", [self._meta(2, "big_score")]),
+        ]
+        selected, duplicates = EA.plan_other_arena_selection(source_clip_lists, eft_names=set(), claimed_names=set())
+        self.assertEqual(len(selected), 1)
+        self.assertEqual(selected[0], ("resources", self._meta(1, "big_score")))
+        self.assertEqual(duplicates, [{"name": "big_score", "kept_source": "resources",
+                                       "skipped_source": "arenaaudio", "skipped_path_id": 2}])
+
+    def test_duplicate_name_within_the_same_source_is_also_recorded(self):
+        source_clip_lists = [("resources", [self._meta(1, "dup"), self._meta(2, "dup")])]
+        selected, duplicates = EA.plan_other_arena_selection(source_clip_lists, eft_names=set(), claimed_names=set())
+        self.assertEqual(len(selected), 1)
+        self.assertEqual(len(duplicates), 1)
+        self.assertEqual(duplicates[0]["skipped_path_id"], 2)
+
+    def test_source_order_determines_which_copy_is_kept(self):
+        source_clip_lists = [
+            ("blastgang", [self._meta(1, "shared")]),
+            ("resources", [self._meta(2, "shared")]),
+        ]
+        selected, duplicates = EA.plan_other_arena_selection(source_clip_lists, eft_names=set(), claimed_names=set())
+        self.assertEqual(selected[0][0], "blastgang")  # first in list order wins, regardless of key name
+        self.assertEqual(duplicates[0]["kept_source"], "blastgang")
+
+
+class ListAudioclipMetasTests(unittest.TestCase):
+    """_list_audioclip_metas() against a small fake UnityPy-shaped environment -- no real install read."""
+
+    class _FakeObj:
+        def __init__(self, path_id, type_name, tree):
+            self.path_id = path_id
+            self.type = type("T", (), {"name": type_name})()
+            self._tree = tree
+
+        def read_typetree(self):
+            return self._tree
+
+    class _FakeEnv:
+        def __init__(self, objects):
+            self.objects = objects
+
+    def test_lists_only_audioclips_sorted_by_path_id(self):
+        env = self._FakeEnv([
+            self._FakeObj(20, "AudioClip", {"m_Name": "b", "m_Channels": 1, "m_Frequency": 44100, "m_Length": 2.0}),
+            self._FakeObj(10, "AudioClip", {"m_Name": "a", "m_Channels": 2, "m_Frequency": 44100, "m_Length": 1.0}),
+            self._FakeObj(15, "MonoBehaviour", {"m_Name": "not_a_clip"}),
+        ])
+        metas = EA._list_audioclip_metas(env)
+        self.assertEqual([m["path_id"] for m in metas], [10, 20])
+        self.assertEqual(metas[0]["name"], "a")
+        self.assertEqual(metas[0]["channels"], 2)
+
 
 class FfmpegCommandTests(unittest.TestCase):
     def test_ffmpeg_command_shape(self):
@@ -600,6 +744,37 @@ class ManifestSchemaTests(unittest.TestCase):
     def test_manifest_round_trips_through_json(self):
         manifest = EA.build_manifest({}, {}, {}, [])
         json.loads(json.dumps(manifest))  # must not raise
+
+    def test_other_group_present_with_note_even_when_not_populated(self):
+        # build_manifest() always adds the 'other' group, the same way it always adds 'commentator' --
+        # empty sub-dicts/lists when this run did not (re-)build it, never a missing key.
+        manifest = EA.build_manifest({}, {}, {}, [])
+        other = manifest["groups"][EA.OTHER_GROUP]
+        self.assertTrue(other["note"])
+        self.assertEqual(other["commentator"], {})
+        self.assertEqual(other["arena"], {})
+        self.assertEqual(other["commentator_skipped_clips"], [])
+        self.assertEqual(other["arena_skipped_clips"], [])
+        self.assertEqual(other["arena_duplicate_clips"], [])
+
+    def test_other_group_shape_with_both_parts_populated(self):
+        other_commentator = {"eng_commentator_bg_toxin_start": {
+            "family": "blast_gang_excluded", "reason": "Blast Gang mode not planned", "arena_tag": ["ToxinStart"],
+            "clips": [{"name": "eng_commentator_bg_toxin_start_01",
+                      "file": "other/commentator/eng_commentator_bg_toxin_start/eng_commentator_bg_toxin_start_01.ogg",
+                      "duration_s": 1.0, "channels": 1, "sample_rate": 44100,
+                      "source_duration_s": 1.0, "source_rms": 100.0}],
+        }}
+        other_arena = {"resources": {"clips": [{
+            "name": "arena_button_click", "file": "other/arena/resources/arena_button_click.ogg",
+            "duration_s": 0.1, "channels": 2, "sample_rate": 44100, "source_duration_s": 0.1,
+            "source_rms": 50.0, "kind": "ui", "kind_guess": True, "source_file": "resources.assets",
+        }]}}
+        manifest = EA.build_manifest({}, {}, {}, [], other_commentator=other_commentator, other_arena=other_arena)
+        other = manifest["groups"][EA.OTHER_GROUP]
+        self.assertEqual(other["commentator"], other_commentator)
+        self.assertEqual(other["arena"], other_arena)
+        json.loads(json.dumps(manifest))  # must still round-trip through JSON
 
 
 class SuggestedCuesTests(unittest.TestCase):
@@ -709,6 +884,37 @@ class CheckModeTests(unittest.TestCase):
             missing = EA.check(tmp)
             self.assertEqual(set(missing), {"commentator/eng_commentator_start/eng_commentator_start_01.ogg"})
 
+    def test_check_covers_the_other_group(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            other_commentator_clip = {
+                "name": "eng_commentator_bg_toxin_start_01",
+                "file": "other/commentator/eng_commentator_bg_toxin_start/eng_commentator_bg_toxin_start_01.ogg",
+                "duration_s": 1.0, "channels": 1, "sample_rate": 44100, "source_duration_s": 1.0, "source_rms": 100.0,
+            }
+            other_arena_clip = {
+                "name": "arena_button_click", "file": "other/arena/resources/arena_button_click.ogg",
+                "duration_s": 0.1, "channels": 2, "sample_rate": 44100, "source_duration_s": 0.1,
+                "source_rms": 50.0, "kind": "ui", "kind_guess": True, "source_file": "resources.assets",
+            }
+            manifest = EA.build_manifest(
+                {}, {}, {},
+                [],
+                other_commentator={"eng_commentator_bg_toxin_start": {
+                    "family": "blast_gang_excluded", "reason": "x", "arena_tag": ["ToxinStart"],
+                    "clips": [other_commentator_clip]}},
+                other_arena={"resources": {"clips": [other_arena_clip]}})
+            (Path(tmp) / "manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
+
+            # Neither file exists yet -- both must be reported missing.
+            missing = EA.check(tmp)
+            self.assertEqual(set(missing), {other_commentator_clip["file"], other_arena_clip["file"]})
+
+            for clip in (other_commentator_clip, other_arena_clip):
+                path = Path(tmp) / clip["file"]
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_bytes(b"x" * 100)
+            self.assertEqual(EA.check(tmp), {})
+
 
 @unittest.skipUnless(os.path.isdir(ARENA_SOURCE) and os.path.isdir(EFT_SOURCE),
                      "Arena/EFT installs not present on this machine")
@@ -720,7 +926,8 @@ class RealSourceExtractionTests(unittest.TestCase):
     def test_extract_two_small_groups(self):
         with tempfile.TemporaryDirectory() as tmp:
             manifest = EA.extract_all(ARENA_SOURCE, EFT_SOURCE, tmp, only=["round_signal", "capture"], workers=2)
-            self.assertEqual(set(manifest["groups"]), {"round_signal", "capture", EA.COMMENTATOR_GROUP})
+            self.assertEqual(set(manifest["groups"]),
+                             {"round_signal", "capture", EA.COMMENTATOR_GROUP, EA.OTHER_GROUP})
             round_signal_clips = manifest["groups"]["round_signal"]["clips"]
             capture_clips = manifest["groups"]["capture"]["clips"]
             self.assertEqual(len(round_signal_clips), 1)

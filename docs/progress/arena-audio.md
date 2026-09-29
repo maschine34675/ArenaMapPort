@@ -426,3 +426,154 @@ and `dist/` (gitignored, what the client csproj stages) ever hold the actual `.o
 git-tracked file is `tools/extract/arena_audio_catalog.json`, which names commentator **categories** and
 the in-game `ArenaTagBank` event **tag names** they belong to, never audio — matching this project's
 existing policy for banners, deploy art, native spatial audio, decals and MultiFlare (AGENTS.md).
+
+## `other` group — unassigned audio (2026-09-29, user request)
+
+User request: *"export the unassigned clips into an 'other'/'Sonstiges' category too, maybe they're
+useful for something else."* `manifest.groups.other` is a catch-all: every clip in it is explicitly
+**unassigned** — `other.note` says so, and none of them appear anywhere in `suggested_arenamode_cues`.
+Two independently-selected parts, both under `other/<part>/...`:
+
+### Part 1 — `other/commentator/<category>/<clip>.ogg`: the 15 excluded commentator categories
+
+Every clip in the 15 commentator categories `arena_audio_catalog.json` excludes (14 Blast-Gang-tagged, 1
+arena-specific — see "Catalog decisions"/"Tag evidence" above) — nothing about that classification
+changed: `classify_categories()`, `read_tag_bank()`/`validate_tag_bank()` and the catalog itself are
+untouched, and `scan_commentator_bank()` now shares one bank scan between the main `commentator` group
+and this part instead of opening the 598 MB bundle twice in a default run. "Excluded" always meant "not
+in the suggested ArenaMode set", not "not exported" — each category keeps its `family`, `reason` and
+`arena_tag` in the manifest, same shape as the main group's categories.
+
+| Metric | Value |
+|---|---|
+| Categories | 15 (all of them — every excluded category has ≥1 surviving clip) |
+| Clips | 433 |
+| Size | 21.65 MiB |
+| Skipped (silent/undecodable) | 0 |
+
+### Part 2 — `other/arena/<source_key>/<clip>.ogg`: unassigned Arena-only clips
+
+Every `AudioClip` in `OTHER_ARENA_SOURCES` (Arena's own `resources.assets`, plus the `blastgang`/
+`soundeffects`/`arenaaudio`/`arena_effects` bundles) whose name is not already claimed by another group
+(including the commentator bank itself, included or excluded — `arena_claimed_names()`) and does not
+exist as an `AudioClip` name in EFT 0.16.9.5's own `resources.assets` (`eft_audio_clip_names()`, 508
+names) — so shared EFT audio (weapon/footstep/ambience names Arena kept verbatim from its EFT fork) is
+never duplicated. A name repeated across more than one source file is kept once, from the first source
+file it appears in (`plan_other_arena_selection()`, pure/tested with fake data); every later repeat is
+recorded in `other.arena_duplicate_clips`, not re-extracted. Each surviving clip gets a coarse, always-a-
+guess `kind` (`ui`/`music`/`sfx`/`voice`, `kind_guess: true` always — this group is unclassified by
+construction) from `guess_kind()`, a whole-token name heuristic (e.g. `arena_button_click` → `ui` via the
+`button` token, `usec_03_ending_03` → `voice` via `ending`, everything unmatched → `sfx`).
+
+**Enumeration before extraction** (task requirement — stop part 2 if projected OGG size would exceed 400
+MiB): a throwaway scratch probe (`probe_other.py`, not part of the shipped pipeline) ran the same
+selection logic ahead of time and found 875 `AudioClip` objects scanned across the 5 source files, 335
+selected after the EFT-shared/already-claimed/duplicate filters, ~227.6 minutes total duration, a rough
+q5-bitrate projection of ~168 MiB — comfortably under the 400 MiB cap, so extraction went ahead. The real
+run came in well under that projection (see below), since the rough projection assumed a flat per-second
+rate rather than actual libvorbis output size.
+
+| Source (`OTHER_ARENA_SOURCES` key) | File | Clips exported | Size |
+|---|---|---|---|
+| `resources` | Arena `resources.assets` | 302 | 71.18 MiB |
+| `blastgang` | `.../content/audio/arena/blastgang/blastgangsoundsso.bundle` | 14 | 0.77 MiB |
+| `soundeffects` | `.../content/audio/arena/soundeffects/arenasoundeffectstagbankmanager.bundle` (beyond the 2 clips `capture` already exports from it) | 2 | 0.09 MiB |
+| `arenaaudio` | `.../arena/resources/arenaaudio/arenasoundeffectswrapper.bundle` | 0 (every clip in it duplicates `resources.assets` or is already exported by `crowd`/`spectator_glitch`/`result_music`) | — |
+| `arena_effects` | `.../content/audio/phrases/arena_effects.bundle` (beyond the 1 clip `round_signal` already exports from it) | 0 (no other clips in this file) | — |
+| **Total** | | **318** | **72.04 MiB** |
+
+`kind` distribution (all `kind_guess: true`): `sfx` 218, `voice` 76, `ui` 20, `music` 4. The `voice`
+bucket is mostly long (~189 s) per-character "ending_0N" lines and `encircled`/`terminal_cutscene_*`
+tracks — core-EFT-style character voice-over Arena ships under its own names, not part of the commentator
+bank, kept here since nothing suggests an ArenaMode use for them yet. The `ui` bucket matches the task
+brief's named examples exactly: `arena_button_click`/`_over`, `arena_tab_click`, `arena_menu_checkbox`/
+`_dropdown`/`_dropdown_select`/`_escape`, `arena_preset_click`/`_over`, `arena_presets_screen_show`,
+`arena_inspect_click`, `arena_magnifier_click`, `arena_popup_generic`/`_negative`/`_positive`/
+`_attention`, `arena_match_ready_popup`, `arena_wtask_complete`. `music` (all 4): `arena_track_02`,
+`arena_track_03`, `arena_wait_match_background_music`, `bp_tactical_map_music_background_01`.
+`arena_mvp_widget_02` and `arena_mvp_postmatch` both guess `sfx` (neither name contains a `track`/`music`
+token), as does `arena_railway_station_notification`. Also present, all `sfx`: the Blast Gang SFX kit
+(`blastgangsoundsso.bundle`'s 14 clips — `blast_gang_light_on`, `bomb_signal_defuse`/`_plant`,
+`blastgang_defuse_beep`/`_plant_beep`/`_bomb_beep_defuse`/`_bomb_beep_plant`/`_flare_explosion`/
+`_backpack_defuse`/`_backpack_plant`/`_code_running_FP`/`_fireworks_loop`, `blast_gang_notebook_diffuse_loop`),
+`arena_bomb_exploded_signal_01`/`_02`, `arena_railway_station_notification`.
+
+17 clips skipped as silent (same `RMS_SILENCE_THRESHOLD=40.0` guard the rest of this pipeline uses, never
+loosened for this group): 13 `bells_0N`/`bells_1N` chime variants, `amb_rain_indoor_medium`/`_weak`,
+`random_scav_06`, `usec_04_ending_02`, `arena_preset_over`, `BP_1_map_loading`, `booz_2`/`_3` — plausibly
+genuinely quiet source material (distant bells, light rain, a hover sound), not a pipeline bug; recorded
+in `other.arena_skipped_clips`, never a hard failure (task brief: part 2 never fails the whole run for a
+per-clip problem).
+
+11 duplicate names recorded in `other.arena_duplicate_clips` (all `arenaaudio` repeats of a `resources`
+clip, `resources` coming first in `OTHER_ARENA_SOURCES`): `spectator_start`, `arena_mvp_postmatch`,
+`draw_shield`, `shine`, `small_score_2`, `win_shield`, `roll_anim`, `final_screen`, `loose_shield`,
+`big_score`, `rollback_anim`.
+
+### Voice banks deliberately NOT exported
+
+The task brief explicitly excludes Arena's other three commentator voice banks under
+`StreamingAssets/Windows/assets/content/audio/phrases/arena/` (same folder as the English bank this
+pipeline's main `commentator`/`other.commentator` groups already extract from) — available on request,
+not swept by any `--only` flag today:
+
+| Bundle | Voice pack | Size | `AudioClip` objects |
+|---|---|---|---|
+| `arenaspeakertagbankmanager.bundle` | RU (default) | 524.3 MiB | 1640 |
+| `arenageneburnspeakertagbankmanager.bundle` | Geneburn | 235.3 MiB | 785 |
+| `arenageneburnspeakertagbankmanagerpreview.bundle` | Geneburn (preview) | 3.8 MiB | 13 |
+| `arenaspeakertagbankmanagertagillaeng.bundle` | Tagilla (EN) | 404.5 MiB | 1496 |
+| `arenaspeakertagbankmanagertagillaru.bundle` | Tagilla (RU) | 467.8 MiB | 1530 |
+| **Total** | | **~1.6 GiB** | **5464** |
+
+### Combined `other` totals and pipeline changes
+
+751 clips (433 + 318), 93.69 MiB — well under the 400 MiB budget the task set for part 2 alone.
+`extract_commentator()` was split into `scan_commentator_bank()` (one bank scan + catalog/tag-bank
+validation, shared) + `extract_commentator()` (included categories, unchanged behavior/output) +
+`extract_commentator_other()` (excluded categories, new); `extract_all()` now scans the bank once
+whenever either `commentator` or `other` is requested. `--only other` builds both parts of `other` in one
+flag (needs no prior `--only commentator` run); `--check` covers `other`'s different manifest shape
+(`_iter_manifest_clip_lists()` extended for `groups.other.commentator.*.clips` /
+`groups.other.arena.*.clips`, alongside the existing `clips`/`categories` shapes). Every one of the 7
+pre-existing groups' output was confirmed byte-identical before/after this change (same manifest content
+for `capture`/`crowd`/`result_music`/`round_signal`/`spectator_glitch`/`stingers`/`commentator`).
+
+### Real run evidence (2026-09-29, this session)
+
+```
+python tools/extract/extract_arena_audio.py --only other
+[commentator] scanning bank: 1640 clips
+[commentator] 69 categories: 54 included, 15 excluded
+[other/commentator] 433/433 clips ok
+[other/arena] 335 clip(s) selected (875 scanned, 11 duplicate name(s) across sources)
+  [warn] other/arena/resources/amb_rain_indoor_medium: skipped (... rms=23.3, threshold=40.0)
+  ... (17 total, see "Voice banks"/skip list above)
+[other/arena] 318/335 clips ok, 17 skipped
+OK: 1975 clip(s), 150.30 MiB, 202.7s wall -> D:\ArenaMapPort\work\extract\arena-audio
+
+python tools/extract/extract_arena_audio.py --check
+OK: manifest and referenced files present under D:\ArenaMapPort\work\extract\arena-audio
+```
+
+Also re-ran the full default extraction (no `--only`, all 8 groups including `other` in one process) to
+exercise the shared-bank-scan path where both `commentator` and `other/commentator` are requested
+together: same 1975 clips / 150.30 MiB total, same single pre-existing `eng_commentator_eng_match_end_red_07`
+skip in the main commentator group, same 17 `other/arena` skips — 316.3 s wall (bank scanned once, not
+twice). `--check` passed again afterward.
+
+`python -m unittest discover -s tools/tests -p "test_*.py"`: 638 tests, all pass (28 skipped, unrelated to
+this work) — `test_arena_audio.py` now runs 100 tests (up from 80): `GuessKindTests`,
+`ArenaClaimedNamesTests`, `PlanOtherArenaSelectionTests`, `ListAudioclipMetasTests` (all fake-data, no
+UnityPy/install read) cover the selection/dedupe/EFT-name-filter/kind-guess logic directly; `OutputPathTests`
+gained `other_commentator_output_path`/`other_arena_output_path` cases; `ManifestSchemaTests` gained
+shape checks for `groups.other`; `CheckModeTests` gained a case proving `--check` reports/clears missing
+files under `other.commentator.*.clips`/`other.arena.*.clips`; `GroupSourcesTests`/`RealSourceExtractionTests`
+updated for `ALL_GROUPS` now including `other`. `pwsh tools/tests/test_unity_log_scan.ps1`: 8 cases, all
+pass, unaffected (no client-log changes in this work).
+
+`dotnet build ArenaMapPort.Client/ArenaMapPort.Client.csproj -c Release -p:ArenaMapPortDllOnly=true`
+staged the new folder with no csproj change needed on the audio side: `ArenaMapPortStageArenaAudio`'s
+existing `Include="$(ArenaMapPortAudioDir)\**\*.*"` glob is already recursive, so `other/` was picked up
+automatically. Confirmed `dist/BepInEx/plugins/ArenaMapPort/arena-audio/other/{commentator,arena}/` present
+with exactly 751 `.ogg` files (433 + 318) after first removing the stale pre-`other` `dist/` folder.

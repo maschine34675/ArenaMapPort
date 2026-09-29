@@ -54,6 +54,31 @@ Sources (every path and clip verified against a live read of the user's own inst
     `resources.assets` -- these really do carry odd, non-44.1 kHz native sample rates (23-38 kHz); this
     script resamples every group to 44100 Hz on the way out (ArenaMode's own convention), never just
     the odd ones.
+  - other: a catch-all "Sonstiges" group for audio this script can name and safely export but does not
+    suggest any ArenaMode cue for (user request 2026-09-29: "export the unassigned clips too, maybe
+    they're useful for something else"). Two independently-selected parts, both written under
+    `other/<part>/...` and both explicitly marked unassigned in the manifest:
+      (1) `other/commentator/<category>/<clip>.ogg` -- every clip in the 15 commentator categories
+          `arena_audio_catalog.json` excludes (14 Blast-Gang-tagged, 1 arena-specific -- see above).
+          "Excluded" only ever meant "not in the suggested set"; this part exports them anyway, with
+          their `arena_tag`/exclusion reason carried over, using the exact same catalog/tag-bank
+          validation as the main commentator group (nothing about that classification changes).
+      (2) `other/arena/<source_key>/<clip>.ogg` -- every AudioClip in a handful of additional Arena-only
+          source files (`OTHER_ARENA_SOURCES` below: Arena's own `resources.assets`, plus the
+          `blastgang`/`soundeffects`/`arenaaudio`/`arena_effects` bundles) whose name is not already
+          claimed by any other group (including the commentator bank itself) and does not also exist as
+          an AudioClip name in EFT 0.16.9.5's own `resources.assets` (`eft_audio_clip_names()`) -- so
+          audio EFT already ships is never duplicated. A name repeated across more than one of these
+          source files is kept once, from the first source file it is found in
+          (`plan_other_arena_selection()`); every later repeat is recorded, not extracted. Each surviving
+          clip gets a coarse, always-a-guess `kind` (`ui`/`music`/`sfx`/`voice`, `guess_kind()`) inferred
+          from its own name -- this group is unclassified by construction, unlike the curated groups
+          above. The much larger non-English/character-specific commentator voice banks under
+          `.../phrases/arena/` (RU default, Geneburn, Tagilla -- well over 1 GB combined) are
+          deliberately NOT swept here; see docs/progress/arena-audio.md for their sizes/clip counts.
+    Both parts skip a silent/undecodable clip with a logged warning instead of failing the whole run --
+    this group is a leftover bucket, not a curated set with a "must stay playable" guarantee the way an
+    included commentator category is.
 
 Every non-commentator clip is selected by its own `m_Name` inside its source file, never by path_id
 alone -- a `path_id` recorded in `GROUP_SOURCES` below is only a drift-detection hint (logged, not
@@ -80,6 +105,7 @@ clips is still a hard failure.
 CLI:
     python extract_arena_audio.py                        # extract every group into work/extract/arena-audio
     python extract_arena_audio.py --only commentator      # extract just one group (repeatable flag)
+    python extract_arena_audio.py --only other             # unassigned/"Sonstiges" group only (both its parts)
     python extract_arena_audio.py --check                 # verify manifest.json + files exist; touches no source
     python extract_arena_audio.py --source <ArenaData> --eft-source <EFTData> --output <dir>
 """
@@ -124,6 +150,7 @@ RMS_SILENCE_THRESHOLD = 40.0  # 16-bit PCM units (full scale 32768); measured re
 DEFAULT_WORKERS = 8
 
 COMMENTATOR_GROUP = "commentator"
+OTHER_GROUP = "other"
 
 # group -> {root: "arena"|"eft", file: <path relative to that install's *_Data dir>,
 #           clips: {clip_name: path_id_hint_or_None}}
@@ -190,7 +217,122 @@ COMMENTATOR_SOURCE = {
     "file": "StreamingAssets/Windows/assets/content/audio/phrases/arena/arenaspeakertagbankmanagereng.bundle",
 }
 
-ALL_GROUPS = sorted(GROUP_SOURCES) + [COMMENTATOR_GROUP]
+ALL_GROUPS = sorted(GROUP_SOURCES) + [COMMENTATOR_GROUP, OTHER_GROUP]
+
+# "other/arena" part (task brief part 2): additional Arena-only source files to sweep for clips not
+# already claimed by any GROUP_SOURCES group or the commentator bank, and not shared with EFT's own
+# resources.assets. `key` is the other/arena/<key>/ output folder name. Order matters: it is the dedupe
+# priority when the same clip name turns up in more than one of these files (plan_other_arena_selection()
+# keeps the first). "resources.assets" and the soundeffects/arena_effects bundles below are the same
+# physical files other groups (crowd/spectator_glitch/result_music, capture, round_signal) already read
+# from -- overlap with those groups' own clip names is filtered out by name, not by skipping the file.
+OTHER_ARENA_SOURCES = [
+    {"key": "resources", "root": "arena", "file": "resources.assets"},
+    {"key": "blastgang", "root": "arena",
+     "file": "StreamingAssets/Windows/assets/content/audio/arena/blastgang/blastgangsoundsso.bundle"},
+    {"key": "soundeffects", "root": "arena",
+     "file": "StreamingAssets/Windows/assets/content/audio/arena/soundeffects/arenasoundeffectstagbankmanager.bundle"},
+    {"key": "arenaaudio", "root": "arena",
+     "file": "StreamingAssets/Windows/assets/arena/resources/arenaaudio/arenasoundeffectswrapper.bundle"},
+    {"key": "arena_effects", "root": "arena",
+     "file": "StreamingAssets/Windows/assets/content/audio/phrases/arena_effects.bundle"},
+]
+
+# guess_kind() token sets -- name-only heuristic for the "other/arena" part, always a guess (this group is
+# unclassified by construction). Checked in this order: ui, then music, then voice; anything left is sfx.
+_OTHER_KIND_UI_TOKENS = {"button", "menu", "tab", "preset", "presets", "inspect", "magnifier",
+                         "popup", "checkbox", "dropdown", "wtask"}
+_OTHER_KIND_MUSIC_TOKENS = {"track", "music"}
+_OTHER_KIND_VOICE_TOKENS = {"voice", "commentator", "speaker", "cutscene", "encircled", "ending"}
+
+
+def guess_kind(clip_name: str) -> str:
+    """Coarse ui/music/sfx/voice guess from a clip's own name (task brief: "a coarse kind ... inferred
+    from the name with a guess flag"). Every clip in the 'other/arena' part is unclassified by
+    construction -- that is why it ended up in 'other' rather than a curated group -- so this is always a
+    guess, never a confirmed classification the way a commentator category's family is. Pure string
+    logic, no I/O; matched against whole underscore-separated tokens, not substrings, so e.g. 'bolt_click'
+    is not mistaken for a UI 'click' sound just because both contain the letters."""
+    tokens = set(clip_name.lower().split("_"))
+    if tokens & _OTHER_KIND_UI_TOKENS:
+        return "ui"
+    if tokens & _OTHER_KIND_MUSIC_TOKENS:
+        return "music"
+    if tokens & _OTHER_KIND_VOICE_TOKENS:
+        return "voice"
+    return "sfx"
+
+
+def eft_audio_clip_names(eft_source) -> set:
+    """Every AudioClip m_Name in EFT's own resources.assets (508 verified 2026-09-29) -- names only, no
+    audio decode. Used to keep the 'other/arena' sweep from duplicating audio EFT 0.16.9.5 already ships
+    (Arena forked from EFT and kept many original sound-effect names verbatim). Unity-dependent."""
+    env = _load_environment(Path(eft_source), "resources.assets")
+    names = set()
+    for obj in env.objects:
+        if obj.type.name != "AudioClip":
+            continue
+        names.add(obj.read_typetree()["m_Name"])
+    return names
+
+
+def arena_claimed_names(commentator_clip_names) -> set:
+    """Names already spoken for by another manifest group -- every 'other/arena' candidate must skip
+    these. `commentator_clip_names`: every clip name in the commentator bank (included AND excluded --
+    excluded ones are handled by the 'other/commentator' part, never by 'other/arena', even though both
+    live under the same top-level 'other' group). Plus every GROUP_SOURCES clip name rooted in 'arena'
+    (stingers is rooted 'eft' and never collides with this Arena-only sweep by construction, since
+    eft_audio_clip_names() already filters out anything sharing a name with EFT's own resources.assets).
+    Pure, no I/O."""
+    names = set(commentator_clip_names)
+    for spec in GROUP_SOURCES.values():
+        if spec["root"] == "arena":
+            names.update(spec["clips"].keys())
+    return names
+
+
+def _list_audioclip_metas(env):
+    """Every AudioClip object's own metadata (name/channels/frequency/length) in a loaded environment,
+    sorted by path_id for a stable, deterministic order -- no audio decode. Unlike _index_clip_names, a
+    repeated m_Name within one file is not an error here: the caller's dedupe logic
+    (plan_other_arena_selection()) decides what to do about repeats, including within a single file, not
+    just across files. Unity-dependent."""
+    metas = []
+    for obj in env.objects:
+        if obj.type.name != "AudioClip":
+            continue
+        tree = obj.read_typetree()
+        metas.append({"path_id": obj.path_id, "name": tree["m_Name"], "channels": tree.get("m_Channels"),
+                      "frequency": tree.get("m_Frequency"), "length_s": tree.get("m_Length")})
+    metas.sort(key=lambda m: m["path_id"])
+    return metas
+
+
+def plan_other_arena_selection(source_clip_lists, eft_names, claimed_names):
+    """Pure selection/dedupe logic for the 'other/arena' part -- no I/O, no ffmpeg, the part of this
+    pipeline covered directly by fake-data tests. `source_clip_lists`: ordered
+    [(source_key, [clip_meta, ...]), ...] as read from OTHER_ARENA_SOURCES, in that order. A clip whose
+    name is in `eft_names` (shared with EFT's own resources.assets) or `claimed_names` (already exported
+    by another group) is dropped outright -- never selected, never counted as a duplicate against
+    anything. Of what remains, the first occurrence of a name (in `source_clip_lists` order, including a
+    repeat within the SAME source file) is selected; every later occurrence of that name is recorded as a
+    duplicate instead of re-extracted. Returns (selected: [(source_key, clip_meta), ...],
+    duplicates: [{name, kept_source, skipped_source, skipped_path_id}, ...])."""
+    selected = []
+    duplicates = []
+    kept_source_by_name = {}
+    for source_key, metas in source_clip_lists:
+        for meta in metas:
+            name = meta["name"]
+            if name in eft_names or name in claimed_names:
+                continue
+            if name in kept_source_by_name:
+                duplicates.append({"name": name, "kept_source": kept_source_by_name[name],
+                                   "skipped_source": source_key, "skipped_path_id": meta["path_id"]})
+                continue
+            kept_source_by_name[name] = source_key
+            selected.append((source_key, meta))
+    return selected, duplicates
 
 # ArenaMode cue key -> ordered list of picks {group, category|clip, team?, note?}. Cue keys are the real
 # ones ArenaMode.Client.Audio.AnnouncerCueCatalog/AnnouncerService.CalloutPriority actually key sound
@@ -529,6 +671,18 @@ def clip_output_path(output_dir, group: str, clip_name: str, category: str = Non
     return Path(output_dir) / group / f"{clip_name}.ogg"
 
 
+def other_commentator_output_path(output_dir, category: str, clip_name: str) -> Path:
+    """<output_dir>/other/commentator/<category>/<clip_name>.ogg -- 'other' group part 1 (excluded
+    commentator categories). Unity-independent."""
+    return Path(output_dir) / OTHER_GROUP / COMMENTATOR_GROUP / category / f"{clip_name}.ogg"
+
+
+def other_arena_output_path(output_dir, source_key: str, clip_name: str) -> Path:
+    """<output_dir>/other/arena/<source_key>/<clip_name>.ogg -- 'other' group part 2 (unassigned
+    Arena-only clips). Unity-independent."""
+    return Path(output_dir) / OTHER_GROUP / "arena" / source_key / f"{clip_name}.ogg"
+
+
 def build_ffmpeg_command(dest_path, quality=ENCODE_QUALITY, sample_rate=ENCODE_SAMPLE_RATE):
     """WAV bytes arrive on stdin (pipe:0); ffmpeg writes straight to dest_path. Channel count is
     intentionally not forced -- ffmpeg passes the input's own channel count through unchanged."""
@@ -761,12 +915,16 @@ def extract_group(group_name, arena_source, eft_source, output_dir,
     return clips, source
 
 
-def extract_commentator(arena_source, output_dir, catalog,
-                        quality=ENCODE_QUALITY, sample_rate=ENCODE_SAMPLE_RATE, workers=DEFAULT_WORKERS):
-    """Extracts every clip in every catalog-included commentator category, after cross-checking the
-    catalog's per-category `arena_tag` field against the bank's own ArenaTagBank MonoBehaviours
-    (`read_tag_bank()`/`validate_tag_bank()`). Returns (categories, excluded_categories, source,
-    skipped_clips)."""
+def scan_commentator_bank(arena_source, catalog):
+    """One read-only pass over the commentator bank, shared by both the main 'commentator' group
+    (included categories, extract_commentator()) and the 'other/commentator' part (excluded categories,
+    extract_commentator_other()) -- opening and indexing the 598 MB bundle once even when a default run
+    builds both, rather than scanning it twice. Cross-checks the catalog's per-category `arena_tag` field
+    against the bank's own ArenaTagBank MonoBehaviours (`read_tag_bank()`/`validate_tag_bank()`) exactly
+    as the original single-purpose extract_commentator() always did -- that check is unconditional here,
+    since both callers rely on the included/excluded split it validates. Returns a dict: `index`
+    (name -> AudioClip reader), `by_category` ({category: [clip_name, ...]}), `included`/`excluded`
+    (category name sets), `reasons` ({category: catalog entry}), `source` (source descriptor)."""
     root_dir = _root_dir(COMMENTATOR_SOURCE["root"], arena_source, None)
     env = _load_environment(root_dir, COMMENTATOR_SOURCE["file"])
     index = _index_clip_names(env)  # purpose-built, self-contained bank: index every clip
@@ -785,17 +943,25 @@ def extract_commentator(arena_source, output_dir, catalog,
     tag_categories = read_tag_bank(env)
     validate_tag_bank(tag_categories, catalog)
 
-    # Every included category has many variant clips (ArenaMode picks a random one at runtime -- see
-    # docs/progress/arena-audio.md), so one flawed source variant must not abort the other ~1260. A
-    # decode-time failure (e.g. the RMS silence guard) here is caught per clip and the clip is
-    # SKIPPED, not fatal, unless it would leave a whole category with zero surviving clips -- that
-    # would make an included line family entirely unplayable, which stays a hard failure. The six
-    # small named-clip groups (extract_group) have no such redundancy, so a failure there still aborts
-    # the whole run.
-    output_dir = Path(output_dir)
+    unity_version = next(iter(index.values())).assets_file.unity_version if index else None
+    source = _source_descriptor(COMMENTATOR_SOURCE["root"], COMMENTATOR_SOURCE["file"], root_dir, unity_version)
+    reasons = {c["category"]: c for c in catalog["categories"]}
+    return {"index": index, "by_category": by_category, "included": included, "excluded": excluded,
+            "reasons": reasons, "source": source}
+
+
+def _build_commentator_categories(index, by_category, categories, reasons, output_dir, path_builder,
+                                  quality, sample_rate, workers, require_nonempty, log_prefix="commentator"):
+    """Decodes+encodes every clip in every category of `categories` (a subset of by_category's keys) via
+    `path_builder(output_dir, category, clip_name)` for the dest path. Shared by extract_commentator()
+    (included categories, require_nonempty=True: an included category left with zero surviving clips is a
+    hard failure -- an included line family would otherwise be entirely unplayable) and
+    extract_commentator_other() (excluded categories, require_nonempty=False: task brief, the 'other'
+    group never hard-fails the whole run for a per-clip problem). A per-clip decode/encode failure is
+    always skipped+recorded here, never fatal by itself -- only require_nonempty's own check can raise."""
     jobs = []
     decode_failures = []
-    for category in sorted(included):
+    for category in sorted(categories):
         for clip_name in sorted(by_category[category]):
             reader = index[clip_name]
             try:
@@ -805,8 +971,7 @@ def extract_commentator(arena_source, output_dir, catalog,
                 continue
             jobs.append({
                 "name": clip_name, "category": category, "wav": wav_bytes, "meta": meta,
-                "output_dir": output_dir,
-                "dest": clip_output_path(output_dir, COMMENTATOR_GROUP, clip_name, category),
+                "output_dir": output_dir, "dest": path_builder(output_dir, category, clip_name),
                 "path_id_hint": None, "path_id_actual": reader.path_id,
             })
 
@@ -814,12 +979,11 @@ def extract_commentator(arena_source, output_dir, catalog,
     skipped = [{"name": name, "category": category, "reason": err} for name, category, err in decode_failures]
     skipped += [{"name": job["name"], "category": job["category"], "reason": err} for job, err in encode_failures]
     for entry in skipped:
-        print(f"  [warn] commentator/{entry['category']}/{entry['name']}: skipped ({entry['reason']})")
+        print(f"  [warn] {log_prefix}/{entry['category']}/{entry['name']}: skipped ({entry['reason']})")
 
-    reasons = {c["category"]: c for c in catalog["categories"]}
     categories_out = {}
     empty_categories = []
-    for category in sorted(included):
+    for category in sorted(categories):
         clip_names = [name for name in sorted(by_category[category]) if name in results]
         if not clip_names:
             empty_categories.append(category)
@@ -828,26 +992,150 @@ def extract_commentator(arena_source, output_dir, catalog,
             "family": reasons[category]["family"], "reason": reasons[category]["reason"],
             "arena_tag": reasons[category]["arena_tag"], "clips": [results[name] for name in clip_names],
         }
-    _require(not empty_categories,
-              "commentator categor" + ("y" if len(empty_categories) == 1 else "ies") +
-              f" left with zero surviving clips after validation failures: {sorted(empty_categories)}")
-    excluded_out = {category: {"reason": reasons[category]["reason"], "arena_tag": reasons[category]["arena_tag"]}
-                    for category in sorted(excluded)}
+    if require_nonempty:
+        _require(not empty_categories,
+                  "commentator categor" + ("y" if len(empty_categories) == 1 else "ies") +
+                  f" left with zero surviving clips after validation failures: {sorted(empty_categories)}")
+    return categories_out, skipped
 
-    print(f"[commentator] {len(results)}/{len(results) + len(skipped)} clips ok"
+
+def extract_commentator(bank: dict, output_dir, quality=ENCODE_QUALITY, sample_rate=ENCODE_SAMPLE_RATE,
+                        workers=DEFAULT_WORKERS):
+    """Builds the main commentator group (every catalog-included category) from an already-scanned `bank`
+    (scan_commentator_bank()). Returns (categories_out, excluded_out, skipped_clips)."""
+    output_dir = Path(output_dir)
+    categories_out, skipped = _build_commentator_categories(
+        bank["index"], bank["by_category"], bank["included"], bank["reasons"], output_dir,
+        lambda out, category, clip: clip_output_path(out, COMMENTATOR_GROUP, clip, category),
+        quality, sample_rate, workers, require_nonempty=True)
+    excluded_out = {category: {"reason": bank["reasons"][category]["reason"],
+                               "arena_tag": bank["reasons"][category]["arena_tag"]}
+                    for category in sorted(bank["excluded"])}
+    total = sum(len(c["clips"]) for c in categories_out.values())
+    print(f"[commentator] {total}/{total + len(skipped)} clips ok" + (f", {len(skipped)} skipped" if skipped else ""))
+    return categories_out, excluded_out, skipped
+
+
+def extract_commentator_other(bank: dict, output_dir, quality=ENCODE_QUALITY, sample_rate=ENCODE_SAMPLE_RATE,
+                              workers=DEFAULT_WORKERS):
+    """'other' group part 1 (docs/progress/arena-audio.md, task brief): every clip in every commentator
+    category the catalog excludes. "Excluded" only ever meant "not part of the suggested ArenaMode set",
+    not "not exported" -- this reuses the exact same `bank["excluded"]`/`bank["reasons"]` the main
+    commentator group's catalog/tag-bank validation already produced, so nothing about that
+    classification changes. Returns (categories_out, skipped_clips)."""
+    output_dir = Path(output_dir)
+    categories_out, skipped = _build_commentator_categories(
+        bank["index"], bank["by_category"], bank["excluded"], bank["reasons"], output_dir,
+        other_commentator_output_path, quality, sample_rate, workers, require_nonempty=False,
+        log_prefix="other/commentator")
+    total = sum(len(c["clips"]) for c in categories_out.values())
+    print(f"[other/commentator] {total}/{total + len(skipped)} clips ok"
          + (f", {len(skipped)} skipped" if skipped else ""))
-    unity_version = next(iter(index.values())).assets_file.unity_version if index else None
-    source = _source_descriptor(COMMENTATOR_SOURCE["root"], COMMENTATOR_SOURCE["file"], root_dir, unity_version)
-    return categories_out, excluded_out, source, skipped
+    return categories_out, skipped
+
+
+def extract_other_arena(arena_source, eft_source, output_dir, commentator_clip_names,
+                        quality=ENCODE_QUALITY, sample_rate=ENCODE_SAMPLE_RATE, workers=DEFAULT_WORKERS):
+    """'other' group part 2 (docs/progress/arena-audio.md, task brief): every AudioClip in
+    OTHER_ARENA_SOURCES not already claimed by another group (arena_claimed_names(), which needs
+    `commentator_clip_names` -- every name in the commentator bank, included or excluded) and not shared
+    with EFT's own resources.assets (eft_audio_clip_names()). Never a hard failure for a per-clip
+    decode/encode problem (task brief: "silent or undecodable clips are skipped and recorded, never fail
+    the whole run for part 2") -- only a source file that fails to open at all is fatal, via the same
+    _load_environment()/_require() every other group already uses for that. Returns (arena_out:
+    {source_key: {"clips": [...]}}, sources: [source descriptor, ...], skipped: [...], duplicates: [...])."""
+    eft_names = eft_audio_clip_names(eft_source)
+    claimed = arena_claimed_names(commentator_clip_names)
+
+    source_clip_lists = []
+    sources = []
+    readers_by_key = {}
+    source_file_by_key = {}
+    for spec in OTHER_ARENA_SOURCES:
+        root_dir = _root_dir(spec["root"], arena_source, eft_source)
+        env = _load_environment(root_dir, spec["file"])
+        metas = _list_audioclip_metas(env)
+        source_clip_lists.append((spec["key"], metas))
+        source_file_by_key[spec["key"]] = spec["file"]
+        readers_by_key[spec["key"]] = {obj.path_id: obj for obj in env.objects if obj.type.name == "AudioClip"}
+        unity_version = None
+        for obj in env.objects:
+            unity_version = obj.assets_file.unity_version
+            break
+        sources.append(_source_descriptor(spec["root"], spec["file"], root_dir, unity_version))
+
+    selected, duplicates = plan_other_arena_selection(source_clip_lists, eft_names, claimed)
+    scanned = sum(len(metas) for _, metas in source_clip_lists)
+    print(f"[other/arena] {len(selected)} clip(s) selected ({scanned} scanned, "
+         f"{len(duplicates)} duplicate name(s) across sources)")
+
+    output_dir = Path(output_dir)
+    jobs = []
+    decode_failures = []
+    for source_key, meta in selected:
+        reader = readers_by_key[source_key][meta["path_id"]]
+        try:
+            wav_bytes, dmeta = _decode_and_validate_source(reader, meta["name"])
+        except HardExtractError as exc:
+            decode_failures.append((meta["name"], source_key, str(exc)))
+            continue
+        jobs.append({
+            "name": meta["name"], "source_key": source_key, "wav": wav_bytes, "meta": dmeta,
+            "output_dir": output_dir, "dest": other_arena_output_path(output_dir, source_key, meta["name"]),
+            "path_id_hint": None, "path_id_actual": reader.path_id,
+        })
+
+    results, encode_failures = _run_jobs(jobs, quality, sample_rate, workers)
+    skipped = [{"name": name, "source": source_key, "reason": err} for name, source_key, err in decode_failures]
+    skipped += [{"name": job["name"], "source": job["source_key"], "reason": err} for job, err in encode_failures]
+    for entry in skipped:
+        print(f"  [warn] other/arena/{entry['source']}/{entry['name']}: skipped ({entry['reason']})")
+
+    arena_out = collections.defaultdict(list)
+    for job in jobs:
+        if job["name"] not in results:
+            continue
+        entry = dict(results[job["name"]])
+        entry["kind"] = guess_kind(job["name"])
+        entry["kind_guess"] = True
+        entry["source_file"] = source_file_by_key[job["source_key"]]
+        arena_out[job["source_key"]].append(entry)
+    arena_out = {key: {"clips": sorted(clips, key=lambda c: c["name"])} for key, clips in arena_out.items()}
+
+    total = sum(len(v["clips"]) for v in arena_out.values())
+    print(f"[other/arena] {total}/{len(selected)} clips ok" + (f", {len(skipped)} skipped" if skipped else ""))
+    return arena_out, sources, skipped, duplicates
+
+
+OTHER_GROUP_NOTE = ("Unassigned audio -- no suggested_arenamode_cues entry points at anything here. "
+                    "Exported in case it is useful for something else (menu/UI SFX, alternate music, "
+                    "Blast Gang SFX, tutorial/ending voice lines, ...). 'commentator': every clip in a "
+                    "commentator category the catalog excludes (still fully catalogued/tag-validated, "
+                    "just not part of the suggested set). 'arena': every other AudioClip found in Arena's "
+                    "own audio sources that is not already exported by another group and not shared with "
+                    "EFT's own resources.assets, grouped by which source file it came from; each clip "
+                    "carries a best-effort, name-derived 'kind' (ui/music/sfx/voice, always kind_guess: "
+                    "true). See docs/progress/arena-audio.md.")
 
 
 def build_manifest(groups: dict, commentator: dict, excluded_commentator: dict, sources: list,
-                   generated_at: str = None, skipped_commentator_clips: list = None) -> dict:
+                   generated_at: str = None, skipped_commentator_clips: list = None,
+                   other_commentator: dict = None, other_commentator_skipped: list = None,
+                   other_arena: dict = None, other_arena_skipped: list = None,
+                   other_arena_duplicates: list = None) -> dict:
     """Pure assembly of the manifest.json structure -- no I/O, easy to unit test against fake data."""
     all_groups = dict(groups)
     all_groups[COMMENTATOR_GROUP] = {
         "categories": commentator, "excluded_categories": excluded_commentator,
         "skipped_clips": skipped_commentator_clips or [],
+    }
+    all_groups[OTHER_GROUP] = {
+        "note": OTHER_GROUP_NOTE,
+        "commentator": other_commentator or {},
+        "commentator_skipped_clips": other_commentator_skipped or [],
+        "arena": other_arena or {},
+        "arena_skipped_clips": other_arena_skipped or [],
+        "arena_duplicate_clips": other_arena_duplicates or [],
     }
     return {
         "schema_version": SCHEMA_VERSION,
@@ -881,10 +1169,17 @@ def extract_all(arena_source=DEFAULT_ARENA_SOURCE, eft_source=DEFAULT_EFT_SOURCE
     _require(not unknown, f"unknown --only group(s): {sorted(unknown)} (known: {ALL_GROUPS})")
 
     existing_groups = existing.get("groups", {})
-    groups = {name: data for name, data in existing_groups.items() if name != COMMENTATOR_GROUP}
+    groups = {name: data for name, data in existing_groups.items()
+             if name not in (COMMENTATOR_GROUP, OTHER_GROUP)}
     commentator = existing_groups.get(COMMENTATOR_GROUP, {}).get("categories", {})
     excluded_commentator = existing_groups.get(COMMENTATOR_GROUP, {}).get("excluded_categories", {})
     skipped_commentator = existing_groups.get(COMMENTATOR_GROUP, {}).get("skipped_clips", [])
+    existing_other = existing_groups.get(OTHER_GROUP, {})
+    other_commentator = existing_other.get("commentator", {})
+    other_commentator_skipped = existing_other.get("commentator_skipped_clips", [])
+    other_arena = existing_other.get("arena", {})
+    other_arena_skipped = existing_other.get("arena_skipped_clips", [])
+    other_arena_duplicates = existing_other.get("arena_duplicate_clips", [])
     sources = {f"{s['root']}:{s['file']}": s for s in existing.get("sources", [])}
 
     for group_name in sorted(GROUP_SOURCES):
@@ -894,15 +1189,32 @@ def extract_all(arena_source=DEFAULT_ARENA_SOURCE, eft_source=DEFAULT_EFT_SOURCE
         groups[group_name] = {"clips": clips}
         sources[f"{source['root']}:{source['file']}"] = source
 
-    if COMMENTATOR_GROUP in requested:
+    need_commentator = COMMENTATOR_GROUP in requested
+    need_other = OTHER_GROUP in requested
+    if need_commentator or need_other:
         catalog = load_catalog(catalog_path)
-        commentator, excluded_commentator, source, skipped_commentator = extract_commentator(
-            arena_source, output_dir, catalog, quality, sample_rate, workers)
-        sources[f"{source['root']}:{source['file']}"] = source
+        bank = scan_commentator_bank(arena_source, catalog)
+        sources[f"{bank['source']['root']}:{bank['source']['file']}"] = bank["source"]
+
+        if need_commentator:
+            commentator, excluded_commentator, skipped_commentator = extract_commentator(
+                bank, output_dir, quality, sample_rate, workers)
+
+        if need_other:
+            other_commentator, other_commentator_skipped = extract_commentator_other(
+                bank, output_dir, quality, sample_rate, workers)
+            other_arena, other_arena_sources, other_arena_skipped, other_arena_duplicates = extract_other_arena(
+                arena_source, eft_source, output_dir, set(bank["index"].keys()), quality, sample_rate, workers)
+            for other_source in other_arena_sources:
+                sources[f"{other_source['root']}:{other_source['file']}"] = other_source
 
     manifest = build_manifest(groups, commentator, excluded_commentator,
                               sorted(sources.values(), key=lambda s: (s["root"], s["file"])),
-                              skipped_commentator_clips=skipped_commentator)
+                              skipped_commentator_clips=skipped_commentator,
+                              other_commentator=other_commentator,
+                              other_commentator_skipped=other_commentator_skipped,
+                              other_arena=other_arena, other_arena_skipped=other_arena_skipped,
+                              other_arena_duplicates=other_arena_duplicates)
     payload = json.dumps(manifest, indent=2, sort_keys=False).encode("utf-8") + b"\n"
     tmp = manifest_path.with_suffix(".json.tmp")
     tmp.write_bytes(payload)
@@ -915,6 +1227,15 @@ def _iter_manifest_clip_lists(group_data: dict):
         yield group_data["clips"]
     for category_data in group_data.get("categories", {}).values():
         yield category_data.get("clips", [])
+    # The 'other' group's shape differs from every other group ({"commentator": {category: {...,
+    # "clips": [...]}}, "arena": {source_key: {"clips": [...]}}, ...}) -- covered here too so check() and
+    # main()'s summary totals pick up its clips the same way every other group's do.
+    for category_data in group_data.get("commentator", {}).values():
+        if isinstance(category_data, dict):
+            yield category_data.get("clips", [])
+    for source_data in group_data.get("arena", {}).values():
+        if isinstance(source_data, dict):
+            yield source_data.get("clips", [])
 
 
 def check(output_dir=DEFAULT_OUTPUT) -> dict:
