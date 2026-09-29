@@ -3,6 +3,23 @@
 Snapshot for whoever continues (human or agent). Verify the commits named here against `git log`; this file
 is updated by hand at each handover, it is not an automatic record. Read [AGENTS.md](AGENTS.md) first.
 
+## State on 2026-09-29 — Arena content survey and Arena audio extraction for ArenaMode
+
+Branch `feature/arena-audio`, based on `baa5913` (`cleanup/obsolete-config-options`). A read-only survey of
+EFT Arena beyond the maps (seven areas, per-area verification, critic pass) is documented in
+[docs/ARENA-CONTENT-FOR-ARENAMODE.md](docs/ARENA-CONTENT-FOR-ARENAMODE.md): worthwhile are mainly audio, a few
+UI sprites and map-side data for ArenaMode's planned Control Point mode; Arena code is IL2CPP with encrypted
+metadata and rule numbers are server-side; Arena bundles are Unity 6000.3.6f1 (skinned cosmetics are out).
+
+First slice: `tools/extract/extract_arena_audio.py` + `tools/extract/arena_audio_catalog.json` extract the
+English commentator (categories classified by the bank's own event tags, validated at every run), EFT's own
+dormant `arena_start/win/lose` stingers and small Arena clip groups into `work/extract/arena-audio` (1224 OGG,
+56.6 MiB, one silent source clip skipped); the client csproj stages it optionally into
+`dist/.../ArenaMapPort/arena-audio/`. ArenaMapPort never plays it: the manifest is a contract for ArenaMode
+([docs/progress/arena-audio.md](docs/progress/arena-audio.md), with a suggested cue mapping). Integration is
+ArenaMode's own work (that repo is read-only here). Next on this side: map-side Control Point data
+(capture anchor, SPAWN_BOUND boxes) once ArenaMode builds Control Point slice 0.
+
 ## State on 2026-09-28 — configuration cleanup
 
 Branch `cleanup/obsolete-config-options`, based on `695bb5e`. All 39 config-binding

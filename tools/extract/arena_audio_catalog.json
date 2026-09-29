@@ -1,0 +1,756 @@
+{
+  "schema_version": 1,
+  "source": {
+    "bundle": "StreamingAssets/Windows/assets/content/audio/phrases/arena/arenaspeakertagbankmanagereng.bundle",
+    "description": "Arena EN commentator bank (all clips mono, 44.1 kHz)",
+    "researched": "2026-09-29",
+    "expected_clip_count": 1640,
+    "expected_category_count": 69
+  },
+  "known_tags": {
+    "StartGame": {
+      "mode": "generic",
+      "purpose": "match start line"
+    },
+    "StartRound": {
+      "mode": "generic",
+      "purpose": "round start line"
+    },
+    "CountDown": {
+      "mode": "generic",
+      "purpose": "pre-round 'get ready' countdown (single clip)"
+    },
+    "FirstBlood": {
+      "mode": "generic",
+      "purpose": "first kill of the match"
+    },
+    "KillingSpree": {
+      "mode": "generic",
+      "purpose": "generic multi-kill streak line (one tier, not a ladder)"
+    },
+    "PlayerDead": {
+      "mode": "generic",
+      "purpose": "on-death lines: generic + per-team (red/blue)"
+    },
+    "LowDeathIntensity": {
+      "mode": "generic",
+      "purpose": "slow-kill-pace color commentary"
+    },
+    "HighDeathIntensity": {
+      "mode": "generic",
+      "purpose": "fast-kill-pace color commentary"
+    },
+    "TeamLead": {
+      "mode": "generic",
+      "purpose": "which team currently leads (start/middle/end x red/blue)"
+    },
+    "KillAllWin": {
+      "mode": "generic",
+      "purpose": "one team wipes the other (bg_ prefix on the blue side is naming only, not Blast-Gang-gated)"
+    },
+    "MatchWon": {
+      "mode": "generic",
+      "purpose": "round/clash win-or-draw lines (Arena's own tag name despite some members firing at round level)"
+    },
+    "MatchEnd": {
+      "mode": "generic",
+      "purpose": "match end lines: TDM colour + ShootOut per-colour + clash draw"
+    },
+    "NextRound": {
+      "mode": "generic",
+      "purpose": "next ShootOut round/battle, or the final-round announcement"
+    },
+    "TimeExpire": {
+      "mode": "generic",
+      "purpose": "clock expired"
+    },
+    "CheckPointTimeExpired": {
+      "mode": "generic",
+      "purpose": "1/3 minute remaining"
+    },
+    "UnfairGame": {
+      "mode": "generic",
+      "purpose": "lopsided-match color commentary"
+    },
+    "OvertimeStart": {
+      "mode": "generic",
+      "purpose": "overtime begins (bg_ prefix is naming only, not Blast-Gang-gated -- generic OvertimeStart tag)"
+    },
+    "CapturePointAppearance": {
+      "mode": "generic",
+      "purpose": "a capture point becomes contestable"
+    },
+    "CapturedPoint": {
+      "mode": "generic",
+      "purpose": "a specific point captured or retaken"
+    },
+    "AllPointsCaptured": {
+      "mode": "generic",
+      "purpose": "one team holds every point"
+    },
+    "PurifiedTeamAppearance": {
+      "mode": "arena_specific",
+      "purpose": "Arena-specific 'Purified' team spawn event, not a team sweep/wipe despite the category's own name"
+    },
+    "TeamSwapped": {
+      "mode": "blast_gang",
+      "purpose": "Blast Gang attack/defend role swap"
+    },
+    "SpecialItemPlanted": {
+      "mode": "blast_gang",
+      "purpose": "Blast Gang bomb planted"
+    },
+    "SpecialItemDefusedTeamWin": {
+      "mode": "blast_gang",
+      "purpose": "Blast Gang bomb defused, defenders win"
+    },
+    "AttackTeamWin": {
+      "mode": "blast_gang",
+      "purpose": "Blast Gang attackers win"
+    },
+    "DefendTeamWin": {
+      "mode": "blast_gang",
+      "purpose": "Blast Gang defenders win"
+    },
+    "TimeExpiredAttackTeamWin": {
+      "mode": "blast_gang",
+      "purpose": "Blast Gang defenders win by clock"
+    },
+    "TeamDiedButWin": {
+      "mode": "blast_gang",
+      "purpose": "Blast Gang team wins despite being wiped (bomb outcome)"
+    },
+    "ToxinStart": {
+      "mode": "blast_gang",
+      "purpose": "Blast Gang post-detonation toxin area denial begins"
+    },
+    "BlastGangMatchendDraw": {
+      "mode": "blast_gang",
+      "purpose": "Blast Gang match ends in a draw"
+    }
+  },
+  "categories": [
+    {
+      "category": "eng_clash_draw",
+      "included": true,
+      "family": "draw_overtime",
+      "reason": "clash/tiebreak ends in a draw",
+      "arena_tag": [
+        "MatchEnd",
+        "MatchWon"
+      ]
+    },
+    {
+      "category": "eng_commentator_1_min_left",
+      "included": true,
+      "family": "general_time",
+      "reason": "one minute remaining",
+      "arena_tag": [
+        "CheckPointTimeExpired"
+      ]
+    },
+    {
+      "category": "eng_commentator_3_min_left",
+      "included": true,
+      "family": "general_time",
+      "reason": "three minutes remaining",
+      "arena_tag": [
+        "CheckPointTimeExpired"
+      ]
+    },
+    {
+      "category": "eng_commentator_all_points_blue_team_captured",
+      "included": true,
+      "family": "capture",
+      "reason": "blue team holds every point",
+      "arena_tag": [
+        "AllPointsCaptured"
+      ]
+    },
+    {
+      "category": "eng_commentator_all_points_red_team_captured",
+      "included": true,
+      "family": "capture",
+      "reason": "red team holds every point",
+      "arena_tag": [
+        "AllPointsCaptured"
+      ]
+    },
+    {
+      "category": "eng_commentator_bg_blue_defend_team_win_time",
+      "included": false,
+      "family": "blast_gang_excluded",
+      "reason": "Blast Gang mode not planned (AGENTS.md, ArenaMode targets TDM/FFA)",
+      "arena_tag": [
+        "TimeExpiredAttackTeamWin"
+      ]
+    },
+    {
+      "category": "eng_commentator_bg_kill_all_win_blue",
+      "included": true,
+      "family": "team",
+      "reason": "blue team wipes the enemy team (generic team wipe despite the bg_ prefix, not Blast-Gang-specific)",
+      "arena_tag": [
+        "KillAllWin"
+      ]
+    },
+    {
+      "category": "eng_commentator_bg_match_end_draw",
+      "included": false,
+      "family": "blast_gang_excluded",
+      "reason": "Blast Gang mode not planned (AGENTS.md, ArenaMode targets TDM/FFA); bg_-prefixed with no confirmed generic-mode equivalent -- unlike eng_kill_all_win_red/bg_kill_all_win_blue's literal same-family color pair, this category has no eng_ sibling at all (docs/ARENA-CONTENT-FOR-ARENAMODE.md's Method section: \"there is no confirmed generic-mode overtime category in this bank\", same finding applies to the paired match-draw category)",
+      "arena_tag": [
+        "BlastGangMatchendDraw"
+      ]
+    },
+    {
+      "category": "eng_commentator_bg_overtime_start",
+      "included": true,
+      "family": "overtime",
+      "reason": "overtime begins -- tag evidence (OvertimeStart, a dedicated non-Blast-Gang tag MonoBehaviour) shows the bg_ prefix is naming only, not a mode gate; the tag itself is generic. No ArenaMode cue consumes this yet (a TDM overtime feature is design reference only, see docs/ARENA-CONTENT-FOR-ARENAMODE.md's Tier A item), but the line is now available for it.",
+      "arena_tag": [
+        "OvertimeStart"
+      ]
+    },
+    {
+      "category": "eng_commentator_bg_red_defend_team_win_time",
+      "included": false,
+      "family": "blast_gang_excluded",
+      "reason": "Blast Gang mode not planned (AGENTS.md, ArenaMode targets TDM/FFA)",
+      "arena_tag": [
+        "TimeExpiredAttackTeamWin"
+      ]
+    },
+    {
+      "category": "eng_commentator_bg_roles_changed",
+      "included": false,
+      "family": "blast_gang_excluded",
+      "reason": "Blast Gang mode not planned (AGENTS.md, ArenaMode targets TDM/FFA)",
+      "arena_tag": [
+        "TeamSwapped"
+      ]
+    },
+    {
+      "category": "eng_commentator_bg_special_item_planted",
+      "included": false,
+      "family": "blast_gang_excluded",
+      "reason": "Blast Gang mode not planned (AGENTS.md, ArenaMode targets TDM/FFA)",
+      "arena_tag": [
+        "SpecialItemPlanted"
+      ]
+    },
+    {
+      "category": "eng_commentator_bg_team_died_but_win_blue",
+      "included": false,
+      "family": "blast_gang_excluded",
+      "reason": "Blast Gang mode not planned (AGENTS.md, ArenaMode targets TDM/FFA)",
+      "arena_tag": [
+        "TeamDiedButWin"
+      ]
+    },
+    {
+      "category": "eng_commentator_bg_team_died_but_win_red",
+      "included": false,
+      "family": "blast_gang_excluded",
+      "reason": "Blast Gang mode not planned (AGENTS.md, ArenaMode targets TDM/FFA)",
+      "arena_tag": [
+        "TeamDiedButWin"
+      ]
+    },
+    {
+      "category": "eng_commentator_bg_toxin_start",
+      "included": false,
+      "family": "blast_gang_excluded",
+      "reason": "Blast Gang mode not planned (AGENTS.md, ArenaMode targets TDM/FFA)",
+      "arena_tag": [
+        "ToxinStart"
+      ]
+    },
+    {
+      "category": "eng_commentator_blue_point_a_red_team_captured",
+      "included": true,
+      "family": "capture",
+      "reason": "blue-held point A retaken by red",
+      "arena_tag": [
+        "CapturedPoint"
+      ]
+    },
+    {
+      "category": "eng_commentator_blue_point_b_red_team_captured",
+      "included": true,
+      "family": "capture",
+      "reason": "blue-held point B retaken by red",
+      "arena_tag": [
+        "CapturedPoint"
+      ]
+    },
+    {
+      "category": "eng_commentator_blue_point_c_red_team_captured",
+      "included": true,
+      "family": "capture",
+      "reason": "blue-held point C retaken by red",
+      "arena_tag": [
+        "CapturedPoint"
+      ]
+    },
+    {
+      "category": "eng_commentator_blue_team_lead_match_end",
+      "included": true,
+      "family": "team",
+      "reason": "blue team leading, late match",
+      "arena_tag": [
+        "TeamLead"
+      ]
+    },
+    {
+      "category": "eng_commentator_blue_team_lead_match_middle",
+      "included": true,
+      "family": "team",
+      "reason": "blue team leading, mid match",
+      "arena_tag": [
+        "TeamLead"
+      ]
+    },
+    {
+      "category": "eng_commentator_blue_team_lead_match_start",
+      "included": true,
+      "family": "team",
+      "reason": "blue team leading, early match",
+      "arena_tag": [
+        "TeamLead"
+      ]
+    },
+    {
+      "category": "eng_commentator_capture_point_live",
+      "included": true,
+      "family": "capture",
+      "reason": "a capture point becomes contestable",
+      "arena_tag": [
+        "CapturePointAppearance"
+      ]
+    },
+    {
+      "category": "eng_commentator_count_down",
+      "included": true,
+      "family": "general_time",
+      "reason": "pre-round 'get ready' countdown line (single clip, no numeric suffix in the source)",
+      "arena_tag": [
+        "CountDown"
+      ]
+    },
+    {
+      "category": "eng_commentator_end_of_time",
+      "included": true,
+      "family": "general_time",
+      "reason": "clock expired",
+      "arena_tag": [
+        "TimeExpire"
+      ]
+    },
+    {
+      "category": "eng_commentator_eng_bg_attack_team_win_blue",
+      "included": false,
+      "family": "blast_gang_excluded",
+      "reason": "Blast Gang mode not planned (AGENTS.md, ArenaMode targets TDM/FFA)",
+      "arena_tag": [
+        "AttackTeamWin"
+      ]
+    },
+    {
+      "category": "eng_commentator_eng_bg_attack_team_win_red",
+      "included": false,
+      "family": "blast_gang_excluded",
+      "reason": "Blast Gang mode not planned (AGENTS.md, ArenaMode targets TDM/FFA)",
+      "arena_tag": [
+        "AttackTeamWin"
+      ]
+    },
+    {
+      "category": "eng_commentator_eng_bg_defend_team_win_blue",
+      "included": false,
+      "family": "blast_gang_excluded",
+      "reason": "Blast Gang mode not planned (AGENTS.md, ArenaMode targets TDM/FFA)",
+      "arena_tag": [
+        "DefendTeamWin"
+      ]
+    },
+    {
+      "category": "eng_commentator_eng_bg_defend_team_win_red",
+      "included": false,
+      "family": "blast_gang_excluded",
+      "reason": "Blast Gang mode not planned (AGENTS.md, ArenaMode targets TDM/FFA)",
+      "arena_tag": [
+        "DefendTeamWin"
+      ]
+    },
+    {
+      "category": "eng_commentator_eng_bg_item_defused_team_win_blue",
+      "included": false,
+      "family": "blast_gang_excluded",
+      "reason": "Blast Gang mode not planned (AGENTS.md, ArenaMode targets TDM/FFA)",
+      "arena_tag": [
+        "SpecialItemDefusedTeamWin"
+      ]
+    },
+    {
+      "category": "eng_commentator_eng_bg_item_defused_team_win_red",
+      "included": false,
+      "family": "blast_gang_excluded",
+      "reason": "Blast Gang mode not planned (AGENTS.md, ArenaMode targets TDM/FFA)",
+      "arena_tag": [
+        "SpecialItemDefusedTeamWin"
+      ]
+    },
+    {
+      "category": "eng_commentator_eng_final_battle",
+      "included": true,
+      "family": "general_time",
+      "reason": "final round announcement",
+      "arena_tag": [
+        "NextRound"
+      ]
+    },
+    {
+      "category": "eng_commentator_eng_kill_all_win_red",
+      "included": true,
+      "family": "team",
+      "reason": "red team wipes the enemy team",
+      "arena_tag": [
+        "KillAllWin"
+      ]
+    },
+    {
+      "category": "eng_commentator_eng_match_end_blue",
+      "included": true,
+      "family": "team",
+      "reason": "blue team wins the match",
+      "arena_tag": [
+        "MatchEnd"
+      ]
+    },
+    {
+      "category": "eng_commentator_eng_match_end_red",
+      "included": true,
+      "family": "team",
+      "reason": "red team wins the match",
+      "arena_tag": [
+        "MatchEnd"
+      ]
+    },
+    {
+      "category": "eng_commentator_eng_shootout_battle_end_victory",
+      "included": true,
+      "family": "ffa_shootout",
+      "reason": "ShootOut battle won, color-neutral variant",
+      "arena_tag": [
+        "MatchWon"
+      ]
+    },
+    {
+      "category": "eng_commentator_eng_tm_round_end_blue",
+      "included": true,
+      "family": "team",
+      "reason": "blue team wins the round",
+      "arena_tag": [
+        "MatchWon"
+      ]
+    },
+    {
+      "category": "eng_commentator_eng_tm_round_end_red",
+      "included": true,
+      "family": "team",
+      "reason": "red team wins the round",
+      "arena_tag": [
+        "MatchWon"
+      ]
+    },
+    {
+      "category": "eng_commentator_first_blood",
+      "included": true,
+      "family": "general_time",
+      "reason": "first kill of the match",
+      "arena_tag": [
+        "FirstBlood"
+      ]
+    },
+    {
+      "category": "eng_commentator_high_death_intensity",
+      "included": true,
+      "family": "general_time",
+      "reason": "fast-kill-pace color commentary",
+      "arena_tag": [
+        "HighDeathIntensity"
+      ]
+    },
+    {
+      "category": "eng_commentator_killing_streak",
+      "included": true,
+      "family": "general_time",
+      "reason": "generic multi-kill streak line",
+      "arena_tag": [
+        "KillingSpree"
+      ]
+    },
+    {
+      "category": "eng_commentator_low_death_intensity",
+      "included": true,
+      "family": "general_time",
+      "reason": "slow-kill-pace color commentary",
+      "arena_tag": [
+        "LowDeathIntensity"
+      ]
+    },
+    {
+      "category": "eng_commentator_neutral_point_a_blue_team_captured",
+      "included": true,
+      "family": "capture",
+      "reason": "neutral point A taken by blue",
+      "arena_tag": [
+        "CapturedPoint"
+      ]
+    },
+    {
+      "category": "eng_commentator_neutral_point_a_red_team_captured",
+      "included": true,
+      "family": "capture",
+      "reason": "neutral point A taken by red",
+      "arena_tag": [
+        "CapturedPoint"
+      ]
+    },
+    {
+      "category": "eng_commentator_neutral_point_b_blue_team_captured",
+      "included": true,
+      "family": "capture",
+      "reason": "neutral point B taken by blue",
+      "arena_tag": [
+        "CapturedPoint"
+      ]
+    },
+    {
+      "category": "eng_commentator_neutral_point_b_red_team_captured",
+      "included": true,
+      "family": "capture",
+      "reason": "neutral point B taken by red",
+      "arena_tag": [
+        "CapturedPoint"
+      ]
+    },
+    {
+      "category": "eng_commentator_neutral_point_c_blue_team_captured",
+      "included": true,
+      "family": "capture",
+      "reason": "neutral point C taken by blue",
+      "arena_tag": [
+        "CapturedPoint"
+      ]
+    },
+    {
+      "category": "eng_commentator_neutral_point_c_red_team_captured",
+      "included": true,
+      "family": "capture",
+      "reason": "neutral point C taken by red",
+      "arena_tag": [
+        "CapturedPoint"
+      ]
+    },
+    {
+      "category": "eng_commentator_player_death",
+      "included": true,
+      "family": "general_time",
+      "reason": "generic on-death line",
+      "arena_tag": [
+        "PlayerDead"
+      ]
+    },
+    {
+      "category": "eng_commentator_red_point_a_blue_team_captured",
+      "included": true,
+      "family": "capture",
+      "reason": "red-held point A retaken by blue",
+      "arena_tag": [
+        "CapturedPoint"
+      ]
+    },
+    {
+      "category": "eng_commentator_red_point_b_blue_team_captured",
+      "included": true,
+      "family": "capture",
+      "reason": "red-held point B retaken by blue",
+      "arena_tag": [
+        "CapturedPoint"
+      ]
+    },
+    {
+      "category": "eng_commentator_red_point_c_blue_team_captured",
+      "included": true,
+      "family": "capture",
+      "reason": "red-held point C retaken by blue",
+      "arena_tag": [
+        "CapturedPoint"
+      ]
+    },
+    {
+      "category": "eng_commentator_red_team_lead_match_end",
+      "included": true,
+      "family": "team",
+      "reason": "red team leading, late match",
+      "arena_tag": [
+        "TeamLead"
+      ]
+    },
+    {
+      "category": "eng_commentator_red_team_lead_match_middle",
+      "included": true,
+      "family": "team",
+      "reason": "red team leading, mid match",
+      "arena_tag": [
+        "TeamLead"
+      ]
+    },
+    {
+      "category": "eng_commentator_red_team_lead_match_start",
+      "included": true,
+      "family": "team",
+      "reason": "red team leading, early match",
+      "arena_tag": [
+        "TeamLead"
+      ]
+    },
+    {
+      "category": "eng_commentator_shootout_battle_end_victory_blue",
+      "included": true,
+      "family": "ffa_shootout",
+      "reason": "ShootOut battle won by the blue-marked player",
+      "arena_tag": [
+        "MatchEnd"
+      ]
+    },
+    {
+      "category": "eng_commentator_shootout_battle_end_victory_green",
+      "included": true,
+      "family": "ffa_shootout",
+      "reason": "ShootOut battle won by the green-marked player",
+      "arena_tag": [
+        "MatchEnd"
+      ]
+    },
+    {
+      "category": "eng_commentator_shootout_battle_end_victory_pink",
+      "included": true,
+      "family": "ffa_shootout",
+      "reason": "ShootOut battle won by the pink-marked player",
+      "arena_tag": [
+        "MatchEnd"
+      ]
+    },
+    {
+      "category": "eng_commentator_shootout_battle_end_victory_red",
+      "included": true,
+      "family": "ffa_shootout",
+      "reason": "ShootOut battle won by the red-marked player",
+      "arena_tag": [
+        "MatchEnd"
+      ]
+    },
+    {
+      "category": "eng_commentator_shootout_battle_end_victory_white",
+      "included": true,
+      "family": "ffa_shootout",
+      "reason": "ShootOut battle won by the white-marked player",
+      "arena_tag": [
+        "MatchEnd"
+      ]
+    },
+    {
+      "category": "eng_commentator_shootout_battle_end_victory_yellow",
+      "included": true,
+      "family": "ffa_shootout",
+      "reason": "ShootOut battle won by the yellow-marked player",
+      "arena_tag": [
+        "MatchEnd"
+      ]
+    },
+    {
+      "category": "eng_commentator_shootout_next_battle",
+      "included": true,
+      "family": "ffa_shootout",
+      "reason": "next ShootOut battle starts",
+      "arena_tag": [
+        "NextRound"
+      ]
+    },
+    {
+      "category": "eng_commentator_shootout_next_round",
+      "included": true,
+      "family": "ffa_shootout",
+      "reason": "next ShootOut round starts",
+      "arena_tag": [
+        "NextRound"
+      ]
+    },
+    {
+      "category": "eng_commentator_start",
+      "included": true,
+      "family": "general_time",
+      "reason": "match start line",
+      "arena_tag": [
+        "StartGame"
+      ]
+    },
+    {
+      "category": "eng_commentator_start_round",
+      "included": true,
+      "family": "general_time",
+      "reason": "round start line",
+      "arena_tag": [
+        "StartRound"
+      ]
+    },
+    {
+      "category": "eng_commentator_tm_player_death_blue",
+      "included": true,
+      "family": "team",
+      "reason": "a blue team player died",
+      "arena_tag": [
+        "PlayerDead"
+      ]
+    },
+    {
+      "category": "eng_commentator_tm_player_death_red",
+      "included": true,
+      "family": "team",
+      "reason": "a red team player died",
+      "arena_tag": [
+        "PlayerDead"
+      ]
+    },
+    {
+      "category": "eng_commentator_tm_sweep_team",
+      "included": false,
+      "family": "arena_specific_excluded",
+      "reason": "excluded -- tag evidence shows this category's real event is PurifiedTeamAppearance, an Arena-specific 'Purified' team spawn event, not a team sweep/wipe as the category's own name suggested; ArenaMode has no Purified-team mechanic to attach this to. Not Blast-Gang-gated (family is 'arena_specific_excluded', not 'blast_gang_excluded').",
+      "arena_tag": [
+        "PurifiedTeamAppearance"
+      ]
+    },
+    {
+      "category": "eng_commentator_unfair_play",
+      "included": true,
+      "family": "general_time",
+      "reason": "lopsided-match color commentary",
+      "arena_tag": [
+        "UnfairGame"
+      ]
+    },
+    {
+      "category": "eng_round_draw",
+      "included": true,
+      "family": "draw_overtime",
+      "reason": "round ends in a draw",
+      "arena_tag": [
+        "MatchWon"
+      ]
+    }
+  ]
+}

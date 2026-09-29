@@ -162,6 +162,29 @@
     <Message Importance="high" Text="[ArenaMapPort] deployed $(TargetFileName) -&gt; $(ArenaMapPortDistDir)" />
   </Target>
 
+  <!-- Curated Arena announcer/ambience/stinger audio, extracted read-only from the user's Arena/EFT
+       installs and transcoded to OGG Vorbis (tools/extract/extract_arena_audio.py). ArenaMapPort itself
+       never plays any of this — it only stages it into its own deployed plugin folder so ArenaMode
+       (D:/SPT41/Development/ArenaMode, a separate mod) can optionally pick it up as an additional/
+       alternate announcer source. See docs/progress/arena-audio.md for the manifest.json contract this
+       staged folder is. Unlike the BSG-derived staging targets above/below, a missing input here is NOT
+       a build error — this data is optional and nothing in this project depends on it. -->
+  <Target Name="ArenaMapPortStageArenaAudio" AfterTargets="ArenaMapPortDistCopy" Condition="'$(Configuration)'=='Release'">
+    <PropertyGroup>
+      <ArenaMapPortAudioDir>$(MSBuildThisFileDirectory)..\work\extract\arena-audio</ArenaMapPortAudioDir>
+    </PropertyGroup>
+    <ItemGroup Condition="Exists('$(ArenaMapPortAudioDir)\manifest.json')">
+      <ArenaMapPortAudioFile Include="$(ArenaMapPortAudioDir)\**\*.*" />
+    </ItemGroup>
+    <Copy SourceFiles="@(ArenaMapPortAudioFile)"
+          DestinationFiles="@(ArenaMapPortAudioFile->'$(ArenaMapPortDistDir)\arena-audio\%(RecursiveDir)%(Filename)%(Extension)')"
+          Condition="Exists('$(ArenaMapPortAudioDir)\manifest.json')" SkipUnchangedFiles="true" />
+    <Message Importance="high" Condition="Exists('$(ArenaMapPortAudioDir)\manifest.json')"
+             Text="[ArenaMapPort] staged Arena audio (optional, for ArenaMode) from $(ArenaMapPortAudioDir) into dist/.../arena-audio/" />
+    <Message Importance="high" Condition="!Exists('$(ArenaMapPortAudioDir)\manifest.json')"
+             Text="[ArenaMapPort] no Arena audio to stage ($(ArenaMapPortAudioDir)\manifest.json not found) - run tools/extract/extract_arena_audio.py if ArenaMode should get it; ArenaMapPort itself does not use these files" />
+  </Target>
+
   <!-- PLAN-TWO-MAPS item 8: AiAnchors.cs reads <plugin>/ai/<key>.ai.json at raid start. The sidecars are
        git-tracked (tools/maps/*.ai.json, written by tools/extract/extract_ai_anchors.py), so they are staged
        with the DLL on every Release build, DllOnly included. -->

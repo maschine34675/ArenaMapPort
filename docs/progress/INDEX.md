@@ -8,6 +8,12 @@ dated state in one screen; read it before this index if you only have a minute.
 
 ## Current — read these for the area you touch
 
+- [arena-audio.md](arena-audio.md) — optional Arena audio for ArenaMode: the English commentator bank
+  classified by BSG's own 30 event tags (54 of 69 categories kept, Blast Gang and PurifiedTeamAppearance out),
+  EFT's dormant arena_start/win/lose stingers, crowd, camera glitch, capture, round signal, result music;
+  OGG + manifest.json contract staged into the plugin folder, never git; suggested ArenaMode cue mapping.
+- [../ARENA-CONTENT-FOR-ARENAMODE.md](../ARENA-CONTENT-FOR-ARENAMODE.md) — 2026-09-29 survey of everything
+  in EFT Arena beyond the maps that ArenaMode could use: tiers, evidence, owners, rejected dead ends.
 - [config-cleanup.md](config-cleanup.md) — complete configuration audit,
   46 ineffective entries retired, user values preserved and both maps smoke-tested (2026-09-28).
 
