@@ -8,6 +8,9 @@ dated state in one screen; read it before this index if you only have a minute.
 
 ## Current — read these for the area you touch
 
+- [hdr-sliders-tuning.md](hdr-sliders-tuning.md) — six native tonemap sliders per map,
+  normal bloom defaults/migration and repeatable Equator Day/Clear screenshots (2026-09-29).
+
 - [hdr-controls.md](hdr-controls.md) — live Equator/Bay5 exposure and native tonemapping,
   advanced curve vectors, Equator flare length/threshold/tint, neutral defaults,
   GPU-2 comparisons and saved-tuning preservation (2026-09-29).

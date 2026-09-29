@@ -16,7 +16,8 @@ The registry contains Equator and Bay5 plus 12 additional source-backed map defi
 
 **Equator light streaks.** F12 → maschine-ArenaMapPort → Lighting (arena_equator): `AnamorphicFlare` restores the thin horizontal streak around bright lamps; `AnamorphicFlareIntensity` defaults to 0.25 and `AnamorphicFlareHDR` is on. This is internal HDR processing, not HDR monitor output. `AmbientIntensity` defaults to 0.85 for slightly deeper shade. Broad glow remains separately adjustable through `BloomThreshold`/`BloomIntensity`. [Native comparison and camera lifecycle checks](docs/progress/equator-anamorphic-hdr.md).
 
-**HDR image tuning.** Equator and Bay5 each have live controls in their `Lighting (<map>)` section:
+**HDR image tuning.** Equator and Bay5 each have live controls in their `Lighting (<map>)` section.
+Bloom defaults are `BloomIntensity=0.35` and `BloomThreshold=2.1`; startup migrates exact old defaults once.
 
 | Setting | Default | Effect |
 |---|---|---|
@@ -25,11 +26,14 @@ The registry contains Equator and Bay5 plus 12 additional source-backed map defi
 | `ExposureSpeedMultiplier` | 1 | Changes how quickly automatic exposure adapts. |
 | `TonemapProfile` | Original | Original camera settings, Filmic, RomB, ACES, or Off. |
 
-The defaults preserve the existing look and native indoor/outdoor exposure changes. Advanced settings
+The neutral HDR defaults preserve native indoor/outdoor exposure and tonemapping. Advanced settings
 add `TonemapCustomCurve`, `TonemapCurve` and `TonemapSecondaryCurve`: raw native X/Y/Z parameters,
 used only with an explicit Filmic/RomB/ACES profile. Set the custom toggle off to return to the
 selected profile, or select Original to recover the camera's own parameters. The two vectors initially
-contain the RomB preset; they are not independent shadow/highlight sliders.
+contain the RomB preset; they are not independent shadow/highlight sliders. Enable the F12 Advanced
+filter to see six X/Y/Z sliders with precise number boxes. Their response is finer near zero.
+`Use <profile> preset` copies both native vectors and enables custom tuning; the ordinary Reset
+buttons restore each vector's config default.
 
 Equator also has `AnamorphicFlareLength` (3.5), `AnamorphicFlareThreshold` (0.155) and
 `AnamorphicFlareTint` (the previous pale-blue RGBA color). Tint alpha multiplies flare strength.

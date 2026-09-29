@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using ArenaMapPort.Shared;
 using BepInEx.Configuration;
 using Comfort.Common;
@@ -22,8 +23,125 @@ namespace ArenaMapPort.Client
     {
         internal enum ToneProfile { Original, Filmic, RomB, ACES, Off }
 
-        // ConfigurationManager reads this optional field by reflection; no dependency is needed.
-        sealed class AdvancedSetting { public bool? IsAdvanced = true; }
+        // The installed ConfigurationManager requires this exact type name, then copies public
+        // fields by reflection. No assembly dependency or additional saved scalar keys are needed.
+        sealed class ConfigurationManagerAttributes
+        {
+            public bool? IsAdvanced = true;
+            public Action<ConfigEntryBase> CustomDrawer;
+        }
+
+        sealed class CurveDrawer
+        {
+            readonly string _map, _controlPrefix;
+            readonly bool _secondary;
+            readonly string[] _text = new string[3];
+            Vector3 _observed;
+            bool _initialized;
+
+            internal CurveDrawer(string map, bool secondary)
+            {
+                _map = map; _secondary = secondary;
+                _controlPrefix = "ArenaMapPort.Tone." + map + (secondary ? ".Secondary." : ".Primary.");
+            }
+
+            internal void Draw(ConfigEntryBase entry)
+            {
+                if (!(entry is ConfigEntry<Vector3> curve) || !Configs.TryGetValue(_map, out var settings)) return;
+                var value = curve.Value;
+                for (int axis = 0; axis < 3; axis++)
+                    if (!_initialized || !value[axis].Equals(_observed[axis])) _text[axis] = Number(value[axis]);
+                _initialized = true;
+                GUILayout.BeginVertical(GUILayout.ExpandWidth(true));
+                try
+                {
+                    for (int axis = 0; axis < 3; axis++) value[axis] = DrawAxis(axis, value[axis]);
+                    // Rendering a field never normalizes or rewrites an existing saved value.
+                    if (!value.Equals(curve.Value)) curve.Value = value;
+                    _observed = value;
+
+                    bool explicitProfile = IsExplicitProfile(settings.Tone.Value);
+                    if (!_secondary)
+                    {
+                        bool wasEnabled = GUI.enabled;
+                        GUI.enabled = wasEnabled && explicitProfile;
+                        try
+                        {
+                            string profileName = explicitProfile ? settings.Tone.Value.ToString() : "selected profile";
+                            if (GUILayout.Button(new GUIContent("Use " + profileName + " preset",
+                                "Replace BOTH saved vectors with this profile's native preset and enable TonemapCustomCurve. The standard Reset button resets only this vector to its original config default.")))
+                            {
+                                var preset = new Values();
+                                SetTonePreset(ref preset, settings.Tone.Value);
+                                settings.Curve.Value = preset.Curve;
+                                settings.SecondaryCurve.Value = preset.SecondaryCurve;
+                                settings.CustomCurve.Value = true;
+                                GUI.FocusControl(null);
+                            }
+                        }
+                        finally { GUI.enabled = wasEnabled; }
+                    }
+                    // Keep one status row in every state so a live toggle or preset click does
+                    // not change the layout's control count halfway through an IMGUI event.
+                    GUILayout.Label(!explicitProfile ? "Inactive: select Filmic, RomB or ACES." :
+                        settings.CustomCurve.Value ? "Custom curve active." : "Inactive: enable TonemapCustomCurve.");
+                }
+                finally { GUILayout.EndVertical(); }
+            }
+
+            float DrawAxis(int axis, float value)
+            {
+                GUILayout.BeginHorizontal();
+                try
+                {
+                    GUILayout.Label(new GUIContent(((char)('X' + axis)).ToString(),
+                        "Raw native coefficient, -16 to 16. Slider movement is finer near zero; the number box accepts exact values. Meanings depend on the selected profile."), GUILayout.Width(18f));
+                    // A signed cubic scale gives useful travel to small native constants such as
+                    // Filmic's 0.004, while still covering the existing full [-16,16] domain.
+                    float safe = Finite(value) ? Mathf.Clamp(value, -16f, 16f) : 0f;
+                    float position = (float)(Math.Sign(safe) * Math.Pow(Math.Abs(safe) / 16d, 1d / 3d));
+                    bool wasChanged = GUI.changed;
+                    GUI.changed = false;
+                    float moved = GUILayout.HorizontalSlider(position, -1f, 1f, GUILayout.ExpandWidth(true));
+                    bool sliderChanged = GUI.changed;
+                    GUI.changed |= wasChanged;
+                    if (sliderChanged && !moved.Equals(position))
+                    {
+                        value = Mathf.Clamp(16f * moved * moved * moved, -16f, 16f);
+                        _text[axis] = Number(value);
+                    }
+
+                    string control = _controlPrefix + axis;
+                    Color oldColor = GUI.color;
+                    bool valid = TryCoefficient(_text[axis], out _);
+                    if (!valid) GUI.color = new Color(1f, 0.55f, 0.55f, oldColor.a);
+                    GUI.SetNextControlName(control);
+                    string edited;
+                    try { edited = GUILayout.TextField(_text[axis], GUILayout.Width(85f)); }
+                    finally { GUI.color = oldColor; }
+                    if (edited != _text[axis])
+                    {
+                        _text[axis] = edited;
+                        if (TryCoefficient(edited, out float parsed)) value = parsed;
+                    }
+                    // Keep intermediate '-' / exponent / empty input while typing. Invalid input
+                    // never reaches the config, and abandoning it shows the last accepted value.
+                    if (GUI.GetNameOfFocusedControl() != control && !TryCoefficient(_text[axis], out _))
+                        _text[axis] = Number(value);
+                    return value;
+                }
+                finally { GUILayout.EndHorizontal(); }
+            }
+
+            static string Number(float value) => value.ToString("G7", CultureInfo.InvariantCulture);
+
+            static bool TryCoefficient(string text, out float value)
+            {
+                bool parsed = float.TryParse(text, NumberStyles.Float, CultureInfo.InvariantCulture, out value) ||
+                    float.TryParse(text, NumberStyles.Float, CultureInfo.CurrentCulture, out value);
+                return parsed && Finite(value) && value >= -16f && value <= 16f;
+            }
+        }
 
         sealed class Settings
         {
@@ -149,11 +267,13 @@ namespace ArenaMapPort.Client
                 Tone = config.Bind(section, "TonemapProfile", ToneProfile.Original,
                     "Original preserves native tonemapping and its current parameters. Filmic, RomB and ACES enable that native profile with its matching native reset parameters. Off disables tonemapping. Live."),
                 CustomCurve = config.Bind(section, "TonemapCustomCurve", false,
-                    new ConfigDescription("Use the two advanced raw native parameter vectors. Requires an explicit Filmic, RomB or ACES profile; Original and Off ignore them. Invalid or out-of-range vectors fall back to that profile. Live.", null, new AdvancedSetting())),
+                    new ConfigDescription("Use the two advanced raw native parameter vectors. Requires an explicit Filmic, RomB or ACES profile; Original and Off ignore them. Invalid or out-of-range vectors fall back to that profile. Live.", null, new ConfigurationManagerAttributes())),
                 Curve = config.Bind(section, "TonemapCurve", new Vector3(-1f, 2.72f, 0.15f),
-                    new ConfigDescription("Raw Prism toneValues (x, y, z); meanings depend on the selected native shader profile. Each component must be finite and within [-16,16]. Used only with TonemapCustomCurve and an explicit profile. Live.", null, new AdvancedSetting())),
+                    new ConfigDescription("Raw Prism toneValues (x, y, z); meanings depend on the selected native shader profile. Sliders cover [-16,16] with finer movement near zero; number boxes allow exact values. Used only with TonemapCustomCurve and an explicit profile. Use the preset button to copy both native vectors and enable custom tuning. Live.", null,
+                        new ConfigurationManagerAttributes { CustomDrawer = new CurveDrawer(map.Key, false).Draw })),
                 SecondaryCurve = config.Bind(section, "TonemapSecondaryCurve", Vector3.zero,
-                    new ConfigDescription("Raw Prism secondaryToneValues (x, y, z); meanings depend on the selected native shader profile. Each component must be finite and within [-16,16]. Used only with TonemapCustomCurve and an explicit profile. Live.", null, new AdvancedSetting()))
+                    new ConfigDescription("Raw Prism secondaryToneValues (x, y, z); meanings depend on the selected native shader profile. Sliders cover [-16,16] with finer movement near zero; number boxes allow exact values. Used only with TonemapCustomCurve and an explicit profile. Live.", null,
+                        new ConfigurationManagerAttributes { CustomDrawer = new CurveDrawer(map.Key, true).Draw }))
             };
             var settings = Configs[map.Key];
             settings.Compensation.SettingChanged += RequestSample;
@@ -268,6 +388,21 @@ namespace ArenaMapPort.Client
             if (tone == ToneProfile.Original) return value;
             if (tone == ToneProfile.Off) { value.Tonemap = false; return value; }
             value.Tonemap = true;
+            SetTonePreset(ref value, tone);
+            if (config.CustomCurve.Value)
+            {
+                if (ValidVector(config.Curve.Value) && ValidVector(config.SecondaryCurve.Value))
+                { value.Curve = config.Curve.Value; value.SecondaryCurve = config.SecondaryCurve.Value; }
+                else invalid = true;
+            }
+            return value;
+        }
+
+        static bool IsExplicitProfile(ToneProfile tone) =>
+            tone == ToneProfile.Filmic || tone == ToneProfile.RomB || tone == ToneProfile.ACES;
+
+        static void SetTonePreset(ref Values value, ToneProfile tone)
+        {
             // Exact native ResetToneParams* constants (PrismEffects.cs 549-565).
             switch (tone)
             {
@@ -287,13 +422,6 @@ namespace ArenaMapPort.Client
                     value.SecondaryCurve = Vector3.zero;
                     break;
             }
-            if (config.CustomCurve.Value)
-            {
-                if (ValidVector(config.Curve.Value) && ValidVector(config.SecondaryCurve.Value))
-                { value.Curve = config.Curve.Value; value.SecondaryCurve = config.SecondaryCurve.Value; }
-                else invalid = true;
-            }
-            return value;
         }
 
         static void WriteChanged(PrismEffects effect, Values from, Values to)

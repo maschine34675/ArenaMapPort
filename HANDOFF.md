@@ -3,6 +3,32 @@
 Snapshot for whoever continues (human or agent). Verify the commits named here against `git log`; this file
 is updated by hand at each handover, it is not an automatic record. Read [AGENTS.md](AGENTS.md) first.
 
+## State on 2026-09-29 — tonemap sliders and Equator image comparison
+
+Follow-up on `652755e`, same feature branch: six X/Y/Z sliders plus precise number
+boxes per supported map, keeping the original Vector3 keys and live renderer.
+F12 Advanced must be enabled. `Use <profile> preset` copies both native vectors
+and enables custom tuning. Fixed ConfigurationManager metadata type-name matching.
+Bloom defaults now 0.35 intensity / 2.1 threshold on Equator/Bay5, with hidden
+once-only migration of exact legacy defaults.
+
+Client SHA256 `D7B2605649934A234132ABFFBBAFAED12F2D620A94A0C570AABECA8607BDC278`.
+Release build/distribution check passed; GPU-2 `c5b90dcb` loaded identity verified.
+All six UI axes, numeric input, profile copy, Reset and live shader upload checked.
+Equator Day/Clear comparisons at `(0,0.1,14)`, yaw 180/pitch -10, plus TECHLIGHT.
+Recommended GPU-2 settings: custom Filmic `(7,0.35,0.7)` / `(-0.02,0.18,0)`,
+ambient 0.5, global lamps 0.6, anamorphic intensity 0.18, normal bloom; other
+lighting values at reset defaults. This is saved artistic tuning for user review,
+not additional source defaults. Night/rain appearance has not been evaluated.
+
+Local screenshots and exact live values:
+`analysis/screenshots/hdr-tuning-2026-09-29/VERGLEICH.md`.
+Implementation and acceptance: [hdr-sliders-tuning.md](docs/progress/hdr-sliders-tuning.md).
+Both sanctioned installs contain all 2239 files, independently SHA256-matched.
+GPU-2 restart `7e235171` preserved the recommendation and a temporary native bloom
+fallback, proving migration runs once; Bay5 intensity then restored to 0.35.
+Host is at MainMenu. User EFT restart required to load the deployed client.
+
 ## State on 2026-09-29 — HDR image controls
 
 Branch `feature/hdr-image-controls`, based on `c23fea6`. Seven new live controls

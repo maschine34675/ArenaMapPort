@@ -228,8 +228,9 @@ the log; the user uses it to point at things.
   and sets `enabled` last. At raid time `CullingLightObject` keeps writing `_light.intensity = float_1 * fade`, so
   `ArenaLightingRepairs` also writes the private `float_1` (reflection) or the brightness uplift is erased; the
   `CullingManager` singleton and the camera's `VolumetricLightRenderer` are client fallbacks, not package data.
-- Bloom/glare: `UltimateBloom` controls broad glow (donor threshold 2.10, intensity 0.35; Equator's existing
-  `BloomThreshold` default remains 1.25). The early horizontal streak is **BloomAndFlares before Prism**:
+- Bloom/glare: `UltimateBloom` controls broad glow. Equator/Bay5 defaults now match the donor threshold
+  2.10 and intensity 0.35; `BloomDefaultsRevision` migrates exact legacy defaults once (2026-09-29).
+  The early horizontal streak is **BloomAndFlares before Prism**:
   `AnamorphicFlareTuning` restores it on Equator and moves its native render before HDR-to-LDR, with captured
   state restored on disable/unload. Merely enabling its HDR mode after Prism cannot recover highlights.
   New Equator controls: `AnamorphicFlare`, `AnamorphicFlareHDR`, `AnamorphicFlareIntensity`. `CameraRepairHooks`

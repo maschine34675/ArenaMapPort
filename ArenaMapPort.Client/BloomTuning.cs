@@ -18,7 +18,8 @@ namespace ArenaMapPort.Client
     internal static class BloomTuning
     {
         const string Tag = "[ArenaMapPort][Bloom]";
-        const float EquatorThreshold = 1.25f;
+        const float DefaultThreshold = 2.1f;
+        const float DefaultIntensity = 0.35f;
 
         static bool _installed;
         static readonly Dictionary<string, (ConfigEntry<float> threshold, ConfigEntry<float> intensity)> _entries =
@@ -39,23 +40,49 @@ namespace ArenaMapPort.Client
             foreach (var map in ArenaMapRegistry.All)
             {
                 var section = $"Lighting ({map.Key})";
-                var defaultThreshold = map.Key == ArenaMapRegistry.Equator.Key ? EquatorThreshold : -1f;
-                var threshold = Plugin.Instance.Config.Bind(section, "BloomThreshold", defaultThreshold,
+                bool releasedMap = map.Key == ArenaMapRegistry.Equator.Key || map.Key == ArenaMapRegistry.Bay5.Key;
+                var threshold = Plugin.Instance.Config.Bind(section, "BloomThreshold", releasedMap ? DefaultThreshold : -1f,
                     new ConfigDescription(
                         "UltimateBloom HDR threshold on the raid camera for this map. -1 keeps the camera's own value " +
-                        "(donor rig: 2.10). Lower = more glow around bright lights: 1.0 strong, 1.25 the Equator " +
-                        "default (atrium floodlights glare, signs stay readable), 1.5 faint. Live.",
+                        "(donor rig: 2.10). Lower = more glow around bright lights. Equator and Bay5 default to " +
+                        "the donor rig's normal threshold, 2.10. Live.",
                         new AcceptableValueRange<float>(-1f, 10f)));
-                var intensity = Plugin.Instance.Config.Bind(section, "BloomIntensity", -1f,
+                var intensity = Plugin.Instance.Config.Bind(section, "BloomIntensity", releasedMap ? DefaultIntensity : -1f,
                     new ConfigDescription(
                         "UltimateBloom intensity on the raid camera for this map. -1 keeps the camera's own value " +
-                        "(donor rig: 0.35). Live.",
+                        "(donor rig: 0.35). Equator and Bay5 default to this normal intensity, 0.35. Live.",
                         new AcceptableValueRange<float>(-1f, 5f)));
+
+                // Migrate before subscribing: no camera writes during config binding. Unreleased maps
+                // keep their native defaults and do not acquire a bloom migration marker.
+                if (releasedMap) MigrateDefaults(map.Key, section, threshold, intensity);
                 threshold.SettingChanged += (_, __) => ApplyToCurrentCamera("setting changed");
                 intensity.SettingChanged += (_, __) => ApplyToCurrentCamera("setting changed");
                 _entries[map.Key] = (threshold, intensity);
             }
 
+        }
+
+        static void MigrateDefaults(string mapKey, string section, ConfigEntry<float> threshold,
+            ConfigEntry<float> intensity)
+        {
+            var revision = Plugin.Instance.Config.Bind(section, "BloomDefaultsRevision", 0,
+                new ConfigDescription(
+                    "Internal — once-only bloom default migration for Equator and Bay5. Leave it alone; " +
+                    "lowering this value repeats migration of values still equal to the legacy defaults.",
+                    null, System.ComponentModel.BrowsableAttribute.No));
+            if (revision.Value >= 1) return;
+
+            // Exact legacy values only; independently tuned values remain untouched. A saved -1 that
+            // was the old default cannot be distinguished from a manually selected native fallback.
+            // After this one-time migration, choosing -1 again persists across subsequent startups.
+            float oldThreshold = mapKey == ArenaMapRegistry.Equator.Key ? 1.25f : -1f;
+            int moved = 0;
+            if (threshold.Value == oldThreshold) { threshold.Value = DefaultThreshold; moved++; }
+            if (intensity.Value == -1f) { intensity.Value = DefaultIntensity; moved++; }
+            revision.Value = 1;
+            Plugin.Log.LogInfo($"{Tag} {mapKey}: config re-seeded to bloom defaults revision 1 " +
+                $"({moved} value(s) moved; threshold={F(threshold.Value)}, intensity={F(intensity.Value)})");
         }
 
         internal static void ApplyToCurrentCamera(string reason)
