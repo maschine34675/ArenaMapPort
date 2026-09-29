@@ -76,6 +76,7 @@ namespace ArenaMapPort.Shared
         public string[] RestoredShadowCasterRoots { get; } // exact active LOD roots with source-disabled shadow proxies to restore
         public string[] DistantShadowCasterPaths { get; } // active shadow proxies missing native LOD registration
         public string[] PuddleWaterMaterialNames { get; } // exact imported water-puddle material names; excludes oil decals
+        public bool InheritIndoorFloorDetails { get; } // small floor pieces inherit their supporting structural floor's classification
         public int? FixedDayHour { get; }
         public int? FixedNightHour { get; }
         public bool UsesFixedStartTimes => FixedDayHour.HasValue && FixedNightHour.HasValue;
@@ -115,7 +116,8 @@ namespace ArenaMapPort.Shared
             string? SunScene = null,
             string[]? SunPaths = null,
             string[]? PuddleWaterMaterialNames = null,
-            string[]? DistantShadowCasterPaths = null)
+            string[]? DistantShadowCasterPaths = null,
+            bool InheritIndoorFloorDetails = false)
 #nullable restore
         {
             this.Key = Key;
@@ -143,6 +145,7 @@ namespace ArenaMapPort.Shared
             this.SunScene = SunScene ?? string.Empty;
             this.SunPaths = SunPaths ?? new string[0];
             this.PuddleWaterMaterialNames = PuddleWaterMaterialNames ?? new string[0];
+            this.InheritIndoorFloorDetails = InheritIndoorFloorDetails;
         }
 
         public bool IsBackgroundScene(string sceneName) =>
@@ -206,6 +209,7 @@ namespace ArenaMapPort.Shared
                 2.280590057373047f, 1.6160001754760742f, 3.3339996337890625f,
                 31.478260040283203f, 5.016374111175537f, 48.85846710205078f),
             FixedDayHour: 12,
+            InheritIndoorFloorDetails: true,
             FixedNightHour: 0,
             SunScene: "Arena_Equator_Lighting",
             SunPaths: new[] { "FAKE_SUN", "FAKE_SUN_VOLUME" },

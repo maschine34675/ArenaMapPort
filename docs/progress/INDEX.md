@@ -8,6 +8,9 @@ dated state in one screen; read it before this index if you only have a minute.
 
 ## Current — read these for the area you touch
 
+- [equator-floor-gloss.md](equator-floor-gloss.md) — coherent gloss controls for small
+  Equator tile pieces, unique ground baselines and user-refined reflection/flare tuning (2026-09-29).
+
 - [hdr-sliders-tuning.md](hdr-sliders-tuning.md) — six native tonemap sliders per map,
   normal bloom defaults/migration and repeatable Equator Day/Clear screenshots (2026-09-29).
 

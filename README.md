@@ -35,6 +35,11 @@ filter to see six X/Y/Z sliders with precise number boxes. Their response is fin
 `Use <profile> preset` copies both native vectors and enables custom tuning; the ordinary Reset
 buttons restore each vector's config default.
 
+Equator's broken tile patches and floor shards now inherit the indoor floor supporting them,
+including their LODs. `IndoorFloorSmoothness` controls both intact and damaged indoor tiles;
+their authored textures and small material differences remain. Ground multipliers control
+the remaining ground materials independently, without repeated scaling of shared materials.
+
 Equator also has `AnamorphicFlareLength` (3.5), `AnamorphicFlareThreshold` (0.155) and
 `AnamorphicFlareTint` (the previous pale-blue RGBA color). Tint alpha multiplies flare strength.
 All changes work during a raid. See [HDR controls and verification](docs/progress/hdr-controls.md).

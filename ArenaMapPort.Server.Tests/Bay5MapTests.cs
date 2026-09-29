@@ -6,6 +6,16 @@ namespace ArenaMapPort.Server.Tests;
 
 public sealed class Bay5MapTests
 {
+    [Fact]
+    public void FloorDetailInheritanceMatchesSidecarAndRemainsEquatorOnly()
+    {
+        using var doc = JsonDocument.Parse(File.ReadAllText(Sidecar("equator.json")));
+        Assert.True(doc.RootElement.GetProperty("inherit_indoor_floor_details").GetBoolean());
+        Assert.True(ArenaMapRegistry.Equator.InheritIndoorFloorDetails);
+        foreach (var map in ArenaMapRegistry.All.Where(m => m != ArenaMapRegistry.Equator))
+            Assert.False(map.InheritIndoorFloorDetails);
+    }
+
     private static string Sidecar(string name)
     {
         for (var dir = new DirectoryInfo(AppContext.BaseDirectory); dir != null; dir = dir.Parent)

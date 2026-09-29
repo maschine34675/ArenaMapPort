@@ -74,7 +74,10 @@ namespace ArenaMapPort.Client
         }
 
         static readonly Dictionary<string, IndoorFloorState> _states = new Dictionary<string, IndoorFloorState>();
+        static readonly HashSet<Material> _ownedMaterials = new HashSet<Material>();
         static bool _installed;
+
+        internal static bool IsOwnedMaterial(Material material) => _ownedMaterials.Contains(material);
 
         internal static void Install()
         {
@@ -201,6 +204,7 @@ namespace ArenaMapPort.Client
                 IndoorSurfaceMesh.Release(entry.Surface);
                 foreach (var clone in entry.OwnedMaterials)
                 {
+                    _ownedMaterials.Remove(clone);
                     if (clone != null)
                     {
                         UnityEngine.Object.Destroy(clone);
@@ -277,6 +281,7 @@ namespace ArenaMapPort.Client
             var perScene = new List<string>();
             var indoorNames = new List<string>();
             var rejects = new List<string>();
+            var floorDetails = new List<MeshRenderer>();
             Texture2D scratch = null;
             RainCoverRepairs.DepthSnapshot roof = null;
             try
@@ -330,7 +335,8 @@ namespace ArenaMapPort.Client
                             {
                                 continue;
                             }
-                            if (!renderer.gameObject.activeInHierarchy || (!renderer.enabled && !surfaceRepair))
+                            if (!renderer.gameObject.activeInHierarchy
+                                || (!renderer.enabled && !surfaceRepair && !map.InheritIndoorFloorDetails))
                             {
                                 if (renderer.gameObject.name.IndexOf("indoor", StringComparison.OrdinalIgnoreCase) >= 0
                                     && renderer.gameObject.name.IndexOf("puddle", StringComparison.OrdinalIgnoreCase) < 0)
@@ -356,6 +362,15 @@ namespace ArenaMapPort.Client
                             // Large candidates get their rejection reason logged (max 40 lines) — the
                             // 2026-09-19 host test classified 41 boards/trusses but not the hall floor.
                             string goName = renderer.gameObject.name;
+                            // Small tile pieces must follow the structural floor beneath them, not
+                            // a separate roof sample over each crack in Equator's open roof lattice.
+                            // Collect all active LODs, including currently disabled renderers.
+                            if (map.InheritIndoorFloorDetails && IsSmallFloorDetail(renderer, bounds))
+                            {
+                                floorDetails.Add(renderer);
+                                continue;
+                            }
+                            if (!renderer.enabled && !surfaceRepair) continue;
                             bool large = goName.IndexOf("puddle", StringComparison.OrdinalIgnoreCase) < 0
                                 && (goName.IndexOf("indoor", StringComparison.OrdinalIgnoreCase) >= 0
                                 || goName.IndexOf("floor", StringComparison.OrdinalIgnoreCase) >= 0
@@ -429,6 +444,49 @@ namespace ArenaMapPort.Client
                     }
                     perScene.Add($"{scene.name}={sceneRenderers}");
                 }
+                if (map.InheritIndoorFloorDetails)
+                {
+                    var support = new FloorDetailSupport();
+                    foreach (var entry in state.Entries)
+                    {
+                        if (entry.Surface != null || !IsFloorName(entry.Renderer.name)
+                            || entry.Renderer.bounds.size.y > 0.5f) continue;
+                        foreach (var face in ReadFloorFaces(entry.Renderer)) support.Add(face);
+                    }
+                    int inherited = 0;
+                    var eligibleDetails = new HashSet<MeshRenderer>(floorDetails);
+                    var lodDecisions = new Dictionary<LODGroup, bool>();
+                    foreach (var detail in floorDetails)
+                    {
+                        bool supported;
+                        var group = detail.GetComponentInParent<LODGroup>();
+                        if (group == null) supported = support.Supports(ReadFloorFaces(detail));
+                        else if (!lodDecisions.TryGetValue(group, out supported))
+                        {
+                            // The authored highest-detail representation decides the whole object.
+                            // Simplified LOD outlines can straddle an edge slightly differently.
+                            var reference = detail;
+                            bool found = false;
+                            foreach (var lod in group.GetLODs())
+                            {
+                                foreach (var member in lod.renderers)
+                                    if (member is MeshRenderer candidate && eligibleDetails.Contains(candidate))
+                                    { reference = candidate; found = true; break; }
+                                if (found) break;
+                            }
+                            supported = support.Supports(ReadFloorFaces(reference));
+                            lodDecisions.Add(group, supported);
+                        }
+                        if (!supported) continue;
+                        var entry = CloneAndScale(detail, detail.sharedMaterials, multiplier, reflection, state);
+                        clones += entry.OwnedMaterials.Count;
+                        indoor++;
+                        inherited++;
+                    }
+                    Plugin.Log.LogInfo($"[ArenaMapPort][FloorDetails] map={map.Key} candidates={floorDetails.Count} " +
+                        $"inherited={inherited} supportTriangles={support.Count} smoothness={multiplier:0.00} " +
+                        $"reflection={reflection:0.00}; source textures and authored material differences retained.");
+                }
             }
             finally
             {
@@ -459,6 +517,50 @@ namespace ArenaMapPort.Client
                 Plugin.Log.LogInfo($"[ArenaMapPort][IndoorFloorSmoothness] map={map.Key} indoor renderer(s) " +
                     $"(showing {indoorNames.Count} of {indoor}): {string.Join(", ", indoorNames)}");
             }
+        }
+
+        static bool IsFloorName(string name) => name.IndexOf("floor", StringComparison.OrdinalIgnoreCase) >= 0
+            || name.IndexOf("ground", StringComparison.OrdinalIgnoreCase) >= 0
+            || name.IndexOf("asphalt", StringComparison.OrdinalIgnoreCase) >= 0;
+
+        static bool IsSmallFloorDetail(MeshRenderer renderer, Bounds bounds)
+        {
+            if (!IsFloorName(renderer.name) || bounds.size.y > 0.5f
+                || Mathf.Max(bounds.size.x, bounds.size.z) >= 4f) return false;
+            var materials = renderer.sharedMaterials;
+            if (materials.Length == 0 || HasDecalShader(materials)) return false;
+            // Unlike legacy building classification, every detail slot must be a floor family.
+            foreach (var material in materials)
+                if (!HasFloorLikeShader(new[] { material })) return false;
+            return true;
+        }
+
+        static List<FloorDetailSupport.Face> ReadFloorFaces(Renderer renderer)
+        {
+            var result = new List<FloorDetailSupport.Face>();
+            var mesh = renderer.GetComponent<MeshFilter>()?.sharedMesh;
+            if (mesh == null || !mesh.isReadable || mesh.blendShapeCount != 0) return result;
+            var materials = renderer.sharedMaterials;
+            if (mesh.subMeshCount != materials.Length) return result;
+            var vertices = mesh.vertices;
+            var world = new IndoorSurfaceGeometry.Point[vertices.Length];
+            var matrix = renderer.localToWorldMatrix;
+            for (int i = 0; i < vertices.Length; i++)
+            {
+                var p = matrix.MultiplyPoint3x4(vertices[i]);
+                world[i] = new IndoorSurfaceGeometry.Point(p.x, p.y, p.z);
+            }
+            for (int slot = 0; slot < materials.Length; slot++)
+            {
+                var single = new[] { materials[slot] };
+                if (!HasFloorLikeShader(single) || HasDecalShader(single)
+                    || mesh.GetTopology(slot) != MeshTopology.Triangles) continue;
+                var triangles = mesh.GetTriangles(slot);
+                for (int i = 0; i + 2 < triangles.Length; i += 3)
+                    if (FloorDetailSupport.TryFace(world[triangles[i]], world[triangles[i + 1]],
+                        world[triangles[i + 2]], out var face)) result.Add(face);
+            }
+            return result;
         }
 
         // Any ONE matching material on a multi-material renderer qualifies the whole renderer — mirrors
@@ -580,14 +682,16 @@ namespace ArenaMapPort.Client
                 var clone = new Material(inputs[i]) { name = inputs[i].name +
                     (surface == null ? " (ArenaMapPort IndoorFloorSmoothness clone)" : " (ArenaMapPort IndoorSurface clone)") };
                 entry.OwnedMaterials.Add(clone);
+                _ownedMaterials.Add(clone);
                 clones[i] = clone;
                 // Reuses LightingLab's own discovery technique (promoted internal, hint list parameterized)
                 // with this file's own hint set — task's own "same discovery as LightingLab E".
                 var discovered = LightingLab.DiscoverSmoothnessProps(clone, IndoorSmoothnessHints);
                 for (int p = 0; p < discovered.Count; p++)
                 {
-                    props.Add((i, discovered[p].propId, discovered[p].original));
-                    clone.SetFloat(discovered[p].propId, discovered[p].original * multiplier);
+                    float baseline = LightingLab.GetGroundBaseline(inputs[i], discovered[p].propId, discovered[p].original);
+                    props.Add((i, discovered[p].propId, baseline));
+                    clone.SetFloat(discovered[p].propId, baseline * multiplier);
                 }
                 // §20.2 — reflection tint (Color), exact name, type-checked so a same-named texture/float
                 // on some other shader can never be misread as a color.

@@ -403,7 +403,8 @@ namespace ArenaMapPort.Client
                     "materials while a weather rig is active (LightingLab's GroundSmoothnessMultiplier stacks " +
                     "on top of it). 1.0 = authored values (default: the host survey 2026-09-18 showed the " +
                     "value that looks right differs per spot, so the sky-reflection strength is scaled " +
-                    "instead — see ReflectionIntensity). Live.",
+                    "instead — see ReflectionIntensity). Indoor-classified materials use IndoorFloorSmoothness " +
+                    "independently, including supported small floor details on Equator. Live.",
                     new BepInEx.Configuration.AcceptableValueRange<float>(0f, 2f)));
 
             // Default 1.0 = vanilla. 0.5 fixed the hall-floor sky mirror but (host A/B 2026-09-19,
@@ -486,6 +487,8 @@ namespace ArenaMapPort.Client
                     "RoofDepthBlack depth photo shows as INDOOR (covered), applied on per-renderer material " +
                     "CLONES only — shared materials also used by an outdoor renderer (e.g. Bay5's yard floor, " +
                     "which shares one material with the hall) are never touched. 1.0 = off (authored values). " +
+                    "Equator's small tile pieces inherit the indoor floor supporting them. The baseline is " +
+                    "independent of GroundSmoothness/GroundSmoothnessMultiplier. " +
                     "Only while a rig is active and RainCoverMethod=RoofDepthBlack. Live.",
                     new BepInEx.Configuration.AcceptableValueRange<float>(0f, 1f)));
 

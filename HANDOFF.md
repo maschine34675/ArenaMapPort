@@ -3,6 +3,32 @@
 Snapshot for whoever continues (human or agent). Verify the commits named here against `git log`; this file
 is updated by hand at each handover, it is not an automatic record. Read [AGENTS.md](AGENTS.md) first.
 
+## State on 2026-09-29 — Equator floor-detail gloss
+
+Follow-up on `aa18519`. The user's Equator tuning now includes ReflectionIntensity
+0.85, IndoorReflectionStrength 0.95 and AnamorphicFlareIntensity 0.40, applied via
+UiBridge and added to the comparison record. No additional program defaults changed.
+
+Small floor tiles/shards inherit the actual supporting indoor floor's classification,
+with one decision per LODGroup. Descriptor/sidecar opt-in is Equator-only. All 512
+details now use IndoorFloorSmoothness; authored material/texture differences remain.
+Ground scanning caches each material once; indoor baselines are independent of ground
+settings at startup and reclassification. Bay5's existing surface partition is retained.
+
+Client SHA256 `A5B95A4D2A1DC0AEC250E64151DA4CB24C81456EC9D8CC4DFCB9E7F92B63454A`.
+Release build clean; 403 tests pass; distribution validation passes. GPU-2 `73ab5e5e`
+loaded identity verified; Equator -> Bay5 -> Equator checked (22:13–22:22 CEST), including
+zero/half ground factors, live indoor values, reclassification, all three formerly
+inconsistent shard LODs and parquet preservation. No ArenaMapPort warning/error.
+Both sanctioned installs match all 2239 staged files by independent SHA256 checks;
+vanilla saved config remains byte-identical. User EFT restart required.
+GPU-2 is back at MainMenu; no raid/test hooks remain. Current user global light
+multiplier 0.5 was preserved (the previous screenshot recommendation used 0.6).
+
+Details: [equator-floor-gloss.md](docs/progress/equator-floor-gloss.md).
+Local original screenshots and settings:
+`analysis/screenshots/equator-floor-gloss-2026-09-29/VERGLEICH.md`.
+
 ## State on 2026-09-29 — tonemap sliders and Equator image comparison
 
 Follow-up on `652755e`, same feature branch: six X/Y/Z sliders plus precise number

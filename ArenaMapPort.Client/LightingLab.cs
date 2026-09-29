@@ -137,8 +137,14 @@ namespace ArenaMapPort.Client
 
         sealed class GroundMaterialEntry
         {
-            internal Material Material;
-            internal List<(int propId, float original)> Props;
+            internal readonly Material Material;
+            internal readonly IReadOnlyList<(int propId, float original)> Props;
+
+            internal GroundMaterialEntry(Material material, List<(int propId, float original)> props)
+            {
+                Material = material;
+                Props = Array.AsReadOnly(props.ToArray());
+            }
         }
 
         // Per-map captured baselines + material cache. A new instance per map, created once at Install()
@@ -171,7 +177,10 @@ namespace ArenaMapPort.Client
             internal TOD_Sky CachedSky; // same "cache before WeatherRig clears ActiveRig" reasoning as CachedAmbient
 
             // E
-            internal readonly List<GroundMaterialEntry> GroundMaterials = new List<GroundMaterialEntry>();
+            // Unity Material equality identifies the native material instance, not its name. Shared
+            // users retain one immutable authored baseline even when a scan is repeated or factor=0.
+            internal readonly Dictionary<Material, GroundMaterialEntry> GroundMaterials =
+                new Dictionary<Material, GroundMaterialEntry>();
         }
 
         static readonly Dictionary<string, LabConfigBundle> _configs = new Dictionary<string, LabConfigBundle>();
@@ -456,9 +465,8 @@ namespace ArenaMapPort.Client
             // E — restore every scanned ground material's original property values, then drop the cache
             // (next raid's materials are fresh instances from the bundle).
             int restoredCount = state.GroundMaterials.Count;
-            for (int i = 0; i < restoredCount; i++)
+            foreach (var entry in state.GroundMaterials.Values)
             {
-                var entry = state.GroundMaterials[i];
                 if (entry.Material == null)
                 {
                     continue; // destroyed/unloaded already
@@ -777,9 +785,11 @@ namespace ArenaMapPort.Client
 
         static void ScanGroundMaterials(ArenaMapDescriptor map, LabState state, float multiplier)
         {
+            if (ArenaMapRaid.CurrentMap != map || _activeState != state) return;
             using var specularScope = ReflectiveSpecularRepairs.Suspend(map);
             int renderersScanned = 0;
             int materialsMatched = 0;
+            var seen = new HashSet<Material>();
 
             int sceneCount = SceneManager.sceneCount;
             for (int i = 0; i < sceneCount; i++)
@@ -818,6 +828,12 @@ namespace ArenaMapPort.Client
                             {
                                 continue;
                             }
+                            // The indoor layer owns its clones. A late scan must not adopt their
+                            // already-scaled values or start controlling those renderer-local inputs.
+                            if (IndoorFloorSmoothnessRepairs.IsOwnedMaterial(material) || !seen.Add(material))
+                            {
+                                continue;
+                            }
                             var shaderName = material.shader.name;
                             bool shaderMatches = shaderName == "Custom/Vert Paint Shader Solid" ||
                                 shaderName.StartsWith("p0/Reflective", StringComparison.Ordinal);
@@ -826,22 +842,26 @@ namespace ArenaMapPort.Client
                                 continue;
                             }
 
-                            var props = DiscoverSmoothnessProps(material, SmoothnessPropertyHints);
-                            if (props.Count == 0)
+                            if (!state.GroundMaterials.TryGetValue(material, out var entry))
                             {
-                                continue; // shader has no smooth/gloss/shin-named Float/Range property — nothing to touch
+                                var props = DiscoverSmoothnessProps(material, SmoothnessPropertyHints);
+                                if (props.Count == 0)
+                                {
+                                    continue; // no matching Float/Range property — nothing to touch
+                                }
+                                entry = new GroundMaterialEntry(material, props);
+                                state.GroundMaterials.Add(material, entry);
                             }
 
-                            state.GroundMaterials.Add(new GroundMaterialEntry { Material = material, Props = props });
                             materialsMatched++;
-                            ApplyGroundSmoothness(material, props, multiplier);
+                            ApplyGroundSmoothness(material, entry.Props, multiplier);
                         }
                     }
                 }
             }
 
             Plugin.Log.LogInfo($"[ArenaMapPort][LightingLab] E: scanned {renderersScanned} renderer(s), " +
-                $"{materialsMatched} material(s) matched, multiplier={multiplier:0.00} (map={map.Key})");
+                $"{materialsMatched} unique material(s) matched, multiplier={multiplier:0.00} (map={map.Key})");
             if (materialsMatched == 0)
             {
                 Plugin.Log.LogWarning("[ArenaMapPort][LightingLab] E: 0 material(s) matched — the renderer-" +
@@ -850,6 +870,19 @@ namespace ArenaMapPort.Client
                     "SceneInspector hotkey (aim at the ground, press F10) shows the real renderer/material " +
                     "names to check against.");
             }
+        }
+
+        // Indoor clones must start from the authored input, not from whichever ground factor happened
+        // to be active when classification ran. Never divide the live value: zero must be reversible.
+        internal static float GetGroundBaseline(Material input, int propId, float fallback)
+        {
+            if (input == null || _activeState == null || ArenaMapRaid.CurrentMap != _activeMap
+                || !_activeState.GroundMaterials.TryGetValue(input, out var entry)) return fallback;
+            for (int i = 0; i < entry.Props.Count; i++)
+            {
+                if (entry.Props[i].propId == propId) return entry.Props[i].original;
+            }
+            return fallback;
         }
 
         // §19 — promoted from private/static to internal/static with an explicit nameHints parameter
@@ -911,7 +944,7 @@ namespace ArenaMapPort.Client
             return result;
         }
 
-        static void ApplyGroundSmoothness(Material material, List<(int propId, float original)> props, float multiplier)
+        static void ApplyGroundSmoothness(Material material, IReadOnlyList<(int propId, float original)> props, float multiplier)
         {
             for (int i = 0; i < props.Count; i++)
             {
@@ -928,9 +961,8 @@ namespace ArenaMapPort.Client
             }
             using var specularScope = ReflectiveSpecularRepairs.Suspend(map);
             float multiplier = cfg.GroundSmoothnessMultiplier.Value * WeatherRig.GroundSmoothnessBaseForCurrentMap();
-            for (int i = 0; i < state.GroundMaterials.Count; i++)
+            foreach (var entry in state.GroundMaterials.Values)
             {
-                var entry = state.GroundMaterials[i];
                 if (entry.Material == null)
                 {
                     continue;

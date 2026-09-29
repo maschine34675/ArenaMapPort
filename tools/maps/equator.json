@@ -18,6 +18,7 @@
   "template_key": "factory4_day",
   "db_base_json_path": "base.json",
   "fixed_day_hour": 12,
+  "inherit_indoor_floor_details": true,
   "fixed_night_hour": 0,
   "sun_scene": "Arena_Equator_Lighting",
   "sun_paths": ["FAKE_SUN", "FAKE_SUN_VOLUME"],
