@@ -20,6 +20,14 @@ dormant `arena_start/win/lose` stingers and small Arena clip groups into `work/e
 ArenaMode's own work (that repo is read-only here). Next on this side: map-side Control Point data
 (capture anchor, SPAWN_BOUND boxes) once ArenaMode builds Control Point slice 0.
 
+Later the same day (user request): the audio group `other` exports everything unassigned (15 excluded
+commentator categories + 318 Arena-only clips such as menu UI, popups, music, MVP and Blast Gang SFX; 751 clips,
+93.7 MiB; RU/Geneburn/Tagilla voice banks, about 1.6 GiB, only on request), and
+`tools/extract/extract_arena_ui.py` exports 159 Arena UI sprites to `work/extract/arena-ui` (PNG, manifest,
+`previews/` contact sheets; staged without previews into `dist/.../ArenaMapPort/arena-ui/`), see
+[docs/progress/arena-ui.md](docs/progress/arena-ui.md). The survey's "contested" rating of the killfeed icons
+was wrong (they are weapon/kill-method icons, not faction icons) and is corrected in the survey doc.
+
 ## State on 2026-09-28 — configuration cleanup
 
 Branch `cleanup/obsolete-config-options`, based on `695bb5e`. All 39 config-binding

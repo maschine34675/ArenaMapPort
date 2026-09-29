@@ -185,6 +185,32 @@
              Text="[ArenaMapPort] no Arena audio to stage ($(ArenaMapPortAudioDir)\manifest.json not found) - run tools/extract/extract_arena_audio.py if ArenaMode should get it; ArenaMapPort itself does not use these files" />
   </Target>
 
+  <!-- Curated Arena UI sprites/textures (killfeed icons, K/D/A glyphs, mode-select logos, kit-class
+       medallions, capture-point progress/marker art, scoreboard row backgrounds + team-color palette, an
+       animated MVP medal), extracted read-only from the user's own Arena install as plain RGBA PNGs
+       (tools/extract/extract_arena_ui.py). Same optional-staging contract as ArenaMapPortStageArenaAudio
+       just above: ArenaMapPort itself never displays any of this, it only stages it into its own deployed
+       plugin folder so ArenaMode (a separate mod) can optionally pick any of it up. See
+       docs/progress/arena-ui.md for the manifest.json contract this staged folder is. previews/ (contact
+       sheets for a human to eyeball, not consumed by any code) is deliberately excluded, never staged.
+       A missing input here is NOT a build error, same reasoning as the audio target: this data is
+       optional and nothing in this project depends on it. -->
+  <Target Name="ArenaMapPortStageArenaUi" AfterTargets="ArenaMapPortDistCopy" Condition="'$(Configuration)'=='Release'">
+    <PropertyGroup>
+      <ArenaMapPortUiDir>$(MSBuildThisFileDirectory)..\work\extract\arena-ui</ArenaMapPortUiDir>
+    </PropertyGroup>
+    <ItemGroup Condition="Exists('$(ArenaMapPortUiDir)\manifest.json')">
+      <ArenaMapPortUiFile Include="$(ArenaMapPortUiDir)\**\*.*" Exclude="$(ArenaMapPortUiDir)\previews\**\*.*" />
+    </ItemGroup>
+    <Copy SourceFiles="@(ArenaMapPortUiFile)"
+          DestinationFiles="@(ArenaMapPortUiFile->'$(ArenaMapPortDistDir)\arena-ui\%(RecursiveDir)%(Filename)%(Extension)')"
+          Condition="Exists('$(ArenaMapPortUiDir)\manifest.json')" SkipUnchangedFiles="true" />
+    <Message Importance="high" Condition="Exists('$(ArenaMapPortUiDir)\manifest.json')"
+             Text="[ArenaMapPort] staged Arena UI sprites (optional, for ArenaMode) from $(ArenaMapPortUiDir) into dist/.../arena-ui/" />
+    <Message Importance="high" Condition="!Exists('$(ArenaMapPortUiDir)\manifest.json')"
+             Text="[ArenaMapPort] no Arena UI sprites to stage ($(ArenaMapPortUiDir)\manifest.json not found) - run tools/extract/extract_arena_ui.py if ArenaMode should get it; ArenaMapPort itself does not use these files" />
+  </Target>
+
   <!-- PLAN-TWO-MAPS item 8: AiAnchors.cs reads <plugin>/ai/<key>.ai.json at raid start. The sidecars are
        git-tracked (tools/maps/*.ai.json, written by tools/extract/extract_ai_anchors.py), so they are staged
        with the DLL on every Release build, DllOnly included. -->

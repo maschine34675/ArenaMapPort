@@ -12,6 +12,11 @@ dated state in one screen; read it before this index if you only have a minute.
   classified by BSG's own 30 event tags (54 of 69 categories kept, Blast Gang and PurifiedTeamAppearance out),
   EFT's dormant arena_start/win/lose stingers, crowd, camera glitch, capture, round signal, result music;
   OGG + manifest.json contract staged into the plugin folder, never git; suggested ArenaMode cue mapping.
+  Group `other` (2026-09-29) adds the unassigned clips: the 15 excluded commentator categories and every
+  Arena-only clip EFT lacks (751 clips, 93.7 MiB); the RU/Geneburn/Tagilla voice banks stay on request.
+- [arena-ui.md](arena-ui.md) — Arena UI sprites for ArenaMode as PNG + manifest + contact-sheet previews:
+  killfeed weapon/kill-method/death icons with labels, K/D/A glyphs, mode logos, kit-class medallions,
+  capture markers/progress art, scoreboard backgrounds with the team palette, the 36-frame MVP medal.
 - [../ARENA-CONTENT-FOR-ARENAMODE.md](../ARENA-CONTENT-FOR-ARENAMODE.md) — 2026-09-29 survey of everything
   in EFT Arena beyond the maps that ArenaMode could use: tiers, evidence, owners, rejected dead ends.
 - [config-cleanup.md](config-cleanup.md) — complete configuration audit,

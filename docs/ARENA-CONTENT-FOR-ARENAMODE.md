@@ -174,7 +174,7 @@ figure for this specific group appears in the synthesis or journal.
 |---|---|---|---|
 | Native menu-click / popup-alert SFX kits (11 `arena_*_click`/`menu` clips + 4 `popup_*`) | `CHARACTER-SELECTION-REVIEW.md`: hover/click on ArenaMode's own screens "remain owned by EFT's original toggle"; no HUD alert/toast infrastructure exists anywhere in the client (`Pickups/`, `Hud/` grepped, zero hits). Revisit only if ArenaMode ever owns real menu chrome. | ArenaMode | S |
 | Lobby / in-match background music tracks (`arena_wait_match_background_music` 112.00 s/32000 Hz, `arena_track_02` 153.29 s, `arena_track_03` 124.16 s) | No separate lobby screen exists to gate lobby music to; in-match background music would be unprecedented in any Tarkov raid, vanilla or Arena. Highest-risk item in the whole survey. | ArenaMode | L |
-| Killfeed weapon-class / kill-method icon sets | Contradicts `KillfeedView.cs`'s own documented, **considered** design ("player-relative team colors instead of faction icons", ported from MIT `DragonDen.Killfeed`) — a design question to raise with the user, not a gap. | ArenaMode | M |
+| Killfeed weapon-class / kill-method icon sets | ~~Contradicts `KillfeedView.cs`'s own documented, **considered** design ("player-relative team colors instead of faction icons", ported from MIT `DragonDen.Killfeed`) — a design question to raise with the user, not a gap.~~ — **corrected 2026-09-29, see below:** weapon-class/kill-method icons are not faction icons; they complement the existing team-colored line rather than contradicting it (extraction now complete — 40 items, `docs/progress/arena-ui.md`). | ArenaMode | M |
 | Animated MVP post-match medal (36-frame flipbook, 6480×6480 source) | "MVP" occurs 0 times across ArenaMode's ~140 docs; `ANNOUNCER-AWARDS-REVIEW.md`'s "awards" are in-raid kill-streak barks, not a postmatch best-player concept. Needs new scoring logic before this art has anywhere to attach. | ArenaMode | M |
 | Scoreboard row-background art + 7-color team palette | Largely redundant: `Effects/ArenaTracerColor.cs` already ships an 8-color palette wired into friendly-marker and killfeed coloring. Only the decorative row art (not the colors) is non-redundant, and there is no results screen to skin it onto. | ArenaMode | S |
 | Arena's 11-mode catalog + per-map matrix (design reference) | Real, non-obvious roster (TeamFight/LastHero/ShootOut Solo-Duo-Trio/Coop/OverRun/BlastGang/CheckPoint) confirmed via `ScenesPreset.GameModes` typetree on both release maps; zero numeric rules recoverable (server-side). Worth reading once against ArenaMode's own roadmap, nothing to build from it directly. | ArenaMode | S |
@@ -221,6 +221,26 @@ figure for this specific group appears in the synthesis or journal.
   extract. ArenaMode has zero PvE/zombie precedent or intent anywhere in its docs or code. If a PvE
   "Infected" mode is ever wanted, the actionable idea is SPT's own built-in Halloween system, not a
   port from Arena — and that belongs in ArenaMode's own backlog. Closed.
+
+## Correction, 2026-09-29 (later same session) — killfeed icon item was not actually contested
+
+Tier C rated the "Killfeed weapon-class / kill-method icon sets" item **contested** because
+`KillfeedView.cs`'s own doc comment says it uses "player-relative team colors **instead of faction
+icons**" — read at the time as this candidate proposing to replace that team-color line with icons, i.e.
+reversing a considered design decision. On a closer look (prompted by the user asking to see what the
+killfeed icons actually look like, 2026-09-29): **weapon-class and kill-method icons are not faction
+icons.** `KillfeedView.cs`'s own design statement is specifically about not using per-faction (USEC/BEAR)
+iconography in place of the team-color text — it says nothing about a weapon-class or kill-method glyph,
+which identifies *what* killed the victim, not *which side* the killer is on. The two are orthogonal: a
+weapon icon or a headshot-skull marker sitting next to the existing team-colored `"Killer -> Victim"` line
+complements it (same role the trailing `WeaponName`/`HS` text already plays today) rather than replacing
+the thing the design comment was actually defending. This item should not have been filed as "contradicts
+a considered design decision" — moved out of Tier C's contested framing; see
+[`docs/progress/arena-ui.md`](progress/arena-ui.md) for the actual extracted icon set (40 items: 11
+weapon-class, 5 kill-method, 5 death-cause, 4 grenade/knife size variants, and the 15-cell `Killmetod_icon`
+strip), its previews, and integration notes against the real `KillfeedView.cs`/`KillfeedText.cs`. Still a
+design decision for the user to make (whether ArenaMode's killfeed should grow icons at all), just not one
+this survey's own evidence actually argues against.
 
 ## Distribution and legal policy
 
