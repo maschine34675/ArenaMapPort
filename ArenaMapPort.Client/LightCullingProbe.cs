@@ -195,6 +195,7 @@ namespace ArenaMapPort.Client
                 Plugin.Log.LogInfo($"[ArenaMapPort][LightProbe] {map.Key} flicker: no enabled LightFlicker");
             }
             LogCameraStack(map.Key, cam);
+            HdrImageTuning.LogDiagnostics();
             _running = false;
         }
 

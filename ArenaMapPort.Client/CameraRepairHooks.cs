@@ -29,17 +29,19 @@ namespace ArenaMapPort.Client
 
         static void AfterSetCamera(CameraManager __instance)
         {
-            if (!ArenaMapRaid.IsLoaded()) { Release(); return; }
+            if (!ArenaMapRaid.IsLoaded()) { Release(); HdrImageTuning.LogDiagnostics(); return; }
             if (__instance.Camera == null) return;
             // Isolate repairs: an optional native effect failure must not suppress bloom/flare.
             try { CameraEffectsRepairs.OnCameraChanged(); }
             catch (Exception e) { Plugin.Log.LogError($"[ArenaMapPort][Camera] repair failed: {e}"); }
             BloomTuning.ApplyToCurrentCamera("camera set");
             AnamorphicFlareTuning.ApplyToCurrentCamera("camera set");
+            HdrImageTuning.OnCameraChanged();
         }
 
         static void Release()
         {
+            HdrImageTuning.Release();
             BloomTuning.Release();
             AnamorphicFlareTuning.Release();
         }

@@ -8,6 +8,10 @@ dated state in one screen; read it before this index if you only have a minute.
 
 ## Current — read these for the area you touch
 
+- [hdr-controls.md](hdr-controls.md) — live Equator/Bay5 exposure and native tonemapping,
+  advanced curve vectors, Equator flare length/threshold/tint, neutral defaults,
+  GPU-2 comparisons and saved-tuning preservation (2026-09-29).
+
 - [arena-audio.md](arena-audio.md) — optional Arena audio for ArenaMode: the English commentator bank
   classified by BSG's own 30 event tags (54 of 69 categories kept, Blast Gang and PurifiedTeamAppearance out),
   EFT's dormant arena_start/win/lose stingers, crowd, camera glitch, capture, round signal, result music;

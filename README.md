@@ -16,6 +16,25 @@ The registry contains Equator and Bay5 plus 12 additional source-backed map defi
 
 **Equator light streaks.** F12 → maschine-ArenaMapPort → Lighting (arena_equator): `AnamorphicFlare` restores the thin horizontal streak around bright lamps; `AnamorphicFlareIntensity` defaults to 0.25 and `AnamorphicFlareHDR` is on. This is internal HDR processing, not HDR monitor output. `AmbientIntensity` defaults to 0.85 for slightly deeper shade. Broad glow remains separately adjustable through `BloomThreshold`/`BloomIntensity`. [Native comparison and camera lifecycle checks](docs/progress/equator-anamorphic-hdr.md).
 
+**HDR image tuning.** Equator and Bay5 each have live controls in their `Lighting (<map>)` section:
+
+| Setting | Default | Effect |
+|---|---|---|
+| `ExposureCompensationEV` | 0 | Relative target brightness: +1 doubles the native automatic-exposure target, -1 halves it. |
+| `ExposureRangeMultiplier` | 1 | Moves both native exposure limits toward zero (below 1) or away from zero (above 1). |
+| `ExposureSpeedMultiplier` | 1 | Changes how quickly automatic exposure adapts. |
+| `TonemapProfile` | Original | Original camera settings, Filmic, RomB, ACES, or Off. |
+
+The defaults preserve the existing look and native indoor/outdoor exposure changes. Advanced settings
+add `TonemapCustomCurve`, `TonemapCurve` and `TonemapSecondaryCurve`: raw native X/Y/Z parameters,
+used only with an explicit Filmic/RomB/ACES profile. Set the custom toggle off to return to the
+selected profile, or select Original to recover the camera's own parameters. The two vectors initially
+contain the RomB preset; they are not independent shadow/highlight sliders.
+
+Equator also has `AnamorphicFlareLength` (3.5), `AnamorphicFlareThreshold` (0.155) and
+`AnamorphicFlareTint` (the previous pale-blue RGBA color). Tint alpha multiplies flare strength.
+All changes work during a raid. See [HDR controls and verification](docs/progress/hdr-controls.md).
+
 **Debugging.** F12 shows map-specific options for Equator and Bay5 only; the other maps retain their saved settings and behavior. The separate ArenaMapDebug mod provides **EQUATOR DEBUG** and **BAY5 DEBUG** main-menu buttons for immediate PMC test raids, with no selection screens or starting countdown. Disconnect returns directly to the menu with the existing living-player health protection. See [debug/config verification](docs/progress/bay5-shadows-menu.md).
 
 **Configuration cleanup.** Obsolete rain-cover, custom ambient-intensity and unused map/logging controls are removed. Startup also deletes their old saved entries while preserving active tuning. Internal migration markers are hidden. Conditional camera/ambient/water fallback controls remain and explain when they apply. [Audit and verification](docs/progress/config-cleanup.md).

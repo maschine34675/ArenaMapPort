@@ -19,6 +19,14 @@ namespace ArenaMapPort.Client
     /// </summary>
     internal static class AnamorphicFlareTuning
     {
+        const float DefaultLength = 3.5f;
+        const float DefaultThreshold = 0.155f;
+        const float MaximumLength = 10f;
+        // The native anamorphic pass divides by (1 - lensflareThreshold), including in HDR.
+        const float MaximumThreshold = 0.99f;
+        static readonly Color DefaultTint = new Color(0.670588f, 0.862745f, 1f, 0.75f);
+        static readonly Color PersistedDefaultTint = (Color32)DefaultTint;
+
         sealed class Original
         {
             internal BloomAndFlares Effect;
@@ -69,7 +77,8 @@ namespace ArenaMapPort.Client
         }
 
         static ConfigEntry<bool> _enabled, _hdr;
-        static ConfigEntry<float> _intensity;
+        static ConfigEntry<float> _intensity, _length, _threshold;
+        static ConfigEntry<Color> _tint;
         static readonly Dictionary<BloomAndFlares, Original> Originals = new Dictionary<BloomAndFlares, Original>();
         static readonly Dictionary<PrismEffects, Original> BeforeTonemap = new Dictionary<PrismEffects, Original>();
         static Action<BloomAndFlares, RenderTexture, RenderTexture> _render;
@@ -149,9 +158,40 @@ namespace ArenaMapPort.Client
                     "0.1 is the early camera's subtler value. " +
                     "0 removes the streak while retaining the HDR/prefilter settings. Live.",
                     new AcceptableValueRange<float>(0f, 1f)));
+            _length = Plugin.Instance.Config.Bind(section, "AnamorphicFlareLength", DefaultLength,
+                new ConfigDescription("Horizontal stretch of the restored light streak. " +
+                    "3.5 preserves the existing length; lower values shorten it and higher values lengthen it. " +
+                    "Only applies while AnamorphicFlare is on. Live.",
+                    new AcceptableValueRange<float>(0f, MaximumLength)));
+            _threshold = Plugin.Instance.Config.Bind(section, "AnamorphicFlareThreshold", DefaultThreshold,
+                new ConfigDescription("Light threshold for the restored horizontal streak. " +
+                    "0.155 preserves the existing selection; lower values admit dimmer highlights, " +
+                    "higher values restrict the streak to brighter highlights. " +
+                    "Only applies while AnamorphicFlare is on. Live.",
+                    new AcceptableValueRange<float>(0f, MaximumThreshold)));
+            _tint = Plugin.Instance.Config.Bind(section, "AnamorphicFlareTint", DefaultTint,
+                "Color of the restored horizontal streak. The default preserves its blue-white tint. " +
+                "Alpha also multiplies AnamorphicFlareIntensity: 0 hides the streak, 0.75 preserves its " +
+                "existing strength, and 1 uses the full configured strength. RGBA channels are limited to 0-1. " +
+                "Only applies while AnamorphicFlare is on. Live.");
             _enabled.SettingChanged += (_, __) => ApplyToCurrentCamera("setting changed");
             _hdr.SettingChanged += (_, __) => ApplyToCurrentCamera("setting changed");
             _intensity.SettingChanged += (_, __) => ApplyToCurrentCamera("setting changed");
+            _length.SettingChanged += (_, __) => ApplyToCurrentCamera("setting changed");
+            _threshold.SettingChanged += (_, __) => ApplyToCurrentCamera("setting changed");
+            _tint.SettingChanged += (_, __) => ApplyToCurrentCamera("setting changed");
+        }
+
+        static float ClampFinite(float value, float fallback, float maximum)
+            => float.IsNaN(value) || float.IsInfinity(value) ? fallback : Mathf.Clamp(value, 0f, maximum);
+
+        static Color ClampTint(Color tint)
+        {
+            // BepInEx saves Color as RRGGBBAA; its default alpha reloads as 191/255 instead
+            // of 0.75. Restore the exact historical default when that saved color is read.
+            if (tint == PersistedDefaultTint) return DefaultTint;
+            return new Color(ClampFinite(tint.r, DefaultTint.r, 1f), ClampFinite(tint.g, DefaultTint.g, 1f),
+                ClampFinite(tint.b, DefaultTint.b, 1f), ClampFinite(tint.a, DefaultTint.a, 1f));
         }
 
         internal static void ApplyToCurrentCamera(string reason)
@@ -182,17 +222,18 @@ namespace ArenaMapPort.Client
                 effect.bloomThreshold = 0.77f;
                 effect.sepBlurSpread = 1.89f;
                 effect.bloomBlurIterations = 2;
-                effect.lensflareThreshold = 0.155f;
-                effect.hollyStretchWidth = 3.5f;
+                effect.lensflareThreshold = ClampFinite(_threshold.Value, DefaultThreshold, MaximumThreshold);
+                effect.hollyStretchWidth = ClampFinite(_length.Value, DefaultLength, MaximumLength);
                 effect.hollywoodFlareBlurIterations = 2;
                 effect.lensflareIntensity = _intensity.Value;
-                effect.flareColorA = new Color(0.670588f, 0.862745f, 1f, 0.75f);
+                effect.flareColorA = ClampTint(_tint.Value);
                 if (original.Ultimate != null) original.Ultimate.m_UseAnamorphicFlare = false;
                 Plugin.Log.LogInfo($"[ArenaMapPort][Flare] arena_equator '{camera.name}' ({reason}): " +
                     $"component={effect.GetInstanceID()} enabled={effect.enabled} lensflares={effect.lensflares} " +
                     $"mode={effect.lensflareMode} HDR={effect.hdr} cameraHDR={camera.allowHDR} " +
                     $"intensity={effect.lensflareIntensity:0.000} threshold={effect.lensflareThreshold:0.000} " +
                     $"spread={effect.sepBlurSpread:0.00} width={effect.hollyStretchWidth:0.00} " +
+                    $"tint={effect.flareColorA.ToString("F3")} " +
                     $"bloom={effect.bloomThreshold:0.00}/{effect.bloomIntensity:0.00}");
             }
             catch (Exception e)

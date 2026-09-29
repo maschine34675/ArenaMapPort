@@ -3,6 +3,41 @@
 Snapshot for whoever continues (human or agent). Verify the commits named here against `git log`; this file
 is updated by hand at each handover, it is not an automatic record. Read [AGENTS.md](AGENTS.md) first.
 
+## State on 2026-09-29 — HDR image controls
+
+Branch `feature/hdr-image-controls`, based on `c23fea6`. Seven new live controls
+per map (Equator/Bay5): relative exposure target, exposure limits, adaptation
+speed, Original/Filmic/RomB/ACES/Off and three advanced custom-curve entries.
+Equator adds flare length, threshold and RGBA tint. All 17 defaults preserve
+the previous look. Existing settings and optional Arena audio/UI assets remain.
+
+`HdrImageTuning` stages the current frame's values after EFT's environment
+overwrite, restores component fields after material upload and changed global
+tone keywords after rendering. Exact main-camera/map gating excludes optics,
+master-dependent cameras and other locations. F7 distinguishes native inputs,
+effective material values and observed shader keyword state. Exposure bounds
+scale about zero: a midpoint-based candidate blacked out at normal lower values
+with EFT's asymmetric [-10,0.9] interval and was corrected before acceptance.
+
+Final client SHA256 `F1B6CCB57A16BF36CDAC96C8525792A88CC84452DDECA4469FD536A244ECA878`.
+GPU-2 `9c899e03`, 19:04–19:11 CEST: Equator -> Bay5 -> hideout -> Equator,
+live controls, native indoor/outdoor transitions, independent map values,
+outside-camera exclusion, repeated camera creation and neutral restoration.
+Earlier same-day candidate covered all tone profiles/custom fallback and flare
+length/tint/threshold/alpha/disable-reenable comparisons. No ArenaMapPort warnings
+or errors. Host returned to MainMenu. Existing host values 865/865 preserved;
+17 new entries neutral. Details and evidence limits:
+[hdr-controls.md](docs/progress/hdr-controls.md).
+
+Release client built; 397 server tests, 639 pipeline tests (28 expected skips),
+eight PowerShell log cases and distribution validation passed. No Unity rebuild.
+The package now contains 2239 files including prior Arena audio/UI extraction,
+so older 103-file deployment totals below are historical.
+Both sanctioned deployments to `D:\SPT41` and `D:\SPT41vanilla` completed;
+independent SHA256 verification matched all 2239 files in each installation.
+All 804 saved vanilla assignments are unchanged. Restart any already running
+user EFT instance; GPU-2 has the verified client loaded and is idle at MainMenu.
+
 ## State on 2026-09-29 — Arena content survey and Arena audio extraction for ArenaMode
 
 Branch `feature/arena-audio`, based on `baa5913` (`cleanup/obsolete-config-options`). A read-only survey of
