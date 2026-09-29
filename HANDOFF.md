@@ -3,6 +3,38 @@
 Snapshot for whoever continues (human or agent). Verify the commits named here against `git log`; this file
 is updated by hand at each handover, it is not an automatic record. Read [AGENTS.md](AGENTS.md) first.
 
+## State on 2026-09-29 — accepted Equator defaults; Bay5 streetlamp source audit
+
+Follow-up on `aa3d953`, branch `feature/hdr-image-controls`. The user's accepted
+Equator tuning is now the actual fresh/F12-reset default: custom Filmic
+`(7,0.35,0.7)` / `(-0.02,0.18,0)`, ambient 0.5, reflection 0.85, indoor reflection
+0.95 and anamorphic strength 0.4. Global lamp 0.5 and bloom 0.35 / 2.1 were already
+defaults. WeatherRig revision 5 plus hidden HDR/flare revision 1 migrate exact
+legacy defaults once; the four tone entries migrate only as a complete neutral
+tuple. Tuned values remain intact. Bay5 defaults and native preset buttons retain
+their existing behavior.
+
+Bay5 audit: 15 original streetlamp roots (11 `fonar_stolb`, 4 `street_lamp2`),
+157 descendant source objects; no Light, lamp controller or flare component in
+those hierarchies. Principal materials have no emission texture. Other native
+lights are separate and already ported. No original Arena nighttime run was made,
+so deliberate difficulty is not established. No Bay5 lighting changes requested
+or made. Source evidence is in ignored `work/bay5-streetlights-audit/`.
+
+Client SHA256 `4A5238EA96D2770737340D939ABA8F37F12236C46AED642CBEF9066DD18B2D7F`.
+Release build clean; 403 tests pass; distribution validation passes. GPU-2
+`a06cb840` loaded identity verified; Equator Day/Clear image and shader parameters
+confirmed (22:50–22:51 CEST), no ArenaMapPort warnings/errors. Returned to MainMenu,
+no active raid/test hooks. Local screenshot + metadata under
+`analysis/screenshots/equator-defaults-2026-09-29/`.
+
+Both sanctioned deployments completed (2239 files each). Saved host values are
+unchanged except internal revision 4 to 5 and two new migration markers; vanilla
+config remains byte-identical. User EFT restart required for the new DLL/defaults.
+Independent SHA256 comparison matches all 2239 staged files in each installation.
+
+Details: [equator-defaults-bay5-lights.md](docs/progress/equator-defaults-bay5-lights.md).
+
 ## State on 2026-09-29 — Equator floor-detail gloss
 
 Follow-up on `aa18519`. The user's Equator tuning now includes ReflectionIntensity

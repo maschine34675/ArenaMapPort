@@ -407,21 +407,21 @@ namespace ArenaMapPort.Client
                     "independently, including supported small floor details on Equator. Live.",
                     new BepInEx.Configuration.AcceptableValueRange<float>(0f, 2f)));
 
-            // Default 1.0 = vanilla. 0.5 fixed the hall-floor sky mirror but (host A/B 2026-09-19,
+            // 1.0 = vanilla. 0.5 fixed the hall-floor sky mirror but (host A/B 2026-09-19,
             // doc §16.2) darkens EVERY shadowed surface: the Custom Ambient pass scales its whole
             // cubemap contribution with _ReflectionIntensity, and that carries most of the shadow light.
-            cfg.ReflectionIntensity = Plugin.Instance.Config.Bind(section, "ReflectionIntensity", 1f,
+            cfg.ReflectionIntensity = Plugin.Instance.Config.Bind(section, "ReflectionIntensity", equatorDefaults ? 0.85f : 1f,
                 new BepInEx.Configuration.ConfigDescription(
                     "Scale on the sky-cubemap reflection term of EFT's screen-space ambient pass while a " +
                     "weather rig is active (1.0 = vanilla, which forces full strength whenever SSR is on). " +
                     "Lower values dim the sky mirrored by smooth surfaces everywhere on the map, indoors and " +
-                    "in puddles alike — and dims every shadowed surface with them (doc §16.2), so keep 1.0 " +
-                    "unless comparing. Live.",
+                    "in puddles alike — and dims every shadowed surface with them (doc §16.2). " +
+                    "Equator defaults to 0.85 with the accepted Filmic image tuning; other maps keep 1.0. Live.",
                     new BepInEx.Configuration.AcceptableValueRange<float>(0f, 1f)));
 
-            cfg.AmbientIntensity = Plugin.Instance.Config.Bind(section, "AmbientIntensity", equatorDefaults ? 0.85f : 1f,
+            cfg.AmbientIntensity = Plugin.Instance.Config.Bind(section, "AmbientIntensity", equatorDefaults ? 0.5f : 1f,
                 new BepInEx.Configuration.ConfigDescription(
-                    "Equator defaults to 0.85 for more separation between direct light and shade. " +
+                    "Equator defaults to 0.5 for more separation between direct light and shade. " +
                     "§18 — scale on the analytic diffuse SH ambient ToDController computes and pushes into " +
                     "AmbientLight.SetSH/AmbientHighlight.SetSH (the same rig-cloned curves Reserve itself " +
                     "uses) — the only indirect-light mechanism on this or any vanilla EFT map (no baked " +
@@ -537,14 +537,14 @@ namespace ArenaMapPort.Client
             // §20.2 — Arena's dominant p0/Reflective/Bumped Specular family mirrors the global sky cubemap
             // scaled by each material's own _ReflectColor, not by its gloss. Applied to the same per-renderer
             // INDOOR material clones IndoorFloorSmoothness uses (RGB scaled, alpha kept). 1.0 = authored.
-            cfg.IndoorReflectionStrength = Plugin.Instance.Config.Bind(section, "IndoorReflectionStrength", equatorDefaults ? 0.3f : 1f,
+            cfg.IndoorReflectionStrength = Plugin.Instance.Config.Bind(section, "IndoorReflectionStrength", equatorDefaults ? 0.95f : 1f,
                 new BepInEx.Configuration.ConfigDescription(
                     "§20.2/§20.3 — multiplier on the reflection-strength properties of every INDOOR-classified " +
                     "renderer's p0/Reflective materials: _SpecColor and _Specularness (the G-buffer specular the " +
                     "deferred reflection pass mirrors the sky with — the lever, host A/B 2026-09-19) plus " +
                     "_ReflectColor, on the same material clones IndoorFloorSmoothness scales. 1.0 = authored " +
-                    "values; lower dims the sky mirrored by polished indoor floors. Equator default 0.3 (host A/B " +
-                    "2026-09-19: the lounge parquet reads as dark wood again; 0.0 turns spec-only props black). Live.",
+                    "values; lower dims the sky mirrored by polished indoor floors. Equator defaults to 0.95 " +
+                    "to retain the accepted parquet sheen alongside the separate specular cap. Live.",
                     new BepInEx.Configuration.AcceptableValueRange<float>(0f, 1f)));
 
             cfg.IndoorSurfaceRepair = Plugin.Instance.Config.Bind(section, "IndoorSurfaceRepair", bay5Defaults,
@@ -642,6 +642,20 @@ namespace ArenaMapPort.Client
                 cfg.DefaultsRevision.Value = 4;
                 Plugin.Log.LogInfo($"[ArenaMapPort][WeatherRig] {map.Key}: config re-seeded to defaults revision 4 " +
                     $"(ambient moved={moved}; AmbientIntensity={cfg.AmbientIntensity.Value:0.00})");
+            }
+
+            // 2026-09-29 — the user-approved Filmic/reflection tuning is now the Equator default.
+            // Exact previous defaults only; once seeded, choosing any legacy value again persists.
+            if (equatorDefaults && cfg.DefaultsRevision.Value < 5)
+            {
+                int moved = 0;
+                if (cfg.AmbientIntensity.Value == 0.85f) { cfg.AmbientIntensity.Value = 0.5f; moved++; }
+                if (cfg.ReflectionIntensity.Value == 1f) { cfg.ReflectionIntensity.Value = 0.85f; moved++; }
+                if (cfg.IndoorReflectionStrength.Value == 0.3f) { cfg.IndoorReflectionStrength.Value = 0.95f; moved++; }
+                cfg.DefaultsRevision.Value = 5;
+                Plugin.Log.LogInfo($"[ArenaMapPort][WeatherRig] {map.Key}: config re-seeded to defaults revision 5 " +
+                    $"({moved} value(s) moved; ambient={cfg.AmbientIntensity.Value:0.00}, " +
+                    $"reflection={cfg.ReflectionIntensity.Value:0.00}, indoorReflection={cfg.IndoorReflectionStrength.Value:0.00})");
             }
 
             cfg.Donor.SettingChanged += (_, __) => OnDonorConfigChanged();

@@ -8,6 +8,9 @@ dated state in one screen; read it before this index if you only have a minute.
 
 ## Current — read these for the area you touch
 
+- [equator-defaults-bay5-lights.md](equator-defaults-bay5-lights.md) — accepted
+  Equator image defaults and guarded migration; original Bay5 streetlamp source audit (2026-09-29).
+
 - [equator-floor-gloss.md](equator-floor-gloss.md) — coherent gloss controls for small
   Equator tile pieces, unique ground baselines and user-refined reflection/flare tuning (2026-09-29).
 

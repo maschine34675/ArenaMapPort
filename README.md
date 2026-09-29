@@ -14,7 +14,7 @@ The registry contains Equator and Bay5 plus 12 additional source-backed map defi
 
 **Equator reflections.** F12 → maschine-ArenaMapPort → Lighting (arena_equator) → `ReflectiveSpecularCap` sets a map-wide ceiling on `p0/Reflective` materials, including uncovered props and mesh decals. Default 30%; 100% restores the input materials. Existing indoor settings remain separate. [Reflection evidence](docs/progress/equator-specular-cap.md) records native A/B views and the repeated-raid camera lifecycle repair.
 
-**Equator light streaks.** F12 → maschine-ArenaMapPort → Lighting (arena_equator): `AnamorphicFlare` restores the thin horizontal streak around bright lamps; `AnamorphicFlareIntensity` defaults to 0.25 and `AnamorphicFlareHDR` is on. This is internal HDR processing, not HDR monitor output. `AmbientIntensity` defaults to 0.85 for slightly deeper shade. Broad glow remains separately adjustable through `BloomThreshold`/`BloomIntensity`. [Native comparison and camera lifecycle checks](docs/progress/equator-anamorphic-hdr.md).
+**Equator light streaks.** F12 → maschine-ArenaMapPort → Lighting (arena_equator): `AnamorphicFlare` restores the thin horizontal streak around bright lamps; `AnamorphicFlareIntensity` defaults to 0.40 and `AnamorphicFlareHDR` is on. This is internal HDR processing, not HDR monitor output. `AmbientIntensity` defaults to 0.5 for deeper shade. Broad glow remains separately adjustable through `BloomThreshold`/`BloomIntensity`. [Native comparison and camera lifecycle checks](docs/progress/equator-anamorphic-hdr.md).
 
 **HDR image tuning.** Equator and Bay5 each have live controls in their `Lighting (<map>)` section.
 Bloom defaults are `BloomIntensity=0.35` and `BloomThreshold=2.1`; startup migrates exact old defaults once.
@@ -24,16 +24,23 @@ Bloom defaults are `BloomIntensity=0.35` and `BloomThreshold=2.1`; startup migra
 | `ExposureCompensationEV` | 0 | Relative target brightness: +1 doubles the native automatic-exposure target, -1 halves it. |
 | `ExposureRangeMultiplier` | 1 | Moves both native exposure limits toward zero (below 1) or away from zero (above 1). |
 | `ExposureSpeedMultiplier` | 1 | Changes how quickly automatic exposure adapts. |
-| `TonemapProfile` | Original | Original camera settings, Filmic, RomB, ACES, or Off. |
+| `TonemapProfile` | Equator: Filmic; Bay5: Original | Original camera settings, Filmic, RomB, ACES, or Off. |
 
-The neutral HDR defaults preserve native indoor/outdoor exposure and tonemapping. Advanced settings
+Exposure defaults preserve native indoor/outdoor adaptation. Advanced settings
 add `TonemapCustomCurve`, `TonemapCurve` and `TonemapSecondaryCurve`: raw native X/Y/Z parameters,
 used only with an explicit Filmic/RomB/ACES profile. Set the custom toggle off to return to the
-selected profile, or select Original to recover the camera's own parameters. The two vectors initially
-contain the RomB preset; they are not independent shadow/highlight sliders. Enable the F12 Advanced
+selected profile, or select Original to recover the camera's own parameters. Equator now defaults to
+custom Filmic `(7, 0.35, 0.7)` / `(-0.02, 0.18, 0)`; Bay5 retains Original with custom tuning off
+and the saved RomB vector defaults. These are not independent shadow/highlight sliders. Enable the F12 Advanced
 filter to see six X/Y/Z sliders with precise number boxes. Their response is finer near zero.
 `Use <profile> preset` copies both native vectors and enables custom tuning; the ordinary Reset
 buttons restore each vector's config default.
+
+The accepted Equator defaults also use `ReflectionIntensity=0.85`,
+`IndoorReflectionStrength=0.95` and the existing `GlobalLightIntensityMultiplier=0.5`.
+Startup migrates exact previous float defaults once; tonemapping migrates only when all four
+old tone settings still form the complete neutral preset. Other tuning is preserved.
+See [accepted defaults and Bay5 streetlight source audit](docs/progress/equator-defaults-bay5-lights.md).
 
 Equator's broken tile patches and floor shards now inherit the indoor floor supporting them,
 including their LODs. `IndoorFloorSmoothness` controls both intact and damaged indoor tiles;
@@ -55,6 +62,12 @@ All changes work during a raid. See [HDR controls and verification](docs/progres
 **Surface lighting and shadows.** Equator/Bay5 now preserve the original packed normal textures instead of having Unity encode them a second time. All 519 normals passed source-versus-bundle checks; native Bay5 comparisons show continuous exterior shadows and remove the blue-white glaze from the reported cardboard boxes. `HandsAmbientHighlightMultiplier` separately reduces the donor's hands/held-item highlight (neutral default 1; local Bay5 0.35). Compressed CPU-readable normal copies currently total 178 MiB for Equator / 305 MiB for Bay5; total game-memory impact is unmeasured. See [visual acceptance and limits](docs/progress/bay5-shadows-menu.md).
 
 **Bay5 background.** The original harbor scene is now included: cranes and container stacks are visible in-game. Native acceptance confirmed connected bot starts, Deathmatch movement/replenishment and both ordinary test exits. Distant scenery does not enlarge weather scans or the NavMesh bake volume. See [background acceptance](docs/progress/bay5-background.md).
+
+**Bay5 streetlights.** The 15 inspected original streetlamp hierarchies have no
+Light or lamp-control component. Their original meshes/materials are ported;
+working streetlamp illumination would require additional authoring. This source
+audit does not establish Arena's intended nighttime difficulty.
+See [source evidence](docs/progress/equator-defaults-bay5-lights.md).
 
 **Original projection decals.** Equator and Bay5 import the original graffiti, dirt and markings from
 Arena's `StaticDeferredDecal` components, including their own material references and atlas regions.

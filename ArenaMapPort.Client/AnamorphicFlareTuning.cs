@@ -153,8 +153,8 @@ namespace ArenaMapPort.Client
                 "Use HDR intermediate buffers and additive blending for the restored flare, like the early camera. " +
                 "Off restores the camera's own HDR mode. Only applies while AnamorphicFlare is on. " +
                 "Camera HDR is already enabled; this is not HDR monitor output. Live.");
-            _intensity = Plugin.Instance.Config.Bind(section, "AnamorphicFlareIntensity", 0.25f,
-                new ConfigDescription("Horizontal flare strength. 0.25 is balanced for the donor camera; " +
+            _intensity = Plugin.Instance.Config.Bind(section, "AnamorphicFlareIntensity", 0.4f,
+                new ConfigDescription("Horizontal flare strength. 0.4 is the accepted Equator Filmic tuning; " +
                     "0.1 is the early camera's subtler value. " +
                     "0 removes the streak while retaining the HDR/prefilter settings. Live.",
                     new AcceptableValueRange<float>(0f, 1f)));
@@ -174,6 +174,17 @@ namespace ArenaMapPort.Client
                 "Alpha also multiplies AnamorphicFlareIntensity: 0 hides the streak, 0.75 preserves its " +
                 "existing strength, and 1 uses the full configured strength. RGBA channels are limited to 0-1. " +
                 "Only applies while AnamorphicFlare is on. Live.");
+            var revision = Plugin.Instance.Config.Bind(section, "AnamorphicDefaultsRevision", 0,
+                new ConfigDescription("Internal — once-only Equator flare default migration. Leave it alone.",
+                    null, System.ComponentModel.BrowsableAttribute.No));
+            if (revision.Value < 1)
+            {
+                bool moved = _intensity.Value == 0.25f;
+                if (moved) _intensity.Value = 0.4f;
+                revision.Value = 1;
+                Plugin.Log.LogInfo($"[ArenaMapPort][AnamorphicFlare] config re-seeded to defaults revision 1 " +
+                    $"(intensity moved={moved}; intensity={_intensity.Value:0.00})");
+            }
             _enabled.SettingChanged += (_, __) => ApplyToCurrentCamera("setting changed");
             _hdr.SettingChanged += (_, __) => ApplyToCurrentCamera("setting changed");
             _intensity.SettingChanged += (_, __) => ApplyToCurrentCamera("setting changed");

@@ -69,7 +69,7 @@ namespace ArenaMapPort.Client
                         {
                             string profileName = explicitProfile ? settings.Tone.Value.ToString() : "selected profile";
                             if (GUILayout.Button(new GUIContent("Use " + profileName + " preset",
-                                "Replace BOTH saved vectors with this profile's native preset and enable TonemapCustomCurve. The standard Reset button resets only this vector to its original config default.")))
+                                "Replace BOTH saved vectors with this profile's native preset and enable TonemapCustomCurve. The standard Reset button resets only this vector to this map's config default.")))
                             {
                                 var preset = new Values();
                                 SetTonePreset(ref preset, settings.Tone.Value);
@@ -246,13 +246,14 @@ namespace ArenaMapPort.Client
                 postfix: new HarmonyMethod(typeof(HdrImageTuning), nameof(AfterUpload)),
                 finalizer: new HarmonyMethod(typeof(HdrImageTuning), nameof(FinalizeUpload)));
             _installed = true;
-            Plugin.Log.LogInfo("[ArenaMapPort][HDR] per-map exposure/tone controls installed after native environment overwrite; defaults preserve camera settings");
+            Plugin.Log.LogInfo("[ArenaMapPort][HDR] per-map exposure/tone controls installed after native environment overwrite; Equator defaults to custom Filmic, Bay5 preserves native tone");
         }
 
         static void Bind(ArenaMapDescriptor map)
         {
             var section = $"Lighting ({map.Key})";
             var config = Plugin.Instance.Config;
+            bool equator = map.Key == ArenaMapRegistry.Equator.Key;
             Configs[map.Key] = new Settings
             {
                 Compensation = config.Bind(section, "ExposureCompensationEV", 0f,
@@ -264,18 +265,42 @@ namespace ArenaMapPort.Client
                 Speed = config.Bind(section, "ExposureSpeedMultiplier", 1f,
                     new ConfigDescription("Multiply the live native exposure adaptation speed. 1 preserves indoor/outdoor behavior; higher values adapt faster. Does not enable exposure. Live.",
                         new AcceptableValueRange<float>(0.1f, 4f))),
-                Tone = config.Bind(section, "TonemapProfile", ToneProfile.Original,
-                    "Original preserves native tonemapping and its current parameters. Filmic, RomB and ACES enable that native profile with its matching native reset parameters. Off disables tonemapping. Live."),
-                CustomCurve = config.Bind(section, "TonemapCustomCurve", false,
+                Tone = config.Bind(section, "TonemapProfile", equator ? ToneProfile.Filmic : ToneProfile.Original,
+                    "Original preserves native tonemapping and its current parameters. Filmic, RomB and ACES enable that native profile, using its native preset unless TonemapCustomCurve is on. Equator defaults to the accepted custom Filmic curve; Bay5 keeps Original. Off disables tonemapping. Live."),
+                CustomCurve = config.Bind(section, "TonemapCustomCurve", equator,
                     new ConfigDescription("Use the two advanced raw native parameter vectors. Requires an explicit Filmic, RomB or ACES profile; Original and Off ignore them. Invalid or out-of-range vectors fall back to that profile. Live.", null, new ConfigurationManagerAttributes())),
-                Curve = config.Bind(section, "TonemapCurve", new Vector3(-1f, 2.72f, 0.15f),
+                Curve = config.Bind(section, "TonemapCurve", equator ? new Vector3(7f, 0.35f, 0.7f) : new Vector3(-1f, 2.72f, 0.15f),
                     new ConfigDescription("Raw Prism toneValues (x, y, z); meanings depend on the selected native shader profile. Sliders cover [-16,16] with finer movement near zero; number boxes allow exact values. Used only with TonemapCustomCurve and an explicit profile. Use the preset button to copy both native vectors and enable custom tuning. Live.", null,
                         new ConfigurationManagerAttributes { CustomDrawer = new CurveDrawer(map.Key, false).Draw })),
-                SecondaryCurve = config.Bind(section, "TonemapSecondaryCurve", Vector3.zero,
+                SecondaryCurve = config.Bind(section, "TonemapSecondaryCurve", equator ? new Vector3(-0.02f, 0.18f, 0f) : Vector3.zero,
                     new ConfigDescription("Raw Prism secondaryToneValues (x, y, z); meanings depend on the selected native shader profile. Sliders cover [-16,16] with finer movement near zero; number boxes allow exact values. Used only with TonemapCustomCurve and an explicit profile. Live.", null,
                         new ConfigurationManagerAttributes { CustomDrawer = new CurveDrawer(map.Key, true).Draw }))
             };
             var settings = Configs[map.Key];
+            if (equator)
+            {
+                var revision = config.Bind(section, "HdrDefaultsRevision", 0,
+                    new ConfigDescription("Internal — once-only Equator tonemap default migration. Leave it alone.",
+                        null, System.ComponentModel.BrowsableAttribute.No));
+                if (revision.Value < 1)
+                {
+                    // The profile and both vectors are a single preset: only migrate the complete
+                    // old neutral tuple. Even a partially customized tuple must remain untouched.
+                    bool moved = settings.Tone.Value == ToneProfile.Original && !settings.CustomCurve.Value &&
+                        settings.Curve.Value.Equals(new Vector3(-1f, 2.72f, 0.15f)) &&
+                        settings.SecondaryCurve.Value.Equals(Vector3.zero);
+                    if (moved)
+                    {
+                        settings.Tone.Value = (ToneProfile)settings.Tone.DefaultValue;
+                        settings.CustomCurve.Value = (bool)settings.CustomCurve.DefaultValue;
+                        settings.Curve.Value = (Vector3)settings.Curve.DefaultValue;
+                        settings.SecondaryCurve.Value = (Vector3)settings.SecondaryCurve.DefaultValue;
+                    }
+                    revision.Value = 1;
+                    Plugin.Log.LogInfo($"[ArenaMapPort][HDR] {map.Key}: config re-seeded to HDR defaults revision 1 " +
+                        $"(complete neutral tone tuple moved={moved}; profile={settings.Tone.Value}, custom={settings.CustomCurve.Value})");
+                }
+            }
             settings.Compensation.SettingChanged += RequestSample;
             settings.Range.SettingChanged += RequestSample;
             settings.Speed.SettingChanged += RequestSample;
