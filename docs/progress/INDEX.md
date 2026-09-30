@@ -8,6 +8,10 @@ dated state in one screen; read it before this index if you only have a minute.
 
 ## Current — read these for the area you touch
 
+- [equator-night-atmosphere.md](equator-night-atmosphere.md) — local colored haze
+  and shallow smoke for Equator's optional midnight neon installation, independent
+  live controls and native lifecycle checks (2026-09-30).
+
 - [equator-night-lights.md](equator-night-lights.md) — optional Equator 00:00
   cyan/magenta light installation, separate live controls and scoped night rain (2026-09-30).
 

@@ -59,6 +59,7 @@ namespace ArenaMapPort.Client
             _glowIntensity.SettingChanged += MarkDirty;
             _cyan.SettingChanged += MarkDirty;
             _magenta.SettingChanged += MarkDirty;
+            NeonNightAtmosphere.BindConfig(MarkDirty);
             SceneManager.sceneUnloaded += scene =>
             {
                 if (_runner != null && Array.IndexOf(ArenaMapRegistry.Equator.AllSceneNames, scene.name) >= 0)
@@ -75,6 +76,7 @@ namespace ArenaMapPort.Client
             GameObject _root;
             Mesh _mesh;
             Material _cyanMaterial, _magentaMaterial;
+            NeonNightAtmosphere _atmosphere;
             readonly List<Light> _lights = new List<Light>();
             bool _failed;
             float _nextUpdate;
@@ -121,6 +123,7 @@ namespace ArenaMapPort.Client
                         light.intensity = fixtures[i].Intensity * _lightIntensity.Value * fade;
                         light.enabled = light.intensity > 0f;
                     }
+                    _atmosphere.Update(camera);
                     if (Dirty) Probe();
                     Dirty = false;
                 }
@@ -178,6 +181,7 @@ namespace ArenaMapPort.Client
                     light.intensity = 0f;
                     _lights.Add(light);
                 }
+                _atmosphere = new NeonNightAtmosphere(_root, _lights);
                 LogState($"created strips={_lights.Count} lights={_lights.Count} shadow=Spot/512 " +
                     "hour=0; original lighting/PostFX retained");
             }
@@ -223,6 +227,7 @@ namespace ArenaMapPort.Client
                     $"roots={(_root != null ? 1 : 0)} strips={_lights.Count} lights={_lights.Count} " +
                     $"lit={_lights.Count(l => l != null && l.enabled)} scale={_lightIntensity.Value:F2} glow={_glowIntensity.Value:F2} " +
                     $"cyan={ColorUtility.ToHtmlStringRGB(Tint(_cyan.Value))} magenta={ColorUtility.ToHtmlStringRGB(Tint(_magenta.Value))}");
+                _atmosphere?.Probe();
             }
 
             void LogState(string state)
@@ -235,6 +240,8 @@ namespace ArenaMapPort.Client
             internal void Stop(string reason)
             {
                 bool hadRoot = _root != null || _mesh != null;
+                _atmosphere?.Dispose();
+                _atmosphere = null;
                 if (_root != null) { _root.SetActive(false); Object.Destroy(_root); }
                 if (_mesh != null) Object.Destroy(_mesh);
                 if (_cyanMaterial != null) Object.Destroy(_cyanMaterial);

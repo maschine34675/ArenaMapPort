@@ -3,6 +3,34 @@
 Snapshot for whoever continues (human or agent). Verify the commits named here against `git log`; this file
 is updated by hand at each handover, it is not an automatic record. Read [AGENTS.md](AGENTS.md) first.
 
+## State on 2026-09-30 — local haze and smoke for Equator night
+
+The user accepted the initial neon look and requested fog/smoke. The existing
+optional Equator 00:00 installation now owns 12 native volumetric spotlights
+and 8 shallow drifting smoke banks (maximum 256 particles). Two new live F12
+controls under `Night neon (arena_equator)`: **HazeStrength=0.16** and
+**SmokeDensity=0.65**, each independently disabled with 0. Haze respects native
+Graphics -> Volumetric Light; smoke uses a cloned native EFT material/atlas and
+has no grenade/AI behavior. No original asset, global fog or graphics change.
+
+Final client SHA256 `361A61C60CE7F1369BA39778A06ACA00BF98E5849C1A0101A52AC7D1FCAA8C86`.
+Release build clean; distribution validation passed. GPU-2 process `c692bb08`
+loaded identity verified (24/24). Night controls/off-on/recreation and normal
+extraction passed; attached light-buffer count fell from 12 to 0 on release.
+Next Equator day raid: hour 12, zero neon roots/lights, Clear weather, no atmosphere.
+No ArenaMapPort warnings/errors; one Unity inactive MenuScreen coroutine
+error occurred on debug pause and is recorded in the progress log. Final host is
+MainMenu, no raid, 440/440 HP. Quiet samples stayed at the 120 FPS cap with effects
+off/on; uncapped incremental cost and exhaustive motion/sorting are not measured.
+
+Both sanctioned installs deployed (2239 files each); client/server hashes match
+dist. All 792 existing host config assignments retained, exactly two new keys;
+vanilla config byte-identical. User EFT restart needed on vanilla. No bundle or
+server rebuild; this client-only follow-up did not rerun the previous 420 tests.
+User visual acceptance is pending. Native PNGs and settings/player metadata:
+`analysis/screenshots/equator-night-atmosphere-2026-09-30/` (ignored).
+Details: [equator-night-atmosphere.md](docs/progress/equator-night-atmosphere.md).
+
 ## State on 2026-09-30 — optional Equator night light installation
 
 Following the image-only experiment, Equator now has an optional installation

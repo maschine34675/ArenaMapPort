@@ -117,6 +117,14 @@ brightness controls and two colors. Its `Rain` option defaults on for this night
 variant only; changes to weather apply on the next raid. Original image settings
 and PostFX remain yours. See [controls and test evidence](docs/progress/equator-night-lights.md).
 
+The same section now includes independent live atmosphere controls:
+`HazeStrength=0.16` adds moving colored haze around the neon lights and requires
+the game's **Volumetric Light** graphics option; `SmokeDensity=0.65` adds shallow,
+drifting smoke banks. Set either value to 0 to turn that effect off. Both follow
+the existing neon switch and activate only on Equator at **00:00**. The smoke is
+decorative and does not change AI visibility. See [night atmosphere controls and
+verification](docs/progress/equator-night-atmosphere.md).
+
 - Repository: `D:/ArenaMapPort`.
 - Read-only Arena source: `D:/Battlestate Games/Escape from Tarkov Arena/EscapeFromTarkovArena_Data`.
 - Read-only SPT references and donor data: `D:/SPT41`.
