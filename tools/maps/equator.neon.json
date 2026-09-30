@@ -1,0 +1,151 @@
+{
+  "schema_version": 1,
+  "map_key": "arena_equator",
+  "description": "Original optional midnight installation. World-space vertical strip mounts; normal points into the open room. No source mesh or texture data.",
+  "fixtures": [
+    {
+      "name": "south-sign-left",
+      "magenta": true,
+      "x": -1.15,
+      "bottom": 3.4,
+      "z": -19.33,
+      "height": 6.4,
+      "normalX": 0,
+      "normalZ": 1,
+      "range": 12,
+      "intensity": 1.8
+    },
+    {
+      "name": "south-sign-right",
+      "magenta": true,
+      "x": 0.58,
+      "bottom": 3.4,
+      "z": -19.33,
+      "height": 6.4,
+      "normalX": 0,
+      "normalZ": 1,
+      "range": 12,
+      "intensity": 1.8
+    },
+    {
+      "name": "north-sign-left",
+      "magenta": true,
+      "x": -1.18,
+      "bottom": 3.4,
+      "z": 25.69,
+      "height": 6.4,
+      "normalX": 0,
+      "normalZ": -1,
+      "range": 12,
+      "intensity": 1.8
+    },
+    {
+      "name": "north-sign-right",
+      "magenta": true,
+      "x": 0.55,
+      "bottom": 3.4,
+      "z": 25.69,
+      "height": 6.4,
+      "normalX": 0,
+      "normalZ": -1,
+      "range": 12,
+      "intensity": 1.8
+    },
+    {
+      "name": "south-column-west",
+      "magenta": false,
+      "x": -9.115,
+      "bottom": 0.65,
+      "z": -21.44,
+      "height": 3.4,
+      "normalX": 0,
+      "normalZ": 1,
+      "range": 9,
+      "intensity": 3
+    },
+    {
+      "name": "south-column-east",
+      "magenta": false,
+      "x": 8.522,
+      "bottom": 0.65,
+      "z": -21.44,
+      "height": 3.4,
+      "normalX": 0,
+      "normalZ": 1,
+      "range": 9,
+      "intensity": 3
+    },
+    {
+      "name": "north-column-west",
+      "magenta": false,
+      "x": -9.784,
+      "bottom": 0.65,
+      "z": 26.67,
+      "height": 3.4,
+      "normalX": 0,
+      "normalZ": -1,
+      "range": 9,
+      "intensity": 3
+    },
+    {
+      "name": "north-column-east",
+      "magenta": false,
+      "x": 8.856,
+      "bottom": 0.65,
+      "z": 26.79,
+      "height": 3.4,
+      "normalX": 0,
+      "normalZ": -1,
+      "range": 9,
+      "intensity": 3
+    },
+    {
+      "name": "techlight-left",
+      "magenta": true,
+      "x": 9.71,
+      "bottom": 0.45,
+      "z": 34.38,
+      "height": 2.5,
+      "normalX": -1,
+      "normalZ": 0,
+      "range": 7,
+      "intensity": 2.4
+    },
+    {
+      "name": "techlight-right",
+      "magenta": true,
+      "x": 9.71,
+      "bottom": 0.45,
+      "z": 38.66,
+      "height": 2.5,
+      "normalX": -1,
+      "normalZ": 0,
+      "range": 7,
+      "intensity": 2.4
+    },
+    {
+      "name": "side-column-west",
+      "magenta": false,
+      "x": -21.51,
+      "bottom": 0.65,
+      "z": 7.041,
+      "height": 3.4,
+      "normalX": 1,
+      "normalZ": 0,
+      "range": 9,
+      "intensity": 3
+    },
+    {
+      "name": "side-column-east",
+      "magenta": false,
+      "x": 20.82,
+      "bottom": 0.65,
+      "z": 5.978,
+      "height": 3.4,
+      "normalX": -1,
+      "normalZ": 0,
+      "range": 9,
+      "intensity": 3
+    }
+  ]
+}

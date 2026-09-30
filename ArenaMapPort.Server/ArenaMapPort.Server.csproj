@@ -38,6 +38,7 @@
     <Compile Include="..\ArenaMapPort.Shared\ArenaEquatorLocation.cs" Link="Shared\ArenaEquatorLocation.cs" />
     <Compile Include="..\ArenaMapPort.Shared\ArenaMapDescriptor.cs" Link="Shared\ArenaMapDescriptor.cs" />
     <Compile Include="..\ArenaMapPort.Shared\ArenaDustDescriptor.cs" Link="Shared\ArenaDustDescriptor.cs" />
+    <Compile Include="..\ArenaMapPort.Shared\ArenaNeonFixture.cs" Link="Shared\ArenaNeonFixture.cs" />
   </ItemGroup>
 
   <ItemGroup>

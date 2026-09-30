@@ -98,6 +98,7 @@ namespace ArenaMapPort.Client
                 yield break;
             }
             Vector3 camPos = cam.transform.position;
+            EquatorNightNeon.Probe();
             NativeMultiFlare.Probe();
             LightingModCompatibility.Probe();
             EquatorRoofShadowRepairs.Probe();

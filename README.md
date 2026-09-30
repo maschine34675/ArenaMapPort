@@ -109,6 +109,14 @@ in Equator's Lighting section allows some remaining light (0.1 = 10%, default 0 
 Existing day lighting settings are preserved. Bay5 keeps its existing time behavior.
 Equator's debug shortcuts still start the day variant. See [native verification](docs/progress/equator-day-night.md).
 
+**Equator neon night (experimental):** choosing **00:00** adds cyan/magenta light
+strips at the Equator signs, atrium columns and TECHLIGHT entrance, with actual
+colored illumination and shadows. **12:00** keeps the realistic daytime appearance.
+F12 → `Night neon (arena_equator)` offers a live switch, separate light/strip
+brightness controls and two colors. Its `Rain` option defaults on for this night
+variant only; changes to weather apply on the next raid. Original image settings
+and PostFX remain yours. See [controls and test evidence](docs/progress/equator-night-lights.md).
+
 - Repository: `D:/ArenaMapPort`.
 - Read-only Arena source: `D:/Battlestate Games/Escape from Tarkov Arena/EscapeFromTarkovArena_Data`.
 - Read-only SPT references and donor data: `D:/SPT41`.

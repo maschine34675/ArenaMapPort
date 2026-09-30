@@ -3,6 +3,34 @@
 Snapshot for whoever continues (human or agent). Verify the commits named here against `git log`; this file
 is updated by hand at each handover, it is not an automatic record. Read [AGENTS.md](AGENTS.md) first.
 
+## State on 2026-09-30 — optional Equator night light installation
+
+Following the image-only experiment, Equator now has an optional installation
+of 12 cyan/magenta emissive strips with 12 real, shadowed spotlights. It activates
+only for confirmed Equator **00:00**. **12:00** retains the realistic appearance;
+other maps are excluded. New F12 group `Night neon (arena_equator)` has Enabled,
+LightIntensity **1.5**, StripBrightness **0.6**, CyanColor/MagentaColor and Rain.
+Rain defaults on for the enabled night variant only. Existing image settings,
+native PostFX and original lighting baselines are retained. No bundles rebuilt.
+
+Release build: zero warnings/errors. All **420 tests** and distribution validation
+pass. Client SHA256 `C024E13AB6A4F5409B0623F3380F52BD9C312787C5A1DC5CE0B0AF9659B86C4E`.
+GPU-2 instance `7560c40a` loaded identity verified. Night live off/on, colors and
+independent light/emission controls checked; final process checked day -> Bay5 ->
+night -> day with expected weather and zero owned objects outside night. Scene
+unload released the installation. No ArenaMapPort warning/error in the final
+process's retained log. Regular night raids used North Gate extraction; final
+state MainMenu, no active raid, 440/440 HP. The capped 120 FPS samples do not
+measure uncapped GPU cost. User visual acceptance remains open.
+
+Both sanctioned deployments completed (2239 files each), client/server hashes
+match dist on both installs. All 786 pre-existing host config assignments remain
+unchanged; six keys added. Vanilla config is byte-identical. User game/server
+restart required there. Native screenshots and matching config/player JSON:
+`analysis/screenshots/equator-night-lights-2026-09-30/` (ignored).
+Testing: normal PMC -> Equator -> **00:00**; debug shortcuts still choose day.
+Details: [equator-night-lights.md](docs/progress/equator-night-lights.md).
+
 ## State on 2026-09-30 — reversible Equator night/neon experiment
 
 On `33abe0d`, GPU-2 instance `9440e5bf`: tried cyan/purple/pink treatments on

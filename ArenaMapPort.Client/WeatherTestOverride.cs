@@ -92,7 +92,8 @@ namespace ArenaMapPort.Client
             {
                 return; // reentrancy guard — see doc comment
             }
-            if (_mode == null || _mode.Value == TestWeather.Server)
+            var mode = EquatorNightNeon.RainForCurrentRaid ? TestWeather.Rain : Mode;
+            if (mode == TestWeather.Server)
             {
                 return;
             }
@@ -101,7 +102,7 @@ namespace ArenaMapPort.Client
                 return;
             }
 
-            var overrideNodes = BuildNodes(_mode.Value);
+            var overrideNodes = BuildNodes(mode);
             try
             {
                 _applying = true;
@@ -109,7 +110,7 @@ namespace ArenaMapPort.Client
             }
             catch (Exception e)
             {
-                Plugin.Log.LogError($"[ArenaMapPort][WeatherTestOverride] applying '{_mode.Value}' threw: " +
+                Plugin.Log.LogError($"[ArenaMapPort][WeatherTestOverride] applying '{mode}' threw: " +
                     $"{e.GetType().Name}: {e.Message}");
                 return;
             }
@@ -120,8 +121,8 @@ namespace ArenaMapPort.Client
             }
 
             var map = ArenaMapRaid.CurrentMap;
-            Plugin.Log.LogInfo($"[ArenaMapPort][WeatherTestOverride] applied '{_mode.Value}' " +
-                $"(map={(map != null ? map.Key : "?")})");
+            Plugin.Log.LogInfo($"[ArenaMapPort][WeatherTestOverride] applied '{mode}' " +
+                $"(map={(map != null ? map.Key : "?")}; nightNeonRain={EquatorNightNeon.RainForCurrentRaid})");
         }
 
         static WeatherNode[] BuildNodes(TestWeather mode)
