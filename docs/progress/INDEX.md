@@ -8,6 +8,9 @@ dated state in one screen; read it before this index if you only have a minute.
 
 ## Current — read these for the area you touch
 
+- [equator-night-neon.md](equator-night-neon.md) — reversible Equator 00:00/Rain
+  neon experiment, vivid/balanced recipes and native screenshots; original values restored (2026-09-30).
+
 - [equator-defaults-bay5-lights.md](equator-defaults-bay5-lights.md) — accepted
   Equator image defaults and guarded migration; original Bay5 streetlamp source audit (2026-09-29).
 

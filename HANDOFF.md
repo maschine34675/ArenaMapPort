@@ -3,6 +3,17 @@
 Snapshot for whoever continues (human or agent). Verify the commits named here against `git log`; this file
 is updated by hand at each handover, it is not an automatic record. Read [AGENTS.md](AGENTS.md) first.
 
+## State on 2026-09-30 — reversible Equator night/neon experiment
+
+On `33abe0d`, GPU-2 instance `9440e5bf`: tried cyan/purple/pink treatments on
+Equator 00:00/Rain with the existing live controls and EFT PostFX. Vivid and
+balanced recipes plus native comparisons are saved under ignored
+`analysis/screenshots/equator-neon-2026-09-30/`. Close-up letters overflare in the
+vivid version; balanced reduces this. All 76 original captured config entries
+and original PostFX were restored and verified. Regular North Gate extraction,
+MainMenu, 440/440 HP, no active raid. No code/default changes, build or deploy.
+Details: [equator-night-neon.md](docs/progress/equator-night-neon.md).
+
 ## State on 2026-09-29 — accepted Equator defaults; Bay5 streetlamp source audit
 
 Follow-up on `aa3d953`, branch `feature/hdr-image-controls`. The user's accepted
