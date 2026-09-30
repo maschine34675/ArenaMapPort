@@ -62,6 +62,25 @@ namespace ArenaMapPort.Client
             UpdateSmoke();
         }
 
+        // Native CheckIntensity caches NeedToPrerender. Refresh after each flicker update so a
+        // zero-to-positive transition cannot leave haze behind until the next 10 Hz upkeep tick.
+        internal void SyncLightVisibility()
+        {
+            if (_disposed) return;
+            try
+            {
+                for (int i = 0; i < _volumes.Count; i++)
+                    if (ArenaMapRegistry.Equator.NeonFixtures[i].FlickerSeed > 0)
+                        _volumes[i].SyncLightVisibility();
+            }
+            catch (Exception e)
+            {
+                ReleaseVolumes();
+                _volumeFailed = true;
+                Plugin.Log.LogWarning($"{Tag} haze synchronization disabled: {e}");
+            }
+        }
+
         void UpdateVolumes(Camera camera)
         {
             try
@@ -313,8 +332,15 @@ namespace ArenaMapPort.Client
                     _volume.ScatteringCoef = strength;
                     _volume.SetDefaultValues();
                 }
-                bool visible = strength > 0f && Light.enabled && Light.intensity >= .001f;
-                _volume.enabled = visible;
+                SyncLightVisibility();
+            }
+
+            internal void SyncLightVisibility()
+            {
+                if (_volume == null || Light == null) return;
+                bool visible = _volume.ScatteringCoef > 0f && Light.enabled && Light.intensity >= .001f;
+                if (!visible) _volume.NeedToPrerender = false;
+                if (_volume.enabled != visible) _volume.enabled = visible;
                 if (visible)
                 {
                     _volume.CheckIntensity();

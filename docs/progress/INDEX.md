@@ -8,6 +8,10 @@ dated state in one screen; read it before this index if you only have a minute.
 
 ## Current — read these for the area you touch
 
+- [equator-night-flicker.md](equator-night-flicker.md) — occasional flicker on
+  three midnight neon fixtures, synchronized strips/lights/haze and independent
+  live strength/frequency controls (2026-09-30).
+
 - [equator-night-atmosphere.md](equator-night-atmosphere.md) — local colored haze
   and shallow smoke for Equator's optional midnight neon installation, independent
   live controls and native lifecycle checks (2026-09-30).

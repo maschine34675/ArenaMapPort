@@ -71,6 +71,7 @@ public class NeonNightTests
             var n = nodes[i]; var f = fixtures[i];
             Assert.Equal(f.Name, n.GetProperty("name").GetString());
             Assert.Equal(f.Magenta, n.GetProperty("magenta").GetBoolean());
+            Assert.Equal(f.FlickerSeed, n.GetProperty("flickerSeed").GetInt32());
             Assert.Equal(new[] { f.X, f.Bottom, f.Z, f.Height, f.NormalX, f.NormalZ, f.Range, f.Intensity },
                 new[] { "x", "bottom", "z", "height", "normalX", "normalZ", "range", "intensity" }.Select(k => n.GetProperty(k).GetSingle()));
         }

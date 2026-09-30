@@ -125,6 +125,15 @@ the existing neon switch and activate only on Equator at **00:00**. The smoke is
 decorative and does not change AI visibility. See [night atmosphere controls and
 verification](docs/progress/equator-night-atmosphere.md).
 
+Three fixtures in the optional midnight installation also have occasional,
+independently timed flicker: the north-west column, right TECHLIGHT strip and
+left south-sign strip. Their visible emission, illumination and haze change
+together. In the same F12 section, live `FlickerStrength=0.8` leaves 20% brightness
+at the deepest dip; 0 restores steady light and 1 permits complete blackouts.
+Live `FlickerFrequency=1` gives roughly one short burst per 20 seconds per selected
+fixture. It changes the gaps between bursts, not their length; 0 restores steady
+light. See [selective night flicker](docs/progress/equator-night-flicker.md).
+
 - Repository: `D:/ArenaMapPort`.
 - Read-only Arena source: `D:/Battlestate Games/Escape from Tarkov Arena/EscapeFromTarkovArena_Data`.
 - Read-only SPT references and donor data: `D:/SPT41`.

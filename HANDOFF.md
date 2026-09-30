@@ -3,6 +3,36 @@
 Snapshot for whoever continues (human or agent). Verify the commits named here against `git log`; this file
 is updated by hand at each handover, it is not an automatic record. Read [AGENTS.md](AGENTS.md) first.
 
+## State on 2026-09-30 — selected Equator neon lights flicker
+
+The user requested a trial. Three fixtures now have independent, occasional
+short faults: north-west column, right TECHLIGHT strip and left south-sign strip.
+The existing midnight-only gate and other nine steady lights remain. New live
+F12 controls in `Night neon (arena_equator)`: **FlickerStrength=0.8** (20% minimum;
+1 permits brief blackouts), **FlickerFrequency=1** (about one burst per 20 seconds
+per fixture, without changing pulse duration). Either 0 restores steady light.
+One envelope drives the actual light and per-strip material override; native
+haze visibility recovers in the same frame. No new lights or rendering passes.
+
+Client SHA256 `2A9A157ECC72D092C64829B0463F7698FAA557DF3B8F1549C66C394B6B7EC18B`;
+server `49CE01FEDBCADD137A347D159437A28998D963CE53396D4376D693FEC16DB48C`
+(shared descriptor rebuilt; no server behavior/database change). Client Release
+clean, 443 tests passed, distribution validation passed. GPU-2 `1ac521ec`, 24/24
+loaded identity: four 40-second native samples verified defaults, full blackouts
+and both zero/off controls with zero light/emission error or haze mismatch.
+Native captures07/08 show the actual blackout and recovery. Full off/on and
+regular extraction released owned resources; subsequent day raid had zero neon
+objects and Clear weather. No ArenaMapPort warnings/errors; the existing Unity
+inactive MenuScreen coroutine error reappeared on debug pause, documented separately.
+
+Both sanctioned installs deployed, 2239 files each; hashes match dist. All 794
+existing host assignments retained, exactly two new keys; vanilla config byte-identical.
+User game/server restart needed there. Final GPU state: MainMenu, no raid, 440/440 HP.
+Quiet default/off samples stayed at 120 FPS cap, 8.3 ms mean/p95; uncapped cost is
+not measured. The user's judgment of the rhythm remains pending. Native evidence:
+`analysis/screenshots/equator-night-flicker-2026-09-30/` (ignored).
+Details: [equator-night-flicker.md](docs/progress/equator-night-flicker.md).
+
 ## State on 2026-09-30 — local haze and smoke for Equator night
 
 The user accepted the initial neon look and requested fog/smoke. The existing

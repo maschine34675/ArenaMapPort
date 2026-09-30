@@ -60,6 +60,7 @@ namespace ArenaMapPort.Client
             _cyan.SettingChanged += MarkDirty;
             _magenta.SettingChanged += MarkDirty;
             NeonNightAtmosphere.BindConfig(MarkDirty);
+            NeonLightFlicker.BindConfig(MarkDirty);
             SceneManager.sceneUnloaded += scene =>
             {
                 if (_runner != null && Array.IndexOf(ArenaMapRegistry.Equator.AllSceneNames, scene.name) >= 0)
@@ -67,7 +68,12 @@ namespace ArenaMapPort.Client
             };
         }
 
-        internal static void Probe() { if (_runner != null) _runner.Probe(); }
+        internal static void Probe()
+        {
+            if (_runner == null) return;
+            _runner.Probe();
+            _runner.SampleFlicker();
+        }
         static void MarkDirty(object sender, EventArgs args) => Interlocked.Exchange(ref _pendingRefresh, 1);
 
         sealed class Runner : MonoBehaviour
@@ -77,7 +83,11 @@ namespace ArenaMapPort.Client
             Mesh _mesh;
             Material _cyanMaterial, _magentaMaterial;
             NeonNightAtmosphere _atmosphere;
+            NeonLightFlicker _flicker;
             readonly List<Light> _lights = new List<Light>();
+            readonly List<MeshRenderer> _strips = new List<MeshRenderer>();
+            float[] _baseIntensities;
+            Coroutine _flickerSample;
             bool _failed;
             float _nextUpdate;
             string _lastState;
@@ -86,10 +96,18 @@ namespace ArenaMapPort.Client
             {
                 // File-watcher callbacks may be off-thread: only consume their signal here.
                 if (Interlocked.Exchange(ref _pendingRefresh, 0) != 0) Dirty = true;
-                if (!Dirty && Time.unscaledTime < _nextUpdate) return;
-                _nextUpdate = Time.unscaledTime + .1f;
+                bool refresh = Dirty || Time.unscaledTime >= _nextUpdate;
                 try
                 {
+                    // Only the short fault envelope and native render gate need every frame.
+                    // Scene checks, distance baselines and atmosphere upkeep remain at 10 Hz.
+                    if (!refresh)
+                    {
+                        _flicker?.Update();
+                        _atmosphere?.SyncLightVisibility();
+                        return;
+                    }
+                    _nextUpdate = Time.unscaledTime + .1f;
                     if (!IsActive)
                     {
                         Stop("inactive");
@@ -120,10 +138,13 @@ namespace ArenaMapPort.Client
                         var light = _lights[i];
                         float fade = ArenaNeonPolicy.DistanceFade(Vector3.Distance(camera.transform.position, light.transform.position));
                         light.color = Tint(fixtures[i].Magenta ? _magenta.Value : _cyan.Value);
-                        light.intensity = fixtures[i].Intensity * _lightIntensity.Value * fade;
+                        _baseIntensities[i] = fixtures[i].Intensity * _lightIntensity.Value * fade;
+                        light.intensity = _baseIntensities[i];
                         light.enabled = light.intensity > 0f;
                     }
+                    _flicker.Update();
                     _atmosphere.Update(camera);
+                    _atmosphere.SyncLightVisibility();
                     if (Dirty) Probe();
                     Dirty = false;
                 }
@@ -161,6 +182,7 @@ namespace ArenaMapPort.Client
                     renderer.receiveShadows = false;
                     renderer.lightProbeUsage = LightProbeUsage.Off;
                     renderer.reflectionProbeUsage = ReflectionProbeUsage.Off;
+                    _strips.Add(renderer);
 
                     var source = new GameObject(fixture.Name + "_light");
                     source.transform.SetParent(_root.transform, false);
@@ -181,6 +203,8 @@ namespace ArenaMapPort.Client
                     light.intensity = 0f;
                     _lights.Add(light);
                 }
+                _baseIntensities = new float[_lights.Count];
+                _flicker = new NeonLightFlicker(_lights, _strips, _baseIntensities);
                 _atmosphere = new NeonNightAtmosphere(_root, _lights);
                 LogState($"created strips={_lights.Count} lights={_lights.Count} shadow=Spot/512 " +
                     "hour=0; original lighting/PostFX retained");
@@ -228,6 +252,12 @@ namespace ArenaMapPort.Client
                     $"lit={_lights.Count(l => l != null && l.enabled)} scale={_lightIntensity.Value:F2} glow={_glowIntensity.Value:F2} " +
                     $"cyan={ColorUtility.ToHtmlStringRGB(Tint(_cyan.Value))} magenta={ColorUtility.ToHtmlStringRGB(Tint(_magenta.Value))}");
                 _atmosphere?.Probe();
+                _flicker?.Probe();
+            }
+
+            internal void SampleFlicker()
+            {
+                if (_flicker != null && !_flicker.Sampling) _flickerSample = StartCoroutine(_flicker.Sample());
             }
 
             void LogState(string state)
@@ -240,6 +270,10 @@ namespace ArenaMapPort.Client
             internal void Stop(string reason)
             {
                 bool hadRoot = _root != null || _mesh != null;
+                if (_flickerSample != null) StopCoroutine(_flickerSample);
+                _flickerSample = null;
+                _flicker?.Dispose();
+                _flicker = null;
                 _atmosphere?.Dispose();
                 _atmosphere = null;
                 if (_root != null) { _root.SetActive(false); Object.Destroy(_root); }
@@ -248,6 +282,8 @@ namespace ArenaMapPort.Client
                 if (_magentaMaterial != null) Object.Destroy(_magentaMaterial);
                 _root = null; _mesh = null; _cyanMaterial = _magentaMaterial = null;
                 _lights.Clear();
+                _strips.Clear();
+                _baseIntensities = null;
                 if (hadRoot) LogState($"removed ({reason}); owned lights/materials/mesh released");
             }
 
