@@ -159,9 +159,12 @@ Same click points as before, raid start ≈ 9 s, `D:\SPT41` still mirrors it. Re
 1. `uibridge_status`: is another session using the host? Is the loaded ArenaMapPort DLL identical to the
    VM build ("VM build = host disk = loaded")? Is the EFT window focused (the first click into an unfocused
    window only focuses it)?
-2. Restart EFT when the client DLL changed: click points from `uibridge_snapshot contains=EXIT` / `YES`,
-   `uibridge_wait unreachableFor=5`, launcher START GAME (1396,323; the "Wipe Profile" checkbox sits left of
-   it, never click it), then `uibridge_wait screen=MainMenu afterRestart=true`.
+2. Restart EFT when the client DLL changed: `node gpu-run.mjs restart --host host2` (in
+   `D:\SPT41\Development\UiBridge\tools\gpu-run`; since UiBridge 0.7.0 it quits EFT, waits, starts the SPT
+   server if needed and EFT directly, no SPT launcher, ~65 s; `start --host host2` when EFT is not running).
+   By hand only as a fallback: click points from `uibridge_snapshot contains=EXIT` / `YES`,
+   `uibridge_wait unreachableFor=5`, then `node gpu-run.mjs start --host host2` and
+   `uibridge_wait screen=MainMenu afterRestart=true`. Never click the launcher's "Wipe Profile" checkbox.
 3. Start the raid with the debug buttons (since 2026-09-27: `EQUATOR / WITH BOTS` (299,718), `EQUATOR / NO BOTS`
    (299,798), `BAY5 / WITH BOTS` (299,878), `BAY5 / NO BOTS` (299,958) — the old single-button positions moved;
    check with `uibridge_snapshot contains=BOTS`), then `uibridge_wait raidStarted=true`. Use NO BOTS for visual or
