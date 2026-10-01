@@ -3,6 +3,28 @@
 Snapshot for whoever continues (human or agent). Verify the commits named here against `git log`; this file
 is updated by hand at each handover, it is not an automatic record. Read [AGENTS.md](AGENTS.md) first.
 
+## State on 2026-10-01 — Equator night chemlights and wet floor
+
+The optional Equator 00:00 neon installation now adds nine native decorative
+chemlights (cyan/magenta/amber/green), each with a small shadowed point light.
+Live F12 `Night neon (arena_equator)`: `AccentLightIntensity=1` (0 removes them)
+and `WetFloorStrength=0.8` (0 restores the saved floor baseline).
+
+Important source finding: native SMap shader field names are inverted.
+`_Specularness` writes actual G-buffer smoothness; `_Glossness` contributes to
+specular RGB. The new night effect adjusts only the verified SMap floor/detail
+materials through the existing material owner. Existing day controls and their
+historical behavior remain unchanged. See the progress note before touching them.
+
+GPU-2 final process `dec34a68`, 24/24 loaded identity: stronger/sharper floor
+reflections, all nine accent placements, off/on cleanup and exact material
+restoration in the subsequent 12:00/Clear raid passed. Release client builds
+cleanly; 471 tests and distribution validation pass. All 798 existing host config
+assignments stay unchanged, including the user's latest strong haze tuning.
+Vanilla config remains byte-identical; restart vanilla EFT after delivery.
+Details, hashes and native comparisons:
+[equator-night-accents-wet-floor.md](docs/progress/equator-night-accents-wet-floor.md).
+
 ## State on 2026-10-01 — Equator night distance haze and temporary PostFX
 
 The optional midnight neon installation now owns a subtle full-map native distance

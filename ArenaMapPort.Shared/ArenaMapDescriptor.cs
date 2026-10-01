@@ -78,6 +78,7 @@ namespace ArenaMapPort.Shared
         public string[] PuddleWaterMaterialNames { get; } // exact imported water-puddle material names; excludes oil decals
         public bool InheritIndoorFloorDetails { get; } // small floor pieces inherit their supporting structural floor's classification
         public ArenaNeonFixture[] NeonFixtures { get; } // optional authored night installation
+        public ArenaNightAccent[] NightAccents { get; } // decorative colored chemlights
         public int? FixedDayHour { get; }
         public int? FixedNightHour { get; }
         public bool UsesFixedStartTimes => FixedDayHour.HasValue && FixedNightHour.HasValue;
@@ -119,7 +120,8 @@ namespace ArenaMapPort.Shared
             string[]? PuddleWaterMaterialNames = null,
             string[]? DistantShadowCasterPaths = null,
             bool InheritIndoorFloorDetails = false,
-            ArenaNeonFixture[]? NeonFixtures = null)
+            ArenaNeonFixture[]? NeonFixtures = null,
+            ArenaNightAccent[]? NightAccents = null)
 #nullable restore
         {
             this.Key = Key;
@@ -149,6 +151,7 @@ namespace ArenaMapPort.Shared
             this.PuddleWaterMaterialNames = PuddleWaterMaterialNames ?? new string[0];
             this.InheritIndoorFloorDetails = InheritIndoorFloorDetails;
             this.NeonFixtures = NeonFixtures ?? new ArenaNeonFixture[0];
+            this.NightAccents = NightAccents ?? new ArenaNightAccent[0];
         }
 
         public bool IsBackgroundScene(string sceneName) =>
@@ -213,6 +216,7 @@ namespace ArenaMapPort.Shared
                 31.478260040283203f, 5.016374111175537f, 48.85846710205078f),
             FixedDayHour: 12,
             NeonFixtures: ArenaNeonLayout.Equator,
+            NightAccents: ArenaNeonLayout.EquatorAccents,
             InheritIndoorFloorDetails: true,
             FixedNightHour: 0,
             SunScene: "Arena_Equator_Lighting",

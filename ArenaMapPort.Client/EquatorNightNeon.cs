@@ -65,6 +65,8 @@ namespace ArenaMapPort.Client
             NeonLightFlicker.BindConfig(MarkDirty);
             NeonNightPostFx.BindConfig(MarkDirty);
             NeonDistanceHaze.Install(harmony, MarkDirty);
+            NeonAccentLights.BindConfig(MarkDirty);
+            NeonWetFloor.BindConfig(MarkDirty);
             SceneManager.sceneUnloaded += scene =>
             {
                 if (_runner != null && Array.IndexOf(ArenaMapRegistry.Equator.AllSceneNames, scene.name) >= 0)
@@ -90,6 +92,7 @@ namespace ArenaMapPort.Client
             NeonLightFlicker _flicker;
             NeonNightPostFx _postFx;
             NeonDistanceHaze _distanceHaze;
+            NeonAccentLights _accents;
             readonly List<Light> _lights = new List<Light>();
             readonly List<MeshRenderer> _strips = new List<MeshRenderer>();
             float[] _baseIntensities;
@@ -123,7 +126,8 @@ namespace ArenaMapPort.Client
                         Dirty = false;
                         return;
                     }
-                    if (_failed || !Singleton<GameWorld>.Instantiated || Singleton<GameWorld>.Instance.MainPlayer == null) return;
+                    if (_failed) { NeonWetFloor.Update(false); return; }
+                    if (!Singleton<GameWorld>.Instantiated || Singleton<GameWorld>.Instance.MainPlayer == null) return;
                     var camera = CameraManager.Exist ? CameraManager.Instance.Camera : null;
                     if (camera == null) return;
                     if (_root == null)
@@ -152,6 +156,8 @@ namespace ArenaMapPort.Client
                     _atmosphere.Update(camera);
                     _postFx.Update(camera);
                     _distanceHaze.Update(camera);
+                    _accents.Update(camera);
+                    NeonWetFloor.Update(true);
                     _atmosphere.SyncLightVisibility();
                     if (Dirty) Probe();
                     Dirty = false;
@@ -216,6 +222,7 @@ namespace ArenaMapPort.Client
                 _atmosphere = new NeonNightAtmosphere(_root, _lights);
                 _postFx = new NeonNightPostFx();
                 _distanceHaze = new NeonDistanceHaze();
+                _accents = new NeonAccentLights(_root);
                 LogState($"created strips={_lights.Count} lights={_lights.Count} shadow=Spot/512 " +
                     "hour=0; saved lighting/PostFX settings retained");
             }
@@ -265,6 +272,8 @@ namespace ArenaMapPort.Client
                 _flicker?.Probe();
                 _postFx?.Probe();
                 _distanceHaze?.Probe();
+                _accents?.Probe();
+                NeonWetFloor.Probe();
             }
 
             internal void SampleFlicker()
@@ -282,6 +291,9 @@ namespace ArenaMapPort.Client
             internal void Stop(string reason)
             {
                 bool hadRoot = _root != null || _mesh != null;
+                NeonWetFloor.Update(false);
+                _accents?.Dispose();
+                _accents = null;
                 if (_flickerSample != null) StopCoroutine(_flickerSample);
                 _flickerSample = null;
                 _postFx?.Dispose();

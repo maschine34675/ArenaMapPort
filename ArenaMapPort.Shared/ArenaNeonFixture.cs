@@ -46,6 +46,34 @@ namespace ArenaMapPort.Shared
             new("side-column-west", false, -21.51f, .65f, 7.041f, 3.4f, 1, 0, 9, 3),
             new("side-column-east", false, 20.82f, .65f, 5.978f, 3.4f, -1, 0, 9, 3),
         };
+
+        // Decorative native chemlight instances, separate from the indexed strip installation.
+        // Checked against the accepted source floor triangles (y = 0.03087).
+        public static readonly ArenaNightAccent[] EquatorAccents =
+        {
+            new("south-west", AccentColor.Amber, -7.8f, -18.5f, 25),
+            new("south-east", AccentColor.Green, 6.9f, -18.5f, -30),
+            new("north-west", AccentColor.Magenta, -8.1f, 23.5f, 65),
+            new("north-east", AccentColor.Amber, 7.4f, 23.5f, -15),
+            new("west-lane", AccentColor.Cyan, -18.7f, 7, 40),
+            new("east-lane", AccentColor.Magenta, 18, 6, -50),
+            new("west-cover", AccentColor.Green, -12.5f, 4, 10),
+            new("east-cover", AccentColor.Cyan, 11.7f, -4, 70),
+            new("techlight", AccentColor.Amber, 8.3f, 34.7f, -25),
+        };
+    }
+
+    public enum AccentColor { Cyan, Magenta, Amber, Green }
+
+    public sealed class ArenaNightAccent
+    {
+        public string Name { get; }
+        public AccentColor Color { get; }
+        public float X { get; }
+        public float Z { get; }
+        public float Yaw { get; }
+        public ArenaNightAccent(string name, AccentColor color, float x, float z, float yaw)
+        { Name = name; Color = color; X = x; Z = z; Yaw = yaw; }
     }
 
     /// <summary>
@@ -117,6 +145,29 @@ namespace ArenaMapPort.Shared
         {
             if (float.IsNaN(distance) || float.IsInfinity(distance)) return 0;
             return Math.Max(0, Math.Min(1, (50f - distance) / 15f));
+        }
+
+        public static float AccentDistanceFade(float distance)
+        {
+            if (float.IsNaN(distance) || float.IsInfinity(distance)) return 0;
+            return Math.Max(0, Math.Min(1, (30f - distance) / 10f));
+        }
+
+        public static bool IsFloorRenderer(string name) => name != null &&
+            (name.IndexOf("floor", StringComparison.OrdinalIgnoreCase) >= 0 ||
+             name.IndexOf("ground", StringComparison.OrdinalIgnoreCase) >= 0 ||
+             name.IndexOf("asphalt", StringComparison.OrdinalIgnoreCase) >= 0 ||
+             name.IndexOf("parquet", StringComparison.OrdinalIgnoreCase) >= 0 ||
+             name.IndexOf("lounge", StringComparison.OrdinalIgnoreCase) >= 0);
+
+        // Native SMap shader: GBuffer1.a = SpecMap.r * _Specularness, despite its name.
+        // Start with the material owner's saved baseline, never the already modified value.
+        public static float WetFloorSmoothness(bool enabled, string? mapKey, int? hour,
+            float configured, float strength)
+        {
+            if (!IsActive(enabled, mapKey, hour) || float.IsNaN(configured) || float.IsInfinity(configured) ||
+                float.IsNaN(strength) || float.IsInfinity(strength) || strength <= 0f) return configured;
+            return configured + (Math.Max(configured, 2.2f) - configured) * Math.Min(strength, 1f);
         }
     }
 }

@@ -134,6 +134,13 @@ and restores your saved PostFX on exit or disable, without saving the preset ove
 your settings. Both follow the midnight neon switch and can change live.
 See [distance haze and temporary PostFX](docs/progress/equator-night-haze-postfx.md).
 
+Nine additional decorative chemlights in cyan, magenta, amber and green add small
+shadowed light pools around the lanes, cover and entrances. Live
+`AccentLightIntensity=1` controls these lights independently (0 removes them).
+`WetFloorStrength=0.8` adds floor sheen while retaining authored surface variation
+and the saved daytime values; 0 restores the configured baseline. Both controls
+share the midnight neon switch. See [accent lights and wet floor](docs/progress/equator-night-accents-wet-floor.md).
+
 Three fixtures in the optional midnight installation also have occasional,
 independently timed flicker: the north-west column, right TECHLIGHT strip and
 left south-sign strip. Their visible emission, illumination and haze change

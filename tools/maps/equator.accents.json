@@ -1,0 +1,16 @@
+{
+  "schema_version": 1,
+  "map_key": "arena_equator",
+  "description": "Optional midnight decorative chemlights; original authored placement, shared native mesh and cloned materials. Source floor y=0.03087, model scale=1.886, light range=3m. No loot or gameplay components.",
+  "fixtures": [
+    { "name": "south-west", "color": "Amber", "x": -7.8, "z": -18.5, "yaw": 25 },
+    { "name": "south-east", "color": "Green", "x": 6.9, "z": -18.5, "yaw": -30 },
+    { "name": "north-west", "color": "Magenta", "x": -8.1, "z": 23.5, "yaw": 65 },
+    { "name": "north-east", "color": "Amber", "x": 7.4, "z": 23.5, "yaw": -15 },
+    { "name": "west-lane", "color": "Cyan", "x": -18.7, "z": 7, "yaw": 40 },
+    { "name": "east-lane", "color": "Magenta", "x": 18, "z": 6, "yaw": -50 },
+    { "name": "west-cover", "color": "Green", "x": -12.5, "z": 4, "yaw": 10 },
+    { "name": "east-cover", "color": "Cyan", "x": 11.7, "z": -4, "yaw": 70 },
+    { "name": "techlight", "color": "Amber", "x": 8.3, "z": 34.7, "yaw": -25 }
+  ]
+}

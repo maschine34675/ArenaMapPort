@@ -62,6 +62,7 @@ namespace ArenaMapPort.Client
             internal Material[] ClonedMaterials;   // renderer.materials after cloning
             internal readonly List<Material> OwnedMaterials = new List<Material>();
             internal IndoorSurfaceMesh.Split Surface;
+            internal bool NightFloor;
             internal List<(int matIndex, int propId, float original)> Props;
             internal List<(int matIndex, int propId, Color original)> ColorProps; // §20.2/§20.3 — _ReflectColor, _SpecColor
             internal List<(int matIndex, int propId, float original)> ReflectionFloatProps; // §20.3 — _Specularness
@@ -668,6 +669,8 @@ namespace ArenaMapPort.Client
             var entry = new IndoorFloorEntry
             {
                 Renderer = renderer, OriginalMaterials = original, ClonedMaterials = clones, Surface = surface,
+                NightFloor = surface == null && (ArenaNeonPolicy.IsFloorRenderer(renderer.name)
+                    || (renderer is MeshRenderer meshRenderer && IsSmallFloorDetail(meshRenderer, renderer.bounds))),
                 Props = props, ColorProps = colorProps, ReflectionFloatProps = reflectionFloats,
             };
             // Own resources BEFORE the first material allocation/renderer write, so either classification
@@ -712,7 +715,7 @@ namespace ArenaMapPort.Client
                 {
                     float f = clone.GetFloat(SpecularnessId);
                     reflectionFloats.Add((i, SpecularnessId, f));
-                    clone.SetFloat(SpecularnessId, f * reflection);
+                    clone.SetFloat(SpecularnessId, NeonWetFloor.Effective(clone, f * reflection, entry.NightFloor));
                 }
             }
             // Per-renderer instances from here on; renderer.sharedMaterials for THIS renderer also returns
@@ -819,7 +822,7 @@ namespace ArenaMapPort.Client
                     {
                         continue;
                     }
-                    mat.SetFloat(propId, original * reflection);
+                    mat.SetFloat(propId, NeonWetFloor.Effective(mat, original * reflection, entry.NightFloor));
                     recolored++;
                 }
                 if (entry.Surface != null)
