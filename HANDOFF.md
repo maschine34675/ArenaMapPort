@@ -3,6 +3,22 @@
 Snapshot for whoever continues (human or agent). Verify the commits named here against `git log`; this file
 is updated by hand at each handover, it is not an automatic record. Read [AGENTS.md](AGENTS.md) first.
 
+## State on 2026-10-01 — chemlights moved into darker areas
+
+After user acceptance of the night effects, six F10 marks identified chemlights
+only 2.81–3.60 m in front of the added cyan column lights. Those six now occupy
+shadowed passages, crate/cover sides and the southern atrium floor, selected in
+an actual GPU-2 midnight/Rain raid. Three unmarked accents remain; nine total,
+same brightness/range/rendering cost and unchanged saved settings. See current
+positions in `tools/maps/equator.accents.json`; `east-lane` is now `atrium-south`.
+
+GPU-2 process `b4e1e179`, 24/24 loaded identity, all six native placement views
+accepted (screenshots 13–18 under `analysis/screenshots/equator-accent-layout-2026-10-01`).
+Release client clean, 471 tests and distribution validation pass. Full evidence:
+[placement follow-up](docs/progress/equator-night-accents-wet-floor.md#placement-follow-up--2026-10-01).
+Both sanctioned installs deployed and hashes verified; both configs byte-identical.
+GPU-2 is back at MainMenu, no raid. Restart vanilla EFT to see the moved sticks.
+
 ## State on 2026-10-01 — Equator night chemlights and wet floor
 
 The optional Equator 00:00 neon installation now adds nine native decorative

@@ -11,7 +11,8 @@ dated state in one screen; read it before this index if you only have a minute.
 - [equator-night-accents-wet-floor.md](equator-night-accents-wet-floor.md) — nine
   multicolor native chemlights and a night-only floor gloss control; verified
   SMap shader field semantics, native comparisons and saved-setting preservation
-  (2026-10-01).
+  (2026-10-01). Same-day follow-up moves the six column-front accents into
+  native-night shadow gaps; all six placements verified on GPU-2.
 
 - [equator-night-haze-postfx.md](equator-night-haze-postfx.md) — subtle map-wide
   native distance haze and temporary balanced camera PostFX for Equator midnight,

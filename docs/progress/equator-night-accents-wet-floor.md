@@ -149,3 +149,75 @@ Delivery used only `tools/deploy-to-spt.ps1 -Confirm` for each sanctioned instal
 The receipts are `deploy-host-native-gloss.log`, `deploy-vanilla.log` and
 `delivery-hashes.json` in the evidence folder. Restart vanilla
 EFT to load the new client; vanilla native acceptance remains the user's test.
+
+## Placement follow-up — 2026-10-01
+
+The user accepted the appearance but marked six redundant placements with F10.
+`LogOutput-MASCHINE11-2026-10-01_21-12-51.log` identifies north-west at 21:15:30.953,
+north-east at 21:15:42.875, east-lane at 21:15:55.122, west-lane at 21:16:05.449,
+south-west at 21:16:14.580 and south-east at 21:16:21.832. These are marks of the
+existing sticks, not proposed destination coordinates. All six were 2.81–3.60 m
+in front of the added cyan column lights, whose range is 9 m.
+
+Native scouting on GPU-2 (`62f1c320`, Equator 00:00/Rain) selected shadowed floor
+areas between and behind cover instead. Original lamps and original chemlights
+were also considered: the otherwise clear candidate at (20,25) was rejected
+because an original green chemlight already lights it; the northern rear corridor
+and southeastern shutter were rejected as already well lit.
+
+| Fixture | New X/Z | Color | Visual purpose |
+|---|---|---|---|
+| south-west | -16 / -8 | Amber | Dark floor beside the western crate stack |
+| south-east | 16 / -8 | Green | Shadow side of the eastern cover |
+| north-west | -16 / 18 | Magenta | Dim western passage between cover |
+| north-east | 14 / 14 | Amber | Dark approach to barrels/sandbags |
+| west-lane | -20 / -18 | Magenta | Western outer approach, away from the neon column |
+| atrium-south (formerly east-lane) | 4 / -12 | Cyan | Dark inner floor beside the southern planter; cyan contrasts with nearby red signage |
+
+The latter two exchange colors, retaining the overall color counts. The three
+unmarked accents are unchanged. Geometry, count, intensity, range, floor gloss,
+night-only ownership and all saved settings remain unchanged.
+
+Independent geometry checks against the accepted v5 scene package sampled each
+candidate's center and eight surrounding points at X/Z offsets of up to 16 cm. Selected sites
+have main-floor Y=0.0309 and no raised renderer or active non-trigger mesh-collider
+triangles in the footprint. Native screenshots remain the placement acceptance;
+these discrete samples are not a general collision guarantee.
+
+Scouting screenshots and matching player/settings metadata are under ignored
+`analysis/screenshots/equator-accent-layout-2026-10-01/`. Before views 02, 04, 05,
+06, 10 and 11 cover the chosen areas; 03 has an obstructed camera. Evidence and
+deployment/configuration receipts are in `work/equator-accent-layout/`.
+
+### Follow-up verification
+
+Client Release: zero warnings/errors. All **471 existing tests pass**, including
+the shared/JSON layout mirror. Test compilation reports four existing nullable
+warnings in BaseJsonTests/ArenaMapRaid; none is in this change. Distribution
+validation passes for 14 maps / 42 bundles / 14 sidecars. No bundle rebuild or
+runtime logic change was necessary. Independent diff review confirms exactly six
+relocations, equal color counts, unchanged three remaining accents and no use of
+the renamed fixture ID outside generated GameObject names.
+
+GPU-2 final process **b4e1e179**, started 21:38:58 CEST: **24/24 loaded identities
+match**. An earlier process loaded the pre-sync DLL and was restarted before the
+acceptance raid. Final native log at 21:43:13–14 confirms Rain, hour=0 and nine
+chemlights/four materials. Screenshots **13–18** show every relocated stick fully
+visible on the ground, without visible floating/clipping, and with its own light
+pool in a dim area. Independent visual review accepted all six. The new green
+and retained cyan accents in the southeast illuminate separated patches.
+
+Regular North Gate extraction completed; final state MainMenu, no raid, 440/440
+health. `native-menu.json` records cleanup and the final log. No ArenaMapPort
+warnings/errors occurred. This focused follow-up validates placement at night;
+the earlier full day/off/on acceptance remains the lifecycle reference.
+
+Client SHA256: `9C5FC20E09D853612E3F06D219221993E82C9FA8AF999B7B4A7A669ED43AD7AC`.
+Server SHA256: `51CD4218C6230E6F8A8DFD9CE218BBA308CAE6BB641D9DED0A313697A0501C79`
+(shared data only; no server behavior change).
+
+Both sanctioned installs received 2239 files through `deploy-to-spt.ps1 -Confirm`.
+Client/server hashes match dist on both installs (`delivery-hashes.json`). Both
+config files are byte-identical to their initial snapshots: 800 host assignments
+and 804 vanilla assignments, no additions or changes (`config-preservation.json`).
+Restart vanilla EFT to load the new positions.

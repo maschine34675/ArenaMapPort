@@ -49,14 +49,16 @@ namespace ArenaMapPort.Shared
 
         // Decorative native chemlight instances, separate from the indexed strip installation.
         // Checked against the accepted source floor triangles (y = 0.03087).
+        // Six accents moved into native-night shadow gaps after the column-front placements
+        // proved redundant. Names describe the current area, not the original column mounts.
         public static readonly ArenaNightAccent[] EquatorAccents =
         {
-            new("south-west", AccentColor.Amber, -7.8f, -18.5f, 25),
-            new("south-east", AccentColor.Green, 6.9f, -18.5f, -30),
-            new("north-west", AccentColor.Magenta, -8.1f, 23.5f, 65),
-            new("north-east", AccentColor.Amber, 7.4f, 23.5f, -15),
-            new("west-lane", AccentColor.Cyan, -18.7f, 7, 40),
-            new("east-lane", AccentColor.Magenta, 18, 6, -50),
+            new("south-west", AccentColor.Amber, -16, -8, 25),
+            new("south-east", AccentColor.Green, 16, -8, -30),
+            new("north-west", AccentColor.Magenta, -16, 18, 65),
+            new("north-east", AccentColor.Amber, 14, 14, -15),
+            new("west-lane", AccentColor.Magenta, -20, -18, 40),
+            new("atrium-south", AccentColor.Cyan, 4, -12, -50),
             new("west-cover", AccentColor.Green, -12.5f, 4, 10),
             new("east-cover", AccentColor.Cyan, 11.7f, -4, 70),
             new("techlight", AccentColor.Amber, 8.3f, 34.7f, -25),
