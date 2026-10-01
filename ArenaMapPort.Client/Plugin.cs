@@ -115,7 +115,7 @@ namespace ArenaMapPort.Client
             AnamorphicFlareTuning.InstallRenderHooks(_harmony);
             HdrImageTuning.Install(_harmony);
             NativeMultiFlare.Install();
-            EquatorNightNeon.Install();
+            EquatorNightNeon.Install(_harmony);
             CameraRepairHooks.Install(_harmony);
             DecalRepairs.Install();
             NativeDecalRepairs.Install();

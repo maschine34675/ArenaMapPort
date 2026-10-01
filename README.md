@@ -116,7 +116,8 @@ colored illumination and shadows. **12:00** keeps the realistic daytime appearan
 F12 → `Night neon (arena_equator)` offers a live switch, separate light/strip
 brightness controls and two colors. Its `Rain` option defaults on for this night
 variant only; changes to weather apply on the next raid. Original image settings
-and PostFX remain yours. See [controls and test evidence](docs/progress/equator-night-lights.md).
+remain yours. The temporary night PostFX option is described below.
+See [light controls and test evidence](docs/progress/equator-night-lights.md).
 
 The same section now includes independent live atmosphere controls:
 `HazeStrength=0.16` adds moving colored haze around the neon lights and requires
@@ -125,6 +126,13 @@ drifting smoke banks. Set either value to 0 to turn that effect off. Both follow
 the existing neon switch and activate only on Equator at **00:00**. The smoke is
 decorative and does not change AI visibility. See [night atmosphere controls and
 verification](docs/progress/equator-night-atmosphere.md).
+
+`DistanceHaze=0.002` adds a subtle cool haze throughout the night map, beginning
+beyond 5 metres; 0 disables it. `PostFx=true` temporarily applies the balanced
+Chillwave preset to the night camera. It pauses in the game's settings/preview
+and restores your saved PostFX on exit or disable, without saving the preset over
+your settings. Both follow the midnight neon switch and can change live.
+See [distance haze and temporary PostFX](docs/progress/equator-night-haze-postfx.md).
 
 Three fixtures in the optional midnight installation also have occasional,
 independently timed flicker: the north-west column, right TECHLIGHT strip and

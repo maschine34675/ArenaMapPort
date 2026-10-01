@@ -3,6 +3,25 @@
 Snapshot for whoever continues (human or agent). Verify the commits named here against `git log`; this file
 is updated by hand at each handover, it is not an automatic record. Read [AGENTS.md](AGENTS.md) first.
 
+## State on 2026-10-01 — Equator night distance haze and temporary PostFX
+
+The optional midnight neon installation now owns a subtle full-map native distance
+fog pass (`DistanceHaze=0.002`, 0=off) and an automatic balanced camera-only Chillwave
+preset (`PostFx=true`). Both are live F12 controls in `Night neon (arena_equator)`.
+The saved native PostFX group is never modified by the feature; native settings and
+preview temporarily regain control, and current user settings return on off/exit.
+The earlier 14 experimental ArenaMapPort image values are preserved and still
+affect both Equator times; this change does not migrate those values into night-only
+controls. The user's current `FlickerFrequency=3` also stays unchanged.
+
+GPU-2 accepted the final build in Equator 00:00/Rain and a subsequent 12:00/Clear
+raid: visible restrained haze, live haze/PostFX/master off/on, native settings
+suspension, saved user edits, and zero owned fog components after exit/day.
+Client Release: zero warnings/errors; 443 policy tests and distribution checks pass.
+Both sanctioned installs receive the verified build; vanilla EFT needs a restart.
+Details, hashes, evidence and test limits:
+[equator-night-haze-postfx.md](docs/progress/equator-night-haze-postfx.md).
+
 ## State on 2026-10-01 — Bay5 DynamicMaps source consolidated
 
 The user requested integration of the completed `feature/bay5-dynamicmaps` work

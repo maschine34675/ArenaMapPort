@@ -8,6 +8,10 @@ dated state in one screen; read it before this index if you only have a minute.
 
 ## Current — read these for the area you touch
 
+- [equator-night-haze-postfx.md](equator-night-haze-postfx.md) — subtle map-wide
+  native distance haze and temporary balanced camera PostFX for Equator midnight,
+  preserving saved settings and tested across night/off/menu/day (2026-10-01).
+
 - [bay5-dynamicmaps.md](bay5-dynamicmaps.md) — Bay5 ground-plan generation and
   original native acceptance; source integration and preservation of the retired
   isolated checkout appended on 2026-10-01.

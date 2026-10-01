@@ -7,6 +7,7 @@ using BepInEx.Configuration;
 using Comfort.Common;
 using EFT;
 using EFT.CameraControl;
+using HarmonyLib;
 using UnityEngine;
 using UnityEngine.Rendering;
 using UnityEngine.SceneManagement;
@@ -17,7 +18,8 @@ namespace ArenaMapPort.Client
     /// <summary>
     /// Optional Equator midnight installation: owned emissive strips plus real shadowed lights.
     /// Created after original scene-light capture, so day tuning and lamp baselines remain intact.
-    /// No native PostFX, saved lighting values, physics or navigation are changed.
+    /// Saved lighting/PostFX settings, physics and navigation are unchanged; optional camera PostFX
+    /// are restored when this installation stops.
     /// Host evidence and authored mount references: docs/progress/equator-night-lights.md.
     /// </summary>
     internal static class EquatorNightNeon
@@ -33,13 +35,13 @@ namespace ArenaMapPort.Client
             ArenaMapRaid.CurrentMap?.Key, TimeOfDayRepairs.ActiveFixedHour);
         internal static bool RainForCurrentRaid => IsActive && _rain?.Value == true;
 
-        internal static void Install()
+        internal static void Install(Harmony harmony)
         {
             const string section = "Night neon (arena_equator)";
             var config = Plugin.Instance.Config;
             _enabled = config.Bind(section, "Enabled", true,
                 "Experimental cyan/magenta light installation for Equator's 00:00 choice. " +
-                "12:00 retains the existing realistic lighting. Live; does not change saved image settings or PostFX.");
+                "12:00 retains the existing lighting. Live; does not change saved image or PostFX settings.");
             _lightIntensity = config.Bind(section, "LightIntensity", 1.5f,
                 new ConfigDescription("Strength of the added lights on floors, walls and characters. " +
                     "Independent of the original map lamps. Live.", new AcceptableValueRange<float>(0f, 3f)));
@@ -61,6 +63,8 @@ namespace ArenaMapPort.Client
             _magenta.SettingChanged += MarkDirty;
             NeonNightAtmosphere.BindConfig(MarkDirty);
             NeonLightFlicker.BindConfig(MarkDirty);
+            NeonNightPostFx.BindConfig(MarkDirty);
+            NeonDistanceHaze.Install(harmony, MarkDirty);
             SceneManager.sceneUnloaded += scene =>
             {
                 if (_runner != null && Array.IndexOf(ArenaMapRegistry.Equator.AllSceneNames, scene.name) >= 0)
@@ -84,6 +88,8 @@ namespace ArenaMapPort.Client
             Material _cyanMaterial, _magentaMaterial;
             NeonNightAtmosphere _atmosphere;
             NeonLightFlicker _flicker;
+            NeonNightPostFx _postFx;
+            NeonDistanceHaze _distanceHaze;
             readonly List<Light> _lights = new List<Light>();
             readonly List<MeshRenderer> _strips = new List<MeshRenderer>();
             float[] _baseIntensities;
@@ -144,6 +150,8 @@ namespace ArenaMapPort.Client
                     }
                     _flicker.Update();
                     _atmosphere.Update(camera);
+                    _postFx.Update(camera);
+                    _distanceHaze.Update(camera);
                     _atmosphere.SyncLightVisibility();
                     if (Dirty) Probe();
                     Dirty = false;
@@ -206,8 +214,10 @@ namespace ArenaMapPort.Client
                 _baseIntensities = new float[_lights.Count];
                 _flicker = new NeonLightFlicker(_lights, _strips, _baseIntensities);
                 _atmosphere = new NeonNightAtmosphere(_root, _lights);
+                _postFx = new NeonNightPostFx();
+                _distanceHaze = new NeonDistanceHaze();
                 LogState($"created strips={_lights.Count} lights={_lights.Count} shadow=Spot/512 " +
-                    "hour=0; original lighting/PostFX retained");
+                    "hour=0; saved lighting/PostFX settings retained");
             }
 
             static Material NewMaterial(Shader shader, string suffix)
@@ -253,6 +263,8 @@ namespace ArenaMapPort.Client
                     $"cyan={ColorUtility.ToHtmlStringRGB(Tint(_cyan.Value))} magenta={ColorUtility.ToHtmlStringRGB(Tint(_magenta.Value))}");
                 _atmosphere?.Probe();
                 _flicker?.Probe();
+                _postFx?.Probe();
+                _distanceHaze?.Probe();
             }
 
             internal void SampleFlicker()
@@ -272,6 +284,10 @@ namespace ArenaMapPort.Client
                 bool hadRoot = _root != null || _mesh != null;
                 if (_flickerSample != null) StopCoroutine(_flickerSample);
                 _flickerSample = null;
+                _postFx?.Dispose();
+                _postFx = null;
+                _distanceHaze?.Dispose();
+                _distanceHaze = null;
                 _flicker?.Dispose();
                 _flicker = null;
                 _atmosphere?.Dispose();
