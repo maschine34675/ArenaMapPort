@@ -330,6 +330,9 @@ class GenerationTests(unittest.TestCase):
             self.assertEqual(layer["ImagePath"], "Maps/ArenaMapPort_Equator/Layers/Ground.svg")
             svg = ET.fromstring((outputs[0] / "pack/Layers/Ground.svg").read_bytes())
             self.assertEqual(svg.attrib["viewBox"], "0 0 26 16")
+            compass = svg.find("{http://www.w3.org/2000/svg}g[@id='arena-north-marker']")
+            self.assertIsNotNone(compass, "Equator must retain the current labeled north compass")
+            self.assertEqual(len(compass.findall("{http://www.w3.org/2000/svg}path")), 4)
             for path in list(svg)[1:4]:
                 self.assertEqual(path.attrib["fill-rule"], "evenodd")
 

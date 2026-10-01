@@ -3,6 +3,23 @@
 Snapshot for whoever continues (human or agent). Verify the commits named here against `git log`; this file
 is updated by hand at each handover, it is not an automatic record. Read [AGENTS.md](AGENTS.md) first.
 
+## State on 2026-10-01 — Bay5 DynamicMaps source consolidated
+
+The user requested integration of the completed `feature/bay5-dynamicmaps` work
+and retirement of `D:/ArenaMapPort-DynamicMapsBay5`. Both source commits (`dd0dce0`,
+`308636b`) are integrated with the current `feature/hdr-image-controls` branch.
+The exporter supports both maps; the newer labeled north compass and explicit
+`-DynamicMapsMap Bay5` deployment selection are retained. Historical Bay5 host
+acceptance is now in [bay5-dynamicmaps.md](docs/progress/bay5-dynamicmaps.md).
+
+Continue from `D:/ArenaMapPort`. The old checkout's complete file snapshot is
+preserved under ignored `work/archives/ArenaMapPort-DynamicMapsBay5-20261001/`
+with a SHA256 manifest; its operational data and native evidence are also copied
+under `work/dynamicmaps/`. These local game-derived files are not in GitHub.
+The old receipt paths remain historical evidence; use the archive to resolve
+paths that named the retired checkout. No runtime source, game installation,
+configuration or accepted map package was changed by this source integration.
+
 ## State on 2026-09-30 — selected Equator neon lights flicker
 
 The user requested a trial. Three fixtures now have independent, occasional
@@ -752,6 +769,46 @@ The user has now listened: impacts fit, ambience is audible but very quiet. Only
 complaint was explicitly assigned to Bay5. Audio gain was not changed; source-level volume and
 randomization findings plus a scoped gain follow-up are documented in the same progress entry.
 The DynamicMaps prototype and prior native-feature work below remain intact.
+
+## State on 2026-09-22 — Bay5 DynamicMaps installed and natively tested
+
+The user released the shared host. Candidate `dd0dce0` was installed with the scoped
+two-file DynamicMaps deploy from `D:/ArenaMapPort-DynamicMapsBay5`. No client/server
+build or full deployment was performed. The lighting session's installed client from
+main-checkout commit `7147e8e` was retained.
+
+Fresh EFT process `e93a8a10` (19:38:54 CEST) loaded the Bay5 definition and SVG.
+Inventory → MAP selected it automatically. Four positions, all cardinal directions,
+raised warehouse ground and both live exits matched. Moving while the map was open
+updated the player marker. Normal north extraction took 9.4 s; MAIN MENU from the
+result screen returned in 30.2 s, with 440/440 HP. No test shots; ammunition 37+1.
+No DynamicMaps warnings/errors and none from any source from first map opening
+through menu return. All 46 plugins and five libraries matched VM/host/loaded code.
+
+EFT was closed normally and the host is free. Native rendering passed; actual
+tessellated vertex count was not instrumented. Source remains on the isolated
+`feature/bay5-dynamicmaps` branch; the lighting checkout was not modified.
+See [native evidence and preservation audit](docs/progress/bay5-dynamicmaps.md).
+
+## State on 2026-09-22 — Bay5 DynamicMaps prepared; shared-host hold
+
+**Staged locally, not deployed or natively accepted.** The user accepted Equator and
+requested Bay5, then explicitly held gameplay tests until release of the shared host.
+No production writes during the hold. Work lives in the isolated
+`D:/ArenaMapPort-DynamicMapsBay5`, branch `feature/bay5-dynamicmaps`, base `cfbbf16`.
+The main checkout's concurrent lighting work must remain untouched.
+
+The generated pack is `work/dynamicmaps/bay5/pack`: exact `arena_bay5` identity,
+108 x 92 m view, 13,737 geometry points. It follows varying native floor heights;
+native projected ground takes priority over false floor-derived obstacle slabs.
+43 exporter tests, 80 deployment cases and independent offline geometry/visual
+review passed. The accepted Equator JSON/SVG/preview remain byte-identical.
+
+The real two-file deployment dry run passed. Deployment and native player/direction/
+exit checks remain pending; recheck host ownership and the recorded live NavMesh
+hash after release. Use this worktree's scoped data-only deploy, not its base DLLs.
+See [Bay5 checkpoint](docs/progress/bay5-dynamicmaps.md) and
+[reproduction](tools/dynamicmaps/README.md). All generated data remain ignored.
 
 ## State on 2026-09-22 — Equator DynamicMaps prototype installed and tested
 

@@ -8,6 +8,10 @@ dated state in one screen; read it before this index if you only have a minute.
 
 ## Current — read these for the area you touch
 
+- [bay5-dynamicmaps.md](bay5-dynamicmaps.md) — Bay5 ground-plan generation and
+  original native acceptance; source integration and preservation of the retired
+  isolated checkout appended on 2026-10-01.
+
 - [equator-night-flicker.md](equator-night-flicker.md) — occasional flicker on
   three midnight neon fixtures, synchronized strips/lights/haze and independent
   live strength/frequency controls (2026-09-30).
@@ -397,3 +401,16 @@ successor instead unless you're specifically investigating that cycle's history.
   proof, actual original material hits, Equator–Bay5–Equator audio playback and teardown,
   unchanged settings/navigation, matched atrium view and final 440/440 return. Technical
   playback passed; muted-host audible balance remains a user check. Supersedes the earlier hold.
+
+## Added 2026-09-22 — Bay5 DynamicMaps preparation
+
+- [bay5-dynamicmaps.md](bay5-dynamicmaps.md) — local ground plan with varying floor heights,
+  native ground projection, independent geometry review, Equator byte-identity regression
+  and exact two-file deployment support. Staged only; host deployment and native tests
+  await explicit user release.
+
+## Added 2026-09-22 — Bay5 DynamicMaps native acceptance
+
+- [bay5-dynamicmaps.md](bay5-dynamicmaps.md) — appended two-file deployment, fresh-process
+  rendering and coordinate checks, all cardinal directions, raised warehouse ground,
+  both live exits and normal north extraction with 440/440 HP. Supersedes the staging hold.

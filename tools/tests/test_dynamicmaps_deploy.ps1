@@ -28,19 +28,22 @@ function New-Fixture([ValidateSet('Equator', 'Bay5')][string]$MapName = 'Equator
     $package = Join-Path $caseRoot 'package'
     $spt = Join-Path $caseRoot 'spt'
     $plugin = Join-Path $spt 'BepInEx/plugins/mpstark-dynamicmaps'
+    $mapId = if ($MapName -eq 'Bay5') { 'arena_bay5' } else { 'arena_equator' }
+    $jsonName = "ArenaMapPort_$MapName.jsonc"
+    $mapDirectory = "ArenaMapPort_$MapName"
     $bounds = @{ Min = @{ x = -20; y = -30 }; Max = @{ x = 40; y = 50 } }
     $map = @{
         DisplayName = "$MapName (ArenaMapPort)"; Author = 'maschine';
-        MapInternalNames = @("arena_$($MapName.ToLowerInvariant())"); CoordinateRotation = 0; DefaultLevel = 0;
+        MapInternalNames = @($mapId); CoordinateRotation = 0; DefaultLevel = 0;
         Bounds = $bounds;
         Layers = @{ 'Ground Floor' = @{
-            Level = 0; ImagePath = "Maps/ArenaMapPort_$MapName/Layers/Ground.svg";
+            Level = 0; ImagePath = "Maps/$mapDirectory/Layers/Ground.svg";
             ImageBounds = $bounds;
             GameBounds = @(@{ Min = @{ x = -20; y = -30; z = -5 }; Max = @{ x = 40; y = 50; z = 10 } })
         } };
         Labels = @(); StaticMarkers = @(@{ ImagePath = 'Markers/exit.png'; Position = @{ x = 0; y = 1; z = 0 } })
     }
-    $json = Join-Path $package "ArenaMapPort_$MapName.jsonc"
+    $json = Join-Path $package $jsonName
     $svg = Join-Path $package 'Layers/Ground.svg'
     Write-FixtureFile $json ($map | ConvertTo-Json -Depth 20)
     Write-FixtureFile $svg '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 60 80"><path d="M 0 0 L 60 80"/></svg>'
@@ -50,7 +53,8 @@ function New-Fixture([ValidateSet('Equator', 'Bay5')][string]$MapName = 'Equator
     Write-FixtureFile (Join-Path $spt 'BepInEx/plugins/ArenaMapPort/ArenaMapPort.Client.dll') 'MapPort client sentinel'
     Write-FixtureFile (Join-Path $spt 'SPT_Runtime/user/mods/ArenaMapPort/ArenaMapPort.Server.dll') 'MapPort server sentinel'
     return @{ Root = $caseRoot; Package = $package; Spt = $spt; Plugin = $plugin; Map = $map;
-        Json = $json; Svg = $svg; MapName = $MapName; Target = (Join-Path $plugin "Maps/ArenaMapPort_$MapName") }
+        MapName = $MapName; JsonName = $jsonName; MapDirectory = $mapDirectory;
+        Json = $json; Svg = $svg; Target = (Join-Path $plugin "Maps/$mapDirectory") }
 }
 
 function Get-TreeState([string]$Path) {
@@ -96,8 +100,9 @@ function Pass-Case([string]$Name) {
     Write-Output "PASS $Name"
 }
 
-function Test-Rejected([string]$Name, [scriptblock]$Mutate, [string]$Expected, [switch]$DryRunOnly, [string]$MapName = 'Equator') {
-    $fixture = New-Fixture $MapName
+function Test-Rejected([string]$Name, [scriptblock]$Mutate, [string]$Expected, [switch]$DryRunOnly,
+    [ValidateSet('Equator', 'Bay5')][string]$MapName = 'Equator') {
+    $fixture = New-Fixture -MapName $MapName
     & $Mutate $fixture
     $before = Get-TreeState $fixture.Root
     $result = Invoke-Deploy $fixture -Confirm:(-not $DryRunOnly)
@@ -110,48 +115,96 @@ function Test-Rejected([string]$Name, [scriptblock]$Mutate, [string]$Expected, [
 function Save-Map($Fixture) { Write-FixtureFile $Fixture.Json ($Fixture.Map | ConvertTo-Json -Depth 20) }
 
 try {
-    $fixture = New-Fixture
-    $before = Get-TreeState $fixture.Root
-    $result = Invoke-Deploy $fixture
-    Assert-That ($result.Code -eq 0 -and $result.Output -match 'DRY RUN' -and $result.Output -match 'plan: 2 file\(s\)') "Valid dry run failed: $($result.Output)"
-    Assert-That ((Get-TreeState $fixture.Root) -ceq $before) 'Dry run modified fixture'
-    Pass-Case 'valid package dry run'
+    foreach ($mapName in @('Equator', 'Bay5')) {
+        $fixture = New-Fixture -MapName $mapName
+        $before = Get-TreeState $fixture.Root
+        $result = Invoke-Deploy $fixture
+        Assert-That ($result.Code -eq 0 -and $result.Output -match 'DRY RUN' -and $result.Output -match 'plan: 2 file\(s\)') "Valid dry run failed: $($result.Output)"
+        Assert-That ((Get-TreeState $fixture.Root) -ceq $before) 'Dry run modified fixture'
+        Pass-Case "$mapName valid package dry run"
 
-    $protectedBefore = Get-TreeState $fixture.Spt
-    $result = Invoke-Deploy $fixture -Confirm
-    Assert-That ($result.Code -eq 0) "Valid real copy failed: $($result.Output)"
-    $deployed = @(Get-ChildItem -LiteralPath $fixture.Target -File -Recurse)
-    Assert-That ($deployed.Count -eq 2) 'Real copy did not deploy exactly two files'
-    foreach ($relative in @('ArenaMapPort_Equator.jsonc', 'Layers/Ground.svg')) {
-        Assert-That ((Get-FileHash -LiteralPath (Join-Path $fixture.Package $relative)).Hash -eq
-            (Get-FileHash -LiteralPath (Join-Path $fixture.Target $relative)).Hash) "Copied file differs: $relative"
+        $protectedBefore = Get-TreeState $fixture.Spt
+        $result = Invoke-Deploy $fixture -Confirm
+        Assert-That ($result.Code -eq 0) "Valid real copy failed: $($result.Output)"
+        $deployed = @(Get-ChildItem -LiteralPath $fixture.Target -File -Recurse)
+        Assert-That ($deployed.Count -eq 2) 'Real copy did not deploy exactly two files'
+        foreach ($relative in @($fixture.JsonName, 'Layers/Ground.svg')) {
+            Assert-That ((Get-FileHash -LiteralPath (Join-Path $fixture.Package $relative)).Hash -eq
+                (Get-FileHash -LiteralPath (Join-Path $fixture.Target $relative)).Hash) "Copied file differs: $relative"
+        }
+        $ownedPattern = 'Maps[\\/]' + [regex]::Escape($fixture.MapDirectory) + '(?:[\\/ ]|$)'
+        $protectedAfter = ((Get-TreeState $fixture.Spt) -split "`n" | Where-Object { $_ -notmatch $ownedPattern }) -join "`n"
+        Assert-That ($protectedAfter -ceq $protectedBefore) 'Copy changed something outside its two-file target'
+        Pass-Case "$mapName real copy preserves DLLs, configs, other maps and MapPort"
+
+        Write-FixtureFile (Join-Path $fixture.Target 'Layers/Ground.svg') 'old SVG'
+        $before = Get-TreeState $fixture.Root
+        $result = Invoke-Deploy $fixture
+        Assert-That ($result.Code -eq 0 -and $result.Output -match 'WILL OVERWRITE') 'Overwrite dry run did not report changed target'
+        Assert-That ((Get-TreeState $fixture.Root) -ceq $before) 'Overwrite dry run wrote target'
+        $result = Invoke-Deploy $fixture -Confirm
+        Assert-That ($result.Code -eq 0 -and (Get-FileHash -LiteralPath $fixture.Svg).Hash -eq
+            (Get-FileHash -LiteralPath (Join-Path $fixture.Target 'Layers/Ground.svg')).Hash) 'Confirmed overwrite did not replace SVG'
+        Pass-Case "$mapName overwrite requires Confirm"
+
+        $before = Get-TreeState $fixture.Root
+        $result = Invoke-Deploy $fixture -Confirm
+        Assert-That ($result.Code -eq 0 -and $result.Output -match 'unchanged \(same SHA256\)') 'Identical package did not report matching hashes'
+        Assert-That ((Get-TreeState $fixture.Root) -ceq $before) 'Identical repeat changed fixture content'
+        Pass-Case "$mapName repeat copy content remains identical"
+
+        $fixture = New-Fixture -MapName $mapName
+        $jsonText = Get-Content -LiteralPath $fixture.Json -Raw
+        Write-FixtureFile $fixture.Json ("// generated comment`n" + $jsonText.Replace('"CoordinateRotation": 0,', '"CoordinateRotation": 0, /* rotation */'))
+        $result = Invoke-Deploy $fixture
+        Assert-That ($result.Code -eq 0) "JSONC comments rejected: $($result.Output)"
+        Pass-Case "$mapName JSONC comments accepted"
     }
-    $protectedAfter = ((Get-TreeState $fixture.Spt) -split "`n" | Where-Object { $_ -notmatch 'Maps[\\/]ArenaMapPort_Equator(?:[\\/ ]|$)' }) -join "`n"
-    Assert-That ($protectedAfter -ceq $protectedBefore) 'Copy changed something outside its two-file target'
-    Pass-Case 'real copy preserves DLLs, configs, other maps and MapPort'
 
-    Write-FixtureFile (Join-Path $fixture.Target 'Layers/Ground.svg') 'old SVG'
-    $before = Get-TreeState $fixture.Root
-    $result = Invoke-Deploy $fixture
-    Assert-That ($result.Code -eq 0 -and $result.Output -match 'WILL OVERWRITE') 'Overwrite dry run did not report changed target'
-    Assert-That ((Get-TreeState $fixture.Root) -ceq $before) 'Overwrite dry run wrote target'
-    $result = Invoke-Deploy $fixture -Confirm
-    Assert-That ($result.Code -eq 0 -and (Get-FileHash -LiteralPath $fixture.Svg).Hash -eq
-        (Get-FileHash -LiteralPath (Join-Path $fixture.Target 'Layers/Ground.svg')).Hash) 'Confirmed overwrite did not replace SVG'
-    Pass-Case 'overwrite requires Confirm'
+    # Install both fixed profiles into the same fixture in each order. The second install must
+    # preserve the entire first map, DLL/config sentinels and every other existing file/directory.
+    foreach ($firstName in @('Equator', 'Bay5')) {
+        $secondName = if ($firstName -eq 'Equator') { 'Bay5' } else { 'Equator' }
+        $first = New-Fixture -MapName $firstName
+        $second = New-Fixture -MapName $secondName
+        $second.Spt = $first.Spt
+        $second.Plugin = $first.Plugin
+        $second.Target = Join-Path $first.Plugin "Maps/$($second.MapDirectory)"
+        $result = Invoke-Deploy $first -Confirm
+        Assert-That ($result.Code -eq 0) "First map install failed: $($result.Output)"
+        $firstBefore = Get-TreeState $first.Target
+        $protectedBefore = Get-TreeState $first.Spt
+        $result = Invoke-Deploy $second
+        Assert-That ($result.Code -eq 0 -and $result.Output -match 'DRY RUN') "Second map dry run failed: $($result.Output)"
+        Assert-That ((Get-TreeState $first.Spt) -ceq $protectedBefore) 'Second map dry run changed installed content'
+        $result = Invoke-Deploy $second -Confirm
+        Assert-That ($result.Code -eq 0) "Second map install failed: $($result.Output)"
+        Assert-That ((Get-TreeState $first.Target) -ceq $firstBefore) 'Second map install changed the first map'
+        $ownedPattern = 'Maps[\\/]' + [regex]::Escape($second.MapDirectory) + '(?:[\\/ ]|$)'
+        $protectedAfter = ((Get-TreeState $first.Spt) -split "`n" | Where-Object { $_ -notmatch $ownedPattern }) -join "`n"
+        Assert-That ($protectedAfter -ceq $protectedBefore) 'Second map install changed unrelated files/directories'
+        Assert-That (@(Get-ChildItem -LiteralPath $second.Target -File -Recurse).Count -eq 2) 'Second map install did not copy exactly two files'
+        foreach ($relative in @($second.JsonName, 'Layers/Ground.svg')) {
+            Assert-That ((Get-FileHash -LiteralPath (Join-Path $second.Package $relative)).Hash -eq
+                (Get-FileHash -LiteralPath (Join-Path $second.Target $relative)).Hash) "Second map copy differs: $relative"
+        }
+        Pass-Case "$firstName then $secondName remain independently installed"
+    }
 
-    $before = Get-TreeState $fixture.Root
-    $result = Invoke-Deploy $fixture -Confirm
-    Assert-That ($result.Code -eq 0 -and $result.Output -match 'unchanged \(same SHA256\)') 'Identical package did not report matching hashes'
-    Assert-That ((Get-TreeState $fixture.Root) -ceq $before) 'Identical repeat changed fixture content'
-    Pass-Case 'repeat copy content remains identical'
-
-    $fixture = New-Fixture
-    $jsonText = Get-Content -LiteralPath $fixture.Json -Raw
-    Write-FixtureFile $fixture.Json ("// generated comment`n" + $jsonText.Replace('"CoordinateRotation": 0,', '"CoordinateRotation": 0, /* rotation */'))
-    $result = Invoke-Deploy $fixture
-    Assert-That ($result.Code -eq 0) "JSONC comments rejected: $($result.Output)"
-    Pass-Case 'JSONC comments accepted'
+    Test-Rejected 'Equator filename with Bay5 content' { param($f) $f.Map.MapInternalNames = @('arena_bay5'); $f.Map.Layers['Ground Floor'].ImagePath = 'Maps/ArenaMapPort_Bay5/Layers/Ground.svg'; Save-Map $f } 'MapInternalNames'
+    Test-Rejected 'Bay5 filename with Equator content' { param($f) $f.Map.MapInternalNames = @('arena_equator'); $f.Map.Layers['Ground Floor'].ImagePath = 'Maps/ArenaMapPort_Equator/Layers/Ground.svg'; Save-Map $f } 'MapInternalNames' -MapName Bay5
+    Test-Rejected 'Equator ID with Bay5 image' { param($f) $f.Map.Layers['Ground Floor'].ImagePath = 'Maps/ArenaMapPort_Bay5/Layers/Ground.svg'; Save-Map $f } 'ground ImagePath'
+    Test-Rejected 'Bay5 ID with Equator image' { param($f) $f.Map.Layers['Ground Floor'].ImagePath = 'Maps/ArenaMapPort_Equator/Layers/Ground.svg'; Save-Map $f } 'ground ImagePath' -MapName Bay5
+    Test-Rejected 'Bay5 filename with Equator ID' { param($f) $f.Map.MapInternalNames = @('arena_equator'); Save-Map $f } 'MapInternalNames' -MapName Bay5
+    Test-Rejected 'unsupported map filename' { param($f) Move-FixtureItem $f.Json (Join-Path $f.Package 'ArenaMapPort_Factory.jsonc') } 'Package must contain only'
+    Test-Rejected 'both profile JSON files in one package' { param($f) Copy-Item -LiteralPath $f.Json -Destination (Join-Path $f.Package 'ArenaMapPort_Bay5.jsonc') } 'Package must contain only'
+    Test-Rejected 'Bay5 unsupported ID' { param($f) $f.Map.MapInternalNames = @('arena_factory'); Save-Map $f } 'MapInternalNames' -MapName Bay5
+    Test-Rejected 'Bay5 multiple map IDs' { param($f) $f.Map.MapInternalNames += 'arena_equator'; Save-Map $f } 'MapInternalNames' -MapName Bay5
+    Test-Rejected 'Bay5 image traversal' { param($f) $f.Map.Layers['Ground Floor'].ImagePath = 'Maps/ArenaMapPort_Equator/../ArenaMapPort_Bay5/Layers/Ground.svg'; Save-Map $f } 'ground ImagePath' -MapName Bay5
+    Test-Rejected 'Bay5 missing SVG' { param($f) Remove-Item -LiteralPath $f.Svg } 'Layers must contain only' -MapName Bay5
+    Test-Rejected 'Bay5 extra hidden file' { param($f) $p = Join-Path $f.Package '.hidden'; Write-FixtureFile $p 'blocked'; (Get-Item -LiteralPath $p -Force).Attributes = [IO.FileAttributes]::Hidden } 'Package must contain only' -MapName Bay5
+    Test-Rejected 'Bay5 source junction' { param($f) $p = Join-Path $f.Root 'package-link'; New-Item -ItemType Junction -Path $p -Target $f.Package | Out-Null; $f.Package = $p } 'Linked/reparse' -MapName Bay5
+    Test-Rejected 'Bay5 target junction' { param($f) $p = Join-Path $f.Root 'outside-map'; [IO.Directory]::CreateDirectory($p) | Out-Null; New-Item -ItemType Junction -Path $f.Target -Target $p | Out-Null } 'Linked/reparse' -MapName Bay5
 
     $fixture = New-Fixture 'Bay5'
     # A Bay5 promotion must preserve the existing Equator map as well as third-party content.

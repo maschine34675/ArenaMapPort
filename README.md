@@ -94,11 +94,12 @@ Release scope (2026-09-25): the first release ships Equator and Bay5 only; the o
 and staged but are deferred. Agents: start at [AGENTS.md](AGENTS.md), then [HANDOFF.md](HANDOFF.md) for the dated
 working state.
 
-**DynamicMaps:** An optional Equator ground-plan pack is generated from local geometry and
-the existing NavMesh. Deployment and native player/direction/exit checks passed on 2026-09-22.
-Open inventory → **MAP** in an Equator raid. This is a simplified ground-floor prototype;
-The user also has a Bay5 DynamicMaps map; it is separate from this Equator generator.
-See [acceptance](docs/progress/equator-dynamicmaps.md)
+**DynamicMaps:** Optional Equator and Bay5 ground-plan packs are generated from local geometry
+and each map's existing NavMesh. Deployment and native player/direction/exit checks passed on 2026-09-22.
+Open inventory → **MAP** in an Equator or Bay5 raid. Both ground-plan packs are now
+installed and natively tested, including player position, direction and active exits.
+These are simplified ground-floor prototypes. See [Equator acceptance](docs/progress/equator-dynamicmaps.md),
+[Bay5 acceptance](docs/progress/bay5-dynamicmaps.md)
 and [generation/deployment](tools/dynamicmaps/README.md).
 
 ## Build inputs
