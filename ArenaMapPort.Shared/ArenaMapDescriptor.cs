@@ -290,7 +290,9 @@ namespace ArenaMapPort.Shared
             },
             Dust: new ArenaDustDescriptor("Arena_Bay5_Light", "DUST", 0.07f, 0.04f, 1, 0.0f,
                 99.63274383544922f, -1.5299997329711914f, 30.428937911987305f,
-                52.685890197753906f, 12.275176048278809f, 42.59858703613281f));
+                52.685890197753906f, 12.275176048278809f, 42.59858703613281f),
+            FixedDayHour: 12,
+            FixedNightHour: 0);
 
         // Source scene selection: tools/extract/plans/airpit.json. Identity is permanent.
         public static readonly ArenaMapDescriptor AirPit = new(

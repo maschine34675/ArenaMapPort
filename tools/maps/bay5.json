@@ -17,6 +17,8 @@
   "background_scene_names": [
     "Arena_Bay5_Background"
   ],
+  "fixed_day_hour": 12,
+  "fixed_night_hour": 0,
   "restored_shadow_caster_roots": [
     "SBG_Arena_Bay5_Main/SOO/PROPS/Military_sandbag_barrier_03",
     "SBG_Arena_Bay5_Main/SOO/PROPS/Military_sandbag_barrier_03 (1)"

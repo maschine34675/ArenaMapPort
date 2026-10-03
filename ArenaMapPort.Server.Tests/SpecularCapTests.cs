@@ -322,6 +322,8 @@ namespace UnityEngine
     public sealed class GameObject : Object
     {
         public string name;
+        public bool activeSelf = true;
+        public void SetActive(bool active) => activeSelf = active;
         public HideFlags hideFlags;
         public Scene scene;
         public readonly List<MeshRenderer> Renderers = new();

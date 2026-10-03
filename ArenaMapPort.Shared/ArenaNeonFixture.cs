@@ -143,6 +143,9 @@ namespace ArenaMapPort.Shared
             enabled && mapKey == ArenaEquatorLocation.Key && selectedHour.HasValue &&
             selectedHour == ArenaMapRegistry.Equator.FixedNightHour;
 
+        public static bool RequestsRain(bool enabled, bool rain, string? mapKey, int? selectedHour) =>
+            rain && IsActive(enabled, mapKey, selectedHour);
+
         public static float DistanceFade(float distance)
         {
             if (float.IsNaN(distance) || float.IsInfinity(distance)) return 0;

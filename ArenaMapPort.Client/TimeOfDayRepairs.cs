@@ -82,13 +82,13 @@ namespace ArenaMapPort.Client
             _installed = true;
 
             _enabled = Plugin.Instance.Config.Bind("TimeOfDay", "Enabled", true,
-                "Legacy fixed-hour override for Arena maps without their own time selection (including Bay5). " +
-                "Equator now always uses its selected 12:00/00:00 start time. Takes effect next raid.");
+                "Legacy fixed-hour override for Arena maps without their own time selection. " +
+                "Equator and Bay5 always use their selected 12:00/00:00 start time. Takes effect next raid.");
 
             _fixedHour = Plugin.Instance.Config.Bind("TimeOfDay", "ArenaFixedHour", 12,
                 new ConfigDescription(
                     "Legacy start hour for Arena maps without fixed menu choices, when Enabled=true. " +
-                    "Equator uses the menu's 12:00/00:00 selection instead. Saved values are retained for Bay5. Next raid.",
+                    "Equator and Bay5 use the menu's 12:00/00:00 selection instead. Saved legacy values are retained. Next raid.",
                     new AcceptableValueRange<int>(0, 23)));
 
             var revision = Plugin.Instance.Config.Bind("TimeOfDay", "FixedTimeSelectionRevision", 0,
@@ -99,6 +99,13 @@ namespace ArenaMapPort.Client
                     "the selected 12:00/00:00. Legacy Enabled/ArenaFixedHour remain saved for other maps; " +
                     "no lighting values changed.");
                 revision.Value = 1;
+            }
+            if (revision.Value < 2)
+            {
+                Plugin.Log.LogInfo("[ArenaMapPort][TimeOfDay] Fixed selection migration 2: Bay5 now starts at " +
+                    "the selected 12:00/00:00. Legacy Enabled/ArenaFixedHour remain saved for other maps; " +
+                    "no lighting values changed.");
+                revision.Value = 2;
             }
             UnityEngine.SceneManagement.SceneManager.sceneUnloaded += scene =>
             {

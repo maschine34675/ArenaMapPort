@@ -3,6 +3,21 @@
 Snapshot for whoever continues (human or agent). Verify the commits named here against `git log`; this file
 is updated by hand at each handover, it is not an automatic record. Read [AGENTS.md](AGENTS.md) first.
 
+## State on 2026-10-03 — Bay5 time choices and Equator rain preview
+
+Bay5 now uses native 12:00/00:00 choices, with matching actual raid start time and
+server night-equipment selection. Equator midnight previews the existing optional
+neon rain in the native weather icon, restoring the original icon/visibility on
+day selection. Saved time/lighting/weather values are unchanged; only internal
+FixedTimeSelectionRevision advances to 2 on next client start.
+
+487 tests and Release DLL-only client build pass; independent review found no
+open concrete correctness issue. No deploy/GPU actions by this implementation
+task: the coordinating ArenaMode session owns promotion and native acceptance.
+Client/server staged hashes and test limits are in
+[map-time-weather.md](docs/progress/map-time-weather.md). Both DLLs and both
+process restarts are required; no map bundles were rebuilt.
+
 ## State on 2026-10-01 — chemlights moved into darker areas
 
 After user acceptance of the night effects, six F10 marks identified chemlights

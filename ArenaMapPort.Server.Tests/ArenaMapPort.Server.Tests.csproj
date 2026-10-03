@@ -28,6 +28,7 @@
     <Compile Include="..\ArenaMapPort.Client\ExfilNavMeshSampling.cs" Link="Client\ExfilNavMeshSampling.cs" />
     <Compile Include="..\ArenaMapPort.Client\IndoorSurfaceGeometry.cs" Link="Client\IndoorSurfaceGeometry.cs" />
     <Compile Include="..\ArenaMapPort.Client\FloorDetailSupport.cs" Link="Client\FloorDetailSupport.cs" />
+    <Compile Include="..\ArenaMapPort.Client\FixedRaidTimeSelection.cs" Link="Client\FixedRaidTimeSelection.cs" />
   </ItemGroup>
 
   <!--

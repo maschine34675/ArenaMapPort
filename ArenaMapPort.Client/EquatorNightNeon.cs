@@ -33,7 +33,10 @@ namespace ArenaMapPort.Client
 
         internal static bool IsActive => ArenaNeonPolicy.IsActive(_enabled?.Value == true,
             ArenaMapRaid.CurrentMap?.Key, TimeOfDayRepairs.ActiveFixedHour);
-        internal static bool RainForCurrentRaid => IsActive && _rain?.Value == true;
+        internal static bool RainForCurrentRaid => RainForSelection(
+            ArenaMapRaid.CurrentMap?.Key, TimeOfDayRepairs.ActiveFixedHour);
+        internal static bool RainForSelection(string mapKey, int? hour) => ArenaNeonPolicy.RequestsRain(
+            _enabled?.Value == true, _rain?.Value == true, mapKey, hour);
 
         internal static void Install(Harmony harmony)
         {

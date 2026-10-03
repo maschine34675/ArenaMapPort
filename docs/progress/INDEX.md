@@ -8,6 +8,11 @@ dated state in one screen; read it before this index if you only have a minute.
 
 ## Current — read these for the area you touch
 
+- [map-time-weather.md](map-time-weather.md) — Bay5 native 12:00/00:00 choices
+  through client raid time and server gear, plus Equator midnight rain preview
+  with native icon restoration (2026-10-03). Offline validation; coordinated
+  deployment and GPU acceptance remain pending.
+
 - [equator-night-accents-wet-floor.md](equator-night-accents-wet-floor.md) — nine
   multicolor native chemlights and a night-only floor gloss control; verified
   SMap shader field semantics, native comparisons and saved-setting preservation

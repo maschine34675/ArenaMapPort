@@ -7,6 +7,17 @@ namespace ArenaMapPort.Server.Tests;
 public class NeonNightTests
 {
     [Theory]
+    [InlineData(true, true, "arena_equator", 0, true)]
+    [InlineData(false, true, "arena_equator", 0, false)]
+    [InlineData(true, false, "arena_equator", 0, false)]
+    [InlineData(true, true, "arena_equator", 12, false)]
+    [InlineData(true, true, "arena_equator", null, false)]
+    [InlineData(true, true, "arena_bay5", 0, false)]
+    [InlineData(true, true, "factory4_night", 0, false)]
+    public void MenuAndRaidRainShareTheSamePolicy(bool enabled, bool rain, string? key, int? hour, bool expected)
+        => Assert.Equal(expected, ArenaNeonPolicy.RequestsRain(enabled, rain, key, hour));
+
+    [Theory]
     [InlineData(true, "arena_equator", 0, true)]
     [InlineData(true, "arena_equator", 12, false)]
     [InlineData(true, "arena_equator", null, false)]

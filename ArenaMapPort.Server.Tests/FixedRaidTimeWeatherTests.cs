@@ -13,12 +13,14 @@ namespace ArenaMapPort.Server.Tests;
 public class FixedRaidTimeWeatherTests
 {
     [Fact]
-    public void FixedStartTimesAndSunTargets_AreEquatorOnly_AndMatchPipelineSidecars()
+    public void FixedStartTimesAndSunTargets_MatchPipelineSidecars()
     {
         Assert.Equal(12, ArenaMapRegistry.Equator.FixedDayHour);
         Assert.Equal(0, ArenaMapRegistry.Equator.FixedNightHour);
         Assert.Equal("Arena_Equator_Lighting", ArenaMapRegistry.Equator.SunScene);
         Assert.Equal(new[] { "FAKE_SUN", "FAKE_SUN_VOLUME" }, ArenaMapRegistry.Equator.SunPaths);
+        Assert.Equal(12, ArenaMapRegistry.Bay5.FixedDayHour);
+        Assert.Equal(0, ArenaMapRegistry.Bay5.FixedNightHour);
         foreach (var map in ArenaMapRegistry.All)
         {
             var name = map.Key["arena_".Length..] + ".json";
@@ -33,30 +35,38 @@ public class FixedRaidTimeWeatherTests
             Assert.NotNull(path);
             using var document = JsonDocument.Parse(File.ReadAllText(path!));
             var json = document.RootElement;
-            if (map == ArenaMapRegistry.Equator)
+            if (map == ArenaMapRegistry.Equator || map == ArenaMapRegistry.Bay5)
             {
                 Assert.True(map.UsesFixedStartTimes);
                 Assert.Equal(map.FixedDayHour, json.GetProperty("fixed_day_hour").GetInt32());
                 Assert.Equal(map.FixedNightHour, json.GetProperty("fixed_night_hour").GetInt32());
-                Assert.Equal(map.SunScene, json.GetProperty("sun_scene").GetString());
-                Assert.Equal(map.SunPaths, json.GetProperty("sun_paths").EnumerateArray().Select(v => v.GetString()!));
-                Assert.Contains(map.SunScene, map.AllSceneNames);
             }
             else
             {
                 Assert.False(map.UsesFixedStartTimes);
                 Assert.Null(map.FixedDayHour);
                 Assert.Null(map.FixedNightHour);
+                foreach (var field in new[] { "fixed_day_hour", "fixed_night_hour" })
+                    Assert.False(json.TryGetProperty(field, out _), $"Unexpected {field} on {map.Key}");
+            }
+            if (map == ArenaMapRegistry.Equator)
+            {
+                Assert.Equal(map.SunScene, json.GetProperty("sun_scene").GetString());
+                Assert.Equal(map.SunPaths, json.GetProperty("sun_paths").EnumerateArray().Select(v => v.GetString()!));
+                Assert.Contains(map.SunScene, map.AllSceneNames);
+            }
+            else
+            {
                 Assert.Empty(map.SunPaths);
                 Assert.Equal(string.Empty, map.SunScene);
-                foreach (var field in new[] { "fixed_day_hour", "fixed_night_hour", "sun_scene", "sun_paths" })
+                foreach (var field in new[] { "sun_scene", "sun_paths" })
                     Assert.False(json.TryGetProperty(field, out _), $"Unexpected {field} on {map.Key}");
             }
         }
     }
 
     [Fact]
-    public void NativeHelper_UsesEquatorSelection_AndPreservesEveryOtherMap()
+    public void NativeHelper_UsesFixedSelections_AndPreservesEveryOtherMap()
     {
         // Zero acceleration fixes the real helper's clock at 03:00. Its ordinary CURR/PAST
         // answers are deliberately opposite to Equator's fixed 12:00/00:00 starts.
@@ -71,19 +81,26 @@ public class FixedRaidTimeWeatherTests
         // Reflection prevents a caller's JIT inlining from bypassing the patched native method.
         bool Night(string key, DateTimeEnum variant) => (bool)target.Invoke(helper, [variant, key])!;
         var variants = new[] { DateTimeEnum.CURR, DateTimeEnum.PAST };
-        var otherKeys = ArenaMapRegistry.All.Where(map => map != ArenaMapRegistry.Equator)
+        var fixedKeys = new[] { ArenaMapRegistry.Equator.Key, ArenaMapRegistry.Bay5.Key };
+        var otherKeys = ArenaMapRegistry.All.Where(map => !fixedKeys.Contains(map.Key))
             .Select(map => map.Key).Concat(["factory4_day", "factory4_night", "bigmap", "unknown_map"]).ToArray();
         var before = otherKeys.SelectMany(key => variants.Select(variant =>
             (key, variant, value: Night(key, variant)))).ToArray();
-        Assert.True(Night(ArenaMapRegistry.Equator.Key, DateTimeEnum.CURR));
-        Assert.False(Night(ArenaMapRegistry.Equator.Key, DateTimeEnum.PAST));
+        foreach (var key in fixedKeys)
+        {
+            Assert.True(Night(key, DateTimeEnum.CURR));
+            Assert.False(Night(key, DateTimeEnum.PAST));
+        }
         var warnings = new List<string>();
         try
         {
             Assert.True(FixedRaidTimeWeather.TryInstall(_ => { }, warnings.Add), string.Join("\n", warnings));
             Assert.Empty(warnings);
-            Assert.False(Night(ArenaMapRegistry.Equator.Key, DateTimeEnum.CURR));
-            Assert.True(Night(ArenaMapRegistry.Equator.Key, DateTimeEnum.PAST));
+            foreach (var key in fixedKeys)
+            {
+                Assert.False(Night(key, DateTimeEnum.CURR));
+                Assert.True(Night(key, DateTimeEnum.PAST));
+            }
             foreach (var expected in before)
                 Assert.Equal(expected.value, Night(expected.key, expected.variant));
         }
@@ -92,8 +109,11 @@ public class FixedRaidTimeWeatherTests
             new Harmony(FixedRaidTimeWeather.PatchHarmonyId).Unpatch(target, HarmonyPatchType.All,
                 FixedRaidTimeWeather.PatchHarmonyId);
         }
-        Assert.True(Night(ArenaMapRegistry.Equator.Key, DateTimeEnum.CURR));
-        Assert.False(Night(ArenaMapRegistry.Equator.Key, DateTimeEnum.PAST));
+        foreach (var key in fixedKeys)
+        {
+            Assert.True(Night(key, DateTimeEnum.CURR));
+            Assert.False(Night(key, DateTimeEnum.PAST));
+        }
     }
 
     [Theory]
