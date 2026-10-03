@@ -13,8 +13,9 @@
       whether the destination already exists, whether its content already matches by SHA256) and
       copies NOTHING. This is true with zero arguments and with only -SptRoot given.
     - A real copy only happens when -Confirm is passed explicitly.
-    - This script NEVER deletes anything, in either mode, anywhere -- not just "outside its own
-      ArenaMapPort folders": it performs Copy-Item only (create/overwrite), never Remove-Item. This
+    - This script NEVER deletes anything, in any mode, anywhere -- not just "outside its own
+      ArenaMapPort folders": ordinary/data deployment uses Copy-Item (create/overwrite), while
+      DllOnly writes the two existing files through exclusive streams; none use Remove-Item. This
       trivially satisfies "never deletes anything outside its own ArenaMapPort folders" by deleting
       nothing at all, which is the safer of the two ways to satisfy that constraint (a copy-only
       script cannot accidentally widen its own blast radius later). Every destination path is also
@@ -43,6 +44,13 @@
   Selects Equator (default) or Bay5 for DynamicMapsPackage. The selected map fixes the package
   filename, internal map ID, image path and destination; no other map destinations are allowed.
 
+.PARAMETER DllOnly
+  Updates exactly maschine-ArenaMapPort.Client.dll and maschine-ArenaMapPort.Server.dll
+  from dist. Requires both DLLs already installed: this is not a first-install mode.
+  Both destinations are exclusively locked before either write; failures restore their
+  previous bytes. No bundles, data, assets or configuration are read or copied.
+  Incompatible with DynamicMapsPackage/Map. Dry run unless Confirm is supplied.
+
 .EXAMPLE
   # dry run (default) -- prints the plan, copies nothing:
   pwsh tools/deploy-to-spt.ps1
@@ -59,6 +67,7 @@
 param(
     [string]$SptRoot = "D:/SPT41",
     [switch]$Confirm,
+    [switch]$DllOnly,
     [string]$DynamicMapsPackage,
     [ValidateSet('Equator', 'Bay5')]
     [string]$DynamicMapsMap = 'Equator'
@@ -76,7 +85,7 @@ function Fail($msg) {
     exit 1
 }
 
-# This intentionally separate path cannot widen the regular client/server deployment mappings.
+# Scoped update modes cannot widen the regular client/server deployment mappings.
 function Assert-PlainPath([string]$Path, [string]$Kind) {
     $full = [IO.Path]::GetFullPath($Path)
     $cursor = $full
@@ -255,6 +264,97 @@ function Invoke-DynamicMapsDeploy {
         Write-Host "[deploy-to-spt] copied $($row.Destination)"
     }
     Write-Host '[deploy-to-spt] OK -- 2 DynamicMaps data files copied.' -ForegroundColor Green
+}
+
+function Invoke-DllOnlyDeploy {
+    $repo = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot '..')).Path
+    $plan = @(foreach ($relative in @(
+        'BepInEx/plugins/ArenaMapPort/maschine-ArenaMapPort.Client.dll',
+        'SPT_Runtime/user/mods/ArenaMapPort/maschine-ArenaMapPort.Server.dll')) {
+        $source = Assert-PlainPath (Join-Path (Join-Path $repo 'dist') $relative) 'File'
+        $destination = Assert-PlainPath (Join-Path $SptRoot $relative) 'File'
+        if (-not (Test-Path -LiteralPath $source -PathType Leaf)) { throw "Missing staged DLL: $source" }
+        if (-not (Test-Path -LiteralPath $destination -PathType Leaf)) { throw "DllOnly requires an existing installed DLL: $destination" }
+        if ($source -eq $destination) { throw 'Staged DLL and installed target must differ' }
+        $hash = (Get-FileHash -LiteralPath $source -Algorithm SHA256).Hash
+        [PSCustomObject]@{ Source = $source; Destination = $destination; Hash = $hash;
+            Same = ((Get-FileHash -LiteralPath $destination -Algorithm SHA256).Hash -eq $hash) }
+    })
+    Write-Step 'DLL-only update plan'
+    foreach ($row in $plan) {
+        $status = if ($row.Same) { 'unchanged (same SHA256)' } else { 'WILL OVERWRITE (differs)' }
+        Write-Host "   $($row.Source) -> $($row.Destination) [$status]"
+    }
+    Write-Host '[deploy-to-spt] plan: 2 file(s), DLL-only update; no bundles/assets/data/configs'
+    if (-not $Confirm) {
+        Write-Host '[deploy-to-spt] DRY RUN (default) -- no files were copied.' -ForegroundColor Green
+        return
+    }
+
+    $streams = [Collections.Generic.List[IO.FileStream]]::new()
+    $backups = [Collections.Generic.List[byte[]]]::new()
+    $sources = [Collections.Generic.List[byte[]]]::new()
+    $writing = $false
+    try {
+        # Open existing files only. A missing/locked second DLL cannot create an empty
+        # first DLL or partially deploy the pair. Links are revalidated before each open.
+        foreach ($row in $plan) {
+            $null = Assert-PlainPath $row.Source 'File'
+            $null = Assert-PlainPath $row.Destination 'File'
+            $bytes = [IO.File]::ReadAllBytes($row.Source)
+            if ([Convert]::ToHexString([Security.Cryptography.SHA256]::HashData($bytes)) -ne $row.Hash) {
+                throw 'Staged DLL changed during validation'
+            }
+            $sources.Add($bytes)
+            $stream = [IO.File]::Open($row.Destination, [IO.FileMode]::Open, [IO.FileAccess]::ReadWrite, [IO.FileShare]::None)
+            $streams.Add($stream)
+            $backup = [IO.MemoryStream]::new()
+            try { $stream.CopyTo($backup); $backups.Add($backup.ToArray()) } finally { $backup.Dispose() }
+        }
+        $writing = $true
+        for ($i = 0; $i -lt $streams.Count; $i++) {
+            $stream = $streams[$i]; $bytes = $sources[$i]
+            $stream.Position = 0; $stream.Write($bytes, 0, $bytes.Length); $stream.SetLength($bytes.Length); $stream.Flush($true)
+            $stream.Position = 0
+            if ([Convert]::ToHexString([Security.Cryptography.SHA256]::HashData($stream)) -ne $plan[$i].Hash) {
+                throw "DLL verification failed: $($plan[$i].Destination)"
+            }
+        }
+    } catch {
+        $deploymentError = $_
+        $restoreErrors = [Collections.Generic.List[Exception]]::new()
+        if ($writing) {
+            for ($i = 0; $i -lt $streams.Count; $i++) {
+                try {
+                    $stream = $streams[$i]; $bytes = $backups[$i]
+                    $stream.Position = 0; $stream.Write($bytes, 0, $bytes.Length); $stream.SetLength($bytes.Length); $stream.Flush($true)
+                    $stream.Position = 0
+                    if ([Convert]::ToHexString([Security.Cryptography.SHA256]::HashData($stream)) -ne
+                        [Convert]::ToHexString([Security.Cryptography.SHA256]::HashData($bytes))) {
+                        throw 'Restored DLL hash differs from its backup'
+                    }
+                } catch {
+                    $restoreErrors.Add([IO.IOException]::new("Restore failed: $($plan[$i].Destination)", $_.Exception))
+                }
+            }
+        }
+        if ($restoreErrors.Count) {
+            $restoreErrors.Insert(0, $deploymentError.Exception)
+            throw [AggregateException]::new('DLL update failed; one or more backups could not be restored. Do not start EFT/SPT.', $restoreErrors)
+        }
+        throw $deploymentError
+    } finally { foreach ($stream in $streams) { $stream.Dispose() } }
+    Write-Host '[deploy-to-spt] OK -- 2 verified DLLs updated; all other files untouched.' -ForegroundColor Green
+}
+
+if ($DllOnly) {
+    try {
+        if ($PSBoundParameters.ContainsKey('DynamicMapsPackage') -or $PSBoundParameters.ContainsKey('DynamicMapsMap')) {
+            throw 'DllOnly cannot be combined with DynamicMapsPackage or DynamicMapsMap'
+        }
+        Invoke-DllOnlyDeploy
+    } catch { Fail $_.Exception.Message }
+    exit 0
 }
 
 if ($PSBoundParameters.ContainsKey('DynamicMapsPackage')) {

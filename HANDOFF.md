@@ -14,9 +14,13 @@ FixedTimeSelectionRevision advances to 2 on next client start.
 487 tests and Release DLL-only client build pass; independent review found no
 open concrete correctness issue. No deploy/GPU actions by this implementation
 task: the coordinating ArenaMode session owns promotion and native acceptance.
-Client/server staged hashes and test limits are in
+Test limits and the requirement to record post-commit staged hashes are in
 [map-time-weather.md](docs/progress/map-time-weather.md). Both DLLs and both
 process restarts are required; no map bundles were rebuilt.
+The sanctioned deploy script now offers `-DllOnly` for exactly the existing
+client/server DLL pair, dry-run by default and exclusive-lock/hash/rollback
+protected. Do not use the default whole-dist mode for a two-DLL update. See the
+same progress note for the tempfixture verification and failure limits.
 
 ## State on 2026-10-01 — chemlights moved into darker areas
 

@@ -62,15 +62,14 @@ or native-menu acceptance.
 `-Check Client` builds Release with `ArenaMapPortDllOnly=true`, without Unity,
 scene builds or live installation writes. It passes with zero warnings/errors.
 Only `dist` staging is performed. Independent review and final artifact identities
-are recorded below.
+are tracked separately: review below, final post-commit build hashes in the
+coordinating deployment receipt (Git/build metadata can change artifact hashes).
 
 ## Deployment and native acceptance
 
 No deployment or GPU action was performed by this implementation task. Promotion
-belongs to the coordinating ArenaMode task. Client staged SHA256:
-`37ABC36AF037BAF47CA2D9A9E9B632FF1B22515161D10C91D6821635532B8947`.
-Server staged SHA256:
-`4B735EBE473720DE1D08E2832F362B283BB443396ACE91B78ED857EC36D4B6D8`.
+belongs to the coordinating ArenaMode task. Its receipt must identify both
+post-commit staged hashes and the exact source commit before copying.
 Both SPT server and EFT require restart. Preserve installed user configuration
 files. Independent read-only review found no concrete unresolved correctness
 issue in time selection or rain presentation; its explicit UI-double limit is
@@ -81,3 +80,29 @@ forward/back navigation, and logs/uses the selected raid hour; Equator night sho
 rain immediately and returning to day restores native weather; Factory/ordinary
 map time controls remain functional. Bay5 midnight lighting is explicitly not
 certified by a successful menu screenshot or offline clock policy.
+
+## Scoped DLL deployment follow-up — 2026-10-03
+
+The coordinator requested a safe two-DLL path in the existing sanctioned script.
+Use `tools/deploy-to-spt.ps1 -SptRoot 'D:\SPT41' -DllOnly` for its dry run, then
+add `-Confirm`. This mode accepts only the exact existing client and server DLLs;
+it cannot be combined with either DynamicMaps option and cannot perform a first
+installation. All bundles, UI/audio assets, database files and configurations
+remain outside the copy plan. The original whole-dist and DynamicMaps modes are
+unchanged.
+
+Both destination files are exclusively locked before the first write. Source
+bytes must still match the reviewed plan, and both writes receive a SHA256
+readback check. A failure attempts and verifies restoration of each prior DLL
+independently; restoration failures are aggregated with the original error rather
+than preventing restoration of the other file. No successful deployment is
+reported after any failure. Filesystem/hardware failures can still prevent a
+restore, in which case the error explicitly warns against starting EFT/SPT.
+
+`tools/tests/test_dllonly_deploy.ps1` runs the actual entry point from temporary
+fake repo/install directories. Its ten cases cover dry run, exact two-file scope,
+repeat, conflicting options, missing source/installed DLL, locked target, original
+whole-dist behavior and two injected write/restore failures. No live installation
+is involved in these tests. All ten pass, along with all 90 cases in the existing
+`test_dynamicmaps_deploy.ps1` regression suite. A separate independent read-only
+review of the new deployment path found no unresolved concrete correctness issue.
