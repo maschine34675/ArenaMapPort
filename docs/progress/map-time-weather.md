@@ -106,3 +106,55 @@ whole-dist behavior and two injected write/restore failures. No live installatio
 is involved in these tests. All ten pass, along with all 90 cases in the existing
 `test_dynamicmaps_deploy.ps1` regression suite. A separate independent read-only
 review of the new deployment path found no unresolved concrete correctness issue.
+
+## Coordinated deployment and GPU-2 menu acceptance — 2026-10-03
+
+The coordinating ArenaMode task subsequently reverified all 487 tests, the client
+Release build (zero warnings/errors), and all ten DLL-only deployment fixtures.
+It deployed source `1cb4572` (menu implementation `aa0a8c1`) through the sanctioned
+`-DllOnly` path to the local mirror and GPU-2. No bundles/assets or database files
+were copied. Deployment receipt:
+`D:/ArenaMapPort/work/map-time-weather-deployment-gpu2.json`.
+
+| Artifact | Verified deployed SHA256 |
+|---|---|
+| ArenaMapPort.Client | `794B5AE286A30F64F0440B6315B1ACEED168322668C54A596E3050B5BD27CABA` |
+| ArenaMapPort.Server | `3D54A40A79174F894BEDA0475F4F746482C6DDB961BB80E11FAF08D6AFF34E7F` |
+
+**Native menu acceptance passed; no raid was started.** The user authorized GPU-2
+because GPU-1 was unavailable. Final process `52a36096` started at 19:06:15
+(Europe/Berlin), profile SPT-GPU-2, 1920x1080 FullScreenWindow, with ArenaMode
+`5a63fa9` and the MapPort build above.
+
+- Bay5 displayed both native 12:00:00/00:00:00 controls. Selecting night, advancing
+  to MatchMakerAccept and returning kept PAST selected. The native UI and
+  `TimeSelection ... selected=PAST` log agreed.
+- Equator night immediately displayed the rain icon. Changing only the time to
+  12:00 restored the sun icon. Selecting night again and then Factory restored
+  Factory's native sun icon.
+- A normal PMC Factory control screen retained its native information and time
+  controls with no Arena mutators/panels.
+
+Evidence is owned by the coordinating repo under
+`D:/SPT41/Development/ArenaMode/artifacts/mutators-map-options-gpu2/`, notably
+`03-bay5-night-return`, `04-equator-night-rain`,
+`06-tdm-tracers-factory-weather`, and `08-pmc-factory-native`. The Equator day
+transition was observed directly through Windows-MCP; the additional image-file
+export for that view failed once through the proxy. This is not claimed as a
+saved screenshot. Full report:
+[GPU-MUTATORS-MAP-OPTIONS-RESULTS-20261003.md](D:/SPT41/Development/ArenaMode/GPU-MUTATORS-MAP-OPTIONS-RESULTS-20261003.md).
+
+UiBridge confirmed loaded/disk/local identity at process start (24/24 maschine
+plugins). A later parallel UiBridge disk update did not change the bridge version
+already loaded in this process; the coordinating report records that distinction
+and both identities. Arena artifact hashes remained unchanged. The complete saved
+client log contained no Error/Fatal. All previously saved ArenaMode/MapPort values
+were retained/restored; the intended MapPort difference was only
+`FixedTimeSelectionRevision: 1 -> 2` (ArenaMode separately added its new false
+Deathmatch tracer key). Game and server were stopped again after the menu test.
+
+This native pass does **not** certify Bay5 midnight lighting, in-raid clock
+progression, bot night equipment, or rain rendering in a raid. The time/gear path
+has offline coverage only in this task; authored Bay5 lamps remain unchanged.
+This follow-up is documentation only: no build or deployment was performed after
+recording it, so the installed artifacts remain from `1cb4572`.

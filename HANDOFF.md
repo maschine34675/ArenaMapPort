@@ -11,12 +11,21 @@ neon rain in the native weather icon, restoring the original icon/visibility on
 day selection. Saved time/lighting/weather values are unchanged; only internal
 FixedTimeSelectionRevision advances to 2 on next client start.
 
-487 tests and Release DLL-only client build pass; independent review found no
-open concrete correctness issue. No deploy/GPU actions by this implementation
-task: the coordinating ArenaMode session owns promotion and native acceptance.
-Test limits and the requirement to record post-commit staged hashes are in
-[map-time-weather.md](docs/progress/map-time-weather.md). Both DLLs and both
-process restarts are required; no map bundles were rebuilt.
+The coordinating ArenaMode task reverified 487 tests, the clean client Release
+build and ten DLL-only fixtures, then deployed source `1cb4572` (menu `aa0a8c1`)
+locally and to GPU-2. Native 1080p menu acceptance passed in process `52a36096`:
+Bay5 keeps night after Next/Back; Equator immediately switches rain/sun on time
+selection and restores native Factory weather; the ordinary PMC screen is intact.
+Independent reviews found no open concrete correctness issue. No raid: Bay5's
+night lighting, in-raid clock and bot gear were not natively tested here.
+
+Client SHA256 `794B5AE286A30F64F0440B6315B1ACEED168322668C54A596E3050B5BD27CABA`;
+server `3D54A40A79174F894BEDA0475F4F746482C6DDB961BB80E11FAF08D6AFF34E7F`.
+No bundles were rebuilt/copied, prior saved tuning was preserved, and game/server
+are stopped again. Report, evidence paths and the later parallel UiBridge disk
+update are documented in [map-time-weather.md](docs/progress/map-time-weather.md).
+This acceptance follow-up changes documentation only; installed DLLs remain from
+`1cb4572`, with no build after the follow-up commit.
 The sanctioned deploy script now offers `-DllOnly` for exactly the existing
 client/server DLL pair, dry-run by default and exclusive-lock/hash/rollback
 protected. Do not use the default whole-dist mode for a two-DLL update. See the
