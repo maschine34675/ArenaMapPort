@@ -2,7 +2,7 @@
   "schema_version": 1,
   "source": {
     "root": "arena",
-    "note": "Every name/path_id below was read live with UnityPy 1.25.2 against the user's own Arena 0.5.4.0 install this session (2026-09-29); path_id is a drift-detection hint only, selection is always by m_Name."
+    "note": "Names and historical path_id hints were read with UnityPy 1.25.2 from Arena 0.5.4.0 (2026-09-29). Revalidated against Arena 0.6.0.47752 / Unity 6000.3.6f1 (2026-10-03): exact name selection survives ID drift; duplicated mode-logo names additionally require their original sprite_rect, verified unchanged in the new build."
   },
   "groups": {
     "killfeed": {
@@ -604,7 +604,13 @@
           "label": "TEAMFIGHT -- 'NO ONE'S LEFT BEHIND' wordmark logo (small size tier, shared texture path_id 803)",
           "confidence": "high",
           "arenamode_use": "MODE-SIDEBAR-REVIEW.md's mode-select rows are text-only today (zero icon/sprite references); TeamFight maps to ArenaMode's own TDM and CheckPoint to the still-unbuilt single control-point mode -- the other six names (Duel/OneManArmy/BlastGang/ShootOut/LastHero/FinalRun) match no existing or planned ArenaMode mode today.",
-          "strip": null
+          "strip": null,
+          "sprite_rect": [
+            146.28570556640625,
+            0.0,
+            146.28570556640625,
+            73.0
+          ]
         },
         {
           "key": "teamfight_medium",
@@ -616,7 +622,13 @@
           "label": "TEAMFIGHT -- 'NO ONE'S LEFT BEHIND' wordmark logo (medium size tier, shared texture path_id 2108)",
           "confidence": "high",
           "arenamode_use": "MODE-SIDEBAR-REVIEW.md's mode-select rows are text-only today (zero icon/sprite references); TeamFight maps to ArenaMode's own TDM and CheckPoint to the still-unbuilt single control-point mode -- the other six names (Duel/OneManArmy/BlastGang/ShootOut/LastHero/FinalRun) match no existing or planned ArenaMode mode today.",
-          "strip": null
+          "strip": null,
+          "sprite_rect": [
+            204.8000030517578,
+            0.0,
+            204.8000030517578,
+            116.99999237060547
+          ]
         },
         {
           "key": "teamfight_large",
@@ -628,7 +640,13 @@
           "label": "TEAMFIGHT -- 'NO ONE'S LEFT BEHIND' wordmark logo (large size tier, shared texture path_id 2070)",
           "confidence": "high",
           "arenamode_use": "MODE-SIDEBAR-REVIEW.md's mode-select rows are text-only today (zero icon/sprite references); TeamFight maps to ArenaMode's own TDM and CheckPoint to the still-unbuilt single control-point mode -- the other six names (Duel/OneManArmy/BlastGang/ShootOut/LastHero/FinalRun) match no existing or planned ArenaMode mode today.",
-          "strip": null
+          "strip": null,
+          "sprite_rect": [
+            292.5714416503906,
+            0.0,
+            292.5714416503906,
+            167.0
+          ]
         },
         {
           "key": "teamfight_xlarge",
@@ -640,7 +658,13 @@
           "label": "TEAMFIGHT -- 'NO ONE'S LEFT BEHIND' wordmark logo (xlarge size tier, shared texture path_id 1838)",
           "confidence": "high",
           "arenamode_use": "MODE-SIDEBAR-REVIEW.md's mode-select rows are text-only today (zero icon/sprite references); TeamFight maps to ArenaMode's own TDM and CheckPoint to the still-unbuilt single control-point mode -- the other six names (Duel/OneManArmy/BlastGang/ShootOut/LastHero/FinalRun) match no existing or planned ArenaMode mode today.",
-          "strip": null
+          "strip": null,
+          "sprite_rect": [
+            409.6000061035156,
+            0.0,
+            409.6000061035156,
+            244.0
+          ]
         },
         {
           "key": "checkpoint_small",
@@ -652,7 +676,13 @@
           "label": "CHECKPOINT wordmark logo (bullet-belt motif in the O) (small size tier, shared texture path_id 803)",
           "confidence": "high",
           "arenamode_use": "MODE-SIDEBAR-REVIEW.md's mode-select rows are text-only today (zero icon/sprite references); TeamFight maps to ArenaMode's own TDM and CheckPoint to the still-unbuilt single control-point mode -- the other six names (Duel/OneManArmy/BlastGang/ShootOut/LastHero/FinalRun) match no existing or planned ArenaMode mode today.",
-          "strip": null
+          "strip": null,
+          "sprite_rect": [
+            1170.28564453125,
+            0.0,
+            146.28570556640625,
+            73.0
+          ]
         },
         {
           "key": "checkpoint_medium",
@@ -664,7 +694,13 @@
           "label": "CHECKPOINT wordmark logo (bullet-belt motif in the O) (medium size tier, shared texture path_id 2108)",
           "confidence": "high",
           "arenamode_use": "MODE-SIDEBAR-REVIEW.md's mode-select rows are text-only today (zero icon/sprite references); TeamFight maps to ArenaMode's own TDM and CheckPoint to the still-unbuilt single control-point mode -- the other six names (Duel/OneManArmy/BlastGang/ShootOut/LastHero/FinalRun) match no existing or planned ArenaMode mode today.",
-          "strip": null
+          "strip": null,
+          "sprite_rect": [
+            1638.4000244140625,
+            0.0,
+            204.8000030517578,
+            116.99999237060547
+          ]
         },
         {
           "key": "checkpoint_large",
@@ -676,7 +712,13 @@
           "label": "CHECKPOINT wordmark logo (bullet-belt motif in the O) (large size tier, shared texture path_id 2070)",
           "confidence": "high",
           "arenamode_use": "MODE-SIDEBAR-REVIEW.md's mode-select rows are text-only today (zero icon/sprite references); TeamFight maps to ArenaMode's own TDM and CheckPoint to the still-unbuilt single control-point mode -- the other six names (Duel/OneManArmy/BlastGang/ShootOut/LastHero/FinalRun) match no existing or planned ArenaMode mode today.",
-          "strip": null
+          "strip": null,
+          "sprite_rect": [
+            2340.571533203125,
+            0.0,
+            292.5714416503906,
+            167.0
+          ]
         },
         {
           "key": "duel_small",
@@ -688,7 +730,13 @@
           "label": "DUEL wordmark logo (pistol motif) (small size tier, shared texture path_id 803)",
           "confidence": "high",
           "arenamode_use": "MODE-SIDEBAR-REVIEW.md's mode-select rows are text-only today (zero icon/sprite references); TeamFight maps to ArenaMode's own TDM and CheckPoint to the still-unbuilt single control-point mode -- the other six names (Duel/OneManArmy/BlastGang/ShootOut/LastHero/FinalRun) match no existing or planned ArenaMode mode today.",
-          "strip": null
+          "strip": null,
+          "sprite_rect": [
+            585.142822265625,
+            0.0,
+            146.28570556640625,
+            73.0
+          ]
         },
         {
           "key": "duel_medium",
@@ -700,7 +748,13 @@
           "label": "DUEL wordmark logo (pistol motif) (medium size tier, shared texture path_id 2108)",
           "confidence": "high",
           "arenamode_use": "MODE-SIDEBAR-REVIEW.md's mode-select rows are text-only today (zero icon/sprite references); TeamFight maps to ArenaMode's own TDM and CheckPoint to the still-unbuilt single control-point mode -- the other six names (Duel/OneManArmy/BlastGang/ShootOut/LastHero/FinalRun) match no existing or planned ArenaMode mode today.",
-          "strip": null
+          "strip": null,
+          "sprite_rect": [
+            819.2000122070312,
+            0.0,
+            204.8000030517578,
+            116.99999237060547
+          ]
         },
         {
           "key": "duel_large",
@@ -712,7 +766,13 @@
           "label": "DUEL wordmark logo (pistol motif) (large size tier, shared texture path_id 2070)",
           "confidence": "high",
           "arenamode_use": "MODE-SIDEBAR-REVIEW.md's mode-select rows are text-only today (zero icon/sprite references); TeamFight maps to ArenaMode's own TDM and CheckPoint to the still-unbuilt single control-point mode -- the other six names (Duel/OneManArmy/BlastGang/ShootOut/LastHero/FinalRun) match no existing or planned ArenaMode mode today.",
-          "strip": null
+          "strip": null,
+          "sprite_rect": [
+            1170.2857666015625,
+            0.0,
+            292.5714416503906,
+            167.0
+          ]
         },
         {
           "key": "onemanarmy_small",
@@ -724,7 +784,13 @@
           "label": "ONE MAN ARMY -- 'TOO HARDCORE TO DIE' wordmark logo (small size tier, shared texture path_id 803)",
           "confidence": "high",
           "arenamode_use": "MODE-SIDEBAR-REVIEW.md's mode-select rows are text-only today (zero icon/sprite references); TeamFight maps to ArenaMode's own TDM and CheckPoint to the still-unbuilt single control-point mode -- the other six names (Duel/OneManArmy/BlastGang/ShootOut/LastHero/FinalRun) match no existing or planned ArenaMode mode today.",
-          "strip": null
+          "strip": null,
+          "sprite_rect": [
+            438.8571472167969,
+            0.0,
+            146.28570556640625,
+            73.0
+          ]
         },
         {
           "key": "onemanarmy_large",
@@ -736,7 +802,13 @@
           "label": "ONE MAN ARMY -- 'TOO HARDCORE TO DIE' wordmark logo (large size tier, shared texture path_id 2070)",
           "confidence": "high",
           "arenamode_use": "MODE-SIDEBAR-REVIEW.md's mode-select rows are text-only today (zero icon/sprite references); TeamFight maps to ArenaMode's own TDM and CheckPoint to the still-unbuilt single control-point mode -- the other six names (Duel/OneManArmy/BlastGang/ShootOut/LastHero/FinalRun) match no existing or planned ArenaMode mode today.",
-          "strip": null
+          "strip": null,
+          "sprite_rect": [
+            877.7142944335938,
+            0.0,
+            292.5714416503906,
+            167.0
+          ]
         },
         {
           "key": "blastgang_small",
@@ -748,7 +820,13 @@
           "label": "BLASTGANG wordmark logo (squad silhouette motif) (small size tier, shared texture path_id 803)",
           "confidence": "high",
           "arenamode_use": "MODE-SIDEBAR-REVIEW.md's mode-select rows are text-only today (zero icon/sprite references); TeamFight maps to ArenaMode's own TDM and CheckPoint to the still-unbuilt single control-point mode -- the other six names (Duel/OneManArmy/BlastGang/ShootOut/LastHero/FinalRun) match no existing or planned ArenaMode mode today.",
-          "strip": null
+          "strip": null,
+          "sprite_rect": [
+            1024.0,
+            0.0,
+            146.28570556640625,
+            73.0
+          ]
         },
         {
           "key": "blastgang_medium",
@@ -760,7 +838,13 @@
           "label": "BLASTGANG wordmark logo (squad silhouette motif) (medium size tier, shared texture path_id 2108)",
           "confidence": "high",
           "arenamode_use": "MODE-SIDEBAR-REVIEW.md's mode-select rows are text-only today (zero icon/sprite references); TeamFight maps to ArenaMode's own TDM and CheckPoint to the still-unbuilt single control-point mode -- the other six names (Duel/OneManArmy/BlastGang/ShootOut/LastHero/FinalRun) match no existing or planned ArenaMode mode today.",
-          "strip": null
+          "strip": null,
+          "sprite_rect": [
+            1433.5999755859375,
+            0.0,
+            204.8000030517578,
+            116.99999237060547
+          ]
         },
         {
           "key": "blastgang_xlarge",
@@ -772,7 +856,13 @@
           "label": "BLASTGANG wordmark logo (squad silhouette motif) (xlarge size tier, shared texture path_id 1838)",
           "confidence": "high",
           "arenamode_use": "MODE-SIDEBAR-REVIEW.md's mode-select rows are text-only today (zero icon/sprite references); TeamFight maps to ArenaMode's own TDM and CheckPoint to the still-unbuilt single control-point mode -- the other six names (Duel/OneManArmy/BlastGang/ShootOut/LastHero/FinalRun) match no existing or planned ArenaMode mode today.",
-          "strip": null
+          "strip": null,
+          "sprite_rect": [
+            2867.199951171875,
+            0.0,
+            409.6000061035156,
+            244.0
+          ]
         },
         {
           "key": "shootout_small",
@@ -784,7 +874,13 @@
           "label": "SHOOTOUT TOURNAMENT wordmark logo (small size tier, shared texture path_id 803)",
           "confidence": "high",
           "arenamode_use": "MODE-SIDEBAR-REVIEW.md's mode-select rows are text-only today (zero icon/sprite references); TeamFight maps to ArenaMode's own TDM and CheckPoint to the still-unbuilt single control-point mode -- the other six names (Duel/OneManArmy/BlastGang/ShootOut/LastHero/FinalRun) match no existing or planned ArenaMode mode today.",
-          "strip": null
+          "strip": null,
+          "sprite_rect": [
+            877.7142944335938,
+            0.0,
+            146.28570556640625,
+            73.0
+          ]
         },
         {
           "key": "shootout_medium",
@@ -796,7 +892,13 @@
           "label": "SHOOTOUT TOURNAMENT wordmark logo (medium size tier, shared texture path_id 2108)",
           "confidence": "high",
           "arenamode_use": "MODE-SIDEBAR-REVIEW.md's mode-select rows are text-only today (zero icon/sprite references); TeamFight maps to ArenaMode's own TDM and CheckPoint to the still-unbuilt single control-point mode -- the other six names (Duel/OneManArmy/BlastGang/ShootOut/LastHero/FinalRun) match no existing or planned ArenaMode mode today.",
-          "strip": null
+          "strip": null,
+          "sprite_rect": [
+            1228.7999267578125,
+            0.0,
+            204.8000030517578,
+            116.99999237060547
+          ]
         },
         {
           "key": "shootout_large",
@@ -808,7 +910,13 @@
           "label": "SHOOTOUT TOURNAMENT wordmark logo (large size tier, shared texture path_id 2070)",
           "confidence": "high",
           "arenamode_use": "MODE-SIDEBAR-REVIEW.md's mode-select rows are text-only today (zero icon/sprite references); TeamFight maps to ArenaMode's own TDM and CheckPoint to the still-unbuilt single control-point mode -- the other six names (Duel/OneManArmy/BlastGang/ShootOut/LastHero/FinalRun) match no existing or planned ArenaMode mode today.",
-          "strip": null
+          "strip": null,
+          "sprite_rect": [
+            1755.4285888671875,
+            0.0,
+            292.5714416503906,
+            167.0
+          ]
         },
         {
           "key": "lasthero_small",
@@ -820,7 +928,13 @@
           "label": "LAST HERO -- 'THE STRONGEST SURVIVES' wordmark logo (small size tier, shared texture path_id 803)",
           "confidence": "high",
           "arenamode_use": "MODE-SIDEBAR-REVIEW.md's mode-select rows are text-only today (zero icon/sprite references); TeamFight maps to ArenaMode's own TDM and CheckPoint to the still-unbuilt single control-point mode -- the other six names (Duel/OneManArmy/BlastGang/ShootOut/LastHero/FinalRun) match no existing or planned ArenaMode mode today.",
-          "strip": null
+          "strip": null,
+          "sprite_rect": [
+            292.5714111328125,
+            0.0,
+            146.28570556640625,
+            73.0
+          ]
         },
         {
           "key": "lasthero_large",
@@ -832,7 +946,13 @@
           "label": "LAST HERO -- 'THE STRONGEST SURVIVES' wordmark logo (large size tier, shared texture path_id 2070)",
           "confidence": "high",
           "arenamode_use": "MODE-SIDEBAR-REVIEW.md's mode-select rows are text-only today (zero icon/sprite references); TeamFight maps to ArenaMode's own TDM and CheckPoint to the still-unbuilt single control-point mode -- the other six names (Duel/OneManArmy/BlastGang/ShootOut/LastHero/FinalRun) match no existing or planned ArenaMode mode today.",
-          "strip": null
+          "strip": null,
+          "sprite_rect": [
+            585.1428833007812,
+            0.0,
+            292.5714416503906,
+            167.0
+          ]
         },
         {
           "key": "lastHeroNewYear_small",
@@ -844,7 +964,13 @@
           "label": "LAST HERO New Year reskin -- same wordmark with a frost/ice decorative overlay (confirmed visually; not a plain recolor and not a different pictogram) (small size tier, shared texture path_id 803)",
           "confidence": "high",
           "arenamode_use": "MODE-SIDEBAR-REVIEW.md's mode-select rows are text-only today (zero icon/sprite references); TeamFight maps to ArenaMode's own TDM and CheckPoint to the still-unbuilt single control-point mode -- the other six names (Duel/OneManArmy/BlastGang/ShootOut/LastHero/FinalRun) match no existing or planned ArenaMode mode today.",
-          "strip": null
+          "strip": null,
+          "sprite_rect": [
+            1316.5714111328125,
+            0.0,
+            146.28570556640625,
+            73.0
+          ]
         },
         {
           "key": "lastHeroNewYear_medium",
@@ -856,7 +982,13 @@
           "label": "LAST HERO New Year reskin -- same wordmark with a frost/ice decorative overlay (confirmed visually; not a plain recolor and not a different pictogram) (medium size tier, shared texture path_id 2108)",
           "confidence": "high",
           "arenamode_use": "MODE-SIDEBAR-REVIEW.md's mode-select rows are text-only today (zero icon/sprite references); TeamFight maps to ArenaMode's own TDM and CheckPoint to the still-unbuilt single control-point mode -- the other six names (Duel/OneManArmy/BlastGang/ShootOut/LastHero/FinalRun) match no existing or planned ArenaMode mode today.",
-          "strip": null
+          "strip": null,
+          "sprite_rect": [
+            1843.199951171875,
+            0.0,
+            204.8000030517578,
+            116.99999237060547
+          ]
         },
         {
           "key": "lastHeroNewYear_large",
@@ -868,7 +1000,13 @@
           "label": "LAST HERO New Year reskin -- same wordmark with a frost/ice decorative overlay (confirmed visually; not a plain recolor and not a different pictogram) (large size tier, shared texture path_id 2070)",
           "confidence": "high",
           "arenamode_use": "MODE-SIDEBAR-REVIEW.md's mode-select rows are text-only today (zero icon/sprite references); TeamFight maps to ArenaMode's own TDM and CheckPoint to the still-unbuilt single control-point mode -- the other six names (Duel/OneManArmy/BlastGang/ShootOut/LastHero/FinalRun) match no existing or planned ArenaMode mode today.",
-          "strip": null
+          "strip": null,
+          "sprite_rect": [
+            2633.142822265625,
+            0.0,
+            292.5714416503906,
+            167.0
+          ]
         },
         {
           "key": "finalrun_small",
@@ -880,7 +1018,13 @@
           "label": "FINAL RUN wordmark logo (small size tier, shared texture path_id 803)",
           "confidence": "high",
           "arenamode_use": "MODE-SIDEBAR-REVIEW.md's mode-select rows are text-only today (zero icon/sprite references); TeamFight maps to ArenaMode's own TDM and CheckPoint to the still-unbuilt single control-point mode -- the other six names (Duel/OneManArmy/BlastGang/ShootOut/LastHero/FinalRun) match no existing or planned ArenaMode mode today.",
-          "strip": null
+          "strip": null,
+          "sprite_rect": [
+            731.4285888671875,
+            0.0,
+            146.28570556640625,
+            73.0
+          ]
         },
         {
           "key": "finalrun_medium",
@@ -892,7 +1036,13 @@
           "label": "FINAL RUN wordmark logo (medium size tier, shared texture path_id 2108)",
           "confidence": "high",
           "arenamode_use": "MODE-SIDEBAR-REVIEW.md's mode-select rows are text-only today (zero icon/sprite references); TeamFight maps to ArenaMode's own TDM and CheckPoint to the still-unbuilt single control-point mode -- the other six names (Duel/OneManArmy/BlastGang/ShootOut/LastHero/FinalRun) match no existing or planned ArenaMode mode today.",
-          "strip": null
+          "strip": null,
+          "sprite_rect": [
+            1024.0,
+            0.0,
+            204.8000030517578,
+            116.99999237060547
+          ]
         },
         {
           "key": "finalrun_large",
@@ -904,7 +1054,13 @@
           "label": "FINAL RUN wordmark logo (large size tier, shared texture path_id 2070)",
           "confidence": "high",
           "arenamode_use": "MODE-SIDEBAR-REVIEW.md's mode-select rows are text-only today (zero icon/sprite references); TeamFight maps to ArenaMode's own TDM and CheckPoint to the still-unbuilt single control-point mode -- the other six names (Duel/OneManArmy/BlastGang/ShootOut/LastHero/FinalRun) match no existing or planned ArenaMode mode today.",
-          "strip": null
+          "strip": null,
+          "sprite_rect": [
+            1462.857177734375,
+            0.0,
+            292.5714416503906,
+            167.0
+          ]
         }
       ]
     },

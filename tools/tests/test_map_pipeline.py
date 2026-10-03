@@ -110,6 +110,26 @@ class SourcePlanTests(unittest.TestCase):
         with self.assertRaisesRegex(SP.PlanError, "input missing"):
             self.verify()
 
+    def test_excluded_scene_index_must_still_match_exact_path(self):
+        excluded = {"name": "Arena_Test_Culling", "asset_path": "Assets/Content/Arena_Test_Culling.unity",
+                    "index": 2, "reason": "not imported"}
+        self.plan["excluded_scenes"] = [excluded]
+        self.build.extend([excluded["asset_path"], excluded["asset_path"]])
+        SP.verify_scene_mapping(self.plan, self.build, self.root)
+        # No serialized file is needed for excluded references, but stale
+        # indices cannot be allowed to identify a different source scene.
+        self.build[2] = "Assets/Content/Arena_New_Scene.unity"
+        with self.assertRaisesRegex(SP.PlanError, "excluded source scene mapping drift"):
+            SP.verify_scene_mapping(self.plan, self.build, self.root)
+
+    @unittest.skipUnless(Path(EX.DEFAULT_SOURCE, "globalgamemanagers").is_file(), "Arena source not installed")
+    def test_all_repository_plans_match_installed_arena(self):
+        source = Path(EX.DEFAULT_SOURCE)
+        build = SP.read_build_scenes(source)
+        for path in sorted(SP.PLAN_ROOT.glob("*.json")):
+            with self.subTest(plan=path.name):
+                SP.verify_scene_mapping(SP.load_plan(path), build, source)
+
     def test_missing_source_is_hard_failure(self):
         self.manifest["source"]["arena_data_root"] = str(self.repo / "missing")
         with self.assertRaisesRegex(SP.PlanError, "unavailable"):

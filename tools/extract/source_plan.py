@@ -117,6 +117,15 @@ def unique_records(plan: dict) -> list[dict]:
 
 def verify_scene_mapping(plan: dict, build_scenes: list[str], source: Path) -> None:
     """Exact asset paths; duplicate paths must have a unique largest full-data copy."""
+    # Excluded scenes are not loaded, but their recorded identities must not
+    # silently point at a new scene after a source update. They need no largest-
+    # copy rule: e.g. Bowl has two equally stripped copies of excluded culling.
+    for raw in plan["excluded_scenes"]:
+        record = scene_record(raw)
+        index = record["index"]
+        if index >= len(build_scenes) or build_scenes[index] != record["asset_path"]:
+            raise PlanError(f"excluded source scene mapping drift for {record['name']}: "
+                            f"expected {record['asset_path']} at {index}")
     for record in unique_records(plan):
         candidates = [i for i, asset in enumerate(build_scenes) if asset == record["asset_path"]]
         if not candidates:

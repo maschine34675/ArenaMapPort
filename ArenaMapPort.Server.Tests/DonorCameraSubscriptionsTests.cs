@@ -182,7 +182,7 @@ namespace EFT.CameraControl
 
 namespace EFT.Weather
 {
-    public sealed class WeatherController
+    public sealed partial class WeatherController
     {
         public RainController? RainController;
         public int CameraRefreshes;

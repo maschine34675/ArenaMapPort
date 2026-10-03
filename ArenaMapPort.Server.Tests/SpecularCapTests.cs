@@ -459,6 +459,7 @@ namespace ArenaMapPort.Client
     }
     internal static class Plugin
     {
+        internal static readonly TestPluginInstance Instance = new();
         internal static readonly TestLog Log = new();
         internal sealed class TestLog
         {

@@ -6,6 +6,18 @@ The port is a **geometry spike**: scene geometry, materials, collision, lighting
 
 ## Current status
 
+**Time and weather.** Equator retains 12:00/00:00 starts: Day always uses Clear,
+while midnight keeps the optional neon rain. Bay5 offers the two normal server
+times twelve hours apart, with a progressing day/night cycle and dynamic backend
+weather. Legacy fixed-hour/test-weather settings do not override Bay5.
+See [time/weather verification](docs/progress/map-weather-restoration.md).
+
+**Arena source update (2026-10-03).** Exporters now support the installed Arena
+0.6.0.47752 / Unity 6000.3.6f1 source. Updated art selectors and seven scene plans
+pass current-source checks; fresh Equator/Bay5 exports validate successfully.
+Accepted map bundles still use the previous verified content and Unity 2022 target.
+See [export compatibility audit](docs/progress/arena-update-20261003.md).
+
 **Target: ArenaMode**, not ordinary SPT raid play. These maps are meant to be played through the user's ArenaMode mod (arena deathmatch with respawns); a plain SPT raid from the menu is only the test vehicle. No loot is authored or extracted on any map, and no scav-raid support (spawn categories, exits, hostility) is implemented — both are permanent decisions, not open gaps. `dist/` (BSG-derived bundles included) is distributed the way other SPT map mods do it; the user carries the licensing grey zone ("a valid EFT installation/licence"). See [docs/SPEC.md](docs/SPEC.md), "Decisions 2026-09-20".
 
 The registry contains Equator and Bay5 plus 12 additional source-backed map definitions: AirPit, AirPit2.0, AutoService, Bowl, Prison, RailwayStation, Yard, Iceberg, Factory, Customs, Shoreline and Woods. All twelve additions were built, validated with schema-2 receipts and staged in `dist/` (verified 2026-09-15, 20:34 CEST; receipt layer simplified 2026-09-17). The complete distribution contains 14 maps, 42 bundles, 14 shader sidecars, 14 server base JSON files and both Release DLLs: 72 files, about 11.05 GB. Validation passed 86 Python tests, eight PowerShell log tests and 228 server tests, as of 2026-09-15/17. The server suite has grown with the bots/exits/PMC/stage-1 work: 267 tests green on 2026-09-20.

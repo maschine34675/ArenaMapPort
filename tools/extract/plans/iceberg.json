@@ -27,26 +27,26 @@
     {
       "name": "Arena_Sanatorium_CheckPoint",
       "asset_path": "Assets/Content/Locations/Arena_Sanatorium/Arena_Sanatorium_CheckPoint.unity",
-      "index": 366
+      "index": 375
     },
     {
       "name": "Arena_Sanatorium_CheckPoint_DesignStuff",
       "asset_path": "Assets/Content/Locations/Arena_Sanatorium/Arena_Sanatorium_CheckPoint_DesignStuff.unity",
-      "index": 367
+      "index": 376
     }
   ],
   "anchor_scenes": [
     {
       "name": "Arena_Sanatorium_CheckPoint_DesignStuff",
       "asset_path": "Assets/Content/Locations/Arena_Sanatorium/Arena_Sanatorium_CheckPoint_DesignStuff.unity",
-      "index": 367
+      "index": 376
     }
   ],
   "navmesh_scenes": [
     {
       "name": "Arena_Sanatorium_CheckPoint_AI",
       "asset_path": "Assets/Content/Locations/Arena_Sanatorium/Arena_Sanatorium_CheckPoint_AI.unity",
-      "index": 368
+      "index": 377
     }
   ],
   "fog_color": [
@@ -70,13 +70,13 @@
     {
       "name": "Arena_Sanatorium_CheckPoint_AI",
       "asset_path": "Assets/Content/Locations/Arena_Sanatorium/Arena_Sanatorium_CheckPoint_AI.unity",
-      "index": 368,
+      "index": 377,
       "reason": "Source AI/gameplay scene is metadata reference only; port bakes a fresh SPT NavMesh."
     },
     {
       "name": "Arena_Sanatorium_CheckPoint_Culling",
       "asset_path": "Assets/Content/Locations/Arena_Sanatorium/Arena_Sanatorium_CheckPoint_Culling.unity",
-      "index": 369,
+      "index": 378,
       "reason": "Source PerfectCulling data is outside the existing port contract."
     }
   ]

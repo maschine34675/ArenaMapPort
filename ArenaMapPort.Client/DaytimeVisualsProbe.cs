@@ -128,12 +128,13 @@ namespace ArenaMapPort.Client
         // without a rig's TOD_Sky).
         static void ProbeTimeOfDay(string tag, ArenaMapPort.Shared.ArenaMapDescriptor map)
         {
-            bool arenaMap = map.Key.StartsWith("arena_", StringComparison.Ordinal);
+            bool arenaMap = map.UsesFixedStartTimes || (!map.UsesServerTime && TimeOfDayRepairs.Enabled);
             var gdt = TODSkyProvider.IsAvailable ? TODSkyProvider.Instance.CurrentTime.GameDateTime : null;
             string liveHour = gdt != null ? gdt.Calculate().Hour.ToString("00") : "n/a (no rig's TOD_Sky to read back — see class doc comment)";
             Plugin.Log.LogInfo($"{tag} F1 TimeOfDay: enabled={TimeOfDayRepairs.Enabled} " +
                                $"legacyFixedHour={TimeOfDayRepairs.FixedHour} activeFixedHour={TimeOfDayRepairs.ActiveFixedHour} " +
-                               $"fixedMenu={map.UsesFixedStartTimes} appliesToThisMap={arenaMap} liveHour={liveHour}");
+                               $"fixedMenu={map.UsesFixedStartTimes} serverTimes={map.UsesServerTime} " +
+                               $"appliesToThisMap={arenaMap} liveHour={liveHour}");
         }
 
         // F2 — CameraEffectsRepairs exposure fix. Live readback off the active camera's own PrismEffects,
@@ -270,9 +271,12 @@ namespace ArenaMapPort.Client
         // confirms what was CONFIGURED for this raid, for a single-log-read summary.
         static void ProbeWeatherTestOverride(string tag, ArenaMapPort.Shared.ArenaMapDescriptor map)
         {
-            Plugin.Log.LogInfo($"{tag} WeatherTestOverride: configured='{WeatherTestOverride.Mode}' (map={map.Key}) " +
-                               "— Server means no change; any other value should show two " +
-                               "'[WeatherTestOverride] applied' lines above for this raid");
+            var effective = WeatherTestOverride.ModeForSelection(map, TimeOfDayRepairs.ActiveFixedHour);
+            Plugin.Log.LogInfo($"{tag} WeatherTestOverride: configured='{WeatherTestOverride.Mode}' " +
+                               $"effective='{effective}' map={map.Key} serverTimes={map.UsesServerTime} — " +
+                               (effective == WeatherTestOverride.TestWeather.Server
+                                   ? "native backend weather nodes retained, including every resync"
+                                   : "selected variant replaces weather nodes on each initialization/resync"));
         }
 
         // §12 goal 4 — SSR/rain-cover diagnostics. CameraManager.GetSSREnabled() reads back EFT's own

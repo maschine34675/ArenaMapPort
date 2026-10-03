@@ -421,6 +421,30 @@ class ResolveNameTests(unittest.TestCase):
         with self.assertRaises(HardExtractError):
             EU._resolve(index, "Sprite", "teamfight", path_id_hint=None, tag="t")
 
+    def _sprite(self, path_id, rect):
+        return SimpleNamespace(path_id=path_id, read_typetree=lambda: {
+            "m_Rect": dict(zip(("x", "y", "width", "height"), rect))})
+
+    def test_verified_rect_survives_id_drift_and_recycled_tier_id(self):
+        small, large = [0, 0, 128, 64], [0, 0, 256, 128]
+        index = {("Sprite", "teamfight"): [self._sprite(100, large), self._sprite(200, small)]}
+        self.assertEqual(EU._resolve(index, "Sprite", "teamfight", 100, "t", small).path_id, 200)
+
+    def test_rect_mismatch_rejects_even_single_candidate_with_old_id(self):
+        index = {("Sprite", "teamfight"): [self._sprite(100, [0, 0, 256, 128])]}
+        with self.assertRaises(HardExtractError):
+            EU._resolve(index, "Sprite", "teamfight", 100, "t", [0, 0, 128, 64])
+
+    def test_duplicate_rects_fail_even_with_matching_id(self):
+        rect = [0, 0, 128, 64]
+        index = {("Sprite", "teamfight"): [self._sprite(100, rect), self._sprite(200, rect)]}
+        with self.assertRaises(HardExtractError):
+            EU._resolve(index, "Sprite", "teamfight", 100, "t", rect)
+
+    def test_rect_float_roundtrip_tolerance(self):
+        index = {("Sprite", "teamfight"): [self._sprite(100, [0, 0, 204.800003, 116.999992])]}
+        self.assertEqual(EU._resolve(index, "Sprite", "teamfight", 100, "t", [0, 0, 204.8, 117]).path_id, 100)
+
 
 class NaturalKeyTests(unittest.TestCase):
     def test_embedded_numbers_sort_numerically(self):

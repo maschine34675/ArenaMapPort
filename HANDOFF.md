@@ -3,7 +3,42 @@
 Snapshot for whoever continues (human or agent). Verify the commits named here against `git log`; this file
 is updated by hand at each handover, it is not an automatic record. Read [AGENTS.md](AGENTS.md) first.
 
-## State on 2026-10-03 — Bay5 time choices and Equator rain preview
+## State on 2026-10-03 — Arena 0.6 exporters and restored Bay5 weather
+
+**Current policy:** Equator 12:00 always Clear; 00:00 retains optional neon rain.
+Bay5 uses the two native server clocks twelve hours apart, the advancing raid
+clock and dynamic backend weather. Saved fixed-hour/test-weather settings cannot
+override Bay5. This supersedes the fixed Bay5 times in the earlier section below.
+
+GPU-2 acceptance passed in process `0126ddc9` (20:06:12 start): native Bay5 menu
+clocks and Next/Back selection, a PAST raid with TimeFactor=7 and unlocked,
+advancing sky, and changing backend rain/cloudiness over a 54-key curve.
+Equator Day remained Clear even with temporary Weather(test)=Rain, including
+the backend re-sync. Midnight's rain menu icon and day sun icon both passed.
+No new midnight raid or full 24-hour cycle was observed in this test round.
+Both botless PMC raids ended via normal extraction. No Error/Fatal in the
+captured session. GPU-2 is back at MainMenu with server/client running.
+
+Release DLLs deployed through sanctioned `-DllOnly` to D:/SPT41 and then
+D:/SPT41vanilla. Client SHA256
+`F60F1181589E992F6AE445477AD7501F6161A3D6352617DC8E96D15DDC585DE1`;
+server `D17E1A9D213C4526A23C938309D051FCFFFDD2D8472A99EFC86726250D07E040`.
+All 800 host and 804 vanilla saved MapPort assignments remain identical.
+The user's vanilla server/client need restarting to load these DLLs.
+Client build, 505 .NET tests and existing distribution validation passed.
+See [native evidence](docs/progress/map-weather-restoration.md).
+
+Arena source is now **0.6.0.47752 / Unity 6000.3.6f1**. Existing UnityPy works;
+fixed banner/loading IDs, UI sprite tier selection and seven generic source
+plans. Full fresh Equator/Bay5 extraction and native structural validation,
+auxiliary exports and all twelve plan mappings passed; Python: 665 tests run,
+44 optional skips. Accepted packages/bundles/art/audio remain unchanged.
+Fresh audit packages are not accepted build inputs; no new-source bundle or
+visual acceptance was performed. Three additional source Bay5 decals were
+recorded, not promoted. Keep SPT's Unity 2022 target. See
+[export audit](docs/progress/arena-update-20261003.md).
+
+## Earlier state on 2026-10-03 — Bay5 time choices and Equator rain preview
 
 Bay5 now uses native 12:00/00:00 choices, with matching actual raid start time and
 server night-equipment selection. Equator midnight previews the existing optional

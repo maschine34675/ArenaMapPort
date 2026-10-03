@@ -3,6 +3,7 @@ using BepInEx.Configuration;
 using EFT;
 using EFT.Weather;
 using UnityEngine;
+using ArenaMapPort.Shared;
 
 namespace ArenaMapPort.Client
 {
@@ -62,6 +63,16 @@ namespace ArenaMapPort.Client
         // Exposed for DaytimeVisualsProbe's consolidated summary line.
         internal static TestWeather Mode => _mode != null ? _mode.Value : TestWeather.Server;
 
+        // One policy for both native menu preview and every weather initialization/re-sync.
+        // FixedDayHour is the selected variant, not the later advancing in-raid sky hour.
+        internal static TestWeather ModeForSelection(ArenaMapDescriptor map, int? selectedHour)
+        {
+            if (map == null || map.UsesServerTime) return TestWeather.Server;
+            if (map.Key == ArenaMapRegistry.Equator.Key && selectedHour == map.FixedDayHour)
+                return TestWeather.Clear;
+            return EquatorNightNeon.RainForSelection(map.Key, selectedHour) ? TestWeather.Rain : Mode;
+        }
+
         internal static void Install()
         {
             if (_installed)
@@ -71,7 +82,9 @@ namespace ArenaMapPort.Client
             _installed = true;
 
             _mode = Plugin.Instance.Config.Bind("Weather (test)", "Weather", TestWeather.Server,
-                "Server = no change, real SPT/backend weather (today's behavior). Any other value forces a " +
+                "Equator day always uses Clear and Bay5 always uses dynamic SPT/backend weather; this setting " +
+                "does not override either. Applies to Equator night when Night neon/Rain does not request rain, " +
+                "and other experimental Arena maps. Server = backend weather. Any other value forces a " +
                 "deterministic weather via a Harmony postfix on WeatherController.SetWeatherNodes, " +
                 "reapplied on EVERY call (including SPT's own PVE_OFFLINE server re-sync) so it actually " +
                 "sticks for the whole raid. Only ever applies to OUR maps' raids — see this file's own doc " +
@@ -92,7 +105,7 @@ namespace ArenaMapPort.Client
             {
                 return; // reentrancy guard — see doc comment
             }
-            var mode = EquatorNightNeon.RainForCurrentRaid ? TestWeather.Rain : Mode;
+            var mode = ModeForSelection(ArenaMapRaid.CurrentMap, TimeOfDayRepairs.ActiveFixedHour);
             if (mode == TestWeather.Server)
             {
                 return;

@@ -22,12 +22,12 @@
     {
       "name": "Arena_Yard_TeamFight",
       "asset_path": "Assets/Content/Locations/Arena_Yard/Arena_Yard_TeamFight.unity",
-      "index": 309
+      "index": 310
     },
     {
       "name": "Arena_Yard_TeamFight_DesignStuff",
       "asset_path": "Assets/Content/Locations/Arena_Yard/Arena_Yard_TeamFight_DesignStuff.unity",
-      "index": 316
+      "index": 317
     },
     {
       "name": "Arena_Yard_Light",
@@ -39,14 +39,14 @@
     {
       "name": "Arena_Yard_TeamFight_DesignStuff",
       "asset_path": "Assets/Content/Locations/Arena_Yard/Arena_Yard_TeamFight_DesignStuff.unity",
-      "index": 316
+      "index": 317
     }
   ],
   "navmesh_scenes": [
     {
       "name": "Arena_Yard_AI",
       "asset_path": "Assets/Content/Locations/Arena_Yard/Arena_Yard_AI.unity",
-      "index": 319
+      "index": 320
     }
   ],
   "fog_color": [
@@ -82,7 +82,7 @@
     {
       "name": "Arena_Yard_AI",
       "asset_path": "Assets/Content/Locations/Arena_Yard/Arena_Yard_AI.unity",
-      "index": 319,
+      "index": 320,
       "reason": "Source AI/gameplay scene is metadata reference only; port bakes a fresh SPT NavMesh."
     }
   ]

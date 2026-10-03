@@ -26,11 +26,10 @@ BSG art never goes into git (AGENTS.md): the only write targets are dist/ (gitig
 --output override, typically under work/ for a one-off inspection. Reads Arena's own
 resources.assets read-only and never writes there.
 
-Fails loudly (HardExtractError) rather than writing a wrong/placeholder image when: the install is
-missing, the expected path_id resolves to something other than a Texture2D, that object's own
-m_Name does not match the name this table expects at that path_id (catches path_id drift silently
-pointing at the wrong asset after an Arena update), or its decoded dimensions are not exactly
-769x460.
+Selects the unique exact Texture2D name in the expected source file, then validates its
+known dimensions. Historical path_id values below document the 0.5.4 source only; Arena
+0.6 reused them for unrelated textures. Missing/ambiguous names or unexpected dimensions
+remain hard errors, never first-match guesses or placeholder images.
 
 CLI:
     python extract_banners.py                       # extract both maps into dist/
@@ -50,6 +49,7 @@ _HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, _HERE)
 
 from common_ids import HardExtractError  # noqa: E402
+from named_assets import unique_named_texture  # noqa: E402
 
 # Same default Arena data directory every other extractor in this pipeline uses
 # (extract_equator.py/extract_bay5.py/extract_map.py's own DEFAULT_SOURCE) -- read-only.
@@ -65,7 +65,7 @@ DEFAULT_OUTPUT = _REPO_ROOT / "dist" / "SPT_Runtime" / "user" / "mods" / "ArenaM
 EXPECTED_WIDTH = 769
 EXPECTED_HEIGHT = 460
 
-# map_key -> (Arena's own object name in resources.assets, its path_id). The dict key doubles as
+# map_key -> (Arena's own object name in resources.assets, historical 0.5.4 path_id). The dict key doubles as
 # the output file stem ("arena_<key>.<ext>") and must equal ArenaMapBanners.cs's own
 # Descriptor.FileStem for each map -- BannerFileStemsTests (tools/tests/test_banners.py) and
 # ArenaMapBannersTests (ArenaMapPort.Server.Tests, C# side) each independently pin this string so
@@ -95,7 +95,7 @@ def output_path(output_dir, map_key: str, ext: str = "jpg") -> Path:
 
 def validate_dimensions(width: int, height: int, map_key: str) -> None:
     """Both known banners are 769x460 (2026-09-25 research pass, re-checked here rather than just
-    trusted) -- a different size at the same path_id means Arena's own asset moved and this table
+    trusted) -- a different size for the same exact name means the source art changed and this table
     needs a fresh look, not a silently mis-sized banner shipped to players."""
     _require(
         width == EXPECTED_WIDTH and height == EXPECTED_HEIGHT,
@@ -121,19 +121,7 @@ def _load_resources_assets(source_dir):
 
 def _read_banner_texture(source_file, map_key):
     spec = BANNERS[map_key]
-    reader = source_file.objects.get(spec["path_id"])
-    _require(reader is not None, f"{map_key}: path_id {spec['path_id']} not found in resources.assets")
-    _require(
-        reader.type.name == "Texture2D",
-        f"{map_key}: path_id {spec['path_id']} is a {reader.type.name}, not Texture2D -- has Arena's asset layout moved?",
-    )
-    data = reader.read()
-    _require(
-        data.m_Name == spec["asset_name"],
-        f"{map_key}: path_id {spec['path_id']} is named {data.m_Name!r}, expected {spec['asset_name']!r} "
-        "-- path_id drift, do not trust this object",
-    )
-    return data
+    return unique_named_texture(source_file, spec["asset_name"], f"Banners: {map_key}")
 
 
 def extract_one(source_file, map_key, output_dir, ext="jpg", quality=95):

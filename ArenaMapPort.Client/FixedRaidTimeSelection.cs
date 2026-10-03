@@ -13,9 +13,10 @@ using UnityEngine;
 namespace ArenaMapPort.Client
 {
     /// <summary>
-    /// Use the native CURR/PAST toggles for descriptor-defined fixed start times. EFT excludes custom
+    /// Use the native CURR/PAST toggles for descriptor-defined time choices. EFT excludes custom
     /// locations in two independent whitelists, then otherwise displays the advancing backend clock.
-    /// Retain its listeners; preview the owned Equator midnight rain without altering session weather.
+    /// Retain its listeners; Bay5 keeps the backend clock and weather. Equator alone replaces the
+    /// clock labels and previews its day Clear / optional midnight rain without altering session weather.
     /// Do not duplicate Factory's special location identities.
     /// Verified against the installed LocationConditionsPanel and selection-controller call paths.
     /// </summary>
@@ -31,6 +32,9 @@ namespace ArenaMapPort.Client
 
         internal static ArenaMapDescriptor Find(string key) =>
             ArenaMapRegistry.All.FirstOrDefault(m => m.Key == key && m.UsesFixedStartTimes);
+
+        internal static ArenaMapDescriptor FindSelectable(string key) =>
+            ArenaMapRegistry.All.FirstOrDefault(m => m.Key == key && m.HasTimeSelection);
 
         internal static void Install(Harmony harmony)
         {
@@ -62,11 +66,11 @@ namespace ArenaMapPort.Client
 
         static void AllowNight(ref IEnumerable<string> __result)
         {
-            __result = __result.Concat(ArenaMapRegistry.All.Where(m => m.UsesFixedStartTimes).Select(m => m.Key)).Distinct();
+            __result = __result.Concat(ArenaMapRegistry.All.Where(m => m.HasTimeSelection).Select(m => m.Key)).Distinct();
         }
 
         static bool KeepSelectedTime(MatchMakerSelectionLocationScreen.SelectionLocationScreenController __instance) =>
-            Find(__instance.RaidSettings.SelectedLocation?.Id) == null;
+            FindSelectable(__instance.RaidSettings.SelectedLocation?.Id) == null;
 
         static void ForgetWeather(LocationConditionsPanel __instance) => Previews.Remove(__instance);
 
@@ -76,8 +80,17 @@ namespace ArenaMapPort.Client
             var selected = __instance.SelectedDateTime;
             int? hour = selected == EDateTime.CURR ? preview.Map.FixedDayHour :
                 selected == EDateTime.PAST ? preview.Map.FixedNightHour : null;
-            bool rain = EquatorNightNeon.RainForSelection(preview.Map.Key, hour);
-            var icon = rain ? ResourcesCache.Pop<Sprite>("UI/WeatherIcons/" + EWeatherType.Rain) : null;
+            var mode = hour.HasValue ? WeatherTestOverride.ModeForSelection(preview.Map, hour) :
+                WeatherTestOverride.TestWeather.Server;
+            var weatherType = mode switch
+            {
+                WeatherTestOverride.TestWeather.Clear => EWeatherType.ClearDay,
+                WeatherTestOverride.TestWeather.Rain => EWeatherType.Rain,
+                WeatherTestOverride.TestWeather.Overcast => EWeatherType.FullCloud,
+                WeatherTestOverride.TestWeather.Fog => EWeatherType.Fog,
+                _ => EWeatherType.None,
+            };
+            var icon = weatherType != EWeatherType.None ? ResourcesCache.Pop<Sprite>("UI/WeatherIcons/" + weatherType) : null;
             // Missing optional sprite fails back to vanilla; never erase a useful existing icon.
             __instance._weatherIcon.sprite = icon ?? preview.OriginalSprite;
             __instance._weatherIcon.gameObject.SetActive(icon != null || preview.OriginalVisible);

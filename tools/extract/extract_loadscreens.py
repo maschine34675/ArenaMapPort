@@ -37,10 +37,9 @@ first missing index, so shipping a second or third variety image later (e.g. one
 session's own research — or a future additional `AllScreens`-style shot) is a drop-in: no client
 rebuild, no naming change, just add `arena_<key>_2.jpg` next to `_1.jpg`.
 
-Fails loudly (`HardExtractError`) rather than writing a wrong/placeholder image when: the Arena
-install is missing, the object at the expected `path_id` is not a `Texture2D`, its own `m_Name`
-does not match the name this table expects at that `path_id` (path_id drift after an Arena update),
-or its decoded dimensions are not exactly 1920x1080.
+Selects a unique exact Texture2D name in the expected source file, then checks that
+entry's known dimensions. The old path_id values below are historical hints only;
+Arena 0.6 repacked them. Missing/duplicate names or dimension drift fail loudly.
 
 CLI:
     python extract_loadscreens.py                     # extract both maps into dist/
@@ -60,6 +59,7 @@ _HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, _HERE)
 
 from common_ids import HardExtractError  # noqa: E402
+from named_assets import unique_named_texture  # noqa: E402
 
 # Same default Arena data directory every other extractor in this pipeline uses -- read-only.
 DEFAULT_SOURCE = "D:/Battlestate Games/Escape from Tarkov Arena/EscapeFromTarkovArena_Data"
@@ -149,20 +149,7 @@ def _load_resources_assets(source_dir):
 
 def _read_loadscreen_texture(source_file, map_key, index):
     spec = LOADSCREENS[map_key][index - 1]
-    reader = source_file.objects.get(spec["path_id"])
-    _require(reader is not None, f"{map_key}[{index}]: path_id {spec['path_id']} not found in {spec.get('file', 'resources.assets')}")
-    _require(
-        reader.type.name == "Texture2D",
-        f"{map_key}[{index}]: path_id {spec['path_id']} is a {reader.type.name}, not Texture2D -- "
-        "has Arena's asset layout moved?",
-    )
-    data = reader.read()
-    _require(
-        data.m_Name == spec["asset_name"],
-        f"{map_key}[{index}]: path_id {spec['path_id']} is named {data.m_Name!r}, expected "
-        f"{spec['asset_name']!r} -- path_id drift, do not trust this object",
-    )
-    return data
+    return unique_named_texture(source_file, spec["asset_name"], f"Loadscreens: {map_key}[{index}]")
 
 
 def extract_one(source_file, map_key, index, output_dir, ext="jpg", quality=95):

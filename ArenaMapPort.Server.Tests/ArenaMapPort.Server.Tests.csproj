@@ -29,6 +29,8 @@
     <Compile Include="..\ArenaMapPort.Client\IndoorSurfaceGeometry.cs" Link="Client\IndoorSurfaceGeometry.cs" />
     <Compile Include="..\ArenaMapPort.Client\FloorDetailSupport.cs" Link="Client\FloorDetailSupport.cs" />
     <Compile Include="..\ArenaMapPort.Client\FixedRaidTimeSelection.cs" Link="Client\FixedRaidTimeSelection.cs" />
+    <Compile Include="..\ArenaMapPort.Client\TimeOfDayRepairs.cs" Link="Client\TimeOfDayRepairs.cs" />
+    <Compile Include="..\ArenaMapPort.Client\WeatherTestOverride.cs" Link="Client\WeatherTestOverride.cs" />
   </ItemGroup>
 
   <!--

@@ -8,6 +8,13 @@ dated state in one screen; read it before this index if you only have a minute.
 
 ## Current — read these for the area you touch
 
+- [map-weather-restoration.md](map-weather-restoration.md) — Equator Day fixed
+  Clear, Bay5 native server-time choices and dynamic weather (2026-10-03).
+  Supersedes the fixed Bay5 policy in the earlier map-time-weather report.
+- [arena-update-20261003.md](arena-update-20261003.md) — Arena 0.6 / Unity 6
+  export audit, repaired art identities and scene plans, complete isolated
+  Equator/Bay5 extraction and auxiliary exporter checks; accepted assets retained.
+
 - [map-time-weather.md](map-time-weather.md) — Bay5 native 12:00/00:00 choices
   through client raid time and server gear, plus Equator midnight rain preview
   with native icon restoration (2026-10-03). Deployed locally/GPU-2; native 1080p

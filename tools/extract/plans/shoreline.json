@@ -7,41 +7,41 @@
     {
       "name": "Arena_Shoreline_LH",
       "asset_path": "Assets/Content/Locations/Arena_NY_Shoreline_LH/Arena_Shoreline_LH.unity",
-      "index": 362
+      "index": 367
     },
     {
       "name": "Arena_Shoreline_LH_Terrain",
       "asset_path": "Assets/Content/Locations/Arena_NY_Shoreline_LH/Arena_Shoreline_LH_Terrain.unity",
-      "index": 357
+      "index": 362
     },
     {
       "name": "Arena_Shoreline_LH_Light",
       "asset_path": "Assets/Content/Locations/Arena_NY_Shoreline_LH/Arena_Shoreline_LH_Light.unity",
-      "index": 353
+      "index": 358
     },
     {
       "name": "Arena_Shoreline_LH_DesignStuff",
       "asset_path": "Assets/Content/Locations/Arena_NY_Shoreline_LH/Arena_Shoreline_LH_DesignStuff.unity",
-      "index": 354
+      "index": 359
     },
     {
       "name": "Arena_NY_Shoreline_LastHero_DesignStuff",
       "asset_path": "Assets/Content/Locations/Arena_NY_Shoreline_LH/Arena_NY_Shoreline_LastHero_DesignStuff.unity",
-      "index": 300
+      "index": 301
     }
   ],
   "anchor_scenes": [
     {
       "name": "Arena_NY_Shoreline_LastHero_DesignStuff",
       "asset_path": "Assets/Content/Locations/Arena_NY_Shoreline_LH/Arena_NY_Shoreline_LastHero_DesignStuff.unity",
-      "index": 300
+      "index": 301
     }
   ],
   "navmesh_scenes": [
     {
       "name": "Arena_NY_Shoreline_LH_AI",
       "asset_path": "Assets/Content/Locations/Arena_NY_Shoreline_LH/Arena_NY_Shoreline_LH_AI.unity",
-      "index": 298
+      "index": 299
     }
   ],
   "fog_color": [
@@ -53,25 +53,25 @@
     {
       "name": "Arena_Shoreline_LH_Scripts",
       "asset_path": "Assets/Content/Locations/Arena_NY_Shoreline_LH/Arena_Shoreline_LH_Scripts.unity",
-      "index": 352,
+      "index": 357,
       "reason": "Replaced by the freshly authored SPT Scripts scene; source scripts and seasonal runtime objects are not imported."
     },
     {
       "name": "Arena_NY_Shoreline_LH_Sound",
       "asset_path": "Assets/Content/Locations/Arena_NY_Shoreline_LH/Arena_NY_Shoreline_LH_Sound.unity",
-      "index": 297,
+      "index": 298,
       "reason": "Source Arena sound/audio runtime is outside the existing port contract."
     },
     {
       "name": "Arena_NY_Shoreline_LH_AI",
       "asset_path": "Assets/Content/Locations/Arena_NY_Shoreline_LH/Arena_NY_Shoreline_LH_AI.unity",
-      "index": 298,
+      "index": 299,
       "reason": "Source AI/gameplay scene is metadata reference only; port bakes a fresh SPT NavMesh."
     },
     {
       "name": "Arena_NY_Shoreline_LH_Culling",
       "asset_path": "Assets/Content/Locations/Arena_NY_Shoreline_LH/Arena_NY_Shoreline_LH_Culling.unity",
-      "index": 299,
+      "index": 300,
       "reason": "Source PerfectCulling data is outside the existing port contract."
     }
   ]

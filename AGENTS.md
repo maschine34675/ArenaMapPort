@@ -1,6 +1,6 @@
 # ArenaMapPort — working notes for agents
 
-ArenaMapPort imports the maps of Escape from Tarkov: Arena (0.5.4.0, read from the user's own Arena
+ArenaMapPort imports the maps of Escape from Tarkov: Arena (read from the user's own Arena
 install) into SPT 4.1.5 (EFT 0.16.9.5, Unity 2022.3.43f1) as separate locations: a Python extractor,
 a Unity 2022.3.43f1 batch importer that rebuilds scenes, materials, colliders and a fresh NavMesh into
 asset bundles, a BepInEx client plugin that repairs everything a ported scene lacks at raid time, and an
@@ -14,6 +14,12 @@ then [docs/progress/INDEX.md](docs/progress/INDEX.md) to find the progress log f
 the end overrides the spike framing. `README.md` is the user-facing summary.
 
 ## Decisions that shape every task (user, 2026-09-20)
+
+Current source (2026-10-03) is Arena 0.6.0.47752 / Unity 6000.3.6f1. Export tools
+were checked against complete fresh Equator/Bay5 extracts; see
+[the source audit](docs/progress/arena-update-20261003.md). Accepted v5 packages
+still contain the prior 0.5.4 source. Audit outputs under `work/arena-update-audit/`
+are not accepted build inputs. Keep the SPT bundle target on Unity 2022.3.43f1.
 
 - **ArenaMode is the target.** Ordinary SPT raid playability (loot, quests, scav raids, insurance,
   transits) is not a goal. A plain SPT raid started from the menu is only the test vehicle.

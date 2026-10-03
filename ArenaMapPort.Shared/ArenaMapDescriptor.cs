@@ -82,6 +82,8 @@ namespace ArenaMapPort.Shared
         public int? FixedDayHour { get; }
         public int? FixedNightHour { get; }
         public bool UsesFixedStartTimes => FixedDayHour.HasValue && FixedNightHour.HasValue;
+        public bool UsesServerTime { get; } // native advancing backend time, CURR/PAST and backend weather
+        public bool HasTimeSelection => UsesFixedStartTimes || UsesServerTime;
         public string SunScene { get; }
         public string[] SunPaths { get; }
 #nullable enable
@@ -121,7 +123,8 @@ namespace ArenaMapPort.Shared
             string[]? DistantShadowCasterPaths = null,
             bool InheritIndoorFloorDetails = false,
             ArenaNeonFixture[]? NeonFixtures = null,
-            ArenaNightAccent[]? NightAccents = null)
+            ArenaNightAccent[]? NightAccents = null,
+            bool UsesServerTime = false)
 #nullable restore
         {
             this.Key = Key;
@@ -146,6 +149,7 @@ namespace ArenaMapPort.Shared
             this.Dust = Dust;
             this.FixedDayHour = FixedDayHour;
             this.FixedNightHour = FixedNightHour;
+            this.UsesServerTime = UsesServerTime;
             this.SunScene = SunScene ?? string.Empty;
             this.SunPaths = SunPaths ?? new string[0];
             this.PuddleWaterMaterialNames = PuddleWaterMaterialNames ?? new string[0];
@@ -291,8 +295,7 @@ namespace ArenaMapPort.Shared
             Dust: new ArenaDustDescriptor("Arena_Bay5_Light", "DUST", 0.07f, 0.04f, 1, 0.0f,
                 99.63274383544922f, -1.5299997329711914f, 30.428937911987305f,
                 52.685890197753906f, 12.275176048278809f, 42.59858703613281f),
-            FixedDayHour: 12,
-            FixedNightHour: 0);
+            UsesServerTime: true);
 
         // Source scene selection: tools/extract/plans/airpit.json. Identity is permanent.
         public static readonly ArenaMapDescriptor AirPit = new(

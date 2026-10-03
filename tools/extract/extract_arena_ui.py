@@ -5,7 +5,7 @@ Mirrors `extract_arena_audio.py`'s shape and rules exactly, for a different asse
 extracts a curated set of Arena's own 2D UI sprites/textures (killfeed icons, a K/D/A glyph triplet,
 mode-select wordmark logos, kit-class medallion badges, capture-point progress/marker art, scoreboard
 row backgrounds and a team-color palette, and an animated post-match MVP medal) read-only from the
-user's own Arena 0.5.4.0 install, and stages plain RGBA PNGs into ArenaMapPort's own deployed plugin
+user's own Arena install (0.5.4 and 0.6 verified), and stages plain RGBA PNGs into ArenaMapPort's own deployed plugin
 folder so ArenaMode (a separate mod, D:/SPT41/Development/ArenaMode, read-only from here) can optionally
 pick any of it up. ArenaMapPort itself never displays any of this. See docs/progress/arena-ui.md (the
 contract for the staged folder and the ArenaMode integration notes) and
@@ -24,8 +24,9 @@ texture's own height would suggest, and why this is *derived*, never hardcoded).
 the object's own `m_Name` (a `path_id` in the catalog is a drift-detection hint only, logged when it no
 longer matches -- same rule as `extract_arena_audio.py`), except where Arena's own build genuinely reuses
 one name for several distinct sprites (every `mode_logos` name, once per size tier): there,
-`path_id` is required to disambiguate which of the same-named candidates this catalog item means, and a
-still-ambiguous or now-missing hint is a hard failure, never a silent first-match guess.
+the catalog records the reviewed sprite rectangle to identify the intended tier across both builds.
+A changed or ambiguous rectangle is a hard failure; a recycled path ID never overrides it. Older
+custom catalogs without rectangles retain their strict ID disambiguation.
 
 CLI:
     python extract_arena_ui.py                    # extract every group into work/extract/arena-ui
@@ -37,6 +38,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import os
 import re
 import sys
@@ -133,6 +135,12 @@ def load_catalog(path=None) -> dict:
             if item["kind"] == "sprite":
                 _require(isinstance(item.get("name"), str) and item["name"], f"{tag}: sprite item missing 'name'")
                 _require(isinstance(item.get("path_id"), int), f"{tag}: sprite item missing int 'path_id'")
+                if "sprite_rect" in item:
+                    rect = item["sprite_rect"]
+                    _require(isinstance(rect, list) and len(rect) == 4 and all(
+                        type(v) in (int, float) and math.isfinite(v) for v in rect)
+                        and min(rect[:2]) >= 0 and min(rect[2:]) > 0,
+                        f"{tag}: sprite_rect must contain finite x/y and positive width/height")
             else:  # strip_slot
                 strip_ref = item.get("strip")
                 _require(isinstance(strip_ref, dict), f"{tag}: strip_slot item missing 'strip'")
@@ -254,9 +262,19 @@ def _build_name_index(env):
     return index
 
 
-def _resolve(index, type_name, name, path_id_hint, tag):
+def _resolve(index, type_name, name, path_id_hint, tag, sprite_rect=None):
     candidates = index.get((type_name, name), [])
     _require(candidates, f"{tag}: expected {type_name} {name!r} not found")
+    if sprite_rect is not None:
+        # Arena 0.6 changed build-local IDs, including IDs recycled for a different
+        # size tier of the same name. The reviewed rectangle remains stable in both
+        # source generations. Require it even when the old ID happens to exist.
+        _require(type_name == "Sprite", f"{tag}: sprite_rect requires a Sprite")
+        matches = [o for o in candidates if all(math.isclose(a, b, rel_tol=0, abs_tol=0.001)
+                   for a, b in zip(_sprite_geometry(o)[0], sprite_rect))]
+        _require(len(matches) == 1,
+                 f"{tag}: expected one {name!r} sprite with rect {sprite_rect}, found {len(matches)}")
+        candidates = matches
     if len(candidates) == 1:
         obj = candidates[0]
         if path_id_hint is not None and obj.path_id != path_id_hint:
@@ -297,7 +315,7 @@ def _avg_rgba(image):
 
 def extract_sprite_item(index, item, output_dir, arena_source):
     tag = f"{item['group']}/{item['key']}"
-    obj = _resolve(index, "Sprite", item["name"], item.get("path_id"), tag)
+    obj = _resolve(index, "Sprite", item["name"], item.get("path_id"), tag, item.get("sprite_rect"))
     data = obj.read()
     _require(data.m_Name == item["name"],
               f"{tag}: object m_Name drifted to {data.m_Name!r} between indexing and read")

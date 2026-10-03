@@ -7,36 +7,36 @@
     {
       "name": "Arena_AirPit_2.0",
       "asset_path": "Assets/Content/Locations/Arena_AirPit_2.0/Arena_AirPit_2.0.unity",
-      "index": 343
+      "index": 348
     },
     {
       "name": "Arena_AirPit_2.0_Light",
       "asset_path": "Assets/Content/Locations/Arena_AirPit_2.0/Arena_AirPit_2.0_Light.unity",
-      "index": 344
+      "index": 349
     },
     {
       "name": "Arena_AirPit_2.0_DesignStuff",
       "asset_path": "Assets/Content/Locations/Arena_AirPit_2.0/Arena_AirPit_2.0_DesignStuff.unity",
-      "index": 345
+      "index": 350
     },
     {
       "name": "Arena_AirPit_2.0_CheckPoint_DesignStuff",
       "asset_path": "Assets/Content/Locations/Arena_AirPit_2.0/Arena_AirPit_2.0_CheckPoint_DesignStuff.unity",
-      "index": 341
+      "index": 346
     }
   ],
   "anchor_scenes": [
     {
       "name": "Arena_AirPit_2.0_CheckPoint_DesignStuff",
       "asset_path": "Assets/Content/Locations/Arena_AirPit_2.0/Arena_AirPit_2.0_CheckPoint_DesignStuff.unity",
-      "index": 341
+      "index": 346
     }
   ],
   "navmesh_scenes": [
     {
       "name": "Arena_AirPit_2.0_AI",
       "asset_path": "Assets/Content/Locations/Arena_AirPit_2.0/Arena_AirPit_2.0_AI.unity",
-      "index": 347
+      "index": 352
     }
   ],
   "fog_color": [
@@ -48,19 +48,19 @@
     {
       "name": "Arena_AirPit_2.0_Scripts",
       "asset_path": "Assets/Content/Locations/Arena_AirPit_2.0/Arena_AirPit_2.0_Scripts.unity",
-      "index": 342,
+      "index": 347,
       "reason": "Replaced by the freshly authored SPT Scripts scene; source scripts and seasonal runtime objects are not imported."
     },
     {
       "name": "Arena_AirPit_2.0_Sound",
       "asset_path": "Assets/Content/Locations/Arena_AirPit_2.0/Arena_AirPit_2.0_Sound.unity",
-      "index": 346,
+      "index": 351,
       "reason": "Source Arena sound/audio runtime is outside the existing port contract."
     },
     {
       "name": "Arena_AirPit_2.0_AI",
       "asset_path": "Assets/Content/Locations/Arena_AirPit_2.0/Arena_AirPit_2.0_AI.unity",
-      "index": 347,
+      "index": 352,
       "reason": "Source AI/gameplay scene is metadata reference only; port bakes a fresh SPT NavMesh."
     }
   ]

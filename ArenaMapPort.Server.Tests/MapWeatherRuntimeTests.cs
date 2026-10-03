@@ -1,0 +1,242 @@
+#nullable disable
+using System.Runtime.CompilerServices;
+using ArenaMapPort.Client;
+using ArenaMapPort.Shared;
+using BepInEx.Configuration;
+using EFT;
+using EFT.Weather;
+using HarmonyLib;
+using UnityEngine.SceneManagement;
+using Xunit;
+
+namespace ArenaMapPort.Server.Tests
+{
+    // Production prefixes/postfixes against boundary doubles that retain the reviewed native branch
+    // order. Tests assert native execution, backend node identity and initialization side effects;
+    // they do not claim to simulate Unity rendering or the server's weather generator.
+    [Collection("MapPort client lifecycle")]
+    public sealed class MapWeatherRuntimeTests : IDisposable
+    {
+        readonly Harmony _harmony = new("mapport.tests.runtime-time-weather");
+        public MapWeatherRuntimeTests()
+        {
+            SceneManager.Scenes.Clear();
+            EquatorNightNeon.Enabled = EquatorNightNeon.Rain = true;
+            TimeOfDayRepairs.Install(); WeatherTestOverride.Install();
+            Plugin.Instance.Config.Get<bool>("TimeOfDay", "Enabled").Value = true;
+            Plugin.Instance.Config.Get<int>("TimeOfDay", "ArenaFixedHour").Value = 0;
+            SetWeather(WeatherTestOverride.TestWeather.Clear);
+            _harmony.Patch(AccessTools.Method(typeof(LocalGame), nameof(LocalGame.InitWeather)),
+                prefix: new HarmonyMethod(typeof(TimeOfDayRepairs), nameof(TimeOfDayRepairs.Prefix)));
+            _harmony.Patch(AccessTools.Method(typeof(WeatherController), nameof(WeatherController.SetWeatherNodes)),
+                postfix: new HarmonyMethod(typeof(WeatherTestOverride), nameof(WeatherTestOverride.Postfix)));
+        }
+        public void Dispose()
+        {
+            _harmony.UnpatchSelf(); SceneManager.Scenes.Clear();
+            Comfort.Common.Singleton<GameWorld>.Instance = null;
+        }
+        static void SetWeather(WeatherTestOverride.TestWeather weather) =>
+            Plugin.Instance.Config.Get<WeatherTestOverride.TestWeather>("Weather (test)", "Weather").Value = weather;
+        static LocalGame Game(ArenaMapDescriptor map, EDateTime selected)
+        {
+            SceneManager.Scenes.Clear(); SceneManager.Load(new Scene(map.ScriptsSceneName));
+            return new LocalGame { Location = new() { Id = map.Key }, _selectedDateTime = selected };
+        }
+        static TimeAndWeatherSettings RandomSettings => new() { IsRandomTime = true, IsRandomWeather = true };
+        static WeatherNode[] BackendNodes() => new[]
+        {
+            new WeatherNode { Time = DateTime.UtcNow.Ticks, Rain = .2f, Cloudness = -.3f },
+            new WeatherNode { Time = DateTime.UtcNow.AddMinutes(10).Ticks, Rain = .7f, Cloudness = .8f },
+        };
+
+        [Theory]
+        [InlineData(EDateTime.CURR, true, 0)]
+        [InlineData(EDateTime.PAST, true, 23)]
+        [InlineData(EDateTime.CURR, false, 0)]
+        [InlineData(EDateTime.PAST, false, 12)]
+        public void Bay5IgnoresLegacyFixedHourAndUsesSelectedAdvancingBackendTime(EDateTime variant, bool enabled, int legacyHour)
+        {
+            Plugin.Instance.Config.Get<bool>("TimeOfDay", "Enabled").Value = enabled;
+            Plugin.Instance.Config.Get<int>("TimeOfDay", "ArenaFixedHour").Value = legacyHour;
+            var game = Game(ArenaMapRegistry.Bay5, variant);
+            game.InitWeather(RandomSettings);
+            Assert.Equal(1, game.NativeInitializations);
+            Assert.Empty(game._specialTimeResolver);
+            Assert.Equal(game._backendDateTime.Calculate().AddHours(variant == EDateTime.PAST ? 12 : 0), game.GameDateTime.Calculate());
+            Assert.Equal(7f, game.GameDateTime.TimeFactor);
+            Assert.Same(game.GameDateTime, game.SkyClock);
+            Assert.Same(game.GameDateTime, Comfort.Common.Singleton<GameWorld>.Instance.GameDateTime);
+            Assert.False(game.ActualSettings.IsRandomTime);
+            Assert.False(game.ActualSettings.IsRandomWeather);
+            Assert.Null(TimeOfDayRepairs.ActiveFixedHour);
+            var start = game.GameDateTime.Calculate(); game.GameDateTime.ElapsedSeconds += 10;
+            Assert.Equal(start.AddSeconds(70), game.GameDateTime.Calculate());
+            Assert.Equal(enabled, Plugin.Instance.Config.Get<bool>("TimeOfDay", "Enabled").Value);
+            Assert.Equal(legacyHour, Plugin.Instance.Config.Get<int>("TimeOfDay", "ArenaFixedHour").Value);
+        }
+
+        [Theory]
+        [InlineData((int)WeatherTestOverride.TestWeather.Clear)]
+        [InlineData((int)WeatherTestOverride.TestWeather.Rain)]
+        [InlineData((int)WeatherTestOverride.TestWeather.Fog)]
+        [InlineData((int)WeatherTestOverride.TestWeather.Overcast)]
+        public void Bay5PassesThroughEveryBackendResyncDespiteSavedTestWeather(int savedValue)
+        {
+            var saved = (WeatherTestOverride.TestWeather)savedValue;
+            SetWeather(saved); var game = Game(ArenaMapRegistry.Bay5, EDateTime.PAST);
+            game.InitWeather(RandomSettings);
+            var controller = new WeatherController(); var first = BackendNodes(); var second = BackendNodes();
+            controller.SetWeatherNodes(first);
+            Assert.Same(first, controller.Nodes);
+            controller.SetWeatherNodes(second);
+            Assert.Same(second, controller.Nodes);
+            Assert.Equal(2, controller.NodeCalls);
+            Assert.NotEqual(second[0].Rain, second[1].Rain);
+            Assert.Equal(saved, WeatherTestOverride.Mode);
+        }
+
+        [Theory]
+        [InlineData(EDateTime.CURR, 12, 0f)]
+        [InlineData(EDateTime.PAST, 0, 5f)]
+        public void EquatorActualWeatherMatchesSelectedVariantThroughBackendResync(EDateTime variant, int hour, float rain)
+        {
+            SetWeather(WeatherTestOverride.TestWeather.Fog);
+            var game = Game(ArenaMapRegistry.Equator, variant); game.InitWeather(RandomSettings);
+            Assert.Equal(hour, TimeOfDayRepairs.ActiveFixedHour);
+            Assert.Equal(hour, game.GameDateTime.Calculate().Hour);
+            Assert.Equal(1, game.NativeInitializations);
+            Assert.Same(game.GameDateTime, game.SkyClock);
+            var controller = new WeatherController();
+            for (int sync = 0; sync < 2; sync++)
+            {
+                var nodes = BackendNodes(); controller.SetWeatherNodes(nodes);
+                Assert.NotSame(nodes, controller.Nodes);
+                Assert.Equal(rain, controller.Nodes[0].Rain);
+                Assert.Equal(controller.Nodes[0].Rain, controller.Nodes[1].Rain);
+            }
+            Assert.Equal(4, controller.NodeCalls); // one native call plus one guarded replacement per sync
+        }
+
+        [Fact]
+        public void EquatorDayStaysClearAfterItsClockAdvancesAndNightDisabledKeepsSavedFallback()
+        {
+            SetWeather(WeatherTestOverride.TestWeather.Fog);
+            var day = Game(ArenaMapRegistry.Equator, EDateTime.CURR); day.InitWeather(RandomSettings);
+            day.GameDateTime.ElapsedSeconds = 7200; // sky may advance; the selected Day variant owns weather.
+            var controller = new WeatherController(); controller.SetWeatherNodes(BackendNodes());
+            Assert.Equal(0f, controller.Nodes[0].Rain);
+            Assert.Equal(-.5f, controller.Nodes[0].Cloudness);
+            EquatorNightNeon.Enabled = false;
+            var night = Game(ArenaMapRegistry.Equator, EDateTime.PAST); night.InitWeather(RandomSettings);
+            controller.SetWeatherNodes(BackendNodes());
+            Assert.Equal(.15f, controller.Nodes[0].ScaterringFogDensity);
+        }
+
+        [Fact]
+        public void EquatorToBay5ToVanillaClearsFixedStateAndNeverOverridesVanillaWeather()
+        {
+            var eq = Game(ArenaMapRegistry.Equator, EDateTime.PAST); eq.InitWeather(RandomSettings);
+            Assert.Equal(0, TimeOfDayRepairs.ActiveFixedHour);
+            var bay = Game(ArenaMapRegistry.Bay5, EDateTime.PAST); bay.InitWeather(RandomSettings);
+            Assert.Null(TimeOfDayRepairs.ActiveFixedHour);
+            SceneManager.Scenes.Clear();
+            var vanilla = new LocalGame { Location = new() { Id = "bigmap" } }; vanilla.InitWeather(RandomSettings);
+            Assert.True(vanilla.ActualSettings.IsRandomTime);
+            Assert.True(vanilla.ActualSettings.IsRandomWeather);
+            var nodes = BackendNodes(); var controller = new WeatherController(); controller.SetWeatherNodes(nodes);
+            Assert.Same(nodes, controller.Nodes);
+            Assert.Equal(1, controller.NodeCalls);
+        }
+
+        [Fact]
+        public void OwnedFailureClearsReentryGuardAndSubsequentWeatherStillWorks()
+        {
+            var game = Game(ArenaMapRegistry.Equator, EDateTime.CURR); game.InitWeather(RandomSettings);
+            var controller = new WeatherController { FailOnCall = 2 };
+            controller.SetWeatherNodes(BackendNodes()); // replacement throws; production finally must clear.
+            controller.SetWeatherNodes(BackendNodes());
+            Assert.Equal(4, controller.NodeCalls);
+            Assert.Equal(-.5f, controller.Nodes[0].Cloudness);
+        }
+    }
+}
+
+namespace ArenaMapPort.Client
+{
+    internal sealed class TestPluginInstance { internal readonly ConfigFile Config = new(); }
+}
+namespace BepInEx.Configuration
+{
+    public sealed class ConfigEntry<T> { public T Value; public ConfigEntry(T value) => Value = value; }
+    public sealed class ConfigDescription { public ConfigDescription(string description, object range = null, params object[] tags) { } }
+    public sealed class AcceptableValueRange<T> { public AcceptableValueRange(T min, T max) { } }
+    public sealed class ConfigFile
+    {
+        readonly Dictionary<(string, string), object> _entries = new();
+        public ConfigEntry<T> Bind<T>(string section, string key, T value, object description)
+        {
+            if (!_entries.ContainsKey((section, key))) _entries[(section, key)] = new ConfigEntry<T>(value);
+            return Get<T>(section, key);
+        }
+        public ConfigEntry<T> Get<T>(string section, string key) => (ConfigEntry<T>)_entries[(section, key)];
+    }
+}
+namespace EFT
+{
+    public struct TimeAndWeatherSettings { public bool IsRandomTime, IsRandomWeather; }
+    public sealed class EftGamePlayerOwner { }
+    public sealed class GameDateTime
+    {
+        public DateTime StatedGameDateTime = new(2026, 10, 3, 4, 18, 53);
+        public float TimeFactor = 7f, ElapsedSeconds;
+        public DateTime Calculate() => StatedGameDateTime.AddSeconds(ElapsedSeconds * TimeFactor);
+    }
+    public sealed class GameWorld { public GameDateTime GameDateTime; }
+    public class BaseLocalGame<T>
+    {
+        public Dictionary<string, DateTime> _specialTimeResolver = new();
+        public GameDateTime _backendDateTime = new();
+        public EDateTime _selectedDateTime;
+    }
+    public sealed class LocalGame : BaseLocalGame<EftGamePlayerOwner>
+    {
+        public JsonType.LocationSettings.Location Location;
+        public GameDateTime GameDateTime, SkyClock;
+        public TimeAndWeatherSettings ActualSettings;
+        public int NativeInitializations;
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        public void InitWeather(TimeAndWeatherSettings timeAndWeather)
+        {
+            NativeInitializations++; ActualSettings = timeAndWeather;
+            DateTime time;
+            if (timeAndWeather.IsRandomTime) time = new DateTime(2016, 4, 30, 9, 33, 0);
+            else if (!_specialTimeResolver.TryGetValue(Location.Id, out time))
+                time = _backendDateTime.Calculate().AddHours(_selectedDateTime == EDateTime.CURR ? 0 : 12);
+            GameDateTime = new GameDateTime { StatedGameDateTime = time, TimeFactor = _backendDateTime.TimeFactor };
+            Comfort.Common.Singleton<GameWorld>.Instance = new GameWorld { GameDateTime = GameDateTime };
+            SkyClock = GameDateTime;
+        }
+    }
+}
+namespace EFT.Weather
+{
+    public sealed partial class WeatherController
+    {
+        public WeatherNode[] Nodes;
+        public int NodeCalls, FailOnCall;
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        public void SetWeatherNodes(WeatherNode[] nodes)
+        {
+            if (++NodeCalls == FailOnCall) throw new InvalidOperationException("Injected weather initialization failure");
+            Nodes = nodes;
+        }
+    }
+    public struct WeatherNode
+    {
+        public long Time;
+        public float Cloudness, Wind, WindDirection, Rain, RainRandomness, ScaterringFogDensity,
+            Temperature, AtmospherePressure, LyingWater;
+        public static WeatherNode CreateDefault() => new();
+    }
+}
