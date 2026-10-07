@@ -12,6 +12,17 @@ times twelve hours apart, with a progressing day/night cycle and dynamic backend
 weather. Legacy fixed-hour/test-weather settings do not override Bay5.
 See [time/weather verification](docs/progress/map-weather-restoration.md).
 
+**Equator profiles.** The same 12:00/00:00 selection now chooses independent
+day/night appearance settings. F12 exposes `Lighting (arena_equator Day)` and
+`Lighting (arena_equator Night)`, with corresponding `LightingLab` and `Bots`
+sections. Day starts from the accepted realistic defaults; Night retains the
+GPU test installation's tuning captured on 2026-10-07. SAIN uses `Factory` by day
+and `FactoryNight` at night. Shared geometry, repair and audio options remain
+in the original Equator sections. Existing legacy values remain saved and hidden;
+changing a profile does not rewrite the other profile. The physical map ID,
+ArenaMode integration and DynamicMaps map stay `arena_equator`.
+See [profile implementation and verification](docs/progress/equator-profiles.md).
+
 **Arena source update (2026-10-03).** Exporters now support the installed Arena
 0.6.0.47752 / Unity 6000.3.6f1 source. Updated art selectors and seven scene plans
 pass current-source checks; fresh Equator/Bay5 exports validate successfully.
@@ -24,12 +35,16 @@ The registry contains Equator and Bay5 plus 12 additional source-backed map defi
 
 **Equator and Bay5.** Both maps have four player starts, ten separate bot markers and two ordinary test exits. Both are integrated with the user's ArenaMode for individual Deathmatch and Gun Game; Tactical and team modes are excluded. Native tests have verified mode admission, bot replenishment, combat respawns and protected profile return. See [Equator acceptance](docs/progress/equator-arenamode-integration.md) and [Bay5 integration](docs/progress/bay5-arenamode-integration.md). The latter separates the first native pass from subsequent geometry and exit corrections. The remaining twelve maps still await their gameplay integration and first native acceptance.
 
-**Equator reflections.** F12 → maschine-ArenaMapPort → Lighting (arena_equator) → `ReflectiveSpecularCap` sets a map-wide ceiling on `p0/Reflective` materials, including uncovered props and mesh decals. Default 30%; 100% restores the input materials. Existing indoor settings remain separate. [Reflection evidence](docs/progress/equator-specular-cap.md) records native A/B views and the repeated-raid camera lifecycle repair.
+**Equator reflections.** F12 → maschine-ArenaMapPort → Lighting (arena_equator Day/Night) → `ReflectiveSpecularCap` sets a map-wide ceiling on `p0/Reflective` materials, including uncovered props and mesh decals. Day defaults to 30%, Night to 100%; 100% restores the input materials. Existing indoor settings remain separate. [Reflection evidence](docs/progress/equator-specular-cap.md) records native A/B views and the repeated-raid camera lifecycle repair.
 
-**Equator light streaks.** F12 → maschine-ArenaMapPort → Lighting (arena_equator): `AnamorphicFlare` restores the thin horizontal streak around bright lamps; `AnamorphicFlareIntensity` defaults to 0.40 and `AnamorphicFlareHDR` is on. This is internal HDR processing, not HDR monitor output. `AmbientIntensity` defaults to 0.5 for deeper shade. Broad glow remains separately adjustable through `BloomThreshold`/`BloomIntensity`. [Native comparison and camera lifecycle checks](docs/progress/equator-anamorphic-hdr.md).
+**Equator light streaks.** F12 → maschine-ArenaMapPort → Lighting (arena_equator Day/Night): `AnamorphicFlare` restores the thin horizontal streak around bright lamps; `AnamorphicFlareIntensity` defaults to 0.40 by day and 0.30 at night and `AnamorphicFlareHDR` is on. This is internal HDR processing, not HDR monitor output. `AmbientIntensity` defaults to 0.5 by day and 4 at night. Broad glow remains separately adjustable through `BloomThreshold`/`BloomIntensity`. [Native comparison and camera lifecycle checks](docs/progress/equator-anamorphic-hdr.md).
 
-**HDR image tuning.** Equator and Bay5 each have live controls in their `Lighting (<map>)` section.
-Bloom defaults are `BloomIntensity=0.35` and `BloomThreshold=2.1`; startup migrates exact old defaults once.
+**HDR image tuning.** Equator has live controls in its separate Day/Night sections;
+Bay5 uses `Lighting (arena_bay5)`. The descriptions and defaults below refer to
+Equator Day. Night uses `BloomThreshold=2`, `ExposureCompensationEV=0.3`,
+`ReflectionIntensity=1`, `IndoorReflectionStrength=1`, `ReflectiveSpecularCap=1`,
+`AmbientIntensity=4` and a custom dark cyan ambient color. Both use
+`BloomIntensity=0.35` and the accepted custom Filmic curve.
 
 | Setting | Default | Effect |
 |---|---|---|
@@ -118,8 +133,8 @@ and [generation/deployment](tools/dynamicmaps/README.md).
 
 **Equator day/night:** the normal map selector offers fixed start times **12:00** and
 **00:00**. Its artificial sun and sun volume turn off at night; `NightSunMultiplier`
-in Equator's Lighting section allows some remaining light (0.1 = 10%, default 0 = off).
-Existing day lighting settings are preserved. Bay5 keeps its existing time behavior.
+in the selected Equator profile allows some remaining light (0.1 = 10%, default 0 = off).
+Each time uses its own saved appearance profile. Bay5 keeps its native time behavior.
 Equator's debug shortcuts still start the day variant. See [native verification](docs/progress/equator-day-night.md).
 
 **Equator neon night (experimental):** choosing **00:00** adds cyan/magenta light
@@ -132,14 +147,14 @@ remain yours. The temporary night PostFX option is described below.
 See [light controls and test evidence](docs/progress/equator-night-lights.md).
 
 The same section now includes independent live atmosphere controls:
-`HazeStrength=0.16` adds moving colored haze around the neon lights and requires
-the game's **Volumetric Light** graphics option; `SmokeDensity=0.65` adds shallow,
+`HazeStrength=0.2398122` adds moving colored haze around the neon lights and requires
+the game's **Volumetric Light** graphics option; `SmokeDensity=1` adds shallow,
 drifting smoke banks. Set either value to 0 to turn that effect off. Both follow
 the existing neon switch and activate only on Equator at **00:00**. The smoke is
 decorative and does not change AI visibility. See [night atmosphere controls and
 verification](docs/progress/equator-night-atmosphere.md).
 
-`DistanceHaze=0.002` adds a subtle cool haze throughout the night map, beginning
+`DistanceHaze=0.01` adds a subtle cool haze throughout the night map, beginning
 beyond 5 metres; 0 disables it. `PostFx=true` temporarily applies the balanced
 Chillwave preset to the night camera. It pauses in the game's settings/preview
 and restores your saved PostFX on exit or disable, without saving the preset over
@@ -159,7 +174,7 @@ left south-sign strip. Their visible emission, illumination and haze change
 together. In the same F12 section, live `FlickerStrength=0.8` leaves 20% brightness
 at the deepest dip; 0 restores steady light and 1 permits complete blackouts.
 Live `FlickerFrequency=1` gives roughly one short burst per 20 seconds per selected
-fixture. It changes the gaps between bursts, not their length; 0 restores steady
+fixture; the captured night recipe defaults to 3. It changes the gaps between bursts, not their length; 0 restores steady
 light. See [selective night flicker](docs/progress/equator-night-flicker.md).
 
 - Repository: `D:/ArenaMapPort`.

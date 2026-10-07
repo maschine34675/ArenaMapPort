@@ -33,21 +33,37 @@ namespace ArenaMapPort.Client
 
         sealed class CurveDrawer
         {
-            readonly string _map, _controlPrefix;
+            readonly string _map, _section, _controlPrefix;
             readonly bool _secondary;
+            readonly Dictionary<string, CurveDrawer> _sectionDrawers = new Dictionary<string, CurveDrawer>();
             readonly string[] _text = new string[3];
             Vector3 _observed;
             bool _initialized;
 
-            internal CurveDrawer(string map, bool secondary)
+            internal CurveDrawer(string map, bool secondary, string section = null)
             {
-                _map = map; _secondary = secondary;
-                _controlPrefix = "ArenaMapPort.Tone." + map + (secondary ? ".Secondary." : ".Primary.");
+                _map = map; _secondary = secondary; _section = section;
+                _controlPrefix = "ArenaMapPort.Tone." + (section ?? map) + (secondary ? ".Secondary." : ".Primary.");
             }
 
             internal void Draw(ConfigEntryBase entry)
             {
                 if (!(entry is ConfigEntry<Vector3> curve) || !Configs.TryGetValue(_map, out var settings)) return;
+                // ConfigurationManager copies this delegate when profile entries are bound. Keep
+                // edit buffers and IMGUI focus names separate for each displayed profile section.
+                // Editing Night while a Day raid is active must still change only the Night tuple.
+                if (_section == null)
+                {
+                    string section = entry.Definition.Section;
+                    if (!_sectionDrawers.TryGetValue(section, out var drawer))
+                        _sectionDrawers[section] = drawer = new CurveDrawer(_map, _secondary, section);
+                    drawer.Draw(entry);
+                    return;
+                }
+                var tone = EquatorProfiles.ForSection(settings.Tone, _section);
+                var customCurve = EquatorProfiles.ForSection(settings.CustomCurve, _section);
+                var primaryCurve = EquatorProfiles.ForSection(settings.Curve, _section);
+                var secondaryCurve = EquatorProfiles.ForSection(settings.SecondaryCurve, _section);
                 var value = curve.Value;
                 for (int axis = 0; axis < 3; axis++)
                     if (!_initialized || !value[axis].Equals(_observed[axis])) _text[axis] = Number(value[axis]);
@@ -60,22 +76,22 @@ namespace ArenaMapPort.Client
                     if (!value.Equals(curve.Value)) curve.Value = value;
                     _observed = value;
 
-                    bool explicitProfile = IsExplicitProfile(settings.Tone.Value);
+                    bool explicitProfile = IsExplicitProfile(tone.Value);
                     if (!_secondary)
                     {
                         bool wasEnabled = GUI.enabled;
                         GUI.enabled = wasEnabled && explicitProfile;
                         try
                         {
-                            string profileName = explicitProfile ? settings.Tone.Value.ToString() : "selected profile";
+                            string profileName = explicitProfile ? tone.Value.ToString() : "selected profile";
                             if (GUILayout.Button(new GUIContent("Use " + profileName + " preset",
                                 "Replace BOTH saved vectors with this profile's native preset and enable TonemapCustomCurve. The standard Reset button resets only this vector to this map's config default.")))
                             {
                                 var preset = new Values();
-                                SetTonePreset(ref preset, settings.Tone.Value);
-                                settings.Curve.Value = preset.Curve;
-                                settings.SecondaryCurve.Value = preset.SecondaryCurve;
-                                settings.CustomCurve.Value = true;
+                                SetTonePreset(ref preset, tone.Value);
+                                primaryCurve.Value = preset.Curve;
+                                secondaryCurve.Value = preset.SecondaryCurve;
+                                customCurve.Value = true;
                                 GUI.FocusControl(null);
                             }
                         }
@@ -84,7 +100,7 @@ namespace ArenaMapPort.Client
                     // Keep one status row in every state so a live toggle or preset click does
                     // not change the layout's control count halfway through an IMGUI event.
                     GUILayout.Label(!explicitProfile ? "Inactive: select Filmic, RomB or ACES." :
-                        settings.CustomCurve.Value ? "Custom curve active." : "Inactive: enable TonemapCustomCurve.");
+                        customCurve.Value ? "Custom curve active." : "Inactive: enable TonemapCustomCurve.");
                 }
                 finally { GUILayout.EndVertical(); }
             }
@@ -301,13 +317,13 @@ namespace ArenaMapPort.Client
                         $"(complete neutral tone tuple moved={moved}; profile={settings.Tone.Value}, custom={settings.CustomCurve.Value})");
                 }
             }
-            settings.Compensation.SettingChanged += RequestSample;
-            settings.Range.SettingChanged += RequestSample;
-            settings.Speed.SettingChanged += RequestSample;
-            settings.Tone.SettingChanged += RequestSample;
-            settings.CustomCurve.SettingChanged += RequestSample;
-            settings.Curve.SettingChanged += RequestSample;
-            settings.SecondaryCurve.SettingChanged += RequestSample;
+            EquatorProfiles.Subscribe(settings.Compensation, RequestSample);
+            EquatorProfiles.Subscribe(settings.Range, RequestSample);
+            EquatorProfiles.Subscribe(settings.Speed, RequestSample);
+            EquatorProfiles.Subscribe(settings.Tone, RequestSample);
+            EquatorProfiles.Subscribe(settings.CustomCurve, RequestSample);
+            EquatorProfiles.Subscribe(settings.Curve, RequestSample);
+            EquatorProfiles.Subscribe(settings.SecondaryCurve, RequestSample);
         }
 
         static void RequestSample(object sender, EventArgs args) => _sampleRequested = true;
@@ -375,9 +391,9 @@ namespace ArenaMapPort.Client
         static Values Adjust(Values value, Settings config, out bool invalid)
         {
             invalid = false;
-            float ev = Setting(config.Compensation.Value, -4f, 4f, 0f, ref invalid);
-            float range = Setting(config.Range.Value, 0.25f, 2f, 1f, ref invalid);
-            float speed = Setting(config.Speed.Value, 0.1f, 4f, 1f, ref invalid);
+            float ev = Setting(EquatorProfiles.Value(config.Compensation), -4f, 4f, 0f, ref invalid);
+            float range = Setting(EquatorProfiles.Value(config.Range), 0.25f, 2f, 1f, ref invalid);
+            float speed = Setting(EquatorProfiles.Value(config.Speed), 0.1f, 4f, 1f, ref invalid);
             if (value.Exposure)
             {
                 if (ev != 0f)
@@ -407,17 +423,17 @@ namespace ArenaMapPort.Client
                     else invalid = true;
                 }
             }
-            var tone = config.Tone.Value;
+            var tone = EquatorProfiles.Value(config.Tone);
             if ((int)tone < (int)ToneProfile.Original || (int)tone > (int)ToneProfile.Off)
             { invalid = true; tone = ToneProfile.Original; }
             if (tone == ToneProfile.Original) return value;
             if (tone == ToneProfile.Off) { value.Tonemap = false; return value; }
             value.Tonemap = true;
             SetTonePreset(ref value, tone);
-            if (config.CustomCurve.Value)
+            if (EquatorProfiles.Value(config.CustomCurve))
             {
-                if (ValidVector(config.Curve.Value) && ValidVector(config.SecondaryCurve.Value))
-                { value.Curve = config.Curve.Value; value.SecondaryCurve = config.SecondaryCurve.Value; }
+                if (ValidVector(EquatorProfiles.Value(config.Curve)) && ValidVector(EquatorProfiles.Value(config.SecondaryCurve)))
+                { value.Curve = EquatorProfiles.Value(config.Curve); value.SecondaryCurve = EquatorProfiles.Value(config.SecondaryCurve); }
                 else invalid = true;
             }
             return value;

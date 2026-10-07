@@ -149,6 +149,8 @@ namespace ArenaMapPort.Client
         {
             ActiveFixedHour = null;
             var location = __instance.Location;
+            EquatorProfiles.ConfirmSelection(location?.Id, SelectedDateTimeField == null
+                ? EDateTime.CURR : (EDateTime)SelectedDateTimeField.GetValue(__instance));
             if (location?.Id == null || !location.Id.StartsWith("arena_", StringComparison.Ordinal))
             {
                 return; // every other map's raid (and the hideout) — untouched

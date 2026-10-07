@@ -40,6 +40,7 @@ namespace ArenaMapPort.Server.Tests
             Plugin.Instance.Config.Get<WeatherTestOverride.TestWeather>("Weather (test)", "Weather").Value = weather;
         static LocalGame Game(ArenaMapDescriptor map, EDateTime selected)
         {
+            EquatorProfiles.BeginLoad(map.Key, selected);
             SceneManager.Scenes.Clear(); SceneManager.Load(new Scene(map.ScriptsSceneName));
             return new LocalGame { Location = new() { Id = map.Key }, _selectedDateTime = selected };
         }
@@ -168,22 +169,97 @@ namespace ArenaMapPort.Client
 }
 namespace BepInEx.Configuration
 {
-    public sealed class ConfigEntry<T> { public T Value; public ConfigEntry(T value) => Value = value; }
-    public sealed class ConfigDescription { public ConfigDescription(string description, object range = null, params object[] tags) { } }
-    public sealed class AcceptableValueRange<T> { public AcceptableValueRange(T min, T max) { } }
-    public sealed class ConfigFile
+    public sealed record ConfigDefinition(string Section, string Key);
+    public abstract class ConfigEntryBase
     {
-        readonly Dictionary<(string, string), object> _entries = new();
+        public ConfigFile ConfigFile { get; }
+        public ConfigDefinition Definition { get; }
+        public ConfigDescription Description { get; }
+        public Type SettingType { get; }
+        public object DefaultValue { get; }
+        public abstract object BoxedValue { get; set; }
+        protected ConfigEntryBase(ConfigFile config, ConfigDefinition definition, Type type, object defaultValue, ConfigDescription description)
+        { ConfigFile = config; Definition = definition; SettingType = type; DefaultValue = defaultValue; Description = description; }
+    }
+    public sealed class ConfigEntry<T> : ConfigEntryBase
+    {
+        T _value;
+        public T Value
+        {
+            get => _value;
+            set
+            {
+                var clamped = Description.AcceptableValues == null ? value : (T)Description.AcceptableValues.Clamp(value);
+                if (EqualityComparer<T>.Default.Equals(_value, clamped)) return;
+                _value = clamped; SettingChanged?.Invoke(this, EventArgs.Empty);
+            }
+        }
+        public override object BoxedValue { get => Value; set => Value = (T)value; }
+        public event EventHandler SettingChanged;
+        public ConfigEntry(ConfigFile config, ConfigDefinition definition, T value, ConfigDescription description)
+            : base(config, definition, typeof(T), value, description) { _value = value; }
+    }
+    public sealed class ConfigDescription
+    {
+        public string Description { get; }
+        public AcceptableValueBase AcceptableValues { get; }
+        public object[] Tags { get; }
+        public ConfigDescription(string description, AcceptableValueBase range = null, params object[] tags)
+        { Description = description; AcceptableValues = range; Tags = tags; }
+    }
+    public abstract class AcceptableValueBase { public abstract object Clamp(object value); }
+    public sealed class AcceptableValueRange<T> : AcceptableValueBase where T : IComparable
+    {
+        readonly T _min, _max;
+        public AcceptableValueRange(T min, T max) { _min = min; _max = max; }
+        public override object Clamp(object value) => ((T)value).CompareTo(_min) < 0 ? _min : ((T)value).CompareTo(_max) > 0 ? _max : value;
+    }
+    public static class TomlTypeConverter
+    {
+        public static T ConvertToValue<T>(string value) => (T)ConvertToValue(value, typeof(T));
+        public static object ConvertToValue(string value, Type type)
+        {
+            if (type.IsEnum) return Enum.Parse(type, value, true);
+            if (type == typeof(UnityEngine.Color))
+            {
+                var bytes = Convert.FromHexString(value);
+                return new UnityEngine.Color(bytes[0] / 255f, bytes[1] / 255f, bytes[2] / 255f, bytes[3] / 255f);
+            }
+            if (type == typeof(UnityEngine.Vector3))
+            {
+                using var json = System.Text.Json.JsonDocument.Parse(value);
+                return new UnityEngine.Vector3(json.RootElement.GetProperty("x").GetSingle(), json.RootElement.GetProperty("y").GetSingle(), json.RootElement.GetProperty("z").GetSingle());
+            }
+            return Convert.ChangeType(value, type, System.Globalization.CultureInfo.InvariantCulture);
+        }
+    }
+    public sealed class ConfigFile : IEnumerable<KeyValuePair<ConfigDefinition, ConfigEntryBase>>
+    {
+        readonly Dictionary<ConfigDefinition, ConfigEntryBase> _entries = new();
         public ConfigEntry<T> Bind<T>(string section, string key, T value, object description)
         {
-            if (!_entries.ContainsKey((section, key))) _entries[(section, key)] = new ConfigEntry<T>(value);
+            var definition = new ConfigDefinition(section, key);
+            if (!_entries.ContainsKey(definition)) _entries[definition] = new ConfigEntry<T>(this, definition, value,
+                description as ConfigDescription ?? new ConfigDescription((string)description));
             return Get<T>(section, key);
         }
-        public ConfigEntry<T> Get<T>(string section, string key) => (ConfigEntry<T>)_entries[(section, key)];
+        public ConfigEntry<T> Get<T>(string section, string key) => (ConfigEntry<T>)_entries[new ConfigDefinition(section, key)];
+        public IEnumerator<KeyValuePair<ConfigDefinition, ConfigEntryBase>> GetEnumerator() => _entries.GetEnumerator();
+        System.Collections.IEnumerator System.Collections.IEnumerable.GetEnumerator() => GetEnumerator();
     }
 }
 namespace EFT
 {
+    public sealed class ClientGameWorld { }
+    public sealed class TarkovApplication
+    {
+        public RaidSettings CurrentRaidSettings;
+        public Action DuringLoad;
+        public Task<ClientGameWorld> LoadResult = Task.FromResult(new ClientGameWorld());
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        public Task<ClientGameWorld> LoadMapAndData()
+        { DuringLoad?.Invoke(); return LoadResult; }
+    }
     public struct TimeAndWeatherSettings { public bool IsRandomTime, IsRandomWeather; }
     public sealed class EftGamePlayerOwner { }
     public sealed class GameDateTime
@@ -218,6 +294,11 @@ namespace EFT
             SkyClock = GameDateTime;
         }
     }
+}
+
+namespace UnityEngine
+{
+    public readonly record struct Vector3(float x, float y, float z);
 }
 namespace EFT.Weather
 {

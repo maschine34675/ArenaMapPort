@@ -34,7 +34,7 @@ namespace ArenaMapPort.Client
             int hidden = 0;
             foreach (var pair in Plugin.Instance.Config)
             {
-                if (!ShouldHide(pair.Key.Section)) continue;
+                if (!ShouldHide(pair.Key.Section) && !EquatorProfiles.IsLegacyDefinition(pair.Key)) continue;
                 try
                 {
                     var entry = pair.Value;
@@ -59,7 +59,7 @@ namespace ArenaMapPort.Client
                 }
             }
 
-            Plugin.Log.LogInfo($"[ArenaMapPort][Config] Hidden {hidden} inactive-map options from F12; " +
+            Plugin.Log.LogInfo($"[ArenaMapPort][Config] Hidden {hidden} inactive-map/legacy-profile options from F12; " +
                 "Equator, Bay5 and shared settings remain available. Saved values are unchanged.");
         }
 

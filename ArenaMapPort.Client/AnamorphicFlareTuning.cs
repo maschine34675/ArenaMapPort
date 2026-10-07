@@ -185,12 +185,12 @@ namespace ArenaMapPort.Client
                 Plugin.Log.LogInfo($"[ArenaMapPort][AnamorphicFlare] config re-seeded to defaults revision 1 " +
                     $"(intensity moved={moved}; intensity={_intensity.Value:0.00})");
             }
-            _enabled.SettingChanged += (_, __) => ApplyToCurrentCamera("setting changed");
-            _hdr.SettingChanged += (_, __) => ApplyToCurrentCamera("setting changed");
-            _intensity.SettingChanged += (_, __) => ApplyToCurrentCamera("setting changed");
-            _length.SettingChanged += (_, __) => ApplyToCurrentCamera("setting changed");
-            _threshold.SettingChanged += (_, __) => ApplyToCurrentCamera("setting changed");
-            _tint.SettingChanged += (_, __) => ApplyToCurrentCamera("setting changed");
+            EquatorProfiles.Subscribe(_enabled, (_, __) => ApplyToCurrentCamera("setting changed"));
+            EquatorProfiles.Subscribe(_hdr, (_, __) => ApplyToCurrentCamera("setting changed"));
+            EquatorProfiles.Subscribe(_intensity, (_, __) => ApplyToCurrentCamera("setting changed"));
+            EquatorProfiles.Subscribe(_length, (_, __) => ApplyToCurrentCamera("setting changed"));
+            EquatorProfiles.Subscribe(_threshold, (_, __) => ApplyToCurrentCamera("setting changed"));
+            EquatorProfiles.Subscribe(_tint, (_, __) => ApplyToCurrentCamera("setting changed"));
         }
 
         static float ClampFinite(float value, float fallback, float maximum)
@@ -210,7 +210,7 @@ namespace ArenaMapPort.Client
             try
             {
                 if (ArenaMapRaid.CurrentMap != ArenaMapRegistry.Equator || _enabled == null || _render == null) return;
-                if (!_enabled.Value) { Release(); return; }
+                if (!EquatorProfiles.Value(_enabled)) { Release(); return; }
                 var camera = CameraManager.Exist ? CameraManager.Instance.Camera : null;
                 if (camera == null) return;
                 BloomAndFlares effect = null;
@@ -228,16 +228,16 @@ namespace ArenaMapPort.Client
                 if (original.Relocate && original.Prism != null && _render != null)
                     BeforeTonemap[original.Prism] = original;
                 effect.lensflares = true;
-                effect.hdr = _hdr.Value ? HDRBloomMode.On : original.Hdr;
+                effect.hdr = EquatorProfiles.Value(_hdr) ? HDRBloomMode.On : original.Hdr;
                 // These form the source and vertical thickness of the stripe, not just its glow.
                 effect.bloomThreshold = 0.77f;
                 effect.sepBlurSpread = 1.89f;
                 effect.bloomBlurIterations = 2;
-                effect.lensflareThreshold = ClampFinite(_threshold.Value, DefaultThreshold, MaximumThreshold);
-                effect.hollyStretchWidth = ClampFinite(_length.Value, DefaultLength, MaximumLength);
+                effect.lensflareThreshold = ClampFinite(EquatorProfiles.Value(_threshold), DefaultThreshold, MaximumThreshold);
+                effect.hollyStretchWidth = ClampFinite(EquatorProfiles.Value(_length), DefaultLength, MaximumLength);
                 effect.hollywoodFlareBlurIterations = 2;
-                effect.lensflareIntensity = _intensity.Value;
-                effect.flareColorA = ClampTint(_tint.Value);
+                effect.lensflareIntensity = EquatorProfiles.Value(_intensity);
+                effect.flareColorA = ClampTint(EquatorProfiles.Value(_tint));
                 if (original.Ultimate != null) original.Ultimate.m_UseAnamorphicFlare = false;
                 Plugin.Log.LogInfo($"[ArenaMapPort][Flare] arena_equator '{camera.name}' ({reason}): " +
                     $"component={effect.GetInstanceID()} enabled={effect.enabled} lensflares={effect.lensflares} " +

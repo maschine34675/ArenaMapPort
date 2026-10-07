@@ -105,20 +105,20 @@ namespace ArenaMapPort.Client
                 }
                 if (entry != null)
                 {
-                    entry.SettingChanged += (_, __) => ReapplyIfLoaded(map);
+                    EquatorProfiles.Subscribe(entry, (_, __) => ReapplyIfLoaded(map));
                 }
                 // §20.2
                 var reflectionEntry = WeatherRig.IndoorReflectionStrengthEntry(map);
                 if (reflectionEntry != null)
                 {
-                    reflectionEntry.SettingChanged += (_, __) => ReapplyIfLoaded(map);
+                    EquatorProfiles.Subscribe(reflectionEntry, (_, __) => ReapplyIfLoaded(map));
                 }
                 var surfaceEntry = WeatherRig.IndoorSurfaceRepairEntry(map);
                 if (surfaceEntry != null) surfaceEntry.SettingChanged += (_, __) => ReclassifyIfLoaded(map);
                 var surfaceGloss = WeatherRig.IndoorSurfaceSmoothnessEntry(map);
-                if (surfaceGloss != null) surfaceGloss.SettingChanged += (_, __) => ReapplyIfLoaded(map);
+                if (surfaceGloss != null) EquatorProfiles.Subscribe(surfaceGloss, (_, __) => ReapplyIfLoaded(map));
                 var surfaceReflection = WeatherRig.IndoorSurfaceReflectionStrengthEntry(map);
-                if (surfaceReflection != null) surfaceReflection.SettingChanged += (_, __) => ReapplyIfLoaded(map);
+                if (surfaceReflection != null) EquatorProfiles.Subscribe(surfaceReflection, (_, __) => ReapplyIfLoaded(map));
                 var glassEntry = WeatherRig.CoverIncludesGlassEntry(map);
                 if (glassEntry != null)
                 {

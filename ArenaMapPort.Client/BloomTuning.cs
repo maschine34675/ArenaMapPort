@@ -56,8 +56,8 @@ namespace ArenaMapPort.Client
                 // Migrate before subscribing: no camera writes during config binding. Unreleased maps
                 // keep their native defaults and do not acquire a bloom migration marker.
                 if (releasedMap) MigrateDefaults(map.Key, section, threshold, intensity);
-                threshold.SettingChanged += (_, __) => ApplyToCurrentCamera("setting changed");
-                intensity.SettingChanged += (_, __) => ApplyToCurrentCamera("setting changed");
+                EquatorProfiles.Subscribe(threshold, (_, __) => ApplyToCurrentCamera("setting changed"));
+                EquatorProfiles.Subscribe(intensity, (_, __) => ApplyToCurrentCamera("setting changed"));
                 _entries[map.Key] = (threshold, intensity);
             }
 
@@ -103,7 +103,7 @@ namespace ArenaMapPort.Client
 
                 if (!_originals.TryGetValue(bloom, out var original))
                 {
-                    if (entry.threshold.Value < 0f && entry.intensity.Value < 0f)
+                    if (EquatorProfiles.Value(entry.threshold) < 0f && EquatorProfiles.Value(entry.intensity) < 0f)
                     {
                         return; // nothing overridden and nothing to restore on this camera
                     }
@@ -112,8 +112,8 @@ namespace ArenaMapPort.Client
                 }
 
                 var before = (threshold: bloom.m_BloomThreshhold, intensity: bloom.m_BloomIntensity);
-                bloom.m_BloomThreshhold = entry.threshold.Value >= 0f ? entry.threshold.Value : original.threshold;
-                bloom.m_BloomIntensity = entry.intensity.Value >= 0f ? entry.intensity.Value : original.intensity;
+                bloom.m_BloomThreshhold = EquatorProfiles.Value(entry.threshold) >= 0f ? EquatorProfiles.Value(entry.threshold) : original.threshold;
+                bloom.m_BloomIntensity = EquatorProfiles.Value(entry.intensity) >= 0f ? EquatorProfiles.Value(entry.intensity) : original.intensity;
                 if (before.threshold != bloom.m_BloomThreshhold || before.intensity != bloom.m_BloomIntensity)
                 {
                     Plugin.Log.LogInfo($"{Tag} {map.Key} '{cam.name}' ({reason}): " +

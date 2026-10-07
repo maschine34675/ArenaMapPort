@@ -39,7 +39,7 @@ namespace ArenaMapPort.Client
 
         internal static void Install(Harmony harmony, EventHandler changed)
         {
-            _density = Plugin.Instance.Config.Bind("Night neon (arena_equator)", "DistanceHaze", .002f,
+            _density = Plugin.Instance.Config.Bind("Night neon (arena_equator)", "DistanceHaze", EquatorProfiles.NightDefault("DistanceHaze", .002f),
                 new ConfigDescription("Cool, subtle distance haze throughout Equator at 00:00. " +
                     "0 = off; 0.002 is subtle. Starts beyond 5 metres, independent of the night sky. " +
                     "Separate from local light cones and smoke banks. Live.",

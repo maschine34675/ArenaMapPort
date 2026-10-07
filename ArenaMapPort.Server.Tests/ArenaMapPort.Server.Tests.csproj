@@ -31,6 +31,10 @@
     <Compile Include="..\ArenaMapPort.Client\FixedRaidTimeSelection.cs" Link="Client\FixedRaidTimeSelection.cs" />
     <Compile Include="..\ArenaMapPort.Client\TimeOfDayRepairs.cs" Link="Client\TimeOfDayRepairs.cs" />
     <Compile Include="..\ArenaMapPort.Client\WeatherTestOverride.cs" Link="Client\WeatherTestOverride.cs" />
+    <Compile Include="..\ArenaMapPort.Client\EquatorProfiles.cs" Link="Client\EquatorProfiles.cs" />
+    <Compile Include="..\ArenaMapPort.Client\EquatorProfileDefaults.cs" Link="Client\EquatorProfileDefaults.cs" />
+    <Compile Include="..\ArenaMapPort.Client\MapConfigVisibility.cs" Link="Client\MapConfigVisibility.cs" />
+    <Compile Include="..\ArenaMapPort.Client\SainLocationShim.cs" Link="Client\SainLocationShim.cs" />
   </ItemGroup>
 
   <!--

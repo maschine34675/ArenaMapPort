@@ -50,10 +50,10 @@ namespace ArenaMapPort.Client
                         "1 preserves the original. Does not scale world/character highlights or ambient light.",
                         new AcceptableValueRange<float>(0f, 1f)));
                 Configs.Add(map.Key, config);
-                config.SettingChanged += (_, __) =>
+                EquatorProfiles.Subscribe(config, (_, __) =>
                 {
                     if (_raid?.Map == map && IsCurrent(_raid)) ApplySafely(_raid, "setting changed");
-                };
+                });
             }
             SceneManager.sceneLoaded += OnSceneLoaded;
             SceneManager.sceneUnloaded += OnSceneUnloaded;
@@ -121,7 +121,7 @@ namespace ArenaMapPort.Client
                                 OriginalMax = source.HighlightMaxMultiplier, LastMax = source.HighlightMaxMultiplier });
                         }
                 }
-                float multiplier = Configs[raid.Map.Key].Value;
+                float multiplier = EquatorProfiles.Value(Configs[raid.Map.Key]);
                 int changed = Apply(raid, multiplier);
                 Plugin.Log.LogInfo($"[ArenaMapPort][HandsHighlight] map={raid.Map.Key} {reason}: " +
                     $"captured={raid.Highlights.Count}, scale={multiplier:0.00}, fieldsChanged={changed}");

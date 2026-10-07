@@ -340,22 +340,22 @@ namespace ArenaMapPort.Client
                     "(TOD_Sky) is active for this map.",
                     new AcceptableValueRange<float>(0f, 4f)));
 
-            cfg.AmbientPresetEntry.SettingChanged += (_, __) => ReapplyIfLoaded(map, (m, c, s) => ApplyAmbient(m, c, s));
-            cfg.AmbientCustomColor.SettingChanged += (_, __) => ReapplyIfLoaded(map, (m, c, s) => ApplyAmbient(m, c, s));
-            cfg.ReflectionPresetEntry.SettingChanged += (_, __) => ReapplyIfLoaded(map, (m, c, s) => ApplyReflectionPreset(m, c, s));
-            cfg.SSRFactorOverride.SettingChanged += (_, __) => ReapplyIfLoaded(map, (m, c, s) => ApplySSRFactor(m, c, s));
-            cfg.WaterLevelOverrideEnabled.SettingChanged += (_, __) => ReapplyIfLoaded(map, (m, c, s) => ApplyWetness(m, c));
-            cfg.WaterLevelOverrideValue.SettingChanged += (_, __) => ReapplyIfLoaded(map, (m, c, s) => ApplyWetness(m, c));
-            cfg.RainOff.SettingChanged += (_, __) => ReapplyIfLoaded(map, (m, c, s) => ApplyWetness(m, c));
-            cfg.GroundSmoothnessMultiplier.SettingChanged += (_, __) => ReapplyIfLoaded(map, (m, c, s) => ReapplyGroundSmoothness(m, c, s));
+            EquatorProfiles.Subscribe(cfg.AmbientPresetEntry, (_, __) => ReapplyIfLoaded(map, (m, c, s) => ApplyAmbient(m, c, s)));
+            EquatorProfiles.Subscribe(cfg.AmbientCustomColor, (_, __) => ReapplyIfLoaded(map, (m, c, s) => ApplyAmbient(m, c, s)));
+            EquatorProfiles.Subscribe(cfg.ReflectionPresetEntry, (_, __) => ReapplyIfLoaded(map, (m, c, s) => ApplyReflectionPreset(m, c, s)));
+            EquatorProfiles.Subscribe(cfg.SSRFactorOverride, (_, __) => ReapplyIfLoaded(map, (m, c, s) => ApplySSRFactor(m, c, s)));
+            EquatorProfiles.Subscribe(cfg.WaterLevelOverrideEnabled, (_, __) => ReapplyIfLoaded(map, (m, c, s) => ApplyWetness(m, c)));
+            EquatorProfiles.Subscribe(cfg.WaterLevelOverrideValue, (_, __) => ReapplyIfLoaded(map, (m, c, s) => ApplyWetness(m, c)));
+            EquatorProfiles.Subscribe(cfg.RainOff, (_, __) => ReapplyIfLoaded(map, (m, c, s) => ApplyWetness(m, c)));
+            EquatorProfiles.Subscribe(cfg.GroundSmoothnessMultiplier, (_, __) => ReapplyIfLoaded(map, (m, c, s) => ReapplyGroundSmoothness(m, c, s)));
             // The per-map base value lives in WeatherRig's "Lighting (<key>)" section (bound before this
             // Install runs, see Plugin.cs order); a live edit of it re-applies through the same path.
             var baseEntry = WeatherRig.GroundSmoothnessBaseEntry(map);
             if (baseEntry != null)
             {
-                baseEntry.SettingChanged += (_, __) => ReapplyIfLoaded(map, (m, c, s) => ReapplyGroundSmoothness(m, c, s));
+                EquatorProfiles.Subscribe(baseEntry, (_, __) => ReapplyIfLoaded(map, (m, c, s) => ReapplyGroundSmoothness(m, c, s)));
             }
-            cfg.SunIntensityMultiplier.SettingChanged += (_, __) => ReapplyIfLoaded(map, (m, c, s) => ApplySunIntensity(m, c, s));
+            EquatorProfiles.Subscribe(cfg.SunIntensityMultiplier, (_, __) => ReapplyIfLoaded(map, (m, c, s) => ApplySunIntensity(m, c, s)));
 
             return cfg;
         }
@@ -521,7 +521,7 @@ namespace ArenaMapPort.Client
                 state.AmbientBaselineCaptured = true;
             }
 
-            var preset = cfg.AmbientPresetEntry.Value;
+            var preset = EquatorProfiles.Value(cfg.AmbientPresetEntry);
             if (preset == AmbientPreset.Off && !state.AmbientOverrideApplied)
             {
                 return; // true no-op path — nothing has ever diverged from baseline this raid, nothing to write
@@ -541,7 +541,7 @@ namespace ArenaMapPort.Client
                     intensity = 1f;
                     break;
                 case AmbientPreset.Custom:
-                    sky = equator = ground = cfg.AmbientCustomColor.Value;
+                    sky = equator = ground = EquatorProfiles.Value(cfg.AmbientCustomColor);
                     intensity = 1f; // Flat ambient uses the colors; preserve the authored intensity baseline.
                     break;
                 default: // Off, but AmbientOverrideApplied — restore this raid's own captured baseline
@@ -598,7 +598,7 @@ namespace ArenaMapPort.Client
         static void ApplyReflectionPreset(ArenaMapDescriptor map, LabConfigBundle cfg, LabState state)
         {
             var ambient = WeatherRig.ActiveRig?.Controller?.TimeOfDayController?.AmbientLightScript;
-            var preset = cfg.ReflectionPresetEntry.Value;
+            var preset = EquatorProfiles.Value(cfg.ReflectionPresetEntry);
 
             if (ambient != null)
             {
@@ -670,7 +670,7 @@ namespace ArenaMapPort.Client
                 return;
             }
 
-            switch (cfg.ReflectionPresetEntry.Value)
+            switch (EquatorProfiles.Value(cfg.ReflectionPresetEntry))
             {
                 case ReflectionPreset.Black:
                     if (state.BlackCube != null)
@@ -699,7 +699,7 @@ namespace ArenaMapPort.Client
                 state.BaseSsrFactor = Shader.GetGlobalFloat(_ssrFactorId);
                 state.SsrBaselineCaptured = true;
             }
-            float value = cfg.SSRFactorOverride.Value;
+            float value = EquatorProfiles.Value(cfg.SSRFactorOverride);
             float before = Shader.GetGlobalFloat(_ssrFactorId);
             if (Mathf.Approximately(before, value))
             {
@@ -716,11 +716,11 @@ namespace ArenaMapPort.Client
         // ---------------------------------------------------------------------------------------------
         static void ApplyWetness(ArenaMapDescriptor map, LabConfigBundle cfg)
         {
-            string waterLevel = cfg.WaterLevelOverrideEnabled.Value
-                ? cfg.WaterLevelOverrideValue.Value.ToString("0.00")
+            string waterLevel = EquatorProfiles.Value(cfg.WaterLevelOverrideEnabled)
+                ? EquatorProfiles.Value(cfg.WaterLevelOverrideValue).ToString("0.00")
                 : "off";
             Plugin.Log.LogInfo($"[ArenaMapPort][LightingLab] D: WaterLevel override={waterLevel} " +
-                $"RainOff={cfg.RainOff.Value} (map={map.Key})");
+                $"RainOff={EquatorProfiles.Value(cfg.RainOff)} (map={map.Key})");
         }
 
         // Harmony postfix target — HarmonyPatches.InstallLightingLabWaterLevelOverride.
@@ -737,19 +737,19 @@ namespace ArenaMapPort.Client
             {
                 return;
             }
-            if (cfg.RainOff.Value)
+            if (EquatorProfiles.Value(cfg.RainOff))
             {
                 Shader.SetGlobalFloat(_waterLevelId, 0f);
                 return;
             }
-            if (cfg.WaterLevelOverrideEnabled.Value)
+            if (EquatorProfiles.Value(cfg.WaterLevelOverrideEnabled))
             {
-                Shader.SetGlobalFloat(_waterLevelId, cfg.WaterLevelOverrideValue.Value);
+                Shader.SetGlobalFloat(_waterLevelId, EquatorProfiles.Value(cfg.WaterLevelOverrideValue));
             }
         }
 
         // Read by RainWetnessRepairs.Postfix's own added RainOff check.
-        internal static bool IsRainOffForCurrentMap() => _activeCfg != null && _activeCfg.RainOff.Value;
+        internal static bool IsRainOffForCurrentMap() => _activeCfg != null && EquatorProfiles.Value(_activeCfg.RainOff);
 
         // ---------------------------------------------------------------------------------------------
         // E — GroundSmoothnessLive.
@@ -774,7 +774,7 @@ namespace ArenaMapPort.Client
                 {
                     // Reads the multiplier LIVE (not the value captured when this coroutine was scheduled)
                     // so a config edit made during the 5s delay still takes effect on the first scan.
-                    ScanGroundMaterials(map, state, cfg.GroundSmoothnessMultiplier.Value * WeatherRig.GroundSmoothnessBaseForCurrentMap());
+                    ScanGroundMaterials(map, state, EquatorProfiles.Value(cfg.GroundSmoothnessMultiplier) * WeatherRig.GroundSmoothnessBaseForCurrentMap());
                 }
                 catch (Exception e)
                 {
@@ -960,7 +960,7 @@ namespace ArenaMapPort.Client
                         // the multiplier live once it does run
             }
             using var specularScope = ReflectiveSpecularRepairs.Suspend(map);
-            float multiplier = cfg.GroundSmoothnessMultiplier.Value * WeatherRig.GroundSmoothnessBaseForCurrentMap();
+            float multiplier = EquatorProfiles.Value(cfg.GroundSmoothnessMultiplier) * WeatherRig.GroundSmoothnessBaseForCurrentMap();
             foreach (var entry in state.GroundMaterials.Values)
             {
                 if (entry.Material == null)
@@ -992,7 +992,7 @@ namespace ArenaMapPort.Client
                 state.SunBaselineCaptured = true;
             }
 
-            float multiplier = cfg.SunIntensityMultiplier.Value;
+            float multiplier = EquatorProfiles.Value(cfg.SunIntensityMultiplier);
             float newDay = state.BaseDayLightIntensity * multiplier;
             float newNight = state.BaseNightLightIntensity * multiplier;
             if (Mathf.Approximately(sky.Day.LightIntensity, newDay) && Mathf.Approximately(sky.Night.LightIntensity, newNight))
@@ -1051,22 +1051,22 @@ namespace ArenaMapPort.Client
                 var sb = new StringBuilder();
                 sb.AppendLine($"[ArenaMapPort][LightingLab][Snapshot] ==== {map.Key} ====");
                 sb.AppendLine($"  camera: {camInfo}");
-                sb.AppendLine($"  A UnityAmbient: preset={cfg.AmbientPresetEntry.Value} " +
-                    $"customColor={cfg.AmbientCustomColor.Value}");
-                sb.AppendLine($"  B GlobalReflection: preset={cfg.ReflectionPresetEntry.Value}");
-                sb.AppendLine($"  C SSRFactor: configured={cfg.SSRFactorOverride.Value:0.00} " +
+                sb.AppendLine($"  A UnityAmbient: preset={EquatorProfiles.Value(cfg.AmbientPresetEntry)} " +
+                    $"customColor={EquatorProfiles.Value(cfg.AmbientCustomColor)}");
+                sb.AppendLine($"  B GlobalReflection: preset={EquatorProfiles.Value(cfg.ReflectionPresetEntry)}");
+                sb.AppendLine($"  C SSRFactor: configured={EquatorProfiles.Value(cfg.SSRFactorOverride):0.00} " +
                     $"live={Shader.GetGlobalFloat(_ssrFactorId):0.00}");
-                sb.AppendLine($"  D Wetness: WaterLevelOverrideEnabled={cfg.WaterLevelOverrideEnabled.Value} " +
-                    $"WaterLevelOverrideValue={cfg.WaterLevelOverrideValue.Value:0.00} RainOff={cfg.RainOff.Value} " +
+                sb.AppendLine($"  D Wetness: WaterLevelOverrideEnabled={EquatorProfiles.Value(cfg.WaterLevelOverrideEnabled)} " +
+                    $"WaterLevelOverrideValue={EquatorProfiles.Value(cfg.WaterLevelOverrideValue):0.00} RainOff={EquatorProfiles.Value(cfg.RainOff)} " +
                     $"live _WaterLevel={Shader.GetGlobalFloat(_waterLevelId):0.00} " +
                     $"live _SurfaceWetIntensity={Shader.GetGlobalFloat(_surfaceWetIntensityId):0.00}");
                 sb.AppendLine($"  B2 Lighting.ReflectionIntensity: scale={WeatherRig.ReflectionIntensityForCurrentMap():0.00}");
                 AppendAmbientIntensitySnapshot(sb, cam);
-                sb.AppendLine($"  E GroundSmoothnessMultiplier: configured={cfg.GroundSmoothnessMultiplier.Value:0.00} " +
+                sb.AppendLine($"  E GroundSmoothnessMultiplier: configured={EquatorProfiles.Value(cfg.GroundSmoothnessMultiplier):0.00} " +
                     $"base(Lighting.GroundSmoothness)={WeatherRig.GroundSmoothnessBaseForCurrentMap():0.00} " +
-                    $"effective={cfg.GroundSmoothnessMultiplier.Value * WeatherRig.GroundSmoothnessBaseForCurrentMap():0.00} " +
+                    $"effective={EquatorProfiles.Value(cfg.GroundSmoothnessMultiplier) * WeatherRig.GroundSmoothnessBaseForCurrentMap():0.00} " +
                     $"cachedMaterials={(state != null ? state.GroundMaterials.Count : 0)}");
-                sb.AppendLine($"  F SunIntensityMultiplier: configured={cfg.SunIntensityMultiplier.Value:0.00}");
+                sb.AppendLine($"  F SunIntensityMultiplier: configured={EquatorProfiles.Value(cfg.SunIntensityMultiplier):0.00}");
                 sb.AppendLine($"  RenderSettings: ambientMode={RenderSettings.ambientMode} " +
                     $"ambientLight={Fmt(RenderSettings.ambientLight)} ambientIntensity={RenderSettings.ambientIntensity:0.00} " +
                     $"ambientEquatorColor={Fmt(RenderSettings.ambientEquatorColor)} " +

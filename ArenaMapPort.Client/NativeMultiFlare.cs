@@ -88,7 +88,7 @@ namespace ArenaMapPort.Client
                 try
                 {
                     if (Map == null) return;
-                    if (!Enabled[Map.Key].Value) { Stop(); _failed = false; return; }
+                    if (!EquatorProfiles.Value(Enabled[Map.Key])) { Stop(); _failed = false; return; }
                     if (_failed) return;
                     var manager = CameraManager.Exist ? CameraManager.Instance : null;
                     if (_renderer == null)
@@ -107,7 +107,7 @@ namespace ArenaMapPort.Client
                         var data = _storage._lights[i];
                         // Always derive from the source value: repeated live edits must not compound.
                         // Native blindness protection remains a separate multiplier on each batch.
-                        data.Alpha = lamp.OriginalAlpha * Intensity[Map.Key].Value;
+                        data.Alpha = lamp.OriginalAlpha * EquatorProfiles.Value(Intensity[Map.Key]);
                         data.Enabled = (lamp.Original == null || lamp.Original.gameObject.activeInHierarchy) &&
                             _cameras.Any(c => (c.transform.position - lamp.Position.position).sqrMagnitude <= lamp.CullDistance * lamp.CullDistance);
                         _storage._lights[i] = data;
@@ -204,7 +204,7 @@ namespace ArenaMapPort.Client
                         OriginalAlpha = F(light["total_alpha"]) };
                     Require(lamp.CullDistance > 0, "invalid cull distance");
                     _lamps.Add(lamp);
-                    _storage._lights.Add(new FlareLightData { Alpha = lamp.OriginalAlpha * Intensity[Map.Key].Value,
+                    _storage._lights.Add(new FlareLightData { Alpha = lamp.OriginalAlpha * EquatorProfiles.Value(Intensity[Map.Key]),
                         Scale = F(light["total_scale"]), Enabled = true, WorldPos = parent.position });
                     _storage._transforms.Add(parent);
                     foreach (var item in (JArray)light["flares"])
@@ -351,7 +351,7 @@ namespace ArenaMapPort.Client
                 if (_renderer == null) { Plugin.Log.LogInfo($"{Tag} {Map.Key} enabled=false failed={_failed} global={GlobalState()}"); return; }
                 var camera = _cameras.FirstOrDefault();
                 Plugin.Log.LogInfo($"{Tag} {Map.Key} lights={_lamps.Count} cameras={_cameras.Count} frames={_frames} " +
-                    $"intensity={Intensity[Map.Key].Value:F3} batches={_batchSummary} " +
+                    $"intensity={EquatorProfiles.Value(Intensity[Map.Key]):F3} batches={_batchSummary} " +
                     $"nv={_settings.NormalBatch.IsNvEnabled} global={GlobalState()}");
                 foreach (var l in _lamps.OrderBy(l => camera == null ? 0 : (l.Position.position - camera.transform.position).sqrMagnitude).Take(6))
                     Plugin.Log.LogInfo($"{Tag} lamp={l.Name} pos={l.Position.position.ToString("F3")} distance={(camera == null ? -1 : Vector3.Distance(l.Position.position, camera.transform.position)):F2}");

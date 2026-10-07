@@ -20,8 +20,8 @@ namespace ArenaMapPort.Client
     /// no <c>None</c> key, so SAIN silently skips its location tuning on our maps.
     ///
     /// Fix: a Harmony prefix on the private <c>findLocation()</c> that, while one of our maps is loaded,
-    /// writes the configured stand-in location (<c>[Bots (&lt;key&gt;)] SainLocation</c>, e.g. Interchange for
-    /// the Equator mall) into <c>Location</c>, sets <c>_foundLocation</c>, and skips the original. Vanilla
+    /// writes the configured stand-in location into <c>Location</c>, sets <c>_foundLocation</c>, and skips
+    /// the original. Equator's selected day/night profile defaults to Factory/FactoryNight. Vanilla
     /// maps are untouched (prefix returns true). Every SAIN type/member is resolved by name via
     /// <see cref="AccessTools"/> at install time — no compile-time reference; when SAIN is absent (the
     /// user's vanilla testbed) nothing is patched and a single info line says so.
@@ -35,6 +35,7 @@ namespace ArenaMapPort.Client
         const string FallbackLocation = "Factory";
 
         static readonly Dictionary<string, ConfigEntry<string>> _configs = new Dictionary<string, ConfigEntry<string>>();
+        static ConfigEntry<string> _equatorDay, _equatorNight;
         static MethodInfo _locationSetter;
         static FieldInfo _foundLocation;
         static Type _eLocation;
@@ -61,6 +62,13 @@ namespace ArenaMapPort.Client
                     "Lighthouse, Shoreline, Labs, Woods, Interchange, Terminal, Town, Labyrinth). Only read while " +
                     "SAIN is installed. Takes effect on the next raid.");
             }
+            // Preserve the legacy assignment for recovery; Equator's independent profiles own the
+            // effective aliases now. Config visibility hides the superseded legacy entry.
+            _equatorDay = Plugin.Instance.Config.Bind("Bots (arena_equator Day)", "SainLocation", "Factory",
+                "Vanilla SAIN location used for Equator's 12:00 Day profile. Takes effect on the next raid.");
+            _equatorNight = Plugin.Instance.Config.Bind("Bots (arena_equator Night)", "SainLocation", "FactoryNight",
+                "Vanilla SAIN location used for Equator's 00:00 Night profile. FactoryNight is SAIN's native " +
+                "enum name; Factory_Night is also accepted. Takes effect on the next raid.");
         }
 
         /// <summary>Returns true when the patch was installed (SAIN present and its shape as expected).</summary>
@@ -94,12 +102,10 @@ namespace ArenaMapPort.Client
             }
             foreach (var kv in _configs)
             {
-                if (ParseOrNull(kv.Value.Value) == null)
-                {
-                    Plugin.Log.LogWarning($"[ArenaMapPort][SAIN] [Bots ({kv.Key})] SainLocation='{kv.Value.Value}' is not a SAIN ELocation " +
-                        $"name (valid: {string.Join(", ", Enum.GetNames(_eLocation))}) — {FallbackLocation} will be used for that map.");
-                }
+                if (kv.Key != ArenaMapRegistry.Equator.Key) ValidateEntry(kv.Value);
             }
+            ValidateEntry(_equatorDay);
+            ValidateEntry(_equatorNight);
 
             harmony.Patch(find, prefix: new HarmonyMethod(AccessTools.Method(typeof(SainLocationShim), nameof(FindLocationPrefix))));
             Plugin.Log.LogInfo($"[ArenaMapPort][Harmony] patched {SainLocationClass}.{FindLocationMethod} (bots-stage1 SAIN location shim)");
@@ -114,12 +120,22 @@ namespace ArenaMapPort.Client
             }
             try
             {
-                return Enum.Parse(_eLocation, name.Trim(), ignoreCase: true);
+                name = name.Trim();
+                if (string.Equals(name, "Factory_Night", StringComparison.OrdinalIgnoreCase)) name = "FactoryNight";
+                var parsed = Enum.Parse(_eLocation, name, ignoreCase: true);
+                return Enum.IsDefined(_eLocation, parsed) ? parsed : null;
             }
             catch (ArgumentException)
             {
                 return null;
             }
+        }
+
+        static void ValidateEntry(ConfigEntry<string> entry)
+        {
+            if (ParseOrNull(entry.Value) != null) return;
+            Plugin.Log.LogWarning($"[ArenaMapPort][SAIN] [{entry.Definition.Section}] SainLocation='{entry.Value}' is not a SAIN ELocation " +
+                $"name (valid: {string.Join(", ", Enum.GetNames(_eLocation))}) — {FallbackLocation} will be used for that profile.");
         }
 
         // Harmony prefix — SAIN's findLocation() is private, instance, no parameters, void. SAIN's own body
@@ -137,7 +153,16 @@ namespace ArenaMapPort.Client
                 return false; // already set (by us) — nothing to do this tick
             }
 
-            string wanted = _configs.TryGetValue(map.Key, out var entry) ? entry.Value : FallbackLocation;
+            ConfigEntry<string> entry;
+            if (map.Key == ArenaMapRegistry.Equator.Key)
+            {
+                // Scene callbacks can precede the raid's authoritative selection. Suppress SAIN's
+                // unknown-map spam, but leave its found flag false so the next tick can retry.
+                if (EquatorProfiles.Current == EquatorProfile.None) return false;
+                entry = EquatorProfiles.Current == EquatorProfile.Night ? _equatorNight : _equatorDay;
+            }
+            else _configs.TryGetValue(map.Key, out entry);
+            string wanted = entry?.Value ?? FallbackLocation;
             object value = ParseOrNull(wanted);
             if (value == null)
             {
@@ -162,7 +187,8 @@ namespace ArenaMapPort.Client
             if (_loggedForMap != map.Key)
             {
                 _loggedForMap = map.Key;
-                Plugin.Log.LogInfo($"[ArenaMapPort][SAIN] {map.Key}: SAIN location set to {value} (config [Bots ({map.Key})] SainLocation='{wanted}').");
+                Plugin.Log.LogInfo($"[ArenaMapPort][SAIN] {map.Key}: SAIN location set to {value} " +
+                    $"(config [{entry?.Definition.Section ?? "fallback"}] SainLocation='{wanted}').");
             }
             return false; // skip SAIN's switch (and its per-tick error line)
         }

@@ -37,11 +37,11 @@ namespace ArenaMapPort.Client
         internal static void BindConfig(EventHandler changed)
         {
             const string section = "Night neon (arena_equator)";
-            _haze = Plugin.Instance.Config.Bind(section, "HazeStrength", .16f,
+            _haze = Plugin.Instance.Config.Bind(section, "HazeStrength", EquatorProfiles.NightDefault("HazeStrength", .16f),
                 new ConfigDescription("Visible colored haze in the added neon light cones. 0 = off. " +
                     "Requires the game's Volumetric Light graphics option; does not change that option. Live.",
                     new AcceptableValueRange<float>(0f, 1f)));
-            _smoke = Plugin.Instance.Config.Bind(section, "SmokeDensity", .65f,
+            _smoke = Plugin.Instance.Config.Bind(section, "SmokeDensity", EquatorProfiles.NightDefault("SmokeDensity", .65f),
                 new ConfigDescription("Opacity of slow, shallow smoke banks by the neon columns and TECHLIGHT. " +
                     "0 = off. Decorative particles, without grenade or AI smoke behavior. Live.",
                     new AcceptableValueRange<float>(0f, 2f)));

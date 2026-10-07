@@ -53,10 +53,10 @@ namespace ArenaMapPort.Client
             foreach (var map in ArenaMapRegistry.All)
             {
                 var config = WeatherRig.ReflectiveSpecularCapEntry(map);
-                if (config != null) config.SettingChanged += (_, __) =>
+                if (config != null) EquatorProfiles.Subscribe(config, (_, __) =>
                 {
                     if (_state?.Map == map) Refresh(_state);
-                };
+                });
             }
         }
 

@@ -468,8 +468,8 @@ namespace ArenaMapPort.Client
                 "LevelSettings.RainBounds from this map's own static geometry once per raid. See " +
                 "RainCoverRepairs.cs. Applied fresh every raid, not live.");
 
-            cfg.ReflectionIntensity.SettingChanged += (_, __) => ReapplyReflectionIntensity(map);
-            cfg.AmbientIntensity.SettingChanged += (_, __) => ReapplyAmbientIntensity(map);
+            EquatorProfiles.Subscribe(cfg.ReflectionIntensity, (_, __) => ReapplyReflectionIntensity(map));
+            EquatorProfiles.Subscribe(cfg.AmbientIntensity, (_, __) => ReapplyAmbientIntensity(map));
 
             // §19 — ReflectionIntensity back at 1.0 (§16.2/§17) re-exposes the hall-floor sky-mirror veil
             // this multiplier fixes on a per-renderer basis instead of a global scalar. Non-1.0 default only
@@ -1672,35 +1672,35 @@ namespace ArenaMapPort.Client
         }
 
         internal static bool KeepFillLightForCurrentMap() =>
-            _activeMap != null && _configs.TryGetValue(_activeMap.Key, out var c) && c.KeepFillLight.Value;
+            _activeMap != null && _configs.TryGetValue(_activeMap.Key, out var c) && EquatorProfiles.Value(c.KeepFillLight);
 
         // §12 goal 3 — mirrors KeepFillLightForCurrentMap's own accessor pattern.
         // Base smoothness multiplier for LightingLab's ground-material pass: only while this map's rig is
         // active (without a rig there is no AmbientLight cubemap to mirror), else the authored 1.0.
         internal static float GroundSmoothnessBaseForCurrentMap() =>
-            IsActiveForCurrentMap() && _configs.TryGetValue(_activeMap.Key, out var c) ? c.GroundSmoothnessBase.Value : 1f;
+            IsActiveForCurrentMap() && _configs.TryGetValue(_activeMap.Key, out var c) ? EquatorProfiles.Value(c.GroundSmoothnessBase) : 1f;
 
         internal static BepInEx.Configuration.ConfigEntry<float> GroundSmoothnessBaseEntry(ArenaMapDescriptor map) =>
-            _configs.TryGetValue(map.Key, out var c) ? c.GroundSmoothnessBase : null;
+            _configs.TryGetValue(map.Key, out var c) ? EquatorProfiles.Entry(c.GroundSmoothnessBase) : null;
 
         internal static float ReflectionIntensityForCurrentMap() =>
-            IsActiveForCurrentMap() && _configs.TryGetValue(_activeMap.Key, out var c) ? c.ReflectionIntensity.Value : 1f;
+            IsActiveForCurrentMap() && _configs.TryGetValue(_activeMap.Key, out var c) ? EquatorProfiles.Value(c.ReflectionIntensity) : 1f;
 
         internal static BepInEx.Configuration.ConfigEntry<float> ReflectionIntensityEntry(ArenaMapDescriptor map) =>
-            _configs.TryGetValue(map.Key, out var c) ? c.ReflectionIntensity : null;
+            _configs.TryGetValue(map.Key, out var c) ? EquatorProfiles.Entry(c.ReflectionIntensity) : null;
 
         // §19 — mirrors GroundSmoothnessBaseForCurrentMap/GroundSmoothnessBaseEntry's own pair shape: a
-        // live-read accessor for the classifier/clone-scale path, plus a raw ConfigEntry so
-        // IndoorFloorSmoothnessRepairs.Install() can wire its own SettingChanged (this file never
-        // references that class, same as it never references LightingLab).
+        // live-read accessor for the classifier/clone-scale path, plus the selected ConfigEntry.
+        // Subscribers use EquatorProfiles.Subscribe so both profiles are wired even at startup,
+        // when no raid has selected a variant yet. This file never references the consuming repair.
         internal static float IndoorFloorSmoothnessForCurrentMap() =>
-            IsActiveForCurrentMap() && _configs.TryGetValue(_activeMap.Key, out var c) ? c.IndoorFloorSmoothness.Value : 1f;
+            IsActiveForCurrentMap() && _configs.TryGetValue(_activeMap.Key, out var c) ? EquatorProfiles.Value(c.IndoorFloorSmoothness) : 1f;
 
         internal static BepInEx.Configuration.ConfigEntry<float> IndoorFloorSmoothnessEntry(ArenaMapDescriptor map) =>
-            _configs.TryGetValue(map.Key, out var c) ? c.IndoorFloorSmoothness : null;
+            _configs.TryGetValue(map.Key, out var c) ? EquatorProfiles.Entry(c.IndoorFloorSmoothness) : null;
 
         internal static BepInEx.Configuration.ConfigEntry<float> ReflectiveSpecularCapEntry(ArenaMapDescriptor map) =>
-            _configs.TryGetValue(map.Key, out var c) ? c.ReflectiveSpecularCap : null;
+            _configs.TryGetValue(map.Key, out var c) ? EquatorProfiles.Entry(c.ReflectiveSpecularCap) : null;
 
         internal static int IndoorCoverPercentForCurrentMap() =>
             IsActiveForCurrentMap() && _configs.TryGetValue(_activeMap.Key, out var c) ? c.IndoorCoverPercent.Value : 50;
@@ -1719,23 +1719,23 @@ namespace ArenaMapPort.Client
             _configs.TryGetValue(map.Key, out var c) ? c.CoverIncludesGlass : null;
 
         internal static float IndoorReflectionStrengthForCurrentMap() =>
-            IsActiveForCurrentMap() && _configs.TryGetValue(_activeMap.Key, out var c) ? c.IndoorReflectionStrength.Value : 1f;
+            IsActiveForCurrentMap() && _configs.TryGetValue(_activeMap.Key, out var c) ? EquatorProfiles.Value(c.IndoorReflectionStrength) : 1f;
 
         internal static BepInEx.Configuration.ConfigEntry<float> IndoorReflectionStrengthEntry(ArenaMapDescriptor map) =>
-            _configs.TryGetValue(map.Key, out var c) ? c.IndoorReflectionStrength : null;
+            _configs.TryGetValue(map.Key, out var c) ? EquatorProfiles.Entry(c.IndoorReflectionStrength) : null;
 
         internal static bool IndoorSurfaceRepairForCurrentMap() =>
             IsActiveForCurrentMap() && _configs.TryGetValue(_activeMap.Key, out var c) && c.IndoorSurfaceRepair.Value;
         internal static float IndoorSurfaceSmoothnessForCurrentMap() =>
-            IsActiveForCurrentMap() && _configs.TryGetValue(_activeMap.Key, out var c) ? c.IndoorSurfaceSmoothness.Value : 1f;
+            IsActiveForCurrentMap() && _configs.TryGetValue(_activeMap.Key, out var c) ? EquatorProfiles.Value(c.IndoorSurfaceSmoothness) : 1f;
         internal static float IndoorSurfaceReflectionStrengthForCurrentMap() =>
-            IsActiveForCurrentMap() && _configs.TryGetValue(_activeMap.Key, out var c) ? c.IndoorSurfaceReflectionStrength.Value : 1f;
+            IsActiveForCurrentMap() && _configs.TryGetValue(_activeMap.Key, out var c) ? EquatorProfiles.Value(c.IndoorSurfaceReflectionStrength) : 1f;
         internal static BepInEx.Configuration.ConfigEntry<bool> IndoorSurfaceRepairEntry(ArenaMapDescriptor map) =>
             _configs.TryGetValue(map.Key, out var c) ? c.IndoorSurfaceRepair : null;
         internal static BepInEx.Configuration.ConfigEntry<float> IndoorSurfaceSmoothnessEntry(ArenaMapDescriptor map) =>
-            _configs.TryGetValue(map.Key, out var c) ? c.IndoorSurfaceSmoothness : null;
+            _configs.TryGetValue(map.Key, out var c) ? EquatorProfiles.Entry(c.IndoorSurfaceSmoothness) : null;
         internal static BepInEx.Configuration.ConfigEntry<float> IndoorSurfaceReflectionStrengthEntry(ArenaMapDescriptor map) =>
-            _configs.TryGetValue(map.Key, out var c) ? c.IndoorSurfaceReflectionStrength : null;
+            _configs.TryGetValue(map.Key, out var c) ? EquatorProfiles.Entry(c.IndoorSurfaceReflectionStrength) : null;
 
         static readonly System.Reflection.FieldInfo ScreenAmbientBlockField =
             HarmonyLib.AccessTools.Field(typeof(AmbientLight), "_screenAmbientBlock");
@@ -1784,10 +1784,10 @@ namespace ArenaMapPort.Client
         // AmbientHighlight.SetSH every frame). See AmbientIntensity's own ConfigDescription for the
         // ReflectionIntensity/§16.2 contradiction this knob is independent of but does not resolve.
         internal static float AmbientIntensityForCurrentMap() =>
-            IsActiveForCurrentMap() && _configs.TryGetValue(_activeMap.Key, out var c) ? c.AmbientIntensity.Value : 1f;
+            IsActiveForCurrentMap() && _configs.TryGetValue(_activeMap.Key, out var c) ? EquatorProfiles.Value(c.AmbientIntensity) : 1f;
 
         internal static BepInEx.Configuration.ConfigEntry<float> AmbientIntensityEntry(ArenaMapDescriptor map) =>
-            _configs.TryGetValue(map.Key, out var c) ? c.AmbientIntensity : null;
+            _configs.TryGetValue(map.Key, out var c) ? EquatorProfiles.Entry(c.AmbientIntensity) : null;
 
         // Harmony prefix on AmbientLight.SetSH (HarmonyPatches.InstallAmbientIntensityScale). `ref` mutates
         // the by-value SphericalHarmonicsL2 argument in place before the original method reads it — same

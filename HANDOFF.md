@@ -3,6 +3,31 @@
 Snapshot for whoever continues (human or agent). Verify the commits named here against `git log`; this file
 is updated by hand at each handover, it is not an automatic record. Read [AGENTS.md](AGENTS.md) first.
 
+## State on 2026-10-07 — independent Equator Day/Night profiles
+
+Equator keeps one `arena_equator` identity with 12:00/00:00 selection. Each time
+now has 43 independent appearance controls: `Lighting (arena_equator Day/Night)`
+and `LightingLab (arena_equator Day/Night)`. Day starts from accepted realistic
+source defaults; Night from the user's GPU tuning captured on 2026-10-07. The
+separate Bots sections default to SAIN Factory / FactoryNight (Factory_Night is
+accepted as an input alias). Legacy entries remain saved/hidden. Common repairs,
+audio, geometry, Bay5 native time/weather and ArenaMode/DynamicMaps IDs remain.
+
+Release client build, full regression suite and distribution validation passed,
+with independent parent verification. GPU-2 process `56d3c1e6` passed Day -> Night
+-> Day -> Bay5, including live SAIN aliases, camera values, inactive-profile edits,
+night-neon independence and F12 HDR preset isolation. All temporary edits restored.
+The existing 800 host / 804 vanilla config assignments remain unchanged; host has
+88 additional profile entries, all matching the intended defaults.
+
+Both sanctioned installs received the tested DLL-only build. Client SHA256
+`FB2E8D6D1B5F2B0D12C0D398CFE75E16E704B01BF3853B2CD013F9CB518E0E97`;
+server `85C4E852AC497D84107464944A6BFAE82ABC6B52E8A3E3E6EAE450C19EE987EC`.
+GPU-2 is at MainMenu, 24/24 loaded identities match. Restart vanilla client/server
+to load the update and create its profile entries. Existing texture/LOD warnings
+and one previously documented inactive MenuScreen coroutine error occurred; no
+profile/SAIN/render exception. See [full evidence](docs/progress/equator-profiles.md).
+
 ## State on 2026-10-03 — Arena 0.6 exporters and restored Bay5 weather
 
 **Current policy:** Equator 12:00 always Clear; 00:00 retains optional neon rain.

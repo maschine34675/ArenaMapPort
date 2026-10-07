@@ -100,8 +100,8 @@ namespace ArenaMapPort.Client
             internal ConfigEntry<float> GlobalLightIntensityMultiplier;
             internal ConfigEntry<float> SunIntensityMultiplier;
             internal ConfigEntry<float> SunColorWhiteBlend;
-            internal float SunIntensity => SunIntensityMultiplier?.Value ?? 1f;
-            internal float SunWhiteBlend => SunColorWhiteBlend?.Value ?? 0f;
+            internal float SunIntensity => SunIntensityMultiplier != null ? EquatorProfiles.Value(SunIntensityMultiplier) : 1f;
+            internal float SunWhiteBlend => SunColorWhiteBlend != null ? EquatorProfiles.Value(SunColorWhiteBlend) : 0f;
             internal ConfigEntry<float> FogDensity;
             internal ConfigEntry<float> FillLightIntensity;
             internal ConfigEntry<bool> SyncCullingLightIntensity;
@@ -202,8 +202,8 @@ namespace ArenaMapPort.Client
                         "0 = authored color unchanged, 1 = pure white.",
                         new AcceptableValueRange<float>(0f, 1f)));
 
-                cfg.SunIntensityMultiplier.SettingChanged += (_, __) => ReapplyIfLoaded(map);
-                cfg.SunColorWhiteBlend.SettingChanged += (_, __) => ReapplyIfLoaded(map);
+                EquatorProfiles.Subscribe(cfg.SunIntensityMultiplier, (_, __) => ReapplyIfLoaded(map));
+                EquatorProfiles.Subscribe(cfg.SunColorWhiteBlend, (_, __) => ReapplyIfLoaded(map));
             }
 
             cfg.FogDensity = Plugin.Instance.Config.Bind(section, "FogDensity", 0f,
@@ -228,10 +228,10 @@ namespace ArenaMapPort.Client
                 "keeps applying live.");
 
             cfg.Enabled.SettingChanged += (_, __) => ReapplyIfLoaded(map);
-            cfg.FillLightIntensity.SettingChanged += (_, __) => ReapplyIfLoaded(map);
-            cfg.AmbientColorMultiplier.SettingChanged += (_, __) => ReapplyIfLoaded(map);
-            cfg.GlobalLightIntensityMultiplier.SettingChanged += (_, __) => ReapplyIfLoaded(map);
-            cfg.FogDensity.SettingChanged += (_, __) => ReapplyIfLoaded(map);
+            EquatorProfiles.Subscribe(cfg.FillLightIntensity, (_, __) => ReapplyIfLoaded(map));
+            EquatorProfiles.Subscribe(cfg.AmbientColorMultiplier, (_, __) => ReapplyIfLoaded(map));
+            EquatorProfiles.Subscribe(cfg.GlobalLightIntensityMultiplier, (_, __) => ReapplyIfLoaded(map));
+            EquatorProfiles.Subscribe(cfg.FogDensity, (_, __) => ReapplyIfLoaded(map));
             cfg.SyncCullingLightIntensity.SettingChanged += (_, __) => ReapplyIfLoaded(map);
             if (map.SunPaths.Length > 0)
             {
@@ -240,7 +240,7 @@ namespace ArenaMapPort.Client
                         "1 = original day/night-independent behavior. Follows the actual sky's sun visibility. " +
                         "Affects only the authored fake sun and its volume, not lamps or saved day multipliers. Applies live.",
                         new AcceptableValueRange<float>(0f, 1f)));
-                cfg.NightSunMultiplier.SettingChanged += (_, __) => ReapplyIfLoaded(map);
+                EquatorProfiles.Subscribe(cfg.NightSunMultiplier, (_, __) => ReapplyIfLoaded(map));
             }
 
             return cfg;
@@ -362,10 +362,10 @@ namespace ArenaMapPort.Client
             // Enabled=false applies neutral values instead of returning, so switching it off live
             // restores the authored look rather than freezing the last tuned state.
             bool on = cfg.Enabled.Value;
-            bool levelSettingsFound = ApplyAmbient(state, on ? cfg.AmbientColorMultiplier.Value : 1f, on ? cfg.FogDensity.Value : 0f);
+            bool levelSettingsFound = ApplyAmbient(state, on ? EquatorProfiles.Value(cfg.AmbientColorMultiplier) : 1f, on ? EquatorProfiles.Value(cfg.FogDensity) : 0f);
             int lightsApplied = ApplyLights(
                 state,
-                on ? cfg.GlobalLightIntensityMultiplier.Value : 1f,
+                on ? EquatorProfiles.Value(cfg.GlobalLightIntensityMultiplier) : 1f,
                 on ? cfg.SunIntensity : 1f,
                 on ? cfg.SunWhiteBlend : 0f,
                 cfg.SyncCullingLightIntensity.Value, SunFactor(cfg)); // independent of Enabled — see BindConfig's doc string
@@ -373,7 +373,7 @@ namespace ArenaMapPort.Client
             // weather-rig-stage0: while a WeatherRig clone is active for this raid, its real
             // AmbientLight/_SHAr feeds ambient instead — this fill light becomes redundant (and can
             // visibly double up interior brightness), unless KeepFillLight explicitly asks to keep it.
-            float fillLightIntensity = on ? cfg.FillLightIntensity.Value : 0f;
+            float fillLightIntensity = on ? EquatorProfiles.Value(cfg.FillLightIntensity) : 0f;
             if (on && WeatherRig.IsActiveForCurrentMap() && !WeatherRig.KeepFillLightForCurrentMap())
             {
                 fillLightIntensity = 0f;
@@ -384,10 +384,10 @@ namespace ArenaMapPort.Client
             {
                 Plugin.Log.LogInfo(
                     $"[ArenaMapPort][Lighting] {map.Key} applied (Enabled={on}): LevelSettings-found={levelSettingsFound} " +
-                    $"(ambientColorMultiplier={cfg.AmbientColorMultiplier.Value:0.00}), {lightsApplied} light(s) " +
-                    $"(globalMultiplier={cfg.GlobalLightIntensityMultiplier.Value:0.00}, " +
+                    $"(ambientColorMultiplier={EquatorProfiles.Value(cfg.AmbientColorMultiplier):0.00}), {lightsApplied} light(s) " +
+                    $"(globalMultiplier={EquatorProfiles.Value(cfg.GlobalLightIntensityMultiplier):0.00}, " +
                     $"sunMultiplier={cfg.SunIntensity:0.00}, sunWhiteBlend={cfg.SunWhiteBlend:0.00}), " +
-                    $"fillLight={(fillActive ? cfg.FillLightIntensity.Value.ToString("0.00") : "off")}, fogDensity={cfg.FogDensity.Value:0.000}, " +
+                    $"fillLight={(fillActive ? EquatorProfiles.Value(cfg.FillLightIntensity).ToString("0.00") : "off")}, fogDensity={EquatorProfiles.Value(cfg.FogDensity):0.000}, " +
                     $"syncCullingLightIntensity={cfg.SyncCullingLightIntensity.Value} (cullingLights={_lastCullingLightCount}, " +
                     $"editorIntensityBaselines={_lastEditorIntensityBaselines})");
             }
@@ -583,7 +583,7 @@ namespace ArenaMapPort.Client
             var sky = WeatherRig.IsActiveForCurrentMap() ? WeatherRig.ActiveRig?.Sky : null;
             float daylight = sky != null && sky.Initialized ? sky.SunVisibility :
                 (TimeOfDayRepairs.ActiveFixedHour == 0 ? 0f : 1f);
-            return Mathf.Lerp(cfg.NightSunMultiplier.Value, 1f, daylight);
+            return Mathf.Lerp(EquatorProfiles.Value(cfg.NightSunMultiplier), 1f, daylight);
         }
 
         static float _nextSunUpdate;
@@ -604,7 +604,7 @@ namespace ArenaMapPort.Client
             {
                 if (!baseline.IsArtificialSun || baseline.Light == null) continue;
                 float multiplier = !cfg.Enabled.Value ? 1f : baseline.Light.type == LightType.Directional
-                    ? cfg.SunIntensity : cfg.GlobalLightIntensityMultiplier.Value;
+                    ? cfg.SunIntensity : EquatorProfiles.Value(cfg.GlobalLightIntensityMultiplier);
                 float target = baseline.Intensity * multiplier * factor;
                 ApplyArtificialSun(baseline, target);
                 Plugin.Log.LogInfo($"[ArenaMapPort][NightSun] {map.Key}/{baseline.Light.name}: " +

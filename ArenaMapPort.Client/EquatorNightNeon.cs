@@ -42,20 +42,20 @@ namespace ArenaMapPort.Client
         {
             const string section = "Night neon (arena_equator)";
             var config = Plugin.Instance.Config;
-            _enabled = config.Bind(section, "Enabled", true,
+            _enabled = config.Bind(section, "Enabled", EquatorProfiles.NightDefault("Enabled", true),
                 "Experimental cyan/magenta light installation for Equator's 00:00 choice. " +
                 "12:00 retains the existing lighting. Live; does not change saved image or PostFX settings.");
-            _lightIntensity = config.Bind(section, "LightIntensity", 1.5f,
+            _lightIntensity = config.Bind(section, "LightIntensity", EquatorProfiles.NightDefault("LightIntensity", 1.5f),
                 new ConfigDescription("Strength of the added lights on floors, walls and characters. " +
                     "Independent of the original map lamps. Live.", new AcceptableValueRange<float>(0f, 3f)));
-            _glowIntensity = config.Bind(section, "StripBrightness", .6f,
+            _glowIntensity = config.Bind(section, "StripBrightness", EquatorProfiles.NightDefault("StripBrightness", .6f),
                 new ConfigDescription("Brightness of the visible neon strips. Separate from their light on nearby surfaces. Live.",
                     new AcceptableValueRange<float>(0f, 3f)));
-            _cyan = config.Bind(section, "CyanColor", new Color(0.02f, .7f, 1f, 1f),
+            _cyan = config.Bind(section, "CyanColor", EquatorProfiles.NightDefault("CyanColor", new Color(0.02f, .7f, 1f, 1f)),
                 "Color of the column and side-lane lights/strips. RGB only; alpha is ignored. Live.");
-            _magenta = config.Bind(section, "MagentaColor", new Color(1f, .025f, .3f, 1f),
+            _magenta = config.Bind(section, "MagentaColor", EquatorProfiles.NightDefault("MagentaColor", new Color(1f, .025f, .3f, 1f)),
                 "Color of the Equator sign and TECHLIGHT lights/strips. RGB only; alpha is ignored. Live.");
-            _rain = config.Bind(section, "Rain", true,
+            _rain = config.Bind(section, "Rain", EquatorProfiles.NightDefault("Rain", true),
                 "Use rain for the enabled Equator 00:00 neon variant, overriding Weather (test) only there. " +
                 "Equator day always uses Clear; Bay5 always uses dynamic backend weather. Next raid.");
             _runner = Plugin.Instance.gameObject.AddComponent<Runner>();

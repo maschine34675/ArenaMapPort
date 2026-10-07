@@ -29,11 +29,11 @@ namespace ArenaMapPort.Client
         internal static void BindConfig(EventHandler changed)
         {
             const string section = "Night neon (arena_equator)";
-            _strength = Plugin.Instance.Config.Bind(section, "FlickerStrength", .8f,
+            _strength = Plugin.Instance.Config.Bind(section, "FlickerStrength", EquatorProfiles.NightDefault("FlickerStrength", .8f),
                 new ConfigDescription("Depth of occasional faults on three selected neon lights. " +
                     "0 = steady; 1 = brief complete blackouts. Strip, light and haze react together. Live.",
                     new AcceptableValueRange<float>(0f, 1f)));
-            _frequency = Plugin.Instance.Config.Bind(section, "FlickerFrequency", 1f,
+            _frequency = Plugin.Instance.Config.Bind(section, "FlickerFrequency", EquatorProfiles.NightDefault("FlickerFrequency", 1f),
                 new ConfigDescription("Frequency of occasional neon faults: 1 = about one burst per 20 seconds " +
                     "per selected fixture, 3 = three times as often. Does not speed up each burst. 0 = steady. Live.",
                     new AcceptableValueRange<float>(0f, 3f)));

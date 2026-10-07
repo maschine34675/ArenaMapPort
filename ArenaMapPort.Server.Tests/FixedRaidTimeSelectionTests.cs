@@ -209,7 +209,7 @@ namespace EFT
 {
     public enum EDateTime { CURR, PAST }
     public sealed class RaidSettings
-    { public LocationSettings.Location SelectedLocation; public EDateTime SelectedDateTime; }
+    { public LocationSettings.Location SelectedLocation; public string LocationId; public EDateTime SelectedDateTime; }
 }
 namespace EFT.Weather { public enum EWeatherType { None, Rain, ClearDay, FullCloud, Fog } }
 namespace EFT.UI.Matchmaker

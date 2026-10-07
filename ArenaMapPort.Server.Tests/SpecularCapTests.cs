@@ -394,12 +394,14 @@ namespace UnityEngine.SceneManagement
     public enum LoadSceneMode { Single }
     public struct Scene
     {
+        static int _nextHandle;
+        public int handle;
         public string name;
         public bool isLoaded;
         GameObject[] _roots;
         public Scene(string name, params GameObject[] roots)
         {
-            this.name = name; isLoaded = true; _roots = roots;
+            this.name = name; isLoaded = true; _roots = roots; handle = ++_nextHandle;
             foreach (var root in roots) root.scene = this;
         }
         public GameObject[] GetRootGameObjects() => _roots;
@@ -436,12 +438,6 @@ namespace Comfort.Common
 }
 namespace ArenaMapPort.Client
 {
-    internal sealed class TestConfig
-    {
-        float _value = 1f;
-        public event EventHandler SettingChanged;
-        public float Value { get => _value; set { _value = value; SettingChanged?.Invoke(this, EventArgs.Empty); } }
-    }
     internal static class WeatherRig
     {
         internal enum RainCoverMode { RoofDepthBlack, Off }
@@ -450,10 +446,10 @@ namespace ArenaMapPort.Client
         internal static EFT.Weather.WeatherController Controller;
         internal static bool IsActiveForCurrentMap() => Active && ArenaMapRaid.IsLoaded();
         internal static RainCoverMode RainCoverForCurrentMap() => CoverMode;
-        static readonly Dictionary<string, TestConfig> Configs = new();
-        internal static TestConfig ReflectiveSpecularCapEntry(ArenaMapDescriptor map)
+        static readonly Dictionary<string, BepInEx.Configuration.ConfigEntry<float>> Configs = new();
+        internal static BepInEx.Configuration.ConfigEntry<float> ReflectiveSpecularCapEntry(ArenaMapDescriptor map)
         {
-            if (!Configs.ContainsKey(map.Key)) Configs[map.Key] = new TestConfig();
+            if (!Configs.ContainsKey(map.Key)) Configs[map.Key] = Plugin.Instance.Config.Bind("TestSpecular (" + map.Key + ")", "Cap", 1f, "Test cap boundary");
             return Configs[map.Key];
         }
     }

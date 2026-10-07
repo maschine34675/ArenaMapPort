@@ -52,6 +52,7 @@ namespace ArenaMapPort.Client
             WeatherTestOverride.Install();
 
             _harmony = new Harmony(PluginGuid);
+            EquatorProfiles.Install(_harmony); // capture the chosen profile before owned scenes load
             HarmonyPatches.InstallAll(_harmony);
             LightingModCompatibility.Install(_harmony);
 
@@ -152,6 +153,7 @@ namespace ArenaMapPort.Client
             {
                 Log.LogWarning($"[ArenaMapPort][Config] Retired saved-option cleanup skipped: {e.Message}");
             }
+            EquatorProfiles.BindAll(); // after legacy binds/migrations; independent Day/Night defaults
             MapConfigVisibility.Install(); // after all binds; keep F12 focused on Equator and Bay5
 
             int totalOwnedScenes = 0;
