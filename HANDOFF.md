@@ -3,6 +3,28 @@
 Snapshot for whoever continues (human or agent). Verify the commits named here against `git log`; this file
 is updated by hand at each handover, it is not an automatic record. Read [AGENTS.md](AGENTS.md) first.
 
+## Follow-up on 2026-10-09 — audible indoor rain output
+
+The user's listening test rejected the earlier rain acceptance: source PCM was
+present, but the native PrecipitationAmbientIn child is muted (-80 dB) in the
+effective Outdoor mixer snapshot, independently of imported acoustic rooms.
+The two owned indoor sources now use its effect-free immediate AmbientIn parent;
+all downstream hearing-protection/master processing and room gains remain.
+Outdoor rain and the accepted chemlight layout are unchanged.
+
+GPU-2 process `2632a9ff` compared an identical quiet 1500 Hz pulse at the final
+listener output in the same Equator indoor room. Old path: no lift over background;
+repaired path: peak 0.018062 vs baseline 0.0000071652; old-path repeat again silent.
+This proves the previously missed mixer gate. Native rain playback and room
+transition also passed. All 891 host and 804 vanilla saved settings remain.
+The existing opt-in ReverbPulseBus now offers both paths for diagnostics.
+Release build, 577 tests and distribution validation pass. Clear Day has no
+playing rain source; both raids cleaned up. The verified DLL pair is deployed
+to both installs; final client SHA256
+`3DB8476449317F9F72D71951573303E76938665B47FA96C69DF93CE43BE2FFE6`.
+GPU-2 is at MainMenu with 20/20 loaded identities matching. Restart the user's
+client for this repair. See [follow-up evidence](docs/progress/equator-rain-output.md).
+
 ## State on 2026-10-09 — rain playback and wall-adjacent night chemlights
 
 Equator/Bay5 now play the native precipitation bank through their original

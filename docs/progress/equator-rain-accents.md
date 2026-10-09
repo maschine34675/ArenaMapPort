@@ -135,3 +135,11 @@ entries (both 1) and AccentDefaultsRevision=1. All 804 vanilla assignments are
 unchanged on disk. Vanilla receives the same selective migration on client
 restart. All temporary live test edits were restored. GPU-2 remains at MainMenu;
 the user's vanilla client/server need restarting to load the updated DLLs.
+
+## Follow-up after user listening test — 2026-10-09
+
+The user still heard no Equator rain. The source-only signal checks above missed
+an unexposed -80 dB child gain in the effective mixer snapshot. This acceptance
+is superseded by [the rain-output repair and native A/B comparison](equator-rain-output.md).
+Indoor rain now uses the effect-free immediate AmbientIn parent while retaining
+all downstream processing; outdoor routing and the chemlight work remain.

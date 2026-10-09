@@ -8,6 +8,9 @@ dated state in one screen; read it before this index if you only have a minute.
 
 ## Current — read these for the area you touch
 
+- [equator-rain-output.md](equator-rain-output.md) — fix the hidden indoor-rain
+  mixer mute after the user's failed listening test; final-output A/B evidence (2026-10-09).
+
 - [equator-rain-accents.md](equator-rain-accents.md) — restore missing native rain
   playback on Equator/Bay5 and move/brighten Equator's night chemlights (2026-10-09).
 

@@ -197,7 +197,12 @@ namespace ArenaMapPort.Client
                 _bank = _pendingBank.GetAwaiter().GetResult();
                 if (_bank == null) throw new InvalidOperationException("Loaded precipitation bank was released");
                 var outside = Group("AmbientOut/PrecipitationAmbientOut", "PrecipitationAmbientOut");
-                var inside = Group("AmbientIn/PrecipitationAmbientIn", "PrecipitationAmbientIn");
+                // The effect-free native PrecipitationAmbientIn child is -80 dB in the
+                // Outdoor gameplay snapshot. Imported acoustic rooms can still be indoor
+                // there. Our source gain already owns that room blend; use the immediate
+                // effect-free parent to bypass only this hidden gate. All downstream
+                // ambient/headphone/master processing remains on the original path.
+                var inside = MonoBehaviourSingleton<BetterAudio>.Instance.AmbientInMixer;
                 if (outside == null || inside == null) throw new InvalidOperationException("Native precipitation mixer routes are unavailable");
                 _outdoorBus = AmbientBusLease.Acquire(_mixer, "AmbientOutVolume");
                 _indoorBus = AmbientBusLease.Acquire(_mixer, "AmbientInVolume");
@@ -279,6 +284,7 @@ namespace ArenaMapPort.Client
                     $"room={_room?.ID}/{_room?.Type} environment={_environment} playerEnvironment={GamePlayerOwner.MyPlayer?.Environment} " +
                     $"roomLevel={_roomLevel:F3} ranged={_room?.RoomAmbientData?.UseVolumeRange} " +
                     $"setting={Volumes[_mapKey].Value:F3} ambientInDb={Bus("AmbientInVolume")} ambientOutDb={Bus("AmbientOutVolume")} " +
+                    $"ambientDb={Bus("AmbientVolume")} headphonesDb={Bus("HeadphonesMixerVolume")} " +
                     $"listenerRms={Mathf.Sqrt(listenerEnergy / _samples.Length):F6} listenerVolume={AudioListener.volume:F3} paused={AudioListener.pause}");
                 _outdoor?.Report(_samples);
                 _indoor?.Report(_samples);

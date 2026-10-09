@@ -12,7 +12,7 @@ namespace ArenaMapPort.Client
     /// measures the complete mixer output, not subjective quality or isolated reverb alone.</summary>
     internal static class ReverbAudioProbe
     {
-        public enum ProbeBus { Ambient, Gameplay, MapAmbience }
+        public enum ProbeBus { Ambient, Gameplay, MapAmbience, IndoorRain, LegacyIndoorRain }
         static ConfigEntry<bool> _request;
         static ConfigEntry<ProbeBus> _bus;
         static AudioSource _source;
@@ -30,7 +30,7 @@ namespace ArenaMapPort.Client
             _request = Plugin.Instance.Config.Bind("Audio diagnostics", "ReverbPulse", false,
                 "Test only: play one quiet 0.12-second tone and measure listener output after it ends. Automatically resets to false. Only during an active Equator/Bay5 raid.");
             _bus = Plugin.Instance.Config.Bind("Audio diagnostics", "ReverbPulseBus", ProbeBus.Ambient,
-                "Route the test tone through native ambient effects, the gameplay environment bus, or this map's original ambience bus. Does not change their mixer settings.");
+                "Route the test tone through ambient effects, gameplay, map ambience, the repaired indoor rain path or its original snapshot-gated child. Does not change their mixer settings.");
             Plugin.Instance.gameObject.AddComponent<Runner>();
             AudioSettings.OnAudioConfigurationChanged += deviceChanged => _audioReset = true;
         }
@@ -67,7 +67,10 @@ namespace ArenaMapPort.Client
                         _source.volume = 0.08f;
                         var audio = MonoBehaviourSingleton<BetterAudio>.Instance;
                         _source.outputAudioMixerGroup = _bus.Value == ProbeBus.Ambient ? audio.CommonAmbientEffectsMixer :
-                            _bus.Value == ProbeBus.Gameplay ? audio.VeryStandartMixerGroup : Bay5AmbientAudio.CurrentEffectsMixer(state.MapKey);
+                            _bus.Value == ProbeBus.Gameplay ? audio.VeryStandartMixerGroup :
+                            _bus.Value == ProbeBus.IndoorRain ? audio.AmbientInMixer :
+                            _bus.Value == ProbeBus.LegacyIndoorRain ? audio.FindMixerGroup("AmbientIn/PrecipitationAmbientIn") :
+                            Bay5AmbientAudio.CurrentEffectsMixer(state.MapKey);
                         if (_source.outputAudioMixerGroup == null) throw new InvalidOperationException("Map ambience route is not ready");
                         int rate = AudioSettings.outputSampleRate;
                         var pcm = new float[(int)(rate * 0.12)];

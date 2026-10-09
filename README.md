@@ -117,7 +117,9 @@ See [spatial acoustics](docs/progress/spatial-audio.md) and
 separate indoor/outdoor sound and the current season/room levels. The missing
 rain playback is restored independently of local scenery ambience. Live F12:
 `Audio (<map>) / RainVolume` (1 = native level, 0 = silent).
-See [rain and chemlight repairs](docs/progress/equator-rain-accents.md).
+The indoor path also avoids a hidden vanilla mixer mute that can disagree with
+the imported room classification. See [rain output](docs/progress/equator-rain-output.md)
+and [rain and chemlight repairs](docs/progress/equator-rain-accents.md).
 
 Equator/Bay5 retain their existing identities and artifact locations. The local Saw preset is present, but its 12 distinct referenced scene paths are absent; Saw cannot be ported from this source installation. Bay5's tournament preset is a mode variant, and Draft/the generic test preset are not additional independent maps.
 
