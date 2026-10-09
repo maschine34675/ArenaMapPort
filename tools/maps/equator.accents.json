@@ -1,16 +1,16 @@
 {
   "schema_version": 1,
   "map_key": "arena_equator",
-  "description": "Optional midnight decorative chemlights; original authored placement, shared native mesh and cloned materials. Source floor y=0.03087, model scale=1.886, light range=3m. No loot or gameplay components.",
+  "description": "Optional midnight decorative chemlights along reviewed wall and cover edges; shared native mesh and cloned materials. Source floor y=0.03087, model scale=1.886, light range=3m. No loot or gameplay components.",
   "fixtures": [
-    { "name": "south-west", "color": "Amber", "x": -16, "z": -8, "yaw": 25 },
-    { "name": "south-east", "color": "Green", "x": 16, "z": -8, "yaw": -30 },
-    { "name": "north-west", "color": "Magenta", "x": -16, "z": 18, "yaw": 65 },
-    { "name": "north-east", "color": "Amber", "x": 14, "z": 14, "yaw": -15 },
-    { "name": "west-lane", "color": "Magenta", "x": -20, "z": -18, "yaw": 40 },
-    { "name": "atrium-south", "color": "Cyan", "x": 4, "z": -12, "yaw": -50 },
+    { "name": "south-west", "color": "Amber", "x": -17, "z": -7.72, "yaw": -76 },
+    { "name": "south-east", "color": "Green", "x": 16.95, "z": -8.42, "yaw": 0 },
+    { "name": "north-west", "color": "Magenta", "x": -18, "z": 14, "yaw": 0 },
+    { "name": "north-east", "color": "Amber", "x": 21, "z": 14.5, "yaw": 90 },
+    { "name": "west-lane", "color": "Magenta", "x": -21.8, "z": -16.8, "yaw": 90 },
+    { "name": "atrium-south", "color": "Cyan", "x": 3.1, "z": -13.6, "yaw": -30 },
     { "name": "west-cover", "color": "Green", "x": -12.5, "z": 4, "yaw": 10 },
-    { "name": "east-cover", "color": "Cyan", "x": 11.7, "z": -4, "yaw": 70 },
-    { "name": "techlight", "color": "Amber", "x": 8.3, "z": 34.7, "yaw": -25 }
+    { "name": "east-cover", "color": "Cyan", "x": 11.47, "z": -4, "yaw": 90 },
+    { "name": "techlight", "color": "Amber", "x": 8.3, "z": 34.12, "yaw": 0 }
   ]
 }

@@ -57,8 +57,7 @@ namespace ArenaMapPort.Client
             internal bool Ready, Finished, Released;
             internal JObject Data;
             internal SpatialAudioDataContainer Container;
-            internal bool OwnsIndoorBus;
-            internal float PreviousIndoorBus;
+            internal AmbientBusLease IndoorBus;
         }
 
         internal static void Install(Harmony harmony)
@@ -321,11 +320,10 @@ namespace ArenaMapPort.Client
                     foreach (var binding in state.ToneBindings) binding.Key.RoomTone = clips[binding.Value];
                     // LocalGame resets sources and mixer buses during deployment. Start only after
                     // Started, as the existing ambient driver does; earlier sources are stopped.
-                    if (!state.OwnsIndoorBus && state.MapKey == ArenaMapRegistry.Bay5.Key && MonoBehaviourSingleton<BetterAudio>.Instantiated)
+                    if (state.IndoorBus == null && state.MapKey == ArenaMapRegistry.Bay5.Key && MonoBehaviourSingleton<BetterAudio>.Instantiated)
                     {
                         var mixer = MonoBehaviourSingleton<BetterAudio>.Instance.Master;
-                        state.OwnsIndoorBus = mixer.GetFloat("AmbientInVolume", out state.PreviousIndoorBus);
-                        if (state.OwnsIndoorBus) mixer.SetFloat("AmbientInVolume", 0);
+                        state.IndoorBus = AmbientBusLease.Acquire(mixer, "AmbientInVolume");
                     }
                     // The existing ambient driver owns its original players. This controller owns
                     // only the newly recovered room tones, without creating a second ambient manager.
@@ -425,13 +423,7 @@ namespace ArenaMapPort.Client
                 CleanupStep(ReverbAudioProbe.Stop);
                 ReleaseRoomTones(state);
                 CleanupStep(SpatialAudioProbe.Stop);
-                if (state.OwnsIndoorBus && MonoBehaviourSingleton<BetterAudio>.Instantiated)
-                    CleanupStep(() => {
-                        var mixer = MonoBehaviourSingleton<BetterAudio>.Instance.Master;
-                        // Restore only the neutral value we own; preserve a later external writer.
-                        if (mixer.GetFloat("AmbientInVolume", out float value) && Mathf.Approximately(value, 0))
-                            mixer.SetFloat("AmbientInVolume", state.PreviousIndoorBus);
-                    });
+                CleanupStep(() => { state.IndoorBus?.Dispose(); state.IndoorBus = null; });
                 if (stopNative && state.System != null)
                 {
                     if (SpatialAudioSystem.Initialized) state.System.Dispose();

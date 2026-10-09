@@ -53,15 +53,15 @@ namespace ArenaMapPort.Shared
         // proved redundant. Names describe the current area, not the original column mounts.
         public static readonly ArenaNightAccent[] EquatorAccents =
         {
-            new("south-west", AccentColor.Amber, -16, -8, 25),
-            new("south-east", AccentColor.Green, 16, -8, -30),
-            new("north-west", AccentColor.Magenta, -16, 18, 65),
-            new("north-east", AccentColor.Amber, 14, 14, -15),
-            new("west-lane", AccentColor.Magenta, -20, -18, 40),
-            new("atrium-south", AccentColor.Cyan, 4, -12, -50),
+            new("south-west", AccentColor.Amber, -17, -7.72f, -76),
+            new("south-east", AccentColor.Green, 16.95f, -8.42f, 0),
+            new("north-west", AccentColor.Magenta, -18f, 14f, 0),
+            new("north-east", AccentColor.Amber, 21, 14.5f, 90),
+            new("west-lane", AccentColor.Magenta, -21.8f, -16.8f, 90),
+            new("atrium-south", AccentColor.Cyan, 3.1f, -13.6f, -30),
             new("west-cover", AccentColor.Green, -12.5f, 4, 10),
-            new("east-cover", AccentColor.Cyan, 11.7f, -4, 70),
-            new("techlight", AccentColor.Amber, 8.3f, 34.7f, -25),
+            new("east-cover", AccentColor.Cyan, 11.47f, -4, 90),
+            new("techlight", AccentColor.Amber, 8.3f, 34.12f, 0),
         };
     }
 

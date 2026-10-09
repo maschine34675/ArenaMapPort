@@ -113,6 +113,12 @@ indoor/outdoor snapshots; outdoor ambience blending remains separate work.
 See [spatial acoustics](docs/progress/spatial-audio.md) and
 [room reverb](docs/progress/room-reverb.md).
 
+**Rain audio.** Equator and Bay5 use EFT's original precipitation clips with
+separate indoor/outdoor sound and the current season/room levels. The missing
+rain playback is restored independently of local scenery ambience. Live F12:
+`Audio (<map>) / RainVolume` (1 = native level, 0 = silent).
+See [rain and chemlight repairs](docs/progress/equator-rain-accents.md).
+
 Equator/Bay5 retain their existing identities and artifact locations. The local Saw preset is present, but its 12 distinct referenced scene paths are absent; Saw cannot be ported from this source installation. Bay5's tournament preset is a mode variant, and Draft/the generic test preset are not additional independent maps.
 
 See [remaining maps: source inventory, results and build steps](docs/progress/remaining-maps.md) for the per-map evidence. [Current distribution contract](docs/dist-manifest.md) records the verified file set, baseline preservation, Release hashes and deployment boundary.
@@ -162,8 +168,9 @@ your settings. Both follow the midnight neon switch and can change live.
 See [distance haze and temporary PostFX](docs/progress/equator-night-haze-postfx.md).
 
 Nine additional decorative chemlights in cyan, magenta, amber and green add small
-shadowed light pools around the lanes, cover and entrances. Live
-`AccentLightIntensity=1` controls these lights independently (0 removes them).
+shadowed light pools along reviewed wall and cover edges. Live
+`AccentLightIntensity=1.6` controls these lights independently (0 removes them).
+The original default 1 migrates once to 1.6; custom values remain unchanged.
 `WetFloorStrength=0.8` adds floor sheen while retaining authored surface variation
 and the saved daytime values; 0 restores the configured baseline. Both controls
 share the midnight neon switch. See [accent lights and wet floor](docs/progress/equator-night-accents-wet-floor.md).

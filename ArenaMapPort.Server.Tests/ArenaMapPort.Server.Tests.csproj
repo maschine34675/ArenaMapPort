@@ -35,6 +35,7 @@
     <Compile Include="..\ArenaMapPort.Client\EquatorProfileDefaults.cs" Link="Client\EquatorProfileDefaults.cs" />
     <Compile Include="..\ArenaMapPort.Client\MapConfigVisibility.cs" Link="Client\MapConfigVisibility.cs" />
     <Compile Include="..\ArenaMapPort.Client\SainLocationShim.cs" Link="Client\SainLocationShim.cs" />
+    <Compile Include="..\ArenaMapPort.Client\AmbientBusLease.cs" Link="Client\AmbientBusLease.cs" />
   </ItemGroup>
 
   <!--

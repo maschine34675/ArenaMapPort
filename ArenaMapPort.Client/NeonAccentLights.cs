@@ -17,7 +17,7 @@ namespace ArenaMapPort.Client
     internal sealed class NeonAccentLights : IDisposable
     {
         const string Tag = "[ArenaMapPort][NightAccents]";
-        const float Scale = 1.886f, FloorY = .03087f;
+        const float Scale = 1.886f, FloorY = .03087f, DefaultStrength = 1.6f;
         static ConfigEntry<float> _strength;
         static readonly Color[] Colors = {
             new Color(.04f, .65f, 1f), new Color(1f, .025f, .3f),
@@ -32,10 +32,19 @@ namespace ArenaMapPort.Client
 
         internal static void BindConfig(EventHandler changed)
         {
-            _strength = Plugin.Instance.Config.Bind("Night neon (arena_equator)", "AccentLightIntensity", 1f,
+            const string section = "Night neon (arena_equator)";
+            _strength = Plugin.Instance.Config.Bind(section, "AccentLightIntensity", DefaultStrength,
                 new ConfigDescription("Strength of nine additional colored chemlights and their small light pools. " +
                     "0 removes these accents. Native models, decorative only; independent of the large neon strips. Live.",
                     new AcceptableValueRange<float>(0f, 2f)));
+            var revision = Plugin.Instance.Config.Bind(section, "AccentDefaultsRevision", 0,
+                new ConfigDescription("Internal once-only migration of the original chemlight strength to the brighter wall layout. " +
+                    "Custom values and disabled accents are retained.", null, System.ComponentModel.BrowsableAttribute.No));
+            if (revision.Value < 1)
+            {
+                if (_strength.Value == 1f) _strength.Value = DefaultStrength;
+                revision.Value = 1;
+            }
             _strength.SettingChanged += changed;
         }
 

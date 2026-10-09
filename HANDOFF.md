@@ -3,6 +3,34 @@
 Snapshot for whoever continues (human or agent). Verify the commits named here against `git log`; this file
 is updated by hand at each handover, it is not an automatic record. Read [AGENTS.md](AGENTS.md) first.
 
+## State on 2026-10-09 — rain playback and wall-adjacent night chemlights
+
+Equator/Bay5 now play the native precipitation bank through their original
+indoor/outdoor mixer routes, following actual rain, season and acoustic rooms.
+The cloned Weather root never included the separate Sound scene blenders.
+New live Audio / RainVolume defaults to 1 on each map; shared ambient-bus leases
+preserve scenery/room-tone cleanup order. F10 includes rain source signal probes.
+
+Eight Equator night chemlights moved toward wall/cover edges; the van-side green
+one was already close. All nine default to strength 1.6, with a selective once-only
+migration from exactly 1. Custom/disabled values remain. Native review corrected
+the north-west light to (-18,14), yaw 0 in front of the accessible sandbag end.
+
+GPU-2 accepted Equator Night/Rain -> Bay5 native light rain -> Equator Day/Clear,
+including native nonzero sound signals, room selection, live mute/restore,
+all nine visual placements, day exclusion and raid cleanup. Final process
+`f4e0303e` is at MainMenu, 20/20 loaded identities match. One known inactive
+MenuScreen coroutine error occurred during debug exit; no rain/light exception.
+This was playback/signal validation, not an audition of subjective loudness.
+
+Release client has 0 warnings/errors; 577 .NET tests and distribution check pass.
+Both sanctioned installs received the verified DLL-only pair. Client SHA256
+`1817D2FBD5578D60785E85FBD6F941B5B96017EC1C46B2EE27A99EDF2FEDC38F`;
+server `5D2AD68B07110B9DAFCA07B3591ED2F93266273537D4CBF741B2E38234BC0F2C`.
+Only the intended host accent default changed; all other existing host and
+vanilla settings were preserved. Restart vanilla client/server. Evidence,
+controls and limits: [rain and accents](docs/progress/equator-rain-accents.md).
+
 ## State on 2026-10-07 — independent Equator Day/Night profiles
 
 Equator keeps one `arena_equator` identity with 12:00/00:00 selection. Each time

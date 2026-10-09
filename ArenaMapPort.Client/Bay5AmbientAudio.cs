@@ -136,8 +136,7 @@ namespace ArenaMapPort.Client
             readonly float[] _outputSamples = new float[256];
             AudioMixer _ambientMixer;
             string _ambientVolumeParameter;
-            float _previousAmbientVolume;
-            bool _ownsAmbientVolume;
+            AmbientBusLease _ambientBus;
             AmbientSoundPlayerGroup _effectsGroup;
             AudioMixerGroup _originalEffects, _reverbEffects;
             bool _reverbRouted, _reverbRouteYielded;
@@ -325,7 +324,7 @@ namespace ArenaMapPort.Client
                 // ambient bus reaches TarkovReverb. Its dry path is equivalent while the owned parent
                 // gain is neutral (no skipped filters/effects); preserve external non-neutral gains.
                 float volume = float.NaN;
-                bool neutralParent = _ownsAmbientVolume && _ambientMixer != null &&
+                bool neutralParent = _ambientBus?.IsNeutral == true && _ambientMixer != null &&
                     _ambientMixer.GetFloat(_ambientVolumeParameter, out volume) && Mathf.Approximately(volume, 0f);
                 bool useReverb = requested && neutralParent;
                 if (useReverb == _reverbRouted) return;
@@ -483,27 +482,14 @@ namespace ArenaMapPort.Client
                 _ambientVolumeParameter = _equator ? audio.AudioMixerData.AmbientInMixerVolume : audio.AudioMixerData.AmbientOutMixerVolume;
                 if (_equator && _ambientVolumeParameter != "AmbientInVolume")
                     throw new InvalidOperationException("native interior ambient volume contract changed");
-                if (!_ambientMixer.GetFloat(_ambientVolumeParameter, out _previousAmbientVolume) ||
-                    !_ambientMixer.SetFloat(_ambientVolumeParameter, 0f))
-                    throw new InvalidOperationException("native ambient volume parameter unavailable");
-                _ownsAmbientVolume = true;
-                Plugin.Log.LogInfo($"[ArenaMapPort][NativeAudio] {(_equator ? "interior" : "exterior")} bus acquired previousDb={_previousAmbientVolume:F2} ownedDb=0.00 map={_mapKey}");
+                _ambientBus = AmbientBusLease.Acquire(_ambientMixer, _ambientVolumeParameter);
+                Plugin.Log.LogInfo($"[ArenaMapPort][NativeAudio] {(_equator ? "interior" : "exterior")} bus leased neutral={_ambientBus.IsNeutral} map={_mapKey}");
             }
 
             void ReleaseAmbientVolume()
             {
-                if (!_ownsAmbientVolume) return;
-                _ownsAmbientVolume = false;
-                if (_ambientMixer == null) return;
-                if (!_ambientMixer.GetFloat(_ambientVolumeParameter, out float current))
-                    throw new InvalidOperationException("native ambient volume could not be read during cleanup");
-                if (Mathf.Approximately(current, 0f))
-                {
-                    if (!_ambientMixer.SetFloat(_ambientVolumeParameter, _previousAmbientVolume))
-                        throw new InvalidOperationException("native ambient volume could not be restored");
-                    Plugin.Log.LogInfo($"[ArenaMapPort][NativeAudio] {(_equator ? "interior" : "exterior")} bus restored previousDb={_previousAmbientVolume:F2} map={_mapKey}");
-                }
-                else Plugin.Log.LogInfo($"[ArenaMapPort][NativeAudio] {(_equator ? "interior" : "exterior")} bus changed externally to {current:F2} dB; retaining its current value map={_mapKey}");
+                _ambientBus?.Dispose();
+                _ambientBus = null;
                 _ambientMixer = null;
             }
 

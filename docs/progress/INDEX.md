@@ -8,6 +8,9 @@ dated state in one screen; read it before this index if you only have a minute.
 
 ## Current — read these for the area you touch
 
+- [equator-rain-accents.md](equator-rain-accents.md) — restore missing native rain
+  playback on Equator/Bay5 and move/brighten Equator's night chemlights (2026-10-09).
+
 - [equator-profiles.md](equator-profiles.md) — independent Equator Day/Night
   appearance recipes behind the existing time selection, preserving current
   night tuning and mapping SAIN to Factory/FactoryNight (2026-10-07).

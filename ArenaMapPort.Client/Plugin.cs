@@ -123,6 +123,7 @@ namespace ArenaMapPort.Client
             SeaPlaceholderRepairs.Install();
             NativeWaterRepairs.Install();
             NativeSpatialAudio.Install(_harmony);
+            PrecipitationAudio.Install(); // missing native rain beds, owned independently of local scenery ambience
             RoomReverb.Install();
             ReverbAudioProbe.Install();
             SpatialAudioProbe.Install(_harmony);
