@@ -14,8 +14,12 @@ remains active. Fresh player installs never create a full developer file.
 All functional bindings use Plugin.Settings; never explicitly save this read-only
 normal-mode ConfigFile. Developer mode restores its values into the primary file
 for F12. See [compact-player-config.md](docs/progress/compact-player-config.md).
-Build/native evidence for this follow-up is recorded there separately from the
-previous release-preparation acceptance below.
+Implementation `88c5d45`; build, complete C# suite and real-BepInEx persistence
+checks pass. GPU-2 accepted natural midnight -> neon midnight -> Bay5 and restart.
+Main CFG shrank from 124333 to 784 bytes; all 293 tuning values survive unchanged
+in the archive. Final process `0fc7d88f`, MainMenu, 20/20 loaded identities match.
+DLL-only deployment to both installs verified; vanilla needs a user restart.
+NaturalEquatorNight is false (neon default). No release was published.
 
 ## Earlier on 2026-10-10 — first release scope and player options
 
