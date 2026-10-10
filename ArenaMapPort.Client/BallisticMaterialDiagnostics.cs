@@ -23,6 +23,7 @@ namespace ArenaMapPort.Client
                 "Diagnostic only; does not change hit or penetration behavior.");
             _remaining = 100;
             _enabled.SettingChanged += (_, __) => _remaining = 100;
+            if (!DeveloperOptions.Enabled) return;
             var target = AccessTools.Method(typeof(Shot), nameof(Shot.HandleCollision),
                 new[] { typeof(float), typeof(Vector3), typeof(Vector3) });
             if (target == null)

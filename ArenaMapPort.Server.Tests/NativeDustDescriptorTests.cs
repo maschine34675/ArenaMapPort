@@ -52,7 +52,7 @@ public sealed class NativeDustDescriptorTests
         Assert.Equal(0.07f, ArenaMapRegistry.Bay5.Dust.TimeSpeed);
         Assert.Equal(0.04f, ArenaMapRegistry.Bay5.Dust.Size);
         Assert.Equal(0.0f, ArenaMapRegistry.Bay5.Dust.UvTilePadding);
-        foreach (var map in ArenaMapRegistry.All.Where(m => m != ArenaMapRegistry.Equator && m != ArenaMapRegistry.Bay5))
+        foreach (var map in ArenaMapRegistry.Catalog.Where(m => m != ArenaMapRegistry.Equator && m != ArenaMapRegistry.Bay5))
             Assert.Null(map.Dust);
     }
 }

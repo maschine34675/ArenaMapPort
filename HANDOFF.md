@@ -3,6 +3,28 @@
 Snapshot for whoever continues (human or agent). Verify the commits named here against `git log`; this file
 is updated by hand at each handover, it is not an automatic record. Read [AGENTS.md](AGENTS.md) first.
 
+## Follow-up on 2026-10-10 — first release scope and player options
+
+Equator and Bay5 are the only runtime and staged maps. All fourteen descriptors
+remain in Catalog; the twelve parked maps retain their sidecars, source/extract
+and build inputs. Release staging archives exact stale parked outputs outside dist.
+Accepted ambient defaults are frozen (+5 dB / .4037559 / ×2.5 Equator;
++4 dB / .399061 / ×4 Bay5); whole-neutral-tuple migration preserves custom mixes.
+
+F12 player mode now has ten controls; General/DeveloperMode requires a restart
+and exposes 238 supported-map settings plus diagnostics. Internal/legacy markers
+stay hidden. The effective mode is latched so visibility and diagnostic execution
+cannot disagree mid-session. Functional repairs/presets remain active in both modes.
+
+Release client/build, 606 C# tests, real BepInEx persistence, 669 Python tests
+(44 skipped), eight PowerShell cases and exact two-map distribution validation pass.
+GPU-2 verified the two-map menu, player/developer visibility, Equator Day/Clear,
+Bay5 native time/weather/audio, Equator Night/Rain, F10 gating and raid cleanup.
+Verified DLLs are deployed to both installs; the vanilla install needs its own
+restart. No publishing/tagging/version change. See
+[first-release-prep.md](docs/progress/first-release-prep.md) for hashes, screenshots,
+configuration preservation, limits and the final host state.
+
 ## Follow-up on 2026-10-10 — Equator open atrium rain
 
 User confirms the indoor rain output repair is audible. Fixed the remaining

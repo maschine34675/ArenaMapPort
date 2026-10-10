@@ -270,13 +270,17 @@ class RegistryTests(unittest.TestCase):
                 if altered:
                     self.assertIn("distant_shadow_caster_paths mismatch", output.getvalue())
 
-    def test_all_membership_rejects_missing_duplicate_and_unknown_entries(self):
-        entries = {"Equator": {}, "Bay5": {}, "Third": {}}
-        prefix = "public static readonly IReadOnlyList<ArenaMapDescriptor> All = new[] "
-        self.assertEqual(VD.registry_membership_errors(prefix + "{ Equator, Bay5, Third };", entries), [])
-        for members in ("Equator, Bay5", "Equator, Bay5, Third, Third", "Equator, Bay5, Unknown"):
-            with self.subTest(members=members):
-                self.assertTrue(VD.registry_membership_errors(prefix + "{" + members + "};", entries))
+    def test_catalog_and_release_membership_are_independently_checked(self):
+        entries = {name: {} for name in ("Equator", "Bay5", "Third")}
+        prefix = "public static readonly IReadOnlyList<ArenaMapDescriptor> "
+        def source(catalog, release):
+            return prefix + "Catalog = new[] {" + catalog + "};\n" + prefix + "All = new[] {" + release + "};"
+        self.assertEqual(VD.registry_membership_errors(source("Equator, Bay5, Third", "Equator, Bay5"), entries), [])
+        for catalog, release in (("Equator, Bay5", "Equator, Bay5"), ("Equator, Bay5, Third, Third", "Equator, Bay5"),
+                                 ("Equator, Bay5, Unknown", "Equator, Bay5"), ("Equator, Bay5, Third", "Equator"),
+                                 ("Equator, Bay5, Third", "Equator, Bay5, Third"), ("Equator, Bay5, Third", "Equator, Bay5, Bay5")):
+            with self.subTest(catalog=catalog, release=release):
+                self.assertTrue(VD.registry_membership_errors(source(catalog, release), entries))
 
     def test_additional_map_declarations_are_actually_discovered(self):
         text = 'ArenaMapDescriptor Equator = new(Key: "arena_equator"); ArenaMapDescriptor Third = new(Key: "arena_third");'

@@ -70,6 +70,7 @@ namespace ArenaMapPort.Client
             // that lives for the whole process — its GameObject is the natural, already-existing host for
             // a plain always-on Update() poller. No new host GameObject needed (contrast WeatherRig's
             // _host, which exists only because IT needs to hold a whole harvested scene hierarchy).
+            if (!DeveloperOptions.Enabled) return;
             Plugin.Instance.gameObject.AddComponent<SceneInspector>();
         }
 

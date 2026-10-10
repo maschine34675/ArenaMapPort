@@ -45,6 +45,39 @@ try
     Check(reload.Bind("Lighting (arena_bowl)", "ReflectionIntensity", -1f).Value == 0.43f, "Hidden map tuning lost");
     Check(reload.Bind("Future category", "PreserveMe", "missing").Value == "future-value", "Unknown orphan lost");
     Check(reload.Bind("Logging", "Verbose", false).Value == false, "Retired key survived save/reload");
+    // Exercise both an untouched old configuration and saved custom mix through actual
+    // BepInEx serialization, then verify the migration is one-shot across process restarts.
+    foreach (var map in new[] { "arena_equator", "arena_bay5" })
+    {
+        string section = "Audio (" + map + ")";
+        var gain = reload.Bind(section, "AmbientGainDb", 0f);
+        var offset = reload.Bind(section, "AmbientVolumeOffset", 0f);
+        var range = reload.Bind(section, "AmbientRangeMultiplier", 1f);
+        AmbientAudioDefaults.Migrate(reload, map, gain, offset, range);
+        Check(gain.Value == (map == "arena_equator" ? 5f : 4f), "Accepted gain missing");
+        Check(offset.Value == (map == "arena_equator" ? .4037559f : .399061f), "Accepted offset missing");
+        Check(range.Value == (map == "arena_equator" ? 2.5f : 4f), "Accepted range missing");
+        gain.Value = 0; offset.Value = 0; range.Value = 1;
+    }
+    DeveloperOptions.Install(reload);
+    Check(!DeveloperOptions.Enabled, "Developer mode must default off");
+    reload.Bind("General", "DeveloperMode", false).Value = true;
+    Check(!DeveloperOptions.Enabled, "Developer mode changed before restart");
+    reload.Save();
+    var second = new ConfigFile(path, false) { SaveOnConfigSet = false };
+    DeveloperOptions.Install(second);
+    Check(DeveloperOptions.Enabled, "Developer mode did not survive restart");
+    foreach (var map in new[] { "arena_equator", "arena_bay5" })
+    {
+        string section = "Audio (" + map + ")";
+        AmbientAudioDefaults.Values(map, out var gainDefault, out var offsetDefault, out var rangeDefault);
+        var gain = second.Bind(section, "AmbientGainDb", gainDefault);
+        var offset = second.Bind(section, "AmbientVolumeOffset", offsetDefault);
+        var range = second.Bind(section, "AmbientRangeMultiplier", rangeDefault);
+        AmbientAudioDefaults.Migrate(second, map, gain, offset, range);
+        Check(gain.Value == 0 && offset.Value == 0 && range.Value == 1, "Repeat migration overwrote a custom mix");
+    }
+    Console.WriteLine("RELEASE_CONFIG_PERSISTENCE_OK: accepted defaults, one-shot migration, restart-latched developer mode");
     Console.WriteLine("CONFIG_RETIREMENT_OK: scoped removal, saved values, unknown orphans, live entries and repeat cleanup");
 }
 finally

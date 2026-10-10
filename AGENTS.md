@@ -4,8 +4,8 @@ ArenaMapPort imports the maps of Escape from Tarkov: Arena (read from the user's
 install) into SPT 4.1.5 (EFT 0.16.9.5, Unity 2022.3.43f1) as separate locations: a Python extractor,
 a Unity 2022.3.43f1 batch importer that rebuilds scenes, materials, colliders and a fresh NavMesh into
 asset bundles, a BepInEx client plugin that repairs everything a ported scene lacks at raid time, and an
-SPT server mod that registers the locations. Fourteen maps are built and staged; **Equator** is the
-reference map and the only one played extensively. The maps exist to be played through the user's
+SPT server mod that registers the locations. Fourteen maps retain development inputs; only **Equator and Bay5** are registered and staged
+for the first release. Both have native playtest evidence. The maps exist to be played through the user's
 ArenaMode mod (arena deathmatch with respawns); see the decisions below.
 
 Read this first, then [HANDOFF.md](HANDOFF.md) (dated working state, what is verified, what is next),
@@ -26,8 +26,8 @@ are not accepted build inputs. Keep the SPT bundle target on Unity 2022.3.43f1.
 - **No loot on any map, ever.** The server keeps the empty loot shape. Do not author or extract loot.
 - **No scav raids.** `DisabledForScav = true` stays.
 - **Bundles are distributed as built** (`dist/`), like other SPT map mods. Bundles still never go into git.
-- **First release = Equator and Bay5 only (user, 2026-09-25).** The other twelve maps stay built and staged
-  but are out of the release and off the work list. Make these two maps as good as they can be (native content,
+- **First release = Equator and Bay5 only (user, 2026-09-25).** The other twelve maps retain source and work/build inputs,
+  but are excluded from ArenaMapRegistry.All and dist; Catalog retains their identities. Make these two maps as good as they can be (native content,
   bots, audio, lighting, physics — see docs/PLAN-TWO-MAPS.md) BEFORE ArenaMode features such as team starts and
   pickups, which come later on both maps.
 
@@ -79,6 +79,16 @@ are not accepted build inputs. Keep the SPT bundle target on Unity 2022.3.43f1.
 EFT client decompile for reference: `D:/SPT41/Development/_decompiled/*.cs` (0.16.9.5). Every obfuscated
 member name pinned in the client (`method_N`, `vmethod_N`) is verified there and installed through
 `HarmonyPatches.Verify()`, which logs and skips a missing target instead of throwing.
+
+## Release configuration
+
+Player mode is the default: ten F12 controls, with the remaining accepted recipes retained.
+`General/DeveloperMode` is latched on startup and requires a restart; it exposes supported-map
+controls and enables F7–F10/diagnostic probes. Never gate functional repairs behind it.
+Ambient bindings happen in Plugin.Awake before visibility filtering. See
+[release preparation](docs/progress/first-release-prep.md). The staging helper
+`tools/park-unreleased-dist.ps1` archives only exact known parked-map outputs under ignored
+`work/release-parked/`; do not delete their source/extract/build inputs or clean live installs.
 
 ## Build, test, deploy
 

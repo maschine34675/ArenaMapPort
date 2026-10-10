@@ -66,7 +66,7 @@ public class MapDescriptorConsistencyTests
             "WAREHOUSE_DOORS (1)/Bay5_Warehouse_Gate_Door_01 (4)",
             "OLD_WAREHOUSE_DOORS/Gates_Depot_Frame",
         }, ArenaMapRegistry.Bay5.OpenedBarriers);
-        foreach (var map in ArenaMapRegistry.All)
+        foreach (var map in ArenaMapRegistry.Catalog)
         {
             Assert.NotNull(map.OpenedBarriers);
             Assert.All(map.OpenedBarriers, path => Assert.Contains("/", path));
@@ -82,7 +82,7 @@ public class MapDescriptorConsistencyTests
     {
         var keys = new HashSet<string>();
         var idFields = new HashSet<string>();
-        foreach (var map in ArenaMapRegistry.All)
+        foreach (var map in ArenaMapRegistry.Catalog)
         {
             Assert.True(keys.Add(map.Key), $"duplicate map key: {map.Key}");
             Assert.True(idFields.Add(map.IdField), $"duplicate map IdField: {map.IdField}");

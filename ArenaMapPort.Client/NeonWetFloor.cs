@@ -50,7 +50,7 @@ namespace ArenaMapPort.Client
             catch (Exception e) { Failed("indoor", e); }
             if (_retry) _retryAt = Time.unscaledTime + 1f;
             else _loggedFailure = false;
-            if (changed) Probe();
+            if (changed && DeveloperOptions.Enabled) Probe();
         }
 
         static void Failed(string owner, Exception error)

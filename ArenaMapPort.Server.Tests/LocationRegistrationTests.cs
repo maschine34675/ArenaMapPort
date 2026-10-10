@@ -17,14 +17,14 @@ namespace ArenaMapPort.Server.Tests;
 ///
 /// Multimap generalization (docs/progress/multimap-generalize.md): every case that used to be a
 /// bare [Fact] against Equator's own constants is now a [Theory] over
-/// <see cref="AllMaps"/> (== ArenaMapRegistry.All) — this both covers Bay5's registration logic
+/// <see cref="AllMaps"/> (== ArenaMapRegistry.Catalog; retained development fixtures) — this both covers Bay5's registration logic
 /// automatically and keeps Equator's own cases running exactly as before, just parameterized.
 /// </summary>
 public class LocationRegistrationTests
 {
     public static IEnumerable<object[]> AllMaps()
     {
-        foreach (var map in ArenaMapRegistry.All)
+        foreach (var map in ArenaMapRegistry.Catalog)
         {
             yield return new object[] { map };
         }

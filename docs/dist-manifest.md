@@ -1,4 +1,28 @@
-# Current distribution contract: 14 Arena locations
+# Current distribution contract: Equator and Bay5
+
+2026-10-10: `ArenaMapRegistry.All` is the two-map runtime/release list; `Catalog`
+retains all fourteen development descriptors. Normal Release builds stage exactly
+six bundles, two shader sidecars, two server databases and both DLLs. Existing
+parked outputs are reversibly archived under ignored `work/release-parked/`.
+Unknown output files fail exact-set validation. Nothing is removed from live installs;
+old files there are inert because the server and client no longer register their maps.
+
+Equator stages from `work/build/full` and Bay5 from `work/build/bay5`, both with
+presets from `work/build/preset`. Accepted v5 source packages remain unchanged.
+Acoustics, room tones, original flares, water data, loading screens and banners are
+included for these two maps. Optional ArenaMode audio/UI payloads remain included
+when their extraction manifests exist. No development/debug plugin or user config
+is packaged. `AdditionalMapBuilds.props` is retained as development metadata and
+is no longer imported by the client build. `build_remaining.ps1 -Stage` is refused;
+its extraction/build workflow remains available without that switch.
+
+Run `python tools/validate/validate_distribution.py` after both Release builds.
+See [first-release preparation](progress/first-release-prep.md) for the current
+artifact inventory, tests, native evidence and remaining publication work.
+
+---
+
+# Historical distribution contract: 14 Arena locations
 
 Verified: 2026-09-15, 20:34 CEST. **All twelve additions have current schema-2 full-map receipts and passed staged validation.** Client/server Release outputs are staged, and the exact 14-map distribution and both DLL hash pairs passed verification. The server Release run passed all 228 tests; the client completed with zero warnings/errors. The deployment dry run passed without copying files into SPT. The per-map results and scope are maintained in [remaining-maps.md](progress/remaining-maps.md).
 

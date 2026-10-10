@@ -484,7 +484,7 @@ namespace ArenaMapPort.Client
             {
                 // Diagnostics read back actual native uniforms at 2 Hz, plus the first completed
                 // upload after any setting change. Normal frames perform no material readbacks.
-                if (!_sampleRequested && Time.unscaledTime < _nextSampleTime) return;
+                if (!DeveloperOptions.Enabled || (!_sampleRequested && Time.unscaledTime < _nextSampleTime)) return;
                 var effect = __state.Effect;
                 if (effect != null && effect.m_Material != null && effect.m_Material2 != null)
                 {

@@ -40,6 +40,7 @@ namespace ArenaMapPort.Client
                 "PLAN-TWO-MAPS item 7 diagnostic: logs the distance fade of every culling light of the loaded Arena map " +
                 "(inside fade start / fade window / beyond fade end vs. full / partial / zero intensity), the nearest lights, " +
                 "the volumetric-light state and a one-second flicker sample. Read-only, only in an Arena raid. Takes effect at once.");
+            if (!DeveloperOptions.Enabled) return;
             Plugin.Instance.gameObject.AddComponent<Runner>();
         }
 

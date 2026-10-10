@@ -501,8 +501,10 @@ namespace ArenaMapPort.Shared
             IconY: 830,
             DbBaseJsonPath: "arena_woods/base.json");
 
-        /// <summary>All registered maps, in registration order. Iterate this — never hardcode
-        /// <see cref="Equator"/> alone — everywhere a map-generic loop is needed.</summary>
-        public static readonly IReadOnlyList<ArenaMapDescriptor> All = new[] { Equator, Bay5, AirPit, AirPit2, AutoService, Bowl, Prison, RailwayStation, Yard, Iceberg, Factory, Custom, Shoreline, Woods };
+        /// <summary>Complete development catalog. Parked maps retain their stable identities and inputs.</summary>
+        public static readonly IReadOnlyList<ArenaMapDescriptor> Catalog = new[] { Equator, Bay5, AirPit, AirPit2, AutoService, Bowl, Prison, RailwayStation, Yard, Iceberg, Factory, Custom, Shoreline, Woods };
+
+        /// <summary>Playable and distributable maps. Runtime consumers must iterate this release subset.</summary>
+        public static readonly IReadOnlyList<ArenaMapDescriptor> All = new[] { Equator, Bay5 };
     }
 }

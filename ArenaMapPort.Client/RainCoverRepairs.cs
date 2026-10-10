@@ -902,7 +902,7 @@ namespace ArenaMapPort.Client
 
             // Plugin.Instance.gameObject is the same always-alive host LightingLab.cs/SceneInspector.cs
             // already add their own hotkey pollers to — no new persistent GameObject needed.
-            Plugin.Instance.gameObject.AddComponent<LabHotkeyRunner>();
+            if (DeveloperOptions.Enabled) Plugin.Instance.gameObject.AddComponent<LabHotkeyRunner>();
 
             // §14 investigation note (task's own "verify the Hidden/Black cull question" requirement) —
             // settled from the game data, not guessed: a UnityPy read of

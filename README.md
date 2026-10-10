@@ -2,7 +2,28 @@
 
 ArenaMapPort imports locally installed Escape from Tarkov: Arena environments as separate SPT locations. The server dependency pin is SPT 4.1.5; current native acceptance uses SPT 4.1.6 / EFT 0.16.9.5-40743 and Unity 2022.3.43f1.
 
-The port is a **geometry spike**: scene geometry, materials, collision, lighting, LOD groups, a freshly baked NavMesh, and an authored player start. It does not implement Arena match rules or full visual parity.
+The first release contains **Equator and Bay5**, with imported geometry, materials, lighting, audio, collision and navigation. It targets ArenaMode play; Arena match rules, loot and scav raids are outside this mod’s scope. The twelve other development maps are parked and are not registered or packaged.
+
+## Player settings
+
+F12 shows ten controls. Their saved values survive updates; the reviewed map presets remain active behind them.
+
+| Group | Available controls |
+|---|---|
+| Audio — Equator / Bay5 | `AmbientGainDb` (source gain in dB), `RainVolume` |
+| Lighting — Equator Day / Night / Bay5 | `ExposureCompensationEV` |
+| Equator night | `PostFx` (temporary camera grading), `FlickerStrength` (0 = steady added neon) |
+| General | `DeveloperMode` (requires game restart) |
+
+The ambience source gain works together with a fixed accepted volume floor and range;
+it is not a master mute. Normal game volume controls still apply. The accepted mixes are
+Equator **+5 dB / offset 0.4037559 / range ×2.5** and Bay5 **+4 dB / offset 0.399061 / range ×4**.
+Only a complete old neutral mix migrates once; custom mixes are preserved. Rain stays at 1.
+
+Enable `General / DeveloperMode` and restart for the full supported-map controls described
+below and diagnostic tools F7–F10. Changing it during a session takes effect at the next
+startup. Existing hidden settings stay saved; legacy Equator profile aliases and internal
+migration markers always remain hidden. Developer mode does not enable parked maps.
 
 ## Current status
 
@@ -13,7 +34,7 @@ weather. Legacy fixed-hour/test-weather settings do not override Bay5.
 See [time/weather verification](docs/progress/map-weather-restoration.md).
 
 **Equator profiles.** The same 12:00/00:00 selection now chooses independent
-day/night appearance settings. F12 exposes `Lighting (arena_equator Day)` and
+day/night appearance settings. In developer mode, F12 exposes `Lighting (arena_equator Day)` and
 `Lighting (arena_equator Night)`, with corresponding `LightingLab` and `Bots`
 sections. Day starts from the accepted realistic defaults; Night retains the
 GPU test installation's tuning captured on 2026-10-07. SAIN uses `Factory` by day
@@ -31,7 +52,7 @@ See [export compatibility audit](docs/progress/arena-update-20261003.md).
 
 **Target: ArenaMode**, not ordinary SPT raid play. These maps are meant to be played through the user's ArenaMode mod (arena deathmatch with respawns); a plain SPT raid from the menu is only the test vehicle. No loot is authored or extracted on any map, and no scav-raid support (spawn categories, exits, hostility) is implemented — both are permanent decisions, not open gaps. `dist/` (BSG-derived bundles included) is distributed the way other SPT map mods do it; the user carries the licensing grey zone ("a valid EFT installation/licence"). See [docs/SPEC.md](docs/SPEC.md), "Decisions 2026-09-20".
 
-The registry contains Equator and Bay5 plus 12 additional source-backed map definitions: AirPit, AirPit2.0, AutoService, Bowl, Prison, RailwayStation, Yard, Iceberg, Factory, Customs, Shoreline and Woods. All twelve additions were built, validated with schema-2 receipts and staged in `dist/` (verified 2026-09-15, 20:34 CEST; receipt layer simplified 2026-09-17). The complete distribution contains 14 maps, 42 bundles, 14 shader sidecars, 14 server base JSON files and both Release DLLs: 72 files, about 11.05 GB. Validation passed 86 Python tests, eight PowerShell log tests and 228 server tests, as of 2026-09-15/17. The server suite has grown with the bots/exits/PMC/stage-1 work: 267 tests green on 2026-09-20.
+The runtime registry and release distribution contain only Equator and Bay5: six bundles, two shader sidecars, two server base JSON files and both Release DLLs, plus their native audio/visual payloads. The complete development catalog still retains the twelve parked map definitions and their extraction/build inputs. Their previous staging evidence is historical; see [first-release preparation](docs/progress/first-release-prep.md).
 
 **Equator and Bay5.** Both maps have four player starts, ten separate bot markers and two ordinary test exits. Both are integrated with the user's ArenaMode for individual Deathmatch and Gun Game; Tactical and team modes are excluded. Native tests have verified mode admission, bot replenishment, combat respawns and protected profile return. See [Equator acceptance](docs/progress/equator-arenamode-integration.md) and [Bay5 integration](docs/progress/bay5-arenamode-integration.md). The latter separates the first native pass from subsequent geometry and exit corrections. The remaining twelve maps still await their gameplay integration and first native acceptance.
 
@@ -58,7 +79,7 @@ add `TonemapCustomCurve`, `TonemapCurve` and `TonemapSecondaryCurve`: raw native
 used only with an explicit Filmic/RomB/ACES profile. Set the custom toggle off to return to the
 selected profile, or select Original to recover the camera's own parameters. Equator now defaults to
 custom Filmic `(7, 0.35, 0.7)` / `(-0.02, 0.18, 0)`; Bay5 retains Original with custom tuning off
-and the saved RomB vector defaults. These are not independent shadow/highlight sliders. Enable the F12 Advanced
+and the saved RomB vector defaults. These are not independent shadow/highlight sliders. Enable developer mode and the F12 Advanced
 filter to see six X/Y/Z sliders with precise number boxes. Their response is finer near zero.
 `Use <profile> preset` copies both native vectors and enables custom tuning; the ordinary Reset
 buttons restore each vector's config default.
@@ -126,7 +147,7 @@ Equator/Bay5 retain their existing identities and artifact locations. The local 
 See [remaining maps: source inventory, results and build steps](docs/progress/remaining-maps.md) for the per-map evidence. [Current distribution contract](docs/dist-manifest.md) records the verified file set, baseline preservation, Release hashes and deployment boundary.
 
 Release scope (2026-09-25): the first release ships Equator and Bay5 only; the other twelve maps remain built
-and staged but are deferred. Agents: start at [AGENTS.md](AGENTS.md), then [HANDOFF.md](HANDOFF.md) for the dated
+under work/build but are excluded from staging and runtime registration. Agents: start at [AGENTS.md](AGENTS.md), then [HANDOFF.md](HANDOFF.md) for the dated
 working state.
 
 **DynamicMaps:** Optional Equator and Bay5 ground-plan packs are generated from local geometry

@@ -61,7 +61,7 @@ public sealed class ArenaMapBannersTests : IDisposable
 
     public static IEnumerable<object[]> MapsWithoutABanner()
     {
-        foreach (var map in ArenaMapRegistry.All)
+        foreach (var map in ArenaMapRegistry.Catalog)
         {
             if (map.Key != ArenaMapRegistry.Equator.Key && map.Key != ArenaMapRegistry.Bay5.Key)
             {
@@ -223,7 +223,7 @@ public sealed class ArenaMapBannersTests : IDisposable
 
     private static ArenaMapDescriptor FindMap(string key)
     {
-        foreach (var map in ArenaMapRegistry.All)
+        foreach (var map in ArenaMapRegistry.Catalog)
         {
             if (map.Key == key)
             {

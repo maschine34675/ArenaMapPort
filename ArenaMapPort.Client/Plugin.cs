@@ -39,7 +39,9 @@ namespace ArenaMapPort.Client
             Instance = this;
             Log = base.Logger;
 
+            DeveloperOptions.Install(Config);
             LogStartupBanner();
+            Bay5AmbientAudio.BindConfig(); // accepted audio defaults before the release configuration policy
 
             // daytime-and-visuals F1 — config must be bound before HarmonyPatches.InstallAll patches
             // LocalGame.InitWeather, whose prefix (TimeOfDayRepairs.Prefix) reads it. See TimeOfDayRepairs.cs.
@@ -56,7 +58,7 @@ namespace ArenaMapPort.Client
             HarmonyPatches.InstallAll(_harmony);
             LightingModCompatibility.Install(_harmony);
 
-            SceneDiagnostics.Install();
+            if (DeveloperOptions.Enabled) SceneDiagnostics.Install();
             VertexGroundDiffuseRepairs.Install(); // capture source RGB before shader/indoor repair cloning
             ShaderRebind.Install();
             NativeDustRepairs.Install(); // native animation after real shaders are rebound; preserve generated meshes
@@ -76,7 +78,7 @@ namespace ArenaMapPort.Client
             // ConfigEntries, and the once-per-raid diagnostic dump. See docs/progress/
             // fix-lighting-movement.md.
             ArenaLightingRepairs.Install();
-            LightingDiagnosticProbe.Install();
+            if (DeveloperOptions.Enabled) LightingDiagnosticProbe.Install();
 
             // "Lighting Lab" (docs/progress/donor-settings-camera-weather.md) — live F12 toggles for the
             // grazing-angle white-ground veil bug. Must install AFTER WeatherRig/ArenaLightingRepairs (both
@@ -128,7 +130,7 @@ namespace ArenaMapPort.Client
             ReverbAudioProbe.Install();
             SpatialAudioProbe.Install(_harmony);
             PuddleFootstepRepairs.Install(_harmony);
-            DaytimeVisualsProbe.Install();
+            if (DeveloperOptions.Enabled) DaytimeVisualsProbe.Install();
 
             // docs/progress/shader-compat-and-inspector.md §b — F10 live diagnostic hotkey (any map, no
             // gate/dependency on the repairs above; order doesn't matter, placed last for clarity).

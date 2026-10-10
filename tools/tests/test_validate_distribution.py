@@ -50,6 +50,15 @@ class DistributionSidecarTests(unittest.TestCase):
         for folder in (self.server / "db", self.repo / "ArenaMapPort.Server/db"):
             folder.mkdir(parents=True)
             (folder / "base.json").write_text('{"Id": "arena_equator"}', encoding="utf-8")
+        # The release is exactly two maps, even when parked descriptors remain in source.
+        (self.maps / "bay5.json").write_text(json.dumps({"key": "arena_bay5", "db_base_json_path": "arena_bay5/base.json"}), encoding="utf-8")
+        (self.maps / "bowl.json").write_text(json.dumps({"key": "arena_bowl", "db_base_json_path": "arena_bowl/base.json"}), encoding="utf-8")
+        for kind in ("scenes", "navmesh", "preset"):
+            (bundles / f"arena_bay5_{kind}.bundle").write_bytes(b"fixture bundle")
+        (self.plugin / "material-shaders.arena_bay5.json").write_text("{}", encoding="utf-8")
+        for folder in (self.server / "db/arena_bay5", self.repo / "ArenaMapPort.Server/db/arena_bay5"):
+            folder.mkdir(parents=True)
+            (folder / "base.json").write_text('{"Id": "arena_bay5"}', encoding="utf-8")
         self.built = {}
         for name, destination in (("Client", self.plugin), ("Server", self.server)):
             built = self.repo / f"ArenaMapPort.{name}/bin/Release/maschine-ArenaMapPort.{name}.dll"
@@ -72,7 +81,7 @@ class DistributionSidecarTests(unittest.TestCase):
                 redirect_stdout(output):
             distribution.validate()
         self.assertEqual(run.call_count, 2)
-        self.assertIn("DISTRIBUTION_OK 1 maps 3 bundles 1 sidecars", output.getvalue())
+        self.assertIn("DISTRIBUTION_OK 2 maps 6 bundles 2 sidecars", output.getvalue())
 
     def test_distribution_accepts_bots_exits_and_other_dotted_sidecars(self):
         (self.maps / "equator.bots.json").write_text('{"player_spawns": []}', encoding="utf-8")
@@ -96,6 +105,20 @@ class DistributionSidecarTests(unittest.TestCase):
         (self.plugin / "bundles/unregistered_scenes.bundle").write_bytes(b"unexpected")
         with self.assertRaisesRegex(ValueError, "Bundle set mismatch"):
             self.validate()
+
+    def test_distribution_rejects_every_kind_of_parked_map_output(self):
+        for path, message in (
+                (self.plugin / "bundles/arena_bowl_scenes.bundle", "Bundle set mismatch"),
+                (self.plugin / "material-shaders.arena_bowl.json", "Shader sidecar set"),
+                (self.server / "db/arena_bowl/base.json", "Server database set")):
+            with self.subTest(path=path):
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_text("{}", encoding="utf-8")
+                try:
+                    with self.assertRaisesRegex(ValueError, message):
+                        self.validate()
+                finally:
+                    path.unlink()
 
     def test_distribution_rejects_missing_flare_files_or_texture_hash(self):
         flare_dir = self.plugin / "flares/arena_equator"
@@ -140,7 +163,7 @@ class RegistrySidecarTests(unittest.TestCase):
         (self.maps / "equator.opened.json").write_text('{"key": "not_a_map"}', encoding="utf-8")
         result = self.run_validator()
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
-        self.assertIn("runtime registry entries", result.stdout)
+        self.assertIn("catalog registry entries", result.stdout)
 
     def test_real_registry_rejects_missing_key_descriptor(self):
         (self.maps / "equator.json").write_text("{}", encoding="utf-8")

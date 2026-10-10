@@ -8,6 +8,9 @@ dated state in one screen; read it before this index if you only have a minute.
 
 ## Current — read these for the area you touch
 
+- [first-release-prep.md](first-release-prep.md) — two-map release scope, accepted ambient mix
+  and ten player options with restart-latched developer controls (2026-10-10).
+
 - [equator-rain-output.md](equator-rain-output.md) — fix the hidden indoor-rain
   mixer mute after the user's failed listening test; final-output A/B evidence (2026-10-09).
 

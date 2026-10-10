@@ -234,9 +234,10 @@
     <Error Condition="!Exists('$(ArenaMapPortAcousticsDir)\arena_equator\spatial-audio.json') Or !Exists('$(ArenaMapPortAcousticsDir)\arena_bay5\spatial-audio.json')"
            Text="Missing native acoustic input; run tools/extract/extract_spatial_audio.py" />
     <ItemGroup>
-      <ArenaMapPortAcousticFile Include="$(ArenaMapPortAcousticsDir)\**\spatial-audio.json;$(ArenaMapPortAcousticsDir)\**\source.audiobakedata;$(ArenaMapPortAcousticsDir)\**\*.wav" />
+      <ArenaMapPortAcousticFile Include="$(ArenaMapPortAcousticsDir)\arena_equator\**\spatial-audio.json;$(ArenaMapPortAcousticsDir)\arena_equator\**\source.audiobakedata;$(ArenaMapPortAcousticsDir)\arena_equator\**\*.wav"><MapKey>arena_equator</MapKey></ArenaMapPortAcousticFile>
+      <ArenaMapPortAcousticFile Include="$(ArenaMapPortAcousticsDir)\arena_bay5\**\spatial-audio.json;$(ArenaMapPortAcousticsDir)\arena_bay5\**\source.audiobakedata;$(ArenaMapPortAcousticsDir)\arena_bay5\**\*.wav"><MapKey>arena_bay5</MapKey></ArenaMapPortAcousticFile>
     </ItemGroup>
-    <Copy SourceFiles="@(ArenaMapPortAcousticFile)" DestinationFiles="@(ArenaMapPortAcousticFile->'$(ArenaMapPortDistDir)\acoustics\%(RecursiveDir)%(Filename)%(Extension)')" />
+    <Copy SourceFiles="@(ArenaMapPortAcousticFile)" DestinationFiles="@(ArenaMapPortAcousticFile->'$(ArenaMapPortDistDir)\acoustics\%(MapKey)\%(RecursiveDir)%(Filename)%(Extension)')" />
   </Target>
 
   <!-- Original map flares and raw source atlas; isolated native renderer, no scene rebuild. -->
@@ -336,14 +337,8 @@
     <Message Importance="high" Text="[ArenaMapPort] staged material-shaders.arena_bay5.json from $(ArenaMapPortBay5BuildDir) into dist/.../ArenaMapPort/" />
   </Target>
 
-  <!-- Explicit full-map outputs only. Never glob slice or diagnostic bundles into dist. -->
-  <Import Project="..\tools\maps\AdditionalMapBuilds.props" />
-  <Target Name="ArenaMapPortStageAdditionalMaps" AfterTargets="ArenaMapPortStageWpOutputs" Condition="'$(Configuration)'=='Release' And '$(ArenaMapPortDllOnly)'!='true'">
-    <Error Text="[ArenaMapPort] validated full-map bundle missing: %(ArenaMapPortAdditionalBundle.Identity)"
-           Condition="!Exists('%(ArenaMapPortAdditionalBundle.Identity)')" />
-    <Copy SourceFiles="@(ArenaMapPortAdditionalBundle)" DestinationFolder="$(ArenaMapPortDistDir)\bundles" SkipUnchangedFiles="true" />
-    <Copy SourceFiles="@(ArenaMapPortAdditionalSidecar)"
-          DestinationFiles="@(ArenaMapPortAdditionalSidecar->'$(ArenaMapPortDistDir)\%(DistFilename)')" SkipUnchangedFiles="true" />
-    <Message Importance="high" Text="[ArenaMapPort] staged all validated additional maps into dist." />
+  <!-- Parked map outputs remain recoverable under work; they never enter this release. -->
+  <Target Name="ArenaMapPortParkUnreleased" BeforeTargets="ArenaMapPortDistCopy" Condition="'$(Configuration)'=='Release'">
+    <Exec Command="pwsh -NoProfile -File &quot;$(MSBuildThisFileDirectory)..\tools\park-unreleased-dist.ps1&quot; -Scope Client" />
   </Target>
 </Project>

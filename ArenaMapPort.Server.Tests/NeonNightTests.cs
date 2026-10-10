@@ -54,7 +54,7 @@ public class NeonNightTests
     [Fact]
     public void OnlyEquatorOwnsAnInstallationAndItsCostIsBounded()
     {
-        Assert.All(ArenaMapRegistry.All.Where(m => m != ArenaMapRegistry.Equator), m => Assert.Empty(m.NeonFixtures));
+        Assert.All(ArenaMapRegistry.Catalog.Where(m => m != ArenaMapRegistry.Equator), m => Assert.Empty(m.NeonFixtures));
         var fixtures = ArenaMapRegistry.Equator.NeonFixtures;
         Assert.InRange(fixtures.Length, 1, 12);
         Assert.Equal(fixtures.Length, fixtures.Select(f => f.Name).Distinct().Count());

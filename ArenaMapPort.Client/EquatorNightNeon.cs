@@ -162,7 +162,7 @@ namespace ArenaMapPort.Client
                     _accents.Update(camera);
                     NeonWetFloor.Update(true);
                     _atmosphere.SyncLightVisibility();
-                    if (Dirty) Probe();
+                    if (Dirty && DeveloperOptions.Enabled) Probe();
                     Dirty = false;
                 }
                 catch (Exception e)

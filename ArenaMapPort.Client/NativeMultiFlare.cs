@@ -127,7 +127,7 @@ namespace ArenaMapPort.Client
                     _frames++;
                     // F7 runs in Update, potentially while these native jobs are writing. Read
                     // their output only here, after every job has completed, and expose a cache.
-                    _batchSummary = string.Join(",", _renderer.GetBatches().Cast<FlareBatch>().Select(b =>
+                    if (DeveloperOptions.Enabled) _batchSummary = string.Join(",", _renderer.GetBatches().Cast<FlareBatch>().Select(b =>
                         b.Material.shader.name + ":" + b.Length + "/" + b._gpuData.Length));
                 }
                 catch (Exception ex) { Fail(ex); }

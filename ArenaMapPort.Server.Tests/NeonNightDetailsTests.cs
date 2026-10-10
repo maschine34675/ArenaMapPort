@@ -69,7 +69,7 @@ public class NeonNightDetailsTests
     [Fact]
     public void AccentLayoutHasOnlyEquatorOwnershipAndMatchesReviewedPlacementData()
     {
-        Assert.All(ArenaMapRegistry.All.Where(m => m != ArenaMapRegistry.Equator), m => Assert.Empty(m.NightAccents));
+        Assert.All(ArenaMapRegistry.Catalog.Where(m => m != ArenaMapRegistry.Equator), m => Assert.Empty(m.NightAccents));
         var accents = ArenaMapRegistry.Equator.NightAccents;
         Assert.InRange(accents.Length, 1, 12); // Bound realtime point-shadow cost.
         Assert.Equal(accents.Length, accents.Select(a => a.Name).Distinct().Count());

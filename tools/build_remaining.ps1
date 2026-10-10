@@ -4,7 +4,7 @@
 .DESCRIPTION
   Skips maps whose build outputs already pass validate_port. Existing extraction packages are reused. An incomplete extraction
   directory is never overwritten. -Rebuild rebuilds bundles from complete existing packages.
-  -Stage runs server tests, builds the client Release distribution and verifies every staged map.
+  -Stage is reserved and refused: the release distribution contains only Equator and Bay5.
   This script does not deploy to the live SPT installation.
 .EXAMPLE
   .\tools\build_remaining.ps1
@@ -21,6 +21,7 @@ param(
     [switch]$Stage
 )
 $ErrorActionPreference = 'Stop'
+if ($Stage) { throw 'Additional maps are parked. -Stage cannot write them into the Equator/Bay5 release; omit -Stage to retain development builds in work/.' }
 $repo = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
 $allMaps = @('autoservice','airpit','airpit2','bowl','prison','railwaystation','yard','iceberg','factory','custom','shoreline','woods')
 if (-not $Maps.Count -or (@($Maps | Sort-Object -Unique).Count -ne $Maps.Count)) { throw 'Specify a nonempty unique map list.' }
@@ -50,25 +51,6 @@ try {
         & python -u tools/validate/validate_port.py --map $stem *>> $log
         if ($LASTEXITCODE -ne 0) { throw "Build output validation failed for $stem; see $log" }
         Write-Output "PORT_COMPLETE $stem $(Get-Date -Format o)"
-    }
-    if ($Stage) {
-        & python -u tools/validate/validate_map_descriptors.py
-        if ($LASTEXITCODE -ne 0) { throw 'Runtime registry and map descriptors disagree; staging refused.' }
-        foreach ($stem in $allMaps) {
-            & python -u tools/validate/validate_port.py --map $stem
-            if ($LASTEXITCODE -ne 0) { throw "Cannot stage until every registered map validates: $stem" }
-        }
-        & dotnet test ArenaMapPort.Server.Tests -c Release --nologo
-        if ($LASTEXITCODE -ne 0) { throw 'Server tests failed.' }
-        & dotnet build ArenaMapPort.Client -c Release --nologo
-        if ($LASTEXITCODE -ne 0) { throw 'Client Release build/staging failed.' }
-        foreach ($stem in $allMaps) {
-            & python -u tools/validate/validate_port.py --map $stem --distribution
-            if ($LASTEXITCODE -ne 0) { throw "Staged map validation failed: $stem" }
-        }
-        & python -u tools/validate/validate_distribution.py
-        if ($LASTEXITCODE -ne 0) { throw 'Distribution contains missing, stale or unexpected map files.' }
-        Write-Output 'ALL_ADDITIONAL_MAPS_STAGED'
     }
 } finally {
     Pop-Location

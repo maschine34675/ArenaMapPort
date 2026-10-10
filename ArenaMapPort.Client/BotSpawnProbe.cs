@@ -55,6 +55,7 @@ namespace ArenaMapPort.Client
                 "(state, position, active BigBrain layer, standby, mover). Read at game start — restart EFT after changing. " +
                 "Turn on when bots register but never move.");
 
+            if (!DeveloperOptions.Enabled) return;
             TryPatch(harmony, "BotsController.ActivateBotsByWave(SpawnWave)",
                 AccessTools.Method(typeof(BotsController), nameof(BotsController.ActivateBotsByWave), new[] { typeof(SpawnWave) }),
                 prefix: nameof(ActivateWavePrefix));

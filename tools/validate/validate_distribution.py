@@ -5,7 +5,7 @@ from pathlib import Path
 import subprocess
 import sys
 
-from validate_map_descriptors import map_descriptor_paths
+from validate_map_descriptors import map_descriptor_paths, RELEASE_MAP_KEYS
 
 REPO = Path(__file__).resolve().parents[2]
 
@@ -20,6 +20,10 @@ def validate():
     keys = [m['key'] for m in descriptors]
     if len(keys) != len(set(keys)):
         raise ValueError('Duplicate descriptor keys')
+    descriptors = [m for m in descriptors if m['key'] in RELEASE_MAP_KEYS]
+    keys = [m['key'] for m in descriptors]
+    if set(keys) != set(RELEASE_MAP_KEYS):
+        raise ValueError('Missing release map descriptor')
     plugin = REPO/'dist/BepInEx/plugins/ArenaMapPort'
     sys.path.insert(0, str(REPO/'tools/extract'))
     from extract_multiflare import validate_graph
@@ -39,7 +43,7 @@ def validate():
     if {p.relative_to(plugin/'flares').as_posix() for p in (plugin/'flares').rglob('*') if p.is_file()} != expected_flare_files:
         raise ValueError('Unexpected or missing flare package files')
     expected_bundles = {f'{key}_{kind}.bundle' for key in keys for kind in ('scenes','navmesh','preset')}
-    actual_bundles = {p.name for p in (plugin/'bundles').iterdir() if p.is_file()}
+    actual_bundles = {p.relative_to(plugin/'bundles').as_posix() for p in (plugin/'bundles').rglob('*') if p.is_file()}
     if actual_bundles != expected_bundles:
         raise ValueError(f'Bundle set mismatch: missing={sorted(expected_bundles-actual_bundles)} unexpected={sorted(actual_bundles-expected_bundles)}')
     # fix-preset-cab-and-bundle-lifetime: every dist bundle's internal UnityFS directory-table

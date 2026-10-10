@@ -84,7 +84,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <Content Include="db\**\*.json" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="db\base.json;db\arena_bay5\base.json" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
   <PropertyGroup Condition="'$(Configuration)'=='Release'">
@@ -99,16 +99,20 @@
     but targets this repo's dist/ tree instead of a live SPT_UserPath — promoting
     dist/ -> D:/SPT41 is a separate, user-approved step, never run from here.
   -->
+  <Target Name="ParkUnreleased" BeforeTargets="DeployToDist" Condition="'$(Configuration)'=='Release'">
+    <Exec Command="pwsh -NoProfile -File &quot;$(MSBuildThisFileDirectory)..\tools\park-unreleased-dist.ps1&quot; -Scope Server" />
+  </Target>
   <Target Name="DeployToDist" AfterTargets="Build">
     <PropertyGroup>
       <DistModDir>$(MSBuildThisFileDirectory)..\dist\SPT_Runtime\user\mods\ArenaMapPort</DistModDir>
     </PropertyGroup>
     <ItemGroup>
-      <ArenaMapPortDbFiles Include="$(MSBuildThisFileDirectory)db\**\*.json" />
+      <ArenaMapPortDbFiles Include="$(MSBuildThisFileDirectory)db\base.json"><ReleasePath>base.json</ReleasePath></ArenaMapPortDbFiles>
+      <ArenaMapPortDbFiles Include="$(MSBuildThisFileDirectory)db\arena_bay5\base.json"><ReleasePath>arena_bay5/base.json</ReleasePath></ArenaMapPortDbFiles>
     </ItemGroup>
     <MakeDir Directories="$(DistModDir)\db" />
     <Copy SourceFiles="$(TargetPath)" DestinationFolder="$(DistModDir)" SkipUnchangedFiles="true" />
-    <Copy SourceFiles="@(ArenaMapPortDbFiles)" DestinationFiles="@(ArenaMapPortDbFiles->'$(DistModDir)\db\%(RecursiveDir)%(Filename)%(Extension)')" SkipUnchangedFiles="true" />
+    <Copy SourceFiles="@(ArenaMapPortDbFiles)" DestinationFiles="@(ArenaMapPortDbFiles->'$(DistModDir)\db\%(ReleasePath)')" SkipUnchangedFiles="true" />
   </Target>
 
 </Project>

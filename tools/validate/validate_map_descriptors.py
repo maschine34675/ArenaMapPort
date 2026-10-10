@@ -333,18 +333,26 @@ def registry_entries(text: str) -> dict[str, dict]:
             for name in names}
 
 
+RELEASE_MAP_NAMES = ("Equator", "Bay5")
+RELEASE_MAP_KEYS = ("arena_equator", "arena_bay5")
+
+
 def registry_membership_errors(text: str, entries: dict) -> list[str]:
     clean = strip_line_comments(text)
-    match = re.search(r"IReadOnlyList<ArenaMapDescriptor>\s+All\s*=\s*new\[\]\s*\{([^}]+)\}", clean, re.S)
-    if not match:
-        return ["ArenaMapRegistry.All membership array could not be parsed"]
-    names = [part.strip() for part in match.group(1).split(",") if part.strip()]
     errors = []
-    if len(names) != len(set(names)):
-        errors.append("ArenaMapRegistry.All contains duplicate entries")
-    if set(names) != set(entries):
-        errors.append(f"ArenaMapRegistry.All membership differs from descriptor declarations: "
-                      f"missing={sorted(set(entries) - set(names))}, unknown={sorted(set(names) - set(entries))}")
+    for array, expected in (("Catalog", set(entries)), ("All", set(RELEASE_MAP_NAMES))):
+        match = re.search(r"IReadOnlyList<ArenaMapDescriptor>\s+" + array + r"\s*=\s*new\[\]\s*\{([^}]+)\}", clean, re.S)
+        if not match:
+            errors.append(f"ArenaMapRegistry.{array} membership array could not be parsed")
+            continue
+        names = [part.strip() for part in match.group(1).split(",") if part.strip()]
+        if len(names) != len(set(names)):
+            errors.append(f"ArenaMapRegistry.{array} contains duplicate entries")
+        if set(names) != expected:
+            errors.append(f"ArenaMapRegistry.{array} membership differs: "
+                          f"missing={sorted(expected - set(names))}, unknown={sorted(set(names) - expected)}")
+        if not set(names) <= set(entries):
+            errors.append(f"ArenaMapRegistry.{array} references undeclared maps")
     return errors
 
 
@@ -516,8 +524,8 @@ def main() -> int:
         return 1
 
     print(
-        f"OK — {len(paths)} tools/maps descriptors, all {len(entries)} runtime registry entries, "
-        "All membership, and ArenaPaths.cs's EquatorDefault() all agree."
+        f"OK — {len(paths)} tools/maps descriptors, all {len(entries)} catalog registry entries, "
+        "release All membership, and ArenaPaths.cs's EquatorDefault() all agree."
     )
     return 0
 

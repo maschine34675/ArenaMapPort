@@ -12,7 +12,7 @@ public sealed class Bay5MapTests
         using var doc = JsonDocument.Parse(File.ReadAllText(Sidecar("equator.json")));
         Assert.True(doc.RootElement.GetProperty("inherit_indoor_floor_details").GetBoolean());
         Assert.True(ArenaMapRegistry.Equator.InheritIndoorFloorDetails);
-        foreach (var map in ArenaMapRegistry.All.Where(m => m != ArenaMapRegistry.Equator))
+        foreach (var map in ArenaMapRegistry.Catalog.Where(m => m != ArenaMapRegistry.Equator))
             Assert.False(map.InheritIndoorFloorDetails);
     }
 
@@ -44,7 +44,7 @@ public sealed class Bay5MapTests
             "SBG_Arena_Bay5_Main/SOO/PROPS/Military_sandbag_barrier_03 (1)"
         }, paths);
         Assert.Equal(paths, ArenaMapRegistry.Bay5.RestoredShadowCasterRoots);
-        foreach (var map in ArenaMapRegistry.All.Where(m => m != ArenaMapRegistry.Bay5))
+        foreach (var map in ArenaMapRegistry.Catalog.Where(m => m != ArenaMapRegistry.Bay5))
             Assert.Empty(map.RestoredShadowCasterRoots);
     }
 
@@ -56,7 +56,7 @@ public sealed class Bay5MapTests
         Assert.Equal(3, paths.Length);
         Assert.Equal(paths, ArenaMapRegistry.Equator.DistantShadowCasterPaths);
         Assert.All(paths, path => Assert.EndsWith("_SHADOW_LOD0", path));
-        foreach (var map in ArenaMapRegistry.All.Where(m => m != ArenaMapRegistry.Equator))
+        foreach (var map in ArenaMapRegistry.Catalog.Where(m => m != ArenaMapRegistry.Equator))
             Assert.Empty(map.DistantShadowCasterPaths);
     }
 
@@ -67,7 +67,7 @@ public sealed class Bay5MapTests
         var names = doc.RootElement.GetProperty("puddle_water_material_names").EnumerateArray().Select(e => e.GetString()).ToArray();
         Assert.Equal(new[] { "70f045bb011600e7" }, names); // Original "puddle indoor static", not oil decals.
         Assert.Equal(names, ArenaMapRegistry.Bay5.PuddleWaterMaterialNames);
-        foreach (var map in ArenaMapRegistry.All.Where(m => m != ArenaMapRegistry.Bay5))
+        foreach (var map in ArenaMapRegistry.Catalog.Where(m => m != ArenaMapRegistry.Bay5))
             Assert.Empty(map.PuddleWaterMaterialNames);
     }
 

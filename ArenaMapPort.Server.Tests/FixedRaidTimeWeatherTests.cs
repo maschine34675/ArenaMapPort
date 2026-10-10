@@ -22,7 +22,7 @@ public class FixedRaidTimeWeatherTests
         Assert.Null(ArenaMapRegistry.Bay5.FixedDayHour);
         Assert.Null(ArenaMapRegistry.Bay5.FixedNightHour);
         Assert.True(ArenaMapRegistry.Bay5.UsesServerTime);
-        foreach (var map in ArenaMapRegistry.All)
+        foreach (var map in ArenaMapRegistry.Catalog)
         {
             var name = map.Key["arena_".Length..] + ".json";
             string? path = null;
@@ -86,7 +86,7 @@ public class FixedRaidTimeWeatherTests
         bool Night(string key, DateTimeEnum variant) => (bool)target.Invoke(helper, [variant, key])!;
         var variants = new[] { DateTimeEnum.CURR, DateTimeEnum.PAST };
         var fixedKeys = new[] { ArenaMapRegistry.Equator.Key };
-        var otherKeys = ArenaMapRegistry.All.Where(map => !fixedKeys.Contains(map.Key))
+        var otherKeys = ArenaMapRegistry.Catalog.Where(map => !fixedKeys.Contains(map.Key))
             .Select(map => map.Key).Concat(["factory4_day", "factory4_night", "bigmap", "unknown_map"]).ToArray();
         var before = otherKeys.SelectMany(key => variants.Select(variant =>
             (key, variant, value: Night(key, variant)))).ToArray();

@@ -239,7 +239,7 @@ namespace ArenaMapPort.Client
 
             // Plugin.Instance.gameObject is the same always-alive host SceneInspector.cs uses for its own
             // F10 poller — no new persistent GameObject needed just for a key-poll.
-            Plugin.Instance.gameObject.AddComponent<HotkeyRunner>();
+            if (DeveloperOptions.Enabled) Plugin.Instance.gameObject.AddComponent<HotkeyRunner>();
 
             SceneManager.sceneLoaded += OnSceneLoaded;
             SceneManager.sceneUnloaded += OnSceneUnloaded;

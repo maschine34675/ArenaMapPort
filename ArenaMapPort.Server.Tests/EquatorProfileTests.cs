@@ -188,7 +188,7 @@ public sealed class EquatorProfileTests : IDisposable
         var common = cfg.Bind("Lighting (arena_equator)", "Donor", "Reserve", "Common");
         var sain = cfg.Bind("Bots (arena_equator)", "SainLocation", "Interchange", "Legacy alias");
         var daySain = cfg.Bind("Bots (arena_equator Day)", "SainLocation", "Factory", "Day alias");
-        MapConfigVisibility.Install(); MapConfigVisibility.Install();
+        MapConfigVisibility.Apply(cfg, true); MapConfigVisibility.Apply(cfg, true);
         Assert.Contains(legacy.Description.Tags, t => t is System.ComponentModel.BrowsableAttribute { Browsable: false });
         Assert.Contains(sain.Description.Tags, t => t is System.ComponentModel.BrowsableAttribute { Browsable: false });
         foreach (var entry in new ConfigEntryBase[] { day, night, common, daySain })
