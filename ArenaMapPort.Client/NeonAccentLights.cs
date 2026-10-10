@@ -33,11 +33,11 @@ namespace ArenaMapPort.Client
         internal static void BindConfig(EventHandler changed)
         {
             const string section = "Night neon (arena_equator)";
-            _strength = Plugin.Instance.Config.Bind(section, "AccentLightIntensity", DefaultStrength,
+            _strength = Plugin.Instance.Settings.Bind(section, "AccentLightIntensity", DefaultStrength,
                 new ConfigDescription("Strength of nine additional colored chemlights and their small light pools. " +
                     "0 removes these accents. Native models, decorative only; independent of the large neon strips. Live.",
                     new AcceptableValueRange<float>(0f, 2f)));
-            var revision = Plugin.Instance.Config.Bind(section, "AccentDefaultsRevision", 0,
+            var revision = Plugin.Instance.Settings.Bind(section, "AccentDefaultsRevision", 0,
                 new ConfigDescription("Internal once-only migration of the original chemlight strength to the brighter wall layout. " +
                     "Custom values and disabled accents are retained.", null, System.ComponentModel.BrowsableAttribute.No));
             if (revision.Value < 1)

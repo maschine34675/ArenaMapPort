@@ -45,11 +45,11 @@ namespace ArenaMapPort.Client
 
         internal static void BindConfig()
         {
-            _enabled = Plugin.Instance.Config.Bind("Exfils", "SmokeSignals", true,
+            _enabled = Plugin.Instance.Settings.Bind("Exfils", "SmokeSignals", true,
                 "Smoke column + light at every runtime-authored exit on ported maps (EFT's airdrop signal effect). Next raid.");
-            _sound = Plugin.Instance.Config.Bind("Exfils", "SmokeSignalSound", true,
+            _sound = Plugin.Instance.Settings.Bind("Exfils", "SmokeSignalSound", true,
                 "Play the airdrop flare's hiss at the exits (3D, quiet, 30 m). Next raid.");
-            _color = Plugin.Instance.Config.Bind("Exfils", "SmokeSignalColor", new Color(0.25f, 1f, 0.35f),
+            _color = Plugin.Instance.Settings.Bind("Exfils", "SmokeSignalColor", new Color(0.25f, 1f, 0.35f),
                 "Tint of the smoke and the light (green like a vanilla extraction flare). Next raid.");
         }
 

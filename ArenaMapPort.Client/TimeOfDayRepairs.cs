@@ -82,19 +82,19 @@ namespace ArenaMapPort.Client
             }
             _installed = true;
 
-            _enabled = Plugin.Instance.Config.Bind("TimeOfDay", "Enabled", true,
+            _enabled = Plugin.Instance.Settings.Bind("TimeOfDay", "Enabled", true,
                 new ConfigDescription("Legacy fixed-hour override for unreleased Arena maps without their own time selection. " +
                     "Equator uses 12:00/00:00; Bay5 uses the two native server times. Has no effect on either released map. " +
                     "Saved legacy values are retained. Next raid.", null, BrowsableAttribute.No));
 
-            _fixedHour = Plugin.Instance.Config.Bind("TimeOfDay", "ArenaFixedHour", 12,
+            _fixedHour = Plugin.Instance.Settings.Bind("TimeOfDay", "ArenaFixedHour", 12,
                 new ConfigDescription(
                     "Legacy start hour for Arena maps without fixed menu choices, when Enabled=true. " +
                     "Equator uses 12:00/00:00; Bay5 uses the two native server times. Has no effect on either released map. " +
                     "Saved legacy values are retained. Next raid.",
                     new AcceptableValueRange<int>(0, 23), BrowsableAttribute.No));
 
-            var revision = Plugin.Instance.Config.Bind("TimeOfDay", "FixedTimeSelectionRevision", 0,
+            var revision = Plugin.Instance.Settings.Bind("TimeOfDay", "FixedTimeSelectionRevision", 0,
                 new ConfigDescription("Internal migration marker for fixed menu choices.", null, BrowsableAttribute.No));
             if (revision.Value < 1)
             {

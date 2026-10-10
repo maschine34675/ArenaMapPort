@@ -14,16 +14,16 @@ public sealed class ReleaseConfigurationTests
     static bool Visible(ConfigEntryBase entry) => entry.Description.Tags.OfType<BrowsableAttribute>().Last().Browsable;
 
     [Fact]
-    public void PlayerMenuHasTenControlsAndRetainsHiddenValuesRangesAndDrawers()
+    public void PlayerMenuHasOneControlAndRetainsHiddenValuesRangesAndDrawers()
     {
         var cfg = new ConfigFile();
         var expected = new[] {
-            "General/DeveloperMode", "Audio (arena_equator)/AmbientGainDb", "Audio (arena_equator)/RainVolume",
-            "Audio (arena_bay5)/AmbientGainDb", "Audio (arena_bay5)/RainVolume",
-            "Lighting (arena_equator Day)/ExposureCompensationEV", "Lighting (arena_equator Night)/ExposureCompensationEV",
-            "Lighting (arena_bay5)/ExposureCompensationEV", "Night neon (arena_equator)/PostFx", "Night neon (arena_equator)/FlickerStrength"
+            "Appearance/NaturalEquatorNight"
         };
         foreach (var path in expected) { var parts = path.Split('/'); cfg.Bind(parts[0], parts[1], 1f, "Player control"); }
+        DeveloperOptions.Install(cfg);
+        cfg.Bind("Audio (arena_equator)", "AmbientGainDb", 5f, "Hidden");
+        cfg.Bind("Lighting (arena_equator Night)", "ExposureCompensationEV", .3f, "Hidden");
         var drawer = new object();
         var original = new ConfigDescription("Curve", new AcceptableValueRange<float>(0f, 2f), drawer);
         var curve = cfg.Bind("Lighting (arena_equator Night)", "ToneCurve", 1f, original); curve.Value = 1.75f;
@@ -37,6 +37,7 @@ public sealed class ReleaseConfigurationTests
         {
             MapConfigVisibility.Apply(cfg, true);
             Assert.True(Visible(curve));
+            Assert.False(Visible(cfg.Get<bool>("General", "DeveloperMode")));
             Assert.False(Visible(legacy)); Assert.False(Visible(parked)); Assert.False(Visible(revision));
             Assert.Equal(2, curve.Description.Tags.Length);
             Assert.Same(drawer, curve.Description.Tags[0]);

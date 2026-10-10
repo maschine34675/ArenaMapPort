@@ -30,6 +30,9 @@ namespace ArenaMapPort.Client
 
         public static Plugin Instance { get; private set; }
 
+        // Every tuning bind must use Settings. Config is reserved for the compact player menu.
+        internal ConfigFile Settings { get; private set; }
+
         Harmony _harmony;
 
         void LateUpdate() => ArenaLightingRepairs.UpdateArtificialSun();
@@ -39,7 +42,7 @@ namespace ArenaMapPort.Client
             Instance = this;
             Log = base.Logger;
 
-            DeveloperOptions.Install(Config);
+            Settings = CompactConfiguration.Initialize(Config);
             LogStartupBanner();
             Bay5AmbientAudio.BindConfig(); // accepted audio defaults before the release configuration policy
 
@@ -149,7 +152,7 @@ namespace ArenaMapPort.Client
             HandsAmbientHighlight.Install();
             try
             {
-                int removed = RetiredConfiguration.RemoveSavedEntries(Config);
+                int removed = RetiredConfiguration.RemoveSavedEntries(Settings, persist: false);
                 Log.LogInfo($"[ArenaMapPort][Config] Removed {removed} retired saved options; active settings preserved.");
             }
             catch (Exception e)
@@ -158,6 +161,9 @@ namespace ArenaMapPort.Client
             }
             EquatorProfiles.BindAll(); // after legacy binds/migrations; independent Day/Night defaults
             MapConfigVisibility.Install(); // after all binds; keep F12 focused on Equator and Bay5
+            CompactConfiguration.Complete(Config);
+            Log.LogInfo($"[ArenaMapPort][Config] Public entries={Config.Count}, tuning entries={Settings.Count}; " +
+                $"tuning persistence={(DeveloperOptions.Enabled ? "developer" : "read-only")}, next-raid natural night={PlayerOptions.NaturalEquatorNight}.");
 
             int totalOwnedScenes = 0;
             foreach (var map in ArenaMapRegistry.All)

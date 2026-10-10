@@ -37,7 +37,7 @@ namespace ArenaMapPort.Client
         {
             if (_driver != null) return;
             foreach (var map in new[] { ArenaMapRegistry.Equator, ArenaMapRegistry.Bay5 })
-                Volumes[map.Key] = Plugin.Instance.Config.Bind("Audio (" + map.Key + ")", "RainVolume", 1f,
+                Volumes[map.Key] = Plugin.Instance.Settings.Bind("Audio (" + map.Key + ")", "RainVolume", 1f,
                     new ConfigDescription("Volume of native rain/snow ambience only. 1 = native full level, 0 = silent. " +
                         "Follows actual weather, season and acoustic room; live. Existing scenery ambience is unchanged.",
                         new AcceptableValueRange<float>(0f, 1f)));

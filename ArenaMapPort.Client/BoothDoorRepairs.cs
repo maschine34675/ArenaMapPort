@@ -47,10 +47,10 @@ namespace ArenaMapPort.Client
 
         internal static void BindConfig()
         {
-            _doors = Plugin.Instance.Config.Bind("Spawns", "OpenRespawnDoors", true,
+            _doors = Plugin.Instance.Settings.Bind("Spawns", "OpenRespawnDoors", true,
                 "Deactivate the leaves of Arena's sliding respawn-booth doors at raid start so players can leave the " +
                 "spawn booth (Arena opens them per round by a script that is not ported). Takes effect on the next raid.");
-            _barriers = Plugin.Instance.Config.Bind("Spawns", "OpenSpawnBarriers", true,
+            _barriers = Plugin.Instance.Settings.Bind("Spawns", "OpenSpawnBarriers", true,
                 "Deactivate the moving parts (everything but the frame) of the static scene objects the map lists as " +
                 "spawn barriers — on Equator the roller shutter that closes the FCK hall at the Usec spawn (Arena opens " +
                 "it per round by a script that is not ported). Takes effect on the next raid.");

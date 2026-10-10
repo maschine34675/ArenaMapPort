@@ -314,7 +314,7 @@ namespace ArenaMapPort.Client
             float defaultZeroLevel = bay5Defaults ? -8.2f : equatorDefaults ? -4.4f : 0f;
             var cfg = new RigConfigBundle();
 
-            cfg.Donor = Plugin.Instance.Config.Bind(section, "Donor", defaultDonor,
+            cfg.Donor = Plugin.Instance.Settings.Bind(section, "Donor", defaultDonor,
                 new BepInEx.Configuration.ConfigDescription(
                     "Vanilla SPT built-in scene ('<Name>_Scripts', BuildSettings scene, e.g. " +
                     "'Reserve_Base_Scripts') whose Weather/Weather_Simple subtree is harvested once per " +
@@ -322,7 +322,7 @@ namespace ArenaMapPort.Client
                     "(ArenaLightingRepairs workaround only, no rig). Takes effect on the NEXT raid — never " +
                     "hot-applied mid-raid."));
 
-            cfg.SkyboxModeEntry = Plugin.Instance.Config.Bind(section, "SkyboxMode", SkyboxMode.Dome,
+            cfg.SkyboxModeEntry = Plugin.Instance.Settings.Bind(section, "SkyboxMode", SkyboxMode.Dome,
                 new BepInEx.Configuration.ConfigDescription(
                     "Dome = the donor's real procedural TOD_Sky dome renders. FrozenStatic = disable the " +
                     "dome's painter GameObjects (Atmosphere/Clear/Space/Sun/Moon/cloud renderer) if the dome " +
@@ -330,7 +330,7 @@ namespace ArenaMapPort.Client
                     "failure mode for a cross-build sky rip) — ambient SH, reflections, fog and wind/rain keep " +
                     "running either way. Only read when Donor != 'Off'. Takes effect on the NEXT raid."));
 
-            cfg.KeepFillLight = Plugin.Instance.Config.Bind(section, "KeepFillLight", false,
+            cfg.KeepFillLight = Plugin.Instance.Settings.Bind(section, "KeepFillLight", false,
                 new BepInEx.Configuration.ConfigDescription(
                     "When a rig is active for this map (Donor != 'Off' AND harvested successfully in time for " +
                     "this raid), ArenaLightingRepairs' own FillLightIntensity is forced to 0 regardless of its " +
@@ -344,7 +344,7 @@ namespace ArenaMapPort.Client
             // -8.2 split the difference for the first playtest). HeightFalloff DOES match the donor
             // exactly (Reserve AND Customs both author 0.025 — critic-confirmed against
             // levelsettings_raw.json), so it's copied straight.
-            cfg.ZeroLevelOverride = Plugin.Instance.Config.Bind(section, "ZeroLevelOverride", defaultZeroLevel,
+            cfg.ZeroLevelOverride = Plugin.Instance.Settings.Bind(section, "ZeroLevelOverride", defaultZeroLevel,
                 "TOD_Scattering reads Singleton<LevelSettings>.Instance.ZeroLevel every rendered frame " +
                 "(TOD_Scattering.cs:165-176) once a rig is active (CameraEffectsRepairs adds the " +
                 "component) — our stub LevelSettings ships ZeroLevel=-78.64 (Laboratory's own authored " +
@@ -353,29 +353,29 @@ namespace ArenaMapPort.Client
                 "docs/progress/donor-settings-camera-weather.md for the evidence trail and how to re-tune " +
                 "it. Applied only while a rig is active for this map (Donor != 'Off' and harvested).");
 
-            cfg.HeightFalloffOverride = Plugin.Instance.Config.Bind(section, "HeightFalloffOverride", rigDefaults ? 0.025f : 0.029f,
+            cfg.HeightFalloffOverride = Plugin.Instance.Settings.Bind(section, "HeightFalloffOverride", rigDefaults ? 0.025f : 0.029f,
                 "TOD_Scattering's other per-frame ZeroLevel/HeightFalloff read (see ZeroLevelOverride). " +
                 "0.025 is Reserve's (and Customs') own authored value, byte-for-byte, vs. our stub's " +
                 "0.029 (Laboratory's authored value / the raw C# class default) — a real donor copy, not a " +
                 "guess. Applied only while a rig is active for this map.");
 
-            cfg.TextureBudgetTierEntry = Plugin.Instance.Config.Bind(section, "TextureBudgetTier",
+            cfg.TextureBudgetTierEntry = Plugin.Instance.Settings.Bind(section, "TextureBudgetTier",
                 rigDefaults ? TextureBudgetTier.ReserveTier : TextureBudgetTier.Stub,
                 "LevelSettings.MaxMapTextureMemory (a Vector4 streaming-texture budget, LevelSettings.cs:" +
                 "111,198) — our stub ships (1024,1024,1024,1024), the raw C# class default. ReserveTier " +
                 "= Reserve_Base_Scripts' own authored (2000,2450,2850,3100) — streaming-quality only, no " +
                 "plausible visual-correctness downside. Applied only while a rig is active for this map.");
 
-            cfg.RainBoundsCenter = Plugin.Instance.Config.Bind(section, "RainBoundsCenter", Vector3.zero,
+            cfg.RainBoundsCenter = Plugin.Instance.Settings.Bind(section, "RainBoundsCenter", Vector3.zero,
                 "LevelSettings.RainBounds' center (LevelSettings.cs:30). Default = the class's own default " +
                 "center (0,0,0) — a deliberate no-op until Bay5's real play-area coordinates are measured " +
                 "(see docs/progress/donor-settings-camera-weather.md, deferred). Applied only while a rig " +
                 "is active for this map.");
-            cfg.RainBoundsSize = Plugin.Instance.Config.Bind(section, "RainBoundsSize", new Vector3(1000f, 220f, 1000f),
+            cfg.RainBoundsSize = Plugin.Instance.Settings.Bind(section, "RainBoundsSize", new Vector3(1000f, 220f, 1000f),
                 "LevelSettings.RainBounds' size. Default = the class's own default size — see " +
                 "RainBoundsCenter's own description for why this ships as a no-op this pass.");
 
-            cfg.NorthDirectionOverride = Plugin.Instance.Config.Bind(section, "NorthDirectionOverride", 0f,
+            cfg.NorthDirectionOverride = Plugin.Instance.Settings.Bind(section, "NorthDirectionOverride", 0f,
                 new BepInEx.Configuration.ConfigDescription(
                     "LevelSettings._northDirection (LevelSettings.cs:108, degrees). Default 0 = our current " +
                     "authored value (unset) — the 2026-09-17 playtest already confirmed the sun direction " +
@@ -390,14 +390,14 @@ namespace ArenaMapPort.Client
             // map — the core of the "consistent donor set" strategy (rig + LevelSettings + camera all
             // from the same donor) — but a real, single-click toggle: falling back to the Cam2 fallback
             // path (§B.3) needs no other config change.
-            cfg.UseDonorCameraPrefab = Plugin.Instance.Config.Bind(section, "UseDonorCameraPrefab", rigDefaults,
+            cfg.UseDonorCameraPrefab = Plugin.Instance.Settings.Bind(section, "UseDonorCameraPrefab", rigDefaults,
                 "Assigns the harvested donor's own CameraPrefab/PrismPresetPrefab/PostProcessProfilePrefab " +
                 "onto this map's LevelSettings while a rig is active, so CameraManager.SetCameraFromSettings " +
                 "instantiates the donor's real camera (with its own baked TOD_Scattering/PrismEffects." +
                 "useExposure) instead of falling back to Cam2. false = always Cam2, matching today's " +
                 "behavior regardless of the rig. Takes effect on the next raid.");
 
-            cfg.GroundSmoothnessBase = Plugin.Instance.Config.Bind(section, "GroundSmoothness", 1f,
+            cfg.GroundSmoothnessBase = Plugin.Instance.Settings.Bind(section, "GroundSmoothness", 1f,
                 new BepInEx.Configuration.ConfigDescription(
                     "Multiplier on the smoothness/gloss properties of the map's floor/ground/asphalt " +
                     "materials while a weather rig is active (LightingLab's GroundSmoothnessMultiplier stacks " +
@@ -410,7 +410,7 @@ namespace ArenaMapPort.Client
             // 1.0 = vanilla. 0.5 fixed the hall-floor sky mirror but (host A/B 2026-09-19,
             // doc §16.2) darkens EVERY shadowed surface: the Custom Ambient pass scales its whole
             // cubemap contribution with _ReflectionIntensity, and that carries most of the shadow light.
-            cfg.ReflectionIntensity = Plugin.Instance.Config.Bind(section, "ReflectionIntensity", equatorDefaults ? 0.85f : 1f,
+            cfg.ReflectionIntensity = Plugin.Instance.Settings.Bind(section, "ReflectionIntensity", equatorDefaults ? 0.85f : 1f,
                 new BepInEx.Configuration.ConfigDescription(
                     "Scale on the sky-cubemap reflection term of EFT's screen-space ambient pass while a " +
                     "weather rig is active (1.0 = vanilla, which forces full strength whenever SSR is on). " +
@@ -419,7 +419,7 @@ namespace ArenaMapPort.Client
                     "Equator defaults to 0.85 with the accepted Filmic image tuning; other maps keep 1.0. Live.",
                     new BepInEx.Configuration.AcceptableValueRange<float>(0f, 1f)));
 
-            cfg.AmbientIntensity = Plugin.Instance.Config.Bind(section, "AmbientIntensity", equatorDefaults ? 0.5f : 1f,
+            cfg.AmbientIntensity = Plugin.Instance.Settings.Bind(section, "AmbientIntensity", equatorDefaults ? 0.5f : 1f,
                 new BepInEx.Configuration.ConfigDescription(
                     "Equator defaults to 0.5 for more separation between direct light and shade. " +
                     "§18 — scale on the analytic diffuse SH ambient ToDController computes and pushes into " +
@@ -437,7 +437,7 @@ namespace ArenaMapPort.Client
 
             // §12 goal 1 — real ambient fix, unconditional default Donor (harmless for a no-rig map —
             // Donor="Off" above means OnSceneLoaded never reaches ApplyDonorLevelSettingsOverrides for it).
-            cfg.UnityAmbientEntry = Plugin.Instance.Config.Bind(section, "UnityAmbient", AmbientSource.Donor,
+            cfg.UnityAmbientEntry = Plugin.Instance.Settings.Bind(section, "UnityAmbient", AmbientSource.Donor,
                 "§12 goal 1 — Donor = write Reserve_Base_Scripts' own authored ambient (SkyColor=black, " +
                 "EquatorColor=GroundColor=(0.604,0.635,0.651), AmbientIntensity=0) into this map's " +
                 "LevelSettings before ApplySettings(), every sceneLoaded — fixes the outdoor white ground " +
@@ -454,7 +454,7 @@ namespace ArenaMapPort.Client
             // saved config; only the unset/default case changes to the new value.
             // Key renamed from "RainCover" (saved as RoofDepth in existing configs) so the new default
             // takes effect; the old key stays orphaned in the cfg.
-            cfg.RainCoverEntry = Plugin.Instance.Config.Bind(section, "RainCoverMethod", RainCoverMode.RoofDepthBlack,
+            cfg.RainCoverEntry = Plugin.Instance.Settings.Bind(section, "RainCoverMethod", RainCoverMode.RoofDepthBlack,
                 "§13 — RoofDepthBlack (default) draws every elevated static mesh (roofs/overhangs, found " +
                 "by the same once-per-raid geometry scan) in black onto DepthPhotograper's depth camera via " +
                 "Graphics.DrawMesh, the same mechanism a real donor's WeatherObstacle/DryPlane does — fixes " +
@@ -481,7 +481,7 @@ namespace ArenaMapPort.Client
             // here), same "WeatherRig owns the config, the consuming file owns its own re-apply wiring"
             // convention GroundSmoothnessBaseEntry's own SettingChanged hookup (LightingLab.BindConfig)
             // already establishes.
-            cfg.IndoorFloorSmoothness = Plugin.Instance.Config.Bind(section, "IndoorFloorSmoothness", rigDefaults ? 0.5f : 1f,
+            cfg.IndoorFloorSmoothness = Plugin.Instance.Settings.Bind(section, "IndoorFloorSmoothness", rigDefaults ? 0.5f : 1f,
                 new BepInEx.Configuration.ConfigDescription(
                     "§19 — multiplier on the smoothness/gloss-like properties of floor-like renderers the " +
                     "RoofDepthBlack depth photo shows as INDOOR (covered), applied on per-renderer material " +
@@ -497,7 +497,7 @@ namespace ArenaMapPort.Client
             // §20.3 — Equator's atrium roof is an open lattice (no panes; the 18 glass renderers found by
             // CoverIncludesGlass are elsewhere): the centre lounge under it reads 8/25 = 32% covered, so
             // Equator's default is 30 (Bay5 keeps 50). Existing configs: DefaultsRevision 2 re-seed below.
-            cfg.IndoorCoverPercent = Plugin.Instance.Config.Bind(section, "IndoorCoverPercent", equatorDefaults ? 30 : 50,
+            cfg.IndoorCoverPercent = Plugin.Instance.Settings.Bind(section, "IndoorCoverPercent", equatorDefaults ? 30 : 50,
                 new BepInEx.Configuration.ConfigDescription(
                     "§19 — percentage of the 5x5 depth-photo samples over a candidate renderer's bounds " +
                     "footprint that must read 'covered' (roof 2.5-60 m above its floor level) to classify " +
@@ -521,13 +521,13 @@ namespace ArenaMapPort.Client
             // the pane material is "broken glass atlas", Arena's raw level51 has m_IsActive=false on it and matching
             // inactive glass-shard debris lies under it (the puddles are generic mall dressing, no evidence) — so
             // the default is false everywhere and DefaultsRevision 3 moves a persisted true back. Opt-in dry mall.
-            cfg.FullyIndoorCover = Plugin.Instance.Config.Bind(section, "FullyIndoorCover", false,
+            cfg.FullyIndoorCover = Plugin.Instance.Settings.Bind(section, "FullyIndoorCover", false,
                 "Treat the whole map as roofed for rain: one black quad over the entire RainBounds footprint in the depth " +
                 "photo (no falling rain and no wetness anywhere). Off by default: Equator's atrium roof is broken on " +
                 "purpose in Arena's data (glass panes inactive, 'broken glass' material, glass-shard debris under it), so rain falls " +
                 "through the lattice like Arena intends. true = dry mall (the puddle ripples stay, they follow the " +
                 "global rain value, not the depth photo). Live: the next camera change or F8 re-renders the photo.");
-            cfg.CoverIncludesGlass = Plugin.Instance.Config.Bind(section, "CoverIncludesGlass", true,
+            cfg.CoverIncludesGlass = Plugin.Instance.Settings.Bind(section, "CoverIncludesGlass", true,
                 "§20.2 — treat glass-shader renderers (glass roofs, skylights, windows: shader name with " +
                 "'Glass', or 'Transparent' together with 'Reflective'/'Specular', never cutout/fence/billboard/" +
                 "sheet/decal/water shaders) as rain and indoor cover in the RoofDepthBlack depth photo instead " +
@@ -537,7 +537,7 @@ namespace ArenaMapPort.Client
             // §20.2 — Arena's dominant p0/Reflective/Bumped Specular family mirrors the global sky cubemap
             // scaled by each material's own _ReflectColor, not by its gloss. Applied to the same per-renderer
             // INDOOR material clones IndoorFloorSmoothness uses (RGB scaled, alpha kept). 1.0 = authored.
-            cfg.IndoorReflectionStrength = Plugin.Instance.Config.Bind(section, "IndoorReflectionStrength", equatorDefaults ? 0.95f : 1f,
+            cfg.IndoorReflectionStrength = Plugin.Instance.Settings.Bind(section, "IndoorReflectionStrength", equatorDefaults ? 0.95f : 1f,
                 new BepInEx.Configuration.ConfigDescription(
                     "§20.2/§20.3 — multiplier on the reflection-strength properties of every INDOOR-classified " +
                     "renderer's p0/Reflective materials: _SpecColor and _Specularness (the G-buffer specular the " +
@@ -547,23 +547,23 @@ namespace ArenaMapPort.Client
                     "to retain the accepted parquet sheen alongside the separate specular cap. Live.",
                     new BepInEx.Configuration.AcceptableValueRange<float>(0f, 1f)));
 
-            cfg.IndoorSurfaceRepair = Plugin.Instance.Config.Bind(section, "IndoorSurfaceRepair", bay5Defaults,
+            cfg.IndoorSurfaceRepair = Plugin.Instance.Settings.Bind(section, "IndoorSurfaceRepair", bay5Defaults,
                 "Separate covered floor triangles in mixed building meshes before adjusting their materials. " +
                 "Leaves walls, decals and uncovered triangles on their existing materials. Bay5 defaults on. " +
                 "Requires the active weather rig and RoofDepthBlack. Live; toggling reclassifies and restores meshes.");
-            cfg.IndoorSurfaceSmoothness = Plugin.Instance.Config.Bind(section, "IndoorSurfaceSmoothness", 0.5f,
+            cfg.IndoorSurfaceSmoothness = Plugin.Instance.Settings.Bind(section, "IndoorSurfaceSmoothness", 0.5f,
                 new BepInEx.Configuration.ConfigDescription(
                     "Smoothness/gloss multiplier for the covered floor triangles selected by IndoorSurfaceRepair. " +
                     "Independent of reflection strength. 1 = authored sharpness, lower softens reflections. Live.",
                     new BepInEx.Configuration.AcceptableValueRange<float>(0f, 1f)));
-            cfg.IndoorSurfaceReflectionStrength = Plugin.Instance.Config.Bind(section, "IndoorSurfaceReflectionStrength", 0.2f,
+            cfg.IndoorSurfaceReflectionStrength = Plugin.Instance.Settings.Bind(section, "IndoorSurfaceReflectionStrength", 0.2f,
                 new BepInEx.Configuration.ConfigDescription(
                     "Linear reflection multiplier for the covered p0/Reflective floor triangles selected by " +
                     "IndoorSurfaceRepair. Scales specular color once and retains specular intensity; 0.2 = 20% " +
                     "of authored specular before ReflectiveSpecularCap. Also scales cubemap tint. Live.",
                     new BepInEx.Configuration.AcceptableValueRange<float>(0f, 1f)));
 
-            cfg.ReflectiveSpecularCap = Plugin.Instance.Config.Bind(section, "ReflectiveSpecularCap", equatorDefaults ? 0.3f : 1f,
+            cfg.ReflectiveSpecularCap = Plugin.Instance.Settings.Bind(section, "ReflectiveSpecularCap", equatorDefaults ? 0.3f : 1f,
                 new BepInEx.Configuration.ConfigDescription(
                     "Ceiling on the strongest RGB channel of p0/Reflective specular color × specular strength. " +
                     "Covers this map's props, floors and mesh decals regardless of roof cover; only values above " +
@@ -587,7 +587,7 @@ namespace ArenaMapPort.Client
             // Bay5 was seeded with the rig defaults from day one — nothing to migrate there. Runs BEFORE
             // Donor's SettingChanged is subscribed below, so the write itself never triggers a harvest
             // pre-warm (RecomputePendingDonors at Install() reads the final values anyway).
-            cfg.DefaultsRevision = Plugin.Instance.Config.Bind(section, "DefaultsRevision", 0,
+            cfg.DefaultsRevision = Plugin.Instance.Settings.Bind(section, "DefaultsRevision", 0,
                 new BepInEx.Configuration.ConfigDescription("Internal — which default set this section was last seeded with (§20 in " +
                 "docs/progress/donor-settings-camera-weather.md). Leave it alone; a lower value than the " +
                 "current build's re-runs the one-time default re-seed for values still on their old default.",

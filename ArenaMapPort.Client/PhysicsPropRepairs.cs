@@ -49,7 +49,7 @@ namespace ArenaMapPort.Client
 
         internal static void BindConfig()
         {
-            _enabled = Plugin.Instance.Config.Bind("Physics", "EnablePhysicsProps", true,
+            _enabled = Plugin.Instance.Settings.Bind("Physics", "EnablePhysicsProps", true,
                 "Activate Arena's PHYSIC prop containers (Equator: 391 props, ships hierarchy-disabled in " +
                 "Arena's own data; Bay5: 18, already active) so cups/bottles/boxes react to shots and touches " +
                 "like a vanilla EFT map. Disable to turn the PHYSIC prop containers off on both maps. " +

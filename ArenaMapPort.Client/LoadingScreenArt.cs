@@ -107,7 +107,7 @@ namespace ArenaMapPort.Client
 
         internal static void Install(Harmony harmony)
         {
-            _enabled = Plugin.Instance.Config.Bind(
+            _enabled = Plugin.Instance.Settings.Bind(
                 "LoadingScreen", "ShowArenaArt", true,
                 "Shows one of the ported map's own Arena splash images full-screen while an ArenaMapPort " +
                 "raid deploys/loads. Takes effect at the next raid load. false restores EFT's default " +

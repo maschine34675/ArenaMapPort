@@ -82,10 +82,16 @@ member name pinned in the client (`method_N`, `vmethod_N`) is verified there and
 
 ## Release configuration
 
-Player mode is the default: ten F12 controls, with the remaining accepted recipes retained.
-`General/DeveloperMode` is latched on startup and requires a restart; it exposes supported-map
-controls and enables F7–F10/diagnostic probes. Never gate functional repairs behind it.
-Ambient bindings happen in Plugin.Awake before visibility filtering. See
+Player mode is the default: one F12 switch, `Appearance/NaturalEquatorNight` (next raid).
+`General/DeveloperMode` is hidden from F12; edit it in the main CFG with the game closed.
+It is latched on startup, exposes supported-map controls and enables F7–F10 diagnostics.
+Never gate functional repairs behind it. All tuning binds/enumeration must use
+`Plugin.Instance.Settings`, never `Config`: in normal mode Settings reads the optional
+developer archive without saving, while Config contains only two public-file entries.
+In developer mode Settings is Config so ConfigurationManager sees the full controls.
+Never explicitly save normal-mode Settings. CompactConfiguration archives existing tuning
+before compaction and preserves unknown keys. Ambient bindings happen in Plugin.Awake.
+See [compact configuration](docs/progress/compact-player-config.md) and
 [release preparation](docs/progress/first-release-prep.md). The staging helper
 `tools/park-unreleased-dist.ps1` archives only exact known parked-map outputs under ignored
 `work/release-parked/`; do not delete their source/extract/build inputs or clean live installs.
@@ -206,7 +212,7 @@ the log; the user uses it to point at things.
   the repair does and which host test proved it. Log lines start with `[ArenaMapPort][<Area>]`.
 - Per-map data belongs in `ArenaMapDescriptor` (Shared) and the matching `tools/maps` sidecar, never as a
   literal in a repair. Object names repeat inside Arena scenes: address scene objects by hierarchy path.
-- New config keys: `Plugin.Instance.Config.Bind("<Section>", "<Key>", default, "<what/why, takes effect when>")`.
+- New tuning keys: `Plugin.Instance.Settings.Bind("<Section>", "<Key>", default, "<what/why, takes effect when>")`.
 - Progress docs are appended, not rewritten; host-test paragraphs carry date, time, build id, log quotes.
 
 ## Traps (each cost hours once)

@@ -49,7 +49,7 @@ namespace ArenaMapPort.Client
             }
             _installed = true;
 
-            _enabled = Plugin.Instance.Config.Bind("Sea", "EnableWaterPlaceholder", true,
+            _enabled = Plugin.Instance.Settings.Bind("Sea", "EnableWaterPlaceholder", true,
                 "Assigns a placeholder water material (FX/SimpleWater4) to any renderer with an empty " +
                 "sharedMaterials array on the built-in 'Water' layer (e.g. Bay5's Sea/Plane) — stands in " +
                 "as a fallback when native harbor water is disabled or unavailable. NativeHarborWater " +

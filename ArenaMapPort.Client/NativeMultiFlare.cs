@@ -34,10 +34,10 @@ namespace ArenaMapPort.Client
         {
             foreach (var map in new[] { ArenaMapRegistry.Equator, ArenaMapRegistry.Bay5 })
             {
-                Enabled[map.Key] = Plugin.Instance.Config.Bind("Lighting (" + map.Key + ")", "NativeMultiFlare", true,
+                Enabled[map.Key] = Plugin.Instance.Settings.Bind("Lighting (" + map.Key + ")", "NativeMultiFlare", true,
                     "Restore original per-lamp flare sprites and lens effects with native depth occlusion. " +
                     "Separate from camera bloom/anamorphic streaks. Live toggle.");
-                Intensity[map.Key] = Plugin.Instance.Config.Bind("Lighting (" + map.Key + ")", "NativeMultiFlareIntensity", .5f,
+                Intensity[map.Key] = Plugin.Instance.Settings.Bind("Lighting (" + map.Key + ")", "NativeMultiFlareIntensity", .5f,
                     new ConfigDescription("Brightness of original lamp flares. 0 = invisible, 0.5 = 50%, 1 = original Arena brightness. " +
                         "Changes immediately; leaves lamp illumination, camera bloom and anamorphic streaks unchanged.",
                         new AcceptableValueRange<float>(0f, 1f)));

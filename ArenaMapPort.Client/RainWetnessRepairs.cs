@@ -60,7 +60,7 @@ namespace ArenaMapPort.Client
             }
             _installed = true;
 
-            _wetRendererIntensityMultiplier = Plugin.Instance.Config.Bind("Wetness", "WetRendererIntensityMultiplier", 1.0f,
+            _wetRendererIntensityMultiplier = Plugin.Instance.Settings.Bind("Wetness", "WetRendererIntensityMultiplier", 1.0f,
                 new ConfigDescription(
                     "Multiplies RainController's WetRenderer.Intensity (the ground-wetness/reflection " +
                     "driver) every frame it ramps, while a rig is active for this map. 1.0 = off/no change " +
@@ -69,14 +69,14 @@ namespace ArenaMapPort.Client
                     "reflection intensity without changing the rain visuals themselves.",
                     new AcceptableValueRange<float>(0f, 1f)));
 
-            _maxLyingWaterOverrideEnabled = Plugin.Instance.Config.Bind("Wetness", "MaxLyingWaterOverrideEnabled", false,
+            _maxLyingWaterOverrideEnabled = Plugin.Instance.Settings.Bind("Wetness", "MaxLyingWaterOverrideEnabled", false,
                 "Clamps RainController.PuddleWaterLevel's upper bound (authored 0.95) down to " +
                 "MaxLyingWaterOverride, while a rig is active for this map. false = unclamped (today's " +
                 "behavior). Blunt stopgap for the fact no ArenaMapPort map authors a real WeatherObstacle " +
                 "for RainController's own cover-exclusion system (docs/progress/" +
                 "donor-settings-camera-weather.md §Deferred) — Tier 2, ships disabled.");
 
-            _maxLyingWaterOverrideValue = Plugin.Instance.Config.Bind("Wetness", "MaxLyingWaterOverride", 0.6f,
+            _maxLyingWaterOverrideValue = Plugin.Instance.Settings.Bind("Wetness", "MaxLyingWaterOverride", 0.6f,
                 new ConfigDescription(
                     "Replacement PuddleWaterLevel.y applied when MaxLyingWaterOverrideEnabled=true (authored " +
                     "default 0.95). Applies on the next raid load, not live.",

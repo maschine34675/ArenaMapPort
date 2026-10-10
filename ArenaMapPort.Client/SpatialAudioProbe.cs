@@ -29,9 +29,9 @@ namespace ArenaMapPort.Client
 
         internal static void Install(Harmony harmony)
         {
-            _enabled = Plugin.Instance.Config.Bind("Audio diagnostics", "SpatialProbe", false,
+            _enabled = Plugin.Instance.Settings.Bind("Audio diagnostics", "SpatialProbe", false,
                 "Test only: run a silent remote sound through native wall/portal attenuation. Logs actual room, volume and filter results. Live; off releases it.");
-            _position = Plugin.Instance.Config.Bind("Audio diagnostics", "SpatialProbePosition", Vector3.zero,
+            _position = Plugin.Instance.Settings.Bind("Audio diagnostics", "SpatialProbePosition", Vector3.zero,
                 "World position of the silent remote acoustic test source. Live. Does not change the player's room or any map geometry.");
             if (!DeveloperOptions.Enabled) return;
             harmony.Patch(AccessTools.Method(typeof(BetterSource), nameof(BetterSource.SetLowPassFilterParameters)),

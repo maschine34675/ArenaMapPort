@@ -89,7 +89,7 @@ namespace ArenaMapPort.Client
 
         internal static void BindConfig()
         {
-            _enableCullingManagerFallback = Plugin.Instance.Config.Bind("Environment", "EnableCullingManagerFallback", true,
+            _enableCullingManagerFallback = Plugin.Instance.Settings.Bind("Environment", "EnableCullingManagerFallback", true,
                 "Creates a bare CullingManager singleton (per-light visibility/intensity culling for " +
                 "CullingLightObject-tagged lights) when none exists, the same way this class already " +
                 "creates EnvironmentManager/ObservedCullingManager. Without it every CullingLightObject on " +

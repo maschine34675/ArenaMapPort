@@ -18,7 +18,7 @@ namespace ArenaMapPort.Client
 
         internal static void Install(Harmony harmony)
         {
-            _enabled = Plugin.Instance.Config.Bind("Combat", "LogMaterialHits", false,
+            _enabled = Plugin.Instance.Settings.Bind("Combat", "LogMaterialHits", false,
                 "Log up to 100 real projectile hits on owned map geometry. Re-enable to reset the budget. " +
                 "Diagnostic only; does not change hit or penetration behavior.");
             _remaining = 100;

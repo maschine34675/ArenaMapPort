@@ -28,7 +28,7 @@ namespace ArenaMapPort.Client
 
         internal static void BindConfig()
         {
-            _enabled = Plugin.Instance.Config.Bind("Combat", "BarbedWire", true,
+            _enabled = Plugin.Instance.Settings.Bind("Combat", "BarbedWire", true,
                 "Give Arena's concertina wire (bruno_helix props) EFT's barbed-wire behaviour: contact damage, sprint " +
                 "off and a speed limit while inside, like vanilla maps. Takes effect on the next raid.");
         }

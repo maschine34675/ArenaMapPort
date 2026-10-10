@@ -44,14 +44,7 @@ namespace ArenaMapPort.Client
 
         internal static bool IsPlayerOption(ConfigDefinition definition)
         {
-            string section = definition.Section, key = definition.Key;
-            if (section == "General") return key == "DeveloperMode";
-            if (section == "Audio (arena_equator)" || section == "Audio (arena_bay5)")
-                return key == "AmbientGainDb" || key == "RainVolume";
-            if (section == "Lighting (arena_equator Day)" || section == "Lighting (arena_equator Night)" ||
-                section == "Lighting (arena_bay5)") return key == "ExposureCompensationEV";
-            if (section == "Night neon (arena_equator)") return key == "PostFx" || key == "FlickerStrength";
-            return false;
+            return definition.Section == "Appearance" && definition.Key == "NaturalEquatorNight";
         }
 
         static bool IsPermanentHidden(ConfigDefinition definition, ConfigDescription original)

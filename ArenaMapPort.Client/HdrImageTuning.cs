@@ -268,7 +268,7 @@ namespace ArenaMapPort.Client
         static void Bind(ArenaMapDescriptor map)
         {
             var section = $"Lighting ({map.Key})";
-            var config = Plugin.Instance.Config;
+            var config = Plugin.Instance.Settings;
             bool equator = map.Key == ArenaMapRegistry.Equator.Key;
             Configs[map.Key] = new Settings
             {

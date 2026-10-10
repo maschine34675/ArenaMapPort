@@ -63,7 +63,7 @@ namespace ArenaMapPort.Client
         internal static void Install(Harmony harmony)
         {
             foreach (var map in new[] { ArenaMapRegistry.Equator, ArenaMapRegistry.Bay5 })
-                Enabled[map.Key] = Plugin.Instance.Config.Bind("Audio (" + map.Key + ")", "NativeSpatialAudio", true,
+                Enabled[map.Key] = Plugin.Instance.Settings.Bind("Audio (" + map.Key + ")", "NativeSpatialAudio", true,
                     "Use original rooms, openings and baked sound paths for native wall/room attenuation and room tones. " +
                     "Takes effect next raid. Missing or invalid data retains unoccluded playback.");
             // Vanilla clears ALL groups when any one is destroyed. Restrict that cleanup to our own

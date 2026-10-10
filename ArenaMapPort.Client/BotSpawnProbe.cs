@@ -46,10 +46,10 @@ namespace ArenaMapPort.Client
 
         internal static void Install(Harmony harmony)
         {
-            _enabled = Plugin.Instance.Config.Bind("Bots", "SpawnDiagnostics", true,
+            _enabled = Plugin.Instance.Settings.Bind("Bots", "SpawnDiagnostics", true,
                 "bots-stage1 — log EFT's bot wave/zone/spawn-point decisions on ported maps (a few lines per wave). " +
                 "Vanilla maps are never logged.");
-            _activation = Plugin.Instance.Config.Bind("Bots", "ActivationDiagnostics", false,
+            _activation = Plugin.Instance.Settings.Bind("Bots", "ActivationDiagnostics", false,
                 "bots-stage1 — deep bot-activation diagnostics on ported maps: finalizers on the async spawn chain and on " +
                 "every step of BotOwner's activation (46 Harmony patches), plus a 15-second status line per living bot " +
                 "(state, position, active BigBrain layer, standby, mover). Read at game start — restart EFT after changing. " +

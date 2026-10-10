@@ -32,7 +32,7 @@ namespace ArenaMapPort.Client
 
         internal static void BindConfig()
         {
-            _enabled = Plugin.Instance.Config.Bind("Combat", "BallisticTwins", true,
+            _enabled = Plugin.Instance.Settings.Bind("Combat", "BallisticTwins", true,
                 "Give every LowPolyCollider-only collider a HighPolyCollider twin at raid start so bullets hit it " +
                 "(EFT's ballistics mask skips the LowPolyCollider layer; Arena authors a ballistic twin for almost " +
                 "every prop, a few lack one). Takes effect on the next raid.");

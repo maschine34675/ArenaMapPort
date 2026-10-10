@@ -73,7 +73,7 @@ namespace ArenaMapPort.Client
                 Plugin.Log.LogWarning(Tag + "native surface query unavailable; puddle translation disabled.");
                 return;
             }
-            _enabled = Plugin.Instance.Config.Bind("Water (arena_bay5)", "PuddleFootsteps", true,
+            _enabled = Plugin.Instance.Settings.Bind("Water (arena_bay5)", "PuddleFootsteps", true,
                 "Use native puddle footsteps on Bay5's original water decals. Matches mesh triangles and " +
                 "the shader's red texture mask (at least 10% coverage), within 16 cm of the feet. " +
                 "Oil, dry/faded edges, elevated surfaces and other ground materials stay unchanged. Live.");

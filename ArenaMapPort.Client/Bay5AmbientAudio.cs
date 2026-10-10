@@ -46,32 +46,32 @@ namespace ArenaMapPort.Client
             if (_equatorDiagnostics == null)
             {
                 AmbientAudioDefaults.Values("arena_equator", out float gain, out float offset, out float range);
-                _equatorDiagnostics = Plugin.Instance.Config.Bind("Audio (arena_equator)", "PlaybackDiagnostics", false,
+                _equatorDiagnostics = Plugin.Instance.Settings.Bind("Audio (arena_equator)", "PlaybackDiagnostics", false,
                     "Log native indoor ambient clip/sample evidence while in Equator. Takes effect immediately; F10 also logs a snapshot.");
-                _equatorGainDb = Plugin.Instance.Config.Bind("Audio (arena_equator)", "AmbientGainDb", gain,
+                _equatorGainDb = Plugin.Instance.Settings.Bind("Audio (arena_equator)", "AmbientGainDb", gain,
                     new ConfigDescription("Gain in dB applied to the imported ambient sources' authored volume (and their random dip) on Equator. 0 dB applies no gain to authored sources; the volume offset and range still apply. Applied live in a running raid and at every raid start.", new AcceptableValueRange<float>(-12f, 12f)));
-                _equatorOffset = Plugin.Instance.Config.Bind("Audio (arena_equator)", "AmbientVolumeOffset", offset,
+                _equatorOffset = Plugin.Instance.Settings.Bind("Audio (arena_equator)", "AmbientVolumeOffset", offset,
                     new ConfigDescription("Linear volume added to every imported ambient source on Equator (raises the floor so quiet sources cannot dip to silence). 0 = no additive volume floor. Applied live in a running raid and at every raid start.", new AcceptableValueRange<float>(0f, 1f)));
                 SubscribeLive(_equatorGainDb, _equatorOffset, "arena_equator");
-                _equatorRange = Plugin.Instance.Config.Bind("Audio (arena_equator)", "AmbientRangeMultiplier", range,
+                _equatorRange = Plugin.Instance.Settings.Bind("Audio (arena_equator)", "AmbientRangeMultiplier", range,
                     new ConfigDescription("Multiplies every imported ambient source's Max Distance on Equator (the authored rolloff curve keeps its shape, so sources stay audible further away; most Equator sources are authored at 10-20 m). 1 = original Arena range. Applied live in a running raid and at every raid start.", new AcceptableValueRange<float>(1f, 8f)));
                 _equatorRange.SettingChanged += (_, __) => ApplyLive("arena_equator");
-                AmbientAudioDefaults.Migrate(Plugin.Instance.Config, "arena_equator", _equatorGainDb, _equatorOffset, _equatorRange);
+                AmbientAudioDefaults.Migrate(Plugin.Instance.Settings, "arena_equator", _equatorGainDb, _equatorOffset, _equatorRange);
             }
             if (_bay5Diagnostics == null)
             {
                 AmbientAudioDefaults.Values("arena_bay5", out float gain, out float offset, out float range);
-                _bay5Diagnostics = Plugin.Instance.Config.Bind("Audio (arena_bay5)", "PlaybackDiagnostics", false,
+                _bay5Diagnostics = Plugin.Instance.Settings.Bind("Audio (arena_bay5)", "PlaybackDiagnostics", false,
                     "Log native ambient clip/sample and shoreline movement evidence while in Bay5. Takes effect immediately; F10 also logs a snapshot.");
-                _bay5GainDb = Plugin.Instance.Config.Bind("Audio (arena_bay5)", "AmbientGainDb", gain,
+                _bay5GainDb = Plugin.Instance.Settings.Bind("Audio (arena_bay5)", "AmbientGainDb", gain,
                     new ConfigDescription("Gain in dB applied to the imported ambient sources' authored volume (and their random dip) on Bay5. 0 dB applies no gain to authored sources; the volume offset and range still apply. Applied live in a running raid and at every raid start.", new AcceptableValueRange<float>(-12f, 12f)));
-                _bay5Offset = Plugin.Instance.Config.Bind("Audio (arena_bay5)", "AmbientVolumeOffset", offset,
+                _bay5Offset = Plugin.Instance.Settings.Bind("Audio (arena_bay5)", "AmbientVolumeOffset", offset,
                     new ConfigDescription("Linear volume added to every imported ambient source on Bay5 (raises the floor so quiet sources cannot dip to silence). 0 = no additive volume floor. Applied live in a running raid and at every raid start.", new AcceptableValueRange<float>(0f, 1f)));
                 SubscribeLive(_bay5GainDb, _bay5Offset, "arena_bay5");
-                _bay5Range = Plugin.Instance.Config.Bind("Audio (arena_bay5)", "AmbientRangeMultiplier", range,
+                _bay5Range = Plugin.Instance.Settings.Bind("Audio (arena_bay5)", "AmbientRangeMultiplier", range,
                     new ConfigDescription("Multiplies every imported ambient source's Max Distance on Bay5 (the authored rolloff curve keeps its shape, so sources stay audible further away). 1 = original Arena range. Applied live in a running raid and at every raid start.", new AcceptableValueRange<float>(1f, 8f)));
                 _bay5Range.SettingChanged += (_, __) => ApplyLive("arena_bay5");
-                AmbientAudioDefaults.Migrate(Plugin.Instance.Config, "arena_bay5", _bay5GainDb, _bay5Offset, _bay5Range);
+                AmbientAudioDefaults.Migrate(Plugin.Instance.Settings, "arena_bay5", _bay5GainDb, _bay5Offset, _bay5Range);
             }
         }
 

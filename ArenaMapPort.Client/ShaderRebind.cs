@@ -124,7 +124,7 @@ namespace ArenaMapPort.Client
             }
             _installed = true;
 
-            _enableShaderFallbacks = Plugin.Instance.Config.Bind("MaterialFixes", "EnableShaderFallbacks", false,
+            _enableShaderFallbacks = Plugin.Instance.Settings.Bind("MaterialFixes", "EnableShaderFallbacks", false,
                 "Substitutes a real SPT shader for Arena shader names with no compiled SPT equivalent at " +
                 "all (162 materials / 6,942 renderers port-wide, currently stuck on the magenta stand-in " +
                 "fragment). Mappings are inferred/unverified (shader-compat-audit F2). OFF by default, and " +
@@ -136,12 +136,12 @@ namespace ArenaMapPort.Client
             // Default OFF: Arena renders this exact material correctly, so the values are right for a
             // correct lighting environment. The switch exists to compare, not to paper over an
             // environment problem (camera, reflections, scattering).
-            _groundMaterialWetnessFixEnabled = Plugin.Instance.Config.Bind("MaterialFixes", "GroundMaterialWetnessFixEnabled", false,
+            _groundMaterialWetnessFixEnabled = Plugin.Instance.Settings.Bind("MaterialFixes", "GroundMaterialWetnessFixEnabled", false,
                 $"Comparison switch for {Bay5GroundMaterialHash} (Bay5_Vertex_Paint_Ground): softens the " +
                 "vertex-paint layer blend (_BlendStrength 5.0 -> 2.0) and scales its near-mirror smoothness " +
                 "(_Smoothness0-2/_FresnelSpecular2, measured 0.85-0.98) by GroundSmoothnessMultiplier. " +
                 "Applies only to arena_bay5, on the next raid load.");
-            _groundSmoothnessMultiplier = Plugin.Instance.Config.Bind("MaterialFixes", "GroundSmoothnessMultiplier", 0.6f,
+            _groundSmoothnessMultiplier = Plugin.Instance.Settings.Bind("MaterialFixes", "GroundSmoothnessMultiplier", 0.6f,
                 "Multiplier applied to _Smoothness0-2/_FresnelSpecular2 when GroundMaterialWetnessFixEnabled=true. " +
                 "Requires a fresh raid load to change — this hook runs once per material, on scene load.");
 

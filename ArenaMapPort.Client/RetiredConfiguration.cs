@@ -14,7 +14,7 @@ namespace ArenaMapPort.Client
     /// </summary>
     internal static class RetiredConfiguration
     {
-        internal static int RemoveSavedEntries(ConfigFile config)
+        internal static int RemoveSavedEntries(ConfigFile config, bool persist = true)
         {
             // Verified against installed BepInEx 5.4.23.5. Public Remove only touches bound entries,
             // while Save also writes this private dictionary; unbinding alone leaves stale keys.
@@ -26,7 +26,7 @@ namespace ArenaMapPort.Client
             int removed = 0;
             foreach (var definition in Definitions())
                 if (!config.ContainsKey(definition) && orphaned.Remove(definition)) removed++;
-            if (removed > 0) config.Save();
+            if (removed > 0 && persist) config.Save();
             return removed;
         }
 

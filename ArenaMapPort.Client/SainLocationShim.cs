@@ -56,7 +56,7 @@ namespace ArenaMapPort.Client
                 string fallback = map.Key == ArenaMapRegistry.Equator.Key ? "Interchange"
                     : map.Key == ArenaMapRegistry.Bay5.Key ? "Customs"
                     : FallbackLocation;
-                _configs[map.Key] = Plugin.Instance.Config.Bind($"Bots ({map.Key})", "SainLocation", fallback,
+                _configs[map.Key] = Plugin.Instance.Settings.Bind($"Bots ({map.Key})", "SainLocation", fallback,
                     "bots-stage1 — the vanilla location SAIN treats this map as, for its per-location difficulty " +
                     "settings (SAIN's ELocation names: Factory, FactoryNight, Customs, GroundZero, Reserve, Streets, " +
                     "Lighthouse, Shoreline, Labs, Woods, Interchange, Terminal, Town, Labyrinth). Only read while " +
@@ -64,9 +64,9 @@ namespace ArenaMapPort.Client
             }
             // Preserve the legacy assignment for recovery; Equator's independent profiles own the
             // effective aliases now. Config visibility hides the superseded legacy entry.
-            _equatorDay = Plugin.Instance.Config.Bind("Bots (arena_equator Day)", "SainLocation", "Factory",
+            _equatorDay = Plugin.Instance.Settings.Bind("Bots (arena_equator Day)", "SainLocation", "Factory",
                 "Vanilla SAIN location used for Equator's 12:00 Day profile. Takes effect on the next raid.");
-            _equatorNight = Plugin.Instance.Config.Bind("Bots (arena_equator Night)", "SainLocation", "FactoryNight",
+            _equatorNight = Plugin.Instance.Settings.Bind("Bots (arena_equator Night)", "SainLocation", "FactoryNight",
                 "Vanilla SAIN location used for Equator's 00:00 Night profile. FactoryNight is SAIN's native " +
                 "enum name; Factory_Night is also accepted. Takes effect on the next raid.");
         }

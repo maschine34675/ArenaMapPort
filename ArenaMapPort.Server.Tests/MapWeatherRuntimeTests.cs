@@ -20,6 +20,7 @@ namespace ArenaMapPort.Server.Tests
         readonly Harmony _harmony = new("mapport.tests.runtime-time-weather");
         public MapWeatherRuntimeTests()
         {
+            PlayerOptions.Install(new ConfigFile());
             SceneManager.Scenes.Clear();
             EquatorNightNeon.Enabled = EquatorNightNeon.Rain = true;
             TimeOfDayRepairs.Install(); WeatherTestOverride.Install();
@@ -33,6 +34,7 @@ namespace ArenaMapPort.Server.Tests
         }
         public void Dispose()
         {
+            PlayerOptions.Install(new ConfigFile());
             _harmony.UnpatchSelf(); SceneManager.Scenes.Clear();
             Comfort.Common.Singleton<GameWorld>.Instance = null;
         }
@@ -50,6 +52,28 @@ namespace ArenaMapPort.Server.Tests
             new WeatherNode { Time = DateTime.UtcNow.Ticks, Rain = .2f, Cloudness = -.3f },
             new WeatherNode { Time = DateTime.UtcNow.AddMinutes(10).Ticks, Rain = .7f, Cloudness = .8f },
         };
+
+        [Fact]
+        public void NaturalAppearanceKeepsMidnightAndRainThroughBackendResync()
+        {
+            var options = new ConfigFile();
+            PlayerOptions.Install(options);
+            options.Get<bool>("Appearance", "NaturalEquatorNight").Value = true;
+            var game = Game(ArenaMapRegistry.Equator, EDateTime.PAST);
+            game.InitWeather(RandomSettings);
+            Assert.True(EquatorProfiles.NaturalNight);
+            Assert.Equal(EquatorProfile.Day, EquatorProfiles.Appearance);
+            Assert.Equal(EquatorProfile.Night, EquatorProfiles.Current);
+            Assert.Equal(0, game.GameDateTime.Calculate().Hour);
+            Assert.Equal(0, TimeOfDayRepairs.ActiveFixedHour);
+            var controller = new WeatherController();
+            controller.SetWeatherNodes(BackendNodes());
+            Assert.Equal(5f, controller.Nodes[0].Rain);
+            options.Get<bool>("Appearance", "NaturalEquatorNight").Value = false;
+            controller.SetWeatherNodes(BackendNodes());
+            Assert.True(EquatorProfiles.NaturalNight);
+            Assert.Equal(5f, controller.Nodes[0].Rain);
+        }
 
         [Theory]
         [InlineData(EDateTime.CURR, true, 0)]
@@ -165,7 +189,11 @@ namespace ArenaMapPort.Server.Tests
 
 namespace ArenaMapPort.Client
 {
-    internal sealed class TestPluginInstance { internal readonly ConfigFile Config = new(); }
+    internal sealed class TestPluginInstance
+    {
+        internal readonly ConfigFile Config = new();
+        internal ConfigFile Settings => Config;
+    }
 }
 namespace BepInEx.Configuration
 {

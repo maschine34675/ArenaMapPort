@@ -27,9 +27,9 @@ namespace ArenaMapPort.Client
 
         internal static void Install()
         {
-            _request = Plugin.Instance.Config.Bind("Audio diagnostics", "ReverbPulse", false,
+            _request = Plugin.Instance.Settings.Bind("Audio diagnostics", "ReverbPulse", false,
                 "Test only: play one quiet 0.12-second tone and measure listener output after it ends. Automatically resets to false. Only during an active Equator/Bay5 raid.");
-            _bus = Plugin.Instance.Config.Bind("Audio diagnostics", "ReverbPulseBus", ProbeBus.Ambient,
+            _bus = Plugin.Instance.Settings.Bind("Audio diagnostics", "ReverbPulseBus", ProbeBus.Ambient,
                 "Route the test tone through ambient effects, gameplay, map ambience, the repaired indoor rain path or its original snapshot-gated child. Does not change their mixer settings.");
             if (!DeveloperOptions.Enabled) return;
             Plugin.Instance.gameObject.AddComponent<Runner>();

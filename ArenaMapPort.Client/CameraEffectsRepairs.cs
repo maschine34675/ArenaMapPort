@@ -110,27 +110,27 @@ namespace ArenaMapPort.Client
             }
             _installed = true;
 
-            _fixExposure = Plugin.Instance.Config.Bind("Camera", "FixExposure", true,
+            _fixExposure = Plugin.Instance.Settings.Bind("Camera", "FixExposure", true,
                 "Repairs missing automatic exposure while a donor weather rig is active. Only applies " +
                 "when the camera's exposure is off; cameras with exposure already enabled retain their " +
                 "existing values. This is a fallback repair, not an exposure on/off switch. Next camera setup.");
 
-            _exposureMiddleGrey = Plugin.Instance.Config.Bind("Camera", "ExposureMiddleGrey", 0.23f,
+            _exposureMiddleGrey = Plugin.Instance.Settings.Bind("Camera", "ExposureMiddleGrey", 0.23f,
                 "Middle grey used only when FixExposure repairs a camera with exposure off. " +
                 "Does not override an already active donor exposure. Next camera setup.");
-            _exposureLowerLimit = Plugin.Instance.Config.Bind("Camera", "ExposureLowerLimit", -10.0f,
+            _exposureLowerLimit = Plugin.Instance.Settings.Bind("Camera", "ExposureLowerLimit", -10.0f,
                 "Lower limit used only when FixExposure repairs a camera with exposure off. " +
                 "Does not override an already active donor exposure. Next camera setup.");
-            _exposureUpperLimit = Plugin.Instance.Config.Bind("Camera", "ExposureUpperLimit", 1.3f,
+            _exposureUpperLimit = Plugin.Instance.Settings.Bind("Camera", "ExposureUpperLimit", 1.3f,
                 "Upper limit used only when FixExposure repairs a camera with exposure off. " +
                 "Does not override an already active donor exposure. Next camera setup.");
 
-            _enableTodScatteringFix = Plugin.Instance.Config.Bind("Camera", "EnableTODScatteringFix", true,
+            _enableTodScatteringFix = Plugin.Instance.Settings.Bind("Camera", "EnableTODScatteringFix", true,
                 "Adds a TOD_Scattering component to the fallback camera while a WeatherRig is active for " +
                 "this map (atmospheric scattering / aerial perspective). Ships with FromLevelSettings=true " +
                 "unchanged this pass — reads our own map's authored LevelSettings.HeightFalloff/ZeroLevel.");
 
-            _enableVolumetricLightRendererFix = Plugin.Instance.Config.Bind("Camera", "EnableVolumetricLightRendererFix", true,
+            _enableVolumetricLightRendererFix = Plugin.Instance.Settings.Bind("Camera", "EnableVolumetricLightRendererFix", true,
                 "Adds a VolumetricLightRenderer component to the fallback camera so the scene's own " +
                 "VolumetricLight components (light-shaft/god-ray cones on a few Equator/Bay5 lights) " +
                 "actually render, the way a real camera prefab already carries one on vanilla maps. " +

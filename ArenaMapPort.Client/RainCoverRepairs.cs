@@ -891,7 +891,7 @@ namespace ArenaMapPort.Client
                 _labConfigs[map.Key] = BindLabConfig(map);
             }
 
-            _rerenderHotkey = Plugin.Instance.Config.Bind("RainCoverLab", "RerenderHotkey",
+            _rerenderHotkey = Plugin.Instance.Settings.Bind("RainCoverLab", "RerenderHotkey",
                 new KeyboardShortcut(KeyCode.F8),
                 "§14 goal 4 — re-renders DepthPhotograper's depth photo immediately " +
                 "(the active donor's DepthPhotograper.Render, the same photo a real camera change uses) and logs a " +
@@ -928,7 +928,7 @@ namespace ArenaMapPort.Client
             string section = $"RainCoverLab ({map.Key})";
             var cfg = new LabConfigBundle();
 
-            cfg.DrawTransform = Plugin.Instance.Config.Bind(section, "DrawTransform", DrawTransformMode.None,
+            cfg.DrawTransform = Plugin.Instance.Settings.Bind(section, "DrawTransform", DrawTransformMode.None,
                 "§14 (H1) — pre-multiplies every RoofDepthBlack elevated-mesh draw's localToWorld matrix by " +
                 "a world-space mirror/swap about the live LevelSettings.RainBounds center before it hits the " +
                 "depth camera. None = today's RoofDepthBlack behavior, unchanged. FlipX: x'=2*cx-x. FlipZ: " +
@@ -941,7 +941,7 @@ namespace ArenaMapPort.Client
                 "Re-renders the depth photo immediately on change (goal 4) — no new raid needed. Only " +
                 "applied while ArenaMapRaid.IsLoaded() && WeatherRig.IsActiveForCurrentMap().");
 
-            cfg.CoverAll = Plugin.Instance.Config.Bind(section, "CoverAll", false,
+            cfg.CoverAll = Plugin.Instance.Settings.Bind(section, "CoverAll", false,
                 "§14 (H2) — additionally draws one black quad (two triangles, built at runtime) over the " +
                 "WHOLE live RainBounds footprint at RainBounds.max.y - 1, so the depth map reads 'covered' " +
                 "everywhere regardless of DrawTransform/the elevated-mesh scan. If the hall AND the yard " +

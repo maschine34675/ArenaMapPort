@@ -32,7 +32,7 @@ namespace ArenaMapPort.Client
 
         internal static void Install()
         {
-            _enabled = Plugin.Instance.Config.Bind("Water (arena_bay5)", "NativeHarborWater", true,
+            _enabled = Plugin.Instance.Settings.Bind("Water (arena_bay5)", "NativeHarborWater", true,
                 "Use original harbor waves, foam and depth settings with EFT's native water renderer. " +
                 "Responds to world lighting at day and night. Live toggle; off restores the old placeholder.");
             SceneManager.sceneLoaded += (scene, mode) =>

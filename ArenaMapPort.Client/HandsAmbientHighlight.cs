@@ -45,7 +45,7 @@ namespace ArenaMapPort.Client
             _installed = true;
             foreach (var map in ArenaMapRegistry.All)
             {
-                var config = Plugin.Instance.Config.Bind($"Lighting ({map.Key})", "HandsAmbientHighlightMultiplier", 1f,
+                var config = Plugin.Instance.Settings.Bind($"Lighting ({map.Key})", "HandsAmbientHighlightMultiplier", 1f,
                     new ConfigDescription("Live brightness scale of the donor ambient highlight for hands and held items. " +
                         "1 preserves the original. Does not scale world/character highlights or ambient light.",
                         new AcceptableValueRange<float>(0f, 1f)));

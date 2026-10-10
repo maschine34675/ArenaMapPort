@@ -37,7 +37,7 @@ namespace ArenaMapPort.Client
 
         internal static void Install()
         {
-            _enabled = Plugin.Instance.Config.Bind("Lighting (" + ArenaMapRegistry.Equator.Key + ")",
+            _enabled = Plugin.Instance.Settings.Bind("Lighting (" + ArenaMapRegistry.Equator.Key + ")",
                 "RoofDistantShadows", true,
                 "Make Equator's original solid ceiling shadows two-sided and include them in the native sun-shadow cache. " +
                 "Retains the original atrium openings. Live toggle; the native cache takes a few seconds to refresh.");

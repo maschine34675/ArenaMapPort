@@ -8,6 +8,9 @@ dated state in one screen; read it before this index if you only have a minute.
 
 ## Current — read these for the area you touch
 
+- [compact-player-config.md](compact-player-config.md) — one player switch for natural Equator
+  midnight, compact normal CFG and recoverable developer tuning (2026-10-10).
+
 - [first-release-prep.md](first-release-prep.md) — two-map release scope, accepted ambient mix
   and ten player options with restart-latched developer controls (2026-10-10).
 

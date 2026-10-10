@@ -41,13 +41,13 @@ namespace ArenaMapPort.Client
             {
                 var section = $"Lighting ({map.Key})";
                 bool releasedMap = map.Key == ArenaMapRegistry.Equator.Key || map.Key == ArenaMapRegistry.Bay5.Key;
-                var threshold = Plugin.Instance.Config.Bind(section, "BloomThreshold", releasedMap ? DefaultThreshold : -1f,
+                var threshold = Plugin.Instance.Settings.Bind(section, "BloomThreshold", releasedMap ? DefaultThreshold : -1f,
                     new ConfigDescription(
                         "UltimateBloom HDR threshold on the raid camera for this map. -1 keeps the camera's own value " +
                         "(donor rig: 2.10). Lower = more glow around bright lights. Equator and Bay5 default to " +
                         "the donor rig's normal threshold, 2.10. Live.",
                         new AcceptableValueRange<float>(-1f, 10f)));
-                var intensity = Plugin.Instance.Config.Bind(section, "BloomIntensity", releasedMap ? DefaultIntensity : -1f,
+                var intensity = Plugin.Instance.Settings.Bind(section, "BloomIntensity", releasedMap ? DefaultIntensity : -1f,
                     new ConfigDescription(
                         "UltimateBloom intensity on the raid camera for this map. -1 keeps the camera's own value " +
                         "(donor rig: 0.35). Equator and Bay5 default to this normal intensity, 0.35. Live.",
@@ -66,7 +66,7 @@ namespace ArenaMapPort.Client
         static void MigrateDefaults(string mapKey, string section, ConfigEntry<float> threshold,
             ConfigEntry<float> intensity)
         {
-            var revision = Plugin.Instance.Config.Bind(section, "BloomDefaultsRevision", 0,
+            var revision = Plugin.Instance.Settings.Bind(section, "BloomDefaultsRevision", 0,
                 new ConfigDescription(
                     "Internal — once-only bloom default migration for Equator and Bay5. Leave it alone; " +
                     "lowering this value repeats migration of values still equal to the legacy defaults.",

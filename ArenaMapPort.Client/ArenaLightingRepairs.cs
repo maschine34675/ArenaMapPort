@@ -169,11 +169,11 @@ namespace ArenaMapPort.Client
             string section = $"Lighting ({map.Key})";
             var cfg = new ConfigBundle();
 
-            cfg.Enabled = Plugin.Instance.Config.Bind(section, "Enabled", true,
+            cfg.Enabled = Plugin.Instance.Settings.Bind(section, "Enabled", true,
                 $"Enables authored light scaling, fallback ambient/fill and fog repair for {map.Key}. " +
                 "Does not disable the weather rig, reflections, bloom, flares or other repairs in this section. Live.");
 
-            cfg.AmbientColorMultiplier = Plugin.Instance.Config.Bind(section, "AmbientColorMultiplier", 0.5f,
+            cfg.AmbientColorMultiplier = Plugin.Instance.Settings.Bind(section, "AmbientColorMultiplier", 0.5f,
                 new ConfigDescription(
                     "Multiplies LevelSettings' own authored ambient colors (Sky/Equator/Ground, each " +
                     "0.5 grey) before they reach RenderSettings. 1.0 = authored value (the dim flat grey " +
@@ -181,7 +181,7 @@ namespace ArenaMapPort.Client
                     "Fallback only: used when no donor weather rig is active. Live.",
                     new AcceptableValueRange<float>(0.2f, 6f)));
 
-            cfg.GlobalLightIntensityMultiplier = Plugin.Instance.Config.Bind(section, "GlobalLightIntensityMultiplier", 0.5f,
+            cfg.GlobalLightIntensityMultiplier = Plugin.Instance.Settings.Bind(section, "GlobalLightIntensityMultiplier", 0.5f,
                 new ConfigDescription(
                     "Multiplies every non-directional (point/spot) Light's own authored intensity in this " +
                     "map's scenes. 1.0 = authored value.",
@@ -190,13 +190,13 @@ namespace ArenaMapPort.Client
             // Bay5 has no authored directional light; the donor sun is controlled in LightingLab.
             if (map != ArenaMapRegistry.Bay5)
             {
-                cfg.SunIntensityMultiplier = Plugin.Instance.Config.Bind(section, "SunIntensityMultiplier", 0.2f,
+                cfg.SunIntensityMultiplier = Plugin.Instance.Settings.Bind(section, "SunIntensityMultiplier", 0.2f,
                     new ConfigDescription(
                         "Multiplies the one Directional light's own authored intensity (Equator: \"FAKE_SUN\", " +
                         "1.7). 1.0 = authored value.",
                         new AcceptableValueRange<float>(0.2f, 8f)));
 
-                cfg.SunColorWhiteBlend = Plugin.Instance.Config.Bind(section, "SunColorWhiteBlend", 0.1f,
+                cfg.SunColorWhiteBlend = Plugin.Instance.Settings.Bind(section, "SunColorWhiteBlend", 0.1f,
                     new ConfigDescription(
                         "Blends the Directional light's own dim/desaturated authored color toward white. " +
                         "0 = authored color unchanged, 1 = pure white.",
@@ -206,20 +206,20 @@ namespace ArenaMapPort.Client
                 EquatorProfiles.Subscribe(cfg.SunColorWhiteBlend, (_, __) => ReapplyIfLoaded(map));
             }
 
-            cfg.FogDensity = Plugin.Instance.Config.Bind(section, "FogDensity", 0f,
+            cfg.FogDensity = Plugin.Instance.Settings.Bind(section, "FogDensity", 0f,
                 new ConfigDescription(
                     "Density of a light grey distance fog (exponential squared). 0 = no fog. Around 0.01 is " +
                     "a light haze, 0.04 is roughly Arena's own authored fog.",
                     new AcceptableValueRange<float>(0f, 0.06f)));
 
-            cfg.FillLightIntensity = Plugin.Instance.Config.Bind(section, "FillLightIntensity", 0.2f,
+            cfg.FillLightIntensity = Plugin.Instance.Settings.Bind(section, "FillLightIntensity", 0.2f,
                 new ConfigDescription(
                     "Intensity of a shadowless directional fill light (from above, plus half as much from " +
                     "below) that stands in for EFT's missing ambient pass — the main lever if surfaces stay " +
                     "dark away from lamps. 0 = off. With a donor rig, requires KeepFillLight=true. Live.",
                     new AcceptableValueRange<float>(0f, 3f)));
 
-            cfg.SyncCullingLightIntensity = Plugin.Instance.Config.Bind(section, "SyncCullingLightIntensity", true,
+            cfg.SyncCullingLightIntensity = Plugin.Instance.Settings.Bind(section, "SyncCullingLightIntensity", true,
                 "Keeps CullingLightObject's own cached intensity field in step with the sun/global " +
                 "multipliers above, on every Light that carries one. Without this, CullingLightObject's " +
                 "own distance/frustum fade update (once CullingManager is running — see EnvironmentRepairs.cs' " +
@@ -235,7 +235,7 @@ namespace ArenaMapPort.Client
             cfg.SyncCullingLightIntensity.SettingChanged += (_, __) => ReapplyIfLoaded(map);
             if (map.SunPaths.Length > 0)
             {
-                cfg.NightSunMultiplier = Plugin.Instance.Config.Bind(section, "NightSunMultiplier", 0f,
+                cfg.NightSunMultiplier = Plugin.Instance.Settings.Bind(section, "NightSunMultiplier", 0f,
                     new ConfigDescription("Remaining artificial sunlight at night: 0 = off, 0.1 = 10%, " +
                         "1 = original day/night-independent behavior. Follows the actual sky's sun visibility. " +
                         "Affects only the authored fake sun and its volume, not lamps or saved day multipliers. Applies live.",

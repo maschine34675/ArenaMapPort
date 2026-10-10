@@ -36,7 +36,7 @@ namespace ArenaMapPort.Client
 
         internal static void Install()
         {
-            _hotkey = Plugin.Instance.Config.Bind("Diagnostics", "LightCullingProbeHotkey", new KeyboardShortcut(KeyCode.F7),
+            _hotkey = Plugin.Instance.Settings.Bind("Diagnostics", "LightCullingProbeHotkey", new KeyboardShortcut(KeyCode.F7),
                 "PLAN-TWO-MAPS item 7 diagnostic: logs the distance fade of every culling light of the loaded Arena map " +
                 "(inside fade start / fade window / beyond fade end vs. full / partial / zero intensity), the nearest lights, " +
                 "the volumetric-light state and a one-second flicker sample. Read-only, only in an Arena raid. Takes effect at once.");

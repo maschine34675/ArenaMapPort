@@ -15,12 +15,14 @@ public sealed class EquatorProfileTests : IDisposable
     static readonly Harmony LifecycleHarmony = new("mapport.tests.equator-profiles");
     public EquatorProfileTests()
     {
+        PlayerOptions.Install(new ConfigFile());
         EquatorProfiles.Install(LifecycleHarmony);
         EquatorProfiles.BeginLoad(null, EDateTime.CURR);
         SceneManager.Scenes.Clear();
     }
     public void Dispose()
     {
+        PlayerOptions.Install(new ConfigFile());
         EquatorProfiles.BeginLoad(null, EDateTime.CURR);
         SceneManager.Scenes.Clear();
     }
@@ -28,6 +30,41 @@ public sealed class EquatorProfileTests : IDisposable
     public enum Tone { Native, Filmic }
     public enum Ambient { Off, Custom }
     public enum Reflection { Rig, Off }
+
+    [Fact]
+    public void NaturalNightUsesDayRecipeButKeepsNightIdentityAndLocksUntilNextRaid()
+    {
+        var options = new ConfigFile();
+        PlayerOptions.Install(options);
+        var natural = options.Get<bool>("Appearance", "NaturalEquatorNight");
+        var cfg = new ConfigFile();
+        var ambient = cfg.Bind("Lighting (arena_equator)", "AmbientIntensity", .5f, "Natural ambient");
+        natural.Value = true;
+        EquatorProfiles.BeginLoad("arena_equator", EDateTime.PAST);
+        Assert.Equal(EquatorProfile.Night, EquatorProfiles.Current);
+        Assert.Equal(EquatorProfile.Day, EquatorProfiles.Appearance);
+        Assert.True(EquatorProfiles.NaturalNight);
+        Assert.Equal(.5f, EquatorProfiles.Value(ambient));
+        natural.Value = false;
+        EquatorProfiles.ConfirmSelection("arena_equator", EDateTime.PAST);
+        Assert.True(EquatorProfiles.NaturalNight);
+        Assert.Equal(.5f, EquatorProfiles.Value(ambient));
+        EquatorProfiles.BeginLoad("arena_equator", EDateTime.PAST);
+        Assert.False(EquatorProfiles.NaturalNight);
+        Assert.Equal(4f, EquatorProfiles.Value(ambient));
+        Assert.Equal(.5f, EquatorProfiles.ForSection(ambient, "Lighting (arena_equator Day)").Value);
+        natural.Value = true;
+        EquatorProfiles.BeginLoad("arena_equator", EDateTime.CURR);
+        Assert.False(EquatorProfiles.NaturalNight);
+        Assert.Equal(EquatorProfile.Day, EquatorProfiles.Appearance);
+        EquatorProfiles.BeginLoad("arena_bay5", EDateTime.PAST);
+        Assert.False(EquatorProfiles.NaturalNight);
+        Assert.Equal(EquatorProfile.None, EquatorProfiles.Current);
+        // A loader bypass still captures the switch exactly once at InitWeather.
+        EquatorProfiles.ConfirmSelection("arena_equator", EDateTime.PAST);
+        Assert.True(EquatorProfiles.NaturalNight);
+        Assert.Equal(EquatorProfile.Night, EquatorProfiles.Current);
+    }
 
     // Acceptance recipe independently captured from the approved 2026-10-07 config inventory.
     public static IEnumerable<object[]> Recipes()
@@ -96,6 +133,13 @@ public sealed class EquatorProfileTests : IDisposable
             Assert.Equal(selection == EDateTime.CURR ? dayDefault : nightDefault, EquatorProfiles.Value(legacy));
             Assert.Equal(nightDefault, legacy.Value);
         }
+        var options = new ConfigFile();
+        PlayerOptions.Install(options);
+        options.Get<bool>("Appearance", "NaturalEquatorNight").Value = true;
+        EquatorProfiles.BeginLoad("arena_equator", EDateTime.PAST);
+        Assert.Equal(EquatorProfile.Night, EquatorProfiles.Current);
+        Assert.Equal(dayDefault, EquatorProfiles.Value(legacy));
+        Assert.Equal(nightDefault, legacy.Value);
         Assert.Equal(3, cfg.Count());
     }
 

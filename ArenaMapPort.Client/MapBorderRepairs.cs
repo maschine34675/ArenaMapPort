@@ -107,7 +107,7 @@ namespace ArenaMapPort.Client
             {
                 var state = new MapState();
                 string configSection = $"Map ({map.Key})";
-                state.RemoveTeamFightBorders = Plugin.Instance.Config.Bind(configSection, "RemoveTeamFightBorders", true,
+                state.RemoveTeamFightBorders = Plugin.Instance.Settings.Bind(configSection, "RemoveTeamFightBorders", true,
                     $"Removes the invisible TeamFight play-area walls so the whole {map.Key} map is walkable. " +
                     "false keeps Arena's TeamFight boundaries.");
                 state.RemoveTeamFightBorders.SettingChanged += (_, __) => ReapplyIfLoaded(map, state);

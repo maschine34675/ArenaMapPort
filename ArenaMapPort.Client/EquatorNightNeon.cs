@@ -31,7 +31,7 @@ namespace ArenaMapPort.Client
         static Runner _runner;
         static int _pendingRefresh = 1;
 
-        internal static bool IsActive => ArenaNeonPolicy.IsActive(_enabled?.Value == true,
+        internal static bool IsActive => !EquatorProfiles.NaturalNight && ArenaNeonPolicy.IsActive(_enabled?.Value == true,
             ArenaMapRaid.CurrentMap?.Key, TimeOfDayRepairs.ActiveFixedHour);
         internal static bool RainForCurrentRaid => RainForSelection(
             ArenaMapRaid.CurrentMap?.Key, TimeOfDayRepairs.ActiveFixedHour);
@@ -41,7 +41,7 @@ namespace ArenaMapPort.Client
         internal static void Install(Harmony harmony)
         {
             const string section = "Night neon (arena_equator)";
-            var config = Plugin.Instance.Config;
+            var config = Plugin.Instance.Settings;
             _enabled = config.Bind(section, "Enabled", EquatorProfiles.NightDefault("Enabled", true),
                 "Experimental cyan/magenta light installation for Equator's 00:00 choice. " +
                 "12:00 retains the existing lighting. Live; does not change saved image or PostFX settings.");

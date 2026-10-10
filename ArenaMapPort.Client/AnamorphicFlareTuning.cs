@@ -145,36 +145,36 @@ namespace ArenaMapPort.Client
         internal static void Install()
         {
             var section = $"Lighting ({ArenaMapRegistry.Equator.Key})";
-            _enabled = Plugin.Instance.Config.Bind(section, "AnamorphicFlare", true,
+            _enabled = Plugin.Instance.Settings.Bind(section, "AnamorphicFlare", true,
                 "Restore the early Equator camera's thin horizontal light streaks on the donor camera. " +
                 "Uses its existing BloomAndFlares pass; replaces UltimateBloom's broader anamorphic streak. " +
                 "Off restores the original camera settings. Live.");
-            _hdr = Plugin.Instance.Config.Bind(section, "AnamorphicFlareHDR", true,
+            _hdr = Plugin.Instance.Settings.Bind(section, "AnamorphicFlareHDR", true,
                 "Use HDR intermediate buffers and additive blending for the restored flare, like the early camera. " +
                 "Off restores the camera's own HDR mode. Only applies while AnamorphicFlare is on. " +
                 "Camera HDR is already enabled; this is not HDR monitor output. Live.");
-            _intensity = Plugin.Instance.Config.Bind(section, "AnamorphicFlareIntensity", 0.4f,
+            _intensity = Plugin.Instance.Settings.Bind(section, "AnamorphicFlareIntensity", 0.4f,
                 new ConfigDescription("Horizontal flare strength. 0.4 is the accepted Equator Filmic tuning; " +
                     "0.1 is the early camera's subtler value. " +
                     "0 removes the streak while retaining the HDR/prefilter settings. Live.",
                     new AcceptableValueRange<float>(0f, 1f)));
-            _length = Plugin.Instance.Config.Bind(section, "AnamorphicFlareLength", DefaultLength,
+            _length = Plugin.Instance.Settings.Bind(section, "AnamorphicFlareLength", DefaultLength,
                 new ConfigDescription("Horizontal stretch of the restored light streak. " +
                     "3.5 preserves the existing length; lower values shorten it and higher values lengthen it. " +
                     "Only applies while AnamorphicFlare is on. Live.",
                     new AcceptableValueRange<float>(0f, MaximumLength)));
-            _threshold = Plugin.Instance.Config.Bind(section, "AnamorphicFlareThreshold", DefaultThreshold,
+            _threshold = Plugin.Instance.Settings.Bind(section, "AnamorphicFlareThreshold", DefaultThreshold,
                 new ConfigDescription("Light threshold for the restored horizontal streak. " +
                     "0.155 preserves the existing selection; lower values admit dimmer highlights, " +
                     "higher values restrict the streak to brighter highlights. " +
                     "Only applies while AnamorphicFlare is on. Live.",
                     new AcceptableValueRange<float>(0f, MaximumThreshold)));
-            _tint = Plugin.Instance.Config.Bind(section, "AnamorphicFlareTint", DefaultTint,
+            _tint = Plugin.Instance.Settings.Bind(section, "AnamorphicFlareTint", DefaultTint,
                 "Color of the restored horizontal streak. The default preserves its blue-white tint. " +
                 "Alpha also multiplies AnamorphicFlareIntensity: 0 hides the streak, 0.75 preserves its " +
                 "existing strength, and 1 uses the full configured strength. RGBA channels are limited to 0-1. " +
                 "Only applies while AnamorphicFlare is on. Live.");
-            var revision = Plugin.Instance.Config.Bind(section, "AnamorphicDefaultsRevision", 0,
+            var revision = Plugin.Instance.Settings.Bind(section, "AnamorphicDefaultsRevision", 0,
                 new ConfigDescription("Internal — once-only Equator flare default migration. Leave it alone.",
                     null, System.ComponentModel.BrowsableAttribute.No));
             if (revision.Value < 1)

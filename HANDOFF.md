@@ -3,7 +3,21 @@
 Snapshot for whoever continues (human or agent). Verify the commits named here against `git log`; this file
 is updated by hand at each handover, it is not an automatic record. Read [AGENTS.md](AGENTS.md) first.
 
-## Follow-up on 2026-10-10 — first release scope and player options
+## Follow-up on 2026-10-10 — compact configuration and natural midnight
+
+Player F12 now exposes only `Appearance/NaturalEquatorNight`. It selects Equator's
+natural Day appearance at midnight and removes neon additions on the next raid;
+time, rain and SAIN night identity stay unchanged. Day and Bay5 are unaffected.
+The normal CFG has two entries; hidden General/DeveloperMode is edited manually
+with the game closed. Existing full tuning is archived as `.developer.cfg` and
+remains active. Fresh player installs never create a full developer file.
+All functional bindings use Plugin.Settings; never explicitly save this read-only
+normal-mode ConfigFile. Developer mode restores its values into the primary file
+for F12. See [compact-player-config.md](docs/progress/compact-player-config.md).
+Build/native evidence for this follow-up is recorded there separately from the
+previous release-preparation acceptance below.
+
+## Earlier on 2026-10-10 — first release scope and player options
 
 Equator and Bay5 are the only runtime and staged maps. All fourteen descriptors
 remain in Catalog; the twelve parked maps retain their sidecars, source/extract

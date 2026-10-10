@@ -9,6 +9,8 @@
     <Reference Include="BepInEx"><HintPath>$(BepInExAssembly)</HintPath></Reference>
     <Compile Include="../../../ArenaMapPort.Client/AmbientAudioDefaults.cs" Link="AmbientAudioDefaults.cs" />
     <Compile Include="../../../ArenaMapPort.Client/DeveloperOptions.cs" Link="DeveloperOptions.cs" />
+    <Compile Include="../../../ArenaMapPort.Client/PlayerOptions.cs" Link="PlayerOptions.cs" />
+    <Compile Include="../../../ArenaMapPort.Client/CompactConfiguration.cs" Link="CompactConfiguration.cs" />
     <Compile Include="../../../ArenaMapPort.Client/RetiredConfiguration.cs" Link="RetiredConfiguration.cs" />
     <Compile Include="../../../ArenaMapPort.Shared/*.cs" Link="Shared/%(Filename)%(Extension)" />
   </ItemGroup>

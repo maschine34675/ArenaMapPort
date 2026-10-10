@@ -25,7 +25,7 @@ namespace ArenaMapPort.Client
 
         internal static void BindConfig(EventHandler changed)
         {
-            _enabled = Plugin.Instance.Config.Bind("Night neon (arena_equator)", "PostFx", true,
+            _enabled = Plugin.Instance.Settings.Bind("Night neon (arena_equator)", "PostFx", true,
                 "Temporarily apply the balanced Chillwave look to the Equator 00:00 raid camera. " +
                 "Saved game PostFX settings and colorblind options are preserved. Suspends in the " +
                 "native settings/preview and restores your current settings on exit or disable. Live.");

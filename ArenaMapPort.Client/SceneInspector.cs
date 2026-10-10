@@ -42,23 +42,23 @@ namespace ArenaMapPort.Client
 
         internal static void Install()
         {
-            _hotkey = Plugin.Instance.Config.Bind(
+            _hotkey = Plugin.Instance.Settings.Bind(
                 "Inspector", "Hotkey", new KeyboardShortcut(KeyCode.F10),
                 "Dumps the nearest renderers under the camera's center crosshair to the log. Works on " +
                 "any map (arena or vanilla) — no raid-type gate.");
-            _maxResults = Plugin.Instance.Config.Bind(
+            _maxResults = Plugin.Instance.Settings.Bind(
                 "Inspector", "MaxResults", 5,
                 "How many of the nearest ray/bounds-intersecting renderers to log per keypress.");
-            _maxDistance = Plugin.Instance.Config.Bind(
+            _maxDistance = Plugin.Instance.Settings.Bind(
                 "Inspector", "MaxDistance", 2000f,
                 "Ray hits farther than this (meters) from the camera are ignored.");
-            _verboseShaderProperties = Plugin.Instance.Config.Bind(
+            _verboseShaderProperties = Plugin.Instance.Settings.Bind(
                 "Inspector", "VerboseShaderProperties", false,
                 "false = log only Color/Float/Range shader properties (the usual 'why is this black/" +
                 "wrong-tinted' culprits) plus texture slot names. true = every property the shader " +
                 "declares, via Shader.GetPropertyCount/GetPropertyName/GetPropertyType, including full " +
                 "Vector4s.");
-            _alsoPhysicsRaycast = Plugin.Instance.Config.Bind(
+            _alsoPhysicsRaycast = Plugin.Instance.Settings.Bind(
                 "Inspector", "AlsoPhysicsRaycast", true,
                 "Also fires a Physics.Raycast along the same ray and logs what it hit, for comparison. " +
                 "Most decorative/visual-only renderers (decals, shadow-proxy planes, the weather rig's " +

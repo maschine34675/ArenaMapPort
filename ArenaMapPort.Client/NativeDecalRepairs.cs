@@ -29,7 +29,7 @@ namespace ArenaMapPort.Client
         internal static void Install()
         {
             foreach (var map in new[] { ArenaMapRegistry.Equator, ArenaMapRegistry.Bay5 })
-                Settings[map.Key] = Plugin.Instance.Config.Bind($"Decals ({map.Key})", "Enabled", true,
+                Settings[map.Key] = Plugin.Instance.Settings.Bind($"Decals ({map.Key})", "Enabled", true,
                     "Render original Arena projection decals (graffiti, dirt, markings). Live comparison toggle; preserves source inactive objects.");
             SceneManager.sceneLoaded += OnSceneLoaded;
             SceneManager.sceneUnloaded += OnSceneUnloaded;

@@ -230,7 +230,7 @@ namespace ArenaMapPort.Client
                 _states[map.Key] = new LabState();
             }
 
-            _snapshotHotkey = Plugin.Instance.Config.Bind("LightingLab", "SnapshotHotkey",
+            _snapshotHotkey = Plugin.Instance.Settings.Bind("LightingLab", "SnapshotHotkey",
                 new BepInEx.Configuration.KeyboardShortcut(KeyCode.F9),
                 "G — logs one [LightingLab][Snapshot] block: every candidate's live value, camera pos/fwd, " +
                 "RenderSettings.ambient*, live _SSRFactor/_WaterLevel/_SurfaceWetIntensity, and a per-face " +
@@ -261,7 +261,7 @@ namespace ArenaMapPort.Client
             // this class's own AmbientPreset enum doc comment and docs/progress/
             // donor-settings-camera-weather.md §12. "AmbientPreset" stays orphaned in a tester's existing
             // config file (BepInEx persists a saved value under its old key regardless).
-            cfg.AmbientPresetEntry = Plugin.Instance.Config.Bind(section, "AmbientOverride", AmbientPreset.Off,
+            cfg.AmbientPresetEntry = Plugin.Instance.Settings.Bind(section, "AmbientOverride", AmbientPreset.Off,
                 "A — UnityAmbient override, for isolating/overriding WeatherRig's own UnityAmbient fix (§12 " +
                 "goal 1). Off = write nothing at load; switching back to Off live re-applies this raid's own " +
                 "captured baseline (whatever WeatherRig/ArenaLightingRepairs already wrote before this file " +
@@ -277,11 +277,11 @@ namespace ArenaMapPort.Client
                 "(no ReflectionProbe exists anywhere in these scenes) reading a bright ambient at grazing " +
                 "Fresnel angles.");
 
-            cfg.AmbientCustomColor = Plugin.Instance.Config.Bind(section, "AmbientCustomColor",
+            cfg.AmbientCustomColor = Plugin.Instance.Settings.Bind(section, "AmbientCustomColor",
                 new Color(0.5f, 0.5f, 0.5f, 1f),
                 "A — SkyColor/EquatorColor/GroundColor used when AmbientPreset=Custom.");
 
-            cfg.ReflectionPresetEntry = Plugin.Instance.Config.Bind(section, "GlobalReflection", ReflectionPreset.Rig,
+            cfg.ReflectionPresetEntry = Plugin.Instance.Settings.Bind(section, "GlobalReflection", ReflectionPreset.Rig,
                 "B — GlobalReflection. Rig = today's behavior, untouched (AmbientLight's own live sky-only " +
                 "cubemap). Black/Grey override the '_MyGlobalReflectionProbe' shader global every frame with a " +
                 "tiny generated solid-color Cubemap (Harmony postfix on AmbientLight.method_2 — wins " +
@@ -291,7 +291,7 @@ namespace ArenaMapPort.Client
                 "docs/progress/donor-settings-camera-weather.md). Isolates: EFT's own custom reflection-probe " +
                 "global, structurally separate from Candidate A's implicit Unity ambient-derived reflection.");
 
-            cfg.SSRFactorOverride = Plugin.Instance.Config.Bind(section, "SSRFactor", 1f,
+            cfg.SSRFactorOverride = Plugin.Instance.Settings.Bind(section, "SSRFactor", 1f,
                 new ConfigDescription(
                     "C — live override of the '_SSRFactor' shader global (LevelSettings.ApplySettings is the " +
                     "ONLY other writer anywhere in the decompile, confirmed by a full-tree grep — a one-shot " +
@@ -299,7 +299,7 @@ namespace ArenaMapPort.Client
                     "no Harmony needed.",
                     new AcceptableValueRange<float>(0f, 1f)));
 
-            cfg.WaterLevelOverrideEnabled = Plugin.Instance.Config.Bind(section, "WaterLevelOverrideEnabled", false,
+            cfg.WaterLevelOverrideEnabled = Plugin.Instance.Settings.Bind(section, "WaterLevelOverrideEnabled", false,
                 "D — hard-overrides the '_WaterLevel' shader global every frame (Harmony postfix on " +
                 "RainController.AbstractState.vmethod_15), independent of RainController.PuddleWaterLevel's " +
                 "own ceiling clamp (Wetness/MaxLyingWaterOverride*, RainWetnessRepairs.cs — a different lever: " +
@@ -307,12 +307,12 @@ namespace ArenaMapPort.Client
                 "outright). false = today's behavior, the vanilla per-frame lerp stands. RainOff below wins " +
                 "over this when both are set.");
 
-            cfg.WaterLevelOverrideValue = Plugin.Instance.Config.Bind(section, "WaterLevelOverrideValue", 0.6f,
+            cfg.WaterLevelOverrideValue = Plugin.Instance.Settings.Bind(section, "WaterLevelOverrideValue", 0.6f,
                 new ConfigDescription(
                     "D — replacement '_WaterLevel' value applied live when WaterLevelOverrideEnabled=true.",
                     new AcceptableValueRange<float>(0f, 0.95f)));
 
-            cfg.RainOff = Plugin.Instance.Config.Bind(section, "RainOff", false,
+            cfg.RainOff = Plugin.Instance.Settings.Bind(section, "RainOff", false,
                 "D — zeroes the rain-driven globals this Lab targets for isolating the ground-veil symptom: " +
                 "forces '_WaterLevel'=0 (wins over WaterLevelOverrideEnabled above) and " +
                 "RainController._wetRenderer.Intensity=0 (one added check in RainWetnessRepairs' own existing " +
@@ -320,7 +320,7 @@ namespace ArenaMapPort.Client
                 "— scoped narrowly to ground wetness/reflection, not the whole weather system. false = today's " +
                 "behavior.");
 
-            cfg.GroundSmoothnessMultiplier = Plugin.Instance.Config.Bind(section, "GroundSmoothnessMultiplier", 1f,
+            cfg.GroundSmoothnessMultiplier = Plugin.Instance.Settings.Bind(section, "GroundSmoothnessMultiplier", 1f,
                 new ConfigDescription(
                     "E — live multiplier on every discovered Float/Range shader property whose name contains " +
                     "'smooth'/'gloss'/'shin' (case-insensitive; Shader.GetPropertyCount/Name/Type — same " +
@@ -331,7 +331,7 @@ namespace ArenaMapPort.Client
                     "cached and restored on raid end.",
                     new AcceptableValueRange<float>(0f, 2f)));
 
-            cfg.SunIntensityMultiplier = Plugin.Instance.Config.Bind(section, "SunIntensityMultiplier", 1f,
+            cfg.SunIntensityMultiplier = Plugin.Instance.Settings.Bind(section, "SunIntensityMultiplier", 1f,
                 new ConfigDescription(
                     "F — multiplies the rig's own TOD_Sky.Day.LightIntensity/Night.LightIntensity fields " +
                     "(captured once per raid as the baseline, never compounded). TOD_Sky.UpdateCelestials " +

@@ -45,7 +45,7 @@ namespace ArenaMapPort.Client
             // showed the blotches are NOT caused by these decals, and hiding renderers that merely carry a
             // decal material slot removed Bay5's cargo containers. Off by default; a renamed key so the
             // previously saved "true" does not carry over.
-            _enabled = Plugin.Instance.Config.Bind("Decals", "HideProjectorDecals", false,
+            _enabled = Plugin.Instance.Settings.Bind("Decals", "HideProjectorDecals", false,
                 "Hides renderers whose materials are ALL deferred-decal projector shaders ('Decal/Water " +
                 "Deferred Decal', 'Decal/Ultra Deferred Decal Of God 3000'). Diagnostic option, off by default.");
 

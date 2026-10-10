@@ -81,7 +81,7 @@ namespace ArenaMapPort.Client
             }
             _installed = true;
 
-            _mode = Plugin.Instance.Config.Bind("Weather (test)", "Weather", TestWeather.Server,
+            _mode = Plugin.Instance.Settings.Bind("Weather (test)", "Weather", TestWeather.Server,
                 "Equator day always uses Clear and Bay5 always uses dynamic SPT/backend weather; this setting " +
                 "does not override either. Applies to Equator night when Night neon/Rain does not request rain, " +
                 "and other experimental Arena maps. Server = backend weather. Any other value forces a " +

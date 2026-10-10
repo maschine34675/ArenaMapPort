@@ -16,7 +16,7 @@ namespace ArenaMapPort.Client
 
         internal static void BindConfig(EventHandler changed)
         {
-            _strength = Plugin.Instance.Config.Bind("Night neon (arena_equator)", "WetFloorStrength", .8f,
+            _strength = Plugin.Instance.Settings.Bind("Night neon (arena_equator)", "WetFloorStrength", .8f,
                 new ConfigDescription("Additional floor sheen for the midnight neon variant. " +
                     "0 = your configured floor values; 1 = stronger native SMap floor gloss (target 2.2, never reduces higher values). " +
                     "Keeps existing wet masks, reflection colors and daytime settings. Live.",

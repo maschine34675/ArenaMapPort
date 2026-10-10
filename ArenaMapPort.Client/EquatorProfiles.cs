@@ -29,6 +29,8 @@ namespace ArenaMapPort.Client
         static int? _scriptsSceneHandle;
         static bool _confirmed;
         internal static EquatorProfile Current { get; private set; }
+        internal static bool NaturalNight { get; private set; }
+        internal static EquatorProfile Appearance => NaturalNight ? EquatorProfile.Day : Current;
 
         sealed class Pair<T>
         {
@@ -72,8 +74,10 @@ namespace ArenaMapPort.Client
         {
             Reset("new load");
             Current = Select(mapKey, selected);
+            NaturalNight = Current == EquatorProfile.Night && PlayerOptions.NaturalEquatorNight;
             if (Current != EquatorProfile.None)
-                Plugin.Log.LogInfo($"[ArenaMapPort][Profiles] {mapKey}: selected {Current} before scene loading (generation {_generation}).");
+                Plugin.Log.LogInfo($"[ArenaMapPort][Profiles] {mapKey}: selected {Current}, appearance={Appearance}, " +
+                    $"naturalNight={NaturalNight} before scene loading (generation {_generation}).");
             return _generation;
         }
 
@@ -102,7 +106,11 @@ namespace ArenaMapPort.Client
             }
             // Fallback supports callers that bypass the normal application loader; normal raids
             // already selected this exact profile before any scene callbacks consumed settings.
-            if (Current == EquatorProfile.None) Current = requested;
+            if (Current == EquatorProfile.None)
+            {
+                Current = requested;
+                NaturalNight = Current == EquatorProfile.Night && PlayerOptions.NaturalEquatorNight;
+            }
             else if (Current != requested)
             {
                 Plugin.Log.LogError($"[ArenaMapPort][Profiles] Selection mismatch: early={Current}, InitWeather={requested}; " +
@@ -122,6 +130,7 @@ namespace ArenaMapPort.Client
             if (Current != EquatorProfile.None)
                 Plugin.Log.LogInfo($"[ArenaMapPort][Profiles] Cleared {Current}: {reason}.");
             Current = EquatorProfile.None;
+            NaturalNight = false;
             _confirmed = false;
             _scriptsSceneHandle = null;
             _generation++;
@@ -131,7 +140,7 @@ namespace ArenaMapPort.Client
         {
             // Snapshot because binding profile copies expands the ConfigFile collection.
             var entries = new List<ConfigEntryBase>();
-            foreach (var item in Plugin.Instance.Config)
+            foreach (var item in Plugin.Instance.Settings)
                 if (IsAppearance(item.Key)) entries.Add(item.Value);
             foreach (var entry in entries)
                 RegisterMethod.MakeGenericMethod(entry.SettingType).Invoke(null, new object[] { entry });
@@ -177,7 +186,7 @@ namespace ArenaMapPort.Client
         internal static ConfigEntry<T> Entry<T>(ConfigEntry<T> entry)
         {
             var pair = Register(entry);
-            return pair == null ? entry : Current == EquatorProfile.Night ? pair.Night : pair.Day;
+            return pair == null ? entry : Appearance == EquatorProfile.Night ? pair.Night : pair.Day;
         }
 
         internal static ConfigEntry<T> ForSection<T>(ConfigEntry<T> entry, string section)

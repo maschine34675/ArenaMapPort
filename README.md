@@ -6,24 +6,30 @@ The first release contains **Equator and Bay5**, with imported geometry, materia
 
 ## Player settings
 
-F12 shows ten controls. Their saved values survive updates; the reviewed map presets remain active behind them.
-
-| Group | Available controls |
-|---|---|
-| Audio — Equator / Bay5 | `AmbientGainDb` (source gain in dB), `RainVolume` |
-| Lighting — Equator Day / Night / Bay5 | `ExposureCompensationEV` |
-| Equator night | `PostFx` (temporary camera grading), `FlickerStrength` (0 = steady added neon) |
-| General | `DeveloperMode` (requires game restart) |
+F12 shows one switch: **Appearance / NaturalEquatorNight** (off by default).
+Enable it to use the natural Day appearance recipe for Equator's next midnight raid,
+without the added neon lights, chemlights, smoke/haze, temporary PostFX or extra
+wet-floor reflections. Midnight, weather, original map lamps and SAIN's night identity
+remain unchanged. Disable it to restore the neon night recipe on the next raid.
+Equator Day and Bay5 are unaffected; changing the switch during a raid applies only
+to the next raid.
 
 The ambience source gain works together with a fixed accepted volume floor and range;
 it is not a master mute. Normal game volume controls still apply. The accepted mixes are
 Equator **+5 dB / offset 0.4037559 / range ×2.5** and Bay5 **+4 dB / offset 0.399061 / range ×4**.
 Only a complete old neutral mix migrates once; custom mixes are preserved. Rain stays at 1.
 
-Enable `General / DeveloperMode` and restart for the full supported-map controls described
-below and diagnostic tools F7–F10. Changing it during a session takes effect at the next
-startup. Existing hidden settings stay saved; legacy Equator profile aliases and internal
-migration markers always remain hidden. Developer mode does not enable parked maps.
+The normal `BepInEx/config/com.maschine.ArenaMapPort.cfg` contains just this switch
+and the hidden `General / DeveloperMode` key. To expose the full controls described
+below and F7–F10 diagnostics, close the game, set `DeveloperMode = true` in that
+file, then restart. Set it back to false and restart to return to the compact file.
+
+An existing full configuration is preserved in
+`com.maschine.ArenaMapPort.developer.cfg` before compaction. Its tuning remains active
+and is restored to the main file when developer mode is enabled. Normal mode never
+saves or expands that archive; a fresh player installation creates no developer file.
+Returning from developer mode preserves the latest tuning in the archive. Legacy
+profile aliases and internal migration markers stay hidden; parked maps stay unavailable.
 
 ## Current status
 

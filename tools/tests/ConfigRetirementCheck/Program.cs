@@ -1,6 +1,8 @@
 using ArenaMapPort.Client;
 using BepInEx.Configuration;
 
+CompactChecks.Run();
+
 // Exercise real BepInEx load/bind/save/reload, using only an isolated temporary file.
 string path = Path.Combine(Path.GetTempPath(), $"ArenaMapPort-config-check-{Guid.NewGuid():N}.cfg");
 try
