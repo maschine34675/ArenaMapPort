@@ -115,3 +115,24 @@ targets instead of developer mode's 66. No errors in the final recorded buffer.
 All 891 original host assignments and all 804 vanilla assignments still match
 before/after snapshots exactly. Host adds only DeveloperMode=false and the two
 audio migration markers; vanilla has not been started after deployment.
+
+## Post-commit build identity follow-up
+
+Final gate re-verification after commit `3182f8a` rebuilt both assemblies. All
+runtime/package checks passed again (five gates met). The outputs carry the new
+build identity, so their hashes supersede the pre-commit pair above. A Mono.Cecil
+comparison against that native-tested pre-commit pair found all 1,572 client and
+209 server method bodies identical; no functional code changed between runs.
+The final pair was promoted again through the sanctioned DLL-only path.
+
+- Client: `76ACDF3531F755D75583D90446965FEE6AFCAAB7825B7EECC167E3FDDD5C39EF`
+- Server: `23E090E8BE8BD800F8CC9343E30F6A682A9B68DFEDAE4B42298091365737D7CB`
+
+The server and EFT were stopped before the host promotion and started fresh.
+
+Post-commit GPU-2 process `27186010` (22:00:04) confirmed the final build loaded,
+20/20 tracked DLL identities identical, ten visible player controls, DeveloperMode
+false and no errors in the recorded startup buffer. MainMenu, no raid, control free.
+The verified final pair is identical in dist, host mirror and vanilla install.
+Earlier Day/Bay5/Night evidence applies to the identical method bodies; the final
+restart additionally verifies loading the actual committed build outputs.

@@ -23,7 +23,8 @@ Bay5 native time/weather/audio, Equator Night/Rain, F10 gating and raid cleanup.
 Verified DLLs are deployed to both installs; the vanilla install needs its own
 restart. No publishing/tagging/version change. See
 [first-release-prep.md](docs/progress/first-release-prep.md) for hashes, screenshots,
-configuration preservation, limits and the final host state.
+configuration preservation, limits and the final host state. Final post-commit
+GPU-2 process: `27186010`, player mode, MainMenu, 20/20 binary identities matching.
 
 ## Follow-up on 2026-10-10 — Equator open atrium rain
 
