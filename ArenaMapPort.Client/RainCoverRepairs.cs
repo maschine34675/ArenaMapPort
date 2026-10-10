@@ -145,6 +145,8 @@ namespace ArenaMapPort.Client
             internal float LastCamTopY;
             internal float LastFarClip;
             internal bool LastCameraCaptured;
+            internal object CompletedDepthRevision;
+            internal DepthPhotograper CompletedPhotographer;
         }
 
         // A scan that finds no geometry is retried on the next camera change (spectate/death cam), but
@@ -236,13 +238,19 @@ namespace ArenaMapPort.Client
         internal static void RenderPrefix(DepthPhotograper __instance)
         {
             // MANDATORY first check — Render runs on ANY loaded DepthPhotograper, vanilla raids included.
-            if (!ArenaMapRaid.IsLoaded() || !WeatherRig.IsActiveForCurrentMap())
+            if (!ArenaMapRaid.IsLoaded() || !WeatherRig.IsActiveForCurrentMap() ||
+                __instance != WeatherRig.DepthPhotographerForCurrentMap())
             {
                 return;
             }
             var map = ArenaMapRaid.CurrentMap;
-            if (map == null || !_states.TryGetValue(map.Key, out var state)
-                || state.Mode == WeatherRig.RainCoverMode.Off || state.Computed)
+            if (map == null || !_states.TryGetValue(map.Key, out var state)) return;
+            // The native renderer reuses the same RT. Publish a new revision only after
+            // Render finishes; failed/in-progress renders must not expose old pixels.
+            state.CompletedDepthRevision = null;
+            state.CompletedPhotographer = null;
+            state.LastCameraCaptured = false;
+            if (state.Mode == WeatherRig.RainCoverMode.Off || state.Computed)
             {
                 return;
             }
@@ -644,7 +652,8 @@ namespace ArenaMapPort.Client
         {
             // MANDATORY first check — SetupDepthCamera runs on ANY loaded DepthPhotograper, including a
             // real vanilla raid played earlier in the same session, not just ours.
-            if (!ArenaMapRaid.IsLoaded() || !WeatherRig.IsActiveForCurrentMap())
+            if (!ArenaMapRaid.IsLoaded() || !WeatherRig.IsActiveForCurrentMap() ||
+                __instance != WeatherRig.DepthPhotographerForCurrentMap())
             {
                 return;
             }
@@ -1301,6 +1310,26 @@ namespace ArenaMapPort.Client
             return false;
         }
 
+        internal static void RenderPostfix(DepthPhotograper __instance)
+        {
+            var map = ArenaMapRaid.CurrentMap;
+            if (map == null || !WeatherRig.IsActiveForCurrentMap() ||
+                !_states.TryGetValue(map.Key, out var state) || !state.LastCameraCaptured ||
+                state.Mode != WeatherRig.RainCoverMode.RoofDepthBlack || __instance._depthRT == null ||
+                __instance != WeatherRig.DepthPhotographerForCurrentMap()) return;
+            state.CompletedPhotographer = __instance;
+            state.CompletedDepthRevision = new object();
+        }
+
+        internal static object CompletedDepthRevision(ArenaMapDescriptor map)
+        {
+            return map != null && ArenaMapRaid.CurrentMap == map &&
+                _states.TryGetValue(map.Key, out var state) &&
+                state.CompletedPhotographer != null &&
+                state.CompletedPhotographer == WeatherRig.DepthPhotographerForCurrentMap()
+                ? state.CompletedDepthRevision : null;
+        }
+
         // §19 — extracted from BuildDepthReadback's own inline formula below.
         internal static void WorldXZToTexel(Vector3 mapStart, Vector3 mapScale, int dim, float worldX, float worldZ,
             out int px, out int py)
@@ -1310,7 +1339,7 @@ namespace ArenaMapPort.Client
         }
 
         // A partition needs many samples along roof edges. One CPU-readable snapshot avoids a GPU
-        // readback/upload stall for each sample. Ownership is limited to one classification pass.
+        // readback/upload stall for each sample. Caller owns disposal and revision invalidation.
         internal sealed class DepthSnapshot : IDisposable
         {
             readonly Texture2D _pixels;
@@ -1332,6 +1361,13 @@ namespace ArenaMapPort.Client
                 nothing = IsNothingPhotographed(raw, _reversed);
                 height = ReconstructHeightReversedAware(raw, _top, _far, _reversed);
                 return true;
+            }
+
+            internal bool TrySampleInside(float x, float z, out bool nothing, out float height)
+            {
+                float u = (x - _start.x) * _scale.x, v = (z - _start.z) * _scale.z;
+                nothing = true; height = float.NaN;
+                return u >= 0f && u < 1f && v >= 0f && v < 1f && TrySample(x, z, out nothing, out height);
             }
 
             public void Dispose() { if (_pixels != null) UnityEngine.Object.Destroy(_pixels); }

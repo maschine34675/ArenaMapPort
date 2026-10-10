@@ -19,6 +19,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\ArenaMapPort.Server\ArenaMapPort.Server.csproj" />
+    <Compile Include="..\ArenaMapPort.Client\RainExposurePolicy.cs" Link="Client\RainExposurePolicy.cs" />
     <Compile Include="..\ArenaMapPort.Shared\SpecularCapPolicy.cs" Link="Shared\SpecularCapPolicy.cs" />
     <Compile Include="..\ArenaMapPort.Client\ReflectiveSpecularRepairs.cs" Link="Client\ReflectiveSpecularRepairs.cs" />
     <Compile Include="..\ArenaMapPort.Client\DistantShadowCache.cs" Link="Client\DistantShadowCache.cs" />

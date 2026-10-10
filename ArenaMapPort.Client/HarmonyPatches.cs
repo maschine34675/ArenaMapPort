@@ -244,7 +244,8 @@ namespace ArenaMapPort.Client
                 return;
             }
             var prefix = AccessTools.Method(typeof(RainCoverRepairs), nameof(RainCoverRepairs.RenderPrefix));
-            harmony.Patch(render, prefix: new HarmonyMethod(prefix));
+            var renderPostfix = AccessTools.Method(typeof(RainCoverRepairs), nameof(RainCoverRepairs.RenderPostfix));
+            harmony.Patch(render, prefix: new HarmonyMethod(prefix), postfix: new HarmonyMethod(renderPostfix));
             Plugin.Log.LogInfo("[ArenaMapPort][Harmony] patched DepthPhotograper.Render (§12 rain cover bounds)");
 
             // §13 goal 2 — DepthPhotograper.RenderObstacles(), public instance, no args, single overload

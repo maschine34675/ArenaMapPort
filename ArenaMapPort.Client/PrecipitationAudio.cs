@@ -108,6 +108,8 @@ namespace ArenaMapPort.Client
             bool _hasSeason;
             RainController.ERainIntensity _intensity;
             EnvironmentType _environment;
+            EnvironmentType _roomEnvironment;
+            readonly PrecipitationCover _cover = new PrecipitationCover();
             float _roomLevel = 1f;
             readonly float[] _samples = new float[512];
 
@@ -237,8 +239,16 @@ namespace ArenaMapPort.Client
                     _room = room;
                     _calculator.UpdateRoom(room?.RoomAmbientData != null ? room : null);
                 }
-                _environment = room != null ? (room.Type.IsOutdoor() ? EnvironmentType.Outdoor : EnvironmentType.Indoor) :
+                _roomEnvironment = room != null ? (room.Type.IsOutdoor() ? EnvironmentType.Outdoor : EnvironmentType.Indoor) :
                     (GamePlayerOwner.MyPlayer?.Environment ?? EnvironmentType.Outdoor);
+                _intensity = RainController.IntensityType;
+                var listener = Singleton<AudioListenerConsistencyManager>.Instantiated ?
+                    Singleton<AudioListenerConsistencyManager>.Instance : null;
+                bool? covered = null;
+                if (_intensity != RainController.ERainIntensity.None && listener != null && listener.transform.position.y >= -500f)
+                    covered = _cover.Sample(ArenaMapRaid.CurrentMap, listener.transform.position, Time.realtimeSinceStartup);
+                else _cover.Dispose(); // No CPU roof copy needed in dry weather or during camera reset.
+                _environment = covered.HasValue ? (covered.Value ? EnvironmentType.Indoor : EnvironmentType.Outdoor) : _roomEnvironment;
                 var season = Seasons.Controller.Status;
                 if (!_hasSeason || season != _season)
                 {
@@ -247,7 +257,6 @@ namespace ArenaMapPort.Client
                         Singleton<ClientSettingsConfig>.Instance.AudioSettings.EnvironmentSettings.GetSeasonSettings(season) :
                         new ClientAudioSettings.SeasonAmbientSettings();
                 }
-                _intensity = RainController.IntensityType;
                 var ambient = room?.RoomAmbientData;
                 float roomVolume = ambient == null ? 1f : ambient.UseVolumeRange ?
                     _calculator.CalculateNormalizedVolumeByRange() : ambient.PrecipitationVolume;
@@ -264,7 +273,9 @@ namespace ArenaMapPort.Client
             AudioClip Clip(EnvironmentType environment)
             {
                 if (_intensity == RainController.ERainIntensity.None) return null;
-                var preset = _room?.RoomAmbientData?.SeasonSoundPreset;
+                // An indoor acoustic room may contain open sky. Its authored muffled
+                // preset is valid only for the bed matching that room's environment.
+                var preset = environment == _roomEnvironment ? _room?.RoomAmbientData?.SeasonSoundPreset : null;
                 if (preset != null && preset._content != null && preset.TryGetContent(_season, out var content) &&
                     content.TryGetValue(_intensity, out var roomClip)) return roomClip;
                 return _bank.TryGetClip(_season, _intensity, environment, out var clip) ? clip : null;
@@ -282,6 +293,7 @@ namespace ArenaMapPort.Client
                 Plugin.Log.LogInfo($"{Tag} map={_mapKey} ready={_root != null} foreign={_foreign} failed={_failed} " +
                     $"rain={RainController.Intensity:F3}/{RainController.IntensityType} season={_season} " +
                     $"room={_room?.ID}/{_room?.Type} environment={_environment} playerEnvironment={GamePlayerOwner.MyPlayer?.Environment} " +
+                    $"rainCover={(_cover.Covered.HasValue ? (_cover.Covered.Value ? "covered" : "open") : "room-fallback")} coveredSamples={_cover.CoveredSamples}/9 depthCaptures={_cover.Captures} " +
                     $"roomLevel={_roomLevel:F3} ranged={_room?.RoomAmbientData?.UseVolumeRange} " +
                     $"setting={Volumes[_mapKey].Value:F3} ambientInDb={Bus("AmbientInVolume")} ambientOutDb={Bus("AmbientOutVolume")} " +
                     $"ambientDb={Bus("AmbientVolume")} headphonesDb={Bus("HeadphonesMixerVolume")} " +
@@ -295,6 +307,7 @@ namespace ArenaMapPort.Client
 
             void ClearPlayback()
             {
+                _cover.Dispose();
                 _outdoor?.Stop(); _outdoor = null;
                 _indoor?.Stop(); _indoor = null;
                 if (_root != null) { _root.SetActive(false); Object.Destroy(_root); _root = null; }

@@ -3,6 +3,22 @@
 Snapshot for whoever continues (human or agent). Verify the commits named here against `git log`; this file
 is updated by hand at each handover, it is not an automatic record. Read [AGENTS.md](AGENTS.md) first.
 
+## Follow-up on 2026-10-10 — Equator open atrium rain
+
+User confirms the indoor rain output repair is audible. Fixed the remaining
+muffled sound in the open atrium: precipitation now reads actual roof exposure
+from the existing donor depth photo, independently of the indoor acoustic room.
+Lattice intersections remain open; continuous roofs select the indoor bed.
+Room reverb, Bay5's selection, rain levels and all saved settings are preserved.
+
+GPU-2 final process `4f109668` passed lounge lattice -> covered corridor -> open
+atrium, FullyIndoorCover on/off with same-RT cache invalidation, and Day/Clear with
+no rain source or snapshot. Both raids cleaned up; MainMenu and 20/20 loaded-build
+matches confirmed. Release tests/build and distribution validation pass; both
+installs have the verified DLL pair. All 891/804 saved config assignments match.
+See [rain output follow-up](docs/progress/equator-rain-output.md#follow-up-2026-10-10--open-atrium-precipitation)
+for source rationale, native measurements, artifact hashes and evidence limits.
+
 ## Follow-up on 2026-10-09 — audible indoor rain output
 
 The user's listening test rejected the earlier rain acceptance: source PCM was
