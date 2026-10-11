@@ -3,6 +3,22 @@
 Snapshot for whoever continues (human or agent). Verify the commits named here against `git log`; this file
 is updated by hand at each handover, it is not an automatic record. Read [AGENTS.md](AGENTS.md) first.
 
+## Package update on 2026-10-11 — v0.1.0 muzzle-flare correction
+
+The refreshed v0.1.0 ZIP contains the accepted client from `1893272` and an updated
+package README. The other 49 entries, including all server/map files and notices,
+are byte-identical to the first published archive. Total: 51 files,
+1,231,754,560 bytes; SHA256
+`85007889b01b8d625255f50dad00bca0962e9879f373ee238cb03f5cc3113494`.
+The original ZIP is retained locally under `work/releases`; refreshed artifacts
+and verification records are under `work/release-muzzle-update`.
+
+The existing `v0.1.0` source tag remains at `edd7dbd`; updated release notes link
+the corrected client source explicitly. This packaging task does not rebuild or
+redeploy binaries. SPT41vanilla still has the earlier client until updated.
+See [package refresh](docs/progress/muzzle-flare-exclusion.md#package-update--2026-10-11)
+and [release notes](docs/releases/v0.1.0.md).
+
 ## Follow-up on 2026-10-11 — muzzle flares and player documents
 
 Equator now excludes native muzzle-emission regions from the restored anamorphic

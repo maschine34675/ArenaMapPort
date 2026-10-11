@@ -75,3 +75,29 @@ were removed. `FORGE.md` is a compact English description for players.
 
 Both documents were checked against current source and all relative README
 links resolve. This follow-up does not change the published v0.1.0 release ZIP.
+
+## Package update — 2026-10-11
+
+The user subsequently requested replacement of the existing v0.1.0 release ZIP
+with the tested correction. The refreshed package reuses the first published
+archive and replaces only the client DLL and its sibling README.txt. All other
+49 files, including the server component, map assets and attribution, remain
+byte-identical. No rebuild, game restart or deployment is required for packaging.
+The correction source is `1893272d0fac158493095b104b5e028adcafda08`; the client hash
+is the final GPU-2 acceptance hash above.
+
+The new ZIP has 51 entries and is 1,231,754,560 bytes. SHA256:
+`85007889b01b8d625255f50dad00bca0962e9879f373ee238cb03f5cc3113494`.
+Verification reads every ZIP entry, checking CRC, per-file SHA256, safe paths,
+exact entry membership and the two-file difference against the original. The
+existing distribution validator also passes for both maps and all six bundles.
+An independent read-only review checks the candidate and release-note scope.
+
+Publication uploads temporary candidate assets first, checks their GitHub SHA256
+and sizes, then replaces the canonical ZIP/checksum names and release notes.
+The original annotated v0.1.0 tag (`c1d14141ea6974f9fad116f82d8c70b720d32e46`,
+commit `edd7dbd2e04ac0412e364c21dff8eb0fe1404750`) is retained. The notes identify
+the corrected source commit because GitHub's automatic source archives still
+represent the original tag. The old ZIP remains under ignored `work/releases`;
+new artifacts, manifests and publication verification are under ignored
+`work/release-muzzle-update`. No host/vanilla configuration or installation changes.
