@@ -159,6 +159,10 @@ working state.
 
 **DynamicMaps:** Optional Equator and Bay5 ground-plan packs are generated from local geometry
 and each map's existing NavMesh. Deployment and native player/direction/exit checks passed on 2026-09-22.
+The packs ship inside `BepInEx/plugins/ArenaMapPort/dynamicmaps/`; when DynamicMaps is
+installed, ArenaMapPort registers them in memory. Its installation folder and settings
+need no additions. Remove old `Maps/ArenaMapPort_Equator` and `Maps/ArenaMapPort_Bay5`
+development copies when upgrading, then restart EFT to clear cached definitions.
 Open inventory → **MAP** in an Equator or Bay5 raid. Both ground-plan packs are now
 installed and natively tested, including player position, direction and active exits.
 These are simplified ground-floor prototypes. See [Equator acceptance](docs/progress/equator-dynamicmaps.md),

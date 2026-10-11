@@ -13,18 +13,11 @@
       whether the destination already exists, whether its content already matches by SHA256) and
       copies NOTHING. This is true with zero arguments and with only -SptRoot given.
     - A real copy only happens when -Confirm is passed explicitly.
-    - This script NEVER deletes anything, in any mode, anywhere -- not just "outside its own
-      ArenaMapPort folders": ordinary/data deployment uses Copy-Item (create/overwrite), while
-      DllOnly writes the two existing files through exclusive streams; none use Remove-Item. This
-      trivially satisfies "never deletes anything outside its own ArenaMapPort folders" by deleting
-      nothing at all, which is the safer of the two ways to satisfy that constraint (a copy-only
-      script cannot accidentally widen its own blast radius later). Every destination path is also
-      asserted, before any write, to fall strictly under
-      <SptRoot>/BepInEx/plugins/ArenaMapPort/ or <SptRoot>/SPT_Runtime/user/mods/ArenaMapPort/ in
-      standard mode; DynamicMaps mode only writes its two declared files below mpstark-dynamicmaps/
-      Maps/ArenaMapPort_Equator/ or Maps/ArenaMapPort_Bay5/, selected explicitly. Full-path prefix checks
-      protect the destinations -- the script refuses to run
-      at all if that invariant doesn't hold for every planned file, in EITHER mode.
+    - Ordinary, DLL-only and data deployment never delete files. All copies remain inside
+      ArenaMapPort's own client/server directories. The explicit RemoveLegacyDynamicMaps mode
+      removes only our two old map packages after verifying their replacements and installed
+      adapter against dist. It rejects links and unknown content before any deletion, and never
+      recursively deletes directories. No other DynamicMaps files or settings are changed.
     - Never reads or writes anything under D:/ArenaMapPort/dist/ other than read-only enumeration
       (source of truth, untouched).
 
@@ -36,8 +29,8 @@
 
 .PARAMETER DynamicMapsPackage
   Optional data-only package directory. Deploys exactly ArenaMapPort_<map>.jsonc and
-  Layers/Ground.svg into the installed mpstark-dynamicmaps/Maps/ArenaMapPort_<map> folder.
-  This separate mode never reads dist/ or copies client/server files. It requires DynamicMaps.dll,
+  Layers/Ground.svg into ArenaMapPort/dynamicmaps/ArenaMapPort_<map>.
+  This separate mode never reads dist/ or copies client/server files. DynamicMaps is optional; it
   validates the complete package and refuses links in either path. Default remains a dry run.
 
 .PARAMETER DynamicMapsMap
@@ -50,6 +43,12 @@
   Both destinations are exclusively locked before either write; failures restore their
   previous bytes. No bundles, data, assets or configuration are read or copied.
   Incompatible with DynamicMapsPackage/Map. Dry run unless Confirm is supplied.
+
+.PARAMETER RemoveLegacyDynamicMaps
+  Separate migration mode (not combinable with other modes). Deletes only the old Equator/Bay5
+  JSONC/SVG files in mpstark-dynamicmaps/Maps after verifying both new owned packages and the client
+  DLL match dist. Missing legacy folders are a no-op; unknown entries/links fail before deletion.
+  Close EFT first (DynamicMaps caches definitions). Dry run unless Confirm is supplied.
 
 .EXAMPLE
   # dry run (default) -- prints the plan, copies nothing:
@@ -68,6 +67,7 @@ param(
     [string]$SptRoot = "D:/SPT41",
     [switch]$Confirm,
     [switch]$DllOnly,
+    [switch]$RemoveLegacyDynamicMaps,
     [string]$DynamicMapsPackage,
     [ValidateSet('Equator', 'Bay5')]
     [string]$DynamicMapsMap = 'Equator'
@@ -223,10 +223,8 @@ function Invoke-DynamicMapsDeploy {
     $mapName = if ($DynamicMapsMap -eq 'Bay5') { 'Bay5' } else { 'Equator' }
     $mapFile = "ArenaMapPort_$mapName.jsonc"
     $package = Assert-DynamicMapsPackage $DynamicMapsPackage $mapName
-    $pluginRoot = Assert-PlainPath (Join-Path $SptRoot 'BepInEx/plugins/mpstark-dynamicmaps') 'Directory'
-    $pluginDll = Assert-PlainPath (Join-Path $pluginRoot 'DynamicMaps.dll') 'File'
-    if (-not (Test-Path -LiteralPath $pluginDll -PathType Leaf)) { throw "Installed DynamicMaps.dll is required: $pluginDll" }
-    $target = Assert-PlainPath (Join-Path $pluginRoot "Maps/ArenaMapPort_$mapName") 'Directory'
+    $pluginRoot = Assert-PlainPath (Join-Path $SptRoot 'BepInEx/plugins/ArenaMapPort') 'Directory'
+    $target = Assert-PlainPath (Join-Path $pluginRoot "dynamicmaps/ArenaMapPort_$mapName") 'Directory'
     $targetPrefix = $target.TrimEnd('\', '/') + [IO.Path]::DirectorySeparatorChar
     if ($target -eq $package -or $target.StartsWith($package.TrimEnd('\', '/') + [IO.Path]::DirectorySeparatorChar, [StringComparison]::OrdinalIgnoreCase) -or
         $package.StartsWith($targetPrefix, [StringComparison]::OrdinalIgnoreCase)) { throw 'Package and deployment target must not overlap' }
@@ -261,9 +259,85 @@ function Invoke-DynamicMapsDeploy {
         $directory = Split-Path $row.Destination -Parent
         if (-not (Test-Path -LiteralPath $directory)) { [IO.Directory]::CreateDirectory($directory) | Out-Null }
         Copy-Item -LiteralPath $row.Source -Destination $row.Destination -Force
+        if ((Get-FileHash -LiteralPath $row.Destination -Algorithm SHA256).Hash -ne $row.Hash) { throw 'Copied map data hash differs' }
         Write-Host "[deploy-to-spt] copied $($row.Destination)"
     }
     Write-Host '[deploy-to-spt] OK -- 2 DynamicMaps data files copied.' -ForegroundColor Green
+}
+
+function Get-LegacyDynamicMapsPlan {
+    $repo = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot '..')).Path
+    $relativePlugin = 'BepInEx/plugins/ArenaMapPort'
+    $stagedPlugin = Join-Path (Join-Path $repo 'dist') $relativePlugin
+    $installedPlugin = Join-Path $SptRoot $relativePlugin
+    $replacementFiles = @('maschine-ArenaMapPort.Client.dll')
+    foreach ($map in @('Equator', 'Bay5')) {
+        $relative = "dynamicmaps/ArenaMapPort_$map"
+        $null = Assert-DynamicMapsPackage (Join-Path $installedPlugin $relative) $map
+        $null = Assert-DynamicMapsPackage (Join-Path $stagedPlugin $relative) $map
+        $replacementFiles += "$relative/ArenaMapPort_$map.jsonc", "$relative/Layers/Ground.svg"
+    }
+    foreach ($relative in $replacementFiles) {
+        $staged = Assert-PlainPath (Join-Path $stagedPlugin $relative) 'File'
+        $installed = Assert-PlainPath (Join-Path $installedPlugin $relative) 'File'
+        if (-not (Test-Path -LiteralPath $staged -PathType Leaf) -or -not (Test-Path -LiteralPath $installed -PathType Leaf) -or
+            (Get-FileHash -LiteralPath $staged -Algorithm SHA256).Hash -ne (Get-FileHash -LiteralPath $installed -Algorithm SHA256).Hash) {
+            throw "Legacy cleanup requires installed replacement matching dist: $relative"
+        }
+    }
+    $legacyRoot = Assert-PlainPath (Join-Path $SptRoot 'BepInEx/plugins/mpstark-dynamicmaps/Maps') 'Directory'
+    foreach ($map in @('Equator', 'Bay5')) {
+        $target = Assert-PlainPath (Join-Path $legacyRoot "ArenaMapPort_$map") 'Directory'
+        $prefix = $legacyRoot.TrimEnd('\', '/') + [IO.Path]::DirectorySeparatorChar
+        if (-not $target.StartsWith($prefix, [StringComparison]::OrdinalIgnoreCase)) { throw 'Legacy target escapes Maps directory' }
+        if (-not (Test-Path -LiteralPath $target -PathType Container)) { continue }
+        # Inspect exactly one directory level at a time; never follow a link while enumerating.
+        foreach ($item in Get-ChildItem -LiteralPath $target -Force) {
+            if ($item.Name -ceq "ArenaMapPort_$map.jsonc") { $null = Assert-PlainPath $item.FullName 'File' }
+            elseif ($item.Name -ceq 'Layers') { $null = Assert-PlainPath $item.FullName 'Directory' }
+            else { throw "Unknown legacy package entry: $($item.FullName)" }
+        }
+        $layers = Assert-PlainPath (Join-Path $target 'Layers') 'Directory'
+        if (Test-Path -LiteralPath $layers -PathType Container) {
+            foreach ($item in Get-ChildItem -LiteralPath $layers -Force) {
+                if ($item.Name -cne 'Ground.svg') { throw "Unknown legacy layer entry: $($item.FullName)" }
+                $null = Assert-PlainPath $item.FullName 'File'
+            }
+        }
+        foreach ($relative in @("ArenaMapPort_$map.jsonc", 'Layers/Ground.svg')) {
+            $file = Assert-PlainPath (Join-Path $target $relative) 'File'
+            if (Test-Path -LiteralPath $file -PathType Leaf) {
+                [PSCustomObject]@{ Path = $file; Kind = 'File'; Hash = (Get-FileHash -LiteralPath $file -Algorithm SHA256).Hash }
+            }
+        }
+        if (Test-Path -LiteralPath $layers -PathType Container) { [PSCustomObject]@{ Path = $layers; Kind = 'Directory'; Hash = '' } }
+        [PSCustomObject]@{ Path = $target; Kind = 'Directory'; Hash = '' }
+    }
+}
+
+function Invoke-LegacyDynamicMapsRemoval {
+    $plan = @(Get-LegacyDynamicMapsPlan)
+    Write-Step 'Legacy ArenaMapPort DynamicMaps cleanup (replacements verified)'
+    foreach ($row in $plan) { Write-Host "   DELETE $($row.Kind): $($row.Path)" }
+    Write-Host "[deploy-to-spt] cleanup plan: $(@($plan | Where-Object Kind -eq 'File').Count) legacy file(s)"
+    if (-not $Confirm) {
+        Write-Host '[deploy-to-spt] DRY RUN (default) -- nothing was deleted.'
+        return
+    }
+    # Validate BOTH maps and replacement files again before removing the first legacy file.
+    $current = @(Get-LegacyDynamicMapsPlan)
+    if (($current | ConvertTo-Json -Compress) -cne ($plan | ConvertTo-Json -Compress)) { throw 'Legacy cleanup plan changed during validation' }
+    foreach ($row in $plan) {
+        $null = Assert-PlainPath $row.Path $row.Kind
+        if ($row.Kind -eq 'File') {
+            if ((Get-FileHash -LiteralPath $row.Path -Algorithm SHA256).Hash -ne $row.Hash) { throw 'Legacy file changed during cleanup' }
+            Remove-Item -LiteralPath $row.Path -Force
+        } else {
+            # Fails if anything was added concurrently; never remove unexpected contents.
+            [IO.Directory]::Delete($row.Path, $false)
+        }
+    }
+    Write-Host '[deploy-to-spt] OK -- legacy ArenaMapPort map packages removed; other DynamicMaps files untouched.'
 }
 
 function Invoke-DllOnlyDeploy {
@@ -345,6 +419,16 @@ function Invoke-DllOnlyDeploy {
         throw $deploymentError
     } finally { foreach ($stream in $streams) { $stream.Dispose() } }
     Write-Host '[deploy-to-spt] OK -- 2 verified DLLs updated; all other files untouched.' -ForegroundColor Green
+}
+
+if ($RemoveLegacyDynamicMaps) {
+    try {
+        if ($DllOnly -or $PSBoundParameters.ContainsKey('DynamicMapsPackage') -or $PSBoundParameters.ContainsKey('DynamicMapsMap')) {
+            throw 'RemoveLegacyDynamicMaps cannot be combined with other deployment modes'
+        }
+        Invoke-LegacyDynamicMapsRemoval
+    } catch { Fail $_.Exception.Message }
+    exit 0
 }
 
 if ($DllOnly) {
@@ -471,7 +555,7 @@ if (-not $Confirm) {
 }
 
 # ---------------------------------------------------------------------------
-# Real copy. Copy-Item only -- this script never calls Remove-Item, anywhere, in either mode.
+# Standard deployment remains copy-only; the explicit legacy migration above is separate.
 # ---------------------------------------------------------------------------
 Write-Step "Copying (real run, -Confirm was passed)"
 

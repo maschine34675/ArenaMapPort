@@ -212,6 +212,19 @@
              Text="[ArenaMapPort] no Arena UI sprites to stage ($(ArenaMapPortUiDir)\manifest.json not found) - run tools/extract/extract_arena_ui.py if ArenaMode should get it; ArenaMapPort itself does not use these files" />
   </Target>
 
+  <!-- Accepted overview maps live with this plugin, not in DynamicMaps' installation.
+       Logical SVG paths in the original definitions are resolved by DynamicMapsIntegration. -->
+  <Target Name="ArenaMapPortStageDynamicMaps" AfterTargets="ArenaMapPortDistCopy" Condition="'$(Configuration)'=='Release'">
+    <PropertyGroup>
+      <ArenaMapPortOverviewRoot>$(MSBuildThisFileDirectory)..\work\dynamicmaps\release</ArenaMapPortOverviewRoot>
+    </PropertyGroup>
+    <ItemGroup>
+      <ArenaMapPortOverview Include="ArenaMapPort_Equator\ArenaMapPort_Equator.jsonc;ArenaMapPort_Equator\Layers\Ground.svg;ArenaMapPort_Bay5\ArenaMapPort_Bay5.jsonc;ArenaMapPort_Bay5\Layers\Ground.svg" />
+    </ItemGroup>
+    <Error Condition="!Exists('$(ArenaMapPortOverviewRoot)\%(ArenaMapPortOverview.Identity)')" Text="Missing accepted overview map %(ArenaMapPortOverview.Identity); see tools/dynamicmaps/README.md" />
+    <Copy SourceFiles="@(ArenaMapPortOverview->'$(ArenaMapPortOverviewRoot)\%(Identity)')" DestinationFiles="@(ArenaMapPortOverview->'$(ArenaMapPortDistDir)\dynamicmaps\%(Identity)')" />
+  </Target>
+
   <!-- PLAN-TWO-MAPS item 8: AiAnchors.cs reads <plugin>/ai/<key>.ai.json at raid start. The sidecars are
        git-tracked (tools/maps/*.ai.json, written by tools/extract/extract_ai_anchors.py), so they are staged
        with the DLL on every Release build, DllOnly included. -->

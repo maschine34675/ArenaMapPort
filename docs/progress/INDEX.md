@@ -8,6 +8,9 @@ dated state in one screen; read it before this index if you only have a minute.
 
 ## Current — read these for the area you touch
 
+- [dynamicmaps-owned.md](dynamicmaps-owned.md) — optional integration loads Equator/Bay5
+  overview maps from ArenaMapPort's own directory; narrow legacy-package migration.
+
 - [compact-player-config.md](compact-player-config.md) — one player switch for natural Equator
   midnight, compact normal CFG and recoverable developer tuning (2026-10-10).
 

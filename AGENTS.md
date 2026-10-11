@@ -38,7 +38,10 @@ are not accepted build inputs. Keep the SPT bundle target on Unity 2022.3.43f1.
   unquoted backslash in bash once created a stray folder). Without `-Confirm` the script is a dry run.
   The optional DynamicMaps packs use the same script with `-DynamicMapsPackage <pack-folder>`
   and `-DynamicMapsMap Equator|Bay5` (default Equator);
-  that separate mode copies only its two owned map-data files (see `tools/dynamicmaps/README.md`).
+  that separate mode copies only its two owned map-data files into ArenaMapPort/dynamicmaps.
+  The user-authorized `-RemoveLegacyDynamicMaps` migration removes only the old Equator/Bay5
+  packages from DynamicMaps/Maps, after both replacements and the adapter DLL match dist.
+  Dry run first; no recursive cleanup or changes to other maps (see `tools/dynamicmaps/README.md`).
 - Never write under `C:\SPT41*`, `D:\sptmaps`, `D:\Battlestate Games` (the read-only Arena source) or
   `D:\SPT41\Development\ArenaMode` (the user's other mod; read it if you must, never edit it).
 - Never edit host/vanilla config files or third-party mod configs on either install.

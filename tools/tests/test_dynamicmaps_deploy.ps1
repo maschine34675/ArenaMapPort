@@ -50,11 +50,12 @@ function New-Fixture([ValidateSet('Equator', 'Bay5')][string]$MapName = 'Equator
     Write-FixtureFile (Join-Path $plugin 'DynamicMaps.dll') 'fixture DLL sentinel, never loaded'
     Write-FixtureFile (Join-Path $plugin 'Maps/Existing/Map.jsonc') 'existing map sentinel'
     Write-FixtureFile (Join-Path $spt 'BepInEx/config/com.mpstark.DynamicMaps.cfg') 'config sentinel'
+    [IO.Directory]::CreateDirectory((Join-Path $spt 'BepInEx/plugins/ArenaMapPort/dynamicmaps')) | Out-Null
     Write-FixtureFile (Join-Path $spt 'BepInEx/plugins/ArenaMapPort/ArenaMapPort.Client.dll') 'MapPort client sentinel'
     Write-FixtureFile (Join-Path $spt 'SPT_Runtime/user/mods/ArenaMapPort/ArenaMapPort.Server.dll') 'MapPort server sentinel'
     return @{ Root = $caseRoot; Package = $package; Spt = $spt; Plugin = $plugin; Map = $map;
         MapName = $MapName; JsonName = $jsonName; MapDirectory = $mapDirectory;
-        Json = $json; Svg = $svg; Target = (Join-Path $plugin "Maps/$mapDirectory") }
+        Json = $json; Svg = $svg; Target = (Join-Path $spt "BepInEx/plugins/ArenaMapPort/dynamicmaps/$mapDirectory") }
 }
 
 function Get-TreeState([string]$Path) {
@@ -132,7 +133,7 @@ try {
             Assert-That ((Get-FileHash -LiteralPath (Join-Path $fixture.Package $relative)).Hash -eq
                 (Get-FileHash -LiteralPath (Join-Path $fixture.Target $relative)).Hash) "Copied file differs: $relative"
         }
-        $ownedPattern = 'Maps[\\/]' + [regex]::Escape($fixture.MapDirectory) + '(?:[\\/ ]|$)'
+        $ownedPattern = 'dynamicmaps[\\/]' + [regex]::Escape($fixture.MapDirectory) + '(?:[\\/ ]|$)'
         $protectedAfter = ((Get-TreeState $fixture.Spt) -split "`n" | Where-Object { $_ -notmatch $ownedPattern }) -join "`n"
         Assert-That ($protectedAfter -ceq $protectedBefore) 'Copy changed something outside its two-file target'
         Pass-Case "$mapName real copy preserves DLLs, configs, other maps and MapPort"
@@ -169,7 +170,7 @@ try {
         $second = New-Fixture -MapName $secondName
         $second.Spt = $first.Spt
         $second.Plugin = $first.Plugin
-        $second.Target = Join-Path $first.Plugin "Maps/$($second.MapDirectory)"
+        $second.Target = Join-Path $first.Spt "BepInEx/plugins/ArenaMapPort/dynamicmaps/$($second.MapDirectory)"
         $result = Invoke-Deploy $first -Confirm
         Assert-That ($result.Code -eq 0) "First map install failed: $($result.Output)"
         $firstBefore = Get-TreeState $first.Target
@@ -180,7 +181,7 @@ try {
         $result = Invoke-Deploy $second -Confirm
         Assert-That ($result.Code -eq 0) "Second map install failed: $($result.Output)"
         Assert-That ((Get-TreeState $first.Target) -ceq $firstBefore) 'Second map install changed the first map'
-        $ownedPattern = 'Maps[\\/]' + [regex]::Escape($second.MapDirectory) + '(?:[\\/ ]|$)'
+        $ownedPattern = 'dynamicmaps[\\/]' + [regex]::Escape($second.MapDirectory) + '(?:[\\/ ]|$)'
         $protectedAfter = ((Get-TreeState $first.Spt) -split "`n" | Where-Object { $_ -notmatch $ownedPattern }) -join "`n"
         Assert-That ($protectedAfter -ceq $protectedBefore) 'Second map install changed unrelated files/directories'
         Assert-That (@(Get-ChildItem -LiteralPath $second.Target -File -Recurse).Count -eq 2) 'Second map install did not copy exactly two files'
@@ -225,7 +226,7 @@ try {
         Assert-That ((Get-FileHash -LiteralPath (Join-Path $fixture.Package $relative)).Hash -eq
             (Get-FileHash -LiteralPath (Join-Path $fixture.Target $relative)).Hash) "Bay5 copied file differs: $relative"
     }
-    $protectedAfter = ((Get-TreeState $fixture.Spt) -split "`n" | Where-Object { $_ -notmatch 'Maps[\\/]ArenaMapPort_Bay5(?:[\\/ ]|$)' }) -join "`n"
+    $protectedAfter = ((Get-TreeState $fixture.Spt) -split "`n" | Where-Object { $_ -notmatch 'dynamicmaps[\\/]ArenaMapPort_Bay5(?:[\\/ ]|$)' }) -join "`n"
     Assert-That ($protectedAfter -ceq $protectedBefore) 'Bay5 copy changed Equator or another protected file'
     Pass-Case 'Bay5 confirmed copy uses canonical destination and preserves Equator'
 
@@ -288,8 +289,11 @@ try {
     Test-Rejected 'SVG external image' { param($f) Write-FixtureFile $f.Svg '<svg xmlns="http://www.w3.org/2000/svg"><image href="../../outside.svg"/></svg>' } 'SVG reference'
     Test-Rejected 'SVG external CSS' { param($f) Write-FixtureFile $f.Svg '<svg xmlns="http://www.w3.org/2000/svg"><style>@import "../../outside.css";</style></svg>' } 'SVG external styles'
     Test-Rejected 'SVG script' { param($f) Write-FixtureFile $f.Svg '<svg xmlns="http://www.w3.org/2000/svg"><script/></svg>' } 'Active SVG'
-    Test-Rejected 'missing installed plugin' { param($f) Remove-Item -LiteralPath (Join-Path $f.Plugin 'DynamicMaps.dll') } 'DynamicMaps.dll is required'
-    Test-Rejected 'plugin DLL is directory' { param($f) $p = Join-Path $f.Plugin 'DynamicMaps.dll'; Remove-Item -LiteralPath $p; [IO.Directory]::CreateDirectory($p) | Out-Null } 'Expected a file'
+    $fixture = New-Fixture
+    Remove-Item -LiteralPath (Join-Path $fixture.Plugin 'DynamicMaps.dll')
+    $result = Invoke-Deploy $fixture -Confirm
+    Assert-That ($result.Code -eq 0) 'Optional maps must deploy without DynamicMaps installed'
+    Pass-Case 'DynamicMaps absent: own data deploy succeeds'
 
     # Link fixtures point solely inside the random temporary fixture tree.
     Test-Rejected 'source root junction' { param($f) $p = Join-Path $f.Root 'package-link'; New-Item -ItemType Junction -Path $p -Target $f.Package | Out-Null; $f.Package = $p } 'Linked/reparse'
@@ -309,7 +313,6 @@ try {
     Test-Rejected 'target broken symlink' { param($f) [IO.Directory]::CreateDirectory($f.Target) | Out-Null; New-Item -ItemType SymbolicLink -Path (Join-Path $f.Target 'ArenaMapPort_Equator.jsonc') -Target (Join-Path $f.Root 'missing.json') | Out-Null } 'Linked/reparse'
     Test-Rejected 'target Layers is file' { param($f) Write-FixtureFile (Join-Path $f.Target 'Layers') 'sentinel' } 'Expected a directory'
     Test-Rejected 'target JSON is directory' { param($f) [IO.Directory]::CreateDirectory((Join-Path $f.Target 'ArenaMapPort_Equator.jsonc')) | Out-Null } 'Expected a file'
-    Test-Rejected 'plugin DLL symlink' { param($f) $p = Join-Path $f.Plugin 'DynamicMaps.dll'; $moved = Join-Path $f.Root 'real-plugin.dll'; Move-FixtureItem $p $moved; New-Item -ItemType SymbolicLink -Path $p -Target $moved | Out-Null } 'Linked/reparse'
     Test-Rejected 'package overlaps target' { param($f) Copy-Item -LiteralPath $f.Package -Destination $f.Target -Recurse; $f.Package = $f.Target } 'must not overlap'
     Test-Rejected 'empty package argument' { param($f) $f.Package = '' } 'DynamicMapsPackage cannot be empty'
 
@@ -340,6 +343,78 @@ try {
     Assert-That (-not (Test-Path -LiteralPath (Join-Path $fixture.Spt 'BepInEx/plugins/OtherMod'))) 'Default mapping copied third-party directory'
     Assert-That ((Get-TreeState $fixture.Plugin) -ceq $dynamicBefore) 'Default mapping changed DynamicMaps'
     Pass-Case 'default Confirm copies only the original two mappings'
+
+    # Legacy migration has its own complete preflight and cannot fall through to a copy mode.
+    function New-CleanupFixture {
+        $f = New-Fixture
+        $f.Script = Join-Path $f.Root 'repo/tools/deploy-to-spt.ps1'
+        $f.Dist = Join-Path $f.Root 'repo/dist/BepInEx/plugins/ArenaMapPort'
+        $f.Own = Join-Path $f.Spt 'BepInEx/plugins/ArenaMapPort'
+        Write-FixtureFile $f.Script (Get-Content -LiteralPath $deployScript -Raw)
+        foreach ($map in @('Equator','Bay5')) {
+            $source = New-Fixture $map
+            foreach ($relative in @("ArenaMapPort_$map.jsonc", 'Layers/Ground.svg')) {
+                $text = Get-Content -LiteralPath (Join-Path $source.Package $relative) -Raw
+                foreach ($target in @((Join-Path $f.Dist "dynamicmaps/ArenaMapPort_$map"),
+                    (Join-Path $f.Own "dynamicmaps/ArenaMapPort_$map"), (Join-Path $f.Plugin "Maps/ArenaMapPort_$map"))) {
+                    Write-FixtureFile (Join-Path $target $relative) $text
+                }
+            }
+        }
+        Write-FixtureFile (Join-Path $f.Own 'maschine-ArenaMapPort.Client.dll') 'current adapter fixture'
+        Write-FixtureFile (Join-Path $f.Dist 'maschine-ArenaMapPort.Client.dll') 'current adapter fixture'
+        return $f
+    }
+    function Invoke-Cleanup($f, [switch]$Confirm, [string[]]$Extra = @()) {
+        $arguments = @('-NoLogo','-NoProfile','-NonInteractive','-File',$f.Script,'-SptRoot',$f.Spt,'-RemoveLegacyDynamicMaps') + $Extra
+        if ($Confirm) { $arguments += '-Confirm' }
+        $output = (& $pwshPath @arguments 2>&1 | Out-String)
+        return @{ Code=$LASTEXITCODE; Output=$output }
+    }
+    $fixture = New-CleanupFixture
+    $before = Get-TreeState $fixture.Root
+    $result = Invoke-Cleanup $fixture
+    Assert-That ($result.Code -eq 0 -and $result.Output -match 'DRY RUN' -and $result.Output -match '4 legacy file') "Cleanup plan failed: $($result.Output)"
+    Assert-That ((Get-TreeState $fixture.Root) -ceq $before) 'Cleanup dry run changed files'
+    $protectedBefore = ((Get-TreeState $fixture.Spt) -split "`n" | Where-Object { $_ -notmatch 'mpstark-dynamicmaps[\\/]Maps[\\/]ArenaMapPort_(Equator|Bay5)(?:[\\/ ]|$)' }) -join "`n"
+    $result = Invoke-Cleanup $fixture -Confirm
+    Assert-That ($result.Code -eq 0) "Cleanup failed: $($result.Output)"
+    Assert-That ((Get-TreeState $fixture.Spt) -ceq $protectedBefore) 'Cleanup changed something outside the two legacy packages'
+    foreach ($map in @('Equator','Bay5')) { Assert-That (-not (Test-Path -LiteralPath (Join-Path $fixture.Plugin "Maps/ArenaMapPort_$map"))) 'Legacy directory remains' }
+    $result = Invoke-Cleanup $fixture -Confirm
+    Assert-That ($result.Code -eq 0 -and $result.Output -match '0 legacy file') 'Cleanup is not idempotent'
+    Pass-Case 'cleanup dry run, exact four-file deletion, unrelated preservation and idempotency'
+
+    $mutations = @{
+        'stale adapter' = { param($f) Write-FixtureFile (Join-Path $f.Own 'maschine-ArenaMapPort.Client.dll') 'old' }
+        'missing adapter' = { param($f) Remove-Item -LiteralPath (Join-Path $f.Own 'maschine-ArenaMapPort.Client.dll') }
+        'missing replacement SVG' = { param($f) Remove-Item -LiteralPath (Join-Path $f.Own 'dynamicmaps/ArenaMapPort_Bay5/Layers/Ground.svg') }
+        'modified replacement' = { param($f) Add-Content -LiteralPath (Join-Path $f.Own 'dynamicmaps/ArenaMapPort_Bay5/Layers/Ground.svg') ' ' }
+        'unexpected Bay5 root file' = { param($f) Write-FixtureFile (Join-Path $f.Plugin 'Maps/ArenaMapPort_Bay5/custom.jsonc') '{}' }
+        'unexpected Bay5 layer directory' = { param($f) [IO.Directory]::CreateDirectory((Join-Path $f.Plugin 'Maps/ArenaMapPort_Bay5/Layers/custom')) | Out-Null }
+        'linked legacy root' = { param($f) $p = Join-Path $f.Plugin 'Maps/ArenaMapPort_Bay5'; $m = Join-Path $f.Root 'outside-legacy'; Move-FixtureItem $p $m; New-Item -ItemType Junction -Path $p -Target $m | Out-Null }
+        'linked legacy SVG' = { param($f) $p = Join-Path $f.Plugin 'Maps/ArenaMapPort_Bay5/Layers/Ground.svg'; $m = Join-Path $f.Root 'outside.svg'; Move-FixtureItem $p $m; New-Item -ItemType HardLink -Path $p -Target $m | Out-Null }
+    }
+    foreach ($case in $mutations.GetEnumerator()) {
+        $fixture = New-CleanupFixture
+        & $case.Value $fixture
+        $before = Get-TreeState $fixture.Root
+        $result = Invoke-Cleanup $fixture -Confirm
+        Assert-That ($result.Code -ne 0) "Cleanup accepted $($case.Key)"
+        Assert-That ((Get-TreeState $fixture.Root) -ceq $before) "Cleanup rejection modified files for $($case.Key)"
+        Pass-Case "cleanup rejects $($case.Key) before deleting either map"
+    }
+    $fixture = New-CleanupFixture
+    $before = Get-TreeState $fixture.Root
+    $result = Invoke-Cleanup $fixture -Confirm -Extra @('-DllOnly')
+    Assert-That ($result.Code -ne 0 -and $result.Output -match 'cannot be combined') 'Cleanup accepted conflicting mode'
+    Assert-That ((Get-TreeState $fixture.Root) -ceq $before) 'Conflicting mode wrote files'
+    Pass-Case 'cleanup mode conflict rejected'
+    # Moving the fixture plugin aside proves absent optional installations are not recreated.
+    Move-FixtureItem $fixture.Plugin (Join-Path $fixture.Root 'not-installed')
+    $result = Invoke-Cleanup $fixture -Confirm
+    Assert-That ($result.Code -eq 0 -and -not (Test-Path -LiteralPath $fixture.Plugin)) 'Absent DynamicMaps not preserved'
+    Pass-Case 'absent DynamicMaps remains absent'
 
     Write-Output "DYNAMICMAPS_DEPLOY_TESTS_PASSED $script:caseCount cases"
 } finally {

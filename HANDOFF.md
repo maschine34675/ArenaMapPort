@@ -3,7 +3,16 @@
 Snapshot for whoever continues (human or agent). Verify the commits named here against `git log`; this file
 is updated by hand at each handover, it is not an automatic record. Read [AGENTS.md](AGENTS.md) first.
 
-## Follow-up on 2026-10-11 — advanced developer switch and rounded ambience
+## Follow-up on 2026-10-11 — owned overview-map integration
+
+Equator/Bay5 overview data now stages under ArenaMapPort/dynamicmaps. The optional
+DynamicMaps 1.2.1 integration loads it before native image precaching; accepted map
+files remain byte-identical. The separate sanctioned `-RemoveLegacyDynamicMaps`
+migration validates both replacements and the client DLL before removing only our
+two old packages. See [implementation and acceptance](docs/progress/dynamicmaps-owned.md)
+and [delivery commands](tools/dynamicmaps/README.md). Native acceptance follows below.
+
+## Earlier on 2026-10-11 — advanced developer switch and rounded ambience
 
 General/DeveloperMode is now visible under F12's Advanced settings filter; it still
 requires a restart. The compact main CFG retains two entries. Both maps use

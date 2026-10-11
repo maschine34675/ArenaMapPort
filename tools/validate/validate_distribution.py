@@ -25,6 +25,17 @@ def validate():
     if set(keys) != set(RELEASE_MAP_KEYS):
         raise ValueError('Missing release map descriptor')
     plugin = REPO/'dist/BepInEx/plugins/ArenaMapPort'
+    expected_maps = set()
+    for name in ('Equator', 'Bay5'):
+        folder = f'ArenaMapPort_{name}'
+        for file in (f'{folder}.jsonc', 'Layers/Ground.svg'):
+            relative = f'{folder}/{file}'
+            expected_maps.add(relative)
+            if (plugin/'dynamicmaps'/relative).read_bytes() != (REPO/'work/dynamicmaps/release'/relative).read_bytes():
+                raise ValueError(f'Stale overview map: {relative}')
+    actual_maps = {p.relative_to(plugin/'dynamicmaps').as_posix() for p in (plugin/'dynamicmaps').rglob('*') if p.is_file()}
+    if actual_maps != expected_maps:
+        raise ValueError('Unexpected or missing overview map files')
     sys.path.insert(0, str(REPO/'tools/extract'))
     from extract_multiflare import validate_graph
     expected_flare_files = set()

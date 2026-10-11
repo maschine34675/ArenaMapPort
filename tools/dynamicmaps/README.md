@@ -2,7 +2,8 @@
 
 Generates a local map pack for the installed DynamicMaps 1.2.1. The map uses the
 existing extracted colliders and native triangulation of each map's built NavMesh.
-It does not change any scene bundle, client/server DLL, or DynamicMaps configuration.
+Generation does not change scene bundles or DynamicMaps configuration. ArenaMapPort's
+optional client integration adds these maps to installed DynamicMaps 1.2.1 in memory.
 Game-derived output remains under ignored `work/`; do not commit it or assume
 redistribution permission from this tool's availability.
 
@@ -46,7 +47,7 @@ install and preserve that receipt when regenerating the drawing. Restart EFT aft
 installing/replacing the pack to avoid cached map definitions/sprites.
 
 Pack destination:
-`BepInEx/plugins/mpstark-dynamicmaps/Maps/ArenaMapPort_Equator/`
+`BepInEx/plugins/ArenaMapPort/dynamicmaps/ArenaMapPort_Equator/`
 
 ### Bay5
 
@@ -66,7 +67,7 @@ pwsh -NoProfile -File tools/deploy-to-spt.ps1 -SptRoot 'D:/SPT41' `
 The historical exporter filename remains compatible with Equator commands; the descriptor
 selects the profile. Bay5 requires native triangulation. Its exact package files are
 `ArenaMapPort_Bay5.jsonc` and `Layers/Ground.svg`; its fixed destination is
-`BepInEx/plugins/mpstark-dynamicmaps/Maps/ArenaMapPort_Bay5/`. Each package deploy
+`BepInEx/plugins/ArenaMapPort/dynamicmaps/ArenaMapPort_Bay5/`. Each package deploy
 leaves the other map's files alone. Bay5 requires `-DynamicMapsMap Bay5`; omitting
 the selector defaults to Equator and rejects a Bay5 package. Add `-Confirm` only
 for the authorized installation.
@@ -83,6 +84,36 @@ Only the selected map's JSON and `Layers/Ground.svg` are deployed. The preview
 and source/hash receipt are outside `pack/`. Missing, extra, linked or malformed
 package files are rejected. The deploy is copy-only and sequential; after a partial
 I/O failure, correct the cause and repeat the deployment.
+
+## Release staging and migration (2026-10-11)
+
+Accepted packs are stored under ignored
+`work/dynamicmaps/release/ArenaMapPort_Equator/` and `ArenaMapPort_Bay5/`.
+Copy the two files from each accepted `pack/` there after visual validation.
+Current inputs are byte-identical to `work/dynamicmaps/north-marker/{Equator,Bay5}/pack`;
+do not replace them with the older compass drawings. Every client Release build stages
+these four explicit files under `dist/BepInEx/plugins/ArenaMapPort/dynamicmaps/`,
+including DLL-only builds. Preview PNGs and generation receipts are not shipped.
+
+DynamicMaps remains optional. Its soft dependency enables two reflected hooks when
+installed: load each owned package after the native `Maps` search, and resolve that
+package's ground SVG to an absolute path. JSON's historical `Maps/ArenaMapPort_...`
+token is retained for byte compatibility; only the in-memory owned layer is rewritten.
+Native `Markers/exit.png`, other definitions, settings and DynamicMaps binaries stay unchanged.
+
+For older development installations, close EFT, deploy the adapter DLL and both owned
+packs, then review and run the **separate** cleanup:
+
+```powershell
+pwsh -NoProfile -File tools/deploy-to-spt.ps1 -SptRoot D:/SPT41 -RemoveLegacyDynamicMaps
+pwsh -NoProfile -File tools/deploy-to-spt.ps1 -SptRoot D:/SPT41 -RemoveLegacyDynamicMaps -Confirm
+```
+
+Cleanup verifies both installed replacements and the client DLL against dist before
+removing only the four old JSONC/SVG files, then their empty directories. Unknown
+content or links stop the entire preflight. No recursive deletion is used. Missing
+legacy directories are a no-op. Restart EFT afterwards: DynamicMaps does not evict
+old definitions when files are deleted during a running process.
 
 ## Coordinates and appearance
 
@@ -138,7 +169,7 @@ can receive the same marker without regenerating its geometry or map definition:
 
 ```powershell
 & ./work/dynamicmaps/venv/Scripts/python.exe tools/dynamicmaps/update_north_marker.py `
-  --source D:/SPT41/BepInEx/plugins/mpstark-dynamicmaps/Maps/ArenaMapPort_Bay5 `
+  --source D:/SPT41/BepInEx/plugins/ArenaMapPort/dynamicmaps/ArenaMapPort_Bay5 `
   --output work/dynamicmaps/north-marker/Bay5/pack --map Bay5
 pwsh -NoProfile -File tools/deploy-to-spt.ps1 -SptRoot D:/SPT41 `
   -DynamicMapsPackage work/dynamicmaps/north-marker/Bay5/pack -DynamicMapsMap Bay5

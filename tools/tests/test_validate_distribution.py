@@ -28,6 +28,13 @@ class DistributionSidecarTests(unittest.TestCase):
         (self.maps / "equator.json").write_text(
             json.dumps({"key": "arena_equator", "db_base_json_path": "base.json"}), encoding="utf-8")
         self.plugin = self.repo / "dist/BepInEx/plugins/ArenaMapPort"
+        for name in ('Equator', 'Bay5'):
+            for file in (f'ArenaMapPort_{name}.jsonc', 'Layers/Ground.svg'):
+                relative = f'ArenaMapPort_{name}/{file}'
+                for root in (self.plugin/'dynamicmaps', self.repo/'work/dynamicmaps/release'):
+                    path = root/relative
+                    path.parent.mkdir(parents=True, exist_ok=True)
+                    path.write_bytes(b'accepted overview fixture')
         bundles = self.plugin / "bundles"
         bundles.mkdir(parents=True)
         for kind in ("scenes", "navmesh", "preset"):
@@ -143,6 +150,20 @@ class DistributionSidecarTests(unittest.TestCase):
         blob = texture_path.read_bytes()
         texture_path.write_bytes(bytes([blob[0] ^ 1]) + blob[1:])
         with self.assertRaisesRegex(ValueError, "Flare texture length/hash mismatch"):
+            self.validate()
+
+    def test_distribution_rejects_missing_stale_or_unexpected_overview(self):
+        path = self.plugin/'dynamicmaps/ArenaMapPort_Bay5/Layers/Ground.svg'
+        original = path.read_bytes()
+        path.unlink()
+        with self.assertRaises(FileNotFoundError):
+            self.validate()
+        path.write_bytes(b'changed map')
+        with self.assertRaisesRegex(ValueError, 'Stale overview map'):
+            self.validate()
+        path.write_bytes(original)
+        (self.plugin/'dynamicmaps/unexpected.json').write_text('{}', encoding='utf-8')
+        with self.assertRaisesRegex(ValueError, 'Unexpected or missing overview'):
             self.validate()
 
 

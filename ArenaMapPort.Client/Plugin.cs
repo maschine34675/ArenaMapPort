@@ -20,6 +20,7 @@ namespace ArenaMapPort.Client
     // dependency only orders our Awake after SAIN's assembly is loaded when SAIN is present.
     [BepInDependency("me.sol.sain", BepInDependency.DependencyFlags.SoftDependency)]
     [BepInDependency("com.smajlec.lights", BepInDependency.DependencyFlags.SoftDependency)]
+    [BepInDependency(DynamicMapsIntegration.PluginGuid, BepInDependency.DependencyFlags.SoftDependency)]
     public class Plugin : BaseUnityPlugin
     {
         public const string PluginGuid = "com.maschine.ArenaMapPort";
@@ -60,6 +61,7 @@ namespace ArenaMapPort.Client
             EquatorProfiles.Install(_harmony); // capture the chosen profile before owned scenes load
             HarmonyPatches.InstallAll(_harmony);
             LightingModCompatibility.Install(_harmony);
+            DynamicMapsIntegration.Install(_harmony);
 
             if (DeveloperOptions.Enabled) SceneDiagnostics.Install();
             VertexGroundDiffuseRepairs.Install(); // capture source RGB before shader/indoor repair cloning
