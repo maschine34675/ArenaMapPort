@@ -3,6 +3,16 @@
 Snapshot for whoever continues (human or agent). Verify the commits named here against `git log`; this file
 is updated by hand at each handover, it is not an automatic record. Read [AGENTS.md](AGENTS.md) first.
 
+## Publication decision on 2026-10-11
+
+The user chose a new independent `maschine34675/ArenaMapPort` repository containing
+the cleaned history. `ArenaMapPort-dev` must stay private: GitHub still serves old
+removed content there by commit ID despite the successful history rewrite.
+Use the new repository as the publishing target and future `origin`. Preserve the
+ignored local exports and original-history backups. The publication checks cover
+a fresh remote clone and rejection of old content on the new repository before
+changing its visibility. See [publication cleanup](docs/progress/publication-cleanup.md).
+
 ## Follow-up on 2026-10-11 — source publication cleanup
 
 The user accepted the release on SPT41vanilla and authorized removal of raw exports

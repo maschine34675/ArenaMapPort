@@ -48,3 +48,12 @@ Rewriting history changes commit IDs. Older progress logs retain the original bu
 identifiers used during testing; the private original-history bundle and local
 `.git/filter-repo/commit-map` allow those records to be traced. Existing checkouts
 must be replaced with a fresh clone of the cleaned repository before pushing again.
+
+## Publication route selected by the user
+
+The cleaned private remote passed the same scans as the local repository. However,
+GitHub still serves removed content by old commit ID in that repository. The user
+therefore authorized a new independent `maschine34675/ArenaMapPort` repository from
+the clean history, keeping `ArenaMapPort-dev` private. The new target is created
+privately, checked using a fresh clone and old-content access probes, then made public.
+It becomes the local `origin`; the private development repository is retained.
