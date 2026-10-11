@@ -134,7 +134,7 @@ namespace ArenaMapPort.Client
             }
 
             var map = ArenaMapRaid.CurrentMap;
-            Plugin.Log.LogInfo($"[ArenaMapPort][WeatherTestOverride] applied '{mode}' " +
+            Plugin.Log.LogDebug($"[ArenaMapPort][WeatherTestOverride] applied '{mode}' " +
                 $"(map={(map != null ? map.Key : "?")}; nightNeonRain={EquatorNightNeon.RainForCurrentRaid})");
         }
 

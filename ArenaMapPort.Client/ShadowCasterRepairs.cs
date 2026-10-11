@@ -56,7 +56,7 @@ namespace ArenaMapPort.Client
                     {
                         renderer.gameObject.SetActive(true);
                         activated++;
-                        Plugin.Log.LogInfo($"[ArenaMapPort][ShadowCaster] map={map.Key} restored '{path}/{renderer.name}' " +
+                        Plugin.Log.LogDebug($"[ArenaMapPort][ShadowCaster] map={map.Key} restored '{path}/{renderer.name}' " +
                             $"casting={renderer.shadowCastingMode} position={renderer.transform.position:F2}");
                     }
                 }

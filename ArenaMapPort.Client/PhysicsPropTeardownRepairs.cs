@@ -28,7 +28,7 @@ namespace ArenaMapPort.Client
             }
             var prefix = AccessTools.Method(typeof(PhysicsPropTeardownRepairs), nameof(UpdatePrefix));
             harmony.Patch(target, prefix: new HarmonyMethod(prefix));
-            Plugin.Log.LogInfo("[ArenaMapPort][Harmony] patched SmallPhysicsSystem.Update (raid-end GameWorld guard)");
+            Plugin.Log.LogDebug("[ArenaMapPort][Harmony] patched SmallPhysicsSystem.Update (raid-end GameWorld guard)");
         }
 
         public static bool UpdatePrefix(SmallPhysicsSystem __instance)

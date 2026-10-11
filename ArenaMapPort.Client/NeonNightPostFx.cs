@@ -119,7 +119,7 @@ namespace ArenaMapPort.Client
             catch (Exception e) { Plugin.Log.LogError($"{Tag} camera restore failed: {e}"); }
         }
 
-        internal void Probe() => Plugin.Log.LogInfo($"{Tag} enabled={_enabled.Value} applied={_applied} " +
+        internal void Probe() => Plugin.Log.LogDebug($"{Tag} enabled={_enabled.Value} applied={_applied} " +
             $"cameraEffect={(_effect != null)} effectEnabled={(_effect != null && _effect.enabled)} " +
             $"editing={SettingsOpen()} saved={Describe(UserSettings())}");
 
@@ -132,7 +132,7 @@ namespace ArenaMapPort.Client
             if (_state == message) return;
             _state = message;
             if (error) Plugin.Log.LogError($"{Tag} {message}");
-            else Plugin.Log.LogInfo($"{Tag} {message}");
+            else Plugin.Log.LogDebug($"{Tag} {message}");
         }
 
         public void Dispose() { Restore(); _effect = null; }

@@ -43,7 +43,7 @@ namespace ArenaMapPort.Client
                 if (hit == null || !ArenaMapRaid.IsOwnedScene(hit.gameObject.scene.name)) return;
                 --_remaining;
                 var material = __instance.HittedBallisticCollider;
-                Plugin.Log.LogInfo("[ArenaMapPort][MaterialHits] scene=" + hit.gameObject.scene.name +
+                Plugin.Log.LogDebug("[ArenaMapPort][MaterialHits] scene=" + hit.gameObject.scene.name +
                     " collider='" + Path(hit.transform) + "' " + Describe(material) +
                     " defaultFallback=" + ReferenceEquals(material, __instance._defaultHitBody) +
                     " forward=" + __instance.IsForwardHit + " state=" + __instance.BulletState +

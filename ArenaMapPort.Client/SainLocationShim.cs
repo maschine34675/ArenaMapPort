@@ -77,7 +77,7 @@ namespace ArenaMapPort.Client
             var type = AccessTools.TypeByName(SainLocationClass);
             if (type == null)
             {
-                Plugin.Log.LogInfo("[ArenaMapPort][SAIN] SAIN not loaded — location shim not installed (nothing to do).");
+                Plugin.Log.LogDebug("[ArenaMapPort][SAIN] SAIN not loaded — location shim not installed (nothing to do).");
                 return false;
             }
             var find = AccessTools.Method(type, FindLocationMethod);
@@ -108,7 +108,7 @@ namespace ArenaMapPort.Client
             ValidateEntry(_equatorNight);
 
             harmony.Patch(find, prefix: new HarmonyMethod(AccessTools.Method(typeof(SainLocationShim), nameof(FindLocationPrefix))));
-            Plugin.Log.LogInfo($"[ArenaMapPort][Harmony] patched {SainLocationClass}.{FindLocationMethod} (bots-stage1 SAIN location shim)");
+            Plugin.Log.LogDebug($"[ArenaMapPort][Harmony] patched {SainLocationClass}.{FindLocationMethod} (bots-stage1 SAIN location shim)");
             return true;
         }
 
@@ -187,7 +187,7 @@ namespace ArenaMapPort.Client
             if (_loggedForMap != map.Key)
             {
                 _loggedForMap = map.Key;
-                Plugin.Log.LogInfo($"[ArenaMapPort][SAIN] {map.Key}: SAIN location set to {value} " +
+                Plugin.Log.LogDebug($"[ArenaMapPort][SAIN] {map.Key}: SAIN location set to {value} " +
                     $"(config [{entry?.Definition.Section ?? "fallback"}] SainLocation='{wanted}').");
             }
             return false; // skip SAIN's switch (and its per-tick error line)

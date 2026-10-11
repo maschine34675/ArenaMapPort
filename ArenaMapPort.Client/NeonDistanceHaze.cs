@@ -90,7 +90,7 @@ namespace ArenaMapPort.Client
                     Set("useRadialDistance", true);
                     Set("startDistance", 5f);
                     _effect.enabled = true;
-                    Plugin.Log.LogInfo($"{Tag} created owned native distance pass; shader={shader.name} " +
+                    Plugin.Log.LogDebug($"{Tag} created owned native distance pass; shader={shader.name} " +
                         $"color={HazeColor} start=5m camera={camera.GetInstanceID()}");
                 }
             }
@@ -157,7 +157,7 @@ namespace ArenaMapPort.Client
             Shader.SetGlobalVector(FogColorId, state.ShaderColor);
         }
 
-        internal void Probe() => Plugin.Log.LogInfo($"{Tag} density={_density.Value:F4} " +
+        internal void Probe() => Plugin.Log.LogDebug($"{Tag} density={_density.Value:F4} " +
             $"owned={(_effect != null)} enabled={(_effect != null && _effect.enabled)} " +
             $"lastDensity={_lastDensity:F4} ageFrames={(_lastFrame < 0 ? -1 : Time.frameCount - _lastFrame)} " +
             $"nativeMode={RenderSettings.fogMode} nativeDensity={RenderSettings.fogDensity:F6} " +
@@ -169,7 +169,7 @@ namespace ArenaMapPort.Client
             {
                 _effect.enabled = false;
                 Object.Destroy(_effect);
-                Plugin.Log.LogInfo($"{Tag} removed owned distance pass; native weather retained");
+                Plugin.Log.LogDebug($"{Tag} removed owned distance pass; native weather retained");
             }
             // Keep ownership even when a retired camera already destroyed its component.
             // Neither GlobalFog nor PostEffectsBase disposes this private material.

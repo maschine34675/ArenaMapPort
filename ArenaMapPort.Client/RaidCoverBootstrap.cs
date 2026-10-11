@@ -45,7 +45,7 @@ namespace ArenaMapPort.Client
             _host = new GameObject("ArenaMapPort_RaidCoverBootstrap") { hideFlags = HideFlags.HideAndDontSave };
             UnityEngine.Object.DontDestroyOnLoad(_host);
             _host.AddComponent<Runner>().StartCoroutine(Run(raid));
-            Plugin.Log.LogInfo($"[ArenaMapPort][RaidCover] map={map.Key} scheduled from Scripts scene; waiting for raid and camera readiness.");
+            Plugin.Log.LogDebug($"[ArenaMapPort][RaidCover] map={map.Key} scheduled from Scripts scene; waiting for raid and camera readiness.");
         }
 
         static bool IsCurrent(Raid raid) => _raid == raid && ArenaMapRaid.CurrentMap == raid.Map
@@ -87,7 +87,7 @@ namespace ArenaMapPort.Client
                     }
                     if (prepared)
                     {
-                        Plugin.Log.LogInfo($"[ArenaMapPort][RaidCover] map={raid.Map.Key} automatic post-start cover/classification complete.");
+                        Plugin.Log.LogDebug($"[ArenaMapPort][RaidCover] map={raid.Map.Key} automatic post-start cover/classification complete.");
                         yield break;
                     }
                 }

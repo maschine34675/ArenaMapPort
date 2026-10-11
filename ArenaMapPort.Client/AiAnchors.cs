@@ -96,7 +96,7 @@ namespace ArenaMapPort.Client
                 }
                 else if (_loggedOnce.Add("missing:" + key))
                 {
-                    Plugin.Log.LogInfo($"{Tag} no sidecar at {path} — {map.Key} keeps the synthesized " +
+                    Plugin.Log.LogDebug($"{Tag} no sidecar at {path} — {map.Key} keeps the synthesized " +
                                        "core point / patrol ways (AICorePointFallback/PatrolWayFallback)");
                 }
             }

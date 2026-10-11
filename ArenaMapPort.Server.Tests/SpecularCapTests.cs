@@ -462,6 +462,7 @@ namespace ArenaMapPort.Client
             internal readonly List<string> Errors = new();
             internal readonly List<string> Warnings = new();
             internal void LogInfo(string message) { }
+            internal void LogDebug(string message) { }
             internal void LogWarning(string message) => Warnings.Add(message);
             internal void LogError(string message) => Errors.Add(message);
         }

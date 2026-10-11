@@ -84,7 +84,7 @@ namespace ArenaMapPort.Client
                         _baseline = _early = _late = _dryPeak = 0; _baselineN = _earlyN = _lateN = 0;
                         AudioListener.GetOutputData(Samples, 0); // Warm up the listener readback.
                         RoomReverb.Log();
-                        Plugin.Log.LogInfo($"{RoomReverb.Tag} pulse begin bus={_bus.Value} group={_source.outputAudioMixerGroup?.name} room={state.System.ListenerCurrentRoom?.ID}");
+                        Plugin.Log.LogDebug($"{RoomReverb.Tag} pulse begin bus={_bus.Value} group={_source.outputAudioMixerGroup?.name} room={state.System.ListenerCurrentRoom?.ID}");
                     }
                     double time = AudioSettings.dspTime - _started;
                     AudioListener.GetOutputData(Samples, 0);
@@ -101,7 +101,7 @@ namespace ArenaMapPort.Client
                     if (afterPlay >= 0.35 && afterPlay < 0.7) { _early += energy; _earlyN++; }
                     if (afterPlay >= 0.7 && afterPlay < 1.5) { _late += energy; _lateN++; }
                     if (afterPlay < 1.6) return;
-                    Plugin.Log.LogInfo($"{RoomReverb.Tag} pulse result bus={_source.outputAudioMixerGroup?.name} dryPlaying={_source.isPlaying} " +
+                    Plugin.Log.LogDebug($"{RoomReverb.Tag} pulse result bus={_source.outputAudioMixerGroup?.name} dryPlaying={_source.isPlaying} " +
                         $"baseline={Math.Sqrt(_baseline / Math.Max(1, _baselineN)):E4} dryPeak={Math.Sqrt(_dryPeak):E4} " +
                         $"tailEarly={Math.Sqrt(_early / Math.Max(1, _earlyN)):E4} tailLate={Math.Sqrt(_late / Math.Max(1, _lateN)):E4} " +
                         $"blocks={_baselineN}/{_earlyN}/{_lateN}; output includes background audio");

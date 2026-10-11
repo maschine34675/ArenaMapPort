@@ -84,7 +84,7 @@ namespace ArenaMapPort.Client
         {
             if (entry.Yielded) return;
             entry.Yielded = true;
-            Plugin.Log.LogInfo($"[ArenaMapPort][AudioBus] {entry.Parameter} changed externally; preserving its mix");
+            Plugin.Log.LogDebug($"[ArenaMapPort][AudioBus] {entry.Parameter} changed externally; preserving its mix");
         }
 
         public void Dispose()

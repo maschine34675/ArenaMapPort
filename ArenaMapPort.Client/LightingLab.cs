@@ -483,7 +483,7 @@ namespace ArenaMapPort.Client
                 _scanHost = null;
             }
 
-            Plugin.Log.LogInfo($"[ArenaMapPort][LightingLab] {map.Key}: raid ended — restored SSRFactor=1.00, " +
+            Plugin.Log.LogDebug($"[ArenaMapPort][LightingLab] {map.Key}: raid ended — restored SSRFactor=1.00, " +
                 "WaterLevel=0.00, sun-intensity baseline (if captured), reflection-intensity baseline (if " +
                 $"captured), {restoredCount} ground material(s).");
 
@@ -587,7 +587,7 @@ namespace ArenaMapPort.Client
             DynamicGI.UpdateEnvironment();
             state.AmbientOverrideApplied = preset != AmbientPreset.Off;
 
-            Plugin.Log.LogInfo($"[ArenaMapPort][LightingLab] A: applied preset={preset} SkyColor={ls.SkyColor} " +
+            Plugin.Log.LogDebug($"[ArenaMapPort][LightingLab] A: applied preset={preset} SkyColor={ls.SkyColor} " +
                 $"EquatorColor={ls.EquatorColor} GroundColor={ls.GroundColor} " +
                 $"AmbientIntensity={ls.AmbientIntensity:0.00} (map={map.Key})");
         }
@@ -628,7 +628,7 @@ namespace ArenaMapPort.Client
                 state.GreyCube = BuildSolidCubemap(new Color(0.5f, 0.5f, 0.5f, 1f));
             }
 
-            Plugin.Log.LogInfo($"[ArenaMapPort][LightingLab] B: reflection override preset={preset} " +
+            Plugin.Log.LogDebug($"[ArenaMapPort][LightingLab] B: reflection override preset={preset} " +
                 $"ambientFound={ambient != null} (map={map.Key})");
         }
 
@@ -706,7 +706,7 @@ namespace ArenaMapPort.Client
                 return; // already at target — steady-state no-op, no log spam
             }
             Shader.SetGlobalFloat(_ssrFactorId, value);
-            Plugin.Log.LogInfo($"[ArenaMapPort][LightingLab] C: SSRFactor override={value:0.00} " +
+            Plugin.Log.LogDebug($"[ArenaMapPort][LightingLab] C: SSRFactor override={value:0.00} " +
                 $"(was {before:0.00}, map={map.Key})");
         }
 
@@ -719,7 +719,7 @@ namespace ArenaMapPort.Client
             string waterLevel = EquatorProfiles.Value(cfg.WaterLevelOverrideEnabled)
                 ? EquatorProfiles.Value(cfg.WaterLevelOverrideValue).ToString("0.00")
                 : "off";
-            Plugin.Log.LogInfo($"[ArenaMapPort][LightingLab] D: WaterLevel override={waterLevel} " +
+            Plugin.Log.LogDebug($"[ArenaMapPort][LightingLab] D: WaterLevel override={waterLevel} " +
                 $"RainOff={EquatorProfiles.Value(cfg.RainOff)} (map={map.Key})");
         }
 
@@ -860,7 +860,7 @@ namespace ArenaMapPort.Client
                 }
             }
 
-            Plugin.Log.LogInfo($"[ArenaMapPort][LightingLab] E: scanned {renderersScanned} renderer(s), " +
+            Plugin.Log.LogDebug($"[ArenaMapPort][LightingLab] E: scanned {renderersScanned} renderer(s), " +
                 $"{materialsMatched} unique material(s) matched, multiplier={multiplier:0.00} (map={map.Key})");
             if (materialsMatched == 0)
             {
@@ -969,7 +969,7 @@ namespace ArenaMapPort.Client
                 }
                 ApplyGroundSmoothness(entry.Material, entry.Props, multiplier);
             }
-            Plugin.Log.LogInfo($"[ArenaMapPort][LightingLab] E: multiplier={multiplier:0.00} reapplied live " +
+            Plugin.Log.LogDebug($"[ArenaMapPort][LightingLab] E: multiplier={multiplier:0.00} reapplied live " +
                 $"to {state.GroundMaterials.Count} cached material(s) (map={map.Key})");
         }
 
@@ -1005,7 +1005,7 @@ namespace ArenaMapPort.Client
             sky.Day.LightIntensity = newDay;
             sky.Night.LightIntensity = newNight;
 
-            Plugin.Log.LogInfo($"[ArenaMapPort][LightingLab] F: SunIntensityMultiplier={multiplier:0.00} " +
+            Plugin.Log.LogDebug($"[ArenaMapPort][LightingLab] F: SunIntensityMultiplier={multiplier:0.00} " +
                 $"Day.LightIntensity {oldDay:0.00} -> {newDay:0.00} Night.LightIntensity {oldNight:0.00} -> " +
                 $"{newNight:0.00} (map={map.Key})");
         }
@@ -1101,7 +1101,7 @@ namespace ArenaMapPort.Client
                     sb.AppendLine($"  IndoorFloorSmoothness snapshot threw: {ex.GetType().Name}: {ex.Message}");
                 }
 
-                Plugin.Log.LogInfo(sb.ToString());
+                Plugin.Log.LogDebug(sb.ToString());
             }
             catch (Exception ex)
             {

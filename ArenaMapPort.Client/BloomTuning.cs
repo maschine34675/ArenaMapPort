@@ -81,7 +81,7 @@ namespace ArenaMapPort.Client
             if (threshold.Value == oldThreshold) { threshold.Value = DefaultThreshold; moved++; }
             if (intensity.Value == -1f) { intensity.Value = DefaultIntensity; moved++; }
             revision.Value = 1;
-            Plugin.Log.LogInfo($"{Tag} {mapKey}: config re-seeded to bloom defaults revision 1 " +
+            Plugin.Log.LogDebug($"{Tag} {mapKey}: config re-seeded to bloom defaults revision 1 " +
                 $"({moved} value(s) moved; threshold={F(threshold.Value)}, intensity={F(intensity.Value)})");
         }
 
@@ -116,7 +116,7 @@ namespace ArenaMapPort.Client
                 bloom.m_BloomIntensity = EquatorProfiles.Value(entry.intensity) >= 0f ? EquatorProfiles.Value(entry.intensity) : original.intensity;
                 if (before.threshold != bloom.m_BloomThreshhold || before.intensity != bloom.m_BloomIntensity)
                 {
-                    Plugin.Log.LogInfo($"{Tag} {map.Key} '{cam.name}' ({reason}): " +
+                    Plugin.Log.LogDebug($"{Tag} {map.Key} '{cam.name}' ({reason}): " +
                                        $"threshold {F(before.threshold)} -> {F(bloom.m_BloomThreshhold)}, " +
                                        $"intensity {F(before.intensity)} -> {F(bloom.m_BloomIntensity)} " +
                                        $"(camera's own {F(original.threshold)}/{F(original.intensity)})");

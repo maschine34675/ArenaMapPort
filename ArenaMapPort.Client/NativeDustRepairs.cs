@@ -93,11 +93,11 @@ namespace ArenaMapPort.Client
                 owner.SetActive(active); // native Awake binds the owned material and keeps the imported mesh
                 if (filter.sharedMesh != entry.Mesh)
                     throw new InvalidOperationException("native initialization replaced the source mesh");
-                Plugin.Log.LogInfo($"[ArenaMapPort][Dust] map={map.Key} initialized '{dust.Scene}/{dust.Path}' " +
+                Plugin.Log.LogDebug($"[ArenaMapPort][Dust] map={map.Key} initialized '{dust.Scene}/{dust.Path}' " +
                     $"native={entry.Animator.GetType().FullName} speed={dust.TimeSpeed:F3} mesh={entry.Mesh.GetInstanceID()} " +
                     $"vertices={entry.Mesh.vertexCount} volume={volume.width}x{volume.height}x{volume.depth} " +
                     $"format={volume.format} queue={entry.Owned.renderQueue} bounds={renderer.localBounds}");
-                entry.Driver.StartCoroutine(ObserveAnimation(entry));
+                if (DeveloperOptions.Enabled) entry.Driver.StartCoroutine(ObserveAnimation(entry));
             }
             catch (Exception ex)
             {
@@ -126,8 +126,8 @@ namespace ArenaMapPort.Client
             string evidence = $"[ArenaMapPort][Dust] map={entry.Map.Key} animation frames={Time.frameCount - frame} " +
                 $"before={before:F5} after={after:F5} advancing={(after - before).sqrMagnitude > 0f} " +
                 $"meshPreserved={sameMesh} visible={entry.Renderer != null && entry.Renderer.isVisible}";
-            if (sameMesh && (after - before).sqrMagnitude > 0f) Plugin.Log.LogInfo(evidence);
-            else Plugin.Log.LogWarning(evidence);
+            // Developer-only animation evidence; initialization failures are reported separately.
+            Plugin.Log.LogDebug(evidence);
         }
 
         static void OnSceneUnloaded(Scene scene)
@@ -161,7 +161,7 @@ namespace ArenaMapPort.Client
                 entry.Driver.State = null;
                 UnityEngine.Object.Destroy(entry.Driver);
             }
-            Plugin.Log.LogInfo($"[ArenaMapPort][Dust] map={entry.Map.Key} cleanup reason={reason} ownedMaterials={materialsReleased} remaining={Entries.Count}");
+            Plugin.Log.LogDebug($"[ArenaMapPort][Dust] map={entry.Map.Key} cleanup reason={reason} ownedMaterials={materialsReleased} remaining={Entries.Count}");
         }
 
         static GameObject Find(Scene scene, string path)

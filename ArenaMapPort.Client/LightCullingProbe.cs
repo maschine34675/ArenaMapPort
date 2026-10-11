@@ -94,7 +94,7 @@ namespace ArenaMapPort.Client
             Camera cam = ResolveActiveCamera();
             if (map == null || cam == null)
             {
-                Plugin.Log.LogInfo("[ArenaMapPort][LightProbe] no Arena map or no active camera — skipped");
+                Plugin.Log.LogDebug("[ArenaMapPort][LightProbe] no Arena map or no active camera — skipped");
                 _running = false;
                 yield break;
             }
@@ -140,7 +140,7 @@ namespace ArenaMapPort.Client
                           $"visible={l.clo.IsVisible} multiplier={F(l.clo.CalculateMultiplier())} float_1={F(Float1(l.clo))} " +
                           $"intensity={F(l.light.intensity)} enabled={l.light.enabled} flicker={l.flicker}");
             }
-            Plugin.Log.LogInfo(sb.ToString());
+            Plugin.Log.LogDebug(sb.ToString());
 
             // Volumetric light: the player's graphics setting, the live components (they self-destroy when it is off)
             // and the renderer on the active camera.
@@ -156,7 +156,7 @@ namespace ArenaMapPort.Client
                 if (vl.isActiveAndEnabled) { vlActive++; if (vlNames.Count < 4) vlNames.Add(vl.gameObject.name); }
             }
             var renderer = cam.GetComponent<VolumetricLightRenderer>();
-            Plugin.Log.LogInfo($"[ArenaMapPort][LightProbe] {map.Key} volumetric: setting={(setting.HasValue ? setting.Value.ToString() : "unknown")} " +
+            Plugin.Log.LogDebug($"[ArenaMapPort][LightProbe] {map.Key} volumetric: setting={(setting.HasValue ? setting.Value.ToString() : "unknown")} " +
                                $"components={vlTotal} activeAndEnabled={vlActive} [{string.Join(", ", vlNames)}] " +
                                $"renderer on '{cam.name}'={(renderer != null ? (renderer.enabled ? "enabled" : "disabled") : "missing")}");
 
@@ -190,11 +190,11 @@ namespace ArenaMapPort.Client
                                $"cullingCoef={(flickers[i] != null ? F(flickers[i].CullingCoef) : "?")} min={F(min)} max={F(max)} " +
                                $"samples=[{string.Join(" ", samples[i].ConvertAll(F))}]");
                 }
-                Plugin.Log.LogInfo(fsb.ToString());
+                Plugin.Log.LogDebug(fsb.ToString());
             }
             else
             {
-                Plugin.Log.LogInfo($"[ArenaMapPort][LightProbe] {map.Key} flicker: no enabled LightFlicker");
+                Plugin.Log.LogDebug($"[ArenaMapPort][LightProbe] {map.Key} flicker: no enabled LightFlicker");
             }
             LogCameraStack(map.Key, cam);
             HdrImageTuning.LogDiagnostics();
@@ -212,7 +212,7 @@ namespace ArenaMapPort.Client
                 if (b != null)
                     sb.Append($" {b.GetType().Name}{(b.enabled ? "" : "(off)")}");
             }
-            Plugin.Log.LogInfo(sb.ToString());
+            Plugin.Log.LogDebug(sb.ToString());
             sb.Clear();
             sb.Append($"[ArenaMapPort][LightProbe] {mapKey} camera exposure:");
             var prism = cam.GetComponent<PrismEffects>();
@@ -231,7 +231,7 @@ namespace ArenaMapPort.Client
             {
                 sb.Append("\n  PrismEffects: none");
             }
-            Plugin.Log.LogInfo(sb.ToString());
+            Plugin.Log.LogDebug(sb.ToString());
             // UltimateBloom and BloomAndFlares (Unity standard assets, not in Assembly-CSharp) by reflection.
             foreach (var b in cam.GetComponents<Behaviour>())
             {
@@ -239,7 +239,7 @@ namespace ArenaMapPort.Client
                     continue;
                 var typeName = b.GetType().Name;
                 if (typeName == "UltimateBloom" || typeName == "BloomAndFlares")
-                    Plugin.Log.LogInfo($"[ArenaMapPort][LightProbe] {mapKey} {typeName}" +
+                    Plugin.Log.LogDebug($"[ArenaMapPort][LightProbe] {mapKey} {typeName}" +
                         $"{(b.enabled ? "" : "(off)")}:{ScalarFields(b)}");
             }
         }

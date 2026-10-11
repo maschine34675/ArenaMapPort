@@ -16,7 +16,7 @@ namespace ArenaMapPort.Client
         internal static void Install(ConfigFile config)
         {
             Enabled = config.Bind("General", "DeveloperMode", false, new ConfigDescription(
-                "Show all supported-map tuning controls and enable diagnostic tools (F7–F10). " +
+                "Show all supported-map tuning controls and enable diagnostic tools (F7–F10). Diagnostic output uses the Debug log level. " +
                 "Restart the game after changing this option. " +
                 "Saved presets and custom values are retained in the developer archive.", null,
                 new ConfigurationManagerAttributes())).Value;

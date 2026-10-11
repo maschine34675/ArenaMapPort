@@ -69,7 +69,7 @@ namespace ArenaMapPort.Client
                 _handler = new TableHandler(state, data, MonoBehaviourSingleton<BetterAudio>.Instance.Master);
                 _controller = new AudioMixerParamsController(_handler);
                 if (_handler.Failed) throw new InvalidOperationException("Initial mixer application failed");
-                Plugin.Log.LogInfo($"{Tag} {state.MapKey}: native room controller active; 26 original parameters, detailed room types mapped; gameplay snapshots retained");
+                Plugin.Log.LogDebug($"{Tag} {state.MapKey}: native room controller active; 26 original parameters, detailed room types mapped; gameplay snapshots retained");
             }
             catch (Exception e)
             {
@@ -92,11 +92,12 @@ namespace ArenaMapPort.Client
 
         internal static void Log()
         {
+            if (!DeveloperOptions.Enabled) return;
             if (!MonoBehaviourSingleton<BetterAudio>.Instantiated) return;
             var mixer = MonoBehaviourSingleton<BetterAudio>.Instance.Master;
             string Value(string key) => mixer.GetFloat(key, out float v) ? v.ToString("F3", System.Globalization.CultureInfo.InvariantCulture) : "missing";
             var room = _owner?.System?.ListenerCurrentRoom;
-            Plugin.Log.LogInfo($"{Tag} room={room?.ID}/{room?.Type} active={_controller != null && _handler?.Failed == false} " +
+            Plugin.Log.LogDebug($"{Tag} room={room?.ID}/{room?.Type} active={_controller != null && _handler?.Failed == false} " +
                 $"ambientReturn={Value("AmbientReverbVolume")} ambientMix={Value("AmbientReverbMix")} " +
                 $"outSend={Value("AmbientOutReverbSend")} inSend={Value("CommonAmbInEffectsSend")} commonSend={Value("AmbCommonEffectsSend")} " +
                 $"gameplayReturn=unexposed playerEnvironment={GamePlayerOwner.MyPlayer?.Environment}");
@@ -159,14 +160,14 @@ namespace ArenaMapPort.Client
                             (!mixer.GetFloat(name, out float current) || !Mathf.Approximately(previous, current)))
                         {
                             _yielded.Add(name); _applied.Remove(name);
-                            Plugin.Log.LogWarning($"{Tag} Yielded {name} to an external mixer writer");
+                            Plugin.Log.LogDebug($"{Tag} Yielded {name} to an external mixer writer");
                             continue;
                         }
                         float value = parameter.Value[category];
                         NativeSpatialAudio.Require(mixer.SetFloat(name, value), "mixer rejected " + name);
                         _applied[name] = value;
                     }
-                    Plugin.Log.LogInfo($"{Tag} applied room type={type}, source category={(EAudioRoomTypeMask)category}, owned={_applied.Count}");
+                    Plugin.Log.LogDebug($"{Tag} applied room type={type}, source category={(EAudioRoomTypeMask)category}, owned={_applied.Count}");
                     Log();
                 }
                 catch (Exception e)
@@ -189,7 +190,7 @@ namespace ArenaMapPort.Client
                     }
                     else preserved++;
                 _applied.Clear();
-                Plugin.Log.LogInfo($"{Tag} released overrides={cleared}, preserved external={preserved}; snapshot control restored");
+                Plugin.Log.LogDebug($"{Tag} released overrides={cleared}, preserved external={preserved}; snapshot control restored");
             }
         }
     }

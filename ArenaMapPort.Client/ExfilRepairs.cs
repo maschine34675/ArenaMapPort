@@ -54,7 +54,7 @@ namespace ArenaMapPort.Client
             harmony.Patch(init,
                 prefix: new HarmonyMethod(AccessTools.Method(typeof(ExfilRepairs), nameof(InitPrefix))),
                 postfix: new HarmonyMethod(AccessTools.Method(typeof(ExfilRepairs), nameof(InitPostfix))));
-            Plugin.Log.LogInfo("[ArenaMapPort][Harmony] patched ExfiltrationController.InitAllExfiltrationPoints (exfils-stage2: runtime-authored exits)");
+            Plugin.Log.LogDebug("[ArenaMapPort][Harmony] patched ExfiltrationController.InitAllExfiltrationPoints (exfils-stage2: runtime-authored exits)");
         }
 
         // ExfiltrationController.InitAllExfiltrationPoints(MongoID locationId, BackendExitTriggerSettings[] settings, ...)
@@ -130,14 +130,14 @@ namespace ArenaMapPort.Client
                 point.Settings.Name = exit.Name;                  // matched against settings[].Name before LoadSettings
                 _synthetic.Add(point);
                 ExfilSignals.Attach(go, exit.Name, floor);        // smoke + light + hiss, see ExfilSignals.cs
-                Plugin.Log.LogInfo($"{Tag} authored exit '{exit.Name}': box {box.size} at floor {floor:F1} ({basis})");
+                Plugin.Log.LogDebug($"{Tag} authored exit '{exit.Name}': box {box.size} at floor {floor:F1} ({basis})");
             }
 
             foreach (var name in serverNames)
             {
                 if (!map.Exits.Any(e => e.Name == name))
                 {
-                    Plugin.Log.LogInfo($"{Tag} the server ships exit '{name}' without a client position — it has no scene object and stays NotPresent");
+                    Plugin.Log.LogWarning($"{Tag} Exit '{name}' has no map position and is unavailable; check that client and server map data match.");
                 }
             }
 
@@ -162,7 +162,7 @@ namespace ArenaMapPort.Client
                 .Distinct()
                 .ToArray();
             containers[typeof(ExfiltrationPoint)] = merged;
-            Plugin.Log.LogInfo($"{Tag} registered {points.Count} exit(s) with LocationScene '{scene.gameObject.scene.name}' " +
+            Plugin.Log.LogDebug($"{Tag} registered {points.Count} exit(s) with LocationScene '{scene.gameObject.scene.name}' " +
                                $"({merged.Length} ExfiltrationPoint(s) in its container now)");
         }
 
@@ -186,7 +186,7 @@ namespace ArenaMapPort.Client
                 }
                 else
                 {
-                    Plugin.Log.LogInfo(line);
+                    Plugin.Log.LogDebug(line);
                 }
             }
         }

@@ -172,7 +172,7 @@ namespace ArenaMapPort.Client
                 }
             }
 
-            Plugin.Log.LogInfo($"{Tag} installed (ShowArenaArt={_enabled.Value})");
+            Plugin.Log.LogDebug($"{Tag} installed (ShowArenaArt={_enabled.Value})");
         }
 
         // ---- Harmony hooks ---------------------------------------------------------------
@@ -216,7 +216,7 @@ namespace ArenaMapPort.Client
             var onClose = controller?.GetType().GetEvent("OnClose");
             if (onClose == null)
             {
-                Plugin.Log.LogWarning($"{Tag} deploy screen controller has no OnClose event; hiding at ShowRaidStartInfo instead");
+                Plugin.Log.LogDebug($"{Tag} deploy screen controller has no OnClose event; hiding at ShowRaidStartInfo instead");
                 return;
             }
 
@@ -335,7 +335,7 @@ namespace ArenaMapPort.Client
             }
             _visible = true;
             _visibleForKey = map.Key;
-            Plugin.Log.LogInfo($"{Tag} show {map.Key} ({(int)sprite.rect.width}x{(int)sprite.rect.height}, " +
+            Plugin.Log.LogDebug($"{Tag} show {map.Key} ({(int)sprite.rect.width}x{(int)sprite.rect.height}, " +
                                $"{Path.GetFileName(imagePath)}, {layer})");
         }
 
@@ -344,7 +344,7 @@ namespace ArenaMapPort.Client
         // its own children.
         static void AttachToDeployScreen(Transform screen, Sprite sprite)
         {
-            if (!_loggedScreenChildren)
+            if (DeveloperOptions.Enabled && !_loggedScreenChildren)
             {
                 _loggedScreenChildren = true;
                 var names = new List<string>();
@@ -354,7 +354,7 @@ namespace ArenaMapPort.Client
                     names.Add(child.gameObject.activeSelf ? child.name : child.name + "(off)");
                 }
                 var rt = screen as RectTransform;
-                Plugin.Log.LogInfo($"{Tag} deploy screen '{screen.name}' rect={(rt != null ? rt.rect.size.ToString() : "?")} " +
+                Plugin.Log.LogDebug($"{Tag} deploy screen '{screen.name}' rect={(rt != null ? rt.rect.size.ToString() : "?")} " +
                                    $"children: {string.Join(", ", names)}");
             }
 
@@ -395,7 +395,7 @@ namespace ArenaMapPort.Client
                 UnityEngine.Object.Destroy(_screenArt);
             }
             _screenArt = null;
-            Plugin.Log.LogInfo($"{Tag} hide ({reason})");
+            Plugin.Log.LogDebug($"{Tag} hide ({reason})");
             _visible = false;
             _visibleForKey = null;
         }
@@ -508,7 +508,7 @@ namespace ArenaMapPort.Client
 
             if (list.Count == 0)
             {
-                Plugin.Log.LogInfo($"{Tag} no loadscreen art staged for {mapKey} under {LoadscreensDir} " +
+                Plugin.Log.LogDebug($"{Tag} no loadscreen art staged for {mapKey} under {LoadscreensDir} " +
                                     "(run tools/extract/extract_loadscreens.py) — showing EFT's default background");
             }
 

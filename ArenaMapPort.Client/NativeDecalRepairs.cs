@@ -5,6 +5,7 @@ using System.Reflection;
 using ArenaMapPort.Shared;
 using BepInEx.Configuration;
 using UnityEngine;
+using UnityEngine.Experimental.Rendering;
 using UnityEngine.Rendering;
 using UnityEngine.SceneManagement;
 
@@ -123,9 +124,23 @@ namespace ArenaMapPort.Client
                 if (count == 0)
                 {
                     _failed = true;
-                    Plugin.Log.LogInfo($"[ArenaMapPort][NativeDecals] map={Map.Key} no imported decals (older bundle)");
+                    Plugin.Log.LogWarning($"[ArenaMapPort][NativeDecals] {Map.LocaleName}: decal data is missing; reinstall the complete map package.");
                     return;
                 }
+                // Arena's normal-map importer keeps readable bytes for bundle serialization.
+                // The native decal atlas uses regional Graphics.CopyTexture for its shorter mip
+                // chain. Compressed CPU regions cannot be copied, even though the GPU copy works.
+                // Discard only our decal sources' unused CPU copies before native Awake builds the
+                // atlases; keep uploaded pixels/mips intact, including authored DXT5 normal maps.
+                var prepared = new HashSet<Texture2D>();
+                foreach (var material in materials)
+                {
+                    if (!material.HasProperty("_BumpMap") || !(material.GetTexture("_BumpMap") is Texture2D texture)
+                        || !texture.isReadable || !GraphicsFormatUtility.IsCompressedFormat(texture.graphicsFormat)
+                        || !prepared.Add(texture)) continue;
+                    texture.Apply(updateMipmaps: false, makeNoLongerReadable: true);
+                }
+                Plugin.Log.LogDebug($"[ArenaMapPort][NativeDecals] map={Map.Key} released {prepared.Count} compressed source CPU copies before atlas creation");
                 var owner = new GameObject("ArenaMapPort StaticDeferredDecalRenderer");
                 owner.SetActive(false);
                 owner.transform.SetParent(transform, false);
@@ -146,7 +161,7 @@ namespace ArenaMapPort.Client
                     foreach (var draw in draws) registered += draw.Count;
                     if (registered != active)
                         throw new InvalidOperationException($"Native decal census {registered} differs from owned active set {active}");
-                    Plugin.Log.LogInfo($"[ArenaMapPort][NativeDecals] map={Map.Key} enabled: source={count} active={active} " +
+                    Plugin.Log.LogDebug($"[ArenaMapPort][NativeDecals] map={Map.Key} enabled: source={count} active={active} " +
                         $"registered={registered} materials={materials.Count} groups={draws.Length} " +
                         $"nativeEnabled={EFTHardSettings.Instance.STATIC_DEFERRED_DECALS_ENABLED} " +
                         $"camera={Camera.main?.actualRenderingPath} renderer={_owned.GetInstanceID()}");
@@ -187,7 +202,7 @@ namespace ArenaMapPort.Client
                 foreach (var material in _materials)
                     if (material != null) UnityEngine.Object.DestroyImmediate(material);
                 foreach (var buffer in _buffers) buffer.Dispose();
-                Plugin.Log.LogInfo($"[ArenaMapPort][NativeDecals] map={Map.Key} renderer removed; " +
+                Plugin.Log.LogDebug($"[ArenaMapPort][NativeDecals] map={Map.Key} renderer removed; " +
                     $"released {_materials.Count} material(s), {_buffers.Count} command buffer(s) and native callbacks");
                 _materials.Clear();
                 _buffers.Clear();

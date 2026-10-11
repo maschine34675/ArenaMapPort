@@ -110,7 +110,7 @@ namespace ArenaMapPort.Client
             _ranThisRaid = true;
 
             const string tag = "[ArenaMapPort][DaytimeVisualsProbe]";
-            Plugin.Log.LogInfo($"{tag} ==== {map.Key} ====");
+            Plugin.Log.LogDebug($"{tag} ==== {map.Key} ====");
 
             ProbeTimeOfDay(tag, map);
             ProbeExposure(tag);
@@ -131,7 +131,7 @@ namespace ArenaMapPort.Client
             bool arenaMap = map.UsesFixedStartTimes || (!map.UsesServerTime && TimeOfDayRepairs.Enabled);
             var gdt = TODSkyProvider.IsAvailable ? TODSkyProvider.Instance.CurrentTime.GameDateTime : null;
             string liveHour = gdt != null ? gdt.Calculate().Hour.ToString("00") : "n/a (no rig's TOD_Sky to read back — see class doc comment)";
-            Plugin.Log.LogInfo($"{tag} F1 TimeOfDay: enabled={TimeOfDayRepairs.Enabled} " +
+            Plugin.Log.LogDebug($"{tag} F1 TimeOfDay: enabled={TimeOfDayRepairs.Enabled} " +
                                $"legacyFixedHour={TimeOfDayRepairs.FixedHour} activeFixedHour={TimeOfDayRepairs.ActiveFixedHour} " +
                                $"fixedMenu={map.UsesFixedStartTimes} serverTimes={map.UsesServerTime} " +
                                $"appliesToThisMap={arenaMap} liveHour={liveHour}");
@@ -145,11 +145,11 @@ namespace ArenaMapPort.Client
             var prism = cam != null ? cam.GetComponent<PrismEffects>() : null;
             if (prism == null)
             {
-                Plugin.Log.LogInfo($"{tag} F2 Exposure: fixEnabled={CameraEffectsRepairs.ExposureFixEnabled} " +
+                Plugin.Log.LogDebug($"{tag} F2 Exposure: fixEnabled={CameraEffectsRepairs.ExposureFixEnabled} " +
                                    "live=(no active camera / no PrismEffects found)");
                 return;
             }
-            Plugin.Log.LogInfo($"{tag} F2 Exposure: fixEnabled={CameraEffectsRepairs.ExposureFixEnabled} " +
+            Plugin.Log.LogDebug($"{tag} F2 Exposure: fixEnabled={CameraEffectsRepairs.ExposureFixEnabled} " +
                                $"useExposure(live)={prism.useExposure} middleGrey={prism.exposureMiddleGrey:0.000} " +
                                $"lower={prism.exposureLowerLimit:0.0} upper={prism.exposureUpperLimit:0.0}");
         }
@@ -162,7 +162,7 @@ namespace ArenaMapPort.Client
             var cam = ResolveActiveCamera();
             var todCamera = cam != null ? cam.GetComponent<TOD_Camera>() : null;
             var scattering = cam != null ? cam.GetComponent<TOD_Scattering>() : null;
-            Plugin.Log.LogInfo($"{tag} F3 TOD: rigActive={rigActive} " +
+            Plugin.Log.LogDebug($"{tag} F3 TOD: rigActive={rigActive} " +
                                $"scatteringFixEnabled={CameraEffectsRepairs.TodScatteringFixEnabled} " +
                                $"TOD_Camera-present={todCamera != null} TOD_Camera-sky-set={(todCamera != null && todCamera.sky != null)} " +
                                $"TOD_Scattering-present={scattering != null} TOD_Scattering-sky-set={(scattering != null && scattering.Sky != null)}");
@@ -174,7 +174,7 @@ namespace ArenaMapPort.Client
             var sky = MonoBehaviourSingleton<TOD_Sky>.Instantiated ? MonoBehaviourSingleton<TOD_Sky>.Instance : null;
             if (sky == null)
             {
-                Plugin.Log.LogInfo($"{tag} F3 TOD: rigActive=True but MonoBehaviourSingleton<TOD_Sky>.Instance is null (unexpected)");
+                Plugin.Log.LogDebug($"{tag} F3 TOD: rigActive=True but MonoBehaviourSingleton<TOD_Sky>.Instance is null (unexpected)");
                 return;
             }
             var domePos = sky.Components != null && sky.Components.DomeTransform != null
@@ -183,7 +183,7 @@ namespace ArenaMapPort.Client
             var sunLight = sky.LightObject;
             var sunPos = sunLight != null ? sunLight.transform.position.ToString() : "n/a (no LightObject)";
             var camPos = cam != null ? cam.transform.position.ToString() : "n/a (no active camera)";
-            Plugin.Log.LogInfo($"{tag} F3 TOD: cameraWorldPos={camPos} domeWorldPos={domePos} sunWorldPos={sunPos}");
+            Plugin.Log.LogDebug($"{tag} F3 TOD: cameraWorldPos={camPos} domeWorldPos={domePos} sunWorldPos={sunPos}");
 
             // Does the sky's own clock follow the raid clock? 2026-09-17 14:54: GameDateTime said 12:00
             // while the sun sat on the horizon with Light.intensity 0.
@@ -191,7 +191,7 @@ namespace ArenaMapPort.Client
             {
                 var time = sky.Components != null ? sky.Components.Time : null;
                 var cycle = sky.Cycle;
-                Plugin.Log.LogInfo(
+                Plugin.Log.LogDebug(
                     $"{tag} TOD state: cycle={cycle.Year}-{cycle.Month:00}-{cycle.Day:00} hour={cycle.Hour:0.00} " +
                     $"lat={sky.World.Latitude:0.0} lon={sky.World.Longitude:0.0} utc={sky.World.UTC:0.0} " +
                     $"sunZenith={sky.SunZenith:0.0} lerp={sky.LerpValue:0.00} isDay={sky.IsDay} isNight={sky.IsNight} " +
@@ -202,7 +202,7 @@ namespace ArenaMapPort.Client
                     $"light.forward={(sunLight != null ? sunLight.transform.forward.ToString("0.00") : "n/a")} " +
                     $"expected(-sunDirection)={(-sky.SunDirection).ToString("0.00")} " +
                     $"domeLocalScale={(sky.Components != null && sky.Components.DomeTransform != null ? sky.Components.DomeTransform.localScale.x.ToString("0") : "n/a")}");
-                Plugin.Log.LogInfo(
+                Plugin.Log.LogDebug(
                     $"{tag} TOD time: component={(time != null)} enabled={(time != null && time.isActiveAndEnabled)} " +
                     $"lockCurrentTime={(time != null && time.LockCurrentTime)} dayLengthMinutes={(time != null ? time.DayLengthInMinutes : 0f):0.0} " +
                     $"gameDateTime-set={(time != null && time.GameDateTime != null)} " +
@@ -218,14 +218,14 @@ namespace ArenaMapPort.Client
         static void ProbeDecals(string tag)
         {
             string count = DecalRepairs.LastDisabledCount >= 0 ? DecalRepairs.LastDisabledCount.ToString() : "n/a (pass hasn't run yet)";
-            Plugin.Log.LogInfo($"{tag} F4 Decals: enabled={DecalRepairs.Enabled} disabledRendererCount={count}");
+            Plugin.Log.LogDebug($"{tag} F4 Decals: enabled={DecalRepairs.Enabled} disabledRendererCount={count}");
         }
 
         // F5 — ArenaLightingRepairs' ambient-color write gate.
         static void ProbeAmbient(string tag)
         {
             bool rigActive = WeatherRig.IsActiveForCurrentMap();
-            Plugin.Log.LogInfo($"{tag} F5 Ambient: rigActive={rigActive} " +
+            Plugin.Log.LogDebug($"{tag} F5 Ambient: rigActive={rigActive} " +
                                $"ArenaLightingRepairs-ambientColorWriteSkipped={rigActive} " +
                                $"liveAmbientLight={RenderSettings.ambientLight}");
 
@@ -249,7 +249,7 @@ namespace ArenaMapPort.Client
             float y = rig.Sky.SunDirection.y;
             float t = y;
             float t01 = y * 0.5f + 0.5f;
-            Plugin.Log.LogInfo($"{tag} §18 Curves @t={t:0.00} t01={t01:0.00}: " +
+            Plugin.Log.LogDebug($"{tag} §18 Curves @t={t:0.00} t01={t01:0.00}: " +
                 $"Top={tod.TopHarmonicIntensity.Evaluate(t):0.00} Horizont={tod.HorizontHarmonicIntensity.Evaluate(t01):0.00} " +
                 $"Bounce={tod.BounceHarmonicIntensity.Evaluate(t):0.00} Forwar={tod.ForwarHarmonicIntensity.Evaluate(t01):0.00} " +
                 $"AmbientBrightness={tod.AmbientBrightness.Evaluate(t):0.00} AmbientContrast={tod.AmbientContrast.Evaluate(t):0.00} " +
@@ -261,7 +261,7 @@ namespace ArenaMapPort.Client
         // F6 — SeaPlaceholderRepairs.
         static void ProbeSea(string tag)
         {
-            Plugin.Log.LogInfo($"{tag} F6 Sea: enabled={SeaPlaceholderRepairs.Enabled} " +
+            Plugin.Log.LogDebug($"{tag} F6 Sea: enabled={SeaPlaceholderRepairs.Enabled} " +
                                $"lastResult={SeaPlaceholderRepairs.LastResult ?? "n/a (pass hasn't run yet)"}");
         }
 
@@ -272,7 +272,7 @@ namespace ArenaMapPort.Client
         static void ProbeWeatherTestOverride(string tag, ArenaMapPort.Shared.ArenaMapDescriptor map)
         {
             var effective = WeatherTestOverride.ModeForSelection(map, TimeOfDayRepairs.ActiveFixedHour);
-            Plugin.Log.LogInfo($"{tag} WeatherTestOverride: configured='{WeatherTestOverride.Mode}' " +
+            Plugin.Log.LogDebug($"{tag} WeatherTestOverride: configured='{WeatherTestOverride.Mode}' " +
                                $"effective='{effective}' map={map.Key} serverTimes={map.UsesServerTime} — " +
                                (effective == WeatherTestOverride.TestWeather.Server
                                    ? "native backend weather nodes retained, including every resync"
@@ -310,7 +310,7 @@ namespace ArenaMapPort.Client
             // runs (see RainCoverRepairs.LastAppliedCullingMaskForCurrentMap's own doc comment).
             int mask = RainCoverRepairs.LastAppliedCullingMaskForCurrentMap();
 
-            Plugin.Log.LogInfo($"{tag} RainCover/SSR: RainCover={WeatherRig.RainCoverForCurrentMap()} " +
+            Plugin.Log.LogDebug($"{tag} RainCover/SSR: RainCover={WeatherRig.RainCoverForCurrentMap()} " +
                                $"RainBounds=({rainBounds}) depthCameraCullingMask=0x{mask:X} " +
                                $"PostFxSSR(CameraManager.GetSSREnabled)={ppSSR} AmbientLight.IsSSREnable={ambientIsSSR} " +
                                $"RenderSettings: ambientMode={RenderSettings.ambientMode} " +

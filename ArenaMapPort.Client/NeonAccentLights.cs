@@ -147,11 +147,11 @@ namespace ArenaMapPort.Client
                 light.intensity = 0f;
             }
             _lastStrength = -1;
-            Plugin.Log.LogInfo($"{Tag} created {_lights.Count} chemlights/point lights, {_materials.Count} colors; " +
+            Plugin.Log.LogDebug($"{Tag} created {_lights.Count} chemlights/point lights, {_materials.Count} colors; " +
                 $"mesh={mesh.name} vertices={mesh.vertexCount} source={sourceMaterial.name}; range=3m, shadows=256, no gameplay components");
         }
 
-        internal void Probe() => Plugin.Log.LogInfo($"{Tag} strength={_strength.Value:F2} " +
+        internal void Probe() => Plugin.Log.LogDebug($"{Tag} strength={_strength.Value:F2} " +
             $"roots={(_root != null ? 1 : 0)} chemlights={_lights.Count} " +
             $"lit={_lights.Count(l => l != null && l.enabled)} colors={_materials.Count}");
 
@@ -163,7 +163,7 @@ namespace ArenaMapPort.Client
             _root = null;
             _materials.Clear(); _lights.Clear();
             _lastStrength = -1;
-            if (hadResources) Plugin.Log.LogInfo($"{Tag} removed owned accents; borrowed mesh/textures retained");
+            if (hadResources) Plugin.Log.LogDebug($"{Tag} removed owned accents; borrowed mesh/textures retained");
         }
 
         public void Dispose() { if (_disposed) return; _disposed = true; Release(); }

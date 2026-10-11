@@ -114,7 +114,7 @@ namespace ArenaMapPort.Client
                     Clip = tagged == null ? null : HarmonyLib.AccessTools.Field(tagged.GetType(), "Clip")?.GetValue(tagged) as AudioClip;
                 }
             }
-            Plugin.Log.LogInfo($"{Tag} signal assets from the airdrop crate: material={(Material != null ? Material.name : "MISSING")} " +
+            Plugin.Log.LogDebug($"{Tag} signal assets from the airdrop crate: material={(Material != null ? Material.name : "MISSING")} " +
                                $"curve={(Template != null)} clip={(Clip != null ? Clip.name : "none")}");
             if (Material == null)
             {
@@ -210,7 +210,7 @@ namespace ArenaMapPort.Client
             renderer.material.SetColor("_LocalMinimalAmbientLight", Color.white);
             renderer.material.SetColor("_TintColor", tint);
             ps.Play();
-            Plugin.Log.LogInfo($"{Tag} smoke signal lit at '{transform.parent?.name}' ({transform.position:F1})");
+            Plugin.Log.LogDebug($"{Tag} smoke signal lit at '{transform.parent?.name}' ({transform.position:F1})");
         }
     }
 }

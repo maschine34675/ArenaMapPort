@@ -118,7 +118,7 @@ namespace ArenaMapPort.Client
 
             var postfix = AccessTools.Method(typeof(WeatherRig), nameof(WeatherRig.ReflectionIntensityPostfix));
             harmony.Patch(target, postfix: new HarmonyMethod(postfix));
-            Plugin.Log.LogInfo("[ArenaMapPort][Harmony] patched AmbientLight.method_3 (Lighting ReflectionIntensity scale)");
+            Plugin.Log.LogDebug("[ArenaMapPort][Harmony] patched AmbientLight.method_3 (Lighting ReflectionIntensity scale)");
         }
 
         // §18 — Lighting (<map>) AmbientIntensity — AmbientLight.SetSH(SphericalHarmonicsL2)/
@@ -132,7 +132,7 @@ namespace ArenaMapPort.Client
             {
                 var prefix = AccessTools.Method(typeof(WeatherRig), nameof(WeatherRig.AmbientIntensityPrefix));
                 harmony.Patch(target, prefix: new HarmonyMethod(prefix));
-                Plugin.Log.LogInfo("[ArenaMapPort][Harmony] patched AmbientLight.SetSH (Lighting AmbientIntensity scale)");
+                Plugin.Log.LogDebug("[ArenaMapPort][Harmony] patched AmbientLight.SetSH (Lighting AmbientIntensity scale)");
             }
 
             var htarget = AccessTools.Method(typeof(AmbientHighlight), nameof(AmbientHighlight.SetSH));
@@ -140,7 +140,7 @@ namespace ArenaMapPort.Client
             {
                 var hprefix = AccessTools.Method(typeof(WeatherRig), nameof(WeatherRig.AmbientHighlightIntensityPrefix));
                 harmony.Patch(htarget, prefix: new HarmonyMethod(hprefix));
-                Plugin.Log.LogInfo("[ArenaMapPort][Harmony] patched AmbientHighlight.SetSH (Lighting AmbientIntensity scale)");
+                Plugin.Log.LogDebug("[ArenaMapPort][Harmony] patched AmbientHighlight.SetSH (Lighting AmbientIntensity scale)");
             }
         }
 
@@ -159,7 +159,7 @@ namespace ArenaMapPort.Client
 
             var postfix = AccessTools.Method(typeof(LightingLab), nameof(LightingLab.ReflectionPostfix));
             harmony.Patch(target, postfix: new HarmonyMethod(postfix));
-            Plugin.Log.LogInfo("[ArenaMapPort][Harmony] patched AmbientLight.method_2 (Lighting Lab candidate B)");
+            Plugin.Log.LogDebug("[ArenaMapPort][Harmony] patched AmbientLight.method_2 (Lighting Lab candidate B)");
         }
 
         // Lighting Lab candidate D — RainController.AbstractState.vmethod_15(in Vector3, float, float,
@@ -178,7 +178,7 @@ namespace ArenaMapPort.Client
 
             var postfix = AccessTools.Method(typeof(LightingLab), nameof(LightingLab.WaterLevelPostfix));
             harmony.Patch(target, postfix: new HarmonyMethod(postfix));
-            Plugin.Log.LogInfo("[ArenaMapPort][Harmony] patched RainController.AbstractState.vmethod_15 " +
+            Plugin.Log.LogDebug("[ArenaMapPort][Harmony] patched RainController.AbstractState.vmethod_15 " +
                                 "(Lighting Lab candidate D)");
         }
 
@@ -196,7 +196,7 @@ namespace ArenaMapPort.Client
 
             var postfix = AccessTools.Method(typeof(WeatherTestOverride), "Postfix");
             harmony.Patch(target, postfix: new HarmonyMethod(postfix));
-            Plugin.Log.LogInfo("[ArenaMapPort][Harmony] patched EFT.Weather.WeatherController.SetWeatherNodes " +
+            Plugin.Log.LogDebug("[ArenaMapPort][Harmony] patched EFT.Weather.WeatherController.SetWeatherNodes " +
                                 "(donor-settings-camera-weather §D)");
         }
 
@@ -217,7 +217,7 @@ namespace ArenaMapPort.Client
 
             var postfix = AccessTools.Method(typeof(RainWetnessRepairs), "Postfix");
             harmony.Patch(target, postfix: new HarmonyMethod(postfix));
-            Plugin.Log.LogInfo("[ArenaMapPort][Harmony] patched RainController.AbstractStateSummer.SetWetting " +
+            Plugin.Log.LogDebug("[ArenaMapPort][Harmony] patched RainController.AbstractStateSummer.SetWetting " +
                                 "(donor-settings-camera-weather §C.3)");
         }
 
@@ -234,7 +234,7 @@ namespace ArenaMapPort.Client
 
             var postfix = AccessTools.Method(typeof(RainCoverRepairs), nameof(RainCoverRepairs.SetupDepthCameraPostfix));
             harmony.Patch(target, postfix: new HarmonyMethod(postfix));
-            Plugin.Log.LogInfo("[ArenaMapPort][Harmony] patched DepthPhotograper.SetupDepthCamera (§12/§13 rain cover mask + diagnostics)");
+            Plugin.Log.LogDebug("[ArenaMapPort][Harmony] patched DepthPhotograper.SetupDepthCamera (§12/§13 rain cover mask + diagnostics)");
 
             // DepthPhotograper.Render(), public instance, no args (DepthPhotograper.cs:55). The prefix computes
             // RainBounds/cover layers on the raid's first camera change, when every scene is loaded.
@@ -246,7 +246,7 @@ namespace ArenaMapPort.Client
             var prefix = AccessTools.Method(typeof(RainCoverRepairs), nameof(RainCoverRepairs.RenderPrefix));
             var renderPostfix = AccessTools.Method(typeof(RainCoverRepairs), nameof(RainCoverRepairs.RenderPostfix));
             harmony.Patch(render, prefix: new HarmonyMethod(prefix), postfix: new HarmonyMethod(renderPostfix));
-            Plugin.Log.LogInfo("[ArenaMapPort][Harmony] patched DepthPhotograper.Render (§12 rain cover bounds)");
+            Plugin.Log.LogDebug("[ArenaMapPort][Harmony] patched DepthPhotograper.Render (§12 rain cover bounds)");
 
             // §13 goal 2 — DepthPhotograper.RenderObstacles(), public instance, no args, single overload
             // (DepthPhotograper.cs:138), verified §1 of the §13 investigation. Draws elevated meshes onto
@@ -259,28 +259,28 @@ namespace ArenaMapPort.Client
             }
             var obstaclesPrefix = AccessTools.Method(typeof(RainCoverRepairs), nameof(RainCoverRepairs.RenderObstaclesPrefix));
             harmony.Patch(renderObstacles, prefix: new HarmonyMethod(obstaclesPrefix));
-            Plugin.Log.LogInfo("[ArenaMapPort][Harmony] patched DepthPhotograper.RenderObstacles (§13 rain cover v2 — roof draws)");
+            Plugin.Log.LogDebug("[ArenaMapPort][Harmony] patched DepthPhotograper.RenderObstacles (§13 rain cover v2 — roof draws)");
         }
 
         // daytime-and-visuals F1 — LocalGame.InitWeather(TimeAndWeatherSettings), public instance,
         // inherited from BaseLocalGame<EftGamePlayerOwner> and never overridden by LocalGame itself.
-        // AccessTools.Method resolves it via the concrete closed type: InitWeather is public, and
-        // Type.GetMethod (which AccessTools.Method wraps) already searches the full inheritance chain
-        // for public instance members without needing FlattenHierarchy — unlike the open generic
-        // BaseLocalGame<>, which is never a runtime-patchable method target.
+        // Resolve the closed declaring type directly. Reflecting through LocalGame produces a
+        // different ReflectedType, which Harmony warns about even though it finds the same body.
         // Verified: D:/SPT41/Development/_decompiled/EFT/BaseLocalGame.cs:489; EFT/LocalGame.cs:29.
         static void InstallTimeOfDayFix(Harmony harmony)
         {
-            var target = AccessTools.Method(typeof(LocalGame), nameof(LocalGame.InitWeather));
+            var declaringType = typeof(BaseLocalGame<EftGamePlayerOwner>);
+            var target = AccessTools.DeclaredMethod(declaringType, nameof(LocalGame.InitWeather),
+                new[] { typeof(TimeAndWeatherSettings) });
 
-            if (!Verify(target, typeof(LocalGame), nameof(LocalGame.InitWeather)))
+            if (!Verify(target, declaringType, nameof(LocalGame.InitWeather)))
             {
                 return;
             }
 
             var prefix = AccessTools.Method(typeof(TimeOfDayRepairs), nameof(TimeOfDayRepairs.Prefix));
             harmony.Patch(target, prefix: new HarmonyMethod(prefix));
-            Plugin.Log.LogInfo("[ArenaMapPort][Harmony] patched LocalGame.InitWeather (daytime-and-visuals F1)");
+            Plugin.Log.LogDebug("[ArenaMapPort][Harmony] patched BaseLocalGame<EftGamePlayerOwner>.InitWeather");
         }
 
         // RainController.AbstractStateSummer.CameraChanged(CameraManager), public override, nested type.
@@ -297,7 +297,7 @@ namespace ArenaMapPort.Client
 
             var prefix = AccessTools.Method(typeof(RainControllerCameraGuard), "Prefix");
             harmony.Patch(target, prefix: new HarmonyMethod(prefix));
-            Plugin.Log.LogInfo("[ArenaMapPort][Harmony] patched RainController.AbstractStateSummer.CameraChanged " +
+            Plugin.Log.LogDebug("[ArenaMapPort][Harmony] patched RainController.AbstractStateSummer.CameraChanged " +
                                 "(weather rig on fallback camera)");
         }
 
@@ -317,7 +317,7 @@ namespace ArenaMapPort.Client
 
             var postfix = AccessTools.Method(typeof(SpawnInfiltrationFixPostfix), "Postfix");
             harmony.Patch(target, postfix: new HarmonyMethod(postfix));
-            Plugin.Log.LogInfo("[ArenaMapPort][Harmony] patched SpawnPointsCollection.CreateFromScene " +
+            Plugin.Log.LogDebug("[ArenaMapPort][Harmony] patched SpawnPointsCollection.CreateFromScene " +
                                 "(fix-gamestart F1 — entry-point blocker fix)");
         }
 
@@ -336,7 +336,7 @@ namespace ArenaMapPort.Client
 
             var postfix = AccessTools.Method(typeof(SpawnColliderRepairs), "Postfix");
             harmony.Patch(target, postfix: new HarmonyMethod(postfix));
-            Plugin.Log.LogInfo("[ArenaMapPort][Harmony] patched SpawnPointMarker.Start " +
+            Plugin.Log.LogDebug("[ArenaMapPort][Harmony] patched SpawnPointMarker.Start " +
                                 "(fix-lighting-movement — spawn collider trigger fix)");
         }
 
@@ -356,7 +356,7 @@ namespace ArenaMapPort.Client
 
             var prefix = AccessTools.Method(typeof(BundleHostPrefix), "Prefix");
             harmony.Patch(target, prefix: new HarmonyMethod(prefix));
-            Plugin.Log.LogInfo("[ArenaMapPort][Harmony] patched BundlesManager.LoadBundleAsync (§F.1)");
+            Plugin.Log.LogDebug("[ArenaMapPort][Harmony] patched BundlesManager.LoadBundleAsync (§F.1)");
         }
 
         // §F.2 — BotsController.Init(...), instance method, synchronous void.
@@ -372,7 +372,7 @@ namespace ArenaMapPort.Client
 
             var prefix = AccessTools.Method(typeof(NavMeshInstallerPrefix), "Prefix");
             harmony.Patch(target, prefix: new HarmonyMethod(prefix));
-            Plugin.Log.LogInfo("[ArenaMapPort][Harmony] patched BotsController.Init (§F.2)");
+            Plugin.Log.LogDebug("[ArenaMapPort][Harmony] patched BotsController.Init (§F.2)");
         }
 
         // §F.6 — PerfectCullingCrossSceneSampler.InitializeAutoCulling(CancellationToken, IProgress<float>),
@@ -393,7 +393,7 @@ namespace ArenaMapPort.Client
 
             var prefix = AccessTools.Method(typeof(PerfectCullingSkipPrefix), "Prefix");
             harmony.Patch(target, prefix: new HarmonyMethod(prefix));
-            Plugin.Log.LogInfo("[ArenaMapPort][Harmony] patched " +
+            Plugin.Log.LogDebug("[ArenaMapPort][Harmony] patched " +
                                 "PerfectCullingCrossSceneSampler.InitializeAutoCulling (§F.6)");
         }
 
@@ -413,7 +413,7 @@ namespace ArenaMapPort.Client
 
             var postfix = AccessTools.Method(typeof(SpatialAudioCreateDefaultsPostfix), "Postfix");
             harmony.Patch(target, postfix: new HarmonyMethod(postfix));
-            Plugin.Log.LogInfo("[ArenaMapPort][Harmony] patched SpatialAudioSystem.CreateSpatialAudioSystem " +
+            Plugin.Log.LogDebug("[ArenaMapPort][Harmony] patched SpatialAudioSystem.CreateSpatialAudioSystem " +
                                 "(impl-raidstart-repairs 1a)");
         }
 
@@ -434,7 +434,7 @@ namespace ArenaMapPort.Client
             var prefix = AccessTools.Method(typeof(SpatialAudioInitSkipPrefix), "Prefix");
             var postfix = AccessTools.Method(typeof(SpatialAudioInitSkipPrefix), "Postfix");
             harmony.Patch(target, prefix: new HarmonyMethod(prefix), postfix: new HarmonyMethod(postfix));
-            Plugin.Log.LogInfo("[ArenaMapPort][Harmony] patched SpatialAudioSystem.Initialize (impl-raidstart-repairs 1b)");
+            Plugin.Log.LogDebug("[ArenaMapPort][Harmony] patched SpatialAudioSystem.Initialize (impl-raidstart-repairs 1b)");
         }
 
         // impl-raidstart-repairs item (1c) — every public instance overload of
@@ -466,7 +466,7 @@ namespace ArenaMapPort.Client
             {
                 harmony.Patch(target, prefix: prefix, finalizer: finalizer);
             }
-            Plugin.Log.LogInfo($"[ArenaMapPort][Harmony] patched SpatialAudioSystem.ProcessSourceOcclusion " +
+            Plugin.Log.LogDebug($"[ArenaMapPort][Harmony] patched SpatialAudioSystem.ProcessSourceOcclusion " +
                                 $"({targets.Length} overload(s)) (impl-raidstart-repairs 1c)");
         }
 
@@ -490,7 +490,7 @@ namespace ArenaMapPort.Client
             var prefix = AccessTools.Method(typeof(SpatialAudioInteractiveOcclusionGuard), "Prefix");
             var finalizer = AccessTools.Method(typeof(SpatialAudioInteractiveOcclusionGuard), "Finalizer");
             harmony.Patch(target, prefix: new HarmonyMethod(prefix), finalizer: new HarmonyMethod(finalizer));
-            Plugin.Log.LogInfo("[ArenaMapPort][Harmony] patched SpatialAudioSystem.ProcessInteractiveObjectOcclusion " +
+            Plugin.Log.LogDebug("[ArenaMapPort][Harmony] patched SpatialAudioSystem.ProcessInteractiveObjectOcclusion " +
                                 "(fix-raidstart)");
         }
 
@@ -508,7 +508,7 @@ namespace ArenaMapPort.Client
 
             var prefix = AccessTools.Method(typeof(EnsureEnvironmentPrefix), "Prefix");
             harmony.Patch(target, prefix: new HarmonyMethod(prefix));
-            Plugin.Log.LogInfo("[ArenaMapPort][Harmony] patched Player.Init (impl-raidstart-repairs 2)");
+            Plugin.Log.LogDebug("[ArenaMapPort][Harmony] patched Player.Init (impl-raidstart-repairs 2)");
         }
 
         // impl-raidstart-repairs item (3) — EffectsController.Awake(), public void.
@@ -524,7 +524,7 @@ namespace ArenaMapPort.Client
 
             var prefix = AccessTools.Method(typeof(EffectsControllerFrostbitePrefix), "Prefix");
             harmony.Patch(target, prefix: new HarmonyMethod(prefix));
-            Plugin.Log.LogInfo("[ArenaMapPort][Harmony] patched EffectsController.Awake (impl-raidstart-repairs 3)");
+            Plugin.Log.LogDebug("[ArenaMapPort][Harmony] patched EffectsController.Awake (impl-raidstart-repairs 3)");
         }
 
         // impl-raidstart-repairs — AIVoxelesData.RestoreData(Dictionary<int, GroupPoint>, AICoversData),
@@ -543,7 +543,7 @@ namespace ArenaMapPort.Client
 
             var prefix = AccessTools.Method(typeof(AIVoxelesDataGuardPrefix), "Prefix");
             harmony.Patch(target, prefix: new HarmonyMethod(prefix));
-            Plugin.Log.LogInfo("[ArenaMapPort][Harmony] patched AIVoxelesData.RestoreData (impl-raidstart-repairs)");
+            Plugin.Log.LogDebug("[ArenaMapPort][Harmony] patched AIVoxelesData.RestoreData (impl-raidstart-repairs)");
         }
 
         // impl-raidstart-repairs — BotsController.Init(...), same target §F.2's NavMeshInstallerPrefix
@@ -560,7 +560,7 @@ namespace ArenaMapPort.Client
 
             var prefix = AccessTools.Method(typeof(AIStationaryControllerEnsurePrefix), "Prefix");
             harmony.Patch(target, prefix: new HarmonyMethod(prefix));
-            Plugin.Log.LogInfo("[ArenaMapPort][Harmony] patched BotsController.Init for AIStationaryController " +
+            Plugin.Log.LogDebug("[ArenaMapPort][Harmony] patched BotsController.Init for AIStationaryController " +
                                 "ensure (impl-raidstart-repairs, additional prefix alongside §F.2)");
         }
 
@@ -574,7 +574,7 @@ namespace ArenaMapPort.Client
             {
                 var prefix = AccessTools.Method(typeof(EyeBurnGuardPrefix), "Prefix");
                 harmony.Patch(burnEyes, prefix: new HarmonyMethod(prefix));
-                Plugin.Log.LogInfo("[ArenaMapPort][Harmony] patched EffectsController.OnHealthBurnEyes (fix-combat F1)");
+                Plugin.Log.LogDebug("[ArenaMapPort][Harmony] patched EffectsController.OnHealthBurnEyes (fix-combat F1)");
             }
 
             var pauseEvent = AccessTools.Method(typeof(EffectsController), "OnClientPlayerEffectsPauseEvent");
@@ -582,7 +582,7 @@ namespace ArenaMapPort.Client
             {
                 var prefix = AccessTools.Method(typeof(EyeBurnPauseGuardPrefix), "Prefix");
                 harmony.Patch(pauseEvent, prefix: new HarmonyMethod(prefix));
-                Plugin.Log.LogInfo("[ArenaMapPort][Harmony] patched EffectsController.OnClientPlayerEffectsPauseEvent " +
+                Plugin.Log.LogDebug("[ArenaMapPort][Harmony] patched EffectsController.OnClientPlayerEffectsPauseEvent " +
                                     "(fix-combat F1)");
             }
         }
@@ -598,7 +598,7 @@ namespace ArenaMapPort.Client
             }
             var prefix = AccessTools.Method(typeof(DeathScreenEffectsGuard), "Prefix");
             harmony.Patch(target, prefix: new HarmonyMethod(prefix));
-            Plugin.Log.LogInfo("[ArenaMapPort][Harmony] patched EffectsController.OnHealthDied (stage 1 death-effects guard)");
+            Plugin.Log.LogDebug("[ArenaMapPort][Harmony] patched EffectsController.OnHealthDied (stage 1 death-effects guard)");
         }
 
         // fix-combat F2 (explosives-items) — the nested EffectsController.FlashAccumulator.AddEffect
@@ -614,7 +614,7 @@ namespace ArenaMapPort.Client
 
             var prefix = AccessTools.Method(typeof(FlashAccumulatorGuardPrefix), "Prefix");
             harmony.Patch(target, prefix: new HarmonyMethod(prefix));
-            Plugin.Log.LogInfo("[ArenaMapPort][Harmony] patched EffectsController.FlashAccumulator.AddEffect " +
+            Plugin.Log.LogDebug("[ArenaMapPort][Harmony] patched EffectsController.FlashAccumulator.AddEffect " +
                                 "(fix-combat F2)");
         }
 
@@ -629,7 +629,7 @@ namespace ArenaMapPort.Client
             {
                 var prefix = AccessTools.Method(typeof(CombatScreenEffectsGuard), "Prefix");
                 harmony.Patch(applyDamage, prefix: new HarmonyMethod(prefix));
-                Plugin.Log.LogInfo("[ArenaMapPort][Harmony] patched EffectsController.OnHealthApplyDamage (fix-combat)");
+                Plugin.Log.LogDebug("[ArenaMapPort][Harmony] patched EffectsController.OnHealthApplyDamage (fix-combat)");
             }
 
             var playerDamaged = AccessTools.Method(typeof(EffectsController), "OnPlayerDamaged");
@@ -637,7 +637,7 @@ namespace ArenaMapPort.Client
             {
                 var finalizer = AccessTools.Method(typeof(CombatScreenEffectsGuard), "Finalizer");
                 harmony.Patch(playerDamaged, finalizer: new HarmonyMethod(finalizer));
-                Plugin.Log.LogInfo("[ArenaMapPort][Harmony] patched EffectsController.OnPlayerDamaged (fix-combat)");
+                Plugin.Log.LogDebug("[ArenaMapPort][Harmony] patched EffectsController.OnPlayerDamaged (fix-combat)");
             }
         }
 

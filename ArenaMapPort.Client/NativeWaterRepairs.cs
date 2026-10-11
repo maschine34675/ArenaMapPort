@@ -52,6 +52,7 @@ namespace ArenaMapPort.Client
 
         internal static void Probe()
         {
+            if (!DeveloperOptions.Enabled) return;
             if (_runner != null) _runner.Probe();
         }
 
@@ -151,7 +152,7 @@ namespace ArenaMapPort.Client
                 _ownsSnowMode = true;
                 WaterRendererv3.DisableSnowMask(true);
                 _owner.SetActive(true);
-                Plugin.Log.LogInfo($"{Tag} enabled: target={sceneName}/{path} textures={_textures.Count} " +
+                Plugin.Log.LogDebug($"{Tag} enabled: target={sceneName}/{path} textures={_textures.Count} " +
                     $"shader={shader.name} renderer={_renderer.GetInstanceID()} camera={Camera.main?.actualRenderingPath}");
             }
 
@@ -235,7 +236,7 @@ namespace ArenaMapPort.Client
             internal void Probe()
             {
                 CaptureBuffers();
-                Plugin.Log.LogInfo($"{Tag} probe enabled={_renderer != null} buffers={_buffers.Count} textures={_textures.Count} " +
+                Plugin.Log.LogDebug($"{Tag} probe enabled={_renderer != null} buffers={_buffers.Count} textures={_textures.Count} " +
                     $"target={_target?.name} forceOff={_target?.forceRenderingOff} targets={_water?.Targets.Length} " +
                     $"drawReady={(_renderer != null && _renderer.method_4())} camera={Camera.main?.actualRenderingPath}");
             }
@@ -267,7 +268,7 @@ namespace ArenaMapPort.Client
                 _target = null; _oldMaterials = null;
                 foreach (var texture in _textures) if (texture != null) UnityEngine.Object.Destroy(texture);
                 _textures.Clear();
-                Plugin.Log.LogInfo($"{Tag} stopped; released buffers={buffers}; restored original renderer");
+                Plugin.Log.LogDebug($"{Tag} stopped; released buffers={buffers}; restored original renderer");
             }
 
             void OnDisable() { Stop(); }

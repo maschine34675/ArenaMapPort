@@ -140,7 +140,7 @@ namespace ArenaMapPort.Client
             manager._bundles[bundleName] = reference;
 
             long bytes = SafeFileLength(filePath);
-            Plugin.Log.LogInfo($"[ArenaMapPort][Bundles] loaded '{bundleName}' from '{filePath}' ({bytes} bytes)");
+            Plugin.Log.LogDebug($"[ArenaMapPort][Bundles] loaded '{bundleName}' from '{filePath}' ({bytes} bytes)");
         }
 
         static long SafeFileLength(string path)

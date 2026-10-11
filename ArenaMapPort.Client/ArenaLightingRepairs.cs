@@ -382,7 +382,7 @@ namespace ArenaMapPort.Client
 
             if (logSummary)
             {
-                Plugin.Log.LogInfo(
+                Plugin.Log.LogDebug(
                     $"[ArenaMapPort][Lighting] {map.Key} applied (Enabled={on}): LevelSettings-found={levelSettingsFound} " +
                     $"(ambientColorMultiplier={EquatorProfiles.Value(cfg.AmbientColorMultiplier):0.00}), {lightsApplied} light(s) " +
                     $"(globalMultiplier={EquatorProfiles.Value(cfg.GlobalLightIntensityMultiplier):0.00}, " +
@@ -607,7 +607,7 @@ namespace ArenaMapPort.Client
                     ? cfg.SunIntensity : EquatorProfiles.Value(cfg.GlobalLightIntensityMultiplier);
                 float target = baseline.Intensity * multiplier * factor;
                 ApplyArtificialSun(baseline, target);
-                Plugin.Log.LogInfo($"[ArenaMapPort][NightSun] {map.Key}/{baseline.Light.name}: " +
+                Plugin.Log.LogDebug($"[ArenaMapPort][NightSun] {map.Key}/{baseline.Light.name}: " +
                     $"factor={factor:0.000} target={target:0.000} live={baseline.Light.intensity:0.000} " +
                     $"startHour={TimeOfDayRepairs.ActiveFixedHour}");
             }

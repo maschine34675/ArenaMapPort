@@ -81,7 +81,7 @@ namespace ArenaMapPort.Client
                 var triangulation = NavMesh.CalculateTriangulation();
                 int vertices = triangulation.vertices?.Length ?? 0;
                 int triangles = (triangulation.indices?.Length ?? 0) / 3;
-                Plugin.Log.LogInfo($"[ArenaMapPort][NavMesh] added navmesh for '{map.Key}': " +
+                Plugin.Log.LogDebug($"[ArenaMapPort][NavMesh] added navmesh for '{map.Key}': " +
                                     $"{vertices} vertices, {triangles} triangles");
             }
             catch (Exception e)

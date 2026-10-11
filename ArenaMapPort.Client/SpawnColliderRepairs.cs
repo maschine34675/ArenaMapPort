@@ -68,7 +68,7 @@ namespace ArenaMapPort.Client
             if (collider != null && !collider.isTrigger)
             {
                 collider.isTrigger = true;
-                Plugin.Log.LogInfo($"[ArenaMapPort][RaidFix] set isTrigger=true on " +
+                Plugin.Log.LogDebug($"[ArenaMapPort][RaidFix] set isTrigger=true on " +
                                     $"'{marker.gameObject.name}'s spawn collider (was solid — the player " +
                                     "would otherwise spawn embedded in it, unable to move; see " +
                                     "SpawnColliderRepairs' own doc comment for the full BSG-code root-cause chain)");

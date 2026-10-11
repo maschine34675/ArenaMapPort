@@ -313,7 +313,7 @@ namespace ArenaMapPort.Client
             state.LoggedThisRaid = true;
 
             int safetyNetTotal = _safetyNetCubeCount + _safetyNetStencilCount + _safetyNetColiderCount;
-            Plugin.Log.LogInfo(
+            Plugin.Log.LogDebug(
                 $"[ArenaMapPort][RaidFix] {map.Key} TeamFight borders: {state.Borders.Count} object(s) matched " +
                 $"(layer '{LevelBorderLayerName}'={LevelBorderLayer}, name-prefix fallback " +
                 $"{(LevelBorderLayer < 0 ? "active" : "unused")}) — RemoveTeamFightBorders=" +

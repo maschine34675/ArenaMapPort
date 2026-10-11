@@ -61,7 +61,7 @@ namespace ArenaMapPort.Client
             _loggedFailure = true;
         }
 
-        internal static void Probe() => Plugin.Log.LogInfo($"[ArenaMapPort][NightWetFloor] " +
+        internal static void Probe() => Plugin.Log.LogDebug($"[ArenaMapPort][NightWetFloor] " +
             $"active={(_owned && EquatorNightNeon.IsActive)} strength={_strength.Value:F2} " +
             $"nativeGlossTarget=2.200 savedIndoorMultiplier={WeatherRig.IndoorFloorSmoothnessForCurrentMap():F3}; saved values retained");
     }

@@ -186,7 +186,7 @@ namespace ArenaMapPort.Client
             }
 
             zone.PatrolWays = ways.ToArray();
-            Plugin.Log.LogInfo($"{Tag} zone '{zone.name}' authored {ways.Count} real patrol way(s) from " +
+            Plugin.Log.LogDebug($"{Tag} zone '{zone.name}' authored {ways.Count} real patrol way(s) from " +
                                $"ai/{anchors.MapKey}.ai.json ({hubCount} hub(s), {subPointCount} sub point(s))");
         }
 
@@ -264,7 +264,7 @@ namespace ArenaMapPort.Client
                 }
             }
             zone.PatrolWays = ways.ToArray();
-            Plugin.Log.LogInfo($"{Tag} zone '{zone.name}' had no patrol ways — built {ways.Count} way(s) with {points} point(s) " +
+            Plugin.Log.LogDebug($"{Tag} zone '{zone.name}' had no patrol ways — built {ways.Count} way(s) with {points} point(s) " +
                                $"and {subPoints} sub point(s) from {candidates.Count} Bot spawn marker(s) in {components.Count} " +
                                $"NavMesh-connected component(s) ({islands} isolated single point(s), {offMesh} marker(s) off the NavMesh); " +
                                "vanilla PatrolAssault can walk now");

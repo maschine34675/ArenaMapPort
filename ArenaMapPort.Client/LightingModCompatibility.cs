@@ -38,7 +38,7 @@ namespace ArenaMapPort.Client
             _smajlecFixer = AccessTools.TypeByName(SmajlecFixerName);
             if (_smajlecFixer == null)
             {
-                Plugin.Log.LogInfo("[ArenaMapPort][LightingCompat] SmajlecLights absent; no compatibility hooks needed.");
+                Plugin.Log.LogDebug("[ArenaMapPort][LightingCompat] SmajlecLights absent; no compatibility hooks needed.");
                 return;
             }
 
@@ -63,7 +63,7 @@ namespace ArenaMapPort.Client
             {
                 if (ArenaMapRaid.MapForScriptsScene(scene.name) != null) _reportedMap = null;
             };
-            Plugin.Log.LogInfo("[ArenaMapPort][LightingCompat] SmajlecLights Apply/Restore excluded on all registered ported maps; " +
+            Plugin.Log.LogDebug("[ArenaMapPort][LightingCompat] SmajlecLights Apply/Restore excluded on all registered ported maps; " +
                 "ordinary maps, menu, hideout and saved settings are unchanged.");
         }
 
@@ -83,7 +83,7 @@ namespace ArenaMapPort.Client
             if (_reportedMap != map.Key)
             {
                 _reportedMap = map.Key;
-                Plugin.Log.LogInfo($"[ArenaMapPort][LightingCompat] {map.Key}: blocked SmajlecLights camera settings " +
+                Plugin.Log.LogDebug($"[ArenaMapPort][LightingCompat] {map.Key}: blocked SmajlecLights camera settings " +
                     $"({__originalMethod.Name}); native port lighting retained.");
             }
             return false;
@@ -91,6 +91,7 @@ namespace ArenaMapPort.Client
 
         internal static void Probe()
         {
+            if (!DeveloperOptions.Enabled) return;
             int fixers = 0;
             if (_smajlecFixer != null)
                 foreach (var candidate in Resources.FindObjectsOfTypeAll(_smajlecFixer))
@@ -104,7 +105,7 @@ namespace ArenaMapPort.Client
                 if (ArenaMapRaid.IsOwnedScene(stencil.gameObject.scene.name)) stencilOwned++;
             }
 
-            Plugin.Log.LogInfo($"[ArenaMapPort][LightingCompat] map={ArenaMapRaid.CurrentMap?.Key ?? "none"} " +
+            Plugin.Log.LogDebug($"[ArenaMapPort][LightingCompat] map={ArenaMapRaid.CurrentMap?.Key ?? "none"} " +
                 $"SmajlecLights present={_smajlecFixer != null} exclusion={_installed} loadedFixers={fixers} " +
                 $"processCalls(blockedApply={_blockedApply},blockedRestore={_blockedRestore},allowedOutside={_allowedOutside}); " +
                 $"BrighterInteriors present={AccessTools.TypeByName(BrighterPluginName) != null} untouched; " +

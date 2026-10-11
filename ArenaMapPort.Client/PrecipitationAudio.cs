@@ -46,6 +46,7 @@ namespace ArenaMapPort.Client
 
         internal static void Probe()
         {
+            if (!DeveloperOptions.Enabled) return;
             if (_driver != null) _driver.Report();
         }
 
@@ -160,7 +161,7 @@ namespace ArenaMapPort.Client
                         if (foreign && !_foreign)
                         {
                             ClearPlayback();
-                            Plugin.Log.LogInfo($"{Tag} {_mapKey}: native ambient owner present; yielding precipitation playback");
+                            Plugin.Log.LogDebug($"{Tag} {_mapKey}: native ambient owner present; yielding precipitation playback");
                         }
                         if (!foreign && _foreign) _startedAt = Time.realtimeSinceStartup;
                         _foreign = foreign;
@@ -213,7 +214,7 @@ namespace ArenaMapPort.Client
                 _outdoor = new Layer(_root.transform, "Outdoor", outside, 1f / .33f);
                 _indoor = new Layer(_root.transform, "Indoor", inside, 1f);
                 _calculator = new RoomPrecipitationCalculator();
-                Plugin.Log.LogInfo($"{Tag} {_mapKey}: ready after raid audio reset; native bank='{_bank.name}', four owned 2D sources");
+                Plugin.Log.LogDebug($"{Tag} {_mapKey}: ready after raid audio reset; native bank='{_bank.name}', four owned 2D sources");
                 return true;
             }
 
@@ -290,7 +291,7 @@ namespace ArenaMapPort.Client
                     AudioListener.GetOutputData(_samples, 0);
                     foreach (float sample in _samples) listenerEnergy += sample * sample;
                 }
-                Plugin.Log.LogInfo($"{Tag} map={_mapKey} ready={_root != null} foreign={_foreign} failed={_failed} " +
+                Plugin.Log.LogDebug($"{Tag} map={_mapKey} ready={_root != null} foreign={_foreign} failed={_failed} " +
                     $"rain={RainController.Intensity:F3}/{RainController.IntensityType} season={_season} " +
                     $"room={_room?.ID}/{_room?.Type} environment={_environment} playerEnvironment={GamePlayerOwner.MyPlayer?.Environment} " +
                     $"rainCover={(_cover.Covered.HasValue ? (_cover.Covered.Value ? "covered" : "open") : "room-fallback")} coveredSamples={_cover.CoveredSamples}/9 depthCaptures={_cover.Captures} " +
@@ -321,7 +322,7 @@ namespace ArenaMapPort.Client
             {
                 bool hadPlayback = _root != null;
                 ClearPlayback();
-                if (hadPlayback) Plugin.Log.LogInfo($"{Tag} {_mapKey}: released four sources and ambient bus leases");
+                if (hadPlayback) Plugin.Log.LogDebug($"{Tag} {_mapKey}: released four sources and ambient bus leases");
                 _mapKey = null; _game = null; _sceneHandle = 0;
                 _pendingBank = null; _failed = false; _foreign = false; _nextForeignCheck = 0f;
             }
@@ -416,7 +417,7 @@ namespace ArenaMapPort.Client
                         source.GetOutputData(samples, 0);
                         foreach (float sample in samples) energy += sample * sample;
                     }
-                    Plugin.Log.LogInfo($"{Tag} source='{source.name}' id={source.GetInstanceID()} clip='{source.clip?.name}' " +
+                    Plugin.Log.LogDebug($"{Tag} source='{source.name}' id={source.GetInstanceID()} clip='{source.clip?.name}' " +
                         $"playing={source.isPlaying} virtual={source.isVirtual} samples={source.timeSamples} volume={source.volume:F4} " +
                         $"route={source.outputAudioMixerGroup?.name} rms={Mathf.Sqrt(energy / samples.Length):F6} " +
                         $"loaded={source.clip?.loadState} spatial={source.spatialBlend:F1} muted={source.mute}");

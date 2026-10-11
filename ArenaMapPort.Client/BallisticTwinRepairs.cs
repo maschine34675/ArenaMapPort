@@ -96,7 +96,7 @@ namespace ArenaMapPort.Client
             }
             if (added > 0 || unsupported > 0)
             {
-                Plugin.Log.LogInfo($"{Tag} ballistic twins: added {added} HighPolyCollider twin(s) for LowPolyCollider-only " +
+                Plugin.Log.LogDebug($"{Tag} ballistic twins: added {added} HighPolyCollider twin(s) for LowPolyCollider-only " +
                                    $"colliders ({alreadyTwinned} already had one, {unsupported} unsupported collider type(s)){names}");
             }
         }

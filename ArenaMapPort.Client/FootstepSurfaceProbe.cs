@@ -17,6 +17,7 @@ namespace ArenaMapPort.Client
 
         internal static void Probe()
         {
+            if (!DeveloperOptions.Enabled) return;
             var map = ArenaMapRaid.CurrentMap;
             if (map == null || (map.Key != "arena_equator" && map.Key != "arena_bay5")) return;
             try
@@ -45,13 +46,13 @@ namespace ArenaMapPort.Client
                 var layer = AccessTools.Field(typeof(Player), "_specificStepAudioController")?.GetValue(player)
                     as PlayerStepLayerAudioController;
                 string season = Seasons.Controller != null ? Seasons.Controller.Status.ToString() : "<none>";
-                Plugin.Log.LogInfo(Tag + "map=" + map.Key + " position=" + V(player.Position) +
+                Plugin.Log.LogDebug(Tag + "map=" + map.Key + " position=" + V(player.Position) +
                     " ray=" + V(origin) + " -> " + V(end) + " mask=" + mask.value +
                     " queriesHitTriggers=" + Physics.queriesHitTriggers + " current=" + before +
                     " afterQuery=" + player.CurrentSurface + " nativeHit=" + queried.Item1 +
                     " queriedSurface=" + queried.Item2 + " allHitCount=" + all.Length +
                     " nativeBufferCapacity=" + NonAllocLineCaster._nearestRayHits.Length);
-                Plugin.Log.LogInfo(Tag + "environment=" + player.Environment + " underRoof=" + player.IsUnderRoof +
+                Plugin.Log.LogDebug(Tag + "environment=" + player.Environment + " underRoof=" + player.IsUnderRoof +
                     " cameraUnderRain=" + RainController.IsCameraUnderRain + " season=" + season +
                     " currentSet=" + (set != null ? set.Surface.ToString() : "<none>") +
                     " runBank=" + Bank(set?.RunSoundBank) + " duckBank=" + Bank(set?.DuckSoundBank) +
@@ -59,19 +60,19 @@ namespace ArenaMapPort.Client
                 if (layer != null)
                 {
                     layer.TryGetBank(EAudioMovementState.Run, out var run);
-                    Plugin.Log.LogInfo(Tag + "seasonLayerRun=" + Bank(run) + " layerSurface=" + layer._currentSurface +
+                    Plugin.Log.LogDebug(Tag + "seasonLayerRun=" + Bank(run) + " layerSurface=" + layer._currentSurface +
                         " layerUnderRoof=" + layer._isUnderRoof + " layerSourceInit=" + layer._isSourceInit +
                         " overallMultiplier=" + F(layer._overallVolumeMultiplier));
                 }
                 var weather = WeatherController.Instance;
-                Plugin.Log.LogInfo(Tag + "rain=" + (weather?.WeatherCurve != null ? F(weather.WeatherCurve.Rain) : "<none>") +
+                Plugin.Log.LogDebug(Tag + "rain=" + (weather?.WeatherCurve != null ? F(weather.WeatherCurve.Rain) : "<none>") +
                     " wetting=" + F(RainController.Wetting) + " rainIntensity=" + RainController.IntensityType +
                     " minLyingWater=" + (weather != null ? F(weather.MinLyingWater) : "<none>") +
                     " shaderWaterLevel=" + F(Shader.GetGlobalFloat("_WaterLevel")));
                 if (replayHit && selected.collider != null)
                     LogHit("nativeQueryReplay", selected);
                 else
-                    Plugin.Log.LogInfo(Tag + "nativeQueryReplay=<no hit>");
+                    Plugin.Log.LogDebug(Tag + "nativeQueryReplay=<no hit>");
                 // RaycastNonAlloc may return an arbitrary subset when its three-slot native buffer
                 // fills. Keep RaycastAll separate so an omitted closer collider is visible.
                 for (int i = 0; i < all.Length; i++) LogHit("allSorted[" + i + "]", all[i]);
@@ -89,7 +90,7 @@ namespace ArenaMapPort.Client
             var direct = collider.GetComponent<BaseBallistic>();
             var parent = collider.transform.parent != null
                 ? collider.transform.parent.GetComponentInParent<BaseBallistic>() : null;
-            Plugin.Log.LogInfo(Tag + label + " distance=" + F(hit.distance) + " point=" + V(hit.point) +
+            Plugin.Log.LogDebug(Tag + label + " distance=" + F(hit.distance) + " point=" + V(hit.point) +
                 " collider='" + collider.gameObject.scene.name + "/" + Path(collider.transform) +
                 "' instance=" + collider.GetInstanceID() + " type=" + collider.GetType().Name +
                 " layer=" + collider.gameObject.layer + "/" + LayerMask.LayerToName(collider.gameObject.layer) +

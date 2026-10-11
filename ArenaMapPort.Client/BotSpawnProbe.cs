@@ -79,7 +79,7 @@ namespace ArenaMapPort.Client
 
             if (!_activation.Value)
             {
-                Plugin.Log.LogInfo("[ArenaMapPort][Harmony] bots-stage1: deep activation diagnostics off ([Bots] ActivationDiagnostics)");
+                Plugin.Log.LogDebug("[ArenaMapPort][Harmony] bots-stage1: deep activation diagnostics off ([Bots] ActivationDiagnostics)");
                 return;
             }
 
@@ -149,7 +149,7 @@ namespace ArenaMapPort.Client
             {
                 Plugin.Log.LogWarning($"{Tag} reading BotOwner.method_10 IL failed: {e.GetType().Name}: {e.Message}");
             }
-            Plugin.Log.LogInfo($"[ArenaMapPort][Harmony] bots-stage1: finalizers on {patched} activation step(s) called by BotOwner.method_10 ({failed} skipped)");
+            Plugin.Log.LogDebug($"[ArenaMapPort][Harmony] bots-stage1: finalizers on {patched} activation step(s) called by BotOwner.method_10 ({failed} skipped)");
         }
 
         static Exception ActivationStepFinalizer(Exception __exception, MethodBase __originalMethod, object __instance)
@@ -188,7 +188,7 @@ namespace ArenaMapPort.Client
                     var owners = game?.BotsController?.Bots?.BotOwners;
                     if (owners == null)
                     {
-                        Plugin.Log.LogInfo($"{Tag} status: no bot controller reachable (game={(game != null)})");
+                        Plugin.Log.LogDebug($"{Tag} status: no bot controller reachable (game={(game != null)})");
                         continue;
                     }
                     var sb = new StringBuilder();
@@ -219,7 +219,7 @@ namespace ArenaMapPort.Client
                         sb.Append($"\n    '{bot.name}' {bot.Profile?.Info?.Settings?.Role} state={bot.BotState} alive={bot.HealthController?.IsAlive} " +
                                   $"pos={bot.Position:F1} layer={layer ?? "null"} standBy={standBy} peace={bot.Memory?.IsPeace} {mover} {patrol} {group}");
                     }
-                    Plugin.Log.LogInfo(sb.ToString());
+                    Plugin.Log.LogDebug(sb.ToString());
                 }
                 catch (Exception e)
                 {
@@ -235,7 +235,7 @@ namespace ArenaMapPort.Client
             EnsureStatusDump();
             string layer = null;
             try { layer = __instance?.Brain?.ActiveLayerName(); } catch (Exception e) { layer = "(" + e.GetType().Name + ")"; }
-            Plugin.Log.LogInfo($"{Tag} BotOwner.method_10 done: '{__instance?.name}' state={__instance?.BotState} " +
+            Plugin.Log.LogDebug($"{Tag} BotOwner.method_10 done: '{__instance?.name}' state={__instance?.BotState} " +
                                $"pos={__instance?.Position:F1} activeLayer={layer ?? "null"} zone='{__instance?.BotsGroup?.BotZone?.name}' " +
                                $"patrolWays={__instance?.BotsGroup?.BotZone?.PatrolWays?.Length ?? -1}");
         }
@@ -264,13 +264,13 @@ namespace ArenaMapPort.Client
         static void BotOwnerCreatePostfix(BotOwner __result, AICorePoint corePointId)
         {
             if (!On) return;
-            Plugin.Log.LogInfo($"{Tag} BotOwner.Create -> '{__result?.name}' startCorePoint={(corePointId == null ? "NULL" : corePointId.Id.ToString())}");
+            Plugin.Log.LogDebug($"{Tag} BotOwner.Create -> '{__result?.name}' startCorePoint={(corePointId == null ? "NULL" : corePointId.Id.ToString())}");
         }
 
         static void ActivateBotCallbackPostfix(BotOwner bot, BotCreationData data)
         {
             if (!On) return;
-            Plugin.Log.LogInfo($"{Tag} ActivateBotCallback: bot='{bot?.name}' role={bot?.Profile?.Info?.Settings?.Role} spawnStopped={data?.SpawnStopped} — bot registered with BotsController");
+            Plugin.Log.LogDebug($"{Tag} ActivateBotCallback: bot='{bot?.name}' role={bot?.Profile?.Info?.Settings?.Role} spawnStopped={data?.SpawnStopped} — bot registered with BotsController");
         }
 
         static void TryPatch(Harmony harmony, string label, MethodBase target, string prefix = null, string postfix = null, string finalizer = null)
@@ -286,7 +286,7 @@ namespace ArenaMapPort.Client
                     prefix: prefix != null ? new HarmonyMethod(AccessTools.Method(typeof(BotSpawnProbe), prefix)) : null,
                     postfix: postfix != null ? new HarmonyMethod(AccessTools.Method(typeof(BotSpawnProbe), postfix)) : null,
                     finalizer: finalizer != null ? new HarmonyMethod(AccessTools.Method(typeof(BotSpawnProbe), finalizer)) : null);
-                Plugin.Log.LogInfo($"[ArenaMapPort][Harmony] patched {label} (bots-stage1 spawn diagnostics)");
+                Plugin.Log.LogDebug($"[ArenaMapPort][Harmony] patched {label} (bots-stage1 spawn diagnostics)");
             }
             catch (Exception e)
             {
@@ -299,7 +299,7 @@ namespace ArenaMapPort.Client
         {
             if (!On) return;
             bool canSpawn = CanSpawnField != null && CanSpawnField.GetValue(__instance) is bool b && b;
-            Plugin.Log.LogInfo($"{Tag} wave fired: zone='{wave?.SpawnAreaName}' count={wave?.BotsCount} side={wave?.Side} " +
+            Plugin.Log.LogDebug($"{Tag} wave fired: zone='{wave?.SpawnAreaName}' count={wave?.BotsCount} side={wave?.Side} " +
                 $"type={wave?.WildSpawnType} difficulty={wave?.Difficulty} time={wave?.Time:0.0}s withCheckMinMax={wave?.WithCheckMinMax} " +
                 $"| _canSpawn={canSpawn} spawner={(__instance.BotSpawner != null)}");
         }
@@ -316,7 +316,7 @@ namespace ArenaMapPort.Client
                     if (m != null && BotZone.IsOnNavMesh(m.transform.position)) onMesh++;
                 }
             }
-            Plugin.Log.LogInfo($"{Tag} BotZone.Init '{__instance.name}': markers={markers?.Count ?? -1} onNavMesh={onMesh} " +
+            Plugin.Log.LogDebug($"{Tag} BotZone.Init '{__instance.name}': markers={markers?.Count ?? -1} onNavMesh={onMesh} " +
                 $"points={__instance.SpawnPoints?.Length ?? -1} maxPersons={__instance.MaxPersons} patrolWays={__instance.PatrolWays?.Length ?? -1} " +
                 $"snipe={__instance.SnipeZone} canSpawnBoss={__instance.CanSpawnBoss}");
         }
@@ -365,7 +365,7 @@ namespace ArenaMapPort.Client
             {
                 sb.Append($"(probe detail failed: {e.GetType().Name}: {e.Message})");
             }
-            Plugin.Log.LogInfo(sb.ToString());
+            Plugin.Log.LogDebug(sb.ToString());
         }
 
         static void SelectAISpawnPointsPostfix(SpawnSystem __instance, BotCreationData profileData, BotZone zone, int maxCount, float time,
@@ -394,7 +394,7 @@ namespace ArenaMapPort.Client
             {
                 sb.Append($" (probe detail failed: {e.GetType().Name}: {e.Message})");
             }
-            Plugin.Log.LogInfo(sb.ToString());
+            Plugin.Log.LogDebug(sb.ToString());
         }
     }
 }

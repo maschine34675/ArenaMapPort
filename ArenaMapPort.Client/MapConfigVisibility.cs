@@ -39,7 +39,7 @@ namespace ArenaMapPort.Client
                 DescriptionField.SetValue(entry, new ConfigDescription(original.Description, original.AcceptableValues, filtered));
                 if (show) visible++; else hidden++;
             }
-            Plugin.Log.LogInfo($"[ArenaMapPort][Config] mode={(developer ? "developer" : "player")}, visible={visible}, hidden={hidden}; saved values retained. Mode changes require restart.");
+            Plugin.Log.LogDebug($"[ArenaMapPort][Config] mode={(developer ? "developer" : "player")}, visible={visible}, hidden={hidden}; saved values retained. Mode changes require restart.");
         }
 
         internal static bool IsPlayerOption(ConfigDefinition definition)

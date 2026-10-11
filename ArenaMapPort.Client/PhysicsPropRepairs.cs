@@ -94,7 +94,7 @@ namespace ArenaMapPort.Client
             }
             if (toggled > 0 || alreadyAtTarget > 0)
             {
-                Plugin.Log.LogInfo($"{Tag} physics props: {(want ? "activated" : "deactivated")} {toggled} PHYSIC " +
+                Plugin.Log.LogDebug($"{Tag} physics props: {(want ? "activated" : "deactivated")} {toggled} PHYSIC " +
                                     $"container(s) ({alreadyAtTarget} already at target), {smallPhysicsObjectTotal} " +
                                     $"SmallPhysicsObject / {rigidbodyTotal} Rigidbody component(s) found under them{sb}");
             }

@@ -29,14 +29,14 @@ namespace ArenaMapPort.Client
             if (__result.OcclusionSettings == null)
             {
                 __result.OcclusionSettings = ScriptableObject.CreateInstance<AudioOcclusionSettings>();
-                Plugin.Log.LogInfo("[ArenaMapPort][RaidFix] SpatialAudioSystem.OcclusionSettings was null " +
+                Plugin.Log.LogDebug("[ArenaMapPort][RaidFix] SpatialAudioSystem.OcclusionSettings was null " +
                                     "(scene carries no SpatialAudioSystem) — assigned a blank AudioOcclusionSettings instance");
             }
 
             if (__result.poolsConfig == null)
             {
                 __result.poolsConfig = new SpatialAudioPoolsConfig();
-                Plugin.Log.LogInfo("[ArenaMapPort][RaidFix] SpatialAudioSystem.poolsConfig was null — assigned class defaults");
+                Plugin.Log.LogDebug("[ArenaMapPort][RaidFix] SpatialAudioSystem.poolsConfig was null — assigned class defaults");
             }
         }
     }
@@ -62,7 +62,7 @@ namespace ArenaMapPort.Client
 
             __result = Task.CompletedTask;
             SpatialAudioSystem.Initialized = false; // explicit: this is the invariant every other guard relies on
-            Plugin.Log.LogInfo("[ArenaMapPort][RaidFix] skipped SpatialAudioSystem.Initialize " +
+            Plugin.Log.LogDebug("[ArenaMapPort][RaidFix] skipped SpatialAudioSystem.Initialize " +
                                 "(native acoustics disabled or no accepted source package for this map)");
             return false; // skip original body entirely
         }

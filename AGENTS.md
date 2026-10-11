@@ -85,6 +85,14 @@ member name pinned in the client (`method_N`, `vmethod_N`) is verified there and
 
 ## Release configuration
 
+Logging: Info is reserved for a concise startup/map-availability summary or actionable
+player information. Successful patches/repairs, counts, file paths, configuration and
+cleanup use Debug. Expensive probes, per-object dumps and GPU readbacks additionally
+require DeveloperOptions.Enabled; gate their work, not only the log call. F7–F10 output
+uses Debug (BepInEx's disk/console filters must include it when collecting diagnostics).
+Real degraded behavior and failures retain Warning/Error in player mode. Never suppress
+Unity/Harmony warnings globally; repair an owned cause or document its origin.
+
 Player mode is the default: one normal F12 switch, `Appearance/NaturalEquatorNight` (next raid).
 `General/DeveloperMode` is visible with F12's Advanced settings filter enabled.
 It is latched on startup, exposes supported-map controls and enables F7–F10 diagnostics.

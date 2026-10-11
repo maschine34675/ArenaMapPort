@@ -24,7 +24,7 @@ namespace ArenaMapPort.Client
             {
                 if (ArenaMapRaid.MapForScriptsScene(scene.name) != null) Release();
             };
-            Plugin.Log.LogInfo("[ArenaMapPort][Camera] patched CameraManager.SetCamera; repairs survive manager disposal");
+            Plugin.Log.LogDebug("[ArenaMapPort][Camera] patched CameraManager.SetCamera; repairs survive manager disposal");
         }
 
         static void AfterSetCamera(CameraManager __instance)

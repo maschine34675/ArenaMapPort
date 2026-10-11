@@ -64,14 +64,14 @@ namespace ArenaMapPort.Client
             if (_object != null) Object.Destroy(_object);
             if (_silence != null) Object.Destroy(_silence);
             _object = null; _silence = null; _sourceRoom = -1;
-            Plugin.Log.LogInfo(NativeSpatialAudio.Tag + " silent probe released");
+            Plugin.Log.LogDebug(NativeSpatialAudio.Tag + " silent probe released");
         }
 
         internal static void Log()
         {
             if (_source == null || _system == null) return;
             var listener = _system.ListenerCurrentRoom;
-            Plugin.Log.LogInfo($"{NativeSpatialAudio.Tag} probe listener={listener?.ID}/{listener?.Name}/{listener?.Type} " +
+            Plugin.Log.LogDebug($"{NativeSpatialAudio.Tag} probe listener={listener?.ID}/{listener?.Name}/{listener?.Type} " +
                 $"source={_sourceRoom}@{_source.Position:F2} container={_container} playing={_source.PlayBackState} " +
                 $"audioPlaying={_source.source1.isPlaying} samples={_source.source1.timeSamples} " +
                 $"propagation={_propagation:F4} obstruction={_obstruction:F4} occlusion={_occlusion:F4} " +

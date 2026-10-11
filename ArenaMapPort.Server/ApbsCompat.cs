@@ -24,7 +24,7 @@ namespace ArenaMapPort.Server;
 /// Fix: a Harmony prefix on that indexer getter (SPT's own <see cref="AbstractPatch"/> machinery, the same
 /// one APBS uses) rewrites an Arena key to a vanilla stand-in before the switch runs — Interchange (a
 /// mall) for Equator, Factory for every other ported map. Everything is resolved by name at load time:
-/// without APBS nothing is patched and one info line says so; a changed APBS shape logs a warning.
+/// without APBS nothing is patched and one Debug line says so; a changed APBS shape logs a warning.
 /// </summary>
 public static class ApbsCompat
 {

@@ -72,7 +72,7 @@ namespace ArenaMapPort.Client
                 if (removed > 0)
                 {
                     DistantShadowCache.Invalidate(ArenaMapRegistry.Equator, "roof shadow registrations removed");
-                    Plugin.Log.LogInfo($"{Tag} disabled; removed owned LOD groups={removed}");
+                    Plugin.Log.LogDebug($"{Tag} disabled; removed owned LOD groups={removed}");
                 }
                 return;
             }
@@ -151,7 +151,7 @@ namespace ArenaMapPort.Client
                     continue;
                 }
                 registered++;
-                Plugin.Log.LogInfo($"{Tag} registered '{path}' mesh={filter.sharedMesh.name} " +
+                Plugin.Log.LogDebug($"{Tag} registered '{path}' mesh={filter.sharedMesh.name} " +
                     $"shader=shadow_2sided bounds={renderer.bounds.center:F2}/{renderer.bounds.size:F2}");
             }
             if (registered > 0)
@@ -189,11 +189,12 @@ namespace ArenaMapPort.Client
             foreach (var state in released)
                 foreach (var material in state.Replacement)
                     if (material != null) { Object.DestroyImmediate(material); destroyed++; }
-            Plugin.Log.LogInfo($"{Tag} released material clones={destroyed}; remaining={OwnedMaterials.Count}");
+            Plugin.Log.LogDebug($"{Tag} released material clones={destroyed}; remaining={OwnedMaterials.Count}");
         }
 
         internal static void Probe()
         {
+            if (!DeveloperOptions.Enabled) return;
             if (!IsEquator()) return;
             try
             {
@@ -208,13 +209,13 @@ namespace ArenaMapPort.Client
                         if (renderer != null) targets.Add(renderer);
                     }
                 }
-                Plugin.Log.LogInfo($"{Tag} enabled={_enabled.Value} targets={targets.Count} " +
+                Plugin.Log.LogDebug($"{Tag} enabled={_enabled.Value} targets={targets.Count} " +
                     $"ownedGroups={OwnedGroups.FindAll(group => group != null).Count} materialSets={OwnedMaterials.Count}");
                 foreach (var shadow in Object.FindObjectsOfType<DistantShadow>(true))
                 {
                     if (shadow == null || !shadow.gameObject.scene.IsValid() || !shadow.gameObject.scene.isLoaded) continue;
                     var records = RenderList?.GetValue(shadow) as List<DistantShadow.DrawRecord>;
-                    Plugin.Log.LogInfo($"{Tag} native camera={shadow.MasterCamera?.name ?? "none"} " +
+                    Plugin.Log.LogDebug($"{Tag} native camera={shadow.MasterCamera?.name ?? "none"} " +
                         $"active={shadow.isActiveAndEnabled} blend={shadow.EnableShadowsBlend} " +
                         $"keyword={shadow.EnableDistantShadowKeyword} dirty={shadow.InvalidateRenderersOnNextUpdate} " +
                         $"cached={records?.Count.ToString() ?? "unavailable"}");
@@ -223,7 +224,7 @@ namespace ArenaMapPort.Client
                         var mesh = renderer.GetComponent<MeshFilter>().sharedMesh;
                         int count = records == null ? -1 : records.FindAll(record => record.mesh == mesh
                             && record.drawTransform == renderer.transform.localToWorldMatrix).Count;
-                        Plugin.Log.LogInfo($"{Tag} proxy={renderer.name} active={renderer.gameObject.activeInHierarchy} " +
+                        Plugin.Log.LogDebug($"{Tag} proxy={renderer.name} active={renderer.gameObject.activeInHierarchy} " +
                             $"casting={renderer.shadowCastingMode} shader={renderer.sharedMaterial?.shader?.name ?? "none"} " +
                             $"nativeCachedDraws={count}");
                     }

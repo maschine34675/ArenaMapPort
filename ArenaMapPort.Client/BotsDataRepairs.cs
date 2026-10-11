@@ -54,7 +54,7 @@ namespace ArenaMapPort.Client
             if (__instance.VoxelsList == null)
             {
                 __instance.VoxelsList = new List<NavGraphVoxelSimple>();
-                Plugin.Log.LogInfo("[ArenaMapPort][RaidFix] AIVoxelesData.VoxelsList was null (no baked " +
+                Plugin.Log.LogDebug("[ArenaMapPort][RaidFix] AIVoxelesData.VoxelsList was null (no baked " +
                                     "bot-nav/cover data for this spike) — initialized empty before RestoreData");
             }
         }
@@ -102,7 +102,7 @@ namespace ArenaMapPort.Client
             if (Object.FindObjectOfType<AIStationaryController>() == null)
             {
                 new GameObject("AIStationaryController(ArenaFallback)").AddComponent<AIStationaryController>();
-                Plugin.Log.LogInfo("[ArenaMapPort][RaidFix] created missing AIStationaryController " +
+                Plugin.Log.LogDebug("[ArenaMapPort][RaidFix] created missing AIStationaryController " +
                                     "(no stationary weapons authored for this spike)");
             }
         }

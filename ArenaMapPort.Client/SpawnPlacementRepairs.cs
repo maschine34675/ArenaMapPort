@@ -74,7 +74,7 @@ namespace ArenaMapPort.Client
                 }
             }
 
-            Plugin.Log.LogInfo($"[ArenaMapPort][RaidFix] spawn placement: disabled {barriersDisabled} SPAWN_BOUND " +
+            Plugin.Log.LogDebug($"[ArenaMapPort][RaidFix] spawn placement: disabled {barriersDisabled} SPAWN_BOUND " +
                                 $"barrier collider(s), {boothBounds.Count} respawn-booth collider(s) avoided;" +
                                 (log.Length > 0 ? log.ToString() : " all spawn points already free"));
         }

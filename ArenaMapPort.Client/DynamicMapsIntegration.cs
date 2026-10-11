@@ -25,7 +25,7 @@ namespace ArenaMapPort.Client
         {
             if (!Chainloader.PluginInfos.ContainsKey(PluginGuid))
             {
-                Plugin.Log.LogInfo("[ArenaMapPort][DynamicMaps] Optional mod absent; overview integration inactive.");
+                Plugin.Log.LogDebug("[ArenaMapPort][DynamicMaps] Optional mod absent; overview integration inactive.");
                 return;
             }
             var dropdown = AccessTools.TypeByName("DynamicMaps.UI.Controls.MapSelectDropdown");
@@ -50,7 +50,7 @@ namespace ArenaMapPort.Client
             {
                 harmony.Patch(read, postfix: new HarmonyMethod(typeof(DynamicMapsIntegration), nameof(DefinitionPostfix)));
                 harmony.Patch(_load, postfix: new HarmonyMethod(typeof(DynamicMapsIntegration), nameof(LoadPostfix)));
-                Plugin.Log.LogInfo("[ArenaMapPort][DynamicMaps] Optional owned map loader installed: " + _assets.Root);
+                Plugin.Log.LogDebug("[ArenaMapPort][DynamicMaps] Optional owned map loader installed: " + _assets.Root);
             }
             catch (Exception ex)
             {

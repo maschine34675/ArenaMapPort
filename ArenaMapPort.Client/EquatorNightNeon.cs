@@ -79,6 +79,7 @@ namespace ArenaMapPort.Client
 
         internal static void Probe()
         {
+            if (!DeveloperOptions.Enabled) return;
             if (_runner == null) return;
             _runner.Probe();
             _runner.SampleFlicker();
@@ -266,7 +267,7 @@ namespace ArenaMapPort.Client
 
             internal void Probe()
             {
-                Plugin.Log.LogInfo($"{Tag} enabled={_enabled.Value} active={IsActive} " +
+                Plugin.Log.LogDebug($"{Tag} enabled={_enabled.Value} active={IsActive} " +
                     $"map={ArenaMapRaid.CurrentMap?.Key ?? "none"} hour={TimeOfDayRepairs.ActiveFixedHour?.ToString() ?? "unknown"} " +
                     $"roots={(_root != null ? 1 : 0)} strips={_lights.Count} lights={_lights.Count} " +
                     $"lit={_lights.Count(l => l != null && l.enabled)} scale={_lightIntensity.Value:F2} glow={_glowIntensity.Value:F2} " +
@@ -288,7 +289,7 @@ namespace ArenaMapPort.Client
             {
                 if (state == _lastState) return;
                 _lastState = state;
-                Plugin.Log.LogInfo($"{Tag} {state}");
+                Plugin.Log.LogDebug($"{Tag} {state}");
             }
 
             internal void Stop(string reason)

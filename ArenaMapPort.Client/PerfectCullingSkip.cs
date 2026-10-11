@@ -41,7 +41,7 @@ namespace ArenaMapPort.Client
             }
 
             __result = Task.CompletedTask;
-            Plugin.Log.LogInfo("[ArenaMapPort][PerfectCulling] skipped InitializeAutoCulling " +
+            Plugin.Log.LogDebug("[ArenaMapPort][PerfectCulling] skipped InitializeAutoCulling " +
                                 "(no baked occlusion data for this spike, §F.6)");
             return false; // skip the original body entirely
         }

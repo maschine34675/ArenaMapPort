@@ -142,7 +142,7 @@ namespace ArenaMapPort.Client
                 BuildGraph(state, dir);
                 state.Ready = true;
                 token = state.Cancellation.Token;
-                Plugin.Log.LogInfo($"{Tag} {key}: prepared rooms={state.Info.roomsCount}, portals={state.Info.portalsCount}, " +
+                Plugin.Log.LogDebug($"{Tag} {key}: prepared rooms={state.Info.roomsCount}, portals={state.Info.portalsCount}, " +
                     $"bake pairs={state.Info.roomPairsCount}, routes={state.Info.routesCount}, sha256={(string)data["bake"]["sha256"]}");
                 return true;
             }
@@ -172,7 +172,7 @@ namespace ArenaMapPort.Client
                 Require(state.Group.AudioRooms.All(r => r.IsValid), "room initialization failed");
                 state.Finished = true;
                 state.Cancellation.CancelAfter(Timeout.Infinite);
-                Plugin.Log.LogInfo($"{Tag} {state.MapKey}: native initialized; valid rooms={container.RoomsByID.Count}, " +
+                Plugin.Log.LogDebug($"{Tag} {state.MapKey}: native initialized; valid rooms={container.RoomsByID.Count}, " +
                     $"portals={container.PortalsByID.Count}, pairs={container.RoomPairsByID.Count}, routes={container.RoomPairsByID.Values.Sum(pair => pair.Routes.Length)}; room tones wait for raid start");
             }
             catch (Exception e)
@@ -328,7 +328,7 @@ namespace ArenaMapPort.Client
                     // The existing ambient driver owns its original players. This controller owns
                     // only the newly recovered room tones, without creating a second ambient manager.
                     state.RoomTones = new RoomToneController();
-                    Plugin.Log.LogInfo($"{Tag} {state.MapKey}: room-tone controller started after audio reset");
+                    Plugin.Log.LogDebug($"{Tag} {state.MapKey}: room-tone controller started after audio reset");
                 }
                 catch (Exception e) { _reportedFailure = true; Plugin.Log.LogError($"{Tag} Room-tone startup: {e}"); }
             }
@@ -463,16 +463,17 @@ namespace ArenaMapPort.Client
                 if (state.Settings != null) Object.Destroy(state.Settings);
                 state.Cancellation?.Dispose();
                 if (_state == state) _state = null;
-                Plugin.Log.LogInfo($"{Tag} {state.MapKey}: released graph and room tones; initialized={SpatialAudioSystem.Initialized}, groups={SpatialAudioCrossSceneGroup.AllCrossGroups.Count}");
+                Plugin.Log.LogDebug($"{Tag} {state.MapKey}: released graph and room tones; initialized={SpatialAudioSystem.Initialized}, groups={SpatialAudioCrossSceneGroup.AllCrossGroups.Count}");
             }
         }
 
         internal static void Probe()
         {
+            if (!DeveloperOptions.Enabled) return;
             if (_state == null || !_state.Finished || _state.System == null) return;
             var system = _state.System;
             var room = system.ListenerCurrentRoom;
-            Plugin.Log.LogInfo($"{Tag} listener room={room?.ID} name={room?.Name} type={room?.Type} valid={room?.IsValid}; " +
+            Plugin.Log.LogDebug($"{Tag} listener room={room?.ID} name={room?.Name} type={room?.Type} valid={room?.IsValid}; " +
                 $"initialized={SpatialAudioSystem.Initialized}; room-tone={_state.RoomTones?._prevEnteredRoom?.ID}");
             if (_state.RoomTones?._prevEnteredRoom is SpatialAudioRoom toneRoom &&
                 Field(toneRoom, "_roomAmbientSoundPlayer") is RoomAmbientSoundPlayer player && player._source != null)
@@ -480,14 +481,14 @@ namespace ArenaMapPort.Client
                 var source = player._source.source1;
                 var mixer = MonoBehaviourSingleton<BetterAudio>.Instance.Master;
                 mixer.GetFloat("AmbientInVolume", out float bus);
-                Plugin.Log.LogInfo($"{Tag} room-tone clip={source.clip?.name} playing={source.isPlaying} " +
+                Plugin.Log.LogDebug($"{Tag} room-tone clip={source.clip?.name} playing={source.isPlaying} " +
                     $"samples={source.timeSamples} load={source.clip?.loadState} volume={source.volume:F4} " +
                     $"indoorBusDb={bus:F1} mixer={source.outputAudioMixerGroup?.name} listenerPaused={AudioListener.pause}");
             }
             RoomReverb.Log();
             SpatialAudioProbe.Log();
             foreach (var r in _state.Group.AudioRooms)
-                Plugin.Log.LogInfo($"{Tag} room {r.ID} '{r.name}' type={r.Type} center={r.Bounds.center:F2} size={r.Bounds.size:F2} areas={r.Areas.Count}");
+                Plugin.Log.LogDebug($"{Tag} room {r.ID} '{r.name}' type={r.Type} center={r.Bounds.center:F2} size={r.Bounds.size:F2} areas={r.Areas.Count}");
         }
 
         internal static void Require(bool condition, string message)

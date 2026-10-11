@@ -62,7 +62,7 @@ namespace ArenaMapPort.Client
                 }
             }
             if (reset != 0)
-                Plugin.Log.LogInfo($"[ArenaMapPort][DistantShadowCache] map={map.Key} {reason}: " +
+                Plugin.Log.LogDebug($"[ArenaMapPort][DistantShadowCache] map={map.Key} {reason}: " +
                     $"invalidated={reset}; native shadow cache rebuild queued.");
         }
     }

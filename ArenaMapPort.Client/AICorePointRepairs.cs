@@ -91,7 +91,7 @@ namespace ArenaMapPort.Client
             harmony.Patch(init, prefix: new HarmonyMethod(AccessTools.Method(typeof(AICorePointFallback), nameof(InitPrefix))));
             harmony.Patch(get, prefix: new HarmonyMethod(AccessTools.Method(typeof(AICorePointFallback), nameof(GetCorePointPrefix))));
             harmony.Patch(create, postfix: new HarmonyMethod(AccessTools.Method(typeof(AICorePointFallback), nameof(CreatePostfix))));
-            Plugin.Log.LogInfo("[ArenaMapPort][Harmony] patched BotsController.Init (core-point fallback, additional prefix), " +
+            Plugin.Log.LogDebug("[ArenaMapPort][Harmony] patched BotsController.Init (core-point fallback, additional prefix), " +
                                "AICorePointHolder.GetCorePoint (null-list guard), BotOwner.Create (StartCorePoint fallback) — bots-stage1");
         }
 
@@ -115,7 +115,7 @@ namespace ArenaMapPort.Client
                                                    out int hubCount, out int subPointCount); // see PatrolWayRepairs.cs
                 if (authoredFromAnchors)
                 {
-                    Plugin.Log.LogInfo($"{Tag} {map.Key}: authored {realCorePointCount} real AI core point(s), " +
+                    Plugin.Log.LogDebug($"{Tag} {map.Key}: authored {realCorePointCount} real AI core point(s), " +
                                        $"{hubCount} patrol hub(s), {subPointCount} sub point(s) from " +
                                        $"ai/{anchors.MapKey}.ai.json, plus the synthetic id-0/group-0 alias " +
                                        "(SpawnPointParams.CorePointId is always 0)");
@@ -160,7 +160,7 @@ namespace ArenaMapPort.Client
             }
             if (created.Count > 0 || filled.Count > 0)
             {
-                Plugin.Log.LogInfo($"{Tag} AI covers holders: created {created.Count} missing component(s) " +
+                Plugin.Log.LogDebug($"{Tag} AI covers holders: created {created.Count} missing component(s) " +
                                    $"[{string.Join(", ", created)}]; initialized {filled.Count} null collection field(s) " +
                                    $"[{string.Join(", ", filled)}] — no baked bot-nav data on this map, empty holders are the " +
                                    "authored-but-empty shape BSG's own deserialization would give");
@@ -222,7 +222,7 @@ namespace ArenaMapPort.Client
             {
                 if (createdHolder)
                 {
-                    Plugin.Log.LogInfo($"{Tag} created {HolderName} (scene had none)");
+                    Plugin.Log.LogDebug($"{Tag} created {HolderName} (scene had none)");
                 }
                 return false; // already populated by an earlier call this raid — idempotent no-op, no new log line
             }
@@ -260,7 +260,7 @@ namespace ArenaMapPort.Client
             AddAlias(holder, position, out var addedAlias);
             if (addedAlias)
             {
-                Plugin.Log.LogInfo($"{Tag} AICorePointHolder had no core points (no baked bot-nav data for this map) — added " +
+                Plugin.Log.LogDebug($"{Tag} AICorePointHolder had no core points (no baked bot-nav data for this map) — added " +
                                    $"synthetic AICore ID:{FallbackId} CG:{FallbackGroup} at {position:F1} ({basis}); " +
                                    "GetCorePoint(0) now resolves and BotOwner.StartCorePoint is never null" +
                                    (createdHolder ? $" (holder {HolderName} created as well)" : ""));
@@ -385,7 +385,7 @@ namespace ArenaMapPort.Client
                 };
                 voxels.VoxelsList.Add(voxel);
             }
-            Plugin.Log.LogInfo($"{Tag} AIVoxelesData had no voxels (no baked bot-nav data) — authored an empty {nx}×{ny}×{nz} grid " +
+            Plugin.Log.LogDebug($"{Tag} AIVoxelesData had no voxels (no baked bot-nav data) — authored an empty {nx}×{ny}×{nz} grid " +
                                $"({voxels.VoxelsList.Count} cells of {CellXZ}×{CellY}×{CellXZ} m) from min={min:F1} over the spawn markers' " +
                                $"bounds {markerBounds.min:F0}..{markerBounds.max:F0} + margin {GridMargin}; BotVoxelesPersonalData.GetVoxelSafe " +
                                "now resolves for every position instead of indexing a 0×0×0 array");
@@ -431,7 +431,7 @@ namespace ArenaMapPort.Client
                     if (d < bestD) { bestD = d; best = c; }
                 }
                 __result.StartCorePoint = best;
-                Plugin.Log.LogInfo($"{Tag} assigned StartCorePoint {best?.Id} to '{__result.name}' ({Mathf.Sqrt(bestD):F1} m away) — " +
+                Plugin.Log.LogDebug($"{Tag} assigned StartCorePoint {best?.Id} to '{__result.name}' ({Mathf.Sqrt(bestD):F1} m away) — " +
                                    "its spawn point carried a CorePointId the holder does not know");
             }
             catch (Exception e)

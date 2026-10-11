@@ -179,7 +179,7 @@ namespace ArenaMapPort.Client
             }
             using var specularScope = ReflectiveSpecularRepairs.Suspend(map);
             RestoreEntries(map, state, out int restored, out int destroyed);
-            Plugin.Log.LogInfo($"[ArenaMapPort][IndoorFloorSmoothness] map={map.Key} re-classifying: restored {restored} " +
+            Plugin.Log.LogDebug($"[ArenaMapPort][IndoorFloorSmoothness] map={map.Key} re-classifying: restored {restored} " +
                 $"renderer(s), destroyed {destroyed} clone(s)");
             state.Done = false;
             try { Classify(map); }
@@ -231,7 +231,7 @@ namespace ArenaMapPort.Client
 
             if (restoredRenderers > 0 || destroyedClones > 0)
             {
-                Plugin.Log.LogInfo($"[ArenaMapPort][IndoorFloorSmoothness] {map.Key}: raid ended — restored " +
+                Plugin.Log.LogDebug($"[ArenaMapPort][IndoorFloorSmoothness] {map.Key}: raid ended — restored " +
                     $"{restoredRenderers} renderer(s), destroyed {destroyedClones} clone(s).");
             }
         }
@@ -408,7 +408,7 @@ namespace ArenaMapPort.Client
                                     surfaceMeshes++;
                                     surfaceTriangles += split.Triangles;
                                     clones += surface.OwnedMaterials.Count;
-                                    Plugin.Log.LogInfo($"[ArenaMapPort][IndoorSurface] map={map.Key} renderer='{goName}' " +
+                                    if (DeveloperOptions.Enabled) Plugin.Log.LogDebug($"[ArenaMapPort][IndoorSurface] map={map.Key} renderer='{goName}' " +
                                         $"triangles={split.Triangles} floorSlots={surface.OwnedMaterials.Count} " +
                                         $"materials={shared.Length}->{surface.ClonedMaterials.Length} " +
                                         $"vertices={split.Original.vertexCount}->{split.Copy.vertexCount}");
@@ -431,7 +431,7 @@ namespace ArenaMapPort.Client
                             }
 
                             indoor++;
-                            if (indoorNames.Count < 20)
+                            if (DeveloperOptions.Enabled && indoorNames.Count < 20)
                             {
                                 indoorNames.Add(renderer.gameObject.name);
                             }
@@ -443,7 +443,7 @@ namespace ArenaMapPort.Client
                             clones += entry.OwnedMaterials.Count;
                         }
                     }
-                    perScene.Add($"{scene.name}={sceneRenderers}");
+                    if (DeveloperOptions.Enabled) perScene.Add($"{scene.name}={sceneRenderers}");
                 }
                 if (map.InheritIndoorFloorDetails)
                 {
@@ -484,7 +484,7 @@ namespace ArenaMapPort.Client
                         indoor++;
                         inherited++;
                     }
-                    Plugin.Log.LogInfo($"[ArenaMapPort][FloorDetails] map={map.Key} candidates={floorDetails.Count} " +
+                    Plugin.Log.LogDebug($"[ArenaMapPort][FloorDetails] map={map.Key} candidates={floorDetails.Count} " +
                         $"inherited={inherited} supportTriangles={support.Count} smoothness={multiplier:0.00} " +
                         $"reflection={reflection:0.00}; source textures and authored material differences retained.");
                 }
@@ -500,22 +500,23 @@ namespace ArenaMapPort.Client
             }
 
             state.Done = true;
-            Plugin.Log.LogInfo($"[ArenaMapPort][IndoorSurface] map={map.Key} enabled={WeatherRig.IndoorSurfaceRepairForCurrentMap()} " +
+            Plugin.Log.LogDebug($"[ArenaMapPort][IndoorSurface] map={map.Key} enabled={WeatherRig.IndoorSurfaceRepairForCurrentMap()} " +
                 $"meshes={surfaceMeshes} triangles={surfaceTriangles} " +
                 $"smoothness={WeatherRig.IndoorSurfaceSmoothnessForCurrentMap():0.00} " +
                 $"reflection={WeatherRig.IndoorSurfaceReflectionStrengthForCurrentMap():0.00} elapsedMs={elapsed.ElapsedMilliseconds}");
-            for (int i = 0; i < rejects.Count; i++)
+            if (DeveloperOptions.Enabled)
             {
-                Plugin.Log.LogInfo($"[ArenaMapPort][IndoorFloorSmoothness] map={map.Key} rejected large candidate: {rejects[i]}");
+                for (int i = 0; i < rejects.Count; i++)
+                    Plugin.Log.LogDebug($"[ArenaMapPort][IndoorFloorSmoothness] map={map.Key} rejected large candidate: {rejects[i]}");
+                Plugin.Log.LogDebug($"[ArenaMapPort][IndoorFloorSmoothness] map={map.Key} scanned scenes (MeshRenderers): {string.Join(", ", perScene)}");
             }
-            Plugin.Log.LogInfo($"[ArenaMapPort][IndoorFloorSmoothness] map={map.Key} scanned scenes (MeshRenderers): {string.Join(", ", perScene)}");
-            Plugin.Log.LogInfo($"[ArenaMapPort][IndoorFloorSmoothness] map={map.Key} classified: floorLike={floorLike} " +
+            Plugin.Log.LogDebug($"[ArenaMapPort][IndoorFloorSmoothness] map={map.Key} classified: floorLike={floorLike} " +
                 $"indoor={indoor} materialClones={clones} multiplier={WeatherRig.IndoorFloorSmoothnessForCurrentMap():0.00} " +
                 $"reflection={WeatherRig.IndoorReflectionStrengthForCurrentMap():0.00} " +
                 $"coverPercent={WeatherRig.IndoorCoverPercentForCurrentMap()} grid={CoverGrid}x{CoverGrid}");
-            if (indoor > 0)
+            if (DeveloperOptions.Enabled && indoor > 0)
             {
-                Plugin.Log.LogInfo($"[ArenaMapPort][IndoorFloorSmoothness] map={map.Key} indoor renderer(s) " +
+                Plugin.Log.LogDebug($"[ArenaMapPort][IndoorFloorSmoothness] map={map.Key} indoor renderer(s) " +
                     $"(showing {indoorNames.Count} of {indoor}): {string.Join(", ", indoorNames)}");
             }
         }
@@ -611,7 +612,7 @@ namespace ArenaMapPort.Client
         // realistic ceiling/roof height still counts (this project's own maps run tens of meters tall).
         static void Reject(bool large, List<string> rejects, Renderer renderer, Bounds bounds, string reason, int covered)
         {
-            if (!large || rejects.Count >= 40)
+            if (!DeveloperOptions.Enabled || !large || rejects.Count >= 40)
             {
                 return;
             }
@@ -825,7 +826,7 @@ namespace ArenaMapPort.Client
                     mat.SetFloat(propId, NeonWetFloor.Effective(mat, original * reflection, entry.NightFloor));
                     recolored++;
                 }
-                if (entry.Surface != null)
+                if (DeveloperOptions.Enabled && entry.Surface != null)
                 {
                     var values = new List<string>();
                     foreach (var mat in entry.OwnedMaterials)
@@ -836,10 +837,10 @@ namespace ArenaMapPort.Client
                         float gloss = mat.HasProperty("_Glossness") ? mat.GetFloat("_Glossness") : float.NaN;
                         values.Add($"spec={Mathf.Max(color.r, Mathf.Max(color.g, color.b)) * strength:0.0000}/gloss={gloss:0.0000}");
                     }
-                    Plugin.Log.LogInfo($"[ArenaMapPort][IndoorSurface] renderer='{entry.Renderer?.name}' uncapped floor values: {string.Join(", ", values)}");
+                    Plugin.Log.LogDebug($"[ArenaMapPort][IndoorSurface] renderer='{entry.Renderer?.name}' uncapped floor values: {string.Join(", ", values)}");
                 }
             }
-            Plugin.Log.LogInfo($"[ArenaMapPort][IndoorFloorSmoothness] map={map.Key} legacySmoothness={WeatherRig.IndoorFloorSmoothnessForCurrentMap():0.00} " +
+            Plugin.Log.LogDebug($"[ArenaMapPort][IndoorFloorSmoothness] map={map.Key} legacySmoothness={WeatherRig.IndoorFloorSmoothnessForCurrentMap():0.00} " +
                 $"legacyReflection={WeatherRig.IndoorReflectionStrengthForCurrentMap():0.00} " +
                 $"surfaceSmoothness={WeatherRig.IndoorSurfaceSmoothnessForCurrentMap():0.00} " +
                 $"surfaceReflection={WeatherRig.IndoorSurfaceReflectionStrengthForCurrentMap():0.00} " +

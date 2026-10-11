@@ -123,7 +123,7 @@ namespace ArenaMapPort.Client
                 }
                 float multiplier = EquatorProfiles.Value(Configs[raid.Map.Key]);
                 int changed = Apply(raid, multiplier);
-                Plugin.Log.LogInfo($"[ArenaMapPort][HandsHighlight] map={raid.Map.Key} {reason}: " +
+                Plugin.Log.LogDebug($"[ArenaMapPort][HandsHighlight] map={raid.Map.Key} {reason}: " +
                     $"captured={raid.Highlights.Count}, scale={multiplier:0.00}, fieldsChanged={changed}");
             }
             catch (Exception e)
@@ -169,7 +169,7 @@ namespace ArenaMapPort.Client
             if (raid.Startup != null) Plugin.Instance.StopCoroutine(raid.Startup);
             if (raid.CameraManager != null) raid.CameraManager.OnCameraChanged -= OnCameraChanged;
             int changed = Apply(raid, 1f);
-            Plugin.Log.LogInfo($"[ArenaMapPort][HandsHighlight] map={raid.Map.Key} released: " +
+            Plugin.Log.LogDebug($"[ArenaMapPort][HandsHighlight] map={raid.Map.Key} released: " +
                 $"fieldsRestored={changed}, captured={raid.Highlights.Count}");
         }
     }

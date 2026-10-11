@@ -38,7 +38,7 @@ namespace ArenaMapPort.Client
             }
             var prefix = AccessTools.Method(typeof(PhysicsPropSoundRepairs), nameof(OnCollisionHandlerPrefix));
             harmony.Patch(target, prefix: new HarmonyMethod(prefix));
-            Plugin.Log.LogInfo("[ArenaMapPort][Harmony] patched SmallPhysicsObject.OnCollisionHandler (null impact SoundBank guard)");
+            Plugin.Log.LogDebug("[ArenaMapPort][Harmony] patched SmallPhysicsObject.OnCollisionHandler (null impact SoundBank guard)");
         }
 
         /// <summary>Harmony prefix: <c>___</c> parameters bind the private/protected fields by name.</summary>

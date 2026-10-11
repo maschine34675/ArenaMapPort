@@ -3,7 +3,17 @@
 Snapshot for whoever continues (human or agent). Verify the commits named here against `git log`; this file
 is updated by hand at each handover, it is not an automatic record. Read [AGENTS.md](AGENTS.md) first.
 
-## Follow-up on 2026-10-11 — owned overview-map integration
+## Follow-up on 2026-10-11 — release logging and decal-copy warnings
+
+Runtime Info is limited to the startup/map-availability summaries; technical progress
+is Debug and expensive diagnostic work additionally requires DeveloperMode. Warnings
+and errors remain visible. Native decal normal maps release unused readable CPU bytes
+before the vanilla atlas is created, preserving uploaded pixels/mips. InitWeather is
+patched through its declaring closed generic type. See [logging audit](docs/progress/release-logging.md)
+for the source-backed CopyTexture explanation and remaining LOD/MenuScreen/other-mod findings.
+Native acceptance and final deployment follow below.
+
+## Earlier on 2026-10-11 — owned overview-map integration
 
 Equator/Bay5 overview data now stages under ArenaMapPort/dynamicmaps. The optional
 DynamicMaps 1.2.1 integration loads it before native image precaching; accepted map

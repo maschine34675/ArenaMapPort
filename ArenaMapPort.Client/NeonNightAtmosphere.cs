@@ -103,7 +103,7 @@ namespace ArenaMapPort.Client
                         owner.Create();
                     }
                     _lastHaze = -1;
-                    Plugin.Log.LogInfo($"{Tag} created {_volumes.Count} native volumes; 16 samples, source shadows retained");
+                    Plugin.Log.LogDebug($"{Tag} created {_volumes.Count} native volumes; 16 samples, source shadows retained");
                 }
                 bool changed = _lastHaze != _haze.Value;
                 foreach (var owner in _volumes)
@@ -114,7 +114,7 @@ namespace ArenaMapPort.Client
                     float shadowFade = Mathf.Clamp01((QualitySettings.shadowDistance - 2f - distance) / 5f);
                     owner.Apply(_haze.Value * shadowFade, changed);
                 }
-                if (changed) Plugin.Log.LogInfo($"{Tag} haze strength={_haze.Value:F2}");
+                if (changed) Plugin.Log.LogDebug($"{Tag} haze strength={_haze.Value:F2}");
                 _lastHaze = _haze.Value;
             }
             catch (Exception e)
@@ -158,7 +158,7 @@ namespace ArenaMapPort.Client
                         system.Simulate(4f, false, true, false);
                         system.Play(false);
                     }
-                    Plugin.Log.LogInfo($"{Tag} smoke density={_smoke.Value:F2} banks={_particles.Count}");
+                    Plugin.Log.LogDebug($"{Tag} smoke density={_smoke.Value:F2} banks={_particles.Count}");
                     _lastSmoke = _smoke.Value;
                 }
             }
@@ -246,11 +246,11 @@ namespace ArenaMapPort.Client
                 renderer.lightProbeUsage = LightProbeUsage.Off;
                 renderer.reflectionProbeUsage = ReflectionProbeUsage.Off;
             }
-            Plugin.Log.LogInfo($"{Tag} created {_particles.Count} shallow smoke banks; shader={_smokeMaterial.shader.name}, " +
+            Plugin.Log.LogDebug($"{Tag} created {_particles.Count} shallow smoke banks; shader={_smokeMaterial.shader.name}, " +
                 $"atlas={originalSheet.numTilesX}x{originalSheet.numTilesY}, maxParticles={_particles.Count * 32}");
         }
 
-        internal void Probe() => Plugin.Log.LogInfo($"{Tag} volumes={_volumes.Count} " +
+        internal void Probe() => Plugin.Log.LogDebug($"{Tag} volumes={_volumes.Count} " +
             $"haze={_haze.Value:F2} smokeBanks={_particles.Count} smoke={_smoke.Value:F2} " +
             $"particles={_particles.Where(p => p != null).Sum(p => p.particleCount)} " +
             $"sourceLightBuffers={SourceLightBuffers()}");
@@ -261,7 +261,7 @@ namespace ArenaMapPort.Client
         void ReleaseVolumes()
         {
             foreach (var volume in _volumes) volume.Dispose();
-            if (_volumes.Count > 0) Plugin.Log.LogInfo($"{Tag} released {_volumes.Count} volumes and their command buffers; " +
+            if (DeveloperOptions.Enabled && _volumes.Count > 0) Plugin.Log.LogDebug($"{Tag} released {_volumes.Count} volumes and their command buffers; " +
                 $"remainingSourceLightBuffers={SourceLightBuffers()}");
             _volumes.Clear();
         }
@@ -282,7 +282,7 @@ namespace ArenaMapPort.Client
             ReleaseVolumes();
             ReleaseSmoke();
             _load = null;
-            Plugin.Log.LogInfo($"{Tag} disposed; smoke/materials/volumes released");
+            Plugin.Log.LogDebug($"{Tag} disposed; smoke/materials/volumes released");
         }
 
         sealed class OwnedVolume : IDisposable

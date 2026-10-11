@@ -120,7 +120,7 @@ namespace ArenaMapPort.Client
                 if (!original.RenderLogged)
                 {
                     original.RenderLogged = true;
-                    Plugin.Log.LogInfo("[ArenaMapPort][Flare] rendered native anamorphic pass before Prism HDR-to-LDR; later pass bypassed");
+                    Plugin.Log.LogDebug("[ArenaMapPort][Flare] rendered native anamorphic pass before Prism HDR-to-LDR; later pass bypassed");
                 }
             }
             catch (Exception e)
@@ -182,7 +182,7 @@ namespace ArenaMapPort.Client
                 bool moved = _intensity.Value == 0.25f;
                 if (moved) _intensity.Value = 0.4f;
                 revision.Value = 1;
-                Plugin.Log.LogInfo($"[ArenaMapPort][AnamorphicFlare] config re-seeded to defaults revision 1 " +
+                Plugin.Log.LogDebug($"[ArenaMapPort][AnamorphicFlare] config re-seeded to defaults revision 1 " +
                     $"(intensity moved={moved}; intensity={_intensity.Value:0.00})");
             }
             EquatorProfiles.Subscribe(_enabled, (_, __) => ApplyToCurrentCamera("setting changed"));
@@ -239,7 +239,7 @@ namespace ArenaMapPort.Client
                 effect.lensflareIntensity = EquatorProfiles.Value(_intensity);
                 effect.flareColorA = ClampTint(EquatorProfiles.Value(_tint));
                 if (original.Ultimate != null) original.Ultimate.m_UseAnamorphicFlare = false;
-                Plugin.Log.LogInfo($"[ArenaMapPort][Flare] arena_equator '{camera.name}' ({reason}): " +
+                Plugin.Log.LogDebug($"[ArenaMapPort][Flare] arena_equator '{camera.name}' ({reason}): " +
                     $"component={effect.GetInstanceID()} enabled={effect.enabled} lensflares={effect.lensflares} " +
                     $"mode={effect.lensflareMode} HDR={effect.hdr} cameraHDR={camera.allowHDR} " +
                     $"intensity={effect.lensflareIntensity:0.000} threshold={effect.lensflareThreshold:0.000} " +
@@ -257,7 +257,7 @@ namespace ArenaMapPort.Client
         {
             if (Originals.Count == 0) return;
             foreach (var original in Originals.Values) original.Restore();
-            Plugin.Log.LogInfo($"[ArenaMapPort][Flare] released {Originals.Count} camera state(s)");
+            Plugin.Log.LogDebug($"[ArenaMapPort][Flare] released {Originals.Count} camera state(s)");
             Originals.Clear();
             BeforeTonemap.Clear();
         }

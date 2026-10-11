@@ -54,7 +54,7 @@ namespace ArenaMapPort.Client
             if (!_logged)
             {
                 _logged = true;
-                Plugin.Log.LogInfo("[ArenaMapPort][RaidFix] camera has no RainScreenDrops (fallback Cam2) — " +
+                Plugin.Log.LogDebug("[ArenaMapPort][RaidFix] camera has no RainScreenDrops (fallback Cam2) — " +
                                     "skipped RainController's screen-drop init; rain on the lens is disabled");
             }
             return false;

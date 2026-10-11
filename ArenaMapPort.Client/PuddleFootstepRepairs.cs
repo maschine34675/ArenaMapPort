@@ -183,7 +183,7 @@ namespace ArenaMapPort.Client
             }
             _dirty = waitingForRebind;
             if (!_dirty)
-                Plugin.Log.LogInfo(Tag + "cached water surfaces=" + Entries.Count + " masks=" + Masks.Count +
+                Plugin.Log.LogDebug(Tag + "cached water surfaces=" + Entries.Count + " masks=" + Masks.Count +
                     " colorSpace=" + QualitySettings.activeColorSpace + " minimumShaderCoverage=" + F(MinimumCoverage) +
                     " maximumFootPlaneDistance=" + F(MaximumFootPlaneDistance));
             return !_dirty;
@@ -321,6 +321,7 @@ namespace ArenaMapPort.Client
 
         internal static void Probe()
         {
+            if (!DeveloperOptions.Enabled) return;
             if (!_installed || !InBay5()) return;
             try
             {
@@ -328,7 +329,7 @@ namespace ArenaMapPort.Client
                 if (player == null) return;
                 var result = player.CalculateMovementSurface(); // Captures the unmodified native result in our postfix.
                 Match match = EnsureCache() ? FindMatch(player.Position) : default;
-                Plugin.Log.LogInfo(Tag + "enabled=" + _enabled.Value + " cached=" + Entries.Count +
+                Plugin.Log.LogDebug(Tag + "enabled=" + _enabled.Value + " cached=" + Entries.Count +
                     " native=" + _last.Native.Item1 + "/" + _last.Native.Item2 +
                     " result=" + result.Item1 + "/" + result.Item2 + " feet=" + player.Position.ToString("F3") +
                     " matched=" + (match.Entry != null) + " coverage=" + F(match.Coverage) +

@@ -418,7 +418,7 @@ public class ArenaMapPortMod(
                     {
                         newBase.Banners = new List<Banner> { banner.Banner };
                         imageRouter.AddRoute(banner.RouteKey, banner.FilePath);
-                        logger.Success(
+                        logger.Debug(
                             $"[ArenaMapPort] {map.Key}: location-select banner wired ({banner.RouteKey} -> {banner.FilePath})");
                     }
                 }
@@ -429,7 +429,7 @@ public class ArenaMapPortMod(
                 }
 
                 ArenaMapRegistration.Register(locationTable, location, map);
-                logger.Success($"[Manimal-ArenaMapPort] {map.LocaleName} registered as an independent location");
+                logger.Info($"[ArenaMapPort] {map.LocaleName} is available in location selection.");
             }
             catch (Exception e) when (e is not OperationCanceledException)
             {
@@ -456,7 +456,7 @@ public class ArenaMapPortMod(
         }
     
         FixedRaidTimeWeather.TryInstall(
-            message => logger.Info("[ArenaMapPort] " + message),
+            message => logger.Debug("[ArenaMapPort] " + message),
             message => logger.Warning("[ArenaMapPort] " + message));
 
         // bots-stage1 (docs/progress/bots-stage1.md, "APBS") — once, after every map is registered: a
@@ -464,7 +464,7 @@ public class ArenaMapPortMod(
         // not throw "Map '<key>' not found". No-op without APBS. See ApbsCompat.cs.
         ApbsCompat.TryInstall(
             ArenaMapRegistry.All,
-            message => logger.Info("[ArenaMapPort] " + message),
+            message => logger.Debug("[ArenaMapPort] " + message),
             message => logger.Warning("[ArenaMapPort] " + message));
 }
 }

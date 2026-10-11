@@ -279,7 +279,7 @@ namespace ArenaMapPort.Client
                 }
             }
 
-            Plugin.Log.LogInfo($"[ArenaMapPort][RebindShaders] {scene.name}: pass complete — " +
+            Plugin.Log.LogDebug($"[ArenaMapPort][RebindShaders] {scene.name}: pass complete — " +
                                 $"{rebound}/{considered} stand-in material(s) rebound this pass");
         }
 
@@ -320,7 +320,7 @@ namespace ArenaMapPort.Client
                 target = FindLoadedExact(fallbackName) ?? Shader.Find(fallbackName);
                 if (target != null)
                 {
-                    Plugin.Log.LogInfo($"[ArenaMapPort][RebindShaders] '{originalName}' has no SPT shader — " +
+                    Plugin.Log.LogDebug($"[ArenaMapPort][RebindShaders] '{originalName}' has no SPT shader — " +
                                         $"using fallback '{fallbackName}' (tentative, unverified visual " +
                                         $"correctness, map={map.Key})");
                 }
@@ -420,7 +420,7 @@ namespace ArenaMapPort.Client
             // _ReflectionStrength (1.0) intentionally left untouched — it already matches vanilla's 1.0,
             // nothing about it is an outlier for this material.
 
-            Plugin.Log.LogInfo($"[ArenaMapPort][MaterialFixes] '{material.name}' (Bay5_Vertex_Paint_Ground): " +
+            Plugin.Log.LogDebug($"[ArenaMapPort][MaterialFixes] '{material.name}' (Bay5_Vertex_Paint_Ground): " +
                                 $"_BlendStrength {preFixBlendStrength:0.0} -> {Bay5GroundBlendStrengthTarget:0.0}, " +
                                 $"_Smoothness0-2/_FresnelSpecular2 scaled by {scale:0.00}");
         }
@@ -523,7 +523,7 @@ namespace ArenaMapPort.Client
                     sidecar[pair.Key] = entry;
                 }
 
-                Plugin.Log.LogInfo($"[ArenaMapPort][RebindShaders] {fileName}: {sidecar.Count} material entries");
+                Plugin.Log.LogDebug($"[ArenaMapPort][RebindShaders] {fileName}: {sidecar.Count} material entries");
             }
             catch (Exception e)
             {
@@ -538,7 +538,7 @@ namespace ArenaMapPort.Client
             // rebound shader name, plus every name that never resolved.
             foreach (var pair in _reboundCounts)
             {
-                Plugin.Log.LogInfo($"[RebindShaders] {pair.Value}x {pair.Key}");
+                Plugin.Log.LogDebug($"[RebindShaders] {pair.Value}x {pair.Key}");
             }
             foreach (var name in _unresolved)
             {

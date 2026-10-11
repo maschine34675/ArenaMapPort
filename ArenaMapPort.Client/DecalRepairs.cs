@@ -134,7 +134,7 @@ namespace ArenaMapPort.Client
             }
 
             LastDisabledCount = disabled;
-            Plugin.Log.LogInfo($"[ArenaMapPort][Decals] pass complete — {disabled}/{scanned} renderer(s) disabled " +
+            Plugin.Log.LogDebug($"[ArenaMapPort][Decals] pass complete — {disabled}/{scanned} renderer(s) disabled " +
                                 "(unsupported deferred-decal shader) — daytime-and-visuals F4");
         }
 

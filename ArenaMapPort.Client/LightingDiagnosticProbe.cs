@@ -133,7 +133,7 @@ namespace ArenaMapPort.Client
             ProbeLights(sb, map);
             ProbeSampleMaterials(sb, map);
 
-            Plugin.Log.LogInfo(sb.ToString());
+            Plugin.Log.LogDebug(sb.ToString());
         }
 
         // Confirms/refutes: player position sane; ground actually under the player (not falling through

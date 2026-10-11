@@ -51,11 +51,10 @@ namespace ArenaMapPort.Client
     /// rather than a prefix-local copy) and seeds <c>_specialTimeResolver[Location.Id]</c> with
     /// today's backend date at <see cref="FixedHour"/>.
     ///
-    /// Patch target: <c>EFT.LocalGame</c> (the concrete class SPT raids actually construct via
-    /// <c>BaseLocalGame&lt;TPlayerOwner&gt;.Create&lt;T&gt;</c>), not the open generic
-    /// <c>BaseLocalGame&lt;TPlayerOwner&gt;</c> — <c>InitWeather</c> is inherited, never overridden
-    /// (EFT/LocalGame.cs:29), and <c>AccessTools.Method(typeof(BaseLocalGame&lt;&gt;), "InitWeather")</c>
-    /// would not resolve to a runtime-patchable method on an open generic. See
+    /// Patch target: the declaring closed type <c>BaseLocalGame&lt;EftGamePlayerOwner&gt;</c>.
+    /// LocalGame inherits InitWeather without overriding it (EFT/LocalGame.cs:29).
+    /// Resolving the declaring type directly avoids Harmony's inherited-member warning;
+    /// the open generic would not be runtime-patchable. See
     /// <see cref="HarmonyPatches.InstallAll"/> for the actual patch-target resolution.
     /// </summary>
     internal static class TimeOfDayRepairs
@@ -98,14 +97,14 @@ namespace ArenaMapPort.Client
                 new ConfigDescription("Internal migration marker for fixed menu choices.", null, BrowsableAttribute.No));
             if (revision.Value < 1)
             {
-                Plugin.Log.LogInfo("[ArenaMapPort][TimeOfDay] Fixed selection migration 1: Equator now starts at " +
+                Plugin.Log.LogDebug("[ArenaMapPort][TimeOfDay] Fixed selection migration 1: Equator now starts at " +
                     "the selected 12:00/00:00. Legacy Enabled/ArenaFixedHour remain saved for other maps; " +
                     "no lighting values changed.");
                 revision.Value = 1;
             }
             if (revision.Value < 2)
             {
-                Plugin.Log.LogInfo("[ArenaMapPort][TimeOfDay] Time selection policy: Equator uses 12:00/00:00; " +
+                Plugin.Log.LogDebug("[ArenaMapPort][TimeOfDay] Time selection policy: Equator uses 12:00/00:00; " +
                     "Bay5 follows its selected server time. Legacy Enabled/ArenaFixedHour remain saved for other maps; " +
                     "no lighting values changed.");
                 revision.Value = 2;
@@ -142,9 +141,9 @@ namespace ArenaMapPort.Client
         internal static bool Enabled => _enabled != null && _enabled.Value;
         internal static int FixedHour => _fixedHour != null ? _fixedHour.Value : 12;
 
-        // Target: LocalGame.InitWeather(TimeAndWeatherSettings) — see HarmonyPatches.InstallTimeOfDayFix
-        // for the AccessTools.Method resolution and this class's own doc comment for the full amendment
-        // writeup. __instance is typed LocalGame (the patched, closed type), not the open generic base.
+        // Target: BaseLocalGame<EftGamePlayerOwner>.InitWeather(TimeAndWeatherSettings).
+        // HarmonyPatches.InstallTimeOfDayFix resolves its exact declaring method. LocalGame inherits
+        // this closed base without overriding the method, so __instance remains a LocalGame.
         internal static void Prefix(LocalGame __instance, ref TimeAndWeatherSettings timeAndWeather)
         {
             ActiveFixedHour = null;
@@ -163,7 +162,7 @@ namespace ArenaMapPort.Client
                 // These are per-raid arguments only; never rewrite saved user configuration.
                 timeAndWeather.IsRandomTime = false;
                 timeAndWeather.IsRandomWeather = false;
-                Plugin.Log.LogInfo($"[ArenaMapPort][TimeOfDay] {location.Id}: native server time and weather; " +
+                Plugin.Log.LogDebug($"[ArenaMapPort][TimeOfDay] {location.Id}: native server time and weather; " +
                     "legacy fixed-hour override bypassed, native weather initialization retained.");
                 return;
             }
@@ -192,7 +191,7 @@ namespace ArenaMapPort.Client
                 (selected == EDateTime.PAST ? fixedMap.FixedNightHour.Value : fixedMap.FixedDayHour.Value);
             resolver[location.Id] = backendDateTime.Calculate().Date.AddHours(hour);
             ActiveFixedHour = hour;
-            Plugin.Log.LogInfo($"[ArenaMapPort][TimeOfDay] {location.Id}: selected={selected} " +
+            Plugin.Log.LogDebug($"[ArenaMapPort][TimeOfDay] {location.Id}: selected={selected} " +
                 $"start={hour:00}:00 fixedMenu={fixedMap != null}; native weather initialization retained.");
         }
     }

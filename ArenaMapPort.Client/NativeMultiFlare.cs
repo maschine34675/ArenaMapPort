@@ -58,7 +58,8 @@ namespace ArenaMapPort.Client
             };
         }
 
-        internal static void Probe() { if (_runner != null) _runner.Probe(); }
+        internal static void Probe() {
+            if (!DeveloperOptions.Enabled) return; if (_runner != null) _runner.Probe(); }
 
         sealed class Lamp
         {
@@ -217,7 +218,7 @@ namespace ArenaMapPort.Client
                     }
                 }
                 Require(_lamps.Count > 0 && flareCount > 0, "no active flares");
-                Plugin.Log.LogInfo($"{Tag} {Map.Key} enabled: sourceLights={sourceCount} activeLights={_lamps.Count} " +
+                Plugin.Log.LogDebug($"{Tag} {Map.Key} enabled: sourceLights={sourceCount} activeLights={_lamps.Count} " +
                     $"flares={flareCount} boundOriginals={bound} nativeBatches=3 originalTextures={textures.Count} isolated=true global={GlobalState()}");
             }
 
@@ -249,7 +250,7 @@ namespace ArenaMapPort.Client
                     wrapper.CommandBuffer.name = "ArenaMapPort MultiFlare " + Map.Key;
                     _renderer.AddCamera(wrapper);
                     _cameras.Add(camera);
-                    Plugin.Log.LogInfo($"{Tag} camera={camera.name} id={camera.GetInstanceID()} hdr={camera.allowHDR} ssaa={wrapper._ssaa != null}");
+                    Plugin.Log.LogDebug($"{Tag} camera={camera.name} id={camera.GetInstanceID()} hdr={camera.allowHDR} ssaa={wrapper._ssaa != null}");
                 }
             }
 
@@ -348,13 +349,13 @@ namespace ArenaMapPort.Client
 
             internal void Probe()
             {
-                if (_renderer == null) { Plugin.Log.LogInfo($"{Tag} {Map.Key} enabled=false failed={_failed} global={GlobalState()}"); return; }
+                if (_renderer == null) { Plugin.Log.LogDebug($"{Tag} {Map.Key} enabled=false failed={_failed} global={GlobalState()}"); return; }
                 var camera = _cameras.FirstOrDefault();
-                Plugin.Log.LogInfo($"{Tag} {Map.Key} lights={_lamps.Count} cameras={_cameras.Count} frames={_frames} " +
+                Plugin.Log.LogDebug($"{Tag} {Map.Key} lights={_lamps.Count} cameras={_cameras.Count} frames={_frames} " +
                     $"intensity={EquatorProfiles.Value(Intensity[Map.Key]):F3} batches={_batchSummary} " +
                     $"nv={_settings.NormalBatch.IsNvEnabled} global={GlobalState()}");
                 foreach (var l in _lamps.OrderBy(l => camera == null ? 0 : (l.Position.position - camera.transform.position).sqrMagnitude).Take(6))
-                    Plugin.Log.LogInfo($"{Tag} lamp={l.Name} pos={l.Position.position.ToString("F3")} distance={(camera == null ? -1 : Vector3.Distance(l.Position.position, camera.transform.position)):F2}");
+                    Plugin.Log.LogDebug($"{Tag} lamp={l.Name} pos={l.Position.position.ToString("F3")} distance={(camera == null ? -1 : Vector3.Distance(l.Position.position, camera.transform.position)):F2}");
             }
 
             static string GlobalState()
@@ -390,7 +391,7 @@ namespace ArenaMapPort.Client
                 _proxies = null;
                 for (int i = _assets.Count - 1; i >= 0; i--) if (_assets[i] != null) { var asset = _assets[i]; Release(() => Object.Destroy(asset)); }
                 _assets.Clear();
-                if (renderer != null) Plugin.Log.LogInfo($"{Tag} {Map.Key} released: ownedLights=0 ownedBuffers=0 cleanupFailures={failures.Count} global={GlobalState()} frames={_frames}");
+                if (renderer != null) Plugin.Log.LogDebug($"{Tag} {Map.Key} released: ownedLights=0 ownedBuffers=0 cleanupFailures={failures.Count} global={GlobalState()} frames={_frames}");
                 if (failures.Count > 0) Plugin.Log.LogWarning($"{Tag} cleanup: {string.Join("; ", failures)}");
                 _frames = 0;
                 _batchSummary = "pending";

@@ -76,7 +76,7 @@ namespace ArenaMapPort.Client
             Current = Select(mapKey, selected);
             NaturalNight = Current == EquatorProfile.Night && PlayerOptions.NaturalEquatorNight;
             if (Current != EquatorProfile.None)
-                Plugin.Log.LogInfo($"[ArenaMapPort][Profiles] {mapKey}: selected {Current}, appearance={Appearance}, " +
+                Plugin.Log.LogDebug($"[ArenaMapPort][Profiles] {mapKey}: selected {Current}, appearance={Appearance}, " +
                     $"naturalNight={NaturalNight} before scene loading (generation {_generation}).");
             return _generation;
         }
@@ -118,7 +118,7 @@ namespace ArenaMapPort.Client
                 return;
             }
             if (!_confirmed)
-                Plugin.Log.LogInfo($"[ArenaMapPort][Profiles] {mapKey}: confirmed {Current} at InitWeather; recipe locked for this raid.");
+                Plugin.Log.LogDebug($"[ArenaMapPort][Profiles] {mapKey}: confirmed {Current} at InitWeather; recipe locked for this raid.");
             _confirmed = true;
         }
 
@@ -128,7 +128,7 @@ namespace ArenaMapPort.Client
         static void Reset(string reason)
         {
             if (Current != EquatorProfile.None)
-                Plugin.Log.LogInfo($"[ArenaMapPort][Profiles] Cleared {Current}: {reason}.");
+                Plugin.Log.LogDebug($"[ArenaMapPort][Profiles] Cleared {Current}: {reason}.");
             Current = EquatorProfile.None;
             NaturalNight = false;
             _confirmed = false;
@@ -144,7 +144,7 @@ namespace ArenaMapPort.Client
                 if (IsAppearance(item.Key)) entries.Add(item.Value);
             foreach (var entry in entries)
                 RegisterMethod.MakeGenericMethod(entry.SettingType).Invoke(null, new object[] { entry });
-            Plugin.Log.LogInfo($"[ArenaMapPort][Profiles] Bound {entries.Count} independent appearance settings per Equator profile; " +
+            Plugin.Log.LogDebug($"[ArenaMapPort][Profiles] Bound {entries.Count} independent appearance settings per Equator profile; " +
                 "legacy saved settings retained, Day uses accepted defaults, Night uses the 2026-10-07 recipe.");
         }
 

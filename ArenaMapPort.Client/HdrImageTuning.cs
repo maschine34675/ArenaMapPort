@@ -262,7 +262,7 @@ namespace ArenaMapPort.Client
                 postfix: new HarmonyMethod(typeof(HdrImageTuning), nameof(AfterUpload)),
                 finalizer: new HarmonyMethod(typeof(HdrImageTuning), nameof(FinalizeUpload)));
             _installed = true;
-            Plugin.Log.LogInfo("[ArenaMapPort][HDR] per-map exposure/tone controls installed after native environment overwrite; Equator defaults to custom Filmic, Bay5 preserves native tone");
+            Plugin.Log.LogDebug("[ArenaMapPort][HDR] per-map exposure/tone controls installed after native environment overwrite; Equator defaults to custom Filmic, Bay5 preserves native tone");
         }
 
         static void Bind(ArenaMapDescriptor map)
@@ -313,7 +313,7 @@ namespace ArenaMapPort.Client
                         settings.SecondaryCurve.Value = (Vector3)settings.SecondaryCurve.DefaultValue;
                     }
                     revision.Value = 1;
-                    Plugin.Log.LogInfo($"[ArenaMapPort][HDR] {map.Key}: config re-seeded to HDR defaults revision 1 " +
+                    Plugin.Log.LogDebug($"[ArenaMapPort][HDR] {map.Key}: config re-seeded to HDR defaults revision 1 " +
                         $"(complete neutral tone tuple moved={moved}; profile={settings.Tone.Value}, custom={settings.CustomCurve.Value})");
                 }
             }
@@ -580,24 +580,25 @@ namespace ArenaMapPort.Client
 
         internal static void LogDiagnostics()
         {
+            if (!DeveloperOptions.Enabled) return;
             _sampleRequested = true;
             try
             {
                 var current = CameraManager.Exist ? CameraManager.Instance.Camera : null;
                 var prism = current != null ? current.GetComponent<PrismEffects>() : null;
-                Plugin.Log.LogInfo($"[ArenaMapPort][HDR] map={ArenaMapRaid.CurrentMap?.Key ?? "outside-port"} installed={_installed} camera={(current != null ? current.name : "none")} owned={(_effect != null)} activeTransaction={(_active != null)}");
+                Plugin.Log.LogDebug($"[ArenaMapPort][HDR] map={ArenaMapRaid.CurrentMap?.Key ?? "outside-port"} installed={_installed} camera={(current != null ? current.name : "none")} owned={(_effect != null)} activeTransaction={(_active != null)}");
                 if (prism != null)
                 {
                     var values = Values.Read(prism);
-                    Plugin.Log.LogInfo($"[ArenaMapPort][HDR] current component fields: exposure {values.ExposureText}; tone {values.ToneText}; child={prism.isChildPrism} exposureMaster={(prism.m_MasterEffectExposure != null)}");
+                    Plugin.Log.LogDebug($"[ArenaMapPort][HDR] current component fields: exposure {values.ExposureText}; tone {values.ToneText}; child={prism.isChildPrism} exposureMaster={(prism.m_MasterEffectExposure != null)}");
                 }
-                Plugin.Log.LogInfo($"[ArenaMapPort][HDR] observed tone keyword masks (Filmic=1 RomB=2 ACES=4): globalNow={ReadToneMask()} materialNow={(prism != null && prism.m_Material != null ? ReadToneMask(prism.m_Material) : -1)}");
+                Plugin.Log.LogDebug($"[ArenaMapPort][HDR] observed tone keyword masks (Filmic=1 RomB=2 ACES=4): globalNow={ReadToneMask()} materialNow={(prism != null && prism.m_Material != null ? ReadToneMask(prism.m_Material) : -1)}");
                 var sample = _last;
                 if (!_hasLast || !ReferenceEquals(sample.Effect, prism))
-                { Plugin.Log.LogInfo("[ArenaMapPort][HDR] no owned completed shader upload sample"); return; }
-                Plugin.Log.LogInfo($"[ArenaMapPort][HDR] sample map={sample.Map} frame={sample.Frame} age={Time.frameCount - sample.Frame} guardedInput={sample.InvalidInput}: native exposure {sample.Native.ExposureText}; applied exposure {sample.Adjusted.ExposureText}");
-                Plugin.Log.LogInfo($"[ArenaMapPort][HDR] native tone {sample.Native.ToneText}; applied tone {sample.Adjusted.ToneText}");
-                Plugin.Log.LogInfo($"[ArenaMapPort][HDR] uploaded material: exposureUsed={sample.Adjusted.Exposure} grey={sample.UploadedGrey:0.######} range=[{sample.UploadedLower:0.####},{sample.UploadedUpper:0.####}] speed={sample.UploadedSpeed:0.####}; toneUsed={sample.Adjusted.Tonemap} curve={VectorText(sample.UploadedCurve)} secondary={VectorText(sample.UploadedSecondary)}; toneMaskExpected={ExpectedToneMask(sample.Adjusted)} observed={sample.UploadedToneMask}; afterRenderGlobalExpected={sample.ExpectedGlobalToneMask} observed={sample.ObservedGlobalToneMask}; fieldTransactionActive={sample.FieldsActive} renderTransactionClosed={sample.Finished}");
+                { Plugin.Log.LogDebug("[ArenaMapPort][HDR] no owned completed shader upload sample"); return; }
+                Plugin.Log.LogDebug($"[ArenaMapPort][HDR] sample map={sample.Map} frame={sample.Frame} age={Time.frameCount - sample.Frame} guardedInput={sample.InvalidInput}: native exposure {sample.Native.ExposureText}; applied exposure {sample.Adjusted.ExposureText}");
+                Plugin.Log.LogDebug($"[ArenaMapPort][HDR] native tone {sample.Native.ToneText}; applied tone {sample.Adjusted.ToneText}");
+                Plugin.Log.LogDebug($"[ArenaMapPort][HDR] uploaded material: exposureUsed={sample.Adjusted.Exposure} grey={sample.UploadedGrey:0.######} range=[{sample.UploadedLower:0.####},{sample.UploadedUpper:0.####}] speed={sample.UploadedSpeed:0.####}; toneUsed={sample.Adjusted.Tonemap} curve={VectorText(sample.UploadedCurve)} secondary={VectorText(sample.UploadedSecondary)}; toneMaskExpected={ExpectedToneMask(sample.Adjusted)} observed={sample.UploadedToneMask}; afterRenderGlobalExpected={sample.ExpectedGlobalToneMask} observed={sample.ObservedGlobalToneMask}; fieldTransactionActive={sample.FieldsActive} renderTransactionClosed={sample.Finished}");
             }
             catch (Exception e) { ReportFailure(e); }
         }

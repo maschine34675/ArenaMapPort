@@ -120,7 +120,7 @@ namespace ArenaMapPort.Client
                 });
                 RefreshWeather(__instance);
             }
-            Plugin.Log.LogInfo($"[ArenaMapPort][TimeSelection] {map.Key}: " +
+            Plugin.Log.LogDebug($"[ArenaMapPort][TimeSelection] {map.Key}: " +
                 $"day={day} night={night} selected={raidSettings.SelectedDateTime}");
         }
     }

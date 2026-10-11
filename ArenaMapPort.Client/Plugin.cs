@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Linq;
 using ArenaMapPort.Shared;
 using BepInEx;
 using BepInEx.Configuration;
@@ -155,7 +156,7 @@ namespace ArenaMapPort.Client
             try
             {
                 int removed = RetiredConfiguration.RemoveSavedEntries(Settings, persist: false);
-                Log.LogInfo($"[ArenaMapPort][Config] Removed {removed} retired saved options; active settings preserved.");
+                Log.LogDebug($"[ArenaMapPort][Config] Removed {removed} retired saved options; active settings preserved.");
             }
             catch (Exception e)
             {
@@ -164,17 +165,11 @@ namespace ArenaMapPort.Client
             EquatorProfiles.BindAll(); // after legacy binds/migrations; independent Day/Night defaults
             MapConfigVisibility.Install(); // after all binds; keep F12 focused on Equator and Bay5
             CompactConfiguration.Complete(Config);
-            Log.LogInfo($"[ArenaMapPort][Config] Public entries={Config.Count}, tuning entries={Settings.Count}; " +
+            Log.LogDebug($"[ArenaMapPort][Config] Public entries={Config.Count}, tuning entries={Settings.Count}; " +
                 $"tuning persistence={(DeveloperOptions.Enabled ? "developer" : "read-only")}, next-raid natural night={PlayerOptions.NaturalEquatorNight}.");
 
-            int totalOwnedScenes = 0;
-            foreach (var map in ArenaMapRegistry.All)
-            {
-                totalOwnedScenes += map.AllSceneNames.Length;
-            }
-            Log.LogInfo($"[ArenaMapPort] {PluginName} {PluginVersion} loaded — " +
-                        $"{ArenaMapRegistry.All.Count} map(s), {totalOwnedScenes} owned scenes, " +
-                        "Harmony patches applied.");
+            Log.LogInfo($"[ArenaMapPort] {PluginVersion} loaded. Maps: {string.Join(", ", ArenaMapRegistry.All.Select(map => map.LocaleName))}." +
+                (DeveloperOptions.Enabled ? " Developer mode enabled; diagnostics use Debug logging." : ""));
         }
 
         // Multimap generalization (docs/progress/multimap-generalize.md): loops ArenaMapRegistry.All
@@ -184,7 +179,7 @@ namespace ArenaMapPort.Client
             var pluginDir = Path.GetDirectoryName(typeof(Plugin).Assembly.Location) ?? ".";
             var bundlesDir = Path.Combine(pluginDir, "bundles");
 
-            Log.LogInfo($"[ArenaMapPort] plugin dir: {pluginDir}");
+            Log.LogDebug($"[ArenaMapPort] plugin dir: {pluginDir}");
 
             foreach (var map in ArenaMapRegistry.All)
             {
@@ -199,14 +194,13 @@ namespace ArenaMapPort.Client
         {
             if (File.Exists(path))
             {
-                Log.LogInfo($"[ArenaMapPort] found: {path}");
+                Log.LogDebug($"[ArenaMapPort] found: {path}");
             }
             else
             {
                 // Not fatal at Awake() — every hook that needs one of these degrades to a clear per-use
                 // error log rather than crashing plugin load (§B.WP4: "log clearly if a target is missing").
-                Log.LogWarning($"[ArenaMapPort] missing at Awake(): {path} (expected once WP2/WP3 bundles " +
-                                "and material-shaders.json are deployed into this plugin's folder)");
+                Log.LogWarning($"[ArenaMapPort] Required map file is missing: {path}. Reinstall the complete ArenaMapPort package.");
             }
         }
     }

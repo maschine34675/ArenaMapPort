@@ -105,7 +105,7 @@ namespace ArenaMapPort.Client
                 Camera cam = ResolveActiveCamera();
                 if (cam == null)
                 {
-                    Plugin.Log.LogInfo("[ArenaMapPort][Inspector] no active camera resolved — skipping.");
+                    Plugin.Log.LogDebug("[ArenaMapPort][Inspector] no active camera resolved — skipping.");
                     return;
                 }
 
@@ -189,7 +189,7 @@ namespace ArenaMapPort.Client
             var parts = SplitLogPayload(dump);
             int inspection = unchecked(++_inspectionSequence);
             for (int i = 0; i < parts.Count; i++)
-                Plugin.Log.LogInfo($"[ArenaMapPort][Inspector] inspection={inspection} part={i + 1}/{parts.Count} " + parts[i]);
+                Plugin.Log.LogDebug($"[ArenaMapPort][Inspector] inspection={inspection} part={i + 1}/{parts.Count} " + parts[i]);
         }
 
         // Concatenating payloads reproduces the complete input, including line endings. Prefer whole

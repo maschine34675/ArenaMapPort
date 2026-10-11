@@ -82,7 +82,7 @@ namespace ArenaMapPort.Client
             ReportRays(spawnPoints, openings, sb);
             if (sb.Length > 0)
             {
-                Plugin.Log.LogInfo($"{Tag} spawn openings:{sb}");
+                Plugin.Log.LogDebug($"{Tag} spawn openings:{sb}");
             }
         }
 

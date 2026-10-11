@@ -55,7 +55,7 @@ namespace ArenaMapPort.Client
             if (__instance.GetComponent<FrostbiteEffect>() == null)
             {
                 __instance.gameObject.AddComponent<FrostbiteEffect>();
-                Plugin.Log.LogInfo("[ArenaMapPort][RaidFix] added missing FrostbiteEffect to fallback camera " +
+                Plugin.Log.LogDebug("[ArenaMapPort][RaidFix] added missing FrostbiteEffect to fallback camera " +
                                     "(Cam2 predates it; EffectsController.Init disables it again immediately)");
             }
         }
@@ -124,9 +124,7 @@ namespace ArenaMapPort.Client
             if (!_logged)
             {
                 _logged = true;
-                Plugin.Log.LogInfo("[ArenaMapPort][RaidFix] EffectsController._eyeBurn is null on Cam2 — " +
-                                    "skipping eye-burn screen overlay for flash/stun grenades this raid " +
-                                    "(fix-combat F1, EffectsController.cs:1327/1404-1408/1260-1263)");
+                Plugin.Log.LogWarning("[ArenaMapPort] Flashbang eye-burn overlay is unavailable: the map camera lacks this effect.");
             }
             return true;
         }
@@ -175,9 +173,7 @@ namespace ArenaMapPort.Client
             if (!_logged)
             {
                 _logged = true;
-                Plugin.Log.LogInfo("[ArenaMapPort][RaidFix] EffectsController._grenadeFlash is null on Cam2 — " +
-                                    "skipping white-flash screen overlay for stun grenades this raid " +
-                                    "(fix-combat F2, EffectsController.cs:1326/634-646)");
+                Plugin.Log.LogWarning("[ArenaMapPort] Stun-grenade screen flash is unavailable: the map camera lacks this effect.");
             }
             return false;
         }
@@ -234,9 +230,7 @@ namespace ArenaMapPort.Client
             if (!_applyDamageLogged)
             {
                 _applyDamageLogged = true;
-                Plugin.Log.LogInfo("[ArenaMapPort][RaidFix] EffectsController._bloodOnScreen is null on Cam2 — " +
-                                    "skipping bleeding screen overlay this raid (fix-combat, " +
-                                    "EffectsController.cs:1285/1417)");
+                Plugin.Log.LogWarning("[ArenaMapPort] Bleeding screen overlay is unavailable: the map camera lacks this effect.");
             }
             return false;
         }
@@ -314,7 +308,7 @@ namespace ArenaMapPort.Client
             if (!_logged)
             {
                 _logged = true;
-                Plugin.Log.LogInfo("[ArenaMapPort][RaidFix] EffectsController.OnHealthDied on Cam2 — " +
+                Plugin.Log.LogDebug("[ArenaMapPort][RaidFix] EffectsController.OnHealthDied on Cam2 — " +
                                    $"death fade {(fade != null ? "played" : "missing")}, death blur " +
                                    $"{(blur != null ? "played" : "missing")} (stage 1, EffectsController.cs:1488-1497)");
             }

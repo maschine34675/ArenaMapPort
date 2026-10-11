@@ -207,13 +207,13 @@ namespace ArenaMapPort.Client
             // depth-photo cover active alongside any genuine native WeatherObstacle.
             if (mode == WeatherRig.RainCoverMode.Off)
             {
-                Plugin.Log.LogInfo($"[ArenaMapPort][RainCover] map={map.Key} RainCover=Off — no bounds/mask/obstacle draws computed");
+                Plugin.Log.LogDebug($"[ArenaMapPort][RainCover] map={map.Key} RainCover=Off — no bounds/mask/obstacle draws computed");
                 return;
             }
             string what = mode == WeatherRig.RainCoverMode.RoofDepthBlack
                 ? "bounds and the elevated-mesh draw cache"
                 : "bounds and cover layers";
-            Plugin.Log.LogInfo($"[ArenaMapPort][RainCover] map={map.Key} RainCover={mode} armed — {what} are " +
+            Plugin.Log.LogDebug($"[ArenaMapPort][RainCover] map={map.Key} RainCover={mode} armed — {what} are " +
                 "computed on the raid's first DepthPhotograper.Render (first camera change)");
             if (mode == WeatherRig.RainCoverMode.RoofDepth)
             {
@@ -297,7 +297,7 @@ namespace ArenaMapPort.Client
                 || state.RainBoundsSize.Value != new Vector3(1000f, 220f, 1000f);
             if (manualOverride)
             {
-                Plugin.Log.LogInfo($"[ArenaMapPort][RainCover] map={map.Key} RainBounds manual override in use " +
+                Plugin.Log.LogDebug($"[ArenaMapPort][RainCover] map={map.Key} RainBounds manual override in use " +
                     $"(center={state.RainBoundsCenter.Value} size={state.RainBoundsSize.Value}) — computed would have been " +
                     $"center={scan.bounds.center} size={scan.bounds.size} from {scan.rendererCount} renderer(s)");
             }
@@ -308,15 +308,15 @@ namespace ArenaMapPort.Client
                 // LevelSettings.cs:194-218 never mentions it), it's read fresh, right after this prefix, by
                 // DepthPhotograper.Render() (DepthPhotograper.cs:59).
                 ls.RainBounds = scan.bounds;
-                Plugin.Log.LogInfo($"[ArenaMapPort][RainCover] map={map.Key} RainBounds computed from " +
+                Plugin.Log.LogDebug($"[ArenaMapPort][RainCover] map={map.Key} RainBounds computed from " +
                     $"{scan.rendererCount} renderer(s) (excluded {scan.excludedOversized} oversized): " +
                     $"center={scan.bounds.center} size={scan.bounds.size}");
             }
-            Plugin.Log.LogInfo($"[ArenaMapPort][RainCover] map={map.Key} depth-camera cover layers=0x{scan.layerMask:X}");
+            Plugin.Log.LogDebug($"[ArenaMapPort][RainCover] map={map.Key} depth-camera cover layers=0x{scan.layerMask:X}");
 
             if (computeElevated)
             {
-                Plugin.Log.LogInfo($"[ArenaMapPort][RainCover] map={map.Key} RoofDepthBlack scan: " +
+                Plugin.Log.LogDebug($"[ArenaMapPort][RainCover] map={map.Key} RoofDepthBlack scan: " +
                     $"keptForBounds={scan.rendererCount} consideredForCover={scan.consideredForCover} " +
                     $"elevated={state.ElevatedMeshes.Count} excluded(oversized)={scan.excludedOversized} " +
                     $"excluded(material)={scan.excludedMaterial} excluded(notElevated)={scan.excludedNotElevated} " +
@@ -691,7 +691,7 @@ namespace ArenaMapPort.Client
 
             cam.cullingMask |= state.LayerMask; // OR, not replace — never narrows the original 1<<Terrain bit
             state.LastAppliedCullingMask = cam.cullingMask;
-            Plugin.Log.LogInfo($"[ArenaMapPort][RainCover] map={map.Key} depth camera cullingMask=0x{cam.cullingMask:X} " +
+            Plugin.Log.LogDebug($"[ArenaMapPort][RainCover] map={map.Key} depth camera cullingMask=0x{cam.cullingMask:X} " +
                 $"(added 0x{state.LayerMask:X})");
         }
 
@@ -753,7 +753,7 @@ namespace ArenaMapPort.Client
                 state.AuthoredSkipLogSent = true;
                 var obstacle = global::WeatherObstacle.Instance; // "global::" cannot sit inside an interpolation hole (':' starts a format)
                 int obstacleVertices = obstacle.MeshCollider.sharedMesh != null ? obstacle.MeshCollider.sharedMesh.vertexCount : 0;
-                Plugin.Log.LogInfo($"[ArenaMapPort][RainCover] map={map.Key} RoofDepthBlack: a real WeatherObstacle " +
+                Plugin.Log.LogDebug($"[ArenaMapPort][RainCover] map={map.Key} RoofDepthBlack: a real WeatherObstacle " +
                     $"('{obstacle.name}', {obstacleVertices} vertices) is also present — vanilla draws it, the heuristic's " +
                     "elevated-mesh draws are added on top (union of both covers)");
             }
@@ -765,7 +765,7 @@ namespace ArenaMapPort.Client
                 if (!state.DrawLogSent)
                 {
                     state.DrawLogSent = true;
-                    Plugin.Log.LogInfo($"[ArenaMapPort][RainCover] map={map.Key} RoofDepthBlack: 0 elevated mesh(es) " +
+                    Plugin.Log.LogDebug($"[ArenaMapPort][RainCover] map={map.Key} RoofDepthBlack: 0 elevated mesh(es) " +
                         "to draw this raid (see the earlier 'RoofDepthBlack scan' line for why) — depth camera stays Terrain-only, same as an empty photo.");
                 }
                 return;
@@ -840,7 +840,7 @@ namespace ArenaMapPort.Client
             if (!state.DrawLogSent)
             {
                 state.DrawLogSent = true;
-                Plugin.Log.LogInfo($"[ArenaMapPort][RainCover] map={map.Key} RoofDepthBlack: drew {meshCount} " +
+                Plugin.Log.LogDebug($"[ArenaMapPort][RainCover] map={map.Key} RoofDepthBlack: drew {meshCount} " +
                     $"elevated mesh(es) ({submeshDraws} submesh draw call(s), CoverAll={coverAll}" +
                     (drawTransform != DrawTransformMode.None ? $", DrawTransform={drawTransform}" : string.Empty) +
                     ") onto the depth camera (Terrain layer, Hidden/Black material).");
@@ -914,7 +914,7 @@ namespace ArenaMapPort.Client
             // (winding-reversed) DrawTransform draw needs no material swap/double-draw workaround; the
             // existing persistent _blackMaterial (GetOrCreateBlackMaterial) is reused unchanged for every
             // DrawTransform mode and for the CoverAll quad below.
-            Plugin.Log.LogInfo("[ArenaMapPort][RainCoverLab] installed — 'Hidden/Black' has no exposed shader " +
+            Plugin.Log.LogDebug("[ArenaMapPort][RainCoverLab] installed — 'Hidden/Black' has no exposed shader " +
                 "properties (m_PropInfo.m_Props empty, confirmed via UnityPy against globalgamemanagers.assets " +
                 "pathid=245) but its own compiled pass already bakes Cull=Off, so DrawTransform's " +
                 "winding-reversing mirrors need no material change. RerenderHotkey=F8.");
@@ -1036,7 +1036,7 @@ namespace ArenaMapPort.Client
             var photo = WeatherRig.DepthPhotographerForCurrentMap();
             if (photo == null)
             {
-                Plugin.Log.LogInfo($"[ArenaMapPort][RainCoverLab] map={map.Key} {trigger}: " +
+                Plugin.Log.LogDebug($"[ArenaMapPort][RainCoverLab] map={map.Key} {trigger}: " +
                     "active donor has no DepthPhotograper — nothing to re-render.");
                 return false;
             }
@@ -1067,16 +1067,17 @@ namespace ArenaMapPort.Client
             // CoverAll here is the RainCoverLab value only; FullyIndoorCover forces the same quad inside
             // RenderObstaclesPrefix (host log 2026-09-26 read "CoverAll=False" while the photo was fully covered).
             bool fullyIndoor = WeatherRig.FullyIndoorCoverForCurrentMap();
-            Plugin.Log.LogInfo($"[ArenaMapPort][RainCover] map={map.Key} re-rendered depth photo " +
+            Plugin.Log.LogDebug($"[ArenaMapPort][RainCover] map={map.Key} re-rendered depth photo " +
                 $"(DrawTransform={drawTransform}, CoverAll={coverAll}, FullyIndoorCover={fullyIndoor}) [{trigger}]");
 
             // Goal 4's own "run the F9 depth readback line right after" — the identical readback F9/
             // LightingLab's own snapshot hotkey appends, at the live camera position, so the effect is
             // visible without moving.
+            if (!DeveloperOptions.Enabled) return true;
             try
             {
                 var cam = ResolveActiveCamera();
-                Plugin.Log.LogInfo(cam != null
+                Plugin.Log.LogDebug(cam != null
                     ? "[ArenaMapPort][RainCoverLab] " + BuildDepthReadback(cam.transform.position)
                     : "[ArenaMapPort][RainCoverLab] re-render readback: n/a (no active camera)");
             }

@@ -107,7 +107,7 @@ namespace ArenaMapPort.Client
             if (_enabled == null || !_enabled.Value)
             {
                 LastResult = "disabled (config)";
-                Plugin.Log.LogInfo("[ArenaMapPort][Sea] EnableWaterPlaceholder=false — skipped");
+                Plugin.Log.LogDebug("[ArenaMapPort][Sea] EnableWaterPlaceholder=false — skipped");
                 return;
             }
 
@@ -151,7 +151,7 @@ namespace ArenaMapPort.Client
                             renderer.enabled = false;
                         }
                         applied++;
-                        Plugin.Log.LogInfo($"[ArenaMapPort][Sea] '{renderer.gameObject.name}' (scene='{scene.name}') — " +
+                        Plugin.Log.LogDebug($"[ArenaMapPort][Sea] '{renderer.gameObject.name}' (scene='{scene.name}') — " +
                                            $"{(placeholder != null ? "assigned placeholder water material" : "no placeholder shader found, disabled renderer")}");
                     }
                 }
@@ -160,7 +160,7 @@ namespace ArenaMapPort.Client
             LastResult = applied > 0
                 ? $"{(_placeholderMaterial != null ? "applied" : "disabled")} {applied}x"
                 : "none found";
-            Plugin.Log.LogInfo($"[ArenaMapPort][Sea] pass complete — {applied} empty-material 'Water'-layer " +
+            Plugin.Log.LogDebug($"[ArenaMapPort][Sea] pass complete — {applied} empty-material 'Water'-layer " +
                                 "renderer(s) handled — daytime-and-visuals F6");
         }
 

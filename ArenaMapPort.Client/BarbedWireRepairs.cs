@@ -72,7 +72,7 @@ namespace ArenaMapPort.Client
             }
             if (added > 0 || present > 0)
             {
-                Plugin.Log.LogInfo($"{Tag} barbed wire: attached {added} BarbedWire trigger(s) ({present} already present){sb}");
+                Plugin.Log.LogDebug($"{Tag} barbed wire: attached {added} BarbedWire trigger(s) ({present} already present){sb}");
             }
         }
     }

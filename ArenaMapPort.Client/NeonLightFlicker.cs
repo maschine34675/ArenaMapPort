@@ -48,7 +48,7 @@ namespace ArenaMapPort.Client
             for (int i = 0; i < fixtures.Length; i++)
                 if (fixtures[i].FlickerSeed > 0)
                     _entries.Add(new Entry { Index = i, Fixture = fixtures[i], Light = lights[i], Strip = strips[i] });
-            Plugin.Log.LogInfo($"{Tag} selected={_entries.Count}: {string.Join(", ", _entries.Select(e => e.Fixture.Name))}");
+            Plugin.Log.LogDebug($"{Tag} selected={_entries.Count}: {string.Join(", ", _entries.Select(e => e.Fixture.Name))}");
         }
 
         internal void Update()
@@ -68,7 +68,7 @@ namespace ArenaMapPort.Client
             }
         }
 
-        internal void Probe() => Plugin.Log.LogInfo($"{Tag} strength={_strength.Value:F2} frequency={_frequency.Value:F2} " +
+        internal void Probe() => Plugin.Log.LogDebug($"{Tag} strength={_strength.Value:F2} frequency={_frequency.Value:F2} " +
             $"selected={_entries.Count} elapsed={Time.timeAsDouble - _started:F2}s " +
             string.Join("; ", _entries.Select(e => $"{e.Fixture.Name}={e.Factor:F3}")));
 
@@ -84,7 +84,7 @@ namespace ArenaMapPort.Client
             var wait = new WaitForEndOfFrame();
             double end = Time.realtimeSinceStartupAsDouble + 40;
             bool interrupted = false;
-            Plugin.Log.LogInfo($"{Tag} 40-second synchronization sample started; strength={strength:F2} frequency={frequency:F2}");
+            Plugin.Log.LogDebug($"{Tag} 40-second synchronization sample started; strength={strength:F2} frequency={frequency:F2}");
             try
             {
                 while (!_disposed && Time.realtimeSinceStartupAsDouble < end)
@@ -124,7 +124,7 @@ namespace ArenaMapPort.Client
                     for (int i = 0; i < _entries.Count; i++)
                     {
                         var s = stats[i];
-                        Plugin.Log.LogInfo($"{Tag} sample { (interrupted ? "interrupted" : "complete") } '{_entries[i].Fixture.Name}' " +
+                        Plugin.Log.LogDebug($"{Tag} sample { (interrupted ? "interrupted" : "complete") } '{_entries[i].Fixture.Name}' " +
                             $"frames={s.Frames} factor={s.Min:F3}..{s.Max:F3} dips={s.Dips} blackoutFrames={s.BlackoutFrames} " +
                             $"maxLightError={s.LightError:F6} maxEmissionError={s.EmissionError:F6} " +
                             $"hazeMismatches={s.HazeMismatches}/{s.HazeFrames}");
