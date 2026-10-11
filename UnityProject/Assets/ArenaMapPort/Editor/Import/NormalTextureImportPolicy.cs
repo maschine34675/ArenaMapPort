@@ -83,6 +83,13 @@ namespace ArenaMapPort.Editor.Import
             // color-space mask, not a normal vector texture; never normal-repack this false positive.
             if (usage.ClothMaskSlots > 0 && sourceFormat == "DXT5" && colorSpace == "sRGB")
                 return new Plan("ClothNormalsMask", "DXT5", true);
+            // AirPit (Arena 0.6.0) authors the same Cloth _NormalsMask as an opaque DXT1 sRGB grey mask
+            // (Lighthouse_tarp_02 / mask2: R = G = B radial falloff, alpha 255 everywhere, on the
+            // tarpaulin_wall_01/03 renderers). Preserve it as DXT1 sRGB exactly like the DXT5 case;
+            // the alpha and grey bounds keep a packed normal from slipping through this branch.
+            if (usage.ClothMaskSlots > 0 && sourceFormat == "DXT1" && colorSpace == "sRGB"
+                && pixels.MinA == 255 && pixels.MaxGreenBlueDifference <= 16)
+                return new Plan("ClothNormalsMask", "DXT1", true);
 
             if (usage.NormalSlots > 0 && colorSpace == "Linear" && !usage.HasDxt1Keyword)
             {

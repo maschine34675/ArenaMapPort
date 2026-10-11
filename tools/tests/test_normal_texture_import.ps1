@@ -77,6 +77,11 @@ Assert-Plan (Classify 'DXT1' 'sRGB' $rgb $cloth) 'RgbNormal' 'DXT1' $true
 $mask = New-Usage 'Cloth/ClothShader' '_NormalsMask'
 Assert-Plan (Classify 'DXT5' 'sRGB' (New-Pixels @(5,8,5,11)) $mask) 'ClothNormalsMask' 'DXT5' $true
 Assert-Rejected { Classify 'DXT5' 'Linear' $box $mask }
+# AirPit's Lighthouse_tarp_02 / mask2: the same Cloth _NormalsMask authored as an opaque DXT1 sRGB grey mask.
+Assert-Plan (Classify 'DXT1' 'sRGB' (New-Pixels @(144,143,144,255,0,0,0,255)) $mask 'Tex2D' 2 1) 'ClothNormalsMask' 'DXT1' $true
+Assert-Rejected { Classify 'DXT1' 'sRGB' (New-Pixels @(144,143,144,254)) $mask }
+Assert-Rejected { Classify 'DXT1' 'Linear' (New-Pixels @(144,143,144,255)) $mask }
+Assert-Rejected { Classify 'DXT1' 'sRGB' (New-Pixels @(128,128,255,255)) $mask }
 $mixed = New-Usage
 $mixed.Add('Cloth/ClothShader', '_NormalsMask', $false)
 Assert-Rejected { Classify 'DXT5' 'Linear' $box $mixed }
