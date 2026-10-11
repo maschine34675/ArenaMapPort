@@ -14,13 +14,13 @@ public sealed class ReleaseConfigurationTests
     static bool Visible(ConfigEntryBase entry) => entry.Description.Tags.OfType<BrowsableAttribute>().Last().Browsable;
 
     [Fact]
-    public void PlayerMenuHasOneControlAndRetainsHiddenValuesRangesAndDrawers()
+    public void PlayerMenuRetainsOneNormalAndOneAdvancedControlWithTuningHidden()
     {
         var cfg = new ConfigFile();
         var expected = new[] {
-            "Appearance/NaturalEquatorNight"
+            "Appearance/NaturalEquatorNight", "General/DeveloperMode"
         };
-        foreach (var path in expected) { var parts = path.Split('/'); cfg.Bind(parts[0], parts[1], 1f, "Player control"); }
+        cfg.Bind("Appearance", "NaturalEquatorNight", false, "Player control");
         DeveloperOptions.Install(cfg);
         cfg.Bind("Audio (arena_equator)", "AmbientGainDb", 5f, "Hidden");
         cfg.Bind("Lighting (arena_equator Night)", "ExposureCompensationEV", .3f, "Hidden");
@@ -33,11 +33,16 @@ public sealed class ReleaseConfigurationTests
         cfg.Bind("Unknown future section", "FutureExperimentalControl", true, "Must opt into player menu");
         MapConfigVisibility.Apply(cfg, false);
         Assert.Equal(expected.Order(), cfg.Where(p => Visible(p.Value)).Select(p => p.Key.Section + "/" + p.Key.Key).Order());
+        var developerEntry = cfg.Get<bool>("General", "DeveloperMode");
+        var advancedTag = Assert.Single(developerEntry.Description.Tags, t => t.GetType().Name == "ConfigurationManagerAttributes");
+        Assert.Equal(true, advancedTag.GetType().GetField("IsAdvanced").GetValue(advancedTag));
+        Assert.DoesNotContain(cfg.Get<bool>("Appearance", "NaturalEquatorNight").Description.Tags,
+            t => t.GetType().GetField("IsAdvanced")?.GetValue(t) is true);
         for (int i = 0; i < 3; i++)
         {
             MapConfigVisibility.Apply(cfg, true);
             Assert.True(Visible(curve));
-            Assert.False(Visible(cfg.Get<bool>("General", "DeveloperMode")));
+            Assert.True(Visible(developerEntry));
             Assert.False(Visible(legacy)); Assert.False(Visible(parked)); Assert.False(Visible(revision));
             Assert.Equal(2, curve.Description.Tags.Length);
             Assert.Same(drawer, curve.Description.Tags[0]);

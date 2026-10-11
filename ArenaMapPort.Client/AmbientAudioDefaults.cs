@@ -11,8 +11,8 @@ namespace ArenaMapPort.Client
         {
             switch (mapKey)
             {
-                case "arena_equator": gainDb = 5f; offset = .4037559f; range = 2.5f; return;
-                case "arena_bay5": gainDb = 4f; offset = .399061f; range = 4f; return;
+                case "arena_equator": gainDb = 5f; offset = .4f; range = 2.5f; return;
+                case "arena_bay5": gainDb = 4f; offset = .4f; range = 4f; return;
                 default: throw new ArgumentException("No accepted ambience mix for " + mapKey, nameof(mapKey));
             }
         }
@@ -21,17 +21,21 @@ namespace ArenaMapPort.Client
             ConfigEntry<float> gain, ConfigEntry<float> offset, ConfigEntry<float> range)
         {
             var revision = config.Bind("Audio (" + mapKey + ")", "AmbientDefaultsRevision", 0,
-                new ConfigDescription("Internal one-time migration of the original unadjusted ambience mix. Custom mixes are preserved.",
+                new ConfigDescription("Internal migration of the original ambience mix and rounded release offsets. Custom mixes are preserved.",
                     null, BrowsableAttribute.No));
-            if (revision.Value >= 1) return;
+            if (revision.Value >= 2) return;
             // Treat the three controls as one mix. A deliberately neutral component in a
             // custom mix must not be independently raised by the migration.
-            if (gain.Value == 0f && offset.Value == 0f && range.Value == 1f)
+            if (revision.Value < 1 && gain.Value == 0f && offset.Value == 0f && range.Value == 1f)
             {
                 Values(mapKey, out float newGain, out float newOffset, out float newRange);
                 gain.Value = newGain; offset.Value = newOffset; range.Value = newRange;
             }
-            revision.Value = 1;
+            // Round only the previously accepted offset; preserve independently customized
+            // gains, ranges and every other offset (including a deliberate zero).
+            float oldOffset = mapKey == "arena_equator" ? .4037559f : .399061f;
+            if (offset.Value == oldOffset) offset.Value = .4f;
+            revision.Value = 2;
         }
     }
 }

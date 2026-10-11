@@ -82,8 +82,8 @@ member name pinned in the client (`method_N`, `vmethod_N`) is verified there and
 
 ## Release configuration
 
-Player mode is the default: one F12 switch, `Appearance/NaturalEquatorNight` (next raid).
-`General/DeveloperMode` is hidden from F12; edit it in the main CFG with the game closed.
+Player mode is the default: one normal F12 switch, `Appearance/NaturalEquatorNight` (next raid).
+`General/DeveloperMode` is visible with F12's Advanced settings filter enabled.
 It is latched on startup, exposes supported-map controls and enables F7–F10 diagnostics.
 Never gate functional repairs behind it. All tuning binds/enumeration must use
 `Plugin.Instance.Settings`, never `Config`: in normal mode Settings reads the optional

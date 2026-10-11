@@ -57,7 +57,7 @@ try
         var range = reload.Bind(section, "AmbientRangeMultiplier", 1f);
         AmbientAudioDefaults.Migrate(reload, map, gain, offset, range);
         Check(gain.Value == (map == "arena_equator" ? 5f : 4f), "Accepted gain missing");
-        Check(offset.Value == (map == "arena_equator" ? .4037559f : .399061f), "Accepted offset missing");
+        Check(offset.Value == .4f, "Accepted offset missing");
         Check(range.Value == (map == "arena_equator" ? 2.5f : 4f), "Accepted range missing");
         gain.Value = 0; offset.Value = 0; range.Value = 1;
     }

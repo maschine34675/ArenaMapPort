@@ -3,7 +3,18 @@
 Snapshot for whoever continues (human or agent). Verify the commits named here against `git log`; this file
 is updated by hand at each handover, it is not an automatic record. Read [AGENTS.md](AGENTS.md) first.
 
-## Follow-up on 2026-10-10 — compact configuration and natural midnight
+## Follow-up on 2026-10-11 — advanced developer switch and rounded ambience
+
+General/DeveloperMode is now visible under F12's Advanced settings filter; it still
+requires a restart. The compact main CFG retains two entries. Both maps use
+AmbientVolumeOffset=0.4. Audio defaults revision 2 rounds only the prior accepted
+offsets, preserving other saved values and the original whole-neutral-mix migration.
+In normal mode the archived values stay untouched on disk; runtime migration supplies
+the rounded offsets. See [configuration follow-up](docs/progress/compact-player-config.md).
+DynamicMaps alternate-loader feasibility was checked against installed 1.2.1;
+the current optional packages still target DynamicMaps/Maps. No integration moved yet.
+
+## Earlier on 2026-10-10 — compact configuration and natural midnight
 
 Player F12 now exposes only `Appearance/NaturalEquatorNight`. It selects Equator's
 natural Day appearance at midnight and removes neon additions on the next raid;

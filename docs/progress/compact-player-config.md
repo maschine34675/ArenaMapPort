@@ -94,3 +94,39 @@ identical, normal mode still exactly two registered entries / one visible switch
 No ArenaMapPort warnings/errors in its recorded startup buffer. The primary stays
 784 bytes and all 293 archived values plus the archive hash remain unchanged.
 Both DLL hash pairs match dist, the host mirror and the vanilla installation.
+
+## 2026-10-11 — advanced developer switch and rounded offsets
+
+User requests DeveloperMode as an advanced F12 setting and both ambient offsets
+rounded to 0.4. DeveloperOptions now uses the same ConfigurationManagerAttributes
+IsAdvanced metadata contract as the existing HDR controls. MapConfigVisibility
+allows this entry in both modes; the normal menu still has just NaturalEquatorNight
+when the Advanced filter is off. Mode remains startup-latched, and compact persistence
+still contains exactly two entries.
+
+AmbientDefaultsRevision 2 selectively rounds Equator's 0.4037559 and Bay5's 0.399061
+to 0.4, with no changes to gains or ranges. Arbitrary custom offsets, deliberately
+neutral mixes already migrated at revision 1, and later manual reversions remain
+intact. Normal mode applies the migration in memory without rewriting its archive;
+developer mode saves it through the normal full-config path.
+
+### DynamicMaps delivery investigation (no implementation)
+
+Installed DynamicMaps 1.2.1 still receives separate optional two-file packages under
+`mpstark-dynamicmaps/Maps/ArenaMapPort_Equator` and `ArenaMapPort_Bay5`; these are absent
+from the ordinary ArenaMapPort dist. Current deployment already preserves its DLL
+and configuration, but adds our subdirectories beneath its Maps folder.
+
+Local source and the installed DLL agree: public
+`MapSelectDropdown.LoadMapDefsFromPath(string relPath)` combines the argument with
+DynamicMaps.Plugin.Path and incrementally loads JSON/JSONC files. An absolute path
+works. There is no extra-search-path setting or automatic external-map discovery.
+SVG layer paths are also resolved against DynamicMaps.Plugin.Path, rather than the
+definition's directory (`SvgUtils.GetOrLoadCachedSprite`).
+
+A small optional adapter can load `ArenaMapPort/dynamicmaps` after native Maps
+loading, and resolve our two definitions' SVG paths to that owned directory before
+precache/selection. Scope hooks to the detected plugin and exact owned files;
+retain native marker paths, guard reentry, and handle pre-existing packages so they
+do not appear twice. This needs no DynamicMaps DLL, CFG or folder modification.
+The current turn only investigates this alternative; packaging remains unchanged.

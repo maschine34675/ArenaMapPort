@@ -6,7 +6,7 @@ The first release contains **Equator and Bay5**, with imported geometry, materia
 
 ## Player settings
 
-F12 shows one switch: **Appearance / NaturalEquatorNight** (off by default).
+F12 shows one normal switch: **Appearance / NaturalEquatorNight** (off by default).
 Enable it to use the natural Day appearance recipe for Equator's next midnight raid,
 without the added neon lights, chemlights, smoke/haze, temporary PostFX or extra
 wet-floor reflections. Midnight, weather, original map lamps and SAIN's night identity
@@ -16,13 +16,14 @@ to the next raid.
 
 The ambience source gain works together with a fixed accepted volume floor and range;
 it is not a master mute. Normal game volume controls still apply. The accepted mixes are
-Equator **+5 dB / offset 0.4037559 / range ×2.5** and Bay5 **+4 dB / offset 0.399061 / range ×4**.
-Only a complete old neutral mix migrates once; custom mixes are preserved. Rain stays at 1.
+Equator **+5 dB / offset 0.4 / range ×2.5** and Bay5 **+4 dB / offset 0.4 / range ×4**.
+Only a complete old neutral mix migrates once; the previously accepted offsets
+0.4037559 / 0.399061 are rounded to 0.4. Other custom values are preserved. Rain stays at 1.
 
 The normal `BepInEx/config/com.maschine.ArenaMapPort.cfg` contains just this switch
-and the hidden `General / DeveloperMode` key. To expose the full controls described
-below and F7–F10 diagnostics, close the game, set `DeveloperMode = true` in that
-file, then restart. Set it back to false and restart to return to the compact file.
+and `General / DeveloperMode`. Enable F12's **Advanced settings** filter to see
+DeveloperMode. Switch it on and restart for the full controls described below and
+F7–F10 diagnostics. Switch it off and restart to return to the compact file.
 
 An existing full configuration is preserved in
 `com.maschine.ArenaMapPort.developer.cfg` before compaction. Its tuning remains active

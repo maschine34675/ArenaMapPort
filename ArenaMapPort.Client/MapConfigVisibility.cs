@@ -44,7 +44,8 @@ namespace ArenaMapPort.Client
 
         internal static bool IsPlayerOption(ConfigDefinition definition)
         {
-            return definition.Section == "Appearance" && definition.Key == "NaturalEquatorNight";
+            return (definition.Section == "Appearance" && definition.Key == "NaturalEquatorNight") ||
+                (definition.Section == "General" && definition.Key == "DeveloperMode");
         }
 
         static bool IsPermanentHidden(ConfigDefinition definition, ConfigDescription original)
