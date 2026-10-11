@@ -3,7 +3,19 @@
 Snapshot for whoever continues (human or agent). Verify the commits named here against `git log`; this file
 is updated by hand at each handover, it is not an automatic record. Read [AGENTS.md](AGENTS.md) first.
 
-## Follow-up on 2026-10-11 — hotkeys and naming metadata
+## Follow-up on 2026-10-11 — lean test release and map labels
+
+Implementation `e17198d` omits unused arena-audio/arena-ui from builds/releases,
+moves Equator DB to `db/arena_equator/base.json`, and aligns PMC/ArenaMode anchors:
+Equator 700/290, Bay5 320/820 on the northern coast. ArenaMode's installed assembly
+stays unchanged; a soft integration preserves the native server positions.
+Release build/C#615, cleanup/distribution/migration tests and exact ZIP verification
+pass. GPU-2 `c9548184` verified both maps/selectors and PMC -> Arena -> PMC, 20/20
+identities matching, no owned startup errors. Both installs updated via script;
+legacy loose DB backed up and removed, vanilla needs a user restart. Local test2
+ZIP is 1,231,747,934 bytes / 50 files. See [release cleanup](docs/progress/release-cleanup.md).
+
+## Earlier on 2026-10-11 — hotkeys and naming metadata
 
 The four diagnostic hotkeys F7–F10 already have developer-only component creation;
 normal player mode does not poll them. Restart after changing DeveloperMode.
