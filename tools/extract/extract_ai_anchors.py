@@ -12,7 +12,7 @@ never extract (fresh bot support is authored for SPT, not ported geometry). This
 scene, raw-decodes the handful of MonoBehaviour classes involved, and writes a small sidecar per
 map (`tools/maps/<key>.ai.json`) the client loads at raid start to author the REAL topology instead
 of synthesizing one -- see ArenaMapPort.Client/AiAnchors.cs, AICorePointRepairs.cs,
-PatrolWayRepairs.cs. The twelve deferred maps have no sidecar and keep today's synthesis unchanged.
+PatrolWayRepairs.cs. A map without a sidecar (the deferred maps) keeps today's synthesis unchanged.
 
 Decoding technique. Player-built data carries no typetree for custom (non-built-in) script classes,
 so every field below is read directly from `obj.get_raw_data()` -- the same technique
@@ -65,10 +65,21 @@ Arena_Equator_TeamFight_AI with no ambiguity).
 constant pointing at a placeholder drive) -- always pass `base=` explicitly (docs/PLAN-TWO-MAPS.md
 item 8's own "Verified facts" note), never rely on the default.
 
+AirPit (PLAN-AIRPIT item 4). The MAPS table gains ``airpit`` = (33, "Arena_Airpit_TeamFight_AI");
+index and name are the ``ai`` scene role of tools/extract/plans/airpit.json (a test keeps the two
+in step, and ``--plan`` reads the role directly so a later map needs no table entry). The scene is
+unambiguous in BuildSettings (one entry), and the decode self-validates without a change: 19 core
+points, one PatrolWay with 3 hubs holding 12/12/11 = 35 sub points, 38 PatrolPoints all consumed
+(Equator 14/2/21, Bay5 11/4/43).
+
 CLI:
     python extract_ai_anchors.py --map equator --output tools/maps/equator.ai.json
     python extract_ai_anchors.py --map bay5 --output tools/maps/bay5.ai.json
     python extract_ai_anchors.py --map equator --map bay5    (writes both maps' default paths)
+    python extract_ai_anchors.py --map airpit                (writes tools/maps/airpit.ai.json)
+    python extract_ai_anchors.py --plan tools/extract/plans/airpit.json
+The default without --map stays equator + bay5 (their sidecars are shipped as released); name
+every other map explicitly.
 """
 from __future__ import annotations
 
@@ -78,6 +89,7 @@ import math
 import os
 import struct
 import sys
+from pathlib import Path
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, _HERE)
@@ -88,10 +100,24 @@ import UnityPy  # noqa: E402
 import census as arena_census  # analysis/scripts/census.py -- resolve_script_name / world_transform_of_transform  # noqa: E402
 from common import scene_files  # noqa: E402
 from common_ids import HardExtractError  # noqa: E402
+from source_plan import PlanError, load_plan, read_build_scenes, scene_for_role, verify_scene_mapping  # noqa: E402
 
 SCHEMA_VERSION = 1
 DEFAULT_SOURCE = "D:/Battlestate Games/Escape from Tarkov Arena/EscapeFromTarkovArena_Data"
 DEFAULT_MAPS_DIR = os.path.normpath(os.path.join(_HERE, "..", "maps"))
+
+# The shipped Equator and Bay5 sidecars were written when twelve maps were deferred, and their
+# `_comment` says so. They are tracked release data, so that wording is kept byte-for-byte; every
+# later map (AirPit) gets wording that names no count, which cannot go stale as maps are released.
+LEGACY_COMMENT_MAP_KEYS = frozenset({"equator", "bay5"})
+
+
+def missing_file_note(map_key: str) -> str:
+    """Parenthetical of the sidecar `_comment` that says which maps lack a sidecar."""
+    if map_key in LEGACY_COMMENT_MAP_KEYS:
+        return "the twelve deferred maps"
+    return "any map without a sidecar"
+
 
 EQUATOR_AI_SCENE_IDX = 52
 EQUATOR_AI_SCENE_NAME = "Arena_Equator_TeamFight_AI"
@@ -455,7 +481,7 @@ def extract_map(map_key: str, ai_scene_idx: int, ai_scene_name: str, source: str
             f"hub/core-point topology for {map_key}, raw-decoded from the excluded TeamFight_AI scene "
             f"(tools/extract/extract_ai_anchors.py). Loaded at raid start by ArenaMapPort.Client/AiAnchors.cs "
             "in place of AICorePointFallback/PatrolWayFallback's NavMesh-derived synthesis; a missing/invalid "
-            "file (the twelve deferred maps) keeps that synthesis unchanged. No connection/edge data: "
+            f"file ({missing_file_note(map_key)}) keeps that synthesis unchanged. No connection/edge data: "
             "AICorePoint.ConnectionsAtNet is never populated outside the Unity Editor's own Gizmos callbacks "
             "(see extract_ai_anchors.py's module docstring), so every authored core point here has empty "
             "connections, same as today's single synthetic point."
@@ -467,31 +493,65 @@ def extract_map(map_key: str, ai_scene_idx: int, ai_scene_name: str, source: str
     }
 
 
+AIRPIT_AI_SCENE_IDX = 33
+AIRPIT_AI_SCENE_NAME = "Arena_Airpit_TeamFight_AI"
+
 MAPS = {
     "equator": (EQUATOR_AI_SCENE_IDX, EQUATOR_AI_SCENE_NAME),
     "bay5": (None, BAY5_AI_SCENE_NAME),  # idx resolved at run time (duplicate BuildSettings entry)
+    "airpit": (AIRPIT_AI_SCENE_IDX, AIRPIT_AI_SCENE_NAME),  # the `ai` role of plans/airpit.json
 }
+# Maps written when --map is not given: the two released-before sidecars, unchanged.
+DEFAULT_MAPS = ("equator", "bay5")
+
+
+def map_key_for_plan(plan: dict) -> str:
+    """Sidecar key of a plan-driven map: arena_<stem> -> <stem> (airpit -> airpit.ai.json)."""
+    return plan["key"].removeprefix("arena_")
+
+
+def ai_scene_for_plan(plan: dict) -> tuple[int, str]:
+    """(BuildSettings index, scene name) of the plan's AI scene, from its ``ai`` scene role."""
+    record = scene_for_role(plan, "ai")
+    return record["index"], record["name"]
 
 
 def default_output_path(map_key: str) -> str:
     return os.path.join(DEFAULT_MAPS_DIR, f"{map_key}.ai.json")
 
 
-def main() -> None:
+def main(argv=None) -> int:
     parser = argparse.ArgumentParser(description="ArenaMapPort AI anchors extractor (PLAN-TWO-MAPS item 8)")
     parser.add_argument("--source", default=DEFAULT_SOURCE, help="Arena EscapeFromTarkovArena_Data dir (read-only)")
     parser.add_argument("--map", action="append", dest="maps", choices=sorted(MAPS), default=None,
-                         help="map key to extract; repeatable. Default: both equator and bay5.")
+                         help="map key to extract; repeatable. Default: equator and bay5.")
+    parser.add_argument("--plan", default=None,
+                         help="source plan JSON of a plan-driven map; the AI scene is its `ai` role "
+                              "(alternative to --map for a map without a MAPS entry)")
     parser.add_argument("--output", default=None,
-                         help="output path (only valid with exactly one --map); default tools/maps/<key>.ai.json")
-    args = parser.parse_args()
+                         help="output path (only valid with exactly one map); default tools/maps/<key>.ai.json")
+    args = parser.parse_args(argv)
 
-    map_keys = args.maps or sorted(MAPS)
-    if args.output and len(map_keys) != 1:
-        parser.error("--output requires exactly one --map")
+    if args.plan and args.maps:
+        parser.error("--plan and --map are alternatives")
+    jobs = []  # (map key, scene idx or None, scene name)
+    if args.plan:
+        try:
+            plan = load_plan(Path(args.plan))
+            # Fail closed if an Arena update moved a scene the plan names (the ai role included).
+            verify_scene_mapping(plan, read_build_scenes(Path(args.source)), Path(args.source))
+            idx, scene_name = ai_scene_for_plan(plan)
+        except (PlanError, OSError) as exc:
+            print(f"[extract_ai_anchors] FAILED: {exc}", file=sys.stderr)
+            return 2
+        jobs.append((map_key_for_plan(plan), idx, scene_name))
+    else:
+        for map_key in args.maps or DEFAULT_MAPS:
+            jobs.append((map_key, *MAPS[map_key]))
+    if args.output and len(jobs) != 1:
+        parser.error("--output requires exactly one map")
 
-    for map_key in map_keys:
-        idx, scene_name = MAPS[map_key]
+    for map_key, idx, scene_name in jobs:
         if idx is None:
             idx = resolve_bay5_ai_scene_index(args.source)
         data = extract_map(map_key, idx, scene_name, args.source)
@@ -501,7 +561,8 @@ def main() -> None:
             json.dump(data, fh, indent=2, sort_keys=True, ensure_ascii=False)
             fh.write("\n")
         print(f"[extract_ai_anchors] {map_key}: wrote {out_path}", file=sys.stderr)
+    return 0
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())

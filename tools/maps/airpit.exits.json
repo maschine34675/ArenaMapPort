@@ -1,0 +1,23 @@
+{
+  "_comment": "airpit plan item 6 (docs/progress/airpit-release.md, 2026-10-11): optional sidecar read by tools/server/make_base_json.py next to tools/maps/airpit.json; emits base.json 'exits'. The client authors the ExfiltrationPoint objects at runtime from ArenaMapRegistry.AirPit.Exits (ArenaMapPort.Shared/ArenaMapDescriptor.cs): names, positions and box sizes there must equal this file (AirPitMapTests.ExitTransformsMatchTheSidecarAndServerEligibility). OFFLINE DRAFT, not walked on the host yet. One gate toward each end of the play space on the ground floor, beyond the two spawn pockets as seen from the pockets: the north gate (z 62) sits on the open floor on the far side of the passport-control lanes (z 66..69) from the north pocket (z 75..80), the south gate (z -58) on the bus apron beyond the bus doors (z -65..-68) from the south pocket (z -78..-66). Both boxes (4 x 3 x 4 m) lie inside Arena's single 8,168 m2 NavMesh component with 3.8 m / 4.2 m of border clearance at the centre, and in the port collider model both centres are passable. Each gate is at least 14.7 m from every player spawn (nearest: north gate 14.8 m from SpawnPoint_Player_All, south gate 17.8 m from SpawnPoint_Player_Bear), so nobody spawns inside a trigger box. EntryPoints is always the map's infiltration name; names double as locale keys. The NavMesh must connect the gates to the spawn pockets: that needs the round-start barriers of plan item 8 (BUS_DOORS, PASSPORT_CONTROL_DOORS), so a raid before item 8 may not reach them.",
+  "exits": [
+    {
+      "name": "Air Pit North Gate",
+      "position": [-11.0, 0.1, 62.0],
+      "box_size": [4.0, 3.0, 4.0],
+      "rotation": 0.0,
+      "exfiltration_time": 8,
+      "chance": 100,
+      "type": "Individual"
+    },
+    {
+      "name": "Air Pit South Gate",
+      "position": [-3.0, 0.1, -58.0],
+      "box_size": [4.0, 3.0, 4.0],
+      "rotation": 0.0,
+      "exfiltration_time": 8,
+      "chance": 100,
+      "type": "Individual"
+    }
+  ]
+}

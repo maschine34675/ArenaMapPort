@@ -1,8 +1,15 @@
-"""Independent source/package/bundle proof for Bay5 and Equator native features.
+"""Independent source/package/bundle proof for native features (Equator, Bay5, AirPit).
 
 No extractor/importer is used as an oracle. Source MonoBehaviour payloads are
 re-encoded from the package and compared byte for byte; native built fields and
 resolved references are checked separately. Legacy packages remain unchanged.
+
+The per-map census (scenes, ballistic colliders per scene, optional feature pins,
+ambient-audio graph shape and states) is data, not code: one JSON file per map under
+``tools/extract/native_contracts`` read by ``native_contract_loader`` (PLAN-AIRPIT item 3).
+A map whose contract says ``audio: null`` is a ballistics-only package: it must carry no
+``native_audio`` entry, ``native_features.required`` is exactly ``['ballistics']``, the
+audio source/bundle proofs do not run, and the bundle must not contain native audio.
 """
 from __future__ import annotations
 
@@ -14,7 +21,13 @@ import math
 from pathlib import Path
 import re
 import struct
+import sys
 import wave
+
+_EXTRACT_DIR = str(Path(__file__).resolve().parents[1] / 'extract')
+if _EXTRACT_DIR not in sys.path:  # native_contract_loader (+ common_ids) live next to the extractors
+    sys.path.append(_EXTRACT_DIR)
+from native_contract_loader import load_contracts  # noqa: E402
 
 FIELDS = ('penetration_level', 'penetration_chance', 'ricochet_chance',
           'fragmentation_chance', 'trajectory_deviation_chance', 'trajectory_deviation')
@@ -24,32 +37,13 @@ MATERIALS = ('None Asphalt Body Cardboard Chainfence Concrete Fabric GarbageMeta
              'GenericSoft Glass GlassShattered Grate GrassHigh GrassLow Gravel MetalThin MetalThick '
              'Mud Pebbles Plastic Stone Soil SoilForest Tile Water WaterPuddle WoodThin WoodThick '
              'Tyre Rubber GenericHard BodyArmor Swamp Helmet GlassVisor HelmetRicochet MetalNoDecal Snow').split()
-SCENES = {84:'Main',83:'Light',81:'DesignStuff',89:'TeamFight',88:'TeamFight_DesignStuff',
-          80:'DEPOT',86:'WAREHOUSE',82:'HANGAR',79:'Background'}
 PLAYERS = {'AmbientSoundPlayer', 'SeasonAmbientSoundPlayer', 'LoopAmbientSoundPlayer'}
 SUPPORT = {'AmbientSoundPlayerGroup', 'BezierSpline', 'AmbientSplineEmitterController',
            'SoundAmbientZoneCalculator', 'AmbientPlayerSplineMappedEmitter'}
-AUDIO_ROOT = 'ArenaMapPort_Bay5NativeAudio'
 PHYSICS = {'MeshCollider', 'BoxCollider', 'SphereCollider', 'CapsuleCollider'}
-MAPS = {
-    'arena_bay5': {
-        'scenes':{index:'Arena_Bay5_'+suffix for index,suffix in SCENES.items()},
-        'ballistics':{84:3541,83:44,81:5,89:429,88:65,80:645,86:541,82:159,79:893},
-        'feature':'harbor_audio', 'schema':1, 'audio_scene':'level188', 'audio_root':AUDIO_ROOT,
-        'players':{'AmbientSoundPlayer':17,'SeasonAmbientSoundPlayer':6,'LoopAmbientSoundPlayer':1},
-        'support':{'AmbientSoundPlayerGroup':2,'BezierSpline':1,'AmbientSplineEmitterController':1,
-                   'SoundAmbientZoneCalculator':1,'AmbientPlayerSplineMappedEmitter':1},
-        'banks':13, 'clips':106,
-    },
-    'arena_equator': {
-        'scenes':{51:'Arena_Equator',53:'Arena_Equator_DesignStuff',55:'Arena_Equator_Lighting',
-                  57:'Arena_Equator_TeamFight_DesignStuff',58:'Arena_Equator_TeamFight'},
-        'ballistics':{51:2639,53:25,55:127,57:89,58:12},
-        'feature':'ambient_audio', 'schema':2, 'audio_scene':'level56',
-        'audio_root':'ArenaMapPort_EquatorNativeAudio', 'players':{'AmbientSoundPlayer':25},
-        'support':{'AmbientSoundPlayerGroup':1}, 'banks':11, 'clips':65,
-    },
-}
+# map key -> contract (native_contract_loader schema: scenes, ballistics, features, audio, ...),
+# read once from tools/extract/native_contracts/*.json; a malformed contract fails the import.
+MAPS = load_contracts()
 SCRIPT_NS = {**{k:'Audio.AmbientSubsystem' for k in PLAYERS | {'AmbientSoundPlayerGroup'}},
              **{k:'Audio.AmbientSubsystem.AmbientSplineEmitter' for k in SUPPORT - {'AmbientSoundPlayerGroup','BezierSpline'}},
              'BezierSpline':'BezierSplineTools', 'SoundBank':'EFT', 'BallisticCollider':'EFT.Ballistics'}
@@ -142,18 +136,54 @@ def scene_objects(package, manifest):
 
 
 def map_contract(manifest):
-    # Released Bay5 schema 1 predates source.map_key. That exact scene set is
-    # the only implicit identity accepted; Equator always declares its key.
+    # A contract with implicit_scene_identity (released Bay5 schema 1 predates
+    # source.map_key) is selected by its exact scene set, and only when the manifest
+    # names no key at all; every other manifest must declare its key.
     key=manifest.get('source',{}).get('map_key')
-    if key is None and set(manifest.get('scenes',[]))==set(MAPS['arena_bay5']['scenes'].values()):
-        key='arena_bay5'
+    if key is None:
+        scene_set=set(manifest.get('scenes',[]))
+        implicit=[k for k,c in MAPS.items() if c['implicit_scene_identity'] and scene_set==set(c['scenes'].values())]
+        key=implicit[0] if len(implicit)==1 else None
     require(key in MAPS,'unsupported or missing native map identity')
     contract=MAPS[key]
     require(len(manifest['scenes'])==len(contract['scenes']) and
             set(manifest['scenes'])==set(contract['scenes'].values()), 'native features require full '+key+' scene set')
-    if key=='arena_equator':
-        require(not manifest.get('slice'), 'Equator native features require unsliced scenes')
+    if contract['require_unsliced']:
+        require(not manifest.get('slice'), key+' native features require unsliced scenes')
     return key,contract
+
+
+def same(actual, expected):
+    """Strict census equality: 1 is not True, 2.0 is not 2."""
+    return type(actual) is type(expected) and actual==expected
+
+
+def check_feature_pins(pins, static_decals, light_culling, raincover):
+    """Contract census pins against the manifest summaries (PLAN-AIRPIT item 3).
+
+    The summaries are optional for maps without pins; a map WITH pins must carry every one
+    of them with exactly the reviewed numbers, so a missing or drifted feature fails closed."""
+    if pins['static_decals']==0:  # the extractor omits the entry when a map has no decals
+        require(static_decals is None,'static decal census differs from the map contract')
+    else:
+        require(isinstance(static_decals,dict) and same(static_decals.get('count'),pins['static_decals']),
+                'static decal census differs from the map contract')
+    require(isinstance(light_culling,dict) and all(same(light_culling.get(k),v) for k,v in pins['light_culling'].items()),
+            'light_culling census differs from the map contract')
+    require(isinstance(raincover,dict) and all(same(raincover.get(k),v) for k,v in pins['raincover'].items()),
+            'raincover census differs from the map contract')
+
+
+def pinned_component_census(pins):
+    """Component type -> pinned count, for the types the scenes themselves must carry."""
+    light=pins['light_culling']
+    return {'StaticDeferredDecal':pins['static_decals'],
+            'NavMeshModifier':pins['navmesh_modifiers']['modifiers'],
+            'NavMeshModifierVolume':pins['navmesh_modifiers']['volumes'],
+            'SmallPhysicsObject':pins['small_physics_objects'],
+            'CullingLightObject':light['culling_light_object_count'],
+            'VolumetricLight':light['volumetric_light_count'],
+            'LightFlicker':light['light_flicker_count']}
 
 
 def feature_enabled(manifest, scenes=None):
@@ -163,8 +193,14 @@ def feature_enabled(manifest, scenes=None):
             require(not any(c['type']=='BallisticCollider' for objects in scenes.values() for o in objects for c in o['components']),
                     'unmarked ballistic components')
         return False
-    require(len(present)==3, 'incomplete required feature contract')
-    _,contract=map_contract(manifest)
+    require('native_features' in manifest and 'native_ballistics' in manifest, 'incomplete required feature contract')
+    key,contract=map_contract(manifest)
+    audio=contract['audio']
+    # The contract decides whether audio is part of the package: all-or-nothing, never optional.
+    if audio is None:
+        require('native_audio' not in manifest, key+' contract declares no native audio, but the manifest carries native_audio')
+    else:
+        require('native_audio' in manifest, 'incomplete required feature contract')
     # PLAN-TWO-MAPS item 6: 'raincover' is an OPTIONAL extra native_features entry (extract_raincover.py) --
     # popped before the strict key-equality compare() below so packages with/without it both validate.
     features=dict(manifest['native_features']);raincover=features.pop('raincover',None)
@@ -176,7 +212,7 @@ def feature_enabled(manifest, scenes=None):
     # GameObjects only, no new GameObjects are created, so extra_counts() below is untouched.
     light_culling=features.pop('light_culling',None)
     static_decals=features.pop('static_decals',None)
-    compare(features, {'schema_version':1,'required':['ballistics',contract['feature']]}, 'feature contract')
+    compare(features, {'schema_version':1,'required':['ballistics']+([audio['feature']] if audio else [])}, 'feature contract')
     if raincover is not None:
         require(isinstance(raincover,dict) and raincover.get('schema_version')==1 and 'indoor_trigger_count' in raincover,
                 'raincover feature summary shape')
@@ -191,6 +227,9 @@ def feature_enabled(manifest, scenes=None):
                 and all(isinstance(light_culling.get(k),int) and light_culling[k]>=0 for k in
                         ('culling_light_object_count','volumetric_light_count','light_flicker_count')),
                 'light_culling feature summary shape')
+    pins=contract['features']  # PLAN-AIRPIT item 3: reviewed census of the optional entries (None: shape rules only)
+    if pins is not None:
+        check_feature_pins(pins,static_decals,light_culling,raincover)
     if scenes is not None:
         decals=[c for objects in scenes.values() for o in objects for c in o['components'] if c['type']=='StaticDeferredDecal']
         if static_decals is not None:
@@ -201,39 +240,58 @@ def feature_enabled(manifest, scenes=None):
         else:
             require(not decals, 'unmarked static decal components')
         require(not any(c['type']=='WindowBreaker' for objects in scenes.values() for o in objects for c in o['components']), 'glass was deferred by the user')
+        if pins is not None:
+            wanted=pinned_component_census(pins)
+            census=Counter(c['type'] for objects in scenes.values() for o in objects for c in o['components'] if c['type'] in wanted)
+            compare({kind:census[kind] for kind in wanted},wanted,'native component census')
     return True
+
+
+def audio_contract(key, contract):
+    """The ambient-audio part of a map contract; a map declared ballistics-only has none."""
+    require(contract['audio'] is not None, key+' contract declares no native audio')
+    return contract['audio']
+
+
+def check_audio_group_states(audio, data, grouped):
+    """The contract's group coverage and state pins against the audio index (Equator-style
+    schema-2 graphs; a schema-1 graph has ``states: null`` and only the coverage rule)."""
+    players=data['players']
+    if audio['group_coverage']=='active_players':
+        require(grouped==Counter(p['id'] for p in players if p['enabled'] and p['activeInHierarchy']),'audio active group coverage')
+    else:
+        require(grouped==Counter(p['id'] for p in players), 'audio group coverage')
+    states=audio['states']
+    if states is None:return
+    require(sum(grouped.values())==states['grouped_players'],'audio grouped player count')
+    compare({p['id']:p['path'].split('/')[-1] for p in players if not p['activeInHierarchy']},
+            states['inactive_players'],'original inactive audio players')
+    compare(sorted(p['id'] for p in players if not p['enabled']),sorted(states['disabled_players']),'disabled audio players')
+    groups=[s for s in data['support'] if s['kind']=='AmbientSoundPlayerGroup']
+    compare([g['mixerName'] for g in groups],states['group_mixers'],'audio group mixer routes')
+    require(all(g['enabled'] and g['activeInHierarchy'] for g in groups),'audio group route/state')
+    loops={p['id'] for p in players if p['sourceAudio']['Loop']}
+    require(loops==set(states['loop_players']),f"original looping audio players {sorted(loops)} != {sorted(states['loop_players'])}")
 
 
 def load_audio(package, manifest):
     key,contract=map_contract(manifest)
+    audio=audio_contract(key,contract)
     meta = manifest['native_audio']
-    require(meta['schema_version']==contract['schema'] and meta['file']=='audio/native-audio.json', 'audio index schema/path')
+    require(meta['schema_version']==audio['schema'] and meta['file']=='audio/native-audio.json', 'audio index schema/path')
     path = child(package, meta['file'])
     require(file_digest(path)==meta['sha256'], 'audio index hash differs')
     data = read_json(path)
-    require(data['schemaVersion']==contract['schema'] and data['mapKey']==key and data['sourceScene']==contract['audio_scene'], 'audio source identity')
-    require(Counter(x['kind'] for x in data['players'])==Counter(contract['players']), 'audio player census')
-    require(Counter(x['kind'] for x in data['support'])==Counter(contract['support']), 'audio support census')
-    for field, count in [('players',sum(contract['players'].values())),('banks',contract['banks']),('clips',contract['clips'])]:
+    require(data['schemaVersion']==audio['schema'] and data['mapKey']==key and data['sourceScene']==audio['scene'], 'audio source identity')
+    require(Counter(x['kind'] for x in data['players'])==Counter(audio['players']), 'audio player census')
+    require(Counter(x['kind'] for x in data['support'])==Counter(audio['support']), 'audio support census')
+    for field, count in [('players',sum(audio['players'].values())),('banks',audio['banks']),('clips',audio['clips'])]:
         require(meta[field]==len(data[field])==count, 'audio count: ' + field)
     for records in (data['players'] + data['support'], data['clips']):
         require(len({x['id'] for x in records})==len(records), 'duplicate audio source identity')
     require(all(k==v['id'] for k,v in data['banks'].items()), 'bank key/identity disagreement')
     validate_audio_hierarchy(data)
-    grouped=Counter(p['resolved'] for s in data['support'] for p in s.get('soundPlayers',[]))
-    if key=='arena_equator':
-        require(grouped==Counter(p['id'] for p in data['players'] if p['enabled'] and p['activeInHierarchy']) and
-                sum(grouped.values())==23,'Equator active audio group coverage')
-        inactive={p['id']:p['path'].split('/')[-1] for p in data['players'] if not p['activeInHierarchy']}
-        compare(inactive,{'level56:970':'far_dogs2','level56:975':'far_dogs1'},'original inactive Equator players')
-        require(all(p['enabled'] for p in data['players']),'Equator player enabled state')
-        group=data['support'][0]
-        require(group['enabled'] and group['activeInHierarchy'] and group['mixerName']=='CommonAmbInEffects',
-                'Equator indoor group route/state')
-        require({p['id'] for p in data['players'] if p['sourceAudio']['Loop']}=={'level56:965'},
-                'Equator original electricity loop')
-    else:
-        require(grouped==Counter(p['id'] for p in data['players']), 'audio group coverage')
+    check_audio_group_states(audio,data,Counter(p['resolved'] for s in data['support'] for p in s.get('soundPlayers',[])))
     return data
 
 
@@ -281,12 +339,15 @@ def raincover_extra_counts(manifest):
 def extra_counts(package, manifest):
     if not feature_enabled(manifest):
         return {}
+    raincover = raincover_extra_counts(manifest)
+    _,contract = map_contract(manifest)
+    if contract['audio'] is None:  # ballistics-only: the importer authors no audio root and no AudioSource
+        return {'GameObject':raincover, 'Transform':raincover, 'AudioSource':0}
     data = load_audio(package, manifest)
     paths = set()
     for record in data['players'] + data['support']:
         parts = record['path'].split('/')
         paths.update('/'.join(parts[:i]) for i in range(1,len(parts)+1))
-    raincover = raincover_extra_counts(manifest)
     return {'GameObject':len(paths)+1+raincover, 'Transform':len(paths)+1+raincover, 'AudioSource':len(data['players'])}
 
 
@@ -521,8 +582,8 @@ def check_wave(package,clip):
 def validate_audio_source(package,manifest,data):
     import UnityPy
     root=Path(manifest['source']['arena_data_root'])
-    key,contract=map_contract(manifest);source_scene=contract['audio_scene']
-    require(data['mapKey']==key and data['sourceScene']==source_scene and data['schemaVersion']==contract['schema'],
+    key,contract=map_contract(manifest);audio=audio_contract(key,contract);source_scene=audio['scene']
+    require(data['mapKey']==key and data['sourceScene']==source_scene and data['schemaVersion']==audio['schema'],
             'audio source identity')
     validate_audio_hierarchy(data)
     require(file_digest(root/source_scene)==data['sourceSceneSha256'],'audio scene source bytes changed')
@@ -548,11 +609,11 @@ def validate_audio_source(package,manifest,data):
         go=unity_go(obj);chain=list(reversed(go['chain']))
         compare('/'.join(t[0] for t in chain),item['path'],'source audio hierarchy names')
         expected_chain=[{'position':dict(zip('xyz',t[1])),'rotation':dict(zip('xyzw',t[2])),'scale':dict(zip('xyz',t[3]))} for t in chain]
-        if contract['schema']==2:
+        if audio['schema']==2:
             for node,(active,layer) in zip(expected_chain,reversed(go['states'])):
                 node.update(activeSelf=active,layer=layer)
         compare_storage(item['transformChain'],expected_chain,'source audio hierarchy transforms/states')
-        compare(audio_states(item,contract['schema']),list(reversed(go['states'])),'source audio hierarchy states')
+        compare(audio_states(item,audio['schema']),list(reversed(go['states'])),'source audio hierarchy states')
         for p in pointers(item):
             if 'resolved' in p:
                 actual=ptr(obj,p);require(identity(actual)==p['resolved'],'source audio reference target '+item['id'])
@@ -605,7 +666,8 @@ def validate_package(package,manifest):
         package=Path(package);scenes=scene_objects(package,manifest)
         if not feature_enabled(manifest,scenes):return
         validate_ballistic_source(package,manifest,scenes)
-        validate_audio_source(package,manifest,load_audio(package,manifest))
+        if map_contract(manifest)[1]['audio'] is not None:  # ballistics-only maps have no audio graph to prove
+            validate_audio_source(package,manifest,load_audio(package,manifest))
     except (KeyError,IndexError,TypeError,OSError,struct.error) as error:
         raise ValueError(f'Native features: invalid or incomplete source/package data: {error}') from error
 
@@ -698,11 +760,17 @@ def validate_ballistic_bundle(readers,scenes):
         check_fields(reader.read_typetree(),ballistic_built_fields(component),'built ballistic '+component['source']['component_id'])
 
 
+def reject_undeclared_audio(readers):
+    """A ballistics-only contract (audio: null) must not hide a native audio graph in the bundle."""
+    found=sorted({script_identity(r)[0] for r in readers if r.type.name=='MonoBehaviour'} & (PLAYERS|SUPPORT|{'SoundBank'}))
+    require(not found,'built bundle carries native audio components the map contract does not declare: '+', '.join(found))
+
+
 def validate_audio_bundle(readers,package,data):
     """Check native graph identity, exact hierarchy, all serialized payload fields and links."""
     key=data['mapKey'];require(key in MAPS,'unsupported built audio map identity')
-    contract=MAPS[key];audio_root=contract['audio_root']
-    require(data['schemaVersion']==contract['schema'],'built audio schema/map disagreement')
+    audio=audio_contract(key,MAPS[key]);audio_root=audio['root']
+    require(data['schemaVersion']==audio['schema'],'built audio schema/map disagreement')
     validate_audio_hierarchy(data)
     native=defaultdict(list)
     for reader in readers:
@@ -731,7 +799,7 @@ def validate_audio_bundle(readers,package,data):
     expected_paths={};expected_states={}
     for item in data['players']+data['support']:
         names=item['path'].split('/')
-        states=audio_states(item,contract['schema'])
+        states=audio_states(item,audio['schema'])
         for i in range(1,len(names)+1):
             path='/'.join(names[:i]);chain=[]
             for n,t in zip(names[:i],item['transformChain'][:i]):
@@ -824,6 +892,9 @@ def validate_bundle(env,package,manifest):
         readers=list(env.objects)
         require(not any(r.type.name=='MonoBehaviour' and script_identity(r)[0]=='WindowBreaker' for r in readers),'deferred glass was unexpectedly imported')
         validate_ballistic_bundle(readers,scenes)
-        validate_audio_bundle(readers,package,load_audio(package,manifest))
+        if map_contract(manifest)[1]['audio'] is not None:
+            validate_audio_bundle(readers,package,load_audio(package,manifest))
+        else:
+            reject_undeclared_audio(readers)
     except (KeyError,IndexError,TypeError,OSError,struct.error) as error:
         raise ValueError(f'Native features: invalid or incomplete built native data: {error}') from error

@@ -3,11 +3,29 @@
 Arena adds a cached OBB array to rooms and an extra flag to trigger areas. Both
 are decoded and retained as provenance; EFT uses the authored box hierarchy.
 Every raw component is consumed exactly. BSG-derived output stays in work/dist.
+
+Which scene (PLAN-AIRPIT item 4). Equator (level56) and Bay5 (level188) keep the table
+below. A plan-driven map names its ambient Sound scene by the ``sound`` role on an
+``excluded_scenes`` record of tools/extract/plans/<stem>.json, so the next map needs no
+edit here: ``--map arena_airpit`` reads level39 (Arena_Airpit_Sound). Measured against the
+live 0.6.0 install, AirPit gives 24 rooms, 94 portals, 78 audio trigger areas and a
+481,738 B bake (276 room pairs, 16,304 routes) with one room-tone clip.
+
+    python tools/extract/extract_spatial_audio.py                       (equator + bay5, as before)
+    python tools/extract/extract_spatial_audio.py --map arena_airpit    (work/extract/spatial-audio/arena_airpit)
+
+Name the map you want. Without ``--map`` the script rewrites the accepted arena_equator and
+arena_bay5 directories from whatever Arena install ``--source`` points at. Against the 0.6.0
+install that changes nine provenance leaves per map (source scene and clip hashes, six
+mixer_effects hashes, ``systems[0].location_info.id``) while the graph, bake and room-tone WAVs
+stay identical; the accepted inputs were exported from 0.5.4. Use ``--output`` to write
+elsewhere when only a comparison is wanted.
 """
-import sys,json,collections,struct,hashlib,math,argparse,shutil
+import sys,json,collections,struct,hashlib,math,argparse,shutil,re
 from pathlib import Path
 sys.path.insert(0,str(Path(__file__).resolve().parent))
 from extract_bay5_audio import Reader,deref,script,identity,hierarchy,validate_wav
+from source_plan import PLAN_ROOT,PlanError,load_plan,read_build_scenes,scene_for_role,verify_scene_mapping
 import UnityPy
 from spatial_audio_bake import parse_bake
 import room_reverb
@@ -67,11 +85,31 @@ def parse_location(obj):
  for k in ('rooms_count','portals_count','routes_count','room_pairs_count','max_routes_count','max_route_portals_count'):d[k]=r.take('I')
  r.done();return d
 
-def export(source, output, key):
+# Legacy maps; every other map reads the sound scene from its source plan (scene_for_map).
+LEGACY_SOUND_SCENES={'arena_equator':'level56','arena_bay5':'level188'}
+DEFAULT_MAPS=('arena_equator','arena_bay5')
+MAP_KEY=re.compile(r'arena_[a-z0-9_]+')
+
+def plan_path(key):
+ """tools/extract/plans/<stem>.json for arena_<stem>."""
+ if not MAP_KEY.fullmatch(key):raise ValueError('invalid map key %r'%(key,))
+ return PLAN_ROOT/(key[len('arena_'):]+'.json')
+
+def scene_for_map(key,plan=None):
+ """Level file name of the map's ambient Sound scene.
+
+ Legacy maps use the table. Any other map needs its source plan with a ``sound`` scene role;
+ a missing plan or role is an error, never a guessed index."""
+ if plan is None and key in LEGACY_SOUND_SCENES:return LEGACY_SOUND_SCENES[key]
+ if plan is None:plan=load_plan(plan_path(key))
+ if plan['key']!=key:raise PlanError('plan %r does not describe map %r'%(plan['key'],key))
+ return 'level%d'%scene_for_role(plan,'sound')['index']
+
+def export(source, output, key, scene=None):
  ROOT,OUT=Path(source).resolve(),Path(output).resolve()
  if ROOT==OUT or ROOT in OUT.parents:raise ValueError('output must be outside source installation')
- scenes={'arena_equator':'level56','arena_bay5':'level188'}
- for key,scene in [(key,scenes[key])]:
+ if scene is None:scene=scene_for_map(key)
+ for key,scene in [(key,scene)]:
   env=UnityPy.load(str(ROOT/scene),str(ROOT/'globalgamemanagers.assets'));f=env.files[str(ROOT/scene)]
   result={'schema_version':1,'map_key':key,'source_scene':scene,'nodes':[],'colliders':[],'rooms':[],'portals':[],'areas':[],'groups':[],'systems':[]}
   slots={'SpatialAudioRoom':'rooms','SpatialAudioPortal':'portals','AudioTriggerArea':'areas','SpatialAudioCrossSceneGroup':'groups','SpatialAudioSystem':'systems'}
@@ -132,7 +170,7 @@ def validate_graph(data):
  """Check source topology, activity and volume transforms before invoking native EFT."""
  import numpy as np
  from extract_raincover import _local_trs_matrix
- if data['schema_version']!=1 or data['map_key'] not in ('arena_equator','arena_bay5'):raise ValueError('acoustic identity')
+ if data['schema_version']!=1 or not isinstance(data['map_key'],str) or not MAP_KEY.fullmatch(data['map_key']):raise ValueError('acoustic identity')
  slots={}
  for key in ('nodes','colliders','rooms','portals','areas','groups','systems'):
   slots[key]={item['id']:item for item in data[key]}
@@ -188,11 +226,24 @@ def validate_graph(data):
  if not active(g) or set(g['room_ids'])!={r['id'] for r in ar} or set(g['portal_ids'])!={p['id'] for p in ap}:raise ValueError('source group coverage')
 
 
-if __name__=='__main__':
- parser=argparse.ArgumentParser(description=__doc__)
+def main(argv=None):
+ parser=argparse.ArgumentParser(description=__doc__,formatter_class=argparse.RawDescriptionHelpFormatter)
  parser.add_argument('--source',type=Path,default=ROOT)
  parser.add_argument('--output',type=Path,default=Path(__file__).resolve().parents[2]/'work/extract/spatial-audio')
- args=parser.parse_args()
- for key in ('arena_equator','arena_bay5'):
-  data=export(args.source,args.output/key,key)
+ parser.add_argument('--map',action='append',dest='maps',metavar='ARENA_KEY',
+  help='map key such as arena_airpit; repeatable. Plan-driven maps need a "sound" scene role in tools/extract/plans. Default: arena_equator and arena_bay5, which OVERWRITES the accepted inputs of those two maps; name the map (or set --output) unless that is intended.')
+ args=parser.parse_args(argv)
+ for key in args.maps or DEFAULT_MAPS:
+  try:
+   scene=scene_for_map(key)
+   if key not in LEGACY_SOUND_SCENES:
+    # Fail closed if an Arena update moved the scenes the plan names (the sound role included).
+    verify_scene_mapping(load_plan(plan_path(key)),read_build_scenes(args.source),args.source)
+  except (PlanError,ValueError,OSError) as e:
+   print('[extract_spatial_audio] FAILED: %s'%e,file=sys.stderr);return 2
+  data=export(args.source,args.output/key,key,scene)
   print(key,json.dumps({k:data['bake'][k] for k in ('bytes','room_pairs_count','routes_count','sha256')}))
+  print(key,json.dumps({'source_scene':data['source_scene'],'rooms':len(data['rooms']),'portals':len(data['portals']),'areas':len(data['areas']),'clips':len(data['clips']),'mixer_effects':bool(data['mixer_effects'])}))
+ return 0
+
+if __name__=='__main__':sys.exit(main())

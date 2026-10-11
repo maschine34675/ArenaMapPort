@@ -1,0 +1,53 @@
+{
+  "schema_version": 1,
+  "map_key": "arena_bay5",
+  "notes": [
+    "Former MAPS['arena_bay5'] literal of validate_native_features.py, moved to data by PLAN-AIRPIT item 3.",
+    "implicit_scene_identity: the released Bay5 schema-1 packages predate source.map_key; that exact scene set is the only implicit identity the validator accepts.",
+    "features is null on purpose: Bay5 keeps shape-only validation of the optional native_features entries (its decal count moved from 499 to 502 with Arena 0.6.0, so it is not pinned).",
+    "states is null: the schema-1 audio graph records no hierarchy states; every player must be a member of some group."
+  ],
+  "scenes": {
+    "84": "Arena_Bay5_Main",
+    "83": "Arena_Bay5_Light",
+    "81": "Arena_Bay5_DesignStuff",
+    "89": "Arena_Bay5_TeamFight",
+    "88": "Arena_Bay5_TeamFight_DesignStuff",
+    "80": "Arena_Bay5_DEPOT",
+    "86": "Arena_Bay5_WAREHOUSE",
+    "82": "Arena_Bay5_HANGAR",
+    "79": "Arena_Bay5_Background"
+  },
+  "ballistics": {
+    "84": 3541,
+    "83": 44,
+    "81": 5,
+    "89": 429,
+    "88": 65,
+    "80": 645,
+    "86": 541,
+    "82": 159,
+    "79": 893
+  },
+  "require_unsliced": false,
+  "implicit_scene_identity": true,
+  "features": null,
+  "audio": {
+    "feature": "harbor_audio",
+    "schema": 1,
+    "scene": "level188",
+    "root": "ArenaMapPort_Bay5NativeAudio",
+    "players": {"AmbientSoundPlayer": 17, "SeasonAmbientSoundPlayer": 6, "LoopAmbientSoundPlayer": 1},
+    "support": {
+      "AmbientSoundPlayerGroup": 2,
+      "BezierSpline": 1,
+      "AmbientSplineEmitterController": 1,
+      "SoundAmbientZoneCalculator": 1,
+      "AmbientPlayerSplineMappedEmitter": 1
+    },
+    "banks": 13,
+    "clips": 106,
+    "group_coverage": "all_players",
+    "states": null
+  }
+}

@@ -317,8 +317,9 @@ public class LocationRegistrationTests
         Assert.Equal("Nordladerampe", locale["Bay5 North Loading Bay"]); // kept
         Assert.Equal("Bay5 South Container Lane", locale["Bay5 South Container Lane"]); // identity
         Assert.Equal(4, locale.Count);
-        Assert.Empty(ArenaMapRegistry.AirPit.Exits);
-        Assert.Same(locale, ArenaMapRegistration.ApplyExitLocale(locale, ArenaMapRegistry.AirPit));
+        // Bowl stays a geometry-only parked map without authored exits (AirPit gained its exits with plan item 6).
+        Assert.Empty(ArenaMapRegistry.Bowl.Exits);
+        Assert.Same(locale, ArenaMapRegistration.ApplyExitLocale(locale, ArenaMapRegistry.Bowl));
         Assert.Equal(4, locale.Count); // an unauthored map adds nothing
         Assert.Null(ArenaMapRegistration.ApplyExitLocale(null, ArenaMapRegistry.Equator));
     }
@@ -336,8 +337,10 @@ public class LocationRegistrationTests
             ArenaMapRegistration.ExitNameMismatches(null, ArenaMapRegistry.Bay5));
         Assert.Empty(ArenaMapRegistration.ExitNameMismatches(
             ArenaMapRegistry.Bay5.Exits.Select(e => (string?)e.Name), ArenaMapRegistry.Bay5));
-        Assert.Empty(ArenaMapRegistry.AirPit.Exits);
-        Assert.Empty(ArenaMapRegistration.ExitNameMismatches(null, ArenaMapRegistry.AirPit));
+        Assert.Empty(ArenaMapRegistry.Bowl.Exits);
+        Assert.Empty(ArenaMapRegistration.ExitNameMismatches(null, ArenaMapRegistry.Bowl));
+        Assert.Equal(new[] { "Air Pit North Gate (descriptor only)", "Air Pit South Gate (descriptor only)" },
+            ArenaMapRegistration.ExitNameMismatches(null, ArenaMapRegistry.AirPit));
     }
 
     // bots-stage1 — ApplyBrainTable gives an Arena key the stand-in map's brain-weight row, once.

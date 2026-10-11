@@ -54,24 +54,28 @@
       "name": "Arena_Airpit_Scripts",
       "asset_path": "Assets/Content/Locations/Arena_Airpit/Arena_Airpit_Scripts.unity",
       "index": 36,
+      "role": "scripts",
       "reason": "Replaced by the freshly authored SPT Scripts scene; source scripts and seasonal runtime objects are not imported."
     },
     {
       "name": "Arena_Airpit_Sound",
       "asset_path": "Assets/Content/Locations/Arena_Airpit/Arena_Airpit_Sound.unity",
       "index": 39,
+      "role": "sound",
       "reason": "Source Arena sound/audio runtime is outside the existing port contract."
     },
     {
       "name": "Arena_Airpit_TeamFight_Culling",
       "asset_path": "Assets/Content/Locations/Arena_Airpit/Arena_Airpit_TeamFight_Culling.unity",
       "index": 30,
+      "role": "culling",
       "reason": "Source PerfectCulling data is outside the existing port contract."
     },
     {
       "name": "Arena_Airpit_TeamFight_AI",
       "asset_path": "Assets/Content/Locations/Arena_Airpit/Arena_Airpit_TeamFight_AI.unity",
       "index": 33,
+      "role": "ai",
       "reason": "Source AI/gameplay scene is metadata reference only; port bakes a fresh SPT NavMesh."
     }
   ]

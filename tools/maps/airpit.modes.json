@@ -1,0 +1,468 @@
+{
+  "_comment": "Arena TeamFight mode objects (positions only) composed from the extracted scenes by tools/extract/extract_mode_objects.py; schema and method in docs/progress/airpit-release.md. Data for ArenaMode, not read by the map mod itself.",
+  "capture_point": {
+    "lights": [
+      {
+        "path": "CAPTURE_POINT/AIRPIT_CAPTURE_POINT_LIGHT_03",
+        "position": [
+          -45.38,
+          0.0,
+          3.82
+        ],
+        "scene": "Arena_Airpit_TeamFight_DesignStuff"
+      },
+      {
+        "path": "CAPTURE_POINT/AIRPIT_CAPTURE_POINT_LIGHT_02",
+        "position": [
+          18.96,
+          -0.1,
+          -1.24
+        ],
+        "scene": "Arena_Airpit_TeamFight_DesignStuff"
+      }
+    ],
+    "method": "capture_point_light_centroid",
+    "position": [
+      -13.21,
+      -0.05,
+      1.29
+    ]
+  },
+  "capture_zones": [
+    {
+      "anchor_position": [
+        -11.4393,
+        -0.074,
+        3.2678
+      ],
+      "at_origin": false,
+      "distance_to_capture_point": 2.6547,
+      "path": "CAPTURE_ZONE",
+      "position": [
+        -11.4393,
+        -0.074,
+        3.2678
+      ],
+      "projection_position": [
+        -11.4393,
+        -0.074,
+        3.2678
+      ],
+      "scene": "Arena_AirPit_ShootOut"
+    },
+    {
+      "anchor_position": [
+        -13.1639,
+        -0.1395,
+        1.3311
+      ],
+      "at_origin": false,
+      "distance_to_capture_point": 0.1087,
+      "path": "Capture_Zone",
+      "position": [
+        -13.1639,
+        -0.1395,
+        1.3311
+      ],
+      "projection_position": null,
+      "scene": "Arena_Airpit_TeamFight"
+    },
+    {
+      "anchor_position": [
+        -13.1639,
+        -0.1395,
+        1.3311
+      ],
+      "at_origin": false,
+      "distance_to_capture_point": 0.1087,
+      "path": "PROJECTION/Capture_Zone",
+      "position": [
+        -186.1073,
+        18.0384,
+        -23.5941
+      ],
+      "projection_position": [
+        -13.1639,
+        -0.1395,
+        1.3311
+      ],
+      "scene": "Arena_Airpit_TeamFight_DesignStuff"
+    }
+  ],
+  "counts": {
+    "capture_zones": 3,
+    "spawn_bounds": 2,
+    "spawn_markers_north": 10,
+    "spawn_markers_south": 10
+  },
+  "map_key": "arena_airpit",
+  "schema_version": 1,
+  "source_package": {
+    "extracted_utc": "2026-10-11T20:16:21Z",
+    "extractor_script": "tools/extract/extract_map.py",
+    "name": "airpit-native-v5",
+    "scenes": [
+      "Arena_AirPit_ShootOut",
+      "Arena_AirPit_ShootOut_Light",
+      "Arena_Airpit_DesignStuff",
+      "Arena_Airpit_TeamFight",
+      "Arena_Airpit_TeamFight_DesignStuff"
+    ]
+  },
+  "spawn_bounds": [
+    {
+      "active": true,
+      "center": [
+        -11.4738,
+        2.1782,
+        77.1579
+      ],
+      "name": "SPAWN_BOUND_FIGHTER",
+      "path": "SPAWNS/SPAWN_BOUND_FIGHTER",
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scene": "Arena_Airpit_TeamFight_DesignStuff",
+      "side": "north",
+      "size": [
+        49.9593,
+        5.5884,
+        16.0009
+      ],
+      "yaw": 0.0
+    },
+    {
+      "active": true,
+      "center": [
+        -11.6524,
+        2.1782,
+        -72.4121
+      ],
+      "name": "SPAWN_BOUND_FIGHTER",
+      "path": "SPAWNS/SPAWN_BOUND_FIGHTER",
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scene": "Arena_Airpit_TeamFight_DesignStuff",
+      "side": "south",
+      "size": [
+        22.3216,
+        5.5884,
+        16.0009
+      ],
+      "yaw": 0.0
+    }
+  ],
+  "spawn_markers": {
+    "north": [
+      {
+        "active": true,
+        "index": 6,
+        "name": "ScavPMCspawn (6)",
+        "path": "SPAWNS/ScavPMCspawn (6)",
+        "position": [
+          -12.59,
+          0.102,
+          79.21
+        ],
+        "scene": "Arena_Airpit_TeamFight_DesignStuff",
+        "side": "north",
+        "stem": "ScavPMCspawn",
+        "yaw": 180.148
+      },
+      {
+        "active": true,
+        "index": 7,
+        "name": "ScavPMCspawn (7)",
+        "path": "SPAWNS/ScavPMCspawn (7)",
+        "position": [
+          -15.1087,
+          0.102,
+          76.0892
+        ],
+        "scene": "Arena_Airpit_TeamFight_DesignStuff",
+        "side": "north",
+        "stem": "ScavPMCspawn",
+        "yaw": 180.148
+      },
+      {
+        "active": true,
+        "index": 8,
+        "name": "ScavPMCspawn (8)",
+        "path": "SPAWNS/ScavPMCspawn (8)",
+        "position": [
+          -17.1913,
+          0.102,
+          80.0678
+        ],
+        "scene": "Arena_Airpit_TeamFight_DesignStuff",
+        "side": "north",
+        "stem": "ScavPMCspawn",
+        "yaw": 180.148
+      },
+      {
+        "active": true,
+        "index": 9,
+        "name": "ScavPMCspawn (9)",
+        "path": "SPAWNS/ScavPMCspawn (9)",
+        "position": [
+          -22.415,
+          0.102,
+          79.6166
+        ],
+        "scene": "Arena_Airpit_TeamFight_DesignStuff",
+        "side": "north",
+        "stem": "ScavPMCspawn",
+        "yaw": 180.148
+      },
+      {
+        "active": true,
+        "index": 10,
+        "name": "ScavPMCspawn (10)",
+        "path": "SPAWNS/ScavPMCspawn (10)",
+        "position": [
+          -19.13,
+          0.102,
+          76.26
+        ],
+        "scene": "Arena_Airpit_TeamFight_DesignStuff",
+        "side": "north",
+        "stem": "ScavPMCspawn",
+        "yaw": 180.148
+      },
+      {
+        "active": true,
+        "index": 16,
+        "name": "ScavPMCspawn (16)",
+        "path": "SPAWNS/ScavPMCspawn (16)",
+        "position": [
+          0.3263,
+          0.102,
+          78.2969
+        ],
+        "scene": "Arena_Airpit_TeamFight_DesignStuff",
+        "side": "north",
+        "stem": "ScavPMCspawn",
+        "yaw": 180.148
+      },
+      {
+        "active": true,
+        "index": 17,
+        "name": "ScavPMCspawn (17)",
+        "path": "SPAWNS/ScavPMCspawn (17)",
+        "position": [
+          -2.8136,
+          0.102,
+          75.1826
+        ],
+        "scene": "Arena_Airpit_TeamFight_DesignStuff",
+        "side": "north",
+        "stem": "ScavPMCspawn",
+        "yaw": 180.148
+      },
+      {
+        "active": true,
+        "index": 18,
+        "name": "ScavPMCspawn (18)",
+        "path": "SPAWNS/ScavPMCspawn (18)",
+        "position": [
+          -4.8963,
+          0.102,
+          79.1612
+        ],
+        "scene": "Arena_Airpit_TeamFight_DesignStuff",
+        "side": "north",
+        "stem": "ScavPMCspawn",
+        "yaw": 180.148
+      },
+      {
+        "active": true,
+        "index": 19,
+        "name": "ScavPMCspawn (19)",
+        "path": "SPAWNS/ScavPMCspawn (19)",
+        "position": [
+          -10.244,
+          0.102,
+          76.739
+        ],
+        "scene": "Arena_Airpit_TeamFight_DesignStuff",
+        "side": "north",
+        "stem": "ScavPMCspawn",
+        "yaw": 180.148
+      },
+      {
+        "active": true,
+        "index": 20,
+        "name": "ScavPMCspawn (20)",
+        "path": "SPAWNS/ScavPMCspawn (20)",
+        "position": [
+          -6.835,
+          0.102,
+          75.3534
+        ],
+        "scene": "Arena_Airpit_TeamFight_DesignStuff",
+        "side": "north",
+        "stem": "ScavPMCspawn",
+        "yaw": 180.148
+      }
+    ],
+    "south": [
+      {
+        "active": true,
+        "index": 1,
+        "name": "ScavPMCspawn (1)",
+        "path": "SPAWNS/ScavPMCspawn (1)",
+        "position": [
+          -12.57,
+          0.08,
+          -74.48
+        ],
+        "scene": "Arena_Airpit_TeamFight_DesignStuff",
+        "side": "south",
+        "stem": "ScavPMCspawn",
+        "yaw": 0.0
+      },
+      {
+        "active": true,
+        "index": 2,
+        "name": "ScavPMCspawn (2)",
+        "path": "SPAWNS/ScavPMCspawn (2)",
+        "position": [
+          -15.22,
+          0.121,
+          -74.4
+        ],
+        "scene": "Arena_Airpit_TeamFight_DesignStuff",
+        "side": "south",
+        "stem": "ScavPMCspawn",
+        "yaw": 0.0
+      },
+      {
+        "active": true,
+        "index": 3,
+        "name": "ScavPMCspawn (3)",
+        "path": "SPAWNS/ScavPMCspawn (3)",
+        "position": [
+          -18.14,
+          0.093,
+          -74.29
+        ],
+        "scene": "Arena_Airpit_TeamFight_DesignStuff",
+        "side": "south",
+        "stem": "ScavPMCspawn",
+        "yaw": 35.4388
+      },
+      {
+        "active": true,
+        "index": 4,
+        "name": "ScavPMCspawn (4)",
+        "path": "SPAWNS/ScavPMCspawn (4)",
+        "position": [
+          -9.94,
+          0.123,
+          -74.4
+        ],
+        "scene": "Arena_Airpit_TeamFight_DesignStuff",
+        "side": "south",
+        "stem": "ScavPMCspawn",
+        "yaw": 0.0
+      },
+      {
+        "active": true,
+        "index": 5,
+        "name": "ScavPMCspawn (5)",
+        "path": "SPAWNS/ScavPMCspawn (5)",
+        "position": [
+          -7.27,
+          0.137,
+          -74.58
+        ],
+        "scene": "Arena_Airpit_TeamFight_DesignStuff",
+        "side": "south",
+        "stem": "ScavPMCspawn",
+        "yaw": 0.0
+      },
+      {
+        "active": true,
+        "index": 11,
+        "name": "ScavPMCspawn (11)",
+        "path": "SPAWNS/ScavPMCspawn (11)",
+        "position": [
+          -11.34,
+          0.08,
+          -71.89
+        ],
+        "scene": "Arena_Airpit_TeamFight_DesignStuff",
+        "side": "south",
+        "stem": "ScavPMCspawn",
+        "yaw": 0.0
+      },
+      {
+        "active": true,
+        "index": 12,
+        "name": "ScavPMCspawn (12)",
+        "path": "SPAWNS/ScavPMCspawn (12)",
+        "position": [
+          -13.99,
+          0.121,
+          -71.81
+        ],
+        "scene": "Arena_Airpit_TeamFight_DesignStuff",
+        "side": "south",
+        "stem": "ScavPMCspawn",
+        "yaw": 0.0
+      },
+      {
+        "active": true,
+        "index": 13,
+        "name": "ScavPMCspawn (13)",
+        "path": "SPAWNS/ScavPMCspawn (13)",
+        "position": [
+          -16.91,
+          0.093,
+          -71.7
+        ],
+        "scene": "Arena_Airpit_TeamFight_DesignStuff",
+        "side": "south",
+        "stem": "ScavPMCspawn",
+        "yaw": 0.0
+      },
+      {
+        "active": true,
+        "index": 14,
+        "name": "ScavPMCspawn (14)",
+        "path": "SPAWNS/ScavPMCspawn (14)",
+        "position": [
+          -8.71,
+          0.123,
+          -71.81
+        ],
+        "scene": "Arena_Airpit_TeamFight_DesignStuff",
+        "side": "south",
+        "stem": "ScavPMCspawn",
+        "yaw": 0.0
+      },
+      {
+        "active": true,
+        "index": 15,
+        "name": "ScavPMCspawn (15)",
+        "path": "SPAWNS/ScavPMCspawn (15)",
+        "position": [
+          -6.04,
+          0.137,
+          -71.99
+        ],
+        "scene": "Arena_Airpit_TeamFight_DesignStuff",
+        "side": "south",
+        "stem": "ScavPMCspawn",
+        "yaw": 323.5043
+      }
+    ]
+  }
+}

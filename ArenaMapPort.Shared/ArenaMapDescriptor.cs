@@ -312,7 +312,14 @@ namespace ArenaMapPort.Shared
             LocaleDescription: "Internal test build — TeamFight geometry/collision/NavMesh port.",
             IconX: 295,
             IconY: 760,
-            DbBaseJsonPath: "arena_airpit/base.json");
+            DbBaseJsonPath: "arena_airpit/base.json",
+            Exits: new[]
+            {
+                // Mirrors tools/maps/airpit.exits.json (AirPitMapTests.ExitTransformsMatchTheSidecarAndServerEligibility).
+                // Floor points on the two ends of the play space, 14.8 m / 17.8 m from the nearest player spawn.
+                new ArenaExitDescriptor("Air Pit North Gate", -11.0f, 0.1f, 62.0f),
+                new ArenaExitDescriptor("Air Pit South Gate", -3.0f, 0.1f, -58.0f),
+            });
 
         // Source scene selection: tools/extract/plans/airpit2.json. Identity is permanent.
         public static readonly ArenaMapDescriptor AirPit2 = new(

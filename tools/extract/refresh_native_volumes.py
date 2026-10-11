@@ -2,6 +2,12 @@
 
 The complete source extract uses the same write_volume_texture path. This focused refresh
 keeps accepted geometry, normal PNGs, audio and material JSON byte-identical. No source writes.
+
+A package without any Tex3D texture (AirPit: 23 Cube + 782 Tex2D, PLAN-AIRPIT item 5) is a true
+no-op: nothing is read from the source and ``manifest.json`` is not rewritten. Re-serialising it
+anyway appended one trailing CRLF that a fresh extraction does not produce (extract_map.py's
+write_json ends without a newline), which a byte-level hash of the manifest would see. Equator and
+Bay5 each hold one Tex3D and take the unchanged refresh path.
 """
 from __future__ import annotations
 import argparse
@@ -15,8 +21,12 @@ from volume_textures import write_volume_texture
 def refresh(package: Path) -> int:
     manifest_path = package / "manifest.json"
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-    source = Path(manifest["source"]["arena_data_root"])
     wanted = {key: value for key, value in manifest["textures"].items() if value.get("dimension") == "Tex3D"}
+    if not wanted:
+        # Nothing to refresh: leave the manifest bytes alone (see the module docstring).
+        print(f"NATIVE_VOLUMES_REFRESHED count=0 package={package} (no Tex3D textures, manifest untouched)")
+        return 0
+    source = Path(manifest["source"]["arena_data_root"])
     found = {}
     # Read serialized asset tables, not existing flattened PNGs; stable identity selects the source.
     for path in sorted(source.glob("sharedassets*.assets")):

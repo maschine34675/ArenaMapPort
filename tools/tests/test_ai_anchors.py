@@ -7,6 +7,7 @@ bottom, guarded by the same ARENA_SOURCE skip idiom test_navmesh_modifiers.py al
 """
 from __future__ import annotations
 
+import json
 import os
 from pathlib import Path
 import struct
@@ -163,8 +164,29 @@ class MapTableTests(unittest.TestCase):
     """The two supported maps and where their sidecar lands -- tools/maps/<key>.ai.json,
     matching the client's own ai/<key>.ai.json staging (see the item-8 progress doc)."""
 
-    def test_exactly_two_maps(self):
-        self.assertEqual(set(A.MAPS), {"equator", "bay5"})
+    def test_exactly_three_maps(self):
+        self.assertEqual(set(A.MAPS), {"equator", "bay5", "airpit"})
+
+    def test_default_maps_stay_the_two_released_sidecars(self):
+        # Running with no --map must not start rewriting a third map's tracked sidecar.
+        self.assertEqual(A.DEFAULT_MAPS, ("equator", "bay5"))
+
+    def test_airpit_scene_identity(self):
+        idx, name = A.MAPS["airpit"]
+        self.assertEqual((idx, name), (33, "Arena_Airpit_TeamFight_AI"))
+
+    def test_airpit_table_entry_is_the_plans_ai_role(self):
+        # PLAN-AIRPIT item 4: the table entry and the plan's `ai` scene role must name one scene.
+        from source_plan import PLAN_ROOT, load_plan
+        plan = load_plan(PLAN_ROOT / "airpit.json")
+        self.assertEqual(A.ai_scene_for_plan(plan), A.MAPS["airpit"])
+        self.assertEqual(A.map_key_for_plan(plan), "airpit")
+
+    def test_plan_without_ai_role_is_an_error(self):
+        from source_plan import PLAN_ROOT, PlanError, load_plan
+        plan = load_plan(PLAN_ROOT / "bowl.json")  # roles are only declared for AirPit
+        with self.assertRaises(PlanError):
+            A.ai_scene_for_plan(plan)
 
     def test_equator_scene_identity(self):
         idx, name = A.MAPS["equator"]
@@ -181,8 +203,96 @@ class MapTableTests(unittest.TestCase):
     def test_default_output_paths(self):
         self.assertEqual(os.path.basename(A.default_output_path("equator")), "equator.ai.json")
         self.assertEqual(os.path.basename(A.default_output_path("bay5")), "bay5.ai.json")
+        self.assertEqual(os.path.basename(A.default_output_path("airpit")), "airpit.ai.json")
         maps_dir = os.path.dirname(A.default_output_path("equator"))
         self.assertEqual(os.path.basename(maps_dir), "maps")
+
+
+class CommentWordingTests(unittest.TestCase):
+    """The sidecar `_comment` names which maps lack a sidecar. Equator's and Bay5's tracked files keep
+    their original "twelve deferred maps" wording byte-for-byte; AirPit (released third) must not
+    repeat a count that is already wrong, and no later map may inherit it."""
+
+    LEGACY = "the twelve deferred maps"
+    GENERIC = "any map without a sidecar"
+
+    @staticmethod
+    def tracked_comment(map_key):
+        with open(A.default_output_path(map_key), encoding="utf-8") as fh:
+            return json.load(fh)["_comment"]
+
+    def test_legacy_maps_keep_the_released_wording(self):
+        self.assertEqual(A.LEGACY_COMMENT_MAP_KEYS, frozenset({"equator", "bay5"}))
+        for map_key in ("equator", "bay5"):
+            self.assertEqual(A.missing_file_note(map_key), self.LEGACY)
+
+    def test_every_other_map_gets_wording_without_a_count(self):
+        for map_key in ("airpit", "shoreline", "a_future_map"):
+            self.assertEqual(A.missing_file_note(map_key), self.GENERIC)
+
+    def test_tracked_equator_and_bay5_comments_are_the_released_text(self):
+        for map_key in ("equator", "bay5"):
+            comment = self.tracked_comment(map_key)
+            self.assertIn(f"a missing/invalid file ({self.LEGACY}) keeps that synthesis unchanged", comment)
+            self.assertIn(f"topology for {map_key}, raw-decoded", comment)
+
+    def test_tracked_airpit_comment_has_no_stale_count(self):
+        comment = self.tracked_comment("airpit")
+        self.assertIn(f"a missing/invalid file ({self.GENERIC}) keeps that synthesis unchanged", comment)
+        self.assertIn("topology for airpit, raw-decoded", comment)
+        self.assertNotIn("twelve", comment)
+        self.assertNotIn("deferred", comment)
+
+
+class CommandLineTests(unittest.TestCase):
+    """main(): --map / --plan selection without reading the Arena install (extract_map is patched)."""
+
+    def run_main(self, argv, **patches):
+        import contextlib
+        import io
+        from unittest import mock
+        err = io.StringIO()
+        with contextlib.redirect_stderr(err),              mock.patch.object(A, "extract_map", return_value={"stub": 1}) as extract,              mock.patch.object(A, "read_build_scenes", return_value=[]),              mock.patch.object(A, "verify_scene_mapping", **patches):
+            code = A.main(argv)
+        return code, extract, err.getvalue()
+
+    def test_plan_mode_takes_key_index_and_name_from_the_plan_role(self):
+        import tempfile
+        from source_plan import PLAN_ROOT
+        with tempfile.TemporaryDirectory() as tmp:
+            out = os.path.join(tmp, "nested", "x.json")
+            code, extract, _err = self.run_main(["--plan", str(PLAN_ROOT / "airpit.json"), "--source", tmp, "--output", out])
+            with open(out, encoding="utf-8") as fh:
+                written = json.load(fh)
+        self.assertEqual(code, 0)
+        self.assertEqual(extract.call_args.args, ("airpit", 33, "Arena_Airpit_TeamFight_AI", tmp))
+        self.assertEqual(written, {"stub": 1})
+
+    def test_map_mode_uses_the_table_and_default_stays_the_released_pair(self):
+        import tempfile
+        with tempfile.TemporaryDirectory() as tmp:
+            code, extract, _err = self.run_main(["--map", "airpit", "--source", tmp, "--output", os.path.join(tmp, "a.json")])
+        self.assertEqual((code, extract.call_args.args[:3]), (0, ("airpit", 33, "Arena_Airpit_TeamFight_AI")))
+
+    def test_plan_and_map_are_alternatives_and_a_bad_plan_exits_2(self):
+        import tempfile
+        from source_plan import PLAN_ROOT
+        with self.assertRaises(SystemExit):
+            self.run_main(["--plan", str(PLAN_ROOT / "airpit.json"), "--map", "airpit"])
+        with tempfile.TemporaryDirectory() as tmp:
+            code, extract, err = self.run_main(["--plan", os.path.join(tmp, "missing.json"), "--source", tmp])
+        self.assertEqual(code, 2)
+        self.assertIn("FAILED", err)
+        extract.assert_not_called()
+
+    def test_plan_without_an_ai_role_exits_2(self):
+        import tempfile
+        from source_plan import PLAN_ROOT, PlanError
+        with tempfile.TemporaryDirectory() as tmp:
+            code, extract, err = self.run_main(["--plan", str(PLAN_ROOT / "bowl.json"), "--source", tmp])
+        self.assertEqual(code, 2)
+        self.assertIn("declares no scene with role 'ai'", err)
+        extract.assert_not_called()
 
 
 @unittest.skipUnless(os.path.isdir(ARENA_SOURCE), "Arena source not reachable from this machine")
@@ -207,6 +317,21 @@ class RealSourceExtractionTests(unittest.TestCase):
         self.assertEqual(len(hubs), 4)
         self.assertEqual(sum(len(h["sub_points"]) for h in hubs), 43)
         self.assertEqual({c["id"] for c in data["core_points"]}, set(range(1, 12)))
+
+    def test_airpit_counts(self):
+        idx, name = A.MAPS["airpit"]
+        data = A.extract_map("airpit", idx, name, A.DEFAULT_SOURCE)
+        self.assertEqual(len(data["core_points"]), 19)
+        hubs = data["patrol_ways"][0]["hubs"]
+        self.assertEqual([len(h["sub_points"]) for h in hubs], [12, 12, 11])
+        self.assertEqual({c["id"] for c in data["core_points"]}, set(range(1, 20)))
+
+    def test_tracked_airpit_sidecar_matches_the_live_source(self):
+        # tools/maps/airpit.ai.json is git-tracked data; it must be what the extractor writes today.
+        idx, name = A.MAPS["airpit"]
+        live = A.extract_map("airpit", idx, name, A.DEFAULT_SOURCE)
+        with open(A.default_output_path("airpit"), encoding="utf-8") as fh:
+            self.assertEqual(json.load(fh), json.loads(json.dumps(live)))
 
 
 if __name__ == "__main__":

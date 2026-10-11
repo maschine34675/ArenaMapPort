@@ -2,7 +2,14 @@
 """Extract one reviewed Arena source plan using the unchanged Equator asset engine.
 
 Usage: python tools/extract/extract_map.py --plan tools/extract/plans/airpit.json
-       --output work/extract/airpit [--source <EscapeFromTarkovArena_Data>]
+       --output <package-dir> [--source <EscapeFromTarkovArena_Data>]
+
+Native features (original ballistic materials, NavMesh modifiers, static decals, light
+culling, rain cover; PLAN-AIRPIT item 2) are opt-in and live in native_features.py:
+       ... --native-features --target <SPT EscapeFromTarkov_Data>
+The plain invocation is unchanged and writes no native block. The accepted AirPit package
+(Arena 0.6.0, PLAN-AIRPIT item 5) is the native form written to work/extract/airpit-native-v5;
+the superseded 0.5.4 spike package work/extract/airpit is never an --output.
 """
 from __future__ import annotations
 
@@ -15,6 +22,7 @@ import sys
 import UnityPy
 
 import extract_equator as EQ
+import native_features as NF
 from source_plan import (PlanError, finite_vector, load_plan, plan_relative_path, provenance,
                          read_build_scenes, require_file, unique_records, validate_anchors,
                          verify_scene_mapping)
@@ -143,7 +151,8 @@ def write_json(path: Path, value) -> None:
     path.write_text(json.dumps(value, indent=2, sort_keys=True, ensure_ascii=False, allow_nan=False), encoding="utf-8")
 
 
-def extract(plan_path: Path, source: Path, output: Path | None, timestamp: str | None, census_only: bool) -> None:
+def extract(plan_path: Path, source: Path, output: Path | None, timestamp: str | None, census_only: bool,
+            native_target: Path | None = None) -> None:
     source = source.resolve()
     plan = load_plan(plan_path)
     plan_relative_path(plan_path)
@@ -156,6 +165,11 @@ def extract(plan_path: Path, source: Path, output: Path | None, timestamp: str |
             raise PlanError("extraction output must be separate from the read-only source tree")
         if output.exists() and any(output.iterdir()):
             raise PlanError(f"output is not empty: {output}; use a fresh extraction directory")
+    native = None
+    if native_target is not None and not census_only:
+        # Resolves the plan's scripts role and reads the ballistic contract now, so a missing
+        # role or SPT install fails before the multi-minute extraction.
+        native = NF.NativeFeatureExtraction.for_plan(plan, source, native_target.resolve())
     env, exact = load_environment(source, plan)
     terrain_present = False
     for record in plan["scenes"]:
@@ -184,6 +198,8 @@ def extract(plan_path: Path, source: Path, output: Path | None, timestamp: str |
                 scene = EQ.extract_scene(record["index"], file, tags, list(transforms), ctx)
                 if not scene["objects"]:
                     raise PlanError(f"selected content scene is empty: {record['name']}")
+                if native is not None:
+                    native.augment_scene(scene, file, ctx, record["name"])
                 total_objects += len(scene["objects"])
                 write_json(output / "scenes" / (record["name"] + ".json"), scene)
                 print(f"[extract_map] {record['name']}: {len(scene['objects'])} objects", file=sys.stderr)
@@ -218,6 +234,9 @@ def extract(plan_path: Path, source: Path, output: Path | None, timestamp: str |
                 "anchors_reference": anchors, "errors": ctx.errors, "warnings": ctx.warnings}
     if terrain_conversion is not None:
         manifest["terrain_conversion"] = terrain_conversion
+    if native is not None:
+        manifest["source"].update(native.source_fields())
+        manifest.update(native.manifest_blocks(env, output))
     if mesh_compatibility:
         manifest["mesh_compatibility"] = mesh_compatibility
     if material_slot_preservation:
@@ -228,16 +247,39 @@ def extract(plan_path: Path, source: Path, output: Path | None, timestamp: str |
           f"{len(materials)} materials, {len(textures)} textures, {len(ctx.warnings)} warnings", file=sys.stderr)
 
 
-def main() -> int:
+def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--plan", required=True, type=Path)
     parser.add_argument("--source", default=DEFAULT_SOURCE, type=Path)
     parser.add_argument("--output", type=Path)
     parser.add_argument("--fixed-timestamp")
     parser.add_argument("--census-only", action="store_true")
-    args = parser.parse_args()
+    parser.add_argument("--native-features", action="store_true",
+                        help="restore original ballistic materials, NavMesh modifiers, static decals, light "
+                             "culling data and rain-cover geometry; needs --target and the plan's scripts scene role")
+    parser.add_argument("--target", type=Path,
+                        help="SPT EscapeFromTarkov_Data directory (read-only) for the ballistic preset mapping; "
+                             "required with, and only valid with, --native-features")
+    return parser
+
+
+def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
+    parser = build_parser()
+    args = parser.parse_args(argv)
+    if args.native_features and args.target is None:
+        parser.error("--native-features requires --target <SPT EscapeFromTarkov_Data>")
+    if args.target is not None and not args.native_features:
+        parser.error("--target is only used with --native-features")
+    if args.native_features and args.census_only:
+        parser.error("--native-features cannot be combined with --census-only")
+    return args
+
+
+def main() -> int:
+    args = parse_args()
     try:
-        extract(args.plan, args.source, args.output, args.fixed_timestamp, args.census_only)
+        extract(args.plan, args.source, args.output, args.fixed_timestamp, args.census_only,
+                args.target if args.native_features else None)
     except (PlanError, EQ.HardExtractError, OSError) as exc:
         print(f"[extract_map] FAILED: {exc}", file=sys.stderr)
         return 2

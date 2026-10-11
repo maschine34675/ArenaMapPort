@@ -15,7 +15,18 @@ objects in the main scene); 509 of 813 lights are saved inactive; 127 fog-sheet 
 the three-map ZIP projects to about 1.9 GB. Control-point data (capture anchor, SPAWN_BOUND) ride along as a
 generic sidecar when AirPit is extracted (user decision 2026-10-11). The user took every recommendation of the
 plan's section 4 (re-extract from 0.6.0, server-time day/night like Bay5, bake y -2..8, native audio now, 0.2.0
-single ZIP if under ~1.95 GB). Phase A (items 1-7) is in progress on `feature/airpit`.
+single ZIP if under ~1.95 GB). Phase A (items 1-7) is done on `feature/airpit` (2026-10-11, evening): plan
+scene roles, `tools/extract/native_features.py` + `extract_map.py --native-features`, data-driven
+`tools/extract/native_contracts/<map>.json` (audio optional), the four feature extractors read plan roles, the
+generic `tools/maps/<map>.modes.json` sidecars (capture point, SPAWN_BOUND boxes, TeamFight spawns) for all three
+maps, `work/extract/airpit-native-v5` extracted from Arena 0.6.0 and validated with reproducibility
+(40,719 objects, 3,548 ballistic colliders, 481 decals, 533 culling lights, 32 NavMesh modifiers, 2 indoor
+triggers), `tools/maps/airpit.{bots,exits,ai}.json` + descriptor exits, and the Arena NavMesh oracle
+(`tools/validate/navmesh_oracle.py` / `navmesh_diff.py`: Arena's play component 8,168 m2, 190 prop instances the
+port bakes as solids). Log: docs/progress/airpit-release.md, delta: docs/progress/airpit-source-060.md.
+Known: `validate_extract.py` on the accepted 0.5.4 Equator/Bay5 packages reports documented 0.6.0 source drifts
+(preset offset 5708 != 5716, Bay5 disabled renderers 302 != 305) - unchanged output is the parity gate
+(`work/airpit-parity/parity_gate.py`); `dotnet test -c Release` re-stages the server DLL into dist/.
 
 ## Package update on 2026-10-11 — v0.1.0 muzzle-flare correction
 

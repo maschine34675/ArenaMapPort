@@ -36,6 +36,21 @@ def example_anchors():
     return {SP.PLAYER_MARKER: {"count": 1, "sample_positions": [[1, 2, 3]], "sample_files": ["level1"]}}
 
 
+def roles_plan():
+    """example_plan plus the four scene roles; as in AirPit the AI scene is also a navmesh scene."""
+    def scene(name, index):
+        return {"name": name, "asset_path": f"Assets/Content/{name}.unity", "index": index}
+    plan = example_plan()
+    plan["navmesh_scenes"] = [scene("Arena_Test_AI", 4)]
+    plan["excluded_scenes"] = [
+        dict(scene("Arena_Test_Scripts", 2), role="scripts", reason="authored scripts"),
+        dict(scene("Arena_Test_Sound", 3), role="sound", reason="ambient sound"),
+        dict(scene("Arena_Test_AI", 4), role="ai", reason="AI metadata"),
+        dict(scene("Arena_Test_Culling", 5), role="culling", reason="culling data"),
+    ]
+    return plan
+
+
 class SpawnPlacementAdmissionTests(unittest.TestCase):
     def test_native_equator_keeps_legacy_authored_starts(self):
         self.assertFalse(VB.requires_spawn_placement({"source": {"map_key": "arena_equator"}}))
@@ -173,6 +188,134 @@ class SourcePlanTests(unittest.TestCase):
         file = SimpleNamespace(objects={1: SimpleNamespace(type=SimpleNamespace(name="TerrainCollider"))})
         with self.assertRaisesRegex(SP.PlanError, "unsupported terrain"):
             EX.reject_unsupported_ground(file, "Arena_Test_Main")
+
+
+class SceneRoleTests(unittest.TestCase):
+    """Plan item 1: excluded scenes carry a `role` so extractors need no per-map index table."""
+
+    def setUp(self):
+        self.plan = roles_plan()
+
+    def test_roles_resolve_to_the_exact_excluded_scene_records(self):
+        SP.validate_plan(self.plan)
+        expected = {"scripts": 2, "sound": 3, "ai": 4, "culling": 5}
+        self.assertEqual(set(SP.SCENE_ROLES), set(expected))
+        for role, index in expected.items():
+            with self.subTest(role=role):
+                record = SP.scene_for_role(self.plan, role)
+                self.assertEqual(set(record), {"name", "asset_path", "index"})
+                self.assertEqual(record["index"], index)
+                self.assertEqual(record["asset_path"], f"Assets/Content/{record['name']}.unity")
+        self.assertEqual({r: v["index"] for r, v in SP.scene_roles(self.plan).items()}, expected)
+
+    def test_returned_record_is_a_copy(self):
+        SP.scene_for_role(self.plan, "sound")["index"] = 99
+        self.assertEqual(SP.scene_for_role(self.plan, "sound")["index"], 3)
+
+    def test_plan_without_roles_stays_valid_and_declares_none(self):
+        plain = example_plan()
+        self.assertEqual(SP.scene_roles(SP.validate_plan(plain)), {})
+        with self.assertRaisesRegex(SP.PlanError, "declares no scene with role 'sound'"):
+            SP.scene_for_role(plain, "sound")
+        partial = roles_plan()
+        partial["excluded_scenes"] = partial["excluded_scenes"][:1]
+        partial["navmesh_scenes"] = []
+        SP.validate_plan(partial)
+        self.assertEqual(set(SP.scene_roles(partial)), {"scripts"})
+        with self.assertRaisesRegex(SP.PlanError, "declares no scene with role 'ai'"):
+            SP.scene_for_role(partial, "ai")
+
+    def test_unknown_or_malformed_role_names_are_rejected(self):
+        for bad in ("audio", "Scripts", "", None, 3, ["sound"]):
+            with self.subTest(role=bad):
+                plan = roles_plan()
+                plan["excluded_scenes"][1]["role"] = bad
+                with self.assertRaisesRegex(SP.PlanError, "unknown scene role"):
+                    SP.validate_plan(plan)
+        for bad in ("audio", "SOUND", "", None):
+            with self.subTest(lookup=bad), self.assertRaisesRegex(SP.PlanError, "unknown scene role"):
+                SP.scene_for_role(self.plan, bad)
+
+    def test_a_role_names_exactly_one_scene(self):
+        self.plan["excluded_scenes"][3]["role"] = "sound"
+        with self.assertRaisesRegex(SP.PlanError, "duplicate scene role 'sound'"):
+            SP.validate_plan(self.plan)
+
+    def test_a_scene_cannot_carry_two_roles(self):
+        self.plan["excluded_scenes"][3] = dict(self.plan["excluded_scenes"][0], role="culling")
+        with self.assertRaisesRegex(SP.PlanError, "cannot carry two roles"):
+            SP.validate_plan(self.plan)
+
+    def test_roles_never_sit_on_an_imported_scene(self):
+        imported = self.plan["scenes"][0]
+        self.plan["excluded_scenes"][3] = dict(imported, role="culling", reason="x")
+        with self.assertRaisesRegex(SP.PlanError, "cannot be assigned to the imported scene"):
+            SP.validate_plan(self.plan)
+
+    def test_role_key_is_rejected_outside_excluded_scenes(self):
+        for group in SP.SCENE_GROUPS:
+            with self.subTest(group=group):
+                plan = roles_plan()
+                plan[group][0]["role"] = "scripts"
+                with self.assertRaisesRegex(SP.PlanError, "cannot carry a scene role"):
+                    SP.validate_plan(plan)
+
+    def test_ai_role_must_also_be_the_same_navmesh_scene(self):
+        self.plan["navmesh_scenes"] = []
+        with self.assertRaisesRegex(SP.PlanError, "must also be listed in navmesh_scenes"):
+            SP.validate_plan(self.plan)
+        other = roles_plan()
+        other["navmesh_scenes"][0]["asset_path"] = "Assets/Content/Other/Arena_Test_AI.unity"
+        with self.assertRaisesRegex(SP.PlanError, "must also be listed in navmesh_scenes"):
+            SP.validate_plan(other)
+
+    def test_roles_do_not_make_extraction_load_the_excluded_scenes(self):
+        # Scripts, Sound and Culling stay unloaded; the AI scene is already a navmesh scene.
+        self.assertEqual({r["index"] for r in SP.unique_records(self.plan)}, {1, 4})
+
+    def test_role_scenes_keep_the_exact_path_drift_check(self):
+        with tempfile.TemporaryDirectory() as temp:
+            source = Path(temp)
+            for index in (1, 4):
+                (source / f"level{index}").write_bytes(b"scene")
+                (source / f"sharedassets{index}.assets").write_bytes(b"assets")
+            build = ["unused", self.plan["scenes"][0]["asset_path"]]
+            build += [r["asset_path"] for r in self.plan["excluded_scenes"]]
+            SP.verify_scene_mapping(self.plan, build, source)
+            build[3] = "Assets/Content/Arena_New_Sound.unity"
+            with self.assertRaisesRegex(SP.PlanError, "excluded source scene mapping drift for Arena_Test_Sound"):
+                SP.verify_scene_mapping(self.plan, build, source)
+
+    def test_repository_plans_validate_and_every_role_names_its_excluded_scene(self):
+        for path in sorted(SP.PLAN_ROOT.glob("*.json")):
+            with self.subTest(plan=path.name):
+                plan = SP.load_plan(path)
+                for role, record in SP.scene_roles(plan).items():
+                    tagged = [SP.scene_record(r) for r in plan["excluded_scenes"] if r.get("role") == role]
+                    self.assertEqual(tagged, [record])
+                    self.assertEqual(SP.scene_for_role(plan, role), record)
+
+    def test_airpit_plan_declares_its_four_roles(self):
+        plan = SP.load_plan(SP.PLAN_ROOT / "airpit.json")
+        found = {role: SP.scene_for_role(plan, role) for role in SP.SCENE_ROLES}
+        self.assertEqual({r: v["index"] for r, v in found.items()},
+                         {"scripts": 36, "sound": 39, "ai": 33, "culling": 30})
+        self.assertEqual({r: v["name"] for r, v in found.items()},
+                         {"scripts": "Arena_Airpit_Scripts", "sound": "Arena_Airpit_Sound",
+                          "ai": "Arena_Airpit_TeamFight_AI", "culling": "Arena_Airpit_TeamFight_Culling"})
+        # The AI scene is the one already loaded for NavMesh metadata; the other three are not.
+        self.assertEqual({r["index"] for r in plan["navmesh_scenes"]}, {found["ai"]["index"]})
+        self.assertEqual({r["index"] for r in SP.unique_records(plan)}, {324, 325, 40, 29, 28, 33})
+
+    @unittest.skipUnless(Path(EX.DEFAULT_SOURCE, "globalgamemanagers").is_file(), "Arena source not installed")
+    def test_airpit_role_scenes_occur_exactly_once_in_installed_build_settings(self):
+        build = SP.read_build_scenes(Path(EX.DEFAULT_SOURCE))
+        plan = SP.load_plan(SP.PLAN_ROOT / "airpit.json")
+        for role in SP.SCENE_ROLES:
+            record = SP.scene_for_role(plan, role)
+            with self.subTest(role=role):
+                self.assertEqual(build.count(record["asset_path"]), 1)
+                self.assertEqual(build[record["index"]], record["asset_path"])
 
 
 class CompleteAnchorTests(unittest.TestCase):

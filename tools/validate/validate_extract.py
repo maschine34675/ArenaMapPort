@@ -1466,6 +1466,12 @@ def run_extractor(extractor_script: Path, scene_indices: list[int], slice_map: d
         if plan_path is None:
             die("generic reproducibility requires a verified source plan")
         cmd += ["--plan", str(plan_path)]
+        if native_features:
+            # A generic package that carries native_features was extracted with --native-features
+            # --target <source.target_data_root>; without both flags the rerun could never match it.
+            if target_root is None:
+                die("generic native reproducibility requires manifest source.target_data_root")
+            cmd += ["--native-features", "--target", target_root]
     elif extractor_script.name == "extract_bay5.py":
         if target_root is not None:
             cmd += ["--target", target_root]

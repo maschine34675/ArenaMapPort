@@ -1,0 +1,657 @@
+"""PLAN-AIRPIT item 3: data-driven native contracts (tools/extract/native_contracts/*.json).
+
+Covers the strict loader (native_contract_loader), the golden proof that the Equator and Bay5 data
+files reproduce the literals validate_native_features.py used to hard-code, and the validator
+behaviour that now follows the data: AirPit's ballistics-only contract (audio null), its census pins
+and the negative cases (wrong census fails, missing feature fails). The real-package tests read the
+ignored work/ packages and are skipped when those are absent.
+"""
+from __future__ import annotations
+
+from collections import Counter
+from copy import deepcopy
+import json
+from pathlib import Path
+import sys
+import tempfile
+from types import SimpleNamespace
+import unittest
+from unittest.mock import patch
+
+REPO = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(REPO / "tools" / "extract"))
+sys.path.insert(0, str(REPO / "tools" / "validate"))
+import native_contract_loader as L
+import validate_native_features as v
+from common_ids import HardExtractError
+
+# The pre-item-3 literals of validate_native_features.py (MAPS, SCENES, AUDIO_ROOT), frozen here as the
+# golden reference. The data files must reproduce them value for value; do not "fix" this table to
+# follow a data change, change the data only together with a reviewed census change.
+_BAY5_SCENES = {84: 'Main', 83: 'Light', 81: 'DesignStuff', 89: 'TeamFight', 88: 'TeamFight_DesignStuff',
+                80: 'DEPOT', 86: 'WAREHOUSE', 82: 'HANGAR', 79: 'Background'}
+LEGACY_MAPS = {
+    'arena_bay5': {
+        'scenes': {index: 'Arena_Bay5_' + suffix for index, suffix in _BAY5_SCENES.items()},
+        'ballistics': {84: 3541, 83: 44, 81: 5, 89: 429, 88: 65, 80: 645, 86: 541, 82: 159, 79: 893},
+        'feature': 'harbor_audio', 'schema': 1, 'audio_scene': 'level188', 'audio_root': 'ArenaMapPort_Bay5NativeAudio',
+        'players': {'AmbientSoundPlayer': 17, 'SeasonAmbientSoundPlayer': 6, 'LoopAmbientSoundPlayer': 1},
+        'support': {'AmbientSoundPlayerGroup': 2, 'BezierSpline': 1, 'AmbientSplineEmitterController': 1,
+                    'SoundAmbientZoneCalculator': 1, 'AmbientPlayerSplineMappedEmitter': 1},
+        'banks': 13, 'clips': 106,
+    },
+    'arena_equator': {
+        'scenes': {51: 'Arena_Equator', 53: 'Arena_Equator_DesignStuff', 55: 'Arena_Equator_Lighting',
+                   57: 'Arena_Equator_TeamFight_DesignStuff', 58: 'Arena_Equator_TeamFight'},
+        'ballistics': {51: 2639, 53: 25, 55: 127, 57: 89, 58: 12},
+        'feature': 'ambient_audio', 'schema': 2, 'audio_scene': 'level56',
+        'audio_root': 'ArenaMapPort_EquatorNativeAudio', 'players': {'AmbientSoundPlayer': 25},
+        'support': {'AmbientSoundPlayerGroup': 1}, 'banks': 11, 'clips': 65,
+    },
+}
+# The Equator-only audio branch of load_audio() (literals 23, far_dogs, CommonAmbInEffects, level56:965).
+LEGACY_EQUATOR_STATES = {
+    'grouped_players': 23, 'disabled_players': [],
+    'inactive_players': {'level56:970': 'far_dogs2', 'level56:975': 'far_dogs1'},
+    'group_mixers': ['CommonAmbInEffects'], 'loop_players': ['level56:965'],
+}
+
+
+def flatten(contract: dict) -> dict:
+    """The data contract in the shape of the retired MAPS literal (audio maps only)."""
+    audio = contract['audio']
+    return {'scenes': contract['scenes'], 'ballistics': contract['ballistics'], 'feature': audio['feature'],
+            'schema': audio['schema'], 'audio_scene': audio['scene'], 'audio_root': audio['root'],
+            'players': audio['players'], 'support': audio['support'], 'banks': audio['banks'], 'clips': audio['clips']}
+
+
+def raw_contract() -> dict:
+    """A small valid schema-2 contract (one scene, two groups) used as the base for schema mutations."""
+    return {
+        'schema_version': 1, 'map_key': 'arena_x', 'notes': ['fixture'],
+        'scenes': {'7': 'Arena_X_Main', '8': 'Arena_X_Light'}, 'ballistics': {'7': 10, '8': 0},
+        'require_unsliced': True, 'implicit_scene_identity': False,
+        'features': {'static_decals': 3, 'light_culling': {'culling_light_object_count': 4, 'volumetric_light_count': 2,
+                                                          'light_flicker_count': 0},
+                     'raincover': {'indoor_trigger_count': 1, 'dry_plane_count': 0, 'weather_obstacle': False},
+                     'navmesh_modifiers': {'modifiers': 5, 'volumes': 6}, 'small_physics_objects': 0},
+        'audio': {'feature': 'ambient_audio', 'schema': 2, 'scene': 'level9', 'root': 'ArenaMapPort_XNativeAudio',
+                  'players': {'AmbientSoundPlayer': 6}, 'support': {'AmbientSoundPlayerGroup': 2},
+                  'banks': 2, 'clips': 3, 'group_coverage': 'all_players',
+                  'states': {'grouped_players': 6, 'disabled_players': [], 'inactive_players': {},
+                             'group_mixers': ['CommonAmbOutEffects', 'CommonAmbInEffects'], 'loop_players': []}},
+    }
+
+
+def parse(raw: dict) -> dict:
+    return L.parse_contract(raw, 'x', 'fixture.json')
+
+
+class ContractFilesTests(unittest.TestCase):
+    def test_repository_contracts_load_and_validator_uses_them(self):
+        contracts = L.load_contracts()
+        self.assertEqual(set(contracts), {'arena_equator', 'arena_bay5', 'arena_airpit'})
+        self.assertEqual(set(v.MAPS), set(contracts))
+        for key, contract in contracts.items():
+            self.assertEqual(contract['key'], key)
+            self.assertEqual(v.MAPS[key], contract)
+        files = sorted(p.stem for p in L.CONTRACT_DIR.glob('*.json'))
+        self.assertEqual(files, ['airpit', 'bay5', 'equator'])
+
+    def test_load_contract_by_key_fails_for_unknown_map(self):
+        self.assertEqual(L.load_contract('arena_airpit')['key'], 'arena_airpit')
+        with self.assertRaisesRegex(L.NativeContractError, 'no native contract for map'):
+            L.load_contract('arena_bowl')
+
+    def test_error_class_is_both_a_hard_extract_error_and_a_value_error(self):
+        self.assertTrue(issubclass(L.NativeContractError, HardExtractError))
+        self.assertTrue(issubclass(L.NativeContractError, ValueError))
+
+    def test_scene_indices_are_integers_in_file_order(self):
+        for contract in L.load_contracts().values():
+            self.assertTrue(all(type(i) is int for i in contract['scenes']))
+            self.assertEqual(list(contract['scenes']), list(contract['ballistics']))
+
+
+class GoldenLegacyTests(unittest.TestCase):
+    """The data files reproduce the retired literals exactly (values and iteration order)."""
+
+    def test_equator_and_bay5_reproduce_the_legacy_maps_table(self):
+        for key, legacy in LEGACY_MAPS.items():
+            with self.subTest(key=key):
+                got = flatten(v.MAPS[key])
+                self.assertEqual(got, legacy)
+                self.assertEqual(list(got['scenes'].items()), list(legacy['scenes'].items()))
+                self.assertEqual(list(got['ballistics'].items()), list(legacy['ballistics'].items()))
+                self.assertEqual(sum(got['ballistics'].values()), {'arena_bay5': 6322, 'arena_equator': 2892}[key])
+
+    def test_equator_audio_branch_literals_are_now_data(self):
+        states = v.MAPS['arena_equator']['audio']['states']
+        self.assertEqual(states, LEGACY_EQUATOR_STATES)
+        self.assertEqual(v.MAPS['arena_equator']['audio']['group_coverage'], 'active_players')
+
+    def test_bay5_has_no_state_pins_and_every_player_is_grouped(self):
+        audio = v.MAPS['arena_bay5']['audio']
+        self.assertIsNone(audio['states'])
+        self.assertEqual(audio['group_coverage'], 'all_players')
+
+    def test_legacy_flags_are_preserved(self):
+        self.assertTrue(v.MAPS['arena_equator']['require_unsliced'])
+        self.assertFalse(v.MAPS['arena_bay5']['require_unsliced'])
+        self.assertTrue(v.MAPS['arena_bay5']['implicit_scene_identity'])
+        self.assertFalse(v.MAPS['arena_equator']['implicit_scene_identity'])
+        self.assertFalse(v.MAPS['arena_airpit']['implicit_scene_identity'])
+        # Equator and Bay5 keep the shape-only validation of the optional entries (Bay5's decal count
+        # moved from 499 to 502 with Arena 0.6.0, so a census pin would reject one of the two sources).
+        self.assertIsNone(v.MAPS['arena_equator']['features'])
+        self.assertIsNone(v.MAPS['arena_bay5']['features'])
+
+    def test_airpit_pins_are_the_item_2_dry_run(self):
+        airpit = v.MAPS['arena_airpit']
+        self.assertEqual(airpit['ballistics'], {324: 2856, 325: 512, 40: 28, 29: 94, 28: 58})
+        self.assertEqual(sum(airpit['ballistics'].values()), 3548)
+        self.assertEqual(airpit['scenes'], {324: 'Arena_AirPit_ShootOut', 325: 'Arena_AirPit_ShootOut_Light',
+                                            40: 'Arena_Airpit_DesignStuff', 29: 'Arena_Airpit_TeamFight',
+                                            28: 'Arena_Airpit_TeamFight_DesignStuff'})
+        self.assertEqual(airpit['features'], {
+            'static_decals': 481,
+            'light_culling': {'culling_light_object_count': 533, 'volumetric_light_count': 130, 'light_flicker_count': 0},
+            'raincover': {'indoor_trigger_count': 2, 'dry_plane_count': 0, 'weather_obstacle': False},
+            'navmesh_modifiers': {'modifiers': 20, 'volumes': 12}, 'small_physics_objects': 0})
+        self.assertIsNone(airpit['audio'])  # item 13 fills it
+        self.assertTrue(airpit['require_unsliced'])
+
+
+class SchemaTests(unittest.TestCase):
+    def test_base_fixture_is_valid_and_normalised(self):
+        contract = parse(raw_contract())
+        self.assertEqual(contract['scenes'], {7: 'Arena_X_Main', 8: 'Arena_X_Light'})
+        self.assertEqual(contract['ballistics'], {7: 10, 8: 0})
+        self.assertEqual(contract['audio']['states']['group_mixers'], ['CommonAmbOutEffects', 'CommonAmbInEffects'])
+
+    def test_two_groups_may_share_a_mixer(self):
+        raw = raw_contract()
+        raw['audio']['states']['group_mixers'] = ['CommonAmbInEffects', 'CommonAmbInEffects']
+        parse(raw)
+
+    def assertRejects(self, change, pattern=None):
+        raw = raw_contract()
+        change(raw)
+        with self.assertRaises(L.NativeContractError) as caught:
+            parse(raw)
+        if pattern:
+            self.assertRegex(str(caught.exception), pattern)
+
+    def test_unknown_and_missing_keys(self):
+        self.assertRejects(lambda r: r.update(bogus=1), 'unknown keys')
+        for key in ('schema_version', 'map_key', 'scenes', 'ballistics', 'require_unsliced',
+                    'implicit_scene_identity', 'features', 'audio'):
+            with self.subTest(key=key):
+                self.assertRejects(lambda r, key=key: r.pop(key), 'missing keys')
+        self.assertRejects(lambda r: r['audio'].update(extra=1), 'unknown keys')
+        self.assertRejects(lambda r: r['audio'].pop('states'), 'missing keys')
+        self.assertRejects(lambda r: r['features'].pop('raincover'), 'missing keys')
+        self.assertRejects(lambda r: r['features']['light_culling'].pop('light_flicker_count'), 'missing keys')
+        self.assertRejects(lambda r: r['audio']['states'].pop('loop_players'), 'missing keys')
+
+    def test_notes_are_optional_but_typed(self):
+        raw = raw_contract()
+        raw.pop('notes')
+        self.assertEqual(parse(raw)['notes'], [])
+        self.assertRejects(lambda r: r.update(notes='text'), 'list of strings')
+
+    def test_identity_and_version(self):
+        self.assertRejects(lambda r: r.update(schema_version=2), 'schema_version')
+        self.assertRejects(lambda r: r.update(schema_version=True), 'schema_version')
+        self.assertRejects(lambda r: r.update(map_key='arena_y'), "must be 'arena_x'")
+        self.assertRejects(lambda r: r.update(map_key=''), 'non-empty string')
+
+    def test_scene_tables(self):
+        self.assertRejects(lambda r: r.update(scenes={}), 'non-empty')
+        for bad in ('07', 'a', '-1', '', '7.0', '²'):
+            with self.subTest(index=bad):
+                self.assertRejects(lambda r, bad=bad: r['scenes'].update({bad: 'Arena_X_Other'}), 'canonical decimal')
+        self.assertRejects(lambda r: r['scenes'].update({'8': 'Arena_X_Main'}), 'duplicate scene names')
+        self.assertRejects(lambda r: r['ballistics'].pop('8'), 'exactly the scenes')
+        self.assertRejects(lambda r: r['ballistics'].update({'9': 1}), 'exactly the scenes')
+        self.assertRejects(lambda r: r['ballistics'].update({'7': -1}), 'integer >= 0')
+        self.assertRejects(lambda r: r['ballistics'].update({'7': True}), 'integer >= 0')
+        self.assertRejects(lambda r: r['ballistics'].update({'7': 1.0}), 'integer >= 0')
+        self.assertRejects(lambda r: r.update(ballistics={'7': 0, '8': 0}), 'total must be positive')
+
+    def test_flags_are_strict_booleans(self):
+        self.assertRejects(lambda r: r.update(require_unsliced=1), 'boolean')
+        self.assertRejects(lambda r: r.update(implicit_scene_identity='yes'), 'boolean')
+        self.assertRejects(lambda r: r['features']['raincover'].update(weather_obstacle=0), 'boolean')
+
+    def test_feature_pins_are_non_negative_integers(self):
+        for change in (lambda r: r['features'].update(static_decals=-1),
+                       lambda r: r['features'].update(static_decals=True),
+                       lambda r: r['features']['light_culling'].update(volumetric_light_count=1.5),
+                       lambda r: r['features']['navmesh_modifiers'].update(volumes=None),
+                       lambda r: r['features'].update(small_physics_objects='0')):
+            with self.subTest(change=change):
+                self.assertRejects(change, 'integer >= 0')
+
+    def test_features_null_is_allowed(self):
+        raw = raw_contract()
+        raw['features'] = None
+        self.assertIsNone(parse(raw)['features'])
+
+    def test_audio_null_is_allowed(self):
+        raw = raw_contract()
+        raw['audio'] = None
+        self.assertIsNone(parse(raw)['audio'])
+
+    def test_audio_shape(self):
+        self.assertRejects(lambda r: r['audio'].update(schema=3), 'unsupported audio schema')
+        self.assertRejects(lambda r: r['audio'].update(schema=True), 'unsupported audio schema')
+        self.assertRejects(lambda r: r['audio'].update(scene='Sound'), "'level<N>'")
+        self.assertRejects(lambda r: r['audio'].update(group_coverage='some'), 'group_coverage')
+        self.assertRejects(lambda r: r['audio'].update(feature='ballistics'), 'reserved')
+        self.assertRejects(lambda r: r['audio'].update(feature=''), 'non-empty string')
+        self.assertRejects(lambda r: r['audio'].update(players={}), 'non-empty object')
+        self.assertRejects(lambda r: r['audio'].update(support={'AmbientSoundPlayerGroup': 0}), 'integer >= 1')
+        self.assertRejects(lambda r: r['audio'].update(banks=0), 'integer >= 1')
+        self.assertRejects(lambda r: r['audio'].update(clips=None), 'integer >= 1')
+
+    def test_states_follow_the_schema(self):
+        # A schema-2 graph records hierarchy states and must pin them; a schema-1 graph has none.
+        self.assertRejects(lambda r: r['audio'].update(states=None), 'must pin them')
+        schema_one = raw_contract()
+        schema_one['audio'].update(schema=1)
+        with self.assertRaisesRegex(L.NativeContractError, 'must pin them'):
+            parse(schema_one)
+        schema_one['audio']['states'] = None
+        self.assertIsNone(parse(schema_one)['audio']['states'])
+
+    def test_states_must_agree_with_the_census(self):
+        self.assertRejects(lambda r: r['audio']['states'].update(group_mixers=['CommonAmbInEffects']), 'entries for 2')
+        self.assertRejects(lambda r: r['audio']['states'].update(grouped_players=5), 'disagrees')
+        self.assertRejects(lambda r: r['audio']['states'].update(grouped_players=7), 'disagrees')
+        self.assertRejects(lambda r: r['audio']['states'].update(inactive_players=[]), 'object of player id')
+        self.assertRejects(lambda r: r['audio']['states'].update(disabled_players=['a', 'a']), 'duplicate')
+        self.assertRejects(lambda r: r['audio']['states'].update(loop_players=[1]), 'non-empty string')
+
+        def active_coverage(r):
+            r['audio']['group_coverage'] = 'active_players'
+            r['audio']['states']['inactive_players'] = {'level9:1': 'far'}
+        self.assertRejects(active_coverage, 'disagrees')  # 6 grouped but one player is inactive
+
+        raw = raw_contract()
+        active_coverage(raw)
+        raw['audio']['states']['grouped_players'] = 5
+        self.assertEqual(parse(raw)['audio']['states']['grouped_players'], 5)
+        raw['audio']['states']['disabled_players'] = ['level9:2']  # disabled players are not grouped either
+        raw['audio']['states']['grouped_players'] = 4
+        self.assertEqual(parse(raw)['audio']['states']['grouped_players'], 4)
+
+
+class ContractFileTests(unittest.TestCase):
+    def write(self, directory, name, text):
+        path = Path(directory) / name
+        path.write_text(text, encoding='utf-8')
+        return path
+
+    def test_duplicate_json_key_is_an_error(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            text = json.dumps(raw_contract()).replace('"7": 10', '"7": 10, "7": 11')
+            path = self.write(tmp, 'x.json', text)
+            with self.assertRaisesRegex(L.NativeContractError, 'duplicate JSON key'):
+                L.load_contract_file(path)
+
+    def test_unreadable_and_malformed_files(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            with self.assertRaisesRegex(L.NativeContractError, 'cannot read'):
+                L.load_contract_file(Path(tmp) / 'missing.json')
+            path = self.write(tmp, 'x.json', '{"schema_version": 1,')
+            with self.assertRaisesRegex(L.NativeContractError, 'cannot read'):
+                L.load_contract_file(path)
+
+    def test_file_stem_must_match_the_map_key(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = self.write(tmp, 'y.json', json.dumps(raw_contract()))
+            with self.assertRaisesRegex(L.NativeContractError, "must be 'arena_y'"):
+                L.load_contract_file(path)
+            ok = self.write(tmp, 'x.json', json.dumps(raw_contract()))
+            self.assertEqual(L.load_contract_file(ok)['key'], 'arena_x')
+
+    def test_missing_or_empty_directory_fails_instead_of_returning_an_empty_table(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            with self.assertRaisesRegex(L.NativeContractError, 'no native contract files'):
+                L.load_contracts(tmp)
+            with self.assertRaisesRegex(L.NativeContractError, 'directory missing'):
+                L.load_contracts(Path(tmp) / 'absent')
+
+    def test_one_bad_file_fails_the_whole_directory(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            self.write(tmp, 'x.json', json.dumps(raw_contract()))
+            bad = raw_contract()
+            bad['map_key'] = 'arena_z'
+            bad['ballistics'] = {'7': 0, '8': 0}
+            self.write(tmp, 'z.json', json.dumps(bad))
+            with self.assertRaisesRegex(L.NativeContractError, 'total must be positive'):
+                L.load_contracts(tmp)
+
+
+# ---------------------------------------------------------------------------------------------
+# validate_native_features driven by the data
+# ---------------------------------------------------------------------------------------------
+
+def airpit_manifest() -> dict:
+    contract = v.MAPS['arena_airpit']
+    pins = contract['features']
+    return {
+        'source': {'map_key': 'arena_airpit'}, 'scenes': list(contract['scenes'].values()),
+        'materials': {'m0': {}},
+        'native_features': {
+            'schema_version': 1, 'required': ['ballistics'],
+            'navmesh_areas': {'0': {'name': 'Walkable', 'cost': 1.0}, '1': {'name': 'Not Walkable', 'cost': 1.0}},
+            'raincover': {'schema_version': 1, 'source_scene': 'Scripts (level36)', **pins['raincover']},
+            'light_culling': {'schema_version': 1, **pins['light_culling']},
+            'static_decals': {'schema_version': 1, 'count': pins['static_decals']}},
+        'native_ballistics': {},
+    }
+
+
+def airpit_scenes(manifest: dict, **override) -> dict:
+    """One owner per scene carrying the pinned component census (plus overrides: type -> count)."""
+    wanted = {'BallisticCollider': 3548, **v.pinned_component_census(v.MAPS['arena_airpit']['features'])}
+    wanted.update(override)
+    scenes = {name: [{'id': name, 'components': []}] for name in manifest['scenes']}
+    first = scenes[manifest['scenes'][0]][0]['components']
+    for kind, count in wanted.items():
+        for _ in range(count):
+            component = {'type': kind}
+            if kind == 'StaticDeferredDecal':
+                component.update(schema_version=1, material_id='m0')
+            first.append(component)
+    return scenes
+
+
+def mono(script: str):
+    head = SimpleNamespace(m_Script=SimpleNamespace(path_id=1, deref=lambda: SimpleNamespace(
+        read=lambda: SimpleNamespace(m_ClassName=script, m_Namespace='', m_AssemblyName='Assembly-CSharp'))))
+    return SimpleNamespace(type=SimpleNamespace(name='MonoBehaviour'), parse_monobehaviour_head=lambda: head)
+
+
+class AirPitBallisticsOnlyContractTests(unittest.TestCase):
+    def test_ballistics_only_manifest_validates_with_and_without_scenes(self):
+        manifest = airpit_manifest()
+        self.assertTrue(v.feature_enabled(manifest))
+        self.assertTrue(v.feature_enabled(manifest, airpit_scenes(manifest)))
+
+    def test_native_audio_entry_is_rejected_when_the_contract_declares_none(self):
+        manifest = airpit_manifest()
+        manifest['native_audio'] = {}
+        with self.assertRaisesRegex(ValueError, 'declares no native audio'):
+            v.feature_enabled(manifest)
+
+    def test_required_list_must_be_exactly_ballistics(self):
+        for required in (['ballistics', 'ambient_audio'], [], ['ambient_audio'], ['ballistics', 'ballistics']):
+            manifest = airpit_manifest()
+            manifest['native_features']['required'] = required
+            with self.subTest(required=required), self.assertRaisesRegex(ValueError, 'feature contract'):
+                v.feature_enabled(manifest)
+
+    def test_equator_and_bay5_still_require_native_audio(self):
+        for key in ('arena_equator', 'arena_bay5'):
+            contract = v.MAPS[key]
+            manifest = {'source': {'map_key': key}, 'scenes': list(contract['scenes'].values()),
+                        'native_features': {'schema_version': 1, 'required': ['ballistics']},
+                        'native_ballistics': {}}
+            with self.subTest(key=key, case='audio absent'), self.assertRaisesRegex(ValueError, 'incomplete required feature contract'):
+                v.feature_enabled(manifest)
+            manifest['native_features']['required'].append(contract['audio']['feature'])
+            manifest['native_audio'] = {}
+            self.assertTrue(v.feature_enabled(manifest))
+            manifest['native_features']['required'] = ['ballistics']  # audio present, but not required
+            with self.subTest(key=key, case='audio not required'), self.assertRaisesRegex(ValueError, 'feature contract'):
+                v.feature_enabled(manifest)
+
+    def test_wrong_manifest_census_fails(self):
+        def wrong(change):
+            manifest = airpit_manifest()
+            change(manifest['native_features'])
+            return manifest
+        cases = {
+            'decals -1': lambda f: f['static_decals'].update(count=480),
+            'decals +1': lambda f: f['static_decals'].update(count=482),
+            'culling lights': lambda f: f['light_culling'].update(culling_light_object_count=532),
+            'volumetric': lambda f: f['light_culling'].update(volumetric_light_count=131),
+            'flicker': lambda f: f['light_culling'].update(light_flicker_count=1),
+            'indoor triggers': lambda f: f['raincover'].update(indoor_trigger_count=3),
+            'dry planes': lambda f: f['raincover'].update(dry_plane_count=1),
+            'weather obstacle': lambda f: f['raincover'].update(weather_obstacle=True),
+            'bool for count': lambda f: f['light_culling'].update(light_flicker_count=False),
+        }
+        for name, change in cases.items():
+            with self.subTest(name), self.assertRaisesRegex(ValueError, 'differs from the map contract'):
+                v.feature_enabled(wrong(change))
+
+    def test_missing_feature_fails(self):
+        for entry in ('static_decals', 'light_culling', 'raincover'):
+            manifest = airpit_manifest()
+            manifest['native_features'].pop(entry)
+            with self.subTest(entry), self.assertRaisesRegex(ValueError, 'differs from the map contract'):
+                v.feature_enabled(manifest)
+        for key in ('native_features', 'native_ballistics'):
+            manifest = airpit_manifest()
+            manifest.pop(key)
+            with self.subTest(key), self.assertRaisesRegex(ValueError, 'incomplete required feature contract'):
+                v.feature_enabled(manifest)
+
+    def test_wrong_scene_census_fails(self):
+        manifest = airpit_manifest()
+        for kind, delta in [('NavMeshModifier', -1), ('NavMeshModifier', 1), ('NavMeshModifierVolume', -1),
+                            ('NavMeshModifierVolume', 1), ('SmallPhysicsObject', 1), ('CullingLightObject', -1),
+                            ('VolumetricLight', 1), ('LightFlicker', 1)]:
+            pinned = v.pinned_component_census(v.MAPS['arena_airpit']['features'])[kind]
+            scenes = airpit_scenes(manifest, **{kind: pinned + delta})
+            with self.subTest(kind=kind, delta=delta), self.assertRaisesRegex(ValueError, 'native component census'):
+                v.feature_enabled(manifest, scenes)
+
+    def test_scene_decals_must_match_the_manifest_and_the_pin(self):
+        manifest = airpit_manifest()
+        with self.assertRaisesRegex(ValueError, 'static decal census differs'):
+            v.feature_enabled(manifest, airpit_scenes(manifest, StaticDeferredDecal=480))
+        manifest['native_features']['static_decals']['count'] = 480
+        with self.assertRaisesRegex(ValueError, 'differs from the map contract'):
+            v.feature_enabled(manifest, airpit_scenes(manifest, StaticDeferredDecal=480))
+
+    def test_scene_set_and_slice_rules(self):
+        for change in (lambda m: m['scenes'].pop(), lambda m: m['scenes'].append(m['scenes'][0]),
+                       lambda m: m['source'].update(map_key='arena_bowl'), lambda m: m.pop('source'),
+                       lambda m: m.update(slice={'324': [1]})):
+            manifest = airpit_manifest()
+            change(manifest)
+            with self.subTest(change=change), self.assertRaises(ValueError):
+                v.feature_enabled(manifest)
+        manifest = airpit_manifest()
+        manifest['slice'] = {}
+        self.assertTrue(v.feature_enabled(manifest))
+
+    def test_unmarked_native_components_still_fail_without_a_manifest_block(self):
+        self.assertFalse(v.feature_enabled({'scenes': ['Arena_AirPit_ShootOut']}))
+        with self.assertRaisesRegex(ValueError, 'unmarked ballistic'):
+            v.feature_enabled({}, {'scene': [{'components': [{'type': 'BallisticCollider'}]}]})
+
+    def test_extra_counts_without_audio_are_the_rain_cover_objects_only(self):
+        manifest = airpit_manifest()
+        # EnvironmentManager + TriggerGroup + 2 IndoorTrigger, no WeatherObstacle/DryPlane; no audio root.
+        self.assertEqual(v.extra_counts('unused', manifest), {'GameObject': 4, 'Transform': 4, 'AudioSource': 0})
+        manifest['native_features'].pop('raincover')
+        with self.assertRaises(ValueError):  # the pin makes the rain-cover summary mandatory
+            v.extra_counts('unused', manifest)
+
+    def test_audio_proofs_refuse_a_map_without_an_audio_contract(self):
+        manifest = airpit_manifest()
+        with self.assertRaisesRegex(ValueError, 'declares no native audio'):
+            v.load_audio('unused', manifest)
+        data = {'mapKey': 'arena_airpit', 'schemaVersion': 2, 'players': [], 'support': []}
+        with self.assertRaisesRegex(ValueError, 'declares no native audio'):
+            v.validate_audio_bundle([], 'unused', data)
+        with self.assertRaisesRegex(ValueError, 'unsupported built audio map identity'):
+            v.validate_audio_bundle([], 'unused', dict(data, mapKey='arena_bowl'))
+
+    def test_bundle_must_not_carry_native_audio_the_contract_does_not_declare(self):
+        v.reject_undeclared_audio([mono('BallisticCollider'), SimpleNamespace(type=SimpleNamespace(name='AudioSource'))])
+        for script in ('AmbientSoundPlayer', 'SeasonAmbientSoundPlayer', 'AmbientSoundPlayerGroup', 'SoundBank',
+                       'BezierSpline'):
+            with self.subTest(script), self.assertRaisesRegex(ValueError, 'does not declare'):
+                v.reject_undeclared_audio([mono('BallisticCollider'), mono(script)])
+
+    def test_strict_census_equality(self):
+        self.assertTrue(v.same(2, 2))
+        self.assertFalse(v.same(True, 1))
+        self.assertFalse(v.same(2.0, 2))
+        self.assertFalse(v.same(None, 0))
+
+
+class AudioFollowsTheContractTests(unittest.TestCase):
+    """Audio is conditional on the contract: swap in a data contract and the validator follows it."""
+
+    def with_audio_contract(self, raw_audio):
+        raw = deepcopy(raw_contract())
+        raw.update(map_key='arena_airpit', features=deepcopy(v.MAPS['arena_airpit']['features']))
+        raw['scenes'] = {str(i): n for i, n in v.MAPS['arena_airpit']['scenes'].items()}
+        raw['ballistics'] = {str(i): n for i, n in v.MAPS['arena_airpit']['ballistics'].items()}
+        raw['audio'] = raw_audio
+        return L.parse_contract(raw, 'airpit', 'fixture.json')
+
+    def test_item_13_style_contract_makes_audio_required(self):
+        contract = self.with_audio_contract(raw_contract()['audio'])
+        manifest = airpit_manifest()
+        manifest['native_features']['required'] = ['ballistics', 'ambient_audio']
+        with patch.dict(v.MAPS, {'arena_airpit': contract}):
+            with self.assertRaisesRegex(ValueError, 'incomplete required feature contract'):
+                v.feature_enabled(manifest)  # audio now required but absent
+            manifest['native_audio'] = {}
+            self.assertTrue(v.feature_enabled(manifest))
+            manifest['native_features']['required'] = ['ballistics']
+            with self.assertRaisesRegex(ValueError, 'feature contract'):
+                v.feature_enabled(manifest)
+
+    def players(self, count=6):
+        return [{'id': f'level9:{i}', 'path': f'Amb/Group/p{i}', 'enabled': True, 'activeInHierarchy': True,
+                 'sourceAudio': {'Loop': False}} for i in range(count)]
+
+    def groups(self, ids):
+        return [{'kind': 'AmbientSoundPlayerGroup', 'enabled': True, 'activeInHierarchy': True, 'mixerName': mixer,
+                 'soundPlayers': [{'resolved': i} for i in members]}
+                for mixer, members in zip(('CommonAmbOutEffects', 'CommonAmbInEffects'), ids)]
+
+    def check(self, data, audio=None):
+        audio = audio or L.parse_contract(raw_contract(), 'x')['audio']
+        grouped = Counter(p['resolved'] for s in data['support'] for p in s.get('soundPlayers', []))
+        v.check_audio_group_states(audio, data, grouped)
+
+    def good(self):
+        players = self.players()
+        ids = [p['id'] for p in players]
+        return {'players': players, 'support': self.groups([ids[:2], ids[2:]])}
+
+    def test_two_groups_with_different_mixers_pass(self):
+        self.check(self.good())
+
+    def test_group_pins_are_enforced(self):
+        def swap_mixers(d):
+            d['support'][0]['mixerName'], d['support'][1]['mixerName'] = d['support'][1]['mixerName'], d['support'][0]['mixerName']
+        def reorder_groups(d):
+            d['support'].reverse()
+        def drop_member(d):
+            d['support'][1]['soundPlayers'].pop()
+        def duplicate_member(d):
+            d['support'][0]['soundPlayers'].append(d['support'][1]['soundPlayers'][0])
+        def inactive_player(d):
+            d['players'][3]['activeInHierarchy'] = False
+        def disabled_player(d):
+            d['players'][3]['enabled'] = False
+        def looping_player(d):
+            d['players'][0]['sourceAudio']['Loop'] = True
+        def disabled_group(d):
+            d['support'][0]['enabled'] = False
+        def inactive_group(d):
+            d['support'][1]['activeInHierarchy'] = False
+        for change in (swap_mixers, reorder_groups, drop_member, duplicate_member, inactive_player,
+                       disabled_player, looping_player, disabled_group, inactive_group):
+            data = self.good()
+            change(data)
+            with self.subTest(change.__name__), self.assertRaises(ValueError):
+                self.check(data)
+
+    def test_active_coverage_with_pinned_inactive_players(self):
+        raw = raw_contract()
+        raw['audio']['group_coverage'] = 'active_players'
+        raw['audio']['states'].update(grouped_players=5, inactive_players={'level9:5': 'far_dogs'})
+        audio = L.parse_contract(raw, 'x')['audio']
+        data = self.good()
+        data['players'][5].update(activeInHierarchy=False, path='Amb/Group/far_dogs')
+        data['support'][1]['soundPlayers'].pop()  # the inactive player is not grouped
+        self.check(data, audio)
+        data['support'][1]['soundPlayers'].append({'resolved': 'level9:5'})  # an inactive player must not join
+        with self.assertRaisesRegex(ValueError, 'active group coverage'):
+            self.check(data, audio)
+
+    def test_schema_one_style_contract_only_checks_coverage(self):
+        raw = raw_contract()
+        raw['audio'].update(schema=1, states=None)
+        audio = L.parse_contract(raw, 'x')['audio']
+        data = self.good()
+        data['players'][0]['enabled'] = False  # no state pins: not examined
+        self.check(data, audio)
+        data['support'][1]['soundPlayers'].pop()
+        with self.assertRaisesRegex(ValueError, 'audio group coverage'):
+            self.check(data, audio)
+
+
+# ---------------------------------------------------------------------------------------------
+# Real packages (ignored work/ inputs; skipped when absent)
+# ---------------------------------------------------------------------------------------------
+
+def package_dir(name: str):
+    path = REPO / 'work' / 'extract' / name
+    return path if (path / 'manifest.json').is_file() else None
+
+
+class AcceptedPackageTests(unittest.TestCase):
+    """The accepted v5 packages still clear the manifest, scene-census and audio-index gates from data.
+
+    These gates do not re-read the live Arena install, unlike validate_extract's source checks, so they
+    are not affected by the 0.6.0 provenance drift documented in docs/progress/airpit-release.md."""
+
+    # extra_counts() values recorded from the pre-item-3 validator on the same packages.
+    EXPECTED_EXTRA = {'equator-native-v5': {'GameObject': 32, 'Transform': 32, 'AudioSource': 25},
+                      'bay5-native-v5': {'GameObject': 63, 'Transform': 63, 'AudioSource': 24}}
+
+    def test_manifest_scene_census_and_audio_index(self):
+        for name, extra in self.EXPECTED_EXTRA.items():
+            package = package_dir(name)
+            if package is None:
+                continue
+            with self.subTest(package=name):
+                manifest = v.read_json(package / 'manifest.json')
+                scenes = v.scene_objects(package, manifest)
+                self.assertTrue(v.feature_enabled(manifest, scenes))
+                key, _ = v.map_contract(manifest)
+                self.assertEqual(key, {'equator-native-v5': 'arena_equator', 'bay5-native-v5': 'arena_bay5'}[name])
+                self.assertEqual(v.load_audio(package, manifest)['mapKey'], key)
+                self.assertEqual(v.extra_counts(package, manifest), extra)
+                counted = Counter(c['type'] for objects in scenes.values() for o in objects for c in o['components']
+                                  if c['type'] == 'BallisticCollider')
+                self.assertEqual(counted['BallisticCollider'], sum(v.MAPS[key]['ballistics'].values()))
+        if all(package_dir(n) is None for n in self.EXPECTED_EXTRA):
+            self.skipTest('accepted native packages not present')
+
+    def test_airpit_native_package_when_present(self):
+        package = package_dir('airpit-native-v5')
+        if package is None:
+            self.skipTest('work/extract/airpit-native-v5 not present (PLAN-AIRPIT item 5)')
+        manifest = v.read_json(package / 'manifest.json')
+        scenes = v.scene_objects(package, manifest)
+        self.assertTrue(v.feature_enabled(manifest, scenes))
+        self.assertNotIn('native_audio', manifest)
+
+
+if __name__ == '__main__':
+    unittest.main()

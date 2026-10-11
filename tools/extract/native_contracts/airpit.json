@@ -1,0 +1,44 @@
+{
+  "schema_version": 1,
+  "map_key": "arena_airpit",
+  "notes": [
+    "Pins from the PLAN-AIRPIT item 2 dry run on Arena 0.6.0.47752 (docs/progress/airpit-release.md): BallisticCollider 3548 (2856/512/28/94/58), StaticDeferredDecal 481, NavMeshModifier 20 + NavMeshModifierVolume 12, CullingLightObject 533, VolumetricLight 130, LightFlicker 0, SmallPhysicsObject 0, rain cover 2 IndoorTrigger / 0 DryPlane / no WeatherObstacle.",
+    "audio is null for now: AirPit ships without native ambient audio until PLAN-AIRPIT item 13, which replaces this null with the audio pins from the plan (schema 2, source scene level39, AmbientSoundPlayer 26, AmbientSoundPlayerGroup 2, banks 9, clips 61, per-group mixers CommonAmbOutEffects / CommonAmbInEffects) and registers an exporter. Until then a package must carry no native_audio entry and native_features.required is exactly [ballistics].",
+    "implicit_scene_identity stays false: generic packages always record source.map_key."
+  ],
+  "scenes": {
+    "324": "Arena_AirPit_ShootOut",
+    "325": "Arena_AirPit_ShootOut_Light",
+    "40": "Arena_Airpit_DesignStuff",
+    "29": "Arena_Airpit_TeamFight",
+    "28": "Arena_Airpit_TeamFight_DesignStuff"
+  },
+  "ballistics": {
+    "324": 2856,
+    "325": 512,
+    "40": 28,
+    "29": 94,
+    "28": 58
+  },
+  "require_unsliced": true,
+  "implicit_scene_identity": false,
+  "features": {
+    "static_decals": 481,
+    "light_culling": {
+      "culling_light_object_count": 533,
+      "volumetric_light_count": 130,
+      "light_flicker_count": 0
+    },
+    "raincover": {
+      "indoor_trigger_count": 2,
+      "dry_plane_count": 0,
+      "weather_obstacle": false
+    },
+    "navmesh_modifiers": {
+      "modifiers": 20,
+      "volumes": 12
+    },
+    "small_physics_objects": 0
+  },
+  "audio": null
+}

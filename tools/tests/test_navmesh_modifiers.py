@@ -183,7 +183,7 @@ class FeatureEnabledAcceptsNavmeshAreasKeyTests(unittest.TestCase):
 
     def _bay5_manifest(self, areas):
         contract = self.v.MAPS["arena_bay5"]
-        native_features = {"schema_version": 1, "required": ["ballistics", contract["feature"]]}
+        native_features = {"schema_version": 1, "required": ["ballistics", contract["audio"]["feature"]]}
         if areas is not None:
             native_features["navmesh_areas"] = areas
         return {

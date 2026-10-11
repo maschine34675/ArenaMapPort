@@ -210,7 +210,7 @@ class FeatureEnabledAcceptsRaincoverKeyTests(unittest.TestCase):
 
     def _bay5_manifest(self, with_raincover):
         contract = self.v.MAPS["arena_bay5"]
-        native_features = {"schema_version": 1, "required": ["ballistics", contract["feature"]]}
+        native_features = {"schema_version": 1, "required": ["ballistics", contract["audio"]["feature"]]}
         if with_raincover:
             native_features["raincover"] = {"schema_version": 1, "indoor_trigger_count": 30,
                                              "dry_plane_count": 669, "weather_obstacle": True}

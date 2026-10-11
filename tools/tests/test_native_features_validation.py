@@ -71,8 +71,11 @@ def player(kind,path):
                 'BypassReverbZones':False,'m_Enabled':1,'m_Volume':.7,'m_Pitch':1.,'MinDistance':1.,'MaxDistance':30.,'rolloffMode':2}}
 
 
+BAY5_AUDIO_ROOT=v.MAPS['arena_bay5']['audio']['root']
+
+
 def audio_fixture(directory):
-    scene=Scene();scripts=scene.go('ScriptsRoot',active=True);root=scene.go(v.AUDIO_ROOT,scripts,False)
+    scene=Scene();scripts=scene.go('ScriptsRoot',active=True);root=scene.go(BAY5_AUDIO_ROOT,scripts,False)
     source_root=scene.go('SourceAmbient',root);gos={};native={}
     names=['Random','Season','Water','Group','Spline','Controller','Calculator','Emitter']
     for name in names:gos[name]=scene.go(name,source_root)
@@ -130,7 +133,7 @@ def equator_fixture(directory):
     keep={clip_reader.path_id,bank_reader.path_id}
     scene.objects={k:r for k,r in scene.objects.items() if k in keep}
     scripts=scene.go('ScriptsRoot',active=True)
-    root=scene.go(v.MAPS['arena_equator']['audio_root'],scripts,False)
+    root=scene.go(v.MAPS['arena_equator']['audio']['root'],scripts,False)
     source=scene.go('AmbientAudioSystem',root)
     container=scene.go('AmbientPlayersGroup',source)
     group_go=scene.go('CommonAmbientInGroup',container)
@@ -164,15 +167,17 @@ def equator_fixture(directory):
 
 
 def manifest_for(key):
-    contract=v.MAPS[key]
-    return {'source':{'map_key':key},'scenes':list(contract['scenes'].values()),
-            'native_features':{'schema_version':1,'required':['ballistics',contract['feature']]},
-            'native_ballistics':{},'native_audio':{}}
+    contract=v.MAPS[key];audio=contract['audio']
+    manifest={'source':{'map_key':key},'scenes':list(contract['scenes'].values()),
+              'native_features':{'schema_version':1,'required':['ballistics']+([audio['feature']] if audio else [])},
+              'native_ballistics':{}}
+    if audio:manifest['native_audio']={}
+    return manifest
 
 
 def write_audio_index(directory,data):
     """Index-only fixture; bundle/source tests separately verify actual assets."""
-    key=data['mapKey'];contract=v.MAPS[key];data=deepcopy(data)
+    key=data['mapKey'];contract=v.MAPS[key]['audio'];data=deepcopy(data)
     first_bank=next(iter(data['banks'].values()));first_clip=data['clips'][0]
     data['banks']={**data['banks'],**{'fixture-bank'+str(i):dict(first_bank,id='fixture-bank'+str(i))
                                      for i in range(contract['banks']-len(data['banks']))}}
@@ -305,7 +310,7 @@ class NativeFeatureTests(unittest.TestCase):
             reader=next(r for r in scene.objects.values() if r.type.name=='GameObject' and r.tree['m_Name']==name)
             reader.tree['m_IsActive']=active
         self.audio_mutation(lambda s,d,n,g,c:set_root_state(s,'ScriptsRoot',False))
-        self.audio_mutation(lambda s,d,n,g,c:set_root_state(s,v.AUDIO_ROOT,True))
+        self.audio_mutation(lambda s,d,n,g,c:set_root_state(s,BAY5_AUDIO_ROOT,True))
 
     def test_audio_wrong_group_order(self):
         self.audio_mutation(lambda s,d,n,g,c:n['group'].tree['_soundPlayers'].reverse())
@@ -404,7 +409,7 @@ class NativeFeatureTests(unittest.TestCase):
         self.equator_bundle_mutation(corrupt)
         self.equator_bundle_mutation(lambda s,d,n,g,c:d.update(mapKey='arena_bay5'))
         self.equator_bundle_mutation(lambda s,d,n,g,c:next(r for r in s.objects.values()
-            if r.type.name=='GameObject' and r.tree['m_Name']==v.MAPS['arena_equator']['audio_root']).tree.update(m_Name=v.AUDIO_ROOT))
+            if r.type.name=='GameObject' and r.tree['m_Name']==v.MAPS['arena_equator']['audio']['root']).tree.update(m_Name=BAY5_AUDIO_ROOT))
 
     def test_physics_states_observe_disabled_and_trigger_colliders(self):
         scene=Scene();go=scene.go('Wall');native=scene.component(go,'BoxCollider',{'m_Enabled':1,'m_IsTrigger':False})

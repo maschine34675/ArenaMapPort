@@ -1,0 +1,44 @@
+{
+  "schema_version": 1,
+  "map_key": "arena_equator",
+  "notes": [
+    "Former MAPS['arena_equator'] literal of validate_native_features.py plus its Equator-only audio branch, moved to data by PLAN-AIRPIT item 3.",
+    "features is null on purpose: Equator keeps shape-only validation of the optional native_features entries (the census of decals, culling lights and modifiers is not pinned here).",
+    "states: 23 grouped players = 25 minus the two original inactive far_dogs players; the single indoor group routes to CommonAmbInEffects; level56:965 is the original electricity loop."
+  ],
+  "scenes": {
+    "51": "Arena_Equator",
+    "53": "Arena_Equator_DesignStuff",
+    "55": "Arena_Equator_Lighting",
+    "57": "Arena_Equator_TeamFight_DesignStuff",
+    "58": "Arena_Equator_TeamFight"
+  },
+  "ballistics": {
+    "51": 2639,
+    "53": 25,
+    "55": 127,
+    "57": 89,
+    "58": 12
+  },
+  "require_unsliced": true,
+  "implicit_scene_identity": false,
+  "features": null,
+  "audio": {
+    "feature": "ambient_audio",
+    "schema": 2,
+    "scene": "level56",
+    "root": "ArenaMapPort_EquatorNativeAudio",
+    "players": {"AmbientSoundPlayer": 25},
+    "support": {"AmbientSoundPlayerGroup": 1},
+    "banks": 11,
+    "clips": 65,
+    "group_coverage": "active_players",
+    "states": {
+      "grouped_players": 23,
+      "disabled_players": [],
+      "inactive_players": {"level56:970": "far_dogs2", "level56:975": "far_dogs1"},
+      "group_mixers": ["CommonAmbInEffects"],
+      "loop_players": ["level56:965"]
+    }
+  }
+}

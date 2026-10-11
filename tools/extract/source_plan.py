@@ -16,6 +16,12 @@ PLAN_ROOT = REPO / "tools" / "extract" / "plans"
 GENERIC_SCRIPT = "tools/extract/extract_map.py"
 PLAYER_MARKER = "EFT.Game.Spawning.SpawnPointMarker"
 SCENE_GROUPS = ("scenes", "anchor_scenes", "navmesh_scenes")
+# Roles an excluded (not imported) scene can play for the native-feature extractors:
+# the authored Scripts scene (rain-cover triggers), the ambient Sound scene (audio
+# bake, spatial graph), the AI scene (core points, patrol points) and the Culling
+# scene. A role is a `role` key on an `excluded_scenes` record; each role names at
+# most one scene so an extractor never has to know a per-map BuildSettings index.
+SCENE_ROLES = ("scripts", "sound", "ai", "culling")
 
 
 class PlanError(ValueError):
@@ -61,6 +67,9 @@ def validate_plan(plan: dict) -> dict:
             raise PlanError(f"source plan {group} must be an {'optionally empty' if group == 'navmesh_scenes' else 'nonempty'} array")
         group_indices = set()
         for raw in records:
+            if isinstance(raw, dict) and "role" in raw:
+                raise PlanError(f"{group} record {raw.get('name')!r} cannot carry a scene role; "
+                                "roles belong only on excluded_scenes records")
             record = scene_record(raw)
             index, path, name = record["index"], record["asset_path"], record["name"]
             if index in group_indices:
@@ -72,6 +81,7 @@ def validate_plan(plan: dict) -> dict:
                 table[key] = record
     if not isinstance(plan.get("excluded_scenes"), list):
         raise PlanError("source plan excluded_scenes must be an array with reasons")
+    scene_roles(plan)  # before the generic imported check so a role names its own failure
     imported = {r["index"] for r in plan["scenes"]}
     for record in plan["excluded_scenes"]:
         if not isinstance(record, dict) or not isinstance(record.get("reason"), str) or not record["reason"].strip():
@@ -80,6 +90,59 @@ def validate_plan(plan: dict) -> dict:
         if record.get("index") in imported:
             raise PlanError("an imported scene cannot also be excluded")
     return plan
+
+
+def scene_roles(plan: dict) -> dict[str, dict]:
+    """Return {role: scene record} for the roles declared on `excluded_scenes`.
+
+    Native-feature extractors (rain cover, spatial audio, ambient audio, AI anchors)
+    each used to carry a per-map table of BuildSettings indices. The plan now names
+    the scenes, so the next map needs no extractor edit. Rules, all fail-closed:
+    the role must be one of SCENE_ROLES, each role and each scene index appears at
+    most once, `ai` must also be listed in `navmesh_scenes` as the same scene (the
+    AI scene is loaded for its metadata by every census), and a role is never valid
+    on an imported scene. `validate_plan` additionally rejects a `role` key on any
+    `scenes`, `anchor_scenes` or `navmesh_scenes` record. A plan without roles
+    returns {}.
+    """
+    imported = {scene_record(r)["index"] for r in plan.get("scenes", [])}
+    navmesh = {r["index"]: r for r in (scene_record(raw) for raw in plan.get("navmesh_scenes", []))}
+    roles: dict[str, dict] = {}
+    owners: dict[int, str] = {}
+    for raw in plan.get("excluded_scenes", []):
+        if not isinstance(raw, dict) or "role" not in raw:
+            continue
+        role = raw["role"]
+        if not isinstance(role, str) or role not in SCENE_ROLES:
+            raise PlanError(f"unknown scene role {role!r} on {raw.get('name')!r}; "
+                            f"allowed: {', '.join(SCENE_ROLES)}")
+        record = scene_record(raw)
+        if record["index"] in imported:
+            raise PlanError(f"scene role {role!r} cannot be assigned to the imported scene {record['name']!r}")
+        if role in roles:
+            raise PlanError(f"duplicate scene role {role!r}: {roles[role]['name']!r} and {record['name']!r}")
+        if record["index"] in owners:
+            raise PlanError(f"scene {record['name']!r} cannot carry two roles: "
+                            f"{owners[record['index']]!r} and {role!r}")
+        if role == "ai" and navmesh.get(record["index"]) != record:
+            raise PlanError(f"scene role 'ai' ({record['name']!r}) must also be listed in navmesh_scenes")
+        roles[role] = record
+        owners[record["index"]] = role
+    return roles
+
+
+def scene_for_role(plan: dict, role: str) -> dict:
+    """Return the {name, asset_path, index} record of the scene that plays `role`.
+
+    Raises PlanError for a role outside SCENE_ROLES and for a plan that does not
+    declare it, so an extractor can never fall back to a stale per-map index.
+    """
+    if not isinstance(role, str) or role not in SCENE_ROLES:
+        raise PlanError(f"unknown scene role {role!r}; allowed: {', '.join(SCENE_ROLES)}")
+    found = scene_roles(plan).get(role)
+    if found is None:
+        raise PlanError(f"source plan {plan.get('key')!r} declares no scene with role {role!r}")
+    return dict(found)
 
 
 def load_plan(path: Path) -> dict:

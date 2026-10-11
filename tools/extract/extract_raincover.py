@@ -27,6 +27,20 @@ live Arena install:
     TRANSFORM RECOMPUTE -- that is the one ground-truth value the shipped Arena game itself uses.
     world_position/world_rotation are exported for author-time placement/gizmo fidelity only and
     are not read by any functional code path.
+
+Which scene (PLAN-AIRPIT item 4). Equator/Bay5 keep the SCRIPTS_SCENE_INDEX table below. A
+plan-driven map names its Scripts scene by the ``scripts`` role on an ``excluded_scenes`` record
+of its source plan (source_plan.scene_for_role), so the next map needs no edit here; the CLI
+and ``export_for_plan`` take the index from that role and nothing else. AirPit (level36)
+measured against the live 0.6.0 install: 2 IndoorTrigger (``Bus_IndoorTrigger`` with a baked
+centre 155.2 m from its live transform (125.76 m on the largest single axis, which is what the
+mismatch log line and gate measure), ``IndoorTrigger 11`` covering the north ~79 percent of
+the play length), 0 DryPlane, no WeatherObstacle.
+
+CLI:
+    python extract_raincover.py --plan tools/extract/plans/airpit.json --output <package-dir>
+    python extract_raincover.py --map arena_equator --output <package-dir>     (legacy table)
+Writes <package-dir>/raincover/raincover.json and prints the manifest summary entry as JSON.
 """
 from __future__ import annotations
 
@@ -46,11 +60,14 @@ from UnityPy.enums import ClassIDType  # noqa: E402
 
 import common  # noqa: E402
 import census  # noqa: E402
+from source_plan import scene_for_role  # noqa: E402
 
 SCHEMA_VERSION = 1
+DEFAULT_SOURCE = "D:/Battlestate Games/Escape from Tarkov Arena/EscapeFromTarkovArena_Data"
 
 # analysis/scripts/common.py's own per-map scene-index tables (docs/PLAN-TWO-MAPS.md §6 facts;
-# task brief: Equator Scripts=54, Bay5 Scripts=85).
+# task brief: Equator Scripts=54, Bay5 Scripts=85). Legacy maps only: plan-driven maps read the
+# index from their source plan's `scripts` scene role (scripts_scene_index_for_plan).
 SCRIPTS_SCENE_INDEX = {"arena_equator": 54, "arena_bay5": 85}
 TARGET_CLASSES = ("DryPlane", "IndoorTrigger", "TriggerGroup", "WeatherObstacle")
 
@@ -278,13 +295,23 @@ def _go_name(go_obj):
 # Export.
 # ---------------------------------------------------------------------------------------------
 
-def export(source, package, map_key):
+def export(source, package, map_key, scripts_scene_index=None):
     """Read map_key's Scripts scene and write <package>/raincover/raincover.json. Returns the
     manifest.native_features['raincover'] summary entry. Fails closed (raises) on anything that
-    would silently ship wrong/half-authored cover data -- same convention as extract_bay5_audio.export."""
-    if map_key not in SCRIPTS_SCENE_INDEX:
+    would silently ship wrong/half-authored cover data -- same convention as extract_bay5_audio.export.
+
+    scripts_scene_index: BuildSettings index of the map's Scripts scene. Plan-driven maps pass it
+    from their source plan's ``scripts`` scene role (source_plan.scene_for_role), so no table entry
+    is needed; omitted, the legacy Equator/Bay5 SCRIPTS_SCENE_INDEX table applies (PLAN-AIRPIT items
+    2 and 4)."""
+    if scripts_scene_index is not None:
+        if type(scripts_scene_index) is not int or scripts_scene_index < 0:
+            raise ValueError(f"raincover: invalid Scripts scene index {scripts_scene_index!r} for {map_key!r}")
+        idx = scripts_scene_index
+    elif map_key not in SCRIPTS_SCENE_INDEX:
         raise ValueError(f"raincover: unsupported map_key {map_key!r}")
-    idx = SCRIPTS_SCENE_INDEX[map_key]
+    else:
+        idx = SCRIPTS_SCENE_INDEX[map_key]
 
     paths = common.scene_files({idx: "Scripts"}, base=str(source))
     if not paths:
@@ -363,9 +390,15 @@ def export(source, package, map_key):
             # what Check(pos) actually uses at runtime; this is purely an informational counter for
             # the progress doc, never a reason to prefer the live-recomputed position instead.
             bounds_transform_mismatches += 1
+            # Two different measures, both labelled: the gate above is the largest single-axis offset,
+            # the Euclidean distance is what "how far apart" means (AirPit Bus trigger: 125.76 m on the
+            # largest axis, 155.2 m apart).
+            largest_axis = max(abs(center[i] - pos[i]) for i in range(3))
+            distance = sum((center[i] - pos[i]) ** 2 for i in range(3)) ** 0.5
             print(f"[extract_raincover] {map_key}: IndoorTrigger path_id={obj.path_id} name={_go_name(go)!r} "
                   f"baked Bounds.center {center} vs live Transform-recomputed position {pos} disagree by "
-                  f"{max(abs(center[i] - pos[i]) for i in range(3)):.2f}m -- using the baked Bounds (see docstring).",
+                  f"{largest_axis:.2f}m on the largest axis ({distance:.2f}m apart) -- using the baked Bounds "
+                  "(see docstring).",
                   file=sys.stderr)
         indoor_triggers.append({
             "name": _go_name(go), "bounds_center": center, "bounds_size": size,
@@ -426,3 +459,61 @@ def export(source, package, map_key):
         "weather_obstacle": weather_obstacle,
         "bounds_transform_mismatches": bounds_transform_mismatches,
     }
+
+
+# ---------------------------------------------------------------------------------------------
+# Plan-driven entry points (PLAN-AIRPIT item 4).
+# ---------------------------------------------------------------------------------------------
+
+def scripts_scene_index_for_plan(plan):
+    """BuildSettings index of the plan's Scripts scene, taken from its ``scripts`` scene role.
+    Raises source_plan.PlanError for a plan that declares no such role (no table fallback)."""
+    return scene_for_role(plan, "scripts")["index"]
+
+
+def export_for_plan(source, package, plan):
+    """export() for a plan-driven map: the Scripts scene is the plan's ``scripts`` role."""
+    return export(source, package, plan["key"], scripts_scene_index=scripts_scene_index_for_plan(plan))
+
+
+def build_parser():
+    import argparse
+    parser = argparse.ArgumentParser(description="Extract Arena rain-cover geometry (IndoorTrigger, DryPlane, "
+                                                 "WeatherObstacle) from a map's Scripts scene.")
+    which = parser.add_mutually_exclusive_group(required=True)
+    which.add_argument("--plan", type=str, help="source plan JSON; the Scripts scene is its `scripts` role")
+    which.add_argument("--map", choices=sorted(SCRIPTS_SCENE_INDEX),
+                       help="legacy table map (Equator/Bay5); plan-driven maps use --plan")
+    parser.add_argument("--source", default=DEFAULT_SOURCE, help="Arena EscapeFromTarkovArena_Data dir (read-only)")
+    parser.add_argument("--output", required=True,
+                        help="package directory; raincover/raincover.json is written inside it")
+    return parser
+
+
+def main(argv=None):
+    from pathlib import Path
+    import json
+    from common_ids import HardExtractError
+    from source_plan import PlanError, load_plan, read_build_scenes, verify_scene_mapping
+
+    args = build_parser().parse_args(argv)
+    source, output = Path(args.source).resolve(), Path(args.output).resolve()
+    try:
+        if output == source or source in output.parents or output in source.parents:
+            raise PlanError("raincover output must be separate from the read-only Arena source tree")
+        if args.plan:
+            plan = load_plan(Path(args.plan))
+            # Fail closed if an Arena update moved a scene the plan names (roles included).
+            verify_scene_mapping(plan, read_build_scenes(source), source)
+            summary = export_for_plan(source, output, plan)
+        else:
+            summary = export(source, output, args.map)
+    except (PlanError, HardExtractError, ValueError, OSError) as exc:
+        print(f"[extract_raincover] FAILED: {exc}", file=sys.stderr)
+        return 2
+    print(json.dumps(summary, indent=2, sort_keys=True))
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
