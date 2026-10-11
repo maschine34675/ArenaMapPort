@@ -1,3 +1,4 @@
+from local_output import output_path
 import UnityPy
 import json
 
@@ -17,8 +18,8 @@ def dump(path, out_path, type_names):
 
 if __name__ == "__main__":
     dump("X:/Escape from Tarkov Arena/EscapeFromTarkovArena_Data/globalgamemanagers",
-         "D:/ArenaMapPort/analysis/arena_gm.json",
+         output_path("arena_gm.json"),
          {"TagManager", "NavMeshProjectSettings", "BuildSettings", "PlayerSettings", "QualitySettings", "GraphicsSettings"})
     dump("D:/SPT41/EscapeFromTarkov_Data/globalgamemanagers",
-         "D:/ArenaMapPort/analysis/spt_gm.json",
+         output_path("spt_gm.json"),
          {"TagManager", "NavMeshProjectSettings"})

@@ -32,3 +32,15 @@ analysis/decompiled-server-415-full/
 
 # Playtest screenshots (game content)
 analysis/screenshots/
+
+# Local task evidence and legacy raw game exports (never publish)
+.unlazy/
+.unlazy-hook-state.json
+.claude/settings.local.json
+analysis/arena_gm.json
+analysis/spt_gm.json
+analysis/equator_tdm_preset.json
+analysis/autoservice_preset.json
+analysis/equator_census.json
+analysis/autoservice_census.json
+analysis/scene_externals.json

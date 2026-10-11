@@ -77,7 +77,6 @@ SCENE_REGISTRY = {
 }
 ALL5 = [51, 53, 55, 57, 58]
 
-ANALYSIS_DIR = os.path.normpath(os.path.join(_HERE, "..", "..", "analysis"))
 DEFAULT_SOURCE = "D:/Battlestate Games/Escape from Tarkov Arena/EscapeFromTarkovArena_Data"
 
 
@@ -85,23 +84,39 @@ DEFAULT_SOURCE = "D:/Battlestate Games/Escape from Tarkov Arena/EscapeFromTarkov
 # Environment loading
 # --------------------------------------------------------------------------
 
-def load_tags():
-    with open(os.path.join(ANALYSIS_DIR, "arena_gm.json"), encoding="utf-8") as f:
-        gm = json.load(f)
-    return gm["TagManager"]["tags"]
+def load_tags(source: str):
+    """Read the selected install; raw game-manager dumps are local-only evidence."""
+    env = UnityPy.load(f"{source}/globalgamemanagers")
+    for obj in env.objects:
+        if obj.type.name == "TagManager":
+            tags = obj.read_typetree().get("tags")
+            if isinstance(tags, list) and all(isinstance(tag, str) for tag in tags):
+                return tags
+    raise HardExtractError(f"TagManager.tags missing or invalid in {source}/globalgamemanagers")
+
+
+def scene_external_names(level_path: str) -> list[str]:
+    """Keep source order while skipping Unity's built-in, non-file resources."""
+    env = UnityPy.load(level_path)
+    names = []
+    for asset in env.files.values():
+        for external in getattr(asset, "externals", []):
+            name = str(external.path)
+            if not name or "unity default resources" in name.lower() or "unity_builtin_extra" in name.lower():
+                continue
+            if name not in names:
+                names.append(name)
+    return names
 
 
 def load_environment(source: str, scene_indices: list[int]):
     """Loads level<N>+sharedassets<N>.assets for every requested scene, plus
-    every external file scene_externals.json's level_externals lists for
-    that scene (§B.WP1 step 1), plus globalgamemanagers.assets/resources.assets
+    every external file referenced by that source scene (§B.WP1 step 1),
+    plus globalgamemanagers.assets/resources.assets
     (needed for the MonoScript pool census.spawn_zone_anchors uses). Returns
     (env, exact_paths) where exact_paths[idx] = {"level":..., "sharedassets":...}
     -- the exact-full-path keys is_scene_file()-style code must match against
     (analysis/arena-census.md Method note 3's double-registration pitfall)."""
-    with open(os.path.join(ANALYSIS_DIR, "scene_externals.json"), encoding="utf-8") as f:
-        scene_ext = json.load(f)["Equator"]
-
     paths: list[str] = []
     seen: set[str] = set()
 
@@ -120,11 +135,7 @@ def load_environment(source: str, scene_indices: list[int]):
         add(lvl)
         add(sa)
         exact_paths[idx] = {"level": lvl, "sharedassets": sa}
-        key = f"{idx}_{arena_common.EQUATOR[idx]}"
-        externals = scene_ext.get(key, {}).get("level_externals", [])
-        for ext_name in externals:
-            if ext_name in ("unity default resources",):
-                continue  # built-in engine resource, not a file on disk
+        for ext_name in scene_external_names(lvl):
             add(f"{source}/{ext_name}")
 
     for p in paths:
@@ -967,7 +978,7 @@ def main():
         parser.error("--native-features requires all five full Equator scenes without --slice-roots")
 
     print(f"Loading environment for scenes {scene_indices} from {args.source} ...", file=sys.stderr)
-    tags_array = load_tags()
+    tags_array = load_tags(args.source)
     env, exact_paths = load_environment(args.source, scene_indices)
     print(f"Loaded {len(env.files)} files.", file=sys.stderr)
 

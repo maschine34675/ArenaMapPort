@@ -8,6 +8,9 @@ dated state in one screen; read it before this index if you only have a minute.
 
 ## Current — read these for the area you touch
 
+- [publication-cleanup.md](publication-cleanup.md) — preserve local exports, remove raw
+  analysis dumps/private paths from Git history, and verify source-driven metadata (2026-10-11).
+
 - [release-finalize.md](release-finalize.md) — retire four debug shortcuts and
   consolidate, clean up and push all completed branches (2026-10-11).
 

@@ -3,6 +3,19 @@
 Snapshot for whoever continues (human or agent). Verify the commits named here against `git log`; this file
 is updated by hand at each handover, it is not an automatic record. Read [AGENTS.md](AGENTS.md) first.
 
+## Follow-up on 2026-10-11 — source publication cleanup
+
+The user accepted the release on SPT41vanilla and authorized removal of raw exports
+and private machine/session details from the full Git history before publication.
+Seven original analysis JSONs are preserved byte-identically in ignored
+`work/local-analysis/`; original history is backed up under ignored
+`work/publication-cleanup/`. Equator/Bay5 now read source metadata directly from
+the chosen Arena installation. Both live census runs and 54 focused tests pass.
+Accepted runtime binaries, bundles and test3 ZIP remain unchanged.
+Historical build IDs below describe the pre-cleanup history; the local Git bundle
+and `.git/filter-repo/commit-map` retain that correspondence after rewriting.
+See [scope and verification](docs/progress/publication-cleanup.md).
+
 ## Follow-up on 2026-10-11 — debug helper retired and branches consolidated
 
 `664564c` adds the sanctioned `-RemoveDebugHelper` migration and retires the

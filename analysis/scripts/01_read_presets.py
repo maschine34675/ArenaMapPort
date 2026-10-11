@@ -1,3 +1,4 @@
+from local_output import output_path
 import UnityPy
 import json
 import sys
@@ -24,8 +25,8 @@ def dump_bundle(path, out_path):
 if __name__ == "__main__":
     base = "X:/Escape from Tarkov Arena/EscapeFromTarkovArena_Data/StreamingAssets/Windows/maps"
     targets = [
-        ("arena_equator_tdm_02_preset.bundle", "D:/ArenaMapPort/analysis/equator_tdm_preset.json"),
-        ("arena_autoservice_preset.bundle", "D:/ArenaMapPort/analysis/autoservice_preset.json"),
+        ("arena_equator_tdm_02_preset.bundle", output_path("equator_tdm_preset.json")),
+        ("arena_autoservice_preset.bundle", output_path("autoservice_preset.json")),
     ]
     for fname, out in targets:
         dump_bundle(f"{base}/{fname}", out)

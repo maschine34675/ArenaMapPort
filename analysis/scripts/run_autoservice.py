@@ -1,3 +1,4 @@
+from local_output import output_path
 import sys, os, json, time
 sys.path.insert(0, os.path.dirname(__file__))
 from common import AUTOSERVICE
@@ -16,7 +17,7 @@ def main():
     t0=time.time(); out["lightmap_settings"] = C.lightmap_settings(env); print("lightmap_settings", time.time()-t0, file=sys.stderr)
     t0=time.time(); out["spawn_zone_anchors"] = C.spawn_zone_anchors(env, AUTOSERVICE); print("spawn_zone_anchors", time.time()-t0, file=sys.stderr)
     t0=time.time(); out["navmesh"] = C.navmesh_summary(env, AUTOSERVICE); print("navmesh", time.time()-t0, file=sys.stderr)
-    with open("D:/ArenaMapPort/analysis/autoservice_census.json", "w", encoding="utf-8") as f:
+    with open(output_path("autoservice_census.json"), "w", encoding="utf-8") as f:
         json.dump(out, f, indent=2, default=str, ensure_ascii=False)
     print("DONE", file=sys.stderr)
 

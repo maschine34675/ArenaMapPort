@@ -226,6 +226,12 @@ light. See [selective night flicker](docs/progress/equator-night-flicker.md).
 
 Generated game assets belong in the ignored `work/`, `dist/` and Unity import/reference directories. The Arena installation and historical `analysis/` evidence remain read-only. Game-derived binaries are not committed to this repository. Reused code attribution is in [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md).
 
+Equator and Bay5 read tags and scene dependencies directly from the selected local
+Arena installation. Raw analysis JSON exports are not included in Git; optional
+historical analysis scripts write them under ignored `work/local-analysis/`.
+See [source publication cleanup](docs/progress/publication-cleanup.md) for local-data
+preservation and the history rewrite.
+
 From PowerShell in this repository, `./tools/build_remaining.ps1 -Stage` skips maps whose outputs already validate, builds missing maps one at a time and stages the complete additional-map set. See the [reproducible build steps](docs/progress/remaining-maps.md#build-all-additional-maps) for options and the individual commands. Full-map builds run through `tools/build_all.ps1 -FullMap`. A named Unity lock protects both reference synchronization and the editor run. The script applies the mandatory MonoScript identity repair and regenerates the preset/server base from current local SPT donors, including when reusing existing Unity bundles.
 
 Each bundle build ends with the content validators (extraction, bundle round trip incl. MonoScript identity, preset, map descriptors). `tools/validate/validate_port.py` checks a map's build outputs for consistency, and Release staging finishes with `tools/validate/validate_distribution.py`. The earlier hash receipts (`full-map-validation.json`, `port_inputs.py`) were removed on 2026-09-17: they guarded against local tampering that does not happen in this single-developer workflow and cost minutes per client build and hours per refresh. The extraction reproducibility check is opt-in (`build_all.ps1 -CheckReproducibility`).

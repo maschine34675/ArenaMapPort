@@ -1,3 +1,4 @@
+from local_output import output_path
 import UnityPy
 import json
 
@@ -28,6 +29,6 @@ for idx, label in AUTOSERVICE.items():
         "level_externals": get_externals(f"level{idx}"),
     }
 
-with open("D:/ArenaMapPort/analysis/scene_externals.json", "w", encoding="utf-8") as f:
+with open(output_path("scene_externals.json"), "w", encoding="utf-8") as f:
     json.dump(results, f, indent=2, ensure_ascii=False)
 print("done")

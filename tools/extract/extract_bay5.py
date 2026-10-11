@@ -260,7 +260,7 @@ def main() -> None:
     EQ.SCENE_REGISTRY = registry
 
     print(f"Loading environment for scenes {scene_indices} from {args.source} ...", file=sys.stderr)
-    tags_array = EQ.load_tags()
+    tags_array = EQ.load_tags(args.source)
     env, exact_paths = load_environment_bay5(args.source, scene_indices)
     print(f"Loaded {len(env.files)} files.", file=sys.stderr)
 
