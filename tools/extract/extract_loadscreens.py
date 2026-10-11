@@ -23,7 +23,7 @@ to 1920x1080.
 This script reads those two objects read-only with UnityPy and writes them as high-quality JPEGs
 straight into the CLIENT plugin's deployed folder — a sibling of that folder's own `bundles/`
 directory, exactly the folder `ArenaMapPort.Client.csproj`'s `ArenaMapPortDistCopy` target already
-copies the plugin DLL into (`$(ArenaMapPortDistDir)` = `dist/BepInEx/plugins/ArenaMapPort/`), so
+copies the plugin DLL into (`$(ArenaMapPortDistDir)` = `dist/BepInEx/plugins/maschine-ArenaMapPort/`), so
 `ArenaMapPort.Client/LoadingScreenArt.cs`'s own `PluginDir`-relative lookup
 (`Path.Combine(PluginDir, "loadscreens", ...)`, the same convention `ShaderRebind.cs`/`BundleHost.cs`/
 `NavMeshInstaller.cs` already use) finds it with zero extra staging step in the csproj. BSG art never
@@ -64,13 +64,13 @@ from named_assets import unique_named_texture  # noqa: E402
 # Same default Arena data directory every other extractor in this pipeline uses -- read-only.
 DEFAULT_SOURCE = "D:/Battlestate Games/Escape from Tarkov Arena/EscapeFromTarkovArena_Data"
 
-# repo_root/dist/BepInEx/plugins/ArenaMapPort/loadscreens -- the exact directory
+# repo_root/dist/BepInEx/plugins/maschine-ArenaMapPort/loadscreens -- the exact directory
 # LoadingScreenArt.cs's own PluginDir-relative lookup resolves to at runtime
 # (Path.Combine(PluginDir, "loadscreens", ...), where PluginDir is the deployed plugin DLL's own
-# folder -- ArenaMapPortDistCopy copies the DLL straight into ".../plugins/ArenaMapPort", not a
+# folder -- ArenaMapPortDistCopy copies the DLL straight into ".../plugins/maschine-ArenaMapPort", not a
 # subfolder of it, same as the "bundles" and "banners"-style siblings already staged there).
 _REPO_ROOT = Path(__file__).resolve().parents[2]
-DEFAULT_OUTPUT = _REPO_ROOT / "dist" / "BepInEx" / "plugins" / "ArenaMapPort" / "loadscreens"
+DEFAULT_OUTPUT = _REPO_ROOT / "dist" / "BepInEx" / "plugins" / "maschine-ArenaMapPort" / "loadscreens"
 
 EXPECTED_WIDTH = 1920
 EXPECTED_HEIGHT = 1080

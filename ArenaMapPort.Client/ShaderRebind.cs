@@ -43,7 +43,7 @@ namespace ArenaMapPort.Client
             _groundMaterialWetnessFixEnabled != null && _groundMaterialWetnessFixEnabled.Value;
 
         // Equator's sidecar keeps its pre-generalization filename exactly — it is already
-        // deployed at dist/BepInEx/plugins/ArenaMapPort/material-shaders.json and must keep
+        // deployed at dist/BepInEx/plugins/maschine-ArenaMapPort/material-shaders.json and must keep
         // loading from there without a redeploy (multimap-generalize.md). Every OTHER map gets
         // its own file instead of overwriting/merging into Equator's already-verified one.
         const string EquatorSidecarFileName = "material-shaders.json";

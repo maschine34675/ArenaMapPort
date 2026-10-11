@@ -38,7 +38,7 @@ full `UnityPy.load()` for that one file and logs that it did so, rather than ris
 
 Usage:
     python tools/validate/validate_bundle_names.py
-    python tools/validate/validate_bundle_names.py --bundles-dir dist/BepInEx/plugins/ArenaMapPort/bundles
+    python tools/validate/validate_bundle_names.py --bundles-dir dist/BepInEx/plugins/maschine-ArenaMapPort/bundles
     python tools/validate/validate_bundle_names.py --bundle some.bundle --bundle other.bundle
 
 Exit code 0 + "OK" summary on success. Exit code 1 with a specific, actionable message (never a bare
@@ -54,7 +54,7 @@ from pathlib import Path
 from typing import NoReturn
 
 REPO = Path(__file__).resolve().parents[2]
-DEFAULT_BUNDLES_DIR = REPO / "dist" / "BepInEx" / "plugins" / "ArenaMapPort" / "bundles"
+DEFAULT_BUNDLES_DIR = REPO / "dist" / "BepInEx" / "plugins" / "maschine-ArenaMapPort" / "bundles"
 
 # Unity's own bit, ArchiveFlags.BlocksInfoAtTheEnd (UnityPy.enums.BundleFile.ArchiveFlags) --
 # duplicated here as a bare int rather than importing the enum so this reader stays a fully

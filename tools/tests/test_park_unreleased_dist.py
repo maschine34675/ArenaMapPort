@@ -20,7 +20,7 @@ class ParkedDistributionTests(unittest.TestCase):
         (self.root / 'tools').mkdir()
         self.script = self.root / 'tools/park-unreleased-dist.ps1'
         shutil.copy2(REPO / 'tools/park-unreleased-dist.ps1', self.script)
-        self.client = self.root / 'dist/BepInEx/plugins/ArenaMapPort'
+        self.client = self.root / 'dist/BepInEx/plugins/maschine-ArenaMapPort'
         self.server = self.root / 'dist/SPT_Runtime/user/mods/ArenaMapPort'
         self.client.mkdir(parents=True)
         self.server.mkdir(parents=True)

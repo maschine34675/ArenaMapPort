@@ -92,7 +92,7 @@ class OutputPathTests(unittest.TestCase):
         # "bundles", not a subfolder of it.
         self.assertEqual(
             EL.DEFAULT_OUTPUT.parts[-5:],
-            ("dist", "BepInEx", "plugins", "ArenaMapPort", "loadscreens"),
+            ("dist", "BepInEx", "plugins", "maschine-ArenaMapPort", "loadscreens"),
         )
 
 

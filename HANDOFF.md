@@ -3,6 +3,20 @@
 Snapshot for whoever continues (human or agent). Verify the commits named here against `git log`; this file
 is updated by hand at each handover, it is not an automatic record. Read [AGENTS.md](AGENTS.md) first.
 
+## Follow-up on 2026-10-11 — first release and client folder
+
+Release 0.1.0 uses `BepInEx/plugins/maschine-ArenaMapPort`; the server remains at
+`SPT_Runtime/user/mods/ArenaMapPort`. Build/deploy/export/validation paths follow
+that contract. The explicit deployment `-RenameClientFolder` mode preserves the
+complete old client folder and requires EFT to be closed on synchronized hosts.
+The accepted client/server DLLs and all 48 runtime files remain byte-identical to
+test3; only ZIP paths and its README change. The final archive has 51 entries.
+37 Python tests, 21 rename checks, 10 DLL-only cases, 99 DynamicMaps deployment cases
+and the real distribution validator pass. No new gameplay behavior is introduced.
+Local pre/post installation and publication evidence is under ignored
+`work/first-github-release/`; see [release record](docs/progress/client-folder-release.md)
+and [release notes](docs/releases/v0.1.0.md).
+
 ## Publication decision on 2026-10-11
 
 The user chose a new independent `maschine34675/ArenaMapPort` repository containing

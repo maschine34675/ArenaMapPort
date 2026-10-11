@@ -30,7 +30,7 @@
     <EftManagedDir>D:/SPT41/EscapeFromTarkov_Data/Managed</EftManagedDir>
 
     <!-- O7/O4: build output lands under the repo's own dist/, never under D:/SPT41. -->
-    <ArenaMapPortDistDir>$(MSBuildThisFileDirectory)..\dist\BepInEx\plugins\ArenaMapPort</ArenaMapPortDistDir>
+    <ArenaMapPortDistDir>$(MSBuildThisFileDirectory)..\dist\BepInEx\plugins\maschine-ArenaMapPort</ArenaMapPortDistDir>
   </PropertyGroup>
 
   <ItemGroup>
@@ -241,7 +241,7 @@
 
   <!--
     §B.WP2.8's own words: "Output written to work/build/ ..., then copied into
-    dist/BepInEx/plugins/ArenaMapPort/bundles/ by a deploy step WP4 owns." This is that step, run after
+    dist/BepInEx/plugins/maschine-ArenaMapPort/bundles/ by a deploy step WP4 owns." This is that step, run after
     every Release build. Still O4/O7-safe (work/ and dist/ only).
 
     S3 FIX (dist-manifest pass): this used to be a recursive `work\build\**\*.bundle` glob (minus

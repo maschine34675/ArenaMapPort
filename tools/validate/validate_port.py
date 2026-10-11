@@ -116,7 +116,7 @@ def verify(stem, distribution=False):
     require(base['Scene'] == {'path': f'maps/{key}_preset.bundle', 'rcid': f'{key}.scenespreset.asset'},
             'Server preset reference mismatch')
     if distribution:
-        plugin = REPO / 'dist/BepInEx/plugins/ArenaMapPort'
+        plugin = REPO / 'dist/BepInEx/plugins/maschine-ArenaMapPort'
         pairs = [(output / f'{key}_{kind}.bundle', plugin / 'bundles' / f'{key}_{kind}.bundle')
                  for kind in ('scenes', 'navmesh')]
         pairs.extend([(REPO / f'work/build/preset/{key}_preset.bundle', plugin / 'bundles' / f'{key}_preset.bundle'),

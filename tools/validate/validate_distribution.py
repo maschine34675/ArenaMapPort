@@ -24,7 +24,7 @@ def validate():
     keys = [m['key'] for m in descriptors]
     if set(keys) != set(RELEASE_MAP_KEYS):
         raise ValueError('Missing release map descriptor')
-    plugin = REPO/'dist/BepInEx/plugins/ArenaMapPort'
+    plugin = REPO/'dist/BepInEx/plugins/maschine-ArenaMapPort'
     for optional in ('arena-audio', 'arena-ui'):
         if any(p.is_file() for p in (plugin/optional).rglob('*')):
             raise ValueError(f'Unused development payload in release: {optional}')

@@ -4,6 +4,19 @@ ArenaMapPort imports locally installed Escape from Tarkov: Arena environments as
 
 The first release contains **Equator and Bay5**, with imported geometry, materials, lighting, audio, collision and navigation. It targets ArenaMode play; Arena match rules, loot and scav raids are outside this mod’s scope. The twelve other development maps are parked and are not registered or packaged.
 
+## Installation
+
+Download the ZIP from [GitHub Releases](https://github.com/maschine34675/ArenaMapPort/releases)
+and extract `BepInEx` and `SPT_Runtime` into your SPT directory with EFT and the server closed.
+The client lives in `BepInEx/plugins/maschine-ArenaMapPort`; the server remains in
+`SPT_Runtime/user/mods/ArenaMapPort`. Install both components. Tested with SPT 4.1.6;
+the server declares compatibility `~4.1.5`.
+
+When upgrading an older development package, move the former
+`BepInEx/plugins/ArenaMapPort` directory outside `BepInEx/plugins` before extracting,
+so only one client DLL is installed. Keep `BepInEx/config` unchanged. The package README
+lists the additional cleanup for old debug-helper and DynamicMaps development copies.
+
 ## Player settings
 
 F12 shows one normal switch: **Appearance / NaturalEquatorNight** (off by default).
@@ -159,7 +172,7 @@ working state.
 
 **DynamicMaps:** Optional Equator and Bay5 ground-plan packs are generated from local geometry
 and each map's existing NavMesh. Deployment and native player/direction/exit checks passed on 2026-09-22.
-The packs ship inside `BepInEx/plugins/ArenaMapPort/dynamicmaps/`; when DynamicMaps is
+The packs ship inside `BepInEx/plugins/maschine-ArenaMapPort/dynamicmaps/`; when DynamicMaps is
 installed, ArenaMapPort registers them in memory. Its installation folder and settings
 need no additions. Remove old `Maps/ArenaMapPort_Equator` and `Maps/ArenaMapPort_Bay5`
 development copies when upgrading, then restart EFT to clear cached definitions.

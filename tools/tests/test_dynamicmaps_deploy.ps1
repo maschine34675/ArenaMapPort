@@ -50,12 +50,12 @@ function New-Fixture([ValidateSet('Equator', 'Bay5')][string]$MapName = 'Equator
     Write-FixtureFile (Join-Path $plugin 'DynamicMaps.dll') 'fixture DLL sentinel, never loaded'
     Write-FixtureFile (Join-Path $plugin 'Maps/Existing/Map.jsonc') 'existing map sentinel'
     Write-FixtureFile (Join-Path $spt 'BepInEx/config/com.mpstark.DynamicMaps.cfg') 'config sentinel'
-    [IO.Directory]::CreateDirectory((Join-Path $spt 'BepInEx/plugins/ArenaMapPort/dynamicmaps')) | Out-Null
-    Write-FixtureFile (Join-Path $spt 'BepInEx/plugins/ArenaMapPort/ArenaMapPort.Client.dll') 'MapPort client sentinel'
+    [IO.Directory]::CreateDirectory((Join-Path $spt 'BepInEx/plugins/maschine-ArenaMapPort/dynamicmaps')) | Out-Null
+    Write-FixtureFile (Join-Path $spt 'BepInEx/plugins/maschine-ArenaMapPort/ArenaMapPort.Client.dll') 'MapPort client sentinel'
     Write-FixtureFile (Join-Path $spt 'SPT_Runtime/user/mods/ArenaMapPort/ArenaMapPort.Server.dll') 'MapPort server sentinel'
     return @{ Root = $caseRoot; Package = $package; Spt = $spt; Plugin = $plugin; Map = $map;
         MapName = $MapName; JsonName = $jsonName; MapDirectory = $mapDirectory;
-        Json = $json; Svg = $svg; Target = (Join-Path $spt "BepInEx/plugins/ArenaMapPort/dynamicmaps/$mapDirectory") }
+        Json = $json; Svg = $svg; Target = (Join-Path $spt "BepInEx/plugins/maschine-ArenaMapPort/dynamicmaps/$mapDirectory") }
 }
 
 function Get-TreeState([string]$Path) {
@@ -170,7 +170,7 @@ try {
         $second = New-Fixture -MapName $secondName
         $second.Spt = $first.Spt
         $second.Plugin = $first.Plugin
-        $second.Target = Join-Path $first.Spt "BepInEx/plugins/ArenaMapPort/dynamicmaps/$($second.MapDirectory)"
+        $second.Target = Join-Path $first.Spt "BepInEx/plugins/maschine-ArenaMapPort/dynamicmaps/$($second.MapDirectory)"
         $result = Invoke-Deploy $first -Confirm
         Assert-That ($result.Code -eq 0) "First map install failed: $($result.Output)"
         $firstBefore = Get-TreeState $first.Target
@@ -321,7 +321,7 @@ try {
     $fakeRepo = Join-Path $fixture.Root 'repo'
     $fixtureScript = Join-Path $fakeRepo 'tools/deploy-to-spt.ps1'
     Write-FixtureFile $fixtureScript (Get-Content -LiteralPath $deployScript -Raw)
-    $clientPath = 'BepInEx/plugins/ArenaMapPort'
+    $clientPath = 'BepInEx/plugins/maschine-ArenaMapPort'
     $serverPath = 'SPT_Runtime/user/mods/ArenaMapPort'
     for ($index = 0; $index -lt 72; $index++) {
         $relative = if ($index -lt 60) { "$clientPath/nested/file-$index.bin" } else { "$serverPath/data/file-$index.json" }
@@ -348,8 +348,8 @@ try {
     function New-CleanupFixture {
         $f = New-Fixture
         $f.Script = Join-Path $f.Root 'repo/tools/deploy-to-spt.ps1'
-        $f.Dist = Join-Path $f.Root 'repo/dist/BepInEx/plugins/ArenaMapPort'
-        $f.Own = Join-Path $f.Spt 'BepInEx/plugins/ArenaMapPort'
+        $f.Dist = Join-Path $f.Root 'repo/dist/BepInEx/plugins/maschine-ArenaMapPort'
+        $f.Own = Join-Path $f.Spt 'BepInEx/plugins/maschine-ArenaMapPort'
         Write-FixtureFile $f.Script (Get-Content -LiteralPath $deployScript -Raw)
         foreach ($map in @('Equator','Bay5')) {
             $source = New-Fixture $map

@@ -6,7 +6,7 @@ $rootFull = [IO.Path]::GetFullPath($root)
 $tempPrefix = [IO.Path]::GetFullPath([IO.Path]::GetTempPath()).TrimEnd('\', '/') + [IO.Path]::DirectorySeparatorChar
 if (-not $rootFull.StartsWith($tempPrefix, [StringComparison]::OrdinalIgnoreCase)) { throw 'Unsafe fixture root' }
 $originalScript = Join-Path $PSScriptRoot '../deploy-to-spt.ps1'
-$client = 'BepInEx/plugins/ArenaMapPort/maschine-ArenaMapPort.Client.dll'
+$client = 'BepInEx/plugins/maschine-ArenaMapPort/maschine-ArenaMapPort.Client.dll'
 $server = 'SPT_Runtime/user/mods/ArenaMapPort/maschine-ArenaMapPort.Server.dll'
 $cases = 0
 function Write-File($path, $text) {
@@ -23,8 +23,8 @@ function New-Fixture([switch]$MissingServer, [switch]$MissingInstalledServer) {
     else { [IO.Directory]::CreateDirectory((Join-Path $repo 'dist/SPT_Runtime/user/mods/ArenaMapPort')) | Out-Null }
     Write-File (Join-Path $spt $client) 'old-client'
     if (-not $MissingInstalledServer) { Write-File (Join-Path $spt $server) 'old-server' }
-    foreach ($extra in @('BepInEx/plugins/ArenaMapPort/bundles/keep.bundle',
-        'BepInEx/plugins/ArenaMapPort/arena-ui/keep.png', 'SPT_Runtime/user/mods/ArenaMapPort/db/base.json')) {
+    foreach ($extra in @('BepInEx/plugins/maschine-ArenaMapPort/bundles/keep.bundle',
+        'BepInEx/plugins/maschine-ArenaMapPort/arena-ui/keep.png', 'SPT_Runtime/user/mods/ArenaMapPort/db/base.json')) {
         Write-File (Join-Path $repo "dist/$extra") 'different-staged-content'
         Write-File (Join-Path $spt $extra) 'installed-sentinel'
     }
@@ -118,7 +118,7 @@ try {
 
     $f = New-Fixture; $result = Invoke-Deploy $f -Confirm -Normal
     Require ($result.Code -eq 0 -and $result.Output -match 'plan: 5 file\(s\)') "Normal whole-dist deploy changed: $($result.Output)"
-    Require ([IO.File]::ReadAllText((Join-Path $f.Spt 'BepInEx/plugins/ArenaMapPort/bundles/keep.bundle')) -eq 'different-staged-content') 'Normal mode stopped deploying assets'
+    Require ([IO.File]::ReadAllText((Join-Path $f.Spt 'BepInEx/plugins/maschine-ArenaMapPort/bundles/keep.bundle')) -eq 'different-staged-content') 'Normal mode stopped deploying assets'
     Require ([IO.File]::ReadAllText((Join-Path $f.Spt 'BepInEx/config/com.maschine.ArenaMapPort.cfg')) -eq 'saved-user-config') 'Normal mode changed config'
     $cases++
     Write-Output "DLL_ONLY_DEPLOY_TESTS_PASSED ($cases cases)"

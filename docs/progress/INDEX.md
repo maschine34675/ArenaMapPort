@@ -8,6 +8,9 @@ dated state in one screen; read it before this index if you only have a minute.
 
 ## Current — read these for the area you touch
 
+- [client-folder-release.md](client-folder-release.md) — prefixed client folder,
+  content-preserving migration and first GitHub release packaging (2026-10-11).
+
 - [publication-cleanup.md](publication-cleanup.md) — preserve local exports, remove raw
   analysis dumps/private paths from Git history, and verify source-driven metadata (2026-10-11).
 

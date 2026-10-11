@@ -5,7 +5,7 @@
   target or CI-style pipeline runs automatically).
 
 .DESCRIPTION
-  Copies dist/BepInEx/plugins/ArenaMapPort/**      -> <SptRoot>/BepInEx/plugins/ArenaMapPort/**
+  Copies dist/BepInEx/plugins/maschine-ArenaMapPort/**      -> <SptRoot>/BepInEx/plugins/maschine-ArenaMapPort/**
         dist/SPT_Runtime/user/mods/ArenaMapPort/** -> <SptRoot>/SPT_Runtime/user/mods/ArenaMapPort/**
 
   SAFETY (task-mandated, not optional):
@@ -33,7 +33,7 @@
 
 .PARAMETER DynamicMapsPackage
   Optional data-only package directory. Deploys exactly ArenaMapPort_<map>.jsonc and
-  Layers/Ground.svg into ArenaMapPort/dynamicmaps/ArenaMapPort_<map>.
+  Layers/Ground.svg into maschine-ArenaMapPort/dynamicmaps/ArenaMapPort_<map>.
   This separate mode never reads dist/ or copies client/server files. DynamicMaps is optional; it
   validates the complete package and refuses links in either path. Default remains a dry run.
 
@@ -64,6 +64,12 @@
   only its known DLL from either historical plugin path, verifying the accepted helper hash.
   Close EFT first. Leaves folders/configuration untouched. Dry run unless Confirm is supplied.
 
+.PARAMETER RenameClientFolder
+  Separate migration from BepInEx/plugins/ArenaMapPort to maschine-ArenaMapPort.
+  Renames the complete directory without changing any file contents or the server folder.
+  Refuses links, a missing client DLL, and an existing destination. Close EFT first,
+  including any host receiving this installation through synchronization. Dry run unless Confirm.
+
 .EXAMPLE
   # dry run (default) -- prints the plan, copies nothing:
   pwsh tools/deploy-to-spt.ps1
@@ -84,6 +90,7 @@ param(
     [switch]$RemoveLegacyDynamicMaps,
     [switch]$RemoveLegacyEquatorDb,
     [switch]$RemoveDebugHelper,
+    [switch]$RenameClientFolder,
     [string]$DynamicMapsPackage,
     [ValidateSet('Equator', 'Bay5')]
     [string]$DynamicMapsMap = 'Equator'
@@ -239,7 +246,7 @@ function Invoke-DynamicMapsDeploy {
     $mapName = if ($DynamicMapsMap -eq 'Bay5') { 'Bay5' } else { 'Equator' }
     $mapFile = "ArenaMapPort_$mapName.jsonc"
     $package = Assert-DynamicMapsPackage $DynamicMapsPackage $mapName
-    $pluginRoot = Assert-PlainPath (Join-Path $SptRoot 'BepInEx/plugins/ArenaMapPort') 'Directory'
+    $pluginRoot = Assert-PlainPath (Join-Path $SptRoot 'BepInEx/plugins/maschine-ArenaMapPort') 'Directory'
     $target = Assert-PlainPath (Join-Path $pluginRoot "dynamicmaps/ArenaMapPort_$mapName") 'Directory'
     $targetPrefix = $target.TrimEnd('\', '/') + [IO.Path]::DirectorySeparatorChar
     if ($target -eq $package -or $target.StartsWith($package.TrimEnd('\', '/') + [IO.Path]::DirectorySeparatorChar, [StringComparison]::OrdinalIgnoreCase) -or
@@ -283,7 +290,7 @@ function Invoke-DynamicMapsDeploy {
 
 function Get-LegacyDynamicMapsPlan {
     $repo = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot '..')).Path
-    $relativePlugin = 'BepInEx/plugins/ArenaMapPort'
+    $relativePlugin = 'BepInEx/plugins/maschine-ArenaMapPort'
     $stagedPlugin = Join-Path (Join-Path $repo 'dist') $relativePlugin
     $installedPlugin = Join-Path $SptRoot $relativePlugin
     $replacementFiles = @('maschine-ArenaMapPort.Client.dll')
@@ -359,7 +366,7 @@ function Invoke-LegacyDynamicMapsRemoval {
 function Invoke-DllOnlyDeploy {
     $repo = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot '..')).Path
     $plan = @(foreach ($relative in @(
-        'BepInEx/plugins/ArenaMapPort/maschine-ArenaMapPort.Client.dll',
+        'BepInEx/plugins/maschine-ArenaMapPort/maschine-ArenaMapPort.Client.dll',
         'SPT_Runtime/user/mods/ArenaMapPort/maschine-ArenaMapPort.Server.dll')) {
         $source = Assert-PlainPath (Join-Path (Join-Path $repo 'dist') $relative) 'File'
         $destination = Assert-PlainPath (Join-Path $SptRoot $relative) 'File'
@@ -522,6 +529,60 @@ function Invoke-DebugHelperRemoval {
     Write-Output "DEBUG_HELPER_REMOVED $($plan.Count) DLL(s); backups: $backupRoot"
 }
 
+function Invoke-ClientFolderRename {
+    $plugins = Assert-PlainPath (Join-Path $SptRoot 'BepInEx/plugins') 'Directory'
+    $source = Assert-PlainPath (Join-Path $plugins 'ArenaMapPort') 'Directory'
+    $target = Assert-PlainPath (Join-Path $plugins 'maschine-ArenaMapPort') 'Directory'
+    $prefix = $plugins.TrimEnd('\', '/') + [IO.Path]::DirectorySeparatorChar
+    if (-not $source.StartsWith($prefix, [StringComparison]::OrdinalIgnoreCase) -or
+        -not $target.StartsWith($prefix, [StringComparison]::OrdinalIgnoreCase) -or
+        [IO.Path]::GetDirectoryName($source) -ne $plugins -or [IO.Path]::GetDirectoryName($target) -ne $plugins) {
+        throw 'Client migration paths escape the intended plugins directory'
+    }
+    if ((Test-Path -LiteralPath $source) -and (Test-Path -LiteralPath $target)) {
+        throw 'Both client folders exist; refusing to merge or overwrite either folder'
+    }
+    $alreadyMoved = -not (Test-Path -LiteralPath $source -PathType Container)
+    $current = if ($alreadyMoved) { $target } else { $source }
+    $dll = Assert-PlainPath (Join-Path $current 'maschine-ArenaMapPort.Client.dll') 'File'
+    if (-not (Test-Path -LiteralPath $dll -PathType Leaf)) { throw 'Expected ArenaMapPort client DLL is missing' }
+    # Inspect each level before descending; never follow a directory junction.
+    $pending = [Collections.Generic.Stack[string]]::new()
+    $pending.Push($current)
+    while ($pending.Count) {
+        $folder = $pending.Pop()
+        $null = Assert-PlainPath $folder 'Directory'
+        foreach ($item in Get-ChildItem -LiteralPath $folder -Force) {
+            $kind = if ($item.PSIsContainer) { 'Directory' } else { 'File' }
+            $null = Assert-PlainPath $item.FullName $kind
+            if ($item.PSIsContainer) { $pending.Push($item.FullName) }
+        }
+    }
+    if ($alreadyMoved) { Write-Output 'CLIENT_FOLDER_RENAMED already migrated'; return }
+    $eftPath = [IO.Path]::GetFullPath((Join-Path $SptRoot 'EscapeFromTarkov.exe'))
+    foreach ($process in Get-Process -Name EscapeFromTarkov -ErrorAction SilentlyContinue) {
+        if ($process.Path -eq $eftPath) { throw 'Close EFT before renaming its plugin folder' }
+    }
+    Write-Output "Rename client directory: $source -> $target"
+    if (-not $Confirm) { Write-Output 'DRY RUN: no files changed'; return }
+    $null = Assert-PlainPath $source 'Directory'
+    $null = Assert-PlainPath $target 'Directory'
+    # Directory.Move refuses an existing destination instead of nesting/merging.
+    [IO.Directory]::Move($source, $target)
+    Write-Output 'CLIENT_FOLDER_RENAMED all contents preserved; server folder untouched'
+}
+
+if ($RenameClientFolder) {
+    try {
+        if ($RemoveDebugHelper -or $RemoveLegacyEquatorDb -or $RemoveLegacyDynamicMaps -or $DllOnly -or
+            $PSBoundParameters.ContainsKey('DynamicMapsPackage') -or $PSBoundParameters.ContainsKey('DynamicMapsMap')) {
+            throw 'RenameClientFolder cannot be combined with other deployment modes'
+        }
+        Invoke-ClientFolderRename
+    } catch { Fail $_.Exception.Message }
+    exit 0
+}
+
 if ($RemoveDebugHelper) {
     try {
         if ($RemoveLegacyEquatorDb -or $RemoveLegacyDynamicMaps -or $DllOnly -or
@@ -587,8 +648,8 @@ if (-not (Test-Path $DistRoot)) {
 $Mappings = @(
     [PSCustomObject]@{
         Label   = "BepInEx client plugin"
-        SrcRoot = Join-Path $DistRoot "BepInEx/plugins/ArenaMapPort"
-        DstRoot = Join-Path $SptRoot "BepInEx/plugins/ArenaMapPort"
+        SrcRoot = Join-Path $DistRoot "BepInEx/plugins/maschine-ArenaMapPort"
+        DstRoot = Join-Path $SptRoot "BepInEx/plugins/maschine-ArenaMapPort"
     },
     [PSCustomObject]@{
         Label   = "SPT server mod"

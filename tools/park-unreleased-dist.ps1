@@ -6,7 +6,7 @@ $ErrorActionPreference = 'Stop'
 $repo = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
 $dist = Join-Path $repo 'dist'
 $archiveBase = Join-Path $repo 'work/release-parked'
-$sourceRoot = if ($Scope -eq 'Client') { Join-Path $dist 'BepInEx/plugins/ArenaMapPort' } else { Join-Path $dist 'SPT_Runtime/user/mods/ArenaMapPort' }
+$sourceRoot = if ($Scope -eq 'Client') { Join-Path $dist 'BepInEx/plugins/maschine-ArenaMapPort' } else { Join-Path $dist 'SPT_Runtime/user/mods/ArenaMapPort' }
 $archive = Join-Path $archiveBase (([DateTime]::UtcNow.ToString('yyyyMMddTHHmmssfffZ')) + '-' + [Guid]::NewGuid().ToString('N') + '/' + $Scope)
 
 function Assert-OwnedPath([string]$Path, [string]$Root) {

@@ -27,7 +27,7 @@ class DistributionSidecarTests(unittest.TestCase):
         self.maps.mkdir(parents=True)
         (self.maps / "equator.json").write_text(
             json.dumps({"key": "arena_equator", "db_base_json_path": "arena_equator/base.json"}), encoding="utf-8")
-        self.plugin = self.repo / "dist/BepInEx/plugins/ArenaMapPort"
+        self.plugin = self.repo / "dist/BepInEx/plugins/maschine-ArenaMapPort"
         for name in ('Equator', 'Bay5'):
             for file in (f'ArenaMapPort_{name}.jsonc', 'Layers/Ground.svg'):
                 relative = f'ArenaMapPort_{name}/{file}'

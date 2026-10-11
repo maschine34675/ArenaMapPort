@@ -17,7 +17,7 @@ python -m venv work/dynamicmaps/venv
 
 $editor = 'C:/Program Files/Unity/Hub/Editor/2022.3.43f1/Editor/Unity.exe'
 $repo = (Get-Location).Path
-$navBundle = "$repo/dist/BepInEx/plugins/ArenaMapPort/bundles/arena_equator_navmesh.bundle"
+$navBundle = "$repo/dist/BepInEx/plugins/maschine-ArenaMapPort/bundles/arena_equator_navmesh.bundle"
 $output = "$repo/work/dynamicmaps/equator"
 New-Item -ItemType Directory -Force -Path $output | Out-Null
 Start-Process -FilePath $editor -WindowStyle Hidden -Wait -ArgumentList @(
@@ -47,7 +47,7 @@ install and preserve that receipt when regenerating the drawing. Restart EFT aft
 installing/replacing the pack to avoid cached map definitions/sprites.
 
 Pack destination:
-`BepInEx/plugins/ArenaMapPort/dynamicmaps/ArenaMapPort_Equator/`
+`BepInEx/plugins/maschine-ArenaMapPort/dynamicmaps/ArenaMapPort_Equator/`
 
 ### Bay5
 
@@ -67,7 +67,7 @@ pwsh -NoProfile -File tools/deploy-to-spt.ps1 -SptRoot 'D:/SPT41' `
 The historical exporter filename remains compatible with Equator commands; the descriptor
 selects the profile. Bay5 requires native triangulation. Its exact package files are
 `ArenaMapPort_Bay5.jsonc` and `Layers/Ground.svg`; its fixed destination is
-`BepInEx/plugins/ArenaMapPort/dynamicmaps/ArenaMapPort_Bay5/`. Each package deploy
+`BepInEx/plugins/maschine-ArenaMapPort/dynamicmaps/ArenaMapPort_Bay5/`. Each package deploy
 leaves the other map's files alone. Bay5 requires `-DynamicMapsMap Bay5`; omitting
 the selector defaults to Equator and rejects a Bay5 package. Add `-Confirm` only
 for the authorized installation.
@@ -92,7 +92,7 @@ Accepted packs are stored under ignored
 Copy the two files from each accepted `pack/` there after visual validation.
 Current inputs are byte-identical to `work/dynamicmaps/north-marker/{Equator,Bay5}/pack`;
 do not replace them with the older compass drawings. Every client Release build stages
-these four explicit files under `dist/BepInEx/plugins/ArenaMapPort/dynamicmaps/`,
+these four explicit files under `dist/BepInEx/plugins/maschine-ArenaMapPort/dynamicmaps/`,
 including DLL-only builds. Preview PNGs and generation receipts are not shipped.
 
 DynamicMaps remains optional. Its soft dependency enables two reflected hooks when
@@ -169,7 +169,7 @@ can receive the same marker without regenerating its geometry or map definition:
 
 ```powershell
 & ./work/dynamicmaps/venv/Scripts/python.exe tools/dynamicmaps/update_north_marker.py `
-  --source D:/SPT41/BepInEx/plugins/ArenaMapPort/dynamicmaps/ArenaMapPort_Bay5 `
+  --source D:/SPT41/BepInEx/plugins/maschine-ArenaMapPort/dynamicmaps/ArenaMapPort_Bay5 `
   --output work/dynamicmaps/north-marker/Bay5/pack --map Bay5
 pwsh -NoProfile -File tools/deploy-to-spt.ps1 -SptRoot D:/SPT41 `
   -DynamicMapsPackage work/dynamicmaps/north-marker/Bay5/pack -DynamicMapsMap Bay5

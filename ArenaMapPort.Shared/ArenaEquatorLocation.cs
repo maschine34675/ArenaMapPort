@@ -39,7 +39,7 @@ namespace ArenaMapPort.Shared
         public const string ServerModFolderName = "ArenaMapPort";
 
         /// <summary>BepInEx plugin folder name under BepInEx/plugins/.</summary>
-        public const string ClientPluginFolderName = "ArenaMapPort";
+        public const string ClientPluginFolderName = "maschine-ArenaMapPort";
 
         // --- Scene set (§E.1) --------------------------------------------------------------------
         // rcid values patched into the preset by WP3 (§B.WP3 step 3) MUST equal these exactly — a

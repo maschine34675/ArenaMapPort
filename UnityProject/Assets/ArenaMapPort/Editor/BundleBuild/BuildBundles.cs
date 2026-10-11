@@ -333,7 +333,7 @@ namespace ArenaMapPort.Editor.BundleBuild
                 // NOT a nested "bundles/" subfolder — matches tools/validate/validate_preset.py's
                 // `s1_dir.glob("*scenes*.bundle")` auto-probe and WP4's own file-name expectations
                 // (docs/progress/wp3.md/wp4.md, cross-checked this pass). WP4's own deploy step is what
-                // copies the built file into dist/BepInEx/plugins/ArenaMapPort/bundles/ — a different,
+                // copies the built file into dist/BepInEx/plugins/maschine-ArenaMapPort/bundles/ — a different,
                 // later "bundles" folder under dist/, not here.
                 string bundleOutputDir = ctx.outputDir.Replace('\\', '/');
                 Directory.CreateDirectory(bundleOutputDir);
