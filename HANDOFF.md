@@ -11,7 +11,15 @@ and errors remain visible. Native decal normal maps release unused readable CPU 
 before the vanilla atlas is created, preserving uploaded pixels/mips. InitWeather is
 patched through its declaring closed generic type. See [logging audit](docs/progress/release-logging.md)
 for the source-backed CopyTexture explanation and remaining LOD/MenuScreen/other-mod findings.
-Native acceptance and final deployment follow below.
+Implementation **c102b6c** passed the 615-test C# suite and warning-free client build.
+GPU-2 verified Equator -> Bay5 -> Equator, correct 346/468 decal counts and visuals,
+zero CopyTexture/owned Harmony warnings, and developer F9 Debug output plus live
+decal off/on reuse. Full normal log: one own Info, 546 Debug, no own warnings/errors.
+Server output was separately verified after synchronization/restart: two Info and
+four Debug. Both DLLs are deployed and hash-matched on SPT41 and SPT41vanilla;
+vanilla still needs the user's game/server restart. Final GPU-2 DeveloperMode=false,
+two public options, EFT closed, verified server running. Known source LOD warnings
+and the pause-menu coroutine error remain documented, not suppressed.
 
 ## Earlier on 2026-10-11 — owned overview-map integration
 

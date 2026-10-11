@@ -109,6 +109,10 @@ See [compact configuration](docs/progress/compact-player-config.md) and
 
 ## Build, test, deploy
 
+After deploying through the Syncthing mirror, verify the GPU host's server DLL hash
+before restarting SPT. UiBridge's loaded-plugin comparison covers the client only;
+confirm changed server behavior in the new process log as well.
+
 ```powershell
 # client plugin (Release; DllOnly skips re-staging the bundles into dist/)
 dotnet build ArenaMapPort.Client/ArenaMapPort.Client.csproj -c Release -p:ArenaMapPortDllOnly=true
