@@ -10,7 +10,13 @@ DynamicMaps 1.2.1 integration loads it before native image precaching; accepted 
 files remain byte-identical. The separate sanctioned `-RemoveLegacyDynamicMaps`
 migration validates both replacements and the client DLL before removing only our
 two old packages. See [implementation and acceptance](docs/progress/dynamicmaps-owned.md)
-and [delivery commands](tools/dynamicmaps/README.md). Native acceptance follows below.
+and [delivery commands](tools/dynamicmaps/README.md). Implementation `efbbceb`;
+Release/C# suite, 99 deployment cases, 43 exporter and 10 distribution tests pass.
+GPU-2 `d8713da3` rendered both maps from their new absolute paths, exactly one
+selectable definition each; 13 total including eleven unchanged maps. MainMenu,
+20/20 loaded identities matching, no integration warnings/errors. Both installs
+received verified DLLs and packs. Four old files removed from SPT41; all 90 other
+DynamicMaps files and config unchanged. Vanilla had no old pack and needs a restart.
 
 ## Earlier on 2026-10-11 — advanced developer switch and rounded ambience
 
