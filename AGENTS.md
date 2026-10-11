@@ -201,6 +201,9 @@ Two MCP servers drive the test host. Since 2026-09-26 the host is **SPT-GPU-2**,
 servers belong to the retired first host — do not test there. The tool names below are written without the suffix.
 Same click points as before, raid start ≈ 9 s, `D:\SPT41` still mirrors it. Recipe that has worked for every host test:
 
+0. `uibridge_help topic=overview` once per session (UiBridge proxy 0.8.1+): the playbooks (start, raid, inventory,
+   shooting, gpu-run, troubleshooting) hold the general sequences, arguments and failure pictures; the steps below are
+   only what is specific to this project.
 1. `uibridge_status`: is another session using the host? Is the loaded ArenaMapPort DLL identical to the
    VM build ("VM build = host disk = loaded")? Is the EFT window focused (the first click into an unfocused
    window only focuses it)?
