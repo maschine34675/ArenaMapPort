@@ -11,6 +11,11 @@ Client metadata generation is enabled so Company and Version actually reach the 
 server Company/Url and GUID casing now follow the naming convention. DLL names,
 folders, map IDs and version 0.1.0 remain unchanged. See the
 [audit and verification](docs/progress/hotkeys-and-metadata.md).
+Implementation **cd51df4** passed the Release build, 615 tests and compiled metadata
+checks. GPU-2 **0d555a71** reached MainMenu with 20/20 loaded identities; direct
+plugin-host inventory confirms all four diagnostic pollers absent in player mode.
+Server validator accepted the corrected GUID. Both installations have matching
+client/server DLLs; vanilla needs a game/server restart. GPU-2 game closed, server running.
 
 ## Earlier on 2026-10-11 — release logging and decal-copy warnings
 
