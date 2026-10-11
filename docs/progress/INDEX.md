@@ -8,6 +8,9 @@ dated state in one screen; read it before this index if you only have a minute.
 
 ## Current — read these for the area you touch
 
+- [../PLAN-AIRPIT.md](../PLAN-AIRPIT.md) — the ordered plan for AirPit as the third released map (2026-10-11):
+  generic plan-driven native-feature pipeline first, then a playable raid, then the native features in the
+  Equator/Bay5 order, then release; open decisions in its section 4.
 - [muzzle-flare-exclusion.md](muzzle-flare-exclusion.md) — exclude native muzzle
   emission from Equator's restored streaks; refresh README and add FORGE (2026-10-11).
 

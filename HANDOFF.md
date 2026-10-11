@@ -3,6 +3,18 @@
 Snapshot for whoever continues (human or agent). Verify the commits named here against `git log`; this file
 is updated by hand at each handover, it is not an automatic record. Read [AGENTS.md](AGENTS.md) first.
 
+## State on 2026-10-11 (evening) — AirPit chosen as the third map; plan written
+
+Branch `feature/airpit` from `d7773e5`. The user picked AirPit (`arena_airpit`, TeamFight layout) as the next
+map. Three read-only surveys plus verification produced [docs/PLAN-AIRPIT.md](docs/PLAN-AIRPIT.md): 25 ordered
+items in four phases (generic extraction plumbing with plan scene roles and data-driven native contracts;
+a playable raid with sidecars, Arena NavMesh oracle, round-start barriers and the lock-step registry promotion;
+native features in the Equator/Bay5 order; size gate and release). Key facts: AirPit is a 2026-09-15 spike with
+no spawns/exits and no native features; Arena 0.6.0 keeps its scene indices (content delta 214 of 20,252
+objects in the main scene); 509 of 813 lights are saved inactive; 127 fog-sheet renderers need a shader stand-in;
+the three-map ZIP projects to about 1.9 GB. Control-point data (capture anchor, SPAWN_BOUND) ride along as a
+generic sidecar when AirPit is extracted (user decision 2026-10-11). Nothing of the plan is implemented yet.
+
 ## Package update on 2026-10-11 — v0.1.0 muzzle-flare correction
 
 The refreshed v0.1.0 ZIP contains the accepted client from `1893272` and an updated
