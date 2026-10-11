@@ -612,6 +612,18 @@ from ignored `work/releases/create_*_zip.py` into `tools/` driven by the release
 
 ## 4. Open decisions for the user (blocking unless marked)
 
+**Decided 2026-10-11 (user: "alles wie empfohlen übernehmen" — take every recommendation):** 1. re-extract from
+Arena 0.6.0; 2. Bay5-style `UsesServerTime` (12:00/00:00 choice) with a night look-test before offering night,
+donor rig `Reserve_Base_Scripts` (Full), `Off` stays an F12 A/B; 3. play space = ground floor + wing mezzanine,
+bake y -2..8 (Arena parity), levels 2/3 walkable without NavMesh; 4. open edges: NavMesh clipping only;
+5. prop obstruction: deactivate mode-hidden props like barriers if the item 7 probe finds the toggler, else
+per-instance bake exclusion; 6. native ambient audio now (lands in URC); 7. version 0.2.0, single ZIP if the
+measured size stays under about 1.95 GB; 8. light parity accepted (AreaLight & co. unported) unless the host shows
+dark signage; 9. shader stand-ins decided on screenshots (A/B); 10. keep the Factory bot stand-ins, pick a free
+icon slot, deploy rotation = the five non-Alt images like Equator/Bay5, no DynamicMaps pack in this cycle,
+package name `airpit-native-v5`, Usec north / Bear south; 11. ArenaMode: Deathmatch/Gun Game first.
+The numbered list below is kept as the record of the options.
+
 1. **Re-extract from Arena 0.6.0 (blocking; recommended yes).** Reasons in §0: native extractors need the live
    install, content delta is about 1 percent of one scene, indices and digest unchanged. Cost: AirPit becomes the only
    map on 0.6.0 content while Equator/Bay5 stay 0.5.4. Alternative (keep 0.5.4 data plus native features) is not

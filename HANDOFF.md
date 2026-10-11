@@ -13,7 +13,9 @@ native features in the Equator/Bay5 order; size gate and release). Key facts: Ai
 no spawns/exits and no native features; Arena 0.6.0 keeps its scene indices (content delta 214 of 20,252
 objects in the main scene); 509 of 813 lights are saved inactive; 127 fog-sheet renderers need a shader stand-in;
 the three-map ZIP projects to about 1.9 GB. Control-point data (capture anchor, SPAWN_BOUND) ride along as a
-generic sidecar when AirPit is extracted (user decision 2026-10-11). Nothing of the plan is implemented yet.
+generic sidecar when AirPit is extracted (user decision 2026-10-11). The user took every recommendation of the
+plan's section 4 (re-extract from 0.6.0, server-time day/night like Bay5, bake y -2..8, native audio now, 0.2.0
+single ZIP if under ~1.95 GB). Phase A (items 1-7) is in progress on `feature/airpit`.
 
 ## Package update on 2026-10-11 — v0.1.0 muzzle-flare correction
 
