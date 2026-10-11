@@ -3,7 +3,21 @@
 Snapshot for whoever continues (human or agent). Verify the commits named here against `git log`; this file
 is updated by hand at each handover, it is not an automatic record. Read [AGENTS.md](AGENTS.md) first.
 
-## Follow-up on 2026-10-11 — lean test release and map labels
+## Follow-up on 2026-10-11 — official map descriptions
+
+Implementation `fa4a484` extracts original English/German/Russian descriptions from
+the installed Arena locale TextAssets and stages one owned server locale JSON.
+Location info and banner descriptions share the selected text; other languages
+fall back to original English. No BSG text is tracked. Server builds now require
+`python tools/extract/extract_map_descriptions.py` once before staging.
+Release build, C#627, extractor13, distribution12 and real-package validation pass.
+GPU-2 `208f2f74` visually verified both English descriptions, 20/20 loaded identities,
+no owned startup warnings/errors. Both installations updated; vanilla needs restart.
+The client remains `e17198d`, the server is `fa4a484`; GPU-2 is at MainMenu.
+Test3 ZIP contains 51 files / 1,231,750,103 bytes, fully CRC/SHA256 verified.
+See [description provenance and acceptance](docs/progress/official-map-descriptions.md).
+
+## Earlier on 2026-10-11 — lean test release and map labels
 
 Implementation `e17198d` omits unused arena-audio/arena-ui from builds/releases,
 moves Equator DB to `db/arena_equator/base.json`, and aligns PMC/ArenaMode anchors:
