@@ -253,8 +253,11 @@ the log; the user uses it to point at things.
 - NavMesh: baked from EVERY physics collider in the content scenes (any layer but Water), including things the
   client removes at raid start — TeamFight `LevelBorder` walls, `SPAWN_BOUND` boxes, booth door leaves, listed
   barriers. `BakeNavMesh.RoundOpenedReason` excludes those by name; anything else the client disables at
-  runtime must be added there too, or it stays a wall for bots. Bake volume is y −8..12 (upper rings are
-  decoration). Probe connectivity in-game with `uibridge_teleport dryRun=true` (reachability = same NavMesh
+  runtime must be added there too, or it stays a wall for bots. The bake volume is the renderer union + 10 m
+  unless the descriptor carries `bake_bounds` (AirPit: x −80..56, y −2..8, z −96..92; Equator/Bay5 have none —
+  their ground floors sit around y −8..12, the upper rings are decoration). `navmesh_bake_exclusions` drops a
+  subtree from the bake WITHOUT deactivating it at runtime (AirPit's four route cutters);
+  `navmesh_bake_layers` restricts the collected layers (AirPit: Arena's own 9/11/13/18/30). Probe connectivity in-game with `uibridge_teleport dryRun=true` (reachability = same NavMesh
   component); offline, `work/extract/<map>/scenes/*.json` + `meshes/*.mesh.bin` give every collider's world
   triangles (see docs/progress/stage1-combat.md for the script pattern).
 - NavMesh modifiers: `NavMeshModifier`/`NavMeshModifierVolume` exist only for the bake. `BuildBundles` strips them
