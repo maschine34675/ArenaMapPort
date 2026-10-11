@@ -270,11 +270,68 @@ def background_scene_errors(map_json: dict, registry_args: dict, ref_scope: dict
     return errors
 
 
+def is_hierarchy_path(path) -> bool:
+    """A root object name plus optional `/`-separated children: no empty or padded segment."""
+    return isinstance(path, str) and bool(path.strip()) and all(s and s == s.strip() for s in path.split("/"))
+
+
+def bake_input_errors(map_json: dict) -> list[str]:
+    """Shape of the optional NavMesh bake inputs (PLAN-AIRPIT item 8): opened_barriers and
+    navmesh_bake_exclusions (hierarchy paths), bake_bounds ([min_x, max_x, min_y, max_y, min_z, max_z]) and
+    navmesh_bake_layers (layer indices). BakeNavMesh.cs reads the same shapes and throws on a malformed box."""
+    errors: list[str] = []
+    for name in ("opened_barriers", "navmesh_bake_exclusions"):
+        paths = map_json.get(name, [])
+        if not isinstance(paths, list) or not all(is_hierarchy_path(p) for p in paths):
+            errors.append(f"{name} must be an array of hierarchy paths (no empty segment)")
+        elif len(paths) != len(set(paths)):
+            errors.append(f"{name} contains duplicate paths")
+    paths, barriers = map_json.get("navmesh_bake_exclusions", []), map_json.get("opened_barriers", [])
+    if isinstance(paths, list) and isinstance(barriers, list):
+        for path in paths:
+            if isinstance(path, str) and any(path == b or path.startswith(str(b) + "/") for b in barriers):
+                errors.append(f"navmesh_bake_exclusions entry {path!r} lies inside an opened_barriers path "
+                              "(the client deactivates it; a bake exclusion is for objects that stay active)")
+    bounds = map_json.get("bake_bounds")
+    if bounds is not None:
+        finite = isinstance(bounds, list) and len(bounds) == 6 and all(
+            type(v) in (int, float) and math.isfinite(v) for v in bounds)
+        if not finite or any(bounds[2 * axis] >= bounds[2 * axis + 1] for axis in range(3)):
+            errors.append("bake_bounds must be six finite numbers [min_x, max_x, min_y, max_y, min_z, max_z] with min < max")
+    layers = map_json.get("navmesh_bake_layers")
+    if layers is not None:
+        if not isinstance(layers, list) or not layers or any(type(v) is not int or not 0 <= v <= 31 for v in layers):
+            errors.append("navmesh_bake_layers must be a nonempty array of layer indices 0..31 (omit it for every layer)")
+        elif 4 in layers:
+            errors.append("navmesh_bake_layers must not name layer 4 (Water is never collected)")
+        elif len(layers) != len(set(layers)):
+            errors.append("navmesh_bake_layers contains duplicate layers")
+    return errors
+
+
+def shader_fallback_errors(map_json: dict) -> list[str]:
+    """Shape of the optional shader_fallback_names (PLAN-AIRPIT item 11): the Arena shader names the client's
+    ShaderStandinPolicy may rebind to an SPT substitute on this map. Only the C# runtime reads it."""
+    names = map_json.get("shader_fallback_names", [])
+    if not isinstance(names, list) or any(not isinstance(n, str) or not n or n != n.strip() for n in names):
+        return ["shader_fallback_names must be an array of nonempty, unpadded shader names"]
+    if len(names) != len(set(names)):
+        return ["shader_fallback_names contains duplicate names"]
+    return []
+
+
 def check_map_against_registry_entry(
     map_json: dict, registry_args: dict, ref_scope: dict, map_path: Path, cs_var_name: str, errors: list
 ) -> None:
     where = f"{map_path.name} vs ArenaMapRegistry.{cs_var_name}"
     errors.extend(f"{where}: {error}" for error in background_scene_errors(map_json, registry_args, ref_scope))
+    errors.extend(f"{where}: {error}" for error in bake_input_errors(map_json))
+    errors.extend(f"{where}: {error}" for error in shader_fallback_errors(map_json))
+    check_field(errors, where, "shader_fallback_names", map_json.get("shader_fallback_names", []),
+                resolve(registry_args.get("ShaderFallbackNames", []), ref_scope))
+    for json_field, cs_field in (("opened_barriers", "OpenedBarriers"), ("navmesh_bake_exclusions", "NavMeshBakeExclusions"),
+                                 ("bake_bounds", "BakeBounds"), ("navmesh_bake_layers", "NavMeshBakeLayers")):
+        check_field(errors, where, json_field, map_json.get(json_field, []), resolve(registry_args.get(cs_field, []), ref_scope))
     check_field(errors, where, "restored_shadow_caster_roots",
                 map_json.get("restored_shadow_caster_roots", []),
                 resolve(registry_args.get("RestoredShadowCasterRoots", []), ref_scope))
@@ -333,8 +390,8 @@ def registry_entries(text: str) -> dict[str, dict]:
             for name in names}
 
 
-RELEASE_MAP_NAMES = ("Equator", "Bay5")
-RELEASE_MAP_KEYS = ("arena_equator", "arena_bay5")
+RELEASE_MAP_NAMES = ("Equator", "Bay5", "AirPit")
+RELEASE_MAP_KEYS = ("arena_equator", "arena_bay5", "arena_airpit")
 
 
 def registry_membership_errors(text: str, entries: dict) -> list[str]:

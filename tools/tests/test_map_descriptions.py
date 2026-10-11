@@ -16,8 +16,10 @@ def synthetic_pack():
     return {
         "schema_version": 1,
         "descriptions": {
-            "en": {"arena_equator": "Synthetic mall text.", "arena_bay5": "Synthetic harbor text."},
-            "ge": {"arena_equator": "Synthetic ä text.", "arena_bay5": "Synthetic ß text."},
+            "en": {"arena_equator": "Synthetic mall text.", "arena_bay5": "Synthetic harbor text.",
+                   "arena_airpit": "Synthetic terminal text."},
+            "ge": {"arena_equator": "Synthetic ä text.", "arena_bay5": "Synthetic ß text.",
+                   "arena_airpit": "Synthetic ö text."},
         },
     }
 
@@ -35,6 +37,23 @@ def synthetic_source():
 
 
 class DescriptionContractTests(unittest.TestCase):
+    def test_keys_are_exactly_the_three_released_maps(self):
+        self.assertEqual(set(descriptions.DESCRIPTION_KEYS), {"arena_equator", "arena_bay5", "arena_airpit"})
+
+    def test_airpit_uses_arenas_location_id_not_the_sidecar_id_field(self):
+        # Arena's own location id (its "Name" key reads Air Pit); the ported location's id_field is another value.
+        self.assertEqual(descriptions.DESCRIPTION_KEYS["arena_airpit"], "61e800b841ee214fbf1f0e53 Description")
+        sidecar = json.loads((Path(__file__).resolve().parents[1] / "maps" / "airpit.json").read_text(encoding="utf-8"))
+        self.assertNotIn(sidecar["id_field"], descriptions.DESCRIPTION_KEYS["arena_airpit"])
+
+    def test_a_pack_without_airpit_is_rejected(self):
+        # A pack generated before AirPit was promoted must fail validation (the server discards it wholesale).
+        pack = synthetic_pack()
+        for maps in pack["descriptions"].values():
+            del maps["arena_airpit"]
+        with self.assertRaises(ValueError):
+            descriptions.validate_pack(pack)
+
     def test_returns_mapping_without_changing_translated_text(self):
         pack = synthetic_pack()
         self.assertIs(descriptions.validate_pack(pack), pack["descriptions"])

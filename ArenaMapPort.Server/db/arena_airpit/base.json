@@ -441,8 +441,8 @@
     "BotsDamageSources",
     "LootPositions"
   ],
-  "IconX": 295,
-  "IconY": 760,
+  "IconX": 500,
+  "IconY": 300,
   "Id": "arena_airpit",
   "Insurance": true,
   "IsSecret": false,
@@ -479,7 +479,7 @@
   "MinMaxBots": [],
   "MinPlayerLvlAccessKeys": 0,
   "MinPlayers": 1,
-  "Name": "Arena: Air Pit (spike)",
+  "Name": "Arena: Air Pit",
   "NewSpawn": false,
   "NewSpawnForPlayers": false,
   "NonWaveGroupScenario": {

@@ -121,6 +121,32 @@ public sealed class AirPitMapTests
         Assert.Equal(2, squads.Count(b => b.GetProperty("BossName").GetString() == "pmcBEAR"));
     }
 
+    // PLAN-AIRPIT item 8: tools/maps/airpit.json is what BakeNavMesh and the Python model read, the compiled descriptor is
+    // what BoothDoorRepairs opens at raid start. One list each, and Equator's and Bay5's sidecars stay free of the new keys
+    // (their NavMesh bundles are not rebuilt, so their bake inputs must not change).
+    [Fact]
+    public void OpenedBarriersAndBakeInputsMatchTheSidecar()
+    {
+        using var sidecar = JsonDocument.Parse(File.ReadAllText(Sidecar("airpit.json")));
+        var root = sidecar.RootElement;
+        var map = ArenaMapRegistry.AirPit;
+
+        Assert.Equal(root.GetProperty("opened_barriers").EnumerateArray().Select(e => e.GetString()), map.OpenedBarriers);
+        Assert.Equal(root.GetProperty("navmesh_bake_exclusions").EnumerateArray().Select(e => e.GetString()), map.NavMeshBakeExclusions);
+        Assert.Equal(Floats(root.GetProperty("bake_bounds")), map.BakeBounds);
+        if (root.TryGetProperty("navmesh_bake_layers", out var layers))
+            Assert.Equal(layers.EnumerateArray().Select(e => e.GetInt32()), map.NavMeshBakeLayers);
+        else
+            Assert.Empty(map.NavMeshBakeLayers);
+
+        foreach (var other in new[] { "equator.json", "bay5.json" })
+        {
+            using var doc = JsonDocument.Parse(File.ReadAllText(Sidecar(other)));
+            foreach (var key in new[] { "navmesh_bake_exclusions", "bake_bounds", "navmesh_bake_layers" })
+                Assert.False(doc.RootElement.TryGetProperty(key, out _), $"{other} must not carry '{key}'");
+        }
+    }
+
     [Fact]
     public void ShippedBaseJsonParsesAsTheServerLocationModel()
     {
@@ -138,6 +164,45 @@ public sealed class AirPitMapTests
         Assert.Equal(8, location.BotMax);
         Assert.True(location.DisabledForScav);
         Assert.Empty(location.Banners!);
+    }
+
+    // PLAN-AIRPIT items 9 + 23: AirPit is a released map, so its identity is the shipped one. The sidecar, the
+    // compiled descriptor and the generated base.json must agree on name, description and menu slot, and no
+    // released map may still carry the spike wording.
+    [Fact]
+    public void ReleasedIdentityMatchesTheSidecarAndBaseJsonAndKeepsItsOwnMenuSlot()
+    {
+        using var sidecar = JsonDocument.Parse(File.ReadAllText(Sidecar("airpit.json")));
+        using var server = JsonDocument.Parse(File.ReadAllText(BaseJsonPath));
+        var map = ArenaMapRegistry.AirPit;
+
+        Assert.Equal(new[] { "arena_equator", "arena_bay5", "arena_airpit" }, ArenaMapRegistry.All.Select(m => m.Key));
+        Assert.Equal("Arena: Air Pit", map.LocaleName);
+        Assert.Equal(sidecar.RootElement.GetProperty("locale_name").GetString(), map.LocaleName);
+        Assert.Equal(sidecar.RootElement.GetProperty("locale_description").GetString(), map.LocaleDescription);
+        Assert.Equal(sidecar.RootElement.GetProperty("icon_x").GetInt32(), map.IconX);
+        Assert.Equal(sidecar.RootElement.GetProperty("icon_y").GetInt32(), map.IconY);
+        Assert.Equal(map.LocaleName, server.RootElement.GetProperty("Name").GetString());
+        Assert.Equal(map.IconX, server.RootElement.GetProperty("IconX").GetInt32());
+        Assert.Equal(map.IconY, server.RootElement.GetProperty("IconY").GetInt32());
+
+        foreach (var released in ArenaMapRegistry.All)
+        {
+            Assert.DoesNotContain("spike", released.LocaleName, StringComparison.OrdinalIgnoreCase);
+            Assert.DoesNotContain("Internal test build", released.LocaleDescription, StringComparison.OrdinalIgnoreCase);
+            Assert.False(string.IsNullOrWhiteSpace(released.LocaleDescription));
+        }
+        // Menu slots (0..1000, the native UI divides by 1000): released maps stay at least 120 units apart and
+        // inside the map-select layout that Equator and Bay5 define.
+        foreach (var a in ArenaMapRegistry.All)
+            foreach (var b in ArenaMapRegistry.All.Where(b => b.Key != a.Key))
+                Assert.True(Math.Sqrt(Math.Pow(a.IconX - b.IconX, 2) + Math.Pow(a.IconY - b.IconY, 2)) >= 120,
+                    $"{a.Key} and {b.Key} menu icons are closer than 120 units");
+        var anchors = new[] { ArenaMapRegistry.Equator, ArenaMapRegistry.Bay5 };
+        Assert.InRange(map.IconX, anchors.Min(m => m.IconX), anchors.Max(m => m.IconX));
+        Assert.InRange(map.IconY, anchors.Min(m => m.IconY), anchors.Max(m => m.IconY));
+        // The banner row ships with the map; base.json itself keeps Banners empty (ArenaMapBanners adds it at load).
+        Assert.Equal("arena_airpit_banner", ArenaMapBanners.For(map)!.Id);
     }
 
     private static float[] PositionOf(JsonElement spawnPoint)

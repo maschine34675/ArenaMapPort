@@ -83,13 +83,13 @@ namespace ArenaMapPort.Client
 
             _enabled = Plugin.Instance.Settings.Bind("TimeOfDay", "Enabled", true,
                 new ConfigDescription("Legacy fixed-hour override for unreleased Arena maps without their own time selection. " +
-                    "Equator uses 12:00/00:00; Bay5 uses the two native server times. Has no effect on either released map. " +
+                    "Equator uses 12:00/00:00; Bay5 and AirPit use the two native server times. Has no effect on any released map (Equator, Bay5, AirPit). " +
                     "Saved legacy values are retained. Next raid.", null, BrowsableAttribute.No));
 
             _fixedHour = Plugin.Instance.Settings.Bind("TimeOfDay", "ArenaFixedHour", 12,
                 new ConfigDescription(
                     "Legacy start hour for Arena maps without fixed menu choices, when Enabled=true. " +
-                    "Equator uses 12:00/00:00; Bay5 uses the two native server times. Has no effect on either released map. " +
+                    "Equator uses 12:00/00:00; Bay5 and AirPit use the two native server times. Has no effect on any released map (Equator, Bay5, AirPit). " +
                     "Saved legacy values are retained. Next raid.",
                     new AcceptableValueRange<int>(0, 23), BrowsableAttribute.No));
 
@@ -105,7 +105,7 @@ namespace ArenaMapPort.Client
             if (revision.Value < 2)
             {
                 Plugin.Log.LogDebug("[ArenaMapPort][TimeOfDay] Time selection policy: Equator uses 12:00/00:00; " +
-                    "Bay5 follows its selected server time. Legacy Enabled/ArenaFixedHour remain saved for other maps; " +
+                    "Bay5 and AirPit follow their selected server time. Legacy Enabled/ArenaFixedHour remain saved for other maps; " +
                     "no lighting values changed.");
                 revision.Value = 2;
             }

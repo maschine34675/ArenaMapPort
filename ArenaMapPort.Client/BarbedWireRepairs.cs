@@ -19,6 +19,14 @@ namespace ArenaMapPort.Client
     /// is no barbed-wire bank in the SPT streaming assets, so <c>PlaySound</c> is skipped while the bank is
     /// null instead of throwing inside BetterAudio. Map-agnostic by name prefix (the same prop family exists on
     /// other Arena maps); runs from the spawn postfix like the other raid-start repairs and is idempotent.
+    ///
+    /// PLAN-AIRPIT item 15 (2026-10-12): there is no map gate to widen. The only gates are
+    /// <c>ArenaMapRaid.IsLoaded()</c> and <c>IsOwnedScene</c>, both over <c>ArenaMapRegistry.All</c>, so AirPit
+    /// is covered since it joined the released set. AirPit (Arena 0.6.0 base scene) carries 26 BarbedWire
+    /// components: 12 on active <c>bruno_helix</c> objects with an enabled trigger BoxCollider (the ones this
+    /// attaches, all in <c>Arena_AirPit_ShootOut</c>) and 14 on inactive <c>Bruno_LOD0</c> LOD mesh children whose
+    /// only collider is a solid MeshCollider (no trigger box, so nothing to attach to). Equator has none. Equator
+    /// and Bay5 behave exactly as before. Host test: docs/progress/airpit-release.md, item 15.
     /// </summary>
     internal static class BarbedWireRepairs
     {

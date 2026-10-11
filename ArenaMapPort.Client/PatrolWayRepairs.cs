@@ -27,7 +27,8 @@ namespace ArenaMapPort.Client
     /// <c>CreateSubPoints</c> uses in the editor). Vanilla maps and zones with authored ways are never touched.
     ///
     /// PLAN-TWO-MAPS item 8 (docs/progress/two-maps-item-8-ai-anchors.md): when the caller passes a
-    /// non-null <see cref="AiAnchors"/> (Equator/Bay5 only, and only once <see cref="AICorePointFallback"/>
+    /// non-null <see cref="AiAnchors"/> (only maps with a staged AI sidecar: Equator, Bay5 and, since
+    /// PLAN-AIRPIT item 20, AirPit, and only once <see cref="AICorePointFallback"/>
     /// has already authored the matching real <see cref="AICorePoint"/> net this raid — see that file),
     /// <see cref="BuildFromAnchors"/> authors Arena's own real hub/subpoint hierarchy instead of the
     /// NavMesh-derived synthesis below: one <see cref="PatrolWay"/> per sidecar entry, its <c>Points</c>
@@ -39,7 +40,7 @@ namespace ArenaMapPort.Client
     /// <c>AddComponent&lt;PatrolPoint&gt;()</c> already gives, set explicitly here for clarity), bypassing
     /// <c>CreatSubs</c>/<c>RefreshData</c> entirely. Any exception (a hub referencing a core point id the
     /// holder does not have, for instance) falls through to the untouched NavMesh-derived synthesis below
-    /// for that zone — the twelve deferred maps' own unchanged behavior.
+    /// for that zone — the unchanged behavior of every map without a sidecar.
     /// </summary>
     internal static class PatrolWayFallback
     {

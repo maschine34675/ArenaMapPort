@@ -26,7 +26,7 @@ function Assert-OwnedPath([string]$Path, [string]$Root) {
 
 Assert-OwnedPath $sourceRoot $dist
 Assert-OwnedPath $archive $archiveBase
-$parked = @('airpit','airpit2','autoservice','bowl','prison','railwaystation','yard','iceberg','factory','custom','shoreline','woods')
+$parked = @('airpit2','autoservice','bowl','prison','railwaystation','yard','iceberg','factory','custom','shoreline','woods')
 $extraPaths = @()
 if ($Scope -eq 'Server') { $extraPaths += 'db/base.json' }
 if ($Scope -eq 'Client') {

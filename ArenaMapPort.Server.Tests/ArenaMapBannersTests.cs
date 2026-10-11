@@ -41,6 +41,7 @@ public sealed class ArenaMapBannersTests : IDisposable
     [Theory]
     [InlineData("arena_equator", "arena_equator_banner", "arena_equator")]
     [InlineData("arena_bay5", "arena_bay5_banner", "arena_bay5")]
+    [InlineData("arena_airpit", "arena_airpit_banner", "arena_airpit")]
     public void For_ReturnsTheExpectedDescriptor_ForEachBanneredMap(string mapKey, string expectedId, string expectedFileStem)
     {
         var map = FindMap(mapKey);
@@ -63,7 +64,8 @@ public sealed class ArenaMapBannersTests : IDisposable
     {
         foreach (var map in ArenaMapRegistry.Catalog)
         {
-            if (map.Key != ArenaMapRegistry.Equator.Key && map.Key != ArenaMapRegistry.Bay5.Key)
+            if (map.Key != ArenaMapRegistry.Equator.Key && map.Key != ArenaMapRegistry.Bay5.Key
+                && map.Key != ArenaMapRegistry.AirPit.Key)
             {
                 yield return new object[] { map };
             }
@@ -75,11 +77,11 @@ public sealed class ArenaMapBannersTests : IDisposable
     {
         var warnings = new List<string>();
 
-        var resolved = ArenaMapBanners.Resolve(ArenaMapRegistry.AirPit, _bannersDir, warnings.Add);
+        var resolved = ArenaMapBanners.Resolve(ArenaMapRegistry.Bowl, _bannersDir, warnings.Add);
 
         Assert.Null(resolved);
-        // AirPit has no banner descriptor at all -- Resolve must not warn about a "missing file"
-        // for a map that was never supposed to have one.
+        // Bowl (a parked map) has no banner descriptor at all -- Resolve must not warn about a
+        // "missing file" for a map that was never supposed to have one.
         Assert.Empty(warnings);
     }
 
@@ -98,10 +100,10 @@ public sealed class ArenaMapBannersTests : IDisposable
     [Fact]
     public void Resolve_NeverReturnsABanner_WhenTheFileIsAbsent_RegardlessOfExtensionTried()
     {
-        // Guards the landmine directly: an empty banners directory must resolve to null for both
-        // maps, for every extension Resolve knows how to look for -- never a Banner pointing at a
-        // file that isn't there.
-        foreach (var map in new[] { ArenaMapRegistry.Equator, ArenaMapRegistry.Bay5 })
+        // Guards the landmine directly: an empty banners directory must resolve to null for every
+        // bannered map, for every extension Resolve knows how to look for -- never a Banner
+        // pointing at a file that isn't there.
+        foreach (var map in new[] { ArenaMapRegistry.Equator, ArenaMapRegistry.Bay5, ArenaMapRegistry.AirPit })
         {
             var resolved = ArenaMapBanners.Resolve(map, _bannersDir, _ => { });
             Assert.Null(resolved);
@@ -173,12 +175,28 @@ public sealed class ArenaMapBannersTests : IDisposable
     }
 
     [Fact]
-    public void Resolve_DoesNotConfuseTheTwoMaps_WhenOnlyOnesFileExists()
+    public void Resolve_DoesNotConfuseTheMaps_WhenOnlyOnesFileExists()
     {
         File.WriteAllBytes(Path.Combine(_bannersDir, "arena_equator.jpg"), new byte[] { 1 });
 
         Assert.NotNull(ArenaMapBanners.Resolve(ArenaMapRegistry.Equator, _bannersDir, _ => { }));
         Assert.Null(ArenaMapBanners.Resolve(ArenaMapRegistry.Bay5, _bannersDir, _ => { }));
+        Assert.Null(ArenaMapBanners.Resolve(ArenaMapRegistry.AirPit, _bannersDir, _ => { }));
+    }
+
+    [Fact]
+    public void Resolve_FindsTheAirPitBanner_UnderItsOwnStem()
+    {
+        File.WriteAllBytes(Path.Combine(_bannersDir, "arena_airpit.jpg"), new byte[] { 1, 2, 3 });
+
+        var resolved = ArenaMapBanners.Resolve(ArenaMapRegistry.AirPit, _bannersDir, _ => Assert.Fail("should not warn on a hit"));
+
+        Assert.NotNull(resolved);
+        var value = resolved!.Value;
+        Assert.Equal("arena_airpit_banner", value.Banner.Id);
+        Assert.Equal("banners/arena_airpit.jpg", value.Banner.Picture!.Path);
+        Assert.Equal("/files/banners/arena_airpit", value.RouteKey);
+        Assert.Null(ArenaMapBanners.Resolve(ArenaMapRegistry.Equator, _bannersDir, _ => { }));
     }
 
     [Fact]
@@ -210,7 +228,7 @@ public sealed class ArenaMapBannersTests : IDisposable
     {
         var locale = new GlobalLocaleDictionary();
 
-        ArenaMapBanners.ApplyLocale(locale, ArenaMapRegistry.AirPit);
+        ArenaMapBanners.ApplyLocale(locale, ArenaMapRegistry.Bowl);
 
         Assert.Empty(locale);
     }

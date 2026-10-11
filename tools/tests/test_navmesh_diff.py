@@ -181,6 +181,67 @@ class BakeRuleTests(unittest.TestCase):
         self.assertGreater(everything.sum(), arena.sum())
         self.assertFalse(any(c.owners[i].layer == 12 for i in np.nonzero(arena)[0]))
 
+    def test_bake_exclusion_drops_the_whole_subtree_including_the_listed_object(self):
+        # BakeNavMesh.BakeOnlyExclusionReason: Transform.IsChildOf is true for the object itself, and nothing
+        # is opened at runtime, so unlike opened_barriers there is no frame exception.
+        c = self.package()
+        pc.mark_bake_exclusions(c, ["Root/Gate"])
+        r = self.reasons(c)
+        for oid in ("2", "3", "4", "5"):
+            self.assertEqual(r[oid], "navmesh_bake_exclusions", oid)
+        self.assertIsNone(r["7"])                            # same leaf name elsewhere is untouched
+        self.assertIsNone(r["15"])
+        self.assertEqual(c.unresolved_exclusions, [])
+
+    def test_bake_exclusion_paths_use_find_semantics_and_report_misses(self):
+        objs = [obj("1", "Root"), obj("2", "Door", "1"), obj("3", "Leaf", "2", comps=[box((1, 1, 1))]),
+                obj("4", "Door", "1"), obj("5", "Leaf", "4", comps=[box((1, 1, 1))])]
+        with tempfile.TemporaryDirectory() as d:
+            c = pc.load_package_colliders(make_package(Path(d), objs))
+        pc.mark_bake_exclusions(c, ["Root/Door", "Root/Missing"])
+        r = self.reasons(c)
+        self.assertEqual(r["3"], "navmesh_bake_exclusions")
+        self.assertIsNone(r["5"])                            # the second "Door" is not reachable by path
+        self.assertEqual(c.unresolved_exclusions, ["Root/Missing"])
+        pc.mark_bake_exclusions(c, [])                       # marking is not cumulative
+        self.assertTrue(all(v is None for v in self.reasons(c).values()))
+
+    def test_barriers_and_bake_exclusions_are_independent_marks(self):
+        c = self.package()
+        pc.mark_bake_exclusions(c, ["Root/Other"])
+        pc.mark_barriers(c, ["Root/Gate"])                   # must not clear the exclusion mark
+        r = self.reasons(c)
+        self.assertEqual(r["7"], "navmesh_bake_exclusions")
+        self.assertEqual(r["3"], "opened_barriers")
+        self.assertIsNone(r["2"])                            # the barrier object itself stays a source
+
+    def test_layer_rules_take_precedence_over_a_bake_exclusion(self):
+        c = self.package()
+        pc.mark_bake_exclusions(c, ["Root"])
+        r = self.reasons(c)
+        self.assertEqual(r["13"], "Triggers layer 13")
+        self.assertEqual(r["11"], "LevelBorder layer 29")
+        self.assertEqual(r["14"], "Water layer")
+        self.assertEqual(r["15"], "navmesh_bake_exclusions")
+
+    def test_layers_to_mask_matches_arenas_surface_mask(self):
+        self.assertEqual(pc.layers_to_mask([9, 11, 13, 18, 30]), nd.AIRPIT_ARENA_LAYER_MASK)
+        self.assertIsNone(pc.layers_to_mask(None))
+        self.assertIsNone(pc.layers_to_mask([]))
+        for bad in ([32], [-1], [True], ["18"], [18.0]):
+            with self.assertRaises(pc.ColliderModelError):
+                pc.layers_to_mask(bad)
+
+    def test_source_mask_combines_layers_exclusions_and_the_owner_layer_rules(self):
+        c = self.package()
+        pc.mark_barriers(c, [])
+        pc.mark_bake_exclusions(c, ["Root/Other"])
+        kept = {c.owners[i].obj_id for i in np.nonzero(pc.source_owner_mask(c, layer_mask=pc.layers_to_mask([12, 13, 29])))[0]}
+        self.assertEqual(kept, {"15"})                       # 12 is collected; 13 and 29 owners are dropped anyway
+        every = {c.owners[i].obj_id for i in np.nonzero(pc.source_owner_mask(c))[0]}
+        self.assertNotIn("7", every)                         # excluded subtree
+        self.assertIn("15", every)
+
 
 def floor_triangles(x0, x1, z0, z1, y=0.0):
     a, b, c, d = (x0, y, z0), (x0, y, z1), (x1, y, z1), (x1, y, z0)
@@ -418,14 +479,85 @@ class EndToEndTests(unittest.TestCase):
             objs.append(obj("5", "collider", "4", layer=wall_layer, comps=[box((0.3, 1.8, 2.4))]))
         return make_package(root, objs, floor=(-2.0, 8.0, -2.0, 4.0))
 
-    def run_analysis(self, barriers=(), **kw):
+    def run_analysis(self, barriers=(), analysis=None, **kw):
         cfg = nd.Config(prop_max_objects=2, arena_layer_mask=1 << 18)
         points = [{"name": "west", "kind": "player_spawn", "position": [1.0, 0.0, 1.0]},
                   {"name": "east", "kind": "exit", "position": [5.0, 0.0, 1.0]},
                   {"name": "cap", "kind": "capture_point", "position": [1.2, 0.0, 1.0]}]
         with tempfile.TemporaryDirectory() as d:
             package = self.package(Path(d), **kw)
-            return nd.analyse(package, cfg, barriers, points, mesh=self.arena(), log=lambda *_a: None)
+            return nd.analyse(package, cfg, barriers, points, mesh=self.arena(), log=lambda *_a: None, **(analysis or {}))
+
+    def test_bake_exclusion_joins_the_corridor_and_the_reachability_summary_says_so(self):
+        blocked = self.run_analysis()["reachability"]
+        self.assertEqual((blocked["located"], blocked["in_anchor_component"]), (3, 2))
+        self.assertEqual(blocked["outside"], ["exit:east"])
+        self.assertEqual(sorted(blocked["per_component"].values()), [1, 2])
+        r = self.run_analysis(analysis={"bake_exclusions": ["Root/Props/Barrier"]})
+        self.assertEqual(r["samples"]["blocked_port_agent"], 0)
+        self.assertEqual(r["port"]["exclusion_reasons"]["navmesh_bake_exclusions"], 1)
+        self.assertEqual(r["config"]["bake_exclusions"], ["Root/Props/Barrier"])
+        self.assertEqual(r["port"]["unresolved_exclusions"], [])
+        self.assertEqual(r["reachability"]["in_anchor_component"], 3)
+        self.assertEqual(r["reachability"]["outside"], [])
+        self.assertIn("probe reachability: 3 of 3 located probes", nd.format_report(r))
+        self.assertIn("1 navmesh_bake_exclusions", nd.format_report(r))
+
+    def test_a_bake_exclusion_removes_a_collider_on_the_listed_object_but_a_barrier_keeps_it(self):
+        # opened_barriers keeps the barrier object itself (its frame stays standing); a bake exclusion does not.
+        barrier = self.run_analysis(barriers=["Root/Props/Barrier"], wall_on_root=True)
+        self.assertGreater(barrier["samples"]["blocked_port_agent"], 0)
+        excluded = self.run_analysis(analysis={"bake_exclusions": ["Root/Props/Barrier"]}, wall_on_root=True)
+        self.assertEqual(excluded["samples"]["blocked_port_agent"], 0)
+
+    def test_an_unresolved_exclusion_is_reported_and_changes_nothing(self):
+        r = self.run_analysis(analysis={"bake_exclusions": ["Root/Props/Missing"]})
+        self.assertEqual(r["port"]["unresolved_exclusions"], ["Root/Props/Missing"])
+        self.assertGreater(r["samples"]["blocked_port_agent"], 0)
+
+    def test_the_port_layer_mask_drops_a_wall_on_a_layer_the_bake_does_not_collect(self):
+        wall12 = self.run_analysis(wall_layer=12)
+        self.assertGreater(wall12["samples"]["blocked_port_agent"], 0)       # everything is collected by default
+        masked = self.run_analysis(wall_layer=12, analysis={"port_layer_mask": 1 << 18})
+        self.assertEqual(masked["samples"]["blocked_port_agent"], 0)
+        self.assertEqual(masked["port"]["exclusion_reasons"]["not in navmesh_bake_layers"], 1)
+        self.assertEqual(masked["config"]["port_layer_mask"], 1 << 18)
+        self.assertIn("layer mask 0x40000", nd.format_report(masked))
+        on18 = self.run_analysis(wall_layer=18, analysis={"port_layer_mask": 1 << 18})
+        self.assertGreater(on18["samples"]["blocked_port_agent"], 0)         # a collected layer still cuts the corridor
+
+    def test_descriptor_inputs_and_cli_precedence(self):
+        self.assertEqual(nd.descriptor_bake_inputs({}), {"barriers": [], "exclusions": [], "layer_mask": None})
+        inputs = nd.descriptor_bake_inputs({"opened_barriers": ["A"], "navmesh_bake_exclusions": ["B/C"],
+                                            "navmesh_bake_layers": [9, 11, 13, 18, 30]})
+        self.assertEqual(inputs, {"barriers": ["A"], "exclusions": ["B/C"], "layer_mask": nd.AIRPIT_ARENA_LAYER_MASK})
+
+        captured = {}
+
+        def fake_analyse(package, cfg, barriers, points, *_a, **kw):
+            captured.update(barriers=list(barriers), exclusions=list(kw["bake_exclusions"]), mask=kw["port_layer_mask"])
+            raise SystemExit(0)
+
+        with tempfile.TemporaryDirectory() as d:
+            sidecar = Path(d) / "map.json"
+            sidecar.write_text(json.dumps({"opened_barriers": ["A"], "navmesh_bake_exclusions": ["B/C"],
+                                           "navmesh_bake_layers": [18]}), encoding="utf-8")
+
+            def run(*args):
+                captured.clear()
+                original = nd.analyse
+                nd.analyse = fake_analyse
+                try:
+                    with self.assertRaises(SystemExit):
+                        nd.main(["--package", d, "--descriptor", str(sidecar), "--opened-barrier", "X",
+                                 "--bake-exclusion", "Y/Z", *args])
+                finally:
+                    nd.analyse = original
+                return dict(captured)
+
+            self.assertEqual(run(), {"barriers": ["X", "A"], "exclusions": ["Y/Z", "B/C"], "mask": 1 << 18})
+            self.assertIsNone(run("--ignore-descriptor-layers")["mask"])
+            self.assertEqual(run("--port-layer-mask", "0x1000")["mask"], 0x1000)
 
     def test_wall_across_the_corridor_splits_the_port_model(self):
         r = self.run_analysis()

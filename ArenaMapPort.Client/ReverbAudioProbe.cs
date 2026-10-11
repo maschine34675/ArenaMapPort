@@ -28,7 +28,7 @@ namespace ArenaMapPort.Client
         internal static void Install()
         {
             _request = Plugin.Instance.Settings.Bind("Audio diagnostics", "ReverbPulse", false,
-                "Test only: play one quiet 0.12-second tone and measure listener output after it ends. Automatically resets to false. Only during an active Equator/Bay5 raid.");
+                "Test only: play one quiet 0.12-second tone and measure listener output after it ends. Automatically resets to false. Only during a raid on a map with native acoustics (Equator, Bay5, AirPit); the map ambience bus needs the imported ambient driver (Equator, Bay5).");
             _bus = Plugin.Instance.Settings.Bind("Audio diagnostics", "ReverbPulseBus", ProbeBus.Ambient,
                 "Route the test tone through ambient effects, gameplay, map ambience, the repaired indoor rain path or its original snapshot-gated child. Does not change their mixer settings.");
             if (!DeveloperOptions.Enabled) return;
@@ -72,7 +72,8 @@ namespace ArenaMapPort.Client
                             _bus.Value == ProbeBus.IndoorRain ? audio.AmbientInMixer :
                             _bus.Value == ProbeBus.LegacyIndoorRain ? audio.FindMixerGroup("AmbientIn/PrecipitationAmbientIn") :
                             Bay5AmbientAudio.CurrentEffectsMixer(state.MapKey);
-                        if (_source.outputAudioMixerGroup == null) throw new InvalidOperationException("Map ambience route is not ready");
+                        if (_source.outputAudioMixerGroup == null) throw new InvalidOperationException(
+                            $"Probe bus {_bus.Value} has no mixer group on {state.MapKey} (MapAmbience needs the imported ambient driver, which runs on Equator and Bay5 only)");
                         int rate = AudioSettings.outputSampleRate;
                         var pcm = new float[(int)(rate * 0.12)];
                         for (int i = 0; i < pcm.Length; i++)

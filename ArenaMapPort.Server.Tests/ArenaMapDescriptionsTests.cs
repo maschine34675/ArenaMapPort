@@ -16,9 +16,17 @@ public sealed class ArenaMapDescriptionsTests : IDisposable
 
     private Dictionary<string, Dictionary<string, string>> Fixture() => new()
     {
-        ["en"] = new() { ["arena_equator"] = "English mall fixture", ["arena_bay5"] = "English harbor fixture" },
-        ["ge"] = new() { ["arena_equator"] = "German mall fixture", ["arena_bay5"] = "German harbor fixture" },
-        ["ru"] = new() { ["arena_equator"] = "Russian mall fixture", ["arena_bay5"] = "Russian harbor fixture" },
+        ["en"] = new() { ["arena_equator"] = "English mall fixture", ["arena_bay5"] = "English harbor fixture", ["arena_airpit"] = "English terminal fixture" },
+        ["ge"] = new() { ["arena_equator"] = "German mall fixture", ["arena_bay5"] = "German harbor fixture", ["arena_airpit"] = "German terminal fixture" },
+        ["ru"] = new() { ["arena_equator"] = "Russian mall fixture", ["arena_bay5"] = "Russian harbor fixture", ["arena_airpit"] = "Russian terminal fixture" },
+    };
+
+    private static string Kind(ArenaMapDescriptor map) => map.Key switch
+    {
+        "arena_equator" => " mall fixture",
+        "arena_bay5" => " harbor fixture",
+        "arena_airpit" => " terminal fixture",
+        _ => throw new InvalidOperationException("unexpected released map " + map.Key),
     };
 
     private void WritePack(Dictionary<string, Dictionary<string, string>> descriptions, int version = 1) =>
@@ -39,13 +47,19 @@ public sealed class ArenaMapDescriptionsTests : IDisposable
         foreach (var map in ArenaMapRegistry.All)
         {
             var description = pack.Resolve(language, map);
-            Assert.Equal(expected + (map.Key == "arena_equator" ? " mall fixture" : " harbor fixture"), description);
+            Assert.Equal(expected + Kind(map), description);
             var locale = new GlobalLocaleDictionary();
             ArenaMapRegistration.ApplyLocale(locale, map, description);
             ArenaMapBanners.ApplyLocale(locale, map, description);
             Assert.Equal(description, locale[map.IdField + " Description"]);
             Assert.Equal(description, locale[ArenaMapBanners.For(map)!.Id + " Description"]);
         }
+    }
+
+    [Fact]
+    public void Released_registry_is_exactly_the_three_maps_of_the_description_pack()
+    {
+        Assert.Equal(new[] { "arena_equator", "arena_bay5", "arena_airpit" }, ArenaMapRegistry.All.Select(m => m.Key));
     }
 
     [Theory]
@@ -56,11 +70,18 @@ public sealed class ArenaMapDescriptionsTests : IDisposable
     [InlineData("missing-map")]
     [InlineData("empty-text")]
     [InlineData("unexpected-map")]
+    [InlineData("missing-airpit")]
+    [InlineData("two-map-pack")]
     public void Broken_pack_warns_once_and_preserves_location_registration(string fault)
     {
         var data = Fixture();
         if (fault == "missing-en") data.Remove("en");
         if (fault == "missing-map") data["en"].Remove("arena_bay5");
+        // A pack from before AirPit joined ArenaMapRegistry.All: the whole pack is discarded (every map falls
+        // back to its built-in description), never half-applied. tools/extract/extract_map_descriptions.py
+        // must be re-run in the same change that promotes a map.
+        if (fault == "missing-airpit") data["ru"].Remove("arena_airpit");
+        if (fault == "two-map-pack") foreach (var language in data.Values) language.Remove("arena_airpit");
         if (fault == "empty-text") data["ge"]["arena_equator"] = " ";
         if (fault == "unexpected-map") data["en"]["arena_bowl"] = "Unreleased fixture";
         if (fault != "missing") WritePack(data, fault == "version" ? 2 : 1);

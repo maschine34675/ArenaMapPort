@@ -57,7 +57,7 @@ namespace ArenaMapPort.Client
                 "Color of the Equator sign and TECHLIGHT lights/strips. RGB only; alpha is ignored. Live.");
             _rain = config.Bind(section, "Rain", EquatorProfiles.NightDefault("Rain", true),
                 "Use rain for the enabled Equator 00:00 neon variant, overriding Weather (test) only there. " +
-                "Equator day always uses Clear; Bay5 always uses dynamic backend weather. Next raid.");
+                "Equator day always uses Clear; Bay5 and AirPit always use dynamic backend weather. Next raid.");
             _runner = Plugin.Instance.gameObject.AddComponent<Runner>();
             _enabled.SettingChanged += MarkDirty;
             _lightIntensity.SettingChanged += MarkDirty;

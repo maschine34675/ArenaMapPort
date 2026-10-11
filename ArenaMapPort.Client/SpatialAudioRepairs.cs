@@ -9,7 +9,7 @@ using UnityEngine;
 namespace ArenaMapPort.Client
 {
     /// <summary>
-    /// Supply native defaults for EFT's fallback SpatialAudioSystem factory. The owned Equator/Bay5
+    /// Supply native defaults for EFT's fallback SpatialAudioSystem factory. The owned Equator/Bay5/AirPit
     /// graphs now permit real initialization through NativeSpatialAudio; other ported maps, disabled
     /// acoustics, and rejected packages retain the original uninitialized fallback. Keep source and
     /// interactive entry points guarded because vanilla calls them even while initialization is off.

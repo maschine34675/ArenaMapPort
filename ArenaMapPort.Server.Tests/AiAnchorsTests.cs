@@ -1,16 +1,19 @@
 using System.Text.Json;
+using ArenaMapPort.Shared;
 using Xunit;
 
 namespace ArenaMapPort.Server.Tests;
 
 /// <summary>
-/// PLAN-TWO-MAPS item 8 (docs/progress/two-maps-item-8-ai-anchors.md) — checks the two AI-anchors
+/// PLAN-TWO-MAPS item 8 (docs/progress/two-maps-item-8-ai-anchors.md) — checks the AI-anchors
 /// sidecars tools/extract/extract_ai_anchors.py writes (tools/maps/equator.ai.json,
-/// tools/maps/bay5.ai.json) directly, the same way Bay5MapTests.cs checks bay5.json/bay5.exits.json:
+/// tools/maps/bay5.ai.json and, since PLAN-AIRPIT item 20, tools/maps/airpit.ai.json) directly, the same
+/// way Bay5MapTests.cs checks bay5.json/bay5.exits.json:
 /// parsed as plain JSON here (no reference to ArenaMapPort.Client/AiAnchors.cs, which needs the real
 /// UnityEngine/Newtonsoft assemblies this net10.0 test project does not have) against the counts the
 /// 2026-09-27 research pass verified (14 core points / 2 hubs+21 sub points on Equator, 11 core
-/// points / 4 hubs+43 sub points on Bay5) and the invariants both ArenaMapPort.Client/AiAnchors.cs'
+/// points / 4 hubs+43 sub points on Bay5) and the 2026-10-11 AirPit extraction (19 core points /
+/// 3 hubs+35 sub points), plus the invariants both ArenaMapPort.Client/AiAnchors.cs'
 /// parser and the NavMesh bake (BakeNavMesh, y -8..12) rely on.
 /// </summary>
 public sealed class AiAnchorsTests
@@ -31,6 +34,7 @@ public sealed class AiAnchorsTests
     [Theory]
     [InlineData("equator.ai.json", 14, 2, 21)]
     [InlineData("bay5.ai.json", 11, 4, 43)]
+    [InlineData("airpit.ai.json", 19, 3, 35)] // PLAN-AIRPIT item 20: 19 core points, hubs 12/12/11
     public void CountsMatchTheResearchPass(string file, int expectedCorePoints, int expectedHubs, int expectedSubPoints)
     {
         using var doc = JsonDocument.Parse(File.ReadAllText(Sidecar(file)));
@@ -45,6 +49,7 @@ public sealed class AiAnchorsTests
     [Theory]
     [InlineData("equator.ai.json")]
     [InlineData("bay5.ai.json")]
+    [InlineData("airpit.ai.json")]
     public void CorePointIdsAreUniqueWithFinitePositionsInTheBakeVolume(string file)
     {
         using var doc = JsonDocument.Parse(File.ReadAllText(Sidecar(file)));
@@ -63,6 +68,7 @@ public sealed class AiAnchorsTests
     [Theory]
     [InlineData("equator.ai.json")]
     [InlineData("bay5.ai.json")]
+    [InlineData("airpit.ai.json")]
     public void EveryHubCorePointIdExistsAndEveryPositionIsValid(string file)
     {
         using var doc = JsonDocument.Parse(File.ReadAllText(Sidecar(file)));
@@ -88,6 +94,7 @@ public sealed class AiAnchorsTests
     [Theory]
     [InlineData("equator.ai.json")]
     [InlineData("bay5.ai.json")]
+    [InlineData("airpit.ai.json")]
     public void NoConnectionOrEdgeFieldsAreShipped(string file)
     {
         // Deliberate -- extract_ai_anchors.py's own module docstring: AICorePoint.ConnectionsAtNet is
@@ -99,6 +106,32 @@ public sealed class AiAnchorsTests
             Assert.False(corePoint.TryGetProperty("connections_at_net", out _));
             Assert.False(corePoint.TryGetProperty("connection_ids", out _));
             Assert.False(corePoint.TryGetProperty("connection_group_ids", out _));
+        }
+    }
+
+    [Fact]
+    public void AirPitAnchorsSitInsideTheDescriptorBakeBounds()
+    {
+        // PLAN-AIRPIT item 20. AirPit's bake volume is descriptor data (x -80..56, y -2..8, z -96..92: ground floor
+        // plus wing mezzanine, user decision 2026-10-11), tighter than the -8..12 the theories above check for every
+        // map. An anchor outside it could never be on the NavMesh the bots walk (the client snaps core points to it).
+        var bounds = ArenaMapRegistry.AirPit.BakeBounds;
+        Assert.Equal(6, bounds.Length);
+        using var doc = JsonDocument.Parse(File.ReadAllText(Sidecar("airpit.ai.json")));
+        var positions = doc.RootElement.GetProperty("core_points").EnumerateArray().Select(cp => cp.GetProperty("position")).ToList();
+        foreach (var hub in doc.RootElement.GetProperty("patrol_ways").EnumerateArray()
+                     .SelectMany(way => way.GetProperty("hubs").EnumerateArray()))
+        {
+            positions.Add(hub.GetProperty("position"));
+            positions.AddRange(hub.GetProperty("sub_points").EnumerateArray());
+        }
+        Assert.Equal(19 + 3 + 35, positions.Count);
+        foreach (var position in positions)
+        {
+            var p = position.EnumerateArray().Select(v => v.GetSingle()).ToArray();
+            Assert.InRange(p[0], bounds[0], bounds[1]);
+            Assert.InRange(p[1], bounds[2], bounds[3]);
+            Assert.InRange(p[2], bounds[4], bounds[5]);
         }
     }
 

@@ -4,7 +4,7 @@
 Reads resources.assets without changing the Arena install. The generated text is
 BSG-derived data and belongs under ignored work/ or dist/, never in source control.
 Select exact TextAsset names rather than build-dependent Unity path IDs. Only the
-two released maps are exported; each available translation must be complete.
+three released maps are exported; each available translation must be complete.
 
     python tools/extract/extract_map_descriptions.py
     python tools/extract/extract_map_descriptions.py --check
@@ -33,6 +33,9 @@ LOCALE_ASSETS = {
 DESCRIPTION_KEYS = {
     "arena_equator": "621df90bf200a905ed57d31d Description",
     "arena_bay5": "62a05c960a18b50b7c575b1b Description",
+    # Arena's own location id for Air Pit (its "Name" key reads "Air Pit" in all three locales), NOT the
+    # sidecar id_field of the ported location (b7ed1752...). Verified 2026-10-11 against 0.6.0.47752.
+    "arena_airpit": "61e800b841ee214fbf1f0e53 Description",
 }
 
 

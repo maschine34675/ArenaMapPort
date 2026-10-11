@@ -9,6 +9,124 @@ from validate_map_descriptors import map_descriptor_paths, RELEASE_MAP_KEYS
 
 REPO = Path(__file__).resolve().parents[2]
 
+# Not every released map carries every optional payload. The key set of the release itself comes from
+# validate_map_descriptors.RELEASE_MAP_KEYS (three maps since AirPit); these two lists stay two-map on purpose:
+# DynamicMaps overview packs are deferred for AirPit (docs/PLAN-AIRPIT.md section 3) and AirPit has no active
+# flare light (item 22), so the exact-set checks below must allow AirPit WITHOUT either payload.
+OVERVIEW_MAP_NAMES = ('Equator', 'Bay5')
+FLARE_MAP_KEYS = ('arena_equator', 'arena_bay5')
+
+
+# Bundle contents are not otherwise inspected here (the build's roundtrip validators cover them), so the one stale
+# state that is known to exist is refused by its bytes: the 2026-09-15 AirPit spike build (Arena 0.5.4 content, no
+# native features, first-guess NavMesh). work/build/airpit keeps holding it until the Phase B Unity build (U1)
+# replaces it, and a full client build stages whatever work/build/airpit holds under the final map name. File name
+# -> (size, sha256), as recorded by that build's work/build/airpit/full-map-validation.json. The preset bundle is
+# left out on purpose: a correct rebuild from unchanged sidecars may reproduce it byte for byte.
+STALE_SPIKE_BUNDLES = {
+    'arena_airpit_scenes.bundle': (664670450, '31100570f3109e7431ff2e59783dc2fa58a76df39c5f0d58e03c349a2b3495aa'),
+    'arena_airpit_navmesh.bundle': (460078, '635762d07b68d6c053fa406d5e191bf37347b09973db6e6d86ae1e229d279687'),
+}
+
+
+def validate_not_spike_build(bundles):
+    """Refuse a distribution that still carries the AirPit spike bundles under the final map name. The size is
+    compared first so the 665 MB scenes bundle is only hashed when it could be the stale file."""
+    for name, (size, digest) in STALE_SPIKE_BUNDLES.items():
+        path = bundles/name
+        if not path.is_file() or path.stat().st_size != size:
+            continue
+        with path.open('rb') as stream:
+            actual = hashlib.file_digest(stream, 'sha256').hexdigest()
+        if actual == digest:
+            raise ValueError(
+                f'Stale AirPit bundle: {name} is the 2026-09-15 spike build (Arena 0.5.4 content, no native '
+                f'features). Run the AirPit Unity build (docs/progress/airpit-release.md), then a full, non-DllOnly '
+                f'client build so dist/ is restaged from work/build/airpit.')
+
+
+def _files_under(root):
+    """Relative posix names of every file below root; an absent directory has none."""
+    if not root.is_dir():
+        return set()
+    return {p.relative_to(root).as_posix() for p in root.rglob('*') if p.is_file()}
+
+
+def _check_art_files(root, expected, label):
+    """Exact set of non-empty JPEG files (the extractors' default format) under one art directory."""
+    actual = _files_under(root)
+    if actual != expected:
+        raise ValueError(f'{label} file set mismatch: missing={sorted(expected - actual)} unexpected={sorted(actual - expected)}')
+    for name in sorted(expected):
+        with (root/name).open('rb') as stream:
+            head = stream.read(3)
+        if head != b'\xff\xd8\xff':
+            raise ValueError(f'{label} file is empty or not a JPEG: {name}')
+
+
+def validate_art(plugin, server, keys):
+    """Banners (server mod) and loading screens (client plugin) are written by their extractors straight into
+    dist/ and staged by no csproj target, so only this check keeps a map from shipping without its art or with
+    stray leftovers. The extractor tables must list exactly the released maps."""
+    sys.path.insert(0, str(REPO/'tools/extract'))
+    import extract_banners
+    import extract_loadscreens
+    if set(extract_banners.BANNERS) != set(keys):
+        raise ValueError('Banner table does not match the released maps')
+    if set(extract_loadscreens.LOADSCREENS) != set(keys):
+        raise ValueError('Loadscreen table does not match the released maps')
+    _check_art_files(server/'banners', {extract_banners.output_filename(key) for key in keys}, 'Banner')
+    _check_art_files(plugin/'loadscreens',
+                     {extract_loadscreens.output_filename(key, index)
+                      for key in keys for index in range(1, len(extract_loadscreens.LOADSCREENS[key]) + 1)},
+                     'Loadscreen')
+
+
+def validate_ai_sidecars(plugin, keys):
+    """AiAnchors.cs reads <plugin>/ai/<key without "arena_">.ai.json. The git-tracked tools/maps sidecars are staged
+    by a csproj row per released map (DllOnly builds included), so the staged set must be exactly one per released map
+    and byte-equal to its source: a missing row silently keeps the NavMesh-synthesised AI, a stray file is parked
+    output."""
+    expected = {f'{key.removeprefix("arena_")}.ai.json' for key in keys}
+    actual = _files_under(plugin/'ai')
+    if actual != expected:
+        raise ValueError(f'AI sidecar file set mismatch: missing={sorted(expected - actual)} unexpected={sorted(actual - expected)}')
+    for name in sorted(expected):
+        staged = (plugin/'ai'/name).read_bytes()
+        if staged != (REPO/'tools/maps'/name).read_bytes():
+            raise ValueError(f'Stale AI sidecar: {name}')
+        if json.loads(staged).get('map_key') != name.removesuffix('.ai.json'):
+            raise ValueError(f'AI sidecar map key mismatch: {name}')
+
+
+def validate_acoustics(plugin, keys):
+    """Original acoustic graph, bake and room tones, staged from the ignored work/extract/spatial-audio inputs (one
+    directory per released map). Each package must name its own map, and the directory must hold exactly the graph
+    JSON plus the bake and room-tone files the graph lists, each with the recorded length and SHA-256."""
+    root = plugin/'acoustics'
+    expected_files = set()
+    packages = {}
+    for key in keys:
+        path = root/key/'spatial-audio.json'
+        if not path.is_file():
+            raise ValueError(f'Missing acoustic package: {key}/spatial-audio.json')
+        package = json.loads(path.read_text(encoding='utf-8'))
+        if package['schema_version'] != 1 or package['map_key'] != key:
+            raise ValueError(f'Acoustic package map or schema mismatch: {key}')
+        listed = [package['bake']] + [clip['decoded'] for clip in package['clips']]
+        packages[key] = listed
+        expected_files.add(f'{key}/spatial-audio.json')
+        expected_files.update(f'{key}/{item["file"]}' for item in listed)
+    actual_files = _files_under(root)
+    if actual_files != expected_files:
+        raise ValueError(f'Acoustics file set mismatch: missing={sorted(expected_files - actual_files)} '
+                         f'unexpected={sorted(actual_files - expected_files)}')
+    for key, listed in packages.items():
+        for item in listed:
+            blob = (root/key/item['file']).read_bytes()
+            if len(blob) != item['bytes'] or hashlib.sha256(blob).hexdigest() != item['sha256']:
+                raise ValueError(f'Acoustic file length/hash mismatch: {key}/{item["file"]}')
+
 
 def validate():
     # This check also runs on fully resumed distributions, when no fresh map build
@@ -29,7 +147,7 @@ def validate():
         if any(p.is_file() for p in (plugin/optional).rglob('*')):
             raise ValueError(f'Unused development payload in release: {optional}')
     expected_maps = set()
-    for name in ('Equator', 'Bay5'):
+    for name in OVERVIEW_MAP_NAMES:
         folder = f'ArenaMapPort_{name}'
         for file in (f'{folder}.jsonc', 'Layers/Ground.svg'):
             relative = f'{folder}/{file}'
@@ -48,9 +166,12 @@ def validate():
     validate_pack(json.loads(descriptions))
     if descriptions != (REPO/'work/extract/map-descriptions/map-descriptions.json').read_bytes():
         raise ValueError('Stale map descriptions')
+    validate_art(plugin, REPO/'dist/SPT_Runtime/user/mods/ArenaMapPort', keys)
+    validate_ai_sidecars(plugin, keys)
+    validate_acoustics(plugin, keys)
     from extract_multiflare import validate_graph
     expected_flare_files = set()
-    for key in ('arena_equator', 'arena_bay5'):
+    for key in FLARE_MAP_KEYS:
         flare_dir = plugin/'flares'/key
         package = json.loads((flare_dir/'flares.json').read_text(encoding='utf-8'))
         if package['map_key'] != key:
@@ -68,6 +189,7 @@ def validate():
     actual_bundles = {p.relative_to(plugin/'bundles').as_posix() for p in (plugin/'bundles').rglob('*') if p.is_file()}
     if actual_bundles != expected_bundles:
         raise ValueError(f'Bundle set mismatch: missing={sorted(expected_bundles-actual_bundles)} unexpected={sorted(actual_bundles-expected_bundles)}')
+    validate_not_spike_build(plugin/'bundles')
     # fix-preset-cab-and-bundle-lifetime: every dist bundle's internal UnityFS directory-table
     # name (its 'CAB-...'/'BuildPlayer-...' entry) must be unique across the WHOLE distribution --
     # a duplicate (as every *_preset.bundle used to share, before that fix) makes Unity's own

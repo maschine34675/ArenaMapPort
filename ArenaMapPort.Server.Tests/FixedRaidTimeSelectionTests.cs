@@ -33,15 +33,17 @@ namespace ArenaMapPort.Server.Tests
         static void Set(LocationConditionsPanel panel, RaidSettings settings) => panel.Set(settings);
 
         [Fact]
-        public void BothPortedMapsJoinNativeChoicesAndKeepPastWhileOtherMapsKeepVanillaReset()
+        public void AllReleasedMapsJoinNativeChoicesAndKeepPastWhileOtherMapsKeepVanillaReset()
         {
-            Assert.Equal(new[] { "bigmap", "arena_equator", "arena_bay5" }, LocationSettings.Location.NightTimeAllowedLocations);
-            foreach (string key in new[] { "arena_equator", "arena_bay5", "bigmap", "unknown" })
+            // AirPit joins like Bay5 (descriptor UsesServerTime => HasTimeSelection); parked maps never do.
+            Assert.Equal(new[] { "bigmap", "arena_equator", "arena_bay5", "arena_airpit" }, LocationSettings.Location.NightTimeAllowedLocations);
+            foreach (string key in new[] { "arena_equator", "arena_bay5", "arena_airpit", "arena_bowl", "bigmap", "unknown" })
             {
                 var settings = Settings(key, EDateTime.PAST);
                 var controller = new MatchMakerSelectionLocationScreen.SelectionLocationScreenController { RaidSettings = settings };
                 controller.UpdateSelectedDateTime();
-                Assert.Equal(key == "unknown" ? EDateTime.CURR : EDateTime.PAST, settings.SelectedDateTime);
+                bool keepsPast = key is "arena_equator" or "arena_bay5" or "arena_airpit" or "bigmap";
+                Assert.Equal(keepsPast ? EDateTime.PAST : EDateTime.CURR, settings.SelectedDateTime);
             }
         }
 
@@ -108,6 +110,10 @@ namespace ArenaMapPort.Server.Tests
             Assert.Same(ResourcesCache.Rain, panel._weatherIcon.sprite);
             Set(panel, Settings("arena_bay5", EDateTime.PAST));
             Assert.Same(panel.NativeSprite, panel._weatherIcon.sprite);
+            Set(panel, Settings("arena_equator", EDateTime.PAST));
+            Assert.Same(ResourcesCache.Rain, panel._weatherIcon.sprite);
+            Set(panel, Settings("arena_airpit", EDateTime.PAST)); // server-time map: Equator's preview context is dropped
+            Assert.Same(panel.NativeSprite, panel._weatherIcon.sprite);
         }
 
         [Fact]
@@ -137,11 +143,13 @@ namespace ArenaMapPort.Server.Tests
         }
 
         [Theory]
-        [InlineData(EDateTime.CURR, "04:18:53")]
-        [InlineData(EDateTime.PAST, "16:18:53")]
-        public void Bay5RetainsBackendClockProgressionWeatherAndSelectionThroughBack(EDateTime selected, string summary)
+        [InlineData("arena_bay5", EDateTime.CURR, "04:18:53")]
+        [InlineData("arena_bay5", EDateTime.PAST, "16:18:53")]
+        [InlineData("arena_airpit", EDateTime.CURR, "04:18:53")]
+        [InlineData("arena_airpit", EDateTime.PAST, "16:18:53")]
+        public void ServerTimeMapsRetainBackendClockProgressionWeatherAndSelectionThroughBack(string key, EDateTime selected, string summary)
         {
-            var panel = new LocationConditionsPanel(); var settings = Settings("arena_bay5", selected);
+            var panel = new LocationConditionsPanel(); var settings = Settings(key, selected);
             panel.OnTimeChanged += time => settings.SelectedDateTime = time;
             Set(panel, settings); panel.UpdateConditions();
             Assert.True(panel.NeedsTimer);
@@ -159,7 +167,7 @@ namespace ArenaMapPort.Server.Tests
             Assert.Equal(2, panel.TimeEvents);
             Assert.Same(panel.NativeSprite, panel._weatherIcon.sprite);
             var single = new LocationConditionsPanel { _amTimeToggle = null, _pmTimeToggle = null };
-            Set(single, Settings("arena_bay5", selected)); single.UpdateConditions();
+            Set(single, Settings(key, selected)); single.UpdateConditions();
             Assert.Equal(summary, single._currentPhaseTime.text);
         }
 
@@ -187,6 +195,8 @@ namespace ArenaMapPort.Server.Tests
             panel.SelectedDateTime = EDateTime.PAST;
             Assert.Same(ResourcesCache.Rain, panel._weatherIcon.sprite);
             Set(panel, Settings("arena_bay5", EDateTime.PAST));
+            Assert.Same(panel.NativeSprite, panel._weatherIcon.sprite);
+            Set(panel, Settings("arena_airpit", EDateTime.PAST));
             Assert.Same(panel.NativeSprite, panel._weatherIcon.sprite);
         }
     }

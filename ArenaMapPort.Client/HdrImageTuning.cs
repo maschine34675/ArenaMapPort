@@ -16,7 +16,8 @@ namespace ArenaMapPort.Client
     /// Prism reads the live environment exposure immediately before UpdateShaderValues. Stage
     /// per-map image controls there, retaining indoor/outdoor adaptation and camera presets.
     /// Restore component fields after upload and changed global tone keywords after rendering;
-    /// only the current Equator/Bay5 gameplay camera's own materials receive adjusted values.
+    /// only the current gameplay camera's own materials of a released map (Equator, Bay5, AirPit)
+    /// receive adjusted values.
     /// Native evidence: PrismEffects.cs 1063-1380, 1611-1784.
     /// </summary>
     internal static class HdrImageTuning
@@ -240,8 +241,9 @@ namespace ArenaMapPort.Client
         internal static void Install(Harmony harmony)
         {
             if (_installed) return;
-            Bind(ArenaMapRegistry.Equator);
-            Bind(ArenaMapRegistry.Bay5);
+            // Every released map (Equator, Bay5, AirPit) gets the sections; only Equator carries non-neutral
+            // defaults. AirPit's neutral rows (Original tonemap, 0 EV, range/speed 1) change nothing until tuned.
+            foreach (var map in ArenaMapRegistry.All) Bind(map);
             var render = AccessTools.Method(typeof(PrismEffects), nameof(PrismEffects.OnRenderImageInternal),
                 new[] { typeof(RenderTexture), typeof(RenderTexture) });
             var upload = AccessTools.Method(typeof(PrismEffects), nameof(PrismEffects.UpdateShaderValues), Type.EmptyTypes);
@@ -262,7 +264,7 @@ namespace ArenaMapPort.Client
                 postfix: new HarmonyMethod(typeof(HdrImageTuning), nameof(AfterUpload)),
                 finalizer: new HarmonyMethod(typeof(HdrImageTuning), nameof(FinalizeUpload)));
             _installed = true;
-            Plugin.Log.LogDebug("[ArenaMapPort][HDR] per-map exposure/tone controls installed after native environment overwrite; Equator defaults to custom Filmic, Bay5 preserves native tone");
+            Plugin.Log.LogDebug("[ArenaMapPort][HDR] per-map exposure/tone controls installed after native environment overwrite; Equator defaults to custom Filmic, Bay5 and AirPit preserve native tone");
         }
 
         static void Bind(ArenaMapDescriptor map)
@@ -282,7 +284,7 @@ namespace ArenaMapPort.Client
                     new ConfigDescription("Multiply the live native exposure adaptation speed. 1 preserves indoor/outdoor behavior; higher values adapt faster. Does not enable exposure. Live.",
                         new AcceptableValueRange<float>(0.1f, 4f))),
                 Tone = config.Bind(section, "TonemapProfile", equator ? ToneProfile.Filmic : ToneProfile.Original,
-                    "Original preserves native tonemapping and its current parameters. Filmic, RomB and ACES enable that native profile, using its native preset unless TonemapCustomCurve is on. Equator defaults to the accepted custom Filmic curve; Bay5 keeps Original. Off disables tonemapping. Live."),
+                    "Original preserves native tonemapping and its current parameters. Filmic, RomB and ACES enable that native profile, using its native preset unless TonemapCustomCurve is on. Equator defaults to the accepted custom Filmic curve; Bay5 and AirPit keep Original. Off disables tonemapping. Live."),
                 CustomCurve = config.Bind(section, "TonemapCustomCurve", equator,
                     new ConfigDescription("Use the two advanced raw native parameter vectors. Requires an explicit Filmic, RomB or ACES profile; Original and Off ignore them. Invalid or out-of-range vectors fall back to that profile. Live.", null, new ConfigurationManagerAttributes())),
                 Curve = config.Bind(section, "TonemapCurve", equator ? new Vector3(7f, 0.35f, 0.7f) : new Vector3(-1f, 2.72f, 0.15f),

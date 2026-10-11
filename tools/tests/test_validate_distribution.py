@@ -16,6 +16,8 @@ sys.path.insert(0, str(REPO / "tools" / "validate"))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import validate_distribution as distribution
 from test_multiflare_extraction import graph as flare_graph
+import extract_banners
+import extract_loadscreens
 
 
 class DistributionSidecarTests(unittest.TestCase):
@@ -58,12 +60,17 @@ class DistributionSidecarTests(unittest.TestCase):
             directory.mkdir(parents=True, exist_ok=True)
             (directory/'map-descriptions.json').write_text(json.dumps({
                 'schema_version': 1, 'descriptions': {'en': {
-                    'arena_equator': 'Mall fixture', 'arena_bay5': 'Harbor fixture'}}}), encoding='utf-8')
+                    'arena_equator': 'Mall fixture', 'arena_bay5': 'Harbor fixture',
+                    'arena_airpit': 'Terminal fixture'}}}), encoding='utf-8')
+        self.put_art()
+        self.put_ai()
+        self.put_acoustics()
         for folder in (self.server / "db/arena_equator", self.repo / "ArenaMapPort.Server/db/arena_equator"):
             folder.mkdir(parents=True)
             (folder / "base.json").write_text('{"Id": "arena_equator"}', encoding="utf-8")
-        # The release is exactly two maps, even when parked descriptors remain in source.
+        # The release is exactly three maps, even when parked descriptors remain in source.
         (self.maps / "bay5.json").write_text(json.dumps({"key": "arena_bay5", "db_base_json_path": "arena_bay5/base.json"}), encoding="utf-8")
+        (self.maps / "airpit.json").write_text(json.dumps({"key": "arena_airpit", "db_base_json_path": "arena_airpit/base.json"}), encoding="utf-8")
         (self.maps / "bowl.json").write_text(json.dumps({"key": "arena_bowl", "db_base_json_path": "arena_bowl/base.json"}), encoding="utf-8")
         for kind in ("scenes", "navmesh", "preset"):
             (bundles / f"arena_bay5_{kind}.bundle").write_bytes(b"fixture bundle")
@@ -71,6 +78,13 @@ class DistributionSidecarTests(unittest.TestCase):
         for folder in (self.server / "db/arena_bay5", self.repo / "ArenaMapPort.Server/db/arena_bay5"):
             folder.mkdir(parents=True)
             (folder / "base.json").write_text('{"Id": "arena_bay5"}', encoding="utf-8")
+        # AirPit: bundles, shader sidecar, database and art, but neither an overview pack nor flares.
+        for kind in ("scenes", "navmesh", "preset"):
+            (bundles / f"arena_airpit_{kind}.bundle").write_bytes(b"fixture bundle")
+        (self.plugin / "material-shaders.arena_airpit.json").write_text("{}", encoding="utf-8")
+        for folder in (self.server / "db/arena_airpit", self.repo / "ArenaMapPort.Server/db/arena_airpit"):
+            folder.mkdir(parents=True)
+            (folder / "base.json").write_text('{"Id": "arena_airpit"}', encoding="utf-8")
         self.built = {}
         for name, destination in (("Client", self.plugin), ("Server", self.server)):
             built = self.repo / f"ArenaMapPort.{name}/bin/Release/maschine-ArenaMapPort.{name}.dll"
@@ -78,6 +92,50 @@ class DistributionSidecarTests(unittest.TestCase):
             built.write_bytes(name.encode())
             (destination / built.name).write_bytes(built.read_bytes())
             self.built[name] = built
+
+    RELEASED = ("arena_equator", "arena_bay5", "arena_airpit")
+
+    @staticmethod
+    def banner_names():
+        return {extract_banners.output_filename(key) for key in DistributionSidecarTests.RELEASED}
+
+    @staticmethod
+    def loadscreen_names():
+        return {extract_loadscreens.output_filename(key, index) for key in DistributionSidecarTests.RELEASED
+                for index in range(1, len(extract_loadscreens.LOADSCREENS[key]) + 1)}
+
+    def put_art(self):
+        """Banners and loading screens as the extractors leave them (only the JPEG start marker matters here)."""
+        for root, names in ((self.server / "banners", self.banner_names()),
+                            (self.plugin / "loadscreens", self.loadscreen_names())):
+            root.mkdir(parents=True, exist_ok=True)
+            for name in names:
+                (root / name).write_bytes(b"\xff\xd8\xff fixture art")
+
+    def put_ai(self):
+        """The git-tracked tools/maps/<stem>.ai.json sources and their staged copies (one per released map)."""
+        (self.plugin / "ai").mkdir(parents=True, exist_ok=True)
+        for key in self.RELEASED:
+            stem = key.removeprefix("arena_")
+            body = json.dumps({"schema_version": 1, "map_key": stem, "core_points": [], "patrol_ways": []})
+            for root in (self.maps, self.plugin / "ai"):
+                (root / f"{stem}.ai.json").write_text(body, encoding="utf-8")
+
+    def put_acoustics(self):
+        """One acoustic package per released map: graph JSON, bake and one room-tone WAV, hashes as recorded."""
+        for key in self.RELEASED:
+            folder = self.plugin / "acoustics" / key
+            folder.mkdir(parents=True, exist_ok=True)
+            blobs = {"source.audiobakedata": b"bake " + key.encode(), f"{key}_tone.wav": b"RIFF tone " + key.encode()}
+            for name, blob in blobs.items():
+                (folder / name).write_bytes(blob)
+
+            def listed(name):
+                return {"file": name, "bytes": len(blobs[name]), "sha256": hashlib.sha256(blobs[name]).hexdigest()}
+
+            (folder / "spatial-audio.json").write_text(json.dumps({
+                "schema_version": 1, "map_key": key, "bake": listed("source.audiobakedata"),
+                "clips": [{"id": "fixture:1", "decoded": listed(f"{key}_tone.wav")}]}), encoding="utf-8")
 
     def validate(self):
         def target_path(command, **kwargs):
@@ -93,7 +151,7 @@ class DistributionSidecarTests(unittest.TestCase):
                 redirect_stdout(output):
             distribution.validate()
         self.assertEqual(run.call_count, 2)
-        self.assertIn("DISTRIBUTION_OK 2 maps 6 bundles 2 sidecars", output.getvalue())
+        self.assertIn("DISTRIBUTION_OK 3 maps 9 bundles 3 sidecars", output.getvalue())
 
     def test_distribution_accepts_bots_exits_and_other_dotted_sidecars(self):
         (self.maps / "equator.bots.json").write_text('{"player_spawns": []}', encoding="utf-8")
@@ -183,6 +241,161 @@ class DistributionSidecarTests(unittest.TestCase):
         texture_path.write_bytes(bytes([blob[0] ^ 1]) + blob[1:])
         with self.assertRaisesRegex(ValueError, "Flare texture length/hash mismatch"):
             self.validate()
+
+    def test_airpit_is_accepted_without_an_overview_pack_or_flares_and_rejected_with_unlisted_ones(self):
+        self.assertFalse((self.plugin / "flares/arena_airpit").exists())
+        self.assertFalse((self.plugin / "dynamicmaps/ArenaMapPort_AirPit").exists())
+        self.validate()
+        (self.plugin / "flares/arena_airpit").mkdir()
+        (self.plugin / "flares/arena_airpit/flares.json").write_text("{}", encoding="utf-8")
+        with self.assertRaisesRegex(ValueError, "Unexpected or missing flare package files"):
+            self.validate()
+        shutil.rmtree(self.plugin / "flares/arena_airpit")
+        (self.plugin / "dynamicmaps/ArenaMapPort_AirPit").mkdir()
+        (self.plugin / "dynamicmaps/ArenaMapPort_AirPit/ArenaMapPort_AirPit.jsonc").write_text("{}", encoding="utf-8")
+        with self.assertRaisesRegex(ValueError, "Unexpected or missing overview"):
+            self.validate()
+
+    def test_known_stale_airpit_spike_bundles_are_rejected_by_their_bytes(self):
+        real = distribution.STALE_SPIKE_BUNDLES
+        self.assertEqual(set(real), {"arena_airpit_scenes.bundle", "arena_airpit_navmesh.bundle"})
+        for size, digest in real.values():
+            self.assertGreater(size, 0)
+            self.assertRegex(digest, r"^[0-9a-f]{64}$")
+        self.validate()  # the fixtures' placeholder bytes are not the real spike files
+        for name in real:
+            with self.subTest(name=name):
+                path = self.plugin / "bundles" / name
+                stale = {name: (path.stat().st_size, hashlib.sha256(path.read_bytes()).hexdigest())}
+                with patch.object(distribution, "STALE_SPIKE_BUNDLES", stale):
+                    with self.assertRaisesRegex(ValueError, f"Stale AirPit bundle: {name}"):
+                        self.validate()
+                    # Same name and size, other bytes: a rebuilt bundle is accepted.
+                    original = path.read_bytes()
+                    path.write_bytes(bytes([original[0] ^ 1]) + original[1:])
+                    try:
+                        self.validate()
+                    finally:
+                        path.write_bytes(original)
+
+    def test_distribution_requires_every_released_maps_banner_and_loadscreens_exactly(self):
+        for path, message in ((self.server / "banners/arena_airpit.jpg", "Banner file set mismatch"),
+                              (self.plugin / "loadscreens/arena_airpit_5.jpg", "Loadscreen file set mismatch"),
+                              (self.plugin / "loadscreens/arena_bay5_1.jpg", "Loadscreen file set mismatch")):
+            with self.subTest(missing=path.name):
+                original = path.read_bytes()
+                path.unlink()
+                try:
+                    with self.assertRaisesRegex(ValueError, message):
+                        self.validate()
+                finally:
+                    path.write_bytes(original)
+        for path, message in ((self.server / "banners/arena_woods.jpg", "Banner file set mismatch"),
+                              (self.server / "banners/arena_airpit.png", "Banner file set mismatch"),
+                              (self.plugin / "loadscreens/arena_airpit_6.jpg", "Loadscreen file set mismatch"),
+                              (self.plugin / "loadscreens/arena_airpit_Alt_1.jpg", "Loadscreen file set mismatch")):
+            with self.subTest(unexpected=path.name):
+                path.write_bytes(b"\xff\xd8\xff stray")
+                try:
+                    with self.assertRaisesRegex(ValueError, message):
+                        self.validate()
+                finally:
+                    path.unlink()
+        for path in (self.server / "banners/arena_airpit.jpg", self.plugin / "loadscreens/arena_airpit_1.jpg"):
+            with self.subTest(corrupt=path.name):
+                original = path.read_bytes()
+                for bad in (b"", b"<html>"):
+                    path.write_bytes(bad)
+                    try:
+                        with self.assertRaisesRegex(ValueError, "empty or not a JPEG"):
+                            self.validate()
+                    finally:
+                        path.write_bytes(original)
+
+    def test_distribution_requires_every_released_maps_ai_sidecar_exactly_and_current(self):
+        staged = self.plugin / "ai/airpit.ai.json"
+        source = self.maps / "airpit.ai.json"
+        original = staged.read_bytes()
+        staged.unlink()
+        with self.assertRaisesRegex(ValueError, r"AI sidecar file set mismatch: missing=\['airpit.ai.json'\]"):
+            self.validate()
+        (self.plugin / "ai/woods.ai.json").write_text("{}", encoding="utf-8")
+        with self.assertRaisesRegex(ValueError, r"AI sidecar file set mismatch: missing=\['airpit.ai.json'\] unexpected=\['woods.ai.json'\]"):
+            self.validate()
+        (self.plugin / "ai/woods.ai.json").unlink()
+        staged.write_bytes(original)
+        self.validate()
+        # A sidecar edited after the last client build is stale in dist.
+        source.write_text(source.read_text(encoding="utf-8").replace('"core_points": []', '"core_points": [1]'), encoding="utf-8")
+        with self.assertRaisesRegex(ValueError, "Stale AI sidecar: airpit.ai.json"):
+            self.validate()
+        staged.write_bytes(source.read_bytes())
+        self.validate()
+        # Equal bytes of the wrong map (a copy-paste between rows) are refused too.
+        wrong = json.dumps({"schema_version": 1, "map_key": "bay5", "core_points": [], "patrol_ways": []})
+        source.write_text(wrong, encoding="utf-8")
+        staged.write_text(wrong, encoding="utf-8")
+        with self.assertRaisesRegex(ValueError, "AI sidecar map key mismatch: airpit.ai.json"):
+            self.validate()
+
+    def test_distribution_requires_every_released_maps_acoustics_exactly_and_intact(self):
+        airpit = self.plugin / "acoustics/arena_airpit"
+        package_path = airpit / "spatial-audio.json"
+        package = package_path.read_bytes()
+        bake = airpit / "source.audiobakedata"
+        blob = bake.read_bytes()
+        for path, message in ((airpit / "arena_airpit_tone.wav", "Acoustics file set mismatch"),
+                              (bake, "Acoustics file set mismatch"),
+                              (package_path, "Missing acoustic package: arena_airpit/spatial-audio.json")):
+            with self.subTest(missing=path.name):
+                original = path.read_bytes()
+                path.unlink()
+                try:
+                    with self.assertRaisesRegex(ValueError, message):
+                        self.validate()
+                finally:
+                    path.write_bytes(original)
+        for path in (airpit / "stray.wav", self.plugin / "acoustics/arena_bowl/spatial-audio.json",
+                     self.plugin / "acoustics/loose.json"):
+            with self.subTest(unexpected=path.name):
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_bytes(b"stray")
+                try:
+                    with self.assertRaisesRegex(ValueError, "Acoustics file set mismatch"):
+                        self.validate()
+                finally:
+                    path.unlink()
+        self.assertEqual(package_path.read_bytes(), package)
+        # Same length, other bytes: only the recorded SHA-256 can tell.
+        bake.write_bytes(bytes([blob[0] ^ 1]) + blob[1:])
+        with self.assertRaisesRegex(ValueError, "Acoustic file length/hash mismatch: arena_airpit/source.audiobakedata"):
+            self.validate()
+        bake.write_bytes(blob + b"!")
+        with self.assertRaisesRegex(ValueError, "Acoustic file length/hash mismatch"):
+            self.validate()
+        bake.write_bytes(blob)
+        for change, message in ((lambda p: p.update(map_key="arena_bay5"), "Acoustic package map or schema mismatch"),
+                                (lambda p: p.update(schema_version=2), "Acoustic package map or schema mismatch")):
+            with self.subTest(message=message):
+                mutated = json.loads(package)
+                change(mutated)
+                package_path.write_text(json.dumps(mutated), encoding="utf-8")
+                try:
+                    with self.assertRaisesRegex(ValueError, message):
+                        self.validate()
+                finally:
+                    package_path.write_bytes(package)
+        self.validate()
+
+    def test_art_tables_must_list_exactly_the_released_maps(self):
+        without_airpit = {k: v for k, v in extract_banners.BANNERS.items() if k != "arena_airpit"}
+        with patch.object(extract_banners, "BANNERS", without_airpit):
+            with self.assertRaisesRegex(ValueError, "Banner table does not match"):
+                self.validate()
+        extra = {**extract_loadscreens.LOADSCREENS, "arena_bowl": extract_loadscreens.LOADSCREENS["arena_airpit"]}
+        with patch.object(extract_loadscreens, "LOADSCREENS", extra):
+            with self.assertRaisesRegex(ValueError, "Loadscreen table does not match"):
+                self.validate()
 
     def test_distribution_rejects_missing_stale_or_unexpected_overview(self):
         path = self.plugin/'dynamicmaps/ArenaMapPort_Bay5/Layers/Ground.svg'

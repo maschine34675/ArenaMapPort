@@ -18,8 +18,9 @@ namespace ArenaMapPort.Client
     /// <c>TarkovApplication.LoadMapAndData</c>, strictly before <c>Player.Init</c> ever fires (this
     /// class's own gating argument below), and sets <c>EnvironmentManagerBase.Instance</c> itself — so the
     /// <c>Instance == null</c> check just below already skips creating the bare fallback for those two
-    /// maps without any further change here. The fallback stays load-bearing for the twelve maps that
-    /// still author no <c>EnvironmentManager</c> at all.
+    /// maps without any further change here (the same holds for any package that carries a
+    /// <c>raincover</c> entry, such as the Arena 0.6.0 AirPit package). The fallback stays load-bearing
+    /// for every map whose package still authors no <c>EnvironmentManager</c> at all: the parked maps.
     ///
     /// <c>EnvironmentManager.Instance</c> is dereferenced UNGUARDED at <c>EFT/Player.cs:28251-28252</c>
     /// (inside <c>Player.Init</c>, for every player — local and AI): once the SpatialAudioSystem fix

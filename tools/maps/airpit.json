@@ -10,16 +10,35 @@
     "Arena_Airpit_TeamFight",
     "Arena_Airpit_TeamFight_DesignStuff"
   ],
+  "uses_server_time": true,
   "infiltration_name": "ArenaAirPit",
-  "locale_name": "Arena: Air Pit (spike)",
-  "locale_description": "Internal test build — TeamFight geometry/collision/NavMesh port.",
-  "icon_x": 295,
-  "icon_y": 760,
+  "locale_name": "Arena: Air Pit",
+  "locale_description": "The Air Pit airport terminal from EFT Arena: a large hall with an airliner inside, passport lanes to the north and a bus apron to the south. Ground floor and mezzanine are the main play space.",
+  "icon_x": 500,
+  "icon_y": 300,
   "template_key": "factory4_day",
   "db_base_json_path": "arena_airpit/base.json",
   "fog_color": [
     0.0992923229932785,
     0.11644228547811508,
     0.12249535322189331
+  ],
+  "opened_barriers": [
+    "BUS_DOORS",
+    "PASSPORT_CONTROL_DOORS"
+  ],
+  "navmesh_bake_exclusions": [
+    "SBG_Arena_AirPit_ShootOut/SOO/fence_ema_01_white (18)",
+    "SBG_Arena_AirPit_ShootOut/SOO_LOD0/BUILDING/DonB_Ramen_closed",
+    "SBG_Arena_AirPit_ShootOut/SOO_LOD0/BUILDING/TH_Roll_door_01_closed",
+    "SBG_Arena_AirPit_ShootOut/SOO_LOD0/BUILDING/DonB_Ramen_closed (1)"
+  ],
+  "bake_bounds": [-80, 56, -2, 8, -96, 92],
+  "navmesh_bake_layers": [9, 11, 13, 18, 30],
+  "shader_fallback_names": [
+    "Custom/Billboard_FogSheet_Simple",
+    "Cloth/ClothShader",
+    "Cloth/ClothShader_backface",
+    "ANGRYMESH/PBR Rocks/PBR BlendTopDetail (Legacy)"
   ]
 }

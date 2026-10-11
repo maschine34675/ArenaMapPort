@@ -20,17 +20,26 @@ ARENA_SOURCE = "D:/Battlestate Games/Escape from Tarkov Arena/EscapeFromTarkovAr
 
 
 class BannerTableTests(unittest.TestCase):
-    """The BANNERS table itself: exactly the two maps in this release, at the path_ids/names the
-    2026-09-25 research pass verified against a live UnityPy read."""
+    """The BANNERS table itself: exactly the three maps in this release, at the path_ids/names the
+    2026-09-25 research pass (Equator, Bay5) and the 2026-10-11 probe (AirPit) verified against a
+    live UnityPy read."""
 
-    def test_exactly_two_maps(self):
-        self.assertEqual(set(EB.BANNERS), {"arena_equator", "arena_bay5"})
+    def test_exactly_the_three_released_maps(self):
+        self.assertEqual(set(EB.BANNERS), {"arena_equator", "arena_bay5", "arena_airpit"})
 
     def test_equator_asset_identity(self):
         self.assertEqual(EB.BANNERS["arena_equator"], {"asset_name": "Matchmaker_Banner_Equator", "path_id": 3030})
 
     def test_bay5_asset_identity(self):
         self.assertEqual(EB.BANNERS["arena_bay5"], {"asset_name": "Matchmaker_Banner_Bay5", "path_id": 1361})
+
+    def test_airpit_asset_identity(self):
+        # Arena 0.6.0.47752 resources.assets; the lookup is by the unique name, the path_id is a hint.
+        self.assertEqual(EB.BANNERS["arena_airpit"], {"asset_name": "Matchmaker_Banner_AirPit", "path_id": 1584})
+
+    def test_airpit_output_names(self):
+        self.assertEqual(EB.output_filename("arena_airpit"), "arena_airpit.jpg")
+        self.assertEqual(EB.output_filename("arena_airpit", "png"), "arena_airpit.png")
 
 
 class OutputFilenameTests(unittest.TestCase):
@@ -42,7 +51,7 @@ class OutputFilenameTests(unittest.TestCase):
 
     def test_unknown_map_key_raises(self):
         with self.assertRaises(HardExtractError):
-            EB.output_filename("arena_woods")
+            EB.output_filename("arena_woods")  # a parked map
 
 
 class OutputPathTests(unittest.TestCase):
@@ -86,10 +95,10 @@ class CheckModeTests(unittest.TestCase):
     """--check must never import UnityPy or touch the Arena install -- only look at whatever the
     caller's own output directory already has on disk."""
 
-    def test_reports_both_maps_missing_from_an_empty_directory(self):
+    def test_reports_every_map_missing_from_an_empty_directory(self):
         with tempfile.TemporaryDirectory() as tmp:
             missing = EB.check(tmp, "jpg")
-            self.assertEqual(set(missing), {"arena_equator", "arena_bay5"})
+            self.assertEqual(set(missing), {"arena_equator", "arena_bay5", "arena_airpit"})
 
     def test_an_empty_file_still_counts_as_missing(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -100,8 +109,9 @@ class CheckModeTests(unittest.TestCase):
             missing = EB.check(tmp, "jpg")
             self.assertIn("arena_equator", missing)
             self.assertNotIn("arena_bay5", missing)
+            self.assertIn("arena_airpit", missing)
 
-    def test_reports_nothing_missing_once_both_files_are_present(self):
+    def test_reports_nothing_missing_once_every_file_is_present(self):
         with tempfile.TemporaryDirectory() as tmp:
             for map_key in EB.BANNERS:
                 with open(os.path.join(tmp, EB.output_filename(map_key, "jpg")), "wb") as f:
@@ -127,10 +137,10 @@ class RealSourceExtractionTests(unittest.TestCase):
     non-trivial image, matching this repo's existing "skip gracefully when the Arena install isn't
     present" convention."""
 
-    def test_both_banners_extract_to_the_expected_size(self):
+    def test_every_banner_extracts_to_the_expected_size(self):
         with tempfile.TemporaryDirectory() as tmp:
             written = EB.extract_all(ARENA_SOURCE, tmp, ext="jpg", quality=90)
-            self.assertEqual(set(written), {"arena_equator", "arena_bay5"})
+            self.assertEqual(set(written), {"arena_equator", "arena_bay5", "arena_airpit"})
             for map_key, path in written.items():
                 self.assertTrue(path.is_file())
                 self.assertGreater(path.stat().st_size, 1000, f"{map_key}: suspiciously small output file")

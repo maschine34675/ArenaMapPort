@@ -12,15 +12,17 @@ Arena-specific, unlike the small `MatchmakerBannersPanel` carousel item 10 alrea
 separate mechanism — see `extract_banners.py` / `docs/progress/two-maps-item-10-banners.md`).
 
 Arena ships one purpose-built, already-vignetted loading-screen image per playable location in its
-own `resources.assets`: `AllScreens_Loadingscreen-Equator` (path_id 1558) and
-`AllScreens_Loadingscreen-Bay5` (path_id 804), both 1920x1080 `Texture2D` (DXT5/BC3). (A third object,
+own `resources.assets`: `AllScreens_Loadingscreen-Equator` (path_id 1558),
+`AllScreens_Loadingscreen-Bay5` (path_id 804) and, added with AirPit (2026-10-11, Arena 0.6.0 path_id
+2704), `AllScreens_Loadingscreen-AirPit`, all 1920x1080 `Texture2D` (DXT5/BC3). (A further object,
 `AllScreens_Loadingscreen-Bay5_NY`, path_id 791, is an unwanted Christmas/New-Year reskin of the Bay5
 shot and is intentionally not in this table.) Re-verified this pass with a live UnityPy read against
 `D:\\Battlestate Games\\Escape from Tarkov Arena\\EscapeFromTarkovArena_Data\\resources.assets`
-(read-only) — both objects really are `Texture2D`, really carry that exact name, and really decode
-to 1920x1080.
+(read-only) — the Equator and Bay5 objects really are `Texture2D`, really carry that exact name, and really
+decode to 1920x1080 (AirPit's was re-read the same way in the 0.6.0 probe, see docs/progress/airpit-release.md).
 
-This script reads those two objects read-only with UnityPy and writes them as high-quality JPEGs
+This script reads the table's objects (per map: that loading screen plus four main-menu backgrounds)
+read-only with UnityPy and writes them as high-quality JPEGs
 straight into the CLIENT plugin's deployed folder — a sibling of that folder's own `bundles/`
 directory, exactly the folder `ArenaMapPort.Client.csproj`'s `ArenaMapPortDistCopy` target already
 copies the plugin DLL into (`$(ArenaMapPortDistDir)` = `dist/BepInEx/plugins/maschine-ArenaMapPort/`), so
@@ -30,19 +32,19 @@ copies the plugin DLL into (`$(ArenaMapPortDistDir)` = `dist/BepInEx/plugins/mas
 goes into git (AGENTS.md): the only write targets are `dist/` (gitignored) or a `--output` override,
 typically under `work/` for a one-off inspection.
 
-Output filenames are numbered per map, `arena_<key>_<n>.jpg` starting at `n=1` — one file per map
-today, but the client probes contiguously (`arena_equator_1.jpg`, `_2.jpg`, ...) and stops at the
-first missing index, so shipping a second or third variety image later (e.g. one of Arena's own
-`Arena_MainMenu_Paralax_<Map>-N` layers, wider/unvignetted, a poorer single-hero-shot fit — see this
-session's own research — or a future additional `AllScreens`-style shot) is a drop-in: no client
-rebuild, no naming change, just add `arena_<key>_2.jpg` next to `_1.jpg`.
+Output filenames are numbered per map, `arena_<key>_<n>.jpg` starting at `n=1` — five files per map
+today (the loading screen plus four main-menu backgrounds), and the client probes contiguously
+(`arena_equator_1.jpg`, `_2.jpg`, ...) and stops at the
+first missing index, so shipping a further variety image later (e.g. a future additional
+`AllScreens`-style shot) is a drop-in: no client rebuild, no naming change, just add the next
+number after the map's last file (`arena_<key>_6.jpg` today).
 
 Selects a unique exact Texture2D name in the expected source file, then checks that
 entry's known dimensions. The old path_id values below are historical hints only;
 Arena 0.6 repacked them. Missing/duplicate names or dimension drift fail loudly.
 
 CLI:
-    python extract_loadscreens.py                     # extract both maps into dist/
+    python extract_loadscreens.py                     # extract all three maps into dist/
     python extract_loadscreens.py --ext png            # write PNG instead of the jpg default
     python extract_loadscreens.py --output <dir>       # override the output directory
     python extract_loadscreens.py --source <ArenaData> # override the Arena EscapeFromTarkovArena_Data dir
@@ -93,6 +95,17 @@ LOADSCREENS = {
         {"asset_name": "Arena_MainMenu_Paralax_Bay5-2", "path_id": 526, "file": "sharedassets1.assets", "size": (2048, 1024)},
         {"asset_name": "Arena_MainMenu_Paralax_Bay5-3", "path_id": 1433, "file": "sharedassets1.assets", "size": (2048, 1024)},
         {"asset_name": "Arena_MainMenu_Paralax_Bay5-4", "path_id": 1638, "file": "sharedassets1.assets", "size": (2048, 1024)},
+    ],
+    # AirPit rows carry the 0.6.0.47752 path ids (2026-10-11 probe; hints only, the lookup is by the unique
+    # name). The four "Arena_MainMenu_Paralax_AirPit-Alt-1..4" images exist in the same file but are NOT part
+    # of the rotation (user decision 2026-10-11, PLAN-AIRPIT section 4 item 10: the five non-Alt images, like
+    # Equator and Bay5).
+    "arena_airpit": [
+        {"asset_name": "AllScreens_Loadingscreen-AirPit", "path_id": 2704, "file": "resources.assets", "size": (1920, 1080)},
+        {"asset_name": "Arena_MainMenu_Paralax_AirPit-1", "path_id": 1472, "file": "sharedassets1.assets", "size": (2048, 1024)},
+        {"asset_name": "Arena_MainMenu_Paralax_AirPit-2", "path_id": 438, "file": "sharedassets1.assets", "size": (2048, 1024)},
+        {"asset_name": "Arena_MainMenu_Paralax_AirPit-3", "path_id": 403, "file": "sharedassets1.assets", "size": (2048, 1024)},
+        {"asset_name": "Arena_MainMenu_Paralax_AirPit-4", "path_id": 936, "file": "sharedassets1.assets", "size": (2048, 1024)},
     ],
 }
 
@@ -201,7 +214,7 @@ def main(argv=None):
     parser.add_argument("--source", default=DEFAULT_SOURCE,
                         help="Arena's EscapeFromTarkovArena_Data directory (read-only)")
     parser.add_argument("--output", default=str(DEFAULT_OUTPUT),
-                        help="directory to write arena_equator_1.<ext> / arena_bay5_1.<ext> into")
+                        help="directory to write arena_<key>_<n>.<ext> (n = 1..5 per map) into")
     parser.add_argument("--ext", default="jpg", choices=["jpg", "jpeg", "png"],
                         help="output image format (default jpg, quality=95)")
     parser.add_argument("--quality", type=int, default=95, help="JPEG quality, 1-95 (ignored for --ext png)")

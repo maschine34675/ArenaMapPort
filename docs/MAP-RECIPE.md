@@ -78,7 +78,27 @@ every map by `BoothDoorRepairs`), `SPAWN_BOUND*` boxes (generic — `SpawnPlacem
 one static roller shutter. Anything map-specific goes into `opened_barriers` as a hierarchy path (object
 names repeat), mirrored by `ArenaMapDescriptor.OpenedBarriers` (test `OpenedBarriers_DescriptorMirrorsSidecar`).
 `BakeNavMesh` excludes the same objects from the NavMesh sources, so a new entry means a bundle rebuild.
-Find candidates with the in-game F10 inspector (aim at the obstacle) and the scene dump.
+Find candidates with the in-game F10 inspector (aim at the obstacle) and the scene dump. A path may be a single
+segment: a bare name addresses the scene root object itself (AirPit: `BUS_DOORS`, `PASSPORT_CONTROL_DOORS`).
+
+Three optional bake-only keys (PLAN-AIRPIT item 8; Equator and Bay5 carry none of them, so their bake is unchanged),
+mirrored by `ArenaMapDescriptor.NavMeshBakeExclusions` / `BakeBounds` / `NavMeshBakeLayers` and checked by
+`validate_map_descriptors.py` (shape and drift) and `AirPitMapTests`:
+
+- `navmesh_bake_exclusions`: hierarchy paths (same syntax) whose whole subtree, the listed object included, is dropped from
+  the NavMesh sources while staying active at runtime. For props that stay but that Arena's own NavMesh walks through and
+  that cut a route (AirPit: two closed ramen shops, a roll-door, a fence panel). Anything the client DISABLES at runtime
+  is not listed here: it belongs in `opened_barriers`. A path that matches nothing fails the build.
+- `bake_bounds`: `[min_x, max_x, min_y, max_y, min_z, max_z]`, the bake volume instead of the renderer union (which spans
+  kilometres when far scenery sits in the gameplay scene).
+- `navmesh_bake_layers`: layer indices the bake may collect instead of "every layer but Water" (AirPit: Arena's own
+  NavMeshSurface mask 9, 11, 13, 18, 30). Non-trigger boxes on the Triggers layer (13) and the LevelBorder layer (29) are
+  still dropped.
+
+Find the objects with `python tools/validate/navmesh_diff.py --package work/extract/<package> --descriptor tools/maps/<stem>.json
+--points tools/maps/<stem>.bots.json --points tools/maps/<stem>.exits.json` (AirPit adds `--live-core-points`; the Arena
+NavMesh source defaults to AirPit's, see `--assets`/`--path-id`). Its greedy list names the smallest set of props whose
+exclusion joins all probe points; `--descriptor` applies the three lists above.
 
 ## 4. Generate, test, deploy
 

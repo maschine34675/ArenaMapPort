@@ -178,13 +178,15 @@
     <Copy SourceFiles="@(ArenaMapPortOverview->'$(ArenaMapPortOverviewRoot)\%(Identity)')" DestinationFiles="@(ArenaMapPortOverview->'$(ArenaMapPortDistDir)\dynamicmaps\%(Identity)')" />
   </Target>
 
-  <!-- PLAN-TWO-MAPS item 8: AiAnchors.cs reads <plugin>/ai/<key>.ai.json at raid start. The sidecars are
-       git-tracked (tools/maps/*.ai.json, written by tools/extract/extract_ai_anchors.py), so they are staged
-       with the DLL on every Release build, DllOnly included. -->
+  <!-- PLAN-TWO-MAPS item 8 (AirPit joined by PLAN-AIRPIT item 20): AiAnchors.cs reads <plugin>/ai/<key>.ai.json at
+       raid start, <key> being the map key without its "arena_" prefix. The sidecars are git-tracked
+       (tools/maps/*.ai.json, written by tools/extract/extract_ai_anchors.py), so they are staged with the DLL on
+       every Release build, DllOnly included. One row per released map that has a sidecar. -->
   <Target Name="ArenaMapPortStageAiSidecars" AfterTargets="ArenaMapPortDistCopy" Condition="'$(Configuration)'=='Release'">
     <ItemGroup>
       <ArenaMapPortAiSidecar Include="$(MSBuildThisFileDirectory)..\tools\maps\equator.ai.json" />
       <ArenaMapPortAiSidecar Include="$(MSBuildThisFileDirectory)..\tools\maps\bay5.ai.json" />
+      <ArenaMapPortAiSidecar Include="$(MSBuildThisFileDirectory)..\tools\maps\airpit.ai.json" />
     </ItemGroup>
     <Error Condition="!Exists('%(ArenaMapPortAiSidecar.Identity)')" Text="[ArenaMapPort] missing AI sidecar %(ArenaMapPortAiSidecar.Identity)" />
     <MakeDir Directories="$(ArenaMapPortDistDir)\ai" />
@@ -197,11 +199,12 @@
     <PropertyGroup>
       <ArenaMapPortAcousticsDir>$(MSBuildThisFileDirectory)..\work\extract\spatial-audio</ArenaMapPortAcousticsDir>
     </PropertyGroup>
-    <Error Condition="!Exists('$(ArenaMapPortAcousticsDir)\arena_equator\spatial-audio.json') Or !Exists('$(ArenaMapPortAcousticsDir)\arena_bay5\spatial-audio.json')"
-           Text="Missing native acoustic input; run tools/extract/extract_spatial_audio.py" />
+    <Error Condition="!Exists('$(ArenaMapPortAcousticsDir)\arena_equator\spatial-audio.json') Or !Exists('$(ArenaMapPortAcousticsDir)\arena_bay5\spatial-audio.json') Or !Exists('$(ArenaMapPortAcousticsDir)\arena_airpit\spatial-audio.json')"
+           Text="Missing native acoustic input; run tools/extract/extract_spatial_audio.py (AirPit: --map arena_airpit)" />
     <ItemGroup>
       <ArenaMapPortAcousticFile Include="$(ArenaMapPortAcousticsDir)\arena_equator\**\spatial-audio.json;$(ArenaMapPortAcousticsDir)\arena_equator\**\source.audiobakedata;$(ArenaMapPortAcousticsDir)\arena_equator\**\*.wav"><MapKey>arena_equator</MapKey></ArenaMapPortAcousticFile>
       <ArenaMapPortAcousticFile Include="$(ArenaMapPortAcousticsDir)\arena_bay5\**\spatial-audio.json;$(ArenaMapPortAcousticsDir)\arena_bay5\**\source.audiobakedata;$(ArenaMapPortAcousticsDir)\arena_bay5\**\*.wav"><MapKey>arena_bay5</MapKey></ArenaMapPortAcousticFile>
+      <ArenaMapPortAcousticFile Include="$(ArenaMapPortAcousticsDir)\arena_airpit\**\spatial-audio.json;$(ArenaMapPortAcousticsDir)\arena_airpit\**\source.audiobakedata;$(ArenaMapPortAcousticsDir)\arena_airpit\**\*.wav"><MapKey>arena_airpit</MapKey></ArenaMapPortAcousticFile>
     </ItemGroup>
     <Copy SourceFiles="@(ArenaMapPortAcousticFile)" DestinationFiles="@(ArenaMapPortAcousticFile->'$(ArenaMapPortDistDir)\acoustics\%(MapKey)\%(RecursiveDir)%(Filename)%(Extension)')" />
   </Target>
@@ -267,6 +270,9 @@
            below). Bay5's preset bundle lands in the SAME shared work/build/preset dir Equator's
            does (patch_preset.py's own output default is work/build/preset/<key>_preset.bundle). -->
       <ArenaMapPortBay5BuildDir>$(MSBuildThisFileDirectory)..\work\build\bay5</ArenaMapPortBay5BuildDir>
+      <!-- AirPit (docs/progress/airpit-release.md, item 9): tools/build_all.ps1 -MapKey arena_airpit -FullMap
+           -OutputDir work/build/airpit (the U1 build); its preset bundle lands in the same shared preset dir. -->
+      <ArenaMapPortAirPitBuildDir>$(MSBuildThisFileDirectory)..\work\build\airpit</ArenaMapPortAirPitBuildDir>
     </PropertyGroup>
     <ItemGroup>
       <ArenaMapPortBundles Include="$(ArenaMapPortFullBuildDir)\arena_equator_scenes.bundle" />
@@ -286,21 +292,31 @@
            "material-shaders.<map.Key>.json". Bay5's map.Key is "arena_bay5", not the short "bay5"
            tools/maps/ file stem, so the staged/renamed dist filename below must match that exactly. -->
       <ArenaMapPortBay5ShaderSidecarSrc Include="$(ArenaMapPortBay5BuildDir)\material-shaders.json" />
+      <!-- AirPit: same explicit-list rule. NOTE: until the U1 rebuild (PLAN-AIRPIT item 12) work/build/airpit still
+           holds the 2026-09-15 spike bundles, which this target stages as they are. -->
+      <ArenaMapPortBundles Include="$(ArenaMapPortAirPitBuildDir)\arena_airpit_scenes.bundle" />
+      <ArenaMapPortBundles Include="$(ArenaMapPortAirPitBuildDir)\arena_airpit_navmesh.bundle" />
+      <ArenaMapPortBundles Include="$(ArenaMapPortPresetBuildDir)\arena_airpit_preset.bundle" />
+      <ArenaMapPortAirPitShaderSidecarSrc Include="$(ArenaMapPortAirPitBuildDir)\material-shaders.json" />
     </ItemGroup>
-    <Error Text="[ArenaMapPort] expected bundle missing: %(ArenaMapPortBundles.Identity) -- run tools/build_all.ps1 (full, and -MapKey arena_bay5) and tools/preset/patch_preset.py (both maps) first"
+    <Error Text="[ArenaMapPort] expected bundle missing: %(ArenaMapPortBundles.Identity) -- run tools/build_all.ps1 (full, -MapKey arena_bay5 and -MapKey arena_airpit -FullMap) and tools/preset/patch_preset.py (all three maps) first"
            Condition="!Exists('%(ArenaMapPortBundles.Identity)')" />
     <Error Text="[ArenaMapPort] expected material-shaders.json missing: %(ArenaMapPortShaderSidecar.Identity)"
            Condition="!Exists('%(ArenaMapPortShaderSidecar.Identity)')" />
     <Error Text="[ArenaMapPort] expected Bay5 material-shaders.json missing: %(ArenaMapPortBay5ShaderSidecarSrc.Identity) -- run tools/build_all.ps1 -MapKey arena_bay5 first"
            Condition="!Exists('%(ArenaMapPortBay5ShaderSidecarSrc.Identity)')" />
+    <Error Text="[ArenaMapPort] expected AirPit material-shaders.json missing: %(ArenaMapPortAirPitShaderSidecarSrc.Identity) -- run tools/build_all.ps1 -MapKey arena_airpit -FullMap first"
+           Condition="!Exists('%(ArenaMapPortAirPitShaderSidecarSrc.Identity)')" />
     <MakeDir Directories="$(ArenaMapPortDistDir)\bundles" />
     <Copy SourceFiles="@(ArenaMapPortBundles)" DestinationFolder="$(ArenaMapPortDistDir)\bundles" SkipUnchangedFiles="false" />
     <Copy SourceFiles="@(ArenaMapPortShaderSidecar)" DestinationFolder="$(ArenaMapPortDistDir)" SkipUnchangedFiles="false" />
     <Copy SourceFiles="@(ArenaMapPortBay5ShaderSidecarSrc)" DestinationFiles="$(ArenaMapPortDistDir)\material-shaders.arena_bay5.json" SkipUnchangedFiles="false" />
+    <Copy SourceFiles="@(ArenaMapPortAirPitShaderSidecarSrc)" DestinationFiles="$(ArenaMapPortDistDir)\material-shaders.arena_airpit.json" SkipUnchangedFiles="false" />
     <Message Importance="high"
              Text="[ArenaMapPort] staged %(ArenaMapPortBundles.Filename)%(ArenaMapPortBundles.Extension) from $(ArenaMapPortFullBuildDir)/$(ArenaMapPortPresetBuildDir)/$(ArenaMapPortBay5BuildDir) into dist/.../bundles/" />
     <Message Importance="high" Text="[ArenaMapPort] staged material-shaders.json from $(ArenaMapPortFullBuildDir) into dist/.../ArenaMapPort/" />
     <Message Importance="high" Text="[ArenaMapPort] staged material-shaders.arena_bay5.json from $(ArenaMapPortBay5BuildDir) into dist/.../ArenaMapPort/" />
+    <Message Importance="high" Text="[ArenaMapPort] staged material-shaders.arena_airpit.json from $(ArenaMapPortAirPitBuildDir) into dist/.../ArenaMapPort/" />
   </Target>
 
   <!-- Parked map outputs remain recoverable under work; they never enter this release. -->

@@ -73,9 +73,20 @@ namespace ArenaMapPort.Shared
         public ArenaExitDescriptor[] Exits { get; } // exfils-stage2 — runtime-authored exits (empty = raid ends by timer only)
         public string[] OpenedBarriers { get; }     // hierarchy paths of static scene objects whose non-frame parts are deactivated
                                                     // at raid start (Arena's round barriers that close a spawn area); empty = none
+        // PLAN-AIRPIT item 8 — Editor-side NavMesh bake inputs. The client never reads them; they live here so the one
+        // per-map table stays complete and tools/maps/<key>.json cannot drift (validate_map_descriptors.py and the xunit
+        // mirror tests). All empty for Equator and Bay5, whose bake is unchanged.
+        public string[] NavMeshBakeExclusions { get; } // hierarchy paths whose subtree is dropped from the NavMesh bake sources
+                                                       // but stays active at runtime (colliders Arena's own bake walks through)
+        public float[] BakeBounds { get; }             // [min_x, max_x, min_y, max_y, min_z, max_z] of the bake volume; empty = renderer union
+        public int[] NavMeshBakeLayers { get; }        // layers the bake may collect from; empty = every layer but Water
         public string[] RestoredShadowCasterRoots { get; } // exact active LOD roots with source-disabled shadow proxies to restore
         public string[] DistantShadowCasterPaths { get; } // active shadow proxies missing native LOD registration
         public string[] PuddleWaterMaterialNames { get; } // exact imported water-puddle material names; excludes oil decals
+        // PLAN-AIRPIT item 11 — the per-map allow-list of ShaderRebind's fallback table: Arena shader names this map's
+        // materials may be rebound to an SPT substitute (client ShaderStandinPolicy owns the original -> substitute rows,
+        // the switches and the AirPit texture work). Empty = the map never substitutes (Equator and the parked maps).
+        public string[] ShaderFallbackNames { get; }
         public bool InheritIndoorFloorDetails { get; } // small floor pieces inherit their supporting structural floor's classification
         public ArenaNeonFixture[] NeonFixtures { get; } // optional authored night installation
         public ArenaNightAccent[] NightAccents { get; } // decorative colored chemlights
@@ -124,7 +135,11 @@ namespace ArenaMapPort.Shared
             bool InheritIndoorFloorDetails = false,
             ArenaNeonFixture[]? NeonFixtures = null,
             ArenaNightAccent[]? NightAccents = null,
-            bool UsesServerTime = false)
+            bool UsesServerTime = false,
+            string[]? NavMeshBakeExclusions = null,
+            float[]? BakeBounds = null,
+            int[]? NavMeshBakeLayers = null,
+            string[]? ShaderFallbackNames = null)
 #nullable restore
         {
             this.Key = Key;
@@ -143,6 +158,9 @@ namespace ArenaMapPort.Shared
             this.DbBaseJsonPath = DbBaseJsonPath;
             this.Exits = Exits ?? new ArenaExitDescriptor[0];
             this.OpenedBarriers = OpenedBarriers ?? new string[0];
+            this.NavMeshBakeExclusions = NavMeshBakeExclusions ?? new string[0];
+            this.BakeBounds = BakeBounds ?? new float[0];
+            this.NavMeshBakeLayers = NavMeshBakeLayers ?? new int[0];
             this.BackgroundSceneNames = BackgroundSceneNames ?? new string[0];
             this.RestoredShadowCasterRoots = RestoredShadowCasterRoots ?? new string[0];
             this.DistantShadowCasterPaths = DistantShadowCasterPaths ?? new string[0];
@@ -153,6 +171,7 @@ namespace ArenaMapPort.Shared
             this.SunScene = SunScene ?? string.Empty;
             this.SunPaths = SunPaths ?? new string[0];
             this.PuddleWaterMaterialNames = PuddleWaterMaterialNames ?? new string[0];
+            this.ShaderFallbackNames = ShaderFallbackNames ?? new string[0];
             this.InheritIndoorFloorDetails = InheritIndoorFloorDetails;
             this.NeonFixtures = NeonFixtures ?? new ArenaNeonFixture[0];
             this.NightAccents = NightAccents ?? new ArenaNightAccent[0];
@@ -292,6 +311,17 @@ namespace ArenaMapPort.Shared
                 // Original "puddle indoor static" material; oil decals share the shader but are not water.
                 "70f045bb011600e7",
             },
+            // All six rows of the fallback table, as shipped (behind the legacy MaterialFixes/EnableShaderFallbacks
+            // switch, default off, plain shader swap). Mirrors tools/maps/bay5.json (ShaderStandinPolicyTests).
+            ShaderFallbackNames: new[]
+            {
+                "Custom/WorldTriplanarFresnelPro",
+                "ANGRYMESH/PBR Rocks/PBR BlendTopDetail (Legacy)",
+                "Cloth/ClothShader",
+                "Cloth/ClothShader_backface",
+                "Custom/Billboard_FogSheet_Simple",
+                "p0/Reflective/Bumped Specular SMap Baked",
+            },
             Dust: new ArenaDustDescriptor("Arena_Bay5_Light", "DUST", 0.07f, 0.04f, 1, 0.0f,
                 99.63274383544922f, -1.5299997329711914f, 30.428937911987305f,
                 52.685890197753906f, 12.275176048278809f, 42.59858703613281f),
@@ -308,10 +338,13 @@ namespace ArenaMapPort.Shared
             ScriptsSceneName: "Arena_AirPit_Scripts",
             AllSceneNames: new[] { "Arena_AirPit_Scripts", "Arena_AirPit_ShootOut", "Arena_AirPit_ShootOut_Light", "Arena_Airpit_DesignStuff", "Arena_Airpit_TeamFight", "Arena_Airpit_TeamFight_DesignStuff" },
             InfiltrationName: "ArenaAirPit",
-            LocaleName: "Arena: Air Pit (spike)",
-            LocaleDescription: "Internal test build — TeamFight geometry/collision/NavMesh port.",
-            IconX: 295,
-            IconY: 760,
+            LocaleName: "Arena: Air Pit",
+            LocaleDescription: "The Air Pit airport terminal from EFT Arena: a large hall with an airliner inside, passport lanes to the north and a bus apron to the south. Ground floor and mezzanine are the main play space.",
+            // Map-select slot (0..1000, the native UI divides by 1000): inside the box spanned by Equator
+            // (700, 290) and Bay5 (320, 820), 200 units from Equator and 550 from Bay5, and at least 165
+            // units from every vanilla icon (nearest: Customs 168, Interchange 171).
+            IconX: 500,
+            IconY: 300,
             DbBaseJsonPath: "arena_airpit/base.json",
             Exits: new[]
             {
@@ -319,7 +352,55 @@ namespace ArenaMapPort.Shared
                 // Floor points on the two ends of the play space, 14.8 m / 17.8 m from the nearest player spawn.
                 new ArenaExitDescriptor("Air Pit North Gate", -11.0f, 0.1f, 62.0f),
                 new ArenaExitDescriptor("Air Pit South Gate", -3.0f, 0.1f, -58.0f),
-            });
+            },
+            OpenedBarriers: new[]
+            {
+                // The two gate groups of Arena's TeamFight round start (GateEntity roots in
+                // Arena_Airpit_TeamFight_DesignStuff). Single-segment root paths: BoothDoorRepairs.FindByPath and
+                // BakeNavMesh.ResolveHierarchyPaths resolve a bare name to the scene root itself. Neither root has a
+                // frame-named object, so every direct child is deactivated at raid start and every collider below
+                // is left out of the bake. BUS_DOORS: 6 bus-door assemblies sealing the south spawn pocket;
+                // PASSPORT_CONTROL_DOORS: 16 lane doors sealing the north spawn field, plus the GREEN/RED fog sheets.
+                // Mirrors tools/maps/airpit.json (AirPitMapTests.OpenedBarriersAndBakeInputsMatchTheSidecar).
+                "BUS_DOORS",
+                "PASSPORT_CONTROL_DOORS",
+            },
+            NavMeshBakeExclusions: new[]
+            {
+                // Bake-only (PLAN-AIRPIT item 8, user decision 2026-10-11): props that stay in the scene but that
+                // Arena's own NavMesh walks through and that cut the route between the spawn areas once baked in.
+                // Found by the greedy pass of tools/validate/navmesh_diff.py on the 0.6.0 package; each path resolves
+                // to exactly one object (the duplicated BUILDING sibling under SOO_LOD0 resolves to the first one,
+                // which holds all three). Nothing is deactivated at runtime.
+                "SBG_Arena_AirPit_ShootOut/SOO/fence_ema_01_white (18)",
+                "SBG_Arena_AirPit_ShootOut/SOO_LOD0/BUILDING/DonB_Ramen_closed",
+                "SBG_Arena_AirPit_ShootOut/SOO_LOD0/BUILDING/TH_Roll_door_01_closed",
+                "SBG_Arena_AirPit_ShootOut/SOO_LOD0/BUILDING/DonB_Ramen_closed (1)",
+            },
+            // Play space (user decision 2026-10-11, 4.3): x -80..56, z -96..92 around Arena's component
+            // (x -56..32, z -78..85), y -2..8 = ground floor plus wing mezzanine.
+            BakeBounds: new[] { -80.0f, 56.0f, -2.0f, 8.0f, -96.0f, 92.0f },
+            // Arena's own NavMeshSurface layer mask (decoded from the three AI scenes, mask 0x40042A00):
+            // DoorLowPolyCollider, Terrain, Triggers, LowPolyCollider, TransparentCollider. EFT's movement test mask
+            // (LayersMaskController.PlayerCollisionTestMask) is LowPolyCollider + DoorLowPolyCollider + Terrain; the
+            // HighPolyCollider (12) meshes are the ballistic layer. The owner rule of BakeNavMesh.NonPhysicalLayerReason
+            // still drops non-trigger boxes left on the Triggers layer (AirPit has none).
+            NavMeshBakeLayers: new[] { 9, 11, 13, 18, 30 },
+            // PLAN-AIRPIT item 11: the four Arena shader names AirPit's materials use that SPT does not ship (fog sheet,
+            // both cloth shaders, the mountain rock). Behind MaterialFixes/AirPitShaderStandins (default on). Mirrors
+            // tools/maps/airpit.json (ShaderStandinPolicyTests).
+            ShaderFallbackNames: new[]
+            {
+                "Custom/Billboard_FogSheet_Simple",
+                "Cloth/ClothShader",
+                "Cloth/ClothShader_backface",
+                "ANGRYMESH/PBR Rocks/PBR BlendTopDetail (Legacy)",
+            },
+            // Time policy (user decision 2026-10-11, PLAN-AIRPIT 4.2): Bay5-style native server time with the ordinary
+            // CURR/PAST choice, an advancing sky and backend weather. No fixed hours, no sun (the map has no
+            // Directional light). Night is uncertified until a host look-test (509 of 813 lights are saved off).
+            // Mirrors tools/maps/airpit.json (FixedRaidTimeWeatherTests).
+            UsesServerTime: true);
 
         // Source scene selection: tools/extract/plans/airpit2.json. Identity is permanent.
         public static readonly ArenaMapDescriptor AirPit2 = new(
@@ -512,6 +593,6 @@ namespace ArenaMapPort.Shared
         public static readonly IReadOnlyList<ArenaMapDescriptor> Catalog = new[] { Equator, Bay5, AirPit, AirPit2, AutoService, Bowl, Prison, RailwayStation, Yard, Iceberg, Factory, Custom, Shoreline, Woods };
 
         /// <summary>Playable and distributable maps. Runtime consumers must iterate this release subset.</summary>
-        public static readonly IReadOnlyList<ArenaMapDescriptor> All = new[] { Equator, Bay5 };
+        public static readonly IReadOnlyList<ArenaMapDescriptor> All = new[] { Equator, Bay5, AirPit };
     }
 }

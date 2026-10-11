@@ -13,7 +13,8 @@ using UnityEngine.UI;
 namespace ArenaMapPort.Client
 {
     /// <summary>
-    /// PLAN-TWO-MAPS item 10b — loading-screen art for ported maps (Equator + Bay5 only).
+    /// PLAN-TWO-MAPS item 10b — loading-screen art for ported maps (every map in
+    /// <see cref="ArenaMapRegistry.All"/> that has art staged: Equator, Bay5 and AirPit).
     ///
     /// What vanilla does: EFT's own "Deploying in progress (NN%)" deploy screen
     /// (<c>EFT.UI.Matchmaker.MatchmakerTimeHasCome.Show</c>, decompile
@@ -77,7 +78,8 @@ namespace ArenaMapPort.Client
     /// complete no-op for every other map.
     ///
     /// Verified 2026-09-27 on SPT-GPU-2 (Equator + Bay5, debug start and normal menu flow): see
-    /// docs/progress/two-maps-item-10b-loadscreens.md.
+    /// docs/progress/two-maps-item-10b-loadscreens.md. AirPit's five images are staged by the same
+    /// extractor (docs/progress/airpit-release.md, item 9) and still await a host raid.
     /// </summary>
     internal static class LoadingScreenArt
     {

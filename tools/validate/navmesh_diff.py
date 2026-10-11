@@ -9,7 +9,9 @@ What it does (offline, read-only; no Unity, no host):
   1. Reads Arena's NavMeshData (default: AirPit, sharedassets33.assets path 2) and samples its
      polygons on a lattice (default 0.2 m), keeping the main component (or all low components).
   2. Loads the port's collider triangles from an extracted package with the bake rules of
-     BakeNavMesh.cs (`port_colliders.py`), optionally with extra `opened_barriers` paths.
+     BakeNavMesh.cs (`port_colliders.py`), optionally with extra `opened_barriers` paths, bake-only
+     `navmesh_bake_exclusions` (PLAN-AIRPIT item 8: dropped from the sources, still active at runtime) and a
+     `navmesh_bake_layers` mask; `--descriptor tools/maps/<key>.json` applies all three.
   3. Runs the column test of `walk_model.py` for every sample: blocked by a port solid? supported by a
      port floor? Twice: with Arena's agent (0.28 / 1.6, with a slack for Detour simplification), which
      lists solids Arena provably walks through, and with the port agent (0.30 / 1.7), which predicts the
@@ -571,8 +573,41 @@ def _status(verdict_blocked, verdict_unsupported, k):
     return "passable"
 
 
+def probe_reachability(probes, anchor, comp_port) -> dict:
+    """How many probe points the port model puts into the anchor's component (the headline of a connectivity check).
+
+    `probes` are the analyse() probe rows; `anchor` the sample index of the anchor (a capture point if there is one);
+    `comp_port` the port-model component of every sample. A probe without a lattice sample within the probe radius
+    is not counted (`located` excludes it); a blocked or unsupported one is located but has no component."""
+    located = [p for p in probes if p["sample"] >= 0]
+    anchor_comp = int(comp_port[anchor]) if anchor >= 0 and comp_port[anchor] >= 0 else None
+    per_component: dict = defaultdict(int)
+    outside = []
+    for p in located:
+        comp = p["model_component"]
+        per_component[comp] += 1
+        if anchor_comp is None or comp != anchor_comp:
+            outside.append(f"{p['kind']}:{p['name']}")
+    return {"probes": len(probes), "located": len(located), "anchor_sample": int(anchor), "anchor_component": anchor_comp,
+            "in_anchor_component": len(located) - len(outside),
+            "per_component": {str(k): v for k, v in sorted(per_component.items(), key=lambda kv: (kv[0] is None, kv[0]))},
+            "outside": outside}
+
+
+def descriptor_bake_inputs(descriptor: dict) -> dict:
+    """The bake inputs of a tools/maps/<key>.json: opened_barriers, navmesh_bake_exclusions (PLAN-AIRPIT item 8,
+    dropped from the NavMesh sources but not deactivated at runtime) and navmesh_bake_layers as a layer mask
+    (None = every layer but Water). bake_bounds is not modelled: the model covers Arena's footprint only."""
+    return {"barriers": list(descriptor.get("opened_barriers") or []),
+            "exclusions": list(descriptor.get("navmesh_bake_exclusions") or []),
+            "layer_mask": pcol.layers_to_mask(descriptor.get("navmesh_bake_layers"))}
+
+
 def analyse(package, cfg: Config | None = None, opened_barriers=(), points=(), arena_data=DEFAULT_ARENA_DATA,
-            mesh=None, cset=None, bake_rules="port", other_mesh=None, greedy_steps=12, log=print):
+            mesh=None, cset=None, bake_rules="port", other_mesh=None, greedy_steps=12, log=print,
+            bake_exclusions=(), port_layer_mask=None):
+    """`bake_exclusions` and `port_layer_mask` are the descriptor's navmesh_bake_exclusions / navmesh_bake_layers
+    (as a mask): what the port bake would collect. `cfg.arena_layer_mask` stays what Arena's own surface sees."""
     cfg = cfg or Config()
     if mesh is None:
         mesh, meta = load_arena_mesh(arena_data)
@@ -588,16 +623,21 @@ def analyse(package, cfg: Config | None = None, opened_barriers=(), points=(), a
     if cset is None:
         cset = pcol.load_package_colliders(package)
     pcol.mark_barriers(cset, list(opened_barriers))
+    pcol.mark_bake_exclusions(cset, list(bake_exclusions))
     if bake_rules == "none":
         mask_all = np.ones(len(cset.owners), dtype=bool)
     else:
-        mask_all = pcol.source_owner_mask(cset)
+        mask_all = pcol.source_owner_mask(cset, layer_mask=port_layer_mask)
     mask_arena = (pcol.source_owner_mask(cset, layer_mask=cfg.arena_layer_mask)
                   if (cfg.arena_layer_mask is not None and bake_rules != "none") else mask_all)
     reasons: dict = defaultdict(int)
     for o in cset.owners:
-        reasons[pcol.bake_exclusion_reason(o) or "source"] += 1
-    log(f"[diff] port colliders: {len(cset.owners)} ({int(mask_all.sum())} bake sources); unresolved barriers {cset.unresolved_barriers}")
+        reason = pcol.bake_exclusion_reason(o)
+        if reason is None and bake_rules != "none" and port_layer_mask is not None and not (port_layer_mask >> o.layer) & 1:
+            reason = "not in navmesh_bake_layers"
+        reasons[reason or "source"] += 1
+    log(f"[diff] port colliders: {len(cset.owners)} ({int(mask_all.sum())} bake sources); unresolved barriers {cset.unresolved_barriers}, "
+        f"unresolved bake exclusions {cset.unresolved_exclusions}")
 
     agent_a, agent_p = wm.ARENA_AGENT, wm.PORT_AGENT
     m = cfg.region_margin
@@ -613,7 +653,7 @@ def analyse(package, cfg: Config | None = None, opened_barriers=(), points=(), a
     v_arena_strict = wm.evaluate_samples(pts, solid, floor, grid, agent_a, shrink=0.0, **kw)
     v_port = wm.evaluate_samples(pts, solid, floor, grid, agent_p, shrink=cfg.port_slack, **kw)
     # the same with only the layers Arena's own surface collects
-    if mask_arena is mask_all:
+    if mask_arena is mask_all or np.array_equal(mask_arena, mask_all):
         v_mask = v_arena
     else:
         tris_m, owner_m = _source_arrays(cset, mask_arena)
@@ -663,6 +703,7 @@ def analyse(package, cfg: Config | None = None, opened_barriers=(), points=(), a
     probe_samples = [p["sample"] for p in probes]
     anchor_candidates = [p["sample"] for p in probes if p["kind"] in ("capture_point",) and p["sample"] >= 0]
     anchor = anchor_candidates[0] if anchor_candidates else next((s for s in probe_samples if s >= 0 and comp_port[s] >= 0), -1)
+    reachability = probe_reachability(probes, anchor, comp_port)
     greedy = {"steps": [], "anchor": int(anchor)}
     if anchor >= 0 and probe_samples:
         blockers = blockers_by_sample(clusters_p, len(pts))
@@ -683,10 +724,12 @@ def analyse(package, cfg: Config | None = None, opened_barriers=(), points=(), a
         "arena": {"polygons": mesh.poly_count, "components": arena_components[:6], "meta": {k: v for k, v in meta.items() if k != "settings"},
                   "portal_pairs": mesh.portal_pairs, "unmatched_portal_edges": mesh.unmatched_portal_edges},
         "config": {"cell": cfg.cell, "y_step": cfg.y_step, "sample_step": cfg.sample_step, "arena_slack": cfg.arena_slack, "port_slack": cfg.port_slack, "floor_margin": cfg.floor_margin, "support_tol": cfg.support_tol,
-                   "arena_layer_mask": cfg.arena_layer_mask, "opened_barriers": list(opened_barriers), "bake_rules": bake_rules},
+                   "arena_layer_mask": cfg.arena_layer_mask, "opened_barriers": list(opened_barriers), "bake_rules": bake_rules,
+                   "bake_exclusions": list(bake_exclusions), "port_layer_mask": port_layer_mask},
         "port": {"colliders": len(cset.owners), "sources": int(mask_all.sum()), "arena_mask_sources": int(mask_arena.sum()),
                  "exclusion_reasons": dict(sorted(reasons.items())), "triangles": int(len(cset.tris)),
-                 "unresolved_barriers": cset.unresolved_barriers},
+                 "unresolved_barriers": cset.unresolved_barriers, "unresolved_exclusions": cset.unresolved_exclusions},
+        "reachability": reachability,
         "samples": {"count": int(len(pts)), "area_m2": round(len(pts) * sample_area, 1),
                     "blocked_arena_agent": int(v_arena.blocked.sum()), "blocked_arena_agent_no_slack": int(v_arena_strict.blocked.sum()),
                     "blocked_arena_agent_arena_layers": int(v_mask.blocked.sum()),
@@ -765,6 +808,14 @@ def format_report(report, top=25) -> str:
                f"under the port agent {s['blocked_port_agent']}, without floor {s['unsupported']}, passable {s['passable_port']}")
     out.append(f"port-model components {report['port_component_count']}: " + ", ".join(
         f"#{c['id']} {c['area_m2']} m2" for c in report["port_components"][:6]))
+    cfg_r, reach = report["config"], report["reachability"]
+    mask = cfg_r["port_layer_mask"]
+    out.append(f"bake inputs: {len(cfg_r['opened_barriers'])} opened_barriers, {len(cfg_r['bake_exclusions'])} navmesh_bake_exclusions, "
+               f"layer mask {'every layer but Water' if mask is None else hex(mask)}")
+    if reach["located"]:
+        out.append(f"probe reachability: {reach['in_anchor_component']} of {reach['located']} located probes ({reach['probes']} given) "
+                   f"in the anchor's port-model component {reach['anchor_component']}; per component {reach['per_component']}"
+                   + (f"; outside: {reach['outside'][:10]}" if reach["outside"] else ""))
     ca = report["clusters_arena_agent"]
     out.append(f"== Solids Arena walks through: {len(ca)} prop instances, {sum(len(c['owners']) for c in ca)} collider objects, "
                f"{sum(c['area_m2'] for c in ca):.1f} m2 of samples counted per instance (top {top})")
@@ -822,7 +873,14 @@ def main(argv=None):
     ap.add_argument("--assets", default=AIRPIT_NAVMESH[0])
     ap.add_argument("--path-id", type=int, default=AIRPIT_NAVMESH[1])
     ap.add_argument("--opened-barrier", action="append", default=[], help="extra opened_barriers path (repeatable)")
-    ap.add_argument("--descriptor", help="map sidecar whose opened_barriers are applied (tools/maps/airpit.json)")
+    ap.add_argument("--descriptor", help="map sidecar whose opened_barriers, navmesh_bake_exclusions and navmesh_bake_layers "
+                                         "are applied (tools/maps/airpit.json)")
+    ap.add_argument("--bake-exclusion", action="append", default=[],
+                    help="extra navmesh_bake_exclusions path: subtree dropped from the bake sources, still active at runtime (repeatable)")
+    ap.add_argument("--port-layer-mask", type=lambda v: int(v, 0),
+                    help="layer mask the port bake collects from (overrides the descriptor's navmesh_bake_layers; default: every layer but Water)")
+    ap.add_argument("--ignore-descriptor-layers", action="store_true",
+                    help="apply the descriptor's barriers and exclusions but not its navmesh_bake_layers (A/B against the layer mask)")
     ap.add_argument("--points", action="append", default=[], help="probe-point JSON / bots / exits sidecar (repeatable)")
     ap.add_argument("--bake-rules", choices=("port", "none"), default="port",
                     help="'none' keeps every enabled non-trigger collider (reproduces a bake that predates the exclusions)")
@@ -841,8 +899,14 @@ def main(argv=None):
     cfg = Config(cell=args.cell, sample_step=args.sample_step, arena_slack=args.slack, port_slack=args.slack,
                  components=args.components, arena_layer_mask=args.arena_layer_mask)
     barriers = list(args.opened_barrier)
+    exclusions = list(args.bake_exclusion)
+    layer_mask = args.port_layer_mask
     if args.descriptor:
-        barriers += json.loads(Path(args.descriptor).read_text(encoding="utf-8")).get("opened_barriers") or []
+        inputs = descriptor_bake_inputs(json.loads(Path(args.descriptor).read_text(encoding="utf-8")))
+        barriers += inputs["barriers"]
+        exclusions += inputs["exclusions"]
+        if layer_mask is None and not args.ignore_descriptor_layers:
+            layer_mask = inputs["layer_mask"]
     points = []
     for f in args.points:
         points += load_points(f)
@@ -853,7 +917,8 @@ def main(argv=None):
         other = load_bundle_mesh(args.compare_bundle)
     elif args.compare_triangulation:
         other = load_triangulation_mesh(args.compare_triangulation)
-    report = analyse(args.package, cfg, barriers, points, args.arena_data, bake_rules=args.bake_rules, other_mesh=other)
+    report = analyse(args.package, cfg, barriers, points, args.arena_data, bake_rules=args.bake_rules, other_mesh=other,
+                     bake_exclusions=exclusions, port_layer_mask=layer_mask)
     print(format_report(report, args.top))
     if args.json_out:
         Path(args.json_out).parent.mkdir(parents=True, exist_ok=True)

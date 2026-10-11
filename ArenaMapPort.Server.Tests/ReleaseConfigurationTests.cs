@@ -29,10 +29,16 @@ public sealed class ReleaseConfigurationTests
         var curve = cfg.Bind("Lighting (arena_equator Night)", "ToneCurve", 1f, original); curve.Value = 1.75f;
         var legacy = cfg.Bind("Lighting (arena_equator)", "BloomIntensity", .35f, "Legacy"); legacy.Value = .8f;
         var parked = cfg.Bind("Lighting (arena_bowl)", "ReflectionIntensity", .5f, "Parked");
+        // Released maps keep their tuning sections: hidden for players, visible in developer mode
+        // (AirPit joined Equator Night and Bay5 when it entered ArenaMapRegistry.All).
+        var bay5 = cfg.Bind("Lighting (arena_bay5)", "ReflectionIntensity", 1f, "Released map");
+        var airpit = cfg.Bind("Lighting (arena_airpit)", "ReflectionIntensity", 1f, "Released map");
+        var airpit2 = cfg.Bind("Lighting (arena_airpit2)", "ReflectionIntensity", 1f, "Parked sibling of AirPit");
         var revision = cfg.Bind("Internal", "Revision", 7, new ConfigDescription("Hidden", null, BrowsableAttribute.No));
         cfg.Bind("Unknown future section", "FutureExperimentalControl", true, "Must opt into player menu");
         MapConfigVisibility.Apply(cfg, false);
         Assert.Equal(expected.Order(), cfg.Where(p => Visible(p.Value)).Select(p => p.Key.Section + "/" + p.Key.Key).Order());
+        Assert.False(Visible(bay5)); Assert.False(Visible(airpit)); Assert.False(Visible(airpit2));
         var developerEntry = cfg.Get<bool>("General", "DeveloperMode");
         var advancedTag = Assert.Single(developerEntry.Description.Tags, t => t.GetType().Name == "ConfigurationManagerAttributes");
         Assert.Equal(true, advancedTag.GetType().GetField("IsAdvanced").GetValue(advancedTag));
@@ -44,6 +50,7 @@ public sealed class ReleaseConfigurationTests
             Assert.True(Visible(curve));
             Assert.True(Visible(developerEntry));
             Assert.False(Visible(legacy)); Assert.False(Visible(parked)); Assert.False(Visible(revision));
+            Assert.True(Visible(bay5)); Assert.True(Visible(airpit)); Assert.False(Visible(airpit2));
             Assert.Equal(2, curve.Description.Tags.Length);
             Assert.Same(drawer, curve.Description.Tags[0]);
             Assert.Same(original.AcceptableValues, curve.Description.AcceptableValues);
@@ -69,11 +76,11 @@ public sealed class ReleaseConfigurationTests
     }
 
     [Fact]
-    public void OnlyTwoMapsArePlayableAndParkedScenesNeverActivateRepairs()
+    public void OnlyThreeMapsArePlayableAndParkedScenesNeverActivateRepairs()
     {
-        Assert.Equal(new[] { "arena_equator", "arena_bay5" }, ArenaMapRegistry.All.Select(m => m.Key));
+        Assert.Equal(new[] { "arena_equator", "arena_bay5", "arena_airpit" }, ArenaMapRegistry.All.Select(m => m.Key));
         var parked = ArenaMapRegistry.Catalog.Except(ArenaMapRegistry.All).ToArray();
-        Assert.Equal(12, parked.Length);
+        Assert.Equal(11, parked.Length);
         SceneManager.Scenes.Clear();
         try
         {

@@ -17,7 +17,13 @@ Source rules mirrored from BakeNavMesh.cs (kept in `bake_exclusion_reason`):
     (`RoundOpenedReason`);
   * every non-frame descendant of an `opened_barriers` path is skipped. A path is a root object name
     followed by `/`-separated child names resolved with Transform.Find semantics (first child of that
-    name at each level); the barrier object itself stays, as in `RoundOpenedReason`.
+    name at each level); the barrier object itself stays, as in `RoundOpenedReason`;
+  * the whole subtree of a `navmesh_bake_exclusions` path is skipped, the listed object itself included
+    (`BakeOnlyExclusionReason`; same path syntax and Find semantics; PLAN-AIRPIT item 8). These objects stay
+    active at runtime, so unlike a barrier there is no frame exception;
+  * an optional `navmesh_bake_layers` set restricts the collected layers (`layers_to_mask`,
+    `source_owner_mask(layer_mask=...)`; `BakeNavMesh.SourceLayerMask`). The owner-layer rule above (13, 29)
+    still applies on top of it.
 
 Not mirrored: Unity's own treatment of MeshCollider.convex (the hull is not computed here), and the
 exact tessellation of spheres and capsules (small fixed UV tessellations; boxes are exact).
@@ -27,7 +33,7 @@ from __future__ import annotations
 import json
 import math
 import struct
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 import numpy as np
@@ -263,6 +269,7 @@ class Owner:
     trigger: bool
     active: bool
     barrier_blocked: bool = False
+    bake_excluded: bool = False
     tri_start: int = 0
     tri_count: int = 0
 
@@ -274,6 +281,7 @@ class ColliderSet:
     owners: list
     scenes: dict                # scene name -> Scene
     unresolved_barriers: list
+    unresolved_exclusions: list = field(default_factory=list)
 
     def owner_mask(self, predicate) -> np.ndarray:
         return np.array([bool(predicate(o)) for o in self.owners], dtype=bool)
@@ -354,7 +362,7 @@ def load_package_colliders(package, scene_files=None, include_inactive=False, in
 # ---------------------------------------------------------------------------------------------
 
 def resolve_barriers(scenes: dict, paths) -> tuple[list, list]:
-    """BakeNavMesh.ResolveOpenedBarriers: [(scene, obj_id)] plus the paths that matched nothing."""
+    """BakeNavMesh.ResolveHierarchyPaths: [(scene, obj_id)] plus the paths that matched nothing."""
     found, unresolved = [], []
     for path in paths or []:
         if not path:
@@ -396,6 +404,34 @@ def mark_barriers(cset: ColliderSet, barrier_paths) -> None:
                     break
 
 
+def mark_bake_exclusions(cset: ColliderSet, paths) -> None:
+    """Flag every owner at or below a `navmesh_bake_exclusions` path (BakeNavMesh.BakeOnlyExclusionReason).
+
+    Same path syntax and Transform.Find resolution as `opened_barriers`; unlike a barrier the listed object
+    itself is dropped too (it stays active at runtime, so there are no frame parts to keep).
+    """
+    excluded, cset.unresolved_exclusions = resolve_barriers(cset.scenes, paths)
+    by_scene: dict = {}
+    for s, k in excluded:
+        by_scene.setdefault(s, set()).add(k)
+    for o in cset.owners:
+        wanted = by_scene.get(o.scene)
+        o.bake_excluded = bool(wanted) and any(k in wanted for k in cset.scenes[o.scene].path(o.obj_id))
+
+
+def layers_to_mask(layers) -> int | None:
+    """`navmesh_bake_layers` -> Unity layer mask (BakeNavMesh.SourceLayerMask without the Water rule, which
+    `bake_exclusion_reason` applies). Empty or None: no restriction, as in a descriptor without the field."""
+    if not layers:
+        return None
+    mask = 0
+    for layer in layers:
+        if type(layer) is not int or not 0 <= layer <= 31:
+            raise ColliderModelError(f"navmesh_bake_layers entry is not a layer index (0..31): {layer!r}")
+        mask |= 1 << layer
+    return mask
+
+
 def bake_exclusion_reason(o: Owner) -> str | None:
     """Why the port bake drops this collider, or None when it is a NavMesh source (BakeNavMesh.cs)."""
     if o.layer == WATER_LAYER:
@@ -412,6 +448,8 @@ def bake_exclusion_reason(o: Owner) -> str | None:
             return name
     if o.barrier_blocked:
         return "opened_barriers"
+    if o.bake_excluded:
+        return "navmesh_bake_exclusions"
     return None
 
 

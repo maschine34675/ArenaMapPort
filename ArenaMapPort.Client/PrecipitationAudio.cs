@@ -20,9 +20,11 @@ namespace ArenaMapPort.Client
 {
     /// <summary>
     /// The harvested Weather root renders rain, but native rain sound lives in a separate
-    /// Sound scene. Restore only its precipitation beds on the two supported maps, using
-    /// EFT's own season bank, room levels and rain buses. No ambient singleton or mixer
-    /// effects controller is created. See docs/progress/equator-rain-accents.md for evidence.
+    /// Sound scene. Restore only its precipitation beds on the released maps (Equator, Bay5,
+    /// AirPit), using EFT's own season bank, room levels and rain buses. No ambient singleton or
+    /// mixer effects controller is created. See docs/progress/equator-rain-accents.md for evidence.
+    /// Only Equator has the depth-photo roof sampling (PrecipitationCover); on the other maps the
+    /// indoor/outdoor bed follows the native acoustic room, else the player's Environment.
     /// </summary>
     internal static class PrecipitationAudio
     {
@@ -36,7 +38,7 @@ namespace ArenaMapPort.Client
         internal static void Install()
         {
             if (_driver != null) return;
-            foreach (var map in new[] { ArenaMapRegistry.Equator, ArenaMapRegistry.Bay5 })
+            foreach (var map in new[] { ArenaMapRegistry.Equator, ArenaMapRegistry.Bay5, ArenaMapRegistry.AirPit })
                 Volumes[map.Key] = Plugin.Instance.Settings.Bind("Audio (" + map.Key + ")", "RainVolume", 1f,
                     new ConfigDescription("Volume of native rain/snow ambience only. 1 = native full level, 0 = silent. " +
                         "Follows actual weather, season and acoustic room; live. Existing scenery ambience is unchanged.",

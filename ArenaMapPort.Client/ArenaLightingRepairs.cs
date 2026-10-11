@@ -187,8 +187,11 @@ namespace ArenaMapPort.Client
                     "map's scenes. 1.0 = authored value.",
                     new AcceptableValueRange<float>(0.2f, 6f)));
 
-            // Bay5 has no authored directional light; the donor sun is controlled in LightingLab.
-            if (map != ArenaMapRegistry.Bay5)
+            // Only a map with an authored sun (descriptor SunPaths: Equator's FAKE_SUN) has a Directional light to
+            // scale. Bay5 has none (the donor sun is controlled in LightingLab) and neither has AirPit (0
+            // Directional lights in all five scenes), so neither binds these two keys; Bay5's old ones are listed
+            // in RetiredConfiguration. Decided before the first AirPit bind so AirPit never saves them.
+            if (MapLightingDefaults.BindsAuthoredSunKeys(map))
             {
                 cfg.SunIntensityMultiplier = Plugin.Instance.Settings.Bind(section, "SunIntensityMultiplier", 0.2f,
                     new ConfigDescription(

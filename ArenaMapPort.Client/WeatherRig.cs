@@ -26,8 +26,10 @@ namespace ArenaMapPort.Client
     ///  - Stage 0 scope: <c>arena_bay5</c> only, Donor = "Reserve_Base_Scripts" (level139, full rig — the
     ///    smallest full-rig donor surveyed; Laboratory's "Weather_Simple" is smaller but has no dome/sun,
     ///    the wrong shape for an outdoor map). Since 2026-09-19 (§20) Equator shares that default (same
-    ///    donor, its own ZeroLevel). Every other map's Donor defaults to "Off" — a complete no-op,
-    ///    byte-identical to today's ArenaLightingRepairs-only behavior.
+    ///    donor, its own ZeroLevel), and since 2026-10-12 so does AirPit (PLAN-AIRPIT item 10; without a rig
+    ///    its p0 deferred materials render as dark silhouettes). Every other map's Donor defaults to "Off" —
+    ///    a complete no-op, byte-identical to today's ArenaLightingRepairs-only behavior. The per-map
+    ///    defaults are the table in <see cref="MapLightingDefaults"/>.
     ///  - Harvest pre-flight gate (<see cref="PreflightClear"/>): "no raid of ANY kind is currently
     ///    loaded" (not just "not one of ours") — a vanilla SPT raid played earlier in the session authors
     ///    the identical LevelSettings/LocationScene/CullingManager/ObservedCullingManager/
@@ -113,7 +115,7 @@ namespace ArenaMapPort.Client
             intensity = DonorBlackAmbientIntensity;
         }
 
-        const string OffDonor = "Off";
+        const string OffDonor = MapLightingDefaults.OffDonor;
         const float PollIntervalSeconds = 3f;
         const int MaxHarvestAttempts = 5;
 
@@ -300,18 +302,21 @@ namespace ArenaMapPort.Client
         {
             string section = $"Lighting ({map.Key})";
             // donor-settings-camera-weather Tier-1/Tier-2 split — real (rig-active) defaults only for the
-            // maps a rig is meant for: Bay5 (outdoor harbor, tuned 2026-09-17..19) and, since 2026-09-19
-            // (§20), Equator (indoor mall whose roof openings the sun is meant to shine through). Every
-            // other map keeps Donor="Off", so none of §A/§B/§C ever reads these values for it regardless
-            // of what they default to.
-            bool bay5Defaults = map.Key == ArenaMapRegistry.Bay5.Key;
-            bool equatorDefaults = map.Key == ArenaMapRegistry.Equator.Key;
-            bool rigDefaults = bay5Defaults || equatorDefaults;
-            string defaultDonor = rigDefaults ? "Reserve_Base_Scripts" : OffDonor;
+            // maps a rig is meant for: Bay5 (outdoor harbor, tuned 2026-09-17..19), since 2026-09-19 (§20)
+            // Equator (indoor mall whose roof openings the sun is meant to shine through) and, since
+            // 2026-10-12 (PLAN-AIRPIT item 10, user decision "donor rig Reserve_Base_Scripts (Full)"), AirPit
+            // (indoor airport hall, 293 of 380 materials are p0 deferred shaders that need the rig's
+            // ambient). Every other map keeps Donor="Off", so none of §A/§B/§C ever reads these values for it
+            // regardless of what they default to. The map-dependent values live in MapLightingDefaults (a
+            // pure table, pinned by WeatherRigDefaultsTests) so Equator's and Bay5's cannot move by accident.
+            var defaults = MapLightingDefaults.Rig(map.Key);
+            bool equatorDefaults = map.Key == ArenaMapRegistry.Equator.Key; // DefaultsRevision migrations below
+            string defaultDonor = defaults.Donor;
             // ZeroLevel is geometry-relative (see ZeroLevelOverride's own description): 4.4 m below the
             // walkable ground — Bay5's spawn hall floor is at y≈-3.8 (→ -8.2, the first playtest's value,
-            // kept), Equator's spawn markers sit at y≈0.03..0.12 (analysis/equator_census.json) → -4.4.
-            float defaultZeroLevel = bay5Defaults ? -8.2f : equatorDefaults ? -4.4f : 0f;
+            // kept), Equator's spawn markers sit at y≈0.03..0.12 (analysis/equator_census.json) → -4.4,
+            // AirPit's at y≈0.08..0.14 → -4.4 (rule of thumb, to be measured on the host).
+            float defaultZeroLevel = defaults.ZeroLevel;
             var cfg = new RigConfigBundle();
 
             cfg.Donor = Plugin.Instance.Settings.Bind(section, "Donor", defaultDonor,
@@ -353,14 +358,14 @@ namespace ArenaMapPort.Client
                 "docs/progress/donor-settings-camera-weather.md for the evidence trail and how to re-tune " +
                 "it. Applied only while a rig is active for this map (Donor != 'Off' and harvested).");
 
-            cfg.HeightFalloffOverride = Plugin.Instance.Settings.Bind(section, "HeightFalloffOverride", rigDefaults ? 0.025f : 0.029f,
+            cfg.HeightFalloffOverride = Plugin.Instance.Settings.Bind(section, "HeightFalloffOverride", defaults.HeightFalloff,
                 "TOD_Scattering's other per-frame ZeroLevel/HeightFalloff read (see ZeroLevelOverride). " +
                 "0.025 is Reserve's (and Customs') own authored value, byte-for-byte, vs. our stub's " +
                 "0.029 (Laboratory's authored value / the raw C# class default) — a real donor copy, not a " +
                 "guess. Applied only while a rig is active for this map.");
 
             cfg.TextureBudgetTierEntry = Plugin.Instance.Settings.Bind(section, "TextureBudgetTier",
-                rigDefaults ? TextureBudgetTier.ReserveTier : TextureBudgetTier.Stub,
+                defaults.ReserveTextureBudget ? TextureBudgetTier.ReserveTier : TextureBudgetTier.Stub,
                 "LevelSettings.MaxMapTextureMemory (a Vector4 streaming-texture budget, LevelSettings.cs:" +
                 "111,198) — our stub ships (1024,1024,1024,1024), the raw C# class default. ReserveTier " +
                 "= Reserve_Base_Scripts' own authored (2000,2450,2850,3100) — streaming-quality only, no " +
@@ -390,7 +395,7 @@ namespace ArenaMapPort.Client
             // map — the core of the "consistent donor set" strategy (rig + LevelSettings + camera all
             // from the same donor) — but a real, single-click toggle: falling back to the Cam2 fallback
             // path (§B.3) needs no other config change.
-            cfg.UseDonorCameraPrefab = Plugin.Instance.Settings.Bind(section, "UseDonorCameraPrefab", rigDefaults,
+            cfg.UseDonorCameraPrefab = Plugin.Instance.Settings.Bind(section, "UseDonorCameraPrefab", defaults.UseDonorCameraPrefab,
                 "Assigns the harvested donor's own CameraPrefab/PrismPresetPrefab/PostProcessProfilePrefab " +
                 "onto this map's LevelSettings while a rig is active, so CameraManager.SetCameraFromSettings " +
                 "instantiates the donor's real camera (with its own baked TOD_Scattering/PrismEffects." +
@@ -410,7 +415,7 @@ namespace ArenaMapPort.Client
             // 1.0 = vanilla. 0.5 fixed the hall-floor sky mirror but (host A/B 2026-09-19,
             // doc §16.2) darkens EVERY shadowed surface: the Custom Ambient pass scales its whole
             // cubemap contribution with _ReflectionIntensity, and that carries most of the shadow light.
-            cfg.ReflectionIntensity = Plugin.Instance.Settings.Bind(section, "ReflectionIntensity", equatorDefaults ? 0.85f : 1f,
+            cfg.ReflectionIntensity = Plugin.Instance.Settings.Bind(section, "ReflectionIntensity", defaults.ReflectionIntensity,
                 new BepInEx.Configuration.ConfigDescription(
                     "Scale on the sky-cubemap reflection term of EFT's screen-space ambient pass while a " +
                     "weather rig is active (1.0 = vanilla, which forces full strength whenever SSR is on). " +
@@ -419,7 +424,7 @@ namespace ArenaMapPort.Client
                     "Equator defaults to 0.85 with the accepted Filmic image tuning; other maps keep 1.0. Live.",
                     new BepInEx.Configuration.AcceptableValueRange<float>(0f, 1f)));
 
-            cfg.AmbientIntensity = Plugin.Instance.Settings.Bind(section, "AmbientIntensity", equatorDefaults ? 0.5f : 1f,
+            cfg.AmbientIntensity = Plugin.Instance.Settings.Bind(section, "AmbientIntensity", defaults.AmbientIntensity,
                 new BepInEx.Configuration.ConfigDescription(
                     "Equator defaults to 0.5 for more separation between direct light and shade. " +
                     "§18 — scale on the analytic diffuse SH ambient ToDController computes and pushes into " +
@@ -473,7 +478,7 @@ namespace ArenaMapPort.Client
 
             // §19 — ReflectionIntensity back at 1.0 (§16.2/§17) re-exposes the hall-floor sky-mirror veil
             // this multiplier fixes on a per-renderer basis instead of a global scalar. Non-1.0 default only
-            // for the rig-active maps (rigDefaults), same "Tier-1 default ON only for the maps this actually
+            // for the rig-active maps (MapLightingDefaults.Rig), same "Tier-1 default ON only for the maps this actually
             // matters for" convention as the other rig defaults above. Only read while a rig is
             // active AND RainCoverMethod=RoofDepthBlack (the depth photo IndoorFloorSmoothnessRepairs'
             // classifier reads). Live: re-applies to the cached per-renderer material clones on change —
@@ -481,7 +486,7 @@ namespace ArenaMapPort.Client
             // here), same "WeatherRig owns the config, the consuming file owns its own re-apply wiring"
             // convention GroundSmoothnessBaseEntry's own SettingChanged hookup (LightingLab.BindConfig)
             // already establishes.
-            cfg.IndoorFloorSmoothness = Plugin.Instance.Settings.Bind(section, "IndoorFloorSmoothness", rigDefaults ? 0.5f : 1f,
+            cfg.IndoorFloorSmoothness = Plugin.Instance.Settings.Bind(section, "IndoorFloorSmoothness", defaults.IndoorFloorSmoothness,
                 new BepInEx.Configuration.ConfigDescription(
                     "§19 — multiplier on the smoothness/gloss-like properties of floor-like renderers the " +
                     "RoofDepthBlack depth photo shows as INDOOR (covered), applied on per-renderer material " +
@@ -497,7 +502,7 @@ namespace ArenaMapPort.Client
             // §20.3 — Equator's atrium roof is an open lattice (no panes; the 18 glass renderers found by
             // CoverIncludesGlass are elsewhere): the centre lounge under it reads 8/25 = 32% covered, so
             // Equator's default is 30 (Bay5 keeps 50). Existing configs: DefaultsRevision 2 re-seed below.
-            cfg.IndoorCoverPercent = Plugin.Instance.Settings.Bind(section, "IndoorCoverPercent", equatorDefaults ? 30 : 50,
+            cfg.IndoorCoverPercent = Plugin.Instance.Settings.Bind(section, "IndoorCoverPercent", defaults.IndoorCoverPercent,
                 new BepInEx.Configuration.ConfigDescription(
                     "§19 — percentage of the 5x5 depth-photo samples over a candidate renderer's bounds " +
                     "footprint that must read 'covered' (roof 2.5-60 m above its floor level) to classify " +
@@ -537,7 +542,7 @@ namespace ArenaMapPort.Client
             // §20.2 — Arena's dominant p0/Reflective/Bumped Specular family mirrors the global sky cubemap
             // scaled by each material's own _ReflectColor, not by its gloss. Applied to the same per-renderer
             // INDOOR material clones IndoorFloorSmoothness uses (RGB scaled, alpha kept). 1.0 = authored.
-            cfg.IndoorReflectionStrength = Plugin.Instance.Settings.Bind(section, "IndoorReflectionStrength", equatorDefaults ? 0.95f : 1f,
+            cfg.IndoorReflectionStrength = Plugin.Instance.Settings.Bind(section, "IndoorReflectionStrength", defaults.IndoorReflectionStrength,
                 new BepInEx.Configuration.ConfigDescription(
                     "§20.2/§20.3 — multiplier on the reflection-strength properties of every INDOOR-classified " +
                     "renderer's p0/Reflective materials: _SpecColor and _Specularness (the G-buffer specular the " +
@@ -547,7 +552,7 @@ namespace ArenaMapPort.Client
                     "to retain the accepted parquet sheen alongside the separate specular cap. Live.",
                     new BepInEx.Configuration.AcceptableValueRange<float>(0f, 1f)));
 
-            cfg.IndoorSurfaceRepair = Plugin.Instance.Settings.Bind(section, "IndoorSurfaceRepair", bay5Defaults,
+            cfg.IndoorSurfaceRepair = Plugin.Instance.Settings.Bind(section, "IndoorSurfaceRepair", defaults.IndoorSurfaceRepair,
                 "Separate covered floor triangles in mixed building meshes before adjusting their materials. " +
                 "Leaves walls, decals and uncovered triangles on their existing materials. Bay5 defaults on. " +
                 "Requires the active weather rig and RoofDepthBlack. Live; toggling reclassifies and restores meshes.");
@@ -563,7 +568,7 @@ namespace ArenaMapPort.Client
                     "of authored specular before ReflectiveSpecularCap. Also scales cubemap tint. Live.",
                     new BepInEx.Configuration.AcceptableValueRange<float>(0f, 1f)));
 
-            cfg.ReflectiveSpecularCap = Plugin.Instance.Settings.Bind(section, "ReflectiveSpecularCap", equatorDefaults ? 0.3f : 1f,
+            cfg.ReflectiveSpecularCap = Plugin.Instance.Settings.Bind(section, "ReflectiveSpecularCap", defaults.ReflectiveSpecularCap,
                 new BepInEx.Configuration.ConfigDescription(
                     "Ceiling on the strongest RGB channel of p0/Reflective specular color × specular strength. " +
                     "Covers this map's props, floors and mesh decals regardless of roof cover; only values above " +

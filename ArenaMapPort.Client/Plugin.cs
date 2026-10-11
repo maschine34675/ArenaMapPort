@@ -165,7 +165,7 @@ namespace ArenaMapPort.Client
                 Log.LogWarning($"[ArenaMapPort][Config] Retired saved-option cleanup skipped: {e.Message}");
             }
             EquatorProfiles.BindAll(); // after legacy binds/migrations; independent Day/Night defaults
-            MapConfigVisibility.Install(); // after all binds; keep F12 focused on Equator and Bay5
+            MapConfigVisibility.Install(); // after all binds; keep F12 focused on the released maps
             CompactConfiguration.Complete(Config);
             Log.LogDebug($"[ArenaMapPort][Config] Public entries={Config.Count}, tuning entries={Settings.Count}; " +
                 $"tuning persistence={(DeveloperOptions.Enabled ? "developer" : "read-only")}, next-raid natural night={PlayerOptions.NaturalEquatorNight}.");

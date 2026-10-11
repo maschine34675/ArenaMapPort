@@ -51,10 +51,13 @@ public class MapDescriptorConsistencyTests
         Assert.Equal("arena_equator/base.json", ArenaMapRegistry.Equator.DbBaseJsonPath);
     }
 
-    // Spawn barriers are authored by hierarchy path only for the walked Equator and Bay5 maps.
+    // Spawn barriers are authored by hierarchy path only for the walked maps (Equator, Bay5, AirPit).
     // Every remaining map keeps the empty default until its own barriers have been checked.
+    // A path is a root object name followed by optional "/"-separated children, so a single segment
+    // (AirPit's BUS_DOORS and PASSPORT_CONTROL_DOORS gate groups) is a valid root path; empty paths and
+    // empty segments ("a//b", leading or trailing "/") are not.
     [Fact]
-    public void OpenedBarriers_EquatorAndBay5NameCheckedPaths_OtherMapsNone()
+    public void OpenedBarriers_WalkedMapsNamePaths_OtherMapsNone()
     {
         Assert.Equal(new[] { "SBG_Arena_Equator/SOO_LOD0/equator_roller_shutters_02 (9)" }, ArenaMapRegistry.Equator.OpenedBarriers);
         Assert.Equal(new[]
@@ -63,15 +66,48 @@ public class MapDescriptorConsistencyTests
             "WAREHOUSE_DOORS (1)/Bay5_Warehouse_Gate_Door_01 (4)",
             "OLD_WAREHOUSE_DOORS/Gates_Depot_Frame",
         }, ArenaMapRegistry.Bay5.OpenedBarriers);
+        Assert.Equal(new[] { "BUS_DOORS", "PASSPORT_CONTROL_DOORS" }, ArenaMapRegistry.AirPit.OpenedBarriers);
+        var walked = new[] { ArenaMapRegistry.Equator, ArenaMapRegistry.Bay5, ArenaMapRegistry.AirPit };
         foreach (var map in ArenaMapRegistry.Catalog)
         {
             Assert.NotNull(map.OpenedBarriers);
-            Assert.All(map.OpenedBarriers, path => Assert.Contains("/", path));
-            if (!ReferenceEquals(map, ArenaMapRegistry.Equator) && !ReferenceEquals(map, ArenaMapRegistry.Bay5))
+            Assert.All(map.OpenedBarriers, path => Assert.True(IsHierarchyPath(path), $"{map.Key}: malformed opened_barriers path '{path}'"));
+            Assert.Equal(map.OpenedBarriers.Length, map.OpenedBarriers.Distinct().Count());
+            if (!walked.Contains(map))
             {
                 Assert.Empty(map.OpenedBarriers);
             }
         }
+    }
+
+    // A hierarchy path as BoothDoorRepairs.FindByPath and BakeNavMesh.ResolveHierarchyPaths read it.
+    private static bool IsHierarchyPath(string? path) =>
+        !string.IsNullOrWhiteSpace(path) && path.Split('/').All(segment => segment.Length > 0 && segment == segment.Trim());
+
+    // PLAN-AIRPIT item 8: the bake-only inputs exist for AirPit alone; Equator's and Bay5's NavMesh bake keeps its
+    // renderer-union volume, its every-layer mask and no exclusion, which is what their shipped bundles were built with.
+    [Fact]
+    public void NavMeshBakeInputs_ExistForAirPitOnly()
+    {
+        var airPit = ArenaMapRegistry.AirPit;
+        Assert.Equal(4, airPit.NavMeshBakeExclusions.Length);
+        Assert.All(airPit.NavMeshBakeExclusions, path => Assert.True(IsHierarchyPath(path) && path.Contains('/'), path));
+        Assert.Equal(airPit.NavMeshBakeExclusions.Length, airPit.NavMeshBakeExclusions.Distinct().Count());
+        Assert.Equal(new[] { -80.0f, 56.0f, -2.0f, 8.0f, -96.0f, 92.0f }, airPit.BakeBounds);
+        // min < max per axis: [min_x, max_x, min_y, max_y, min_z, max_z]
+        for (var axis = 0; axis < 3; axis++)
+            Assert.True(airPit.BakeBounds[2 * axis] < airPit.BakeBounds[2 * axis + 1]);
+        // A bake exclusion that is also a barrier would be dropped twice and say two different things about the runtime.
+        Assert.DoesNotContain(airPit.NavMeshBakeExclusions, p => airPit.OpenedBarriers.Any(b => p == b || p.StartsWith(b + "/")));
+
+        foreach (var map in ArenaMapRegistry.Catalog.Where(m => !ReferenceEquals(m, airPit)))
+        {
+            Assert.Empty(map.NavMeshBakeExclusions);
+            Assert.Empty(map.BakeBounds);
+            Assert.Empty(map.NavMeshBakeLayers);
+        }
+        Assert.All(airPit.NavMeshBakeLayers, layer => Assert.InRange(layer, 0, 31));
+        Assert.DoesNotContain(4, airPit.NavMeshBakeLayers); // Water is never collected
     }
 
     [Fact]

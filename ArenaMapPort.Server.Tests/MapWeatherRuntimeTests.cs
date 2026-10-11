@@ -75,16 +75,23 @@ namespace ArenaMapPort.Server.Tests
             Assert.Equal(5f, controller.Nodes[0].Rain);
         }
 
+        static ArenaMapDescriptor ReleasedMap(string key) => ArenaMapRegistry.All.Single(m => m.Key == key);
+
+        // Bay5 and AirPit share the native server-time policy (descriptor UsesServerTime).
         [Theory]
-        [InlineData(EDateTime.CURR, true, 0)]
-        [InlineData(EDateTime.PAST, true, 23)]
-        [InlineData(EDateTime.CURR, false, 0)]
-        [InlineData(EDateTime.PAST, false, 12)]
-        public void Bay5IgnoresLegacyFixedHourAndUsesSelectedAdvancingBackendTime(EDateTime variant, bool enabled, int legacyHour)
+        [InlineData("arena_bay5", EDateTime.CURR, true, 0)]
+        [InlineData("arena_bay5", EDateTime.PAST, true, 23)]
+        [InlineData("arena_bay5", EDateTime.CURR, false, 0)]
+        [InlineData("arena_bay5", EDateTime.PAST, false, 12)]
+        [InlineData("arena_airpit", EDateTime.CURR, true, 0)]
+        [InlineData("arena_airpit", EDateTime.PAST, true, 23)]
+        [InlineData("arena_airpit", EDateTime.CURR, false, 0)]
+        [InlineData("arena_airpit", EDateTime.PAST, false, 12)]
+        public void ServerTimeMapsIgnoreLegacyFixedHourAndUseSelectedAdvancingBackendTime(string key, EDateTime variant, bool enabled, int legacyHour)
         {
             Plugin.Instance.Config.Get<bool>("TimeOfDay", "Enabled").Value = enabled;
             Plugin.Instance.Config.Get<int>("TimeOfDay", "ArenaFixedHour").Value = legacyHour;
-            var game = Game(ArenaMapRegistry.Bay5, variant);
+            var game = Game(ReleasedMap(key), variant);
             game.InitWeather(RandomSettings);
             Assert.Equal(1, game.NativeInitializations);
             Assert.Empty(game._specialTimeResolver);
@@ -102,14 +109,18 @@ namespace ArenaMapPort.Server.Tests
         }
 
         [Theory]
-        [InlineData((int)WeatherTestOverride.TestWeather.Clear)]
-        [InlineData((int)WeatherTestOverride.TestWeather.Rain)]
-        [InlineData((int)WeatherTestOverride.TestWeather.Fog)]
-        [InlineData((int)WeatherTestOverride.TestWeather.Overcast)]
-        public void Bay5PassesThroughEveryBackendResyncDespiteSavedTestWeather(int savedValue)
+        [InlineData("arena_bay5", (int)WeatherTestOverride.TestWeather.Clear)]
+        [InlineData("arena_bay5", (int)WeatherTestOverride.TestWeather.Rain)]
+        [InlineData("arena_bay5", (int)WeatherTestOverride.TestWeather.Fog)]
+        [InlineData("arena_bay5", (int)WeatherTestOverride.TestWeather.Overcast)]
+        [InlineData("arena_airpit", (int)WeatherTestOverride.TestWeather.Clear)]
+        [InlineData("arena_airpit", (int)WeatherTestOverride.TestWeather.Rain)]
+        [InlineData("arena_airpit", (int)WeatherTestOverride.TestWeather.Fog)]
+        [InlineData("arena_airpit", (int)WeatherTestOverride.TestWeather.Overcast)]
+        public void ServerTimeMapsPassThroughEveryBackendResyncDespiteSavedTestWeather(string key, int savedValue)
         {
             var saved = (WeatherTestOverride.TestWeather)savedValue;
-            SetWeather(saved); var game = Game(ArenaMapRegistry.Bay5, EDateTime.PAST);
+            SetWeather(saved); var game = Game(ReleasedMap(key), EDateTime.PAST);
             game.InitWeather(RandomSettings);
             var controller = new WeatherController(); var first = BackendNodes(); var second = BackendNodes();
             controller.SetWeatherNodes(first);
@@ -159,12 +170,17 @@ namespace ArenaMapPort.Server.Tests
         }
 
         [Fact]
-        public void EquatorToBay5ToVanillaClearsFixedStateAndNeverOverridesVanillaWeather()
+        public void EquatorToServerTimeMapsToVanillaClearsFixedStateAndNeverOverridesVanillaWeather()
         {
             var eq = Game(ArenaMapRegistry.Equator, EDateTime.PAST); eq.InitWeather(RandomSettings);
             Assert.Equal(0, TimeOfDayRepairs.ActiveFixedHour);
             var bay = Game(ArenaMapRegistry.Bay5, EDateTime.PAST); bay.InitWeather(RandomSettings);
             Assert.Null(TimeOfDayRepairs.ActiveFixedHour);
+            var eq2 = Game(ArenaMapRegistry.Equator, EDateTime.CURR); eq2.InitWeather(RandomSettings);
+            Assert.Equal(12, TimeOfDayRepairs.ActiveFixedHour);
+            var air = Game(ArenaMapRegistry.AirPit, EDateTime.PAST); air.InitWeather(RandomSettings);
+            Assert.Null(TimeOfDayRepairs.ActiveFixedHour); // server-time map: the Equator hour does not leak into it
+            Assert.False(air.ActualSettings.IsRandomTime);
             SceneManager.Scenes.Clear();
             var vanilla = new LocalGame { Location = new() { Id = "bigmap" } }; vanilla.InitWeather(RandomSettings);
             Assert.True(vanilla.ActualSettings.IsRandomTime);

@@ -40,22 +40,26 @@ namespace ArenaMapPort.Client
             foreach (var map in ArenaMapRegistry.All)
             {
                 var section = $"Lighting ({map.Key})";
-                bool releasedMap = map.Key == ArenaMapRegistry.Equator.Key || map.Key == ArenaMapRegistry.Bay5.Key;
-                var threshold = Plugin.Instance.Settings.Bind(section, "BloomThreshold", releasedMap ? DefaultThreshold : -1f,
+                // Only Equator and Bay5 carry the donor-rig defaults and the one-time migration. Every other map in
+                // the registry, released AirPit included, binds -1 (keep the camera's own value, expected to equal
+                // the donor rig's 2.10/0.35). PLAN-AIRPIT item 21 decision: AirPit stays at -1, so it creates no
+                // BloomDefaultsRevision marker; moving it to the explicit 2.10/0.35 is adding it to donorDefaults.
+                bool donorDefaults = map.Key == ArenaMapRegistry.Equator.Key || map.Key == ArenaMapRegistry.Bay5.Key;
+                var threshold = Plugin.Instance.Settings.Bind(section, "BloomThreshold", donorDefaults ? DefaultThreshold : -1f,
                     new ConfigDescription(
                         "UltimateBloom HDR threshold on the raid camera for this map. -1 keeps the camera's own value " +
                         "(donor rig: 2.10). Lower = more glow around bright lights. Equator and Bay5 default to " +
                         "the donor rig's normal threshold, 2.10. Live.",
                         new AcceptableValueRange<float>(-1f, 10f)));
-                var intensity = Plugin.Instance.Settings.Bind(section, "BloomIntensity", releasedMap ? DefaultIntensity : -1f,
+                var intensity = Plugin.Instance.Settings.Bind(section, "BloomIntensity", donorDefaults ? DefaultIntensity : -1f,
                     new ConfigDescription(
                         "UltimateBloom intensity on the raid camera for this map. -1 keeps the camera's own value " +
                         "(donor rig: 0.35). Equator and Bay5 default to this normal intensity, 0.35. Live.",
                         new AcceptableValueRange<float>(-1f, 5f)));
 
-                // Migrate before subscribing: no camera writes during config binding. Unreleased maps
-                // keep their native defaults and do not acquire a bloom migration marker.
-                if (releasedMap) MigrateDefaults(map.Key, section, threshold, intensity);
+                // Migrate before subscribing: no camera writes during config binding. Maps without the donor
+                // defaults keep -1 (native camera values) and do not acquire a bloom migration marker.
+                if (donorDefaults) MigrateDefaults(map.Key, section, threshold, intensity);
                 EquatorProfiles.Subscribe(threshold, (_, __) => ApplyToCurrentCamera("setting changed"));
                 EquatorProfiles.Subscribe(intensity, (_, __) => ApplyToCurrentCamera("setting changed"));
                 _entries[map.Key] = (threshold, intensity);

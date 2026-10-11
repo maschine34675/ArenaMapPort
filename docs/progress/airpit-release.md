@@ -1063,3 +1063,859 @@ accepted manifest was rewritten with the fresh bytes; the same comparison now re
 among its twelve maps, so `build_remaining.ps1 -Maps airpit -Rebuild` would rebuild the stale 0.5.4 package. It is outside the
 three findings and the plan builds AirPit with an explicit `-PackageDir work/extract/airpit-native-v5` in item 12 (never with this
 script), but either that item or a guard in the script should settle it before the first AirPit Unity build.
+
+## Item 8 - round-start barriers, bake bounds, bake-only exclusions, bake layers (done 2026-10-11, about 23:10-23:55 local)
+
+Offline only: no Unity, no host, no deploy, no write outside the repository and the agent scratchpad. The Unity bake
+(U1) is the lead's next step; everything below that touches Unity-only API (`JsonUtility` array fields, `Bounds.SetMinMax`,
+the `Bake()` wiring) is **unverified until that run**. The pure helpers are executed from the production text, see
+"Equator and Bay5 stay unchanged".
+
+### What changed
+
+| File | Change |
+|---|---|
+| `tools/maps/airpit.json` | `opened_barriers` `["BUS_DOORS", "PASSPORT_CONTROL_DOORS"]`, `navmesh_bake_exclusions` (the four cutters), `bake_bounds` `[-80, 56, -2, 8, -96, 92]`, `navmesh_bake_layers` `[9, 11, 13, 18, 30]` |
+| `ArenaMapPort.Shared/ArenaMapDescriptor.cs` | `AirPit.OpenedBarriers` plus three new optional properties `NavMeshBakeExclusions`, `BakeBounds`, `NavMeshBakeLayers` (empty for every other map); same values, same order as the sidecar |
+| `UnityProject/.../Editor/Common/ArenaPaths.cs` | `ArenaMapDescriptorData.navmesh_bake_exclusions` (`string[]`), `bake_bounds` (`float[]`), `navmesh_bake_layers` (`int[]`); `EquatorDefault()` untouched (null = absent) |
+| `UnityProject/.../Editor/NavMesh/BakeNavMesh.cs` | `ResolveOpenedBarriers` became `ResolveHierarchyPaths(roots, paths, out unresolved)` (same body, now shared); new pure helpers `BakeOnlyExclusionReason`, `SourceLayerMask`, `UsesExplicitBakeBounds`; collider loop, markup loop and volume loop apply the exclusion; `Bake()` takes the bounds box and the layer mask from the descriptor when present; new log line `bake inputs: bounds ..., layer mask 0x..., N navmesh_bake_exclusions, M opened_barriers` |
+| `tools/validate/validate_map_descriptors.py` | `bake_input_errors` (shape of the four keys, exclusion not inside a barrier) and sidecar-vs-`ArenaMapRegistry` drift checks for all four (build_all runs this validator, so a mismatch stops a build) |
+| `tools/validate/port_colliders.py` | `mark_bake_exclusions`, `layers_to_mask`, reason `navmesh_bake_exclusions`, `ColliderSet.unresolved_exclusions` |
+| `tools/validate/navmesh_diff.py` | `analyse(..., bake_exclusions, port_layer_mask)`; CLI `--bake-exclusion` (repeatable), `--port-layer-mask`, `--ignore-descriptor-layers`; `--descriptor` now applies `opened_barriers`, `navmesh_bake_exclusions` and `navmesh_bake_layers`; new `reachability` block (probes in the anchor's component) in the report and text |
+| `ArenaMapPort.Server.Tests/MapDescriptorConsistencyTests.cs` | the barrier test is relaxed (root paths allowed; renamed `OpenedBarriers_WalkedMapsNamePaths_OtherMapsNone`, AirPit pinned) and `NavMeshBakeInputs_ExistForAirPitOnly` is new |
+| `ArenaMapPort.Server.Tests/AirPitMapTests.cs` | `OpenedBarriersAndBakeInputsMatchTheSidecar` (sidecar == descriptor, Equator/Bay5 sidecars free of the new keys) |
+| `tools/tests/test_airpit_bake_inputs.py` (new, 16 tests) | validator shape and drift, sidecar facts, and (gated on `work/extract/airpit-native-v5`) path resolution, barrier-root shape, layer census |
+| `tools/tests/test_navmesh_diff.py` (+11), `tools/tests/test_navmesh_source_layers.py` (+1, cases 53 -> 175) | model and C#-helper coverage, see below |
+| `tools/build_remaining.ps1` | `airpit` removed from the default list and from `$allMaps`; `-Maps airpit` is refused with the reason; help text and example updated |
+| `docs/MAP-RECIPE.md` | section 3 documents the four keys and the model command |
+
+`tools/extract/extract_map.py` needed nothing: its docstring already names `work/extract/airpit-native-v5` and calls
+`work/extract/airpit` "never an --output" (item 5 follow-up). No tracked file mentions the 0.5.4 package as a build input any more
+except the historical measurement logs.
+
+### Decisions
+
+1. **`opened_barriers` only for the two real gate groups** (user decision 4.5, since the item 7 probe found no mode toggler).
+   `BUS_DOORS` and `PASSPORT_CONTROL_DOORS` are scene roots of `Arena_Airpit_TeamFight_DesignStuff`, each with exactly one
+   match. A single segment is a root path in both resolvers (`BoothDoorRepairs.FindByPath`: `rest == null` returns the root;
+   `BakeNavMesh.ResolveHierarchyPaths`: same), so no resolver change was needed. Checked on the 0.6.0 package: `BUS_DOORS`
+   has 6 direct children (`Apron_bus_MAZ_doors` assemblies, 223 objects, 60 live colliders: 24 on layer 18, 36 on layer 12),
+   `PASSPORT_CONTROL_DOORS` has 18 (the `GREEN` and `RED` fog sheets plus 16 `Passport_control_01_Door`, 229 objects, 32 live
+   colliders: 16 + 16), no collider on either root object, **no object whose name contains "frame" anywhere below**. That
+   matters because the two consumers use different frame rules: the client deactivates the DIRECT children whose own name
+   lacks "frame", the bake drops every descendant with no frame-named object on its chain. With no frame name they agree
+   exactly (0 descendants disagree); `test_barrier_roots_are_scene_roots_without_frame_parts` pins it. 92 colliders leave the
+   bake (60 + 32), the same 92 as in item 7. Side effect already known: the client also deactivates the `GREEN`/`RED` fog
+   sheets (item 11).
+2. **Bake-only exclusion for the four route cutters, visuals kept.** `navmesh_bake_exclusions` drops the whole subtree of each
+   listed object, the object itself included, from collider sources AND from `NavMeshModifier`/`NavMeshModifierVolume`
+   markups (symmetric with `RoundOpenedReason`: a Not-Walkable markup under an excluded prop would cut the route the exclusion
+   exists to keep; the four have no markup, pinned by a test). Nothing is deactivated at runtime, so shop fronts, roll door and
+   fence stay visible and solid for players; bots path through them like through Arena's mesh. Unlike a barrier there is no
+   frame exception, because the client keeps nothing standing or opening. All four paths resolve on the 0.6.0 package to exactly
+   one object each, in `Arena_AirPit_ShootOut`, at the world positions the model named ((-23.21, -44.19), (-46.24, 29.41),
+   (-43.27, -43.47), (22.11, -29.85)); each carries a layer-18 collider (so Arena's layer mask still sees them) and 2-3 live
+   colliders (9 in total). `SOO_LOD0` holds two siblings named `BUILDING` (52 and 8 children); `Transform.Find` takes the first,
+   which holds all three BUILDING paths; the model resolves paths with the same first-sibling rule (test
+   `test_exclusion_paths_survive_a_duplicated_building_sibling`). An unresolved exclusion path **fails the build**
+   (`InvalidOperationException` after an Error log): a silently missing exclusion would ship a cut route. (Review fix, same
+   day: an unresolved `opened_barriers` path now fails the build the same way, see "Review fixes" below; the first version
+   kept the old warning for it.) The AGENTS-style rule stays in the code comment next to the resolution: anything
+   the client DISABLES at runtime belongs to `RoundOpenedReason`, anything that merely must not shape the mesh belongs here.
+3. **Bake bounds.** Format `[min_x, max_x, min_y, max_y, min_z, max_z]` (flat `float[6]`, same family as `fog_color`, so
+   `JsonUtility`, the Shared descriptor and the validator's `new[] { ... }` parser all handle it without a nested type). The box
+   is used as given (no 10 m expansion). Absent or empty: the renderer-union code runs unchanged (it moved into an `else`
+   block, text-pinned). Present but malformed: `InvalidOperationException`, because falling back to the 4.3 km renderer union
+   would silently bake the map the field exists to avoid. **Which clip applies today** (the plan asked to confirm):
+   `BakeNavMesh.cs` has **no y clip**; the volume is the union of all non-Water renderer bounds of the non-background roots,
+   expanded by 10 m. Logged bakes: Equator (`work/build/full/unity_build_all_20260927_233134.log`) Center (-0.48, 5.73, -9.55)
+   Extents (59.04, 42.69, 74.29), 4,104 sources, 10,404 vertices / 4,572 triangles; Bay5 Center (24.55, 3.39, -157.84)
+   Extents (170.82, 51.47, 358.07), 10,501 sources; AirPit spike Center (-64.43, 44.61, -507.17) Extents (2132.5, 125.69,
+   1604.49), 5,309 sources, 29,596 / 13,586. So AGENTS.md "Bake volume is y -8..12" (and the `AiAnchorsTests` comment) describes
+   where the walkable ground floors are, not an applied clip; AirPit's y -2..8 is the first real vertical limit.
+4. **Layer mask `navmesh_bake_layers` = Arena's NavMeshSurface mask (9, 11, 13, 18, 30).**
+   - Implementation: `SourceLayerMask(layers, waterLayer)`: no layers = `~0 & ~(1 << water)` (the replaced expression, proven equal
+     for every water index -1..31 by the harness); layers = their OR, Water always removed, out-of-range entries ignored with a
+     warning, an empty result throws.
+   - **Triggers (13) stays in the mask AND the owner rule stays.** Arena's mask names layer 13, the port's
+     `NonPhysicalLayerReason` drops non-trigger colliders on 13 (stripped spawn-marker boxes made invisible raised islands on
+     Bay5) and on 29 (LevelBorder). Both stay, because the rule is a port fact (installed EFT's Triggers layer) independent of
+     which layers a map collects, and because it costs AirPit nothing: the 0.6.0 package has **no live non-trigger collider on
+     layer 13** (census of the 5,309 live collider owners: layer 0: 5, 12: 3,180, 18: 1,978, 22: 2, 29: 67, 30: 77; the 20
+     `NavMeshModifier ignoreFromBuild` markups sit on Triggers-layer owners whose own colliders are triggers or disabled). The
+     wire-markup case (a `NavMeshModifier` on a Triggers-layer owner) is untouched: markups never see the layer rule
+     and the mask only filters colliders.
+   - Why this mask for AirPit: it is what Arena's own bake collected (decoded in item 7). In the 0.16.9.5 decompile EFT's
+     `LayersMaskController.PlayerCollisionTestMask` is `LowPolyCollider + DoorLowPolyCollider + Terrain + Player`, while
+     `HighPolyCollider` (12) is the layer of the ballistic raycast masks (`HighPolyWithTerrainMask`, `GrenadeObstaclesColliderMask`).
+     So the 3,180 layer-12 colliders most likely add obstacles that players do not physically meet (inference: I did not read the
+     project's physics collision matrix). Item 7 found 22 of the 190 walked-through instances
+     exist only on layers 12/0.
+   - **Cost found by the model:** one group of 193 - 98 = 95 more Arena-walkable samples (3.8 m2) loses its port floor, at
+     x -7.55..-6.55, z -30.15..-25.55, y 0.64..2.71: the **`Passenger_ladder_02` airstairs** (the detailed treads are layer-12
+     ballistic meshes, about 2,400 triangles; the layer-18 `_COLLIDER` has 29 triangles and the model finds no floor from it
+     in that group). The bake may or may not walk it; check the built NavMesh there (`--compare-bundle`). If it matters, the switch is
+     one deletion: remove `navmesh_bake_layers` from `tools/maps/airpit.json` and `NavMeshBakeLayers` from the descriptor (the
+     validator keeps both in step), then every other result of this item still holds (S1 below).
+5. **Why the Shared descriptor carries Editor-only data.** Nothing in the client reads the three bake keys; they are mirrored
+   because the one per-map table should stay complete and because the validator and `AirPitMapTests` then catch a sidecar edit
+   that forgets its twin. No runtime cost beyond three empty arrays.
+
+### Offline model on the 0.6.0 package (`work/extract/airpit-native-v5`)
+
+Probe points: `airpit.bots.json` (18) + `airpit.exits.json` (2) + the two capture points of the item 7 draft (scratch JSON) + 19
+live AI core points + 3 hubs + 35 patrol points = 79 given, **78 located** (`capture_base` has no lattice sample, as in item 7).
+Anchor = `capture_teamfight`. Commands (scratch wrapper `run_model.sh <label> <extra args>`; all with
+`--package work/extract/airpit-native-v5 --points tools/maps/airpit.bots.json --points tools/maps/airpit.exits.json
+--points <captures.json> --live-core-points --json-out <label>.json`):
+
+| Run | Extra arguments | Bake sources | Port components (largest) | Probes in the anchor's component | Walked-through instances | No-floor samples | Time |
+|---|---|---:|---|---|---:|---:|---:|
+| S0 barriers only | `--opened-barrier BUS_DOORS --opened-barrier PASSPORT_CONTROL_DOORS` | 5,148 | 50 (3,965.7 m2) | **9 of 78** in the anchor's component #2 (52 sit in #0, 11 in #1, 2+2+2 in #3-#5); the greedy pass then joins 61 / 74 / 76 / 78 with the four cutters | 190 (426 colliders) | 98 | 82 s |
+| S1 final lists, all layers | S0 + `--bake-exclusion` x4 | 5,139 | 45 (**7,924.6 m2**, 97.0 % of Arena's 8,168.2) | **78 of 78 (component 0)** | 186 (417) | 98 | 77 s |
+| S2 final lists + Arena's layers | S1 + `--port-layer-mask 0x40042A00` | 2,011 | 36 (**7,957.1 m2**, 97.4 %) | **78 of 78 (component 0)** | 164 (199) | 193 | 34 s |
+| S3 `--descriptor tools/maps/airpit.json` | (barriers, exclusions and layers from the sidecar) | 2,011 | identical to S2 line for line | 78 of 78 | 164 | 193 | 25 s |
+
+- S0 reproduces item 7's scenario B on the new package, and the tool's own greedy pass proposes exactly the four paths of the
+  sidecar in the same order with the same gains (12, 313, 64, 307 samples; probes joined 61, 74, 76, 78). S1 equals item 7's
+  scenario C (45 components, 7,924.6 m2, 186 instances / 417 colliders left over).
+- **Rank changes of the `Fence_Armored_*` / tarpaulin props: none.** A second S0 run on the superseded 0.5.4 package
+  (`PKG=work/extract/airpit`, 74 s) gives the identical report: 190 instances, 426 colliders, 4,795 blocked samples, 50
+  components (3,965.7 / 1,650.6 / 1,544.5 m2), the same ranks and areas to 0.01 m2 for every instance (e.g. `tarpaulin_wall_03` #14
+  3.80 m2, `Fence_Armored_2 (1)` #32 2.08 m2, `Fence_Armored_2` #36 1.92 m2, `tarpaulin_wall_03 (1)` #42 1.72 m2, `(2)` #45 1.52 m2,
+  `Fence_Armored_1 (1)` #109 0.52 m2), no instance present in only one run. That is consistent with the source audit (the delta
+  is a pure id re-keying).
+- The 186 instances (S1) that stay walked-through cut nothing between probe points: `Airbus_wing_L/R`, `Flowerbed_steel_01`,
+  `Passenger_ladder_02`, `Airport_Shop_BS_closed_closed`, `TH_Roll_door_02_closed`, the sandbag families and so on. The
+  plan's fallback candidates (`TH_Roll_door_02/03`, `Airport_Shop_BS_closed`, capture-zone fences, portal fences) are **not** needed
+  for the 78 probes; they remain a gameplay question for the host (bots path around them, like players).
+- The port model's 36 / 45 components are all inside Arena's footprint: the small ones are sub-10 m2 pockets (7.6, 3.3, 1.7 ... m2);
+  every probe is in component 0. The model is a lower bound (see item 7); the real Unity bake remains the verdict.
+
+### Equator and Bay5 stay unchanged
+
+- Their sidecars carry none of the new keys and their descriptors none of the new arguments (`AirPitMapTests`,
+  `MapDescriptorConsistencyTests.NavMeshBakeInputs_ExistForAirPitOnly`, `test_airpit_bake_inputs.test_released_maps_keep_their_bake_unchanged`,
+  `test_no_other_sidecar_uses_the_new_keys`). Their `opened_barriers` are untouched and still resolve through the same function body.
+- `test_navmesh_source_layers.py` now compiles and runs the production text of `BakeOnlyExclusionReason`, `SourceLayerMask` and
+  `UsesExplicitBakeBounds` next to the old functions (175 cases): with an empty exclusion list the composed collider-source
+  expression equals the pre-item-8 `NonPhysicalLayerReason ?? RoundOpenedReason` for all 32 owner layers; `SourceLayerMask(null)` and
+  `SourceLayerMask(empty)` equal the replaced expression for water index -1..31; `UsesExplicitBakeBounds(null | empty)` is false. A
+  text test pins how `Bake()` wires them (the three-way `??` chain in the collider loop, the markup loop, the volume loop, the
+  resolver calls, and that the renderer-union branch with `Expand(10f)` and the 200 x 50 x 200 fallback box is still there once).
+  What is not proven offline is Unity itself: a rebuild of Equator's NavMesh was not run (their bundles are not rebuilt).
+- `dist/`: 46 of 48 files identical to the 0.1.0 manifest; the two that differ are the client and the server DLL (the required
+  `dotnet build`/`dotnet test` stage them). No bundle, `base.json`, sidecar, acoustics or description file changed.
+
+### Expected U1 log lines (for the lead's AirPit build)
+
+`[BakeNavMesh] navmesh_bake_exclusions: 4 object(s) resolved ...`; `excluded 1 ... navmesh_bake_exclusions:<name>` once per cutter
+and `excluded 24 ... opened_barriers:BUS_DOORS` / `excluded 16 ... opened_barriers:PASSPORT_CONTROL_DOORS` (under the mask Unity only
+sees the layer-18 colliders of these objects; the 9 / 60 / 32 of the model table above are counted over all layers); `bake inputs: bounds from the descriptor (bake_bounds), layer mask 0x40042A00
+(navmesh_bake_layers), 4 navmesh_bake_exclusions, 2 opened_barriers`; `bounds=Center: (-12.00, 3.00, -2.00), Extents: (68.00, 5.00,
+94.00)`; `sources=` about 2,011 plus the volume sources (the collider part equals the model's 2,011 if Unity's `CollectSources`
+counts as it did for the spike, 5,309 = 5,309). The layer-29 and `SPAWN_BOUND` colliders never reach the loop under the mask, so
+their "excluded" lines are absent; that is not a loss. No `opened_barriers path not found` line may appear (since the review fix it is an Error that stops the build). Afterwards:
+`python tools/validate/navmesh_diff.py --package work/extract/airpit-native-v5 --descriptor tools/maps/airpit.json --points
+tools/maps/airpit.bots.json --points tools/maps/airpit.exits.json --live-core-points --compare-bundle
+work/build/airpit/arena_airpit_navmesh.bundle` gives the real coverage and the probe components in the built mesh.
+
+### Verification
+
+| Check | Result |
+|---|---|
+| `dotnet build ArenaMapPort.Client/ArenaMapPort.Client.csproj -c Release -p:ArenaMapPortDllOnly=true` | 0 warnings, 0 errors |
+| `dotnet build ArenaMapPort.Server/ArenaMapPort.Server.csproj -c Release` | 0 warnings, 0 errors |
+| `dotnet test ArenaMapPort.Server.Tests/ArenaMapPort.Server.Tests.csproj -c Release` | **632 passed**, 0 failed, 0 skipped (630 + 2: `NavMeshBakeInputs_ExistForAirPitOnly`, `OpenedBarriersAndBakeInputsMatchTheSidecar`; the relaxed barrier test was renamed, not added) |
+| `python -m unittest discover -s tools/tests -p "test_*.py"` | **957 tests, OK, 44 skipped** (929 + 28: 16 new file, +11 `test_navmesh_diff`, +1 `test_navmesh_source_layers`), 40 s |
+| `python tools/validate/validate_map_descriptors.py` | OK (14 descriptors, 14 catalog entries, release `All` membership, `EquatorDefault()`), now including the four new keys |
+| `pwsh -NoProfile -File tools/tests/test_unity_log_scan.ps1` | `UNITY_LOG_TESTS_OK 8 cases` |
+| `pwsh -NoProfile -File tools/build_remaining.ps1 -Maps airpit` / `-Maps nosuchmap` | both throw before any work (the first with the new message); the default map list was not run (it would start Unity builds) |
+| `work/airpit-parity/dist_vs_manifest.py` | 46 of 48 identical, the two DLLs differ (see above) |
+
+### Open points and questions for the lead
+
+1. **Layer mask on or off for U1?** On is implemented and set (as asked). The model sees one real cost, the 3.8 m2 airstairs group
+   at x about -7, z about -28; the gain is about 14 % fewer blocked samples (port agent 5,505 -> 4,760), 9 fewer components
+   (45 -> 36) and a bake with 2,011 instead of 5,139 sources. If the built mesh lacks the airstairs, delete the key from sidecar and descriptor.
+2. ~~**Unresolved `opened_barriers` stays a warning** (Equator/Bay5 behaviour must not change).~~ Resolved by the review fix: it is
+   an error now, see "Review fixes" below.
+3. **AGENTS.md trap "Bake volume is y -8..12"** is not what the code does (no y clip; renderer union + 10 m). Not edited (not in
+   my remit); worth a one-line correction after U1.
+4. **dist/ DLLs** now differ from the 0.1.0 manifest (client and server), which the required builds cause. `restore_server_dll.py`
+   restores the server one; the client DLL has no restore helper.
+5. The plan's 78 probes need the two capture points, which no sidecar holds; they were fed from a scratch JSON (positions from item 7).
+   Whether `airpit.bots.json` should carry them (the host teleport test of item 12 reads them) is the lead's call.
+6. `tools/maps/AdditionalMapBuilds.props` and `docs/dist-manifest.md` still describe twelve additional maps; item 9 touches both.
+
+### Review fixes (item 8, 2026-10-11, after the independent review)
+
+Two findings, both verified before any change.
+
+1. **Doc: S0 reachability cell (confirmed, fixed).** The "Probes in the anchor's component" cell of the S0 row mixed two numbers:
+   the greedy progression and the new reachability headline. A fresh S0 run (`navmesh_diff.py --package work/extract/airpit-native-v5
+   --points tools/maps/airpit.bots.json --points tools/maps/airpit.exits.json --points <captures.json> --live-core-points
+   --opened-barrier BUS_DOORS --opened-barrier PASSPORT_CONTROL_DOORS`, scratch `fix8/s0.txt`) prints `probe reachability: 9 of 78
+   located probes (79 given) in the anchor's port-model component 2; per component {0: 52, 1: 11, 2: 9, 3: 2, 4: 2, 5: 2}` and then the
+   greedy lines 61 / 74 / 76 / 78 (identical to the builder's `s0_barriers_only.txt`). The anchor (`capture_teamfight`) sits in a small
+   component, not in the largest one; with barriers only 52 of 78 probes share component 0. The S0 cell now says exactly that. S1, S2
+   and S3 were re-read from their saved reports (78 of 78 in component 0 each) and were right. The item 7 table (scenario B, "61 after
+   step 1") is a greedy count by its own wording and stays as logged.
+2. **Code: unresolved `opened_barriers` fails the build (confirmed, fixed).** The review's evidence holds, so the stated reason for
+   keeping the warning did not: no accepted Equator or Bay5 build log contains `opened_barriers path not found`
+   (`grep -c` over every `.log` in `work/build/full` and `work/build/bay5`: no file with a non-zero count), and both logs show their
+   barriers resolving (`excluded 2 ... opened_barriers:equator_roller_shutters_02 (9)`; Bay5 `Gate_Door_01 (3)`, `(4)`,
+   `Gates_Depot_Frame`). Offline cross-check with the model's resolver (`port_colliders.resolve_barriers`, scratch
+   `fix8/resolve_released.py`) on the accepted packages: Equator v5 1 of 1 path resolved, Bay5 v5 3 of 3, AirPit 0.6.0 2 of 2, no
+   unresolved path. A scan of `tools/maps/*.json` shows only these three sidecars list `opened_barriers`; the parked maps list none.
+   An error therefore changes no successful build of any map; it changes only the failure case, which is exactly the one that must
+   not be silent (a missing `BUS_DOORS` bakes the bus doors as walls and re-seals the south spawn pocket while the client opens them).
+   `BakeNavMesh.cs`: new `FailOnUnresolvedPaths(descriptorKey, unresolved)` logs one Error per missing path and throws
+   `InvalidOperationException` (`... N opened_barriers path(s) not found in the content scenes`); both resolver calls use it, so
+   barriers and exclusions now behave identically, with the exclusion message text unchanged apart from the shared template. The
+   text test `test_bake_composes_the_item8_inputs_in_the_documented_order` pins both calls, the single definition, the throw, and that
+   the old `LogWarning` is gone. Unity-only API is unchanged (`Debug.LogError`, `InvalidOperationException` were already used in the
+   same block), but like the rest of this item it has not run in Unity. Also corrected: the stale name `ResolveOpenedBarriers` in the
+   `resolve_barriers` docstring (`port_colliders.py`), and the three statements of this section that said the barrier stays a warning
+   (decision 2, expected U1 log lines, open point 2). Builder question 2 is answered: error, for every map.
+
+## Item 9 + item 23 (identity and art) - lock-step registry promotion (done 2026-10-12, about 23:40-00:20 local)
+
+Offline only: no Unity, no host, no deploy, nothing written outside the repository, ignored `work/`/`dist/` and the agent
+scratchpad. AirPit is now a released map in every list that names the release. The first host raid therefore shows "Arena: Air
+Pit" with its own banner, description, menu slot and loading art. The bundles it stages are still the stale 2026-09-15 spike
+bundles (see "Stale bundles" below).
+
+### What changed
+
+| File | Change |
+|---|---|
+| `ArenaMapPort.Shared/ArenaMapDescriptor.cs` | `All = new[] { Equator, Bay5, AirPit }` (shape kept for the validator regex); AirPit `LocaleName` "Arena: Air Pit", `LocaleDescription` rewritten, `IconX/IconY` 500/300 |
+| `tools/maps/airpit.json`, `ArenaMapPort.Server/db/arena_airpit/base.json` | same name, description and slot; base.json regenerated with `python tools/server/make_base_json.py --map tools/maps/airpit.json`, diff against the previous file is exactly `Name`, `IconX`, `IconY` (99 keys, 18 spawn points, 2 exits, 5 waves, 4 boss waves, `BotMax 8`, `Banners []`, `Loot []`, `DisabledForScav true` unchanged) |
+| `tools/validate/validate_map_descriptors.py` | `RELEASE_MAP_NAMES` / `RELEASE_MAP_KEYS` carry AirPit |
+| `tools/park-unreleased-dist.ps1` | `airpit` dropped from the park list: 11 stems (55 rows) |
+| `tools/validate/validate_distribution.py` | key set (via `RELEASE_MAP_KEYS`) = 3 maps; the overview-pack and flare loops are now the named constants `OVERVIEW_MAP_NAMES` / `FLARE_MAP_KEYS`, both still two-map with a comment why; new `validate_art`: exact set of banner files (server mod `banners/`) and loadscreen files (client `loadscreens/`) for the released maps, each non-empty with a JPEG start marker, and the two extractor tables must list exactly the released keys (plan item 23 last bullet) |
+| `ArenaMapPort.Client/ArenaMapPort.Client.csproj` | `ArenaMapPortStageWpOutputs`: `ArenaMapPortAirPitBuildDir` = `work/build/airpit`; scenes + navmesh from it, `work/build/preset/arena_airpit_preset.bundle`, `material-shaders.json` staged as `material-shaders.arena_airpit.json`; one `<Error>` row for the bundles (message names all three maps) and a separate AirPit shader-sidecar `<Error>` row, like Bay5; staging message added |
+| `ArenaMapPort.Server/ArenaMapPort.Server.csproj` | `Content` and `DeployToDist` rows for `db/arena_airpit/base.json` |
+| `ArenaMapPort.Client/MapConfigVisibility.cs` | `IsPermanentHidden`: a Catalog section is hidden only when the map is not in `ArenaMapRegistry.All` (was the literal `arena_equator`/`arena_bay5` pair) |
+| `ArenaMapPort.Server/ArenaMapBanners.cs` | row `arena_airpit_banner` / stem `arena_airpit`; doc comment now "released maps" / "eleven parked" |
+| `tools/extract/extract_banners.py` | `BANNERS["arena_airpit"]` = `Matchmaker_Banner_AirPit` (path_id hint 1584 from 0.6.0) |
+| `tools/extract/extract_loadscreens.py` | `LOADSCREENS["arena_airpit"]`: `AllScreens_Loadingscreen-AirPit` + `Arena_MainMenu_Paralax_AirPit-1..4` (the four `-Alt-` images stay out, user decision 10) |
+| `tools/extract/extract_map_descriptions.py` | `DESCRIPTION_KEYS["arena_airpit"]` = `61e800b841ee214fbf1f0e53 Description` |
+| Tests | `ArenaMapBannersTests` (AirPit row, own-stem resolve, Bowl as the "no banner" fixture, parked-map list), `ArenaMapDescriptionsTests` (three-map fixture, two-map pack and one-locale-missing pack are discarded wholesale, `All` is exactly the three), `ReleaseConfigurationTests` (3 keys / 11 parked; `Lighting (arena_bay5)` and `(arena_airpit)` hidden for players and visible in developer mode, `(arena_airpit2)` and `(arena_bowl)` hidden in both), `LocationRegistrationTests` (AirPit remaps to the `factory4_day` stand-in), `AirPitMapTests.ReleasedIdentityMatchesTheSidecarAndBaseJsonAndKeepsItsOwnMenuSlot` (new: descriptor = sidecar = base.json for name/description/slot, no "spike" or "Internal test build" wording on any released map, released menu slots at least 120 units apart and AirPit inside Equator/Bay5's box, banner id), `test_park_unreleased_dist.py` (11 stems, 55 rows, AirPit files preserved, the fixtures that used AirPit use Bowl), `test_validate_distribution.py` (three-map fixture with art, AirPit accepted without overview pack or flares and rejected if either appears unlisted, missing/stray/corrupt art and mismatching extractor tables rejected), `test_banners.py`, `test_loadscreens.py` (three maps, five-image rotation, no `-Alt-`), `test_map_descriptions.py` (three keys, Arena's id is not the sidecar `id_field`, a pack without AirPit is rejected), `test_map_pipeline.py` (membership test for three released names) |
+
+`FixedRaidTimeWeatherTests` and `UsesServerTime` are untouched (item 10). `tools/maps/AdditionalMapBuilds.props` still lists
+`airpit` among the "additional" maps; nothing imports that file any more (only an archived csproj under `work/archives/`
+does), so it was left alone (see open points).
+
+### Decisions
+
+1. **Menu slot (500, 300).** The native UI divides `IconX/IconY` by 1000 (`analysis/ref-manimal.md`, `LocationButton.Show`); Equator
+   (700, 290) is "immediately south-east of Interchange", Bay5 (320, 820) on the northern coast (`ArenaPortedMapPresentation.cs` in
+   ArenaMode, read-only). Vanilla icons were read from the installed SPT database (read-only): Customs (550, 460), Factory (470,
+   510), Interchange (660, 360), Reserve (360, 410), Woods (460, 660), Shoreline (220, 300), Terminal (280, 160) and so on.
+   Search: every integer slot of the box spanned by Equator and Bay5 (x 320..700, y 290..820), at least 120 from both, maximising
+   the distance to the nearest vanilla icon. (500, 300) is 200 from Equator, 550 from Bay5 and at least 167 from every vanilla icon
+   (nearest Customs 168, Interchange 171, Reserve 178); the best box point scores 177. The old spike slot (295, 760) was 65 from Bay5.
+   A map-select label is the only user of the number, so the slot is cosmetic and can be moved by editing sidecar and descriptor
+   (the validator and the new test keep them in step); I could not look at the real map-select screen offline.
+2. **Description text (own words).** "The Air Pit airport terminal from EFT Arena: a large hall with an airliner inside, passport
+   lanes to the north and a bus apron to the south. Ground floor and mezzanine are the main play space." Checked against the
+   extracted banner and loading art (an airliner under the glass roof of a terminal hall) and the object names behind the
+   barriers (`PASSPORT_CONTROL_DOORS` at the north, `BUS_DOORS` at the south). It is only the fallback: when the original description
+   pack loads, the three BSG texts win in en/ge/ru.
+3. **Original description key.** `61e800b841ee214fbf1f0e53 Description` exists in all three locale TextAssets
+   (`TestBackendLocaleEn` / `Localege` / `LocaleRu`); the matching `... Name` key reads "Air Pit" in English and German (the Russian
+   Name was not printed, the console codepage cannot show it; the Description decoded in all three). The extractor was re-run:
+   `MAP_DESCRIPTIONS_OK 3 locales 3 maps`; texts are 83 / 119 / 116 characters (en / ge / ru), as the plan said. The Equator and Bay5
+   entries are identical to the previous pack (compared string by string), so only AirPit rows are new. The BSG text is not
+   quoted here or anywhere tracked.
+4. **Art lookup is by unique name.** UnityPy read of the live 0.6.0.47752 install: `Matchmaker_Banner_AirPit` (resources.assets,
+   path_id 1584, 769x460), `AllScreens_Loadingscreen-AirPit` (resources.assets, 2704, 1920x1080) and
+   `Arena_MainMenu_Paralax_AirPit-1..4` (sharedassets1.assets, 1472 / 438 / 403 / 936, 2048x1024); each name occurs exactly once;
+   the `-Alt-1..4` images exist (624 / 1642 / 1293 / 994) and are deliberately not in the table. `Popup_background_airpit` also exists
+   and is not used. The path ids are 0.6.0 values recorded as hints only, the Equator/Bay5 rows keep their 0.5.4 ids.
+5. **The art extractors write straight into `dist/`, so Equator and Bay5 were protected first.** Both extractors were run into a scratch
+   directory, and the 3 banners and 15 loadscreen JPEGs hashed against the files already in `dist/`: all 12 Equator/Bay5 files (2 banners, 10 loadscreens) were
+   byte-identical (the extraction is deterministic), only the 6 AirPit files were new. Then the default-output runs wrote
+   `dist/` (`--check`: 3 banners, 15 loadscreens present); the Equator/Bay5 files are unchanged (re-hashed after).
+   AirPit files: `banners/arena_airpit.jpg` 183,175 B (769x460 RGB); `loadscreens/arena_airpit_1.jpg` 804,292 B (1920x1080) and
+   `_2.._5` 760,941 / 801,786 / 581,224 / 725,844 B (2048x1024). The banner and the first loading screen were looked at: an airliner
+   in a terminal hall with "NORVAIR" signage.
+6. **`validate_distribution.py` checks the art for all released maps, not only AirPit.** An exact set for AirPit alone would have been
+   an odd special case; the extractor tables (`BANNERS`, `LOADSCREENS`) must list exactly `RELEASE_MAP_KEYS`, so the next
+   promotion cannot ship without its art. The file format check is only the three-byte JPEG start marker, because sizes are
+   already enforced at extraction time.
+7. **The release-list edits are literal on purpose** (plan section 0): no `ReleasedMaps.props`, no generator. The client csproj keeps
+   its explicit per-map lists so "exactly N files" stays meaningful.
+
+### Stale bundles (read this before trusting `dist/` or a deploy)
+
+`work/build/airpit` still holds the 2026-09-15 spike build (scenes 664,670,450 B, navmesh 460,078 B, preset 6,859 B, shader sidecar
+49,576 B). The full client build (`dotnet build ... -c Release` without `DllOnly`) staged those into `dist/`, because the new rows
+point at `work/build/airpit`. That was requested for the validator run, but it means **`dist/` now contains an AirPit that has
+0 native features, 0.5.4 content, the old first-guess NavMesh and no barrier or bake-bounds inputs**. The U1 build must be followed
+by another non-`DllOnly` client build (it overwrites these four files with `SkipUnchangedFiles=false`) before any deploy;
+`validate_distribution.py` cannot tell the difference, because bundle contents are not part of its checks (the bundle roundtrip
+validators of the U1 build are what covers them).
+
+### Verification
+
+| Check | Result |
+|---|---|
+| `dotnet build ArenaMapPort.Client/ArenaMapPort.Client.csproj -c Release -p:ArenaMapPortDllOnly=true` | 0 warnings, 0 errors (`PARKED_DIST_OK Client 0 files`) |
+| `dotnet build ArenaMapPort.Client/ArenaMapPort.Client.csproj -c Release` (staging rows) | 0 warnings, 0 errors; staged `arena_airpit_{scenes,navmesh,preset}.bundle` and `material-shaders.arena_airpit.json` besides the Equator/Bay5 files |
+| `dotnet build ArenaMapPort.Server/ArenaMapPort.Server.csproj -c Release` | 0 warnings, 0 errors (`PARKED_DIST_OK Server 0 files`); `dist/.../db/arena_airpit/base.json` and `locales/map-descriptions.json` equal their sources (sha256) |
+| `dotnet test ArenaMapPort.Server.Tests/ArenaMapPort.Server.Tests.csproj -c Release` | **637 passed**, 0 failed, 0 skipped (632 before; +1 AirPit banner row, +1 AirPit resolve test, +3 description tests, +1 AirPit identity test, -1 because the "no banner" theory lost AirPit's row) |
+| `python -m unittest discover -s tools/tests -p "test_*.py"` | **968 tests, OK, 44 skipped** (957 before: +11; the banner/loadscreen tests run their real-source passes against the live Arena install, including AirPit) |
+| `python tools/validate/validate_map_descriptors.py` | OK (14 descriptors, 14 catalog entries, release `All` membership, `EquatorDefault()`) |
+| `python tools/validate/validate_distribution.py` | **`DISTRIBUTION_OK 3 maps 9 bundles 3 sidecars`**; `validate_bundle_names` "9 bundle(s), every internal directory name is unique". It passes with the stale AirPit bundles, so it is a file-set gate, not a content gate |
+| park script | `PARKED_DIST_OK Client 0 files` and `Server 0 files` during the builds (no AirPit file archived); `test_park_unreleased_dist.py`: 11 stems, 55 rows, AirPit files preserved |
+| `work/airpit-parity/dist_vs_manifest.py` (dist vs the shipped 0.1.0 manifest) | 59 files: **45 identical**, 3 different (client DLL, server DLL, `locales/map-descriptions.json` which now has the third map; its Equator/Bay5 strings are unchanged), 11 new AirPit files (3 stale bundles, 1 shader sidecar, 5 loadscreens, 1 banner, `db/arena_airpit/base.json`). All six Equator/Bay5 bundles, both shader sidecars, both `base.json`, sidecars, acoustics, flares, water, loadscreens, banners and DynamicMaps files are among the 45 |
+| not run | `tools/tests/test_unity_log_scan.ps1` (no editor code touched); the Equator/Bay5 `parity_gate.py` (no extractor/validator it covers was touched); no Unity, no host, no deploy |
+
+New dist hashes (for the lead's deploy comparison): client DLL `7ed62955...8895`, server DLL `23f5e174...2663`, stale AirPit scenes
+bundle `31100570...95aa`, navmesh `635762d0...9687`, preset `f1cc7743...5dde`, `material-shaders.arena_airpit.json` `6d70ad11...150d`.
+
+### Open points and questions for the lead
+
+1. **Stale AirPit bundles are in `dist/`** (above). Rebuild after U1 with a full client build; do not deploy before that unless the
+   spike map is acceptable.
+2. **Menu slot (500, 300)** is chosen offline; one look at the map-select screen on the host decides whether it is a good place.
+3. **`tools/maps/AdditionalMapBuilds.props` and `docs/dist-manifest.md`** still describe twelve additional maps (item 25 covers the
+   doc; the props file is imported by nothing today, so I did not touch it; deleting AirPit's eight lines there is a one-minute
+   edit if you want it consistent).
+4. **AI sidecar not staged yet.** `tools/maps/airpit.ai.json` exists but `ArenaMapPortStageAiSidecars` still lists only Equator and
+   Bay5 (plan item 20); the same for acoustics (item 21). Neither is checked by `validate_distribution.py` for AirPit yet.
+5. **A pre-existing stale-pack trap stays real for every future promotion:** `ArenaMapDescriptions.Load` discards the whole pack when
+   the key set differs from `All`. The new tests pin it (`two-map-pack`), and `validate_distribution.py` fails with "Stale map
+   descriptions" if `work/extract/map-descriptions` and the staged pack differ, but nothing regenerates the pack automatically.
+6. AirPit now runs through every client loop over `ArenaMapRegistry.All` with neutral defaults (no `UsesServerTime`, `Donor=Off`,
+   no AirPit rows in `AmbientAudioDefaults`, `NativeSpatialAudio`, `RoomReverb`, `PrecipitationAudio`). That is the state items 10,
+   13 and 21 start from; I found no loop that throws for an unlisted AirPit (the C# suite constructs the config and visibility paths),
+   but no client startup was executed offline.
+
+## Item 9 review fixes (2026-10-12, about 00:20 local)
+
+Offline only, same rules as the section above. Two review findings, both about what item 9 left misleading.
+
+### Finding 1: `validate_distribution.py` could not tell that `dist/` carries the spike bundles (fixed)
+
+Confirmed. The real `dist/` AirPit scenes bundle is 664,670,450 B with sha256 `31100570...95aa` and the navmesh bundle 460,078 B with
+`635762d0...9687`, which are exactly the hashes in `work/build/airpit/full-map-validation.json` of the 2026-09-15 spike build, and the
+gate printed `DISTRIBUTION_OK` for them.
+
+Change: `tools/validate/validate_distribution.py` now has `STALE_SPIKE_BUNDLES` (file name -> size, sha256 for the scenes and the
+navmesh bundle) and `validate_not_spike_build()`, called right after the exact bundle-set check. It compares the size first, so the
+665 MB scenes bundle is hashed only when it could be the stale file (about 0.6 s on this machine, nothing otherwise), and fails with
+`Stale AirPit bundle: <file> is the 2026-09-15 spike build ...` plus the remedy. The preset bundle is deliberately not listed: a correct
+rebuild from unchanged sidecars may reproduce its 6,859 bytes, and listing it could fail a good rebuild. The scenes and navmesh bundles
+cannot survive the Phase B Unity build unchanged (0.6.0 content, new bake inputs).
+
+Test: `test_known_stale_airpit_spike_bundles_are_rejected_by_their_bytes` (table shape; fixtures with other bytes pass; a fixture whose
+size and hash are patched into the table is rejected by name; the same name and size with one byte changed is accepted).
+
+Consequence the lead must expect: **the real `python tools/validate/validate_distribution.py` is now red until U1 and a full client
+build have replaced the spike files**:
+
+```
+DISTRIBUTION_FAILED: Stale AirPit bundle: arena_airpit_scenes.bundle is the 2026-09-15 spike build (Arena 0.5.4 content, no native features). ...
+```
+
+That is the intended state of the gate, not a regression of anything else (the check runs after the file-set checks, so every other
+item still passes first; the builder's `DISTRIBUTION_OK 3 maps 9 bundles 3 sidecars` is what it prints once the bundles are fresh).
+It supersedes the sentence "it passes with the stale bundles" in the section above.
+
+### Finding 2: wording that still said "Equator and Bay5 only" / "twelve maps" (fixed, comments and text only)
+
+Every cited place was checked and was wrong or misleading now that `ArenaMapRegistry.All` has three maps; no code path changed.
+
+| Place | Fix |
+|---|---|
+| `BloomTuning.cs` | the local `releasedMap` (true only for Equator/Bay5, so AirPit, a released map, was "unreleased") is renamed `donorDefaults` and its comments say what it means: only Equator and Bay5 carry the donor defaults and the migration, every other map in the registry binds -1. The ConfigDescription texts ("Equator and Bay5 default to ...") were already true and are unchanged; so are the bound defaults and the migration. Giving AirPit the explicit defaults stays plan item 21 |
+| `LoadingScreenArt.cs` | class doc: every map in `ArenaMapRegistry.All` with staged art (the loop at `:190` already iterates `All`); the 2026-09-27 verification note stays as evidence and now says AirPit's images still await a host raid |
+| `Plugin.cs` | "keep F12 focused on the released maps" |
+| `EnvironmentRepairs.cs` | no more "twelve maps": the fallback stays for every map whose package authors no `EnvironmentManager` (the parked maps); a package with a `raincover` entry, such as the 0.6.0 AirPit package (2 IndoorTrigger), does not need it |
+| `AICorePointRepairs.cs`, `PatrolWayRepairs.cs` | "only maps with a staged AI sidecar: Equator and Bay5 today, AirPit once its sidecar is staged (item 20)" and "the behavior of every map without a sidecar" instead of "the twelve deferred maps" |
+| `tools/build_remaining.ps1` | header and the `-Stage` refusal message name the released maps (Equator, Bay5, AirPit); no test pins either text |
+| `tools/extract/extract_loadscreens.py` | docstring only: "both objects"/"those two objects" now describe the table (a loading screen plus four backgrounds per map), "third object" became "further object", "one file per map today" became five |
+
+Left alone on purpose: `extract_ai_anchors.py:109-118` and `test_ai_anchors.py` keep the shipped Equator/Bay5 sidecars' own
+"twelve deferred maps" comment string byte for byte (a pinned legacy value, tested); statements that are still true about two maps
+("both maps" for physics props, Bay5/Equator ambience, light-culling counts); `LoadingScreenArt`'s `:79` verification date. Docs
+(`docs/dist-manifest.md`, `AdditionalMapBuilds.props`) stay with item 25.
+
+### Verification
+
+| Check | Result |
+|---|---|
+| `dotnet build ArenaMapPort.Client/ArenaMapPort.Client.csproj -c Release -p:ArenaMapPortDllOnly=true` | 0 warnings, 0 errors (`PARKED_DIST_OK Client 0 files`) |
+| `dotnet build ArenaMapPort.Server/ArenaMapPort.Server.csproj -c Release` | 0 warnings, 0 errors |
+| `dotnet test ArenaMapPort.Server.Tests/ArenaMapPort.Server.Tests.csproj -c Release` | 637 passed, 0 failed |
+| `python -m unittest discover -s tools/tests -p "test_*.py"` | 969 tests, OK, 44 skipped (968 before, +1 test above) |
+| `python tools/validate/validate_map_descriptors.py` | OK (14 descriptors, 14 catalog entries, release `All` membership) |
+| `python tools/validate/validate_distribution.py` | exit 1 with the stale-spike message above, as intended until U1 plus a full client build |
+| `work/airpit-parity/dist_vs_manifest.py` | unchanged: 59 files, 45 identical to the 0.1.0 manifest, 3 different (client DLL, server DLL, `map-descriptions.json`), 11 new AirPit files |
+| `build_remaining.ps1` parse check | 0 errors |
+| not run | `test_unity_log_scan.ps1` (no editor code touched), Unity, host, deploy |
+
+## Item 10 - runtime defaults for the first look: weather rig, sun keys, time policy, saved config (done 2026-10-12, about 00:00-00:40 local)
+
+Offline only: no Unity, no host, no deploy; nothing written outside the repository, the ignored `dist/` (client and server DLL rebuilt by
+the Release builds) and the agent scratchpad. User decisions applied (PLAN-AIRPIT 4.2, 2026-10-11): Bay5-style `UsesServerTime`, donor rig
+`Reserve_Base_Scripts` (Full), `Off` stays an F12 A/B.
+
+### What changed
+
+| File | Change |
+|---|---|
+| `ArenaMapPort.Client/MapLightingDefaults.cs` (new) | Pure table of the map-dependent first-run defaults of the rig section (`Rig(mapKey)`) and the sun-key predicate (`BindsAuthoredSunKeys(map)` = `map.SunPaths.Length > 0`). No Unity/EFT/BepInEx types, so the test project links the file as is |
+| `ArenaMapPort.Client/WeatherRig.cs` | `BindConfig` reads Donor, ZeroLevel, HeightFalloff, TextureBudgetTier, UseDonorCameraPrefab, ReflectionIntensity, AmbientIntensity, IndoorFloorSmoothness, IndoorCoverPercent, IndoorReflectionStrength, IndoorSurfaceRepair and ReflectiveSpecularCap from `MapLightingDefaults.Rig`; the three local booleans are gone except `equatorDefaults`, which still gates the five `DefaultsRevision` migrations (untouched). `OffDonor` is the shared constant. Comments only otherwise |
+| `ArenaMapPort.Client/ArenaLightingRepairs.cs` | `if (map != ArenaMapRegistry.Bay5)` became `if (MapLightingDefaults.BindsAuthoredSunKeys(map))` before the first AirPit bind: `SunIntensityMultiplier`, `SunColorWhiteBlend` (and the `EquatorProfiles.Subscribe` calls) now exist only for Equator |
+| `ArenaMapPort.Shared/ArenaMapDescriptor.cs`, `tools/maps/airpit.json` | AirPit: `UsesServerTime: true` / `"uses_server_time": true` (no fixed hours, no sun) |
+| `ArenaMapPort.Client/TimeOfDayRepairs.cs` | the two hidden legacy option descriptions and the revision-2 migration log line: "Equator uses 12:00/00:00; Bay5 and AirPit use the two native server times. Has no effect on any released map (Equator, Bay5, AirPit)". Text only |
+| `ArenaMapPort.Client/FixedRaidTimeSelection.cs` | class doc only ("Bay5 and AirPit ... keep the backend clock"). `AllowNight` / `FindSelectable` already derive from `HasTimeSelection` over `All`, so no code change: `NightTimeAllowedLocations` gains `arena_airpit` by itself |
+| `ArenaMapPort.Client/HdrImageTuning.cs` | `Bind(Equator); Bind(Bay5);` became `foreach (var map in ArenaMapRegistry.All) Bind(map);`. AirPit gets the seven image-tuning keys with the neutral defaults Bay5 uses (Original tonemap, 0 EV, range/speed 1); doc and description text name AirPit |
+| `ArenaMapPort.Server.Tests/WeatherRigDefaultsTests.cs` (new), `...Tests.csproj` | 6 tests: pinned rows for Equator and Bay5 (the values their released builds bind), AirPit's rows, neutral row for the 11 parked maps and unknown keys, "only the released maps are rig-active", sun-key predicate (only Equator), AirPit `Lighting`/`LightingLab`/`RainCoverLab` sections hidden for players and visible in developer mode |
+| `FixedRaidTimeWeatherTests`, `FixedRaidTimeSelectionTests`, `MapWeatherRuntimeTests` | AirPit asserted as a server-time map (descriptor = sidecar, `HasTimeSelection`, no fixed hours, `NightTimeAllowedLocations` = bigmap, equator, bay5, airpit, native decision for `arena_airpit` CURR/PAST); the Bay5 menu-clock and backend-weather theories now run for both Bay5 and AirPit; Equator -> AirPit transition clears the fixed hour |
+
+The pointer ":53-68" of the task needed no edit in `FixedRaidTimeWeatherTests`: that block is the `else` branch for every non-Equator map and already asserts "no
+fixed hours, no sun scene or paths in descriptor and sidecar", which is exactly AirPit's state.
+
+### Defaults, documented (`Lighting (arena_airpit)`)
+
+| Key | Equator (unchanged) | Bay5 (unchanged) | AirPit (new) | Parked / unknown |
+|---|---|---|---|---|
+| Donor | Reserve_Base_Scripts | Reserve_Base_Scripts | **Reserve_Base_Scripts** | Off |
+| ZeroLevelOverride | -4.4 | -8.2 | **-4.4** (rule of thumb: spawn markers at y 0.08..0.14, to be measured) | 0 |
+| HeightFalloffOverride | 0.025 | 0.025 | **0.025** | 0.029 |
+| TextureBudgetTier | ReserveTier | ReserveTier | **ReserveTier** | Stub |
+| UseDonorCameraPrefab | true | true | **true** | false |
+| IndoorFloorSmoothness | 0.5 | 0.5 | **0.5** (comes with the rig-active set, see Decisions) | 1 |
+| ReflectionIntensity / AmbientIntensity | 0.85 / 0.5 | 1 / 1 | 1 / 1 | 1 / 1 |
+| IndoorCoverPercent | 30 | 50 | 50 | 50 |
+| IndoorReflectionStrength / ReflectiveSpecularCap | 0.95 / 0.3 | 1 / 1 | 1 / 1 | 1 / 1 |
+| IndoorSurfaceRepair | false | true | false | false |
+| DefaultsRevision | migrates 1..5 | 0 | 0 (no migration) | - |
+
+Same for every map (not touched): SkyboxMode Dome, KeepFillLight false, UnityAmbient Donor, RainCoverMethod RoofDepthBlack, FullyIndoorCover false,
+CoverIncludesGlass true, GroundSmoothness 1, IndoorSurfaceSmoothness 0.5, IndoorSurfaceReflectionStrength 0.2, RainBounds 0 / 1000x220x1000,
+NorthDirectionOverride 0; `ArenaLightingRepairs`: Enabled true, AmbientColorMultiplier 0.5, GlobalLightIntensityMultiplier 0.5, FogDensity 0,
+FillLightIntensity 0.2 (forced to 0 under a rig unless KeepFillLight), SyncCullingLightIntensity true; `BloomTuning`: BloomThreshold / BloomIntensity -1 for AirPit
+(it iterates `All`; no change needed, -1 keeps the donor camera's own 2.10/0.35 under the rig); `HdrImageTuning`: neutral. AirPit binds no
+`SunIntensityMultiplier`, `SunColorWhiteBlend` or `NightSunMultiplier` (no sun). The F12 sections are visible in developer mode only; the new
+test covers the section-suffix rule of `MapConfigVisibility` for AirPit (the rule itself was fixed in item 9).
+
+### Saved configuration (read-only grep, 2026-10-12 about 00:15)
+
+- `D:/SPT41/BepInEx/config/com.maschine.ArenaMapPort.cfg` (809 B, sections `[Appearance]`, `[General]`): 0 hits for `airpit`.
+- `D:/SPT41/BepInEx/config/com.maschine.ArenaMapPort.developer.cfg` (9,849 B, 668 lines, 41 sections, none for AirPit): 0 hits.
+- `D:/SPT41vanilla/BepInEx/config`: no ArenaMapPort cfg at all (the folder holds BepInEx.cfg, FixPluginTypesSerialization, ConfigurationManager, Freecam,
+  LogTools; the plugin folder `BepInEx/plugins/ArenaMapPort` exists, the plugin never wrote a config there).
+- The only `arena_airpit` string under either install's config tree is `CombatLog/raids/index.jsonl` on D:/SPT41, and those two lines are `arena_airpit2`
+  (Air Pit 2.0 raids of 2026-09-21 and 09-25), a different, parked map.
+
+Conclusion: no stale `Donor=Off` section or any other AirPit key exists on a tester install, so the first AirPit defaults need no `DefaultsRevision`
+migration, no `RetiredConfiguration` entry, and no key was renamed. A host that ran an AirPit build with AirPit in `All` and the old `Donor=Off` default (none did: neither cfg carries an AirPit
+section) would have persisted `Donor = Off` and look dark; `uibridge_config` on `Lighting (arena_airpit)` / `Donor` is the first host check.
+
+### Fog under the rig
+
+- The bundle carries the sidecar colour: `AuthorScriptsScene.Build` writes `LevelSettings.fogColor = ArenaPaths.Map.FogColorOrDefault()` (AirPit's
+  `fog_color` 0.099 / 0.116 / 0.122), `fogMode` ExponentialSquared, `fogDensity` 0, `fog` false. The U1 build uses the sidecar as is.
+- `ArenaLightingRepairs.ApplyAmbient`: `ownFogColor = !WeatherRig.IsActiveForCurrentMap()`. The constant `FogColor` (0.62, 0.66, 0.70) is therefore
+  written only with `Donor=Off`. Under the rig it writes mode and density only (FogDensity default 0, so `fog` stays false and the colour has no
+  visible effect); the colour that reaches `RenderSettings` is the sidecar value from the single `ls.ApplySettings()` of
+  `ApplyDonorLevelSettingsOverrides` (`LevelSettings.cs` ApplySettings pushes fog, fogColor, fogDensity, fogMode), and the donor's `TOD_Sky.UpdateFog` overwrites
+  `RenderSettings.fogColor` every frame where its Fog mode is Color/Directional. Identical to Bay5 (sidecar 0.132/0.148/0.138) and Equator.
+- Verdict: not a bug, no change. Open evidence the host answers (not AirPit specific): whether the Reserve donor's `TOD_Sky.Fog.Mode` is ever None
+  (`LightingDiagnosticProbe` comment; its rig section prints `fogColor(live)` beside the constant).
+
+### Decisions
+
+1. **`rigDefaults` semantics, full join.** AirPit takes every rig-active default, which includes `IndoorFloorSmoothness 0.5` (the plan names only Donor,
+   ZeroLevel, HeightFalloff, TextureBudgetTier and UseDonorCameraPrefab). Reason: the key's own comment defines 0.5 as the baseline for rig-active maps, and
+   both released maps ship it for the same sky-mirror problem class (AirPit: 293 of 380 materials are p0 deferred shaders, a glass roof over polished floors).
+   It only acts on floors the RoofDepthBlack depth photo classifies as indoor. One value to confirm on the host.
+2. **A table instead of booleans.** WeatherRig and ArenaLightingRepairs cannot be compiled into the test project (EFT/Unity types), so a pin on the *bound*
+   defaults needs the values outside them. `MapLightingDefaults` is that table (same pattern as `AmbientAudioDefaults`). The pinned Equator/Bay5 rows were
+   derived from the HEAD expressions (`git show HEAD:...WeatherRig.cs`), not from the new code. Limit: the test pins the table, not the individual `Bind(...)` call
+   sites; a future literal at a call site would escape it (review rule: map-dependent defaults go through the table).
+3. **Sun keys use the descriptor only.** The plan's `SunPaths.Length > 0 || map == Equator` is redundant (Equator's `SunPaths` is `FAKE_SUN`,
+   `FAKE_SUN_VOLUME`, pinned by `FixedRaidTimeWeatherTests`); the predicate is `SunPaths.Length > 0` and a test asserts that Equator is the only Catalog map for which it
+   holds. Only Equator is affected in practice (`BindConfig` runs over `All`), so the 11 parked maps' sections are not changed either.
+4. **Night is offered on AirPit as soon as this lands.** `HasTimeSelection` is the single switch for both whitelists (Bay5-style), so the PAST toggle
+   appears; the plan's "night look-test before offering night" is therefore a host check, not a gate in code (a gate would need a new descriptor flag, which
+   Bay5 does not have either). The item-10 host raid must include one PAST raid (checklist 9).
+5. **HdrImageTuning loops over `All`** instead of adding a third literal, so the next promoted map needs no edit there. BloomTuning needed nothing.
+6. **ZeroLevel -4.4 stays a rule of thumb** until measured; it is only a config default (live-tunable on the next raid), so a wrong value costs one raid, not a rebuild.
+
+### Verification
+
+| Check | Result |
+|---|---|
+| `dotnet build ArenaMapPort.Client/ArenaMapPort.Client.csproj -c Release -p:ArenaMapPortDllOnly=true` | 0 warnings, 0 errors (`PARKED_DIST_OK Client 0 files`) |
+| `dotnet build ArenaMapPort.Server/ArenaMapPort.Server.csproj -c Release` | 0 warnings, 0 errors (`PARKED_DIST_OK Server 0 files`) |
+| `dotnet test ArenaMapPort.Server.Tests/ArenaMapPort.Server.Tests.csproj -c Release` | **655 passed**, 0 failed (637 before: +6 `WeatherRigDefaultsTests`, +2 `arena_airpit` rows in `UnsupportedIdentityOrVariant`, +2 menu-clock rows, +4 + 4 runtime-weather rows) |
+| `python -m unittest discover -s tools/tests -p "test_*.py"` | **969 tests, OK, 44 skipped** (unchanged: no Python file touched; the airpit.json edit is accepted by the sidecar validators) |
+| `python tools/validate/validate_map_descriptors.py` | OK (14 descriptors, 14 catalog entries, release `All` membership) |
+| `python tools/validate/validate_distribution.py` | exit 1 with the intended `Stale AirPit bundle: arena_airpit_scenes.bundle is the 2026-09-15 spike build` message until U1 and a full client build; nothing else is reported before it |
+| not run | `test_unity_log_scan.ps1` (no editor code touched), Unity, host, deploy |
+
+New `dist/` DLL hashes for the lead's deploy comparison: client `5ab244a3...9c30` (712,704 B), server `2855dcda...8ec3` (67,584 B). Equator and Bay5 bundles,
+sidecars and base.json files were not touched.
+
+### Host-test checklist for item 10 (SPT-GPU-2, after U1 and a full client build; DeveloperMode on, BepInEx Debug lines enabled)
+
+1. `uibridge_status`: loaded client MVID = VM build, server DLL hash `2855dcda...8ec3` before the server restart, EFT restarted for the new bundles.
+2. `uibridge_config` before any raid, section `Lighting (arena_airpit)`: Donor `Reserve_Base_Scripts`, ZeroLevelOverride -4.4, HeightFalloffOverride 0.025,
+   TextureBudgetTier ReserveTier, UseDonorCameraPrefab true, IndoorFloorSmoothness 0.5, ReflectionIntensity 1, AmbientIntensity 1, IndoorCoverPercent 50,
+   IndoorSurfaceRepair false, DefaultsRevision 0, BloomThreshold/BloomIntensity -1, TonemapProfile Original; **no** SunIntensityMultiplier, SunColorWhiteBlend
+   or NightSunMultiplier key. Equator unchanged (ZeroLevelOverride -4.4, AmbientIntensity 0.5, ReflectionIntensity 0.85, IndoorCoverPercent 30), Bay5 unchanged
+   (ZeroLevelOverride -8.2, IndoorSurfaceRepair true). A stale `Donor = Off` here explains a dark map; set it back.
+3. Map-select: AirPit shows the CURR/PAST toggles with the native live clock and weather icon (not 12:00/00:00); Next/Back keeps the chosen variant.
+4. Start AirPit (day, bot amount None) and look for, in order:
+   - `[ArenaMapPort][TimeOfDay] arena_airpit: native server time and weather; legacy fixed-hour override bypassed, native weather initialization retained.`
+   - `[ArenaMapPort][WeatherRig] arena_airpit: activated 'Reserve_Base_Scripts' (Full) for this raid. SkyboxMode=Dome.`
+   - `[ArenaMapPort][LevelSettingsOverride] map=arena_airpit ZeroLevel=-4.40 (was -78.64) HeightFalloff=0.025 (was 0.029) TextureBudget=ReserveTier ...`
+   - `[ArenaMapPort][CameraPrefabTakeover] assigned donor camera for map=arena_airpit camera='...'` (a `UseDonorCameraPrefab=true but the harvested rig has no donor CameraPrefab` line is the failure form)
+   - `[ArenaMapPort][RainCover] map=arena_airpit RainBounds computed from N renderer(s) (excluded M oversized): center=... size=...` and the `RoofDepthBlack scan:` line.
+     Expected size: the play footprint (Arena's walkable component x -56..32, z -78..85) plus 10 m padding. A size in the hundreds of metres or more means the far
+     scenery that AirPit keeps in its main scene (mountains, runway; only single renderers over 600 m extent are excluded) inflated the bounds and the depth photo is
+     coarse: that is a plan item 17 finding, not an item 10 failure.
+   - no `[WeatherRig] ... not harvested in time`, no `activation failed`, no `LevelSettings singleton not found`.
+5. The two developer-mode probes run by themselves about 5 s after the raid loads: the lighting probe (`-- weather rig (WeatherRig.cs) --` section: `active-this-raid=True`,
+   the TODSkyProvider GameDateTime-set tripwire line, `LevelSettingsOverride (live): ZeroLevel=-4.40`, `fogColor(live)` beside `ArenaLightingRepairs.FogColor`; with the rig the
+   live colour is not the constant) and `[ArenaMapPort][DaytimeVisualsProbe]` F1 `serverTimes=True appliesToThisMap=False`. F8 (RainCoverLab RerenderHotkey) depth readback plus a
+   screenshot of falling rain is the rain-cover half (item 17 evidence).
+6. Look: hall centre, north spawn, south apron: lit, not dark silhouettes; sky/horizon without a seam; floors without a white sky-mirror veil. Tune on the spot
+   (all live or next-raid): ZeroLevelOverride (sky dome height; the measured value replaces the rule of thumb), ReflectionIntensity (Equator needed 0.85),
+   IndoorFloorSmoothness, AmbientIntensity. Record final values; a changed default after release needs a `DefaultsRevision` (AGENTS.md).
+7. A/B `Donor=Off` for the next raid: no `activated` line, the 2026-09-14 flat-ambient look (dark silhouettes) is the expected result; set it back to `Reserve_Base_Scripts`.
+8. Non-regression: one Equator Day raid and one Bay5 raid show their usual `[WeatherRig]` / `[LevelSettingsOverride]` lines (`map=arena_equator ZeroLevel=-4.40`,
+   `map=arena_bay5 ZeroLevel=-8.20`); sequence AirPit -> Equator -> AirPit shows the rig deactivating and re-activating without warnings.
+9. One night raid (PAST) on AirPit: record which lamps are on (F7 `LightCullingProbe`), whether the hall is readable, the rain/weather node behaviour. Night is
+   uncertified (509 of 813 lights are saved inactive); if it is not acceptable the options are a descriptor flag that hides the toggle or accepting it as on Bay5.
+
+### Open points and questions for the lead
+
+1. `IndoorFloorSmoothness 0.5` for AirPit rides on the `rigDefaults` join (decision 1). Say if AirPit should start at 1 instead.
+2. The PAST toggle is offered immediately (decision 4); a "night after look-test" gate would need a new descriptor flag. Keep Bay5-style?
+3. `MapLightingDefaults` pins the table, not the call sites (decision 2). If you want the call sites pinned too, the cheapest step is a source-text test over
+   `WeatherRig.cs`; I did not add one.
+4. `validate_map_descriptors.py` does not mirror `uses_server_time` (neither for Bay5 nor AirPit); only `FixedRaidTimeWeatherTests` does. Adding it to
+   `JSON_TO_CS_FIELD` is a one-line change if you want the Python gate to cover it.
+5. `BloomTuning` stays at -1 / -1 for AirPit (camera value = donor 2.10/0.35 under the rig). Giving AirPit the explicit 2.10/0.35 now (add it to `donorDefaults`) would only
+   matter if the AirPit host test finds the Cam2 fallback in use; plan item 21 owns it.
+6. `dist/` carries the rebuilt client and server DLLs plus the stale spike AirPit bundles (item 9 note): do not deploy before U1 and a full client build.
+
+### Item 10 review fixes (2026-10-12)
+
+Two review findings, both checked against the code before acting.
+
+1. **Stale F12 text for `Weather (test)/Weather` (confirmed, fixed).** `WeatherTestOverride.ModeForSelection` returns `Server` for every map with
+   `UsesServerTime` (line 70), and AirPit has the flag since item 10, so the description that said only Bay5 uses backend weather and that the key applies
+   to "other experimental Arena maps" now told a developer the opposite. Fixed: the description of `WeatherTestOverride.cs` now reads "Bay5 and AirPit
+   (descriptor UsesServerTime) always use dynamic SPT/backend weather ... applies to Equator night when Night neon/Rain does not request rain, and to
+   unreleased Arena maps". Same omission found in the sibling `Night neon (arena_equator)/Rain` description in `EquatorNightNeon.cs` ("Bay5 always uses
+   dynamic backend weather"); now "Bay5 and AirPit". Description strings only: the keys, their defaults and their types are
+   untouched (and neither bind has an acceptable-value range to change), so no `DefaultsRevision` and no `RetiredConfiguration` entry. A grep for the old wording (`Bay5 always`, `dynamic SPT/backend`,
+   `experimental Arena maps`) finds no other occurrence in code or docs. The client DLL changed: `dist/` client is now `d8078a33...28b6` (712,704 B, was
+   `5ab244a3...9c30`); the server DLL is unchanged (`2855dcda...8ec3`).
+2. **Night toggle offered before the look-test (disputed as a code defect; documented as a release gate).** Evidence for keeping the code as is:
+   - PLAN-AIRPIT 4.2 option (a) says "night uncertified (as for Bay5): run a night look-test before offering it". Bay5 offers PAST today with no code gate (no
+     descriptor flag for it exists), so "Bay5-style" and the look-test are a verification step, not a feature.
+   - The PAST toggle is the only way to start a night AirPit raid in the ordinary menu flow (the debug buttons were retired). A code gate that hides it
+     would block the very look-test it waits for, unless it also had a developer-mode override. That needs a new descriptor field, a sidecar key, a validator
+     mirror and tests, and one more U1/DLL round after the look-test to flip it: scope the plan does not contain.
+   - Nothing reaches players first: `dist/` still holds the 2026-09-15 spike AirPit bundles and `validate_distribution.py` refuses them (`DISTRIBUTION_FAILED:
+     Stale AirPit bundle`, re-run today), so no release or deploy can happen before U1 plus the host raid whose checklist item 9 is the look-test.
+   Decision recorded: **checklist item 9 is a release gate for AirPit.** AirPit is not released, and `D:\SPT41vanilla` is not given the build, until the
+   PAST raid has been recorded (lamps via F7, hall readability, weather-node behaviour). If night fails, the options are (i) a descriptor flag that withholds
+   `arena_airpit` from `NightTimeAllowedLocations`/`FindSelectable` (one-line effect in `AllowNight`, plus the Shared/sidecar/validator plumbing above), or (ii)
+   accepting it as on Bay5. The lead can still ask for the flag now; it is then a self-contained change and does not touch Equator or Bay5.
+
+Verification after the fixes (all run today, same commands as the item 10 table): client Release `-p:ArenaMapPortDllOnly=true` 0 warnings / 0 errors; server
+Release 0 warnings / 0 errors; `dotnet test -c Release` **655 passed**, 0 failed (the test project's own nullability warnings predate the change, e.g.
+`ResourcesCache.Clear = null` was already at HEAD line 174); `python -m unittest discover -s tools/tests -p "test_*.py"` **969 tests, OK, 44 skipped**;
+`validate_map_descriptors.py` OK; `validate_distribution.py` exit 1 with the intended stale-spike message. `test_unity_log_scan.ps1` not run (no editor code
+touched).
+
+
+## Item 11 - per-map shader stand-ins for fog sheets, cloth and mountain rock (done 2026-10-12, about 00:15-01:05 local)
+
+Runtime only, no Unity build. Equator and Bay5 bundles and behaviour are untouched; the client DLL changed. *(After the review fixes below: `ArenaMapPort.Shared` gained `ShaderFallbackNames`, so the server DLL changed too although the server never reads it, and `tools/maps/bay5.json` / `airpit.json` gained the `shader_fallback_names` key, which no bundle, Python tool or Unity importer reads.)*
+
+### What changed
+
+| File | Change |
+|---|---|
+| `ArenaMapPort.Client/ShaderStandinPolicy.cs` (new, pure) | The substitute rows, the switches and the per-map rules for the fallback table (the allow-list itself is `ArenaMapDescriptor.ShaderFallbackNames`, see "Review fixes" below). The six-row table moved here unchanged. Bay5: all six rows behind the legacy `MaterialFixes/EnableShaderFallbacks` (default off), plain swap, as shipped. AirPit: only `Custom/Billboard_FogSheet_Simple`, `Cloth/ClothShader`, `Cloth/ClothShader_backface` (double-sided substitute, see "Review fixes"), `ANGRYMESH/PBR Rocks/PBR BlendTopDetail (Legacy)`, behind its own key. Every other map (Equator, all parked): never. Also holds the AirPit texture/float fixes, the fog-sheet texture arithmetic and the unresolved-summary formatting. Keyed on `ArenaMapRegistry.Bay5.Key` / `.AirPit.Key` for the switch wiring, no literals. |
+| `ArenaMapPort.Client/ShaderStandins.cs` (new) | The Unity side, AirPit only: the three new keys, capture of texture slots and fog colour before the swap, the post-swap slot copies / float override / generated fog texture, and `TryHideFogSheet` for the Hidden mode. Class doc has the usual vanilla / ported-scene / repair / host-test paragraphs. |
+| `ArenaMapPort.Client/ShaderRebind.cs` | `ShaderNameFallbacks` and the `map.Key == Bay5` test replaced by `ShaderStandinPolicy.FallbacksActive` + `TryGetFallback`; capture/apply hooks around the shader swap (only when `UsesExtendedStandins`, i.e. AirPit); `TryHideFogSheet` at the top of the per-renderer loop; `ReportSummary(map)` logs the unresolved names as one Info line. `ApplyKnownValueFixes` (ground hash, Bay5 only) and `SeaPlaceholderRepairs` are not touched. |
+| `ArenaMapPort.Server.Tests/ShaderStandinPolicyTests.cs` (new, 17 tests) + `.csproj` (one `Compile Include`) | Pins the per-map gating (see Verification). |
+
+New F12 keys, all in `MaterialFixes`, all bound through `Plugin.Instance.Settings` (hidden for players, visible with DeveloperMode); AirPit has never shipped with saved keys, so no `DefaultsRevision`:
+
+| Key | Type / default | Meaning |
+|---|---|---|
+| `AirPitShaderStandins` | bool, **true** | AirPit only. true = the four names use SPT substitutes; false = they stay magenta (the baseline for the A/B). |
+| `AirPitFogSheets` | `StandIn` (default) / `Hidden` | AirPit only. `StandIn` = fog sheets use `Unlit/Transparent Colored` with a generated texture (needs `AirPitShaderStandins`). `Hidden` = the fog-sheet renderers are disabled at raid start (independent of the other key). Next raid. |
+| `AirPitFogSheetOpacity` | float 0..4, default 1 | Multiplies the alpha of the generated fog texture. Live (SettingChanged refreshes the textures). |
+
+The existing `EnableShaderFallbacks` key keeps its default and meaning ("applies only to arena_bay5" is still true); I did not edit its description.
+
+### Offline evidence (read-only)
+
+1. **SPT shader census.** `list_shaders.py` (scratchpad `airpit-b/item11/`, UnityPy over `EscapeFromTarkov_Data/StreamingAssets/Windows/shaders`, 378 MB): 555 Shader objects, 530 distinct names. All three targets exist: `Unlit/Transparent Colored` (one property `_MainTex`, default texture "black", queue Transparent, Cull Off, ZWrite Off, ZTest LEqual, Blend SrcAlpha / OneMinusSrcAlpha, Offset -1,-1, no tint property, so the colour comes from the texture times the vertex colour), `MK4/Rock` (22 properties incl. `_Aldebo`, `_Normalmap`, `_AO`, `_Color`), `p0/Cutout/Bumped Diffuse` (`_Color`, `_MainTex`, `_BumpMap`, `_Cutoff`). Arena's `Custom/Billboard_FogSheet_Simple`, `Cloth/ClothShader*` and the ANGRYMESH rock shader are not in the bundle (the only "cloth" hit is `Hidden/Amplify Motion/ClothVectors`). `Unlit/Transparent Colored` is also what Equator's and Bay5's `boot_shadow` materials already rebind to natively, so it is known to resolve in this EFT.
+2. **AirPit renderer census** (`census_renderers.py` over `work/extract/airpit-native-v5`): FogSheet 127 renderers (73 in `Arena_AirPit_ShootOut_Light`, 54 in `Arena_Airpit_TeamFight_DesignStuff`); Cloth 112 + 22 backface + 6 = 140; mountain rock 10, all in `Arena_AirPit_ShootOut`. Of the 54 TeamFight sheets, 36 sit under `PASSPORT_CONTROL_DOORS` (the opened-barrier root, deactivated at raid start) and 18 under `PASSPORT_CONTROL_EMISSIVE`, so about 91 fog sheets are live in a raid. All fog-sheet objects are a `MeshFilter` + `MeshRenderer` + `LODGroup` with no children; the mesh (`5076d95c884c0d37`) is an 11 x 11 vertex plane with normals, tangents and UV0 and **no vertex colours**.
+3. **Why a plain shader swap is not enough** (measured on the 0.6.0 package):
+   - Fog sheets: all five materials have `_MainTex` empty (`texture_id: null`); the look is procedural. `Unlit/Transparent Colored` would sample its "black" default or an empty slot, i.e. invisible or opaque white quads depending on how Unity treats a cleared slot. `_Color` is e.g. (0.65, 0.91, 1.0, 0.949), `_OpacityIntensity` 0.1, render queue 5000 (restored from the sidecar after the swap, still sorted last, ZWrite off in the target).
+   - Cloth: the albedo alpha is not coverage. Tarpaulin albedo alpha 0..232 (mean 69/255), `fence_ema_01_white_D` 0..203 (mean 39), `City_Military_Tarp_01_D` constant 31. The materials carry `_Cutoff` 0.5 / 0.67 for the original shader's separate `_CutoutMask`; through `p0/Cutout/Bumped Diffuse` that cutoff would discard every texel (invisible cloth, not magenta). The normal map lives in `_NormalMap1`.
+   - Rock: `Lighthouse_Mountain` keeps base albedo (alpha = smoothness, mean 74/255) and base normal under `_BaseAlbedoASmoothness` / `_BaseNormalMap`; `MK4/Rock` reads `_Aldebo` / `_Normalmap` (default white / bump), so the rock would be white. The material's "AO + noise mask" slot holds the same texture id as its detail albedo (`Grange_detail_D`), so it is not copied to `_AO`.
+4. Water-layer check for the Bay5-only sea placeholder: AirPit has 0 renderers on layer 4, so that generic repair does nothing there.
+
+### Decisions
+
+1. **Allow-list in a pure client class, not a descriptor field.** *(Superseded by the review fix below: the allow-list is now `ArenaMapDescriptor.ShaderFallbackNames` plus a `shader_fallback_names` sidecar key, mirrored by the validator and tests. The first-pass reasoning was that a descriptor flag + `tools/maps` key + validator mirror + mirror tests would touch the files items 8-10 were editing and the `All = new[] { ... }` regex shape.)* The test project links the policy file and pins the gating.
+2. **AirPit has its own switch (default on); Bay5's legacy switch is not widened.** AirPit never consults `EnableShaderFallbacks` and Bay5 never consults the new key (`FallbacksActive`, tests).
+3. **The table is unchanged.** The plan's targets are the existing rows (fog sheet -> `Unlit/Transparent Colored`, rock -> `MK4/Rock`, cloth -> `p0/Cutout/Bumped Diffuse`, the same cloth substitute Bay5 uses; the only AirPit difference, the backface cloth, is explained in "Review fixes"); the census confirms they exist. Bay5 stays a plain swap: `captured` stays null there (`UsesExtendedStandins` is AirPit only), so its code path, order of operations and logging of the swap are the same as before.
+4. **Extra material work for AirPit only** (`ShaderStandins`), all captured before the swap because a property the new shader does not declare cannot be read afterwards: rock `_BaseAlbedoASmoothness -> _Aldebo`, `_BaseNormalMap -> _Normalmap` (with scale/offset); cloth `_NormalMap1 -> _BumpMap` and `_Cutoff = 0`; fog sheet: a generated 64 x 64 RGBA32 texture per material (constant `_Color.rgb`, alpha `(1 - r^2)^2` falling to 0 at the circle, peak = `_Color.a * _OpacityIntensity * 2 * AirPitFogSheetOpacity`, about 0.19 for the main sheet, 0.04 for the dark one). The peak gain 2 and the falloff are inferred (the original shader's alpha terms are not known); the opacity key is the lever for the host, live.
+5. **Hidden mode** disables the `Renderer` (not the GameObject: the objects carry a `LODGroup`), only when every material of the renderer is a fog-sheet material, and skips those renderers in the rebind so they do not appear as unresolved. Fog-sheet materials are recognised by the stand-in shader name or, after a StandIn raid in the same process, by a persistent instance-id set, so StandIn <-> Hidden works in both directions without restarting EFT.
+6. **Cached bundle materials outlive the raid** (the AGENTS trap), so the generated textures are not destroyed at raid end (`DontUnloadUnusedAsset`; released only when their material is gone). Consequence for the A/B: going from on back to `AirPitShaderStandins = false` needs an EFT restart; the other direction and the fog mode switch do not.
+7. **Logging.** `[ArenaMapPort][RebindShaders]` now emits ONE Info line per raid for the known gaps that stayed unresolved, e.g. `arena_airpit: 4 shader name(s) without an SPT shader keep the flat stand-in: ANGRYMESH/..., Cloth/ClothShader, Cloth/ClothShader_backface, Custom/Billboard_FogSheet_Simple`; the per-name text moved to Debug. *(Scope narrowed by the review fix below: only AirPit's four names while `AirPitShaderStandins` is false use Info + Debug. Equator, Bay5, parked maps, AirPit with the switch on and every other name keep the Error line exactly as at HEAD, so no log level changes on Equator or Bay5.)* The per-material application line (slots copied, overrides, fog peak alpha) is Debug.
+8. `StandinShaderGenerator` still emits the magenta fragment; nothing in Unity or `tools/` changed.
+
+### Verification (2026-10-12, all run after the last edit)
+
+| Command | Result |
+|---|---|
+| `dotnet build ArenaMapPort.Client/ArenaMapPort.Client.csproj -c Release -p:ArenaMapPortDllOnly=true` | 0 warnings, 0 errors; client DLL `0c0203fbf094fd2755b529d4eb7bdc9ffeaf5d2ecedc9eae7f3b7f40f907b8b5` (722,944 B), bin == dist |
+| `dotnet build ArenaMapPort.Server/ArenaMapPort.Server.csproj -c Release` | 0 warnings, 0 errors |
+| `dotnet test ArenaMapPort.Server.Tests/ArenaMapPort.Server.Tests.csproj -c Release` | **672 passed**, 0 failed (655 after the item 10 fixes + the 17 new tests); no warning comes from the new files |
+| `python -m unittest discover -s tools/tests -p "test_*.py"` | 969 tests, OK, 44 skipped (unchanged by this item) |
+| `python tools/validate/validate_map_descriptors.py` | OK (nothing in Shared or the sidecars changed) |
+| `python tools/validate/validate_distribution.py` | the intended `DISTRIBUTION_FAILED: Stale AirPit bundle` (U1 not built yet), same as item 10 |
+| `test_unity_log_scan.ps1` | not run (no editor code touched) |
+
+The 17 tests in `ShaderStandinPolicyTests` pin: only Bay5 and AirPit use the table at all (Equator and every parked Catalog map do not, nor does an empty or null key); Bay5 follows only the legacy switch and AirPit only its own; no other map is active for any switch combination; Bay5 keeps the six shipped rows exactly (and SpeedTree8 has none); AirPit may use exactly its four names with the Bay5 targets and gets nothing for the other two rows; the extended handling (`FixFor`, `UsesExtendedStandins`) is AirPit only and empty for Bay5 / Equator / parked; the rock and cloth fixes (slots, `_Cutoff = 0`); Hidden applies only to AirPit; the defaults (on / StandIn / 1.0); the fog peak-alpha arithmetic and clamps; the generated pixels (constant colour, soft symmetric disc, zero at corners and rim, zero for a zero peak); the known-gap rule and the one-line summary format.
+
+### Host-test checklist for item 11 (SPT-GPU-2, after U1 and a full client build; DeveloperMode on, BepInEx Debug lines enabled)
+
+1. Raid A, defaults (`AirPitShaderStandins` true, `AirPitFogSheets` StandIn, opacity 1). Expect Debug `[RebindShaders] Nx` lines for the four names (5 fog-sheet, 4 + 1 cloth, 1 rock materials on the 0.6.0 package), the per-material `... slot(s) copied ... fog texture colour=... peak alpha=...` lines, and **no** `without an SPT shader` Info line and no Error `unresolved:` line (all four resolved; a name that only resolved on the 3 s sweep is no longer reported). Screenshots: an airport-lamp area, the horizon with the mountains, a tarp / flag wall / ramen sign, a white cloth fence; F10 on a mountain, a fog sheet and a `Facade_FlagWall_*` object to confirm the shader names (`MK4/Rock`, `Unlit/Transparent Colored`, `Legacy Shaders/Transparent/Cutout/Bumped Diffuse 2 side` for the backface cloth). **View the flag wall from behind**: it must draw from both sides; if the 2-side shader looks wrong, the one-line alternative is the `AirPitTargets` row in `ShaderStandinPolicy` (back to `p0/Cutout/Bumped Diffuse`, single-sided).
+2. Fog judgement: too bright or too flat? Move `AirPitFogSheetOpacity` live (0.25 / 0.5 / 2); the Debug line `fog-sheet opacity ... refreshed` confirms the refresh.
+3. Hidden A/B: set `AirPitFogSheets = Hidden`, next raid (no restart): Debug `AirPitFogSheets=Hidden, N fog-sheet renderer(s) disabled this raid` (expect up to 127: every fog-sheet renderer whose own flag was on, including the 36 under the deactivated `PASSPORT_CONTROL_DOORS` group; about 91 of them are live), lamp areas without sheets.
+4. Baseline for the screenshots "fallback off": restart EFT, set `AirPitShaderStandins = false` (and `AirPitFogSheets = StandIn`): the horizon and lamps are magenta again and the Info line lists the four names.
+5. Equator and Bay5 quick raid for non-regression (their cloth / fog sheets stay as before: Equator magenta, Bay5 per its legacy switch).
+6. Done when no magenta remains in the three screenshots and the policy is chosen; record it here and keep the losing mode as an F12 option.
+
+### Open points and questions for the lead
+
+1. **Substitutes remain inferred.** I could verify only that the shaders exist and which properties they read, not how they look. `MK4/Rock` may need more than albedo + normal (its top/detail masks are unused); `p0/Reflective/Bumped Specular SMap` (the workhorse) is the fallback candidate for the rock if the host dislikes it, a one-line change in the table for AirPit.
+2. **Fog texture is my addition to the plan's "Unlit/Transparent Colored".** Without it the sheets cannot render sensibly (empty `_MainTex`, no tint property). The peak gain 2 is a guess; `Hidden` is the escape hatch. The sheets are flat horizontal planes (11 x 11 vertex plane, Cull Off), not billboards, so they are visible from both sides but not camera-facing.
+3. **Cloth is opaque.** `_Cutoff = 0` and the `_CutoutMask` is not used, so the chain-link-style `fence_ema_01_white` cloth renders as a solid panel; `ClothShader_backface`'s culling behaviour in the substitute was unknown at first pass and is now answered (see "Review fixes": the front cloth is single-sided Cull Back, the backface cloth uses a double-sided substitute). Both are visual only (colliders are separate).
+4. **Equator and Bay5 cloth / fog sheets** are outside this item and stay as they are (by the code path: Equator has no fallback, so its 78 cloth + 17 fog renderers per the plan's census stay on the magenta stand-in; Bay5 stays magenta unless the legacy switch is on). If a tester does turn the Bay5 switch on, its cloth is likely to vanish rather than render: Bay5's `City_Military_Tarp_01` has constant albedo alpha 31/255 against `_Cutoff` 0.5, and `fence_ema_01_white_cloth` alpha 0..203 (mean 39) against 0.5 (measured on `bay5-native-v5`). The AirPit-only `_Cutoff = 0` fix would apply there too, but widening needs its own review.
+5. **Log levels** of the known-gap lines changed on all maps (Error -> Info + Debug). *(Resolved by the review fix: `IsKnownGap` takes the map key and the switch; Equator and Bay5 keep Error.)*
+6. The `dist/` client DLL is the item 11 build above; if another item rebuilds it afterwards, its hash supersedes this one. *(Superseded: the review fix changed the client DLL and, through `ArenaMapPort.Shared`, the server DLL too; hashes below.)*
+
+
+### Review fixes for item 11 (2026-10-12)
+
+Five review findings, all verified against the code; four fixed, one fixed with a recorded judgement (finding 4). Nothing was run in Unity or on the host.
+
+| # | Finding | Verdict | What changed |
+|---|---|---|---|
+| 1 | Unresolved-shader log level lowered on every map | Confirmed | `IsKnownGap(mapKey, name, airPitSwitchOn)` is true only for AirPit's four allowed names while `AirPitShaderStandins` is false (the deliberate A/B baseline). That case keeps the single Info line plus Debug detail. Equator, Bay5, every parked map, AirPit with the switch on (a substitute that could not be resolved) and any name outside the allow-list (`Nature/SpeedTree8` included) log the per-name Error line exactly as at HEAD. The old `else Debug "no known-gap ..."` line and the `SpeedTree8` constant are gone. |
+| 2 | Backface cloth substitute is single-sided | Confirmed, fixed with option (a) | See "Backface cloth" below. |
+| 3 | Hidden-mode count expectation (about 91) is wrong | Confirmed | `RunPass` walks `GetComponentsInChildren<Renderer>(true)` and `TryHideFogSheet` counts any renderer whose own `enabled` flag is on, so the 36 sheets under the deactivated `PASSPORT_CONTROL_DOORS` group are disabled and counted: up to 127 (73 + 54). Checklist step 3 now says so, and the Debug line ends with "(inactive hierarchies included)". Behaviour is deliberate: a sheet under a group the barrier repair deactivates stays hidden if the group is ever reactivated. |
+| 4 | Allow-list is a key test in a client class, not a descriptor field | Judgment call; fixed (the stated reason is gone, the plan and the conventions ask for descriptor data) | `ArenaMapDescriptor.ShaderFallbackNames` (new optional constructor argument, default empty) plus `shader_fallback_names` in `tools/maps/bay5.json` (the six table names) and `tools/maps/airpit.json` (the four names). `ShaderStandinPolicy.AllowedNames/TryGetFallback/UsesFallbackTable` read it; Equator and all parked maps have no list and therefore never substitute. What stays in code on purpose: the original -> substitute rows, which switch governs which map (`FallbacksActive`, Bay5 legacy key vs the AirPit key), the AirPit texture/float work (`FixFor`) and the AirPit backface override. `validate_map_descriptors.py` gained `shader_fallback_errors` (shape: nonempty, unpadded, no duplicates) and a descriptor-vs-sidecar mirror check; `tools/tests/test_shader_fallback_names.py` (6 tests) and `ShaderStandinPolicyTests.TheAllowListsMirrorTheSidecarsAndOnlyBay5AndAirPitHaveOne` pin them. `UnityProject/.../ArenaPaths.cs` reads sidecars with `JsonUtility`, which ignores the new key like `puddle_water_material_names`. |
+| 5 | `_unresolved` is add-only, so a name resolved on the sweep is still reported | Confirmed (code path; no host failure demonstrated) | `Rebind` now calls `_unresolved.Remove(originalName)` right after a successful `material.shader = target`. A name whose materials still fail is re-added by the next failing material, so only names that are genuinely unresolved at the 3 s summary are reported. Reachable because `_byName` is built once per raid while `Shader.Find` sees later-loaded shaders. This is bookkeeping on a `HashSet` inside the Unity-bound class, so it has no xunit test; the checklist step 1 ("no Info line and no Error line") now rests on it. |
+
+#### Backface cloth (finding 2, open question 3 answered)
+
+Read-only dump of `D:\SPT41\EscapeFromTarkov_Data\StreamingAssets\Windows\shaders` (UnityPy, scratchpad `airpit-b/fix11/cull2.py`; nothing written to the game folder):
+
+| Shader | Properties | Passes (all three: FORWARDBASE, FORWARDADD, DEFERRED; LOD, queue) | Cull |
+|---|---|---|---|
+| `p0/Cutout/Bumped Diffuse` | `_StencilType, _Color, _MainTex, _BumpMap, _Cutoff, _SpecVals, _DefVals, _Temperature, _Factor, _Units` | queue AlphaTest, LOD 0; fallback `Transparent/Cutout/Diffuse` | **2 (Back)** in all three; no `_Cull` property |
+| `Legacy Shaders/Transparent/Cutout/Bumped Diffuse` | `_Color, _MainTex, _BumpMap, _Cutoff` | queue AlphaTest, LOD 300 | 2 (Back) |
+| `Legacy Shaders/Transparent/Cutout/Bumped Diffuse 2 side` | `_Color, _MainTex, _BumpMap, _Cutoff` | queue AlphaTest, LOD 300; fallback `Legacy Shaders/Transparent/Cutout/Diffuse` | **0 (Off)** in all three |
+
+So the shared `p0/Cutout/Bumped Diffuse` substitute would make the 22 `Cloth/ClothShader_backface` renderers (for example the `Facade_FlagWall_*` objects with `City_Military_Tarp_01`) vanish from behind, and a material-level override is impossible. AirPit's `ClothShader_backface` now rebinds to `Legacy Shaders/Transparent/Cutout/Bumped Diffuse 2 side` (`ShaderStandinPolicy.AirPitTargets`, `TwoSidedClothShader`); it declares `_Color`, `_MainTex`, `_BumpMap` and `_Cutoff`, so the existing cloth fix (`_NormalMap1 -> _BumpMap`, `_Cutoff = 0`) applies unchanged. Bay5's table row (and its behaviour) is untouched: `ShaderStandinPolicyTests.OnlyAirPitsBackfaceClothUsesTheDoubleSidedSubstitute` pins both. The front cloth (`Cloth/ClothShader`, the other 118 of the 140 cloth renderers) stays on `p0/Cutout/Bumped Diffuse`, single-sided; whether Arena's front cloth is double-sided is not known. Caveats: the legacy shader lacks EFT's `_Temperature` and stencil terms, so thermal vision and the stencil effects will not see it, and that "backface" means "double sided" is inferred from the name. Host checklist step 1 now includes a look at the flag wall from behind and names the one-line revert.
+
+#### Verification after the review fixes (2026-10-12)
+
+| Command | Result |
+|---|---|
+| `dotnet build ArenaMapPort.Client/ArenaMapPort.Client.csproj -c Release -p:ArenaMapPortDllOnly=true` | 0 warnings, 0 errors; client DLL `38252bf33976c596fdb12ab557cae3622769c23b963094ee34af6e9de8a0d787` (723,456 B), bin == dist |
+| `dotnet build ArenaMapPort.Server/ArenaMapPort.Server.csproj -c Release` | 0 warnings, 0 errors; server DLL `4ecc06f1966ba50a9e029c0b979ff400f853543504bf66396b55e1aaa79c50fe`, bin == dist. It changed only because `ArenaMapPort.Shared` gained the property; no server behaviour changed, but a deploy replaces it, so verify the host hash and restart the server as usual |
+| `dotnet test ArenaMapPort.Server.Tests/ArenaMapPort.Server.Tests.csproj -c Release` | **675 passed**, 0 failed (672 before: one known-gap test replaced by two, plus the sidecar mirror test and the double-sided cloth test); no warning comes from `ShaderStandinPolicy.cs` or its tests (the warnings the test build prints come from other items' linked files) |
+| `python -m unittest discover -s tools/tests -p "test_*.py"` | 975 tests, OK, 44 skipped (969 + the 6 in `test_shader_fallback_names.py`) |
+| `python tools/validate/validate_map_descriptors.py` | OK (14 sidecars, 14 catalog entries, release `All`, `ArenaPaths.EquatorDefault()`), now including the `shader_fallback_names` mirror |
+| `python tools/validate/validate_distribution.py` | the intended `DISTRIBUTION_FAILED: Stale AirPit bundle` (U1 not built yet), unchanged |
+| `test_unity_log_scan.ps1` | not run (no editor code touched) |
+
+
+## Items 13 (ballistics check), 15, 17-19 (genericity audit), 20 and 21 - client and csproj wiring for the first AirPit raid (done 2026-10-12, about 01:00-01:50 local)
+
+Offline only: no Unity, no host, no deploy. Wrote only repository files, the ignored `dist/` (the Release client build rebuilt the DLL and staged the two new AirPit inputs) and the agent scratchpad (`airpit-b/wiring/`: read-only census scripts and a scratch re-extraction). Reads of the live Arena install were read-only (UnityPy on `level324`). Bundles are untouched; Equator and Bay5 bundles, sidecars and `base.json` files did not change. The client DLL changed (and `dist/` holds it); the server DLL is byte-identical to the one the item 11 review recorded.
+
+### What changed
+
+| File | Change |
+|---|---|
+| `ArenaMapPort.Client/ArenaMapPort.Client.csproj` | `ArenaMapPortStageAiSidecars`: row for `tools/maps/airpit.ai.json` (staged as `ai/airpit.ai.json`, DllOnly builds included). `ArenaMapPortStageAcoustics`: row for `work/extract/spatial-audio/arena_airpit` (graph JSON, original bake, room-tone WAV -> `acoustics/arena_airpit/`), and the missing-input `<Error>` now also fires when `arena_airpit\spatial-audio.json` is absent (message names `--map arena_airpit`). Flare, water, DynamicMaps and bundle rows untouched (AirPit has none of those, plan items 22/3) |
+| `ArenaMapPort.Client/NativeSpatialAudio.cs`, `RoomReverb.cs`, `PrecipitationAudio.cs` | the per-map `new[] { Equator, Bay5 }` table gets `ArenaMapRegistry.AirPit` (new sections `Audio (arena_airpit)`: `NativeSpatialAudio` true, `NativeRoomReverb` true, `RainVolume` 1; all bound through `Plugin.Instance.Settings`, hidden for players by the existing section-suffix rule). Comments name why the three lists must stay equal (RoomReverb indexes its own table with the acoustic state's `MapKey`). `PrecipitationAudio` class doc says "released maps" instead of "the two supported maps" |
+| `ArenaMapPort.Client/NativeDecalRepairs.cs` | the only real gate found by the item 17-19 audit: `new[] { Equator, Bay5 }` gets AirPit (new section `Decals (arena_airpit)`: `Enabled` true). Without it AirPit would render none of its 481 decals and log nothing |
+| `ArenaMapPort.Client/PrecipitationCover.cs` | doc only: roof sampling stays Equator-only on purpose, and says what AirPit/Bay5 use instead (see item 21) |
+| `ArenaMapPort.Client/BarbedWireRepairs.cs` | doc only (item 15): there is no map gate to widen, with the AirPit census |
+| `ArenaMapPort.Client/FootstepSurfaceProbe.cs` | the F10 footstep diagnostic (DeveloperMode only) had `map.Key != "arena_equator" && != "arena_bay5"` -> return. It now accepts every released map (`CurrentMap` only resolves over `ArenaMapRegistry.All`), so the item 13 footstep check works on AirPit. Equator/Bay5 output is identical |
+| `ArenaMapPort.Client/BloomTuning.cs` | comment only: records the decision that AirPit stays at -1/-1 (see Decisions 1) |
+| `ArenaMapPort.Server.Tests/AiAnchorsTests.cs` | AirPit rows in the four theories (counts 19 / 3 / 35, unique ids, hub ids exist, no connection fields) and a new test that every AirPit anchor sits inside the descriptor's bake bounds (x -80..56, y -2..8, z -96..92) |
+| `ArenaMapPort.Server.Tests/AirPitWiringTests.cs` (new, 7 cases) | source-text pins for what cannot be compiled into the test project: the four per-map tables name exactly `ArenaMapRegistry.All` (4 cases, one per file); the csproj stages one acoustics package per released map and its missing-input guard names the same maps; every released map that has a `tools/maps/<stem>.ai.json` has a csproj row and every row has a file; `BarbedWireRepairs.cs` and `BallisticTwinRepairs.cs` contain no map literal outside comments |
+
+### Gate audit
+
+| Item | What was checked | Result |
+|---|---|---|
+| 20 AI anchors | `AiAnchors.Load` | `ShortKey` strips `arena_`, so `arena_airpit` reads `ai/airpit.ai.json`. `AICorePointFallback.InitPrefix` and `PatrolWayFallback` gate on `ArenaMapRaid.IsLoaded()` only; the only other thing that sees the sidecar is the csproj list. Nothing else gates on Equator/Bay5 (grep over `ArenaMapPort.Client/*.cs` for registry members, `"arena_*"` literals and `Key ==`). The sidecar (git-tracked, item 4) has 19 core points (ids 1..19), 1 patrol way with 3 hubs and 35 sub points; core points y 0.02..6.39, hub and sub points y 0.003..0.13, all inside the bake bounds. Only the csproj row was missing |
+| 21 acoustics | `Prepare`, `BuildGraph`, `RoomReverb.Tick`, `PrecipitationAudio.Update`, `SpatialAudioRepairs` | table entries were the gates (fixed). The AirPit package passes the code's own requirements: schema 1, `map_key` `arena_airpit`, exactly 1 system and 1 group, rooms 24, portals 94. `NativeSpatialAudio.cs:323` (the `AmbientInVolume` lease) is Bay5-only on purpose and AirPit has no native ambient yet (item 13 audio, later). `Bay5AmbientAudio.Ensure` ignores every other map (`mapKey != bay5 && != equator`). `DynamicMapAssets`, `NativeMultiFlare`, `Bay5AmbientAudio` left as they are |
+| 21 HDR / bloom | `HdrImageTuning.Install`, `BloomTuning.Install` | both already iterate `ArenaMapRegistry.All` (items 9/10), so AirPit has `Lighting (arena_airpit)` sections: HDR neutral (Original tonemap, 0 EV, range 1, speed 1), bloom -1/-1. No code change needed |
+| 15 barbed wire | `BarbedWireRepairs`, `SpawnInfiltrationFixPostfix`, `ArenaMapRaid` | the plan's "Bay5-only" is not what the code says: gates are `IsLoaded()` and `IsOwnedScene`, both over `All`, name prefix `bruno_helix`. No code change. Live census (UnityPy read-only on `level324`): 26 `EFT.Interactive.BarbedWire` components = 12 on active `bruno_helix` objects (BoxCollider, trigger, enabled) + 14 on inactive `Bruno_LOD0` mesh children whose only collider is a MeshCollider. The package has exactly the 12 `bruno_helix` trigger boxes, all active in hierarchy, all in `Arena_AirPit_ShootOut`. The repair attaches 12 |
+| 13 ballistics | `BallisticColliderImporter`, `SceneAssembler`, `BallisticTwinRepairs`, `BallisticMaterialDiagnostics`, `validate_native_features`, `validate_bundle_roundtrip` | generic everywhere: importer takes component dicts from the package; twins and the `LogMaterialHits` diagnostic work on `IsOwnedScene`; the roundtrip calls `validate_native_features.validate_bundle`, whose contract for AirPit is `tools/extract/native_contracts/airpit.json` (324: 2,856, 325: 512, 40: 28, 29: 94, 28: 58 = 3,548). `ShaderRebind` is a material rebind and is unaffected. Only gate: the F10 footstep probe (fixed above). Offline: `validate_native_features.validate_package(airpit-native-v5)` passes (live-source recheck by scene index); `extra_counts` = GameObject 4, Transform 4, AudioSource 0 (rain-cover objects only, no audio root) |
+| 17 rain cover | `RainCoverImporter`, `RainCoverRepairs` | importer is package-driven: `weather_obstacle` false and zero dry planes is a legal shape, 2 IndoorTrigger required non-zero. Client side gates on `IsLoaded()` + `WeatherRig.IsActiveForCurrentMap()`, and the AirPit rig is active by default since item 10. No Equator/Bay5 literal. `PrecipitationCover` is the only Equator-only piece and stays so (documented) |
+| 18 lights | `LightCullingImporter`, `ArenaLightingRepairs`, `EnvironmentRepairs`, `LightCullingProbe` | no map literal in any of them; `ArenaLightingRepairs.Install` binds and captures per `All` map. Package census: 533 `CullingLightObject` (all 533 on a Light; 298 in an active hierarchy: 292 in `Arena_AirPit_ShootOut_Light`, 6 in `Arena_Airpit_TeamFight_DesignStuff`; 2 in `ShootOut` and 4 in `TeamFight` are inactive), 130 `VolumetricLight`, 0 `LightFlicker` |
+| 19 decals | `StaticDecalImporter`, `NativeDecalRepairs`, `validate_decals` | importer and validators generic; the client had the literal pair (fixed). Package census: 481 `StaticDeferredDecal` (423 ShootOut, 4 DesignStuff, 54 TeamFight_DesignStuff), 471 enabled with an active owner (none sits under `BUS_DOORS` or `PASSPORT_CONTROL_DOORS`, so barrier deactivation does not change that), 55 distinct materials, 54 of them on active decals, material shaders a subset of what Equator and Bay5 already render (material counts: `Decal/DeferredDecalDiffuseNormalsDynamicEditor` 55, `Ultra Deferred Decal Of God 3000` 35, `Water Deferred Decal` 3, plus the `p0/Reflective/Bumped Specular SMap_Decal` variant 31) |
+
+### Decisions
+
+1. **Bloom stays -1/-1 for AirPit.** The task said "like Bay5 (-1 keep camera)", while Bay5 actually ships the explicit 2.10/0.35 plus a `BloomDefaultsRevision` marker. I kept the literal reading: nothing to change, no marker key is created for a map that never shipped. Under the donor rig the camera's own value is the donor 2.10/0.35, so the on-screen result is the same as explicit defaults; they differ only if the donor camera takeover fails (the host check in item 10 already looks for that). Switching to the explicit values later is one token (`donorDefaults` includes AirPit) and, because a stored -1 equals the legacy value, `MigrateDefaults` would move any saved -1 once. Open question 1.
+2. **Explicit per-map arrays, not `ArenaMapRegistry.All`.** A future promoted map that has no acoustics package or no decals must add itself deliberately; the new test then fails first instead of the feature failing silently on the host.
+3. **No BarbedWire code.** The audit found the repair already generic; adding a gate or a list would be new code. The doc comment records the census so the next reader does not repeat it.
+4. **Footstep probe widened, ballistics otherwise untouched** (item 13 asked for code only if a gate blocks AirPit; this one blocks the plan's own footstep check).
+5. **`validate_distribution.py` not extended.** It still has no exact-set check for `ai/` or `acoustics/` (item 9 noted this); the plan's release checklist item 3 expects one. Left alone because item 9's art check landed in the same file this session; see open question 2.
+6. **`deploy-to-spt.ps1` needs nothing**: it copies the recursive file set of both dist roots (line 675), so `ai/airpit.ai.json` and `acoustics/arena_airpit/*` travel with the ordinary deploy.
+
+### Offline evidence
+
+| Check | Result |
+|---|---|
+| `python tools/extract/extract_spatial_audio.py --map arena_airpit --output <scratch>` (3.1 s) | `rooms 24, portals 94, areas 78, clips 1`, bake `{bytes 481738, room_pairs_count 276, routes_count 16304, sha256 4be00976...a6bd9}`; `diff -r` against `work/extract/spatial-audio/arena_airpit` (item 4 output) is empty, so the input was not regenerated in place and is current |
+| staged copies in `dist/` after the DllOnly build | `ai/airpit.ai.json` sha256 `094f55c0...eab382`, identical to `tools/maps/airpit.ai.json`; `acoustics/arena_airpit/{spatial-audio.json 167fefb8..., source.audiobakedata 4be00976..., sharedassets39.assets_9.wav 1c67ed9a...}` equal to the `work/extract` files; equator/bay5 acoustics and ai files untouched |
+| live read-only census, `level324` (UnityPy) | 26 BarbedWire = 12 `bruno_helix` (active, trigger BoxCollider, enabled) + 14 `Bruno_LOD0` (inactive, MeshCollider) |
+| package census scripts (scratchpad) | numbers in the audit table |
+
+### Verification (2026-10-12, after the last edit)
+
+| Command | Result |
+|---|---|
+| `dotnet build ArenaMapPort.Client/ArenaMapPort.Client.csproj -c Release -p:ArenaMapPortDllOnly=true` | 0 warnings, 0 errors (`PARKED_DIST_OK Client 0 files`); client DLL `40708c8c7f04b1b8e167a9e2c09b5b72332387f60b681a58ac777026c8082a2f` (723,456 B), bin == dist |
+| `dotnet build ArenaMapPort.Server/ArenaMapPort.Server.csproj -c Release` | 0 warnings, 0 errors; server DLL `4ecc06f1966ba50a9e029c0b979ff400f853543504bf66396b55e1aaa79c50fe` (unchanged from the item 11 review), bin == dist |
+| `dotnet test ArenaMapPort.Server.Tests/ArenaMapPort.Server.Tests.csproj -c Release` | **687 passed**, 0 failed (675 before: +5 in `AiAnchorsTests`, +7 in `AirPitWiringTests`) |
+| `python -m unittest discover -s tools/tests -p "test_*.py"` | 975 tests, OK, 44 skipped (no Python file touched) |
+| `python tools/validate/validate_map_descriptors.py` | OK (14 descriptors, 14 catalog entries, release `All` membership, `EquatorDefault()`) |
+| `test_unity_log_scan.ps1`, Unity, host, deploy | not run (no editor code touched) |
+
+### Host-test checklist (SPT-GPU-2, after U1, a full non-DllOnly client build and an EFT restart; DeveloperMode on, BepInEx Debug lines enabled)
+
+Log tags below are the ones the code writes; the task text's "NativeAudio/spatial" is `[ArenaMapPort][Acoustics]`.
+
+**Item 21 - acoustics, room reverb, rain audio (any AirPit raid, bots optional)**
+1. Before room initialization: `[ArenaMapPort][Acoustics] arena_airpit: prepared rooms=24, portals=94, bake pairs=276, routes=16304, sha256=4be00976...`. A `Preparation rejected` Error or `package hash` message means the staged file differs from `work/extract`.
+2. `native initialized; valid rooms=24, portals=94, pairs=276, routes=16304; room tones wait for raid start`, then after the raid is `Started`: `room-tone controller started after audio reset`.
+3. `[ArenaMapPort][RoomReverb] arena_airpit: native room controller active; 26 original parameters, detailed room types mapped; gameplay snapshots retained`.
+4. `[ArenaMapPort][RainAudio] arena_airpit: ready after raid audio reset; native bank='...', four owned 2D sources`, and on leaving `released four sources and ambient bus leases`. F10 (DeveloperMode) logs the whole stack in one press: `[Acoustics]` room list and `room-tone clip=... playing=... indoorBusDb=... mixer=...`, `[RoomReverb] room=... active=True`, `[RainAudio] map=arena_airpit ready=True ... room=<id>/<type> environment=...`, plus `[Footsteps]` (item 13). In rain, `room=`/`environment=` should change between hall and apron.
+5. Listen: walk hangar/terminal doors (muffling and reverb change), hear the room tone (one clip, `airpit_amb_indoor_tone_`, indoor rooms; F10 shows `playing=True`). **If the room tone is silent** (`playing=True` but inaudible, `indoorBusDb` very low), the candidate one-liner is the Bay5-style `AmbientBusLease.Acquire(mixer, "AmbientInVolume")` at `NativeSpatialAudio.cs:323` (currently keyed on Bay5 only; Equator plays its tones without it).
+6. Rain under the glass roof and in the passport hall: with no `PrecipitationCover` sampling the bed follows the acoustic room (`rainCover=room-fallback` in the Report line). Judge whether a listener under the roof hears the outdoor bed; if so the cover sampler needs an AirPit decision (it is Equator-only today).
+7. `uibridge_config` on `Audio (arena_airpit)`: `NativeSpatialAudio` true, `NativeRoomReverb` true, `RainVolume` 1; `Lighting (arena_airpit)` `TonemapProfile` Original, `BloomThreshold` / `BloomIntensity` -1.
+8. Non-regression: AirPit -> Equator -> AirPit and a Bay5 raid still show their own `prepared rooms=23, portals=55` / `rooms=44, portals=89` lines.
+
+**Item 20 - AI anchors (WITH-bots raid)**
+1. `[ArenaMapPort][RaidFix] arena_airpit: authored 19 real AI core point(s), 3 patrol hub(s), 35 sub point(s) from ai/airpit.ai.json, plus the synthetic id-0/group-0 alias (SpawnPointParams.CorePointId is always 0)` and and per bot zone `[ArenaMapPort][RaidFix] zone '<name>' authored 1 real patrol way(s) from ai/airpit.ai.json (3 hub(s), 35 sub point(s))`.
+2. Absent: `[AiAnchors] no sidecar at ...` (Debug) and `failed to load/parse` (Warning), `authoring real patrol ways ... failed` (Warning).
+3. `uibridge_bots`: bots Active under `PatrolAssault`, no `ActiveFail`; `uibridge_teleport dryRun=true` to each core point is `reachable=true` (the port model put 78 of 78 probe points in one component only with the item 8 barriers and cutters, so a miss here points at item 8, not at the sidecar).
+
+**Item 19 - decals**
+1. `[ArenaMapPort][NativeDecals] map=arena_airpit enabled: source=481 active=471 registered=471 materials=54 groups=... nativeEnabled=True`. `released N compressed source CPU copies before atlas creation` precedes it.
+2. Sequence AirPit -> Equator -> AirPit: `renderer removed; released ...` between raids and exactly one manager (a `refusing a second manager` Error is the failure form). `Decals (arena_airpit)/Enabled` off/on live comparison.
+3. `validate_bundle_roundtrip` (U1 `-Verify`) prints `native decal identities, hierarchy, materials, UVs and settings roundtrip` as a pass.
+
+**Item 18 - lights**
+1. `[ArenaMapPort][Lighting] arena_airpit applied (Enabled=True): ... cullingLights=533, editorIntensityBaselines=N` (533 = every CullingLightObject, all sit on a Light).
+2. F7 (`LightCullingProbe`): `[LightProbe] arena_airpit ... cullingLights=` counts active objects only (expect up to 298, less where a barrier group is off), the `volumetric:` line `components=` depends on the player's volumetric setting (130 in the package, 22 active in hierarchy), `flicker: no enabled LightFlicker`. Counts 533 / 130 / 0 are confirmed offline by `validate_light_culling_counts_bundle` in the roundtrip.
+3. Whether the 509 saved-inactive lights stay dark in a way that looks wrong is the plan item 18 judgement; this wiring changes nothing there.
+
+**Item 17 - rain cover**
+1. Unity build log (not the client log): `[ArenaMapPort][RainCoverImporter] authored EnvironmentManager (TriggerGroup=1, IndoorTrigger=2), WeatherObstacle=0`.
+2. Client: `[ArenaMapPort][RainCover] map=arena_airpit RainBounds computed from N renderer(s) ...` and the `RoofDepthBlack scan:` line; F8 depth readback and a screenshot of falling rain in the hall and on the apron (item 10 checklist step 4 already asks for the bounds size).
+
+**Item 15 - barbed wire**
+1. `[ArenaMapPort][RaidFix] barbed wire: attached 12 BarbedWire trigger(s) (0 already present)` (the spawn postfix runs twice per raid, the second line reads `attached 0 ... (12 already present)`; the first five carry `'bruno_helix (n)' at (...)`).
+2. Teleport into a volume near (1.4, 4.1, 28..31) and one near (-24.7, 4.1, -26..-24) (positions from the plan item 14 survey), step in: HP loss, sprint off and a speed limit (`Combat/BarbedWire` true). A teleport across the two NavMeshModifierVolume areas of item 14 uses the same objects.
+
+**Item 13 - ballistics**
+1. U1 `-Verify`: the roundtrip's `native material/audio fields, hierarchy, clips and script identities roundtrip` passes with 3,548 BallisticCollider (2,856 / 512 / 28 / 94 / 58).
+2. Host, no bots: fire at concrete, metal, wood and glass; with `Combat/LogMaterialHits` on, `[ArenaMapPort][MaterialHits] scene=Arena_AirPit_... collider='...' ballistic=... defaultFallback=False` (a `defaultFallback=True` row is a collider without a native ballistic material). F10 on the floor of the hall, apron and a carpet/stair area: `[ArenaMapPort][Footsteps]` shows different native/result surfaces (now works on AirPit).
+3. `[ArenaMapPort][RaidFix] ballistic twins: added N HighPolyCollider twin(s)` is expected non-zero or zero, no count is pinned for AirPit.
+
+### Open points and questions for the lead
+
+1. **Bloom for AirPit**: kept -1/-1 (decision 1). Say if you want the explicit 2.10/0.35 like Bay5 (adds a `BloomDefaultsRevision` marker for the AirPit section; one-token change plus a comment).
+2. **Distribution gate**: `validate_distribution.py` still checks neither `ai/` nor `acoustics/` as exact sets (and `test_validate_distribution.py` has no fixture for them). A stray or missing AirPit file would pass it. Adding both is small; I left it to avoid colliding with the other items editing that file.
+3. **Room tone bus**: whether AirPit needs Bay5's `AmbientInVolume` lease can only be answered by ear (checklist 21.5).
+4. **Rain under the glass roof**: AirPit and Bay5 classify rain audio by acoustic room only (checklist 21.6); the Equator roof sampler would need a separate decision to reuse (its depth photo comes from the rig, which AirPit has).
+5. `dist/` carries this client DLL (`40708c8c...`), the unchanged server DLL and, until U1 plus a full client build, the stale spike AirPit bundles (item 9 note): do not deploy yet.
+6. `tools/maps/AdditionalMapBuilds.props` is still not touched (item 9 open point 3).
+
+### Review fixes for items 13, 15, 17-19, 20 and 21 (2026-10-12, about 01:40-02:10 local)
+
+Three minor findings. All three were checked against the code; all three are confirmed, one sub-point of finding 2 is disputed. Offline only again: no Unity, host or deploy step; Equator and Bay5 bundles, sidecars and `base.json` files are untouched (only the client DLL changed).
+
+| # | Finding | Verdict | What changed |
+|---|---|---|---|
+| 1 | Comments and option text still say Equator/Bay5 only for AI anchors and the reverb probe | Confirmed, plus three more spots of the same kind | Comment/text only, no behaviour: `AICorePointRepairs.cs` class doc and the `AiAnchors.Load` line comment, `PatrolWayRepairs.cs` class doc, `AiAnchors.cs` class doc (not in the finding, same wording: "every map besides Equator/Bay5"), `SpatialAudioRepairs.cs` class doc ("owned Equator/Bay5 graphs", AirPit now initializes the same way). `ReverbAudioProbe`: the `ReverbPulse` option text now says it needs a map with native acoustics (Equator, Bay5, AirPit) and that the map-ambience bus needs the imported ambient driver (Equator, Bay5). The probe's failure for that bus on AirPit is exactly as described: `Bay5AmbientAudio.CurrentEffectsMixer("arena_airpit")` is null (`Ensure` ignores every other map), the probe throws and its catch logs the Error and resets the switch. The exception text now names the bus and the map instead of "Map ambience route is not ready". The option text is a description string only (key, default and meaning unchanged; nothing in tests or docs quotes it). Left alone on purpose: the `_comment` strings inside `tools/maps/equator.ai.json` and `bay5.ai.json` ("the twelve deferred maps") are staged data; editing them would change Equator and Bay5 dist bytes for no behaviour |
+| 2 | Room-tone bus reasoning (open question 3, checklist 21.5) incomplete and line number stale | Confirmed; one sub-point disputed | See "Room-tone bus, corrected" below |
+| 3 | Nothing in `validate_distribution.py` checks `ai/` or `acoustics/` | Confirmed | `validate_ai_sidecars` and `validate_acoustics` added and wired after `validate_art`; two tests; see "Distribution gate" below. The reason it was deferred (item 9 editing the same file) is gone: item 9 and its review fixes are finished above, and this edit adds two functions and two calls without touching the existing checks |
+
+#### Room-tone bus, corrected (supersedes the "Gate audit" cell for item 21 and checklist step 21.5)
+
+Read-only trace of every `AmbientBusLease.Acquire` caller in the client:
+
+| Holder | Bus | Maps | Where |
+|---|---|---|---|
+| `Bay5AmbientAudio.Driver.AcquireAmbientVolume` | `AmbientInVolume` on Equator (`_equator`), `AmbientOutVolume` on Bay5 | Equator, Bay5 (`Ensure` returns for any other map) | `Bay5AmbientAudio.cs` 487-499, called at 299 |
+| `NativeSpatialAudio` room-tone controller | `AmbientInVolume` | Bay5 only (`state.MapKey == ArenaMapRegistry.Bay5.Key`) | `NativeSpatialAudio.cs:325` (the finding is right: it was `:323` before the comment lines were added; the earlier "Gate audit" cell and 21.5 carry the stale number) |
+| `PrecipitationAudio.Driver.TryStart` | `AmbientOutVolume` and `AmbientInVolume` | all released maps, AirPit included | `PrecipitationAudio.cs` 212-213 |
+
+So the earlier statement "Equator plays its tones without it" was wrong: Equator holds the interior bus through its ambient driver (and Bay5 through the spatial controller plus its driver's exterior lease). AirPit has no ambient driver, so its only holder of `AmbientInVolume` is `PrecipitationAudio`. That lease is taken as soon as the raid is `Started`, the audio listener exists, `Seasons.Controller` is set and the native precipitation bank is loaded. It does not wait for rain: `TryStart` never reads the rain intensity. `AmbientBusLease.Acquire` only raises the bus from the reset value (at or below -79.99 dB) and yields to any other writer. Consequence: AirPit's room tones depend on the rain-audio driver staying healthy, not on the weather. `ClearPlayback` releases both leases when the driver is `_failed` (the `precipitation stopped for this raid` Error), `_foreign` (a native `AmbientAudioSystem` or an active `PrecipitationAmbientBlender` exists; `native ambient owner present` Debug line); an audio-device refresh releases them too but the driver re-acquires on the following frames.
+
+Disputed sub-point: the finding suggests checking with `RainVolume=0`. `RainVolume` only multiplies the source gain inside `Tick` (`PrecipitationAudio.cs:268-271`); `TryStart` and the leases never read it, so a zero volume keeps the lease and is not a failure mode. It is harmless to try, but the two real failure modes are `_failed` and `_foreign`.
+
+Replacement for checklist step 21.5 (the other steps stand):
+
+5. Room tone in dry weather first (weather None or clear): F10 prints `[Acoustics] room-tone clip=airpit_amb_indoor_tone_ ... playing=True ... indoorBusDb=0.0` and, in the same press, `[RainAudio] map=arena_airpit ready=True foreign=False failed=False ... ambientInDb=0.00`. Walk the hangar and terminal doors and listen for the tone. Then repeat in rain. The tone must not depend on the rain.
+   - `ambientInDb` and `indoorBusDb` near -80 with `playing=True`, or `foreign=True` / `failed=True`, means the interior bus is closed on AirPit: nobody holds the lease. Then the candidate one-line change is at `NativeSpatialAudio.cs:325`: take the interior lease on every map that has no ambient driver (or on all maps; leases are reference counted per mixer and parameter, so a second holder is safe). No code change before the host shows this.
+   - `ReverbPulseBus = MapAmbience` cannot be used on AirPit (no imported ambient driver); use `Ambient`, `IndoorRain` or `Gameplay`.
+
+#### Distribution gate (finding 3)
+
+`tools/validate/validate_distribution.py` gained two functions, called right after `validate_art`:
+
+- `validate_ai_sidecars(plugin, keys)`: `ai/` holds exactly one `<key without arena_>.ai.json` per released map (`equator`, `bay5`, `airpit`), each byte-equal to its git-tracked source `tools/maps/<stem>.ai.json` (a sidecar edited after the last client build is "Stale AI sidecar"), and the JSON's `map_key` equals the stem (a copy between csproj rows is refused).
+- `validate_acoustics(plugin, keys)`: for every released map `acoustics/<key>/` holds exactly `spatial-audio.json` plus the files that graph lists (`bake.file` and each `clips[].decoded.file`); the package must be schema 1 and name its own map; every listed file must have the recorded length and SHA-256. A parked map's directory or any stray file is "Acoustics file set mismatch". The check is self-consistent on purpose (like the flare check): the recorded hashes tie each file to the package JSON, and the csproj copy ties the package JSON to `work/extract/spatial-audio`.
+
+`tools/tests/test_validate_distribution.py`: the fixture now stages both payloads for all three released maps, plus two tests (AI sidecar: missing, stray, stale against its source, wrong map key; acoustics: missing package, missing bake or WAV, stray file, parked-map directory, same-length changed bake, grown bake, wrong map key, wrong schema). 18 tests in that file, up from 16. On the real `dist/` the new checks pass (called directly, outside the full validator): `ai/` = equator, bay5, airpit; `acoustics/` = the three packages with intact hashes. The full validator still ends with the one expected failure, `Stale AirPit bundle` (U1 not built yet).
+
+#### Verification after the review fixes (2026-10-12)
+
+| Command | Result |
+|---|---|
+| `dotnet build ArenaMapPort.Client/ArenaMapPort.Client.csproj -c Release -p:ArenaMapPortDllOnly=true` | 0 warnings, 0 errors; client DLL `6ce2826b6f40513a8bcf2959a2b402de9d8de4b436419c7eed74044f6d062648` (723,968 B), bin == dist. It replaces `40708c8c...` of the section above; only comments and the probe's option/exception text changed |
+| `dotnet build ArenaMapPort.Server/ArenaMapPort.Server.csproj -c Release` | 0 warnings, 0 errors; server DLL `4ecc06f1966ba50a9e029c0b979ff400f853543504bf66396b55e1aaa79c50fe`, unchanged, dist == bin (also after the test run) |
+| `dotnet test ArenaMapPort.Server.Tests/ArenaMapPort.Server.Tests.csproj -c Release` | **687 passed**, 0 failed (no C# test changed) |
+| `python -m unittest discover -s tools/tests -p "test_*.py"` | **977 tests**, OK, 44 skipped (975 + the 2 new distribution tests) |
+| `python tools/validate/validate_map_descriptors.py` | OK (14 descriptors, 14 catalog entries, release `All`, `EquatorDefault()`) |
+| `python tools/validate/validate_distribution.py` | the intended `DISTRIBUTION_FAILED: Stale AirPit bundle`, now after passing the new `ai/` and `acoustics/` checks |
+| `test_unity_log_scan.ps1`, Unity, host, deploy | not run (no editor code touched) |
+
+Open point 2 above is closed (the gate exists). Open point 3 is refined by "Room-tone bus, corrected": the question is no longer "does AirPit need Bay5's lease" but "does the rain-audio lease keep the interior bus open in every weather", and checklist step 21.5 was replaced.

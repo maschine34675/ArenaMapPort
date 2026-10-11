@@ -18,11 +18,16 @@ ARENA_SOURCE = "D:/Battlestate Games/Escape from Tarkov Arena/EscapeFromTarkovAr
 
 
 class LoadscreenTableTests(unittest.TestCase):
-    """The LOADSCREENS table itself: exactly the two maps in this release, one entry each, at the
-    path_ids/names the 2026-09-27 research pass verified against a live UnityPy read."""
+    """The LOADSCREENS table itself: exactly the three maps in this release, five entries each, at
+    the path_ids/names the 2026-09-27 research pass (Equator, Bay5) and the 2026-10-11 probe
+    (AirPit, Arena 0.6.0) verified against a live UnityPy read."""
 
-    def test_exactly_two_maps(self):
-        self.assertEqual(set(EL.LOADSCREENS), {"arena_equator", "arena_bay5"})
+    def test_exactly_the_three_released_maps(self):
+        self.assertEqual(set(EL.LOADSCREENS), {"arena_equator", "arena_bay5", "arena_airpit"})
+
+    def test_every_map_has_the_five_image_rotation(self):
+        for key, entries in EL.LOADSCREENS.items():
+            self.assertEqual(5, len(entries), key)
 
     def test_equator_entries(self):
         entries = EL.LOADSCREENS["arena_equator"]
@@ -43,6 +48,22 @@ class LoadscreenTableTests(unittest.TestCase):
                           ("Arena_MainMenu_Paralax_Bay5-3", 1433), ("Arena_MainMenu_Paralax_Bay5-4", 1638)])
         for e in entries[1:]:
             self.assertEqual((e["file"], e["size"]), ("sharedassets1.assets", (2048, 1024)))
+
+    def test_airpit_entries(self):
+        entries = EL.LOADSCREENS["arena_airpit"]
+        self.assertEqual(entries[0], {"asset_name": "AllScreens_Loadingscreen-AirPit", "path_id": 2704,
+                                      "file": "resources.assets", "size": (1920, 1080)})
+        self.assertEqual([(e["asset_name"], e["path_id"]) for e in entries[1:]],
+                         [("Arena_MainMenu_Paralax_AirPit-1", 1472), ("Arena_MainMenu_Paralax_AirPit-2", 438),
+                          ("Arena_MainMenu_Paralax_AirPit-3", 403), ("Arena_MainMenu_Paralax_AirPit-4", 936)])
+        for e in entries[1:]:
+            self.assertEqual((e["file"], e["size"]), ("sharedassets1.assets", (2048, 1024)))
+
+    def test_the_alt_menu_backgrounds_are_not_in_the_rotation(self):
+        # User decision 2026-10-11 (PLAN-AIRPIT section 4 item 10): the four "-Alt-" images stay out.
+        for entries in EL.LOADSCREENS.values():
+            for entry in entries:
+                self.assertNotIn("-Alt-", entry["asset_name"])
 
     def test_menu_backgrounds_validate_at_their_own_size(self):
         EL.validate_dimensions(2048, 1024, "arena_equator", index=2)  # must not raise
@@ -117,7 +138,7 @@ class CheckModeTests(unittest.TestCase):
     """--check must never import UnityPy or touch the Arena install -- only look at whatever the
     caller's own output directory already has on disk (five images per map since 2026-09-27)."""
 
-    ALL = {(k, i) for k in ("arena_equator", "arena_bay5") for i in range(1, 6)}
+    ALL = {(k, i) for k in ("arena_equator", "arena_bay5", "arena_airpit") for i in range(1, 6)}
 
     @staticmethod
     def _write_all(tmp):
@@ -154,7 +175,7 @@ class RealSourceTests(unittest.TestCase):
     def test_extract_all_into_a_temp_dir(self):
         with tempfile.TemporaryDirectory() as tmp:
             written = EL.extract_all(ARENA_SOURCE, tmp, ext="jpg", quality=90)
-            self.assertEqual(set(written), {(k, i) for k in ("arena_equator", "arena_bay5") for i in range(1, 6)})
+            self.assertEqual(set(written), {(k, i) for k in ("arena_equator", "arena_bay5", "arena_airpit") for i in range(1, 6)})
             for path in written.values():
                 self.assertTrue(path.is_file())
                 self.assertGreater(path.stat().st_size, 0)

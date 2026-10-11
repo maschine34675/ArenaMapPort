@@ -60,14 +60,15 @@ namespace ArenaMapPort.Client
     /// THIRD-PARTY-NOTICES.md). Vanilla maps: every method here returns immediately.
     ///
     /// PLAN-TWO-MAPS item 8 (docs/progress/two-maps-item-8-ai-anchors.md): when <see cref="AiAnchors"/>
-    /// loads a sidecar for the current map (Equator/Bay5 only), <see cref="EnsureCorePoint"/> authors
+    /// loads a sidecar for the current map (only maps with a staged <c>ai/&lt;key&gt;.ai.json</c>: Equator,
+    /// Bay5 and, since PLAN-AIRPIT item 20, AirPit), <see cref="EnsureCorePoint"/> authors
     /// Arena's own real <see cref="AICorePoint"/> net (ids/connection groups/positions, connections left
     /// empty — see AiAnchors' own doc comment) in place of the single synthetic point below, PLUS the
     /// same synthetic id-0/group-0 alias still added regardless: <c>tools/server/make_base_json.py</c>
     /// gives every <c>SpawnPointParams.CorePointId</c> the value 0, while Arena's real ids start at 1, so
     /// without the alias <c>GetCorePoint(0)</c> would return null and bot creation would regress exactly
     /// as it did before this whole file existed. Any exception while authoring the real net falls
-    /// through to the untouched single-point synthesis (the twelve deferred maps' own behavior).
+    /// through to the untouched single-point synthesis (the behavior of every map without a sidecar).
     /// </summary>
     internal static class AICorePointFallback
     {
@@ -109,7 +110,7 @@ namespace ArenaMapPort.Client
                 EnsureCoversHolders();
                 EnsureVoxelGrid(bounds);
                 var map = ArenaMapRaid.CurrentMap;
-                var anchors = AiAnchors.Load(map); // null for every map besides Equator/Bay5, or on a bad sidecar
+                var anchors = AiAnchors.Load(map); // null for a map without a staged ai/<key>.ai.json (every released map has one), or on a bad sidecar
                 bool authoredFromAnchors = EnsureCorePoint(anchor, basis, anchors, out int realCorePointCount);
                 PatrolWayFallback.EnsurePatrolWays(botZones, authoredFromAnchors ? anchors : null,
                                                    out int hubCount, out int subPointCount); // see PatrolWayRepairs.cs

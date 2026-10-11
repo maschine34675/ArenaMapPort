@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.ComponentModel;
+using System.Linq;
 using System.Reflection;
 using ArenaMapPort.Shared;
 using BepInEx.Configuration;
@@ -53,8 +54,9 @@ namespace ArenaMapPort.Client
             if (EquatorProfiles.IsLegacyDefinition(definition)) return true;
             foreach (var tag in original.Tags ?? Array.Empty<object>())
                 if (tag is BrowsableAttribute browsable && !browsable.Browsable) return true;
+            // Sections of parked maps (in the Catalog, not in the released All) stay hidden for good.
             foreach (var map in ArenaMapRegistry.Catalog)
-                if (map.Key != "arena_equator" && map.Key != "arena_bay5" &&
+                if (!ArenaMapRegistry.All.Any(released => released.Key == map.Key) &&
                     definition.Section.EndsWith("(" + map.Key + ")", StringComparison.Ordinal)) return true;
             return false;
         }

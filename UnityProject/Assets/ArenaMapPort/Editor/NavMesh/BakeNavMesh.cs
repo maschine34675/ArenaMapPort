@@ -138,7 +138,18 @@ namespace ArenaMapPort.Editor.NavMesh
             // generic fix (not a per-object/per-map special case): no ported Arena map should ever
             // treat its water surface as bot-walkable navmesh.
             int waterLayer = LayerMask.NameToLayer("Water");
-            int sourceLayerMask = waterLayer >= 0 ? ~0 & ~(1 << waterLayer) : ~0;
+            // PLAN-AIRPIT item 8: an optional per-map layer mask (descriptor navmesh_bake_layers; AirPit takes
+            // Arena's own NavMeshSurface mask). Absent/empty = every layer but Water, exactly as before.
+            int[] bakeLayers = ArenaPaths.Map.navmesh_bake_layers;
+            int sourceLayerMask = SourceLayerMask(bakeLayers, waterLayer);
+            if (bakeLayers != null && bakeLayers.Length > 0)
+            {
+                foreach (int layer in bakeLayers)
+                    if (layer < 0 || layer > 31)
+                        Debug.LogWarning("[ArenaMapPort][BakeNavMesh] navmesh_bake_layers entry " + layer + " is not a layer index (0..31); ignored");
+                if (sourceLayerMask == 0)
+                    throw new InvalidOperationException("[ArenaMapPort][BakeNavMesh] navmesh_bake_layers leaves no collectable layer");
+            }
 
             var rootTransforms = new List<Transform>();
             foreach (var root in geometryRoots)
@@ -161,10 +172,30 @@ namespace ArenaMapPort.Editor.NavMesh
             // BoothDoorRepairs deactivates the Door_Sliding_Respawn_L/_R leaves and the non-frame parts of every
             // descriptor-listed opened_barriers path). Baked with them in place, the booth and hall interiors were
             // NavMesh islands (bots could not path where players walk), so the same objects are excluded here.
+            // A listed path that matches nothing fails the build (it used to be a warning): the barrier would stay
+            // baked as a wall while the client opens it at raid start, silently re-sealing the pocket behind it
+            // (AirPit: BUS_DOORS / PASSPORT_CONTROL_DOORS and the south spawn pocket). Every released map's paths
+            // resolve (Equator 1, Bay5 3 in their accepted build logs, AirPit 2 on the 0.6.0 package), so this
+            // changes no successful build; the parked maps list none.
             List<string> unresolvedBarriers;
-            var openedBarriers = ResolveOpenedBarriers(geometryRoots, out unresolvedBarriers);
-            foreach (var missing in unresolvedBarriers)
-                Debug.LogWarning("[ArenaMapPort][BakeNavMesh] opened_barriers path not found in the content scenes: '" + missing + "'");
+            var openedBarriers = ResolveHierarchyPaths(geometryRoots, ArenaPaths.Map.opened_barriers, out unresolvedBarriers);
+            FailOnUnresolvedPaths("opened_barriers", unresolvedBarriers);
+
+            // PLAN-AIRPIT item 8 (user decision 2026-10-11, "no mode toggler exists"): objects that STAY active at
+            // runtime but whose colliders must not shape the NavMesh, because Arena's own bake walks through them
+            // and they would otherwise cut a route between spawn areas (AirPit: two closed ramen shops, a roll-door
+            // and a fence panel). Unlike opened_barriers nothing is deactivated by the client, so the visuals and
+            // the physical solid remain; the bots simply path through the prop like Arena's. The whole subtree is
+            // dropped, the listed object itself included (opened_barriers keeps the barrier object and its frame
+            // parts, because the client keeps them standing). The inverse rule is unchanged and still applies:
+            // anything the client DISABLES at runtime belongs to RoundOpenedReason (name prefixes, leaf names,
+            // opened_barriers), otherwise it stays a wall for bots. A path that matches nothing fails the build:
+            // a silently missing exclusion would leave the route cut.
+            List<string> unresolvedExclusions;
+            var bakeExclusions = ResolveHierarchyPaths(geometryRoots, ArenaPaths.Map.navmesh_bake_exclusions, out unresolvedExclusions);
+            FailOnUnresolvedPaths("navmesh_bake_exclusions", unresolvedExclusions);
+            if (bakeExclusions.Count > 0)
+                Debug.Log("[ArenaMapPort][BakeNavMesh] navmesh_bake_exclusions: " + bakeExclusions.Count + " object(s) resolved (their colliders and markups are not NavMesh sources, they stay active at runtime)");
             var excludedByReason = new Dictionary<string, int>();
 
             var modifierMarkups = new List<NavMeshBuildMarkup>();
@@ -180,7 +211,7 @@ namespace ArenaMapPort.Editor.NavMesh
                 // Same round-open exclusion as the collider sources (names/opened barriers only — NOT the
                 // layer rule, see NonPhysicalLayerReason): a modifier under an opened barrier must not carve
                 // a hole the client's runtime removal then walks through.
-                string modifierReason = RoundOpenedReason(m.transform, openedBarriers);
+                string modifierReason = RoundOpenedReason(m.transform, openedBarriers) ?? BakeOnlyExclusionReason(m.transform, bakeExclusions);
                 if (modifierReason != null)
                 {
                     int nm;
@@ -210,7 +241,7 @@ namespace ArenaMapPort.Editor.NavMesh
             {
                 Transform t = s.component != null ? s.component.transform : null;
                 if (t == null) continue;
-                string reason = NonPhysicalLayerReason(t) ?? RoundOpenedReason(t, openedBarriers);
+                string reason = NonPhysicalLayerReason(t) ?? RoundOpenedReason(t, openedBarriers) ?? BakeOnlyExclusionReason(t, bakeExclusions);
                 if (reason != null)
                 {
                     int n;
@@ -244,6 +275,7 @@ namespace ArenaMapPort.Editor.NavMesh
                 if (!underRoot) continue;
                 if (!v.AffectsAgentType(0)) continue; // parity with NavMeshSurface.AppendModifierVolumes
                 if (RoundOpenedReason(v.transform, openedBarriers) != null) continue; // symmetric with the collider filter
+                if (BakeOnlyExclusionReason(v.transform, bakeExclusions) != null) continue;
                 Vector3 worldCenter = v.transform.TransformPoint(v.center);
                 Vector3 scale = v.transform.lossyScale;
                 Vector3 worldSize = new Vector3(v.size.x * Mathf.Abs(scale.x), v.size.y * Mathf.Abs(scale.y), v.size.z * Mathf.Abs(scale.z));
@@ -278,20 +310,38 @@ namespace ArenaMapPort.Editor.NavMesh
             // filter above -- a renderer-only object (no collider) was never going to contribute
             // walkable geometry anyway, but it can still legitimately need to be IN the bake volume
             // (e.g. a rendered-only prop standing on real ground); only Water is special-cased out.
-            var bounds = new Bounds();
-            bool first = true;
-            foreach (var root in gameplayRoots)
+            //
+            // PLAN-AIRPIT item 8 (user decision 2026-10-11, 4.3): a descriptor may fix the bake volume instead
+            // (bake_bounds = [min_x, max_x, min_y, max_y, min_z, max_z]). AirPit needs it because its far
+            // scenery (mountains to +-1.6 km, runway, forecourt) sits in the gameplay scene, so the renderer union
+            // spanned 4.3 km and baked 29,596 vertices where Equator needs 10,404; the box is the play space
+            // (x -80..56, z -96..92) and y -2..8 (ground floor plus wing mezzanine, Arena's own NavMesh; level 2
+            // and 3 floors at y 8.6 / 16.1 stay out). Used as given, without the 10 m expansion of the union.
+            // Absent (Equator, Bay5): the renderer-union code below runs unchanged.
+            Bounds bounds = new Bounds();
+            float[] bakeBounds = ArenaPaths.Map.bake_bounds;
+            bool explicitBounds = UsesExplicitBakeBounds(bakeBounds);
+            if (explicitBounds)
             {
-                if (root == null) continue;
-                foreach (var r in root.GetComponentsInChildren<Renderer>(true))
-                {
-                    if (waterLayer >= 0 && r.gameObject.layer == waterLayer) continue;
-                    if (first) { bounds = r.bounds; first = false; }
-                    else bounds.Encapsulate(r.bounds);
-                }
+                bounds.SetMinMax(new Vector3(bakeBounds[0], bakeBounds[2], bakeBounds[4]),
+                                 new Vector3(bakeBounds[1], bakeBounds[3], bakeBounds[5]));
             }
-            if (first) bounds = new Bounds(Vector3.zero, new Vector3(200f, 50f, 200f)); // no renderers found - generous fallback
-            else bounds.Expand(10f);
+            else
+            {
+                bool first = true;
+                foreach (var root in gameplayRoots)
+                {
+                    if (root == null) continue;
+                    foreach (var r in root.GetComponentsInChildren<Renderer>(true))
+                    {
+                        if (waterLayer >= 0 && r.gameObject.layer == waterLayer) continue;
+                        if (first) { bounds = r.bounds; first = false; }
+                        else bounds.Encapsulate(r.bounds);
+                    }
+                }
+                if (first) bounds = new Bounds(Vector3.zero, new Vector3(200f, 50f, 200f)); // no renderers found - generous fallback
+                else bounds.Expand(10f);
+            }
 
             NavMeshData data = UnityEngine.AI.NavMeshBuilder.BuildNavMeshData(settings, sources, bounds, Vector3.zero, Quaternion.identity);
             Debug.Log("[ArenaMapPort][BakeNavMesh] baked NavMeshData: agentRadius=" + AgentRadius + " agentHeight=" + AgentHeight +
@@ -299,6 +349,9 @@ namespace ArenaMapPort.Editor.NavMesh
                       " bounds=" + bounds + " sources=" + sources.Count +
                       " (root=null collected " + allSources.Count + " total, " + sources.Count + " kept after filtering to this bake's own content-scene roots" +
                       ", Water layer(" + waterLayer + ") " + (waterLayer >= 0 ? "excluded from sourceLayerMask" : "not found in TagManager, no exclusion applied") + ")");
+            Debug.Log("[ArenaMapPort][BakeNavMesh] bake inputs: bounds " + (explicitBounds ? "from the descriptor (bake_bounds)" : "from the renderer union") +
+                      ", layer mask 0x" + sourceLayerMask.ToString("X8") + (bakeLayers != null && bakeLayers.Length > 0 ? " (navmesh_bake_layers)" : " (every layer but Water)") +
+                      ", " + bakeExclusions.Count + " navmesh_bake_exclusions, " + openedBarriers.Count + " opened_barriers");
 
             // s2-build: report vertex/triangle counts for comparison against Arena's own bake
             // (analysis/equator_census.json's navmesh block: 41 tiles for Equator's full geometry,
@@ -385,13 +438,14 @@ namespace ArenaMapPort.Editor.NavMesh
         static readonly string[] ExcludedNamePrefixes = { "SPAWN_BOUND", "LevelBorder" };
         static readonly string[] ExcludedLeafNames = { "Door_Sliding_Respawn_L", "Door_Sliding_Respawn_R" };
 
-        // Resolves ArenaPaths.Map.opened_barriers ("Root/Child/... (n)") against the content-scene roots the
-        // same way the client does (first segment = a root object, the rest via Transform.Find).
-        static List<Transform> ResolveOpenedBarriers(GameObject[] geometryRoots, out List<string> unresolved)
+        // Resolves hierarchy paths ("Root/Child/... (n)"; ArenaPaths.Map.opened_barriers and
+        // navmesh_bake_exclusions) against the content-scene roots the same way the client does (first segment =
+        // a root object, the rest via Transform.Find, which takes the first child of that name at every level).
+        // A single segment names the root object itself (AirPit: BUS_DOORS, PASSPORT_CONTROL_DOORS).
+        static List<Transform> ResolveHierarchyPaths(GameObject[] geometryRoots, string[] paths, out List<string> unresolved)
         {
             var found = new List<Transform>();
             unresolved = new List<string>();
-            string[] paths = ArenaPaths.Map.opened_barriers;
             if (paths == null) return found;
             foreach (string path in paths)
             {
@@ -409,6 +463,17 @@ namespace ArenaMapPort.Editor.NavMesh
                 if (!any) unresolved.Add(path);
             }
             return found;
+        }
+
+        // Logs every unresolved path of one descriptor list (opened_barriers, navmesh_bake_exclusions) as an
+        // Error and fails the build: a silently missing entry would ship a sealed pocket or a cut route.
+        static void FailOnUnresolvedPaths(string descriptorKey, List<string> unresolved)
+        {
+            if (unresolved.Count == 0) return;
+            foreach (var missing in unresolved)
+                Debug.LogError("[ArenaMapPort][BakeNavMesh] " + descriptorKey + " path not found in the content scenes: '" + missing + "'");
+            throw new InvalidOperationException("[ArenaMapPort][BakeNavMesh] " + unresolved.Count + " " + descriptorKey +
+                                                " path(s) not found in the content scenes");
         }
 
         // Non-null for a nonphysical source or one the client opens at raid start: a SPAWN_BOUND* barrier, a
@@ -461,6 +526,53 @@ namespace ArenaMapPort.Editor.NavMesh
                 if (!frame) return "opened_barriers:" + barrier.name;
             }
             return null;
+        }
+
+        /// <summary>
+        /// PLAN-AIRPIT item 8: bake-only exclusion. Non-null for the listed object itself and everything below it
+        /// (<see cref="Transform.IsChildOf"/> is true for the object itself). Nothing is deactivated at runtime; the
+        /// object is merely not a NavMesh source. Applied to collider sources AND to NavMeshModifier/Volume markups,
+        /// like <see cref="RoundOpenedReason"/>: a Not-Walkable markup under an excluded prop would cut the route
+        /// the exclusion exists to keep.
+        /// </summary>
+        static string BakeOnlyExclusionReason(Transform t, List<Transform> exclusions)
+        {
+            foreach (Transform excluded in exclusions)
+                if (t.IsChildOf(excluded)) return "navmesh_bake_exclusions:" + excluded.name;
+            return null;
+        }
+
+        /// <summary>
+        /// The layer mask handed to CollectSources. No descriptor layers (Equator, Bay5): every layer but Water,
+        /// the expression this method replaced. Descriptor layers (AirPit: Arena's own NavMeshSurface mask
+        /// 9, 11, 13, 18, 30): only those, still without Water. The owner-layer rule of
+        /// <see cref="NonPhysicalLayerReason"/> (13 Triggers, 29 LevelBorder) is applied on top in both cases,
+        /// because Arena's mask also names the Triggers layer while this port drops non-trigger boxes left on it.
+        /// Out-of-range entries are ignored.
+        /// </summary>
+        static int SourceLayerMask(int[] layers, int waterLayer)
+        {
+            int mask = 0;
+            if (layers == null || layers.Length == 0)
+                mask = ~0;
+            else
+                foreach (int layer in layers)
+                    if (layer >= 0 && layer <= 31) mask |= 1 << layer;
+            return waterLayer >= 0 ? mask & ~(1 << waterLayer) : mask;
+        }
+
+        /// <summary>
+        /// bake_bounds = [min_x, max_x, min_y, max_y, min_z, max_z]. Null or empty: the renderer union applies
+        /// (false). A well-formed box: true. Anything else throws, because falling back to the renderer union
+        /// would silently bake a map whose far scenery spans kilometres.
+        /// </summary>
+        static bool UsesExplicitBakeBounds(float[] b)
+        {
+            if (b == null || b.Length == 0) return false;
+            if (b.Length != 6 || !(b[0] < b[1]) || !(b[2] < b[3]) || !(b[4] < b[5]))
+                throw new InvalidOperationException("[ArenaMapPort][BakeNavMesh] bake_bounds must hold six numbers " +
+                    "[min_x, max_x, min_y, max_y, min_z, max_z] with min < max, got " + string.Join(", ", b));
+            return true;
         }
 
         public static string SaveAsset(NavMeshData data, string assetPath)

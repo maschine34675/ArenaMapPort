@@ -22,6 +22,13 @@ public class FixedRaidTimeWeatherTests
         Assert.Null(ArenaMapRegistry.Bay5.FixedDayHour);
         Assert.Null(ArenaMapRegistry.Bay5.FixedNightHour);
         Assert.True(ArenaMapRegistry.Bay5.UsesServerTime);
+        // AirPit follows Bay5's policy (user decision 2026-10-11): native server time, no fixed hours, no sun.
+        Assert.Null(ArenaMapRegistry.AirPit.FixedDayHour);
+        Assert.Null(ArenaMapRegistry.AirPit.FixedNightHour);
+        Assert.True(ArenaMapRegistry.AirPit.UsesServerTime);
+        Assert.True(ArenaMapRegistry.AirPit.HasTimeSelection);
+        Assert.False(ArenaMapRegistry.AirPit.UsesFixedStartTimes);
+        var serverTimeMaps = new[] { ArenaMapRegistry.Bay5, ArenaMapRegistry.AirPit };
         foreach (var map in ArenaMapRegistry.Catalog)
         {
             var name = map.Key["arena_".Length..] + ".json";
@@ -36,9 +43,9 @@ public class FixedRaidTimeWeatherTests
             Assert.NotNull(path);
             using var document = JsonDocument.Parse(File.ReadAllText(path!));
             var json = document.RootElement;
-            Assert.Equal(map == ArenaMapRegistry.Bay5, map.UsesServerTime);
+            Assert.Equal(serverTimeMaps.Contains(map), map.UsesServerTime);
             Assert.Equal(map.UsesServerTime, json.TryGetProperty("uses_server_time", out var serverTime) && serverTime.GetBoolean());
-            Assert.Equal(map == ArenaMapRegistry.Equator || map == ArenaMapRegistry.Bay5, map.HasTimeSelection);
+            Assert.Equal(map == ArenaMapRegistry.Equator || serverTimeMaps.Contains(map), map.HasTimeSelection);
             if (map == ArenaMapRegistry.Equator)
             {
                 Assert.True(map.UsesFixedStartTimes);
@@ -125,6 +132,8 @@ public class FixedRaidTimeWeatherTests
     [InlineData("arena_equator_suffix", DateTimeEnum.PAST)]
     [InlineData("arena_bay5", DateTimeEnum.CURR)]
     [InlineData("arena_bay5", DateTimeEnum.PAST)]
+    [InlineData("arena_airpit", DateTimeEnum.CURR)]
+    [InlineData("arena_airpit", DateTimeEnum.PAST)]
     [InlineData("arena_equator", (DateTimeEnum)123)]
     public void UnsupportedIdentityOrVariant_LeavesNativeDecision(string? key, DateTimeEnum variant)
     {

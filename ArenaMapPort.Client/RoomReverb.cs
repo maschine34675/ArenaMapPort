@@ -41,7 +41,8 @@ namespace ArenaMapPort.Client
 
         internal static void Install()
         {
-            foreach (var map in new[] { ArenaMapRegistry.Equator, ArenaMapRegistry.Bay5 })
+            // Same maps as NativeSpatialAudio: Tick indexes Enabled with the acoustic state's MapKey.
+            foreach (var map in new[] { ArenaMapRegistry.Equator, ArenaMapRegistry.Bay5, ArenaMapRegistry.AirPit })
                 Enabled[map.Key] = Plugin.Instance.Settings.Bind("Audio (" + map.Key + ")", "NativeRoomReverb", true,
                     "Restore original room-dependent ambient reverb, delay and effect sends. Requires NativeSpatialAudio. " +
                     "Live. Equator ambience uses a compatible effect bus because EFT mutes its original return. Gameplay reverb is unchanged.");

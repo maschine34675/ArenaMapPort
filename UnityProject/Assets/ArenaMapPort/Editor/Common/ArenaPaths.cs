@@ -52,6 +52,17 @@ namespace ArenaMapPort.Editor.Common
         // by BaseJsonTests.OpenedBarriers_DescriptorMirrorsSidecar). BakeNavMesh excludes their non-frame parts
         // from the NavMesh sources so the spaces behind them are not islands. Optional (null/empty = none).
         public string[] opened_barriers;
+        // PLAN-AIRPIT item 8 (docs/progress/airpit-release.md). Three optional bake-only inputs, mirrored from
+        // tools/maps/<key>.json by ArenaMapDescriptor.NavMeshBakeExclusions / BakeBounds / NavMeshBakeLayers and
+        // guarded by validate_map_descriptors.py and the xunit mirror tests. Absent/empty (Equator, Bay5) keeps
+        // the bake exactly as it was; JsonUtility leaves missing arrays null, BakeNavMesh treats null as empty.
+        //   navmesh_bake_exclusions: hierarchy paths ("Root/Child/... (n)", same syntax as opened_barriers) whose
+        //     whole subtree is dropped from the NavMesh sources WITHOUT being deactivated at runtime.
+        //   bake_bounds: [min_x, max_x, min_y, max_y, min_z, max_z], the bake volume used instead of the renderer union.
+        //   navmesh_bake_layers: layer indices CollectSources may use instead of "every layer but Water".
+        public string[] navmesh_bake_exclusions;
+        public float[] bake_bounds;
+        public int[] navmesh_bake_layers;
 
         static readonly float[] DefaultFogColor = { 0.62f, 0.66f, 0.70f };
 

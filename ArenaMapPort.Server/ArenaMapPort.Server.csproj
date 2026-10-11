@@ -86,7 +86,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <Content Include="db\arena_equator\base.json;db\arena_bay5\base.json" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="db\arena_equator\base.json;db\arena_bay5\base.json;db\arena_airpit\base.json" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
   <PropertyGroup Condition="'$(Configuration)'=='Release'">
@@ -112,6 +112,7 @@
     <ItemGroup>
       <ArenaMapPortDbFiles Include="$(MSBuildThisFileDirectory)db\arena_equator\base.json"><ReleasePath>arena_equator/base.json</ReleasePath></ArenaMapPortDbFiles>
       <ArenaMapPortDbFiles Include="$(MSBuildThisFileDirectory)db\arena_bay5\base.json"><ReleasePath>arena_bay5/base.json</ReleasePath></ArenaMapPortDbFiles>
+      <ArenaMapPortDbFiles Include="$(MSBuildThisFileDirectory)db\arena_airpit\base.json"><ReleasePath>arena_airpit/base.json</ReleasePath></ArenaMapPortDbFiles>
     </ItemGroup>
     <Error Condition="!Exists('$(MapDescriptions)')" Text="Missing original map descriptions. Run python tools/extract/extract_map_descriptions.py first." />
     <MakeDir Directories="$(DistModDir)\db;$(DistModDir)\locales" />

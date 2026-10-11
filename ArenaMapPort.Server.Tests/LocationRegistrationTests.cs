@@ -291,6 +291,7 @@ public class LocationRegistrationTests
         Assert.Equal(ArenaMapRegistry.All.Count, count);
         Assert.Equal("Interchange", ApbsCompat.Remap(ArenaMapRegistry.Equator.Key));
         Assert.Equal("factory4_day", ApbsCompat.Remap(ArenaMapRegistry.Bay5.Key));
+        Assert.Equal("factory4_day", ApbsCompat.Remap(ArenaMapRegistry.AirPit.Key)); // user decision 2026-10-11: Factory stand-in
         Assert.Equal("bigmap", ApbsCompat.Remap("bigmap"));
         Assert.Equal("RezervBase", ApbsCompat.Remap("RezervBase"));
         Assert.Null(ApbsCompat.Remap(null));

@@ -18,8 +18,10 @@ namespace ArenaMapPort.Client
         internal static void Probe()
         {
             if (!DeveloperOptions.Enabled) return;
+            // Any released map (CurrentMap only resolves over ArenaMapRegistry.All): Equator, Bay5 and, since
+            // PLAN-AIRPIT item 13, AirPit, whose ballistic-material footsteps are checked with the F10 probe.
             var map = ArenaMapRaid.CurrentMap;
-            if (map == null || (map.Key != "arena_equator" && map.Key != "arena_bay5")) return;
+            if (map == null) return;
             try
             {
                 var world = Singleton<GameWorld>.Instantiated ? Singleton<GameWorld>.Instance : null;

@@ -32,7 +32,9 @@ namespace ArenaMapPort.Client
     /// the convergent Icebreaker/InterchangeRework pattern (InterchangeRework.Client/MaterialShaderRebind.cs,
     /// MIT — attribution in THIRD-PARTY-NOTICES.md), adapted for O1's prefixed-name scheme instead of their
     /// error-shader/Substitutes-table scheme (not needed here — see O1 and §F.3: "no substitution table is
-    /// needed for the spike's material set").
+    /// needed for the spike's material set"). A later fallback table for names SPT does not ship is owned by
+    /// <see cref="ShaderStandinPolicy"/> (per-map allow-list: Bay5 as shipped, AirPit with its own switch) and
+    /// the AirPit texture/float work by <see cref="ShaderStandins"/>.
     /// </summary>
     internal static class ShaderRebind
     {
@@ -76,20 +78,12 @@ namespace ArenaMapPort.Client
         static ConfigEntry<float> _groundSmoothnessMultiplier;
 
         // Arena shader names with no compiled SPT equivalent at all (shader-compat-audit F2) — real
-        // bug, tentative/unverified substitutes. See ApplyShaderFallback and MaterialFixes.
-        // EnableShaderFallbacks default OFF. Nature/SpeedTree8 intentionally omitted: its SPT analog
-        // (Nature/SpeedTreeEFT) has a materially different property set — an obviously-wrong magenta
-        // stand-in is a more honest failure state than a plausible-looking wrong tree.
-        static readonly Dictionary<string, string> ShaderNameFallbacks = new Dictionary<string, string>
-        {
-            ["Custom/WorldTriplanarFresnelPro"] = "p0/Reflective/Bumped Specular SMap",
-            ["ANGRYMESH/PBR Rocks/PBR BlendTopDetail (Legacy)"] = "MK4/Rock",
-            ["Cloth/ClothShader"] = "p0/Cutout/Bumped Diffuse",
-            ["Cloth/ClothShader_backface"] = "p0/Cutout/Bumped Diffuse",
-            ["Custom/Billboard_FogSheet_Simple"] = "Unlit/Transparent Colored",
-            ["p0/Reflective/Bumped Specular SMap Baked"] = "p0/Reflective/Bumped Specular SMap",
-        };
-
+        // bug, tentative/unverified substitutes. The table (unchanged since it shipped for Bay5) and the
+        // per-map rules now live in ShaderStandinPolicy: Bay5 behind EnableShaderFallbacks (default OFF),
+        // AirPit behind its own AirPitShaderStandins (default ON), every other map never. Nature/SpeedTree8
+        // stays out of the table: its SPT analog (Nature/SpeedTreeEFT) has a materially different property
+        // set — an obviously-wrong magenta stand-in is a more honest failure state than a plausible-looking
+        // wrong tree.
         static ConfigEntry<bool> _enableShaderFallbacks;
 
         sealed class SidecarEntry
@@ -145,6 +139,8 @@ namespace ArenaMapPort.Client
                 "Multiplier applied to _Smoothness0-2/_FresnelSpecular2 when GroundMaterialWetnessFixEnabled=true. " +
                 "Requires a fresh raid load to change — this hook runs once per material, on scene load.");
 
+            ShaderStandins.BindConfig(); // AirPit's own keys (the legacy switch above stays Bay5-only)
+
             SceneManager.sceneLoaded += OnSceneLoaded;
             SceneManager.sceneUnloaded += OnSceneUnloaded;
         }
@@ -186,6 +182,7 @@ namespace ArenaMapPort.Client
             _reboundCounts.Clear();
             _unresolved.Clear();
             _warnedOnce.Clear();
+            ShaderStandins.ResetRaid();
             if (_sweepHost != null)
             {
                 UnityEngine.Object.Destroy(_sweepHost);
@@ -210,7 +207,7 @@ namespace ArenaMapPort.Client
             {
                 yield return new WaitForSeconds(seconds);
                 RunPassOverAllOwnedScenes(map);
-                ReportSummary();
+                ReportSummary(map);
             }
         }
 
@@ -256,6 +253,11 @@ namespace ArenaMapPort.Client
                 var renderers = root.GetComponentsInChildren<Renderer>(true);
                 for (int r = 0; r < renderers.Length; r++)
                 {
+                    // AirPit A/B mode: fog-sheet quads are disabled instead of rebound (a no-op on every other map).
+                    if (ShaderStandins.TryHideFogSheet(renderers[r], map))
+                    {
+                        continue;
+                    }
                     var mats = renderers[r].sharedMaterials;
                     for (int m = 0; m < mats.Length; m++)
                     {
@@ -308,18 +310,27 @@ namespace ArenaMapPort.Client
             var target = FindLoadedExact(originalName) ?? Shader.Find(originalName);
 
             // §a2 — real bug (14 Arena shader names have no compiled SPT shader at all), tentative
-            // fallback mapping, OFF by default. Scope-guarded to arena_bay5 even when enabled: several
-            // of these shader names (Cloth/ClothShader, Custom/Billboard_FogSheet_Simple) are also used
-            // on arena_equator, which was never evaluated with these unverified substitutes (adversarial
-            // review) — widening this to other maps needs its own dedicated review, not a silent
-            // side-effect of flipping one global switch.
-            if (target == null && _enableShaderFallbacks != null && _enableShaderFallbacks.Value &&
-                map.Key == ArenaMapRegistry.Bay5.Key &&
-                ShaderNameFallbacks.TryGetValue(originalName, out var fallbackName))
+            // fallback mapping. Per-map allow-list (ArenaMapDescriptor.ShaderFallbackNames) and rows in
+            // ShaderStandinPolicy: Bay5 behind the legacy
+            // EnableShaderFallbacks switch (default OFF, plain swap, as before), AirPit behind
+            // AirPitShaderStandins (default ON, only its four names, plus ShaderStandins' texture/float work),
+            // every other map never — several of these names (Cloth/ClothShader,
+            // Custom/Billboard_FogSheet_Simple) are also used on arena_equator, which was never evaluated
+            // with these unverified substitutes (adversarial review). Widening it needs its own review.
+            ShaderStandins.Captured captured = null;
+            if (target == null &&
+                ShaderStandinPolicy.FallbacksActive(map.Key,
+                    _enableShaderFallbacks != null && _enableShaderFallbacks.Value, ShaderStandins.AirPitStandinsEnabled) &&
+                ShaderStandinPolicy.TryGetFallback(map.Key, originalName, out var fallbackName))
             {
                 target = FindLoadedExact(fallbackName) ?? Shader.Find(fallbackName);
                 if (target != null)
                 {
+                    if (ShaderStandinPolicy.UsesExtendedStandins(map.Key))
+                    {
+                        // Must be read while the stand-in shader (which declares every imported property) is still assigned.
+                        captured = ShaderStandins.Capture(material, originalName, map);
+                    }
                     Plugin.Log.LogDebug($"[ArenaMapPort][RebindShaders] '{originalName}' has no SPT shader — " +
                                         $"using fallback '{fallbackName}' (tentative, unverified visual " +
                                         $"correctness, map={map.Key})");
@@ -336,6 +347,9 @@ namespace ArenaMapPort.Client
             }
 
             material.shader = target;
+            // A name whose first pass failed (target shader not loaded yet) and that the 3 s sweep resolved must not
+            // be reported as unresolved. A later material that still fails re-adds it above.
+            _unresolved.Remove(originalName);
 
             var sidecar = _sidecarByMap.TryGetValue(map.Key, out var s) ? s : null;
             if (sidecar != null && sidecar.TryGetValue(MaterialKey(material.name), out var entry))
@@ -358,6 +372,11 @@ namespace ArenaMapPort.Client
                     material.renderQueue = entry.RenderQueue;
                 }
                 material.shaderKeywords = entry.Keywords;
+            }
+
+            if (captured != null)
+            {
+                ShaderStandins.ApplyAfterSwap(material, captured, originalName, map);
             }
 
             ApplyKnownValueFixes(material, originalName, map);
@@ -532,7 +551,7 @@ namespace ArenaMapPort.Client
             }
         }
 
-        static void ReportSummary()
+        static void ReportSummary(ArenaMapDescriptor map)
         {
             // §F.5 / ref-manimal.md §3 point 7: "the log line is the only ground truth" — one line per
             // rebound shader name, plus every name that never resolved.
@@ -540,12 +559,41 @@ namespace ArenaMapPort.Client
             {
                 Plugin.Log.LogDebug($"[RebindShaders] {pair.Value}x {pair.Key}");
             }
+
+            // AirPit's four allowed names staying magenta because the developer switched AirPitShaderStandins off are the
+            // deliberate A/B baseline: ONE Info line per raid carries the names, the per-name detail is Debug. Every
+            // other unresolved name is real degradation and keeps its Error line, as before this item: Equator and
+            // Bay5 (their names stay magenta unless Bay5's legacy switch is on), AirPit with the switch on (a
+            // substitute that could not be resolved), and any name outside the map's allow-list.
+            var knownGaps = new List<string>();
             foreach (var name in _unresolved)
             {
-                Plugin.Log.LogError($"[ArenaMapPort][RebindShaders] unresolved: '{name}' — no loaded shader of that " +
-                                     "exact name and Shader.Find found none; material(s) using it stay on the " +
-                                     $"'{StandinPrefix}{name}' stand-in (visible as a flat/incorrect surface, not " +
-                                     "necessarily magenta, since the stand-in itself is a real, compiling shader).");
+                if (ShaderStandinPolicy.IsKnownGap(map.Key, name, ShaderStandins.AirPitStandinsEnabled))
+                {
+                    knownGaps.Add(name);
+                    Plugin.Log.LogDebug($"[ArenaMapPort][RebindShaders] unresolved: '{name}' — no loaded shader of that " +
+                                        "exact name and Shader.Find found none; material(s) using it stay on the " +
+                                        $"'{StandinPrefix}{name}' stand-in (magenta, AirPitShaderStandins=false).");
+                }
+                else
+                {
+                    Plugin.Log.LogError($"[ArenaMapPort][RebindShaders] unresolved: '{name}' — no loaded shader of that " +
+                                         "exact name and Shader.Find found none; material(s) using it stay on the " +
+                                         $"'{StandinPrefix}{name}' stand-in (visible as a flat/incorrect surface, not " +
+                                         "necessarily magenta, since the stand-in itself is a real, compiling shader).");
+                }
+            }
+            if (knownGaps.Count > 0)
+            {
+                Plugin.Log.LogInfo("[ArenaMapPort][RebindShaders] " + ShaderStandinPolicy.FormatUnresolvedSummary(map.Key, knownGaps));
+            }
+            if (ShaderStandins.HiddenFogSheetRenderers > 0)
+            {
+                // Counts every fog-sheet renderer whose own enabled flag was on, including those under groups the
+                // client deactivated at raid start (PASSPORT_CONTROL_DOORS), so up to 127 on the 0.6.0 package.
+                Plugin.Log.LogDebug($"[ArenaMapPort][RebindShaders] {map.Key}: AirPitFogSheets=Hidden, " +
+                                    $"{ShaderStandins.HiddenFogSheetRenderers} fog-sheet renderer(s) disabled this raid " +
+                                    "(inactive hierarchies included)");
             }
         }
     }

@@ -82,9 +82,9 @@ namespace ArenaMapPort.Client
             _installed = true;
 
             _mode = Plugin.Instance.Settings.Bind("Weather (test)", "Weather", TestWeather.Server,
-                "Equator day always uses Clear and Bay5 always uses dynamic SPT/backend weather; this setting " +
-                "does not override either. Applies to Equator night when Night neon/Rain does not request rain, " +
-                "and other experimental Arena maps. Server = backend weather. Any other value forces a " +
+                "Equator day always uses Clear; Bay5 and AirPit (descriptor UsesServerTime) always use dynamic " +
+                "SPT/backend weather. This setting does not override any of them. Applies to Equator night when " +
+                "Night neon/Rain does not request rain, and to unreleased Arena maps. Server = backend weather. Any other value forces a " +
                 "deterministic weather via a Harmony postfix on WeatherController.SetWeatherNodes, " +
                 "reapplied on EVERY call (including SPT's own PVE_OFFLINE server re-sync) so it actually " +
                 "sticks for the whole raid. Only ever applies to OUR maps' raids — see this file's own doc " +
