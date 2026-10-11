@@ -8,6 +8,9 @@ dated state in one screen; read it before this index if you only have a minute.
 
 ## Current — read these for the area you touch
 
+- [hotkeys-and-metadata.md](hotkeys-and-metadata.md) — four diagnostic listeners already
+  developer-only; compiled Company/version metadata and server GUID aligned (2026-10-11).
+
 - [release-logging.md](release-logging.md) — player-relevant Info, Debug/developer diagnostics,
   native decal CPU-copy warning fix, and remaining warning ownership (2026-10-11).
 

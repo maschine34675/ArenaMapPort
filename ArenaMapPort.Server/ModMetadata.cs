@@ -8,7 +8,7 @@ namespace ArenaMapPort.Server;
 // tiebreaker). Shape matches ArenaMode.Server's own ModMetadata.cs.
 public record ModMetadata : IModMetadata
 {
-    public string ModGuid { get; init; } = "com.maschine.arenamapport";
+    public string ModGuid { get; init; } = "com.maschine.ArenaMapPort";
     public string Name { get; init; } = "ArenaMapPort";
     public string Author { get; init; } = "maschine";
     public List<string>? Contributors { get; init; }
@@ -17,6 +17,6 @@ public record ModMetadata : IModMetadata
     public bool HasPrepatcher { get; init; } = false;
     public List<string>? Incompatibilities { get; init; }
     public Dictionary<string, SemanticVersioning.Range>? ModDependencies { get; init; }
-    public string? Url { get; init; }
+    public string? Url { get; init; } = "https://github.com/maschine34675/ArenaMapPort";
     public string License { get; init; } = "MIT";
 }

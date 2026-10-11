@@ -3,7 +3,16 @@
 Snapshot for whoever continues (human or agent). Verify the commits named here against `git log`; this file
 is updated by hand at each handover, it is not an automatic record. Read [AGENTS.md](AGENTS.md) first.
 
-## Follow-up on 2026-10-11 — release logging and decal-copy warnings
+## Follow-up on 2026-10-11 — hotkeys and naming metadata
+
+The four diagnostic hotkeys F7–F10 already have developer-only component creation;
+normal player mode does not poll them. Restart after changing DeveloperMode.
+Client metadata generation is enabled so Company and Version actually reach the DLL;
+server Company/Url and GUID casing now follow the naming convention. DLL names,
+folders, map IDs and version 0.1.0 remain unchanged. See the
+[audit and verification](docs/progress/hotkeys-and-metadata.md).
+
+## Earlier on 2026-10-11 — release logging and decal-copy warnings
 
 Runtime Info is limited to the startup/map-availability summaries; technical progress
 is Debug and expensive diagnostic work additionally requires DeveloperMode. Warnings

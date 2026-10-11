@@ -17,7 +17,7 @@
     <TargetFramework>netstandard2.1</TargetFramework>
     <AssemblyName>maschine-ArenaMapPort.Client</AssemblyName>
     <RootNamespace>ArenaMapPort.Client</RootNamespace>
-    <Description>ArenaMapPort client plugin - serves the Arena Equator location port (spike)</Description>
+    <Description>Loads and repairs the Equator and Bay5 Arena maps in SPT.</Description>
     <Company>https://github.com/maschine34675/ArenaMapPort</Company>
     <Authors>maschine</Authors>
     <Version>0.1.0</Version>
@@ -25,7 +25,6 @@
     <Nullable>disable</Nullable>
     <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
     <Configurations>Debug;Release</Configurations>
-    <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
 
     <!-- Read-only source of the game's Managed DLLs (O8). Never written to from this project. -->
     <EftManagedDir>D:/SPT41/EscapeFromTarkov_Data/Managed</EftManagedDir>

@@ -25,6 +25,8 @@
     <TargetFramework>net10.0</TargetFramework>
     <RootNamespace>ArenaMapPort.Server</RootNamespace>
     <AssemblyName>maschine-ArenaMapPort.Server</AssemblyName>
+    <Description>Registers the Equator and Bay5 Arena maps in SPT.</Description>
+    <Company>https://github.com/maschine34675/ArenaMapPort</Company>
     <Authors>maschine</Authors>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
