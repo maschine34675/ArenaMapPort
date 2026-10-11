@@ -13,6 +13,10 @@ In normal mode the archived values stay untouched on disk; runtime migration sup
 the rounded offsets. See [configuration follow-up](docs/progress/compact-player-config.md).
 DynamicMaps alternate-loader feasibility was checked against installed 1.2.1;
 the current optional packages still target DynamicMaps/Maps. No integration moved yet.
+Implementation `2f0ff31`; 610 C# tests, real-BepInEx harness and Release build pass.
+GPU-2 `85aa779c` verified Advanced on/off visibility and both runtime offsets=0.4;
+20/20 loaded identities match. Both installs received verified DLLs; vanilla needs
+a restart. Main CFG still has two entries, no new developer archive in normal mode.
 
 ## Earlier on 2026-10-10 — compact configuration and natural midnight
 

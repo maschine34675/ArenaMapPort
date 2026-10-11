@@ -130,3 +130,33 @@ precache/selection. Scope hooks to the detected plugin and exact owned files;
 retain native marker paths, guard reentry, and handle pre-existing packages so they
 do not appear twice. This needs no DynamicMaps DLL, CFG or folder modification.
 The current turn only investigates this alternative; packaging remains unchanged.
+
+### Validation and deployment
+
+Implementation `2f0ff31`: all 610 C# tests pass, including selective revision-2
+migration, preservation of custom mixes, advanced visibility tags and compact
+persistence. The installed-BepInEx ConfigRetirementCheck passes. Client Release
+build has zero warnings/errors; unrelated test-project warnings remain.
+
+GPU-2 instance `85aa779c`, started 2026-10-11 10:27:25 CEST, MainMenu, 20/20
+tracked binaries match VM/host/loaded code. UiBridge lists DeveloperMode as advanced
+and restart-required, with NaturalEquatorNight normal. F12 was visually checked
+with Advanced enabled and disabled: two options versus only NaturalEquatorNight.
+The filter was restored to its original enabled state; DeveloperMode remains false.
+Search temporarily overrides ConfigurationManager filters, so the negative control
+was performed with an empty search field. Screenshots:
+`analysis/screenshots/advanced-developer-2026-10-11/advanced-{on,off}.png`.
+
+Read-only runtime inspection of Bay5AmbientAudio._equatorOffset.Value and
+_bay5Offset.Value returns 0.4 for both. This host had no developer archive before
+the run and still creates none; its main CFG remains two entries / 765 bytes.
+No ArenaMapPort warnings/errors in the recorded startup buffer. No additional
+raid or subjective audio-balance test was needed for rounding these two constants.
+
+Dry-run then confirmed DLL-only deployment completed for D:/SPT41 and, after the
+native checks, D:/SPT41vanilla. Both DLL pairs match dist. Vanilla's config remains
+byte-identical to the pre-task copy; that installation requires the user's restart.
+No DynamicMaps files were written. Final artifact SHA256:
+
+- Client: `4C3D143C068748CB755C78FDD838BD7F85C21E56756F631B139E71D6DA047AA0`
+- Server: `0C5AB8D480C697026850F80F0815891F2C5661D341BA0B2FA74CFCDB587C26DA`
