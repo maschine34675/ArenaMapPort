@@ -85,6 +85,9 @@ namespace ArenaMapPort.Client
         static AccessTools.FieldRef<UnityStandardAssets.ImageEffects.PostEffectsBase, SSAAPropagator> Propagator;
         static bool _rendering;
 
+        internal static bool HasRestoredCamera => Originals.Count > 0 && ArenaMapRaid.CurrentMap == ArenaMapRegistry.Equator;
+        internal static bool IsRestored(BloomAndFlares effect) => effect != null && Originals.ContainsKey(effect);
+
         internal static void InstallRenderHooks(Harmony harmony)
         {
             var signature = new[] { typeof(RenderTexture), typeof(RenderTexture) };
@@ -103,6 +106,7 @@ namespace ArenaMapPort.Client
             harmony.Patch(prism, prefix: new HarmonyMethod(typeof(AnamorphicFlareTuning), nameof(BeforePrism)));
             _render = (Action<BloomAndFlares, RenderTexture, RenderTexture>)Delegate.CreateDelegate(
                 typeof(Action<BloomAndFlares, RenderTexture, RenderTexture>), flare);
+            MuzzleFlareMask.Install(harmony, flare);
         }
 
         static void BeforePrism(PrismEffects __instance, RenderTexture source, RenderTexture destination)
@@ -255,6 +259,7 @@ namespace ArenaMapPort.Client
 
         internal static void Release()
         {
+            MuzzleFlareMask.Release();
             if (Originals.Count == 0) return;
             foreach (var original in Originals.Values) original.Restore();
             Plugin.Log.LogDebug($"[ArenaMapPort][Flare] released {Originals.Count} camera state(s)");

@@ -3,6 +3,23 @@
 Snapshot for whoever continues (human or agent). Verify the commits named here against `git log`; this file
 is updated by hand at each handover, it is not an automatic record. Read [AGENTS.md](AGENTS.md) first.
 
+## Follow-up on 2026-10-11 — muzzle flares and player documents
+
+Equator now excludes native muzzle-emission regions from the restored anamorphic
+flare seed. Ordinary muzzle flash/bloom and separately positioned lamp streaks
+remain intact. Native GPU-2 Mk17 firing and Equator -> menu -> Bay5 control passed;
+Bay5 keeps no active mask or tracked shots. Release build has zero warnings/errors.
+Final client SHA256 is `b5a6919020e243fc9f0a8fa2ecf031d75d5c594f3dc31b4d2d94bd69afbb1eb1`;
+it is deployed to the main synchronized test install only. GPU-2 loaded 19/19
+matching identities. The server and map assets are unchanged; SPT41vanilla and
+the published v0.1.0 ZIP retain the accepted release build.
+
+README is now player-oriented and `FORGE.md` provides a compact English mod
+description. See [render scope, evidence and limits](docs/progress/muzzle-flare-exclusion.md).
+The final test logged the existing missing Books impact bank for a physics shoe;
+there were no flare-filter errors. No launcher/modded-weapon catalogue or identical
+same-weapon A/B comparison is claimed.
+
 ## Follow-up on 2026-10-11 — first release and client folder
 
 Release 0.1.0 uses `BepInEx/plugins/maschine-ArenaMapPort`; the server remains at

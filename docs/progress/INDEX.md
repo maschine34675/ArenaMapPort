@@ -8,6 +8,9 @@ dated state in one screen; read it before this index if you only have a minute.
 
 ## Current — read these for the area you touch
 
+- [muzzle-flare-exclusion.md](muzzle-flare-exclusion.md) — exclude native muzzle
+  emission from Equator's restored streaks; refresh README and add FORGE (2026-10-11).
+
 - [client-folder-release.md](client-folder-release.md) — prefixed client folder,
   content-preserving migration and first GitHub release packaging (2026-10-11).
 
