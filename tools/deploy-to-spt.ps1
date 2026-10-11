@@ -20,6 +20,8 @@
       recursively deletes directories. No other DynamicMaps files or settings are changed.
       RemoveLegacyEquatorDb is a second explicit migration: verify the new database/server DLL,
       back up the original loose Equator database, then remove only that original file.
+      RemoveDebugHelper similarly backs up/removes only the accepted ArenaMapDebug DLL
+      at its two historical locations; other plugin files, folders and configs stay intact.
     - Never reads or writes anything under D:/ArenaMapPort/dist/ other than read-only enumeration
       (source of truth, untouched).
 
@@ -57,6 +59,11 @@
   and server DLL against dist, backs up the old owned db/base.json under work/deployment-backups,
   then removes that one legacy file. Refuses links and non-Equator data. Dry run unless Confirm.
 
+.PARAMETER RemoveDebugHelper
+  Separate cleanup mode for the retired four-button ArenaMapDebug helper. Backs up and removes
+  only its known DLL from either historical plugin path, verifying the accepted helper hash.
+  Close EFT first. Leaves folders/configuration untouched. Dry run unless Confirm is supplied.
+
 .EXAMPLE
   # dry run (default) -- prints the plan, copies nothing:
   pwsh tools/deploy-to-spt.ps1
@@ -76,6 +83,7 @@ param(
     [switch]$DllOnly,
     [switch]$RemoveLegacyDynamicMaps,
     [switch]$RemoveLegacyEquatorDb,
+    [switch]$RemoveDebugHelper,
     [string]$DynamicMapsPackage,
     [ValidateSet('Equator', 'Bay5')]
     [string]$DynamicMapsMap = 'Equator'
@@ -464,6 +472,65 @@ function Invoke-LegacyEquatorDbRemoval {
     }
     Remove-Item -LiteralPath $legacy
     Write-Output "LEGACY_EQUATOR_DB_OK backed up to $backup"
+}
+
+function Invoke-DebugHelperRemoval {
+    $repo = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
+    # This migration retires the accepted four-button helper, not an arbitrary DLL
+    # a user may subsequently place under the same name.
+    $acceptedHash = 'DF0F5B7D578EDC63899CA53AD24D1E78589034A973770645CA8675ECB413C301'
+    $root = Assert-PlainPath $SptRoot 'Directory'
+    if (-not (Test-Path -LiteralPath $root -PathType Container)) { throw 'SPT installation does not exist' }
+    $plan = @(foreach ($relative in @(
+        'BepInEx/plugins/ArenaMapDebug/maschine-ArenaMapDebug.dll',
+        'BepInEx/plugins/maschine-ArenaMapDebug.dll')) {
+        $target = Assert-PlainPath (Join-Path $root $relative) 'File'
+        if (-not (Test-Path -LiteralPath $target -PathType Leaf)) { continue }
+        if ((Get-FileHash -LiteralPath $target).Hash -ne $acceptedHash) {
+            throw "Unrecognized ArenaMapDebug build; nothing removed: $target"
+        }
+        [PSCustomObject]@{ Path = $target; Relative = $relative }
+    })
+    if (-not $plan.Count) { Write-Output 'DEBUG_HELPER_REMOVED already absent'; return }
+    foreach ($row in $plan) { Write-Output "Back up and remove: $($row.Path)" }
+    if (-not $Confirm) { Write-Output 'DRY RUN: no files changed'; return }
+
+    $backupRoot = Assert-PlainPath (Join-Path $repo ('work/deployment-backups/debug-helper-' + [Guid]::NewGuid().ToString('N'))) 'Directory'
+    # Back up and recheck every candidate before deleting the first file.
+    foreach ($row in $plan) {
+        $null = Assert-PlainPath $row.Path 'File'
+        $bytes = [IO.File]::ReadAllBytes($row.Path)
+        if ([Convert]::ToHexString([Security.Cryptography.SHA256]::HashData($bytes)) -ne $acceptedHash) {
+            throw 'Debug helper changed before backup; nothing removed'
+        }
+        $backup = Assert-PlainPath (Join-Path $backupRoot $row.Relative) 'File'
+        New-Item -ItemType Directory -Path ([IO.Path]::GetDirectoryName($backup)) -Force | Out-Null
+        [IO.File]::WriteAllBytes($backup, $bytes)
+        if ((Get-FileHash -LiteralPath $backup).Hash -ne $acceptedHash) { throw 'Debug helper backup verification failed' }
+    }
+    foreach ($row in $plan) {
+        $null = Assert-PlainPath $row.Path 'File'
+        if ((Get-FileHash -LiteralPath $row.Path).Hash -ne $acceptedHash) {
+            throw 'Debug helper changed during cleanup; backups retained'
+        }
+    }
+    foreach ($row in $plan) {
+        $null = Assert-PlainPath $row.Path 'File'
+        if ((Get-FileHash -LiteralPath $row.Path).Hash -ne $acceptedHash) { throw 'Debug helper changed before removal' }
+        Remove-Item -LiteralPath $row.Path
+    }
+    Write-Output "DEBUG_HELPER_REMOVED $($plan.Count) DLL(s); backups: $backupRoot"
+}
+
+if ($RemoveDebugHelper) {
+    try {
+        if ($RemoveLegacyEquatorDb -or $RemoveLegacyDynamicMaps -or $DllOnly -or
+            $PSBoundParameters.ContainsKey('DynamicMapsPackage') -or $PSBoundParameters.ContainsKey('DynamicMapsMap')) {
+            throw 'RemoveDebugHelper cannot be combined with other deployment modes'
+        }
+        Invoke-DebugHelperRemoval
+    } catch { Fail $_.Exception.Message }
+    exit 0
 }
 
 if ($RemoveLegacyEquatorDb) {

@@ -42,6 +42,8 @@ are not accepted build inputs. Keep the SPT bundle target on Unity 2022.3.43f1.
   The user-authorized `-RemoveLegacyDynamicMaps` migration removes only the old Equator/Bay5
   packages from DynamicMaps/Maps, after both replacements and the adapter DLL match dist.
   Dry run first; no recursive cleanup or changes to other maps (see `tools/dynamicmaps/README.md`).
+  The separate `-RemoveDebugHelper` cleanup backs up and removes only the retired
+  ArenaMapDebug DLL at either known plugin path. Dry run first; close EFT before removal.
 - Never write under `C:\SPT41*`, `D:\sptmaps`, `D:\Battlestate Games` (the read-only Arena source) or
   `D:\SPT41\Development\ArenaMode` (the user's other mod; read it if you must, never edit it).
 - Never edit host/vanilla config files or third-party mod configs on either install.
@@ -183,10 +185,10 @@ with `python tools/server/make_base_json.py` (see its header for the arguments).
 After a deploy, Syncthing delivers to the host within ~20 s. A new client DLL needs an EFT restart; a new
 server DLL or base.json needs a server restart (the host server is restarted by closing its terminal
 window and double-clicking the desktop shortcut; Syncthing only replaces the server DLL once the process
-is closed). Both installs carry the user's own `maschine-ArenaMapDebug.dll`: a main-menu button
-"EQUATOR DEBUG" and "BAY5 DEBUG" that start the selected PMC raid without the menu flow or countdown,
-and a disconnect that skips the
-confirmations and the vanilla 0-HP penalty for a skipped heal screen.
+is closed). The standalone `maschine-ArenaMapDebug.dll` and its four shortcut buttons
+were retired for release preparation. Use the ordinary PMC/ArenaMode selection flow
+for testing. Do not redeploy the helper; its source remains in the separate development
+project if future debugging explicitly needs it.
 
 ## Host testing (GPU host, via MCP)
 

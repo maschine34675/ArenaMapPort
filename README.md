@@ -106,7 +106,7 @@ Equator also has `AnamorphicFlareLength` (3.5), `AnamorphicFlareThreshold` (0.15
 `AnamorphicFlareTint` (the previous pale-blue RGBA color). Tint alpha multiplies flare strength.
 All changes work during a raid. See [HDR controls and verification](docs/progress/hdr-controls.md).
 
-**Debugging.** F12 shows map-specific options for Equator and Bay5 only; the other maps retain their saved settings and behavior. The separate ArenaMapDebug mod provides **EQUATOR DEBUG** and **BAY5 DEBUG** main-menu buttons for immediate PMC test raids, with no selection screens or starting countdown. Disconnect returns directly to the menu with the existing living-player health protection. See [debug/config verification](docs/progress/bay5-shadows-menu.md).
+**Debugging.** Enable DeveloperMode and restart to access Equator/Bay5 tuning and diagnostic hotkeys. Start raids through the ordinary PMC or ArenaMode menus. The separate ArenaMapDebug helper and its four main-menu shortcuts have been retired and are not included in the release.
 
 **Configuration cleanup.** Obsolete rain-cover, custom ambient-intensity and unused map/logging controls are removed. Startup also deletes their old saved entries while preserving active tuning. Internal migration markers are hidden. Conditional camera/ambient/water fallback controls remain and explain when they apply. [Audit and verification](docs/progress/config-cleanup.md).
 
