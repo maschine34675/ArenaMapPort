@@ -3,7 +3,21 @@
 Snapshot for whoever continues (human or agent). Verify the commits named here against `git log`; this file
 is updated by hand at each handover, it is not an automatic record. Read [AGENTS.md](AGENTS.md) first.
 
-## Follow-up on 2026-10-11 — official map descriptions
+## Follow-up on 2026-10-11 — debug helper retired and branches consolidated
+
+`664564c` adds the sanctioned `-RemoveDebugHelper` migration and retires the
+standalone helper from both installs. All four main-menu shortcuts are gone;
+GPU-2 `25d3d20a` verified the clean menu and ordinary PMC map selection, 19/19
+identities matching. Debug DLLs are backed up under ignored work/deployment-backups;
+config and other plugins stay untouched. Runtime MapPort binaries and test3 ZIP
+are unchanged. Vanilla needs an EFT restart only if it was open; GPU-2 is at MainMenu.
+
+All development history is consolidated into `main`, now the pushed GitHub default.
+26 merged local branches and both obsolete remote feature branches were deleted.
+Only D:/ArenaMapPort remains as a worktree; required ignored assets/build inputs
+were retained. Use main for subsequent work. See [execution and verification](docs/progress/release-finalize.md).
+
+## Earlier on 2026-10-11 — official map descriptions
 
 Implementation `fa4a484` extracts original English/German/Russian descriptions from
 the installed Arena locale TextAssets and stages one owned server locale JSON.
