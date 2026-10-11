@@ -8,6 +8,9 @@ dated state in one screen; read it before this index if you only have a minute.
 
 ## Current — read these for the area you touch
 
+- [official-map-descriptions.md](official-map-descriptions.md) — original Arena
+  descriptions for both released maps, with native German/English/Russian text (2026-10-11).
+
 - [release-cleanup.md](release-cleanup.md) — omit unused audio/UI exports, nest Equator DB,
   align native/ArenaMode map labels and rebuild the test package (2026-10-11).
 

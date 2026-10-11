@@ -54,6 +54,11 @@ class DistributionSidecarTests(unittest.TestCase):
                 texture_path.write_bytes(blob)
             (flare_dir / "flares.json").write_text(json.dumps(package), encoding="utf-8")
         self.server = self.repo / "dist/SPT_Runtime/user/mods/ArenaMapPort"
+        for directory in (self.server/'locales', self.repo/'work/extract/map-descriptions'):
+            directory.mkdir(parents=True, exist_ok=True)
+            (directory/'map-descriptions.json').write_text(json.dumps({
+                'schema_version': 1, 'descriptions': {'en': {
+                    'arena_equator': 'Mall fixture', 'arena_bay5': 'Harbor fixture'}}}), encoding='utf-8')
         for folder in (self.server / "db/arena_equator", self.repo / "ArenaMapPort.Server/db/arena_equator"):
             folder.mkdir(parents=True)
             (folder / "base.json").write_text('{"Id": "arena_equator"}', encoding="utf-8")
@@ -119,6 +124,19 @@ class DistributionSidecarTests(unittest.TestCase):
     def test_invalid_json_descriptor_is_not_silently_skipped(self):
         (self.maps / "broken.json").write_text("{", encoding="utf-8")
         with self.assertRaises(json.JSONDecodeError):
+            self.validate()
+
+    def test_missing_stale_or_invalid_descriptions_are_rejected(self):
+        path = self.server/'locales/map-descriptions.json'
+        original = path.read_bytes()
+        path.unlink()
+        with self.assertRaisesRegex(ValueError, 'missing map description files'):
+            self.validate()
+        path.write_bytes(original.replace(b'Mall fixture', b'Changed fixture'))
+        with self.assertRaisesRegex(ValueError, 'Stale map descriptions'):
+            self.validate()
+        path.write_bytes(original.replace(b'"schema_version": 1', b'"schema_version": 2'))
+        with self.assertRaises(ValueError):
             self.validate()
 
     def test_unexpected_bundle_is_still_rejected_when_sidecars_exist(self):

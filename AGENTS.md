@@ -171,6 +171,11 @@ and `work/extract/arena-ui`. Neither current mod consumes them; Release/DllOnly 
 them. The release cleanup archives old dist copies without changing the extraction inputs.
 Their extractors and provenance remain available; see `docs/progress/arena-audio.md` and `arena-ui.md`.
 
+Server builds require original descriptions from
+`python tools/extract/extract_map_descriptions.py`. The ignored output under
+`work/extract/map-descriptions` stages to the server mod's `locales` directory.
+Keep these BSG-derived texts out of tracked source; see `docs/progress/official-map-descriptions.md`.
+
 `-FullMap` also regenerates that map's base.json and preset from the sidecars; to regenerate only base.json
 after a sidecar change, add `-SkipUnityBuild` (reuses the bundles). For Equator, base.json is regenerated
 with `python tools/server/make_base_json.py` (see its header for the arguments).

@@ -123,13 +123,13 @@ public static class ArenaMapBanners
     /// <summary>
     /// Stamps the two locale keys the client's banner carousel reads
     /// (<c>MatchmakerBannersPanel.TryCreateBanner</c>, MatchmakerBannersPanel.cs:164: builds
-    /// <c>banner.id + " Name"</c> / <c>banner.id + " Description"</c>) — English text only for this
-    /// pass, written into every language slot the same way <see cref="ArenaMapRegistration.ApplyLocale"/>
-    /// already does for the map's own name/description. A no-op for a map with no banner
+    /// <c>banner.id + " Name"</c> / <c>banner.id + " Description"</c>). The caller supplies the same
+    /// localized description as <see cref="ArenaMapRegistration.ApplyLocale"/>.
+    /// A no-op for a map with no banner
     /// descriptor, or for a null <paramref name="locale"/> (mirrors <c>ApplyLocale</c>'s own null
     /// handling so it can be passed to <c>LazyLoad{T}.AddTransformer</c> the same way).
     /// </summary>
-    public static GlobalLocaleDictionary? ApplyLocale(GlobalLocaleDictionary? locale, ArenaMapDescriptor map)
+    public static GlobalLocaleDictionary? ApplyLocale(GlobalLocaleDictionary? locale, ArenaMapDescriptor map, string? description = null)
     {
         if (locale is null)
         {
@@ -148,7 +148,7 @@ public static class ArenaMapBanners
         }
         if (!locale.ContainsKey(descriptor.Id + " Description"))
         {
-            locale[descriptor.Id + " Description"] = map.LocaleDescription;
+            locale[descriptor.Id + " Description"] = description ?? map.LocaleDescription;
         }
         return locale;
     }

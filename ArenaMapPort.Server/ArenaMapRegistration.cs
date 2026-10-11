@@ -284,7 +284,7 @@ public static class ArenaMapRegistration
     /// Matches Icebreaker's own working pattern (`IcebreakerMod.cs:252/258`, keyed by
     /// `IcebreakerLocation.Id`, itself a MongoId).
     /// </summary>
-    public static GlobalLocaleDictionary? ApplyLocale(GlobalLocaleDictionary? locale, ArenaMapDescriptor map)
+    public static GlobalLocaleDictionary? ApplyLocale(GlobalLocaleDictionary? locale, ArenaMapDescriptor map, string? description = null)
     {
         if (locale is null)
         {
@@ -292,7 +292,7 @@ public static class ArenaMapRegistration
         }
 
         locale[map.IdField + " Name"] = map.LocaleName;
-        locale[map.IdField + " Description"] = map.LocaleDescription;
+        locale[map.IdField + " Description"] = description ?? map.LocaleDescription;
         return locale;
     }
 }
@@ -437,13 +437,16 @@ public class ArenaMapPortMod(
 
         try
         {
-            foreach (var (_, lazyLocale) in localeTable.Global)
+            var descriptions = ArenaMapDescriptions.Load(Path.Combine(modDir, "locales", "map-descriptions.json"),
+                message => logger.Warning("[ArenaMapPort] " + message));
+            foreach (var (language, lazyLocale) in localeTable.Global)
             {
                 foreach (var map in ArenaMapRegistry.All)
                 {
-                    lazyLocale.AddTransformer(locale => ArenaMapRegistration.ApplyLocale(locale, map));
+                    var description = descriptions.Resolve(language, map);
+                    lazyLocale.AddTransformer(locale => ArenaMapRegistration.ApplyLocale(locale, map, description));
                     lazyLocale.AddTransformer(locale => ArenaMapRegistration.ApplyExitLocale(locale, map)); // exfils-stage2
-                    lazyLocale.AddTransformer(locale => ArenaMapBanners.ApplyLocale(locale, map)); // two-maps item 10
+                    lazyLocale.AddTransformer(locale => ArenaMapBanners.ApplyLocale(locale, map, description)); // two-maps item 10
                 }
             }
         }

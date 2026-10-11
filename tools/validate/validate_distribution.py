@@ -40,6 +40,14 @@ def validate():
     if actual_maps != expected_maps:
         raise ValueError('Unexpected or missing overview map files')
     sys.path.insert(0, str(REPO/'tools/extract'))
+    from extract_map_descriptions import validate_pack
+    locale_dir = REPO/'dist/SPT_Runtime/user/mods/ArenaMapPort/locales'
+    if {p.relative_to(locale_dir).as_posix() for p in locale_dir.rglob('*') if p.is_file()} != {'map-descriptions.json'}:
+        raise ValueError('Unexpected or missing map description files')
+    descriptions = (locale_dir/'map-descriptions.json').read_bytes()
+    validate_pack(json.loads(descriptions))
+    if descriptions != (REPO/'work/extract/map-descriptions/map-descriptions.json').read_bytes():
+        raise ValueError('Stale map descriptions')
     from extract_multiflare import validate_graph
     expected_flare_files = set()
     for key in ('arena_equator', 'arena_bay5'):

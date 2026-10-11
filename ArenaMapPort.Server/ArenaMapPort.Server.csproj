@@ -107,14 +107,17 @@
   <Target Name="DeployToDist" AfterTargets="Build">
     <PropertyGroup>
       <DistModDir>$(MSBuildThisFileDirectory)..\dist\SPT_Runtime\user\mods\ArenaMapPort</DistModDir>
+      <MapDescriptions>$(MSBuildThisFileDirectory)..\work\extract\map-descriptions\map-descriptions.json</MapDescriptions>
     </PropertyGroup>
     <ItemGroup>
       <ArenaMapPortDbFiles Include="$(MSBuildThisFileDirectory)db\arena_equator\base.json"><ReleasePath>arena_equator/base.json</ReleasePath></ArenaMapPortDbFiles>
       <ArenaMapPortDbFiles Include="$(MSBuildThisFileDirectory)db\arena_bay5\base.json"><ReleasePath>arena_bay5/base.json</ReleasePath></ArenaMapPortDbFiles>
     </ItemGroup>
-    <MakeDir Directories="$(DistModDir)\db" />
+    <Error Condition="!Exists('$(MapDescriptions)')" Text="Missing original map descriptions. Run python tools/extract/extract_map_descriptions.py first." />
+    <MakeDir Directories="$(DistModDir)\db;$(DistModDir)\locales" />
     <Copy SourceFiles="$(TargetPath)" DestinationFolder="$(DistModDir)" SkipUnchangedFiles="true" />
     <Copy SourceFiles="@(ArenaMapPortDbFiles)" DestinationFiles="@(ArenaMapPortDbFiles->'$(DistModDir)\db\%(ReleasePath)')" SkipUnchangedFiles="true" />
+    <Copy SourceFiles="$(MapDescriptions)" DestinationFolder="$(DistModDir)\locales" SkipUnchangedFiles="true" />
   </Target>
 
 </Project>
