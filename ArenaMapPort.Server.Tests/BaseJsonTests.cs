@@ -9,7 +9,7 @@ using Xunit;
 namespace ArenaMapPort.Server.Tests;
 
 /// <summary>
-/// Loads the shipped db/base.json and asserts the invariants docs/SPEC.md §E.4 and
+/// Loads the shipped db/arena_equator/base.json and asserts the invariants docs/SPEC.md §E.4 and
 /// §B.WP6's validate_server_db.py table demand: identity constants, Scene.path/rcid,
 /// Banners empty, DisabledForScav true — and, since bots-stage1 (docs/progress/bots-stage1.md),
 /// SpawnPointParams PRESENT with player + Bot-category points and Factory-shaped waves on the zone.
@@ -22,7 +22,7 @@ public class BaseJsonTests
     private const string ExpectedSceneRcid = "arena_equator.scenespreset.asset";
 
     // Same converter set the live server's JsonUtil registers (SptJsonConverterRegistrator),
-    // so these tests parse db/base.json exactly as the server does at load.
+    // so these tests parse db/arena_equator/base.json exactly as the server does at load.
     private static readonly JsonSerializerOptions Options = CreateServerOptions();
 
     private static JsonSerializerOptions CreateServerOptions()
@@ -33,7 +33,7 @@ public class BaseJsonTests
         return options;
     }
 
-    private static string BaseJsonPath => Path.Combine(AppContext.BaseDirectory, "db", "base.json");
+    private static string BaseJsonPath => Path.Combine(AppContext.BaseDirectory, "db", "arena_equator", "base.json");
 
     private static string ReadRawJson() => File.ReadAllText(BaseJsonPath);
 
@@ -48,7 +48,7 @@ public class BaseJsonTests
     [Fact]
     public void File_Exists()
     {
-        Assert.True(File.Exists(BaseJsonPath), $"db/base.json not found at {BaseJsonPath}");
+        Assert.True(File.Exists(BaseJsonPath), $"db/arena_equator/base.json not found at {BaseJsonPath}");
     }
 
     // exfils-stage2 — base.json exits carry the descriptor's names, the map's infiltration as EntryPoints,

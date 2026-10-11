@@ -57,7 +57,7 @@
     <PackageReference Include="SPTushonka.Reflection" Version="4.1.5" />
   </ItemGroup>
 
-  <!-- db/base.json, copied so tests read the exact file the mod ships, not a duplicate. -->
+  <!-- Per-map db files, copied so tests read the exact file the mod ships, not a duplicate. -->
   <ItemGroup>
     <Content Include="..\ArenaMapPort.Server\db\**\*.json" Link="db\%(RecursiveDir)%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>

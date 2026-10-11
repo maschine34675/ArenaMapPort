@@ -18,6 +18,8 @@
       removes only our two old map packages after verifying their replacements and installed
       adapter against dist. It rejects links and unknown content before any deletion, and never
       recursively deletes directories. No other DynamicMaps files or settings are changed.
+      RemoveLegacyEquatorDb is a second explicit migration: verify the new database/server DLL,
+      back up the original loose Equator database, then remove only that original file.
     - Never reads or writes anything under D:/ArenaMapPort/dist/ other than read-only enumeration
       (source of truth, untouched).
 
@@ -50,6 +52,11 @@
   DLL match dist. Missing legacy folders are a no-op; unknown entries/links fail before deletion.
   Close EFT first (DynamicMaps caches definitions). Dry run unless Confirm is supplied.
 
+.PARAMETER RemoveLegacyEquatorDb
+  Separate migration after a full deployment. Verifies the installed nested Equator database
+  and server DLL against dist, backs up the old owned db/base.json under work/deployment-backups,
+  then removes that one legacy file. Refuses links and non-Equator data. Dry run unless Confirm.
+
 .EXAMPLE
   # dry run (default) -- prints the plan, copies nothing:
   pwsh tools/deploy-to-spt.ps1
@@ -68,6 +75,7 @@ param(
     [switch]$Confirm,
     [switch]$DllOnly,
     [switch]$RemoveLegacyDynamicMaps,
+    [switch]$RemoveLegacyEquatorDb,
     [string]$DynamicMapsPackage,
     [ValidateSet('Equator', 'Bay5')]
     [string]$DynamicMapsMap = 'Equator'
@@ -419,6 +427,53 @@ function Invoke-DllOnlyDeploy {
         throw $deploymentError
     } finally { foreach ($stream in $streams) { $stream.Dispose() } }
     Write-Host '[deploy-to-spt] OK -- 2 verified DLLs updated; all other files untouched.' -ForegroundColor Green
+}
+
+function Invoke-LegacyEquatorDbRemoval {
+    $repo = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
+    $relativeRoot = 'SPT_Runtime/user/mods/ArenaMapPort'
+    $installed = Assert-PlainPath (Join-Path $SptRoot $relativeRoot) 'Directory'
+    $staged = Assert-PlainPath (Join-Path (Join-Path $repo 'dist') $relativeRoot) 'Directory'
+    foreach ($relative in @('db/arena_equator/base.json', 'maschine-ArenaMapPort.Server.dll')) {
+        $source = Assert-PlainPath (Join-Path $staged $relative) 'File'
+        $target = Assert-PlainPath (Join-Path $installed $relative) 'File'
+        if (-not (Test-Path -LiteralPath $source -PathType Leaf) -or -not (Test-Path -LiteralPath $target -PathType Leaf) -or
+            (Get-FileHash -LiteralPath $source).Hash -ne (Get-FileHash -LiteralPath $target).Hash) {
+            throw "Deploy and verify the new Equator data and server DLL first: $relative"
+        }
+    }
+    $newDb = Get-Content -LiteralPath (Join-Path $installed 'db/arena_equator/base.json') -Raw | ConvertFrom-Json
+    if ($newDb.Id -cne 'arena_equator') { throw 'Replacement database is not Equator' }
+    $legacy = Assert-PlainPath (Join-Path $installed 'db/base.json') 'File'
+    if (-not (Test-Path -LiteralPath $legacy -PathType Leaf)) {
+        Write-Output 'LEGACY_EQUATOR_DB_OK already absent'; return
+    }
+    $oldBytes = [IO.File]::ReadAllBytes($legacy)
+    $oldDb = [Text.Encoding]::UTF8.GetString($oldBytes).TrimStart([char]0xFEFF) | ConvertFrom-Json
+    if ($oldDb.Id -cne 'arena_equator') { throw 'Legacy database is not Equator; refusing removal' }
+    if (-not $Confirm) {
+        Write-Output "DRY RUN: back up and remove only $legacy after verified replacement"; return
+    }
+    $backup = Assert-PlainPath (Join-Path $repo ('work/deployment-backups/' + [Guid]::NewGuid().ToString('N') + '/equator-base.json')) 'File'
+    New-Item -ItemType Directory -Path ([IO.Path]::GetDirectoryName($backup)) -Force | Out-Null
+    [IO.File]::WriteAllBytes($backup, $oldBytes)
+    # Revalidate after backup and refuse a concurrently changed legacy file.
+    $null = Assert-PlainPath $legacy 'File'
+    if ((Get-FileHash -LiteralPath $legacy).Hash -ne (Get-FileHash -LiteralPath $backup).Hash) {
+        throw 'Legacy database changed during migration; backup retained, removal cancelled'
+    }
+    Remove-Item -LiteralPath $legacy
+    Write-Output "LEGACY_EQUATOR_DB_OK backed up to $backup"
+}
+
+if ($RemoveLegacyEquatorDb) {
+    try {
+        if ($RemoveLegacyDynamicMaps -or $DllOnly -or $PSBoundParameters.ContainsKey('DynamicMapsPackage') -or $PSBoundParameters.ContainsKey('DynamicMapsMap')) {
+            throw 'RemoveLegacyEquatorDb cannot be combined with other deployment modes'
+        }
+        Invoke-LegacyEquatorDbRemoval
+    } catch { Fail $_.Exception.Message }
+    exit 0
 }
 
 if ($RemoveLegacyDynamicMaps) {

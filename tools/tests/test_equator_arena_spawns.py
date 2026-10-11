@@ -15,7 +15,7 @@ class EquatorArenaSpawnTests(unittest.TestCase):
     def setUp(self):
         self.bots = json.loads((REPO / "tools/maps/equator.bots.json").read_text(encoding="utf-8"))
         self.descriptor = json.loads((REPO / "tools/maps/equator.json").read_text(encoding="utf-8"))
-        self.base = json.loads((REPO / "ArenaMapPort.Server/db/base.json").read_text(encoding="utf-8"))
+        self.base = json.loads((REPO / "ArenaMapPort.Server/db/arena_equator/base.json").read_text(encoding="utf-8"))
 
     def test_three_distant_bot_points_cover_playable_ground_envelope(self):
         # Preserve ArenaMode's 25 m minimum with three distinct candidate points;

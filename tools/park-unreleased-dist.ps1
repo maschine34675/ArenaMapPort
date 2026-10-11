@@ -27,12 +27,30 @@ function Assert-OwnedPath([string]$Path, [string]$Root) {
 Assert-OwnedPath $sourceRoot $dist
 Assert-OwnedPath $archive $archiveBase
 $parked = @('airpit','airpit2','autoservice','bowl','prison','railwaystation','yard','iceberg','factory','custom','shoreline','woods')
+$extraPaths = @()
+if ($Scope -eq 'Server') { $extraPaths += 'db/base.json' }
+if ($Scope -eq 'Client') {
+    foreach ($folder in @('arena-audio', 'arena-ui')) {
+        $optionalRoot = Join-Path $sourceRoot $folder
+        Assert-OwnedPath $optionalRoot $sourceRoot
+        if (Test-Path -LiteralPath $optionalRoot) {
+            # Validate every node before moving any file. Inputs remain in work/extract.
+            foreach ($node in Get-ChildItem -LiteralPath $optionalRoot -Recurse -Force) {
+                Assert-OwnedPath $node.FullName $sourceRoot
+                if (-not $node.PSIsContainer) {
+                    $extraPaths += $node.FullName.Substring($sourceRoot.Length).TrimStart('\', '/')
+                }
+            }
+        }
+    }
+}
 $plan = @(
-    foreach ($stem in $parked) {
-        $paths = if ($Scope -eq 'Client') {
+    $paths = @($extraPaths) + @(foreach ($stem in $parked) {
+        if ($Scope -eq 'Client') {
             @("bundles/arena_${stem}_scenes.bundle", "bundles/arena_${stem}_navmesh.bundle", "bundles/arena_${stem}_preset.bundle", "material-shaders.arena_${stem}.json")
         } else { @("db/arena_${stem}/base.json") }
-        foreach ($relative in $paths) {
+    })
+    foreach ($relative in $paths) {
             $source = Join-Path $sourceRoot $relative
             $destination = Join-Path $archive $relative
             Assert-OwnedPath $source $sourceRoot
@@ -43,7 +61,6 @@ $plan = @(
                 if ($file.PSIsContainer) { throw "Expected regular file: $source" }
                 [pscustomobject]@{ RelativePath=$relative; Source=$source; Destination=$destination; Bytes=$file.Length; Sha256=(Get-FileHash -LiteralPath $source -Algorithm SHA256).Hash; Moved=$false }
             }
-        }
     }
 )
 if (-not $plan.Count) { Write-Output "PARKED_DIST_OK $Scope 0 files"; exit 0 }

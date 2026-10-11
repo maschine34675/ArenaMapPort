@@ -334,9 +334,6 @@ public class ArenaMapPortMod(
         // base.json exist on disk today — docs/progress/bay5-port.md — but the isolation still
         // matters for whichever map breaks next). Each map is independently try/caught, mirroring
         // the existing per-hook independence already used client-side (HarmonyPatches.cs).
-        // Equator's own db path is unchanged
-        // ("db/base.json" — ArenaMapRegistry.Equator.DbBaseJsonPath — not "db/arena_equator/base.json")
-        // so its already-deployed dist/ layout keeps working without a migration.
         foreach (var map in ArenaMapRegistry.All)
         {
             var basePath = Path.Combine(modDir, "db", map.DbBaseJsonPath);

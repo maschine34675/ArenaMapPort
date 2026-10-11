@@ -1,5 +1,15 @@
 # Current distribution contract: Equator and Bay5
 
+2026-10-11 follow-up: optional `arena-audio` and `arena-ui` exports are excluded from
+the release because neither current ArenaMapPort nor ArenaMode consumes them.
+Builds archive previously staged copies under `work/release-parked`, preserving
+extraction inputs. Both databases now use `db/<key>/base.json`, including Equator.
+After a full deployment, the explicit `-RemoveLegacyEquatorDb` deployment mode
+backs up and removes only the former loose database after validating its replacement.
+See [release cleanup](progress/release-cleanup.md) for the revised test package.
+
+## Earlier preparation baseline
+
 2026-10-10: `ArenaMapRegistry.All` is the two-map runtime/release list; `Catalog`
 retains all fourteen development descriptors. Normal Release builds stage exactly
 six bundles, two shader sidecars, two server databases and both DLLs. Existing

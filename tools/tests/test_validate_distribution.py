@@ -26,7 +26,7 @@ class DistributionSidecarTests(unittest.TestCase):
         self.maps = self.repo / "tools/maps"
         self.maps.mkdir(parents=True)
         (self.maps / "equator.json").write_text(
-            json.dumps({"key": "arena_equator", "db_base_json_path": "base.json"}), encoding="utf-8")
+            json.dumps({"key": "arena_equator", "db_base_json_path": "arena_equator/base.json"}), encoding="utf-8")
         self.plugin = self.repo / "dist/BepInEx/plugins/ArenaMapPort"
         for name in ('Equator', 'Bay5'):
             for file in (f'ArenaMapPort_{name}.jsonc', 'Layers/Ground.svg'):
@@ -54,7 +54,7 @@ class DistributionSidecarTests(unittest.TestCase):
                 texture_path.write_bytes(blob)
             (flare_dir / "flares.json").write_text(json.dumps(package), encoding="utf-8")
         self.server = self.repo / "dist/SPT_Runtime/user/mods/ArenaMapPort"
-        for folder in (self.server / "db", self.repo / "ArenaMapPort.Server/db"):
+        for folder in (self.server / "db/arena_equator", self.repo / "ArenaMapPort.Server/db/arena_equator"):
             folder.mkdir(parents=True)
             (folder / "base.json").write_text('{"Id": "arena_equator"}', encoding="utf-8")
         # The release is exactly two maps, even when parked descriptors remain in source.
@@ -101,6 +101,20 @@ class DistributionSidecarTests(unittest.TestCase):
         (self.maps / "broken.json").write_text("{}", encoding="utf-8")
         with self.assertRaises(KeyError):
             self.validate()
+
+    def test_unused_exports_and_old_equator_database_are_rejected(self):
+        for path, message in (
+                (self.plugin/'arena-audio/manifest.json', 'Unused development payload'),
+                (self.plugin/'arena-ui/manifest.json', 'Unused development payload'),
+                (self.server/'db/base.json', 'Server database set')):
+            with self.subTest(path=path):
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_text('{}', encoding='utf-8')
+                try:
+                    with self.assertRaisesRegex(ValueError, message):
+                        self.validate()
+                finally:
+                    path.unlink()
 
     def test_invalid_json_descriptor_is_not_silently_skipped(self):
         (self.maps / "broken.json").write_text("{", encoding="utf-8")

@@ -167,10 +167,10 @@ namespace ArenaMapPort.Editor.Common
                 opened_barriers = new[] { "SBG_Arena_Equator/SOO_LOD0/equator_roller_shutters_02 (9)" },
                 locale_name = "Arena: Equator",
                 locale_description = "The Equator shopping mall from EFT Arena. Ground floor playable; the upper rings are scenery.",
-                icon_x = 150,
-                icon_y = 760,
+            icon_x = 700,
+            icon_y = 290,
                 template_key = "factory4_day",
-                db_base_json_path = "base.json",
+            db_base_json_path = "arena_equator/base.json",
                 fog_color = new[] { 0.62f, 0.66f, 0.70f },
             };
         }

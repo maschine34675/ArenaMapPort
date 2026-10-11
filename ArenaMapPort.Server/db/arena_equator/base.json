@@ -441,8 +441,8 @@
     "BotsDamageSources",
     "LootPositions"
   ],
-  "IconX": 150,
-  "IconY": 760,
+  "IconX": 700,
+  "IconY": 290,
   "Id": "arena_equator",
   "Insurance": true,
   "IsSecret": false,

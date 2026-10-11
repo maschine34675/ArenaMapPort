@@ -86,7 +86,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <Content Include="db\base.json;db\arena_bay5\base.json" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="db\arena_equator\base.json;db\arena_bay5\base.json" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
   <PropertyGroup Condition="'$(Configuration)'=='Release'">
@@ -109,7 +109,7 @@
       <DistModDir>$(MSBuildThisFileDirectory)..\dist\SPT_Runtime\user\mods\ArenaMapPort</DistModDir>
     </PropertyGroup>
     <ItemGroup>
-      <ArenaMapPortDbFiles Include="$(MSBuildThisFileDirectory)db\base.json"><ReleasePath>base.json</ReleasePath></ArenaMapPortDbFiles>
+      <ArenaMapPortDbFiles Include="$(MSBuildThisFileDirectory)db\arena_equator\base.json"><ReleasePath>arena_equator/base.json</ReleasePath></ArenaMapPortDbFiles>
       <ArenaMapPortDbFiles Include="$(MSBuildThisFileDirectory)db\arena_bay5\base.json"><ReleasePath>arena_bay5/base.json</ReleasePath></ArenaMapPortDbFiles>
     </ItemGroup>
     <MakeDir Directories="$(DistModDir)\db" />

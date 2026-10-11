@@ -193,8 +193,8 @@ namespace ArenaMapPort.Shared
             InfiltrationName: "ArenaEquator", // SpawnInfiltrationRepairs' pre-generalization literal
             LocaleName: "Arena: Equator",
             LocaleDescription: "The Equator shopping mall from EFT Arena. Ground floor playable; the upper rings are scenery.",
-            IconX: 150, IconY: 760,
-            DbBaseJsonPath: "base.json", // unchanged legacy path — ArenaMapPort.Server/db/base.json
+            IconX: 700, IconY: 290,
+            DbBaseJsonPath: "arena_equator/base.json",
             Exits: new[]
             {
                 // exfils-stage2 — ground-floor edges beyond the player spawns (Usec/All spawn north at z 38–49,
@@ -263,7 +263,7 @@ namespace ArenaMapPort.Shared
             InfiltrationName: "ArenaBay5",
             LocaleName: "Arena: Bay 5",
             LocaleDescription: "The Bay 5 harbour depot from EFT Arena: container yard, hangar, warehouse and depot.",
-            IconX: 150, IconY: 830,
+            IconX: 320, IconY: 820,
             DbBaseJsonPath: "arena_bay5/base.json",
             Exits: new[]
             {

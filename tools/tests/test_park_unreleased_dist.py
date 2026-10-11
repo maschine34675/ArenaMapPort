@@ -46,7 +46,7 @@ class ParkedDistributionTests(unittest.TestCase):
                 self.put(path, data)
                 expected[os.path.normcase(os.path.realpath(path))] = hashlib.sha256(data).hexdigest().upper()
         preserved = [self.client / 'bundles/arena_equator_scenes.bundle', self.client / 'bundles/arena_bay5_scenes.bundle',
-                     self.client / 'bundles/unknown.bundle', self.server / 'db/base.json',
+                     self.client / 'bundles/unknown.bundle', self.server / 'db/arena_equator/base.json',
                      self.root / 'work/build/bowl/arena_bowl_scenes.bundle', self.root / 'ArenaMapPort.Server/db/arena_bowl/base.json']
         for path in preserved:
             self.put(path, b'preserved')
@@ -73,6 +73,19 @@ class ParkedDistributionTests(unittest.TestCase):
         self.run_script('Client', success=False)
         self.assertTrue(first.exists())
         self.assertFalse((self.root / 'work/release-parked').exists())
+
+    def test_unused_exports_and_legacy_db_are_archived_but_inputs_survive(self):
+        removed = [self.client/'arena-audio/commentator/test.ogg', self.client/'arena-ui/icons/test.png',
+                   self.server/'db/base.json']
+        kept = self.root/'work/extract/arena-audio/commentator/test.ogg'
+        for path in [*removed, kept]:
+            self.put(path, b'original')
+        self.run_script('Client'); self.run_script('Server')
+        self.assertTrue(all(not p.exists() for p in removed))
+        self.assertEqual(b'original', kept.read_bytes())
+        archived = [p for p in (self.root/'work/release-parked').rglob('*') if p.is_file() and p.name != 'manifest.json']
+        self.assertEqual(3, len(archived))
+        self.assertTrue(all(p.read_bytes() == b'original' for p in archived))
 
     def test_linked_ancestor_is_rejected(self):
         outside = self.root / 'outside'

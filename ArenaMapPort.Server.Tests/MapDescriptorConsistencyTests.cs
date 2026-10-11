@@ -46,12 +46,9 @@ public class MapDescriptorConsistencyTests
     }
 
     [Fact]
-    public void Equator_DbBaseJsonPath_IsTheLegacyUnnestedPath()
+    public void Equator_DbBaseJsonPath_IsMapScoped()
     {
-        // Must stay "base.json" (not "arena_equator/base.json") — the already-deployed dist/
-        // layout (dist/SPT_Runtime/user/mods/ArenaMapPort/db/base.json) must keep working
-        // without a redeploy/migration.
-        Assert.Equal("base.json", ArenaMapRegistry.Equator.DbBaseJsonPath);
+        Assert.Equal("arena_equator/base.json", ArenaMapRegistry.Equator.DbBaseJsonPath);
     }
 
     // Spawn barriers are authored by hierarchy path only for the walked Equator and Bay5 maps.
