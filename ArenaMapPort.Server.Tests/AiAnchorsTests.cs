@@ -34,7 +34,7 @@ public sealed class AiAnchorsTests
     [Theory]
     [InlineData("equator.ai.json", 14, 2, 21)]
     [InlineData("bay5.ai.json", 11, 4, 43)]
-    [InlineData("airpit.ai.json", 19, 3, 35)] // PLAN-AIRPIT item 20: 19 core points, hubs 12/12/11
+    [InlineData("airpit.ai.json", 18, 3, 35)] // PLAN-AIRPIT item 20: 19 core points, hubs 12/12/11; id 7 dropped 2026-10-12 (behind the closed passport doors)
     public void CountsMatchTheResearchPass(string file, int expectedCorePoints, int expectedHubs, int expectedSubPoints)
     {
         using var doc = JsonDocument.Parse(File.ReadAllText(Sidecar(file)));
@@ -125,7 +125,7 @@ public sealed class AiAnchorsTests
             positions.Add(hub.GetProperty("position"));
             positions.AddRange(hub.GetProperty("sub_points").EnumerateArray());
         }
-        Assert.Equal(19 + 3 + 35, positions.Count);
+        Assert.Equal(18 + 3 + 35, positions.Count);
         foreach (var position in positions)
         {
             var p = position.EnumerateArray().Select(v => v.GetSingle()).ToArray();

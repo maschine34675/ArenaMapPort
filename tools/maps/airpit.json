@@ -25,8 +25,6 @@
   ],
   "opened_barriers": [
     "BUS_DOORS",
-    "PASSPORT_CONTROL_DOORS",
-    "PASSPORT_CONTROL_EMISSIVE",
     "SBG_Arena_AirPit_ShootOut/SOO/Prison_Metal_Fence_01 (2)",
     "SBG_Arena_AirPit_ShootOut/SOO/Prison_Metal_Fence_01 (3)"
   ],
@@ -45,7 +43,7 @@
     {"name": "west", "from": [-56.03, -41.66], "to": [-56.81, 44.28], "y": [-1.0, 12.0]},
     {"name": "north-west", "from": [-56.81, 44.28], "to": [-33.86, 74.16], "y": [-1.0, 12.0]}
   ],
-  "bake_bounds": [-57, 37, -2, 8, -83, 83],
+  "bake_bounds": [-57, 37, -2, 8, -83, 70],
   "navmesh_bake_layers": [9, 11, 13, 18, 30],
   "shader_fallback_names": [
     "Custom/Billboard_FogSheet_Simple",

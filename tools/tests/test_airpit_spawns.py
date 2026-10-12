@@ -27,6 +27,12 @@ spec.loader.exec_module(generator)
 # bot spawns that also come from markers; the bot spawns that come from Arena AI core points (id -> core id).
 PLAYER_MARKERS = {"all": 19, "usec": 16, "bear": 4, "south-all": 13}
 BOT_MARKERS = {"north-end-west": 9, "north-end-east": 17, "south-end": 15}
+# 2026-10-12 (user decision, host raid 4): the passport-control doors stay closed and are the north limit of the
+# play space, so the four points of the north spawn pocket (markers 19, 16, 9, 17; z 75..80) moved south of the
+# door line (z 69.4) onto open Arena floor with >= 1 m border clearance; id -> upper bound of the move in metres.
+MOVED_FROM_MARKER = {"arena_airpit-player-all": 20.0, "arena_airpit-player-usec": 21.0,
+                     "arena_airpit-bot-north-end-west": 18.5, "arena_airpit-bot-north-end-east": 18.0}
+DOOR_LINE_Z = 66.0   # the southern leaves of the closed passport doors sit at z 66.28
 BOT_CORE_POINTS = {
     "north-approach": 6, "north-hall": 5, "north-hall-west": 17, "east-north": 2, "east-mid": 1,
     "east-south": 18, "west-mid": 15, "west-south": 16, "center-east": 3, "plane-south": 12, "south-apron": 13,
@@ -198,6 +204,11 @@ class AirPitSidecarTests(unittest.TestCase):
         for pid, number in expected.items():
             x, y, z = world[number]
             px, py, pz = by_id[pid]["position"]
+            if pid in MOVED_FROM_MARKER:
+                self.assertLess(pz, DOOR_LINE_Z, f"{pid} must lie south of the closed passport-control line")
+                self.assertGreater(z, DOOR_LINE_Z, f"marker {number} is not in the north pocket")
+                self.assertLessEqual(math.hypot(px - x, pz - z), MOVED_FROM_MARKER[pid], pid)
+                continue
             self.assertAlmostEqual(px, x, delta=0.006, msg=pid)
             self.assertAlmostEqual(pz, z, delta=0.006, msg=pid)
             self.assertAlmostEqual(py, y, delta=0.05, msg=pid)

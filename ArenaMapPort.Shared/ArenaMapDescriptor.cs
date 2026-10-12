@@ -394,11 +394,13 @@ namespace ArenaMapPort.Shared
                 // PASSPORT_CONTROL_DOORS: 16 lane doors sealing the north spawn field, plus the GREEN/RED fog sheets.
                 // Mirrors tools/maps/airpit.json (AirPitMapTests.OpenedBarriersAndBakeInputsMatchTheSidecar).
                 "BUS_DOORS",
-                "PASSPORT_CONTROL_DOORS",
-                // The 18 red "lane closed" fog sheets that hang at y 2.8 along z 66 once the passport doors are gone
-                // (user report 2026-10-12: red lights floating in the air at the north spawn). Arena's GateEntity
-                // sits on this root too; it holds nothing but the sheets, no collider, so the bake is unchanged.
-                "PASSPORT_CONTROL_EMISSIVE",
+                // PASSPORT_CONTROL_DOORS stays CLOSED (user decision 2026-10-12, host raid 4): the 16 lane doors at
+                // z 66.3/69.1 are the only thing that can close the north - the facade behind the spawn pocket has a
+                // 32 m opening into the unlit entrance hall - so the real passport control closes it, its red
+                // PASSPORT_CONTROL_EMISSIVE lane lights stay as the "closed" state, and the north player and bot
+                // spawns moved south of the door line (tools/maps/airpit.bots.json). ArenaMode may open the doors
+                // itself (Spawns/OpenSpawnBarriers lists them no more; the GateEntity roots are documented in
+                // docs/progress/airpit-release.md).
                 // The two metal-detector portals in the z 50.5 facade between the passport hall and the main hall
                 // (host raid 1, 2026-10-12): each Prison_Metal_Fence_01 gate holds an active closed fence and two
                 // inactive swung-open halves (_PART_L/_PART_R), i.e. a gate Arena closes for ShootOut and opens for
@@ -412,10 +414,11 @@ namespace ArenaMapPort.Shared
             // TH_Roll_door_01_closed, fence_ema_01_white (18)) let the NavMesh run through shutters that stay solid;
             // host raid 1 walked the player into the DonB_Ramen shutter at (-46.2, 0, 43.4). Every solid is baked.
             // Play space: the AABB of the authored borders below (Arena's TeamFight outline, x -56.8..36.2,
-            // z -82.5..83.6), y -2..8 = ground floor plus wing mezzanine (user decision 2026-10-11, 4.3). The
-            // 2026-10-11 box (x -80..56, z -96..92) baked 7 m of the dark entrance hall north of the facade and
-            // strips of runway and forecourt that the walls now close off (host raids 1-4, 2026-10-12).
-            BakeBounds: new[] { -57.0f, 37.0f, -2.0f, 8.0f, -83.0f, 83.0f },
+            // z -82.5..83.6) cut at z 70, just south of the closed passport-control line (z 69.4), y -2..8 = ground
+            // floor plus wing mezzanine (user decision 2026-10-11, 4.3). The 2026-10-11 box (x -80..56, z -96..92)
+            // baked the spawn pocket, 7 m of the dark entrance hall and strips of runway and forecourt (host raids
+            // 1-4, 2026-10-12).
+            BakeBounds: new[] { -57.0f, 37.0f, -2.0f, 8.0f, -83.0f, 70.0f },
             // Arena's own NavMeshSurface layer mask (decoded from the three AI scenes, mask 0x40042A00):
             // DoorLowPolyCollider, Terrain, Triggers, LowPolyCollider, TransparentCollider. EFT's movement test mask
             // (LayersMaskController.PlayerCollisionTestMask) is LowPolyCollider + DoorLowPolyCollider + Terrain; the

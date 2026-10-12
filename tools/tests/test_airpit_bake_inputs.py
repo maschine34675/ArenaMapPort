@@ -30,8 +30,10 @@ GATES = [
     "SBG_Arena_AirPit_ShootOut/SOO/Prison_Metal_Fence_01 (3)",
 ]
 GATE_XZ = [(-23.50, 50.54), (-0.38, 50.54)]
-# PASSPORT_CONTROL_EMISSIVE (2026-10-12, host raid 4): the 18 red lane-closed fog sheets, a root with no collider.
-ROOT_BARRIERS = ["BUS_DOORS", "PASSPORT_CONTROL_DOORS", "PASSPORT_CONTROL_EMISSIVE"]
+# PASSPORT_CONTROL_DOORS stays closed since 2026-10-12 (user decision, host raid 4): the real passport control closes
+# the north instead of an invisible wall, the north spawns moved south of its line; its red PASSPORT_CONTROL_EMISSIVE
+# lane lights stay as the closed state. Only the bus doors and the two portal gates open.
+ROOT_BARRIERS = ["BUS_DOORS"]
 BARRIERS = ROOT_BARRIERS + GATES
 # Paths under the duplicated BUILDING sibling, kept to pin the resolver's Transform.Find semantics (no longer inputs).
 BUILDING_PATHS = [
@@ -40,9 +42,10 @@ BUILDING_PATHS = [
     "SBG_Arena_AirPit_ShootOut/SOO_LOD0/BUILDING/DonB_Ramen_closed (1)",
 ]
 ARENA_LAYERS = [9, 11, 13, 18, 30]            # NavMeshSurface mask 0x40042A00 of Arena's three AI scenes
-# The AABB of the authored borders (Arena's TeamFight outline) rounded outwards; was x -80..56, z -96..92 until
-# host raid 4 (2026-10-12) showed the mesh running 7 m into the unlit entrance hall north of the facade.
-BOUNDS = [-57, 37, -2, 8, -83, 83]
+# The AABB of the authored borders (Arena's TeamFight outline) rounded outwards and cut at z 70, just south of the
+# closed passport-control line (z 69.4); was x -80..56, z -96..92 until host raid 4 (2026-10-12) showed the mesh
+# running through the spawn pocket and 7 m into the unlit entrance hall north of the facade.
+BOUNDS = [-57, 37, -2, 8, -83, 70]
 PACKAGE = REPO / "work" / "extract" / "airpit-native-v5"
 HAVE_PACKAGE = (PACKAGE / "scenes" / "Arena_AirPit_ShootOut.json").is_file()
 ARENA_NAVMESH = Path("D:/Battlestate Games/Escape from Tarkov Arena/EscapeFromTarkovArena_Data/sharedassets33.assets")
@@ -105,8 +108,9 @@ class SidecarContentTests(unittest.TestCase):
         xs = [c for b in borders for c in (b["from"][0], b["to"][0])]
         zs = [c for b in borders for c in (b["from"][1], b["to"][1])]
         x0, x1, _y0, _y1, z0, z1 = self.map["bake_bounds"]
-        for bound, extreme in ((x0, min(xs)), (x1, max(xs)), (z0, min(zs)), (z1, max(zs))):
+        for bound, extreme in ((x0, min(xs)), (x1, max(xs)), (z0, min(zs))):
             self.assertLessEqual(abs(bound - extreme), 1.0, (bound, extreme))   # the box hugs the outline to within 1 m
+        self.assertTrue(69.5 <= z1 <= max(zs) + 1, z1)   # the north is cut at the closed passport-control line (z 69.4)
         facade = [b for b in borders if b["name"] == "north-facade-gap"][0]
         self.assertEqual((facade["from"], facade["to"]), ([-28.5, 82.5], [4.6, 82.5]))   # the 32 m opening at z 82.47
         for name in ("equator.json", "bay5.json"):
@@ -119,9 +123,9 @@ class SidecarContentTests(unittest.TestCase):
         main = nd.oracle.component_summary(mesh)[0]
         x0, x1, y0, y1, z0, z1 = self.map["bake_bounds"]
         self.assertTrue(x0 < main["min"][0] and main["max"][0] < x1, (main["min"], main["max"]))
-        # Arena's north edge is ragged (z 82.2..84.8 at the facade openings); the authored wall sits on the facade
-        # line z 82.5 and the box ends at 83, so up to 2 m of that strip is deliberately left out.
-        self.assertTrue(z0 < main["min"][2] and main["max"][2] < z1 + 2.0, (main["min"], main["max"]))
+        # The north spawn pocket (z 69.4..84.8, behind the closed passport-control doors) is deliberately left out;
+        # the box ends at z 70 and must still hold everything south of the door line.
+        self.assertTrue(z0 < main["min"][2] and 69.5 <= z1 < main["max"][2], (main["min"], main["max"], z1))
         self.assertTrue(y0 < main["min"][1] and main["max"][1] < y1, (main["min"], main["max"]))
 
 
@@ -265,7 +269,7 @@ class PackageTests(unittest.TestCase):
             self.assertFalse([k for k in tree if "frame" in scene.objects[k]["name"].lower()], root_name)
             self.assertEqual(self.live_colliders(scene, [key]), [], "the barrier object itself would stay a source")
             total += len(self.live_colliders(scene, tree))
-        self.assertEqual(total, 92)
+        self.assertEqual(total, 60)   # BUS_DOORS: 24 on layer 18, 36 on layer 12 (the 32 passport-door colliders stay)
 
     def test_the_barriers_leave_no_markup_behind(self):
         # BakeNavMesh also drops NavMeshModifier/Volume markups under these objects; AirPit has none there.
@@ -285,8 +289,8 @@ class PackageTests(unittest.TestCase):
         masked = self.pc.source_owner_mask(cset, layer_mask=self.pc.layers_to_mask(ARENA_LAYERS))
         layers = {cset.owners[i].layer for i in range(len(cset.owners)) if everything[i] and not masked[i]}
         self.assertEqual(len(cset.owners), 5309)
-        self.assertEqual(int(everything.sum()), 5144)         # 5309 - 67 LevelBorder - 2 SPAWN_BOUND - 92 root barrier - 4 gate
-        self.assertEqual(int(masked.sum()), 2013)             # was 2011 with the 4 cutters (4 of their 9 owners on layer 18)
+        self.assertEqual(int(everything.sum()), 5176)         # 5309 - 67 LevelBorder - 2 SPAWN_BOUND - 60 BUS_DOORS - 4 gate
+        self.assertEqual(int(masked.sum()), 2029)             # the 16 passport-door leaves on layer 18 are sources again
         self.assertEqual(layers, {0, 12, 22})                   # Default, HighPolyCollider (ballistic), Interactive
         self.assertFalse({cset.owners[i].layer for i in range(len(cset.owners)) if masked[i]} - set(ARENA_LAYERS))
         # AirPit has no live non-trigger collider on the Triggers layer, so keeping the owner rule costs nothing here

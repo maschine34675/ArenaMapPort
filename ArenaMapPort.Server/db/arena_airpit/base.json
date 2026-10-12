@@ -679,9 +679,9 @@
       "Id": "arena_airpit-player-all",
       "Infiltration": "ArenaAirPit",
       "Position": {
-        "x": -10.24,
+        "x": -21.5,
         "y": 0.1,
-        "z": 76.74
+        "z": 61.5
       },
       "Rotation": 180.0,
       "Sides": [
@@ -709,9 +709,9 @@
       "Id": "arena_airpit-player-usec",
       "Infiltration": "ArenaAirPit",
       "Position": {
-        "x": 0.33,
+        "x": -1.0,
         "y": 0.1,
-        "z": 78.3
+        "z": 58.5
       },
       "Rotation": 180.0,
       "Sides": [
@@ -800,9 +800,9 @@
       "Id": "arena_airpit-bot-north-end-west",
       "Infiltration": "",
       "Position": {
-        "x": -22.42,
+        "x": -23.5,
         "y": 0.1,
-        "z": 79.62
+        "z": 62.0
       },
       "Rotation": 180.0,
       "Sides": [
@@ -831,9 +831,9 @@
       "Id": "arena_airpit-bot-north-end-east",
       "Infiltration": "",
       "Position": {
-        "x": -2.81,
+        "x": 8.0,
         "y": 0.1,
-        "z": 75.18
+        "z": 62.0
       },
       "Rotation": 180.0,
       "Sides": [

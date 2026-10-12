@@ -70,8 +70,8 @@ public class MapDescriptorConsistencyTests
         Assert.Equal(new[]
         {
             "BUS_DOORS",
-            "PASSPORT_CONTROL_DOORS",
-            "PASSPORT_CONTROL_EMISSIVE", // the 18 red lane-closed fog sheets (host raid 4, 2026-10-12)
+            // PASSPORT_CONTROL_DOORS stays closed since 2026-10-12 (user decision, host raid 4): the real passport
+            // control closes the north instead of an invisible wall; the north spawns moved south of its line.
             // the two portal gates of the z 50.5 facade (host raid 1, 2026-10-12): non-root paths into the main scene
             "SBG_Arena_AirPit_ShootOut/SOO/Prison_Metal_Fence_01 (2)",
             "SBG_Arena_AirPit_ShootOut/SOO/Prison_Metal_Fence_01 (3)",
@@ -114,11 +114,11 @@ public class MapDescriptorConsistencyTests
             minX = MathF.Min(minX, MathF.Min(b.X0, b.X1)); maxX = MathF.Max(maxX, MathF.Max(b.X0, b.X1));
             minZ = MathF.Min(minZ, MathF.Min(b.Z0, b.Z1)); maxZ = MathF.Max(maxZ, MathF.Max(b.Z0, b.Z1));
         }
-        // Bots get little or no mesh beyond the walls: the bake volume is the outline's bounding box to within 1 m
-        // (z max 83 against the 83.6 m north-east jog, where the facade itself is solid).
+        // Bots get no mesh beyond the walls: the bake volume lies inside the outline's bounding box (to within 1 m on
+        // the west, east and south edges; the north is cut at the closed passport-control line, 13 m inside).
         var bounds = ArenaMapRegistry.AirPit.BakeBounds;
         Assert.InRange(bounds[0], minX - 1f, minX + 1f); Assert.InRange(bounds[1], maxX - 1f, maxX + 1f);
-        Assert.InRange(bounds[4], minZ - 1f, minZ + 1f); Assert.InRange(bounds[5], maxZ - 1f, maxZ + 1f);
+        Assert.InRange(bounds[4], minZ - 1f, minZ + 1f); Assert.InRange(bounds[5], 69.5f, maxZ + 1f);
         // Every spawn and exit of the map lies inside the outline's box (the walls must not shut a spawn out).
         foreach (var exit in ArenaMapRegistry.AirPit.Exits)
         {
@@ -140,11 +140,13 @@ public class MapDescriptorConsistencyTests
         // solids that stay in the scene; the walk test stopped at the DonB_Ramen shutter. AirPit now bakes every
         // solid and opens the two portal gates instead (OpenedBarriers), so the list is empty by design.
         Assert.Empty(airPit.NavMeshBakeExclusions);
-        Assert.Equal(5, airPit.OpenedBarriers.Length);
+        Assert.Equal(3, airPit.OpenedBarriers.Length);
         Assert.All(airPit.OpenedBarriers, path => Assert.True(IsHierarchyPath(path), path));
         Assert.Equal(airPit.OpenedBarriers.Length, airPit.OpenedBarriers.Distinct().Count());
-        // The AABB of the authored borders (Arena's TeamFight outline) rounded outwards to whole metres.
-        Assert.Equal(new[] { -57.0f, 37.0f, -2.0f, 8.0f, -83.0f, 83.0f }, airPit.BakeBounds);
+        Assert.DoesNotContain("PASSPORT_CONTROL_DOORS", airPit.OpenedBarriers); // the closed passport control IS the north limit
+        // The AABB of the authored borders (Arena's TeamFight outline) rounded outwards, cut at z 70 just south of
+        // the closed passport-control line (z 69.4).
+        Assert.Equal(new[] { -57.0f, 37.0f, -2.0f, 8.0f, -83.0f, 70.0f }, airPit.BakeBounds);
         // min < max per axis: [min_x, max_x, min_y, max_y, min_z, max_z]
         for (var axis = 0; axis < 3; axis++)
             Assert.True(airPit.BakeBounds[2 * axis] < airPit.BakeBounds[2 * axis + 1]);
