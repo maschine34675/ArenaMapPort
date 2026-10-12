@@ -2241,3 +2241,8 @@ restart (the chained `restart` failed once because the backend was down; `uibrid
 - That F10 hit also showed that `BallisticTwinRepairs` had cloned the invisible walls onto the ballistic layer; the twin pass now
   skips `ArenaMapPort_Border_*` (movement-only walls, bullets pass).
 - Left at 10:19 (`gpu-run leave`, healed).
+
+Raid 6 (10:23, build `0419ab1`, after a server stop for the DLL swap - host server DLL hash = dist - and an EFT restart): spawned at
+the moved `SpawnPoint_Player_All` (-21.5, 0, 61.5); `authored borders: created 12 wall(s)`, **`ballistic twins: added 43
+HighPolyCollider twin(s) ... (1909 already had one)`** (the 12 walls no longer counted), `added navmesh ... 8193 vertices, 3775
+triangles`, no warning. Left at 10:25.
