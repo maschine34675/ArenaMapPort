@@ -2062,3 +2062,45 @@ Offline check with the new inputs: both gate paths resolve to exactly one object
 (portal gate shape test: closed fence active, halves inactive, colliders 12+18, no frame name), `MapDescriptorConsistencyTests`
 expects four barriers and no exclusion; `dotnet test` 687 passed, Python suite OK. The raid was left at 02:44 (`gpu-run leave`, healed)
 before the offline analysis. Rebuild U2: `work/logs/airpit-u2.log`.
+
+### U2 (2026-10-12 02:53-03:04, `unity_build_all_20261012_025338.log`) and host raid 2 (03:09-03:14, build 5f0ac2b + d23efda)
+
+U2: `[build_all] OK`; `bake inputs: ... 0 navmesh_bake_exclusions, 4 opened_barriers`; `excluded 1 ... opened_barriers:Prison_Metal_Fence_01 (2)`
+and `(3)` (one source each: the closed fence collider), BUS_DOORS 24 / PASSPORT_CONTROL_DOORS 16 as before; `sources=2025`;
+**`triangulation: vertices=10264 triangles=4684`**. Offline on the new bundle (scratch `airpit_check_u2.py`: inside-only components
+of the mesh clipped to the play space, centroid Dijkstra): one component of 8,707 m2 now holds both north spawns, the north gate, core2/core4/core7,
+core5, the hall, every mezzanine point, the apron and the south spawns; `usec_spawn -> core5` is 49 m of centroid path for 41 m straight.
+Still apart in that clipped view: core16 (642 m2, `TH_Roll_door_02/03_closed`), core17 (923 m2, inside the `DonB_Ramen_closed`
+block) and core18 (523 m2, inside `DonB_Ramen_closed (1)`), and `core3_hall -> core19` (12 m straight) is a 305 m centroid path
+over the north field, because the ShootOut cover around the airliner (`plywood_wall_02`, `med_camp_operating_room_wall`,
+`shopping_mall_med_camp_tarpaulin_wall`, boards, barrels) walls the hall centre off from the airliner block. `validate_port ...
+--distribution` → `PORT_VALIDATED` (4684 triangles, 824,643,005 B scenes bundle); `DISTRIBUTION_OK 3 maps 9 bundles 3 sidecars`;
+deploy: 4 files overwritten (client DLL, server DLL, both AirPit bundles + preset, `material-shaders.arena_airpit.json`); `gpu-run server
+stop` so Syncthing could replace the server DLL (host hash = dist after the stop), `gpu-run restart --force` (88 s, 19/19 identical).
+
+Raid 2 (`gpu-run raid --mode pmc --map "AIR PIT" --bots none`, spawned at the **south** `SpawnPoint_Player_South_All` (-16.9, 0, -71.7)):
+
+- `[NavMesh] added navmesh for 'arena_airpit': 10264 vertices, 4684 triangles` (the U2 bake is live after the restart).
+- `spawn openings: ... spawn barrier 'Prison_Metal_Fence_01 (2)' at (-23.5, 0.0, 50.5): deactivated 1 part(s), 2 already off, kept 0
+  frame part(s)   spawn barrier 'Prison_Metal_Fence_01 (3)' at (-0.4, 0.0, 50.5): deactivated 1 part(s), 2 already off` (second pass
+  `0 ... 3 already off`); BUS_DOORS 6 / PASSPORT_CONTROL_DOORS 18 as in raid 1; no ArenaMapPort warning or error.
+- `uibridge_teleport dryRun=true` from the south spawn: core5, core3, the south gate, core10 (mezzanine, y 6.4), hub1.11 and core19 all
+  pass `navmesh, zone, reachable, room`. From (-0.4, 55) at the end: core16, core17 and core18 pass too - Unity's runtime mesh reaches
+  the three shop pockets (presumably round the outside of the building, which the clipped offline view drops); not measured.
+- **Walk `usec_spawn -> core5`: "40.8 m away (40.8 m along the navmesh)", arrived** (raid 1: 283.8 m, stuck at the shutter).
+- Walk `core3 -> core19`: "11.9 m away (193.9 m along the navmesh)" - the hall-centre cover detour, see the U2 paragraph.
+- Screenshots: the south spawn looking north through the opened bus (`BUS_DOORS` leaves gone, the airliner behind), the hall centre
+  looking north-west (escalators, `Прибытие` sign, tarpaulin walls, crates; a yellow-green fog-sheet haze at the pallet fence - the
+  item 11 StandIn/Hidden A/B is still open), core5 looking north (the east portal: open plywood-lined passage, red passport-hall lights
+  beyond) and the east portal from the north side (open, the airliner nose and the NORVAIR sign through it).
+- The bright green column of raid 1 is EFT's own exfil marker: `uibridge_inspect find type=ParticleSystem` lists `Air Pit North Gate
+  signal` / `Air Pit South Gate signal` next to Arena's flare/fire/explosion systems; `PASSPORT_CONTROL_DOORS/GREEN` and `/RED` are
+  off, the 18 red fog sheets under `PASSPORT_CONTROL_EMISSIVE` are on (red lane lights). Not a port defect.
+- RainBounds with the play-space set filter (d23efda): `computed from 9434 renderer(s) (excluded 1 oversized, 50 outside the play
+  space): center=(-0.95, 26.24, 278.20) size=(779.38, 60.50, 1648.26)` - better than 4.3 x 3.2 km but the runway/forecourt still
+  reach in and run on; follow-up 3bd7780 intersects each renderer's bounds with the box before encapsulating (deployed for raid 3).
+  F8 under the hall roof at (-1.08, 1.57, 38.30): `height(reversedZ)=45.08` (roof 45 m up, `nothingPhotographed=False`); on the apron
+  at the south spawn `height(reversedZ)=0.03` (open sky).
+- `Weather (test)/Weather` set to `Rain` for raid 3.
+
+Left at 03:14 (`gpu-run leave`, healed).
