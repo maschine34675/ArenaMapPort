@@ -30,9 +30,10 @@ GATES = [
     "SBG_Arena_AirPit_ShootOut/SOO/Prison_Metal_Fence_01 (3)",
 ]
 GATE_XZ = [(-23.50, 50.54), (-0.38, 50.54)]
-# PASSPORT_CONTROL_DOORS stays closed since 2026-10-12 (user decision, host raid 4): the real passport control closes
-# the north instead of an invisible wall, the north spawns moved south of its line; its red PASSPORT_CONTROL_EMISSIVE
-# lane lights stay as the closed state. Only the bus doors and the two portal gates open.
+# PASSPORT_CONTROL_DOORS stays closed since 2026-10-12 (user decision, host raid 4/5): the closed passport-control look
+# (eight waist-high turnstile gates with open floor between them, red PASSPORT_CONTROL_EMISSIVE lane lights above the
+# posts); the authored facade wall is the actual north limit and the north spawns sit south of the gate line. Only
+# the bus doors and the two portal gates open.
 ROOT_BARRIERS = ["BUS_DOORS"]
 BARRIERS = ROOT_BARRIERS + GATES
 # Paths under the duplicated BUILDING sibling, kept to pin the resolver's Transform.Find semantics (no longer inputs).

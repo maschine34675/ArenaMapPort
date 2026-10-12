@@ -394,13 +394,14 @@ namespace ArenaMapPort.Shared
                 // PASSPORT_CONTROL_DOORS: 16 lane doors sealing the north spawn field, plus the GREEN/RED fog sheets.
                 // Mirrors tools/maps/airpit.json (AirPitMapTests.OpenedBarriersAndBakeInputsMatchTheSidecar).
                 "BUS_DOORS",
-                // PASSPORT_CONTROL_DOORS stays CLOSED (user decision 2026-10-12, host raid 4): the 16 lane doors at
-                // z 66.3/69.1 are the only thing that can close the north - the facade behind the spawn pocket has a
-                // 32 m opening into the unlit entrance hall - so the real passport control closes it, its red
-                // PASSPORT_CONTROL_EMISSIVE lane lights stay as the "closed" state, and the north player and bot
-                // spawns moved south of the door line (tools/maps/airpit.bots.json). ArenaMode may open the doors
-                // itself (Spawns/OpenSpawnBarriers lists them no more; the GateEntity roots are documented in
-                // docs/progress/airpit-release.md).
+                // PASSPORT_CONTROL_DOORS stays CLOSED (user decision 2026-10-12, host raid 4/5): the 16 lane "doors"
+                // are waist-high turnstile gates (1.09 x 1.35 m) in eight lanes with 7-13 m of open floor between
+                // them, so they are the closed-passport-control LOOK (red PASSPORT_CONTROL_EMISSIVE/RED lane lights
+                // above the gate posts), not a barrier - the walk around them is open, host raid 5. The north limit
+                // is the authored facade wall below; the north player and bot spawns sit south of the gate line
+                // (tools/maps/airpit.bots.json) and the bake box ends at z 70, so bots have no business in the pocket.
+                // ArenaMode may open the gates itself (Spawns/OpenSpawnBarriers lists them no more; the GateEntity
+                // roots are documented in docs/progress/airpit-release.md).
                 // The two metal-detector portals in the z 50.5 facade between the passport hall and the main hall
                 // (host raid 1, 2026-10-12): each Prison_Metal_Fence_01 gate holds an active closed fence and two
                 // inactive swung-open halves (_PART_L/_PART_R), i.e. a gate Arena closes for ShootOut and opens for
@@ -414,10 +415,11 @@ namespace ArenaMapPort.Shared
             // TH_Roll_door_01_closed, fence_ema_01_white (18)) let the NavMesh run through shutters that stay solid;
             // host raid 1 walked the player into the DonB_Ramen shutter at (-46.2, 0, 43.4). Every solid is baked.
             // Play space: the AABB of the authored borders below (Arena's TeamFight outline, x -56.8..36.2,
-            // z -82.5..83.6) cut at z 70, just south of the closed passport-control line (z 69.4), y -2..8 = ground
-            // floor plus wing mezzanine (user decision 2026-10-11, 4.3). The 2026-10-11 box (x -80..56, z -96..92)
-            // baked the spawn pocket, 7 m of the dark entrance hall and strips of runway and forecourt (host raids
-            // 1-4, 2026-10-12).
+            // z -82.5..83.6) cut at z 70, just south of the closed passport-gate line (z 69.4), y -2..8 = ground
+            // floor plus wing mezzanine (user decision 2026-10-11, 4.3). Arena's own mesh has no polygons in the
+            // gate band z 66..69.8 either (its bake predates the current gates); the pocket behind it stays without
+            // mesh. The 2026-10-11 box (x -80..56, z -96..92) baked the pocket, 7 m of the dark entrance hall and
+            // strips of runway and forecourt (host raids 1-4, 2026-10-12).
             BakeBounds: new[] { -57.0f, 37.0f, -2.0f, 8.0f, -83.0f, 70.0f },
             // Arena's own NavMeshSurface layer mask (decoded from the three AI scenes, mask 0x40042A00):
             // DoorLowPolyCollider, Terrain, Triggers, LowPolyCollider, TransparentCollider. EFT's movement test mask
@@ -430,7 +432,8 @@ namespace ArenaMapPort.Shared
             // not by colliders: the passport-hall facade has a 32 m opening (x -28..4 at z 82.5) into the unlit
             // entrance hall, and the apron opens onto the runway. The ShootOut LevelBorder cubes all lie inside the
             // outline and stay removed. The north edge is pulled from the polygon's (-32.4, 88.3)-(-2.2, 89.9)-
-            // (8.8, 83.6) onto the facade line so the wall sits in the doorway. Mirrors tools/maps/airpit.json.
+            // (8.8, 83.6) onto the facade line so the wall sits in the doorway; it is what closes the unlit entrance
+            // hall (host raid 5: F10 from the spawn hits 'north-facade-gap' at 23.7 m). Mirrors tools/maps/airpit.json.
             AuthoredBorders: new[]
             {
                 new ArenaBorderDescriptor("north-west-approach", -33.86f, 74.16f, -28.5f, 82.5f, -1.0f, 12.0f),

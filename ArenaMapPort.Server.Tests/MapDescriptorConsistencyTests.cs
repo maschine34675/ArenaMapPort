@@ -70,8 +70,8 @@ public class MapDescriptorConsistencyTests
         Assert.Equal(new[]
         {
             "BUS_DOORS",
-            // PASSPORT_CONTROL_DOORS stays closed since 2026-10-12 (user decision, host raid 4): the real passport
-            // control closes the north instead of an invisible wall; the north spawns moved south of its line.
+            // PASSPORT_CONTROL_DOORS stays closed since 2026-10-12 (user decision, host raid 4/5): the closed
+            // passport-control look (turnstile gates, red lane lights); the north spawns moved south of its line.
             // the two portal gates of the z 50.5 facade (host raid 1, 2026-10-12): non-root paths into the main scene
             "SBG_Arena_AirPit_ShootOut/SOO/Prison_Metal_Fence_01 (2)",
             "SBG_Arena_AirPit_ShootOut/SOO/Prison_Metal_Fence_01 (3)",
@@ -143,7 +143,7 @@ public class MapDescriptorConsistencyTests
         Assert.Equal(3, airPit.OpenedBarriers.Length);
         Assert.All(airPit.OpenedBarriers, path => Assert.True(IsHierarchyPath(path), path));
         Assert.Equal(airPit.OpenedBarriers.Length, airPit.OpenedBarriers.Distinct().Count());
-        Assert.DoesNotContain("PASSPORT_CONTROL_DOORS", airPit.OpenedBarriers); // the closed passport control IS the north limit
+        Assert.DoesNotContain("PASSPORT_CONTROL_DOORS", airPit.OpenedBarriers); // the gates stay closed (look); the facade wall is the limit
         // The AABB of the authored borders (Arena's TeamFight outline) rounded outwards, cut at z 70 just south of
         // the closed passport-control line (z 69.4).
         Assert.Equal(new[] { -57.0f, 37.0f, -2.0f, 8.0f, -83.0f, 70.0f }, airPit.BakeBounds);

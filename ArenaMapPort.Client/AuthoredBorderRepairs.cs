@@ -29,7 +29,7 @@ namespace ArenaMapPort.Client
     internal static class AuthoredBorderRepairs
     {
         const string Tag = "[ArenaMapPort][RaidFix]";
-        const string ObjectPrefix = "ArenaMapPort_Border_";
+        internal const string ObjectPrefix = "ArenaMapPort_Border_";
         const string LayerName = "LowPolyCollider";
         const int LayerFallback = 18;
         const float Thickness = 0.4f;

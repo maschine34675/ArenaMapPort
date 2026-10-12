@@ -73,6 +73,10 @@ namespace ArenaMapPort.Client
                         {
                             continue;
                         }
+                        if (collider.name.StartsWith(AuthoredBorderRepairs.ObjectPrefix, System.StringComparison.Ordinal))
+                        {
+                            continue; // the descriptor's invisible play-area walls are movement-only; bullets pass them
+                        }
                         // the twin lives under the same parent in Arena's authoring; a previous pass of this
                         // method (EFT runs the spawn postfix twice per raid) counts as one too
                         var scope = collider.transform.parent != null ? collider.transform.parent : collider.transform;

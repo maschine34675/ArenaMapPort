@@ -2212,4 +2212,32 @@ north - provided it stays closed. Decision (commit `2a1e0ce`):
   none named frame) itself and may switch `GREEN/GreenFog` on - see the GateEntity notes above.
 - Tests: `test_airpit_spawns.py` records the four moves against the original markers (`MOVED_FROM_MARKER`, south of
   `DOOR_LINE_Z` 66), `MapDescriptorConsistencyTests` three barriers and the z 70 box.
-  U4 rebake: `work/logs/airpit-u4.log`.
+  U4 rebake: `work/logs/airpit-u4.log` (`unity_build_all_20261012_095714.log`: box Center (-10, 3, -6.5) Extents (47, 5, 76.5),
+  **`triangulation: vertices=8193 triangles=3775`**, 3 opened barriers; `PORT_VALIDATED` 3775 triangles, `DISTRIBUTION_OK`).
+
+### Host raid 5 (2026-10-12 10:12-10:19, build a262375 + U4, bots None, daytime) - and what the passport control really is
+
+Deploy + `gpu-run server stop` + host hash check (server DLL, client DLL, both bundles, base.json, ai sidecar all MATCH) + EFT
+restart (the chained `restart` failed once because the backend was down; `uibridge_quit` + `gpu-run start`, 72 s, 19/19 identical).
+
+- Spawned at the moved `SpawnPoint_Player_Usec` (-1.0, 0, 58.5), facing the open "A" portal 8 m south (photo 14). Log:
+  `[NavMesh] added navmesh for 'arena_airpit': 8193 vertices, 3775 triangles`; `spawn openings: BUS_DOORS ... deactivated 6`,
+  `Prison_Metal_Fence_01 (2)/(3) ... deactivated 1 part(s), 2 already off` (no passport entry, second pass idempotent);
+  **`authored borders: created 12 wall(s) on layer 18 ('LowPolyCollider'), 0 already present, 0 degenerate,
+  scene=Arena_AirPit_Scripts`** (second pass `created 0 ... 12 already present`); `RainBounds ... center=(-10.00, 26.24, -6.50)
+  size=(174.00, 60.50, 233.00)`; no ArenaMapPort warning or error.
+- `uibridge_teleport dryRun`: (-10, 92) and the old spawn (-10.24, 76.74) → `no navmesh within 2 m` (pocket and hall without
+  mesh); core5 and the south gate reachable.
+- **The passport control is not a barrier.** Facing north from the spawn (photo 15) and from 2 m before the line (16, 17): the
+  16 `Passport_control_01_Door` leaves are waist-high turnstile gates, 1.09 x 1.35 m, in eight lanes (x -21.2..-20.1, -17.8..-16.7,
+  -16.2..-15.1, -12.8..-11.7, -11.2..-10.2, -7.8..-6.8, -6.3..-5.2, 2.1..3.2 at z 66.3 and 69.1); between the lanes the floor is
+  open (gaps of 2 m, and 7-13 m at x -34..-21, -5..2, 3..11.5). The only other collider on the line is the hall's curved glass
+  wall (`airport_passport_control_COLLIDER`, two vertical bands at x -41..-34 and 18.7..11.7). Dry runs at (-1, 66..69.6),
+  (-10.7, 67.7) and (-14, 67.7) pass; `uibridge_walk` to (-1, 69.6): "5.6 m along the navmesh", arrived, the pocket ahead (photo
+  18). Arena's own mesh has no polygons in the band z 66..69.8 (its bake predates these gates or used a geometry that is not in
+  the data), which is where the plan's "the doors DO seal the north" came from. So the closed gates are the passport-control
+  LOOK (red lane lights above the posts, nothing floats), and the north is closed by the authored facade wall: F10 from the
+  spawn hits `ArenaMapPort_Border_north-facade-gap/..._BALLISTIC_twin` at 23.7 m.
+- That F10 hit also showed that `BallisticTwinRepairs` had cloned the invisible walls onto the ballistic layer; the twin pass now
+  skips `ArenaMapPort_Border_*` (movement-only walls, bullets pass).
+- Left at 10:19 (`gpu-run leave`, healed).
