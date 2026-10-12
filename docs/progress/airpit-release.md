@@ -2659,4 +2659,4 @@ The plywood / chain-link / container cordon under the airliner between the east 
 photos 27 (from (3, 0.6, -17) facing north-west: plywood wall and fence under the fuselage) and 28 (from core19 facing south-east:
 NORVAIR container, corrugated panels, plywood). Bots path 194 m around it for 12 m of straight line (analysis in "Open points after
 raids 1-3" and the hall-cover audit: options A leave, B open `tarpaulin_wall_03`, C also `plywood_wall_02 (1)`; each option is a
-rebake). Still a user decision.
+rebake). **User decision (2026-10-12 late): the cover stays** - no rebake; the 194 m bot detour is accepted. In the same message the user confirmed the glass after the queue fix ("Scheiben sehen gut aus") and the rain ("Regen passt"), and asked why the four shops are closed and empty when they should be walkable - investigation `wf_c92d33bb-843` (preset scene binding per mode, interior census 0.5.4 / 0.6.0 / `Arena_Airpit_Main_hall`).

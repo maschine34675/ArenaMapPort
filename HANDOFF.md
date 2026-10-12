@@ -73,7 +73,7 @@ Evening user feedback (progress doc "User feedback (2026-10-12 evening)"): (a) t
 room left open (sealing it = new importer/bake mechanism, user's call); (b) the hall glass was near-black because the rebind forced
 the stand-in's Geometry queue onto the transparent shader - `ShaderStandinPolicy.EffectiveRenderQueue` restores the shader default
 on AirPit (host check: F10 `renderQueue=3000` on `Airpit_Building_Glass_LOD0`, screenshot from the mezzanine (-3.9, 5.1, 4.0) facing
-south); (c) "hall-centre cover" = the plywood/fence/container cordon under the airliner (photos 27/28).
+south); (c) "hall-centre cover" = the plywood/fence/container cordon under the airliner (photos 27/28). User decisions (2026-10-12 late): the hall-centre cover STAYS (no rebake), the glass looks good after the queue fix, the rain is fine. New question from the user: all four shops should be walkable in Arena - where did the interiors go? Investigation running (preset scene binding per mode, shop interior census across 0.5.4 / 0.6.0 / level38).
 Item 24 multi-part packager is in (`606f00e`: `tools/release/make_release_zips.py`, core + one ZIP per map, 4 parts, largest
 755 MiB; the real build needs a clean tree and a scratch dir for `--extract-check`). Item 25 (0.2.0 text sweep, night look-test, Equator/Bay5 regression raids,
 AirPit -> Equator -> AirPit sequence, bots raid on U4, map-select screenshots, bloom -1/-1 decision, light-parity signage look).
