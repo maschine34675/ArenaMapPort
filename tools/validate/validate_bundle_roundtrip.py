@@ -1441,13 +1441,19 @@ def source_reference_expectations(manifest: dict, scenes: dict) -> tuple[dict, l
 
     Source-null MeshFilters omitted by the inherited extractor remain outside the
     accepted scope; any explicitly emitted null MeshFilter still needs source proof.
+
+    A partial scene (manifest ``partial_scenes``) is scoped to the owners that are objects of its package
+    scene (tools/validate/partial_scope.py); a scene that is not partial is read in full as before.
     """
     import UnityPy
+    import partial_scope
     root = Path(manifest["source"]["arena_data_root"])
     env = UnityPy.Environment(path=str(root))
     registry = {record["name"]: record for record in manifest["source"]["scene_registry"]}
+    scopes = partial_scope.scopes_from_objects(manifest, scenes)
     nulls, mixed = {}, []
     for scene_name, scene in scenes.items():
+        scope = scopes.get(scene_name)
         source_name = f"level{registry[scene_name]['index']}"
         sf = env.load_file(str(root / source_name))
         emitted_mf = {o["id"] for o in scene["objects"] for c in o["components"]
@@ -1462,6 +1468,8 @@ def source_reference_expectations(manifest: dict, scenes: dict) -> tuple[dict, l
                 if tree["m_Mesh"] != {"m_FileID": 0, "m_PathID": 0}:
                     continue
                 go_id = str(tree["m_GameObject"]["m_PathID"])
+                if scope is not None and not scope.covers(go_id):
+                    continue
                 if kind == "MeshFilter" and go_id not in emitted_mf:
                     continue
                 typed = reader.read()
@@ -1472,6 +1480,8 @@ def source_reference_expectations(manifest: dict, scenes: dict) -> tuple[dict, l
                 slots = tree["m_Materials"]
                 empty = [i for i, pointer in enumerate(slots) if pointer == {"m_FileID": 0, "m_PathID": 0}]
                 if not empty or len(empty) == len(slots):
+                    continue
+                if scope is not None and not scope.covers(tree["m_GameObject"]["m_PathID"]):
                     continue
                 typed = reader.read()
                 ids, sources = [], []

@@ -190,6 +190,188 @@ class SourcePlanTests(unittest.TestCase):
             EX.reject_unsupported_ground(file, "Arena_Test_Main")
 
 
+def partial_plan():
+    """example_plan plus a partial scene (level 2) that skips the twins of the full scene (level 1)."""
+    plan = example_plan()
+    plan["scenes"].append({
+        "name": "Arena_Test_Part", "asset_path": "Assets/Content/Arena_Test_Part.unity", "index": 2,
+        "select": {"schema": 1, "reason": "furnished shops", "skip_twins_of": 1,
+                   "roots": ["Root/Shops"],
+                   "region_roots": [{"path": "Root/Props ", "regions": ["shop"]}],
+                   "regions": [{"name": "shop", "min": [0, 0, 0], "max": [10, 5, 10]}]}})
+    return plan
+
+
+class PartialScenePlanTests(unittest.TestCase):
+    """A scenes record with `select` is a partial scene: validated by the plan, reported by the manifest."""
+
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temp.cleanup)
+        self.repo = Path(self.temp.name)
+        self.root = self.repo / "arena-source"
+        self.root.mkdir()
+        self.plan = partial_plan()
+        self.path = self.repo / "tools/extract/plans/test.json"
+        self.path.parent.mkdir(parents=True)
+        self.path.write_text(json.dumps(self.plan), encoding="utf-8")
+        self.manifest = {"source": SP.provenance(self.plan, self.path, self.root, "fixed", self.repo),
+                         "scenes": ["Arena_Test_Main", "Arena_Test_Part"], "slice": {},
+                         "partial_scenes": {"Arena_Test_Part": {"index": 2, "objects": 3}},
+                         "anchors_reference": example_anchors()}
+
+    def verify(self):
+        with patch.object(SP, "read_build_scenes", return_value=[]), patch.object(SP, "verify_scene_mapping"):
+            return SP.validate_manifest_plan(self.manifest, self.repo, verify_source=False)
+
+    def test_partial_plan_is_valid_and_its_registry_stays_a_plain_scene_list(self):
+        SP.validate_plan(self.plan)
+        self.assertEqual([r["name"] for r in SP.partial_scene_records(self.plan)], ["Arena_Test_Part"])
+        self.assertEqual(SP.registry_for(self.plan), [
+            {"name": "Arena_Test_Main", "asset_path": "Assets/Content/Arena_Test_Main.unity", "index": 1},
+            {"name": "Arena_Test_Part", "asset_path": "Assets/Content/Arena_Test_Part.unity", "index": 2}])
+        self.assertEqual([r["index"] for r in SP.unique_records(self.plan)], [1, 2])
+
+    def test_a_plan_without_select_has_no_partial_scenes(self):
+        self.assertEqual(SP.partial_scene_records(example_plan()), [])
+
+    def test_select_belongs_on_scenes_records_only(self):
+        select = self.plan["scenes"][1]["select"]
+        for group in ("anchor_scenes", "navmesh_scenes"):
+            plan = partial_plan()
+            plan[group] = [dict(plan["scenes"][1])]
+            with self.subTest(group=group), self.assertRaisesRegex(SP.PlanError, "cannot carry select"):
+                SP.validate_plan(plan)
+        plan = partial_plan()
+        plan["excluded_scenes"] = [{"name": "Arena_Test_Culling", "asset_path": "Assets/Content/Arena_Test_Culling.unity",
+                                    "index": 9, "reason": "not imported", "select": select}]
+        with self.assertRaisesRegex(SP.PlanError, "cannot carry select"):
+            SP.validate_plan(plan)
+
+    def test_skip_twins_of_must_name_an_earlier_full_scene(self):
+        for twins, label in ((2, "itself"), (3, "unknown index"), (7, "an excluded or foreign index")):
+            plan = partial_plan()
+            plan["scenes"][1]["select"]["skip_twins_of"] = twins
+            with self.subTest(label), self.assertRaisesRegex(SP.PlanError, "earlier full scene|itself"):
+                SP.validate_plan(plan)
+        # a full scene that comes later in the scene order is not a valid reference
+        plan = partial_plan()
+        plan["scenes"].reverse()
+        with self.assertRaisesRegex(SP.PlanError, "earlier full scene"):
+            SP.validate_plan(plan)
+        # another partial scene is not a reference either
+        plan = partial_plan()
+        second = deepcopy(plan["scenes"][1])
+        second.update(name="Arena_Test_Part2", asset_path="Assets/Content/Arena_Test_Part2.unity", index=3)
+        second["select"]["skip_twins_of"] = 2
+        plan["scenes"].append(second)
+        with self.assertRaisesRegex(SP.PlanError, "earlier full scene"):
+            SP.validate_plan(plan)
+        # no twin skipping at all is fine
+        plan = partial_plan()
+        del plan["scenes"][1]["select"]["skip_twins_of"]
+        SP.validate_plan(plan)
+
+    def test_a_malformed_selection_is_a_plan_error_naming_the_scene(self):
+        for change in ({"schema": 2}, {"reason": ""}, {"roots": []}, {"roots": ["Root/Shops/"]},
+                       {"regions": []}, {"surprise": True}):
+            plan = partial_plan()
+            plan["scenes"][1]["select"].update(change)
+            if "roots" in change:
+                plan["scenes"][1]["select"]["region_roots"] = [] if change["roots"] == [] else \
+                    plan["scenes"][1]["select"]["region_roots"]
+                if change["roots"] == []:
+                    del plan["scenes"][1]["select"]["regions"]
+            with self.subTest(change=change), self.assertRaisesRegex(SP.PlanError, "Arena_Test_Part"):
+                SP.validate_plan(plan)
+
+    def test_the_digest_covers_the_selection(self):
+        before = SP.plan_digest(self.plan)
+        for edit in (lambda s: s["roots"].append("Root/Extra"), lambda s: s.update(skip_twins_of=None),
+                     lambda s: s["regions"][0]["max"].__setitem__(0, 11), lambda s: s.update(reason="other")):
+            plan = partial_plan()
+            edit(plan["scenes"][1]["select"])
+            with self.subTest(edit=edit):
+                self.assertNotEqual(SP.plan_digest(plan), before)
+
+    def test_manifest_must_list_exactly_the_partial_scenes_of_the_plan(self):
+        self.assertEqual(self.verify()[1], self.plan)
+        for label, change in (("missing block", lambda m: m.pop("partial_scenes")),
+                              ("empty block", lambda m: m.update(partial_scenes={})),
+                              ("extra scene", lambda m: m["partial_scenes"].update(Arena_Test_Main={"index": 1})),
+                              ("renamed scene", lambda m: m.update(partial_scenes={"Other": {"index": 2}})),
+                              ("wrong index", lambda m: m["partial_scenes"]["Arena_Test_Part"].update(index=1)),
+                              ("not an object", lambda m: m["partial_scenes"].update(Arena_Test_Part=[2])),
+                              ("not a mapping", lambda m: m.update(partial_scenes=["Arena_Test_Part"]))):
+            manifest = deepcopy(self.manifest)
+            change(manifest)
+            self.manifest = manifest
+            with self.subTest(label), self.assertRaisesRegex(SP.PlanError, "partial_scenes"):
+                self.verify()
+            self.setUp()
+
+    def test_a_package_of_a_plan_without_partial_scenes_must_not_claim_any(self):
+        plan = example_plan()
+        path = self.repo / "tools/extract/plans/plain.json"
+        path.write_text(json.dumps(plan), encoding="utf-8")
+        manifest = {"source": SP.provenance(plan, path, self.root, "fixed", self.repo), "scenes": ["Arena_Test_Main"],
+                    "slice": {}, "anchors_reference": example_anchors()}
+        SP.validate_manifest_plan(manifest, self.repo, verify_source=False)
+        manifest["partial_scenes"] = {"Arena_Test_Main": {"index": 1}}
+        with self.assertRaisesRegex(SP.PlanError, "partial_scenes"):
+            SP.validate_manifest_plan(manifest, self.repo, verify_source=False)
+        manifest["partial_scenes"] = {}
+        SP.validate_manifest_plan(manifest, self.repo, verify_source=False)
+
+    def test_slices_stay_refused_beside_partial_scenes(self):
+        self.manifest["slice"] = {"2": [7]}
+        with self.assertRaisesRegex(SP.PlanError, "cannot contain slices"):
+            self.verify()
+
+    def test_the_selection_edit_invalidates_an_extracted_package(self):
+        self.plan["scenes"][1]["select"]["roots"].append("Root/Extra")
+        self.path.write_text(json.dumps(self.plan), encoding="utf-8")
+        with self.assertRaisesRegex(SP.PlanError, "digest drift"):
+            self.verify()
+
+    def test_airpit_plan_imports_the_two_furnished_levels_after_the_five_full_scenes(self):
+        plan = SP.load_plan(SP.PLAN_ROOT / "airpit.json")
+        self.assertEqual([(r["name"], r["index"]) for r in plan["scenes"]], [
+            ("Arena_AirPit_ShootOut", 324), ("Arena_AirPit_ShootOut_Light", 325), ("Arena_Airpit_DesignStuff", 40),
+            ("Arena_Airpit_TeamFight", 29), ("Arena_Airpit_TeamFight_DesignStuff", 28),
+            ("Arena_Airpit_Main_hall", 38), ("Arena_Airpit_Light", 37)])
+        partial = {r["name"]: r for r in SP.partial_scene_records(plan)}
+        self.assertEqual(sorted(partial), ["Arena_Airpit_Light", "Arena_Airpit_Main_hall"])
+        self.assertEqual({k: v["select"]["skip_twins_of"] for k, v in partial.items()},
+                         {"Arena_Airpit_Main_hall": 324, "Arena_Airpit_Light": 325})
+        for record in partial.values():
+            self.assertEqual(record["asset_path"], f"Assets/Content/Locations/Arena_Airpit/{record['name']}.unity")
+
+    def test_airpit_main_hall_selection_names_the_reviewed_groups(self):
+        from scene_select import validate_select
+        plan = SP.load_plan(SP.PLAN_ROOT / "airpit.json")
+        spec = validate_select(plan["scenes"][5]["select"])
+        hall = "SBG_Arena_Airpit_Main_hall/"
+        keys = [r.key for r in spec.rules]
+        self.assertEqual(keys[:2], [f"roots:{hall}OO/PROPS/INDOOR/SHOPS", "roots:PROJECTION/INDOOR/SHOPS"])
+        self.assertIn(f"roots:{hall}SOO_LOD0/DOORS", keys)
+        self.assertEqual(sorted(k for k in keys if "SOO_LOD0/" in k and "DOORS" not in k), sorted(
+            f"roots:{hall}SOO_LOD0/{n}" for n in ("Airport_Shop_BS", "DonB_Ramen", "LP_Shop", "LP_Defile",
+                                                  "TH_Roll_door_01", "TH_Roll_door_02", "TH_Roll_door_03",
+                                                  "TH_Shop_indoor")))
+        regions = {r.path: [x.name for x in r.regions] for r in spec.rules if r.kind == "region_roots"}
+        self.assertEqual(regions["PROJECTION"], ["outline box"])
+        self.assertIn(f"{hall}OO/PROPS/FLOOR_DAMAGE ", regions)  # the trailing space is part of the name
+        shops = ["NW shop", "NE shop", "SE shop", "SW shop"]
+        for group in ("INDOOR/BACK", "INDOOR/FRONT", "INDOOR/LEFT", "INDOOR/RIGHT", "OUTDOOR/FIELD"):
+            self.assertEqual(regions[f"{hall}OO/PROPS/{group}"], shops)
+        light = validate_select(plan["scenes"][6]["select"])
+        self.assertEqual([r.path for r in light.rules if r.kind == "roots"],
+                         ["SBG_Airpit_Light/OO/" + n for n in ("ChinaPlace*", "BurgerSpot*", "HELLFINGER", "LouiPeeton*")])
+        self.assertEqual({tuple(x.name for x in r.regions) for r in light.rules if r.kind == "region_roots"},
+                         {tuple(shops)})
+
+
 class SceneRoleTests(unittest.TestCase):
     """Plan item 1: excluded scenes carry a `role` so extractors need no per-map index table."""
 
@@ -305,7 +487,8 @@ class SceneRoleTests(unittest.TestCase):
                           "ai": "Arena_Airpit_TeamFight_AI", "culling": "Arena_Airpit_TeamFight_Culling"})
         # The AI scene is the one already loaded for NavMesh metadata; the other three are not.
         self.assertEqual({r["index"] for r in plan["navmesh_scenes"]}, {found["ai"]["index"]})
-        self.assertEqual({r["index"] for r in SP.unique_records(plan)}, {324, 325, 40, 29, 28, 33})
+        # Loaded levels: the five full scenes, the two partial scenes (38 and 37) and the AI scene.
+        self.assertEqual({r["index"] for r in SP.unique_records(plan)}, {324, 325, 40, 29, 28, 38, 37, 33})
 
     @unittest.skipUnless(Path(EX.DEFAULT_SOURCE, "globalgamemanagers").is_file(), "Arena source not installed")
     def test_airpit_role_scenes_occur_exactly_once_in_installed_build_settings(self):

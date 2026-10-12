@@ -868,7 +868,7 @@ def format_report(report, top=25) -> str:
 
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
-    ap.add_argument("--package", default="work/extract/airpit-native-v6", help="extracted package with scenes/*.json and meshes/")
+    ap.add_argument("--package", default="work/extract/airpit-native-v7", help="extracted package with scenes/*.json and meshes/")
     ap.add_argument("--arena-data", default=DEFAULT_ARENA_DATA)
     ap.add_argument("--assets", default=AIRPIT_NAVMESH[0])
     ap.add_argument("--path-id", type=int, default=AIRPIT_NAVMESH[1])

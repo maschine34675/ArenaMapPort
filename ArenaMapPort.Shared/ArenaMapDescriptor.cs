@@ -367,7 +367,7 @@ namespace ArenaMapPort.Shared
             ScenesBundleKey: "arena_airpit/arena_airpit_scenes.bundle",
             NavMeshBundleKey: "arena_airpit/arena_airpit_navmesh.bundle",
             ScriptsSceneName: "Arena_AirPit_Scripts",
-            AllSceneNames: new[] { "Arena_AirPit_Scripts", "Arena_AirPit_ShootOut", "Arena_AirPit_ShootOut_Light", "Arena_Airpit_DesignStuff", "Arena_Airpit_TeamFight", "Arena_Airpit_TeamFight_DesignStuff" },
+            AllSceneNames: new[] { "Arena_AirPit_Scripts", "Arena_AirPit_ShootOut", "Arena_AirPit_ShootOut_Light", "Arena_Airpit_DesignStuff", "Arena_Airpit_TeamFight", "Arena_Airpit_TeamFight_DesignStuff", "Arena_Airpit_Main_hall", "Arena_Airpit_Light" },
             InfiltrationName: "ArenaAirPit",
             LocaleName: "Arena: Air Pit",
             LocaleDescription: "The Air Pit airport terminal from EFT Arena: a large hall with an airliner inside, passport lanes to the north and a bus apron to the south. Ground floor and mezzanine are the main play space.",
@@ -410,6 +410,14 @@ namespace ArenaMapPort.Shared
                 // direct children leaves the portal frame standing; the open halves stay inactive.
                 "SBG_Arena_AirPit_ShootOut/SOO/Prison_Metal_Fence_01 (2)",
                 "SBG_Arena_AirPit_ShootOut/SOO/Prison_Metal_Fence_01 (3)",
+                // The six closed shop shells of the ShootOut build: the furnished shops of Arena_Airpit_Main_hall carry the
+                // rolled-up shutters, so BoothDoorRepairs opens these at raid start and the bake leaves them out.
+                "SBG_Arena_AirPit_ShootOut/SOO_LOD0/BUILDING/Airport_Shop_BS_closed_closed",
+                "SBG_Arena_AirPit_ShootOut/SOO_LOD0/BUILDING/DonB_Ramen_closed",
+                "SBG_Arena_AirPit_ShootOut/SOO_LOD0/BUILDING/DonB_Ramen_closed (1)",
+                "SBG_Arena_AirPit_ShootOut/SOO_LOD0/BUILDING/TH_Roll_door_01_closed",
+                "SBG_Arena_AirPit_ShootOut/SOO_LOD0/BUILDING/TH_Roll_door_02_closed",
+                "SBG_Arena_AirPit_ShootOut/SOO_LOD0/BUILDING/TH_Roll_door_03_closed",
             },
             // No NavMeshBakeExclusions: the four bake-only cutters of 2026-10-11 (DonB_Ramen_closed x2,
             // TH_Roll_door_01_closed, fence_ema_01_white (18)) let the NavMesh run through shutters that stay solid;

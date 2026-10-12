@@ -76,8 +76,14 @@ class DecalTests(unittest.TestCase):
     def test_wrong_asset_type_is_not_accepted_as_material(self):
         with self.assertRaises(HardExtractError): self.augment(material_type='Mesh')
 
+    def test_texture_larger_than_the_authored_size_is_a_half_ratio_and_keeps_the_whole_texture(self):
+        # Nine AirPit shop quads author 32x32 against a 64x64 texture (here 1024 authored vs 2048 shipped).
+        comp=self.augment(size=(2048,2048))
+        self.assertEqual(comp['texture_size'],[1024,1024])
+        self.assertEqual(comp['source_texture_size'],[2048,2048])
+
     def test_aspect_or_unexpected_resolution_change_rejected(self):
-        for size in [(512,1024),(256,256)]:
+        for size in [(512,1024),(2048,1024),(256,256),(4096,4096),(128,128)]:
             with self.subTest(size=size), self.assertRaises(HardExtractError): self.augment(size=size)
 
 

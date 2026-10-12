@@ -8,7 +8,9 @@
     "Arena_AirPit_ShootOut_Light",
     "Arena_Airpit_DesignStuff",
     "Arena_Airpit_TeamFight",
-    "Arena_Airpit_TeamFight_DesignStuff"
+    "Arena_Airpit_TeamFight_DesignStuff",
+    "Arena_Airpit_Main_hall",
+    "Arena_Airpit_Light"
   ],
   "uses_server_time": true,
   "infiltration_name": "ArenaAirPit",
@@ -26,7 +28,13 @@
   "opened_barriers": [
     "BUS_DOORS",
     "SBG_Arena_AirPit_ShootOut/SOO/Prison_Metal_Fence_01 (2)",
-    "SBG_Arena_AirPit_ShootOut/SOO/Prison_Metal_Fence_01 (3)"
+    "SBG_Arena_AirPit_ShootOut/SOO/Prison_Metal_Fence_01 (3)",
+    "SBG_Arena_AirPit_ShootOut/SOO_LOD0/BUILDING/Airport_Shop_BS_closed_closed",
+    "SBG_Arena_AirPit_ShootOut/SOO_LOD0/BUILDING/DonB_Ramen_closed",
+    "SBG_Arena_AirPit_ShootOut/SOO_LOD0/BUILDING/DonB_Ramen_closed (1)",
+    "SBG_Arena_AirPit_ShootOut/SOO_LOD0/BUILDING/TH_Roll_door_01_closed",
+    "SBG_Arena_AirPit_ShootOut/SOO_LOD0/BUILDING/TH_Roll_door_02_closed",
+    "SBG_Arena_AirPit_ShootOut/SOO_LOD0/BUILDING/TH_Roll_door_03_closed"
   ],
   "navmesh_bake_exclusions": [],
   "authored_borders": [

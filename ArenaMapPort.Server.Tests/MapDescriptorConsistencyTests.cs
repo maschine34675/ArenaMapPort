@@ -75,6 +75,14 @@ public class MapDescriptorConsistencyTests
             // the two portal gates of the z 50.5 facade (host raid 1, 2026-10-12): non-root paths into the main scene
             "SBG_Arena_AirPit_ShootOut/SOO/Prison_Metal_Fence_01 (2)",
             "SBG_Arena_AirPit_ShootOut/SOO/Prison_Metal_Fence_01 (3)",
+            // the six closed shop shells of the ShootOut build (furnished shops imported from Arena_Airpit_Main_hall,
+            // 2026-10-12 late): the first BUILDING sibling under SOO_LOD0, no frame-named parts
+            "SBG_Arena_AirPit_ShootOut/SOO_LOD0/BUILDING/Airport_Shop_BS_closed_closed",
+            "SBG_Arena_AirPit_ShootOut/SOO_LOD0/BUILDING/DonB_Ramen_closed",
+            "SBG_Arena_AirPit_ShootOut/SOO_LOD0/BUILDING/DonB_Ramen_closed (1)",
+            "SBG_Arena_AirPit_ShootOut/SOO_LOD0/BUILDING/TH_Roll_door_01_closed",
+            "SBG_Arena_AirPit_ShootOut/SOO_LOD0/BUILDING/TH_Roll_door_02_closed",
+            "SBG_Arena_AirPit_ShootOut/SOO_LOD0/BUILDING/TH_Roll_door_03_closed",
         }, ArenaMapRegistry.AirPit.OpenedBarriers);
         var walked = new[] { ArenaMapRegistry.Equator, ArenaMapRegistry.Bay5, ArenaMapRegistry.AirPit };
         foreach (var map in ArenaMapRegistry.Catalog)
@@ -138,9 +146,10 @@ public class MapDescriptorConsistencyTests
         var airPit = ArenaMapRegistry.AirPit;
         // 2026-10-12 host raid 1: the four bake-only exclusions (shop shutters, a fence) let the NavMesh run through
         // solids that stay in the scene; the walk test stopped at the DonB_Ramen shutter. AirPit now bakes every
-        // solid and opens the two portal gates instead (OpenedBarriers), so the list is empty by design.
+        // solid and opens the two portal gates instead (OpenedBarriers), so the list is empty by design. The six
+        // closed shop shells joined the list when the furnished shops came in from Arena_Airpit_Main_hall.
         Assert.Empty(airPit.NavMeshBakeExclusions);
-        Assert.Equal(3, airPit.OpenedBarriers.Length);
+        Assert.Equal(9, airPit.OpenedBarriers.Length);
         Assert.All(airPit.OpenedBarriers, path => Assert.True(IsHierarchyPath(path), path));
         Assert.Equal(airPit.OpenedBarriers.Length, airPit.OpenedBarriers.Distinct().Count());
         Assert.DoesNotContain("PASSPORT_CONTROL_DOORS", airPit.OpenedBarriers); // the gates stay closed (look); the facade wall is the limit

@@ -20,6 +20,13 @@ Schema (version 1; every key is required unless marked optional, unknown keys ar
     scenes                    {"<scene index>": "<scene name>"}  the full scene set, in validation order
     ballistics                {"<scene index>": N}               BallisticCollider count per scene
     require_unsliced          true: a manifest with a non-empty ``slice`` is rejected (Equator)
+    partial_scenes            optional: {"<scene name>": {index, objects, units, carriers, orphans,
+                              dropped_script_owners, rules{"<rule>": {selected, twin_skipped}}}}  the
+                              census of the scenes that take only a selected part of their Arena level
+                              (plan record ``select``, manifest ``partial_scenes``; AirPit's furnished
+                              shops). ``orphans`` is the number of manifest ``ballistic_orphans``,
+                              ``dropped_script_owners`` the claimed containers whose script the
+                              selection could not carry (a reviewed 0 today).
     implicit_scene_identity   true: a manifest without ``source.map_key`` is this map when its
                               scene names equal ``scenes`` (released Bay5 predates ``map_key``)
     features                  null (shape-only checks, Equator/Bay5) or census pins:
@@ -52,6 +59,13 @@ fail extraction, not the later build). ``group_mixers`` (the mixers in ``groups`
 from the same file; the loader rejects a file whose mirrors disagree with ``groups``/``loops``. A missing,
 unreadable or empty contract directory fails loading instead of producing an empty table.
 
+``partial_scenes`` names scenes of ``scenes`` only, with the index the contract gives that scene; it requires
+``require_unsliced`` (a partial scene is the only partial source selection a native package may carry, so the
+slice refusal must stay active), every census count is an integer, ``rules`` is non-empty with ``selected`` counts
+that add up to ``units`` (the extractor assigns each selected unit to exactly one rule) and ``objects`` is at
+least ``units + carriers`` (every unit root and every carrier is its own object). The normalised contract always
+carries the key (``{}`` when the file has none), so consumers never test for its presence.
+
 Failures raise ``NativeContractError``, a ``HardExtractError`` (extractors halt) and a ``ValueError``
 (the validators report ``ValueError`` as a failed check).
 
@@ -80,6 +94,8 @@ CONTRACT_DIR = Path(_HERE) / "native_contracts"
 
 _TOP_REQUIRED = ("schema_version", "map_key", "scenes", "ballistics", "require_unsliced",
                  "implicit_scene_identity", "features", "audio")
+_PARTIAL_KEYS = ("index", "objects", "units", "carriers", "orphans", "dropped_script_owners", "rules")
+_PARTIAL_RULE_KEYS = ("selected", "twin_skipped")
 _FEATURE_KEYS = ("static_decals", "light_culling", "raincover", "navmesh_modifiers", "small_physics_objects")
 _LIGHT_CULLING_KEYS = ("culling_light_object_count", "volumetric_light_count", "light_flicker_count")
 _RAINCOVER_KEYS = ("indoor_trigger_count", "dry_plane_count", "weather_obstacle")
@@ -178,6 +194,44 @@ def _parse_features(raw, where: str):
     }
 
 
+def _parse_partial_scenes(raw, where: str, scenes: dict, require_unsliced: bool) -> dict:
+    """{scene name: census} for the scenes that take a selected part of their level (normalised, file order)."""
+    if type(raw) is not dict:
+        _fail(where, "expected an object of scene name -> census")
+    if raw and not require_unsliced:
+        _fail(where, "partial scenes require 'require_unsliced': the slice refusal must stay active beside them")
+    by_name = {name: index for index, name in scenes.items()}
+    result = {}
+    for name, record in raw.items():
+        at = f"{where}.{name}"
+        if _text(name, where + " key") not in by_name:
+            _fail(at, "is not a scene of 'scenes'")
+        record = _object(record, at, _PARTIAL_KEYS)
+        entry = {"index": _int(record["index"], at + ".index"),
+                 "objects": _int(record["objects"], at + ".objects", 1),
+                 "units": _int(record["units"], at + ".units", 1),
+                 "carriers": _int(record["carriers"], at + ".carriers"),
+                 "orphans": _int(record["orphans"], at + ".orphans"),
+                 "dropped_script_owners": _int(record["dropped_script_owners"], at + ".dropped_script_owners")}
+        if entry["index"] != by_name[name]:
+            _fail(at + ".index", f"{entry['index']} is not the contract index {by_name[name]} of the scene")
+        if entry["objects"] < entry["units"] + entry["carriers"]:
+            _fail(at + ".objects", f"{entry['objects']} objects cannot hold {entry['units']} units "
+                                   f"and {entry['carriers']} carriers")
+        if type(record["rules"]) is not dict or not record["rules"]:
+            _fail(at + ".rules", "expected a non-empty object of rule -> {selected, twin_skipped}")
+        rules = {}
+        for rule, counts in record["rules"].items():
+            rule_at = f"{at}.rules.{rule}"
+            counts = _object(counts, rule_at, _PARTIAL_RULE_KEYS)
+            rules[_text(rule, at + ".rules key")] = {k: _int(counts[k], f"{rule_at}.{k}") for k in _PARTIAL_RULE_KEYS}
+        if sum(r["selected"] for r in rules.values()) != entry["units"]:
+            _fail(at + ".rules", f"the selected counts must add up to the {entry['units']} units")
+        entry["rules"] = rules
+        result[name] = entry
+    return result
+
+
 def _leaf_map(value, where: str, what: str) -> dict:
     """{source id: leaf name}, as ``inactive_players`` and ``loops`` pin a player by identity and by name."""
     if type(value) is not dict:
@@ -269,7 +323,7 @@ def _parse_audio(raw, where: str):
 def parse_contract(raw, stem: str, source: str = "<memory>") -> dict:
     """Validate one decoded contract and return it normalised (scene indices become ints)."""
     where = source
-    raw = _object(raw, where, _TOP_REQUIRED, optional=("notes",))
+    raw = _object(raw, where, _TOP_REQUIRED, optional=("notes", "partial_scenes"))
     if raw["schema_version"] != SCHEMA_VERSION or type(raw["schema_version"]) is not int:
         _fail(where, f"unsupported schema_version {raw['schema_version']!r}")
     key = _text(raw["map_key"], where + ".map_key")
@@ -289,12 +343,15 @@ def parse_contract(raw, stem: str, source: str = "<memory>") -> dict:
         _fail(where + ".ballistics", "must list exactly the scenes of 'scenes'")
     if sum(ballistics.values()) <= 0:
         _fail(where + ".ballistics", "a native package lists ballistics as required; the total must be positive")
+    require_unsliced = _bool(raw["require_unsliced"], where + ".require_unsliced")
     return {
         "key": key,
         "notes": notes,
         "scenes": scenes,
         "ballistics": ballistics,
-        "require_unsliced": _bool(raw["require_unsliced"], where + ".require_unsliced"),
+        "require_unsliced": require_unsliced,
+        "partial_scenes": _parse_partial_scenes(raw.get("partial_scenes", {}), where + ".partial_scenes",
+                                                scenes, require_unsliced),
         "implicit_scene_identity": _bool(raw["implicit_scene_identity"], where + ".implicit_scene_identity"),
         "features": _parse_features(raw["features"], where + ".features"),
         "audio": _parse_audio(raw["audio"], where + ".audio"),

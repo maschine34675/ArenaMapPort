@@ -28,6 +28,235 @@
       "name": "Arena_Airpit_TeamFight_DesignStuff",
       "asset_path": "Assets/Content/Locations/Arena_Airpit/Arena_Airpit_TeamFight_DesignStuff.unity",
       "index": 28
+    },
+    {
+      "name": "Arena_Airpit_Main_hall",
+      "asset_path": "Assets/Content/Locations/Arena_Airpit/Arena_Airpit_Main_hall.unity",
+      "index": 38,
+      "select": {
+        "schema": 1,
+        "reason": "The ShootOut build (level324) imports the four shop interiors only as shells and a few props; this earlier TeamFight level has them furnished. Import its shop content, door leaves and projection decals, plus the hall prop groups that sit inside the four shop footprints, and skip everything level324 already carries (twin objects).",
+        "skip_twins_of": 324,
+        "roots": [
+          "SBG_Arena_Airpit_Main_hall/OO/PROPS/INDOOR/SHOPS",
+          "PROJECTION/INDOOR/SHOPS",
+          "SBG_Arena_Airpit_Main_hall/SOO_LOD0/Airport_Shop_BS",
+          "SBG_Arena_Airpit_Main_hall/SOO_LOD0/DonB_Ramen",
+          "SBG_Arena_Airpit_Main_hall/SOO_LOD0/LP_Shop",
+          "SBG_Arena_Airpit_Main_hall/SOO_LOD0/LP_Defile",
+          "SBG_Arena_Airpit_Main_hall/SOO_LOD0/TH_Roll_door_01",
+          "SBG_Arena_Airpit_Main_hall/SOO_LOD0/TH_Roll_door_02",
+          "SBG_Arena_Airpit_Main_hall/SOO_LOD0/TH_Roll_door_03",
+          "SBG_Arena_Airpit_Main_hall/SOO_LOD0/TH_Shop_indoor",
+          "SBG_Arena_Airpit_Main_hall/SOO_LOD0/DOORS"
+        ],
+        "region_roots": [
+          {
+            "path": "PROJECTION",
+            "regions": [
+              "outline box"
+            ]
+          },
+          {
+            "path": "SBG_Arena_Airpit_Main_hall/OO/PROPS/INDOOR/BACK",
+            "regions": [
+              "NW shop",
+              "NE shop",
+              "SE shop",
+              "SW shop"
+            ]
+          },
+          {
+            "path": "SBG_Arena_Airpit_Main_hall/OO/PROPS/INDOOR/FRONT",
+            "regions": [
+              "NW shop",
+              "NE shop",
+              "SE shop",
+              "SW shop"
+            ]
+          },
+          {
+            "path": "SBG_Arena_Airpit_Main_hall/OO/PROPS/INDOOR/LEFT",
+            "regions": [
+              "NW shop",
+              "NE shop",
+              "SE shop",
+              "SW shop"
+            ]
+          },
+          {
+            "path": "SBG_Arena_Airpit_Main_hall/OO/PROPS/INDOOR/RIGHT",
+            "regions": [
+              "NW shop",
+              "NE shop",
+              "SE shop",
+              "SW shop"
+            ]
+          },
+          {
+            "path": "SBG_Arena_Airpit_Main_hall/OO/PROPS/OUTDOOR/FIELD",
+            "regions": [
+              "NW shop",
+              "NE shop",
+              "SE shop",
+              "SW shop"
+            ]
+          },
+          {
+            "path": "SBG_Arena_Airpit_Main_hall/OO/PROPS/FLOOR_DAMAGE ",
+            "regions": [
+              "NW shop",
+              "NE shop",
+              "SE shop",
+              "SW shop"
+            ]
+          }
+        ],
+        "regions": [
+          {
+            "name": "outline box",
+            "min": [
+              -57.0,
+              -5.0,
+              -83.0
+            ],
+            "max": [
+              37.0,
+              12.0,
+              70.0
+            ]
+          },
+          {
+            "name": "NW shop",
+            "min": [
+              -57.5,
+              -1.5,
+              13.5
+            ],
+            "max": [
+              -33.5,
+              9.0,
+              44.5
+            ]
+          },
+          {
+            "name": "NE shop",
+            "min": [
+              11.5,
+              -1.5,
+              6.5
+            ],
+            "max": [
+              34.5,
+              9.0,
+              44.5
+            ]
+          },
+          {
+            "name": "SE shop",
+            "min": [
+              9.5,
+              -1.5,
+              -45.5
+            ],
+            "max": [
+              33.5,
+              9.0,
+              -14.5
+            ]
+          },
+          {
+            "name": "SW shop",
+            "min": [
+              -57.5,
+              -1.5,
+              -41.5
+            ],
+            "max": [
+              -26.5,
+              9.0,
+              -7.5
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "Arena_Airpit_Light",
+      "asset_path": "Assets/Content/Locations/Arena_Airpit/Arena_Airpit_Light.unity",
+      "index": 37,
+      "select": {
+        "schema": 1,
+        "reason": "Lighting scene that belongs to the furnished shops of Arena_Airpit_Main_hall: the shop lamp groups, plus the light helpers, shadow planes, puddles and fog sheets inside the four shop footprints, minus whatever level325 already carries (twin objects).",
+        "skip_twins_of": 325,
+        "roots": [
+          "SBG_Airpit_Light/OO/ChinaPlace*",
+          "SBG_Airpit_Light/OO/BurgerSpot*",
+          "SBG_Airpit_Light/OO/HELLFINGER",
+          "SBG_Airpit_Light/OO/LouiPeeton*"
+        ],
+        "region_roots": [
+          "SBG_Airpit_Light/OO/GLOBAL GI",
+          "NO_CULL",
+          "SBG_Airpit_Light/OO/ShadowPlanes",
+          "PUDDLES",
+          "SBG_Airpit_Light/OO/FogSheets"
+        ],
+        "regions": [
+          {
+            "name": "NW shop",
+            "min": [
+              -57.5,
+              -1.5,
+              13.5
+            ],
+            "max": [
+              -33.5,
+              9.0,
+              44.5
+            ]
+          },
+          {
+            "name": "NE shop",
+            "min": [
+              11.5,
+              -1.5,
+              6.5
+            ],
+            "max": [
+              34.5,
+              9.0,
+              44.5
+            ]
+          },
+          {
+            "name": "SE shop",
+            "min": [
+              9.5,
+              -1.5,
+              -45.5
+            ],
+            "max": [
+              33.5,
+              9.0,
+              -14.5
+            ]
+          },
+          {
+            "name": "SW shop",
+            "min": [
+              -57.5,
+              -1.5,
+              -41.5
+            ],
+            "max": [
+              -26.5,
+              9.0,
+              -7.5
+            ]
+          }
+        ]
+      }
     }
   ],
   "anchor_scenes": [

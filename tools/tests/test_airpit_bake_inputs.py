@@ -35,8 +35,22 @@ GATE_XZ = [(-23.50, 50.54), (-0.38, 50.54)]
 # posts); the authored facade wall is the actual north limit and the north spawns sit south of the gate line. Only
 # the bus doors and the two portal gates open.
 ROOT_BARRIERS = ["BUS_DOORS"]
-BARRIERS = ROOT_BARRIERS + GATES
-# Paths under the duplicated BUILDING sibling, kept to pin the resolver's Transform.Find semantics (no longer inputs).
+# The six closed shop shells of the ShootOut build (2026-10-12, furnished shops): level324 imports the four shop
+# interiors only as shutters/shells (Airport_Shop_BS_closed_closed, DonB_Ramen_closed x2, TH_Roll_door_01..03_closed,
+# all under the first BUILDING sibling). The furnished shops come from level38 (Arena_Airpit_Main_hall) with the
+# rolled-up shutters, so the closed shells are opened at raid start (BoothDoorRepairs) and left out of the bake;
+# extraction keeps them (dropping them would change level324's accepted JSON).
+SHOP_SHELLS = [
+    "SBG_Arena_AirPit_ShootOut/SOO_LOD0/BUILDING/Airport_Shop_BS_closed_closed",
+    "SBG_Arena_AirPit_ShootOut/SOO_LOD0/BUILDING/DonB_Ramen_closed",
+    "SBG_Arena_AirPit_ShootOut/SOO_LOD0/BUILDING/DonB_Ramen_closed (1)",
+    "SBG_Arena_AirPit_ShootOut/SOO_LOD0/BUILDING/TH_Roll_door_01_closed",
+    "SBG_Arena_AirPit_ShootOut/SOO_LOD0/BUILDING/TH_Roll_door_02_closed",
+    "SBG_Arena_AirPit_ShootOut/SOO_LOD0/BUILDING/TH_Roll_door_03_closed",
+]
+SHELL_LIVE_COLLIDER_LAYERS = [[12, 12, 12, 18], [12, 18], [12, 18], [12, 18], [12, 18], [12, 18]]   # 14 colliders: 8 ballistic, 6 movement
+BARRIERS = ROOT_BARRIERS + GATES + SHOP_SHELLS
+# Paths under the duplicated BUILDING sibling, kept to pin the resolver's Transform.Find semantics (the shop shells above are inputs again).
 BUILDING_PATHS = [
     "SBG_Arena_AirPit_ShootOut/SOO_LOD0/BUILDING/DonB_Ramen_closed",
     "SBG_Arena_AirPit_ShootOut/SOO_LOD0/BUILDING/TH_Roll_door_01_closed",
@@ -47,7 +61,7 @@ ARENA_LAYERS = [9, 11, 13, 18, 30]            # NavMeshSurface mask 0x40042A00 o
 # closed passport-control line (z 69.4); was x -80..56, z -96..92 until host raid 4 (2026-10-12) showed the mesh
 # running through the spawn pocket and 7 m into the unlit entrance hall north of the facade.
 BOUNDS = [-57, 37, -2, 8, -83, 70]
-PACKAGE = REPO / "work" / "extract" / "airpit-native-v6"
+PACKAGE = REPO / "work" / "extract" / "airpit-native-v7"   # v6 + the furnished shops (Main_hall, Light); v6 is the five-scene archive
 HAVE_PACKAGE = (PACKAGE / "scenes" / "Arena_AirPit_ShootOut.json").is_file()
 ARENA_NAVMESH = Path("D:/Battlestate Games/Escape from Tarkov Arena/EscapeFromTarkovArena_Data/sharedassets33.assets")
 
@@ -192,7 +206,7 @@ class ValidatorTests(unittest.TestCase):
         self.assertEqual(VD.bake_input_errors(sidecar("bay5.json")), [])
 
 
-@unittest.skipUnless(HAVE_PACKAGE, "work/extract/airpit-native-v6 not present (PLAN-AIRPIT item 5/13)")
+@unittest.skipUnless(HAVE_PACKAGE, "work/extract/airpit-native-v7 not present (PLAN-AIRPIT item 5/13, furnished shops)")
 class PackageTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -255,6 +269,26 @@ class PackageTests(unittest.TestCase):
             found, _unresolved = self.pc.resolve_barriers(self.scenes, [path])
             self.assertEqual(scene.objects[found[0][1]]["parent_id"], buildings[0], path)
 
+    def test_shop_shells_are_first_building_children_without_frame_parts(self):
+        # The six closed shells resolve (Transform.Find semantics) to the first BUILDING sibling, hold no frame-named
+        # part (BoothDoorRepairs deactivates every direct child without "frame", BakeNavMesh drops their colliders
+        # the same way) and carry 14 live colliders in total: 8 ballistic (L12) and 6 movement (L18).
+        scene = self.scenes["Arena_AirPit_ShootOut"]
+        (lod0,) = [k for k, o in scene.objects.items() if o["name"] == "SOO_LOD0"]
+        first_building = [c for c in scene.children[lod0] if scene.objects[c]["name"] == "BUILDING"][0]
+        for path, expected in zip(SHOP_SHELLS, SHELL_LIVE_COLLIDER_LAYERS):
+            found, unresolved = self.pc.resolve_barriers(self.scenes, [path])
+            self.assertEqual((len(found), unresolved), (1, []), path)
+            scene_name, key = found[0]
+            self.assertEqual(scene_name, "Arena_AirPit_ShootOut", path)
+            self.assertEqual(scene.objects[key]["parent_id"], first_building, path)
+            self.assertTrue(scene.chain_active(key), path)
+            tree = self.subtree(scene, key)
+            self.assertFalse([k for k in tree if "frame" in scene.objects[k]["name"].lower()], path)
+            self.assertEqual(self.live_colliders(scene, [key]), [], "the shell object itself must not be a source")
+            self.assertEqual(sorted(layer for _k, layer in self.live_colliders(scene, tree)), expected, path)
+        self.assertEqual(sum(len(layers) for layers in SHELL_LIVE_COLLIDER_LAYERS), 14)
+
     def test_barrier_roots_are_scene_roots_without_frame_parts(self):
         total = 0
         for root_name in ROOT_BARRIERS:
@@ -289,9 +323,24 @@ class PackageTests(unittest.TestCase):
         everything = self.pc.source_owner_mask(cset)
         masked = self.pc.source_owner_mask(cset, layer_mask=self.pc.layers_to_mask(ARENA_LAYERS))
         layers = {cset.owners[i].layer for i in range(len(cset.owners)) if everything[i] and not masked[i]}
-        self.assertEqual(len(cset.owners), 5309)
-        self.assertEqual(int(everything.sum()), 5176)         # 5309 - 67 LevelBorder - 2 SPAWN_BOUND - 60 BUS_DOORS - 4 gate
-        self.assertEqual(int(masked.sum()), 2029)             # the 16 passport-door leaves on layer 18 are sources again
+        # v6 (five scenes): 5309 owners, 5176 sources (- 67 LevelBorder - 2 SPAWN_BOUND - 60 BUS_DOORS - 4 gate), 2029 on the mask.
+        # v7 adds the two furnished-shop scenes: Arena_Airpit_Main_hall 1107 owners (673 L12, 421 L18, 7 L9, 3 L30, 3 L22) and
+        # Arena_Airpit_Light 178 (132 L12, 46 L18), none of them dropped by a name rule or barrier, so owners +1285 = 6594.
+        # Main_hall includes the 28 SOO_LOD0/DOORS units (closed static leaves: 34 L12 + 14 L18 + 7 L9 live colliders). The six
+        # opened shop shells of level324 take 14 colliders out of the bake (8 L12, 6 L18): sources 5176 + 1285 - 14 = 6447,
+        # layer-masked 2029 + (431 Main_hall + 46 Light) - 6 = 2500.
+        self.assertEqual(len(cset.owners), 6594)
+        self.assertEqual(int(everything.sum()), 6447)
+        self.assertEqual(int(masked.sum()), 2500)             # the 16 passport-door leaves on layer 18 are sources again
+        per_scene = {}
+        for i, owner in enumerate(cset.owners):
+            counts = per_scene.setdefault(owner.scene, [0, 0, 0])
+            counts[0] += 1
+            counts[1] += int(everything[i])
+            counts[2] += int(masked[i])
+        self.assertEqual(per_scene["Arena_Airpit_Main_hall"], [1107, 1107, 431])
+        self.assertEqual(per_scene["Arena_Airpit_Light"], [178, 178, 46])
+        self.assertEqual(per_scene["Arena_AirPit_ShootOut"], [4625, 4540, 1891])   # 4554 / 1897 before the six shells were barriers
         self.assertEqual(layers, {0, 12, 22})                   # Default, HighPolyCollider (ballistic), Interactive
         self.assertFalse({cset.owners[i].layer for i in range(len(cset.owners)) if masked[i]} - set(ARENA_LAYERS))
         # AirPit has no live non-trigger collider on the Triggers layer, so keeping the owner rule costs nothing here

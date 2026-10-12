@@ -328,6 +328,41 @@ class DecalsGenericPackageTests(unittest.TestCase):
                 self.refresh(package, Path(tmp) / "empty", generic=True, per_scene=0)
             self.assertFalse((Path(tmp) / "empty").exists())
 
+    def test_partial_scenes_are_scanned_through_a_scope_of_their_own_objects(self):
+        scoped = []
+
+        class FakeScoped:
+            def __init__(self, unity_file, owners):
+                self.unity_file, self.owners = unity_file, sorted(owners)
+                scoped.append(self)
+        seen = {}
+
+        def augment(scene, unity_file, _ctx):
+            seen[scene["scene_name"]] = unity_file
+            return 1
+        files = {1: object(), 2: object()}
+        with tempfile.TemporaryDirectory() as tmp:
+            package, output = self.make_package(tmp), Path(tmp) / "out"
+            manifest = json.loads((package / "manifest.json").read_text(encoding="utf-8"))
+            manifest["partial_scenes"] = {"S2": {"index": 2}}
+            (package / "manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
+            scene = json.loads((package / "scenes" / "S2.json").read_text(encoding="utf-8"))
+            scene["objects"].append({"id": "42", "name": "other", "components": []})
+            (package / "scenes" / "S2.json").write_text(json.dumps(scene), encoding="utf-8")
+            source = D.PackageSource("arena_x", object(), {1: "S1", 2: "S2"}, files, True)
+            with patch.object(D, "open_source", return_value=source), patch.object(D, "augment_scene", augment), \
+                 patch("scene_select.ScopedFile", FakeScoped), \
+                 patch("extract_equator.write_materials", return_value={}), \
+                 patch("extract_equator.write_textures", return_value={}), \
+                 patch("texture_compat.bc6h_rgb_decoder", contextlib.nullcontext):
+                count, _out, _err = quiet(D.refresh, package, output)
+        self.assertEqual(count, 2)
+        self.assertIs(seen["S1"], files[1], "a full scene is scanned on the plain level file")
+        self.assertIs(seen["S2"], scoped[0], "a partial scene only through the scoped view")
+        self.assertIs(scoped[0].unity_file, files[2])
+        self.assertEqual(scoped[0].owners, [1, 42], "the scope is the object ids of the package's own scene JSON")
+        self.assertEqual(len(scoped), 1)
+
     def test_incomplete_scene_set_is_refused(self):
         with tempfile.TemporaryDirectory() as tmp:
             package = self.make_package(tmp)

@@ -4,7 +4,8 @@ Covers the strict loader (native_contract_loader), the golden proof that the Equ
 files reproduce the literals validate_native_features.py used to hard-code, and the validator
 behaviour that now follows the data: AirPit's census and audio pins (item 13 filled its audio; the
 `audio: null` ballistics-only branch is exercised through a patched copy of the AirPit contract) and
-the negative cases (wrong census fails, missing feature fails). The real-package tests read the
+the negative cases (wrong census fails, missing feature fails), the optional ``partial_scenes`` pins of the
+furnished-shop scenes (loader schema, manifest pin check) and the real-package tests, which read the
 ignored work/ packages and are skipped when those are absent.
 """
 from __future__ import annotations
@@ -58,6 +59,26 @@ LEGACY_EQUATOR_STATES = {
 }
 
 
+# The five scenes of the accepted airpit-native-v6 package (PLAN-AIRPIT item 2 / 13 dry run, reviewed).
+AIRPIT_V6_SCENES = {324: 'Arena_AirPit_ShootOut', 325: 'Arena_AirPit_ShootOut_Light', 40: 'Arena_Airpit_DesignStuff',
+                    29: 'Arena_Airpit_TeamFight', 28: 'Arena_Airpit_TeamFight_DesignStuff'}
+AIRPIT_V6_BALLISTICS = {324: 2856, 325: 512, 40: 28, 29: 94, 28: 58}
+# Furnished shops: the two partial scenes appended after the v6 scenes. The pins are the first real
+# airpit-native-v7 extraction (2026-10-12, Arena 0.6.0.47752), reconciled with the slice design's dry run:
+# Main_hall 7118 objects = the dry run's 5885 + the 28 SOO_LOD0/DOORS units (1132 members, 38 ballistic) + the 88
+# new PROJECTION outline-box decal units (86 quads with a renderer + 2 renderer-less spray_02 leaves) + 13 more carriers
+# (101 objects together); Light 962 / 187 / 26 is the dry run unchanged. Ballistics 38: 747 + 38 doors = 785. Decals:
+# 481 (v6) + 202 = 683, of which 114 are the dry run's shop decals and 88 come from the outline box. Culling lights and volumetrics only come from Light (147 / 9). Change this
+# table, the contract file and nothing else, together with the reviewed census.
+AIRPIT_SHOP_SCENES = {38: 'Arena_Airpit_Main_hall', 37: 'Arena_Airpit_Light'}
+AIRPIT_SHOP_BALLISTICS = {38: 785, 37: 122}
+AIRPIT_SHOP_FEATURES = {'static_decals': 683, 'culling_light_object_count': 680, 'volumetric_light_count': 139}
+AIRPIT_SHOP_PARTIAL = {'Arena_Airpit_Main_hall': {'objects': 7118, 'units': 1446, 'carriers': 85, 'orphans': 4,
+                                                  'dropped_script_owners': 0},
+                       'Arena_Airpit_Light': {'objects': 962, 'units': 187, 'carriers': 26, 'orphans': 0,
+                                              'dropped_script_owners': 0}}
+
+
 def flatten(contract: dict) -> dict:
     """The data contract in the shape of the retired MAPS literal (audio maps only)."""
     audio = contract['audio']
@@ -91,6 +112,14 @@ def parse(raw: dict) -> dict:
     return L.parse_contract(raw, 'x', 'fixture.json')
 
 
+def partial_block() -> dict:
+    """A valid ``partial_scenes`` block for the fixture contract (scene 8 'Arena_X_Light' is partial)."""
+    return {'Arena_X_Light': {'index': 8, 'objects': 30, 'units': 10, 'carriers': 4, 'orphans': 1,
+                              'dropped_script_owners': 0,
+                              'rules': {'roots:Root/Shops': {'selected': 8, 'twin_skipped': 2},
+                                        'region_roots:Root/Props': {'selected': 2, 'twin_skipped': 0}}}}
+
+
 class ContractFilesTests(unittest.TestCase):
     def test_repository_contracts_load_and_validator_uses_them(self):
         contracts = L.load_contracts()
@@ -115,6 +144,15 @@ class ContractFilesTests(unittest.TestCase):
         for contract in L.load_contracts().values():
             self.assertTrue(all(type(i) is int for i in contract['scenes']))
             self.assertEqual(list(contract['scenes']), list(contract['ballistics']))
+
+    def test_partial_scenes_key_is_always_normalised(self):
+        for key, contract in L.load_contracts().items():
+            with self.subTest(key=key):
+                self.assertIn('partial_scenes', contract)
+                self.assertEqual(bool(contract['partial_scenes']), key == 'arena_airpit')
+                for name, pin in contract['partial_scenes'].items():
+                    self.assertEqual(contract['scenes'][pin['index']], name)
+                    self.assertTrue(contract['require_unsliced'])
 
 
 class GoldenLegacyTests(unittest.TestCase):
@@ -158,19 +196,40 @@ class GoldenLegacyTests(unittest.TestCase):
         self.assertIsNone(v.MAPS['arena_equator']['features'])
         self.assertIsNone(v.MAPS['arena_bay5']['features'])
 
-    def test_airpit_pins_are_the_item_2_dry_run(self):
+    def test_airpit_v6_scenes_keep_the_item_2_dry_run_pins(self):
         airpit = v.MAPS['arena_airpit']
-        self.assertEqual(airpit['ballistics'], {324: 2856, 325: 512, 40: 28, 29: 94, 28: 58})
-        self.assertEqual(sum(airpit['ballistics'].values()), 3548)
-        self.assertEqual(airpit['scenes'], {324: 'Arena_AirPit_ShootOut', 325: 'Arena_AirPit_ShootOut_Light',
-                                            40: 'Arena_Airpit_DesignStuff', 29: 'Arena_Airpit_TeamFight',
-                                            28: 'Arena_Airpit_TeamFight_DesignStuff'})
-        self.assertEqual(airpit['features'], {
-            'static_decals': 481,
-            'light_culling': {'culling_light_object_count': 533, 'volumetric_light_count': 130, 'light_flicker_count': 0},
-            'raincover': {'indoor_trigger_count': 2, 'dry_plane_count': 0, 'weather_obstacle': False},
-            'navmesh_modifiers': {'modifiers': 20, 'volumes': 12}, 'small_physics_objects': 0})
+        self.assertEqual({i: n for i, n in airpit['scenes'].items() if i in AIRPIT_V6_SCENES}, AIRPIT_V6_SCENES)
+        self.assertEqual({i: n for i, n in airpit['ballistics'].items() if i in AIRPIT_V6_SCENES}, AIRPIT_V6_BALLISTICS)
+        self.assertEqual(sum(AIRPIT_V6_BALLISTICS.values()), 3548)
+        self.assertEqual(list(airpit['scenes'])[:5], list(AIRPIT_V6_SCENES))  # the shops are appended, never interleaved
+        self.assertEqual(airpit['features']['raincover'], {'indoor_trigger_count': 2, 'dry_plane_count': 0,
+                                                             'weather_obstacle': False})
+        self.assertEqual(airpit['features']['navmesh_modifiers'], {'modifiers': 20, 'volumes': 12})
+        self.assertEqual(airpit['features']['small_physics_objects'], 0)
+        self.assertEqual(airpit['features']['light_culling']['light_flicker_count'], 0)
         self.assertTrue(airpit['require_unsliced'])
+
+    def test_airpit_shop_scenes_are_appended_with_the_v7_pins(self):
+        airpit = v.MAPS['arena_airpit']
+        self.assertEqual(list(airpit['scenes'])[5:], list(AIRPIT_SHOP_SCENES))
+        self.assertEqual({i: n for i, n in airpit['scenes'].items() if i in AIRPIT_SHOP_SCENES}, AIRPIT_SHOP_SCENES)
+        self.assertEqual({i: n for i, n in airpit['ballistics'].items() if i in AIRPIT_SHOP_SCENES},
+                         AIRPIT_SHOP_BALLISTICS)
+        self.assertEqual(sum(airpit['ballistics'].values()), 3548 + sum(AIRPIT_SHOP_BALLISTICS.values()))
+        features = airpit['features']
+        self.assertEqual((features['static_decals'], features['light_culling']['culling_light_object_count'],
+                          features['light_culling']['volumetric_light_count']),
+                         (AIRPIT_SHOP_FEATURES['static_decals'], AIRPIT_SHOP_FEATURES['culling_light_object_count'],
+                          AIRPIT_SHOP_FEATURES['volumetric_light_count']))
+        partial = airpit['partial_scenes']
+        self.assertEqual(list(partial), list(AIRPIT_SHOP_SCENES.values()))
+        self.assertEqual({name: pin['index'] for name, pin in partial.items()},
+                         {name: index for index, name in AIRPIT_SHOP_SCENES.items()})
+        self.assertEqual({name: {k: pin[k] for k in ('objects', 'units', 'carriers', 'orphans', 'dropped_script_owners')}
+                          for name, pin in partial.items()}, AIRPIT_SHOP_PARTIAL)
+        for name, pin in partial.items():
+            self.assertGreaterEqual(pin['objects'], pin['units'] + pin['carriers'])
+            self.assertEqual(sum(r['selected'] for r in pin['rules'].values()), pin['units'], name)
 
     def test_airpit_audio_pins_are_the_item_13_export(self):
         audio = v.MAPS['arena_airpit']['audio']
@@ -375,6 +434,100 @@ class SchemaTests(unittest.TestCase):
                 L.load_contract_file(path)
 
 
+class PartialScenesSchemaTests(unittest.TestCase):
+    """Optional ``partial_scenes`` block: strict inside, always present (``{}``) after normalisation."""
+
+    def raw(self):
+        raw = raw_contract()
+        raw['partial_scenes'] = partial_block()
+        return raw
+
+    def assertRejects(self, change, pattern=None):
+        raw = self.raw()
+        change(raw)
+        with self.assertRaises(L.NativeContractError) as caught:
+            parse(raw)
+        if pattern:
+            self.assertRegex(str(caught.exception), pattern)
+
+    def test_absent_block_normalises_to_an_empty_table(self):
+        self.assertEqual(parse(raw_contract())['partial_scenes'], {})
+        raw = raw_contract()
+        raw['partial_scenes'] = {}
+        self.assertEqual(parse(raw)['partial_scenes'], {})
+
+    def test_valid_block_is_normalised_in_file_order(self):
+        raw = self.raw()
+        raw['partial_scenes']['Arena_X_Main'] = {'index': 7, 'objects': 5, 'units': 1, 'carriers': 0, 'orphans': 0,
+                                                 'dropped_script_owners': 0,
+                                                 'rules': {'roots:A': {'selected': 1, 'twin_skipped': 0}}}
+        contract = parse(raw)
+        self.assertEqual(list(contract['partial_scenes']), ['Arena_X_Light', 'Arena_X_Main'])
+        self.assertEqual(contract['partial_scenes']['Arena_X_Light'], partial_block()['Arena_X_Light'])
+        self.assertEqual(list(contract['partial_scenes']['Arena_X_Light']['rules']),
+                         ['roots:Root/Shops', 'region_roots:Root/Props'])
+
+    def test_unknown_and_missing_keys_inside_the_block_are_rejected(self):
+        entry = lambda r: r['partial_scenes']['Arena_X_Light']
+        self.assertRejects(lambda r: entry(r).update(reason='why'), 'unknown keys')
+        self.assertRejects(lambda r: entry(r)['rules']['roots:Root/Shops'].update(extra=1), 'unknown keys')
+        for key in ('index', 'objects', 'units', 'carriers', 'orphans', 'dropped_script_owners', 'rules'):
+            with self.subTest(key=key):
+                self.assertRejects(lambda r, key=key: entry(r).pop(key), 'missing keys')
+        for key in ('selected', 'twin_skipped'):
+            with self.subTest(rule_key=key):
+                self.assertRejects(lambda r, key=key: entry(r)['rules']['roots:Root/Shops'].pop(key), 'missing keys')
+
+    def test_top_level_unknown_key_next_to_the_block_is_still_rejected(self):
+        self.assertRejects(lambda r: r.update(partial_scene={}), 'unknown keys')
+
+    def test_counts_are_non_negative_integers(self):
+        entry = lambda r: r['partial_scenes']['Arena_X_Light']
+        for key, bad in (('objects', 0), ('objects', 30.0), ('objects', True), ('units', 0), ('carriers', -1),
+                         ('orphans', -1), ('orphans', '1'), ('dropped_script_owners', -1),
+                         ('dropped_script_owners', 0.0), ('index', None)):
+            with self.subTest(key=key, bad=bad):
+                self.assertRejects(lambda r, key=key, bad=bad: entry(r).update({key: bad}), 'integer >=')
+        for key, bad in (('selected', -1), ('twin_skipped', 1.5), ('selected', False)):
+            with self.subTest(rule_key=key, bad=bad):
+                self.assertRejects(lambda r, key=key, bad=bad: entry(r)['rules']['roots:Root/Shops'].update({key: bad}),
+                                   'integer >= 0')
+
+    def test_block_must_agree_with_the_scene_table(self):
+        self.assertRejects(lambda r: r['partial_scenes'].update({'Arena_X_Other': r['partial_scenes']['Arena_X_Light']}),
+                           'not a scene of')
+        self.assertRejects(lambda r: r['partial_scenes']['Arena_X_Light'].update(index=7), 'contract index 8')
+        self.assertRejects(lambda r: r.update(partial_scenes=[]), 'object of scene name')
+        self.assertRejects(lambda r: r['partial_scenes'].update({'': {}}), 'non-empty string')
+
+    def test_object_count_must_hold_the_units_and_carriers(self):
+        self.assertRejects(lambda r: r['partial_scenes']['Arena_X_Light'].update(objects=13), 'cannot hold 10 units and 4 carriers')
+        parse_ok = self.raw()
+        parse_ok['partial_scenes']['Arena_X_Light']['objects'] = 14
+        parse(parse_ok)
+
+    def test_rules_must_be_a_non_empty_table_of_named_counts(self):
+        self.assertRejects(lambda r: r['partial_scenes']['Arena_X_Light'].update(rules={}), 'non-empty object')
+        self.assertRejects(lambda r: r['partial_scenes']['Arena_X_Light'].update(rules=[]), 'non-empty object')
+        self.assertRejects(lambda r: r['partial_scenes']['Arena_X_Light']['rules'].update({'': {'selected': 1, 'twin_skipped': 0}}),
+                           'non-empty string')
+
+    def test_selected_counts_must_add_up_to_the_units(self):
+        entry = lambda r: r['partial_scenes']['Arena_X_Light']
+        self.assertRejects(lambda r: entry(r)['rules']['roots:Root/Shops'].update(selected=9), 'add up to the 10 units')
+        self.assertRejects(lambda r: entry(r).update(units=11, objects=40), 'add up to the 11 units')
+        # twin-skipped units are not selected and do not count
+        raw = self.raw()
+        entry(raw)['rules']['roots:Root/Shops']['twin_skipped'] = 99
+        parse(raw)
+
+    def test_partial_scenes_require_the_slice_refusal(self):
+        self.assertRejects(lambda r: r.update(require_unsliced=False), 'require_unsliced')
+        raw = raw_contract()
+        raw['require_unsliced'] = False
+        parse(raw)  # a contract without partial scenes may still allow slices (released Bay5)
+
+
 class ContractFileTests(unittest.TestCase):
     def write(self, directory, name, text):
         path = Path(directory) / name
@@ -426,6 +579,18 @@ class ContractFileTests(unittest.TestCase):
 # validate_native_features driven by the data
 # ---------------------------------------------------------------------------------------------
 
+def partial_manifest_block(contract: dict) -> dict:
+    """The manifest ``partial_scenes`` block that satisfies the contract's pins exactly (hash and orphan ids synthetic)."""
+    block = {}
+    for name, pin in contract['partial_scenes'].items():
+        block[name] = {'index': pin['index'], 'objects': pin['objects'], 'units': pin['units'],
+                       'carriers': pin['carriers'], 'rules': deepcopy(pin['rules']),
+                       'dropped_script_owners': pin['dropped_script_owners'],
+                       'ballistic_orphans': [[1000 + i, 5000 + i] for i in range(pin['orphans'])],
+                       'go_ids_sha256': 'a' * 64}
+    return block
+
+
 def airpit_manifest(audio: bool = True) -> dict:
     """The manifest blocks of an AirPit package; audio=False is the ballistics-only (pre item 13) shape."""
     contract = v.MAPS['arena_airpit']
@@ -441,6 +606,8 @@ def airpit_manifest(audio: bool = True) -> dict:
             'static_decals': {'schema_version': 1, 'count': pins['static_decals']}},
         'native_ballistics': {},
     }
+    if contract['partial_scenes']:
+        manifest['partial_scenes'] = partial_manifest_block(contract)
     if audio:
         manifest['native_features']['required'].append(contract['audio']['feature'])
         manifest['native_audio'] = {}
@@ -449,7 +616,8 @@ def airpit_manifest(audio: bool = True) -> dict:
 
 def airpit_scenes(manifest: dict, **override) -> dict:
     """One owner per scene carrying the pinned component census (plus overrides: type -> count)."""
-    wanted = {'BallisticCollider': 3548, **v.pinned_component_census(v.MAPS['arena_airpit']['features'])}
+    wanted = {'BallisticCollider': sum(v.MAPS['arena_airpit']['ballistics'].values()),
+              **v.pinned_component_census(v.MAPS['arena_airpit']['features'])}
     wanted.update(override)
     scenes = {name: [{'id': name, 'components': []}] for name in manifest['scenes']}
     first = scenes[manifest['scenes'][0]][0]['components']
@@ -521,11 +689,14 @@ class AirPitNativeContractTests(unittest.TestCase):
             manifest = airpit_manifest()
             change(manifest['native_features'])
             return manifest
+        pins = v.MAPS['arena_airpit']['features']
         cases = {
-            'decals -1': lambda f: f['static_decals'].update(count=480),
-            'decals +1': lambda f: f['static_decals'].update(count=482),
-            'culling lights': lambda f: f['light_culling'].update(culling_light_object_count=532),
-            'volumetric': lambda f: f['light_culling'].update(volumetric_light_count=131),
+            'decals -1': lambda f: f['static_decals'].update(count=pins['static_decals'] - 1),
+            'decals +1': lambda f: f['static_decals'].update(count=pins['static_decals'] + 1),
+            'culling lights': lambda f: f['light_culling'].update(
+                culling_light_object_count=pins['light_culling']['culling_light_object_count'] - 1),
+            'volumetric': lambda f: f['light_culling'].update(
+                volumetric_light_count=pins['light_culling']['volumetric_light_count'] + 1),
             'flicker': lambda f: f['light_culling'].update(light_flicker_count=1),
             'indoor triggers': lambda f: f['raincover'].update(indoor_trigger_count=3),
             'dry planes': lambda f: f['raincover'].update(dry_plane_count=1),
@@ -560,11 +731,12 @@ class AirPitNativeContractTests(unittest.TestCase):
 
     def test_scene_decals_must_match_the_manifest_and_the_pin(self):
         manifest = airpit_manifest()
+        pinned = v.MAPS['arena_airpit']['features']['static_decals']
         with self.assertRaisesRegex(ValueError, 'static decal census differs'):
-            v.feature_enabled(manifest, airpit_scenes(manifest, StaticDeferredDecal=480))
-        manifest['native_features']['static_decals']['count'] = 480
+            v.feature_enabled(manifest, airpit_scenes(manifest, StaticDeferredDecal=pinned - 1))
+        manifest['native_features']['static_decals']['count'] = pinned - 1
         with self.assertRaisesRegex(ValueError, 'differs from the map contract'):
-            v.feature_enabled(manifest, airpit_scenes(manifest, StaticDeferredDecal=480))
+            v.feature_enabled(manifest, airpit_scenes(manifest, StaticDeferredDecal=pinned - 1))
 
     def test_scene_set_and_slice_rules(self):
         for change in (lambda m: m['scenes'].pop(), lambda m: m['scenes'].append(m['scenes'][0]),
@@ -582,6 +754,83 @@ class AirPitNativeContractTests(unittest.TestCase):
         self.assertFalse(v.feature_enabled({'scenes': ['Arena_AirPit_ShootOut']}))
         with self.assertRaisesRegex(ValueError, 'unmarked ballistic'):
             v.feature_enabled({}, {'scene': [{'components': [{'type': 'BallisticCollider'}]}]})
+
+    def test_partial_scene_census_is_pinned_by_the_contract(self):
+        manifest = airpit_manifest()
+        self.assertEqual(sorted(manifest['partial_scenes']), sorted(v.MAPS['arena_airpit']['partial_scenes']))
+        self.assertTrue(v.feature_enabled(manifest))
+        pins = v.MAPS['arena_airpit']['partial_scenes']
+        name = 'Arena_Airpit_Main_hall'
+        first_rule = next(iter(pins[name]['rules']))
+        changes = {
+            'objects': lambda e: e.update(objects=e['objects'] + 1),
+            'units': lambda e: e.update(units=e['units'] - 1),
+            'carriers': lambda e: e.update(carriers=e['carriers'] + 1),
+            'dropped script owner': lambda e: e.update(dropped_script_owners=e['dropped_script_owners'] + 1),
+            'index': lambda e: e.update(index=39),
+            'orphan dropped': lambda e: e['ballistic_orphans'].pop(),
+            'orphan added': lambda e: e['ballistic_orphans'].append([7, 8]),
+            'rule selected': lambda e: e['rules'][first_rule].update(selected=e['rules'][first_rule]['selected'] + 1),
+            'rule twin_skipped': lambda e: e['rules'][first_rule].update(twin_skipped=e['rules'][first_rule]['twin_skipped'] + 1),
+            'rule renamed': lambda e: e['rules'].update({'roots:Renamed': e['rules'].pop(first_rule)}),
+            'rule added': lambda e: e['rules'].update({'roots:Extra': {'selected': 0, 'twin_skipped': 0}}),
+        }
+        for label, change in changes.items():
+            broken = airpit_manifest()
+            change(broken['partial_scenes'][name])
+            with self.subTest(label), self.assertRaises(ValueError) as caught:
+                v.feature_enabled(broken)
+            self.assertRegex(str(caught.exception), 'partial scene|Arena_Airpit_Main_hall|index')
+
+    def test_partial_scene_pins_are_exact_integers(self):
+        manifest = airpit_manifest()
+        entry = manifest['partial_scenes']['Arena_Airpit_Light']
+        entry['carriers'] = float(entry['carriers'])
+        with self.assertRaises(ValueError):  # shape check of the manifest block already refuses a float count
+            v.feature_enabled(manifest)
+        manifest = airpit_manifest()
+        manifest['partial_scenes']['Arena_Airpit_Light']['rules'] = {
+            rule: {'selected': counts['selected'], 'twin_skipped': counts['twin_skipped']}
+            for rule, counts in manifest['partial_scenes']['Arena_Airpit_Light']['rules'].items()}
+        self.assertTrue(v.feature_enabled(manifest))
+
+    def test_the_manifest_and_the_contract_must_name_the_same_partial_scenes(self):
+        for label, change in {
+                'block missing': lambda m: m.pop('partial_scenes'),
+                'block empty': lambda m: m.update(partial_scenes={}),
+                'one scene missing': lambda m: m['partial_scenes'].pop('Arena_Airpit_Light'),
+                'unlisted scene': lambda m: m['partial_scenes'].update({'Arena_Airpit_DesignStuff': m['partial_scenes']['Arena_Airpit_Light']}),
+        }.items():
+            manifest = airpit_manifest()
+            change(manifest)
+            with self.subTest(label), self.assertRaises(ValueError):
+                v.feature_enabled(manifest)
+
+    def test_a_manifest_with_partial_scenes_needs_a_contract_that_pins_them(self):
+        for key in ('arena_equator', 'arena_bay5'):
+            contract = v.MAPS[key]
+            manifest = {'source': {'map_key': key}, 'scenes': list(contract['scenes'].values()),
+                        'native_features': {'schema_version': 1, 'required': ['ballistics', contract['audio']['feature']]},
+                        'native_ballistics': {}, 'native_audio': {}}
+            self.assertTrue(v.feature_enabled(manifest))
+            manifest['partial_scenes'] = {contract['scenes'][next(iter(contract['scenes']))]: partial_manifest_block(
+                v.MAPS['arena_airpit'])['Arena_Airpit_Light']}
+            with self.subTest(key=key), self.assertRaisesRegex(ValueError, 'pins no partial scenes'):
+                v.feature_enabled(manifest)
+
+    def test_a_damaged_manifest_block_fails_instead_of_narrowing_a_census(self):
+        for label, change in {
+                'not an object': lambda e: e.update(rules=[]),
+                'orphan not a pair': lambda e: e.update(ballistic_orphans=[[1]]),
+                'orphan not an id': lambda e: e.update(ballistic_orphans=[['x', 'y']]),
+                'bad hash': lambda e: e.update(go_ids_sha256='zz'),
+                'missing key': lambda e: e.pop('units'),
+                'missing dropped count': lambda e: e.pop('dropped_script_owners'),
+        }.items():
+            manifest = airpit_manifest()
+            change(manifest['partial_scenes']['Arena_Airpit_Main_hall'])
+            with self.subTest(label), self.assertRaisesRegex(ValueError, 'partial scene Arena_Airpit_Main_hall'):
+                v.feature_enabled(manifest)
 
     def test_strict_census_equality(self):
         self.assertTrue(v.same(2, 2))
@@ -651,6 +900,7 @@ class AudioFollowsTheContractTests(unittest.TestCase):
         raw.update(map_key='arena_airpit', features=deepcopy(v.MAPS['arena_airpit']['features']))
         raw['scenes'] = {str(i): n for i, n in v.MAPS['arena_airpit']['scenes'].items()}
         raw['ballistics'] = {str(i): n for i, n in v.MAPS['arena_airpit']['ballistics'].items()}
+        raw['partial_scenes'] = deepcopy(v.MAPS['arena_airpit']['partial_scenes'])
         raw['audio'] = raw_audio
         return L.parse_contract(raw, 'airpit', 'fixture.json')
 
@@ -839,14 +1089,29 @@ class AcceptedPackageTests(unittest.TestCase):
         manifest = v.read_json(package / 'manifest.json')
         self.assertNotIn('native_audio', manifest)
         self.assertEqual(manifest['native_features']['required'], ['ballistics'])
-        with self.assertRaisesRegex(ValueError, 'incomplete required feature contract'):
+        # Both gaps reject it: the scene set (v5 predates the furnished shops) and the missing audio contract.
+        with self.assertRaisesRegex(ValueError, 'full arena_airpit scene set'):
+            v.feature_enabled(manifest, v.scene_objects(package, manifest))
+
+    def test_airpit_v6_is_the_five_scene_archive_the_shop_contract_refuses(self):
+        package = package_dir('airpit-native-v6')
+        if package is None:
+            self.skipTest('work/extract/airpit-native-v6 not present')
+        manifest = v.read_json(package / 'manifest.json')
+        self.assertEqual(manifest['slice'], {})
+        self.assertNotIn('partial_scenes', manifest)
+        self.assertEqual(list(manifest['scenes']), list(AIRPIT_V6_SCENES.values()))
+        self.assertEqual(manifest['native_features']['required'], ['ballistics', 'ambient_audio'])
+        with self.assertRaisesRegex(ValueError, 'full arena_airpit scene set'):
             v.feature_enabled(manifest, v.scene_objects(package, manifest))
 
     def test_airpit_native_package_when_present(self):
-        package = package_dir('airpit-native-v6')
+        package = package_dir('airpit-native-v7')
         if package is None:
-            self.skipTest('work/extract/airpit-native-v6 not present (PLAN-AIRPIT item 13)')
+            self.skipTest('work/extract/airpit-native-v7 not present (furnished shops)')
         manifest = v.read_json(package / 'manifest.json')
+        self.assertEqual(manifest['slice'], {})
+        self.assertEqual(sorted(manifest['partial_scenes']), sorted(AIRPIT_SHOP_SCENES.values()))
         scenes = v.scene_objects(package, manifest)
         self.assertTrue(v.feature_enabled(manifest, scenes))
         self.assertEqual(v.map_contract(manifest)[0], 'arena_airpit')

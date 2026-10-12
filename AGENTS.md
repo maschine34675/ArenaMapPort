@@ -153,9 +153,11 @@ omit later native features (and old Bay5 omits the harbor background), and the v
 components; v4 lacks native projection decals. Do not rebuild either accepted map from those older packages.
 Bay5 uses its v5 package with `-FullMap`
 and `-OutputDir D:/ArenaMapPort/work/build/bay5`. AirPit (branch `feature/airpit`) builds from
-`work/extract/airpit-native-v6` (2026-10-12: v5 + native ambient audio via `extract_map.py --plan
-tools/extract/plans/airpit.json --native-features`; its contract requires audio, so the older
-`airpit-native-v5` fails the validators) with `-FullMap` and `-OutputDir D:/ArenaMapPort/work/build/airpit`. Always give `-MapDescriptor` an absolute
+`work/extract/airpit-native-v7` (2026-10-12 late: v6 + the two PARTIAL scenes `Arena_Airpit_Main_hall` (38) and
+`Arena_Airpit_Light` (37) with the furnished shops, selected by the plan's `select` records and skipping level324/325
+twins; v6 = v5 + native ambient audio; via `extract_map.py --plan tools/extract/plans/airpit.json --native-features`.
+The contract requires audio and the `partial_scenes` pins, so the older packages fail the validators; the five
+full scenes of v7 are byte-identical to v6) with `-FullMap` and `-OutputDir D:/ArenaMapPort/work/build/airpit`. Always give `-MapDescriptor` an absolute
 path: Unity resolves relative descriptor paths from its project directory.
 
 Native spatial acoustics use separate ignored `work/extract/spatial-audio/<map>` inputs, regenerated

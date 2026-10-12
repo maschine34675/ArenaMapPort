@@ -98,15 +98,17 @@
   "map_key": "arena_airpit",
   "schema_version": 1,
   "source_package": {
-    "extracted_utc": "2026-10-12T13:17:33Z",
+    "extracted_utc": "2026-10-12T21:20:59Z",
     "extractor_script": "tools/extract/extract_map.py",
-    "name": "airpit-native-v6",
+    "name": "airpit-native-v7",
     "scenes": [
       "Arena_AirPit_ShootOut",
       "Arena_AirPit_ShootOut_Light",
       "Arena_Airpit_DesignStuff",
       "Arena_Airpit_TeamFight",
-      "Arena_Airpit_TeamFight_DesignStuff"
+      "Arena_Airpit_TeamFight_DesignStuff",
+      "Arena_Airpit_Main_hall",
+      "Arena_Airpit_Light"
     ]
   },
   "spawn_bounds": [

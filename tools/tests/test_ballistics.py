@@ -179,6 +179,16 @@ class BallisticsTests(unittest.TestCase):
                 B.augment_scene(scene, file, contract())
             self.assertEqual(scene, original)
 
+    def test_a_ballistic_component_on_an_owner_without_a_physical_collider_fails_closed(self):
+        # AirPit's level38 has four of these (video_player_LOD0). The plain augmenter must keep refusing
+        # them; scene_select.ScopedFile hides and records them for partial scenes (test_scene_select).
+        file, scene, _, tree, _ = fixture()
+        tree["m_Component"] = [{"component": {"m_PathID": 20}}]
+        scene["objects"][0]["components"] = []
+        with self.assertRaisesRegex(HardExtractError, "owner physics or state differ"):
+            B.augment_scene(scene, file, contract())
+        self.assertEqual(scene["objects"][0]["components"], [])
+
     def test_owner_missing_or_unlinked_component_fails(self):
         file, scene, _, tree, _ = fixture()
         tree["m_Component"] = [{"component": {"m_PathID": 30}}]

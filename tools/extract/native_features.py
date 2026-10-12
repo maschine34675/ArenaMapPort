@@ -20,6 +20,10 @@ and in every one of those pairs the relative order is the same under both legacy
 (ballistics before NavMesh; the light-culling classes come from one augmenter). So this
 order yields the same packages as both legacy orders.
 
+Partial scenes. For a plan scene with ``select`` (scene_select.py) ``extract_map`` hands
+``augment_scene`` a ``scene_select.ScopedFile`` instead of the level file: the augmenters scan only
+the MonoBehaviours whose owner was extracted. ``augment_scene`` itself is unchanged.
+
 Manifest. ``native_features`` = ``{schema_version 1, required, navmesh_areas, raincover,
 light_culling, static_decals}``. ``required`` lists ``ballistics`` plus the audio feature
 name when the map has a registered ambient-audio exporter (``AUDIO_EXPORTERS``); a map

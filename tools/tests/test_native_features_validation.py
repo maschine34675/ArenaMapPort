@@ -13,6 +13,8 @@ import wave
 
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]/'validate'))
 import validate_native_features as v
+import native_contract_loader as L  # validate_native_features puts tools/extract on sys.path
+import partial_scope
 
 
 class Reader:
@@ -419,6 +421,187 @@ class NativeFeatureTests(unittest.TestCase):
             old=native.tree[field];native.tree[field]=value
             self.assertNotEqual(v.physics_states(expected),v.physics_states([native],True))
             native.tree[field]=old
+
+
+
+# ---------------------------------------------------------------------------------------------
+# Partial scenes: the whole-level ballistic source scan is scoped to the package scene
+# ---------------------------------------------------------------------------------------------
+
+def _owner_object(oid,parent=None,components=(),name=None):
+    return {'id':oid,'parent_id':parent,'name':name or 'go'+oid,'active':True,'layer':0,'local_position':[0.,0.,0.],
+            'local_rotation':[0.,0.,0.,1.],'local_scale':[1.,1.,1.],'components':list(components)}
+
+
+def _box():
+    return {'type':'BoxCollider','enabled':True,'is_trigger':False}
+
+
+def _ballistic(component,owner):
+    return {'type':'BallisticCollider','source':{'component_id':component,'object_id':owner}}
+
+
+class PartialBallisticSourceWorld:
+    """A synthetic Arena level pair: scene 7 is a full scene, scene 8 a partial one.
+
+    Package scene 8 holds a carrier (10), a shelf (11: box + ballistic 201) and a screen (12: renderer only; its
+    source BallisticCollider 202 is hidden on purpose). The source level also carries a BallisticCollider (203) on
+    owner 99, which the package never imported."""
+    def __init__(self):
+        self.full=[_owner_object('1',components=[_box(),_ballistic('101','1')])]
+        self.part=[_owner_object('10'),
+                   _owner_object('11','10',[_box(),_ballistic('201','11')]),
+                   _owner_object('12','10',[{'type':'MeshRenderer'}])]
+        self.source={7:[(101,1)],8:[(201,11),(202,12),(203,99)]}  # level -> [(component id, owner id)]
+        self.orphans=[[12,202]]
+        self.units=2;self.carriers=1;self.dropped=0;self.ballistics={7:1,8:1}
+        self.rules={'roots:Root/Shelves':{'selected':2,'twin_skipped':3}}
+        self.digest=None;self.entry_objects=None;self.orphan_pins=None;self.dropped_pins=None
+
+    def objects(self):return {'Arena_X_Full':self.full,'Arena_X_Part':self.part}
+
+    def manifest(self):
+        part_ids=[o['id'] for o in self.part]
+        return {'source':{'map_key':'arena_x','arena_data_root':'unused-root','target_data_root':'unused-target'},
+                'scenes':['Arena_X_Full','Arena_X_Part'],
+                'native_ballistics':{'schema_version':1,'source_presets':{},'target_presets':{}},
+                'partial_scenes':{'Arena_X_Part':{
+                    'index':8,'objects':self.entry_objects if self.entry_objects is not None else len(part_ids),
+                    'units':self.units,'carriers':self.carriers,'rules':deepcopy(self.rules),
+                    'dropped_script_owners':self.dropped,'ballistic_orphans':deepcopy(self.orphans),
+                    'go_ids_sha256':self.digest or partial_scope.go_ids_digest(part_ids)}}}
+
+    def contract(self,manifest):
+        entry=manifest['partial_scenes']['Arena_X_Part']
+        raw={'schema_version':1,'map_key':'arena_x','scenes':{'7':'Arena_X_Full','8':'Arena_X_Part'},
+             'ballistics':{str(i):n for i,n in self.ballistics.items()},'require_unsliced':True,
+             'implicit_scene_identity':False,'features':None,'audio':None,
+             'partial_scenes':{'Arena_X_Part':{'index':8,'objects':entry['objects'],'units':entry['units'],
+                 'carriers':entry['carriers'],'orphans':len(entry['ballistic_orphans']) if self.orphan_pins is None else self.orphan_pins,
+                 'dropped_script_owners':entry['dropped_script_owners'] if self.dropped_pins is None else self.dropped_pins,
+                 'rules':deepcopy(entry['rules'])}}}
+        return L.parse_contract(raw,'x','world.json')
+
+    def readers(self,level):
+        return [SimpleNamespace(path_id=component,assets_file=SimpleNamespace(name='level'+str(level)),
+                                type=SimpleNamespace(name='MonoBehaviour'),
+                                get_raw_data=lambda owner=owner:struct.pack('<iq',0,owner)+bytes(24))
+                for component,owner in self.source[level]]
+
+    def native(self,reader):
+        """What the source level says about the owner: the same hierarchy and the same physical colliders."""
+        owner=str(struct.unpack_from('<iq',reader.get_raw_data())[1])
+        for objects in self.objects().values():
+            lookup={o['id']:o for o in objects}
+            if owner in lookup:
+                obj=lookup[owner]
+                components=[SimpleNamespace(type=SimpleNamespace(name=c['type']),
+                                            read_typetree=lambda:{'m_Enabled':1,'m_IsTrigger':0})
+                            for c in obj['components'] if c['type'] in v.PHYSICS]
+                return {'chain':v.package_chain(obj,lookup),'states':v.package_states(obj,lookup),
+                        'active':obj['active'],'layer':obj['layer'],'components':components}
+        return {'chain':[],'states':[],'active':True,'layer':0,'components':[]}
+
+    def expected(self,reader):
+        owner=str(struct.unpack_from('<iq',reader.get_raw_data())[1])
+        return _ballistic(str(reader.path_id),owner)
+
+    def run(self):
+        """validate_ballistic_source on the world; returns normally when it accepts."""
+        manifest=self.manifest();contract=self.contract(manifest)
+        table=[{'name':n,'material':i,'index':i} for i,n in enumerate(v.MATERIALS)]
+        env=lambda *paths:SimpleNamespace(objects=self.readers(int(Path(paths[0]).name[len('level'):])))
+        import UnityPy
+        with patch.dict(v.MAPS,{'arena_x':contract}),patch.object(v,'source_presets',return_value=table), \
+             patch.object(UnityPy,'load',side_effect=env),patch.object(v,'ballistic_expected',lambda r,s,t:self.expected(r)), \
+             patch.object(v,'script_identity',return_value=('BallisticCollider','EFT.Ballistics','Assembly-CSharp')), \
+             patch.object(v,'unity_go',self.native):
+            return v.validate_ballistic_source('unused-package',manifest,self.objects())
+
+
+class PartialBallisticSourceTests(unittest.TestCase):
+    def reject(self,world,pattern):
+        with self.assertRaisesRegex(ValueError,pattern):world.run()
+
+    def test_baseline_world_is_accepted(self):
+        PartialBallisticSourceWorld().run()
+
+    def test_a_ballistic_collider_outside_the_package_scene_is_not_part_of_the_package(self):
+        world=PartialBallisticSourceWorld()
+        self.assertIn((203,99),world.source[8])  # present in the level, owner 99 is no object of the package scene
+        world.source[8].append((204,98))
+        world.run()
+
+    def test_a_full_scene_keeps_the_whole_level_scan(self):
+        world=PartialBallisticSourceWorld()
+        world.source[7].append((104,98))  # scene 7 is not partial: every component of its level must be in the package
+        self.reject(world,'Arena_X_Full: missing ballistic component 104')
+
+    def test_a_component_on_an_in_scope_owner_must_be_imported_or_listed_as_hidden(self):
+        world=PartialBallisticSourceWorld()
+        world.orphans=[]  # the screen's ballistic 202 is neither in the package nor listed
+        self.reject(world,'missing ballistic component 202')
+
+    def test_a_listed_orphan_must_exist_in_the_source(self):
+        world=PartialBallisticSourceWorld()
+        world.source[8].remove((202,12))
+        self.reject(world,'hidden ballistic orphans differ from the source')
+
+    def test_a_hidden_orphan_must_not_have_a_physical_collider(self):
+        world=PartialBallisticSourceWorld()
+        world.part[2]['components'].append(_box())  # the screen can take a collider: hiding it hides a real ballistic
+        self.reject(world,'hidden ballistic orphan owner has a physical collider 202')
+
+    def test_a_hidden_orphan_must_not_be_present_in_the_package(self):
+        world=PartialBallisticSourceWorld()
+        world.part[2]['components'].append(_ballistic('202','12'))
+        self.reject(world,'hidden ballistic orphan is present in the package 202')
+
+    def test_an_imported_component_missing_from_the_source_fails(self):
+        world=PartialBallisticSourceWorld()
+        world.source[8].remove((201,11))
+        self.reject(world,'extra ballistic source identities')
+
+    def test_the_scene_census_counts_the_imported_components_only(self):
+        world=PartialBallisticSourceWorld()
+        world.ballistics[8]=2  # the contract counts the 201 only, never the hidden 202 or the foreign 203
+        self.reject(world,'ballistic source census changed')
+
+    def test_orphan_owners_must_be_objects_of_the_scene(self):
+        world=PartialBallisticSourceWorld()
+        world.orphans=[[99,203]]
+        self.reject(world,'ballistic orphan owners .* are not objects of the scene')
+
+    def test_the_recorded_selection_hash_must_match_the_scene_objects(self):
+        world=PartialBallisticSourceWorld()
+        world.digest='0'*64
+        self.reject(world,'go_ids_sha256 differs')
+        world=PartialBallisticSourceWorld()
+        world.part.append(_owner_object('13','10'))  # an object the recorded selection does not know
+        world.entry_objects=3
+        self.reject(world,'manifest records 3 objects, the package scene holds 4')
+
+    def test_the_contract_pins_gate_the_scan(self):
+        world=PartialBallisticSourceWorld()
+        world.orphan_pins=0
+        self.reject(world,'census differs from the map contract')
+        world=PartialBallisticSourceWorld()
+        world.dropped_pins=1  # the contract reviewed one dropped script owner, the manifest reports none
+        self.reject(world,'census differs from the map contract')
+        world=PartialBallisticSourceWorld()
+        world.dropped=1  # a script owner the selection could not carry appeared; the reviewed pin is 0
+        world.dropped_pins=0
+        self.reject(world,'census differs from the map contract')
+        world=PartialBallisticSourceWorld()
+        world.rules={'roots:Root/Shelves':{'selected':2,'twin_skipped':3}}
+        world.run()
+
+    def test_ballistic_owner_reads_the_header_only(self):
+        good=SimpleNamespace(get_raw_data=lambda:struct.pack('<iq',0,77)+bytes(20))
+        self.assertEqual(v.ballistic_owner(good),77)
+        with self.assertRaisesRegex(ValueError,'truncated'):v.ballistic_owner(SimpleNamespace(get_raw_data=lambda:bytes(31)))
+        with self.assertRaisesRegex(ValueError,'ABI'):v.ballistic_owner(SimpleNamespace(get_raw_data=lambda:struct.pack('<iq',1,77)+bytes(20)))
+        with self.assertRaisesRegex(ValueError,'ABI'):v.ballistic_owner(SimpleNamespace(get_raw_data=lambda:struct.pack('<iq',0,0)+bytes(20)))
 
 
 if __name__=='__main__':unittest.main()

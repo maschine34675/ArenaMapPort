@@ -70,6 +70,9 @@ def validate_plan(plan: dict) -> dict:
             if isinstance(raw, dict) and "role" in raw:
                 raise PlanError(f"{group} record {raw.get('name')!r} cannot carry a scene role; "
                                 "roles belong only on excluded_scenes records")
+            if isinstance(raw, dict) and "select" in raw and group != "scenes":
+                raise PlanError(f"{group} record {raw.get('name')!r} cannot carry select; "
+                                "a partial scene selection belongs only on scenes records")
             record = scene_record(raw)
             index, path, name = record["index"], record["asset_path"], record["name"]
             if index in group_indices:
@@ -79,6 +82,7 @@ def validate_plan(plan: dict) -> dict:
                 if key in table and table[key] != record:
                     raise PlanError(f"conflicting scene mapping for {name}")
                 table[key] = record
+    partial_scene_records(plan)  # validates every `select`; needs the scene groups checked above
     if not isinstance(plan.get("excluded_scenes"), list):
         raise PlanError("source plan excluded_scenes must be an array with reasons")
     scene_roles(plan)  # before the generic imported check so a role names its own failure
@@ -86,10 +90,39 @@ def validate_plan(plan: dict) -> dict:
     for record in plan["excluded_scenes"]:
         if not isinstance(record, dict) or not isinstance(record.get("reason"), str) or not record["reason"].strip():
             raise PlanError("every excluded scene needs a reason")
+        if "select" in record:
+            raise PlanError(f"excluded scene {record.get('name')!r} cannot carry select; "
+                            "a partial scene selection belongs only on scenes records")
         scene_record(record)
         if record.get("index") in imported:
             raise PlanError("an imported scene cannot also be excluded")
     return plan
+
+
+def partial_scene_records(plan: dict) -> list[dict]:
+    """The ``scenes`` records that carry ``select`` (partial scenes), validated, in plan order.
+
+    A partial scene imports only the selected part of its level (see scene_select.py). Its
+    ``skip_twins_of`` must name a full scene (a record without ``select``) that comes earlier in
+    ``scenes``: extraction then reads the reference level anyway, and the scene order, which is the
+    build order, never has a partial scene ahead of what it is compared with. The returned records
+    are the plan's own dicts, ``select`` included.
+    """
+    from scene_select import validate_select  # lazy: scene_select imports PlanError from this module
+    full, partial = set(), []
+    for raw in plan["scenes"]:
+        record = scene_record(raw)
+        if "select" not in raw:
+            full.add(record["index"])
+            continue
+        spec = validate_select(raw["select"], f"scene {record['name']!r} select")
+        if spec.skip_twins_of is not None and spec.skip_twins_of not in full:
+            raise PlanError(f"scene {record['name']!r} skip_twins_of {spec.skip_twins_of} must name an earlier "
+                            "full scene of the plan (a scenes record without select)")
+        if spec.skip_twins_of == record["index"]:
+            raise PlanError(f"scene {record['name']!r} cannot skip the twins of itself")
+        partial.append(raw)
+    return partial
 
 
 def scene_roles(plan: dict) -> dict[str, dict]:
@@ -153,6 +186,8 @@ def load_plan(path: Path) -> dict:
 
 
 def plan_digest(plan: dict) -> str:
+    # The digest covers the whole plan, every scene's `select` included: any edit of a selection
+    # makes the packages extracted before it fail validate_manifest_plan, on purpose.
     canonical = json.dumps(plan, sort_keys=True, separators=(",", ":"), ensure_ascii=False, allow_nan=False)
     return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
 
@@ -250,6 +285,14 @@ def validate_manifest_plan(manifest: dict, repo: Path = REPO, verify_source: boo
         raise PlanError("package map identity or ordered scenes differ from the source plan")
     if manifest.get("slice"):
         raise PlanError("generic full-map packages cannot contain slices")
+    partial = manifest.get("partial_scenes", {})
+    expected = {r["name"]: r["index"] for r in partial_scene_records(plan)}
+    if not isinstance(partial, dict) or set(partial) != set(expected):
+        raise PlanError("manifest partial_scenes must list exactly the plan scenes that carry select: "
+                        f"{sorted(expected)}, found {sorted(partial) if isinstance(partial, dict) else partial!r}")
+    for name, block in partial.items():
+        if not isinstance(block, dict) or block.get("index") != expected[name]:
+            raise PlanError(f"manifest partial_scenes[{name!r}] must be an object with index {expected[name]}")
     validate_anchors(manifest.get("anchors_reference", {}))
     if verify_source:
         root = source.get("arena_data_root")

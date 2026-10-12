@@ -2746,3 +2746,99 @@ stalls, `FLOOR_DAMAGE2`, apron litter (reported to the user as a possible follow
 (no extraction change, 324 stays byte-identical); the four spawns stay where they are for U6 and are reverted to Arena's anchors only
 after the host dry runs. Package v7 = full re-extract with the two partial scenes.
   Figure: `work/screenshots/airpit-2026-10-12/34-shops-topdown-324-vs-054-vs-level38.png` (ignored).
+
+## Phase 1 - partial scenes: the furnished shops from level38/37, package v7 (2026-10-12, 21:18-23:45, workflow `wf_fe3c0bde-c1f`)
+
+Six agents (two implementers, integrator, two reviewers, fixer; 2.1 M tokens); lead steps afterwards. Nothing of this is
+built or host-tested yet - the Unity build follows phase 1b (everything else recoverable from level38/37, see the previous
+section), so one bake and one deploy cover both.
+
+### What the pipeline can do now
+
+- **Plan `select` records** (`tools/extract/plans/airpit.json`, schema 1): a `scenes` entry may carry `select {reason,
+  skip_twins_of, roots, region_roots, regions}`; only full scenes are allowed in `anchor_scenes`/`navmesh_scenes`/
+  `excluded_scenes`, `skip_twins_of` must name an EARLIER FULL scene of the plan, the plan digest covers `select`, and the
+  manifest's new `partial_scenes` block must list exactly the plan's partial scenes with their indices. `slice` stays `{}`.
+  `region_roots` entries are a bare path (all declared regions) or `{path, regions: [names]}` (the 38 record needs two
+  region sets: the outline box for `PROJECTION`, the four shop footprints for the tier-2 prop groups); every declared
+  region must be used. Paths are verbatim (`OO/PROPS/FLOOR_DAMAGE ` keeps its trailing space; the `*` in
+  `ChinaPlace*`/`BurgerSpot*`/`LouiPeeton*` is part of the Arena name, there is no wildcard syntax). `PROJECTION`, `PHYSIC`,
+  `VARIANT`, `PROPSnoCulling` are LEVEL ROOTS of level38, not children of `SBG_Arena_Airpit_Main_hall`.
+- **`tools/extract/scene_select.py`**: builds the level graph (paths with duplicate siblings, world TRS through the full
+  parent chain, effective activity, component-type multiset), decomposes it into units (LODGroup subtree, renderer leaf,
+  Light/ParticleSystem/Rigidbody leaf, or - review finding 3 - a leaf whose MonoBehaviour is `EFT.Visual.StaticDecal.
+  StaticDeferredDecal`, the one renderer-less native script in the shop scope), assigns each unit to the first matching rule
+  (`roots:` before `region_roots:`, plan order; region test = unit root world position, faces inclusive), skips twins of the
+  reference scene (same base name without ` (N)`, same non-Transform/non-MonoBehaviour component multiset, same effective
+  activity, per-axis distance <= 0.02 m, greedy nearest-first, each reference once), adds the component-free ancestor chain
+  as carriers, and fails closed on dangling parents, unresolved LOD renderer ids, component-bearing carriers, unresolved
+  roots, a Terrain in a partial level, or a claimed container that owns a MonoBehaviour but is neither unit nor carrier
+  (`dropped_script_owners`, pinned 0). `ScopedFile` wraps the UnityPy file for the five native augmenters: scans see only
+  MonoBehaviours whose owner is selected; BallisticColliders whose owner has no physical collider are hidden and recorded as
+  `ballistic_orphans`; a foreign-file owner or an unreadable head raises (review finding 4: the first version swallowed them).
+- **Manifest/contract/validators**: `manifest.partial_scenes[name] = {index, objects, units, carriers, rules{rule:
+  {selected, twin_skipped}}, ballistic_orphans [[go, comp]...], dropped_script_owners, go_ids_sha256}`; the contract pins
+  the same block (`native_contract_loader.py`, `partial_scenes`, `require_unsliced` must be true); `tools/validate/
+  partial_scope.py` binds the block to the scene file (object count, orphan owners, sha256 of the object ids) and prints the
+  contract block (`python tools/validate/partial_scope.py <package>`); `validate_extract`'s four source censuses,
+  `validate_native_features.validate_ballistic_source` and `validate_bundle_roundtrip.source_reference_expectations` drop
+  components whose owner lies outside a partial scene's package ids. Equator/Bay5 parity: validate_extract output on the
+  two accepted v5 packages is byte-identical to HEAD (`work/airpit-parity/parity_gate.py check`). `extract_decals` accepts
+  texture ratio 0.5 (`Graffiti6_ShadowPlaneBox`, 9 decals) and scopes partial scenes on refresh.
+
+### Package `work/extract/airpit-native-v7` (re-extracted after the review fixes, `extracted_utc 2026-10-12T21:20:59Z`, 4.5 min)
+
+| | v6 | v7 | delta |
+|---|---|---|---|
+| objects | 40,719 | 48,799 | +7,118 Main_hall, +962 Light |
+| meshes / materials / textures | 2,487 / 435 / 805 | 3,299 / 541 / 971 | +812 / +106 / +166 (152.7 MB PNG, +13.6 % pixels) |
+| BallisticCollider | 3,548 | 4,455 | 38: 785, 37: 122 (4 video_player_LOD0 orphans hidden) |
+| StaticDeferredDecal | 481 | 683 | 38: 202 (186 ratio 1, 9 ratio 0.5, 5 ratio 2, 2 renderer-less `spray_02`) |
+| CullingLightObject / VolumetricLight | 533 / 130 | 680 / 139 | 37: 147 / 9 (156 Lights) |
+| NavMesh modifiers/volumes, raincover, audio | 20/12, 2 triggers, 26 clips | unchanged | - |
+
+Gate: every one of v6's 3,797 files is present in v7 and byte-identical except `manifest.json` (scenes 324/325/40/29/28,
+meshes, materials, textures, audio, navmesh_ref, raincover). Main_hall: 7,118 objects, 1,446 units, 85 carriers, 544 twin
+units skipped; rules SHOPS 1148/30, PROJECTION/INDOOR/SHOPS 104/92, eight shells 1 each, DOORS 28/0, `PROJECTION` outline
+box 97/262, INDOOR/BACK 24/67, FRONT 22/35, LEFT 3/10, RIGHT 4/9, OUTDOOR/FIELD 3/7, FLOOR_DAMAGE 5/32 (selected/twin).
+Light: 962 objects, 187 units, 26 carriers, 15 twins; ChinaPlace* 27, BurgerSpot* 37, HELLFINGER 34, LouiPeeton* 25/2,
+GLOBAL GI 8/3, NO_CULL 6/1, ShadowPlanes 47/8, PUDDLES 1, FogSheets 2/1. Independent re-walk of both scenes against the raw
+level Transform chain: world-position deviation 7e-15 m, 0 activity mismatches. All 5,885 objects of the phase-0 dry run are
+present with identical fields. `validate_extract.py --package work/extract/airpit-native-v7`: OK, two reproducibility runs
+byte-identical, 8 non-blocking warnings (the 21 unreferenced meshes of v6, the 261 manifest warnings = 19 benign "MeshFilter:
+no mesh assigned" + 2 cubemap exports, 2 barrel_fire LOD slots of v6, and 4 NEW Main_hall LOD slots pointing at the
+unextracted `hit_effect` ParticleSystems of the `Inside_Door_Wood_2_R` doors - `SceneAssembler.AttachLodGroup` omits such
+slots). `extract_decals.py` refresh: "DECALS VERIFIED: arena_airpit: 683 instances, 70 materials, 64 textures", output
+byte-identical to the package. `extract_mode_objects.py` regenerated `tools/maps/airpit.modes.json` (only `source_package`
+changed).
+
+### Review (two reviewers, four findings, all resolved)
+
+1./2. Sidecar ahead of the descriptor (the brief kept C# for the lead): `tools/maps/airpit.json` had `all_scene_names` +2
+and `opened_barriers` +6 while `ArenaMapDescriptor.AirPit` had not - four red mirror tests and the real hazard that a
+bake from that tree leaves the six shells out of the NavMesh while the client keeps them solid. Lead: descriptor
+`AllSceneNames` += `Arena_Airpit_Main_hall`, `Arena_Airpit_Light`; `OpenedBarriers` += the six
+`SBG_Arena_AirPit_ShootOut/SOO_LOD0/BUILDING/{Airport_Shop_BS_closed_closed, DonB_Ramen_closed, DonB_Ramen_closed (1),
+TH_Roll_door_01_closed, TH_Roll_door_02_closed, TH_Roll_door_03_closed}` (first BUILDING sibling, no frame-named parts, 14
+live colliders = 8 ballistic + 6 movement, `test_shop_shells_are_first_building_children_without_frame_parts`);
+`MapDescriptorConsistencyTests` expects 9 barriers. `validate_map_descriptors.py`: all 14 agree.
+3. Renderer-less `StaticDeferredDecal` leaves were neither unit nor carrier: two `PROJECTION/OUTDOOR/FIELD/spray_02`
+decals inside the outline box were silently lost (681 instead of 683). Fixed with the `UNIT_SCRIPTS` allow-list plus the
+`dropped_script_owners` pin, package re-extracted (only `manifest.json`, `Arena_Airpit_Main_hall.json` +2 objects and one
+new decal material changed).
+4. `ScopedFile` failed open on unreadable MonoBehaviour heads / foreign owners; now raises. A null owner stays visible so
+the plain augmenters refuse it as before.
+
+Tests: python `Ran 1274 tests ... OK (skipped=44)` (optional numpy/shapely/Pillow exporters), dotnet 727 passed. New:
+`test_scene_select.py` (57+, incl. two live-install pins of the selections), `test_partial_scope.py`,
+`PartialScenePlanTests`, `ExtractPartialSceneTests`, bake-input pins per scene (Main_hall 1107 collider owners / 431 on the
+layer mask, Light 178 / 46; the shells leave 14 colliders out).
+
+### Bake expectations and host checks still owed
+
+The next bake sees +1,285 collider owners (431 + 46 on Arena's layer mask) minus the 14 shell colliders; the 28 DOORS
+leaves are closed statics on L9/L18 (NavMesh obstacles - shop entrances must stay connected, check with Dijkstra on the
+built bundle and `uibridge_walk`); Light's 46 L18 lamp colliders sit at ceiling height inside the y -2..8 box (island
+risk). Host-unverified content: the 9 ratio-0.5 and 5 ratio-2 decals, the two renderer-less sprays, the 4 hidden
+video-player colliders, the DOORS, the 86 outline-box decal quads, 146 new meshes that share a name with a v6 mesh, the two
+new cubemaps (`cubemapa_128`, `moscow_2_DXT1`).

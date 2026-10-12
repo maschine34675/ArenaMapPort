@@ -4,29 +4,84 @@
   "notes": [
     "Pins from the PLAN-AIRPIT item 2 dry run on Arena 0.6.0.47752 (docs/progress/airpit-release.md): BallisticCollider 3548 (2856/512/28/94/58), StaticDeferredDecal 481, NavMeshModifier 20 + NavMeshModifierVolume 12, CullingLightObject 533, VolumetricLight 130, LightFlicker 0, SmallPhysicsObject 0, rain cover 2 IndoorTrigger / 0 DryPlane / no WeatherObstacle.",
     "audio: PLAN-AIRPIT item 13 pins from the dry run and the first real export on Arena 0.6.0.47752 (docs/progress/airpit-release.md): source scene level39 (plan role 'sound'), schema 2, AmbientSoundPlayer 26 (all enabled and active in the source, no Loop/Season players, no playOnAwake, no mixer override), AmbientSoundPlayerGroup 2, 9 SoundBank, 61 clips. AirPit is the first map with both an Out and an In group: states.groups pins each group by its leaf name with its mixer and member count (CommonAmbientOutGroup -> CommonAmbOutEffects with 4 players, CommonAmbientInGroup -> CommonAmbInEffects with 22), so neither the object-table order nor a player moved between the groups passes; group_mixers (source order) and loop_players mirror them for ArenaMapPort.Server.Tests/AmbientAudioProfilesTests.cs. Every player is grouped (all_players).",
-    "implicit_scene_identity stays false: generic packages always record source.map_key."
+    "implicit_scene_identity stays false: generic packages always record source.map_key.",
+    "Furnished shops (2026-10-12, PLAN-AIRPIT shop import; docs/progress/airpit-release.md): scenes 38 Arena_Airpit_Main_hall and 37 Arena_Airpit_Light are partial scenes of the earlier TeamFight levels level38/level37 (plan record select; roots + region_roots + twin skipping against level324/level325). Pins are the first real airpit-native-v7 extraction on Arena 0.6.0.47752, checked against the slice design dry run (SHOPS 1148 selected / 30 twin, PROJECTION/INDOOR/SHOPS 104 / 92, tier-2 groups 24/22/3/4/3/5, Light 187 units / 26 carriers / 962 objects), plus the two additions of the lead decision: SOO_LOD0/DOORS (28 units, 38 BallisticColliders) and the PROJECTION outline-box decals (+88 StaticDeferredDecal units: 86 quads with a renderer and the two renderer-less spray_02 leaves that scene_select.UNIT_SCRIPTS makes units). Ballistics 38 = 785 and 37 = 122 (total 4455), static_decals 683 (481 + 202), CullingLightObject 680 (533 + 147), VolumetricLight 139 (130 + 9), LightFlicker 0. The first five scenes and their meshes, materials and textures are byte-identical to airpit-native-v6.",
+    "partial_scenes pins the scenes that take only a selected part of their Arena level (plan record select, manifest partial_scenes): objects, units and carriers as emitted, orphans = BallisticColliders hidden because their owner has no physical collider (four video_player_LOD0 owners in SHOPS/BURGER_SPOT), dropped_script_owners = claimed containers that own a MonoBehaviour but are neither a unit nor a carrier, so their script is not in the package (0 for both scenes: every script owner of the claimed scope is a unit or a carrier), rules = selected units and twin-skipped units per rule (rule key = 'roots:<path>' or 'region_roots:<path>' exactly as the plan spells the path, trailing space included). require_unsliced stays true: a partial scene is not a slice."
   ],
   "scenes": {
     "324": "Arena_AirPit_ShootOut",
     "325": "Arena_AirPit_ShootOut_Light",
     "40": "Arena_Airpit_DesignStuff",
     "29": "Arena_Airpit_TeamFight",
-    "28": "Arena_Airpit_TeamFight_DesignStuff"
+    "28": "Arena_Airpit_TeamFight_DesignStuff",
+    "38": "Arena_Airpit_Main_hall",
+    "37": "Arena_Airpit_Light"
   },
   "ballistics": {
     "324": 2856,
     "325": 512,
     "40": 28,
     "29": 94,
-    "28": 58
+    "28": 58,
+    "38": 785,
+    "37": 122
   },
   "require_unsliced": true,
+  "partial_scenes": {
+    "Arena_Airpit_Main_hall": {
+      "index": 38,
+      "objects": 7118,
+      "units": 1446,
+      "carriers": 85,
+      "orphans": 4,
+      "dropped_script_owners": 0,
+      "rules": {
+        "region_roots:PROJECTION": {"selected": 97, "twin_skipped": 262},
+        "region_roots:SBG_Arena_Airpit_Main_hall/OO/PROPS/FLOOR_DAMAGE ": {"selected": 5, "twin_skipped": 32},
+        "region_roots:SBG_Arena_Airpit_Main_hall/OO/PROPS/INDOOR/BACK": {"selected": 24, "twin_skipped": 67},
+        "region_roots:SBG_Arena_Airpit_Main_hall/OO/PROPS/INDOOR/FRONT": {"selected": 22, "twin_skipped": 35},
+        "region_roots:SBG_Arena_Airpit_Main_hall/OO/PROPS/INDOOR/LEFT": {"selected": 3, "twin_skipped": 10},
+        "region_roots:SBG_Arena_Airpit_Main_hall/OO/PROPS/INDOOR/RIGHT": {"selected": 4, "twin_skipped": 9},
+        "region_roots:SBG_Arena_Airpit_Main_hall/OO/PROPS/OUTDOOR/FIELD": {"selected": 3, "twin_skipped": 7},
+        "roots:PROJECTION/INDOOR/SHOPS": {"selected": 104, "twin_skipped": 92},
+        "roots:SBG_Arena_Airpit_Main_hall/OO/PROPS/INDOOR/SHOPS": {"selected": 1148, "twin_skipped": 30},
+        "roots:SBG_Arena_Airpit_Main_hall/SOO_LOD0/Airport_Shop_BS": {"selected": 1, "twin_skipped": 0},
+        "roots:SBG_Arena_Airpit_Main_hall/SOO_LOD0/DOORS": {"selected": 28, "twin_skipped": 0},
+        "roots:SBG_Arena_Airpit_Main_hall/SOO_LOD0/DonB_Ramen": {"selected": 1, "twin_skipped": 0},
+        "roots:SBG_Arena_Airpit_Main_hall/SOO_LOD0/LP_Defile": {"selected": 1, "twin_skipped": 0},
+        "roots:SBG_Arena_Airpit_Main_hall/SOO_LOD0/LP_Shop": {"selected": 1, "twin_skipped": 0},
+        "roots:SBG_Arena_Airpit_Main_hall/SOO_LOD0/TH_Roll_door_01": {"selected": 1, "twin_skipped": 0},
+        "roots:SBG_Arena_Airpit_Main_hall/SOO_LOD0/TH_Roll_door_02": {"selected": 1, "twin_skipped": 0},
+        "roots:SBG_Arena_Airpit_Main_hall/SOO_LOD0/TH_Roll_door_03": {"selected": 1, "twin_skipped": 0},
+        "roots:SBG_Arena_Airpit_Main_hall/SOO_LOD0/TH_Shop_indoor": {"selected": 1, "twin_skipped": 0}
+      }
+    },
+    "Arena_Airpit_Light": {
+      "index": 37,
+      "objects": 962,
+      "units": 187,
+      "carriers": 26,
+      "orphans": 0,
+      "dropped_script_owners": 0,
+      "rules": {
+        "region_roots:NO_CULL": {"selected": 6, "twin_skipped": 1},
+        "region_roots:PUDDLES": {"selected": 1, "twin_skipped": 0},
+        "region_roots:SBG_Airpit_Light/OO/FogSheets": {"selected": 2, "twin_skipped": 1},
+        "region_roots:SBG_Airpit_Light/OO/GLOBAL GI": {"selected": 8, "twin_skipped": 3},
+        "region_roots:SBG_Airpit_Light/OO/ShadowPlanes": {"selected": 47, "twin_skipped": 8},
+        "roots:SBG_Airpit_Light/OO/BurgerSpot*": {"selected": 37, "twin_skipped": 0},
+        "roots:SBG_Airpit_Light/OO/ChinaPlace*": {"selected": 27, "twin_skipped": 0},
+        "roots:SBG_Airpit_Light/OO/HELLFINGER": {"selected": 34, "twin_skipped": 0},
+        "roots:SBG_Airpit_Light/OO/LouiPeeton*": {"selected": 25, "twin_skipped": 2}
+      }
+    }
+  },
   "implicit_scene_identity": false,
   "features": {
-    "static_decals": 481,
+    "static_decals": 683,
     "light_culling": {
-      "culling_light_object_count": 533,
-      "volumetric_light_count": 130,
+      "culling_light_object_count": 680,
+      "volumetric_light_count": 139,
       "light_flicker_count": 0
     },
     "raincover": {

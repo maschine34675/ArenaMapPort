@@ -381,16 +381,18 @@ class TrackedSidecarTests(unittest.TestCase):
         # not produced the accepted 0.6.0 package yet (every marker and light agrees to 6e-5 m, so only
         # source_package differs). PLAN-AIRPIT item 5 says the old package is "no longer referenced":
         # this test starts running when the accepted package appears and fails until the sidecar is redone.
-        # 2026-10-12 (item 13): the accepted package is airpit-native-v6 (v5 + native ambient audio; scenes,
-        # meshes, materials and textures are byte-identical to v5).
-        accepted = ROOT / "work" / "extract" / "airpit-native-v6"
+        # 2026-10-12 (item 13): the accepted package was airpit-native-v6 (v5 + native ambient audio; scenes,
+        # meshes, materials and textures byte-identical to v5). Furnished shops (same day): airpit-native-v7 adds the
+        # partial scenes Arena_Airpit_Main_hall and Arena_Airpit_Light; the first five scenes are byte-identical to v6,
+        # so only source_package (name, extracted_utc, the scene list) changed in the sidecar.
+        accepted = ROOT / "work" / "extract" / "airpit-native-v7"
         if not (accepted / "manifest.json").is_file():
-            self.skipTest("airpit-native-v6 not extracted yet (PLAN-AIRPIT item 5/13)")
+            self.skipTest("airpit-native-v7 not extracted yet (PLAN-AIRPIT item 5/13, furnished shops)")
         name = json.loads(self.sidecar("airpit").read_text(encoding="utf-8"))["source_package"]["name"]
         self.assertEqual(
-            name, "airpit-native-v6",
+            name, "airpit-native-v7",
             "airpit.modes.json still names the superseded package %r; regenerate it: python "
-            "tools/extract/extract_mode_objects.py --package work/extract/airpit-native-v6 "
+            "tools/extract/extract_mode_objects.py --package work/extract/airpit-native-v7 "
             "(only source_package should change)" % name)
 
     def test_every_sidecar_has_twenty_markers_and_two_bounds(self):

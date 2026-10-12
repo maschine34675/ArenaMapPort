@@ -8,8 +8,13 @@ Native features (original ballistic materials, NavMesh modifiers, static decals,
 culling, rain cover; PLAN-AIRPIT item 2) are opt-in and live in native_features.py:
        ... --native-features --target <SPT EscapeFromTarkov_Data>
 The plain invocation is unchanged and writes no native block. The accepted AirPit package
-(Arena 0.6.0, PLAN-AIRPIT item 5) is the native form written to work/extract/airpit-native-v6 (v6 = v5 + native ambient audio, item 13);
+(Arena 0.6.0, PLAN-AIRPIT item 5) is the native form written to work/extract/airpit-native-v7 (v7 = v6 + the furnished-shop partial scenes; v6 = v5 + native ambient audio, item 13);
 the superseded 0.5.4 spike package work/extract/airpit is never an --output.
+
+A plan scene record with ``select`` is a *partial scene* (scene_select.py): only the selected
+hierarchy of that level is written, the native augmenters see just those owners, and the
+manifest gains ``partial_scenes`` (``slice`` stays empty). Full scenes are processed exactly as
+before, in plan order; a partial scene always follows the full scene its twins are skipped against.
 """
 from __future__ import annotations
 
@@ -23,8 +28,9 @@ import UnityPy
 
 import extract_equator as EQ
 import native_features as NF
-from source_plan import (PlanError, finite_vector, load_plan, plan_relative_path, provenance,
-                         read_build_scenes, require_file, unique_records, validate_anchors,
+import scene_select as SS
+from source_plan import (PlanError, finite_vector, load_plan, partial_scene_records, plan_relative_path,
+                         provenance, read_build_scenes, require_file, unique_records, validate_anchors,
                          verify_scene_mapping)
 
 DEFAULT_SOURCE = "D:/Battlestate Games/Escape from Tarkov Arena/EscapeFromTarkovArena_Data"
@@ -151,6 +157,47 @@ def write_json(path: Path, value) -> None:
     path.write_text(json.dumps(value, indent=2, sort_keys=True, ensure_ascii=False, allow_nan=False), encoding="utf-8")
 
 
+def extract_partial_scene(record: dict, level_files: dict, graphs: dict, tags: list[str], ctx,
+                          native: NF.NativeFeatureExtraction | None) -> tuple[dict, dict]:
+    """Extract one partial scene; returns ``(scene JSON, manifest partial_scenes block)``.
+
+    ``level_files`` maps a BuildSettings index to its UnityPy level file and ``graphs`` caches the
+    scene_select graph per index (a reference level is read once). The selection comes from
+    scene_select.select_nodes; the native augmenters run through a ScopedFile so that only
+    extracted owners are scanned, and the result is checked against the selection (every object
+    present, every parent and LOD renderer resolvable, carriers without components) before the
+    scene is accepted.
+    """
+    def graph_of(index: int) -> SS.Graph:
+        if index not in graphs:
+            graphs[index] = SS.build_graph(level_files[index])
+        return graphs[index]
+
+    twins_of = record["select"].get("skip_twins_of")
+    selection = SS.select_nodes(record, graph_of(record["index"]),
+                                graph_of(twins_of) if twins_of is not None else None)
+    file = level_files[record["index"]]
+    scene = EQ.extract_scene(record["index"], file, tags, list(selection.node_tf_ids), ctx)
+    orphans: list[list[int]] = []
+    if native is not None:
+        scoped = SS.ScopedFile(file, selection.go_ids)
+        native.augment_scene(scene, scoped, ctx, record["name"])
+        orphans = [list(pair) for pair in scoped.orphans]
+    problems = SS.structure_problems(scene, selection)
+    if problems:
+        raise EQ.HardExtractError(f"partial scene {record['name']} is inconsistent with its selection: "
+                                  f"{problems[:5]} ({len(problems)} problem(s))")
+    report = selection.report
+    print(f"[extract_map] {record['name']}: partial scene of level{record['index']}: {report['units']} units, "
+          f"{report['carriers']} carriers, {len(selection.twins)} twin unit(s) of level{twins_of} skipped, "
+          f"{len(orphans)} ballistic orphan(s) hidden, {report['dropped_script_owners']} container(s) "
+          "with a dropped script", file=sys.stderr)
+    return scene, {"index": record["index"], "objects": report["objects"], "units": report["units"],
+                   "carriers": report["carriers"], "rules": report["rules"],
+                   "dropped_script_owners": report["dropped_script_owners"],
+                   "ballistic_orphans": orphans, "go_ids_sha256": report["go_ids_sha256"]}
+
+
 def extract(plan_path: Path, source: Path, output: Path | None, timestamp: str | None, census_only: bool,
             native_target: Path | None = None) -> None:
     source = source.resolve()
@@ -172,9 +219,14 @@ def extract(plan_path: Path, source: Path, output: Path | None, timestamp: str |
         native = NF.NativeFeatureExtraction.for_plan(plan, source, native_target.resolve())
     env, exact = load_environment(source, plan)
     terrain_present = False
+    partial_names = {r["name"] for r in partial_scene_records(plan)}
     for record in plan["scenes"]:
         file = env.files[exact[record["index"]]["level"]]
-        terrain_present |= any(o.type.name in ("Terrain", "TerrainCollider") for o in file.objects.values())
+        has_terrain = any(o.type.name in ("Terrain", "TerrainCollider") for o in file.objects.values())
+        if has_terrain and record["name"] in partial_names:
+            raise PlanError(f"partial scene {record['name']} is cut from a level with Terrain; "
+                            "ground conversion covers whole scenes only")
+        terrain_present |= has_terrain
         if census_only:
             print(f"{record['name']} (level{record['index']}): "
                   f"{dict(Counter(obj.type.name for obj in file.objects.values()).most_common())}")
@@ -187,18 +239,25 @@ def extract(plan_path: Path, source: Path, output: Path | None, timestamp: str |
     EQ.ensure_dirs(str(output))
     old_registry = EQ.SCENE_REGISTRY
     total_objects = 0
+    partial_blocks: dict[str, dict] = {}
+    level_files = {r["index"]: env.files[exact[r["index"]]["level"]] for r in plan["scenes"]}
+    graphs: dict[int, SS.Graph] = {}
     try:
         EQ.SCENE_REGISTRY = {r["index"]: r["name"] for r in plan["scenes"]}
         from material_slots import preserve_material_slots
         scene_by_file = {f"level{r['index']}": r['name'] for r in plan['scenes']}
         with preserve_material_slots(EQ, scene_by_file) as material_slot_preservation:
             for record in plan["scenes"]:
-                file = env.files[exact[record["index"]]["level"]]
-                _go, transforms, _tf = EQ.build_scene_graph(file)
-                scene = EQ.extract_scene(record["index"], file, tags, list(transforms), ctx)
+                file = level_files[record["index"]]
+                if record["name"] in partial_names:
+                    scene, partial_blocks[record["name"]] = extract_partial_scene(
+                        record, level_files, graphs, tags, ctx, native)
+                else:
+                    _go, transforms, _tf = EQ.build_scene_graph(file)
+                    scene = EQ.extract_scene(record["index"], file, tags, list(transforms), ctx)
                 if not scene["objects"]:
                     raise PlanError(f"selected content scene is empty: {record['name']}")
-                if native is not None:
+                if native is not None and record["name"] not in partial_names:
                     native.augment_scene(scene, file, ctx, record["name"])
                 total_objects += len(scene["objects"])
                 write_json(output / "scenes" / (record["name"] + ".json"), scene)
@@ -232,6 +291,8 @@ def extract(plan_path: Path, source: Path, output: Path | None, timestamp: str |
                 "scenes": [r["name"] for r in plan["scenes"]], "slice": {},
                 "meshes": meshes, "materials": materials, "textures": textures,
                 "anchors_reference": anchors, "errors": ctx.errors, "warnings": ctx.warnings}
+    if partial_blocks:
+        manifest["partial_scenes"] = partial_blocks
     if terrain_conversion is not None:
         manifest["terrain_conversion"] = terrain_conversion
     if native is not None:

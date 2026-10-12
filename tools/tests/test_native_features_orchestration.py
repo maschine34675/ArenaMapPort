@@ -8,13 +8,15 @@ accepted Equator/Bay5 packages (skipped when those ignored work/ packages are ab
 """
 from __future__ import annotations
 
-from contextlib import ExitStack
+from contextlib import ExitStack, contextmanager
+import io
 import json
 from pathlib import Path
 import sys
 import tempfile
+from types import SimpleNamespace
 import unittest
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 REPO = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO / "tools" / "extract"))
@@ -295,6 +297,10 @@ class AcceptedPackageShapeTests(NativeFeatureTestCase):
     def test_airpit_native_v6_blocks_are_reproduced(self):
         self.check_package("airpit-native-v6")
 
+    def test_airpit_native_v7_blocks_are_reproduced(self):
+        # v7 = v6 + the furnished-shop partial scenes: same block shapes, larger decal and light-culling counts.
+        self.check_package("airpit-native-v7")
+
 
 class ExtractMapCommandLineTests(unittest.TestCase):
     PLAN = ["--plan", "tools/extract/plans/airpit.json"]
@@ -387,6 +393,197 @@ class ExtractOrderTests(unittest.TestCase):
             raise AssertionError("plain extraction must not touch the native-feature path")
         with self.assertRaises(self.Reached):
             self.run_extract(None, forbidden)
+
+
+PART_SELECT = {"schema": 1, "reason": "furnished shops", "skip_twins_of": 1, "roots": ["Root/Shops"]}
+
+
+def partial_plan_with_scripts_role() -> dict:
+    plan = plan_with_scripts_role()
+    plan["scenes"].append({"name": "Arena_Test_Part", "asset_path": "Assets/Content/Arena_Test_Part.unity",
+                           "index": 2, "select": dict(PART_SELECT)})
+    return plan
+
+
+class PartialSceneTestCase(unittest.TestCase):
+    """Shared fakes: two level files, a fixed selection and an extract_scene that returns exactly its nodes."""
+
+    def setUp(self):
+        self.record = partial_plan_with_scripts_role()["scenes"][1]
+        self.files = {1: object(), 2: object()}
+        self.selection = EX.SS.Selection(
+            node_tf_ids=(11, 12, 13), go_ids=frozenset((1, 2, 3)), carrier_go_ids=frozenset((1,)),
+            unit_tf_ids=(12,), twins={20: 21, 22: 23},
+            report={"objects": 3, "units": 1, "carriers": 1, "dropped_script_owners": 2, "go_ids_sha256": "ab" * 32,
+                    "rules": {"roots:Root/Shops": {"selected": 1, "twin_skipped": 2}}})
+        self.tags = ["Untagged"]
+        self.ctx = object()
+        self.scene = {"scene_name": "Arena_Test_Part", "objects": [
+            {"id": "1", "name": "Root", "parent_id": None, "components": []},
+            {"id": "2", "name": "Shops", "parent_id": "1", "components": [
+                {"type": "LODGroup", "lods": [{"renderer_object_ids": ["3"]}]}]},
+            {"id": "3", "name": "Mesh", "parent_id": "2", "components": [{"type": "MeshRenderer"}]}]}
+        self.scoped_calls = []
+        outer = self
+
+        class FakeScoped:
+            orphans = [(7, 8)]
+
+            def __init__(self, unity_file, owners):
+                self.unity_file, self.owners = unity_file, set(owners)
+                outer.scoped_calls.append(self)
+        self.FakeScoped = FakeScoped
+
+    def patches(self, stack, scene=None):
+        stack.enter_context(patch.object(EX.SS, "build_graph", side_effect=lambda f: f"graph of {id(f)}"))
+        self.select = stack.enter_context(patch.object(EX.SS, "select_nodes", return_value=self.selection))
+        self.extract_scene = stack.enter_context(
+            patch.object(EX.EQ, "extract_scene", return_value=scene if scene is not None else self.scene))
+        stack.enter_context(patch.object(EX.SS, "ScopedFile", self.FakeScoped))
+        stack.enter_context(patch.object(EX.sys, "stderr", new=io.StringIO()))
+
+
+class ExtractPartialSceneTests(PartialSceneTestCase):
+    def run_partial(self, native, graphs=None, scene=None, record=None):
+        with ExitStack() as stack:
+            self.patches(stack, scene)
+            return EX.extract_partial_scene(record or self.record, self.files, {} if graphs is None else graphs,
+                                            self.tags, self.ctx, native)
+
+    def test_selection_extraction_scoped_augmentation_and_manifest_block(self):
+        native = MagicMock()
+        scene, block = self.run_partial(native)
+        record, graph, reference = self.select.call_args.args
+        self.assertEqual((record, graph, reference), (self.record, f"graph of {id(self.files[2])}",
+                                                      f"graph of {id(self.files[1])}"))
+        self.extract_scene.assert_called_once_with(2, self.files[2], self.tags, [11, 12, 13], self.ctx)
+        (scoped,) = self.scoped_calls
+        self.assertIs(scoped.unity_file, self.files[2])
+        self.assertEqual(scoped.owners, {1, 2, 3})
+        native.augment_scene.assert_called_once_with(scene, scoped, self.ctx, "Arena_Test_Part")
+        self.assertEqual(block, {"index": 2, "objects": 3, "units": 1, "carriers": 1, "ballistic_orphans": [[7, 8]],
+                                 "dropped_script_owners": 2, "go_ids_sha256": "ab" * 32,
+                                 "rules": {"roots:Root/Shops": {"selected": 1, "twin_skipped": 2}}})
+
+    def test_graphs_are_built_once_per_level_and_shared_through_the_cache(self):
+        graphs = {}
+        built = []
+        with ExitStack() as stack:
+            self.patches(stack)
+            stack.enter_context(patch.object(EX.SS, "build_graph", side_effect=lambda f: built.append(f) or "g"))
+            for _ in range(2):
+                EX.extract_partial_scene(self.record, self.files, graphs, self.tags, self.ctx, None)
+        self.assertEqual(built, [self.files[2], self.files[1]])
+        self.assertEqual(sorted(graphs), [1, 2])
+
+    def test_without_twin_skipping_no_reference_level_is_read(self):
+        record = dict(self.record, select={k: v for k, v in PART_SELECT.items() if k != "skip_twins_of"})
+        graphs = {}
+        self.run_partial(None, graphs=graphs, record=record)
+        self.assertEqual(sorted(graphs), [2])
+        self.assertIsNone(self.select.call_args.args[2])
+
+    def test_plain_extraction_neither_augments_nor_scopes(self):
+        _scene, block = self.run_partial(None)
+        self.assertEqual(self.scoped_calls, [])
+        self.assertEqual(block["ballistic_orphans"], [])
+
+    def test_a_scene_that_disagrees_with_its_selection_is_refused(self):
+        broken = json.loads(json.dumps(self.scene))
+        broken["objects"][2]["parent_id"] = "99"
+        with self.assertRaisesRegex(HardExtractError, "inconsistent with its selection"):
+            self.run_partial(MagicMock(), scene=broken)
+        short = json.loads(json.dumps(self.scene))
+        short["objects"].pop()
+        with self.assertRaisesRegex(HardExtractError, "1 missing"):
+            self.run_partial(MagicMock(), scene=short)
+
+    def test_a_carrier_that_gained_a_component_is_refused(self):
+        native = MagicMock()
+        native.augment_scene.side_effect = lambda scene, *_: scene["objects"][0]["components"].append(
+            {"type": "BallisticCollider"})
+        with self.assertRaisesRegex(HardExtractError, "carrier has components"):
+            self.run_partial(native)
+
+
+class ExtractPartialFlowTests(PartialSceneTestCase):
+    """extract(): partial scenes follow their reference in plan order, only they get the scoped view."""
+
+    def run_extract(self, root, plan, native, terrain_in=None):
+        files = {name: SimpleNamespace(objects={1: SimpleNamespace(type=SimpleNamespace(name=terrain_in == name
+                                                                                       and "Terrain" or "GameObject"))})
+                 for name in ("L1", "L2")}
+        self.level = {1: files["L1"], 2: files["L2"]}
+        exact = {1: {"level": "L1"}, 2: {"level": "L2"}}
+        (root / "source").mkdir()
+        scenes = {r["index"]: dict(self.scene, scene_name=r["name"]) for r in plan["scenes"]}
+
+        @contextmanager
+        def nothing(*_args):
+            yield None
+        with ExitStack() as stack:
+            self.patches(stack)
+            stack.enter_context(patch.object(EX.EQ, "extract_scene",
+                                             side_effect=lambda idx, *_a: json.loads(json.dumps(scenes[idx]))))
+            stack.enter_context(patch.object(EX.EQ, "build_scene_graph", return_value=(None, {11: {}}, None)))
+            for name, value in (("write_meshes", {}), ("write_materials", {}), ("write_textures", {})):
+                stack.enter_context(patch.object(EX.EQ, name, return_value=value))
+            stack.enter_context(patch.object(EX.EQ, "ExtractionContext", return_value=SimpleNamespace(errors=[], warnings=[])))
+            stack.enter_context(patch.object(EX, "load_plan", return_value=plan))
+            stack.enter_context(patch.object(EX, "plan_relative_path"))
+            stack.enter_context(patch.object(EX, "read_build_scenes"))
+            stack.enter_context(patch.object(EX, "verify_scene_mapping"))
+            stack.enter_context(patch.object(EX, "load_environment", return_value=(SimpleNamespace(files=files), exact)))
+            stack.enter_context(patch.object(EX, "collect_anchors", return_value={}))
+            stack.enter_context(patch.object(EX, "source_navmesh_reference", return_value={}))
+            stack.enter_context(patch.object(EX, "load_tags", return_value=[]))
+            stack.enter_context(patch.object(EX, "provenance", return_value={"map_key": plan["key"]}))
+            stack.enter_context(patch("mesh_compat.compressed_mesh_decoder", nothing))
+            stack.enter_context(patch("texture_compat.bc6h_rgb_decoder", nothing))
+            stack.enter_context(patch.object(EX.NF.NativeFeatureExtraction, "for_plan", return_value=native))
+            EX.extract(Path("plan.json"), root / "source", root / "out", "T", False, Path("spt") if native else None)
+        return json.loads((root / "out" / "manifest.json").read_text(encoding="utf-8"))
+
+    def fake_native(self):
+        native = MagicMock()
+        native.source_fields.return_value = {}
+        native.manifest_blocks.return_value = {}
+        return native
+
+    def test_full_scene_gets_the_plain_file_the_partial_scene_the_scoped_view(self):
+        with tempfile.TemporaryDirectory() as temp:
+            native = self.fake_native()
+            manifest = self.run_extract(Path(temp), partial_plan_with_scripts_role(), native)
+            written = sorted(p.name for p in (Path(temp) / "out" / "scenes").iterdir())
+        self.assertEqual(manifest["scenes"], ["Arena_Test_Main", "Arena_Test_Part"])
+        self.assertEqual(manifest["slice"], {})
+        self.assertEqual(list(manifest["partial_scenes"]), ["Arena_Test_Part"])
+        self.assertEqual(manifest["partial_scenes"]["Arena_Test_Part"]["index"], 2)
+        self.assertEqual(manifest["partial_scenes"]["Arena_Test_Part"]["ballistic_orphans"], [[7, 8]])
+        self.assertEqual(written, ["Arena_Test_Main.json", "Arena_Test_Part.json"])
+        calls = native.augment_scene.call_args_list
+        self.assertEqual([c.args[3] for c in calls], ["Arena_Test_Main", "Arena_Test_Part"])
+        self.assertIs(calls[0].args[1], self.level[1])
+        self.assertIsInstance(calls[1].args[1], self.FakeScoped)
+        self.assertEqual(len(self.scoped_calls), 1)
+
+    def test_a_plan_without_partial_scenes_writes_no_partial_block(self):
+        plan = plan_with_scripts_role()
+        with tempfile.TemporaryDirectory() as temp:
+            manifest = self.run_extract(Path(temp), plan, self.fake_native())
+        self.assertNotIn("partial_scenes", manifest)
+        self.assertEqual(manifest["slice"], {})
+        self.assertEqual(self.scoped_calls, [])
+
+    def test_plain_extraction_of_a_partial_plan_still_lists_the_partial_scene(self):
+        with tempfile.TemporaryDirectory() as temp:
+            manifest = self.run_extract(Path(temp), partial_plan_with_scripts_role(), None)
+        self.assertEqual(manifest["partial_scenes"]["Arena_Test_Part"]["ballistic_orphans"], [])
+        self.assertEqual(self.scoped_calls, [])
+
+    def test_a_partial_scene_cannot_be_cut_from_a_level_with_terrain(self):
+        with tempfile.TemporaryDirectory() as temp, self.assertRaisesRegex(SP.PlanError, "with Terrain"):
+            self.run_extract(Path(temp), partial_plan_with_scripts_role(), self.fake_native(), terrain_in="L2")
 
 
 class GenericReproducibilityCommandTests(unittest.TestCase):

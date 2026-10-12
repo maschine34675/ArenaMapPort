@@ -48,6 +48,12 @@ Checks performed against --package (default: work/extract/equator_s1, O7's S1 pa
      if it is not, this step is SKIPPED with a clear message (an environment gap, not a WP1
      defect) rather than failed.
 
+Partial scenes (plan record ``select``, manifest ``partial_scenes``) take only a selected part of one Arena
+level file. The whole-level source censuses below (null MeshCollider, mixed material slots, special meshes,
+disabled components) count, for such a scene, only the components whose owner GameObject is an object of the
+package's own scenes/<name>.json (tools/validate/partial_scope.py); every other scene keeps the whole-level
+census unchanged.
+
 Exit code 0 + "OK" summary on success. Exit code 1 with specific, actionable messages (never a
 bare stack trace) on any failure, per SS B.WP6's own acceptance criterion for validators.
 
@@ -75,6 +81,7 @@ import traceback
 from pathlib import Path
 from typing import Any, NoReturn
 from native_volume import package_errors as native_volume_errors
+import partial_scope
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_PACKAGE = REPO_ROOT / "work" / "extract" / "equator_s1"  # O7
@@ -228,14 +235,39 @@ def validate_manifest_shape(manifest: dict, package: Path) -> None:
 # 4: scenes -- structural + cross-reference integrity
 # ---------------------------------------------------------------------------
 
-def census_null_mesh_colliders(manifest: dict) -> Counter:
-    """Read null collider references from every selected source scene, not package claims."""
+def validate_partial_scenes(manifest: dict, package: Path) -> None:
+    """Shape of the manifest ``partial_scenes`` block against the package scenes it scopes.
+
+    Silent for a package without the key, so the output of every full-scene package is unchanged. The
+    numbers are pinned by the map contract (validate_native_features); this proves the block is readable, that it
+    belongs to a generic source-plan package with ``slice == {}`` and that its object counts and ballistic
+    orphan owners agree with the scene files the censuses below are scoped by."""
+    if partial_scope.PARTIAL_KEY not in manifest:
+        return
+    check(is_generic_package(manifest), "partial scenes belong only to generic source-plan packages")
+    check(not manifest.get("slice"), "a package with partial scenes keeps slice == {} (partial scenes are not slices)")
+    try:
+        scopes = partial_scope.scopes_from_package(manifest, package)
+    except partial_scope.PartialScopeError as exc:
+        check(False, f"manifest partial_scenes block is valid for the package scenes: {exc}")
+        return
+    for name, scope in scopes.items():
+        check(True, f"partial scene {name}: {len(scope.owners)} objects, {len(scope.orphans)} hidden ballistic "
+                    f"orphan(s); manifest block matches the package scene")
+
+
+def census_null_mesh_colliders(manifest: dict, package: Path | None = None) -> Counter:
+    """Read null collider references from every selected source scene, not package claims.
+
+    A partial scene counts only the owners that are objects of its package scene (``package`` is then required)."""
     import UnityPy
     _, plan = generic_plan_for(manifest)
+    scopes = partial_scope.scopes_from_package(manifest, package)
     source = Path(manifest["source"]["arena_data_root"]).resolve()
     env = UnityPy.Environment(path=str(source))
     result = Counter()
     for scene in plan["scenes"]:
+        scope = scopes.get(scene["name"]) if scopes else None
         file = env.load_file(str(source / f"level{scene['index']}"))
         for obj in file.objects.values():
             if obj.type.name != "MeshCollider":
@@ -249,6 +281,8 @@ def census_null_mesh_colliders(manifest: dict) -> Counter:
             owner = tree["m_GameObject"]
             if owner.get("m_FileID") != 0 or not owner.get("m_PathID"):
                 raise ValueError("source null MeshCollider owner is not a local GameObject")
+            if scope is not None and not scope.covers(owner["m_PathID"]):
+                continue
             result[(scene["name"], str(owner["m_PathID"]))] += 1
     return result
 
@@ -268,7 +302,7 @@ def validate_scenes(manifest: dict, package: Path) -> dict:
     generic = is_generic_package(manifest)
     if generic:
         try:
-            source_null_colliders = census_null_mesh_colliders(manifest)
+            source_null_colliders = census_null_mesh_colliders(manifest, package)
         except Exception as exc:
             check(False, f"source null MeshCollider census failed: {exc}")
 
@@ -399,18 +433,21 @@ def validate_scenes(manifest: dict, package: Path) -> dict:
     return stats
 
 
-def census_mixed_material_slots(manifest: dict) -> list[dict]:
+def census_mixed_material_slots(manifest: dict, package: Path | None = None) -> list[dict]:
     """Independently reconstruct mixed arrays from all selected source renderers.
 
     Discovery never relies on package provenance: dropping the record together
     with a null slot must still fail. Only mixed arrays are the new contract.
+    A partial scene takes only the renderers whose owner is an object of its package scene.
     """
     import UnityPy
     _, plan = generic_plan_for(manifest)
+    scopes = partial_scope.scopes_from_package(manifest, package)
     source = Path(manifest['source']['arena_data_root']).resolve()
     env = UnityPy.Environment(path=str(source))
     result = []
     for scene in plan['scenes']:
+        scope = scopes.get(scene['name']) if scopes else None
         basename = f"level{scene['index']}"
         file = env.load_file(str(source / basename))
         for renderer in sorted(file.objects.values(), key=lambda obj: obj.path_id):
@@ -424,6 +461,8 @@ def census_mixed_material_slots(manifest: dict) -> list[dict]:
             owner = tree['m_GameObject']
             if owner['m_FileID'] != 0 or not owner['m_PathID']:
                 raise ValueError('source mixed renderer has no local GameObject owner')
+            if scope is not None and not scope.covers(owner['m_PathID']):
+                continue
             ids, materials = [], []
             for pointer in renderer.read().m_Materials:
                 if pointer.path_id == 0:
@@ -492,7 +531,7 @@ def validate_material_slot_preservation(manifest: dict, package: Path) -> None:
             check(False, 'material slot preservation belongs only to generic source-plan packages')
         return
     try:
-        required = census_mixed_material_slots(manifest)
+        required = census_mixed_material_slots(manifest, package)
         scenes = {name: load_json(package / 'scenes' / (name + '.json')) for name in manifest['scenes']}
         errors = material_slot_preservation_errors(records, required, scenes, set(manifest['materials']))
         for error in errors:
@@ -796,26 +835,32 @@ def special_mesh_output_errors(tree: dict, record: dict, path: Path) -> list[str
     return errors
 
 
-def census_special_source_meshes(manifest: dict):
+def census_special_source_meshes(manifest: dict, package: Path | None = None):
     """Find special meshes through the selected scenes' real MF/MC references.
 
     Source objects are deduplicated before reading mesh metadata. This visits the
     imported scene scope only; source skinned renderers remain the legacy exclusion.
+    A partial scene visits only the components whose owner is an object of its package scene.
     """
     from collections import Counter
     import UnityPy
     _, plan = generic_plan_for(manifest)
+    scopes = partial_scope.scopes_from_package(manifest, package)
     source = Path(manifest["source"]["arena_data_root"]).resolve()
     env = UnityPy.Environment(path=str(source))
     seen, special = set(), {}
     bindings = Counter()
     for scene in plan["scenes"]:
+        scope = scopes.get(scene["name"]) if scopes else None
         file = env.load_file(str(source / f"level{scene['index']}"))
         for component in file.objects.values():
             kind = component.type.name
             if kind not in ("MeshFilter", "MeshCollider"):
                 continue
-            pointer = component.read().m_Mesh
+            typed = component.read()
+            if scope is not None and not scope.covers(typed.m_GameObject.path_id):
+                continue
+            pointer = typed.m_Mesh
             if pointer is None or pointer.path_id == 0:
                 continue
             reader = pointer.deref()
@@ -842,7 +887,7 @@ def validate_mesh_compatibility(manifest: dict, package: Path) -> None:
     if not check(is_generic_package(manifest) and isinstance(records, list), "mesh compatibility provenance belongs to a generic source-plan package"):
         return
     try:
-        required, source_bindings = census_special_source_meshes(manifest)
+        required, source_bindings = census_special_source_meshes(manifest, package)
     except Exception as exc:
         check(False, f"selected source scene mesh census failed: {exc}")
         return
@@ -1273,7 +1318,9 @@ def count_disabled_in_arena(source_root: str | None, manifest: dict, package: Pa
     records (GameObject/Transform/MeshRenderer/etc.) live entirely inside level<N> itself, never in
     sharedassets<N>.assets or an external file (extract_equator.py's own build_scene_graph()/
     build_components() only ever read from the level<N> SerializedFile) -- so this only needs to
-    load that one file per scene, not the full multi-file environment extraction needs. Returns
+    load that one file per scene, not the full multi-file environment extraction needs. A partial
+    scene (manifest ``partial_scenes``) counts only the components whose owner GameObject is an object of
+    its package scene, so its count is compared like a full scene's, without a slice excuse. Returns
     None (with a warning already recorded) if the source tree is not reachable right now."""
     strict = is_generic_package(manifest)
     generic_plan = generic_plan_for(manifest)[1] if strict else None
@@ -1313,6 +1360,10 @@ def count_disabled_in_arena(source_root: str | None, manifest: dict, package: Pa
              "the hardcoded reference table")
         return None
 
+    try:
+        scopes = partial_scope.scopes_from_package(manifest, package)
+    except partial_scope.PartialScopeError as exc:
+        die(f"disabled-component check cannot scope the partial scenes: {exc}")
     out: dict[str, dict[str, int]] = {}
     for scene_name in manifest.get("scenes", []):
         idx = name_to_idx.get(scene_name)
@@ -1329,6 +1380,7 @@ def count_disabled_in_arena(source_root: str | None, manifest: dict, package: Pa
             warn(f"disabled-component ground-truth check: {level_path} not found -- skipped {scene_name}")
             continue
         env = UnityPy.load(str(level_path))
+        scope = scopes.get(scene_name)
         scene_counts: dict[str, int] = {}
         for obj in env.objects:
             t = obj.type.name
@@ -1341,6 +1393,8 @@ def count_disabled_in_arena(source_root: str | None, manifest: dict, package: Pa
                     die(f"cannot read disabled-component source {level_path} {obj.path_id}: {exc}")
                 continue
             if tt.get("m_Enabled", 1) == 0:
+                if scope is not None and not scope.covers(tt["m_GameObject"]["m_PathID"]):
+                    continue
                 scene_counts[t] = scene_counts.get(t, 0) + 1
         if strict and package is not None:
             source_file = env.files[str(level_path)]
@@ -1361,7 +1415,9 @@ def validate_disabled_component_counts(manifest: dict, package: Path) -> None:
     enabled state, so nothing this check compares is ever intentionally skipped for a full run. A
     sliced package (--slice-roots) legitimately differs whenever a disabled object falls outside
     the requested subtree(s); reported as a WARN with the slice noted, not a FAIL, since that is
-    expected slicing behavior, not a defect."""
+    expected slicing behavior, not a defect. A partial scene (manifest ``partial_scenes``) is not a
+    slice: count_disabled_in_arena() scopes the source side to the owners of its package scene, so
+    the two counts must agree exactly, like a full scene's."""
     package_counts = count_disabled_in_package(manifest, package)
     source_root = manifest.get("source", {}).get("arena_data_root")
     arena_counts = count_disabled_in_arena(source_root, manifest, package)
@@ -1589,6 +1645,7 @@ def main() -> None:
         generic_plan_for(manifest)  # Source, plan digest, registry and finite complete anchors are mandatory.
 
     validate_manifest_shape(manifest, package)
+    validate_partial_scenes(manifest, package)
     from validate_native_features import validate_package as validate_native_package
     try:
         validate_native_package(package, manifest)

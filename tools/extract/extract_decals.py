@@ -6,6 +6,11 @@ and texture dimensions on every original instance. No MeshRenderer is required.
 An existing complete package can be augmented into a NEW directory with --package
 and --output; ordinary full extraction also uses augment_scene below.
 
+Partial scenes. A plan scene with ``select`` (scene_select.py) is extracted from part of its
+level. ``augment_scene`` then runs on a ``scene_select.ScopedFile`` over the level, scoped to the
+object ids of the package's own scene JSON, so only the owners that were extracted are scanned;
+the refresh CLI does the same for every scene listed in the manifest's ``partial_scenes``.
+
 Packages. The refresh CLI accepts the two legacy full-map packages (extract_equator.py,
 extract_bay5.py) and, since PLAN-AIRPIT item 4, any generic package written by
 extract_map.py --native-features. A generic package names its repository source plan in
@@ -91,7 +96,10 @@ def augment_scene(scene, unity_file, ctx):
             ratio_y = comp['texture_size'][1] / tt['m_Height']
             # Fourteen source components retain authoring resolution although Arena ships
             # a half-size texture. Preserve the atlas region in normalized coordinates.
-            require(ratio_x == ratio_y and ratio_x in (1, 2), "unexpected texture size ratio")
+            # AirPit's furnished shops (level38) add the opposite case, ratio 0.5: nine
+            # Graffiti6_ShadowPlaneBox quads author 32x32 against a 64x64 texture; the
+            # region is the whole texture and the importer scales the corners the same way.
+            require(ratio_x == ratio_y and ratio_x in (0.5, 1, 2), "unexpected texture size ratio")
             comp['source_texture_size'] = [tt['m_Width'], tt['m_Height']]
         except HardExtractError:
             raise
@@ -181,9 +189,14 @@ def refresh(package: Path, output: Path) -> int:
     ctx = eq.ExtractionContext(src.env)
     scenes = {}
     count = 0
+    partial = manifest.get('partial_scenes') or {}
     for idx, name in src.registry.items():
         scene = json.loads((package / 'scenes' / (name + '.json')).read_text(encoding='utf-8'))
-        count += augment_scene(scene, src.level_files[idx], ctx)
+        level_file = src.level_files[idx]
+        if name in partial:
+            from scene_select import ScopedFile
+            level_file = ScopedFile(level_file, [int(o['id']) for o in scene['objects']])
+        count += augment_scene(scene, level_file, ctx)
         scenes[name] = scene
     require(count > 0, "empty source census")
     shutil.copytree(package, output)

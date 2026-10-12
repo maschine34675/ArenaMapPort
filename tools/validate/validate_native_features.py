@@ -10,6 +10,13 @@ ambient-audio graph shape and states) is data, not code: one JSON file per map u
 A map whose contract says ``audio: null`` is a ballistics-only package: it must carry no
 ``native_audio`` entry, ``native_features.required`` is exactly ``['ballistics']``, the
 audio source/bundle proofs do not run, and the bundle must not contain native audio.
+
+Partial scenes (plan record ``select``, manifest ``partial_scenes``, contract ``partial_scenes``) take only a
+selected part of one Arena level file. ``map_contract`` pins their census (objects, units, carriers, hidden
+ballistic orphans, dropped script owners, per-rule counts) exactly, and ``validate_ballistic_source`` scopes its whole-level scan of
+that file to the owners of the package scene (tools/validate/partial_scope.py): a ``BallisticCollider`` outside
+the scene is not part of the package, one the extractor hid because its owner has no physical collider must be
+listed in ``ballistic_orphans`` and must really have none. A scene that is not partial keeps the whole-level scan.
 """
 from __future__ import annotations
 
@@ -28,6 +35,10 @@ _EXTRACT_DIR = str(Path(__file__).resolve().parents[1] / 'extract')
 if _EXTRACT_DIR not in sys.path:  # native_contract_loader (+ common_ids) live next to the extractors
     sys.path.append(_EXTRACT_DIR)
 from native_contract_loader import load_contracts  # noqa: E402
+_VALIDATE_DIR = str(Path(__file__).resolve().parent)
+if _VALIDATE_DIR not in sys.path:  # partial_scope lives next to this file
+    sys.path.append(_VALIDATE_DIR)
+import partial_scope  # noqa: E402
 
 FIELDS = ('penetration_level', 'penetration_chance', 'ricochet_chance',
           'fragmentation_chance', 'trajectory_deviation_chance', 'trajectory_deviation')
@@ -150,7 +161,44 @@ def map_contract(manifest):
             set(manifest['scenes'])==set(contract['scenes'].values()), 'native features require full '+key+' scene set')
     if contract['require_unsliced']:
         require(not manifest.get('slice'), key+' native features require unsliced scenes')
+    check_partial_scene_pins(key,contract,manifest)
     return key,contract
+
+
+def check_partial_scene_pins(key, contract, manifest):
+    """The manifest's ``partial_scenes`` census against the contract's reviewed pins.
+
+    Both directions fail closed: a contract that pins partial scenes needs exactly that set in the manifest, and a
+    manifest that carries partial scenes needs a contract that pins them (a block nobody reviewed would otherwise
+    narrow the source scans unchecked). Counts compare by exact type, rule names and counts included; the hidden
+    ballistic orphans are pinned by their number (the pairs themselves are proven against the source in
+    ``validate_ballistic_source``)."""
+    try:
+        entries=partial_scope.manifest_entries(manifest)
+    except partial_scope.PartialScopeError as error:
+        raise ValueError('Native features: '+str(error)) from error
+    pins=contract.get('partial_scenes') or {}
+    if not pins:
+        require(not entries,key+' contract pins no partial scenes, but the manifest carries partial_scenes')
+        return
+    require(set(entries)==set(pins),'partial scenes differ from the map contract: manifest '+str(sorted(entries))
+            +' != contract '+str(sorted(pins)))
+    for name,pin in pins.items():
+        entry=entries[name]
+        census_keys=('index','objects','units','carriers','orphans','dropped_script_owners')
+        actual={k:entry[k] for k in ('index','objects','units','carriers','dropped_script_owners')}
+        actual['orphans']=len(entry['ballistic_orphans'])
+        actual['rules']=entry['rules']
+        require(all(same(actual[k],pin[k]) for k in census_keys),
+                'partial scene '+name+' census differs from the map contract: '
+                +str({k:actual[k] for k in census_keys})+' != '+str({k:pin[k] for k in census_keys}))
+        require(sorted(actual['rules'])==sorted(pin['rules']),
+                'partial scene '+name+' selection rules differ from the map contract: '+str(sorted(actual['rules']))
+                +' != '+str(sorted(pin['rules'])))
+        for rule,counts in pin['rules'].items():
+            require(all(same(actual['rules'][rule][k],v) for k,v in counts.items()),
+                    'partial scene '+name+' rule '+rule+' census differs from the map contract: '
+                    +str(actual['rules'][rule])+' != '+str(counts))
 
 
 def same(actual, expected):
@@ -471,6 +519,15 @@ def physics_states(components, native=False):
     return Counter(states)
 
 
+def ballistic_owner(reader):
+    """Owner GameObject path id of a source BallisticCollider, from the header alone (no preset decoding)."""
+    raw=reader.get_raw_data()
+    require(len(raw)>=32,'truncated ballistic header')
+    owner_file,owner=struct.unpack_from('<iq',raw)
+    require(owner_file==0 and owner>0,'ballistic ABI changed')
+    return owner
+
+
 def validate_ballistic_source(package, manifest, scenes):
     import UnityPy
     root=Path(manifest['source']['arena_data_root']); target=Path(manifest['source']['target_data_root'])
@@ -480,8 +537,10 @@ def validate_ballistic_source(package, manifest, scenes):
     for name in MATERIALS:
         require(next(p for p in target_table if p['name']==name)['material']==MATERIALS.index(name),'target named material mapping changed')
     key,contract=map_contract(manifest);total=0
+    scopes=partial_scope.scopes_from_objects(manifest,scenes)  # {} unless the manifest has partial scenes
     for index,scene in contract['scenes'].items():
         objects={o['id']:o for o in scenes[scene]}
+        scope=scopes.get(scene);hidden=set()
         actual={}
         for obj in objects.values():
             for c in obj['components']:
@@ -493,7 +552,18 @@ def validate_ballistic_source(package, manifest, scenes):
         for reader in list(env.objects):
             if Path(reader.assets_file.name).name!=f'level{index}' or reader.type.name!='MonoBehaviour': continue
             if script_identity(reader)[:2]!=('BallisticCollider','EFT.Ballistics'): continue
-            key=str(reader.path_id); found.add(key)
+            key=str(reader.path_id)
+            if scope is not None:  # partial scene: only components on package objects are in scope
+                owner_id=ballistic_owner(reader)
+                if not scope.covers(owner_id):continue
+                if scope.is_orphan(owner_id,key):
+                    # Hidden on purpose: the owner has no physical collider, in the source or in the package.
+                    require(key not in actual,scene+': hidden ballistic orphan is present in the package '+key)
+                    require(not physics_states(unity_go(reader)['components'],True) and
+                            not any(x['type'] in PHYSICS for x in objects[str(owner_id)]['components']),
+                            scene+': hidden ballistic orphan owner has a physical collider '+key)
+                    hidden.add(key);continue
+            found.add(key)
             require(key in actual,scene+': missing ballistic component '+key)
             owner,c=actual[key]; expected=ballistic_expected(reader,source_table,target_table)
             compare_storage(c,expected,scene+': ballistic '+key)
@@ -506,6 +576,8 @@ def validate_ballistic_source(package, manifest, scenes):
             compare(dict(physics_states(owner['components'])),dict(physics_states(native['components'],True)),
                     'ballistic source physical collider states '+key)
         require(set(actual)==found,scene+': extra ballistic source identities')
+        if scope is not None:
+            require(hidden=={component for _,component in scope.orphans},scene+': hidden ballistic orphans differ from the source')
         require(len(found)==contract['ballistics'][index],scene+': ballistic source census changed');total+=len(found)
     require(total==sum(contract['ballistics'].values()),key+' ballistic source census changed')
 
