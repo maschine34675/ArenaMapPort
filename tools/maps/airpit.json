@@ -26,11 +26,26 @@
   "opened_barriers": [
     "BUS_DOORS",
     "PASSPORT_CONTROL_DOORS",
+    "PASSPORT_CONTROL_EMISSIVE",
     "SBG_Arena_AirPit_ShootOut/SOO/Prison_Metal_Fence_01 (2)",
     "SBG_Arena_AirPit_ShootOut/SOO/Prison_Metal_Fence_01 (3)"
   ],
   "navmesh_bake_exclusions": [],
-  "bake_bounds": [-80, 56, -2, 8, -96, 92],
+  "authored_borders": [
+    {"name": "north-west-approach", "from": [-33.86, 74.16], "to": [-28.5, 82.5], "y": [-1.0, 12.0]},
+    {"name": "north-facade-gap", "from": [-28.5, 82.5], "to": [4.6, 82.5], "y": [-1.0, 12.0]},
+    {"name": "north-east-jog", "from": [4.6, 82.5], "to": [8.84, 83.6], "y": [-1.0, 12.0]},
+    {"name": "east-upper", "from": [8.84, 83.6], "to": [36.24, 41.15], "y": [-1.0, 12.0]},
+    {"name": "east", "from": [36.24, 41.15], "to": [36.24, -48.3], "y": [-1.0, 12.0]},
+    {"name": "south-east", "from": [36.24, -48.3], "to": [1.44, -70.11], "y": [-1.0, 12.0]},
+    {"name": "south-pocket-east", "from": [1.44, -70.11], "to": [0.0, -81.96], "y": [-1.0, 12.0]},
+    {"name": "south", "from": [0.0, -81.96], "to": [-21.03, -82.54], "y": [-1.0, 12.0]},
+    {"name": "south-pocket-west", "from": [-21.03, -82.54], "to": [-26.22, -72.6], "y": [-1.0, 12.0]},
+    {"name": "south-west", "from": [-26.22, -72.6], "to": [-56.03, -41.66], "y": [-1.0, 12.0]},
+    {"name": "west", "from": [-56.03, -41.66], "to": [-56.81, 44.28], "y": [-1.0, 12.0]},
+    {"name": "north-west", "from": [-56.81, 44.28], "to": [-33.86, 74.16], "y": [-1.0, 12.0]}
+  ],
+  "bake_bounds": [-57, 37, -2, 8, -83, 83],
   "navmesh_bake_layers": [9, 11, 13, 18, 30],
   "shader_fallback_names": [
     "Custom/Billboard_FogSheet_Simple",

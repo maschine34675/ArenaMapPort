@@ -76,6 +76,7 @@ namespace ArenaMapPort.Client
             SpawnColliderRepairs.EnsureAllTriggers();
             SpawnPlacementRepairs.Apply(__result);
             BoothDoorRepairs.OpenAll(__result); // exfils-stage2 follow-up: open Arena's respawn-booth doors
+            AuthoredBorderRepairs.Apply(); // AirPit: invisible walls along Arena's TeamFight outline (after the openings)
             BallisticTwinRepairs.Apply();       // stage 1: HighPolyCollider twins for LowPolyCollider-only props
             BarbedWireRepairs.Apply();          // PLAN-TWO-MAPS item 2: EFT's BarbedWire on Arena's concertina wire
             PhysicsPropRepairs.Apply();         // PLAN-TWO-MAPS item 5: activate Arena's PHYSIC prop containers

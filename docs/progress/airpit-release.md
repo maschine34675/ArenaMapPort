@@ -2139,3 +2139,53 @@ Left at 03:19 (`gpu-run leave`, healed). `General/DeveloperMode` stays on for th
 3. Fog sheets: the StandIn haze looks strong in the hall (yellow-green at the pallet fence); A/B with `AirPitFogSheets = Hidden`.
 4. `navmesh_bake_layers`: the 3.8 m2 airstairs strip is still the only Arena-walkable floor the port lacks; not checked on the host.
 5. core16's pocket, core17's and core18's shops are reachable on the runtime mesh (dry runs pass) but only by long routes.
+
+### Host raid 4 (2026-10-12 09:16-09:35, build bf9d371): the user's spawn report, shutter photos, outline analysis
+
+User report (2026-10-12 morning, after a look at the map): "sieht gut aus", but at the player spawn (-10.24, 76.74) the huge hall
+behind it is walkable although it obviously should not be, and red lights float in the air there, presumably from the barrier that
+used to stand there. Second request: screenshots of the shutters named in open point 1.
+
+Two raids (`--bots none`, the second with `--time past` and `Lighting (arena_airpit)` ambient raised to 4 / 6 for legible photos,
+reset afterwards), 13 screenshots under `work/screenshots/airpit-2026-10-12/` (ignored), the user got sets 07-13 (shutters) and
+01/03/05 (spawn, north hall). Findings:
+
+- **North hall.** Facing north from `SpawnPoint_Player_All` the player looks into an unlit hall with a black glass facade; `uibridge_teleport
+  dryRun` to (-10, 0.1, 92) passes `navmesh, zone, reachable, room` - the built mesh (bake box to z 92) and the geometry are open.
+  Offline (three read-only agents, 20 min): all 67 layer-29 cubes belong to `Arena_AirPit_ShootOut_LevelBorders` and ring the
+  ShootOut corridor (northernmost `Cube (9)` at z 50.5); no `LevelBorder*` object exists anywhere; the passport-hall facade
+  (`airport_floor_outer_glass_panels`, z 82.47) has a **32.15 m opening at x -28.02..4.13**; the only solid across it is
+  `SPAWNS/SPAWN_BOUND_FIGHTER` (layer 0 box, x -36.5..13.5, z 69.2..85.2), which `SpawnPlacementRepairs` must disable because the
+  players spawn inside it. Arena's TeamFight NavMesh (component 0, 8,168 m2) ends at z 84.77 and its outline is a **data polygon**:
+  `ExcludeLevelBorders` (component `LevelBorder`, `Points[]`) in `Arena_Airpit_TeamFight_Culling` (level30), 12 vertices
+  (-2.15, 89.86), (8.84, 83.60), (36.24, 41.15), (36.24, -48.30), (1.44, -70.11), (0.00, -81.96), (-21.03, -82.54), (-26.22, -72.60),
+  (-56.03, -41.66), (-56.81, 44.28), (-33.86, 74.16), (-32.41, 88.34) - it contains all 10,511 mesh vertices, all 78 anchors and all
+  67 cube centres (12,839 m2). The EFT decompile knows it only as the PerfectCulling sampling outline; Arena's own bounds logic is
+  not in the data. A coarse 2D flood model also showed that capping the facade opening alone does not seal the map: the apron is
+  open to the runway and the terminal can be walked around.
+- **Red lights.** `PASSPORT_CONTROL_EMISSIVE` (root, GateEntity host, no collider) holds exactly 18 `FogSheetSimple_Volumetric_red_small`
+  sheets at y 2.79, z 66.05, x -34.3..9.4 (2.1 x 1.4 m quads, `_Color` (1.0, 0.19, 0.21)); nothing else near the spawn is red. The
+  client deactivates `PASSPORT_CONTROL_DOORS`' 18 children (RED/RedFog, GREEN/GreenFog, 16 door leaves), so these were the only
+  indicators left and they hang over the empty lane line. Arena's `DotAnimator`s (decoded, unnamed fields) switch `RedFog` off and
+  `GreenFog` on when the gate opens; `BUS_LIGHT` is three wall-mounted exit signs like Equator's accepted `EXIT_LIGHT_EMISSIVE` and
+  stays.
+- **Shutters** (photos 07-13): all six are static closed fronts without an open variant: `DonB_Ramen_closed` (west shop, north side
+  at z 43, top torn open), `TH_Roll_door_03` (three roll doors, west shop front to the hall at z -10), `TH_Roll_door_02` (two roll
+  doors at x -37 behind a tape barrier and a leaning steel sheet), `TH_Roll_door_01` (south wall z -43.5 under the window band),
+  `DonB_Ramen_closed (1)` (the "LOUI PEET" shop in the south-east) and `Airport_Shop_BS_closed_closed` (the brick-pillared corner
+  shop "БУ..." at x 13-27, z 8-36, with tarpaulin walls in front). **User decision 2026-10-12: keep them closed** ("da sich hinter
+  den Shuttern nichts befindet: zulassen"); open point 1 is closed, no U3 for them.
+
+**Fix (lead, 2026-10-12):**
+
+1. `authored_borders` (new descriptor/sidecar input, `AuthoredBorderRepairs.cs`): twelve invisible walls along Arena's outline, the
+   north edge pulled from (-32.4, 88.3)-(-2.2, 89.9)-(8.8, 83.6) onto the facade line so the wall stands in the doorway
+   (`north-facade-gap` (-28.5, 82.5)-(4.6, 82.5)); each a 0.4 m BoxCollider on `LowPolyCollider` spanning y -1..12, raised in
+   `SpawnInfiltrationRepairs`' postfix after the openings, idempotent by object name, parented into an owned scene;
+   `Map (arena_airpit)/AuthoredBorders` (default on). Bullets use the ballistic layer and pass.
+2. `bake_bounds` x -57..37, z -83..83 (the walls' AABB): bots get no mesh in the hall, on the runway or the forecourt (U3,
+   `work/logs/airpit-u3.log`).
+3. `opened_barriers` gains `PASSPORT_CONTROL_EMISSIVE` (the 18 red sheets off; no green cue - `GreenFog` would hang in the same
+   air, agent recommendation not to add activation code for it).
+4. Validator: `authored_borders` shape + sidecar/descriptor mirror (`ArenaBorderDescriptor` literals parsed); tests
+   `AuthoredBorders_FormAirPitsClosedOutline_OtherMapsNone`, `AuthoredBordersMatchTheSidecar`, `test_authored_borders_form_a_closed_outline_inside_the_bake_box`.

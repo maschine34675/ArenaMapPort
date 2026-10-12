@@ -59,6 +59,7 @@ namespace ArenaMapPort.Client
             ExfilRepairs.Install(harmony);
             ExfilSignals.BindConfig(); // [Exfils] SmokeSignals / SmokeSignalSound / SmokeSignalColor
             BoothDoorRepairs.BindConfig(); // [Spawns] OpenRespawnDoors — runs from SpawnInfiltrationRepairs' postfix
+            AuthoredBorderRepairs.BindConfig(); // [Map (<key>)] AuthoredBorders — same postfix, after the openings
             BallisticTwinRepairs.BindConfig(); // [Combat] BallisticTwins — same postfix (stage 1)
             BarbedWireRepairs.BindConfig();    // [Combat] BarbedWire — same postfix (PLAN-TWO-MAPS item 2)
             PhysicsPropRepairs.BindConfig();   // [Physics] EnablePhysicsProps — same postfix (PLAN-TWO-MAPS item 5)

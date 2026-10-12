@@ -160,6 +160,16 @@ def parse_cs_value(raw: str):
         if not inner.endswith(")"):
             fail(f"could not parse exit literal: {v!r}")
         return ("exit", [parse_cs_value(x) for x in split_top_level_args(inner[:-1])])
+    if v.startswith("new ArenaBorderDescriptor("):
+        # AuthoredBorderRepairs: `new ArenaBorderDescriptor("name", x0, z0, x1, z1, minY, maxY)`; the sidecar twin
+        # is the map's "authored_borders" array (compared in check_map_against_registry_entry).
+        inner = v[len("new ArenaBorderDescriptor("):].rstrip()
+        if not inner.endswith(")"):
+            fail(f"could not parse border literal: {v!r}")
+        values = [parse_cs_value(x) for x in split_top_level_args(inner[:-1])]
+        if len(values) != 7:
+            fail(f"border literal requires exactly 7 parameters: {v!r}")
+        return {"name": values[0], "from": values[1:3], "to": values[3:5], "y": values[5:7]}
     if v.startswith("new ArenaDustDescriptor("):
         inner = v[len("new ArenaDustDescriptor("):].rstrip()
         if not inner.endswith(")"):
@@ -292,6 +302,20 @@ def bake_input_errors(map_json: dict) -> list[str]:
             if isinstance(path, str) and any(path == b or path.startswith(str(b) + "/") for b in barriers):
                 errors.append(f"navmesh_bake_exclusions entry {path!r} lies inside an opened_barriers path "
                               "(the client deactivates it; a bake exclusion is for objects that stay active)")
+    borders = map_json.get("authored_borders")
+    if borders is not None:
+        # AuthoredBorderRepairs: one invisible wall per entry {name, from [x, z], to [x, z], y [min, max]}.
+        def pair(v):
+            return isinstance(v, list) and len(v) == 2 and all(type(c) in (int, float) and math.isfinite(c) for c in v)
+        ok = isinstance(borders, list) and all(
+            isinstance(b, dict) and isinstance(b.get("name"), str) and b["name"].strip() == b["name"] and b["name"]
+            and pair(b.get("from")) and pair(b.get("to")) and pair(b.get("y")) and b["y"][0] < b["y"][1]
+            and math.hypot(b["to"][0] - b["from"][0], b["to"][1] - b["from"][1]) >= 0.5 for b in borders)
+        if not ok:
+            errors.append("authored_borders must be an array of {name, from [x, z], to [x, z], y [min < max]} "
+                          "objects with finite numbers and segments of at least 0.5 m")
+        elif len(borders) != len({b["name"] for b in borders}):
+            errors.append("authored_borders contains duplicate names")
     bounds = map_json.get("bake_bounds")
     if bounds is not None:
         finite = isinstance(bounds, list) and len(bounds) == 6 and all(
@@ -330,7 +354,8 @@ def check_map_against_registry_entry(
     check_field(errors, where, "shader_fallback_names", map_json.get("shader_fallback_names", []),
                 resolve(registry_args.get("ShaderFallbackNames", []), ref_scope))
     for json_field, cs_field in (("opened_barriers", "OpenedBarriers"), ("navmesh_bake_exclusions", "NavMeshBakeExclusions"),
-                                 ("bake_bounds", "BakeBounds"), ("navmesh_bake_layers", "NavMeshBakeLayers")):
+                                 ("bake_bounds", "BakeBounds"), ("navmesh_bake_layers", "NavMeshBakeLayers"),
+                                 ("authored_borders", "AuthoredBorders")):
         check_field(errors, where, json_field, map_json.get(json_field, []), resolve(registry_args.get(cs_field, []), ref_scope))
     check_field(errors, where, "restored_shadow_caster_roots",
                 map_json.get("restored_shadow_caster_roots", []),

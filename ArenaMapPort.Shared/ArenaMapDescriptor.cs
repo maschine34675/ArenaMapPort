@@ -53,6 +53,34 @@ namespace ArenaMapPort.Shared
         }
     }
 
+    /// <summary>
+    /// One invisible wall the client raises at raid start (AuthoredBorderRepairs): a vertical box from (X0, Z0) to
+    /// (X1, Z1) spanning MinY..MaxY on the movement layer. AirPit's set follows Arena's own TeamFight outline (the
+    /// LevelBorder polygon of its culling bake), with the north edge pulled onto the passport-hall facade line.
+    /// Mirrors the map sidecar's "authored_borders" (AirPitMapTests.AuthoredBordersMatchTheSidecar).
+    /// </summary>
+    public sealed class ArenaBorderDescriptor
+    {
+        public string Name { get; }
+        public float X0 { get; }
+        public float Z0 { get; }
+        public float X1 { get; }
+        public float Z1 { get; }
+        public float MinY { get; }
+        public float MaxY { get; }
+
+        public ArenaBorderDescriptor(string Name, float X0, float Z0, float X1, float Z1, float MinY, float MaxY)
+        {
+            this.Name = Name;
+            this.X0 = X0;
+            this.Z0 = Z0;
+            this.X1 = X1;
+            this.Z1 = Z1;
+            this.MinY = MinY;
+            this.MaxY = MaxY;
+        }
+    }
+
     public sealed class ArenaMapDescriptor
     {
         public string Key { get; }                 // "arena_equator" / "arena_bay5" — LocationTable key, base.json Id
@@ -77,6 +105,7 @@ namespace ArenaMapPort.Shared
         // per-map table stays complete and tools/maps/<key>.json cannot drift (validate_map_descriptors.py and the xunit
         // mirror tests). All empty for Equator and Bay5, whose bake is unchanged.
         public string[] NavMeshBakeExclusions { get; } // hierarchy paths whose subtree is dropped from the NavMesh bake sources
+        public ArenaBorderDescriptor[] AuthoredBorders { get; } // invisible walls raised at raid start (empty = none)
                                                        // but stays active at runtime (colliders Arena's own bake walks through)
         public float[] BakeBounds { get; }             // [min_x, max_x, min_y, max_y, min_z, max_z] of the bake volume; empty = renderer union
         public int[] NavMeshBakeLayers { get; }        // layers the bake may collect from; empty = every layer but Water
@@ -139,7 +168,8 @@ namespace ArenaMapPort.Shared
             string[]? NavMeshBakeExclusions = null,
             float[]? BakeBounds = null,
             int[]? NavMeshBakeLayers = null,
-            string[]? ShaderFallbackNames = null)
+            string[]? ShaderFallbackNames = null,
+            ArenaBorderDescriptor[]? AuthoredBorders = null)
 #nullable restore
         {
             this.Key = Key;
@@ -159,6 +189,7 @@ namespace ArenaMapPort.Shared
             this.Exits = Exits ?? new ArenaExitDescriptor[0];
             this.OpenedBarriers = OpenedBarriers ?? new string[0];
             this.NavMeshBakeExclusions = NavMeshBakeExclusions ?? new string[0];
+            this.AuthoredBorders = AuthoredBorders ?? new ArenaBorderDescriptor[0];
             this.BakeBounds = BakeBounds ?? new float[0];
             this.NavMeshBakeLayers = NavMeshBakeLayers ?? new int[0];
             this.BackgroundSceneNames = BackgroundSceneNames ?? new string[0];
@@ -364,6 +395,10 @@ namespace ArenaMapPort.Shared
                 // Mirrors tools/maps/airpit.json (AirPitMapTests.OpenedBarriersAndBakeInputsMatchTheSidecar).
                 "BUS_DOORS",
                 "PASSPORT_CONTROL_DOORS",
+                // The 18 red "lane closed" fog sheets that hang at y 2.8 along z 66 once the passport doors are gone
+                // (user report 2026-10-12: red lights floating in the air at the north spawn). Arena's GateEntity
+                // sits on this root too; it holds nothing but the sheets, no collider, so the bake is unchanged.
+                "PASSPORT_CONTROL_EMISSIVE",
                 // The two metal-detector portals in the z 50.5 facade between the passport hall and the main hall
                 // (host raid 1, 2026-10-12): each Prison_Metal_Fence_01 gate holds an active closed fence and two
                 // inactive swung-open halves (_PART_L/_PART_R), i.e. a gate Arena closes for ShootOut and opens for
@@ -376,15 +411,38 @@ namespace ArenaMapPort.Shared
             // No NavMeshBakeExclusions: the four bake-only cutters of 2026-10-11 (DonB_Ramen_closed x2,
             // TH_Roll_door_01_closed, fence_ema_01_white (18)) let the NavMesh run through shutters that stay solid;
             // host raid 1 walked the player into the DonB_Ramen shutter at (-46.2, 0, 43.4). Every solid is baked.
-            // Play space (user decision 2026-10-11, 4.3): x -80..56, z -96..92 around Arena's component
-            // (x -56..32, z -78..85), y -2..8 = ground floor plus wing mezzanine.
-            BakeBounds: new[] { -80.0f, 56.0f, -2.0f, 8.0f, -96.0f, 92.0f },
+            // Play space: the AABB of the authored borders below (Arena's TeamFight outline, x -56.8..36.2,
+            // z -82.5..83.6), y -2..8 = ground floor plus wing mezzanine (user decision 2026-10-11, 4.3). The
+            // 2026-10-11 box (x -80..56, z -96..92) baked 7 m of the dark entrance hall north of the facade and
+            // strips of runway and forecourt that the walls now close off (host raids 1-4, 2026-10-12).
+            BakeBounds: new[] { -57.0f, 37.0f, -2.0f, 8.0f, -83.0f, 83.0f },
             // Arena's own NavMeshSurface layer mask (decoded from the three AI scenes, mask 0x40042A00):
             // DoorLowPolyCollider, Terrain, Triggers, LowPolyCollider, TransparentCollider. EFT's movement test mask
             // (LayersMaskController.PlayerCollisionTestMask) is LowPolyCollider + DoorLowPolyCollider + Terrain; the
             // HighPolyCollider (12) meshes are the ballistic layer. The owner rule of BakeNavMesh.NonPhysicalLayerReason
             // still drops non-trigger boxes left on the Triggers layer (AirPit has none).
             NavMeshBakeLayers: new[] { 9, 11, 13, 18, 30 },
+            // Invisible walls (AuthoredBorderRepairs, 2026-10-12). Arena bounds its TeamFight area by a data polygon
+            // (`ExcludeLevelBorders` in the culling scene, 12 vertices; every NavMesh vertex and anchor lies inside),
+            // not by colliders: the passport-hall facade has a 32 m opening (x -28..4 at z 82.5) into the unlit
+            // entrance hall, and the apron opens onto the runway. The ShootOut LevelBorder cubes all lie inside the
+            // outline and stay removed. The north edge is pulled from the polygon's (-32.4, 88.3)-(-2.2, 89.9)-
+            // (8.8, 83.6) onto the facade line so the wall sits in the doorway. Mirrors tools/maps/airpit.json.
+            AuthoredBorders: new[]
+            {
+                new ArenaBorderDescriptor("north-west-approach", -33.86f, 74.16f, -28.5f, 82.5f, -1.0f, 12.0f),
+                new ArenaBorderDescriptor("north-facade-gap", -28.5f, 82.5f, 4.6f, 82.5f, -1.0f, 12.0f),
+                new ArenaBorderDescriptor("north-east-jog", 4.6f, 82.5f, 8.84f, 83.6f, -1.0f, 12.0f),
+                new ArenaBorderDescriptor("east-upper", 8.84f, 83.6f, 36.24f, 41.15f, -1.0f, 12.0f),
+                new ArenaBorderDescriptor("east", 36.24f, 41.15f, 36.24f, -48.3f, -1.0f, 12.0f),
+                new ArenaBorderDescriptor("south-east", 36.24f, -48.3f, 1.44f, -70.11f, -1.0f, 12.0f),
+                new ArenaBorderDescriptor("south-pocket-east", 1.44f, -70.11f, 0.0f, -81.96f, -1.0f, 12.0f),
+                new ArenaBorderDescriptor("south", 0.0f, -81.96f, -21.03f, -82.54f, -1.0f, 12.0f),
+                new ArenaBorderDescriptor("south-pocket-west", -21.03f, -82.54f, -26.22f, -72.6f, -1.0f, 12.0f),
+                new ArenaBorderDescriptor("south-west", -26.22f, -72.6f, -56.03f, -41.66f, -1.0f, 12.0f),
+                new ArenaBorderDescriptor("west", -56.03f, -41.66f, -56.81f, 44.28f, -1.0f, 12.0f),
+                new ArenaBorderDescriptor("north-west", -56.81f, 44.28f, -33.86f, 74.16f, -1.0f, 12.0f),
+            },
             // PLAN-AIRPIT item 11: the four Arena shader names AirPit's materials use that SPT does not ship (fog sheet,
             // both cloth shaders, the mountain rock). Behind MaterialFixes/AirPitShaderStandins (default on). Mirrors
             // tools/maps/airpit.json (ShaderStandinPolicyTests).

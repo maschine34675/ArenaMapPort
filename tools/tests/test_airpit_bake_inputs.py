@@ -30,7 +30,8 @@ GATES = [
     "SBG_Arena_AirPit_ShootOut/SOO/Prison_Metal_Fence_01 (3)",
 ]
 GATE_XZ = [(-23.50, 50.54), (-0.38, 50.54)]
-ROOT_BARRIERS = ["BUS_DOORS", "PASSPORT_CONTROL_DOORS"]
+# PASSPORT_CONTROL_EMISSIVE (2026-10-12, host raid 4): the 18 red lane-closed fog sheets, a root with no collider.
+ROOT_BARRIERS = ["BUS_DOORS", "PASSPORT_CONTROL_DOORS", "PASSPORT_CONTROL_EMISSIVE"]
 BARRIERS = ROOT_BARRIERS + GATES
 # Paths under the duplicated BUILDING sibling, kept to pin the resolver's Transform.Find semantics (no longer inputs).
 BUILDING_PATHS = [
@@ -39,7 +40,9 @@ BUILDING_PATHS = [
     "SBG_Arena_AirPit_ShootOut/SOO_LOD0/BUILDING/DonB_Ramen_closed (1)",
 ]
 ARENA_LAYERS = [9, 11, 13, 18, 30]            # NavMeshSurface mask 0x40042A00 of Arena's three AI scenes
-BOUNDS = [-80, 56, -2, 8, -96, 92]
+# The AABB of the authored borders (Arena's TeamFight outline) rounded outwards; was x -80..56, z -96..92 until
+# host raid 4 (2026-10-12) showed the mesh running 7 m into the unlit entrance hall north of the facade.
+BOUNDS = [-57, 37, -2, 8, -83, 83]
 PACKAGE = REPO / "work" / "extract" / "airpit-native-v5"
 HAVE_PACKAGE = (PACKAGE / "scenes" / "Arena_AirPit_ShootOut.json").is_file()
 ARENA_NAVMESH = Path("D:/Battlestate Games/Escape from Tarkov Arena/EscapeFromTarkovArena_Data/sharedassets33.assets")
@@ -80,12 +83,34 @@ class SidecarContentTests(unittest.TestCase):
             self.assertFalse(any(path == b or path.startswith(b + "/") for b in BARRIERS), path)
 
     def test_bounds_hold_every_spawn_and_exit_with_room(self):
+        # 3 m of mesh around every point; the box is the walls' AABB now, so the old 20/15 m margins no longer apply.
         x0, x1, y0, y1, z0, z1 = self.map["bake_bounds"]
         bots, exits = sidecar("airpit.bots.json"), sidecar("airpit.exits.json")
         points = [p["position"] for p in bots["player_spawns"] + bots["bot_spawns"]] + [e["position"] for e in exits["exits"]]
         self.assertEqual(len(points), 20)
         for x, y, z in points:
-            self.assertTrue(x0 + 20 <= x <= x1 - 20 and z0 + 15 <= z <= z1 - 5 and y0 < y < y1, (x, y, z))
+            self.assertTrue(x0 + 3 <= x <= x1 - 3 and z0 + 3 <= z <= z1 - 3 and y0 < y < y1, (x, y, z))
+
+    def test_authored_borders_form_a_closed_outline_inside_the_bake_box(self):
+        # AuthoredBorderRepairs raises one invisible wall per entry; the ring is Arena's TeamFight outline (the
+        # ExcludeLevelBorders polygon of its culling scene) with the north edge pulled onto the facade line z 82.5.
+        borders = self.map["authored_borders"]
+        self.assertEqual(len(borders), 12)
+        self.assertEqual(len({b["name"] for b in borders}), 12)
+        for i, b in enumerate(borders):
+            nxt = borders[(i + 1) % len(borders)]
+            self.assertEqual(b["to"], nxt["from"], f"{b['name']} does not meet {nxt['name']}")
+            self.assertLess(b["y"][0], b["y"][1])
+            self.assertGreaterEqual(math.hypot(b["to"][0] - b["from"][0], b["to"][1] - b["from"][1]), 1.0, b["name"])
+        xs = [c for b in borders for c in (b["from"][0], b["to"][0])]
+        zs = [c for b in borders for c in (b["from"][1], b["to"][1])]
+        x0, x1, _y0, _y1, z0, z1 = self.map["bake_bounds"]
+        for bound, extreme in ((x0, min(xs)), (x1, max(xs)), (z0, min(zs)), (z1, max(zs))):
+            self.assertLessEqual(abs(bound - extreme), 1.0, (bound, extreme))   # the box hugs the outline to within 1 m
+        facade = [b for b in borders if b["name"] == "north-facade-gap"][0]
+        self.assertEqual((facade["from"], facade["to"]), ([-28.5, 82.5], [4.6, 82.5]))   # the 32 m opening at z 82.47
+        for name in ("equator.json", "bay5.json"):
+            self.assertNotIn("authored_borders", sidecar(name))
 
     @unittest.skipUnless(ARENA_NAVMESH.is_file(), "installed Arena not present")
     def test_bounds_contain_arenas_play_space_component(self):
@@ -94,7 +119,9 @@ class SidecarContentTests(unittest.TestCase):
         main = nd.oracle.component_summary(mesh)[0]
         x0, x1, y0, y1, z0, z1 = self.map["bake_bounds"]
         self.assertTrue(x0 < main["min"][0] and main["max"][0] < x1, (main["min"], main["max"]))
-        self.assertTrue(z0 < main["min"][2] and main["max"][2] < z1, (main["min"], main["max"]))
+        # Arena's north edge is ragged (z 82.2..84.8 at the facade openings); the authored wall sits on the facade
+        # line z 82.5 and the box ends at 83, so up to 2 m of that strip is deliberately left out.
+        self.assertTrue(z0 < main["min"][2] and main["max"][2] < z1 + 2.0, (main["min"], main["max"]))
         self.assertTrue(y0 < main["min"][1] and main["max"][1] < y1, (main["min"], main["max"]))
 
 
@@ -129,6 +156,8 @@ class ValidatorTests(unittest.TestCase):
         self.assertTrue(any("navmesh_bake_exclusions mismatch" in e
                             for e in self.check(lambda d: d["navmesh_bake_exclusions"].append("SBG_Arena_AirPit_ShootOut/SOO/x"))))
         self.assertTrue(any("opened_barriers mismatch" in e for e in self.check(lambda d: d.pop("opened_barriers"))))
+        self.assertTrue(any("authored_borders mismatch" in e
+                            for e in self.check(lambda d: d["authored_borders"][0].__setitem__("y", [-1.0, 11.0]))))
 
     def test_malformed_values_are_rejected(self):
         def errors(**changes):
@@ -143,6 +172,11 @@ class ValidatorTests(unittest.TestCase):
         for name in ("opened_barriers", "navmesh_bake_exclusions"):
             for bad in ("a/b", [""], ["a//b"], ["/a"], ["a/"], [" a"], [3], ["a/b", "a/b"]):
                 self.assertTrue(any(name in e for e in errors(**{name: bad})), (name, bad))
+        good = {"name": "n", "from": [0, 0], "to": [1, 0], "y": [0, 2]}
+        for bad in ("x", [{}], [{**good, "name": " n"}], [{**good, "from": [0]}], [{**good, "to": [0, 0.2]}],
+                    [{**good, "y": [2, 0]}], [{**good, "from": [math.inf, 0]}], [good, good]):
+            self.assertTrue(any("authored_borders" in e for e in errors(authored_borders=bad)), bad)
+        self.assertEqual(errors(authored_borders=[good]), [])
         overlap = errors(navmesh_bake_exclusions=["BUS_DOORS/Apron_bus_MAZ_doors"])
         self.assertTrue(any("inside an opened_barriers path" in e for e in overlap))
         self.assertTrue(any("inside an opened_barriers path" in e for e in errors(navmesh_bake_exclusions=["BUS_DOORS"])))

@@ -71,6 +71,7 @@ public class MapDescriptorConsistencyTests
         {
             "BUS_DOORS",
             "PASSPORT_CONTROL_DOORS",
+            "PASSPORT_CONTROL_EMISSIVE", // the 18 red lane-closed fog sheets (host raid 4, 2026-10-12)
             // the two portal gates of the z 50.5 facade (host raid 1, 2026-10-12): non-root paths into the main scene
             "SBG_Arena_AirPit_ShootOut/SOO/Prison_Metal_Fence_01 (2)",
             "SBG_Arena_AirPit_ShootOut/SOO/Prison_Metal_Fence_01 (3)",
@@ -92,6 +93,43 @@ public class MapDescriptorConsistencyTests
     private static bool IsHierarchyPath(string? path) =>
         !string.IsNullOrWhiteSpace(path) && path.Split('/').All(segment => segment.Length > 0 && segment == segment.Trim());
 
+    // 2026-10-12 (host raid 4): AirPit's invisible walls follow Arena's TeamFight outline, a closed ring of twelve
+    // segments whose bounding box is the bake volume. AuthoredBorderRepairs raises one box per segment at raid start.
+    [Fact]
+    public void AuthoredBorders_FormAirPitsClosedOutline_OtherMapsNone()
+    {
+        var borders = ArenaMapRegistry.AirPit.AuthoredBorders;
+        Assert.Equal(12, borders.Length);
+        Assert.Equal(borders.Length, borders.Select(b => b.Name).Distinct().Count());
+        float minX = float.MaxValue, maxX = float.MinValue, minZ = float.MaxValue, maxZ = float.MinValue;
+        for (var i = 0; i < borders.Length; i++)
+        {
+            var b = borders[i];
+            var next = borders[(i + 1) % borders.Length];
+            Assert.True(b.Name.Length > 0 && b.Name.Trim() == b.Name, b.Name);
+            Assert.All(new[] { b.X0, b.Z0, b.X1, b.Z1, b.MinY, b.MaxY }, v => Assert.True(float.IsFinite(v), b.Name));
+            Assert.True(b.MinY < b.MaxY, b.Name);
+            Assert.True(MathF.Sqrt((b.X1 - b.X0) * (b.X1 - b.X0) + (b.Z1 - b.Z0) * (b.Z1 - b.Z0)) >= 1f, $"{b.Name}: shorter than 1 m");
+            Assert.True(b.X1 == next.X0 && b.Z1 == next.Z0, $"{b.Name} does not meet {next.Name}"); // closed ring
+            minX = MathF.Min(minX, MathF.Min(b.X0, b.X1)); maxX = MathF.Max(maxX, MathF.Max(b.X0, b.X1));
+            minZ = MathF.Min(minZ, MathF.Min(b.Z0, b.Z1)); maxZ = MathF.Max(maxZ, MathF.Max(b.Z0, b.Z1));
+        }
+        // Bots get little or no mesh beyond the walls: the bake volume is the outline's bounding box to within 1 m
+        // (z max 83 against the 83.6 m north-east jog, where the facade itself is solid).
+        var bounds = ArenaMapRegistry.AirPit.BakeBounds;
+        Assert.InRange(bounds[0], minX - 1f, minX + 1f); Assert.InRange(bounds[1], maxX - 1f, maxX + 1f);
+        Assert.InRange(bounds[4], minZ - 1f, minZ + 1f); Assert.InRange(bounds[5], maxZ - 1f, maxZ + 1f);
+        // Every spawn and exit of the map lies inside the outline's box (the walls must not shut a spawn out).
+        foreach (var exit in ArenaMapRegistry.AirPit.Exits)
+        {
+            Assert.InRange(exit.X, minX, maxX); Assert.InRange(exit.Z, minZ, maxZ);
+        }
+        foreach (var map in ArenaMapRegistry.Catalog.Where(m => !ReferenceEquals(m, ArenaMapRegistry.AirPit)))
+        {
+            Assert.Empty(map.AuthoredBorders);
+        }
+    }
+
     // PLAN-AIRPIT item 8: the bake-only inputs exist for AirPit alone; Equator's and Bay5's NavMesh bake keeps its
     // renderer-union volume, its every-layer mask and no exclusion, which is what their shipped bundles were built with.
     [Fact]
@@ -102,10 +140,11 @@ public class MapDescriptorConsistencyTests
         // solids that stay in the scene; the walk test stopped at the DonB_Ramen shutter. AirPit now bakes every
         // solid and opens the two portal gates instead (OpenedBarriers), so the list is empty by design.
         Assert.Empty(airPit.NavMeshBakeExclusions);
-        Assert.Equal(4, airPit.OpenedBarriers.Length);
+        Assert.Equal(5, airPit.OpenedBarriers.Length);
         Assert.All(airPit.OpenedBarriers, path => Assert.True(IsHierarchyPath(path), path));
         Assert.Equal(airPit.OpenedBarriers.Length, airPit.OpenedBarriers.Distinct().Count());
-        Assert.Equal(new[] { -80.0f, 56.0f, -2.0f, 8.0f, -96.0f, 92.0f }, airPit.BakeBounds);
+        // The AABB of the authored borders (Arena's TeamFight outline) rounded outwards to whole metres.
+        Assert.Equal(new[] { -57.0f, 37.0f, -2.0f, 8.0f, -83.0f, 83.0f }, airPit.BakeBounds);
         // min < max per axis: [min_x, max_x, min_y, max_y, min_z, max_z]
         for (var axis = 0; axis < 3; axis++)
             Assert.True(airPit.BakeBounds[2 * axis] < airPit.BakeBounds[2 * axis + 1]);

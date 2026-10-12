@@ -147,6 +147,31 @@ public sealed class AirPitMapTests
         }
     }
 
+    // 2026-10-12 (host raid 4): the invisible walls along Arena's TeamFight outline, one sidecar entry per segment
+    // ({name, from [x, z], to [x, z], y [min, max]}) mirrored by the compiled descriptor AuthoredBorderRepairs reads.
+    [Fact]
+    public void AuthoredBordersMatchTheSidecar()
+    {
+        using var sidecar = JsonDocument.Parse(File.ReadAllText(Sidecar("airpit.json")));
+        var entries = sidecar.RootElement.GetProperty("authored_borders").EnumerateArray().ToArray();
+        var map = ArenaMapRegistry.AirPit;
+        Assert.Equal(entries.Length, map.AuthoredBorders.Length);
+        for (var i = 0; i < entries.Length; i++)
+        {
+            var e = entries[i];
+            var b = map.AuthoredBorders[i];
+            Assert.Equal(e.GetProperty("name").GetString(), b.Name);
+            Assert.Equal(Floats(e.GetProperty("from")), new[] { b.X0, b.Z0 });
+            Assert.Equal(Floats(e.GetProperty("to")), new[] { b.X1, b.Z1 });
+            Assert.Equal(Floats(e.GetProperty("y")), new[] { b.MinY, b.MaxY });
+        }
+        foreach (var other in new[] { "equator.json", "bay5.json" })
+        {
+            using var doc = JsonDocument.Parse(File.ReadAllText(Sidecar(other)));
+            Assert.False(doc.RootElement.TryGetProperty("authored_borders", out _), $"{other} must not carry 'authored_borders'");
+        }
+    }
+
     [Fact]
     public void ShippedBaseJsonParsesAsTheServerLocationModel()
     {

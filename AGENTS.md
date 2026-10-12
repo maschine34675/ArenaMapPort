@@ -254,8 +254,10 @@ the log; the user uses it to point at things.
   client removes at raid start — TeamFight `LevelBorder` walls, `SPAWN_BOUND` boxes, booth door leaves, listed
   barriers. `BakeNavMesh.RoundOpenedReason` excludes those by name; anything else the client disables at
   runtime must be added there too, or it stays a wall for bots. The bake volume is the renderer union + 10 m
-  unless the descriptor carries `bake_bounds` (AirPit: x −80..56, y −2..8, z −96..92; Equator/Bay5 have none —
-  their ground floors sit around y −8..12, the upper rings are decoration). `navmesh_bake_exclusions` drops a
+  unless the descriptor carries `bake_bounds` (AirPit: x −57..37, y −2..8, z −83..83 = the AABB of its
+  `authored_borders`; Equator/Bay5 have none — their ground floors sit around y −8..12, the upper rings are
+  decoration). Arena bounds AirPit's TeamFight area by a data polygon, not colliders (`ExcludeLevelBorders` in its
+  culling scene); `AuthoredBorderRepairs` raises invisible movement-layer walls along that outline at raid start. `navmesh_bake_exclusions` drops a
   subtree from the bake WITHOUT deactivating it at runtime — no map uses it any more: AirPit's four "route cutters"
   (shop shutters) put NavMesh through solids and the 2026-10-12 host walk ended face-first in the DonB_Ramen shutter.
   A closed gate that Arena opens for the mode belongs in `opened_barriers` instead (AirPit's two
