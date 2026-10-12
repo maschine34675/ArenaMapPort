@@ -14,8 +14,8 @@ dated state in one screen; read it before this index if you only have a minute.
 - [airpit-source-alternatives.md](airpit-source-alternatives.md) — read-only audits of Air Pit 2.0 (pink =
   one triplanar blockout shader; unfinished CheckPoint/OverRun dev map on Bay5's AI), the unreferenced
   `Arena_Airpit_new` scenes 207–212 (abandoned 2024 BlastGang art pass, bound nowhere, not coherent) and
-  Bowl's single pink material (`p0/Reflective/Bumped Specular_TwoSided` on `Tarp_Tunnel`). Recommendation:
-  AirPit 1.0 stays the third map (2026-10-12).
+  Bowl's single pink material (`p0/Reflective/Bumped Specular_TwoSided` on `Tarp_Tunnel`). User decision:
+  AirPit 1.0 stays the third map, the release may span several ZIP parts (2026-10-12).
 - [muzzle-flare-exclusion.md](muzzle-flare-exclusion.md) — exclude native muzzle
   emission from Equator's restored streaks; refresh README and add FORGE (2026-10-11).
 

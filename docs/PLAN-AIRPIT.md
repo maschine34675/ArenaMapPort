@@ -537,6 +537,10 @@ exceeds about 1.95 GB take LZMA for AirPit via a descriptor/sidecar `bundle_comp
 Bay5's ~9 s) or a separate add-on archive (needs disk-presence gating in the server mod). Move the package builder
 from ignored `work/releases/create_*_zip.py` into `tools/` driven by the released list, with a size assertion.
 **Effort.** S, M if LZMA/add-on is needed. **Done when.** Final ZIP size recorded and under the gate.
+**Superseded (user, 2026-10-12):** the measured three-map dist is about 2.06 GB (the AirPit scenes bundle is 824.6 MB,
+not the 664.7 MB above), and the user accepts that the release exceeds 2 GB: the package is split into several ZIP
+parts (each under the 2 GiB per-asset limit) instead of LZMA or an add-on archive. The tracked packager builds the
+parts from the released list and asserts the per-part limit.
 
 ### 25. Release candidate and promotion
 
@@ -604,8 +608,8 @@ from ignored `work/releases/create_*_zip.py` into `tools/` driven by the release
 - **Other modes and maps:** Tournament / LastHero presets, Air Pit 2.0 (scenes 346-352), the `Arena_Airpit_new/*`
   scenes (BuildSettings 207-212, covered by no plan), the other eleven maps. Both Airpit alternatives were audited
   on 2026-10-12 (`docs/progress/airpit-source-alternatives.md`): 2.0 is a grey-box CheckPoint/OverRun dev map on a
-  shader SPT lacks, `Arena_Airpit_new` an abandoned BlastGang-era art pass bound by no preset; recommendation: AirPit
-  1.0 stays.
+  shader SPT lacks, `Arena_Airpit_new` an abandoned BlastGang-era art pass bound by no preset; user decision
+  2026-10-12: AirPit 1.0 stays.
 - **Rejected refactors:** `released` sidecar flag with `ReleasedMaps.props`, a `RuntimeFeatures` vocabulary, a
   `BotProfile` descriptor group (reasons in §0); revisit when the fourth map needs them.
 - **Equator-only stacks:** neon night appearance, `EquatorProfiles`, `EquatorRoofShadowRepairs`, anamorphic flare,
@@ -650,7 +654,8 @@ The numbered list below is kept as the record of the options.
 6. **Native ambient audio now (recommended) or later.** Now = L, touches extractor, Editor importer and client; lands
    in URC. Later = ship without ambience first (needs the optional-audio contract from item 3, already planned).
 7. **Version and packaging (blocking item 25, not before):** 0.2.0 suggested; single ZIP if the measured size stays
-   under about 1.95 GB, else LZMA for AirPit, else an add-on archive.
+   under about 1.95 GB, else LZMA for AirPit, else an add-on archive. **Decided 2026-10-12 (user):** the size will
+   exceed 2 GB whatever we do; split the release into several ZIP parts.
 8. **Light parity** (non-blocking): accept shipping without AreaLight / CullingAdvancedLightObject / StencilShadow /
    AnalyticSource support (Equator/Bay5 ship the same gaps for AreaLight) unless the host shows dark signage.
 9. **Shader stand-ins** (non-blocking): accept the A/B approach for FogSheet (Unlit/Transparent Colored vs

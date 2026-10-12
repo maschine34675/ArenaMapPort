@@ -41,7 +41,8 @@ single blockout shader (`Custom/WorldTriplanarFresnelPro`, ~95 % of the visible 
 Bay5/AirPit and AirPit2 is not in `All`), and 2.0 is an unfinished CheckPoint/OverRun dev map on Bay5's AI with no locale/banner/
 loadscreen. `Arena_Airpit_new` is bound by no preset: a 2024-01 BlastGang-era art pass (two copies of the level, 76 % dead grass,
 Prison AI stub without NavMeshData, Bay5 light, Train settings, 1.0 Scripts copy, bomb sites and defender spawns over void).
-Recommendation (not yet confirmed by the user): AirPit 1.0 stays. Side finding for the next candidate: Bowl's one pink material is `Tarp_Tunnel` on
+User decision (midday): AirPit 1.0 stays; the release may exceed 2 GB and is split into several ZIP parts (item 24 superseded).
+Side finding for the next candidate: Bowl's one pink material is `Tarp_Tunnel` on
 `p0/Reflective/Bumped Specular_TwoSided` (plus the two cloth shaders AirPit already substitutes) - a fallback-table job.
 
 Open for the user: (1) `Weather (test)` is inert on server-time maps, so AirPit's rain check still waits for server rain; (2)

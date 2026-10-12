@@ -9,8 +9,9 @@ packages under `work/extract/`, and the SPT 4.1.5 shader bundle (555 shaders, 53
 PLAN-AIRPIT item 11). No tracked file, build or host state was changed by the audits; scratch scripts live in the
 session scratchpad only.
 
-**Recommendation (2026-10-12): AirPit 1.0 stays the third map.** Neither alternative is a playable replacement; the
-user has not decided otherwise.
+**Decision (user, 2026-10-12 midday, "Airpit 1.0 bleibt"): AirPit 1.0 stays the third map.** Neither alternative is a
+playable replacement. In the same message the user dropped the 2 GiB single-ZIP constraint: the release will exceed
+2 GB in any case, the accepted answer is a multi-part package (PLAN-AIRPIT item 24 / decision 7 updated).
 
 ## 1. Air Pit 2.0 (`Arena_AirPit2`, scenes 346–352)
 
