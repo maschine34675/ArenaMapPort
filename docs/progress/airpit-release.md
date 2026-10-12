@@ -2660,3 +2660,40 @@ photos 27 (from (3, 0.6, -17) facing north-west: plywood wall and fence under th
 NORVAIR container, corrugated panels, plywood). Bots path 194 m around it for 12 m of straight line (analysis in "Open points after
 raids 1-3" and the hall-cover audit: options A leave, B open `tarpaulin_wall_03`, C also `plywood_wall_02 (1)`; each option is a
 rebake). **User decision (2026-10-12 late): the cover stays** - no rebake; the 194 m bot detour is accepted. In the same message the user confirmed the glass after the queue fix ("Scheiben sehen gut aus") and the rain ("Regen passt"), and asked why the four shops are closed and empty when they should be walkable - investigation `wf_c92d33bb-843` (preset scene binding per mode, interior census 0.5.4 / 0.6.0 / `Arena_Airpit_Main_hall`).
+
+### Where the four shop interiors are (2026-10-12 late, three read-only agents, workflow `wf_c92d33bb-843`)
+
+- **Preset binding (all 36 preset bundles parsed, typetrees complete, identical to the 0.5.4 dump):** `arena_airpit_preset.bundle` holds
+  the root `Arena_AirPit.ScenesPreset` (Scripts 36, ShootOut 324, ShootOut_Light 325, Sound 39, DesignStuff 40) plus three children:
+  TeamFight (29, 28, 30, 33; used by TeamFight AND Coop), Tournament (32/114, 116, 106/115; used by ShootOut Solo/Duo/Trio) and
+  LastHero (139, 29, 140, 30). **Every mode loads the same hall, `Arena_AirPit_ShootOut` (324).** `Arena_Airpit_Main_hall` (38),
+  Building (35), Background (34), Light (37), Tournament (31/113), LastHero (138/137) and `Arena_Airpit_new` (207-212) are referenced by
+  no preset, no child preset, no bundle and no code string (binary scan of 783 files). The port's five content scenes plus the four
+  role scenes are exactly the TeamFight set; the 2026-09-15 census chose "root + TeamFight child" at mode level, no hall was compared.
+- **The interiors were removed by BSG, not hidden:** level324 is Building 35 (96.4 % identical) merged with a reduced Main_hall 38 in
+  the same frame (roots at (-186.107, 18.038, -23.594); 10,212 of 38's 27,764 objects coincide with 324 to 0.01 m). Shop subtrees:
+  `OO/PROPS/INDOOR/SHOPS` 5,487 objects in 38 vs 300 in 324 (Burger Spot 1,391 -> 77, Tonni Hellfinger 1,541 -> 78, Don B Ramen
+  1,179 -> 79, Loui Peeton 1,375 -> 65: signs, pillars, tape and decals only); the shop `DOORS` (1,140 objects, 8 `Inside_Door_Wood`,
+  2 `KitchenDoors`) are empty containers in 324; the `PHYSIC` root (1,865 physics props) does not exist in 324; the open shells
+  `Airport_Shop_BS`, `DonB_Ramen`, `LP_Shop`, `TH_Roll_door_01..03` were swapped for static `*_closed` meshes (SE got a copy of the
+  Ramen shell where `LP_Shop` stood); `TH_Shop_indoor` (SW interior mesh + colliders) is still in 324 but inactive. Interior light
+  groups `ChinaPlace*`/`BurgerSpot*`/`LouiPeeton*`/`HELLFINGER` (118 lights) exist in level37 and are 0-2 lights in 325. The 0.5.4 spike
+  package already had the closed shells (0 differences to 0.6.0 in all five scenes), so this predates 0.5.4.
+- **Why it looks "meant to be walkable":** the AI and design data were authored for the furnished hall: TeamFight AI (33, bake stamp
+  2025-08-11) and LastHero AI (140, 2025-10-02) NavMeshes cover 36-55 % of each shop footprint with holes tracing the OLD interior walls
+  (41-59 % of hole cells within 0.4 m of a level38 wall vs 8-11 % near a 324 wall) and cross the closed shutters in 4/6/5/8 places; core
+  points 2, 4 (NE), 17 (NW), 18 (SE), 16 (SW); 8 of 23 Savage spawn markers, 36 mine points and 24 cover places inside shops; the
+  spatial-audio rooms `ServerRoom_AudioRoom_{Burger_Spot, Loui_Peeton, Don_Bulyon, German}`; the TeamFight pickup tray in the NE shop;
+  six LastHero player spawns inside shops; culling exclude volumes on old fixtures; and the menu parallax images 3/4 show the FURNISHED
+  Don B Ramen interior (counter, neon, lanterns, ink panels), which only level38 holds. The preset binding (2026-08-18) is about ten
+  months younger than the AI bakes. Nothing in the TeamFight scenes opens the shops (GateEntity/DotAnimator only on the bus and
+  passport gates), so Arena's own TeamFight on this build most likely plays with closed, empty shops too (inference; the live game was
+  not observed). The ShootOut border ring excludes all four shops, which is presumably why they were emptied.
+- **What walkable shops would need (estimate L):** a slice import from the unreferenced level38 (+ lights from 37) into the generic
+  pipeline (`extract_map.py` refuses slices today; only `extract_equator.py` has `--slice`): `OO/PROPS/INDOOR/SHOPS/*` (5,486),
+  `SOO_LOD0/DOORS/*` (1,139), `PROJECTION/INDOOR/SHOPS/*` (220), the old open shells and the hall-prop groups inside the footprints;
+  de-duplicate 324's own 300 shop objects and 106 projection decals (88 % are a subset); deactivate/replace the six `*_closed` shells
+  (`opened_barriers`), activate `TH_Shop_indoor`; the 118 shop lights with their CullingLightObjects; new ballistic/decal pins (+about
+  370 bake colliders, +9.7k triangles); rebake (the sealed pockets and the three moved bot spawns would become moot, Arena's own
+  anchors would fit again). Then host raids. **User decision pending.**
+  Figure: `work/screenshots/airpit-2026-10-12/34-shops-topdown-324-vs-054-vs-level38.png` (ignored).
