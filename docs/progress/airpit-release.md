@@ -2695,5 +2695,5 @@ rebake). **User decision (2026-10-12 late): the cover stays** - no rebake; the 1
   de-duplicate 324's own 300 shop objects and 106 projection decals (88 % are a subset); deactivate/replace the six `*_closed` shells
   (`opened_barriers`), activate `TH_Shop_indoor`; the 118 shop lights with their CullingLightObjects; new ballistic/decal pins (+about
   370 bake colliders, +9.7k triangles); rebake (the sealed pockets and the three moved bot spawns would become moot, Arena's own
-  anchors would fit again). Then host raids. **User decision pending.**
+  anchors would fit again). Then host raids. **User decision (2026-10-12 late): "ja, bau die shops aus level38 ein"; also check for other lost decoration ("es fehlen zumindest einige Decals").** Phase 0 = three read-only agents (full diff 38/37 vs 324/325 incl. decals, slice design for the generic pipeline, bake/gameplay consequences), then implementation in phases.
   Figure: `work/screenshots/airpit-2026-10-12/34-shops-topdown-324-vs-054-vs-level38.png` (ignored).
