@@ -924,9 +924,9 @@
       "Id": "arena_airpit-bot-north-hall-west",
       "Infiltration": "",
       "Position": {
-        "x": -42.94,
+        "x": -32.69,
         "y": 0.1,
-        "z": 33.84
+        "z": 30.15
       },
       "Rotation": 0.0,
       "Sides": [
@@ -1017,9 +1017,9 @@
       "Id": "arena_airpit-bot-east-south",
       "Infiltration": "",
       "Position": {
-        "x": 19.59,
+        "x": 6.0,
         "y": 0.1,
-        "z": -29.58
+        "z": -40.5
       },
       "Rotation": 0.0,
       "Sides": [
@@ -1079,9 +1079,9 @@
       "Id": "arena_airpit-bot-west-south",
       "Infiltration": "",
       "Position": {
-        "x": -40.1,
+        "x": -31.0,
         "y": 0.1,
-        "z": -27.7
+        "z": -25.5
       },
       "Rotation": 0.0,
       "Sides": [

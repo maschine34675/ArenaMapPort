@@ -121,6 +121,10 @@ public sealed class AiAnchorsTests
         // Core point 7 (-8.35, 0.02, 76.81) is Arena's anchor in the north spawn pocket. Since 2026-10-12 the passport-control
         // doors stay closed and the box ends at z 70 (docs/progress/airpit-release.md, host raid 4), so it is a deliberate island
         // like Equator's 13/14; the sidecar keeps it because it is the extractor's reproducible output.
+        // Core points 16, 17 and 18 (2026-10-12, host raid 8 dry runs on the U4 bake) lie inside the closed shop fronts, which the
+        // shutters and the authored outline walls seal off from the hall: islands for a walking bot too, but inside the bake
+        // volume, so they stay in the loop below. The three bot spawns that used to sit on them moved to the main component
+        // (tools/maps/airpit.bots.json, tools/tests/test_airpit_spawns.py SEALED_POCKETS); the core points remain unedited.
         var corePoints = doc.RootElement.GetProperty("core_points").EnumerateArray().ToList();
         var island = Assert.Single(corePoints, cp => cp.GetProperty("id").GetInt32() == 7);
         Assert.InRange(island.GetProperty("position")[2].GetSingle(), 75f, 80f);

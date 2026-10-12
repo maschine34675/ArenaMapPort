@@ -2291,3 +2291,154 @@ Same afternoon, without a raid: the `Weather (test)` inertia on server-time maps
 `Weather (test)/ApplyOnServerTimeMaps` (default false, read through `DeveloperOptions.Enabled` inside `ModeForSelection`, so the
 `DaytimeVisualsProbe` `effective=` line stays truthful; commit `171c278`, six new rows in `MapWeatherRuntimeTests`). The AirPit rain
 check (F8 readbacks at the accepted RainBounds plus streak screenshots) is the next host raid.
+
+### Host raid 8 (2026-10-12 13:52-13:56, build e56980a, bots None, forced rain, TOD 14:00): rain cover verified, sealed pockets found
+
+Deploy of `e56980a` (client + a rebuilt but unchanged server DLL; `gpu-run server stop`, hashes over `\\192.168.178.109\C$` equal dist,
+`gpu-run restart`, 19/19 identical). Before the raid: `Weather (test)/Weather = Rain`, `Weather (test)/ApplyOnServerTimeMaps = true`
+(developer mode on). `gpu-run raid ... --time past` still gave `liveHour=14` (the backend clock, no night); both keys were reset to
+`Server` / `false` after the raid.
+
+- **The opt-in works on a server-time map:** `[WeatherTestOverride] applied 'Rain' (map=arena_airpit; nightNeonRain=False)` at
+  13:52:06.121 (InitWeather) and 13:52:17.925 (the PVE_OFFLINE re-sync); `[DaytimeVisualsProbe] WeatherTestOverride: configured='Rain'
+  effective='Rain' map=arena_airpit serverTimes=True`; `[TimeOfDay]` unchanged (`native server time and weather`).
+- **Shader finding reproduced in a fresh process:** four `[RebindShaders] '<name>' resolved to EFT's own loaded shader; the stand-in
+  substitute is not used` lines (both cloth variants, the rock, the fog sheet) at 13:52:04.99-05.06, before any content material was
+  rebound.
+- **Rain cover (item 17), F8 at the accepted RainBounds `center=(-10, 26.24, -6.5) size=(174, 60.5, 233)`, `depthTextureDimension=4096`,
+  `nothingPhotographed=False` everywhere:**
+
+  | Spot | Position | `height(reversedZ)` centre (3x3 spread) | Streaks |
+  |---|---|---|---|
+  | passport hall, Usec spawn | (-1.08, 1.52, 58.37) | **44.34** (44.29..44.38) = glass-and-truss roof | none against the ceiling (photo 23, pitch -35) |
+  | south apron | (-14.80, 1.59, -59.24) | **0.03** = ground, uncovered | falling streaks against the overcast sky (photo 24) |
+  | hall centre | (-1.16, 1.62, 38.34) | **45.18** (45.15..45.19) = hall roof | none against the roof trusses (photo 25) |
+
+  So the depth-photo heuristic covers the terminal and leaves the apron open, and the shader culls the streaks accordingly. No
+  `FullyIndoorCover`-style default is needed for AirPit: the glass roof is a closed roof in the data and reads as cover. Floor wetness
+  shows everywhere (global rain value), as on the other maps.
+- **Rain audio (item 21), F10:** apron `room=21/OutdoorGeneric environment=Outdoor playerEnvironment=Outdoor rainCover=room-fallback
+  ... ambientOutDb=0.00`, `source='Outdoor rain 1' clip='amb_rain_outdoor_strong' playing=True volume=0.5000 route=PrecipitationAmbientOut`;
+  hall `room=17/IndoorConcrete environment=Indoor playerEnvironment=Indoor rainCover=room-fallback ... headphonesDb=4.53
+  listenerRms=0.010794` with `Indoor rain 1` (`amb_rain_indoor_strong`) playing. The room classification follows the acoustic graph,
+  as designed; whether the indoor bed under the glass roof is wanted stays the audibility question of item 21 (host output is muted).
+- **Sealed pockets on U4 (new, from the items 14-20 audit):** `uibridge_teleport dryRun` from the Usec spawn: core16 (-45.88, -25.91),
+  core17 = bot spawn `north-hall-west` (-42.94, 33.84) and bot spawn `west-south` (-40.1, -27.7) -> **`not reachable on foot ... navmesh
+  island`**; core18 = bot spawn `east-south` (19.59, -29.58) -> **`the walk there passes through a wall or fence`**. On U2 raid 2 had
+  reached them "round the outside of the building"; that route lies outside Arena's outline and the U4 box/walls removed it on
+  purpose. The three bot spawns sit inside the closed shop fronts (user decision: shutters stay closed) and must move onto the main
+  component; the three core points stay as documented islands (sidecar = extractor output). Fix in progress, see "Sealed-pocket
+  anchors on U4".
+- Barbed-wire contact (item 15) was not testable: the 12 `bruno_helix` boxes sit at y 3.9 on top of the mezzanine fence; the nearest
+  walkable mesh is 2 m away ((1.4, 3.9, 29.5) and (1.4, 3.9, 31.8) answer `no navmesh within 2 m`, (1.4, 3.9, 27.3) snaps to (0, 3.2,
+  26.1)). Attach stays verified (12 triggers every raid); contact is EFT's own `BarbedWire` behaviour.
+- Left at 13:56 (`gpu-run leave`, healed). Screenshots `work/screenshots/airpit-2026-10-12/23..25` (ignored).
+
+### Sealed-pocket anchors on U4 (2026-10-12)
+
+Why: raid 8 (above) answered four bot-spawn / core-point probes with "navmesh island" or "passes through a wall or fence". A bot that
+spawns in a sealed pocket stays there for the raid, so the three bot spawns involved moved onto the main component; the three core
+points stay as documented islands. Offline work on the built U4 bundle (`work/build/airpit/arena_airpit_navmesh.bundle`, read-only,
+8193 vertices / 3775 triangles = 2209 Detour polygons in **90 connected components**); no rebake, no descriptor, bake-input or
+`airpit.ai.json` change, the NavMesh is unchanged.
+
+**How the points were matched.** `tools/validate/navmesh_diff.load_bundle_mesh` + `navmesh_oracle` (adjacency incl. cross-tile portals,
+components ranked by xz area). Each point (y 0.1, core points 0.02, hubs 0.003, mezzanine core points 3.6-6.4) is matched to the
+polygon whose xz footprint contains it, among fan triangles whose surface height at that spot lies within +-1.0 m of the point's y
+(nearest footprint by xz distance when none contains it; the result was identical with +-2.5 m). Every point matched at 0.00 m
+horizontal distance except core 7 (6.81 m from the nearest polygon = off the mesh, as documented). Because Arena's authored outline
+walls are runtime colliders the raw bundle components do not know, a second labelling applies them: polygons outside the 12-vertex
+outline are dropped and every portal that a wall segment crosses is cut ("effective" components).
+
+| Component | Polygons | Area (xz) | Extent | Holds |
+|---|---|---|---|---|
+| raw 0 = **main** | 1551 | 8814.8 m2 | x -54.9..37, y 0..6.4, z -77.7..70 | hall, both aprons, mezzanine decks, and the strip at the box edge beyond the east outline wall (x 36.1..37) |
+| raw 4 | 35 | 846.2 m2 | x -57..-35.7, z 15.9..70 | north-west shop front (DonB_Ramen_closed) and the wedge beside it |
+| raw 5 | 31 | 643.3 m2 | x -57..-37, z -44.5..-10.4 | south-west shop front (TH_Roll_door_02/03) |
+| raw 1, 3 | 92 / 15 | 4406.3 / 1923.4 m2 | y 8.55 | roof decks of the terminal |
+| raw 2 | 120 | 2025.8 m2 | y 0.05-0.10, z -83..-46 | ground south of the building, 1675 m2 of it outside the outline (the rest on the flanks of the south apron) |
+| raw 6-89 | 365 (84 components) | 0.0-149.4 m2 each | y 0..6.7 | small decks, enclosed floors, treads and slivers; no point of this audit sits on any of raw 1-3 or 6-89 |
+| effective **main** | 1474 | 7730.0 m2 | same box | raw 0 minus 1084.7 m2 that lie outside the outline or behind a wall |
+| effective SW / NW / SE pocket | | 641.8 / 589.8 / 532.5 m2 | SE: x 11.6..37, z -44.5..-16.4 | the three closed shop fronts; the SE one (DonB_Ramen_closed (1), "LOUI PEET") hangs on raw main only by a 1.35 m link that runs outside the east wall |
+
+| Group | Points | On main (raw) | On main (effective) | Not on main |
+|---|---|---|---|---|
+| bot spawns | 14 | 12 | 11 | `north-hall-west` raw 4; `west-south` raw 5; `east-south` effective SE pocket |
+| player spawns | 4 | 4 | 4 | none |
+| AI core points | 19 | 16 | 15 | core 17 raw 4; core 16 raw 5; core 18 effective SE pocket; core 7 off the mesh (6.81 m) |
+| patrol hubs / sub points | 3 / 35 | 3 / 35 | 3 / 35 | none (all at 0.00 m, y 0.05-0.30) |
+
+The 14 bot spawns (raw component, border clearance in U4): north-end-west 0, 4.48 m; north-end-east 0, 6.09; north-approach 0, 5.44;
+north-hall 0, 2.34; **north-hall-west 4**, 5.03; east-north 0, 3.19; east-mid 0, 2.04; **east-south 0 (effective pocket)**, 5.19;
+west-mid 0, 3.81; **west-south 5**, 2.70; center-east 0, 1.61; plane-south 0, 4.45; south-apron 0, 5.32; south-end 0, 1.39. Player spawns:
+all 4.40, usec 7.04, bear 2.98, south-all 3.19 m. Core points 8-11 sit on the mezzanine decks of the main component (surface y 3.67, 4.25,
+6.29, 3.65); core 4 (clearance 0.32 m) and core 9 (0.62 m) are tight but connected.
+
+**Cross-check with the raid 8 dry runs** (13:52, `uibridge_teleport dryRun` from the Usec spawn (-1, 0, 58.5)):
+
+| Host answer | Point | This analysis |
+|---|---|---|
+| "not reachable on foot (navmesh island)" | core16 (-45.88, 0.1, -25.91) | raw 5, 643 m2 island |
+| same | core17 = bot `north-hall-west` (-42.94, 0.1, 33.84) | raw 4, 846 m2 island |
+| same | bot `west-south` (-40.1, 0.1, -27.7) | raw 5 |
+| "the walk there passes through a wall or fence" | core18 = bot `east-south` (19.59, 0.1, -29.58) | raw main, but its only route (148 m offline) crosses the east outline wall (x 36.24) through a 1.35 m link at (36.55, 0.05, -0.50), returns inside the wall near (35, -13) and follows the strip east of the shop (x 34-36) down to z -44.3 before turning into it; the player-height linecast (1.3 m, `TeleportPolicy.WalkCheckHeight`) over the layer 18/30 bake colliders plus the 12 authored walls hits `BORDER/east` twice (out and back) |
+
+The offline replica of the dry run (polygon corridor, funnel corners, linecast at 1.3 m against the layer 18/30 bake sources and the
+authored walls) reproduces all four answers and returns "reachable, 0 crossings" from the Usec spawn for the 11 other bot spawns, the
+15 other core points (core 7 is off the mesh) and all 38 hub and sub points. East-north (16.6, 26.8) lies in the
+Airport_Shop_BS_closed front, which is shuttered on its west and south sides but open to the north: effective main, offline path from
+the Usec spawn 43 m, no crossing. U2's "round the outside of the building" reach (raid 2: bigger box, no outline walls) was a route
+of this kind; it ran outside Arena's outline and was removed on purpose by the U4 box and the walls, and the east-south link above is
+the remnant at the box edge. The sealed shop fronts are the closed shutters (user decision: they stay closed; shop table in "Host
+raid 4").
+
+**Moves** (ids unchanged; chosen on the effective main component, >= 2.0 m U4 border clearance, >= 10 m from both exit-box centres,
+>= 8 m (xz) from every other bot and player spawn, ground floor, no solid collider of the 0.4-1.7 m band within 4 m, inside the 12-vertex
+outline with >= 20 m margin, inside Arena's own component 0 with >= 1 m of Arena-mesh clearance; offline dry run from both player spawns
+without a wall crossing):
+
+| Spawn | Old (pocket) | New | Move | U4 clearance | Arena-mesh clearance | Nearest exit centre | Nearest other spawn |
+|---|---|---|---|---|---|---|---|
+| `north-hall-west` | (-42.94, 0.1, 33.84), north-west shop | (-32.69, 0.1, 30.15) = Arena's patrol point hub2.7 | 10.9 m | 4.20 m | 4.22 m | 38.5 m (North Gate) | west-mid 28.1 m |
+| `west-south` | (-40.1, 0.1, -27.7), south-west shop | (-31.0, 0.1, -25.5) | 9.4 m | 5.35 m | 5.15 m | 42.9 m (South Gate) | plane-south 19.7 m |
+| `east-south` | (19.59, 0.1, -29.58), south-east shop | (6.0, 0.1, -40.5) | 17.4 m | 4.85 m | 4.92 m | 19.7 m (South Gate) | plane-south 21.7 m |
+
+Roles kept: west/north-west of the hall (open floor about 4 m east of the shop front, on Arena's own patrol point), south-west (open
+floor 6 m east of the roll-door shop, clear of the plane), south-east (floor south-east of the aircraft tail, west of the "LOUI PEET"
+front, 5.6 m from its curved shutter line). Arena has no marker or core point on the main component in the south-west or south-east (its 20 spawn
+markers all sit in the two end pockets), so those two are open-floor picks; the north-west one is Arena's own patrol point. Considered
+and rejected: the strip north of the south-east shop ((25, -11), 3.6 m clearance) is 10 m from east-mid and a duplicate of its role;
+hub0's points are 12 m from center-east and east-mid; points along the pocket fronts clear 2.0 m only just. Offline path from the
+Usec spawn: 64 / 118 / 188 m (straight 43 / 89 / 99 m); from the Bear spawn: 171 / 151 / 43 m. The south-west floor is a 151 m walk from
+the Bear spawn (straight 53 m), over uibridge's detour rule (2.5 x straight + 15 m), so a dry run from THAT spawn would answer "only
+reachable by a long detour"; it is the hall's topology (plane-south, unchanged, is 341 m from the Bear spawn by the same model), not a
+seal. Replaying all 14 bot spawns and the 4 player spawns (new positions) from both player spawns finds no wall crossing and no
+other detour. Start the host dry runs at the Usec spawn.
+
+**Island decision for core 16 / 17 / 18.** `airpit.ai.json` is the extractor's reproducible output (pinned by
+`test_tracked_airpit_sidecar_matches_the_live_source`) and an AI core point on an island is a known harmless case (Equator 13/14,
+AirPit core 7): the three core points stay unedited; what matters is that no spawn sits on them any more. All three still lie inside the
+bake volume, so `AiAnchorsTests.AirPitAnchorsSitInsideTheDescriptorBakeBounds` holds unchanged (a comment now names them).
+
+**Files.** `tools/maps/airpit.bots.json` (three positions, the moves recorded in `_comment`), `ArenaMapPort.Server/db/arena_airpit/base.json`
+(regenerated with `python tools/server/make_base_json.py --map D:/ArenaMapPort/tools/maps/airpit.json`; the diff is exactly those three
+positions), `tools/tests/test_airpit_spawns.py`, `ArenaMapPort.Server.Tests/AiAnchorsTests.cs` (comment only). Test changes:
+`MOVED_FROM_CORE_POINT` now records the four core-point-derived moves (east-north 1.6 m, west-south <= 15.0 m, north-hall-west <= 11.0 m,
+east-south <= 17.5 m); new `SEALED_POCKETS` boxes (four boxes for the three pockets: the effective north-west pocket is 589.8 m2 at
+z 16.0..55.5 and its wedge beside the shop front, x -51.2..-44.2 / z 43.6..59.2, got its own box x -51.2..-48.0, z 43.6..56.2 after
+review, which covers 24.6 of the wedge's 38.2 m2; the other ~1 m sliver along the main-component edge (main floor starts at x -47.7)
+is left to the bundle test, and the south-west and south-east boxes cover their pockets completely) and `SEALED_POCKET_ORIGINS` (old position, move bound, role side);
+`test_no_spawn_stands_in_a_sealed_shop_pocket`, `test_sealed_pocket_moves_keep_the_role_the_distances_and_the_exits` (>= 5 m moved, role
+side, >= 10 m from both exit centres, >= 8 m from every other spawn) and `test_every_spawn_lies_on_the_main_component_of_the_built_navmesh`
+(skipped without the ignored bundle or UnityPy: every spawn on raw component 0, <= 0.4 m off the ground floor, >= 1.0 m border
+clearance, >= 2.0 m for the three moved). The old positions fail these guards (north-hall-west raw 4, west-south raw 5, east-south in the
+south-east box). Results: `python -m unittest discover -s tools/tests -p "test_*.py"` Ran 1071 tests, OK (skipped=44) when the pockets were first added, Ran 1113 tests, OK (skipped=44) after the review fixes (the wedge box
+and a corrected table row; the count difference is other work in the same tree, the fixes add no test);
+`dotnet test ArenaMapPort.Server.Tests -c Release` 702 passed, 0 failed. `docs/MAP-RECIPE.md` documents no AirPit positions (generic recipe
+only), so it is unchanged; `docs/PLAN-AIRPIT.md` Appendix A and `tools/validate/navmesh_probe_points_airpit.json` keep the 2026-10-11 draft
+positions as history (they were already stale after the north moves).
+
+**Not done / next.** Nothing is deployed: `base.json` is read at server start, so the next host check needs the deploy script, a server
+restart and (as usual) the hash comparison. Then `uibridge_teleport dryRun=true` from the Usec spawn to the three new points must answer
+"reachable" without the wall message, and one raid with bots should show `[BotSpawn]` wave lines and `uibridge_bots` positions on the hall
+floor (none inside the three shop fronts).

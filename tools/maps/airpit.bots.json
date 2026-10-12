@@ -1,5 +1,5 @@
 {
-  "_comment": "airpit plan item 6 (docs/progress/airpit-release.md, 2026-10-11): optional sidecar read by tools/server/make_base_json.py next to tools/maps/airpit.json. OFFLINE DRAFT, not walked on the host yet: the first AirPit raid (plan item 12) must confirm every point with uibridge_teleport dryRun=true. Player spawns are the world positions (parent chain) of four of Arena's 20 original SPAWNS/ScavPMCspawn markers in Arena_Airpit_TeamFight_DesignStuff: markers 19 and 16 in the north pocket (z 75..80, yaw 180) and markers 4 and 13 in the south pocket (z -75..-72, yaw 0); the other 16 markers stay unused until ArenaMode team starts. The faction split (Usec north, Bear south, an All point at each end) copies Equator and is a guess. Bot spawns: markers 9 and 17 (north pocket) and 15 (south pocket) plus eleven of Arena's own AI core points (ids 6, 5, 17, 2, 1, 18, 15, 16, 3, 12, 13) read from Arena_Airpit_TeamFight_AI. All sit on the ground floor at y 0.1 (markers 0.08-0.14, Arena NavMesh surface 0.02-0.11). Core points 2 and 16 lie 0.30 m and 0.75 m from the border of Arena's own NavMesh, so east-north is moved 1.5 m east to (16.6, 26.8) and west-south 6.0 m east into open floor at (-40.1, -27.7); every point now keeps at least 1.38 m of border clearance in Arena's mesh (tools/validate/navmesh_oracle.py) and lies inside its single 8,168 m2 component. Two end points sit 4.4-4.6 m from a player marker, inherent to the small spawn pockets. The north-approach point (core 6) lies 1.5 m from the north exit centre; bots do not extract, and the 25 m radius makes the marker position irrelevant. Radii follow Equator (bots 25 m). waves and boss_waves are Equator's (bots-stage1/3), BotMax 8. Derived from Arena 0.6.0.47752 (the marker transforms read live from level28 equal the 0.5.4 package scene to 0.0001 m). No loot, no scav raids. 2026-10-12 (user decision, host raid 4): the passport-control doors stay closed and are the north limit, so SpawnPoint_Player_All (marker 19), SpawnPoint_Player_Usec (16), bot north-end-west (9) and north-end-east (17) moved from the north pocket (z 75..80) south of the door line onto open floor with >= 2 m Arena-mesh clearance (-21.5/61.5, -1.0/58.5, -23.5/62.0, 8.0/62.0).",
+  "_comment": "airpit plan item 6 (docs/progress/airpit-release.md, 2026-10-11): optional sidecar read by tools/server/make_base_json.py next to tools/maps/airpit.json. OFFLINE DRAFT, not walked on the host yet: the first AirPit raid (plan item 12) must confirm every point with uibridge_teleport dryRun=true. Player spawns are the world positions (parent chain) of four of Arena's 20 original SPAWNS/ScavPMCspawn markers in Arena_Airpit_TeamFight_DesignStuff: markers 19 and 16 in the north pocket (z 75..80, yaw 180) and markers 4 and 13 in the south pocket (z -75..-72, yaw 0); the other 16 markers stay unused until ArenaMode team starts. The faction split (Usec north, Bear south, an All point at each end) copies Equator and is a guess. Bot spawns: markers 9 and 17 (north pocket) and 15 (south pocket) plus eleven of Arena's own AI core points (ids 6, 5, 17, 2, 1, 18, 15, 16, 3, 12, 13) read from Arena_Airpit_TeamFight_AI. All sit on the ground floor at y 0.1 (markers 0.08-0.14, Arena NavMesh surface 0.02-0.11). Core points 2 and 16 lie 0.30 m and 0.75 m from the border of Arena's own NavMesh, so east-north is moved 1.5 m east to (16.6, 26.8) and west-south 6.0 m east into open floor at (-40.1, -27.7); every point now keeps at least 1.38 m of border clearance in Arena's mesh (tools/validate/navmesh_oracle.py) and lies inside its single 8,168 m2 component. Two end points sit 4.4-4.6 m from a player marker, inherent to the small spawn pockets. The north-approach point (core 6) lies 1.5 m from the north exit centre; bots do not extract, and the 25 m radius makes the marker position irrelevant. Radii follow Equator (bots 25 m). waves and boss_waves are Equator's (bots-stage1/3), BotMax 8. Derived from Arena 0.6.0.47752 (the marker transforms read live from level28 equal the 0.5.4 package scene to 0.0001 m). No loot, no scav raids. 2026-10-12 (user decision, host raid 4): the passport-control doors stay closed and are the north limit, so SpawnPoint_Player_All (marker 19), SpawnPoint_Player_Usec (16), bot north-end-west (9) and north-end-east (17) moved from the north pocket (z 75..80) south of the door line onto open floor with >= 2 m Arena-mesh clearance (-21.5/61.5, -1.0/58.5, -23.5/62.0, 8.0/62.0). 2026-10-12 (host raid 8 dry runs on the U4 NavMesh, docs/progress/airpit-release.md 'Sealed-pocket anchors on U4'): three bot spawns stood inside shop fronts that the closed shutters and the authored outline walls seal off from the hall, so a bot spawned there would be stuck for the raid; each moved onto the main component of the U4 bake with >= 4.2 m of border clearance, >= 19 m from the nearest exit and >= 19 m from every other spawn: north-hall-west (-42.94, 33.84) to (-32.69, 30.15), 10.9 m, Arena's own patrol point hub2.7 (core point 17 sat in the DonB_Ramen_closed shop); west-south (-40.1, -27.7) to (-31.0, -25.5), 9.4 m (the TH_Roll_door shop in the south-west; core point 16, the origin of the earlier 6.0 m move, is the same island); east-south (19.59, -29.58) to (6.0, -40.5), 17.4 m (the DonB_Ramen_closed (1) shop in the south-east; its only mesh link leaves the outline across the east wall, so core point 18 stays an island too). Core points 16, 17 and 18 remain in airpit.ai.json as documented islands, like core point 7.",
   "zone": "BotZone_Main",
   "max_bots": 8,
   "player_spawns": [
@@ -118,9 +118,9 @@
     {
       "id": "arena_airpit-bot-north-hall-west",
       "position": [
-        -42.94,
+        -32.69,
         0.1,
-        33.84
+        30.15
       ],
       "radius": 25,
       "categories": [
@@ -157,9 +157,9 @@
     {
       "id": "arena_airpit-bot-east-south",
       "position": [
-        19.59,
+        6.0,
         0.1,
-        -29.58
+        -40.5
       ],
       "radius": 25,
       "categories": [
@@ -183,9 +183,9 @@
     {
       "id": "arena_airpit-bot-west-south",
       "position": [
-        -40.1,
+        -31.0,
         0.1,
-        -27.7
+        -25.5
       ],
       "radius": 25,
       "categories": [

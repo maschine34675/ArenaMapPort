@@ -45,11 +45,22 @@ User decision (midday): AirPit 1.0 stays; the release may exceed 2 GB and is spl
 Side finding for the next candidate: Bowl's one pink material is `Tarp_Tunnel` on
 `p0/Reflective/Bumped Specular_TwoSided` (plus the two cloth shaders AirPit already substitutes) - a fallback-table job.
 
-Open for the user: (1) `Weather (test)` is inert on server-time maps, so AirPit's rain check still waits for server rain; (2)
-fog-sheet StandIn vs Hidden A/B (the haze in the hall looks strong); (3) the airstairs strip (`navmesh_bake_layers`); (4) the
-hall-centre ShootOut cover still makes core3 -> core19 a 194 m detour for bots (plan's rejected "190 walked-through props"
-option); (5) Phase C items 13 (native ambient audio), 21, 23-25 (size gate, release 0.2.0).
-Host config: `General/DeveloperMode` is on; `Weather (test)/Weather` was reset to `Server`.
+Afternoon of 2026-10-12 (raids 7 and 8, commits `171c278`, `e56980a` + follow-ups; evidence in docs/progress/airpit-release.md): (1) the
+rain check is DONE: new developer-only key `Weather (test)/ApplyOnServerTimeMaps` forces the test preset on Bay5/AirPit; F8 at the
+accepted RainBounds gives 44.3 m (passport hall) / 45.2 m (hall) / 0.03 (apron) with streaks only on the apron; rain audio follows
+the acoustic rooms. (2) The fog-sheet A/B is moot: EFT 0.16.9.5 carries `Custom/Billboard_FogSheet_Simple`, both cloth shaders and
+the rock shader itself (Customs' scene shared assets), they are loaded in-process, so the item 11 stand-ins never ran and the
+haze is Arena's own look; `Hidden` now recognises both shader names, the log says `resolved to EFT's own loaded shader`. (3) The
+airstairs are reachable on the runtime mesh (`uibridge_walk` 7.9 m to y 3.4): closed. (4) The hall-centre cover detour stays as
+accepted (bots path 194 m). NEW: on U4 the bot spawns `north-hall-west`, `west-south` and `east-south` (and core points 16/17/18)
+sit in the sealed shop pockets behind the closed shutters (dry runs: navmesh island / through a wall) - the three bot spawns are
+being moved onto the main component (sidecar + base.json + tests), the core points stay as documented islands. Status audit of
+Phase C (eight read-only agents, 2026-10-12): items 14-21 and 23 are implemented and log-verified; open are item 13 native
+ambient audio (L: extractor generalisation, contract, re-extract as a NEW package name, importer, client driver for two groups,
+Unity FullMap rebuild, host test, defaults decision), item 24 multi-part packager (in implementation: `tools/release/
+make_release_zips.py`, core + one ZIP per map), item 25 (0.2.0 text sweep, night look-test, Equator/Bay5 regression raids,
+AirPit -> Equator -> AirPit sequence, bots raid on U4, map-select screenshots, bloom -1/-1 decision, light-parity signage look).
+Host config: `General/DeveloperMode` is on; `Weather (test)/Weather` = `Server`, `ApplyOnServerTimeMaps` = `false`.
 
 ## State on 2026-10-11 (evening) — AirPit chosen as the third map; plan written
 
