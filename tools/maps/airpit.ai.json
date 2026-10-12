@@ -1,5 +1,5 @@
 {
-  "_comment": "PLAN-TWO-MAPS item 8 (docs/progress/two-maps-item-8-ai-anchors.md) -- Arena's own AI patrol hub/core-point topology for airpit, raw-decoded from the excluded TeamFight_AI scene (tools/extract/extract_ai_anchors.py). Loaded at raid start by ArenaMapPort.Client/AiAnchors.cs in place of AICorePointFallback/PatrolWayFallback's NavMesh-derived synthesis; a missing/invalid file (any map without a sidecar) keeps that synthesis unchanged. No connection/edge data: AICorePoint.ConnectionsAtNet is never populated outside the Unity Editor's own Gizmos callbacks (see extract_ai_anchors.py's module docstring), so every authored core point here has empty connections, same as today's single synthetic point. 2026-10-12: core point id 7 (-8.35, 0.02, 76.81) dropped - it lies in the north spawn pocket behind the passport-control doors, which the port keeps closed (user decision: the real passport control closes the north instead of an invisible wall).",
+  "_comment": "PLAN-TWO-MAPS item 8 (docs/progress/two-maps-item-8-ai-anchors.md) -- Arena's own AI patrol hub/core-point topology for airpit, raw-decoded from the excluded TeamFight_AI scene (tools/extract/extract_ai_anchors.py). Loaded at raid start by ArenaMapPort.Client/AiAnchors.cs in place of AICorePointFallback/PatrolWayFallback's NavMesh-derived synthesis; a missing/invalid file (any map without a sidecar) keeps that synthesis unchanged. No connection/edge data: AICorePoint.ConnectionsAtNet is never populated outside the Unity Editor's own Gizmos callbacks (see extract_ai_anchors.py's module docstring), so every authored core point here has empty connections, same as today's single synthetic point.",
   "core_points": [
     {
       "connection_group_id": 19,
@@ -59,6 +59,16 @@
         -11.010000228881836,
         0.023543596267700195,
         60.459999084472656
+      ]
+    },
+    {
+      "connection_group_id": 19,
+      "id": 7,
+      "name": "AICore ID:7 CG:19",
+      "position": [
+        -8.350000381469727,
+        0.023543596267700195,
+        76.80999755859375
       ]
     },
     {

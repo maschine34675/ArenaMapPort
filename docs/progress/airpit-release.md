@@ -2189,3 +2189,27 @@ reset afterwards), 13 screenshots under `work/screenshots/airpit-2026-10-12/` (i
    air, agent recommendation not to add activation code for it).
 4. Validator: `authored_borders` shape + sidecar/descriptor mirror (`ArenaBorderDescriptor` literals parsed); tests
    `AuthoredBorders_FormAirPitsClosedOutline_OtherMapsNone`, `AuthoredBordersMatchTheSidecar`, `test_authored_borders_form_a_closed_outline_inside_the_bake_box`.
+
+**Revised the same morning (user: "lässt sich die Passkontrolle nicht wiederherstellen (statt unsichtbarer Wand)?").** A top-down
+plot of the area (scratch `airpit_passport_map.py`) shows the layout: the "passport control" is the door line at z 69.4 - eight
+lanes, each closed by a pair of `Passport_control_01_Door` leaves at z 66.3/69.1 - with the hall's curved glass walls running from
+(-48, 43) and (26, 43) up to the facade at (-31.9, 82) / (9.5, 82); the spawn pocket lies between the door line and the facade,
+and the facade opening behind it has no geometry at all. So the real passport control IS the only thing that can close the
+north - provided it stays closed. Decision (commit `2a1e0ce`):
+
+- `PASSPORT_CONTROL_DOORS` is no opened barrier any more (closed doors, lane lights red = closed; nothing floats, the sheets sit
+  above the door frames); `PASSPORT_CONTROL_EMISSIVE` stays as it is. The 32 door colliders are NavMesh sources again (bake
+  sources 2029 under the mask).
+- The four points of the north pocket moved south of the door line onto open Arena floor with >= 2 m border clearance:
+  `SpawnPoint_Player_All` (-21.5, 0.1, 61.5), `SpawnPoint_Player_Usec` (-1.0, 0.1, 58.5), bots `north-end-west` (-23.5, 0.1, 62.0)
+  and `north-end-east` (8.0, 0.1, 62.0); both are >= 10 m from the North Gate exfil box. AI core point 7 (-8.35, 0.02, 76.81)
+  inside the pocket stays in `airpit.ai.json`: the sidecar is the extractor's reproducible output
+  (`test_tracked_airpit_sidecar_matches_the_live_source`), and an island core point is a known, harmless case (Equator's 13/14).
+- `bake_bounds` end at z 70 (x -57..37, z -83..70): no mesh in the pocket or the entrance hall. The authored outline walls stay
+  for the apron/runway sides (`north-facade-gap` and its two neighbours are now behind the closed doors and harmless).
+- For ArenaMode: the spawn pocket and the doors remain Arena's round-start gate; `Spawns/OpenSpawnBarriers` no longer lists
+  the doors, so a mode that wants the pocket as a team start has to open `PASSPORT_CONTROL_DOORS` (18 direct children,
+  none named frame) itself and may switch `GREEN/GreenFog` on - see the GateEntity notes above.
+- Tests: `test_airpit_spawns.py` records the four moves against the original markers (`MOVED_FROM_MARKER`, south of
+  `DOOR_LINE_Z` 66), `MapDescriptorConsistencyTests` three barriers and the z 70 box.
+  U4 rebake: `work/logs/airpit-u4.log`.
