@@ -2696,4 +2696,53 @@ rebake). **User decision (2026-10-12 late): the cover stays** - no rebake; the 1
   (`opened_barriers`), activate `TH_Shop_indoor`; the 118 shop lights with their CullingLightObjects; new ballistic/decal pins (+about
   370 bake colliders, +9.7k triangles); rebake (the sealed pockets and the three moved bot spawns would become moot, Arena's own
   anchors would fit again). Then host raids. **User decision (2026-10-12 late): "ja, bau die shops aus level38 ein"; also check for other lost decoration ("es fehlen zumindest einige Decals").** Phase 0 = three read-only agents (full diff 38/37 vs 324/325 incl. decals, slice design for the generic pipeline, bake/gameplay consequences), then implementation in phases.
+
+### Phase 0 results (2026-10-12 late, workflow `wf_fb891c2d-939`; full reports in the session scratchpad `shops2_{A,B,C}.md`)
+
+**A. What else is lost (diff level38 + 37 vs 324 + 325 + 40/29/28, one-to-one matching by path and world position):** 18,977 of
+33,801 legacy objects have no live counterpart (shops 8,865; inside the outline but outside the shops 9,376; outside 736). Active
+visual instances outside the shops: 1,355 props, 114 mesh decals, 127 StaticDeferredDecal, 58 lights. By area, what the user most
+likely sees as missing: (1) the **north passport/respawn hall** z 44..90: ~190 of 215 decals gone, props 415 -> 93, lights 32 -> 3, the
+whole `OO/PROPS/INDOOR/PASSPORT_CONTROL` group (2,015 objects, crates/racks/shells/footstep decals, its `Respawn` subgroup at z 83);
+(2) **`FLOOR_DAMAGE2`** (129 ceramic-tile damage overlays over the concourse): present in 324 but switched OFF by BSG (active in 38) -
+left as BSG set it; (3) the **four shops** (1,070 props, 328 mesh decals = bullet holes/footsteps/dust/blob shadows, 74 StaticDeferredDecal,
+164 lights); (4) the **south apron** z <= -52: 25/49 StaticDeferredDecal and 110 props (rubble, shells, bottles) gone; (5) blob shadows
+(73 ShadowPlaneBox + 22 carshadow); (6) 27 `Food_container` stalls and ~90 shell/garbage groups (`VARIANT`, `PHYSIC` is inactive even in
+38). The main hall itself is nearly intact (14/309 StaticDeferredDecal, 21/331 mesh decals lost). **Decals in the port render correctly:**
+all 481 StaticDeferredDecal go through the native manager (471 active; the 10 inactive are event/pickup content), the 1,000
+`Decal/Ultra Deferred Decal Of God 3000` mesh-decal slots are ordinary polygon-offset G-buffer decals (bytecode read: no depth texture,
+no manager needed; the `DecalRepairs.cs` comment calling them projector decals is wrong) and the 2026-10-12 queue fix put them at the
+shader's own 2005; the `DeferredDecalDiffuseNormalsDynamicEditor` materials of the rebind census are the StaticDeferredDecal materials,
+not mesh decals. So nothing present fails to draw; what is missing was removed from the scene by BSG. Only-legacy StaticDeferredDecal:
+208 (north hall 95, shops 74, apron 25, main hall 14), mostly dirt/dust/stains (133), blob shadows (22), road overlays (14), blood (12).
+
+**B. Design (chosen):** PARTIAL SCENES in the generic pipeline, not slices (the slice concept is refused by `source_plan`, the contract's
+`require_unsliced` and five native augmenters that scan whole level files; the partial scene keeps `slice == {}` and runs the augmenters
+through a scope proxy). Plan scene records get `select` (roots / region_roots / regions / skip_twins_of), the manifest `partial_scenes`,
+the contract an optional `partial_scenes` key; two new content scenes `Arena_Airpit_Main_hall` (38, twins vs 324 skipped) and
+`Arena_Airpit_Light` (37, twins vs 325). Unit = LODGroup subtree or lone leaf; ancestors become component-free carriers; twin rule =
+same base name + same non-MonoBehaviour component multiset + 0.02 m + same effective activity, greedy and deterministic. Dry run
+(without R4/R5): Main_hall 5,885 objects / 1,330 units / 72 carriers, Light 962 / 187 / 26; +747/+122 BallisticCollider, +114
+StaticDeferredDecal, +147 CullingLightObject, +9 VolumetricLight; +752 meshes (~25 MB), +90 materials, +149 textures (108 Mpx, +11 %);
+scenes bundle estimated 0.95-0.98 GB; no new shader or MonoScript. Two blockers found and handled: four `BallisticCollider` on
+`video_player_LOD0` without a physical collider (hidden + recorded as orphans) and nine `Graffiti6_ShadowPlaneBox` decals with
+texture ratio 0.5 (`extract_decals` now accepts 0.5). No C# importer change: `BuildBundles` loops `pkg.SceneNames`, the bake takes all
+content scenes, `patch_preset.py` follows `all_scene_names`.
+
+**C. Bake/gameplay:** with the shop content in and the six `*_closed` shells gone, the offline walk model reproduces Arena's TeamFight
+mesh inside the shops to 99.8 % (1,222 of 1,225 m2, 85 m2 extra); the sealed pockets vanish, core points 16/17/18/2 become usable
+(core 16 needs the old west-south position, core 2 the +1.5 m rule); `bake_bounds` and `authored_borders` stay; the old shells have
+their fronts open (NE west bays z 8.3..12.9 / 29.0..31.2 / 36.8..42.5 and south gaps; NW whole curve; SE west side 17 m and south gap;
+SW roll doors partly rolled up incl. a south entrance from the apron); the interior doors imported closed keep the back rooms shut as
+in Arena (NE east wing 136 m2, NW back room 126, SE east rooms 120, SW west rooms 217 stay unwalkable); expected bake ~4.1-4.3k
+triangles, ~2,410 sources; ground-level west-east links through the shops appear (west-south -> east-south 78 m instead of a mezzanine
+detour). 324 added nothing inside the footprints; the tape/plywood in front of the fronts exist in 38 too and stay.
+
+**Lead decisions:** R1 `OO/PROPS/INDOOR/SHOPS`, R2 `PROJECTION/INDOOR/SHOPS`, R3 the eight shells (incl. `LP_Shop`, `LP_Defile`,
+`TH_Shop_indoor`), R4 ALL 38-only `PROJECTION` decals inside the outline box (the user's "missing decals": north hall, apron, main
+hall), R5 `SOO_LOD0/DOORS` closed and static (Arena-mesh parity), tier-2 hall props inside the four footprints, Light-scene shop
+groups + regional GI/shadow planes/puddles/fog sheets; NOT: `PHYSIC`, `Destroyed_Brick_Wall`, `PASSPORT_CONTROL` clutter, `VARIANT`
+stalls, `FLOOR_DAMAGE2`, apron litter (reported to the user as a possible follow-up). The six closed shells go to `opened_barriers`
+(no extraction change, 324 stays byte-identical); the four spawns stay where they are for U6 and are reverted to Arena's anchors only
+after the host dry runs. Package v7 = full re-extract with the two partial scenes.
   Figure: `work/screenshots/airpit-2026-10-12/34-shops-topdown-324-vs-054-vs-level38.png` (ignored).
