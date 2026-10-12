@@ -2531,3 +2531,57 @@ suites and switched the package pins. No Unity, no host.
     bus leases with the room's fade; C leave as is. Decide after the host listen test.
   Phase 3 next: Unity `-FullMap` rebuild from v6 (U5, `work/logs/airpit-u5.log`; rebake expected unchanged since audio objects carry no
   colliders), client Release build (stages bundles + acoustics), validators, deploy, host listen test, Equator/Bay5 smoke raids.
+
+### Item 13 phase 3 - U5 build, deploy and the dead-plugin session (2026-10-12, 16:52-17:40)
+
+- **U5** (`work/logs/airpit-u5.log`, `unity_build_all_20261012_165255.log`, 17 min): the importer compiled and authored the graph on the
+  first run - **`[ArenaMapPort][NativeAudio] authored inactive stock graph map=arena_airpit players=26 banks=9 clips=61 support=2`**;
+  bake inputs unchanged (`3 opened_barriers`, mask 0x40042A00, box from the descriptor), **`triangulation: vertices=8193 triangles=3775`**
+  (identical to U4), modifiers 20/12 stripped, MonoScript patch 15 (now incl. `EFT.SoundBank`, `AmbientSoundPlayer`,
+  `AmbientSoundPlayerGroup`), `validate_bundle_roundtrip` incl. the audio proofs OK, scenes bundle **855,037,777 B** (+30.4 MB for the
+  61 PCM clips; navmesh 120,516 B unchanged). Client Release build staged it; `validate_port --map airpit --package
+  work/extract/airpit-native-v6 --distribution` -> `PORT_VALIDATED ... scene_bundle_bytes 855037777`, `DISTRIBUTION_OK 3 maps 9 bundles
+  3 sidecars`. Deploy: client DLL, scenes bundle and the (rebuilt, unchanged) server DLL; host hashes equal dist.
+- **Session 17:15 died at plugin start, nothing to do with the audio:** the raid load aborted with `Can't load bundle:
+  maps/arena_airpit_preset.bundle HTTP/1.1 404 Not Found` and `uibridge_config` showed 0 ArenaMapPort keys. The host's live BepInEx log
+  (`\\192.168.178.109\C$\SPT41\BepInEx\LogOutput-SPT-GPU-2-2026-10-12_17-15-38.log`, the file sits in the BepInEx root until UiBridge
+  moves it to `logs/` at exit) has, right after `Loading [maschine-ArenaMapPort 0.1.0]`: **`IOException: Die Datei, die ersetzt werden soll,
+  kann nicht entfernt werden`** from `System.IO.File.Replace` <- `CompactConfiguration.SaveArchive` <- `Initialize` <- `Plugin.Awake`. The
+  developer archive was held by another process for a moment (Syncthing is the candidate: the cfg had just been written by the raid 8
+  key resets) and the exception escaped Awake, so no Harmony patch and no `BundleHost` existed - EFT asked the server for the preset
+  bundle and got 404. Fix `438f179`: `SaveArchive` retries the replace, falls back to an in-place copy and otherwise keeps the merged
+  values in memory with one `[ArenaMapPort][Config]` warning (retried at the next start); `Plugin.Awake` degrades to the public file if
+  `Initialize` still throws. `ConfigRetirementCheck`'s locked-archive case (which until now ASSERTED the IOException) expects the warning
+  and the in-memory merge instead. Redeployed (client + server DLL, hashes equal), EFT restarted.
+
+### Host raid 10 (2026-10-12 17:24-17:27, build 438f179 + U5, bots None): native ambient audio live on AirPit
+
+- `[ArenaMapPort][NativeAudio] waiting for raid listener and native mixers; map=arena_airpit players=26 active=26` (17:24:59), then at
+  17:25:25 **`exterior bus leased neutral=True`**, **`interior bus leased neutral=True`**, `user range x3.00: max distance scaled on 26
+  player(s); e.g. 'indoor_wind_howl' 30->90 m; 'indoor_wind (4)' 5->15 m; 'water_drops' 3->9 m`, `user mix gainDb=4.0 offset=0.400:
+  adjusted 26 player(s), dip capped on 0; e.g. 'metal_squeak_deep_1' 0.200-0.126->0.717-0.200`, **`ready players=26 started=26
+  seasonalSilent=0 season=Summer mixers=CommonAmbOutEffects,CommonAmbInEffects shoreline=none listener=(-16.82, 1.54, -71.58)
+  sourceInactive=0`**, `[RoomReverb] AirPit owned ambient route=AmbCommonEffects, players=22, original indoor bus=0.00dB` (the In group
+  rerouted, the 4 Out players stay on `CommonAmbOutEffects`). `uibridge_config`: the eight `Audio (arena_airpit)` keys exist
+  (`AmbientGainDb 4`, `AmbientVolumeOffset 0.4`, `AmbientRangeMultiplier 3`, `AmbientDefaultsRevision 2`, PlaybackDiagnostics, plus the
+  earlier NativeSpatialAudio/NativeRoomReverb/RainVolume). No ArenaMapPort warning or error.
+- F10 at (-1.1, 0.6, 20) in the hall: 26 `[NativeAudio] source=` rows, 22 on `mixer=AmbCommonEffects` and the 4 far_* on
+  `CommonAmbOutEffects`, `indoor_wind (8)` playing at 29.5 m, the others between their random draws (`playing=False virtual=True`, as
+  on Equator/Bay5); `[RainAudio] ... ambientInDb=0.00 ambientOutDb=-0.27` (both buses open; rain 0.063 Low from the backend).
+- Audibility is the user's listening pass (host output is muted); the provisional mix 4 / 0.4 / 3 and the Out/In crossfade question
+  stay open for that pass. Left at 17:27.
+
+### Host raids 11-13 (2026-10-12 17:26-17:31, same process): Equator and Bay5 regression, AirPit -> Equator -> Bay5 -> AirPit
+
+Same EFT process as raid 10 (bundle cache in play), bots None each, `gpu-run leave` between raids, no ArenaMapPort warning or error in
+any of them:
+
+| Raid | Map | Evidence |
+|---|---|---|
+| 11 | Equator | `[Acoustics] arena_equator: prepared rooms=21, portals=50, bake pairs=210, routes=31676` (21/50 = the three earlier host sessions; the graph file holds 23/55 before the client drops invalid rooms), `[NavMesh] added navmesh for 'arena_equator': 10404 vertices, 4572 triangles`, `[NativeDecals] map=arena_equator enabled: source=348 active=346 registered=346`, `[RoomReverb] arena_equator: native room controller active`, `Equator owned ambient route=AmbCommonEffects, players=23`, **`[NativeAudio] ready players=25 started=23 seasonalSilent=0 ... mixers=CommonAmbInEffects shoreline=none map=arena_equator sourceInactive=2`** (unchanged: the two dogs inactive) |
+| 12 | Bay5 | `[Acoustics] arena_bay5: prepared rooms=40, portals=85` (as before), `[NativeDecals] map=arena_bay5 enabled: source=499 active=468`, `[Water] enabled: target=Arena_Bay5_Main/Sea/Plane textures=4 shader=Hidden/WaterForSSR`, `[NavMesh] ... 22117 vertices, 10213 triangles`, shoreline `range origin aligned ... radius=75.00` + `initial calculation`, **`[NativeAudio] ready players=24 started=23 seasonalSilent=1 season=Summer mixers=CommonAmbOutEffects,CommonAmbOutBypass shoreline=stock map=arena_bay5`** - byte-identical to the three earlier Bay5 sessions in the mirrored logs |
+| 13 | AirPit again | `[RebindShaders] Arena_AirPit_ShootOut: pass complete — 351/351` (the bundle was reloaded after the two other maps), `[Acoustics] arena_airpit: prepared rooms=24, portals=94`, `[NavMesh] ... 8193 vertices, 3775 triangles`, `[NativeDecals] map=arena_airpit enabled: source=481 active=471 registered=471 ... renderer=-1511394` (a fresh manager, no `refusing a second manager`), **`[NativeAudio] ready players=26 started=26 ... mixers=CommonAmbOutEffects,CommonAmbInEffects map=arena_airpit`** |
+
+So the profile-driven driver leaves Equator and Bay5 exactly where they were, and the AirPit graph starts again after a map change.
+Item 13 is log-verified on the host; what remains is the user's listening pass (mix 4 / 0.4 / 3, Out/In crossfade by room) and the
+ballistics shooting check (item 13a) that no raid has done yet.

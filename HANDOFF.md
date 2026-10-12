@@ -60,9 +60,14 @@ onto the main component (`9bf4f89`: sidecar + base.json + tests; raid 9 on the d
 south spawn, three scavs spawn and patrol 50-70 m across the hall and mezzanine in 30 s, no `ActiveFail`), the core points stay as
 documented islands. Status audit of
 Phase C (eight read-only agents, 2026-10-12): items 14-21 and 23 are implemented and log-verified. Item 13 native ambient
-audio: phase 1 (contract-driven extractor, AirPit contract, package `airpit-native-v6`, `601074d`) and phase 2 (profile-driven
-importer + client driver with two bus leases, `AmbientAudioProfiles`, provisional AirPit defaults 4 / 0.4 / 3) are in; phase 3 =
-U5 Unity rebuild from v6, staging, deploy, host listen test, Equator/Bay5 smoke raids (open decision: Out/In crossfade by room).
+audio is IN and host-verified (evening 2026-10-12): phase 1 (contract-driven extractor, AirPit contract, package
+`airpit-native-v6`, `601074d`), phase 2 (profile-driven importer + client driver with two bus leases, `AmbientAudioProfiles`,
+provisional AirPit defaults 4 / 0.4 / 3, `f20a79f`), phase 3 = **U5** (`work/logs/airpit-u5.log`: importer authored 26/9/61/2,
+bake unchanged 8193/3775, scenes bundle 855,037,777 B), staged, `PORT_VALIDATED`/`DISTRIBUTION_OK`, deployed; raid 10
+`[NativeAudio] ready players=26 started=26 ... mixers=CommonAmbOutEffects,CommonAmbInEffects`, raids 11-13 Equator/Bay5
+unchanged and AirPit again after the map change. Open for the user: the listening pass (mix, Out/In crossfade by room: options in
+the progress doc), the ballistics shooting check. Incident on the way: a held developer archive threw out of `Plugin.Awake` and
+killed the plugin for one session (bundle 404) - fixed in `438f179`, `ConfigRetirementCheck` covers it.
 Item 24 multi-part packager is in (`606f00e`: `tools/release/make_release_zips.py`, core + one ZIP per map, 4 parts, largest
 755 MiB; the real build needs a clean tree and a scratch dir for `--extract-check`). Item 25 (0.2.0 text sweep, night look-test, Equator/Bay5 regression raids,
 AirPit -> Equator -> AirPit sequence, bots raid on U4, map-select screenshots, bloom -1/-1 decision, light-parity signage look).
