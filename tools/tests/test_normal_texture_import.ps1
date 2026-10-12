@@ -91,6 +91,17 @@ Assert-Rejected { Classify 'DXT1' 'Linear' $rgb $mixedRgb }
 Assert-Rejected { Classify 'DXT5' 'Linear' $box (New-Usage 'p0/Reflective/Bumped Specular' '_MainTex') }
 Assert-Rejected { Classify 'DXT5' 'Linear' $box ([ArenaMapPort.Editor.Import.NormalTextureImportPolicy+Usage]::new()) }
 
+# AirPit rock shader normal slots and the SMap _SpecMap co-usage (Passenger_ladder_02_part_02).
+foreach ($slot in @('_BaseNormalMap','_TopNormalMap','_DetailNormalMap')) {
+    Assert-Plan (Classify 'DXT5' 'Linear' $box (New-Usage 'ANGRYMESH/PBR Rocks/PBR BlendTopDetail (Legacy)' $slot)) 'PackedRaG' 'DXT5' $false
+    Assert-Rejected { Classify 'DXT5' 'Linear' $box (New-Usage 'p0/Reflective/Bumped Specular' $slot) }
+}
+$specCo = New-Usage 'p0/Reflective/Bumped Specular SMap' '_BumpMap'
+$specCo.Add('p0/Reflective/Bumped Specular SMap', '_SpecMap', $false)
+Assert-Plan (Classify 'DXT5' 'Linear' $box $specCo) 'PackedRaG' 'DXT5' $false
+Assert-Rejected { Classify 'DXT5' 'Linear' $box (New-Usage 'p0/Reflective/Bumped Specular SMap' '_SpecMap') }
+Assert-Rejected { Classify 'DXT5' 'Linear' $box (New-Usage 'p0/Reflective/Bumped Specular' '_SpecMap') }
+
 # All currently used concrete normal properties qualify independently of texture names.
 foreach ($slot in @('_BumpMap','_BumpMap0','_BumpMap1','_BumpMap2','_NormalMap1','_NormalMap2')) {
     Assert-Plan (Classify 'DXT5' 'Linear' $box (New-Usage 'verified source shader' $slot)) 'PackedRaG' 'DXT5' $false

@@ -12,6 +12,14 @@ namespace ArenaMapPort.Editor.Import
             public bool HasDxt1Keyword;
             public bool AllNormalReadersUseRgb = true;
 
+            // AirPit (Arena 0.6.0) shader slots verified against the live source on 2026-10-12: the
+            // ANGRYMESH rock shader's three normal slots carry ordinary packed DXT5 normals, and
+            // Passenger_ladder_02_part_02 binds its packed _BumpMap texture a second time as _SpecMap on
+            // the same SMap shader. That co-usage reads the same preserved bytes Arena reads, so it is
+            // neither a normal reader nor an unsupported slot.
+            const string RockShader = "ANGRYMESH/PBR Rocks/PBR BlendTopDetail (Legacy)";
+            const string SpecMapShader = "p0/Reflective/Bumped Specular SMap";
+
             public void Add(string shader, string property, bool dxt1Keyword)
             {
                 switch (property)
@@ -22,6 +30,9 @@ namespace ArenaMapPort.Editor.Import
                     case "_BumpMap2":
                     case "_NormalMap1":
                     case "_NormalMap2":
+                    case "_BaseNormalMap" when shader == RockShader:
+                    case "_TopNormalMap" when shader == RockShader:
+                    case "_DetailNormalMap" when shader == RockShader:
                         NormalSlots++;
                         HasDxt1Keyword |= dxt1Keyword;
                         AllNormalReadersUseRgb &= dxt1Keyword ||
@@ -30,6 +41,8 @@ namespace ArenaMapPort.Editor.Import
                     case "_NormalsMask" when shader == "Cloth/ClothShader":
                         ClothMaskSlots++;
                         break;
+                    case "_SpecMap" when shader == SpecMapShader:
+                        break; // co-usage of a normal texture; the normal slot decides the plan
                     default:
                         UnsupportedSlots++;
                         break;
