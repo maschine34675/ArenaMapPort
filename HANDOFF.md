@@ -24,11 +24,21 @@ NavMesh through solids (walk 283.8 m for 41 m, stuck in the `DonB_Ramen_closed` 
 = 40.8 m along the navmesh, arrived; every dry-run teleport passes. `d23efda`/`3bd7780`: the RainBounds scan is clipped to the
 descriptor play space (216 x 268 m instead of 4.3 x 3.2 km; Equator/Bay5 unchanged, they carry no BakeBounds).
 
-Open for the user (details in the log's "Open points after raids 1-3"): (1) the shop shutters / ShootOut cover - three Arena core
-points sit inside closed shops and the hall centre is walled off from the airliner block (core3 -> core19: 12 m straight, 194 m on the
-navmesh); opening the five shutters + the BS shop front via `opened_barriers` is the proposed middle way (U3 rebake); (2) `Weather
-(test)` is inert on server-time maps, so AirPit's rain check still waits for server rain; (3) fog-sheet StandIn vs Hidden A/B;
-(4) the airstairs strip (`navmesh_bake_layers`); (5) Phase C items 13 (native ambient audio), 21, 23-25 (size gate, release 0.2.0).
+Morning of 2026-10-12 (user look at the map, host raids 4-6, commits `2ebe94c`..`0419ab1`, U3/U4 rebakes): Arena bounds AirPit's
+TeamFight area by a data polygon, not colliders (`ExcludeLevelBorders`, 12 vertices, in the culling scene) - the passport-hall
+facade has a 32 m opening into the unlit entrance hall and the apron opens onto the runway. New descriptor/sidecar input
+`authored_borders` + `AuthoredBorderRepairs`: twelve invisible movement-layer walls along that outline (north edge on the facade
+line), excluded from the ballistic-twin pass; `bake_bounds` x -57..37, z -83..70. User decisions: the six shop shutters stay closed
+("dahinter ist nichts"); the passport-control gates stay closed as the look (`PASSPORT_CONTROL_DOORS` is no opened barrier, red
+lane lights stay) - they are waist-high turnstiles with open floor between them, NOT a barrier (raid 5 walk), so the facade wall is
+the real limit; the four north spawn points moved south of the gate line (`test_airpit_spawns.MOVED_FROM_MARKER`), AI core point 7
+stays as a documented island. Current bake U4: 8193 vertices / 3775 triangles. Evidence and the GateEntity notes for ArenaMode in
+docs/progress/airpit-release.md ("Host raid 4", "Host raid 5").
+
+Open for the user: (1) `Weather (test)` is inert on server-time maps, so AirPit's rain check still waits for server rain; (2)
+fog-sheet StandIn vs Hidden A/B (the haze in the hall looks strong); (3) the airstairs strip (`navmesh_bake_layers`); (4) the
+hall-centre ShootOut cover still makes core3 -> core19 a 194 m detour for bots (plan's rejected "190 walked-through props"
+option); (5) Phase C items 13 (native ambient audio), 21, 23-25 (size gate, release 0.2.0).
 Host config: `General/DeveloperMode` is on; `Weather (test)/Weather` was reset to `Server`.
 
 ## State on 2026-10-11 (evening) — AirPit chosen as the third map; plan written
