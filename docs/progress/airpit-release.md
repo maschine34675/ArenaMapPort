@@ -2643,7 +2643,13 @@ mezzanine at (-3.9, 5.1, 4.0)).
   `sidecar queue 2000 is the stand-in default, shader default is 3000; using the shader default`. Test
   `AirPitRestoresTheShaderDefaultQueueWhereTheSidecarCarriesTheStandinDefault`. Host check: F10 on the south wall must show
   `renderQueue=3000` for `Airpit_Building_Glass_LOD0`, screenshot at the user's spot; if the panes stay dark, the next step is a
-  developer-only `GlassRepairs` with `AlphaOffsetDelta` / reflection / tint knobs (not built yet). The opaque north facade
+  developer-only `GlassRepairs` with `AlphaOffsetDelta` / reflection / tint knobs (not built yet). Host raid 14 (19:16, build
+  `e225182`, night on the backend clock): the rebind now logs the restored default for FIVE names - `Global Fog/Transparent Reflective
+  Specular` 2000 -> 3000, `p0/Cutout/Bumped Diffuse` -> 2450, `p0/SoftCutoutBumpedFresnel` -> 2454, `p0/Reflective/Bumped Specular
+  SMap Transparent Cutoff` -> 2450, `Decal/Ultra Deferred Decal Of God 3000` -> 2005 (all were drawn at 2000 before; -1 is what Arena
+  authored for them, so the cutouts and decals now sit in their shaders' own phases too); F10 on the facade decals shows
+  `renderQueue=2450` / `3000`. The daylight look of the south wall is still to be checked (the backend clock gave night; the UiBridge
+  time selection is being fixed by the user). The new `east-north` (8.0, 26.5) passes `dryRun` from the Usec spawn. The opaque north facade
   (`airport_floor_outer_glass_panels`, `Airpit_Airport_Glass_Tiles_01` on an opaque `p0` shader with an interior `_Cube`) is dark by
   authoring; making it see-through would be a design change (it would reveal the facade opening).
 
