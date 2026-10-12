@@ -2104,3 +2104,38 @@ Raid 2 (`gpu-run raid --mode pmc --map "AIR PIT" --bots none`, spawned at the **
 - `Weather (test)/Weather` set to `Rain` for raid 3.
 
 Left at 03:14 (`gpu-run leave`, healed).
+
+### Host raid 3 (03:14-03:19, build 3bd7780, `--bots low`, godmode)
+
+EFT restarted for the clipped-bounds client DLL (`gpu-run restart --force`, 65 s, 19/19 identical). `gpu-run raid --mode pmc --map "AIR PIT"
+--bots low`, spawned at the Usec spawn, `uibridge_hook godmode` right after `raidStarted`, in-game clock `Day 11 11:44 AM` (daylight).
+
+- **Bots:** `[BotSpawn] BotZone.Init 'BotZone_Main': markers=14 onNavMesh=14 points=14 maxPersons=-1 patrolWays=1`; `wave fired:
+  zone='BotZone_Main' count=3 side=Savage type=assault difficulty=normal time=16.0s`; `TryToSpawnInZoneInner ... -> STARTED`. `uibridge_bots`
+  at +60 s: 2 PMCs (`pmcBEAR` at (-50.9, 0, 46.4) then (-37.9, 0, 53.3), `pmcUSEC` at (11.7, 0, 0.6) then (0.4, 4.1, 2.1) on the mezzanine),
+  both `PatrolAssault` then `SAIN : Combat Layer`; at +90 s three scavs (`AssaultHaveEnemy`, moving, around (-23..-31, 0, 32..34)). Five bots
+  `state Active`, nobody `ActiveFail`, no ArenaMapPort warning or error.
+- **RainBounds (3bd7780):** `computed from 9434 renderer(s) (excluded 1 oversized, 50 outside the play space): center=(-12.00, 26.24,
+  -2.00) size=(216.00, 60.50, 268.00)` = the play space plus margins, 4096 px → about 6.5 cm per depth pixel (raid 1: 4.3 x 3.2 km);
+  `RoofDepthBlack: drew 8748 elevated mesh(es) (11659 submesh draw call(s))`, `depthCamTopY 56.49 farClip 60.50`.
+- **Test weather is inert on server-time maps:** `[DaytimeVisualsProbe] WeatherTestOverride: configured='Rain' effective='Server'
+  map=arena_airpit serverTimes=True — native backend weather nodes retained`. The rain check (falling streaks + F8) therefore still waits
+  for server rain or a Bay5-style override; the key was reset to `Server` afterwards.
+- Screenshots: the north spawn hall by day with both exfils listed (`EXFIL01 Air Pit North Gate`, `EXFIL02 Air Pit South Gate`) and the
+  open "A" portal; the apron from the south spawn looking south (bus doors open, airliner tail, containers, floodlight mast, overcast sky).
+
+Left at 03:19 (`gpu-run leave`, healed). `General/DeveloperMode` stays on for the test host.
+
+### Open points after raids 1-3 (for the user)
+
+1. **Shop shutters / ShootOut cover (U3 question).** Arena's core points core16 (-45.9, -25.9), core17 (-42.9, 33.8) and core18 (19.6,
+   -29.6) sit inside the `TH_Roll_door_02/03_closed`, `DonB_Ramen_closed` and `DonB_Ramen_closed (1)` shop blocks, and the hall centre
+   is walled off from the airliner block by the plywood/med-camp/tarpaulin cover (core3 -> core19: 12 m straight, 194 m on the navmesh).
+   Together with the portal gates this reads as Arena's ShootOut layout (small area, shops shut, cover added) versus the TeamFight layout
+   the spawns, bots and NavMesh belong to. Candidates for `opened_barriers`: the five shop shutters and `Airport_Shop_BS_closed_closed`
+   (static closed props without an open variant, so deactivating them opens the shop fronts). The wider "190 walked-through props" set is
+   the plan's rejected option (user decision 4.5); the shutters alone would be a middle way. Needs a U3 rebake (~20 min) and a bots raid.
+2. `Weather (test)` has no effect on UsesServerTime maps (see raid 3); a rain verification on AirPit needs server rain.
+3. Fog sheets: the StandIn haze looks strong in the hall (yellow-green at the pallet fence); A/B with `AirPitFogSheets = Hidden`.
+4. `navmesh_bake_layers`: the 3.8 m2 airstairs strip is still the only Arena-walkable floor the port lacks; not checked on the host.
+5. core16's pocket, core17's and core18's shops are reachable on the runtime mesh (dry runs pass) but only by long routes.

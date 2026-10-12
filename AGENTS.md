@@ -256,8 +256,13 @@ the log; the user uses it to point at things.
   runtime must be added there too, or it stays a wall for bots. The bake volume is the renderer union + 10 m
   unless the descriptor carries `bake_bounds` (AirPit: x −80..56, y −2..8, z −96..92; Equator/Bay5 have none —
   their ground floors sit around y −8..12, the upper rings are decoration). `navmesh_bake_exclusions` drops a
-  subtree from the bake WITHOUT deactivating it at runtime (AirPit's four route cutters);
-  `navmesh_bake_layers` restricts the collected layers (AirPit: Arena's own 9/11/13/18/30). Probe connectivity in-game with `uibridge_teleport dryRun=true` (reachability = same NavMesh
+  subtree from the bake WITHOUT deactivating it at runtime — no map uses it any more: AirPit's four "route cutters"
+  (shop shutters) put NavMesh through solids and the 2026-10-12 host walk ended face-first in the DonB_Ramen shutter.
+  A closed gate that Arena opens for the mode belongs in `opened_barriers` instead (AirPit's two
+  `Prison_Metal_Fence_01` portal gates: closed fence active, swung-open halves inactive).
+  `navmesh_bake_layers` restricts the collected layers (AirPit: Arena's own 9/11/13/18/30). The offline coverage
+  metric of `navmesh_diff.py` dilates by one cell and misses one-cell cuts; check routes with Dijkstra on the built
+  bundle (`navmesh_diff.load_bundle_mesh`) and in-game with `uibridge_walk` ("N m along the navmesh"). Probe connectivity in-game with `uibridge_teleport dryRun=true` (reachability = same NavMesh
   component); offline, `work/extract/<map>/scenes/*.json` + `meshes/*.mesh.bin` give every collider's world
   triangles (see docs/progress/stage1-combat.md for the script pattern).
 - NavMesh modifiers: `NavMeshModifier`/`NavMeshModifierVolume` exist only for the bake. `BuildBundles` strips them

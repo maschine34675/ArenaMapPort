@@ -3,6 +3,34 @@
 Snapshot for whoever continues (human or agent). Verify the commits named here against `git log`; this file
 is updated by hand at each handover, it is not an automatic record. Read [AGENTS.md](AGENTS.md) first.
 
+## State on 2026-10-12 (night) — AirPit Phase B built, deployed and host-tested; portal gates opened
+
+Branch `feature/airpit`, head after `03e945e` (+ AGENTS/HANDOFF touch-ups). PLAN-AIRPIT Phase B is in: lock-step registry
+promotion (`ArenaMapRegistry.All = { Equator, Bay5, AirPit }`, 11 maps parked), weather/time (donor `Reserve_Base_Scripts`,
+ZeroLevel -4.4, server time), shader stand-ins (fog sheet, cloth, rock), descriptor bake inputs (`bake_bounds` x -80..56 / y -2..8
+/ z -96..92, `navmesh_bake_layers` 9/11/13/18/30), AI anchors, acoustics, decals, light culling, banners/loadscreens, server
+registration. Two Unity builds: U1c (`unity_build_all_20261012_020615.log`, after two texture-policy fixes `232ea72`/`d52c898`) and
+**U2 (`unity_build_all_20261012_025338.log`, bake 10264 vertices / 4684 triangles, 2025 sources, 4 opened barriers, 0 exclusions)**,
+the latter staged, validated (`PORT_VALIDATED`, `DISTRIBUTION_OK 3 maps 9 bundles 3 sidecars`) and deployed to `D:\SPT41` (host hashes
+checked over `\\192.168.178.109\C$`). `validate_port.py` takes `--package` now (the accepted package is `airpit-native-v5`).
+
+Three host raids on SPT-GPU-2 (all evidence in docs/progress/airpit-release.md, "Host raid 1..3"): every raid-start repair logs as
+expected (415 stand-in materials rebound, no magenta, 533 culling lights, acoustics 24 rooms / 94 portals, 471 decals, rain cover
+8748 elevated meshes, 19 core points + 3 hubs), bots spawn and run (`BotZone_Main markers=14 onNavMesh=14`, 2 PMCs on SAIN + 3 scavs,
+no `ActiveFail`). **Raid 1 found the north spawn field sealed:** the four bake-only `navmesh_bake_exclusions` (shop shutters) had put
+NavMesh through solids (walk 283.8 m for 41 m, stuck in the `DonB_Ramen_closed` shutter) and the z 50.5 facade is closed by two
+`Prison_Metal_Fence_01` portal gates (closed fence active, swung-open halves inactive = Arena's ShootOut/TeamFight gate). Fix
+`5f0ac2b`: both gates are `opened_barriers`, the exclusion list is empty (tests updated). Raid 2 verified it: walk Usec spawn -> core5
+= 40.8 m along the navmesh, arrived; every dry-run teleport passes. `d23efda`/`3bd7780`: the RainBounds scan is clipped to the
+descriptor play space (216 x 268 m instead of 4.3 x 3.2 km; Equator/Bay5 unchanged, they carry no BakeBounds).
+
+Open for the user (details in the log's "Open points after raids 1-3"): (1) the shop shutters / ShootOut cover - three Arena core
+points sit inside closed shops and the hall centre is walled off from the airliner block (core3 -> core19: 12 m straight, 194 m on the
+navmesh); opening the five shutters + the BS shop front via `opened_barriers` is the proposed middle way (U3 rebake); (2) `Weather
+(test)` is inert on server-time maps, so AirPit's rain check still waits for server rain; (3) fog-sheet StandIn vs Hidden A/B;
+(4) the airstairs strip (`navmesh_bake_layers`); (5) Phase C items 13 (native ambient audio), 21, 23-25 (size gate, release 0.2.0).
+Host config: `General/DeveloperMode` is on; `Weather (test)/Weather` was reset to `Server`.
+
 ## State on 2026-10-11 (evening) — AirPit chosen as the third map; plan written
 
 Branch `feature/airpit` from `d7773e5`. The user picked AirPit (`arena_airpit`, TeamFight layout) as the next
