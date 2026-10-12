@@ -2496,7 +2496,38 @@ suites and switched the package pins. No Unity, no host.
   `tools/maps/airpit.modes.json` (only `source_package` changed), `navmesh_diff.py` default, `build_remaining.ps1`, docstrings,
   AGENTS/HANDOFF/PLAN. Consequence: an AirPit build from v5 now fails `validate_native_features` ('incomplete required feature
   contract'); a build from v6 needs phase 2 (importer + client) first.
-- **Phase 2 (in progress, workflow `wf_782fcb51-70b`):** `Bay5AudioImporter.cs` and `Bay5AmbientAudio.cs` generalised for a map
-  with an Out and an In group on two buses, `AmbientAudioDefaults` AirPit tuple (provisional 4 / 0.4 / 3), a Unity-independent
-  `AmbientAudioProfiles` under test. Then phase 3: Unity `-FullMap` rebuild from v6 (U5, rebake expected unchanged), client build,
-  validators, deploy, host listen test, Equator/Bay5 smoke raids.
+- **Phase 2 (done 2026-10-12 15:30-17:40, workflow `wf_782fcb51-70b`: implementer, three reviewers, fix pass; 721 .NET tests, client
+  Release DllOnly build 0 warnings):**
+  - `ArenaMapPort.Client/AmbientAudioProfiles.cs` (new, pure C#, linked into Server.Tests): one profile per released map (root name,
+    player/active/controller counts, shoreline/seasons flags, original-activation pins, ordered group routes `GroupName -> bus/mixer`,
+    which route carries the room-reverb reroute). Equator 25/23, one In group (effects + reroute, dogs inactive, `electricity` loop);
+    Bay5 24/24, `AmbientPlayersGroup` -> AmbientOut/`CommonAmbOutEffects` + the water group -> `CommonAmbOutBypass`, shoreline, seasons;
+    AirPit 26/26, `CommonAmbientOutGroup` (4) -> AmbientOut/`CommonAmbOutEffects`, `CommonAmbientInGroup` (22) -> AmbientIn/
+    `CommonAmbInEffects` (effects + reroute). `AmbientAudioProfilesTests` (27 AmbientAudio tests in total) pin the table, the invariants
+    and the importer's root-name/case pairing.
+  - `Bay5AmbientAudio.cs`: map via the profile table (no key whitelist; returns silently when the bundle carries no audio root, i.e. the
+    pre-U5 AirPit bundle), `BindConfig` loops the table (Equator/Bay5 key names, defaults, ranges and texts byte-identical; new
+    `Audio (arena_airpit)` keys PlaybackDiagnostics, AmbientGainDb, AmbientVolumeOffset, AmbientRangeMultiplier, hidden
+    AmbientDefaultsRevision), profile-driven `ValidateGraph`, seasons only with `UsesSeasons`, shoreline only with `HasShoreline`,
+    **one `AmbientBusLease` per bus** (AirPit: Out then In, both 0 dB; the lease entry is refcounted per (mixer, parameter), so
+    PrecipitationAudio and NativeSpatialAudio coexist without a fight), reverb reroute on the profile's effects route (Equator In,
+    AirPit In; Bay5 none). `NativeSpatialAudio` takes the room-tone In lease only when the driver does not (`LeasesBus`), unchanged for
+    Equator/Bay5. `AmbientAudioDefaults`: `arena_airpit = 4 / 0.4 / 3` **provisional (to be ear-tuned by the user)**, `Migrate` never
+    rewrites an AirPit mix (no legacy), still throws for unlisted keys; `ConfigRetirementCheck` covers the new block.
+  - `Bay5AudioImporter.cs` (Unity, compiled only by the U5 build): Equator/Bay5 gate removed; root name and asset folder per key
+    (`ArenaMapPort_AirPitNativeAudio`, `NativeAudio/AirPit`), schema/identity from the package manifest, counts from `native_audio`
+    (no literals), `preserveStates = (schema == 2)`, per-group mixer pairing table (`CommonAmbientInGroup -> CommonAmbInEffects`,
+    `CommonAmbientOutGroup -> CommonAmbOutEffects`, `AmbientPlayersGroup -> CommonAmbOutEffects`, water -> `CommonAmbOutBypass`) checked
+    against the package `mixerName`, generic membership validation. Equator/Bay5 authoring unchanged.
+  - Expected U5/host lines: Unity `[ArenaMapPort][NativeAudio] authored inactive stock graph map=arena_airpit players=26 banks=9 clips=61
+    support=2`; raid `[NativeAudio] exterior bus leased neutral=True`, `interior bus leased neutral=True`, `user range x3.00 ... 26
+    player(s)`, `user mix gainDb=4.0 offset=0.400`, **`ready players=26 started=26 ... mixers=CommonAmbOutEffects,CommonAmbInEffects
+    shoreline=none`**, `[RoomReverb] AirPit owned ambient route=... players=22`.
+  - **Open decision (user): Out/In crossfade by acoustic room.** Today both AirPit buses stay at 0 dB for the whole raid (the same
+    compromise Equator/Bay5 ship with one bus): the four far outdoor sources (50-100 m ranges) are audible inside within range, the
+    interior sources outside. EFT's own mechanism is `EnvironmentSoundBlendSystem` + `AmbientSoundBlender` (AirPit's Sound scene has one
+    of each; room data: 24 rooms, 22 of 23 indoor rooms with `OutdoorAmbientVolume` 0.0, one 0.5, 1 s fades). Options: A port the blender
+    (extractor + importer + client, largest); B client-only: follow `ListenerCurrentRoom` (as PrecipitationAudio does) and blend the two
+    bus leases with the room's fade; C leave as is. Decide after the host listen test.
+  Phase 3 next: Unity `-FullMap` rebuild from v6 (U5, `work/logs/airpit-u5.log`; rebake expected unchanged since audio objects carry no
+  colliders), client Release build (stages bundles + acoustics), validators, deploy, host listen test, Equator/Bay5 smoke raids.

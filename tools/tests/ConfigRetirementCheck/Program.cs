@@ -61,6 +61,23 @@ try
         Check(range.Value == (map == "arena_equator" ? 2.5f : 4f), "Accepted range missing");
         gain.Value = 0; offset.Value = 0; range.Value = 1;
     }
+    // AirPit's ambience keys are new (PROVISIONAL mix, 2026-10-12): they bind with the provisional defaults, and no
+    // legacy migration step may touch any AirPit mix, a deliberately neutral one included.
+    {
+        const string airpit = "Audio (arena_airpit)";
+        AmbientAudioDefaults.Values("arena_airpit", out var airpitGain, out var airpitOffset, out var airpitRange);
+        var gain = reload.Bind(airpit, "AmbientGainDb", airpitGain);
+        var offset = reload.Bind(airpit, "AmbientVolumeOffset", airpitOffset);
+        var range = reload.Bind(airpit, "AmbientRangeMultiplier", airpitRange);
+        AmbientAudioDefaults.Migrate(reload, "arena_airpit", gain, offset, range);
+        Check(gain.Value == 4f && offset.Value == .4f && range.Value == 3f, "AirPit provisional mix missing");
+        gain.Value = 0; offset.Value = 0; range.Value = 1;
+        // The first Migrate stamped revision 2, which alone would make the second call return early. Reset the marker so
+        // the legacy-mix steps are reachable; only the map's "no legacy mix" rule can then keep the neutral mix neutral.
+        reload.Bind(airpit, "AmbientDefaultsRevision", 0).Value = 0;
+        AmbientAudioDefaults.Migrate(reload, "arena_airpit", gain, offset, range);
+        Check(gain.Value == 0 && offset.Value == 0 && range.Value == 1, "AirPit neutral mix was migrated");
+    }
     DeveloperOptions.Install(reload);
     Check(!DeveloperOptions.Enabled, "Developer mode must default off");
     reload.Bind("General", "DeveloperMode", false).Value = true;
@@ -69,7 +86,7 @@ try
     var second = new ConfigFile(path, false) { SaveOnConfigSet = false };
     DeveloperOptions.Install(second);
     Check(DeveloperOptions.Enabled, "Developer mode did not survive restart");
-    foreach (var map in new[] { "arena_equator", "arena_bay5" })
+    foreach (var map in new[] { "arena_equator", "arena_bay5", "arena_airpit" })
     {
         string section = "Audio (" + map + ")";
         AmbientAudioDefaults.Values(map, out var gainDefault, out var offsetDefault, out var rangeDefault);

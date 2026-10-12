@@ -13,83 +13,97 @@ using UnityEngine.SceneManagement;
 
 namespace ArenaMapPort.Client
 {
-    /// <summary>Starts Bay5/Equator imported stock ambient players once real raid audio services exist.
+    /// <summary>Starts the imported stock ambient players of Equator, Bay5 and AirPit once real raid audio services exist.
     /// Arena's ambient singleton/room system is deliberately not recreated. Stock players retain
     /// their original clip selection, gain, pitch and timing; Bay5's stock shoreline calculator
-    /// ticks from this owned driver. Per-map host acceptance lives in native-features progress.</summary>
+    /// ticks from this owned driver. What differs per map (root name, graph census, group to mixer/bus
+    /// routing, season and shoreline handling, the reverb reroute) is the <see cref="AmbientAudioProfile"/> table in
+    /// AmbientAudioProfiles.cs; per-map host acceptance lives in native-features progress.
+    /// AirPit (2026-10-12) has an exterior group on AmbientOut and an interior group on AmbientIn and holds both
+    /// parent buses open for the whole raid; blending them by acoustic room is not implemented.</summary>
     internal static class Bay5AmbientAudio
     {
-        internal const string RootName = "ArenaMapPort_Bay5NativeAudio";
-        internal const string EquatorRootName = "ArenaMapPort_EquatorNativeAudio";
         static Driver _driver;
-        static ConfigEntry<bool> _bay5Diagnostics, _equatorDiagnostics;
-        // PLAN-TWO-MAPS item 1 (2026-09-25): the user hears the ported ambience as too quiet. BaseAmbientSoundPlayer
-        // draws GetBaseVolume() = _volume + Random.Range(-_deltaVolume, 0) per raid; 13 of Equator's 25 authored
-        // players have _deltaVolume > _volume, so a draw can clamp them to silence. The accepted release mix uses
-        // a dB gain that scales _volume and _deltaVolume together, and a
-        // linear offset added to _volume (raises the floor). Whenever either is non-neutral, _deltaVolume is also
-        // capped at _volume so no draw can fall below zero. Applied once per raid to the scene's own player
-        // instances right before they start (the scene is unloaded with the raid, nothing accumulates).
-        static ConfigEntry<float> _bay5GainDb, _equatorGainDb, _bay5Offset, _equatorOffset;
-        // 2026-09-25 user report: even at AmbientGainDb=+12 / AmbientVolumeOffset=1 the imported ambience is only
-        // audible right next to a source. Cause (decompile BaseAmbientSoundPlayer.Awake, lines 250-261): the
-        // authored custom rolloff curve (1.0 at 0.2 %, 0.27 at 19 %, 0 at 100 % of _maxDistance; Equator players
-        // mostly 10-20 m) is baked into the AudioSource once at Awake, and gain/offset only scale the pre-attenuation
-        // volume. This multiplier stretches _maxDistance BEFORE the graph is activated (before that Awake), so the
-        // same curve shape reaches further. 1 = original Arena range.
-        static ConfigEntry<float> _bay5Range, _equatorRange;
+        // Tuning entries per map, bound once per session from the profile table (they outlive every Driver).
+        sealed class MapSettings
+        {
+            internal ConfigEntry<bool> Diagnostics;
+            // PLAN-TWO-MAPS item 1 (2026-09-25): the user hears the ported ambience as too quiet. BaseAmbientSoundPlayer
+            // draws GetBaseVolume() = _volume + Random.Range(-_deltaVolume, 0) per raid; 13 of Equator's 25 authored
+            // players have _deltaVolume > _volume, so a draw can clamp them to silence. The accepted release mix uses
+            // a dB gain that scales _volume and _deltaVolume together, and a
+            // linear offset added to _volume (raises the floor). Whenever either is non-neutral, _deltaVolume is also
+            // capped at _volume so no draw can fall below zero. Applied once per raid to the scene's own player
+            // instances right before they start (the scene is unloaded with the raid, nothing accumulates).
+            internal ConfigEntry<float> GainDb, Offset;
+            // 2026-09-25 user report: even at AmbientGainDb=+12 / AmbientVolumeOffset=1 the imported ambience is only
+            // audible right next to a source. Cause (decompile BaseAmbientSoundPlayer.Awake, lines 250-261): the
+            // authored custom rolloff curve (1.0 at 0.2 %, 0.27 at 19 %, 0 at 100 % of _maxDistance; Equator players
+            // mostly 10-20 m) is baked into the AudioSource once at Awake, and gain/offset only scale the pre-attenuation
+            // volume. This multiplier stretches _maxDistance BEFORE the graph is activated (before that Awake), so the
+            // same curve shape reaches further. 1 = original Arena range.
+            internal ConfigEntry<float> Range;
+        }
+        static readonly Dictionary<string, MapSettings> Bound = new Dictionary<string, MapSettings>();
 
-        // Bind both maps before the initial F12 visibility pass, even when no raid has
+        // Bind every map before the initial F12 visibility pass, even when no raid has
         // loaded yet. This also applies the accepted audio migration before map cleanup.
         internal static void BindConfig()
         {
-            if (_equatorDiagnostics == null)
+            foreach (var profile in AmbientAudioProfiles.All)
             {
-                AmbientAudioDefaults.Values("arena_equator", out float gain, out float offset, out float range);
-                _equatorDiagnostics = Plugin.Instance.Settings.Bind("Audio (arena_equator)", "PlaybackDiagnostics", false,
-                    "Log native indoor ambient clip/sample evidence while in Equator. Takes effect immediately; F10 also logs a snapshot.");
-                _equatorGainDb = Plugin.Instance.Settings.Bind("Audio (arena_equator)", "AmbientGainDb", gain,
-                    new ConfigDescription("Gain in dB applied to the imported ambient sources' authored volume (and their random dip) on Equator. 0 dB applies no gain to authored sources; the volume offset and range still apply. Applied live in a running raid and at every raid start.", new AcceptableValueRange<float>(-12f, 12f)));
-                _equatorOffset = Plugin.Instance.Settings.Bind("Audio (arena_equator)", "AmbientVolumeOffset", offset,
-                    new ConfigDescription("Linear volume added to every imported ambient source on Equator (raises the floor so quiet sources cannot dip to silence). 0 = no additive volume floor. Applied live in a running raid and at every raid start.", new AcceptableValueRange<float>(0f, 1f)));
-                SubscribeLive(_equatorGainDb, _equatorOffset, "arena_equator");
-                _equatorRange = Plugin.Instance.Settings.Bind("Audio (arena_equator)", "AmbientRangeMultiplier", range,
-                    new ConfigDescription("Multiplies every imported ambient source's Max Distance on Equator (the authored rolloff curve keeps its shape, so sources stay audible further away; most Equator sources are authored at 10-20 m). 1 = original Arena range. Applied live in a running raid and at every raid start.", new AcceptableValueRange<float>(1f, 8f)));
-                _equatorRange.SettingChanged += (_, __) => ApplyLive("arena_equator");
-                AmbientAudioDefaults.Migrate(Plugin.Instance.Settings, "arena_equator", _equatorGainDb, _equatorOffset, _equatorRange);
+                string key = profile.MapKey, section = "Audio (" + key + ")", name = profile.DisplayName;
+                if (Bound.ContainsKey(key)) continue;
+                AmbientAudioDefaults.Values(key, out float gain, out float offset, out float range);
+                var settings = new MapSettings();
+                settings.Diagnostics = Plugin.Instance.Settings.Bind(section, "PlaybackDiagnostics", false, DiagnosticsText(profile));
+                settings.GainDb = Plugin.Instance.Settings.Bind(section, "AmbientGainDb", gain,
+                    new ConfigDescription($"Gain in dB applied to the imported ambient sources' authored volume (and their random dip) on {name}. 0 dB applies no gain to authored sources; the volume offset and range still apply. Applied live in a running raid and at every raid start.", new AcceptableValueRange<float>(-12f, 12f)));
+                settings.Offset = Plugin.Instance.Settings.Bind(section, "AmbientVolumeOffset", offset,
+                    new ConfigDescription($"Linear volume added to every imported ambient source on {name} (raises the floor so quiet sources cannot dip to silence). 0 = no additive volume floor. Applied live in a running raid and at every raid start.", new AcceptableValueRange<float>(0f, 1f)));
+                SubscribeLive(settings.GainDb, settings.Offset, key);
+                settings.Range = Plugin.Instance.Settings.Bind(section, "AmbientRangeMultiplier", range,
+                    new ConfigDescription($"Multiplies every imported ambient source's Max Distance on {name} (the authored rolloff curve keeps its shape, so sources stay audible further away{RangeNote(profile)}). 1 = original Arena range. Applied live in a running raid and at every raid start.", new AcceptableValueRange<float>(1f, 8f)));
+                settings.Range.SettingChanged += (_, __) => ApplyLive(key);
+                AmbientAudioDefaults.Migrate(Plugin.Instance.Settings, key, settings.GainDb, settings.Offset, settings.Range);
+                Bound.Add(key, settings);
             }
-            if (_bay5Diagnostics == null)
+        }
+
+        static string DiagnosticsText(AmbientAudioProfile profile)
+        {
+            const string tail = " Takes effect immediately; F10 also logs a snapshot.";
+            switch (profile.MapKey)
             {
-                AmbientAudioDefaults.Values("arena_bay5", out float gain, out float offset, out float range);
-                _bay5Diagnostics = Plugin.Instance.Settings.Bind("Audio (arena_bay5)", "PlaybackDiagnostics", false,
-                    "Log native ambient clip/sample and shoreline movement evidence while in Bay5. Takes effect immediately; F10 also logs a snapshot.");
-                _bay5GainDb = Plugin.Instance.Settings.Bind("Audio (arena_bay5)", "AmbientGainDb", gain,
-                    new ConfigDescription("Gain in dB applied to the imported ambient sources' authored volume (and their random dip) on Bay5. 0 dB applies no gain to authored sources; the volume offset and range still apply. Applied live in a running raid and at every raid start.", new AcceptableValueRange<float>(-12f, 12f)));
-                _bay5Offset = Plugin.Instance.Settings.Bind("Audio (arena_bay5)", "AmbientVolumeOffset", offset,
-                    new ConfigDescription("Linear volume added to every imported ambient source on Bay5 (raises the floor so quiet sources cannot dip to silence). 0 = no additive volume floor. Applied live in a running raid and at every raid start.", new AcceptableValueRange<float>(0f, 1f)));
-                SubscribeLive(_bay5GainDb, _bay5Offset, "arena_bay5");
-                _bay5Range = Plugin.Instance.Settings.Bind("Audio (arena_bay5)", "AmbientRangeMultiplier", range,
-                    new ConfigDescription("Multiplies every imported ambient source's Max Distance on Bay5 (the authored rolloff curve keeps its shape, so sources stay audible further away). 1 = original Arena range. Applied live in a running raid and at every raid start.", new AcceptableValueRange<float>(1f, 8f)));
-                _bay5Range.SettingChanged += (_, __) => ApplyLive("arena_bay5");
-                AmbientAudioDefaults.Migrate(Plugin.Instance.Settings, "arena_bay5", _bay5GainDb, _bay5Offset, _bay5Range);
+                case "arena_equator": return "Log native indoor ambient clip/sample evidence while in Equator." + tail;
+                case "arena_bay5": return "Log native ambient clip/sample and shoreline movement evidence while in Bay5." + tail;
+                default: return $"Log native ambient clip/sample evidence while in {profile.DisplayName}." + tail;
+            }
+        }
+
+        static string RangeNote(AmbientAudioProfile profile)
+        {
+            switch (profile.MapKey)
+            {
+                case "arena_equator": return "; most Equator sources are authored at 10-20 m";
+                case "arena_airpit": return "; half of the AirPit sources are authored at 10 m or less";
+                default: return "";
             }
         }
 
         internal static void Ensure()
         {
             string mapKey = ArenaMapRaid.CurrentMap?.Key;
-            if (_driver != null || (mapKey != "arena_bay5" && mapKey != "arena_equator")) return;
+            if (_driver != null || !AmbientAudioProfiles.TryGet(mapKey, out var profile)) return;
             BindConfig();
-            bool equator = mapKey == "arena_equator";
             var scene = SceneManager.GetSceneByName(ArenaMapRaid.CurrentMap.ScriptsSceneName);
             var roots = scene.GetRootGameObjects().SelectMany(r => r.GetComponentsInChildren<Transform>(true))
-                .Where(t => t.name == (equator ? EquatorRootName : RootName)).ToArray();
+                .Where(t => t.name == profile.RootName).ToArray();
             if (roots.Length == 0) return; // Old packages do not contain this optional feature.
             if (roots.Length != 1) { Plugin.Log.LogError("[ArenaMapPort][NativeAudio] duplicate owned audio roots; refusing playback"); return; }
+            var settings = Bound[mapKey];
             _driver = Plugin.Instance.gameObject.AddComponent<Driver>();
-            _driver.Initialize(roots[0].gameObject, mapKey, equator ? _equatorDiagnostics : _bay5Diagnostics,
-                equator ? _equatorGainDb : _bay5GainDb, equator ? _equatorOffset : _bay5Offset,
-                equator ? _equatorRange : _bay5Range);
+            _driver.Initialize(roots[0].gameObject, profile, settings.Diagnostics, settings.GainDb, settings.Offset, settings.Range);
         }
 
         // 2026-09-25 user request: tuning needs the keys to act in the running raid. Bound once per session (the
@@ -130,7 +144,7 @@ namespace ArenaMapPort.Client
         {
             GameObject _root;
             string _mapKey;
-            bool _equator;
+            AmbientAudioProfile _profile;
             ConfigEntry<bool> _diagnostics;
             ConfigEntry<float> _gainDb, _offset, _range;
             internal string MapKey => _mapKey;
@@ -147,9 +161,11 @@ namespace ArenaMapPort.Client
             readonly List<AudioClip> _emptyClips = new List<AudioClip>();
             readonly float[] _outputSamples = new float[256];
             AudioMixer _ambientMixer;
-            string _ambientVolumeParameter;
-            AmbientBusLease _ambientBus;
+            // One lease per parent bus the profile's groups feed (Equator In, Bay5 Out, AirPit Out and In). The leases share
+            // their entry with the room-tone and precipitation owners, so a bus opens once and closes with its last owner.
+            readonly Dictionary<AmbientBus, AmbientBusLease> _leases = new Dictionary<AmbientBus, AmbientBusLease>();
             AmbientSoundPlayerGroup _effectsGroup;
+            AmbientGroupRoute _effectsRoute;
             AudioMixerGroup _originalEffects, _reverbEffects;
             bool _reverbRouted, _reverbRouteYielded;
             internal AudioMixerGroup EffectsMixer => _effectsGroup != null ? _effectsGroup._outputMixerGroup : null;
@@ -160,11 +176,11 @@ namespace ArenaMapPort.Client
             Vector3 _previousEmitter;
             bool _hasEmitterPosition;
 
-            internal void Initialize(GameObject root, string mapKey, ConfigEntry<bool> diagnostics,
+            internal void Initialize(GameObject root, AmbientAudioProfile profile, ConfigEntry<bool> diagnostics,
                 ConfigEntry<float> gainDb, ConfigEntry<float> offset, ConfigEntry<float> range)
             {
                 _root = root;
-                _mapKey = mapKey; _equator = mapKey == "arena_equator"; _diagnostics = diagnostics;
+                _profile = profile; _mapKey = profile.MapKey; _diagnostics = diagnostics;
                 _gainDb = gainDb; _offset = offset; _range = range;
                 _players = root.GetComponentsInChildren<BaseAmbientSoundPlayer>(true);
                 foreach (var p in _players)
@@ -187,30 +203,36 @@ namespace ArenaMapPort.Client
 
             void ValidateGraph()
             {
-                if (_root.activeSelf || _players.Length != (_equator ? 25 : 24) ||
-                    _groups.Length != (_equator ? 1 : 2) || _controllers.Length != (_equator ? 0 : 1) ||
-                    (_equator ? _water != null : _water == null) ||
+                var profile = _profile;
+                if (_root.activeSelf || _players.Length != profile.Players ||
+                    _groups.Length != profile.Groups || _controllers.Length != profile.Controllers ||
+                    (profile.HasShoreline ? _water == null : _water != null) ||
                     _root.GetComponentsInChildren<AudioSource>(true).Length != _players.Length)
                     throw new InvalidOperationException("native graph census mismatch");
                 if (_groups.Any(g => !g.enabled || !ActiveUnderOwnedRoot(g.transform) || g._soundPlayers == null))
                     throw new InvalidOperationException("inactive or incomplete native player group");
+                // Every group must be one the profile routes, each exactly once (found by the carrying GameObject's name).
+                if (_groups.Any(g => profile.IndexOfGroup(g.name) < 0) || _groups.Select(g => g.name).Distinct().Count() != _groups.Length)
+                    throw new InvalidOperationException("unrecognized or duplicate ambient group");
+                if (_groups.Any(g => g._soundPlayers.Count != profile.Routes[profile.IndexOfGroup(g.name)].Members))
+                    throw new InvalidOperationException("ambient group member count differs from the source graph");
                 _activePlayers = _groups.SelectMany(g => g._soundPlayers).ToArray();
                 var active = _players.Where(p => p.enabled && ActiveUnderOwnedRoot(p.transform) &&
                     p.GetComponent<AudioSource>() != null && p.GetComponent<AudioSource>().enabled).ToArray();
-                if (_activePlayers.Length != (_equator ? 23 : 24) || _activePlayers.Any(p => p == null) ||
+                if (_activePlayers.Length != profile.ActivePlayers || _activePlayers.Any(p => p == null) ||
                     _activePlayers.Distinct().Count() != _activePlayers.Length ||
                     !new HashSet<BaseAmbientSoundPlayer>(active).SetEquals(_activePlayers))
                     throw new InvalidOperationException("native group membership differs from enabled active players");
-                // Retain Bay5's accepted hierarchy iteration order; Equator follows its
-                // original active member list and never starts ungrouped descendants.
-                if (!_equator) { _activePlayers = _players; return; }
+                // Retain Bay5's accepted hierarchy iteration order; the original-activation maps (Equator, AirPit)
+                // follow their original active member lists and never start ungrouped descendants.
+                if (!profile.OriginalActivation) { _activePlayers = _players; return; }
                 var inactive = _players.Where(p => !ActiveUnderOwnedRoot(p.transform)).ToArray();
-                if (_groups[0].name != "CommonAmbientInGroup" || inactive.Length != 2 ||
-                    !new HashSet<string>(inactive.Select(p => p.name)).SetEquals(new[] { "far_dogs1", "far_dogs2" }) ||
+                if (inactive.Length != profile.InactivePlayers.Count ||
+                    !new HashSet<string>(inactive.Select(p => p.name)).SetEquals(profile.InactivePlayers) ||
                     _players.Any(p => !(p is AmbientSoundPlayer) || !p.enabled || !p.GetComponent<AudioSource>().enabled) ||
-                    _players.Count(p => p.name == "electricity") != 1 ||
-                    _players.Any(p => p.GetComponent<AudioSource>().loop != (p.name == "electricity")))
-                    throw new InvalidOperationException("Equator original activation/loop contract differs");
+                    profile.LoopPlayers.Any(name => _players.Count(p => p.name == name) != 1) ||
+                    _players.Any(p => p.GetComponent<AudioSource>().loop != profile.LoopPlayers.Contains(p.name)))
+                    throw new InvalidOperationException(profile.DisplayName + " original activation/loop contract differs");
             }
 
             bool ActiveUnderOwnedRoot(Transform transform)
@@ -242,7 +264,7 @@ namespace ArenaMapPort.Client
                     var game = Singleton<AbstractGame>.Instantiated ? Singleton<AbstractGame>.Instance : null;
                     if (world == null || game == null || game.Status == GameStatus.Stopping || game.Status == GameStatus.Stopped || game.Status == GameStatus.SoftStopping)
                     { Shutdown(); return; }
-                    if (!_equator && Seasons.Controller != null && Seasons.Controller.Status != _season)
+                    if (_profile.UsesSeasons && Seasons.Controller != null && Seasons.Controller.Status != _season)
                         ApplySeason(Seasons.Controller.Status);
                     foreach (var controller in _controllers) controller.Tick();
                     if (DeveloperOptions.Enabled && (_diagnostics?.Value ?? false) && Time.realtimeSinceStartup >= _nextReport)
@@ -280,24 +302,27 @@ namespace ArenaMapPort.Client
                 var listener = Singleton<AudioListenerConsistencyManager>.Instantiated ? Singleton<AudioListenerConsistencyManager>.Instance : null;
                 if (world == null || world.MainPlayer == null || !Singleton<AbstractGame>.Instantiated || Singleton<AbstractGame>.Instance.Status != GameStatus.Started) return;
                 if (_servicesSince < 0f) _servicesSince = Time.realtimeSinceStartup;
-                if (listener == null || listener.transform.position.y < -500f || (!_equator && Seasons.Controller == null) || !BetterAudio.Instantiated)
+                if (listener == null || listener.transform.position.y < -500f || (_profile.UsesSeasons && Seasons.Controller == null) || !BetterAudio.Instantiated)
                     return;
                 var audio = BetterAudio.Instance;
                 if (audio.Master == null || audio.AudioMixerData == null) return;
-                var effects = _equator ? Mixer(audio.Master, "AmbientIn/CommonAmbInEffects", "CommonAmbInEffects") :
-                    Mixer(audio.Master, "AmbientOut/CommonAmbOutEffects", "CommonAmbOutEffects");
-                var bypass = _equator ? null : Mixer(audio.Master, "CommonAmbOutBypass", "CommonAmbOutBypass");
-                if (effects == null || (!_equator && bypass == null)) return;
+                // Resolve every route's native mixer group first; a missing one means the audio services are not up yet.
+                var routes = _profile.Routes;
+                var mixers = new AudioMixerGroup[routes.Count];
+                for (int i = 0; i < routes.Count; i++)
+                {
+                    mixers[i] = Mixer(audio.Master, routes[i].MixerPath, routes[i].MixerName);
+                    if (mixers[i] == null) return;
+                }
                 foreach (var group in _groups)
                 {
-                    if (group.name == (_equator ? "CommonAmbientInGroup" : "AmbientPlayersGroup"))
-                    { group._outputMixerGroup = effects; _effectsGroup = group; }
-                    else if (!_equator && group.name == "AmbientSplineEmitterWaterGroup") group._outputMixerGroup = bypass;
-                    else throw new InvalidOperationException("unrecognized ambient group " + group.name);
+                    int index = _profile.IndexOfGroup(group.name);
+                    if (index < 0) throw new InvalidOperationException("unrecognized ambient group " + group.name);
+                    group._outputMixerGroup = mixers[index];
+                    if (routes[index].Effects) { _effectsGroup = group; _effectsRoute = routes[index]; _originalEffects = mixers[index]; }
                     group.SetMixerGroup();
                 }
                 AcquireAmbientVolume(audio);
-                _originalEffects = effects;
                 _reverbEffects = audio.CommonAmbientEffectsMixer;
                 ApplyUserRange(); // must precede SetActive: BaseAmbientSoundPlayer.Awake bakes _maxDistance into the AudioSource once
                 // All serialized fields and links exist before any stock Awake executes.
@@ -308,7 +333,7 @@ namespace ArenaMapPort.Client
                     _players.Except(_activePlayers).Any(p => p.Fader != null || p.EmptyClip != null))
                     throw new InvalidOperationException("native initialization differs from active source graph");
                 foreach (var controller in _controllers) controller.Init(listener.transform);
-                if (!_equator) PrepareShoreline();
+                if (_profile.HasShoreline) PrepareShoreline();
                 _season = Seasons.Controller != null ? Seasons.Controller.Status : default(ESeasonStatus);
                 ApplyUserMix();
                 int started = 0, seasonalSilence = 0;
@@ -325,19 +350,21 @@ namespace ArenaMapPort.Client
                 _ready = true;
                 RefreshReverbRouting(RoomReverb.IsActive(_mapKey));
                 _nextReport = Time.realtimeSinceStartup + 5f;
-                string mixers = effects.name + (bypass != null ? "," + bypass.name : "");
-                Plugin.Log.LogDebug($"[ArenaMapPort][NativeAudio] ready players={_players.Length} started={started} seasonalSilent={seasonalSilence} season={_season} mixers={mixers} shoreline={(_equator ? "none" : "stock")} listener={listener.transform.position} map={_mapKey} sourceInactive={_players.Length - _activePlayers.Length}");
+                string mixerNames = string.Join(",", mixers.Select(m => m.name));
+                Plugin.Log.LogDebug($"[ArenaMapPort][NativeAudio] ready players={_players.Length} started={started} seasonalSilent={seasonalSilence} season={_season} mixers={mixerNames} shoreline={(_profile.HasShoreline ? "stock" : "none")} listener={listener.transform.position} map={_mapKey} sourceInactive={_players.Length - _activePlayers.Length}");
             }
 
             internal void RefreshReverbRouting(bool requested)
             {
-                if (!_equator || _effectsGroup == null || _originalEffects == null || _reverbEffects == null || _reverbRouteYielded) return;
+                var route = _effectsRoute;
+                if (route == null || !route.ReverbReroute || _effectsGroup == null || _originalEffects == null || _reverbEffects == null || _reverbRouteYielded) return;
                 // EFT permanently mutes the original Returns/Reverb group. This original alternative
                 // ambient bus reaches TarkovReverb. Its dry path is equivalent while the owned parent
                 // gain is neutral (no skipped filters/effects); preserve external non-neutral gains.
+                // Equator and AirPit reroute their interior group (AmbientIn parent); Bay5's exterior bus needs no reroute.
                 float volume = float.NaN;
-                bool neutralParent = _ambientBus?.IsNeutral == true && _ambientMixer != null &&
-                    _ambientMixer.GetFloat(_ambientVolumeParameter, out volume) && Mathf.Approximately(volume, 0f);
+                bool neutralParent = _leases.TryGetValue(route.Bus, out var lease) && lease.IsNeutral && _ambientMixer != null &&
+                    _ambientMixer.GetFloat(AmbientAudioProfiles.Parameter(route.Bus), out volume) && Mathf.Approximately(volume, 0f);
                 bool useReverb = requested && neutralParent;
                 if (useReverb == _reverbRouted) return;
                 var expected = _reverbRouted ? _reverbEffects : _originalEffects;
@@ -345,17 +372,17 @@ namespace ArenaMapPort.Client
                     p != null && (p._mixerGroup != expected || p.GetComponent<AudioSource>()?.outputAudioMixerGroup != expected)))
                 {
                     _reverbRouteYielded = true;
-                    Plugin.Log.LogDebug(RoomReverb.Tag + " Equator ambient routing changed externally; retaining it");
+                    Plugin.Log.LogDebug(RoomReverb.Tag + " " + _profile.DisplayName + " ambient routing changed externally; retaining it");
                     return;
                 }
                 _effectsGroup._outputMixerGroup = useReverb ? _reverbEffects : _originalEffects;
                 _effectsGroup.SetMixerGroup(); // Also updates live sources; no restart/random delay reset.
                 _reverbRouted = useReverb;
-                Plugin.Log.LogDebug($"{RoomReverb.Tag} Equator owned ambient route={_effectsGroup._outputMixerGroup.name}, " +
+                Plugin.Log.LogDebug($"{RoomReverb.Tag} {_profile.DisplayName} owned ambient route={_effectsGroup._outputMixerGroup.name}, " +
                     $"players={_effectsGroup._soundPlayers.Count}, original indoor bus={volume:F2}dB");
             }
 
-            // See the field comment on _bay5Range. Runs on the still-inactive graph; 1.0 leaves every value untouched.
+            // See the field comment on MapSettings.Range. Runs on the still-inactive graph; 1.0 leaves every value untouched.
             void ApplyUserRange()
             {
                 float m = _range?.Value ?? 1f;
@@ -402,7 +429,7 @@ namespace ArenaMapPort.Client
                 Plugin.Log.LogDebug($"[ArenaMapPort][NativeAudio] live settings applied: gainDb={_gainDb?.Value ?? 0f:F1} offset={_offset?.Value ?? 0f:F3} range=x{_range?.Value ?? 1f:F2}; re-targeted {pushed} playing source(s), max distance pushed on {_activePlayers.Length} map={_mapKey}");
             }
 
-            // PLAN-TWO-MAPS item 1 — see the field comment on _bay5GainDb. Neutral settings leave every value untouched.
+            // PLAN-TWO-MAPS item 1 — see the field comment on MapSettings.GainDb. Neutral settings leave every value untouched.
             void ApplyUserMix()
             {
                 float gainDb = _gainDb?.Value ?? 0f;
@@ -490,19 +517,32 @@ namespace ArenaMapPort.Client
                 // exterior/interior mixer blend endpoint is 1 (= 0 dB).
                 // We own only that neutral bus gain while this graph lives; native earpro,
                 // spatial filters and Main/InGame volumes retain their normal ownership.
+                // AirPit holds both buses open at 0 dB (no room crossfade); a lease is shared with the rain and
+                // room-tone owners, so the value is written once and restored by the last owner.
                 _ambientMixer = audio.Master;
-                _ambientVolumeParameter = _equator ? audio.AudioMixerData.AmbientInMixerVolume : audio.AudioMixerData.AmbientOutMixerVolume;
-                if (_equator && _ambientVolumeParameter != "AmbientInVolume")
-                    throw new InvalidOperationException("native interior ambient volume contract changed");
-                _ambientBus = AmbientBusLease.Acquire(_ambientMixer, _ambientVolumeParameter);
-                Plugin.Log.LogDebug($"[ArenaMapPort][NativeAudio] {(_equator ? "interior" : "exterior")} bus leased neutral={_ambientBus.IsNeutral} map={_mapKey}");
+                foreach (var bus in _profile.Buses)
+                {
+                    string parameter = bus == AmbientBus.In ? audio.AudioMixerData.AmbientInMixerVolume : audio.AudioMixerData.AmbientOutMixerVolume;
+                    if (parameter != AmbientAudioProfiles.Parameter(bus))
+                        throw new InvalidOperationException("native " + (bus == AmbientBus.In ? "interior" : "exterior") + " ambient volume contract changed");
+                    var lease = AmbientBusLease.Acquire(_ambientMixer, parameter);
+                    _leases.Add(bus, lease);
+                    Plugin.Log.LogDebug($"[ArenaMapPort][NativeAudio] {(bus == AmbientBus.In ? "interior" : "exterior")} bus leased neutral={lease.IsNeutral} map={_mapKey}");
+                }
             }
 
             void ReleaseAmbientVolume()
             {
-                _ambientBus?.Dispose();
-                _ambientBus = null;
+                // Release every lease even if one fails; report the first failure to the caller's cleanup handler.
+                Exception first = null;
+                foreach (var lease in _leases.Values)
+                {
+                    try { lease.Dispose(); }
+                    catch (Exception ex) { if (first == null) first = ex; }
+                }
+                _leases.Clear();
                 _ambientMixer = null;
+                if (first != null) System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(first).Throw();
             }
 
             void ApplySeason(ESeasonStatus season)

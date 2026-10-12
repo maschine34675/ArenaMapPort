@@ -322,7 +322,10 @@ namespace ArenaMapPort.Client
                     foreach (var binding in state.ToneBindings) binding.Key.RoomTone = clips[binding.Value];
                     // LocalGame resets sources and mixer buses during deployment. Start only after
                     // Started, as the existing ambient driver does; earlier sources are stopped.
-                    if (state.IndoorBus == null && state.MapKey == ArenaMapRegistry.Bay5.Key && MonoBehaviourSingleton<BetterAudio>.Instantiated)
+                    // Equator and AirPit: their ambient driver already holds the interior bus (AmbientAudioProfiles); Bay5's
+                    // driver holds only the exterior bus, so its room tones take the shared interior lease themselves.
+                    if (state.IndoorBus == null && !AmbientAudioProfiles.LeasesBus(state.MapKey, AmbientBus.In) &&
+                        MonoBehaviourSingleton<BetterAudio>.Instantiated)
                     {
                         var mixer = MonoBehaviourSingleton<BetterAudio>.Instance.Master;
                         state.IndoorBus = AmbientBusLease.Acquire(mixer, "AmbientInVolume");

@@ -14,34 +14,83 @@ using UnityEngine;
 
 namespace ArenaMapPort.Editor.Import
 {
-    /// <summary>Rebuilds Bay5/Equator source ambient graphs with target native components.
-    /// The inactive root defers stock Awake/playback until the client has real audio services.</summary>
+    /// <summary>Rebuilds the Equator, Bay5 and AirPit source ambient graphs with target native components.
+    /// The inactive root defers stock Awake/playback until the client has real audio services.
+    ///
+    /// What is pinned where. The exact census of every map (players, support components, banks, clips, group
+    /// mixers, inactive and looping players) is the extraction contract (tools/extract/native_contracts/&lt;stem&gt;.json),
+    /// checked by validate_native_features.py on the package and again on the built bundle. This importer therefore takes
+    /// its counts from the package (manifest <c>native_audio</c> entry against the hash-verified index) and fails only
+    /// on an inconsistent or unsupported package; the schema decides whether the source activation/layer states are
+    /// kept (schema 2: Equator, AirPit) or everything is active at layer 0 (schema 1: Bay5), never the map identity.
+    /// What the package cannot carry, the Editor assembly cannot share with the client: the root name per map
+    /// (<see cref="RootNameFor"/>) and the group name to native mixer pairing (<see cref="GroupMixers"/>) mirror the
+    /// client's AmbientAudioProfiles.cs, and ArenaMapPort.Server.Tests/AmbientAudioProfilesTests compares them.</summary>
     public static class Bay5AudioImporter
     {
         public const string RootName = "ArenaMapPort_Bay5NativeAudio";
         public const string EquatorRootName = "ArenaMapPort_EquatorNativeAudio";
+        public const string AirPitRootName = "ArenaMapPort_AirPitNativeAudio";
+
+        // Group GameObject name -> the native mixer group the client routes it to. The package names the same mixer in
+        // each group's mixerName; a mismatch means the source graph and the client routing table disagree.
+        static readonly Dictionary<string, string> GroupMixers = new Dictionary<string, string>
+        {
+            ["CommonAmbientInGroup"] = "CommonAmbInEffects",
+            ["CommonAmbientOutGroup"] = "CommonAmbOutEffects",
+            ["AmbientPlayersGroup"] = "CommonAmbOutEffects",
+            ["AmbientSplineEmitterWaterGroup"] = "CommonAmbOutBypass",
+        };
+
+        // Map key -> (owned root name, asset folder below Assets/ArenaImport/NativeAudio). Throws for a map without
+        // imported ambience support, which also keeps a stray native_audio entry from building an unrouted graph.
+        static string RootNameFor(string mapKey)
+        {
+            switch (mapKey)
+            {
+                case "arena_equator": return EquatorRootName;
+                case "arena_bay5": return RootName;
+                case "arena_airpit": return AirPitRootName;
+                default: throw new InvalidDataException("Native audio has no owned root for map " + mapKey);
+            }
+        }
+
+        static string AssetFolderFor(string mapKey)
+        {
+            switch (mapKey)
+            {
+                case "arena_equator": return "Equator";
+                case "arena_bay5": return "Bay5";
+                case "arena_airpit": return "AirPit";
+                default: throw new InvalidDataException("Native audio has no asset folder for map " + mapKey);
+            }
+        }
 
         public static void Build(ArenaPackage package, GameObject scriptsRoot)
         {
             var entry = package.Manifest["native_audio"] as JObject;
             if (entry == null) return;
-            bool equator = ArenaPaths.Map.key == "arena_equator";
-            if ((!equator && ArenaPaths.Map.key != "arena_bay5") || scriptsRoot.activeInHierarchy)
-                throw new InvalidDataException("Native audio requires a supported map and inactive ScriptsRoot.");
+            string mapKey = ArenaPaths.Map.key;
+            string rootName = RootNameFor(mapKey);
+            if (scriptsRoot.activeInHierarchy)
+                throw new InvalidDataException("Native audio requires an inactive ScriptsRoot.");
             var payload = ReadVerified(package, (string)entry["file"], (string)entry["sha256"]);
             var data = JObject.Parse(System.Text.Encoding.UTF8.GetString(payload));
-            int schema = equator ? 2 : 1;
-            if ((int)data["schemaVersion"] != schema || (int)entry["schema_version"] != schema ||
-                (string)data["mapKey"] != ArenaPaths.Map.key || (string)data["sourceScene"] != (equator ? "level56" : "level188"))
+            int schema = (int)entry["schema_version"];
+            if ((schema != 1 && schema != 2) || (int)data["schemaVersion"] != schema ||
+                (string)data["mapKey"] != mapKey || string.IsNullOrEmpty((string)data["sourceScene"]))
                 throw new InvalidDataException("Unsupported native audio identity/schema.");
+            // Schema 2 keeps each source object's activeSelf and layer (inactive ancestors, Equator's dogs); schema 1 is
+            // all-active layer 0. The schema, not the map, decides.
+            bool preserveStates = schema == 2;
             var players = (JArray)data["players"];
             var support = (JArray)data["support"];
-            if (players.Count != (equator ? 25 : 24) || support.Count != (equator ? 1 : 6) ||
-                ((JArray)data["clips"]).Count != (equator ? 65 : 106) || ((JObject)data["banks"]).Count != (equator ? 11 : 13))
-                throw new InvalidDataException("Native audio source census changed.");
+            if (players.Count == 0 || support.Count == 0 || players.Count != (int)entry["players"] ||
+                ((JArray)data["clips"]).Count != (int)entry["clips"] || ((JObject)data["banks"]).Count != (int)entry["banks"])
+                throw new InvalidDataException("Native audio source census differs from the package manifest.");
 
-            ValidateMembership(players, support, equator);
-            string assetDir = ArenaPaths.ImportRoot + "/NativeAudio/" + (equator ? "Equator" : "Bay5");
+            ValidateMembership(players, support);
+            string assetDir = ArenaPaths.ImportRoot + "/NativeAudio/" + AssetFolderFor(mapKey);
             Directory.CreateDirectory(assetDir);
             var clips = new Dictionary<string, AudioClip>();
             foreach (JObject item in data["clips"])
@@ -95,7 +144,7 @@ namespace ArenaMapPort.Editor.Import
                 banks.Add(property.Name, bank);
             }
 
-            var root = new GameObject(equator ? EquatorRootName : RootName);
+            var root = new GameObject(rootName);
             root.SetActive(false);
             root.transform.SetParent(scriptsRoot.transform, false);
             var objects = new Dictionary<string, GameObject>();
@@ -103,7 +152,7 @@ namespace ArenaMapPort.Editor.Import
             var components = new Dictionary<string, Component>();
             try
             {
-                foreach (JObject item in players.Concat(support)) EnsureHierarchy(root, objects, hierarchyNodes, item, equator);
+                foreach (JObject item in players.Concat(support)) EnsureHierarchy(root, objects, hierarchyNodes, item, preserveStates);
                 foreach (JObject item in players)
                 {
                     var go = objects[(string)item["path"]];
@@ -178,9 +227,9 @@ namespace ArenaMapPort.Editor.Import
                     var component = components[(string)item["id"]];
                     if (component is AmbientSoundPlayerGroup group)
                     {
-                        string expected = equator ? "CommonAmbInEffects" :
-                            group.name == "AmbientPlayersGroup" ? "CommonAmbOutEffects" : "CommonAmbOutBypass";
-                        if ((string)item["mixerName"] != expected) throw new InvalidDataException("Unknown ambient mixer routing.");
+                        // The client finds the native mixer by this group's GameObject name; the package must agree.
+                        if (!GroupMixers.TryGetValue(group.name, out string expected) || (string)item["mixerName"] != expected)
+                            throw new InvalidDataException("Unknown ambient mixer routing for group '" + group.name + "'.");
                         group._soundPlayers = ((JArray)item["soundPlayers"]).Select(p => (BaseAmbientSoundPlayer)components[(string)p["resolved"]]).ToList();
                     }
                     else if (component is BezierSpline spline)
@@ -208,28 +257,22 @@ namespace ArenaMapPort.Editor.Import
             catch { UnityEngine.Object.DestroyImmediate(root); throw; }
         }
 
-        static void ValidateMembership(JArray players, JArray support, bool equator)
+        // The groups start exactly the enabled players that are active under their original ancestors. Bay5 and AirPit
+        // have no inactive or disabled player (that set is every player); Equator's two inactive dogs stay out of its group.
+        // The exact inactive/loop/mixer pins of each map live in the extraction contract and the bundle validators.
+        static void ValidateMembership(JArray players, JArray support)
         {
             var ids = players.Select(p => (string)p["id"]).ToArray();
-            var grouped = support.Where(s => (string)s["kind"] == "AmbientSoundPlayerGroup")
-                .SelectMany(s => (JArray)s["soundPlayers"]).Select(p => (string)p["resolved"]).ToArray();
-            var active = players.Where(p => (bool)p["enabled"] && (bool)p["activeInHierarchy"])
-                .Select(p => (string)p["id"]).ToArray();
-            if (ids.Distinct().Count() != ids.Length || grouped.Distinct().Count() != grouped.Length ||
-                !new HashSet<string>(equator ? active : ids).SetEquals(grouped))
+            var groups = support.Where(s => (string)s["kind"] == "AmbientSoundPlayerGroup").ToArray();
+            var grouped = groups.SelectMany(s => (JArray)s["soundPlayers"]).Select(p => (string)p["resolved"]).ToArray();
+            var activePlayers = players.Where(p => (bool)p["enabled"] && (bool)p["activeInHierarchy"]).ToArray();
+            var active = activePlayers.Select(p => (string)p["id"]).ToArray();
+            if (groups.Length == 0 || ids.Distinct().Count() != ids.Length || grouped.Distinct().Count() != grouped.Length ||
+                !new HashSet<string>(active).SetEquals(grouped))
                 throw new InvalidDataException("Native audio group membership differs from active source graph.");
-            if (!equator) return;
-            var inactive = players.Where(p => !(bool)p["activeInHierarchy"]).ToArray();
-            if (active.Length != 23 || inactive.Length != 2 || players.Any(p => !(bool)p["enabled"] ||
-                (string)p["kind"] != "AmbientSoundPlayer" || (int)p["sourceAudio"]["m_Enabled"] != 1) ||
-                !new HashSet<string>(inactive.Select(p => ((string)p["path"]).Split('/').Last())).SetEquals(new[] { "far_dogs1", "far_dogs2" }) ||
-                (string)support[0]["kind"] != "AmbientSoundPlayerGroup" || !(bool)support[0]["enabled"] || !(bool)support[0]["activeInHierarchy"] ||
-                ((string)support[0]["path"]).Split('/').Last() != "CommonAmbientInGroup")
-                throw new InvalidDataException("Equator source activation contract changed.");
-            var electricity = players.Where(p => ((string)p["path"]).Split('/').Last() == "electricity").ToArray();
-            if (electricity.Length != 1 || players.Any(p => (bool)p["sourceAudio"]["Loop"] !=
-                (((string)p["path"]).Split('/').Last() == "electricity")))
-                throw new InvalidDataException("Equator original electricity loop changed.");
+            if (groups.Any(g => !(bool)g["enabled"] || !(bool)g["activeInHierarchy"]) ||
+                activePlayers.Any(p => (int)p["sourceAudio"]["m_Enabled"] != 1))
+                throw new InvalidDataException("Native audio source activation contract changed.");
         }
 
         static byte[] ReadVerified(ArenaPackage package, string relative, string expectedHash)
