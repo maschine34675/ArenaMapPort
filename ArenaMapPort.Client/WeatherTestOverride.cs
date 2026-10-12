@@ -49,6 +49,14 @@ namespace ArenaMapPort.Client
     /// <c>WeatherCurve.Rain</c> at exactly 1.0 — still maximum, deterministic rain, still at/above the
     /// 0.83 peak observed in the 2026-09-17 playtest, just via simple clamping rather than an inverse-lerp
     /// ceiling.
+    ///
+    /// Server-time maps (descriptor <c>UsesServerTime</c>: Bay5 since 2026-10-03, AirPit since PLAN-AIRPIT
+    /// item 10) keep the backend weather on purpose, so <c>Weather</c> is inert there. A rain check on such a
+    /// map (F8 depth readback plus streak screenshot, AGENTS.md) would otherwise have to wait for real
+    /// backend rain: the developer-only opt-in <c>ApplyOnServerTimeMaps</c> (2026-10-12, default false,
+    /// read through <see cref="DeveloperOptions.Enabled"/> at use time so a value archived during developer
+    /// use never forces weather for players) routes the same preset through <see cref="ModeForSelection"/>,
+    /// which keeps DaytimeVisualsProbe's <c>effective=</c> line truthful.
     /// </summary>
     internal static class WeatherTestOverride
     {
@@ -57,17 +65,24 @@ namespace ArenaMapPort.Client
         const int SecondsHalfSpan = 300; // two nodes, 600s apart total, bracketing "now"
 
         static ConfigEntry<TestWeather> _mode;
+        static ConfigEntry<bool> _applyOnServerTime;
         static bool _applying;
         static bool _installed;
 
         // Exposed for DaytimeVisualsProbe's consolidated summary line.
         internal static TestWeather Mode => _mode != null ? _mode.Value : TestWeather.Server;
 
+        // Developer-mode opt-in (see the class comment): the test preset also replaces the backend nodes on
+        // server-time maps. Gated on DeveloperOptions.Enabled at use time, not only on F12 visibility.
+        internal static bool ForceOnServerTime =>
+            DeveloperOptions.Enabled && _applyOnServerTime != null && _applyOnServerTime.Value;
+
         // One policy for both native menu preview and every weather initialization/re-sync.
         // FixedDayHour is the selected variant, not the later advancing in-raid sky hour.
         internal static TestWeather ModeForSelection(ArenaMapDescriptor map, int? selectedHour)
         {
-            if (map == null || map.UsesServerTime) return TestWeather.Server;
+            if (map == null) return TestWeather.Server;
+            if (map.UsesServerTime) return ForceOnServerTime ? Mode : TestWeather.Server;
             if (map.Key == ArenaMapRegistry.Equator.Key && selectedHour == map.FixedDayHour)
                 return TestWeather.Clear;
             return EquatorNightNeon.RainForSelection(map.Key, selectedHour) ? TestWeather.Rain : Mode;
@@ -83,12 +98,19 @@ namespace ArenaMapPort.Client
 
             _mode = Plugin.Instance.Settings.Bind("Weather (test)", "Weather", TestWeather.Server,
                 "Equator day always uses Clear; Bay5 and AirPit (descriptor UsesServerTime) always use dynamic " +
-                "SPT/backend weather. This setting does not override any of them. Applies to Equator night when " +
+                "SPT/backend weather. This setting does not override any of them unless ApplyOnServerTimeMaps " +
+                "is on in developer mode. Applies to Equator night when " +
                 "Night neon/Rain does not request rain, and to unreleased Arena maps. Server = backend weather. Any other value forces a " +
                 "deterministic weather via a Harmony postfix on WeatherController.SetWeatherNodes, " +
                 "reapplied on EVERY call (including SPT's own PVE_OFFLINE server re-sync) so it actually " +
                 "sticks for the whole raid. Only ever applies to OUR maps' raids — see this file's own doc " +
                 "comment. Applies on the next raid load, not live.");
+            _applyOnServerTime = Plugin.Instance.Settings.Bind("Weather (test)", "ApplyOnServerTimeMaps", false,
+                "Developer mode only (General/DeveloperMode latched at startup). false = Bay5 and AirPit keep " +
+                "the backend weather and ignore 'Weather'. true = the 'Weather' value (Clear/Overcast/Rain/Fog) " +
+                "also replaces the backend weather nodes on Bay5/AirPit, on every initialization and PVE_OFFLINE " +
+                "re-sync; Server = no change. Time of day keeps following the backend clock. For rain checks " +
+                "(F8 depth readback, streak screenshots). Applies on the next raid load, not live.");
         }
 
         // Target: EFT.Weather.WeatherController.SetWeatherNodes(WeatherNode[]) — see

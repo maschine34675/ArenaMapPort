@@ -35,11 +35,22 @@ namespace ArenaMapPort.Server.Tests
         public void Dispose()
         {
             PlayerOptions.Install(new ConfigFile());
+            SetApplyOnServerTime(false); SetDeveloperMode(false);
             _harmony.UnpatchSelf(); SceneManager.Scenes.Clear();
             Comfort.Common.Singleton<GameWorld>.Instance = null;
         }
         static void SetWeather(WeatherTestOverride.TestWeather weather) =>
             Plugin.Instance.Config.Get<WeatherTestOverride.TestWeather>("Weather (test)", "Weather").Value = weather;
+        static void SetApplyOnServerTime(bool value) =>
+            Plugin.Instance.Config.Get<bool>("Weather (test)", "ApplyOnServerTimeMaps").Value = value;
+        // DeveloperOptions.Enabled is latched at Install time (ReleaseConfigurationTests), so each test
+        // re-installs it on a fresh ConfigFile carrying the wanted value.
+        static void SetDeveloperMode(bool enabled)
+        {
+            var cfg = new ConfigFile();
+            cfg.Bind("General", "DeveloperMode", false, "test").Value = enabled;
+            DeveloperOptions.Install(cfg);
+        }
         static LocalGame Game(ArenaMapDescriptor map, EDateTime selected)
         {
             EquatorProfiles.BeginLoad(map.Key, selected);
@@ -130,6 +141,44 @@ namespace ArenaMapPort.Server.Tests
             Assert.Equal(2, controller.NodeCalls);
             Assert.NotEqual(second[0].Rain, second[1].Rain);
             Assert.Equal(saved, WeatherTestOverride.Mode);
+        }
+
+        // 2026-10-12: the developer-only opt-in forces the test preset on server-time maps (rain checks on
+        // Bay5/AirPit). Three gates: the key, developer mode latched at startup, and Weather != Server.
+        [Theory]
+        [InlineData("arena_bay5", true, true, (int)WeatherTestOverride.TestWeather.Rain, true)]
+        [InlineData("arena_airpit", true, true, (int)WeatherTestOverride.TestWeather.Rain, true)]
+        [InlineData("arena_airpit", true, true, (int)WeatherTestOverride.TestWeather.Fog, true)]
+        [InlineData("arena_airpit", true, false, (int)WeatherTestOverride.TestWeather.Rain, false)]
+        [InlineData("arena_airpit", false, true, (int)WeatherTestOverride.TestWeather.Rain, false)]
+        [InlineData("arena_airpit", true, true, (int)WeatherTestOverride.TestWeather.Server, false)]
+        public void ApplyOnServerTimeMapsForcesTheTestWeatherOnlyInDeveloperMode(string key, bool applyKey, bool developerMode, int savedValue, bool expectForced)
+        {
+            var saved = (WeatherTestOverride.TestWeather)savedValue;
+            SetWeather(saved); SetApplyOnServerTime(applyKey); SetDeveloperMode(developerMode);
+            var map = ReleasedMap(key);
+            Assert.Equal(expectForced ? saved : WeatherTestOverride.TestWeather.Server, WeatherTestOverride.ModeForSelection(map, null));
+            var game = Game(map, EDateTime.PAST);
+            game.InitWeather(RandomSettings);
+            Assert.Null(TimeOfDayRepairs.ActiveFixedHour);
+            var controller = new WeatherController(); var first = BackendNodes(); var second = BackendNodes();
+            controller.SetWeatherNodes(first);
+            controller.SetWeatherNodes(second);
+            if (expectForced)
+            {
+                Assert.NotSame(second, controller.Nodes);
+                Assert.Equal(2, controller.Nodes.Length);
+                Assert.Equal(controller.Nodes[0].Rain, controller.Nodes[1].Rain);
+                Assert.Equal(saved == WeatherTestOverride.TestWeather.Rain ? 5f : 0f, controller.Nodes[0].Rain);
+            }
+            else
+            {
+                Assert.Same(second, controller.Nodes);
+                Assert.Equal(2, controller.NodeCalls);
+            }
+            // Equator is unaffected by the opt-in: day stays Clear whatever the key says.
+            Assert.Equal(WeatherTestOverride.TestWeather.Clear,
+                WeatherTestOverride.ModeForSelection(ArenaMapRegistry.Equator, ArenaMapRegistry.Equator.FixedDayHour));
         }
 
         [Theory]
