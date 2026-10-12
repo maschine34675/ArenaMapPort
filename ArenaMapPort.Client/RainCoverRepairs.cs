@@ -467,10 +467,19 @@ namespace ArenaMapPort.Client
                             excludedOversized++; // the sea placeholder plane / sky dome and similar enormous volumes
                             continue;
                         }
-                        if (clipToPlaySpace && !playSpace.Intersects(rendererBounds))
+                        if (clipToPlaySpace)
                         {
-                            excludedOutsidePlaySpace++; // far scenery: never a roof over the play space
-                            continue;
+                            if (!playSpace.Intersects(rendererBounds))
+                            {
+                                excludedOutsidePlaySpace++; // far scenery: never a roof over the play space
+                                continue;
+                            }
+                            // Only the part inside the play space counts for the footprint: AirPit's runway and
+                            // forecourt reach into the box but run on for hundreds of metres beyond it.
+                            var clipped = new Bounds();
+                            clipped.SetMinMax(Vector3.Max(rendererBounds.min, playSpace.min),
+                                Vector3.Min(rendererBounds.max, playSpace.max));
+                            rendererBounds = clipped;
                         }
 
                         if (!hasBounds)
