@@ -7,8 +7,6 @@ Shader "Hidden/ArenaMapPort/p0/Reflective/Bumped Specular"
 {
     Properties
     {
-        USEHEAT ("USEHEAT", Float) = 0
-        _AlphaMultiplier ("_AlphaMultiplier", Float) = 0
         _BumpMap ("_BumpMap", 2D) = "white" {}
         _BumpScale ("_BumpScale", Float) = 0
         _BumpTiling ("_BumpTiling", Float) = 0
@@ -17,37 +15,20 @@ Shader "Hidden/ArenaMapPort/p0/Reflective/Bumped Specular"
         _Cutoff ("_Cutoff", Float) = 0
         _DXT1_NM ("_DXT1_NM", Float) = 0
         _DefVals ("_DefVals", Color) = (1,1,1,1)
-        _DetailGloss ("_DetailGloss", Float) = 0
         _DetailNormalMapScale ("_DetailNormalMapScale", Float) = 0
         _DropsSpec ("_DropsSpec", Float) = 0
         _DstBlend ("_DstBlend", Float) = 0
         _EmissionColor ("_EmissionColor", Color) = (1,1,1,1)
-        _EmissionColorUI ("_EmissionColorUI", Color) = (1,1,1,1)
-        _EmissionPower ("_EmissionPower", Float) = 0
-        _EmissionScaleUI ("_EmissionScaleUI", Float) = 0
-        _EmissionVisibility ("_EmissionVisibility", Float) = 0
         _Factor ("_Factor", Float) = 0
-        _FresAdd ("_FresAdd", Float) = 0
-        _FresPow ("_FresPow", Float) = 0
-        _GlobalReflectionStrength ("_GlobalReflectionStrength", Float) = 0
         _GlossMapScale ("_GlossMapScale", Float) = 0
         _Glossiness ("_Glossiness", Float) = 0
         _Glossness ("_Glossness", Float) = 0
         _GlossyReflections ("_GlossyReflections", Float) = 0
-        _HeatCenter ("_HeatCenter", Color) = (1,1,1,1)
-        _HeatColor1 ("_HeatColor1", Color) = (1,1,1,1)
-        _HeatColor2 ("_HeatColor2", Color) = (1,1,1,1)
-        _HeatSize ("_HeatSize", Color) = (1,1,1,1)
-        _HeatTemp ("_HeatTemp", Float) = 0
-        _HeatVisible ("_HeatVisible", Float) = 0
         _MainTex ("_MainTex", 2D) = "white" {}
-        _MatIndex ("_MatIndex", Float) = 0
         _Metallic ("_Metallic", Float) = 0
         _Mode ("_Mode", Float) = 0
         _NdotLOffset ("_NdotLOffset", Float) = 0
         _NightRippleFakeLightOffset ("_NightRippleFakeLightOffset", Float) = 0
-        _NormalIntensity ("_NormalIntensity", Float) = 0
-        _NormalPower ("_NormalPower", Float) = 0
         _OcclusionStrength ("_OcclusionStrength", Float) = 0
         _Parallax ("_Parallax", Float) = 0
         _ReflectColor ("_ReflectColor", Color) = (1,1,1,1)
@@ -59,10 +40,7 @@ Shader "Hidden/ArenaMapPort/p0/Reflective/Bumped Specular"
         _SmoothnessTextureChannel ("_SmoothnessTextureChannel", Float) = 0
         _SpecColor ("_SpecColor", Color) = (1,1,1,1)
         _SpecPower ("_SpecPower", Float) = 0
-        _SpecSmoothness ("_SpecSmoothness", Float) = 0
         _SpecVals ("_SpecVals", Color) = (1,1,1,1)
-        _Specular ("_Specular", Float) = 0
-        _SpecularColor ("_SpecularColor", Color) = (1,1,1,1)
         _SpecularHighlights ("_SpecularHighlights", Float) = 0
         _Specularness ("_Specularness", Float) = 0
         _SrcBlend ("_SrcBlend", Float) = 0

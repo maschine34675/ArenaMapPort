@@ -25,7 +25,7 @@ def require(condition, message):
         raise ValueError(message)
 
 
-def verify(stem, distribution=False):
+def verify(stem, distribution=False, package=None):
     import UnityPy
     sys.path.insert(0, str(REPO / 'tools/extract'))
 
@@ -33,7 +33,10 @@ def verify(stem, distribution=False):
     descriptor = load(descriptor_path)
     key = descriptor['key']
     output = REPO / 'work/build' / stem
-    package = REPO / 'work/extract' / stem
+    # The accepted release packages carry a suffix (work/extract/<stem>-native-v5, AGENTS.md "Build, test,
+    # deploy"); checking the plain work/extract/<stem> package against such a build reports a source plan
+    # digest drift because that older package was extracted under the previous plan.
+    package = Path(package) if package else REPO / 'work/extract' / stem
     from source_plan import validate_manifest_plan
     server_path = REPO / f'ArenaMapPort.Server/db/{descriptor["db_base_json_path"]}'
     for path in (output / f'{key}_scenes.bundle', output / f'{key}_navmesh.bundle',
@@ -137,10 +140,11 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--map', required=True)
     parser.add_argument('--distribution', action='store_true')
+    parser.add_argument('--package', help='extraction package the build was made from (default: work/extract/<map>)')
     args = parser.parse_args()
     try:
         require(args.map.isalnum(), 'Map stem must be alphanumeric')
-        verify(args.map, args.distribution)
+        verify(args.map, args.distribution, args.package)
     except Exception as exc:
         print(f'PORT_FAILED: {exc}', file=sys.stderr)
         sys.exit(1)

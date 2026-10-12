@@ -11,10 +11,12 @@ Shader "Hidden/ArenaMapPort/Standard"
         _BumpMap ("_BumpMap", 2D) = "white" {}
         _BumpScale ("_BumpScale", Float) = 0
         _Color ("_Color", Color) = (1,1,1,1)
+        _CullMode ("_CullMode", Float) = 0
         _Cutoff ("_Cutoff", Float) = 0
         _DefVals ("_DefVals", Color) = (1,1,1,1)
         _DetailAlbedoMap ("_DetailAlbedoMap", 2D) = "white" {}
         _DetailMask ("_DetailMask", 2D) = "white" {}
+        _DetailMode ("_DetailMode", Float) = 0
         _DetailNormalMap ("_DetailNormalMap", 2D) = "white" {}
         _DetailNormalMapScale ("_DetailNormalMapScale", Float) = 0
         _DstBlend ("_DstBlend", Float) = 0
@@ -22,15 +24,24 @@ Shader "Hidden/ArenaMapPort/Standard"
         _EmissionColorUI ("_EmissionColorUI", Color) = (1,1,1,1)
         _EmissionColorWithMapUI ("_EmissionColorWithMapUI", Color) = (1,1,1,1)
         _EmissionMap ("_EmissionMap", 2D) = "white" {}
-        _EmissionPower ("_EmissionPower", Float) = 0
         _EmissionScaleUI ("_EmissionScaleUI", Float) = 0
-        _EmissionVisibility ("_EmissionVisibility", Float) = 0
         _Factor ("_Factor", Float) = 0
         _GlossMapScale ("_GlossMapScale", Float) = 0
         _Glossiness ("_Glossiness", Float) = 0
         _GlossyReflections ("_GlossyReflections", Float) = 0
         _Lightmapping ("_Lightmapping", Float) = 0
         _MainTex ("_MainTex", 2D) = "white" {}
+        _MetaDiffuseAdd ("_MetaDiffuseAdd", Color) = (1,1,1,1)
+        _MetaDiffuseScale ("_MetaDiffuseScale", Float) = 0
+        _MetaDiffuseTint ("_MetaDiffuseTint", Color) = (1,1,1,1)
+        _MetaEmissionAdd ("_MetaEmissionAdd", Color) = (1,1,1,1)
+        _MetaEmissionScale ("_MetaEmissionScale", Float) = 0
+        _MetaEmissionTint ("_MetaEmissionTint", Color) = (1,1,1,1)
+        _MetaMetallicSoup ("_MetaMetallicSoup", Float) = 0
+        _MetaSpecularAdd ("_MetaSpecularAdd", Color) = (1,1,1,1)
+        _MetaSpecularScale ("_MetaSpecularScale", Float) = 0
+        _MetaSpecularTint ("_MetaSpecularTint", Color) = (1,1,1,1)
+        _MetaUseCustom ("_MetaUseCustom", Float) = 0
         _Metallic ("_Metallic", Float) = 0
         _MetallicGlossMap ("_MetallicGlossMap", 2D) = "white" {}
         _Mode ("_Mode", Float) = 0
@@ -39,6 +50,7 @@ Shader "Hidden/ArenaMapPort/Standard"
         _Parallax ("_Parallax", Float) = 0
         _ParallaxMap ("_ParallaxMap", 2D) = "white" {}
         _ReflectColor ("_ReflectColor", Color) = (1,1,1,1)
+        _SSRPow ("_SSRPow", Float) = 0
         _Shininess ("_Shininess", Float) = 0
         _SmoothnessTextureChannel ("_SmoothnessTextureChannel", Float) = 0
         _SpecColor ("_SpecColor", Color) = (1,1,1,1)
@@ -48,8 +60,12 @@ Shader "Hidden/ArenaMapPort/Standard"
         _SrcBlend ("_SrcBlend", Float) = 0
         _StencilType ("_StencilType", Float) = 0
         _Temperature ("_Temperature", Color) = (1,1,1,1)
+        _Translucency ("_Translucency", Float) = 0
+        _USEDECALS ("_USEDECALS", Float) = 0
+        _UVDetailMask ("_UVDetailMask", Float) = 0
         _UVSec ("_UVSec", Float) = 0
         _Units ("_Units", Float) = 0
+        _VertexOcclusionPower ("_VertexOcclusionPower", Float) = 0
         _ZWrite ("_ZWrite", Float) = 0
     }
     SubShader

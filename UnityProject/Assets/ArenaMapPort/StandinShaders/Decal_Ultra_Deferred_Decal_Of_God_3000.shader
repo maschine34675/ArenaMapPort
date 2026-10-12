@@ -23,12 +23,10 @@ Shader "Hidden/ArenaMapPort/Decal/Ultra Deferred Decal Of God 3000"
         _Fade ("_Fade", Float) = 0
         _FadeStrength ("_FadeStrength", Float) = 0
         _Fresnel ("_Fresnel", Float) = 0
-        _GlobalReflectionStrength ("_GlobalReflectionStrength", Float) = 0
         _GlossMapScale ("_GlossMapScale", Float) = 0
         _Glossiness ("_Glossiness", Float) = 0
         _Glossness ("_Glossness", Float) = 0
         _GlossyReflections ("_GlossyReflections", Float) = 0
-        _InvFade ("_InvFade", Float) = 0
         _MainColor ("_MainColor", Color) = (1,1,1,1)
         _MainTex ("_MainTex", 2D) = "white" {}
         _Metallic ("_Metallic", Float) = 0
@@ -49,7 +47,6 @@ Shader "Hidden/ArenaMapPort/Decal/Ultra Deferred Decal Of God 3000"
         _SkinnedMeshMaterial ("_SkinnedMeshMaterial", Float) = 0
         _Smoothness ("_Smoothness", Float) = 0
         _SmoothnessTextureChannel ("_SmoothnessTextureChannel", Float) = 0
-        _SnowShift ("_SnowShift", Float) = 0
         _SpecColor ("_SpecColor", Color) = (1,1,1,1)
         _SpecPower ("_SpecPower", Float) = 0
         _SpecSmoothness ("_SpecSmoothness", Float) = 0
@@ -62,7 +59,6 @@ Shader "Hidden/ArenaMapPort/Decal/Ultra Deferred Decal Of God 3000"
         _StencilType ("_StencilType", Float) = 0
         _Temperature ("_Temperature", Color) = (1,1,1,1)
         _Temperature1 ("_Temperature1", Color) = (1,1,1,1)
-        _TintColor ("_TintColor", Color) = (1,1,1,1)
         _USERAIN ("_USERAIN", Float) = 0
         _UVSec ("_UVSec", Float) = 0
         _Units ("_Units", Float) = 0

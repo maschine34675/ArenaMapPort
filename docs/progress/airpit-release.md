@@ -1919,3 +1919,72 @@ Replacement for checklist step 21.5 (the other steps stand):
 | `test_unity_log_scan.ps1`, Unity, host, deploy | not run (no editor code touched) |
 
 Open point 2 above is closed (the gate exists). Open point 3 is refined by "Room-tone bus, corrected": the question is no longer "does AirPit need Bay5's lease" but "does the rain-audio lease keep the interior bus open in every weather", and checklist step 21.5 was replaced.
+
+## Item 12 - build U1 and the first host raid (2026-10-12, lead)
+
+Phase B code was committed as `f4e4505` (977 Python / 687 .NET tests). The first two U1 attempts stopped in Unity's
+texture import, both in `NormalTextureImportPolicy.Classify` (fail-closed by design); the offline model and the
+host were not involved.
+
+1. `unity_build_all_20261012_014538.log:10261`: `Normal texture 0e098c935f973254 rejected: unverified normal encoding:
+   format=DXT1, colorSpace=sRGB, ...`. The texture is `mask2` (512x512, radial grey falloff R=G=B, alpha 255), the
+   Cloth `_NormalsMask` of `Lighthouse_tarp_02` on the `tarpaulin_wall_01/03` renderers. The policy knew the Cloth
+   mask exception only as DXT5. Fix `232ea72`: a DXT1 sRGB variant with the same preservation (alpha 255,
+   |G-B| <= 16), four harness cases.
+2. `unity_build_all_20261012_015015.log:2669`: `Normal texture 4f803b16461865d9 rejected: invalid dimensions/pixels or
+   unsupported/mixed material usage` (`Detail_03_N`, `_DetailNormalMap` of the ANGRYMESH rock shader). Instead of a
+   third 20-minute build, the production policy was run offline over every normal-flagged texture:
+   `work/airpit-parity/normal_policy_inputs.py <package> <json>` (usages from `tex_envs`/`DXT1_NM` exactly like
+   `TextureImportDriver.CollectNormalTextureUsages`, channel bounds from the PNGs) and
+   `work/airpit-parity/normal_policy_check.ps1 <json>` (Add-Type on the production C#, synthetic pixels that reproduce
+   the measured bounds). Equator control: 0 of 239 rejected (1 ClothNormalsMask DXT5, 14 PackedRaG BC7, 223 PackedRaG
+   DXT5, 1 RgbNormal DXT1). AirPit: 4 of 258 rejected - the rock shader's `_BaseNormalMap`/`_TopNormalMap`/
+   `_DetailNormalMap` (packed DXT5 Linear normals of `Lighthouse_Mountain`) and `Passenger_ladder_02_part_02_G`, a
+   packed `_BumpMap` texture that the same SMap material binds a second time as `_SpecMap` (mixed usage). Fix
+   `d52c898`: the three rock slots count as normal readers of that shader only, the SMap `_SpecMap` co-usage is
+   neither normal nor unsupported (the preserved bytes are what Arena reads in both slots); nine harness cases.
+   After the fix AirPit classifies 0 of 258 rejected (1 ClothNormalsMask DXT1, 10 PackedRaG BC7, 246 PackedRaG DXT5,
+   1 RgbNormal DXT1); Equator unchanged.
+
+Third U1 run: `work/logs/airpit-u1c.log` (results appended below).
+
+### U1c result (2026-10-12 02:06-02:15, Unity log `work/build/airpit/unity_build_all_20261012_020615.log`)
+
+`[build_all] OK -- build + mandatory identity patch + all validators passed.` Key lines, in build order:
+
+| Stage | Log line (abridged) |
+|---|---|
+| Textures | `[TextureImportDriver] imported 805 textures (33 flagged alpha-cutout uncompressed, 23 real Cubemap assets, ... 256 packed normals / 1 RGB normals / 1 Cloth masks saved as native source-encoded Texture2D assets)` - the two fixes above account for the DXT1 Cloth mask and the rock-shader normals |
+| Stand-in shaders | `[StandinShaderGenerator] generated 22 stand-in shaders` - two new files (`ANGRYMESH_PBR_Rocks_PBR_BlendTopDetail__Legacy_`, `p0_Reflective_Bumped_Emissive_Specular`) and 11 regenerated property unions; committed as generated, like after every earlier build |
+| Materials | `[MaterialImporter] imported 435 materials`; roundtrip validator: `all 415 id-named Material objects in the bundle carry the declared stand-in or exact owned terrain shader (0 mismatch(es))` |
+| Rain cover | `[RainCoverImporter] authored EnvironmentManager (TriggerGroup=1, IndoorTrigger=2), WeatherObstacle=0` |
+| NavMesh inputs | `[BakeNavMesh] bake inputs: bounds from the descriptor (bake_bounds), layer mask 0x40042A00 (navmesh_bake_layers), 4 navmesh_bake_exclusions, 2 opened_barriers`; `navmesh_bake_exclusions: 4 object(s) resolved (their colliders and markups are not NavMesh sources, they stay active at runtime)` |
+| NavMesh exclusions | `excluded 16 ... opened_barriers:PASSPORT_CONTROL_DOORS`, `excluded 24 ... opened_barriers:BUS_DOORS`, one source each for `TH_Roll_door_01_closed`, `DonB_Ramen_closed (1)`, `DonB_Ramen_closed`, `fence_ema_01_white (18)` |
+| NavMesh modifiers | `NavMesh modifiers: 20 markup(s) in bake scope (0 area-override, 20 ignoreFromBuild), 12 volume source(s) added; volume area distribution: area1=12` |
+| NavMesh bake | `baked NavMeshData: agentRadius=0,3 agentHeight=1,7 agentSlope=48 agentClimb=0,38 tileSize=256 bounds=Center: (-12.00, 3.00, -2.00), Extents: (68.00, 5.00, 94.00) sources=2023 (root=null collected 2055 total, 2023 kept after filtering to this bake's own content-scene roots, Water layer(4) excluded from sourceLayerMask)`; **`triangulation: vertices=10295 triangles=4685 (indices=14055)`** - the signature the live `[ArenaMapPort][NavMesh] added navmesh ...` line must repeat |
+| Strip | `[NavMeshModifierImporter] stripped bake-only components before the bundle build: 20 NavMeshModifier, 12 NavMeshModifierVolume; re-saved 5 content scene(s)` |
+| Bundles | `arena_airpit_scenes.bundle` 824,643,390 B, `arena_airpit_navmesh.bundle` 146,566 B, preset 6,859 B with the 6 `Arena_AirPit_*`/`Arena_Airpit_*` rcids; `base.json` regenerated (4 player + 14 bot spawn points, 5 waves) |
+| validate_extract | 0 errors, 240 warnings of the known kinds (`MeshFilter ...: no mesh assigned`, two `barrel_fire` LODGroup renderer references, 21 unreferenced mesh ids) |
+
+**Built mesh against Arena's own NavMesh** (`tools/validate/navmesh_diff.py ... --compare-bundle work/build/airpit/arena_airpit_navmesh.bundle`,
+output `work/logs/airpit-navmesh-diff-u1.log`): the built triangulation has 2,805 polygons and covers 199,896 of 204,204 Arena
+samples; offline-model agreement passable&covered 198,548 / passable-not-covered 851 / blocked-covered 1,348 / blocked-not-covered
+3,457. Probes inside the built mesh: **76 of 77, all in component 0** (4 player spawns, 14 bot spawns, 2 exits, 19 core points,
+3 hubs, 35 sub points); the tool names only the count, the likely odd one is `hub1.11` at (5.51, 0.13, 7.19) with Arena border
+clearance 0.0 - checked on the host with `uibridge_teleport dryRun=true`. Arena-walkable floor the port lacks: the 3.8 m² airstairs
+strip at x -7.55..-6.55, z -30.15..-25.55 (item 8's `navmesh_bake_layers` question) and seven groups of 1.3 m² or less.
+
+**validate_port** reported `PORT_FAILED: source plan digest drift: package was extracted from a different plan` because it hard-coded
+`work/extract/<stem>` - the pre-item-1 AirPit package, extracted under the previous plan. It now takes `--package`;
+`python tools/validate/validate_port.py --map airpit --package work/extract/airpit-native-v5 --distribution` →
+`PORT_VALIDATED {"distribution": true, "map_key": "arena_airpit", "materials": 435, "meshes": 2487, "navmesh_tiles": 56,
+"navmesh_triangles": 4685, "scene_bundle_bytes": 824643390, "scenes": 6, "terrain_count": 0, "textures": 805, "verified_starts": 3,
+"warnings": 240}`.
+
+**Staging and deploy.** Client Release build (no DllOnly) staged the three AirPit bundles and `material-shaders.arena_airpit.json`;
+server Release build 0/0; `dotnet test` 687 passed; Python suite 977 OK; `validate_distribution.py` → `DISTRIBUTION_OK 3 maps 9 bundles
+3 sidecars`. Deploy 2026-10-12 (dry run, then `-Confirm`): 63 files, 1975.8 MB - 10 new (AirPit spatial audio `spatial-audio.json`,
+`source.audiobakedata`, `sharedassets39.assets_9.wav`, `ai/airpit.ai.json`, five `arena_airpit_N.jpg` loadscreens, the
+`arena_airpit.jpg` banner), 7 overwritten (client DLL, `material-shaders.arena_airpit.json`, both AirPit bundles - the mirror still held
+the spike-era AirPit bundles -, server DLL, `db/arena_airpit/base.json`, `locales/map-descriptions.json`). Host2 before the deploy:
+helper reachable, "server not running · game not running".

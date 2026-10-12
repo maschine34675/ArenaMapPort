@@ -7,6 +7,8 @@ Shader "Hidden/ArenaMapPort/p0/Reflective/Bumped Specular SMap Transparent Cutof
 {
     Properties
     {
+        USEHEAT ("USEHEAT", Float) = 0
+        _BaseTintColor ("_BaseTintColor", Color) = (1,1,1,1)
         _BumpMap ("_BumpMap", 2D) = "white" {}
         _BumpScale ("_BumpScale", Float) = 0
         _BumpTiling ("_BumpTiling", Float) = 0
@@ -24,11 +26,20 @@ Shader "Hidden/ArenaMapPort/p0/Reflective/Bumped Specular SMap Transparent Cutof
         _Glossiness ("_Glossiness", Float) = 0
         _Glossness ("_Glossness", Float) = 0
         _GlossyReflections ("_GlossyReflections", Float) = 0
+        _HasTint ("_HasTint", Float) = 0
+        _HeatCenter ("_HeatCenter", Color) = (1,1,1,1)
+        _HeatColor1 ("_HeatColor1", Color) = (1,1,1,1)
+        _HeatColor2 ("_HeatColor2", Color) = (1,1,1,1)
+        _HeatSize ("_HeatSize", Color) = (1,1,1,1)
+        _HeatTemp ("_HeatTemp", Float) = 0
+        _HeatVisible ("_HeatVisible", Float) = 0
         _MainTex ("_MainTex", 2D) = "white" {}
         _Metallic ("_Metallic", Float) = 0
         _Mode ("_Mode", Float) = 0
         _NdotLOffset ("_NdotLOffset", Float) = 0
         _NightRippleFakeLightOffset ("_NightRippleFakeLightOffset", Float) = 0
+        _NormalIntensity ("_NormalIntensity", Float) = 0
+        _NormalUVMultiplier ("_NormalUVMultiplier", Float) = 0
         _OcclusionStrength ("_OcclusionStrength", Float) = 0
         _Parallax ("_Parallax", Float) = 0
         _ReflectColor ("_ReflectColor", Color) = (1,1,1,1)
