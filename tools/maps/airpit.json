@@ -25,14 +25,11 @@
   ],
   "opened_barriers": [
     "BUS_DOORS",
-    "PASSPORT_CONTROL_DOORS"
+    "PASSPORT_CONTROL_DOORS",
+    "SBG_Arena_AirPit_ShootOut/SOO/Prison_Metal_Fence_01 (2)",
+    "SBG_Arena_AirPit_ShootOut/SOO/Prison_Metal_Fence_01 (3)"
   ],
-  "navmesh_bake_exclusions": [
-    "SBG_Arena_AirPit_ShootOut/SOO/fence_ema_01_white (18)",
-    "SBG_Arena_AirPit_ShootOut/SOO_LOD0/BUILDING/DonB_Ramen_closed",
-    "SBG_Arena_AirPit_ShootOut/SOO_LOD0/BUILDING/TH_Roll_door_01_closed",
-    "SBG_Arena_AirPit_ShootOut/SOO_LOD0/BUILDING/DonB_Ramen_closed (1)"
-  ],
+  "navmesh_bake_exclusions": [],
   "bake_bounds": [-80, 56, -2, 8, -96, 92],
   "navmesh_bake_layers": [9, 11, 13, 18, 30],
   "shader_fallback_names": [

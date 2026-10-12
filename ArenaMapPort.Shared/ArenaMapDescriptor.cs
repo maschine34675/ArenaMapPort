@@ -364,19 +364,18 @@ namespace ArenaMapPort.Shared
                 // Mirrors tools/maps/airpit.json (AirPitMapTests.OpenedBarriersAndBakeInputsMatchTheSidecar).
                 "BUS_DOORS",
                 "PASSPORT_CONTROL_DOORS",
+                // The two metal-detector portals in the z 50.5 facade between the passport hall and the main hall
+                // (host raid 1, 2026-10-12): each Prison_Metal_Fence_01 gate holds an active closed fence and two
+                // inactive swung-open halves (_PART_L/_PART_R), i.e. a gate Arena closes for ShootOut and opens for
+                // TeamFight. With them closed the whole north spawn field plus the east wing is sealed from the hall
+                // for players and bots alike (the only NavMesh route ran through a shop shutter). Deactivating the
+                // direct children leaves the portal frame standing; the open halves stay inactive.
+                "SBG_Arena_AirPit_ShootOut/SOO/Prison_Metal_Fence_01 (2)",
+                "SBG_Arena_AirPit_ShootOut/SOO/Prison_Metal_Fence_01 (3)",
             },
-            NavMeshBakeExclusions: new[]
-            {
-                // Bake-only (PLAN-AIRPIT item 8, user decision 2026-10-11): props that stay in the scene but that
-                // Arena's own NavMesh walks through and that cut the route between the spawn areas once baked in.
-                // Found by the greedy pass of tools/validate/navmesh_diff.py on the 0.6.0 package; each path resolves
-                // to exactly one object (the duplicated BUILDING sibling under SOO_LOD0 resolves to the first one,
-                // which holds all three). Nothing is deactivated at runtime.
-                "SBG_Arena_AirPit_ShootOut/SOO/fence_ema_01_white (18)",
-                "SBG_Arena_AirPit_ShootOut/SOO_LOD0/BUILDING/DonB_Ramen_closed",
-                "SBG_Arena_AirPit_ShootOut/SOO_LOD0/BUILDING/TH_Roll_door_01_closed",
-                "SBG_Arena_AirPit_ShootOut/SOO_LOD0/BUILDING/DonB_Ramen_closed (1)",
-            },
+            // No NavMeshBakeExclusions: the four bake-only cutters of 2026-10-11 (DonB_Ramen_closed x2,
+            // TH_Roll_door_01_closed, fence_ema_01_white (18)) let the NavMesh run through shutters that stay solid;
+            // host raid 1 walked the player into the DonB_Ramen shutter at (-46.2, 0, 43.4). Every solid is baked.
             // Play space (user decision 2026-10-11, 4.3): x -80..56, z -96..92 around Arena's component
             // (x -56..32, z -78..85), y -2..8 = ground floor plus wing mezzanine.
             BakeBounds: new[] { -80.0f, 56.0f, -2.0f, 8.0f, -96.0f, 92.0f },

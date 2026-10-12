@@ -1987,4 +1987,78 @@ server Release build 0/0; `dotnet test` 687 passed; Python suite 977 OK; `valida
 `source.audiobakedata`, `sharedassets39.assets_9.wav`, `ai/airpit.ai.json`, five `arena_airpit_N.jpg` loadscreens, the
 `arena_airpit.jpg` banner), 7 overwritten (client DLL, `material-shaders.arena_airpit.json`, both AirPit bundles - the mirror still held
 the spike-era AirPit bundles -, server DLL, `db/arena_airpit/base.json`, `locales/map-descriptions.json`). Host2 before the deploy:
-helper reachable, "server not running · game not running".
+helper reachable, "server not running · game not running". All 14 deployed AirPit files (server DLL, base.json, map-descriptions,
+client DLL, three bundles, material-shaders sidecar, acoustics trio, `ai/airpit.ai.json`, loadscreens, banner) hashed identical on
+`\\192.168.178.109\C$\SPT41` before the server was started.
+
+### Host raid 1 (SPT-GPU-2, 2026-10-12 02:32-02:44, build d29bad4, bots None)
+
+`gpu-run start --host host2` (73 s, server + EFT, 19/19 DLLs identical), `General/DeveloperMode` set through `uibridge_config_set` and
+EFT restarted (`gpu-run restart --force`, 64 s; the lease of this session counted as "another session"), then
+`gpu-run raid --mode pmc --map "AIR PIT" --bots none` (37 s to `raidStarted`: the SelectLocation tile reads `ARENA: AIR PIT`).
+`uibridge_config` lists the full `Lighting (arena_airpit)` section with the item 10 defaults (Donor `Reserve_Base_Scripts`,
+ZeroLevelOverride -4.4, HeightFalloffOverride 0.025, ReserveTier, UseDonorCameraPrefab true, IndoorFloorSmoothness 0.5,
+IndoorCoverPercent 50, Bloom -1/-1, TonemapProfile Original), `Map (arena_airpit)/RemoveTeamFightBorders` true,
+`MaterialFixes/AirPitFogSheets` StandIn, `Audio (arena_airpit)` NativeSpatialAudio/NativeRoomReverb true.
+
+**Raid-start log (all expected lines present, no ArenaMapPort warning or error; the three HarmonyX warnings are other mods'):**
+
+| Check | Log (abridged) |
+|---|---|
+| Shaders | `[RebindShaders] material-shaders.arena_airpit.json: 435 material entries`; per scene 351/24/20/9/11 stand-in materials rebound (= 415), second pass 0/0; census 183x `p0/Reflective/Bumped Specular SMap`, 55x `Decal/DeferredDecalDiffuseNormalsDynamicEditor`, 40x `p0/Reflective/Bumped Specular`, 35x `Decal/Ultra Deferred Decal Of God 3000`, 22x `p0/Cutout/Bumped Diffuse`, 15x `Global Fog/Transparent Reflective Specular`, 13x `Standard`, 11x `SMap_Decal`, 9x `SMap Transparent Cutoff`, 5x `shadow`, 5x `Custom/Billboard_FogSheet_Simple`, 4x `Cloth/ClothShader`, 1x `ClothShader_backface`, 1x `ANGRYMESH/PBR Rocks/PBR BlendTopDetail (Legacy)`, 2x `Unlit/Transparent Colored`, 2x `Custom/Vert Paint Shader Solid`, ... (no magenta in any screenshot) |
+| Weather/time | `[WeatherRig] arena_airpit: activated 'Reserve_Base_Scripts' (Full) for this raid. SkyboxMode=Dome.`; `[LevelSettingsOverride] map=arena_airpit ZeroLevel=-4.40 (was -78.64) HeightFalloff=0.025 (was 0.029) TextureBudget=ReserveTier ...`; `[TimeOfDay] arena_airpit: native server time and weather; legacy fixed-hour override bypassed` (02:32 local = night raid) |
+| Rain cover | `[RainCover] map=arena_airpit RoofDepthBlack armed`, `RainBounds computed from 9498 renderer(s) (excluded 1 oversized): center=(-64.43, 47.33, -507.17) size=(4274.99, 245.95, 3218.99)`, `RoofDepthBlack scan: keptForBounds=9498 consideredForCover=8832 elevated=8812 ... included(glass)=25`, `drew 8812 elevated mesh(es) (11795 submesh draw call(s))`, automatic F8 readback at the spawn: `depthTextureDimension=4096 ... nothingPhotographed=False` (**open point: 4.3 x 3.2 km bounds from the far scenery = about 1 m per depth pixel; compare with Equator/Bay5 and consider the manual `RainBoundsCenter/Size` before the rain check**) |
+| Lighting | `[Lighting] arena_airpit applied ... 831 light(s) (globalMultiplier=0.50 ...) cullingLights=533, editorIntensityBaselines=533` after the last scene |
+| Borders/spawns | `[RaidFix] arena_airpit TeamFight borders: 67 object(s) matched (layer 'LevelBorder'=29 ...)`; `spawn placement: disabled 2 SPAWN_BOUND barrier collider(s) ... all spawn points already free`; `spawn openings: spawn barrier 'BUS_DOORS' at (-17.6, 5.8, -69.3): deactivated 6 part(s)`, `'PASSPORT_CONTROL_DOORS' at (-16.1, 3.9, 63.2): deactivated 18 part(s)`; the second `CreateFromScene` pass reports `deactivated 0 part(s), 6/18 already off` (idempotent) |
+| Ballistics/wire | `ballistic twins: added 43 HighPolyCollider twin(s) ... (1895 already had one)`; `barbed wire: attached 12 BarbedWire trigger(s)` (then `0 ... (12 already present)`) |
+| NavMesh | **`[NavMesh] added navmesh for 'arena_airpit': 10295 vertices, 4685 triangles`** = the U1c bake |
+| AI | `AI covers holders: created 8 missing component(s) ...`; `AIVoxelesData ... authored an empty 20x9x29 grid`; `zone 'BotZone_Main' authored 1 real patrol way(s) from ai/airpit.ai.json (3 hub(s), 35 sub point(s))`; `authored 19 real AI core point(s), 3 patrol hub(s), 35 sub point(s)` |
+| Acoustics | `[Acoustics] arena_airpit: prepared rooms=24, portals=94, bake pairs=276, routes=16304, sha256=4be00976...`; `native initialized; valid rooms=24 ...; room tones wait for raid start`; `room-tone controller started after audio reset`; `[RoomReverb] arena_airpit: native room controller active; 26 original parameters` (room 6 IndoorBrick at the spawn) |
+| Decals | `[NativeDecals] map=arena_airpit enabled: source=481 active=471 registered=471 materials=54 groups=22 nativeEnabled=True` |
+| Camera (F7) | `[LightProbe] ... hdr=True path=DeferredShading ... UltimateBloom m_BloomIntensity=0.35 m_BloomThreshhold=2.10`, `PrismEffects ... useBloom=False`, `BloomAndFlares hdr=Off ... lensflares=False` |
+| Places | `uibridge_places`: `exfil:pmc:Air Pit North Gate (-11.0, 1.1, 62.0)`, `exfil:pmc:Air Pit South Gate (-3.0, 1.0, -58.0)`, both `RegularMode`, entry point `arenaairpit` |
+
+Screenshots: north spawn (passport hall, globe sign, red wall lights, a bright green smoke column near the west wall - a particle
+effect, not identified yet, F10 cannot hit particles; **open point**) and the hall centre from (-3.2, 0.1, -12.1) looking north
+(airliner with the ORVAIR sign, mezzanine, crates, plywood walls, lit and complete). 117 fps at the hall centre.
+
+**NavMesh connectivity - the finding of this raid.** From the Usec spawn (0.33, 0, 78.3) `uibridge_teleport dryRun=true` accepted
+only the north gate (-11, 62), the north-approach spawn (-11, 60.5) and core2 (15.1, 26.8); every hall, mezzanine and south
+point failed with "the walk there passes through a wall or fence" (the same points pass with `reachable=false`, i.e. they are on
+the mesh, only the path is wrong). `uibridge_walk` to core5 (-1.23, 37.5), 40.8 m away, reported **283.8 m along the navmesh**,
+went west and stopped after 60 s "45.8 m short (stepped right)" at (-46.2, 0, 43.4) facing yaw 214 - a closed roll shutter filling
+the screen; the F10 inspector names it `SOO_LOD0/BUILDING/DonB_Ramen_closed/DonB_Ramen_closed_BALLISTIC_metalthin` at 0.28 m.
+That is one of the four bake-only `navmesh_bake_exclusions`: the mesh runs through it, the player (and every bot) cannot.
+
+Offline (scratch scripts over `arena_airpit_navmesh.bundle` via `navmesh_diff.load_bundle_mesh` and `port_colliders`), with the
+four excluded objects treated as the solids they are at runtime and the mesh clipped to the play space, the 77 probe points fall
+into four regions: **north field + east wing** (both player spawns, north gate, core2/core4/core7; 3,008 m2), **hall south/west +
+apron + south spawns** (core3, core10, core13-15, core17, core18, core1, core14, south gate, both south spawns; 5,516 m2), the
+**airliner block** (core5, core8, core11, core12, core19; 1,590 m2 - probably joined to the hall over the mezzanine at (-11.7, 4.9,
+5.8), where the offline tile matching shows a 9 cm seam without any collider) and the **core16 pocket** (641 m2 behind
+`TH_Roll_door_02/03_closed`). Every frontier between the north/east region and the hall is a real solid on layer 18:
+`SOO/Prison_Metal_Fence_01 (2)/Prison_Metal_Fence` at (-23.5, 50.5) and `(3)` at (-0.4, 50.5) inside the two `Entrance_portal`
+metal detectors of the z 50.5 facade, `Airport_Shop_BS_closed_closed` (x 13 / z 7.8 shutter lines of the corner shop), the
+`DonB_Ramen_closed` shutters, `Wall_landing_01`. The plan's "the z 50.5 facade has 4 NavMesh openings" counted the two portals
+(cut by the gates), the x -40 corridor (ends at the DonB_Ramen shutter) and the x 15..20 opening (leads into the east wing, which
+reaches the hall only through the BS shop). Arena's own mesh crosses all of them; the coverage metric of `navmesh_diff.py` never
+showed it because `coverage_of` dilates by one cell and these cuts are one cell wide (without dilation the built mesh misses
+7,171 of 204,204 Arena samples in 659 groups, the largest 32 m2 around the escalators).
+
+The two portal gates are the mechanism the item 7 probe did not find: each `Prison_Metal_Fence_01 (2)/(3)` holds an **active
+closed fence** (`Prison_Metal_Fence`, colliders on 18 + 12) and **two inactive swung-open halves** (`Prison_Metal_Fence_PART_L`,
+`_PART_R`) - a gate closed for the ShootOut area (the `LevelBorders` cubes run along the same z 50.5 line) and open for TeamFight,
+where the spawns sit north of it. The shop shutters have no open variant (`DonB_Ramen_closed`, `TH_Roll_door_0x_closed`,
+`Airport_Shop_BS_closed_closed` are static closed props), so Arena's mesh through them is the stale-bake artefact the probe
+suspected.
+
+**Decision (lead, 2026-10-12, within item 8; to be confirmed by the user):** `opened_barriers` gains the two portal gates
+(`SBG_Arena_AirPit_ShootOut/SOO/Prison_Metal_Fence_01 (2)` and `(3)`: the client deactivates the closed fence, the open halves
+stay inactive, the portal frame stands; the bake drops the fence colliders) and `navmesh_bake_exclusions` is emptied, so every
+solid is baked and no NavMesh runs through a shutter. core16 (-45.9, -25.9) keeps its sealed pocket for now (the client snaps it
+to the nearest mesh; a bot that draws it finds no path and re-rolls) - open point whether to drop it from `airpit.ai.json`.
+Offline check with the new inputs: both gate paths resolve to exactly one object each, bake sources 5,144 of 5,309 owners (was
+5,139), 2,013 under Arena's layer mask (was 2,011). Tests: `test_airpit_bake_inputs.py` rewritten around `GATES`/`ROOT_BARRIERS`
+(portal gate shape test: closed fence active, halves inactive, colliders 12+18, no frame name), `MapDescriptorConsistencyTests`
+expects four barriers and no exclusion; `dotnet test` 687 passed, Python suite OK. The raid was left at 02:44 (`gpu-run leave`, healed)
+before the offline analysis. Rebuild U2: `work/logs/airpit-u2.log`.

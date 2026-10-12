@@ -54,8 +54,9 @@ public class MapDescriptorConsistencyTests
     // Spawn barriers are authored by hierarchy path only for the walked maps (Equator, Bay5, AirPit).
     // Every remaining map keeps the empty default until its own barriers have been checked.
     // A path is a root object name followed by optional "/"-separated children, so a single segment
-    // (AirPit's BUS_DOORS and PASSPORT_CONTROL_DOORS gate groups) is a valid root path; empty paths and
-    // empty segments ("a//b", leading or trailing "/") are not.
+    // (AirPit's BUS_DOORS and PASSPORT_CONTROL_DOORS gate groups) is a valid root path and AirPit's two
+    // portal gates are ordinary nested paths; empty paths and empty segments ("a//b", leading or trailing
+    // "/") are not.
     [Fact]
     public void OpenedBarriers_WalkedMapsNamePaths_OtherMapsNone()
     {
@@ -66,7 +67,14 @@ public class MapDescriptorConsistencyTests
             "WAREHOUSE_DOORS (1)/Bay5_Warehouse_Gate_Door_01 (4)",
             "OLD_WAREHOUSE_DOORS/Gates_Depot_Frame",
         }, ArenaMapRegistry.Bay5.OpenedBarriers);
-        Assert.Equal(new[] { "BUS_DOORS", "PASSPORT_CONTROL_DOORS" }, ArenaMapRegistry.AirPit.OpenedBarriers);
+        Assert.Equal(new[]
+        {
+            "BUS_DOORS",
+            "PASSPORT_CONTROL_DOORS",
+            // the two portal gates of the z 50.5 facade (host raid 1, 2026-10-12): non-root paths into the main scene
+            "SBG_Arena_AirPit_ShootOut/SOO/Prison_Metal_Fence_01 (2)",
+            "SBG_Arena_AirPit_ShootOut/SOO/Prison_Metal_Fence_01 (3)",
+        }, ArenaMapRegistry.AirPit.OpenedBarriers);
         var walked = new[] { ArenaMapRegistry.Equator, ArenaMapRegistry.Bay5, ArenaMapRegistry.AirPit };
         foreach (var map in ArenaMapRegistry.Catalog)
         {
@@ -90,9 +98,13 @@ public class MapDescriptorConsistencyTests
     public void NavMeshBakeInputs_ExistForAirPitOnly()
     {
         var airPit = ArenaMapRegistry.AirPit;
-        Assert.Equal(4, airPit.NavMeshBakeExclusions.Length);
-        Assert.All(airPit.NavMeshBakeExclusions, path => Assert.True(IsHierarchyPath(path) && path.Contains('/'), path));
-        Assert.Equal(airPit.NavMeshBakeExclusions.Length, airPit.NavMeshBakeExclusions.Distinct().Count());
+        // 2026-10-12 host raid 1: the four bake-only exclusions (shop shutters, a fence) let the NavMesh run through
+        // solids that stay in the scene; the walk test stopped at the DonB_Ramen shutter. AirPit now bakes every
+        // solid and opens the two portal gates instead (OpenedBarriers), so the list is empty by design.
+        Assert.Empty(airPit.NavMeshBakeExclusions);
+        Assert.Equal(4, airPit.OpenedBarriers.Length);
+        Assert.All(airPit.OpenedBarriers, path => Assert.True(IsHierarchyPath(path), path));
+        Assert.Equal(airPit.OpenedBarriers.Length, airPit.OpenedBarriers.Distinct().Count());
         Assert.Equal(new[] { -80.0f, 56.0f, -2.0f, 8.0f, -96.0f, 92.0f }, airPit.BakeBounds);
         // min < max per axis: [min_x, max_x, min_y, max_y, min_z, max_z]
         for (var axis = 0; axis < 3; axis++)

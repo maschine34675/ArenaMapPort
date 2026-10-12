@@ -20,15 +20,24 @@ REPO = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO / "tools" / "validate"))
 import validate_map_descriptors as VD  # noqa: E402
 
-EXCLUSIONS = [
-    "SBG_Arena_AirPit_ShootOut/SOO/fence_ema_01_white (18)",
+# Host raid 1 (2026-10-12) retired the four bake-only cutters (DonB_Ramen_closed x2, TH_Roll_door_01_closed,
+# fence_ema_01_white (18)): a NavMesh through shutters that stay solid walked the player into one. Every solid is baked.
+EXCLUSIONS: list = []
+# The two metal-detector portal gates of the z 50.5 facade (closed fence active, swung-open halves inactive) seal the
+# north spawn field and the east wing from the hall; they are opened like the two round-start gate roots.
+GATES = [
+    "SBG_Arena_AirPit_ShootOut/SOO/Prison_Metal_Fence_01 (2)",
+    "SBG_Arena_AirPit_ShootOut/SOO/Prison_Metal_Fence_01 (3)",
+]
+GATE_XZ = [(-23.50, 50.54), (-0.38, 50.54)]
+ROOT_BARRIERS = ["BUS_DOORS", "PASSPORT_CONTROL_DOORS"]
+BARRIERS = ROOT_BARRIERS + GATES
+# Paths under the duplicated BUILDING sibling, kept to pin the resolver's Transform.Find semantics (no longer inputs).
+BUILDING_PATHS = [
     "SBG_Arena_AirPit_ShootOut/SOO_LOD0/BUILDING/DonB_Ramen_closed",
     "SBG_Arena_AirPit_ShootOut/SOO_LOD0/BUILDING/TH_Roll_door_01_closed",
     "SBG_Arena_AirPit_ShootOut/SOO_LOD0/BUILDING/DonB_Ramen_closed (1)",
 ]
-# World positions of the four objects in the 0.6.0 package (x, z); the model's greedy list named them by path.
-EXCLUSION_XZ = [(-23.21, -44.19), (-46.24, 29.41), (-43.27, -43.47), (22.11, -29.85)]
-BARRIERS = ["BUS_DOORS", "PASSPORT_CONTROL_DOORS"]
 ARENA_LAYERS = [9, 11, 13, 18, 30]            # NavMeshSurface mask 0x40042A00 of Arena's three AI scenes
 BOUNDS = [-80, 56, -2, 8, -96, 92]
 PACKAGE = REPO / "work" / "extract" / "airpit-native-v5"
@@ -95,7 +104,7 @@ class ValidatorTests(unittest.TestCase):
         args = VD.registry_entries(text)["AirPit"]
         scope = {"ArenaEquatorLocation": {}}
         self.assertEqual(VD.resolve(args["OpenedBarriers"], scope), BARRIERS)
-        self.assertEqual(VD.resolve(args["NavMeshBakeExclusions"], scope), EXCLUSIONS)
+        self.assertNotIn("NavMeshBakeExclusions", args)   # omitted on purpose: the descriptor defaults to an empty list
         self.assertEqual(VD.resolve(args["BakeBounds"], scope), BOUNDS)
         self.assertEqual(VD.resolve(args["NavMeshBakeLayers"], scope), ARENA_LAYERS)
         for name in ("Equator", "Bay5"):
@@ -117,7 +126,8 @@ class ValidatorTests(unittest.TestCase):
     def test_sidecar_drift_from_the_runtime_descriptor_is_reported_per_field(self):
         self.assertTrue(any("bake_bounds mismatch" in e for e in self.check(lambda d: d["bake_bounds"].__setitem__(1, 57))))
         self.assertTrue(any("navmesh_bake_layers mismatch" in e for e in self.check(lambda d: d["navmesh_bake_layers"].pop())))
-        self.assertTrue(any("navmesh_bake_exclusions mismatch" in e for e in self.check(lambda d: d["navmesh_bake_exclusions"].pop())))
+        self.assertTrue(any("navmesh_bake_exclusions mismatch" in e
+                            for e in self.check(lambda d: d["navmesh_bake_exclusions"].append("SBG_Arena_AirPit_ShootOut/SOO/x"))))
         self.assertTrue(any("opened_barriers mismatch" in e for e in self.check(lambda d: d.pop("opened_barriers"))))
 
     def test_malformed_values_are_rejected(self):
@@ -169,36 +179,46 @@ class PackageTests(unittest.TestCase):
                     out.append((key, scene.objects[key]["layer"]))
         return out
 
-    def test_every_exclusion_resolves_to_exactly_the_flagged_object(self):
-        for path, (x, z) in zip(EXCLUSIONS, EXCLUSION_XZ):
+    def test_each_portal_gate_is_a_closed_fence_with_inactive_open_halves(self):
+        # The gate object itself carries no collider; its only active child is the closed fence (movement
+        # collider on LowPolyCollider 18 plus the ballistic twin on 12), the two swung-open halves are inactive.
+        # BoothDoorRepairs deactivates the direct children (none is called frame), so the portal frame
+        # (Entrance_portal, a separate object) stays and the passage opens; the bake drops the fence colliders.
+        for path, (x, z) in zip(GATES, GATE_XZ):
             found, unresolved = self.pc.resolve_barriers(self.scenes, [path])
             self.assertEqual((len(found), unresolved), (1, []), path)
             scene_name, key = found[0]
             self.assertEqual(scene_name, "Arena_AirPit_ShootOut")
             scene = self.scenes[scene_name]
+            self.assertNotIn(key, scene.roots())
+            self.assertTrue(scene.chain_active(key))
             world = scene.world(key)
             self.assertAlmostEqual(world[0, 3], x, delta=0.05, msg=path)
             self.assertAlmostEqual(world[2, 3], z, delta=0.05, msg=path)
-            colliders = self.live_colliders(scene, self.subtree(scene, key))
-            self.assertTrue(colliders, path)
-            # the movement collider is on LowPolyCollider (18), which Arena's layer mask collects
-            self.assertIn(18, {layer for _k, layer in colliders}, path)
-            self.assertTrue(scene.chain_active(key))
+            children = {scene.objects[c]["name"]: c for c in scene.children[key]}
+            self.assertEqual(set(children), {"Prison_Metal_Fence", "Prison_Metal_Fence_PART_L", "Prison_Metal_Fence_PART_R"}, path)
+            self.assertTrue(scene.objects[children["Prison_Metal_Fence"]]["active"], path)
+            self.assertFalse(scene.objects[children["Prison_Metal_Fence_PART_L"]]["active"], path)
+            self.assertFalse(scene.objects[children["Prison_Metal_Fence_PART_R"]]["active"], path)
+            self.assertEqual(self.live_colliders(scene, [key]), [], "the gate object itself must not be a source")
+            layers = sorted(layer for _k, layer in self.live_colliders(scene, self.subtree(scene, key)))
+            self.assertEqual(layers, [12, 18], path)
+            self.assertFalse([k for k in self.subtree(scene, key) if "frame" in scene.objects[k]["name"].lower()], path)
 
-    def test_exclusion_paths_survive_a_duplicated_building_sibling(self):
+    def test_building_paths_resolve_to_the_first_duplicated_sibling(self):
         # SOO_LOD0 holds two siblings named BUILDING (52 and 8 children). Transform.Find takes the first one,
         # which holds all three BUILDING paths, so BakeNavMesh and this model resolve them to the same objects.
         scene = self.scenes["Arena_AirPit_ShootOut"]
         (lod0,) = [k for k, o in scene.objects.items() if o["name"] == "SOO_LOD0"]
         buildings = [c for c in scene.children[lod0] if scene.objects[c]["name"] == "BUILDING"]
         self.assertEqual(len(buildings), 2)
-        for path in EXCLUSIONS[1:]:
+        for path in BUILDING_PATHS:
             found, _unresolved = self.pc.resolve_barriers(self.scenes, [path])
             self.assertEqual(scene.objects[found[0][1]]["parent_id"], buildings[0], path)
 
     def test_barrier_roots_are_scene_roots_without_frame_parts(self):
         total = 0
-        for root_name in BARRIERS:
+        for root_name in ROOT_BARRIERS:
             found, unresolved = self.pc.resolve_barriers(self.scenes, [root_name])
             self.assertEqual((len(found), unresolved), (1, []), root_name)
             scene_name, key = found[0]
@@ -213,9 +233,9 @@ class PackageTests(unittest.TestCase):
             total += len(self.live_colliders(scene, tree))
         self.assertEqual(total, 92)
 
-    def test_the_four_cutters_and_the_barriers_leave_no_markup_behind(self):
+    def test_the_barriers_leave_no_markup_behind(self):
         # BakeNavMesh also drops NavMeshModifier/Volume markups under these objects; AirPit has none there.
-        for path in EXCLUSIONS + BARRIERS:
+        for path in BARRIERS:
             found, _unresolved = self.pc.resolve_barriers(self.scenes, [path])
             scene_name, key = found[0]
             scene = self.scenes[scene_name]
@@ -231,8 +251,8 @@ class PackageTests(unittest.TestCase):
         masked = self.pc.source_owner_mask(cset, layer_mask=self.pc.layers_to_mask(ARENA_LAYERS))
         layers = {cset.owners[i].layer for i in range(len(cset.owners)) if everything[i] and not masked[i]}
         self.assertEqual(len(cset.owners), 5309)
-        self.assertEqual(int(everything.sum()), 5139)         # 5309 - 67 LevelBorder - 2 SPAWN_BOUND - 92 barrier - 9 exclusion
-        self.assertEqual(int(masked.sum()), 2011)
+        self.assertEqual(int(everything.sum()), 5144)         # 5309 - 67 LevelBorder - 2 SPAWN_BOUND - 92 root barrier - 4 gate
+        self.assertEqual(int(masked.sum()), 2013)             # was 2011 with the 4 cutters (4 of their 9 owners on layer 18)
         self.assertEqual(layers, {0, 12, 22})                   # Default, HighPolyCollider (ballistic), Interactive
         self.assertFalse({cset.owners[i].layer for i in range(len(cset.owners)) if masked[i]} - set(ARENA_LAYERS))
         # AirPit has no live non-trigger collider on the Triggers layer, so keeping the owner rule costs nothing here
