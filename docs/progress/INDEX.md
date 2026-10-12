@@ -11,6 +11,11 @@ dated state in one screen; read it before this index if you only have a minute.
 - [../PLAN-AIRPIT.md](../PLAN-AIRPIT.md) — the ordered plan for AirPit as the third released map (2026-10-11):
   generic plan-driven native-feature pipeline first, then a playable raid, then the native features in the
   Equator/Bay5 order, then release; open decisions in its section 4.
+- [airpit-source-alternatives.md](airpit-source-alternatives.md) — read-only audits of Air Pit 2.0 (pink =
+  one triplanar blockout shader; unfinished CheckPoint/OverRun dev map on Bay5's AI), the unreferenced
+  `Arena_Airpit_new` scenes 207–212 (abandoned 2024 BlastGang art pass, bound nowhere, not coherent) and
+  Bowl's single pink material (`p0/Reflective/Bumped Specular_TwoSided` on `Tarp_Tunnel`). Recommendation:
+  AirPit 1.0 stays the third map (2026-10-12).
 - [muzzle-flare-exclusion.md](muzzle-flare-exclusion.md) — exclude native muzzle
   emission from Equator's restored streaks; refresh README and add FORGE (2026-10-11).
 

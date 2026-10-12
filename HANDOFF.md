@@ -35,6 +35,15 @@ the real limit; the four north spawn points moved south of the gate line (`test_
 stays as a documented island. Current bake U4: 8193 vertices / 3775 triangles. Evidence and the GateEntity notes for ArenaMode in
 docs/progress/airpit-release.md ("Host raid 4", "Host raid 5").
 
+Midday 2026-10-12 (source audits, no code change, `docs/progress/airpit-source-alternatives.md`): the user asked whether BSG's
+"Air Pit 2.0" could replace 1.0 (our 0.5.4 export was all pink) and what `Arena_Airpit_new` (scenes 207-212) is. 2.0's pink is a
+single blockout shader (`Custom/WorldTriplanarFresnelPro`, ~95 % of the visible area; the stand-in row exists but is gated to
+Bay5/AirPit and AirPit2 is not in `All`), and 2.0 is an unfinished CheckPoint/OverRun dev map on Bay5's AI with no locale/banner/
+loadscreen. `Arena_Airpit_new` is bound by no preset: a 2024-01 BlastGang-era art pass (two copies of the level, 76 % dead grass,
+Prison AI stub without NavMeshData, Bay5 light, Train settings, 1.0 Scripts copy, bomb sites and defender spawns over void).
+Recommendation (not yet confirmed by the user): AirPit 1.0 stays. Side finding for the next candidate: Bowl's one pink material is `Tarp_Tunnel` on
+`p0/Reflective/Bumped Specular_TwoSided` (plus the two cloth shaders AirPit already substitutes) - a fallback-table job.
+
 Open for the user: (1) `Weather (test)` is inert on server-time maps, so AirPit's rain check still waits for server rain; (2)
 fog-sheet StandIn vs Hidden A/B (the haze in the hall looks strong); (3) the airstairs strip (`navmesh_bake_layers`); (4) the
 hall-centre ShootOut cover still makes core3 -> core19 a 194 m detour for bots (plan's rejected "190 walked-through props"

@@ -602,7 +602,10 @@ from ignored `work/releases/create_*_zip.py` into `tools/` driven by the release
 - **Optional visual polish:** activating `GreenFog` / deactivating `RedFog` as an "open lanes" cue, bus exit lights,
   re-creating the animated gates (Arena's gate components are not EFT classes).
 - **Other modes and maps:** Tournament / LastHero presets, Air Pit 2.0 (scenes 346-352), the `Arena_Airpit_new/*`
-  scenes (BuildSettings 207-212, covered by no plan; watch item for 0.6.0 content), the other eleven maps.
+  scenes (BuildSettings 207-212, covered by no plan), the other eleven maps. Both Airpit alternatives were audited
+  on 2026-10-12 (`docs/progress/airpit-source-alternatives.md`): 2.0 is a grey-box CheckPoint/OverRun dev map on a
+  shader SPT lacks, `Arena_Airpit_new` an abandoned BlastGang-era art pass bound by no preset; recommendation: AirPit
+  1.0 stays.
 - **Rejected refactors:** `released` sidecar flag with `ReleasedMaps.props`, a `RuntimeFeatures` vocabulary, a
   `BotProfile` descriptor group (reasons in §0); revisit when the fourth map needs them.
 - **Equator-only stacks:** neon night appearance, `EquatorProfiles`, `EquatorRoofShadowRepairs`, anamorphic flare,
