@@ -309,6 +309,17 @@ namespace ArenaMapPort.Client
             var originalName = currentName.Substring(StandinPrefix.Length);
             var target = FindLoadedExact(originalName) ?? Shader.Find(originalName);
 
+            // 2026-10-12 host finding: EFT 0.16.9.5 carries the AirPit fallback-table names itself (Customs'
+            // scene shared assets, loaded in-process by raid start), so the direct lookup wins and the
+            // stand-in path below never runs. Say so once per name and raid, so a future raid where the
+            // substitutes DO run is visible in the log.
+            if (target != null && ShaderStandinPolicy.TryGetFallback(map.Key, originalName, out _) &&
+                _warnedOnce.Add("native-shader:" + originalName))
+            {
+                Plugin.Log.LogDebug($"[ArenaMapPort][RebindShaders] '{originalName}' resolved to EFT's own loaded " +
+                                    $"shader; the stand-in substitute is not used (map={map.Key})");
+            }
+
             // §a2 — real bug (14 Arena shader names have no compiled SPT shader at all), tentative
             // fallback mapping. Per-map allow-list (ArenaMapDescriptor.ShaderFallbackNames) and rows in
             // ShaderStandinPolicy: Bay5 behind the legacy

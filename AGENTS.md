@@ -331,3 +331,8 @@ the log; the user uses it to point at things.
 - `uibridge_wait logMatches`: only lines logged after the wait started count (use `sinceSeq`).
 - Bash tool heredocs over ~180 lines fail; write scripts with the Write tool and run them.
 - Fresh 0-HP profile deaths on the host were the skipped heal screen, not the map.
+- Shader stand-ins (PLAN-AIRPIT item 11): EFT 0.16.9.5 carries `Custom/Billboard_FogSheet_Simple`, both `Cloth/ClothShader`
+  variants and the ANGRYMESH rock shader itself, inside Customs' scene shared assets (`sharedassets13/5/15.assets`), not in the
+  global `StreamingAssets/Windows/shaders` bundle a name census reads. They are loaded in-process by raid start, so
+  `ShaderRebind`'s direct lookup wins and the AirPit substitutes never run (log `resolved to EFT's own loaded shader`); the
+  fog-sheet haze is Arena's own look and `AirPitFogSheetOpacity` has nothing to refresh. Keep the stand-in rows as the safety net.

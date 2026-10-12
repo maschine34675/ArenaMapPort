@@ -49,6 +49,22 @@ public sealed class ShaderStandinPolicyTests
         Assert.Empty(ShaderStandinPolicy.AllowedNames(null));
     }
 
+    // 2026-10-12 host finding: EFT 0.16.9.5 carries Custom/Billboard_FogSheet_Simple itself, so after the first
+    // rebind of a process the cached fog-sheet materials carry the REAL name, not the stand-in prefix; Hidden
+    // mode has to recognise both (and nothing else).
+    [Theory]
+    [InlineData("Custom/Billboard_FogSheet_Simple", true)]
+    [InlineData("Hidden/ArenaMapPort/Custom/Billboard_FogSheet_Simple", true)]
+    [InlineData("Unlit/Transparent Colored", false)]
+    [InlineData("Hidden/ArenaMapPort/Cloth/ClothShader", false)]
+    [InlineData("Custom/Billboard_FogSheet", false)]
+    [InlineData("", false)]
+    [InlineData(null, false)]
+    public void FogSheetMaterialsAreRecognisedByTheRealAndTheStandinShaderName(string shaderName, bool expected)
+    {
+        Assert.Equal(expected, ShaderStandinPolicy.IsFogSheetShaderName(shaderName, "Hidden/ArenaMapPort/"));
+    }
+
     // The six rows exactly as they shipped for Bay5 (docs/progress/shader-compat-and-inspector.md section 3).
     static readonly (string Original, string Fallback)[] ShippedRows =
     {

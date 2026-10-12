@@ -32,6 +32,14 @@ namespace ArenaMapPort.Client
     /// StandIn / Hidden choice works in both directions within one process (Hidden recognises the already
     /// rebound fog-sheet materials by instance id, StandIn rebinds the ones Hidden left alone).
     /// Host test: docs/progress/airpit-release.md item 11 checklist (log lines <c>[ArenaMapPort][RebindShaders]</c>).
+    ///
+    /// 2026-10-12 host finding (raid 7): EFT 0.16.9.5 itself carries the three Arena shaders inside Customs'
+    /// scene shared assets (<c>sharedassets13</c> fog sheet, <c>sharedassets5</c> both cloth variants,
+    /// <c>sharedassets15</c> rock) and they are loaded in-process before the content scenes rebind, so
+    /// <see cref="ShaderRebind"/>'s direct lookup finds the REAL shader and this substitute path never runs
+    /// (the fog sheets render natively; no generated texture exists, so <c>AirPitFogSheetOpacity</c> has
+    /// nothing to refresh). The stand-in path stays as the safety net for a process where they are absent;
+    /// Hidden mode recognises both shader names (<see cref="ShaderStandinPolicy.IsFogSheetShaderName"/>).
     /// </summary>
     internal static class ShaderStandins
     {
@@ -94,7 +102,9 @@ namespace ArenaMapPort.Client
                 new ConfigDescription(
                     "AirPit only, AirPitFogSheets = StandIn. Multiplies the alpha of the generated fog-sheet texture " +
                     "(peak alpha = colour alpha x authored OpacityIntensity x 2 x this value). 0 = invisible, " +
-                    "4 = four times the default. Live.",
+                    "4 = four times the default. Live. No effect when EFT's own copy of the fog-sheet shader is " +
+                    "loaded (the usual case on 0.16.9.5: the log says 'resolved to EFT's own loaded shader' and the " +
+                    "sheets render natively).",
                     new AcceptableValueRange<float>(ShaderStandinPolicy.FogSheetOpacityMin, ShaderStandinPolicy.FogSheetOpacityMax)));
             _fogSheetOpacity.SettingChanged += (_, __) => RefreshFogTextures();
         }
@@ -221,7 +231,8 @@ namespace ArenaMapPort.Client
         }
 
         static bool IsFogSheetMaterial(Material material) =>
-            (material.shader != null && material.shader.name == FogStandinName) || Fog.ContainsKey(material.GetInstanceID());
+            (material.shader != null && ShaderStandinPolicy.IsFogSheetShaderName(material.shader.name, ShaderRebind.StandinPrefix)) ||
+            Fog.ContainsKey(material.GetInstanceID());
 
         static float UserOpacity() =>
             _fogSheetOpacity != null ? _fogSheetOpacity.Value : ShaderStandinPolicy.FogSheetOpacityDefault;

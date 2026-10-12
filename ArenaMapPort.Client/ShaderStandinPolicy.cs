@@ -141,6 +141,17 @@ namespace ArenaMapPort.Client
         internal static bool HidesFogSheets(string mapKey, FogSheetMode mode) =>
             IsAirPit(mapKey) && mode == FogSheetMode.Hidden;
 
+        /// <summary>
+        /// A fog-sheet material is recognised by its shader name in both states: the imported stand-in
+        /// (<paramref name="standinPrefix"/> + the Arena name, first pass of a fresh process) and the real
+        /// <c>Custom/Billboard_FogSheet_Simple</c>. EFT 0.16.9.5 carries that shader itself (Customs' scene
+        /// shared assets, loaded in-process by raid start, 2026-10-12 host finding), so after the first rebind of
+        /// a process the cached bundle materials carry the real name and Hidden mode must still find them.
+        /// </summary>
+        internal static bool IsFogSheetShaderName(string shaderName, string standinPrefix) =>
+            !string.IsNullOrEmpty(shaderName) &&
+            (shaderName == FogSheetShader || shaderName == standinPrefix + FogSheetShader);
+
         /// <summary>One texture slot the substitute reads under another name than the Arena shader used.</summary>
         internal readonly struct TextureRemap
         {

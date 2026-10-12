@@ -2246,3 +2246,48 @@ Raid 6 (10:23, build `0419ab1`, after a server stop for the DLL swap - host serv
 the moved `SpawnPoint_Player_All` (-21.5, 0, 61.5); `authored borders: created 12 wall(s)`, **`ballistic twins: added 43
 HighPolyCollider twin(s) ... (1909 already had one)`** (the 12 walls no longer counted), `added navmesh ... 8193 vertices, 3775
 triangles`, no warning. Left at 10:25.
+
+### Host raid 7 (2026-10-12 13:32-13:40, build 171c278-era client = `e1e27e7` DLL, bots None, daytime): airstairs, fog sheets, the real shaders
+
+Purpose: the open points "airstairs strip" (4) and "fog sheets StandIn vs Hidden A/B" (3), with the U4 build still loaded.
+
+- **Airstairs: closed.** `uibridge_teleport dryRun` at (-7, -30) and (-7, -26) snap onto mesh at y 1.8 and 3.4 (the offline note said the
+  3.8 m2 `Passenger_ladder_02` tread strip is missing from the bake); `uibridge_walk` from the foot (-7, 0, -33) to (-7, 2.7, -25.8):
+  **"7.7 m away (7.9 m along the navmesh)", arrived at (-7.0, 3.4, -26.4)**. The runtime mesh carries the climb, so bots reach the top;
+  `navmesh_bake_layers` stays as it is.
+- **Fog sheets: there is nothing to A/B, the sheets render on Arena's own shader.** Offline (`scratchpad/airpit_fogsheets.py`): 127
+  fog-sheet renderers, 109 active at raid time (73 Light-scene lamp sheets at y 6.42 / 14.06 / misc, 18 `PASSPORT_CONTROL_EMISSIVE`
+  and 18 `RED/RedFog` lane sheets at z 66.05 / 69.4; the 18 `GREEN` ones inactive). The yellow-green haze the user saw is the sheet
+  at (19.1, 7.4, -3.0) hanging under the arrivals board in front of Burger Spot (photo 20, from (14, 0, -20) yaw 30). Setting
+  `AirPitFogSheetOpacity` 1 -> 0.5 logged **`fog-sheet opacity 0.50: 0 generated texture(s) refreshed`** and changed nothing: no
+  material went through the substitute path. The whole raid has no `has no SPT shader — using fallback` line and no per-material
+  `fog texture colour=` line; the rebind summary still counts `5x Custom/Billboard_FogSheet_Simple, 4x Cloth/ClothShader, 1x
+  Cloth/ClothShader_backface, 1x ANGRYMESH/PBR Rocks/PBR BlendTopDetail (Legacy)` because `_reboundCounts` counts every rebind.
+  `uibridge_inspect` on `PASSPORT_CONTROL_EMISSIVE/FogSheetSimple_Volumetric_red_small` -> MeshRenderer -> sharedMaterial
+  `396807b58e197f49` -> **`shader = Custom/Billboard_FogSheet_Simple`** (no `Hidden/ArenaMapPort/` prefix, `mainTexture = null`).
+  So `ShaderRebind.Rebind`'s direct lookup (`FindLoadedExact(originalName) ?? Shader.Find`) found the REAL shader and the item 11
+  stand-ins never ran - on this raid and, by the same missing log lines, on raids 1-6 as well (the item 11 "verification" table
+  only quoted the summary counts).
+- **Where EFT has them.** UnityPy scan of `EscapeFromTarkov_Data/*` (1,143 files, 200 s, `scratchpad/find_shader_source.py`):
+  `sharedassets13.assets` (= BuildSettings 13 `custom_Light`) carries `Custom/Billboard_FogSheet_Simple`, `sharedassets5.assets`
+  (`custom_multiScene`) `Cloth/ClothShader` and `Cloth/ClothShader_backface`, `sharedassets15.assets` (`custom_Scripts`)
+  `ANGRYMESH/PBR Rocks/PBR BlendTopDetail (Legacy)`; the global `StreamingAssets/Windows/shaders` bundle (the item 11 census) has
+  none of them, which is why the census called them missing. Unity stores a shader shared by several scenes in the first scene's
+  shared-asset file and later scenes reference it, so these three are loaded whenever any scene that uses them is loaded; they
+  were present before the ShootOut rebind pass (13:32:08) in a process whose only raid was this one (EFT's `ShadersFinder` table
+  does not list them). Which loaded scene pulls them in (menu/hideout content or the `Reserve_Base_Scripts` donor rig, activated
+  at 13:32:07.213, one second before the pass) was not determined; both run on every ArenaMapPort raid.
+- Consequences: (1) the fog sheets, cloth and rock on AirPit are Arena's own look, the haze is authored and stays (nothing to decide);
+  (2) `AirPitFogSheetOpacity` and the StandIn/Hidden switch were inert in this state - `IsFogSheetMaterial` only knew the stand-in
+  name, so `Hidden` would have failed on a cached bundle. Fix (same day): `ShaderStandinPolicy.IsFogSheetShaderName` accepts the real
+  and the prefixed name (test `FogSheetMaterialsAreRecognisedByTheRealAndTheStandinShaderName`), the opacity key's description says
+  when it has no effect, and `ShaderRebind` logs once per name `'<name>' resolved to EFT's own loaded shader; the stand-in substitute
+  is not used` so a process where the substitutes DO run is visible. The stand-in rows stay as the safety net.
+- Also in this raid: `barbed wire: attached 12 BarbedWire trigger(s)` (item 15 live on AirPit), `NativeDecals ... source=481 active=471`
+  (the 10 missing decals of the plan's 481 sit on inactive objects), `RainAudio arena_airpit: ready after raid audio reset` (item 21).
+- Left at 13:40 (`gpu-run leave`, healed). Screenshots `work/screenshots/airpit-2026-10-12/20..22` (ignored).
+
+Same afternoon, without a raid: the `Weather (test)` inertia on server-time maps (open point 2) gets a developer-only opt-in,
+`Weather (test)/ApplyOnServerTimeMaps` (default false, read through `DeveloperOptions.Enabled` inside `ModeForSelection`, so the
+`DaytimeVisualsProbe` `effective=` line stays truthful; commit `171c278`, six new rows in `MapWeatherRuntimeTests`). The AirPit rain
+check (F8 readbacks at the accepted RainBounds plus streak screenshots) is the next host raid.
