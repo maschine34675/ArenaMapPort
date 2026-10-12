@@ -118,14 +118,20 @@ public sealed class AiAnchorsTests
         var bounds = ArenaMapRegistry.AirPit.BakeBounds;
         Assert.Equal(6, bounds.Length);
         using var doc = JsonDocument.Parse(File.ReadAllText(Sidecar("airpit.ai.json")));
-        var positions = doc.RootElement.GetProperty("core_points").EnumerateArray().Select(cp => cp.GetProperty("position")).ToList();
+        // Core point 7 (-8.35, 0.02, 76.81) is Arena's anchor in the north spawn pocket. Since 2026-10-12 the passport-control
+        // doors stay closed and the box ends at z 70 (docs/progress/airpit-release.md, host raid 4), so it is a deliberate island
+        // like Equator's 13/14; the sidecar keeps it because it is the extractor's reproducible output.
+        var corePoints = doc.RootElement.GetProperty("core_points").EnumerateArray().ToList();
+        var island = Assert.Single(corePoints, cp => cp.GetProperty("id").GetInt32() == 7);
+        Assert.InRange(island.GetProperty("position")[2].GetSingle(), 75f, 80f);
+        var positions = corePoints.Where(cp => cp.GetProperty("id").GetInt32() != 7).Select(cp => cp.GetProperty("position")).ToList();
         foreach (var hub in doc.RootElement.GetProperty("patrol_ways").EnumerateArray()
                      .SelectMany(way => way.GetProperty("hubs").EnumerateArray()))
         {
             positions.Add(hub.GetProperty("position"));
             positions.AddRange(hub.GetProperty("sub_points").EnumerateArray());
         }
-        Assert.Equal(19 + 3 + 35, positions.Count);
+        Assert.Equal(18 + 3 + 35, positions.Count);
         foreach (var position in positions)
         {
             var p = position.EnumerateArray().Select(v => v.GetSingle()).ToArray();
