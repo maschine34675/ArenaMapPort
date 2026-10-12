@@ -2842,3 +2842,101 @@ built bundle and `uibridge_walk`); Light's 46 L18 lamp colliders sit at ceiling 
 risk). Host-unverified content: the 9 ratio-0.5 and 5 ratio-2 decals, the two renderer-less sprays, the 4 hidden
 video-player colliders, the DOORS, the 86 outline-box decal quads, 146 new meshes that share a name with a v6 mesh, the two
 new cubemaps (`cubemapa_128`, `moscow_2_DXT1`).
+
+## Phase 1b - census of the rest of level38/37 and the lead decisions for v8 (2026-10-13, 00:05-00:40, workflow `wf_d11c2d61-6d5`)
+
+Two read-only census agents (level38 against 324, level37 against 325; 1.0 M tokens) ran the proposed records through
+`scene_select.select_nodes` on the live Arena graphs; both reproduce the v7 pins and digests exactly before widening. The
+decoration box x -60..40, y -5..20, z -85..90 contains all but two of level38's 8,041 unit roots, so "inside the box" is
+effectively the whole level; the two outliers are a v7 decal and `PASSPORT_CONTROL/puddle2_indoornoripple (1)` at z 90.5
+(box raised to z 91 for v8).
+
+### Level38 (`Arena_Airpit_Main_hall`), reference 324
+
+- **Record**: the 11 v7 roots stay; the six shop-footprint tier-2 region roots become four bare region roots on the one
+  box: `PROJECTION`, `SBG_Arena_Airpit_Main_hall/OO/PROPS` (whole tree), `VARIANT`, `PROPSnoCulling`. Not selected:
+  `PHYSIC` (334 units, inactive in Arena too), `SOO` (275 units: 132 cover-wall units without twin + 143 twins; mode
+  layout, the user keeps 324's hall-centre cover), `SOO_LOD0/Destroyed_Brick_Wall..(3)` (would close the NE breach).
+  Without exclusions: 14,965 objects / 4,174 units / 309 carriers / 3,212 twins (per rule: PROJECTION 123/263,
+  OO/PROPS 1209/1251, VARIANT 1534/1555, PROPSnoCulling 20/21); 1,855 BallisticCollider, 237 StaticDeferredDecal (+35,
+  all pass the ratio set, 6 inactive), 0 lights, dropped_script_owners 0, orphans 4 (the v7 ones). New assets vs v7:
+  179 meshes / 14 materials / 20 textures.
+- **Overlap census** (the quality risk): BSG rearranged the hall centre for 324. Method: 1,370 new prop instances
+  (prefab containers or lone units) vs 1,016 live-only 324 prop/cover instances (OO/PROPS, SOO, VARIANT, PROPSnoCulling;
+  324 structure = OO_Building, SOO_Building, SOO_LOD0 BUILDING, LevelBorders, CAPTURE_ZONE, PROJECTION not tested),
+  mesh-AABB intersection >= 0.3 of the smaller volume, confirmed by OBB sampling and a decal-likeness test; moved copies =
+  same base name at 0.02..1.5 m (greedy one-to-one). **Result: 245 instances = 632 units (VARIANT 455, OO/PROPS 161,
+  PROPSnoCulling 16) are MAJOR** - 216 overlap a 324 prop (>= 0.5 AABB and OBB, not decal-like), 29 are moved copies
+  (0.04..1.48 m). They concentrate on two old scaffold/cover platforms (south x -26..-3, z -37..-13: 111 of 174
+  instances; north x -21..-3, z 17..33: 57 of 108) that 324 replaced by the prefab platforms
+  `SOO/airpit_construction_ShootOut_01 (2)` at (-12.2, 0, -19.7) and `(3)` at (-11.7, 0, 26.1), plus the moved
+  `Passenger_ladder_02` (1.40 m), `Flowerbed_steel_01` at (-11.9, 0, 50.5) (4 Food_container stall units inside; bounds
+  test only, the planter may be hollow), `tarpaulin_wall_03`, `Airport_wing_ramp_02`, `Stairs_ramp`, nudged sandbags
+  (0.23-0.74 m) and barricades. 54 instances are minor-only (28 near misses 0.3..0.5, 16 decal-like, 10 AABB >= 0.5 but
+  OBB < 0.5): kept, host-check visually. After the 632 exclusions the census is a fixed point (0 major, 0 moved copies).
+  `FLOOR_DAMAGE2 ` (152 units; 129 re-enable twins BSG left inactive in 324, 23 exist only in 38) is the only
+  BSG-disabled content the record turns back on - in scope by the user's decision.
+- **With the exclusions**: 12,997 objects / 3,542 units / 241 carriers / 3,212 twins, digest `5648ec2a...`; 1,562
+  BallisticCollider; bake-source colliders 2,384 (966 on Arena's mask, 856 of them intersecting the bake box, 425 new;
+  75 new in-box mask colliders have their bottom at >= 2.5 m: AIRBUS interior 25, FRONT 16, BACK 9, stalls 9,
+  barricades ~12 = island candidates for the Dijkstra check after the bake). 484 selected units are inactive (VARIANT
+  alternates) and carry 193 colliders / 22 meshes used nowhere else: inert, bundle weight only.
+- **Spawn check**: 18 sidecar spawn points (= the 18 SpawnPointParams of base.json), 2 exits and the four Arena anchors
+  vs every new live collider: 0 hits (AABB and triangle level; nearest 1.73 m at the south bot end, anchors 1.84-2.10 m).
+  The r=5 player spheres of player-all and south-all contain 37 new colliders each (15-16 on movement layers): check
+  with `uibridge_teleport dryRun` on the host.
+- **Scripts**: dropped_script_owners 0; the only renderer-less script owners of level38 are the two `spray_02` decals
+  already in v7. Interaction rigs on unit members (LimbIK, SmartGrip, DoorHandle, GripPose, WindowBreaker, HotObject,
+  BarbedWire) arrive without their scripts, as in the full scenes. AreaLight / CullingAdvancedLightObject / FlareLight of
+  the phase-0 census are level37 items.
+
+### Level37 (`Arena_Airpit_Light`), reference 325
+
+- **Record**: roots as v7 (ChinaPlace*, BurgerSpot*, HELLFINGER, LouiPeeton*), region roots on the one box for every
+  other group: GLOBAL GI, NO_CULL, ShadowPlanes, PUDDLES, FogSheets, Airport_lamp_02, LAMPS_GENERIC*, AIRBUS, AIRPORT
+  LAMPS, BACK_AIRPORT_LAMPS, LUM_LAMPS, Point Light, chemlight_emissive, `Lamps_ceiling - DISABLED` (the last four lamp
+  groups select 0 new units - all twins - and stay as guards). Not selected: LIGHT_Disabled (103 in box, lights on
+  inactive objects), BACKGROUND (68 ring lamps at z 94..154), STENCILS and PLANE_AREA_HIGHLIGHTS (script-only shells
+  with null mesh/material; BSG switched the stencils off in 325). Result 1,518 objects / 285 units / 30 carriers / 268
+  twins (+556 / +98 / +4 vs v7); Lights 156 -> 206 (+50: 25 Point / 25 Spot, 12 with soft shadows = the VolumetricSpot
+  fixtures over the passport hall, 46 active), CullingLightObject 147 -> 176, VolumetricLight 9 -> 23, BallisticCollider
+  122 -> 172, MeshRenderer 431 -> 795; 26 new Decal/Ultra blob shadows (all within 3 m of a level38 prop). New assets:
+  8 meshes (the `Airport_lamp_02` LODs/shadow/ballistic), 1 material (`Airpit_emissive_01_off`).
+- **Double lighting**: of the 50 new lights only one lies within 1.5 m of a 325 light (`NO_CULL/Spot Light` 0.31 m
+  below a 325 point light of a different type; level37 carries both, so it is the furnished hall, kept). No moved or
+  re-tuned copy exists in 325. Effective intensity is `CullingLightObject._maxLightIntensity` (448 of 712 CLO lights
+  store editor intensity 0), so lighting comparisons must use it.
+- **The 45 `Airport_lamp_02` ring lamps** (x -37..14, y 5.35..6.83, z 56..83) carry one layer-12 ballistic collider
+  each; L12 is NOT in Arena's bake mask, so no obstacle and no island. The whole new level37 scope adds ONE mask-layer
+  collider and it sits above the bake box (y 9.3). v7's 46 L18 lamp colliders have no walkable top larger than 0.22 m2,
+  so no island there either (inference from the meshes). Bake y max 6.5 would cut the airliner fuselage top (Arena's
+  highest walkable surface 6.46 m, about 150-190 m2): keep y -2..8. Only 11 of the 45 fixtures have an active light
+  within 2 m; expect lit cones over the hall, not every lamp glowing (emissive material does the rest).
+- **Found by the census, not by the twin rule**: `scene_select` compares unit ROOTS only; 11 of the 268 twin pairs
+  differ below the root - the level37 unit carries child Lights that its 325 twin lost. **20 active lights** (none
+  exists anywhere in 325) would stay missing: `AIRPORT LAMPS/Airport_lamp (79)` = 9 point lights r 7-10.6 at y 2.3 across
+  the SE shop interior (x 6.8..31, z -14..-41) + `Airport_lamp (72)` one point light; `AIRBUS/Old_Bunker_Light_cookie
+  (9)/(6)` and `NO_CULL/(8)` = 6 spots over the airliner; `BACK_AIRPORT_LAMPS (102)/(103)` one point each; `LUM_LAMPS/
+  lab_lamp_lam_ceiling_destroyable (3)` x2 one spot each; plus 2 `ShadowPlaneBox` renderer children. With them the port
+  would hold the furnished hall's lighting exactly (963 active lights = 737 via 325 twins + 206 imported + the 20).
+  List: scratchpad `shops4/a37/lost_child_lights.txt`.
+- AreaLight 25 / CullingAdvancedLightObject 25 / MultiFlare FlareLight 4 arrive without scripts (no importer exists; the
+  shells are cosmetic, as in 325).
+
+### Lead decisions for v8 (2026-10-13 00:45; implementation workflow `wf_409814f7-455`)
+
+- D1/D2: both records as proposed, one "decoration box" region x -60..40, y -5..20, z -85..91.
+- D3: new select key `twin_descendants: "import_missing"` on both records - for a twin-skipped unit, descendants with
+  content of their own that have no counterpart below the reference twin (base name, component multiset, activity,
+  0.02 m, greedy) are emitted as extra units; the ancestors up to the twin root become component-free stand-in carriers
+  ("twin carriers", the only carriers allowed to have source components). Expected for level37: the 20 lights + 2
+  renderers; level38 unmeasured, guard: more than 300 units or whole prop duplicates -> "skip" and report.
+- D4: new select key `exclude: [{path, at?, reason}]` with the 208 census entries (632 units); applied after claiming,
+  twin matching and descendants; `at` (0.05 m) required for ambiguous paths (47 entries: VARIANT instance names repeat);
+  fail closed on no node / zero drop / ambiguity / duplicates; carriers recomputed. Gate: no v7 unit is dropped.
+- D5: manifest block and contract gain `excluded`, `exclude_entries`, `twin_descendants_added`, `twin_descendant_paths`
+  (manifest only) and per-rule `excluded` / `descendants_added`; required keys, so v7 joins v6 as an archive.
+- D6/D7: package `work/extract/airpit-native-v8`; gates: five full scenes and all v7 assets byte-identical, v7 selection a
+  subset of v8, validate_extract with reproducibility, decal refresh identical, spawn check on the real package;
+  repoint every v7 pin to v8. Descriptor and sidecar are unchanged (same scene names, same 9 opened barriers).
+- Unity build U6 only after v8 (one bake and one deploy for phases 1 and 1b).
