@@ -32,7 +32,9 @@ namespace ArenaMapPort.Client
     ///
     ///  (a) <see cref="RenderPrefix"/> computes <c>LevelSettings.RainBounds</c> from the map's own static
     ///      geometry (every enabled <c>MeshRenderer</c> in an owned scene, excluding Water/Sky/LevelBorder
-    ///      layers, the local player's own body, and oversized volumes like the sea plane/sky dome) and
+    ///      layers, the local player's own body, and oversized volumes like the sea plane/sky dome; when the
+    ///      descriptor states a play space in <c>BakeBounds</c> also everything that never reaches into that
+    ///      box plus <see cref="PlaySpaceMargin"/>, AirPit's distant scenery) and
     ///      writes it — safe to overwrite <see cref="WeatherRig"/>'s own default-value write: <c>RainBounds</c>
     ///      is never referenced by <c>LevelSettings.ApplySettings()</c> (confirmed, LevelSettings.cs:194-218),
     ///      it is read fresh, later, directly off the live singleton by <c>DepthPhotograper.Render()</c>
@@ -104,6 +106,14 @@ namespace ArenaMapPort.Client
         const float MaxRendererExtent = 600f;
         const float HorizontalPadding = 10f;
         const float TopPadding = 5f;
+        // AirPit host raid 1 (2026-10-12): its far scenery (mountains to +-1.6 km, runway, forecourt) is many
+        // renderers that each pass MaxRendererExtent, so the union came out 4.3 x 3.2 km and the 4096 px depth
+        // photo had about one metre per pixel (Bay5: 352 x 726 m). When the descriptor states a play space
+        // (BakeBounds, AirPit only so far), only renderers that reach into that box, widened by this margin
+        // horizontally and by the headroom upwards, count for RainBounds and for the roof-cover draw list;
+        // Equator and Bay5 carry no BakeBounds and keep the plain renderer union.
+        const float PlaySpaceMargin = 30f;
+        const float PlaySpaceHeadroom = 250f;
 
         // §13 goal 2 — a degenerate (near-zero) size.y would make DepthPhotograper's own _MapScale.y
         // (1/RainBounds.size.y, DepthPhotograper.cs:178) blow up; also guards against the ortho camera's
@@ -309,7 +319,8 @@ namespace ArenaMapPort.Client
                 // DepthPhotograper.Render() (DepthPhotograper.cs:59).
                 ls.RainBounds = scan.bounds;
                 Plugin.Log.LogDebug($"[ArenaMapPort][RainCover] map={map.Key} RainBounds computed from " +
-                    $"{scan.rendererCount} renderer(s) (excluded {scan.excludedOversized} oversized): " +
+                    $"{scan.rendererCount} renderer(s) (excluded {scan.excludedOversized} oversized, " +
+                    $"{scan.excludedOutsidePlaySpace} outside the play space): " +
                     $"center={scan.bounds.center} size={scan.bounds.size}");
             }
             Plugin.Log.LogDebug($"[ArenaMapPort][RainCover] map={map.Key} depth-camera cover layers=0x{scan.layerMask:X}");
@@ -319,6 +330,7 @@ namespace ArenaMapPort.Client
                 Plugin.Log.LogDebug($"[ArenaMapPort][RainCover] map={map.Key} RoofDepthBlack scan: " +
                     $"keptForBounds={scan.rendererCount} consideredForCover={scan.consideredForCover} " +
                     $"elevated={state.ElevatedMeshes.Count} excluded(oversized)={scan.excludedOversized} " +
+                    $"excluded(outsidePlaySpace)={scan.excludedOutsidePlaySpace} " +
                     $"excluded(material)={scan.excludedMaterial} excluded(notElevated)={scan.excludedNotElevated} " +
                     $"excluded(noMesh)={scan.excludedNoMesh} included(glass)={scan.includedGlass} " +
                     $"CoverIncludesGlass={WeatherRig.CoverIncludesGlassForCurrentMap()}");
@@ -343,6 +355,7 @@ namespace ArenaMapPort.Client
             internal readonly int layerMask;
             internal readonly int rendererCount;      // "kept" — used for RainBounds, unchanged meaning from §12
             internal readonly int excludedOversized;
+            internal readonly int excludedOutsidePlaySpace; // renderers beyond the descriptor's BakeBounds (+margin)
             internal readonly List<ElevatedMesh> elevatedMeshes; // only populated when computeElevated=true
             internal readonly int consideredForCover;  // §13 — candidates that passed the material filter
             internal readonly int excludedMaterial;    // §13 — Transparent/Glass/Fence shader or renderQueue>=2450
@@ -351,13 +364,14 @@ namespace ArenaMapPort.Client
             internal readonly int includedGlass;       // §20.2 — glass-shader renderers kept as cover (CoverIncludesGlass)
 
             internal ScanResult(Bounds bounds, int layerMask, int rendererCount, int excludedOversized,
-                List<ElevatedMesh> elevatedMeshes, int consideredForCover, int excludedMaterial,
-                int excludedNotElevated, int excludedNoMesh, int includedGlass)
+                int excludedOutsidePlaySpace, List<ElevatedMesh> elevatedMeshes, int consideredForCover,
+                int excludedMaterial, int excludedNotElevated, int excludedNoMesh, int includedGlass)
             {
                 this.bounds = bounds;
                 this.layerMask = layerMask;
                 this.rendererCount = rendererCount;
                 this.excludedOversized = excludedOversized;
+                this.excludedOutsidePlaySpace = excludedOutsidePlaySpace;
                 this.elevatedMeshes = elevatedMeshes;
                 this.consideredForCover = consideredForCover;
                 this.excludedMaterial = excludedMaterial;
@@ -389,6 +403,18 @@ namespace ArenaMapPort.Client
             int layerMaskAccum = 0;
             int rendererCount = 0;
             int excludedOversized = 0;
+            int excludedOutsidePlaySpace = 0;
+
+            // Descriptor play space (BakeBounds = [min_x, max_x, min_y, max_y, min_z, max_z]); see PlaySpaceMargin.
+            bool clipToPlaySpace = map.BakeBounds != null && map.BakeBounds.Length == 6;
+            var playSpace = new Bounds();
+            if (clipToPlaySpace)
+            {
+                var b = map.BakeBounds;
+                playSpace.SetMinMax(
+                    new Vector3(b[0] - PlaySpaceMargin, b[2] - PlaySpaceMargin, b[4] - PlaySpaceMargin),
+                    new Vector3(b[1] + PlaySpaceMargin, b[3] + PlaySpaceHeadroom, b[5] + PlaySpaceMargin));
+            }
 
             // §13 goal 2 — every renderer that survived the §12 filter (Water/Sky/LevelBorder/player/
             // oversized), gathered here, elevation-classified in a second pass below once map min.y is known.
@@ -441,6 +467,11 @@ namespace ArenaMapPort.Client
                             excludedOversized++; // the sea placeholder plane / sky dome and similar enormous volumes
                             continue;
                         }
+                        if (clipToPlaySpace && !playSpace.Intersects(rendererBounds))
+                        {
+                            excludedOutsidePlaySpace++; // far scenery: never a roof over the play space
+                            continue;
+                        }
 
                         if (!hasBounds)
                         {
@@ -471,7 +502,7 @@ namespace ArenaMapPort.Client
                 Plugin.Log.LogWarning($"[ArenaMapPort][RainCover] map={map.Key}: static-geometry scan found 0 " +
                     "eligible renderer(s) — class-default RainBounds, no cullingMask widening/obstacle draws (retried on the next camera change).");
                 return new ScanResult(new Bounds(Vector3.zero, new Vector3(1000f, 220f, 1000f)), 0, 0, excludedOversized,
-                    null, 0, 0, 0, 0, 0);
+                    excludedOutsidePlaySpace, null, 0, 0, 0, 0, 0);
             }
 
             // Pad 10m each side horizontally; vertical range stays min(bounds) to max(bounds)+5m (task's
@@ -549,7 +580,7 @@ namespace ArenaMapPort.Client
                 }
             }
 
-            return new ScanResult(padded, layerMaskAccum, rendererCount, excludedOversized,
+            return new ScanResult(padded, layerMaskAccum, rendererCount, excludedOversized, excludedOutsidePlaySpace,
                 elevatedMeshes, consideredForCover, excludedMaterial, excludedNotElevated, excludedNoMesh, includedGlass);
         }
 
