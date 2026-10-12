@@ -152,7 +152,10 @@ The older `equator-native-dust`/`bay5-native-dust`, `equator`, `bay5` and `bay5-
 omit later native features (and old Bay5 omits the harbor background), and the v3 packages lack the light-culling
 components; v4 lacks native projection decals. Do not rebuild either accepted map from those older packages.
 Bay5 uses its v5 package with `-FullMap`
-and `-OutputDir D:/ArenaMapPort/work/build/bay5`. Always give `-MapDescriptor` an absolute
+and `-OutputDir D:/ArenaMapPort/work/build/bay5`. AirPit (branch `feature/airpit`) builds from
+`work/extract/airpit-native-v6` (2026-10-12: v5 + native ambient audio via `extract_map.py --plan
+tools/extract/plans/airpit.json --native-features`; its contract requires audio, so the older
+`airpit-native-v5` fails the validators) with `-FullMap` and `-OutputDir D:/ArenaMapPort/work/build/airpit`. Always give `-MapDescriptor` an absolute
 path: Unity resolves relative descriptor paths from its project directory.
 
 Native spatial acoustics use separate ignored `work/extract/spatial-audio/<map>` inputs, regenerated

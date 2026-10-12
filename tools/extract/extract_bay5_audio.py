@@ -1,15 +1,30 @@
-"""Export Bay5/Equator native ambient graphs from the user's install, never match audio.
+"""Export native ambient graphs (Bay5, Equator, AirPit) from the user's install, never match audio.
 
-export(source, package) returns the optional manifest.native_audio entry. The caller
+export(source, package, map_key) returns the optional manifest.native_audio entry. The caller
 publishes that entry only after its other extraction steps pass. Source custom player
 layouts are pinned by full byte consumption; SoundBanks use an actual source bundle
 type tree as an independent schema/graph check. Unsupported source changes fail closed.
+
+Per-map data is not coded here. Which maps are supported, the source scene (``level<N>``),
+the graph schema, the player/support/bank/clip census, the group coverage rule and, for a
+schema-2 graph, the original hierarchy states (inactive players, disabled components, loops,
+per-group mixer routes) all come from ``tools/extract/native_contracts/<stem>.json`` through
+native_contract_loader (PLAN-AIRPIT items 3 and 13), the same pins validate_native_features
+checks on the finished package. The scene must be the one the map's source plan marks with
+role ``sound`` (native_features.for_plan cross-checks that before the extraction starts).
+A map whose contract has ``audio: null`` is rejected here before anything is read or written.
 """
 from __future__ import annotations
-import argparse, collections, hashlib, io, json, math, struct, wave
+import argparse, collections, hashlib, io, json, math, os, struct, sys, wave
 from pathlib import Path
 import UnityPy
 from UnityPy.classes import PPtr
+
+_HERE = os.path.dirname(os.path.abspath(__file__))
+if _HERE not in sys.path:  # standalone-importable regardless of caller sys.path setup
+    sys.path.insert(0, _HERE)
+
+from native_contract_loader import load_contracts  # noqa: E402
 
 PLAYERS = {'AmbientSoundPlayer', 'SeasonAmbientSoundPlayer', 'LoopAmbientSoundPlayer'}
 SUPPORT = {'AmbientSoundPlayerGroup', 'BezierSpline', 'AmbientSplineEmitterController', 'SoundAmbientZoneCalculator', 'AmbientPlayerSplineMappedEmitter'}
@@ -138,10 +153,29 @@ def source_audio(obj):
     if len(sources)!=1: raise ValueError('player needs exactly one AudioSource')
     return sources[0]
 
+def find_audio_contract(map_key):
+    """The map's ambient-audio contract (native_contracts/<stem>.json ``audio``), or None.
+
+    None means the map is unknown or declares no native audio. A malformed contract file is not
+    "unsupported": load_contracts raises NativeContractError for it and that propagates.
+    """
+    contract=load_contracts().get(map_key)
+    return contract['audio'] if contract else None
+
+def audio_contract(map_key):
+    audio=find_audio_contract(map_key)
+    if audio is None: raise ValueError(f'unsupported native audio map: {map_key!r} declares no ambient audio contract')
+    return audio
+
+def expected_group_members(players, audio):
+    """Player ids the AmbientSoundPlayerGroup records must cover exactly once, per the contract rule."""
+    if audio['group_coverage']=='all_players': return [d['id'] for d in players]
+    return [d['id'] for d in players if d['activeInHierarchy'] and d['enabled']]
+
 def export(source, package, map_key='arena_bay5'):
     """Return a manifest entry after fully decoding/validating the map-owned audio graph."""
-    if map_key not in ('arena_bay5','arena_equator'): raise ValueError('unsupported native audio map')
-    equator=map_key=='arena_equator'; source_scene='level56' if equator else 'level188'; schema=2 if equator else 1
+    contract=audio_contract(map_key)
+    source_scene=contract['scene']; schema=contract['schema']; preserve_states=schema==2  # schema 2 records the original hierarchy states
     source=Path(source).resolve(); package=Path(package).resolve(); output=package/'audio'
     if source==package or source in package.parents: raise ValueError('output must not be in source installation')
     output.mkdir(parents=True,exist_ok=True)
@@ -156,9 +190,9 @@ def export(source, package, map_key='arena_bay5'):
         if obj.type.name!='MonoBehaviour': continue
         kind=script(obj); counts[kind]+=1
         if kind in SUPPORT:
-            d=parse_support(obj,kind); d.update(hierarchy(obj,equator)); d.update(id=identity(obj),kind=kind,byteSize=obj.byte_size); support.append(d)
+            d=parse_support(obj,kind); d.update(hierarchy(obj,preserve_states)); d.update(id=identity(obj),kind=kind,byteSize=obj.byte_size); support.append(d)
         if kind not in PLAYERS: continue
-        d=parse_player(obj,kind); d.update(hierarchy(obj,equator)); d.update(id=identity(obj),kind=kind,byteSize=obj.byte_size,sourceAudio=source_audio(obj))
+        d=parse_player(obj,kind); d.update(hierarchy(obj,preserve_states)); d.update(id=identity(obj),kind=kind,byteSize=obj.byte_size,sourceAudio=source_audio(obj))
         refs=[d['ambientBank']] if kind=='AmbientSoundPlayer' else list(d['seasonAmbientBanks'].values()) if kind=='SeasonAmbientSoundPlayer' else []
         for ptr in refs:
             bank=deref(obj,ptr,'MonoBehaviour')
@@ -195,7 +229,7 @@ def export(source, package, map_key='arena_bay5'):
             target=deref(owner,ptr,'MonoBehaviour')
             if not target or script(target) not in PLAYERS: raise ValueError('group edge')
             ptr['resolved']=identity(target); grouped.append(identity(target))
-    expected_players=[d['id'] for d in players if not equator or d['activeInHierarchy'] and d['enabled']]
+    expected_players=expected_group_members(players,contract)
     if collections.Counter(grouped)!=collections.Counter(expected_players): raise ValueError('group coverage')
     result={'schemaVersion':schema,'mapKey':map_key,'sourceScene':source_scene,'componentCounts':dict(counts),'players':players,'support':support,'banks':banks,'clips':[], 'bankSchema':{'path':bank_schema_path.relative_to(source).as_posix(),'sha256':hashlib.sha256(bank_schema_path.read_bytes()).hexdigest()},'sourceSceneSha256':hashlib.sha256((source/source_scene).read_bytes()).hexdigest()}
     for key,obj in clips.items():
@@ -221,18 +255,18 @@ def validate_wav(data, metadata, filename):
         return {'file':filename,'channels':wav.getnchannels(),'sampleRate':wav.getframerate(),'frames':wav.getnframes(),'sampleWidth':2,'bytes':len(data),'sha256':hashlib.sha256(data).hexdigest()}
 
 def validate_graph(data):
-    equator=data['mapKey']=='arena_equator'
-    expected=(2,'arena_equator','level56') if equator else (1,'arena_bay5','level188')
-    if (data['schemaVersion'],data['mapKey'],data['sourceScene'])!=expected: raise ValueError('audio package identity')
+    key=data['mapKey']; audio=find_audio_contract(key)
+    if audio is None or (data['schemaVersion'],data['sourceScene'])!=(audio['schema'],audio['scene']): raise ValueError('audio package identity')
     players=data['players']; banks=data['banks']; support=data['support']; clips=data['clips']
-    census={'AmbientSoundPlayer':25} if equator else {'AmbientSoundPlayer':17,'SeasonAmbientSoundPlayer':6,'LoopAmbientSoundPlayer':1}
-    if collections.Counter(x['kind'] for x in players)!=census: raise ValueError('source player census changed')
-    if (len(banks),len(clips),len(support))!=((11,65,1) if equator else (13,106,6)): raise ValueError('source audio census changed')
+    if collections.Counter(x['kind'] for x in players)!=collections.Counter(audio['players']): raise ValueError('source player census changed')
+    if (len(banks),len(clips))!=(audio['banks'],audio['clips']) or collections.Counter(s.get('kind') for s in support)!=collections.Counter(audio['support']): raise ValueError('source audio census changed')
     player_ids=[p['id'] for p in players]; clip_ids={c['id'] for c in clips}
     if len(set(player_ids))!=len(players) or len(clip_ids)!=len(clips): raise ValueError('duplicate source identity')
     grouped=[p['resolved'] for s in support for p in s.get('soundPlayers',[])]
-    expected_ids=validate_equator_states(players,support) if equator else player_ids
-    if collections.Counter(grouped)!=collections.Counter(expected_ids): raise ValueError('group coverage')
+    if audio['states'] is not None: validate_audio_states(players,support,audio)
+    if collections.Counter(grouped)!=collections.Counter(expected_group_members(players,audio)): raise ValueError('group coverage')
+    if audio['states'] is not None and len(grouped)!=audio['states']['grouped_players']: raise ValueError('audio grouped player count changed')
+    if audio['states'] is not None: validate_audio_group_members(players,support,audio['states'])  # after coverage: only a player moved between groups reaches it
     for bank in banks.values():
         if not bank['environments'] or not bank['environments'][0] or not bank['environments'][0][0]: raise ValueError('empty native PickSingleClip bank')
         for refs in bank['environments']:
@@ -245,8 +279,17 @@ def validate_graph(data):
             if ptr.get('resolved') not in banks: raise ValueError('unresolved player bank')
         if 'loopClip' in p and p['loopClip'].get('resolved') not in clip_ids: raise ValueError('unresolved loop clip')
 
-def validate_equator_states(players, support):
-    """Reject lost states or graph activation; hierarchy state is not component enabled state."""
+def validate_audio_states(players, support, audio):
+    """Reject lost states or graph activation; hierarchy state is not component enabled state.
+
+    Runs for the schema-2 graphs, whose contract carries ``states`` (Equator, AirPit): the original
+    inactive players, the components disabled in the source, the AudioSources that loop (by id AND
+    leaf name: the Unity importer and the client look the loop up by name) and the mixer each
+    AmbientSoundPlayerGroup routes to, keyed by the group's leaf name, never by object-table order.
+    Returns the player ids the groups must cover under the contract's coverage rule.
+    """
+    states=audio['states']; disabled=set(states['disabled_players'])
+    if not disabled<={p['id'] for p in players}: raise ValueError('audio disabled player pin missing')
     nodes={}
     for item in players+support:
         names=item['path'].split('/'); chain=item['transformChain']
@@ -258,21 +301,45 @@ def validate_equator_states(players, support):
             if path in nodes and nodes[path]!=node: raise ValueError('inconsistent shared audio hierarchy')
             nodes[path]=node
         if type(item['activeInHierarchy']) is not bool or active!=item['activeInHierarchy']: raise ValueError('audio hierarchy activation mismatch')
-        if item['enabled'] is not True: raise ValueError('Equator audio component activation changed')
-    if support[0]['kind']!='AmbientSoundPlayerGroup' or support[0]['mixerName']!='CommonAmbInEffects' or not support[0]['activeInHierarchy']: raise ValueError('Equator indoor group contract')
-    inactive=[p for p in players if not p['activeInHierarchy']]
-    if len(inactive)!=2 or {p['path'].rsplit('/',1)[-1] for p in inactive}!={'far_dogs1','far_dogs2'}: raise ValueError('Equator inactive source players changed')
+        if item['enabled'] is not (item['id'] not in disabled): raise ValueError('audio component activation changed')
+    groups=group_records(support)
+    if {n:g['mixerName'] for n,g in groups.items()}!={n:r['mixer'] for n,r in states['groups'].items()} or not all(g['activeInHierarchy'] for g in groups.values()): raise ValueError('audio group mixer contract changed')
+    inactive={p['id']:p['path'].rsplit('/',1)[-1] for p in players if not p['activeInHierarchy']}
+    if inactive!=states['inactive_players']: raise ValueError('audio inactive source players changed')
     for player in players:
         source=player['sourceAudio']
-        if source['m_Enabled']!=1: raise ValueError('Equator AudioSource activation changed')
-        if source['Loop']!=(player['path'].rsplit('/',1)[-1]=='electricity'): raise ValueError('Equator source loop changed')
-        if player['playOnAwake'] or player['forceSetMixerGroup'] or player['mixerGroup']['pathId']!=0: raise ValueError('Equator source start/mixer policy changed')
-    if sum(p['path'].rsplit('/',1)[-1]=='electricity' for p in players)!=1: raise ValueError('Equator electricity source missing')
-    return [p['id'] for p in players if p['activeInHierarchy']]
+        if source['m_Enabled']!=1: raise ValueError('audio AudioSource activation changed')
+        if source['Loop'] not in (0,1): raise ValueError('audio source loop changed')
+        if player['playOnAwake'] or player['forceSetMixerGroup'] or player['mixerGroup']['pathId']!=0: raise ValueError('audio source start/mixer policy changed')
+    if {p['id']:p['path'].rsplit('/',1)[-1] for p in players if p['sourceAudio']['Loop']}!=states['loops']: raise ValueError('audio source loop changed')
+    return expected_group_members(players,audio)
+
+def group_records(support):
+    """AmbientSoundPlayerGroup records keyed by the group GameObject's leaf name, the key the client and importer route by."""
+    groups={}
+    for record in support:
+        if record.get('kind')!='AmbientSoundPlayerGroup': continue
+        name=record['path'].rsplit('/',1)[-1]
+        if name in groups: raise ValueError('audio group names not unique')
+        groups[name]=record
+    return groups
+
+def validate_audio_group_members(players, support, states):
+    """Pin each group's membership. Coverage only proves every player is grouped once, so a player moved
+    from one group to another (a different mixer bus) passes it; here the per-group member counts of the
+    contract must match and every listed member must sit under its group's hierarchy path (Arena parents
+    each player under its group, which also catches two players swapped between equal-sized groups).
+    An id that is no player counts as outside every group."""
+    paths={p['id']:p['path'] for p in players}
+    groups=group_records(support)
+    if {n:len(g.get('soundPlayers',[])) for n,g in groups.items()}!={n:r['players'] for n,r in states['groups'].items()}: raise ValueError('audio group membership changed')
+    for group in groups.values():
+        if not all(paths.get(m['resolved'],'').startswith(group['path']+'/') for m in group.get('soundPlayers',[])): raise ValueError('audio group membership changed')
 
 def main():
     ap=argparse.ArgumentParser(); ap.add_argument('--source',type=Path,required=True); ap.add_argument('--package',type=Path,required=True)
-    ap.add_argument('--map-key',choices=('arena_bay5','arena_equator'),default='arena_bay5'); args=ap.parse_args()
+    maps=sorted(k for k,c in load_contracts().items() if c['audio'] is not None)
+    ap.add_argument('--map-key',choices=maps,default='arena_bay5'); args=ap.parse_args()
     print(json.dumps(export(args.source,args.package,args.map_key)))
 
 if __name__=='__main__': main()

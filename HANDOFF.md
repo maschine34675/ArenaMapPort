@@ -12,7 +12,9 @@ ZeroLevel -4.4, server time), shader stand-ins (fog sheet, cloth, rock), descrip
 registration. Two Unity builds: U1c (`unity_build_all_20261012_020615.log`, after two texture-policy fixes `232ea72`/`d52c898`) and
 **U2 (`unity_build_all_20261012_025338.log`, bake 10264 vertices / 4684 triangles, 2025 sources, 4 opened barriers, 0 exclusions)**,
 the latter staged, validated (`PORT_VALIDATED`, `DISTRIBUTION_OK 3 maps 9 bundles 3 sidecars`) and deployed to `D:\SPT41` (host hashes
-checked over `\\192.168.178.109\C$`). `validate_port.py` takes `--package` now (the accepted package is `airpit-native-v5`).
+checked over `\\192.168.178.109\C$`). `validate_port.py` takes `--package` now (the accepted package was `airpit-native-v5`;
+since 2026-10-12 afternoon it is `airpit-native-v6` = v5 + native ambient audio, item 13 phase 1; scenes/meshes/materials/textures
+byte-identical, and the AirPit contract now REQUIRES audio, so a build from v5 fails the validators).
 
 Three host raids on SPT-GPU-2 (all evidence in docs/progress/airpit-release.md, "Host raid 1..3"): every raid-start repair logs as
 expected (415 stand-in materials rebound, no magenta, 533 culling lights, acoustics 24 rooms / 94 portals, 471 decals, rain cover
@@ -53,8 +55,10 @@ the rock shader itself (Customs' scene shared assets), they are loaded in-proces
 haze is Arena's own look; `Hidden` now recognises both shader names, the log says `resolved to EFT's own loaded shader`. (3) The
 airstairs are reachable on the runtime mesh (`uibridge_walk` 7.9 m to y 3.4): closed. (4) The hall-centre cover detour stays as
 accepted (bots path 194 m). NEW: on U4 the bot spawns `north-hall-west`, `west-south` and `east-south` (and core points 16/17/18)
-sit in the sealed shop pockets behind the closed shutters (dry runs: navmesh island / through a wall) - the three bot spawns are
-being moved onto the main component (sidecar + base.json + tests), the core points stay as documented islands. Status audit of
+sit in the sealed shop pockets behind the closed shutters (dry runs: navmesh island / through a wall) - the three bot spawns moved
+onto the main component (`9bf4f89`: sidecar + base.json + tests; raid 9 on the deployed base.json: all three pass `dryRun` from the
+south spawn, three scavs spawn and patrol 50-70 m across the hall and mezzanine in 30 s, no `ActiveFail`), the core points stay as
+documented islands. Status audit of
 Phase C (eight read-only agents, 2026-10-12): items 14-21 and 23 are implemented and log-verified; open are item 13 native
 ambient audio (L: extractor generalisation, contract, re-extract as a NEW package name, importer, client driver for two groups,
 Unity FullMap rebuild, host test, defaults decision), item 24 multi-part packager (in implementation: `tools/release/

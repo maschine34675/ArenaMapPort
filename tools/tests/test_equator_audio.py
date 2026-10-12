@@ -1,4 +1,11 @@
-"""Synthetic Equator activation/loop contracts; no source-derived audio fixtures."""
+"""Synthetic Equator activation/loop contracts; no source-derived audio fixtures.
+
+The pins the extractor checks come from tools/extract/native_contracts/equator.json (PLAN-AIRPIT
+items 3 and 13); the synthetic graph below therefore carries the contract's source identities
+(level56:965 electricity loop, level56:970/975 the two inactive far_dogs players).
+The loop is pinned by leaf name as well as by id (the Unity importer and the client look it up as
+'electricity'), and the single indoor group by name, mixer and member count.
+"""
 import copy
 from pathlib import Path
 import sys
@@ -16,19 +23,24 @@ def node(active=True, layer=0):
             'scale': {'x': 1, 'y': 1, 'z': 1}, 'activeSelf': active, 'layer': layer}
 
 
+# Source identities pinned by equator.json: the electricity loop and the two inactive dogs.
+ELECTRICITY, DOG1, DOG2 = 'level56:965', 'level56:975', 'level56:970'
+
+
 def graph():
     prefix='AmbientAudioSystem/AmbientPlayersGroup/CommonAmbientInGroup'
     players=[]
     for i in range(25):
         name='far_dogs1' if i==23 else 'far_dogs2' if i==24 else 'electricity' if i==0 else f'sound_{i}'
         active=i<23
-        players.append({'id': f'player:{i}', 'kind': 'AmbientSoundPlayer',
+        ident=DOG1 if i==23 else DOG2 if i==24 else ELECTRICITY if i==0 else f'level56:{100+i}'
+        players.append({'id': ident, 'kind': 'AmbientSoundPlayer',
                         'path': prefix+'/'+name, 'activeInHierarchy': active,
                         'transformChain': [node(),node(),node(),node(active)], 'enabled': True,
                         'sourceAudio': {'m_Enabled': 1, 'Loop': i==0},
                         'playOnAwake': False, 'forceSetMixerGroup': False, 'mixerGroup': {'pathId': 0},
                         'ambientBank': {'resolved': f'bank:{i%11}'}})
-    support=[{'id': 'group:1', 'kind': 'AmbientSoundPlayerGroup', 'path': prefix,
+    support=[{'id': 'level56:900', 'kind': 'AmbientSoundPlayerGroup', 'path': prefix,
               'transformChain': [node(),node(),node()], 'activeInHierarchy': True, 'enabled': True,
               'mixerName': 'CommonAmbInEffects', 'soundPlayers': [{'resolved': p['id']} for p in players[:23]]}]
     return {'schemaVersion': 2, 'mapKey': 'arena_equator', 'sourceScene': 'level56',
@@ -42,7 +54,8 @@ class EquatorAudioTests(unittest.TestCase):
         data=graph(); before=copy.deepcopy(data)
         audio.validate_graph(data)
         self.assertEqual(before,data)
-        self.assertEqual(23,len(audio.validate_equator_states(data['players'],data['support'])))
+        equator=audio.audio_contract('arena_equator')
+        self.assertEqual(23,len(audio.validate_audio_states(data['players'],data['support'],equator)))
 
     def test_activation_cannot_silently_start_dogs(self):
         data=graph(); dog=data['players'][-1]
@@ -51,7 +64,7 @@ class EquatorAudioTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError,'inactive source players'): audio.validate_graph(data)
 
     def test_group_cannot_include_inactive_dog(self):
-        data=graph(); data['support'][0]['soundPlayers'].append({'resolved':'player:24'})
+        data=graph(); data['support'][0]['soundPlayers'].append({'resolved':DOG2})
         with self.assertRaisesRegex(ValueError,'group coverage'): audio.validate_graph(data)
 
     def test_group_cannot_omit_duplicate_or_substitute_active_player(self):
@@ -59,7 +72,7 @@ class EquatorAudioTests(unittest.TestCase):
             data=graph(); members=data['support'][0]['soundPlayers']
             if mutation=='omit': members.pop()
             elif mutation=='duplicate': members.append(copy.deepcopy(members[0]))
-            else: members[-1]={'resolved':'player:24'}
+            else: members[-1]={'resolved':DOG2}
             with self.subTest(mutation=mutation), self.assertRaisesRegex(ValueError,'group coverage'):
                 audio.validate_graph(data)
 
@@ -100,13 +113,49 @@ class EquatorAudioTests(unittest.TestCase):
     def test_indoor_mixer_cannot_use_exterior_route(self):
         for mixer in ('CommonAmbOutEffects','CommonAmbOutBypass',None):
             data=graph(); data['support'][0]['mixerName']=mixer
-            with self.subTest(mixer=mixer), self.assertRaisesRegex(ValueError,'indoor group'):
+            with self.subTest(mixer=mixer), self.assertRaisesRegex(ValueError,'group mixer contract'):
                 audio.validate_graph(data)
 
     def test_electricity_loop_is_preserved_and_not_added_to_random_sources(self):
         for index in (0,1,24):
             data=graph(); data['players'][index]['sourceAudio']['Loop']^=True
             with self.subTest(index=index), self.assertRaisesRegex(ValueError,'source loop'):
+                audio.validate_graph(data)
+        data=graph(); data['players'][1]['sourceAudio']['Loop']=2
+        with self.assertRaisesRegex(ValueError,'source loop'): audio.validate_graph(data)
+
+    def test_loop_player_leaf_name_is_pinned(self):
+        # Review of item 13: the old validator tied the loop to the leaf 'electricity'; the id-only pin did not.
+        # Bay5AudioImporter and the client both look the looping source up by that name.
+        for leaf in ('electricityx', 'Electricity', 'electric', 'sound_0'):
+            data=graph(); player=data['players'][0]
+            player['path']=player['path'].rsplit('/',1)[0]+'/'+leaf
+            with self.subTest(leaf=leaf), self.assertRaisesRegex(ValueError,'source loop'):
+                audio.validate_graph(data)
+        # the loop moved to another player that is named 'electricity' is a different source as well
+        data=graph(); data['players'][0]['sourceAudio']['Loop']=False; data['players'][1]['sourceAudio']['Loop']=True
+        data['players'][1]['path']=data['players'][1]['path'].rsplit('/',1)[0]+'/electricity'
+        with self.assertRaisesRegex(ValueError,'source loop'): audio.validate_graph(data)
+
+    def test_group_is_pinned_by_name_mixer_and_member_count(self):
+        data=graph(); group=data['support'][0]
+        group['path']=group['path']+'Renamed'
+        with self.assertRaisesRegex(ValueError,'group mixer contract'): audio.validate_graph(data)
+        # a member that does not sit under the group keeps coverage and the count intact but is a changed source
+        data=graph(); player=data['players'][1]
+        player['path']='AmbientAudioSystem/AmbientPlayersGroup/CommonAmbientOutGroup/'+player['path'].rsplit('/',1)[-1]
+        with self.assertRaisesRegex(ValueError,'audio group membership'): audio.validate_graph(data)
+        pins=audio.audio_contract('arena_equator')['states']
+        self.assertEqual({'CommonAmbientInGroup':{'mixer':'CommonAmbInEffects','players':23}},pins['groups'])
+        self.assertEqual({'level56:965':'electricity'},pins['loops'])
+
+    def test_pins_are_source_identities_not_leaf_names(self):
+        # equator.json pins ids: a player renamed in the source with the same leaf name is a changed source.
+        for index,pattern in ((24,'inactive source players'),(0,'source loop')):
+            data=graph(); old=data['players'][index]['id']; data['players'][index]['id']='level56:1'
+            for group in data['support']:
+                group['soundPlayers']=[{'resolved':'level56:1' if p['resolved']==old else p['resolved']} for p in group['soundPlayers']]
+            with self.subTest(index=index), self.assertRaisesRegex(ValueError,pattern):
                 audio.validate_graph(data)
 
     def test_player_cannot_enable_unowned_start_or_mixer_policy(self):
@@ -145,6 +194,37 @@ class EquatorAudioTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError,'unsupported native audio map'):
                 audio.export(Path(directory)/'source',output,'arena_bowl')
             self.assertFalse(output.exists()); load.assert_not_called()
+
+    def test_map_whose_contract_declares_no_audio_is_rejected_the_same_way(self):
+        contracts={'arena_x':{'audio':None}}
+        with tempfile.TemporaryDirectory() as directory, mock.patch.object(audio.UnityPy,'load') as load, \
+             mock.patch.object(audio,'load_contracts',return_value=contracts):
+            output=Path(directory)/'package'
+            with self.assertRaisesRegex(ValueError,'unsupported native audio map'):
+                audio.export(Path(directory)/'source',output,'arena_x')
+            self.assertFalse(output.exists()); load.assert_not_called()
+            data=graph(); data['mapKey']='arena_x'
+            with self.assertRaisesRegex(ValueError,'audio package identity'): audio.validate_graph(data)
+
+    def test_malformed_contract_is_not_reported_as_an_unsupported_map(self):
+        class Broken(ValueError): pass
+        with tempfile.TemporaryDirectory() as directory, mock.patch.object(audio,'load_contracts',side_effect=Broken('bad contract')):
+            with self.assertRaisesRegex(Broken,'bad contract'):
+                audio.export(Path(directory)/'source',Path(directory)/'package','arena_equator')
+            with self.assertRaisesRegex(Broken,'bad contract'): audio.validate_graph(graph())
+
+    def test_extractor_pins_reproduce_the_retired_literals(self):
+        # What extract_bay5_audio hard-coded before the contract data: (schema, scene), player census,
+        # (banks, clips, support records) and the group coverage rule. Frozen as the golden reference.
+        legacy={'arena_equator':(2,'level56',{'AmbientSoundPlayer':25},(11,65,1),'active_players'),
+                'arena_bay5':(1,'level188',{'AmbientSoundPlayer':17,'SeasonAmbientSoundPlayer':6,'LoopAmbientSoundPlayer':1},(13,106,6),'all_players')}
+        for key,(schema,scene,players,counts,coverage) in legacy.items():
+            pins=audio.audio_contract(key)
+            with self.subTest(key=key):
+                self.assertEqual((schema,scene,players,coverage),(pins['schema'],pins['scene'],pins['players'],pins['group_coverage']))
+                self.assertEqual(counts,(pins['banks'],pins['clips'],sum(pins['support'].values())))
+        self.assertIsNotNone(audio.audio_contract('arena_equator')['states'])
+        self.assertIsNone(audio.audio_contract('arena_bay5')['states'])
 
 
 if __name__=='__main__': unittest.main()

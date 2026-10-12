@@ -47,7 +47,7 @@ ARENA_LAYERS = [9, 11, 13, 18, 30]            # NavMeshSurface mask 0x40042A00 o
 # closed passport-control line (z 69.4); was x -80..56, z -96..92 until host raid 4 (2026-10-12) showed the mesh
 # running through the spawn pocket and 7 m into the unlit entrance hall north of the facade.
 BOUNDS = [-57, 37, -2, 8, -83, 70]
-PACKAGE = REPO / "work" / "extract" / "airpit-native-v5"
+PACKAGE = REPO / "work" / "extract" / "airpit-native-v6"
 HAVE_PACKAGE = (PACKAGE / "scenes" / "Arena_AirPit_ShootOut.json").is_file()
 ARENA_NAVMESH = Path("D:/Battlestate Games/Escape from Tarkov Arena/EscapeFromTarkovArena_Data/sharedassets33.assets")
 
@@ -192,7 +192,7 @@ class ValidatorTests(unittest.TestCase):
         self.assertEqual(VD.bake_input_errors(sidecar("bay5.json")), [])
 
 
-@unittest.skipUnless(HAVE_PACKAGE, "work/extract/airpit-native-v5 not present (PLAN-AIRPIT item 5)")
+@unittest.skipUnless(HAVE_PACKAGE, "work/extract/airpit-native-v6 not present (PLAN-AIRPIT item 5/13)")
 class PackageTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):

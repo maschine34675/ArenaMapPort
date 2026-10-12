@@ -255,7 +255,8 @@ def audio_contract(key, contract):
 
 def check_audio_group_states(audio, data, grouped):
     """The contract's group coverage and state pins against the audio index (Equator-style
-    schema-2 graphs; a schema-1 graph has ``states: null`` and only the coverage rule)."""
+    schema-2 graphs; a schema-1 graph has ``states: null`` and only the coverage rule). Groups
+    are pinned by leaf name (mixer and member count), loops by id and leaf name, never by order."""
     players=data['players']
     if audio['group_coverage']=='active_players':
         require(grouped==Counter(p['id'] for p in players if p['enabled'] and p['activeInHierarchy']),'audio active group coverage')
@@ -268,10 +269,16 @@ def check_audio_group_states(audio, data, grouped):
             states['inactive_players'],'original inactive audio players')
     compare(sorted(p['id'] for p in players if not p['enabled']),sorted(states['disabled_players']),'disabled audio players')
     groups=[s for s in data['support'] if s['kind']=='AmbientSoundPlayerGroup']
-    compare([g['mixerName'] for g in groups],states['group_mixers'],'audio group mixer routes')
+    named={g['path'].split('/')[-1]:g for g in groups}  # the leaf name is the key the client and the importer route by
+    require(len(named)==len(groups),'audio group leaf names are not unique')
+    compare({n:g['mixerName'] for n,g in named.items()},{n:r['mixer'] for n,r in states['groups'].items()},'audio group mixer routes')
     require(all(g['enabled'] and g['activeInHierarchy'] for g in groups),'audio group route/state')
-    loops={p['id'] for p in players if p['sourceAudio']['Loop']}
-    require(loops==set(states['loop_players']),f"original looping audio players {sorted(loops)} != {sorted(states['loop_players'])}")
+    # Coverage above proves every player is grouped once; these pin which group holds which players.
+    compare({n:len(g['soundPlayers']) for n,g in named.items()},{n:r['players'] for n,r in states['groups'].items()},'audio group member counts')
+    paths={p['id']:p['path'] for p in players}
+    require(all(paths.get(m['resolved'],'').startswith(g['path']+'/') for g in groups for m in g['soundPlayers']),
+            'audio group members outside their group hierarchy')
+    compare({p['id']:p['path'].split('/')[-1] for p in players if p['sourceAudio']['Loop']},states['loops'],'original looping audio players')
 
 
 def load_audio(package, manifest):

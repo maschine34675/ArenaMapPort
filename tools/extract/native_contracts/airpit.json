@@ -3,7 +3,7 @@
   "map_key": "arena_airpit",
   "notes": [
     "Pins from the PLAN-AIRPIT item 2 dry run on Arena 0.6.0.47752 (docs/progress/airpit-release.md): BallisticCollider 3548 (2856/512/28/94/58), StaticDeferredDecal 481, NavMeshModifier 20 + NavMeshModifierVolume 12, CullingLightObject 533, VolumetricLight 130, LightFlicker 0, SmallPhysicsObject 0, rain cover 2 IndoorTrigger / 0 DryPlane / no WeatherObstacle.",
-    "audio is null for now: AirPit ships without native ambient audio until PLAN-AIRPIT item 13, which replaces this null with the audio pins from the plan (schema 2, source scene level39, AmbientSoundPlayer 26, AmbientSoundPlayerGroup 2, banks 9, clips 61, per-group mixers CommonAmbOutEffects / CommonAmbInEffects) and registers an exporter. Until then a package must carry no native_audio entry and native_features.required is exactly [ballistics].",
+    "audio: PLAN-AIRPIT item 13 pins from the dry run and the first real export on Arena 0.6.0.47752 (docs/progress/airpit-release.md): source scene level39 (plan role 'sound'), schema 2, AmbientSoundPlayer 26 (all enabled and active in the source, no Loop/Season players, no playOnAwake, no mixer override), AmbientSoundPlayerGroup 2, 9 SoundBank, 61 clips. AirPit is the first map with both an Out and an In group: states.groups pins each group by its leaf name with its mixer and member count (CommonAmbientOutGroup -> CommonAmbOutEffects with 4 players, CommonAmbientInGroup -> CommonAmbInEffects with 22), so neither the object-table order nor a player moved between the groups passes; group_mixers (source order) and loop_players mirror them for ArenaMapPort.Server.Tests/AmbientAudioProfilesTests.cs. Every player is grouped (all_players).",
     "implicit_scene_identity stays false: generic packages always record source.map_key."
   ],
   "scenes": {
@@ -40,5 +40,27 @@
     },
     "small_physics_objects": 0
   },
-  "audio": null
+  "audio": {
+    "feature": "ambient_audio",
+    "schema": 2,
+    "scene": "level39",
+    "root": "ArenaMapPort_AirPitNativeAudio",
+    "players": {"AmbientSoundPlayer": 26},
+    "support": {"AmbientSoundPlayerGroup": 2},
+    "banks": 9,
+    "clips": 61,
+    "group_coverage": "all_players",
+    "states": {
+      "grouped_players": 26,
+      "disabled_players": [],
+      "inactive_players": {},
+      "groups": {
+        "CommonAmbientOutGroup": {"mixer": "CommonAmbOutEffects", "players": 4},
+        "CommonAmbientInGroup": {"mixer": "CommonAmbInEffects", "players": 22}
+      },
+      "group_mixers": ["CommonAmbOutEffects", "CommonAmbInEffects"],
+      "loops": {},
+      "loop_players": []
+    }
+  }
 }

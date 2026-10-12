@@ -45,7 +45,10 @@ def graph():
         elif kind=='SeasonAmbientSoundPlayer': p['seasonAmbientBanks']={'Winter':{'resolved':'bank:1'}}
         else: p['loopClip']={'resolved':'clip:100'}
         players.append(p)
-    support=[{'soundPlayers':[{'resolved':p['id']} for p in players[:-1]]},{'soundPlayers':[{'resolved':players[-1]['id']}]}]+[{} for _ in range(4)]
+    # The six Bay5 support records of bay5.json, by kind (the contract pins the kind census).
+    support=[{'kind':'AmbientSoundPlayerGroup','soundPlayers':[{'resolved':p['id']} for p in players[:-1]]},
+             {'kind':'AmbientSoundPlayerGroup','soundPlayers':[{'resolved':players[-1]['id']}]}]
+    support+=[{'kind':kind} for kind in ('BezierSpline','AmbientSplineEmitterController','SoundAmbientZoneCalculator','AmbientPlayerSplineMappedEmitter')]
     return {'schemaVersion':1,'mapKey':'arena_bay5','sourceScene':'level188','players':players,'banks':banks,'clips':clips,'support':support}
 
 
@@ -102,6 +105,20 @@ class Bay5AudioTests(unittest.TestCase):
             elif mutation=='loop': data['players'][-1]['loopClip']['resolved']='missing'
             else: data['banks']['bank:0']['environments']=[[]]
             with self.subTest(mutation=mutation),self.assertRaises(ValueError): audio.validate_graph(data)
+
+    def test_support_census_is_pinned_by_kind_not_only_by_count(self):
+        data=graph(); data['support'][-1]['kind']='BezierSpline'
+        with self.assertRaisesRegex(ValueError,'source audio census'): audio.validate_graph(data)
+        data=graph(); data['support'].pop()
+        with self.assertRaisesRegex(ValueError,'source audio census'): audio.validate_graph(data)
+
+    def test_schema_one_graph_has_no_state_checks_and_every_player_must_be_grouped(self):
+        pins=audio.audio_contract('arena_bay5')
+        self.assertIsNone(pins['states'])
+        data=graph()
+        for player in data['players']: player.update(enabled=False,activeInHierarchy=False)  # schema 1 records no states
+        audio.validate_graph(data)
+        self.assertEqual([p['id'] for p in data['players']],audio.expected_group_members(data['players'],pins))
 
     def test_unknown_scene_and_event_player_are_rejected(self):
         data=graph(); data['sourceScene']='level225'

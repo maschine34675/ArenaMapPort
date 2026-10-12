@@ -4,7 +4,7 @@
   "notes": [
     "Former MAPS['arena_equator'] literal of validate_native_features.py plus its Equator-only audio branch, moved to data by PLAN-AIRPIT item 3.",
     "features is null on purpose: Equator keeps shape-only validation of the optional native_features entries (the census of decals, culling lights and modifiers is not pinned here).",
-    "states: 23 grouped players = 25 minus the two original inactive far_dogs players; the single indoor group routes to CommonAmbInEffects; level56:965 is the original electricity loop."
+    "states: 23 grouped players = 25 minus the two original inactive far_dogs players; the single indoor group (CommonAmbientInGroup, 23 members) routes to CommonAmbInEffects; level56:965 is the original electricity loop, pinned by id and leaf name because the Unity importer and the client look the loop up as 'electricity'. group_mixers and loop_players mirror groups and loops for ArenaMapPort.Server.Tests/AmbientAudioProfilesTests.cs."
   ],
   "scenes": {
     "51": "Arena_Equator",
@@ -37,7 +37,9 @@
       "grouped_players": 23,
       "disabled_players": [],
       "inactive_players": {"level56:970": "far_dogs2", "level56:975": "far_dogs1"},
+      "groups": {"CommonAmbientInGroup": {"mixer": "CommonAmbInEffects", "players": 23}},
       "group_mixers": ["CommonAmbInEffects"],
+      "loops": {"level56:965": "electricity"},
       "loop_players": ["level56:965"]
     }
   }

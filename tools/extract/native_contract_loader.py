@@ -9,7 +9,8 @@ the ambient-audio graph. Until PLAN-AIRPIT item 3 those pins were literals insid
 branch), so a third map meant editing validator code. Now the pins are data, one file per map
 (``equator.json``, ``bay5.json``, ``airpit.json``, named like ``tools/maps/<stem>.json``) and
 this module is the only reader. The validator imports it; the ambient-audio extractor
-(PLAN-AIRPIT item 13) takes its census from the same files.
+(``extract_bay5_audio``, PLAN-AIRPIT item 13) takes its supported maps, source scene, schema, census and
+state pins from the same files.
 
 Schema (version 1; every key is required unless marked optional, unknown keys are rejected)::
 
@@ -32,16 +33,24 @@ Schema (version 1; every key is required unless marked optional, unknown keys ar
                                support{kind: N}, banks, clips,
                                group_coverage "all_players"|"active_players",
                                states null|{grouped_players, disabled_players[ids],
-                                            inactive_players{id: leaf name}, group_mixers[names],
+                                            inactive_players{id: leaf name},
+                                            groups{group leaf name: {mixer, players}},
+                                            group_mixers[names], loops{id: leaf name},
                                             loop_players[ids]}}
 
 Rules beyond types (each one closes a way for a pin to be weakened silently): duplicate JSON keys
 are an error; ``map_key`` must equal ``arena_`` + the file stem; ``ballistics`` must list exactly
 the scenes of ``scenes`` and sum to more than zero; a schema-2 audio graph (which records the
-original hierarchy states) must carry ``states``, a schema-1 graph must not; ``group_mixers`` must
-have one entry per ``AmbientSoundPlayerGroup``; ``states.grouped_players`` must agree with the
-player census and the coverage mode. A missing, unreadable or empty contract directory fails
-loading instead of producing an empty table.
+original hierarchy states) must carry ``states``, a schema-1 graph must not; ``groups`` must have one
+entry per ``AmbientSoundPlayerGroup``, keyed by the group GameObject's leaf name (the key the client
+routes and the Unity importer checks by, so no pin depends on object-table order) with the mixer it
+routes to and its member count; ``states.grouped_players`` must agree with the player census, the
+coverage mode and the sum of the group member counts; ``loops`` pins each looping AudioSource by source
+id AND leaf name (the Unity importer and the client look the loop up by name, so a renamed loop must
+fail extraction, not the later build). ``group_mixers`` (the mixers in ``groups`` order) and
+``loop_players`` (the ids of ``loops``) stay as the flat mirrors that ``AmbientAudioProfilesTests.cs`` reads
+from the same file; the loader rejects a file whose mirrors disagree with ``groups``/``loops``. A missing,
+unreadable or empty contract directory fails loading instead of producing an empty table.
 
 Failures raise ``NativeContractError``, a ``HardExtractError`` (extractors halt) and a ``ValueError``
 (the validators report ``ValueError`` as a failed check).
@@ -49,7 +58,8 @@ Failures raise ``NativeContractError``, a ``HardExtractError`` (extractors halt)
 Evidence. The Equator and Bay5 files reproduce the former literals exactly
 (``tools/tests/test_native_contracts.py`` keeps a frozen copy of them as the golden reference);
 the AirPit pins are the PLAN-AIRPIT item 2 dry run on Arena 0.6.0.47752
-(docs/progress/airpit-release.md).
+(docs/progress/airpit-release.md); its ``audio`` block (item 13) is the first real export of the
+Arena_Airpit_Sound scene (level39), the first map with both an Out and an In group.
 """
 from __future__ import annotations
 
@@ -76,7 +86,9 @@ _RAINCOVER_KEYS = ("indoor_trigger_count", "dry_plane_count", "weather_obstacle"
 _NAVMESH_KEYS = ("modifiers", "volumes")
 _AUDIO_KEYS = ("feature", "schema", "scene", "root", "players", "support", "banks", "clips",
                "group_coverage", "states")
-_STATE_KEYS = ("grouped_players", "disabled_players", "inactive_players", "group_mixers", "loop_players")
+_STATE_KEYS = ("grouped_players", "disabled_players", "inactive_players", "groups", "group_mixers",
+               "loops", "loop_players")
+_GROUP_KEYS = ("mixer", "players")
 _GROUP_KIND = "AmbientSoundPlayerGroup"
 _COVERAGE = ("all_players", "active_players")
 
@@ -166,23 +178,46 @@ def _parse_features(raw, where: str):
     }
 
 
+def _leaf_map(value, where: str, what: str) -> dict:
+    """{source id: leaf name}, as ``inactive_players`` and ``loops`` pin a player by identity and by name."""
+    if type(value) is not dict:
+        _fail(where, f"expected an object of {what} id -> leaf name")
+    return {_text(k, where + " key"): _text(v, f"{where}.{k}") for k, v in value.items()}
+
+
+def _groups(value, where: str) -> dict:
+    """{group leaf name: {mixer, players}} in file (= source) order; the name is the routing key."""
+    if type(value) is not dict:
+        _fail(where, "expected an object of group leaf name -> {mixer, players}")
+    result = {}
+    for name, record in value.items():
+        at = f"{where}.{name}"
+        record = _object(record, at, _GROUP_KEYS)
+        result[_text(name, where + " key")] = {"mixer": _text(record["mixer"], at + ".mixer"),
+                                              "players": _int(record["players"], at + ".players", 1)}
+    return result
+
+
 def _parse_states(raw, where: str, audio: dict):
     raw = _object(raw, where, _STATE_KEYS)
-    inactive = raw["inactive_players"]
-    if type(inactive) is not dict:
-        _fail(where + ".inactive_players", "expected an object of player id -> leaf name")
     states = {
         "grouped_players": _int(raw["grouped_players"], where + ".grouped_players"),
         "disabled_players": _strings(raw["disabled_players"], where + ".disabled_players"),
-        "inactive_players": {_text(k, where + ".inactive_players key"): _text(v, f"{where}.inactive_players.{k}")
-                             for k, v in inactive.items()},
+        "inactive_players": _leaf_map(raw["inactive_players"], where + ".inactive_players", "player"),
+        "groups": _groups(raw["groups"], where + ".groups"),
         "group_mixers": _strings(raw["group_mixers"], where + ".group_mixers", unique=False),  # two groups may share a mixer
+        "loops": _leaf_map(raw["loops"], where + ".loops", "player"),
         "loop_players": _strings(raw["loop_players"], where + ".loop_players"),
     }
     players = sum(audio["players"].values())
-    groups = audio["support"].get(_GROUP_KIND, 0)
-    if len(states["group_mixers"]) != groups:
-        _fail(where + ".group_mixers", f"{len(states['group_mixers'])} entries for {groups} {_GROUP_KIND} support records")
+    group_count = audio["support"].get(_GROUP_KIND, 0)
+    for key in ("group_mixers", "groups"):
+        if len(states[key]) != group_count:
+            _fail(f"{where}.{key}", f"{len(states[key])} entries for {group_count} {_GROUP_KIND} support records")
+    if states["group_mixers"] != [g["mixer"] for g in states["groups"].values()]:
+        _fail(where + ".group_mixers", "must list the mixer of each entry of 'groups', in the same order")
+    if sorted(states["loops"]) != sorted(states["loop_players"]):
+        _fail(where + ".loops", "must name exactly the ids listed in 'loop_players'")
     if audio["group_coverage"] == "all_players":
         grouped = players
     else:
@@ -190,6 +225,9 @@ def _parse_states(raw, where: str, audio: dict):
     if states["grouped_players"] != grouped or not 0 <= grouped <= players:
         _fail(where + ".grouped_players",
               f"{states['grouped_players']} disagrees with {players} players under '{audio['group_coverage']}' coverage")
+    members = sum(g["players"] for g in states["groups"].values())
+    if members != states["grouped_players"]:
+        _fail(where + ".groups", f"{members} group members disagree with grouped_players {states['grouped_players']}")
     return states
 
 

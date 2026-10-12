@@ -90,7 +90,7 @@ def inside_pocket(x, z):
 def package_dir():
     """The accepted 0.6.0 package only (PLAN-AIRPIT item 5); the superseded 0.5.4 spike package
     ``work/extract/airpit`` is deliberately not a fallback, the test skips when the accepted one is absent."""
-    path = REPO / "work" / "extract" / "airpit-native-v5"
+    path = REPO / "work" / "extract" / "airpit-native-v6"
     if (path / "scenes" / "Arena_Airpit_TeamFight_DesignStuff.json").is_file():
         return path
     return None

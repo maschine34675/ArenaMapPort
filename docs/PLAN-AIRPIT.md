@@ -36,7 +36,8 @@ registered only in `ArenaMapRegistry.Catalog` (`ArenaMapDescriptor.cs:301-315`),
   module driven by the source plan (scene roles) and per-map contract data files; the Equator/Bay5 literals in
   validators are converted to data with a parity test. Plans of the other eleven maps stay untouched (adding keys
   changes a plan's digest and would invalidate their packages).
-- **Package naming:** `work/extract/airpit-native-v5` (v5 = feature level: adds static decals; source version
+- **Package naming:** `work/extract/airpit-native-v5` (superseded 2026-10-12 by `airpit-native-v6` = v5 + native ambient
+  audio, item 13 phase 1; v5 = feature level: adds static decals; source version
   0.6.0 is recorded in the manifest provenance). Build output `work/build/airpit`.
 - **Release promotion has two stages.** Client loops run over `ArenaMapRegistry.All`, so AirPit must be in `All`
   to be testable on the host. The lock-step registry change (item 9) therefore lands on the `feature/airpit`
@@ -171,7 +172,7 @@ with the counts above and their tests pass. Staging in the client csproj is adde
 
 **What/why.** Produce the accepted input and record the content delta.
 **Commands.** `python tools/extract/extract_map.py --plan tools/extract/plans/airpit.json --native-features
---target D:/SPT41/EscapeFromTarkov_Data --output work/extract/airpit-native-v5`, then
+--target D:/SPT41/EscapeFromTarkov_Data --output work/extract/airpit-native-v5` (since item 13: `...-v6`), then
 `python tools/extract/refresh_native_volumes.py work/extract/airpit-native-v5` (no-op: zero Tex3D, 23 Cube + 739
 Tex2D), then `python tools/validate/validate_extract.py --package work/extract/airpit-native-v5` (first
 `--skip-reproducibility`, then the full run).

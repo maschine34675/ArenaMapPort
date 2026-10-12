@@ -2,8 +2,9 @@
 
 Covers the strict loader (native_contract_loader), the golden proof that the Equator and Bay5 data
 files reproduce the literals validate_native_features.py used to hard-code, and the validator
-behaviour that now follows the data: AirPit's ballistics-only contract (audio null), its census pins
-and the negative cases (wrong census fails, missing feature fails). The real-package tests read the
+behaviour that now follows the data: AirPit's census and audio pins (item 13 filled its audio; the
+`audio: null` ballistics-only branch is exercised through a patched copy of the AirPit contract) and
+the negative cases (wrong census fails, missing feature fails). The real-package tests read the
 ignored work/ packages and are skipped when those are absent.
 """
 from __future__ import annotations
@@ -79,7 +80,10 @@ def raw_contract() -> dict:
                   'players': {'AmbientSoundPlayer': 6}, 'support': {'AmbientSoundPlayerGroup': 2},
                   'banks': 2, 'clips': 3, 'group_coverage': 'all_players',
                   'states': {'grouped_players': 6, 'disabled_players': [], 'inactive_players': {},
-                             'group_mixers': ['CommonAmbOutEffects', 'CommonAmbInEffects'], 'loop_players': []}},
+                             'groups': {'CommonAmbientOutGroup': {'mixer': 'CommonAmbOutEffects', 'players': 2},
+                                        'CommonAmbientInGroup': {'mixer': 'CommonAmbInEffects', 'players': 4}},
+                             'group_mixers': ['CommonAmbOutEffects', 'CommonAmbInEffects'],
+                             'loops': {}, 'loop_players': []}},
     }
 
 
@@ -127,8 +131,16 @@ class GoldenLegacyTests(unittest.TestCase):
 
     def test_equator_audio_branch_literals_are_now_data(self):
         states = v.MAPS['arena_equator']['audio']['states']
-        self.assertEqual(states, LEGACY_EQUATOR_STATES)
+        self.assertEqual({key: states[key] for key in LEGACY_EQUATOR_STATES}, LEGACY_EQUATOR_STATES)
         self.assertEqual(v.MAPS['arena_equator']['audio']['group_coverage'], 'active_players')
+
+    def test_equator_group_and_loop_pins_extend_the_legacy_literals(self):
+        # Added with the item-13 review: the loop is pinned by leaf name too (the importer and the client look it
+        # up as 'electricity'), the single indoor group by name, mixer and member count (25 players - 2 dogs).
+        states = v.MAPS['arena_equator']['audio']['states']
+        self.assertEqual(set(states), set(LEGACY_EQUATOR_STATES) | {'groups', 'loops'})
+        self.assertEqual(states['loops'], {'level56:965': 'electricity'})
+        self.assertEqual(states['groups'], {'CommonAmbientInGroup': {'mixer': 'CommonAmbInEffects', 'players': 23}})
 
     def test_bay5_has_no_state_pins_and_every_player_is_grouped(self):
         audio = v.MAPS['arena_bay5']['audio']
@@ -158,8 +170,24 @@ class GoldenLegacyTests(unittest.TestCase):
             'light_culling': {'culling_light_object_count': 533, 'volumetric_light_count': 130, 'light_flicker_count': 0},
             'raincover': {'indoor_trigger_count': 2, 'dry_plane_count': 0, 'weather_obstacle': False},
             'navmesh_modifiers': {'modifiers': 20, 'volumes': 12}, 'small_physics_objects': 0})
-        self.assertIsNone(airpit['audio'])  # item 13 fills it
         self.assertTrue(airpit['require_unsliced'])
+
+    def test_airpit_audio_pins_are_the_item_13_export(self):
+        audio = v.MAPS['arena_airpit']['audio']
+        self.assertEqual(audio, {
+            'feature': 'ambient_audio', 'schema': 2, 'scene': 'level39', 'root': 'ArenaMapPort_AirPitNativeAudio',
+            'players': {'AmbientSoundPlayer': 26}, 'support': {'AmbientSoundPlayerGroup': 2},
+            'banks': 9, 'clips': 61, 'group_coverage': 'all_players',
+            'states': {'grouped_players': 26, 'disabled_players': [], 'inactive_players': {},
+                       'groups': {'CommonAmbientOutGroup': {'mixer': 'CommonAmbOutEffects', 'players': 4},
+                                  'CommonAmbientInGroup': {'mixer': 'CommonAmbInEffects', 'players': 22}},
+                       'group_mixers': ['CommonAmbOutEffects', 'CommonAmbInEffects'],
+                       'loops': {}, 'loop_players': []}})
+        # AirPit is the first map with both an Out and an In group: the Out group comes first in source order
+        # (kept in the group_mixers mirror), but the pins themselves are keyed by group name.
+        self.assertEqual(audio['states']['group_mixers'][0], 'CommonAmbOutEffects')
+        self.assertEqual(sum(audio['players'].values()), audio['states']['grouped_players'])
+        self.assertEqual(sum(g['players'] for g in audio['states']['groups'].values()), audio['states']['grouped_players'])
 
 
 class SchemaTests(unittest.TestCase):
@@ -168,10 +196,16 @@ class SchemaTests(unittest.TestCase):
         self.assertEqual(contract['scenes'], {7: 'Arena_X_Main', 8: 'Arena_X_Light'})
         self.assertEqual(contract['ballistics'], {7: 10, 8: 0})
         self.assertEqual(contract['audio']['states']['group_mixers'], ['CommonAmbOutEffects', 'CommonAmbInEffects'])
+        self.assertEqual(contract['audio']['states']['groups'],
+                         {'CommonAmbientOutGroup': {'mixer': 'CommonAmbOutEffects', 'players': 2},
+                          'CommonAmbientInGroup': {'mixer': 'CommonAmbInEffects', 'players': 4}})
+        self.assertEqual(contract['audio']['states']['loops'], {})
 
     def test_two_groups_may_share_a_mixer(self):
         raw = raw_contract()
         raw['audio']['states']['group_mixers'] = ['CommonAmbInEffects', 'CommonAmbInEffects']
+        for record in raw['audio']['states']['groups'].values():
+            record['mixer'] = 'CommonAmbInEffects'
         parse(raw)
 
     def assertRejects(self, change, pattern=None):
@@ -192,7 +226,11 @@ class SchemaTests(unittest.TestCase):
         self.assertRejects(lambda r: r['audio'].pop('states'), 'missing keys')
         self.assertRejects(lambda r: r['features'].pop('raincover'), 'missing keys')
         self.assertRejects(lambda r: r['features']['light_culling'].pop('light_flicker_count'), 'missing keys')
-        self.assertRejects(lambda r: r['audio']['states'].pop('loop_players'), 'missing keys')
+        for key in ('loop_players', 'loops', 'groups', 'group_mixers'):
+            with self.subTest(states_key=key):
+                self.assertRejects(lambda r, key=key: r['audio']['states'].pop(key), 'missing keys')
+        self.assertRejects(lambda r: r['audio']['states']['groups']['CommonAmbientInGroup'].pop('players'), 'missing keys')
+        self.assertRejects(lambda r: r['audio']['states']['groups']['CommonAmbientInGroup'].update(extra=1), 'unknown keys')
 
     def test_notes_are_optional_but_typed(self):
         raw = raw_contract()
@@ -272,6 +310,7 @@ class SchemaTests(unittest.TestCase):
         self.assertRejects(lambda r: r['audio']['states'].update(inactive_players=[]), 'object of player id')
         self.assertRejects(lambda r: r['audio']['states'].update(disabled_players=['a', 'a']), 'duplicate')
         self.assertRejects(lambda r: r['audio']['states'].update(loop_players=[1]), 'non-empty string')
+        self.assertRejects(lambda r: r['audio']['states'].update(loops=[]), 'object of player id')
 
         def active_coverage(r):
             r['audio']['group_coverage'] = 'active_players'
@@ -281,10 +320,59 @@ class SchemaTests(unittest.TestCase):
         raw = raw_contract()
         active_coverage(raw)
         raw['audio']['states']['grouped_players'] = 5
+        raw['audio']['states']['groups']['CommonAmbientInGroup']['players'] = 3
         self.assertEqual(parse(raw)['audio']['states']['grouped_players'], 5)
         raw['audio']['states']['disabled_players'] = ['level9:2']  # disabled players are not grouped either
         raw['audio']['states']['grouped_players'] = 4
+        raw['audio']['states']['groups']['CommonAmbientInGroup']['players'] = 2
         self.assertEqual(parse(raw)['audio']['states']['grouped_players'], 4)
+
+    def test_group_pins_are_per_group_data_that_agree_with_their_mirrors(self):
+        def states(r):
+            return r['audio']['states']
+
+        def groups(r):
+            return states(r)['groups']
+
+        # per-group record shape
+        self.assertRejects(lambda r: states(r).update(groups=[]), 'object of group leaf name')
+        self.assertRejects(lambda r: states(r).update(groups={}), 'entries for 2')
+        self.assertRejects(lambda r: groups(r).pop('CommonAmbientInGroup'), 'entries for 2')
+        self.assertRejects(lambda r: groups(r).update(Third={'mixer': 'CommonAmbInEffects', 'players': 1}), 'entries for 2')
+        self.assertRejects(lambda r: groups(r)['CommonAmbientInGroup'].update(mixer=''), 'non-empty string')
+        self.assertRejects(lambda r: groups(r)['CommonAmbientInGroup'].update(players=0), 'integer >= 1')
+        self.assertRejects(lambda r: groups(r)['CommonAmbientInGroup'].update(players=True), 'integer >= 1')
+        self.assertRejects(lambda r: groups(r)['CommonAmbientInGroup'].update(players='4'), 'integer >= 1')
+        self.assertRejects(lambda r: groups(r).update(CommonAmbientInGroup=['x']), 'expected an object')
+        # the member counts must add up to the grouped players (a typo changes the total)
+        self.assertRejects(lambda r: groups(r)['CommonAmbientInGroup'].update(players=5), 'group members disagree')
+        self.assertRejects(lambda r: groups(r)['CommonAmbientOutGroup'].update(players=1), 'group members disagree')
+        # group_mixers stays the ordered mirror of the mixers of 'groups'
+        self.assertRejects(lambda r: states(r).update(group_mixers=['CommonAmbInEffects', 'CommonAmbOutEffects']), 'same order')
+        self.assertRejects(lambda r: states(r).update(group_mixers=['CommonAmbOutEffects', 'CommonAmbOutEffects']), 'same order')
+
+    def test_loops_are_pinned_by_id_and_leaf_name_with_loop_players_as_the_mirror(self):
+        def states(r):
+            return r['audio']['states']
+
+        def named_loop(r):
+            states(r).update(loops={'level9:3': 'hum'}, loop_players=['level9:3'])
+
+        raw = raw_contract()
+        named_loop(raw)
+        self.assertEqual(parse(raw)['audio']['states']['loops'], {'level9:3': 'hum'})
+        self.assertRejects(lambda r: (named_loop(r), states(r).update(loop_players=[])), 'exactly the ids')
+        self.assertRejects(lambda r: (named_loop(r), states(r).update(loop_players=['level9:4'])), 'exactly the ids')
+        self.assertRejects(lambda r: (named_loop(r), states(r).update(loops={'level9:3': ''})), 'non-empty string')
+        self.assertRejects(lambda r: states(r).update(loops={'level9:3': 'hum'}), 'exactly the ids')
+
+    def test_group_names_are_unique_keys(self):
+        text = json.dumps(raw_contract()).replace('"CommonAmbientInGroup": {', '"CommonAmbientOutGroup": {', 1)
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / 'x.json'
+            path.write_text(text, encoding='utf-8')
+            with self.assertRaisesRegex(L.NativeContractError, 'duplicate JSON key'):
+                L.load_contract_file(path)
 
 
 class ContractFileTests(unittest.TestCase):
@@ -338,10 +426,11 @@ class ContractFileTests(unittest.TestCase):
 # validate_native_features driven by the data
 # ---------------------------------------------------------------------------------------------
 
-def airpit_manifest() -> dict:
+def airpit_manifest(audio: bool = True) -> dict:
+    """The manifest blocks of an AirPit package; audio=False is the ballistics-only (pre item 13) shape."""
     contract = v.MAPS['arena_airpit']
     pins = contract['features']
-    return {
+    manifest = {
         'source': {'map_key': 'arena_airpit'}, 'scenes': list(contract['scenes'].values()),
         'materials': {'m0': {}},
         'native_features': {
@@ -352,6 +441,10 @@ def airpit_manifest() -> dict:
             'static_decals': {'schema_version': 1, 'count': pins['static_decals']}},
         'native_ballistics': {},
     }
+    if audio:
+        manifest['native_features']['required'].append(contract['audio']['feature'])
+        manifest['native_audio'] = {}
+    return manifest
 
 
 def airpit_scenes(manifest: dict, **override) -> dict:
@@ -375,20 +468,34 @@ def mono(script: str):
     return SimpleNamespace(type=SimpleNamespace(name='MonoBehaviour'), parse_monobehaviour_head=lambda: head)
 
 
-class AirPitBallisticsOnlyContractTests(unittest.TestCase):
-    def test_ballistics_only_manifest_validates_with_and_without_scenes(self):
+class AirPitNativeContractTests(unittest.TestCase):
+    """AirPit's contract since PLAN-AIRPIT item 13: ballistics plus the native ambient audio graph."""
+
+    def test_manifest_validates_with_and_without_scenes(self):
         manifest = airpit_manifest()
+        self.assertEqual(manifest['native_features']['required'], ['ballistics', 'ambient_audio'])
         self.assertTrue(v.feature_enabled(manifest))
         self.assertTrue(v.feature_enabled(manifest, airpit_scenes(manifest)))
 
-    def test_native_audio_entry_is_rejected_when_the_contract_declares_none(self):
+    def test_native_audio_entry_is_now_required(self):
         manifest = airpit_manifest()
-        manifest['native_audio'] = {}
-        with self.assertRaisesRegex(ValueError, 'declares no native audio'):
+        del manifest['native_audio']
+        with self.assertRaisesRegex(ValueError, 'incomplete required feature contract'):
             v.feature_enabled(manifest)
 
-    def test_required_list_must_be_exactly_ballistics(self):
-        for required in (['ballistics', 'ambient_audio'], [], ['ambient_audio'], ['ballistics', 'ballistics']):
+    def test_the_superseded_ballistics_only_shape_is_rejected(self):
+        # work/extract/airpit-native-v5 (no native_audio, required == ['ballistics']) predates item 13.
+        manifest = airpit_manifest(audio=False)
+        with self.assertRaisesRegex(ValueError, 'incomplete required feature contract'):
+            v.feature_enabled(manifest)
+        manifest['native_audio'] = {}  # an audio entry without the required feature name is no better
+        with self.assertRaisesRegex(ValueError, 'feature contract'):
+            v.feature_enabled(manifest)
+
+    def test_required_list_must_be_exactly_ballistics_then_ambient_audio(self):
+        for required in (['ballistics'], [], ['ambient_audio'], ['ballistics', 'ballistics'],
+                         ['ambient_audio', 'ballistics'], ['ballistics', 'ambient_audio', 'ambient_audio'],
+                         ['ballistics', 'harbor_audio']):
             manifest = airpit_manifest()
             manifest['native_features']['required'] = required
             with self.subTest(required=required), self.assertRaisesRegex(ValueError, 'feature contract'):
@@ -476,8 +583,42 @@ class AirPitBallisticsOnlyContractTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'unmarked ballistic'):
             v.feature_enabled({}, {'scene': [{'components': [{'type': 'BallisticCollider'}]}]})
 
+    def test_strict_census_equality(self):
+        self.assertTrue(v.same(2, 2))
+        self.assertFalse(v.same(True, 1))
+        self.assertFalse(v.same(2.0, 2))
+        self.assertFalse(v.same(None, 0))
+
+
+class BallisticsOnlyContractBranchTests(unittest.TestCase):
+    """The `audio: null` branch of the validator. No repository map uses it since item 13 filled AirPit's
+    audio, so the AirPit contract with its audio dropped stands in for a future ballistics-only map."""
+
+    def setUp(self):
+        patcher = patch.dict(v.MAPS, {'arena_airpit': dict(v.MAPS['arena_airpit'], audio=None)})
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
+    def test_ballistics_only_manifest_validates_with_and_without_scenes(self):
+        manifest = airpit_manifest(audio=False)
+        self.assertTrue(v.feature_enabled(manifest))
+        self.assertTrue(v.feature_enabled(manifest, airpit_scenes(manifest)))
+
+    def test_native_audio_entry_is_rejected_when_the_contract_declares_none(self):
+        manifest = airpit_manifest(audio=False)
+        manifest['native_audio'] = {}
+        with self.assertRaisesRegex(ValueError, 'declares no native audio'):
+            v.feature_enabled(manifest)
+
+    def test_required_list_must_be_exactly_ballistics(self):
+        for required in (['ballistics', 'ambient_audio'], [], ['ambient_audio'], ['ballistics', 'ballistics']):
+            manifest = airpit_manifest(audio=False)
+            manifest['native_features']['required'] = required
+            with self.subTest(required=required), self.assertRaisesRegex(ValueError, 'feature contract'):
+                v.feature_enabled(manifest)
+
     def test_extra_counts_without_audio_are_the_rain_cover_objects_only(self):
-        manifest = airpit_manifest()
+        manifest = airpit_manifest(audio=False)
         # EnvironmentManager + TriggerGroup + 2 IndoorTrigger, no WeatherObstacle/DryPlane; no audio root.
         self.assertEqual(v.extra_counts('unused', manifest), {'GameObject': 4, 'Transform': 4, 'AudioSource': 0})
         manifest['native_features'].pop('raincover')
@@ -485,7 +626,7 @@ class AirPitBallisticsOnlyContractTests(unittest.TestCase):
             v.extra_counts('unused', manifest)
 
     def test_audio_proofs_refuse_a_map_without_an_audio_contract(self):
-        manifest = airpit_manifest()
+        manifest = airpit_manifest(audio=False)
         with self.assertRaisesRegex(ValueError, 'declares no native audio'):
             v.load_audio('unused', manifest)
         data = {'mapKey': 'arena_airpit', 'schemaVersion': 2, 'players': [], 'support': []}
@@ -501,12 +642,6 @@ class AirPitBallisticsOnlyContractTests(unittest.TestCase):
             with self.subTest(script), self.assertRaisesRegex(ValueError, 'does not declare'):
                 v.reject_undeclared_audio([mono('BallisticCollider'), mono(script)])
 
-    def test_strict_census_equality(self):
-        self.assertTrue(v.same(2, 2))
-        self.assertFalse(v.same(True, 1))
-        self.assertFalse(v.same(2.0, 2))
-        self.assertFalse(v.same(None, 0))
-
 
 class AudioFollowsTheContractTests(unittest.TestCase):
     """Audio is conditional on the contract: swap in a data contract and the validator follows it."""
@@ -521,7 +656,7 @@ class AudioFollowsTheContractTests(unittest.TestCase):
 
     def test_item_13_style_contract_makes_audio_required(self):
         contract = self.with_audio_contract(raw_contract()['audio'])
-        manifest = airpit_manifest()
+        manifest = airpit_manifest(audio=False)
         manifest['native_features']['required'] = ['ballistics', 'ambient_audio']
         with patch.dict(v.MAPS, {'arena_airpit': contract}):
             with self.assertRaisesRegex(ValueError, 'incomplete required feature contract'):
@@ -532,14 +667,17 @@ class AudioFollowsTheContractTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, 'feature contract'):
                 v.feature_enabled(manifest)
 
+    # The fixture's two groups: (leaf name, mixer, member count), players 0-1 in the first and 2-5 in the second.
+    GROUPS = (('CommonAmbientOutGroup', 'CommonAmbOutEffects', 2), ('CommonAmbientInGroup', 'CommonAmbInEffects', 4))
+
     def players(self, count=6):
-        return [{'id': f'level9:{i}', 'path': f'Amb/Group/p{i}', 'enabled': True, 'activeInHierarchy': True,
-                 'sourceAudio': {'Loop': False}} for i in range(count)]
+        return [{'id': f'level9:{i}', 'path': f'Amb/{self.GROUPS[0 if i < 2 else 1][0]}/p{i}', 'enabled': True,
+                 'activeInHierarchy': True, 'sourceAudio': {'Loop': False}} for i in range(count)]
 
     def groups(self, ids):
         return [{'kind': 'AmbientSoundPlayerGroup', 'enabled': True, 'activeInHierarchy': True, 'mixerName': mixer,
-                 'soundPlayers': [{'resolved': i} for i in members]}
-                for mixer, members in zip(('CommonAmbOutEffects', 'CommonAmbInEffects'), ids)]
+                 'path': f'Amb/{name}', 'soundPlayers': [{'resolved': i} for i in members]}
+                for (name, mixer, _size), members in zip(self.GROUPS, ids)]
 
     def check(self, data, audio=None):
         audio = audio or L.parse_contract(raw_contract(), 'x')['audio']
@@ -557,8 +695,13 @@ class AudioFollowsTheContractTests(unittest.TestCase):
     def test_group_pins_are_enforced(self):
         def swap_mixers(d):
             d['support'][0]['mixerName'], d['support'][1]['mixerName'] = d['support'][1]['mixerName'], d['support'][0]['mixerName']
-        def reorder_groups(d):
-            d['support'].reverse()
+        def rename_group(d):
+            d['support'][0]['path'] = 'Amb/CommonAmbientOutGroupRenamed'
+        def move_member(d):  # coverage still holds (every player grouped once), only the pinned counts differ
+            d['support'][1]['soundPlayers'].append(d['support'][0]['soundPlayers'].pop())
+        def swap_members(d):  # counts preserved, the members no longer sit under their group
+            out, indoor = d['support'][0]['soundPlayers'], d['support'][1]['soundPlayers']
+            out[0], indoor[0] = indoor[0], out[0]
         def drop_member(d):
             d['support'][1]['soundPlayers'].pop()
         def duplicate_member(d):
@@ -573,20 +716,64 @@ class AudioFollowsTheContractTests(unittest.TestCase):
             d['support'][0]['enabled'] = False
         def inactive_group(d):
             d['support'][1]['activeInHierarchy'] = False
-        for change in (swap_mixers, reorder_groups, drop_member, duplicate_member, inactive_player,
-                       disabled_player, looping_player, disabled_group, inactive_group):
+        for change in (swap_mixers, rename_group, move_member, swap_members, drop_member, duplicate_member,
+                       inactive_player, disabled_player, looping_player, disabled_group, inactive_group):
             data = self.good()
             change(data)
             with self.subTest(change.__name__), self.assertRaises(ValueError):
                 self.check(data)
 
+    def test_group_pins_name_their_failure(self):
+        for change, pattern in ((lambda d: d['support'][0].update(mixerName='CommonAmbInEffects'), 'audio group mixer routes'),
+                                (lambda d: d['support'][0].update(path='Amb/Elsewhere'), 'audio group mixer routes'),
+                                (lambda d: d['support'][1]['soundPlayers'].append(d['support'][0]['soundPlayers'].pop()),
+                                 'audio group member counts')):
+            data = self.good()
+            change(data)
+            with self.assertRaisesRegex(ValueError, pattern):
+                self.check(data)
+        data = self.good()  # two players swapped between the groups: counts agree, the hierarchy does not
+        out, indoor = data['support'][0]['soundPlayers'], data['support'][1]['soundPlayers']
+        out[0], indoor[0] = indoor[0], out[0]
+        with self.assertRaisesRegex(ValueError, 'outside their group hierarchy'):
+            self.check(data)
+        data = self.good()  # two groups with one leaf name cannot be keyed
+        data['support'][1]['path'] = 'Other/' + self.GROUPS[0][0]
+        with self.assertRaisesRegex(ValueError, 'not unique'):
+            self.check(data)
+
+    def test_group_order_is_not_pinned(self):
+        data = self.good()
+        data['support'].reverse()
+        self.check(data)
+
+    def test_loops_are_pinned_by_id_and_leaf_name(self):
+        raw = raw_contract()
+        raw['audio']['states'].update(loops={'level9:0': 'hum'}, loop_players=['level9:0'])
+        audio = L.parse_contract(raw, 'x')['audio']
+        data = self.good()
+        data['players'][0].update(path='Amb/CommonAmbientOutGroup/hum', sourceAudio={'Loop': True})
+        self.check(data, audio)
+        for name, change in (('renamed leaf', lambda d: d['players'][0].update(path='Amb/CommonAmbientOutGroup/hum2')),
+                             ('loop lost', lambda d: d['players'][0].update(sourceAudio={'Loop': False})),
+                             ('extra loop', lambda d: d['players'][1].update(sourceAudio={'Loop': True})),
+                             ('moved loop', lambda d: (d['players'][0].update(sourceAudio={'Loop': False}),
+                                                       d['players'][1].update(path='Amb/CommonAmbientOutGroup/hum',
+                                                                              sourceAudio={'Loop': True})))):
+            moved = self.good()
+            moved['players'][0].update(path='Amb/CommonAmbientOutGroup/hum', sourceAudio={'Loop': True})
+            change(moved)
+            with self.subTest(name), self.assertRaisesRegex(ValueError, 'original looping audio players'):
+                self.check(moved, audio)
+
     def test_active_coverage_with_pinned_inactive_players(self):
         raw = raw_contract()
         raw['audio']['group_coverage'] = 'active_players'
         raw['audio']['states'].update(grouped_players=5, inactive_players={'level9:5': 'far_dogs'})
+        raw['audio']['states']['groups']['CommonAmbientInGroup']['players'] = 3  # the inactive player is not a member
         audio = L.parse_contract(raw, 'x')['audio']
         data = self.good()
-        data['players'][5].update(activeInHierarchy=False, path='Amb/Group/far_dogs')
+        data['players'][5].update(activeInHierarchy=False, path='Amb/CommonAmbientInGroup/far_dogs')
         data['support'][1]['soundPlayers'].pop()  # the inactive player is not grouped
         self.check(data, audio)
         data['support'][1]['soundPlayers'].append({'resolved': 'level9:5'})  # an inactive player must not join
@@ -623,6 +810,8 @@ class AcceptedPackageTests(unittest.TestCase):
     # extra_counts() values recorded from the pre-item-3 validator on the same packages.
     EXPECTED_EXTRA = {'equator-native-v5': {'GameObject': 32, 'Transform': 32, 'AudioSource': 25},
                       'bay5-native-v5': {'GameObject': 63, 'Transform': 63, 'AudioSource': 24}}
+    # Recorded from validate_native_features.extra_counts on work/extract/airpit-native-v6 (item 13).
+    EXPECTED_AIRPIT_EXTRA = {'GameObject': 35, 'Transform': 35, 'AudioSource': 26}
 
     def test_manifest_scene_census_and_audio_index(self):
         for name, extra in self.EXPECTED_EXTRA.items():
@@ -643,14 +832,35 @@ class AcceptedPackageTests(unittest.TestCase):
         if all(package_dir(n) is None for n in self.EXPECTED_EXTRA):
             self.skipTest('accepted native packages not present')
 
-    def test_airpit_native_package_when_present(self):
+    def test_superseded_airpit_v5_package_lacks_the_audio_contract_requires(self):
         package = package_dir('airpit-native-v5')
         if package is None:
-            self.skipTest('work/extract/airpit-native-v5 not present (PLAN-AIRPIT item 5)')
+            self.skipTest('work/extract/airpit-native-v5 not present')
+        manifest = v.read_json(package / 'manifest.json')
+        self.assertNotIn('native_audio', manifest)
+        self.assertEqual(manifest['native_features']['required'], ['ballistics'])
+        with self.assertRaisesRegex(ValueError, 'incomplete required feature contract'):
+            v.feature_enabled(manifest, v.scene_objects(package, manifest))
+
+    def test_airpit_native_package_when_present(self):
+        package = package_dir('airpit-native-v6')
+        if package is None:
+            self.skipTest('work/extract/airpit-native-v6 not present (PLAN-AIRPIT item 13)')
         manifest = v.read_json(package / 'manifest.json')
         scenes = v.scene_objects(package, manifest)
         self.assertTrue(v.feature_enabled(manifest, scenes))
-        self.assertNotIn('native_audio', manifest)
+        self.assertEqual(v.map_contract(manifest)[0], 'arena_airpit')
+        self.assertEqual(manifest['native_features']['required'], ['ballistics', 'ambient_audio'])
+        self.assertEqual({k: manifest['native_audio'][k] for k in ('file', 'schema_version', 'players', 'banks', 'clips')},
+                         {'file': 'audio/native-audio.json', 'schema_version': 2, 'players': 26, 'banks': 9, 'clips': 61})
+        data = v.load_audio(package, manifest)
+        self.assertEqual((data['mapKey'], data['schemaVersion'], data['sourceScene']), ('arena_airpit', 2, 'level39'))
+        groups = [s for s in data['support'] if s['kind'] == 'AmbientSoundPlayerGroup']
+        # The Out group routes four players to CommonAmbOutEffects, the In group 22 to CommonAmbInEffects.
+        self.assertEqual([(g['path'].rsplit('/', 1)[-1], g['mixerName'], len(g['soundPlayers'])) for g in groups],
+                         [('CommonAmbientOutGroup', 'CommonAmbOutEffects', 4), ('CommonAmbientInGroup', 'CommonAmbInEffects', 22)])
+        self.assertEqual(sum(p['volume'] < p['deltaVolume'] for p in data['players']), 0)  # no quiet-source silencing
+        self.assertEqual(v.extra_counts(package, manifest), self.EXPECTED_AIRPIT_EXTRA)
 
 
 if __name__ == '__main__':

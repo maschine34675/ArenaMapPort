@@ -8,7 +8,7 @@ Native features (original ballistic materials, NavMesh modifiers, static decals,
 culling, rain cover; PLAN-AIRPIT item 2) are opt-in and live in native_features.py:
        ... --native-features --target <SPT EscapeFromTarkov_Data>
 The plain invocation is unchanged and writes no native block. The accepted AirPit package
-(Arena 0.6.0, PLAN-AIRPIT item 5) is the native form written to work/extract/airpit-native-v5;
+(Arena 0.6.0, PLAN-AIRPIT item 5) is the native form written to work/extract/airpit-native-v6 (v6 = v5 + native ambient audio, item 13);
 the superseded 0.5.4 spike package work/extract/airpit is never an --output.
 """
 from __future__ import annotations

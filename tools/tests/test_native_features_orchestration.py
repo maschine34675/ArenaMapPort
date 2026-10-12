@@ -19,7 +19,9 @@ from unittest.mock import patch
 REPO = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO / "tools" / "extract"))
 sys.path.insert(0, str(REPO / "tools" / "validate"))
+import extract_bay5_audio
 import extract_map as EX
+import native_contract_loader
 import native_features as NF
 import source_plan as SP
 import validate_extract as VE
@@ -29,13 +31,21 @@ CONTRACT = {"schema_version": 1, "source_presets": {"presets": []}, "target_pres
 LIGHT = {"culling_light_object_count": 0, "volumetric_light_count": 0, "light_flicker_count": 0}
 
 
-def plan_with_scripts_role(index: int = 7) -> dict:
+def plan_with_scripts_role(index: int = 7, sound_index: int | None = None) -> dict:
     def scene(name, idx):
         return {"name": name, "asset_path": f"Assets/Content/{name}.unity", "index": idx}
+    excluded = [dict(scene("Arena_Test_Scripts", index), role="scripts", reason="authored scripts")]
+    if sound_index is not None:
+        excluded.append(dict(scene("Arena_Test_Sound", sound_index), role="sound", reason="native audio"))
     return {"schema_version": 1, "key": "arena_test", "source_preset": "arena_test_preset.bundle",
             "source_mode": "TeamFight", "scenes": [scene("Arena_Test_Main", 1)],
             "anchor_scenes": [scene("Arena_Test_Main", 1)], "navmesh_scenes": [], "fog_color": [0.1, 0.2, 0.3],
-            "excluded_scenes": [dict(scene("Arena_Test_Scripts", index), role="scripts", reason="authored scripts")]}
+            "excluded_scenes": excluded}
+
+
+def fake_contracts(feature="ambient_audio", scene="level39", audio=True) -> dict:
+    """Minimal stand-in for native_contract_loader.load_contracts(): only what the registration check reads."""
+    return {"arena_test": {"audio": {"feature": feature, "scene": scene} if audio else None}}
 
 
 class NativeFeatureTestCase(unittest.TestCase):
@@ -204,9 +214,49 @@ class ManifestBlockTests(NativeFeatureTestCase):
 
     def test_for_plan_picks_up_a_registered_audio_exporter(self):
         exporter = ("ambient_audio", lambda *_: {})
-        with patch.dict(NF.AUDIO_EXPORTERS, {"arena_test": exporter}):
-            run = NF.NativeFeatureExtraction.for_plan(plan_with_scripts_role(), self.root / "arena", self.target)
+        with patch.dict(NF.AUDIO_EXPORTERS, {"arena_test": exporter}), \
+             patch.object(NF, "load_contracts", return_value=fake_contracts()):
+            run = NF.NativeFeatureExtraction.for_plan(plan_with_scripts_role(sound_index=39), self.root / "arena",
+                                                      self.target)
         self.assertIs(run.audio, exporter)
+
+    def for_registered_plan(self, plan, contracts, feature="ambient_audio"):
+        with patch.dict(NF.AUDIO_EXPORTERS, {"arena_test": (feature, lambda *_: {})}), \
+             patch.object(NF, "load_contracts", return_value=contracts):
+            return NF.NativeFeatureExtraction.for_plan(plan, self.root / "arena", self.target)
+
+    def test_registered_exporter_needs_the_plans_sound_role(self):
+        with self.assertRaisesRegex(SP.PlanError, "declares no scene with role 'sound'"):
+            self.for_registered_plan(plan_with_scripts_role(), fake_contracts())
+
+    def test_registered_exporter_must_match_the_contract_before_any_extraction(self):
+        plan = plan_with_scripts_role(sound_index=39)
+        cases = (("sound scene drift", plan_with_scripts_role(sound_index=40), fake_contracts(), "ambient_audio",
+                  "contract audio scene 'level39' is not the plan's sound scene"),
+                 ("contract scene drift", plan, fake_contracts(scene="level38"), "ambient_audio",
+                  "contract audio scene 'level38' is not the plan's sound scene"),
+                 ("feature name drift", plan, fake_contracts(feature="harbor_audio"), "ambient_audio",
+                  "registers audio feature 'ambient_audio' but its native contract says 'harbor_audio'"),
+                 ("contract without audio", plan, fake_contracts(audio=False), "ambient_audio",
+                  "contract declares no audio"),
+                 ("no contract at all", plan, {}, "ambient_audio", "contract declares no audio"))
+        for name, case_plan, contracts, feature, pattern in cases:
+            with self.subTest(name), self.assertRaisesRegex(HardExtractError, pattern):
+                self.for_registered_plan(case_plan, contracts, feature)
+
+    def test_airpit_registers_the_shared_ambient_audio_exporter(self):
+        self.assertEqual(NF.AUDIO_EXPORTERS["arena_airpit"], ("ambient_audio", extract_bay5_audio.export))
+        contracts = native_contract_loader.load_contracts()
+        for key, (feature, _exporter) in NF.AUDIO_EXPORTERS.items():
+            with self.subTest(key=key):
+                self.assertEqual(contracts[key]["audio"]["feature"], feature)
+
+    def test_airpit_plan_sound_scene_is_the_contract_scene_level39(self):
+        plan = SP.load_plan(REPO / "tools/extract/plans/airpit.json")
+        self.assertEqual(SP.scene_for_role(plan, "sound")["index"], 39)
+        run = NF.NativeFeatureExtraction.for_plan(plan, self.root / "arena", self.target)
+        self.assertEqual(run.audio, ("ambient_audio", extract_bay5_audio.export))
+        self.assertEqual(native_contract_loader.load_contract("arena_airpit")["audio"]["scene"], "level39")
 
     def test_airpit_plan_scripts_scene_is_index_36(self):
         plan = SP.load_plan(REPO / "tools/extract/plans/airpit.json")
@@ -241,6 +291,9 @@ class AcceptedPackageShapeTests(NativeFeatureTestCase):
 
     def test_bay5_native_v5_blocks_are_reproduced(self):
         self.check_package("bay5-native-v5")
+
+    def test_airpit_native_v6_blocks_are_reproduced(self):
+        self.check_package("airpit-native-v6")
 
 
 class ExtractMapCommandLineTests(unittest.TestCase):

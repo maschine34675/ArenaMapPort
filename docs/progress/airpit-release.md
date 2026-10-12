@@ -2442,3 +2442,61 @@ positions as history (they were already stale after the north moves).
 restart and (as usual) the hash comparison. Then `uibridge_teleport dryRun=true` from the Usec spawn to the three new points must answer
 "reachable" without the wall message, and one raid with bots should show `[BotSpawn]` wave lines and `uibridge_bots` positions on the hall
 floor (none inside the three shop fronts).
+
+### Host raid 9 (2026-10-12 14:41-14:45, build 9bf4f89 base.json, bots low): the moved spawns on the deployed U4 mesh
+
+Deploy of the regenerated `base.json` (server stopped, hashes equal dist, `gpu-run restart`, 19/19 identical), `gpu-run raid --bots low`,
+spawned at `SpawnPoint_Player_South_All` (-16.9, 0, -71.7).
+
+- `uibridge_teleport dryRun` from the south spawn to the three new points: **(-32.69, 30.15) -> `would teleport to (-32.7, 0.1, 30.1)`,
+  (-31.0, -25.5) -> `(-31.0, 0.0, -25.5)`, (6.0, -40.5) -> `(6.0, 0.1, -40.5)`**, each `snapped <= 0.1 m · checks navmesh, zone,
+  reachable, room` - no island, no wall message (the old points answered `navmesh island` / `passes through a wall or fence` in raid 8).
+- Bots on U4 (the first bots raid since the U3/U4 rebakes; raid 3 ran on U2): `[BotSpawn] wave fired: zone='BotZone_Main' count=3
+  side=Savage ... providedValid=1/1`, three `BotOwner.Create -> 'Bot1..3' startCorePoint=0` + `ActivateBotCallback ... bot registered`;
+  `uibridge_bots` at 14:42:40: all three `Active, PatrolAssault` at (-24, 0, 57)..(-23, 0, 60) (the `north-end-west` spawn); 30 s later at
+  (9.8, 0, -11.2), (-2.7, 4.7, 2.1) and (-16.7, 5.4, 4.4) - 50-70 m across the hall and up the mezzanine. No `ActiveFail`, no
+  ArenaMapPort warning or error. Left at 14:45 (`gpu-run leave`).
+
+## Item 13 phase 1 - native ambient audio: extractor, contract, package v6 (2026-10-12, 14:00-15:30)
+
+Done by one implementing agent plus two adversarial reviewers and a fix pass (workflow `wf_cd72c8a7-b60`); the lead re-ran the
+suites and switched the package pins. No Unity, no host.
+
+- **Extractor generalised.** `tools/extract/extract_bay5_audio.py` no longer carries the Equator/Bay5 whitelist, the `equator`
+  boolean and the literal census/identity/state pins: supported maps, source scene, schema, census (players/support by kind, banks,
+  clips), group coverage and the schema-2 state pins (inactive/disabled/loop players, per-group mixer list in source order) come from
+  the native contract through `native_contract_loader` (`find_audio_contract`, `audio_contract`, `expected_group_members`,
+  `validate_audio_states` replaces `validate_equator_states`). Helper names/signatures (`Reader`, `deref`, `script`, `identity`,
+  `hierarchy`, `validate_wav`, `script_hash`, `export`, `validate_graph`) unchanged; `room_reverb.py`, `extract_multiflare.py`,
+  `extract_spatial_audio.py` still import. **Equator/Bay5 output byte-identical** (HEAD exporter vs new exporter on the live Arena
+  0.6.0 source: Equator 66/66 files, Bay5 107/107 files identical; `work/airpit-parity/parity_gate.py check` UNCHANGED). The
+  review's one finding (the Equator electricity loop was pinned by leaf name only in the retired literal) is fixed: the contract
+  `loop_players` now carries id + leaf name for Equator and `validate_native_features.check_audio_group_states` checks both.
+- **Registration.** `tools/extract/native_features.py`: `AUDIO_EXPORTERS['arena_airpit'] = ('ambient_audio', extract_bay5_audio.export)`;
+  `for_plan` cross-checks the plan's `sound` role against the contract's scene/feature before the multi-minute extraction (Equator and
+  Bay5 keep calling `export()` directly from their own extractors).
+- **Contract.** `tools/extract/native_contracts/airpit.json` `audio`: feature `ambient_audio`, schema 2, scene `level39`, root
+  `ArenaMapPort_AirPitNativeAudio`, players `{AmbientSoundPlayer: 26}`, support `{AmbientSoundPlayerGroup: 2}`, banks 9, clips 61,
+  `group_coverage all_players`, states `{grouped_players 26, disabled [], inactive {}, group_mixers [CommonAmbOutEffects,
+  CommonAmbInEffects], loop []}`.
+- **Package `work/extract/airpit-native-v6`** (accepted input from now on; ignored): `extract_map.py --plan tools/extract/plans/airpit.json
+  --native-features --target D:/SPT41/EscapeFromTarkov_Data --output work/extract/airpit-native-v6`, `refresh_native_volumes.py` (no-op),
+  `validate_extract.py --package ... --extractor-timeout 900` -> `OK -- all checks passed` incl. two reproducibility runs and the
+  package-freshness check (0 diffs, 939 s). Manifest `native_audio {schema_version 2, players 26, banks 9, clips 61, sha256 fa50a114...}`,
+  `native_features.required = [ballistics, ambient_audio]`; `audio/` = `native-audio.json` + 61 WAV (44,058,104 B). **Diff against v5:**
+  scenes 5/5, meshes 2487/2487, materials 435/435, textures 805/805, navmesh_ref, raincover byte-identical; only `manifest.json`
+  differs (the audio block, the `required` list, `extracted_utc`). Data facts reproduced: groups Out (4 players, `CommonAmbOutEffects`,
+  far_* sources with 50-100 m ranges) then In (22 players, `CommonAmbInEffects`), 0 of 26 players with `volume < deltaVolume`
+  (Equator's problem class is absent), all enabled and active, no Loop/playOnAwake/mixer override.
+- **Tests.** `test_airpit_audio.py` (new, 13: synthetic 26-player graph, swaps/reorders/omissions/state and census drift, CLI),
+  `test_native_contracts.py` (AirPit audio golden pins, the ballistics-only branch kept alive on a patched contract copy, v5 asserted
+  rejected, real v6 checked), `test_native_features_orchestration.py` (registry, `for_plan` cross-check, v6 block reproduction),
+  `test_equator_audio.py` (frozen-literal test pins the retired numbers), `test_bay5_audio.py`. Whole suite 1113 tests OK.
+- **Pins switched to v6 (lead):** `test_airpit_bake_inputs.py`, `test_airpit_spawns.py`, `test_mode_objects.py` + regenerated
+  `tools/maps/airpit.modes.json` (only `source_package` changed), `navmesh_diff.py` default, `build_remaining.ps1`, docstrings,
+  AGENTS/HANDOFF/PLAN. Consequence: an AirPit build from v5 now fails `validate_native_features` ('incomplete required feature
+  contract'); a build from v6 needs phase 2 (importer + client) first.
+- **Phase 2 (in progress, workflow `wf_782fcb51-70b`):** `Bay5AudioImporter.cs` and `Bay5AmbientAudio.cs` generalised for a map
+  with an Out and an In group on two buses, `AmbientAudioDefaults` AirPit tuple (provisional 4 / 0.4 / 3), a Unity-independent
+  `AmbientAudioProfiles` under test. Then phase 3: Unity `-FullMap` rebuild from v6 (U5, rebake expected unchanged), client build,
+  validators, deploy, host listen test, Equator/Bay5 smoke raids.

@@ -23,8 +23,11 @@ order yields the same packages as both legacy orders.
 Manifest. ``native_features`` = ``{schema_version 1, required, navmesh_areas, raincover,
 light_culling, static_decals}``. ``required`` lists ``ballistics`` plus the audio feature
 name when the map has a registered ambient-audio exporter (``AUDIO_EXPORTERS``); a map
-without one gets ``required == ["ballistics"]`` and no ``native_audio`` key (PLAN-AIRPIT
-item 3 makes the validator accept that; item 13 registers ``arena_airpit``).
+without one gets ``required == ["ballistics"]`` and no ``native_audio`` key (the validator
+accepts that for a contract with ``audio: null``). ``arena_airpit`` registers
+``extract_bay5_audio.export`` (PLAN-AIRPIT item 13): its census, schema and states come from
+``native_contracts/airpit.json`` and its source scene is the plan's ``sound`` role.
+Equator and Bay5 are not registered: their own extractors call the same exporter directly.
 ``static_decals`` is written only when the map has decals, because the validator
 (``validate_native_features.feature_enabled``) requires a non-empty census whenever the key
 is present and requires none when it is absent. Equator and Bay5 always have decals, so
@@ -55,11 +58,13 @@ for _path in (_HERE, _ANALYSIS_SCRIPTS):  # standalone-importable regardless of 
 
 from common_ids import HardExtractError  # noqa: E402
 import extract_ballistics  # noqa: E402
+import extract_bay5_audio  # noqa: E402
 import extract_decals  # noqa: E402
 import extract_light_culling  # noqa: E402
 import extract_navmesh_modifiers  # noqa: E402
 import extract_physics_props  # noqa: E402
 import extract_raincover  # noqa: E402
+from native_contract_loader import load_contracts  # noqa: E402
 from source_plan import scene_for_role  # noqa: E402
 
 SCHEMA_VERSION = 1
@@ -67,16 +72,42 @@ SCHEMA_VERSION = 1
 # (source, output, map_key) -> manifest.native_audio entry. Writes under <output>/audio.
 AudioExporter = Callable[[str, str, str], dict]
 
-# map key -> (native_features.required entry, exporter). Empty on purpose: the plan-driven
-# maps have no ambient-audio exporter yet (extract_bay5_audio.export raises for any key but
-# Equator/Bay5). PLAN-AIRPIT item 13 registers arena_airpit here.
-AUDIO_EXPORTERS: dict[str, tuple[str, AudioExporter]] = {}
+# map key -> (native_features.required entry, exporter) for plan-driven maps whose native contract
+# declares ambient audio. The entry must equal the contract's ``audio.feature`` and the exporter reads
+# its pins from the same contract (``for_plan`` checks both, and the plan's ``sound`` scene, before any
+# extraction). Equator/Bay5 are not listed: extract_equator.py / extract_bay5.py call the exporter inline.
+AUDIO_EXPORTERS: dict[str, tuple[str, AudioExporter]] = {
+    "arena_airpit": ("ambient_audio", extract_bay5_audio.export),
+}
 
 _LIGHT_CULLING_KEYS = ("culling_light_object_count", "volumetric_light_count", "light_flicker_count")
 
 
 def _log(message: str) -> None:
     print(f"[native_features] {message}", file=sys.stderr)
+
+
+def _check_audio_registration(plan: dict, feature: str) -> None:
+    """A registered exporter must agree with the map's contract and with the plan's ``sound`` role.
+
+    The exporter takes its source scene from ``native_contracts/<stem>.json``; the plan names the
+    same scene as the excluded scene with role ``sound``. Comparing them here fails a drifted pin
+    (an Arena update that renumbers the scene, a contract edited without the plan) in seconds
+    instead of after the multi-minute extraction. A plan without the role fails with PlanError.
+    """
+    key = plan["key"]
+    sound = scene_for_role(plan, "sound")
+    contract = load_contracts().get(key)
+    audio = contract["audio"] if contract else None
+    if audio is None:
+        raise HardExtractError(f"native_features: {key} registers an ambient-audio exporter but its native "
+                               "contract declares no audio")
+    if audio["feature"] != feature:
+        raise HardExtractError(f"native_features: {key} registers audio feature {feature!r} but its native "
+                               f"contract says {audio['feature']!r}")
+    if audio["scene"] != f"level{sound['index']}":
+        raise HardExtractError(f"native_features: {key} contract audio scene {audio['scene']!r} is not the plan's "
+                               f"sound scene {sound['name']!r} (level{sound['index']})")
 
 
 def _fail_closed(label: str, call, *args, **kwargs):
@@ -120,10 +151,15 @@ class NativeFeatureExtraction:
 
     @classmethod
     def for_plan(cls, plan: dict, source: Path, target: Path) -> "NativeFeatureExtraction":
-        """Resolve the scripts scene from the plan role; a plan without it fails before any extraction."""
+        """Resolve the scripts scene (and, with an audio exporter, the sound scene) from the plan roles.
+
+        A plan without the role, or a contract that disagrees with it, fails before any extraction."""
         scripts = scene_for_role(plan, "scripts")
+        audio = AUDIO_EXPORTERS.get(plan["key"])
+        if audio is not None:
+            _check_audio_registration(plan, audio[0])
         return cls(source=source, target=target, map_key=plan["key"], scripts_scene_index=scripts["index"],
-                   audio=AUDIO_EXPORTERS.get(plan["key"]))
+                   audio=audio)
 
     def source_fields(self) -> dict:
         """Extra manifest ``source`` entries (the reproducibility check re-passes ``--target``)."""

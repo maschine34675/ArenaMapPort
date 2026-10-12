@@ -380,15 +380,17 @@ class TrackedSidecarTests(unittest.TestCase):
         # item 4 had to compose airpit.modes.json from the 0.5.4 spike package `airpit` because item 5 had
         # not produced the accepted 0.6.0 package yet (every marker and light agrees to 6e-5 m, so only
         # source_package differs). PLAN-AIRPIT item 5 says the old package is "no longer referenced":
-        # this test starts running when `airpit-native-v5` appears and fails until the sidecar is redone.
-        accepted = ROOT / "work" / "extract" / "airpit-native-v5"
+        # this test starts running when the accepted package appears and fails until the sidecar is redone.
+        # 2026-10-12 (item 13): the accepted package is airpit-native-v6 (v5 + native ambient audio; scenes,
+        # meshes, materials and textures are byte-identical to v5).
+        accepted = ROOT / "work" / "extract" / "airpit-native-v6"
         if not (accepted / "manifest.json").is_file():
-            self.skipTest("airpit-native-v5 not extracted yet (PLAN-AIRPIT item 5)")
+            self.skipTest("airpit-native-v6 not extracted yet (PLAN-AIRPIT item 5/13)")
         name = json.loads(self.sidecar("airpit").read_text(encoding="utf-8"))["source_package"]["name"]
         self.assertEqual(
-            name, "airpit-native-v5",
+            name, "airpit-native-v6",
             "airpit.modes.json still names the superseded package %r; regenerate it: python "
-            "tools/extract/extract_mode_objects.py --package work/extract/airpit-native-v5 "
+            "tools/extract/extract_mode_objects.py --package work/extract/airpit-native-v6 "
             "(only source_package should change)" % name)
 
     def test_every_sidecar_has_twenty_markers_and_two_bounds(self):
