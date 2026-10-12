@@ -955,9 +955,9 @@
       "Id": "arena_airpit-bot-east-north",
       "Infiltration": "",
       "Position": {
-        "x": 16.6,
+        "x": 8.0,
         "y": 0.1,
-        "z": 26.8
+        "z": 26.5
       },
       "Rotation": 0.0,
       "Sides": [

@@ -48,7 +48,10 @@ BOT_CORE_POINTS = {
 #    a bot that spawns there is stuck for the raid. Those three spawns moved onto the main component of the built
 #    NavMesh (docs/progress/airpit-release.md "Sealed-pocket anchors on U4"); the core points themselves stay in
 #    airpit.ai.json as documented islands, like core point 7 (the extractor's output is pinned, never hand-edited).
-MOVED_FROM_CORE_POINT = {"east-north": 1.6, "west-south": 15.0, "north-hall-west": 11.0, "east-south": 17.5}
+#  * east-north (2026-10-12 evening, user report): core point 2 sits inside the empty north-east shop shell
+#    (Burger Spot, x 13.3..33, z 8..43: shutters lowered, interior and inside doors removed, open to the north through
+#    Arena's own 4.6 m breach); the spawn moved west onto the hall floor at (8.0, 26.5), 7.1 m from the core point.
+MOVED_FROM_CORE_POINT = {"east-north": 9.0, "west-south": 15.0, "north-hall-west": 11.0, "east-south": 17.5}
 # The three sealed pockets of the U4 NavMesh as xz boxes (min_x, max_x, min_z, max_z), the extent of the ground-floor
 # components that the main component loses once the authored outline walls are applied (items 14-20 shutter table,
 # raid 4). The north-west pocket (589.8 m2, effective component z 16.0..55.5) needs two boxes: the shop front itself
@@ -62,6 +65,9 @@ SEALED_POCKETS = {
     "north-west wedge (beside DonB_Ramen_closed)": (-51.2, -48.0, 43.6, 56.2),
     "south-west shop (TH_Roll_door)": (-57.0, -37.0, -44.5, -10.4),
     "south-east shop (DonB_Ramen_closed (1))": (11.6, 37.0, -44.5, -16.4),
+    # Not sealed (Arena's breach at x 17.6..22.2, z 43.3 keeps it on the main component) but an empty shell no spawn
+    # may stand in (user decision 2026-10-12: "not meant to be entered").
+    "north-east shop shell (Airport_Shop_BS_closed_closed)": (13.3, 33.4, 8.2, 43.3),
 }
 # Bot spawn id suffix -> (its position before the 2026-10-12 move, upper bound of that move in metres, role side
 # that the new position must keep: west/north-west, south-west, east/south-east of the hall). All three origins lay
@@ -70,6 +76,7 @@ SEALED_POCKET_ORIGINS = {
     "north-hall-west": ((-42.94, 33.84), 11.0, lambda x, z: x < -20.0 and z > 15.0),
     "west-south": ((-40.1, -27.7), 10.0, lambda x, z: x < -20.0 and z < -10.0),
     "east-south": ((19.59, -29.58), 17.5, lambda x, z: x > 0.0 and z < -15.0),
+    "east-north": ((16.6, 26.8), 9.0, lambda x, z: x > 0.0 and z > 15.0),
 }
 MIN_MOVED_SPACING = 8.0            # the moved spawns keep this distance (xz) from every other bot and player spawn
 MIN_MOVED_EXIT_DISTANCE = 10.0     # and from both exit box centres

@@ -380,7 +380,18 @@ namespace ArenaMapPort.Client
 
                 if (entry.RenderQueue >= 0)
                 {
-                    material.renderQueue = entry.RenderQueue;
+                    // 2026-10-12: the sidecar carries the stand-in's queue (2000) for every source material that
+                    // used the shader default; forcing it onto a transparent shader drew AirPit's hall glass in
+                    // the opaque phase (near-black, opaque panes). ShaderStandinPolicy restores the shader default
+                    // for that case on AirPit; -1 means "the shader's own queue".
+                    int queue = ShaderStandinPolicy.EffectiveRenderQueue(map.Key, entry.RenderQueue, target.renderQueue);
+                    material.renderQueue = queue;
+                    if (queue != entry.RenderQueue && _warnedOnce.Add("queue-default:" + originalName))
+                    {
+                        Plugin.Log.LogDebug($"[ArenaMapPort][RebindShaders] '{originalName}': sidecar queue " +
+                                            $"{entry.RenderQueue} is the stand-in default, shader default is " +
+                                            $"{target.renderQueue}; using the shader default (map={map.Key})");
+                    }
                 }
                 material.shaderKeywords = entry.Keywords;
             }

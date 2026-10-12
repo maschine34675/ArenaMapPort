@@ -2585,3 +2585,72 @@ any of them:
 So the profile-driven driver leaves Equator and Bay5 exactly where they were, and the AirPit graph starts again after a map change.
 Item 13 is log-verified on the host; what remains is the user's listening pass (mix 4 / 0.4 / 3, Out/In crossfade by room) and the
 ballistics shooting check (item 13a) that no raid has done yet.
+
+## User feedback (2026-10-12 evening): the north-east shop shell, the hall glass, the hall-centre cover
+
+The user walked the map and reported: (1) the shop at the `east-north` spawn is empty and "apparently not meant to be entered",
+presumably a roll door toward the entrance hall was removed (the NW shop has one); (2) the hangar panes are still too dark, almost
+black and opaque; (3) what is the "hall-centre cover"? Two read-only agents (workflow `wf_8e6adfe2-89f`) and host screenshots
+(`work/screenshots/airpit-2026-10-12/27..33`, ignored; 30/31 are the user's own daytime view of the south glass wall from the
+mezzanine at (-3.9, 5.1, 4.0)).
+
+### North-east shop (Burger Spot): an empty shell, not a sealed room
+
+- Interior x 13.25..32.98, z 7.9..43.0 (about 20 x 35 m), floor `airport_floor` at y 0, **no prop at all** (only four graffiti decals,
+  the inactive `Graffiti_Art_21 (3)`, `AirpitArenaLevelSettings` at (21.6, 0.4, 23.2) and the active grenade tray `Grenades_Points (2)`
+  at (14.29, 1.38, 35.58)). West wall = `Airport_Shop_BS_closed_closed` (five lowered shutter fields between brick pillars, solid at
+  y 0.3..2.8, tarpaulin/plywood in front), south wall closed, east wall = `Airport_shop_upper_part_02` x 32.98..33.62. **North side
+  open in two places:** Arena's own breach x 17.64..22.22 through `airport_passport_control_broken_glass_wall` (jagged glass edge at
+  y 1.6..3.0, broken frames (6)/(7)/(8)) and the unclosed NE corner x 26.54..33.6 (into the pocket east of the passport hall).
+- **No roll door was removed on the north side**: no door-like object, active or inactive, exists within x 10..40, z 5..52 in the five
+  package scenes, in the raw `level324`, nor in the old furnished `level38` (`Arena_Airpit_Main_hall`, in no preset) - that scene has
+  the same breach plus tape fences and glass shards. What Arena did remove is the shop INTERIOR: the old `Airport_Shop_BS` had 1,448
+  props and 4 `Inside_Door_Wood_11_R` + 2 `KitchenDoors_1`; the current scene has 105 objects and an empty `DOORS/BURGER_SPOT`
+  container. The west bays that were open in the old collider (z 8.3..12.9, 36.8..42.5) are shuttered now. The NW shop
+  (`DonB_Ramen_closed`) has its roll fronts on the hall side AND an opening to the north (x -57.4..-50.2) into the sealed wedge; its
+  interior is equally empty (1,226 -> 95 objects).
+- Arena's TeamFight mesh covers 267 of 442 m2 of the room (its holes trace the old interior walls, 39 % of hole cells within 0.45 m of
+  an old wall vs 3 % of covered cells) and crosses the breach at (20.0, 0.02, 42.8); core points 2 (15.14, 26.76) and 4 (26.15,
+  8.56) are inside. The built U5 mesh covers 439 m2 and leaves the room only through the breach (3.9 m) and the NE corner (6.1 m);
+  blocking the breach alone would cut 1,869 m2 (room + pocket) off the main component.
+- **Decision (lead, 2026-10-12): leave the room open, move the spawn.** The breach is Arena's own doorway, the room is a dead end on the
+  main component and holds an active pickup tray and two core points. Sealing it properly would need either a cloned shutter prop
+  (new "added props" importer mechanism + rebake) or an authored wall plus a bake-only NotWalkable box (new `BakeNavMesh` list +
+  rebake); both are available if the user wants the shell closed. `east-north` moved (16.6, 26.8) -> **(8.0, 0.1, 26.5)** (7.1 m from
+  core point 2; built-mesh clearance 4.4 m, Arena-mesh 4.5 m, 14.4 m from `north-hall`, about 40 m from the North Gate; sidecar +
+  `base.json` + `test_airpit_spawns.py`: `MOVED_FROM_CORE_POINT`, a fourth box in the no-spawn list, `SEALED_POCKET_ORIGINS`).
+  Core points 2 and 4 stay in `airpit.ai.json` (the room is reachable, they are not islands).
+
+### Hall glass: the rebind forced the stand-in's render queue onto the transparent shader
+
+- The user's view (photo 30/31, from the mezzanine at (-3.9, 5.1, 4.0) facing south): the whole south glass wall of the hall and the
+  skylight band read 12-13/255 at noon although the exterior behind them is 180-198/255 and the authored alpha is about 0.63.
+- Materials: AirPit's hall envelope is ONE single-LOD mesh `Airpit_Building_Glass_LOD0` (28,368 m2 per side: side walls x -75.5 /
+  +52.9, south facade z -45.5 y 12..28, skylight band z 42.8..50 y 37..46.5) on `cf1419e2` `Airpit_glass_dirty_inside_top`
+  (`Global Fog/Transparent Reflective Specular`, `_AlphaOffset -0.33`, `_DirtStrength 0.6`, `_GlobalReflectionStrength 2.0`); the
+  passport control, stair and elevator glass use `99230e6d` `Airpit_glass_dirty`; the south facade also carries the shard decal
+  `77832cd9` `Airpit_broken_glass_atlas_01` (explicit queue 3000). The DXBC of EFT's and Arena's shader is identical apart from fog
+  and thermal: `alpha = saturate(MainTex.a ^ _DirtStrength + _AlphaOffset)`, `_Color.a`/`_ReflectColor`/`_Cube` are never read, blend
+  SrcAlpha/OneMinusSrcAlpha, ZWrite off, **queue Transparent (3000) by default**. The properties reach the bundle intact.
+- **The defect:** the four hall-glass materials have `render_queue -1` (shader default) in the package; `MaterialImporter.cs:162`
+  records the queue the STAND-IN shader reports (2000) and `ShaderRebind.cs:381-383` forced that onto the real shader after the swap,
+  so the transparent glass drew in the opaque phase (before the sky/clouds at 2510-2530 and before the screen-space inputs the shader
+  samples exist). Equator's three and Bay5's two `Global Fog` materials with queue -1 carry the same sidecar value; on Equator the
+  affected roof glass has alpha about 0.07, so it was never visible there.
+- **Fix (client, no rebuild):** `ShaderStandinPolicy.EffectiveRenderQueue(mapKey, recorded, shaderDefault)` - on AirPit a recorded
+  Geometry queue (2000) on a shader whose own default differs is the stand-in's value, so the material gets `renderQueue = -1`
+  (shader default); explicit queues stay; Equator/Bay5 keep the recorded value (accepted look). `ShaderRebind` logs once per name
+  `sidecar queue 2000 is the stand-in default, shader default is 3000; using the shader default`. Test
+  `AirPitRestoresTheShaderDefaultQueueWhereTheSidecarCarriesTheStandinDefault`. Host check: F10 on the south wall must show
+  `renderQueue=3000` for `Airpit_Building_Glass_LOD0`, screenshot at the user's spot; if the panes stay dark, the next step is a
+  developer-only `GlassRepairs` with `AlphaOffsetDelta` / reflection / tint knobs (not built yet). The opaque north facade
+  (`airport_floor_outer_glass_panels`, `Airpit_Airport_Glass_Tiles_01` on an opaque `p0` shader with an interior `_Cube`) is dark by
+  authoring; making it see-through would be a design change (it would reveal the facade opening).
+
+### "Hall-centre cover"
+
+The plywood / chain-link / container cordon under the airliner between the east half (core3) and the west half (core19) of the hall:
+photos 27 (from (3, 0.6, -17) facing north-west: plywood wall and fence under the fuselage) and 28 (from core19 facing south-east:
+NORVAIR container, corrugated panels, plywood). Bots path 194 m around it for 12 m of straight line (analysis in "Open points after
+raids 1-3" and the hall-cover audit: options A leave, B open `tarpaulin_wall_03`, C also `plywood_wall_02 (1)`; each option is a
+rebake). Still a user decision.

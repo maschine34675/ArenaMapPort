@@ -65,6 +65,21 @@ public sealed class ShaderStandinPolicyTests
         Assert.Equal(expected, ShaderStandinPolicy.IsFogSheetShaderName(shaderName, "Hidden/ArenaMapPort/"));
     }
 
+    // 2026-10-12 user report (hall glass near-black and opaque): the sidecar records the stand-in's Geometry queue
+    // for every source material that used the shader default, and the rebind forced it onto the transparent shader.
+    // AirPit restores the shader default in that case; explicit queues and the other maps are untouched.
+    [Theory]
+    [InlineData("arena_airpit", 2000, 3000, -1)]   // transparent glass recorded at the stand-in default -> shader default
+    [InlineData("arena_airpit", 2000, 2000, 2000)] // opaque shader: 2000 is also its default, keep
+    [InlineData("arena_airpit", 3000, 3000, 3000)] // explicit transparent queue, keep
+    [InlineData("arena_airpit", 2004, 2000, 2004)] // explicit decal offset, keep
+    [InlineData("arena_equator", 2000, 3000, 2000)] // other maps keep the accepted behaviour
+    [InlineData("arena_bay5", 2000, 3000, 2000)]
+    public void AirPitRestoresTheShaderDefaultQueueWhereTheSidecarCarriesTheStandinDefault(string mapKey, int recorded, int shaderDefault, int expected)
+    {
+        Assert.Equal(expected, ShaderStandinPolicy.EffectiveRenderQueue(mapKey, recorded, shaderDefault));
+    }
+
     // The six rows exactly as they shipped for Bay5 (docs/progress/shader-compat-and-inspector.md section 3).
     static readonly (string Original, string Fallback)[] ShippedRows =
     {

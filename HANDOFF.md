@@ -68,6 +68,12 @@ bake unchanged 8193/3775, scenes bundle 855,037,777 B), staged, `PORT_VALIDATED`
 unchanged and AirPit again after the map change. Open for the user: the listening pass (mix, Out/In crossfade by room: options in
 the progress doc), the ballistics shooting check. Incident on the way: a held developer archive threw out of `Plugin.Awake` and
 killed the plugin for one session (bundle 404) - fixed in `438f179`, `ConfigRetirementCheck` covers it.
+Evening user feedback (progress doc "User feedback (2026-10-12 evening)"): (a) the north-east shop at `east-north` is an empty shell
+(interior removed by Arena, open to the north through Arena's own breach, no door object anywhere) - spawn moved to (8.0, 26.5),
+room left open (sealing it = new importer/bake mechanism, user's call); (b) the hall glass was near-black because the rebind forced
+the stand-in's Geometry queue onto the transparent shader - `ShaderStandinPolicy.EffectiveRenderQueue` restores the shader default
+on AirPit (host check: F10 `renderQueue=3000` on `Airpit_Building_Glass_LOD0`, screenshot from the mezzanine (-3.9, 5.1, 4.0) facing
+south); (c) "hall-centre cover" = the plywood/fence/container cordon under the airliner (photos 27/28).
 Item 24 multi-part packager is in (`606f00e`: `tools/release/make_release_zips.py`, core + one ZIP per map, 4 parts, largest
 755 MiB; the real build needs a clean tree and a scratch dir for `--extract-check`). Item 25 (0.2.0 text sweep, night look-test, Equator/Bay5 regression raids,
 AirPit -> Equator -> AirPit sequence, bots raid on U4, map-select screenshots, bloom -1/-1 decision, light-parity signage look).

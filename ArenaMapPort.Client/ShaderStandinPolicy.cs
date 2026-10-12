@@ -152,6 +152,27 @@ namespace ArenaMapPort.Client
             !string.IsNullOrEmpty(shaderName) &&
             (shaderName == FogSheetShader || shaderName == standinPrefix + FogSheetShader);
 
+        /// <summary>Unity's Geometry queue: what the imported stand-in shader reports for a material whose source
+        /// left <c>render_queue</c> at -1 (shader default), so the importer's sidecar records 2000 for it.</summary>
+        internal const int GeometryQueue = 2000;
+
+        /// <summary>
+        /// The render queue to apply after the real shader is back on the material. The importer records the queue
+        /// the STAND-IN shader reported (2000 for every source material that used the shader default), and the
+        /// rebind used to force that onto the real shader. For a transparent shader (queue 3000 by default) that
+        /// put the glass into the opaque phase: AirPit's hall glass (`Airpit_glass_dirty_*` on
+        /// <c>Global Fog/Transparent Reflective Specular</c>) rendered near-black and opaque (user report
+        /// 2026-10-12). Rule, AirPit only (Equator and Bay5 keep their accepted look): a recorded Geometry queue on
+        /// a shader whose own default differs is the stand-in's value, not the author's, so the shader default
+        /// (-1) is restored; an explicit queue (anything but 2000) is kept.
+        /// </summary>
+        internal static int EffectiveRenderQueue(string mapKey, int recordedQueue, int shaderDefaultQueue)
+        {
+            if (!IsAirPit(mapKey)) return recordedQueue;
+            if (recordedQueue == GeometryQueue && shaderDefaultQueue != GeometryQueue) return -1;
+            return recordedQueue;
+        }
+
         /// <summary>One texture slot the substitute reads under another name than the Arena shader used.</summary>
         internal readonly struct TextureRemap
         {
