@@ -71,6 +71,29 @@ namespace ArenaMapPort.Client
             OrphansProperty?.GetValue(config) as Dictionary<ConfigDefinition, string> ??
             throw new InvalidOperationException("Unsupported BepInEx orphaned configuration layout");
 
+        /// <summary>
+        /// Last-resort configuration when <see cref="Initialize"/> throws (2026-10-12 host session: a sync tool held
+        /// the developer archive, <c>File.Replace</c> threw an IOException out of Plugin.Awake and the whole plugin
+        /// stayed dead for the session - no patches, no bundles, raid load aborted with a 404). The public file is
+        /// used as the settings file for this session; nothing is archived or compacted.
+        /// </summary>
+        internal static ConfigFile Fallback(ConfigFile config)
+        {
+            config.SaveOnConfigSet = false;
+            DeveloperOptions.Install(config);
+            PlayerOptions.Install(config);
+            return config;
+        }
+
+        // The archive is a persistence convenience: the merged values already live in the in-memory ConfigFile that
+        // Initialize hands out, so a file that cannot be replaced right now (held by a sync/antivirus tool: Syncthing
+        // on the test host, 2026-10-12) must not take the plugin down. Retry briefly, then fall back to an in-place
+        // copy, then keep the old file and say so; the next start merges and retries.
+        internal const int ReplaceAttempts = 5;
+
+        /// <summary>Warning sink (Plugin.Awake wires the BepInEx logger; the ConfigRetirementCheck tool and tests leave it unset).</summary>
+        internal static Action<string> Warning;
+
         static void SaveArchive(string path, Dictionary<ConfigDefinition, string> values)
         {
             string temporary = path + "." + Guid.NewGuid().ToString("N") + ".tmp";
@@ -79,10 +102,32 @@ namespace ArenaMapPort.Client
                 var snapshot = new ConfigFile(temporary, false) { SaveOnConfigSet = false };
                 foreach (var pair in values) Orphans(snapshot).Add(pair.Key, pair.Value);
                 snapshot.Save();
-                if (File.Exists(path)) File.Replace(temporary, path, null);
-                else File.Move(temporary, path);
+                Exception last = null;
+                for (int attempt = 0; attempt < ReplaceAttempts; attempt++)
+                {
+                    try
+                    {
+                        if (File.Exists(path)) File.Replace(temporary, path, null);
+                        else File.Move(temporary, path);
+                        return;
+                    }
+                    catch (IOException e) { last = e; }
+                    catch (UnauthorizedAccessException e) { last = e; }
+                    System.Threading.Thread.Sleep(40 * (attempt + 1));
+                }
+                try { File.Copy(temporary, path, true); return; }
+                catch (IOException e) { last = e; }
+                catch (UnauthorizedAccessException e) { last = e; }
+                Warning?.Invoke($"[ArenaMapPort][Config] could not update the developer archive '{path}' " +
+                                $"({last?.GetType().Name}: {last?.Message}); this session keeps the merged values in " +
+                                "memory and the file is retried at the next start");
             }
-            finally { if (File.Exists(temporary)) File.Delete(temporary); }
+            finally
+            {
+                try { if (File.Exists(temporary)) File.Delete(temporary); }
+                catch (IOException) { }
+                catch (UnauthorizedAccessException) { }
+            }
         }
     }
 }

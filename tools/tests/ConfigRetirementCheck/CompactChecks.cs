@@ -85,13 +85,21 @@ internal static class CompactChecks
             string archiveBeforeFailure = File.ReadAllText(archive);
             using (var locked = new FileStream(archive, FileMode.Open, FileAccess.Read, FileShare.Read))
             {
-                bool failed = false;
-                try { CompactConfiguration.Initialize(new ConfigFile(path, false)); }
-                catch (IOException) { failed = true; }
-                Check(failed, "Locked archive did not exercise the failure path");
+                // 2026-10-12 host session: a held archive threw an IOException out of Initialize and disabled the whole
+                // plugin for the session. The replace is now retried, then given up with ONE warning; the merged values
+                // stay in memory and both files on disk are left as they were.
+                int warnings = 0;
+                CompactConfiguration.Warning = _ => warnings++;
+                ConfigFile lockedTuning;
+                try { lockedTuning = CompactConfiguration.Initialize(new ConfigFile(path, false)); }
+                finally { CompactConfiguration.Warning = null; }
+                Check(warnings == 1, "Locked archive must warn exactly once instead of throwing");
+                Check(lockedTuning.Bind("Future", "AfterLock", "missing").Value == "still-safe", "Locked archive lost the in-memory merge");
+                Check(lockedTuning.Bind("Future", "KeepMe", "missing").Value == "unknown", "Locked archive lost the older archive values");
             }
             Check(File.ReadAllText(path) == primaryBeforeFailure && File.ReadAllText(archive) == archiveBeforeFailure,
                 "Archive failure changed either original file");
+            Check(Directory.GetFiles(directory, "*.tmp").Length == 0, "Archive failure left a temporary file behind");
             Console.WriteLine("COMPACT_CONFIG_PERSISTENCE_OK: fresh, migration, archived tuning, developer roundtrip, restart and orphan merge");
         }
         finally

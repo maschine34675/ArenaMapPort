@@ -45,7 +45,19 @@ namespace ArenaMapPort.Client
             Instance = this;
             Log = base.Logger;
 
-            Settings = CompactConfiguration.Initialize(Config);
+            CompactConfiguration.Warning = message => Log.LogWarning(message);
+            try
+            {
+                Settings = CompactConfiguration.Initialize(Config);
+            }
+            catch (Exception e)
+            {
+                // 2026-10-12: an IOException from the archive replace escaped here once and left the plugin without
+                // patches for the whole session (raid load aborted with a bundle 404). Degrade, never die.
+                Log.LogError($"[ArenaMapPort][Config] compact configuration failed ({e.GetType().Name}: {e.Message}); " +
+                             "using the public configuration file for this session");
+                Settings = CompactConfiguration.Fallback(Config);
+            }
             LogStartupBanner();
             Bay5AmbientAudio.BindConfig(); // accepted audio defaults before the release configuration policy
 
