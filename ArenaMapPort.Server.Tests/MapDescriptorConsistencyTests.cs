@@ -83,6 +83,8 @@ public class MapDescriptorConsistencyTests
             "SBG_Arena_AirPit_ShootOut/SOO_LOD0/BUILDING/TH_Roll_door_01_closed",
             "SBG_Arena_AirPit_ShootOut/SOO_LOD0/BUILDING/TH_Roll_door_02_closed",
             "SBG_Arena_AirPit_ShootOut/SOO_LOD0/BUILDING/TH_Roll_door_03_closed",
+            // the three layer-0 blockout panels over the south-west shop's roll-door lines (host raid 2026-10-13)
+            "SBG_Arena_AirPit_ShootOut/SOO/Cube (10) Group",
         }, ArenaMapRegistry.AirPit.OpenedBarriers);
         var walked = new[] { ArenaMapRegistry.Equator, ArenaMapRegistry.Bay5, ArenaMapRegistry.AirPit };
         foreach (var map in ArenaMapRegistry.Catalog)
@@ -147,9 +149,10 @@ public class MapDescriptorConsistencyTests
         // 2026-10-12 host raid 1: the four bake-only exclusions (shop shutters, a fence) let the NavMesh run through
         // solids that stay in the scene; the walk test stopped at the DonB_Ramen shutter. AirPit now bakes every
         // solid and opens the two portal gates instead (OpenedBarriers), so the list is empty by design. The six
-        // closed shop shells joined the list when the furnished shops came in from Arena_Airpit_Main_hall.
+        // closed shop shells joined the list when the furnished shops came in from Arena_Airpit_Main_hall, and the
+        // layer-0 blockout panels over the south-west roll doors after the first host raid on that build.
         Assert.Empty(airPit.NavMeshBakeExclusions);
-        Assert.Equal(9, airPit.OpenedBarriers.Length);
+        Assert.Equal(10, airPit.OpenedBarriers.Length);
         Assert.All(airPit.OpenedBarriers, path => Assert.True(IsHierarchyPath(path), path));
         Assert.Equal(airPit.OpenedBarriers.Length, airPit.OpenedBarriers.Distinct().Count());
         Assert.DoesNotContain("PASSPORT_CONTROL_DOORS", airPit.OpenedBarriers); // the gates stay closed (look); the facade wall is the limit

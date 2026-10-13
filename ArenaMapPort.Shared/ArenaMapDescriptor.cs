@@ -418,6 +418,11 @@ namespace ArenaMapPort.Shared
                 "SBG_Arena_AirPit_ShootOut/SOO_LOD0/BUILDING/TH_Roll_door_01_closed",
                 "SBG_Arena_AirPit_ShootOut/SOO_LOD0/BUILDING/TH_Roll_door_02_closed",
                 "SBG_Arena_AirPit_ShootOut/SOO_LOD0/BUILDING/TH_Roll_door_03_closed",
+                // Three white blockout panels (layer Default, 12.7-14 x 3.3 x 0.16 m, BoxCollider) that the ShootOut
+                // build lays over the south-west shop's three roll-door lines on top of the shells. Arena's bake mask
+                // never saw them (layer 0), so the NavMesh runs through while the player collides (host raid 2026-10-13,
+                // F10 at (-44, -7.5) facing south). With the furnished shop they go the way of the shells.
+                "SBG_Arena_AirPit_ShootOut/SOO/Cube (10) Group",
             },
             // No NavMeshBakeExclusions: the four bake-only cutters of 2026-10-11 (DonB_Ramen_closed x2,
             // TH_Roll_door_01_closed, fence_ema_01_white (18)) let the NavMesh run through shutters that stay solid;

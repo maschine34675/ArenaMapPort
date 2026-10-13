@@ -49,7 +49,12 @@ SHOP_SHELLS = [
     "SBG_Arena_AirPit_ShootOut/SOO_LOD0/BUILDING/TH_Roll_door_03_closed",
 ]
 SHELL_LIVE_COLLIDER_LAYERS = [[12, 12, 12, 18], [12, 18], [12, 18], [12, 18], [12, 18], [12, 18]]   # 14 colliders: 8 ballistic, 6 movement
-BARRIERS = ROOT_BARRIERS + GATES + SHOP_SHELLS
+# Three white blockout panels (layer 0 Default, 12.7-14 x 3.3 x 0.16 m, MeshRenderer + BoxCollider) that the ShootOut build lays
+# over the south-west shop's three roll-door lines (z -10.15; x -36.8 at z -16.6 and -33.75) on top of the shells. Arena's
+# bake mask never saw them (layer 0 is not in 9/11/13/18/30), so the U6 NavMesh ran through them while the player collided
+# (host raid 2026-10-13, F10 at (-44, -7.5) facing south). They are opened like the shells; the bake does not change.
+COVER_CUBES = ["SBG_Arena_AirPit_ShootOut/SOO/Cube (10) Group"]
+BARRIERS = ROOT_BARRIERS + GATES + SHOP_SHELLS + COVER_CUBES
 # Paths under the duplicated BUILDING sibling, kept to pin the resolver's Transform.Find semantics (the shop shells above are inputs again).
 BUILDING_PATHS = [
     "SBG_Arena_AirPit_ShootOut/SOO_LOD0/BUILDING/DonB_Ramen_closed",
@@ -289,6 +294,25 @@ class PackageTests(unittest.TestCase):
             self.assertEqual(sorted(layer for _k, layer in self.live_colliders(scene, tree)), expected, path)
         self.assertEqual(sum(len(layers) for layers in SHELL_LIVE_COLLIDER_LAYERS), 14)
 
+    def test_the_cover_cubes_are_three_layer_zero_panels_without_frame_parts(self):
+        # The group resolves once, under SOO of the main scene; its three direct children are the white panels (layer 0,
+        # BoxCollider each, no frame-named part), so BoothDoorRepairs deactivates all three and nothing else.
+        (path,) = COVER_CUBES
+        found, unresolved = self.pc.resolve_barriers(self.scenes, [path])
+        self.assertEqual((len(found), unresolved), (1, []), path)
+        scene_name, key = found[0]
+        self.assertEqual(scene_name, "Arena_AirPit_ShootOut")
+        scene = self.scenes[scene_name]
+        self.assertEqual(scene.objects[scene.objects[key]["parent_id"]]["name"], "SOO")
+        self.assertTrue(scene.chain_active(key))
+        children = scene.children[key]
+        self.assertEqual([scene.objects[c]["name"] for c in children], ["Cube", "Cube", "Cube"])
+        self.assertFalse([k for k in self.subtree(scene, key) if "frame" in scene.objects[k]["name"].lower()])
+        self.assertEqual(self.live_colliders(scene, [key]), [], "the group object itself must not be a source")
+        self.assertEqual(sorted(layer for _k, layer in self.live_colliders(scene, children)), [0, 0, 0])
+        for c in children:
+            self.assertIn("BoxCollider", [comp["type"] for comp in scene.objects[c]["components"]])
+
     def test_barrier_roots_are_scene_roots_without_frame_parts(self):
         total = 0
         for root_name in ROOT_BARRIERS:
@@ -332,9 +356,10 @@ class PackageTests(unittest.TestCase):
         # v8 widens both scenes to the whole level38/37 decoration (decoration box, 632 exclusions, 22 + 4 twin descendants):
         # Main_hall 2384 owners (1415 L12, 948 L18, 7 L9, 11 L30, 3 L22), Light 229 (182 L12, 47 L18); owners +1328 = 7922,
         # sources 6447 + 1328 = 7775 (no new name rule or barrier), layer-masked 2500 + 535 (Main_hall) + 1 (Light, the
-        # one mask-layer lamp collider above the bake box, y 9.3) = 3036.
+        # one mask-layer lamp collider above the bake box, y 9.3) = 3036. The three layer-0 cover cubes of the south-west
+        # shop (COVER_CUBES, 2026-10-13) are barriers since the first U6 host raid: sources 7775 - 3 = 7772, mask unchanged.
         self.assertEqual(len(cset.owners), 7922)
-        self.assertEqual(int(everything.sum()), 7775)
+        self.assertEqual(int(everything.sum()), 7772)
         self.assertEqual(int(masked.sum()), 3036)             # the 16 passport-door leaves on layer 18 are sources again
         per_scene = {}
         for i, owner in enumerate(cset.owners):
@@ -344,8 +369,10 @@ class PackageTests(unittest.TestCase):
             counts[2] += int(masked[i])
         self.assertEqual(per_scene["Arena_Airpit_Main_hall"], [2384, 2384, 966])
         self.assertEqual(per_scene["Arena_Airpit_Light"], [229, 229, 47])
-        self.assertEqual(per_scene["Arena_AirPit_ShootOut"], [4625, 4540, 1891])   # 4554 / 1897 before the six shells were barriers
-        self.assertEqual(layers, {0, 12, 22})                   # Default, HighPolyCollider (ballistic), Interactive
+        self.assertEqual(per_scene["Arena_AirPit_ShootOut"], [4625, 4537, 1891])   # 4554 / 1897 before the six shells, 4540 before the cubes
+        # HighPolyCollider (ballistic), Interactive; the only live layer-0 (Default) sources were the three cover cubes,
+        # which are barriers now (the two layer-0 owners of TeamFight_DesignStuff are the SPAWN_BOUND boxes, dropped by name)
+        self.assertEqual(layers, {12, 22})
         self.assertFalse({cset.owners[i].layer for i in range(len(cset.owners)) if masked[i]} - set(ARENA_LAYERS))
         # AirPit has no live non-trigger collider on the Triggers layer, so keeping the owner rule costs nothing here
         self.assertFalse([o for o in cset.owners if o.layer == 13])
