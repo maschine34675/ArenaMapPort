@@ -15,8 +15,8 @@
   "infiltration_name": "ArenaBowl",
   "locale_name": "Arena: Bowl (spike)",
   "locale_description": "Internal test build — TeamFight geometry/collision/NavMesh port.",
-  "icon_x": 440,
-  "icon_y": 830,
+  "icon_x": 919,
+  "icon_y": 679,
   "template_key": "factory4_day",
   "db_base_json_path": "arena_bowl/base.json",
   "fog_color": [

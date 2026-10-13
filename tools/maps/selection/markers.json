@@ -1,0 +1,209 @@
+{
+  "schema_version": 1,
+  "source": "User-provided Arena 0.6.0.47752 screenshots, 2026-10-13",
+  "coordinate_kind": "displayed original 80x80 sprite center, not backend location coordinates or pin tip",
+  "uncertainty_screen_px": 1,
+  "calibration": {
+    "screenshot_size": [
+      2560,
+      1440
+    ],
+    "scale": 1.2714474355395542,
+    "offset_x": 143.53945689919652,
+    "offset_y": 66.7115977667045,
+    "max_landmark_residual_px": 0.2560827673629911,
+    "source_texture_size": [
+      1080,
+      1080
+    ],
+    "geographic_origin": [
+      140,
+      0
+    ],
+    "geographic_size": 800,
+    "spt_image_size": 800,
+    "spt_inset": 5,
+    "rms_landmark_residual_px": 0.10449964920364535,
+    "landmark_count": 60
+  },
+  "screenshots": {
+    "Screenshot 2026-10-13 112239.png": "1b073bb5f5a2783ef2b35aaeb9cb6447ed8ed219a48478cd6a93a04f9e5b5ed4",
+    "Screenshot 2026-10-13 112247.png": "5416d97cad9d05e61d3197f9d92e16895cf44ae5464a01d02b7e4bc2ed995282",
+    "Screenshot 2026-10-13 112256.png": "2349486e51b4f49e7cc6d11b9be33518f42e1f29d3eff23be28d211c87e548f2",
+    "Screenshot 2026-10-13 112305.png": "82be97aa103340983d2293974d193ec18841203b6c0a8f84d73c2325d3ef13a5",
+    "Screenshot 2026-10-13 112323.png": "dd6059732c9c75128443b18ed140d5f579176a76d9a41f49f018c834fd3c9650"
+  },
+  "markers": [
+    {
+      "name": "Fort",
+      "source_key": "Arena_Prison",
+      "catalog_key": "arena_prison",
+      "screenshot": "Screenshot 2026-10-13 112239.png",
+      "screen_center": [
+        563.191,
+        343.597
+      ],
+      "icon_x": 234,
+      "icon_y": 731
+    },
+    {
+      "name": "EMERCOM",
+      "source_key": "Arena_Woods",
+      "catalog_key": "arena_woods",
+      "screenshot": "Screenshot 2026-10-13 112239.png",
+      "screen_center": [
+        808.888,
+        384.797
+      ],
+      "icon_x": 479,
+      "icon_y": 690
+    },
+    {
+      "name": "Equator",
+      "source_key": "Arena_equator_TDM_02",
+      "catalog_key": "arena_equator",
+      "screenshot": "Screenshot 2026-10-13 112256.png",
+      "screen_center": [
+        1119.358,
+        553.83
+      ],
+      "icon_x": 788,
+      "icon_y": 521
+    },
+    {
+      "name": "Chop Shop",
+      "source_key": "Arena_AutoService",
+      "catalog_key": "arena_autoservice",
+      "screenshot": "Screenshot 2026-10-13 112239.png",
+      "screen_center": [
+        736.24,
+        604.517
+      ],
+      "icon_x": 407,
+      "icon_y": 471
+    },
+    {
+      "name": "Dorms",
+      "source_key": "Arena_Custom",
+      "catalog_key": "arena_custom",
+      "screenshot": "Screenshot 2026-10-13 112239.png",
+      "screen_center": [
+        877.498,
+        673.265
+      ],
+      "icon_x": 547,
+      "icon_y": 402
+    },
+    {
+      "name": "Base",
+      "source_key": "Arena_Shoreline",
+      "catalog_key": "arena_shoreline",
+      "screenshot": "Screenshot 2026-10-13 112239.png",
+      "screen_center": [
+        547.97,
+        769.494
+      ],
+      "icon_x": 219,
+      "icon_y": 307
+    },
+    {
+      "name": "Labs Replica",
+      "source_key": "Arena_LabsReplica",
+      "catalog_key": null,
+      "screenshot": "Screenshot 2026-10-13 112239.png",
+      "screen_center": [
+        1083.558,
+        741.986
+      ],
+      "icon_x": 752,
+      "icon_y": 334
+    },
+    {
+      "name": "Bay 5",
+      "source_key": "Arena_Bay5",
+      "catalog_key": "arena_bay5",
+      "screenshot": "Screenshot 2026-10-13 112239.png",
+      "screen_center": [
+        799.396,
+        985.102
+      ],
+      "icon_x": 469,
+      "icon_y": 92
+    },
+    {
+      "name": "Bowl",
+      "source_key": "Arena_Bowl",
+      "catalog_key": "arena_bowl",
+      "screenshot": "Screenshot 2026-10-13 112305.png",
+      "screen_center": [
+        1251.186,
+        395.681
+      ],
+      "icon_x": 919,
+      "icon_y": 679
+    },
+    {
+      "name": "Iceberg",
+      "source_key": "Arena_Iceberg",
+      "catalog_key": "arena_iceberg",
+      "screenshot": "Screenshot 2026-10-13 112247.png",
+      "screen_center": [
+        438.229,
+        467.282
+      ],
+      "icon_x": 110,
+      "icon_y": 608
+    },
+    {
+      "name": "Block",
+      "source_key": "Arena_Yard",
+      "catalog_key": "arena_yard",
+      "screenshot": "Screenshot 2026-10-13 112256.png",
+      "screen_center": [
+        1021.76,
+        275.073
+      ],
+      "icon_x": 691,
+      "icon_y": 799
+    },
+    {
+      "name": "Factory",
+      "source_key": "Arena_Factory",
+      "catalog_key": "arena_factory",
+      "screenshot": "Screenshot 2026-10-13 112256.png",
+      "screen_center": [
+        818.545,
+        494.631
+      ],
+      "icon_x": 488,
+      "icon_y": 580
+    },
+    {
+      "name": "Air Pit",
+      "source_key": "Arena_AirPit",
+      "catalog_key": "arena_airpit",
+      "screenshot": "Screenshot 2026-10-13 112256.png",
+      "screen_center": [
+        1123.439,
+        864.262
+      ],
+      "icon_x": 792,
+      "icon_y": 212
+    },
+    {
+      "name": "Skybridge",
+      "source_key": "Arena_RailwayStation",
+      "catalog_key": "arena_railwaystation",
+      "screenshot": "Screenshot 2026-10-13 112323.png",
+      "screen_center": [
+        1198.939,
+        674.545
+      ],
+      "icon_x": 867,
+      "icon_y": 401
+    }
+  ],
+  "unmeasured_catalog_keys": {
+    "arena_airpit2": "Not shown. Gate_playtest source art; do not copy Air Pit position."
+  }
+}

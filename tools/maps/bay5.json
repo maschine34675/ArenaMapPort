@@ -54,8 +54,8 @@
   "infiltration_name": "ArenaBay5",
   "locale_name": "Arena: Bay 5",
   "locale_description": "The Bay 5 harbour depot from EFT Arena: container yard, hangar, warehouse and depot.",
-  "icon_x": 320,
-  "icon_y": 820,
+  "icon_x": 469,
+  "icon_y": 92,
   "template_key": "factory4_day",
   "db_base_json_path": "arena_bay5/base.json",
   "fog_color": [

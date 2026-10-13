@@ -14,8 +14,8 @@
   "infiltration_name": "ArenaPrison",
   "locale_name": "Arena: Prison (spike)",
   "locale_description": "Internal test build — TeamFight geometry/collision/NavMesh port.",
-  "icon_x": 585,
-  "icon_y": 760,
+  "icon_x": 234,
+  "icon_y": 731,
   "template_key": "factory4_day",
   "db_base_json_path": "arena_prison/base.json",
   "fog_color": [

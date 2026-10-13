@@ -14,8 +14,8 @@
   "infiltration_name": "ArenaYard",
   "locale_name": "Arena: Yard (spike)",
   "locale_description": "Internal test build — TeamFight geometry/collision/NavMesh port.",
-  "icon_x": 730,
-  "icon_y": 760,
+  "icon_x": 691,
+  "icon_y": 799,
   "template_key": "factory4_day",
   "db_base_json_path": "arena_yard/base.json",
   "fog_color": [

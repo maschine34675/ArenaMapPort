@@ -16,8 +16,8 @@
   "infiltration_name": "ArenaAirPit",
   "locale_name": "Arena: Air Pit",
   "locale_description": "The Air Pit airport terminal from EFT Arena: a large hall with an airliner inside, passport lanes to the north and a bus apron to the south. Ground floor and mezzanine are the main play space.",
-  "icon_x": 500,
-  "icon_y": 300,
+  "icon_x": 792,
+  "icon_y": 212,
   "template_key": "factory4_day",
   "db_base_json_path": "arena_airpit/base.json",
   "fog_color": [

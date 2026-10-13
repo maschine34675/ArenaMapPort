@@ -247,15 +247,14 @@ public sealed class AirPitMapTests
             Assert.DoesNotContain("Internal test build", released.LocaleDescription, StringComparison.OrdinalIgnoreCase);
             Assert.False(string.IsNullOrWhiteSpace(released.LocaleDescription));
         }
-        // Menu slots (0..1000, the native UI divides by 1000): released maps stay at least 120 units apart and
-        // inside the map-select layout that Equator and Bay5 define.
+        // Released pins remain selectable and inside the map. Their geographic positions now come
+        // from Arena screenshots, not the old arbitrary box between Equator and Bay5.
         foreach (var a in ArenaMapRegistry.All)
             foreach (var b in ArenaMapRegistry.All.Where(b => b.Key != a.Key))
                 Assert.True(Math.Sqrt(Math.Pow(a.IconX - b.IconX, 2) + Math.Pow(a.IconY - b.IconY, 2)) >= 120,
                     $"{a.Key} and {b.Key} menu icons are closer than 120 units");
-        var anchors = new[] { ArenaMapRegistry.Equator, ArenaMapRegistry.Bay5 };
-        Assert.InRange(map.IconX, anchors.Min(m => m.IconX), anchors.Max(m => m.IconX));
-        Assert.InRange(map.IconY, anchors.Min(m => m.IconY), anchors.Max(m => m.IconY));
+        Assert.InRange(map.IconX, 0, 1000);
+        Assert.InRange(map.IconY, 0, 1000);
         // The banner row ships with the map; base.json itself keeps Banners empty (ArenaMapBanners adds it at load).
         Assert.Equal("arena_airpit_banner", ArenaMapBanners.For(map)!.Id);
     }

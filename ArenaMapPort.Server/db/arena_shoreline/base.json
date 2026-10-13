@@ -340,8 +340,8 @@
     "BotsDamageSources",
     "LootPositions"
   ],
-  "IconX": 1020,
-  "IconY": 760,
+  "IconX": 219,
+  "IconY": 307,
   "Id": "arena_shoreline",
   "Insurance": true,
   "IsSecret": false,

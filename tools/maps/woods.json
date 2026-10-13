@@ -13,8 +13,8 @@
   "infiltration_name": "ArenaWoods",
   "locale_name": "Arena: Woods (spike)",
   "locale_description": "Internal test build — LastHero geometry/collision/NavMesh port.",
-  "icon_x": 1020,
-  "icon_y": 830,
+  "icon_x": 479,
+  "icon_y": 690,
   "template_key": "factory4_day",
   "db_base_json_path": "arena_woods/base.json",
   "fog_color": [

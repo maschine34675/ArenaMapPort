@@ -12,8 +12,8 @@
   "infiltration_name": "ArenaFactory",
   "locale_name": "Arena: Factory (spike)",
   "locale_description": "Internal test build — ShootOutDuo geometry/collision/NavMesh port.",
-  "icon_x": 875,
-  "icon_y": 760,
+  "icon_x": 488,
+  "icon_y": 580,
   "template_key": "factory4_day",
   "db_base_json_path": "arena_factory/base.json",
   "fog_color": [

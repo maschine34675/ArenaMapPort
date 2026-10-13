@@ -13,8 +13,8 @@
   "infiltration_name": "ArenaCustom",
   "locale_name": "Arena: Custom (spike)",
   "locale_description": "Internal test build — LastHero geometry/collision/NavMesh port.",
-  "icon_x": 875,
-  "icon_y": 830,
+  "icon_x": 547,
+  "icon_y": 402,
   "template_key": "factory4_day",
   "db_base_json_path": "arena_custom/base.json",
   "fog_color": [

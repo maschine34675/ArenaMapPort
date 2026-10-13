@@ -5,6 +5,16 @@ is updated by hand at each handover, it is not an automatic record. Read [AGENTS
 
 ## Update 2026-10-13 - original Arena selection map
 
+Follow-up: user-supplied selection screenshots now establish displayed original pin positions. Applied
+13 measured positions to the catalog, map sidecars and server JSON; Labs Replica is recorded separately
+for future work, AirPit 2.0 remains unmeasured. Source record: `tools/maps/selection/markers.json`.
+No parked maps are enabled. See the new dated section in [selection-map.md](docs/progress/selection-map.md)
+for the coordinate table and acceptance evidence; it supersedes the unresolved-position status below.
+Follow-up acceptance: all 738 .NET tests and distribution validation pass; deployed to D:\SPT41, five
+changed files verified on GPU-1 before server/client restart. PMC Equator/AirPit/Bay5 and ArenaMode
+Equator/Bay5 selection verified at their new anchors, previous PMC label overlap gone. No ArenaMapPort
+warnings; host left in MainMenu. Native screenshots: `work/map-marker-audit/{pmc,arena}.png`.
+
 Added Arena's original region-selection artwork on `feature/airpit`, independently of scene bundles.
 `SelectionMapArtwork` swaps only the native map Image sprite in PMC/ArenaMode and restores it on close.
 New required ignored build input: `python tools/extract/extract_selection_map.py` produces

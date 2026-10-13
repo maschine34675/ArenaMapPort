@@ -340,8 +340,8 @@
     "BotsDamageSources",
     "LootPositions"
   ],
-  "IconX": 875,
-  "IconY": 830,
+  "IconX": 547,
+  "IconY": 402,
   "Id": "arena_custom",
   "Insurance": true,
   "IsSecret": false,

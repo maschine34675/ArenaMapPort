@@ -340,8 +340,8 @@
     "BotsDamageSources",
     "LootPositions"
   ],
-  "IconX": 585,
-  "IconY": 830,
+  "IconX": 867,
+  "IconY": 401,
   "Id": "arena_railwaystation",
   "Insurance": true,
   "IsSecret": false,

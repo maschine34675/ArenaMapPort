@@ -12,8 +12,8 @@
   "infiltration_name": "ArenaAutoService",
   "locale_name": "Arena: Auto Service (spike)",
   "locale_description": "Internal test build — TeamFight geometry/collision/NavMesh port.",
-  "icon_x": 440,
-  "icon_y": 760,
+  "icon_x": 407,
+  "icon_y": 471,
   "template_key": "factory4_day",
   "db_base_json_path": "arena_autoservice/base.json",
   "fog_color": [

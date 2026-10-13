@@ -14,8 +14,8 @@
   "infiltration_name": "ArenaIceberg",
   "locale_name": "Arena: Iceberg (spike)",
   "locale_description": "Internal test build — CheckPoint geometry/collision/NavMesh port.",
-  "icon_x": 730,
-  "icon_y": 830,
+  "icon_x": 110,
+  "icon_y": 608,
   "template_key": "factory4_day",
   "db_base_json_path": "arena_iceberg/base.json",
   "fog_color": [

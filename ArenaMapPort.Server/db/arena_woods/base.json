@@ -340,8 +340,8 @@
     "BotsDamageSources",
     "LootPositions"
   ],
-  "IconX": 1020,
-  "IconY": 830,
+  "IconX": 479,
+  "IconY": 690,
   "Id": "arena_woods",
   "Insurance": true,
   "IsSecret": false,

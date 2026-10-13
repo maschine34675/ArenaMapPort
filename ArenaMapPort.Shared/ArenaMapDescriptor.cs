@@ -279,7 +279,7 @@ namespace ArenaMapPort.Shared
             InfiltrationName: "ArenaEquator", // SpawnInfiltrationRepairs' pre-generalization literal
             LocaleName: "Arena: Equator",
             LocaleDescription: "The Equator shopping mall from EFT Arena. Ground floor playable; the upper rings are scenery.",
-            IconX: 700, IconY: 290,
+            IconX: 788, IconY: 521,
             DbBaseJsonPath: "arena_equator/base.json",
             Exits: new[]
             {
@@ -349,7 +349,7 @@ namespace ArenaMapPort.Shared
             InfiltrationName: "ArenaBay5",
             LocaleName: "Arena: Bay 5",
             LocaleDescription: "The Bay 5 harbour depot from EFT Arena: container yard, hangar, warehouse and depot.",
-            IconX: 320, IconY: 820,
+            IconX: 469, IconY: 92,
             DbBaseJsonPath: "arena_bay5/base.json",
             Exits: new[]
             {
@@ -407,11 +407,10 @@ namespace ArenaMapPort.Shared
             InfiltrationName: "ArenaAirPit",
             LocaleName: "Arena: Air Pit",
             LocaleDescription: "The Air Pit airport terminal from EFT Arena: a large hall with an airliner inside, passport lanes to the north and a bus apron to the south. Ground floor and mezzanine are the main play space.",
-            // Map-select slot (0..1000, the native UI divides by 1000): inside the box spanned by Equator
-            // (700, 290) and Bay5 (320, 820), 200 units from Equator and 550 from Bay5, and at least 165
-            // units from every vanilla icon (nearest: Customs 168, Interchange 171).
-            IconX: 500,
-            IconY: 300,
+            // Original Arena screenshot pin, converted to native 0..1000 anchors.
+            // Provenance and the other measured maps: tools/maps/selection/markers.json.
+            IconX: 792,
+            IconY: 212,
             DbBaseJsonPath: "arena_airpit/base.json",
             Exits: new[]
             {
@@ -592,8 +591,8 @@ namespace ArenaMapPort.Shared
             InfiltrationName: "ArenaAutoService",
             LocaleName: "Arena: Auto Service (spike)",
             LocaleDescription: "Internal test build — TeamFight geometry/collision/NavMesh port.",
-            IconX: 440,
-            IconY: 760,
+            IconX: 407,
+            IconY: 471,
             DbBaseJsonPath: "arena_autoservice/base.json");
 
         // Source scene selection: tools/extract/plans/bowl.json. Identity is permanent.
@@ -609,8 +608,8 @@ namespace ArenaMapPort.Shared
             InfiltrationName: "ArenaBowl",
             LocaleName: "Arena: Bowl (spike)",
             LocaleDescription: "Internal test build — TeamFight geometry/collision/NavMesh port.",
-            IconX: 440,
-            IconY: 830,
+            IconX: 919,
+            IconY: 679,
             DbBaseJsonPath: "arena_bowl/base.json");
 
         // Source scene selection: tools/extract/plans/prison.json. Identity is permanent.
@@ -626,8 +625,8 @@ namespace ArenaMapPort.Shared
             InfiltrationName: "ArenaPrison",
             LocaleName: "Arena: Prison (spike)",
             LocaleDescription: "Internal test build — TeamFight geometry/collision/NavMesh port.",
-            IconX: 585,
-            IconY: 760,
+            IconX: 234,
+            IconY: 731,
             DbBaseJsonPath: "arena_prison/base.json");
 
         // Source scene selection: tools/extract/plans/railwaystation.json. Identity is permanent.
@@ -643,8 +642,8 @@ namespace ArenaMapPort.Shared
             InfiltrationName: "ArenaRailwayStation",
             LocaleName: "Arena: Railway Station (spike)",
             LocaleDescription: "Internal test build — TeamFight geometry/collision/NavMesh port.",
-            IconX: 585,
-            IconY: 830,
+            IconX: 867,
+            IconY: 401,
             DbBaseJsonPath: "arena_railwaystation/base.json");
 
         // Source scene selection: tools/extract/plans/yard.json. Identity is permanent.
@@ -660,8 +659,8 @@ namespace ArenaMapPort.Shared
             InfiltrationName: "ArenaYard",
             LocaleName: "Arena: Yard (spike)",
             LocaleDescription: "Internal test build — TeamFight geometry/collision/NavMesh port.",
-            IconX: 730,
-            IconY: 760,
+            IconX: 691,
+            IconY: 799,
             DbBaseJsonPath: "arena_yard/base.json");
 
         // Source scene selection: tools/extract/plans/iceberg.json. Identity is permanent.
@@ -677,8 +676,8 @@ namespace ArenaMapPort.Shared
             InfiltrationName: "ArenaIceberg",
             LocaleName: "Arena: Iceberg (spike)",
             LocaleDescription: "Internal test build — CheckPoint geometry/collision/NavMesh port.",
-            IconX: 730,
-            IconY: 830,
+            IconX: 110,
+            IconY: 608,
             DbBaseJsonPath: "arena_iceberg/base.json");
 
         // Source scene selection: tools/extract/plans/factory.json. Identity is permanent.
@@ -694,8 +693,8 @@ namespace ArenaMapPort.Shared
             InfiltrationName: "ArenaFactory",
             LocaleName: "Arena: Factory (spike)",
             LocaleDescription: "Internal test build — ShootOutDuo geometry/collision/NavMesh port.",
-            IconX: 875,
-            IconY: 760,
+            IconX: 488,
+            IconY: 580,
             DbBaseJsonPath: "arena_factory/base.json");
 
         // Source scene selection: tools/extract/plans/custom.json. Identity is permanent.
@@ -711,8 +710,8 @@ namespace ArenaMapPort.Shared
             InfiltrationName: "ArenaCustom",
             LocaleName: "Arena: Custom (spike)",
             LocaleDescription: "Internal test build — LastHero geometry/collision/NavMesh port.",
-            IconX: 875,
-            IconY: 830,
+            IconX: 547,
+            IconY: 402,
             DbBaseJsonPath: "arena_custom/base.json");
 
         // Source scene selection: tools/extract/plans/shoreline.json. Identity is permanent.
@@ -728,8 +727,8 @@ namespace ArenaMapPort.Shared
             InfiltrationName: "ArenaShoreline",
             LocaleName: "Arena: Shoreline (spike)",
             LocaleDescription: "Internal test build — LastHero geometry/collision/NavMesh port.",
-            IconX: 1020,
-            IconY: 760,
+            IconX: 219,
+            IconY: 307,
             DbBaseJsonPath: "arena_shoreline/base.json");
 
         // Source scene selection: tools/extract/plans/woods.json. Identity is permanent.
@@ -745,8 +744,8 @@ namespace ArenaMapPort.Shared
             InfiltrationName: "ArenaWoods",
             LocaleName: "Arena: Woods (spike)",
             LocaleDescription: "Internal test build — LastHero geometry/collision/NavMesh port.",
-            IconX: 1020,
-            IconY: 830,
+            IconX: 479,
+            IconY: 690,
             DbBaseJsonPath: "arena_woods/base.json");
 
         /// <summary>Complete development catalog. Parked maps retain their stable identities and inputs.</summary>
