@@ -23,12 +23,12 @@ function Move-FixtureItem([string]$Source, [string]$Destination) {
     Move-Item -LiteralPath $sourceFull -Destination $destinationFull
 }
 
-function New-Fixture([ValidateSet('Equator', 'Bay5')][string]$MapName = 'Equator') {
+function New-Fixture([ValidateSet('Equator', 'Bay5', 'AirPit')][string]$MapName = 'Equator') {
     $caseRoot = Join-Path $fixtureRoot ([guid]::NewGuid().ToString('N'))
     $package = Join-Path $caseRoot 'package'
     $spt = Join-Path $caseRoot 'spt'
     $plugin = Join-Path $spt 'BepInEx/plugins/mpstark-dynamicmaps'
-    $mapId = if ($MapName -eq 'Bay5') { 'arena_bay5' } else { 'arena_equator' }
+    $mapId = "arena_$($MapName.ToLowerInvariant())"
     $jsonName = "ArenaMapPort_$MapName.jsonc"
     $mapDirectory = "ArenaMapPort_$MapName"
     $bounds = @{ Min = @{ x = -20; y = -30 }; Max = @{ x = 40; y = 50 } }
@@ -102,7 +102,7 @@ function Pass-Case([string]$Name) {
 }
 
 function Test-Rejected([string]$Name, [scriptblock]$Mutate, [string]$Expected, [switch]$DryRunOnly,
-    [ValidateSet('Equator', 'Bay5')][string]$MapName = 'Equator') {
+    [ValidateSet('Equator', 'Bay5', 'AirPit')][string]$MapName = 'Equator') {
     $fixture = New-Fixture -MapName $MapName
     & $Mutate $fixture
     $before = Get-TreeState $fixture.Root
@@ -116,7 +116,7 @@ function Test-Rejected([string]$Name, [scriptblock]$Mutate, [string]$Expected, [
 function Save-Map($Fixture) { Write-FixtureFile $Fixture.Json ($Fixture.Map | ConvertTo-Json -Depth 20) }
 
 try {
-    foreach ($mapName in @('Equator', 'Bay5')) {
+    foreach ($mapName in @('Equator', 'Bay5', 'AirPit')) {
         $fixture = New-Fixture -MapName $mapName
         $before = Get-TreeState $fixture.Root
         $result = Invoke-Deploy $fixture

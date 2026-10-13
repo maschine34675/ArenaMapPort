@@ -3,6 +3,16 @@
 Snapshot for whoever continues (human or agent). Verify the commits named here against `git log`; this file
 is updated by hand at each handover, it is not an automatic record. Read [AGENTS.md](AGENTS.md) first.
 
+## Update 2026-10-13 - AirPit DynamicMaps
+
+AirPit now ships an optional ground-floor overview from its own plugin directory.
+The upper spectator area is intentionally excluded (user clarification).
+Built, deployed through the sanctioned script and natively accepted on GPU-1:
+four positions/headings, both exit markers, one layer, 38,141 sprite vertices,
+no map-renderer warnings/errors. North Gate exit and return to MainMenu passed.
+Sources, package paths and test evidence: [airpit-dynamicmaps.md](docs/progress/airpit-dynamicmaps.md).
+No scene bundles changed; existing Equator/Bay5 overview bytes are preserved.
+
 ## Update 2026-10-13 - original Arena selection map
 
 Follow-up: user-supplied selection screenshots now establish displayed original pin positions. Applied

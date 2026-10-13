@@ -10,10 +10,9 @@ from validate_map_descriptors import map_descriptor_paths, RELEASE_MAP_KEYS
 REPO = Path(__file__).resolve().parents[2]
 
 # Not every released map carries every optional payload. The key set of the release itself comes from
-# validate_map_descriptors.RELEASE_MAP_KEYS (three maps since AirPit); these two lists stay two-map on purpose:
-# DynamicMaps overview packs are deferred for AirPit (docs/PLAN-AIRPIT.md section 3) and AirPit has no active
-# flare light (item 22), so the exact-set checks below must allow AirPit WITHOUT either payload.
-OVERVIEW_MAP_NAMES = ('Equator', 'Bay5')
+# validate_map_descriptors.RELEASE_MAP_KEYS (three maps since AirPit). All three have overviews;
+# AirPit has no active flare light (item 22), so its flare package remains absent.
+OVERVIEW_MAP_NAMES = ('Equator', 'Bay5', 'AirPit')
 FLARE_MAP_KEYS = ('arena_equator', 'arena_bay5')
 
 

@@ -331,7 +331,7 @@ def required_files(spec: ReleaseSpec) -> dict:
     tools/validate/validate_distribution.py treats as mandatory per released map: a missing AI sidecar silently
     falls back to the NavMesh-synthesised AI, a missing shader sidecar leaves pink materials, and a map without
     its acoustic graph, banner or loading screens is not the map the README promises. Only flares, water and the
-    DynamicMaps overview are optional (AirPit ships none of them)."""
+    DynamicMaps overview are optional (AirPit has an overview but no flares or water package)."""
     required = {CORE_ID: [spec.client_dll, spec.server_dll, DESCRIPTIONS_NAME, *SELECTION_MAP_NAMES]}
     for m in spec.maps:
         names = [f"{PLUGIN_ROOT}/bundles/{m.key}_{kind}.bundle" for kind in ("scenes", "navmesh", "preset")]

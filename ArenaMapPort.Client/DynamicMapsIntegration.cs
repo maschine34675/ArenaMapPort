@@ -10,7 +10,7 @@ namespace ArenaMapPort.Client
 {
     /// <summary>
     /// DynamicMaps 1.2.1 loads only its own Maps folder and resolves SVGs relative to its plugin.
-    /// Add our two packages before its native precache, rewriting only our ground-layer paths.
+    /// Add our three packages before its native precache, rewriting only our ground-layer paths.
     /// No binary dependency, config change or third-party file write. Native evidence: docs/progress/dynamicmaps-owned.md.
     /// </summary>
     internal static class DynamicMapsIntegration

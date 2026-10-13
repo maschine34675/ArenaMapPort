@@ -90,9 +90,9 @@ def fake_dist_files(maps=MAPS):
         if key != "arena_airpit":
             files[f"{PLUGIN}/flares/{key}/flares.json"] = text(key + "flares")
             files[f"{PLUGIN}/flares/{key}/textures/atlas.bin"] = rng.randbytes(1000)
-            folder = f"{PLUGIN}/dynamicmaps/ArenaMapPort_{display}"
-            files[f"{folder}/ArenaMapPort_{display}.jsonc"] = text(key + "overview")
-            files[f"{folder}/Layers/Ground.svg"] = text(key + "ground")
+        folder = f"{PLUGIN}/dynamicmaps/ArenaMapPort_{display}"
+        files[f"{folder}/ArenaMapPort_{display}.jsonc"] = text(key + "overview")
+        files[f"{folder}/Layers/Ground.svg"] = text(key + "ground")
         if key == "arena_bay5":
             files[f"{PLUGIN}/water/{key}/water.json"] = text("water")
             files[f"{PLUGIN}/water/{key}/textures/foam.bin"] = rng.randbytes(800)

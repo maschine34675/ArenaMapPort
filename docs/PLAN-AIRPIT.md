@@ -597,7 +597,7 @@ parts from the released list and asserts the per-part limit.
   WaterContainer; only 3 water-decal materials (mapping them to the native Puddle footstep set is optional polish via
   the sidecar `puddle_water_material_names`). **Native dust / Texture3D** — no LocalDustParticles, no Tex3D.
   **Window breakers, trees, exits/loot classes** — none present (WindowBreaker 72 exist only in unused scene 34).
-- **DynamicMaps overview pack** — optional, deferred (M, value 2): needs a `MAP_PROFILES` entry in
+- **DynamicMaps overview pack** — implemented separately on 2026-10-13; see [the overview record](progress/airpit-dynamicmaps.md). Original planning note (M, value 2): needs a `MAP_PROFILES` entry in
   `tools/dynamicmaps/export_equator.py:293-307`, a final NavMesh bundle, a user-coordinated Unity batch run, a
   `deploy-to-spt.ps1` ValidateSet edit and `validate_distribution` changes; the loader tolerates a missing pack.
 - **AreaLight / CullingAdvancedLightObject decoding** (L) — only if the host shows visibly dark signage after item 18.

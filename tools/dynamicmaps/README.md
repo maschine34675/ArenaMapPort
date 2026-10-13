@@ -80,24 +80,47 @@ project with the matching `ProjectVersion.txt`, this repository's
 `ExportMapTriangulation.cs` under `Assets/Editor`, and the Unity modules `ai`,
 `assetbundle`, `jsonserialize` (each `1.0.0`) can read the existing bundle headlessly.
 
-Only the selected map's JSON and `Layers/Ground.svg` are deployed. The preview
+Only the selected map's JSON and approved SVG layers are deployed. The preview
 and source/hash receipt are outside `pack/`. Missing, extra, linked or malformed
 package files are rejected. The deploy is copy-only and sequential; after a partial
 I/O failure, correct the cause and repeat the deployment.
 
+## AirPit (development build, 2026-10-13)
+
+Export `arena_airpit_navmesh.bundle` in the isolated Unity probe, then run:
+
+```powershell
+& ./work/dynamicmaps/venv/Scripts/python.exe tools/dynamicmaps/export_equator.py `
+  --package work/extract/airpit-native-v8 --descriptor tools/maps/airpit.json `
+  --navmesh work/dynamicmaps/airpit/navmesh.json --output work/dynamicmaps/airpit/ground-only
+pwsh -NoProfile -File tools/deploy-to-spt.ps1 -SptRoot D:/SPT41 `
+  -DynamicMapsPackage work/dynamicmaps/airpit/ground-only/pack -DynamicMapsMap AirPit
+```
+
+AirPit ships only `ArenaMapPort_AirPit.jsonc` and `Layers/Ground.svg`, under its
+own `dynamicmaps/ArenaMapPort_AirPit/` folder. **The upper area is for spectators,
+not players** (user clarification, 2026-10-13); no upper layer is generated/shipped.
+Ground uses world Y -0.5..1.2 m; 1 cm projection snapping closes float-sized tile
+seams that would otherwise cut the south apron away from the anchored component.
+The fixed drawing extent is X -60..40 / Z -86..73, north up. Muted ground includes
+isolated NavMesh regions; cartography is not proof that such areas are accessible.
+
+Accepted source, checks and native screenshots: [AirPit overview](../../docs/progress/airpit-dynamicmaps.md).
+Legacy cleanup remains restricted to the old Equator/Bay5 packages.
+
 ## Release staging and migration (2026-10-11)
 
 Accepted packs are stored under ignored
-`work/dynamicmaps/release/ArenaMapPort_Equator/` and `ArenaMapPort_Bay5/`.
-Copy the two files from each accepted `pack/` there after visual validation.
-Current inputs are byte-identical to `work/dynamicmaps/north-marker/{Equator,Bay5}/pack`;
+`work/dynamicmaps/release/ArenaMapPort_Equator/` and `ArenaMapPort_Bay5/`, plus `ArenaMapPort_AirPit/`.
+Copy the approved files from each accepted `pack/` there after visual validation.
+Equator/Bay5 inputs remain byte-identical to `work/dynamicmaps/north-marker/{Equator,Bay5}/pack`;
 do not replace them with the older compass drawings. Every client Release build stages
-these four explicit files under `dist/BepInEx/plugins/maschine-ArenaMapPort/dynamicmaps/`,
+these six explicit files under `dist/BepInEx/plugins/maschine-ArenaMapPort/dynamicmaps/`,
 including DLL-only builds. Preview PNGs and generation receipts are not shipped.
 
 DynamicMaps remains optional. Its soft dependency enables two reflected hooks when
 installed: load each owned package after the native `Maps` search, and resolve that
-package's ground SVG to an absolute path. JSON's historical `Maps/ArenaMapPort_...`
+package's allowlisted SVG layers to absolute paths. JSON's historical `Maps/ArenaMapPort_...`
 token is retained for byte compatibility; only the in-memory owned layer is rewritten.
 Native `Markers/exit.png`, other definitions, settings and DynamicMaps binaries stay unchanged.
 

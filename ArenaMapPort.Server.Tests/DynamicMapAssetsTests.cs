@@ -20,6 +20,7 @@ public sealed class DynamicMapAssetsTests : IDisposable
     [Theory]
     [InlineData("Equator")]
     [InlineData("Bay5")]
+    [InlineData("AirPit")]
     public void ResolvesOnlyExactOwnedDefinitionAndGroundLayer(string map)
     {
         var token = $"Maps/ArenaMapPort_{map}/Layers/Ground.svg";
@@ -74,7 +75,7 @@ public sealed class DynamicMapAssetsTests : IDisposable
         Assert.Equal(DynamicMapAssets.Maps.Select(_assets.DirectoryFor), loaded);
         loaded.Clear();
         _assets.LoadAdditional("Maps", Load, _ => Assert.Fail("missing pack"));
-        Assert.Equal(2, loaded.Count); // native loader retains mtime-based cache/refresh behavior
+        Assert.Equal(3, loaded.Count); // native loader retains mtime-based cache/refresh behavior
     }
 
     [Fact]
@@ -87,7 +88,7 @@ public sealed class DynamicMapAssetsTests : IDisposable
         var missing = new List<string>();
         _assets.LoadAdditional("Maps", loaded.Add, missing.Add);
         Assert.Equal(new[] { _assets.DirectoryFor("Equator") }, loaded);
-        Assert.Equal(new[] { "Bay5" }, missing);
+        Assert.Equal(new[] { "Bay5", "AirPit" }, missing);
         Assert.Throws<IOException>(() => _assets.LoadAdditional("Maps", _ => throw new IOException("fixture"), missing.Add));
         loaded.Clear();
         _assets.LoadAdditional("Maps", loaded.Add, missing.Add);

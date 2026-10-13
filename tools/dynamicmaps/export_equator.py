@@ -1,4 +1,4 @@
-"""Generate local-only Equator or Bay5 DynamicMaps plans from extracted colliders.
+"""Generate local-only Equator, Bay5 and AirPit DynamicMaps plans from extracted geometry.
 
 No game data ships with this tool. Install requirements in a dedicated venv.
 The drawing is a cartographic approximation, not a navigation or collision mesh.
@@ -295,6 +295,9 @@ MAP_PROFILES = {
                        "heights": (-.5, 1.2), "anchor": (0, 0), "relative": False},
     "arena_bay5": {"name": "Bay 5", "folder": "ArenaMapPort_Bay5", "title": "BAY 5",
                     "heights": (-4.5, -2.5), "anchor": (90, 30), "relative": True},
+    "arena_airpit": {"name": "Air Pit", "folder": "ArenaMapPort_AirPit", "title": "AIR PIT",
+                     "heights": (-.5, 1.2), "anchor": (0, 0), "relative": True,
+                     "seam_grid": .01, "bounds": [-60, -86, 40, 73]},
 }
 
 
@@ -304,15 +307,20 @@ def generate(package, descriptor, output, navmesh=None):
         raise ValueError("Output must be separate from the source package")
     config = json.loads(descriptor.read_text(encoding="utf-8"))
     if config["key"] not in MAP_PROFILES:
-        raise ValueError("This prototype supports arena_equator and arena_bay5 only")
+        raise ValueError("Supported maps: arena_equator, arena_bay5, arena_airpit")
     profile = MAP_PROFILES[config["key"]]
+    bounds_override = profile.get("bounds")
     if profile["relative"] and navmesh is None:
-        raise ValueError("Bay5 requires native ground triangulation for height calibration")
+        raise ValueError(profile["folder"].removeprefix("ArenaMapPort_") + " requires native ground triangulation for height calibration")
     inputs = {str(descriptor): digest(descriptor)}
     opened = config.get("opened_barriers", [])
     floor_parts, low_parts, high_parts = [], [], []
     stats = Counter()
     walkable = read_triangulation(navmesh, profile["heights"]) if navmesh else None
+    if walkable is not None and profile.get("seam_grid"):
+        # Tile edges differ by a few float ULPs. Snap only AirPit before selecting
+        # its connected footprint, otherwise the south apron is cut at z=-51.2.
+        walkable = unary_union(set_precision(walkable, profile["seam_grid"]))
     connected, drawing_clip, surface = None, None, None
     if navmesh:
         inputs[str(Path(navmesh).resolve())] = digest(navmesh)
@@ -322,7 +330,7 @@ def generate(package, descriptor, output, navmesh=None):
         connected = components[0]
         if profile["relative"]:
             xmin, zmin, xmax, zmax = connected.bounds
-            drawing_clip = box(math.floor(xmin)-3, math.floor(zmin)-3, math.ceil(xmax)+3, math.ceil(zmax)+3)
+            drawing_clip = box(*(bounds_override or [math.floor(xmin)-3, math.floor(zmin)-3, math.ceil(xmax)+3, math.ceil(zmax)+3]))
             surface = GroundSurface(native_triangles(navmesh, profile["heights"]), drawing_clip)
 
     @lru_cache(maxsize=256)
@@ -388,7 +396,7 @@ def generate(package, descriptor, output, navmesh=None):
     if floor.is_empty:
         raise ValueError("No ground floor found")
     xmin, zmin, xmax, zmax = (connected if connected is not None else floor).bounds
-    bounds = [math.floor(xmin)-3, math.floor(zmin)-3, math.ceil(xmax)+3, math.ceil(zmax)+3]
+    bounds = bounds_override or [math.floor(xmin)-3, math.floor(zmin)-3, math.ceil(xmax)+3, math.ceil(zmax)+3]
     if bounds[2]-bounds[0] > 180 or bounds[3]-bounds[1] > 180:
         raise ValueError(f"Unexpected {profile['name']} ground extent: {bounds}")
     drawing_clip = box(*bounds)
@@ -465,6 +473,7 @@ def generate(package, descriptor, output, navmesh=None):
                         "Round primitive colliders use conservative boxes", "Not a walkability or line-of-sight guarantee"]}
     (output / "receipt.json").write_text(json.dumps(receipt, indent=2)+"\n", encoding="utf-8")
     print(json.dumps({k: v for k, v in receipt.items() if k not in ("inputs_sha256",)}, indent=2))
+
 
 
 if __name__ == "__main__":

@@ -185,7 +185,7 @@
       <ArenaMapPortOverviewRoot>$(MSBuildThisFileDirectory)..\work\dynamicmaps\release</ArenaMapPortOverviewRoot>
     </PropertyGroup>
     <ItemGroup>
-      <ArenaMapPortOverview Include="ArenaMapPort_Equator\ArenaMapPort_Equator.jsonc;ArenaMapPort_Equator\Layers\Ground.svg;ArenaMapPort_Bay5\ArenaMapPort_Bay5.jsonc;ArenaMapPort_Bay5\Layers\Ground.svg" />
+      <ArenaMapPortOverview Include="ArenaMapPort_Equator\ArenaMapPort_Equator.jsonc;ArenaMapPort_Equator\Layers\Ground.svg;ArenaMapPort_Bay5\ArenaMapPort_Bay5.jsonc;ArenaMapPort_Bay5\Layers\Ground.svg;ArenaMapPort_AirPit\ArenaMapPort_AirPit.jsonc;ArenaMapPort_AirPit\Layers\Ground.svg" />
     </ItemGroup>
     <Error Condition="!Exists('$(ArenaMapPortOverviewRoot)\%(ArenaMapPortOverview.Identity)')" Text="Missing accepted overview map %(ArenaMapPortOverview.Identity); see tools/dynamicmaps/README.md" />
     <Copy SourceFiles="@(ArenaMapPortOverview->'$(ArenaMapPortOverviewRoot)\%(Identity)')" DestinationFiles="@(ArenaMapPortOverview->'$(ArenaMapPortDistDir)\dynamicmaps\%(Identity)')" />

@@ -74,7 +74,9 @@ Overview maps for Equator and Bay5 are included. If DynamicMaps is installed,
 open inventory → **MAP** during a raid.
 
 ArenaMapPort loads these maps from its own directory; you do not need to copy
-anything into DynamicMaps. The overviews are simplified ground-floor plans.
+anything into DynamicMaps. Equator and Bay5 use simplified ground-floor plans.
+The AirPit development build additionally includes a ground-floor overview.
+The upper spectator area is deliberately omitted.
 
 ## Scope
 

@@ -37,7 +37,7 @@ are not accepted build inputs. Keep the SPT bundle target on Unity 2022.3.43f1.
   `pwsh -NoProfile -File tools/deploy-to-spt.ps1 -SptRoot 'D:\SPT41' -Confirm` (quote the path: an
   unquoted backslash in bash once created a stray folder). Without `-Confirm` the script is a dry run.
   The optional DynamicMaps packs use the same script with `-DynamicMapsPackage <pack-folder>`
-  and `-DynamicMapsMap Equator|Bay5` (default Equator);
+  and `-DynamicMapsMap Equator|Bay5|AirPit` (default Equator);
   that separate mode copies only its two owned map-data files into maschine-ArenaMapPort/dynamicmaps.
   The user-authorized `-RemoveLegacyDynamicMaps` migration removes only the old Equator/Bay5
   packages from DynamicMaps/Maps, after both replacements and the adapter DLL match dist.

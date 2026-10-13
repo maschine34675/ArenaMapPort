@@ -48,7 +48,7 @@ class DistributionSidecarTests(unittest.TestCase):
                                  hashlib.sha256(image.tobytes()).hexdigest())
         pixel_pin.start()
         self.addCleanup(pixel_pin.stop)
-        for name in ('Equator', 'Bay5'):
+        for name in ('Equator', 'Bay5', 'AirPit'):
             for file in (f'ArenaMapPort_{name}.jsonc', 'Layers/Ground.svg'):
                 relative = f'ArenaMapPort_{name}/{file}'
                 for root in (self.plugin/'dynamicmaps', self.repo/'work/dynamicmaps/release'):
@@ -260,17 +260,16 @@ class DistributionSidecarTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "Flare texture length/hash mismatch"):
             self.validate()
 
-    def test_airpit_is_accepted_without_an_overview_pack_or_flares_and_rejected_with_unlisted_ones(self):
+    def test_airpit_requires_its_overview_and_rejects_unlisted_flares_or_layers(self):
         self.assertFalse((self.plugin / "flares/arena_airpit").exists())
-        self.assertFalse((self.plugin / "dynamicmaps/ArenaMapPort_AirPit").exists())
+        self.assertTrue((self.plugin / "dynamicmaps/ArenaMapPort_AirPit/Layers/Ground.svg").exists())
         self.validate()
         (self.plugin / "flares/arena_airpit").mkdir()
         (self.plugin / "flares/arena_airpit/flares.json").write_text("{}", encoding="utf-8")
         with self.assertRaisesRegex(ValueError, "Unexpected or missing flare package files"):
             self.validate()
         shutil.rmtree(self.plugin / "flares/arena_airpit")
-        (self.plugin / "dynamicmaps/ArenaMapPort_AirPit").mkdir()
-        (self.plugin / "dynamicmaps/ArenaMapPort_AirPit/ArenaMapPort_AirPit.jsonc").write_text("{}", encoding="utf-8")
+        (self.plugin / "dynamicmaps/ArenaMapPort_AirPit/Layers/Unexpected.svg").write_text("<svg/>", encoding="utf-8")
         with self.assertRaisesRegex(ValueError, "Unexpected or missing overview"):
             self.validate()
 
