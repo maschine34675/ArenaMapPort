@@ -21,12 +21,17 @@ Schema (version 1; every key is required unless marked optional, unknown keys ar
     ballistics                {"<scene index>": N}               BallisticCollider count per scene
     require_unsliced          true: a manifest with a non-empty ``slice`` is rejected (Equator)
     partial_scenes            optional: {"<scene name>": {index, objects, units, carriers, orphans,
-                              dropped_script_owners, rules{"<rule>": {selected, twin_skipped}}}}  the
+                              dropped_script_owners, excluded, exclude_entries, twin_descendants_added,
+                              rules{"<rule>": {selected, twin_skipped, excluded, descendants_added}}}}  the
                               census of the scenes that take only a selected part of their Arena level
                               (plan record ``select``, manifest ``partial_scenes``; AirPit's furnished
                               shops). ``orphans`` is the number of manifest ``ballistic_orphans``,
                               ``dropped_script_owners`` the claimed containers whose script the
-                              selection could not carry (a reviewed 0 today).
+                              selection could not carry (a reviewed 0 today). ``excluded`` and
+                              ``exclude_entries`` pin the plan record's ``select.exclude`` list (units it
+                              dropped, entries it holds), ``twin_descendants_added`` the units that
+                              ``select.twin_descendants: import_missing`` added below twin-skipped units;
+                              all three are required (0 when the record uses neither mechanism).
     implicit_scene_identity   true: a manifest without ``source.map_key`` is this map when its
                               scene names equal ``scenes`` (released Bay5 predates ``map_key``)
     features                  null (shape-only checks, Equator/Bay5) or census pins:
@@ -61,10 +66,22 @@ unreadable or empty contract directory fails loading instead of producing an emp
 
 ``partial_scenes`` names scenes of ``scenes`` only, with the index the contract gives that scene; it requires
 ``require_unsliced`` (a partial scene is the only partial source selection a native package may carry, so the
-slice refusal must stay active), every census count is an integer, ``rules`` is non-empty with ``selected`` counts
-that add up to ``units`` (the extractor assigns each selected unit to exactly one rule) and ``objects`` is at
+slice refusal must stay active), every census count is an integer >= 0, ``rules`` is non-empty and ``objects`` is at
 least ``units + carriers`` (every unit root and every carrier is its own object). The normalised contract always
 carries the key (``{}`` when the file has none), so consumers never test for its presence.
+
+Counting contract of the per-rule counters (the extractor's manifest block and this file use the same definition;
+``tools/extract/scene_select.py`` ``select_nodes`` produces them, ``tools/validate/partial_scope.py`` reads them
+back). Every counter counts UNITS. ``selected``: units a rule claimed that were not twin-skipped, counted BEFORE
+the two later steps; ``twin_skipped``: claimed units skipped as twins of the reference scene (they are not part
+of ``units``); ``descendants_added``: units that ``twin_descendants: import_missing`` added below a twin-skipped
+unit and attributed to the rule of that unit; ``excluded``: units dropped by ``select.exclude`` (added
+descendants included) and attributed to the rule that owned them. Hence, per rule, ``selected +
+descendants_added - excluded`` is the number of units the rule leaves in the scene (never negative) and the
+rules add up to the scene: ``sum(selected) + sum(descendants_added) - sum(excluded) == units``. The three
+scene-level counters repeat the totals: ``twin_descendants_added == sum(descendants_added)`` and ``excluded ==
+sum(rule excluded)``; ``exclude_entries`` (the number of ``select.exclude`` entries of the plan record) is 0
+exactly when nothing was excluded, because an entry that drops no unit fails the extraction.
 
 Failures raise ``NativeContractError``, a ``HardExtractError`` (extractors halt) and a ``ValueError``
 (the validators report ``ValueError`` as a failed check).
@@ -94,8 +111,9 @@ CONTRACT_DIR = Path(_HERE) / "native_contracts"
 
 _TOP_REQUIRED = ("schema_version", "map_key", "scenes", "ballistics", "require_unsliced",
                  "implicit_scene_identity", "features", "audio")
-_PARTIAL_KEYS = ("index", "objects", "units", "carriers", "orphans", "dropped_script_owners", "rules")
-_PARTIAL_RULE_KEYS = ("selected", "twin_skipped")
+_PARTIAL_KEYS = ("index", "objects", "units", "carriers", "orphans", "dropped_script_owners", "excluded",
+                 "exclude_entries", "twin_descendants_added", "rules")
+_PARTIAL_RULE_KEYS = ("selected", "twin_skipped", "excluded", "descendants_added")
 _FEATURE_KEYS = ("static_decals", "light_culling", "raincover", "navmesh_modifiers", "small_physics_objects")
 _LIGHT_CULLING_KEYS = ("culling_light_object_count", "volumetric_light_count", "light_flicker_count")
 _RAINCOVER_KEYS = ("indoor_trigger_count", "dry_plane_count", "weather_obstacle")
@@ -212,21 +230,39 @@ def _parse_partial_scenes(raw, where: str, scenes: dict, require_unsliced: bool)
                  "units": _int(record["units"], at + ".units", 1),
                  "carriers": _int(record["carriers"], at + ".carriers"),
                  "orphans": _int(record["orphans"], at + ".orphans"),
-                 "dropped_script_owners": _int(record["dropped_script_owners"], at + ".dropped_script_owners")}
+                 "dropped_script_owners": _int(record["dropped_script_owners"], at + ".dropped_script_owners"),
+                 "excluded": _int(record["excluded"], at + ".excluded"),
+                 "exclude_entries": _int(record["exclude_entries"], at + ".exclude_entries"),
+                 "twin_descendants_added": _int(record["twin_descendants_added"], at + ".twin_descendants_added")}
         if entry["index"] != by_name[name]:
             _fail(at + ".index", f"{entry['index']} is not the contract index {by_name[name]} of the scene")
         if entry["objects"] < entry["units"] + entry["carriers"]:
             _fail(at + ".objects", f"{entry['objects']} objects cannot hold {entry['units']} units "
                                    f"and {entry['carriers']} carriers")
         if type(record["rules"]) is not dict or not record["rules"]:
-            _fail(at + ".rules", "expected a non-empty object of rule -> {selected, twin_skipped}")
+            _fail(at + ".rules", "expected a non-empty object of rule -> "
+                                 "{selected, twin_skipped, excluded, descendants_added}")
         rules = {}
         for rule, counts in record["rules"].items():
             rule_at = f"{at}.rules.{rule}"
             counts = _object(counts, rule_at, _PARTIAL_RULE_KEYS)
             rules[_text(rule, at + ".rules key")] = {k: _int(counts[k], f"{rule_at}.{k}") for k in _PARTIAL_RULE_KEYS}
-        if sum(r["selected"] for r in rules.values()) != entry["units"]:
-            _fail(at + ".rules", f"the selected counts must add up to the {entry['units']} units")
+            if counts["excluded"] > counts["selected"] + counts["descendants_added"]:
+                _fail(rule_at + ".excluded", f"{counts['excluded']} units cannot be dropped from a rule that holds "
+                                             f"{counts['selected']} selected and {counts['descendants_added']} added units")
+        kept = (sum(r["selected"] for r in rules.values()) + sum(r["descendants_added"] for r in rules.values())
+                - sum(r["excluded"] for r in rules.values()))
+        if kept != entry["units"]:
+            _fail(at + ".rules", f"selected + descendants_added - excluded must add up to the {entry['units']} units, "
+                                 f"the rules leave {kept}")
+        if sum(r["descendants_added"] for r in rules.values()) != entry["twin_descendants_added"]:
+            _fail(at + ".twin_descendants_added", f"{entry['twin_descendants_added']} differs from the sum of the "
+                                                  "rules' descendants_added")
+        if sum(r["excluded"] for r in rules.values()) != entry["excluded"]:
+            _fail(at + ".excluded", f"{entry['excluded']} differs from the sum of the rules' excluded counts")
+        if (entry["exclude_entries"] == 0) != (entry["excluded"] == 0):
+            _fail(at + ".exclude_entries", f"{entry['exclude_entries']} exclude entries cannot drop "
+                                           f"{entry['excluded']} units (an entry that drops nothing is refused)")
         entry["rules"] = rules
         result[name] = entry
     return result

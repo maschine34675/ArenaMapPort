@@ -1570,6 +1570,12 @@ def diff_trees(a: Path, b: Path, ignore_manifest_timestamp: bool) -> list[str]:
     return problems
 
 
+# One re-run of the extractor: the AirPit v8 package takes 4 min 38 s on an idle machine, and the former 300 s default
+# failed "reproducibility runs complete within" there. build_remaining.ps1 and build_all.ps1 (-ReproTimeoutSeconds)
+# use the same value.
+DEFAULT_EXTRACTOR_TIMEOUT_S = 1800
+
+
 def run_reproducibility_checks(manifest: dict, package: Path, timeout_s: int) -> None:
     derived = derive_extractor_args(manifest)
     if derived is None:
@@ -1628,8 +1634,10 @@ def main() -> None:
                      help="extracted package directory to validate (default: O7's S1 path)")
     ap.add_argument("--skip-reproducibility", action="store_true",
                      help="skip re-invoking the extractor twice (structural/integrity checks only)")
-    ap.add_argument("--extractor-timeout", type=int, default=300,
-                     help="seconds to allow each reproducibility re-run (default 300)")
+    ap.add_argument("--extractor-timeout", type=int, default=DEFAULT_EXTRACTOR_TIMEOUT_S,
+                     help="seconds to allow each reproducibility re-run "
+                          f"(default {DEFAULT_EXTRACTOR_TIMEOUT_S}: one AirPit extraction takes about 5 minutes on "
+                          "an idle machine and a loaded one needs several times that)")
     args = ap.parse_args()
 
     package: Path = args.package

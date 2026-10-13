@@ -2940,3 +2940,119 @@ effectively the whole level; the two outliers are a v7 decal and `PASSPORT_CONTR
   subset of v8, validate_extract with reproducibility, decal refresh identical, spawn check on the real package;
   repoint every v7 pin to v8. Descriptor and sidecar are unchanged (same scene names, same 9 opened barriers).
 - Unity build U6 only after v8 (one bake and one deploy for phases 1 and 1b).
+
+## Phase 1b - package v8: the rest of the furnished hall, `exclude` and `twin_descendants` (2026-10-13, 00:45-03:50, workflow `wf_409814f7-455` + lead)
+
+Six agents (two implementers, integrator, two reviewers, fixer; 2.0 M tokens), then the lead applied one review finding
+with a re-extraction. Nothing is built or host-tested yet; U6 follows.
+
+### New select mechanisms (`tools/extract/scene_select.py`, plan schema 1 keys, both optional)
+
+- **`twin_descendants: "import_missing"`** (default `"skip"`): for every claimed unit U that was twin-skipped against its
+  reference twin R, every content node below U (renderer leaf, LODGroup, Light, ParticleSystem, Rigidbody, collider,
+  `UNIT_SCRIPTS` script) that has no counterpart below R (same base name without ` (N)`, same non-Transform /
+  non-MonoBehaviour component multiset, same effective activity, per-axis 0.02 m, greedy nearest-first) is emitted as an
+  extra unit with its whole subtree; its ancestors up to U (U included) are emitted as **twin carriers**: component-free
+  stand-ins with the source name, layer, activity and local transform (`extract_map.bare_game_objects` swaps the component
+  builder for the duration of the scene). `structure_problems` demands that twin carriers are bare too (stricter than the
+  brief) and that they are a subset of the carriers. Order in `select_nodes`: claim -> twins -> twin descendants ->
+  exclude -> carriers (recomputed from the surviving units).
+- **`exclude: [{path, at?, reason}]`**: a node by exact hierarchy path (unit root or a container that groups units, e.g.
+  a VARIANT prefab instance); `at` (euclidean 0.05 m) picks one of several nodes sharing the path and is required when the
+  path is ambiguous. Every selected unit (imported descendants included) whose root is the node or lies below it is
+  dropped. Fail closed: no node, ambiguous without `at`, no node near `at`, a path inside a unit, two entries on one
+  node, an entry that drops nothing, or everything excluded -> `HardExtractError`. Exclusion never shifts twin matching.
+- **Manifest block** `partial_scenes[scene]` gains `excluded`, `exclude_entries`, `twin_descendants_added`,
+  `twin_descendant_paths` (sorted full paths), `twin_carrier_ids` (required once descendants were imported: the validators
+  leave those source components out of every scoped census - `validate_ballistic_source`, the four `validate_extract`
+  censuses, the roundtrip expectations - and `extract_decals.refresh` scopes to all scene ids minus them), and per rule
+  `excluded` / `descendants_added`. **Counting contract** (loader, `partial_scope.py`, `check_partial_scene_pins`):
+  every counter counts units; `selected` = claimed and not twin-skipped BEFORE descendants and exclusions, so
+  `sum(selected) + sum(descendants_added) - sum(excluded) == units`; `twin_descendants_added == sum(descendants_added)`;
+  `exclude_entries == 0` iff `excluded == 0`. The new keys are required, so v7 is an archive beside v6 (its manifest is
+  refused by `partial_scope.manifest_entries`; `test_airpit_v7_is_the_archive_the_new_partial_keys_refuse`).
+- `source_plan`: the two keys are refused outside a `select`; `validate_manifest_plan` cross-checks `exclude_entries`
+  against the plan and `twin_descendants_added > 0` only with `import_missing`. The plan digest covers both keys.
+- `validate_extract.py --extractor-timeout` and `build_all.ps1 -ReproTimeoutSeconds` default to 1800 s now (the AirPit
+  extraction alone takes about 5 min; the first v8 validation failed only on the old 300 s limit).
+- The census exclude list (`select_exclude_proposed.json`) was NOT valid as written: 12 exact duplicates and 24 bare
+  paths that name several nodes (the census meant "all instances"). The plan carries the conforming list: the same 208
+  entries, one per node, `at` on 71 of them (not 47), reasons copied; it reproduces the census selection (632 units,
+  digest `5648ec2a...` at z 90 with `skip`).
+
+### Plan records (`tools/extract/plans/airpit.json`, digest `2a47e2aa...`)
+
+- Level38: the 11 v7 roots; region roots `PROJECTION`, `SBG_Arena_Airpit_Main_hall/OO/PROPS`, `VARIANT`,
+  `PROPSnoCulling` on the one region "decoration box" x -60..40, y -5..20, z -85..91; `twin_descendants`
+  `import_missing`; 208 `exclude` entries.
+- Level37: roots ChinaPlace*, BurgerSpot*, HELLFINGER, LouiPeeton*; 14 region roots (GLOBAL GI, NO_CULL, ShadowPlanes,
+  PUDDLES, FogSheets, Airport_lamp_02, LAMPS_GENERIC*, AIRBUS, AIRPORT LAMPS, BACK_AIRPORT_LAMPS, LUM_LAMPS, Point Light,
+  chemlight_emissive, `Lamps_ceiling - DISABLED`) on the same box; `import_missing`; **9 `exclude` entries added by the
+  lead after review 1** (below).
+
+### Review (two reviewers, "ship" both, 4 non-nit findings; fixer)
+
+1. `extract_decals.refresh` scoped the bare twin carriers in (divergent from extraction; loud, not silent, via the
+   byte-identical refresh gate) - fixed, scope = scene ids minus `twin_carrier_ids`, test rewritten.
+2. Three mutation survivors in the new counters (rule attribution of an excluded descendant, `sorted()` of the paths,
+   `exclude_entries` vs dropped units) - three synthetic tests added, all four mutants now die.
+3. **Lighting evidence on the 22 level37 descendants** (reviewer 1, verified on v8 and level325): level325 did not
+   simply lose them. `AIRBUS/Old_Bunker_Light_cookie (6)/(9)`: 37 carries BaseLight + MainLight (Spot, max intensity 1+4 /
+   3+7), 325's twin carries one `SupportLight` (Point, 1.0) 0.23 m away instead - name matching cannot pair them and the
+   import stacks 5-10x the authored intensity. `NO_CULL/Old_Bunker_Light_cookie (8)`: 325 keeps `MainLight (1)` and
+   `SupportLight (1)` INACTIVE plus an active SupportLight 0.87; the import re-enables MainLight 3.0 + BaseLight 0.6.
+   `Airport_lamp (72)/Spot Light (2)` sits 0.31 m from 325's own Spot Light. `ShadowPlaneBox (125)/(140)`: 325 keeps the
+   LODGroup with an EMPTY renderer list (BSG removed the plane); the imported `Plane_LOD0` under a bare carrier would
+   render as an always-visible plane (2.5 x 2.8 m at (6.4, 0.6, 37.9), 5.9 x 5.5 m at (-8.1, 0, 53.6)). The other 13
+   lights (`Airport_lamp (79)` x9 in the SE shop, BACK_AIRPORT_LAMPS x2, LUM_LAMPS x2) have no 325 light within 1 m.
+   **Lead decision 2026-10-13 03:20: exclude the 9 (data evidence beats a host eyeball of light intensity)**; the fixer's
+   prepared entries went into the level37 record, v8 was re-extracted (4 min 40 s, `extracted_utc` see manifest).
+4. 300 s validator timeout - defaults raised to 1800 s.
+   Nits left as they are: a pinned `twin_carriers` count (the carriers total covers it), exclude entry 129
+   (`barrel_heap3_Update`, pivot 0.86 m outside its partner's bounds) and 177 (`Barricade_Fanera_01` moved copy of a
+   differently named SOO board) kept, five VARIANT props 0.95-1.46 m from a same-mesh 324 prop whose own twin exists
+   elsewhere (extra instances, host eyeball), two new ShadowPlaneBox blob shadows overlapping a 325 plane by 72 %, and the
+   plan now carrying 208 Arena hierarchy paths plus 71 positions (same class as the existing path strings; accepted).
+
+### Package `work/extract/airpit-native-v8` (final, after the 9 exclusions)
+
+| | v7 | v8 | delta |
+|---|---|---|---|
+| objects | 48,799 | 55,263 | Main_hall +5,888, Light +576 |
+| meshes / materials / textures | 3,299 / 541 / 971 | 3,474 / 555 / 988 | +175 / +14 / +17 (26.3 MB; +2.15 % pixels) |
+| BallisticCollider | 4,455 | 5,282 | 38: 785 -> 1,562; 37: 122 -> 172 |
+| StaticDeferredDecal | 683 | 722 | Main_hall 202 -> 241 (ratio 1: 227, 0.5: 9, 2: 5; 7 inactive) |
+| Light (Light scene) / port total | 156 / 987 | 219 / 1,050 | +50 imported units, +20 descendants, -7 excluded |
+| CullingLightObject / VolumetricLight | 680 / 139 | 722 / 154 | Light scene 189 / 24 |
+| NavMesh modifiers/volumes, raincover, audio | 20/12, 2 triggers, 26 clips | unchanged | - |
+
+Per scene: Main_hall 13,006 objects / 3,547 units / 245 carriers (4 twin) / 3,212 twins skipped / 632 excluded by 208
+entries / 4 descendants (the `decal_carshadow` leaves of `Baggage_cart_02_D (10|14|15|16)`), digest `d63155ff...`; Light
+1,538 / 298 / 37 (5 twin) / 268 twins / 22 descendants imported, 9 excluded, digest `15384741...`. Rules Main_hall
+(selected/twin/excluded/descendants): SHOPS 1148/30, PROJECTION/INDOOR/SHOPS 104/92, eight shells 1/0, DOORS 28/0,
+region PROJECTION 123/263, region OO/PROPS 1210/1251/161/4, region VARIANT 1534/1555/455, region PROPSnoCulling
+20/21/16. Rules Light: ChinaPlace* 27, BurgerSpot* 37, HELLFINGER 34, LouiPeeton* 25/2, GLOBAL GI 19/88, NO_CULL
+12/7/2/2, ShadowPlanes 73/47/2/2, PUDDLES 1/14, FogSheets 2/7, Airport_lamp_02 45/0, LAMPS_GENERIC* 4/0, AIRBUS
+4/10/4/4, AIRPORT LAMPS 0/26/1/10, BACK_AIRPORT_LAMPS 0/36/0/2, LUM_LAMPS 1/22/0/2, Point Light 0/1, chemlight_emissive
+1/2, Lamps_ceiling - DISABLED 0/6. Gates: (a) all 4,883 v7 files present, only `manifest.json` and the two partial scene
+JSONs differ, 206 new files; (b) every v7 object of both partial scenes present with identical fields; (c)
+`validate_extract` OK with two byte-identical reproducibility runs and the freshness check (8 non-blocking warnings = v7's
+classes + one new: texture `lightMask01` exported as a 256 x 1536 six-face cube strip, the reflection cube of
+`Airpit_Glass_Jal` on 40 passport-control glass renderers; no new shader, still 22); (d) decal refresh byte-identical
+(722 instances, 71 materials, 66 textures, 5,089 files); (e) contract re-pinned from `partial_scope.py`; (f)
+`airpit.modes.json` regenerated (only `source_package`); (g) spawn check on the real package: 0 live new triangles
+within 0.6 m of the 18 spawn points, 2 exits and 4 Arena anchors (nearest 2.35 m at a player spawn; anchors 3.12 / 9.01 /
+5.16 / 14.01 m). Bake-input pins (`test_airpit_bake_inputs`): owners 6,594 -> 7,922, sources 6,447 -> 7,775, on Arena's
+mask 2,500 -> 3,036; Main_hall [2384, 2384, 966], Light [229, 229, 47] (the one new mask-layer lamp collider sits at
+y 9.3, above the bake box). Parity: validate_extract output on equator-native-v5 / bay5-native-v5 unchanged.
+Tests: python suite green (1377 tests), `validate_map_descriptors.py` OK; descriptor and sidecar unchanged (same scene
+names, same 9 opened barriers).
+
+### Still owed before/at the host
+
+Dijkstra / `uibridge_walk` after the U6 bake (75 new in-box mask colliders with their bottom >= 2.5 m: AIRBUS interior,
+FRONT/BACK decks, stalls, barricades = island candidates; shop entrances per report C); `uibridge_teleport dryRun` at
+the 18 spawns (the r=5 spheres of player-all and south-all hold 37 new colliders each) and the four anchors; a look at the
+13 recovered lights (SE shop `Airport_lamp (79)`), the 12 new soft-shadow VolumetricSpot fixtures over the passport hall
+(F7 `LightCullingProbe` + frame time), `FLOOR_DAMAGE2`, the 54 minor-overlap props, the two 72 %-overlapping blob
+shadows, the new `lightMask01` cubemap on the passport glass.

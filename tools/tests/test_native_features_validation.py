@@ -446,7 +446,8 @@ class PartialBallisticSourceWorld:
 
     Package scene 8 holds a carrier (10), a shelf (11: box + ballistic 201) and a screen (12: renderer only; its
     source BallisticCollider 202 is hidden on purpose). The source level also carries a BallisticCollider (203) on
-    owner 99, which the package never imported."""
+    owner 99, which the package never imported. ``twin_carriers`` makes the carrier 10 the bare chain above an imported
+    twin descendant: its source node owns a BallisticCollider (205) that the package deliberately lacks."""
     def __init__(self):
         self.full=[_owner_object('1',components=[_box(),_ballistic('101','1')])]
         self.part=[_owner_object('10'),
@@ -455,21 +456,25 @@ class PartialBallisticSourceWorld:
         self.source={7:[(101,1)],8:[(201,11),(202,12),(203,99)]}  # level -> [(component id, owner id)]
         self.orphans=[[12,202]]
         self.units=2;self.carriers=1;self.dropped=0;self.ballistics={7:1,8:1}
-        self.rules={'roots:Root/Shelves':{'selected':2,'twin_skipped':3}}
+        self.rules={'roots:Root/Shelves':{'selected':2,'twin_skipped':3,'excluded':0,'descendants_added':0}}
+        self.excluded=0;self.exclude_entries=0;self.added=0;self.twin_carriers=None
         self.digest=None;self.entry_objects=None;self.orphan_pins=None;self.dropped_pins=None
 
     def objects(self):return {'Arena_X_Full':self.full,'Arena_X_Part':self.part}
 
     def manifest(self):
         part_ids=[o['id'] for o in self.part]
+        entry={'index':8,'objects':self.entry_objects if self.entry_objects is not None else len(part_ids),
+               'units':self.units,'carriers':self.carriers,'rules':deepcopy(self.rules),
+               'dropped_script_owners':self.dropped,'ballistic_orphans':deepcopy(self.orphans),
+               'go_ids_sha256':self.digest or partial_scope.go_ids_digest(part_ids),
+               'excluded':self.excluded,'exclude_entries':self.exclude_entries,'twin_descendants_added':self.added,
+               'twin_descendant_paths':['Root/Twin/D%02d'%i for i in range(self.added)]}
+        if self.twin_carriers is not None:entry['twin_carrier_ids']=list(self.twin_carriers)
         return {'source':{'map_key':'arena_x','arena_data_root':'unused-root','target_data_root':'unused-target'},
                 'scenes':['Arena_X_Full','Arena_X_Part'],
                 'native_ballistics':{'schema_version':1,'source_presets':{},'target_presets':{}},
-                'partial_scenes':{'Arena_X_Part':{
-                    'index':8,'objects':self.entry_objects if self.entry_objects is not None else len(part_ids),
-                    'units':self.units,'carriers':self.carriers,'rules':deepcopy(self.rules),
-                    'dropped_script_owners':self.dropped,'ballistic_orphans':deepcopy(self.orphans),
-                    'go_ids_sha256':self.digest or partial_scope.go_ids_digest(part_ids)}}}
+                'partial_scenes':{'Arena_X_Part':entry}}
 
     def contract(self,manifest):
         entry=manifest['partial_scenes']['Arena_X_Part']
@@ -479,6 +484,8 @@ class PartialBallisticSourceWorld:
              'partial_scenes':{'Arena_X_Part':{'index':8,'objects':entry['objects'],'units':entry['units'],
                  'carriers':entry['carriers'],'orphans':len(entry['ballistic_orphans']) if self.orphan_pins is None else self.orphan_pins,
                  'dropped_script_owners':entry['dropped_script_owners'] if self.dropped_pins is None else self.dropped_pins,
+                 'excluded':entry['excluded'],'exclude_entries':entry['exclude_entries'],
+                 'twin_descendants_added':entry['twin_descendants_added'],
                  'rules':deepcopy(entry['rules'])}}}
         return L.parse_contract(raw,'x','world.json')
 
@@ -593,8 +600,47 @@ class PartialBallisticSourceTests(unittest.TestCase):
         world.dropped_pins=0
         self.reject(world,'census differs from the map contract')
         world=PartialBallisticSourceWorld()
-        world.rules={'roots:Root/Shelves':{'selected':2,'twin_skipped':3}}
+        world.rules={'roots:Root/Shelves':{'selected':2,'twin_skipped':3,'excluded':0,'descendants_added':0}}
         world.run()
+
+    def twin_world(self):
+        """Screen 12 is an imported twin descendant; carrier 10 is the bare chain above it, its source owns ballistic 205."""
+        world=PartialBallisticSourceWorld()
+        world.source[8].append((205,10))
+        world.rules={'roots:Root/Shelves':{'selected':1,'twin_skipped':3,'excluded':0,'descendants_added':1}}
+        world.added=1
+        return world
+
+    def test_the_source_components_of_a_twin_carrier_are_not_part_of_the_package(self):
+        world=self.twin_world()
+        world.twin_carriers=['10']
+        world.run()  # 205 sits on an object of the package scene, but the package carries that object bare on purpose
+
+    def test_without_the_twin_carrier_ids_the_carriers_source_component_is_demanded(self):
+        world=self.twin_world()
+        world.twin_carriers=[]  # the record says: no bare carrier remains, so owner 10 must hold its ballistic 205
+        self.reject(world,'missing ballistic component 205')
+
+    def test_imported_twin_descendants_without_a_carrier_record_are_refused(self):
+        world=self.twin_world()  # twin_carriers stays None: the manifest block has no twin_carrier_ids at all
+        self.reject(world,'lacks twin_carrier_ids')
+
+    def test_twin_carriers_must_be_bare_objects_of_the_scene_without_orphans(self):
+        world=self.twin_world()
+        world.twin_carriers=['11']  # the shelf holds a collider and a ballistic in the package
+        self.reject(world,'must be bare in the package')
+        world=self.twin_world()
+        world.twin_carriers=['99']
+        self.reject(world,'are not objects of the scene')
+        world=self.twin_world()
+        world.twin_carriers=['12']  # the screen owns the hidden orphan 202
+        world.part[2]['components']=[]
+        self.reject(world,'cannot own hidden ballistic orphans')
+
+    def test_twin_carriers_only_exist_beside_imported_twin_descendants(self):
+        world=PartialBallisticSourceWorld()
+        world.twin_carriers=['10']
+        self.reject(world,'only emitted for imported twin descendants')
 
     def test_ballistic_owner_reads_the_header_only(self):
         good=SimpleNamespace(get_raw_data=lambda:struct.pack('<iq',0,77)+bytes(20))

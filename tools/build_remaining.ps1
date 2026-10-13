@@ -6,7 +6,7 @@
   directory is never overwritten. -Rebuild rebuilds bundles from complete existing packages.
   -Stage is reserved and refused: the release distribution contains only the released maps (Equator, Bay5 and AirPit).
   AirPit (arena_airpit) is not built here any more (PLAN-AIRPIT item 8): this runner derives the package as work/extract/<stem>,
-  which for airpit is the superseded Arena 0.5.4 spike package. AirPit is built from work/extract/airpit-native-v7 (Arena 0.6.0; v7 = v6 + the furnished-shop scenes)
+  which for airpit is the superseded Arena 0.5.4 spike package. AirPit is built from work/extract/airpit-native-v8 (Arena 0.6.0; v8 = v7 + the rest of the furnished hall)
   with an explicit -PackageDir through tools/build_all.ps1; see docs/progress/airpit-release.md.
   This script does not deploy to the live SPT installation.
 .EXAMPLE
@@ -28,7 +28,7 @@ if ($Stage) { throw 'Additional maps are parked. -Stage cannot write them into t
 $repo = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
 $allMaps = @('autoservice','airpit2','bowl','prison','railwaystation','yard','iceberg','factory','custom','shoreline','woods')
 if (-not $Maps.Count -or (@($Maps | Sort-Object -Unique).Count -ne $Maps.Count)) { throw 'Specify a nonempty unique map list.' }
-if ($Maps -ccontains 'airpit') { throw 'airpit is no longer built by this runner: it would use the superseded Arena 0.5.4 package work/extract/airpit. Build it from work/extract/airpit-native-v7 with an explicit -PackageDir through tools/build_all.ps1 (docs/progress/airpit-release.md).' }
+if ($Maps -ccontains 'airpit') { throw 'airpit is no longer built by this runner: it would use the superseded Arena 0.5.4 package work/extract/airpit. Build it from work/extract/airpit-native-v8 with an explicit -PackageDir through tools/build_all.ps1 (docs/progress/airpit-release.md).' }
 foreach ($stem in $Maps) { if ($stem -cnotin $allMaps) { throw "Unknown additional map: $stem" } }
 
 Push-Location -LiteralPath $repo

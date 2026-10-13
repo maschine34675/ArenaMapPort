@@ -363,6 +363,69 @@ class DecalsGenericPackageTests(unittest.TestCase):
         self.assertEqual(scoped[0].owners, [1, 42], "the scope is the object ids of the package's own scene JSON")
         self.assertEqual(len(scoped), 1)
 
+    def test_the_refresh_scope_leaves_out_bare_twin_carriers_but_covers_imported_twin_descendants(self):
+        # a v8 partial scene holds component-free stand-ins (twin carriers) for the ancestors of content imported
+        # below a skipped unit, and the content itself.  Extraction scanned the augmenters through
+        # Selection.scope_go_ids = every object except those stand-ins, whose source nodes carry components the
+        # package does not hold; the refresh must scan exactly the same owners, so it subtracts the manifest block's
+        # twin_carrier_ids from the scene JSON's object ids (a stand-in that owned a decal script in a future Arena
+        # build would otherwise re-attach it to the bare carrier)
+        scoped = []
+
+        class FakeScoped:
+            def __init__(self, unity_file, owners):
+                self.owners = sorted(owners)
+                scoped.append(self)
+        files = {1: object(), 2: object()}
+        with tempfile.TemporaryDirectory() as tmp:
+            package, output = self.make_package(tmp), Path(tmp) / "out"
+            manifest = json.loads((package / "manifest.json").read_text(encoding="utf-8"))
+            manifest["partial_scenes"] = {"S2": {"index": 2, "twin_descendants_added": 1,
+                                                 "twin_descendant_paths": ["Root/Lamp/Spot"], "excluded": 3,
+                                                 "exclude_entries": 2, "twin_carrier_ids": ["41"]}}
+            (package / "manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
+            scene = json.loads((package / "scenes" / "S2.json").read_text(encoding="utf-8"))
+            scene["objects"] += [{"id": "41", "name": "Lamp", "parent_id": "1", "components": []},
+                                 {"id": "42", "name": "Spot", "parent_id": "41", "components": [{"type": "Light"}]}]
+            (package / "scenes" / "S2.json").write_text(json.dumps(scene), encoding="utf-8")
+            source = D.PackageSource("arena_x", object(), {1: "S1", 2: "S2"}, files, True)
+            with patch.object(D, "open_source", return_value=source), \
+                 patch.object(D, "augment_scene", lambda *a: 1), \
+                 patch("scene_select.ScopedFile", FakeScoped), \
+                 patch("extract_equator.write_materials", return_value={}), \
+                 patch("extract_equator.write_textures", return_value={}), \
+                 patch("texture_compat.bc6h_rgb_decoder", contextlib.nullcontext):
+                quiet(D.refresh, package, output)
+        self.assertEqual(scoped[0].owners, [1, 42], "the bare carrier 41 is out of scope, its imported child 42 is in")
+
+    def test_a_partial_scene_without_twin_carriers_is_scoped_to_all_its_objects(self):
+        # the manifest block only carries twin_carrier_ids once twin descendants were imported (v7-shaped blocks, or
+        # a v8 record with twin_descendants 'skip'): the subtraction is then empty and the scope is the whole scene
+        scoped = []
+
+        class FakeScoped:
+            def __init__(self, unity_file, owners):
+                self.owners = sorted(owners)
+                scoped.append(self)
+        files = {1: object(), 2: object()}
+        with tempfile.TemporaryDirectory() as tmp:
+            package, output = self.make_package(tmp), Path(tmp) / "out"
+            manifest = json.loads((package / "manifest.json").read_text(encoding="utf-8"))
+            manifest["partial_scenes"] = {"S2": {"index": 2, "twin_descendants_added": 0}}
+            (package / "manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
+            scene = json.loads((package / "scenes" / "S2.json").read_text(encoding="utf-8"))
+            scene["objects"].append({"id": "41", "name": "Lamp", "parent_id": "1", "components": []})
+            (package / "scenes" / "S2.json").write_text(json.dumps(scene), encoding="utf-8")
+            source = D.PackageSource("arena_x", object(), {1: "S1", 2: "S2"}, files, True)
+            with patch.object(D, "open_source", return_value=source), \
+                 patch.object(D, "augment_scene", lambda *a: 1), \
+                 patch("scene_select.ScopedFile", FakeScoped), \
+                 patch("extract_equator.write_materials", return_value={}), \
+                 patch("extract_equator.write_textures", return_value={}), \
+                 patch("texture_compat.bc6h_rgb_decoder", contextlib.nullcontext):
+                quiet(D.refresh, package, output)
+        self.assertEqual(scoped[0].owners, [1, 41])
+
     def test_incomplete_scene_set_is_refused(self):
         with tempfile.TemporaryDirectory() as tmp:
             package = self.make_package(tmp)

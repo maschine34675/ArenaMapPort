@@ -7,6 +7,7 @@ ballistic augmenter that motivates it.
 """
 from __future__ import annotations
 
+from collections import Counter
 from copy import deepcopy
 import math
 from pathlib import Path
@@ -75,6 +76,12 @@ def select(**changes):
 
 def record(name="Partial", index=38, **changes):
     return {"name": name, "asset_path": f"Assets/{name}.unity", "index": index, "select": select(**changes)}
+
+
+def counters(selected, twin_skipped=0, excluded=0, descendants_added=0):
+    """The four per-rule counters select_nodes reports."""
+    return {"selected": selected, "twin_skipped": twin_skipped, "excluded": excluded,
+            "descendants_added": descendants_added}
 
 
 def prop(level, name, parent, pos=(0.0, 0.0, 0.0), comps=("LODGroup",), **kwargs):
@@ -189,6 +196,63 @@ class ValidateSelectTests(unittest.TestCase):
         self.assertEqual([r.name for r in spec.rules[1].regions], ["b"])
 
 
+class ValidateNewKeysTests(unittest.TestCase):
+    """`twin_descendants` and `exclude`, the keys of the second AirPit package."""
+
+    def test_defaults_keep_the_old_behaviour(self):
+        spec = SS.validate_select(select(roots=["A"]))
+        self.assertEqual((spec.twin_descendants, spec.exclude), ("skip", ()))
+
+    def test_twin_descendants_modes(self):
+        for mode in ("skip", "import_missing"):
+            spec = SS.validate_select(select(roots=["A"], skip_twins_of=324, twin_descendants=mode))
+            self.assertEqual(spec.twin_descendants, mode)
+        SS.validate_select(select(roots=["A"], twin_descendants="skip"))   # nothing to compare with is fine for skip
+        for bad in ("import", "IMPORT_MISSING", "", None, True, 1, ["skip"]):
+            with self.subTest(bad=bad), self.assertRaisesRegex(PlanError, "twin_descendants must be one of"):
+                SS.validate_select(select(roots=["A"], skip_twins_of=324, twin_descendants=bad))
+
+    def test_import_missing_needs_a_reference_scene(self):
+        with self.assertRaisesRegex(PlanError, "needs skip_twins_of"):
+            SS.validate_select(select(roots=["A"], twin_descendants="import_missing"))
+
+    def test_exclude_entries(self):
+        spec = SS.validate_select(select(roots=["A"], exclude=[
+            {"path": "A/B", "reason": "moved copy"},
+            {"path": "A/C", "at": [1, 2.5, -3], "reason": "replaced in 324"},
+            {"path": "A/C", "at": [1, 2.5, 4], "reason": "same path elsewhere"}]))
+        self.assertEqual([(e.path, e.at, e.reason) for e in spec.exclude],
+                         [("A/B", None, "moved copy"), ("A/C", (1.0, 2.5, -3.0), "replaced in 324"),
+                          ("A/C", (1.0, 2.5, 4.0), "same path elsewhere")])
+        self.assertEqual(SS.validate_select(select(roots=["A"], exclude=[])).exclude, ())
+
+    def test_malformed_exclude_entries_are_refused(self):
+        good = {"path": "A/B", "reason": "r"}
+        cases = {"not a list": {"path": "A/B", "reason": "r"}, "entry not an object": ["A/B"],
+                 "no reason": [{"path": "A/B"}], "blank reason": [dict(good, reason=" ")],
+                 "non-string reason": [dict(good, reason=3)], "no path": [{"reason": "r"}],
+                 "bad path": [dict(good, path="A/")], "empty path": [dict(good, path="")],
+                 "unknown key": [dict(good, why="x")], "short at": [dict(good, at=[1, 2])],
+                 "text at": [dict(good, at="1,2,3")], "bool at": [dict(good, at=[True, 0, 0])],
+                 "infinite at": [dict(good, at=[0, math.inf, 0])], "nan at": [dict(good, at=[0, 0, math.nan])]}
+        for label, bad in cases.items():
+            with self.subTest(label), self.assertRaises(PlanError):
+                SS.validate_select(select(roots=["A"], exclude=bad))
+
+    def test_duplicate_exclusions_are_refused(self):
+        a = {"path": "A/B", "reason": "r"}
+        with self.assertRaisesRegex(PlanError, "listed twice"):
+            SS.validate_select(select(roots=["A"], exclude=[a, dict(a, reason="other text")]))
+        at = dict(a, at=[1, 2, 3])
+        with self.assertRaisesRegex(PlanError, "listed twice"):
+            SS.validate_select(select(roots=["A"], exclude=[at, dict(at, at=[1.0, 2.0, 3.0])]))
+        # the same path at another position, or once with and once without a position, is not a duplicate
+        SS.validate_select(select(roots=["A"], exclude=[at, dict(at, at=[1, 2, 4]), a]))
+
+    def test_the_keys_are_part_of_the_schema(self):
+        self.assertLessEqual({"twin_descendants", "exclude"}, SS.SELECT_KEYS)
+
+
 class GraphTests(unittest.TestCase):
     def test_paths_keep_duplicate_sibling_names_and_trailing_spaces(self):
         level = Level()
@@ -280,6 +344,17 @@ class GraphTests(unittest.TestCase):
         a = level.add("A", comps=("Transform", "MonoBehaviour", "MeshRenderer", "MeshFilter", "MonoBehaviour"))
         self.assertEqual(level.graph().nodes[a].types, ("MeshFilter", "MeshRenderer"))
 
+    def test_nodes_keep_their_component_ids_and_content_flag(self):
+        level = Level()
+        root = level.add("Root")
+        lamp = level.add("Lamp", root, ("Transform", "Light", "MonoBehaviour"))
+        decal = level.add("Spray", root, ("MonoBehaviour:" + DECAL_SCRIPT,))
+        plain = level.add("Plain", root, ("MeshFilter",))
+        graph = level.graph()
+        self.assertEqual(graph.nodes[lamp].components, tuple(level.go_map[lamp - 1000]["components"]))
+        self.assertEqual(len(graph.nodes[lamp].components), 3)
+        self.assertEqual([graph.nodes[t].has_content for t in (root, lamp, decal, plain)], [False, True, True, False])
+
     def test_hierarchy_cycles_are_refused(self):
         level = Level()
         a, b = level.add("A"), level.add("B")
@@ -363,8 +438,14 @@ class SelectNodesTests(unittest.TestCase):
         self.assertEqual(sel.unit_tf_ids, (n["chair"], n["table"]))
         report = sel.report
         self.assertEqual((report["objects"], report["units"], report["carriers"]), (len(expected), 2, 3))
-        self.assertEqual(report["rules"], {"roots:Root/Hall/Shop": {"selected": 2, "twin_skipped": 0}})
+        self.assertEqual(report["rules"], {"roots:Root/Hall/Shop": counters(2)})
         self.assertEqual(report["go_ids_sha256"], SS.go_ids_digest(sel.go_ids))
+        # nothing was imported or excluded: the new report keys are present and empty
+        self.assertEqual((report["excluded"], report["exclude_entries"], report["twin_descendants_added"],
+                          report["twin_descendant_paths"], report["twin_carriers"]), (0, 0, 0, [], 0))
+        self.assertEqual((sel.twin_carrier_tf_ids, sel.twin_carrier_go_ids, sel.descendant_tf_ids, sel.excluded_tf_ids),
+                         ((), frozenset(), (), ()))
+        self.assertEqual(sel.scope_go_ids, sel.go_ids)
 
     def test_a_root_path_never_matches_a_longer_sibling_name(self):
         level = Level()
@@ -466,9 +547,8 @@ class SelectNodesTests(unittest.TestCase):
         sel = SS.select_nodes(rec, graph)
         self.assertEqual(set(sel.unit_tf_ids), {a, b, c})
         self.assertNotIn(d, sel.unit_tf_ids)
-        self.assertEqual(sel.report["rules"], {"roots:Root/Near/A": {"selected": 1, "twin_skipped": 0},
-                                               "region_roots:Root/Near": {"selected": 1, "twin_skipped": 0},
-                                               "region_roots:Root/Far": {"selected": 1, "twin_skipped": 0}})
+        self.assertEqual(sel.report["rules"], {"roots:Root/Near/A": counters(1), "region_roots:Root/Near": counters(1),
+                                               "region_roots:Root/Far": counters(1)})
         # a unit under both kinds of rule is claimed by the roots rule, whatever the plan text order
         both = SS.select_nodes(record(roots=["Root/Near"], regions=regions[:1],
                                       region_roots=[{"path": "Root/Near/A", "regions": ["west"]}]), graph)
@@ -512,7 +592,7 @@ class SelectNodesTests(unittest.TestCase):
         sel = SS.select_nodes(rec, level.graph(), reference.graph())
         self.assertEqual(sel.unit_tf_ids, (inside,))
         self.assertEqual(set(sel.twins), {twin})
-        self.assertEqual(sel.report["rules"], {"region_roots:Root": {"selected": 1, "twin_skipped": 1}})
+        self.assertEqual(sel.report["rules"], {"region_roots:Root": counters(1, 1)})
         self.assertEqual(sel.report["dropped_script_owners"], 0)
 
     def test_dropped_script_owners_are_claimed_containers_that_are_neither_unit_nor_carrier(self):
@@ -595,7 +675,7 @@ class TwinTests(unittest.TestCase):
             prop(level, "Table", shop, pos=(5.0, 0.0, 0.0))
         graph, _ref, sel = self.run_select(candidates, reference)
         self.assertEqual(self.kept(graph, sel), ["Keeper", "Table"])
-        self.assertEqual(sel.report["rules"]["roots:Root/Shop"], {"selected": 2, "twin_skipped": 1})
+        self.assertEqual(sel.report["rules"]["roots:Root/Shop"], counters(2, 1))
         self.assertEqual(len(sel.twins), 1)
 
     def test_a_selection_of_nothing_but_twins_selects_no_unit(self):
@@ -715,9 +795,562 @@ class TwinTests(unittest.TestCase):
             self.assertEqual(SS.strip_copy_suffix(name), expected, name)
 
 
+def lamp(level, parent, name="Lamp", pos=(1.0, 0.0, 0.0), lights=(), comps=("LODGroup",)):
+    """A LODGroup unit with a mesh child and one Light child per ``(name, local position)``; returns (root, lights)."""
+    root = level.add(name, parent, comps, pos=pos)
+    level.add(name + "_LOD0", root, ("MeshFilter", "MeshRenderer"))
+    return root, [level.add(light, root, ("Light",), pos=at) for light, at in lights]
+
+
+class TwinDescendantTests(unittest.TestCase):
+    """``twin_descendants: import_missing``: the content a twin-skipped unit has and its reference twin lacks.
+
+    Every case selects ``Root/Shop`` of a candidate level against a reference level; the candidate always carries a
+    ``Keeper`` unit without a twin, so the selection is never empty."""
+
+    def build(self, candidate_build, reference_build):
+        candidate = Level()
+        shop = candidate.add("Shop", candidate.add("Root"))
+        out = candidate_build(candidate, shop)
+        prop(candidate, "Keeper", shop, pos=(99.0, 0.0, 0.0))
+        reference = Level()
+        reference.add("Pad")  # keeps reference transform ids apart from the candidate's
+        reference_build(reference, reference.add("Shop", reference.add("Root")))
+        return candidate, reference, out
+
+    def run_select(self, candidate_build, reference_build, mode="import_missing", **extra):
+        candidate, reference, out = self.build(candidate_build, reference_build)
+        graph, ref_graph = candidate.graph(), reference.graph()
+        rec = record(roots=["Root/Shop"], skip_twins_of=324, twin_descendants=mode, **extra)
+        return graph, ref_graph, SS.select_nodes(rec, graph, ref_graph), out
+
+    def test_a_light_the_twin_lacks_is_imported_under_bare_twin_carriers(self):
+        def reference(level, shop):
+            lamp(level, shop, lights=[("Spot", (0.0, -1.0, 0.0))])
+
+        def candidate(level, shop):
+            return lamp(level, shop, lights=[("Spot", (0.0, -1.0, 0.0)), ("Spot (1)", (0.0, -2.0, 0.0))])
+        graph, _ref, sel, (root, (spot, extra)) = self.run_select(candidate, reference)
+        shop, base = root - 1, root - 1000
+        self.assertEqual(set(sel.twins), {root})
+        self.assertEqual(sel.descendant_tf_ids, (extra,))
+        self.assertEqual(sel.twin_carrier_tf_ids, (root,))
+        self.assertEqual(sel.twin_carrier_go_ids, {base})
+        self.assertEqual(sel.report["twin_carrier_ids"], [str(base)])
+        # the lamp unit itself is skipped: only the imported light, its twin carrier and the ordinary carriers remain
+        keeper = [t for t in sel.unit_tf_ids if graph.nodes[t].name == "Keeper"]
+        self.assertEqual(sel.unit_tf_ids, (keeper[0], extra))
+        self.assertNotIn(root + 1, sel.node_tf_ids)           # the lamp's own mesh child is not emitted
+        self.assertNotIn(spot, sel.node_tf_ids)                # the light the twin has stays out
+        self.assertEqual(set(sel.node_tf_ids), {shop - 1, shop, root, extra, *range(keeper[0], keeper[0] + 3)})
+        self.assertIn(base, sel.carrier_go_ids)
+        self.assertEqual(sel.scope_go_ids, sel.go_ids - {base})
+        self.assertEqual(graph.nodes[extra].pos, (1.0, -2.0, 0.0), "the imported light keeps its world pose")
+        report = sel.report
+        self.assertEqual((report["objects"], report["units"], report["carriers"], report["twin_carriers"]), (7, 2, 3, 1))
+        self.assertEqual(report["rules"], {"roots:Root/Shop": counters(1, 1, 0, 1)})
+        self.assertEqual((report["twin_descendants_added"], report["twin_descendant_paths"], report["excluded"]),
+                         (1, ["Root/Shop/Lamp/Spot (1)"], 0))
+        self.assertEqual(report["go_ids_sha256"], SS.go_ids_digest(sel.go_ids))
+
+    def test_skip_is_the_default_and_imports_nothing(self):
+        def reference(level, shop):
+            lamp(level, shop)
+
+        def candidate(level, shop):
+            return lamp(level, shop, lights=[("Spot", (0.0, -2.0, 0.0))])
+        for mode in ("skip", None):
+            extra = {} if mode is None else {"twin_descendants": mode}
+            with self.subTest(mode=mode):
+                candidate_level, reference_level, (root, _lights) = self.build(candidate, reference)
+                graph, ref_graph = candidate_level.graph(), reference_level.graph()
+                rec = record(roots=["Root/Shop"], skip_twins_of=324)
+                rec["select"].update(extra)
+                sel = SS.select_nodes(rec, graph, ref_graph)
+                self.assertEqual((sel.descendant_tf_ids, sel.twin_carrier_tf_ids), ((), ()))
+                self.assertEqual(sel.report["twin_descendants_added"], 0)
+                self.assertEqual(sel.report["rules"]["roots:Root/Shop"], counters(1, 1))
+                self.assertNotIn(root, sel.node_tf_ids)
+
+    def test_content_the_twin_carries_is_not_imported(self):
+        def both(level, shop):
+            lamp(level, shop, lights=[("Spot", (0.0, -1.0, 0.0)), ("Spot (2)", (0.0, -2.0, 0.0))])
+        _g, _r, sel, _ = self.run_select(both, both)
+        self.assertEqual((sel.descendant_tf_ids, sel.twin_carrier_tf_ids), ((), ()))
+        self.assertEqual(sel.report["rules"]["roots:Root/Shop"], counters(1, 1))
+
+    def test_renumbered_copies_are_the_same_light(self):
+        def reference(level, shop):
+            lamp(level, shop, lights=[("Spot Light", (0.0, -1.0, 0.0)), ("Spot Light (1)", (0.0, -2.0, 0.0))])
+
+        def candidate(level, shop):
+            return lamp(level, shop, lights=[("Spot Light (5)", (0.0, -2.0, 0.0)), ("Spot Light (9)", (0.0, -1.0, 0.0))])
+        _g, _r, sel, _ = self.run_select(candidate, reference)
+        self.assertEqual(sel.descendant_tf_ids, ())
+
+    def test_each_counterpart_is_used_once_and_the_earlier_path_takes_it(self):
+        def reference(level, shop):
+            lamp(level, shop, lights=[("Spot", (0.0, -1.0, 0.0))])
+
+        def candidate(level, shop):
+            return lamp(level, shop, lights=[("Spot (1)", (0.0, -1.0, 0.0)), ("Spot", (0.0, -1.0, 0.0))])
+        graph, _r, sel, (_root, (numbered, plain)) = self.run_select(candidate, reference)
+        # "Spot" sorts before "Spot (1)" and takes the only counterpart, so the numbered one is the missing light
+        self.assertEqual(sel.descendant_tf_ids, (numbered,))
+        self.assertEqual((graph.nodes[numbered].name, graph.nodes[plain].name), ("Spot (1)", "Spot"))
+
+    def test_the_reported_descendant_paths_are_sorted_as_strings_not_left_in_import_order(self):
+        # the twin units are visited in (path, tf id) order, so 'Lamp' imports before 'Lamp (1)'; as strings
+        # ' ' sorts before '/', so the sorted list names 'Lamp (1)/Spot' first
+        def reference(level, shop):
+            lamp(level, shop)
+            lamp(level, shop, name="Lamp (1)", pos=(5.0, 0.0, 0.0))
+
+        def candidate(level, shop):
+            return (lamp(level, shop, lights=[("Spot", (0.0, -1.0, 0.0))]),
+                    lamp(level, shop, name="Lamp (1)", pos=(5.0, 0.0, 0.0), lights=[("Spot", (0.0, -1.0, 0.0))]))
+        graph, _r, sel, ((first, (first_spot,)), (second, (second_spot,))) = self.run_select(candidate, reference)
+        self.assertEqual(set(sel.twins), {first, second})
+        self.assertEqual(set(sel.descendant_tf_ids), {first_spot, second_spot})
+        self.assertEqual(sel.report["twin_descendant_paths"], ["Root/Shop/Lamp (1)/Spot", "Root/Shop/Lamp/Spot"])
+        self.assertEqual([graph.nodes[t].path for t in sel.descendant_tf_ids],
+                         sel.report["twin_descendant_paths"], "the selection's own order is the same string order")
+        self.assertEqual(sel.report["twin_descendants_added"], 2)
+
+    def test_what_makes_a_counterpart(self):
+        base_at = (0.0, -1.0, 0.0)
+
+        def reference(level, shop):
+            lamp(level, shop, lights=[("Spot", base_at)])
+        cases = (
+            ("same light", {}, False),
+            ("other name", {"name": "Flood"}, True),
+            ("other component set", {"comps": ("Light", "ParticleSystem")}, True),
+            ("inactive here, active there", {"active": False}, True),
+            ("exactly on the tolerance", {"at": (0.02, -1.0, 0.0)}, False),
+            ("per axis beyond the tolerance", {"at": (0.0, -1.0, 0.0201)}, True),
+            ("moved far", {"at": (0.0, -1.5, 0.0)}, True))
+        for label, change, missing in cases:
+            def candidate(level, shop, change=change):
+                root = level.add("Lamp", shop, ("LODGroup",), pos=(1.0, 0.0, 0.0))
+                level.add("Lamp_LOD0", root, ("MeshFilter", "MeshRenderer"))
+                level.add(change.get("name", "Spot"), root, change.get("comps", ("Light",)),
+                          pos=change.get("at", base_at), active=change.get("active", True))
+                return root
+            with self.subTest(label):
+                _g, _r, sel, _root = self.run_select(candidate, reference)
+                self.assertEqual(len(sel.descendant_tf_ids), 1 if missing else 0)
+
+    def test_inactivity_through_the_parent_chain_counts_like_the_own_flag(self):
+        def reference(level, shop):
+            root = level.add("Lamp", shop, ("LODGroup",), pos=(1.0, 0.0, 0.0), active=False)
+            level.add("Spot", root, ("Light",), pos=(0.0, -1.0, 0.0))     # inactive through the lamp
+
+        def candidate(level, shop):
+            root = level.add("Lamp", shop, ("LODGroup",), pos=(1.0, 0.0, 0.0), active=False)
+            level.add("Spot", root, ("Light",), pos=(0.0, -1.0, 0.0), active=False)   # inactive by its own flag too
+            return root
+        # the unit itself is a twin only when its effective activity matches, and so are its parts
+        _g, _r, sel, _ = self.run_select(candidate, reference)
+        self.assertEqual((sel.descendant_tf_ids, len(sel.twins)), ((), 1))
+
+    def test_only_content_below_the_reference_twin_counts(self):
+        def reference(level, shop):
+            lamp(level, shop)
+            # an identical light elsewhere in the reference level does not make the lamp's light a counterpart
+            level.add("Spot", shop, ("Light",), pos=(1.0, -1.0, 0.0))
+
+        def candidate(level, shop):
+            return lamp(level, shop, lights=[("Spot", (0.0, -1.0, 0.0))])
+        graph, _r, sel, (_root, (spot,)) = self.run_select(candidate, reference)
+        self.assertEqual(sel.descendant_tf_ids, (spot,))
+
+    def test_a_missing_part_takes_its_subtree_and_the_chain_up_to_the_unit(self):
+        def reference(level, shop):
+            lamp(level, shop)
+
+        def candidate(level, shop):
+            root = level.add("Lamp", shop, ("LODGroup",), pos=(1.0, 0.0, 0.0))
+            level.add("Lamp_LOD0", root, ("MeshFilter", "MeshRenderer"))
+            arm = level.add("Arm", root, pos=(0.0, 1.0, 0.0))
+            mount = level.add("Mount", arm, ("MeshRenderer",), pos=(0.0, 1.0, 0.0))
+            bulb = level.add("Bulb", mount, ("Light",), pos=(0.0, 1.0, 0.0))     # content inside the missing part
+            return root, arm, mount, bulb
+        graph, _r, sel, (root, arm, mount, bulb) = self.run_select(candidate, reference)
+        self.assertEqual(sel.descendant_tf_ids, (mount,), "the bulb belongs to the mount that carries it")
+        self.assertEqual(set(sel.twin_carrier_tf_ids), {root, arm})
+        self.assertIn(bulb, sel.node_tf_ids)
+        self.assertEqual(graph.nodes[bulb].pos, (1.0, 3.0, 0.0))
+        self.assertEqual(sel.report["twin_descendant_paths"], ["Root/Shop/Lamp/Arm/Mount"])
+        self.assertEqual(sel.report["twin_carriers"], 2)
+
+    def test_missing_content_inside_a_part_the_twin_has_is_found_on_its_own(self):
+        def reference(level, shop):
+            root = level.add("Lamp", shop, ("LODGroup",), pos=(1.0, 0.0, 0.0))
+            level.add("Housing", root, ("MeshRenderer",), pos=(0.0, 1.0, 0.0))
+
+        def candidate(level, shop):
+            root = level.add("Lamp", shop, ("LODGroup",), pos=(1.0, 0.0, 0.0))
+            housing = level.add("Housing", root, ("MeshRenderer",), pos=(0.0, 1.0, 0.0))
+            bulb = level.add("Bulb", housing, ("Light",), pos=(0.0, 1.0, 0.0))
+            return root, housing, bulb
+        graph, _r, sel, (root, housing, bulb) = self.run_select(candidate, reference)
+        self.assertEqual(sel.descendant_tf_ids, (bulb,))
+        self.assertEqual(set(sel.twin_carrier_tf_ids), {root, housing}, "the housing the twin has is a bare stand-in")
+        self.assertEqual(graph.nodes[bulb].pos, (1.0, 2.0, 0.0))
+
+    def test_several_missing_parts_share_their_carriers(self):
+        def reference(level, shop):
+            lamp(level, shop)
+
+        def candidate(level, shop):
+            return lamp(level, shop, lights=[("A", (0.0, -1.0, 0.0)), ("B", (0.0, -2.0, 0.0)), ("C", (0.0, -3.0, 0.0))])
+        _g, _r, sel, (root, kids) = self.run_select(candidate, reference)
+        self.assertEqual(set(sel.descendant_tf_ids), set(kids))
+        self.assertEqual(sel.twin_carrier_tf_ids, (root,))
+        self.assertEqual(sel.report["twin_descendants_added"], 3)
+        self.assertEqual(sel.report["twin_descendant_paths"], sorted(f"Root/Shop/Lamp/{n}" for n in "ABC"))
+        self.assertEqual(sel.report["carriers"], 3)
+
+    def test_a_twin_carrier_may_own_a_script_that_stays_out_of_the_augmenter_scope(self):
+        def reference(level, shop):
+            lamp(level, shop)
+
+        def candidate(level, shop):
+            root, (light,) = lamp(level, shop, lights=[("Spot", (0.0, -1.0, 0.0))],
+                                  comps=("LODGroup", "MonoBehaviour:Some.Other"))
+            return root, light
+        _g, _r, sel, (root, _light) = self.run_select(candidate, reference)
+        self.assertIn(root - 1000, sel.go_ids)
+        self.assertNotIn(root - 1000, sel.scope_go_ids)
+        self.assertEqual(sel.report["dropped_script_owners"], 0)
+
+    def test_a_selection_made_only_of_imported_descendants_is_not_empty(self):
+        candidate = Level()
+        shop = candidate.add("Shop", candidate.add("Root"))
+        root, (spot,) = lamp(candidate, shop, lights=[("Spot", (0.0, -1.0, 0.0))])
+        reference = Level()
+        reference.add("Pad")
+        lamp(reference, reference.add("Shop", reference.add("Root")))
+        rec = record(roots=["Root/Shop"], skip_twins_of=324, twin_descendants="import_missing")
+        sel = SS.select_nodes(rec, candidate.graph(), reference.graph())
+        self.assertEqual(sel.unit_tf_ids, (spot,))
+        with self.assertRaisesRegex(HardExtractError, "selects no unit"):
+            SS.select_nodes(dict(rec, select=dict(rec["select"], twin_descendants="skip")),
+                            candidate.graph(), reference.graph())
+
+    def test_an_imported_part_counts_for_the_rule_that_claimed_its_unit(self):
+        candidate = Level()
+        root = candidate.add("Root")
+        west, east = candidate.add("West", root), candidate.add("East", root)
+        w_root, (w_spot,) = lamp(candidate, west, lights=[("Spot", (0.0, -1.0, 0.0))])
+        e_root, (e_spot,) = lamp(candidate, east, pos=(50.0, 0.0, 0.0), lights=[("Spot", (0.0, -1.0, 0.0))])
+        prop(candidate, "Keeper", east, pos=(99.0, 0.0, 0.0))
+        reference = Level()
+        reference.add("Pad")
+        ref_root = reference.add("Root")
+        lamp(reference, reference.add("West", ref_root))
+        lamp(reference, reference.add("East", ref_root), pos=(50.0, 0.0, 0.0))
+        rec = record(roots=["Root/West", "Root/East"], skip_twins_of=324, twin_descendants="import_missing")
+        sel = SS.select_nodes(rec, candidate.graph(), reference.graph())
+        self.assertEqual(sel.report["rules"], {"roots:Root/West": counters(0, 1, 0, 1),
+                                               "roots:Root/East": counters(1, 1, 0, 1)})
+        self.assertEqual(sel.report["units"], 3)
+        self.assertEqual(set(sel.descendant_tf_ids), {w_spot, e_spot})
+
+    def test_missing_descendants_function(self):
+        candidate, reference = Level(), Level()
+        root, (a, b) = lamp(candidate, candidate.add("Shop"), lights=[("A", (0.0, -1.0, 0.0)), ("B", (0.0, -2.0, 0.0))])
+        ref_root, _ = lamp(reference, reference.add("Shop"), lights=[("A", (0.0, -1.0, 0.0))])
+        graph, ref_graph = candidate.graph(), reference.graph()
+        self.assertEqual(SS.missing_descendants(graph, root, ref_graph, ref_root), [b])
+        self.assertEqual(SS.missing_descendants(graph, root, ref_graph, ref_root + 1), [a, b, root + 1],
+                         "the reference side is the subtree of the given node only (the mesh child is missing too)")
+        self.assertEqual(SS.missing_descendants(graph, a, ref_graph, ref_root), [], "a leaf has nothing below it")
+
+    def test_results_do_not_depend_on_table_order(self):
+        def reference(level, shop):
+            lamp(level, shop, lights=[("Spot", (0.0, -1.0, 0.0)), ("Spot (1)", (0.0, -1.0, 0.0))])
+
+        def candidate(level, shop):
+            lamp(level, shop, lights=[("Spot (3)", (0.0, -1.0, 0.0)), ("Spot (4)", (0.0, -1.0, 0.0)),
+                                      ("Spot (5)", (0.0, -1.0, 0.0)), ("Spot (6)", (0.0, -2.0, 0.0))])
+        cand, ref, _ = self.build(candidate, reference)
+        rec = record(roots=["Root/Shop"], skip_twins_of=324, twin_descendants="import_missing")
+        base = SS.select_nodes(rec, cand.graph(), ref.graph())
+        self.assertEqual(base.report["twin_descendants_added"], 2)
+        for seed in range(6):
+            self.assertEqual(SS.select_nodes(rec, cand.graph(seed), ref.graph(seed + 100)), base, seed)
+
+    def test_the_default_mode_leaves_the_old_selection_untouched(self):
+        # same level, same reference: only the mode differs, and the difference is exactly the imported part
+        def reference(level, shop):
+            lamp(level, shop)
+
+        def candidate(level, shop):
+            return lamp(level, shop, lights=[("Spot", (0.0, -1.0, 0.0))])
+        _g, _r, skip, _ = self.run_select(candidate, reference, mode="skip")
+        _g, _r, imported, (_root, (spot,)) = self.run_select(candidate, reference)
+        self.assertEqual(set(imported.unit_tf_ids) - set(skip.unit_tf_ids), {spot})
+        self.assertLess(set(skip.node_tf_ids), set(imported.node_tf_ids))
+
+
+class ExcludeTests(unittest.TestCase):
+    """``exclude``: reviewed duplicates are removed after claiming, twin matching and twin descendants."""
+
+    def setUp(self):
+        level = self.level = Level()
+        root = level.add("Root")
+        props = level.add("Props", root)
+        stack = level.add("Stack", props)
+        variant = level.add("Variant", root)
+        self.n = {"root": root, "props": props, "stack": stack, "variant": variant,
+                  "a": prop(level, "A", props, pos=(1.0, 0.0, 0.0)),
+                  "b": prop(level, "B", props, pos=(2.0, 0.0, 0.0)),
+                  "c": prop(level, "C", stack, pos=(3.0, 0.0, 0.0)),
+                  "d": prop(level, "D", stack, pos=(4.0, 0.0, 0.0)),
+                  "crate1": prop(level, "Crate", variant, pos=(10.0, 0.0, 0.0)),
+                  "crate2": prop(level, "Crate", variant, pos=(20.0, 0.0, 0.0)),
+                  "crate3": prop(level, "Crate", variant, pos=(30.0, 0.0, 0.0))}
+        self.graph = level.graph()
+
+    def run_select(self, exclude, roots=("Root",), graph=None, reference=None, **extra):
+        rec = record(roots=list(roots), exclude=exclude, **extra)
+        return SS.select_nodes(rec, graph or self.graph, reference)
+
+    def test_a_unit_root_is_dropped_with_its_subtree(self):
+        base = SS.select_nodes(record(roots=["Root"]), self.graph)
+        sel = self.run_select([{"path": "Root/Props/A", "reason": "dup"}])
+        self.assertEqual(set(base.unit_tf_ids) - set(sel.unit_tf_ids), {self.n["a"]})
+        self.assertEqual(sel.excluded_tf_ids, (self.n["a"],))
+        self.assertFalse(set(range(self.n["a"], self.n["a"] + 3)) & set(sel.node_tf_ids))
+        self.assertEqual(sel.report["objects"], base.report["objects"] - 3)
+        self.assertEqual(sel.report["rules"], {"roots:Root": counters(7, 0, 1)})
+        self.assertEqual((sel.report["excluded"], sel.report["exclude_entries"]), (1, 1))
+        self.assertNotEqual(sel.report["go_ids_sha256"], base.report["go_ids_sha256"])
+
+    def test_a_container_drops_every_unit_below_it_and_the_carriers_follow(self):
+        n = self.n
+        sel = self.run_select([{"path": "Root/Props/Stack", "reason": "a prefab instance"}])
+        self.assertEqual(set(sel.excluded_tf_ids), {n["c"], n["d"]})
+        self.assertNotIn(n["stack"], sel.node_tf_ids, "a container without surviving units is no carrier either")
+        self.assertIn(n["props"], sel.node_tf_ids)
+        self.assertEqual(sel.report["carriers"], 3)       # Root, Props, Variant
+        self.assertEqual(sel.report["rules"]["roots:Root"], counters(7, 0, 2), "selected counts before the exclusion")
+        self.assertEqual(sel.report["units"], 5)
+
+    def test_a_container_that_loses_all_its_units_loses_its_carrier_chain(self):
+        sel = self.run_select([{"path": "Root/Props/Stack", "reason": "x"}, {"path": "Root/Props/A", "reason": "x"},
+                               {"path": "Root/Props/B", "reason": "x"}])
+        self.assertNotIn(self.n["props"], sel.node_tf_ids)
+        self.assertEqual(sel.report["carriers"], 2)       # Root, Variant
+
+    def test_at_picks_one_of_several_nodes_that_share_a_path(self):
+        n = self.n
+        sel = self.run_select([{"path": "Root/Variant/Crate", "at": [20.0, 0.0, 0.0], "reason": "second crate"}])
+        self.assertEqual(sel.excluded_tf_ids, (n["crate2"],))
+        self.assertEqual({n["crate1"], n["crate3"]} - set(sel.unit_tf_ids), set())
+        # the position matches within 0.05 m, euclidean
+        for offset, found in (((0.0, 0.0, 0.049), True), ((0.03, 0.03, 0.0), True), ((0.0, 0.0, 0.0501), False),
+                              ((0.04, 0.04, 0.0), False)):
+            at = [20.0 + offset[0], offset[1], offset[2]]
+            with self.subTest(offset=offset):
+                if found:
+                    self.run_select([{"path": "Root/Variant/Crate", "at": at, "reason": "x"}])
+                else:
+                    with self.assertRaisesRegex(HardExtractError, "no object within"):
+                        self.run_select([{"path": "Root/Variant/Crate", "at": at, "reason": "x"}])
+
+    def test_every_crate_can_be_named_by_its_position(self):
+        sel = self.run_select([{"path": "Root/Variant/Crate", "at": [x, 0.0, 0.0], "reason": "x"}
+                               for x in (10.0, 20.0, 30.0)])
+        self.assertEqual(set(sel.excluded_tf_ids), {self.n["crate1"], self.n["crate2"], self.n["crate3"]})
+
+    def test_a_shared_path_without_a_position_is_ambiguous(self):
+        with self.assertRaisesRegex(HardExtractError, r"is ambiguous \(3 objects share the path\)"):
+            self.run_select([{"path": "Root/Variant/Crate", "reason": "which one?"}])
+
+    def test_a_unique_path_with_a_wrong_position_is_stale(self):
+        with self.assertRaisesRegex(HardExtractError, "no object within"):
+            self.run_select([{"path": "Root/Props/A", "at": [50.0, 0.0, 0.0], "reason": "moved by an update"}])
+        self.run_select([{"path": "Root/Props/A", "at": [1.0, 0.0, 0.0], "reason": "still there"}])
+
+    def test_two_objects_closer_than_the_tolerance_stay_ambiguous(self):
+        level = Level()
+        group = level.add("Group", level.add("Root"))
+        prop(level, "Twin", group, pos=(1.0, 0.0, 0.0))
+        prop(level, "Twin", group, pos=(1.02, 0.0, 0.0))
+        prop(level, "Other", group, pos=(7.0, 0.0, 0.0))
+        with self.assertRaisesRegex(HardExtractError, r"ambiguous \(2 objects within"):
+            SS.select_nodes(record(roots=["Root"], exclude=[{"path": "Root/Group/Twin", "at": [1.01, 0.0, 0.0],
+                                                             "reason": "x"}]), level.graph())
+
+    def test_unresolved_paths_fail_closed(self):
+        for path in ("Root/Props/Missing", "root/props", "Root/Props/A/A_LOD0/Missing"):
+            with self.subTest(path=path), self.assertRaisesRegex(HardExtractError, "resolves to no object"):
+                self.run_select([{"path": path, "reason": "stale"}])
+
+    def test_a_path_inside_a_unit_is_refused(self):
+        with self.assertRaisesRegex(HardExtractError, "points inside the unit"):
+            self.run_select([{"path": "Root/Props/A/A_LOD0", "reason": "part of a prop"}])
+
+    def test_an_entry_that_drops_nothing_is_stale(self):
+        # outside every rule, a unit that is only a twin, and a container without selected units
+        level = Level()
+        root = level.add("Root")
+        prop(level, "Chair", level.add("Shop", root), pos=(1.0, 0.0, 0.0))
+        prop(level, "Table", level.add("Hall", root), pos=(5.0, 0.0, 0.0))
+        prop(level, "Sofa", level.add("Keep", root), pos=(9.0, 0.0, 0.0))     # keeps the selection non-empty
+        reference = Level()
+        reference.add("Pad")
+        prop(reference, "Chair", reference.add("Shop", reference.add("Root")), pos=(1.0, 0.0, 0.0))
+        graph, ref_graph = level.graph(), reference.graph()
+        for path, why in (("Root/Hall/Table", "outside every rule"), ("Root/Shop/Chair", "a twin"),
+                          ("Root/Shop", "a container whose only unit is a twin")):
+            rec = record(roots=["Root/Shop", "Root/Keep"], skip_twins_of=324, exclude=[{"path": path, "reason": why}])
+            with self.subTest(why), self.assertRaisesRegex(HardExtractError, "drops no unit"):
+                SS.select_nodes(rec, graph, ref_graph)
+
+    def test_two_entries_for_one_object_are_refused(self):
+        with self.assertRaisesRegex(HardExtractError, "names the same object"):
+            self.run_select([{"path": "Root/Props/A", "reason": "x"},
+                             {"path": "Root/Props/A", "at": [1.0, 0.0, 0.0], "reason": "y"}])
+
+    def test_overlapping_entries_for_a_container_and_a_unit_below_it_are_fine(self):
+        sel = self.run_select([{"path": "Root/Props/Stack", "reason": "x"}, {"path": "Root/Props/Stack/C", "reason": "y"}])
+        self.assertEqual(set(sel.excluded_tf_ids), {self.n["c"], self.n["d"]})
+        self.assertEqual(sel.report["excluded"], 2)
+
+    def test_excluding_everything_selects_no_unit(self):
+        with self.assertRaisesRegex(HardExtractError, "selects no unit .every selected unit is excluded"):
+            self.run_select([{"path": "Root/Props", "reason": "x"}, {"path": "Root/Variant", "reason": "y"}])
+
+    def test_the_exclusion_comes_after_twin_matching(self):
+        # X sorts first and takes the reference twin; excluding X must not hand that twin to Y
+        level = Level()
+        group = level.add("Group", level.add("Root"))
+        x = prop(level, "Cup", group, pos=(1.0, 0.0, 0.0))
+        y = prop(level, "Cup (1)", group, pos=(1.0, 0.0, 0.0))
+        prop(level, "Keeper", group, pos=(99.0, 0.0, 0.0))
+        reference = Level()
+        reference.add("Pad")
+        prop(reference, "Cup", reference.add("Group", reference.add("Root")), pos=(1.0, 0.0, 0.0))
+        graph, ref_graph = level.graph(), reference.graph()
+        sel = SS.select_nodes(record(roots=["Root"], skip_twins_of=324,
+                                     exclude=[{"path": "Root/Group/Cup (1)", "reason": "x"}]), graph, ref_graph)
+        # Cup took the twin, so Cup (1) was a selected unit and the exclusion could drop it
+        self.assertEqual(set(sel.twins), {x})
+        self.assertEqual(sel.excluded_tf_ids, (y,))
+        with self.assertRaisesRegex(HardExtractError, "drops no unit"):
+            SS.select_nodes(record(roots=["Root"], skip_twins_of=324,
+                                   exclude=[{"path": "Root/Group/Cup", "reason": "x"}]), graph, ref_graph)
+
+    def test_the_exclusion_drops_imported_twin_descendants_too(self):
+        def make():
+            candidate, reference = Level(), Level()
+            root = candidate.add("Root")
+            holder = candidate.add("Holder", root)
+            lamp_root, (spot,) = lamp(candidate, holder, lights=[("Spot", (0.0, -1.0, 0.0))])
+            prop(candidate, "Keeper", root, pos=(99.0, 0.0, 0.0))
+            reference.add("Pad")
+            lamp(reference, reference.add("Holder", reference.add("Root")))
+            return candidate.graph(), reference.graph(), holder, lamp_root, spot
+        graph, ref_graph, holder, lamp_root, spot = make()
+        base = SS.select_nodes(record(roots=["Root"], skip_twins_of=324, twin_descendants="import_missing"),
+                               graph, ref_graph)
+        self.assertEqual(base.descendant_tf_ids, (spot,))
+        for path in ("Root/Holder", "Root/Holder/Lamp", "Root/Holder/Lamp/Spot"):
+            with self.subTest(path=path):
+                sel = SS.select_nodes(record(roots=["Root"], skip_twins_of=324, twin_descendants="import_missing",
+                                             exclude=[{"path": path, "reason": "x"}]), graph, ref_graph)
+                self.assertEqual(sel.excluded_tf_ids, (spot,))
+                self.assertEqual(sel.descendant_tf_ids, (spot,), "it was imported, then dropped again")
+                self.assertEqual((sel.twin_carrier_tf_ids, sel.twin_carrier_go_ids), ((), frozenset()))
+                self.assertNotIn(lamp_root, sel.node_tf_ids, "no twin carrier without a surviving descendant")
+                self.assertNotIn(holder, sel.node_tf_ids)
+                self.assertNotIn(spot, sel.unit_tf_ids)
+                report = sel.report
+                self.assertEqual((report["excluded"], report["twin_descendants_added"], report["twin_descendant_paths"],
+                                  report["twin_carrier_ids"]), (1, 1, ["Root/Holder/Lamp/Spot"], []))
+                self.assertEqual(report["rules"]["roots:Root"], counters(1, 1, 1, 1))
+                self.assertEqual(report["units"], 1)
+
+    def test_an_exclusion_naming_a_unit_part_that_was_not_imported_is_refused(self):
+        # without import_missing the light is inside the skipped lamp unit, so it cannot be named
+        candidate, reference = Level(), Level()
+        root = candidate.add("Root")
+        lamp(candidate, candidate.add("Holder", root), lights=[("Spot", (0.0, -1.0, 0.0))])
+        prop(candidate, "Keeper", root, pos=(99.0, 0.0, 0.0))
+        reference.add("Pad")
+        lamp(reference, reference.add("Holder", reference.add("Root")))
+        rec = record(roots=["Root"], skip_twins_of=324, exclude=[{"path": "Root/Holder/Lamp/Spot", "reason": "x"}])
+        with self.assertRaisesRegex(HardExtractError, "points inside the unit"):
+            SS.select_nodes(rec, candidate.graph(), reference.graph())
+
+    def test_each_rule_counts_its_own_exclusions(self):
+        sel = self.run_select([{"path": "Root/Props/A", "reason": "x"}, {"path": "Root/Variant/Crate", "at": [10, 0, 0],
+                                                                           "reason": "y"}],
+                              roots=["Root/Props", "Root/Variant"])
+        self.assertEqual(sel.report["rules"], {"roots:Root/Props": counters(4, 0, 1), "roots:Root/Variant": counters(3, 0, 1)})
+        self.assertEqual(sel.report["units"], 5)
+        self.assertEqual(sum(v["selected"] + v["descendants_added"] - v["excluded"] for v in sel.report["rules"].values()),
+                         sel.report["units"])
+
+    def test_an_excluded_imported_descendant_counts_for_the_rule_that_claimed_its_unit(self):
+        # two rules, each claims one twin-skipped lamp that imports a Spot; naming a Spot moves only the counters of
+        # the rule that claimed the lamp it sits in (the descendant is not a claimed unit root itself)
+        candidate, reference = Level(), Level()
+        root = candidate.add("Root")
+        left, right = candidate.add("Left", root), candidate.add("Right", root)
+        lamp(candidate, left, lights=[("Spot", (0.0, -1.0, 0.0))])
+        prop(candidate, "KeeperL", left, pos=(97.0, 0.0, 0.0))
+        lamp(candidate, right, pos=(5.0, 0.0, 0.0), lights=[("Spot", (0.0, -1.0, 0.0))])
+        prop(candidate, "KeeperR", right, pos=(98.0, 0.0, 0.0))
+        reference.add("Pad")
+        reference_root = reference.add("Root")
+        lamp(reference, reference.add("Left", reference_root))
+        lamp(reference, reference.add("Right", reference_root), pos=(5.0, 0.0, 0.0))
+        graph, ref_graph = candidate.graph(), reference.graph()
+        left_key, right_key = "roots:Root/Left", "roots:Root/Right"
+        spots = {"left": {"path": "Root/Left/Lamp/Spot", "reason": "x"},
+                 "right": {"path": "Root/Right/Lamp/Spot", "reason": "y"}}
+        for named, expected in ((("left",), (1, 0)), (("right",), (0, 1)), (("left", "right"), (1, 1)), ((), (0, 0))):
+            with self.subTest(named=named):
+                rec = record(roots=["Root/Left", "Root/Right"], skip_twins_of=324, twin_descendants="import_missing",
+                             exclude=[spots[n] for n in named])
+                if not named:
+                    del rec["select"]["exclude"]
+                report = SS.select_nodes(rec, graph, ref_graph).report
+                self.assertEqual(report["rules"], {left_key: counters(1, 1, expected[0], 1),
+                                                   right_key: counters(1, 1, expected[1], 1)})
+                self.assertEqual((report["excluded"], report["twin_descendants_added"], report["units"]),
+                                 (sum(expected), 2, 4 - sum(expected)))
+                self.assertEqual(report["twin_descendant_paths"], ["Root/Left/Lamp/Spot", "Root/Right/Lamp/Spot"],
+                                 "the paths report what was imported, before the exclusion")
+
+    def test_exclude_entries_counts_the_entries_not_the_dropped_units(self):
+        # one container entry drops C and D (two units), one unit entry drops A: 2 entries, 3 units
+        sel = self.run_select([{"path": "Root/Props/Stack", "reason": "a prefab instance"},
+                               {"path": "Root/Props/A", "reason": "dup"}])
+        self.assertEqual(set(sel.excluded_tf_ids), {self.n["a"], self.n["c"], self.n["d"]})
+        self.assertEqual((sel.report["excluded"], sel.report["exclude_entries"]), (3, 2))
+        self.assertEqual(sel.report["rules"], {"roots:Root": counters(7, 0, 3)})
+        # no entries at all: both counters are 0, and the key is reported nevertheless
+        none = SS.select_nodes(record(roots=["Root"]), self.graph).report
+        self.assertEqual((none["excluded"], none["exclude_entries"]), (0, 0))
+
+    def test_results_do_not_depend_on_table_order(self):
+        rec = record(roots=["Root"], exclude=[{"path": "Root/Props/Stack", "reason": "x"},
+                                              {"path": "Root/Variant/Crate", "at": [30.0, 0.0, 0.0], "reason": "y"}])
+        base = SS.select_nodes(rec, self.level.graph())
+        for seed in range(6):
+            self.assertEqual(SS.select_nodes(rec, self.level.graph(seed)), base, seed)
+
+
 class StructureProblemsTests(unittest.TestCase):
-    def selection(self):
-        return NS(go_ids=frozenset((1, 2, 3)), carrier_go_ids=frozenset((1,)))
+    def selection(self, twin_carriers=()):
+        return NS(go_ids=frozenset((1, 2, 3)), carrier_go_ids=frozenset((1, *twin_carriers)),
+                  twin_carrier_go_ids=frozenset(twin_carriers))
 
     def scene(self):
         return {"scene_name": "S", "objects": [
@@ -747,6 +1380,26 @@ class StructureProblemsTests(unittest.TestCase):
             with self.subTest(label):
                 problems = SS.structure_problems(scene, self.selection())
                 self.assertTrue(any(expected in p for p in problems), problems)
+
+    def test_twin_carriers_are_emitted_bare_like_every_other_carrier(self):
+        # id 2 is a twin carrier here (its source has a LODGroup); extract_map emits it without components
+        scene = self.scene()
+        scene["objects"][1]["components"] = []
+        scene["objects"][1]["name"] = "stand-in"
+        scene["objects"][2]["components"] = [{"type": "MeshRenderer"}]
+        self.assertEqual(SS.structure_problems(scene, self.selection(twin_carriers=(2,))), [])
+        # a component that survived on it is named as a twin carrier defect, and only there
+        scene["objects"][1]["components"] = [{"type": "LODGroup", "lods": [{"renderer_object_ids": ["3"]}]}]
+        problems = SS.structure_problems(scene, self.selection(twin_carriers=(2,)))
+        self.assertEqual(len(problems), 1)
+        self.assertIn("twin carrier has components ['LODGroup']", problems[0])
+        # a LODGroup on a unit that is not a carrier stays fine
+        self.assertEqual(SS.structure_problems(scene, self.selection()), [])
+
+    def test_a_twin_carrier_must_be_a_carrier(self):
+        selection = NS(go_ids=frozenset((1, 2, 3)), carrier_go_ids=frozenset((1,)), twin_carrier_go_ids=frozenset((2,)))
+        problems = SS.structure_problems(self.scene(), selection)
+        self.assertTrue(any("are not carriers" in p for p in problems), problems)
 
 
 # --------------------------------------------------------------------------
@@ -924,66 +1577,262 @@ HALL = "roots:SBG_Arena_Airpit_Main_hall/"
 HALL_REGION = "region_roots:SBG_Arena_Airpit_Main_hall/"
 LIGHT = "roots:SBG_Airpit_Light/OO/"
 LIGHT_REGION = "region_roots:SBG_Airpit_Light/OO/"
-# Selection pins of the two AirPit partial scenes against Arena 0.6.0 (level38 vs level324, level37 vs
-# level325). The shop, projection and tier-2 group counts reproduce the design dry run; DOORS and the
-# outline-box projection decals were added to it afterwards, and the two renderer-less spray_02 decal
-# quads (PROJECTION/OUTDOOR/FIELD) came with the decal unit rule (+2 objects, +2 units, PROJECTION 97).
-MAIN_HALL_PINS = {"objects": 7118, "units": 1446, "carriers": 85, "twins": 544, "dropped_script_owners": 0,
-                  "go_ids_sha256": "d73986aa20321399d1bf679a21ff15680c23b472902ee5d250e2c41e9e582958",
-                  "rules": {HALL + "OO/PROPS/INDOOR/SHOPS": (1148, 30), "roots:PROJECTION/INDOOR/SHOPS": (104, 92),
-                            HALL + "SOO_LOD0/Airport_Shop_BS": (1, 0), HALL + "SOO_LOD0/DonB_Ramen": (1, 0),
-                            HALL + "SOO_LOD0/LP_Shop": (1, 0), HALL + "SOO_LOD0/LP_Defile": (1, 0),
-                            HALL + "SOO_LOD0/TH_Roll_door_01": (1, 0), HALL + "SOO_LOD0/TH_Roll_door_02": (1, 0),
-                            HALL + "SOO_LOD0/TH_Roll_door_03": (1, 0), HALL + "SOO_LOD0/TH_Shop_indoor": (1, 0),
-                            HALL + "SOO_LOD0/DOORS": (28, 0), "region_roots:PROJECTION": (97, 262),
-                            HALL_REGION + "OO/PROPS/INDOOR/BACK": (24, 67), HALL_REGION + "OO/PROPS/INDOOR/FRONT": (22, 35),
-                            HALL_REGION + "OO/PROPS/INDOOR/LEFT": (3, 10), HALL_REGION + "OO/PROPS/INDOOR/RIGHT": (4, 9),
-                            HALL_REGION + "OO/PROPS/OUTDOOR/FIELD": (3, 7), HALL_REGION + "OO/PROPS/FLOOR_DAMAGE ": (5, 32)}}
-LIGHT_PINS = {"objects": 962, "units": 187, "carriers": 26, "twins": 15, "dropped_script_owners": 0,
-              "go_ids_sha256": "0bbb13dca87d5037d79c8cb8de4dca3767fed509da664d659802bab4f5b5742d",
-              "rules": {LIGHT + "ChinaPlace*": (27, 0), LIGHT + "BurgerSpot*": (37, 0), LIGHT + "HELLFINGER": (34, 0),
-                        LIGHT + "LouiPeeton*": (25, 2), LIGHT_REGION + "GLOBAL GI": (8, 3), "region_roots:NO_CULL": (6, 1),
-                        LIGHT_REGION + "ShadowPlanes": (47, 8), "region_roots:PUDDLES": (1, 0),
-                        LIGHT_REGION + "FogSheets": (2, 1)}}
+
+# The select records of package v7 (phase 1, before ``twin_descendants`` and ``exclude`` existed). They stay here
+# as the regression for records without the new keys: they must keep reproducing the v7 selections whatever
+# tools/extract/plans/airpit.json holds today.
+V7_MAIN_HALL_SELECT = {
+    "schema": 1,
+    "reason": "phase 1 record (package v7)",
+    "skip_twins_of": 324,
+    "roots": [
+        "SBG_Arena_Airpit_Main_hall/OO/PROPS/INDOOR/SHOPS",
+        "PROJECTION/INDOOR/SHOPS",
+        "SBG_Arena_Airpit_Main_hall/SOO_LOD0/Airport_Shop_BS",
+        "SBG_Arena_Airpit_Main_hall/SOO_LOD0/DonB_Ramen",
+        "SBG_Arena_Airpit_Main_hall/SOO_LOD0/LP_Shop",
+        "SBG_Arena_Airpit_Main_hall/SOO_LOD0/LP_Defile",
+        "SBG_Arena_Airpit_Main_hall/SOO_LOD0/TH_Roll_door_01",
+        "SBG_Arena_Airpit_Main_hall/SOO_LOD0/TH_Roll_door_02",
+        "SBG_Arena_Airpit_Main_hall/SOO_LOD0/TH_Roll_door_03",
+        "SBG_Arena_Airpit_Main_hall/SOO_LOD0/TH_Shop_indoor",
+        "SBG_Arena_Airpit_Main_hall/SOO_LOD0/DOORS",
+    ],
+    "region_roots": [
+        {"path": "PROJECTION", "regions": ["outline box"]},
+        {"path": "SBG_Arena_Airpit_Main_hall/OO/PROPS/INDOOR/BACK", "regions": ["NW shop", "NE shop", "SE shop", "SW shop"]},
+        {"path": "SBG_Arena_Airpit_Main_hall/OO/PROPS/INDOOR/FRONT", "regions": ["NW shop", "NE shop", "SE shop", "SW shop"]},
+        {"path": "SBG_Arena_Airpit_Main_hall/OO/PROPS/INDOOR/LEFT", "regions": ["NW shop", "NE shop", "SE shop", "SW shop"]},
+        {"path": "SBG_Arena_Airpit_Main_hall/OO/PROPS/INDOOR/RIGHT", "regions": ["NW shop", "NE shop", "SE shop", "SW shop"]},
+        {"path": "SBG_Arena_Airpit_Main_hall/OO/PROPS/OUTDOOR/FIELD", "regions": ["NW shop", "NE shop", "SE shop", "SW shop"]},
+        {"path": "SBG_Arena_Airpit_Main_hall/OO/PROPS/FLOOR_DAMAGE ", "regions": ["NW shop", "NE shop", "SE shop", "SW shop"]},
+    ],
+    "regions": [
+        {"name": "outline box", "min": [-57.0, -5.0, -83.0], "max": [37.0, 12.0, 70.0]},
+        {"name": "NW shop", "min": [-57.5, -1.5, 13.5], "max": [-33.5, 9.0, 44.5]},
+        {"name": "NE shop", "min": [11.5, -1.5, 6.5], "max": [34.5, 9.0, 44.5]},
+        {"name": "SE shop", "min": [9.5, -1.5, -45.5], "max": [33.5, 9.0, -14.5]},
+        {"name": "SW shop", "min": [-57.5, -1.5, -41.5], "max": [-26.5, 9.0, -7.5]},
+    ],
+}
+
+V7_LIGHT_SELECT = {
+    "schema": 1,
+    "reason": "phase 1 record (package v7)",
+    "skip_twins_of": 325,
+    "roots": [
+        "SBG_Airpit_Light/OO/ChinaPlace*",
+        "SBG_Airpit_Light/OO/BurgerSpot*",
+        "SBG_Airpit_Light/OO/HELLFINGER",
+        "SBG_Airpit_Light/OO/LouiPeeton*",
+    ],
+    "region_roots": [
+        "SBG_Airpit_Light/OO/GLOBAL GI",
+        "NO_CULL",
+        "SBG_Airpit_Light/OO/ShadowPlanes",
+        "PUDDLES",
+        "SBG_Airpit_Light/OO/FogSheets",
+    ],
+    "regions": [
+        {"name": "NW shop", "min": [-57.5, -1.5, 13.5], "max": [-33.5, 9.0, 44.5]},
+        {"name": "NE shop", "min": [11.5, -1.5, 6.5], "max": [34.5, 9.0, 44.5]},
+        {"name": "SE shop", "min": [9.5, -1.5, -45.5], "max": [33.5, 9.0, -14.5]},
+        {"name": "SW shop", "min": [-57.5, -1.5, -41.5], "max": [-26.5, 9.0, -7.5]},
+    ],
+}
+
+V7_RECORDS = {38: ("Arena_Airpit_Main_hall", V7_MAIN_HALL_SELECT), 37: ("Arena_Airpit_Light", V7_LIGHT_SELECT)}
 
 
-@unittest.skipUnless(Path(ARENA_SOURCE, "globalgamemanagers").is_file(), "Arena source not reachable from this machine")
-class LiveSelectionTests(unittest.TestCase):
-    """The airpit.json selections against the installed Arena: every root resolves and the counts are the reviewed ones."""
+def pin_rules(**rules):
+    """{rule key: (selected, twin_skipped[, excluded, descendants_added])} padded to four counters."""
+    return {key: tuple(values) + (0,) * (4 - len(values)) for key, values in rules.items()}
 
-    @classmethod
-    def setUpClass(cls):
+
+# Selection pins of the AirPit partial scenes against Arena 0.6.0 (level38 vs level324, level37 vs level325).
+# V7: the shop, projection and tier-2 group counts reproduce the design dry run; DOORS and the outline-box
+# projection decals were added to it afterwards, and the two renderer-less spray_02 decal quads
+# (PROJECTION/OUTDOOR/FIELD) came with the decal unit rule (+2 objects, +2 units, PROJECTION 97).
+MAIN_HALL_V7_PINS = {"objects": 7118, "units": 1446, "carriers": 85, "twins": 544, "dropped_script_owners": 0,
+                     "go_ids_sha256": "d73986aa20321399d1bf679a21ff15680c23b472902ee5d250e2c41e9e582958",
+                     "rules": pin_rules(**{HALL + "OO/PROPS/INDOOR/SHOPS": (1148, 30), "roots:PROJECTION/INDOOR/SHOPS": (104, 92),
+                                           HALL + "SOO_LOD0/Airport_Shop_BS": (1, 0), HALL + "SOO_LOD0/DonB_Ramen": (1, 0),
+                                           HALL + "SOO_LOD0/LP_Shop": (1, 0), HALL + "SOO_LOD0/LP_Defile": (1, 0),
+                                           HALL + "SOO_LOD0/TH_Roll_door_01": (1, 0), HALL + "SOO_LOD0/TH_Roll_door_02": (1, 0),
+                                           HALL + "SOO_LOD0/TH_Roll_door_03": (1, 0), HALL + "SOO_LOD0/TH_Shop_indoor": (1, 0),
+                                           HALL + "SOO_LOD0/DOORS": (28, 0), "region_roots:PROJECTION": (97, 262),
+                                           HALL_REGION + "OO/PROPS/INDOOR/BACK": (24, 67), HALL_REGION + "OO/PROPS/INDOOR/FRONT": (22, 35),
+                                           HALL_REGION + "OO/PROPS/INDOOR/LEFT": (3, 10), HALL_REGION + "OO/PROPS/INDOOR/RIGHT": (4, 9),
+                                           HALL_REGION + "OO/PROPS/OUTDOOR/FIELD": (3, 7), HALL_REGION + "OO/PROPS/FLOOR_DAMAGE ": (5, 32)})}
+LIGHT_V7_PINS = {"objects": 962, "units": 187, "carriers": 26, "twins": 15, "dropped_script_owners": 0,
+                 "go_ids_sha256": "0bbb13dca87d5037d79c8cb8de4dca3767fed509da664d659802bab4f5b5742d",
+                 "rules": pin_rules(**{LIGHT + "ChinaPlace*": (27, 0), LIGHT + "BurgerSpot*": (37, 0), LIGHT + "HELLFINGER": (34, 0),
+                                       LIGHT + "LouiPeeton*": (25, 2), LIGHT_REGION + "GLOBAL GI": (8, 3), "region_roots:NO_CULL": (6, 1),
+                                       LIGHT_REGION + "ShadowPlanes": (47, 8), "region_roots:PUDDLES": (1, 0),
+                                       LIGHT_REGION + "FogSheets": (2, 1)})}
+# V8 (package v8): the whole recoverable decoration of level38 (decoration box x -60..40, y -5..20, z -85..91,
+# 208 exclusions, twin descendants imported) and of level37. Counters are (selected, twin_skipped, excluded,
+# descendants_added) with ``selected`` counted before the later steps, so selected + descendants_added - excluded
+# over all rules is the unit count.
+MAIN_HALL_V8_PINS = {"objects": 13006, "units": 3547, "carriers": 245, "twins": 3212, "dropped_script_owners": 0,
+                     "go_ids_sha256": "d63155ffe9936e40e836c4eb802ad38f0ef6b3caa11f954bda07dc45f086507d",
+                     "twin_carriers": 4, "excluded": 632, "exclude_entries": 208, "twin_descendants_added": 4,
+                     "rules": pin_rules(**{HALL + "OO/PROPS/INDOOR/SHOPS": (1148, 30), "roots:PROJECTION/INDOOR/SHOPS": (104, 92),
+                                           HALL + "SOO_LOD0/Airport_Shop_BS": (1, 0), HALL + "SOO_LOD0/DonB_Ramen": (1, 0),
+                                           HALL + "SOO_LOD0/LP_Shop": (1, 0), HALL + "SOO_LOD0/LP_Defile": (1, 0),
+                                           HALL + "SOO_LOD0/TH_Roll_door_01": (1, 0), HALL + "SOO_LOD0/TH_Roll_door_02": (1, 0),
+                                           HALL + "SOO_LOD0/TH_Roll_door_03": (1, 0), HALL + "SOO_LOD0/TH_Shop_indoor": (1, 0),
+                                           HALL + "SOO_LOD0/DOORS": (28, 0), "region_roots:PROJECTION": (123, 263),
+                                           HALL_REGION + "OO/PROPS": (1210, 1251, 161, 4), "region_roots:VARIANT": (1534, 1555, 455),
+                                           "region_roots:PROPSnoCulling": (20, 21, 16)})}
+LIGHT_V8_PINS = {"objects": 1538, "units": 298, "carriers": 37, "twins": 268, "dropped_script_owners": 0,
+                 "go_ids_sha256": "153847417c4427b3e6882b11a58a66932aeef63df6bb9857c76b976c1857c022",
+                 "twin_carriers": 5, "excluded": 9, "exclude_entries": 9, "twin_descendants_added": 22,
+                 "rules": pin_rules(**{LIGHT + "ChinaPlace*": (27, 0), LIGHT + "BurgerSpot*": (37, 0), LIGHT + "HELLFINGER": (34, 0),
+                                       LIGHT + "LouiPeeton*": (25, 2), LIGHT_REGION + "GLOBAL GI": (19, 88), "region_roots:NO_CULL": (12, 7, 2, 2),
+                                       LIGHT_REGION + "ShadowPlanes": (73, 47, 2, 2), "region_roots:PUDDLES": (1, 14),
+                                       LIGHT_REGION + "FogSheets": (2, 7), LIGHT_REGION + "Airport_lamp_02": (45, 0),
+                                       LIGHT_REGION + "LAMPS_GENERIC*": (4, 0), LIGHT_REGION + "AIRBUS": (4, 10, 4, 4),
+                                       LIGHT_REGION + "AIRPORT LAMPS": (0, 26, 1, 10), LIGHT_REGION + "BACK_AIRPORT_LAMPS": (0, 36, 0, 2),
+                                       LIGHT_REGION + "LUM_LAMPS": (1, 22, 0, 2), LIGHT_REGION + "Point Light": (0, 1),
+                                       LIGHT_REGION + "chemlight_emissive": (1, 2), LIGHT_REGION + "Lamps_ceiling - DISABLED": (0, 6)})}
+# What the 324 / 325 twins lack (phase 1b census): the 20 Lights and 2 ShadowPlaneBox renderer children below
+# twin-skipped lamp units of level37, and the car-shadow decals of four baggage carts of level38.
+LIGHT_DESC = [
+    "NO_CULL/Old_Bunker_Light_cookie (8)/BaseLight",
+    "NO_CULL/Old_Bunker_Light_cookie (8)/MainLight",
+    "SBG_Airpit_Light/OO/AIRBUS/Old_Bunker_Light_cookie (6)/BaseLight",
+    "SBG_Airpit_Light/OO/AIRBUS/Old_Bunker_Light_cookie (6)/MainLight",
+    "SBG_Airpit_Light/OO/AIRBUS/Old_Bunker_Light_cookie (9)/BaseLight ",
+    "SBG_Airpit_Light/OO/AIRBUS/Old_Bunker_Light_cookie (9)/MainLight",
+    "SBG_Airpit_Light/OO/AIRPORT LAMPS/Airport_lamp (72)/Spot Light (2)",
+    "SBG_Airpit_Light/OO/AIRPORT LAMPS/Airport_lamp (79)/Spot Light (11)",
+    "SBG_Airpit_Light/OO/AIRPORT LAMPS/Airport_lamp (79)/Spot Light (12)",
+    "SBG_Airpit_Light/OO/AIRPORT LAMPS/Airport_lamp (79)/Spot Light (13)",
+    "SBG_Airpit_Light/OO/AIRPORT LAMPS/Airport_lamp (79)/Spot Light (15)",
+    "SBG_Airpit_Light/OO/AIRPORT LAMPS/Airport_lamp (79)/Spot Light (4)",
+    "SBG_Airpit_Light/OO/AIRPORT LAMPS/Airport_lamp (79)/Spot Light (6)",
+    "SBG_Airpit_Light/OO/AIRPORT LAMPS/Airport_lamp (79)/Spot Light (7)",
+    "SBG_Airpit_Light/OO/AIRPORT LAMPS/Airport_lamp (79)/Spot Light (8)",
+    "SBG_Airpit_Light/OO/AIRPORT LAMPS/Airport_lamp (79)/Spot Light (9)",
+    "SBG_Airpit_Light/OO/BACK_AIRPORT_LAMPS/Airport_lamp (102)/Spot Light (1)",
+    "SBG_Airpit_Light/OO/BACK_AIRPORT_LAMPS/Airport_lamp (103)/Spot Light (1)",
+    "SBG_Airpit_Light/OO/LUM_LAMPS/lab_lamp_lam_ceiling_destroyable (3)/Spot Light",
+    "SBG_Airpit_Light/OO/LUM_LAMPS/lab_lamp_lam_ceiling_destroyable (3)/Spot Light",
+    "SBG_Airpit_Light/OO/ShadowPlanes/ShadowPlaneBox (125)/Plane_LOD0",
+    "SBG_Airpit_Light/OO/ShadowPlanes/ShadowPlaneBox (140)/Plane_LOD0",
+]
+HALL_DESC = [
+    "SBG_Arena_Airpit_Main_hall/OO/PROPS/OUTDOOR/FIELD/Baggage_cart_02_D (10)/decal_carshadow (4)",
+    "SBG_Arena_Airpit_Main_hall/OO/PROPS/OUTDOOR/FIELD/Baggage_cart_02_D (14)/decal_carshadow (5)",
+    "SBG_Arena_Airpit_Main_hall/OO/PROPS/OUTDOOR/FIELD/Baggage_cart_02_D (15)/decal_carshadow (7)",
+    "SBG_Arena_Airpit_Main_hall/OO/PROPS/OUTDOOR/FIELD/Baggage_cart_02_D (16)/decal_carshadow (7)",
+]
+
+
+_LIVE = {}
+
+
+def arena_graph():
+    """graph(index) over the installed Arena, built once and shared by every live test class."""
+    if not _LIVE:
         import contextlib
         import io
         import extract_map as em
-        from source_plan import PLAN_ROOT, load_plan, partial_scene_records
+        from source_plan import PLAN_ROOT, load_plan
         plan = load_plan(PLAN_ROOT / "airpit.json")
         with contextlib.redirect_stderr(io.StringIO()):
             env, exact = em.load_environment(Path(ARENA_SOURCE), plan)
-        graphs = cls.graphs = {}
+        graphs = {}
 
         def graph(index):
             if index not in graphs:
                 graphs[index] = SS.build_graph(env.files[exact[index]["level"]])
             return graphs[index]
-        cls.selections = {r["name"]: SS.select_nodes(r, graph(r["index"]), graph(r["select"]["skip_twins_of"]))
-                          for r in partial_scene_records(plan)}
+        _LIVE["graph"] = graph
+    return _LIVE["graph"]
 
-    def check(self, name, pins):
-        sel = self.selections[name]
+
+class LiveSelectionCase(unittest.TestCase):
+    def check(self, sel, pins):
         report = sel.report
         keys = ("objects", "units", "carriers", "dropped_script_owners", "go_ids_sha256")
         self.assertEqual({k: report[k] for k in keys}, {k: pins[k] for k in keys})
-        self.assertEqual({k: (v["selected"], v["twin_skipped"]) for k, v in report["rules"].items()}, pins["rules"])
+        self.assertEqual({k: (v["selected"], v["twin_skipped"], v["excluded"], v["descendants_added"])
+                          for k, v in report["rules"].items()}, pins["rules"])
         self.assertEqual(len(sel.twins), pins["twins"])
         self.assertEqual(report["objects"], len(sel.node_tf_ids))
         self.assertEqual(report["objects"], len(sel.go_ids))
+        self.assertEqual(report["units"], len(sel.unit_tf_ids))
+        self.assertEqual(report["units"], sum(v["selected"] + v["descendants_added"] - v["excluded"]
+                                              for v in report["rules"].values()))
+        self.assertEqual(report["excluded"], sum(v["excluded"] for v in report["rules"].values()))
+        self.assertEqual(report["twin_descendants_added"], sum(v["descendants_added"] for v in report["rules"].values()))
+        self.assertEqual(len(report["twin_carrier_ids"]), report["twin_carriers"])
+        self.assertEqual(report["twin_carrier_ids"], sorted(report["twin_carrier_ids"], key=int))
+        for key in ("twin_carriers", "excluded", "exclude_entries", "twin_descendants_added"):
+            self.assertEqual(report[key], pins.get(key, 0), key)
+        self.assertEqual(len(report["twin_descendant_paths"]), report["twin_descendants_added"])
+        self.assertEqual(len(sel.twin_carrier_tf_ids), report["twin_carriers"])
+
+
+@unittest.skipUnless(Path(ARENA_SOURCE, "globalgamemanagers").is_file(), "Arena source not reachable from this machine")
+class LiveLegacyRecordTests(LiveSelectionCase):
+    """Records without ``twin_descendants`` / ``exclude`` still select exactly what the v7 package holds."""
+
+    @classmethod
+    def setUpClass(cls):
+        graph = arena_graph()
+        cls.selections = {name: SS.select_nodes({"name": name, "index": index, "select": select},
+                                                graph(index), graph(select["skip_twins_of"]))
+                          for index, (name, select) in V7_RECORDS.items()}
 
     def test_main_hall(self):
-        self.check("Arena_Airpit_Main_hall", MAIN_HALL_PINS)
+        self.check(self.selections["Arena_Airpit_Main_hall"], MAIN_HALL_V7_PINS)
+
+    def test_light(self):
+        self.check(self.selections["Arena_Airpit_Light"], LIGHT_V7_PINS)
+
+    def test_the_new_keys_are_empty(self):
+        for sel in self.selections.values():
+            self.assertEqual((sel.twin_carrier_tf_ids, sel.descendant_tf_ids, sel.excluded_tf_ids,
+                              sel.scope_go_ids == sel.go_ids), ((), (), (), True))
+
+
+@unittest.skipUnless(Path(ARENA_SOURCE, "globalgamemanagers").is_file(), "Arena source not reachable from this machine")
+class LiveSelectionTests(LiveSelectionCase):
+    """The airpit.json selections against the installed Arena: every root resolves and the counts are the reviewed ones.
+
+    ``plan_path`` can name a candidate plan to run through the same checks. The plan holds either the v7 records (no
+    ``exclude`` in the Main_hall select) or the v8 ones; the checks of the other generation skip."""
+    plan_path = None
+
+    @classmethod
+    def setUpClass(cls):
+        from source_plan import PLAN_ROOT, load_plan, partial_scene_records
+        graph = arena_graph()
+        cls.graph = staticmethod(graph)
+        plan = load_plan(cls.plan_path or PLAN_ROOT / "airpit.json")
+        cls.records = {r["name"]: r for r in partial_scene_records(plan)}
+        cls.selections = {name: SS.select_nodes(r, graph(r["index"]), graph(r["select"]["skip_twins_of"]))
+                          for name, r in cls.records.items()}
+        cls.v8 = "exclude" in cls.records["Arena_Airpit_Main_hall"]["select"]
+        cls.legacy = {name: SS.select_nodes({"name": name, "index": index, "select": select},
+                                            graph(index), graph(select["skip_twins_of"]))
+                      for index, (name, select) in V7_RECORDS.items()}
+
+    def pins(self, v7, v8):
+        return v8 if self.v8 else v7
+
+    def need_v8(self):
+        if not self.v8:
+            self.skipTest("the plan still holds the v7 records")
+
+    def test_main_hall(self):
+        self.check(self.selections["Arena_Airpit_Main_hall"], self.pins(MAIN_HALL_V7_PINS, MAIN_HALL_V8_PINS))
 
     def test_main_hall_takes_the_renderer_less_spray_decals_of_the_outline_box(self):
-        graph = self.graphs[38]
+        graph = self.graph(38)
         sel = self.selections["Arena_Airpit_Main_hall"]
         bare = sorted(graph.nodes[t].path for t in sel.unit_tf_ids if not graph.nodes[t].types)
         self.assertEqual(bare, ["PROJECTION/OUTDOOR/FIELD/spray_02 (59)", "PROJECTION/OUTDOOR/FIELD/spray_02 (62)"])
@@ -992,7 +1841,73 @@ class LiveSelectionTests(unittest.TestCase):
                 self.assertEqual(graph.nodes[tf_id].scripts, tuple(SS.UNIT_SCRIPTS))
 
     def test_light(self):
-        self.check("Arena_Airpit_Light", LIGHT_PINS)
+        self.check(self.selections["Arena_Airpit_Light"], self.pins(LIGHT_V7_PINS, LIGHT_V8_PINS))
+
+    def test_the_v7_selection_is_a_subset_of_the_plan_selection(self):
+        for name, sel in self.selections.items():
+            old = self.legacy[name]
+            with self.subTest(name):
+                self.assertLessEqual(set(old.unit_tf_ids), set(sel.unit_tf_ids))
+                self.assertLessEqual(set(old.node_tf_ids), set(sel.node_tf_ids))
+
+    def test_every_twin_carrier_is_script_free_so_the_decal_refresh_sees_what_extraction_saw(self):
+        # extract_decals.refresh scopes the augmenters to the object ids of the scene JSON, twin carriers
+        # included; that equals the extraction scope only while no twin carrier owns a MonoBehaviour
+        for name, sel in self.selections.items():
+            graph = self.graph(self.records[name]["index"])
+            for tf_id in sel.twin_carrier_tf_ids:
+                with self.subTest(graph.nodes[tf_id].path):
+                    self.assertEqual(graph.nodes[tf_id].scripts, ())
+
+    def test_v8_light_imports_the_lights_and_shadow_plane_parts_its_twins_lack(self):
+        self.need_v8()
+        sel = self.selections["Arena_Airpit_Light"]
+        graph = self.graph(37)
+        self.assertEqual(sel.report["twin_descendant_paths"], LIGHT_DESC)
+        self.assertEqual(Counter(graph.nodes[t].types for t in sel.descendant_tf_ids),
+                         {("Light",): 20, ("MeshFilter", "MeshRenderer"): 2})
+        # Nine of the 22 imports are excluded again (level325 replaced or disabled them on purpose); the twin
+        # carriers are recomputed from the surviving descendants, so an excluded import leaves no stand-in behind.
+        excluded = set(sel.excluded_tf_ids)
+        self.assertEqual(len(excluded & set(sel.descendant_tf_ids)), 9)
+        self.assertEqual(Counter(graph.nodes[t].types for t in excluded), {("Light",): 7, ("MeshFilter", "MeshRenderer"): 2})
+        kept = [t for t in sel.descendant_tf_ids if t not in excluded]
+        self.assertEqual(set(sel.twin_carrier_tf_ids), {graph.nodes[t].unit for t in kept})
+        self.assertLessEqual(set(sel.twin_carrier_tf_ids), set(sel.twins))
+
+    def test_v8_main_hall_imports_only_the_car_shadow_decals_its_twins_lack(self):
+        self.need_v8()
+        sel = self.selections["Arena_Airpit_Main_hall"]
+        self.assertEqual(sel.report["twin_descendant_paths"], HALL_DESC)
+        self.assertLessEqual(sel.report["twin_descendants_added"], 300, "the guard of the import: small parts only")
+
+    def test_v8_main_hall_exclusions_resolve_and_drop_the_census_units(self):
+        self.need_v8()
+        record = self.records["Arena_Airpit_Main_hall"]
+        entries = record["select"]["exclude"]
+        self.assertEqual(len(entries), 208)
+        self.assertTrue(all(e["reason"] for e in entries))
+        sel = self.selections["Arena_Airpit_Main_hall"]
+        self.assertEqual((sel.report["excluded"], sel.report["exclude_entries"]), (632, 208))
+        # the census run of phase 1b cut the decoration box at z 90 and imported no twin descendants
+        census = deepcopy(record)
+        census["select"]["twin_descendants"] = "skip"
+        for region in census["select"]["regions"]:
+            region["max"][2] = 90.0
+        sel = SS.select_nodes(census, self.graph(38), self.graph(record["select"]["skip_twins_of"]))
+        self.assertEqual({k: sel.report[k] for k in ("objects", "units", "carriers", "excluded")},
+                         {"objects": 12997, "units": 3542, "carriers": 241, "excluded": 632})
+        self.assertEqual(sel.report["go_ids_sha256"], "5648ec2a7805e8d1081943de6e8c8f5425f5d7ab881e4ea944887ff5b09da92a")
+
+    def test_v8_exclusions_are_the_only_difference_to_the_unexcluded_record(self):
+        self.need_v8()
+        record = deepcopy(self.records["Arena_Airpit_Main_hall"])
+        record["select"]["exclude"] = []
+        plain = SS.select_nodes(record, self.graph(38), self.graph(324))
+        sel = self.selections["Arena_Airpit_Main_hall"]
+        self.assertEqual(set(plain.unit_tf_ids) - set(sel.unit_tf_ids), set(sel.excluded_tf_ids))
+        self.assertEqual(set(sel.unit_tf_ids) - set(plain.unit_tf_ids), set())
+        self.assertEqual(len(sel.excluded_tf_ids), 632)
 
 
 class DigestTests(unittest.TestCase):

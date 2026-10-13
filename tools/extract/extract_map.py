@@ -8,18 +8,24 @@ Native features (original ballistic materials, NavMesh modifiers, static decals,
 culling, rain cover; PLAN-AIRPIT item 2) are opt-in and live in native_features.py:
        ... --native-features --target <SPT EscapeFromTarkov_Data>
 The plain invocation is unchanged and writes no native block. The accepted AirPit package
-(Arena 0.6.0, PLAN-AIRPIT item 5) is the native form written to work/extract/airpit-native-v7 (v7 = v6 + the furnished-shop partial scenes; v6 = v5 + native ambient audio, item 13);
+(Arena 0.6.0, PLAN-AIRPIT item 5) is the native form written to work/extract/airpit-native-v8 (v8 = v7 + the whole
+recoverable level38/37 decoration: twin descendants, exclusions and the wider decoration box; v7 = v6 + the
+furnished-shop partial scenes; v6 = v5 + native ambient audio, item 13);
 the superseded 0.5.4 spike package work/extract/airpit is never an --output.
 
 A plan scene record with ``select`` is a *partial scene* (scene_select.py): only the selected
 hierarchy of that level is written, the native augmenters see just those owners, and the
 manifest gains ``partial_scenes`` (``slice`` stays empty). Full scenes are processed exactly as
 before, in plan order; a partial scene always follows the full scene its twins are skipped against.
+The block lists the selection counters (``excluded``, ``exclude_entries``, ``twin_descendants_added`` and the
+sorted ``twin_descendant_paths`` next to the per-rule counters); twin carriers are written as bare GameObjects
+and, when twin descendants were imported, listed in ``twin_carrier_ids``.
 """
 from __future__ import annotations
 
 import argparse
 from collections import Counter, deque
+from contextlib import contextmanager
 import json
 from pathlib import Path
 import sys
@@ -157,6 +163,31 @@ def write_json(path: Path, value) -> None:
     path.write_text(json.dumps(value, indent=2, sort_keys=True, ensure_ascii=False, allow_nan=False), encoding="utf-8")
 
 
+@contextmanager
+def bare_game_objects(component_sets):
+    """Make ``EQ.extract_scene`` emit the GameObjects whose component id tuple is in ``component_sets`` bare.
+
+    A twin carrier (scene_select) stands in for a skipped unit: it keeps name, activity, layer and local
+    transform but must carry no component, and its mesh and materials must not be queued for export. The engine
+    builds components per GameObject from the id list of the GameObject, so the stand-in is recognised by that list.
+    """
+    sets = {tuple(ids) for ids in component_sets}
+    if not sets:
+        yield
+        return
+    original = EQ.build_components
+
+    def build(f, comp_ids, scene_idx, ctx):
+        if tuple(comp_ids) in sets:
+            return []
+        return original(f, comp_ids, scene_idx, ctx)
+    EQ.build_components = build
+    try:
+        yield
+    finally:
+        EQ.build_components = original
+
+
 def extract_partial_scene(record: dict, level_files: dict, graphs: dict, tags: list[str], ctx,
                           native: NF.NativeFeatureExtraction | None) -> tuple[dict, dict]:
     """Extract one partial scene; returns ``(scene JSON, manifest partial_scenes block)``.
@@ -164,9 +195,9 @@ def extract_partial_scene(record: dict, level_files: dict, graphs: dict, tags: l
     ``level_files`` maps a BuildSettings index to its UnityPy level file and ``graphs`` caches the
     scene_select graph per index (a reference level is read once). The selection comes from
     scene_select.select_nodes; the native augmenters run through a ScopedFile so that only
-    extracted owners are scanned, and the result is checked against the selection (every object
-    present, every parent and LOD renderer resolvable, carriers without components) before the
-    scene is accepted.
+    extracted owners are scanned (not the bare twin carriers, whose scripts belong to skipped units), and the
+    result is checked against the selection (every object present, every parent and LOD renderer resolvable,
+    carriers without components) before the scene is accepted.
     """
     def graph_of(index: int) -> SS.Graph:
         if index not in graphs:
@@ -174,13 +205,14 @@ def extract_partial_scene(record: dict, level_files: dict, graphs: dict, tags: l
         return graphs[index]
 
     twins_of = record["select"].get("skip_twins_of")
-    selection = SS.select_nodes(record, graph_of(record["index"]),
-                                graph_of(twins_of) if twins_of is not None else None)
+    graph = graph_of(record["index"])
+    selection = SS.select_nodes(record, graph, graph_of(twins_of) if twins_of is not None else None)
     file = level_files[record["index"]]
-    scene = EQ.extract_scene(record["index"], file, tags, list(selection.node_tf_ids), ctx)
+    with bare_game_objects(graph.nodes[t].components for t in selection.twin_carrier_tf_ids):
+        scene = EQ.extract_scene(record["index"], file, tags, list(selection.node_tf_ids), ctx)
     orphans: list[list[int]] = []
     if native is not None:
-        scoped = SS.ScopedFile(file, selection.go_ids)
+        scoped = SS.ScopedFile(file, selection.scope_go_ids)
         native.augment_scene(scene, scoped, ctx, record["name"])
         orphans = [list(pair) for pair in scoped.orphans]
     problems = SS.structure_problems(scene, selection)
@@ -189,13 +221,23 @@ def extract_partial_scene(record: dict, level_files: dict, graphs: dict, tags: l
                                   f"{problems[:5]} ({len(problems)} problem(s))")
     report = selection.report
     print(f"[extract_map] {record['name']}: partial scene of level{record['index']}: {report['units']} units, "
-          f"{report['carriers']} carriers, {len(selection.twins)} twin unit(s) of level{twins_of} skipped, "
-          f"{len(orphans)} ballistic orphan(s) hidden, {report['dropped_script_owners']} container(s) "
-          "with a dropped script", file=sys.stderr)
-    return scene, {"index": record["index"], "objects": report["objects"], "units": report["units"],
-                   "carriers": report["carriers"], "rules": report["rules"],
-                   "dropped_script_owners": report["dropped_script_owners"],
-                   "ballistic_orphans": orphans, "go_ids_sha256": report["go_ids_sha256"]}
+          f"{report['carriers']} carriers ({report.get('twin_carriers', 0)} twin), "
+          f"{len(selection.twins)} twin unit(s) of level{twins_of} skipped, "
+          f"{report['twin_descendants_added']} twin descendant(s) imported, {report['excluded']} unit(s) excluded "
+          f"by {report['exclude_entries']} entries, {len(orphans)} ballistic orphan(s) hidden, "
+          f"{report['dropped_script_owners']} container(s) with a dropped script", file=sys.stderr)
+    block = {"index": record["index"], "objects": report["objects"], "units": report["units"],
+             "carriers": report["carriers"], "rules": report["rules"],
+             "dropped_script_owners": report["dropped_script_owners"],
+             "ballistic_orphans": orphans, "go_ids_sha256": report["go_ids_sha256"],
+             "excluded": report["excluded"], "exclude_entries": report["exclude_entries"],
+             "twin_descendants_added": report["twin_descendants_added"],
+             "twin_descendant_paths": list(report["twin_descendant_paths"])}
+    if report["twin_descendants_added"]:
+        # the bare carriers of the imported descendants: their source nodes carry components the package lacks, so
+        # the source censuses of the validators must leave them out (validate/partial_scope.py, SceneScope)
+        block["twin_carrier_ids"] = list(report["twin_carrier_ids"])
+    return scene, block
 
 
 def extract(plan_path: Path, source: Path, output: Path | None, timestamp: str | None, census_only: bool,

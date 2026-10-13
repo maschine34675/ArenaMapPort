@@ -195,7 +195,10 @@ def refresh(package: Path, output: Path) -> int:
         level_file = src.level_files[idx]
         if name in partial:
             from scene_select import ScopedFile
-            level_file = ScopedFile(level_file, [int(o['id']) for o in scene['objects']])
+            # the scope extraction scanned (Selection.scope_go_ids): every object of the scene JSON except the bare
+            # twin carriers, whose source nodes carry components the package does not hold
+            bare = {int(i) for i in partial[name].get('twin_carrier_ids', [])}
+            level_file = ScopedFile(level_file, [int(o['id']) for o in scene['objects'] if int(o['id']) not in bare])
         count += augment_scene(scene, level_file, ctx)
         scenes[name] = scene
     require(count > 0, "empty source census")

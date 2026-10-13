@@ -5,15 +5,40 @@ selected subtrees of one Arena level file (AirPit's furnished shops from level38
 from level37) and records the result under the manifest key ``partial_scenes``::
 
     {"<scene name>": {"index": N, "objects": N, "units": N, "carriers": N,
-                      "rules": {"<rule>": {"selected": N, "twin_skipped": N}},
+                      "rules": {"<rule>": {"selected": N, "twin_skipped": N, "excluded": N, "descendants_added": N}},
                       "dropped_script_owners": N,
                       "ballistic_orphans": [[<owner go id>, <component id>], ...],
-                      "go_ids_sha256": "<64 hex>"}}
+                      "go_ids_sha256": "<64 hex>",
+                      "excluded": N, "exclude_entries": N,
+                      "twin_descendants_added": N, "twin_descendant_paths": ["<hierarchy path>", ...]}}
 
 ``go_ids_sha256`` is the SHA-256 of the selected GameObject path ids (decimal, ascending, one per line); it must
 equal the digest of the object ids of the package scene file, which binds the scene file to the recorded
 selection. ``slice`` stays ``{}`` for such a package, so the slice refusals of the contract and the source plan keep
-working. A validator that re-reads the WHOLE Arena level file independently of the extractor (the
+working.
+
+Every counter counts units (the counting contract is spelled out in ``native_contract_loader``): per rule
+``selected`` (claimed and not twin-skipped, before the later steps), ``twin_skipped``, ``descendants_added`` (units
+that ``twin_descendants: import_missing`` added below twin-skipped units) and ``excluded`` (units ``select.exclude``
+dropped); ``sum(selected) + sum(descendants_added) - sum(excluded) == units``. ``excluded``, ``exclude_entries`` and
+``twin_descendants_added`` repeat the totals of the plan record's two newer mechanisms and are REQUIRED, so a
+manifest from before them (airpit-native-v7 and older) is refused instead of read with zeros.
+``twin_descendant_paths`` is the sorted list of the full hierarchy paths of the added descendants (documentation
+and review aid; it may be empty and is not pinned by the contract).
+
+Twin carriers. ``twin_descendants: import_missing`` emits the chain from an added descendant up to the twin-skipped
+unit as bare carriers although the SOURCE nodes of that chain carry components (the skipped unit's renderers,
+colliders, BallisticCollider...). Those components are not part of the package by design, but the owner ids are, so a
+validator that scoped its whole-level scan by object ids alone would demand them. The optional key
+``twin_carrier_ids`` (sorted decimal source ids, a subset of the carriers) names these objects; ``SceneScope.covers``
+is False for them, which narrows every census of ``validate_extract`` / ``validate_bundle_roundtrip`` /
+``validate_native_features`` at once. Each id must be an object of the package scene without any component and must
+not own a hidden ballistic orphan. The key is optional while ``twin_descendants_added`` is 0 (absent means none, the
+shape of every package without imported twin descendants) and REQUIRED as soon as descendants were imported (an empty
+list is fine when all of them were excluded again): a block that imports twin descendants without recording their
+carriers would make every source census demand components that the package deliberately lacks.
+
+A validator that re-reads the WHOLE Arena level file independently of the extractor (the
 null-collider, mixed-material, special-mesh, disabled-component, ballistic and reference censuses)
 must therefore count only what the package can hold: components whose owner GameObject is one of the
 object ids of the package's own ``scenes/<name>.json``. Everything else in the level file is, by design,
@@ -46,7 +71,9 @@ import sys
 
 PARTIAL_KEY = "partial_scenes"
 _ENTRY_KEYS = ("index", "objects", "units", "carriers", "rules", "dropped_script_owners", "ballistic_orphans",
-               "go_ids_sha256")
+               "go_ids_sha256", "excluded", "exclude_entries", "twin_descendants_added", "twin_descendant_paths")
+_TWIN_CARRIERS = "twin_carrier_ids"  # optional
+_RULE_KEYS = ("selected", "twin_skipped", "excluded", "descendants_added")
 _SHA256 = re.compile(r"^[0-9a-f]{64}$")
 _ID = re.compile(r"^[0-9]+$")
 
@@ -102,9 +129,50 @@ def manifest_entries(manifest: dict) -> dict:
         if type(entry["rules"]) is not dict or not entry["rules"]:
             _fail(name, "rules must be a non-empty object")
         for rule, counts in entry["rules"].items():
-            if (type(counts) is not dict or not {"selected", "twin_skipped"} <= counts.keys()
-                    or any(type(counts[k]) is not int or counts[k] < 0 for k in ("selected", "twin_skipped"))):
-                _fail(name, f"rule {rule!r} must carry non-negative integer selected/twin_skipped counts")
+            if (type(counts) is not dict or not set(_RULE_KEYS) <= counts.keys()
+                    or any(type(counts[k]) is not int or counts[k] < 0 for k in _RULE_KEYS)):
+                _fail(name, f"rule {rule!r} must carry non-negative integer "
+                            f"{'/'.join(_RULE_KEYS)} counts")
+            if counts["excluded"] > counts["selected"] + counts["descendants_added"]:
+                _fail(name, f"rule {rule!r} excludes {counts['excluded']} units but holds only "
+                            f"{counts['selected']} selected and {counts['descendants_added']} added units")
+        rules = {rule: {k: counts[k] for k in _RULE_KEYS} for rule, counts in entry["rules"].items()}
+        units = _count(entry["units"], name, "units", 1)
+        excluded = _count(entry["excluded"], name, "excluded")
+        exclude_entries = _count(entry["exclude_entries"], name, "exclude_entries")
+        added = _count(entry["twin_descendants_added"], name, "twin_descendants_added")
+        paths = entry["twin_descendant_paths"]
+        if type(paths) is not list or any(type(p) is not str or not p for p in paths):
+            _fail(name, "twin_descendant_paths must be a list of non-empty hierarchy path strings")
+        if paths != sorted(paths):
+            _fail(name, "twin_descendant_paths must be sorted")
+        if len(paths) != added:
+            _fail(name, f"twin_descendant_paths lists {len(paths)} paths for {added} added twin descendants")
+        kept = sum(r["selected"] + r["descendants_added"] - r["excluded"] for r in rules.values())
+        if kept != units:
+            _fail(name, f"rules leave {kept} units (selected + descendants_added - excluded), the entry records {units}")
+        if sum(r["descendants_added"] for r in rules.values()) != added:
+            _fail(name, f"twin_descendants_added {added} differs from the sum of the rules' descendants_added")
+        if sum(r["excluded"] for r in rules.values()) != excluded:
+            _fail(name, f"excluded {excluded} differs from the sum of the rules' excluded counts")
+        if (exclude_entries == 0) != (excluded == 0):
+            _fail(name, f"{exclude_entries} exclude entries cannot have dropped {excluded} units")
+        twin_carriers = entry.get(_TWIN_CARRIERS, [])
+        if type(twin_carriers) is not list:
+            _fail(name, f"{_TWIN_CARRIERS} must be a list of source path ids")
+        twin_carriers = [source_id(i, name, "twin carrier id") for i in twin_carriers]
+        if len(set(twin_carriers)) != len(twin_carriers):
+            _fail(name, f"duplicate {_TWIN_CARRIERS}")
+        if twin_carriers != sorted(twin_carriers, key=int):
+            _fail(name, f"{_TWIN_CARRIERS} must be sorted ascending")
+        if len(twin_carriers) > _count(entry["carriers"], name, "carriers"):
+            _fail(name, f"{len(twin_carriers)} twin carriers cannot be a subset of {entry['carriers']} carriers")
+        if twin_carriers and not added:
+            _fail(name, f"{_TWIN_CARRIERS} are only emitted for imported twin descendants (twin_descendants_added is 0)")
+        if added and _TWIN_CARRIERS not in entry:
+            _fail(name, f"twin_descendants_added is {added} but the block lacks {_TWIN_CARRIERS}: the extractor must "
+                        "record the bare carriers of imported twin descendants (an empty list if none remain), "
+                        "otherwise the source censuses demand components the package deliberately lacks")
         if type(entry["ballistic_orphans"]) is not list:
             _fail(name, "ballistic_orphans must be a list of [owner id, component id] pairs")
         orphans = []
@@ -118,26 +186,34 @@ def manifest_entries(manifest: dict) -> dict:
         if type(entry["go_ids_sha256"]) is not str or not _SHA256.match(entry["go_ids_sha256"]):
             _fail(name, "go_ids_sha256 must be a lowercase SHA-256 hex digest")
         result[name] = {"index": index, "objects": _count(entry["objects"], name, "objects", 1),
-                        "units": _count(entry["units"], name, "units", 1),
+                        "units": units,
                         "carriers": _count(entry["carriers"], name, "carriers"),
                         "dropped_script_owners": _count(entry["dropped_script_owners"], name,
                                                         "dropped_script_owners"),
-                        "rules": {rule: {k: counts[k] for k in ("selected", "twin_skipped")}
-                                  for rule, counts in entry["rules"].items()},
+                        "excluded": excluded, "exclude_entries": exclude_entries,
+                        "twin_descendants_added": added, "twin_descendant_paths": list(paths),
+                        "twin_carrier_ids": twin_carriers, "rules": rules,
                         "ballistic_orphans": orphans, "go_ids_sha256": entry["go_ids_sha256"]}
     return result
 
 
 @dataclass(frozen=True)
 class SceneScope:
-    """What a package can hold of one Arena level file: the owner ids plus the hidden-ballistic pairs."""
+    """What a package can hold of one Arena level file: the owner ids plus the hidden-ballistic pairs.
+
+    ``owners`` are all object ids of the package scene; ``twin_carriers`` the subset whose source nodes carry components
+    that the package deliberately lacks (bare carriers of imported twin descendants), so their components are no
+    part of the scope."""
     name: str
     owners: frozenset
     orphans: frozenset
+    twin_carriers: frozenset = frozenset()
 
     def covers(self, owner) -> bool:
-        """True when the source GameObject (int path id or its string spelling) is in the package scene."""
-        return str(owner) in self.owners
+        """True when the source GameObject (int path id or its string spelling) is in the package scene and the
+        package holds its components (a twin carrier's are not carried)."""
+        owner = str(owner)
+        return owner in self.owners and owner not in self.twin_carriers
 
     def is_orphan(self, owner, component) -> bool:
         """True for a hidden BallisticCollider: expected absent from the package, present in the source."""
@@ -175,7 +251,19 @@ def scopes_from_objects(manifest: dict, objects_by_scene: dict) -> dict:
         outside = sorted(go for go, _ in entry["ballistic_orphans"] if go not in owners)
         if outside:
             _fail(name, f"ballistic orphan owners {outside[:5]} are not objects of the scene")
-        scopes[name] = SceneScope(name, owners, frozenset(entry["ballistic_orphans"]))
+        twin = frozenset(entry["twin_carrier_ids"])
+        if twin:
+            by_id = {str(obj["id"]): obj for obj in _object_list(objects_by_scene[name])}
+            missing = sorted(twin - owners, key=int)
+            if missing:
+                _fail(name, f"twin carrier ids {missing[:5]} are not objects of the scene")
+            loaded = sorted((i for i in twin if by_id[i].get("components")), key=int)
+            if loaded:
+                _fail(name, f"twin carriers {loaded[:5]} must be bare in the package but hold components")
+            hidden = sorted({go for go, _ in entry["ballistic_orphans"]} & twin, key=int)
+            if hidden:
+                _fail(name, f"twin carriers {hidden[:5]} cannot own hidden ballistic orphans")
+        scopes[name] = SceneScope(name, owners, frozenset(entry["ballistic_orphans"]), twin)
     return scopes
 
 
@@ -209,13 +297,17 @@ def contract_block(manifest: dict) -> dict:
     """The ``partial_scenes`` block a map contract pins for this manifest (the census, nothing else).
 
     ``orphans`` is the number of hidden ballistic colliders, ``dropped_script_owners`` the number of claimed
-    containers whose script the selection could not carry (0 when every script owner is a unit or a carrier).
+    containers whose script the selection could not carry (0 when every script owner is a unit or a carrier),
+    ``excluded`` / ``exclude_entries`` / ``twin_descendants_added`` the totals of the plan record's exclude list and
+    twin-descendant import. The hierarchy paths (``twin_descendant_paths``) are review material and not printed.
     Used to read the first real extraction into
     ``tools/extract/native_contracts/<stem>.json`` after reviewing it; the validators then hold every later
     package to exactly these numbers."""
     return {name: {"index": entry["index"], "objects": entry["objects"], "units": entry["units"],
                    "carriers": entry["carriers"], "orphans": len(entry["ballistic_orphans"]),
-                   "dropped_script_owners": entry["dropped_script_owners"], "rules": entry["rules"]}
+                   "dropped_script_owners": entry["dropped_script_owners"], "excluded": entry["excluded"],
+                   "exclude_entries": entry["exclude_entries"],
+                   "twin_descendants_added": entry["twin_descendants_added"], "rules": entry["rules"]}
             for name, entry in manifest_entries(manifest).items()}
 
 

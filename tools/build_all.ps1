@@ -75,7 +75,8 @@
   Also re-run the extraction twice and compare the results (minutes per map). Off by default.
 
 .PARAMETER ReproTimeoutSeconds
-  Maximum duration of each extraction run when -CheckReproducibility is set.
+  Maximum duration of each extraction run when -CheckReproducibility is set (default 1800: the AirPit
+  extraction alone takes about 5 minutes on an idle machine, more on a loaded one).
 
 .EXAMPLE
   # full real build, S1 slice, in the background (Unity takes several minutes):
@@ -106,7 +107,7 @@ param(
     [switch]$SkipUnityBuild,
     [switch]$FullMap,
     [switch]$CheckReproducibility,
-    [ValidateRange(1, 86400)][int]$ReproTimeoutSeconds = 300,
+    [ValidateRange(1, 86400)][int]$ReproTimeoutSeconds = 1800,
     [string]$UnityExe = "C:/Program Files/Unity/Hub/Editor/2022.3.43f1/Editor/Unity.exe"
 )
 

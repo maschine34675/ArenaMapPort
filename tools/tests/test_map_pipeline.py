@@ -190,6 +190,15 @@ class SourcePlanTests(unittest.TestCase):
             EX.reject_unsupported_ground(file, "Arena_Test_Main")
 
 
+def _airpit_plan_is_v8() -> bool:
+    """True once airpit.json carries the v8 Main_hall record (the one with an `exclude` list)."""
+    plan = SP.load_plan(SP.PLAN_ROOT / "airpit.json")
+    return any("exclude" in r.get("select", {}) for r in plan["scenes"] if r["name"] == "Arena_Airpit_Main_hall")
+
+
+AIRPIT_PLAN_V8 = _airpit_plan_is_v8()
+
+
 def partial_plan():
     """example_plan plus a partial scene (level 2) that skips the twins of the full scene (level 1)."""
     plan = example_plan()
@@ -334,6 +343,111 @@ class PartialScenePlanTests(unittest.TestCase):
         with self.assertRaisesRegex(SP.PlanError, "digest drift"):
             self.verify()
 
+    def test_exclude_and_twin_descendants_belong_inside_select(self):
+        entry = [{"path": "Root/Shops/A", "reason": "moved copy"}]
+        for key, value in (("exclude", entry), ("twin_descendants", "import_missing")):
+            with self.subTest(key=key, where="beside select"):
+                plan = partial_plan()
+                plan["scenes"][1][key] = value
+                with self.assertRaisesRegex(SP.PlanError, f"'Arena_Test_Part' carries '{key}' outside its select"):
+                    SP.validate_plan(plan)
+            with self.subTest(key=key, where="full scene"):
+                plan = partial_plan()
+                plan["scenes"][0][key] = value
+                with self.assertRaisesRegex(SP.PlanError, f"carries '{key}' outside its select"):
+                    SP.validate_plan(plan)
+            for group in ("anchor_scenes", "navmesh_scenes"):
+                with self.subTest(key=key, where=group):
+                    plan = partial_plan()
+                    plan[group] = [dict(plan["scenes"][0], **{key: value})]
+                    with self.assertRaisesRegex(SP.PlanError, f"{group} record .* carries '{key}'"):
+                        SP.validate_plan(plan)
+            with self.subTest(key=key, where="excluded_scenes"):
+                plan = partial_plan()
+                plan["excluded_scenes"] = [{"name": "Arena_Test_Culling", "asset_path": "Assets/Content/Arena_Test_Culling.unity",
+                                            "index": 9, "reason": "not imported", key: value}]
+                with self.assertRaisesRegex(SP.PlanError, f"excluded_scenes record .* carries '{key}'"):
+                    SP.validate_plan(plan)
+
+    def test_the_new_select_keys_are_valid_inside_select(self):
+        plan = partial_plan()
+        plan["scenes"][1]["select"].update(twin_descendants="import_missing", exclude=[
+            {"path": "Root/Shops/A", "reason": "moved copy"},
+            {"path": "Root/Shops/B", "at": [1.0, 2.0, 3.0], "reason": "replaced in level 1"}])
+        SP.validate_plan(plan)
+        (record,) = SP.partial_scene_records(plan)
+        self.assertEqual(record["select"]["twin_descendants"], "import_missing")
+
+    def test_a_malformed_new_key_is_a_plan_error_naming_the_scene(self):
+        for change in ({"twin_descendants": "everything"}, {"exclude": "Root/Shops/A"},
+                       {"exclude": [{"path": "Root/Shops/A"}]},
+                       {"exclude": [{"path": "A", "reason": "x"}, {"path": "A", "reason": "y"}]},
+                       {"exclude": [{"path": "A", "reason": "x", "at": [1, 2]}]}):
+            plan = partial_plan()
+            plan["scenes"][1]["select"].update(change)
+            with self.subTest(change=change), self.assertRaisesRegex(SP.PlanError, "Arena_Test_Part"):
+                SP.validate_plan(plan)
+        plan = partial_plan()
+        del plan["scenes"][1]["select"]["skip_twins_of"]
+        plan["scenes"][1]["select"]["twin_descendants"] = "import_missing"
+        with self.assertRaisesRegex(SP.PlanError, "needs skip_twins_of"):
+            SP.validate_plan(plan)
+
+    def test_the_digest_covers_the_new_keys(self):
+        before = SP.plan_digest(self.plan)
+        for edit in (lambda s: s.update(twin_descendants="import_missing"),
+                     lambda s: s.update(exclude=[{"path": "Root/Shops/A", "reason": "x"}]),
+                     lambda s: s.update(exclude=[{"path": "Root/Shops/A", "at": [0, 0, 0], "reason": "x"}])):
+            plan = partial_plan()
+            edit(plan["scenes"][1]["select"])
+            with self.subTest(edit=edit):
+                self.assertNotEqual(SP.plan_digest(plan), before)
+        a, b = partial_plan(), partial_plan()
+        a["scenes"][1]["select"]["exclude"] = [{"path": "Root/Shops/A", "reason": "x"}]
+        b["scenes"][1]["select"]["exclude"] = [{"path": "Root/Shops/A", "reason": "y"}]
+        self.assertNotEqual(SP.plan_digest(a), SP.plan_digest(b), "the reason is part of the reviewed record")
+
+    def reload_with(self, **select_changes):
+        self.plan["scenes"][1]["select"].update(select_changes)
+        self.path.write_text(json.dumps(self.plan), encoding="utf-8")
+        self.manifest["source"] = SP.provenance(self.plan, self.path, self.root, "fixed", self.repo)
+
+    def test_manifest_counters_are_checked_against_the_plan_select(self):
+        self.reload_with(twin_descendants="import_missing",
+                         exclude=[{"path": "Root/Shops/A", "reason": "x"}, {"path": "Root/Shops/B", "reason": "y"}])
+        block = self.manifest["partial_scenes"]["Arena_Test_Part"]
+        block.update(excluded=5, exclude_entries=2, twin_descendants_added=2,
+                     twin_descendant_paths=["Root/Shops/A/Light", "Root/Shops/B/Light"])
+        self.assertEqual(self.verify()[1], self.plan)
+        for label, change in (("wrong entry count", {"exclude_entries": 1}),
+                              ("entry count not an int", {"exclude_entries": "2"}),
+                              ("count without a list", {"twin_descendant_paths": ["Root/Shops/A/Light"]}),
+                              ("unsorted paths", {"twin_descendant_paths": ["Root/Shops/B/Light", "Root/Shops/A/Light"]}),
+                              ("paths not strings", {"twin_descendant_paths": [1, 2]}),
+                              ("paths not a list", {"twin_descendant_paths": "x"}),
+                              ("negative count", {"twin_descendants_added": -1}),
+                              ("count not an int", {"twin_descendants_added": True})):
+            manifest = deepcopy(self.manifest)
+            manifest["partial_scenes"]["Arena_Test_Part"].update(change)
+            saved, self.manifest = self.manifest, manifest
+            with self.subTest(label), self.assertRaisesRegex(SP.PlanError, "partial_scenes"):
+                self.verify()
+            self.manifest = saved
+
+    def test_a_package_cannot_claim_imports_the_plan_does_not_ask_for(self):
+        block = self.manifest["partial_scenes"]["Arena_Test_Part"]
+        block.update(exclude_entries=0, twin_descendants_added=0, twin_descendant_paths=[])
+        self.verify()
+        block.update(twin_descendants_added=1, twin_descendant_paths=["Root/Shops/A/Light"])
+        with self.assertRaisesRegex(SP.PlanError, "imported 1 twin descendant"):
+            self.verify()
+
+    def test_a_block_without_the_new_counters_is_not_refused_here(self):
+        # the contract pins (native_contract_loader / partial_scope) make them mandatory; the plan check only
+        # compares the counters a block carries
+        self.assertEqual(set(self.manifest["partial_scenes"]["Arena_Test_Part"]), {"index", "objects"})
+        self.verify()
+
     def test_airpit_plan_imports_the_two_furnished_levels_after_the_five_full_scenes(self):
         plan = SP.load_plan(SP.PLAN_ROOT / "airpit.json")
         self.assertEqual([(r["name"], r["index"]) for r in plan["scenes"]], [
@@ -347,6 +461,7 @@ class PartialScenePlanTests(unittest.TestCase):
         for record in partial.values():
             self.assertEqual(record["asset_path"], f"Assets/Content/Locations/Arena_Airpit/{record['name']}.unity")
 
+    @unittest.skipIf(AIRPIT_PLAN_V8, "the plan holds the v8 records; see AirpitV8PlanTests")
     def test_airpit_main_hall_selection_names_the_reviewed_groups(self):
         from scene_select import validate_select
         plan = SP.load_plan(SP.PLAN_ROOT / "airpit.json")
@@ -370,6 +485,83 @@ class PartialScenePlanTests(unittest.TestCase):
                          ["SBG_Airpit_Light/OO/" + n for n in ("ChinaPlace*", "BurgerSpot*", "HELLFINGER", "LouiPeeton*")])
         self.assertEqual({tuple(x.name for x in r.regions) for r in light.rules if r.kind == "region_roots"},
                          {tuple(shops)})
+
+
+@unittest.skipUnless(AIRPIT_PLAN_V8, "airpit.json still holds the v7 records")
+class AirpitV8PlanTests(unittest.TestCase):
+    """The two partial-scene records of package v8 (twin descendants, exclusions, the decoration box).
+
+    ``plan_file`` can name a candidate plan; the default is the repository plan."""
+    plan_file = None
+
+    @classmethod
+    def setUpClass(cls):
+        plan = SP.load_plan(cls.plan_file or SP.PLAN_ROOT / "airpit.json")
+        cls.records = {r["name"]: r for r in SP.partial_scene_records(plan)}
+
+    def specs(self):
+        from scene_select import validate_select
+        return {name: validate_select(r["select"]) for name, r in self.records.items()}
+
+    def test_main_hall_record(self):
+        hall = "SBG_Arena_Airpit_Main_hall/"
+        spec = self.specs()["Arena_Airpit_Main_hall"]
+        self.assertEqual((spec.skip_twins_of, spec.twin_descendants), (324, "import_missing"))
+        self.assertEqual([r.path for r in spec.rules if r.kind == "roots"],
+                         [hall + "OO/PROPS/INDOOR/SHOPS", "PROJECTION/INDOOR/SHOPS"]
+                         + [hall + "SOO_LOD0/" + n for n in ("Airport_Shop_BS", "DonB_Ramen", "LP_Shop", "LP_Defile",
+                                                              "TH_Roll_door_01", "TH_Roll_door_02", "TH_Roll_door_03",
+                                                              "TH_Shop_indoor", "DOORS")])
+        self.assertEqual({r.path: [x.name for x in r.regions] for r in spec.rules if r.kind == "region_roots"},
+                         {"PROJECTION": ["decoration box"], hall + "OO/PROPS": ["decoration box"],
+                          "VARIANT": ["decoration box"], "PROPSnoCulling": ["decoration box"]})
+        self.assertEqual([(r.name, r.lo, r.hi) for r in spec.regions],
+                         [("decoration box", (-60.0, -5.0, -85.0), (40.0, 20.0, 91.0))])
+        # not imported on purpose: PHYSIC (inactive in Arena), the SOO cover walls and the brick walls
+        for rule in spec.rules:
+            for forbidden in ("PHYSIC", "SOO/", "Destroyed_Brick_Wall", "LIGHT_Disabled"):
+                self.assertNotIn(forbidden, rule.path)
+            self.assertNotEqual(rule.path, hall + "SOO_LOD0")
+
+    def test_main_hall_exclusions(self):
+        spec = self.specs()["Arena_Airpit_Main_hall"]
+        self.assertEqual(len(spec.exclude), 208)
+        self.assertTrue(all(e.reason.strip() for e in spec.exclude))
+        self.assertTrue(any(e.at is not None for e in spec.exclude))
+        self.assertTrue(all(e.path.split("/")[0] in ("SBG_Arena_Airpit_Main_hall", "VARIANT", "PROPSnoCulling")
+                            for e in spec.exclude), "every exclusion lies in a selected subtree")
+
+    def test_light_record(self):
+        spec = self.specs()["Arena_Airpit_Light"]
+        lamp = "SBG_Airpit_Light/OO/"
+        self.assertEqual((spec.skip_twins_of, spec.twin_descendants), (325, "import_missing"))
+        # The nine imported twin descendants that level325 replaced or disabled on purpose (review of 2026-10-13):
+        # SupportLight stand-ins on the AIRBUS/NO_CULL bunker lamps, a re-tuned Spot Light, two emptied LODGroups.
+        self.assertEqual([e.path for e in spec.exclude], [
+            "NO_CULL/Old_Bunker_Light_cookie (8)/BaseLight",
+            "NO_CULL/Old_Bunker_Light_cookie (8)/MainLight",
+            lamp + "AIRBUS/Old_Bunker_Light_cookie (6)/BaseLight",
+            lamp + "AIRBUS/Old_Bunker_Light_cookie (6)/MainLight",
+            lamp + "AIRBUS/Old_Bunker_Light_cookie (9)/BaseLight ",
+            lamp + "AIRBUS/Old_Bunker_Light_cookie (9)/MainLight",
+            lamp + "AIRPORT LAMPS/Airport_lamp (72)/Spot Light (2)",
+            lamp + "ShadowPlanes/ShadowPlaneBox (125)/Plane_LOD0",
+            lamp + "ShadowPlanes/ShadowPlaneBox (140)/Plane_LOD0",
+        ])
+        self.assertTrue(all(e.at is None and e.reason.strip() for e in spec.exclude), "every path is unique in level37")
+        self.assertEqual([r.path for r in spec.rules if r.kind == "roots"],
+                         [lamp + n for n in ("ChinaPlace*", "BurgerSpot*", "HELLFINGER", "LouiPeeton*")])
+        regions = {r.path: [x.name for x in r.regions] for r in spec.rules if r.kind == "region_roots"}
+        self.assertEqual(list(regions), [lamp + "GLOBAL GI", "NO_CULL", lamp + "ShadowPlanes", "PUDDLES", lamp + "FogSheets"]
+                         + [lamp + n for n in ("Airport_lamp_02", "LAMPS_GENERIC*", "AIRBUS", "AIRPORT LAMPS",
+                                               "BACK_AIRPORT_LAMPS", "LUM_LAMPS", "Point Light", "chemlight_emissive",
+                                               "Lamps_ceiling - DISABLED")])
+        self.assertEqual({tuple(v) for v in regions.values()}, {("decoration box",)})
+        self.assertEqual([(r.name, r.lo, r.hi) for r in spec.regions],
+                         [("decoration box", (-60.0, -5.0, -85.0), (40.0, 20.0, 91.0))])
+        for rule in spec.rules:   # script-only shells, disabled lights and the ceiling track lights stay out
+            for forbidden in ("LIGHT_Disabled", "BACKGROUND", "STENCILS", "PLANE_AREA_HIGHLIGHTS", "CEILING"):
+                self.assertNotIn(forbidden, rule.path)
 
 
 class SceneRoleTests(unittest.TestCase):

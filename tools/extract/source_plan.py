@@ -22,6 +22,8 @@ SCENE_GROUPS = ("scenes", "anchor_scenes", "navmesh_scenes")
 # scene. A role is a `role` key on an `excluded_scenes` record; each role names at
 # most one scene so an extractor never has to know a per-map BuildSettings index.
 SCENE_ROLES = ("scripts", "sound", "ai", "culling")
+# Keys that only mean something inside a scene record's `select`; one beside it would be ignored silently.
+SELECT_ONLY_KEYS = ("twin_descendants", "exclude")
 
 
 class PlanError(ValueError):
@@ -73,6 +75,7 @@ def validate_plan(plan: dict) -> dict:
             if isinstance(raw, dict) and "select" in raw and group != "scenes":
                 raise PlanError(f"{group} record {raw.get('name')!r} cannot carry select; "
                                 "a partial scene selection belongs only on scenes records")
+            _reject_select_only_keys(raw, group)
             record = scene_record(raw)
             index, path, name = record["index"], record["asset_path"], record["name"]
             if index in group_indices:
@@ -93,10 +96,21 @@ def validate_plan(plan: dict) -> dict:
         if "select" in record:
             raise PlanError(f"excluded scene {record.get('name')!r} cannot carry select; "
                             "a partial scene selection belongs only on scenes records")
+        _reject_select_only_keys(record, "excluded_scenes")
         scene_record(record)
         if record.get("index") in imported:
             raise PlanError("an imported scene cannot also be excluded")
     return plan
+
+
+def _reject_select_only_keys(raw, group: str) -> None:
+    """`exclude` / `twin_descendants` next to a scene record's `select` instead of inside it never take effect."""
+    if not isinstance(raw, dict):
+        return
+    for key in SELECT_ONLY_KEYS:
+        if key in raw:
+            raise PlanError(f"{group} record {raw.get('name')!r} carries {key!r} outside its select; "
+                            f"{key!r} is a key of the select object of a scenes record")
 
 
 def partial_scene_records(plan: dict) -> list[dict]:
@@ -290,9 +304,12 @@ def validate_manifest_plan(manifest: dict, repo: Path = REPO, verify_source: boo
     if not isinstance(partial, dict) or set(partial) != set(expected):
         raise PlanError("manifest partial_scenes must list exactly the plan scenes that carry select: "
                         f"{sorted(expected)}, found {sorted(partial) if isinstance(partial, dict) else partial!r}")
+    from scene_select import TWIN_DESCENDANTS_IMPORT, validate_select
+    selects = {r["name"]: r["select"] for r in partial_scene_records(plan)}
     for name, block in partial.items():
         if not isinstance(block, dict) or block.get("index") != expected[name]:
             raise PlanError(f"manifest partial_scenes[{name!r}] must be an object with index {expected[name]}")
+        _check_selection_counters(name, block, validate_select(selects[name]), TWIN_DESCENDANTS_IMPORT)
     validate_anchors(manifest.get("anchors_reference", {}))
     if verify_source:
         root = source.get("arena_data_root")
@@ -300,6 +317,26 @@ def validate_manifest_plan(manifest: dict, repo: Path = REPO, verify_source: boo
             raise PlanError("generic package source tree is unavailable; validation cannot skip provenance")
         verify_scene_mapping(plan, read_build_scenes(Path(root)), Path(root))
     return path.resolve(), plan
+
+
+def _check_selection_counters(name: str, block: dict, spec, import_mode: str) -> None:
+    """The selection counters a manifest block carries must agree with the plan's select (keys absent in packages
+    from before the exclude / twin_descendants support are left to the contract pins)."""
+    entries = block.get("exclude_entries")
+    if entries is not None and (type(entries) is not int or entries != len(spec.exclude)):
+        raise PlanError(f"manifest partial_scenes[{name!r}].exclude_entries is {entries!r}, the plan select "
+                        f"lists {len(spec.exclude)} exclusion(s)")
+    added, paths = block.get("twin_descendants_added"), block.get("twin_descendant_paths")
+    if added is not None:
+        if type(added) is not int or added < 0:
+            raise PlanError(f"manifest partial_scenes[{name!r}].twin_descendants_added must be a count")
+        if added and spec.twin_descendants != import_mode:
+            raise PlanError(f"manifest partial_scenes[{name!r}] imported {added} twin descendant(s) but the plan "
+                            f"select has twin_descendants {spec.twin_descendants!r}")
+    if paths is not None and (not isinstance(paths, list) or any(not isinstance(p, str) for p in paths)
+                              or paths != sorted(paths) or (added is not None and len(paths) != added)):
+        raise PlanError(f"manifest partial_scenes[{name!r}].twin_descendant_paths must be a sorted list of "
+                        "hierarchy paths, one per imported twin descendant")
 
 
 def validate_anchors(anchors: dict) -> None:

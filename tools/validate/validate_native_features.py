@@ -170,9 +170,12 @@ def check_partial_scene_pins(key, contract, manifest):
 
     Both directions fail closed: a contract that pins partial scenes needs exactly that set in the manifest, and a
     manifest that carries partial scenes needs a contract that pins them (a block nobody reviewed would otherwise
-    narrow the source scans unchecked). Counts compare by exact type, rule names and counts included; the hidden
-    ballistic orphans are pinned by their number (the pairs themselves are proven against the source in
-    ``validate_ballistic_source``)."""
+    narrow the source scans unchecked). Counts compare by exact type, rule names and counts included (the four
+    per-rule counters selected / twin_skipped / excluded / descendants_added, and the scene-level excluded /
+    exclude_entries / twin_descendants_added of the plan record's exclude list and twin-descendant import); the
+    hidden ballistic orphans are pinned by their number (the pairs themselves are proven against the source in
+    ``validate_ballistic_source``) and the hierarchy paths of the added twin descendants are review material that the
+    contract does not pin."""
     try:
         entries=partial_scope.manifest_entries(manifest)
     except partial_scope.PartialScopeError as error:
@@ -185,8 +188,9 @@ def check_partial_scene_pins(key, contract, manifest):
             +' != contract '+str(sorted(pins)))
     for name,pin in pins.items():
         entry=entries[name]
-        census_keys=('index','objects','units','carriers','orphans','dropped_script_owners')
-        actual={k:entry[k] for k in ('index','objects','units','carriers','dropped_script_owners')}
+        census_keys=('index','objects','units','carriers','orphans','dropped_script_owners','excluded',
+                     'exclude_entries','twin_descendants_added')
+        actual={k:entry[k] for k in census_keys if k!='orphans'}
         actual['orphans']=len(entry['ballistic_orphans'])
         actual['rules']=entry['rules']
         require(all(same(actual[k],pin[k]) for k in census_keys),

@@ -32,11 +32,36 @@ FULL_IDS = ["1", "2"]
 PART_IDS = ["10", "11", "12"]
 
 
-def entry(ids=PART_IDS, orphans=((12, 202),), units=2, carriers=1, dropped=0):
-    return {"index": 2, "objects": len(ids), "units": units, "carriers": carriers,
-            "rules": {"roots:Root/Shelves": {"selected": units, "twin_skipped": 3}},
-            "dropped_script_owners": dropped,
-            "ballistic_orphans": [list(pair) for pair in orphans], "go_ids_sha256": PS.go_ids_digest(ids)}
+def rule(selected=2, twin_skipped=3, excluded=0, descendants_added=0):
+    return {"selected": selected, "twin_skipped": twin_skipped, "excluded": excluded,
+            "descendants_added": descendants_added}
+
+
+def entry(ids=PART_IDS, orphans=((12, 202),), units=2, carriers=1, dropped=0, rules=None, excluded=0,
+          exclude_entries=0, added=0, paths=None, twin_carriers=None):
+    """A manifest block; the defaults are a scene that uses neither the exclude list nor twin descendants."""
+    block = {"index": 2, "objects": len(ids), "units": units, "carriers": carriers,
+             "rules": deepcopy(rules) if rules is not None else {"roots:Root/Shelves": rule(selected=units)},
+             "dropped_script_owners": dropped,
+             "ballistic_orphans": [list(pair) for pair in orphans], "go_ids_sha256": PS.go_ids_digest(ids),
+             "excluded": excluded, "exclude_entries": exclude_entries, "twin_descendants_added": added,
+             "twin_descendant_paths": list(paths) if paths is not None else [f"Root/Twin/Part{i:02d}" for i in range(added)]}
+    if twin_carriers is not None:
+        block["twin_carrier_ids"] = list(twin_carriers) if isinstance(twin_carriers, (list, tuple)) else twin_carriers
+    return block
+
+
+def twin_entry(**change):
+    """Object 10 is the bare carrier of one imported twin descendant (the chain up to its skipped unit)."""
+    fields = dict(units=2, rules={"roots:Root/Shelves": rule(selected=1, twin_skipped=3, descendants_added=1)}, added=1,
+                  paths=["Root/Lamp (1)/Light"], twin_carriers=["10"])
+    fields.update(change)
+    return entry(**fields)
+
+
+# A scene that uses both mechanisms: 5 units = (4 + 0 - 2) in the first rule + (1 + 2 - 0) in the second.
+BUSY_RULES = {"roots:Root/Shelves": rule(selected=4, twin_skipped=6, excluded=2, descendants_added=0),
+              "region_roots:Root/Props": rule(selected=1, twin_skipped=0, excluded=0, descendants_added=2)}
 
 
 def scene_json(name, ids, components=None):
@@ -45,12 +70,12 @@ def scene_json(name, ids, components=None):
          "components": list((components or {}).get(i, []))} for i in ids]}
 
 
-def manifest_for(source="unused", partial=True):
+def manifest_for(source="unused", partial=True, twin=False):
     manifest = {"source": {"extractor_script": GENERIC, "arena_data_root": str(source),
                            "scene_registry": [{"name": "Full", "index": 1}, {"name": "Part", "index": 2}]},
                 "scenes": ["Full", "Part"], "slice": {}}
     if partial:
-        manifest["partial_scenes"] = {"Part": entry()}
+        manifest["partial_scenes"] = {"Part": twin_entry() if twin else entry()}
     return manifest
 
 
@@ -174,7 +199,35 @@ class ScopeModuleTests(unittest.TestCase):
             "zero objects": lambda m: m["partial_scenes"]["Part"].update(objects=0),
             "registry index": lambda m: m["partial_scenes"]["Part"].update(index=3),
             "empty rules": lambda m: m["partial_scenes"]["Part"].update(rules={}),
-            "rule counts": lambda m: m["partial_scenes"]["Part"]["rules"].update({"r": {"selected": -1, "twin_skipped": 0}}),
+            "rule counts": lambda m: m["partial_scenes"]["Part"]["rules"].update({"r": rule(selected=-1, twin_skipped=0)}),
+            "rule without twin_skipped": lambda m: m["partial_scenes"]["Part"]["rules"]["roots:Root/Shelves"].pop("twin_skipped"),
+            "rule without excluded": lambda m: m["partial_scenes"]["Part"]["rules"]["roots:Root/Shelves"].pop("excluded"),
+            "rule without descendants_added": lambda m: m["partial_scenes"]["Part"]["rules"]["roots:Root/Shelves"].pop("descendants_added"),
+            "rule excluded negative": lambda m: m["partial_scenes"]["Part"]["rules"]["roots:Root/Shelves"].update(excluded=-1),
+            "rule excluded float": lambda m: m["partial_scenes"]["Part"]["rules"]["roots:Root/Shelves"].update(excluded=1.0),
+            "rule descendants_added bool": lambda m: m["partial_scenes"]["Part"]["rules"]["roots:Root/Shelves"].update(descendants_added=True),
+            "rule excludes more than it holds": lambda m: m["partial_scenes"]["Part"].update(
+                rules={"roots:Root/Shelves": rule(selected=2, excluded=3), "region_roots:Root/Props": rule(selected=3)},
+                units=2, excluded=3, exclude_entries=1),
+            "missing excluded": lambda m: m["partial_scenes"]["Part"].pop("excluded"),
+            "missing exclude_entries": lambda m: m["partial_scenes"]["Part"].pop("exclude_entries"),
+            "missing twin_descendants_added": lambda m: m["partial_scenes"]["Part"].pop("twin_descendants_added"),
+            "missing twin_descendant_paths": lambda m: m["partial_scenes"]["Part"].pop("twin_descendant_paths"),
+            "negative excluded": lambda m: m["partial_scenes"]["Part"].update(excluded=-1),
+            "float exclude_entries": lambda m: m["partial_scenes"]["Part"].update(exclude_entries=1.0),
+            "bool twin_descendants_added": lambda m: m["partial_scenes"]["Part"].update(twin_descendants_added=False),
+            "paths not a list": lambda m: m["partial_scenes"]["Part"].update(twin_descendant_paths="Root/A"),
+            "path not a string": lambda m: m["partial_scenes"]["Part"].update(twin_descendant_paths=[7], twin_descendants_added=1),
+            "empty path": lambda m: m["partial_scenes"]["Part"].update(twin_descendant_paths=[""], twin_descendants_added=1),
+            "paths not sorted": lambda m: m["partial_scenes"]["Part"].update(
+                twin_descendant_paths=["Root/B", "Root/A"], twin_descendants_added=2, twin_carrier_ids=["10"],
+                rules={"roots:Root/Shelves": rule(selected=0, descendants_added=2)}, units=2),
+            "paths count differs": lambda m: m["partial_scenes"]["Part"].update(twin_descendant_paths=["Root/A"]),
+            "units differ from the rules": lambda m: m["partial_scenes"]["Part"].update(units=3),
+            "added total differs from the rules": lambda m: m["partial_scenes"]["Part"].update(
+                twin_descendants_added=1, twin_descendant_paths=["Root/A"]),
+            "excluded total differs from the rules": lambda m: m["partial_scenes"]["Part"].update(excluded=1, exclude_entries=1),
+            "entries without excluded units": lambda m: m["partial_scenes"]["Part"].update(exclude_entries=2),
             "orphans not a list": lambda m: m["partial_scenes"]["Part"].update(ballistic_orphans={}),
             "orphan not a pair": lambda m: m["partial_scenes"]["Part"].update(ballistic_orphans=[[1, 2, 3]]),
             "orphan not an id": lambda m: m["partial_scenes"]["Part"].update(ballistic_orphans=[["a", 2]]),
@@ -224,12 +277,124 @@ class ScopeModuleTests(unittest.TestCase):
     def test_contract_block_is_the_census_for_the_contract(self):
         block = PS.contract_block(manifest_for())
         self.assertEqual(block, {"Part": {"index": 2, "objects": 3, "units": 2, "carriers": 1, "orphans": 1,
-                                          "dropped_script_owners": 0,
-                                          "rules": {"roots:Root/Shelves": {"selected": 2, "twin_skipped": 3}}}})
+                                          "dropped_script_owners": 0, "excluded": 0, "exclude_entries": 0,
+                                          "twin_descendants_added": 0,
+                                          "rules": {"roots:Root/Shelves": {"selected": 2, "twin_skipped": 3,
+                                                                           "excluded": 0, "descendants_added": 0}}}})
         dropped = manifest_for()
         dropped["partial_scenes"]["Part"]["dropped_script_owners"] = 2
         self.assertEqual(PS.contract_block(dropped)["Part"]["dropped_script_owners"], 2)
         self.assertEqual(PS.contract_block(manifest_for(partial=False)), {})
+
+    def busy_manifest(self):
+        manifest = manifest_for()
+        manifest["partial_scenes"]["Part"] = entry(units=5, rules=BUSY_RULES, excluded=2, exclude_entries=1, added=2,
+                                                   paths=["Root/Lamp (1)/Light", "Root/Lamp (2)/Light"],
+                                                   twin_carriers=["10"])
+        return manifest
+
+    def test_the_new_counters_are_validated_normalised_and_printed_without_the_paths(self):
+        manifest = self.busy_manifest()
+        parsed = PS.manifest_entries(manifest)["Part"]
+        self.assertEqual((parsed["excluded"], parsed["exclude_entries"], parsed["twin_descendants_added"]), (2, 1, 2))
+        self.assertEqual(parsed["twin_descendant_paths"], ["Root/Lamp (1)/Light", "Root/Lamp (2)/Light"])
+        self.assertEqual(parsed["rules"]["roots:Root/Shelves"], rule(selected=4, twin_skipped=6, excluded=2))
+        self.assertEqual(parsed["rules"]["region_roots:Root/Props"], rule(selected=1, twin_skipped=0, descendants_added=2))
+        block = PS.contract_block(manifest)["Part"]
+        self.assertEqual((block["units"], block["excluded"], block["exclude_entries"], block["twin_descendants_added"]),
+                         (5, 2, 1, 2))
+        self.assertEqual(block["rules"], BUSY_RULES)
+        self.assertNotIn("twin_descendant_paths", block)
+        self.assertEqual(list(block), ["index", "objects", "units", "carriers", "orphans", "dropped_script_owners",
+                                       "excluded", "exclude_entries", "twin_descendants_added", "rules"])
+        package = Package()
+        self.addCleanup(package.close)
+        PS.scopes_from_package(manifest, package.path)  # the scope helpers read the busy block too
+
+    def test_duplicate_hierarchy_paths_are_fine_but_the_list_must_stay_sorted(self):
+        manifest = manifest_for()
+        manifest["partial_scenes"]["Part"] = entry(
+            units=2, rules={"roots:Root/Shelves": rule(selected=0, descendants_added=2)}, added=2,
+            paths=["Root/Lamp/Light", "Root/Lamp/Light"], twin_carriers=["10"])  # two instances of the same path
+        self.assertEqual(PS.manifest_entries(manifest)["Part"]["twin_descendant_paths"], ["Root/Lamp/Light"] * 2)
+        manifest["partial_scenes"]["Part"]["twin_descendant_paths"] = ["Root/Lamp/Light", "Root/Lamp"]
+        with self.assertRaisesRegex(PS.PartialScopeError, "must be sorted"):
+            PS.manifest_entries(manifest)
+
+    def test_twin_carriers_have_no_components_in_the_scope(self):
+        """The bare chain above an imported twin descendant: in the package, but the package lacks their components."""
+        package = Package()
+        self.addCleanup(package.close)
+        scope = PS.scopes_from_package(manifest_for(twin=True), package.path)["Part"]
+        self.assertEqual(scope.owners, frozenset(PART_IDS))  # the objects are all in the package scene ...
+        self.assertEqual(scope.twin_carriers, frozenset({"10"}))
+        self.assertFalse(scope.covers(10) or scope.covers("10"))  # ... but the source components of the carrier are not in scope
+        self.assertTrue(scope.covers(11) and scope.covers(12))
+        self.assertTrue(PS.in_scope({"Part": scope}, "Part", 11) and not PS.in_scope({"Part": scope}, "Part", 10))
+        self.assertEqual(PS.manifest_entries(manifest_for(twin=True))["Part"]["twin_carrier_ids"], ["10"])
+        self.assertEqual(PS.manifest_entries(manifest_for())["Part"]["twin_carrier_ids"], [])  # absent means none
+        plain = PS.scopes_from_package(manifest_for(), package.path)["Part"]
+        self.assertEqual(plain.twin_carriers, frozenset())
+        self.assertTrue(plain.covers(10))
+
+    def test_imported_twin_descendants_require_the_carrier_record(self):
+        """Without the carriers the source censuses would demand components the package deliberately lacks."""
+        manifest = manifest_for(twin=True)
+        manifest["partial_scenes"]["Part"].pop("twin_carrier_ids")
+        with self.assertRaisesRegex(PS.PartialScopeError, "lacks twin_carrier_ids"):
+            PS.manifest_entries(manifest)
+        manifest["partial_scenes"]["Part"]["twin_carrier_ids"] = []  # all imported descendants excluded again: fine
+        self.assertEqual(PS.manifest_entries(manifest)["Part"]["twin_carrier_ids"], [])
+        package = Package()
+        self.addCleanup(package.close)
+        self.assertEqual(PS.scopes_from_package(manifest, package.path)["Part"].twin_carriers, frozenset())
+
+    def test_twin_carrier_ids_are_checked(self):
+        package = Package(partial_components={"11": [{"type": "MeshRenderer"}]})
+        self.addCleanup(package.close)
+        cases = {
+            "not a list": dict(twin_carriers="10"),
+            "not an id": dict(twin_carriers=["x"]),
+            "negative id": dict(twin_carriers=["-1"]),
+            "duplicate": dict(twin_carriers=["10", "10"]),
+            "unsorted": dict(twin_carriers=["11", "10"]),
+            "more twin carriers than carriers": dict(twin_carriers=["10", "11"]),
+            "no twin descendants were added": dict(rules={"roots:Root/Shelves": rule(selected=2, twin_skipped=3)}, added=0,
+                                                   paths=[]),
+        }
+        for label, change in cases.items():
+            manifest = manifest_for(twin=True)
+            manifest["partial_scenes"]["Part"] = twin_entry(**change)
+            with self.subTest(label), self.assertRaises(PS.PartialScopeError):
+                PS.manifest_entries(manifest)
+        for label, change, pattern in (
+                ("not an object of the scene", dict(twin_carriers=["99"]), "are not objects of the scene"),
+                ("holds components in the package", dict(twin_carriers=["11"]), "must be bare in the package"),
+                ("owns a hidden orphan", dict(twin_carriers=["12"], orphans=((12, 202),)), "hidden ballistic orphans")):
+            manifest = manifest_for(twin=True)
+            manifest["partial_scenes"]["Part"] = twin_entry(**change)
+            package.write("Part", scene_json("Part", PART_IDS, {"11": [{"type": "MeshRenderer"}]}))
+            with self.subTest(label), self.assertRaisesRegex(PS.PartialScopeError, pattern):
+                PS.scopes_from_package(manifest, package.path)
+
+    def test_a_block_from_before_the_new_keys_is_refused_not_read_with_zeros(self):
+        """airpit-native-v7 and older record neither the exclude list nor twin descendants."""
+        for removed in ("excluded", "exclude_entries", "twin_descendants_added", "twin_descendant_paths"):
+            manifest = manifest_for()
+            manifest["partial_scenes"]["Part"].pop(removed)
+            with self.subTest(removed), self.assertRaisesRegex(PS.PartialScopeError, f"lacks keys .*{removed}"):
+                PS.manifest_entries(manifest)
+        manifest = manifest_for()
+        manifest["partial_scenes"]["Part"]["rules"] = {"roots:Root/Shelves": {"selected": 2, "twin_skipped": 3}}
+        with self.assertRaisesRegex(PS.PartialScopeError, "excluded/descendants_added"):
+            PS.manifest_entries(manifest)
+        with self.assertRaises(PS.PartialScopeError):
+            PS.contract_block(manifest)
+        package = Package()
+        self.addCleanup(package.close)
+        (package.path / "manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
+        with self.assertRaises(PS.PartialScopeError):
+            PS.main([str(package.path)])
 
     def test_command_line_prints_the_block_after_checking_the_package(self):
         package = Package()
@@ -263,6 +428,16 @@ class CensusScopeTests(unittest.TestCase):
         self.assertEqual(partial, Counter({("Full", "1"): 1, ("Full", "500"): 1, ("Part", "11"): 1, ("Part", "12"): 1}))
         self.assertEqual(whole[("Part", "77")], 1)  # without a partial scene the level is counted in full
         self.assertEqual(sum(whole.values()), 5)
+
+    def test_null_mesh_colliders_skip_the_source_components_of_twin_carriers(self):
+        full = [null_collider(1, 1)]
+        part = [null_collider(3, 11), null_collider(4, 10), null_collider(5, 12)]  # 10 is the bare twin carrier
+        with plan_patch(), self.environment(full, part):
+            twin = VE.census_null_mesh_colliders(manifest_for(twin=True), self.package.path)
+            plain = VE.census_null_mesh_colliders(manifest_for(), self.package.path)
+        self.assertEqual(twin, Counter({("Full", "1"): 1, ("Part", "11"): 1, ("Part", "12"): 1}))
+        self.assertEqual(plain[("Part", "10")], 1)  # without the twin_carrier_ids the carrier's source collider is demanded
+        self.assertEqual(sum(plain.values()), 4)
 
     def test_null_mesh_colliders_need_the_package_for_a_partial_manifest(self):
         with plan_patch(), self.environment([], []), self.assertRaises(PS.PartialScopeError):
@@ -379,7 +554,9 @@ class CensusScopeTests(unittest.TestCase):
 class RoundtripScopeTests(unittest.TestCase):
     """validate_bundle_roundtrip.source_reference_expectations is scoped like the census above."""
 
-    def run_expectations(self, partial):
+    def run_expectations(self, partial, twin=None):
+        """twin=None: the plain fixture; twin=True/False adds source components on object 10 (the carrier) and reads
+        the manifest with (True) or without (False) 10 listed as a twin carrier."""
         package = Package()
         self.addCleanup(package.close)
         material = SimpleNamespace(type=SimpleNamespace(name="Material"), assets_file=SimpleNamespace(name="shared.assets"),
@@ -390,18 +567,30 @@ class RoundtripScopeTests(unittest.TestCase):
             return Obj("MeshRenderer", path_id, {"m_Materials": [{"m_FileID": 0, "m_PathID": p.path_id} for p in pointers],
                                                   "m_GameObject": owner_ptr(go)}, SimpleNamespace(m_Materials=pointers),
                        raw=b"r%d" % path_id)
+        part = [null_collider(4, 11), null_collider(5, 77), renderer(6, 11), renderer(7, 77)]
+        if twin is not None:
+            part += [null_collider(8, 10), renderer(9, 10)]
         levels = {"level1": Level(null_collider(1, 1), null_collider(2, 500), renderer(3, 500)),
-                  "level2": Level(null_collider(4, 11), null_collider(5, 77), renderer(6, 11), renderer(7, 77))}
+                  "level2": Level(*part)}
         scenes = {"Full": json.loads((package.path / "scenes" / "Full.json").read_text()),
                   "Part": json.loads((package.path / "scenes" / "Part.json").read_text())}
         with patch("UnityPy.Environment", return_value=Environment(levels)):
-            return VB.source_reference_expectations(manifest_for(partial=partial), scenes)
+            return VB.source_reference_expectations(manifest_for(partial=partial, twin=bool(twin)), scenes)
 
     def test_a_partial_scene_reads_only_its_package_owners(self):
         nulls, mixed = self.run_expectations(True)
         self.assertEqual([r["go_id"] for r in nulls["Full"]], ["1", "500"])  # the full scene is read whole
         self.assertEqual([r["go_id"] for r in nulls["Part"]], ["11"])
         self.assertEqual([(r["scene"], r["source_game_object_path_id"]) for r in mixed], [("Full", 500), ("Part", 11)])
+
+    def test_the_source_components_of_a_twin_carrier_are_not_expected(self):
+        nulls, mixed = self.run_expectations(True, twin=True)
+        self.assertEqual([r["go_id"] for r in nulls["Part"]], ["11"])
+        self.assertEqual([(r["scene"], r["source_game_object_path_id"]) for r in mixed], [("Full", 500), ("Part", 11)])
+        nulls, mixed = self.run_expectations(True, twin=False)  # not listed: the bare carrier would be expected to hold them
+        self.assertEqual([r["go_id"] for r in nulls["Part"]], ["11", "10"])
+        self.assertEqual([(r["scene"], r["source_game_object_path_id"]) for r in mixed],
+                         [("Full", 500), ("Part", 11), ("Part", 10)])
 
     def test_without_partial_scenes_the_level_is_read_in_full(self):
         nulls, mixed = self.run_expectations(False)

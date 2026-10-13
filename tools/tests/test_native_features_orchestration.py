@@ -9,6 +9,7 @@ accepted Equator/Bay5 packages (skipped when those ignored work/ packages are ab
 from __future__ import annotations
 
 from contextlib import ExitStack, contextmanager
+import dataclasses
 import io
 import json
 from pathlib import Path
@@ -299,7 +300,12 @@ class AcceptedPackageShapeTests(NativeFeatureTestCase):
 
     def test_airpit_native_v7_blocks_are_reproduced(self):
         # v7 = v6 + the furnished-shop partial scenes: same block shapes, larger decal and light-culling counts.
+        # (An archive since v8: the validators refuse its partial_scenes block, its native blocks are unchanged.)
         self.check_package("airpit-native-v7")
+
+    def test_airpit_native_v8_blocks_are_reproduced(self):
+        # v8 = v7 + twin descendants, exclusions and the wider decoration box: the same native block shapes.
+        self.check_package("airpit-native-v8")
 
 
 class ExtractMapCommandLineTests(unittest.TestCase):
@@ -415,7 +421,9 @@ class PartialSceneTestCase(unittest.TestCase):
             node_tf_ids=(11, 12, 13), go_ids=frozenset((1, 2, 3)), carrier_go_ids=frozenset((1,)),
             unit_tf_ids=(12,), twins={20: 21, 22: 23},
             report={"objects": 3, "units": 1, "carriers": 1, "dropped_script_owners": 2, "go_ids_sha256": "ab" * 32,
-                    "rules": {"roots:Root/Shops": {"selected": 1, "twin_skipped": 2}}})
+                    "rules": {"roots:Root/Shops": dict(selected=1, twin_skipped=2, excluded=0, descendants_added=0)},
+                    "excluded": 0, "exclude_entries": 0, "twin_descendants_added": 0, "twin_descendant_paths": [],
+                    "twin_carriers": 0})
         self.tags = ["Untagged"]
         self.ctx = object()
         self.scene = {"scene_name": "Arena_Test_Part", "objects": [
@@ -440,7 +448,8 @@ class PartialSceneTestCase(unittest.TestCase):
         self.extract_scene = stack.enter_context(
             patch.object(EX.EQ, "extract_scene", return_value=scene if scene is not None else self.scene))
         stack.enter_context(patch.object(EX.SS, "ScopedFile", self.FakeScoped))
-        stack.enter_context(patch.object(EX.sys, "stderr", new=io.StringIO()))
+        self.stderr = io.StringIO()
+        stack.enter_context(patch.object(EX.sys, "stderr", new=self.stderr))
 
 
 class ExtractPartialSceneTests(PartialSceneTestCase):
@@ -463,7 +472,112 @@ class ExtractPartialSceneTests(PartialSceneTestCase):
         native.augment_scene.assert_called_once_with(scene, scoped, self.ctx, "Arena_Test_Part")
         self.assertEqual(block, {"index": 2, "objects": 3, "units": 1, "carriers": 1, "ballistic_orphans": [[7, 8]],
                                  "dropped_script_owners": 2, "go_ids_sha256": "ab" * 32,
-                                 "rules": {"roots:Root/Shops": {"selected": 1, "twin_skipped": 2}}})
+                                 "rules": {"roots:Root/Shops": dict(selected=1, twin_skipped=2, excluded=0,
+                                                                    descendants_added=0)},
+                                 "excluded": 0, "exclude_entries": 0, "twin_descendants_added": 0,
+                                 "twin_descendant_paths": []})
+
+    def test_the_block_carries_the_selection_counters_and_the_imported_paths(self):
+        report = dict(self.selection.report, units=3, excluded=5, exclude_entries=2, twin_descendants_added=2,
+                      twin_descendant_paths=["Root/Shops/Lamp/Spot", "Root/Shops/Lamp/Spot"], twin_carriers=1,
+                      twin_carrier_ids=["7", "12"],
+                      rules={"roots:Root/Shops": dict(selected=1, twin_skipped=2, excluded=5, descendants_added=2)})
+        self.selection = dataclasses.replace(self.selection, report=report)
+        _scene, block = self.run_partial(None)
+        self.assertEqual({k: block[k] for k in ("excluded", "exclude_entries", "twin_descendants_added",
+                                                "twin_descendant_paths", "units")},
+                         {"excluded": 5, "exclude_entries": 2, "twin_descendants_added": 2, "units": 3,
+                          "twin_descendant_paths": ["Root/Shops/Lamp/Spot", "Root/Shops/Lamp/Spot"]})
+        self.assertEqual(block["rules"]["roots:Root/Shops"], dict(selected=1, twin_skipped=2, excluded=5,
+                                                                  descendants_added=2))
+        self.assertEqual(set(block), {"index", "objects", "units", "carriers", "rules", "dropped_script_owners",
+                                      "ballistic_orphans", "go_ids_sha256", "excluded", "exclude_entries",
+                                      "twin_descendants_added", "twin_descendant_paths", "twin_carrier_ids"},
+                         "the manifest block is the contract's key set plus the carriers of imported descendants")
+        self.assertEqual(block["twin_carrier_ids"], ["7", "12"], "the ids are the extractor's, in its order")
+        self.assertIsNot(block["twin_descendant_paths"], report["twin_descendant_paths"])
+        self.assertIsNot(block["twin_carrier_ids"], report["twin_carrier_ids"])
+
+    def test_twin_carrier_ids_are_listed_only_when_twin_descendants_were_imported(self):
+        # imported and all excluded again: the key is still there (empty) because the descendants were imported
+        report = dict(self.selection.report, twin_descendants_added=1, excluded=1, exclude_entries=1,
+                      twin_descendant_paths=["Root/Shops/Lamp/Spot"], twin_carrier_ids=[])
+        self.selection = dataclasses.replace(self.selection, report=report)
+        self.assertEqual(self.run_partial(None)[1]["twin_carrier_ids"], [])
+        # nothing imported: no key (the fixture's report does not even carry one)
+        self.setUp()
+        self.assertNotIn("twin_carrier_ids", self.run_partial(None)[1])
+
+    def test_the_log_line_names_the_imports_the_exclusions_and_the_twin_carriers(self):
+        report = dict(self.selection.report, excluded=5, exclude_entries=2, twin_descendants_added=2, twin_carriers=1,
+                      twin_descendant_paths=["a", "b"], twin_carrier_ids=["9"])
+        self.selection = dataclasses.replace(self.selection, report=report)
+        self.run_partial(None)
+        line = self.stderr.getvalue()
+        for text in ("1 carriers (1 twin)", "2 twin descendant(s) imported", "5 unit(s) excluded by 2 entries",
+                     "2 twin unit(s) of level1 skipped"):
+            self.assertIn(text, line)
+
+    def twin_carrier_selection(self):
+        """Selection 11 (carrier Root, go 1) / 12 (unit, go 2) / 13 (go 3) in which Root is a twin carrier."""
+        graph = SimpleNamespace(nodes={11: SimpleNamespace(components=(5, 6)), 12: SimpleNamespace(components=(7,)),
+                                       13: SimpleNamespace(components=(8,))})
+        selection = dataclasses.replace(self.selection, twin_carrier_tf_ids=(11,), twin_carrier_go_ids=frozenset((1,)))
+        return graph, selection
+
+    def test_twin_carriers_are_extracted_bare_and_stay_out_of_the_augmenter_scope(self):
+        graph, self.selection = self.twin_carrier_selection()
+        seen = {}
+        original = MagicMock(return_value=[{"type": "MeshRenderer"}])
+
+        def extract_scene(*args):
+            seen["bare"] = EX.EQ.build_components("file", [5, 6], 2, "ctx")
+            seen["other"] = EX.EQ.build_components("file", [7], 2, "ctx")
+            seen["partial_match"] = EX.EQ.build_components("file", [5], 2, "ctx")
+            return json.loads(json.dumps(self.scene))
+        native = MagicMock()
+        with ExitStack() as stack:
+            self.patches(stack)
+            stack.enter_context(patch.object(EX.SS, "build_graph", return_value=graph))
+            stack.enter_context(patch.object(EX.EQ, "build_components", original))
+            stack.enter_context(patch.object(EX.EQ, "extract_scene", side_effect=extract_scene))
+            EX.extract_partial_scene(self.record, self.files, {}, self.tags, self.ctx, native)
+            self.assertIs(EX.EQ.build_components, original, "the engine is restored after the scene")
+        self.assertEqual(seen["bare"], [])
+        self.assertEqual(seen["other"], [{"type": "MeshRenderer"}])
+        self.assertEqual(seen["partial_match"], [{"type": "MeshRenderer"}], "only the exact component list is bare")
+        self.assertEqual([c.args for c in original.call_args_list], [("file", [7], 2, "ctx"), ("file", [5], 2, "ctx")])
+        (scoped,) = self.scoped_calls
+        self.assertEqual(scoped.owners, {2, 3}, "the augmenters never see the twin carrier's scripts")
+
+    def test_the_engine_is_restored_when_the_extraction_fails(self):
+        original = EX.EQ.build_components
+        with self.assertRaisesRegex(RuntimeError, "boom"):
+            with EX.bare_game_objects([(1, 2)]):
+                self.assertIsNot(EX.EQ.build_components, original)
+                raise RuntimeError("boom")
+        self.assertIs(EX.EQ.build_components, original)
+
+    def test_bare_game_objects_leaves_every_other_game_object_to_the_engine(self):
+        calls = []
+        with patch.object(EX.EQ, "build_components", side_effect=lambda *a: calls.append(a) or ["real"]):
+            with EX.bare_game_objects([iter((1, 2)), (3,)]):
+                self.assertEqual(EX.EQ.build_components("f", [1, 2], 0, "ctx"), [])
+                self.assertEqual(EX.EQ.build_components("f", (3,), 0, "ctx"), [])
+                self.assertEqual(EX.EQ.build_components("f", [2, 1], 0, "ctx"), ["real"])
+                self.assertEqual(EX.EQ.build_components("f", [], 0, "ctx"), ["real"])
+        self.assertEqual(len(calls), 2)
+
+    def test_without_twin_carriers_the_engine_is_not_wrapped(self):
+        seen = []
+        with ExitStack() as stack:
+            self.patches(stack)
+            stack.enter_context(patch.object(EX.EQ, "extract_scene",
+                                             side_effect=lambda *a: seen.append(EX.EQ.build_components) or self.scene))
+            original = EX.EQ.build_components
+            EX.extract_partial_scene(self.record, self.files, {}, self.tags, self.ctx, None)
+        self.assertEqual(seen, [original], "no twin carrier, no filter: the engine runs exactly as before")
+        self.assertIs(EX.EQ.build_components, original)
 
     def test_graphs_are_built_once_per_level_and_shared_through_the_cache(self):
         graphs = {}

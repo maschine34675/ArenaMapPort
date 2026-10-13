@@ -153,11 +153,15 @@ omit later native features (and old Bay5 omits the harbor background), and the v
 components; v4 lacks native projection decals. Do not rebuild either accepted map from those older packages.
 Bay5 uses its v5 package with `-FullMap`
 and `-OutputDir D:/ArenaMapPort/work/build/bay5`. AirPit (branch `feature/airpit`) builds from
-`work/extract/airpit-native-v7` (2026-10-12 late: v6 + the two PARTIAL scenes `Arena_Airpit_Main_hall` (38) and
-`Arena_Airpit_Light` (37) with the furnished shops, selected by the plan's `select` records and skipping level324/325
-twins; v6 = v5 + native ambient audio; via `extract_map.py --plan tools/extract/plans/airpit.json --native-features`.
-The contract requires audio and the `partial_scenes` pins, so the older packages fail the validators; the five
-full scenes of v7 are byte-identical to v6) with `-FullMap` and `-OutputDir D:/ArenaMapPort/work/build/airpit`. Always give `-MapDescriptor` an absolute
+`work/extract/airpit-native-v8` (2026-10-13: v7 + the rest of the furnished hall; v7 = v6 + the furnished shops. Both
+come from the two PARTIAL scenes `Arena_Airpit_Main_hall` (38) and `Arena_Airpit_Light` (37), selected by the plan's
+`select` records (roots / region_roots on the decoration box, `skip_twins_of` 324/325, `exclude` for the 208 props
+level324 replaced, `twin_descendants: import_missing` for the parts level325 dropped from its twin fixtures); v6 = v5 +
+native ambient audio; via `extract_map.py --plan tools/extract/plans/airpit.json --native-features` followed by
+`refresh_native_volumes.py`. The contract requires audio and the `partial_scenes` pins, so the older packages fail the
+validators; the five full scenes of v8 are byte-identical to v6/v7) with `-FullMap` and `-OutputDir
+D:/ArenaMapPort/work/build/airpit`. `validate_extract.py` on this package needs the 1800 s extractor timeout (the
+default since 2026-10-13; the extraction alone takes about 5 min). Always give `-MapDescriptor` an absolute
 path: Unity resolves relative descriptor paths from its project directory.
 
 Native spatial acoustics use separate ignored `work/extract/spatial-audio/<map>` inputs, regenerated
@@ -334,6 +338,18 @@ the log; the user uses it to point at things.
   bundle stays cached in the EFT process, so a new NavMesh/scenes bundle needs an EFT restart before the next
   raid (the `[ArenaMapPort][NavMesh] added navmesh ... N vertices` line tells which bake is live).
 - `uibridge_wait logMatches`: only lines logged after the wait started count (use `sinceSeq`).
+- Partial scenes (AirPit level38/37, `docs/progress/airpit-release.md` "Phase 1"/"Phase 1b"): `PROJECTION`, `PHYSIC`,
+  `VARIANT`, `PROPSnoCulling` are LEVEL ROOTS of level38, not children of `SBG_Arena_Airpit_Main_hall`; the `*` in
+  `ChinaPlace*` is part of the Arena name (no wildcards); `FLOOR_DAMAGE ` keeps its trailing space. The twin rule compares
+  unit ROOTS only (base name, component multiset, activity, 0.02 m per axis) - a reference twin may have lost or replaced
+  children, which is what `twin_descendants: import_missing` recovers and what `exclude` takes out again when the
+  reference carries a deliberate replacement (level325's SupportLight stand-ins, emptied LODGroups). `exclude` entries
+  name one node each (`at` within 0.05 m when sibling names repeat, as in VARIANT) and fail closed: a census list with
+  duplicates or bare ambiguous paths is refused. Counters: `selected` counts BEFORE descendants/exclusions and
+  `sum(selected) + sum(descendants_added) - sum(excluded) == units`. Re-pin a changed selection with
+  `python tools/validate/partial_scope.py <package>` (contract block) plus the manifest totals; the live pins in
+  `test_scene_select.py`, `test_native_contracts.py` and `test_airpit_bake_inputs.py` follow. Sidecar `opened_barriers`
+  and the C# descriptor must change in the same commit (the bake reads the sidecar, the client the descriptor).
 - Bash tool heredocs over ~180 lines fail; write scripts with the Write tool and run them.
 - Fresh 0-HP profile deaths on the host were the skipped heal screen, not the map.
 - Shader stand-ins (PLAN-AIRPIT item 11): EFT 0.16.9.5 carries `Custom/Billboard_FogSheet_Simple`, both `Cloth/ClothShader`

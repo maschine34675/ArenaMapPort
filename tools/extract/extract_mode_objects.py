@@ -57,7 +57,7 @@ categories only warn (stderr) and appear as empty lists / null.
 CLI:
     python tools/extract/extract_mode_objects.py --package work/extract/equator-native-v5
     python tools/extract/extract_mode_objects.py --package work/extract/bay5-native-v5
-    python tools/extract/extract_mode_objects.py --package work/extract/airpit-native-v7
+    python tools/extract/extract_mode_objects.py --package work/extract/airpit-native-v8
     (the map key comes from the manifest, or from the extractor script for the two legacy
      packages, or from --map-key; the output defaults to tools/maps/<stem>.modes.json)
 """

@@ -37,8 +37,9 @@ registered only in `ArenaMapRegistry.Catalog` (`ArenaMapDescriptor.cs:301-315`),
   validators are converted to data with a parity test. Plans of the other eleven maps stay untouched (adding keys
   changes a plan's digest and would invalidate their packages).
 - **Package naming:** `work/extract/airpit-native-v5` (superseded 2026-10-12 by `airpit-native-v6` = v5 + native ambient
-  audio, item 13 phase 1, and the same evening by `airpit-native-v7` = v6 + the partial scenes `Arena_Airpit_Main_hall`/
-  `Arena_Airpit_Light` with the furnished shops; v5 = feature level: adds static decals; source version
+  audio, item 13 phase 1, the same evening by `airpit-native-v7` = v6 + the partial scenes `Arena_Airpit_Main_hall`/
+  `Arena_Airpit_Light` with the furnished shops, and on 2026-10-13 by `airpit-native-v8` = v7 + the rest of the furnished
+  hall (decoration box, `exclude`, `twin_descendants`); v5 = feature level: adds static decals; source version
   0.6.0 is recorded in the manifest provenance). Build output `work/build/airpit`.
 - **Release promotion has two stages.** Client loops run over `ArenaMapRegistry.All`, so AirPit must be in `All`
   to be testable on the host. The lock-step registry change (item 9) therefore lands on the `feature/airpit`

@@ -61,7 +61,7 @@ ARENA_LAYERS = [9, 11, 13, 18, 30]            # NavMeshSurface mask 0x40042A00 o
 # closed passport-control line (z 69.4); was x -80..56, z -96..92 until host raid 4 (2026-10-12) showed the mesh
 # running through the spawn pocket and 7 m into the unlit entrance hall north of the facade.
 BOUNDS = [-57, 37, -2, 8, -83, 70]
-PACKAGE = REPO / "work" / "extract" / "airpit-native-v7"   # v6 + the furnished shops (Main_hall, Light); v6 is the five-scene archive
+PACKAGE = REPO / "work" / "extract" / "airpit-native-v8"   # v6 + the furnished shops and the rest of the hall decoration (Main_hall, Light); v6/v7 are archives
 HAVE_PACKAGE = (PACKAGE / "scenes" / "Arena_AirPit_ShootOut.json").is_file()
 ARENA_NAVMESH = Path("D:/Battlestate Games/Escape from Tarkov Arena/EscapeFromTarkovArena_Data/sharedassets33.assets")
 
@@ -206,7 +206,7 @@ class ValidatorTests(unittest.TestCase):
         self.assertEqual(VD.bake_input_errors(sidecar("bay5.json")), [])
 
 
-@unittest.skipUnless(HAVE_PACKAGE, "work/extract/airpit-native-v7 not present (PLAN-AIRPIT item 5/13, furnished shops)")
+@unittest.skipUnless(HAVE_PACKAGE, "work/extract/airpit-native-v8 not present (PLAN-AIRPIT item 5/13, furnished shops and hall decoration)")
 class PackageTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -324,22 +324,26 @@ class PackageTests(unittest.TestCase):
         masked = self.pc.source_owner_mask(cset, layer_mask=self.pc.layers_to_mask(ARENA_LAYERS))
         layers = {cset.owners[i].layer for i in range(len(cset.owners)) if everything[i] and not masked[i]}
         # v6 (five scenes): 5309 owners, 5176 sources (- 67 LevelBorder - 2 SPAWN_BOUND - 60 BUS_DOORS - 4 gate), 2029 on the mask.
-        # v7 adds the two furnished-shop scenes: Arena_Airpit_Main_hall 1107 owners (673 L12, 421 L18, 7 L9, 3 L30, 3 L22) and
+        # v7 added the two furnished-shop scenes: Arena_Airpit_Main_hall 1107 owners (673 L12, 421 L18, 7 L9, 3 L30, 3 L22) and
         # Arena_Airpit_Light 178 (132 L12, 46 L18), none of them dropped by a name rule or barrier, so owners +1285 = 6594.
-        # Main_hall includes the 28 SOO_LOD0/DOORS units (closed static leaves: 34 L12 + 14 L18 + 7 L9 live colliders). The six
+        # Main_hall included the 28 SOO_LOD0/DOORS units (closed static leaves: 34 L12 + 14 L18 + 7 L9 live colliders). The six
         # opened shop shells of level324 take 14 colliders out of the bake (8 L12, 6 L18): sources 5176 + 1285 - 14 = 6447,
         # layer-masked 2029 + (431 Main_hall + 46 Light) - 6 = 2500.
-        self.assertEqual(len(cset.owners), 6594)
-        self.assertEqual(int(everything.sum()), 6447)
-        self.assertEqual(int(masked.sum()), 2500)             # the 16 passport-door leaves on layer 18 are sources again
+        # v8 widens both scenes to the whole level38/37 decoration (decoration box, 632 exclusions, 22 + 4 twin descendants):
+        # Main_hall 2384 owners (1415 L12, 948 L18, 7 L9, 11 L30, 3 L22), Light 229 (182 L12, 47 L18); owners +1328 = 7922,
+        # sources 6447 + 1328 = 7775 (no new name rule or barrier), layer-masked 2500 + 535 (Main_hall) + 1 (Light, the
+        # one mask-layer lamp collider above the bake box, y 9.3) = 3036.
+        self.assertEqual(len(cset.owners), 7922)
+        self.assertEqual(int(everything.sum()), 7775)
+        self.assertEqual(int(masked.sum()), 3036)             # the 16 passport-door leaves on layer 18 are sources again
         per_scene = {}
         for i, owner in enumerate(cset.owners):
             counts = per_scene.setdefault(owner.scene, [0, 0, 0])
             counts[0] += 1
             counts[1] += int(everything[i])
             counts[2] += int(masked[i])
-        self.assertEqual(per_scene["Arena_Airpit_Main_hall"], [1107, 1107, 431])
-        self.assertEqual(per_scene["Arena_Airpit_Light"], [178, 178, 46])
+        self.assertEqual(per_scene["Arena_Airpit_Main_hall"], [2384, 2384, 966])
+        self.assertEqual(per_scene["Arena_Airpit_Light"], [229, 229, 47])
         self.assertEqual(per_scene["Arena_AirPit_ShootOut"], [4625, 4540, 1891])   # 4554 / 1897 before the six shells were barriers
         self.assertEqual(layers, {0, 12, 22})                   # Default, HighPolyCollider (ballistic), Interactive
         self.assertFalse({cset.owners[i].layer for i in range(len(cset.owners)) if masked[i]} - set(ARENA_LAYERS))

@@ -15,8 +15,9 @@ real parent chain (as component-free *carriers*), so world positions, hierarchy 
 ballistic owner/ancestor activity checks stay valid, and the manifest records it in
 ``partial_scenes`` while ``slice`` stays ``{}``.
 
-Schema. ``select`` = ``{"schema": 1, "reason": str, "skip_twins_of": <index>, "roots": [path],
-"region_roots": [path | {"path": path, "regions": [name]}], "regions": [{"name", "min", "max"}]}``.
+Schema. ``select`` = ``{"schema": 1, "reason": str, "skip_twins_of": <index>, "twin_descendants": "skip" |
+"import_missing", "roots": [path], "region_roots": [path | {"path": path, "regions": [name]}],
+"regions": [{"name", "min", "max"}], "exclude": [{"path", "at", "reason"}]}``.
 Paths are hierarchy paths from the level root (``Root/Child/...``); names are exact, a trailing
 space included, and a path that several siblings share names all of them (Arena has two
 ``BUILDING`` siblings). ``roots`` take every unit below the path; ``region_roots`` take only the units whose root position lies inside one
@@ -34,7 +35,14 @@ scene whose carrier gained one, so a future Arena update cannot slip a MeshFilte
 
 Rules. Each ``roots`` / ``region_roots`` entry is one rule, tried in the order roots first, then
 region roots, in plan order; the first rule that matches a unit claims it. The manifest reports
-``rules[<kind>:<path>] = {selected, twin_skipped}``.
+``rules[<kind>:<path>] = {selected, twin_skipped, excluded, descendants_added}``. Every counter counts units
+and each one belongs to a step: ``selected`` is the claimed units that were not twin-skipped (counted before the
+two later steps), ``twin_skipped`` the claimed units skipped as twins, ``descendants_added`` the twin descendants
+that ``twin_descendants`` imported below twin-skipped units (attributed to the rule that claimed the unit they sit
+in) and ``excluded`` the units ``exclude`` dropped again, imported descendants included (attributed likewise).
+So per rule ``selected + descendants_added - excluded`` units are left and
+``units = sum(selected) + sum(descendants_added) - sum(excluded)``; the totals ``twin_descendants_added`` and
+``excluded`` repeat the sums. tools/extract/native_contract_loader.py spells the same definition out for the pins.
 
 Twins. A claimed unit is *twin-skipped* when the reference scene has a still unused unit root
 with the same name once a trailing `` (N)`` is stripped, the same multiset of
@@ -43,6 +51,31 @@ position within ``TWIN_TOLERANCE`` on every axis. Candidates are matched greedil
 (path, transform id) order, each reference unit once, nearest first, so the result does not
 depend on the order the level file lists its objects. The signature leaves every MonoBehaviour
 out; script classes only matter for ``UNIT_SCRIPTS`` and the dropped-owner count below.
+
+Twin descendants. ``"twin_descendants": "import_missing"`` (needs ``skip_twins_of``; the default
+``"skip"`` is the behaviour above) recovers what a twin lacks. For every claimed unit U that was
+twin-skipped against the reference unit R, each node D below U that carries content of its own (the unit
+rules above applied as if U and everything between were containers: LODGroup, renderer, collider, Light,
+ParticleSystem, Rigidbody or a ``UNIT_SCRIPTS`` script) and has no counterpart below R becomes a unit of its
+own with its whole subtree. A counterpart is a node below R with the same base name (`` (N)`` stripped), the
+same component multiset, the same effective activity and a world position within ``TWIN_TOLERANCE`` on every
+axis; candidates go in (path, transform id) order and take the nearest unused counterpart, so the result does
+not depend on the table order. A content node inside an emitted D belongs to it. The chain from D up to and
+including U is emitted as *twin carriers*: GameObjects with the source name, active flag, layer and local TRS
+(D keeps its exact world pose and hierarchy path) but no components, although the source nodes have some
+(U's LODGroup, renderers). They are the only carriers whose source carries components: ``extract_map``
+emits them bare, their MonoBehaviours stay outside the augmenter scope (``Selection.scope_go_ids``), and
+``structure_problems`` still refuses a scene in which any carrier, twin carriers included, has a component.
+
+Exclusions. ``exclude`` removes reviewed duplicates after claiming, twin matching and twin descendants. An
+entry names a node by its exact hierarchy path (a unit root, or a container above several units such as a
+prefab instance; an added twin descendant also qualifies) and drops every selected unit, added descendants
+included, whose root is that node or lies below it; carriers are recomputed from the units that remain.
+``at`` (a world position, matched within ``EXCLUDE_AT_TOLERANCE``) picks one of several nodes that share the
+path and is required when the path is not unique in the level. An entry that resolves to no node, is
+ambiguous, points inside a unit, resolves to a node another entry already names or drops no unit raises
+``HardExtractError``: the list is the fingerprint of one reviewed Arena build, so an update that moves or
+removes a node fails in the extractor instead of silently importing the duplicate again.
 
 Dropped owners. A container that lies in a claimed rule scope (under the rule path, and inside a
 region for a region root), owns a MonoBehaviour and is neither a unit nor a carrier loses that script:
@@ -63,8 +96,8 @@ the loss visible.
 
 Failures. ``validate_select`` raises ``PlanError`` (a malformed record); everything that needs
 the level raises ``HardExtractError`` (an unresolved root, a root inside a unit, an empty
-selection, a missing reference scene), so a drifted Arena update fails in the extractor and not
-in Unity.
+selection, a missing reference scene, a stale exclusion), so a drifted Arena update fails in the
+extractor and not in Unity.
 """
 from __future__ import annotations
 
@@ -78,9 +111,15 @@ from common_ids import HardExtractError
 from source_plan import PlanError, finite_vector
 
 SELECT_SCHEMA = 1
-SELECT_KEYS = frozenset(("schema", "reason", "skip_twins_of", "roots", "region_roots", "regions"))
+SELECT_KEYS = frozenset(("schema", "reason", "skip_twins_of", "twin_descendants", "roots", "region_roots",
+                         "regions", "exclude"))
+TWIN_DESCENDANTS_SKIP = "skip"
+TWIN_DESCENDANTS_IMPORT = "import_missing"
+TWIN_DESCENDANT_MODES = (TWIN_DESCENDANTS_SKIP, TWIN_DESCENDANTS_IMPORT)
 # Per-axis distance under which two same-signature unit roots are the same object in two levels.
 TWIN_TOLERANCE = 0.02
+# Distance (metres, euclidean) within which an exclude entry's ``at`` selects a node.
+EXCLUDE_AT_TOLERANCE = 0.05
 _FLOAT_SLACK = 1e-9  # keeps a pair that sits exactly on the tolerance in, whatever the float32 round trip did
 _CELL = 0.1          # twin lookup grid; any cell size >= TWIN_TOLERANCE makes the 27 neighbours exhaustive
 # Components that make a lone GameObject a unit of its own (LODGroup roots are units by themselves).
@@ -123,11 +162,20 @@ class Rule:
 
 
 @dataclass(frozen=True)
+class Exclusion:
+    path: str
+    at: tuple | None          # world position that picks one of several nodes sharing the path
+    reason: str
+
+
+@dataclass(frozen=True)
 class SelectSpec:
     reason: str
     skip_twins_of: int | None
     rules: tuple              # Rule objects in claim order: roots first, then region roots
     regions: tuple            # every declared Region, in declaration order
+    twin_descendants: str = TWIN_DESCENDANTS_SKIP
+    exclude: tuple = ()       # Exclusion objects in plan order
 
 
 def _check_path(value, where: str) -> str:
@@ -146,6 +194,26 @@ def _check_keys(value, allowed: set, required: set, where: str) -> None:
     missing = required - set(value)
     if missing:
         raise PlanError(f"{where} is missing {sorted(missing)}")
+
+
+def _check_exclude(raw, where: str) -> tuple:
+    """The ``exclude`` list as Exclusion objects; every entry needs a path and a reason, ``at`` is optional."""
+    if not isinstance(raw, list):
+        raise PlanError(f"{where} must be an array")
+    entries, seen = [], set()
+    for i, item in enumerate(raw):
+        label = f"{where}[{i}]"
+        _check_keys(item, {"path", "at", "reason"}, {"path", "reason"}, label)
+        path = _check_path(item["path"], label)
+        reason = item["reason"]
+        if not isinstance(reason, str) or not reason.strip():
+            raise PlanError(f"{label}: a reason is required")
+        at = tuple(finite_vector(item["at"], f"{label} at")) if "at" in item else None
+        if (path, at) in seen:
+            raise PlanError(f"{where}: {path!r}{'' if at is None else ' at ' + str(list(at))} is listed twice")
+        seen.add((path, at))
+        entries.append(Exclusion(path, at, reason))
+    return tuple(entries)
 
 
 def _check_region(raw, where: str) -> Region:
@@ -175,6 +243,12 @@ def validate_select(select, where: str = "select") -> SelectSpec:
     twins = select.get("skip_twins_of")
     if twins is not None and (type(twins) is not int or twins < 0):
         raise PlanError(f"{where}: skip_twins_of must be a BuildSettings index")
+    mode = select.get("twin_descendants", TWIN_DESCENDANTS_SKIP)
+    if not isinstance(mode, str) or mode not in TWIN_DESCENDANT_MODES:
+        raise PlanError(f"{where}: twin_descendants must be one of {list(TWIN_DESCENDANT_MODES)}, got {mode!r}")
+    if mode == TWIN_DESCENDANTS_IMPORT and twins is None:
+        raise PlanError(f"{where}: twin_descendants {mode!r} needs skip_twins_of (there is no twin to compare with)")
+    exclude = _check_exclude(select.get("exclude", []), f"{where}.exclude")
 
     declared = select.get("regions", [])
     if not isinstance(declared, list):
@@ -223,7 +297,7 @@ def validate_select(select, where: str = "select") -> SelectSpec:
     unused = [r.name for r in regions if r.name not in used]
     if unused:
         raise PlanError(f"{where}: region(s) {unused} are not used by any region root")
-    return SelectSpec(reason, twins, tuple(rules), regions)
+    return SelectSpec(reason, twins, tuple(rules), regions, mode, exclude)
 
 
 # --------------------------------------------------------------------------
@@ -233,7 +307,7 @@ def validate_select(select, where: str = "select") -> SelectSpec:
 class Node:
     """One GameObject/Transform pair of a level, with everything the selection needs."""
     __slots__ = ("tf_id", "go_id", "name", "path", "layer", "self_active", "active", "pos", "types", "scripts",
-                 "parent", "children", "unit")
+                 "components", "parent", "children", "unit")
 
     def __init__(self, tf_id, go_id, name, layer, self_active):
         self.tf_id, self.go_id, self.name, self.layer, self.self_active = tf_id, go_id, name, layer, self_active
@@ -242,6 +316,7 @@ class Node:
         self.pos = (0.0, 0.0, 0.0)
         self.types = ()           # sorted multiset of component type names (Transform/MonoBehaviour left out)
         self.scripts = ()         # sorted script class of every MonoBehaviour ("" when unresolved)
+        self.components = ()      # component path ids of the GameObject, in file order
         self.parent = None        # parent tf id, None for a level root
         self.children = []        # child tf ids, ascending
         self.unit = None          # tf id of the unit root this node belongs to; None for a container
@@ -249,6 +324,12 @@ class Node:
     @property
     def is_unit_root(self) -> bool:
         return self.unit == self.tf_id
+
+    @property
+    def has_content(self) -> bool:
+        """True for a node that makes a unit of its own wherever no ancestor already did."""
+        return bool(LOD_TYPE in self.types or CONTENT_TYPES.intersection(self.types)
+                    or UNIT_SCRIPTS.intersection(self.scripts))
 
 
 def _rotation(q):
@@ -314,6 +395,7 @@ class Graph:
                     types.append(kind)
             nodes[tf_id].types = tuple(sorted(types))
             nodes[tf_id].scripts = tuple(sorted(scripts))
+            nodes[tf_id].components = tuple(go["components"])
         roots = []
         for tf_id, node in nodes.items():
             father = tf_map[tf_id]["father_id"]
@@ -340,8 +422,7 @@ class Graph:
             node.pos = (parent_pos[0] + offset[0], parent_pos[1] + offset[1], parent_pos[2] + offset[2])
             linear = _mul(parent_linear, _local_linear(tf["rot"], tf["scale"]))
             unit = parent_unit
-            if unit is None and (LOD_TYPE in node.types or CONTENT_TYPES.intersection(node.types)
-                                 or UNIT_SCRIPTS.intersection(node.scripts)):
+            if unit is None and node.has_content:
                 unit = tf_id
             node.unit = unit
             for child in reversed(node.children):
@@ -398,35 +479,73 @@ def _cell(position):
     return tuple(math.floor(v / _CELL) for v in position)
 
 
+def _twin_index(nodes) -> dict:
+    index: dict[tuple, list[Node]] = {}
+    for node in nodes:
+        index.setdefault((_twin_key(node), _cell(node.pos)), []).append(node)
+    return index
+
+
+def _nearest_unused(index: dict, used: set, node: Node) -> Node | None:
+    """The still unused node of ``index`` (see ``_twin_index``) that is a twin of ``node``, nearest first."""
+    key, (cx, cy, cz) = _twin_key(node), _cell(node.pos)
+    best, best_rank = None, None
+    for dx in (-1, 0, 1):
+        for dy in (-1, 0, 1):
+            for dz in (-1, 0, 1):
+                for ref in index.get((key, (cx + dx, cy + dy, cz + dz)), ()):
+                    if ref.tf_id in used:
+                        continue
+                    distance = max(abs(a - b) for a, b in zip(node.pos, ref.pos))
+                    if distance > TWIN_TOLERANCE + _FLOAT_SLACK:
+                        continue
+                    rank = (distance, ref.path, ref.tf_id)
+                    if best_rank is None or rank < best_rank:
+                        best, best_rank = ref, rank
+    return best
+
+
 def match_twins(candidates, reference: Graph) -> dict[int, int]:
     """{candidate tf id: reference tf id} for every candidate that has a twin among the reference unit roots.
 
     Candidates are processed in (path, tf id) order and each reference unit root is used once.
     """
-    index: dict[tuple, list[Node]] = {}
-    for node in reference.unit_roots:
-        index.setdefault((_twin_key(node), _cell(node.pos)), []).append(node)
+    index = _twin_index(reference.unit_roots)
     used: set[int] = set()
     twins: dict[int, int] = {}
     for node in sorted(candidates, key=lambda n: (n.path, n.tf_id)):
-        key, (cx, cy, cz) = _twin_key(node), _cell(node.pos)
-        best, best_rank = None, None
-        for dx in (-1, 0, 1):
-            for dy in (-1, 0, 1):
-                for dz in (-1, 0, 1):
-                    for ref in index.get((key, (cx + dx, cy + dy, cz + dz)), ()):
-                        if ref.tf_id in used:
-                            continue
-                        distance = max(abs(a - b) for a, b in zip(node.pos, ref.pos))
-                        if distance > TWIN_TOLERANCE + _FLOAT_SLACK:
-                            continue
-                        rank = (distance, ref.path, ref.tf_id)
-                        if best_rank is None or rank < best_rank:
-                            best, best_rank = ref, rank
+        best = _nearest_unused(index, used, node)
         if best is not None:
             used.add(best.tf_id)
             twins[node.tf_id] = best.tf_id
     return twins
+
+
+def missing_descendants(graph: Graph, unit_tf_id: int, reference: Graph, reference_tf_id: int) -> list[int]:
+    """Transform ids of the content nodes below a twin-skipped unit that its reference twin does not carry.
+
+    Every node strictly below ``unit_tf_id`` with ``has_content`` is a candidate; the reference side is every node
+    strictly below ``reference_tf_id``. Candidates go in (path, tf id) order and take the nearest unused
+    counterpart (``_nearest_unused``). One without a counterpart is returned and its whole subtree is covered:
+    content inside it is neither matched nor returned again. Ascending path order, so an ancestor always comes
+    before the nodes it covers.
+    """
+    index = _twin_index(reference.nodes[t] for t in reference.subtree(reference_tf_id) if t != reference_tf_id)
+    candidates = sorted((graph.nodes[t] for t in graph.subtree(unit_tf_id)
+                         if t != unit_tf_id and graph.nodes[t].has_content), key=lambda n: (n.path, n.tf_id))
+    used: set[int] = set()
+    covered: set[int] = set()
+    missing: list[int] = []
+    for node in candidates:
+        if node.tf_id in covered:
+            continue
+        counterpart = _nearest_unused(index, used, node)
+        if counterpart is not None:
+            used.add(counterpart.tf_id)
+            continue
+        missing.append(node.tf_id)
+        covered.update(graph.subtree(node.tf_id))
+    return missing
 
 
 # --------------------------------------------------------------------------
@@ -438,9 +557,21 @@ class Selection:
     node_tf_ids: tuple        # ascending: the members of every selected unit plus the carriers
     go_ids: frozenset         # GameObject path ids of node_tf_ids
     carrier_go_ids: frozenset
-    unit_tf_ids: tuple        # the selected unit roots, in (path, tf id) order
+    unit_tf_ids: tuple        # the selected unit roots (added twin descendants included), in (path, tf id) order
     twins: dict               # twin-skipped unit tf id -> reference tf id
-    report: dict              # objects, units, carriers, rules, dropped_script_owners, go_ids_sha256
+    report: dict              # objects, units, carriers, rules, dropped_script_owners, go_ids_sha256, excluded,
+                              # exclude_entries, twin_descendants_added, twin_descendant_paths, twin_carriers,
+                              # twin_carrier_ids (decimal GameObject ids, ascending)
+    twin_carrier_tf_ids: tuple = ()          # the carriers whose source nodes have components (subset of the carriers)
+    twin_carrier_go_ids: frozenset = frozenset()
+    descendant_tf_ids: tuple = ()            # roots of the twin descendants twin_descendants imported (before exclusion)
+    excluded_tf_ids: tuple = ()              # claimed unit roots and imported twin descendants the exclude entries dropped
+
+    @property
+    def scope_go_ids(self) -> frozenset:
+        """Owners the native augmenters may see: everything extracted except the bare twin carriers, whose
+        MonoBehaviours belong to units that were skipped."""
+        return self.go_ids - self.twin_carrier_go_ids
 
 
 def go_ids_digest(go_ids) -> str:
@@ -451,8 +582,34 @@ def _under(path: str, root: str) -> bool:
     return path == root or path.startswith(root + "/")
 
 
+def _resolve_exclusion(entry: Exclusion, graph: Graph, label: str) -> int:
+    """The transform an exclude entry names; HardExtractError when the path does not pick exactly one node."""
+    found = graph.by_path.get(entry.path)
+    if not found:
+        raise HardExtractError(f"scene_select: {label} exclude {entry.path!r} resolves to no object")
+    if entry.at is None:
+        if len(found) > 1:
+            raise HardExtractError(f"scene_select: {label} exclude {entry.path!r} is ambiguous ({len(found)} objects "
+                                   "share the path); add 'at'")
+        return found[0]
+    near = [t for t in found if math.dist(graph.nodes[t].pos, entry.at) <= EXCLUDE_AT_TOLERANCE + _FLOAT_SLACK]
+    if not near:
+        raise HardExtractError(f"scene_select: {label} exclude {entry.path!r} has no object within "
+                               f"{EXCLUDE_AT_TOLERANCE} m of {list(entry.at)}")
+    if len(near) > 1:
+        raise HardExtractError(f"scene_select: {label} exclude {entry.path!r} at {list(entry.at)} is ambiguous "
+                               f"({len(near)} objects within {EXCLUDE_AT_TOLERANCE} m)")
+    return near[0]
+
+
 def select_nodes(record: dict, graph: Graph, reference_graph: Graph | None = None) -> Selection:
-    """Apply the record's ``select`` to ``graph``; ``reference_graph`` is the graph of ``skip_twins_of``."""
+    """Apply the record's ``select`` to ``graph``; ``reference_graph`` is the graph of ``skip_twins_of``.
+
+    Order: claim the units by rule, match twins, import the missing descendants of twin-skipped units
+    (``twin_descendants``), drop the excluded units (``exclude``), then derive the carriers from the units that
+    remain. ``tf`` ids are the keys everywhere; the report is the manifest ``partial_scenes`` block minus ``index``
+    and ``ballistic_orphans``.
+    """
     label = record.get("name", "?")
     spec = validate_select(record.get("select"), f"{label} select")
     if spec.skip_twins_of is not None and reference_graph is None:
@@ -474,24 +631,60 @@ def select_nodes(record: dict, graph: Graph, reference_graph: Graph | None = Non
                 break
     twins = (match_twins([u for units in claimed.values() for u in units], reference_graph)
              if spec.skip_twins_of is not None else {})
-    rules_report, selected = {}, []
+    rules_report, selected, rule_of = {}, [], {}
     for rule in spec.rules:
         units = claimed[rule.key]
         kept = [u for u in units if u.tf_id not in twins]
-        rules_report[rule.key] = {"selected": len(kept), "twin_skipped": len(units) - len(kept)}
+        rules_report[rule.key] = {"selected": len(kept), "twin_skipped": len(units) - len(kept),
+                                  "excluded": 0, "descendants_added": 0}
         selected.extend(kept)
-    if not selected:
-        raise HardExtractError(f"scene_select: {label} selects no unit (every claimed unit is a twin or nothing matched)")
+        rule_of.update((u.tf_id, rule.key) for u in units)
     selected.sort(key=lambda n: (n.path, n.tf_id))
+    descendants: dict[int, int] = {}      # twin descendant tf id -> the twin-skipped unit it sits in
+    if spec.twin_descendants == TWIN_DESCENDANTS_IMPORT:
+        for unit_tf_id in sorted(twins, key=lambda t: (graph.nodes[t].path, t)):
+            for tf_id in missing_descendants(graph, unit_tf_id, reference_graph, twins[unit_tf_id]):
+                descendants[tf_id] = unit_tf_id
+                rules_report[rule_of[unit_tf_id]]["descendants_added"] += 1
+    dropped_units: set[int] = set()
+    if spec.exclude:
+        candidates = {u.tf_id for u in selected} | set(descendants)
+        named: dict[int, Exclusion] = {}
+        for entry in spec.exclude:
+            node = _resolve_exclusion(entry, graph, label)
+            if node in named:
+                raise HardExtractError(f"scene_select: {label} exclude {entry.path!r} names the same object as "
+                                       f"{named[node].path!r}")
+            named[node] = entry
+            owner = graph.nodes[node].unit
+            if owner not in (None, node) and node not in descendants:
+                raise HardExtractError(f"scene_select: {label} exclude {entry.path!r} points inside the unit "
+                                       f"{graph.nodes[owner].path!r}; exclude the unit root")
+            drops = candidates.intersection(graph.subtree(node))
+            if not drops:
+                raise HardExtractError(f"scene_select: {label} exclude {entry.path!r} drops no unit "
+                                       "(stale entry, or everything below it is a twin or not selected)")
+            dropped_units.update(drops)
+    final = sorted((n for n in ([*selected, *(graph.nodes[t] for t in descendants)]) if n.tf_id not in dropped_units),
+                   key=lambda n: (n.path, n.tf_id))
+    if not final:
+        why = ("every selected unit is excluded" if selected or descendants
+               else "every claimed unit is a twin or nothing matched")
+        raise HardExtractError(f"scene_select: {label} selects no unit ({why})")
+    for tf_id in dropped_units:
+        rules_report[rule_of[descendants.get(tf_id, tf_id)]]["excluded"] += 1
     members: set[int] = set()
-    for unit in selected:
+    for unit in final:
         members.update(graph.subtree(unit.tf_id))
     carriers: set[int] = set()
-    for unit in selected:
+    twin_carriers: set[int] = set()       # carriers inside a twin-skipped unit (their source has components)
+    for unit in final:
         for ancestor in graph.ancestors(unit.tf_id):
             if ancestor in carriers:
                 break
             carriers.add(ancestor)
+            if graph.nodes[ancestor].unit is not None:
+                twin_carriers.add(ancestor)
     tf_ids = sorted(members | carriers)
     go_ids = frozenset(graph.nodes[t].go_id for t in tf_ids)
     dropped = sum(1 for node in graph.nodes.values()
@@ -499,10 +692,18 @@ def select_nodes(record: dict, graph: Graph, reference_graph: Graph | None = Non
                   and any(_under(node.path, rule.path)
                           and (not rule.regions or any(r.contains(node.pos) for r in rule.regions))
                           for rule in spec.rules))
-    report = {"objects": len(tf_ids), "units": len(selected), "carriers": len(carriers),
-              "rules": rules_report, "dropped_script_owners": dropped, "go_ids_sha256": go_ids_digest(go_ids)}
+    report = {"objects": len(tf_ids), "units": len(final), "carriers": len(carriers),
+              "rules": rules_report, "dropped_script_owners": dropped, "go_ids_sha256": go_ids_digest(go_ids),
+              "excluded": len(dropped_units), "exclude_entries": len(spec.exclude),
+              "twin_descendants_added": len(descendants),
+              "twin_descendant_paths": sorted(graph.nodes[t].path for t in descendants),
+              "twin_carriers": len(twin_carriers),
+              "twin_carrier_ids": sorted((str(graph.nodes[t].go_id) for t in twin_carriers), key=int)}
     return Selection(tuple(tf_ids), go_ids, frozenset(graph.nodes[t].go_id for t in carriers),
-                     tuple(u.tf_id for u in selected), {t: twins[t] for t in sorted(twins)}, report)
+                     tuple(u.tf_id for u in final), {t: twins[t] for t in sorted(twins)}, report,
+                     tuple(sorted(twin_carriers)), frozenset(graph.nodes[t].go_id for t in twin_carriers),
+                     tuple(sorted(descendants, key=lambda t: (graph.nodes[t].path, t))),
+                     tuple(sorted(dropped_units, key=lambda t: (graph.nodes[t].path, t))))
 
 
 # --------------------------------------------------------------------------
@@ -521,12 +722,18 @@ def structure_problems(scene: dict, selection: Selection) -> list[str]:
         problems.append(f"emitted objects differ from the selection: {len(ids - expected)} extra, "
                         f"{len(expected - ids)} missing")
     carriers = {str(g) for g in selection.carrier_go_ids}
+    twin_carriers = {str(g) for g in selection.twin_carrier_go_ids}
+    if not twin_carriers <= carriers:
+        problems.append(f"twin carriers {sorted(twin_carriers - carriers)[:3]} are not carriers")
     for obj in objects:
         if obj["parent_id"] is not None and obj["parent_id"] not in ids:
             problems.append(f"{obj['id']} ({obj['name']!r}): parent {obj['parent_id']} is not in the scene")
         if obj["id"] in carriers and obj["components"]:
+            # Twin carriers have components in the source (the skipped unit's LODGroup and renderers) and are
+            # emitted bare by extract_map; a component that survived is as much a defect as on any container.
             kinds = sorted({c["type"] for c in obj["components"]})
-            problems.append(f"{obj['id']} ({obj['name']!r}): carrier has components {kinds}")
+            what = "twin carrier" if obj["id"] in twin_carriers else "carrier"
+            problems.append(f"{obj['id']} ({obj['name']!r}): {what} has components {kinds}")
         for comp in obj["components"]:
             if comp["type"] != "LODGroup":
                 continue

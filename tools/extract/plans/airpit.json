@@ -35,8 +35,9 @@
       "index": 38,
       "select": {
         "schema": 1,
-        "reason": "The ShootOut build (level324) imports the four shop interiors only as shells and a few props; this earlier TeamFight level has them furnished. Import its shop content, door leaves and projection decals, plus the hall prop groups that sit inside the four shop footprints, and skip everything level324 already carries (twin objects).",
+        "reason": "The ShootOut build (level324) carries the four shop interiors only as shells and a few props and lost most of the hall dressing BSG kept in this earlier TeamFight level (passport hall, stalls, floor damage, ground clutter, decals). Import the furnished shops, their door leaves and, inside the decoration box, the whole prop tree (OO/PROPS, VARIANT, PROPSnoCulling) and every projection decal; skip everything level324 already carries (twin objects) but recover the parts a twin lacks (twin_descendants: the car-shadow decals below the baggage carts); the 208 exclude entries drop the 632 units BSG replaced for level324 (the two old scaffold/cover platforms were swapped for the prefab platforms SOO/airpit_construction_ShootOut_01 (2)/(3), plus moved ladders, planters, tarpaulin walls, ramps and nudged sandbags/barricades), so the hall centre keeps level324's cover. Not imported: PHYSIC (inactive in Arena), SOO cover walls (mode layout) and SOO_LOD0/Destroyed_Brick_Wall* (would close the north-east breach). FLOOR_DAMAGE2 is in scope although BSG switched it off in level324.",
         "skip_twins_of": 324,
+        "twin_descendants": "import_missing",
         "roots": [
           "SBG_Arena_Airpit_Main_hall/OO/PROPS/INDOOR/SHOPS",
           "PROJECTION/INDOOR/SHOPS",
@@ -51,132 +52,1213 @@
           "SBG_Arena_Airpit_Main_hall/SOO_LOD0/DOORS"
         ],
         "region_roots": [
-          {
-            "path": "PROJECTION",
-            "regions": [
-              "outline box"
-            ]
-          },
-          {
-            "path": "SBG_Arena_Airpit_Main_hall/OO/PROPS/INDOOR/BACK",
-            "regions": [
-              "NW shop",
-              "NE shop",
-              "SE shop",
-              "SW shop"
-            ]
-          },
-          {
-            "path": "SBG_Arena_Airpit_Main_hall/OO/PROPS/INDOOR/FRONT",
-            "regions": [
-              "NW shop",
-              "NE shop",
-              "SE shop",
-              "SW shop"
-            ]
-          },
-          {
-            "path": "SBG_Arena_Airpit_Main_hall/OO/PROPS/INDOOR/LEFT",
-            "regions": [
-              "NW shop",
-              "NE shop",
-              "SE shop",
-              "SW shop"
-            ]
-          },
-          {
-            "path": "SBG_Arena_Airpit_Main_hall/OO/PROPS/INDOOR/RIGHT",
-            "regions": [
-              "NW shop",
-              "NE shop",
-              "SE shop",
-              "SW shop"
-            ]
-          },
-          {
-            "path": "SBG_Arena_Airpit_Main_hall/OO/PROPS/OUTDOOR/FIELD",
-            "regions": [
-              "NW shop",
-              "NE shop",
-              "SE shop",
-              "SW shop"
-            ]
-          },
-          {
-            "path": "SBG_Arena_Airpit_Main_hall/OO/PROPS/FLOOR_DAMAGE ",
-            "regions": [
-              "NW shop",
-              "NE shop",
-              "SE shop",
-              "SW shop"
-            ]
-          }
+          "PROJECTION",
+          "SBG_Arena_Airpit_Main_hall/OO/PROPS",
+          "VARIANT",
+          "PROPSnoCulling"
         ],
         "regions": [
           {
-            "name": "outline box",
+            "name": "decoration box",
             "min": [
-              -57.0,
+              -60.0,
               -5.0,
-              -83.0
+              -85.0
             ],
             "max": [
-              37.0,
-              12.0,
-              70.0
+              40.0,
+              20.0,
+              91.0
             ]
+          }
+        ],
+        "exclude": [
+          {
+            "path": "PROPSnoCulling/Scaffolding_Trap (41)",
+            "reason": "replaced in level324: lies inside SOO/airpit_construction_ShootOut_01 (3)"
           },
           {
-            "name": "NW shop",
-            "min": [
-              -57.5,
-              -1.5,
-              13.5
-            ],
-            "max": [
-              -33.5,
-              9.0,
-              44.5
-            ]
+            "path": "PROPSnoCulling/Scaffolding_Trap (42)",
+            "reason": "replaced in level324: lies inside SOO/airpit_construction_ShootOut_01 (3)"
           },
           {
-            "name": "NE shop",
-            "min": [
-              11.5,
-              -1.5,
-              6.5
-            ],
-            "max": [
-              34.5,
-              9.0,
-              44.5
-            ]
+            "path": "PROPSnoCulling/Scaffolding_Trap (43)",
+            "reason": "replaced in level324: lies inside SOO/airpit_construction_ShootOut_01 (3)"
           },
           {
-            "name": "SE shop",
-            "min": [
-              9.5,
-              -1.5,
-              -45.5
-            ],
-            "max": [
-              33.5,
-              9.0,
-              -14.5
-            ]
+            "path": "PROPSnoCulling/Scaffolding_Trap (5)",
+            "reason": "replaced in level324: lies inside SOO/airpit_construction_ShootOut_01 (2)"
           },
           {
-            "name": "SW shop",
-            "min": [
-              -57.5,
-              -1.5,
-              -41.5
+            "path": "PROPSnoCulling/Scaffolding_Trap (54)",
+            "reason": "replaced in level324: lies inside SOO/airpit_construction_ShootOut_01 (3)"
+          },
+          {
+            "path": "PROPSnoCulling/Scaffolding_Trap (55)",
+            "reason": "replaced in level324: lies inside SOO/airpit_construction_ShootOut_01 (3)"
+          },
+          {
+            "path": "PROPSnoCulling/Scaffolding_Trap (6)",
+            "reason": "replaced in level324: lies inside SOO/airpit_construction_ShootOut_01 (2)"
+          },
+          {
+            "path": "PROPSnoCulling/metal_sheet_hanging_01 (22)",
+            "reason": "replaced in level324: lies inside SOO/airpit_construction_ShootOut_01 (2)"
+          },
+          {
+            "path": "PROPSnoCulling/metal_sheet_hanging_01 (7)",
+            "reason": "replaced in level324: lies inside SOO/airpit_construction_ShootOut_01 (3)"
+          },
+          {
+            "path": "PROPSnoCulling/metal_sheet_hanging_01 (8)",
+            "reason": "replaced in level324: lies inside SOO/airpit_construction_ShootOut_01 (3)"
+          },
+          {
+            "path": "PROPSnoCulling/plywood_board_2 (29)",
+            "reason": "replaced in level324: lies inside SOO/airpit_construction_ShootOut_01 (3)"
+          },
+          {
+            "path": "PROPSnoCulling/plywood_board_2 (55)",
+            "reason": "replaced in level324: lies inside SOO/airpit_construction_ShootOut_01 (3)"
+          },
+          {
+            "path": "PROPSnoCulling/plywood_board_2 (56)",
+            "reason": "replaced in level324: lies inside SOO/airpit_construction_ShootOut_01 (3)"
+          },
+          {
+            "path": "PROPSnoCulling/plywood_board_2 (58)",
+            "at": [
+              -13.635,
+              3.6,
+              26.519
             ],
-            "max": [
-              -26.5,
-              9.0,
-              -7.5
-            ]
+            "reason": "replaced in level324: lies inside SOO/airpit_construction_ShootOut_01 (3)"
+          },
+          {
+            "path": "PROPSnoCulling/plywood_board_2 (58)",
+            "at": [
+              -9.938,
+              3.584,
+              -18.545
+            ],
+            "reason": "replaced in level324: lies inside SOO/airpit_construction_ShootOut_01 (2)"
+          },
+          {
+            "path": "PROPSnoCulling/plywood_board_2 (59)",
+            "reason": "replaced in level324: lies inside SOO/airpit_construction_ShootOut_01 (2)"
+          },
+          {
+            "path": "SBG_Arena_Airpit_Main_hall/OO/PROPS/INDOOR/AIRBUS/PROPS_INDOOR/paper_06",
+            "at": [
+              -10.894,
+              4.246,
+              -10.389
+            ],
+            "reason": "moved copy of a level324 prop (OO/PROPS/INDOOR/AIRBUS/PROPS_INDOOR/paper_06 (1))"
+          },
+          {
+            "path": "SBG_Arena_Airpit_Main_hall/OO/PROPS/INDOOR/AIRBUS/PROPS_INDOOR/paper_06 (1)",
+            "reason": "moved copy of a level324 prop (OO/PROPS/INDOOR/AIRBUS/PROPS_INDOOR/paper_06 (1))"
+          },
+          {
+            "path": "SBG_Arena_Airpit_Main_hall/OO/PROPS/INDOOR/BACK/Aviation_container (1)",
+            "reason": "moved copy of a level324 prop (OO/PROPS/INDOOR/BACK/Aviation_container (1))"
+          },
+          {
+            "path": "SBG_Arena_Airpit_Main_hall/OO/PROPS/INDOOR/BACK/City_Generic_Tarp_05 (2)",
+            "reason": "replaced in level324: lies inside SOO/tarpaulin_wall_03"
+          },
+          {
+            "path": "SBG_Arena_Airpit_Main_hall/OO/PROPS/INDOOR/BACK/City_PostOffice_Papers_Set_01",
+            "at": [
+              -19.39,
+              3.31,
+              -17.51
+            ],
+            "reason": "replaced in level324: lies inside SOO/Airport_wing_ramp_02"
+          },
+          {
+            "path": "SBG_Arena_Airpit_Main_hall/OO/PROPS/INDOOR/BACK/Destroyed_Wall_PROPS/debris_concrete_01_rezerv (2)",
+            "reason": "moved copy of a level324 prop (OO/PROPS/INDOOR/BACK/Destroyed_Wall_PROPS/debris_concrete_01_rezerv (2))"
+          },
+          {
+            "path": "SBG_Arena_Airpit_Main_hall/OO/PROPS/INDOOR/BACK/Passenger_ladder_02",
+            "reason": "moved copy of a level324 prop (OO/PROPS/INDOOR/BACK/Passenger_ladder_02)"
+          },
+          {
+            "path": "SBG_Arena_Airpit_Main_hall/OO/PROPS/INDOOR/BACK/Podium/Barricade_Metal_List_01",
+            "reason": "replaced in level324: lies inside SOO/airpit_construction_ShootOut_01 (2)"
+          },
+          {
+            "path": "SBG_Arena_Airpit_Main_hall/OO/PROPS/INDOOR/BACK/Podium/Barricade_Metal_List_02",
+            "reason": "replaced in level324: lies inside SOO/Stairs_ramp"
+          },
+          {
+            "path": "SBG_Arena_Airpit_Main_hall/OO/PROPS/INDOOR/BACK/Podium/COPY_plywood_board_4",
+            "reason": "replaced in level324: lies inside SOO/Stairs_ramp"
+          },
+          {
+            "path": "SBG_Arena_Airpit_Main_hall/OO/PROPS/INDOOR/BACK/Podium/Fence_metall_barbwire_2 (46)",
+            "reason": "replaced in level324: lies inside SOO/airpit_construction_ShootOut_01 (2)"
+          },
+          {
+            "path": "SBG_Arena_Airpit_Main_hall/OO/PROPS/INDOOR/BACK/Podium/Fence_metall_barbwire_2 (48)",
+            "reason": "moved copy of a level324 prop (OO/PROPS/INDOOR/BACK/Fence_metall_barbwire_2 (61))"
+          },
+          {
+            "path": "SBG_Arena_Airpit_Main_hall/OO/PROPS/INDOOR/BACK/Podium/Metal_sheet_hanging_02",
+            "reason": "replaced in level324: lies inside SOO/airpit_construction_ShootOut_01 (2)"
+          },
+          {
+            "path": "SBG_Arena_Airpit_Main_hall/OO/PROPS/INDOOR/BACK/Podium/Old_table_Plane (2)",
+            "reason": "replaced in level324: lies inside SOO/airpit_construction_ShootOut_01 (2)"
+          },
+          {
+            "path": "SBG_Arena_Airpit_Main_hall/OO/PROPS/INDOOR/BACK/Podium/Plastic_suitcase_110_P",
+            "reason": "moved copy of a level324 prop (SOO/Plastic_suitcase_110_P (1))"
+          },
+          {
+            "path": "SBG_Arena_Airpit_Main_hall/OO/PROPS/INDOOR/BACK/Podium/Plastic_suitcase_110_P (6)",
+            "reason": "replaced in level324: lies inside OO/PROPS/INDOOR/BACK/Passenger_ladder_02"
+          },
+          {
+            "path": "SBG_Arena_Airpit_Main_hall/OO/PROPS/INDOOR/BACK/Podium/metal_sheet_hanging_01 (19)",
+            "reason": "replaced in level324: lies inside SOO/airpit_construction_ShootOut_01 (2)"
+          },
+          {
+            "path": "SBG_Arena_Airpit_Main_hall/OO/PROPS/INDOOR/BACK/Podium/pallete (6)",
+            "reason": "replaced in level324: lies inside SOO/Stairs_ramp"
+          },
+          {
+            "path": "SBG_Arena_Airpit_Main_hall/OO/PROPS/INDOOR/BACK/Podium/pallete (7)",
+            "reason": "replaced in level324: lies inside SOO/Stairs_ramp"
+          },
+          {
+            "path": "SBG_Arena_Airpit_Main_hall/OO/PROPS/INDOOR/BACK/Podium/plywood_board_1 (1)",
+            "reason": "replaced in level324: lies inside SOO/airpit_construction_ShootOut_01 (2)"
+          },
+          {
+            "path": "SBG_Arena_Airpit_Main_hall/OO/PROPS/INDOOR/BACK/Podium/plywood_board_1 (2)",
+            "reason": "replaced in level324: lies inside SOO/airpit_construction_ShootOut_01 (2)"
+          },
+          {
+            "path": "SBG_Arena_Airpit_Main_hall/OO/PROPS/INDOOR/BACK/Podium/plywood_board_1 (3)",
+            "reason": "replaced in level324: lies inside SOO/airpit_construction_ShootOut_01 (2)"
+          },
+          {
+            "path": "SBG_Arena_Airpit_Main_hall/OO/PROPS/INDOOR/BACK/Podium/plywood_board_2 (57)",
+            "reason": "replaced in level324: lies inside SOO/airpit_construction_ShootOut_01 (2)"
+          },
+          {
+            "path": "SBG_Arena_Airpit_Main_hall/OO/PROPS/INDOOR/BACK/Podium/plywood_board_2 (60)",
+            "reason": "replaced in level324: lies inside SOO/airpit_construction_ShootOut_01 (2)"
+          },
+          {
+            "path": "SBG_Arena_Airpit_Main_hall/OO/PROPS/INDOOR/BACK/Podium/plywood_board_2 (61)",
+            "reason": "replaced in level324: lies inside SOO/airpit_construction_ShootOut_01 (2)"
+          },
+          {
+            "path": "SBG_Arena_Airpit_Main_hall/OO/PROPS/INDOOR/BACK/Podium/plywood_board_2 (62)",
+            "reason": "replaced in level324: lies inside SOO/airpit_construction_ShootOut_01 (2)"
+          },
+          {
+            "path": "SBG_Arena_Airpit_Main_hall/OO/PROPS/INDOOR/BACK/Podium/plywood_board_2 (64)",
+            "reason": "replaced in level324: lies inside SOO/airpit_construction_ShootOut_01 (2)"
+          },
+          {
+            "path": "SBG_Arena_Airpit_Main_hall/OO/PROPS/INDOOR/BACK/Podium/wood_board01_long (1)",
+            "reason": "replaced in level324: lies inside SOO/airpit_construction_ShootOut_01 (2)"
+          },
+          {
+            "path": "SBG_Arena_Airpit_Main_hall/OO/PROPS/INDOOR/BACK/Podium/wood_board01_long (3)",
+            "reason": "replaced in level324: lies inside SOO/airpit_construction_ShootOut_01 (2)"
+          },
+          {
+            "path": "SBG_Arena_Airpit_Main_hall/OO/PROPS/INDOOR/BACK/Podium/wood_board02_long (1)",
+            "reason": "replaced in level324: lies inside SOO/airpit_construction_ShootOut_01 (2)"
+          },
+          {
+            "path": "SBG_Arena_Airpit_Main_hall/OO/PROPS/INDOOR/BACK/Podium/wood_board02_long (11)",
+            "reason": "replaced in level324: lies inside SOO/airpit_construction_ShootOut_01 (2)"
+          },
+          {
+            "path": "SBG_Arena_Airpit_Main_hall/OO/PROPS/INDOOR/BACK/Podium/wood_board02_long (2)",
+            "reason": "replaced in level324: lies inside SOO/airpit_construction_ShootOut_01 (2)"
+          },
+          {
+            "path": "SBG_Arena_Airpit_Main_hall/OO/PROPS/INDOOR/BACK/Podium/wood_board02_long (6)",
+            "reason": "replaced in level324: lies inside SOO/airpit_construction_ShootOut_01 (2)"
+          },
+          {
+            "path": "SBG_Arena_Airpit_Main_hall/OO/PROPS/INDOOR/BACK/Podium/wood_board02_long (7)",
+            "reason": "replaced in level324: lies inside SOO/airpit_construction_ShootOut_01 (2)"
+          },
+          {
+            "path": "SBG_Arena_Airpit_Main_hall/OO/PROPS/INDOOR/BACK/Podium/wood_board02_long (8)",
+            "reason": "replaced in level324: lies inside SOO/airpit_construction_ShootOut_01 (2)"
+          },
+          {
+            "path": "SBG_Arena_Airpit_Main_hall/OO/PROPS/INDOOR/BACK/Podium/wood_board02_long (9)",
+            "reason": "replaced in level324: lies inside SOO/airpit_construction_ShootOut_01 (2)"
+          },
+          {
+            "path": "SBG_Arena_Airpit_Main_hall/OO/PROPS/INDOOR/BACK/Scaffolding_Group",
+            "reason": "replaced in level324: lies inside SOO/Fence_Armored_1 (2); SOO/airpit_construction_ShootOut_01 (2)"
+          },
+          {
+            "path": "SBG_Arena_Airpit_Main_hall/OO/PROPS/INDOOR/BACK/Scaffolding_Trap (7)",
+            "reason": "moved copy of a level324 prop (OO/PROPS/INDOOR/BACK/Scaffolding_Trap (7))"
+          },
+          {
+            "path": "SBG_Arena_Airpit_Main_hall/OO/PROPS/INDOOR/BACK/Scaffolding_Trap (8)",
+            "reason": "moved copy of a level324 prop (OO/PROPS/INDOOR/BACK/Scaffolding_Trap (8))"
+          },
+          {
+            "path": "SBG_Arena_Airpit_Main_hall/OO/PROPS/INDOOR/BACK/Trap",
+            "reason": "replaced in level324: lies inside SOO/airpit_construction_ShootOut_01 (2)"
+          },
+          {
+            "path": "SBG_Arena_Airpit_Main_hall/OO/PROPS/INDOOR/BACK/cardBox_carton (5)",
+            "reason": "replaced in level324: lies inside SOO/tarpaulin_wall_03"
+          },
+          {
+            "path": "SBG_Arena_Airpit_Main_hall/OO/PROPS/INDOOR/BACK/metal_barrel_5 (1)",
+            "reason": "moved copy of a level324 prop (OO/PROPS/INDOOR/BACK/metal_barrel_5 (1))"
+          },
+          {
+            "path": "SBG_Arena_Airpit_Main_hall/OO/PROPS/INDOOR/BACK/military_AmmoBox122mm_Closed",
+            "at": [
+              -7.421,
+              0.006,
+              -29.941
+            ],
+            "reason": "replaced in level324: lies inside OO/PROPS/INDOOR/BACK/Passenger_ladder_02"
+          },
+          {
+            "path": "SBG_Arena_Airpit_Main_hall/OO/PROPS/INDOOR/BACK/military_AmmoBox122mm_Closed (1)",
+            "at": [
+              -7.415,
+              0.203,
+              -30.02
+            ],
+            "reason": "replaced in level324: lies inside OO/PROPS/INDOOR/BACK/Passenger_ladder_02"
+          },
+          {
+            "path": "SBG_Arena_Airpit_Main_hall/OO/PROPS/INDOOR/BACK/military_AmmoBox122mm_Closed (10)",
+            "reason": "replaced in level324: lies inside SOO/metal_sheet_hanging_01"
+          },
+          {
+            "path": "SBG_Arena_Airpit_Main_hall/OO/PROPS/INDOOR/BACK/military_AmmoBox122mm_Closed (128)",
+            "reason": "replaced in level324: lies inside OO/PROPS/INDOOR/BACK/Passenger_ladder_02"
+          },
+          {
+            "path": "SBG_Arena_Airpit_Main_hall/OO/PROPS/INDOOR/BACK/military_AmmoBox122mm_Closed (2)",
+            "reason": "replaced in level324: lies inside OO/PROPS/INDOOR/BACK/Passenger_ladder_02"
+          },
+          {
+            "path": "SBG_Arena_Airpit_Main_hall/OO/PROPS/INDOOR/BACK/military_AmmoBox122mm_Closed (3)",
+            "reason": "replaced in level324: lies inside OO/PROPS/INDOOR/BACK/Passenger_ladder_02"
+          },
+          {
+            "path": "SBG_Arena_Airpit_Main_hall/OO/PROPS/INDOOR/BACK/military_AmmoBox122mm_Closed (4)",
+            "reason": "replaced in level324: lies inside OO/PROPS/INDOOR/BACK/Passenger_ladder_02"
+          },
+          {
+            "path": "SBG_Arena_Airpit_Main_hall/OO/PROPS/INDOOR/BACK/military_AmmoBox122mm_Closed (40)",
+            "reason": "replaced in level324: lies inside SOO/tarpaulin_wall_03"
+          },
+          {
+            "path": "SBG_Arena_Airpit_Main_hall/OO/PROPS/INDOOR/BACK/military_AmmoBox122mm_Closed (47)",
+            "reason": "moved copy of a level324 prop (OO/PROPS/INDOOR/BACK/military_AmmoBox122mm_Closed (47))"
+          },
+          {
+            "path": "SBG_Arena_Airpit_Main_hall/OO/PROPS/INDOOR/BACK/military_AmmoBox122mm_Closed (48)",
+            "reason": "moved copy of a level324 prop (OO/PROPS/INDOOR/BACK/military_AmmoBox122mm_Closed (48))"
+          },
+          {
+            "path": "SBG_Arena_Airpit_Main_hall/OO/PROPS/INDOOR/BACK/military_AmmoBox122mm_Closed (5)",
+            "reason": "replaced in level324: lies inside OO/PROPS/INDOOR/BACK/Passenger_ladder_02"
+          },
+          {
+            "path": "SBG_Arena_Airpit_Main_hall/OO/PROPS/INDOOR/BACK/military_AmmoBox122mm_Closed (6)",
+            "reason": "replaced in level324: lies inside OO/PROPS/INDOOR/BACK/Passenger_ladder_02"
+          },
+          {
+            "path": "SBG_Arena_Airpit_Main_hall/OO/PROPS/INDOOR/BACK/military_AmmoBox122mm_Closed (63)",
+            "reason": "replaced in level324: lies inside OO/PROPS/INDOOR/BACK/Passenger_ladder_02"
+          },
+          {
+            "path": "SBG_Arena_Airpit_Main_hall/OO/PROPS/INDOOR/BACK/military_AmmoBox122mm_Closed (8)",
+            "reason": "replaced in level324: lies inside OO/PROPS/INDOOR/BACK/Passenger_ladder_02"
+          },
+          {
+            "path": "SBG_Arena_Airpit_Main_hall/OO/PROPS/INDOOR/BACK/military_AmmoBox122mm_Closed (9)",
+            "reason": "moved copy of a level324 prop (OO/PROPS/INDOOR/BACK/military_AmmoBox122mm_Closed (9))"
+          },
+          {
+            "path": "SBG_Arena_Airpit_Main_hall/OO/PROPS/INDOOR/BACK/military_AmmoBox122mm_Closed (94)",
+            "reason": "replaced in level324: lies inside OO/PROPS/INDOOR/BACK/Passenger_ladder_02"
+          },
+          {
+            "path": "SBG_Arena_Airpit_Main_hall/OO/PROPS/INDOOR/BACK/military_AmmoBox122mm_Closed (95)",
+            "reason": "replaced in level324: lies inside OO/PROPS/INDOOR/BACK/Passenger_ladder_02"
+          },
+          {
+            "path": "SBG_Arena_Airpit_Main_hall/OO/PROPS/INDOOR/BACK/military_AmmoBox122mm_Closed (96)",
+            "reason": "replaced in level324: lies inside OO/PROPS/INDOOR/BACK/Passenger_ladder_02"
+          },
+          {
+            "path": "SBG_Arena_Airpit_Main_hall/OO/PROPS/INDOOR/BACK/reserve_woodBox_medium (16)",
+            "reason": "moved copy of a level324 prop (OO/PROPS/INDOOR/BACK/reserve_woodBox_medium (16))"
+          },
+          {
+            "path": "SBG_Arena_Airpit_Main_hall/OO/PROPS/INDOOR/BACK/reserve_woodBox_medium (20)",
+            "reason": "moved copy of a level324 prop (OO/PROPS/INDOOR/BACK/reserve_woodBox_medium (20))"
+          },
+          {
+            "path": "SBG_Arena_Airpit_Main_hall/OO/PROPS/INDOOR/BACK/suitcase_plastic (1)",
+            "reason": "replaced in level324: lies inside OO/PROPS/INDOOR/BACK/Passenger_ladder_02"
+          },
+          {
+            "path": "SBG_Arena_Airpit_Main_hall/OO/PROPS/INDOOR/BACK/suitcase_plastic (2)",
+            "reason": "replaced in level324: lies inside SOO/airpit_construction_ShootOut_01 (2)"
+          },
+          {
+            "path": "SBG_Arena_Airpit_Main_hall/OO/PROPS/INDOOR/BACK/wood_board02_long (4)",
+            "reason": "replaced in level324: lies inside SOO/Airport_wing_ramp_02 (1)"
+          },
+          {
+            "path": "SBG_Arena_Airpit_Main_hall/OO/PROPS/INDOOR/BACK/wood_board02_long (5)",
+            "reason": "replaced in level324: lies inside SOO/shopping_mall_med_camp_tarpaulin_wall_x2 (3)"
+          },
+          {
+            "path": "SBG_Arena_Airpit_Main_hall/OO/PROPS/INDOOR/BACK/wood_board02_long (73)",
+            "reason": "replaced in level324: lies inside SOO/Airport_wing_ramp_02 (1)"
+          },
+          {
+            "path": "SBG_Arena_Airpit_Main_hall/OO/PROPS/INDOOR/BACK/wood_board02_long (74)",
+            "reason": "replaced in level324: lies inside SOO/airpit_construction_ShootOut_01 (2)"
+          },
+          {
+            "path": "SBG_Arena_Airpit_Main_hall/OO/PROPS/INDOOR/FRONT/Airbus_seats_03 (1)",
+            "reason": "replaced in level324: lies inside SOO/airpit_construction_ShootOut_01 (3)"
+          },
+          {
+            "path": "SBG_Arena_Airpit_Main_hall/OO/PROPS/INDOOR/FRONT/Cover_group_01/military_AmmoBox122mm_Closed",
+            "reason": "replaced in level324: lies inside SOO/Flowerbed_steel_01"
+          },
+          {
+            "path": "SBG_Arena_Airpit_Main_hall/OO/PROPS/INDOOR/FRONT/Cover_group_01/military_AmmoBox122mm_Closed (2)",
+            "reason": "replaced in level324: lies inside SOO/shopping_mall_med_camp_tarpaulin_wall_x2"
+          },
+          {
+            "path": "SBG_Arena_Airpit_Main_hall/OO/PROPS/INDOOR/FRONT/Cover_group_01/military_AmmoBox122mm_Closed (4)",
+            "reason": "replaced in level324: lies inside SOO/shopping_mall_med_camp_tarpaulin_wall_x2"
+          },
+          {
+            "path": "SBG_Arena_Airpit_Main_hall/OO/PROPS/INDOOR/FRONT/Cover_group_01/military_AmmoBox122mm_Closed (6)",
+            "reason": "replaced in level324: lies inside SOO/shopping_mall_med_camp_tarpaulin_wall_x2"
+          },
+          {
+            "path": "SBG_Arena_Airpit_Main_hall/OO/PROPS/INDOOR/FRONT/Cover_group_01/pallete",
+            "reason": "replaced in level324: lies inside SOO/shopping_mall_med_camp_tarpaulin_wall_x2"
+          },
+          {
+            "path": "SBG_Arena_Airpit_Main_hall/OO/PROPS/INDOOR/FRONT/Cover_group_01/reserve_woodBox_medium (11)",
+            "reason": "replaced in level324: lies inside SOO/shopping_mall_med_camp_tarpaulin_wall_x2"
+          },
+          {
+            "path": "SBG_Arena_Airpit_Main_hall/OO/PROPS/INDOOR/FRONT/Old_table2_Plane (7)",
+            "reason": "replaced in level324: lies inside SOO/Passenger_ladder_02 (2)"
+          },
+          {
+            "path": "SBG_Arena_Airpit_Main_hall/OO/PROPS/INDOOR/FRONT/Scaffolding",
+            "at": [
+              -17.54,
+              -0.0,
+              28.53
+            ],
+            "reason": "replaced in level324: lies inside SOO/airpit_construction_ShootOut_01 (3)"
+          },
+          {
+            "path": "SBG_Arena_Airpit_Main_hall/OO/PROPS/INDOOR/FRONT/Scaffolding",
+            "at": [
+              -17.21,
+              0.03,
+              21.203
+            ],
+            "reason": "replaced in level324: lies inside SOO/tarpaulin_support (8)"
+          },
+          {
+            "path": "SBG_Arena_Airpit_Main_hall/OO/PROPS/INDOOR/FRONT/Scaffolding",
+            "at": [
+              -14.47,
+              -0.001,
+              21.35
+            ],
+            "reason": "replaced in level324: lies inside SOO/airpit_construction_ShootOut_01 (3)"
+          },
+          {
+            "path": "SBG_Arena_Airpit_Main_hall/OO/PROPS/INDOOR/FRONT/Scaffolding",
+            "at": [
+              -13.62,
+              0.012,
+              31.43
+            ],
+            "reason": "replaced in level324: lies inside SOO/airpit_construction_ShootOut_01 (3)"
+          },
+          {
+            "path": "SBG_Arena_Airpit_Main_hall/OO/PROPS/INDOOR/FRONT/Scaffolding",
+            "at": [
+              -10.17,
+              0.002,
+              29.043
+            ],
+            "reason": "replaced in level324: lies inside SOO/airpit_construction_ShootOut_01 (3)"
+          },
+          {
+            "path": "SBG_Arena_Airpit_Main_hall/OO/PROPS/INDOOR/FRONT/Scaffolding",
+            "at": [
+              -10.17,
+              0.002,
+              31.43
+            ],
+            "reason": "replaced in level324: lies inside SOO/airpit_construction_ShootOut_01 (3)"
+          },
+          {
+            "path": "SBG_Arena_Airpit_Main_hall/OO/PROPS/INDOOR/FRONT/Scaffolding",
+            "at": [
+              -6.725,
+              -0.011,
+              31.43
+            ],
+            "reason": "replaced in level324: lies inside SOO/airpit_construction_ShootOut_01 (3)"
+          },
+          {
+            "path": "SBG_Arena_Airpit_Main_hall/OO/PROPS/INDOOR/FRONT/Scaffolding",
+            "at": [
+              -6.267,
+              -0.007,
+              24.5
+            ],
+            "reason": "replaced in level324: lies inside SOO/airpit_construction_ShootOut_01 (3)"
+          },
+          {
+            "path": "SBG_Arena_Airpit_Main_hall/OO/PROPS/INDOOR/FRONT/Scaffolding (1)",
+            "reason": "replaced in level324: lies inside SOO/airpit_construction_ShootOut_01 (3)"
+          },
+          {
+            "path": "SBG_Arena_Airpit_Main_hall/OO/PROPS/INDOOR/FRONT/Scaffolding (2)",
+            "reason": "replaced in level324: lies inside SOO/airpit_construction_ShootOut_01 (3)"
+          },
+          {
+            "path": "SBG_Arena_Airpit_Main_hall/OO/PROPS/INDOOR/FRONT/Scaffolding (3)",
+            "reason": "replaced in level324: lies inside SOO/airpit_construction_ShootOut_01 (3)"
+          },
+          {
+            "path": "SBG_Arena_Airpit_Main_hall/OO/PROPS/INDOOR/FRONT/Scaffolding (4)",
+            "reason": "replaced in level324: lies inside SOO/airpit_construction_ShootOut_01 (3)"
+          },
+          {
+            "path": "SBG_Arena_Airpit_Main_hall/OO/PROPS/INDOOR/FRONT/Scaffolding (5)",
+            "reason": "replaced in level324: lies inside SOO/airpit_construction_ShootOut_01 (3)"
+          },
+          {
+            "path": "SBG_Arena_Airpit_Main_hall/OO/PROPS/INDOOR/FRONT/Scaffolding_Trap (16)",
+            "reason": "replaced in level324: lies inside SOO/airpit_construction_ShootOut_01 (3)"
+          },
+          {
+            "path": "SBG_Arena_Airpit_Main_hall/OO/PROPS/INDOOR/FRONT/Scaffolding_Trap (17)",
+            "reason": "replaced in level324: lies inside SOO/airpit_construction_ShootOut_01 (3)"
+          },
+          {
+            "path": "SBG_Arena_Airpit_Main_hall/OO/PROPS/INDOOR/FRONT/Scaffolding_Trap (20)",
+            "reason": "replaced in level324: lies inside SOO/airpit_construction_ShootOut_01 (3)"
+          },
+          {
+            "path": "SBG_Arena_Airpit_Main_hall/OO/PROPS/INDOOR/FRONT/Scaffolding_Trap (35)",
+            "reason": "replaced in level324: lies inside SOO/airpit_construction_ShootOut_01 (3)"
+          },
+          {
+            "path": "SBG_Arena_Airpit_Main_hall/OO/PROPS/INDOOR/FRONT/Scaffolding_Trap (36)",
+            "reason": "replaced in level324: lies inside SOO/airpit_construction_ShootOut_01 (3)"
+          },
+          {
+            "path": "SBG_Arena_Airpit_Main_hall/OO/PROPS/INDOOR/FRONT/Scaffolding_Trap (37)",
+            "reason": "replaced in level324: lies inside SOO/airpit_construction_ShootOut_01 (3)"
+          },
+          {
+            "path": "SBG_Arena_Airpit_Main_hall/OO/PROPS/INDOOR/FRONT/Scaffolding_Trap (38)",
+            "reason": "replaced in level324: lies inside SOO/airpit_construction_ShootOut_01 (3)"
+          },
+          {
+            "path": "SBG_Arena_Airpit_Main_hall/OO/PROPS/INDOOR/FRONT/Scaffolding_Trap (39)",
+            "at": [
+              -11.631,
+              3.507,
+              24.47
+            ],
+            "reason": "replaced in level324: lies inside SOO/airpit_construction_ShootOut_01 (3)"
+          },
+          {
+            "path": "SBG_Arena_Airpit_Main_hall/OO/PROPS/INDOOR/FRONT/Scaffolding_Trap (40)",
+            "at": [
+              -11.617,
+              3.507,
+              25.356
+            ],
+            "reason": "replaced in level324: lies inside SOO/airpit_construction_ShootOut_01 (3)"
+          },
+          {
+            "path": "SBG_Arena_Airpit_Main_hall/OO/PROPS/INDOOR/FRONT/Scaffolding_Trap (40)",
+            "at": [
+              -2.144,
+              0.28,
+              17.323
+            ],
+            "reason": "moved copy of a level324 prop (OO/PROPS/INDOOR/FRONT/Scaffolding_Trap (40))"
+          },
+          {
+            "path": "SBG_Arena_Airpit_Main_hall/OO/PROPS/INDOOR/FRONT/Scaffolding_Trap (42)",
+            "reason": "moved copy of a level324 prop (OO/PROPS/INDOOR/FRONT/Scaffolding_Trap (42))"
+          },
+          {
+            "path": "SBG_Arena_Airpit_Main_hall/OO/PROPS/INDOOR/FRONT/Scaffolding_Trap (44)",
+            "reason": "replaced in level324: lies inside SOO/airpit_construction_ShootOut_01 (3)"
+          },
+          {
+            "path": "SBG_Arena_Airpit_Main_hall/OO/PROPS/INDOOR/FRONT/Scaffolding_Trap (45)",
+            "reason": "replaced in level324: lies inside SOO/airpit_construction_ShootOut_01 (3)"
+          },
+          {
+            "path": "SBG_Arena_Airpit_Main_hall/OO/PROPS/INDOOR/FRONT/Scaffolding_Trap (46)",
+            "reason": "replaced in level324: lies inside SOO/airpit_construction_ShootOut_01 (3)"
+          },
+          {
+            "path": "SBG_Arena_Airpit_Main_hall/OO/PROPS/INDOOR/FRONT/Scaffolding_Trap (47)",
+            "reason": "replaced in level324: lies inside SOO/airpit_construction_ShootOut_01 (3)"
+          },
+          {
+            "path": "SBG_Arena_Airpit_Main_hall/OO/PROPS/INDOOR/FRONT/Scaffolding_Trap (48)",
+            "reason": "replaced in level324: lies inside SOO/airpit_construction_ShootOut_01 (3)"
+          },
+          {
+            "path": "SBG_Arena_Airpit_Main_hall/OO/PROPS/INDOOR/FRONT/Scaffolding_Trap (49)",
+            "reason": "replaced in level324: lies inside SOO/airpit_construction_ShootOut_01 (3)"
+          },
+          {
+            "path": "SBG_Arena_Airpit_Main_hall/OO/PROPS/INDOOR/FRONT/Scaffolding_Trap (50)",
+            "reason": "replaced in level324: lies inside SOO/airpit_construction_ShootOut_01 (3)"
+          },
+          {
+            "path": "SBG_Arena_Airpit_Main_hall/OO/PROPS/INDOOR/FRONT/Scaffolding_Trap (51)",
+            "reason": "replaced in level324: lies inside SOO/airpit_construction_ShootOut_01 (3)"
+          },
+          {
+            "path": "SBG_Arena_Airpit_Main_hall/OO/PROPS/INDOOR/FRONT/Scaffolding_Trap (52)",
+            "at": [
+              -17.224,
+              3.51,
+              28.517
+            ],
+            "reason": "replaced in level324: lies inside SOO/airpit_construction_ShootOut_01 (3)"
+          },
+          {
+            "path": "SBG_Arena_Airpit_Main_hall/OO/PROPS/INDOOR/FRONT/Scaffolding_Trap (53)",
+            "at": [
+              -14.707,
+              3.51,
+              27.841
+            ],
+            "reason": "replaced in level324: lies inside SOO/airpit_construction_ShootOut_01 (3)"
+          },
+          {
+            "path": "SBG_Arena_Airpit_Main_hall/OO/PROPS/INDOOR/FRONT/Scaffolding_Trap (56)",
+            "reason": "replaced in level324: lies inside SOO/airpit_construction_ShootOut_01 (3)"
+          },
+          {
+            "path": "SBG_Arena_Airpit_Main_hall/OO/PROPS/INDOOR/FRONT/Scaffolding_Trap (57)",
+            "reason": "replaced in level324: lies inside SOO/airpit_construction_ShootOut_01 (3)"
+          },
+          {
+            "path": "SBG_Arena_Airpit_Main_hall/OO/PROPS/INDOOR/FRONT/Scaffolding_Trap (58)",
+            "reason": "replaced in level324: lies inside SOO/airpit_construction_ShootOut_01 (3)"
+          },
+          {
+            "path": "SBG_Arena_Airpit_Main_hall/OO/PROPS/INDOOR/FRONT/barrel_heap3_Update",
+            "reason": "replaced in level324: lies inside VARIANT/cardbox_vinyl_(ARENA) (3)"
+          },
+          {
+            "path": "SBG_Arena_Airpit_Main_hall/OO/PROPS/INDOOR/FRONT/barrel_heap3_Update (1)",
+            "reason": "replaced in level324: lies inside SOO/airpit_construction_ShootOut_01 (3)"
+          },
+          {
+            "path": "SBG_Arena_Airpit_Main_hall/OO/PROPS/INDOOR/FRONT/logan_whell_tire (6)",
+            "reason": "replaced in level324: lies inside SOO/Flowerbed_steel_01"
+          },
+          {
+            "path": "SBG_Arena_Airpit_Main_hall/OO/PROPS/INDOOR/FRONT/metal_barrel_4_old_green (3)",
+            "reason": "replaced in level324: lies inside SOO/polywood_stairs (1)"
+          },
+          {
+            "path": "SBG_Arena_Airpit_Main_hall/OO/PROPS/INDOOR/FRONT/metal_barrel_4_old_green (4)",
+            "reason": "replaced in level324: lies inside SOO/polywood_stairs (1)"
+          },
+          {
+            "path": "SBG_Arena_Airpit_Main_hall/OO/PROPS/INDOOR/FRONT/metal_fence_03",
+            "reason": "replaced in level324: lies inside SOO/airpit_construction_ShootOut_01 (3)"
+          },
+          {
+            "path": "SBG_Arena_Airpit_Main_hall/OO/PROPS/INDOOR/FRONT/metal_sheet_hanging_01 (10)",
+            "reason": "replaced in level324: lies inside SOO/airpit_construction_ShootOut_01 (3)"
+          },
+          {
+            "path": "SBG_Arena_Airpit_Main_hall/OO/PROPS/INDOOR/FRONT/metal_sheet_hanging_01 (2)",
+            "reason": "replaced in level324: lies inside SOO/airpit_construction_ShootOut_01 (3)"
+          },
+          {
+            "path": "SBG_Arena_Airpit_Main_hall/OO/PROPS/INDOOR/FRONT/plywood_board_1 (1)",
+            "reason": "replaced in level324: lies inside SOO/Arena_Airport_Elevator"
+          },
+          {
+            "path": "SBG_Arena_Airpit_Main_hall/OO/PROPS/INDOOR/FRONT/plywood_board_2 (28)",
+            "reason": "replaced in level324: lies inside SOO/airpit_construction_ShootOut_01 (3)"
+          },
+          {
+            "path": "SBG_Arena_Airpit_Main_hall/OO/PROPS/INDOOR/FRONT/plywood_board_2 (52)",
+            "at": [
+              -6.468,
+              3.603,
+              23.538
+            ],
+            "reason": "replaced in level324: lies inside SOO/airpit_construction_ShootOut_01 (3)"
+          },
+          {
+            "path": "SBG_Arena_Airpit_Main_hall/OO/PROPS/INDOOR/FRONT/plywood_board_2 (53)",
+            "reason": "replaced in level324: lies inside SOO/airpit_construction_ShootOut_01 (3)"
+          },
+          {
+            "path": "SBG_Arena_Airpit_Main_hall/OO/PROPS/INDOOR/FRONT/plywood_board_2 (54)",
+            "reason": "replaced in level324: lies inside SOO/airpit_construction_ShootOut_01 (3)"
+          },
+          {
+            "path": "SBG_Arena_Airpit_Main_hall/OO/PROPS/INDOOR/FRONT/plywood_board_2 (57)",
+            "reason": "replaced in level324: lies inside SOO/airpit_construction_ShootOut_01 (3)"
+          },
+          {
+            "path": "SBG_Arena_Airpit_Main_hall/OO/PROPS/INDOOR/FRONT/shopping_mall_med_camp_tarpaulin_support (2)",
+            "reason": "moved copy of a level324 prop (OO/PROPS/INDOOR/FRONT/shopping_mall_med_camp_tarpaulin_support (2))"
+          },
+          {
+            "path": "SBG_Arena_Airpit_Main_hall/OO/PROPS/INDOOR/FRONT/wood_board02_long (30)",
+            "reason": "replaced in level324: lies inside SOO/airpit_construction_ShootOut_01 (3)"
+          },
+          {
+            "path": "SBG_Arena_Airpit_Main_hall/OO/PROPS/INDOOR/FRONT/wood_board02_long (31)",
+            "reason": "replaced in level324: lies inside SOO/airpit_construction_ShootOut_01 (3)"
+          },
+          {
+            "path": "SBG_Arena_Airpit_Main_hall/OO/PROPS/INDOOR/FRONT/wood_board02_long (35)",
+            "reason": "replaced in level324: lies inside SOO/airpit_construction_ShootOut_01 (3)"
+          },
+          {
+            "path": "SBG_Arena_Airpit_Main_hall/OO/PROPS/INDOOR/FRONT/wood_board02_long (7)",
+            "reason": "moved copy of a level324 prop (OO/PROPS/INDOOR/FRONT/wood_board02_long (7))"
+          },
+          {
+            "path": "SBG_Arena_Airpit_Main_hall/OO/PROPS/INDOOR/FRONT/wood_board02_long (76)",
+            "reason": "moved copy of a level324 prop (OO/PROPS/INDOOR/FRONT/wood_board02_long (76))"
+          },
+          {
+            "path": "SBG_Arena_Airpit_Main_hall/OO/PROPS/INDOOR/PASSPORT_CONTROL/Fence_tape_store_1 (7)",
+            "reason": "replaced in level324: lies inside SOO/Flowerbed_steel_01"
+          },
+          {
+            "path": "SBG_Arena_Airpit_Main_hall/OO/PROPS/INDOOR/PASSPORT_CONTROL/suitcase_v2 (5)",
+            "reason": "replaced in level324: lies inside SOO/Flowerbed_steel_01"
+          },
+          {
+            "path": "SBG_Arena_Airpit_Main_hall/OO/PROPS/OUTDOOR/FIELD/trash_pile_1x1_04",
+            "reason": "replaced in level324: lies inside OO/PROPS/OUTDOOR/Passenger_ladder (5)"
+          },
+          {
+            "path": "VARIANT/Barricade_Fanera_01_(ARENA)",
+            "at": [
+              -18.202,
+              3.49,
+              30.15
+            ],
+            "reason": "replaced in level324: lies inside SOO/airpit_construction_ShootOut_01 (3)"
+          },
+          {
+            "path": "VARIANT/Barricade_Fanera_01_(ARENA)",
+            "at": [
+              -18.142,
+              3.461,
+              28.079
+            ],
+            "reason": "replaced in level324: lies inside SOO/airpit_construction_ShootOut_01 (3)"
+          },
+          {
+            "path": "VARIANT/Barricade_Fanera_01_(ARENA)",
+            "at": [
+              -17.435,
+              3.555,
+              -16.095
+            ],
+            "reason": "replaced in level324: lies inside SOO/airpit_construction_ShootOut_01 (2)"
+          },
+          {
+            "path": "VARIANT/Barricade_Fanera_01_(ARENA)",
+            "at": [
+              -17.205,
+              3.466,
+              -24.238
+            ],
+            "reason": "replaced in level324: lies inside SOO/airpit_construction_ShootOut_01 (2)"
+          },
+          {
+            "path": "VARIANT/Barricade_Fanera_01_(ARENA)",
+            "at": [
+              -16.468,
+              3.526,
+              30.112
+            ],
+            "reason": "replaced in level324: lies inside SOO/airpit_construction_ShootOut_01 (3)"
+          },
+          {
+            "path": "VARIANT/Barricade_Fanera_01_(ARENA)",
+            "at": [
+              -16.355,
+              3.589,
+              24.659
+            ],
+            "reason": "replaced in level324: lies inside SOO/airpit_construction_ShootOut_01 (3)"
+          },
+          {
+            "path": "VARIANT/Barricade_Fanera_01_(ARENA)",
+            "at": [
+              -15.803,
+              3.616,
+              -20.831
+            ],
+            "reason": "replaced in level324: lies inside SOO/airpit_construction_ShootOut_01 (2)"
+          },
+          {
+            "path": "VARIANT/Barricade_Fanera_01_(ARENA)",
+            "at": [
+              -15.451,
+              3.598,
+              30.18
+            ],
+            "reason": "replaced in level324: lies inside SOO/airpit_construction_ShootOut_01 (3)"
+          },
+          {
+            "path": "VARIANT/Barricade_Fanera_01_(ARENA)",
+            "at": [
+              -14.336,
+              3.602,
+              -20.426
+            ],
+            "reason": "replaced in level324: lies inside SOO/airpit_construction_ShootOut_01 (2)"
+          },
+          {
+            "path": "VARIANT/Barricade_Fanera_01_(ARENA)",
+            "at": [
+              -14.016,
+              3.517,
+              -22.505
+            ],
+            "reason": "replaced in level324: lies inside SOO/airpit_construction_ShootOut_01 (2)"
+          },
+          {
+            "path": "VARIANT/Barricade_Fanera_01_(ARENA)",
+            "at": [
+              -13.971,
+              3.566,
+              -18.461
+            ],
+            "reason": "replaced in level324: lies inside SOO/airpit_construction_ShootOut_01 (2)"
+          },
+          {
+            "path": "VARIANT/Barricade_Fanera_01_(ARENA)",
+            "at": [
+              -13.644,
+              3.589,
+              -22.08
+            ],
+            "reason": "replaced in level324: lies inside SOO/airpit_construction_ShootOut_01 (2)"
+          },
+          {
+            "path": "VARIANT/Barricade_Fanera_01_(ARENA)",
+            "at": [
+              -13.6,
+              3.588,
+              26.84
+            ],
+            "reason": "replaced in level324: lies inside SOO/airpit_construction_ShootOut_01 (3)"
+          },
+          {
+            "path": "VARIANT/Barricade_Fanera_01_(ARENA)",
+            "at": [
+              -13.58,
+              3.586,
+              25.816
+            ],
+            "reason": "replaced in level324: lies inside SOO/airpit_construction_ShootOut_01 (3)"
+          },
+          {
+            "path": "VARIANT/Barricade_Fanera_01_(ARENA)",
+            "at": [
+              -13.46,
+              3.542,
+              -17.094
+            ],
+            "reason": "replaced in level324: lies inside SOO/airpit_construction_ShootOut_01 (2)"
+          },
+          {
+            "path": "VARIANT/Barricade_Fanera_01_(ARENA)",
+            "at": [
+              -13.368,
+              3.594,
+              23.162
+            ],
+            "reason": "replaced in level324: lies inside SOO/airpit_construction_ShootOut_01 (3)"
+          },
+          {
+            "path": "VARIANT/Barricade_Fanera_01_(ARENA)",
+            "at": [
+              -13.134,
+              3.588,
+              24.231
+            ],
+            "reason": "replaced in level324: lies inside SOO/airpit_construction_ShootOut_01 (3)"
+          },
+          {
+            "path": "VARIANT/Barricade_Fanera_01_(ARENA)",
+            "at": [
+              -13.015,
+              3.56,
+              31.782
+            ],
+            "reason": "replaced in level324: lies inside SOO/airpit_construction_ShootOut_01 (3)"
+          },
+          {
+            "path": "VARIANT/Barricade_Fanera_01_(ARENA)",
+            "at": [
+              -12.704,
+              3.571,
+              -16.958
+            ],
+            "reason": "replaced in level324: lies inside SOO/airpit_construction_ShootOut_01 (2)"
+          },
+          {
+            "path": "VARIANT/Barricade_Fanera_01_(ARENA)",
+            "at": [
+              -12.515,
+              3.602,
+              27.614
+            ],
+            "reason": "replaced in level324: lies inside SOO/airpit_construction_ShootOut_01 (3)"
+          },
+          {
+            "path": "VARIANT/Barricade_Fanera_01_(ARENA)",
+            "at": [
+              -11.301,
+              3.548,
+              -21.658
+            ],
+            "reason": "replaced in level324: lies inside SOO/airpit_construction_ShootOut_01 (2)"
+          },
+          {
+            "path": "VARIANT/Barricade_Fanera_01_(ARENA)",
+            "at": [
+              -10.691,
+              3.49,
+              -23.253
+            ],
+            "reason": "replaced in level324: lies inside SOO/airpit_construction_ShootOut_01 (2)"
+          },
+          {
+            "path": "VARIANT/Barricade_Fanera_01_(ARENA)",
+            "at": [
+              -9.992,
+              3.584,
+              27.204
+            ],
+            "reason": "replaced in level324: lies inside SOO/airpit_construction_ShootOut_01 (3)"
+          },
+          {
+            "path": "VARIANT/Barricade_Fanera_01_(ARENA)",
+            "at": [
+              -9.693,
+              3.494,
+              -24.279
+            ],
+            "reason": "replaced in level324: lies inside SOO/airpit_construction_ShootOut_01 (2)"
+          },
+          {
+            "path": "VARIANT/Barricade_Fanera_01_(ARENA)",
+            "at": [
+              -8.908,
+              3.593,
+              -19.91
+            ],
+            "reason": "replaced in level324: lies inside SOO/airpit_construction_ShootOut_01 (2)"
+          },
+          {
+            "path": "VARIANT/Barricade_Fanera_01_(ARENA)",
+            "at": [
+              -8.892,
+              3.61,
+              -15.972
+            ],
+            "reason": "moved copy of a level324 prop (SOO/Barricade_Fanera_01 (3))"
+          },
+          {
+            "path": "VARIANT/Barricade_Fanera_01_(ARENA)",
+            "at": [
+              -7.581,
+              3.552,
+              26.987
+            ],
+            "reason": "replaced in level324: lies inside SOO/airpit_construction_ShootOut_01 (3)"
+          },
+          {
+            "path": "VARIANT/Barricade_Fanera_01_(ARENA)",
+            "at": [
+              -6.706,
+              3.583,
+              25.203
+            ],
+            "reason": "replaced in level324: lies inside SOO/airpit_construction_ShootOut_01 (3)"
+          },
+          {
+            "path": "VARIANT/Barricade_Fanera_01_(ARENA)",
+            "at": [
+              -5.034,
+              3.572,
+              28.378
+            ],
+            "reason": "replaced in level324: lies inside SOO/airpit_construction_ShootOut_01 (3)"
+          },
+          {
+            "path": "VARIANT/Barricade_Fanera_01_(ARENA) (1)",
+            "reason": "replaced in level324: lies inside SOO/airpit_construction_ShootOut_01 (3)"
+          },
+          {
+            "path": "VARIANT/Barricade_Metal_List_02_(ARENA)",
+            "at": [
+              -7.821,
+              1.582,
+              -28.384
+            ],
+            "reason": "replaced in level324: lies inside OO/PROPS/INDOOR/BACK/Passenger_ladder_02"
+          },
+          {
+            "path": "VARIANT/Barricade_Metal_List_04_(ARENA)",
+            "at": [
+              -8.15,
+              1.831,
+              -25.721
+            ],
+            "reason": "replaced in level324: lies inside OO/PROPS/INDOOR/BACK/Passenger_ladder_02"
+          },
+          {
+            "path": "VARIANT/Barricade_Metal_List_04_(ARENA)",
+            "at": [
+              -8.139,
+              2.607,
+              -24.429
+            ],
+            "reason": "replaced in level324: lies inside OO/PROPS/INDOOR/BACK/Passenger_ladder_02"
+          },
+          {
+            "path": "VARIANT/Barricade_Metal_List_04_(ARENA) (1)",
+            "reason": "replaced in level324: lies inside OO/PROPS/INDOOR/BACK/Passenger_ladder_02"
+          },
+          {
+            "path": "VARIANT/Food_container_(ARENA)",
+            "at": [
+              -18.2,
+              0.009,
+              51.95
+            ],
+            "reason": "replaced in level324: lies inside SOO/Flowerbed_steel_01"
+          },
+          {
+            "path": "VARIANT/Food_container_(ARENA)",
+            "at": [
+              -15.809,
+              3.231,
+              31.219
+            ],
+            "reason": "replaced in level324: lies inside SOO/Passenger_ladder_02 (2)"
+          },
+          {
+            "path": "VARIANT/Food_container_(ARENA)",
+            "at": [
+              -6.939,
+              2.468,
+              -21.999
+            ],
+            "reason": "replaced in level324: lies inside SOO/airpit_construction_ShootOut_01 (2)"
+          },
+          {
+            "path": "VARIANT/Food_container_(ARENA)",
+            "at": [
+              -6.83,
+              2.766,
+              -22.141
+            ],
+            "reason": "replaced in level324: lies inside SOO/airpit_construction_ShootOut_01 (2)"
+          },
+          {
+            "path": "VARIANT/Food_container_(ARENA)",
+            "at": [
+              -6.302,
+              3.626,
+              -19.851
+            ],
+            "reason": "moved copy of a level324 prop (VARIANT/Food_container_(ARENA))"
+          },
+          {
+            "path": "VARIANT/Food_container_(ARENA)",
+            "at": [
+              -6.249,
+              3.626,
+              -20.74
+            ],
+            "reason": "moved copy of a level324 prop (VARIANT/Food_container_(ARENA))"
+          },
+          {
+            "path": "VARIANT/Sandbag_03_(ARENA)",
+            "at": [
+              -6.662,
+              -0.441,
+              -26.258
+            ],
+            "reason": "replaced in level324: lies inside OO/PROPS/INDOOR/BACK/Passenger_ladder_02"
+          },
+          {
+            "path": "VARIANT/Sandbag_03_(ARENA)",
+            "at": [
+              2.176,
+              3.256,
+              39.957
+            ],
+            "reason": "moved copy of a level324 prop (VARIANT/Sandbag_03_(ARENA))"
+          },
+          {
+            "path": "VARIANT/Sandbag_03_(ARENA)",
+            "at": [
+              4.323,
+              3.256,
+              42.07
+            ],
+            "reason": "moved copy of a level324 prop (VARIANT/Sandbag_03_(ARENA))"
+          },
+          {
+            "path": "VARIANT/Sandbag_03_(ARENA) (3)",
+            "reason": "moved copy of a level324 prop (VARIANT/Sandbag_03_(ARENA) (3))"
+          },
+          {
+            "path": "VARIANT/Sandbag_03_(ARENA) (4)",
+            "reason": "moved copy of a level324 prop (VARIANT/Sandbag_03_(ARENA) (4))"
+          },
+          {
+            "path": "VARIANT/cardbox_vinyl_(ARENA)",
+            "at": [
+              -17.537,
+              3.578,
+              -15.999
+            ],
+            "reason": "moved copy of a level324 prop (VARIANT/cardbox_vinyl_(ARENA))"
+          },
+          {
+            "path": "VARIANT/cardbox_vinyl_(ARENA)",
+            "at": [
+              -17.537,
+              4.49,
+              -15.999
+            ],
+            "reason": "moved copy of a level324 prop (VARIANT/cardbox_vinyl_(ARENA))"
+          },
+          {
+            "path": "VARIANT/cardbox_vinyl_(ARENA)",
+            "at": [
+              -5.323,
+              -0.004,
+              -36.522
+            ],
+            "reason": "replaced in level324: lies inside SOO/tarpaulin_wall_03"
+          },
+          {
+            "path": "VARIANT/plywood_board_3_(ARENA)",
+            "at": [
+              -18.833,
+              3.416,
+              -21.627
+            ],
+            "reason": "replaced in level324: lies inside SOO/Airport_wing_ramp_02 (1)"
+          },
+          {
+            "path": "VARIANT/plywood_board_3_(ARENA)",
+            "at": [
+              -18.833,
+              3.416,
+              -19.96
+            ],
+            "reason": "replaced in level324: lies inside SOO/Airport_wing_ramp_02 (1)"
+          },
+          {
+            "path": "VARIANT/plywood_board_3_(ARENA)",
+            "at": [
+              -18.833,
+              3.416,
+              -18.289
+            ],
+            "reason": "replaced in level324: lies inside SOO/Airport_wing_ramp_02"
+          },
+          {
+            "path": "VARIANT/plywood_board_3_(ARENA)",
+            "at": [
+              -6.556,
+              1.738,
+              -23.735
+            ],
+            "reason": "replaced in level324: lies inside SOO/airpit_construction_ShootOut_01 (2)"
+          },
+          {
+            "path": "VARIANT/plywood_board_3_(ARENA)",
+            "at": [
+              -6.287,
+              2.023,
+              -25.486
+            ],
+            "reason": "replaced in level324: lies inside OO/PROPS/INDOOR/BACK/Passenger_ladder_02"
+          },
+          {
+            "path": "VARIANT/plywood_board_3_(ARENA) (4)",
+            "reason": "replaced in level324: lies inside OO/PROPS/INDOOR/BACK/Passenger_ladder_02"
+          },
+          {
+            "path": "VARIANT/plywood_board_3_(ARENA)/Collider",
+            "at": [
+              -5.939,
+              0.006,
+              53.187
+            ],
+            "reason": "replaced in level324: lies inside SOO/Flowerbed_steel_01"
+          },
+          {
+            "path": "VARIANT/plywood_board_3_(ARENA)/ballistic",
+            "at": [
+              -5.939,
+              0.006,
+              53.187
+            ],
+            "reason": "replaced in level324: lies inside SOO/Flowerbed_steel_01"
           }
         ]
       }
@@ -187,8 +1269,9 @@
       "index": 37,
       "select": {
         "schema": 1,
-        "reason": "Lighting scene that belongs to the furnished shops of Arena_Airpit_Main_hall: the shop lamp groups, plus the light helpers, shadow planes, puddles and fog sheets inside the four shop footprints, minus whatever level325 already carries (twin objects).",
+        "reason": "Lighting scene that belongs to the furnished Arena_Airpit_Main_hall: the shop lamp groups whole, plus every other lamp group, light helper, shadow plane, puddle and fog sheet whose unit root lies inside the decoration box, minus whatever level325 already carries (twin objects), but with the parts a twin lacks (twin_descendants: 20 Lights below lamp fixtures and 2 ShadowPlaneBox planes that level325's copies do not carry). Nine of those parts are excluded again because level325 replaced or disabled them on purpose: one SupportLight stands in for Base+MainLight on the AIRBUS bunker lamps (6)/(9), the NO_CULL lamp (8) keeps its MainLight disabled, Airport_lamp (72) has a re-tuned Spot Light 0.31 m away, and the LODGroups of ShadowPlaneBox (125)/(140) were emptied. Not imported: LIGHT_Disabled, BACKGROUND, STENCILS and PLANE_AREA_HIGHLIGHTS (script-only markers without mesh or material) and everything above y 20 (CEILING HIGHLIGHT, CEILING_TRACK_LIGHT).",
         "skip_twins_of": 325,
+        "twin_descendants": "import_missing",
         "roots": [
           "SBG_Airpit_Light/OO/ChinaPlace*",
           "SBG_Airpit_Light/OO/BurgerSpot*",
@@ -200,60 +1283,68 @@
           "NO_CULL",
           "SBG_Airpit_Light/OO/ShadowPlanes",
           "PUDDLES",
-          "SBG_Airpit_Light/OO/FogSheets"
+          "SBG_Airpit_Light/OO/FogSheets",
+          "SBG_Airpit_Light/OO/Airport_lamp_02",
+          "SBG_Airpit_Light/OO/LAMPS_GENERIC*",
+          "SBG_Airpit_Light/OO/AIRBUS",
+          "SBG_Airpit_Light/OO/AIRPORT LAMPS",
+          "SBG_Airpit_Light/OO/BACK_AIRPORT_LAMPS",
+          "SBG_Airpit_Light/OO/LUM_LAMPS",
+          "SBG_Airpit_Light/OO/Point Light",
+          "SBG_Airpit_Light/OO/chemlight_emissive",
+          "SBG_Airpit_Light/OO/Lamps_ceiling - DISABLED"
         ],
         "regions": [
           {
-            "name": "NW shop",
+            "name": "decoration box",
             "min": [
-              -57.5,
-              -1.5,
-              13.5
+              -60.0,
+              -5.0,
+              -85.0
             ],
             "max": [
-              -33.5,
-              9.0,
-              44.5
+              40.0,
+              20.0,
+              91.0
             ]
+          }
+        ],
+        "exclude": [
+          {
+            "path": "NO_CULL/Old_Bunker_Light_cookie (8)/BaseLight",
+            "reason": "NO_CULL lamp (8): level325 disabled its MainLight (1)/SupportLight (1); import re-enables BaseLight 0.6"
           },
           {
-            "name": "NE shop",
-            "min": [
-              11.5,
-              -1.5,
-              6.5
-            ],
-            "max": [
-              34.5,
-              9.0,
-              44.5
-            ]
+            "path": "NO_CULL/Old_Bunker_Light_cookie (8)/MainLight",
+            "reason": "NO_CULL lamp (8): import re-enables MainLight 3.0 that level325 disabled"
           },
           {
-            "name": "SE shop",
-            "min": [
-              9.5,
-              -1.5,
-              -45.5
-            ],
-            "max": [
-              33.5,
-              9.0,
-              -14.5
-            ]
+            "path": "SBG_Airpit_Light/OO/AIRBUS/Old_Bunker_Light_cookie (6)/BaseLight",
+            "reason": "AIRBUS lamp (6): level325 replaced Base+MainLight by one SupportLight"
           },
           {
-            "name": "SW shop",
-            "min": [
-              -57.5,
-              -1.5,
-              -41.5
-            ],
-            "max": [
-              -26.5,
-              9.0,
-              -7.5
-            ]
+            "path": "SBG_Airpit_Light/OO/AIRBUS/Old_Bunker_Light_cookie (6)/MainLight",
+            "reason": "AIRBUS lamp (6): level325 replaced Base+MainLight by one SupportLight"
+          },
+          {
+            "path": "SBG_Airpit_Light/OO/AIRBUS/Old_Bunker_Light_cookie (9)/BaseLight ",
+            "reason": "AIRBUS lamp (9): level325 replaced Base+MainLight by one SupportLight (trailing space is the source name)"
+          },
+          {
+            "path": "SBG_Airpit_Light/OO/AIRBUS/Old_Bunker_Light_cookie (9)/MainLight",
+            "reason": "AIRBUS lamp (9): level325 replaced Base+MainLight by one SupportLight"
+          },
+          {
+            "path": "SBG_Airpit_Light/OO/AIRPORT LAMPS/Airport_lamp (72)/Spot Light (2)",
+            "reason": "0.31 m from level325's own Spot Light"
+          },
+          {
+            "path": "SBG_Airpit_Light/OO/ShadowPlanes/ShadowPlaneBox (125)/Plane_LOD0",
+            "reason": "level325 keeps the LODGroup with an empty renderer list (plane removed by BSG)"
+          },
+          {
+            "path": "SBG_Airpit_Light/OO/ShadowPlanes/ShadowPlaneBox (140)/Plane_LOD0",
+            "reason": "level325 keeps the LODGroup with an empty renderer list (plane removed by BSG)"
           }
         ]
       }
