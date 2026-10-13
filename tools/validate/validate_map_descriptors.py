@@ -138,6 +138,22 @@ def split_top_level_args(s: str) -> list[str]:
     return parts
 
 
+def parse_lamp_fill_literal(v: str) -> dict:
+    """LampFillRepairs: `new ArenaLampFillDescriptor("template path", y, new[] { x0, z0, x1, z1, ... })`. The flat cell
+    array is paired up as the sidecar's "lamp_fill" object spells it: {template, y, cells [[x, z], ...]}. An odd
+    number of values is a hard error (a cell without a z)."""
+    inner = v[len("new ArenaLampFillDescriptor("):].rstrip()
+    if not inner.endswith(")"):
+        fail(f"could not parse lamp fill literal: {v[:80]!r}")
+    values = [parse_cs_value(x) for x in split_top_level_args(inner[:-1])]
+    if len(values) != 3 or not isinstance(values[0], str) or not isinstance(values[2], list):
+        fail("lamp fill literal requires (template path string, y, new[] { x0, z0, ... })")
+    flat = values[2]
+    if len(flat) % 2:
+        fail(f"lamp fill literal has an odd number of cell values ({len(flat)}): every cell needs an x and a z")
+    return {"template": values[0], "y": values[1], "cells": [list(flat[i:i + 2]) for i in range(0, len(flat), 2)]}
+
+
 def parse_cs_value(raw: str):
     """Parses one named-argument value into a Python str / int / list[str] / ("ref", "A.B")."""
     v = raw.strip()
@@ -179,6 +195,8 @@ def parse_cs_value(raw: str):
             fail(f"dust literal requires exactly 12 source parameters: {v!r}")
         return dict(zip(("scene", "path", "time_speed", "size", "quad_tile_set_side", "uv_tile_padding"), values[:6]),
                     bounds_center=values[6:9], bounds_extents=values[9:12])
+    if v.startswith("new ArenaLampFillDescriptor("):
+        return parse_lamp_fill_literal(v)
     if re.fullmatch(r"[A-Za-z_]\w*\.[A-Za-z_]\w*", v):
         return ("ref", v)
     if re.fullmatch(r"[A-Za-z_]\w*", v):
@@ -333,6 +351,46 @@ def bake_input_errors(map_json: dict) -> list[str]:
     return errors
 
 
+LAMP_FILL_MIN_SPACING = 2.0   # metres; the lattice pitch is about 3.1-3.3 m, a closer pair would overlap its lamp discs
+
+
+def is_finite_pair(v) -> bool:
+    return isinstance(v, list) and len(v) == 2 and all(type(c) in (int, float) and math.isfinite(c) for c in v)
+
+
+def lamp_fill_errors(map_json: dict) -> list[str]:
+    """Shape of the optional lamp_fill (LampFillRepairs): {template, y, cells [[x, z], ...]}. `template` is the hierarchy
+    path of the authored lamp the copies are made from (scene root first, at least one child), `y` the world height of the
+    copies and `cells` their world x/z positions: finite, no duplicate and no two closer than LAMP_FILL_MIN_SPACING."""
+    fill = map_json.get("lamp_fill")
+    if fill is None:
+        return []
+    if not isinstance(fill, dict) or set(fill) != {"template", "y", "cells"}:
+        return ["lamp_fill must be an object with exactly template, y and cells"]
+    errors: list[str] = []
+    if not is_hierarchy_path(fill["template"]) or "/" not in fill["template"]:
+        errors.append("lamp_fill template must be a hierarchy path below a scene root (Root/Child/... with no empty segment)")
+    if type(fill["y"]) not in (int, float) or not math.isfinite(fill["y"]):
+        errors.append("lamp_fill y must be a finite number")
+    cells = fill["cells"]
+    if not isinstance(cells, list) or not cells or not all(is_finite_pair(c) for c in cells):
+        errors.append("lamp_fill cells must be a nonempty array of [x, z] pairs of finite numbers")
+        return errors
+    duplicates, close = [], []
+    for i, a in enumerate(cells):
+        for b in cells[i + 1:]:
+            distance = math.hypot(a[0] - b[0], a[1] - b[1])
+            if distance == 0:
+                duplicates.append(a)
+            elif distance < LAMP_FILL_MIN_SPACING:
+                close.append((a, b))
+    if duplicates:
+        errors.append(f"lamp_fill cells contain duplicates, e.g. {duplicates[0]}")
+    if close:
+        errors.append(f"lamp_fill has {len(close)} cell pair(s) closer than {LAMP_FILL_MIN_SPACING} m, e.g. {close[0][0]} and {close[0][1]}")
+    return errors
+
+
 def shader_fallback_errors(map_json: dict) -> list[str]:
     """Shape of the optional shader_fallback_names (PLAN-AIRPIT item 11): the Arena shader names the client's
     ShaderStandinPolicy may rebind to an SPT substitute on this map. Only the C# runtime reads it."""
@@ -351,6 +409,8 @@ def check_map_against_registry_entry(
     errors.extend(f"{where}: {error}" for error in background_scene_errors(map_json, registry_args, ref_scope))
     errors.extend(f"{where}: {error}" for error in bake_input_errors(map_json))
     errors.extend(f"{where}: {error}" for error in shader_fallback_errors(map_json))
+    errors.extend(f"{where}: {error}" for error in lamp_fill_errors(map_json))
+    check_field(errors, where, "lamp_fill", map_json.get("lamp_fill"), registry_args.get("LampFill"))
     check_field(errors, where, "shader_fallback_names", map_json.get("shader_fallback_names", []),
                 resolve(registry_args.get("ShaderFallbackNames", []), ref_scope))
     for json_field, cs_field in (("opened_barriers", "OpenedBarriers"), ("navmesh_bake_exclusions", "NavMeshBakeExclusions"),

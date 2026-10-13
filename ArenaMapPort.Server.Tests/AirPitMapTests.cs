@@ -172,6 +172,36 @@ public sealed class AirPitMapTests
         }
     }
 
+    // 2026-10-13 (user decision): the empty cells of the passport-hall ring-lamp lattice get dark copies of the authored
+    // off-lamp (LampFillRepairs). tools/maps/airpit.json's "lamp_fill" {template, y, cells [[x, z], ...]} is the Python
+    // side's copy of the compiled descriptor; no other map carries it.
+    [Fact]
+    public void LampFillMatchesTheSidecar()
+    {
+        using var sidecar = JsonDocument.Parse(File.ReadAllText(Sidecar("airpit.json")));
+        var entry = sidecar.RootElement.GetProperty("lamp_fill");
+        var fill = ArenaMapRegistry.AirPit.LampFill;
+        Assert.NotNull(fill);
+        Assert.Equal("SBG_Airpit_Light/OO/Airport_lamp_02/Airport_lamp_02_disabled", fill!.TemplatePath);
+        Assert.Equal(entry.GetProperty("template").GetString(), fill.TemplatePath);
+        Assert.Equal(entry.GetProperty("y").GetSingle(), fill.Y);
+        Assert.Equal(6.83f, fill.Y);
+        var cells = entry.GetProperty("cells").EnumerateArray().ToArray();
+        Assert.Equal(0, fill.Cells.Length % 2);
+        Assert.Equal(81, cells.Length);
+        Assert.Equal(cells.Length, fill.Count);
+        for (var i = 0; i < cells.Length; i++)
+            Assert.Equal(Floats(cells[i]), new[] { fill.CellX(i), fill.CellZ(i) });
+
+        var mapsDir = Path.GetDirectoryName(Sidecar("airpit.json"))!;
+        foreach (var path in Directory.EnumerateFiles(mapsDir, "*.json").Where(p => !Path.GetFileNameWithoutExtension(p).Contains('.')))
+        {
+            if (Path.GetFileName(path) == "airpit.json") continue;
+            using var doc = JsonDocument.Parse(File.ReadAllText(path));
+            Assert.False(doc.RootElement.TryGetProperty("lamp_fill", out _), $"{Path.GetFileName(path)} must not carry 'lamp_fill'");
+        }
+    }
+
     [Fact]
     public void ShippedBaseJsonParsesAsTheServerLocationModel()
     {

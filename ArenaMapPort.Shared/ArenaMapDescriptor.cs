@@ -81,6 +81,39 @@ namespace ArenaMapPort.Shared
         }
     }
 
+    /// <summary>
+    /// The empty cells of a ceiling lamp lattice that LampFillRepairs fills at raid start with copies of one authored
+    /// template lamp: <see cref="TemplatePath"/> is the hierarchy path of the template (root scene object first, as
+    /// <c>BoothDoorRepairs.FindByPath</c> reads it), <see cref="Y"/> the world height of every copy and
+    /// <see cref="Cells"/> the flat list x0, z0, x1, z1, ... of their world positions. A flat float array keeps the
+    /// registry literal short; <see cref="Count"/>, <see cref="CellX"/> and <see cref="CellZ"/> read it as pairs.
+    /// AirPit's passport hall is the only user. Mirrors the map sidecar's "lamp_fill"
+    /// (AirPitMapTests.LampFillMatchesTheSidecar).
+    /// </summary>
+    public sealed class ArenaLampFillDescriptor
+    {
+        public string TemplatePath { get; }
+        public float Y { get; }
+        public float[] Cells { get; }
+
+        /// <summary>Number of cells. A trailing unpaired value is not a cell (the consistency tests refuse an odd array).</summary>
+        public int Count => Cells.Length / 2;
+
+        public float CellX(int index) => Cells[2 * index];
+
+        public float CellZ(int index) => Cells[2 * index + 1];
+
+        /// <summary>Name of the copy for cell <paramref name="index"/>; "(fill 0)" doubles as the idempotence marker.</summary>
+        public static string CloneName(string templateName, int index) => templateName + " (fill " + index + ")";
+
+        public ArenaLampFillDescriptor(string TemplatePath, float Y, float[] Cells)
+        {
+            this.TemplatePath = TemplatePath;
+            this.Y = Y;
+            this.Cells = Cells;
+        }
+    }
+
     public sealed class ArenaMapDescriptor
     {
         public string Key { get; }                 // "arena_equator" / "arena_bay5" — LocationTable key, base.json Id
@@ -128,6 +161,7 @@ namespace ArenaMapPort.Shared
         public string[] SunPaths { get; }
 #nullable enable
         public ArenaDustDescriptor? Dust { get; } // exact source dust owner; null leaves other maps untouched
+        public ArenaLampFillDescriptor? LampFill { get; } // empty ceiling-lamp cells filled at raid start; null = none (AirPit only)
 #nullable restore
 
         // Parameter names are PascalCase (unusual for a C# constructor) so every call site below
@@ -169,7 +203,8 @@ namespace ArenaMapPort.Shared
             float[]? BakeBounds = null,
             int[]? NavMeshBakeLayers = null,
             string[]? ShaderFallbackNames = null,
-            ArenaBorderDescriptor[]? AuthoredBorders = null)
+            ArenaBorderDescriptor[]? AuthoredBorders = null,
+            ArenaLampFillDescriptor? LampFill = null)
 #nullable restore
         {
             this.Key = Key;
@@ -196,6 +231,7 @@ namespace ArenaMapPort.Shared
             this.RestoredShadowCasterRoots = RestoredShadowCasterRoots ?? new string[0];
             this.DistantShadowCasterPaths = DistantShadowCasterPaths ?? new string[0];
             this.Dust = Dust;
+            this.LampFill = LampFill;
             this.FixedDayHour = FixedDayHour;
             this.FixedNightHour = FixedNightHour;
             this.UsesServerTime = UsesServerTime;
@@ -462,6 +498,54 @@ namespace ArenaMapPort.Shared
                 new ArenaBorderDescriptor("west", -56.03f, -41.66f, -56.81f, 44.28f, -1.0f, 12.0f),
                 new ArenaBorderDescriptor("north-west", -56.81f, 44.28f, -33.86f, 74.16f, -1.0f, 12.0f),
             },
+            // Passport-hall ring lamps (LampFillRepairs, user decision 2026-10-13: "the map is our own interpretation anyway;
+            // fill the ceiling, it looks broken; only the lamps that are lit now stay lit, all additional ones OFF").
+            // Arena 0.6.0 level37 authors 45 `Airport_lamp_02` units on a 17 x 9 lattice over the passport hall (pivots at
+            // y 6.83; columns x -36.95 .. 13.81, rows z 56.44 .. 83.01); the dense ceiling of the older build is gone. The
+            // 81 cells below are the lattice cells that hold no authored lamp, lie 3.0 m or more from every one and sit
+            // fully under the flat ceiling plane of airport_passport_control (the 26 cells at the curved flanks and the
+            // north edge stay empty, and so does (-30.37, 73.13): its 1.28 m lamp disc would sink 0.12 m into the round
+            // column Airport_column_02 at (-32.44, 73.18)). Each gets a copy of the authored dark lamp (`_off` emissive
+            // material), one row of the lattice per group, x then z. Mirrors tools/maps/airpit.json
+            // (AirPitMapTests.LampFillMatchesTheSidecar).
+            LampFill: new ArenaLampFillDescriptor(
+                "SBG_Airpit_Light/OO/Airport_lamp_02/Airport_lamp_02_disabled",
+                6.83f,
+                new[]
+                {
+                    // row z 56.44: 12 cell(s)
+                    -33.65f, 56.44f, -30.37f, 56.44f, -27.29f, 56.44f, -24.13f, 56.44f,
+                    -17.87f, 56.44f, -14.71f, 56.44f, -11.57f, 56.44f, -8.43f, 56.44f,
+                    -5.21f, 56.44f, 1.11f, 56.44f, 7.42f, 56.44f, 10.64f, 56.44f,
+                    // row z 59.72: 12 cell(s)
+                    -36.95f, 59.72f, -33.65f, 59.72f, -27.29f, 59.72f, -21.01f, 59.72f,
+                    -17.87f, 59.72f, -14.71f, 59.72f, -11.57f, 59.72f, -8.43f, 59.72f,
+                    1.11f, 59.72f, 4.28f, 59.72f, 10.64f, 59.72f, 13.81f, 59.72f,
+                    // row z 63.13: 11 cell(s)
+                    -33.65f, 63.13f, -30.37f, 63.13f, -27.29f, 63.13f, -24.13f, 63.13f,
+                    -17.87f, 63.13f, -14.71f, 63.13f, -8.43f, 63.13f, -5.21f, 63.13f,
+                    -2.14f, 63.13f, 1.11f, 63.13f, 4.28f, 63.13f,
+                    // row z 66.38: 11 cell(s)
+                    -33.65f, 66.38f, -30.37f, 66.38f, -24.13f, 66.38f, -21.01f, 66.38f,
+                    -14.71f, 66.38f, -8.43f, 66.38f, -5.21f, 66.38f, -2.14f, 66.38f,
+                    7.42f, 66.38f, 10.64f, 66.38f, 13.81f, 66.38f,
+                    // row z 69.70: 7 cell(s)
+                    -27.29f, 69.7f, -17.87f, 69.7f, -14.71f, 69.7f, -11.57f, 69.7f,
+                    -5.21f, 69.7f, 1.11f, 69.7f, 10.64f, 69.7f,
+                    // row z 73.13: 9 cell(s)
+                    -24.13f, 73.13f, -21.01f, 73.13f, -17.87f, 73.13f, -11.57f, 73.13f,
+                    -8.43f, 73.13f, -5.21f, 73.13f, 1.11f, 73.13f, 4.28f, 73.13f,
+                    7.42f, 73.13f,
+                    // row z 76.47: 7 cell(s)
+                    -30.37f, 76.47f, -27.29f, 76.47f, -24.13f, 76.47f, -17.87f, 76.47f,
+                    -2.14f, 76.47f, 4.28f, 76.47f, 7.42f, 76.47f,
+                    // row z 79.76: 7 cell(s)
+                    -30.37f, 79.76f, -17.87f, 79.76f, -14.71f, 79.76f, -5.21f, 79.76f,
+                    -2.14f, 79.76f, 1.11f, 79.76f, 7.42f, 79.76f,
+                    // row z 83.01: 5 cell(s)
+                    -21.01f, 83.01f, -14.71f, 83.01f, -11.57f, 83.01f, -5.21f, 83.01f,
+                    -2.14f, 83.01f,
+                }),
             // PLAN-AIRPIT item 11: the four Arena shader names AirPit's materials use that SPT does not ship (fog sheet,
             // both cloth shaders, the mountain rock). Behind MaterialFixes/AirPitShaderStandins (default on). Mirrors
             // tools/maps/airpit.json (ShaderStandinPolicyTests).

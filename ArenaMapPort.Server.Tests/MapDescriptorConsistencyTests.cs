@@ -140,6 +140,18 @@ public class MapDescriptorConsistencyTests
         }
     }
 
+    // 2026-10-13: the passport-hall lamp fill (LampFillRepairs) is AirPit's alone; every other map keeps the default (none),
+    // so nothing is cloned on Equator, Bay5 or a parked map.
+    [Fact]
+    public void LampFill_ExistsForAirPitOnly()
+    {
+        Assert.NotNull(ArenaMapRegistry.AirPit.LampFill);
+        foreach (var map in ArenaMapRegistry.Catalog.Where(m => !ReferenceEquals(m, ArenaMapRegistry.AirPit)))
+        {
+            Assert.Null(map.LampFill);
+        }
+    }
+
     // PLAN-AIRPIT item 8: the bake-only inputs exist for AirPit alone; Equator's and Bay5's NavMesh bake keeps its
     // renderer-union volume, its every-layer mask and no exclusion, which is what their shipped bundles were built with.
     [Fact]

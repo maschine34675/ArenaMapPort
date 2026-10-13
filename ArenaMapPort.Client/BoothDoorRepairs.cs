@@ -227,7 +227,7 @@ namespace ArenaMapPort.Client
 
         // "Root/Child/Grandchild (n)" — the first segment is a scene root object in one of our scenes, the rest is
         // resolved with Transform.Find (which takes '/'-separated paths and returns the first match per level).
-        static List<Transform> FindByPath(string path)
+        internal static List<Transform> FindByPath(string path) // also LampFillRepairs' template lookup
         {
             var found = new List<Transform>();
             int slash = path.IndexOf('/');
