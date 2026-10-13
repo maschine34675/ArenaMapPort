@@ -3056,3 +3056,82 @@ the 18 spawns (the r=5 spheres of player-all and south-all hold 37 new colliders
 13 recovered lights (SE shop `Airport_lamp (79)`), the 12 new soft-shadow VolumetricSpot fixtures over the passport hall
 (F7 `LightCullingProbe` + frame time), `FLOOR_DAMAGE2`, the 54 minor-overlap props, the two 72 %-overlapping blob
 shadows, the new `lightMask01` cubemap on the passport glass.
+
+## U6 host raids 15-18 (SPT-GPU-2, 2026-10-13 03:36-04:00): the furnished hall, the south-west blockout panels, spawns back on Arena's anchors
+
+Build: U6 = `unity_build_all_20261013_030551.log` from package v8 (8 scenes, 3474 meshes, 555 materials, 988 textures;
+bake 3048 sources, 11332 vertices / 5212 triangles, 9 opened barriers, 0 exclusions; scenes bundle 992 MB), client
+`89a072a` for raids 15-16 and `62d7739` for raids 17-18 (opened_barriers 10). Deployed through the mirror, every host
+file SHA256-identical to dist (server DLL, client DLL, base.json, the three AirPit bundles, the shader sidecar), server
+and EFT restarted with `gpu-run restart`, 19/19 plugins identical. Spawns were reverted to Arena's anchors BEFORE the
+first raid (offline evidence: all four on the main component of the U6 bundle with 1.50 / 2.18 / 1.89 / 1.80 m of
+border clearance; `navmesh_diff --compare-bundle`: 187,767 of 204,204 Arena samples covered, up from 187,410 on U5,
+75 of 77 located probes in the main component, the two unlocated ones lie outside the bake box).
+
+### Raid 15 (03:37, bots None): everything but the south-west shop
+
+Raid-start log: all nine barriers opened (`BUS_DOORS` 6 parts, the two portal gates 1 + 2 already off, the six shells
+4-6 parts each), `[NavMesh] added navmesh for 'arena_airpit': 11332 vertices, 5212 triangles`, 1050 lights with
+722 culling lights (editor baselines 722), `RebindShaders` 351 + 24 + 20 + 9 + 11 + 109 (Main_hall) + 11 (Light)
+stand-in materials, `[NativeDecals] source=722 active=705 registered=705 materials=70 groups=26`, native audio ready
+26/26, rain cover armed (13,659 elevated meshes), zero `[ArenaMapPort]` warnings. `uibridge_teleport dryRun` from the
+Usec spawn: NE court (16.6, 38.5) / (17.6, 12.5) / (17.6, 28.5), NW shop (-41.3, 15.4) / (-35.3, 21.4), SE shop
+(16.6, -16.9) / (28.6, -17.9) / (15.6, -34.9), core points 2 / 17 / 18, hubs 2.6 / 2.8, the reverted spawns
+north-hall-west, east-south, east-north: all reachable. The five back-room probes (-53.4, 35.0), (-52.0, -39.7),
+(28.1, -41.4), (25.4, 30.5), (29.6, 20.0): "not reachable on foot (navmesh island)" as intended. **Every south-west
+shop point failed with "the walk there passes through a wall or fence"**: (-40, -28.6), (-41, -42.6), (-40, -19.6),
+core 16, west-south (-40.1, -27.7), both roll-door-03 gaps (-44 / -48.5, -12.5), the east bay (-36.7, -36.7), the south
+door (-40.9, -43.5) and the apron behind it (-41, -47), while (-44, -9) just north of the door line passed. Teleport to
+(-44, -7.5) facing south showed a closed shutter; F10 hit `SBG_Arena_AirPit_ShootOut/SOO/Cube (10) Group/Cube` at
+2.44 m: layer 0 (Default), BoxCollider, `Standard` material. The package shows the group holds THREE such panels
+(12.7-14 x 3.26 x 0.16 m) at (-44.01, 1.38, -10.15), (-36.8, 1.38, -16.58) and (-36.87, 1.38, -33.75) = the three
+roll-door lines of the south-west shop: BSG's ShootOut blockout on top of the shells. Arena's bake mask (9/11/13/18/30)
+never saw layer 0, so the U6 mesh runs through them while the player collides - the 2026-10-11 shutter picture again,
+caused by invisible blockout, not by a bake-only exclusion. They were the only live layer-0 sources of the package.
+
+Fix (`62d7739`): `SBG_Arena_AirPit_ShootOut/SOO/Cube (10) Group` is the tenth `opened_barriers` entry (descriptor,
+sidecar, `MapDescriptorConsistencyTests` 10, `test_airpit_bake_inputs` COVER_CUBES: sources 7775 -> 7772, no live
+layer-0 source left). No rebake: layer 0 was never a bake input; `validate_port --distribution` and
+`validate_distribution` pass on the U6 bundles. Client + server DLL redeployed (hashes identical), `gpu-run restart`.
+
+### Raid 16 (03:49, bots None): the south-west shop opens
+
+`spawn barrier 'Cube (10) Group' at (-11.2, 1.2, 0.0): deactivated 3 part(s)`. Dry runs: every south-west point above
+plus core 16 and west-south reachable; the west rooms (-52, -39.7) stay an island. Walks: SW east bay (-36.7, -36.7)
+-> through the shop -> south door -> apron (-41, -47): "arrived" (11.3 m along the navmesh); west-south (-40.1, -27.7)
+-> east-south (19.59, -29.58): "arrived", 86.6 m along the navmesh (straight line 59.7 m; report C predicted about
+78 m for a different pair of points) - the shops link the hall halves at ground level. F10 at the SW east bay facing
+west: `Main_hall/OO/PROPS/INDOOR/SHOPS/GERMAN_TONNI_HELLFINGER/TH_Shop_shelves` (level38 content); facing east: the kept
+324 barricade `SOO/Barricade_Metal_List_04 (12)` in front of the roll-door-02 bay (report C D10, kept). F7
+`LightProbe` at west-south: cullingLights=481 visible=334, 40 volumetric spots active and enabled, no flicker, camera
+stack unchanged, 116-118 fps. Screenshots (`work/screenshots/airpit-2026-10-13/00-06`): the Tonni Hellfinger shop
+(shelves, lit niches, mannequins, wood floor, bullet-hole decals), Loui Peeton (lit neon arches, ticket machines,
+shell casings), Burger Spot (counters, signage, paper litter, footprint decals, closed inside door), the passport hall
+with the 45 ring lamps on the ceiling, the red-X lane lights, a tipped hot-dog stall, paper and footprints (the user's
+Arena screenshot of the spawn hall), and the hall centre under the airliner (prefab platform, tarpaulin wall, container,
+no duplicate scaffold: the 632 exclusions did their job in that view). Acoustics listener room at the shop points:
+`Main`/IndoorConcrete with the shop room tones (German_3 at the SW shop).
+
+### Raid 17 (03:54, bots Low): bots on the U6 mesh
+
+`BotZone.Init 'BotZone_Main': markers=14 onNavMesh=14 points=14`, wave count=3 at 15 s; after 35 s: three scavs at the
+north spawn field ((-0.7, 57.3), (2.5, 55.9), (14.1, 52.6)), one PMC on `SAIN : Combat Layer` moving in the hall at
+(-30, 0.1, -4.7); no `ActiveFail`, no `[ArenaMapPort]` warning; the player was killed as usual (Redeploy intercepted).
+
+### Raids 18-19 (03:56-03:59, bots None): Equator and Bay5 regression
+
+Equator: `[NavMesh] added navmesh for 'arena_equator': 10404 vertices, 4572 triangles`, native decals 346/348, native
+audio ready 25/23 (2 inactive as before), zero `[ArenaMapPort]` warnings. Bay5: 22117 / 10213, decals 468/499,
+`[Water] enabled: target=Arena_Bay5_Main/Sea/Plane textures=4 shader=Hidden/WaterForSSR`, audio 24/23 (1 seasonal
+silent), zero warnings. Both unchanged by the AirPit work (only AirPit's descriptor, sidecars and bundles changed).
+
+### Open after U6
+
+- Host-unverified detail: the 13 recovered level37 lights in the SE shop were lit in the screenshot but not measured;
+  the 12 soft-shadow VolumetricSpot fixtures over the passport hall ran at 116 fps on the GPU host; the two blob
+  shadows overlapping a 325 plane by 72 %, FLOOR_DAMAGE2 on the concourse, the apron litter and the 54 minor-overlap
+  props were not looked at individually.
+- `(-41, -50)` on the apron is off-mesh in the U6 bundle (Arena's own mesh has no polygon there either); the south door
+  (-40.9, -43.5) and (-41, -47) are on the main component.
+- A partly rolled-up level38 roll door still hangs in the roll-door-03 line (rail at about 1.3 m in the screenshot
+  before the fix); the NavMesh and the walks pass, the player may have to duck - Arena's own look of that shop.

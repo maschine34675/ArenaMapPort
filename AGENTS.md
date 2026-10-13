@@ -350,6 +350,11 @@ the log; the user uses it to point at things.
   `python tools/validate/partial_scope.py <package>` (contract block) plus the manifest totals; the live pins in
   `test_scene_select.py`, `test_native_contracts.py` and `test_airpit_bake_inputs.py` follow. Sidecar `opened_barriers`
   and the C# descriptor must change in the same commit (the bake reads the sidecar, the client the descriptor).
+- Layer-0 blockout: BSG's ShootOut cover includes white `Standard`-material panels on layer Default (AirPit
+  `SBG_Arena_AirPit_ShootOut/SOO/Cube (10) Group`, three 13 x 3.3 x 0.16 m boxes on the south-west roll-door lines).
+  Arena's bake mask (9/11/13/18/30) never sees layer 0, so the NavMesh runs through them while the player collides -
+  the shutter-trap picture without any bake-only exclusion. `test_airpit_bake_inputs` reports the layers the mask drops;
+  a live layer-0 source inside the play space is a blockout to open (`opened_barriers`) or to keep out of the mesh.
 - Bash tool heredocs over ~180 lines fail; write scripts with the Write tool and run them.
 - Fresh 0-HP profile deaths on the host were the skipped heal screen, not the map.
 - Shader stand-ins (PLAN-AIRPIT item 11): EFT 0.16.9.5 carries `Custom/Billboard_FogSheet_Simple`, both `Cloth/ClothShader`
