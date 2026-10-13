@@ -3135,3 +3135,51 @@ silent), zero warnings. Both unchanged by the AirPit work (only AirPit's descrip
   (-40.9, -43.5) and (-41, -47) are on the main component.
 - A partly rolled-up level38 roll door still hangs in the roll-door-03 line (rail at about 1.3 m in the screenshot
   before the fix); the NavMesh and the walks pass, the player may have to duck - Arena's own look of that shop.
+
+### Passport-hall ceiling lamps: nothing is deactivated, the dense ceiling is an older build (2026-10-13, workflow `wf_477d4a54-b4a`)
+
+User question after raid 16: "can we recover the deactivated lamps in the passport hall? The ceiling is actually
+seamlessly full of lamps." Two read-only census agents (Arena levels 37/325/324/38/35/29/28/40/34/31/36/39 and the v8
+package + client code), verified from the data:
+
+- Level37's `SBG_Airpit_Light/OO/Airport_lamp_02` holds **exactly 45** ring-lamp units over the passport hall (pivots
+  y 6.83, disc 2.56 m, hanging to y 5.35), all active, on a 17 x 9 lattice (pitch about 3.17 x 3.32 m, 153 cells,
+  45 occupied = 29 %, one whole column missing). Unit names run up to (118) with 43 numbered survivors, and all 11
+  `VolumetricSpot` ceiling lights of `NO_CULL/shopping_mall_ceiling_light_volume (17)` sit within 0.5 m of a surviving
+  lamp: BSG deleted lamps in the authoring scene (inference). The port imports all 45 and shows them as authored.
+- **43 are lit** (`Airpit_emissive_01`, `_EmissiveColor` white, `_EmissionPower` 1.0, sharedassets35) and **2 are
+  authored dark** (`Airpit_emissive_01_off`, `_EmissionPower` 0, grey): `Airport_lamp_02_disabled` at
+  (-11.57, 6.83, 63.13) and the base `Airport_lamp_02` at (-8.43, 6.83, 76.47); the `_off` material is BSG's
+  deliberate "LIGHT OFF" variant (also on all 68 `BACKGROUND/LIGHT OFF` ring lamps at z 94..154 north of the facade),
+  not a runtime state; no script in any AirPit level switches emissives (the only `EmissiveAnimator`s are the bus
+  exit lights of level28).
+- No other level carries ring lamps: level325/324 have none at all (a string scan of every level/sharedassets file
+  finds `Airport_lamp_02` only in level37: 45 + 68), no inactive copy exists at any lattice cell, and no other object
+  occupies the empty cells. `LIGHT_Disabled` holds only the two facade track lights `shopping_mall_ceiling_light_volume
+  (13)/(18)` at z 50.7 (fixture active, child Spot inactive in Arena too) and `Lamps_ceiling - DISABLED` is the main
+  hall's high ceiling (y 15..37). The ring lamps have no Light of their own (11 of 45 have a VolumetricSpot within
+  2.5 m); the ceiling is lit by those 13 spots, 10 GLOBAL GI points and 2 BasePoints.
+- **The user's reference screenshot** (`D:\SPT41\Development\Screenshot 2026-10-12 211121.png`, watermark
+  0.12.12.15 beta) shows about 59 lamps in one frame, about 27 % of them dark discs, i.e. a close-packed grid that no
+  0.6.0 level contains. The same full grid survives in the baked passport cubemaps of the package
+  (`airport_cubemap_passport_control`, `_left`, `_right`: regular lit rings at the lamp pitch). Correction to an earlier
+  note: `airport_cubemap` (ca8b576a, the north facade's `_Cube`) shows the central atrium, not the passport hall.
+- A shipped 0.6.0 raid loads neither level37 nor 38 (no preset lists them), so Arena itself shows no ring lamps in
+  this hall today; the port shows the furnished-hall version with 45.
+
+Options recorded (user decision pending): (A) swap the two `_off` lamps to the ON material at raid start (client,
+DLL only, cosmetic, "disabled" by BSG); (B) fill the 104 free lattice cells (108 minus 4 under the round columns) with
+raid-time clones of a template lamp (client repair behind a new config key, explicit cell list in descriptor + sidecar,
+no shadow proxies, optional dark fraction like the old build, perf check against 116 fps) - a reconstruction, not
+Arena 0.6.0 data; (C) the same baked into a v9 package / U7 build (package stops being a pure Arena subset, full
+re-pin and rebuild); (E) leave the authored 45. Not recommended: activating the two `LIGHT_Disabled` facade spots.
+
+### Roll doors of the south-west shop: accepted by the user (2026-10-13)
+
+Numbering: 01 = south door to the apron (z -43.5), 02 = east door to the hall (x -36.8), 03 = north front toward the
+hall centre (z -10.1). From the level38 collider meshes (0.5 m slices): door 01 open over x -43.0..-37.5 with 1.86-2.28
+m of headroom (upright); door 02 open at z -38.25..-34.75 and -29.25..-28.25 (2.44 m) and z -16.0..-10.5 (2.32 m); door
+03 open at x -50.5..-47.0 (2.44 m, upright) and x -45.75..-42.25 only 1.22 m under the rail (prone / marginal crouch),
+closed elsewhere. The user walked the north front: three shutter modules, one closed, one open, the middle one half
+open with a sandbag barricade behind it (impassable) - "passt". The night look and the shop sound were accepted too
+(no extra sound sources were ever meant: the shop room tones come from Arena's spatial-audio graph).
