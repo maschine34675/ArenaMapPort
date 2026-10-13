@@ -39,7 +39,7 @@ public sealed class LampFillDescriptorTests
         Assert.Equal("Airport_lamp_02_disabled (fill 80)", ArenaLampFillDescriptor.CloneName("Airport_lamp_02_disabled", 80));
     }
 
-    // The literal in ArenaMapRegistry.AirPit: 81 distinct cells on the passport-hall lattice, the template a path below a
+    // The literal in ArenaMapRegistry.AirPit: 82 distinct cells on the passport-hall lattice, the template a path below a
     // scene root, nothing so close to another cell that two lamp discs (2.56 m) could overlap.
     [Fact]
     public void AirPitsLiteralIsWellFormed()
@@ -47,7 +47,7 @@ public sealed class LampFillDescriptorTests
         var fill = ArenaMapRegistry.AirPit.LampFill;
         Assert.NotNull(fill);
         Assert.Equal(0, fill!.Cells.Length % 2);
-        Assert.Equal(81, fill.Count);
+        Assert.Equal(82, fill.Count);
         Assert.True(float.IsFinite(fill.Y) && fill.Y > 0f);
         var segments = fill.TemplatePath.Split('/');
         Assert.True(segments.Length >= 2 && segments.All(s => s.Length > 0 && s == s.Trim()), fill.TemplatePath);
@@ -69,22 +69,34 @@ public sealed class LampFillDescriptorTests
 
     // Arena_AirPit_ShootOut/.../OO_Building/Airport_column_02 stands twice in the lattice area (axes from the v8 package,
     // tools/tests/test_lamp_fill.py measures the same from it). At the lamp discs' height (y 5.35-5.48) its LOD0 mesh is
-    // 0.913 m in radius, a copy's flat disc 1.28 m: a cell nearer than 2.19 m to an axis would sink the rim into the
-    // column (review 2026-10-13: (-30.37, 73.13) did, by 0.12 m, and was dropped).
+    // 0.913 m in radius, a copy's flat disc 1.28 m: a cell nearer than 2.19 m to an axis sinks the rim into the column.
+    // Exactly one cell does, on the user's decision (2026-10-13 midday): (-30.37, 73.13) beside the western column, by
+    // 0.13 m (the review of the first version had dropped it; the user wants the lattice closed there too, as it is beside
+    // the eastern column, where the lattice falls 2.64 m from the axis). Every other cell clears both columns.
     [Theory]
-    [InlineData(-32.44f, 73.18f)]
-    [InlineData(10.05f, 73.34f)]
-    public void NoLampDiscSinksIntoARoundColumn(float columnX, float columnZ)
+    [InlineData(-32.44f, 73.18f, -30.37f, 73.13f)]
+    [InlineData(10.05f, 73.34f, float.NaN, float.NaN)]
+    public void OnlyTheAcceptedCellDipsIntoARoundColumn(float columnX, float columnZ, float acceptedX, float acceptedZ)
     {
-        const float DiscRadius = 1.28f, ColumnRadiusAtTheDiscs = 0.913f;
+        const float DiscRadius = 1.28f, ColumnRadiusAtTheDiscs = 0.913f, AcceptedDip = 0.13f;
         var fill = ArenaMapRegistry.AirPit.LampFill!;
-        var nearest = float.MaxValue;
+        var inside = new List<(float x, float z, float distance)>();
         for (var i = 0; i < fill.Count; i++)
         {
             var dx = fill.CellX(i) - columnX;
             var dz = fill.CellZ(i) - columnZ;
-            nearest = MathF.Min(nearest, MathF.Sqrt(dx * dx + dz * dz));
+            var distance = MathF.Sqrt(dx * dx + dz * dz);
+            if (distance < DiscRadius + ColumnRadiusAtTheDiscs)
+                inside.Add((fill.CellX(i), fill.CellZ(i), distance));
         }
-        Assert.True(nearest >= DiscRadius + ColumnRadiusAtTheDiscs, $"nearest cell is {nearest:F2} m from the column axis");
+        if (float.IsNaN(acceptedX))
+        {
+            Assert.Empty(inside);
+            return;
+        }
+        var cell = Assert.Single(inside);
+        Assert.Equal((acceptedX, acceptedZ), (cell.x, cell.z));
+        var dip = DiscRadius + ColumnRadiusAtTheDiscs - cell.distance;
+        Assert.True(dip > 0f && dip <= AcceptedDip + 0.005f, $"the accepted cell dips {dip:F3} m into the column");
     }
 }

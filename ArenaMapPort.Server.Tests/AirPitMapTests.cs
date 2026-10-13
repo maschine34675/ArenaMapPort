@@ -188,7 +188,7 @@ public sealed class AirPitMapTests
         Assert.Equal(6.83f, fill.Y);
         var cells = entry.GetProperty("cells").EnumerateArray().ToArray();
         Assert.Equal(0, fill.Cells.Length % 2);
-        Assert.Equal(81, cells.Length);
+        Assert.Equal(82, cells.Length);
         Assert.Equal(cells.Length, fill.Count);
         for (var i = 0; i < cells.Length; i++)
             Assert.Equal(Floats(cells[i]), new[] { fill.CellX(i), fill.CellZ(i) });

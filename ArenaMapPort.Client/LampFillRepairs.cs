@@ -37,7 +37,9 @@ namespace ArenaMapPort.Client
     /// Failure degrades to the authored lamps: a missing template or parent logs a Warning and skips the fill, nothing
     /// else depends on it. Switch: `Map (&lt;key&gt;)/PassportHallLampFill` (default true, next raid).
     ///
-    /// Verified: host test pending (2026-10-13).
+    /// Verified: host raid 20 (2026-10-13 10:30, build dc8ea36: 81 copied, 0 skipped, no warnings, 117 fps) and host raid 21
+    /// (14:32, with the 82nd cell beside the western round column, user decision 2026-10-13 midday: 82 copied, 0 skipped, no
+    /// warnings, 116 fps); docs/progress/airpit-release.md, "Lamp fill".
     /// </summary>
     internal static class LampFillRepairs
     {

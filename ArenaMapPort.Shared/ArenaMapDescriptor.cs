@@ -501,12 +501,13 @@ namespace ArenaMapPort.Shared
             // fill the ceiling, it looks broken; only the lamps that are lit now stay lit, all additional ones OFF").
             // Arena 0.6.0 level37 authors 45 `Airport_lamp_02` units on a 17 x 9 lattice over the passport hall (pivots at
             // y 6.83; columns x -36.95 .. 13.81, rows z 56.44 .. 83.01); the dense ceiling of the older build is gone. The
-            // 81 cells below are the lattice cells that hold no authored lamp, lie 3.0 m or more from every one and sit
+            // 82 cells below are the lattice cells that hold no authored lamp, lie 3.0 m or more from every one and sit
             // fully under the flat ceiling plane of airport_passport_control (the 26 cells at the curved flanks and the
-            // north edge stay empty, and so does (-30.37, 73.13): its 1.28 m lamp disc would sink 0.12 m into the round
-            // column Airport_column_02 at (-32.44, 73.18)). Each gets a copy of the authored dark lamp (`_off` emissive
-            // material), one row of the lattice per group, x then z. Mirrors tools/maps/airpit.json
-            // (AirPitMapTests.LampFillMatchesTheSidecar).
+            // north edge stay empty). (-30.37, 73.13) is filled on the user's decision (2026-10-13 midday) although its
+            // 1.28 m lamp disc dips 0.13 m into the shaft of the round column Airport_column_02 at (-32.44, 73.18): the
+            // mirrored column at (10.05, 73.34) has the lattice cell (7.42, 73.13) filled right beside it and the user
+            // judged that look fine. Each cell gets a copy of the authored dark lamp (`_off` emissive material), one row
+            // of the lattice per group, x then z. Mirrors tools/maps/airpit.json (AirPitMapTests.LampFillMatchesTheSidecar).
             LampFill: new ArenaLampFillDescriptor(
                 "SBG_Airpit_Light/OO/Airport_lamp_02/Airport_lamp_02_disabled",
                 6.83f,
@@ -531,10 +532,10 @@ namespace ArenaMapPort.Shared
                     // row z 69.70: 7 cell(s)
                     -27.29f, 69.7f, -17.87f, 69.7f, -14.71f, 69.7f, -11.57f, 69.7f,
                     -5.21f, 69.7f, 1.11f, 69.7f, 10.64f, 69.7f,
-                    // row z 73.13: 9 cell(s)
-                    -24.13f, 73.13f, -21.01f, 73.13f, -17.87f, 73.13f, -11.57f, 73.13f,
-                    -8.43f, 73.13f, -5.21f, 73.13f, 1.11f, 73.13f, 4.28f, 73.13f,
-                    7.42f, 73.13f,
+                    // row z 73.13: 10 cell(s)
+                    -30.37f, 73.13f, -24.13f, 73.13f, -21.01f, 73.13f, -17.87f, 73.13f,
+                    -11.57f, 73.13f, -8.43f, 73.13f, -5.21f, 73.13f, 1.11f, 73.13f,
+                    4.28f, 73.13f, 7.42f, 73.13f,
                     // row z 76.47: 7 cell(s)
                     -30.37f, 76.47f, -27.29f, 76.47f, -24.13f, 76.47f, -17.87f, 76.47f,
                     -2.14f, 76.47f, 4.28f, 76.47f, 7.42f, 76.47f,

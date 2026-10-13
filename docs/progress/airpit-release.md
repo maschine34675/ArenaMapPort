@@ -3216,3 +3216,42 @@ lamps that are lit now stay lit, every added lamp OFF." Implemented as a client 
 - Open: the copies keep their SHADOW_LOD0-2 proxies (+243 ShadowsOnly renderers); frame time did not move, so no
   switch was added. The Unity importer reads the sidecar with JsonUtility and has not run since `lamp_fill` (a nested
   array) was added; the next headless `build_all` run must show the key is skipped as unknown.
+
+### Lamp fill: the 82nd cell beside the western round column (user decision 2026-10-13 midday, host raid 21)
+
+The user looked at the filled ceiling and asked for the one dropped cell back: "the lamp left out because of the column
+can go in too; the opposite side has the same situation and it fits there." Measured on the v8 meshes
+(`scratchpad/column_geometry.py`, the same figures `test_lamp_fill` pins): both `Airport_column_02` shafts are 0.913 m in
+radius at the disc height (y 5.2-5.8; the capital widens to 1.09 m at y 5.8, 1.23 m at y 6.0-6.8 and 1.39 m at y 6.8-7.0,
+where only the 0.06 m lamp stem is), a copy's disc reaches 1.283 m (y 5.354-5.5). The lattice is not symmetric about
+the two columns: beside the eastern column at (10.05, 73.34) the filled cell (7.42, 73.13) is 2.64 m from the axis (0.44
+m of air between rim and shaft), beside the western column at (-32.44, 73.18) the cell (-30.37, 73.13) is 2.07 m away,
+so its rim dips 0.13 m into the shaft. The user accepts that look; the cell is in.
+
+- `tools/maps/airpit.json` `lamp_fill.cells` and the `LampFill` literal in `ArenaMapDescriptor.cs`: +(-30.37, 73.13) in row
+  z 73.13 (10 cells), **82 cells**; the descriptor comment records the decision and the dip.
+- Tests re-scoped from "no disc inside a column" to "exactly the accepted cell, by at most 0.13 m":
+  `LampFillDescriptorTests.OnlyTheAcceptedCellDipsIntoARoundColumn` (Theory per column: the western one has exactly that
+  cell inside the 2.19 m clearance, the eastern none), `test_lamp_fill.test_only_the_accepted_cell_dips_into_a_round_column`
+  (re-measures column and disc radii from the v8 meshes, requires the eastern lattice to clear by 0.4 m) and
+  `test_the_cell_beside_the_western_column_is_filled_on_the_users_decision`; the 82 pins in `AirPitMapTests`,
+  `LampFillDescriptorTests` and `test_lamp_fill`. The validator's 2 m spacing floor is untouched. dotnet 738 / python
+  1407 (45 skipped) tests green.
+- No bundle or NavMesh change (the copies' colliders are layer 12). Client DLL (Shared descriptor) and server DLL (same
+  Shared assembly) rebuilt; deploy and host raid below.
+- **Deploy** (14:28-14:31): `deploy-to-spt.ps1 -Confirm` (65 files; client DLL 768,512 B sha256 `02f8f796...`, server DLL
+  72,192 B `090fe4ab...`, built from HEAD `9035e29` + this change), then `gpu-run deploy-wait --server --game --force` (server
+  stopped, the three files identical on the host after 2 s; its restart step then failed on EFT's busy main thread - the
+  old process stalled 8 s when its backend vanished - and left the server stopped), `gpu-run restart --force` (87 s, server
+  ready, 19/19 plugins VM build = host disk = loaded). The host disk tag `0.1.0+9035e29` confirms the DLL was built from
+  HEAD plus this change; a parallel session had uncommitted DynamicMaps/AirPit-overview edits in the same working tree
+  at 14:25-14:26 (DynamicMapAssets.cs, DynamicMapsIntegration.cs, the client csproj, deploy-to-spt.ps1, validate_distribution.py,
+  make_release_zips.py and their tests), none of which is in the deployed DLL (no `NormalizeLayers`/`Mezzanine` symbol, the
+  HEAD `NormalizeGroundLayer` present) and none of which is part of this commit.
+- **Host raid 21** (14:32, PMC, bots None, instance d891ed09): `#2889 14:32:16 [ArenaMapPort][LampFill] map=arena_airpit lamp
+  fill: template '.../Airport_lamp_02_disabled' under 'SBG_Airpit_Light/OO/Airport_lamp_02', 82 copied, 0 skipped, y=6.83,
+  scene=Arena_Airpit_Light, rotation=(270.0, 0.0, 0.0), scale=(1.00, 1.00, 1.00)`, zero `[ArenaMapPort]` warnings, 116.4 fps
+  (mean 8.6 ms) at (-27.8, 0, 69.8) looking up at the new disc. Screenshot
+  `work/screenshots/airpit-2026-10-13/08-passport-hall-lamp-fill-82-west-column.png`: the dark disc sits beside the column
+  shaft just under the capital, the lit rings around it unchanged. The point is not reachable on foot from the spawn (the
+  passport gates stay closed), so the teleport skipped the path check. Left via `gpu-run leave`.

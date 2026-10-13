@@ -24,7 +24,7 @@ import validate_map_descriptors as VD  # noqa: E402
 
 TEMPLATE = "SBG_Airpit_Light/OO/Airport_lamp_02/Airport_lamp_02_disabled"
 FILL_Y = 6.83
-CELL_COUNT = 81
+CELL_COUNT = 82
 OFF_MATERIAL = "69cb23528f367efc"      # Airpit_emissive_01_off: the "LIGHT OFF" variant (emission power 0), slot 1 of the LOD0 renderer
 # The lattice of level37's 45 authored lamps (17 columns x 9 rows, pitch about 3.17 x 3.32 m); the authored units sit within 0.02 of it.
 COLUMNS = [-36.95, -33.65, -30.37, -27.29, -24.13, -21.01, -17.87, -14.71, -11.57, -8.43, -5.21, -2.14, 1.11, 4.28, 7.42, 10.64, 13.81]
@@ -37,8 +37,11 @@ MIN_DISTANCE_TO_AUTHORED = 3.0
 LAMP_DISC_RADIUS = 1.284
 COLUMN_RADIUS_AT_THE_DISCS = 0.914
 COLUMN_NAME = "Airport_column_02"
-# Review 2026-10-13: the cell (-30.37, 73.13) put the rim 0.12 m into the column at (-32.44, 73.18) and was dropped.
-DROPPED_CELL = [-30.37, 73.13]
+# The review of the first version dropped (-30.37, 73.13) because its rim sits 0.13 m inside the western column at
+# (-32.44, 73.18); the user put it back (2026-10-13 midday: the lattice runs just as close past the eastern column, where
+# (7.42, 73.13) is filled 2.64 m from the axis, and that look is fine). It is the only cell allowed inside the clearance.
+ACCEPTED_COLUMN_CELL = [-30.37, 73.13]
+ACCEPTED_DIP = 0.13
 PACKAGE = REPO / "work" / "extract" / "airpit-native-v8"
 HAVE_PACKAGE = (PACKAGE / "scenes" / "Arena_Airpit_Light.json").is_file()
 
@@ -74,8 +77,9 @@ class SidecarContentTests(unittest.TestCase):
         nearest = min(math.hypot(a[0] - b[0], a[1] - b[1]) for i, a in enumerate(cells) for b in cells[i + 1:])
         self.assertGreaterEqual(nearest, 3.0)        # the lattice pitch; the validator's own floor is 2.0 m
 
-    def test_the_cell_that_would_sink_into_a_column_is_not_filled(self):
-        self.assertNotIn(DROPPED_CELL, self.fill["cells"])
+    def test_the_cell_beside_the_western_column_is_filled_on_the_users_decision(self):
+        self.assertIn(ACCEPTED_COLUMN_CELL, self.fill["cells"])
+        self.assertEqual(self.fill["cells"].count(ACCEPTED_COLUMN_CELL), 1)
 
     def test_only_airpit_carries_lamp_fill(self):
         sidecars = map_sidecars()
@@ -244,7 +248,7 @@ class PackageTests(unittest.TestCase):
         world = scene.world(part)
         return (world[:3, :3] @ vertices.T).T + world[:3, 3]
 
-    def test_no_lamp_disc_sinks_into_a_round_column(self):
+    def test_only_the_accepted_cell_dips_into_a_round_column(self):
         import numpy as np
         # the lamp disc: LOD0 of the template, radius about its own axis
         lamp = self.mesh_world_vertices(self.scene, self.template, "lamp_02_LOD0")
@@ -269,11 +273,17 @@ class PackageTests(unittest.TestCase):
             self.assertLessEqual(radius, COLUMN_RADIUS_AT_THE_DISCS)
             self.assertGreater(radius, COLUMN_RADIUS_AT_THE_DISCS - 0.01)
         cells = sidecar("airpit.json")["lamp_fill"]["cells"]
-        nearest = min(math.hypot(x - cx, z - cz) for x, z in cells for _, cx, cz in columns)
-        self.assertGreaterEqual(nearest, LAMP_DISC_RADIUS + COLUMN_RADIUS_AT_THE_DISCS, nearest)
-        # the dropped cell is the one that would have failed: its rim sinks into the column
-        sunk = min(math.hypot(DROPPED_CELL[0] - cx, DROPPED_CELL[1] - cz) for _, cx, cz in columns)
-        self.assertLess(sunk, LAMP_DISC_RADIUS + COLUMN_RADIUS_AT_THE_DISCS)
+        clearance = LAMP_DISC_RADIUS + COLUMN_RADIUS_AT_THE_DISCS
+        inside = [(x, z, cx, cz, math.hypot(x - cx, z - cz)) for x, z in cells for _, cx, cz in columns
+                  if math.hypot(x - cx, z - cz) < clearance]
+        # exactly the accepted cell, beside the western column, and by no more than the documented dip
+        self.assertEqual([(x, z) for x, z, *_ in inside], [tuple(ACCEPTED_COLUMN_CELL)])
+        (_, _, cx, cz, distance), = inside
+        self.assertEqual((round(cx, 2), round(cz, 2)), (-32.44, 73.18))
+        self.assertLessEqual(clearance - distance, ACCEPTED_DIP + 0.005, clearance - distance)
+        # the eastern column has the lattice beside it too, but 2.64 m from its axis: a clear 0.4 m
+        east = min(math.hypot(x - cx, z - cz) for x, z in cells for _, cx, cz in columns if cx > 0)
+        self.assertGreaterEqual(east, clearance + 0.4, east)
 
     def test_authored_lamps_define_the_lattice_and_the_height(self):
         for u in self.units:
