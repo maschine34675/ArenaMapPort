@@ -9,7 +9,7 @@ present, every position still derives from Arena's own data (marker world transf
 in Arena's NavMesh with the documented border clearance. The C# side (descriptor mirror, server parse) is
 ArenaMapPort.Server.Tests/AirPitMapTests.cs. Native reachability in the port's own bake is a host check; since
 2026-10-12 the built bundle (when present) also has to hold every spawn on its main component, and no spawn may
-stand in the three shop-front pockets that the closed shutters and outline walls seal off (raid 8 dry runs).
+stand in the shop back rooms that the furnished interiors (level38, U6 2026-10-13) leave closed, as Arena's own mesh does.
 """
 import importlib.util
 import json
@@ -40,55 +40,35 @@ BOT_CORE_POINTS = {
     "north-approach": 6, "north-hall": 5, "north-hall-west": 17, "east-north": 2, "east-mid": 1,
     "east-south": 18, "west-mid": 15, "west-south": 16, "center-east": 3, "plane-south": 12, "south-apron": 13,
 }
-# Core points whose bot spawn does NOT sit on the core point any more; id -> upper bound of the move in metres.
-#  * east-north / west-south: the core points lay within 0.8 m of the border of Arena's NavMesh (0.30 m and 0.75 m)
-#    and were moved inward (the west-south move is now the one below, measured from the same core point 16).
-#  * north-hall-west / west-south / east-south (2026-10-12, host raid 8, U4 bake): core points 17, 16 and 18 lie
-#    inside the three shop fronts that the closed shutters and the authored outline walls seal off from the hall;
-#    a bot that spawns there is stuck for the raid. Those three spawns moved onto the main component of the built
-#    NavMesh (docs/progress/airpit-release.md "Sealed-pocket anchors on U4"); the core points themselves stay in
-#    airpit.ai.json as documented islands, like core point 7 (the extractor's output is pinned, never hand-edited).
-#  * east-north (2026-10-12 evening, user report): core point 2 sits inside the empty north-east shop shell
-#    (Burger Spot, x 13.3..33, z 8..43: shutters lowered, interior and inside doors removed, open to the north through
-#    Arena's own 4.6 m breach); the spawn moved west onto the hall floor at (8.0, 26.5), 7.1 m from the core point.
-MOVED_FROM_CORE_POINT = {"east-north": 9.0, "west-south": 15.0, "north-hall-west": 11.0, "east-south": 17.5}
-# The three sealed pockets of the U4 NavMesh as xz boxes (min_x, max_x, min_z, max_z), the extent of the ground-floor
-# components that the main component loses once the authored outline walls are applied (items 14-20 shutter table,
-# raid 4). The north-west pocket (589.8 m2, effective component z 16.0..55.5) needs two boxes: the shop front itself
-# and the wedge beside it at x -51.2..-44.2, z 43.6..59.2, which the first box does not reach. The south-west and
-# south-east boxes cover their pockets completely; the north-west and south-east fronts are curved, so those boxes
-# also cover a little hall floor. The boxes are a cheap always-on approximation, not an exhaustive map: the wedge box
-# stops at x -48.0 because main-component floor starts at x -47.7, so a ~1 m sliver of the wedge (13.6 of 38.2 m2) along
-# that edge stays outside. test_every_spawn_lies_on_the_main_component_of_the_built_navmesh is the authority.
-SEALED_POCKETS = {
-    "north-west shop (DonB_Ramen_closed)": (-57.0, -35.5, 15.9, 43.2),
-    "north-west wedge (beside DonB_Ramen_closed)": (-51.2, -48.0, 43.6, 56.2),
-    "south-west shop (TH_Roll_door)": (-57.0, -37.0, -44.5, -10.4),
-    "south-east shop (DonB_Ramen_closed (1))": (11.6, 37.0, -44.5, -16.4),
-    # Not sealed (Arena's breach at x 17.6..22.2, z 43.3 keeps it on the main component) but an empty shell no spawn
-    # may stand in (user decision 2026-10-12: "not meant to be entered").
-    "north-east shop shell (Airport_Shop_BS_closed_closed)": (13.3, 33.4, 8.2, 43.3),
+# Core points whose bot spawn does NOT sit on the core point; id -> upper bound of the move in metres.
+#  * east-north / west-south: core points 2 and 16 lie within 0.8 m of the border of Arena's NavMesh (0.30 m and 0.75 m)
+#    and were moved inward: east-north 1.5 m east, west-south 6.05 m east into open floor.
+#  * History: on the U4 bake (2026-10-12, host raid 8) core points 16, 17 and 18 sat in the three shop fronts that the
+#    closed shutters sealed, and the north-east shop was an empty shell, so four spawns moved onto the hall floor
+#    (docs/progress/airpit-release.md "Sealed-pocket anchors on U4"). Since U6 (2026-10-13) the furnished shops of
+#    level38 are in and the shells are opened_barriers: all four spawns are back on Arena's anchors (report C of the
+#    phase-0 design, built-mesh clearance 1.50 / 2.18 / 1.89 / 1.80 m).
+MOVED_FROM_CORE_POINT = {"east-north": 1.6, "west-south": 6.1}
+# The shop back rooms that stay closed with the furnished interiors (U6, 2026-10-13; report C of the phase-0 design):
+# the old shell partitions and the closed inside doors seal them, and Arena's own mesh leaves them out too, so they are
+# separate components of the built NavMesh (U6 negative probes: (-53.4, 35.0), (-52.0, -39.7), (28.1, -41.4),
+# (25.4, 30.5), (29.6, 20.0) are all islands). xz boxes (min_x, max_x, min_z, max_z), a cheap always-on approximation:
+# test_every_spawn_lies_on_the_main_component_of_the_built_navmesh is the authority.
+SEALED_ROOMS = {
+    "north-east shop east wing (incl. the kitchen)": (23.5, 31.7, 12.0, 43.8),
+    "north-west shop back room": (-56.5, -44.7, 29.0, 44.0),
+    "north-west wedge (beside the back room)": (-51.2, -44.2, 43.6, 59.2),
+    "south-east shop east rooms": (20.5, 33.7, -44.5, -30.5),
+    "south-west shop west rooms": (-56.1, -46.7, -44.3, -10.5),
 }
-# Bot spawn id suffix -> (its position before the 2026-10-12 move, upper bound of that move in metres, role side
-# that the new position must keep: west/north-west, south-west, east/south-east of the hall). All three origins lay
-# in a pocket above.
-SEALED_POCKET_ORIGINS = {
-    "north-hall-west": ((-42.94, 33.84), 11.0, lambda x, z: x < -20.0 and z > 15.0),
-    "west-south": ((-40.1, -27.7), 10.0, lambda x, z: x < -20.0 and z < -10.0),
-    "east-south": ((19.59, -29.58), 17.5, lambda x, z: x > 0.0 and z < -15.0),
-    "east-north": ((16.6, 26.8), 9.0, lambda x, z: x > 0.0 and z > 15.0),
-}
-MIN_MOVED_SPACING = 8.0            # the moved spawns keep this distance (xz) from every other bot and player spawn
-MIN_MOVED_EXIT_DISTANCE = 10.0     # and from both exit box centres
-MIN_ARENA_CLEARANCE = 1.0          # border clearance every spawn point keeps in Arena's own NavMesh
-MIN_MOVED_CLEARANCE = 2.0          # the three moved spawns keep this much in the built (U4) NavMesh
+MIN_ARENA_CLEARANCE = 1.0          # border clearance every spawn point keeps in Arena's own NavMesh and in the built one
 EXIT_HALF_BOX = 2.0
 BUILT_NAVMESH = REPO / "work" / "build" / "airpit" / "arena_airpit_navmesh.bundle"
 
 
 def inside_pocket(x, z):
-    """Name of the sealed pocket that contains (x, z), or None."""
-    for name, (x0, x1, z0, z1) in SEALED_POCKETS.items():
+    """Name of the sealed back room that contains (x, z), or None."""
+    for name, (x0, x1, z0, z1) in SEALED_ROOMS.items():
         if x0 <= x <= x1 and z0 <= z <= z1:
             return name
     return None
@@ -224,31 +204,13 @@ class AirPitSidecarTests(unittest.TestCase):
                 self.assertGreaterEqual(math.dist(player["position"], exit_point["position"]), 10,
                                         f"{player['id']} too close to {exit_point['name']}")
 
-    def test_no_spawn_stands_in_a_sealed_shop_pocket(self):
-        # The closed shop fronts (items 14-20, raid 4) and the authored outline walls leave three ground-floor pockets of the
-        # built NavMesh that a walking bot can never leave (host raid 8: "not reachable on foot (navmesh island)"). A bot that
-        # spawns in one is stuck for the raid, so no bot or player spawn may stand inside their boxes.
+    def test_no_spawn_stands_in_a_sealed_back_room(self):
+        # The furnished shops leave their back rooms closed (old shell partitions, closed inside doors), like Arena's own
+        # mesh does: separate components of the built NavMesh that a walking bot can never leave. A bot that spawns in one
+        # is stuck for the raid, so no bot or player spawn may stand inside their boxes.
         for point in self.players + self.bot_points:
             x, _y, z = point["position"]
             self.assertIsNone(inside_pocket(x, z), f"{point['id']} ({x}, {z}) stands in the sealed {inside_pocket(x, z)}")
-
-    def test_sealed_pocket_moves_keep_the_role_the_distances_and_the_exits(self):
-        by_id = {p["id"]: p for p in self.bot_points}
-        for suffix, ((ox, oz), max_move, role) in SEALED_POCKET_ORIGINS.items():
-            pid = f"arena_airpit-bot-{suffix}"
-            x, y, z = by_id[pid]["position"]
-            self.assertIsNotNone(inside_pocket(ox, oz), f"the recorded origin of {suffix} is not in a pocket box")
-            self.assertGreater(math.hypot(x - ox, z - oz), 5.0, f"{suffix} did not really move out of the pocket")
-            self.assertLessEqual(math.hypot(x - ox, z - oz), max_move, suffix)
-            self.assertTrue(role(x, z), f"{suffix} left its side of the hall: ({x}, {z})")
-            for exit_point in self.exits["exits"]:
-                self.assertGreaterEqual(math.dist(by_id[pid]["position"], exit_point["position"]), MIN_MOVED_EXIT_DISTANCE,
-                                        f"{suffix} too close to {exit_point['name']}")
-            for other in self.players + self.bot_points:
-                if other["id"] == pid:
-                    continue
-                self.assertGreaterEqual(math.hypot(x - other["position"][0], z - other["position"][2]), MIN_MOVED_SPACING,
-                                        f"{suffix} too close to {other['id']}")
 
     def test_player_respawns_offer_both_ends_to_both_pmc_sides(self):
         for side in ("Usec", "Bear"):
@@ -325,17 +287,16 @@ class AirPitSidecarTests(unittest.TestCase):
 
     @unittest.skipUnless(BUILT_NAVMESH.is_file(), "no built AirPit NavMesh bundle (work/build/airpit)")
     def test_every_spawn_lies_on_the_main_component_of_the_built_navmesh(self):
-        # The port's own bake (U4: 8193 vertices, 3775 triangles), not Arena's: Detour polygons of the bundle, one
-        # component per connected set. The sealed shop pockets above are separate components or hang on the main one
-        # only through the strip outside the outline walls, so main-component membership plus the pocket boxes
-        # catch every spawn a walking bot could never leave. Skipped without UnityPy or the ignored bundle.
+        # The port's own bake (U6: 11332 vertices, 5212 triangles), not Arena's: Detour polygons of the bundle, one
+        # component per connected set. The sealed back rooms above are separate components, so main-component
+        # membership plus the room boxes catch every spawn a walking bot could never leave. Skipped without UnityPy or
+        # the ignored bundle.
         import numpy as np
         import navmesh_diff as nd
         try:
             mesh = nd.load_bundle_mesh(BUILT_NAVMESH)
         except ImportError:
             self.skipTest("UnityPy is not installed")
-        moved = {f"arena_airpit-bot-{suffix}" for suffix in SEALED_POCKET_ORIGINS}
         points = self.players + self.bot_points
         xyz = np.array([p["position"] for p in points], dtype=float)
         poly, surf = mesh.locate(xyz, max_dy=1.0)
@@ -345,8 +306,8 @@ class AirPitSidecarTests(unittest.TestCase):
             self.assertEqual(int(mesh.labels[pid]), 0, f"{name} is not on the main component of the built NavMesh")
             self.assertLess(abs(sy - point["position"][1]), 0.4, f"{name} is not on the ground floor")
             clearance = float(mesh.clearance(np.array([[point["position"][0], sy, point["position"][2]]]))[0])
-            need = MIN_MOVED_CLEARANCE if name in moved else MIN_ARENA_CLEARANCE
-            self.assertGreaterEqual(clearance, need, f"{name} is only {clearance:.2f} m from the built NavMesh border")
+            self.assertGreaterEqual(clearance, MIN_ARENA_CLEARANCE,
+                                    f"{name} is only {clearance:.2f} m from the built NavMesh border")
 
 
 if __name__ == "__main__":
