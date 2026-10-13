@@ -3183,3 +3183,36 @@ m of headroom (upright); door 02 open at z -38.25..-34.75 and -29.25..-28.25 (2.
 closed elsewhere. The user walked the north front: three shutter modules, one closed, one open, the middle one half
 open with a sandbag barricade behind it (impassable) - "passt". The night look and the shop sound were accepted too
 (no extra sound sources were ever meant: the shop room tones come from Arena's spatial-audio graph).
+
+### Lamp fill: the passport-hall lattice filled with dark copies (user decision 2026-10-13, host raid 20, build `dc8ea36`)
+
+User decision after the census: "the map is our own interpretation anyway; fill the ceiling, it looks broken; only the
+lamps that are lit now stay lit, every added lamp OFF." Implemented as a client raid-time fill (workflow
+`wf_1ddff4a6-a4d`: implementer, two reviewers, fixer):
+
+- **Data**: `ArenaLampFillDescriptor` (template path, y, flat cell array) as the descriptor's `LampFill` (AirPit only,
+  null elsewhere), mirrored by the sidecar key `lamp_fill` {template, y, cells [[x, z], ...]} and checked by
+  `validate_map_descriptors.py` (new literal parser; refuses odd arrays, non-finite values, duplicate cells and cells
+  closer than 2 m), `AirPitMapTests.LampFillMatchesTheSidecar`, `MapDescriptorConsistencyTests.LampFill_ExistsForAirPitOnly`,
+  `LampFillDescriptorTests` and the package-backed `tools/tests/test_lamp_fill.py` (lattice membership within 0.02 m,
+  >= 3.0 m from every authored `Airport_lamp_02` root, template resolves to the dark lamp with material
+  `69cb23528f367efc` = `Airpit_emissive_01_off`, no disc rim inside the two round columns).
+- **Cells**: the 82 `empty_fit` cells of the census minus (-30.37, 73.13), whose 1.28 m disc rim would sink 0.12 m into
+  round column A at (-32.44, 73.18) (reviewer measurement from the v8 meshes) = **81 cells**; the 26 flank/north-edge
+  cells without a flat ceiling above stay empty.
+- **Repair** `ArenaMapPort.Client/LampFillRepairs.cs`: on `sceneLoaded` of an owned scene (subscribed in
+  `HarmonyPatches.InstallAll` ahead of ShaderRebind and the lighting repairs), resolves
+  `SBG_Airpit_Light/OO/Airport_lamp_02/Airport_lamp_02_disabled` (direct lookup in the loading scene, `FindByPath`
+  fallback), instantiates it under its own parent at (cell x, 6.83, cell z) in world space with the template's rotation
+  and scale, names the copies `Airport_lamp_02_disabled (fill N)`, idempotent via `(fill 0)`, Warning only once every
+  scene of the map is loaded and the template is still missing. No Light, no material change, layer-12 collider only
+  (NavMesh untouched). Key `Map (arena_airpit)/PassportHallLampFill` (default true, next raid; hidden in player mode).
+- **Host raid 20** (10:30, bots None, after `gpu-run start`: the user had closed EFT and the server):
+  `[LampFill] map=arena_airpit lamp fill: template '.../Airport_lamp_02_disabled' under 'SBG_Airpit_Light/OO/Airport_lamp_02',
+  81 copied, 0 skipped, y=6.83, scene=Arena_Airpit_Light, rotation=(270.0, 0.0, 0.0), scale=(1.00, 1.00, 1.00)`, zero
+  `[ArenaMapPort]` warnings, 117.4 fps at the hall (116-118 before), screenshot
+  `work/screenshots/airpit-2026-10-13/07-passport-hall-lamp-fill-81-dark-copies.png` from the pose of screenshot 05:
+  the lattice is closed, the dark discs mirror the red lane lights, the 43 lit rings are unchanged.
+- Open: the copies keep their SHADOW_LOD0-2 proxies (+243 ShadowsOnly renderers); frame time did not move, so no
+  switch was added. The Unity importer reads the sidecar with JsonUtility and has not run since `lamp_fill` (a nested
+  array) was added; the next headless `build_all` run must show the key is skipped as unknown.
