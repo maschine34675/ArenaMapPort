@@ -158,6 +158,12 @@ def validate():
     if actual_maps != expected_maps:
         raise ValueError('Unexpected or missing overview map files')
     sys.path.insert(0, str(REPO/'tools/extract'))
+    from extract_selection_map import validate as validate_selection_map, FILENAME, MANIFEST
+    selection_dir = plugin/'map-selection'
+    validate_selection_map(selection_dir)
+    for name in (FILENAME, MANIFEST):
+        if (selection_dir/name).read_bytes() != (REPO/'work/extract/map-selection'/name).read_bytes():
+            raise ValueError(f'Stale selection map file: {name}')
     from extract_map_descriptions import validate_pack
     locale_dir = REPO/'dist/SPT_Runtime/user/mods/ArenaMapPort/locales'
     if {p.relative_to(locale_dir).as_posix() for p in locale_dir.rglob('*') if p.is_file()} != {'map-descriptions.json'}:

@@ -18,6 +18,8 @@ import validate_distribution as distribution
 from test_multiflare_extraction import graph as flare_graph
 import extract_banners
 import extract_loadscreens
+import extract_selection_map
+from PIL import Image
 
 
 class DistributionSidecarTests(unittest.TestCase):
@@ -30,6 +32,22 @@ class DistributionSidecarTests(unittest.TestCase):
         (self.maps / "equator.json").write_text(
             json.dumps({"key": "arena_equator", "db_base_json_path": "arena_equator/base.json"}), encoding="utf-8")
         self.plugin = self.repo / "dist/BepInEx/plugins/maschine-ArenaMapPort"
+        for directory in (self.plugin/'map-selection', self.repo/'work/extract/map-selection'):
+            directory.mkdir(parents=True, exist_ok=True)
+            image = Image.new('RGBA', extract_selection_map.TEXTURE_SIZE)
+            image.paste((70, 80, 90, 255), extract_selection_map.ALPHA_BOUNDS)
+            image.save(directory/extract_selection_map.FILENAME)
+            (directory/extract_selection_map.MANIFEST).write_text(json.dumps({
+                'schema_version': 1, 'file': extract_selection_map.FILENAME,
+                'texture_name': extract_selection_map.TEXTURE_NAME,
+                'texture_size': list(extract_selection_map.TEXTURE_SIZE),
+                'sprite_rect': list(extract_selection_map.SPRITE_RECT),
+                'sha256': hashlib.sha256((directory/extract_selection_map.FILENAME).read_bytes()).hexdigest()
+            }))
+        pixel_pin = patch.object(extract_selection_map, 'REVIEWED_PIXEL_SHA256',
+                                 hashlib.sha256(image.tobytes()).hexdigest())
+        pixel_pin.start()
+        self.addCleanup(pixel_pin.stop)
         for name in ('Equator', 'Bay5'):
             for file in (f'ArenaMapPort_{name}.jsonc', 'Layers/Ground.svg'):
                 relative = f'ArenaMapPort_{name}/{file}'

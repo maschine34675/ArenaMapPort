@@ -77,6 +77,7 @@ namespace ArenaMapPort.Client
             LightingModCompatibility.Install(_harmony);
             DynamicMapsIntegration.Install(_harmony);
             ArenaModeMapPositionIntegration.Install(_harmony);
+            SelectionMapArtwork.Install(_harmony);
 
             if (DeveloperOptions.Enabled) SceneDiagnostics.Install();
             VertexGroundDiffuseRepairs.Install(); // capture source RGB before shader/indoor repair cloning
@@ -203,6 +204,8 @@ namespace ArenaMapPort.Client
                 LogExpectedFile(Path.Combine(pluginDir, ShaderRebind.SidecarFileName(map)));
             }
         }
+
+        void OnDestroy() => SelectionMapArtwork.Dispose();
 
         void LogExpectedFile(string path)
         {

@@ -186,6 +186,12 @@ and `work/extract/arena-ui`. Neither current mod consumes them; Release/DllOnly 
 them. The release cleanup archives old dist copies without changing the extraction inputs.
 Their extractors and provenance remain available; see `docs/progress/arena-audio.md` and `arena-ui.md`.
 
+The region-selection artwork is a separate, consumed export: run
+`python tools/extract/extract_selection_map.py` against the installed Arena data. Release/DllOnly builds
+require its PNG and manifest under ignored `work/extract/map-selection` and stage only those two files
+to the client's `map-selection` directory. The extractor pins reviewed pixel content and framing;
+review a changed Arena source before updating either pin. See `docs/progress/selection-map.md`.
+
 Server builds require original descriptions from
 `python tools/extract/extract_map_descriptions.py`. The ignored output under
 `work/extract/map-descriptions` stages to the server mod's `locales` directory.

@@ -71,6 +71,8 @@ def fake_dist_files(maps=MAPS):
         f"{PLUGIN}/maschine-ArenaMapPort.Client.dll": rng.randbytes(3000),
         f"{SERVER}/maschine-ArenaMapPort.Server.dll": rng.randbytes(2000),
         f"{SERVER}/locales/map-descriptions.json": text("descriptions"),
+        f"{PLUGIN}/map-selection/region-map.png": b"\x89PNG\r\n\x1a\n" + rng.randbytes(1000),
+        f"{PLUGIN}/map-selection/manifest.json": text("selection map manifest"),
     }
     for key, display in maps:
         stem = key.removeprefix("arena_")
@@ -151,11 +153,12 @@ class PartitionTests(FakeRepoCase):
             "maschine-ArenaMapPort-0.1.0-part3of4-bay5.zip",
             "maschine-ArenaMapPort-0.1.0-part4of4-airpit.zip"])
 
-    def test_core_holds_only_the_three_shared_files(self):
+    def test_core_holds_only_the_five_shared_files(self):
         core = self.partition()[0]
         self.assertEqual({f.rel for f in core.files}, {
             f"{PLUGIN}/maschine-ArenaMapPort.Client.dll", f"{SERVER}/maschine-ArenaMapPort.Server.dll",
-            f"{SERVER}/locales/map-descriptions.json"})
+            f"{SERVER}/locales/map-descriptions.json",
+            f"{PLUGIN}/map-selection/region-map.png", f"{PLUGIN}/map-selection/manifest.json"})
 
     def test_each_map_part_holds_only_its_own_files(self):
         for part, (key, display) in zip(self.partition()[1:], MAPS):
@@ -187,6 +190,9 @@ class PartitionTests(FakeRepoCase):
                      f"{PLUGIN}/acoustics/loose.json", f"{SERVER}/db/base.json",
                      f"{SERVER}/db/arena_airpit/other.json", f"{PLUGIN}/loadscreens/arena_airpit_x.jpg",
                      f"{PLUGIN}/arena-audio/clip.wav",
+                     f"{PLUGIN}/map-selection/Thumbs.db", f"{PLUGIN}/map-selection/region-map.png.bak",
+                     f"{PLUGIN}/map-selection/manifest.json.bak", f"{PLUGIN}/map-selection/other.png",
+                     f"{PLUGIN}/map-selection/nested/region-map.png",
                      # strays inside the folders the build stages file by file
                      f"{PLUGIN}/acoustics/arena_bay5/Thumbs.db", f"{PLUGIN}/acoustics/arena_bay5/notes.txt",
                      f"{PLUGIN}/acoustics/arena_equator/old/spatial-audio.json",
@@ -252,7 +258,8 @@ class PartitionTests(FakeRepoCase):
     def test_incomplete_dist_is_rejected(self):
         names = [f"{SERVER}/db/arena_bay5/base.json", f"{PLUGIN}/bundles/arena_equator_navmesh.bundle",
                  f"{SERVER}/locales/map-descriptions.json", f"{PLUGIN}/maschine-ArenaMapPort.Client.dll",
-                 f"{SERVER}/maschine-ArenaMapPort.Server.dll"]
+                 f"{SERVER}/maschine-ArenaMapPort.Server.dll",
+                 f"{PLUGIN}/map-selection/region-map.png", f"{PLUGIN}/map-selection/manifest.json"]
         for key, _display in MAPS:  # everything validate_distribution.py demands of every released map
             names += [f"{PLUGIN}/{shader_sidecar(key)}", f"{PLUGIN}/ai/{key.removeprefix('arena_')}.ai.json",
                       f"{SERVER}/banners/{key}.jpg", f"{PLUGIN}/acoustics/{key}/spatial-audio.json",
@@ -282,6 +289,7 @@ class PartitionTests(FakeRepoCase):
                      f"{PLUGIN}/acoustics/arena_bay5/source.audiobakedata",
                      f"{PLUGIN}/flares/arena_equator/textures/resources.assets_2812.bin",
                      f"{PLUGIN}/water/arena_bay5/textures/normalsDetails.bin",
+                     f"{PLUGIN}/map-selection/region-map.png", f"{PLUGIN}/map-selection/manifest.json",
                      f"{PLUGIN}/dynamicmaps/ArenaMapPort_Equator/Layers/Ground.svg"):
             with self.subTest(name=name):
                 self.assertEqual(len([r for r in rules if r.regex.fullmatch(name)]), 1)
@@ -533,6 +541,7 @@ class BuildTests(FakeRepoCase):
         self.assertIn("EVERY part", readme)
         self.assertIn("close", readme.lower())
         self.assertIn("Equator, Bay5, AirPit", readme)
+        self.assertIn("selection artwork", readme)
         notices = core[f"{PLUGIN}/THIRD-PARTY-NOTICES.txt"]
         self.assertEqual(notices, core[f"{SERVER}/THIRD-PARTY-NOTICES.txt"])
         text = notices.decode("utf-8")
@@ -544,6 +553,14 @@ class BuildTests(FakeRepoCase):
                 continue
             self.assertEqual({n for n in entries if n not in self.files},
                              {f"{PLUGIN}/parts/{name.rsplit('-', 1)[1].removesuffix('.zip')}.json"}, name)
+
+    def test_selection_artwork_is_byte_identical_and_core_only(self):
+        result = self.build()
+        contents = self.read_zips(result)
+        core_name = "maschine-ArenaMapPort-0.1.0-part1of4-core.zip"
+        for path in (f"{PLUGIN}/map-selection/region-map.png", f"{PLUGIN}/map-selection/manifest.json"):
+            self.assertEqual(contents[core_name][path], self.files[path])
+            self.assertEqual([name for name, entries in contents.items() if path in entries], [core_name])
 
     def test_zip_timestamps_and_attributes_are_fixed(self):
         result = self.build()

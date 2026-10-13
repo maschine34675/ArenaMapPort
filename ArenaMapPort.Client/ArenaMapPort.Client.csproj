@@ -165,6 +165,19 @@
   <!-- Optional ArenaMode audio/UI exports remain development inputs only.
        ArenaMapPort has no runtime consumers and does not distribute them. -->
 
+  <!-- Original Arena region artwork, with its native texture padding preserved.
+       SelectionMapArtwork selects the aligned geographic window at runtime. -->
+  <Target Name="ArenaMapPortStageSelectionMap" AfterTargets="ArenaMapPortDistCopy" Condition="'$(Configuration)'=='Release'">
+    <PropertyGroup>
+      <ArenaMapPortSelectionMapDir>$(MSBuildThisFileDirectory)..\work\extract\map-selection</ArenaMapPortSelectionMapDir>
+    </PropertyGroup>
+    <ItemGroup>
+      <ArenaMapPortSelectionMapFile Include="$(ArenaMapPortSelectionMapDir)\region-map.png;$(ArenaMapPortSelectionMapDir)\manifest.json" />
+    </ItemGroup>
+    <Error Condition="!Exists('%(ArenaMapPortSelectionMapFile.Identity)')" Text="Missing Arena selection map; run tools/extract/extract_selection_map.py" />
+    <Copy SourceFiles="@(ArenaMapPortSelectionMapFile)" DestinationFolder="$(ArenaMapPortDistDir)\map-selection" />
+  </Target>
+
   <!-- Accepted overview maps live with this plugin, not in DynamicMaps' installation.
        Logical SVG paths in the original definitions are resolved by DynamicMapsIntegration. -->
   <Target Name="ArenaMapPortStageDynamicMaps" AfterTargets="ArenaMapPortDistCopy" Condition="'$(Configuration)'=='Release'">

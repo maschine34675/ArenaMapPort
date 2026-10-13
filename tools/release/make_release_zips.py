@@ -6,7 +6,7 @@ dist/ holds two install roots, `BepInEx/plugins/maschine-ArenaMapPort/...` (clie
 ZIP can safely carry through the release channels, so the release is cut into parts that install by extracting
 EVERY part into the SPT root:
 
-    part1ofN-core         client DLL, server DLL, original map descriptions, README, notices
+    part1ofN-core         client DLL, server DLL, original map descriptions, selection artwork, README, notices
     part2ofN-<map stem>   one part per released map: bundles, db/<key>/base.json, acoustics, AI sidecar,
                           flares, water, loading screens, overview map, shader sidecar, banner
 
@@ -104,6 +104,8 @@ README_NAME = f"{PLUGIN_ROOT}/README.txt"
 CLIENT_NOTICES_NAME = f"{PLUGIN_ROOT}/THIRD-PARTY-NOTICES.txt"
 SERVER_NOTICES_NAME = f"{SERVER_ROOT}/THIRD-PARTY-NOTICES.txt"
 DESCRIPTIONS_NAME = f"{SERVER_ROOT}/locales/map-descriptions.json"
+SELECTION_MAP_NAMES = (f"{PLUGIN_ROOT}/map-selection/region-map.png",
+                       f"{PLUGIN_ROOT}/map-selection/manifest.json")
 
 
 class PackagingError(Exception):
@@ -294,6 +296,8 @@ def build_rules(spec: ReleaseSpec) -> list:
     add(CORE_ID, "client DLL", re.escape(spec.client_dll))
     add(CORE_ID, "server DLL", re.escape(spec.server_dll))
     add(CORE_ID, "map descriptions", re.escape(DESCRIPTIONS_NAME))
+    for name in SELECTION_MAP_NAMES:
+        add(CORE_ID, "selection map", re.escape(name))
     for m in spec.maps:
         key = re.escape(m.key)
         add(m.stem, "bundle", re.escape(f"{PLUGIN_ROOT}/bundles/") + key + r"_(?:scenes|navmesh|preset)\.bundle")
@@ -328,7 +332,7 @@ def required_files(spec: ReleaseSpec) -> dict:
     falls back to the NavMesh-synthesised AI, a missing shader sidecar leaves pink materials, and a map without
     its acoustic graph, banner or loading screens is not the map the README promises. Only flares, water and the
     DynamicMaps overview are optional (AirPit ships none of them)."""
-    required = {CORE_ID: [spec.client_dll, spec.server_dll, DESCRIPTIONS_NAME]}
+    required = {CORE_ID: [spec.client_dll, spec.server_dll, DESCRIPTIONS_NAME, *SELECTION_MAP_NAMES]}
     for m in spec.maps:
         names = [f"{PLUGIN_ROOT}/bundles/{m.key}_{kind}.bundle" for kind in ("scenes", "navmesh", "preset")]
         names += [f"{SERVER_ROOT}/db/{m.key}/base.json",
@@ -518,7 +522,7 @@ def readme_text(spec: ReleaseSpec, parts) -> str:
     display = {m.stem: m.display for m in spec.maps}
     lines = []
     for p in parts:
-        what = ("plugin, server mod, original map descriptions, notices" if p.id == CORE_ID
+        what = ("plugin, server mod, original map descriptions, selection artwork, notices" if p.id == CORE_ID
                 else f"{display[p.id]} map data (bundles, NavMesh, server database entry, audio, art)")
         lines.append(f"  {p.index} of {p.count}  {p.zip_name}\n         {what}")
     names = ", ".join(m.display for m in spec.maps)

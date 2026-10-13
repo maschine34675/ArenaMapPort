@@ -3,6 +3,23 @@
 Snapshot for whoever continues (human or agent). Verify the commits named here against `git log`; this file
 is updated by hand at each handover, it is not an automatic record. Read [AGENTS.md](AGENTS.md) first.
 
+## Update 2026-10-13 - original Arena selection map
+
+Added Arena's original region-selection artwork on `feature/airpit`, independently of scene bundles.
+`SelectionMapArtwork` swaps only the native map Image sprite in PMC/ArenaMode and restores it on close.
+New required ignored build input: `python tools/extract/extract_selection_map.py` produces
+`work/extract/map-selection/{region-map.png,manifest.json}`; Release/DllOnly builds stage it in the
+client's own `map-selection` folder. The multipart release packager includes both exact files in Core.
+Accepted artwork framing/content is pinned; no BSG-derived bytes are tracked. Original Arena marker
+positions remain unproven and existing anchors are unchanged. Source/provenance and limitations:
+[selection-map.md](docs/progress/selection-map.md).
+
+Build/distribution passed and sanctioned deployment to D:\SPT41 completed. GPU-1 was explicitly released
+by the user: loaded client matches staged candidate, PMC (Equator/Bay5/AirPit) and ArenaMode (Equator/Bay5)
+selection, re-entry and sprite restoration verified; no ArenaMapPort warnings. Host left in MainMenu.
+GPU-2 was not controlled/restarted. No server or map asset content changed, no release ZIP/upload,
+no vanilla deployment. The AirPit work and remaining acceptance items below retain their status.
+
 ## State on 2026-10-12 (night) — AirPit Phase B built, deployed and host-tested; portal gates opened
 
 Branch `feature/airpit`, head after `03e945e` (+ AGENTS/HANDOFF touch-ups). PLAN-AIRPIT Phase B is in: lock-step registry
