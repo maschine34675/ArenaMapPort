@@ -3215,7 +3215,8 @@ lamps that are lit now stay lit, every added lamp OFF." Implemented as a client 
   the lattice is closed, the dark discs mirror the red lane lights, the 43 lit rings are unchanged.
 - Open: the copies keep their SHADOW_LOD0-2 proxies (+243 ShadowsOnly renderers); frame time did not move, so no
   switch was added. The Unity importer reads the sidecar with JsonUtility and has not run since `lamp_fill` (a nested
-  array) was added; the next headless `build_all` run must show the key is skipped as unknown.
+  array) was added; the next headless `build_all` run must show the key is skipped as unknown (done 2026-10-14
+  evening: "Verification pass 2026-10-14", item 3).
 
 ### Lamp fill: the 82nd cell beside the western round column (user decision 2026-10-13 midday, host raid 21)
 
@@ -3369,8 +3370,53 @@ Two botless AirPit PMC raids (19:20-19:25 and 19:27-19:30, DeveloperMode for F7/
   licence any more (`No valid Unity Editor license found`, `No ULF license found, Token not found in cache`); the
   Hub sign-in must be renewed by the user before any Unity build. By Unity's documented JsonUtility behaviour the
   unknown nested key is ignored; the log proof waits for the next licensed build.
+  **Resolved the same evening** (user renewed the Hub sign-in; `build_all` re-run into the same scratch output, Unity
+  log `unity_build_all_20261014_205245.log`, 34685 lines, exit 0): `[ArenaMapPort][ArenaPaths] loaded map descriptor
+  'arena_airpit' from D:/ArenaMapPort/tools/maps/airpit.json` with the sibling keys consumed downstream -
+  `[BakeNavMesh] bake inputs: bounds from the descriptor (bake_bounds), layer mask 0x40042A00 (navmesh_bake_layers),
+  0 navmesh_bake_exclusions, 10 opened_barriers` (the deployed U6 build read 9; the tenth, the layer-0 blockout
+  plates, never reaches the mask) and `triangulation: vertices=11332 triangles=5212`, identical to U6. JsonUtility
+  skips the nested `lamp_fill` array without zeroing the object (the one failure mode `ArenaPaths.Map` guards
+  against). Bundles built (scenes 992 MB, navmesh 163 KB), identity patch 15 MonoScripts, `validate_extract`,
+  `validate_bundle_roundtrip`, `validate_preset` and the descriptor agreement all OK. Not deployed: same bake as the
+  live U6, nothing new for the host. The build regenerated the seven tracked stand-in shaders with extra property
+  rows (added properties only, as after every build since U1); reverted to keep the tree at the committed U1 set.
 - **Item 6, identity on screen** (EN client): SelectLocation tile `ARENA: AIR PIT`, panel title `Arena: Air Pit`,
   description "An abandoned terminal hangar, borrowed by locals to become o..." (BSG's own text from
   `map-descriptions.json`), `10 MIN`, `NORMAL`, `1-1`, both time phases, no `[UNHANDLED]` anywhere in the text
   snapshot; still `05-select-location-airpit-en.png` shows the banner art. DE/RU need a client language switch
   (restart); the user's own client shows them. The loading art was seen on every raid start today.
+
+### Barricades with gangway ramps (user question 2026-10-14 evening, GPU-2)
+
+The user stood in the Hellfinger shop in front of a boarded opening with a ramp leading up to it and asked whether
+the two such barricades on the map can open ("very detailed, but the ramp in front implies you could walk through").
+They cannot, by Arena's own data; nothing to change.
+
+- **The object** (F10 + `uibridge_look` from the user's spot (-36.8, 0.3, -36.7) looking east):
+  `SBG_Arena_AirPit_ShootOut/SOO/Barricade_07 (2)` at (-34.81, 1.82, -37.66), an OSB panel with
+  `Barricade_07_BALLISTIC_woodthin`/`_metalthin` and `Barricade_07_COLLIDER` (layer 18 LowPolyCollider), with the
+  corrugated sheet `Barricade_Metal_List_04 (12)` (-34.83, 1.72, -37.58) nailed over it. The "ramp" is three
+  `Scaffolding_Trap (4)/(5)/(6)` gangway decks of the furnished hall (level38 `OO/PROPS/INDOOR/BACK`, x -36.58,
+  y 0.25, z -35.54..-37.32) laid up to the panel, construction dressing like the ammo crates and the wooden crate
+  beside them (still 07). Behind the panel, on the hall side, a chain-link fence stands in front of it and two
+  `Fence_metall_barbwire_2 (66)/(67)` panels sit above it at y 2.77 (still 08): sealed from both sides.
+- **The point-mirror** in the Burger Spot ((10.5, 40.4), the hall is point-symmetric about the capture point): five
+  `Scaffolding_Trap` decks at x 12.26 lead west to `Fence_metall_barbwire_2 (53)/(54)` hung with tarps, with
+  `Barricade_Fanera_01 (29)` above (still 09). The second OSB panel in the Hellfinger shop itself,
+  `GERMAN_TONNI_HELLFINGER/Barricade_07` at (-36.83, 1.34, -31.29), boards the shutter bay beside the shop entrance
+  (still 10).
+- **No door anywhere.** The component census over all five scenes of `airpit-native-v8` has no Animator, Door or
+  interactive type at all: MeshFilter 26355, MeshRenderer 24039, MeshCollider 8583, LODGroup 6524, BallisticCollider
+  5282, Light 1050, BoxCollider 981, CapsuleCollider 888, StaticDeferredDecal 722, CullingLightObject 722,
+  SkinnedMeshRenderer 509, VolumetricLight 154, SphereCollider 119, NavMeshModifier 20, NavMeshModifierVolume 12. The
+  only passages Arena opens per mode are active/inactive variants (the two portal gates in `opened_barriers`); within
+  6 m of either spot the only inactive objects are disabled shop-exterior lights and the spectator rigs on the stands.
+  All 186 `Barricade*` and 69 `Scaffolding_Trap*` roots of the package are active and static.
+- **Bake and reachability:** the panel's collider layer is inside the bake mask, so the NavMesh treats it as a wall;
+  both sides are reachable through the shop entrance (`uibridge_teleport` with the path check from inside the shop
+  to (-32.5, 0.5, -37.7) found a route).
+- Stills `06-th-shop-barricade-user-view.png` .. `10-th-shop-front-second-osb-panel-beside-entrance.png` in
+  `work/screenshots/airpit-2026-10-14/`. Cost: the user's own raid expired (15-min timer) during the inspection, MIA,
+  test profile SPT-GPU-2 lost its equipped gear again; the botless follow-up raid was left by disconnect (nothing
+  equipped), EFT is back at the main menu.

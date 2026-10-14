@@ -10,12 +10,16 @@ shooting check (five SR-25 shots, metal/wood/concrete/plastic/fabric/glass incl.
 racks, no `defaultFallback=True`; footsteps Concrete), extraction on foot through both gates (server `outcome: RUNNER`
 = run-through, the gates work), `uibridge_teleport dryRun` on all 18 spawns + 2 exits (all pass), eye/F7 pass with
 four stills (SE-shop lights, passport-hall spots, concourse floor damage, apron) - the look is the user's call,
-item 6 EN texts/banner on screen. Still open from the pass: the JsonUtility `lamp_fill` log proof needs a Unity
-licence (the VM's Editor licence expired: "No valid Unity Editor license found" - renew the Hub sign-in before the
-next build), DE/RU description texts (user's client), nothing from the island scan: the offline Dijkstra pass found no island on any of the 75 high
-colliders and all four shops connected (progress log, item 4). Test profile SPT-GPU-2 had lost its weapons: `gpu-run leave` is a disconnect
-(`outcome: LEFT` = MIA, PMC gear lost) - extract through a gate when the gear matters; an SR-25 from the stash is
-equipped now.
+item 6 EN texts/banner on screen. The JsonUtility `lamp_fill` proof is done (evening, after the user renewed the
+Hub sign-in: scratch `build_all` into `work/build/airpit-lampfill-check`, descriptor parsed, `bake_bounds` / layer
+mask / 10 `opened_barriers` consumed, triangulation identical to U6, all validators OK, not deployed; progress log
+item 3). Nothing from the island scan: the offline Dijkstra pass found no island on any of the 75 high colliders and
+all four shops connected (progress log, item 4). Still open from the pass: DE/RU description texts (user's client). Test profile SPT-GPU-2 had lost its weapons: `gpu-run leave` is a disconnect
+(`outcome: LEFT` = MIA, PMC gear lost) - extract through a gate when the gear matters; the SR-25 equipped from the
+stash was lost again in the evening when the user's own raid expired (15-min timer) during the barricade inspection.
+User question, evening: the two boarded openings with gangway ramps (Hellfinger shop back wall, Burger Spot mirror)
+cannot open - static props, no door component anywhere in the package, sealed by chain-link on the hall side
+(progress log, "Barricades with gangway ramps").
 
 ## Update 2026-10-14 - bloom accepted for AirPit (1.2 / 0.25), next step after AirPit: per-room shot acoustics
 
