@@ -3269,3 +3269,44 @@ whole; the legacy chain (revision 1 neutral-to-accepted, revision 2 offset round
 defaults first and revision 3 carries it on. `AmbientAudioDefaultsTests`: defaults pinned, legacy neutral mix walks the
 whole chain once, previous defaults follow the gain once per map, custom and already-accepted mixes survive, AirPit's
 keys never see the legacy steps. 753 .NET tests green. No bundle change; the keys are live-applied in a raid.
+
+### Hall to shop: what changes acoustically, measured (2026-10-14, host raid, build `4c288fd`)
+
+User question (listening pass, items 7/8): "should the sound change when walking from the big main hall into a
+smaller room (a shop)? If yes, it does not happen today." Analysis (workflow `wf_667478da-f98`, four readers over the
+graph, the client, the EFT decompile and the docs) plus a host measurement:
+
+- **By Arena's own data the hall and the four shops are the same acoustic category.** The 24 rooms share ONE room tone
+  (`airpit_amb_indoor_tone_`, volume 0.5, bound to the Main room; `RoomToneController` restarts only on a different clip
+  hash), all indoor rooms map to the same mixer-effects category (IndoorGeneric: ambient return -13 dB, mix 1090,
+  out send -5.8, in send 0), `PrecipitationVolume` is 1.0 everywhere, `OutdoorAmbientVolume` 0 in hall and shops, one
+  IndoorTrigger (x -125.8..95.4, z -46.8..130.3) covers hall and shops so `Player.Environment` stays Indoor, and all 94
+  portals are door-less, static and open (no door damping exists). `ReverbPreset`/`ReverbSendVolume`/
+  `OutdoorAmbientHighCutFreq` have no readers in EFT 0.16.9.5. Equator's hall versus its brick shops and Bay5 are just as
+  uniform.
+- **What does change natively**: (1) sounds from OTHER rooms are attenuated and low-passed through the baked room graph
+  (`wall_occlusion` 0.70 hall, 0.75 shops, plus portal traversal) - a bot firing in the hall sounds muffled from inside a
+  shop; this is the native SpatialAudioSystem and is live in the port (numeric readbacks exist for Equator/Bay5 only,
+  `spatial-audio.md`). (2) In EFT the outdoor ambience (AmbientOut bus) fades with the listener's distance to the
+  nearest outdoor gate (`EnvironmentSoundBlendSystem`/`AmbientSoundBlender`); AirPit's gates are the south wall (z about
+  -46), so in the north half of the building and in the NE/NW shops EFT's value is 0 -> 0 (no hall-to-shop change
+  either); only the SE/SW shops and the south strip vary. This blend is not ported (option A/B of the open decision):
+  both buses sit at 0 dB all raid, so the four `far_*` outdoor sources and 8-11 interior sources are audible everywhere
+  in the building at range x3 - a uniform wash, the one real deviation from EFT.
+- **Host measurement** (GPU-2, 17:46, AirPit, bots None, DeveloperMode F10): at (12, 0, 4) in the hall `[Acoustics]
+  listener room=17 name=SpatialAudioSystem/Main type=IndoorConcrete`, room tone `playing=True indoorBusDb=0.0`,
+  `ambientInDb=0.00 ambientOutDb=0.00`; `uibridge_walk` 12 m into Burger_Spot_3 -> at 17:46:32 `[RoomReverb] applied
+  room type=IndoorBrick, source category=IndoorGeneric` with IDENTICAL numbers (`room=7/IndoorBrick ambientReturn=-13.000
+  ambientMix=1090.000 outSend=-5.800 inSend=0.000`), then at (19.6, 0, 12.6) `listener room=7
+  name=SpatialAudioSystem/Burger_Spot/AudioRoom_Burger_Spot_3 type=IndoorBrick`, same tone, same bus levels. So the
+  listener room DOES switch to the shop on a walk (the 2026-10-13 teleport that stayed on Main was the arbitrary order
+  of overlapping trigger volumes a teleport enters; a teleport here logged Outdoor then IndoorConcrete within 1 ms), and
+  the port applies exactly what the data says: nothing audible differs between hall and shop. "It does not change
+  today" is the correct behaviour for tone, reverb and rain; the muffling of other rooms' sounds is the thing to listen
+  for (a source in the hall, listener in a shop).
+- **Open decision stays with the user (item 8)**: C = leave it (hall and shop identical as in Arena); B scoped to AirPit =
+  client-only crossfade of the AmbientOut/AmbientIn buses by `ListenerCurrentRoom` (building <-> apron/bus only; it cannot
+  separate hall from shop; medium: `AmbientBusLease` needs an owned-write API so the rain lease does not yield, and
+  `RefreshReverbRouting` must accept the blend value); A-lite = additionally the south-gate distance fade (touches only
+  the SE/SW shops and the south strip; depends on an unverified `_depthCalculationMult` decode). Anything that makes a
+  shop sound "smaller" than the hall would be invented, not Arena data.

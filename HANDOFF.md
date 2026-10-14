@@ -8,9 +8,13 @@ is updated by hand at each handover, it is not an automatic record. Read [AGENTS
 The user's listening pass settled the map ambience mix: Equator 2 / 0.4 / 2.5, Bay5 5 / 0.4 / 4, AirPit 3 / 0.4 / 3
 (gain dB / volume offset / range multiplier) are now `AmbientAudioDefaults`; the AirPit mix is no longer provisional.
 Revision 3 of the migration moves a saved mix that still equals the old default to the new gain and preserves every
-custom mix. Details: [airpit-release.md](docs/progress/airpit-release.md), "Ambience mix accepted". The remaining
-listening items (room tone audible, door muffling, rain bed under the glass roof) and the hall-to-shop transition
-question are handled in the next update below once answered.
+custom mix. Details: [airpit-release.md](docs/progress/airpit-release.md), "Ambience mix accepted". Hall-to-shop
+question answered and measured (progress log "Hall to shop"): by Arena's data hall and shops share tone, reverb category
+and rain bed, the listener room does switch on a walk (Main -> AudioRoom_Burger_Spot_3, identical reverb numbers), the
+only native differences are the muffling of other rooms' sounds (live) and EFT's outdoor-ambience distance fade (not
+ported; 0 -> 0 for the north shops anyway). Open user decision: C (leave) / B (building <-> apron bus crossfade) /
+A-lite (south-gate distance fade). Remaining listening items: room tone audible indoors (F10 shows
+`playing=True indoorBusDb=0.0`), muffling of a hall source heard from a shop, Equator's atrium rain bed (by design).
 
 ## Update 2026-10-14 - 1 Hz hitch on every ported map (PrecipitationAudio), fixed on feature/airpit for 0.2.0
 

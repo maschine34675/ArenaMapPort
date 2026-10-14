@@ -56,13 +56,14 @@ try
         var offset = reload.Bind(section, "AmbientVolumeOffset", 0f);
         var range = reload.Bind(section, "AmbientRangeMultiplier", 1f);
         AmbientAudioDefaults.Migrate(reload, map, gain, offset, range);
-        Check(gain.Value == (map == "arena_equator" ? 5f : 4f), "Accepted gain missing");
+        // 2026-10-14: the legacy chain lands on the previous accepted mix and revision 3 carries it to today's gains.
+        Check(gain.Value == (map == "arena_equator" ? 2f : 5f), "Accepted gain missing");
         Check(offset.Value == .4f, "Accepted offset missing");
         Check(range.Value == (map == "arena_equator" ? 2.5f : 4f), "Accepted range missing");
         gain.Value = 0; offset.Value = 0; range.Value = 1;
     }
-    // AirPit's ambience keys are new (PROVISIONAL mix, 2026-10-12): they bind with the provisional defaults, and no
-    // legacy migration step may touch any AirPit mix, a deliberately neutral one included.
+    // AirPit's ambience keys are new (2026-10-12; accepted mix 3 / 0.4 / 3 since 2026-10-14): they bind with the accepted
+    // defaults, and no legacy migration step may touch any AirPit mix, a deliberately neutral one included.
     {
         const string airpit = "Audio (arena_airpit)";
         AmbientAudioDefaults.Values("arena_airpit", out var airpitGain, out var airpitOffset, out var airpitRange);
@@ -70,10 +71,10 @@ try
         var offset = reload.Bind(airpit, "AmbientVolumeOffset", airpitOffset);
         var range = reload.Bind(airpit, "AmbientRangeMultiplier", airpitRange);
         AmbientAudioDefaults.Migrate(reload, "arena_airpit", gain, offset, range);
-        Check(gain.Value == 4f && offset.Value == .4f && range.Value == 3f, "AirPit provisional mix missing");
+        Check(gain.Value == 3f && offset.Value == .4f && range.Value == 3f, "AirPit accepted mix missing");
         gain.Value = 0; offset.Value = 0; range.Value = 1;
-        // The first Migrate stamped revision 2, which alone would make the second call return early. Reset the marker so
-        // the legacy-mix steps are reachable; only the map's "no legacy mix" rule can then keep the neutral mix neutral.
+        // The first Migrate stamped revision 3, which alone would make the second call return early. Reset the marker so
+        // every step is reachable; the "no legacy mix" rule and the previous-default test then keep the neutral mix neutral.
         reload.Bind(airpit, "AmbientDefaultsRevision", 0).Value = 0;
         AmbientAudioDefaults.Migrate(reload, "arena_airpit", gain, offset, range);
         Check(gain.Value == 0 && offset.Value == 0 && range.Value == 1, "AirPit neutral mix was migrated");
