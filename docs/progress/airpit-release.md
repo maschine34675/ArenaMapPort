@@ -3310,3 +3310,12 @@ graph, the client, the EFT decompile and the docs) plus a host measurement:
   `RefreshReverbRouting` must accept the blend value); A-lite = additionally the south-gate distance fade (touches only
   the SE/SW shops and the south strip; depends on an unverified `_depthCalculationMult` decode). Anything that makes a
   shop sound "smaller" than the hall would be invented, not Arena data.
+
+### Bloom accepted (user decision 2026-10-14, item 9): AirPit ships 1.2 / 0.25
+
+The user tuned `Lighting (arena_airpit)/BloomThreshold = 1.2` and `BloomIntensity = 0.25` in the synced config and
+asked to take them over. `BloomTuning` now binds those as AirPit's defaults (PLAN-AIRPIT item 21 had kept -1/-1, the
+camera's own 2.10/0.35); Equator and Bay5 keep the donor 2.10/0.35. Because the keys existed with -1/-1, AirPit gets
+its own `BloomDefaultsRevision` (revision 1): a saved -1/-1 pair follows 1.2/0.25 once, any other pair - the user's
+own included - stays as a whole. Live evidence from the host's F7 probe in the SE shop (19:24): `UltimateBloom
+m_BloomIntensity=0.25 m_BloomThreshhold=1.20 m_HDR=On`.

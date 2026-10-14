@@ -3,6 +3,17 @@
 Snapshot for whoever continues (human or agent). Verify the commits named here against `git log`; this file
 is updated by hand at each handover, it is not an automatic record. Read [AGENTS.md](AGENTS.md) first.
 
+## Update 2026-10-14 - bloom accepted for AirPit (1.2 / 0.25), next step after AirPit: per-room shot acoustics
+
+`BloomTuning` binds AirPit's accepted `BloomThreshold 1.2` / `BloomIntensity 0.25` (user decision, item 9) with its own
+once-only `BloomDefaultsRevision`; Equator/Bay5 unchanged. Progress log: "Bloom accepted".
+**Planned next step once AirPit is otherwise done (user, 2026-10-14):** per-room gunshot acoustics with invented data -
+Meta XR shoebox room from the acoustic room boxes/types (option A, M) with a shot-tail clip-set remap by room as the
+cheap fallback (option B); probe first (Meta XR acoustic model state, Gunshots-bus pulse hall vs shop). Open user
+inputs: is "hall" only Main or also the passport hall; metallic character for planes/bus; Equator/Bay5 too; ship ON or
+OFF in player mode. Full analysis in the session notes (workflow wf_fbef2f20-d8d) - to be written up when the work
+starts.
+
 ## Update 2026-10-14 - ambience mix accepted: tuned gains are the defaults (AmbientDefaultsRevision 3)
 
 The user's listening pass settled the map ambience mix: Equator 2 / 0.4 / 2.5, Bay5 5 / 0.4 / 4, AirPit 3 / 0.4 / 3

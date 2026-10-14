@@ -20,6 +20,11 @@ namespace ArenaMapPort.Client
         const string Tag = "[ArenaMapPort][Bloom]";
         const float DefaultThreshold = 2.1f;
         const float DefaultIntensity = 0.35f;
+        // AirPit (user decision 2026-10-14, listening/looking pass item 9): the values the user tuned in their config
+        // become the map's defaults. Its keys shipped with -1/-1 (camera value), so AirPitDefaultsRevision 1 moves a
+        // saved -1/-1 pair once and leaves every other value alone.
+        const float AirPitThreshold = 1.2f;
+        const float AirPitIntensity = 0.25f;
 
         static bool _installed;
         static readonly Dictionary<string, (ConfigEntry<float> threshold, ConfigEntry<float> intensity)> _entries =
@@ -40,26 +45,31 @@ namespace ArenaMapPort.Client
             foreach (var map in ArenaMapRegistry.All)
             {
                 var section = $"Lighting ({map.Key})";
-                // Only Equator and Bay5 carry the donor-rig defaults and the one-time migration. Every other map in
-                // the registry, released AirPit included, binds -1 (keep the camera's own value, expected to equal
-                // the donor rig's 2.10/0.35). PLAN-AIRPIT item 21 decision: AirPit stays at -1, so it creates no
-                // BloomDefaultsRevision marker; moving it to the explicit 2.10/0.35 is adding it to donorDefaults.
+                // Equator and Bay5 carry the donor-rig defaults (2.10/0.35) and their one-time migration; AirPit
+                // carries the user's accepted 1.2/0.25 (2026-10-14, previously -1/-1 = the camera's own value, which
+                // PLAN-AIRPIT item 21 had kept). Every other map in the registry binds -1 (keep the camera's own
+                // value) and creates no migration marker.
                 bool donorDefaults = map.Key == ArenaMapRegistry.Equator.Key || map.Key == ArenaMapRegistry.Bay5.Key;
-                var threshold = Plugin.Instance.Settings.Bind(section, "BloomThreshold", donorDefaults ? DefaultThreshold : -1f,
+                bool airPit = map.Key == ArenaMapRegistry.AirPit.Key;
+                float defaultThreshold = donorDefaults ? DefaultThreshold : airPit ? AirPitThreshold : -1f;
+                float defaultIntensity = donorDefaults ? DefaultIntensity : airPit ? AirPitIntensity : -1f;
+                var threshold = Plugin.Instance.Settings.Bind(section, "BloomThreshold", defaultThreshold,
                     new ConfigDescription(
                         "UltimateBloom HDR threshold on the raid camera for this map. -1 keeps the camera's own value " +
                         "(donor rig: 2.10). Lower = more glow around bright lights. Equator and Bay5 default to " +
-                        "the donor rig's normal threshold, 2.10. Live.",
+                        "the donor rig's normal threshold, 2.10; AirPit to the accepted 1.2. Live.",
                         new AcceptableValueRange<float>(-1f, 10f)));
-                var intensity = Plugin.Instance.Settings.Bind(section, "BloomIntensity", donorDefaults ? DefaultIntensity : -1f,
+                var intensity = Plugin.Instance.Settings.Bind(section, "BloomIntensity", defaultIntensity,
                     new ConfigDescription(
                         "UltimateBloom intensity on the raid camera for this map. -1 keeps the camera's own value " +
-                        "(donor rig: 0.35). Equator and Bay5 default to this normal intensity, 0.35. Live.",
+                        "(donor rig: 0.35). Equator and Bay5 default to this normal intensity, 0.35; AirPit to the " +
+                        "accepted 0.25. Live.",
                         new AcceptableValueRange<float>(-1f, 5f)));
 
-                // Migrate before subscribing: no camera writes during config binding. Maps without the donor
+                // Migrate before subscribing: no camera writes during config binding. Maps without accepted
                 // defaults keep -1 (native camera values) and do not acquire a bloom migration marker.
                 if (donorDefaults) MigrateDefaults(map.Key, section, threshold, intensity);
+                if (airPit) MigrateAirPitDefaults(section, threshold, intensity);
                 EquatorProfiles.Subscribe(threshold, (_, __) => ApplyToCurrentCamera("setting changed"));
                 EquatorProfiles.Subscribe(intensity, (_, __) => ApplyToCurrentCamera("setting changed"));
                 _entries[map.Key] = (threshold, intensity);
@@ -86,6 +96,27 @@ namespace ArenaMapPort.Client
             if (intensity.Value == -1f) { intensity.Value = DefaultIntensity; moved++; }
             revision.Value = 1;
             Plugin.Log.LogDebug($"{Tag} {mapKey}: config re-seeded to bloom defaults revision 1 " +
+                $"({moved} value(s) moved; threshold={F(threshold.Value)}, intensity={F(intensity.Value)})");
+        }
+
+        // AirPit's keys were born with -1/-1 (camera value = the donor rig's 2.10/0.35). A saved pair still at -1/-1
+        // follows the accepted 1.2/0.25 once; any other pair (the user's own 1.2/0.25 included) stays as it is. The pair
+        // is treated as one setting, like the ambience mix: a single tuned component protects the other.
+        static void MigrateAirPitDefaults(string section, ConfigEntry<float> threshold, ConfigEntry<float> intensity)
+        {
+            var revision = Plugin.Instance.Settings.Bind(section, "BloomDefaultsRevision", 0,
+                new ConfigDescription(
+                    "Internal — once-only bloom default migration for AirPit (revision 1: a -1/-1 pair follows the " +
+                    "accepted 1.2/0.25). Leave it alone.",
+                    null, System.ComponentModel.BrowsableAttribute.No));
+            if (revision.Value >= 1) return;
+            int moved = 0;
+            if (threshold.Value == -1f && intensity.Value == -1f)
+            {
+                threshold.Value = AirPitThreshold; intensity.Value = AirPitIntensity; moved = 2;
+            }
+            revision.Value = 1;
+            Plugin.Log.LogDebug($"{Tag} {ArenaMapRegistry.AirPit.Key}: config re-seeded to bloom defaults revision 1 " +
                 $"({moved} value(s) moved; threshold={F(threshold.Value)}, intensity={F(intensity.Value)})");
         }
 

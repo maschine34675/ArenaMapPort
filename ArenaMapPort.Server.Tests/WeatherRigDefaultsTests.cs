@@ -109,7 +109,7 @@ public sealed class WeatherRigDefaultsTests
             cfg.Bind("Lighting (arena_airpit)", "Donor", "Reserve_Base_Scripts", "Rig donor"),
             cfg.Bind("Lighting (arena_airpit)", "ZeroLevelOverride", -4.4f, "Rig ZeroLevel"),
             cfg.Bind("Lighting (arena_airpit)", "ExposureCompensationEV", 0f, "HDR"),
-            cfg.Bind("Lighting (arena_airpit)", "BloomThreshold", -1f, "Bloom"),
+            cfg.Bind("Lighting (arena_airpit)", "BloomThreshold", 1.2f, "Bloom"),
             cfg.Bind("LightingLab (arena_airpit)", "ReflectionStrength", 1f, "Lab"),
             cfg.Bind("RainCoverLab (arena_airpit)", "CoverAll", false, "Rain lab"),
         };
