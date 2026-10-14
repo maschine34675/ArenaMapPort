@@ -12,8 +12,8 @@ racks, no `defaultFallback=True`; footsteps Concrete), extraction on foot throug
 four stills (SE-shop lights, passport-hall spots, concourse floor damage, apron) - the look is the user's call,
 item 6 EN texts/banner on screen. Still open from the pass: the JsonUtility `lamp_fill` log proof needs a Unity
 licence (the VM's Editor licence expired: "No valid Unity Editor license found" - renew the Hub sign-in before the
-next build), DE/RU description texts (user's client), the offline island scan of the 75 high colliders (running
-separately when this was written). Test profile SPT-GPU-2 had lost its weapons: `gpu-run leave` is a disconnect
+next build), DE/RU description texts (user's client), nothing from the island scan: the offline Dijkstra pass found no island on any of the 75 high
+colliders and all four shops connected (progress log, item 4). Test profile SPT-GPU-2 had lost its weapons: `gpu-run leave` is a disconnect
 (`outcome: LEFT` = MIA, PMC gear lost) - extract through a gate when the gear matters; an SR-25 from the stash is
 equipped now.
 

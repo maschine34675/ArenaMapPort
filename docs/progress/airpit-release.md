@@ -3341,8 +3341,19 @@ Two botless AirPit PMC raids (19:20-19:25 and 19:27-19:30, DeveloperMode for F7/
   lies behind the closed passport gates, which is the intended layout.
 - **Item 4, NavMesh residual (host half)**: `uibridge_teleport dryRun` from the north spawn to all 18 spawn points
   (4 player + 14 bot) and both exits: every one `checks navmesh, zone, reachable, room`, snapped 0.0-0.1 m (the two
-  exits 1.0 m, their boxes sit at y 1). The offline island scan of the 75 high in-box colliders runs separately
-  (see the follow-up paragraph).
+  exits 1.0 m, their boxes sit at y 1).
+- **Item 4, offline island scan** (subagent, scripts and tables kept under `work/navmesh-islands-2026-10-14/`): the 75
+  new in-box mask colliders with their bottom >= 2.5 m (reproduced from the v8-vs-v7 census: AIRBUS 25, FRONT 16, BACK
+  9, stalls 9, barricades 12, 4 others) against the built U6 mesh (3,060 polygons, 5,212 triangles, 127 components,
+  main component 7,511 m2 holding the spawn). Only 10 of the 75 carry NavMesh on top (barricade plywood, boards,
+  sandbags and an ammo box on the two construction-platform decks at 3.2-4.1 m, 0.03-4.8 m2 each) and all 10 are on
+  the main component: **no island on any of the 75** (the 25 AIRBUS props and the 9 stalls carry no mesh at all; the
+  airliner floor at y 6.4 is part of main). The 126 other components are unreachable tops and the intentionally closed
+  rooms (NW back room, SW west rooms, SE east rooms, NE kitchen, NE east wing - the five report-C probes stay islands;
+  the passport-booth roofs and cart/box/seat tops total 121 m2). All four shops are connected to the hall from two hall
+  seeds (NE 6/6 entrances, NW 4/4, SE 4/4, SW 6/6, every interior point reached); the Dijkstra + string-pulling model
+  reproduces raid 16's `uibridge_walk` 86.6 m and 11.3 m exactly. 38 of 39 sidecar points on main (core point 7 is
+  outside the bake box, known).
 - **Item 5, eye/F7 pass** (stills in `work/screenshots/airpit-2026-10-14/`): `01-se-shop-recovered-lights.png`
   (the SE shop front lit warm by the recovered `Airport_lamp (79)` points, red neon arches; F7:
   `cullingLights=481 visible=350`, 40 volumetric components active, 117 fps);
