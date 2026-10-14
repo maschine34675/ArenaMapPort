@@ -12,10 +12,9 @@ call once per second to `PrecipitationAudio.Driver.Update`: its foreign-owner ch
 objects). Now scanned once per raid (and after an audio reconfiguration); the per-second check keeps only the cheap
 `AmbientAudioSystem` singleton flag. Host GPU-2: `max` frame time 35 ms -> 8.8-12 ms, ModProfiler `Driver.Update` 31 ms -> 0.18 ms max, no 1 Hz spike
 in 90 s of capture. Details and the measurement recipe:
-[equator-rain-accents.md](docs/progress/equator-rain-accents.md), "1 Hz hitch". Side finding from the same log: 410
-`NullReferenceException`s in `StaticDeferredDecal.OnDisable -> StaticDeferredDecalRenderer.ComputeHash ->
-Material.get_mainTexture` at raid teardown (16:13:15, all within 0.4 s) - the decal materials are gone before the
-native renderer unregisters the decals; harmless for play, to be looked at with the decal manager cleanup.
+[equator-rain-accents.md](docs/progress/equator-rain-accents.md), "1 Hz hitch". (The 410 `StaticDeferredDecal.OnDisable`
+NullReferenceExceptions at the end of the user's log came from closing the game with Alt+F4 mid-raid, not from a
+cleanup bug - user clarification 2026-10-14.)
 
 ## Update 2026-10-14 - hideout loading regression (TimeOfDayRepairs), fixed on feature/airpit for 0.2.0
 
