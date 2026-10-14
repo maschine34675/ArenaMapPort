@@ -3,6 +3,20 @@
 Snapshot for whoever continues (human or agent). Verify the commits named here against `git log`; this file
 is updated by hand at each handover, it is not an automatic record. Read [AGENTS.md](AGENTS.md) first.
 
+## Update 2026-10-14 - verification pass items 1-6 (GPU-2)
+
+Done and logged in [airpit-release.md](docs/progress/airpit-release.md) "Verification pass 2026-10-14": ballistics
+shooting check (five SR-25 shots, metal/wood/concrete/plastic/fabric/glass incl. the partial-scene roll door and shop
+racks, no `defaultFallback=True`; footsteps Concrete), extraction on foot through both gates (server `outcome: RUNNER`
+= run-through, the gates work), `uibridge_teleport dryRun` on all 18 spawns + 2 exits (all pass), eye/F7 pass with
+four stills (SE-shop lights, passport-hall spots, concourse floor damage, apron) - the look is the user's call,
+item 6 EN texts/banner on screen. Still open from the pass: the JsonUtility `lamp_fill` log proof needs a Unity
+licence (the VM's Editor licence expired: "No valid Unity Editor license found" - renew the Hub sign-in before the
+next build), DE/RU description texts (user's client), the offline island scan of the 75 high colliders (running
+separately when this was written). Test profile SPT-GPU-2 had lost its weapons: `gpu-run leave` is a disconnect
+(`outcome: LEFT` = MIA, PMC gear lost) - extract through a gate when the gear matters; an SR-25 from the stash is
+equipped now.
+
 ## Update 2026-10-14 - bloom accepted for AirPit (1.2 / 0.25), next step after AirPit: per-room shot acoustics
 
 `BloomTuning` binds AirPit's accepted `BloomThreshold 1.2` / `BloomIntensity 0.25` (user decision, item 9) with its own

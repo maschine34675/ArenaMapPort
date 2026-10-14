@@ -3319,3 +3319,47 @@ camera's own 2.10/0.35); Equator and Bay5 keep the donor 2.10/0.35. Because the 
 its own `BloomDefaultsRevision` (revision 1): a saved -1/-1 pair follows 1.2/0.25 once, any other pair - the user's
 own included - stays as a whole. Live evidence from the host's F7 probe in the SE shop (19:24): `UltimateBloom
 m_BloomIntensity=0.25 m_BloomThreshhold=1.20 m_HDR=On`.
+
+## Verification pass 2026-10-14 (GPU-2, builds `92b9857`/`4c288fd`, items 1-6 of the open list)
+
+Two botless AirPit PMC raids (19:20-19:25 and 19:27-19:30, DeveloperMode for F7/F10), plus the menu afterwards.
+
+- **Item 13a, ballistics shooting check**: `Combat/LogMaterialHits = true`, SR-25 from the stash (the test profile had
+  lost its weapons: every earlier `gpu-run leave` is a DISCONNECT and the server books it as `outcome: LEFT` = MIA, so
+  the PMC gear is gone - extract instead of leaving when the gear matters), `infiniteAmmo keepCondition`. Five shots,
+  every hit on a native material with its own preset, **no `defaultFallback=True` in the whole raid**:
+  Airbus body `MetalThin` (DeviationHit) -> `reserve_woodBox_small` WoodThick (ricochet) -> `Boards3` WoodThick (stop);
+  `airport_floor_BALLISTIC_concrete` Concrete (ricochet, stop); `airport_metal_shop_pillar_01` Plastic (stop);
+  `TH_Roll_door_02` MetalThin (scene `Arena_Airpit_Main_hall`, the partial-scene import) -> German shop racks WoodThick
+  -> `City_Generic_Tarp_03` Fabric -> `TH_Shop_indoor` Concrete; `airport_floor_outer_glass_panels` Glass ->
+  `Airpit_Building_Glass` Glass. Footsteps (F10 at the north spawn): `queriedSurface=Concrete` from
+  `airport_floor_BALLISTIC_concrete` (nativeHit=True), the asphalt runway collider second in the sorted list.
+- **Item 2, extraction on foot**: North Gate (-11, 1, 62) from the north pocket and South Gate (-3, 1, -58) from the
+  apron: `uibridge_walk` into the box, raid over after 8-9 s (`inRaid=false`, ExitStatus -> KillList -> ... ->
+  MainMenu via `gpu-run menu`), server `outcome: RUNNER` both times (EFT's run-through verdict for a raid this short,
+  not a map issue; a Left/MIA would read `LEFT`). Both gates are only reachable from their own end: the north pocket
+  lies behind the closed passport gates, which is the intended layout.
+- **Item 4, NavMesh residual (host half)**: `uibridge_teleport dryRun` from the north spawn to all 18 spawn points
+  (4 player + 14 bot) and both exits: every one `checks navmesh, zone, reachable, room`, snapped 0.0-0.1 m (the two
+  exits 1.0 m, their boxes sit at y 1). The offline island scan of the 75 high in-box colliders runs separately
+  (see the follow-up paragraph).
+- **Item 5, eye/F7 pass** (stills in `work/screenshots/airpit-2026-10-14/`): `01-se-shop-recovered-lights.png`
+  (the SE shop front lit warm by the recovered `Airport_lamp (79)` points, red neon arches; F7:
+  `cullingLights=481 visible=350`, 40 volumetric components active, 117 fps);
+  `02-passport-hall-soft-shadow-spots.png` (lamp lattice with the 82 dark discs; F7 at (-27.9, 1.6, 69.7):
+  `visible=161`, `Volumetric (4)/(6)` and `Spot Light (65)/(66)/(68)` within 16 m, fade 55-70 m);
+  `03-concourse-floor-damage2.png` (cracked-tile overlays and litter on the concourse floor);
+  `04-apron-litter.png` (the bus 197 on the night apron; the litter needs a day raid to show). The two 72 % blob
+  shadows and the 54 minor-overlap props were not singled out. The look is the user's call.
+- **Item 9, bloom**: F7 in the raid reports `UltimateBloom m_BloomIntensity=0.25 m_BloomThreshhold=1.20` (the
+  accepted values, now the defaults).
+- **Item 3, JsonUtility vs `lamp_fill`**: the headless `build_all` run into a scratch output
+  (`work/build/airpit-lampfill-check`) did not reach the importer: Unity 2022.3.43f1 on this VM has no valid Editor
+  licence any more (`No valid Unity Editor license found`, `No ULF license found, Token not found in cache`); the
+  Hub sign-in must be renewed by the user before any Unity build. By Unity's documented JsonUtility behaviour the
+  unknown nested key is ignored; the log proof waits for the next licensed build.
+- **Item 6, identity on screen** (EN client): SelectLocation tile `ARENA: AIR PIT`, panel title `Arena: Air Pit`,
+  description "An abandoned terminal hangar, borrowed by locals to become o..." (BSG's own text from
+  `map-descriptions.json`), `10 MIN`, `NORMAL`, `1-1`, both time phases, no `[UNHANDLED]` anywhere in the text
+  snapshot; still `05-select-location-airpit-en.png` shows the banner art. DE/RU need a client language switch
+  (restart); the user's own client shows them. The loading art was seen on every raid start today.
