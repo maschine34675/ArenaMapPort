@@ -3255,3 +3255,17 @@ so its rim dips 0.13 m into the shaft. The user accepts that look; the cell is i
   `work/screenshots/airpit-2026-10-13/08-passport-hall-lamp-fill-82-west-column.png`: the dark disc sits beside the column
   shaft just under the capital, the lit rings around it unchanged. The point is not reachable on foot from the spawn (the
   passport gates stay closed), so the teleport skipped the path check. Left via `gpu-run leave`.
+
+### Ambience mix accepted (user decision 2026-10-14): the tuned gains become the defaults
+
+Listening pass, item 7 of the open list: the user kept the three ranges and the 0.4 offsets and tuned the gains in the
+synced config (`BepInEx/config/com.maschine.ArenaMapPort.cfg` on the mirror, identical in the developer archive) to
+Equator **2 dB** (default was 5), Bay5 **5 dB** (was 4) and AirPit **3 dB** (was the provisional 4), then asked to
+"take the current values of the three maps as the default". `AmbientAudioDefaults.Values` now returns 2 / 0.4 / 2.5,
+5 / 0.4 / 4 and 3 / 0.4 / 3; the provisional marker is gone. Existing keys change their default, so `Migrate` got
+revision 3: a saved mix that still equals the previous default of its map (never touched by the user) follows the
+new gain once, every other mix - including the user's own, which already carries the new numbers - stays as a
+whole; the legacy chain (revision 1 neutral-to-accepted, revision 2 offset rounding) now lands on the previous
+defaults first and revision 3 carries it on. `AmbientAudioDefaultsTests`: defaults pinned, legacy neutral mix walks the
+whole chain once, previous defaults follow the gain once per map, custom and already-accepted mixes survive, AirPit's
+keys never see the legacy steps. 753 .NET tests green. No bundle change; the keys are live-applied in a raid.

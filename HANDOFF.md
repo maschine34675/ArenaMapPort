@@ -3,6 +3,15 @@
 Snapshot for whoever continues (human or agent). Verify the commits named here against `git log`; this file
 is updated by hand at each handover, it is not an automatic record. Read [AGENTS.md](AGENTS.md) first.
 
+## Update 2026-10-14 - ambience mix accepted: tuned gains are the defaults (AmbientDefaultsRevision 3)
+
+The user's listening pass settled the map ambience mix: Equator 2 / 0.4 / 2.5, Bay5 5 / 0.4 / 4, AirPit 3 / 0.4 / 3
+(gain dB / volume offset / range multiplier) are now `AmbientAudioDefaults`; the AirPit mix is no longer provisional.
+Revision 3 of the migration moves a saved mix that still equals the old default to the new gain and preserves every
+custom mix. Details: [airpit-release.md](docs/progress/airpit-release.md), "Ambience mix accepted". The remaining
+listening items (room tone audible, door muffling, rain bed under the glass roof) and the hall-to-shop transition
+question are handled in the next update below once answered.
+
 ## Update 2026-10-14 - 1 Hz hitch on every ported map (PrecipitationAudio), fixed on feature/airpit for 0.2.0
 
 User report with two recordings: the picture freezes briefly every second on the ported maps. Frame-diffing the clips
