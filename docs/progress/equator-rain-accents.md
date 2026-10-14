@@ -143,3 +143,60 @@ an unexposed -80 dB child gain in the effective mixer snapshot. This acceptance
 is superseded by [the rain-output repair and native A/B comparison](equator-rain-output.md).
 Indoor rain now uses the effect-free immediate AmbientIn parent while retaining
 all downstream processing; outdoor routing and the chemlight work remain.
+
+## 1 Hz hitch on every ported map: the precipitation driver's foreign-owner poll (found and fixed 2026-10-14)
+
+**Symptom (user, 2026-10-14):** on the ported maps the picture freezes very briefly every second (the user guessed
+half a second), standing still and moving; TAA smears afterwards. Two recordings from the user's PC (AirPit, 2560x1440,
+60 fps capture): `D:\SPT41\Development\Escape From Tarkov 2026.10.14 - 15.47.26.01.mp4` (14 s, still) and
+`... - 16.12.10.01.mp4` (8.4 s, moving).
+
+**Video evidence** (`ffmpeg tblend=difference + signalstats` per frame, scratchpad `stutter/`): one duplicated frame
+at exactly every 60th frame in both clips - still clip frames 78, 138, 197, 258, 318, 378, 438, 498, 558, 618, 679,
+739, 799; moving clip 22, 82, 142, 203, 263, 323, 383, 443 - i.e. a frame that took two capture intervals (>= 33 ms)
+once per 1.000 s. No timestamp gaps (constant-rate capture).
+
+**Profiler evidence**: the user had ModProfiler 1.4.0 running; its export of 16:12:29-16:12:59 (AirPit, synced to the
+host share as `BepInEx/plugins/maschine-ModProfiler/exports/20261014-161027/modprofiler-20261014-161259.csv`)
+lists 30 spikes in 30 s, 1.000-1.005 s apart, 33-36 ms per frame, each with
+`maschine-ArenaMapPort Driver.Update 29.1-30.6 ms` on top (`gc=false`). The same on GPU-2 (AirPit, 16:21:58-16:22:28,
+headless capture): `Driver.Update max_ms_in_frame 31.1`, 1 call/frame, 0.277 ms/frame average = one 31 ms call per
+second at 117 fps; `uibridge_status` `max 35.4 ms` over every 300-frame window while the menu shows 16.7 ms. Every
+other ArenaMapPort method stays below 0.2 ms; the next spike source is ArenaMode's `ArenaController.Update` at
+8.6-9.6 ms (not this mod).
+
+**Cause**: `PrecipitationAudio.Driver.Update` checked once per second whether a native ambient owner had appeared:
+`MonoBehaviourSingleton<AmbientAudioSystem>.Instantiated || Object.FindObjectsOfType<PrecipitationAmbientBlender>()
+.Any(...)`. The singleton flag is a field read; `FindObjectsOfType` walks every loaded object - about 30 ms on the
+ported scenes (AirPit 55,263 objects, Equator and Bay5 of the same order) - and has done so every second on every
+ported map since the driver's introduction (`equator-rain-accents`, 2026-10-09). Vanilla maps never run the driver
+(`Volumes.ContainsKey(map.Key)`), which is why only our maps stuttered.
+
+**Fix**: the blender scan runs once per raid (`_blenderScanned`/`_blenderPresent`, reset by `Reset()` and after an
+`OnAudioConfigurationChanged` refresh); the per-second check keeps only the singleton flag. Scene components do not
+appear out of nowhere, and a late native `AmbientAudioSystem` still trips the flag. AGENTS.md carries the trap
+("Scene-wide searches in periodic code").
+
+**Host verification (GPU-2, 2026-10-14):**
+
+- Before (16:19-16:24, build `900917f`, AirPit PMC raid, bots None, ModProfiler 1.4.0 headless capture via
+  `uibridge_config_set Capture/Headless`): `uibridge_status` `116-117 fps, mean 8.5 ms, p95 8.3 ms, max 35.4 ms` in
+  every 300-frame window; export 16:21:58-16:22:28: `Driver.Update max_ms_in_frame 31.11, 0.277 ms/frame, 1 call/frame`.
+- After (16:28-16:33, the fix deployed with `deploy-to-spt -Confirm` + `gpu-run deploy-wait --server --game --force`,
+  19/19 plugins VM build = host disk = loaded, same raid recipe): `uibridge_status` `120 fps, mean 8.3 ms, p95 8.3 ms,
+  max 8.8 ms` and `max 12.0 ms` in later windows; three 30 s exports (16:31:15, 16:31:45, 16:32:15; 3523-3599 frames,
+  117-119 fps): `Driver.Update max_ms_in_frame 0.08-0.18 ms`, `0.0013 / 0.0088 ms/frame` for the two drivers, **no
+  1 Hz spike** - the spike list holds only two one-off 284 / 300 ms frames at 16:30:58 and 16:31:53 topped by
+  `Tyfon.UIFixes AddTagParsedItemPatch.Postfix (ItemDeserializer.CreateItem)` 2 ms (a profile/item deserialization,
+  not this mod) and `ArenaController.Update` (ArenaMode) stays the largest per-frame cost at 8.9-9.8 ms max. Raid left
+  via `gpu-run leave`, `Capture/Headless` set back to false. The one-time blender scan still costs its ~30 ms once at
+  the first foreign-owner check after the raid starts (inside the first second of play).
+
+**Measurement recipe for the next hitch report:** (1) frame-diff the recording (`ffmpeg -vf
+"scale=640:-1,tblend=all_mode=difference,signalstats,metadata=print:key=lavfi.signalstats.YAVG:file=diff.txt"`,
+duplicated frames = YAVG far below the median; their spacing is the period); (2) `uibridge_status` `max` over 300
+frames in the raid versus the menu; (3) ModProfiler: `uibridge_config_set plugin=com.maschine.ModProfiler key="Capture
+› Headless" value=true` in the raid (it instruments all mod code once, about 6 s main-thread pause), wait for `CSV
+written`, read `exports/<session>/modprofiler-*.meta.json` `spikes[]` (frame, ms, top method) and the CSV's
+`max_ms_in_frame` per method from `\192.168.178.109\C$\SPT41\BepInEx\plugins\maschine-ModProfiler\exports`
+(PowerShell for the UNC copy); set the key back to false afterwards.

@@ -378,3 +378,11 @@ the log; the user uses it to point at things.
   generic-class method takes `object __instance`, type-tests it before any reflection, and never lets an exception
   escape into EFT's load chain (vanilla must continue when a repair fails). Host acceptance of a client build includes
   opening the hideout once.
+- Scene-wide searches in periodic code: `Object.FindObjectsOfType`, `Resources.FindObjectsOfTypeAll` and
+  `GetComponentsInChildren` over a ported scene cost about 30 ms on the main thread (55k objects on AirPit) and must
+  never sit in Update/LateUpdate, a coroutine loop or a timer. `PrecipitationAudio.Driver` polled
+  `FindObjectsOfType<PrecipitationAmbientBlender>` once per second for a week: a 30 ms freeze at exactly 1 Hz on every
+  ported map, found 2026-10-14 by frame-diffing the user's recordings (one duplicated frame every 60) and by
+  ModProfiler's spike list (`Driver.Update 30 ms` at 1 Hz on both machines). Scan once per raid and cache; a
+  measurement recipe lives in `docs/progress/equator-rain-accents.md` ("1 Hz hitch"). Check `uibridge_status`'s
+  `max` frame time and ModProfiler's `max_ms_in_frame` before accepting a client build on the host.

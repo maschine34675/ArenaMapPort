@@ -97,7 +97,7 @@ namespace ArenaMapPort.Client
             AbstractGame _game;
             int _sceneHandle;
             float _startedAt, _nextForeignCheck;
-            bool _failed, _foreign, _refresh;
+            bool _failed, _foreign, _refresh, _blenderScanned, _blenderPresent;
             Task<PrecipitationSoundStorageSO> _pendingBank;
             PrecipitationSoundStorageSO _bank;
             GameObject _root;
@@ -154,12 +154,22 @@ namespace ArenaMapPort.Client
                         _refresh = false;
                         ClearPlayback();
                         _startedAt = Time.realtimeSinceStartup;
+                        _blenderScanned = false; // an audio reconfiguration may have brought a native owner along
                     }
                     if (Time.realtimeSinceStartup >= _nextForeignCheck)
                     {
                         _nextForeignCheck = Time.realtimeSinceStartup + 1f;
-                        bool foreign = MonoBehaviourSingleton<AmbientAudioSystem>.Instantiated ||
-                            Object.FindObjectsOfType<PrecipitationAmbientBlender>().Any(b => b.isActiveAndEnabled);
+                        // The singleton flag is a field read; FindObjectsOfType walks every loaded object, about 30 ms
+                        // on the ported scenes (55k objects on AirPit), and ran here ONCE PER SECOND: the user's "picture
+                        // freezes every second" of 2026-10-14 (ModProfiler on both machines: Driver.Update 30 ms at
+                        // exactly 1 Hz, docs/progress/equator-rain-accents.md). Scene components do not appear out of
+                        // nowhere: scan once per raid and again only after an audio configuration change.
+                        if (!_blenderScanned)
+                        {
+                            _blenderPresent = Object.FindObjectsOfType<PrecipitationAmbientBlender>().Any(b => b.isActiveAndEnabled);
+                            _blenderScanned = true;
+                        }
+                        bool foreign = MonoBehaviourSingleton<AmbientAudioSystem>.Instantiated || _blenderPresent;
                         if (foreign && !_foreign)
                         {
                             ClearPlayback();
@@ -327,6 +337,7 @@ namespace ArenaMapPort.Client
                 if (hadPlayback) Plugin.Log.LogDebug($"{Tag} {_mapKey}: released four sources and ambient bus leases");
                 _mapKey = null; _game = null; _sceneHandle = 0;
                 _pendingBank = null; _failed = false; _foreign = false; _nextForeignCheck = 0f;
+                _blenderScanned = false; _blenderPresent = false;
             }
 
             void OnDestroy()

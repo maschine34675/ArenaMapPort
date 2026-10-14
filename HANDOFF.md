@@ -3,6 +3,20 @@
 Snapshot for whoever continues (human or agent). Verify the commits named here against `git log`; this file
 is updated by hand at each handover, it is not an automatic record. Read [AGENTS.md](AGENTS.md) first.
 
+## Update 2026-10-14 - 1 Hz hitch on every ported map (PrecipitationAudio), fixed on feature/airpit for 0.2.0
+
+User report with two recordings: the picture freezes briefly every second on the ported maps. Frame-diffing the clips
+shows one duplicated frame at exactly every 60th frame; ModProfiler on the user's PC and on GPU-2 attributes a 30 ms
+call once per second to `PrecipitationAudio.Driver.Update`: its foreign-owner check ran
+`Object.FindObjectsOfType<PrecipitationAmbientBlender>()` every second, ~30 ms on the ported scenes (AirPit 55k
+objects). Now scanned once per raid (and after an audio reconfiguration); the per-second check keeps only the cheap
+`AmbientAudioSystem` singleton flag. Host GPU-2: `max` frame time 35 ms -> 8.8-12 ms, ModProfiler `Driver.Update` 31 ms -> 0.18 ms max, no 1 Hz spike
+in 90 s of capture. Details and the measurement recipe:
+[equator-rain-accents.md](docs/progress/equator-rain-accents.md), "1 Hz hitch". Side finding from the same log: 410
+`NullReferenceException`s in `StaticDeferredDecal.OnDisable -> StaticDeferredDecalRenderer.ComputeHash ->
+Material.get_mainTexture` at raid teardown (16:13:15, all within 0.4 s) - the decal materials are gone before the
+native renderer unregisters the decals; harmless for play, to be looked at with the decal manager cleanup.
+
 ## Update 2026-10-14 - hideout loading regression (TimeOfDayRepairs), fixed on feature/airpit for 0.2.0
 
 User report: with ArenaMapPort installed the hideout never finishes loading. Root cause (host GPU-2, EFT's own
