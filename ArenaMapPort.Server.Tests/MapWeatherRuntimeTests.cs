@@ -24,10 +24,14 @@ namespace ArenaMapPort.Server.Tests
             SceneManager.Scenes.Clear();
             EquatorNightNeon.Enabled = EquatorNightNeon.Rain = true;
             TimeOfDayRepairs.Install(); WeatherTestOverride.Install();
+            Plugin.Log.Errors.Clear();
             Plugin.Instance.Config.Get<bool>("TimeOfDay", "Enabled").Value = true;
             Plugin.Instance.Config.Get<int>("TimeOfDay", "ArenaFixedHour").Value = 0;
             SetWeather(WeatherTestOverride.TestWeather.Clear);
-            _harmony.Patch(AccessTools.Method(typeof(LocalGame), nameof(LocalGame.InitWeather)),
+            // The production target (HarmonyPatches.InstallTimeOfDayFix): the closed generic's own method. The
+            // detour is shared by every reference-type instantiation, so the HideoutGame double below runs it too.
+            _harmony.Patch(AccessTools.DeclaredMethod(typeof(BaseLocalGame<EftGamePlayerOwner>), nameof(LocalGame.InitWeather),
+                    new[] { typeof(TimeAndWeatherSettings) }),
                 prefix: new HarmonyMethod(typeof(TimeOfDayRepairs), nameof(TimeOfDayRepairs.Prefix)));
             _harmony.Patch(AccessTools.Method(typeof(WeatherController), nameof(WeatherController.SetWeatherNodes)),
                 postfix: new HarmonyMethod(typeof(WeatherTestOverride), nameof(WeatherTestOverride.Postfix)));
@@ -63,6 +67,87 @@ namespace ArenaMapPort.Server.Tests
             new WeatherNode { Time = DateTime.UtcNow.Ticks, Rain = .2f, Cloudness = -.3f },
             new WeatherNode { Time = DateTime.UtcNow.AddMinutes(10).Ticks, Rain = .7f, Cloudness = .8f },
         };
+
+        // Regression 2026-10-07..14: the prefix read _selectedDateTime (a BaseLocalGame<EftGamePlayerOwner>
+        // field) off the HideoutGame before its map gate, threw ArgumentException out of InitWeather and
+        // every hideout visit stayed on its loading screen. The hideout double runs InitWeather through the
+        // detour on the closed EftGamePlayerOwner type exactly like the game (shared generic body); the
+        // production FieldInfos belong to that closed type, so GetValue on the double throws as the game's
+        // did (guard assertion). The prefix must leave the hideout, its settings, the Arena state AND the
+        // in-flight Equator selection alone, and nothing may escape. Against the old prefix this test fails
+        // with the game's own message (review 2026-10-14 reproduced it on CoreCLR).
+        [Fact]
+        public void HideoutGameRunsTheSharedDetourUntouched()
+        {
+            Assert.Throws<ArgumentException>(() => TimeOfDayRepairs.ResolverField.GetValue(new HideoutGame()));
+            // a vanilla InitWeather first: it clears the static fixed hour a previous test may have left behind
+            new LocalGame { Location = new() { Id = "bigmap" } }.InitWeather(RandomSettings);
+            Assert.Null(TimeOfDayRepairs.ActiveFixedHour);
+            EquatorProfiles.BeginLoad(ArenaMapRegistry.Equator.Key, EDateTime.PAST); // a raid selection already made
+            var hideout = new HideoutGame { Location = new() { Id = ArenaMapRegistry.Equator.Key }, _selectedDateTime = EDateTime.PAST };
+            hideout.InitWeather(RandomSettings);
+            Assert.Equal(1, hideout.NativeInitializations);
+            Assert.True(hideout.ActualSettings.IsRandomTime);           // a mis-gated Apply would have flipped these
+            Assert.True(hideout.ActualSettings.IsRandomWeather);
+            Assert.Empty(hideout._specialTimeResolver);
+            Assert.Null(TimeOfDayRepairs.ActiveFixedHour);
+            Assert.Equal(EquatorProfile.Night, EquatorProfiles.Current); // the selection survives the hideout
+            Assert.Empty(Plugin.Log.Errors);
+            var settings = RandomSettings;
+            TimeOfDayRepairs.Prefix(null, ref settings);                 // an unknown owner is just as inert
+            Assert.True(settings.IsRandomTime);
+            Assert.Empty(Plugin.Log.Errors);
+        }
+
+        // Fika's CoopGame : BaseLocalGame<EftGamePlayerOwner> is the other real subclass of the closed type;
+        // the gate must accept every such subclass, not only LocalGame.
+        [Fact]
+        public void AnotherSubclassOfTheClosedTypeGetsTheFullRepair()
+        {
+            EquatorProfiles.BeginLoad(ArenaMapRegistry.Equator.Key, EDateTime.PAST);
+            SceneManager.Scenes.Clear(); SceneManager.Load(new Scene(ArenaMapRegistry.Equator.ScriptsSceneName));
+            var coop = new CoopGame { Location = new() { Id = ArenaMapRegistry.Equator.Key }, _selectedDateTime = EDateTime.PAST };
+            coop.InitWeather(RandomSettings);
+            Assert.Equal(1, coop.NativeInitializations);
+            Assert.False(coop.ActualSettings.IsRandomTime);
+            Assert.Equal(0, coop.GameDateTime.Calculate().Hour);
+            Assert.Equal(0, TimeOfDayRepairs.ActiveFixedHour);
+            Assert.Equal(EquatorProfile.Night, EquatorProfiles.Current);
+            Assert.Empty(Plugin.Log.Errors);
+        }
+
+        // A vanilla map through the closed type keeps InitWeather's own branches (no resolver seed, random time
+        // kept) and, as since 04be98c, clears a stale Equator profile at its InitWeather.
+        [Fact]
+        public void VanillaLocalGameClearsAStaleEquatorProfileAndKeepsRandomTime()
+        {
+            EquatorProfiles.BeginLoad(ArenaMapRegistry.Equator.Key, EDateTime.PAST);
+            var game = new LocalGame { Location = new() { Id = "factory4_day" }, _selectedDateTime = EDateTime.PAST };
+            game.InitWeather(RandomSettings);
+            Assert.Equal(1, game.NativeInitializations);
+            Assert.True(game.ActualSettings.IsRandomTime);
+            Assert.Empty(game._specialTimeResolver);
+            Assert.Null(TimeOfDayRepairs.ActiveFixedHour);
+            Assert.Equal(EquatorProfile.None, EquatorProfiles.Current);
+            Assert.Empty(Plugin.Log.Errors);
+        }
+
+        // A repair failure must degrade to vanilla: one Error line, and InitWeather sees the settings it was
+        // called with even though Apply had already written the ref struct before it threw.
+        [Fact]
+        public void APrefixFailureLogsOnceAndHandsInitWeatherTheOriginalSettings()
+        {
+            var game = Game(ArenaMapRegistry.Equator, EDateTime.CURR);
+            game._backendDateTime.ElapsedSeconds = 1f; game._backendDateTime.TimeFactor = float.PositiveInfinity; // Calculate() throws
+            game.InitWeather(RandomSettings);
+            Assert.Equal(1, game.NativeInitializations);
+            Assert.True(game.ActualSettings.IsRandomTime);
+            Assert.True(game.ActualSettings.IsRandomWeather);
+            Assert.Empty(game._specialTimeResolver);
+            Assert.Null(TimeOfDayRepairs.ActiveFixedHour);
+            var error = Assert.Single(Plugin.Log.Errors);
+            Assert.Contains("InitWeather prefix failed for LocalGame", error);
+        }
 
         [Fact]
         public void NaturalAppearanceKeepsMidnightAndRainThroughBackendResync()
@@ -362,14 +447,16 @@ namespace EFT
         public DateTime Calculate() => StatedGameDateTime.AddSeconds(ElapsedSeconds * TimeFactor);
     }
     public sealed class GameWorld { public GameDateTime GameDateTime; }
+    // The shape of EFT/BaseLocalGame.cs: fields, Location (:360) and InitWeather (:489) live on the generic
+    // base; LocalGame (EftGamePlayerOwner), Fika's CoopGame (EftGamePlayerOwner) and HideoutGame
+    // (HideoutPlayerOwner, EFT/HideoutGame.cs:20) only close it. Harmony's detour on the closed
+    // BaseLocalGame<EftGamePlayerOwner>.InitWeather is shared by every reference-type instantiation
+    // (Mono in the game, CoreCLR here), so the HideoutGame double runs the production prefix too.
     public class BaseLocalGame<T>
     {
         public Dictionary<string, DateTime> _specialTimeResolver = new();
         public GameDateTime _backendDateTime = new();
         public EDateTime _selectedDateTime;
-    }
-    public sealed class LocalGame : BaseLocalGame<EftGamePlayerOwner>
-    {
         public JsonType.LocationSettings.Location Location;
         public GameDateTime GameDateTime, SkyClock;
         public TimeAndWeatherSettings ActualSettings;
@@ -387,6 +474,10 @@ namespace EFT
             SkyClock = GameDateTime;
         }
     }
+    public sealed class HideoutPlayerOwner { }
+    public sealed class HideoutGame : BaseLocalGame<HideoutPlayerOwner> { }
+    public sealed class LocalGame : BaseLocalGame<EftGamePlayerOwner> { }
+    public sealed class CoopGame : BaseLocalGame<EftGamePlayerOwner> { }
 }
 
 namespace UnityEngine

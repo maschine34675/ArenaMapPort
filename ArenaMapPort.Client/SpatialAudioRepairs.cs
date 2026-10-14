@@ -83,16 +83,16 @@ namespace ArenaMapPort.Client
     /// same "no occlusion" result BSG's own <c>EOcclusionTest.None</c> early-out already returns
     /// (<c>SpatialAudioSystem.cs:348-363</c>) — the sound itself still plays, it is just never occluded.
     ///
-    /// GATING NOTE (task brief asks every hook's gate to be documented): the <see cref="Prefix"/> below
-    /// is intentionally NOT map-gated with <see cref="ArenaMapRaid.IsLoaded()"/> — it only branches
-    /// on the static <c>Initialized</c> flag, matching ManimalIcebreaker's own upstream choice. This is
-    /// safe and correct on every map, not just ours: <c>Initialized</c> is false on a normal map only in
-    /// the narrow window before ITS OWN <c>Initialize</c> completes, and degrading an early call to -1
-    /// (unoccluded) instead of letting it NRE against not-yet-assigned fields is a strict improvement
-    /// there too, never a behaviour change once that map's own init finishes (<c>Initialized</c> then
-    /// stays true and the prefix's `return true` passes every later call through untouched). The
-    /// <see cref="Finalizer"/> IS explicitly map-gated, since swallowing an exception is the riskier
-    /// half — it must never mask a genuinely new bug on a normal map's fully-initialized system.
+    /// GATING (changed 2026-10-14, a side finding of the hideout-regression review, not its cause): the
+    /// <see cref="Prefix"/> is map-gated like every other hook — outside a ported raid
+    /// (<see cref="ArenaMapRaid.IsLoaded()"/> false: vanilla maps, menu, hideout) the native body always
+    /// runs, whatever <c>Initialized</c> says, so those stay behaviourally vanilla (the earlier version
+    /// skipped the native body wherever the flag was false, ManimalIcebreaker's upstream choice, which is a
+    /// behaviour change outside our maps even if a benign one). Inside a ported raid the <c>Initialized</c>
+    /// branch is unchanged. The static flag is tested first: this is the hot sound path and
+    /// <c>IsLoaded()</c> walks the registry and SceneManager. The <see cref="Finalizer"/> was map-gated from
+    /// the start, since swallowing an exception is the riskier half — it must never mask a genuinely new
+    /// bug on a normal map's fully-initialized system.
     ///
     /// Ported from ManimalIcebreaker's <c>Patch_OcclusionWhenUninitialized</c> (prefix, gate on
     /// <c>!Initialized</c>) + <c>Patch_OcclusionNeverThrows</c> (finalizer belt-and-braces, in case some
@@ -107,9 +107,10 @@ namespace ArenaMapPort.Client
 
         internal static bool Prefix(ref int __result)
         {
-            if (SpatialAudioSystem.Initialized)
+            // cheap static flag first (hot path), the registry/scene walk only on an uninitialized system
+            if (SpatialAudioSystem.Initialized || !ArenaMapRaid.IsLoaded())
             {
-                return true; // real maps / already-initialized system: untouched
+                return true; // already-initialized system / every other map, menu, hideout: untouched
             }
             __result = -1;
             return false;
@@ -157,9 +158,9 @@ namespace ArenaMapPort.Client
     /// plumbing needed for the prefix (a bare <c>bool</c> return already controls whether the original
     /// body runs) or the finalizer (nothing to force back to a sentinel value on the way out).
     ///
-    /// GATING: matches <see cref="SpatialAudioOcclusionGuard"/>'s own reasoning — the <see cref="Prefix"/>
-    /// is intentionally NOT map-gated (branches only on the static <c>Initialized</c> flag, safe on every
-    /// map); the <see cref="Finalizer"/> IS map-gated, since swallowing an exception is the riskier half.
+    /// GATING: matches <see cref="SpatialAudioOcclusionGuard"/> — since 2026-10-14 the <see cref="Prefix"/>
+    /// is map-gated too (outside a ported raid the native body always runs); the <see cref="Finalizer"/>
+    /// was map-gated from the start, since swallowing an exception is the riskier half.
     /// </summary>
     internal static class SpatialAudioInteractiveOcclusionGuard
     {
@@ -167,7 +168,9 @@ namespace ArenaMapPort.Client
 
         internal static bool Prefix()
         {
-            return SpatialAudioSystem.Initialized; // false => skip original body (no occluder to call)
+            // Initialized (cheap flag first) or outside a ported raid: vanilla. Otherwise skip the original
+            // body (no occluder to call).
+            return SpatialAudioSystem.Initialized || !ArenaMapRaid.IsLoaded();
         }
 
         internal static Exception Finalizer(Exception __exception)

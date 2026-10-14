@@ -60,7 +60,9 @@ dated state in one screen; read it before this index if you only have a minute.
 
 - [equator-profiles.md](equator-profiles.md) — independent Equator Day/Night
   appearance recipes behind the existing time selection, preserving current
-  night tuning and mapping SAIN to Factory/FactoryNight (2026-10-07).
+  night tuning and mapping SAIN to Factory/FactoryNight (2026-10-07); its
+  InitWeather prefix broke every hideout visit until the 2026-10-14 fix
+  ("Regression: hideout loading" at the end).
 
 - [map-weather-restoration.md](map-weather-restoration.md) — Equator Day fixed
   Clear, Bay5 native server-time choices and dynamic weather (2026-10-03).

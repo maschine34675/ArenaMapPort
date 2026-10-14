@@ -159,3 +159,106 @@ warnings and one `MenuScreen` inactive-coroutine error when opening Bay5's pause
 menu (10:42:00.706). That same error was previously recorded in
 `native-dust.md` and `equator-night-atmosphere.md`. No profile selection mismatch,
 SAIN unknown-location error or new profile/render exception was observed.
+
+## Regression: hideout loading (2026-10-07 .. 2026-10-14), fixed 2026-10-14
+
+**Symptom (user, 2026-10-14):** with the mod installed, HIDEOUT from the main menu shows the loading spinner
+forever; without the mod it opens. Reproduced on GPU-2 (14:29-14:31): `HideoutGameWorld` created, main player null,
+`screen=None` for minutes at 60 fps, no `[ArenaMapPort]` line and no warning in BepInEx's log, all five
+`/client/hideout/*` requests answered by the server before the click. EFT's own `Logs/log_2026.10.14_12-28-59_*/
+*errors.log` (and `traces.log`) carries the cause:
+
+```
+EXCEPTION: System.ArgumentException: Field _selectedDateTime defined on type EFT.BaseLocalGame`1[EFT.EftGamePlayerOwner]
+is not a field on the target object which is of type EFT.HideoutGame.
+  at System.Reflection.RuntimeFieldInfo.GetValue (System.Object obj)
+  at ArenaMapPort.Client.TimeOfDayRepairs.Prefix (EFT.LocalGame __instance, EFT.TimeAndWeatherSettings& timeAndWeather)
+  at (wrapper dynamic-method) EFT.BaseLocalGame`1[EFT.EftGamePlayerOwner]::InitWeather
+  at EFT.BaseLocalGame`1[TPlayerOwner].Create[T] (...)
+  at EFT.HideoutGame.smethod_6 (...)
+  at EFT.TarkovApplication+HideoutController.method_7 / method_0 / HideoutSelectedHandler
+```
+
+The same signature is in the user's own client log of 14:15 (MASCHINE11): hideout requests, the hideout scene's
+LODGroup warnings, `RespawnApiProbe evt=World`, then silence until EFT was closed.
+
+**Mechanism.** `HarmonyPatches.InstallTimeOfDayFix` detours `BaseLocalGame<EftGamePlayerOwner>.InitWeather`.
+`HideoutGame` is `BaseLocalGame<HideoutPlayerOwner>` (EFT/HideoutGame.cs:20); Mono compiles one body for every
+reference-type instantiation of a generic class, so the detour fires for the hideout too, with the `HideoutGame` as
+`__instance` (the `LocalGame __instance` parameter type is not checked by Harmony's generated stub). The three
+reflected fields (`_specialTimeResolver`, `_backendDateTime`, `_selectedDateTime`) belong to the closed
+EftGamePlayerOwner type. Until `04be98c` (2026-10-07) the prefix returned for every non-`arena_` location before
+touching them; that commit added `EquatorProfiles.ConfirmSelection(location?.Id, (EDateTime)
+SelectedDateTimeField.GetValue(__instance))` ABOVE the gate, so every hideout visit threw. `BaseLocalGame.Create<T>`
+calls `InitWeather` unconditionally (BaseLocalGame.cs:443); `HideoutController.method_0` runs with
+`.HandleExceptions()` (logs to EFT's errors.log only) and `LoadComplete` is never reached, while
+`HideoutLoadingScreen` keeps eating input. `04be98c` is in v0.1.0, `main` and `feature/airpit`; the last documented
+hideout visits before it are 2026-09-28/29 (lighting-followup.md, hdr-controls.md). No config switch helps: the
+failing call precedes every `Enabled` check.
+
+**Fix (`feature/airpit`, for 0.2.0; user decision 2026-10-14: no 0.1.1 hotfix, 0.1.0 is not published on Forge):**
+
+- `TimeOfDayRepairs.Prefix(object __instance, ref TimeAndWeatherSettings)`: `if (!(__instance is
+  BaseLocalGame<EftGamePlayerOwner> game)) return;` before any reflection - the hideout and any unknown owner type are
+  fully inert, as before `04be98c` (the review's first version cleared the Equator profile there, which would race
+  `LoadMapAndData`: its `BeginLoad` runs before the hideout is unloaded); `LocalGame` and Fika's `CoopGame` derive from
+  the closed type and keep the full behaviour. The former body moved unchanged into `Apply(game, ...)`; the prefix
+  snapshots the settings, runs `Apply` in `try/catch`, and on a failure restores the settings it was called with,
+  clears `ActiveFixedHour` and logs `[ArenaMapPort][TimeOfDay] InitWeather prefix failed ...` at Error, so the native
+  body runs as if the repair did not exist.
+- `HarmonyPatches.InstallTimeOfDayFix` comment and the class doc comment carry the TRAP; AGENTS.md has it as a trap
+  ("Harmony on generic classes").
+- Tests (`MapWeatherRuntimeTests`; the first version was reviewed by workflow `wf_502f7395-11f`, which showed the
+  hideout test never reached the shared detour and the vanilla test was vacuous, and reproduced the game's failure
+  on CoreCLR once the fake had the real shape): the fake `BaseLocalGame<T>` now carries `Location`, `InitWeather` and
+  its state like the real class (BaseLocalGame.cs:360/489), `LocalGame`, Fika-shaped `CoopGame` and
+  `HideoutGame : BaseLocalGame<HideoutPlayerOwner>` only close it, and the test constructor patches the production
+  target `BaseLocalGame<EftGamePlayerOwner>.InitWeather`. `HideoutGameRunsTheSharedDetourUntouched` guards the
+  failure precondition (`ArgumentException` from the production FieldInfo on the double), then runs the hideout's
+  `InitWeather` THROUGH the detour with an `arena_equator` location and a PAST selection: native body runs once,
+  settings untouched, resolver empty, the in-flight Equator Night selection survives, no Error logged; against the
+  old prefix this fails with the game's message. `AnotherSubclassOfTheClosedTypeGetsTheFullRepair` (CoopGame),
+  `VanillaLocalGameClearsAStaleEquatorProfileAndKeepsRandomTime` (seeded profile) and
+  `APrefixFailureLogsOnceAndHandsInitWeatherTheOriginalSettings` (an infinite backend time factor makes `Apply`
+  throw after it wrote the ref struct) cover the gate's width, the vanilla reset and the catch path. 743 .NET tests
+  green; client Release build 0 warnings.
+
+**Hardening from the same review (user request 2026-10-14, "fix the two side findings too"):**
+
+- `HdrImageTuning.Release()` walked `while (_active != null) FinishRender(_active)`; `FinishRender` returns at once for
+  a scope that already finished and advances `_active` only when the scope it finishes IS `_active`, so a scope finished
+  out of order (outer before inner) would have left `_active` on a finished scope and spun the main thread at the next
+  camera change outside a raid (menu, hideout). Now a bounded walk (64) that steps past such a scope itself and logs a
+  Warning if anything is left. Not the cause of the hideout report (no scope exists outside a configured map), a latent
+  hang.
+- `SpatialAudioOcclusionGuard.Prefix` / `SpatialAudioInteractiveOcclusionGuard.Prefix` skipped the native
+  `ProcessSourceOcclusion` / `ProcessInteractiveObjectOcclusion` bodies wherever `SpatialAudioSystem.Initialized` was
+  false, on every map, in the menu and in the hideout (ManimalIcebreaker's upstream choice, documented as benign). They
+  are now gated with `ArenaMapRaid.IsLoaded()` like every other hook: outside a ported raid the native body always runs,
+  inside one the `Initialized` branch is unchanged. The finalizers were map-gated already.
+
+**Host verification (GPU-2, 2026-10-14):**
+
+- 14:29-14:31, build `41a4c0f` (before the fix): HIDEOUT click -> `screen=None` for 2+ minutes at 60 fps,
+  `Raid: no (HideoutGameWorld)`, EFT `errors.log` with the ArgumentException above; `uibridge_quit` to recover.
+- 14:59-15:04, fix deployed (`deploy-to-spt -Confirm`, `gpu-run deploy-wait --server --game --force`, 20/20 plugins
+  VM build = host disk = loaded): HIDEOUT -> `screen=Hideout` after **7.5 s**, the area overview renders (screenshot
+  `work/screenshots/hideout-2026-10-14/01-hideout-opens-with-fix.png`), EFT wrote **no errors.log at all** for the
+  session up to the raid, no `[ArenaMapPort]` warning, Escape back to MainMenu. Equator PMC day raid (bots None):
+  `[Profiles] arena_equator: selected Day ... (generation 2)`, `[Profiles] arena_equator: confirmed Day at InitWeather;
+  recipe locked for this raid.`, `[TimeOfDay] arena_equator: selected=CURR start=12:00 fixedMenu=True; native weather
+  initialization retained.` - identical to the pre-fix raids; left via `gpu-run leave`. AirPit PMC raid: `[TimeOfDay]
+  arena_airpit: native server time and weather; legacy fixed-hour override bypassed, native weather initialization
+  retained.` The session's errors.log afterwards holds only EFT's usual ported-map noise (Invalid windSettings,
+  WeatherObstacle.Instance is null, SpawnPointMarker counts, JetMaterial, seasons singletons), nothing from
+  ArenaMapPort.
+- 15:09-15:12, hardened build (bounded HDR release, map-gated occlusion prefixes): HIDEOUT -> `screen=Hideout` after
+  8.1 s, no errors.log, no warnings; Equator day raid with the same three Profiles/TimeOfDay lines, left to the main
+  menu (the camera change outside the raid runs the new `Release()` walk over the raid's scope chain: no
+  "render scope chain" warning, 60 fps in the menu). Host left in MainMenu.
+- 15:20-15:23, final build after the review follow-ups (inert hideout branch, settings restore in the catch, operand
+  order in the occlusion prefixes; 743 .NET tests): HIDEOUT -> `screen=Hideout` after 8.1 s, no errors.log, no
+  warnings, Escape to MainMenu; Equator PMC **night** raid (`--time past`, bots None): `[Profiles] arena_equator:
+  selected Night ... (generation 1)`, `[Profiles] arena_equator: confirmed Night at InitWeather; recipe locked for this
+  raid.`, `[TimeOfDay] arena_equator: selected=PAST start=00:00 fixedMenu=True; native weather initialization
+  retained.`; left via `gpu-run leave`. Host left in MainMenu.

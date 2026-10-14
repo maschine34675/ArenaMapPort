@@ -341,7 +341,30 @@ namespace ArenaMapPort.Client
 
         internal static void Release()
         {
-            while (_active != null) FinishRender(_active);
+            // Finish every open scope, innermost first. FinishRender only advances _active when the scope
+            // it finishes IS _active and returns at once for a scope that already finished; a scope that
+            // finished out of order (outer before inner) would leave _active on a finished scope and a
+            // bare `while (_active != null) FinishRender(_active)` would spin on the main thread. Not
+            // constructible from current EFT call paths (PrismEffects never re-enters its render, so the
+            // chain is one deep and finalizes LIFO; review 2026-10-14) - a safety net, identical in the
+            // normal case. Step past such a scope ourselves and bound the walk; scopes dropped at the bound
+            // are not Finished, so their own finalizers still restore their fields.
+            for (int i = 0; _active != null && i < 64; i++)
+            {
+                var scope = _active;
+                FinishRender(scope);
+                if (ReferenceEquals(_active, scope))
+                {
+                    Plugin.Log.LogDebug("[ArenaMapPort][HDR] release stepped past an already-finished render scope");
+                    _active = scope.Parent;
+                }
+            }
+            if (_active != null)
+            {
+                Plugin.Log.LogWarning("[ArenaMapPort][HDR] render scope chain did not drain within 64 steps " +
+                                      "(cycle or overlong chain); dropping the rest");
+                _active = null;
+            }
             _effect = null; _camera = null; _last = default; _hasLast = false; _sampleRequested = true;
         }
 

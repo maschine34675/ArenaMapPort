@@ -3,6 +3,23 @@
 Snapshot for whoever continues (human or agent). Verify the commits named here against `git log`; this file
 is updated by hand at each handover, it is not an automatic record. Read [AGENTS.md](AGENTS.md) first.
 
+## Update 2026-10-14 - hideout loading regression (TimeOfDayRepairs), fixed on feature/airpit for 0.2.0
+
+User report: with ArenaMapPort installed the hideout never finishes loading. Root cause (host GPU-2, EFT's own
+`Logs/<session>/errors.log`): `TimeOfDayRepairs.Prefix` on `BaseLocalGame<EftGamePlayerOwner>.InitWeather` also runs
+for `HideoutGame : BaseLocalGame<HideoutPlayerOwner>` (Mono shares the generic body) and, since `04be98c` (2026-10-07,
+Equator day/night profiles; contained in v0.1.0), read `_selectedDateTime` through a FieldInfo of the closed
+EftGamePlayerOwner type BEFORE its `arena_` gate: `ArgumentException` out of InitWeather, `HideoutGame.smethod_6`
+faults, the loading screen never closes, nothing in BepInEx's log. Fix: `Prefix(object __instance, ...)` type-tests
+`is BaseLocalGame<EftGamePlayerOwner>` first (foreign owner types are left inert), the body moved to `Apply`, try/catch
+that restores the original settings so a repair failure degrades to vanilla; four tests in `MapWeatherRuntimeTests`
+(hideout double through the shared detour, Fika-shaped subclass, seeded vanilla reset, failure injection). Two side findings of the same review hardened on request: `HdrImageTuning.Release()` walks its
+scope chain bounded instead of spinning on a finished scope, and the two spatial-audio occlusion prefixes are
+map-gated (vanilla/menu/hideout run the native bodies). User decision: no 0.1.1 hotfix (0.1.0 is not on Forge yet), the fix ships with 0.2.0 - the 0.2.0
+release notes must name it. Host verification GPU-2 2026-10-14: hideout opens in 7.5 s / 8.1 s (before: never), no EFT errors.log entry, Equator day
+and AirPit server-time raids log the same Profiles/TimeOfDay lines as before. Details:
+[equator-profiles.md](docs/progress/equator-profiles.md), "Regression: hideout loading".
+
 ## Update 2026-10-13 - AirPit DynamicMaps
 
 AirPit now ships an optional ground-floor overview from its own plugin directory.

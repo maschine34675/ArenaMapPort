@@ -56,6 +56,18 @@ namespace ArenaMapPort.Client
     /// Resolving the declaring type directly avoids Harmony's inherited-member warning;
     /// the open generic would not be runtime-patchable. See
     /// <see cref="HarmonyPatches.InstallAll"/> for the actual patch-target resolution.
+    ///
+    /// TRAP (regression 2026-10-07 .. 2026-10-14, "the hideout never finishes loading"): Mono compiles ONE
+    /// body for every reference-type instantiation of a generic class, so the detour on
+    /// <c>BaseLocalGame&lt;EftGamePlayerOwner&gt;.InitWeather</c> also fires for
+    /// <c>HideoutGame : BaseLocalGame&lt;HideoutPlayerOwner&gt;</c> (EFT/HideoutGame.cs:20) on every hideout
+    /// visit, with the HideoutGame as <c>__instance</c>. The reflected fields above belong to the closed
+    /// <c>BaseLocalGame&lt;EftGamePlayerOwner&gt;</c> only; <c>FieldInfo.GetValue</c> on a HideoutGame throws
+    /// <c>ArgumentException</c> out of InitWeather, <c>HideoutGame.smethod_6</c> faults and
+    /// <c>HideoutController.method_0</c> never closes the loading screen (EFT logs it only in its own
+    /// <c>Logs/&lt;session&gt;/*errors.log</c>, nothing reaches BepInEx). <see cref="Prefix"/> therefore takes
+    /// <c>object</c>, type-tests it first and never lets an exception escape into EFT's load chain.
+    /// See docs/progress/equator-profiles.md, "Regression: hideout loading".
     /// </summary>
     internal static class TimeOfDayRepairs
     {
@@ -141,18 +153,42 @@ namespace ArenaMapPort.Client
         internal static bool Enabled => _enabled != null && _enabled.Value;
         internal static int FixedHour => _fixedHour != null ? _fixedHour.Value : 12;
 
-        // Target: BaseLocalGame<EftGamePlayerOwner>.InitWeather(TimeAndWeatherSettings).
-        // HarmonyPatches.InstallTimeOfDayFix resolves its exact declaring method. LocalGame inherits
-        // this closed base without overriding the method, so __instance remains a LocalGame.
-        internal static void Prefix(LocalGame __instance, ref TimeAndWeatherSettings timeAndWeather)
+        // Target: BaseLocalGame<EftGamePlayerOwner>.InitWeather(TimeAndWeatherSettings), resolved by
+        // HarmonyPatches.InstallTimeOfDayFix. The shared generic body (class doc comment, TRAP) means this
+        // also runs for HideoutGame and any other BaseLocalGame<T>: __instance is deliberately `object`,
+        // the type test comes before any reflection, and nothing in here may throw into EFT's load chain.
+        internal static void Prefix(object __instance, ref TimeAndWeatherSettings timeAndWeather)
         {
-            ActiveFixedHour = null;
-            var location = __instance.Location;
+            // The hideout (BaseLocalGame<HideoutPlayerOwner>) or an unknown owner type: not a raid, never an
+            // Arena map - fully inert, as before 04be98c. (Clearing the Equator profile here would race
+            // LoadMapAndData, whose BeginLoad runs before the hideout is unloaded; review 2026-10-14.)
+            if (!(__instance is BaseLocalGame<EftGamePlayerOwner> game)) return;
+            var original = timeAndWeather;
+            try
+            {
+                ActiveFixedHour = null;
+                Apply(game, ref timeAndWeather);
+            }
+            catch (Exception e)
+            {
+                // A failing repair must degrade to vanilla: InitWeather's own body runs next, with the
+                // settings it was called with (Apply may have written the ref struct before it threw).
+                timeAndWeather = original;
+                ActiveFixedHour = null;
+                Plugin.Log.LogError("[ArenaMapPort][TimeOfDay] InitWeather prefix failed for " +
+                    $"{game.GetType().Name}; native weather initialization continues with the original settings: {e}");
+            }
+        }
+
+        // LocalGame (and Fika's CoopGame) derive from this closed type; the reflected fields belong to it.
+        static void Apply(BaseLocalGame<EftGamePlayerOwner> game, ref TimeAndWeatherSettings timeAndWeather)
+        {
+            var location = game.Location;
             EquatorProfiles.ConfirmSelection(location?.Id, SelectedDateTimeField == null
-                ? EDateTime.CURR : (EDateTime)SelectedDateTimeField.GetValue(__instance));
+                ? EDateTime.CURR : (EDateTime)SelectedDateTimeField.GetValue(game));
             if (location?.Id == null || !location.Id.StartsWith("arena_", StringComparison.Ordinal))
             {
-                return; // every other map's raid (and the hideout) — untouched
+                return; // every other map's raid — untouched
             }
             var selectedMap = FixedRaidTimeSelection.FindSelectable(location.Id);
             if (selectedMap?.UsesServerTime == true)
@@ -175,8 +211,8 @@ namespace ArenaMapPort.Client
                 return; // reflection target moved — Install() already logged this once at plugin startup; don't half-apply
             }
 
-            var resolver = (Dictionary<string, DateTime>)ResolverField.GetValue(__instance);
-            var backendDateTime = (GameDateTime)BackendDateTimeField.GetValue(__instance);
+            var resolver = (Dictionary<string, DateTime>)ResolverField.GetValue(game);
+            var backendDateTime = (GameDateTime)BackendDateTimeField.GetValue(game);
             if (resolver == null || backendDateTime == null)
             {
                 return; // defensive — should never happen given the null checks above
@@ -186,7 +222,7 @@ namespace ArenaMapPort.Client
             // IsRandomTime branch (BaseLocalGame.cs:491-495) is skipped in favor of the
             // _specialTimeResolver branch (:496-499) we seed on the next line.
             timeAndWeather.IsRandomTime = false;
-            var selected = fixedMap == null ? EDateTime.CURR : (EDateTime)SelectedDateTimeField.GetValue(__instance);
+            var selected = fixedMap == null ? EDateTime.CURR : (EDateTime)SelectedDateTimeField.GetValue(game);
             int hour = fixedMap == null ? FixedHour :
                 (selected == EDateTime.PAST ? fixedMap.FixedNightHour.Value : fixedMap.FixedDayHour.Value);
             resolver[location.Id] = backendDateTime.Calculate().Date.AddHours(hour);

@@ -368,3 +368,13 @@ the log; the user uses it to point at things.
   global `StreamingAssets/Windows/shaders` bundle a name census reads. They are loaded in-process by raid start, so
   `ShaderRebind`'s direct lookup wins and the AirPit substitutes never run (log `resolved to EFT's own loaded shader`); the
   fog-sheet haze is Arena's own look and `AirPitFogSheetOpacity` has nothing to refresh. Keep the stand-in rows as the safety net.
+- Harmony on generic classes: Mono compiles ONE body per generic method for all reference-type instantiations, so a
+  patch on `BaseLocalGame<EftGamePlayerOwner>.InitWeather` also runs for `HideoutGame : BaseLocalGame<HideoutPlayerOwner>`
+  (every hideout visit) with the HideoutGame as `__instance`; a `FieldInfo` of the closed EftGamePlayerOwner type throws
+  `ArgumentException` on it. From 2026-10-07 (`04be98c`) to 2026-10-14 that exception left `TimeOfDayRepairs.Prefix`
+  before its map gate, `HideoutGame.smethod_6` faulted and the hideout never left its loading screen. Nothing reached
+  BepInEx's log: EFT writes faulted load tasks only to its own `Logs/<session>/*errors.log` (host:
+  `\\192.168.178.109\C$\SPT41\Logs`), so grep there first for a hang without a BepInEx trace. Rules: a prefix on a
+  generic-class method takes `object __instance`, type-tests it before any reflection, and never lets an exception
+  escape into EFT's load chain (vanilla must continue when a repair fails). Host acceptance of a client build includes
+  opening the hideout once.

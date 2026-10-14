@@ -270,6 +270,9 @@ namespace ArenaMapPort.Client
         // Resolve the closed declaring type directly. Reflecting through LocalGame produces a
         // different ReflectedType, which Harmony warns about even though it finds the same body.
         // Verified: D:/SPT41/Development/_decompiled/EFT/BaseLocalGame.cs:489; EFT/LocalGame.cs:29.
+        // The detour is shared by every reference-type instantiation of the generic (Mono compiles one
+        // body), so it also runs for HideoutGame : BaseLocalGame<HideoutPlayerOwner> on each hideout
+        // visit; TimeOfDayRepairs.Prefix type-tests its `object __instance` first (regression 2026-10-07).
         static void InstallTimeOfDayFix(Harmony harmony)
         {
             var declaringType = typeof(BaseLocalGame<EftGamePlayerOwner>);
