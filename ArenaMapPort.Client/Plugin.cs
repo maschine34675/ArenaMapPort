@@ -148,6 +148,7 @@ namespace ArenaMapPort.Client
             NativeSpatialAudio.Install(_harmony);
             PrecipitationAudio.Install(); // missing native rain beds, owned independently of local scenery ambience
             RoomReverb.Install();
+            RoomShotAcoustics.Install(); // invented per-room gunshot reverb, default off
             ReverbAudioProbe.Install();
             SpatialAudioProbe.Install(_harmony);
             PuddleFootstepRepairs.Install(_harmony);

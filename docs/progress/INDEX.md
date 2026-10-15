@@ -8,6 +8,9 @@ dated state in one screen; read it before this index if you only have a minute.
 
 ## Current — read these for the area you touch
 
+- [shot-acoustics.md](shot-acoustics.md) — per-room gunshot reverb from INVENTED room data through the Meta XR
+  Audio shoebox room (class Hall/Shop/Metal/Outdoor), live `ShotAcousticsLab` tuning keys, the Gunshots probe buses
+  and two GPU-2 measurement rounds (2026-10-15); default off, user listening pending.
 - [selection-map.md](selection-map.md) — original Arena region-selection artwork, native SPT alignment,
   screenshot-derived current/future map positions and GPU-1 menu validation (2026-10-13);
   Arena-only menu scope and PMC/Scav restoration (2026-10-15).

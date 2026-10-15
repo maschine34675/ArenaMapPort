@@ -389,3 +389,11 @@ the log; the user uses it to point at things.
   ModProfiler's spike list (`Driver.Update 30 ms` at 1 Hz on both machines). Scan once per raid and cache; a
   measurement recipe lives in `docs/progress/equator-rain-accents.md` ("1 Hz hitch"). Check `uibridge_status`'s
   `max` frame time and ModProfiler's `max_ms_in_frame` before accepting a client build on the host.
+- Meta XR Audio is process-global: `MetaXRAcousticSettings.Instance.AcousticModel` and the one shoebox room
+  (`MetaXRAudioRoomAcousticProperties`, two native calls per frame while enabled) belong to the whole process, not to a
+  scene, and the plugin's managed model value does not vouch for the native side after an audio reset. `RoomShotAcoustics`
+  saves the shipped model on first use, restores model and the plugin's default room (8 x 3 x 5 m, applied like the plugin's
+  own `CheckSceneHasRoom`) on switch-off, outdoors and in `NativeSpatialAudio.Release`, and re-sends the model after
+  `AudioSettings.OnAudioConfigurationChanged`. Measuring reverb on the muted host: `Audio diagnostics/ReverbPulse` with a
+  Gunshots bus at `ReverbPulseVolume` 0.8 and the rain/ambience keys muted, otherwise the rain bed sits at the tail level
+  (recipe in `docs/progress/shot-acoustics.md`).

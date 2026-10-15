@@ -148,6 +148,12 @@
       <HintPath>$(EftManagedDir)\Unity.Postprocessing.Runtime.dll</HintPath>
       <Private>false</Private>
     </Reference>
+    <!-- RoomShotAcoustics: the Meta XR Audio plugin EFT ships (MetaXRAudioRoomAcousticProperties, MetaXRAcousticSettings,
+         MetaXRAudioNativeInterface). Reference only: the game already loads it. -->
+    <Reference Include="Meta.XR.Audio">
+      <HintPath>$(EftManagedDir)\Meta.XR.Audio.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
 
     <PackageReference Include="BepInEx.Analyzers" Version="1.*" PrivateAssets="all" />
     <PackageReference Include="BepInEx.Core" Version="5.*" />

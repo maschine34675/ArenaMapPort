@@ -3,6 +3,28 @@
 Snapshot for whoever continues (human or agent). Verify the commits named here against `git log`; this file
 is updated by hand at each handover, it is not an automatic record. Read [AGENTS.md](AGENTS.md) first.
 
+## Update 2026-10-15 - per-room shot acoustics (invented data, Meta XR shoebox), release = one ZIP on Pixeldrain
+
+**Shot acoustics (user's next step after AirPit; option A):** `RoomShotAcoustics` (switch `Audio (<map>)/RoomShotAcoustics`,
+default OFF on every map) drives the Meta XR Audio plugin's one global shoebox room from the listener's acoustic room
+(class Hall / Shop / Metal / Outdoor by room type and size, dims from the room bounds) and switches the plugin's
+process-global model to ShoeboxRoom; outdoors, on switch-off and at raid end the shipped model (AcousticRayTracing) and
+the plugin's default room come back. Every material and clutter value is INVENTED (EFT and Arena carry none) and lives
+in the developer section `ShotAcousticsLab` (per class walls/ceiling/floor/clutter + `HallMaxDimension`), live. Two host
+rounds on GPU-2 (`ReverbPulse` probe with the three new gunshot buses, `ReverbPulseVolume` 0.8, rain/ambience muted for
+the measurement): mechanism proven on every route, first table rang the shop louder than the hall, the measured defaults
+(hall Concrete walls+ceiling, CeramicTile floor, clutter 0.4, cap 50 m; shop GypsumBoard walls, AcousticTile ceiling,
+CeramicTile floor, clutter 0.7) give hall late tail 7.4e-4 vs shop 9.8e-5. Details, tables and log quotes:
+[shot-acoustics.md](docs/progress/shot-acoustics.md). NOTE: the shared developer config on the Syncthing mirror now holds
+`Audio (arena_airpit)/RoomShotAcoustics = true` (set for the measurement, left on for the user's listening test) and the
+measured lab values. Open user inputs: is the passport hall (Start1, classified Hall by the 40 m rule) wanted as a hall;
+metallic character for planes/bus (Steel/Steel/Carpet, measured but untuned); Equator/Bay5 (switch exists, nothing
+measured); ship ON or OFF in player mode. Still to verify: a hideout visit and a cross-map raid with the switch on.
+**Release form (user decision):** ONE ZIP (about 2.03 GiB) on Pixeldrain instead of GitHub release parts
+(`make_release_zips.py --single`, `tools/release/upload_pixeldrain.py`, commit `340d6e9`; API key in the VM's Machine
+environment `PIXELDRAIN_API_KEY`, resolved via the registry fallback, never printed). VirusTotal links only for the two
+DLLs (the tool prints them from the dist hashes). Test upload verified (53-byte file, server hash matched).
+
 ## Update 2026-10-15 - Arena-only selection artwork
 
 The region artwork now requires ArenaMode's exact current menu selection via its optional

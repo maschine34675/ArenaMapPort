@@ -23,6 +23,7 @@
     <Compile Include="..\ArenaMapPort.Client\DeveloperOptions.cs" Link="Client\DeveloperOptions.cs" />
     <Compile Include="..\ArenaMapPort.Client\PlayerOptions.cs" Link="Client\PlayerOptions.cs" />
     <Compile Include="..\ArenaMapPort.Client\AmbientAudioDefaults.cs" Link="Client\AmbientAudioDefaults.cs" />
+    <Compile Include="..\ArenaMapPort.Client\RoomShotAcousticsModel.cs" Link="Client\RoomShotAcousticsModel.cs" />
     <Compile Include="..\ArenaMapPort.Client\AmbientAudioProfiles.cs" Link="Client\AmbientAudioProfiles.cs" />
     <Compile Include="..\ArenaMapPort.Client\DynamicMapAssets.cs" Link="Client\DynamicMapAssets.cs" />
     <Compile Include="..\ArenaMapPort.Shared\SpecularCapPolicy.cs" Link="Shared\SpecularCapPolicy.cs" />

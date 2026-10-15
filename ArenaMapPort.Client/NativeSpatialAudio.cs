@@ -301,6 +301,7 @@ namespace ArenaMapPort.Client
             {
                 var state = _state;
                 RoomReverb.Tick(state);
+                RoomShotAcoustics.Tick(state);
                 if (state == null) { _reportedFailure = false; return; }
                 if (_reportedFailure || !state.Finished || (state.RoomTones != null && !state.RefreshTones) ||
                     !Singleton<AbstractGame>.Instantiated || Singleton<AbstractGame>.Instance.Status != GameStatus.Started ||
@@ -425,6 +426,7 @@ namespace ArenaMapPort.Client
             try
             {
                 CleanupStep(RoomReverb.Stop);
+                CleanupStep(RoomShotAcoustics.Stop);
                 CleanupStep(ReverbAudioProbe.Stop);
                 ReleaseRoomTones(state);
                 CleanupStep(SpatialAudioProbe.Stop);
