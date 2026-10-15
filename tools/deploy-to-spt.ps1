@@ -42,11 +42,15 @@
   filename, internal map ID, image path and destination; no other map destinations are allowed.
 
 .PARAMETER DllOnly
-  Updates exactly maschine-ArenaMapPort.Client.dll and maschine-ArenaMapPort.Server.dll
-  from dist. Requires both DLLs already installed: this is not a first-install mode.
-  Both destinations are exclusively locked before either write; failures restore their
+  Updates maschine-ArenaMapPort.Client.dll and, by default, maschine-ArenaMapPort.Server.dll
+  from dist. Requires every selected DLL already installed: this is not a first-install mode.
+  All selected destinations are exclusively locked before any write; failures restore their
   previous bytes. No bundles, data, assets or configuration are read or copied.
   Incompatible with DynamicMapsPackage/Map. Dry run unless Confirm is supplied.
+
+.PARAMETER DllTarget
+  Selects Both (default) or Client for DllOnly. Client updates only the client DLL and never
+  inspects, reads or opens the staged or installed server DLL. Requires DllOnly.
 
 .PARAMETER RemoveLegacyDynamicMaps
   Separate migration mode (not combinable with other modes). Deletes only the old Equator/Bay5
@@ -81,12 +85,18 @@
 .EXAMPLE
   # data-only dry run; add -Confirm for the real copy:
   pwsh tools/deploy-to-spt.ps1 -DynamicMapsPackage work/dynamicmaps/equator/pack
+
+.EXAMPLE
+  # client DLL-only dry run; server DLL and all assets remain outside the plan:
+  pwsh tools/deploy-to-spt.ps1 -DllOnly -DllTarget Client
 #>
 [CmdletBinding()]
 param(
     [string]$SptRoot = "D:/SPT41",
     [switch]$Confirm,
     [switch]$DllOnly,
+    [ValidateSet('Client', 'Both')]
+    [string]$DllTarget = 'Both',
     [switch]$RemoveLegacyDynamicMaps,
     [switch]$RemoveLegacyEquatorDb,
     [switch]$RemoveDebugHelper,
@@ -365,9 +375,11 @@ function Invoke-LegacyDynamicMapsRemoval {
 
 function Invoke-DllOnlyDeploy {
     $repo = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot '..')).Path
-    $plan = @(foreach ($relative in @(
-        'BepInEx/plugins/maschine-ArenaMapPort/maschine-ArenaMapPort.Client.dll',
-        'SPT_Runtime/user/mods/ArenaMapPort/maschine-ArenaMapPort.Server.dll')) {
+    $relativePaths = @('BepInEx/plugins/maschine-ArenaMapPort/maschine-ArenaMapPort.Client.dll')
+    if ($DllTarget -eq 'Both') {
+        $relativePaths += 'SPT_Runtime/user/mods/ArenaMapPort/maschine-ArenaMapPort.Server.dll'
+    }
+    $plan = @(foreach ($relative in $relativePaths) {
         $source = Assert-PlainPath (Join-Path (Join-Path $repo 'dist') $relative) 'File'
         $destination = Assert-PlainPath (Join-Path $SptRoot $relative) 'File'
         if (-not (Test-Path -LiteralPath $source -PathType Leaf)) { throw "Missing staged DLL: $source" }
@@ -382,7 +394,7 @@ function Invoke-DllOnlyDeploy {
         $status = if ($row.Same) { 'unchanged (same SHA256)' } else { 'WILL OVERWRITE (differs)' }
         Write-Host "   $($row.Source) -> $($row.Destination) [$status]"
     }
-    Write-Host '[deploy-to-spt] plan: 2 file(s), DLL-only update; no bundles/assets/data/configs'
+    Write-Host "[deploy-to-spt] plan: $($plan.Count) file(s), DLL-only update; no bundles/assets/data/configs"
     if (-not $Confirm) {
         Write-Host '[deploy-to-spt] DRY RUN (default) -- no files were copied.' -ForegroundColor Green
         return
@@ -441,7 +453,7 @@ function Invoke-DllOnlyDeploy {
         }
         throw $deploymentError
     } finally { foreach ($stream in $streams) { $stream.Dispose() } }
-    Write-Host '[deploy-to-spt] OK -- 2 verified DLLs updated; all other files untouched.' -ForegroundColor Green
+    Write-Host "[deploy-to-spt] OK -- $($plan.Count) verified DLLs updated; all other files untouched." -ForegroundColor Green
 }
 
 function Invoke-LegacyEquatorDbRemoval {
@@ -570,6 +582,10 @@ function Invoke-ClientFolderRename {
     # Directory.Move refuses an existing destination instead of nesting/merging.
     [IO.Directory]::Move($source, $target)
     Write-Output 'CLIENT_FOLDER_RENAMED all contents preserved; server folder untouched'
+}
+
+if ($PSBoundParameters.ContainsKey('DllTarget') -and -not $DllOnly) {
+    Fail 'DllTarget requires DllOnly'
 }
 
 if ($RenameClientFolder) {
