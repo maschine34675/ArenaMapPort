@@ -190,7 +190,10 @@ The region-selection artwork is a separate, consumed export: run
 `python tools/extract/extract_selection_map.py` against the installed Arena data. Release/DllOnly builds
 require its PNG and manifest under ignored `work/extract/map-selection` and stage only those two files
 to the client's `map-selection` directory. The extractor pins reviewed pixel content and framing;
-review a changed Arena source before updating either pin. See `docs/progress/selection-map.md`.
+review a changed Arena source before updating either pin. The runtime image replacement is optional
+ArenaMode integration: only its exact selected menu flow receives the artwork; ordinary PMC/Scav
+and installations without ArenaMode retain EFT's original. Never gate this on map ID or a global
+Arena flag alone. See `docs/progress/selection-map.md`.
 
 Server builds require original descriptions from
 `python tools/extract/extract_map_descriptions.py`. The ignored output under

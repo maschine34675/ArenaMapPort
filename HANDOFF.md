@@ -3,6 +3,18 @@
 Snapshot for whoever continues (human or agent). Verify the commits named here against `git log`; this file
 is updated by hand at each handover, it is not an automatic record. Read [AGENTS.md](AGENTS.md) first.
 
+## Update 2026-10-15 - Arena-only selection artwork
+
+The region artwork now requires ArenaMode's exact current menu selection via its optional
+`ArenaMenuSelection.IsSelectedFor(RaidSettings)` contract. Ordinary PMC/Scav and installations
+without ArenaMode retain the original EFT image. Restoration on close/re-entry remains unconditional;
+map positions, availability and assets are unchanged. This supersedes the shared PMC/Arena artwork
+scope of the 2026-10-13 implementation below. See [selection-map.md](docs/progress/selection-map.md)
+for implementation and verification.
+Client Release build and native GPU-2 menu checks passed: fresh PMC, Arena, Arena -> PMC/Scav,
+Confirmation -> Back, MainMenu -> new PMC flow, and hideout opening. Client-only deployment preserved
+the installed server/bundles/configuration; host left in MainMenu, no raid started.
+
 ## Update 2026-10-14 - verification pass items 1-6 (GPU-2)
 
 Done and logged in [airpit-release.md](docs/progress/airpit-release.md) "Verification pass 2026-10-14": ballistics

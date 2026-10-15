@@ -185,3 +185,70 @@ markers still satisfy its separation check. Native evidence follows after deploy
   positions are also plotted on `work/map-marker-audit/review/geographic-centers.png` for review.
 - No ArenaMapPort Warning/Error in the client log `LogOutput-SPT-GPU-1-2026-10-13_11-50-40.log`.
   Host returned to MainMenu, no raid started. No GPU-2 restart, vanilla deployment, release ZIP or upload.
+
+## 2026-10-15 - confine the artwork to ArenaMode's selected menu flow
+
+The initial shared-screen hook also changed ordinary PMC/Scav map selection. The user wants the
+Arena appearance to remain inside ArenaMode. This scope correction supersedes the global artwork
+behavior documented above; it does not change the separately registered map positions or availability.
+
+`SelectionMapArtwork.Install` now resolves `ArenaMode.Session.ArenaMenuSelection.IsSelectedFor`
+from the registered optional plugin. Its exact static `bool (EFT.RaidSettings)` contract checks the
+Arena choice, reference identity of this menu flow's settings, and PMC side. The existing soft
+dependency already orders plugin startup; no hard reference, new toggle or ArenaMode source change
+is needed. Without ArenaMode no artwork hooks are installed. Unsupported contracts leave the native
+image intact and report one warning.
+
+The ShowInternal postfix checks the actual `raidSettings` argument before touching or loading any
+image. Native source assigns the screen's settings before this call, including repeated calls through
+the Marathon callback. ArenaMode's map-screen patches neither replace that object nor change the
+selection flag, so no additional patch ordering is required. The unconditional Restore prefix and
+Close hook remain: leaving Arena or reopening another flow cannot retain our sprite. A failed query
+also restores the owned image and falls back to native artwork.
+
+Validation: client Release/DllOnly build succeeded with zero warnings/errors, the original artwork
+validator reports `SELECTION_MAP_OK`, and an independent source review confirmed the gate and native
+call ordering. The staged server DLL differed from the installed server despite no server changes in
+this task; deployment therefore uses the client-only DLL target, preserving installed server bytes,
+bundles, assets and configuration.
+
+### Native acceptance on SPT-GPU-2
+
+2026-10-15, 10:20-10:26 CEST; test profile SPT-GPU-2, UiBridge instance `52679c74`,
+EFT 0.16.9.5 / SPT 4.1.6. Candidate client SHA256
+`4de92e0d7c754c20184a706c94de3e4d6575499dc5cf7a8531382ccaffee98a9`.
+After synchronization and a fresh start, UiBridge confirmed all 19 compared plugins identical
+between VM build, host disk and loaded process; all 43 plugins loaded successfully.
+
+Inspected the actual Image component at
+`Menu UI/UI/Matchmaker Location Selection/Content/Map/Image` through UiBridge, in addition to
+reviewing the native PMC and Arena screenshots:
+
+| Flow | Actual Image.sprite.name / result |
+|---|---|
+| Fresh PMC selection | `region_map_external`; artwork `_loadAttempted` still false |
+| PMC -> Back -> ARENA | `ArenaMapPort_RegionMap`; retained original `region_map_external` |
+| ARENA -> Back -> PMC | `region_map_external`; owned `_image` null |
+| PMC -> Back -> ARENA again | `ArenaMapPort_RegionMap` |
+| ARENA -> Back -> Scav | `region_map_external` |
+| ARENA Factory -> NEXT (MatchMakerAccept) | Hidden selection Image restored to `region_map_external` |
+| MatchMakerAccept -> BACK | `ArenaMapPort_RegionMap` reapplied |
+| ARENA -> MAIN MENU | `region_map_external` restored |
+| New PMC flow after MAIN MENU | `region_map_external` |
+| Hideout | Opened successfully in about 11 s; tutorial dismissed, returned to MainMenu |
+
+Evidence is ignored under `work/selection-map-scope-20261015/`: scenario reports, native screenshots
+and `runtime-inspection.json`. No raid was started and no mutator/configuration changed. Host was
+left in MainMenu with control free. Missing/unsupported ArenaMode is source-reviewed fail-closed
+behavior, not a native uninstall/reinstall test.
+
+Client log `LogOutput-SPT-GPU-2-2026-10-15_10-19-23.log` contains four artwork activations, all in the
+Arena flows (10:21:41, 10:22:32, 10:23:21, 10:23:45), and no ArenaMapPort Warning/Error. EFT's separate
+errors.log contains inactive M4 preview-animator reset messages and one `JetMaterial == null` while
+switching character previews; no preview code was changed here. No hideout load-task error was logged.
+
+The sanctioned deployment used `-DllOnly -DllTarget Client`; its 44-case fixture harness passed.
+The installed server hash stayed
+`9298c76b6925e1686d4254238d0a07060a7b747b787b23f74979926f7d8cc824` both locally and on GPU-2.
+No server restart was required by this change, no scene assets were deployed, and no release/upload
+or vanilla-install update was performed.
