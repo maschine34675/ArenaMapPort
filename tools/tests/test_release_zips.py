@@ -1,7 +1,8 @@
-"""The multi-part release packager: strict classification of dist/, size gate, compression choice, manifests,
-checksums, verification and the extract-and-compare check. Everything runs on a fake dist tree in a temporary
-directory (tiny files named like the real ones); only the classification smoke test reads the real dist/, and it
-is skipped unless every file the release requires is staged. No bundle bytes are involved anywhere."""
+"""The release packager, both layouts (the multi-part set and the single ZIP the user chose for the release):
+strict classification of dist/, size gate (multi-part only), compression choice, manifests, checksums,
+verification and the extract-and-compare check. Everything runs on a fake dist tree in a temporary directory (tiny
+files named like the real ones); only the classification smoke test reads the real dist/, and it is skipped unless
+every file the release requires is staged. No bundle bytes are involved anywhere."""
 from contextlib import redirect_stderr, redirect_stdout
 import hashlib
 import io
@@ -138,6 +139,13 @@ class FakeRepoCase(unittest.TestCase):
         with patch.object(release, "default_maps", return_value=MAPS), redirect_stdout(out), redirect_stderr(err):
             code = release.main(list(argv), repo=self.repo)
         return code, out.getvalue(), err.getvalue()
+
+    def pin_released_maps(self):
+        """verify_set checks a single ZIP against the released map list (default_maps()); the fake dist carries
+        MAPS, so tests that call it directly pin that list instead of depending on the real one."""
+        patcher = patch.object(release, "default_maps", return_value=MAPS)
+        patcher.start()
+        self.addCleanup(patcher.stop)
 
 
 class PartitionTests(FakeRepoCase):
@@ -1149,6 +1157,904 @@ class CommandLineTests(FakeRepoCase):
                 with self.assertRaises(SystemExit) as caught:
                     release.parse_args(argv)
                 self.assertEqual(caught.exception.code, 2)
+
+
+SINGLE_ZIP = "maschine-ArenaMapPort-0.1.0.zip"
+SHA_NAME = "maschine-ArenaMapPort-0.1.0.sha256"
+FULL_MANIFEST = f"{PLUGIN}/parts/full.json"
+GENERATED_TRIO = (f"{PLUGIN}/README.txt", f"{PLUGIN}/THIRD-PARTY-NOTICES.txt", f"{SERVER}/THIRD-PARTY-NOTICES.txt")
+
+
+def read_zip(path):
+    with zipfile.ZipFile(path) as archive:
+        return {i.filename: archive.read(i) for i in archive.infolist()}
+
+
+def snapshot(directory):
+    return {p.name: p.read_bytes() for p in directory.iterdir()}
+
+
+class SingleLayoutTests(FakeRepoCase):
+    """--single: ONE ZIP with every dist file, the generated README / notices and parts/full.json."""
+
+    def setUp(self):
+        super().setUp()
+        self.pin_released_maps()
+
+    def build_single(self, out_name="out", **kwargs):
+        return self.build(out_name, single=True, **kwargs)
+
+    # --- what is built ----------------------------------------------------------------------------------------
+
+    def test_partition_single_is_one_sorted_plan_over_every_file(self):
+        parts = release.partition_single(self.scan(), self.spec)
+        self.assertEqual(len(parts), 1)
+        plan = parts[0]
+        self.assertEqual((plan.index, plan.count, plan.id, plan.zip_name), (1, 1, "full", SINGLE_ZIP))
+        self.assertEqual([f.rel for f in plan.files], sorted(self.files))
+        self.assertEqual(plan.raw_bytes, sum(len(data) for data in self.files.values()))
+        self.assertEqual(release.single_zip_name("0.1.0"), SINGLE_ZIP)
+        self.assertTrue(release.is_single_layout(parts))
+        self.assertFalse(release.is_single_layout(self.partition()))
+
+    def test_build_writes_one_zip_and_a_one_line_sha256(self):
+        result = self.build_single()
+        self.assertEqual(result.layout, "single")
+        self.assertEqual([p.name for p in result.zips], [SINGLE_ZIP])
+        self.assertEqual(sorted(p.name for p in result.out_dir.iterdir()), sorted([SINGLE_ZIP, SHA_NAME]))
+        self.assertEqual(result.sha256_path.name, SHA_NAME)
+        digest = hashlib.sha256((result.out_dir / SINGLE_ZIP).read_bytes()).hexdigest()
+        text = result.sha256_path.read_bytes().decode("ascii")
+        self.assertEqual(text, f"{digest}  {SINGLE_ZIP}\n")  # one line, LF, same format as the multi-part file
+        self.assertNotIn("\r", text)
+        self.assertEqual(len(text.splitlines()), 1)
+        self.assertEqual(result.digests, [digest])
+        self.assertEqual(result.sizes, [(result.out_dir / SINGLE_ZIP).stat().st_size])
+
+    def test_the_zip_holds_every_dist_file_then_the_generated_entries_then_the_manifest(self):
+        result = self.build_single()
+        with zipfile.ZipFile(result.zips[0]) as archive:
+            names = archive.namelist()
+        self.assertEqual(len(names), len(set(names)))
+        self.assertEqual(names[:len(self.files)], sorted(self.files))
+        self.assertEqual(names[len(self.files):-1], sorted(GENERATED_TRIO))
+        self.assertEqual(names[-1], FULL_MANIFEST, "the manifest needs every hash, so it is the last entry")
+        self.assertEqual(set(names), set(self.files) | set(GENERATED_TRIO) | {FULL_MANIFEST})
+
+    def test_manifest_names_the_one_part_full_1_of_1(self):
+        result = self.build_single()
+        entries = read_zip(result.zips[0])
+        manifest = json.loads(entries[FULL_MANIFEST])
+        self.assertEqual(manifest["schema"], 1)
+        self.assertEqual(manifest["version"], "0.1.0")
+        self.assertEqual(manifest["source_commit"], COMMIT)
+        self.assertEqual(manifest["part"], {"index": 1, "of": 1, "id": "full", "zip": SINGLE_ZIP})
+        self.assertEqual(manifest["parts"], [{"index": 1, "id": "full", "zip": SINGLE_ZIP,
+                                              "dist_files": len(self.files),
+                                              "raw_bytes": sum(len(d) for d in self.files.values())}])
+        self.assertIn("extract this ZIP into the SPT root", manifest["install"])
+        self.assertNotIn("ALL", manifest["install"])
+        own = {e["path"]: e for e in manifest["entries"]}
+        self.assertEqual(set(own), set(entries) - {FULL_MANIFEST})
+        for path, entry in own.items():
+            self.assertEqual(entry["size"], len(entries[path]))
+            self.assertEqual(entry["sha256"], hashlib.sha256(entries[path]).hexdigest())
+            self.assertEqual(entry["origin"], "dist" if path in self.files else "generated")
+        self.assertEqual({p for p, e in own.items() if e["origin"] == "generated"}, set(GENERATED_TRIO))
+
+    def test_readme_says_it_is_one_zip_to_extract_into_the_spt_root(self):
+        entries = read_zip(self.build_single().zips[0])
+        readme = entries[f"{PLUGIN}/README.txt"].decode("utf-8")
+        self.assertIn("ONE ZIP: " + SINGLE_ZIP, readme)
+        self.assertIn("Extract the ZIP into your SPT installation directory", readme)
+        self.assertIn("BepInEx and SPT_Runtime", readme)
+        self.assertIn("close", readme.lower())
+        self.assertIn("Equator, Bay5, AirPit", readme)
+        # the Verification paragraph describes the single checksum line, not "every part"
+        self.assertIn(f"Verification: {SHA_NAME} lists the SHA-256 of the ZIP", readme)
+        self.assertIn("parts/full.json records", readme)
+        for multi_part_wording in ("EVERY part", "ZIP parts", "ALL of them", "part1of", "of every part", "any order",
+                                   "core part"):
+            self.assertNotIn(multi_part_wording, readme)
+
+    def test_the_multi_part_readme_keeps_its_wording(self):
+        parts_readme = read_zip(self.build().zips[0])[f"{PLUGIN}/README.txt"].decode("utf-8")
+        for wording in ("This release comes in 4 ZIP parts. Install ALL of them", "Extract EVERY part",
+                        "The parts do not overlap and can be extracted in any order",
+                        f"Verification: {SHA_NAME} lists the SHA-256 of every part",
+                        "parts/ records, per part,"):
+            self.assertIn(wording, parts_readme)
+        self.assertNotIn("ONE ZIP", parts_readme)
+
+    def test_notices_equal_the_multi_part_core_entries(self):
+        single = read_zip(self.build_single("single").zips[0])
+        core = read_zip(self.build("parts").zips[0])
+        for name in GENERATED_TRIO[1:]:
+            self.assertEqual(single[name], core[name])
+        self.assertEqual(single[GENERATED_TRIO[1]].decode("utf-8").count("MIT License"), 2)
+
+    def test_compression_decisions_and_dist_bytes_match_the_multi_part_layout(self):
+        single = self.build_single("single")
+        parts = self.build("parts")
+        with zipfile.ZipFile(single.zips[0]) as archive:
+            in_single = {i.filename: (i.compress_type, i.CRC, i.file_size, i.compress_size, archive.read(i))
+                         for i in archive.infolist()}
+        in_parts = {}
+        for path in parts.zips:
+            with zipfile.ZipFile(path) as archive:
+                in_parts.update({i.filename: (i.compress_type, i.CRC, i.file_size, i.compress_size, archive.read(i))
+                                 for i in archive.infolist() if i.filename in self.files})
+        self.assertEqual({n: v for n, v in in_single.items() if n in self.files}, in_parts)
+        self.assertEqual(in_single[f"{PLUGIN}/bundles/arena_equator_scenes.bundle"][0], zipfile.ZIP_STORED)
+        self.assertEqual(in_single[f"{SERVER}/banners/arena_equator.jpg"][0], zipfile.ZIP_STORED)
+        self.assertEqual(in_single[f"{SERVER}/db/arena_equator/base.json"][0], zipfile.ZIP_DEFLATED)
+
+    def test_timestamps_and_attributes_are_fixed_and_zip64_stays_on(self):
+        calls = []
+
+        class Spy(zipfile.ZipFile):
+            def __init__(self, file, mode="r", *args, **kwargs):
+                calls.append((mode, kwargs.get("allowZip64")))
+                super().__init__(file, mode, *args, **kwargs)
+
+        with patch.object(zipfile, "ZipFile", Spy):
+            result = self.build_single()
+        self.assertIn(("x", True), calls, "the single ZIP must be written with allowZip64=True")
+        with zipfile.ZipFile(result.zips[0]) as archive:
+            for info in archive.infolist():
+                self.assertEqual(info.date_time, (1980, 1, 1, 0, 0, 0), info.filename)
+                self.assertEqual(info.external_attr >> 16, 0o100644)
+
+    def test_single_build_is_reproducible(self):
+        first = self.build_single("one")
+        second = self.build_single("two")
+        self.assertEqual(first.zips[0].read_bytes(), second.zips[0].read_bytes())
+        self.assertEqual(first.sha256_path.read_bytes(), second.sha256_path.read_bytes())
+        self.assertEqual(first.digests, second.digests)
+
+    # --- no size gate ------------------------------------------------------------------------------------------
+
+    def test_the_two_gibibyte_gate_does_not_apply_to_the_single_layout(self):
+        with self.assertRaises(release.PartTooLarge):
+            self.build("parts", size_limit=300)  # the multi-part layout still refuses
+        result = self.build_single("single", size_limit=300)  # ... the one ZIP is far above 300 B and is accepted
+        self.assertGreater(result.sizes[0], 300)
+        verified = release.verify_set(result.out_dir, size_limit=300, log=quiet)
+        self.assertEqual(verified.layout, "single")
+        self.assertEqual(release.verify_set(result.out_dir, size_limit=1, log=quiet).layout, "single")
+        self.assertEqual(release.SIZE_LIMIT, 2 ** 31)
+
+    # --- strict classification is unchanged ---------------------------------------------------------------------
+
+    def test_a_stray_or_parked_file_is_still_a_hard_error_in_single_mode(self):
+        for name in (f"{PLUGIN}/extra.txt", f"{PLUGIN}/maschine-ArenaMapPort.Client.pdb", f"{SERVER}/Thumbs.db",
+                     f"{PLUGIN}/README.txt", FULL_MANIFEST, f"{PLUGIN}/parts/core.json",
+                     f"{PLUGIN}/bundles/arena_airpit2_scenes.bundle", f"{PLUGIN}/ai/airpit2.ai.json",
+                     f"{PLUGIN}/acoustics/arena_bay5/Thumbs.db", f"{PLUGIN}/water/arena_bay5/water.json~",
+                     f"{SERVER}/db/arena_prison/base.json"):
+            with self.subTest(name=name):
+                path = self.dist / name
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_bytes(b"x")
+                try:
+                    with self.assertRaises(release.ClassificationError) as caught:
+                        release.partition_single(self.scan(), self.spec)
+                    self.assertIn(name, str(caught.exception))
+                    with self.assertRaises(release.ClassificationError):
+                        self.build_single("rejected")
+                    self.assertFalse((self.tmp / "rejected").exists(), "a rejected dist wrote output")
+                    code, _out, err = self.cli("--plan", "--single")
+                    self.assertEqual(code, 1)
+                    self.assertIn("unclassified", err)
+                finally:
+                    path.unlink()
+
+    def test_an_incomplete_dist_is_still_rejected_in_single_mode(self):
+        for name in (f"{SERVER}/db/arena_bay5/base.json", f"{PLUGIN}/bundles/arena_equator_navmesh.bundle",
+                     f"{PLUGIN}/ai/airpit.ai.json", f"{PLUGIN}/maschine-ArenaMapPort.Client.dll",
+                     f"{PLUGIN}/loadscreens/arena_equator_1.jpg"):
+            with self.subTest(name=name):
+                data = (self.dist / name).read_bytes()
+                (self.dist / name).unlink()
+                try:
+                    with self.assertRaises(release.PackagingError) as caught:
+                        self.build_single("incomplete")
+                    self.assertIn("incomplete dist", str(caught.exception))
+                    self.assertIn(name, str(caught.exception))
+                finally:
+                    (self.dist / name).write_bytes(data)
+
+    def test_full_is_a_reserved_map_stem(self):
+        with self.assertRaises(release.PackagingError) as caught:
+            release.load_spec(self.repo, maps=(("arena_equator", "Equator"), ("arena_full", "Full")))
+        self.assertIn("'full'", str(caught.exception))
+
+    # --- verification: layout auto-detection, extract-check -------------------------------------------------------
+
+    def test_verify_set_detects_the_single_layout(self):
+        result = self.build_single()
+        logged = []
+        verified = release.verify_set(result.out_dir, log=logged.append)
+        self.assertEqual(verified.layout, "single")
+        self.assertEqual(verified.version, "0.1.0")
+        self.assertEqual([(p.index, p.id, p.zip_name) for p in verified.parts], [(1, "full", SINGLE_ZIP)])
+        self.assertEqual(verified.parts[0].sha256, result.digests[0])
+        self.assertEqual(verified.parts[0].size, result.sizes[0])
+        self.assertEqual(logged, [f"verified single ZIP: {SINGLE_ZIP}"])
+        self.assertEqual(release.verify_set(self.build("parts").out_dir, log=quiet).layout, "parts")
+
+    def test_extract_overlay_equals_dist_byte_for_byte(self):
+        result = self.build_single()
+        scratch = self.tmp / "overlay"
+        with zipfile.ZipFile(result.zips[0]) as archive:
+            archive.extractall(scratch)  # independent of the module's own extractor
+        extracted = {p.relative_to(scratch).as_posix(): p.read_bytes() for p in scratch.rglob("*") if p.is_file()}
+        generated = {*GENERATED_TRIO, FULL_MANIFEST}
+        self.assertTrue(generated <= set(extracted))
+        self.assertEqual({n: d for n, d in extracted.items() if n not in generated}, self.files)
+
+    def test_extract_check_works_for_the_single_layout(self):
+        result = self.build_single()
+        verified = release.verify_set(result.out_dir, log=quiet)
+        logged = []
+        count = release.extract_check(verified, self.dist, self.tmp / "scratch", log=logged.append)
+        self.assertEqual(count, len(self.files))
+        self.assertEqual(logged, [f"extract-check OK: {len(self.files)} files identical to dist, "
+                                  "4 generated entries ignored"])
+        victim = self.dist / f"{SERVER}/db/arena_bay5/base.json"  # a changed dist byte is caught
+        victim.write_bytes(victim.read_bytes()[:-1] + b"!")
+        with self.assertRaises(release.VerificationError) as caught:
+            release.extract_check(verified, self.dist, self.tmp / "scratch2", log=quiet)
+        self.assertIn("db/arena_bay5/base.json", str(caught.exception))
+        (self.tmp / "busy").mkdir()
+        (self.tmp / "busy" / "old.txt").write_text("x")
+        with self.assertRaises(release.PackagingError):
+            release.extract_check(verified, self.dist, self.tmp / "busy", log=quiet)
+
+    def test_verify_detects_a_tampered_byte(self):
+        result = self.build_single()
+        copy = self.tmp / "copy"
+        shutil.copytree(result.out_dir, copy)
+        path = copy / SINGLE_ZIP
+        data = bytearray(path.read_bytes())
+        needle = self.files[f"{PLUGIN}/bundles/arena_equator_scenes.bundle"][100:140]
+        offset = bytes(data).find(needle)
+        self.assertGreater(offset, 0)
+        data[offset] ^= 0xFF
+        path.write_bytes(bytes(data))
+        with self.assertRaises(release.VerificationError) as caught:
+            release.verify_set(copy, log=quiet)
+        self.assertIn("SHA-256 mismatch", str(caught.exception))
+        (copy / SHA_NAME).write_text(f"{hashlib.sha256(bytes(data)).hexdigest()}  {SINGLE_ZIP}\n", encoding="ascii",
+                                     newline="\n")  # an honest checksum still cannot hide the damaged entry
+        with self.assertRaises(release.VerificationError) as caught:
+            release.verify_set(copy, log=quiet)
+        self.assertIn(SINGLE_ZIP, str(caught.exception))
+
+    def test_a_missing_single_zip_is_reported(self):
+        result = self.build_single()
+        (result.out_dir / SINGLE_ZIP).unlink()
+        with self.assertRaises(release.VerificationError) as caught:
+            release.verify_set(result.out_dir, log=quiet)
+        self.assertIn("missing part", str(caught.exception))
+
+    def test_zips_of_the_other_layout_are_an_error_in_both_directions(self):
+        parts = self.build("parts")
+        single = self.build_single("single")
+        mixed = self.tmp / "mixed-single"
+        shutil.copytree(single.out_dir, mixed)
+        shutil.copy(parts.zips[0], mixed)
+        with self.assertRaises(release.VerificationError) as caught:
+            release.verify_set(mixed, log=quiet)
+        self.assertIn("not listed", str(caught.exception))
+        self.assertIn("part1of4-core.zip", str(caught.exception))
+        mixed = self.tmp / "mixed-parts"
+        shutil.copytree(parts.out_dir, mixed)
+        shutil.copy(single.zips[0], mixed)
+        with self.assertRaises(release.VerificationError) as caught:
+            release.verify_set(mixed, log=quiet)
+        self.assertIn("not listed", str(caught.exception))
+        self.assertIn(SINGLE_ZIP, str(caught.exception))
+
+    # --- --force and the other layout ---------------------------------------------------------------------------
+
+    def test_an_existing_multi_part_release_blocks_a_single_build_without_force(self):
+        parts = self.build()
+        before = snapshot(parts.out_dir)
+        with self.assertRaises(release.PackagingError) as caught:
+            self.build_single()
+        self.assertIn("--force", str(caught.exception))
+        self.assertIn("part1of4-core.zip", str(caught.exception))
+        self.assertEqual(snapshot(parts.out_dir), before)
+        self.assertEqual(release.verify_set(parts.out_dir, log=quiet).layout, "parts")
+
+    def test_an_existing_single_release_blocks_a_multi_part_build_without_force(self):
+        single = self.build_single()
+        before = snapshot(single.out_dir)
+        with self.assertRaises(release.PackagingError) as caught:
+            self.build()
+        self.assertIn("--force", str(caught.exception))
+        self.assertIn(SINGLE_ZIP, str(caught.exception))
+        self.assertEqual(snapshot(single.out_dir), before)
+
+    def test_an_existing_single_release_blocks_a_single_rebuild_without_force(self):
+        first = self.build_single()
+        before = snapshot(first.out_dir)
+        with self.assertRaises(release.PackagingError) as caught:
+            self.build_single()
+        self.assertIn("--force", str(caught.exception))
+        self.assertEqual(snapshot(first.out_dir), before)
+        second = self.build_single(force=True)
+        self.assertEqual(snapshot(second.out_dir), before)  # reproducible, so the forced rebuild is identical
+
+    def test_force_replaces_a_multi_part_release_with_the_single_zip(self):
+        parts = self.build()
+        single = self.build_single(force=True)
+        self.assertEqual(sorted(p.name for p in single.out_dir.iterdir()), sorted([SINGLE_ZIP, SHA_NAME]))
+        verified = release.verify_set(single.out_dir, log=quiet)
+        self.assertEqual((verified.layout, [p.id for p in verified.parts]), ("single", ["full"]))
+        self.assertEqual(parts.out_dir, single.out_dir)
+
+    def test_force_replaces_the_single_zip_with_a_multi_part_release(self):
+        single = self.build_single()
+        parts = self.build(force=True)
+        self.assertEqual(sorted(p.name for p in parts.out_dir.iterdir()),
+                         sorted([p.name for p in parts.zips] + [SHA_NAME]))
+        self.assertFalse((single.out_dir / SINGLE_ZIP).exists())
+        verified = release.verify_set(parts.out_dir, log=quiet)
+        self.assertEqual((verified.layout, [p.id for p in verified.parts]), ("parts", ["core", "equator", "bay5", "airpit"]))
+
+    def test_other_versions_in_the_same_directory_are_left_alone(self):
+        first = self.build_single()
+        spec2 = release.load_spec(self.repo, "0.2.0", maps=MAPS)
+        release.build_release(spec2, self.dist, first.out_dir, self.repo, commit=COMMIT, log=quiet, single=True)
+        release.build_release(spec2, self.dist, first.out_dir, self.repo, force=True, commit=COMMIT, log=quiet)
+        self.assertEqual(sorted(p.name for p in first.out_dir.glob("*.zip") if "0.1.0" in p.name), [SINGLE_ZIP])
+        self.assertEqual(release.verify_set(first.out_dir, "0.1.0", log=quiet).layout, "single")
+        self.assertEqual(release.verify_set(first.out_dir, "0.2.0", log=quiet).layout, "parts")
+
+    def test_stale_partials_of_either_layout_block_a_build_without_force_and_go_with_it(self):
+        out = self.tmp / "out"
+        out.mkdir()
+        for stale_name, build_single in (("maschine-ArenaMapPort-0.1.0.zip.partial", False),
+                                         ("maschine-ArenaMapPort-0.1.0-part2of4-equator.zip.partial", True),
+                                         ("maschine-ArenaMapPort-0.1.0-part2of5-equator.zip.partial", True)):
+            with self.subTest(stale=stale_name, single=build_single):
+                stale = out / stale_name
+                stale.write_bytes(b"crashed")
+                with self.assertRaises(release.PackagingError):
+                    self.build(single=build_single)
+                self.assertTrue(stale.exists())
+                result = self.build(single=build_single, force=True)
+                self.assertFalse(stale.exists())
+                self.assertEqual(release.verify_set(out, log=quiet).layout, result.layout)
+                for leftover in out.iterdir():
+                    leftover.unlink()
+
+    def test_a_failed_forced_single_build_leaves_the_previous_set_intact(self):
+        for previous in ("parts", "single"):
+            with self.subTest(previous=previous):
+                out_name = f"out-{previous}"
+                first = self.build(out_name, single=(previous == "single"))
+                before = snapshot(first.out_dir)
+                victim = f"{SERVER}/db/arena_bay5/base.json"
+                files = [release.DistFile(f.rel, f.path, f.size + 1) if f.rel == victim else f for f in self.scan()]
+                with patch.object(release, "scan_dist", return_value=files):
+                    with self.assertRaises(release.PackagingError):
+                        self.build(out_name, force=True, single=True)
+                self.assertEqual(snapshot(first.out_dir), before, "changed-while-packaging left files behind")
+                with patch.object(release, "write_part", side_effect=KeyboardInterrupt):
+                    with self.assertRaises(KeyboardInterrupt):
+                        self.build(out_name, force=True, single=True)
+                self.assertEqual(snapshot(first.out_dir), before, "an interrupted build left files behind")
+                with patch.object(release, "verify_zip", side_effect=release.VerificationError("boom")):
+                    with self.assertRaises(release.VerificationError):
+                        self.build(out_name, force=True, single=True)
+                self.assertEqual(snapshot(first.out_dir), before)
+                self.assertEqual(release.verify_set(first.out_dir, log=quiet).layout, previous)
+
+    def test_a_failed_first_single_build_leaves_no_files(self):
+        victim = f"{SERVER}/db/arena_bay5/base.json"
+        files = [release.DistFile(f.rel, f.path, f.size + 1) if f.rel == victim else f for f in self.scan()]
+        with patch.object(release, "scan_dist", return_value=files):
+            with self.assertRaises(release.PackagingError) as caught:
+                self.build_single()
+        self.assertIn("changed while packaging", str(caught.exception))
+        self.assertEqual(list((self.tmp / "out").iterdir()), [])
+
+    def test_output_inside_dist_is_refused_in_single_mode(self):
+        with self.assertRaises(release.PackagingError):
+            release.build_release(self.spec, self.dist, self.dist / "out", self.repo, commit=COMMIT, log=quiet,
+                                  single=True)
+
+    # --- the plan -----------------------------------------------------------------------------------------------
+
+    def test_estimate_and_plan_text_for_the_single_layout(self):
+        files = self.scan()
+        parts = release.partition_single(files, self.spec)
+        decisions = {f.rel: release.decide_file(f) for f in files}
+        estimates = release.estimate_parts(self.spec, parts, decisions,
+                                           release.generated_core_entries(self.spec, parts, self.repo), COMMIT)
+        self.assertEqual(len(estimates), 1)
+        self.assertEqual(estimates[0].generated_count, 4)  # README, two notices, the manifest
+        actual = self.build_single().sizes[0]
+        self.assertLess(abs(estimates[0].estimated_zip - actual), 0.3 * actual + 1000)
+        text = release.format_plan(self.spec, self.dist, COMMIT, estimates, decisions, None)
+        for token in ("layout single (1 ZIP)", f"single ZIP  full  ->  {SINGLE_ZIP}", "size limit    none",
+                      "(+4 generated)", f"total: {len(files)} dist files", "estimated single ZIP:"):
+            self.assertIn(token, text)
+        self.assertNotIn("part 1 of", text)
+        self.assertNotIn("WARNING", text)
+        # far beyond the old limit: still no warning, the estimate is printed in GiB
+        big = release.DistFile(f"{PLUGIN}/bundles/arena_equator_huge.bundle", self.tmp / "none", 5_000_000_000)
+        parts[0].files.append(big)
+        decisions[big.rel] = release.Decision(zipfile.ZIP_STORED, 0.0, 5_000_000_000)
+        estimates = release.estimate_parts(self.spec, parts, decisions,
+                                           release.generated_core_entries(self.spec, parts, self.repo), COMMIT)
+        text = release.format_plan(self.spec, self.dist, COMMIT, estimates, decisions, None)
+        self.assertNotIn("WARNING", text)
+        self.assertRegex(text, r"estimated single ZIP: 4\.\d\d GiB")
+
+    def test_plan_prints_the_one_archive_and_writes_nothing(self):
+        before = sorted(p.relative_to(self.repo).as_posix() for p in self.repo.rglob("*"))
+        code, out, err = self.cli("--plan", "--single")
+        self.assertEqual(code, 0, err)
+        for token in ("layout single (1 ZIP)", f"single ZIP  full  ->  {SINGLE_ZIP}", "estimated zip", "total:",
+                      "size limit    none", "estimated single ZIP:"):
+            self.assertIn(token, out)
+        for token in ("part 1 of", "part 2 of", "WARNING"):  # (not the part ids: the temp dir name is random)
+            self.assertNotIn(token, out)
+        self.assertEqual(sorted(p.relative_to(self.repo).as_posix() for p in self.repo.rglob("*")), before)
+        code, out, err = self.cli("--plan")  # the default plan is unchanged
+        self.assertEqual(code, 0, err)
+        self.assertIn("part 1 of 4  core", out)
+        self.assertNotIn("single ZIP", out)
+
+    # --- command line --------------------------------------------------------------------------------------------
+
+    def test_single_with_verify_only_is_a_usage_error(self):
+        for argv in (["--single", "--verify-only", "x"], ["--verify-only", "x", "--single"],
+                     ["--verify-only", "x", "--single", "--extract-check", "y"]):
+            with self.subTest(argv=argv):
+                err = io.StringIO()
+                with redirect_stderr(err):
+                    with self.assertRaises(SystemExit) as caught:
+                        release.parse_args(argv)
+                self.assertEqual(caught.exception.code, 2)
+                self.assertIn("detects its layout from the .sha256", err.getvalue())
+        for argv in (["--plan", "--single"], ["--single", "--force", "--allow-dirty"],
+                     ["--single", "--extract-check", "x"], ["--single"]):  # these combine fine
+            with self.subTest(argv=argv):
+                self.assertTrue(release.parse_args(argv).single)
+        self.assertFalse(release.parse_args([]).single)
+
+    def test_build_verify_and_extract_check_end_to_end(self):
+        out = self.tmp / "releases"
+        code, stdout, err = self.cli("--single", "--allow-dirty", "--out", str(out),
+                                     "--extract-check", str(self.tmp / "s"))
+        self.assertEqual(code, 0, err)
+        self.assertIn("RELEASE_ZIPS_BUILT", stdout)
+        self.assertIn(f"{len(self.files)} files identical to dist", stdout)
+        self.assertIn(f"{SINGLE_ZIP}  ", stdout)
+        self.assertRegex(stdout, r"single ZIP: \d+\.\d\d GiB \([\d,]+ B\); the 2\*\*31 per-ZIP size gate does not apply")
+        self.assertEqual(sorted(p.name for p in out.iterdir()), sorted([SINGLE_ZIP, SHA_NAME]))
+        code, stdout, err = self.cli("--verify-only", str(out))
+        self.assertEqual(code, 0, err)
+        self.assertIn("RELEASE_ZIPS_VERIFIED 0.1.0 (single ZIP)", stdout)
+        code, stdout, err = self.cli("--verify-only", str(out), "--extract-check", str(self.tmp / "s2"))
+        self.assertEqual(code, 0, err)
+        self.assertIn("extract-check OK", stdout)
+
+    def test_cli_force_semantics_across_layouts(self):
+        out = self.tmp / "releases"
+        self.assertEqual(self.cli("--allow-dirty", "--out", str(out))[0], 0)  # multi-part first
+        code, _stdout, err = self.cli("--single", "--allow-dirty", "--out", str(out))
+        self.assertEqual(code, 1)
+        self.assertIn("--force", err)
+        self.assertEqual(len(list(out.glob("*.zip"))), 4)
+        self.assertEqual(self.cli("--single", "--allow-dirty", "--force", "--out", str(out))[0], 0)
+        self.assertEqual([p.name for p in out.glob("*.zip")], [SINGLE_ZIP])
+        code, _stdout, err = self.cli("--single", "--allow-dirty", "--out", str(out))
+        self.assertEqual(code, 1)
+        self.assertIn("--force", err)
+
+    def test_default_output_directory_and_the_dirty_gate_apply_to_single(self):
+        code, _out, err = self.cli("--single")  # not a clean repository
+        self.assertEqual(code, 1)
+        self.assertIn("--allow-dirty", err)
+        self.assertFalse((self.repo / "work").exists())
+        code, _out, err = self.cli("--single", "--allow-dirty")
+        self.assertEqual(code, 0, err)
+        self.assertTrue((self.repo / "work/releases/0.1.0" / SINGLE_ZIP).is_file())
+        self.assertTrue((self.repo / "work/releases/0.1.0" / SHA_NAME).is_file())
+
+    def test_extract_check_scratch_is_validated_before_the_single_zip_is_built(self):
+        busy = self.tmp / "busy"
+        busy.mkdir()
+        (busy / "old.txt").write_text("x")
+        out = self.tmp / "releases"
+        code, stdout, err = self.cli("--single", "--allow-dirty", "--out", str(out), "--extract-check", str(busy))
+        self.assertEqual(code, 1)
+        self.assertIn("scratch", err)
+        self.assertNotIn("RELEASE_ZIPS_BUILT", stdout)
+        self.assertFalse(out.exists())
+
+    def test_verify_only_fails_on_a_tampered_single_zip(self):
+        out = self.tmp / "releases"
+        self.assertEqual(self.cli("--single", "--allow-dirty", "--out", str(out))[0], 0)
+        path = out / SINGLE_ZIP
+        data = bytearray(path.read_bytes())
+        data[len(data) // 2] ^= 0x01
+        path.write_bytes(bytes(data))
+        code, _out, err = self.cli("--verify-only", str(out))
+        self.assertEqual(code, 1)
+        self.assertIn("ERROR", err)
+
+
+class ForcedSwapTests(FakeRepoCase):
+    """The commit phase of build_release, where the previous release is replaced: a failed forced rebuild changes
+    nothing in any combination of layouts (finished files, stale .partial files, a locked previous file), and a
+    previous file that cannot be deleted once the new set is in place never spoils that set."""
+
+    PART3 = "maschine-ArenaMapPort-0.1.0-part3of4-bay5.zip"
+    STALE = ("maschine-ArenaMapPort-0.1.0.zip.partial",  # the single layout's own in-progress name
+             "maschine-ArenaMapPort-0.1.0-part2of4-equator.zip.partial",  # a multi-part leftover of this part count
+             "maschine-ArenaMapPort-0.1.0-part2of5-equator.zip.partial",  # ... of an older part count
+             "maschine-ArenaMapPort-0.1.0.sha256.partial")
+
+    def setUp(self):
+        super().setUp()
+        self.pin_released_maps()
+        self.counter = 0
+
+    @staticmethod
+    def locked(should_fail):
+        """os.replace failing like a file held open by 7-Zip, a virus scan or an upload still reading it: the
+        renames `should_fail(source name, target name)` selects raise PermissionError."""
+        real = os.replace
+
+        def replace(src, dst, *args, **kwargs):
+            if should_fail(Path(src).name, Path(dst).name):
+                raise PermissionError(13, "The process cannot access the file because it is being used by another "
+                                          "process", str(src))
+            return real(src, dst, *args, **kwargs)
+
+        return patch.object(os, "replace", replace)
+
+    def change_dist(self):
+        """A different dist byte, so a new set that wrongly reached the directory could not equal the old one."""
+        self.counter += 1
+        self.dist.joinpath(SERVER, "db", "arena_bay5", "base.json").write_bytes(f"changed {self.counter}".encode())
+
+    @staticmethod
+    def into_place(name):
+        return lambda src, dst: src.endswith(".partial") and dst == name
+
+    # --- finding 1: a failing rename into place --------------------------------------------------------------
+
+    def test_a_failing_rename_into_place_leaves_no_partial_files_and_the_old_set_intact(self):
+        cases = (("single over single, the ZIP", True, True, self.into_place(SINGLE_ZIP)),
+                 ("single over single, the checksum", True, True, self.into_place(SHA_NAME)),
+                 ("single over parts", False, True, self.into_place(SINGLE_ZIP)),
+                 ("parts over single, the third part", True, False, self.into_place(self.PART3)),
+                 ("parts over parts, the third part", False, False, self.into_place(self.PART3)),
+                 ("parts over parts, the checksum", False, False, self.into_place(SHA_NAME)))
+        for label, old_single, new_single, fail in cases:
+            with self.subTest(label):
+                name = f"out{self.counter}"
+                old = self.build(name, single=old_single)
+                before = snapshot(old.out_dir)
+                self.change_dist()
+                with self.locked(fail):
+                    with self.assertRaises(OSError):
+                        self.build(name, single=new_single, force=True)
+                self.assertEqual(snapshot(old.out_dir), before, "the failed swap changed the directory")
+                self.assertEqual(release.verify_set(old.out_dir, log=quiet).layout,
+                                 "single" if old_single else "parts")
+
+    def test_a_failed_swap_says_so_and_a_retry_goes_through(self):
+        old = self.build(single=True)
+        before = snapshot(old.out_dir)
+        self.change_dist()
+        logged = []
+        with self.locked(self.into_place(SINGLE_ZIP)):
+            with self.assertRaises(OSError):
+                self.build(single=True, force=True, log=logged.append)
+        self.assertTrue(any("previous release was left as it was" in line for line in logged), logged)
+        self.assertEqual(snapshot(old.out_dir), before)
+        self.build(single=True, force=True)
+        self.assertEqual(sorted(p.name for p in old.out_dir.iterdir()), sorted([SINGLE_ZIP, SHA_NAME]))
+        self.assertNotEqual(snapshot(old.out_dir)[SINGLE_ZIP], before[SINGLE_ZIP])
+
+    # --- finding 2: a locked or undeletable previous file ----------------------------------------------------
+
+    def test_a_locked_previous_file_stops_the_swap_before_anything_changes(self):
+        for label, old_single, new_single, locked in (
+                ("part 3 of the old parts, new single", False, True, self.PART3),
+                ("the old single ZIP, new parts", True, False, SINGLE_ZIP),
+                ("the old checksum, new single", False, True, SHA_NAME)):
+            with self.subTest(label):
+                name = f"out{self.counter}"
+                old = self.build(name, single=old_single)
+                before = snapshot(old.out_dir)
+                self.change_dist()
+                with self.locked(lambda src, dst: src == locked):
+                    with self.assertRaises(release.PackagingError) as caught:
+                        self.build(name, single=new_single, force=True)
+                self.assertIn(locked, str(caught.exception))
+                self.assertIn("another program", str(caught.exception))
+                self.assertEqual(snapshot(old.out_dir), before, "no new ZIP, no .partial, no .superseded may remain")
+                self.assertEqual(release.verify_set(old.out_dir, log=quiet).layout,
+                                 "single" if old_single else "parts")
+                new = self.build(name, single=new_single, force=True)  # the lock is gone: the same command works
+                self.assertEqual(release.verify_set(new.out_dir, log=quiet).layout,
+                                 "single" if new_single else "parts")
+                self.assertEqual(sorted(p.name for p in new.out_dir.iterdir()),
+                                 sorted([p.name for p in new.zips] + [SHA_NAME]))
+
+    def test_a_previous_file_that_cannot_be_deleted_afterwards_does_not_spoil_the_new_set(self):
+        real_unlink = Path.unlink
+
+        def unlink(path, missing_ok=False):
+            if path.name == self.PART3 + ".superseded":
+                raise PermissionError(13, "The process cannot access the file", str(path))
+            return real_unlink(path, missing_ok=missing_ok)
+
+        old = self.build(single=False)
+        self.change_dist()
+        logged = []
+        with patch.object(Path, "unlink", unlink):
+            new = self.build(single=True, force=True, log=logged.append)
+        self.assertEqual([p.name for p in new.out_dir.glob("*.zip")], [SINGLE_ZIP])  # nothing of the old set is a ZIP
+        verified = release.verify_set(old.out_dir, log=quiet)  # ... so the directory verifies as the new release
+        self.assertEqual((verified.layout, [p.id for p in verified.parts]), ("single", ["full"]))
+        self.assertEqual([p.name for p in new.out_dir.iterdir() if p.name.endswith(".superseded")],
+                         [self.PART3 + ".superseded"])
+        warnings = [line for line in logged if line.startswith("WARNING")]
+        self.assertEqual(len(warnings), 1, logged)
+        self.assertIn(self.PART3 + ".superseded", warnings[0])
+        self.assertIn("new release is complete", warnings[0])
+
+    def test_the_command_line_reports_success_when_only_the_cleanup_of_old_files_fails(self):
+        out = self.tmp / "releases"
+        self.assertEqual(self.cli("--allow-dirty", "--out", str(out))[0], 0)
+        real_unlink = Path.unlink
+
+        def unlink(path, missing_ok=False):
+            if path.name.endswith(".superseded"):
+                raise PermissionError(13, "The process cannot access the file", str(path))
+            return real_unlink(path, missing_ok=missing_ok)
+
+        with patch.object(Path, "unlink", unlink):
+            code, stdout, err = self.cli("--single", "--allow-dirty", "--force", "--out", str(out),
+                                         "--extract-check", str(self.tmp / "scratch"))
+        self.assertEqual(code, 0, err)
+        self.assertIn("RELEASE_ZIPS_BUILT", stdout)
+        self.assertIn("WARNING", stdout)
+        self.assertIn("extract-check OK", stdout)
+        self.assertEqual([p.name for p in out.glob("*.zip")], [SINGLE_ZIP])
+
+    # --- finding 3: stale .partial files belong to the previous release ------------------------------------------
+
+    def failures(self):
+        """(label, exception raised, a context that makes the build fail after it started writing)."""
+        victim = f"{SERVER}/db/arena_bay5/base.json"
+        grown = [release.DistFile(f.rel, f.path, f.size + 1) if f.rel == victim else f for f in self.scan()]
+        yield "dist file changing while packaging", release.PackagingError, patch.object(
+            release, "scan_dist", return_value=grown)
+        yield "Ctrl-C while writing", KeyboardInterrupt, patch.object(release, "write_part",
+                                                                     side_effect=KeyboardInterrupt)
+        yield "a ZIP failing its check", release.VerificationError, patch.object(
+            release, "verify_zip", side_effect=release.VerificationError("boom"))
+        yield "a failing rename into place", OSError, self.locked(
+            lambda src, dst: src.endswith(".partial") and dst.endswith((".zip", ".sha256")))
+
+    def test_stale_partials_survive_a_failed_forced_build_and_go_after_a_successful_one(self):
+        for new_single in (True, False):
+            for old_layout in (None, "single", "parts"):
+                with self.subTest(new_single=new_single, old_layout=old_layout):
+                    name = f"out{self.counter}"
+                    out = self.tmp / name
+                    if old_layout:
+                        self.build(name, single=(old_layout == "single"))
+                        self.change_dist()
+                    out.mkdir(exist_ok=True)
+                    for stale in self.STALE:
+                        (out / stale).write_bytes(b"crashed " + stale.encode())
+                    before = snapshot(out)
+                    for label, expected, failing in self.failures():
+                        with self.subTest(failure=label), failing:
+                            with self.assertRaises(expected):
+                                self.build(name, single=new_single, force=True)
+                        self.assertEqual(snapshot(out), before, f"{label}: the previous files were touched")
+                    result = self.build(name, single=new_single, force=True)
+                    self.assertEqual(sorted(p.name for p in out.iterdir()),
+                                     sorted([p.name for p in result.zips] + [SHA_NAME]),
+                                     "stale .partial files and the previous release go once the new set is in place")
+                    self.assertEqual(release.verify_set(out, log=quiet).layout,
+                                     "single" if new_single else "parts")
+                    self.counter += 1
+
+
+class DamagedSingleSetTests(FakeRepoCase):
+    """Verification of single-layout sets damaged in ways that keep the checksum honest: the ZIP is rewritten and
+    its one SHA-256 line refreshed, so only the intended inconsistency is left for the verifier to find."""
+
+    def setUp(self):
+        super().setUp()
+        self.pin_released_maps()
+        self.result = self.build(single=True)
+        self.copy = self.tmp / "copy"
+        shutil.copytree(self.result.out_dir, self.copy)
+
+    def rewrite(self, mutate=None):
+        path = self.copy / SINGLE_ZIP
+        entries = read_zip(path)
+        manifest = json.loads(entries.pop(FULL_MANIFEST))
+        if mutate is not None:
+            mutate(entries, manifest)
+        entries[FULL_MANIFEST] = (json.dumps(manifest, indent=2) + "\n").encode("utf-8")
+        path.unlink()
+        with zipfile.ZipFile(path, "w", zipfile.ZIP_DEFLATED) as archive:
+            for name, data in entries.items():
+                archive.writestr(name, data)
+        (self.copy / SHA_NAME).write_text(f"{hashlib.sha256(path.read_bytes()).hexdigest()}  {SINGLE_ZIP}\n",
+                                          encoding="ascii", newline="\n")
+
+    @staticmethod
+    def drop(entries, manifest, name):
+        entries.pop(name)
+        removed = next(e for e in manifest["entries"] if e["path"] == name)
+        manifest["entries"] = [e for e in manifest["entries"] if e["path"] != name]
+        if removed["origin"] == "dist":  # keep the manifest's own counters honest
+            manifest["parts"][0]["dist_files"] -= 1
+            manifest["parts"][0]["raw_bytes"] -= removed["size"]
+
+    def assert_rejected(self, fragment):
+        with self.assertRaises(release.VerificationError) as caught:
+            release.verify_set(self.copy, log=quiet)
+        self.assertIn(fragment, str(caught.exception))
+
+    def test_the_untouched_copy_verifies(self):
+        self.rewrite()  # the rewrite helper itself must not break a good set
+        self.assertEqual(release.verify_set(self.copy, log=quiet).layout, "single")
+
+    def test_every_maps_bundles_and_database_entry_must_be_present(self):
+        for name in (f"{PLUGIN}/bundles/arena_airpit_navmesh.bundle", f"{PLUGIN}/bundles/arena_equator_scenes.bundle",
+                     f"{PLUGIN}/bundles/arena_bay5_preset.bundle", f"{SERVER}/db/arena_bay5/base.json",
+                     f"{SERVER}/db/arena_equator/base.json"):
+            with self.subTest(name=name):
+                shutil.rmtree(self.copy)
+                shutil.copytree(self.result.out_dir, self.copy)
+                self.rewrite(lambda entries, manifest: self.drop(entries, manifest, name))
+                self.assert_rejected(name)
+
+    def test_a_single_zip_without_any_map_is_refused(self):
+        def strip_maps(entries, manifest):
+            for name in [n for n in entries if release.MAP_DATA_RE.fullmatch(n)]:
+                self.drop(entries, manifest, name)
+        self.rewrite(strip_maps)
+        self.assert_rejected("carries no map")
+
+    def drop_map(self, key):
+        """Every map-data entry of one released map (3 bundles + db/<key>/base.json), counters kept honest."""
+        def mutate(entries, manifest):
+            names = [n for n in entries if (m := release.MAP_DATA_RE.fullmatch(n)) and key in m.groups()]
+            self.assertEqual(len(names), 4, names)
+            for name in names:
+                self.drop(entries, manifest, name)
+        self.rewrite(mutate)
+
+    def test_a_whole_released_map_missing_from_the_zip_is_refused(self):
+        """The map list used to come from the archive's own entries, so a ZIP that lost a complete map (all three
+        bundles and its database entry) verified: nothing in it mentioned the map any more."""
+        for key in ("arena_bay5", "arena_airpit", "arena_equator"):
+            with self.subTest(key=key):
+                shutil.rmtree(self.copy)
+                shutil.copytree(self.result.out_dir, self.copy)
+                self.drop_map(key)
+                with self.assertRaises(release.VerificationError) as caught:
+                    release.verify_set(self.copy, log=quiet)
+                message = str(caught.exception)
+                self.assertIn(f"map {key} lacks", message)
+                self.assertIn(f"bundles/{key}_scenes.bundle", message)
+                self.assertIn(f"db/{key}/base.json", message)
+
+    def test_the_whole_map_guard_reaches_the_command_line(self):
+        self.drop_map("arena_bay5")
+        code, stdout, err = self.cli("--verify-only", str(self.copy))
+        self.assertEqual(code, 1)
+        self.assertNotIn("RELEASE_ZIPS_VERIFIED", stdout)
+        self.assertIn("map arena_bay5 lacks", err)
+
+    def test_the_expected_map_list_is_injectable(self):
+        self.drop_map("arena_bay5")
+        two = ["arena_equator", "arena_airpit"]
+        self.assertEqual(release.verify_set(self.copy, maps=two, log=quiet).layout, "single")
+        self.assert_rejected("arena_bay5")  # the default (released) list still wants all three
+        for wanted in (two + ["arena_prison"], ["arena_bay5"]):
+            with self.assertRaises(release.VerificationError) as caught:
+                release.verify_set(self.copy, maps=wanted, log=quiet)
+            self.assertIn(f"map {wanted[-1]} lacks", str(caught.exception))
+        # a map the ZIP carries but the expected list does not name must still be complete
+        shutil.rmtree(self.copy)
+        shutil.copytree(self.result.out_dir, self.copy)
+        name = f"{PLUGIN}/bundles/arena_airpit_navmesh.bundle"
+        self.rewrite(lambda entries, manifest: self.drop(entries, manifest, name))
+        with self.assertRaises(release.VerificationError) as caught:
+            release.verify_set(self.copy, maps=["arena_equator", "arena_bay5"], log=quiet)
+        self.assertIn(name, str(caught.exception))
+
+    def test_a_single_zip_built_from_other_maps_verifies_against_those_maps(self):
+        spec2 = release.load_spec(self.repo, maps=MAPS[:2])
+        dist2 = self.tmp / "dist2"
+        write_tree(dist2, fake_dist_files(MAPS[:2]))
+        built = release.build_release(spec2, dist2, self.tmp / "out2", self.repo, commit=COMMIT, log=quiet,
+                                      single=True)
+        keys = [m.key for m in spec2.maps]
+        self.assertEqual(release.verify_set(built.out_dir, maps=keys, log=quiet).layout, "single")
+        with self.assertRaises(release.VerificationError) as caught:  # against the 3 released maps, AirPit is gone
+            release.verify_set(built.out_dir, log=quiet)
+        self.assertIn("map arena_airpit lacks", str(caught.exception))
+
+    def test_the_generated_readme_and_notices_must_be_present(self):
+        for name in (f"{PLUGIN}/README.txt", f"{PLUGIN}/THIRD-PARTY-NOTICES.txt", f"{SERVER}/THIRD-PARTY-NOTICES.txt"):
+            with self.subTest(name=name):
+                shutil.rmtree(self.copy)
+                shutil.copytree(self.result.out_dir, self.copy)
+                self.rewrite(lambda entries, manifest: self.drop(entries, manifest, name))
+                self.assert_rejected(f"generated entry missing: {name}")
+
+    def test_the_manifest_must_say_full_1_of_1(self):
+        cases = (("does not match its part id", lambda e, m: m["part"].update(id="core")),
+                 ("part list is inconsistent", lambda e, m: m["part"].update(of=2)),
+                 ("part list is inconsistent", lambda e, m: m["parts"].append(dict(m["parts"][0], index=2))),
+                 ("manifest names", lambda e, m: m["part"].update(zip="other.zip")))
+        for fragment, mutate in cases:
+            with self.subTest(fragment=fragment):
+                shutil.rmtree(self.copy)
+                shutil.copytree(self.result.out_dir, self.copy)
+                self.rewrite(mutate)
+                self.assert_rejected(fragment)
+
+    def test_a_manifest_naming_a_multi_part_id_is_refused_even_when_consistent(self):
+        """parts/core.json inside the file the .sha256 calls the single ZIP: not the single layout."""
+        path = self.copy / SINGLE_ZIP
+        entries = read_zip(path)
+        manifest = json.loads(entries.pop(FULL_MANIFEST))
+        manifest["part"]["id"] = "core"
+        manifest["parts"][0]["id"] = "core"
+        entries[f"{PLUGIN}/parts/core.json"] = (json.dumps(manifest, indent=2) + "\n").encode("utf-8")
+        path.unlink()
+        with zipfile.ZipFile(path, "w", zipfile.ZIP_DEFLATED) as archive:
+            for name, data in entries.items():
+                archive.writestr(name, data)
+        (self.copy / SHA_NAME).write_text(f"{hashlib.sha256(path.read_bytes()).hexdigest()}  {SINGLE_ZIP}\n",
+                                          encoding="ascii", newline="\n")
+        self.assert_rejected("manifest part id/index/count disagree")
+
+    def test_malformed_single_checksum_files_are_refused(self):
+        digest = hashlib.sha256((self.copy / SINGLE_ZIP).read_bytes()).hexdigest()
+        sha = self.copy / SHA_NAME
+        cases = {
+            "duplicate part": f"{digest}  {SINGLE_ZIP}\n{digest}  {SINGLE_ZIP}\n",
+            "malformed line": f"{digest.upper()}  {SINGLE_ZIP}\n",
+            "missing final newline": f"{digest}  {SINGLE_ZIP}",
+            "empty": "",
+            # a second line leaves the single layout: the one ZIP is then not part 1 of 2
+            "is not part 1 of 2": f"{digest}  {SINGLE_ZIP}\n{digest}  maschine-ArenaMapPort-0.1.0-part2of2-x.zip\n",
+        }
+        for label, text in cases.items():
+            with self.subTest(label=label):
+                sha.write_bytes(text.encode("ascii"))
+                self.assert_rejected(label)
+
+    def test_a_checksum_naming_another_zip_is_not_the_single_layout(self):
+        digest = hashlib.sha256((self.copy / SINGLE_ZIP).read_bytes()).hexdigest()
+        (self.copy / SHA_NAME).write_text(f"{digest}  maschine-ArenaMapPort-0.9.9.zip\n", encoding="ascii",
+                                          newline="\n")
+        with self.assertRaises(release.VerificationError):
+            release.verify_set(self.copy, log=quiet)
 
 
 class GitInvocationTests(FakeRepoCase):

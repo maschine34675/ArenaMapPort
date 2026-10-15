@@ -1,51 +1,80 @@
 #!/usr/bin/env python3
-"""Split the staged distribution (dist/) into the multi-part release ZIPs.
+"""Package the staged distribution (dist/) as release ZIP(s): ONE ZIP (--single) or a multi-part set.
 
 dist/ holds two install roots, `BepInEx/plugins/maschine-ArenaMapPort/...` (client) and
-`SPT_Runtime/user/mods/ArenaMapPort/...` (server). Together they are far larger than the 2 GiB a single
-ZIP can safely carry through the release channels, so the release is cut into parts that install by extracting
-EVERY part into the SPT root:
+`SPT_Runtime/user/mods/ArenaMapPort/...` (server). Both layouts install by extracting into the SPT root.
 
-    part1ofN-core         client DLL, server DLL, original map descriptions, selection artwork, README, notices
-    part2ofN-<map stem>   one part per released map: bundles, db/<key>/base.json, acoustics, AI sidecar,
-                          flares, water, loading screens, overview map, shader sidecar, banner
+Two layouts, one classification, one verifier:
+
+  --single   (the release form the user chose; about 2.1 GiB, hosted on Pixeldrain, not GitHub)
+      maschine-ArenaMapPort-<version>.zip     EVERY dist file, the generated README.txt and
+                                              THIRD-PARTY-NOTICES.txt entries, and the manifest
+                                              BepInEx/plugins/maschine-ArenaMapPort/parts/full.json
+                                              (part index 1 of 1, id "full")
+      maschine-ArenaMapPort-<version>.sha256  one line: '<sha256>  <zip name>'
+      The 2**31 per-ZIP size gate does NOT apply here: it exists because GitHub-style release channels cap
+      a single file near 2 GiB, while Pixeldrain takes multi-GB files. The final size is printed instead.
+      allowZip64 stays on, so entries or an archive beyond 4 GiB would still be written correctly.
+
+  (default)  the multi-part layout, kept available for channels with a file size cap. The release is cut into
+      parts that install by extracting EVERY part into the SPT root:
+
+      part1ofN-core         client DLL, server DLL, original map descriptions, selection artwork, README, notices
+      part2ofN-<map stem>   one part per released map: bundles, db/<key>/base.json, acoustics, AI sidecar,
+                            flares, water, loading screens, overview map, shader sidecar, banner
+
+      maschine-ArenaMapPort-<version>-part<i>of<N>-<id>.zip     one per part
+      maschine-ArenaMapPort-<version>.sha256                    '<sha256>  <zip name>' per part, in part order
 
 The released maps and their order come from tools/validate/validate_map_descriptors.py
 (RELEASE_MAP_KEYS / RELEASE_MAP_NAMES). The version comes from the `<Version>` of both csproj files, which must
-agree (`--version` overrides). Outputs, under `--out` (default work/releases/<version>/):
+agree (`--version` overrides). Outputs land under `--out` (default work/releases/<version>/).
 
-    maschine-ArenaMapPort-<version>-part<i>of<N>-<id>.zip     one per part
-    maschine-ArenaMapPort-<version>.sha256                    '<sha256>  <zip name>' per part, in part order
-
-Classification is strict and anchored: every dist file must match exactly one rule (see build_rules). A file
-that matches none (a parked map's output such as arena_airpit2_scenes.bundle or ai/airpit2.ai.json, a stray
-.pdb or backup, a Thumbs.db or .bak inside an acoustics / flares / water / dynamicmaps folder) or more than one
-is a hard error, never a silent skip; so is a directory that cannot be listed. The rules pin the leaf names the
-build stages, and required_files() demands everything every released map must carry (bundles, database entry,
-shader sidecar, AI sidecar, banner, acoustic graph, first loading screen); only flares, water and the overview
-map are optional per map. Every part carries
-BepInEx/plugins/maschine-ArenaMapPort/parts/<id>.json, a schema-1 manifest naming ALL parts plus this part's
-own entries with size and SHA-256, so any single ZIP says which others complete the install. The core part adds
-README.txt and THIRD-PARTY-NOTICES.txt (client and server root); the notices are cut from the MIT blocks of
-THIRD-PARTY-NOTICES.md.
+Classification is strict and anchored and identical for both layouts: every dist file must match exactly one
+rule (see build_rules). A file that matches none (a parked map's output such as arena_airpit2_scenes.bundle or
+ai/airpit2.ai.json, a stray .pdb or backup, a Thumbs.db or .bak inside an acoustics / flares / water /
+dynamicmaps folder) or more than one is a hard error, never a silent skip; so is a directory that cannot be
+listed. The rules pin the leaf names the build stages, and required_files() demands everything every released
+map must carry (bundles, database entry, shader sidecar, AI sidecar, banner, acoustic graph, first loading
+screen); only flares, water and the overview map are optional per map. Every ZIP carries
+BepInEx/plugins/maschine-ArenaMapPort/parts/<id>.json, a schema-1 manifest naming ALL parts (one, in the single
+layout) plus this ZIP's own entries with size and SHA-256, so any ZIP says which others complete the install.
+The core part (or the single ZIP) adds README.txt and THIRD-PARTY-NOTICES.txt (client and server root); the
+notices are cut from the MIT blocks of THIRD-PARTY-NOTICES.md. The manifest is always the last entry.
 
 Compression is chosen per file: ZIP_STORED for .jpg and for any file whose probe (deflate level 6 over the first
 8 MiB) gains less than 3 %, ZIP_DEFLATED level 6 otherwise. Timestamps are fixed (1980-01-01) so identical inputs
-give identical ZIP bytes. Every part must end up below 2**31 bytes.
+give identical ZIP bytes. Multi-part: every part must end up below 2**31 bytes; single: no size gate.
 
 Modes:
-    --plan                    print the partition and size estimates, write nothing
-    (default)                 build the ZIPs and the .sha256 (clean git tree required unless --allow-dirty;
-                              an allowed dirty tree is recorded as '<commit>+dirty' in every part manifest)
-    --force                   replace an existing release of this version. The previous set is only touched
-                              after the new one is complete and verified: a failed rebuild changes nothing, and
-                              parts of an older part count are removed once the new set is in place.
-    --verify-only <dir>       re-hash existing parts against the .sha256, check every part manifest, the size
-                              gate and the partition invariant (each map's bundles and database entry travel
-                              together in that map's part, nowhere else)
-    --extract-check <scratch> after building (or after --verify-only): extract all parts into an EMPTY scratch
-                              directory and compare byte for byte with dist/, ignoring generated entries. The
-                              scratch directory is validated before anything is built.
+    --plan                    print the partition (or the one archive) and size estimates, write nothing
+    (default)                 build the multi-part ZIPs and the .sha256 (clean git tree required unless
+                              --allow-dirty; an allowed dirty tree is recorded as '<commit>+dirty' in every
+                              manifest)
+    --single                  build the single-ZIP layout instead; combines with --plan, --force, --allow-dirty,
+                              --out, --version and --extract-check
+    --force                   replace an existing release of this version, in EITHER layout. The previous files
+                              of this version (both layouts, finished or .partial, any part count) are only
+                              touched after the new set is complete and verified: they are then renamed to
+                              '<name>.superseded', the new set is renamed into place and the renamed copies are
+                              deleted. Any failure before that point (a locked old file, a failing rename, Ctrl-C)
+                              removes the new files and renames the old ones back, so a failed rebuild changes
+                              nothing and leaves no .partial file. A superseded copy that cannot be deleted at the
+                              very end is reported as a warning and is harmless (it is not a release ZIP).
+                              Without --force any existing release of this version in the output directory,
+                              of either layout, is refused.
+    --verify-only <dir>       re-hash the existing ZIP(s) against the .sha256 and check every manifest. The layout
+                              is detected from the .sha256 (one line naming <package>-<version>.zip = single).
+                              Multi-part also checks the size gate and the partition invariant (each map's
+                              bundles and database entry travel together in that map's part, nowhere else);
+                              single checks that the one archive carries the three bundles and db/<key>/base.json
+                              of EVERY RELEASED map (RELEASE_MAP_KEYS, not just the maps it happens to mention,
+                              so a ZIP that lost a whole map fails) plus the generated README and notices.
+                              Cannot be combined with --single.
+    --extract-check <scratch> after building (or after --verify-only): extract all ZIPs (the one ZIP, or every
+                              part) into an EMPTY scratch directory and compare byte for byte with dist/,
+                              ignoring generated entries. The scratch directory is validated before anything
+                              is built.
 
 Nothing here touches dist/ or any SPT install; the only writes are the output directory and the scratch
 directory (git runs with --no-optional-locks, so even the index is left alone). BSG-derived bytes never enter
@@ -76,6 +105,11 @@ PACKAGE = "maschine-ArenaMapPort"
 PLUGIN_ROOT = "BepInEx/plugins/maschine-ArenaMapPort"
 SERVER_ROOT = "SPT_Runtime/user/mods/ArenaMapPort"
 CORE_ID = "core"
+# Part id of the single-ZIP layout: its manifest is parts/full.json (index 1 of 1). Reserved like CORE_ID: a map
+# stem may be neither.
+FULL_ID = "full"
+LAYOUT_PARTS = "parts"
+LAYOUT_SINGLE = "single"
 # Equator keeps its pre-generalisation sidecar name; every other map uses material-shaders.<key>.json
 # (ShaderRebind.cs, ArenaMapPort.Client.csproj ArenaMapPortStageWpOutputs).
 LEGACY_SHADER_SIDECAR_KEY = "arena_equator"
@@ -191,8 +225,8 @@ def load_spec(repo: Path, version: str | None = None, maps=None) -> ReleaseSpec:
             raise PackagingError(f"unexpected map key {key!r}")
         releases.append(MapRelease(key, key.removeprefix("arena_"), display))
     stems = [m.stem for m in releases]
-    if len(set(stems)) != len(stems) or CORE_ID in stems:
-        raise PackagingError(f"map stems must be unique and not {CORE_ID!r}: {stems}")
+    if len(set(stems)) != len(stems) or CORE_ID in stems or FULL_ID in stems:
+        raise PackagingError(f"map stems must be unique and not {CORE_ID!r} or {FULL_ID!r}: {stems}")
     return ReleaseSpec(version, tuple(releases), f"{PLUGIN_ROOT}/{names['client']}.dll",
                        f"{SERVER_ROOT}/{names['server']}.dll")
 
@@ -366,6 +400,29 @@ def partition_dist(files, spec: ReleaseSpec, rules=None) -> list:
             for i, part_id in enumerate(ids, 1)]
 
 
+def single_zip_name(version: str) -> str:
+    return f"{PACKAGE}-{version}.zip"
+
+
+def partition_single(files, spec: ReleaseSpec, rules=None) -> list:
+    """The single-ZIP layout: ONE PartPlan (index 1 of 1, id 'full') holding every dist file. The files first go
+    through partition_dist, so the strict classification (a stray or parked file is a hard error) and the
+    required_files demands are exactly those of the multi-part layout; only the grouping differs. The files stay
+    sorted by relative path, the order scan_dist produced, so the ZIP bytes are reproducible."""
+    everything = [f for part in partition_dist(files, spec, rules) for f in part.files]
+    everything.sort(key=lambda f: f.rel)
+    return [PartPlan(1, 1, FULL_ID, single_zip_name(spec.version), everything)]
+
+
+def is_single_layout(parts) -> bool:
+    return len(parts) == 1 and parts[0].id == FULL_ID
+
+
+def carries_generated(plan: PartPlan) -> bool:
+    """The core part and the single ZIP hold the generated README and notices; map parts hold only their manifest."""
+    return plan.id in (CORE_ID, FULL_ID)
+
+
 # --------------------------------------------------------------------------------------------------------------
 # Compression choice
 # --------------------------------------------------------------------------------------------------------------
@@ -513,29 +570,50 @@ def notices_text(repo: Path) -> str:
 
 
 def install_instruction(parts) -> str:
+    if is_single_layout(parts):
+        return ("Close EFT and the SPT server, then extract this ZIP into the SPT root directory (the folder "
+                "that contains BepInEx and SPT_Runtime), merging folders and replacing existing ArenaMapPort files.")
     return (f"Close EFT and the SPT server, then extract ALL {len(parts)} parts of this release into the SPT "
             "root directory (the folder that contains BepInEx and SPT_Runtime), merging folders and replacing "
             "existing ArenaMapPort files. The parts do not overlap and can be extracted in any order.")
 
 
 def readme_text(spec: ReleaseSpec, parts) -> str:
-    display = {m.stem: m.display for m in spec.maps}
-    lines = []
-    for p in parts:
-        what = ("plugin, server mod, original map descriptions, selection artwork, notices" if p.id == CORE_ID
-                else f"{display[p.id]} map data (bundles, NavMesh, server database entry, audio, art)")
-        lines.append(f"  {p.index} of {p.count}  {p.zip_name}\n         {what}")
+    """The generated README.txt. The multi-part wording is fixed; the single-ZIP layout replaces exactly the
+    three paragraphs that depend on it (what the release consists of, the extraction step, the verification)."""
     names = ", ".join(m.display for m in spec.maps)
+    sha_name = f"{PACKAGE}-{spec.version}.sha256"
+    if is_single_layout(parts):
+        intro = (f"This release is ONE ZIP: {parts[0].zip_name}. It holds the plugin, the server mod and the\n"
+                 f"data of every included map ({names}); there is nothing else to download.\n\n")
+        extract = ("2. Extract the ZIP into your SPT installation directory (the folder that contains\n"
+                   "   BepInEx and SPT_Runtime). Merge the folders and replace existing ArenaMapPort files\n"
+                   "   when prompted.\n")
+        verification = (f"Verification: {sha_name} lists the SHA-256 of the ZIP\n"
+                        "(Get-FileHash in PowerShell). BepInEx/plugins/maschine-ArenaMapPort/parts/full.json records\n"
+                        "the files it installed.\n\n")
+    else:
+        display = {m.stem: m.display for m in spec.maps}
+        lines = []
+        for p in parts:
+            what = ("plugin, server mod, original map descriptions, selection artwork, notices" if p.id == CORE_ID
+                    else f"{display[p.id]} map data (bundles, NavMesh, server database entry, audio, art)")
+            lines.append(f"  {p.index} of {p.count}  {p.zip_name}\n         {what}")
+        intro = (f"This release comes in {len(parts)} ZIP parts. Install ALL of them; a map is complete only with\n"
+                 "its own part and the core part.\n\n"
+                 f"{chr(10).join(lines)}\n\n")
+        extract = ("2. Extract EVERY part into your SPT installation directory (the folder that contains\n"
+                   "   BepInEx and SPT_Runtime). Merge the folders and replace existing ArenaMapPort files\n"
+                   "   when prompted. The parts do not overlap and can be extracted in any order.\n")
+        verification = (f"Verification: {sha_name} lists the SHA-256 of every part\n"
+                        "(Get-FileHash in PowerShell). BepInEx/plugins/maschine-ArenaMapPort/parts/ records, per part,\n"
+                        "the files it installed.\n\n")
     return (f"ArenaMapPort {spec.version}\n\n"
             "Target: SPT 4.1.x / EFT 0.16.9.5\n\n"
-            f"This release comes in {len(parts)} ZIP parts. Install ALL of them; a map is complete only with\n"
-            "its own part and the core part.\n\n"
-            f"{chr(10).join(lines)}\n\n"
+            + intro +
             "Installation\n"
             "1. Close the game and the SPT server.\n"
-            "2. Extract EVERY part into your SPT installation directory (the folder that contains\n"
-            "   BepInEx and SPT_Runtime). Merge the folders and replace existing ArenaMapPort files\n"
-            "   when prompted. The parts do not overlap and can be extracted in any order.\n"
+            + extract +
             "3. When upgrading a development build, also remove the former BepInEx/plugins/ArenaMapPort\n"
             "   folder (the plugin folder is now maschine-ArenaMapPort), the former\n"
             "   SPT_Runtime/user/mods/ArenaMapPort/db/base.json, and the development copies\n"
@@ -550,9 +628,7 @@ def readme_text(spec: ReleaseSpec, parts) -> str:
             "Settings: F12 exposes NaturalEquatorNight for a natural Equator midnight look on the next\n"
             "raid. DeveloperMode appears under Advanced and requires a restart. A fresh installation\n"
             "creates only the compact player configuration; existing user settings are preserved.\n\n"
-            "Verification: maschine-ArenaMapPort-" + spec.version + ".sha256 lists the SHA-256 of every part\n"
-            "(Get-FileHash in PowerShell). BepInEx/plugins/maschine-ArenaMapPort/parts/ records, per part,\n"
-            "the files it installed.\n\n"
+            + verification +
             "See THIRD-PARTY-NOTICES.txt for third-party software attribution.\n")
 
 
@@ -597,7 +673,7 @@ def estimate_parts(spec, parts, decisions, generated, commit, probe_bytes=PROBE_
         for f in plan.files:
             total += decisions[f.rel].estimate + zip_overhead(f.rel)
             entries.append({"path": f.rel, "size": f.size, "sha256": "0" * 64, "origin": "dist"})
-        own = generated if plan.id == CORE_ID else {}
+        own = generated if carries_generated(plan) else {}
         for name, data in own.items():
             total += decide_bytes(name, data, probe_bytes).estimate + zip_overhead(name)
             entries.append({"path": name, "size": len(data), "sha256": "0" * 64, "origin": "generated"})
@@ -613,16 +689,27 @@ def _size(n: int) -> str:
 
 
 def format_plan(spec, dist, commit, estimates, decisions, size_limit) -> str:
-    out = [f"ArenaMapPort release plan  version {spec.version}  parts {len(estimates)}",
-           f"  source commit {commit}",
-           f"  dist          {dist}",
-           f"  size limit    {size_limit:,} B per part"]
+    """The plan text. `size_limit=None` is the single-ZIP layout: one archive, no size gate."""
+    single = is_single_layout([est.plan for est in estimates])
+    if single:
+        out = [f"ArenaMapPort release plan  version {spec.version}  layout single (1 ZIP)",
+               f"  source commit {commit}",
+               f"  dist          {dist}",
+               "  size limit    none (single ZIP: Pixeldrain takes multi-GB files)"]
+    else:
+        out = [f"ArenaMapPort release plan  version {spec.version}  parts {len(estimates)}",
+               f"  source commit {commit}",
+               f"  dist          {dist}",
+               f"  size limit    {size_limit:,} B per part"]
     warnings = []
     total_raw = total_zip = total_files = 0
     for est in estimates:
         plan = est.plan
         out.append("")
-        out.append(f"part {plan.index} of {plan.count}  {plan.id}  ->  {plan.zip_name}")
+        if single:
+            out.append(f"single ZIP  {plan.id}  ->  {plan.zip_name}")
+        else:
+            out.append(f"part {plan.index} of {plan.count}  {plan.id}  ->  {plan.zip_name}")
         out.append(f"  dist files {len(plan.files)} (+{est.generated_count} generated)  raw {_size(est.raw_bytes)}"
                    f"  estimated zip {_size(est.estimated_zip)}")
         big = [f for f in plan.files if f.size > LARGE_FILE_BYTES]
@@ -632,7 +719,7 @@ def format_plan(spec, dist, commit, estimates, decisions, size_limit) -> str:
                 d = decisions[f.rel]
                 out.append(f"    {method_name(d.method):8} gain {d.gain * 100:5.1f}%  {f.size:>13,} B -> "
                            f"~{d.estimate:>13,} B  {f.rel}")
-        if est.estimated_zip >= size_limit:
+        if size_limit is not None and est.estimated_zip >= size_limit:
             warnings.append(f"part {plan.index} ({plan.id}) is estimated at {est.estimated_zip:,} B, "
                             f"not below the {size_limit:,} B limit")
         total_raw += est.raw_bytes
@@ -640,6 +727,8 @@ def format_plan(spec, dist, commit, estimates, decisions, size_limit) -> str:
         total_files += len(plan.files)
     out.append("")
     out.append(f"total: {total_files} dist files, raw {_size(total_raw)}, estimated zip {_size(total_zip)}")
+    if single:
+        out.append(f"estimated single ZIP: {total_zip / 2 ** 30:.2f} GiB")
     out.extend(f"WARNING: {w}" for w in warnings)
     return "\n".join(out)
 
@@ -688,7 +777,7 @@ def write_part(plan, parts, spec, commit, generated, decisions, dest: Path, prob
         for f in plan.files:
             size, digest = _write_file_entry(archive, f, decisions[f.rel].method)
             entries.append({"path": f.rel, "size": size, "sha256": digest, "origin": "dist"})
-        own = generated if plan.id == CORE_ID else {}
+        own = generated if carries_generated(plan) else {}
         for name in sorted(own):
             data = own[name]
             info = _write_bytes_entry(archive, name, data, decide_bytes(name, data, probe_bytes).method)
@@ -711,6 +800,7 @@ class BuildResult:
     zips: list       # Path
     sizes: list
     digests: list
+    layout: str = LAYOUT_PARTS
 
 
 def _is_within(path: Path, root: Path) -> bool:
@@ -724,27 +814,84 @@ def sha256_name(spec: ReleaseSpec) -> str:
 
 
 def other_parts_of_version(out_dir: Path, spec: ReleaseSpec, keep) -> list:
-    """ZIP parts (finished or .partial) of this version in out_dir that are not in `keep`: the leftovers of a
-    release with a different part count (a map added or removed within the same version)."""
+    """ZIPs (finished or .partial) of this version in out_dir that are not in `keep`, of EITHER layout: the
+    leftovers of a release with a different part count (a map added or removed within the same version) and the
+    other layout's files (the multi-part parts when a single ZIP is built, the single ZIP when parts are built)."""
     if not out_dir.is_dir():
         return []
     pattern = re.compile(re.escape(PACKAGE) + "-" + re.escape(spec.version)
-                         + r"-part[0-9]+of[0-9]+-[a-z0-9]+\.zip(?:\.partial)?")
+                         + r"(?:-part[0-9]+of[0-9]+-[a-z0-9]+)?\.zip(?:\.partial)?")
     keep = {p.name for p in keep}
     return sorted(p for p in out_dir.iterdir() if pattern.fullmatch(p.name) and p.name not in keep)
 
 
+SUPERSEDED_SUFFIX = ".superseded"
+
+
+class _Stash:
+    """The previous release, moved out of the way under '<name>.superseded' while the new set is built and put in
+    place: restore() gives every file back (a failed rebuild), discard() deletes the copies (a finished one).
+
+    Renaming instead of deleting is what makes --force a no-op on failure. A previous file that is locked (7-Zip, a
+    virus scan, an upload still reading it) fails its rename BEFORE any new file takes its place, so nothing is
+    half-replaced; and a file that cannot be deleted at the very end (discard) is a leftover named *.superseded,
+    which is not a release ZIP and so can neither be mistaken for part of the new set by verify_set nor block a
+    later build. A hard kill between two renames can leave *.superseded files behind; they are safe to delete."""
+
+    def __init__(self):
+        self.moved = []  # (original, aside), in the order they were moved
+
+    def aside(self, path: Path) -> None:
+        aside = Path(str(path) + SUPERSEDED_SUFFIX)
+        try:
+            os.replace(path, aside)
+        except OSError as exc:
+            raise PackagingError(f"cannot move the previous file {path.name} out of the way ({exc}); is it open in "
+                                 "another program? Close it and run again: nothing was changed") from exc
+        self.moved.append((path, aside))
+
+    def restore(self) -> list:
+        """Move everything back, newest first. Returns the *.superseded files that could not be moved back."""
+        stuck = []
+        for original, aside in reversed(self.moved):
+            try:
+                os.replace(aside, original)
+            except OSError:
+                stuck.append(aside)
+        self.moved = []
+        return stuck
+
+    def discard(self) -> list:
+        """Delete the moved copies. Returns the ones that could not be deleted."""
+        stuck = []
+        for _original, aside in self.moved:
+            try:
+                aside.unlink()
+            except FileNotFoundError:
+                pass
+            except OSError:
+                stuck.append(aside)
+        self.moved = []
+        return stuck
+
+
 def build_release(spec: ReleaseSpec, dist: Path, out_dir: Path, repo: Path, *, force: bool = False,
                   size_limit: int = SIZE_LIMIT, probe_bytes: int = PROBE_BYTES, commit: str | None = None,
-                  log=print) -> BuildResult:
-    """Write the parts as .partial files, check each, then rename everything into place. With `force`, only
-    stale .partial files are removed up front; an existing release stays untouched until the new set is complete
-    (os.replace overwrites atomically), so a failed rebuild is a no-op. Parts of an older part count are removed
-    last."""
+                  log=print, single: bool = False) -> BuildResult:
+    """Write the parts (or, with `single`, the one ZIP holding every dist file) as .partial files, check each,
+    then put everything in place. Without `force` any existing release of this version, of either layout, finished
+    or .partial, is refused. With `force` NOTHING of the previous release is deleted or replaced while the new set
+    is incomplete: the previous files (finished or stale .partial, either layout, any part count) are renamed to
+    '<name>.superseded' (see _Stash), the new set takes their place, and only then are the renamed copies deleted.
+    Any failure in between, including Ctrl-C and a rename that a locked file refuses, removes the new files and
+    gives the previous ones back, so a failed rebuild is a no-op. The one exception is a stale .partial file with
+    the same name as a file this build writes: it is renamed out of the way first (the build must create that
+    name) and given back on failure. `size_limit` gates every part of the multi-part layout; the single layout has
+    no size gate (Pixeldrain takes multi-GB files, GitHub-style channels are not the target)."""
     if _is_within(out_dir, dist):
         raise PackagingError(f"the output directory must not be inside dist: {out_dir}")
     files = scan_dist(dist)
-    parts = partition_dist(files, spec)
+    parts = partition_single(files, spec) if single else partition_dist(files, spec)
     commit = source_commit(repo) if commit is None else commit
     finals = [out_dir / p.zip_name for p in parts]
     partials = [Path(str(path) + ".partial") for path in finals]
@@ -758,35 +905,54 @@ def build_release(spec: ReleaseSpec, dist: Path, out_dir: Path, repo: Path, *, f
     generated = generated_core_entries(spec, parts, repo)
     decisions = {f.rel: decide_file(f, probe_bytes) for f in files}
     out_dir.mkdir(parents=True, exist_ok=True)
-    for leftover in partials + [sha_partial] + [p for p in other_counts if p.name.endswith(".partial")]:
-        if leftover.is_file():
-            leftover.unlink()
+    stash = _Stash()
+    placed = []  # new files already renamed into place
     sizes, digests = [], []
     try:
+        for stale in partials + [sha_partial]:  # the build creates these names; stale debris of them steps aside
+            if stale.is_file():
+                stash.aside(stale)
         for plan, partial in zip(parts, partials):
-            log(f"writing part {plan.index} of {plan.count} ({plan.id}): {len(plan.files)} files, "
-                f"{plan.raw_bytes:,} raw bytes")
+            log((f"writing single ZIP ({plan.id}): " if single else f"writing part {plan.index} of {plan.count} "
+                 f"({plan.id}): ") + f"{len(plan.files)} files, {plan.raw_bytes:,} raw bytes")
             write_part(plan, parts, spec, commit, generated, decisions, partial, probe_bytes)
             size = partial.stat().st_size
-            if size >= size_limit:
+            if not single and size >= size_limit:
                 raise PartTooLarge(f"{plan.zip_name} is {size:,} B, not below the {size_limit:,} B limit")
             verify_zip(partial, expected_name=plan.zip_name)
             sizes.append(size)
             digests.append(sha256_file(partial))
         sha_partial.write_text("".join(f"{d}  {p.zip_name}\n" for d, p in zip(digests, parts)),
                                encoding="ascii", newline="\n")
+        # The new set is complete and verified. Now the previous release makes room: finished files first, so a
+        # locked one stops the swap while nothing new is in place yet, then the stale files of other part counts
+        # and of the other layout.
+        for old in [p for p in finals + [sha_final] if p.is_file()] + [p for p in other_counts if p.is_file()]:
+            stash.aside(old)
+        for partial, final in zip(partials, finals):
+            os.replace(partial, final)
+            placed.append(final)
+        os.replace(sha_partial, sha_final)
+        placed.append(sha_final)
     except BaseException:
-        for leftover in partials + [sha_partial]:
-            if leftover.exists():
-                leftover.unlink()
+        for leftover in partials + [sha_partial] + placed:
+            try:
+                leftover.unlink(missing_ok=True)
+            except OSError:
+                pass  # best effort: restore() below overwrites a placed file, and the original error matters more
+        had_previous = bool(stash.moved)
+        stuck = stash.restore()
+        if stuck:
+            log("WARNING: could not give the previous release back; these copies hold it, rename them to their "
+                "original names: " + ", ".join(p.name for p in stuck))
+        elif had_previous:
+            log("the new set was not completed; the previous release was left as it was")
         raise
-    for partial, final in zip(partials, finals):
-        os.replace(partial, final)
-    os.replace(sha_partial, sha_final)
-    for old in other_counts:  # only now: the new set is complete, so nothing of the previous one is still needed
-        if old.name.endswith(".zip") and old.is_file():
-            old.unlink()
-    return BuildResult(out_dir, sha_final, parts, finals, sizes, digests)
+    for stuck_file in stash.discard():
+        log(f"WARNING: the new release is complete, but the superseded file {stuck_file.name} could not be deleted "
+            "(is it open in another program?). It is not part of the release and can be deleted by hand.")
+    return BuildResult(out_dir, sha_final, parts, finals, sizes, digests,
+                       LAYOUT_SINGLE if single else LAYOUT_PARTS)
 
 
 # --------------------------------------------------------------------------------------------------------------
@@ -899,7 +1065,8 @@ class VerifiedPart:
 class VerifiedSet:
     version: str
     sha256_path: Path
-    parts: list
+    parts: list  # VerifiedPart; exactly one (id 'full') in the single layout
+    layout: str = LAYOUT_PARTS
 
 
 def find_sha256_file(directory: Path, version: str | None) -> tuple:
@@ -944,10 +1111,43 @@ def check_partition(parts) -> None:
                 raise VerificationError(f"{part.zip_name} carries files that belong to part '{other.id}': {foreign}")
 
 
-def verify_set(directory: Path, version: str | None = None, log=print, size_limit: int | None = None) -> VerifiedSet:
-    """Re-hash every part against the .sha256 and check each part's manifest against its content and the others,
-    the per-part size gate and the partition invariant (see check_partition)."""
+MAP_DATA_RE = re.compile(re.escape(f"{PLUGIN_ROOT}/bundles/") + r"(arena_[a-z0-9]+)_(?:scenes|navmesh|preset)\.bundle"
+                         + "|" + re.escape(f"{SERVER_ROOT}/db/") + r"(arena_[a-z0-9]+)/base\.json")
+
+
+def check_single(part, expected_keys=()) -> None:
+    """The partition invariant of the single layout: the one archive is the core AND every map, so every released
+    map (`expected_keys`, e.g. 'arena_equator') carries its three bundles and its database entry, and so does every
+    other map the archive mentions (recognised by any bundle or db/<key>/base.json entry). At least one map must be
+    present, and the generated README and notices must be there. The released map list is NOT recorded in the ZIP,
+    so it has to come from the caller: deriving it from the archive's own entries would let a ZIP that lost a whole
+    map (all three bundles and the database entry) pass, because nothing in it would mention that map any more."""
+    entries = {e["path"]: e for e in part.manifest["entries"]}
+    found = {m.group(1) or m.group(2) for m in map(MAP_DATA_RE.fullmatch, entries) if m}
+    if not found:
+        raise VerificationError(f"{part.zip_name}: single ZIP carries no map (no bundles or db/<key>/base.json)")
+    for key in sorted(found | set(expected_keys)):
+        required = [f"{PLUGIN_ROOT}/bundles/{key}_{kind}.bundle" for kind in ("scenes", "navmesh", "preset")]
+        required.append(f"{SERVER_ROOT}/db/{key}/base.json")
+        missing = [name for name in required if name not in entries]
+        if missing:
+            raise VerificationError(f"{part.zip_name}: map {key} lacks {missing}")
+    for name in (README_NAME, CLIENT_NOTICES_NAME, SERVER_NOTICES_NAME):
+        if name not in entries or entries[name]["origin"] != "generated":
+            raise VerificationError(f"{part.zip_name}: generated entry missing: {name}")
+
+
+def verify_set(directory: Path, version: str | None = None, log=print, size_limit: int | None = None,
+               maps=None) -> VerifiedSet:
+    """Re-hash the ZIP(s) against the .sha256 and check each manifest against its content and the others. The
+    layout comes from the .sha256: exactly one line naming <package>-<version>.zip is the single layout (manifest
+    part id 'full', index 1 of 1, no size gate, see check_single); anything else is the multi-part layout with
+    the per-part size gate and the partition invariant (see check_partition). Leftover ZIPs of the OTHER layout
+    for this version, which the .sha256 does not list, are an error in both. `maps` is the list of map keys the
+    single ZIP must carry (default: the released maps of default_maps()); the multi-part layout names its maps in
+    its part file names and does not use it."""
     limit = SIZE_LIMIT if size_limit is None else size_limit
+    expected_maps = [key for key, _display in default_maps()] if maps is None else list(maps)
     version, sha_path = find_sha256_file(directory, version)
     text = sha_path.read_bytes().decode("ascii", errors="replace")
     lines = text.splitlines()
@@ -962,16 +1162,23 @@ def verify_set(directory: Path, version: str | None = None, log=print, size_limi
     names = [zip_name for _, zip_name in expected]
     if len(set(names)) != len(names):
         raise VerificationError(f"{sha_path.name}: duplicate part")
+    single_name = single_zip_name(version)
+    single = names == [single_name]
+    layout = LAYOUT_SINGLE if single else LAYOUT_PARTS
     part_re = re.compile(re.escape(PACKAGE) + "-" + re.escape(version) + r"-part([0-9]+)of([0-9]+)-([a-z0-9]+)\.zip")
     stray = sorted(p.name for p in directory.iterdir()
-                   if part_re.fullmatch(p.name) and p.name not in names)
+                   if (part_re.fullmatch(p.name) or p.name == single_name) and p.name not in names)
     if stray:
-        raise VerificationError(f"ZIP parts present but not listed in {sha_path.name}: {stray}")
+        raise VerificationError(f"ZIP files present but not listed in {sha_path.name}: {stray}")
     verified = []
     for position, (digest, zip_name) in enumerate(expected, 1):
-        match = part_re.fullmatch(zip_name)
-        if not match or int(match.group(1)) != position or int(match.group(2)) != len(expected):
-            raise VerificationError(f"{sha_path.name}: {zip_name} is not part {position} of {len(expected)}")
+        if single:
+            part_id, count = FULL_ID, 1
+        else:
+            match = part_re.fullmatch(zip_name)
+            if not match or int(match.group(1)) != position or int(match.group(2)) != len(expected):
+                raise VerificationError(f"{sha_path.name}: {zip_name} is not part {position} of {len(expected)}")
+            part_id, count = match.group(3), len(expected)
         path = directory / zip_name
         if not path.is_file():
             raise VerificationError(f"missing part: {zip_name}")
@@ -979,14 +1186,14 @@ def verify_set(directory: Path, version: str | None = None, log=print, size_limi
         if actual != digest:
             raise VerificationError(f"SHA-256 mismatch: {zip_name} (listed {digest}, actual {actual})")
         size = path.stat().st_size
-        if size >= limit:
+        if not single and size >= limit:
             raise VerificationError(f"{zip_name} is {size:,} B, not below the {limit:,} B limit")
         manifest = verify_zip(path)
-        if (manifest["part"]["id"] != match.group(3) or manifest["part"]["index"] != position
-                or manifest["part"]["of"] != len(expected)):
+        if (manifest["part"]["id"] != part_id or manifest["part"]["index"] != position
+                or manifest["part"]["of"] != count):
             raise VerificationError(f"{zip_name}: manifest part id/index/count disagree with the file name")
-        verified.append(VerifiedPart(position, match.group(3), zip_name, path, digest, size, manifest))
-        log(f"verified part {position} of {len(expected)}: {zip_name}")
+        verified.append(VerifiedPart(position, part_id, zip_name, path, digest, size, manifest))
+        log(f"verified single ZIP: {zip_name}" if single else f"verified part {position} of {len(expected)}: {zip_name}")
     first = verified[0].manifest
     seen = {}
     for part in verified:
@@ -1004,8 +1211,11 @@ def verify_set(directory: Path, version: str | None = None, log=print, size_limi
         raise VerificationError(f"manifest version {first['version']} differs from the file name version {version}")
     if [p["zip"] for p in first["parts"]] != names:
         raise VerificationError(f"{sha_path.name} and the part manifests list different ZIPs")
-    check_partition(verified)
-    return VerifiedSet(version, sha_path, verified)
+    if single:
+        check_single(verified[0], expected_maps)
+    else:
+        check_partition(verified)
+    return VerifiedSet(version, sha_path, verified, layout)
 
 
 def check_scratch(scratch: Path, dist: Path) -> None:
@@ -1018,7 +1228,8 @@ def check_scratch(scratch: Path, dist: Path) -> None:
 
 
 def extract_check(verified: VerifiedSet, dist: Path, scratch: Path, log=print) -> int:
-    """Extract all parts into an empty scratch directory and compare it byte for byte with dist/."""
+    """Extract all parts (the one ZIP, in the single layout) into an empty scratch directory and compare it byte
+    for byte with dist/. The generated entries (README, notices, parts/<id>.json) are ignored in both layouts."""
     check_scratch(scratch, dist)
     scratch.mkdir(parents=True, exist_ok=True)
     root = scratch.resolve()
@@ -1065,20 +1276,28 @@ def parse_args(argv=None):
     parser.add_argument("--out", help="output directory (default <repo>/work/releases/<version>)")
     parser.add_argument("--version", help="release version (default: the agreeing csproj <Version>)")
     parser.add_argument("--plan", action="store_true", help="print the partition and estimates; write nothing")
+    parser.add_argument("--single", action="store_true",
+                        help="build ONE ZIP holding every dist file instead of the multi-part set (the chosen "
+                             "release form; no size gate). Combines with --plan; not with --verify-only, which "
+                             "detects the layout itself")
     parser.add_argument("--force", action="store_true",
-                        help="replace an existing release of this version; the old files stay until the new set "
-                             "is complete, so a failed rebuild changes nothing")
+                        help="replace an existing release of this version, of either layout; the old files are "
+                             "only renamed once the new set is complete and are restored if anything fails, so a "
+                             "failed rebuild changes nothing")
     parser.add_argument("--allow-dirty", action="store_true",
                         help="skip the clean git tree gate (the manifests then record '<commit>+dirty')")
-    parser.add_argument("--verify-only", metavar="DIR", help="verify the parts in DIR instead of building")
+    parser.add_argument("--verify-only", metavar="DIR",
+                        help="verify the ZIP(s) in DIR instead of building (single or multi-part, detected "
+                             "from the .sha256)")
     parser.add_argument("--extract-check", metavar="SCRATCH",
-                        help="after building / verifying, extract all parts into this EMPTY directory and "
-                             "compare with dist")
+                        help="after building / verifying, extract the ZIP (or all parts) into this EMPTY "
+                             "directory and compare with dist")
     args = parser.parse_args(argv)
     if args.plan and (args.verify_only or args.extract_check or args.force):
         parser.error("--plan writes nothing and cannot be combined with --verify-only, --extract-check or --force")
-    if args.verify_only and (args.force or args.out):
-        parser.error("--verify-only reads an existing directory; --out and --force do not apply")
+    if args.verify_only and (args.force or args.out or args.single):
+        parser.error("--verify-only reads an existing directory and detects its layout from the .sha256; "
+                     "--out, --force and --single do not apply")
     return args
 
 
@@ -1095,7 +1314,8 @@ def run(args, repo: Path) -> int:
         check_scratch(Path(args.extract_check), dist)  # before any work, not after a finished build
     if args.verify_only:
         verified = verify_set(Path(args.verify_only), args.version)
-        print(f"RELEASE_ZIPS_VERIFIED {verified.version} ({len(verified.parts)} parts)")
+        shape = "single ZIP" if verified.layout == LAYOUT_SINGLE else f"{len(verified.parts)} parts"
+        print(f"RELEASE_ZIPS_VERIFIED {verified.version} ({shape})")
         warn_unidentified_source(verified)
         if args.extract_check:
             extract_check(verified, dist, Path(args.extract_check))
@@ -1103,22 +1323,26 @@ def run(args, repo: Path) -> int:
     spec = load_spec(repo, args.version, default_maps())
     if args.plan:
         files = scan_dist(dist)
-        parts = partition_dist(files, spec)
+        parts = partition_single(files, spec) if args.single else partition_dist(files, spec)
         commit = source_commit(repo)
         decisions = {f.rel: decide_file(f) for f in files}
         estimates = estimate_parts(spec, parts, decisions, generated_core_entries(spec, parts, repo), commit)
-        print(format_plan(spec, dist, commit, estimates, decisions, SIZE_LIMIT))
+        print(format_plan(spec, dist, commit, estimates, decisions, None if args.single else SIZE_LIMIT))
         return 0
     if not args.allow_dirty:
         require_clean_tree(repo)
     out = Path(args.out) if args.out else repo / "work" / "releases" / spec.version
-    result = build_release(spec, dist, out, repo, force=args.force,
+    result = build_release(spec, dist, out, repo, force=args.force, single=args.single,
                            commit=resolve_commit(repo, args.allow_dirty))
     for plan, path, size, digest in zip(result.parts, result.zips, result.sizes, result.digests):
         print(f"{path.name}  {size:,} B  {digest}")
+    if result.layout == LAYOUT_SINGLE:
+        print(f"single ZIP: {result.sizes[0] / 2 ** 30:.2f} GiB ({result.sizes[0]:,} B); the 2**31 per-ZIP size "
+              "gate does not apply to this layout (Pixeldrain takes multi-GB files)")
     print(f"wrote {result.sha256_path}")
     if args.extract_check:
-        extract_check(verify_set(out, spec.version), dist, Path(args.extract_check))
+        extract_check(verify_set(out, spec.version, maps=[m.key for m in spec.maps]), dist,
+                      Path(args.extract_check))
     print("RELEASE_ZIPS_BUILT")
     return 0
 
