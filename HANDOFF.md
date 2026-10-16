@@ -3,6 +3,26 @@
 Snapshot for whoever continues (human or agent). Verify the commits named here against `git log`; this file
 is updated by hand at each handover, it is not an automatic record. Read [AGENTS.md](AGENTS.md) first.
 
+## Update 2026-10-16 (evening) - RELEASE 0.2.1 published (first Forge version), 0.2.0 withdrawn
+
+User decision: 0.2.0 is deleted completely (GitHub release and tag `v0.2.0` removed, Pixeldrain files a9p4qcnD/Nj6acBoa and
+list Runugi6n deleted and verified gone; `docs/releases/v0.2.0.md` kept, marked withdrawn), 0.2.1 is the first version
+published on the Forge. 0.2.1 = the 0.2.0 bundle set plus `ScopeMaskRepairs`; only the two DLLs are rebuilt. Source commit
+`d26b7fd` (version bump in both csproj, `Plugin.cs`, `ModMetadata.cs`; `docs/releases/v0.2.1.md` self-contained with the
+changes since 0.1.0). Host acceptance GPU-2 with the release DLLs (19 plugins identical, server log
+`Mod: ArenaMapPort Version: 0.2.1`, client `[ArenaMapPort] 0.2.1 loaded`): AirPit PMC raid with bots as-online (7 PMCs
+spawned and fought, SAIN), ELCAN 4x on an MP7A1 sharp, 119 fps, max frame 14.7 ms, no plugin warning, ScopeMaskRenderer
+removed after the raid, hideout opens. Package `make_release_zips.py --single --extract-check`:
+`work/releases/0.2.1/maschine-ArenaMapPort-0.2.1.zip`, 2,149,176,941 B (2.00 GiB), SHA-256
+`c45ec0fdf0bc2be3509f5d1f40337185aacbefc356ea4284e240332953ab5369`, 67 files identical after extraction. Pixeldrain
+(5.8 MiB/s, server-side size and hash confirmed): list https://pixeldrain.com/l/BT2M3X6y, ZIP https://pixeldrain.com/u/yzCy9P3o
+(direct https://pixeldrain.com/api/file/yzCy9P3o?download), checksum https://pixeldrain.com/u/2ZNw7sxm; record
+`work/releases/0.2.1/pixeldrain.json`. VirusTotal (record `work/releases/0.2.1/virustotal.json`): client
+`71d95b16...`, server `22b04fa1...`, both 0 malicious / 0 suspicious of 75 engines. Extra GitHub asset: the client DLL
+alone as `work/releases/0.2.1-patch/maschine-ArenaMapPort-0.2.1-client-dll-only.zip` (289,130 B, SHA-256 `8da34e1b...`)
+for 0.2.0 installations. `D:\SPT41` and `D:\SPT41vanilla` carry dist 0.2.1 (the vanilla server restart is the user's job).
+Still the user's: the Forge entry (text from FORGE.md, link to the Pixeldrain list, VirusTotal links).
+
 ## Update 2026-10-16 (afternoon) - blurred optics on every ported map fixed (ScopeMaskRepairs), release 0.2.0 published
 
 **Release 0.2.0 is public:** `main` fast-forwarded to `4ddd321`, tag `v0.2.0`, GitHub release

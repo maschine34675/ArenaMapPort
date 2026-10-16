@@ -5,7 +5,7 @@ install) into SPT 4.1.5 (EFT 0.16.9.5, Unity 2022.3.43f1) as separate locations:
 a Unity 2022.3.43f1 batch importer that rebuilds scenes, materials, colliders and a fresh NavMesh into
 asset bundles, a BepInEx client plugin that repairs everything a ported scene lacks at raid time, and an
 SPT server mod that registers the locations. Fourteen maps retain development inputs; **Equator, Bay5 and AirPit** are registered and staged
-for release 0.2.0 (Equator and Bay5 were the first release; AirPit was added in 2026-10 on `feature/airpit`). All three have native
+for release 0.2.1 (Equator and Bay5 were the first release; AirPit was added in 2026-10 on `feature/airpit`; 0.2.0 was built and withdrawn on 2026-10-16). All three have native
 playtest evidence. The maps exist to be played through the user's
 ArenaMode mod (arena deathmatch with respawns); see the decisions below.
 
@@ -27,7 +27,7 @@ are not accepted build inputs. Keep the SPT bundle target on Unity 2022.3.43f1.
 - **No loot on any map, ever.** The server keeps the empty loot shape. Do not author or extract loot.
 - **No scav raids.** `DisabledForScav = true` stays.
 - **Bundles are distributed as built** (`dist/`), like other SPT map mods. Bundles still never go into git.
-- **Release 0.2.0 = Equator, Bay5 and AirPit.** The first release (user, 2026-09-25) was Equator and Bay5 only; AirPit was
+- **Release 0.2.1 = Equator, Bay5 and AirPit** (0.2.0 was built and withdrawn the same day; 0.2.1 is the first Forge release). The first release (user, 2026-09-25) was Equator and Bay5 only; AirPit was
   added in 2026-10 on `feature/airpit` and is registered and staged. The other eleven maps retain source and work/build inputs,
   but are excluded from ArenaMapRegistry.All and dist; Catalog retains their identities. Make these three maps as good as they can be (native content,
   bots, audio, lighting, physics — see docs/PLAN-TWO-MAPS.md) BEFORE ArenaMode features such as team starts and
