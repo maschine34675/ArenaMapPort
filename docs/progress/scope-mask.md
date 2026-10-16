@@ -89,3 +89,8 @@ Second pass with the shipped build (14:15-14:20, after the review-driven hardeni
 `ShadersFinder.Find` before the component is added, a missing one logs a Warning and skips the repair): same log line at
 scene load, one instance, MDR with the ELCAN at 4x from another spawn (-1.0, 0.0, 58.5, yaw 180): sharp
 (`06-airpit-elcan-4x-after-shipped-build.png`), no plugin warning, object removed on the disconnect, hideout opened.
+
+Scope of the host evidence: AirPit only. Equator and Bay5 run the same code path (the repair gates on
+`ArenaMapRaid.MapForScriptsScene`, which covers all three Scripts scenes, and the missing vanilla object is the same on
+every ported map); they were not raided separately for this fix. Review (three independent lenses, adversarially
+verified): no confirmed finding; the shader pre-check and this verification section came out of it.
