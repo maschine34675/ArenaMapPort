@@ -1,5 +1,9 @@
 # Current distribution contract: Equator, Bay5 and AirPit
 
+2026-10-16 (release 0.2.1): same three-map list and bundle set as 0.2.0; only the two DLLs are rebuilt (client:
+`ScopeMaskRepairs`, the sharp sight picture inside optics; server: version string only), packaged as
+`maschine-ArenaMapPort-0.2.1.zip` with its `.sha256` file.
+
 2026-10-16 (release 0.2.0): the release list is three maps. `ArenaMapRegistry.All` is Equator, Bay5 and AirPit; the
 distribution is nine bundles (three per map), three shader sidecars, three server databases (`db/<key>/base.json`) and both
 DLLs (`DISTRIBUTION_OK 3 maps 9 bundles 3 sidecars`), in the single-ZIP form (`make_release_zips.py --single`,

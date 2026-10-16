@@ -20,7 +20,7 @@
     <Description>Loads and repairs the Equator, Bay5 and Air Pit Arena maps in SPT.</Description>
     <Company>https://github.com/maschine34675/ArenaMapPort</Company>
     <Authors>maschine</Authors>
-    <Version>0.2.0</Version>
+    <Version>0.2.1</Version>
     <LangVersion>latest</LangVersion>
     <Nullable>disable</Nullable>
     <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
