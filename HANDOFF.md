@@ -15,8 +15,8 @@ in 3.6 s. `validate_distribution.py`: `DISTRIBUTION_OK 3 maps 9 bundles 3 sideca
 identical after extraction. Upload (`upload_pixeldrain.py`, 6.1 MiB/s, server-side size and hash confirmed):
 list https://pixeldrain.com/l/Runugi6n, ZIP https://pixeldrain.com/u/a9p4qcnD (direct
 https://pixeldrain.com/api/file/a9p4qcnD?download), checksum https://pixeldrain.com/u/Nj6acBoa; record in
-`work/releases/0.2.0/pixeldrain.json`. VirusTotal: the user uploads the two DLLs from dist once; the links in the
-release notes are `https://www.virustotal.com/gui/file/<sha256>` (client `70fc84f7...`, server `aacc6e49...`).
+`work/releases/0.2.0/pixeldrain.json`. VirusTotal (`tools/release/scan_virustotal.py`, key `VIRUSTOTAL_API_KEY`, record `work/releases/0.2.0/virustotal.json`):
+both DLLs uploaded and clean, 0 malicious / 0 suspicious of 75 engines (client `70fc84f7...`, server `aacc6e49...`).
 `D:\SPT41vanilla` received the same dist (67 files; its server restart is the user's job). Still the user's call:
 merge `feature/airpit` into `main`, tag `v0.2.0` (on `4009006` or the docs commit after it) and push; the Forge entry
 (link to the Pixeldrain list, VirusTotal links, text from FORGE.md). The earlier block below says the switch defaulted
