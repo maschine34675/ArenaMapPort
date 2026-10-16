@@ -3,6 +3,25 @@
 Snapshot for whoever continues (human or agent). Verify the commits named here against `git log`; this file
 is updated by hand at each handover, it is not an automatic record. Read [AGENTS.md](AGENTS.md) first.
 
+## Update 2026-10-16 (afternoon) - blurred optics on every ported map fixed (ScopeMaskRepairs), release 0.2.0 published
+
+**Release 0.2.0 is public:** `main` fast-forwarded to `4ddd321`, tag `v0.2.0`, GitHub release
+https://github.com/maschine34675/ArenaMapPort/releases/tag/v0.2.0 (notes = `docs/releases/v0.2.0.md`, asset = the
+`.sha256`; the ZIP stays on the Pixeldrain list https://pixeldrain.com/l/Runugi6n). The block below is the pre-publication state.
+
+**Bug after the release (user report): the image inside magnifying optics is blurred on our maps.** Root cause: every
+vanilla Scripts scene carries a `TechnicalManagers/ScopeMaskRenderer` object (EFT's `ScopeMaskRenderer` writes the global
+`_ScopeMask` texture that the aiming depth-of-field uses to leave the sight picture alone); Arena's scenes have no
+TechnicalManagers root, so `_ScopeMask` was never written and the aiming blur covered the lens too. Proven on GPU-2 with the
+same ELCAN SpecterDR at 4x: AirPit soft (Laplacian variance of the scope interior 2.3), Factory sharp (79.5). Fix:
+`ArenaMapPort.Client/ScopeMaskRepairs.cs` creates "ArenaMapPort ScopeMaskRenderer" (EFT's own component) on the owned
+Scripts scene's load and destroys it on its unload; key `Camera/EnableScopeMaskFix` (default true). Host-verified the same
+afternoon (same spot after the fix: 709.0, sharp rivets and reticle ladder, 120 fps, no warnings, object removed after the
+raid, hideout opens). Details and stills: [scope-mask.md](docs/progress/scope-mask.md). NOT in the 0.2.0 package: a
+0.2.1 (client DLL only; the bundles are unchanged) is the user's call. New AGENTS.md trap: the vanilla TechnicalManagers
+list (ScopeMaskRenderer, WindowBreakerManager, WaterRenderer, lightManager, OnRenderObjectManager, ImpostorsRenderer,
+GrassTrampler) is the first place to look when an aiming/screen effect works on vanilla but not on a ported map.
+
 ## Update 2026-10-16 - RELEASE 0.2.0 built, host-verified and uploaded to Pixeldrain (feature/airpit, not yet merged or tagged)
 
 Source commit of the package: `4009006` (version bump, three-map texts, `docs/releases/v0.2.0.md`, `RoomShotAcoustics`

@@ -8,6 +8,9 @@ dated state in one screen; read it before this index if you only have a minute.
 
 ## Current — read these for the area you touch
 
+- [scope-mask.md](scope-mask.md) — blurred image inside magnifying optics on every ported map: the vanilla Scripts
+  scenes' `TechnicalManagers/ScopeMaskRenderer` is missing, so the aiming depth-of-field blurred the sight picture;
+  `ScopeMaskRepairs` provides it (GPU-2 AirPit vs Factory stills, 2026-10-16).
 - [shot-acoustics.md](shot-acoustics.md) — per-room gunshot reverb from INVENTED room data through the Meta XR
   Audio shoebox room (class Hall/Shop/Metal/Outdoor), live `ShotAcousticsLab` tuning keys, the Gunshots probe buses
   and three GPU-2 measurement rounds (2026-10-15/16); on by default since 2026-10-16 (user decision after

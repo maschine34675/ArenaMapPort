@@ -133,6 +133,9 @@ namespace ArenaMapPort.Client
             // daytime-and-visuals F2-F7 — 2026-09-17 playtest symptom B follow-up. See
             // docs/progress/daytime-and-visuals.md and each file's own doc comment.
             CameraEffectsRepairs.Install();
+            // Blurred optics (2026-10-16): the vanilla Scripts scenes' TechnicalManagers/ScopeMaskRenderer is
+            // missing on ported maps, so the aiming depth-of-field blurred the sight picture. See ScopeMaskRepairs.cs.
+            ScopeMaskRepairs.Install();
             // Floodlight glare follow-up (2026-09-27): live UltimateBloom knobs. See BloomTuning.cs.
             BloomTuning.Install();
             AnamorphicFlareTuning.Install();

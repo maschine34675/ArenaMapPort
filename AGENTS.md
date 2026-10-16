@@ -391,6 +391,13 @@ the log; the user uses it to point at things.
   ModProfiler's spike list (`Driver.Update 30 ms` at 1 Hz on both machines). Scan once per raid and cache; a
   measurement recipe lives in `docs/progress/equator-rain-accents.md` ("1 Hz hitch"). Check `uibridge_status`'s
   `max` frame time and ModProfiler's `max_ms_in_frame` before accepting a client build on the host.
+- Vanilla Scripts scenes carry a `TechnicalManagers` root (Factory: `ScopeMaskRenderer`, `WindowBreakerManager`,
+  `WaterRenderer`, `lightManager`, `OnRenderObjectManager`, `ImpostorsRenderer`, `GrassTrampler`); Arena's scenes have
+  none and the extracts hold none of them. The plugin provides `OnRenderObjectManager` (WeatherRig), the CullingManager
+  fallback (EnvironmentRepairs) and, since 2026-10-16, `ScopeMaskRenderer` (`ScopeMaskRepairs`): without it the global
+  `_ScopeMask` texture is never written and the aiming depth-of-field blurs the image inside every magnifying optic
+  (ELCAN 4x on AirPit soft, the same scope on Factory sharp). A screen/aiming effect that works on vanilla but not on
+  a ported map: check that root's list first, with `uibridge_inspect gameObject path=TechnicalManagers` on a vanilla raid.
 - Meta XR Audio is process-global: `MetaXRAcousticSettings.Instance.AcousticModel` and the one shoebox room
   (`MetaXRAudioRoomAcousticProperties`, two native calls per frame while enabled) belong to the whole process, not to a
   scene, and the plugin's managed model value does not vouch for the native side after an audio reset. `RoomShotAcoustics`
