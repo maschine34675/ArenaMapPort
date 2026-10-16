@@ -605,12 +605,12 @@ public sealed class RoomShotAcousticsWiringTests
     }
 
     [Fact]
-    public void ConfigIsBoundForEveryReleasedMapAndDefaultsOff()
+    public void ConfigIsBoundForEveryReleasedMapAndDefaultsOn()
     {
         var code = Text("ArenaMapPort.Client/RoomShotAcoustics.cs");
         // Loops the registry instead of a literal list, so a newly released map cannot be missed.
         Assert.Contains("foreach (var map in ArenaMapRegistry.All)", code);
-        Assert.Matches(@"""Audio \("" \+ map\.Key \+ ""\)"", ""RoomShotAcoustics"", false,", code);
+        Assert.Matches(@"""Audio \("" \+ map\.Key \+ ""\)"", ""RoomShotAcoustics"", true,", code);
         Assert.DoesNotMatch(@"(?<![A-Za-z])Config\.Bind\(", code); // tuning binds go through Settings
         Assert.True(ArenaMapRegistry.All.Count >= 3);
     }

@@ -26,7 +26,8 @@ namespace ArenaMapPort.Client
     /// ships any per-room gunshot value (zero reverb zones or filters in all 24 raw Arena levels, empty
     /// RoomAmbientData.ReverbPreset on all 91 rooms), so there is nothing to restore: every size, material and clutter
     /// factor is made up (RoomShotAcousticsModel).
-    /// Repair (opt-in, default off): while the listener stands in an acoustic room of a released map, ONE
+    /// Repair (on by default since 2026-10-16, user decision after listening on all three maps; off per map restores the
+    /// shipped acoustics): while the listener stands in an acoustic room of a released map, ONE
     /// MetaXRAudioRoomAcousticProperties (the plugin's single global shoebox room, centred on the listener) is fed that
     /// room's invented class preset and the plugin's acoustic model is switched to ShoeboxRoom; outdoors, and when the
     /// switch is turned off or the raid ends, the shipped model and the plugin's default room come back. All the work
@@ -37,8 +38,8 @@ namespace ArenaMapPort.Client
     /// The class table is tuned live in the developer config section ShotAcousticsLab (docs/progress/shot-acoustics.md):
     /// the first host measurement showed that the near-perfectly reflective first presets make a shop ring louder and
     /// longer than the hall, so every material and clutter factor is a key, read on each application.
-    /// Host test: pending (compare ReverbPulse buses Gunshots, GunshotsFirstPerson and GunshotsThirdPerson, hall vs shop
-    /// vs switch off).
+    /// Host test: GPU-2 2026-10-15/16 on AirPit, Equator and Bay5 (ReverbPulse buses Gunshots, GunshotsFirstPerson and
+    /// GunshotsThirdPerson, hall vs shop vs switch off); evidence in docs/progress/shot-acoustics.md.
     /// </summary>
     internal static class RoomShotAcoustics
     {
@@ -66,11 +67,13 @@ namespace ArenaMapPort.Client
         {
             // The same maps as the other per-map audio keys (every released map), so a newly released map gets its switch.
             foreach (var map in ArenaMapRegistry.All)
-                Enabled[map.Key] = Plugin.Instance.Settings.Bind("Audio (" + map.Key + ")", "RoomShotAcoustics", false,
-                    "INVENTED room data for gunshot reverb: while on, the acoustic room you stand in (hall, shop, metal body) selects " +
-                    "a made-up shoebox room model for the Meta XR Audio plugin, so shots ring differently in a big hall than in a " +
-                    "small shop. Outdoors the shipped model stays. Neither EFT nor Arena provides these values; they are an " +
-                    "unverified design guess and default off. Live; off restores the shipped gunshot acoustics.");
+                Enabled[map.Key] = Plugin.Instance.Settings.Bind("Audio (" + map.Key + ")", "RoomShotAcoustics", true,
+                    "Per-room gunshot reverb, on by default. The acoustic room you stand in (hall, shop, metal body) selects " +
+                    "a shoebox room model for the Meta XR Audio plugin, so shots ring differently in a big hall than in a " +
+                    "small shop. Outdoors the shipped model stays. The room data is INVENTED: neither EFT nor Arena provides " +
+                    "these values, they are a design choice tuned by measurement and ear. Off restores the shipped gunshot " +
+                    "acoustics. Live. This is a Settings key: in player mode it is visible and changeable only with " +
+                    "General/DeveloperMode enabled.");
             // The lab keys (developer config): one tuning round by measurement and ear, no rebuild. Defaults are the model's
             // INVENTED starting table. The materials are the plugin's MaterialPreset names, offered as a list per key.
             var defaults = RoomShotTuning.Default;

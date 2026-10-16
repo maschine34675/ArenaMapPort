@@ -1,4 +1,12 @@
-# Current distribution contract: Equator and Bay5
+# Current distribution contract: Equator, Bay5 and AirPit
+
+2026-10-16 (release 0.2.0): the release list is three maps. `ArenaMapRegistry.All` is Equator, Bay5 and AirPit; the
+distribution is nine bundles (three per map), three shader sidecars, three server databases (`db/<key>/base.json`) and both
+DLLs (`DISTRIBUTION_OK 3 maps 9 bundles 3 sidecars`), in the single-ZIP form (`make_release_zips.py --single`,
+`maschine-ArenaMapPort-0.2.0.zip` with its `.sha256` file). The earlier two-map baseline below describes release 0.1.0 (six
+bundles, two sidecars, two databases) and is kept as history; its map list is no longer current. The 2026-10-11 follow-up
+stays in force for 0.2.0 apart from its two-map wording: the optional `arena-audio` and `arena-ui` exports remain excluded
+and every database is `db/<key>/base.json`.
 
 2026-10-11 follow-up: optional `arena-audio` and `arena-ui` exports are excluded from
 the release because neither current ArenaMapPort nor ArenaMode consumes them.

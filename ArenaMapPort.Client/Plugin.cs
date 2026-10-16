@@ -27,7 +27,7 @@ namespace ArenaMapPort.Client
     {
         public const string PluginGuid = "com.maschine.ArenaMapPort";
         public const string PluginName = "maschine-ArenaMapPort";
-        public const string PluginVersion = "0.1.0";
+        public const string PluginVersion = "0.2.0";
 
         public static ManualLogSource Log { get; private set; }
 
@@ -148,7 +148,7 @@ namespace ArenaMapPort.Client
             NativeSpatialAudio.Install(_harmony);
             PrecipitationAudio.Install(); // missing native rain beds, owned independently of local scenery ambience
             RoomReverb.Install();
-            RoomShotAcoustics.Install(); // invented per-room gunshot reverb, default off
+            RoomShotAcoustics.Install(); // per-room gunshot reverb from invented room data, on by default
             ReverbAudioProbe.Install();
             SpatialAudioProbe.Install(_harmony);
             PuddleFootstepRepairs.Install(_harmony);

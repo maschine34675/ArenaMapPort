@@ -2,8 +2,10 @@
 
 Status: implemented, builds and unit tests green. Two host measurement rounds on 2026-10-15 (AirPit, GPU-2): the mechanism
 works; the first invented table was wrong (a shop rang louder and longer than the hall); the second round measured
-alternatives and the defaults are now the measured choice (see "Tuning round"). The table stays live-tunable in the developer
-config section `ShotAcousticsLab` for tuning by ear; **the user's listening note is still open**. Default **off** on every map.
+alternatives and the defaults are now the measured choice (see "Tuning round"); a third round on 2026-10-16 measured Equator
+and Bay5 (see "Equator and Bay5"). The table stays live-tunable in the developer
+config section `ShotAcousticsLab` for tuning by ear. **On by default on every map since 2026-10-16** (user decision after
+listening on all three maps); the switch stays per map and turns it off.
 
 ## Purpose
 
@@ -29,8 +31,8 @@ is superseded: the second measurement round (see "Tuning round") found the Cardb
 and the defaults are now the measured choice (hall Concrete walls and ceiling, CeramicTile floor, clutter 0.4; shop
 GypsumBoard walls, AcousticTile ceiling, CeramicTile floor, clutter 0.7; size cap 50 m). The measured choice is exactly
 as invented as the earlier tables: it is the best contrast between hall and shop found by measurement, not original
-data, and it is open to tuning by ear. The switch defaults off until the user has judged the result; whether player
-mode ships it on is the user's decision.
+data, and it is open to tuning by ear. The switch is on by default since 2026-10-16 (user decision after listening on all
+three maps); it ships on in player mode, and the data stays invented.
 
 The table is generic by room type and size, not per map, so it is code and not descriptor/sidecar data
 (per-map data belongs in `ArenaMapDescriptor` and `tools/maps`; this table has none).
@@ -109,7 +111,7 @@ Classes of the active rooms in the three graphs (offline, same rules): Equator 1
 
 | Section / key | Default | Meaning |
 |---|---|---|
-| `Audio (<map key>) / RoomShotAcoustics` (every map in `ArenaMapRegistry.All`) | false | Live switch. Off restores the shipped acoustics. Developer-mode menu only. |
+| `Audio (<map key>) / RoomShotAcoustics` (every map in `ArenaMapRegistry.All`) | true (on by default since 2026-10-16, user decision after listening on all three maps) | Live switch. Off restores the shipped acoustics. A Settings key: in player mode it is visible and changeable only with `General/DeveloperMode`. The key never shipped before the default became true (born 2026-10-15 on the unreleased branch), so there is no `DefaultsRevision` migration. |
 | `ShotAcousticsLab / HallWalls`, `HallCeiling`, `HallFloor` | Concrete, Concrete, CeramicTile | Meta material of the hall's four side walls, ceiling, floor. List of all 36 `MaterialPreset` names, each key's list led by its own default. |
 | `ShotAcousticsLab / HallClutter` | 0.4 (range 0..1) | Hall clutter factor. |
 | `ShotAcousticsLab / ShopWalls`, `ShopCeiling`, `ShopFloor` | GypsumBoard, AcousticTile, CeramicTile | Same for the shop class. |
@@ -349,7 +351,8 @@ the first tuning attempt above and no longer a default.
 - That `ShoeboxRoom` is audible on the gun path is answered by the first measurement (tail energy rises on all three
   routes: `PlayAtPoint`, first-person and third-person weapon queue). The table question (which materials and clutter give a long hall tail
   and a short, tight shop) is answered by measurement in round 2 for Hall and Shop. Open: the Metal class is untuned, the
-  passport hall as a hall, and the ear: every value is invented and waits for the user's listening note.
+  passport hall as a hall. The ear has answered: the user listened on all three maps on 2026-10-16 and kept the
+  shoebox solution (every value stays invented).
 - The plugin's setter calls the native `SetAcousticModel` only when the managed value changes. An audio configuration
   change during a raid is handled by re-applying the room and re-sending the model (see Runtime behaviour); whether the
   plugin really drops its native state on a reset is not verified (the Unity native interface also caches its
@@ -434,9 +437,10 @@ Log evidence: Equator spawn `room=5/IndoorGeneric class=Shop dims=29.0x4.1x12.7`
 class=Hall dims=50.0x24.7x50.0` (09:59:43), `room=3/IndoorBrick class=Shop` (09:59:55); Bay5 spawn `room=14/OutdoorCommon
 class=Outdoor dims=none ... model=AcousticRayTracing` (10:04:06), then `room=16/IndoorBrick class=Hall dims=44.0x9.6x21.6`
 (10:04:11), `room=11/IndoorMetalThin class=Metal dims=17.2x12.6x50.0` (10:04:33), `room=40/IndoorBrick class=Shop
-dims=23.4x10.6x18.7` (10:04:45). No Warning or Error from the plugin in either raid; the map switch AirPit -> Equator ->
-Bay5 inside one process (the 2026-10-15 AirPit raids ran in the previous process of the same build) left the model and
-room state consistent (Bay5 started outdoors with the shipped model).
+dims=23.4x10.6x18.7` (10:04:45). No Warning or Error from the plugin in either raid; the map switch Equator -> Bay5
+inside one process left the model and room state consistent (Bay5 started outdoors with the shipped model). The
+2026-10-15 AirPit raids ran in an earlier process of the same build, so an AirPit -> Equator switch inside one process
+was not observed.
 
 Reading: Equator behaves like AirPit (atrium late tail 3x the shop's, decay 0.53 vs 0.24). Bay5's `SpawnBuilding1` is
 the loudest room measured so far (late tail 3.3e-3, 4.5x AirPit's hall): a 44 x 22 m warehouse with a 9.6 m ceiling under
@@ -448,7 +452,8 @@ the plant building (Shop) sit close together; outdoors (most of Bay5) nothing ch
 
 ## Host verification
 
-Two measurement rounds, both 2026-10-15 on AirPit, GPU-2, bots None, DeveloperMode:
+Three measurement rounds on GPU-2, bots None, DeveloperMode: two on AirPit on 2026-10-15, one on Equator and Bay5 on 2026-10-16.
+During all three the switch was set on in the shared developer config (the code default was still off at that time):
 
 - Round 1: section "First host measurement" (15:00-15:07, client DLL of the uncommitted feature, sha256 2d56641f...,
   `uibridge_status` 19/19 identical, EFT instance ad32a23d). It carries the probe table, the `pulse begin` / `pulse route`
@@ -457,11 +462,27 @@ Two measurement rounds, both 2026-10-15 on AirPit, GPU-2, bots None, DeveloperMo
   build = host disk = loaded), EFT instance 85490820. The measured record, the decision and the new defaults are there.
   The chosen values were measured live through the lab keys. They then became the code defaults (this document and
   `RoomShotAcousticsModelTests` were updated together; the Release build, the unit tests and `ConfigRetirementCheck` were
-  rerun for that change); a host build that carries them as defaults has not been run yet.
+  rerun for that change).
+- Round 3: section "Equator and Bay5" (2026-10-16 09:58-10:05): Equator Day and Bay5 raids in one process (the AirPit
+  raids of rounds 1 and 2 ran in an earlier process), measured defaults, map switch Equator -> Bay5 left the model and
+  room state consistent (Bay5 started outdoors with the shipped model). The hideout opened with the build in 7 s
+  (HANDOFF 2026-10-15/16).
+- Decision 2026-10-16: after listening on all three maps the user kept the shoebox solution (no clip-set remap) and decided to
+  ship it **on by default** on every map. The code default of `RoomShotAcoustics` is therefore `true` (client Release build,
+  server build, the unit tests incl. the pinned bind in `RoomShotAcousticsWiringTests` and `ConfigRetirementCheck` were rerun
+  for that change). The key was born on the unreleased `feature/airpit` branch on 2026-10-15, so no `DefaultsRevision`
+  migration is needed; a developer `.cfg` that already holds the key keeps its saved value.
 
-TODO (still open):
+Closed by the rounds above: the Stop path across raids (the next raid's `pulse begin` read 8x3x5 + `AcousticRayTracing` after
+the switch-off), the Equator -> Bay5 start in one process, the hideout visit, the user's listening note, and the Equator
+and Bay5 measurements.
 
-- The Stop path on raid exit: seen only indirectly, through the next raid's `pulse begin` reading 8x3x5 + `AcousticRayTracing`
-  after the switch-off. A hideout visit and a cross-map raid with the switch on are still to do.
-- The user's listening note (hall vs shop vs the airliner rooms, with the measured defaults).
-- Equator and Bay5: the switch exists for every map in `ArenaMapRegistry.All`, nothing has been measured there.
+Still open:
+
+- A host raid on a build that carries the default-on value with a fresh configuration (no saved `RoomShotAcoustics` entry);
+  the rounds above ran with the switch set in the shared developer config.
+- An AirPit -> Equator (or AirPit -> Bay5) map switch with the switch on inside one EFT process; only Equator -> Bay5 was
+  observed that way.
+- HANDOFF 2026-10-15 lists two user inputs without a recorded answer: whether the passport hall (Start1, classified Hall by
+  the 40 m rule) should stay a hall, and a metallic character for the planes and the bus (Steel/Steel/Carpet, measured but
+  untuned).

@@ -1,6 +1,6 @@
 # ArenaMapPort
 
-**Equator and Bay5 from Escape from Tarkov: Arena, rebuilt for SPT.**
+**Equator, Bay5 and Air Pit from Escape from Tarkov: Arena, rebuilt for SPT.**
 
 The release includes the map assets, client plugin and server component. It is
 designed for use with **ArenaMode**, installed separately; ArenaMapPort itself
@@ -15,10 +15,12 @@ does not add Arena match rules.
 | Equator Day | Fixed 12:00 start, clear weather and natural daytime lighting. |
 | Equator Night | Fixed 00:00 start, rain, neon lights, colored chemlights, haze and reflective floors. A natural appearance is available in settings. |
 | Bay5 | Two normal server-time choices, a progressing day/night cycle and dynamic weather. |
+| Air Pit | An abandoned terminal hangar: the furnished main hall with its four shops, the passport hall and the apron. Two normal server-time choices, a progressing day/night cycle and dynamic weather, like Bay5. Two gates serve as extractions. |
 
-Both maps include imported geometry, materials, lighting, collision and bot
-navigation, with restored ambience, material sounds, room acoustics, decals,
-dust and lamp flares. Bay5 includes its harbor background and water.
+All three maps include imported geometry, materials, lighting, collision and bot
+navigation, with restored ambience, material sounds, room acoustics and decals.
+Equator and Bay5 also have restored dust and original lamp flares. Bay5 includes
+its harbor background and water.
 
 ## Compatibility
 
@@ -57,7 +59,7 @@ In the F12 configuration menu, enable **Appearance / NaturalEquatorNight** to
 use the natural appearance for your next Equator midnight raid. This disables
 the added neon lights, chemlights, smoke/haze, temporary PostFX and extra
 wet-floor reflections. Time, weather and original lamps remain unchanged.
-Equator Day and Bay5 are unaffected.
+Equator Day, Bay5 and Air Pit are unaffected.
 
 Night PostFX are temporary and do not overwrite your saved game settings.
 The colored volumetric haze requires the game's **Volumetric Light** option.
@@ -68,19 +70,26 @@ and diagnostics. Normal installations keep a compact configuration file.
 Existing developer tuning is preserved in `com.maschine.ArenaMapPort.developer.cfg`
 and remains active when developer mode is off.
 
+Per-room gunshot reverb (**RoomShotAcoustics**) is on by default on all three
+maps: shots ring differently in a big hall than in a small shop. Its room data is
+invented, because neither Escape from Tarkov nor Arena provides gunshot reverb
+values. It can be switched off per map under `Audio (arena_equator)`,
+`Audio (arena_bay5)` or `Audio (arena_airpit)` with **General / DeveloperMode**
+enabled (enable it and restart EFT, the keys then appear in F12); switching it off
+restores the shipped gunshot acoustics.
+
 ## DynamicMaps
 
-Overview maps for Equator and Bay5 are included. If DynamicMaps is installed,
-open inventory → **MAP** during a raid.
+Overview maps for Equator, Bay5 and Air Pit are included. If DynamicMaps is
+installed, open inventory → **MAP** during a raid.
 
 ArenaMapPort loads these maps from its own directory; you do not need to copy
-anything into DynamicMaps. Equator and Bay5 use simplified ground-floor plans.
-The AirPit development build additionally includes a ground-floor overview.
-The upper spectator area is deliberately omitted.
+anything into DynamicMaps. The overviews are simplified ground-floor plans; Air
+Pit's upper spectator area is deliberately omitted.
 
 ## Scope
 
-The release contains **Equator and Bay5 only**. There is no loot or scav-raid
+The release contains **Equator, Bay5 and Air Pit**. There is no loot or scav-raid
 support, and these locations are not intended as ordinary quest/progression
 maps. Arena match rules and respawns come from ArenaMode.
 
