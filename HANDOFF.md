@@ -3,6 +3,25 @@
 Snapshot for whoever continues (human or agent). Verify the commits named here against `git log`; this file
 is updated by hand at each handover, it is not an automatic record. Read [AGENTS.md](AGENTS.md) first.
 
+## Update 2026-10-16 - RELEASE 0.2.0 built, host-verified and uploaded to Pixeldrain (feature/airpit, not yet merged or tagged)
+
+Source commit of the package: `4009006` (version bump, three-map texts, `docs/releases/v0.2.0.md`, `RoomShotAcoustics`
+ON by default on every map = user decision after listening). Host acceptance on GPU-2 with the 0.2.0 DLLs (client and server
+hashes identical on the host): AirPit raid with bots as-online (bots spawn and fight, 118 fps, max frame 47 ms at a spawn,
+no plugin warnings, `[ArenaMapPort] 0.2.0 loaded. Maps: Arena: Equator, Arena: Bay 5, Arena: Air Pit`), hideout opens
+in 3.6 s. `validate_distribution.py`: `DISTRIBUTION_OK 3 maps 9 bundles 3 sidecars`. Package:
+`make_release_zips.py --single --extract-check` -> `work/releases/0.2.0/maschine-ArenaMapPort-0.2.0.zip`,
+2,149,176,241 B (2.00 GiB), SHA-256 `6c449bdbc629c87c34f0eee7b395c1acb6f33642ad7cf848ea8c3045ab420519`, 67 dist files
+identical after extraction. Upload (`upload_pixeldrain.py`, 6.1 MiB/s, server-side size and hash confirmed):
+list https://pixeldrain.com/l/Runugi6n, ZIP https://pixeldrain.com/u/a9p4qcnD (direct
+https://pixeldrain.com/api/file/a9p4qcnD?download), checksum https://pixeldrain.com/u/Nj6acBoa; record in
+`work/releases/0.2.0/pixeldrain.json`. VirusTotal: the user uploads the two DLLs from dist once; the links in the
+release notes are `https://www.virustotal.com/gui/file/<sha256>` (client `70fc84f7...`, server `aacc6e49...`).
+`D:\SPT41vanilla` received the same dist (67 files; its server restart is the user's job). Still the user's call:
+merge `feature/airpit` into `main`, tag `v0.2.0` (on `4009006` or the docs commit after it) and push; the Forge entry
+(link to the Pixeldrain list, VirusTotal links, text from FORGE.md). The earlier block below says the switch defaulted
+OFF: superseded.
+
 ## Update 2026-10-15 - per-room shot acoustics (invented data, Meta XR shoebox), release = one ZIP on Pixeldrain
 
 **Shot acoustics (user's next step after AirPit; option A):** `RoomShotAcoustics` (switch `Audio (<map>)/RoomShotAcoustics`,
