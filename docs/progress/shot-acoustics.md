@@ -404,6 +404,48 @@ Lab-keys review (2026-10-15), one finding, confirmed and fixed:
    (`RoomShotAcousticsModel.MaterialChoices`); see "Config keys". Tests: list construction, the simulated clamp for all
    nine keys, and a wiring check that no key shares the plain enum-ordered list.
 
+## Equator and Bay5 (user decision 2026-10-16: keep the shoebox solution, enable it on the other two maps)
+
+The switch `Audio (<map>)/RoomShotAcoustics` already existed for every released map and the class table is generic by
+room type and size, so nothing map-specific is needed. Offline census of the active rooms in each map's spatial-audio
+graph (`work/extract/spatial-audio/<map>/spatial-audio.json`, the same bounds the runtime reads; types are
+`EAudioRoomTypeMask` values: 4 IndoorGeneric, 64 OutdoorCommon, 1024 IndoorWoodThick, 16384 IndoorWoodThin,
+65536 IndoorMetalThick; every indoor type other than IndoorMetalThin is a Shop unless the 40 m rule makes it a Hall):
+
+| Map | Hall | Metal | Shop | Outdoor | Notes |
+|---|---|---|---|---|---|
+| Equator | `Main` 54.8 x 24.7 x 59.7 IndoorConcrete; `UpRoof` 9.9 x 6.5 x 40.7 IndoorBrick (a corridor over 40 m long: concrete walls, a plausible ringing service corridor) | none | 19 (the shops, corridors, kitchen, start rooms; 8 of them IndoorWoodThin) | none (the atrium is an indoor room by Arena's data) | |
+| Bay5 | `SpawnBuilding1` 44.0 x 9.6 x 21.6 IndoorBrick | 18: `SpawnBulding2` 17.2 x 12.6 x 62.4, `Hangar` 18.9 x 12.1 x 23.1 and 16 containers, all IndoorMetalThin (Steel walls: the long warehouse rings metallic, which fits a metal shed) | 6 (`PlantBuldingA` 23.4 x 10.6 x 18.7 IndoorBrick, its small rooms IndoorWoodThick / IndoorMetalThick, `Hangar_out`, the building-2 entrance) | 15 (the big `OUTDOOR` 251 x 27 x 175 OutdoorCommon, the ship, every back yard) | outdoors the shipped model stays, so most of Bay5 is unchanged |
+| AirPit | `Main`, `Start1` | 9 (planes, bus) | 12 shops | `Start2` (apron) | measured above |
+
+Host check (GPU-2, 2026-10-16 09:58-10:05, EFT instance of the 2026-10-15 final build, one process: Equator Day raid,
+then Bay5 raid, bots None, DeveloperMode, `ReverbPulseVolume` 0.8, the map's ambience keys muted during the measurement
+and restored afterwards; Bay5 had rain 0.27 with `RainVolume` 0). `GunshotsFirstPerson` bus, measured defaults:
+
+| Map / room | class, dims applied | baseline | tailEarly | tailLate |
+|---|---|---|---|---|
+| Equator `Main` (room 19 IndoorConcrete) | Hall 50.0 x 24.7 x 50.0 | 2.0e-6 | 1.86e-3 | 9.8e-4 |
+| Equator `adik` (room 3 IndoorBrick) | Shop 17.8 x 4.3 x 23.5 | 1.4e-4 | 1.26e-3 | 3.0e-4 |
+| Bay5 `SpawnBuilding1` (room 16 IndoorBrick) | Hall 44.0 x 9.6 x 21.6 | 2.4e-6 | 3.80e-3 | 3.30e-3 |
+| Bay5 `SpawnBulding2` (room 11 IndoorMetalThin) | Metal 17.2 x 12.6 x 50.0 (capped) | 1.6e-5 | 7.0e-4 | 3.5e-4 |
+| Bay5 `PlantBuldingA` (room 40 IndoorBrick) | Shop 23.4 x 10.6 x 18.7 | 9.5e-6 | 8.9e-4 | 3.5e-4 |
+
+Log evidence: Equator spawn `room=5/IndoorGeneric class=Shop dims=29.0x4.1x12.7` (09:59:37), `room=19/IndoorConcrete
+class=Hall dims=50.0x24.7x50.0` (09:59:43), `room=3/IndoorBrick class=Shop` (09:59:55); Bay5 spawn `room=14/OutdoorCommon
+class=Outdoor dims=none ... model=AcousticRayTracing` (10:04:06), then `room=16/IndoorBrick class=Hall dims=44.0x9.6x21.6`
+(10:04:11), `room=11/IndoorMetalThin class=Metal dims=17.2x12.6x50.0` (10:04:33), `room=40/IndoorBrick class=Shop
+dims=23.4x10.6x18.7` (10:04:45). No Warning or Error from the plugin in either raid; the map switch AirPit -> Equator ->
+Bay5 inside one process (the 2026-10-15 AirPit raids ran in the previous process of the same build) left the model and
+room state consistent (Bay5 started outdoors with the shipped model).
+
+Reading: Equator behaves like AirPit (atrium late tail 3x the shop's, decay 0.53 vs 0.24). Bay5's `SpawnBuilding1` is
+the loudest room measured so far (late tail 3.3e-3, 4.5x AirPit's hall): a 44 x 22 m warehouse with a 9.6 m ceiling under
+the Hall materials (Concrete walls and ceiling) keeps nearly all energy, where the airport hall's 43 m height dilutes it.
+That is the Hall class applied to a mid-size closed box; if the user finds it too live, the lever is the Hall ceiling
+(AcousticTile) or clutter, or a volume-scaled clutter in the model. The metal warehouse (`SpawnBulding2`, Steel) and
+the plant building (Shop) sit close together; outdoors (most of Bay5) nothing changes.
+
+
 ## Host verification
 
 Two measurement rounds, both 2026-10-15 on AirPit, GPU-2, bots None, DeveloperMode:

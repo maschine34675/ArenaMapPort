@@ -19,7 +19,7 @@ CeramicTile floor, clutter 0.7) give hall late tail 7.4e-4 vs shop 9.8e-5. Detai
 `Audio (arena_airpit)/RoomShotAcoustics = true` (set for the measurement, left on for the user's listening test) and the
 measured lab values. Open user inputs: is the passport hall (Start1, classified Hall by the 40 m rule) wanted as a hall;
 metallic character for planes/bus (Steel/Steel/Carpet, measured but untuned); Equator/Bay5 (switch exists, nothing
-measured); ship ON or OFF in player mode. Still to verify: a hideout visit and a cross-map raid with the switch on.
+measured); ship ON or OFF in player mode. Verified 2026-10-15/16: hideout opens with the build (7 s); Equator and Bay5 measured in one process after AirPit (atrium vs shop 3x, Bay5 warehouse the most reverberant room so far, Bay5 outdoors untouched) - the shared developer config now has the switch ON on all three maps for the user's listening test; user decision 2026-10-16: keep the shoebox solution (no clip-set remap), enable it on all three maps.
 **Release form (user decision):** ONE ZIP (about 2.03 GiB) on Pixeldrain instead of GitHub release parts
 (`make_release_zips.py --single`, `tools/release/upload_pixeldrain.py`, commit `340d6e9`; API key in the VM's Machine
 environment `PIXELDRAIN_API_KEY`, resolved via the registry fallback, never printed). VirusTotal links only for the two
