@@ -341,7 +341,7 @@ Reused in `ArenaMapPort.Client/ShaderRebind.cs`:
 - **Overall structure** — per-raid `Resources.FindObjectsOfTypeAll<Shader>()` name index built
   once and reset on scene unload, an immediate rebind pass on `SceneManager.sceneLoaded` plus a
   delayed sweep pass via a `HideFlags.HideAndDontSave` + `DontDestroyOnLoad` coroutine host, and a
-  sidecar JSON file (`material-shaders.json`) read once per process and keyed by material name
+  sidecar JSON file (`material-shaders.<map key>.json`) read once per process and keyed by material name
   (with the `" (Instance)"` suffix stripped) — following the shape of
   `InterchangeRework.Client/MaterialShaderRebind.cs`'s `_byName`/`IntendedShader()`/`Sweeper`/
   `MaterialKey()`.

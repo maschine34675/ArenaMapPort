@@ -3,6 +3,31 @@
 Snapshot for whoever continues (human or agent). Verify the commits named here against `git log`; this file
 is updated by hand at each handover, it is not an automatic record. Read [AGENTS.md](AGENTS.md) first.
 
+## Update 2026-10-17 (afternoon) - Equator's shader sidecar renamed to material-shaders.arena_equator.json; feature/airpit merged into main and deleted
+
+- Branches: `feature/airpit` (SpawnGates `93afc19` plus the user's MIT `LICENSE` commit `ab6d4bb`) was fast-forwarded into `main`,
+  `main` pushed, the branch deleted locally and on origin. Everything continues on `main`. `H.npy` in the repo root was a scratch
+  height raster this session's spawn-gate analysis script wrote into its working directory; deleted.
+- The 0.2.1 package shipped Equator's shader sidecar under the pre-generalization name `material-shaders.json` next to
+  `material-shaders.arena_bay5.json` / `.arena_airpit.json`. The mod is not on Forge yet, so the exception is gone:
+  `ShaderRebind.SidecarFileName` is `material-shaders.<key>.json` for every map, the csproj stages Equator's
+  `work/build/full/material-shaders.json` as `material-shaders.arena_equator.json`, and `make_release_zips.py`,
+  `validate_distribution.py`, the tests, `docs/dist-manifest.md` and THIRD-PARTY-NOTICES follow. The per-map BUILD output keeps
+  its name (MaterialImporter writes it; the csproj renames while staging). No other Equator file in the package lacks the key
+  (bundles, db, acoustics, flares, ai, loadscreens, banner, dynamicmaps all carry it).
+- Ordinary deployment never deletes, so `tools/deploy-to-spt.ps1 -RemoveLegacyShaderSidecar` (modeled on `-RemoveLegacyEquatorDb`,
+  test `tools/tests/test_shader_sidecar_deploy.ps1`) backs up and removes only the old file after the renamed file and the client
+  DLL match dist. Run on `D:\SPT41` and `D:\SPT41vanilla` (backups under ignored `work/deployment-backups/`).
+- Host evidence (GPU-2, 14:43-14:46, client built from the working tree on `ab6d4bb`): startup banner
+  `found: ...material-shaders.arena_equator.json`; Equator PMC raid without bots:
+  `[RebindShaders] material-shaders.arena_equator.json: 392 material entries`, 372 stand-in materials rebound
+  (328 + 11 + 20 + 3 + 10 per scene), no ArenaMapPort warning, 120 fps (max 8.5 ms), hideout opens.
+- Tests: 861 .NET, 1721 Python (46 skipped), all six deploy-script tests, `DISTRIBUTION_OK 3 maps 9 bundles 3 sidecars`.
+- Open: the published 0.2.1 package (GitHub release and Pixeldrain, built from `d26b7fd`) still carries the old name; the Forge
+  upload needs a re-cut package (re-cut 0.2.1 or bump to 0.2.2 - SpawnGates is on `main` too, user's call). The vanilla server
+  DLL on disk is a same-source rebuild (the assembly carries the commit hash, so it differs per commit); restarting that server
+  is the user's job and changes nothing functionally.
+
 ## Update 2026-10-17 - spawn gates: enclosures held closed for a mode plugin, released on call (SpawnGates)
 
 User question answered and implemented: the team spawn enclosures (Equator's booth doors, Bay5's gates, AirPit's bus

@@ -306,10 +306,10 @@
       <ArenaMapPortBundles Include="$(ArenaMapPortBay5BuildDir)\arena_bay5_scenes.bundle" />
       <ArenaMapPortBundles Include="$(ArenaMapPortBay5BuildDir)\arena_bay5_navmesh.bundle" />
       <ArenaMapPortBundles Include="$(ArenaMapPortPresetBuildDir)\arena_bay5_preset.bundle" />
-      <!-- ShaderRebind.SidecarFileName: Equator keeps its pre-generalization "material-shaders.json"
-           (already deployed under that exact name); every other map gets its own
-           "material-shaders.<map.Key>.json". Bay5's map.Key is "arena_bay5", not the short "bay5"
-           tools/maps/ file stem, so the staged/renamed dist filename below must match that exactly. -->
+      <!-- ShaderRebind.SidecarFileName: every map's sidecar is staged as "material-shaders.<map.Key>.json"
+           (Equator's pre-generalization "material-shaders.json" was renamed on 2026-10-17, before the first
+           Forge release). Bay5's map.Key is "arena_bay5", not the short "bay5" tools/maps/ file stem, so the
+           staged/renamed dist filename below must match that exactly. -->
       <ArenaMapPortBay5ShaderSidecarSrc Include="$(ArenaMapPortBay5BuildDir)\material-shaders.json" />
       <!-- AirPit: same explicit-list rule. NOTE: until the U1 rebuild (PLAN-AIRPIT item 12) work/build/airpit still
            holds the 2026-09-15 spike bundles, which this target stages as they are. -->
@@ -320,7 +320,7 @@
     </ItemGroup>
     <Error Text="[ArenaMapPort] expected bundle missing: %(ArenaMapPortBundles.Identity) -- run tools/build_all.ps1 (full, -MapKey arena_bay5 and -MapKey arena_airpit -FullMap) and tools/preset/patch_preset.py (all three maps) first"
            Condition="!Exists('%(ArenaMapPortBundles.Identity)')" />
-    <Error Text="[ArenaMapPort] expected material-shaders.json missing: %(ArenaMapPortShaderSidecar.Identity)"
+    <Error Text="[ArenaMapPort] expected Equator material-shaders.json missing: %(ArenaMapPortShaderSidecar.Identity) -- run tools/build_all.ps1 -MapKey arena_equator first"
            Condition="!Exists('%(ArenaMapPortShaderSidecar.Identity)')" />
     <Error Text="[ArenaMapPort] expected Bay5 material-shaders.json missing: %(ArenaMapPortBay5ShaderSidecarSrc.Identity) -- run tools/build_all.ps1 -MapKey arena_bay5 first"
            Condition="!Exists('%(ArenaMapPortBay5ShaderSidecarSrc.Identity)')" />
@@ -328,12 +328,12 @@
            Condition="!Exists('%(ArenaMapPortAirPitShaderSidecarSrc.Identity)')" />
     <MakeDir Directories="$(ArenaMapPortDistDir)\bundles" />
     <Copy SourceFiles="@(ArenaMapPortBundles)" DestinationFolder="$(ArenaMapPortDistDir)\bundles" SkipUnchangedFiles="false" />
-    <Copy SourceFiles="@(ArenaMapPortShaderSidecar)" DestinationFolder="$(ArenaMapPortDistDir)" SkipUnchangedFiles="false" />
+    <Copy SourceFiles="@(ArenaMapPortShaderSidecar)" DestinationFiles="$(ArenaMapPortDistDir)\material-shaders.arena_equator.json" SkipUnchangedFiles="false" />
     <Copy SourceFiles="@(ArenaMapPortBay5ShaderSidecarSrc)" DestinationFiles="$(ArenaMapPortDistDir)\material-shaders.arena_bay5.json" SkipUnchangedFiles="false" />
     <Copy SourceFiles="@(ArenaMapPortAirPitShaderSidecarSrc)" DestinationFiles="$(ArenaMapPortDistDir)\material-shaders.arena_airpit.json" SkipUnchangedFiles="false" />
     <Message Importance="high"
              Text="[ArenaMapPort] staged %(ArenaMapPortBundles.Filename)%(ArenaMapPortBundles.Extension) from $(ArenaMapPortFullBuildDir)/$(ArenaMapPortPresetBuildDir)/$(ArenaMapPortBay5BuildDir) into dist/.../bundles/" />
-    <Message Importance="high" Text="[ArenaMapPort] staged material-shaders.json from $(ArenaMapPortFullBuildDir) into dist/.../ArenaMapPort/" />
+    <Message Importance="high" Text="[ArenaMapPort] staged material-shaders.arena_equator.json from $(ArenaMapPortFullBuildDir) into dist/.../ArenaMapPort/" />
     <Message Importance="high" Text="[ArenaMapPort] staged material-shaders.arena_bay5.json from $(ArenaMapPortBay5BuildDir) into dist/.../ArenaMapPort/" />
     <Message Importance="high" Text="[ArenaMapPort] staged material-shaders.arena_airpit.json from $(ArenaMapPortAirPitBuildDir) into dist/.../ArenaMapPort/" />
   </Target>

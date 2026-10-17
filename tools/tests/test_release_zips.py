@@ -55,7 +55,7 @@ def quiet(*_args, **_kwargs):
 
 
 def shader_sidecar(key):
-    return "material-shaders.json" if key == "arena_equator" else f"material-shaders.{key}.json"
+    return f"material-shaders.{key}.json"
 
 
 def git_env():
@@ -172,8 +172,7 @@ class PartitionTests(FakeRepoCase):
         for part, (key, display) in zip(self.partition()[1:], MAPS):
             for f in part.files:
                 self.assertTrue(key in f.rel or f.rel.endswith(f"/ai/{part.id}.ai.json")
-                                or f"ArenaMapPort_{display}/" in f.rel
-                                or f.rel == f"{PLUGIN}/material-shaders.json",
+                                or f"ArenaMapPort_{display}/" in f.rel,
                                 f"{f.rel} does not belong to {key}")
 
     def test_base_json_lands_with_its_bundles(self):
@@ -183,16 +182,16 @@ class PartitionTests(FakeRepoCase):
             for kind in ("scenes", "navmesh", "preset"):
                 self.assertIn(f"{PLUGIN}/bundles/{key}_{kind}.bundle", names)
 
-    def test_legacy_shader_sidecar_belongs_to_equator_only(self):
+    def test_every_shader_sidecar_carries_its_map_key(self):
         parts = {p.id: {f.rel for f in p.files} for p in self.partition()}
-        self.assertIn(f"{PLUGIN}/material-shaders.json", parts["equator"])
+        self.assertIn(f"{PLUGIN}/material-shaders.arena_equator.json", parts["equator"])
         self.assertIn(f"{PLUGIN}/material-shaders.arena_bay5.json", parts["bay5"])
         self.assertIn(f"{PLUGIN}/material-shaders.arena_airpit.json", parts["airpit"])
 
     def test_unknown_files_are_rejected(self):
         for name in (f"{PLUGIN}/extra.txt", f"{PLUGIN}/maschine-ArenaMapPort.Client.pdb",
                      f"{SERVER}/Thumbs.db", f"{PLUGIN}/README.txt", f"{PLUGIN}/parts/core.json",
-                     f"{PLUGIN}/bundles/arena_airpit_scenes.bundle.bak",
+                     f"{PLUGIN}/bundles/arena_airpit_scenes.bundle.bak", f"{PLUGIN}/material-shaders.json",
                      f"{PLUGIN}/bundles/xarena_airpit_scenes.bundle",
                      f"{PLUGIN}/bundles/arena_airpit_other.bundle",
                      f"{PLUGIN}/acoustics/loose.json", f"{SERVER}/db/base.json",

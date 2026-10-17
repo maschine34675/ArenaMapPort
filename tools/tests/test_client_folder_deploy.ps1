@@ -25,6 +25,7 @@ try {
     Run $false @('-Confirm', '-DllOnly')
     Run $false @('-Confirm', '-RemoveDebugHelper')
     Run $false @('-Confirm', '-RemoveLegacyEquatorDb')
+    Run $false @('-Confirm', '-RemoveLegacyShaderSidecar')
     Run $false @('-Confirm', '-RemoveLegacyDynamicMaps')
     Run $false @('-Confirm', '-DynamicMapsMap', 'Bay5')
     Run $false @('-Confirm', '-DynamicMapsPackage', $temp)

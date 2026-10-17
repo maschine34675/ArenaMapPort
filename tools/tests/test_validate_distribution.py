@@ -59,7 +59,7 @@ class DistributionSidecarTests(unittest.TestCase):
         bundles.mkdir(parents=True)
         for kind in ("scenes", "navmesh", "preset"):
             (bundles / f"arena_equator_{kind}.bundle").write_bytes(b"fixture bundle")
-        (self.plugin / "material-shaders.json").write_text("{}", encoding="utf-8")
+        (self.plugin / "material-shaders.arena_equator.json").write_text("{}", encoding="utf-8")
         for key, scene in (("arena_equator", "Arena_Equator_Lighting"),
                            ("arena_bay5", "Arena_Bay5_Light")):
             package = flare_graph()
@@ -225,6 +225,7 @@ class DistributionSidecarTests(unittest.TestCase):
         for path, message in (
                 (self.plugin / "bundles/arena_bowl_scenes.bundle", "Bundle set mismatch"),
                 (self.plugin / "material-shaders.arena_bowl.json", "Shader sidecar set"),
+                (self.plugin / "material-shaders.json", "Shader sidecar set"),
                 (self.server / "db/arena_bowl/base.json", "Server database set")):
             with self.subTest(path=path):
                 path.parent.mkdir(parents=True, exist_ok=True)

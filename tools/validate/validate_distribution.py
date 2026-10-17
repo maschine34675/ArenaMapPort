@@ -203,7 +203,7 @@ def validate():
     # for the full root-cause evidence.
     subprocess.run([sys.executable, str(REPO/'tools/validate/validate_bundle_names.py'),
                     '--bundles-dir', str(plugin/'bundles')], cwd=REPO, check=True)
-    expected_sidecars = {'material-shaders.json' if key == 'arena_equator' else f'material-shaders.{key}.json' for key in keys}
+    expected_sidecars = {f'material-shaders.{key}.json' for key in keys}
     actual_sidecars = {p.name for p in plugin.glob('material-shaders*.json')}
     if actual_sidecars != expected_sidecars:
         raise ValueError('Shader sidecar set does not exactly match registered maps')

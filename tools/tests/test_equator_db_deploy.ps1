@@ -26,6 +26,7 @@ Set-Content -LiteralPath "$live/db/base.json" -Value '{"Id":"other"}'
 Run $false @('-Confirm')
 Set-Content -LiteralPath "$live/db/base.json" -Value '{"Id":"arena_equator","old":true}'
 Run $false @('-Confirm','-DllOnly')
+Run $false @('-Confirm','-RemoveLegacyShaderSidecar')
 Run $true @('-Confirm')
 if (Test-Path -LiteralPath "$live/db/base.json") { throw 'Legacy file remains' }
 $backups = @(Get-ChildItem -LiteralPath "$temp/work/deployment-backups" -Recurse -File)

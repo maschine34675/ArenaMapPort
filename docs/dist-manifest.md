@@ -1,5 +1,12 @@
 # Current distribution contract: Equator, Bay5 and AirPit
 
+2026-10-17: Equator's shader sidecar is staged as `material-shaders.arena_equator.json`, the same rule as every other
+map (`ShaderRebind.SidecarFileName`, csproj `ArenaMapPortStageWpOutputs`, `make_release_zips.py`, `validate_distribution.py`).
+The pre-generalization name `material-shaders.json` is retired before the first Forge upload; ordinary deployment never deletes,
+so an install that still holds the old file is cleaned by the explicit `-RemoveLegacyShaderSidecar` deploy mode (backs the file
+up under `work/deployment-backups`, removes it only after the renamed file and the client DLL match dist). The published 0.2.1
+package (built from `d26b7fd`) still carries the old name; the next package carries the new one.
+
 2026-10-16 (release 0.2.1): same three-map list and bundle set as 0.2.0; only the two DLLs are rebuilt (client:
 `ScopeMaskRepairs`, the sharp sight picture inside optics; server: version string only), packaged as
 `maschine-ArenaMapPort-0.2.1.zip` with its `.sha256` file.
@@ -56,8 +63,7 @@ The earlier Equator-only distribution log remains unchanged at [progress/dist-ma
 dist/
   BepInEx/plugins/maschine-ArenaMapPort/
     maschine-ArenaMapPort.Client.dll
-    material-shaders.json                       # Equator compatibility name
-    material-shaders.arena_<stem>.json           # one for each of the other 13 maps
+    material-shaders.arena_<stem>.json           # one per map (Equator's compatibility name retired 2026-10-17)
     bundles/
       arena_<stem>_preset.bundle
       arena_<stem>_scenes.bundle
@@ -65,8 +71,7 @@ dist/
   SPT_Runtime/user/mods/ArenaMapPort/
     maschine-ArenaMapPort.Server.dll
     db/
-      base.json                                 # Equator compatibility path
-      arena_<stem>/base.json                     # one for each of the other 13 maps
+      arena_<stem>/base.json                     # one per map (Equator's loose base.json retired 2026-10-11)
 ```
 
 The 14 stems are `equator`, `bay5`, `airpit`, `airpit2`, `autoservice`, `bowl`, `prison`, `railwaystation`, `yard`, `iceberg`, `factory`, `custom`, `shoreline`, `woods`. The verified set is **42 bundles, 14 shader sidecars, the two Release DLLs and 14 map base JSON files**: **72 files, 11,054,200,717 bytes** (about 11.05 GB). Saw, the Bay5 tournament variant, Draft and the generic test preset add no separate output set.
@@ -75,7 +80,7 @@ The 14 stems are `equator`, `bay5`, `airpit`, `airpit2`, `autoservice`, `bowl`, 
 
 | Map group | Scenes/NavMesh/sidecar source | Preset source | Sidecar destination |
 |---|---|---|---|
-| Equator | `work/build/full/` | `work/build/preset/arena_equator_preset.bundle` | `material-shaders.json` |
+| Equator | `work/build/full/` | `work/build/preset/arena_equator_preset.bundle` | `material-shaders.arena_equator.json` |
 | Bay5 | `work/build/bay5/` | `work/build/preset/arena_bay5_preset.bundle` | `material-shaders.arena_bay5.json` |
 | Each additional map | `work/build/<stem>/` | `work/build/preset/arena_<stem>_preset.bundle` | `material-shaders.arena_<stem>.json` |
 
