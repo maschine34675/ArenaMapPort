@@ -45,6 +45,10 @@ namespace ArenaMapPort.Client
         static readonly Dictionary<string, NavMeshDataInstance> _instances = new Dictionary<string, NavMeshDataInstance>();
         static bool _unloadHooked;
 
+        /// <summary>Raised right after this raid's ported NavMeshData is added (and its triangulation logged); runtime
+        /// NavMesh users that must not touch the mesh before it exists (SpawnGates' carvers) subscribe here.</summary>
+        internal static event Action Installed;
+
         internal static void OnBotsControllerInit()
         {
             var map = ArenaMapRaid.CurrentMap;
@@ -83,6 +87,8 @@ namespace ArenaMapPort.Client
                 int triangles = (triangulation.indices?.Length ?? 0) / 3;
                 Plugin.Log.LogDebug($"[ArenaMapPort][NavMesh] added navmesh for '{map.Key}': " +
                                     $"{vertices} vertices, {triangles} triangles");
+                try { Installed?.Invoke(); }
+                catch (Exception e) { Plugin.Log.LogError($"[ArenaMapPort][NavMesh] Installed handler failed: {e}"); }
             }
             catch (Exception e)
             {

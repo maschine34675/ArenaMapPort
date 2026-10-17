@@ -3,6 +3,24 @@
 Snapshot for whoever continues (human or agent). Verify the commits named here against `git log`; this file
 is updated by hand at each handover, it is not an automatic record. Read [AGENTS.md](AGENTS.md) first.
 
+## Update 2026-10-17 - spawn gates: enclosures held closed for a mode plugin, released on call (SpawnGates)
+
+User question answered and implemented: the team spawn enclosures (Equator's booth doors, Bay5's gates, AirPit's bus
+doors) can stay closed through a preparation phase and open later. `ArenaMapPort.Client/SpawnGates.cs` (public API
+`Hold(reason)` / `Release(reason)` / `IsHeld` / `ClosedParts`, reflection contract in its class doc) registers every part
+`BoothDoorRepairs` would switch off, keeps it closed while held, seals it for bots with carving NavMeshObstacle boxes
+(EFT bots never see colliders), slides Equator's leaves 1.38 m into their frame pockets on release and switches the parts
+off as the raid-start opening would. Developer keys `Spawns/SpawnGateHold` + `SpawnGateHoldSeconds` (test hold without a
+caller), `SpawnGateCarve`, `SpawnGateSlideSeconds`, `SpawnGateMaxHoldSeconds` (safety release, Warning). Pure rules in
+`SpawnGateModel.cs` with tests. GPU-2 evidence (Equator, PMC raid, bots as online): 15 parts held, 11 carvers, probe
+sealed (9 judged, door (3) disconnected on the map itself), auto release after 60 s, probe open 0.5 s later, no warning,
+120 fps; details and the ArenaMode to-do list in [spawn-gates.md](docs/progress/spawn-gates.md). What the plugin side
+could not observe: SAIN bots at a sealed doorway (plain-raid bots kept 50 m away whether open or closed); that belongs to
+the first Team DM with the gates held, which needs ArenaMode to call the API and to tolerate a Partial path out of a box
+during the hold. Review workflow: 11 confirmed findings, all fixed before the final host run (registration of every part,
+closed pose restored on a re-hold, an opening in progress cancelled by Hold, safety limit counted from the hold, probe
+bounds cached, baseline probe). Not released; the next version decides.
+
 ## Update 2026-10-16 (evening) - RELEASE 0.2.1 published (first Forge version), 0.2.0 withdrawn
 
 User decision: 0.2.0 is deleted completely (GitHub release and tag `v0.2.0` removed, Pixeldrain files a9p4qcnD/Nj6acBoa and

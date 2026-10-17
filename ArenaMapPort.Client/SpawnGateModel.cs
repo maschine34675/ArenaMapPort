@@ -1,0 +1,79 @@
+#nullable disable
+using System;
+
+namespace ArenaMapPort.Client
+{
+    /// <summary>
+    /// The pure rules behind <see cref="SpawnGates"/> (no Unity types, linked into the server tests): which gate part
+    /// slides which way when a booth opens, how a NavMesh carver box is sized from a part's world bounds, when a held
+    /// gate releases itself, and how a NavMesh probe across the doorway is judged. The numbers are design data: the
+    /// slide distance is the leaf width of Equator's sliding respawn doors, which equals the depth of the frame pocket
+    /// next to each leaf (work/extract/equator-native-v5, leaf x 0..1.38, frame x up to 2.82); Arena's own slide script
+    /// is not readable, so the motion is an inference from that geometry, not Arena data.
+    /// </summary>
+    internal static class SpawnGateModel
+    {
+        /// <summary>Name prefix of Arena's sliding respawn-booth door assemblies and their two leaves.</summary>
+        internal const string DoorPrefix = "Door_Sliding_Respawn";
+
+        /// <summary>How far a sliding leaf moves along its local x axis when the booth opens (metres).</summary>
+        internal const float SlideDistance = 1.38f;
+
+        /// <summary>Extra width per horizontal side of a carver box, so the agent radius (0.3 m on the ported bakes)
+        /// cannot squeeze past the edge of a thin leaf.</summary>
+        internal const float CarveMargin = 0.2f;
+
+        /// <summary>Extra height of a carver box above the part, so the carve covers the walkable surface fully.</summary>
+        internal const float CarveHeightMargin = 0.5f;
+
+        /// <summary>Distance from the gate's centre to each probe point across its thin axis (metres).</summary>
+        internal const float ProbeReach = 1.5f;
+
+        /// <summary>Search radius when snapping a probe point to the NavMesh (metres).</summary>
+        internal const float ProbeSampleRadius = 1.5f;
+
+        /// <summary>Unity's NavMeshPathStatus.PathComplete as an int, so this file stays free of Unity types.</summary>
+        internal const int PathComplete = 0;
+
+        /// <summary>+1 for the left leaf (slides towards +x into its frame pocket), -1 for the right leaf, 0 for any
+        /// other gate part (those switch off without a motion: Bay5's warehouse gates, AirPit's bus doors).</summary>
+        internal static int SlideDirection(string partName)
+        {
+            if (partName == DoorPrefix + "_L") return 1;
+            if (partName == DoorPrefix + "_R") return -1;
+            return 0;
+        }
+
+        /// <summary>Gates are held closed only when the feature is on and either a caller asked for it (ArenaMode) or the
+        /// developer test hold is on.</summary>
+        internal static bool ShouldHold(bool featureEnabled, bool requested, bool testHold) =>
+            featureEnabled && (requested || testHold);
+
+        /// <summary>A timed hold releases once the raid clock since GameStatus.Started reaches the hold length; a hold
+        /// length of zero or less never releases by time.</summary>
+        internal static bool AutoReleaseDue(float secondsSinceStarted, float holdSeconds) =>
+            holdSeconds > 0f && secondsSinceStarted >= holdSeconds;
+
+        /// <summary>Carver box (centre and size) for a gate part from its world-space AABB: the horizontal sides grow by
+        /// <see cref="CarveMargin"/>, the top by <see cref="CarveHeightMargin"/>, the bottom stays at the part's floor line
+        /// so the carve starts at the walkable surface.</summary>
+        internal static void CarverBox(float minX, float minY, float minZ, float maxX, float maxY, float maxZ,
+            out float centreX, out float centreY, out float centreZ, out float sizeX, out float sizeY, out float sizeZ)
+        {
+            if (maxX < minX || maxY < minY || maxZ < minZ) throw new ArgumentException("inverted bounds");
+            sizeX = (maxX - minX) + 2f * CarveMargin;
+            sizeZ = (maxZ - minZ) + 2f * CarveMargin;
+            sizeY = (maxY - minY) + CarveHeightMargin;
+            centreX = (minX + maxX) * 0.5f;
+            centreZ = (minZ + maxZ) * 0.5f;
+            centreY = minY + sizeY * 0.5f;
+        }
+
+        /// <summary>The horizontal axis a gate is thin on, which the probe path has to cross: 0 for x, 2 for z.</summary>
+        internal static int ThinAxis(float sizeX, float sizeZ) => sizeX <= sizeZ ? 0 : 2;
+
+        /// <summary>A carved doorway yields a Partial or Invalid NavMesh path between the two probe points; a complete
+        /// path means the gate is NOT sealed for bots.</summary>
+        internal static bool Sealed(int pathStatus) => pathStatus != PathComplete;
+    }
+}

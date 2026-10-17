@@ -74,7 +74,7 @@ on the far side of a spawn zone, 10 m from the nearest spawn. `name` doubles as 
 ## 3. Barriers the client must open — `opened_barriers` in `tools/maps/<stem>.json`
 
 Arena closes spawn areas per round with sliding booth doors (`Door_Sliding_Respawn*`, generic — opened on
-every map by `BoothDoorRepairs`), `SPAWN_BOUND*` boxes (generic — `SpawnPlacementRepairs`) and, on Equator,
+every map by `BoothDoorRepairs`) — since 2026-10-17 every such part is registered with `SpawnGates`, so a mode plugin can hold the enclosures closed and release them later (docs/progress/spawn-gates.md), `SPAWN_BOUND*` boxes (generic — `SpawnPlacementRepairs`) and, on Equator,
 one static roller shutter. Anything map-specific goes into `opened_barriers` as a hierarchy path (object
 names repeat), mirrored by `ArenaMapDescriptor.OpenedBarriers` (test `OpenedBarriers_DescriptorMirrorsSidecar`).
 `BakeNavMesh` excludes the same objects from the NavMesh sources, so a new entry means a bundle rebuild.

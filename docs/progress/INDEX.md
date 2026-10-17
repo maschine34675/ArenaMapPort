@@ -8,6 +8,9 @@ dated state in one screen; read it before this index if you only have a minute.
 
 ## Current — read these for the area you touch
 
+- [spawn-gates.md](spawn-gates.md) — spawn enclosures held closed until a mode plugin releases them (`SpawnGates`
+  API Hold/Release/IsHeld, NavMesh carvers over the closed parts, Equator's leaves slide open), what Arena had, what
+  ArenaMode's Team DM needs, GPU-2 evidence that carving works on the ported NavMesh (2026-10-17).
 - [scope-mask.md](scope-mask.md) — blurred image inside magnifying optics on every ported map: the vanilla Scripts
   scenes' `TechnicalManagers/ScopeMaskRenderer` is missing, so the aiming depth-of-field blurred the sight picture;
   `ScopeMaskRepairs` provides it (GPU-2 AirPit vs Factory stills, 2026-10-16).

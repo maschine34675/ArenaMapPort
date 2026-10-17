@@ -33,13 +33,18 @@ namespace ArenaMapPort.Client
     /// ("equator_roller_shutters_02 (4)" exists twice), hence full paths.
     ///
     /// Both steps log a horizontal raycast from every player spawn to each opening within 20 m so the log says
-    /// whether the way out is clear. The NavMesh was baked with the leaves and shutters in place (booth and hall
-    /// interiors are islands for bots); that is a bake change, not a runtime one — see the doc.
+    /// whether the way out is clear. The NavMesh bake leaves these parts out (BakeNavMesh.RoundOpenedReason), so
+    /// the baked mesh runs through every opening and the booth interiors join the main NavMesh component.
+    ///
+    /// Since 2026-10-17 every part is offered to <see cref="SpawnGates"/> before it is switched off: the part is
+    /// registered with its closed pose either way, and while a mode plugin holds the gates closed it stays active
+    /// (sealed for bots by a NavMesh carver) and opens on the plugin's release instead; the raycast then reports
+    /// BLOCKED on purpose.
     /// </summary>
     internal static class BoothDoorRepairs
     {
         const string Tag = "[ArenaMapPort][RaidFix]";
-        const string DoorPrefix = "Door_Sliding_Respawn";
+        const string DoorPrefix = SpawnGateModel.DoorPrefix;
         const string FramePart = "frame";
         const float RayReach = 20f; // openings within this distance of a player spawn get a raycast verdict
         static ConfigEntry<bool> _doors;
@@ -90,7 +95,7 @@ namespace ArenaMapPort.Client
         static void OpenDoors(List<Transform> openings, StringBuilder sb)
         {
             var doorRoots = new List<Transform>();
-            int leaves = 0;
+            int leaves = 0, held = 0;
             foreach (var root in OwnedSceneRoots())
             {
                 foreach (var t in root.GetComponentsInChildren<Transform>(true))
@@ -104,6 +109,7 @@ namespace ArenaMapPort.Client
                     {
                         if (t.gameObject.activeSelf)
                         {
+                            if (SpawnGates.Offer(t)) { held++; continue; } // registered either way; a hold keeps the booth closed for now
                             t.gameObject.SetActive(false);
                             leaves++;
                         }
@@ -118,7 +124,8 @@ namespace ArenaMapPort.Client
             {
                 return;
             }
-            sb.Append($"\n  respawn doors: deactivated {leaves} sliding-door leaf(s) on {doorRoots.Count} door assembly(s)");
+            sb.Append($"\n  respawn doors: deactivated {leaves} sliding-door leaf(s) on {doorRoots.Count} door assembly(s)" +
+                      (held > 0 ? $", {held} leaf(s) {SpawnGates.Describe()}" : ""));
             foreach (var door in doorRoots)
             {
                 sb.Append($"\n    door '{door.name}' at {door.position:F1}");
@@ -149,7 +156,7 @@ namespace ArenaMapPort.Client
                 }
                 foreach (var barrier in found)
                 {
-                    int opened = 0, kept = 0, alreadyOff = 0;
+                    int opened = 0, kept = 0, alreadyOff = 0, held = 0;
                     for (int i = 0; i < barrier.childCount; i++)
                     {
                         var part = barrier.GetChild(i);
@@ -160,6 +167,7 @@ namespace ArenaMapPort.Client
                         }
                         if (part.gameObject.activeSelf)
                         {
+                            if (SpawnGates.Offer(part)) { held++; continue; } // registered either way; a hold keeps the enclosure closed for now
                             part.gameObject.SetActive(false);
                             opened++;
                         }
@@ -169,7 +177,8 @@ namespace ArenaMapPort.Client
                         }
                     }
                     sb.Append($"\n  spawn barrier '{barrier.name}' at {barrier.position:F1}: deactivated {opened} part(s), " +
-                              $"{alreadyOff} already off, kept {kept} frame part(s)");
+                              $"{alreadyOff} already off, kept {kept} frame part(s)" +
+                              (held > 0 ? $", {held} part(s) {SpawnGates.Describe()}" : ""));
                     openings.Add(barrier);
                 }
             }

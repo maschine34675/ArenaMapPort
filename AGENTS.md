@@ -398,6 +398,12 @@ the log; the user uses it to point at things.
   `_ScopeMask` texture is never written and the aiming depth-of-field blurs the image inside every magnifying optic
   (ELCAN 4x on AirPit soft, the same scope on Factory sharp). A screen/aiming effect that works on vanilla but not on
   a ported map: check that root's list first, with `uibridge_inspect gameObject path=TechnicalManagers` on a vanilla raid.
+- Spawn gates: EFT bots path only on the NavMesh (area mask -1, no NavMeshAgent) and never see colliders, so a gate part
+  re-activated at runtime is a wall for players and air for bots (SAIN presses against it, the vanilla mover snaps through).
+  `SpawnGates` seals a held gate with carving `NavMeshObstacle` boxes; carving on the ported `NavMeshData` (added through
+  `NavMesh.AddNavMeshData`) works and un-carves within 0.5 s (GPU-2, 2026-10-17). Equator's booths double as the map's
+  extraction boxes (4 x 4 m at (2, 46) and (5, -44)): a tester standing inside one extracts after 8 s. Door (3) of the
+  south booth is disconnected on the map's own NavMesh (Arena's fence behind it); probes across it are Partial by design.
 - Meta XR Audio is process-global: `MetaXRAcousticSettings.Instance.AcousticModel` and the one shoebox room
   (`MetaXRAudioRoomAcousticProperties`, two native calls per frame while enabled) belong to the whole process, not to a
   scene, and the plugin's managed model value does not vouch for the native side after an audio reset. `RoomShotAcoustics`
