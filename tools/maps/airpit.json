@@ -27,6 +27,8 @@
   ],
   "opened_barriers": [
     "BUS_DOORS",
+    "PASSPORT_CONTROL_DOORS",
+    "PASSPORT_CONTROL_EMISSIVE",
     "SBG_Arena_AirPit_ShootOut/SOO/Prison_Metal_Fence_01 (2)",
     "SBG_Arena_AirPit_ShootOut/SOO/Prison_Metal_Fence_01 (3)",
     "SBG_Arena_AirPit_ShootOut/SOO_LOD0/BUILDING/Airport_Shop_BS_closed_closed",
@@ -36,6 +38,13 @@
     "SBG_Arena_AirPit_ShootOut/SOO_LOD0/BUILDING/TH_Roll_door_02_closed",
     "SBG_Arena_AirPit_ShootOut/SOO_LOD0/BUILDING/TH_Roll_door_03_closed",
     "SBG_Arena_AirPit_ShootOut/SOO/Cube (10) Group"
+  ],
+  "start_gates": [
+    "BUS_DOORS"
+  ],
+  "held_gates": [
+    "PASSPORT_CONTROL_DOORS",
+    "PASSPORT_CONTROL_EMISSIVE"
   ],
   "navmesh_bake_exclusions": [],
   "authored_borders": [
@@ -67,7 +76,7 @@
       [-21.01, 83.01], [-14.71, 83.01], [-11.57, 83.01], [-5.21, 83.01], [-2.14, 83.01]
     ]
   },
-  "bake_bounds": [-57, 37, -2, 8, -83, 70],
+  "bake_bounds": [-57, 37, -2, 8, -83, 83],
   "navmesh_bake_layers": [9, 11, 13, 18, 30],
   "shader_fallback_names": [
     "Custom/Billboard_FogSheet_Simple",

@@ -70,8 +70,10 @@ public class MapDescriptorConsistencyTests
         Assert.Equal(new[]
         {
             "BUS_DOORS",
-            // PASSPORT_CONTROL_DOORS stays closed since 2026-10-12 (user decision, host raid 4/5): the closed
-            // passport-control look (turnstile gates, red lane lights); the north spawns moved south of its line.
+            // the passport control (16 lane turnstiles + the red lane sheets) is the north team box's HELD gate since
+            // 2026-10-18: closed at raid start in every mode, opened only by SpawnGates.Release (HeldGates below)
+            "PASSPORT_CONTROL_DOORS",
+            "PASSPORT_CONTROL_EMISSIVE",
             // the two portal gates of the z 50.5 facade (host raid 1, 2026-10-12): non-root paths into the main scene
             "SBG_Arena_AirPit_ShootOut/SOO/Prison_Metal_Fence_01 (2)",
             "SBG_Arena_AirPit_ShootOut/SOO/Prison_Metal_Fence_01 (3)",
@@ -124,11 +126,11 @@ public class MapDescriptorConsistencyTests
             minX = MathF.Min(minX, MathF.Min(b.X0, b.X1)); maxX = MathF.Max(maxX, MathF.Max(b.X0, b.X1));
             minZ = MathF.Min(minZ, MathF.Min(b.Z0, b.Z1)); maxZ = MathF.Max(maxZ, MathF.Max(b.Z0, b.Z1));
         }
-        // Bots get no mesh beyond the walls: the bake volume lies inside the outline's bounding box (to within 1 m on
-        // the west, east and south edges; the north is cut at the closed passport-control line, 13 m inside).
+        // Bots get no mesh beyond the walls: the bake volume hugs the outline's bounding box to within 1 m on every
+        // edge (the north again since 2026-10-18: the original north team box lies behind the held passport gate).
         var bounds = ArenaMapRegistry.AirPit.BakeBounds;
         Assert.InRange(bounds[0], minX - 1f, minX + 1f); Assert.InRange(bounds[1], maxX - 1f, maxX + 1f);
-        Assert.InRange(bounds[4], minZ - 1f, minZ + 1f); Assert.InRange(bounds[5], 69.5f, maxZ + 1f);
+        Assert.InRange(bounds[4], minZ - 1f, minZ + 1f); Assert.InRange(bounds[5], maxZ - 1f, maxZ + 1f);
         // Every spawn and exit of the map lies inside the outline's box (the walls must not shut a spawn out).
         foreach (var exit in ArenaMapRegistry.AirPit.Exits)
         {
@@ -164,13 +166,12 @@ public class MapDescriptorConsistencyTests
         // closed shop shells joined the list when the furnished shops came in from Arena_Airpit_Main_hall, and the
         // layer-0 blockout panels over the south-west roll doors after the first host raid on that build.
         Assert.Empty(airPit.NavMeshBakeExclusions);
-        Assert.Equal(10, airPit.OpenedBarriers.Length);
+        Assert.Equal(12, airPit.OpenedBarriers.Length);
         Assert.All(airPit.OpenedBarriers, path => Assert.True(IsHierarchyPath(path), path));
         Assert.Equal(airPit.OpenedBarriers.Length, airPit.OpenedBarriers.Distinct().Count());
-        Assert.DoesNotContain("PASSPORT_CONTROL_DOORS", airPit.OpenedBarriers); // the gates stay closed (look); the facade wall is the limit
-        // The AABB of the authored borders (Arena's TeamFight outline) rounded outwards, cut at z 70 just south of
-        // the closed passport-control line (z 69.4).
-        Assert.Equal(new[] { -57.0f, 37.0f, -2.0f, 8.0f, -83.0f, 70.0f }, airPit.BakeBounds);
+        Assert.Contains("PASSPORT_CONTROL_DOORS", airPit.OpenedBarriers); // the held north gate: out of the bake, closed at raid start
+        // The AABB of the authored borders (Arena's TeamFight outline) rounded outwards (z 83 vs the outline's 83.6).
+        Assert.Equal(new[] { -57.0f, 37.0f, -2.0f, 8.0f, -83.0f, 83.0f }, airPit.BakeBounds);
         // min < max per axis: [min_x, max_x, min_y, max_y, min_z, max_z]
         for (var axis = 0; axis < 3; axis++)
             Assert.True(airPit.BakeBounds[2 * axis] < airPit.BakeBounds[2 * axis + 1]);
@@ -212,5 +213,31 @@ public class MapDescriptorConsistencyTests
     {
         Assert.NotEmpty(map.AllSceneNames);
         Assert.Equal(map.ScriptsSceneName, map.AllSceneNames[0]);
+    }
+
+    // 2026-10-18 (the original AirPit north team box): which opened barriers a mode plugin may hold (StartGates) and
+    // which stay closed until SpawnGates.Release (HeldGates). Equator and Bay5 declare neither, so every barrier of
+    // theirs is a start gate, exactly as before.
+    [Fact]
+    public void SpawnGateRoles_AirPitHoldsOnlyTheBusDoors_AndKeepsThePassportControlClosed()
+    {
+        var airPit = ArenaMapRegistry.AirPit;
+        Assert.Equal(new[] { "BUS_DOORS" }, airPit.StartGates);
+        Assert.Equal(new[] { "PASSPORT_CONTROL_DOORS", "PASSPORT_CONTROL_EMISSIVE" }, airPit.HeldGates);
+        Assert.Equal(ArenaGateRole.Start, airPit.GateRoleOf("BUS_DOORS"));
+        Assert.Equal(ArenaGateRole.Held, airPit.GateRoleOf("PASSPORT_CONTROL_DOORS"));
+        Assert.Equal(ArenaGateRole.Held, airPit.GateRoleOf("PASSPORT_CONTROL_EMISSIVE"));
+        Assert.Equal(9, airPit.OpenedBarriers.Count(p => airPit.GateRoleOf(p) == ArenaGateRole.Plain)); // fences, shells, panels
+        Assert.Equal(ArenaGateRole.Plain, airPit.GateRoleOf("not a barrier at all"));
+        foreach (var map in ArenaMapRegistry.Catalog)
+        {
+            Assert.All(map.StartGates, p => Assert.Contains(p, map.OpenedBarriers));
+            Assert.All(map.HeldGates, p => Assert.Contains(p, map.OpenedBarriers));
+            Assert.Empty(map.StartGates.Intersect(map.HeldGates));
+            if (ReferenceEquals(map, airPit)) continue;
+            Assert.Empty(map.StartGates);
+            Assert.Empty(map.HeldGates);
+            Assert.All(map.OpenedBarriers, p => Assert.Equal(ArenaGateRole.Start, map.GateRoleOf(p)));
+        }
     }
 }

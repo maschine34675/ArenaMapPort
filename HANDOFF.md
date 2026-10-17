@@ -3,6 +3,43 @@
 Snapshot for whoever continues (human or agent). Verify the commits named here against `git log`; this file
 is updated by hand at each handover, it is not an automatic record. Read [AGENTS.md](AGENTS.md) first.
 
+## Update 2026-10-18 - AirPit's original north team box: bake z 83, the passport control as a held gate, per-map start gates
+
+User decision after the gap analysis below ("die Original-Nordbox: Rebake, Nordtor und Hold-Teilmenge"). Done and
+host-verified on GPU-2 (18:41-18:55); details in [spawn-gates.md](docs/progress/spawn-gates.md) and
+[airpit-team-boxes.md](docs/progress/airpit-team-boxes.md), both with a 2026-10-18 follow-up.
+- Data (sidecar + descriptor in one commit): `bake_bounds` z max 70 -> 83 (the authored-borders AABB again);
+  `opened_barriers` regains `PASSPORT_CONTROL_DOORS` + `PASSPORT_CONTROL_EMISSIVE` (12 entries, so the bake leaves them
+  out); new keys `start_gates` ["BUS_DOORS"] (the only barrier a hold may close) and `held_gates` [both passport roots]
+  (closed at raid start in every mode, carved from the NavMesh install on, opened only by a Release after a hold).
+  `ArenaMapDescriptor.GateRoleOf` -> Plain/Start/Held; Equator and Bay5 declare neither key, so every barrier of theirs
+  stays a start gate as before. Validator, mirror tests and the bake pins (sources 7740, mask 3020,
+  TeamFight_DesignStuff [97, 3, 0], 92 barrier colliders) follow.
+- Client: `BoothDoorRepairs` opens by role; `SpawnGates.OfferHeld` / `HeldGatesClosed` / `SealHeldGates`, incremental
+  carvers, `_heldGatesOpened`; the probe verdict is per enclosure (`SpawnGateModel.EnclosureContradicts`), so the bus
+  pocket's authored-open inner row no longer raises a false Warning. The reflection contract for ArenaMode is unchanged.
+  `SpawnGates=false` or `SpawnGateCarve=false` opens the held gates at raid start (an uncarved leaf on a meshed lane
+  would trap bots).
+- Rebake U7 (`build_all.ps1 -FullMap`, 18:16-18:35): bounds Extents (47, 5, 83), sources 3032, 11771 vertices / 5415
+  triangles (U6: 11332 / 5212); base.json unchanged; the U6 bundles are kept under `work/build/airpit-u6-backup/`. All
+  ten north markers and the eight lane strips lie on the main component of the raw bake (new test in
+  `test_airpit_spawns.py`); the passport booth row of package v8 fills the floor between the lanes, so the turnstiles
+  are the only openings (the 2026-10-12 "open floor between them" observation was made on package v6).
+- Host: plain AirPit raid `PASSPORT_CONTROL_DOORS ... 18 part(s) closed until Release`, EMISSIVE 18, `navmesh installed:
+  16 carver(s) ... 36 held-gate part(s)`, `navmesh probe: every probed gate sealed (16 probed)`, dryRun to a north
+  marker and to a lane strip not reachable, the hall reachable, no warning. Developer test hold 60 s: 40 carvers,
+  `every probed gate sealed (22 probed)`, `released ... 42 gate part(s) switched off, 40 carver(s) removed`, `every
+  probed gate open (22 probed)`, dryRun to the north marker reachable, `uibridge_walk` 22.5 m through a lane to marker
+  (6): arrived. Hideout opens. Equator regression raid: opening unchanged, no SpawnGates activity, no warning.
+  RainBounds grew to size z 246 (the rain play space is the bake box + 30 m).
+- Both installs carry the build (`D:\SPT41`, `D:\SPT41vanilla`; the vanilla server DLL changed with Shared, its
+  restart is the user's). Host dev cfg back to `SpawnGateHold=false`, `SpawnGateHoldSeconds=30`.
+- Open: ArenaMode's `arena_airpit` formation and its GPU trial (bots in the north box, departures through eight
+  single-file lanes); whether a player can vault the 1.35 m turnstiles (untested); the AirPit DynamicMaps pack is
+  derived from the NavMesh bundle and wants a re-export (the pocket is meshed now); the crate under the tarp at
+  (-31.3, -16.7) (level38 `SOO` crates, user's choice pending); a new MapPort version before ArenaMode relies on this
+  (0.2.1 carries neither SpawnGates nor the U7 bundle).
+
 ## Update 2026-10-17 (evening) - AirPit team boxes: gap analysis for ArenaMode's original team boxes (offline)
 
 User question: Bay5's original team boxes are now implemented in ArenaMode (its `cfa3f55`); what does AirPit still lack?

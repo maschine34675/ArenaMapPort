@@ -279,9 +279,9 @@ the log; the user uses it to point at things.
   client removes at raid start — TeamFight `LevelBorder` walls, `SPAWN_BOUND` boxes, booth door leaves, listed
   barriers. `BakeNavMesh.RoundOpenedReason` excludes those by name; anything else the client disables at
   runtime must be added there too, or it stays a wall for bots. The bake volume is the renderer union + 10 m
-  unless the descriptor carries `bake_bounds` (AirPit: x −57..37, y −2..8, z −83..70: the closed passport control is
-  the north limit since 2026-10-12, so the original north team box at z 69..85 has no mesh, see
-  `docs/progress/airpit-team-boxes.md`; the `authored_borders` reach z 83.6. Equator/Bay5 have none — their ground floors sit around y −8..12, the upper rings are
+  unless the descriptor carries `bake_bounds` (AirPit: x −57..37, y −2..8, z −83..83 = the AABB of its
+  `authored_borders` (z 83.6) rounded; from 2026-10-12 to 2026-10-18 it ended at z 70 to keep bots out of the north
+  spawn pocket, now the held passport gate does that, see `docs/progress/airpit-team-boxes.md`. Equator/Bay5 have none — their ground floors sit around y −8..12, the upper rings are
   decoration). Arena bounds AirPit's TeamFight area by a data polygon, not colliders (`ExcludeLevelBorders` in its
   culling scene); `AuthoredBorderRepairs` raises invisible movement-layer walls along that outline at raid start. `navmesh_bake_exclusions` drops a
   subtree from the bake WITHOUT deactivating it at runtime — no map uses it any more: AirPit's four "route cutters"
@@ -410,6 +410,12 @@ the log; the user uses it to point at things.
   `NavMesh.AddNavMeshData`) works and un-carves within 0.5 s (GPU-2, 2026-10-17). Equator's booths double as the map's
   extraction boxes (4 x 4 m at (2, 46) and (5, -44)): a tester standing inside one extracts after 8 s. Door (3) of the
   south booth is disconnected on the map's own NavMesh (Arena's fence behind it); probes across it are Partial by design.
+  Since 2026-10-18 the descriptor says which opened barriers a hold may close (`start_gates`; AirPit: BUS_DOORS only) and
+  which stay closed until the release in every mode (`held_gates`; AirPit's `PASSPORT_CONTROL_DOORS` + `_EMISSIVE`, the
+  original north team box: closed at raid start, carved from the NavMesh install on, so bots cannot path into the
+  pocket behind them in a plain raid; whether a player can vault the 1.35 m turnstiles is open). Both are subsets of
+  `opened_barriers` (that is how the bake leaves them out), and carving off opens the held gates too; sidecar and C#
+  descriptor change in one commit.
 - Meta XR Audio is process-global: `MetaXRAcousticSettings.Instance.AcousticModel` and the one shoebox room
   (`MetaXRAudioRoomAcousticProperties`, two native calls per frame while enabled) belong to the whole process, not to a
   scene, and the plugin's managed model value does not vouch for the native side after an audio reset. `RoomShotAcoustics`

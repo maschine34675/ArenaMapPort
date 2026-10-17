@@ -132,6 +132,8 @@ public sealed class AirPitMapTests
         var map = ArenaMapRegistry.AirPit;
 
         Assert.Equal(root.GetProperty("opened_barriers").EnumerateArray().Select(e => e.GetString()), map.OpenedBarriers);
+        Assert.Equal(root.GetProperty("start_gates").EnumerateArray().Select(e => e.GetString()), map.StartGates);
+        Assert.Equal(root.GetProperty("held_gates").EnumerateArray().Select(e => e.GetString()), map.HeldGates);
         Assert.Equal(root.GetProperty("navmesh_bake_exclusions").EnumerateArray().Select(e => e.GetString()), map.NavMeshBakeExclusions);
         Assert.Equal(Floats(root.GetProperty("bake_bounds")), map.BakeBounds);
         if (root.TryGetProperty("navmesh_bake_layers", out var layers))
@@ -142,7 +144,7 @@ public sealed class AirPitMapTests
         foreach (var other in new[] { "equator.json", "bay5.json" })
         {
             using var doc = JsonDocument.Parse(File.ReadAllText(Sidecar(other)));
-            foreach (var key in new[] { "navmesh_bake_exclusions", "bake_bounds", "navmesh_bake_layers" })
+            foreach (var key in new[] { "navmesh_bake_exclusions", "bake_bounds", "navmesh_bake_layers", "start_gates", "held_gates" })
                 Assert.False(doc.RootElement.TryGetProperty(key, out _), $"{other} must not carry '{key}'");
         }
     }

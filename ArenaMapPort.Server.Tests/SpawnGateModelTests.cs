@@ -54,6 +54,16 @@ public sealed class SpawnGateModelTests
         Assert.Equal(expected, SpawnGateModel.AutoReleaseDue(elapsed, hold));
     }
 
+    [Theory]
+    [InlineData(true, true, false, true)]
+    [InlineData(true, false, false, false)]  // carving off: an uncarved closed leaf on a meshed lane would trap bots
+    [InlineData(false, true, false, false)]
+    [InlineData(true, true, true, false)]    // released this raid
+    public void HeldGatesStayClosedOnlyWithCarvingAndUntilAReleaseThisRaid(bool enabled, bool carve, bool opened, bool expected)
+    {
+        Assert.Equal(expected, SpawnGateModel.HeldGateStaysClosed(enabled, carve, opened));
+    }
+
     [Fact]
     public void CarverBoxGrowsSidewaysAndUpButKeepsTheFloorLine()
     {
@@ -82,6 +92,18 @@ public sealed class SpawnGateModelTests
     public void ProbeCrossesTheThinAxis(float sizeX, float sizeZ, int axis)
     {
         Assert.Equal(axis, SpawnGateModel.ThinAxis(sizeX, sizeZ));
+    }
+
+    [Theory]
+    [InlineData(true, 6, 3, false)]   // AirPit's bus pocket: outer row sealed, inner row authored open
+    [InlineData(true, 6, 6, false)]
+    [InlineData(true, 6, 0, true)]    // the carve took nowhere
+    [InlineData(true, 0, 0, false)]   // nothing probed
+    [InlineData(false, 22, 0, false)]
+    [InlineData(false, 22, 1, true)]  // a doorway still closed after the release
+    public void AnEnclosureContradictsAHoldOnlyWhenNoDoorwaySealedAndAReleaseWhenAnyStaysClosed(bool expectSealed, int probed, int sealedDoorways, bool expected)
+    {
+        Assert.Equal(expected, SpawnGateModel.EnclosureContradicts(expectSealed, probed, sealedDoorways));
     }
 
     [Theory]
@@ -175,7 +197,8 @@ public sealed class SpawnGatesWiringTests
         foreach (var reset in new[] { "DestroyCarvers();", "UnityEngine.Object.Destroy(_host);", "_host = null;", "_runner = null;",
                                       "_openCoroutine = null;", "_parts.Clear();", "_closedPose.Clear();", "_bounds.Clear();", "_baseline.Clear();",
                                       "_requested = false;", "_released = false;", "_navMeshReady = false;", "_opening = false;",
-                                      "_startedAt = -1f;", "_heldSince = -1f;" })
+                                      "_startedAt = -1f;", "_heldSince = -1f;",
+                                      "_heldGateParts.Clear();", "_carved.Clear();", "_heldGatesOpened = false;" })
         {
             Assert.Contains(reset, body);
         }
@@ -194,7 +217,38 @@ public sealed class SpawnGatesWiringTests
         Assert.Contains("part.localPosition = pose.LocalPosition;", body);
         Assert.Contains("part.gameObject.SetActive(true);", body);
         Assert.Contains("_heldSince = Time.time;", body);
+        Assert.Contains("_heldGatesOpened = false;", body); // a second round re-closes the held gate too
         // The safety limit counts from the hold when that came after the raid timer started.
         Assert.Contains("Mathf.Max(_startedAt, _heldSince)", gates);
+    }
+
+    [Fact]
+    public void HeldGatesAreRegisteredByBoothDoorRepairsAndCarvedWithoutAHold()
+    {
+        // 2026-10-18: a descriptor's HeldGates (AirPit's passport control) stay closed at raid start in every mode and
+        // get their carvers with the NavMesh install; only a Release that follows a hold opens them.
+        var doors = Text("ArenaMapPort.Client/BoothDoorRepairs.cs");
+        Assert.Contains("map.GateRoleOf(path)", doors);
+        Assert.Contains("role == ArenaGateRole.Held && SpawnGates.OfferHeld(part)", doors);
+        Assert.Contains("role == ArenaGateRole.Start && SpawnGates.Offer(part)", doors);
+        Assert.Contains("if (!doors && !barriers && !heldGates)", doors); // registered even with OpenSpawnBarriers off
+        var gates = Text("ArenaMapPort.Client/SpawnGates.cs");
+        Assert.Contains("internal static bool OfferHeld(Transform part)", gates);
+        Assert.DoesNotContain("public static bool OfferHeld", gates);
+        Assert.Contains("if ((IsHeld || HeldGatesClosed) && _parts.Count > 0) CreateCarvers(\"navmesh installed\");", gates);
+        Assert.DoesNotContain("if (_carvers.Count > 0 || !_carve.Value) return;", gates); // carvers are incremental now
+        Assert.Contains("if (part == null || _carved.Contains(part)) continue;", gates);
+        Assert.Contains("SpawnGateModel.HeldGateStaysClosed(_enabled.Value, _carve.Value, _heldGatesOpened)", gates);
+        Assert.Contains("SpawnGates.SealHeldGates(", doors); // one carve call per opening pass, not one per part
+        Assert.Contains("SpawnGateModel.EnclosureContradicts(expectSealed, pair.Value.probed, pair.Value.sealedDoorways)", gates);
+        int release = Regex.Match(gates, @"public static void Release\(string reason\)\s*\r?\n").Index;
+        int install = gates.IndexOf("internal static void Install()", StringComparison.Ordinal);
+        Assert.True(release > 0 && install > release);
+        Assert.Contains("_heldGatesOpened = true;", gates.Substring(release, install - release));
+        // The mode-plugin contract is unchanged: one public Hold, one public Release, no public held-gate member.
+        // (the class doc quotes both signatures inside <c>...</c>; a declaration ends its line)
+        Assert.Single(Regex.Matches(gates, @"public static bool Hold\(string reason\)\s*\r?\n"));
+        Assert.Single(Regex.Matches(gates, @"public static void Release\(string reason\)\s*\r?\n"));
+        Assert.DoesNotContain("public static bool HeldGatesClosed", gates);
     }
 }

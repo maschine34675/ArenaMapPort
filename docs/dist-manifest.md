@@ -1,5 +1,9 @@
 # Current distribution contract: Equator, Bay5 and AirPit
 
+2026-10-18: AirPit's scenes and NavMesh bundles are the U7 rebake (bake box z 83 again, the passport control out of
+the bake as a held gate; scenes 991,961,232 B, navmesh 168,826 B); dist and both installs carry them, the published 0.2.1
+package still has the U6 mesh (z 70). The next package carries U7 and the SpawnGates client.
+
 2026-10-17: Equator's shader sidecar is staged as `material-shaders.arena_equator.json`, the same rule as every other
 map (`ShaderRebind.SidecarFileName`, csproj `ArenaMapPortStageWpOutputs`, `make_release_zips.py`, `validate_distribution.py`).
 The pre-generalization name `material-shaders.json` is retired before the first Forge upload; ordinary deployment never deletes,

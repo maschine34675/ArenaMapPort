@@ -31,6 +31,14 @@ namespace ArenaMapPort.Client
     /// after <c>SpawnGateMaxHoldSeconds</c> (counted from the hold, or from the raid timer for a hold made before it) with
     /// a Warning, so a mode bug cannot lock the player in. Everything resets on the owned Scripts scene's unload.
     ///
+    /// Held gates (descriptor <c>HeldGates</c>, 2026-10-18; AirPit's passport control, the gate of its original north
+    /// team box): their parts are registered through <see cref="OfferHeld"/> and stay closed at raid start in EVERY
+    /// mode, get their carvers as soon as the NavMesh is installed (no hold needed), and open only with a Release that
+    /// follows a hold, so a plain raid keeps the pocket behind them closed for players and bots alike (the 2026-10-12
+    /// north-limit decision, now without cutting the bake). <see cref="IsHeld"/> does not reflect them;
+    /// <see cref="ClosedParts"/> counts them. Which opened barriers a hold may close at all is the descriptor's
+    /// <c>StartGates</c> list (AirPit: only the bus doors; shop shells, portal fences and blockout panels stay open).
+    ///
     /// Contract for a mode plugin (reflection, like ArenaMapPort's own ArenaModeMapPositionIntegration does the other
     /// way round): type <c>ArenaMapPort.Client.SpawnGates</c>, all members on the Unity main thread.
     /// <c>public static bool Hold(string reason)</c>: in the menu (applies to the next owned raid; call Release on every
@@ -75,6 +83,12 @@ namespace ArenaMapPort.Client
         // Baseline per part, probed before the first carve: false = the doorway is disconnected on the map's own NavMesh.
         static readonly Dictionary<Transform, bool> _baseline = new Dictionary<Transform, bool>();
         static readonly List<GameObject> _carvers = new List<GameObject>();
+        // Held gates (descriptor HeldGates): closed at raid start in every mode, carved from the NavMesh install on,
+        // opened only by a Release that follows a hold. _carved remembers the parts that already have carvers, so a
+        // later Hold adds the start gates' carvers without touching the held gate's.
+        static readonly HashSet<Transform> _heldGateParts = new HashSet<Transform>();
+        static readonly HashSet<Transform> _carved = new HashSet<Transform>();
+        static bool _heldGatesOpened;
         static GameObject _host;
         static Runner _runner;
         static Coroutine _openCoroutine;
@@ -89,6 +103,11 @@ namespace ArenaMapPort.Client
         /// opening ran, or on a map without gates).</summary>
         public static int ClosedParts => _parts.Count;
 
+        /// <summary>True while a held gate (descriptor HeldGates) stands closed: registered held-gate parts that no
+        /// Release has opened yet. Independent of <see cref="IsHeld"/>, which reflects only a hold.</summary>
+        internal static bool HeldGatesClosed => _installed && _heldGateParts.Count > 0 &&
+                                                SpawnGateModel.HeldGateStaysClosed(_enabled.Value, _carve.Value, _heldGatesOpened);
+
         /// <summary>Keep the spawn gates closed until <see cref="Release"/> (or the safety limit); after the raid-start
         /// opening, re-close them. Returns false when the feature is switched off, in which case the gates open at raid
         /// start as usual.</summary>
@@ -102,6 +121,7 @@ namespace ArenaMapPort.Client
             _requested = true;
             _released = false;
             _heldSince = Time.time;
+            _heldGatesOpened = false;
             bool cancelledOpening = false;
             if (_opening && _runner != null && _openCoroutine != null)
             {
@@ -136,7 +156,9 @@ namespace ArenaMapPort.Client
             return true;
         }
 
-        /// <summary>Open the gates now: slide Equator's leaves, switch every part off, remove the carvers.</summary>
+        /// <summary>Open the gates now: slide Equator's leaves, switch every part off, remove the carvers. A held gate
+        /// (descriptor HeldGates) opens with this release only when a hold was outstanding; without one it stays closed
+        /// (Hold followed by Release opens it in any raid).</summary>
         public static void Release(string reason)
         {
             if (!_installed) return;
@@ -145,9 +167,11 @@ namespace ArenaMapPort.Client
             _requested = false;
             if (!held || _parts.Count == 0)
             {
-                Plugin.Log.LogDebug($"{Tag} release ({reason ?? "no reason"}): nothing held");
+                Plugin.Log.LogDebug($"{Tag} release ({reason ?? "no reason"}): nothing held" +
+                                    (HeldGatesClosed ? $"; {_heldGateParts.Count} held-gate part(s) stay closed (a held gate opens only with a hold)" : ""));
                 return;
             }
+            _heldGatesOpened = true;
             EnsureRunner();
             if (!_opening)
             {
@@ -163,10 +187,12 @@ namespace ArenaMapPort.Client
             var s = Plugin.Instance.Settings;
             _enabled = s.Bind("Spawns", "SpawnGates", true,
                 "Lets a mode plugin (ArenaMode) keep the spawn enclosures closed at raid start and open them later " +
-                "(SpawnGates.Hold / Release). Off: the gates always open at raid start. Next raid.");
+                "(SpawnGates.Hold / Release); a map's held gates (AirPit's passport control) stay closed until that release " +
+                "in every mode. Off: every gate opens at raid start, the held gates too. Next raid.");
             _carve = s.Bind("Spawns", "SpawnGateCarve", true,
                 "While the gates are held closed, cut the NavMesh at every closed gate part with a carving obstacle, so bots " +
-                "inside stay inside instead of pressing against or clipping through a leaf the bake does not know. Next hold.");
+                "inside stay inside instead of pressing against or clipping through a leaf the bake does not know. A map's " +
+                "held gates (AirPit's passport control) depend on it: off opens them at raid start. Next hold / next raid.");
             _slideSeconds = s.Bind("Spawns", "SpawnGateSlideSeconds", 1.0f, new ConfigDescription(
                 "How long Equator's sliding leaves take to slide into their frame pockets when the gates release; 0 opens " +
                 "instantly. Other gates switch off without a motion. Next release.", new AcceptableValueRange<float>(0f, 5f)));
@@ -189,15 +215,44 @@ namespace ArenaMapPort.Client
         internal static bool Offer(Transform part)
         {
             if (part == null) return false;
-            if (!_parts.Contains(part))
-            {
-                _parts.Add(part);
-                _closedPose[part] = new Pose { LocalPosition = part.localPosition, LocalRotation = part.localRotation };
-            }
+            Register(part);
             if (!IsHeld) return false;
             EnsureRunner();
             return true;
         }
+
+        /// <summary>A held gate's part (descriptor HeldGates): registered like every other part, but it stays closed in
+        /// every mode until a Release that follows a hold. True means keep it active (carvers come with the NavMesh
+        /// install); false (feature off, or already released this raid) means the caller switches it off like an
+        /// opened barrier.</summary>
+        internal static bool OfferHeld(Transform part)
+        {
+            if (part == null) return false;
+            Register(part);
+            _heldGateParts.Add(part);
+            if (!SpawnGateModel.HeldGateStaysClosed(_enabled.Value, _carve.Value, _heldGatesOpened)) return false;
+            EnsureRunner();
+            return true;
+        }
+
+        /// <summary>Once per raid-start opening, after every held part was offered: carves the held gates at once when
+        /// the NavMesh is already installed (otherwise the install does it).</summary>
+        internal static void SealHeldGates(string why)
+        {
+            if (_navMeshReady && HeldGatesClosed) CreateCarvers(why);
+        }
+
+        static void Register(Transform part)
+        {
+            if (_parts.Contains(part)) return;
+            _parts.Add(part);
+            _closedPose[part] = new Pose { LocalPosition = part.localPosition, LocalRotation = part.localRotation };
+        }
+
+        /// <summary>One line for BoothDoorRepairs' spawn-openings log, held-gate variant.</summary>
+        internal static string DescribeHeldGate() =>
+            HeldGatesClosed ? $"closed until Release ({_heldGateParts.Count} held-gate part(s), carved from the navmesh install on)"
+                            : "opened at raid start (SpawnGates or SpawnGateCarve off, or already released this raid)";
 
         /// <summary>One line for BoothDoorRepairs' spawn-openings log.</summary>
         internal static string Describe() =>
@@ -208,7 +263,7 @@ namespace ArenaMapPort.Client
         static void OnNavMeshInstalled()
         {
             _navMeshReady = true;
-            if (IsHeld && _parts.Count > 0) CreateCarvers("navmesh installed");
+            if ((IsHeld || HeldGatesClosed) && _parts.Count > 0) CreateCarvers("navmesh installed");
         }
 
         static void EnsureRunner()
@@ -250,9 +305,11 @@ namespace ArenaMapPort.Client
             }
         }
 
+        // Incremental: the held gate's carvers come with the NavMesh install, a later Hold adds the start gates' ones.
         static void CreateCarvers(string why)
         {
-            if (_carvers.Count > 0 || !_carve.Value) return;
+            if (!_carve.Value) return;
+            EnsureRunner();
             int colliders = 0;
             // Pass 1: the movement colliders' world bounds (only an active part has them) and, before anything is cut,
             // the baseline: is the doorway connected on the map's own NavMesh at all? Equator's door (3) leads into a
@@ -261,7 +318,7 @@ namespace ArenaMapPort.Client
             var movement = new List<(Transform part, Collider collider)>();
             foreach (var part in _parts)
             {
-                if (part == null) continue;
+                if (part == null || _carved.Contains(part)) continue;
                 foreach (var collider in part.GetComponentsInChildren<Collider>(true))
                 {
                     int layer = collider.gameObject.layer;
@@ -273,12 +330,10 @@ namespace ArenaMapPort.Client
                     movement.Add((part, collider));
                 }
             }
-            if (_baseline.Count == 0)
+            foreach (var pair in _bounds)
             {
-                foreach (var pair in _bounds)
-                {
+                if (!_baseline.ContainsKey(pair.Key))
                     _baseline[pair.Key] = ProbePath(pair.Value, out _) == NavMeshPathStatus.PathComplete;
-                }
             }
             // Pass 2: one carver box per movement collider.
             foreach (var (part, collider) in movement)
@@ -298,16 +353,19 @@ namespace ArenaMapPort.Client
                     obstacle.carvingTimeToStationary = 0f;
                     obstacle.carving = true;
                     _carvers.Add(go);
+                    _carved.Add(part);
                     colliders++;
                 }
             }
             int disconnected = 0;
             foreach (var pair in _baseline) if (!pair.Value) disconnected++;
-            Plugin.Log.LogDebug($"{Tag} {why}: {_carvers.Count} carver(s) over {colliders} movement collider(s) of {_parts.Count} gate part(s)" +
+            Plugin.Log.LogDebug($"{Tag} {why}: {colliders} carver(s) over {colliders} movement collider(s) of {_parts.Count} gate part(s) " +
+                                $"({_carvers.Count} carver(s) in place, {_heldGateParts.Count} held-gate part(s))" +
                                 (disconnected > 0 ? $"; {disconnected} doorway(s) already disconnected on the map's own navmesh (not judged)" : ""));
-            if (_carvers.Count == 0)
+            if (colliders == 0)
             {
-                Plugin.Log.LogWarning($"{Tag} no movement collider under the held gate parts; bots are not sealed in");
+                if (_carvers.Count == 0)
+                    Plugin.Log.LogWarning($"{Tag} no movement collider under the held gate parts; bots are not sealed in");
                 return;
             }
             _runner.StartCoroutine(Probe(expectSealed: true));
@@ -320,6 +378,7 @@ namespace ArenaMapPort.Client
                 if (go != null) UnityEngine.Object.Destroy(go);
             }
             _carvers.Clear();
+            _carved.Clear();
         }
 
         // NavMesh path across every gate, 0.5 s after the carvers changed and once more at 2.5 s when the first probe
@@ -357,6 +416,10 @@ namespace ArenaMapPort.Client
             probed = 0;
             inconclusive = 0;
             int skipped = 0, disconnected = 0;
+            // Verdicts per enclosure (SpawnGateModel.EnclosureContradicts): the parts under one barrier root or door
+            // assembly. AirPit's bus pocket has an authored-open inner row behind the closed outer row, so three of its
+            // six doorways stay passable while the pocket is sealed; a per-part verdict warned on them (GPU-2 2026-10-17).
+            var enclosures = new Dictionary<string, (int probed, int sealedDoorways)>();
             foreach (var part in _parts)
             {
                 if (part == null) continue;
@@ -372,8 +435,17 @@ namespace ArenaMapPort.Client
                 }
                 bool sealedNow = SpawnGateModel.Sealed((int)status.Value);
                 probed++;
-                if (sealedNow != expectSealed) contradicted = true;
+                string enclosure = part.parent != null ? part.parent.name : part.name;
+                enclosures.TryGetValue(enclosure, out var tally);
+                enclosures[enclosure] = (tally.probed + 1, tally.sealedDoorways + (sealedNow ? 1 : 0));
                 sb.Append($"\n  '{part.name}' at {bounds.center:F1}: {detail}");
+            }
+            foreach (var pair in enclosures)
+            {
+                if (SpawnGateModel.EnclosureContradicts(expectSealed, pair.Value.probed, pair.Value.sealedDoorways))
+                    contradicted = true;
+                else if (expectSealed && pair.Value.sealedDoorways < pair.Value.probed)
+                    sb.Append($"\n  '{pair.Key}': {pair.Value.probed - pair.Value.sealedDoorways} passable doorway(s) inside the sealed enclosure (authored-open leaves behind the closed row)");
             }
             if (disconnected > 0) sb.Append($"\n  {disconnected} doorway(s) disconnected on the map's own navmesh not judged");
             if (skipped > 0) sb.Append($"\n  {skipped} part(s) without a movement collider not probed");
@@ -453,6 +525,9 @@ namespace ArenaMapPort.Client
             _closedPose.Clear();
             _bounds.Clear();
             _baseline.Clear();
+            _heldGateParts.Clear();
+            _carved.Clear();
+            _heldGatesOpened = false;
             _requested = false;
             _released = false;
             _navMeshReady = false;

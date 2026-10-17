@@ -53,6 +53,14 @@ namespace ArenaMapPort.Shared
         }
     }
 
+    /// <summary>What the raid-start opening does with an OpenedBarriers entry (ArenaMapDescriptor.GateRoleOf).</summary>
+    public enum ArenaGateRole
+    {
+        Plain,  // switched off at raid start, never offered to SpawnGates
+        Start,  // offered to SpawnGates: held closed only while a mode plugin holds the gates
+        Held,   // closed at raid start in every mode, sealed for bots, opened only by SpawnGates.Release
+    }
+
     /// <summary>
     /// One invisible wall the client raises at raid start (AuthoredBorderRepairs): a vertical box from (X0, Z0) to
     /// (X1, Z1) spanning MinY..MaxY on the movement layer. AirPit's set follows Arena's own TeamFight outline (the
@@ -134,6 +142,13 @@ namespace ArenaMapPort.Shared
         public ArenaExitDescriptor[] Exits { get; } // exfils-stage2 — runtime-authored exits (empty = raid ends by timer only)
         public string[] OpenedBarriers { get; }     // hierarchy paths of static scene objects whose non-frame parts are deactivated
                                                     // at raid start (Arena's round barriers that close a spawn area); empty = none
+        // Spawn gates (SpawnGates.cs, 2026-10-18). StartGates: the OpenedBarriers a mode plugin may hold closed through
+        // SpawnGates (offered to it before the raid-start opening switches them off); empty = every opened barrier is
+        // offered (Equator, Bay5). HeldGates: OpenedBarriers that stay CLOSED at raid start in every mode, sealed for
+        // bots by SpawnGates' carvers from the NavMesh install on, and opened only by SpawnGates.Release (AirPit's
+        // passport control, the north team box's gate). Both are subsets of OpenedBarriers, so the bake leaves them out.
+        public string[] StartGates { get; }
+        public string[] HeldGates { get; }
         // PLAN-AIRPIT item 8 — Editor-side NavMesh bake inputs. The client never reads them; they live here so the one
         // per-map table stays complete and tools/maps/<key>.json cannot drift (validate_map_descriptors.py and the xunit
         // mirror tests). All empty for Equator and Bay5, whose bake is unchanged.
@@ -204,7 +219,9 @@ namespace ArenaMapPort.Shared
             int[]? NavMeshBakeLayers = null,
             string[]? ShaderFallbackNames = null,
             ArenaBorderDescriptor[]? AuthoredBorders = null,
-            ArenaLampFillDescriptor? LampFill = null)
+            ArenaLampFillDescriptor? LampFill = null,
+            string[]? StartGates = null,
+            string[]? HeldGates = null)
 #nullable restore
         {
             this.Key = Key;
@@ -223,6 +240,8 @@ namespace ArenaMapPort.Shared
             this.DbBaseJsonPath = DbBaseJsonPath;
             this.Exits = Exits ?? new ArenaExitDescriptor[0];
             this.OpenedBarriers = OpenedBarriers ?? new string[0];
+            this.StartGates = StartGates ?? new string[0];
+            this.HeldGates = HeldGates ?? new string[0];
             this.NavMeshBakeExclusions = NavMeshBakeExclusions ?? new string[0];
             this.AuthoredBorders = AuthoredBorders ?? new ArenaBorderDescriptor[0];
             this.BakeBounds = BakeBounds ?? new float[0];
@@ -246,6 +265,16 @@ namespace ArenaMapPort.Shared
 
         public bool IsBackgroundScene(string sceneName) =>
             System.Array.IndexOf(BackgroundSceneNames, sceneName) >= 0;
+
+        /// <summary>How the raid-start opening treats the OpenedBarriers entry <paramref name="path"/>: Held = stays
+        /// closed until SpawnGates.Release; Start = offered to SpawnGates (held closed only on a mode plugin's Hold),
+        /// which every opened barrier is when StartGates is empty; Plain = switched off at raid start, never offered.</summary>
+        public ArenaGateRole GateRoleOf(string path)
+        {
+            if (System.Array.IndexOf(HeldGates, path) >= 0) return ArenaGateRole.Held;
+            if (StartGates.Length == 0 || System.Array.IndexOf(StartGates, path) >= 0) return ArenaGateRole.Start;
+            return ArenaGateRole.Plain;
+        }
 
         // Physical bundle filenames are always the served key's basename — never stored
         // separately, never allowed to drift from the served key (the exact trap
@@ -424,19 +453,23 @@ namespace ArenaMapPort.Shared
                 // The two gate groups of Arena's TeamFight round start (GateEntity roots in
                 // Arena_Airpit_TeamFight_DesignStuff). Single-segment root paths: BoothDoorRepairs.FindByPath and
                 // BakeNavMesh.ResolveHierarchyPaths resolve a bare name to the scene root itself. Neither root has a
-                // frame-named object, so every direct child is deactivated at raid start and every collider below
-                // is left out of the bake. BUS_DOORS: 6 bus-door assemblies sealing the south spawn pocket;
-                // PASSPORT_CONTROL_DOORS: 16 lane doors sealing the north spawn field, plus the GREEN/RED fog sheets.
+                // frame-named object, so every direct child is a gate part and every collider below is left out of
+                // the bake. BUS_DOORS: 6 bus-door assemblies sealing the south spawn pocket (opened at raid start unless
+                // held); PASSPORT_CONTROL_DOORS: 16 lane turnstiles sealing the north spawn pocket plus the GREEN/RED
+                // lane-light groups; PASSPORT_CONTROL_EMISSIVE: the 18 red lane sheets (held gates, see below).
                 // Mirrors tools/maps/airpit.json (AirPitMapTests.OpenedBarriersAndBakeInputsMatchTheSidecar).
                 "BUS_DOORS",
-                // PASSPORT_CONTROL_DOORS stays CLOSED (user decision 2026-10-12, host raid 4/5): the 16 lane "doors"
-                // are waist-high turnstile gates (1.09 x 1.35 m) in eight lanes with 7-13 m of open floor between
-                // them, so they are the closed-passport-control LOOK (red PASSPORT_CONTROL_EMISSIVE/RED lane lights
-                // above the gate posts), not a barrier - the walk around them is open, host raid 5. The north limit
-                // is the authored facade wall below; the north player and bot spawns sit south of the gate line
-                // (tools/maps/airpit.bots.json) and the bake box ends at z 70, so bots have no business in the pocket.
-                // ArenaMode may open the gates itself (Spawns/OpenSpawnBarriers lists them no more; the GateEntity
-                // roots are documented in docs/progress/airpit-release.md).
+                // PASSPORT_CONTROL_DOORS + PASSPORT_CONTROL_EMISSIVE are the HeldGates (2026-10-18, the original north
+                // team box): the 16 lane turnstiles (1.09 x 1.35 m, eight lanes at z 66.3 and 69.1) stay closed at
+                // raid start in every mode and open only on SpawnGates.Release, together with the 18 red lane sheets.
+                // Since package v8 the furnished passport booth row (Arena_Airpit_Main_hall PASSPORT_CONTROL, layer-18
+                // colliders x -31.35..8.37, z 66.0..69.4) fills the floor between the lanes, so the turnstiles are the
+                // only way through (host raid 5 of 2026-10-12 saw open floor there on package v6). 2a1e0ce's "the
+                // closed passport control is the north limit" stays true for plain raids; SpawnGates' carvers now keep
+                // bots out of the meshed pocket instead of the bake box. The north player and bot spawns stay south of
+                // the gate line (tools/maps/airpit.bots.json).
+                "PASSPORT_CONTROL_DOORS",
+                "PASSPORT_CONTROL_EMISSIVE",
                 // The two metal-detector portals in the z 50.5 facade between the passport hall and the main hall
                 // (host raid 1, 2026-10-12): each Prison_Metal_Fence_01 gate holds an active closed fence and two
                 // inactive swung-open halves (_PART_L/_PART_R), i.e. a gate Arena closes for ShootOut and opens for
@@ -459,16 +492,21 @@ namespace ArenaMapPort.Shared
                 // F10 at (-44, -7.5) facing south). With the furnished shop they go the way of the shells.
                 "SBG_Arena_AirPit_ShootOut/SOO/Cube (10) Group",
             },
+            // Only the bus doors are a start gate a mode plugin may hold; the portal fences, shop shells and blockout
+            // panels are plain openings that must not come back during a hold. The passport control is the held gate.
+            StartGates: new[] { "BUS_DOORS" },
+            HeldGates: new[] { "PASSPORT_CONTROL_DOORS", "PASSPORT_CONTROL_EMISSIVE" },
             // No NavMeshBakeExclusions: the four bake-only cutters of 2026-10-11 (DonB_Ramen_closed x2,
             // TH_Roll_door_01_closed, fence_ema_01_white (18)) let the NavMesh run through shutters that stay solid;
             // host raid 1 walked the player into the DonB_Ramen shutter at (-46.2, 0, 43.4). Every solid is baked.
             // Play space: the AABB of the authored borders below (Arena's TeamFight outline, x -56.8..36.2,
-            // z -82.5..83.6) cut at z 70, just south of the closed passport-gate line (z 69.4), y -2..8 = ground
-            // floor plus wing mezzanine (user decision 2026-10-11, 4.3). Arena's own mesh has no polygons in the
-            // gate band z 66..69.8 either (its bake predates the current gates); the pocket behind it stays without
-            // mesh. The 2026-10-11 box (x -80..56, z -96..92) baked the pocket, 7 m of the dark entrance hall and
-            // strips of runway and forecourt (host raids 1-4, 2026-10-12).
-            BakeBounds: new[] { -57.0f, 37.0f, -2.0f, 8.0f, -83.0f, 70.0f },
+            // z -82.5..83.6), y -2..8 = ground floor plus wing mezzanine (user decision 2026-10-11, 4.3). From
+            // 2026-10-12 (2a1e0ce) to 2026-10-18 the box ended at z 70 to keep bots out of the north spawn pocket;
+            // the original north team box (SPAWN_BOUND_FIGHTER z 69.16..85.16) needs the pocket meshed, so the box is
+            // the outline's AABB again and the held passport gate seals the pocket for bots instead. The 2026-10-11
+            // box (x -80..56, z -96..92) baked 7 m of the dark entrance hall and strips of runway and forecourt
+            // (host raids 1-4, 2026-10-12); z 83 stops 0.5 m past the facade-gap wall (z 82.5).
+            BakeBounds: new[] { -57.0f, 37.0f, -2.0f, 8.0f, -83.0f, 83.0f },
             // Arena's own NavMeshSurface layer mask (decoded from the three AI scenes, mask 0x40042A00):
             // DoorLowPolyCollider, Terrain, Triggers, LowPolyCollider, TransparentCollider. EFT's movement test mask
             // (LayersMaskController.PlayerCollisionTestMask) is LowPolyCollider + DoorLowPolyCollider + Terrain; the

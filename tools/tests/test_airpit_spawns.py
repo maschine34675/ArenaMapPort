@@ -286,6 +286,33 @@ class AirPitSidecarTests(unittest.TestCase):
             self.assertGreaterEqual(clearance, need, f"{name} is only {clearance:.2f} m from the NavMesh border")
 
     @unittest.skipUnless(BUILT_NAVMESH.is_file(), "no built AirPit NavMesh bundle (work/build/airpit)")
+    def test_the_north_team_box_and_the_passport_lanes_are_on_the_main_component_of_the_built_navmesh(self):
+        # 2026-10-18 (the original north team box): the bake volume reaches the facade again (z 83) and the 16 passport
+        # leaves leave the bake like every opened barrier (held gate), so the ten north TeamFight markers (modes.json)
+        # and the eight lane strips through the passport line carry mesh joined to the hall. At runtime SpawnGates'
+        # carvers over the leaves cut the lanes again until a mode plugin's Release; this test pins the raw bake.
+        import numpy as np
+        import navmesh_diff as nd
+        try:
+            mesh = nd.load_bundle_mesh(BUILT_NAVMESH)
+        except ImportError:
+            self.skipTest("UnityPy is not installed")
+        modes = json.loads((REPO / "tools" / "maps" / "airpit.modes.json").read_text(encoding="utf-8"))
+        north = [(m["name"], m["position"]) for m in modes["spawn_markers"]["north"]]
+        self.assertEqual(len(north), 10)
+        lanes = [(f"lane {i} z {z}", [x, 0.1, z]) for i, x in enumerate((-20.635, -17.225, -15.67, -12.265, -10.705, -7.305, -5.745, 2.625))
+                 for z in (66.3, 67.7, 69.1)]
+        points = north + lanes
+        xyz = np.array([p[1] for p in points], dtype=float)
+        poly, surf = mesh.locate(xyz, max_dy=1.0)
+        for (name, pos), pid, sy in zip(points, poly, surf):
+            self.assertGreaterEqual(pid, 0, f"{name} at ({pos[0]:.2f}, {pos[2]:.2f}) is outside the built NavMesh")
+            self.assertEqual(int(mesh.labels[pid]), 0, f"{name} is not on the main component of the built NavMesh")
+        for (name, pos), sy in zip(north, surf[:10]):
+            clearance = float(mesh.clearance(np.array([[pos[0], sy, pos[2]]]))[0])
+            self.assertGreaterEqual(clearance, 1.0, f"{name} is only {clearance:.2f} m from the NavMesh border")
+
+    @unittest.skipUnless(BUILT_NAVMESH.is_file(), "no built AirPit NavMesh bundle (work/build/airpit)")
     def test_every_spawn_lies_on_the_main_component_of_the_built_navmesh(self):
         # The port's own bake (U6: 11332 vertices, 5212 triangles), not Arena's: Detour polygons of the bundle, one
         # component per connected set. The sealed back rooms above are separate components, so main-component

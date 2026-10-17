@@ -106,3 +106,27 @@ Final build (11:28-11:32, after the review fixes and the baseline probe; this is
    and expect bots inside a sealed box to idle or stand at the carved edge until the release.
 3. Watch the first native Team DM with the gates held: bots inside the boxes during Assembling, the slide at Live, bots
    leaving afterwards. That is the observation this plugin side could not produce in a plain PMC raid.
+
+## Follow-up 2026-10-18: held gates, start-gate subset, AirPit's north box
+
+- Descriptor `StartGates` / `HeldGates` (sidecar `start_gates` / `held_gates`, subsets of `opened_barriers`;
+  `ArenaMapDescriptor.GateRoleOf`): a Hold closes only the start gates (AirPit: BUS_DOORS; Equator and Bay5 declare
+  nothing, which means every barrier, as before). Held gates stay closed at raid start in every mode, get their carvers at
+  the NavMesh install without a hold (`SpawnGates.OfferHeld`, `HeldGatesClosed`, `SealHeldGates`), and open only with a
+  Release that follows a hold; `Hold` re-arms them for a second round. `SpawnGates=false` or `SpawnGateCarve=false`
+  opens them at raid start (an uncarved closed leaf on a meshed lane is the shutter trap). Carvers are incremental
+  (`_carved`): the held gate's come with the install, a later Hold adds the start gates' ones.
+- Probe verdict per enclosure (`SpawnGateModel.EnclosureContradicts`): AirPit's bus pocket has an authored-open inner
+  row behind the closed outer row; the per-part verdict logged a false `a gate is NOT sealed` Warning for its three
+  inner doorways (GPU-2 18:45). An enclosure now contradicts a hold only when none of its probed doorways is sealed, and
+  a release when any doorway stays closed; the passable inner doorways are listed as Debug. A single leaking outer door
+  next to sealed ones would not be caught by this; the dryRun teleport across the enclosure is the stronger check.
+- GPU-2 evidence (AirPit, bots None, build of this commit, 18:41-18:52): plain raid `navmesh installed: 16 carver(s)
+  over 16 movement collider(s) of 42 gate part(s) (16 carver(s) in place, 36 held-gate part(s))`, `navmesh probe: every
+  probed gate sealed (16 probed)` (PathPartial across every leaf), `uibridge_teleport dryRun` to marker (6)
+  (-12.59, 79.21) and to a lane strip (-17.23, 67.7): not reachable, the hall (-10, 60) reachable; no warning. Test
+  hold 60 s: `40 carver(s) over 40 movement collider(s) of 42 gate part(s)`, `every probed gate sealed (22 probed)`
+  without a Warning, `released (developer test hold, 60.0 s after the raid timer started): 0 leaf(s) slid 1.38 m in
+  1.0 s, 42 gate part(s) switched off, 40 carver(s) removed`, `every probed gate open (22 probed)`, dryRun to marker
+  (6) ok, `uibridge_walk` to it: 22.5 m along the navmesh through a lane, arrived. Equator regression raid: the
+  raid-start opening unchanged (10 leaves, the FCK shutter), no SpawnGates activity, no warning.

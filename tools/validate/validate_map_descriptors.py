@@ -314,7 +314,24 @@ def bake_input_errors(map_json: dict) -> list[str]:
             errors.append(f"{name} must be an array of hierarchy paths (no empty segment)")
         elif len(paths) != len(set(paths)):
             errors.append(f"{name} contains duplicate paths")
-    paths, barriers = map_json.get("navmesh_bake_exclusions", []), map_json.get("opened_barriers", [])
+    barriers = map_json.get("opened_barriers", [])
+    # start_gates / held_gates (SpawnGates, 2026-10-18): which opened barriers a mode plugin may hold and which stay
+    # closed until its Release. Both name opened barriers (the bake drops every gate through that list), never overlap.
+    for name in ("start_gates", "held_gates"):
+        gates = map_json.get(name, [])
+        if not isinstance(gates, list) or not all(is_hierarchy_path(p) for p in gates):
+            errors.append(f"{name} must be an array of hierarchy paths (no empty segment)")
+        elif len(gates) != len(set(gates)):
+            errors.append(f"{name} contains duplicate paths")
+        elif isinstance(barriers, list) and any(p not in barriers for p in gates):
+            errors.append(f"{name} must be a subset of opened_barriers (the bake leaves every gate out through that list)")
+    starts, helds = map_json.get("start_gates", []), map_json.get("held_gates", [])
+    if isinstance(starts, list) and isinstance(helds, list) and set(map(str, starts)) & set(map(str, helds)):
+        errors.append("start_gates and held_gates overlap (a gate is either held by a mode plugin or closed until Release)")
+    if isinstance(helds, list) and helds and not (isinstance(starts, list) and starts):
+        errors.append("held_gates without start_gates: name the start gates explicitly (an empty start_gates offers every "
+                      "opened barrier to a hold)")
+    paths = map_json.get("navmesh_bake_exclusions", [])
     if isinstance(paths, list) and isinstance(barriers, list):
         for path in paths:
             if isinstance(path, str) and any(path == b or path.startswith(str(b) + "/") for b in barriers):
@@ -415,7 +432,8 @@ def check_map_against_registry_entry(
                 resolve(registry_args.get("ShaderFallbackNames", []), ref_scope))
     for json_field, cs_field in (("opened_barriers", "OpenedBarriers"), ("navmesh_bake_exclusions", "NavMeshBakeExclusions"),
                                  ("bake_bounds", "BakeBounds"), ("navmesh_bake_layers", "NavMeshBakeLayers"),
-                                 ("authored_borders", "AuthoredBorders")):
+                                 ("authored_borders", "AuthoredBorders"), ("start_gates", "StartGates"),
+                                 ("held_gates", "HeldGates")):
         check_field(errors, where, json_field, map_json.get(json_field, []), resolve(registry_args.get(cs_field, []), ref_scope))
     check_field(errors, where, "restored_shadow_caster_roots",
                 map_json.get("restored_shadow_caster_roots", []),

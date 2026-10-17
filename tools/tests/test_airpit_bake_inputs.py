@@ -30,11 +30,15 @@ GATES = [
     "SBG_Arena_AirPit_ShootOut/SOO/Prison_Metal_Fence_01 (3)",
 ]
 GATE_XZ = [(-23.50, 50.54), (-0.38, 50.54)]
-# PASSPORT_CONTROL_DOORS stays closed since 2026-10-12 (user decision, host raid 4/5): the closed passport-control look
-# (eight waist-high turnstile gates with open floor between them, red PASSPORT_CONTROL_EMISSIVE lane lights above the
-# posts); the authored facade wall is the actual north limit and the north spawns sit south of the gate line. Only
-# the bus doors and the two portal gates open.
-ROOT_BARRIERS = ["BUS_DOORS"]
+# The three GateEntity roots of Arena's TeamFight round start. BUS_DOORS (the south team box) opens at raid start unless
+# a mode plugin holds it (start_gates). PASSPORT_CONTROL_DOORS + PASSPORT_CONTROL_EMISSIVE (the north team box: 16 lane
+# turnstiles and the red lane sheets) are held_gates since 2026-10-18: closed at raid start in every mode, sealed for
+# bots by SpawnGates' carvers, opened only by SpawnGates.Release. Since package v8 the furnished passport booth row
+# fills the floor between the lanes, so the turnstiles are the only way through (host raid 5 of 2026-10-12 saw open
+# floor there on package v6). All three leave the bake like every opened barrier.
+ROOT_BARRIERS = ["BUS_DOORS", "PASSPORT_CONTROL_DOORS", "PASSPORT_CONTROL_EMISSIVE"]
+START_GATES = ["BUS_DOORS"]
+HELD_GATES = ["PASSPORT_CONTROL_DOORS", "PASSPORT_CONTROL_EMISSIVE"]
 # The six closed shop shells of the ShootOut build (2026-10-12, furnished shops): level324 imports the four shop
 # interiors only as shutters/shells (Airport_Shop_BS_closed_closed, DonB_Ramen_closed x2, TH_Roll_door_01..03_closed,
 # all under the first BUILDING sibling). The furnished shops come from level38 (Arena_Airpit_Main_hall) with the
@@ -62,10 +66,11 @@ BUILDING_PATHS = [
     "SBG_Arena_AirPit_ShootOut/SOO_LOD0/BUILDING/DonB_Ramen_closed (1)",
 ]
 ARENA_LAYERS = [9, 11, 13, 18, 30]            # NavMeshSurface mask 0x40042A00 of Arena's three AI scenes
-# The AABB of the authored borders (Arena's TeamFight outline) rounded outwards and cut at z 70, just south of the
-# closed passport-control line (z 69.4); was x -80..56, z -96..92 until host raid 4 (2026-10-12) showed the mesh
-# running through the spawn pocket and 7 m into the unlit entrance hall north of the facade.
-BOUNDS = [-57, 37, -2, 8, -83, 70]
+# The AABB of the authored borders (Arena's TeamFight outline) rounded outwards; was x -80..56, z -96..92 until host
+# raid 4 (2026-10-12) showed the mesh running 7 m into the unlit entrance hall north of the facade, and cut at z 70
+# from 2a1e0ce (2026-10-12) to 2026-10-18, when the original north team box (z 69.16..85.16) needed its pocket meshed
+# again (the held passport gate keeps bots out of it in plain raids).
+BOUNDS = [-57, 37, -2, 8, -83, 83]
 PACKAGE = REPO / "work" / "extract" / "airpit-native-v8"   # v6 + the furnished shops and the rest of the hall decoration (Main_hall, Light); v6/v7 are archives
 HAVE_PACKAGE = (PACKAGE / "scenes" / "Arena_AirPit_ShootOut.json").is_file()
 ARENA_NAVMESH = Path("D:/Battlestate Games/Escape from Tarkov Arena/EscapeFromTarkovArena_Data/sharedassets33.assets")
@@ -81,6 +86,8 @@ class SidecarContentTests(unittest.TestCase):
 
     def test_airpit_lists(self):
         self.assertEqual(self.map["opened_barriers"], BARRIERS)
+        self.assertEqual(self.map["start_gates"], START_GATES)
+        self.assertEqual(self.map["held_gates"], HELD_GATES)
         self.assertEqual(self.map["navmesh_bake_exclusions"], EXCLUSIONS)
         self.assertEqual(self.map["bake_bounds"], BOUNDS)
         self.assertEqual(self.map["navmesh_bake_layers"], ARENA_LAYERS)
@@ -88,7 +95,7 @@ class SidecarContentTests(unittest.TestCase):
     def test_released_maps_keep_their_bake_unchanged(self):
         for name in ("equator.json", "bay5.json"):
             data = sidecar(name)
-            for key in ("navmesh_bake_exclusions", "bake_bounds", "navmesh_bake_layers"):
+            for key in ("navmesh_bake_exclusions", "bake_bounds", "navmesh_bake_layers", "start_gates", "held_gates"):
                 self.assertNotIn(key, data, f"{name} must not carry {key}")
         self.assertEqual(len(sidecar("equator.json")["opened_barriers"]), 1)
         self.assertEqual(len(sidecar("bay5.json")["opened_barriers"]), 3)
@@ -98,7 +105,7 @@ class SidecarContentTests(unittest.TestCase):
             if "." in path.stem or path.stem == "airpit":
                 continue
             data = json.loads(path.read_text(encoding="utf-8"))
-            for key in ("navmesh_bake_exclusions", "bake_bounds", "navmesh_bake_layers"):
+            for key in ("navmesh_bake_exclusions", "bake_bounds", "navmesh_bake_layers", "start_gates", "held_gates"):
                 self.assertNotIn(key, data, f"{path.name} must not carry {key}")
 
     def test_exclusions_are_disjoint_from_the_barriers(self):
@@ -114,6 +121,18 @@ class SidecarContentTests(unittest.TestCase):
         for x, y, z in points:
             self.assertTrue(x0 + 3 <= x <= x1 - 3 and z0 + 3 <= z <= z1 - 3 and y0 < y < y1, (x, y, z))
 
+    def test_bounds_hold_every_team_box_marker_with_room(self):
+        # 2026-10-18: the original north team box lives behind the passport line; its ten markers (and the south ten)
+        # must stay inside the bake volume with 2.5 m of mesh around them (the northernmost, ScavPMCspawn (8), stands 2.9 m
+        # from the z 83 edge), or the box is unusable before any rebake shows it.
+        x0, x1, y0, y1, z0, z1 = self.map["bake_bounds"]
+        modes = sidecar("airpit.modes.json")
+        markers = modes["spawn_markers"]["north"] + modes["spawn_markers"]["south"]
+        self.assertEqual(len(markers), 20)
+        for m in markers:
+            x, y, z = m["position"]
+            self.assertTrue(x0 + 2.5 <= x <= x1 - 2.5 and z0 + 2.5 <= z <= z1 - 2.5 and y0 < y < y1, (m["name"], x, y, z))
+
     def test_authored_borders_form_a_closed_outline_inside_the_bake_box(self):
         # AuthoredBorderRepairs raises one invisible wall per entry; the ring is Arena's TeamFight outline (the
         # ExcludeLevelBorders polygon of its culling scene) with the north edge pulled onto the facade line z 82.5.
@@ -128,9 +147,8 @@ class SidecarContentTests(unittest.TestCase):
         xs = [c for b in borders for c in (b["from"][0], b["to"][0])]
         zs = [c for b in borders for c in (b["from"][1], b["to"][1])]
         x0, x1, _y0, _y1, z0, z1 = self.map["bake_bounds"]
-        for bound, extreme in ((x0, min(xs)), (x1, max(xs)), (z0, min(zs))):
+        for bound, extreme in ((x0, min(xs)), (x1, max(xs)), (z0, min(zs)), (z1, max(zs))):
             self.assertLessEqual(abs(bound - extreme), 1.0, (bound, extreme))   # the box hugs the outline to within 1 m
-        self.assertTrue(69.5 <= z1 <= max(zs) + 1, z1)   # the north is cut at the closed passport-control line (z 69.4)
         facade = [b for b in borders if b["name"] == "north-facade-gap"][0]
         self.assertEqual((facade["from"], facade["to"]), ([-28.5, 82.5], [4.6, 82.5]))   # the 32 m opening at z 82.47
         for name in ("equator.json", "bay5.json"):
@@ -143,9 +161,8 @@ class SidecarContentTests(unittest.TestCase):
         main = nd.oracle.component_summary(mesh)[0]
         x0, x1, y0, y1, z0, z1 = self.map["bake_bounds"]
         self.assertTrue(x0 < main["min"][0] and main["max"][0] < x1, (main["min"], main["max"]))
-        # The north spawn pocket (z 69.4..84.8, behind the closed passport-control doors) is deliberately left out;
-        # the box ends at z 70 and must still hold everything south of the door line.
-        self.assertTrue(z0 < main["min"][2] and 69.5 <= z1 < main["max"][2], (main["min"], main["max"], z1))
+        # Arena's north edge is ragged (z 82.2..84.8 behind the facade-gap wall at z 82.5); the box ends 0.5 m past the wall.
+        self.assertTrue(z0 < main["min"][2] and main["max"][2] < z1 + 2.0, (main["min"], main["max"], z1))
         self.assertTrue(y0 < main["min"][1] and main["max"][1] < y1, (main["min"], main["max"]))
 
 
@@ -155,11 +172,13 @@ class ValidatorTests(unittest.TestCase):
         args = VD.registry_entries(text)["AirPit"]
         scope = {"ArenaEquatorLocation": {}}
         self.assertEqual(VD.resolve(args["OpenedBarriers"], scope), BARRIERS)
+        self.assertEqual(VD.resolve(args["StartGates"], scope), START_GATES)
+        self.assertEqual(VD.resolve(args["HeldGates"], scope), HELD_GATES)
         self.assertNotIn("NavMeshBakeExclusions", args)   # omitted on purpose: the descriptor defaults to an empty list
         self.assertEqual(VD.resolve(args["BakeBounds"], scope), BOUNDS)
         self.assertEqual(VD.resolve(args["NavMeshBakeLayers"], scope), ARENA_LAYERS)
         for name in ("Equator", "Bay5"):
-            for field in ("NavMeshBakeExclusions", "BakeBounds", "NavMeshBakeLayers"):
+            for field in ("NavMeshBakeExclusions", "BakeBounds", "NavMeshBakeLayers", "StartGates", "HeldGates"):
                 self.assertNotIn(field, VD.registry_entries(text)[name])
 
     def check(self, mutate):
@@ -180,6 +199,9 @@ class ValidatorTests(unittest.TestCase):
         self.assertTrue(any("navmesh_bake_exclusions mismatch" in e
                             for e in self.check(lambda d: d["navmesh_bake_exclusions"].append("SBG_Arena_AirPit_ShootOut/SOO/x"))))
         self.assertTrue(any("opened_barriers mismatch" in e for e in self.check(lambda d: d.pop("opened_barriers"))))
+        self.assertTrue(any("start_gates mismatch" in e
+                            for e in self.check(lambda d: d["start_gates"].append("SBG_Arena_AirPit_ShootOut/SOO/Cube (10) Group"))))
+        self.assertTrue(any("held_gates mismatch" in e for e in self.check(lambda d: d["held_gates"].pop())))
         self.assertTrue(any("authored_borders mismatch" in e
                             for e in self.check(lambda d: d["authored_borders"][0].__setitem__("y", [-1.0, 11.0]))))
 
@@ -193,9 +215,15 @@ class ValidatorTests(unittest.TestCase):
             self.assertTrue(any("bake_bounds" in e for e in errors(bake_bounds=bad)), bad)
         for bad in ([], [32], [-1], [18, 18], [True], [18.0], "18", [4, 18]):
             self.assertTrue(any("navmesh_bake_layers" in e for e in errors(navmesh_bake_layers=bad)), bad)
-        for name in ("opened_barriers", "navmesh_bake_exclusions"):
+        for name in ("opened_barriers", "navmesh_bake_exclusions", "start_gates", "held_gates"):
             for bad in ("a/b", [""], ["a//b"], ["/a"], ["a/"], [" a"], [3], ["a/b", "a/b"]):
                 self.assertTrue(any(name in e for e in errors(**{name: bad})), (name, bad))
+        # a gate must be an opened barrier (the bake drops it through that list) and cannot be both start and held
+        self.assertTrue(any("start_gates must be a subset" in e for e in errors(start_gates=["NOT_A_BARRIER"])))
+        self.assertTrue(any("held_gates must be a subset" in e for e in errors(held_gates=["NOT_A_BARRIER"])))
+        self.assertTrue(any("overlap" in e for e in errors(held_gates=["BUS_DOORS"])))
+        self.assertTrue(any("held_gates without start_gates" in e for e in errors(start_gates=[])))
+        self.assertEqual(errors(start_gates=[], held_gates=[]), [])
         good = {"name": "n", "from": [0, 0], "to": [1, 0], "y": [0, 2]}
         for bad in ("x", [{}], [{**good, "name": " n"}], [{**good, "from": [0]}], [{**good, "to": [0, 0.2]}],
                     [{**good, "y": [2, 0]}], [{**good, "from": [math.inf, 0]}], [good, good]):
@@ -328,7 +356,7 @@ class PackageTests(unittest.TestCase):
             self.assertFalse([k for k in tree if "frame" in scene.objects[k]["name"].lower()], root_name)
             self.assertEqual(self.live_colliders(scene, [key]), [], "the barrier object itself would stay a source")
             total += len(self.live_colliders(scene, tree))
-        self.assertEqual(total, 60)   # BUS_DOORS: 24 on layer 18, 36 on layer 12 (the 32 passport-door colliders stay)
+        self.assertEqual(total, 92)   # BUS_DOORS 24 on layer 18 + 36 on layer 12; PASSPORT_CONTROL_DOORS 16 + 16; EMISSIVE none (fog sheets)
 
     def test_the_barriers_leave_no_markup_behind(self):
         # BakeNavMesh also drops NavMeshModifier/Volume markups under these objects; AirPit has none there.
@@ -358,9 +386,11 @@ class PackageTests(unittest.TestCase):
         # sources 6447 + 1328 = 7775 (no new name rule or barrier), layer-masked 2500 + 535 (Main_hall) + 1 (Light, the
         # one mask-layer lamp collider above the bake box, y 9.3) = 3036. The three layer-0 cover cubes of the south-west
         # shop (COVER_CUBES, 2026-10-13) are barriers since the first U6 host raid: sources 7775 - 3 = 7772, mask unchanged.
+        # The held passport gate (2026-10-18, the original north team box) takes its 16 lane leaves (layer 18) and their 16
+        # ballistic twins out again: sources 7772 - 32 = 7740, mask 3036 - 16 = 3020. EMISSIVE holds no collider.
         self.assertEqual(len(cset.owners), 7922)
-        self.assertEqual(int(everything.sum()), 7772)
-        self.assertEqual(int(masked.sum()), 3036)             # the 16 passport-door leaves on layer 18 are sources again
+        self.assertEqual(int(everything.sum()), 7740)
+        self.assertEqual(int(masked.sum()), 3020)
         per_scene = {}
         for i, owner in enumerate(cset.owners):
             counts = per_scene.setdefault(owner.scene, [0, 0, 0])
@@ -370,6 +400,7 @@ class PackageTests(unittest.TestCase):
         self.assertEqual(per_scene["Arena_Airpit_Main_hall"], [2384, 2384, 966])
         self.assertEqual(per_scene["Arena_Airpit_Light"], [229, 229, 47])
         self.assertEqual(per_scene["Arena_AirPit_ShootOut"], [4625, 4537, 1891])   # 4554 / 1897 before the six shells, 4540 before the cubes
+        self.assertEqual(per_scene["Arena_Airpit_TeamFight_DesignStuff"], [97, 3, 0])   # [97, 35, 16] while the passport leaves were sources
         # HighPolyCollider (ballistic), Interactive; the only live layer-0 (Default) sources were the three cover cubes,
         # which are barriers now (the two layer-0 owners of TeamFight_DesignStuff are the SPAWN_BOUND boxes, dropped by name)
         self.assertEqual(layers, {12, 22})

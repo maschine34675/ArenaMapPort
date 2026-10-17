@@ -142,3 +142,20 @@ reflection API stays.
   (one reader predicts a join through the east-flank corridor x 10.2 .. 16.5, z 66 .. 70, another found a wall at
   x 8.6 .. 9.0); the vault test over the 1.35 m leaves; floor and headroom in the furnished north hall.
 - Equator and Bay5 regression, hideout once, frame time.
+
+## Follow-up 2026-10-18: the original north box implemented (user decision)
+
+Implemented and host-verified the same evening (HANDOFF 2026-10-18; log quotes in `spawn-gates.md`'s follow-up).
+- Blocker 1 (no mesh): `bake_bounds` z max 83 again, rebake U7 (11771 vertices / 5415 triangles). All ten north markers
+  and the eight lane strips sit on the main component of the raw bake (`test_airpit_spawns.py`).
+- Blocker 2 (no gate): `PASSPORT_CONTROL_DOORS` + `PASSPORT_CONTROL_EMISSIVE` are `held_gates`: closed at raid start in
+  every mode, carved from the NavMesh install on, opened only by `SpawnGates.Release` after a hold. The worry above that
+  the passport line could be walked around was wrong for package v8: the furnished booth row (`PASSPORT_CONTROL/
+  Passport_control_01 (n)`, layer-18 colliders x -31.35..8.37) fills the floor between the lanes; host raid 5 of
+  2026-10-12 saw open floor there on package v6. The 16 turnstiles are the only openings.
+- Hold scope: `start_gates` ["BUS_DOORS"]; the shop shells, portal fences and blockout panels are plain openings again.
+- Host: plain raid 16 carvers, `every probed gate sealed (16 probed)`, north marker and lane strip unreachable; test hold
+  40 carvers, sealed (22 probed), the release opens everything, the north marker reachable, a 22.5 m walk through a lane
+  arrived. The south box's three authored-open inner bus doorways stay passable inside the sealed pocket; the probe
+  verdict is per enclosure now, so they are listed as Debug, not warned about.
+- Still open for ArenaMode: the formation (the numbers above stay valid), the GPU trial, the vault question.

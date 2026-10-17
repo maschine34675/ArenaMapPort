@@ -49,6 +49,12 @@ namespace ArenaMapPort.Client
         internal static bool ShouldHold(bool featureEnabled, bool requested, bool testHold) =>
             featureEnabled && (requested || testHold);
 
+        /// <summary>A held gate (descriptor HeldGates) keeps its parts closed at raid start only while the feature is on
+        /// and carving is on (an uncarved closed leaf on a mesh that runs through it is the shutter trap), and until a
+        /// Release that follows a hold opened it this raid.</summary>
+        internal static bool HeldGateStaysClosed(bool featureEnabled, bool carveEnabled, bool openedThisRaid) =>
+            featureEnabled && carveEnabled && !openedThisRaid;
+
         /// <summary>A timed hold releases once the raid clock since GameStatus.Started reaches the hold length; a hold
         /// length of zero or less never releases by time.</summary>
         internal static bool AutoReleaseDue(float secondsSinceStarted, float holdSeconds) =>
@@ -71,6 +77,14 @@ namespace ArenaMapPort.Client
 
         /// <summary>The horizontal axis a gate is thin on, which the probe path has to cross: 0 for x, 2 for z.</summary>
         internal static int ThinAxis(float sizeX, float sizeZ) => sizeX <= sizeZ ? 0 : 2;
+
+        /// <summary>An enclosure's verdict from its probed doorways (the parts under one barrier root or door assembly):
+        /// while held, an enclosure contradicts the hold only when none of its probed doorways is sealed (the carve took
+        /// nowhere); a doorway that stays passable behind a sealed row lies inside the box (AirPit's bus pocket has an
+        /// authored-open inner row behind the closed outer row, GPU-2 2026-10-17). After a release every doorway must be
+        /// open again.</summary>
+        internal static bool EnclosureContradicts(bool expectSealed, int probedDoorways, int sealedDoorways) =>
+            expectSealed ? probedDoorways > 0 && sealedDoorways == 0 : sealedDoorways > 0;
 
         /// <summary>A carved doorway yields a Partial or Invalid NavMesh path between the two probe points; a complete
         /// path means the gate is NOT sealed for bots.</summary>

@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Text;
 using BepInEx.Configuration;
+using ArenaMapPort.Shared;
 using EFT.Game.Spawning;
 using UnityEngine;
 using UnityEngine.SceneManagement;
@@ -39,7 +40,10 @@ namespace ArenaMapPort.Client
     /// Since 2026-10-17 every part is offered to <see cref="SpawnGates"/> before it is switched off: the part is
     /// registered with its closed pose either way, and while a mode plugin holds the gates closed it stays active
     /// (sealed for bots by a NavMesh carver) and opens on the plugin's release instead; the raycast then reports
-    /// BLOCKED on purpose.
+    /// BLOCKED on purpose. Since 2026-10-18 the descriptor says which barriers that applies to: <c>StartGates</c> are
+    /// offered (AirPit: the bus doors only), <c>HeldGates</c> stay closed at raid start in every mode and open only on
+    /// the plugin's release (AirPit's passport control, the original north team box's gate), every other opened
+    /// barrier is switched off here without a way back (shop shells, portal fences, blockout panels).
     /// </summary>
     internal static class BoothDoorRepairs
     {
@@ -58,7 +62,9 @@ namespace ArenaMapPort.Client
             _barriers = Plugin.Instance.Settings.Bind("Spawns", "OpenSpawnBarriers", true,
                 "Deactivate the moving parts (everything but the frame) of the static scene objects the map lists as " +
                 "spawn barriers — on Equator the roller shutter that closes the FCK hall at the Usec spawn (Arena opens " +
-                "it per round by a script that is not ported). Takes effect on the next raid.");
+                "it per round by a script that is not ported). A map's held gates (AirPit's passport control) are not " +
+                "governed by this switch: they stay closed until a mode plugin releases them, and open at raid start only " +
+                "when Spawns/SpawnGates or SpawnGateCarve is off. Takes effect on the next raid.");
         }
 
         internal static void OpenAll(SpawnPointsCollection spawnPoints)
@@ -69,7 +75,9 @@ namespace ArenaMapPort.Client
             }
             bool doors = _doors != null && _doors.Value;
             bool barriers = _barriers != null && _barriers.Value;
-            if (!doors && !barriers)
+            var map = ArenaMapRaid.CurrentMap;
+            bool heldGates = map != null && map.HeldGates.Length > 0; // registered even with OpenSpawnBarriers off
+            if (!doors && !barriers && !heldGates)
             {
                 return;
             }
@@ -80,9 +88,13 @@ namespace ArenaMapPort.Client
             {
                 OpenDoors(openings, sb);
             }
-            if (barriers)
+            if (barriers || heldGates)
             {
-                OpenBarriers(openings, sb);
+                OpenBarriers(openings, sb, barriers);
+            }
+            if (heldGates)
+            {
+                SpawnGates.SealHeldGates("held gates registered after the navmesh install");
             }
             ReportRays(spawnPoints, openings, sb);
             if (sb.Length > 0)
@@ -133,8 +145,10 @@ namespace ArenaMapPort.Client
             openings.AddRange(doorRoots);
         }
 
-        // Static barriers the descriptor names by hierarchy path: deactivate every child that is not frame.
-        static void OpenBarriers(List<Transform> openings, StringBuilder sb)
+        // Static barriers the descriptor names by hierarchy path: deactivate every child that is not frame. A held
+        // gate's children are registered with SpawnGates instead and stay closed; openPlain false (the
+        // OpenSpawnBarriers switch is off) registers only those.
+        static void OpenBarriers(List<Transform> openings, StringBuilder sb, bool openPlain)
         {
             var map = ArenaMapRaid.CurrentMap;
             if (map == null || map.OpenedBarriers.Length == 0)
@@ -143,6 +157,11 @@ namespace ArenaMapPort.Client
             }
             foreach (var path in map.OpenedBarriers)
             {
+                var role = map.GateRoleOf(path);
+                if (role != ArenaGateRole.Held && !openPlain)
+                {
+                    continue;
+                }
                 var found = FindByPath(path);
                 if (found.Count == 0)
                 {
@@ -167,7 +186,8 @@ namespace ArenaMapPort.Client
                         }
                         if (part.gameObject.activeSelf)
                         {
-                            if (SpawnGates.Offer(part)) { held++; continue; } // registered either way; a hold keeps the enclosure closed for now
+                            if (role == ArenaGateRole.Held && SpawnGates.OfferHeld(part)) { held++; continue; } // closed until the mode plugin's release
+                            if (role == ArenaGateRole.Start && SpawnGates.Offer(part)) { held++; continue; } // registered either way; a hold keeps the enclosure closed for now
                             part.gameObject.SetActive(false);
                             opened++;
                         }
@@ -178,8 +198,8 @@ namespace ArenaMapPort.Client
                     }
                     sb.Append($"\n  spawn barrier '{barrier.name}' at {barrier.position:F1}: deactivated {opened} part(s), " +
                               $"{alreadyOff} already off, kept {kept} frame part(s)" +
-                              (held > 0 ? $", {held} part(s) {SpawnGates.Describe()}" : ""));
-                    openings.Add(barrier);
+                              (held > 0 ? $", {held} part(s) {(role == ArenaGateRole.Held ? SpawnGates.DescribeHeldGate() : SpawnGates.Describe())}" : ""));
+                    if (role != ArenaGateRole.Held) openings.Add(barrier); // a held gate is BLOCKED on purpose
                 }
             }
         }
