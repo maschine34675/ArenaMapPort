@@ -27,7 +27,7 @@ function Assert-Present {
 Run $true @()
 Assert-Present
 if (Test-Path -LiteralPath "$temp/work") { throw 'Dry run created backup files' }
-foreach ($option in @('-DllOnly', '-RemoveLegacyEquatorDb', '-RemoveLegacyDynamicMaps')) {
+foreach ($option in @('-DllOnly', '-RemoveLegacyEquatorDb', '-RemoveLegacyShaderSidecar', '-RemoveLegacyDynamicMaps')) {
     Run $false @('-Confirm', $option)
     Assert-Present
 }

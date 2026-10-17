@@ -359,3 +359,14 @@ edit in this pass and again after the final Client Release rebuild):
 | `arena_equator_scenes.bundle` (308,912,270 B) | `adb8c5916da001f068fe345d3c18d167ec74357d003b9853ff3e16df64fb1035` |
 | `arena_equator_navmesh.bundle` (72,842 B) | `25d6165c3c2535e4ae3ae77f4d08b4a3963f9addcfb275b546543d51fea10f6b` |
 | `arena_equator_preset.bundle` (6,891 B) | `f12cf0bfbff60e5ec299f211253656d87650d63fb8a3a899b957bf4ee06dfe36` |
+
+## Follow-up 2026-10-17: Equator's legacy sidecar name retired
+
+The one exception this pass introduced (Equator keeps `material-shaders.json`, every other map gets
+`material-shaders.<key>.json`) is gone: since 2026-10-17 `ShaderRebind.SidecarFileName` returns `material-shaders.<key>.json`
+for every map, the csproj stages Equator's build output as `material-shaders.arena_equator.json`, and `make_release_zips.py` /
+`validate_distribution.py` / the tests expect exactly that set. The reason the exception existed (an already deployed, already
+verified file that a rename would have broken without a redeploy) no longer applies: the mod is not on Forge yet and every
+install is redeployed anyway. Ordinary deployment never deletes, so `tools/deploy-to-spt.ps1 -RemoveLegacyShaderSidecar`
+(modeled on `-RemoveLegacyEquatorDb`) backs up and removes the old file after the renamed file and the client DLL match dist.
+The published 0.2.1 package (built from `d26b7fd`) still carries the old name; see `docs/dist-manifest.md`.

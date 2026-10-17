@@ -50,6 +50,11 @@ are not accepted build inputs. Keep the SPT bundle target on Unity 2022.3.43f1.
   directory from `ArenaMapPort` to `maschine-ArenaMapPort`; server/config stay unchanged.
   Dry run first; close EFT on the synchronized host before confirming. It refuses links
   and destination collisions. New builds/deployments use the prefixed client directory.
+  The separate `-RemoveLegacyShaderSidecar` migration (2026-10-17: Equator's shader sidecar renamed to
+  `material-shaders.arena_equator.json`, one rule for every map) backs up and removes only the old
+  `material-shaders.json` after the renamed file and the client DLL match dist. Order: full deploy first (not
+  `-DllOnly`, the renamed sidecar must be installed), restart EFT so the new client DLL is loaded, then this mode.
+  Dry run first.
 - Never write under `C:\SPT41*`, `D:\sptmaps`, `D:\Battlestate Games` (the read-only Arena source) or
   `D:\SPT41\Development\ArenaMode` (the user's other mod; read it if you must, never edit it).
 - Never edit host/vanilla config files or third-party mod configs on either install.

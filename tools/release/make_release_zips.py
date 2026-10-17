@@ -110,9 +110,8 @@ CORE_ID = "core"
 FULL_ID = "full"
 LAYOUT_PARTS = "parts"
 LAYOUT_SINGLE = "single"
-# Equator keeps its pre-generalisation sidecar name; every other map uses material-shaders.<key>.json
-# (ShaderRebind.cs, ArenaMapPort.Client.csproj ArenaMapPortStageWpOutputs).
-LEGACY_SHADER_SIDECAR_KEY = "arena_equator"
+# Every map's shader sidecar is material-shaders.<key>.json (ShaderRebind.cs, ArenaMapPort.Client.csproj
+# ArenaMapPortStageWpOutputs); Equator's pre-generalisation "material-shaders.json" was renamed on 2026-10-17.
 CLIENT_CSPROJ = "ArenaMapPort.Client/ArenaMapPort.Client.csproj"
 SERVER_CSPROJ = "ArenaMapPort.Server/ArenaMapPort.Server.csproj"
 
@@ -312,7 +311,7 @@ def scan_dist(dist: Path) -> list:
 
 
 def shader_sidecar_name(key: str) -> str:
-    return "material-shaders.json" if key == LEGACY_SHADER_SIDECAR_KEY else f"material-shaders.{key}.json"
+    return f"material-shaders.{key}.json"
 
 
 def build_rules(spec: ReleaseSpec) -> list:
@@ -614,9 +613,11 @@ def readme_text(spec: ReleaseSpec, parts) -> str:
             "Installation\n"
             "1. Close the game and the SPT server.\n"
             + extract +
-            "3. When upgrading a development build, also remove the former BepInEx/plugins/ArenaMapPort\n"
+            "3. When upgrading from 0.2.1 or a development build, also remove the former BepInEx/plugins/ArenaMapPort\n"
             "   folder (the plugin folder is now maschine-ArenaMapPort), the former\n"
-            "   SPT_Runtime/user/mods/ArenaMapPort/db/base.json, and the development copies\n"
+            "   SPT_Runtime/user/mods/ArenaMapPort/db/base.json, the former\n"
+            "   BepInEx/plugins/maschine-ArenaMapPort/material-shaders.json (Equator's shader sidecar is now\n"
+            "   material-shaders.arena_equator.json), and the development copies\n"
             "   DynamicMaps/Maps/ArenaMapPort_Equator and ArenaMapPort_Bay5 if still present, to avoid\n"
             "   duplicate maps. Unused arena-audio and arena-ui folders may be removed too.\n"
             "4. Start the SPT server, then the game.\n\n"

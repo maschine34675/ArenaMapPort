@@ -22,7 +22,7 @@ namespace ArenaMapPort.Client
     /// Algorithm (O1, exact): for every material whose current shader name starts with the prefix, strip
     /// it to get the original name, look that name up first among <c>Resources.FindObjectsOfTypeAll&lt;Shader&gt;()</c>
     /// (exact match), then fall back to <c>Shader.Find</c>; never rebind to a prefixed shader; restore the
-    /// per-material renderQueue/keywords WP2 recorded in the material-shaders.json sidecar (a reassigned
+    /// per-material renderQueue/keywords WP2 recorded in the material-shaders.&lt;map key&gt;.json sidecar (a reassigned
     /// shader instance can differ in defaults from the stand-in the material was imported against); log
     /// "[RebindShaders] Nx &lt;name&gt;" per shader and list unresolved ones.
     ///
@@ -44,11 +44,6 @@ namespace ArenaMapPort.Client
         internal static bool GroundMaterialWetnessFixEnabled =>
             _groundMaterialWetnessFixEnabled != null && _groundMaterialWetnessFixEnabled.Value;
 
-        // Equator's sidecar keeps its pre-generalization filename exactly — it is already
-        // deployed at dist/BepInEx/plugins/maschine-ArenaMapPort/material-shaders.json and must keep
-        // loading from there without a redeploy (multimap-generalize.md). Every OTHER map gets
-        // its own file instead of overwriting/merging into Equator's already-verified one.
-        const string EquatorSidecarFileName = "material-shaders.json";
         const float SweepDelaySeconds = 3f;
 
         // donor-settings-camera-weather §C.1. Materials are pipeline-generated and named by their
@@ -107,8 +102,10 @@ namespace ArenaMapPort.Client
         static string PluginDir => Path.GetDirectoryName(typeof(ShaderRebind).Assembly.Location) ?? ".";
 
         // internal, not private: Plugin.cs's startup banner also logs this file's expected path per map.
-        internal static string SidecarFileName(ArenaMapDescriptor map) =>
-            map.Key == ArenaMapRegistry.Equator.Key ? EquatorSidecarFileName : $"material-shaders.{map.Key}.json";
+        // One rule for every map since 2026-10-17: Equator's pre-generalization "material-shaders.json" was
+        // renamed to material-shaders.arena_equator.json before the first Forge release; the deploy script's
+        // -RemoveLegacyShaderSidecar migration retires the old file from an install.
+        internal static string SidecarFileName(ArenaMapDescriptor map) => $"material-shaders.{map.Key}.json";
 
         internal static void Install()
         {

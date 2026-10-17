@@ -20,6 +20,9 @@
       recursively deletes directories. No other DynamicMaps files or settings are changed.
       RemoveLegacyEquatorDb is a second explicit migration: verify the new database/server DLL,
       back up the original loose Equator database, then remove only that original file.
+      RemoveLegacyShaderSidecar does the same on the client side for Equator's renamed shader
+      sidecar: verify material-shaders.arena_equator.json and the client DLL against dist, back up
+      and remove only the old material-shaders.json.
       RemoveDebugHelper similarly backs up/removes only the accepted ArenaMapDebug DLL
       at its two historical locations; other plugin files, folders and configs stay intact.
     - Never reads or writes anything under D:/ArenaMapPort/dist/ other than read-only enumeration
@@ -63,6 +66,14 @@
   and server DLL against dist, backs up the old owned db/base.json under work/deployment-backups,
   then removes that one legacy file. Refuses links and non-Equator data. Dry run unless Confirm.
 
+.PARAMETER RemoveLegacyShaderSidecar
+  Separate migration after a full deployment (2026-10-17: Equator's shader sidecar was renamed from
+  material-shaders.json to material-shaders.arena_equator.json, one rule for every map). Verifies the
+  installed renamed sidecar and client DLL against dist, backs up the old material-shaders.json under
+  work/deployment-backups, then removes that one legacy file. Refuses links and files that are not a
+  shader sidecar. Run it after a full deployment (not DllOnly) and after EFT was restarted with the new
+  client DLL; an EFT still running the old DLL would read the old name at its next raid. Dry run unless Confirm.
+
 .PARAMETER RemoveDebugHelper
   Separate cleanup mode for the retired four-button ArenaMapDebug helper. Backs up and removes
   only its known DLL from either historical plugin path, verifying the accepted helper hash.
@@ -99,6 +110,7 @@ param(
     [string]$DllTarget = 'Both',
     [switch]$RemoveLegacyDynamicMaps,
     [switch]$RemoveLegacyEquatorDb,
+    [switch]$RemoveLegacyShaderSidecar,
     [switch]$RemoveDebugHelper,
     [switch]$RenameClientFolder,
     [string]$DynamicMapsPackage,
@@ -493,6 +505,48 @@ function Invoke-LegacyEquatorDbRemoval {
     Write-Output "LEGACY_EQUATOR_DB_OK backed up to $backup"
 }
 
+function Invoke-LegacyShaderSidecarRemoval {
+    # 2026-10-17: Equator's shader sidecar was renamed from material-shaders.json to material-shaders.arena_equator.json
+    # (ShaderRebind.SidecarFileName, one rule for every map). Ordinary deployment never deletes, so the old file stays
+    # on an install until this explicit migration retires it, after the renamed file and the client DLL match dist.
+    $repo = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
+    $relativeRoot = 'BepInEx/plugins/maschine-ArenaMapPort'
+    $installed = Assert-PlainPath (Join-Path $SptRoot $relativeRoot) 'Directory'
+    $staged = Assert-PlainPath (Join-Path (Join-Path $repo 'dist') $relativeRoot) 'Directory'
+    foreach ($relative in @('material-shaders.arena_equator.json', 'maschine-ArenaMapPort.Client.dll')) {
+        $source = Assert-PlainPath (Join-Path $staged $relative) 'File'
+        $target = Assert-PlainPath (Join-Path $installed $relative) 'File'
+        if (-not (Test-Path -LiteralPath $source -PathType Leaf) -or -not (Test-Path -LiteralPath $target -PathType Leaf) -or
+            (Get-FileHash -LiteralPath $source).Hash -ne (Get-FileHash -LiteralPath $target).Hash) {
+            throw "Deploy and verify the renamed Equator shader sidecar and the client DLL first: $relative"
+        }
+    }
+    $legacy = Assert-PlainPath (Join-Path $installed 'material-shaders.json') 'File'
+    if (-not (Test-Path -LiteralPath $legacy -PathType Leaf)) {
+        Write-Output 'LEGACY_SHADER_SIDECAR_OK already absent'; return
+    }
+    $oldBytes = [IO.File]::ReadAllBytes($legacy)
+    # A shader sidecar maps material ids to { shader, renderQueue, keywords }; anything else under that name stays.
+    $old = [Text.Encoding]::UTF8.GetString($oldBytes).TrimStart([char]0xFEFF) | ConvertFrom-Json -AsHashtable
+    if ($old -isnot [hashtable] -or $old.Count -eq 0) { throw 'Legacy file is not a shader sidecar; refusing removal' }
+    foreach ($entry in $old.Values) {
+        if ($entry -isnot [hashtable] -or -not $entry.ContainsKey('shader')) { throw 'Legacy file is not a shader sidecar; refusing removal' }
+    }
+    if (-not $Confirm) {
+        Write-Output "DRY RUN: back up and remove only $legacy after verified replacement"; return
+    }
+    $backup = Assert-PlainPath (Join-Path $repo ('work/deployment-backups/' + [Guid]::NewGuid().ToString('N') + '/equator-material-shaders.json')) 'File'
+    New-Item -ItemType Directory -Path ([IO.Path]::GetDirectoryName($backup)) -Force | Out-Null
+    [IO.File]::WriteAllBytes($backup, $oldBytes)
+    # Revalidate after backup and refuse a concurrently changed legacy file.
+    $null = Assert-PlainPath $legacy 'File'
+    if ((Get-FileHash -LiteralPath $legacy).Hash -ne (Get-FileHash -LiteralPath $backup).Hash) {
+        throw 'Legacy sidecar changed during migration; backup retained, removal cancelled'
+    }
+    Remove-Item -LiteralPath $legacy
+    Write-Output "LEGACY_SHADER_SIDECAR_OK backed up to $backup"
+}
+
 function Invoke-DebugHelperRemoval {
     $repo = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
     # This migration retires the accepted four-button helper, not an arbitrary DLL
@@ -590,7 +644,7 @@ if ($PSBoundParameters.ContainsKey('DllTarget') -and -not $DllOnly) {
 
 if ($RenameClientFolder) {
     try {
-        if ($RemoveDebugHelper -or $RemoveLegacyEquatorDb -or $RemoveLegacyDynamicMaps -or $DllOnly -or
+        if ($RemoveDebugHelper -or $RemoveLegacyEquatorDb -or $RemoveLegacyShaderSidecar -or $RemoveLegacyDynamicMaps -or $DllOnly -or
             $PSBoundParameters.ContainsKey('DynamicMapsPackage') -or $PSBoundParameters.ContainsKey('DynamicMapsMap')) {
             throw 'RenameClientFolder cannot be combined with other deployment modes'
         }
@@ -601,7 +655,7 @@ if ($RenameClientFolder) {
 
 if ($RemoveDebugHelper) {
     try {
-        if ($RemoveLegacyEquatorDb -or $RemoveLegacyDynamicMaps -or $DllOnly -or
+        if ($RemoveLegacyEquatorDb -or $RemoveLegacyShaderSidecar -or $RemoveLegacyDynamicMaps -or $DllOnly -or
             $PSBoundParameters.ContainsKey('DynamicMapsPackage') -or $PSBoundParameters.ContainsKey('DynamicMapsMap')) {
             throw 'RemoveDebugHelper cannot be combined with other deployment modes'
         }
@@ -612,10 +666,20 @@ if ($RemoveDebugHelper) {
 
 if ($RemoveLegacyEquatorDb) {
     try {
-        if ($RemoveLegacyDynamicMaps -or $DllOnly -or $PSBoundParameters.ContainsKey('DynamicMapsPackage') -or $PSBoundParameters.ContainsKey('DynamicMapsMap')) {
+        if ($RemoveLegacyShaderSidecar -or $RemoveLegacyDynamicMaps -or $DllOnly -or $PSBoundParameters.ContainsKey('DynamicMapsPackage') -or $PSBoundParameters.ContainsKey('DynamicMapsMap')) {
             throw 'RemoveLegacyEquatorDb cannot be combined with other deployment modes'
         }
         Invoke-LegacyEquatorDbRemoval
+    } catch { Fail $_.Exception.Message }
+    exit 0
+}
+
+if ($RemoveLegacyShaderSidecar) {
+    try {
+        if ($RemoveLegacyDynamicMaps -or $DllOnly -or $PSBoundParameters.ContainsKey('DynamicMapsPackage') -or $PSBoundParameters.ContainsKey('DynamicMapsMap')) {
+            throw 'RemoveLegacyShaderSidecar cannot be combined with other deployment modes'
+        }
+        Invoke-LegacyShaderSidecarRemoval
     } catch { Fail $_.Exception.Message }
     exit 0
 }

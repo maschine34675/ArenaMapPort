@@ -141,7 +141,7 @@ try {
 
     # Explicit target selection is never meaningful outside DLL-only mode, including Both.
     foreach ($target in @('Client', 'Both')) {
-        foreach ($mode in @('', '-RenameClientFolder', '-RemoveDebugHelper', '-RemoveLegacyEquatorDb',
+        foreach ($mode in @('', '-RenameClientFolder', '-RemoveDebugHelper', '-RemoveLegacyEquatorDb', '-RemoveLegacyShaderSidecar',
             '-RemoveLegacyDynamicMaps', '-DynamicMapsMap', '-DynamicMapsPackage')) {
             $extra = switch ($mode) {
                 '-DynamicMapsMap' { @($mode, 'Equator') }
@@ -157,7 +157,7 @@ try {
         }
     }
 
-    foreach ($mode in @('-RenameClientFolder', '-RemoveDebugHelper', '-RemoveLegacyEquatorDb',
+    foreach ($mode in @('-RenameClientFolder', '-RemoveDebugHelper', '-RemoveLegacyEquatorDb', '-RemoveLegacyShaderSidecar',
         '-RemoveLegacyDynamicMaps', '-DynamicMapsMap', '-DynamicMapsPackage')) {
         $extra = switch ($mode) {
             '-DynamicMapsMap' { @($mode, 'Equator') }

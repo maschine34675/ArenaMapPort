@@ -82,6 +82,23 @@ public sealed class AirPitWiringTests
         foreach (var row in rows) Assert.NotNull(RepoFileOrNull($"tools/maps/{row}.ai.json"));
     }
 
+    [Fact]
+    public void EveryReleasedMapsShaderSidecarIsStagedUnderItsKey()
+    {
+        // 2026-10-17: one naming rule for every map. ShaderRebind.SidecarFileName reads <plugin>/material-shaders.<key>.json;
+        // the csproj renames each map's build output (work/build/<dir>/material-shaders.json) to that name while staging.
+        // Equator's pre-generalization "material-shaders.json" is retired; a literal under that name must not come back.
+        var csproj = Text("ArenaMapPort.Client/ArenaMapPort.Client.csproj");
+        var staged = Regex.Matches(csproj, @"DestinationFiles=""\$\(ArenaMapPortDistDir\)\\material-shaders\.(arena_\w+)\.json""")
+            .Select(m => m.Groups[1].Value).Order().ToArray();
+        Assert.Equal(ReleasedKeys, staged);
+        Assert.DoesNotMatch(@"SourceFiles=""@\(ArenaMapPortShaderSidecar\)""\s+DestinationFolder=", csproj); // the old unrenamed Equator Copy
+        var rebind = Text("ArenaMapPort.Client/ShaderRebind.cs");
+        Assert.Contains("internal static string SidecarFileName(ArenaMapDescriptor map) => $\"material-shaders.{map.Key}.json\";", rebind);
+        // No code path may hand out the legacy name again (a comment may still mention it).
+        Assert.DoesNotMatch(@"(=|\?|:|return)\s*""material-shaders\.json""", rebind);
+    }
+
     static string? RepoFileOrNull(string relative)
     {
         try { return RepoFile(relative); } catch (FileNotFoundException) { return null; }
