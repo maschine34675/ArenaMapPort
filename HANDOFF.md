@@ -3,6 +3,17 @@
 Snapshot for whoever continues (human or agent). Verify the commits named here against `git log`; this file
 is updated by hand at each handover, it is not an automatic record. Read [AGENTS.md](AGENTS.md) first.
 
+## Update 2026-10-18 - RELEASE 0.2.2 built (not uploaded yet): SpawnGates, AirPit's original north box, renamed Equator sidecar
+
+Version bump in both csproj, `Plugin.cs`, `ModMetadata.cs` (`1f7ce05`); `docs/releases/v0.2.2.md` self-contained (Included,
+Changes since 0.2.1, Installation: the full ZIP is required because AirPit's bundles changed). Package:
+`work/releases/0.2.2/maschine-ArenaMapPort-0.2.2.zip`, 2,149,191,505 B (2.00 GiB), SHA-256 `734ce122...a88c9a`, built from
+`1f7ce05` (`make_release_zips.py --single --extract-check`: 67 files identical to dist). Not done, on request only:
+Pixeldrain upload (`upload_pixeldrain.py --timeout 300`, record `work/releases/0.2.2/pixeldrain.json`), VirusTotal scan of
+the two DLLs (`scan_virustotal.py --version 0.2.2`), tag `v0.2.2` + `gh release create`, the Forge entry (text from
+FORGE.md). The dist DLLs now say 0.2.2; both installs still run the 0.2.1-versioned DLL of the same code until the next
+deploy. The SOO crates under the tarp (user decision 2026-10-18) come after this package: a v9 package and a later rebake.
+
 ## Update 2026-10-18 - AirPit's original north team box: bake z 83, the passport control as a held gate, per-map start gates
 
 User decision after the gap analysis below ("die Original-Nordbox: Rebake, Nordtor und Hold-Teilmenge"). Done and
