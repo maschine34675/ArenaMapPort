@@ -8,6 +8,9 @@ dated state in one screen; read it before this index if you only have a minute.
 
 ## Current — read these for the area you touch
 
+- [airpit-team-boxes.md](airpit-team-boxes.md) — what AirPit still lacks for ArenaMode's original team boxes (offline
+  analysis 2026-10-17): south bus pocket data-ready, north box without NavMesh (bake z limit 70) and without a gate
+  (passport doors not a barrier), map-wide hold re-closes 37 parts; formation numbers and the decisions to take.
 - [spawn-gates.md](spawn-gates.md) — spawn enclosures held closed until a mode plugin releases them (`SpawnGates`
   API Hold/Release/IsHeld, NavMesh carvers over the closed parts, Equator's leaves slide open), what Arena had, what
   ArenaMode's Team DM needs, GPU-2 evidence that carving works on the ported NavMesh (2026-10-17).

@@ -3,6 +3,18 @@
 Snapshot for whoever continues (human or agent). Verify the commits named here against `git log`; this file
 is updated by hand at each handover, it is not an automatic record. Read [AGENTS.md](AGENTS.md) first.
 
+## Update 2026-10-17 (evening) - AirPit team boxes: gap analysis for ArenaMode's original team boxes (offline)
+
+User question: Bay5's original team boxes are now implemented in ArenaMode (its `cfa3f55`); what does AirPit still lack?
+Answer in [airpit-team-boxes.md](docs/progress/airpit-team-boxes.md): the south bus pocket is data-ready (ten markers on the
+mesh, BUS_DOORS seal it in the offline carve model); the north box is blocked on this side twice: no NavMesh beyond z 70
+(`bake_bounds`, the 2026-10-12 north-limit decision) and no gate (`PASSPORT_CONTROL_DOORS` is not an `opened_barriers`
+entry, so SpawnGates cannot hold or release it); and `SpawnGates.Hold` re-closes every opened barrier on AirPit (37 parts,
+35 carvers incl. the shop shells), which wants a per-map start-gate subset. The formation numbers (bounds, 20 points,
+infiltration, donor/destination candidates) are in the log. Nothing observed in-game yet: the GPU host was in use by
+another session, so the AirPit hold run is still open. Decisions (north start, mesh in all modes, hold subset, bounds,
+sequencing with a new MapPort version) are the user's.
+
 ## Update 2026-10-17 (afternoon) - Equator's shader sidecar renamed to material-shaders.arena_equator.json; feature/airpit merged into main and deleted
 
 - Branches: `feature/airpit` (SpawnGates `93afc19` plus the user's MIT `LICENSE` commit `ab6d4bb`) was fast-forwarded into `main`,
