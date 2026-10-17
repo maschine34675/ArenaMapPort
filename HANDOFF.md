@@ -3,7 +3,7 @@
 Snapshot for whoever continues (human or agent). Verify the commits named here against `git log`; this file
 is updated by hand at each handover, it is not an automatic record. Read [AGENTS.md](AGENTS.md) first.
 
-## Update 2026-10-17 - cached weather sky-provider rebind candidate (not deployed)
+## Update 2026-10-17 - cached weather sky-provider rebind deployed and tested
 
 ArenaMode's map-feature tests exposed repeated native weather, distant-shadow and ambient-highlight
 exceptions on Equator after AirPit -> Customs -> Labyrinth in one GPU2 process. The first error occurred
@@ -12,11 +12,16 @@ restored the cached donor's singleton but omitted the independent `TODSkyProvide
 The candidate adds the exact owned Full/Simple provider rebinds through the existing native API.
 Production-method regression: 55 assertions, plus two compiled omission controls rejected at their intended
 assertions. Isolated Release DllOnly build including required auxiliary staging passed (0 warnings/errors);
-accepted input copies were hash-verified and only the client DLL is a deployment candidate. Native transition
-acceptance remains pending; root owns commit, delivery and GPU checks. Server, bundles, published 0.2.2
-ZIP/tag, main dist and all live files are untouched by this candidate build.
+accepted input copies were hash-verified. Root committed `6c6a38c`, rebuilt and deployed only the client DLL
+(SHA256 `E4E917381CC524AD224947CF0EF7E530021D8A88899FDC0B0141EE9D75BBAF0B`). GPU2 loaded the exact build:
+fresh Equator with local respawn, Labyrinth -> Equator reuse, Customs Yard and Hideout succeeded in one process;
+the final 17,512-line BepInEx Error query returned zero entries. The separate native EFT stream retains 68
+other entries (material/weather managers, marker reconciliation, etc.); this is not a globally clean log claim.
+Direct static provider identity was not
+inspected; source and regression checks support that part of the diagnosis. All 2,239 protected non-client files
+(including server/bundles) remained hash-identical. Published 0.2.2 ZIP/tag and main dist are unchanged.
 See [weather-provider-rebind.md](docs/progress/weather-provider-rebind.md) for the observed chronology,
-source limits and outstanding acceptance sequence.
+source limits and the appended deployment/native evidence.
 
 ## Update 2026-10-17 - RELEASE 0.2.2 cut again with the crates and published (Pixeldrain, VirusTotal, tag, GitHub release)
 

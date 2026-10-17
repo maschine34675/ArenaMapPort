@@ -98,3 +98,51 @@ native acceptance.
 
 These are pending acceptance steps, not reported GPU passes. Existing native
 evidence and unrelated map assets remain unchanged.
+
+## Root deployment and native follow-up — 2026-10-17
+
+The preceding pending section describes the implementing agent's handoff. Root
+committed the correction as `6c6a38c`, independently reran the production-method
+regression and isolated Release build, then deployed exactly one client DLL with
+`tools/deploy-to-spt.ps1 -SptRoot D:\SPT41 -DllOnly -DllTarget Client -Confirm`.
+The post-commit candidate is 815,104 bytes, SHA-256
+`e4e917381cc524ad224947cf0ef7e530021d8a88899fdc0b0141ee9d75bbaf0b`.
+The earlier pre-commit hash is superseded. Local and GPU2 files match; after
+restart, UiBridge reported all 19 modules identical across build, host disk and
+loaded process. No published ZIP, tag, server, bundle or main `dist` was changed.
+The deployment's 2,239 protected non-client files, including the server DLL,
+total 12,009,189,770 bytes and all retain their pre-deploy SHA-256 hashes.
+
+GPU2 process `dc8d8d22033641dbb4f0ac3147a7c862` (started 23:09:28) ran:
+
+1. Fresh Equator DM: all six pickups placed, DoubleDamage collected after an
+   8 m native navigation walk, local death/respawn at 23:12:06 completed in
+   0.23 s. No Error-level entries followed the respawn.
+2. Labyrinth DM then Equator DM in the same process: both placed six pickups,
+   created their owned phase-light object, rendered a live scene and left
+   normally. The second Equator was a brief startup/reuse check; the local
+   respawn above belongs to the first Equator, not this repeat.
+3. Customs Yard DM loaded its native map and placed six pickups after the
+   ported-map sequence. This is a native-map control within Arena, not a
+   separate ordinary PMC gameplay test. A full file-backed BepInEx Error query
+   after Customs covered 17,442 lines, including loading, and returned zero matches.
+4. Hideout opened successfully, including its rendered first-person view.
+
+Root independently reviewed the scenario results and Equator/Hideout captures.
+There was no recurrence of the three original weather/shadow/ambient exception
+signatures in these samples. The provider's static object identity was not
+directly read back; the mechanism remains supported by native source and the
+production-method regression, while the map-transition behavior is now tested
+in the game. This is not a certification of every weather preset or transition.
+
+Final BepInEx inspection covered 17,512 lines with zero Error matches. The
+separate native EFT stream still contained 68 Error-level entries, including
+JetMaterial, wind/WeatherObstacle, seasonal managers and spawn-marker
+reconciliation. None was one of the three repaired exception signatures. Those
+entries were preserved, not suppressed or exhaustively resolved by this fix;
+the result must not be described as all game logs being error-free.
+
+Detailed scenarios, screenshots, process/configuration cleanup and limitations
+are recorded in ArenaMode's `docs/GPU-MAP-FEATURES-20261017.md` and its ignored
+`artifacts/map-features-native/` evidence directory. The protected-file manifests
+and build/gate evidence are retained by the integrating root session.
