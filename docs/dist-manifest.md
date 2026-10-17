@@ -1,5 +1,9 @@
 # Current distribution contract: Equator, Bay5 and AirPit
 
+2026-10-18 (release 0.2.2): three maps, nine bundles (AirPit's scenes and NavMesh are the U7 rebake), three sidecars
+(`material-shaders.arena_<key>.json` for every map) and both DLLs (client: SpawnGates with held gates, server: version
+string and the Shared descriptor), packaged as `maschine-ArenaMapPort-0.2.2.zip` with its `.sha256` file.
+
 2026-10-18: AirPit's scenes and NavMesh bundles are the U7 rebake (bake box z 83 again, the passport control out of
 the bake as a held gate; scenes 991,961,232 B, navmesh 168,826 B); dist and both installs carry them, the published 0.2.1
 package still has the U6 mesh (z 70). The next package carries U7 and the SpawnGates client.
