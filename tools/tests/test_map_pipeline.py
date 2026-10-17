@@ -512,7 +512,7 @@ class AirpitV8PlanTests(unittest.TestCase):
                          + [hall + "SOO_LOD0/" + n for n in ("Airport_Shop_BS", "DonB_Ramen", "LP_Shop", "LP_Defile",
                                                               "TH_Roll_door_01", "TH_Roll_door_02", "TH_Roll_door_03",
                                                               "TH_Shop_indoor", "DOORS")]
-                         # v9 (2026-10-18): the three level38 SOO crates under the tarp City_Generic_Tarp_01 (1)
+                         # v9 (2026-10-17): the three level38 SOO crates under the tarp City_Generic_Tarp_01 (1)
                          + [hall + "SOO/" + n for n in ("reserve_woodBox_medium (10)", "reserve_woodBox_medium (9)", "cardbox_vinyl")])
         self.assertEqual({r.path: [x.name for x in r.regions] for r in spec.rules if r.kind == "region_roots"},
                          {"PROJECTION": ["decoration box"], hall + "OO/PROPS": ["decoration box"],

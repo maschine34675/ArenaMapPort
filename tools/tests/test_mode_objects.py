@@ -386,7 +386,7 @@ class TrackedSidecarTests(unittest.TestCase):
         # partial scenes Arena_Airpit_Main_hall and Arena_Airpit_Light; the first five scenes are byte-identical to v6,
         # so only source_package (name, extracted_utc, the scene list) changed in the sidecar. 2026-10-13:
         # airpit-native-v8 widens the two partial scenes (twin descendants, exclusions, decoration box); the first five
-        # scenes are still byte-identical, again only source_package (name, extracted_utc) changed. 2026-10-18: v9 adds
+        # scenes are still byte-identical, again only source_package (name, extracted_utc) changed. 2026-10-17: v9 adds
         # three SOO crates to Arena_Airpit_Main_hall; the TeamFight scenes are byte-identical, only source_package changed.
         accepted = ROOT / "work" / "extract" / "airpit-native-v9"
         if not (accepted / "manifest.json").is_file():

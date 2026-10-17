@@ -71,7 +71,7 @@ public class MapDescriptorConsistencyTests
         {
             "BUS_DOORS",
             // the passport control (16 lane turnstiles + the red lane sheets) is the north team box's HELD gate since
-            // 2026-10-18: closed at raid start in every mode, opened only by SpawnGates.Release (HeldGates below)
+            // 2026-10-17: closed at raid start in every mode, opened only by SpawnGates.Release (HeldGates below)
             "PASSPORT_CONTROL_DOORS",
             "PASSPORT_CONTROL_EMISSIVE",
             // the two portal gates of the z 50.5 facade (host raid 1, 2026-10-12): non-root paths into the main scene
@@ -127,7 +127,7 @@ public class MapDescriptorConsistencyTests
             minZ = MathF.Min(minZ, MathF.Min(b.Z0, b.Z1)); maxZ = MathF.Max(maxZ, MathF.Max(b.Z0, b.Z1));
         }
         // Bots get no mesh beyond the walls: the bake volume hugs the outline's bounding box to within 1 m on every
-        // edge (the north again since 2026-10-18: the original north team box lies behind the held passport gate).
+        // edge (the north again since 2026-10-17: the original north team box lies behind the held passport gate).
         var bounds = ArenaMapRegistry.AirPit.BakeBounds;
         Assert.InRange(bounds[0], minX - 1f, minX + 1f); Assert.InRange(bounds[1], maxX - 1f, maxX + 1f);
         Assert.InRange(bounds[4], minZ - 1f, minZ + 1f); Assert.InRange(bounds[5], maxZ - 1f, maxZ + 1f);
@@ -215,7 +215,7 @@ public class MapDescriptorConsistencyTests
         Assert.Equal(map.ScriptsSceneName, map.AllSceneNames[0]);
     }
 
-    // 2026-10-18 (the original AirPit north team box): which opened barriers a mode plugin may hold (StartGates) and
+    // 2026-10-17 (the original AirPit north team box): which opened barriers a mode plugin may hold (StartGates) and
     // which stay closed until SpawnGates.Release (HeldGates). Equator and Bay5 declare neither, so every barrier of
     // theirs is a start gate, exactly as before.
     [Fact]

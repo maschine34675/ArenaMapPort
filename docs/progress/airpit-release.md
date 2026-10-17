@@ -3421,7 +3421,7 @@ They cannot, by Arena's own data; nothing to change.
   test profile SPT-GPU-2 lost its equipped gear again; the botless follow-up raid was left by disconnect (nothing
   equipped), EFT is back at the main menu.
 
-### 2026-10-18: U7 rebake (bake box z 83 again, the passport control a held gate)
+### 2026-10-17: U7 rebake (bake box z 83 again, the passport control a held gate)
 
 For the original north team box (docs/progress/airpit-team-boxes.md, spawn-gates.md follow-ups): `bake_bounds` z max
 70 -> 83, `opened_barriers` regains `PASSPORT_CONTROL_DOORS` + `PASSPORT_CONTROL_EMISSIVE` (held gates, closed at raid
@@ -3430,11 +3430,11 @@ start, carved for bots, opened by a mode plugin's release). `build_all.ps1 -Full
 navmesh_bake_exclusions, 12 opened_barriers`, `baked NavMeshData ... bounds=Center: (-10.00, 3.00, 0.00), Extents:
 (47.00, 5.00, 83.00) sources=3032`, `triangulation: vertices=11771 triangles=5415` (U6: 11332 / 5212, sources 3048).
 base.json and the preset bundle unchanged; scenes bundle 991,961,232 B, navmesh bundle 168,826 B. The U6 bundles are
-kept under `work/build/airpit-u6-backup/`. Host runs: HANDOFF 2026-10-18. The RainBounds line now reads
+kept under `work/build/airpit-u6-backup/`. Host runs: HANDOFF 2026-10-17. The RainBounds line now reads
 `center=(-10.00, 26.24, 0.00) size=(174.00, 60.50, 246.00)` (was z -6.5 / 233): the rain play space follows the bake
 box; the F8 rain acceptance was not repeated.
 
-### 2026-10-18 (evening): package v9 (the crates under the tarp) and rebake U8
+### 2026-10-17 (evening): package v9 (the crates under the tarp) and rebake U8
 
 User report during a raid: the tarp `City_Generic_Tarp_01 (1)` at (-31.3, 2.1, -16.7) hung over nothing. The tarp came
 from level38's hall dressing; the stack under it (`SBG_Arena_Airpit_Main_hall/SOO/reserve_woodBox_medium (9)` at

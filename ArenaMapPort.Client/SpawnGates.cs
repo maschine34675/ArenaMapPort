@@ -31,7 +31,7 @@ namespace ArenaMapPort.Client
     /// after <c>SpawnGateMaxHoldSeconds</c> (counted from the hold, or from the raid timer for a hold made before it) with
     /// a Warning, so a mode bug cannot lock the player in. Everything resets on the owned Scripts scene's unload.
     ///
-    /// Held gates (descriptor <c>HeldGates</c>, 2026-10-18; AirPit's passport control, the gate of its original north
+    /// Held gates (descriptor <c>HeldGates</c>, 2026-10-17; AirPit's passport control, the gate of its original north
     /// team box): their parts are registered through <see cref="OfferHeld"/> and stay closed at raid start in EVERY
     /// mode, get their carvers as soon as the NavMesh is installed (no hold needed), and open only with a Release that
     /// follows a hold, so a plain raid keeps the pocket behind them closed for players and bots alike (the 2026-10-12

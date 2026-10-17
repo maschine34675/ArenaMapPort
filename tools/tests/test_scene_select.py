@@ -1696,7 +1696,7 @@ LIGHT_V8_PINS = {"objects": 1538, "units": 298, "carriers": 37, "twins": 268, "d
                                        LIGHT_REGION + "AIRPORT LAMPS": (0, 26, 1, 10), LIGHT_REGION + "BACK_AIRPORT_LAMPS": (0, 36, 0, 2),
                                        LIGHT_REGION + "LUM_LAMPS": (1, 22, 0, 2), LIGHT_REGION + "Point Light": (0, 1),
                                        LIGHT_REGION + "chemlight_emissive": (1, 2), LIGHT_REGION + "Lamps_ceiling - DISABLED": (0, 6)})}
-# v9 (2026-10-18): v8 + three explicit roots for the level38 SOO crates under the tarp City_Generic_Tarp_01 (1) at
+# v9 (2026-10-17): v8 + three explicit roots for the level38 SOO crates under the tarp City_Generic_Tarp_01 (1) at
 # (-31.3, -16.7); the roots name every same-named SOO sibling (cardbox_vinyl x8, reserve_woodBox_medium (10) x2), so the
 # five that stand elsewhere are excluded by position (213 entries). +3 units, +1 carrier (SOO), +29 objects.
 MAIN_HALL_V9_PINS = {**MAIN_HALL_V8_PINS, "objects": 13035, "units": 3550, "carriers": 246, "twins": 3215,

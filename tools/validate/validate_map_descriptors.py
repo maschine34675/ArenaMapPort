@@ -315,7 +315,7 @@ def bake_input_errors(map_json: dict) -> list[str]:
         elif len(paths) != len(set(paths)):
             errors.append(f"{name} contains duplicate paths")
     barriers = map_json.get("opened_barriers", [])
-    # start_gates / held_gates (SpawnGates, 2026-10-18): which opened barriers a mode plugin may hold and which stay
+    # start_gates / held_gates (SpawnGates, 2026-10-17): which opened barriers a mode plugin may hold and which stay
     # closed until its Release. Both name opened barriers (the bake drops every gate through that list), never overlap.
     for name in ("start_gates", "held_gates"):
         gates = map_json.get(name, [])

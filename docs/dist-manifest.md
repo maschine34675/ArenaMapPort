@@ -1,13 +1,20 @@
 # Current distribution contract: Equator, Bay5 and AirPit
 
-2026-10-18 (later): dist carries AirPit's U8 bundles (package v9, the three crates under the tarp; scenes 991,967,415 B,
-navmesh 169,055 B) and the 0.2.2 DLLs; the built 0.2.2 package (`1f7ce05`) still holds the U7 bundles.
+2026-10-17 (release 0.2.2, final cut): `maschine-ArenaMapPort-0.2.2.zip` is cut again from this dist (AirPit's U8 bundles
+with the crates, the redrawn AirPit DynamicMaps overview, the 0.2.2 DLLs): 2,149,195,967 B, SHA-256
+`d4790b66...5e7944`, built from `326d71b`, 67 files identical to dist after extraction; uploaded to Pixeldrain
+(https://pixeldrain.com/l/rKL2Pt2f), both DLLs 0/75 on VirusTotal, tag `v0.2.2` and GitHub release. The first
+cut (`1f7ce05`, U7 bundles, SHA `734ce122...`) was replaced before any upload.
 
-2026-10-18 (release 0.2.2): three maps, nine bundles (AirPit's scenes and NavMesh are the U7 rebake), three sidecars
+2026-10-17 (later): dist carries AirPit's U8 bundles (package v9, the three crates under the tarp; scenes 991,967,415 B,
+navmesh 169,055 B) and the 0.2.2 DLLs; the first 0.2.2 cut (`1f7ce05`) still held the U7 bundles (replaced, see above).
+
+2026-10-17 (release 0.2.2, first cut `1f7ce05`, replaced by the final cut above): three maps, nine bundles (AirPit's
+scenes and NavMesh were the U7 rebake), three sidecars
 (`material-shaders.arena_<key>.json` for every map) and both DLLs (client: SpawnGates with held gates, server: version
 string and the Shared descriptor), packaged as `maschine-ArenaMapPort-0.2.2.zip` with its `.sha256` file.
 
-2026-10-18: AirPit's scenes and NavMesh bundles are the U7 rebake (bake box z 83 again, the passport control out of
+2026-10-17: AirPit's scenes and NavMesh bundles are the U7 rebake (bake box z 83 again, the passport control out of
 the bake as a held gate; scenes 991,961,232 B, navmesh 168,826 B); dist and both installs carry them, the published 0.2.1
 package still has the U6 mesh (z 70). The next package carries U7 and the SpawnGates client.
 

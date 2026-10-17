@@ -143,9 +143,9 @@ reflection API stays.
   x 8.6 .. 9.0); the vault test over the 1.35 m leaves; floor and headroom in the furnished north hall.
 - Equator and Bay5 regression, hideout once, frame time.
 
-## Follow-up 2026-10-18: the original north box implemented (user decision)
+## Follow-up 2026-10-17: the original north box implemented (user decision)
 
-Implemented and host-verified the same evening (HANDOFF 2026-10-18; log quotes in `spawn-gates.md`'s follow-up).
+Implemented and host-verified the same evening (HANDOFF 2026-10-17; log quotes in `spawn-gates.md`'s follow-up).
 - Blocker 1 (no mesh): `bake_bounds` z max 83 again, rebake U7 (11771 vertices / 5415 triangles). All ten north markers
   and the eight lane strips sit on the main component of the raw bake (`test_airpit_spawns.py`).
 - Blocker 2 (no gate): `PASSPORT_CONTROL_DOORS` + `PASSPORT_CONTROL_EMISSIVE` are `held_gates`: closed at raid start in

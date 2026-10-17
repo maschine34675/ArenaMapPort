@@ -32,7 +32,7 @@ GATES = [
 GATE_XZ = [(-23.50, 50.54), (-0.38, 50.54)]
 # The three GateEntity roots of Arena's TeamFight round start. BUS_DOORS (the south team box) opens at raid start unless
 # a mode plugin holds it (start_gates). PASSPORT_CONTROL_DOORS + PASSPORT_CONTROL_EMISSIVE (the north team box: 16 lane
-# turnstiles and the red lane sheets) are held_gates since 2026-10-18: closed at raid start in every mode, sealed for
+# turnstiles and the red lane sheets) are held_gates since 2026-10-17: closed at raid start in every mode, sealed for
 # bots by SpawnGates' carvers, opened only by SpawnGates.Release. Since package v8 the furnished passport booth row
 # fills the floor between the lanes, so the turnstiles are the only way through (host raid 5 of 2026-10-12 saw open
 # floor there on package v6). All three leave the bake like every opened barrier.
@@ -68,10 +68,10 @@ BUILDING_PATHS = [
 ARENA_LAYERS = [9, 11, 13, 18, 30]            # NavMeshSurface mask 0x40042A00 of Arena's three AI scenes
 # The AABB of the authored borders (Arena's TeamFight outline) rounded outwards; was x -80..56, z -96..92 until host
 # raid 4 (2026-10-12) showed the mesh running 7 m into the unlit entrance hall north of the facade, and cut at z 70
-# from 2a1e0ce (2026-10-12) to 2026-10-18, when the original north team box (z 69.16..85.16) needed its pocket meshed
+# from 2a1e0ce (2026-10-12) to 2026-10-17, when the original north team box (z 69.16..85.16) needed its pocket meshed
 # again (the held passport gate keeps bots out of it in plain raids).
 BOUNDS = [-57, 37, -2, 8, -83, 83]
-PACKAGE = REPO / "work" / "extract" / "airpit-native-v9"   # v8 + the three SOO crates under the tarp (2026-10-18); v6/v7/v8 are archives
+PACKAGE = REPO / "work" / "extract" / "airpit-native-v9"   # v8 + the three SOO crates under the tarp (2026-10-17); v6/v7/v8 are archives
 HAVE_PACKAGE = (PACKAGE / "scenes" / "Arena_AirPit_ShootOut.json").is_file()
 ARENA_NAVMESH = Path("D:/Battlestate Games/Escape from Tarkov Arena/EscapeFromTarkovArena_Data/sharedassets33.assets")
 
@@ -122,7 +122,7 @@ class SidecarContentTests(unittest.TestCase):
             self.assertTrue(x0 + 3 <= x <= x1 - 3 and z0 + 3 <= z <= z1 - 3 and y0 < y < y1, (x, y, z))
 
     def test_bounds_hold_every_team_box_marker_with_room(self):
-        # 2026-10-18: the original north team box lives behind the passport line; its ten markers (and the south ten)
+        # 2026-10-17: the original north team box lives behind the passport line; its ten markers (and the south ten)
         # must stay inside the bake volume with 2.5 m of mesh around them (the northernmost, ScavPMCspawn (8), stands 2.9 m
         # from the z 83 edge), or the box is unusable before any rebake shows it.
         x0, x1, y0, y1, z0, z1 = self.map["bake_bounds"]
@@ -386,9 +386,9 @@ class PackageTests(unittest.TestCase):
         # sources 6447 + 1328 = 7775 (no new name rule or barrier), layer-masked 2500 + 535 (Main_hall) + 1 (Light, the
         # one mask-layer lamp collider above the bake box, y 9.3) = 3036. The three layer-0 cover cubes of the south-west
         # shop (COVER_CUBES, 2026-10-13) are barriers since the first U6 host raid: sources 7775 - 3 = 7772, mask unchanged.
-        # The held passport gate (2026-10-18, the original north team box) takes its 16 lane leaves (layer 18) and their 16
+        # The held passport gate (2026-10-17, the original north team box) takes its 16 lane leaves (layer 18) and their 16
         # ballistic twins out again: sources 7772 - 32 = 7740, mask 3036 - 16 = 3020. EMISSIVE holds no collider.
-        # v9 (2026-10-18) adds the three SOO crates under the tarp: 7 collider owners (2 x COLLIDER + BALLISTIC, cardbox
+        # v9 (2026-10-17) adds the three SOO crates under the tarp: 7 collider owners (2 x COLLIDER + BALLISTIC, cardbox
         # COLLIDER + 2 BALLISTIC), 3 of them on layer 18: owners 7929, sources 7747, mask 3023.
         self.assertEqual(len(cset.owners), 7929)
         self.assertEqual(int(everything.sum()), 7747)

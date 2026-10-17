@@ -287,7 +287,7 @@ class AirPitSidecarTests(unittest.TestCase):
 
     @unittest.skipUnless(BUILT_NAVMESH.is_file(), "no built AirPit NavMesh bundle (work/build/airpit)")
     def test_the_north_team_box_and_the_passport_lanes_are_on_the_main_component_of_the_built_navmesh(self):
-        # 2026-10-18 (the original north team box): the bake volume reaches the facade again (z 83) and the 16 passport
+        # 2026-10-17 (the original north team box): the bake volume reaches the facade again (z 83) and the 16 passport
         # leaves leave the bake like every opened barrier (held gate), so the ten north TeamFight markers (modes.json)
         # and the eight lane strips through the passport line carry mesh joined to the hall. At runtime SpawnGates'
         # carvers over the leaves cut the lanes again until a mode plugin's Release; this test pins the raw bake.

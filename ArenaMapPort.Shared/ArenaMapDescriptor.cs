@@ -142,7 +142,7 @@ namespace ArenaMapPort.Shared
         public ArenaExitDescriptor[] Exits { get; } // exfils-stage2 — runtime-authored exits (empty = raid ends by timer only)
         public string[] OpenedBarriers { get; }     // hierarchy paths of static scene objects whose non-frame parts are deactivated
                                                     // at raid start (Arena's round barriers that close a spawn area); empty = none
-        // Spawn gates (SpawnGates.cs, 2026-10-18). StartGates: the OpenedBarriers a mode plugin may hold closed through
+        // Spawn gates (SpawnGates.cs, 2026-10-17). StartGates: the OpenedBarriers a mode plugin may hold closed through
         // SpawnGates (offered to it before the raid-start opening switches them off); empty = every opened barrier is
         // offered (Equator, Bay5). HeldGates: OpenedBarriers that stay CLOSED at raid start in every mode, sealed for
         // bots by SpawnGates' carvers from the NavMesh install on, and opened only by SpawnGates.Release (AirPit's
@@ -459,7 +459,7 @@ namespace ArenaMapPort.Shared
                 // lane-light groups; PASSPORT_CONTROL_EMISSIVE: the 18 red lane sheets (held gates, see below).
                 // Mirrors tools/maps/airpit.json (AirPitMapTests.OpenedBarriersAndBakeInputsMatchTheSidecar).
                 "BUS_DOORS",
-                // PASSPORT_CONTROL_DOORS + PASSPORT_CONTROL_EMISSIVE are the HeldGates (2026-10-18, the original north
+                // PASSPORT_CONTROL_DOORS + PASSPORT_CONTROL_EMISSIVE are the HeldGates (2026-10-17, the original north
                 // team box): the 16 lane turnstiles (1.09 x 1.35 m, eight lanes at z 66.3 and 69.1) stay closed at
                 // raid start in every mode and open only on SpawnGates.Release, together with the 18 red lane sheets.
                 // Since package v8 the furnished passport booth row (Arena_Airpit_Main_hall PASSPORT_CONTROL, layer-18
@@ -501,7 +501,7 @@ namespace ArenaMapPort.Shared
             // host raid 1 walked the player into the DonB_Ramen shutter at (-46.2, 0, 43.4). Every solid is baked.
             // Play space: the AABB of the authored borders below (Arena's TeamFight outline, x -56.8..36.2,
             // z -82.5..83.6), y -2..8 = ground floor plus wing mezzanine (user decision 2026-10-11, 4.3). From
-            // 2026-10-12 (2a1e0ce) to 2026-10-18 the box ended at z 70 to keep bots out of the north spawn pocket;
+            // 2026-10-12 (2a1e0ce) to 2026-10-17 the box ended at z 70 to keep bots out of the north spawn pocket;
             // the original north team box (SPAWN_BOUND_FIGHTER z 69.16..85.16) needs the pocket meshed, so the box is
             // the outline's AABB again and the held passport gate seals the pocket for bots instead. The 2026-10-11
             // box (x -80..56, z -96..92) baked 7 m of the dark entrance hall and strips of runway and forecourt

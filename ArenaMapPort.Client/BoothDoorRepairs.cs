@@ -40,7 +40,7 @@ namespace ArenaMapPort.Client
     /// Since 2026-10-17 every part is offered to <see cref="SpawnGates"/> before it is switched off: the part is
     /// registered with its closed pose either way, and while a mode plugin holds the gates closed it stays active
     /// (sealed for bots by a NavMesh carver) and opens on the plugin's release instead; the raycast then reports
-    /// BLOCKED on purpose. Since 2026-10-18 the descriptor says which barriers that applies to: <c>StartGates</c> are
+    /// BLOCKED on purpose. Since 2026-10-17 the descriptor says which barriers that applies to: <c>StartGates</c> are
     /// offered (AirPit: the bus doors only), <c>HeldGates</c> stay closed at raid start in every mode and open only on
     /// the plugin's release (AirPit's passport control, the original north team box's gate), every other opened
     /// barrier is switched off here without a way back (shop shells, portal fences, blockout panels).

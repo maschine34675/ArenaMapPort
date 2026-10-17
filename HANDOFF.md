@@ -3,6 +3,21 @@
 Snapshot for whoever continues (human or agent). Verify the commits named here against `git log`; this file
 is updated by hand at each handover, it is not an automatic record. Read [AGENTS.md](AGENTS.md) first.
 
+## Update 2026-10-17 - RELEASE 0.2.2 cut again with the crates and published (Pixeldrain, VirusTotal, tag, GitHub release)
+
+User decision: cut 0.2.2 again from the U8 dist instead of a 0.2.3. `make_release_zips.py --single --force --extract-check`
+replaced the 1f7ce05 package (U7, SHA `734ce122...`, never uploaded): `work/releases/0.2.2/maschine-ArenaMapPort-0.2.2.zip`,
+2,149,195,967 B (2.00 GiB), SHA-256 `d4790b666a07d2dad9257f2b128f5e52bcc6476ceaf954cb827cb4bc6f5e7944`, built from `326d71b` (release notes with the
+crates and the redrawn AirPit overview), 67 files identical to dist after extraction. dist == `D:\SPT41` for all 67 files
+(hash compare); `D:\SPT41vanilla` still has the previous AirPit DynamicMaps JSONC/SVG (the refresh was deployed to
+`D:\SPT41` only). No C# changed since 1f7ce05, so the DLLs built at b680f7e (client) / 1f7ce05 (server) are the 0.2.2 code.
+Pixeldrain (`upload_pixeldrain.py --timeout 300`, record `work/releases/0.2.2/pixeldrain.json`): list https://pixeldrain.com/l/rKL2Pt2f,
+ZIP https://pixeldrain.com/u/u3Yh5xmn (direct https://pixeldrain.com/api/file/u3Yh5xmn?download), checksum https://pixeldrain.com/u/5y34D3K6. VirusTotal (record `virustotal.json`, scanned 2026-10-17):
+client `eea88249211b...` and server `2501e6567e66...` both 0 malicious, 0 suspicious of 75 engines. Tag `v0.2.2` on the publishing commit and the GitHub release
+(body = v0.2.2.md without its H1, asset: the `.sha256` file; no DLL-only package because AirPit's bundles changed).
+Still the user's: the Forge entry (text from FORGE.md, link to the Pixeldrain list, VirusTotal links), the vanilla server
+restart (new server DLL since the U8 deploy), the ArenaMode `arena_airpit` formation.
+
 ## Update 2026-10-17 - AirPit DynamicMaps refreshed for the original team boxes
 
 Regenerated the overview from v9 colliders and fresh triangulation of the current U8 bundle;
@@ -16,7 +31,7 @@ No bundles or DLLs rebuilt; the existing 0.2.2 ZIP is unchanged.
 DynamicMaps menu renderer displayed both boxes with one layer, 37,658 sprite vertices and
 no warning/error; no new raid was needed. See [the appended evidence](docs/progress/airpit-dynamicmaps.md#team-box-refresh--2026-10-17).
 
-## Update 2026-10-18 - AirPit package v9: the crates under the tarp (user report), rebake U8
+## Update 2026-10-17 - AirPit package v9: the crates under the tarp (user report), rebake U8
 
 User report (standing at (-29.2, -15.5) facing south-west): a tarp hung in the air, the crate under it missing. Cause: the
 tarp `OO/PROPS/INDOOR/BACK/City_Generic_Tarp_01 (1)` is level38 hall dressing (imported), the three cover props under
@@ -37,7 +52,7 @@ triangles`, the two wooden crates on their pallet and the vinyl-wrapped box stan
 crates; the crates go into the next package. The plan's three roots went into `b680f7e` by accident (a `git add -A`
 during the 0.2.2 notes commit); the exclusions, pins and package references are in this commit.
 
-## Update 2026-10-18 - RELEASE 0.2.2 built (not uploaded yet): SpawnGates, AirPit's original north box, renamed Equator sidecar
+## Update 2026-10-17 - RELEASE 0.2.2 built (not uploaded yet): SpawnGates, AirPit's original north box, renamed Equator sidecar
 
 Version bump in both csproj, `Plugin.cs`, `ModMetadata.cs` (`1f7ce05`); `docs/releases/v0.2.2.md` self-contained (Included,
 Changes since 0.2.1, Installation: the full ZIP is required because AirPit's bundles changed). Package:
@@ -46,13 +61,13 @@ Changes since 0.2.1, Installation: the full ZIP is required because AirPit's bun
 Pixeldrain upload (`upload_pixeldrain.py --timeout 300`, record `work/releases/0.2.2/pixeldrain.json`), VirusTotal scan of
 the two DLLs (`scan_virustotal.py --version 0.2.2`), tag `v0.2.2` + `gh release create`, the Forge entry (text from
 FORGE.md). The dist DLLs now say 0.2.2; both installs still run the 0.2.1-versioned DLL of the same code until the next
-deploy. The SOO crates under the tarp (user decision 2026-10-18) come after this package: a v9 package and a later rebake.
+deploy. The SOO crates under the tarp (user decision 2026-10-17) come after this package: a v9 package and a later rebake.
 
-## Update 2026-10-18 - AirPit's original north team box: bake z 83, the passport control as a held gate, per-map start gates
+## Update 2026-10-17 - AirPit's original north team box: bake z 83, the passport control as a held gate, per-map start gates
 
 User decision after the gap analysis below ("die Original-Nordbox: Rebake, Nordtor und Hold-Teilmenge"). Done and
 host-verified on GPU-2 (18:41-18:55); details in [spawn-gates.md](docs/progress/spawn-gates.md) and
-[airpit-team-boxes.md](docs/progress/airpit-team-boxes.md), both with a 2026-10-18 follow-up.
+[airpit-team-boxes.md](docs/progress/airpit-team-boxes.md), both with a 2026-10-17 follow-up.
 - Data (sidecar + descriptor in one commit): `bake_bounds` z max 70 -> 83 (the authored-borders AABB again);
   `opened_barriers` regains `PASSPORT_CONTROL_DOORS` + `PASSPORT_CONTROL_EMISSIVE` (12 entries, so the bake leaves them
   out); new keys `start_gates` ["BUS_DOORS"] (the only barrier a hold may close) and `held_gates` [both passport roots]

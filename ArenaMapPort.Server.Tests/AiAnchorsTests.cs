@@ -118,7 +118,7 @@ public sealed class AiAnchorsTests
         var bounds = ArenaMapRegistry.AirPit.BakeBounds;
         Assert.Equal(6, bounds.Length);
         using var doc = JsonDocument.Parse(File.ReadAllText(Sidecar("airpit.ai.json")));
-        // Core point 7 (-8.35, 0.02, 76.81) is Arena's anchor in the north spawn pocket. Since 2026-10-18 the pocket is
+        // Core point 7 (-8.35, 0.02, 76.81) is Arena's anchor in the north spawn pocket. Since 2026-10-17 the pocket is
         // meshed again (the original north team box, bake box z 83) but sealed by the held passport gate's carvers in
         // every raid without a mode plugin's release, so it stays an island for bots like Equator's 13/14; the sidecar
         // keeps it because it is the extractor's reproducible output (from 2026-10-12 to 10-18 the box ended at z 70).

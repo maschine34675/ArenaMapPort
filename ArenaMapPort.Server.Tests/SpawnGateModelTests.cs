@@ -225,7 +225,7 @@ public sealed class SpawnGatesWiringTests
     [Fact]
     public void HeldGatesAreRegisteredByBoothDoorRepairsAndCarvedWithoutAHold()
     {
-        // 2026-10-18: a descriptor's HeldGates (AirPit's passport control) stay closed at raid start in every mode and
+        // 2026-10-17: a descriptor's HeldGates (AirPit's passport control) stay closed at raid start in every mode and
         // get their carvers with the NavMesh install; only a Release that follows a hold opens them.
         var doors = Text("ArenaMapPort.Client/BoothDoorRepairs.cs");
         Assert.Contains("map.GateRoleOf(path)", doors);

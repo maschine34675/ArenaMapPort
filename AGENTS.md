@@ -161,8 +161,8 @@ The older `equator-native-dust`/`bay5-native-dust`, `equator`, `bay5` and `bay5-
 omit later native features (and old Bay5 omits the harbor background), and the v3 packages lack the light-culling
 components; v4 lacks native projection decals. Do not rebuild either accepted map from those older packages.
 Bay5 uses its v5 package with `-FullMap`
-and `-OutputDir D:/ArenaMapPort/work/build/bay5`. AirPit (branch `feature/airpit`) builds from
-`work/extract/airpit-native-v9` (2026-10-18: v8 + the three level38 SOO crates under the tarp at (-31.3, -16.7), explicit
+and `-OutputDir D:/ArenaMapPort/work/build/bay5`. AirPit (on `main` since the 2026-10-17 merge of `feature/airpit`) builds from
+`work/extract/airpit-native-v9` (2026-10-17: v8 + the three level38 SOO crates under the tarp at (-31.3, -16.7), explicit
 roots with the five same-named siblings excluded by position; v8 = 2026-10-13: v7 + the rest of the furnished hall; v7 = v6 + the furnished shops. Both
 come from the two PARTIAL scenes `Arena_Airpit_Main_hall` (38) and `Arena_Airpit_Light` (37), selected by the plan's
 `select` records (roots / region_roots on the decoration box, `skip_twins_of` 324/325, `exclude` for the 208 props
@@ -283,7 +283,7 @@ the log; the user uses it to point at things.
   barriers. `BakeNavMesh.RoundOpenedReason` excludes those by name; anything else the client disables at
   runtime must be added there too, or it stays a wall for bots. The bake volume is the renderer union + 10 m
   unless the descriptor carries `bake_bounds` (AirPit: x −57..37, y −2..8, z −83..83 = the AABB of its
-  `authored_borders` (z 83.6) rounded; from 2026-10-12 to 2026-10-18 it ended at z 70 to keep bots out of the north
+  `authored_borders` (z 83.6) rounded; from 2026-10-12 to 2026-10-17 it ended at z 70 to keep bots out of the north
   spawn pocket, now the held passport gate does that, see `docs/progress/airpit-team-boxes.md`. Equator/Bay5 have none — their ground floors sit around y −8..12, the upper rings are
   decoration). Arena bounds AirPit's TeamFight area by a data polygon, not colliders (`ExcludeLevelBorders` in its
   culling scene); `AuthoredBorderRepairs` raises invisible movement-layer walls along that outline at raid start. `navmesh_bake_exclusions` drops a
@@ -413,7 +413,7 @@ the log; the user uses it to point at things.
   `NavMesh.AddNavMeshData`) works and un-carves within 0.5 s (GPU-2, 2026-10-17). Equator's booths double as the map's
   extraction boxes (4 x 4 m at (2, 46) and (5, -44)): a tester standing inside one extracts after 8 s. Door (3) of the
   south booth is disconnected on the map's own NavMesh (Arena's fence behind it); probes across it are Partial by design.
-  Since 2026-10-18 the descriptor says which opened barriers a hold may close (`start_gates`; AirPit: BUS_DOORS only) and
+  Since 2026-10-17 the descriptor says which opened barriers a hold may close (`start_gates`; AirPit: BUS_DOORS only) and
   which stay closed until the release in every mode (`held_gates`; AirPit's `PASSPORT_CONTROL_DOORS` + `_EMISSIVE`, the
   original north team box: closed at raid start, carved from the NavMesh install on, so bots cannot path into the
   pocket behind them in a plain raid; whether a player can vault the 1.35 m turnstiles is open). Both are subsets of

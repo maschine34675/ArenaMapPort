@@ -81,7 +81,7 @@ names repeat), mirrored by `ArenaMapDescriptor.OpenedBarriers` (test `OpenedBarr
 Find candidates with the in-game F10 inspector (aim at the obstacle) and the scene dump. A path may be a single
 segment: a bare name addresses the scene root object itself (AirPit: `BUS_DOORS`, `PASSPORT_CONTROL_DOORS`).
 
-Two optional spawn-gate keys (2026-10-18; mirrored by `ArenaMapDescriptor.StartGates` / `HeldGates`; a map that declares
+Two optional spawn-gate keys (2026-10-17; mirrored by `ArenaMapDescriptor.StartGates` / `HeldGates`; a map that declares
 `held_gates` must also declare `start_gates`) and three optional bake-only keys (PLAN-AIRPIT item 8; Equator and Bay5 carry
 none of the five, so their bake is unchanged), mirrored by `ArenaMapDescriptor.NavMeshBakeExclusions` / `BakeBounds` /
 `NavMeshBakeLayers` and checked by `validate_map_descriptors.py` (shape and drift) and `AirPitMapTests`:

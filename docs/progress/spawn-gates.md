@@ -107,7 +107,7 @@ Final build (11:28-11:32, after the review fixes and the baseline probe; this is
 3. Watch the first native Team DM with the gates held: bots inside the boxes during Assembling, the slide at Live, bots
    leaving afterwards. That is the observation this plugin side could not produce in a plain PMC raid.
 
-## Follow-up 2026-10-18: held gates, start-gate subset, AirPit's north box
+## Follow-up 2026-10-17: held gates, start-gate subset, AirPit's north box
 
 - Descriptor `StartGates` / `HeldGates` (sidecar `start_gates` / `held_gates`, subsets of `opened_barriers`;
   `ArenaMapDescriptor.GateRoleOf`): a Hold closes only the start gates (AirPit: BUS_DOORS; Equator and Bay5 declare
