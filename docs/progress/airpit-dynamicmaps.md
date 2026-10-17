@@ -88,3 +88,54 @@ profile health was 440/440.
   remain under ignored `work/dynamicmaps/airpit/`.
 
 All source-derived graphics and native screenshots remain in ignored work/dist.
+
+## Team-box refresh — 2026-10-17
+
+After ArenaMode's native acceptance of the original north/south starts, the user
+requested a fresh overview including those boxes. The old drawing used U6 and
+ended at world Z73; widening its frame alone would not restore the north floor.
+
+- Fresh Unity 2022.3.43f1 triangulation of the **existing U8 bundle**, SHA256
+  `2a72a71ba0c959a816c26885c58ea50412075625ae62e4cfdb420b54d185d275`:
+  11,787 vertices / 5,423 triangles. No scene/NavMesh rebuild or DLL build.
+- Source colliders: `work/extract/airpit-native-v9`. Drawing bounds now
+  **[-60, -86, 40, 86]**; the ground-only height band and 1 cm tile seam grid
+  remain unchanged. All twenty original team markers lie on the selected native
+  ground component and within the new drawing.
+- The first candidate at 18 cm obstacle simplification had 16,283 SVG points,
+  exceeding the existing 16,000-point guard. AirPit alone now uses 20 cm obstacle
+  simplification, yielding **15,035 points**. Its native walkable geometry is not
+  further simplified; Equator/Bay5 retain their original settings and files.
+- The inspected preview includes the northern passport hall, its booth row and
+  the southern bus pocket. Spectator floors remain excluded.
+
+Accepted output is under ignored `work/dynamicmaps/airpit-team-boxes/final/`;
+the adjacent fresh `navmesh.json`, logs, `geometry-verified.json` and
+`final-verification.json` bind source, current bundle and delivered bytes. The old
+pack is retained under `previous-pack/`. Only these two files were restaged into
+the accepted release inputs and dist, then deployed through the reviewed
+two-file dry run and `deploy-to-spt.ps1 -DynamicMapsMap AirPit -Confirm`:
+
+| File | SHA256 |
+|---|---|
+| ArenaMapPort_AirPit.jsonc | `cc115d91c0ef5958f4e8a215a163999a535c5b5c5f5658552a4335cb26008b67` |
+| Layers/Ground.svg | `2033d7cb9f4049075964c777cc37ce66f78cf53c8af54b3bcae1e7e29441ee07` |
+
+Generation, accepted release inputs, dist, local install and GPU1 copies match.
+The existing 0.2.2 release archive was **not** rewritten or published; a subsequent
+package build will consume these updated staged files.
+
+Checks: 44 export tests passed (including north/south coverage, consistent bounds
+and explicit spectator-floor exclusion), 104 scoped deployment fixtures passed,
+and real distribution validation passed for all three maps/nine bundles.
+All 2,349 snapshotted other MapPort/server/DynamicMaps files, Arena DLLs and
+MapPort config remained byte-identical through deployment.
+
+Native check on **SPT-GPU-1**, fresh instance `456ec42b`, 22:00–22:01 local:
+Inventory → MAP selected `Arena: Air Pit — ground plan`; one ground layer,
+north bound 86, both boxes/compass/exits visibly rendered. Actual
+`MapLayer.Image.sprite.vertices.Length` was **37,658**, below DynamicMaps'
+65,500 limit; the complete process log had zero DynamicMaps warnings/errors.
+Evidence: `native-map.png` and `native-inspection.txt` in the task output directory.
+The host returned to MainMenu. This was a **menu-only renderer check**, not a
+new raid or player-arrow alignment test; coordinate formulas/axes are unchanged.

@@ -85,13 +85,13 @@ and source/hash receipt are outside `pack/`. Missing, extra, linked or malformed
 package files are rejected. The deploy is copy-only and sequential; after a partial
 I/O failure, correct the cause and repeat the deployment.
 
-## AirPit (development build, 2026-10-13)
+## AirPit (including original team boxes)
 
 Export `arena_airpit_navmesh.bundle` in the isolated Unity probe, then run:
 
 ```powershell
 & ./work/dynamicmaps/venv/Scripts/python.exe tools/dynamicmaps/export_equator.py `
-  --package work/extract/airpit-native-v8 --descriptor tools/maps/airpit.json `
+  --package work/extract/airpit-native-v9 --descriptor tools/maps/airpit.json `
   --navmesh work/dynamicmaps/airpit/navmesh.json --output work/dynamicmaps/airpit/ground-only
 pwsh -NoProfile -File tools/deploy-to-spt.ps1 -SptRoot D:/SPT41 `
   -DynamicMapsPackage work/dynamicmaps/airpit/ground-only/pack -DynamicMapsMap AirPit
@@ -102,7 +102,10 @@ own `dynamicmaps/ArenaMapPort_AirPit/` folder. **The upper area is for spectator
 not players** (user clarification, 2026-10-13); no upper layer is generated/shipped.
 Ground uses world Y -0.5..1.2 m; 1 cm projection snapping closes float-sized tile
 seams that would otherwise cut the south apron away from the anchored component.
-The fixed drawing extent is X -60..40 / Z -86..73, north up. Muted ground includes
+The fixed drawing extent is X -60..40 / Z -86..86, north up, including both original
+team boxes. Re-export triangulation from the current U8 bundle before generation;
+expanding the drawing alone cannot restore the north pocket missing from U6.
+Muted ground includes
 isolated NavMesh regions; cartography is not proof that such areas are accessible.
 
 Accepted source, checks and native screenshots: [AirPit overview](../../docs/progress/airpit-dynamicmaps.md).
@@ -160,7 +163,7 @@ old definitions when files are deleted during a running process.
 - Original floor faces within ±0.45 m and obstacle slabs at 0.4–1.8 m contribute.
   Disabled/inactive/trigger colliders, water, numeric trigger/border layers, round-open
   doors and listed shutter leaves are excluded. Listed shutter frames remain.
-- Geometry is simplified (12 cm Equator / 18 cm Bay5 obstacle tolerance, 4.5 cm NavMesh tolerance,
+- Geometry is simplified (12 cm Equator / 18 cm Bay5 / 20 cm AirPit obstacle tolerance, 4.5 cm NavMesh tolerance,
   7 cm obstacle closing, tiny holes below 0.15 m² removed). This improves legibility;
   the result is not an exact collision, line-of-sight or navigation guarantee.
 - Upper floors, roofs and background scenery are omitted. Round primitive colliders

@@ -3,6 +3,19 @@
 Snapshot for whoever continues (human or agent). Verify the commits named here against `git log`; this file
 is updated by hand at each handover, it is not an automatic record. Read [AGENTS.md](AGENTS.md) first.
 
+## Update 2026-10-17 - AirPit DynamicMaps refreshed for the original team boxes
+
+Regenerated the overview from v9 colliders and fresh triangulation of the current U8 bundle;
+the former U6 drawing ended before the north box. Bounds now X -60..40 / Z -86..86.
+AirPit alone uses 20 cm obstacle simplification to stay within the existing complexity guard;
+native ground, spectator exclusion and Equator/Bay5 settings are unchanged. Both original
+boxes and all twenty team starts are covered. Only the two owned AirPit JSONC/SVG files
+were updated in accepted release inputs, dist and the install, with matching GPU1 hashes.
+No bundles or DLLs rebuilt; the existing 0.2.2 ZIP is unchanged.
+44 export tests, 104 deployment fixtures and distribution validation passed. GPU1's actual
+DynamicMaps menu renderer displayed both boxes with one layer, 37,658 sprite vertices and
+no warning/error; no new raid was needed. See [the appended evidence](docs/progress/airpit-dynamicmaps.md#team-box-refresh--2026-10-17).
+
 ## Update 2026-10-18 - AirPit package v9: the crates under the tarp (user report), rebake U8
 
 User report (standing at (-29.2, -15.5) facing south-west): a tarp hung in the air, the crate under it missing. Cause: the

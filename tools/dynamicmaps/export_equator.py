@@ -297,7 +297,8 @@ MAP_PROFILES = {
                     "heights": (-4.5, -2.5), "anchor": (90, 30), "relative": True},
     "arena_airpit": {"name": "Air Pit", "folder": "ArenaMapPort_AirPit", "title": "AIR PIT",
                      "heights": (-.5, 1.2), "anchor": (0, 0), "relative": True,
-                     "seam_grid": .01, "bounds": [-60, -86, 40, 73]},
+                     "seam_grid": .01, "bounds": [-60, -86, 40, 86],
+                     "obstacle_tolerance": .20},
 }
 
 
@@ -400,7 +401,7 @@ def generate(package, descriptor, output, navmesh=None):
     if bounds[2]-bounds[0] > 180 or bounds[3]-bounds[1] > 180:
         raise ValueError(f"Unexpected {profile['name']} ground extent: {bounds}")
     drawing_clip = box(*bounds)
-    detail_tolerance = .18 if profile["relative"] else .12
+    detail_tolerance = profile.get("obstacle_tolerance", .18 if profile["relative"] else .12)
     low = unary_union(low_parts).intersection(drawing_clip).buffer(.07).buffer(-.07)
     high = unary_union(high_parts).intersection(drawing_clip).buffer(.07).buffer(-.07)
     if profile["relative"]:

@@ -57,7 +57,8 @@ dated state in one screen; read it before this index if you only have a minute.
 - [release-logging.md](release-logging.md) — player-relevant Info, Debug/developer diagnostics,
   native decal CPU-copy warning fix, and remaining warning ownership (2026-10-11).
 
-- [airpit-dynamicmaps.md](airpit-dynamicmaps.md) — AirPit ground overview, owned-package integration and GPU-1 acceptance.
+- [airpit-dynamicmaps.md](airpit-dynamicmaps.md) — AirPit ground overview, owned-package integration and GPU-1 acceptance;
+  refreshed from v9/U8 for both original team boxes, including native menu renderer validation (2026-10-17).
 - [dynamicmaps-owned.md](dynamicmaps-owned.md) — optional integration loads Equator/Bay5
   overview maps from ArenaMapPort's own directory; narrow legacy-package migration.
 
