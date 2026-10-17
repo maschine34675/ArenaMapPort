@@ -28,7 +28,8 @@ are not accepted build inputs. Keep the SPT bundle target on Unity 2022.3.43f1.
 - **No scav raids.** `DisabledForScav = true` stays.
 - **Bundles are distributed as built** (`dist/`), like other SPT map mods. Bundles still never go into git.
 - **Release 0.2.2 = Equator, Bay5 and AirPit** (0.2.0 was built and withdrawn the same day; 0.2.1 went to GitHub and Pixeldrain
-  only; 0.2.2 adds SpawnGates, AirPit's original north box and the renamed Equator sidecar and is the Forge candidate). The first release (user, 2026-09-25) was Equator and Bay5 only; AirPit was
+  only; 0.2.2 adds SpawnGates, AirPit's original north box, the renamed Equator sidecar and the crates under AirPit's tarp
+  (package v9) and is the Forge candidate). The first release (user, 2026-09-25) was Equator and Bay5 only; AirPit was
   added in 2026-10 on `feature/airpit` and is registered and staged. The other eleven maps retain source and work/build inputs,
   but are excluded from ArenaMapRegistry.All and dist; Catalog retains their identities. Make these three maps as good as they can be (native content,
   bots, audio, lighting, physics — see docs/PLAN-TWO-MAPS.md) BEFORE ArenaMode features such as team starts and
