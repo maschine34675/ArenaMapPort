@@ -1557,6 +1557,11 @@ namespace ArenaMapPort.Client
                     dome.localScale = Vector3.one * 1000f;
                 }
                 Singleton<TOD_Sky>.Create(rig.Sky);
+                // Awake registers both the native singleton and this separate provider.
+                // Reused rigs do not Awake again; an intervening vanilla raid may have
+                // replaced the provider with its now-destroyed sky. IsAvailable checks
+                // the singleton only, so rebind the provider to this exact owned rig too.
+                TODSkyProvider.RegisterInstance(rig.Sky);
                 WeatherController.Instance = rig.Controller;
                 if (CameraManager.Exist)
                 {
@@ -1571,6 +1576,7 @@ namespace ArenaMapPort.Client
             else
             {
                 Singleton<TODSkySimple>.Create(rig.SimpleSky);
+                TODSkyProvider.RegisterInstance(rig.SimpleSky);
                 if (CameraManager.Exist)
                 {
                     CameraManager.Instance.OnCameraChanged -= rig.SimpleSky.OnCameraCreated;

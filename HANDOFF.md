@@ -3,6 +3,21 @@
 Snapshot for whoever continues (human or agent). Verify the commits named here against `git log`; this file
 is updated by hand at each handover, it is not an automatic record. Read [AGENTS.md](AGENTS.md) first.
 
+## Update 2026-10-17 - cached weather sky-provider rebind candidate (not deployed)
+
+ArenaMode's map-feature tests exposed repeated native weather, distant-shadow and ambient-highlight
+exceptions on Equator after AirPit -> Customs -> Labyrinth in one GPU2 process. The first error occurred
+12.038 seconds before ArenaMode created its Equator phase-feedback light. `WeatherRig.ReestablishSingletons`
+restored the cached donor's singleton but omitted the independent `TODSkyProvider.Instance` registration.
+The candidate adds the exact owned Full/Simple provider rebinds through the existing native API.
+Production-method regression: 55 assertions, plus two compiled omission controls rejected at their intended
+assertions. Isolated Release DllOnly build including required auxiliary staging passed (0 warnings/errors);
+accepted input copies were hash-verified and only the client DLL is a deployment candidate. Native transition
+acceptance remains pending; root owns commit, delivery and GPU checks. Server, bundles, published 0.2.2
+ZIP/tag, main dist and all live files are untouched by this candidate build.
+See [weather-provider-rebind.md](docs/progress/weather-provider-rebind.md) for the observed chronology,
+source limits and outstanding acceptance sequence.
+
 ## Update 2026-10-17 - RELEASE 0.2.2 cut again with the crates and published (Pixeldrain, VirusTotal, tag, GitHub release)
 
 User decision: cut 0.2.2 again from the U8 dist instead of a 0.2.3. `make_release_zips.py --single --force --extract-check`

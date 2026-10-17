@@ -8,6 +8,11 @@ dated state in one screen; read it before this index if you only have a minute.
 
 ## Current — read these for the area you touch
 
+- [weather-provider-rebind.md](weather-provider-rebind.md) — restore the separate
+  native sky-provider reference when a cached owned Full/Simple weather rig is
+  reused after a vanilla raid (2026-10-17); production-method regression and
+  pre-light exception chronology, native transition acceptance pending.
+
 - [airpit-team-boxes.md](airpit-team-boxes.md) — what AirPit still lacks for ArenaMode's original team boxes (offline
   analysis 2026-10-17): south bus pocket data-ready, north box without NavMesh (bake z limit 70) and without a gate
   (passport doors not a barrier), map-wide hold re-closes 37 parts; formation numbers and the decisions to take.
