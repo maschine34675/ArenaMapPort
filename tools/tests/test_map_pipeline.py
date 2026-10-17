@@ -511,21 +511,27 @@ class AirpitV8PlanTests(unittest.TestCase):
                          [hall + "OO/PROPS/INDOOR/SHOPS", "PROJECTION/INDOOR/SHOPS"]
                          + [hall + "SOO_LOD0/" + n for n in ("Airport_Shop_BS", "DonB_Ramen", "LP_Shop", "LP_Defile",
                                                               "TH_Roll_door_01", "TH_Roll_door_02", "TH_Roll_door_03",
-                                                              "TH_Shop_indoor", "DOORS")])
+                                                              "TH_Shop_indoor", "DOORS")]
+                         # v9 (2026-10-18): the three level38 SOO crates under the tarp City_Generic_Tarp_01 (1)
+                         + [hall + "SOO/" + n for n in ("reserve_woodBox_medium (10)", "reserve_woodBox_medium (9)", "cardbox_vinyl")])
         self.assertEqual({r.path: [x.name for x in r.regions] for r in spec.rules if r.kind == "region_roots"},
                          {"PROJECTION": ["decoration box"], hall + "OO/PROPS": ["decoration box"],
                           "VARIANT": ["decoration box"], "PROPSnoCulling": ["decoration box"]})
         self.assertEqual([(r.name, r.lo, r.hi) for r in spec.regions],
                          [("decoration box", (-60.0, -5.0, -85.0), (40.0, 20.0, 91.0))])
-        # not imported on purpose: PHYSIC (inactive in Arena), the SOO cover walls and the brick walls
+        # not imported on purpose: PHYSIC (inactive in Arena), the SOO cover walls and the brick walls; the three SOO
+        # crates under the tarp are the reviewed exception (their same-named siblings elsewhere are excluded by position)
+        crates = {hall + "SOO/" + n for n in ("reserve_woodBox_medium (10)", "reserve_woodBox_medium (9)", "cardbox_vinyl")}
         for rule in spec.rules:
-            for forbidden in ("PHYSIC", "SOO/", "Destroyed_Brick_Wall", "LIGHT_Disabled"):
+            for forbidden in ("PHYSIC", "Destroyed_Brick_Wall", "LIGHT_Disabled"):
                 self.assertNotIn(forbidden, rule.path)
+            if "SOO/" in rule.path:
+                self.assertIn(rule.path, crates)
             self.assertNotEqual(rule.path, hall + "SOO_LOD0")
 
     def test_main_hall_exclusions(self):
         spec = self.specs()["Arena_Airpit_Main_hall"]
-        self.assertEqual(len(spec.exclude), 208)
+        self.assertEqual(len(spec.exclude), 213)   # 208 census entries + the 5 same-named crate siblings (v9)
         self.assertTrue(all(e.reason.strip() for e in spec.exclude))
         self.assertTrue(any(e.at is not None for e in spec.exclude))
         self.assertTrue(all(e.path.split("/")[0] in ("SBG_Arena_Airpit_Main_hall", "VARIANT", "PROPSnoCulling")

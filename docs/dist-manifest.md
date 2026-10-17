@@ -1,5 +1,8 @@
 # Current distribution contract: Equator, Bay5 and AirPit
 
+2026-10-18 (later): dist carries AirPit's U8 bundles (package v9, the three crates under the tarp; scenes 991,967,415 B,
+navmesh 169,055 B) and the 0.2.2 DLLs; the built 0.2.2 package (`1f7ce05`) still holds the U7 bundles.
+
 2026-10-18 (release 0.2.2): three maps, nine bundles (AirPit's scenes and NavMesh are the U7 rebake), three sidecars
 (`material-shaders.arena_<key>.json` for every map) and both DLLs (client: SpawnGates with held gates, server: version
 string and the Shared descriptor), packaged as `maschine-ArenaMapPort-0.2.2.zip` with its `.sha256` file.

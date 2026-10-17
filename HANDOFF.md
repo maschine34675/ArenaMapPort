@@ -3,6 +3,27 @@
 Snapshot for whoever continues (human or agent). Verify the commits named here against `git log`; this file
 is updated by hand at each handover, it is not an automatic record. Read [AGENTS.md](AGENTS.md) first.
 
+## Update 2026-10-18 - AirPit package v9: the crates under the tarp (user report), rebake U8
+
+User report (standing at (-29.2, -15.5) facing south-west): a tarp hung in the air, the crate under it missing. Cause: the
+tarp `OO/PROPS/INDOOR/BACK/City_Generic_Tarp_01 (1)` is level38 hall dressing (imported), the three cover props under
+it (`SOO/reserve_woodBox_medium (9)`, `(10)` and `SOO/cardbox_vinyl`, at (-29.3..-30.7, -17.1..-17.6)) sit under
+level38's `SOO` root that the plan leaves out as mode layout, and level324 has neither the tarp nor crates there. User
+decision: import the crates. `tools/extract/plans/airpit.json` names the three as explicit `roots`; a roots path names
+every same-named sibling, so the five siblings elsewhere (four `cardbox_vinyl` at (-12.6..-13.9, -24.6..-25.2), one
+`reserve_woodBox_medium (10)` at (-6.4, -21.9)) are `exclude`d by position (213 entries). Package
+`work/extract/airpit-native-v9` (extract 19:36-19:41, `validate_extract.py` OK): Main_hall 13035 objects / 3550 units /
+246 carriers, excluded 637, ballistics 38: 1566; the five full scenes and the Light scene are byte-identical to v8.
+Pins lifted in `native_contracts/airpit.json`, `test_native_contracts`, `test_scene_select` (MAIN_HALL_V9_PINS, census
+variant 13026 / 3545 / 242 / 637, digest db3d1fad...), `test_airpit_bake_inputs` (owners 7929, sources 7747, mask 3023,
+Main_hall [2391, 2391, 969]), the package paths of the other tests, `airpit.modes.json` regenerated (source_package only).
+Rebake U8 (19:43-20:05, `-FullMap` from v9): 11787 vertices / 5423 triangles (U7: 11771 / 5415), base.json unchanged;
+U7 bundles kept under `work/build/airpit-u7-backup/`. GPU-2 (20:09): `added navmesh ... 11787 vertices, 5423
+triangles`, the two wooden crates on their pallet and the vinyl-wrapped box stand under the tarp again (still
+`airpit-tarp-crates-u8`), no warning. The 0.2.2 package built before this (`1f7ce05`) carries the U7 bundle without the
+crates; the crates go into the next package. The plan's three roots went into `b680f7e` by accident (a `git add -A`
+during the 0.2.2 notes commit); the exclusions, pins and package references are in this commit.
+
 ## Update 2026-10-18 - RELEASE 0.2.2 built (not uploaded yet): SpawnGates, AirPit's original north box, renamed Equator sidecar
 
 Version bump in both csproj, `Plugin.cs`, `ModMetadata.cs` (`1f7ce05`); `docs/releases/v0.2.2.md` self-contained (Included,

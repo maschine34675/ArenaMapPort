@@ -42,7 +42,7 @@ COLUMN_NAME = "Airport_column_02"
 # (7.42, 73.13) is filled 2.64 m from the axis, and that look is fine). It is the only cell allowed inside the clearance.
 ACCEPTED_COLUMN_CELL = [-30.37, 73.13]
 ACCEPTED_DIP = 0.13
-PACKAGE = REPO / "work" / "extract" / "airpit-native-v8"
+PACKAGE = REPO / "work" / "extract" / "airpit-native-v9"
 HAVE_PACKAGE = (PACKAGE / "scenes" / "Arena_Airpit_Light.json").is_file()
 
 
@@ -189,7 +189,7 @@ class ValidatorTests(unittest.TestCase):
                 VD.parse_cs_value(bad)
 
 
-@unittest.skipUnless(HAVE_PACKAGE, "work/extract/airpit-native-v8 not present (the furnished hall, PLAN-AIRPIT item 5/13)")
+@unittest.skipUnless(HAVE_PACKAGE, "work/extract/airpit-native-v9 not present (the furnished hall plus the crates under the tarp)")
 class PackageTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):

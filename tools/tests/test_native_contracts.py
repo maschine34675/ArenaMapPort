@@ -76,11 +76,14 @@ AIRPIT_V6_BALLISTICS = {324: 2856, 325: 512, 40: 28, 29: 94, 28: 58}
 # level325 replaced or disabled on purpose) and 37 carriers (5 twin carriers).
 # Ballistics 38: 1562, 37: 172 (total 3548 + 1734 = 5282). Decals: 481 (v6) + 241 = 722, all in Main_hall. Culling lights
 # and volumetrics only come from Light (189 / 24 on top of 533 / 130).
+# v9 (2026-10-18) = v8 + the three level38 SOO crates under the tarp City_Generic_Tarp_01 (1) at (-31.3, -16.7)
+# (reserve_woodBox_medium (9)/(10), cardbox_vinyl as explicit roots; the five same-named SOO siblings elsewhere are
+# excluded by position, 213 entries): Main_hall 13035 objects = 3550 units, 246 carriers, ballistics 38: 1566.
 AIRPIT_SHOP_SCENES = {38: 'Arena_Airpit_Main_hall', 37: 'Arena_Airpit_Light'}
-AIRPIT_SHOP_BALLISTICS = {38: 1562, 37: 172}
+AIRPIT_SHOP_BALLISTICS = {38: 1566, 37: 172}
 AIRPIT_SHOP_FEATURES = {'static_decals': 722, 'culling_light_object_count': 722, 'volumetric_light_count': 154}
-AIRPIT_SHOP_PARTIAL = {'Arena_Airpit_Main_hall': {'objects': 13006, 'units': 3547, 'carriers': 245, 'orphans': 4,
-                                                  'dropped_script_owners': 0, 'excluded': 632, 'exclude_entries': 208,
+AIRPIT_SHOP_PARTIAL = {'Arena_Airpit_Main_hall': {'objects': 13035, 'units': 3550, 'carriers': 246, 'orphans': 4,
+                                                  'dropped_script_owners': 0, 'excluded': 637, 'exclude_entries': 213,
                                                   'twin_descendants_added': 4},
                        'Arena_Airpit_Light': {'objects': 1538, 'units': 298, 'carriers': 37, 'orphans': 0,
                                               'dropped_script_owners': 0, 'excluded': 9, 'exclude_entries': 9,
@@ -1318,9 +1321,9 @@ class AcceptedPackageTests(unittest.TestCase):
             v.feature_enabled(manifest)
 
     def test_airpit_native_package_when_present(self):
-        package = package_dir('airpit-native-v8')
+        package = package_dir('airpit-native-v9')
         if package is None:
-            self.skipTest('work/extract/airpit-native-v8 not present (furnished shops)')
+            self.skipTest('work/extract/airpit-native-v9 not present (furnished shops + the crates under the tarp)')
         manifest = v.read_json(package / 'manifest.json')
         self.assertEqual(manifest['slice'], {})
         self.assertEqual(sorted(manifest['partial_scenes']), sorted(AIRPIT_SHOP_SCENES.values()))

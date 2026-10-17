@@ -78,7 +78,7 @@ def package_dir():
     """The accepted 0.6.0 package only (PLAN-AIRPIT item 5; v8 = v7 + the rest of the furnished hall, v7 = v6 + the
     furnished-shop scenes, whose object ids are disjoint from the DesignStuff scene read here); the superseded 0.5.4
     spike package ``work/extract/airpit`` is deliberately not a fallback, the test skips when the accepted one is absent."""
-    path = REPO / "work" / "extract" / "airpit-native-v8"
+    path = REPO / "work" / "extract" / "airpit-native-v9"
     if (path / "scenes" / "Arena_Airpit_TeamFight_DesignStuff.json").is_file():
         return path
     return None

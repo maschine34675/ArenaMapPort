@@ -386,15 +386,16 @@ class TrackedSidecarTests(unittest.TestCase):
         # partial scenes Arena_Airpit_Main_hall and Arena_Airpit_Light; the first five scenes are byte-identical to v6,
         # so only source_package (name, extracted_utc, the scene list) changed in the sidecar. 2026-10-13:
         # airpit-native-v8 widens the two partial scenes (twin descendants, exclusions, decoration box); the first five
-        # scenes are still byte-identical, again only source_package (name, extracted_utc) changed.
-        accepted = ROOT / "work" / "extract" / "airpit-native-v8"
+        # scenes are still byte-identical, again only source_package (name, extracted_utc) changed. 2026-10-18: v9 adds
+        # three SOO crates to Arena_Airpit_Main_hall; the TeamFight scenes are byte-identical, only source_package changed.
+        accepted = ROOT / "work" / "extract" / "airpit-native-v9"
         if not (accepted / "manifest.json").is_file():
-            self.skipTest("airpit-native-v8 not extracted yet (PLAN-AIRPIT item 5/13, furnished shops and hall decoration)")
+            self.skipTest("airpit-native-v9 not extracted yet (the furnished hall plus the crates under the tarp)")
         name = json.loads(self.sidecar("airpit").read_text(encoding="utf-8"))["source_package"]["name"]
         self.assertEqual(
-            name, "airpit-native-v8",
+            name, "airpit-native-v9",
             "airpit.modes.json still names the superseded package %r; regenerate it: python "
-            "tools/extract/extract_mode_objects.py --package work/extract/airpit-native-v8 "
+            "tools/extract/extract_mode_objects.py --package work/extract/airpit-native-v9 "
             "(only source_package should change)" % name)
 
     def test_every_sidecar_has_twenty_markers_and_two_bounds(self):

@@ -3433,3 +3433,19 @@ base.json and the preset bundle unchanged; scenes bundle 991,961,232 B, navmesh 
 kept under `work/build/airpit-u6-backup/`. Host runs: HANDOFF 2026-10-18. The RainBounds line now reads
 `center=(-10.00, 26.24, 0.00) size=(174.00, 60.50, 246.00)` (was z -6.5 / 233): the rain play space follows the bake
 box; the F8 rain acceptance was not repeated.
+
+### 2026-10-18 (evening): package v9 (the crates under the tarp) and rebake U8
+
+User report during a raid: the tarp `City_Generic_Tarp_01 (1)` at (-31.3, 2.1, -16.7) hung over nothing. The tarp came
+from level38's hall dressing; the stack under it (`SBG_Arena_Airpit_Main_hall/SOO/reserve_woodBox_medium (9)` at
+(-29.26, 0, -17.10), `(10)` at (-30.67, 0, -17.58), `SOO/cardbox_vinyl` at (-30.67, 1.06, -17.29)) sits under level38's
+`SOO` root, which the plan leaves out as mode layout; level324 has neither tarp nor crates at that spot (raw level query,
+scratch `raw_level38_boxes.py`). Plan: the three paths as explicit `roots`. A roots path names every same-named sibling:
+the first v9 extract pulled eight units (`cardbox_vinyl` x5 after 3 twin skips, `reserve_woodBox_medium (10)` x2), so
+the five that stand elsewhere are excluded by position (`at` entries, 213 in total; the extractor's `selected 5 /
+twin_skipped 3 / excluded 4` and `2 / 0 / 1` rules record it). Package: Main_hall 13035 objects, 3550 units, 246
+carriers (the `SOO` container), excluded 637, ballistics 38: 1566; `validate_extract.py` OK (the usual LODGroup
+renderer warnings). Bake U8 from v9: `bake inputs ... 12 opened_barriers`, `sources=3035`, `triangulation:
+vertices=11787 triangles=5423` (U7: 11771 / 5415), base.json and preset unchanged. Host (20:08-20:12, 19/19 identical):
+`added navmesh ... 11787 vertices, 5423 triangles`, the stack is back under the tarp (still `airpit-tarp-crates-u8`,
+from the user's viewpoint (-29.2, -15.5) yaw 228), no ArenaMapPort warning.

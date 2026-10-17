@@ -161,13 +161,14 @@ omit later native features (and old Bay5 omits the harbor background), and the v
 components; v4 lacks native projection decals. Do not rebuild either accepted map from those older packages.
 Bay5 uses its v5 package with `-FullMap`
 and `-OutputDir D:/ArenaMapPort/work/build/bay5`. AirPit (branch `feature/airpit`) builds from
-`work/extract/airpit-native-v8` (2026-10-13: v7 + the rest of the furnished hall; v7 = v6 + the furnished shops. Both
+`work/extract/airpit-native-v9` (2026-10-18: v8 + the three level38 SOO crates under the tarp at (-31.3, -16.7), explicit
+roots with the five same-named siblings excluded by position; v8 = 2026-10-13: v7 + the rest of the furnished hall; v7 = v6 + the furnished shops. Both
 come from the two PARTIAL scenes `Arena_Airpit_Main_hall` (38) and `Arena_Airpit_Light` (37), selected by the plan's
 `select` records (roots / region_roots on the decoration box, `skip_twins_of` 324/325, `exclude` for the 208 props
-level324 replaced, `twin_descendants: import_missing` for the parts level325 dropped from its twin fixtures); v6 = v5 +
+level324 replaced plus the five crate siblings, `twin_descendants: import_missing` for the parts level325 dropped from its twin fixtures); v6 = v5 +
 native ambient audio; via `extract_map.py --plan tools/extract/plans/airpit.json --native-features` followed by
 `refresh_native_volumes.py`. The contract requires audio and the `partial_scenes` pins, so the older packages fail the
-validators; the five full scenes of v8 are byte-identical to v6/v7) with `-FullMap` and `-OutputDir
+validators; the five full scenes of v9 are byte-identical to v6/v7/v8) with `-FullMap` and `-OutputDir
 D:/ArenaMapPort/work/build/airpit`. `validate_extract.py` on this package needs the 1800 s extractor timeout (the
 default since 2026-10-13; the extraction alone takes about 5 min). Always give `-MapDescriptor` an absolute
 path: Unity resolves relative descriptor paths from its project directory.

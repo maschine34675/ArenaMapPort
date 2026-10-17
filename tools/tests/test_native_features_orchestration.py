@@ -305,7 +305,12 @@ class AcceptedPackageShapeTests(NativeFeatureTestCase):
 
     def test_airpit_native_v8_blocks_are_reproduced(self):
         # v8 = v7 + twin descendants, exclusions and the wider decoration box: the same native block shapes.
+        # (An archive since v9: the validators refuse its partial_scenes block, its native blocks are unchanged.)
         self.check_package("airpit-native-v8")
+
+    def test_airpit_native_v9_blocks_are_reproduced(self):
+        # v9 = v8 + the three SOO crates under the tarp (explicit roots, five same-named siblings excluded by position).
+        self.check_package("airpit-native-v9")
 
 
 class ExtractMapCommandLineTests(unittest.TestCase):

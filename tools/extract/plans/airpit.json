@@ -1262,6 +1262,51 @@
               53.187
             ],
             "reason": "replaced in level324: lies inside SOO/Flowerbed_steel_01"
+          },
+          {
+            "path": "SBG_Arena_Airpit_Main_hall/SOO/cardbox_vinyl",
+            "at": [
+              -12.755,
+              0.0223,
+              -25.1315
+            ],
+            "reason": "a sibling of the same name as the crate under the tarp City_Generic_Tarp_01 (1) at (-31.3, -16.7): level38 cover elsewhere that level324 replaced (the roots rule names every sibling)"
+          },
+          {
+            "path": "SBG_Arena_Airpit_Main_hall/SOO/cardbox_vinyl",
+            "at": [
+              -13.843,
+              0.0223,
+              -24.5738
+            ],
+            "reason": "a sibling of the same name as the crate under the tarp City_Generic_Tarp_01 (1) at (-31.3, -16.7): level38 cover elsewhere that level324 replaced (the roots rule names every sibling)"
+          },
+          {
+            "path": "SBG_Arena_Airpit_Main_hall/SOO/cardbox_vinyl",
+            "at": [
+              -12.645,
+              1.0467,
+              -25.2249
+            ],
+            "reason": "a sibling of the same name as the crate under the tarp City_Generic_Tarp_01 (1) at (-31.3, -16.7): level38 cover elsewhere that level324 replaced (the roots rule names every sibling)"
+          },
+          {
+            "path": "SBG_Arena_Airpit_Main_hall/SOO/cardbox_vinyl",
+            "at": [
+              -13.8999,
+              1.0473,
+              -24.5898
+            ],
+            "reason": "a sibling of the same name as the crate under the tarp City_Generic_Tarp_01 (1) at (-31.3, -16.7): level38 cover elsewhere that level324 replaced (the roots rule names every sibling)"
+          },
+          {
+            "path": "SBG_Arena_Airpit_Main_hall/SOO/reserve_woodBox_medium (10)",
+            "at": [
+              -6.439,
+              0.0036,
+              -21.9189
+            ],
+            "reason": "a sibling of the same name as the crate under the tarp City_Generic_Tarp_01 (1) at (-31.3, -16.7): level38 cover elsewhere that level324 replaced (the roots rule names every sibling)"
           }
         ]
       }

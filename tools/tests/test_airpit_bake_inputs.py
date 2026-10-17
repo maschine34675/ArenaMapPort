@@ -71,7 +71,7 @@ ARENA_LAYERS = [9, 11, 13, 18, 30]            # NavMeshSurface mask 0x40042A00 o
 # from 2a1e0ce (2026-10-12) to 2026-10-18, when the original north team box (z 69.16..85.16) needed its pocket meshed
 # again (the held passport gate keeps bots out of it in plain raids).
 BOUNDS = [-57, 37, -2, 8, -83, 83]
-PACKAGE = REPO / "work" / "extract" / "airpit-native-v8"   # v6 + the furnished shops and the rest of the hall decoration (Main_hall, Light); v6/v7 are archives
+PACKAGE = REPO / "work" / "extract" / "airpit-native-v9"   # v8 + the three SOO crates under the tarp (2026-10-18); v6/v7/v8 are archives
 HAVE_PACKAGE = (PACKAGE / "scenes" / "Arena_AirPit_ShootOut.json").is_file()
 ARENA_NAVMESH = Path("D:/Battlestate Games/Escape from Tarkov Arena/EscapeFromTarkovArena_Data/sharedassets33.assets")
 
@@ -239,7 +239,7 @@ class ValidatorTests(unittest.TestCase):
         self.assertEqual(VD.bake_input_errors(sidecar("bay5.json")), [])
 
 
-@unittest.skipUnless(HAVE_PACKAGE, "work/extract/airpit-native-v8 not present (PLAN-AIRPIT item 5/13, furnished shops and hall decoration)")
+@unittest.skipUnless(HAVE_PACKAGE, "work/extract/airpit-native-v9 not present (furnished hall plus the crates under the tarp)")
 class PackageTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -388,16 +388,18 @@ class PackageTests(unittest.TestCase):
         # shop (COVER_CUBES, 2026-10-13) are barriers since the first U6 host raid: sources 7775 - 3 = 7772, mask unchanged.
         # The held passport gate (2026-10-18, the original north team box) takes its 16 lane leaves (layer 18) and their 16
         # ballistic twins out again: sources 7772 - 32 = 7740, mask 3036 - 16 = 3020. EMISSIVE holds no collider.
-        self.assertEqual(len(cset.owners), 7922)
-        self.assertEqual(int(everything.sum()), 7740)
-        self.assertEqual(int(masked.sum()), 3020)
+        # v9 (2026-10-18) adds the three SOO crates under the tarp: 7 collider owners (2 x COLLIDER + BALLISTIC, cardbox
+        # COLLIDER + 2 BALLISTIC), 3 of them on layer 18: owners 7929, sources 7747, mask 3023.
+        self.assertEqual(len(cset.owners), 7929)
+        self.assertEqual(int(everything.sum()), 7747)
+        self.assertEqual(int(masked.sum()), 3023)
         per_scene = {}
         for i, owner in enumerate(cset.owners):
             counts = per_scene.setdefault(owner.scene, [0, 0, 0])
             counts[0] += 1
             counts[1] += int(everything[i])
             counts[2] += int(masked[i])
-        self.assertEqual(per_scene["Arena_Airpit_Main_hall"], [2384, 2384, 966])
+        self.assertEqual(per_scene["Arena_Airpit_Main_hall"], [2391, 2391, 969])   # [2384, 2384, 966] before the v9 crates
         self.assertEqual(per_scene["Arena_Airpit_Light"], [229, 229, 47])
         self.assertEqual(per_scene["Arena_AirPit_ShootOut"], [4625, 4537, 1891])   # 4554 / 1897 before the six shells, 4540 before the cubes
         self.assertEqual(per_scene["Arena_Airpit_TeamFight_DesignStuff"], [97, 3, 0])   # [97, 35, 16] while the passport leaves were sources
