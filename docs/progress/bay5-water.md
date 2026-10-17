@@ -165,3 +165,31 @@ Controls in `Water (arena_bay5)`:
 
 The old shared `Sea / EnableWaterPlaceholder` key retains its existing meaning
 and saved value; no silent default migration was performed.
+
+## Distribution gate for the water package (2026-10-17)
+
+`tools/validate/validate_distribution.py` had no check for the staged water package: its
+exact-set checks covered bundles, shader sidecars, db, acoustics, AI sidecars, art and
+flares, so a client build with a missing, stale-named or parked-map `water/` directory
+still printed `DISTRIBUTION_OK`, and only NativeWaterRepairs refused the package at raid
+start (harbor back on the unlit placeholder). `validate_water` now runs next to the flare
+block with `WATER_MAP_KEYS = ('arena_bay5',)`:
+
+- `water/arena_bay5/water.json` must exist with schema 1, its own map key and
+  `Hidden/WaterForSSR` (the identity the client checks).
+- Its `textures` must be exactly the four WaterSettings fields of
+  `extract_water.TEXTURE_FIELDS`, each a bare `textures/<name>.bin` name (the client's
+  ReadTexture rule), no two sharing a file.
+- Every listed file must exist with the recorded `byte_count` and `sha256`, and the
+  recorded width/height/format/mip_count must explain that byte count through the
+  extractor's own `texture_byte_count`.
+- The set of files under `water/` must equal that list, so a stray file, a released map
+  without water or a parked map's package (`water/arena_airpit2/...`) fails.
+
+`test_validate_distribution.py` builds the fixture package with the extractor's mip-chain
+arithmetic (8 x 8 px, four mips) and covers missing, stray, same-length-modified, longer,
+mis-keyed, mis-described and mis-named packages. Evidence 2026-10-17: the real Bay5
+package in `dist/` (five files, 2,277,635 bytes) passes `validate_water`; a scratch copy
+with a parked map's directory or one flipped byte in `foam.bin` is refused with the
+expected messages; the full run prints `DISTRIBUTION_OK 3 maps 9 bundles 3 sidecars`;
+Python suite 1722 tests, 78 expected skips.

@@ -14,6 +14,9 @@ REPO = Path(__file__).resolve().parents[2]
 # AirPit has no active flare light (item 22), so its flare package remains absent.
 OVERVIEW_MAP_NAMES = ('Equator', 'Bay5', 'AirPit')
 FLARE_MAP_KEYS = ('arena_equator', 'arena_bay5')
+# Only Bay5 has a native water surface (the harbor's Sea/Plane mesh, NativeWaterRepairs.cs); Equator and AirPit carry
+# no water package, so a water directory for any other key is parked or stray output.
+WATER_MAP_KEYS = ('arena_bay5',)
 
 
 # Bundle contents are not otherwise inspected here (the build's roundtrip validators cover them), so the one stale
@@ -127,6 +130,61 @@ def validate_acoustics(plugin, keys):
                 raise ValueError(f'Acoustic file length/hash mismatch: {key}/{item["file"]}')
 
 
+def validate_water(plugin):
+    """Original harbor water settings and raw texture mip chains, staged by the client csproj (Release and DllOnly)
+    from the ignored work/extract/bay5-water input of tools/extract/extract_water.py (docs/progress/bay5-water.md).
+    NativeWaterRepairs.cs reads <plugin>/water/<key>/water.json at raid start: schema 1, the map's own key, and the
+    four WaterSettings textures as textures/<name>.bin with the recorded byte count and SHA-256; anything else makes
+    it refuse the package and leaves the harbor on the unlit placeholder. So the directory must hold exactly those
+    files for WATER_MAP_KEYS, with each mip chain intact and as long as its recorded dimensions, format and mip count
+    require (the extractor's own arithmetic). A stray or parked map's water directory is rejected by the exact set."""
+    import extract_water
+    root = plugin/'water'
+    expected_files = set()
+    packages = {}
+    for key in WATER_MAP_KEYS:
+        path = root/key/'water.json'
+        if not path.is_file():
+            raise ValueError(f'Missing water package: {key}/water.json')
+        package = json.loads(path.read_text(encoding='utf-8'))
+        if package['schema_version'] != extract_water.SCHEMA_VERSION or package['map_key'] != key:
+            raise ValueError(f'Water package map or schema mismatch: {key}')
+        if package['target_shader'] != extract_water.TARGET_SHADER:
+            raise ValueError(f'Water package shader mismatch: {key}')
+        textures = package['textures']
+        if set(textures) != set(extract_water.TEXTURE_FIELDS):
+            raise ValueError(f'Water texture set mismatch: {key}: '
+                             f'missing={sorted(set(extract_water.TEXTURE_FIELDS) - set(textures))} '
+                             f'unexpected={sorted(set(textures) - set(extract_water.TEXTURE_FIELDS))}')
+        for field, texture in textures.items():
+            # The same rule as the client's ReadTexture: a bare file name directly below textures/.
+            file = texture['file']
+            name = file.removeprefix('textures/')
+            if not file.startswith('textures/') or not name or '/' in name or '\\' in name:
+                raise ValueError(f'Invalid water texture filename: {key}/{field}: {file!r}')
+        if len({texture['file'] for texture in textures.values()}) != len(textures):
+            raise ValueError(f'Water textures share a file: {key}')
+        packages[key] = textures
+        expected_files.add(f'{key}/water.json')
+        expected_files.update(f'{key}/{texture["file"]}' for texture in textures.values())
+    actual_files = _files_under(root)
+    if actual_files != expected_files:
+        raise ValueError(f'Water file set mismatch: missing={sorted(expected_files - actual_files)} '
+                         f'unexpected={sorted(actual_files - expected_files)}')
+    for key, textures in packages.items():
+        for texture in textures.values():
+            try:
+                chain = extract_water.texture_byte_count(texture['width'], texture['height'],
+                                                        texture['mip_count'], texture['format'])
+            except extract_water.HardExtractError as exc:
+                raise ValueError(f'Water texture metadata invalid: {key}/{texture["file"]}: {exc}') from exc
+            if chain != texture['byte_count']:
+                raise ValueError(f'Water texture byte count does not match its mip chain: {key}/{texture["file"]}')
+            blob = (root/key/texture['file']).read_bytes()
+            if len(blob) != texture['byte_count'] or hashlib.sha256(blob).hexdigest() != texture['sha256']:
+                raise ValueError(f'Water texture length/hash mismatch: {key}/{texture["file"]}')
+
+
 def validate():
     # This check also runs on fully resumed distributions, when no fresh map build
     # would otherwise compare the current C# registry with the JSON descriptors.
@@ -190,6 +248,7 @@ def validate():
             expected_flare_files.add(f'{key}/{texture["file"]}')
     if {p.relative_to(plugin/'flares').as_posix() for p in (plugin/'flares').rglob('*') if p.is_file()} != expected_flare_files:
         raise ValueError('Unexpected or missing flare package files')
+    validate_water(plugin)
     expected_bundles = {f'{key}_{kind}.bundle' for key in keys for kind in ('scenes','navmesh','preset')}
     actual_bundles = {p.relative_to(plugin/'bundles').as_posix() for p in (plugin/'bundles').rglob('*') if p.is_file()}
     if actual_bundles != expected_bundles:
