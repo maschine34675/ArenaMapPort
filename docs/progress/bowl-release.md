@@ -672,3 +672,25 @@ Warning/Error query over the whole process stayed at 0 lines; no `disabled after
 - Release texts: the overview wording is reinstated in README, FORGE and `v0.3.0.md` (recipe above), the Mi-26 class
   change has its own Changes bullet. Still open on the host: the spawn-gate hold on Bowl (no hold has run yet), the east
   guard-tower stairs and vault limits, the capture point under the Mi-26 (ArenaMode's concern).
+
+## 2026-10-18 - raid 6: the spawn-gate hold on Bowl (developer test hold, GPU-2)
+
+Host developer config set live through `uibridge_config_set` (`com.maschine.ArenaMapPort` / `Spawns`): `SpawnGateHold true`,
+`SpawnGateHoldSeconds 60` (the config lease blocks `gpu-run raid` for 90 s with a 409: wait it out before the recipe), restored to
+`false` / `30` after the raid. Raid 6 (17:55-17:58, Bowl, no bots, 12:00 clear, same process 4eeae3d5):
+
+- Hold: `[RaidFix] spawn openings: spawn barrier 'DOORS_SPAWN_A' ...: deactivated 0 part(s), 0 already off, kept 0 frame part(s),
+  2 part(s) held closed (4 part(s) registered; developer test hold 60 s)` and the same for `DOORS_SPAWN_B` (both passes);
+  `[SpawnGates] navmesh installed: 28 carver(s) over 28 movement collider(s) of 4 gate part(s) (28 carver(s) in place, 0
+  held-gate part(s)); 1 doorway(s) already disconnected on the map's own navmesh (not judged)`; `navmesh probe: every probed gate
+  sealed (1 probed, 2 inconclusive)`: `Gates_Army_01` (-51.7, 1.2, -54.7) `PathPartial`, `BTR_82_closed` and
+  `Bowl_Respawn_Ambulance_Animated Group` `no navmesh within 1.5 m of a probe point` (vehicle bodies, their probe points sit off
+  the mesh). `uibridge_teleport dryRun` from the east spawn (56.0, 0.0, -5.8) to the field (2.5, 0.1, -21.1): `not reachable on
+  foot` twice during the hold (the pocket is sealed for bots and the player alike).
+- Release: `[SpawnGates] released (developer test hold, 60.0 s after the raid timer started): 0 leaf(s) slid 1.38 m in 1.0 s, 4
+  gate part(s) switched off, 28 carver(s) removed` (17:57:05), then `navmesh probe: every probed gate open (3 probed)`:
+  `BTR_82_closed` (51.2, 0.1, -23.0) -> (51.2, 0.1, -20.0) `PathComplete, 2 corners`, `Gates_Army_01` `PathComplete`,
+  `Bowl_Respawn_Ambulance_Animated Group` (-43.7, 0.0, -69.8) -> (-40.7, 0.0, -69.8) `PathComplete`; the same dryRun to the field
+  then passed (`would teleport to (2.5, 0.0, -21.1)`). No ArenaMapPort warning. 120 fps, max 8.4 ms.
+- Conclusion: Bowl's two pocket gates hold and release like the other maps' (PLAN-BOWL item 19's SpawnGates side is covered);
+  the release notes' "Pocket gates" limitation is withdrawn. ArenaMode's own hold/release on Bowl is still the user's.

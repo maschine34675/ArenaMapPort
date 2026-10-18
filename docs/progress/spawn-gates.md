@@ -149,3 +149,13 @@ of `Hold` and on scene unload, no new config key, Debug log only. Host check: de
 `uibridge_inspect` of `GreenFog` and a still from inside the north box at about (-26, 0.1, 72). Risks: the covers are
 coplanar with the lamps (z-fighting possible), the green sheets were never active in a host raid, a plain raid shows no
 change (the held gate opens only after Hold then Release), `AirPitFogSheets=Hidden` would hide the green sheets too.
+
+## Host evidence (GPU-2, 2026-10-18, Bowl, developer test hold 60 s)
+
+Bowl's `DOORS_SPAWN_A` (east pocket: gate + BTR) and `DOORS_SPAWN_B` (west pocket: army gate + ambulance) are `start_gates`.
+With `Spawns/SpawnGateHold = true`, `SpawnGateHoldSeconds = 60`: both passes of the spawn openings reported `2 part(s) held
+closed` per barrier (4 registered), `navmesh installed: 28 carver(s) over 28 movement collider(s) of 4 gate part(s)`, the probe
+`every probed gate sealed (1 probed, 2 inconclusive)` (`Gates_Army_01` PathPartial; the BTR and the ambulance have no navmesh within
+1.5 m of their probe points) and a `uibridge_teleport dryRun` from the east spawn to the field was refused as unreachable. At
+60.0 s: `released (developer test hold ...): 0 leaf(s) slid, 4 gate part(s) switched off, 28 carver(s) removed`, `every probed gate
+open (3 probed)` with PathComplete for all three, and the same dryRun passed. Details in bowl-release.md (raid 6).
