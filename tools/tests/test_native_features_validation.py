@@ -651,3 +651,45 @@ class PartialBallisticSourceTests(unittest.TestCase):
 
 
 if __name__=='__main__':unittest.main()
+
+
+class BallisticTwinMatchingTests(unittest.TestCase):
+    """Bowl's Lum_lamp_intact lamps carry two 'ballistic' children at the same pose whose rotations differ by 1e-7 (within
+    the float32 tolerance) with different meshes: the matcher picks the twin by the component's own built fields and
+    consumes indistinguishable twins in order instead of reporting them as ambiguous."""
+
+    @staticmethod
+    def twin(scene, lamp, rotation, material_id, material, pen):
+        c={'enabled':True,'target_material_id':material_id,'target_preset_id':-900,'preset_name':None,'material':material,
+           'values':dict(zip(v.FIELDS,[pen,.6,.1,.2,.3,.04])),'source':{'component_id':'src-'+material},'type':'BallisticCollider'}
+        go=scene.go('ballistic',lamp);go.transform.tree['m_LocalRotation']=dict(zip('xyzw',rotation));go.tree['m_Layer']=12
+        scene.component(go,'MeshCollider',{'m_Enabled':1,'m_IsTrigger':False})
+        reader=scene.component(go,'MonoBehaviour',v.ballistic_built_fields(c),'BallisticCollider')
+        obj={'id':'ballistic-'+material,'parent_id':'lamp','name':'ballistic','active':True,'layer':12,'local_position':[0.,0.,0.],
+             'local_rotation':list(rotation),'local_scale':[1.,1.,1.],
+             'components':[{'type':'MeshCollider','enabled':True,'is_trigger':False},c]}
+        return reader,obj
+
+    def test_twins_within_tolerance_are_told_apart_by_their_fields(self):
+        r1=(-0.5000000596046448,0.5,0.4999999701976776,0.5000001192092896); r2=(-0.5,0.5,0.49999988079071045,0.5000001192092896)
+        scene=Scene();lamp=scene.go('Lum_lamp_intact')
+        lamp_obj={'id':'lamp','parent_id':None,'name':'Lum_lamp_intact','active':True,'layer':0,'local_position':[0.,0.,0.],
+                  'local_rotation':[0.,0.,0.,1.],'local_scale':[1.,1.,1.],'components':[]}
+        glass,glass_obj=self.twin(scene,lamp,r1,4,'Glass',3.)
+        metal,metal_obj=self.twin(scene,lamp,r2,27,'MetalThin',14.)
+        readers=list(scene.objects.values())
+        with patch.object(v,'ptr',scene.deref):
+            # either package order pairs each twin with the built owner that carries its fields
+            v.validate_ballistic_bundle(readers,{'scene':[lamp_obj,glass_obj,metal_obj]})
+            v.validate_ballistic_bundle(readers,{'scene':[lamp_obj,metal_obj,glass_obj]})
+            # both built twins carrying the glass fields: the metal twin has no owner left that matches its fields
+            saved=dict(metal.tree);metal.tree.update(v.ballistic_built_fields(glass_obj['components'][1]))
+            with self.assertRaises(ValueError):v.validate_ballistic_bundle(readers,{'scene':[lamp_obj,glass_obj,metal_obj]})
+            metal.tree.clear();metal.tree.update(saved)
+            # identical twins (same fields, same pose) are interchangeable and both are consumed
+            glass_obj2=dict(glass_obj,id='ballistic-Glass2');glass_obj2['components']=[glass_obj['components'][0],dict(glass_obj['components'][1],source={'component_id':'src-Glass2'})]
+            twin_reader,_=self.twin(scene,lamp,r1,4,'Glass',3.)
+            readers=list(scene.objects.values())
+            v.validate_ballistic_bundle(readers,{'scene':[lamp_obj,glass_obj,glass_obj2,metal_obj]})
+            # a third package twin with no built counterpart is still missing
+            with self.assertRaises(ValueError):v.validate_ballistic_bundle(readers,{'scene':[lamp_obj,glass_obj,glass_obj2,metal_obj,dict(glass_obj,id='x')]})

@@ -851,6 +851,16 @@ def validate_ballistic_bundle(readers,scenes):
     for obj,component,chain,states in expected:
         candidates=by_names[tuple(x[0] for x in chain)]
         matches=[(r,g) for r,g in candidates if match_chain(g['chain'],chain)]
+        if len(matches)>1:
+            # Siblings whose whole chain agrees within the float32 tolerance (Bowl's six Lum_lamp_intact lamps carry two
+            # 'ballistic' children at the same pose, rotations 1e-7 apart, with different meshes): the component's own
+            # built fields pick the twin; twins that agree in those too are interchangeable, so the first is taken and
+            # the other package twin consumes the remaining one (candidates.remove below).
+            wanted=ballistic_built_fields(component)
+            def fields_ok(reader):
+                try: check_fields(reader.read_typetree(),wanted,'twin'); return True
+                except ValueError: return False
+            matches=([m for m in matches if fields_ok(m[0])] or matches)[:1]
         require(len(matches)==1,'missing/ambiguous built ballistic owner '+component['source']['component_id'])
         reader,go=matches[0];candidates.remove(matches[0])
         compare((go['active'],go['layer']),(obj['active'],obj['layer']),'built ballistic owner state')

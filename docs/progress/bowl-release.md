@@ -133,3 +133,127 @@ host evidence. Appended, never rewritten.
   (the other nine BC7 normals peak at 1..9). Bound widened to 24 (an RGB normal differs by 100 and more and keeps
   B near 255, so the other layout stays rejected); harness cases at 18 (accepted) and 25/26 (rejected). U1 attempt 3
   started afterwards.
+
+## 2026-10-18 - items 8-9: promotion into the released set (offline, while U1 runs)
+
+Offline only: no Unity, no host, no deploy; nothing under `work/build`, `UnityProject/` or the dist `bundles/` folder was
+touched (the U1 build writes them). Wrote repository files, the ignored `dist/` (banner, loading images, DllOnly staging of the AI
+sidecar and acoustics, both Release DLLs, `db/arena_bowl/base.json`) and the ignored `work/extract/map-descriptions` and
+`work/extract/spatial-audio/arena_bowl`. Bowl is now in `ArenaMapRegistry.All` and in every list that names the release; release
+0.2.2 stays the three-map package and no release file is cut.
+
+| Area | Change |
+|---|---|
+| `ArenaMapPort.Shared/ArenaMapDescriptor.cs` | `All = { Equator, Bay5, AirPit, Bowl }` (Catalog order kept), doc comment says Bowl is registered and staged for 0.3.0 |
+| `tools/validate/validate_map_descriptors.py` | `RELEASE_MAP_NAMES` / `RELEASE_MAP_KEYS` carry Bowl; `validate_distribution.py` and `make_release_zips.py` derive from them (comments only, no logic change) |
+| `tools/park-unreleased-dist.ps1` | `bowl` leaves the parked stems (10 stems, 50 rows) |
+| `tools/build_remaining.ps1` | `bowl` removed from the default list and refused with a message, like AirPit: the runner derives `work/extract/bowl` (the Arena 0.5.4 spike package) and writes `work/build/bowl`, which would overwrite the U1 output |
+| `ArenaMapPort.Client/ArenaMapPort.Client.csproj` | `ArenaMapPortBowlBuildDir`; scenes + navmesh from `work/build/bowl`, `work/build/preset/arena_bowl_preset.bundle`, `material-shaders.json` staged as `material-shaders.arena_bowl.json` (own `<Error>` row and message); `tools/maps/bowl.ai.json` row; `work/extract/spatial-audio/arena_bowl` acoustics row and the missing-input condition. No flares, water or DynamicMaps row |
+| `ArenaMapPort.Server/ArenaMapPort.Server.csproj`, `ArenaMapBanners.cs` | `db/arena_bowl/base.json` Content and DeployToDist rows; banner row `arena_bowl_banner` / stem `arena_bowl` |
+| `NativeDecalRepairs`, `NativeSpatialAudio`, `PrecipitationAudio`, `RoomReverb` | the per-map table gets `ArenaMapRegistry.Bowl` (new sections `Decals (arena_bowl)`, `Audio (arena_bowl)`; hidden for players by the existing section-suffix rule); `MapConfigVisibility` already derives from `All` |
+| `MapLightingDefaults` | Bowl joins the Reserve rig, ZeroLevel -4.4 (its 20 spawn markers sit at y 0.047), no authored-sun keys (no Directional light) |
+| `AmbientAudioDefaults` | `arena_bowl` gain 3 dB, offset .4, range 3 (provisional like AirPit's first mix); previous = same; `HasLegacyMix` false |
+| `AmbientAudioProfiles` | Bowl profile mirroring the contract: root `ArenaMapPort_BowlNativeAudio`, 33 players, 29 active, four inactive (`cracles (2)`, `water_drops (4)`, `water_drops (1)`, `water_drops`), routes in `group_mixers` order: `CommonAmbientInGroup` (AmbientIn, 15, effects + reverb reroute) then `CommonAmbientOutGroup` (AmbientOut, 18). See the finding below |
+| `tools/extract/extract_banners.py`, `extract_loadscreens.py`, `extract_map_descriptions.py` | `BANNERS["arena_bowl"]` = `Matchmaker_Banner_TheBowl` (hint path_id 2538), `LOADSCREENS["arena_bowl"]` = `Arena_MainMenu_Paralax_Bowl-1..4` (hints 164, 1314, 274, 834; 2048 x 1024; Arena ships no `AllScreens_Loadingscreen` for Bowl, so four files and no fake fifth; every consumer derives the count from the table), `DESCRIPTION_KEYS["arena_bowl"]` = `62eba95b7ba21c1d534d305a Description` |
+| Docs | `AGENTS.md` (Bowl registered and staged for 0.3.0, not released; builds from `bowl-native-v2`), `docs/dist-manifest.md` (dated paragraph, bundles pending), this section |
+
+### Finding: Bowl's groups list the inactive players, the ambient driver did not allow that
+
+The task text and the plan describe the profile as 29 active of 33 players with group members 15 + 18. Those numbers cannot
+all hold in the existing model: the contract says `group_coverage "all_players"` and `grouped_players 33`, and the exported
+package confirms it (both `AmbientSoundPlayerGroup` records list all 33 players, the four `water_drops`/`cracles` ones sit
+under an inactive ancestor). `AmbientAudioProfile` required `sum(Members) == ActivePlayers` (Equator's groups list only the
+active players), and `Bay5AmbientAudio.ValidateGraph` required the group members to equal the enabled-and-active players, so
+(a) the profile table's static initializer threw for every map (first dotnet run: 10 failures, `Inconsistent ambient player
+census for arena_bowl`) and (b) Bowl's ambient graph would have been refused at raid start (`native group membership differs
+from enabled active players`). The importer already accepts both codings (`ValidateMembership`, "an inactive member never plays").
+Change: `AmbientAudioProfile.GroupsListInactivePlayers` (ctor parameter, default false; true needs original activation and at
+least one inactive player) and `GroupedPlayers` (all players when true, else the active ones); `ValidateGraph` compares the
+member list with `GroupedPlayers`, derives the started set as the active members when the flag is set (and then also demands
+that the members are exactly the graph's players), and is byte-for-byte the old rule for Equator, Bay5 and AirPit. The group's
+own `SetMixerGroup` is safe on never-awakened players (decompile `BaseAmbientSoundPlayer.SetMixerGroup` uses the lazy
+`Source`). Not host-verified: the first Bowl raid must show `[NativeAudio] ready players=33 started=29 ... sourceInactive=4` at
+Debug level and no `refusing playback` error.
+
+### Extractor runs (read-only on the Arena install)
+
+- `python tools/extract/extract_banners.py`, `extract_loadscreens.py`, `extract_map_descriptions.py`: Bowl banner 769 x 460
+  (219,073 B), four loading images 2048 x 1024 (1,055,400 / 1,005,830 / 973,521 / 1,062,160 B; viewed: the stadium), the
+  description pack now holds 4 maps in en/ge/ru. SHA-256 of the 41 files that existed before (the Equator/Bay5/AirPit
+  banners and loading images, the three spatial-audio folders, the staged acoustics and ai folders, the locales copy) compared
+  before and after: 40 identical; the only changed file is `work/extract/map-descriptions/map-descriptions.json` (new
+  `arena_bowl` key; the 9 existing entries, 3 locales x 3 maps, are byte-identical to the previously shipped pack).
+- `python tools/extract/extract_spatial_audio.py --map arena_bowl` -> `work/extract/spatial-audio/arena_bowl`: source scene
+  level111, 14 rooms, 25 portals, 24 areas, 1 clip (`sharedassets111.assets_40.wav`, 2,800,324 B), `mixer_effects` present,
+  `source.audiobakedata` 7,039 B (55 room pairs, 196 routes, sha `d7291dea...0035`), `spatial-audio.json` 156,032 B.
+
+### Fixtures moved off Bowl
+
+Prison is the parked fixture everywhere (no test needed another property): `ArenaMapBannersTests` (no-banner map, locale no-op;
+Bowl gets its own descriptor row and joins the empty-directory loop), `ArenaMapDescriptionsTests` (stadium fixture text,
+`unexpected-map` = `arena_prison`, new `three-map-pack` fault: a pack from before Bowl is discarded wholesale),
+`ReleaseConfigurationTests` (`Lighting (arena_prison)` parked, `Lighting (arena_bowl)` hidden for players and visible in developer
+mode, "only four maps are playable", 10 parked), `FixedRaidTimeSelectionTests` (Bowl joins `NightTimeAllowedLocations` and keeps
+PAST, Prison is the vanilla-reset fixture), `AmbientAudioProfilesTests` (key list, a Bowl test, the contract mirror uses
+`GroupedPlayers`, ctor invariants for the new flag, driver text pins), `AirPitWiringTests` (Bowl row pinned, regex),
+`AirPitMapTests` / `SelectionMapPositionTests` (four released keys), `WeatherRigDefaultsTests` (Bowl rig row, 10 parked, no sun
+keys), `test_park_unreleased_dist.py` (10 stems / 50 rows, Bowl files preserved), `test_validate_distribution.py` (four-map
+fixture, `DISTRIBUTION_OK 4 maps 12 bundles 4 sidecars`, Prison as the parked output, new Bowl test: four loading images, a fifth
+or a missing fourth rejected, no overview/flares/water), `test_release_zips.py` (Prison as the parked fixture, new
+`BowlPartTests`: a five-part fixture with Bowl's four images and no flares/water/overview), `test_upload_pixeldrain.py` (the
+single-ZIP smoke test pins the fixture's three-map release list like the packager tests do), `test_banners.py`,
+`test_loadscreens.py` (five images per map except Bowl's four), `test_map_descriptions.py`, `test_map_pipeline.py` (four released
+names), `test_dynamicmaps_deploy.ps1` (unsupported selection `Prison`, not run, see below) and the `ConfigRetirementCheck` tool
+(`Lighting (arena_prison)` as the hidden/parked section).
+
+### Commands and results
+
+- `dotnet build ArenaMapPort.Server/ArenaMapPort.Server.csproj -c Release`: 0 warnings, 0 errors; server DLL
+  `4adf04e371fa3ef9f954726f17c04c3ddfd95a0be135b2f917d4b4ca12e45d7e` (74,240 B), bin == dist.
+- `dotnet build ArenaMapPort.Client/ArenaMapPort.Client.csproj -c Release -p:ArenaMapPortDllOnly=true`: 0 warnings, 0 errors;
+  client DLL `4a613df1b6fb2976ad3389c5b20e38df15557f535389e8b85b7ccc34b3b1e0a3` (818,688 B), bin == dist. It stages
+  `ai/bowl.ai.json` and `acoustics/arena_bowl/` into dist.
+- `dotnet test ArenaMapPort.Server.Tests/ArenaMapPort.Server.Tests.csproj -c Release`: **881 passed**, 0 failed (873 before:
+  eight new tests, ten failures fixed on the way); 887 after the adversarial review added six Bowl rows to
+  `AmbientAudioDefaultsTests` (accepted mix, revision-3 survival, new-keys-never-migrate).
+- `python -m unittest discover -s tools/tests -p "test_*.py"`: `Ran 1799 tests in 202.399s`, `OK (skipped=47)` (implementer's run
+  234.703 s, same counts; the 47 skips are the Arena-install / host / symlink gated tests and the real-dist smoke test).
+- `python tools/validate/validate_map_descriptors.py`: `OK - 14 tools/maps descriptors, all 14 catalog registry entries, release
+  All membership, and ArenaPaths.cs's EquatorDefault() all agree.`
+- `dotnet run --project tools/tests/ConfigRetirementCheck/ConfigRetirementCheck.csproj -c Release`: all three `*_OK` lines.
+- NOT run: the non-DllOnly client build and `validate_distribution.py` (both need the U1 bundles and `material-shaders.json`
+  of `work/build/bowl`), `tools/tests/test_dynamicmaps_deploy.ps1` (it drives `deploy-to-spt.ps1`, which this pass must not run),
+  `test_unity_log_scan.ps1` (no editor code touched). `test_release_zips.RealDistSmokeTests` skips until the Bowl bundles are in
+  dist.
+
+### Open follow-ups
+
+- When U1 finishes: non-DllOnly client build, `validate_distribution.py` (expect `DISTRIBUTION_OK 4 maps 12 bundles 4 sidecars`),
+  then the first host raid; add the Bowl spike bundles' hashes to `STALE_SPIKE_BUNDLES` only if the 0.5.4 spike ever lands in
+  `work/build/bowl` again (it is archived under `work/build/bowl-spike-20260915`, so nothing stale can be staged today).
+- Per-map rows that default for an unlisted map and were left alone on purpose (PLAN-BOWL items 9/17): `BloomTuning` (-1/-1 = the
+  camera's own values), `HdrImageTuning` (neutral), `RoomShotAcoustics` (global room classes), `NativeMultiFlare` (Equator and
+  Bay5 only), `SainLocationShim` (generic fallback), ambient mix defaults (provisional 3 dB / .4 / 3). `RainCoverRepairs` limits
+  the play-space footprint by `BakeBounds`, which Bowl carries like AirPit (judge it on the first rain check).
+- `tools/maps/AdditionalMapBuilds.props` still lists `bowl` among the additional maps (nothing imports it, as for AirPit).
+- The working tree also shows Unity-side changes that are not part of this promotion: the `UnityProject/Assets/ArenaMapPort/
+  StandinShaders/*.shader` files (rewritten by the running build) and two new untracked stand-in shaders
+  (`p0_Reflective_Bumped_Specular_TwoSided`, `Custom_Vert_Paint_SoftCutout_Decal`) with their `.meta` files.
+
+## 2026-10-18 - U1 build attempts 3 and 4: audio group membership, the Lum_lamp twins
+
+- Attempt 3 (11:50) imported every texture and failed in the Scripts-scene authoring: `Native audio group membership
+  differs from active source graph`. Arena groups Bowl's four inactive players too (contract `group_coverage`
+  `all_players`, 33 of 33 grouped), while `Bay5AudioImporter.ValidateMembership` accepted only the active set
+  (Equator's reading). Both readings are accepted now (`ce846f8`); an inactive member never plays.
+- Attempt 4 (12:02-12:20) built the bundles: `arena_bowl_scenes.bundle` 1,006,073,696 B, `arena_bowl_navmesh.bundle`
+  185,840 B. Bake inputs honoured: `bounds from the descriptor (bake_bounds), layer mask 0x60040A00
+  (navmesh_bake_layers), 1 navmesh_bake_exclusions, 2 opened_barriers`; excluded 14 sources under DOORS_SPAWN_A, 19
+  under DOORS_SPAWN_B, the slab; `sources=5476`; `triangulation: vertices=12704 triangles=5890` (the spike's
+  renderer-union bake had 51,335 / 22,879). `validate_bundle_roundtrip` then failed: `missing/ambiguous built ballistic
+  owner 6535` = the `ballistic` child of `SBG_Bowl_Light/OO/LEFT/Lum_lamp_intact`. Each of the six lamps carries TWO
+  `ballistic` children at the same pose whose rotations differ by 1e-7 (`[-0.50000006, 0.5, 0.49999997, 0.50000012]`
+  vs `[-0.5, 0.5, 0.49999988, 0.50000012]`, different meshes), so both built twins matched the first package twin
+  within the float32 tolerance and the matcher reported two candidates. Fix: when several built owners match a chain,
+  the component's own built fields pick the twin, and indistinguishable twins are consumed in order (the second package
+  twin takes the remaining one). Post-Unity steps re-run with `-SkipUnityBuild` (base.json, preset, validators).
