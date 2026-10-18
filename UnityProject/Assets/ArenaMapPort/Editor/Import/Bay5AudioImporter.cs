@@ -31,6 +31,7 @@ namespace ArenaMapPort.Editor.Import
         public const string RootName = "ArenaMapPort_Bay5NativeAudio";
         public const string EquatorRootName = "ArenaMapPort_EquatorNativeAudio";
         public const string AirPitRootName = "ArenaMapPort_AirPitNativeAudio";
+        public const string BowlRootName = "ArenaMapPort_BowlNativeAudio"; // PLAN-BOWL item 4/9, contract audio.root
 
         // Group GameObject name -> the native mixer group the client routes it to. The package names the same mixer in
         // each group's mixerName; a mismatch means the source graph and the client routing table disagree.
@@ -51,6 +52,7 @@ namespace ArenaMapPort.Editor.Import
                 case "arena_equator": return EquatorRootName;
                 case "arena_bay5": return RootName;
                 case "arena_airpit": return AirPitRootName;
+                case "arena_bowl": return BowlRootName;
                 default: throw new InvalidDataException("Native audio has no owned root for map " + mapKey);
             }
         }
@@ -62,6 +64,7 @@ namespace ArenaMapPort.Editor.Import
                 case "arena_equator": return "Equator";
                 case "arena_bay5": return "Bay5";
                 case "arena_airpit": return "AirPit";
+                case "arena_bowl": return "Bowl";
                 default: throw new InvalidDataException("Native audio has no asset folder for map " + mapKey);
             }
         }
