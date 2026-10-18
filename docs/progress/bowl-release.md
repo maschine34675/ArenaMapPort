@@ -50,3 +50,23 @@ host evidence. Appended, never rewritten.
   `CommonAmbientOutGroup` -> `CommonAmbOutEffects`, 18), 11 banks, 61 clips, all players grouped, none disabled, four
   inactive (`cracles (2)`, `water_drops`, `water_drops (1)`, `water_drops (4)`), no loop players. These become the
   contract's audio block for package v2.
+
+## 2026-10-18 - package v2 (ambient audio): the same-named indoor_wind players
+
+- The contract's audio block (pins above) and `AUDIO_EXPORTERS["arena_bowl"]` were added; the first v2 extraction
+  (10:56) failed closed in the exporter: `ambient_audio export failed: inconsistent shared audio hierarchy`. Cause
+  (scratch census of level111): two AmbientSoundPlayer leaves are both named `indoor_wind` under
+  `AmbientAudioSystem/AmbientPlayersGroup/CommonAmbientInGroup` (source ids 560 and 597, 7 m and 60 m apart), so
+  they shared one hierarchy path, which is the object key of the Unity importer (`objects[path]`) and of the client.
+  Equator, Bay5 and AirPit have no such duplicates.
+- Fix (`9c6bc17`): `extract_bay5_audio.disambiguate_sibling_paths` renames the second and later duplicates, in source
+  id order, with the leaf suffix `~2`, `~3` ... and keeps the authored leaf in `sourceLeafName`;
+  `validate_native_features.validate_audio_source` applies the same rule before comparing names with the source.
+  Tests in `test_audio_sibling_names.py`; the AirPit export re-run into a scratch directory is byte-identical to the
+  accepted v9 graph (`native-audio.json` sha `fa50a114...`).
+- Side rule for two pockets (`ff23a28`): `extract_mode_objects.py` finds the pockets by single linkage; Bowl's
+  `north` is the east pocket (x 46..56), `south` the west pocket (x -58..-49), 10 markers each, with a `side_rule`
+  block in the sidecar; the released sidecars stay byte-identical (verified against their packages).
+- `KeepLevelBorders` (`6873576`): Bowl keeps its 354 layer-29 LevelBorder cubes (descriptor + sidecar
+  `keep_level_borders: true`); the client's `RemoveTeamFightBorders` key defaults to false for Bowl and the bake treats
+  layer 29 as physical when the map's `navmesh_bake_layers` lists it. 875 .NET tests OK.
