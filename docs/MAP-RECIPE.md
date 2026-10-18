@@ -104,8 +104,13 @@ none of the five, so their bake is unchanged), mirrored by `ArenaMapDescriptor.N
   still dropped.
 
 Find the objects with `python tools/validate/navmesh_diff.py --package work/extract/<package> --descriptor tools/maps/<stem>.json
---points tools/maps/<stem>.bots.json --points tools/maps/<stem>.exits.json` (AirPit adds `--live-core-points`; the Arena
-NavMesh source defaults to AirPit's, see `--assets`/`--path-id`). Its greedy list names the smallest set of props whose
+--points tools/maps/<stem>.bots.json --points tools/maps/<stem>.exits.json` (AirPit adds `--live-core-points`). The Arena
+NavMesh source defaults to AirPit's; `--map bowl` selects another row of `ARENA_SOURCES` (NavMeshData, NavMeshSurface layer
+mask, AI scene, default package), `--plan tools/extract/plans/<stem>.json` takes the AI scene from the plan's `ai` role (the plan of a map that has its own row
+must go with that row's `--map`; the tool refuses the mix), and
+`--assets`/`--path-id`/`--arena-layer-mask` override single values. The oracle reads the NavMeshData in WORLD coordinates
+(its `m_Position`/`m_Rotation` are applied; Bowl's is a 90 degree yaw, AirPit's the identity), so a new map needs nothing
+beyond its table row. Its greedy list names the smallest set of props whose
 exclusion joins all probe points; `--descriptor` applies the barrier and exclusion lists above (held gates included;
 `bake_bounds` is not modelled).
 

@@ -6,8 +6,10 @@ AirPit the two disagree: Arena's single 8,168 m2 component walks through roughly
 the base scene. Instead of guessing barrier names for `opened_barriers`, this tool measures it.
 
 What it does (offline, read-only; no Unity, no host):
-  1. Reads Arena's NavMeshData (default: AirPit, sharedassets33.assets path 2) and samples its
-     polygons on a lattice (default 0.2 m), keeping the main component (or all low components).
+  1. Reads Arena's NavMeshData (default: AirPit, sharedassets33.assets path 2; `--map bowl` selects Bowl's
+     sharedassets128.assets path 2, see ARENA_SOURCES) in WORLD coordinates (the NavMeshData's m_Position /
+     m_Rotation are applied by navmesh_oracle; Bowl's is a 90 degree yaw, AirPit's the identity) and samples
+     its polygons on a lattice (default 0.2 m), keeping the main component (or all low components).
   2. Loads the port's collider triangles from an extracted package with the bake rules of
      BakeNavMesh.cs (`port_colliders.py`), optionally with extra `opened_barriers` paths, bake-only
      `navmesh_bake_exclusions` (PLAN-AIRPIT item 8: dropped from the sources, still active at runtime) and a
@@ -31,6 +33,7 @@ counted). Calibration against the real spike bake is in docs/progress/airpit-rel
 from __future__ import annotations
 
 import argparse
+import dataclasses
 import json
 import math
 import re
@@ -52,6 +55,34 @@ AIRPIT_NAVMESH = ("sharedassets33.assets", 2)
 # DoorLowPolyCollider, Terrain, Triggers, LowPolyCollider, TransparentCollider.
 AIRPIT_ARENA_LAYER_MASK = 0x40042A00
 DEFAULT_PROP_MAX_OBJECTS = 120
+
+
+@dataclass(frozen=True)
+class ArenaSource:
+    """Where one map's Arena-side oracle inputs live in the installed game (all read-only).
+
+    `assets` / `path_id`: the NavMeshData of the map's TeamFight AI scene; `layer_mask`: that scene's
+    NavMeshSurface.m_LayerMask (decoded by probe_mode_toggler); `ai_scene_index` / `ai_scene_name`: the `ai`
+    scene role of tools/extract/plans/<stem>.json (a test keeps both in step); `package`: the default extracted
+    package for the port side. AirPit's row is what the module hard-wired before PLAN-BOWL item 6.
+    """
+    key: str
+    assets: str
+    path_id: int
+    layer_mask: int
+    ai_scene_index: int
+    ai_scene_name: str
+    package: str
+
+
+ARENA_SOURCES = {
+    "airpit": ArenaSource("arena_airpit", AIRPIT_NAVMESH[0], AIRPIT_NAVMESH[1], AIRPIT_ARENA_LAYER_MASK,
+                          33, "Arena_Airpit_TeamFight_AI", "work/extract/airpit-native-v8"),
+    # Bowl (measured 2026-10-18, Arena 0.6.0.47752): level128, NavMeshSurface layers 9 / 11 / 18 / 30 (no 13), 80 tiles,
+    # agent radius 0.3 / height 1.7, NavMeshData rotated 90 degrees about Y (navmesh_oracle applies it).
+    "bowl": ArenaSource("arena_bowl", "sharedassets128.assets", 2, 0x40040A00,
+                        128, "Arena_Bowl_TeamFight_AI", "work/extract/bowl-native-v1"),
+}
 
 
 @dataclass
@@ -159,22 +190,39 @@ def load_points(path) -> list[dict]:
     return out
 
 
-def live_ai_points(arena_data=DEFAULT_ARENA_DATA, scene_index=33, scene_name="Arena_Airpit_TeamFight_AI") -> list[dict]:
-    """AI core points and patrol hubs/points of AirPit's TeamFight_AI scene (read-only, via the
-    existing extractor's decoders; nothing is written)."""
+def live_ai_points(arena_data=DEFAULT_ARENA_DATA, scene_index=33, scene_name="Arena_Airpit_TeamFight_AI",
+                   map_key="arena_airpit") -> list[dict]:
+    """AI core points and patrol hubs/points of a map's TeamFight_AI scene (default AirPit's; Bowl: 128,
+    "Arena_Bowl_TeamFight_AI", "arena_bowl"; read-only, via the existing extractor's decoders; nothing is
+    written). A scene without patrol ways yields core points only (Bowl has one way with 7 hubs / 79 sub points,
+    AirPit one with 3 / 35)."""
     extract_dir = Path(__file__).resolve().parents[1] / "extract"
     sys.path.insert(0, str(extract_dir))
     import extract_ai_anchors as anchors
-    data = anchors.extract_map("arena_airpit", scene_index, scene_name, arena_data)
+    data = anchors.extract_map(map_key, scene_index, scene_name, arena_data)
     tmp = {"core_points": data["core_points"], "patrol_ways": data["patrol_ways"]}
     out = []
     for p in tmp["core_points"]:
         out.append({"name": f"core{p['id']}", "kind": "core_point", "position": [float(v) for v in p["position"]]})
-    for i, hub in enumerate(tmp["patrol_ways"][0]["hubs"]):
+    for i, hub in enumerate(tmp["patrol_ways"][0]["hubs"] if tmp["patrol_ways"] else []):
         out.append({"name": f"hub{i}", "kind": "patrol_hub", "position": [float(v) for v in hub["position"]]})
         for j, sub in enumerate(hub["sub_points"]):
             out.append({"name": f"hub{i}.{j}", "kind": "patrol_point", "position": [float(v) for v in sub]})
     return out
+
+
+def arena_source_from_plan(plan_path, base: ArenaSource | None = None) -> ArenaSource:
+    """The AI scene (index, name) and map key of a source plan's `ai` role, for a map without an ARENA_SOURCES
+    row (`--plan`). Everything else (NavMeshData, mask, package) comes from `base` (default AirPit's row), so a
+    map that needs those too gets a table row; extract_ai_anchors resolves the role and fails closed on a
+    plan without one."""
+    extract_dir = Path(__file__).resolve().parents[1] / "extract"
+    sys.path.insert(0, str(extract_dir))
+    import extract_ai_anchors as anchors
+    from source_plan import load_plan
+    plan = load_plan(Path(plan_path))
+    index, name = anchors.ai_scene_for_plan(plan)
+    return dataclasses.replace(base or ARENA_SOURCES["airpit"], key=plan["key"], ai_scene_index=index, ai_scene_name=name)
 
 
 # ---------------------------------------------------------------------------------------------
@@ -182,6 +230,8 @@ def live_ai_points(arena_data=DEFAULT_ARENA_DATA, scene_index=33, scene_name="Ar
 # ---------------------------------------------------------------------------------------------
 
 def load_arena_mesh(arena_data=DEFAULT_ARENA_DATA, assets=AIRPIT_NAVMESH[0], path_id=AIRPIT_NAVMESH[1]):
+    """Arena's NavMesh of one map in WORLD coordinates (the tiles carry the NavMeshData placement and
+    `build_navmesh` applies it; identity on AirPit, a 90 degree yaw on Bowl)."""
     tiles, meta = oracle.load_navmesh_tiles(f"{arena_data}/{assets}", path_id)
     return oracle.build_navmesh(tiles), meta
 
@@ -448,7 +498,8 @@ def load_triangulation_mesh(path):
 
 
 def load_bundle_mesh(path):
-    """NavMesh of a built `*_navmesh.bundle` (UnityPy, read-only)."""
+    """NavMesh of a built `*_navmesh.bundle` (UnityPy, read-only), in world coordinates through the bundle's own
+    NavMeshData placement (identity in every bundle the port has baked: Vector3.zero / Quaternion.identity)."""
     import UnityPy
     env = UnityPy.load(str(path))
     for obj in env.objects:
@@ -605,12 +656,13 @@ def descriptor_bake_inputs(descriptor: dict) -> dict:
 
 def analyse(package, cfg: Config | None = None, opened_barriers=(), points=(), arena_data=DEFAULT_ARENA_DATA,
             mesh=None, cset=None, bake_rules="port", other_mesh=None, greedy_steps=12, log=print,
-            bake_exclusions=(), port_layer_mask=None):
+            bake_exclusions=(), port_layer_mask=None, assets=AIRPIT_NAVMESH[0], path_id=AIRPIT_NAVMESH[1]):
     """`bake_exclusions` and `port_layer_mask` are the descriptor's navmesh_bake_exclusions / navmesh_bake_layers
-    (as a mask): what the port bake would collect. `cfg.arena_layer_mask` stays what Arena's own surface sees."""
+    (as a mask): what the port bake would collect. `cfg.arena_layer_mask` stays what Arena's own surface sees.
+    `assets` / `path_id` pick the NavMeshData to load when no `mesh` is given (default AirPit's)."""
     cfg = cfg or Config()
     if mesh is None:
-        mesh, meta = load_arena_mesh(arena_data)
+        mesh, meta = load_arena_mesh(arena_data, assets, path_id)
     else:
         meta = {}
     arena_components = oracle.component_summary(mesh)
@@ -797,6 +849,12 @@ def format_report(report, top=25) -> str:
     out = []
     a, s, p = report["arena"], report["samples"], report["port"]
     out.append("== Arena NavMesh")
+    meta = a.get("meta") or {}
+    if "rotation" in meta and "position" in meta:
+        placed = oracle.Placement(tuple(meta["position"]), tuple(meta["rotation"]))
+        if not placed.is_identity:
+            out.append(f"NavMeshData placement applied: yaw {placed.yaw_degrees():.2f} deg, position "
+                       f"({placed.position[0]:.2f}, {placed.position[1]:.2f}, {placed.position[2]:.2f})")
     out.append(f"polygons {a['polygons']}, components {len(a['components'])}+ (largest first):")
     for c in a["components"][:4]:
         out.append(f"  #{c['label']}: {c['polygons']} polys, {c['area_xz']:.1f} m2, x {c['min'][0]:.1f}..{c['max'][0]:.1f}, "
@@ -868,10 +926,15 @@ def format_report(report, top=25) -> str:
 
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
-    ap.add_argument("--package", default="work/extract/airpit-native-v8", help="extracted package with scenes/*.json and meshes/")
+    ap.add_argument("--map", choices=sorted(ARENA_SOURCES), default="airpit",
+                    help="per-map Arena inputs (ARENA_SOURCES): NavMeshData, NavMeshSurface layer mask, AI scene and the default "
+                         "package; --package / --assets / --path-id / --arena-layer-mask override single values")
+    ap.add_argument("--plan", help="source plan JSON (tools/extract/plans/<stem>.json): its `ai` scene role replaces the AI scene "
+                                   "(--live-core-points) of the selected --map")
+    ap.add_argument("--package", default=None, help="extracted package with scenes/*.json and meshes/ (default: the --map's row)")
     ap.add_argument("--arena-data", default=DEFAULT_ARENA_DATA)
-    ap.add_argument("--assets", default=AIRPIT_NAVMESH[0])
-    ap.add_argument("--path-id", type=int, default=AIRPIT_NAVMESH[1])
+    ap.add_argument("--assets", default=None, help="Arena assets file holding the NavMeshData (default: the --map's row)")
+    ap.add_argument("--path-id", type=int, default=None, help="path id of the NavMeshData in --assets (default: the --map's row)")
     ap.add_argument("--opened-barrier", action="append", default=[], help="extra opened_barriers path (repeatable)")
     ap.add_argument("--descriptor", help="map sidecar whose opened_barriers, navmesh_bake_exclusions and navmesh_bake_layers "
                                          "are applied (tools/maps/airpit.json)")
@@ -884,20 +947,34 @@ def main(argv=None):
     ap.add_argument("--points", action="append", default=[], help="probe-point JSON / bots / exits sidecar (repeatable)")
     ap.add_argument("--bake-rules", choices=("port", "none"), default="port",
                     help="'none' keeps every enabled non-trigger collider (reproduces a bake that predates the exclusions)")
-    ap.add_argument("--arena-layer-mask", type=lambda v: int(v, 0), default=AIRPIT_ARENA_LAYER_MASK)
+    ap.add_argument("--arena-layer-mask", type=lambda v: int(v, 0), default=None,
+                    help="Arena's NavMeshSurface layer mask (default: the --map's row)")
     ap.add_argument("--components", choices=("main", "low"), default="main")
     ap.add_argument("--cell", type=float, default=0.1)
     ap.add_argument("--sample-step", type=float, default=0.2)
     ap.add_argument("--slack", type=float, default=0.1, help="radius allowance for both agent tests")
     ap.add_argument("--live-core-points", action="store_true",
-                    help="add Arena's AI core points / patrol points, read from the live install (AirPit TeamFight_AI, level33)")
+                    help="add Arena's AI core points / patrol points, read from the live install (the --map's TeamFight_AI scene, "
+                         "or the --plan's `ai` role)")
     ap.add_argument("--compare-bundle", help="a built *_navmesh.bundle to compare against Arena's footprint")
     ap.add_argument("--compare-triangulation", help="ExportMapTriangulation receipt to compare against Arena's footprint")
     ap.add_argument("--top", type=int, default=25)
     ap.add_argument("--json-out")
     args = ap.parse_args(argv)
+    source = ARENA_SOURCES[args.map]
+    if args.plan:
+        planned = arena_source_from_plan(args.plan, source)
+        owner = next((stem for stem, row in ARENA_SOURCES.items() if row.key == planned.key), None)
+        if owner is not None and planned.key != source.key:
+            # AI points of one map on the NavMeshData of another would report most of them as off the mesh, silently
+            ap.error(f"--plan {args.plan} belongs to {planned.key}, which has its own ARENA_SOURCES row: use --map {owner}")
+        source = planned
+    package = args.package or source.package
+    assets = args.assets or source.assets
+    path_id = args.path_id if args.path_id is not None else source.path_id
+    arena_layer_mask = args.arena_layer_mask if args.arena_layer_mask is not None else source.layer_mask
     cfg = Config(cell=args.cell, sample_step=args.sample_step, arena_slack=args.slack, port_slack=args.slack,
-                 components=args.components, arena_layer_mask=args.arena_layer_mask)
+                 components=args.components, arena_layer_mask=arena_layer_mask)
     barriers = list(args.opened_barrier)
     exclusions = list(args.bake_exclusion)
     layer_mask = args.port_layer_mask
@@ -911,14 +988,14 @@ def main(argv=None):
     for f in args.points:
         points += load_points(f)
     if args.live_core_points:
-        points += live_ai_points(args.arena_data)
+        points += live_ai_points(args.arena_data, source.ai_scene_index, source.ai_scene_name, source.key)
     other = None
     if args.compare_bundle:
         other = load_bundle_mesh(args.compare_bundle)
     elif args.compare_triangulation:
         other = load_triangulation_mesh(args.compare_triangulation)
-    report = analyse(args.package, cfg, barriers, points, args.arena_data, bake_rules=args.bake_rules, other_mesh=other,
-                     bake_exclusions=exclusions, port_layer_mask=layer_mask)
+    report = analyse(package, cfg, barriers, points, args.arena_data, bake_rules=args.bake_rules, other_mesh=other,
+                     bake_exclusions=exclusions, port_layer_mask=layer_mask, assets=assets, path_id=path_id)
     print(format_report(report, args.top))
     if args.json_out:
         Path(args.json_out).parent.mkdir(parents=True, exist_ok=True)

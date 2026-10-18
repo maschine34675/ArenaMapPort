@@ -28,11 +28,28 @@ An "empty" tile is exactly the 72-byte header with polyCount 0. Cross-tile conne
 geometrically (portal edges that lie on the shared tile border and overlap along it) instead of from
 the side codes, so a different side numbering in another Unity version cannot silently break it.
 
+Placement (PLAN-BOWL item 6, measured 2026-10-18 on AirPit and Bowl, Arena 0.6.0.47752). The tile vertices
+are NOT world coordinates: they live in the frame of the NavMeshSurface that baked them, and
+`NavMeshData.m_Position` / `m_Rotation` (the surface GameObject's world transform, the values Unity passes
+to `NavMesh.AddNavMeshData(data, position, rotation)`) place that frame in the world. AirPit's is the
+identity (level33, Transform 985 at the origin), which is why the first oracle could ignore it. Bowl's
+(level128, the root `NavMesh` Transform 340, equal to its NavMeshData) is a rotation of 90 degrees about Y
+(quaternion y 0.7071058 / w 0.7071078): the raw tiles span x -8.8..79.5 and z -63.8..59.6, the world mesh
+x -63.8..59.6 and z -79.5..8.8, i.e. world (x, z) = (local z, -local x). Reading the tiles without the
+placement puts Bowl's mesh 90 degrees off its spawns, core points and colliders and every oracle answer
+(reachability, clearance, the diff against the port's colliders) is wrong. `Tile` therefore carries the
+`Placement` of the NavMeshData it came from; `build_navmesh` builds the connectivity in the tile frame (the
+tile grid is axis aligned only there, `_match_portals` needs that) and then maps vertices, tile boxes and
+the lazy fan triangles into the world, so every `NavMesh` query is in world coordinates. Only upright
+placements (a yaw about Y plus any translation) are supported: `locate`, `clearance` and the lattice
+sampler treat y as up. A tilted frame raises `NavMeshFormatError` instead of answering wrongly.
+
 Everything is numpy plus a tiny union-find (scipy is not installed in this repository's toolchain).
 The module has no dependency on UnityPy except in `load_navmesh_tiles`, which imports it lazily.
 """
 from __future__ import annotations
 
+import dataclasses
 import math
 import struct
 from dataclasses import dataclass, field
@@ -51,6 +68,70 @@ class NavMeshFormatError(ValueError):
     """The blob is not a Detour tile this reader understands (never guess a layout)."""
 
 
+@dataclass(frozen=True)
+class Placement:
+    """Where a NavMeshData's tile frame sits in the world: `m_Position` and `m_Rotation` (x, y, z, w).
+
+    world = R(rotation) * local + position, Unity's convention (a +90 degree yaw sends local +x to world -z
+    and local +z to world +x). The default is the identity, which is exact for AirPit and for every bundle
+    the port bakes (`BuildNavMeshData(..., Vector3.zero, Quaternion.identity)`).
+    """
+    position: tuple = (0.0, 0.0, 0.0)
+    rotation: tuple = (0.0, 0.0, 0.0, 1.0)
+
+    def __post_init__(self):
+        """Plain float tuples of the right length, all finite: a NaN position is neither the identity nor refused by
+        `matrix()`, so `apply` would silently move the whole mesh to NaN."""
+        try:
+            position = tuple(float(c) for c in self.position)
+            rotation = tuple(float(c) for c in self.rotation)
+        except (TypeError, ValueError) as exc:
+            raise NavMeshFormatError(f"NavMeshData placement is not numeric ({exc!r})") from exc
+        if len(position) != 3 or len(rotation) != 4 or not all(math.isfinite(c) for c in position + rotation):
+            raise NavMeshFormatError(f"NavMeshData placement needs a finite position (3) and rotation (4), got {position} / {rotation}")
+        object.__setattr__(self, "position", position)
+        object.__setattr__(self, "rotation", rotation)
+
+    @property
+    def is_identity(self) -> bool:
+        """Exactly the identity (a quaternion of -0 / +0 xyz and w of either sign): `apply` is then a no-op,
+        which keeps the identity case (AirPit, every port bundle) bit-identical to the pre-placement oracle."""
+        x, y, z, w = self.rotation
+        return x == 0.0 and y == 0.0 and z == 0.0 and abs(w) == 1.0 and all(c == 0.0 for c in self.position)
+
+    def matrix(self) -> np.ndarray:
+        """3x3 rotation matrix of the (re-normalised) quaternion; a clearly non-unit quaternion is refused."""
+        x, y, z, w = (float(c) for c in self.rotation)
+        norm = math.sqrt(x * x + y * y + z * z + w * w)
+        if not (abs(norm - 1.0) <= 1e-3):
+            raise NavMeshFormatError(f"NavMeshData rotation {self.rotation} is not a unit quaternion (norm {norm})")
+        x, y, z, w = x / norm, y / norm, z / norm, w / norm
+        return np.array([[1 - 2 * (y * y + z * z), 2 * (x * y - z * w), 2 * (x * z + y * w)],
+                         [2 * (x * y + z * w), 1 - 2 * (x * x + z * z), 2 * (y * z - x * w)],
+                         [2 * (x * z - y * w), 2 * (y * z + x * w), 1 - 2 * (x * x + y * y)]])
+
+    def require_upright(self) -> None:
+        """The oracle's queries treat y as up; refuse a frame that tilts it instead of answering wrongly."""
+        if self.is_identity:
+            return
+        up = self.matrix()[:, 1]
+        if np.abs(up - np.array([0.0, 1.0, 0.0])).max() > 1e-4:
+            raise NavMeshFormatError(f"NavMeshData rotation {self.rotation} tilts the up axis (local up maps to "
+                                     f"{[round(float(c), 4) for c in up]}); only yaw placements are supported")
+
+    def apply(self, points) -> np.ndarray:
+        """(N, 3) local points to world points (float64; the identity returns the input values unchanged)."""
+        pts = np.asarray(points, dtype=np.float64).reshape(-1, 3)
+        if self.is_identity:
+            return pts
+        return pts @ self.matrix().T + np.asarray(self.position, dtype=np.float64)
+
+    def yaw_degrees(self) -> float:
+        """Rotation about Y in degrees as Unity's `eulerAngles.y` reports it (0..360; meaningful for upright frames)."""
+        m = self.matrix()
+        return float(math.degrees(math.atan2(m[0, 2], m[0, 0])) % 360.0)
+
+
 @dataclass
 class Tile:
     x: int
@@ -64,6 +145,7 @@ class Tile:
     poly_nverts: np.ndarray      # (P,) uint8
     poly_area: np.ndarray        # (P,) uint8
     poly_flags: np.ndarray       # (P,) uint32
+    placement: Placement = Placement()   # of the NavMeshData the tile came from; verts/bmin/bmax stay in the tile frame
 
 
 def parse_tile(blob: bytes) -> Tile | None:
@@ -110,17 +192,18 @@ def parse_tile(blob: bytes) -> Tile | None:
 @dataclass
 class NavMesh:
     """All tiles merged into global arrays plus the polygon adjacency graph."""
-    verts: np.ndarray                      # (V, 3)
+    verts: np.ndarray                      # (V, 3) world coordinates (NavMeshData placement applied)
     poly_verts: np.ndarray                 # (P, 6) global vertex indices, -1 padded
     poly_nverts: np.ndarray                # (P,)
     poly_area: np.ndarray                  # (P,)
     poly_tile: np.ndarray                  # (P,) index into `tiles`
     poly_nei: np.ndarray                   # (P, 6) global polygon index, -1 border, -2 portal (see `portal_edges`)
-    tiles: list = field(default_factory=list)
+    tiles: list = field(default_factory=list)   # the tiles in world space (identity placement); bmin / bmax: box of the corners
     edges: np.ndarray = None               # (E, 2) polygon adjacency pairs (internal + portal matches)
     portal_pairs: int = 0
     unmatched_portal_edges: int = 0
     labels: np.ndarray = None              # (P,) component label, 0..C-1, largest area first
+    placement: Placement = Placement()     # applied to verts / tiles by build_navmesh (identity: nothing moved)
     # derived lazily
     _tris: tuple | None = None
 
@@ -311,10 +394,35 @@ def _match_portals(tiles, offsets_poly, poly_verts, verts, tol=0.02, max_dy=0.6)
     return sorted(pairs), unmatched + stray
 
 
-def build_navmesh(tiles: list[Tile]) -> NavMesh:
-    """Merge parsed (non-empty) tiles into one NavMesh with adjacency and component labels."""
+def _common_placement(tiles: list[Tile]) -> Placement:
+    first = tiles[0].placement
+    for t in tiles[1:]:
+        if t.placement != first:
+            raise NavMeshFormatError(f"tiles of one NavMesh carry different placements ({first} and {t.placement})")
+    return first
+
+
+def _place_tile(tile: Tile, placement: Placement) -> Tile:
+    """World-space copy of a tile: vertices mapped, bmin / bmax the box of the eight mapped corners. The copy
+    carries the identity placement (its arrays are world now), so rebuilding from it cannot apply the move twice."""
+    corners = np.array([[x, y, z] for x in (tile.bmin[0], tile.bmax[0]) for y in (tile.bmin[1], tile.bmax[1])
+                        for z in (tile.bmin[2], tile.bmax[2])], dtype=np.float64)
+    world = placement.apply(corners)
+    return dataclasses.replace(tile, verts=placement.apply(tile.verts), bmin=tuple(float(c) for c in world.min(axis=0)),
+                               bmax=tuple(float(c) for c in world.max(axis=0)), placement=Placement())
+
+
+def build_navmesh(tiles: list[Tile], placement: Placement | None = None) -> NavMesh:
+    """Merge parsed (non-empty) tiles into one NavMesh with adjacency and component labels, in world coordinates.
+
+    `placement` defaults to the one the tiles carry (`tiles_from_navmesh_data` stamps every tile with its
+    NavMeshData's m_Position / m_Rotation); pass `Placement()` to read the raw tile frame. Connectivity is
+    built in the tile frame, where the tile grid is axis aligned, and the result is mapped afterwards.
+    """
     if not tiles:
         raise NavMeshFormatError("no non-empty tiles")
+    placement = placement if placement is not None else _common_placement(tiles)
+    placement.require_upright()
     vert_off, poly_off = [0], [0]
     for t in tiles:
         vert_off.append(vert_off[-1] + len(t.verts))
@@ -350,6 +458,15 @@ def build_navmesh(tiles: list[Tile]) -> NavMesh:
     rank = np.empty(len(uniq), dtype=np.int64)
     rank[order] = np.arange(len(uniq))
     mesh.labels = rank[inv]
+    if placement.is_identity:
+        mesh.tiles = [t if t.placement == placement else dataclasses.replace(t, placement=placement) for t in tiles]
+    else:
+        # An isometry about Y: areas, adjacency and the component ranking are unchanged. The fan triangles
+        # computed for the areas above are still in the tile frame, so drop that cache with the move.
+        mesh.verts = placement.apply(mesh.verts)
+        mesh.tiles = [_place_tile(t, placement) for t in tiles]
+        mesh._tris = None
+    mesh.placement = placement             # what was applied; `tiles` are already world and carry the identity
     return mesh
 
 
@@ -433,26 +550,42 @@ def sample_polygons(mesh: NavMesh, step: float, origin=(0.0, 0.0)):
 # Loading from the live install
 # ---------------------------------------------------------------------------------------------
 
+def placement_from_navmesh_data(tree: dict) -> Placement:
+    """The `m_Position` / `m_Rotation` of a read_typetree() dict of a `NavMeshData` (both are required: a
+    missing key means another serialisation, and guessing the identity would hide a rotated mesh)."""
+    try:
+        pos, rot = tree["m_Position"], tree["m_Rotation"]
+        return Placement(tuple(float(pos[k]) for k in "xyz"), tuple(float(rot[k]) for k in "xyzw"))
+    except (KeyError, TypeError, ValueError) as exc:
+        raise NavMeshFormatError(f"NavMeshData has no readable m_Position / m_Rotation ({exc!r})") from exc
+
+
 def tiles_from_navmesh_data(tree: dict) -> list[Tile]:
-    """Parse a read_typetree() dict of a `NavMeshData` object."""
+    """Parse a read_typetree() dict of a `NavMeshData` object. Every tile is stamped with the object's
+    placement, so `build_navmesh(tiles)` returns world coordinates; the tile arrays themselves stay raw."""
+    placement = placement_from_navmesh_data(tree)
     out = []
     for entry in tree["m_NavMeshTiles"]:
         tile = parse_tile(bytes(entry["m_MeshData"]))
         if tile is not None:
-            out.append(tile)
+            out.append(dataclasses.replace(tile, placement=placement))
     return out
 
 
 def load_navmesh_tiles(assets_file: str, path_id: int) -> tuple[list[Tile], dict]:
-    """Read one NavMeshData from a game assets file (read-only; UnityPy imported lazily)."""
+    """Read one NavMeshData from a game assets file (read-only; UnityPy imported lazily). The tiles are in the
+    NavMeshData's own frame and carry its placement; pass them to `build_navmesh` for world coordinates.
+    `meta` lists the placement as plain `position` / `rotation` lists."""
     import UnityPy
     env = UnityPy.load(assets_file)
     for f in env.files.values():
         objects = getattr(f, "objects", None)
         if objects and path_id in objects and objects[path_id].type.name == "NavMeshData":
             tree = objects[path_id].read_typetree()
+            placement = placement_from_navmesh_data(tree)
             meta = {"agent_type_id": tree.get("m_AgentTypeID"), "settings": tree.get("m_NavMeshBuildSettings"),
-                    "offmesh_links": len(tree.get("m_OffMeshLinks") or []), "tiles_total": len(tree["m_NavMeshTiles"])}
+                    "offmesh_links": len(tree.get("m_OffMeshLinks") or []), "tiles_total": len(tree["m_NavMeshTiles"]),
+                    "position": list(placement.position), "rotation": list(placement.rotation)}
             return tiles_from_navmesh_data(tree), meta
     raise NavMeshFormatError(f"no NavMeshData with path_id {path_id} in {assets_file}")
 

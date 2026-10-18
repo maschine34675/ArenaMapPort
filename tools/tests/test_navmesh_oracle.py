@@ -1,8 +1,13 @@
 """Synthetic-tile tests for the Arena NavMesh oracle reader and the mode-toggler probe decoders.
 
 No game data: every Detour tile here is built byte by byte from the layout documented in
-tools/validate/navmesh_oracle.py (72-byte header, float3 vertices, 32-byte polygons).
+tools/validate/navmesh_oracle.py (72-byte header, float3 vertices, 32-byte polygons). PlacementTests,
+PlacedMeshTests and NavMeshDataTreeTests cover the NavMeshData position / rotation (PLAN-BOWL item 6): Bowl's
+mesh is yawed 90 degrees about Y, AirPit's placement is the identity; the live Arena numbers are pinned in
+test_bowl_navmesh_oracle.py.
 """
+import dataclasses
+import math
 import struct
 import sys
 import unittest
@@ -174,6 +179,186 @@ class TriangulationTests(unittest.TestCase):
         verts = [(0, 0, 0), (1, 0, 0), (0, 0, 1), (1, 0, 0), (1, 0, 1), (0, 0, 1)]     # vertex 1 == 3, 2 == 5
         mesh = no.mesh_from_triangulation(verts, [0, 2, 1, 3, 5, 4])
         self.assertEqual(int(mesh.labels.max()) + 1, 1)
+
+
+S = math.sqrt(0.5)
+YAW90 = (0.0, S, 0.0, S)                                               # Quaternion.Euler(0, 90, 0)
+BOWL_ROTATION = (-0.0, 0.7071057558059692, -0.0, 0.7071078419685364)   # Bowl's NavMeshData.m_Rotation (level128)
+AIRPIT_ROTATION = (-0.0, -0.0, -0.0, 1.0)                              # AirPit's (level33): the identity
+
+
+def yaw(degrees):
+    half = math.radians(degrees) / 2.0
+    return (0.0, math.sin(half), 0.0, math.cos(half))
+
+
+def stamped(tiles, placement):
+    return [dataclasses.replace(t, placement=placement) for t in tiles]
+
+
+def navmesh_tree(blobs, position=(0.0, 0.0, 0.0), rotation=(0.0, 0.0, 0.0, 1.0)):
+    """The slice of a read_typetree() dict of a NavMeshData that the oracle reads."""
+    return {"m_NavMeshTiles": [{"m_MeshData": blob, "m_Hash": b""} for blob in blobs],
+            "m_Position": dict(zip("xyz", position)), "m_Rotation": dict(zip("xyzw", rotation))}
+
+
+class PlacementTests(unittest.TestCase):
+    """NavMeshData.m_Position / m_Rotation (PLAN-BOWL item 6): Bowl's mesh is yawed 90 degrees, AirPit's is not."""
+
+    def test_a_yaw_of_90_degrees_sends_local_x_to_minus_z_and_local_z_to_x(self):
+        placed = no.Placement(rotation=YAW90).apply([[1, 0, 0], [0, 0, 1], [0, 5, 0]])
+        np.testing.assert_allclose(placed, [[0, 0, -1], [1, 0, 0], [0, 5, 0]], atol=1e-12)
+        self.assertAlmostEqual(no.Placement(rotation=YAW90).yaw_degrees(), 90.0, places=9)
+
+    def test_the_translation_is_added_after_the_rotation(self):
+        placed = no.Placement(position=(10.0, 1.0, -2.0), rotation=YAW90).apply([[1, 0, 0]])
+        np.testing.assert_allclose(placed, [[10.0, 1.0, -3.0]], atol=1e-12)
+
+    def test_the_identity_is_recognised_and_applies_bit_exactly(self):
+        for rotation in ((0.0, 0.0, 0.0, 1.0), AIRPIT_ROTATION):        # AirPit stores negative zeros
+            placement = no.Placement(rotation=rotation)
+            self.assertTrue(placement.is_identity)
+            points = np.array([[0.1, 0.2, 0.3], [-56.14, 0.0235, 84.77]])
+            self.assertTrue(np.array_equal(placement.apply(points), points))
+        self.assertFalse(no.Placement(rotation=YAW90).is_identity)
+        self.assertFalse(no.Placement(position=(0.0, 0.1, 0.0)).is_identity)
+
+    def test_bowls_recorded_quaternion_is_a_90_degree_yaw_and_maps_the_raw_corner_to_the_world_corner(self):
+        placement = no.Placement(rotation=BOWL_ROTATION)
+        self.assertAlmostEqual(placement.yaw_degrees(), 90.0, places=3)
+        # raw tile corner (x 79.45, z -63.84) -> world (x -63.84, z -79.45): within 0.3 mm of the exact quarter turn
+        np.testing.assert_allclose(placement.apply([[79.45, 0.04, -63.84]]), [[-63.84, 0.04, -79.45]], atol=3e-4)
+
+    def test_malformed_and_non_finite_placements_are_refused_at_construction(self):
+        for kwargs in ({"position": (float("nan"), 0.0, 0.0)}, {"position": (0.0, float("inf"), 0.0)}, {"position": (0.0, 0.0)},
+                       {"rotation": (0.0, float("nan"), 0.0, 1.0)}, {"rotation": (0.0, 0.0, 1.0)}, {"rotation": ("a", 0, 0, 1)}):
+            with self.assertRaises(no.NavMeshFormatError, msg=kwargs):
+                no.Placement(**kwargs)
+        # lists are accepted and normalised to float tuples, so a Placement stays hashable and comparable
+        listed = no.Placement(position=[1, 2, 3], rotation=[0, 0, 0, 1])
+        self.assertEqual(listed, no.Placement(position=(1.0, 2.0, 3.0)))
+        self.assertEqual(hash(listed), hash(no.Placement(position=(1.0, 2.0, 3.0))))
+        with self.assertRaises(no.NavMeshFormatError):
+            no.placement_from_navmesh_data(navmesh_tree([], (float("nan"), 0.0, 0.0)))
+
+    def test_tilted_and_non_unit_rotations_are_refused(self):
+        with self.assertRaises(no.NavMeshFormatError):
+            no.Placement(rotation=(S, 0.0, 0.0, S)).require_upright()         # 90 degrees about X: up is not up
+        with self.assertRaises(no.NavMeshFormatError):
+            no.Placement(rotation=(0.0, 0.0, 0.0, 2.0)).matrix()
+        no.Placement(rotation=yaw(37.0)).require_upright()                    # any pure yaw is fine
+
+
+class PlacedMeshTests(unittest.TestCase):
+    def raw(self):
+        return [no.parse_tile(two_quads())]
+
+    def test_vertices_are_world_coordinates_and_the_topology_is_unchanged(self):
+        tiles = self.raw()
+        raw = no.build_navmesh(tiles)
+        placed = no.build_navmesh(stamped(tiles, no.Placement(rotation=YAW90)))
+        np.testing.assert_allclose(placed.verts, np.stack([raw.verts[:, 2], raw.verts[:, 1], -raw.verts[:, 0]], axis=1), atol=1e-12)
+        for name in ("poly_verts", "poly_nverts", "poly_area", "poly_tile", "poly_nei", "edges", "labels"):
+            self.assertTrue(np.array_equal(getattr(placed, name), getattr(raw, name)), name)
+        np.testing.assert_allclose(placed.poly_areas()[0], raw.poly_areas()[0], atol=1e-12)
+        self.assertEqual(no.check_symmetry(placed), 0)
+        self.assertAlmostEqual(placed.placement.yaw_degrees(), 90.0, places=9)
+
+    def test_queries_answer_in_world_coordinates(self):
+        # quad A spans world x 0..1, z -1..0 and B z -2..-1 once the yaw is applied (raw: A x 0..1, B x 1..2 at z 0..1)
+        placed = no.build_navmesh(stamped(self.raw(), no.Placement(rotation=YAW90)))
+        poly, _surf = placed.locate([(0.5, 0.0, -0.5), (0.5, 0.0, -1.5), (0.5, 0.0, 0.5), (1.5, 0.0, -0.5)])
+        self.assertEqual(poly.tolist(), [0, 1, -1, -1])          # the raw-frame spot (0.5, 0.5) is off the mesh now
+        self.assertAlmostEqual(placed.clearance([(0.2, 0.0, -1.0)])[0], 0.2, places=9)      # the world x = 0 border
+        pts, _polys = no.sample_polygons(placed, 0.5, origin=(0.25, 0.25))
+        self.assertEqual(len(pts), 8)
+        self.assertTrue((pts[:, 0] > 0).all() and (pts[:, 0] < 1).all() and (pts[:, 2] < 0).all() and (pts[:, 2] > -2).all())
+        # the fan triangles cached while the areas were computed in the tile frame must not survive the move
+        tri_x = placed.fan_triangles()[0][:, :, 0]
+        self.assertTrue(tri_x.min() >= -1e-9 and tri_x.max() <= 1 + 1e-9)
+
+    def test_the_translation_moves_the_whole_mesh(self):
+        tiles = self.raw()
+        placed = no.build_navmesh(stamped(tiles, no.Placement(position=(100.0, 5.0, -7.0), rotation=YAW90)))
+        self.assertEqual(placed.locate([(100.5, 5.0, -7.5)])[0].tolist(), [0])
+        np.testing.assert_allclose(placed.verts.min(axis=0), [100.0, 5.0, -9.0], atol=1e-9)
+        np.testing.assert_allclose(placed.verts.max(axis=0), [101.0, 5.0, -7.0], atol=1e-9)
+
+    def test_tile_boxes_follow_the_rotation_and_the_parsed_tiles_are_not_mutated(self):
+        tiles = self.raw()
+        before = tiles[0].verts.copy()
+        placed = no.build_navmesh(stamped(tiles, no.Placement(rotation=YAW90)))
+        np.testing.assert_allclose(placed.tiles[0].bmin, (0.0, 0.0, -2.0), atol=1e-9)    # raw box (0,0,0)-(2,1,1)
+        np.testing.assert_allclose(placed.tiles[0].bmax, (1.0, 1.0, 0.0), atol=1e-9)
+        self.assertTrue(np.array_equal(tiles[0].verts, before))
+        # the world copies carry the identity, so building from them again cannot apply the rotation twice
+        self.assertTrue(placed.tiles[0].placement.is_identity)
+        again = no.build_navmesh(placed.tiles)
+        self.assertTrue(np.array_equal(again.verts, placed.verts))
+
+    def test_the_identity_placement_returns_the_input_tiles_and_vertices_untouched(self):
+        tiles = self.raw()
+        mesh = no.build_navmesh(stamped(tiles, no.Placement(rotation=AIRPIT_ROTATION)))
+        self.assertTrue(np.array_equal(mesh.verts, no.build_navmesh(tiles).verts))
+        self.assertTrue(mesh.placement.is_identity)
+        self.assertTrue(np.array_equal(mesh.tiles[0].verts, tiles[0].verts))
+        self.assertTrue(mesh.tiles[0].placement.is_identity)
+
+    def test_an_explicit_placement_overrides_the_stamp(self):
+        stamped_tiles = stamped(self.raw(), no.Placement(rotation=YAW90))
+        raw = no.build_navmesh(stamped_tiles, no.Placement())                 # the pre-placement oracle, on purpose
+        np.testing.assert_allclose(raw.verts, no.build_navmesh(self.raw()).verts, atol=0.0)
+        self.assertTrue(raw.placement.is_identity)
+        self.assertTrue(all(t.placement.is_identity for t in raw.tiles))      # no tile claims a rotation the mesh lacks
+
+    def test_portals_are_matched_in_the_tile_frame_so_any_yaw_keeps_the_tiles_joined(self):
+        tiles = PortalTests("test_overlapping_portal_edges_connect_the_tiles").tiles()
+        for rotation in (YAW90, yaw(37.0), yaw(180.0), yaw(-90.0)):
+            mesh = no.build_navmesh(stamped(tiles, no.Placement(position=(3.0, 0.0, 4.0), rotation=rotation)))
+            self.assertEqual((mesh.portal_pairs, int(mesh.labels.max()), mesh.unmatched_portal_edges), (1, 0, 0), rotation)
+
+    def test_a_tilted_frame_and_mixed_placements_are_refused(self):
+        tiles = self.raw()
+        with self.assertRaises(no.NavMeshFormatError):
+            no.build_navmesh(stamped(tiles, no.Placement(rotation=(S, 0.0, 0.0, S))))
+        two = stamped(PortalTests("test_overlapping_portal_edges_connect_the_tiles").tiles(), no.Placement(rotation=YAW90))
+        two[1] = dataclasses.replace(two[1], placement=no.Placement())
+        with self.assertRaises(no.NavMeshFormatError):
+            no.build_navmesh(two)
+
+
+class NavMeshDataTreeTests(unittest.TestCase):
+    """The m_Position / m_Rotation of a read_typetree() dict reach the mesh (no Arena install needed)."""
+
+    EMPTY = struct.pack("<5i", MAGIC, 16, 3, 4, 0) + struct.pack("<6i", 0, 0, 0, 0, 0, 0) + bytes(28)
+
+    def test_placement_is_read_from_the_tree(self):
+        placement = no.placement_from_navmesh_data(navmesh_tree([], (1.0, 2.0, 3.0), BOWL_ROTATION))
+        self.assertEqual((placement.position, placement.rotation), ((1.0, 2.0, 3.0), BOWL_ROTATION))
+
+    def test_a_tree_without_a_placement_is_refused_instead_of_assumed_identity(self):
+        tree = navmesh_tree([two_quads()])
+        del tree["m_Rotation"]
+        with self.assertRaises(no.NavMeshFormatError):
+            no.placement_from_navmesh_data(tree)
+        with self.assertRaises(no.NavMeshFormatError):
+            no.tiles_from_navmesh_data(tree)
+        with self.assertRaises(no.NavMeshFormatError):
+            no.placement_from_navmesh_data({**navmesh_tree([]), "m_Position": {"x": 0.0}})
+
+    def test_tiles_are_stamped_with_the_placement_and_empty_tiles_are_dropped(self):
+        tiles = no.tiles_from_navmesh_data(navmesh_tree([self.EMPTY, two_quads()], rotation=YAW90))
+        self.assertEqual(len(tiles), 1)
+        self.assertEqual(tiles[0].placement.rotation, YAW90)
+        np.testing.assert_allclose(tiles[0].verts[:, 0], [0, 1, 1, 0, 2, 2])      # the raw arrays stay in the tile frame
+
+    def test_a_rotated_tree_builds_a_world_mesh_and_an_identity_tree_the_raw_one(self):
+        raw = no.build_navmesh([no.parse_tile(two_quads())])
+        for rotation, same in ((AIRPIT_ROTATION, True), (BOWL_ROTATION, False)):
+            mesh = no.build_navmesh(no.tiles_from_navmesh_data(navmesh_tree([two_quads()], rotation=rotation)))
+            self.assertEqual(np.array_equal(mesh.verts, raw.verts), same, rotation)
+            self.assertEqual(mesh.placement.is_identity, same)
+        self.assertEqual(mesh.locate([(0.5, 0.0, -0.5)])[0].tolist(), [0])
 
 
 class ProbeDecoderTests(unittest.TestCase):
