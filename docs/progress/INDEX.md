@@ -8,6 +8,9 @@ dated state in one screen; read it before this index if you only have a minute.
 
 ## Current — read these for the area you touch
 
+- [bowl-release.md](bowl-release.md) — Bowl as the fourth released map (branch `feature/bowl`, started 2026-10-18): plan roles,
+  the native extraction from Arena 0.6.0 (reviewed Chainfence/MetalThin ballistics pair), then package, sidecars, bake,
+  host raids. Plan: [../PLAN-BOWL.md](../PLAN-BOWL.md).
 - [weather-provider-rebind.md](weather-provider-rebind.md) — restore the separate
   native sky-provider reference when a cached owned Full/Simple weather rig is
   reused after a vanilla raid (2026-10-17); production-method regression and
@@ -31,6 +34,9 @@ dated state in one screen; read it before this index if you only have a minute.
 - [selection-map.md](selection-map.md) — original Arena region-selection artwork, native SPT alignment,
   screenshot-derived current/future map positions and GPU-1 menu validation (2026-10-13);
   Arena-only menu scope and PMC/Scav restoration (2026-10-15).
+- [../PLAN-BOWL.md](../PLAN-BOWL.md) — the ordered plan for Bowl as the fourth released map (2026-10-18): decisions
+  (0.6.0 re-extract, TeamFight, server time, no grass, keep the border cubes, four parallax images, 0.3.0) and items with
+  their AirPit precedents.
 - [../PLAN-AIRPIT.md](../PLAN-AIRPIT.md) — the ordered plan for AirPit as the third released map (2026-10-11):
   generic plan-driven native-feature pipeline first, then a playable raid, then the native features in the
   Equator/Bay5 order, then release; open decisions in its section 4.

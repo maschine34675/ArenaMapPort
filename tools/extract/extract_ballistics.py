@@ -27,6 +27,14 @@ MATERIAL_NAMES = frozenset("None Asphalt Body Cardboard Chainfence Concrete Fabr
                           "BodyArmor Swamp Helmet GlassVisor HelmetRicochet MetalNoDecal Snow".split())
 
 
+# Arena components whose named preset and surface material disagree, reviewed one pair at a time: the component
+# is imported exactly as authored (EFT keeps TypeOfMaterial and Preset as two fields, so Arena itself ran it that
+# way, and the validator's independent decoding expects the same two values). Bowl, 2026-10-18: the two
+# 'Guardian_Tower_Fance_BALLISTIC_MetalThin' colliders of Arena_Bowl (level41) carry the preset Chainfence over the
+# material MetalThin. Any other pair still fails the extraction closed ("preset/material disagreement").
+REVIEWED_PRESET_MATERIAL_PAIRS = frozenset({("Chainfence", "MetalThin")})
+
+
 def _require(condition, message):
     if not condition:
         raise HardExtractError("Ballistics: " + message)
@@ -205,7 +213,8 @@ def _component(reader, source_file_name, contract, bindings):
     rows = contract["source_presets"]["presets"]
     _require(index == -900 or 0 <= index < len(rows), "unmapped source preset index")
     preset = rows[index] if index != -900 else None
-    _require(preset is None or preset["material_id"] == decoded["material"], "preset/material disagreement")
+    _require(preset is None or preset["material_id"] == decoded["material"] or
+             (preset["name"], material) in REVIEWED_PRESET_MATERIAL_PAIRS, "preset/material disagreement")
     _require((decoded["hit"] == 0 and decoded["net"] == 0) or
              (decoded["hit"] == 2 and material == "Glass" and decoded["net"] > 0),
              "unreviewed hit role/network identity")

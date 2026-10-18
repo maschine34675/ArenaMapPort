@@ -164,6 +164,24 @@ class BallisticsTests(unittest.TestCase):
                 B.augment_scene(scene, file, contract())
             self.assertEqual(len(scene["objects"][0]["components"]), 1)
 
+    def test_reviewed_preset_material_pair_imports_as_authored_and_others_still_fail(self):
+        # Bowl 2026-10-18: two Guardian_Tower fence colliders carry the preset Chainfence over the material MetalThin.
+        # Only the reviewed pair passes, imported exactly as authored (material from the payload, preset by name).
+        self.assertEqual(B.REVIEWED_PRESET_MATERIAL_PAIRS, frozenset({("Chainfence", "MetalThin")}))
+        file, scene, _, _, _ = fixture()
+        file.objects[20].get_raw_data = lambda: raw(preset=1)  # preset MetalThin (id 101) over material WoodThin (102)
+        with self.assertRaises(HardExtractError):
+            B.augment_scene(scene, file, contract())
+        original = B.REVIEWED_PRESET_MATERIAL_PAIRS
+        B.REVIEWED_PRESET_MATERIAL_PAIRS = frozenset({("MetalThin", "WoodThin")})
+        try:
+            self.assertEqual(B.augment_scene(scene, file, contract()), 1)
+        finally:
+            B.REVIEWED_PRESET_MATERIAL_PAIRS = original
+        component = scene["objects"][0]["components"][-1]
+        self.assertEqual((component["material"], component["preset_name"]), ("WoodThin", "MetalThin"))
+        self.assertEqual(component["target_preset_id"], 4)  # the target table lists MetalThin at index 4
+
     def test_changed_active_or_physics_state_fails_before_mutation(self):
         for change in ("active", "collider_enabled", "trigger", "missing_physics"):
             file, scene, _, _, _ = fixture()

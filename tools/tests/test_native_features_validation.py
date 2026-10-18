@@ -339,7 +339,7 @@ class NativeFeatureTests(unittest.TestCase):
         self.assertTrue(v.feature_enabled(bay5))
         equator=manifest_for('arena_equator');self.assertTrue(v.feature_enabled(equator))
         self.assertFalse(v.feature_enabled({'scenes':['AnyLegacyMap']}))
-        for change in (lambda m:m.pop('source'),lambda m:m['source'].update(map_key='arena_bowl'),
+        for change in (lambda m:m.pop('source'),lambda m:m['source'].update(map_key='arena_prison'),
                        lambda m:m['source'].update(map_key='arena_bay5'),
                        lambda m:m['native_features'].update(required=['ballistics','harbor_audio']),
                        lambda m:m['scenes'].pop(),lambda m:m['scenes'].append(m['scenes'][0])):

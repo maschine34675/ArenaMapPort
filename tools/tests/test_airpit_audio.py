@@ -197,7 +197,7 @@ class AirPitAudioContractTests(unittest.TestCase):
         data["clips"].pop()
         with self.assertRaisesRegex(ValueError, "source audio census"):
             audio.validate_graph(data)
-        for key, value in (("schemaVersion", 1), ("sourceScene", "level56"), ("mapKey", "arena_bowl")):
+        for key, value in (("schemaVersion", 1), ("sourceScene", "level56"), ("mapKey", "arena_prison")):
             data = graph()
             data[key] = value
             with self.subTest(key), self.assertRaisesRegex(ValueError, "audio package identity"):
@@ -237,7 +237,7 @@ class AirPitAudioContractTests(unittest.TestCase):
              mock.patch.object(sys, "argv", argv + ["--map-key", "arena_airpit"]), mock.patch("builtins.print"):
             audio.main()
         self.assertEqual(export.call_args.args[2], "arena_airpit")
-        with mock.patch.object(sys, "argv", argv + ["--map-key", "arena_bowl"]), \
+        with mock.patch.object(sys, "argv", argv + ["--map-key", "arena_prison"]), \
              mock.patch.object(sys, "stderr"), self.assertRaises(SystemExit) as stopped:
             audio.main()
         self.assertEqual(stopped.exception.code, 2)

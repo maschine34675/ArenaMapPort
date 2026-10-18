@@ -165,7 +165,7 @@ class EquatorAudioTests(unittest.TestCase):
                 audio.validate_graph(data)
 
     def test_unknown_map_schema_scene_and_source_census_fail(self):
-        for key,value in (('mapKey','arena_bowl'),('schemaVersion',1),('sourceScene','level188')):
+        for key,value in (('mapKey','arena_prison'),('schemaVersion',1),('sourceScene','level188')):
             data=graph(); data[key]=value
             with self.subTest(key=key), self.assertRaisesRegex(ValueError,'identity'): audio.validate_graph(data)
         for collection in ('players','support','clips','banks'):
@@ -192,7 +192,7 @@ class EquatorAudioTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory, mock.patch.object(audio.UnityPy,'load') as load:
             output=Path(directory)/'package'
             with self.assertRaisesRegex(ValueError,'unsupported native audio map'):
-                audio.export(Path(directory)/'source',output,'arena_bowl')
+                audio.export(Path(directory)/'source',output,'arena_prison')
             self.assertFalse(output.exists()); load.assert_not_called()
 
     def test_map_whose_contract_declares_no_audio_is_rejected_the_same_way(self):

@@ -147,18 +147,18 @@ def partial_block() -> dict:
 class ContractFilesTests(unittest.TestCase):
     def test_repository_contracts_load_and_validator_uses_them(self):
         contracts = L.load_contracts()
-        self.assertEqual(set(contracts), {'arena_equator', 'arena_bay5', 'arena_airpit'})
+        self.assertEqual(set(contracts), {'arena_equator', 'arena_bay5', 'arena_airpit', 'arena_bowl'})
         self.assertEqual(set(v.MAPS), set(contracts))
         for key, contract in contracts.items():
             self.assertEqual(contract['key'], key)
             self.assertEqual(v.MAPS[key], contract)
         files = sorted(p.stem for p in L.CONTRACT_DIR.glob('*.json'))
-        self.assertEqual(files, ['airpit', 'bay5', 'equator'])
+        self.assertEqual(files, ['airpit', 'bay5', 'bowl', 'equator'])
 
     def test_load_contract_by_key_fails_for_unknown_map(self):
         self.assertEqual(L.load_contract('arena_airpit')['key'], 'arena_airpit')
         with self.assertRaisesRegex(L.NativeContractError, 'no native contract for map'):
-            L.load_contract('arena_bowl')
+            L.load_contract('arena_prison')
 
     def test_error_class_is_both_a_hard_extract_error_and_a_value_error(self):
         self.assertTrue(issubclass(L.NativeContractError, HardExtractError))
@@ -833,7 +833,7 @@ class AirPitNativeContractTests(unittest.TestCase):
 
     def test_scene_set_and_slice_rules(self):
         for change in (lambda m: m['scenes'].pop(), lambda m: m['scenes'].append(m['scenes'][0]),
-                       lambda m: m['source'].update(map_key='arena_bowl'), lambda m: m.pop('source'),
+                       lambda m: m['source'].update(map_key='arena_prison'), lambda m: m.pop('source'),
                        lambda m: m.update(slice={'324': [1]})):
             manifest = airpit_manifest()
             change(manifest)
@@ -1076,7 +1076,7 @@ class BallisticsOnlyContractBranchTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'declares no native audio'):
             v.validate_audio_bundle([], 'unused', data)
         with self.assertRaisesRegex(ValueError, 'unsupported built audio map identity'):
-            v.validate_audio_bundle([], 'unused', dict(data, mapKey='arena_bowl'))
+            v.validate_audio_bundle([], 'unused', dict(data, mapKey='arena_prison'))
 
     def test_bundle_must_not_carry_native_audio_the_contract_does_not_declare(self):
         v.reject_undeclared_audio([mono('BallisticCollider'), SimpleNamespace(type=SimpleNamespace(name='AudioSource'))])

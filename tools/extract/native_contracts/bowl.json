@@ -1,0 +1,89 @@
+{
+  "schema_version": 1,
+  "map_key": "arena_bowl",
+  "notes": [
+    "Pins from the first native extraction of Bowl on Arena 0.6.0.47752 (2026-10-18, package bowl-native-v1, docs/progress/bowl-release.md): BallisticCollider per scene {'41': 5048, '46': 2375, '95': 0, '45': 269, '43': 29, '47': 1421, '48': 73}, StaticDeferredDecal 766, CullingLightObject 106, VolumetricLight 4, LightFlicker 8, NavMeshModifier 39 + NavMeshModifierVolume 76, SmallPhysicsObject 341, rain cover 10 IndoorTrigger / 0 DryPlane / weather obstacle False.",
+    "audio: pins from the census of level111 (Arena_Bowl_Sound) with the exporter's own parsers (2026-10-18, docs/progress/bowl-release.md): 33 AmbientSoundPlayer in 2 AmbientSoundPlayerGroup (CommonAmbientInGroup -> CommonAmbInEffects 15, CommonAmbientOutGroup -> CommonAmbOutEffects 18), 11 banks, 61 clips, all players grouped, none disabled, four inactive (cracles (2), water_drops, water_drops (1), water_drops (4)), no loop players. Package v2 = v1 + this feature.",
+    "implicit_scene_identity stays false: generic packages always record source.map_key.",
+    "Two BallisticColliders of Arena_Bowl ('Guardian_Tower_Fance_BALLISTIC_MetalThin') carry the preset Chainfence over the material MetalThin; extract_ballistics imports the reviewed pair as authored (REVIEWED_PRESET_MATERIAL_PAIRS)."
+  ],
+  "scenes": {
+    "41": "Arena_Bowl",
+    "46": "Arena_Bowl_Building",
+    "95": "Arena_Bowl_Grass",
+    "45": "Arena_Bowl_Light",
+    "43": "Arena_Bowl_DesignStuff",
+    "47": "Arena_Bowl_TeamFight",
+    "48": "Arena_Bowl_TeamFight_DesignStuff"
+  },
+  "ballistics": {
+    "41": 5048,
+    "46": 2375,
+    "95": 0,
+    "45": 269,
+    "43": 29,
+    "47": 1421,
+    "48": 73
+  },
+  "require_unsliced": true,
+  "implicit_scene_identity": false,
+  "features": {
+    "static_decals": 766,
+    "light_culling": {
+      "culling_light_object_count": 106,
+      "volumetric_light_count": 4,
+      "light_flicker_count": 8
+    },
+    "raincover": {
+      "indoor_trigger_count": 10,
+      "dry_plane_count": 0,
+      "weather_obstacle": false
+    },
+    "navmesh_modifiers": {
+      "modifiers": 39,
+      "volumes": 76
+    },
+    "small_physics_objects": 341
+  },
+  "audio": {
+    "feature": "ambient_audio",
+    "schema": 2,
+    "scene": "level111",
+    "root": "ArenaMapPort_BowlNativeAudio",
+    "players": {
+      "AmbientSoundPlayer": 33
+    },
+    "support": {
+      "AmbientSoundPlayerGroup": 2
+    },
+    "banks": 11,
+    "clips": 61,
+    "group_coverage": "all_players",
+    "states": {
+      "grouped_players": 33,
+      "disabled_players": [],
+      "inactive_players": {
+        "level111:543": "cracles (2)",
+        "level111:580": "water_drops (4)",
+        "level111:582": "water_drops (1)",
+        "level111:673": "water_drops"
+      },
+      "groups": {
+        "CommonAmbientInGroup": {
+          "mixer": "CommonAmbInEffects",
+          "players": 15
+        },
+        "CommonAmbientOutGroup": {
+          "mixer": "CommonAmbOutEffects",
+          "players": 18
+        }
+      },
+      "group_mixers": [
+        "CommonAmbInEffects",
+        "CommonAmbOutEffects"
+      ],
+      "loops": {},
+      "loop_players": []
+    }
+  }
+}

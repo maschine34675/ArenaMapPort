@@ -82,6 +82,7 @@ AudioExporter = Callable[[str, str, str], dict]
 # extraction). Equator/Bay5 are not listed: extract_equator.py / extract_bay5.py call the exporter inline.
 AUDIO_EXPORTERS: dict[str, tuple[str, AudioExporter]] = {
     "arena_airpit": ("ambient_audio", extract_bay5_audio.export),
+    "arena_bowl": ("ambient_audio", extract_bay5_audio.export),
 }
 
 _LIGHT_CULLING_KEYS = ("culling_light_object_count", "volumetric_light_count", "light_flicker_count")
