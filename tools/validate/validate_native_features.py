@@ -685,12 +685,22 @@ def validate_audio_source(package,manifest,data):
     items=data['players']+data['support']
     require(set(components)=={r['id'] for r in items},'source audio component set differs')
     reached_banks=set();reached_clips=set()
+    # Same-named siblings get unique paths in the package (extract_bay5_audio.disambiguate_sibling_paths; Bowl's two
+    # indoor_wind players); the source recheck applies the same rule before comparing names.
+    from extract_bay5_audio import disambiguate_sibling_paths
+    source_gos={item['id']:unity_go(components[item['id']]) for item in items}
+    source_paths=disambiguate_sibling_paths({k:'/'.join(t[0] for t in reversed(g['chain'])) for k,g in source_gos.items()})
     for item in items:
         obj=components[item['id']]
         require(obj.get_raw_data()==audio_wire(item,item['kind']),'source audio payload '+item['id'])
         require(len(obj.get_raw_data())==item['byteSize'],'source audio byte size')
-        go=unity_go(obj);chain=list(reversed(go['chain']))
-        compare('/'.join(t[0] for t in chain),item['path'],'source audio hierarchy names')
+        go=source_gos[item['id']];chain=list(reversed(go['chain']))
+        compare(source_paths[item['id']],item['path'],'source audio hierarchy names')
+        authored_leaf=chain[-1][0]
+        if source_paths[item['id']]!='/'.join(t[0] for t in chain):
+            compare(item.get('sourceLeafName'),authored_leaf,'renamed sibling keeps its authored leaf name')
+        else:
+            require('sourceLeafName' not in item,'sourceLeafName on a player whose path was not renamed')
         expected_chain=[{'position':dict(zip('xyz',t[1])),'rotation':dict(zip('xyzw',t[2])),'scale':dict(zip('xyz',t[3]))} for t in chain]
         if audio['schema']==2:
             for node,(active,layer) in zip(expected_chain,reversed(go['states'])):

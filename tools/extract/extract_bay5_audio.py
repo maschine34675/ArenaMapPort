@@ -13,6 +13,12 @@ native_contract_loader (PLAN-AIRPIT items 3 and 13), the same pins validate_nati
 checks on the finished package. The scene must be the one the map's source plan marks with
 role ``sound`` (native_features.for_plan cross-checks that before the extraction starts).
 A map whose contract has ``audio: null`` is rejected here before anything is read or written.
+Same-named siblings (Bowl level111: two AmbientSoundPlayer leaves 'indoor_wind' under
+CommonAmbientInGroup) would share one hierarchy path, the key the Unity importer and the client
+use for the object; disambiguate_sibling_paths gives the second and later duplicates, in source
+id order, the leaf suffix '~2', '~3' ... and the record keeps the authored leaf as 'sourceLeafName'
+(validate_native_features applies the same rule to the source recheck). Maps without duplicates
+(Equator, Bay5, AirPit) are byte-identical to before.
 """
 from __future__ import annotations
 import argparse, collections, hashlib, io, json, math, os, struct, sys, wave
@@ -167,6 +173,30 @@ def audio_contract(map_key):
     if audio is None: raise ValueError(f'unsupported native audio map: {map_key!r} declares no ambient audio contract')
     return audio
 
+def disambiguate_sibling_paths(paths_by_id):
+    """{id: hierarchy path} -> {id: unique path}. Duplicated paths are renamed in ascending numeric source id
+    order: the first keeps its name, the others get the leaf suffix '~2', '~3' ...; an ordinal whose result
+    already exists as a path is skipped. Ids with a unique path come back unchanged."""
+    groups=collections.defaultdict(list)
+    for key,path in paths_by_id.items(): groups[path].append(key)
+    taken=set(paths_by_id.values()); result=dict(paths_by_id)
+    for path in sorted(groups):
+        ids=sorted(groups[path],key=lambda k:int(k.rsplit(':',1)[1]))
+        if len(ids)<2: continue
+        ordinal=2
+        for key in ids[1:]:
+            while f'{path}~{ordinal}' in taken: ordinal+=1
+            result[key]=f'{path}~{ordinal}'; taken.add(result[key]); ordinal+=1
+    return result
+
+def apply_sibling_paths(items):
+    """Rename same-named sibling records in place (see disambiguate_sibling_paths); returns the renamed ids."""
+    renamed=disambiguate_sibling_paths({d['id']:d['path'] for d in items}); changed=[]
+    for d in items:
+        if renamed[d['id']]!=d['path']:
+            d['sourceLeafName']=d['path'].rsplit('/',1)[-1]; d['path']=renamed[d['id']]; changed.append(d['id'])
+    return changed
+
 def expected_group_members(players, audio):
     """Player ids the AmbientSoundPlayerGroup records must cover exactly once, per the contract rule."""
     if audio['group_coverage']=='all_players': return [d['id'] for d in players]
@@ -215,6 +245,7 @@ def export(source, package, map_key='arena_bay5'):
             co=deref(obj,d['loopClip'],'AudioClip')
             if co: clips[identity(co)]=co; d['loopClip']['resolved']=identity(co)
         players.append(d)
+    apply_sibling_paths(players+support)  # same-named siblings get unique hierarchy paths (Bowl: indoor_wind~2)
     # Validate all support edges against class identity; importing half a water graph is invalid.
     grouped=[]
     expected_refs={'splineEmitter':'AmbientPlayerSplineMappedEmitter','spline':'BezierSpline','soundPlayer':'LoopAmbientSoundPlayer'}
