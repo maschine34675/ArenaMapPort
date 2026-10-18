@@ -3,27 +3,29 @@
 Snapshot for whoever continues (human or agent). Verify the commits named here against `git log`; this file
 is updated by hand at each handover, it is not an automatic record. Read [AGENTS.md](AGENTS.md) first.
 
-## Update 2026-10-18 - Bowl playable on `feature/bowl` (fourth map, U1 host-verified); passport-lamp green arrow recorded for later
+## Update 2026-10-18 (evening) - Bowl polish integrated and host-verified as 0.3.0 candidate on `feature/bowl`; passport-lamp green arrow recorded for later
 
 User decision: "mit der Bowl-Umsetzung starten, so wie du es am sinnvollsten erachtest; den gruenen Pfeil fuer spaeter
-festhalten". Plan and decisions in [docs/PLAN-BOWL.md](docs/PLAN-BOWL.md) (0.6.0 re-extract with native features,
-TeamFight, UsesServerTime, no grass, keep the layer-29 border cubes, four parallax images as loading art, release
-0.3.0); progress log [docs/progress/bowl-release.md](docs/progress/bowl-release.md). State at the end of the day
-(commits 4b5adc2..03714c1 plus the raid log): package `work/extract/bowl-native-v2` (v1 = native features, v2 = + ambient
-audio; new exporter rules: reviewed ballistic preset/material pair Chainfence/MetalThin, same-named audio siblings
-`indoor_wind~2`, forced-mixer pin `states.forced_mixer_players` with the importer marker `mixerPolicy: group`), contract
-`native_contracts/bowl.json`, sidecars `bowl.{json,bots,exits,modes,ai}.json` (two gates `DOORS_SPAWN_A/B` =
-`opened_barriers` = `start_gates`, bake bounds x -66..62 / y -2..10 / z -82..11, bake layers 9/11/18/29/30, the new
-`keep_level_borders` flag that keeps the 354 border cubes as walls, the TwoSided reflective stand-in, east/west pocket
-side rule), descriptor + `ArenaMapRegistry.All` promotion in lock step (3ef5132), Unity U1 (scenes 1,006,073,696 B,
-NavMesh 12704 vertices / 5890 triangles, four import-policy fixes on the way), `DISTRIBUTION_OK 4 maps 12 bundles 4
-sidecars`, deployed to `D:\SPT41` only. GPU-2 raids 1 (05:42, no bots) and 2 (12:00, medium bots) in one process: zero
-ArenaMapPort warnings, gates open, both exit boxes work (extraction after 8 s), west-to-east crossing 151 m along the
-NavMesh, 3 assault bots on PatrolAssault from the authored patrol way, ambient graph re-armed between raids, tarp
-stand-in renders, 120 fps / max 8.5 ms. The hideout opened once after the raids (gpu-run scenario, no ArenaMapPort error). Not yet done: F8
-rain readback on the Bowl build, release texts for 0.3.0 (csproj descriptions, README, FORGE, dist manifest), DynamicMaps
-Bowl pack, MultiFlare, shot-acoustics room classes, bloom/HDR rows, the `Invalid windSettings` comparison with AirPit,
-the vanilla install (deploy only on the user's decision), ArenaMode catalog/formation (user). `feature/bowl` is not pushed.
+festhalten", then "mit den offenen Punkten weitermachen". Plan and decisions in [docs/PLAN-BOWL.md](docs/PLAN-BOWL.md); the
+day's log is [docs/progress/bowl-release.md](docs/progress/bowl-release.md). State: Bowl (package `work/extract/bowl-native-v2`,
+Unity U1, NavMesh 12704/5890) is in `ArenaMapRegistry.All`, playable and host-verified; the afternoon added the polish items
+(commits e9fe9b8, 9540cbd, f408db2, 185f8f8 and the evidence commit after them): the shot-acoustics rule "IndoorMetalThick
+bodies of 15 m and more are Metal" (Bowl's Mi-26; Equator/Bay5/AirPit classes unchanged), the Bowl DynamicMaps ground overview
+(`work/dynamicmaps/release/ArenaMapPort_Bowl`, profile with the hidden stadium shell, `-DynamicMapsMap Bowl`), the Bowl
+MultiFlare package (4 of 28 lights active, all four city-backdrop glows 789-888 m from the field and beyond the 500 m cull, so
+it binds and draws nothing; staged so the raid logs no error), the flare/overview staging rows, `FLARE_MAP_KEYS` /
+`OVERVIEW_MAP_NAMES` with Bowl, version 0.3.0 in both csproj, `Plugin.cs` and `ModMetadata.cs`, both csproj descriptions, and the
+release texts (README, FORGE, `docs/releases/v0.3.0.md` with placeholders for size, SHA, links, commit and VirusTotal).
+Evidence: 903 .NET tests, 1818 Python tests (55 environment skips), `DISTRIBUTION_OK 4 maps 12 bundles 4 sidecars`, dist 86 files
+(Bowl additions 1,676,831 B), single-ZIP estimate 2.93 GiB (Pixeldrain takes it; a 2 GiB channel needs the 5-part layout).
+Deployed to `D:\SPT41` only (not `D:\SPT41vanilla`); GPU-2 process 4eeae3d5 with the 0.3.0 DLLs: Bowl raids at 00:30 (F7 flare
+and light probes, the four shot-acoustics rooms, F8 in a container, DynamicMaps MAP tab with 35,530 sprite vertices) and at
+12:00 in rain (F8 open sky, F10 border cube), Air Pit after them (NavMesh, acoustics, 16 sealed gate carvers), hideout open:
+0 ArenaMapPort warnings, 120 fps, max 11.2 ms. The user played Bowl in ArenaMode teamdeathmatch on their own machine at 13:25
+(0 warnings). Not done: the spawn-gate hold on Bowl (no hold has run), east guard-tower stairs / vault limits, the Mi-26
+capture point (ArenaMode), the release cut itself (merge `feature/bowl` into `main`, rebuild, `make_release_zips.py --single
+--extract-check`, Pixeldrain, VirusTotal, tag, GitHub release; `D:\SPT41vanilla` only after the user's decision), ArenaMode
+catalog/formation for Bowl (user), the green arrow below. `feature/bowl` is not pushed.
 
 Open follow-up (AirPit, not started): the passport lamps' green arrow. Arena switches the booth lamps by dark cover
 quads, not by material: the hall lamps `..._RED_close_LOD0` (the X) and `..._GREEN_open_LOD0` (the arrow) are always lit;

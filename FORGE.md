@@ -30,9 +30,9 @@ Designed for **ArenaMode**, installed separately. ArenaMapPort provides the
 maps; ArenaMode provides its match rules and respawns. No loot or scav raids
 are included. Fika compatibility has not been verified.
 
-**DynamicMaps is optional:** overview maps for Equator, Bay5 and Air Pit are included
-and load automatically when it is installed. Air Pit shows its ground floor. Bowl does
-not have an overview map yet.
+**DynamicMaps is optional:** overview maps for all four maps are included
+and load automatically when it is installed. Air Pit and Bowl show their ground floors;
+their upper spectator areas are omitted.
 
 ## Installation
 

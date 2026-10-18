@@ -614,3 +614,61 @@ There is no `flares/arena_airpit` and no `water/arena_bowl`, as intended.
 5. F7/F8/F10 diagnostics as in the earlier Bowl raids; `uibridge_status` `max` frame time; the hideout opened once.
 6. Cross-map raids on Equator, Bay5 and AirPit with the same DLL (flares on Equator and Bay5 unchanged, AirPit and Bowl overview
    present), then the 0.3.0 package cut from a committed tree.
+
+## 2026-10-18 - host verification of the 0.3.0 build on GPU-2 (raids 3-5, hideout) and the user's own Bowl raid
+
+Deploy: the clean-HEAD rebuild (`185f8f8`, both DLLs `FileVersion 0.3.0.0`, `ProductVersion 0.3.0+185f8f8...`) went into
+`D:\SPT41` with `deploy-to-spt.ps1 -Confirm` (86 files: 5 new = Bowl flares and overview, 2 overwritten = the DLLs, 79
+identical). `gpu-run deploy-wait --server --force --game` stopped the SPT server, saw the 7 files identical on the host after
+28 s and then failed on a busy EFT main thread (the old process froze 8 s when its server vanished); `gpu-run restart --force`
+(78 s) started the server and a fresh EFT: `17/17 identical`, server log `Mod: ArenaMapPort Version: 0.3.0 ... geladen`
+and `Arena: Bowl is available in location selection` (17:41). All three raids and the hideout ran in that one process
+(instance 4eeae3d5), with `General/DeveloperMode = true` on the host for the F7/F8/F10 probes. The `[ArenaMapPort]`
+Warning/Error query over the whole process stayed at 0 lines; no `disabled after error` line (the Bowl flare package loads).
+
+- **Raid 3 (17:42-17:46, Bowl, no bots, `--clock 00:30`, the raid's own weather: rain 0.25).** `[MultiFlare] arena_bowl
+  enabled: sourceLights=28 activeLights=4 flares=20 boundOriginals=4 nativeBatches=3 originalTextures=2`. F7 (`press-key`
+  scenario through the host's Windows MCP): `[MultiFlare] arena_bowl lights=4 cameras=1 ... intensity=0.500` and the four
+  `lamp=SBG_Bowl_Light/OO/BACK_FLARES/Flare_City_background ... distance=788.91 / 790.53 / 880.99 / 887.65`, all beyond the
+  500 m cull, as predicted: the package binds and draws nothing. `[LightProbe] arena_bowl camera=(55.82, 1.53, -5.85)
+  CullingManager=True cullingLights=96 visible=24 | inside fade start: full=12 ... beyond fade end: zero=68`, `volumetric:
+  setting=True components=4 activeAndEnabled=4`, flicker 4 enabled, HDR/Prism/UltimateBloom lines as on AirPit.
+  `[Acoustics] arena_bowl: prepared rooms=11, portals=19, bake pairs=55, routes=196` and `native initialized`; room tones
+  started after the audio reset. **Shot-acoustics room classes** (teleports, each followed by the `[ShotAcoustics]` line):
+  spawn `room=8/OutdoorCommon class=Outdoor ... model=AcousticRayTracing`; Mi-26 (1.1, 1.6, -33.5) `room=4/IndoorMetalThick
+  class=Metal dims=20.8x4.5x13.8 materials=Steel,Steel,Steel,Carpet,Steel,Steel clutter=0.70 model=ShoeboxRoom` (the new
+  rule; the user's own raid at 13:27 still showed `class=Shop` with GypsumBoard); container (34.1, 0.2, -55.1)
+  `room=1/IndoorMetalThin class=Metal dims=8.2x2.7x7.0`; office (0.9, 2.8, -13.4) `room=3/IndoorWoodThick class=Shop
+  dims=14.4x2.5x2.3 materials=GypsumBoard,...`; back on the field `room=8/OutdoorCommon class=Outdoor`. `[RoomReverb]`
+  followed each change (`IndoorMetalThick, source category=IndoorGeneric`). F8 inside the container:
+  `[RainCoverLab] RainCover depth readback @ (33.95, 1.72, -55.10): ... height(reversedZ)=2.78` (the container roof covers).
+  **DynamicMaps** (`map-check` scenario: Tab, MAP tab): DynamicMaps loaded `ArenaMapPort_Bowl\ArenaMapPort_Bowl.jsonc` and
+  precached `Layers\Ground.svg` at startup, 0 DynamicMaps warnings; the MAP tab showed `BOWL / GROUND` with the player arrow
+  at (50.20, -3.30), the `Bowl BTR Gate` exit marker, the containers, the pockets and the Mi-26 outline (still
+  `bowl-u3-map`, desktop screenshot `bowl-map-screen.png` in the scenario report); `uibridge_inspect` on
+  `DynamicMaps.UI.Components.MapLayer` `Ground Floor`: `Image.sprite.vertices.Length = 35530` (limit 65,500; the estimate was
+  ~35,000). Still `bowl-u3-night-spawn`: the stadium at 00:30 is very dark (a few small lamps, the exit sign; Arena's Bowl is
+  a daytime map, the night comes from the server-time choice as on Bay5/AirPit). 120 fps, max 8.9 ms.
+- **Raid 4 (17:46-17:48, Bowl, no bots, `--clock 12:00 --weather rain`, rain 0.7 override).** F8 at the spawn (50.00, 1.53,
+  -3.29): `height(reversedZ)=0.01` = open sky, rain falls (still `bowl-u3-rain-spawn`: wet grey field, fine streaks in the
+  crop, exit list EXFIL01 Bowl BTR Gate / EXFIL02 Bowl Army Gate). `[RainCover] ... RoofDepthBlack scan: keptForBounds=19815
+  consideredForCover=17946 elevated=17921 excluded(outsidePlaySpace)=3096 excluded(material)=1869 ... drew 17921 elevated
+  mesh(es) (28580 submesh draw call(s))`. F10 from the spawn: `Physics.Raycast: hit 'Arena_Bowl_LevelBorders/Cube (129)'
+  dist=12.13 layer=LevelBorder ... ballistic=<none>` (the kept border cubes carry no ballistic material, as in Arena) and
+  the renderer dump behind it (`p0/Reflective/Bumped Specular SMap ...`). Max frame 11.2 ms.
+- **Raid 5 (17:49-17:51, Air Pit after two Bowl raids, no bots, 12:00 clear).** 0 warnings; `[NavMesh] added navmesh for
+  'arena_airpit': 11787 vertices, 5423 triangles`; `[Acoustics] arena_airpit: prepared rooms=24, portals=94 ... routes=16304`;
+  `[SpawnGates] navmesh installed: 16 carver(s) ... 36 held-gate part(s)` and `navmesh probe: every probed gate sealed (16
+  probed)`; TeamFight borders 67 removed (RemoveTeamFightBorders=True, AirPit's own default); still `airpit-after-bowl-030`
+  (passport hall, correct). 120 fps, max 8.4 ms. (The first `gpu-run raid --map airpit` call stopped on SelectLocation: the
+  tile is `ARENA: AIR PIT`, so the map argument must be `'air pit'`; `back-to-menu` scenario, then the retry.)
+- **Hideout** opened once after the three raids (`hideout-open` scenario, screen `Hideout`, 31 labels, `logAbsent` error
+  passed) and closed with BACK (`allowDangerous: true`, the runner's own list).
+- **The user's own raid (MASCHINE11, 13:24-13:30, ArenaMode teamdeathmatch on Bowl, 0.2.2-era client of the U1 deploy):**
+  `LogOutput-MASCHINE11-2026-10-18_13-24-10.log` on the shared install: 0 ArenaMapPort warnings; `[Acoustics] arena_bowl:
+  prepared rooms=11, portals=19`; NavMesh 12704/5890; `BotZone.Init ... markers=17 onNavMesh=17`; `[NativeAudio] ready
+  players=33 started=29`; `[RoomReverb]` Outdoor -> `IndoorMetalThick` at 13:27:03 (the Mi-26) with the old `[ShotAcoustics]
+  ... class=Shop ... GypsumBoard` line, which raid 3 above now shows as `class=Metal`.
+- Release texts: the overview wording is reinstated in README, FORGE and `v0.3.0.md` (recipe above), the Mi-26 class
+  change has its own Changes bullet. Still open on the host: the spawn-gate hold on Bowl (no hold has run yet), the east
+  guard-tower stairs and vault limits, the capture point under the Mi-26 (ArenaMode's concern).

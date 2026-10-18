@@ -177,3 +177,11 @@ The integration rows above were applied the same evening: the two `ArenaMapPortO
 byte-identical to `work/dynamicmaps/release/ArenaMapPort_Bowl`; `validate_distribution.py` prints
 `DISTRIBUTION_OK 4 maps 12 bundles 4 sidecars`, and the deploy dry run lists both files as new. Still open: the
 in-game MAP check on GPU-2 and the measured sprite vertex count (recorded in bowl-release.md when done).
+
+## 2026-10-18 (evening) - opened in game on GPU-2
+
+Raid 3 of the 0.3.0 verification (Bowl, 00:30, no bots): DynamicMaps 1.2.1 loaded `ArenaMapPort_Bowl.jsonc` and precached
+`Layers/Ground.svg` at startup with 0 warnings; the inventory MAP tab showed `BOWL / GROUND` with the player arrow at
+(50.20, -3.30) in the east pocket, the `Bowl BTR Gate` exit marker, both pockets, the containers and the Mi-26 outline
+(still `bowl-u3-map`). `uibridge_inspect` on the `Ground Floor` `MapLayer`: `Image.sprite.vertices.Length = 35530`
+(limit 65,500). Player-arrow alignment at the spawn matched the drawn pocket; other positions were not checked.

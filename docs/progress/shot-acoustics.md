@@ -608,3 +608,13 @@ Gunshots buses is the optional second step (`ReverbPulse`, see "Probe procedure"
 - Bowl's stadium is Outdoor, so the shipped model stays across the whole field; a stadium-sized tail would need an Outdoor
   preset, which no class has. Not requested.
 - The Mi-26 box is axis aligned and 20.8 x 13.8 m wide although the hull is about 15 x 4 x 4 m.
+
+## 2026-10-18 (evening) - host verification of the Mi-26 rule on GPU-2
+
+Raid 3 of the 0.3.0 verification (Bowl, no bots), teleports followed by the `[ShotAcoustics]` line: spawn
+`room=8/OutdoorCommon class=Outdoor model=AcousticRayTracing`; Mi-26 at (1.1, 1.6, -33.5) `room=4/IndoorMetalThick
+class=Metal dims=20.8x4.5x13.8 materials=Steel,Steel,Steel,Carpet,Steel,Steel clutter=0.70 model=ShoeboxRoom`; container
+at (34.1, 0.2, -55.1) `room=1/IndoorMetalThin class=Metal dims=8.2x2.7x7.0`; office at (0.9, 2.8, -13.4)
+`room=3/IndoorWoodThick class=Shop dims=14.4x2.5x2.3 materials=GypsumBoard,GypsumBoard,AcousticTile,CeramicTile,...`;
+field again `class=Outdoor`. The user's own raid earlier that day (MASCHINE11, 13:27:03, pre-rule client) logged the Mi-26
+as `class=Shop` with the GypsumBoard set, so the rule's effect is the only difference. No reverb measurement was taken.

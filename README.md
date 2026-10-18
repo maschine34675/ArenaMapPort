@@ -81,13 +81,12 @@ restores the shipped gunshot acoustics.
 
 ## DynamicMaps
 
-Overview maps for Equator, Bay5 and Air Pit are included. If DynamicMaps is
+Overview maps for Equator, Bay5, Air Pit and Bowl are included. If DynamicMaps is
 installed, open inventory → **MAP** during a raid.
 
 ArenaMapPort loads these maps from its own directory; you do not need to copy
-anything into DynamicMaps. The overviews are simplified ground-floor plans; Air
-Pit's upper spectator area is deliberately omitted. Bowl does not have an overview
-map yet.
+anything into DynamicMaps. The overviews are simplified ground-floor plans; the upper
+spectator areas of Air Pit and Bowl are deliberately omitted.
 
 ## Scope
 

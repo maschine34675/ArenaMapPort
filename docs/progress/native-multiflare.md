@@ -270,3 +270,12 @@ distance=` lines. Making the glows visible would need a changed cull rule for th
 3. `tools/tests/test_validate_distribution.py`: add `("arena_bowl", "Arena_Bowl_Light")` to the fixture's key/scene
    tuple and replace the Bowl assertions that no `flares/arena_bowl` may exist (`assertFalse(... "flares/arena_bowl"
    ...exists())` and the stray-package block) by "present and valid, plus a stray file is refused".
+
+## 2026-10-18 (evening) - Bowl package on GPU-2
+
+Raid 3 of the 0.3.0 verification (Bowl, 00:30): `[MultiFlare] arena_bowl enabled: sourceLights=28 activeLights=4 flares=20
+boundOriginals=4 nativeBatches=3 originalTextures=2 isolated=true`; F7: `[MultiFlare] arena_bowl lights=4 cameras=1 ...
+intensity=0.500` and the four `lamp=SBG_Bowl_Light/OO/BACK_FLARES/Flare_City_background ... distance=788.91 / 790.53 /
+880.99 / 887.65`, every one beyond the 500 m cull from the east pocket, so nothing is drawn; no `disabled after error`
+line in the process (three raids, hideout). The package stays staged for that reason only; a visible city glow would need
+a map-specific cull rule, which remains undecided.
