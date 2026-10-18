@@ -1,8 +1,8 @@
 # ArenaMapPort
 
-Bring **Equator, Bay5 and Air Pit from Escape from Tarkov: Arena** into SPT.
+Bring **Equator, Bay5, Air Pit and Bowl from Escape from Tarkov: Arena** into SPT.
 
-## Three maps, four atmospheres
+## Four maps, five atmospheres
 
 - **Equator Day:** clear weather, a fixed noon start and natural lighting.
 - **Equator Night:** a rainy midnight variant with neon lights, colored
@@ -12,11 +12,14 @@ Bring **Equator, Bay5 and Air Pit from Escape from Tarkov: Arena** into SPT.
 - **Air Pit:** an abandoned terminal hangar with the furnished main hall and its
   four shops, the passport hall and the apron. Normal time progression with both
   time phases, dynamic weather, and two gates as extractions.
+- **Bowl:** the stadium arena with its sunken field, a crashed Mi-26 in the middle, containers, guard
+  towers and a gated team pocket at each end. Normal time progression with both time phases, dynamic
+  weather, and two gates as extractions. The spectator stands are scenery and no grass is ported.
 
-All three maps include bot navigation, original environmental audio, material
+All four maps include bot navigation, original environmental audio, material
 sounds, room acoustics and decals; Equator and Bay5 also have restored dust and
 lamp flares. Gunshots ring differently in a big hall than in a small shop: the
-per-room gunshot reverb is on by default on all three maps (its room data is
+per-room gunshot reverb is on by default on all four maps (its room data is
 invented) and can be switched off per map with DeveloperMode enabled (enable it and restart EFT).
 
 ## Compatibility
@@ -27,8 +30,9 @@ Designed for **ArenaMode**, installed separately. ArenaMapPort provides the
 maps; ArenaMode provides its match rules and respawns. No loot or scav raids
 are included. Fika compatibility has not been verified.
 
-**DynamicMaps is optional:** overview maps for all three locations are included
-and load automatically when it is installed. Air Pit shows its ground floor.
+**DynamicMaps is optional:** overview maps for Equator, Bay5 and Air Pit are included
+and load automatically when it is installed. Air Pit shows its ground floor. Bowl does
+not have an overview map yet.
 
 ## Installation
 
@@ -42,4 +46,4 @@ directory outside `BepInEx/plugins` before extracting to avoid duplicate plugins
 
 In F12, enable **Appearance / NaturalEquatorNight** before your next raid to
 remove the added neon treatment. The time remains midnight and the weather
-stays unchanged. Equator Day, Bay5 and Air Pit are unaffected.
+stays unchanged. Equator Day, Bay5, Air Pit and Bowl are unaffected.

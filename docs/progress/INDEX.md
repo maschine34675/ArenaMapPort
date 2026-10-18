@@ -11,6 +11,11 @@ dated state in one screen; read it before this index if you only have a minute.
 - [bowl-release.md](bowl-release.md) — Bowl as the fourth released map (branch `feature/bowl`, started 2026-10-18): plan roles,
   the native extraction from Arena 0.6.0 (reviewed Chainfence/MetalThin ballistics pair), then package, sidecars, bake,
   host raids. Plan: [../PLAN-BOWL.md](../PLAN-BOWL.md).
+- [bowl-dynamicmaps.md](bowl-dynamicmaps.md) — Bowl's ground-floor DynamicMaps overview pack (2026-10-18, PLAN-BOWL
+  item 17): isolated Unity triangulation of the U1 NavMesh, the exporter profile (seam snapping, hidden stadium shell),
+  receipt, deploy mode and the integration rows; the log states what is staged and what is host-tested.
+- [bowl-source-060.md](bowl-source-060.md) — Bowl's Arena 0.5.4 spike package against the 0.6.0 native package that
+  fed package v1 (2026-10-18).
 - [weather-provider-rebind.md](weather-provider-rebind.md) — restore the separate
   native sky-provider reference when a cached owned Full/Simple weather rig is
   reused after a vanilla raid (2026-10-17); production-method regression and
@@ -30,7 +35,7 @@ dated state in one screen; read it before this index if you only have a minute.
 - [shot-acoustics.md](shot-acoustics.md) — per-room gunshot reverb from INVENTED room data through the Meta XR
   Audio shoebox room (class Hall/Shop/Metal/Outdoor), live `ShotAcousticsLab` tuning keys, the Gunshots probe buses
   and three GPU-2 measurement rounds (2026-10-15/16); on by default since 2026-10-16 (user decision after
-  listening on all three maps).
+  listening on all three maps). Bowl room classes (2026-10-18, offline; the log says what a host raid still has to show).
 - [selection-map.md](selection-map.md) — original Arena region-selection artwork, native SPT alignment,
   screenshot-derived current/future map positions and GPU-1 menu validation (2026-10-13);
   Arena-only menu scope and PMC/Scav restoration (2026-10-15).
@@ -165,7 +170,8 @@ dated state in one screen; read it before this index if you only have a minute.
   optional SmajlecLights exclusion and BrighterInteriors assessment (2026-09-28).
 
 - [native-multiflare.md](native-multiflare.md) — original Equator/Bay5 lamp sprites,
-  source atlas, isolated native rendering and visible/occluded off/on comparisons (2026-09-28).
+  source atlas, isolated native rendering and visible/occluded off/on comparisons (2026-09-28). Bowl section
+  (2026-10-18): census, the inactive-light rule, and why Bowl draws no flares.
 
 - [room-reverb.md](room-reverb.md) — original room-dependent ambient mixer tables,
   detailed room-type compatibility, separate gameplay hall path and listener-output tests (2026-09-28).
