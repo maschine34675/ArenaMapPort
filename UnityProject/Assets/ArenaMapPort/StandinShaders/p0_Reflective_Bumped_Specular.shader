@@ -19,12 +19,17 @@ Shader "Hidden/ArenaMapPort/p0/Reflective/Bumped Specular"
         _DropsSpec ("_DropsSpec", Float) = 0
         _DstBlend ("_DstBlend", Float) = 0
         _EmissionColor ("_EmissionColor", Color) = (1,1,1,1)
+        _EmissionColorUI ("_EmissionColorUI", Color) = (1,1,1,1)
+        _EmissionPower ("_EmissionPower", Float) = 0
+        _EmissionScaleUI ("_EmissionScaleUI", Float) = 0
+        _EmissionVisibility ("_EmissionVisibility", Float) = 0
         _Factor ("_Factor", Float) = 0
         _GlossMapScale ("_GlossMapScale", Float) = 0
         _Glossiness ("_Glossiness", Float) = 0
         _Glossness ("_Glossness", Float) = 0
         _GlossyReflections ("_GlossyReflections", Float) = 0
         _MainTex ("_MainTex", 2D) = "white" {}
+        _MatIndex ("_MatIndex", Float) = 0
         _Metallic ("_Metallic", Float) = 0
         _Mode ("_Mode", Float) = 0
         _NdotLOffset ("_NdotLOffset", Float) = 0

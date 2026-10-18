@@ -12,22 +12,26 @@ Shader "Hidden/ArenaMapPort/Decal/DeferredDecalDiffuseNormalsDynamicEditor"
         _BumpMap ("_BumpMap", 2D) = "white" {}
         _BumpMapArray ("_BumpMapArray", 2D) = "white" {}
         _BumpScale ("_BumpScale", Float) = 0
+        _BumpTiling ("_BumpTiling", Float) = 0
         _Color ("_Color", Color) = (1,1,1,1)
         _Cutoff ("_Cutoff", Float) = 0
         _DefVals ("_DefVals", Color) = (1,1,1,1)
         _DetailNormalMapScale ("_DetailNormalMapScale", Float) = 0
+        _DropsSpec ("_DropsSpec", Float) = 0
         _DstBlend ("_DstBlend", Float) = 0
         _EmissionColor ("_EmissionColor", Color) = (1,1,1,1)
         _Factor ("_Factor", Float) = 0
         _Fade ("_Fade", Float) = 0
         _GlossMapScale ("_GlossMapScale", Float) = 0
         _Glossiness ("_Glossiness", Float) = 0
+        _Glossness ("_Glossness", Float) = 0
         _GlossyReflections ("_GlossyReflections", Float) = 0
-        _MainColor ("_MainColor", Color) = (1,1,1,1)
         _MainTex ("_MainTex", 2D) = "white" {}
         _MainTexArray ("_MainTexArray", 2D) = "white" {}
         _Metallic ("_Metallic", Float) = 0
         _Mode ("_Mode", Float) = 0
+        _NdotLOffset ("_NdotLOffset", Float) = 0
+        _NightRippleFakeLightOffset ("_NightRippleFakeLightOffset", Float) = 0
         _NormalAlphaFadeoff ("_NormalAlphaFadeoff", Float) = 0
         _NormalClip ("_NormalClip", Float) = 0
         _NormalIntensity ("_NormalIntensity", Float) = 0
@@ -35,8 +39,11 @@ Shader "Hidden/ArenaMapPort/Decal/DeferredDecalDiffuseNormalsDynamicEditor"
         _OcclusionStrength ("_OcclusionStrength", Float) = 0
         _Parallax ("_Parallax", Float) = 0
         _ReflectColor ("_ReflectColor", Color) = (1,1,1,1)
-        _ReflectionStrength ("_ReflectionStrength", Float) = 0
+        _RippleFakeLightIntensityOffset ("_RippleFakeLightIntensityOffset", Float) = 0
+        _RippleTexScale ("_RippleTexScale", Float) = 0
         _Roughness ("_Roughness", Float) = 0
+        _Shininess ("_Shininess", Float) = 0
+        _SkinnedMeshMaterial ("_SkinnedMeshMaterial", Float) = 0
         _Smoothness ("_Smoothness", Float) = 0
         _SmoothnessTextureChannel ("_SmoothnessTextureChannel", Float) = 0
         _SpecColor ("_SpecColor", Color) = (1,1,1,1)
@@ -46,16 +53,16 @@ Shader "Hidden/ArenaMapPort/Decal/DeferredDecalDiffuseNormalsDynamicEditor"
         _Specular ("_Specular", Float) = 0
         _SpecularColor ("_SpecularColor", Color) = (1,1,1,1)
         _SpecularHighlights ("_SpecularHighlights", Float) = 0
+        _Specularness ("_Specularness", Float) = 0
         _SrcBlend ("_SrcBlend", Float) = 0
         _StencilType ("_StencilType", Float) = 0
         _Temperature ("_Temperature", Color) = (1,1,1,1)
+        _USERAIN ("_USERAIN", Float) = 0
         _UVSec ("_UVSec", Float) = 0
         _Units ("_Units", Float) = 0
         _ZWrite ("_ZWrite", Float) = 0
         _alphaCutoff ("_alphaCutoff", Float) = 0
         _intensiv ("_intensiv", Float) = 0
-        _specular ("_specular", Color) = (1,1,1,1)
-        _transparency ("_transparency", Float) = 0
     }
     SubShader
     {

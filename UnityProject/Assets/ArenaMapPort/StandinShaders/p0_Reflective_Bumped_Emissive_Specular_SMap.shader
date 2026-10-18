@@ -23,7 +23,6 @@ Shader "Hidden/ArenaMapPort/p0/Reflective/Bumped Emissive Specular SMap"
         _EmissionVisibility ("_EmissionVisibility", Float) = 0
         _EmissiveColor ("_EmissiveColor", Color) = (1,1,1,1)
         _Factor ("_Factor", Float) = 0
-        _GlobalReflectionStrength ("_GlobalReflectionStrength", Float) = 0
         _GlossMapScale ("_GlossMapScale", Float) = 0
         _Glossiness ("_Glossiness", Float) = 0
         _Glossness ("_Glossness", Float) = 0
@@ -45,12 +44,12 @@ Shader "Hidden/ArenaMapPort/p0/Reflective/Bumped Emissive Specular SMap"
         _SpecMap ("_SpecMap", 2D) = "white" {}
         _SpecPower ("_SpecPower", Float) = 0
         _SpecVals ("_SpecVals", Color) = (1,1,1,1)
-        _Specular ("_Specular", Float) = 0
         _SpecularHighlights ("_SpecularHighlights", Float) = 0
         _Specularness ("_Specularness", Float) = 0
         _SrcBlend ("_SrcBlend", Float) = 0
         _StencilType ("_StencilType", Float) = 0
         _Temperature ("_Temperature", Color) = (1,1,1,1)
+        _USEDECALS ("_USEDECALS", Float) = 0
         _USERAIN ("_USERAIN", Float) = 0
         _UVSec ("_UVSec", Float) = 0
         _Units ("_Units", Float) = 0

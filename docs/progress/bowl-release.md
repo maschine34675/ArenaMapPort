@@ -257,3 +257,16 @@ names), `test_dynamicmaps_deploy.ps1` (unsupported selection `Prison`, not run, 
   within the float32 tolerance and the matcher reported two candidates. Fix: when several built owners match a chain,
   the component's own built fields pick the twin, and indistinguishable twins are consumed in order (the second package
   twin takes the remaining one). Post-Unity steps re-run with `-SkipUnityBuild` (base.json, preset, validators).
+
+## 2026-10-18 - U1 accepted by the pipeline (bundles, identity patch, every validator)
+
+- After the twin-matcher fix the post-Unity steps (`build_all.ps1 ... -FullMap -SkipUnityBuild`, 12:28-12:55) passed:
+  `patch_monoscript_identity` nothing to patch on both bundles, `validate_extract` OK (v2, 18 non-blocking warnings),
+  `validate_bundle_roundtrip` OK (1 non-blocking warning), `validate_preset` OK, `validate_map_descriptors` OK;
+  `build_all` reports `work/build/bowl is safe to copy into dist/`. base.json and the preset regenerated from the
+  sidecars (byte-identical to the committed base.json). Bundles: scenes 1,006,073,696 B, navmesh 185,840 B, preset
+  6,947 B.
+- The Unity build regenerated the stand-in shader stubs under `UnityProject/Assets/ArenaMapPort/StandinShaders/` from
+  Bowl's material properties: 22 stubs changed their property lists and two new ones appeared
+  (`p0_Reflective_Bumped_Specular_TwoSided`, `Custom_Vert_Paint_SoftCutout_Decal`), committed with this build as the
+  AirPit precedent did (d29bad4). Next: full client build staging the bundles, `validate_distribution`, deploy, raid.
