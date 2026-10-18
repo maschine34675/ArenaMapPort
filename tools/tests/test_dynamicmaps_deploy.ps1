@@ -23,7 +23,7 @@ function Move-FixtureItem([string]$Source, [string]$Destination) {
     Move-Item -LiteralPath $sourceFull -Destination $destinationFull
 }
 
-function New-Fixture([ValidateSet('Equator', 'Bay5', 'AirPit')][string]$MapName = 'Equator') {
+function New-Fixture([ValidateSet('Equator', 'Bay5', 'AirPit', 'Bowl')][string]$MapName = 'Equator') {
     $caseRoot = Join-Path $fixtureRoot ([guid]::NewGuid().ToString('N'))
     $package = Join-Path $caseRoot 'package'
     $spt = Join-Path $caseRoot 'spt'
@@ -102,7 +102,7 @@ function Pass-Case([string]$Name) {
 }
 
 function Test-Rejected([string]$Name, [scriptblock]$Mutate, [string]$Expected, [switch]$DryRunOnly,
-    [ValidateSet('Equator', 'Bay5', 'AirPit')][string]$MapName = 'Equator') {
+    [ValidateSet('Equator', 'Bay5', 'AirPit', 'Bowl')][string]$MapName = 'Equator') {
     $fixture = New-Fixture -MapName $MapName
     & $Mutate $fixture
     $before = Get-TreeState $fixture.Root
@@ -116,7 +116,7 @@ function Test-Rejected([string]$Name, [scriptblock]$Mutate, [string]$Expected, [
 function Save-Map($Fixture) { Write-FixtureFile $Fixture.Json ($Fixture.Map | ConvertTo-Json -Depth 20) }
 
 try {
-    foreach ($mapName in @('Equator', 'Bay5', 'AirPit')) {
+    foreach ($mapName in @('Equator', 'Bay5', 'AirPit', 'Bowl')) {
         $fixture = New-Fixture -MapName $mapName
         $before = Get-TreeState $fixture.Root
         $result = Invoke-Deploy $fixture
@@ -164,8 +164,8 @@ try {
 
     # Install both fixed profiles into the same fixture in each order. The second install must
     # preserve the entire first map, DLL/config sentinels and every other existing file/directory.
-    foreach ($firstName in @('Equator', 'Bay5')) {
-        $secondName = if ($firstName -eq 'Equator') { 'Bay5' } else { 'Equator' }
+    foreach ($order in @(@('Equator', 'Bay5'), @('Bay5', 'Equator'), @('AirPit', 'Bowl'), @('Bowl', 'AirPit'))) {
+        $firstName, $secondName = $order
         $first = New-Fixture -MapName $firstName
         $second = New-Fixture -MapName $secondName
         $second.Spt = $first.Spt
@@ -230,7 +230,9 @@ try {
     Assert-That ($protectedAfter -ceq $protectedBefore) 'Bay5 copy changed Equator or another protected file'
     Pass-Case 'Bay5 confirmed copy uses canonical destination and preserves Equator'
 
-    foreach ($mismatch in @(@{ PackageMap = 'Bay5'; Selected = 'Equator' }, @{ PackageMap = 'Equator'; Selected = 'Bay5' })) {
+    foreach ($mismatch in @(@{ PackageMap = 'Bay5'; Selected = 'Equator' }, @{ PackageMap = 'Equator'; Selected = 'Bay5' },
+            @{ PackageMap = 'Bowl'; Selected = 'AirPit' }, @{ PackageMap = 'AirPit'; Selected = 'Bowl' },
+            @{ PackageMap = 'Bowl'; Selected = 'Equator' })) {
         $fixture = New-Fixture $mismatch.PackageMap
         $before = Get-TreeState $fixture.Root
         $result = Invoke-Deploy $fixture -Confirm -SelectedMap $mismatch.Selected
@@ -238,8 +240,8 @@ try {
         Assert-That ((Get-TreeState $fixture.Root) -ceq $before) 'Wrong selected map changed fixture'
         Pass-Case "$($mismatch.PackageMap) package rejected for $($mismatch.Selected) selection"
     }
-    # Prison (a parked map) stands for any unsupported selection; Bowl is released but, like every map beyond Equator/Bay5/AirPit,
-    # has no DynamicMaps pack and is not in the script's -DynamicMapsMap ValidateSet either (PLAN-BOWL item 8).
+    # Prison (a parked map) stands for any unsupported selection: the script's -DynamicMapsMap ValidateSet is
+    # exactly Equator, Bay5, AirPit and Bowl (Bowl since PLAN-BOWL item 17).
     foreach ($selection in @('../Other', 'Prison')) {
         $fixture = New-Fixture
         $before = Get-TreeState $fixture.Root
@@ -258,6 +260,23 @@ try {
     Test-Rejected 'Bay5 wrong internal map ID' { param($f) $f.Map.MapInternalNames = @('arena_equator'); Save-Map $f } 'MapInternalNames' -MapName 'Bay5'
     Test-Rejected 'Bay5 image path cannot target Equator' { param($f) $f.Map.Layers['Ground Floor'].ImagePath = 'Maps/ArenaMapPort_Equator/Layers/Ground.svg'; Save-Map $f } 'ground ImagePath' -MapName 'Bay5'
     Test-Rejected 'Bay5 package rejects additional map file' { param($f) Write-FixtureFile (Join-Path $f.Package 'ArenaMapPort_Equator.jsonc') '{}' } 'Package must contain only' -MapName 'Bay5'
+
+    # Bowl (PLAN-BOWL item 17): same fixed-identity rules as the other three maps.
+    Test-Rejected 'Bowl filename with AirPit ID' { param($f) $f.Map.MapInternalNames = @('arena_airpit'); Save-Map $f } 'MapInternalNames' -MapName 'Bowl'
+    Test-Rejected 'Bowl ID with AirPit image' { param($f) $f.Map.Layers['Ground Floor'].ImagePath = 'Maps/ArenaMapPort_AirPit/Layers/Ground.svg'; Save-Map $f } 'ground ImagePath' -MapName 'Bowl'
+    Test-Rejected 'Bowl unsupported ID' { param($f) $f.Map.MapInternalNames = @('arena_factory'); Save-Map $f } 'MapInternalNames' -MapName 'Bowl'
+    Test-Rejected 'Bowl multiple map IDs' { param($f) $f.Map.MapInternalNames += 'arena_airpit'; Save-Map $f } 'MapInternalNames' -MapName 'Bowl'
+    Test-Rejected 'Bowl package rejects additional map file' { param($f) Write-FixtureFile (Join-Path $f.Package 'ArenaMapPort_AirPit.jsonc') '{}' } 'Package must contain only' -MapName 'Bowl'
+    Test-Rejected 'Bowl missing SVG' { param($f) Remove-Item -LiteralPath $f.Svg } 'Layers must contain only' -MapName 'Bowl'
+    Test-Rejected 'Bowl target junction' { param($f) $p = Join-Path $f.Root 'outside-map'; [IO.Directory]::CreateDirectory($p) | Out-Null; New-Item -ItemType Junction -Path $f.Target -Target $p | Out-Null } 'Linked/reparse' -MapName 'Bowl'
+    # ValidateSet is case-insensitive; a lowercase selection must still land in the canonical ArenaMapPort_Bowl directory.
+    $fixture = New-Fixture 'Bowl'
+    $result = Invoke-Deploy $fixture -Confirm -SelectedMap 'bowl'
+    Assert-That ($result.Code -eq 0 -and $result.Output -match 'DynamicMaps Bowl data only') "Lowercase Bowl selection failed: $($result.Output)"
+    Assert-That (@(Get-ChildItem -LiteralPath $fixture.Target -File -Recurse).Count -eq 2) 'Lowercase Bowl selection did not deploy exactly two files to the canonical directory'
+    $names = @(Get-ChildItem -LiteralPath (Join-Path $fixture.Spt 'BepInEx/plugins/maschine-ArenaMapPort/dynamicmaps') -Directory | ForEach-Object Name)
+    Assert-That ($names.Count -eq 1 -and $names[0] -ceq 'ArenaMapPort_Bowl') "Lowercase Bowl selection created a non-canonical directory: $($names -join ',')"
+    Pass-Case 'Bowl lowercase selection deploys to the canonical directory'
 
     Test-Rejected 'malformed JSON' { param($f) Write-FixtureFile $f.Json '{ broken' } 'FATAL'
     Test-Rejected 'duplicate JSON key' { param($f) $j = Get-Content -LiteralPath $f.Json -Raw; Write-FixtureFile $f.Json ($j -replace '^\{', '{ "CoordinateRotation": 0,') } 'Duplicate JSON property'

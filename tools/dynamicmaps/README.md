@@ -65,7 +65,7 @@ pwsh -NoProfile -File tools/deploy-to-spt.ps1 -SptRoot 'D:/SPT41' `
 ```
 
 The historical exporter filename remains compatible with Equator commands; the descriptor
-selects the profile. Bay5 requires native triangulation. Its exact package files are
+selects the profile (Equator, Bay5, AirPit and Bowl). Bay5 requires native triangulation. Its exact package files are
 `ArenaMapPort_Bay5.jsonc` and `Layers/Ground.svg`; its fixed destination is
 `BepInEx/plugins/maschine-ArenaMapPort/dynamicmaps/ArenaMapPort_Bay5/`. Each package deploy
 leaves the other map's files alone. Bay5 requires `-DynamicMapsMap Bay5`; omitting
@@ -111,15 +111,66 @@ isolated NavMesh regions; cartography is not proof that such areas are accessibl
 Accepted source, checks and native screenshots: [AirPit overview](../../docs/progress/airpit-dynamicmaps.md).
 Legacy cleanup remains restricted to the old Equator/Bay5 packages.
 
+## Bowl (PLAN-BOWL item 17, 2026-10-18)
+
+Export `arena_bowl_navmesh.bundle` from `work/build/bowl` (byte-identical to dist's copy; compare the SHA-256) in the
+isolated Unity probe, then generate and review the two-file plan:
+
+```powershell
+# The probe's script must equal the repository copy before it is used.
+(Get-FileHash work/dynamicmaps/UnityProbe/Assets/Editor/ExportMapTriangulation.cs).Hash -eq `
+  (Get-FileHash UnityProject/Assets/ArenaMapPort/Editor/NavMesh/ExportMapTriangulation.cs).Hash
+$editor = 'C:/Program Files/Unity/Hub/Editor/2022.3.43f1/Editor/Unity.exe'
+$repo = (Get-Location).Path
+Start-Process -FilePath $editor -WindowStyle Hidden -Wait -ArgumentList @(
+  '-batchmode', '-nographics', '-projectPath', "$repo/work/dynamicmaps/UnityProbe",
+  '-executeMethod', 'ArenaMapPort.Editor.NavMesh.ExportMapTriangulation.Run',
+  '-mapNavMeshBundle', "$repo/work/build/bowl/arena_bowl_navmesh.bundle",
+  '-mapTriangulationOutput', "$repo/work/dynamicmaps/bowl/navmesh.json",
+  '-logFile', "$repo/work/dynamicmaps/bowl/unity-export.log")
+& ./work/dynamicmaps/venv/Scripts/python.exe tools/dynamicmaps/export_equator.py `
+  --package work/extract/bowl-native-v2 --descriptor tools/maps/bowl.json `
+  --navmesh work/dynamicmaps/bowl/navmesh.json --output work/dynamicmaps/bowl
+& ./work/dynamicmaps/venv/Scripts/python.exe -m unittest discover -s tools/tests -p 'test_dynamicmaps*.py' -v
+pwsh -NoProfile -File tools/deploy-to-spt.ps1 -SptRoot 'D:/SPT41' `
+  -DynamicMapsPackage work/dynamicmaps/bowl/pack -DynamicMapsMap Bowl
+```
+
+Bowl ships only `ArenaMapPort_Bowl.jsonc` and `Layers/Ground.svg` under
+`BepInEx/plugins/maschine-ArenaMapPort/dynamicmaps/ArenaMapPort_Bowl/` (display `Bowl`, title `BOWL`).
+Add `-Confirm` only for the authorized installation; omitting `-DynamicMapsMap Bowl` rejects the package.
+
+- Ground band world Y -0.5..1.2 m (the pitch lies at y 0.0-0.1). The Mi-26 roof cell (y 1.6), the guard-tower
+  platforms and the stands (to y 11) are above it and never become ground. Obstacle heights are relative to the
+  nearest native ground triangle (like Bay5/AirPit).
+- Anchor: Arena's core point 2 at (2.5, -21.1), the same NavMesh component as both team pockets. The capture-point
+  centroid (-1.76, -33.92) lies under the helicopter belly, off the mesh.
+- Fixed bounds X -66..62 / Z -82..11, north up: exactly the descriptor's `bake_bounds` (a test pins the two together).
+- The U1 NavMesh tiles meet at z=-51.2 with a float-sized gap like AirPit's, so the 1 cm seam grid is on; without it
+  the south half (1,380 m2) is cut away from the anchored component.
+- Obstacle simplification 20 cm (AirPit's value): 14,104 SVG points; the 18 cm default gave 15,878, 122 under the
+  16,000-point guard.
+- `hidden_paths` (new, optional per profile) drops hierarchy prefixes from the drawing exactly like opened barriers.
+  Bowl hides `SBG_Arena_Bowl_Building/SOO_LOD0/BUILDING/Stadium` and `.../OO/Stadium_Chairs_F1`, the stands' lowest
+  rows that otherwise draw two full-width strips along z=10 and z=-81. The prefixes match whole path segments.
+- Two `Cabin_ladder` MeshColliders carry no mesh (`mesh_id: null`); the exporter skips explicit nulls and counts them
+  (`meshless_mesh_colliders_skipped` in the receipt). A malformed non-null ID still fails.
+- `DOORS_SPAWN_A/B` are roots of the TeamFight design scene and are in `opened_barriers`: both pockets are drawn open,
+  as they are during the mode.
+
+Source, counts and limits: [Bowl overview](../../docs/progress/bowl-dynamicmaps.md).
+
 ## Release staging and migration (2026-10-11)
 
 Accepted packs are stored under ignored
-`work/dynamicmaps/release/ArenaMapPort_Equator/` and `ArenaMapPort_Bay5/`, plus `ArenaMapPort_AirPit/`.
+`work/dynamicmaps/release/ArenaMapPort_Equator/` and `ArenaMapPort_Bay5/`, plus `ArenaMapPort_AirPit/` and
+`ArenaMapPort_Bowl/` (item 17).
 Copy the approved files from each accepted `pack/` there after visual validation.
 Equator/Bay5 inputs remain byte-identical to `work/dynamicmaps/north-marker/{Equator,Bay5}/pack`;
 do not replace them with the older compass drawings. Every client Release build stages
 these six explicit files under `dist/BepInEx/plugins/maschine-ArenaMapPort/dynamicmaps/`,
-including DLL-only builds. Preview PNGs and generation receipts are not shipped.
+including DLL-only builds (Bowl's two files join them once its client rows are in; see the Bowl overview log).
+Preview PNGs and generation receipts are not shipped.
 
 DynamicMaps remains optional. Its soft dependency enables two reflected hooks when
 installed: load each owned package after the native `Maps` search, and resolve that
@@ -163,7 +214,7 @@ old definitions when files are deleted during a running process.
 - Original floor faces within ±0.45 m and obstacle slabs at 0.4–1.8 m contribute.
   Disabled/inactive/trigger colliders, water, numeric trigger/border layers, round-open
   doors and listed shutter leaves are excluded. Listed shutter frames remain.
-- Geometry is simplified (12 cm Equator / 18 cm Bay5 / 20 cm AirPit obstacle tolerance, 4.5 cm NavMesh tolerance,
+- Geometry is simplified (12 cm Equator / 18 cm Bay5 / 20 cm AirPit / 20 cm Bowl obstacle tolerance, 4.5 cm NavMesh tolerance,
   7 cm obstacle closing, tiny holes below 0.15 m² removed). This improves legibility;
   the result is not an exact collision, line-of-sight or navigation guarantee.
 - Upper floors, roofs and background scenery are omitted. Round primitive colliders

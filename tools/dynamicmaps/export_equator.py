@@ -1,4 +1,4 @@
-"""Generate local-only Equator, Bay5 and AirPit DynamicMaps plans from extracted geometry.
+"""Generate local-only Equator, Bay5, AirPit and Bowl DynamicMaps plans from extracted geometry.
 
 No game data ships with this tool. Install requirements in a dedicated venv.
 The drawing is a cartographic approximation, not a navigation or collision mesh.
@@ -299,6 +299,15 @@ MAP_PROFILES = {
                      "heights": (-.5, 1.2), "anchor": (0, 0), "relative": True,
                      "seam_grid": .01, "bounds": [-60, -86, 40, 86],
                      "obstacle_tolerance": .20},
+    # Bowl (PLAN-BOWL item 17): flat pitch at y 0.0-0.1 (spawn markers 0.1, floor cells 0.04); the Mi-26 roof cell
+    # (y 1.6), guard-tower platforms and the stands (to y 11) lie above the band. The U1 NavMesh tiles meet at
+    # z=-51.2 like AirPit's, so the seam grid is needed. Anchor = Arena's core point 2, shared with the east spawn.
+    # Bounds = descriptor bake_bounds (x -66..62, z -82..11).
+    "arena_bowl": {"name": "Bowl", "folder": "ArenaMapPort_Bowl", "title": "BOWL",
+                   "heights": (-.5, 1.2), "anchor": (2.5, -21.1), "relative": True,
+                   "seam_grid": .01, "bounds": [-66, -82, 62, 11], "obstacle_tolerance": .20,
+                   "hidden_paths": ["SBG_Arena_Bowl_Building/SOO_LOD0/BUILDING/Stadium",
+                                    "SBG_Arena_Bowl_Building/OO/Stadium_Chairs_F1"]},
 }
 
 
@@ -308,19 +317,21 @@ def generate(package, descriptor, output, navmesh=None):
         raise ValueError("Output must be separate from the source package")
     config = json.loads(descriptor.read_text(encoding="utf-8"))
     if config["key"] not in MAP_PROFILES:
-        raise ValueError("Supported maps: arena_equator, arena_bay5, arena_airpit")
+        raise ValueError("Supported maps: arena_equator, arena_bay5, arena_airpit, arena_bowl")
     profile = MAP_PROFILES[config["key"]]
     bounds_override = profile.get("bounds")
     if profile["relative"] and navmesh is None:
         raise ValueError(profile["folder"].removeprefix("ArenaMapPort_") + " requires native ground triangulation for height calibration")
     inputs = {str(descriptor): digest(descriptor)}
-    opened = config.get("opened_barriers", [])
+    # Profile "hidden_paths" are hierarchy prefixes dropped from the drawing exactly like opened barriers
+    # (they stay in the scene; only the overview omits them).
+    opened = config.get("opened_barriers", []) + profile.get("hidden_paths", [])
     floor_parts, low_parts, high_parts = [], [], []
-    stats = Counter()
+    stats, meshless = Counter(), 0
     walkable = read_triangulation(navmesh, profile["heights"]) if navmesh else None
     if walkable is not None and profile.get("seam_grid"):
-        # Tile edges differ by a few float ULPs. Snap only AirPit before selecting
-        # its connected footprint, otherwise the south apron is cut at z=-51.2.
+        # Tile edges differ by a few float ULPs. Snap only AirPit and Bowl before selecting
+        # the connected footprint, otherwise the south part is cut at z=-51.2 (both maps).
         walkable = unary_union(set_precision(walkable, profile["seam_grid"]))
     connected, drawing_clip, surface = None, None, None
     if navmesh:
@@ -356,6 +367,11 @@ def generate(package, descriptor, output, navmesh=None):
                 if kind not in ("MeshCollider", "BoxCollider", "SphereCollider", "CapsuleCollider"):
                     continue
                 if not component.get("enabled", True) or component.get("is_trigger", False):
+                    continue
+                if kind == "MeshCollider" and component.get("mesh_id", "") is None:
+                    # No sharedMesh in the source means no collision geometry (Bowl's two Cabin_ladder
+                    # colliders). A malformed non-null ID still raises in mesh().
+                    meshless += 1
                     continue
                 verts, indices = mesh(component["mesh_id"]) if kind == "MeshCollider" else primitive(component)
                 world = scene.world(key)
@@ -460,7 +476,7 @@ def generate(package, descriptor, output, navmesh=None):
     if any(digest(path) != expected for path, expected in inputs.items()):
         raise ValueError("An input changed during export")
     receipt = {"schema": 1, "map": config["key"], "bounds_xz": bounds, "svg_points": point_count,
-        "colliders": dict(stats), "areas_m2": {"floor": floor.area, "low": low.area, "high": high.area},
+        "colliders": dict(stats), "meshless_mesh_colliders_skipped": meshless, "areas_m2": {"floor": floor.area, "low": low.area, "high": high.area},
         "generator_sha256": digest(__file__), "inputs_sha256": dict(sorted(inputs.items())),
         "output_sha256": {p.relative_to(pack).as_posix(): digest(p) for p in sorted(pack.rglob("*")) if p.is_file()},
         "native_walkable_area_m2": walkable.area if walkable is not None else None,
