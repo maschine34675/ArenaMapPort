@@ -22,8 +22,8 @@ Deployed to `D:\SPT41` only (not `D:\SPT41vanilla`); GPU-2 process 4eeae3d5 with
 and light probes, the four shot-acoustics rooms, F8 in a container, DynamicMaps MAP tab with 35,530 sprite vertices) and at
 12:00 in rain (F8 open sky, F10 border cube), Air Pit after them (NavMesh, acoustics, 16 sealed gate carvers), hideout open:
 0 ArenaMapPort warnings, 120 fps, max 11.2 ms. The user played Bowl in ArenaMode teamdeathmatch on their own machine at 13:25
-(0 warnings). The developer gate hold on Bowl sealed both pockets and released them after 60 s (raid 6). Not done: east
-guard-tower stairs / vault limits, the Mi-26
+(0 warnings). The developer gate hold on Bowl sealed both pockets and released them after 60 s (raid 6); the east guard-tower
+stairs are on the connected NavMesh and the BTR gate extracted a player (raid 7). Not done: vault limits above 1.2 m, the Mi-26
 capture point (ArenaMode), the publication of the cut candidate (`work/releases/0.3.0/maschine-ArenaMapPort-0.3.0.zip`, 3,078,043,845 B, SHA-256
 `8f9b6591...ddeb8b`, built from `26b9216`: Pixeldrain, VirusTotal, tag, GitHub release, Forge; `D:\SPT41vanilla` only after the
 user's decision), ArenaMode catalog/formation for Bowl (user), the green arrow below. User decision 2026-10-18 evening: `feature/bowl`

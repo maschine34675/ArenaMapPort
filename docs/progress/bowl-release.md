@@ -709,3 +709,22 @@ that ran raids 3-6 and the hideout on GPU-2 (`185f8f8`; `3e983c3` and `26b9216` 
 VirusTotal, tag, GitHub release, the merge of `feature/bowl` into `main` (a fast-forward: `main` is at `a3188cd`, the merge base),
 the Forge entry and the `D:\SPT41vanilla` deploy; all of these wait for the user's decision. `docs/releases/v0.3.0.md` carries the
 size, SHA-256 and source commit; the Pixeldrain and VirusTotal placeholders remain.
+
+## 2026-10-18 - raid 7: guard towers and the BTR gate extraction (GPU-2, after the merge into main)
+
+EFT had been closed on the host at 19:44 (the user's session); `gpu-run start` (52 s, 17/17 identical, the 0.3.0 DLLs) and
+`gpu-run raid --map bowl --bots none --clock 12:00 --weather clear` (21:58). 0 ArenaMapPort warnings.
+
+- Tower positions read live (`uibridge_inspect gameObject` + `Transform.position`): big towers `SBG_Arena_Bowl/SOO_LOD0/
+  Guardian_Tower` at (53.4, -64.2) (east, south of the east pocket) and `Guardian_Tower_1` at (-58.1, -9.1) (west); small towers
+  `OO/PROPS/FRONT/Guardian_Tower_Small` at (51.5, 3.5) and `OO/PROPS/BACK/Guardian_Tower_Small (1)` at (-53.9, -76.7).
+- **East guard-tower stairs: walkable.** `uibridge_teleport dryRun` to (53.4, 4.5, -64.2) snapped to a reachable NavMesh point
+  (51.6, 4.9, -64.6); `uibridge_walk` from the east spawn arrived there after 8.8 s (61.6 m straight, 71.8 m along the navmesh),
+  `uibridge_player` then reported (51.3, 4.8, -64.8): the stairs are part of the connected mesh, bots can take the tower (still
+  `bowl-u3-east-tower`, looking up through the tower's upper deck). The west big tower has no NavMesh within 2 m at y 3.0, 4.5
+  and 7.0 (its platform is not in the bake band or not baked), and both small towers have a NavMesh patch at y 4.5 that is
+  "not reachable on foot" (islands without a baked stair). Vault limits above 1.2 m remain untested (needs player input).
+- **BTR gate extraction: works.** Teleport into the `Bowl BTR Gate` box at (51.0, 0.1, -31.0) from the tower; `uibridge_wait
+  inRaid=false` matched after 5.7 s (the extraction timer ran from the teleport into the box; the wait was issued a few seconds
+  later), the result screens followed (`gpu-run menu`: ExitStatus -> KillList -> SessionStatistics ->
+  SessionExperience -> MainMenu). With raid 1's Army gate walk both exits have extracted a player once.
