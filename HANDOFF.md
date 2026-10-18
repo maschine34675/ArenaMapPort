@@ -3,7 +3,7 @@
 Snapshot for whoever continues (human or agent). Verify the commits named here against `git log`; this file
 is updated by hand at each handover, it is not an automatic record. Read [AGENTS.md](AGENTS.md) first.
 
-## Update 2026-10-18 (evening) - Bowl polish integrated and host-verified as 0.3.0 candidate on `feature/bowl`; passport-lamp green arrow recorded for later
+## Update 2026-10-18 (evening) - Bowl polish integrated, host-verified and merged into `main` as the 0.3.0 candidate; passport-lamp green arrow recorded for later
 
 User decision: "mit der Bowl-Umsetzung starten, so wie du es am sinnvollsten erachtest; den gruenen Pfeil fuer spaeter
 festhalten", then "mit den offenen Punkten weitermachen". Plan and decisions in [docs/PLAN-BOWL.md](docs/PLAN-BOWL.md); the
@@ -24,9 +24,10 @@ and light probes, the four shot-acoustics rooms, F8 in a container, DynamicMaps 
 0 ArenaMapPort warnings, 120 fps, max 11.2 ms. The user played Bowl in ArenaMode teamdeathmatch on their own machine at 13:25
 (0 warnings). The developer gate hold on Bowl sealed both pockets and released them after 60 s (raid 6). Not done: east
 guard-tower stairs / vault limits, the Mi-26
-capture point (ArenaMode), the release cut itself (merge `feature/bowl` into `main`, rebuild, `make_release_zips.py --single
---extract-check`, Pixeldrain, VirusTotal, tag, GitHub release; `D:\SPT41vanilla` only after the user's decision), ArenaMode
-catalog/formation for Bowl (user), the green arrow below. `feature/bowl` is not pushed.
+capture point (ArenaMode), the publication of the cut candidate (`work/releases/0.3.0/maschine-ArenaMapPort-0.3.0.zip`, 3,078,043,845 B, SHA-256
+`8f9b6591...ddeb8b`, built from `26b9216`: Pixeldrain, VirusTotal, tag, GitHub release, Forge; `D:\SPT41vanilla` only after the
+user's decision), ArenaMode catalog/formation for Bowl (user), the green arrow below. User decision 2026-10-18 evening: `feature/bowl`
+was fast-forwarded into `main` (`a3188cd` -> `eee77e2`) and deleted; `main` is not pushed.
 
 Open follow-up (AirPit, not started): the passport lamps' green arrow. Arena switches the booth lamps by dark cover
 quads, not by material: the hall lamps `..._RED_close_LOD0` (the X) and `..._GREEN_open_LOD0` (the arrow) are always lit;

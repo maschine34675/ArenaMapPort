@@ -5,7 +5,7 @@ precedent, plus the unrelated passport-lamp question) and their synthesis; probe
 Arena install (0.6.0.47752, Unity 6000.3.6f1) and on `work/extract/bowl`. Evidence is quoted as file:line, counts or
 object paths; inferences are marked **(inferred)**. Status lives in [HANDOFF.md](../HANDOFF.md) and the progress log
 [docs/progress/bowl-release.md](progress/bowl-release.md); this file is the plan, not the record. Work happens on the
-branch `feature/bowl` (user decision 2026-10-18: "mit der Bowl-Umsetzung starten, so wie du es am sinnvollsten
+branch `feature/bowl`, fast-forwarded into `main` on 2026-10-18 evening (user decision 2026-10-18: "mit der Bowl-Umsetzung starten, so wie du es am sinnvollsten
 erachtest").
 
 Bowl today (2026-09-15 spike): package `work/extract/bowl` (Arena 0.5.4 source, 80,163 objects, no

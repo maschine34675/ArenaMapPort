@@ -8,7 +8,7 @@ dated state in one screen; read it before this index if you only have a minute.
 
 ## Current — read these for the area you touch
 
-- [bowl-release.md](bowl-release.md) — Bowl as the fourth released map (branch `feature/bowl`, started 2026-10-18): plan roles,
+- [bowl-release.md](bowl-release.md) — Bowl as the fourth released map (started on `feature/bowl`, merged into `main` 2026-10-18; started 2026-10-18): plan roles,
   the native extraction from Arena 0.6.0 (reviewed Chainfence/MetalThin ballistics pair), then package, sidecars, bake,
   host raids. Plan: [../PLAN-BOWL.md](../PLAN-BOWL.md).
 - [bowl-dynamicmaps.md](bowl-dynamicmaps.md) — Bowl's ground-floor DynamicMaps overview pack (2026-10-18, PLAN-BOWL
