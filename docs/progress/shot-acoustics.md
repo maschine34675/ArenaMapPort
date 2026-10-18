@@ -85,7 +85,7 @@ Notes:
 
 - Isolated beats outdoor, the same precedence `RoomReverb` uses for its mixer categories. An isolated room is
   never Outdoor.
-- Only `IndoorMetalThin` is Metal. `IndoorMetalThick` (Bay5 `PlantBuldingA_back_indoor`: `room_id` 27, graph node
+- Only `IndoorMetalThin` is Metal (2026-10-18: plus a big `IndoorMetalThick` room, see "Bowl" below). `IndoorMetalThick` (Bay5 `PlantBuldingA_back_indoor`: `room_id` 27, graph node
   id 1250, 9.0 x 2.7 x 10.0 m) is a Shop for now; adding it is one line in `RoomShotAcousticsModel.Classify`.
 - Room numbers in this document and in the log are the runtime `ISpatialAudioRoom.ID` = the graph's `room_id`, not the
   graph node `id` (a different, larger number). Grep the host log for `room=27`, not `room=1250`.
@@ -486,3 +486,125 @@ Still open:
 - HANDOFF 2026-10-15 lists two user inputs without a recorded answer: whether the passport hall (Start1, classified Hall by
   the 40 m rule) should stay a hall, and a metallic character for the planes and the bus (Steel/Steel/Carpet, measured but
   untuned).
+
+
+## Bowl (2026-10-18, PLAN-BOWL item 17: room classes)
+
+Status: offline analysis, one rule change and the Bowl pins are done and green; no host raid has run the changed rule yet (the
+Bowl raids of 2026-10-18 ran before it; recipe below). The switch `Audio (arena_bowl)/RoomShotAcoustics`
+already exists and defaults on: `Install` loops `ArenaMapRegistry.All`, which carries Bowl, and Bowl's acoustic graph is built by
+`NativeSpatialAudio` (it needs a started acoustic state for the repair to tick).
+
+Source: `work/extract/spatial-audio/arena_bowl/spatial-audio.json`, 14 rooms, 25 portals, 24 areas; the system group lists 11
+rooms (`groups[0].room_ids`). The loader (`NativeSpatialAudio`, around "Explicit source group arrays exclude inactive
+originals") sets `ISpatialAudioRoom.ID` from the graph's `room_id` and gives the group the 11 rooms of `room_ids` as its room list,
+so the three other source rooms are never the listener's room. The brief and `RoomReverb` use the graph's own room `id` (531 ...); the `[ShotAcoustics]` log line prints the runtime
+`room_id` (1 ... 11), exactly like the AirPit/Bay5 rows above (Bay5 `room_id` 27 = graph id 1250). Both are listed.
+
+Types are `EAudioRoomTypeMask` bits (Audio.SpatialSystem, decompile 0.16.9.5): 1 OutdoorGeneric, 2 OutdoorVehicle, 4 IndoorGeneric,
+8 IndoorIsolated, 0x10 IndoorVehicle, 0x20 IndoorStairs, 0x40 (64) OutdoorCommon, 0x80 IndoorBasement, 0x100 IndoorTransparent,
+0x200 (512) IndoorMetalThin, 0x400 (1024) IndoorWoodThick, 0x800 IndoorBrick, 0x1000 IndoorConcrete, 0x2000 IndoorPlasterBoard,
+0x4000 IndoorWoodThin, 0x8000 (32768) IndoorFabric, 0x10000 (65536) IndoorMetalThick; Outdoor = 0x43, Indoor = 0x1FFBC,
+Isolated = 0x88. Sizes are the full AABB sizes (twice the bounds extents), the shoebox gets them clamped to [2 m, 50 m].
+
+| `room=` (runtime) | graph id | path below SpatialAudioSystem | type | AABB W x H x D (m) | class before | class now | shoebox preset |
+|---|---|---|---|---|---|---|---|
+| 1 | 531 | Containers_R/Container_1 | 512 IndoorMetalThin | 8.15 x 2.68 x 7.04 | Metal | Metal | 8.2x2.7x7.0 |
+| 2 | 554 | Military_R/Hospital_enterance | 32768 IndoorFabric | 2.31 x 2.44 x 3.59 | Shop | Shop | 2.3x2.4x3.6 |
+| 3 | 558 | Offices_L/Offices_AudioRoom_3 | 1024 IndoorWoodThick | 14.37 x 2.50 x 2.26 | Shop | Shop | 14.4x2.5x2.3 |
+| 4 | 563 | Helicopter/Helicopter (crashed Mi-26) | 65536 IndoorMetalThick | 20.78 x 4.49 x 13.79 | Shop | **Metal** | 20.8x4.5x13.8 |
+| 5 | 568 | FanZone/FanZone | 4 IndoorGeneric | 49.48 x 2.91 x 10.12 | Hall | Hall | 49.5x2.9x10.1 |
+| 6 | 587 | Containers_L/Container_2 | 512 IndoorMetalThin | 6.54 x 2.64 x 4.89 | Metal | Metal | 6.5x2.6x4.9 |
+| 7 | 594 | Offices_L/Offices_AudioRoom_2 | 1024 IndoorWoodThick | 6.00 x 2.50 x 2.26 | Shop | Shop | 6.0x2.5x2.3 |
+| 8 | 636 | Outdoor/Outdoor (the stadium) | 64 OutdoorCommon, outdoor=true | 239.9 x 42.4 x 235.3 | Outdoor | Outdoor | none (shipped model stays) |
+| 9 | 656 | Military_R/Hospital | 512 IndoorMetalThin | 8.84 x 2.83 x 14.21 | Metal | Metal | 8.8x2.8x14.2 |
+| 10 | 665 | Containers_L/Container_1 | 512 IndoorMetalThin | 3.39 x 2.68 x 6.39 | Metal | Metal | 3.4x2.7x6.4 |
+| 11 | 672 | Offices_L/Offices_AudioRoom_1 | 1024 IndoorWoodThick | 2.26 x 2.41 x 12.11 | Shop | Shop | 2.3x2.4x12.1 |
+
+Outside the group (`active_in_hierarchy` false, never a listener room): graph 550 `Military_R/Base` (IndoorGeneric,
+9.40 x 1.94 x 5.29, `room_id` 2 like the active `Hospital_enterance`: the inactive originals reuse valid native ids), graph 572
+`Military_L/Base` and 659 `Military_L/Tower` (IndoorGeneric, bounds 0 x 0 x 0 at (69.7, 12.9, -42), `room_id` 0).
+
+Active classes of the 11: Metal 5 (4 IndoorMetalThin + the Mi-26), Shop 4, Hall 1, Outdoor 1. With the old rule: Metal 4, Shop 5.
+
+### Judgement room by room
+
+- Stadium (room 8): the outdoor flag AND the type bit 64 (inside `OutdoorBits` 0x43) both say Outdoor, not isolated, so
+  `IsOutdoor` is true by either; no preset, the shipped model stays, as on Bay5's yards. No change needed.
+- Containers, Hospital (rooms 1, 6, 9, 10; IndoorMetalThin): Metal already (Steel walls and ceiling, Carpet floor, clutter 0.7).
+- Offices (rooms 3, 7, 11; IndoorWoodThick) and the Hospital entrance tent (room 2, IndoorFabric): Shop. Fine. The
+  corridor-like offices (2.3 m wide) get a 2.3 m wide shoebox; the minimum edge is 2 m, so none is raised. The tent is a Shop although
+  fabric would be more absorptive; the room is 2.3 x 2.4 x 3.6 m, an invented-data refinement nobody can hear.
+- Mi-26 (room 4; IndoorMetalThick): the one wrong result. A steel hull classified as a shop (GypsumBoard walls, AcousticTile
+  ceiling) while the containers next door ring as steel. Metal so far meant IndoorMetalThin; IndoorMetalThick was a Shop on purpose
+  (Bay5 `PlantBuldingA_back_indoor`, room_id 27, 9.0 x 2.7 x 10.0 m). The hull lies rotated by about -30 degrees (OBB half
+  extents 7.5 x 1.7 x 1.95 m for the main body), so its AABB (20.8 x 13.8 m floor) overstates the cross-section; the plugin's
+  box is axis aligned anyway.
+- FanZone (room 5; IndoorGeneric, 49.5 x 2.9 x 10.1 m at y 20.7, above the north stand): Hall by the 40 m rule, a long low
+  concourse, the same situation as Equator's `UpRoof` corridor (Concrete shell, clutter 0.4). The NavMesh ends at y 11.05 and holds no vertex within 4.5 m
+  (vertical) of its box, so bots never path there; whether a player could reach it by other means (stand geometry) was not checked.
+  Note only, no change.
+- Zero-extent rooms 572 and 659: `Clamp` raises every edge to `MinDimension` 2 m, so the model answer is a Shop preset of
+  2x2x2 with the default Shop materials (no correction, no exception; pinned). They are not in the group, hence never applied.
+
+### Rule change (minimal)
+
+`RoomShotAcousticsModel.Classify`: an IndoorMetalThick room whose larger floor edge reaches `MetalThickBodyMinFloorEdge` (15 m)
+is Metal, right after the IndoorMetalThin test and before the Hall test (the same precedence the thin-metal rule has over the
+Hall rule). Threshold INVENTED, chosen between the only two IndoorMetalThick rooms in the four graphs: Bay5's back room has 10.0 m
+(stays Shop, as released and as pinned), Bowl's Mi-26 has 20.8 m (becomes Metal; its real hull is 14.9 m long, so the AABB and the
+threshold are not coupled to the hull). Nothing else moves: Equator 19 Shop / 2 Hall, Bay5 15 Outdoor / 18 Metal / 6 Shop / 1 Hall,
+AirPit 12 Shop / 9 Metal / 2 Hall / 1 Outdoor, recomputed offline with the new rule (identical to the census above), and the
+existing pins stay green. No default of any config key changed; the description text of `ShotAcousticsLab/MetalWalls`, `MetalCeiling`,
+`MetalFloor`, `MetalClutter` now names the Mi-26 (text only, the saved values are untouched).
+The alternative would be IndoorMetalThick = Metal at any size, which also turns Bay5's room 27 into Metal; it was not done because
+Bay5's released results stay unchanged.
+
+### RoomReverb mixer categories (can two rooms of one type get different categories?)
+
+No. `RoomReverb.TableHandler` gives each room of the active group `isolated ? 8 : outdoor ? 67 : 4` by FLAGS (not type bits) and
+refuses the graph ("conflicting mixer room category") when a type gets two. Bowl: type 512 (4 rooms) -> 4, 1024 (3) -> 4, 4 -> 4,
+32768 -> 4, 65536 -> 4, 64 -> 67; no isolated room, no type 0, no conflict. Replicated offline on all four graphs: no conflict anywhere
+(Equator, Bay5, AirPit, Bowl); the mixer_effects table is complete for the three categories (26 parameters, each with room types 4, 8
+and 67, no duplicate). The shot rule's Outdoor decision (flag OR type bit) and RoomReverb's outdoor category (flag only) select
+the same rooms in all four graphs (a room carrying an outdoor type bit without the flag would diverge; none exists). Both are
+pinned for Bowl by `BowlRoomTypesMapToOneMixerCategoryEachAndTheShotRuleAgreesWithIt`, with a text pin on the RoomReverb line
+(`RoomReverbStillDerivesItsMixerCategoryFromTheIsolatedAndOutdoorFlagsOnly`).
+
+### Tests
+
+`RoomShotAcousticsModelTests`: 78 model tests + 13 wiring tests (91; the file had 76 before). New: the Bowl fixture of the 11 active
+rooms (runtime id, graph id, path, type, flag, full size, expected class and default preset), the stadium by flag and by type bit, the
+Mi-26 preset, the 15 m edge (6 cases incl. Bay5's 9 x 10 and the 45 x 10 precedence), MetalThick outdoor-flagged and other types
+unaffected by the size edge, Bay5's back room stays Shop, the FanZone Hall, the inactive source rooms (zero extents, 9.4 x 1.9 x 5.3),
+the mixer-category check and its RoomReverb text pin. Existing tests are unchanged apart from comments and the new `IndoorFabric` constant.
+
+### Host recipe (Bowl, GPU-2; first raid with a client that carries this rule)
+
+Needs: a client build with the rule (restart EFT), `RoomShotAcoustics` on (default), BepInEx Debug lines collected
+(`uibridge_log` filter `[ArenaMapPort][ShotAcoustics]`; the line is Debug), a Bowl raid with bots None. The line appears on each
+room change once the raid is `Started`: `[ArenaMapPort][ShotAcoustics] arena_bowl: room=<room_id>/<type> class=<class> dims=...`.
+Teleport targets are NavMesh polygon centres of `work/build/bowl/arena_bowl_navmesh.bundle` inside each room (head height 1.7 m
+inside the room's area volumes, main component); confirm with `uibridge_teleport dryRun=true` first.
+
+| Stand in | Teleport near | Expected log line |
+|---|---|---|
+| Mi-26 hull (room 4) | (1.1, 1.55, -33.5) | `room=4/IndoorMetalThick class=Metal dims=20.8x4.5x13.8 materials=Steel,Steel,Steel,Carpet,Steel,Steel clutter=0.70 model=ShoeboxRoom` |
+| container (room 1) | (34.1, 0.21, -55.1) | `room=1/IndoorMetalThin class=Metal dims=8.2x2.7x7.0 ... model=ShoeboxRoom` (other containers: room 6 at (30.4, 0.20, 0.9), 6.5x2.6x4.9; room 10 at (21.9, 0.25, -2.5), 3.4x2.7x6.4) |
+| office (room 3) | (0.9, 2.75, -13.4) | `room=3/IndoorWoodThick class=Shop dims=14.4x2.5x2.3 materials=GypsumBoard,GypsumBoard,AcousticTile,CeramicTile,GypsumBoard,GypsumBoard clutter=0.70 model=ShoeboxRoom` (room 11 at (-14.6, 0.20, -8.2), 2.3x2.4x12.1) |
+| the field (room 8) | the east spawn (50.2, 0.1, -3.3) or any pitch spot outside the structures | `room=8/OutdoorCommon class=Outdoor dims=none materials=none clutter=none model=AcousticRayTracing` (the shipped model; the first line of the raid, and again after leaving a room) |
+
+Order: field -> Mi-26 -> field shows Outdoor -> Metal -> Outdoor (model switches ShoeboxRoom <-> AcousticRayTracing). The old result would
+read `room=4/IndoorMetalThick class=Shop dims=20.8x4.5x13.8 materials=GypsumBoard,...` (a client without the rule). Not testable by
+walking: the Hall (room 5, FanZone, no NavMesh) and the Hospital rooms 2 and 9 (their NavMesh polygons sit on component 22, apart
+from the main component 0; `dryRun` will probably answer `reachable=false`, like the tarp-building probes in bowl-release.md);
+the Hospital class (Metal, thin metal) is the same as the containers anyway. An ear check of the Mi-26 against a container on the
+Gunshots buses is the optional second step (`ReverbPulse`, see "Probe procedure"); no measurement exists for Bowl.
+
+### Open points
+
+- The 15 m edge is a design guess (nothing measured); whether the user wants Bay5's back room (and the Hospital tent) to follow is
+  a one-line decision in `Classify`.
+- Bowl's stadium is Outdoor, so the shipped model stays across the whole field; a stadium-sized tail would need an Outdoor
+  preset, which no class has. Not requested.
+- The Mi-26 box is axis aligned and 20.8 x 13.8 m wide although the hull is about 15 x 4 x 4 m.

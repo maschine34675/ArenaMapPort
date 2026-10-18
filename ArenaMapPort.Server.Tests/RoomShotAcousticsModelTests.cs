@@ -11,13 +11,14 @@ namespace ArenaMapPort.Server.Tests;
 /// invented design data (docs/progress/shot-acoustics.md); these tests pin the starting table so a later tuning edit is a
 /// deliberate change, pin the rule that routes AirPit's real rooms to the intended classes, and pin the lab-tuning rules
 /// (per-class options, fallback for an unknown material name, the re-apply rule). Room sizes are the full AABB sizes
-/// (twice the bounds extents) of the AirPit graph.
+/// (twice the bounds extents) of the AirPit graph; the Bowl section pins the 11 active rooms of the Bowl graph.
 /// </summary>
 public sealed class RoomShotAcousticsModelTests
 {
     // EAudioRoomTypeMask values as they appear in the spatial-audio graphs.
     const int OutdoorGeneric = 1, IndoorGeneric = 4, IndoorIsolated = 8, OutdoorCommon = 64,
-        IndoorMetalThin = 512, IndoorWoodThick = 1024, IndoorBrick = 2048, IndoorConcrete = 4096, IndoorMetalThick = 65536;
+        IndoorMetalThin = 512, IndoorWoodThick = 1024, IndoorBrick = 2048, IndoorConcrete = 4096, IndoorFabric = 32768,
+        IndoorMetalThick = 65536;
 
     // Literal copy of MetaXRAudioRoomAcousticProperties.MaterialPreset (Meta.XR.Audio.dll). Kept as a literal on purpose:
     // a typo in the model must fail here, not at raid time inside Enum.Parse.
@@ -115,7 +116,8 @@ public sealed class RoomShotAcousticsModelTests
     public void EveryOtherIndoorTypeIsAShop(int type)
     {
         // IndoorMetalThick (Bay5 PlantBuldingA_back_indoor: room_id 27, graph node 1250; 9.0 x 2.7 x 10.0 m) is a Shop on
-        // purpose: only IndoorMetalThin is Metal. The runtime (and the ShotAcoustics log line) reports room_id, not the node id.
+        // purpose at this size: IndoorMetalThin is Metal, IndoorMetalThick only from MetalThickBodyMinFloorEdge on (Bowl's
+        // Mi-26, see the Bowl section). The runtime (and the ShotAcoustics log line) reports room_id, not the node id.
         var cls = Resolve(type, false, false, 9.0f, 2.7f, 10.0f, out var preset);
         Assert.Equal(RoomShotClass.Shop, cls);
         Assert.Equal("GypsumBoard", preset.Right);
@@ -586,6 +588,159 @@ public sealed class RoomShotAcousticsModelTests
         // A preset built without corrections reports none.
         Assert.False(new RoomShotPreset(2f, 2f, 2f, "Steel", "Steel", "Steel", "Carpet", "Steel", "Steel", 0.5f).UsedClassDefaults);
     }
+
+    // ---- Bowl (PLAN-BOWL item 17) ---------------------------------------------------------------------------------------
+
+    // Bowl's spatial-audio graph (work/extract/spatial-audio/arena_bowl: 14 rooms, 11 of them in the active group). Sizes are
+    // the full AABB sizes in metres (twice the bounds extents). RoomId is the runtime ISpatialAudioRoom.ID (the graph's
+    // room_id), which the "[ArenaMapPort][ShotAcoustics] arena_bowl: room=<id>/<type>" line prints; GraphId is the graph's own
+    // room id (what the group's room_ids, RoomReverb and the census use). Path is below SpatialAudioSystem/.
+    static readonly (int RoomId, int GraphId, string Path, int Type, bool Outdoor, float W, float H, float D, RoomShotClass Class)[] BowlActiveRooms =
+    {
+        (1, 531, "Containers_R/Container_1", IndoorMetalThin, false, 8.152f, 2.680f, 7.038f, RoomShotClass.Metal),
+        (2, 554, "Military_R/Hospital_enterance", IndoorFabric, false, 2.306f, 2.438f, 3.592f, RoomShotClass.Shop),
+        (3, 558, "Offices_L/Offices_AudioRoom_3", IndoorWoodThick, false, 14.370f, 2.503f, 2.262f, RoomShotClass.Shop),
+        (4, 563, "Helicopter/Helicopter", IndoorMetalThick, false, 20.776f, 4.488f, 13.788f, RoomShotClass.Metal),
+        (5, 568, "FanZone/FanZone", IndoorGeneric, false, 49.478f, 2.911f, 10.124f, RoomShotClass.Hall),
+        (6, 587, "Containers_L/Container_2", IndoorMetalThin, false, 6.536f, 2.637f, 4.893f, RoomShotClass.Metal),
+        (7, 594, "Offices_L/Offices_AudioRoom_2", IndoorWoodThick, false, 5.998f, 2.503f, 2.262f, RoomShotClass.Shop),
+        (8, 636, "Outdoor/Outdoor", OutdoorCommon, true, 239.871f, 42.439f, 235.251f, RoomShotClass.Outdoor),
+        (9, 656, "Military_R/Hospital", IndoorMetalThin, false, 8.837f, 2.830f, 14.208f, RoomShotClass.Metal),
+        (10, 665, "Containers_L/Container_1", IndoorMetalThin, false, 3.387f, 2.680f, 6.390f, RoomShotClass.Metal),
+        (11, 672, "Offices_L/Offices_AudioRoom_1", IndoorWoodThick, false, 2.262f, 2.413f, 12.107f, RoomShotClass.Shop),
+    };
+
+    static void AssertClassDefaultPreset(RoomShotPreset preset, RoomShotClass roomClass, float w, float h, float d)
+    {
+        var t = Default.For(roomClass);
+        AssertPreset(preset, w, h, d, t.Walls, t.Walls, t.Ceiling, t.Floor, t.Walls, t.Walls, t.Clutter);
+        Assert.False(preset.UsedClassDefaults);
+    }
+
+    [Fact]
+    public void BowlActiveRoomsClassifyAsDocumented()
+    {
+        Assert.Equal(11, BowlActiveRooms.Length);
+        Assert.Equal(11, BowlActiveRooms.Select(r => r.RoomId).Distinct().Count());
+        Assert.Equal(11, BowlActiveRooms.Select(r => r.GraphId).Distinct().Count());
+        foreach (var r in BowlActiveRooms)
+        {
+            var cls = Resolve(r.Type, r.Outdoor, false, r.W, r.H, r.D, out var preset);
+            Assert.True(r.Class == cls, $"room {r.RoomId} (graph {r.GraphId}) {r.Path}: expected {r.Class}, got {cls}");
+            if (r.Class == RoomShotClass.Outdoor) { Assert.Null(preset); continue; }
+            // No indoor room of Bowl reaches the 50 m cap or falls below the 2 m floor in any edge, so the shoebox is the real AABB.
+            AssertClassDefaultPreset(preset, r.Class, r.W, r.H, r.D);
+        }
+        Assert.Equal(5, BowlActiveRooms.Count(r => r.Class == RoomShotClass.Metal)); // 4 IndoorMetalThin + the Mi-26
+        Assert.Equal(1, BowlActiveRooms.Count(r => r.Class == RoomShotClass.Hall));
+        Assert.Equal(4, BowlActiveRooms.Count(r => r.Class == RoomShotClass.Shop));
+        Assert.Equal(1, BowlActiveRooms.Count(r => r.Class == RoomShotClass.Outdoor));
+    }
+
+    [Fact]
+    public void BowlStadiumIsOutdoorByTheFlagAndByTheTypeBit()
+    {
+        // Room 8 (graph 636, 239.9 x 42.4 x 235.3 m): OutdoorCommon with the outdoor flag, not isolated. Either one alone is
+        // enough, and the huge floor never turns it into a Hall; no preset, so the shipped acoustic model stays.
+        foreach (var flag in new[] { true, false })
+        {
+            Assert.Equal(RoomShotClass.Outdoor, Resolve(OutdoorCommon, flag, false, 239.871f, 42.439f, 235.251f, out var preset));
+            Assert.Null(preset);
+        }
+        Assert.Equal(RoomShotClass.Outdoor, Resolve(IndoorGeneric, true, false, 239.871f, 42.439f, 235.251f, out _));
+    }
+
+    [Fact]
+    public void BowlCrashedMi26IsAMetalBody()
+    {
+        // Room 4 (graph 563, Helicopter/Helicopter): IndoorMetalThick, AABB 20.8 x 4.5 x 13.8 m around a hull that lies rotated
+        // by about 30 degrees. A steel hull: Steel walls and ceiling, not the shop table (GypsumBoard / AcousticTile).
+        var cls = Resolve(IndoorMetalThick, false, false, 20.776f, 4.488f, 13.788f, out var preset);
+        Assert.Equal(RoomShotClass.Metal, cls);
+        AssertPreset(preset, 20.776f, 4.488f, 13.788f, "Steel", "Steel", "Steel", "Carpet", "Steel", "Steel", 0.7f);
+        Assert.False(preset.UsedClassDefaults);
+    }
+
+    [Theory]
+    [InlineData(14.9f, 5f, "Shop")]
+    [InlineData(15f, 5f, "Metal")]
+    [InlineData(5f, 15f, "Metal")]
+    [InlineData(9.0f, 10.0f, "Shop")] // Bay5 PlantBuldingA_back_indoor
+    [InlineData(20.776f, 13.788f, "Metal")] // Bowl Mi-26
+    [InlineData(45f, 10f, "Metal")] // like IndoorMetalThin: a steel body wins over the 40 m Hall rule
+    public void AnIndoorMetalThickRoomIsASteelBodyFromFifteenMetresOnEitherFloorEdge(float width, float depth, string expected)
+    {
+        Assert.Equal(15f, RoomShotAcousticsModel.MetalThickBodyMinFloorEdge);
+        Assert.Equal(expected, Resolve(IndoorMetalThick, false, false, width, 3f, depth, out var preset).ToString());
+        Assert.NotNull(preset);
+    }
+
+    [Fact]
+    public void AMetalThickRoomIsStillOutdoorWhenFlaggedAndOtherTypesIgnoreTheSizeEdge()
+    {
+        Assert.Equal(RoomShotClass.Outdoor, Resolve(IndoorMetalThick, true, false, 20.8f, 4.5f, 13.8f, out var preset));
+        Assert.Null(preset);
+        // The size edge belongs to IndoorMetalThick only: other indoor types of the same size are unchanged.
+        foreach (var type in new[] { IndoorGeneric, IndoorWoodThick, IndoorBrick, IndoorConcrete, IndoorFabric, 0 })
+            Assert.Equal(RoomShotClass.Shop, Resolve(type, false, false, 20.8f, 4.5f, 13.8f, out _));
+    }
+
+    [Fact]
+    public void Bay5BackRoomKeepsItsShopResult()
+    {
+        // Bay5 PlantBuldingA_back_indoor (room_id 27): IndoorMetalThick 9.0 x 2.7 x 10.0 m, released as a Shop; the Bowl Mi-26
+        // rule must not move it.
+        var cls = Resolve(IndoorMetalThick, false, false, 9.0f, 2.7f, 10.0f, out var preset);
+        Assert.Equal(RoomShotClass.Shop, cls);
+        AssertPreset(preset, 9.0f, 2.7f, 10.0f, "GypsumBoard", "GypsumBoard", "AcousticTile", "CeramicTile", "GypsumBoard", "GypsumBoard", 0.7f);
+    }
+
+    [Fact]
+    public void BowlFanZoneIsAHallByTheFortyMetreRule()
+    {
+        // Room 5 (graph 568, FanZone/FanZone): IndoorGeneric 49.5 x 2.9 x 10.1 m, a long low concourse above the north stand
+        // (like Equator's UpRoof corridor, a Hall by the 40 m rule). 49.5 m is under the 50 m cap, so the real size is used.
+        var cls = Resolve(IndoorGeneric, false, false, 49.478f, 2.911f, 10.124f, out var preset);
+        Assert.Equal(RoomShotClass.Hall, cls);
+        AssertPreset(preset, 49.478f, 2.911f, 10.124f, "Concrete", "Concrete", "Concrete", "CeramicTile", "Concrete", "Concrete", 0.4f);
+    }
+
+    [Fact]
+    public void BowlInactiveSourceRoomsAreHarmlessEvenIfOneWereApplied()
+    {
+        // Graph rooms 572 (Military_L/Base) and 659 (Military_L/Tower): IndoorGeneric with 0 x 0 x 0 bounds; 550
+        // (Military_R/Base): 9.4 x 1.9 x 5.3 m. All three are inactive in the hierarchy and outside the active group (11 of
+        // the 14 rooms), so ListenerCurrentRoom is never one of them; the model still gives a sane answer for them.
+        var cls = Resolve(IndoorGeneric, false, false, 0f, 0f, 0f, out var zero);
+        Assert.Equal(RoomShotClass.Shop, cls);
+        AssertClassDefaultPreset(zero, RoomShotClass.Shop, 2f, 2f, 2f);
+        cls = Resolve(IndoorGeneric, false, false, 9.404f, 1.938f, 5.287f, out var low);
+        Assert.Equal(RoomShotClass.Shop, cls);
+        AssertClassDefaultPreset(low, RoomShotClass.Shop, 9.404f, 2f, 5.287f); // only the height is raised to the 2 m floor
+    }
+
+    // RoomReverb's TableHandler gives every room of the active group a mixer category by the isolated and outdoor FLAGS only
+    // (isolated 8, outdoor 67, else 4) and refuses the graph ("conflicting mixer room category") when one room type would get two.
+    static int MixerCategory(bool outdoor, bool isolated) => isolated ? 8 : outdoor ? 67 : 4;
+
+    [Fact]
+    public void BowlRoomTypesMapToOneMixerCategoryEachAndTheShotRuleAgreesWithIt()
+    {
+        var categories = new Dictionary<int, int>();
+        foreach (var r in BowlActiveRooms)
+        {
+            int category = MixerCategory(r.Outdoor, false);
+            Assert.True(!categories.TryGetValue(r.Type, out int previous) || previous == category,
+                $"room {r.RoomId} {r.Path}: type {r.Type} would get categories {previous} and {category}");
+            categories[r.Type] = category;
+            // Same set of rooms: the shot-acoustics Outdoor decision (flag or type bit) equals RoomReverb's outdoor category.
+            Assert.Equal(category == 67, RoomShotAcousticsModel.IsOutdoor(r.Type, r.Outdoor, false));
+        }
+        Assert.Equal(6, categories.Count); // 4, 512, 1024, 32768, 65536 and 64
+        Assert.Equal(67, categories[OutdoorCommon]);
+        Assert.All(categories.Where(c => c.Key != OutdoorCommon), c => Assert.Equal(4, c.Value));
+        Assert.DoesNotContain(0, categories.Keys); // RoomReverb refuses a type-0 room
+    }
 }
 
 /// <summary>
@@ -655,6 +810,15 @@ public sealed class RoomShotAcousticsWiringTests
         var code = Text("ArenaMapPort.Client/NativeSpatialAudio.cs");
         Assert.Matches(@"RoomReverb\.Tick\(state\);\s*RoomShotAcoustics\.Tick\(state\);", code);
         Assert.Contains("CleanupStep(RoomShotAcoustics.Stop);", code);
+    }
+
+    [Fact]
+    public void RoomReverbStillDerivesItsMixerCategoryFromTheIsolatedAndOutdoorFlagsOnly()
+    {
+        // RoomShotAcousticsModelTests copies this rule for the Bowl category check; a change here must change that copy.
+        var code = Text("ArenaMapPort.Client/RoomReverb.cs");
+        Assert.Contains(@"category = (bool)room[""isolated""] ? 8 : (bool)room[""outdoor""] ? 67 : 4;", code);
+        Assert.Contains("conflicting mixer room category", code);
     }
 
     [Fact]

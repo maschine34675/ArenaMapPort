@@ -80,7 +80,7 @@ namespace ArenaMapPort.Client
             _hall = BindClass("Hall", defaults.Hall,
                 "A big enclosed space (AirPit's main and passport hall: floor edge of 40 m or more).");
             _shop = BindClass("Shop", defaults.Shop, "Every other indoor room: shops, booths, offices.");
-            _metal = BindClass("Metal", defaults.Metal, "Narrow steel bodies (the airliner rooms; IndoorMetalThin).");
+            _metal = BindClass("Metal", defaults.Metal, "Steel bodies: the airliner rooms and containers (IndoorMetalThin) and Bowl's crashed Mi-26 (a big IndoorMetalThick room).");
             _hallMaxDimension = Plugin.Instance.Settings.Bind(LabSection, "HallMaxDimension", defaults.HallMaxDimension,
                 new ConfigDescription("Largest shoebox edge in metres (the 111 m hall is capped to this). In practice only halls " +
                     "reach it, but it caps every indoor class. Invented tuning value. Live; re-applies the current room.",

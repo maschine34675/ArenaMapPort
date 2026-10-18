@@ -14,7 +14,8 @@ namespace ArenaMapPort.Client
         Hall,
         /// <summary>An ordinary indoor room: shops, booths, offices.</summary>
         Shop,
-        /// <summary>A narrow steel body such as AirPit's airliner rooms.</summary>
+        /// <summary>A steel body: the IndoorMetalThin rooms (AirPit's airliners, Bay5's and Bowl's containers) and a big
+        /// IndoorMetalThick room (Bowl's crashed Mi-26).</summary>
         Metal
     }
 
@@ -131,11 +132,21 @@ namespace ArenaMapPort.Client
         internal const float DefaultMaxDimension = 50f;
         /// <summary>A not-outdoor room whose larger floor edge reaches this many metres is a Hall. INVENTED.</summary>
         internal const float HallMinFloorEdge = 40f;
+        /// <summary>
+        /// A not-outdoor IndoorMetalThick room whose larger floor edge reaches this many metres is a steel body (Metal); a
+        /// smaller one stays a Shop. INVENTED, chosen between the only two IndoorMetalThick rooms in the four spatial-audio
+        /// graphs: Bowl's crashed Mi-26 (<c>SpatialAudioSystem/Helicopter/Helicopter</c>, room_id 4, 20.8 x 4.5 x 13.8 m: a
+        /// steel hull, its AABB larger than the hull because it lies rotated by about 30 degrees) is a Metal body, while
+        /// Bay5's <c>PlantBuldingA_back_indoor</c> (room_id 27, 9.0 x 2.7 x 10.0 m) keeps the Shop result it was released
+        /// with. The threshold is not a measured value.
+        /// </summary>
+        internal const float MetalThickBodyMinFloorEdge = 15f;
 
         // EAudioRoomTypeMask bits (Audio.SpatialSystem, EFT 0.16.9.5), mirrored here to stay free of EFT types.
         internal const int OutdoorGeneric = 0x1, OutdoorVehicle = 0x2, OutdoorCommon = 0x40;
         internal const int OutdoorBits = OutdoorGeneric | OutdoorVehicle | OutdoorCommon; // EAudioRoomTypeMask.Outdoor = 0x43
         internal const int IndoorMetalThin = 0x200;
+        internal const int IndoorMetalThick = 0x10000;
 
         /// <summary>"No room applied yet" marker for <see cref="NeedsApply"/> (a real room ID is a short).</summary>
         internal const int NoRoom = int.MinValue;
@@ -195,11 +206,14 @@ namespace ArenaMapPort.Client
         internal static bool IsOutdoor(int typeMask, bool outdoor, bool isolated)
             => !isolated && (outdoor || (typeMask & OutdoorBits) != 0);
 
-        /// <summary>Classifies one room. Order of rules: Outdoor, Metal (IndoorMetalThin), Hall, Shop.</summary>
+        /// <summary>Classifies one room. Order of rules: Outdoor, Metal (IndoorMetalThin, or an IndoorMetalThick room whose
+        /// larger floor edge reaches <see cref="MetalThickBodyMinFloorEdge"/>), Hall, Shop.</summary>
         internal static RoomShotClass Classify(int typeMask, bool outdoor, bool isolated, float width, float depth)
         {
             if (IsOutdoor(typeMask, outdoor, isolated)) return RoomShotClass.Outdoor;
             if ((typeMask & IndoorMetalThin) != 0) return RoomShotClass.Metal;
+            // Bowl's Mi-26 (IndoorMetalThick, 20.8 x 13.8 m floor): a steel hull, not a shop. Bay5's 10 m back room is below the edge.
+            if ((typeMask & IndoorMetalThick) != 0 && Math.Max(width, depth) >= MetalThickBodyMinFloorEdge) return RoomShotClass.Metal;
             if (Math.Max(width, depth) >= HallMinFloorEdge) return RoomShotClass.Hall;
             return RoomShotClass.Shop;
         }
