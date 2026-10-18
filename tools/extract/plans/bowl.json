@@ -64,25 +64,29 @@
       "name": "Arena_Bowl_Scripts",
       "asset_path": "Assets/Content/Locations/Arena_Bowl/Arena_Bowl_Scripts.unity",
       "index": 44,
-      "reason": "Replaced by the freshly authored SPT Scripts scene; source scripts and seasonal runtime objects are not imported."
+      "reason": "Replaced by the freshly authored SPT Scripts scene; source scripts and seasonal runtime objects are not imported.",
+      "role": "scripts"
     },
     {
       "name": "Arena_Bowl_Sound",
       "asset_path": "Assets/Content/Locations/Arena_Bowl/Arena_Bowl_Sound.unity",
       "index": 111,
-      "reason": "Source Arena sound/audio runtime is outside the existing port contract."
+      "reason": "Source Arena sound/audio runtime is outside the existing port contract.",
+      "role": "sound"
     },
     {
       "name": "Arena_Bowl_TeamFight_Culling",
       "asset_path": "Assets/Content/Locations/Arena_Bowl/Arena_Bowl_TeamFight_Culling.unity",
       "index": 96,
-      "reason": "Source PerfectCulling data is outside the existing port contract."
+      "reason": "Source PerfectCulling data is outside the existing port contract.",
+      "role": "culling"
     },
     {
       "name": "Arena_Bowl_TeamFight_AI",
       "asset_path": "Assets/Content/Locations/Arena_Bowl/Arena_Bowl_TeamFight_AI.unity",
       "index": 128,
-      "reason": "Source AI/gameplay scene is metadata reference only; port bakes a fresh SPT NavMesh."
+      "reason": "Source AI/gameplay scene is metadata reference only; port bakes a fresh SPT NavMesh.",
+      "role": "ai"
     }
   ]
 }

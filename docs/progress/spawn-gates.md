@@ -130,3 +130,22 @@ Final build (11:28-11:32, after the review fixes and the baseline probe; this is
   1.0 s, 42 gate part(s) switched off, 40 carver(s) removed`, `every probed gate open (22 probed)`, dryRun to marker
   (6) ok, `uibridge_walk` to it: 22.5 m along the navmesh through a lane, arrived. Equator regression raid: the
   raid-start opening unchanged (10 leaves, the FCK shutter), no SpawnGates activity, no warning.
+
+### Follow-up (recorded 2026-10-18, not started): the passport lamps' green arrow
+
+User question: Arena flips the passport booths' red X to the green arrow when the gate opens; can the port do that? The
+data says yes, with a client-only change. The booths in `Arena_Airpit_Main_hall` carry two always-lit lamp quads per lane
+(`Passport_control_01_Emissive_controller_RED_close_LOD0` = X, `..._GREEN_open_LOD0` = arrow, 10 each incl. the
+`_02` variant). The state comes from dark cover quads under the held gate root `PASSPORT_CONTROL_DOORS`:
+`RED/RedFog` (active) holds 10 `Passport_control_01_Emissive_controller_GREY (n)` LODGroups with `_open_LOD0` active
+(covering the arrows) plus 18 `FogSheetSimple_Volumetric_red_small` sheets; `GREEN/GreenFog` (inactive) holds the same
+10 controllers with `_close_LOD0` active (covering the X) plus 18 green sheets. Both roots are in the shipped bundle
+(SceneAssembler sets the saved activity), the green fog material (`Custom/Billboard_FogSheet_Simple`, id b647a5fb...)
+is in the shader sidecar, the controller material (`Standard`, `_EMISSION`, id 8ef39b0b...) is shared with RED.
+Smallest correct design: a new sidecar/descriptor list `held_gate_indicators` (AirPit:
+`PASSPORT_CONTROL_DOORS/GREEN/GreenFog`), `BoothDoorRepairs.OpenBarriers` skips `GREEN` as a gate part (counts 42/36 ->
+41/35), `SpawnGates` keeps `_indicators`, switches them on at the end of `Open` when the held gates opened, off at the end
+of `Hold` and on scene unload, no new config key, Debug log only. Host check: dev hold (`Spawns/SpawnGateHold`), then
+`uibridge_inspect` of `GreenFog` and a still from inside the north box at about (-26, 0.1, 72). Risks: the covers are
+coplanar with the lamps (z-fighting possible), the green sheets were never active in a host raid, a plain raid shows no
+change (the held gate opens only after Hold then Release), `AirPitFogSheets=Hidden` would hide the green sheets too.

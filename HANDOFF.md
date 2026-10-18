@@ -3,6 +3,26 @@
 Snapshot for whoever continues (human or agent). Verify the commits named here against `git log`; this file
 is updated by hand at each handover, it is not an automatic record. Read [AGENTS.md](AGENTS.md) first.
 
+## Update 2026-10-18 - Bowl started on `feature/bowl` (fourth map); passport-lamp green arrow recorded for later
+
+User decision: "mit der Bowl-Umsetzung starten, so wie du es am sinnvollsten erachtest; den gruenen Pfeil fuer spaeter
+festhalten". Plan and decisions in [docs/PLAN-BOWL.md](docs/PLAN-BOWL.md) (0.6.0 re-extract with native features,
+TeamFight, UsesServerTime, no grass, keep the layer-29 border cubes, four parallax images as loading art, release
+0.3.0); progress log `docs/progress/bowl-release.md`. Done so far: scene roles on `plans/bowl.json` (scripts 44, sound
+111, culling 96, ai 128; the roleless fixtures of `test_extractor_plan_roles.py` and `test_ai_anchors.py` moved to
+`prison.json`), the stale spike build moved to `work/build/bowl-spike-20260915/`. The first `--native-features`
+extraction failed closed with `Ballistics: preset/material disagreement` (the risk PLAN-AIRPIT item 2 named); the
+offending payloads are being identified before any rule changes.
+
+Open follow-up (AirPit, not started): the passport lamps' green arrow. Arena switches the booth lamps by dark cover
+quads, not by material: the hall lamps `..._RED_close_LOD0` (the X) and `..._GREEN_open_LOD0` (the arrow) are always lit;
+`PASSPORT_CONTROL_DOORS/RED/RedFog` (active: 10 `GREY` covers over the arrows + 18 red fog sheets) and `GREEN/GreenFog`
+(inactive: 10 covers over the X lamps + 18 green sheets) swap at the gate opening. Design (review-verified 2026-10-18,
+client DLL only): sidecar/descriptor list `held_gate_indicators` = ["PASSPORT_CONTROL_DOORS/GREEN/GreenFog"], GREEN no
+longer a gate part (42/36 parts become 41/35), `SpawnGates` switches the indicators on when the held gates open and off
+on Hold / scene unload; verify with the dev hold on GPU-2 from inside the north box. Risks: coplanar covers (z-fighting),
+the green sheets were never seen live, `AirPitFogSheets=Hidden` would hide them too.
+
 ## Update 2026-10-17 - cached weather sky-provider rebind deployed and tested
 
 ArenaMode's map-feature tests exposed repeated native weather, distant-shadow and ambient-highlight

@@ -184,7 +184,7 @@ class MapTableTests(unittest.TestCase):
 
     def test_plan_without_ai_role_is_an_error(self):
         from source_plan import PLAN_ROOT, PlanError, load_plan
-        plan = load_plan(PLAN_ROOT / "bowl.json")  # roles are only declared for AirPit
+        plan = load_plan(PLAN_ROOT / "prison.json")  # roles are declared for AirPit and Bowl only
         with self.assertRaises(PlanError):
             A.ai_scene_for_plan(plan)
 
@@ -289,7 +289,7 @@ class CommandLineTests(unittest.TestCase):
         import tempfile
         from source_plan import PLAN_ROOT, PlanError
         with tempfile.TemporaryDirectory() as tmp:
-            code, extract, err = self.run_main(["--plan", str(PLAN_ROOT / "bowl.json"), "--source", tmp])
+            code, extract, err = self.run_main(["--plan", str(PLAN_ROOT / "prison.json"), "--source", tmp])
         self.assertEqual(code, 2)
         self.assertIn("declares no scene with role 'ai'", err)
         extract.assert_not_called()

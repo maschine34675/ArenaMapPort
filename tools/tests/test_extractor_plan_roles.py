@@ -49,7 +49,7 @@ class RaincoverPlanRoleTests(unittest.TestCase):
 
     def test_plan_without_the_role_is_an_error_not_a_table_fallback(self):
         with self.assertRaises(PlanError):
-            R.scripts_scene_index_for_plan(load_plan(PLAN_ROOT / "bowl.json"))
+            R.scripts_scene_index_for_plan(load_plan(PLAN_ROOT / "prison.json"))
 
     def test_legacy_table_is_untouched(self):
         self.assertEqual(R.SCRIPTS_SCENE_INDEX, {"arena_equator": 54, "arena_bay5": 85})
@@ -143,7 +143,7 @@ class SpatialAudioMapTests(unittest.TestCase):
 
     def test_a_map_without_a_sound_role_or_plan_is_an_error(self):
         with self.assertRaises(PlanError):
-            S.scene_for_map("arena_bowl")          # plan exists, declares no roles
+            S.scene_for_map("arena_prison")        # plan exists, declares no roles
         with self.assertRaises(PlanError):
             S.scene_for_map("arena_does_not_exist")  # no plan file
         with self.assertRaises(PlanError):
@@ -175,7 +175,7 @@ class SpatialAudioMapTests(unittest.TestCase):
 
     def test_main_failures_exit_2_before_touching_the_source(self):
         with tempfile.TemporaryDirectory() as tmp:
-            for key in ("arena_bowl", "arena_does_not_exist"):
+            for key in ("arena_prison", "arena_does_not_exist"):
                 with self.subTest(key=key):
                     code, _out, err = quiet(S.main, ["--map", key, "--source", tmp, "--output", tmp])
                     self.assertEqual(code, 2)
@@ -238,7 +238,7 @@ class DecalsGenericPackageTests(unittest.TestCase):
         self.assertEqual(D.package_kind({"source": {"extractor_script": "tools/extract/extract_equator.py",
                                                     "map_key": "arena_equator"}}), "legacy")
         for source in ({}, {"extractor_script": "tools/extract/extract_other.py"},
-                       {"extractor_script": "tools/extract/extract_equator.py", "map_key": "arena_bowl"}):
+                       {"extractor_script": "tools/extract/extract_equator.py", "map_key": "arena_prison"}):
             with self.subTest(source=source), self.assertRaisesRegex(HardExtractError, "unsupported map"):
                 D.package_kind({"source": source})
 
