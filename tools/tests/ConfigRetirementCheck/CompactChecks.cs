@@ -28,7 +28,7 @@ internal static class CompactChecks
             Check(!File.Exists(CompactConfiguration.DeveloperPath(main)), "Runtime tuning created developer config");
 
             // Positive control: create a representative old full config including orphaned/parked keys.
-            File.AppendAllText(path, "\n[Audio (arena_equator)]\nAmbientGainDb = 6.25\n[Lighting (arena_bowl)]\nReflectionIntensity = 0.43\n[Future]\nKeepMe = unknown\n[Logging]\nVerbose = true\n");
+            File.AppendAllText(path, "\n[Audio (arena_equator)]\nAmbientGainDb = 6.25\n[Lighting (arena_prison)]\nReflectionIntensity = 0.43\n[Future]\nKeepMe = unknown\n[Logging]\nVerbose = true\n");
             Check(Assignments(path) == 6, "Legacy fixture is not actually a full config");
             main = new ConfigFile(path, false);
             tuning = CompactConfiguration.Initialize(main);
@@ -50,7 +50,7 @@ internal static class CompactChecks
             Check(ReferenceEquals(main, tuning) && DeveloperOptions.Enabled, "Developer settings cannot appear in F12");
             volume = tuning.Bind("Audio (arena_equator)", "AmbientGainDb", 5f);
             Check(volume.Value == 6.25f, "Developer recipe was not restored");
-            Check(tuning.Bind("Lighting (arena_bowl)", "ReflectionIntensity", 0f).Value == .43f, "Parked value lost");
+            Check(tuning.Bind("Lighting (arena_prison)", "ReflectionIntensity", 0f).Value == .43f, "Parked value lost");
             Check(tuning.Bind("Future", "KeepMe", "missing").Value == "unknown", "Unknown value lost");
             volume.Value = 8f;
             CompactConfiguration.Complete(main);

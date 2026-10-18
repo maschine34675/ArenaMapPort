@@ -8,7 +8,7 @@ namespace ArenaMapPort.Client
     /// Equator's rain-only exposure, independent of room/reverb classification.
     /// Equator-only on purpose (<see cref="Sample"/> returns null for every other map): the completed donor roof
     /// photo decides rain exposure there regardless of the acoustic room type, open atrium lattice included
-    /// (docs/progress/equator-rain-output.md). Bay5 and AirPit (PLAN-AIRPIT item 21, 2026-10-12) get no roof
+    /// (docs/progress/equator-rain-output.md). Bay5 and AirPit (PLAN-AIRPIT item 21, 2026-10-12) and Bowl (PLAN-BOWL item 8, 2026-10-18) get no roof
     /// sampling; <see cref="PrecipitationAudio"/> then falls back to the native acoustic room's outdoor flag and,
     /// without a valid room, the player's own Environment (set by the rain-cover IndoorTriggers). AirPit's
     /// glass-and-truss terminal roof is the case to listen for on the host: a listener under it in an acoustic

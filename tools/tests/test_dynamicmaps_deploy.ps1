@@ -238,7 +238,9 @@ try {
         Assert-That ((Get-TreeState $fixture.Root) -ceq $before) 'Wrong selected map changed fixture'
         Pass-Case "$($mismatch.PackageMap) package rejected for $($mismatch.Selected) selection"
     }
-    foreach ($selection in @('../Other', 'Bowl')) {
+    # Prison (a parked map) stands for any unsupported selection; Bowl is released but, like every map beyond Equator/Bay5/AirPit,
+    # has no DynamicMaps pack and is not in the script's -DynamicMapsMap ValidateSet either (PLAN-BOWL item 8).
+    foreach ($selection in @('../Other', 'Prison')) {
         $fixture = New-Fixture
         $before = Get-TreeState $fixture.Root
         $result = Invoke-Deploy $fixture -Confirm -SelectedMap $selection

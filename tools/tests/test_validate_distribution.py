@@ -80,7 +80,7 @@ class DistributionSidecarTests(unittest.TestCase):
             (directory/'map-descriptions.json').write_text(json.dumps({
                 'schema_version': 1, 'descriptions': {'en': {
                     'arena_equator': 'Mall fixture', 'arena_bay5': 'Harbor fixture',
-                    'arena_airpit': 'Terminal fixture'}}}), encoding='utf-8')
+                    'arena_airpit': 'Terminal fixture', 'arena_bowl': 'Stadium fixture'}}}), encoding='utf-8')
         self.put_art()
         self.put_ai()
         self.put_acoustics()
@@ -88,7 +88,8 @@ class DistributionSidecarTests(unittest.TestCase):
         for folder in (self.server / "db/arena_equator", self.repo / "ArenaMapPort.Server/db/arena_equator"):
             folder.mkdir(parents=True)
             (folder / "base.json").write_text('{"Id": "arena_equator"}', encoding="utf-8")
-        # The release is exactly three maps, even when parked descriptors remain in source.
+        # The release is exactly four maps (Bowl since PLAN-BOWL item 8, 2026-10-18), even when parked descriptors
+        # remain in source.
         (self.maps / "bay5.json").write_text(json.dumps({"key": "arena_bay5", "db_base_json_path": "arena_bay5/base.json"}), encoding="utf-8")
         (self.maps / "airpit.json").write_text(json.dumps({"key": "arena_airpit", "db_base_json_path": "arena_airpit/base.json"}), encoding="utf-8")
         (self.maps / "bowl.json").write_text(json.dumps({"key": "arena_bowl", "db_base_json_path": "arena_bowl/base.json"}), encoding="utf-8")
@@ -105,6 +106,14 @@ class DistributionSidecarTests(unittest.TestCase):
         for folder in (self.server / "db/arena_airpit", self.repo / "ArenaMapPort.Server/db/arena_airpit"):
             folder.mkdir(parents=True)
             (folder / "base.json").write_text('{"Id": "arena_airpit"}', encoding="utf-8")
+        # Bowl (PLAN-BOWL item 8): bundles, shader sidecar, database, art, AI sidecar and acoustics; no overview pack, no
+        # flares, no water package, and four loading images (Arena ships no loading screen for it).
+        for kind in ("scenes", "navmesh", "preset"):
+            (bundles / f"arena_bowl_{kind}.bundle").write_bytes(b"fixture bundle")
+        (self.plugin / "material-shaders.arena_bowl.json").write_text("{}", encoding="utf-8")
+        for folder in (self.server / "db/arena_bowl", self.repo / "ArenaMapPort.Server/db/arena_bowl"):
+            folder.mkdir(parents=True)
+            (folder / "base.json").write_text('{"Id": "arena_bowl"}', encoding="utf-8")
         self.built = {}
         for name, destination in (("Client", self.plugin), ("Server", self.server)):
             built = self.repo / f"ArenaMapPort.{name}/bin/Release/maschine-ArenaMapPort.{name}.dll"
@@ -113,7 +122,7 @@ class DistributionSidecarTests(unittest.TestCase):
             (destination / built.name).write_bytes(built.read_bytes())
             self.built[name] = built
 
-    RELEASED = ("arena_equator", "arena_bay5", "arena_airpit")
+    RELEASED = ("arena_equator", "arena_bay5", "arena_airpit", "arena_bowl")
 
     @staticmethod
     def banner_names():
@@ -191,7 +200,7 @@ class DistributionSidecarTests(unittest.TestCase):
                 redirect_stdout(output):
             distribution.validate()
         self.assertEqual(run.call_count, 2)
-        self.assertIn("DISTRIBUTION_OK 3 maps 9 bundles 3 sidecars", output.getvalue())
+        self.assertIn("DISTRIBUTION_OK 4 maps 12 bundles 4 sidecars", output.getvalue())
 
     def test_distribution_accepts_bots_exits_and_other_dotted_sidecars(self):
         (self.maps / "equator.bots.json").write_text('{"player_spawns": []}', encoding="utf-8")
@@ -245,10 +254,10 @@ class DistributionSidecarTests(unittest.TestCase):
 
     def test_distribution_rejects_every_kind_of_parked_map_output(self):
         for path, message in (
-                (self.plugin / "bundles/arena_bowl_scenes.bundle", "Bundle set mismatch"),
-                (self.plugin / "material-shaders.arena_bowl.json", "Shader sidecar set"),
+                (self.plugin / "bundles/arena_prison_scenes.bundle", "Bundle set mismatch"),
+                (self.plugin / "material-shaders.arena_prison.json", "Shader sidecar set"),
                 (self.plugin / "material-shaders.json", "Shader sidecar set"),
-                (self.server / "db/arena_bowl/base.json", "Server database set")):
+                (self.server / "db/arena_prison/base.json", "Server database set")):
             with self.subTest(path=path):
                 path.parent.mkdir(parents=True, exist_ok=True)
                 path.write_text("{}", encoding="utf-8")
@@ -352,6 +361,50 @@ class DistributionSidecarTests(unittest.TestCase):
                     finally:
                         path.write_bytes(original)
 
+    def test_bowl_carries_four_loadscreens_and_no_overview_flares_or_water(self):
+        # PLAN-BOWL item 8: Arena ships no loading screen for Bowl, only the four main-menu backgrounds, so the count of
+        # the rotation comes from its LOADSCREENS list and a fifth image (or a missing fourth) is a set mismatch.
+        self.assertEqual(4, len(extract_loadscreens.LOADSCREENS["arena_bowl"]))
+        self.assertTrue(all(len(extract_loadscreens.LOADSCREENS[k]) == 5 for k in ("arena_equator", "arena_bay5", "arena_airpit")))
+        self.assertEqual({f"arena_bowl_{n}.jpg" for n in range(1, 5)},
+                         {p.name for p in (self.plugin / "loadscreens").glob("arena_bowl_*.jpg")})
+        self.validate()
+        fifth = self.plugin / "loadscreens/arena_bowl_5.jpg"
+        fifth.write_bytes(b"\xff\xd8\xff fake fifth image")
+        try:
+            with self.assertRaisesRegex(ValueError, "Loadscreen file set mismatch"):
+                self.validate()
+        finally:
+            fifth.unlink()
+        fourth = self.plugin / "loadscreens/arena_bowl_4.jpg"
+        original = fourth.read_bytes()
+        fourth.unlink()
+        try:
+            with self.assertRaisesRegex(ValueError, "Loadscreen file set mismatch"):
+                self.validate()
+        finally:
+            fourth.write_bytes(original)
+        # No overview pack, flare package or water package may appear for Bowl before it is listed on purpose.
+        self.assertFalse((self.plugin / "dynamicmaps/ArenaMapPort_Bowl").exists())
+        self.assertFalse((self.plugin / "flares/arena_bowl").exists())
+        self.assertFalse((self.plugin / "water/arena_bowl").exists())
+        (self.plugin / "dynamicmaps/ArenaMapPort_Bowl").mkdir()
+        (self.plugin / "dynamicmaps/ArenaMapPort_Bowl/ArenaMapPort_Bowl.jsonc").write_text("{}", encoding="utf-8")
+        with self.assertRaisesRegex(ValueError, "Unexpected or missing overview"):
+            self.validate()
+        shutil.rmtree(self.plugin / "dynamicmaps/ArenaMapPort_Bowl")
+        (self.plugin / "flares/arena_bowl").mkdir()
+        (self.plugin / "flares/arena_bowl/flares.json").write_text("{}", encoding="utf-8")
+        with self.assertRaisesRegex(ValueError, "Unexpected or missing flare package files"):
+            self.validate()
+        shutil.rmtree(self.plugin / "flares/arena_bowl")
+        (self.plugin / "water/arena_bowl").mkdir(parents=True)
+        (self.plugin / "water/arena_bowl/water.json").write_text("{}", encoding="utf-8")
+        with self.assertRaisesRegex(ValueError, "Water file set mismatch"):
+            self.validate()
+        shutil.rmtree(self.plugin / "water/arena_bowl")
+        self.validate()
+
     def test_distribution_requires_every_released_maps_ai_sidecar_exactly_and_current(self):
         staged = self.plugin / "ai/airpit.ai.json"
         source = self.maps / "airpit.ai.json"
@@ -395,7 +448,7 @@ class DistributionSidecarTests(unittest.TestCase):
                         self.validate()
                 finally:
                     path.write_bytes(original)
-        for path in (airpit / "stray.wav", self.plugin / "acoustics/arena_bowl/spatial-audio.json",
+        for path in (airpit / "stray.wav", self.plugin / "acoustics/arena_prison/spatial-audio.json",
                      self.plugin / "acoustics/loose.json"):
             with self.subTest(unexpected=path.name):
                 path.parent.mkdir(parents=True, exist_ok=True)
@@ -505,7 +558,7 @@ class DistributionSidecarTests(unittest.TestCase):
         with patch.object(extract_banners, "BANNERS", without_airpit):
             with self.assertRaisesRegex(ValueError, "Banner table does not match"):
                 self.validate()
-        extra = {**extract_loadscreens.LOADSCREENS, "arena_bowl": extract_loadscreens.LOADSCREENS["arena_airpit"]}
+        extra = {**extract_loadscreens.LOADSCREENS, "arena_prison": extract_loadscreens.LOADSCREENS["arena_airpit"]}
         with patch.object(extract_loadscreens, "LOADSCREENS", extra):
             with self.assertRaisesRegex(ValueError, "Loadscreen table does not match"):
                 self.validate()

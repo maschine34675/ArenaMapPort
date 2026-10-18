@@ -4,7 +4,8 @@
 Reads resources.assets without changing the Arena install. The generated text is
 BSG-derived data and belongs under ignored work/ or dist/, never in source control.
 Select exact TextAsset names rather than build-dependent Unity path IDs. Only the
-three released maps are exported; each available translation must be complete.
+released maps (DESCRIPTION_KEYS: Equator, Bay5, AirPit and, since PLAN-BOWL item 8, Bowl) are exported; each
+available translation must be complete.
 
     python tools/extract/extract_map_descriptions.py
     python tools/extract/extract_map_descriptions.py --check
@@ -36,6 +37,9 @@ DESCRIPTION_KEYS = {
     # Arena's own location id for Air Pit (its "Name" key reads "Air Pit" in all three locales), NOT the
     # sidecar id_field of the ported location (b7ed1752...). Verified 2026-10-11 against 0.6.0.47752.
     "arena_airpit": "61e800b841ee214fbf1f0e53 Description",
+    # Arena's own location id for Bowl (PLAN-BOWL item 8, 2026-10-18), likewise NOT the sidecar id_field of the
+    # ported location. Verified against 0.6.0.47752 in the PLAN-BOWL surveys.
+    "arena_bowl": "62eba95b7ba21c1d534d305a Description",
 }
 
 

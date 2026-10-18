@@ -501,8 +501,9 @@ def registry_entries(text: str) -> dict[str, dict]:
             for name in names}
 
 
-RELEASE_MAP_NAMES = ("Equator", "Bay5", "AirPit")
-RELEASE_MAP_KEYS = ("arena_equator", "arena_bay5", "arena_airpit")
+# Bowl joined with PLAN-BOWL item 8 (2026-10-18): registered and staged on feature/bowl for 0.3.0, not released yet.
+RELEASE_MAP_NAMES = ("Equator", "Bay5", "AirPit", "Bowl")
+RELEASE_MAP_KEYS = ("arena_equator", "arena_bay5", "arena_airpit", "arena_bowl")
 
 
 def registry_membership_errors(text: str, entries: dict) -> list[str]:

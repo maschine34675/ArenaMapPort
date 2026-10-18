@@ -26,7 +26,8 @@ function Assert-OwnedPath([string]$Path, [string]$Root) {
 
 Assert-OwnedPath $sourceRoot $dist
 Assert-OwnedPath $archive $archiveBase
-$parked = @('airpit2','autoservice','bowl','prison','railwaystation','yard','iceberg','factory','custom','shoreline','woods')
+# bowl left this list with PLAN-BOWL item 8 (2026-10-18): it is registered and staged like the other released maps.
+$parked = @('airpit2','autoservice','prison','railwaystation','yard','iceberg','factory','custom','shoreline','woods')
 $extraPaths = @()
 if ($Scope -eq 'Server') { $extraPaths += 'db/base.json' }
 if ($Scope -eq 'Client') {

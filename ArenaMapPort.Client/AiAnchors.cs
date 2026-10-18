@@ -14,7 +14,7 @@ namespace ArenaMapPort.Client
     /// file at <c>&lt;plugin dir&gt;/ai/&lt;key&gt;.ai.json</c> (main csproj addition, see that progress
     /// doc). <see cref="AICorePointRepairs"/>/<see cref="PatrolWayRepairs"/> author the real
     /// topology from this instead of their own NavMesh-derived/single-point synthesis when it loads;
-    /// a missing or invalid file (any map without a staged sidecar; Equator, Bay5 and AirPit have one) returns null and those repairs fall
+    /// a missing or invalid file (any map without a staged sidecar; Equator, Bay5, AirPit and Bowl have one) returns null and those repairs fall
     /// through to that synthesis unchanged.
     ///
     /// Loading follows <see cref="ShaderRebind"/>'s own convention exactly: a loose JSON sidecar next

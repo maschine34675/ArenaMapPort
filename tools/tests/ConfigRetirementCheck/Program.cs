@@ -25,7 +25,7 @@ try
         AmbientCustomIntensity = 3
         [LightingLab (arena_bay5)]
         SunIntensityMultiplier = 0.6
-        [Lighting (arena_bowl)]
+        [Lighting (arena_prison)]
         ReflectionIntensity = 0.43
         [Future category]
         PreserveMe = future-value
@@ -44,7 +44,7 @@ try
     Check(reload.Bind("Lighting (arena_equator)", "SunIntensityMultiplier", -1f).Value == 0.72f, "Equator sun lost");
     Check(reload.Bind("Lighting (arena_bay5)", "VertexGroundDiffuseMultiplier", -1f).Value == 1.4f, "Bay5 ground lost");
     Check(reload.Bind("LightingLab (arena_bay5)", "SunIntensityMultiplier", -1f).Value == 0.6f, "Real sun lost");
-    Check(reload.Bind("Lighting (arena_bowl)", "ReflectionIntensity", -1f).Value == 0.43f, "Hidden map tuning lost");
+    Check(reload.Bind("Lighting (arena_prison)", "ReflectionIntensity", -1f).Value == 0.43f, "Hidden map tuning lost");
     Check(reload.Bind("Future category", "PreserveMe", "missing").Value == "future-value", "Unknown orphan lost");
     Check(reload.Bind("Logging", "Verbose", false).Value == false, "Retired key survived save/reload");
     // Exercise both an untouched old configuration and saved custom mix through actual

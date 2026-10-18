@@ -1,4 +1,21 @@
-# Current distribution contract: Equator, Bay5 and AirPit
+# Current distribution contract: Equator, Bay5 and AirPit (Bowl staged for 0.3.0)
+
+2026-10-18 (feature/bowl, PLAN-BOWL item 8, not released): Bowl is the fourth map of `ArenaMapRegistry.All`, so every list that
+names the release counts four maps: 12 bundles (three per map), 4 shader sidecars (`material-shaders.arena_<key>.json`), 4
+server databases (`db/<key>/base.json`), 4 AI sidecars (`ai/<stem>.ai.json`), 4 acoustic packages, 4 banners and both DLLs,
+i.e. `DISTRIBUTION_OK 4 maps 12 bundles 4 sidecars` once it can pass. Bowl's own files: `db/arena_bowl/base.json`,
+`ai/bowl.ai.json`, `acoustics/arena_bowl/` (`spatial-audio.json` 156,032 B, `source.audiobakedata` 7,039 B and the one room-tone
+WAV `sharedassets111.assets_40.wav` 2,800,324 B; 14 rooms, 25 portals, 24 areas, 55 room pairs, 196 routes), `banners/arena_bowl.jpg`
+(`Matchmaker_Banner_TheBowl`, 769 x 460, 219,073 B), FOUR loading images `loadscreens/arena_bowl_1..4.jpg` (the
+`Arena_MainMenu_Paralax_Bowl-1..4` backgrounds, 2048 x 1024; Arena ships no loading screen for Bowl, so there is no fifth
+file and the count is table-driven by `extract_loadscreens.LOADSCREENS`) and its entry in `locales/map-descriptions.json`
+(`62eba95b7ba21c1d534d305a Description`, en/ge/ru). Bowl has no flares, water package or DynamicMaps overview (PLAN-BOWL item 17,
+polish). **Pending:** the three Bowl bundles (`arena_bowl_scenes.bundle`, `arena_bowl_navmesh.bundle`, `arena_bowl_preset.bundle`)
+and `material-shaders.arena_bowl.json` come from the U1 Unity build (`work/build/bowl`), which was still running when this
+promotion was made; until a non-DllOnly client build stages them, `validate_distribution.py` and the real-dist smoke test of
+`test_release_zips.py` fail or skip on the missing Bowl files, and 0.2.2 stays the released three-map package. The park script no
+longer archives Bowl's outputs and `tools/build_remaining.ps1` refuses the map (it would overwrite `work/build/bowl` with the
+0.5.4 spike package).
 
 2026-10-17 (release 0.2.2, final cut): `maschine-ArenaMapPort-0.2.2.zip` is cut again from this dist (AirPit's U8 bundles
 with the crates, the redrawn AirPit DynamicMaps overview, the 0.2.2 DLLs): 2,149,195,967 B, SHA-256

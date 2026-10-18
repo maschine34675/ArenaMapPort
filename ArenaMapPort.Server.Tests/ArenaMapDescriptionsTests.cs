@@ -16,9 +16,9 @@ public sealed class ArenaMapDescriptionsTests : IDisposable
 
     private Dictionary<string, Dictionary<string, string>> Fixture() => new()
     {
-        ["en"] = new() { ["arena_equator"] = "English mall fixture", ["arena_bay5"] = "English harbor fixture", ["arena_airpit"] = "English terminal fixture" },
-        ["ge"] = new() { ["arena_equator"] = "German mall fixture", ["arena_bay5"] = "German harbor fixture", ["arena_airpit"] = "German terminal fixture" },
-        ["ru"] = new() { ["arena_equator"] = "Russian mall fixture", ["arena_bay5"] = "Russian harbor fixture", ["arena_airpit"] = "Russian terminal fixture" },
+        ["en"] = new() { ["arena_equator"] = "English mall fixture", ["arena_bay5"] = "English harbor fixture", ["arena_airpit"] = "English terminal fixture", ["arena_bowl"] = "English stadium fixture" },
+        ["ge"] = new() { ["arena_equator"] = "German mall fixture", ["arena_bay5"] = "German harbor fixture", ["arena_airpit"] = "German terminal fixture", ["arena_bowl"] = "German stadium fixture" },
+        ["ru"] = new() { ["arena_equator"] = "Russian mall fixture", ["arena_bay5"] = "Russian harbor fixture", ["arena_airpit"] = "Russian terminal fixture", ["arena_bowl"] = "Russian stadium fixture" },
     };
 
     private static string Kind(ArenaMapDescriptor map) => map.Key switch
@@ -26,6 +26,7 @@ public sealed class ArenaMapDescriptionsTests : IDisposable
         "arena_equator" => " mall fixture",
         "arena_bay5" => " harbor fixture",
         "arena_airpit" => " terminal fixture",
+        "arena_bowl" => " stadium fixture", // PLAN-BOWL item 8, 2026-10-18
         _ => throw new InvalidOperationException("unexpected released map " + map.Key),
     };
 
@@ -57,9 +58,9 @@ public sealed class ArenaMapDescriptionsTests : IDisposable
     }
 
     [Fact]
-    public void Released_registry_is_exactly_the_three_maps_of_the_description_pack()
+    public void Released_registry_is_exactly_the_four_maps_of_the_description_pack()
     {
-        Assert.Equal(new[] { "arena_equator", "arena_bay5", "arena_airpit" }, ArenaMapRegistry.All.Select(m => m.Key));
+        Assert.Equal(new[] { "arena_equator", "arena_bay5", "arena_airpit", "arena_bowl" }, ArenaMapRegistry.All.Select(m => m.Key));
     }
 
     [Theory]
@@ -72,6 +73,7 @@ public sealed class ArenaMapDescriptionsTests : IDisposable
     [InlineData("unexpected-map")]
     [InlineData("missing-airpit")]
     [InlineData("two-map-pack")]
+    [InlineData("three-map-pack")]
     public void Broken_pack_warns_once_and_preserves_location_registration(string fault)
     {
         var data = Fixture();
@@ -82,8 +84,11 @@ public sealed class ArenaMapDescriptionsTests : IDisposable
         // must be re-run in the same change that promotes a map.
         if (fault == "missing-airpit") data["ru"].Remove("arena_airpit");
         if (fault == "two-map-pack") foreach (var language in data.Values) language.Remove("arena_airpit");
+        // The same for a pack from before Bowl joined (PLAN-BOWL item 8): the whole pack is discarded.
+        if (fault == "three-map-pack") foreach (var language in data.Values) language.Remove("arena_bowl");
         if (fault == "empty-text") data["ge"]["arena_equator"] = " ";
-        if (fault == "unexpected-map") data["en"]["arena_bowl"] = "Unreleased fixture";
+        // Prison is a parked map (Bowl was this fixture until PLAN-BOWL item 8 released it).
+        if (fault == "unexpected-map") data["en"]["arena_prison"] = "Unreleased fixture";
         if (fault != "missing") WritePack(data, fault == "version" ? 2 : 1);
         if (fault == "invalid-json") File.WriteAllText(PackPath, "{");
         var warnings = new List<string>();

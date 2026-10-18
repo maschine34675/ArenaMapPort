@@ -233,7 +233,7 @@ class PartitionTests(FakeRepoCase):
                   f"{PLUGIN}/flares/arena_airpit2/flares.json", f"{PLUGIN}/water/arena_airpit2/water.json",
                   f"{PLUGIN}/loadscreens/arena_airpit2_1.jpg", f"{PLUGIN}/dynamicmaps/ArenaMapPort_AirPit2/a.jsonc",
                   f"{SERVER}/db/arena_airpit2/base.json", f"{SERVER}/banners/arena_airpit2.jpg",
-                  f"{PLUGIN}/bundles/arena_bowl_scenes.bundle", f"{SERVER}/db/arena_prison/base.json")
+                  f"{PLUGIN}/bundles/arena_prison_scenes.bundle", f"{SERVER}/db/arena_prison/base.json")
         for name in parked:
             with self.subTest(name=name):
                 path = self.dist / name
@@ -2210,6 +2210,64 @@ class RealRepoTests(unittest.TestCase):
     def test_client_and_server_versions_agree(self):
         spec = release.load_spec(REPO)  # raises when the two csproj versions differ or are missing
         self.assertTrue(release.VERSION_RE.fullmatch(spec.version), spec.version)
+
+
+BOWL = ("arena_bowl", "Bowl")
+
+
+class BowlPartTests(FakeRepoCase):
+    """PLAN-BOWL item 8 (2026-10-18): Bowl is the fourth released map. It ships bundles, database entry, shader sidecar,
+    AI sidecar, banner, acoustics and FOUR loading screens (Arena has no loading screen for it), but no flares, water
+    package or overview map (item 17 polish), so its part must be complete and classified without them."""
+
+    def setUp(self):
+        super().setUp()
+        bowl = {name: data for name, data in fake_dist_files(MAPS + (BOWL,)).items()
+                if "arena_bowl" in name or "ArenaMapPort_Bowl" in name or name.endswith("/ai/bowl.ai.json")}
+        for name in list(bowl):
+            if "/flares/" in name or "/dynamicmaps/" in name:
+                del bowl[name]
+        for n in (3, 4):
+            bowl[f"{PLUGIN}/loadscreens/arena_bowl_{n}.jpg"] = b"\xff\xd8\xff" + b"\x00" * 3000
+        write_tree(self.dist, bowl)
+        self.spec = release.load_spec(self.repo, maps=MAPS + (BOWL,))
+
+    def test_bowl_is_the_fifth_part_and_holds_exactly_its_own_files(self):
+        parts = self.partition()
+        self.assertEqual([p.id for p in parts], ["core", "equator", "bay5", "airpit", "bowl"])
+        self.assertEqual(parts[-1].zip_name, "maschine-ArenaMapPort-0.1.0-part5of5-bowl.zip")
+        names = {f.rel for f in parts[-1].files}
+        self.assertEqual(names, {
+            *(f"{PLUGIN}/bundles/arena_bowl_{kind}.bundle" for kind in ("scenes", "navmesh", "preset")),
+            f"{PLUGIN}/acoustics/arena_bowl/spatial-audio.json", f"{PLUGIN}/acoustics/arena_bowl/source.audiobakedata",
+            f"{PLUGIN}/acoustics/arena_bowl/room.assets_9.wav", f"{PLUGIN}/ai/bowl.ai.json",
+            *(f"{PLUGIN}/loadscreens/arena_bowl_{n}.jpg" for n in (1, 2, 3, 4)),
+            f"{PLUGIN}/material-shaders.arena_bowl.json", f"{SERVER}/db/arena_bowl/base.json",
+            f"{SERVER}/banners/arena_bowl.jpg"})
+        total = [f.rel for part in parts for f in part.files]
+        self.assertEqual(len(total), len(set(total)))
+        self.assertEqual(sorted(total), sorted(f.rel for f in self.scan()))
+
+    def test_bowl_needs_its_required_files_but_not_a_fifth_loading_image(self):
+        required = release.required_files(self.spec)["bowl"]
+        self.assertIn(f"{PLUGIN}/material-shaders.arena_bowl.json", required)
+        self.assertIn(f"{PLUGIN}/loadscreens/arena_bowl_1.jpg", required)
+        for name in required:
+            with self.subTest(name=name):
+                data = (self.dist / name).read_bytes()
+                (self.dist / name).unlink()
+                try:
+                    with self.assertRaises(release.PackagingError) as caught:
+                        self.partition()
+                    self.assertIn("incomplete dist", str(caught.exception))
+                    self.assertIn(name, str(caught.exception))
+                finally:
+                    (self.dist / name).write_bytes(data)
+        # A stray fifth image of a map is still classified (the rule is any numbered .jpg), the real guard against a fake
+        # fifth Bowl image is validate_distribution.validate_art; Alt-style names remain unclassifiable.
+        (self.dist / PLUGIN / "loadscreens/arena_bowl_Alt_1.jpg").write_bytes(b"\xff\xd8\xff")
+        with self.assertRaises(release.ClassificationError):
+            self.partition()
 
 
 class RealDistSmokeTests(unittest.TestCase):

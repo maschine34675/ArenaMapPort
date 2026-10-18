@@ -18,16 +18,18 @@ ARENA_SOURCE = "D:/Battlestate Games/Escape from Tarkov Arena/EscapeFromTarkovAr
 
 
 class LoadscreenTableTests(unittest.TestCase):
-    """The LOADSCREENS table itself: exactly the three maps in this release, five entries each, at
-    the path_ids/names the 2026-09-27 research pass (Equator, Bay5) and the 2026-10-11 probe
-    (AirPit, Arena 0.6.0) verified against a live UnityPy read."""
+    """The LOADSCREENS table itself: exactly the maps of this release, five entries each (Bowl four), at
+    the path_ids/names the 2026-09-27 research pass (Equator, Bay5), the 2026-10-11 probe (AirPit, Arena 0.6.0)
+    and the 2026-10-18 probe (Bowl) verified against a live UnityPy read."""
 
-    def test_exactly_the_three_released_maps(self):
-        self.assertEqual(set(EL.LOADSCREENS), {"arena_equator", "arena_bay5", "arena_airpit"})
+    def test_exactly_the_four_released_maps(self):
+        self.assertEqual(set(EL.LOADSCREENS), {"arena_equator", "arena_bay5", "arena_airpit", "arena_bowl"})
 
-    def test_every_map_has_the_five_image_rotation(self):
+    def test_every_map_has_the_five_image_rotation_except_bowl_which_has_four(self):
+        # Arena ships no AllScreens_Loadingscreen for Bowl (PLAN-BOWL item 8): its rotation is the four main-menu
+        # backgrounds alone, never a fake fifth image; the file count everywhere derives from this table.
         for key, entries in EL.LOADSCREENS.items():
-            self.assertEqual(5, len(entries), key)
+            self.assertEqual(4 if key == "arena_bowl" else 5, len(entries), key)
 
     def test_equator_entries(self):
         entries = EL.LOADSCREENS["arena_equator"]
@@ -58,6 +60,19 @@ class LoadscreenTableTests(unittest.TestCase):
                           ("Arena_MainMenu_Paralax_AirPit-3", 403), ("Arena_MainMenu_Paralax_AirPit-4", 936)])
         for e in entries[1:]:
             self.assertEqual((e["file"], e["size"]), ("sharedassets1.assets", (2048, 1024)))
+
+    def test_bowl_entries(self):
+        entries = EL.LOADSCREENS["arena_bowl"]
+        self.assertEqual([(e["asset_name"], e["path_id"]) for e in entries],
+                         [("Arena_MainMenu_Paralax_Bowl-1", 164), ("Arena_MainMenu_Paralax_Bowl-2", 1314),
+                          ("Arena_MainMenu_Paralax_Bowl-3", 274), ("Arena_MainMenu_Paralax_Bowl-4", 834)])
+        for e in entries:
+            self.assertEqual((e["file"], e["size"]), ("sharedassets1.assets", (2048, 1024)))
+        # No entry is a 1920x1080 loading screen; the four output names are _1.._4 and there is no _5.
+        self.assertEqual([EL.output_filename("arena_bowl", n) for n in range(1, 5)],
+                         [f"arena_bowl_{n}.jpg" for n in range(1, 5)])
+        with self.assertRaises(HardExtractError):
+            EL.output_filename("arena_bowl", index=5)
 
     def test_the_alt_menu_backgrounds_are_not_in_the_rotation(self):
         # User decision 2026-10-11 (PLAN-AIRPIT section 4 item 10): the four "-Alt-" images stay out.
@@ -136,9 +151,11 @@ class ValidateDimensionsTests(unittest.TestCase):
 
 class CheckModeTests(unittest.TestCase):
     """--check must never import UnityPy or touch the Arena install -- only look at whatever the
-    caller's own output directory already has on disk (five images per map since 2026-09-27)."""
+    caller's own output directory already has on disk (five images per map since 2026-09-27, four for Bowl since
+    PLAN-BOWL item 8, 2026-10-18)."""
 
-    ALL = {(k, i) for k in ("arena_equator", "arena_bay5", "arena_airpit") for i in range(1, 6)}
+    ALL = ({(k, i) for k in ("arena_equator", "arena_bay5", "arena_airpit") for i in range(1, 6)}
+           | {("arena_bowl", i) for i in range(1, 5)})
 
     @staticmethod
     def _write_all(tmp):
@@ -175,7 +192,7 @@ class RealSourceTests(unittest.TestCase):
     def test_extract_all_into_a_temp_dir(self):
         with tempfile.TemporaryDirectory() as tmp:
             written = EL.extract_all(ARENA_SOURCE, tmp, ext="jpg", quality=90)
-            self.assertEqual(set(written), {(k, i) for k in ("arena_equator", "arena_bay5", "arena_airpit") for i in range(1, 6)})
+            self.assertEqual(set(written), CheckModeTests.ALL)
             for path in written.values():
                 self.assertTrue(path.is_file())
                 self.assertGreater(path.stat().st_size, 0)

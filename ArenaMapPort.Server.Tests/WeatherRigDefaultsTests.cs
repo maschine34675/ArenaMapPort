@@ -11,7 +11,8 @@ namespace ArenaMapPort.Server.Tests;
 // project (they sit on EFT and Unity types), so every map-dependent first-run default lives in the pure table
 // MapLightingDefaults and is pinned here. BepInEx persists whatever a bound key defaults to, so the Equator and
 // Bay5 rows below are the values their released builds shipped; AirPit is a new section with no saved keys on
-// either test install (read-only grep 2026-10-12), so its rows are free to be chosen but are now pinned too.
+// either test install (read-only grep 2026-10-12), so its rows are free to be chosen but are now pinned too. Bowl
+// (PLAN-BOWL item 9, 2026-10-18) is the same kind of new section.
 [Collection("MapPort client lifecycle")]
 public sealed class WeatherRigDefaultsTests
 {
@@ -63,10 +64,23 @@ public sealed class WeatherRigDefaultsTests
     }
 
     [Fact]
+    public void BowlJoinsTheReserveRigLikeAirPitWithItsOwnSpawnHeightZeroLevel()
+    {
+        var bowl = Row.Of(ArenaMapRegistry.Bowl.Key);
+        // PLAN-BOWL item 9: donor rig Reserve_Base_Scripts and the same neutral tuning as AirPit; its 20 original spawn
+        // markers sit at y 0.047 (the same rule as Equator/AirPit: 4.4 m below the walkable ground).
+        Assert.Equal("Reserve_Base_Scripts", bowl.Donor);
+        Assert.True(bowl.UseDonorCameraPrefab);
+        Assert.True(bowl.ReserveTextureBudget);
+        Assert.Equal(-4.4f, bowl.ZeroLevel);
+        Assert.Equal(Row.Of(ArenaMapRegistry.AirPit.Key), bowl);
+    }
+
+    [Fact]
     public void EveryOtherCatalogMapKeepsDonorOffAndNeutralValues()
     {
         var parked = ArenaMapRegistry.Catalog.Except(ArenaMapRegistry.All).ToArray();
-        Assert.Equal(11, parked.Length);
+        Assert.Equal(10, parked.Length);
         foreach (var map in parked) Assert.Equal(Neutral, Row.Of(map.Key));
         Assert.Equal(Neutral, Row.Of("bigmap"));
         Assert.Equal(Neutral, Row.Of(null));
@@ -86,6 +100,7 @@ public sealed class WeatherRigDefaultsTests
         Assert.True(MapLightingDefaults.BindsAuthoredSunKeys(ArenaMapRegistry.Equator));
         Assert.False(MapLightingDefaults.BindsAuthoredSunKeys(ArenaMapRegistry.Bay5));
         Assert.False(MapLightingDefaults.BindsAuthoredSunKeys(ArenaMapRegistry.AirPit));
+        Assert.False(MapLightingDefaults.BindsAuthoredSunKeys(ArenaMapRegistry.Bowl)); // no Directional light in its imported scenes
         // The condition is the descriptor's data, not a map list: Equator is the only map with SunPaths.
         foreach (var map in ArenaMapRegistry.Catalog)
             Assert.Equal(map.SunPaths.Length > 0, MapLightingDefaults.BindsAuthoredSunKeys(map));

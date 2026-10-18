@@ -829,7 +829,9 @@ namespace ArenaMapPort.Shared
         /// <summary>Complete development catalog. Parked maps retain their stable identities and inputs.</summary>
         public static readonly IReadOnlyList<ArenaMapDescriptor> Catalog = new[] { Equator, Bay5, AirPit, AirPit2, AutoService, Bowl, Prison, RailwayStation, Yard, Iceberg, Factory, Custom, Shoreline, Woods };
 
-        /// <summary>Playable and distributable maps. Runtime consumers must iterate this release subset.</summary>
-        public static readonly IReadOnlyList<ArenaMapDescriptor> All = new[] { Equator, Bay5, AirPit };
+        /// <summary>Playable and distributable maps. Runtime consumers must iterate this release subset.
+        /// Equator, Bay5 and AirPit are the released ones (0.2.2); Bowl joined on feature/bowl for 0.3.0
+        /// (PLAN-BOWL item 8, 2026-10-18) and is registered and staged, not yet released.</summary>
+        public static readonly IReadOnlyList<ArenaMapDescriptor> All = new[] { Equator, Bay5, AirPit, Bowl };
     }
 }

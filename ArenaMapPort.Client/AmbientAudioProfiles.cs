@@ -57,8 +57,15 @@ namespace ArenaMapPort.Client
         internal string RootName { get; }
         /// <summary>Every <c>BaseAmbientSoundPlayer</c> under the root, with its <c>AudioSource</c>.</summary>
         internal int Players { get; }
-        /// <summary>Players the groups start (enabled and active under the root).</summary>
+        /// <summary>Players the driver starts (enabled and active under the root). Equals <see cref="Players"/> minus
+        /// <see cref="InactivePlayers"/>.</summary>
         internal int ActivePlayers { get; }
+        /// <summary>The groups' member lists also hold the players that stay inactive under an inactive ancestor (the
+        /// contract's <c>group_coverage</c> "all_players" together with a non-empty <c>inactive_players</c>; Bowl, 2026-10-18).
+        /// The driver starts only the active members. false = the lists hold exactly the active players (Equator).</summary>
+        internal bool GroupsListInactivePlayers { get; }
+        /// <summary>Total of the groups' member lists (the contract's <c>states.grouped_players</c>).</summary>
+        internal int GroupedPlayers => GroupsListInactivePlayers ? Players : ActivePlayers;
         internal int Groups { get; }
         /// <summary><c>AmbientSplineEmitterController</c> components (Bay5's shoreline).</summary>
         internal int Controllers { get; }
@@ -83,7 +90,7 @@ namespace ArenaMapPort.Client
 
         internal AmbientAudioProfile(string mapKey, string displayName, string rootName, int players, int activePlayers,
             int controllers, bool hasShoreline, bool usesSeasons, bool originalActivation,
-            string[] inactivePlayers, string[] loopPlayers, AmbientGroupRoute[] routes)
+            string[] inactivePlayers, string[] loopPlayers, AmbientGroupRoute[] routes, bool groupsListInactivePlayers = false)
         {
             if (routes == null || routes.Length == 0 || routes.Count(r => r.Effects) != 1 ||
                 routes.Select(r => r.GroupName).Distinct().Count() != routes.Length)
@@ -91,11 +98,13 @@ namespace ArenaMapPort.Client
             inactivePlayers = inactivePlayers ?? Array.Empty<string>();
             loopPlayers = loopPlayers ?? Array.Empty<string>();
             if (players <= 0 || activePlayers <= 0 || players - activePlayers != inactivePlayers.Length ||
-                routes.Sum(r => r.Members) != activePlayers ||
+                routes.Sum(r => r.Members) != (groupsListInactivePlayers ? players : activePlayers) ||
+                (groupsListInactivePlayers && (!originalActivation || inactivePlayers.Length == 0)) ||
                 controllers < 0 || (!originalActivation && (inactivePlayers.Length != 0 || loopPlayers.Length != 0)))
                 throw new ArgumentException("Inconsistent ambient player census for " + mapKey);
             MapKey = mapKey; DisplayName = displayName; RootName = rootName;
-            Players = players; ActivePlayers = activePlayers; Groups = routes.Length; Controllers = controllers;
+            Players = players; ActivePlayers = activePlayers; GroupsListInactivePlayers = groupsListInactivePlayers;
+            Groups = routes.Length; Controllers = controllers;
             HasShoreline = hasShoreline; UsesSeasons = usesSeasons; OriginalActivation = originalActivation;
             InactivePlayers = inactivePlayers; LoopPlayers = loopPlayers; Routes = routes;
         }
@@ -122,6 +131,13 @@ namespace ArenaMapPort.Client
     /// AmbientOut family. AirPit (2026-10-12): 26 plain players in an exterior group (AmbientOut, 4 far sources) and an
     /// interior group (AmbientIn, 22 sources); both buses stay open all raid (no room crossfade yet), the interior group
     /// takes the same reverb reroute as Equator because EFT mutes the CommonAmbInEffects original return.
+    /// Bowl (PLAN-BOWL item 9, 2026-10-18; contract native_contracts/bowl.json audio block): 33 players, four of them
+    /// inactive under an inactive ancestor as in the source scene (29 start), an interior group (AmbientIn, 15 sources)
+    /// listed first as the contract's group_mixers do, and an exterior group (AmbientOut, 18 sources); unlike Equator the
+    /// source groups list ALL 33 players, the four inactive ones included (group_coverage "all_players",
+    /// <see cref="AmbientAudioProfile.GroupsListInactivePlayers"/>), so the member counts add up to 33 and the driver
+    /// starts the 29 active members only. The interior group takes the Equator/AirPit reverb reroute. The pinned forced-mixer player metal_rigging (level111:557) is routed like
+    /// its group by the importer and needs no client row.
     /// </summary>
     internal static class AmbientAudioProfiles
     {
@@ -158,6 +174,19 @@ namespace ArenaMapPort.Client
                     new AmbientGroupRoute("CommonAmbientInGroup", "AmbientIn/CommonAmbInEffects", "CommonAmbInEffects",
                         AmbientBus.In, members: 22, effects: true, reverbReroute: true),
                 }),
+            // Bowl: PLAN-BOWL item 9, mirrors tools/extract/native_contracts/bowl.json "audio" (schema 2, level111): group
+            // members 15 + 18 = grouped_players 33 = all players (coverage "all_players"), 29 of them active.
+            new AmbientAudioProfile("arena_bowl", "Bowl", "ArenaMapPort_BowlNativeAudio",
+                players: 33, activePlayers: 29, controllers: 0, hasShoreline: false, usesSeasons: false, originalActivation: true,
+                inactivePlayers: new[] { "cracles (2)", "water_drops (4)", "water_drops (1)", "water_drops" }, loopPlayers: null,
+                routes: new[]
+                {
+                    new AmbientGroupRoute("CommonAmbientInGroup", "AmbientIn/CommonAmbInEffects", "CommonAmbInEffects",
+                        AmbientBus.In, members: 15, effects: true, reverbReroute: true),
+                    new AmbientGroupRoute("CommonAmbientOutGroup", "AmbientOut/CommonAmbOutEffects", "CommonAmbOutEffects",
+                        AmbientBus.Out, members: 18),
+                },
+                groupsListInactivePlayers: true),
         };
 
         /// <summary>Every map with an imported ambient graph, in config binding order.</summary>

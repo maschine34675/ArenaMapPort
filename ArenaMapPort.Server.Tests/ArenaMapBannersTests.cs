@@ -42,6 +42,7 @@ public sealed class ArenaMapBannersTests : IDisposable
     [InlineData("arena_equator", "arena_equator_banner", "arena_equator")]
     [InlineData("arena_bay5", "arena_bay5_banner", "arena_bay5")]
     [InlineData("arena_airpit", "arena_airpit_banner", "arena_airpit")]
+    [InlineData("arena_bowl", "arena_bowl_banner", "arena_bowl")] // PLAN-BOWL item 8, 2026-10-18
     public void For_ReturnsTheExpectedDescriptor_ForEachBanneredMap(string mapKey, string expectedId, string expectedFileStem)
     {
         var map = FindMap(mapKey);
@@ -65,7 +66,7 @@ public sealed class ArenaMapBannersTests : IDisposable
         foreach (var map in ArenaMapRegistry.Catalog)
         {
             if (map.Key != ArenaMapRegistry.Equator.Key && map.Key != ArenaMapRegistry.Bay5.Key
-                && map.Key != ArenaMapRegistry.AirPit.Key)
+                && map.Key != ArenaMapRegistry.AirPit.Key && map.Key != ArenaMapRegistry.Bowl.Key)
             {
                 yield return new object[] { map };
             }
@@ -77,10 +78,10 @@ public sealed class ArenaMapBannersTests : IDisposable
     {
         var warnings = new List<string>();
 
-        var resolved = ArenaMapBanners.Resolve(ArenaMapRegistry.Bowl, _bannersDir, warnings.Add);
+        var resolved = ArenaMapBanners.Resolve(ArenaMapRegistry.Prison, _bannersDir, warnings.Add);
 
         Assert.Null(resolved);
-        // Bowl (a parked map) has no banner descriptor at all -- Resolve must not warn about a
+        // Prison (a parked map; Bowl was this fixture until PLAN-BOWL item 8 released it) has no banner descriptor at all -- Resolve must not warn about a
         // "missing file" for a map that was never supposed to have one.
         Assert.Empty(warnings);
     }
@@ -103,7 +104,7 @@ public sealed class ArenaMapBannersTests : IDisposable
         // Guards the landmine directly: an empty banners directory must resolve to null for every
         // bannered map, for every extension Resolve knows how to look for -- never a Banner
         // pointing at a file that isn't there.
-        foreach (var map in new[] { ArenaMapRegistry.Equator, ArenaMapRegistry.Bay5, ArenaMapRegistry.AirPit })
+        foreach (var map in new[] { ArenaMapRegistry.Equator, ArenaMapRegistry.Bay5, ArenaMapRegistry.AirPit, ArenaMapRegistry.Bowl })
         {
             var resolved = ArenaMapBanners.Resolve(map, _bannersDir, _ => { });
             Assert.Null(resolved);
@@ -228,7 +229,7 @@ public sealed class ArenaMapBannersTests : IDisposable
     {
         var locale = new GlobalLocaleDictionary();
 
-        ArenaMapBanners.ApplyLocale(locale, ArenaMapRegistry.Bowl);
+        ArenaMapBanners.ApplyLocale(locale, ArenaMapRegistry.Prison);
 
         Assert.Empty(locale);
     }

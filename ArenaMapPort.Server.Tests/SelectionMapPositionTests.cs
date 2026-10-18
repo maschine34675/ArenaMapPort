@@ -71,7 +71,7 @@ public sealed class SelectionMapPositionTests
     [Fact]
     public void FutureMeasurementsDoNotActivateUnreleasedMapsOrAssignAirPit2TheAirPitPin()
     {
-        Assert.Equal(new[] { "arena_equator", "arena_bay5", "arena_airpit" }, ArenaMapRegistry.All.Select(m => m.Key));
+        Assert.Equal(new[] { "arena_equator", "arena_bay5", "arena_airpit", "arena_bowl" }, ArenaMapRegistry.All.Select(m => m.Key));
         using var document = JsonDocument.Parse(File.ReadAllText(RepoFile("tools", "maps", "selection", "markers.json")));
         var unmapped = document.RootElement.GetProperty("markers").EnumerateArray()
             .Where(m => m.GetProperty("catalog_key").ValueKind == JsonValueKind.Null).ToArray();

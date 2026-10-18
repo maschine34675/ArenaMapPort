@@ -14,7 +14,7 @@ namespace ArenaMapPort.Client
 {
     /// <summary>
     /// PLAN-TWO-MAPS item 10b — loading-screen art for ported maps (every map in
-    /// <see cref="ArenaMapRegistry.All"/> that has art staged: Equator, Bay5 and AirPit).
+    /// <see cref="ArenaMapRegistry.All"/> that has art staged: Equator, Bay5, AirPit and Bowl).
     ///
     /// What vanilla does: EFT's own "Deploying in progress (NN%)" deploy screen
     /// (<c>EFT.UI.Matchmaker.MatchmakerTimeHasCome.Show</c>, decompile
@@ -69,7 +69,7 @@ namespace ArenaMapPort.Client
     /// <c>NavMeshInstaller.cs</c>; staged there by <c>tools/extract/extract_loadscreens.py</c>) via
     /// <c>File.ReadAllBytes</c> + <c>ImageConversion.LoadImage</c> — plugin-local files, not a
     /// UnityWebRequest fetch — each image decoded once and cached for the process; a raid load picks at
-    /// random among whichever indices exist on disk (five per map: Arena's loading screen plus its four
+    /// random among whichever indices exist on disk (five per map, four for Bowl: Arena's loading screen plus its four
     /// main-menu backgrounds), never the one shown last time. Every entry
     /// point is wrapped in try/catch (never allowed to throw into EFT code) and every obfuscated-free
     /// member name here was verified against the decompile and is installed through
@@ -78,7 +78,8 @@ namespace ArenaMapPort.Client
     /// complete no-op for every other map.
     ///
     /// Verified 2026-09-27 on SPT-GPU-2 (Equator + Bay5, debug start and normal menu flow): see
-    /// docs/progress/two-maps-item-10b-loadscreens.md. AirPit's five images are staged by the same
+    /// docs/progress/two-maps-item-10b-loadscreens.md. Bowl (PLAN-BOWL item 8) has four: Arena ships no loading screen for it,
+    /// so its rotation is the four main-menu backgrounds (the probe stops at the first missing index). AirPit's five images are staged by the same
     /// extractor (docs/progress/airpit-release.md, item 9) and still await a host raid.
     /// </summary>
     internal static class LoadingScreenArt

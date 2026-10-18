@@ -33,18 +33,19 @@ goes into git (AGENTS.md): the only write targets are `dist/` (gitignored) or a 
 typically under `work/` for a one-off inspection.
 
 Output filenames are numbered per map, `arena_<key>_<n>.jpg` starting at `n=1` — five files per map
-today (the loading screen plus four main-menu backgrounds), and the client probes contiguously
+for Equator, Bay5 and AirPit (the loading screen plus four main-menu backgrounds) and four for Bowl, which has
+no Arena loading screen (the count is whatever the map's LOADSCREENS list holds), and the client probes contiguously
 (`arena_equator_1.jpg`, `_2.jpg`, ...) and stops at the
 first missing index, so shipping a further variety image later (e.g. a future additional
 `AllScreens`-style shot) is a drop-in: no client rebuild, no naming change, just add the next
-number after the map's last file (`arena_<key>_6.jpg` today).
+number after the map's last file (`arena_equator_6.jpg` today; `arena_bowl_5.jpg` for Bowl).
 
 Selects a unique exact Texture2D name in the expected source file, then checks that
 entry's known dimensions. The old path_id values below are historical hints only;
 Arena 0.6 repacked them. Missing/duplicate names or dimension drift fail loudly.
 
 CLI:
-    python extract_loadscreens.py                     # extract all three maps into dist/
+    python extract_loadscreens.py                     # extract every map of LOADSCREENS into dist/
     python extract_loadscreens.py --ext png            # write PNG instead of the jpg default
     python extract_loadscreens.py --output <dir>       # override the output directory
     python extract_loadscreens.py --source <ArenaData> # override the Arena EscapeFromTarkovArena_Data dir
@@ -80,7 +81,8 @@ EXPECTED_HEIGHT = 1080
 # map_key -> [entry, ...], in the order they become arena_<key>_1.jpg, arena_<key>_2.jpg, ... . Entry 1 is
 # Arena's purpose-made 1920x1080 loading screen (resources.assets); entries 2-5 are the four main-menu
 # backgrounds Arena shows for the map (sharedassets1.assets, 2048x1024, opaque; the user pointed at these,
-# 2026-09-27). The client rotates over whatever files exist. The "-NY" (New Year) reskins are never used.
+# 2026-09-27). Bowl has no loading screen, only the four backgrounds (entries 1-4). The client rotates over
+# whatever files exist. The "-NY" (New Year) reskins are never used.
 LOADSCREENS = {
     "arena_equator": [
         {"asset_name": "AllScreens_Loadingscreen-Equator", "path_id": 1558, "file": "resources.assets", "size": (1920, 1080)},
@@ -106,6 +108,16 @@ LOADSCREENS = {
         {"asset_name": "Arena_MainMenu_Paralax_AirPit-2", "path_id": 438, "file": "sharedassets1.assets", "size": (2048, 1024)},
         {"asset_name": "Arena_MainMenu_Paralax_AirPit-3", "path_id": 403, "file": "sharedassets1.assets", "size": (2048, 1024)},
         {"asset_name": "Arena_MainMenu_Paralax_AirPit-4", "path_id": 936, "file": "sharedassets1.assets", "size": (2048, 1024)},
+    ],
+    # Bowl (PLAN-BOWL item 8/16, 2026-10-18; Arena 0.6.0.47752 path ids, hints only): Arena ships NO
+    # "AllScreens_Loadingscreen-*" for Bowl, so the rotation is the four main-menu backgrounds alone (four files, not
+    # five; there is deliberately no fake fifth image). Everything downstream derives the count from this table
+    # (output_filename, check, validate_distribution.validate_art) and the client probes contiguously up to the first gap.
+    "arena_bowl": [
+        {"asset_name": "Arena_MainMenu_Paralax_Bowl-1", "path_id": 164, "file": "sharedassets1.assets", "size": (2048, 1024)},
+        {"asset_name": "Arena_MainMenu_Paralax_Bowl-2", "path_id": 1314, "file": "sharedassets1.assets", "size": (2048, 1024)},
+        {"asset_name": "Arena_MainMenu_Paralax_Bowl-3", "path_id": 274, "file": "sharedassets1.assets", "size": (2048, 1024)},
+        {"asset_name": "Arena_MainMenu_Paralax_Bowl-4", "path_id": 834, "file": "sharedassets1.assets", "size": (2048, 1024)},
     ],
 }
 
@@ -214,7 +226,7 @@ def main(argv=None):
     parser.add_argument("--source", default=DEFAULT_SOURCE,
                         help="Arena's EscapeFromTarkovArena_Data directory (read-only)")
     parser.add_argument("--output", default=str(DEFAULT_OUTPUT),
-                        help="directory to write arena_<key>_<n>.<ext> (n = 1..5 per map) into")
+                        help="directory to write arena_<key>_<n>.<ext> (n = 1..len(LOADSCREENS[key]), 4 or 5 per map) into")
     parser.add_argument("--ext", default="jpg", choices=["jpg", "jpeg", "png"],
                         help="output image format (default jpg, quality=95)")
     parser.add_argument("--quality", type=int, default=95, help="JPEG quality, 1-95 (ignored for --ext png)")

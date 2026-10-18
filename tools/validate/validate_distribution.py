@@ -10,12 +10,13 @@ from validate_map_descriptors import map_descriptor_paths, RELEASE_MAP_KEYS
 REPO = Path(__file__).resolve().parents[2]
 
 # Not every released map carries every optional payload. The key set of the release itself comes from
-# validate_map_descriptors.RELEASE_MAP_KEYS (three maps since AirPit). All three have overviews;
-# AirPit has no active flare light (item 22), so its flare package remains absent.
+# validate_map_descriptors.RELEASE_MAP_KEYS (four maps since Bowl, PLAN-BOWL item 8, 2026-10-18). Equator, Bay5 and
+# AirPit have overviews; Bowl has none yet (DynamicMaps pack is polish, PLAN-BOWL item 17), so its pack stays absent.
+# AirPit has no active flare light (item 22) and Bowl's MultiFlare is polish too (item 17), so neither has a flare package.
 OVERVIEW_MAP_NAMES = ('Equator', 'Bay5', 'AirPit')
 FLARE_MAP_KEYS = ('arena_equator', 'arena_bay5')
-# Only Bay5 has a native water surface (the harbor's Sea/Plane mesh, NativeWaterRepairs.cs); Equator and AirPit carry
-# no water package, so a water directory for any other key is parked or stray output.
+# Only Bay5 has a native water surface (the harbor's Sea/Plane mesh, NativeWaterRepairs.cs); Equator, AirPit and Bowl
+# carry no water package, so a water directory for any other key is parked or stray output.
 WATER_MAP_KEYS = ('arena_bay5',)
 
 

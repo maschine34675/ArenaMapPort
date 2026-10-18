@@ -64,7 +64,8 @@ namespace ArenaMapPort.Client
         {
             // Maps that have a generated acoustics/<key> package (csproj ArenaMapPortStageAcoustics). RoomReverb and
             // PrecipitationAudio list the same maps: RoomReverb indexes its own Enabled table with this state's MapKey.
-            foreach (var map in new[] { ArenaMapRegistry.Equator, ArenaMapRegistry.Bay5, ArenaMapRegistry.AirPit })
+            // Bowl joined with PLAN-BOWL item 8/14 (2026-10-18); its package is extract_spatial_audio.py --map arena_bowl.
+            foreach (var map in new[] { ArenaMapRegistry.Equator, ArenaMapRegistry.Bay5, ArenaMapRegistry.AirPit, ArenaMapRegistry.Bowl })
                 Enabled[map.Key] = Plugin.Instance.Settings.Bind("Audio (" + map.Key + ")", "NativeSpatialAudio", true,
                     "Use original rooms, openings and baked sound paths for native wall/room attenuation and room tones. " +
                     "Takes effect next raid. Missing or invalid data retains unoccluded playback.");
@@ -323,7 +324,7 @@ namespace ArenaMapPort.Client
                     foreach (var binding in state.ToneBindings) binding.Key.RoomTone = clips[binding.Value];
                     // LocalGame resets sources and mixer buses during deployment. Start only after
                     // Started, as the existing ambient driver does; earlier sources are stopped.
-                    // Equator and AirPit: their ambient driver already holds the interior bus (AmbientAudioProfiles); Bay5's
+                    // Equator, AirPit and Bowl: their ambient driver already holds the interior bus (AmbientAudioProfiles); Bay5's
                     // driver holds only the exterior bus, so its room tones take the shared interior lease themselves.
                     if (state.IndoorBus == null && !AmbientAudioProfiles.LeasesBus(state.MapKey, AmbientBus.In) &&
                         MonoBehaviourSingleton<BetterAudio>.Instantiated)

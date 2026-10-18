@@ -6,7 +6,8 @@ using Xunit;
 namespace ArenaMapPort.Server.Tests;
 
 /// <summary>
-/// PLAN-AIRPIT items 15, 20, 21. The client files that bind a per-map table (native acoustics, room reverb, rain
+/// PLAN-AIRPIT items 15, 20, 21 (Bowl joined the released set with PLAN-BOWL item 8, 2026-10-18; every list below is
+/// compared with <see cref="ArenaMapRegistry.All"/>, so the same tests pin Bowl). The client files that bind a per-map table (native acoustics, room reverb, rain
 /// audio, projection decals) and the csproj rows that stage a map's AI sidecar and acoustic package are sources of
 /// silent failure: a missing entry does not throw, the feature just never starts on that map (RoomReverb would even
 /// throw a KeyNotFoundException against a map NativeSpatialAudio bound). They sit on Unity and BepInEx types and
@@ -79,6 +80,7 @@ public sealed class AirPitWiringTests
             .Select(Stem).Order().ToArray();
         Assert.Equal(withSidecar, rows);
         Assert.Contains("airpit", rows);
+        Assert.Contains("bowl", rows); // PLAN-BOWL item 8/15
         foreach (var row in rows) Assert.NotNull(RepoFileOrNull($"tools/maps/{row}.ai.json"));
     }
 
@@ -112,7 +114,7 @@ public sealed class AirPitWiringTests
         foreach (var file in new[] { "ArenaMapPort.Client/BarbedWireRepairs.cs", "ArenaMapPort.Client/BallisticTwinRepairs.cs" })
         {
             var code = string.Join("\n", Text(file).Split('\n').Where(l => !l.TrimStart().StartsWith("///") && !l.TrimStart().StartsWith("//")));
-            Assert.DoesNotMatch(@"ArenaMapRegistry\.(Equator|Bay5|AirPit)\b|""arena_(equator|bay5|airpit)""", code);
+            Assert.DoesNotMatch(@"ArenaMapRegistry\.(Equator|Bay5|AirPit|Bowl)\b|""arena_(equator|bay5|airpit|bowl)""", code);
         }
     }
 }

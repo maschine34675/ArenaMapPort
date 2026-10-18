@@ -15,7 +15,7 @@ namespace ArenaMapPort.Client
     /// <summary>
     /// Use the native CURR/PAST toggles for descriptor-defined time choices. EFT excludes custom
     /// locations in two independent whitelists, then otherwise displays the advancing backend clock.
-    /// Retain its listeners; Bay5 and AirPit (descriptor UsesServerTime) keep the backend clock and weather. Equator alone replaces the
+    /// Retain its listeners; Bay5, AirPit and Bowl (descriptor UsesServerTime) keep the backend clock and weather. Equator alone replaces the
     /// clock labels and previews its day Clear / optional midnight rain without altering session weather.
     /// Do not duplicate Factory's special location identities.
     /// Verified against the installed LocationConditionsPanel and selection-controller call paths.

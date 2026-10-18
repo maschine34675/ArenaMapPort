@@ -17,9 +17,9 @@ def synthetic_pack():
         "schema_version": 1,
         "descriptions": {
             "en": {"arena_equator": "Synthetic mall text.", "arena_bay5": "Synthetic harbor text.",
-                   "arena_airpit": "Synthetic terminal text."},
+                   "arena_airpit": "Synthetic terminal text.", "arena_bowl": "Synthetic stadium text."},
             "ge": {"arena_equator": "Synthetic ä text.", "arena_bay5": "Synthetic ß text.",
-                   "arena_airpit": "Synthetic ö text."},
+                   "arena_airpit": "Synthetic ö text.", "arena_bowl": "Synthetic ü text."},
         },
     }
 
@@ -37,8 +37,22 @@ def synthetic_source():
 
 
 class DescriptionContractTests(unittest.TestCase):
-    def test_keys_are_exactly_the_three_released_maps(self):
-        self.assertEqual(set(descriptions.DESCRIPTION_KEYS), {"arena_equator", "arena_bay5", "arena_airpit"})
+    def test_keys_are_exactly_the_four_released_maps(self):
+        self.assertEqual(set(descriptions.DESCRIPTION_KEYS), {"arena_equator", "arena_bay5", "arena_airpit", "arena_bowl"})
+
+    def test_bowl_uses_arenas_location_id_not_the_sidecar_id_field(self):
+        # PLAN-BOWL item 8: Arena's own location id for Bowl; the ported location's id_field is another value.
+        self.assertEqual(descriptions.DESCRIPTION_KEYS["arena_bowl"], "62eba95b7ba21c1d534d305a Description")
+        sidecar = json.loads((Path(__file__).resolve().parents[1] / "maps" / "bowl.json").read_text(encoding="utf-8"))
+        self.assertNotIn(sidecar["id_field"], descriptions.DESCRIPTION_KEYS["arena_bowl"])
+
+    def test_a_pack_without_bowl_is_rejected(self):
+        # A pack generated before Bowl was promoted must fail validation (the server discards it wholesale).
+        pack = synthetic_pack()
+        for maps in pack["descriptions"].values():
+            del maps["arena_bowl"]
+        with self.assertRaises(ValueError):
+            descriptions.validate_pack(pack)
 
     def test_airpit_uses_arenas_location_id_not_the_sidecar_id_field(self):
         # Arena's own location id (its "Name" key reads Air Pit); the ported location's id_field is another value.

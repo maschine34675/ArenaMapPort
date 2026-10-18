@@ -795,19 +795,22 @@ class RegistryTests(unittest.TestCase):
                     self.assertIn("distant_shadow_caster_paths mismatch", output.getvalue())
 
     def test_catalog_and_release_membership_are_independently_checked(self):
-        # The released set is Equator, Bay5 and AirPit (RELEASE_MAP_NAMES); Third stands for any parked map.
-        entries = {name: {} for name in ("Equator", "Bay5", "AirPit", "Third")}
+        # The released set is Equator, Bay5, AirPit and Bowl (RELEASE_MAP_NAMES, Bowl since PLAN-BOWL item 8,
+        # 2026-10-18); Third stands for any parked map.
+        entries = {name: {} for name in ("Equator", "Bay5", "AirPit", "Bowl", "Third")}
         prefix = "public static readonly IReadOnlyList<ArenaMapDescriptor> "
         def source(catalog, release):
             return prefix + "Catalog = new[] {" + catalog + "};\n" + prefix + "All = new[] {" + release + "};"
-        released = "Equator, Bay5, AirPit"
-        self.assertEqual(VD.RELEASE_MAP_NAMES, ("Equator", "Bay5", "AirPit"))
-        self.assertEqual(VD.registry_membership_errors(source("Equator, Bay5, AirPit, Third", released), entries), [])
-        for catalog, release in (("Equator, Bay5, AirPit", released), ("Equator, Bay5, AirPit, Third, Third", released),
-                                 ("Equator, Bay5, AirPit, Unknown", released), ("Equator, Bay5, AirPit, Third", "Equator"),
-                                 ("Equator, Bay5, AirPit, Third", "Equator, Bay5"),
-                                 ("Equator, Bay5, AirPit, Third", "Equator, Bay5, AirPit, Third"),
-                                 ("Equator, Bay5, AirPit, Third", "Equator, Bay5, AirPit, AirPit")):
+        released = "Equator, Bay5, AirPit, Bowl"
+        full = "Equator, Bay5, AirPit, Bowl, Third"
+        self.assertEqual(VD.RELEASE_MAP_NAMES, ("Equator", "Bay5", "AirPit", "Bowl"))
+        self.assertEqual(VD.RELEASE_MAP_KEYS, ("arena_equator", "arena_bay5", "arena_airpit", "arena_bowl"))
+        self.assertEqual(VD.registry_membership_errors(source(full, released), entries), [])
+        for catalog, release in (("Equator, Bay5, AirPit, Bowl", released), (full + ", Third", released),
+                                 ("Equator, Bay5, AirPit, Bowl, Unknown", released), (full, "Equator"),
+                                 (full, "Equator, Bay5"), (full, "Equator, Bay5, AirPit"),
+                                 (full, "Equator, Bay5, AirPit, Bowl, Third"),
+                                 (full, "Equator, Bay5, AirPit, Bowl, Bowl")):
             with self.subTest(catalog=catalog, release=release):
                 self.assertTrue(VD.registry_membership_errors(source(catalog, release), entries))
 

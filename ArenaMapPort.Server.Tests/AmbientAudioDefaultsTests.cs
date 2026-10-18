@@ -12,6 +12,7 @@ public class AmbientAudioDefaultsTests
     [InlineData("arena_equator", 2f, .4f, 2.5f)]
     [InlineData("arena_bay5", 5f, .4f, 4f)]
     [InlineData("arena_airpit", 3f, .4f, 3f)]
+    [InlineData("arena_bowl", 3f, .4f, 3f)] // provisional like AirPit's first mix (PLAN-BOWL item 9, 2026-10-18)
     public void AcceptedMixIsTheDefault(string map, float gain, float offset, float range)
     {
         AmbientAudioDefaults.Values(map, out float defaultGain, out float defaultOffset, out float defaultRange);
@@ -67,6 +68,9 @@ public class AmbientAudioDefaultsTests
     [InlineData("arena_airpit", 3f, .4f, 3f)]
     [InlineData("arena_airpit", 0f, 0f, 1f)]
     [InlineData("arena_airpit", -6f, .1f, 2f)]
+    [InlineData("arena_bowl", 3f, .4f, 3f)] // Bowl's previous default equals its default: nothing may move
+    [InlineData("arena_bowl", 0f, 0f, 1f)]
+    [InlineData("arena_bowl", -6f, .1f, 2f)]
     [InlineData("arena_equator", 2f, .4f, 2.5f)]
     [InlineData("arena_bay5", 5f, .4f, 4f)]
     [InlineData("arena_bay5", 4f, .4f, 3.5f)]
@@ -84,24 +88,26 @@ public class AmbientAudioDefaultsTests
     }
 
     [Theory]
-    [InlineData(0f, 0f, 1f)]
-    [InlineData(-6f, .1f, 2f)]
-    public void AirPitKeysAreNewSoNoLegacyMigrationTouchesAMix(float savedGain, float savedOffset, float savedRange)
+    [InlineData("arena_airpit", 0f, 0f, 1f)]
+    [InlineData("arena_airpit", -6f, .1f, 2f)]
+    [InlineData("arena_bowl", 0f, 0f, 1f)]
+    [InlineData("arena_bowl", -6f, .1f, 2f)]
+    public void AirPitAndBowlKeysAreNewSoNoLegacyMigrationTouchesAMix(string map, float savedGain, float savedOffset, float savedRange)
     {
-        // Equator and Bay5 migrate neutral defaults and rounded offsets from earlier releases. AirPit's keys never had
-        // either, so even a deliberately neutral mix must survive, and the revision is only stamped.
+        // Equator and Bay5 migrate neutral defaults and rounded offsets from earlier releases. AirPit's and Bowl's keys
+        // never had either, so even a deliberately neutral mix must survive, and the revision is only stamped.
         var config = new ConfigFile();
-        const string section = "Audio (arena_airpit)";
+        string section = "Audio (" + map + ")";
         var gain = config.Bind(section, "AmbientGainDb", savedGain, "");
         var offset = config.Bind(section, "AmbientVolumeOffset", savedOffset, "");
         var range = config.Bind(section, "AmbientRangeMultiplier", savedRange, "");
-        AmbientAudioDefaults.Migrate(config, "arena_airpit", gain, offset, range);
+        AmbientAudioDefaults.Migrate(config, map, gain, offset, range);
         Assert.Equal((savedGain, savedOffset, savedRange), (gain.Value, offset.Value, range.Value));
         Assert.Equal(3, config.Get<int>(section, "AmbientDefaultsRevision").Value);
         // A value equal to Bay5's unrounded legacy offset is not rewritten either.
         offset.Value = .399061f;
         config.Get<int>(section, "AmbientDefaultsRevision").Value = 0;
-        AmbientAudioDefaults.Migrate(config, "arena_airpit", gain, offset, range);
+        AmbientAudioDefaults.Migrate(config, map, gain, offset, range);
         Assert.Equal(.399061f, offset.Value);
     }
 

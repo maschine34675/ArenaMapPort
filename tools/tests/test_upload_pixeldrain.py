@@ -1699,6 +1699,10 @@ class RealVerifyTests(packager_tests.FakeRepoCase if packager_tests else unittes
         import inspect
         if "single" not in inspect.signature(upload.release.build_release).parameters:
             self.skipTest("the packager in the tree has no single-ZIP layout yet")
+        # The single ZIP is verified against the released map list (default_maps()); the fake dist carries the three
+        # fixture maps, so this pins that list like the packager's own tests do (Bowl joined the real list with
+        # PLAN-BOWL item 8, 2026-10-18, and has no files in this fixture).
+        self.pin_released_maps()
         result = self.build(single=True)
         self.assertEqual([p.name for p in result.zips], [f"maschine-ArenaMapPort-{self.spec.version}.zip"])
         fake = FakePixeldrain()

@@ -16,12 +16,14 @@ namespace ArenaMapPort.Server;
 /// The location-select screen's one-per-map picture (client: <c>LocationInfoPanel.Set()</c> reads
 /// only <c>location.Banners[0]</c>, EFT.UI/LocationInfoPanel.cs:167; <c>ImageUrl =&gt; "/files/" +
 /// pic.path</c>, JsonType/LocationSettings.cs:153), built from Arena's own
-/// Matchmaker_Banner_Equator / Matchmaker_Banner_Bay5 / Matchmaker_Banner_AirPit art (extracted
-/// read-only by tools/extract/extract_banners.py, never committed).
+/// Matchmaker_Banner_Equator / Matchmaker_Banner_Bay5 / Matchmaker_Banner_AirPit /
+/// Matchmaker_Banner_TheBowl art (extracted read-only by tools/extract/extract_banners.py, never
+/// committed).
 ///
-/// Equator, Bay5 and AirPit only (the released maps) — deliberately NOT a field on
+/// Equator, Bay5, AirPit and Bowl only (the maps of <see cref="ArenaMapRegistry.All"/>; Bowl joined
+/// with PLAN-BOWL item 8, 2026-10-18) — deliberately NOT a field on
 /// <see cref="ArenaMapDescriptor"/> (Shared/Client/UnityProject are out of scope for this pass;
-/// keeping it here also means the eleven parked maps need no descriptor change at all to stay
+/// keeping it here also means the ten parked maps need no descriptor change at all to stay
 /// bannerless). <c>db/&lt;key&gt;/base.json</c> keeps shipping <c>Banners: []</c> byte-for-byte
 /// unchanged for every map, including Equator/Bay5 — <see cref="Resolve"/> builds the runtime
 /// <see cref="Banner"/> entry in memory instead, once per server start, and ONLY when the backing
@@ -51,6 +53,8 @@ public static class ArenaMapBanners
         [ArenaMapRegistry.Equator.Key] = new Descriptor("arena_equator_banner", "arena_equator"),
         [ArenaMapRegistry.Bay5.Key] = new Descriptor("arena_bay5_banner", "arena_bay5"),
         [ArenaMapRegistry.AirPit.Key] = new Descriptor("arena_airpit_banner", "arena_airpit"),
+        // PLAN-BOWL item 8/16 (2026-10-18): Arena's Matchmaker_Banner_TheBowl, extract_banners.BANNERS["arena_bowl"].
+        [ArenaMapRegistry.Bowl.Key] = new Descriptor("arena_bowl_banner", "arena_bowl"),
     };
 
     /// <summary>
@@ -61,7 +65,7 @@ public static class ArenaMapBanners
     /// </summary>
     private static readonly string[] Extensions = { "jpg", "jpeg", "png" };
 
-    /// <summary>The banner descriptor for <paramref name="map"/>, or null for any of the eleven
+    /// <summary>The banner descriptor for <paramref name="map"/>, or null for any of the ten
     /// parked maps this pass does not touch.</summary>
     public static Descriptor? For(ArenaMapDescriptor map) => ByMapKey.GetValueOrDefault(map.Key);
 

@@ -48,7 +48,7 @@ public sealed class AmbientAudioProfilesTests
         Assert.Equal(ArenaMapRegistry.All.Select(m => m.Key).Order().ToArray(),
             AmbientAudioProfiles.All.Select(p => p.MapKey).Order().ToArray());
         Assert.Equal(AmbientAudioProfiles.All.Count, AmbientAudioProfiles.All.Select(p => p.MapKey).Distinct().Count());
-        Assert.Equal(new[] { "arena_equator", "arena_bay5", "arena_airpit" }, AmbientAudioProfiles.All.Select(p => p.MapKey).ToArray());
+        Assert.Equal(new[] { "arena_equator", "arena_bay5", "arena_airpit", "arena_bowl" }, AmbientAudioProfiles.All.Select(p => p.MapKey).ToArray());
     }
 
     [Fact]
@@ -96,7 +96,9 @@ public sealed class AmbientAudioProfilesTests
             Assert.Equal("all_players", audio.GetProperty("group_coverage").GetString());
             return;
         }
-        Assert.Equal(profile.ActivePlayers, states.GetProperty("grouped_players").GetInt32());
+        // grouped_players is the sum of the group member lists: the active players, or every player when the source
+        // groups also list the inactive ones (Bowl).
+        Assert.Equal(profile.GroupedPlayers, states.GetProperty("grouped_players").GetInt32());
         Assert.Equal(profile.Routes.Select(r => r.MixerName).ToArray(),
             states.GetProperty("group_mixers").EnumerateArray().Select(e => e.GetString()).ToArray());
         // Groups are pinned by the leaf name of the GameObject carrying them, the key the driver and the importer route by.
@@ -110,7 +112,7 @@ public sealed class AmbientAudioProfilesTests
             states.GetProperty("inactive_players").EnumerateObject().Select(p => p.Value.GetString()).Order().ToArray());
         Assert.Equal(profile.LoopPlayers.Count, states.GetProperty("loop_players").GetArrayLength());
         Assert.Equal(0, states.GetProperty("disabled_players").GetArrayLength());
-        Assert.Equal(profile.InactivePlayers.Count == 0 ? "all_players" : "active_players",
+        Assert.Equal(profile.InactivePlayers.Count == 0 || profile.GroupsListInactivePlayers ? "all_players" : "active_players",
             audio.GetProperty("group_coverage").GetString());
     }
 
@@ -125,7 +127,9 @@ public sealed class AmbientAudioProfilesTests
         Assert.StartsWith("ArenaMapPort_", profile.RootName);
         Assert.EndsWith("NativeAudio", profile.RootName);
         Assert.Equal(profile.Players - profile.ActivePlayers, profile.InactivePlayers.Count);
-        Assert.Equal(profile.ActivePlayers, profile.Routes.Sum(r => r.Members));
+        Assert.Equal(profile.GroupedPlayers, profile.Routes.Sum(r => r.Members));
+        Assert.Equal(profile.GroupsListInactivePlayers ? profile.Players : profile.ActivePlayers, profile.GroupedPlayers);
+        if (profile.GroupsListInactivePlayers) { Assert.True(profile.OriginalActivation); Assert.NotEmpty(profile.InactivePlayers); }
         Assert.Single(profile.Routes, r => r.Effects);
         Assert.Same(profile.EffectsRoute, profile.Routes.Single(r => r.Effects));
         Assert.All(profile.Routes.Where(r => r.ReverbReroute), r => Assert.True(r.Effects));
@@ -172,6 +176,38 @@ public sealed class AmbientAudioProfilesTests
         Assert.Equal(new[] { false, true }, airpit.Routes.Select(r => r.ReverbReroute).ToArray());
         Assert.True(AmbientAudioProfiles.LeasesBus(airpit.MapKey, AmbientBus.Out));
         Assert.True(AmbientAudioProfiles.LeasesBus(airpit.MapKey, AmbientBus.In));
+    }
+
+    [Fact]
+    public void BowlListsEveryPlayerInItsGroupsStartsTheActiveOnesAndRoutesInteriorFirst()
+    {
+        // PLAN-BOWL item 9 (2026-10-18). Source: tools/extract/native_contracts/bowl.json "audio" (level111).
+        var bowl = AmbientAudioProfiles.Get(ArenaMapRegistry.Bowl.Key);
+        Assert.Equal("Bowl", bowl.DisplayName);
+        Assert.Equal("ArenaMapPort_BowlNativeAudio", bowl.RootName);
+        Assert.Equal((33, 29, 2, 0), (bowl.Players, bowl.ActivePlayers, bowl.Groups, bowl.Controllers));
+        Assert.False(bowl.HasShoreline);
+        Assert.False(bowl.UsesSeasons);
+        Assert.True(bowl.OriginalActivation);
+        Assert.Equal(new[] { "cracles (2)", "water_drops", "water_drops (1)", "water_drops (4)" }, bowl.InactivePlayers.Order().ToArray());
+        Assert.Empty(bowl.LoopPlayers);
+        // The source groups list all 33 players (the four inactive ones too), so members add up to Players, not ActivePlayers.
+        Assert.True(bowl.GroupsListInactivePlayers);
+        Assert.Equal(33, bowl.GroupedPlayers);
+        Assert.Equal(new[] { 15, 18 }, bowl.Routes.Select(r => r.Members).ToArray());
+        // Routes follow the contract's group_mixers order: interior (AmbientIn) first, then exterior (AmbientOut).
+        Assert.Equal(new[] { "CommonAmbientInGroup", "CommonAmbientOutGroup" }, bowl.Routes.Select(r => r.GroupName).ToArray());
+        Assert.Equal(new[] { "AmbientIn/CommonAmbInEffects", "AmbientOut/CommonAmbOutEffects" }, bowl.Routes.Select(r => r.MixerPath).ToArray());
+        Assert.Equal(new[] { "CommonAmbInEffects", "CommonAmbOutEffects" }, bowl.Routes.Select(r => r.MixerName).ToArray());
+        Assert.Equal(new[] { AmbientBus.In, AmbientBus.Out }, bowl.Routes.Select(r => r.Bus).ToArray());
+        Assert.Equal(new[] { true, false }, bowl.Routes.Select(r => r.Effects).ToArray());
+        Assert.Equal(new[] { true, false }, bowl.Routes.Select(r => r.ReverbReroute).ToArray());
+        Assert.Equal("CommonAmbientInGroup", bowl.EffectsRoute.GroupName);
+        Assert.True(AmbientAudioProfiles.LeasesBus(bowl.MapKey, AmbientBus.In));
+        Assert.True(AmbientAudioProfiles.LeasesBus(bowl.MapKey, AmbientBus.Out));
+        // Only Bowl's source groups list inactive players; the other three keep "members = started players".
+        Assert.Equal(new[] { ArenaMapRegistry.Bowl.Key },
+            AmbientAudioProfiles.All.Where(p => p.GroupsListInactivePlayers).Select(p => p.MapKey).ToArray());
     }
 
     [Fact]
@@ -234,6 +270,13 @@ public sealed class AmbientAudioProfilesTests
         Assert.Throws<ArgumentException>(() => new AmbientAudioProfile("arena_x", "X", "Root", 3, 3, 0, false, false, false, null, null, new[] { interior, second }));
         Assert.Throws<ArgumentException>(() => new AmbientAudioProfile("arena_x", "X", "Root", 4, 4, 0, false, false, false, null, null, new[] { interior, other, other }));
         Assert.Throws<ArgumentException>(() => new AmbientAudioProfile("arena_x", "X", "Root", 3, 3, 0, false, false, false, null, null, Array.Empty<AmbientGroupRoute>()));
+        // groups that list the inactive players too (Bowl): members add up to ALL players, and the flag needs original
+        // activation plus at least one inactive player to mean anything
+        var all33 = new AmbientGroupRoute("G", "AmbientIn/CommonAmbInEffects", "CommonAmbInEffects", AmbientBus.In, members: 3, effects: true);
+        Assert.NotNull(new AmbientAudioProfile("arena_x", "X", "Root", 3, 2, 0, false, false, true, new[] { "a" }, null, new[] { all33 }, groupsListInactivePlayers: true));
+        Assert.Throws<ArgumentException>(() => new AmbientAudioProfile("arena_x", "X", "Root", 3, 2, 0, false, false, true, new[] { "a" }, null, new[] { interior }, groupsListInactivePlayers: true));
+        Assert.Throws<ArgumentException>(() => new AmbientAudioProfile("arena_x", "X", "Root", 3, 3, 0, false, false, true, null, null, new[] { all33 }, groupsListInactivePlayers: true));
+        Assert.Throws<ArgumentException>(() => new AmbientAudioProfile("arena_x", "X", "Root", 3, 2, 0, false, false, false, new[] { "a" }, null, new[] { all33 }, groupsListInactivePlayers: true));
         // inactive players that do not add up, or inactive/looping players without the original-activation contract
         Assert.Throws<ArgumentException>(() => new AmbientAudioProfile("arena_x", "X", "Root", 3, 2, 0, false, false, true, null, null, new[] { interior }));
         Assert.Throws<ArgumentException>(() => new AmbientAudioProfile("arena_x", "X", "Root", 3, 2, 0, false, false, false, new[] { "a" }, null, new[] { interior }));
@@ -282,6 +325,10 @@ public sealed class AmbientAudioProfilesTests
         Assert.Contains("AmbientAudioProfiles.TryGet(mapKey, out var profile)", code);
         Assert.Contains("foreach (var profile in AmbientAudioProfiles.All)", code);
         Assert.DoesNotMatch(@"[!=]=\s*""arena_", code);
-        Assert.DoesNotMatch(@"ArenaMapRegistry\.(Equator|Bay5|AirPit)\b", code);
+        Assert.DoesNotMatch(@"ArenaMapRegistry\.(Equator|Bay5|AirPit|Bowl)\b", code);
+        // Bowl's groups list the inactive players too (PLAN-BOWL item 9): the member count and the started set come from the
+        // profile, never from the group lists alone.
+        Assert.Contains("profile.GroupedPlayers", code);
+        Assert.Contains("profile.GroupsListInactivePlayers", code);
     }
 }

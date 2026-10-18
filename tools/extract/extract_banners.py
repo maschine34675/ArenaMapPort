@@ -8,11 +8,12 @@ JsonType/LocationSettings.cs:146-163, EFT.UI/LocationInfoPanel.cs:167). Today's 
 Banners: [] for every ArenaMapPort location (tools/server/make_base_json.py), so the screen shows
 the client's own default picture instead.
 
-Arena ships matching art for exactly the three maps in this release: Matchmaker_Banner_Equator
-(resources.assets path_id 3030), Matchmaker_Banner_Bay5 (path_id 1361) and Matchmaker_Banner_AirPit
-(0.6.0 path_id 1584), all 769x460 RGB24 Texture2D (vanilla banners are 764/765x460 -- close but not
+Arena ships matching art for exactly the maps in this release: Matchmaker_Banner_Equator
+(resources.assets path_id 3030), Matchmaker_Banner_Bay5 (path_id 1361), Matchmaker_Banner_AirPit
+(0.6.0 path_id 1584) and, added with Bowl (PLAN-BOWL item 8, 2026-10-18), Matchmaker_Banner_TheBowl
+(0.6.0 path_id 2538), all 769x460 RGB24 Texture2D (vanilla banners are 764/765x460 -- close but not
 identical, confirmed harmless: the client's own Sprite.Create call just uses the texture's actual
-width/height). This script reads those three objects read-only with UnityPy from Arena's own
+width/height). This script reads those objects read-only with UnityPy from Arena's own
 resources.assets and writes them
 straight into the server mod's DEPLOYED folder
 (dist/SPT_Runtime/user/mods/ArenaMapPort/banners/arena_<key>.<ext>) -- a sibling of that folder's
@@ -30,11 +31,11 @@ resources.assets read-only and never writes there.
 Selects the unique exact Texture2D name in the expected source file, then validates its
 known dimensions. The Equator/Bay5 path_id values below document the 0.5.4 source only; Arena
 0.6 reused them for unrelated textures. The AirPit value was read from the 0.6.0.47752 install
-(2026-10-11) and is a hint as well. Missing/ambiguous names or unexpected dimensions
+(2026-10-11) and the Bowl value too (2026-10-18); both are hints as well. Missing/ambiguous names or unexpected dimensions
 remain hard errors, never first-match guesses or placeholder images.
 
 CLI:
-    python extract_banners.py                       # extract all three maps into dist/
+    python extract_banners.py                       # extract every map of BANNERS into dist/
     python extract_banners.py --ext png              # write PNG instead of the jpg default
     python extract_banners.py --output <dir>         # override the output directory
     python extract_banners.py --source <ArenaData>   # override the Arena EscapeFromTarkovArena_Data dir
@@ -68,7 +69,7 @@ EXPECTED_WIDTH = 769
 EXPECTED_HEIGHT = 460
 
 # map_key -> (Arena's own object name in resources.assets, path_id hint: 0.5.4 for Equator/Bay5, 0.6.0 for
-# AirPit; the lookup is always by the unique name). The dict key doubles as
+# AirPit and Bowl; the lookup is always by the unique name). The dict key doubles as
 # the output file stem ("arena_<key>.<ext>") and must equal ArenaMapBanners.cs's own
 # Descriptor.FileStem for each map -- BannerFileStemsTests (tools/tests/test_banners.py) and
 # ArenaMapBannersTests (ArenaMapPort.Server.Tests, C# side) each independently pin this string so
@@ -77,6 +78,8 @@ BANNERS = {
     "arena_equator": {"asset_name": "Matchmaker_Banner_Equator", "path_id": 3030},
     "arena_bay5": {"asset_name": "Matchmaker_Banner_Bay5", "path_id": 1361},
     "arena_airpit": {"asset_name": "Matchmaker_Banner_AirPit", "path_id": 1584},
+    # PLAN-BOWL item 8/16 (2026-10-18): Arena's banner for the stadium is named "TheBowl", not "Bowl".
+    "arena_bowl": {"asset_name": "Matchmaker_Banner_TheBowl", "path_id": 2538},
 }
 
 
@@ -172,7 +175,7 @@ def main(argv=None):
     parser.add_argument("--source", default=DEFAULT_SOURCE,
                         help="Arena's EscapeFromTarkovArena_Data directory (read-only)")
     parser.add_argument("--output", default=str(DEFAULT_OUTPUT),
-                        help="directory to write arena_equator.<ext> / arena_bay5.<ext> / arena_airpit.<ext> into")
+                        help="directory to write arena_<key>.<ext> (one per BANNERS map) into")
     parser.add_argument("--ext", default="jpg", choices=["jpg", "jpeg", "png"],
                         help="output image format (default jpg, quality=95)")
     parser.add_argument("--quality", type=int, default=95, help="JPEG quality, 1-95 (ignored for --ext png)")

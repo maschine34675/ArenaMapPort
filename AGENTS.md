@@ -6,7 +6,8 @@ a Unity 2022.3.43f1 batch importer that rebuilds scenes, materials, colliders an
 asset bundles, a BepInEx client plugin that repairs everything a ported scene lacks at raid time, and an
 SPT server mod that registers the locations. Fourteen maps retain development inputs; **Equator, Bay5 and AirPit** are registered and staged
 for release 0.2.2 (Equator and Bay5 were the first release; AirPit was added in 2026-10 on `feature/airpit`; 0.2.0 was built and withdrawn on 2026-10-16). All three have native
-playtest evidence. The maps exist to be played through the user's
+playtest evidence. **Bowl** (the fourth map, branch `feature/bowl`) is registered and staged too, for release 0.3.0
+(PLAN-BOWL item 8, 2026-10-18); it is not released and has no host raid yet. The maps exist to be played through the user's
 ArenaMode mod (arena deathmatch with respawns); see the decisions below.
 
 Read this first, then [HANDOFF.md](HANDOFF.md) (dated working state, what is verified, what is next),
@@ -30,7 +31,12 @@ are not accepted build inputs. Keep the SPT bundle target on Unity 2022.3.43f1.
 - **Release 0.2.2 = Equator, Bay5 and AirPit** (0.2.0 was built and withdrawn the same day; 0.2.1 went to GitHub and Pixeldrain
   only; 0.2.2 adds SpawnGates, AirPit's original north box, the renamed Equator sidecar and the crates under AirPit's tarp
   (package v9) and is the Forge candidate). The first release (user, 2026-09-25) was Equator and Bay5 only; AirPit was
-  added in 2026-10 on `feature/airpit` and is registered and staged. The other eleven maps retain source and work/build inputs,
+  added in 2026-10 on `feature/airpit` and is registered and staged. **Bowl is registered and staged on `feature/bowl` for 0.3.0
+  (not released yet; docs/PLAN-BOWL.md, user decision 2026-10-18 "so wie du es am sinnvollsten erachtest"):** it is in
+  ArenaMapRegistry.All, so the validators, the park script and the csproj staging rows treat it as released, but 0.2.2 stays the
+  three-map release and no release file is cut until its Unity build (U1) and first host raid. Bowl builds from
+  `work/extract/bowl-native-v2` with `-FullMap` and `-OutputDir D:/ArenaMapPort/work/build/bowl`; `tools/build_remaining.ps1`
+  refuses it (that runner would use the Arena 0.5.4 spike package). The other ten maps retain source and work/build inputs,
   but are excluded from ArenaMapRegistry.All and dist; Catalog retains their identities. Make these three maps as good as they can be (native content,
   bots, audio, lighting, physics — see docs/PLAN-TWO-MAPS.md) BEFORE ArenaMode features such as team starts and
   pickups, which come later on all three maps.

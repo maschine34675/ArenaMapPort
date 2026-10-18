@@ -13,7 +13,7 @@ using UnityEngine.SceneManagement;
 
 namespace ArenaMapPort.Client
 {
-    /// <summary>Starts the imported stock ambient players of Equator, Bay5 and AirPit once real raid audio services exist.
+    /// <summary>Starts the imported stock ambient players of Equator, Bay5, AirPit and Bowl once real raid audio services exist.
     /// Arena's ambient singleton/room system is deliberately not recreated. Stock players retain
     /// their original clip selection, gain, pitch and timing; Bay5's stock shoreline calculator
     /// ticks from this owned driver. What differs per map (root name, graph census, group to mixer/bus
@@ -216,12 +216,21 @@ namespace ArenaMapPort.Client
                     throw new InvalidOperationException("unrecognized or duplicate ambient group");
                 if (_groups.Any(g => g._soundPlayers.Count != profile.Routes[profile.IndexOfGroup(g.name)].Members))
                     throw new InvalidOperationException("ambient group member count differs from the source graph");
-                _activePlayers = _groups.SelectMany(g => g._soundPlayers).ToArray();
+                var members = _groups.SelectMany(g => g._soundPlayers).ToArray();
                 var active = _players.Where(p => p.enabled && ActiveUnderOwnedRoot(p.transform) &&
                     p.GetComponent<AudioSource>() != null && p.GetComponent<AudioSource>().enabled).ToArray();
-                if (_activePlayers.Length != profile.ActivePlayers || _activePlayers.Any(p => p == null) ||
-                    _activePlayers.Distinct().Count() != _activePlayers.Length ||
-                    !new HashSet<BaseAmbientSoundPlayer>(active).SetEquals(_activePlayers))
+                // Equator, AirPit: the groups list exactly the players that start. Bowl (PLAN-BOWL item 9): its source groups
+                // list every player, four of them under an inactive ancestor; those stay members (the group's own Play and
+                // SetMixerGroup tolerate them, as in Arena) but are never started here, so the started set is the active
+                // members and the member list must still be exactly the graph's players.
+                _activePlayers = profile.GroupsListInactivePlayers
+                    ? members.Where(p => p != null && p.enabled && ActiveUnderOwnedRoot(p.transform)).ToArray()
+                    : members;
+                if (members.Length != profile.GroupedPlayers || members.Any(p => p == null) ||
+                    members.Distinct().Count() != members.Length ||
+                    _activePlayers.Length != profile.ActivePlayers ||
+                    !new HashSet<BaseAmbientSoundPlayer>(active).SetEquals(_activePlayers) ||
+                    (profile.GroupsListInactivePlayers && !new HashSet<BaseAmbientSoundPlayer>(_players).SetEquals(members)))
                     throw new InvalidOperationException("native group membership differs from enabled active players");
                 // Retain Bay5's accepted hierarchy iteration order; the original-activation maps (Equator, AirPit)
                 // follow their original active member lists and never start ungrouped descendants.
@@ -361,7 +370,7 @@ namespace ArenaMapPort.Client
                 // EFT permanently mutes the original Returns/Reverb group. This original alternative
                 // ambient bus reaches TarkovReverb. Its dry path is equivalent while the owned parent
                 // gain is neutral (no skipped filters/effects); preserve external non-neutral gains.
-                // Equator and AirPit reroute their interior group (AmbientIn parent); Bay5's exterior bus needs no reroute.
+                // Equator, AirPit and Bowl reroute their interior group (AmbientIn parent); Bay5's exterior bus needs no reroute.
                 float volume = float.NaN;
                 bool neutralParent = _leases.TryGetValue(route.Bus, out var lease) && lease.IsNeutral && _ambientMixer != null &&
                     _ambientMixer.GetFloat(AmbientAudioProfiles.Parameter(route.Bus), out volume) && Mathf.Approximately(volume, 0f);
