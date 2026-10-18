@@ -81,7 +81,7 @@ ARENA_SOURCES = {
     # Bowl (measured 2026-10-18, Arena 0.6.0.47752): level128, NavMeshSurface layers 9 / 11 / 18 / 30 (no 13), 80 tiles,
     # agent radius 0.3 / height 1.7, NavMeshData rotated 90 degrees about Y (navmesh_oracle applies it).
     "bowl": ArenaSource("arena_bowl", "sharedassets128.assets", 2, 0x40040A00,
-                        128, "Arena_Bowl_TeamFight_AI", "work/extract/bowl-native-v1"),
+                        128, "Arena_Bowl_TeamFight_AI", "work/extract/bowl-native-v2"),
 }
 
 

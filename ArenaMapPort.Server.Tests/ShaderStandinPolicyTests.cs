@@ -33,16 +33,18 @@ public sealed class ShaderStandinPolicyTests
             var hasKey = doc.RootElement.TryGetProperty("shader_fallback_names", out var names);
             var expected = hasKey ? names.EnumerateArray().Select(e => e.GetString()).ToArray() : new string[0];
             Assert.Equal(expected, map.ShaderFallbackNames);
-            Assert.Equal(map == ArenaMapRegistry.Bay5 || map == ArenaMapRegistry.AirPit, map.ShaderFallbackNames.Length > 0);
+            Assert.Equal(map == ArenaMapRegistry.Bay5 || map == ArenaMapRegistry.AirPit || map == ArenaMapRegistry.Bowl,
+                map.ShaderFallbackNames.Length > 0);
         }
         Assert.Equal(ShippedRows.Select(r => r.Original).Order(), ArenaMapRegistry.Bay5.ShaderFallbackNames.Order());
         Assert.Equal(AirPitNames.Order(), ArenaMapRegistry.AirPit.ShaderFallbackNames.Order());
-        // Every listed name has a substitute row, and the policy reads the same list.
+        Assert.Equal(BowlNames, ArenaMapRegistry.Bowl.ShaderFallbackNames);
+        // Every listed name has a substitute row for its map, and the policy reads the same list.
         foreach (var map in ArenaMapRegistry.Catalog)
         {
             Assert.Equal(map.ShaderFallbackNames, ShaderStandinPolicy.AllowedNames(map.Key));
             foreach (var name in map.ShaderFallbackNames)
-                Assert.True(ShaderStandinPolicy.FallbackTable.ContainsKey(name), $"{map.Key} {name}");
+                Assert.True(ShaderStandinPolicy.TryGetFallback(map.Key, name, out _), $"{map.Key} {name}");
         }
         Assert.Empty(ShaderStandinPolicy.AllowedNames("unknown_map"));
         Assert.Empty(ShaderStandinPolicy.AllowedNames(""));
@@ -97,15 +99,19 @@ public sealed class ShaderStandinPolicyTests
         "ANGRYMESH/PBR Rocks/PBR BlendTopDetail (Legacy)",
     };
 
+    // Bowl (PLAN-BOWL item 10): the tarp tunnel's two-sided reflective shader, substituted by the Cull Off cutout.
+    static readonly string[] BowlNames = { "p0/Reflective/Bumped Specular_TwoSided" };
+
     static IEnumerable<string> OtherMapKeys() =>
         ArenaMapRegistry.Catalog.Select(m => m.Key)
-            .Where(k => k != ArenaMapRegistry.Bay5.Key && k != ArenaMapRegistry.AirPit.Key);
+            .Where(k => k != ArenaMapRegistry.Bay5.Key && k != ArenaMapRegistry.AirPit.Key && k != ArenaMapRegistry.Bowl.Key);
 
     [Fact]
     public void OnlyBay5AndAirPitConsultTheFallbackTable()
     {
         Assert.True(ShaderStandinPolicy.UsesFallbackTable(ArenaMapRegistry.Bay5.Key));
         Assert.True(ShaderStandinPolicy.UsesFallbackTable(ArenaMapRegistry.AirPit.Key));
+        Assert.True(ShaderStandinPolicy.UsesFallbackTable(ArenaMapRegistry.Bowl.Key));
         Assert.False(ShaderStandinPolicy.UsesFallbackTable(ArenaMapRegistry.Equator.Key));
         foreach (var key in OtherMapKeys())
             Assert.False(ShaderStandinPolicy.UsesFallbackTable(key), key);
@@ -117,20 +123,40 @@ public sealed class ShaderStandinPolicyTests
     public void Bay5FollowsOnlyTheLegacySwitch()
     {
         var bay5 = ArenaMapRegistry.Bay5.Key;
-        Assert.True(ShaderStandinPolicy.FallbacksActive(bay5, bay5LegacySwitch: true, airPitSwitch: false));
-        Assert.True(ShaderStandinPolicy.FallbacksActive(bay5, true, true));
-        Assert.False(ShaderStandinPolicy.FallbacksActive(bay5, false, true));
-        Assert.False(ShaderStandinPolicy.FallbacksActive(bay5, false, false));
+        Assert.True(ShaderStandinPolicy.FallbacksActive(bay5, bay5LegacySwitch: true, airPitSwitch: false, bowlSwitch: false));
+        Assert.True(ShaderStandinPolicy.FallbacksActive(bay5, true, true, true));
+        Assert.False(ShaderStandinPolicy.FallbacksActive(bay5, false, true, true));
+        Assert.False(ShaderStandinPolicy.FallbacksActive(bay5, false, false, false));
     }
 
     [Fact]
     public void AirPitFollowsOnlyItsOwnSwitchAndNotTheLegacyOne()
     {
         var airPit = ArenaMapRegistry.AirPit.Key;
-        Assert.True(ShaderStandinPolicy.FallbacksActive(airPit, bay5LegacySwitch: false, airPitSwitch: true));
-        Assert.True(ShaderStandinPolicy.FallbacksActive(airPit, true, true));
-        Assert.False(ShaderStandinPolicy.FallbacksActive(airPit, true, false));
-        Assert.False(ShaderStandinPolicy.FallbacksActive(airPit, false, false));
+        Assert.True(ShaderStandinPolicy.FallbacksActive(airPit, bay5LegacySwitch: false, airPitSwitch: true, bowlSwitch: false));
+        Assert.True(ShaderStandinPolicy.FallbacksActive(airPit, true, true, true));
+        Assert.False(ShaderStandinPolicy.FallbacksActive(airPit, true, false, true));
+        Assert.False(ShaderStandinPolicy.FallbacksActive(airPit, false, false, false));
+    }
+
+    [Fact]
+    public void BowlFollowsOnlyItsOwnSwitchAndGetsTheTwoSidedCutoutRow()
+    {
+        var bowl = ArenaMapRegistry.Bowl.Key;
+        Assert.True(ShaderStandinPolicy.BowlStandinsDefault);
+        Assert.True(ShaderStandinPolicy.FallbacksActive(bowl, bay5LegacySwitch: false, airPitSwitch: false, bowlSwitch: true));
+        Assert.True(ShaderStandinPolicy.FallbacksActive(bowl, true, true, true));
+        Assert.False(ShaderStandinPolicy.FallbacksActive(bowl, true, true, false));
+        Assert.False(ShaderStandinPolicy.FallbacksActive(bowl, false, false, false));
+        Assert.True(ShaderStandinPolicy.TryGetFallback(bowl, ShaderStandinPolicy.TwoSidedReflectiveShader, out var got));
+        Assert.Equal(ShaderStandinPolicy.TwoSidedClothShader, got);
+        // The row is Bowl's alone: the shipped table stays the six Bay5 rows and the other allow-lists do not name it.
+        Assert.False(ShaderStandinPolicy.FallbackTable.ContainsKey(ShaderStandinPolicy.TwoSidedReflectiveShader));
+        Assert.False(ShaderStandinPolicy.TryGetFallback(ArenaMapRegistry.Bay5.Key, ShaderStandinPolicy.TwoSidedReflectiveShader, out _));
+        Assert.False(ShaderStandinPolicy.TryGetFallback(ArenaMapRegistry.AirPit.Key, ShaderStandinPolicy.TwoSidedReflectiveShader, out _));
+        // Bowl's list names nothing else, so AirPit's rows do not leak onto it.
+        Assert.False(ShaderStandinPolicy.TryGetFallback(bowl, ShaderStandinPolicy.ClothShader, out _));
+        Assert.False(ShaderStandinPolicy.UsesExtendedStandins(bowl));
     }
 
     [Fact]
@@ -140,7 +166,8 @@ public sealed class ShaderStandinPolicyTests
         foreach (var key in keys)
             foreach (var legacy in new[] { false, true })
                 foreach (var airPit in new[] { false, true })
-                    Assert.False(ShaderStandinPolicy.FallbacksActive(key, legacy, airPit), $"{key} {legacy} {airPit}");
+                    foreach (var bowl in new[] { false, true })
+                        Assert.False(ShaderStandinPolicy.FallbacksActive(key, legacy, airPit, bowl), $"{key} {legacy} {airPit} {bowl}");
     }
 
     [Fact]

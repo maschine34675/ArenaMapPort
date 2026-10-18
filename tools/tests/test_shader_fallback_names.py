@@ -38,8 +38,10 @@ class ShaderFallbackNamesSidecarTests(unittest.TestCase):
     def test_only_bay5_and_airpit_carry_the_key(self):
         self.assertEqual(sidecar("airpit")["shader_fallback_names"], AIRPIT_NAMES)
         self.assertEqual(sidecar("bay5")["shader_fallback_names"], BAY5_NAMES)
+        # Bowl (PLAN-BOWL item 10, 2026-10-18): the tarp tunnel's two-sided reflective shader, the one of its 23 EFT lacks.
+        self.assertEqual(sidecar("bowl")["shader_fallback_names"], ["p0/Reflective/Bumped Specular_TwoSided"])
         for path in sorted((REPO / "tools" / "maps").glob("*.json")):
-            if "." in path.stem or path.stem in ("airpit", "bay5"):
+            if "." in path.stem or path.stem in ("airpit", "bay5", "bowl"):
                 continue
             self.assertNotIn("shader_fallback_names", json.loads(path.read_text(encoding="utf-8")), path.name)
 

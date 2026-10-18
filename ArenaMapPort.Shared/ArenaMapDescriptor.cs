@@ -653,11 +653,39 @@ namespace ArenaMapPort.Shared
             ScriptsSceneName: "Arena_Bowl_Scripts",
             AllSceneNames: new[] { "Arena_Bowl_Scripts", "Arena_Bowl", "Arena_Bowl_Building", "Arena_Bowl_Grass", "Arena_Bowl_Light", "Arena_Bowl_DesignStuff", "Arena_Bowl_TeamFight", "Arena_Bowl_TeamFight_DesignStuff" },
             InfiltrationName: "ArenaBowl",
-            LocaleName: "Arena: Bowl (spike)",
-            LocaleDescription: "Internal test build — TeamFight geometry/collision/NavMesh port.",
+            LocaleName: "Arena: Bowl",
+            LocaleDescription: "The Bowl from EFT Arena: the sunken field of an old sports arena with its stands, converted for death-fighting. Containers, barricades and a grounded Mi-26 fill the field between two gated team pockets at the east and west ends; the layer-29 border cubes of Arena bound the play space.",
             IconX: 919,
             IconY: 679,
             DbBaseJsonPath: "arena_bowl/base.json",
+            // PLAN-BOWL item 5/7 (docs/progress/bowl-release.md, 2026-10-18). Exits mirror tools/maps/bowl.exits.json
+            // (BowlMapTests): one gate beyond each pocket as seen from the pocket, on Arena's own NavMesh main component.
+            Exits: new[]
+            {
+                new ArenaExitDescriptor("Bowl BTR Gate", 51.0f, 0.1f, -31.0f),
+                new ArenaExitDescriptor("Bowl Army Gate", -51.0f, 0.1f, -49.0f),
+            },
+            // The two GateEntity roots of Arena_Bowl_TeamFight_DesignStuff (both at the origin): DOORS_SPAWN_A holds
+            // Bowl_Gates_Respawn_01 (gate + rail) and BTR_82_closed, DOORS_SPAWN_B holds Gates_Army_01 (gate + two Telfer
+            // posts) and the ambulance group. No part name contains "frame", so all four direct children switch off at
+            // raid start (each pocket has two independent exits, so all four must open together). Both roots are start
+            // gates: a mode plugin's hold keeps every part closed. Mirrors tools/maps/bowl.json opened_barriers/start_gates.
+            OpenedBarriers: new[] { "DOORS_SPAWN_A", "DOORS_SPAWN_B" },
+            StartGates: new[] { "DOORS_SPAWN_A", "DOORS_SPAWN_B" },
+            // Bake inputs (item 7 analysis, 2026-10-18): Arena's NavMesh spans x -63.8..59.6, y 0.04..9.25, z -79.5..8.8;
+            // the box adds about 2 m, y max 10 keeps the two guard-tower tops. Layers = Arena's own NavMeshSurface mask
+            // (9, 11, 18, 30) plus 29 because the kept border cubes are baked as walls (KeepLevelBorders). The one bake
+            // exclusion is the 165 x 144 m under-floor slab 'Arena_Bowl_LevelBorders/Cube' (y -1..0), which would
+            // otherwise become a walkable plane at floor level; it stays active at runtime as a catch floor.
+            BakeBounds: new[] { -66.0f, 62.0f, -2.0f, 10.0f, -82.0f, 11.0f },
+            NavMeshBakeLayers: new[] { 9, 11, 18, 29, 30 },
+            NavMeshBakeExclusions: new[] { "Arena_Bowl_LevelBorders/Cube" },
+            // The one shader of Bowl's 23 that EFT 0.16.9.5 does not ship (Tarp_Tunnel, 12 renderers); the client's
+            // ShaderStandinPolicy owns the substitute row (PLAN-BOWL item 10).
+            ShaderFallbackNames: new[] { "p0/Reflective/Bumped Specular_TwoSided" },
+            // Bay5/AirPit-style native server time: no Directional light exists in the imported scenes (Bowl's sun and
+            // sky sit in the excluded Scripts scene), the WeatherRig supplies both.
+            UsesServerTime: true,
             // docs/PLAN-BOWL.md decision: the 354 layer-29 LevelBorder cubes are the stadium's only play-area bound;
             // they stay active at raid start and the bake treats them as walls (mirrors keep_level_borders).
             KeepLevelBorders: true);

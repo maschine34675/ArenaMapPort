@@ -1,0 +1,450 @@
+{
+  "_comment": "Arena TeamFight mode objects (positions only) composed from the extracted scenes by tools/extract/extract_mode_objects.py; schema and method in docs/progress/airpit-release.md. Data for ArenaMode, not read by the map mod itself.",
+  "capture_point": {
+    "lights": [
+      {
+        "path": "CAPTURE_POINT/BOWL_CAPTURE_POINT_LIGHT_02",
+        "position": [
+          -20.51,
+          0.0,
+          -37.12
+        ],
+        "scene": "Arena_Bowl_TeamFight_DesignStuff"
+      },
+      {
+        "path": "CAPTURE_POINT/BOWL_CAPTURE_POINT_LIGHT_01",
+        "position": [
+          16.99,
+          -0.1,
+          -30.72
+        ],
+        "scene": "Arena_Bowl_TeamFight_DesignStuff"
+      }
+    ],
+    "method": "capture_point_light_centroid",
+    "position": [
+      -1.76,
+      -0.05,
+      -33.92
+    ]
+  },
+  "capture_zones": [
+    {
+      "anchor_position": [
+        -14.8777,
+        2.4963,
+        -47.5578
+      ],
+      "at_origin": false,
+      "distance_to_capture_point": 19.0931,
+      "path": "CAPTURE_ZONE",
+      "position": [
+        -14.8777,
+        2.4963,
+        -47.5578
+      ],
+      "projection_position": null,
+      "scene": "Arena_Bowl_TeamFight_DesignStuff"
+    }
+  ],
+  "counts": {
+    "capture_zones": 1,
+    "spawn_bounds": 2,
+    "spawn_markers_north": 10,
+    "spawn_markers_south": 10
+  },
+  "map_key": "arena_bowl",
+  "schema_version": 1,
+  "side_rule": {
+    "cut_distance": 112.6058,
+    "method": "pocket_split",
+    "naming": "north = the pocket with the larger mean z, south = the other",
+    "pocket_spread": 10.2018,
+    "pockets": {
+      "north": {
+        "centroid_xz": [
+          51.7188,
+          -6.5989
+        ],
+        "markers": 10
+      },
+      "south": {
+        "centroid_xz": [
+          -53.9808,
+          -65.4126
+        ],
+        "markers": 10
+      }
+    }
+  },
+  "source_package": {
+    "extracted_utc": "2026-10-18T09:32:25Z",
+    "extractor_script": "tools/extract/extract_map.py",
+    "name": "bowl-native-v2",
+    "scenes": [
+      "Arena_Bowl",
+      "Arena_Bowl_Building",
+      "Arena_Bowl_Grass",
+      "Arena_Bowl_Light",
+      "Arena_Bowl_DesignStuff",
+      "Arena_Bowl_TeamFight",
+      "Arena_Bowl_TeamFight_DesignStuff"
+    ]
+  },
+  "spawn_bounds": [
+    {
+      "active": true,
+      "center": [
+        51.2529,
+        1.9918,
+        -7.0645
+      ],
+      "name": "SPAWN_BOUND_FIGHTER",
+      "path": "SPAWNS/SPAWN_BOUND_FIGHTER",
+      "rotation": [
+        0.0,
+        -0.3504,
+        0.0,
+        0.9366
+      ],
+      "scene": "Arena_Bowl_TeamFight_DesignStuff",
+      "side": "north",
+      "size": [
+        23.0354,
+        4.2832,
+        26.3419
+      ],
+      "yaw": 318.9815
+    },
+    {
+      "active": true,
+      "center": [
+        -52.8998,
+        1.9918,
+        -64.8147
+      ],
+      "name": "SPAWN_BOUND_FIGHTER",
+      "path": "SPAWNS/SPAWN_BOUND_FIGHTER",
+      "rotation": [
+        0.0,
+        -0.3504,
+        0.0,
+        0.9366
+      ],
+      "scene": "Arena_Bowl_TeamFight_DesignStuff",
+      "side": "south",
+      "size": [
+        20.3407,
+        4.2832,
+        21.7715
+      ],
+      "yaw": 318.9815
+    }
+  ],
+  "spawn_markers": {
+    "north": [
+      {
+        "active": true,
+        "index": 5,
+        "name": "Bear house (5)",
+        "path": "SPAWNS/Bear house (5)",
+        "position": [
+          50.16,
+          0.047,
+          -3.25
+        ],
+        "scene": "Arena_Bowl_TeamFight_DesignStuff",
+        "side": "north",
+        "stem": "Bear house",
+        "yaw": 216.8446
+      },
+      {
+        "active": true,
+        "index": 6,
+        "name": "Bear house (6)",
+        "path": "SPAWNS/Bear house (6)",
+        "position": [
+          53.346,
+          0.047,
+          -3.043
+        ],
+        "scene": "Arena_Bowl_TeamFight_DesignStuff",
+        "side": "north",
+        "stem": "Bear house",
+        "yaw": 225.5344
+      },
+      {
+        "active": true,
+        "index": 7,
+        "name": "Bear house (7)",
+        "path": "SPAWNS/Bear house (7)",
+        "position": [
+          52.986,
+          0.047,
+          -6.003
+        ],
+        "scene": "Arena_Bowl_TeamFight_DesignStuff",
+        "side": "north",
+        "stem": "Bear house",
+        "yaw": 230.1743
+      },
+      {
+        "active": true,
+        "index": 8,
+        "name": "Bear house (8)",
+        "path": "SPAWNS/Bear house (8)",
+        "position": [
+          55.966,
+          0.047,
+          -5.853
+        ],
+        "scene": "Arena_Bowl_TeamFight_DesignStuff",
+        "side": "north",
+        "stem": "Bear house",
+        "yaw": 237.9887
+      },
+      {
+        "active": true,
+        "index": 9,
+        "name": "Bear house (9)",
+        "path": "SPAWNS/Bear house (9)",
+        "position": [
+          55.976,
+          0.047,
+          -8.703
+        ],
+        "scene": "Arena_Bowl_TeamFight_DesignStuff",
+        "side": "north",
+        "stem": "Bear house",
+        "yaw": 238.7445
+      },
+      {
+        "active": true,
+        "index": 15,
+        "name": "Bear house (15)",
+        "path": "SPAWNS/Bear house (15)",
+        "position": [
+          46.224,
+          0.047,
+          -5.707
+        ],
+        "scene": "Arena_Bowl_TeamFight_DesignStuff",
+        "side": "north",
+        "stem": "Bear house",
+        "yaw": 258.2478
+      },
+      {
+        "active": true,
+        "index": 16,
+        "name": "Bear house (16)",
+        "path": "SPAWNS/Bear house (16)",
+        "position": [
+          49.41,
+          0.047,
+          -5.5
+        ],
+        "scene": "Arena_Bowl_TeamFight_DesignStuff",
+        "side": "north",
+        "stem": "Bear house",
+        "yaw": 247.4753
+      },
+      {
+        "active": true,
+        "index": 17,
+        "name": "Bear house (17)",
+        "path": "SPAWNS/Bear house (17)",
+        "position": [
+          49.05,
+          0.047,
+          -8.46
+        ],
+        "scene": "Arena_Bowl_TeamFight_DesignStuff",
+        "side": "north",
+        "stem": "Bear house",
+        "yaw": 230.1743
+      },
+      {
+        "active": true,
+        "index": 18,
+        "name": "Bear house (18)",
+        "path": "SPAWNS/Bear house (18)",
+        "position": [
+          52.03,
+          0.047,
+          -8.31
+        ],
+        "scene": "Arena_Bowl_TeamFight_DesignStuff",
+        "side": "north",
+        "stem": "Bear house",
+        "yaw": 209.5248
+      },
+      {
+        "active": true,
+        "index": 19,
+        "name": "Bear house (19)",
+        "path": "SPAWNS/Bear house (19)",
+        "position": [
+          52.04,
+          0.047,
+          -11.16
+        ],
+        "scene": "Arena_Bowl_TeamFight_DesignStuff",
+        "side": "north",
+        "stem": "Bear house",
+        "yaw": 198.9134
+      }
+    ],
+    "south": [
+      {
+        "active": true,
+        "index": null,
+        "name": "Bear house",
+        "path": "SPAWNS/Bear house",
+        "position": [
+          -52.144,
+          0.047,
+          -68.883
+        ],
+        "scene": "Arena_Bowl_TeamFight_DesignStuff",
+        "side": "south",
+        "stem": "Bear house",
+        "yaw": 51.3698
+      },
+      {
+        "active": true,
+        "index": 1,
+        "name": "Bear house (1)",
+        "path": "SPAWNS/Bear house (1)",
+        "position": [
+          -55.33,
+          0.047,
+          -69.09
+        ],
+        "scene": "Arena_Bowl_TeamFight_DesignStuff",
+        "side": "south",
+        "stem": "Bear house",
+        "yaw": 51.3698
+      },
+      {
+        "active": true,
+        "index": 2,
+        "name": "Bear house (2)",
+        "path": "SPAWNS/Bear house (2)",
+        "position": [
+          -54.97,
+          0.047,
+          -66.13
+        ],
+        "scene": "Arena_Bowl_TeamFight_DesignStuff",
+        "side": "south",
+        "stem": "Bear house",
+        "yaw": 51.3698
+      },
+      {
+        "active": true,
+        "index": 3,
+        "name": "Bear house (3)",
+        "path": "SPAWNS/Bear house (3)",
+        "position": [
+          -57.95,
+          0.047,
+          -66.28
+        ],
+        "scene": "Arena_Bowl_TeamFight_DesignStuff",
+        "side": "south",
+        "stem": "Bear house",
+        "yaw": 51.3698
+      },
+      {
+        "active": true,
+        "index": 4,
+        "name": "Bear house (4)",
+        "path": "SPAWNS/Bear house (4)",
+        "position": [
+          -57.96,
+          0.047,
+          -63.43
+        ],
+        "scene": "Arena_Bowl_TeamFight_DesignStuff",
+        "side": "south",
+        "stem": "Bear house",
+        "yaw": 51.3698
+      },
+      {
+        "active": true,
+        "index": 10,
+        "name": "Bear house (10)",
+        "path": "SPAWNS/Bear house (10)",
+        "position": [
+          -48.764,
+          0.047,
+          -66.183
+        ],
+        "scene": "Arena_Bowl_TeamFight_DesignStuff",
+        "side": "south",
+        "stem": "Bear house",
+        "yaw": 51.3698
+      },
+      {
+        "active": true,
+        "index": 11,
+        "name": "Bear house (11)",
+        "path": "SPAWNS/Bear house (11)",
+        "position": [
+          -51.95,
+          0.047,
+          -66.39
+        ],
+        "scene": "Arena_Bowl_TeamFight_DesignStuff",
+        "side": "south",
+        "stem": "Bear house",
+        "yaw": 51.3698
+      },
+      {
+        "active": true,
+        "index": 12,
+        "name": "Bear house (12)",
+        "path": "SPAWNS/Bear house (12)",
+        "position": [
+          -51.59,
+          0.047,
+          -63.43
+        ],
+        "scene": "Arena_Bowl_TeamFight_DesignStuff",
+        "side": "south",
+        "stem": "Bear house",
+        "yaw": 51.3698
+      },
+      {
+        "active": true,
+        "index": 13,
+        "name": "Bear house (13)",
+        "path": "SPAWNS/Bear house (13)",
+        "position": [
+          -54.57,
+          0.047,
+          -63.58
+        ],
+        "scene": "Arena_Bowl_TeamFight_DesignStuff",
+        "side": "south",
+        "stem": "Bear house",
+        "yaw": 51.3698
+      },
+      {
+        "active": true,
+        "index": 14,
+        "name": "Bear house (14)",
+        "path": "SPAWNS/Bear house (14)",
+        "position": [
+          -54.58,
+          0.047,
+          -60.73
+        ],
+        "scene": "Arena_Bowl_TeamFight_DesignStuff",
+        "side": "south",
+        "stem": "Bear house",
+        "yaw": 51.3698
+      }
+    ]
+  }
+}

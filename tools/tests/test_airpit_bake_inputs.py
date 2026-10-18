@@ -101,8 +101,17 @@ class SidecarContentTests(unittest.TestCase):
         self.assertEqual(len(sidecar("bay5.json")["opened_barriers"]), 3)
 
     def test_no_other_sidecar_uses_the_new_keys(self):
+        # AirPit and, since PLAN-BOWL item 7 (2026-10-18), Bowl carry bake inputs and gate roles; no other sidecar does.
+        bowl = sidecar("bowl.json")
+        self.assertEqual(bowl["opened_barriers"], ["DOORS_SPAWN_A", "DOORS_SPAWN_B"])
+        self.assertEqual(bowl["start_gates"], bowl["opened_barriers"])
+        self.assertEqual(bowl["held_gates"], [])
+        self.assertEqual(bowl["navmesh_bake_exclusions"], ["Arena_Bowl_LevelBorders/Cube"])
+        self.assertEqual(bowl["bake_bounds"], [-66, 62, -2, 10, -82, 11])
+        self.assertEqual(bowl["navmesh_bake_layers"], [9, 11, 18, 29, 30])
+        self.assertIs(bowl["keep_level_borders"], True)
         for path in sorted((REPO / "tools" / "maps").glob("*.json")):
-            if "." in path.stem or path.stem == "airpit":
+            if "." in path.stem or path.stem in ("airpit", "bowl"):
                 continue
             data = json.loads(path.read_text(encoding="utf-8"))
             for key in ("navmesh_bake_exclusions", "bake_bounds", "navmesh_bake_layers", "start_gates", "held_gates"):

@@ -64,9 +64,14 @@ namespace ArenaMapPort.Client
         internal const string ClothBackfaceShader = "Cloth/ClothShader_backface";
         internal const string RockShader = "ANGRYMESH/PBR Rocks/PBR BlendTopDetail (Legacy)";
         internal const string TwoSidedClothShader = "Legacy Shaders/Transparent/Cutout/Bumped Diffuse 2 side";
+        // Bowl (PLAN-BOWL item 10): the one shader of its 23 that EFT 0.16.9.5 does not ship, Tarp_Tunnel's
+        // two-sided reflective bumped specular (12 renderers). The tarp tunnel is seen from both sides, so the
+        // substitute is the same Cull Off cutout the AirPit backface cloth uses; a stand-in, not Arena's look.
+        internal const string TwoSidedReflectiveShader = "p0/Reflective/Bumped Specular_TwoSided";
 
         // First-run (code) defaults of the AirPit keys. AirPit never shipped with saved keys, so no migration.
         internal const bool AirPitStandinsDefault = true;
+        internal const bool BowlStandinsDefault = true;   // first-run default of BowlShaderStandins (new key, no migration)
         internal const FogSheetMode FogSheetModeDefault = FogSheetMode.StandIn;
         internal const float FogSheetOpacityDefault = 1f;
         internal const float FogSheetOpacityMin = 0f;
@@ -91,10 +96,17 @@ namespace ArenaMapPort.Client
             [ClothBackfaceShader] = TwoSidedClothShader,
         };
 
+        // Bowl's own row (its allow-list names only this shader, so the shipped table stays the six Bay5 rows).
+        static readonly Dictionary<string, string> BowlTargets = new Dictionary<string, string>
+        {
+            [TwoSidedReflectiveShader] = TwoSidedClothShader,
+        };
+
         internal static IReadOnlyDictionary<string, string> FallbackTable => Table;
 
         static bool IsBay5(string mapKey) => mapKey == ArenaMapRegistry.Bay5.Key;
         static bool IsAirPit(string mapKey) => mapKey == ArenaMapRegistry.AirPit.Key;
+        static bool IsBowl(string mapKey) => mapKey == ArenaMapRegistry.Bowl.Key;
 
         /// <summary>
         /// The Arena shader names this map may rebind to an SPT substitute: its descriptor's
@@ -115,10 +127,11 @@ namespace ArenaMapPort.Client
 
         /// <summary>
         /// Whether the table is switched on for this map's raid: Bay5 follows the legacy
-        /// <c>EnableShaderFallbacks</c> value only, AirPit its own key only, every other map is never on.
+        /// <c>EnableShaderFallbacks</c> value only, AirPit its own key only (<c>AirPitShaderStandins</c>), Bowl its
+        /// own key only (<c>BowlShaderStandins</c>), every other map is never on.
         /// </summary>
-        internal static bool FallbacksActive(string mapKey, bool bay5LegacySwitch, bool airPitSwitch) =>
-            IsBay5(mapKey) ? bay5LegacySwitch : IsAirPit(mapKey) && airPitSwitch;
+        internal static bool FallbacksActive(string mapKey, bool bay5LegacySwitch, bool airPitSwitch, bool bowlSwitch) =>
+            IsBay5(mapKey) ? bay5LegacySwitch : IsAirPit(mapKey) ? airPitSwitch : IsBowl(mapKey) && bowlSwitch;
 
         /// <summary>The SPT shader allowed to stand in for <paramref name="originalName"/> on this map, if any.</summary>
         internal static bool TryGetFallback(string mapKey, string originalName, out string fallbackName)
@@ -128,6 +141,7 @@ namespace ArenaMapPort.Client
                 return false;
             string target = null;
             bool found = (IsAirPit(mapKey) && AirPitTargets.TryGetValue(originalName, out target)) ||
+                         (IsBowl(mapKey) && BowlTargets.TryGetValue(originalName, out target)) ||
                          Table.TryGetValue(originalName, out target);
             if (!found) return false;
             fallbackName = target;

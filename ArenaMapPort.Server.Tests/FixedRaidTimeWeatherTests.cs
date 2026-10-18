@@ -28,7 +28,8 @@ public class FixedRaidTimeWeatherTests
         Assert.True(ArenaMapRegistry.AirPit.UsesServerTime);
         Assert.True(ArenaMapRegistry.AirPit.HasTimeSelection);
         Assert.False(ArenaMapRegistry.AirPit.UsesFixedStartTimes);
-        var serverTimeMaps = new[] { ArenaMapRegistry.Bay5, ArenaMapRegistry.AirPit };
+        // Bowl follows the same policy (docs/PLAN-BOWL.md, 2026-10-18): no Directional light in its imported scenes.
+        var serverTimeMaps = new[] { ArenaMapRegistry.Bay5, ArenaMapRegistry.AirPit, ArenaMapRegistry.Bowl };
         foreach (var map in ArenaMapRegistry.Catalog)
         {
             var name = map.Key["arena_".Length..] + ".json";

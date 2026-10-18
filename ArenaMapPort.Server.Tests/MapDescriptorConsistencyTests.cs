@@ -92,7 +92,10 @@ public class MapDescriptorConsistencyTests
             // the three layer-0 blockout panels over the south-west shop's roll-door lines (host raid 2026-10-13)
             "SBG_Arena_AirPit_ShootOut/SOO/Cube (10) Group",
         }, ArenaMapRegistry.AirPit.OpenedBarriers);
-        var walked = new[] { ArenaMapRegistry.Equator, ArenaMapRegistry.Bay5, ArenaMapRegistry.AirPit };
+        // Bowl (PLAN-BOWL item 7, 2026-10-18): the two GateEntity roots of Arena_Bowl_TeamFight_DesignStuff; each pocket
+        // has two independent exits (gate + BTR east, gate + ambulance west), so every direct child opens at raid start.
+        Assert.Equal(new[] { "DOORS_SPAWN_A", "DOORS_SPAWN_B" }, ArenaMapRegistry.Bowl.OpenedBarriers);
+        var walked = new[] { ArenaMapRegistry.Equator, ArenaMapRegistry.Bay5, ArenaMapRegistry.AirPit, ArenaMapRegistry.Bowl };
         foreach (var map in ArenaMapRegistry.Catalog)
         {
             Assert.NotNull(map.OpenedBarriers);
@@ -161,9 +164,10 @@ public class MapDescriptorConsistencyTests
     // PLAN-AIRPIT item 8: the bake-only inputs exist for AirPit alone; Equator's and Bay5's NavMesh bake keeps its
     // renderer-union volume, its every-layer mask and no exclusion, which is what their shipped bundles were built with.
     [Fact]
-    public void NavMeshBakeInputs_ExistForAirPitOnly()
+    public void NavMeshBakeInputs_ExistForAirPitAndBowlOnly()
     {
         var airPit = ArenaMapRegistry.AirPit;
+        var bowl = ArenaMapRegistry.Bowl;
         // 2026-10-12 host raid 1: the four bake-only exclusions (shop shutters, a fence) let the NavMesh run through
         // solids that stay in the scene; the walk test stopped at the DonB_Ramen shutter. AirPit now bakes every
         // solid and opens the two portal gates instead (OpenedBarriers), so the list is empty by design. The six
@@ -182,14 +186,28 @@ public class MapDescriptorConsistencyTests
         // A bake exclusion that is also a barrier would be dropped twice and say two different things about the runtime.
         Assert.DoesNotContain(airPit.NavMeshBakeExclusions, p => airPit.OpenedBarriers.Any(b => p == b || p.StartsWith(b + "/")));
 
-        foreach (var map in ArenaMapRegistry.Catalog.Where(m => !ReferenceEquals(m, airPit)))
+        // Bowl (PLAN-BOWL item 7 analysis, 2026-10-18): Arena's mesh spans x -63.8..59.6, y 0.04..9.25, z -79.5..8.8,
+        // the box adds about 2 m and keeps the guard-tower tops (y max 10); Arena's own mask 9/11/18/30 plus 29 because
+        // the kept border cubes are baked as walls; the one exclusion is the 165 x 144 m under-floor slab.
+        Assert.Equal(new[] { "Arena_Bowl_LevelBorders/Cube" }, bowl.NavMeshBakeExclusions);
+        Assert.Equal(new[] { -66.0f, 62.0f, -2.0f, 10.0f, -82.0f, 11.0f }, bowl.BakeBounds);
+        Assert.Equal(new[] { 9, 11, 18, 29, 30 }, bowl.NavMeshBakeLayers);
+        Assert.True(bowl.KeepLevelBorders);
+        for (var axis = 0; axis < 3; axis++)
+            Assert.True(bowl.BakeBounds[2 * axis] < bowl.BakeBounds[2 * axis + 1]);
+        Assert.DoesNotContain(bowl.NavMeshBakeExclusions, p => bowl.OpenedBarriers.Any(b => p == b || p.StartsWith(b + "/")));
+
+        foreach (var map in ArenaMapRegistry.Catalog.Where(m => !ReferenceEquals(m, airPit) && !ReferenceEquals(m, bowl)))
         {
             Assert.Empty(map.NavMeshBakeExclusions);
             Assert.Empty(map.BakeBounds);
             Assert.Empty(map.NavMeshBakeLayers);
         }
-        Assert.All(airPit.NavMeshBakeLayers, layer => Assert.InRange(layer, 0, 31));
-        Assert.DoesNotContain(4, airPit.NavMeshBakeLayers); // Water is never collected
+        foreach (var map in new[] { airPit, bowl })
+        {
+            Assert.All(map.NavMeshBakeLayers, layer => Assert.InRange(layer, 0, 31));
+            Assert.DoesNotContain(4, map.NavMeshBakeLayers); // Water is never collected
+        }
     }
 
     [Fact]
@@ -260,12 +278,18 @@ public class MapDescriptorConsistencyTests
         Assert.Equal(ArenaGateRole.Held, airPit.GateRoleOf("PASSPORT_CONTROL_EMISSIVE"));
         Assert.Equal(9, airPit.OpenedBarriers.Count(p => airPit.GateRoleOf(p) == ArenaGateRole.Plain)); // fences, shells, panels
         Assert.Equal(ArenaGateRole.Plain, airPit.GateRoleOf("not a barrier at all"));
+        // Bowl (PLAN-BOWL item 7): both gate roots are start gates (a mode plugin's hold keeps all four parts closed),
+        // Arena keeps no Bowl box closed in TeamFight, so there are no held gates.
+        var bowl = ArenaMapRegistry.Bowl;
+        Assert.Equal(new[] { "DOORS_SPAWN_A", "DOORS_SPAWN_B" }, bowl.StartGates);
+        Assert.Empty(bowl.HeldGates);
+        Assert.All(bowl.OpenedBarriers, p => Assert.Equal(ArenaGateRole.Start, bowl.GateRoleOf(p)));
         foreach (var map in ArenaMapRegistry.Catalog)
         {
             Assert.All(map.StartGates, p => Assert.Contains(p, map.OpenedBarriers));
             Assert.All(map.HeldGates, p => Assert.Contains(p, map.OpenedBarriers));
             Assert.Empty(map.StartGates.Intersect(map.HeldGates));
-            if (ReferenceEquals(map, airPit)) continue;
+            if (ReferenceEquals(map, airPit) || ReferenceEquals(map, bowl)) continue;
             Assert.Empty(map.StartGates);
             Assert.Empty(map.HeldGates);
             Assert.All(map.OpenedBarriers, p => Assert.Equal(ArenaGateRole.Start, map.GateRoleOf(p)));

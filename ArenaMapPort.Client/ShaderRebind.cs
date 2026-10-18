@@ -328,7 +328,8 @@ namespace ArenaMapPort.Client
             ShaderStandins.Captured captured = null;
             if (target == null &&
                 ShaderStandinPolicy.FallbacksActive(map.Key,
-                    _enableShaderFallbacks != null && _enableShaderFallbacks.Value, ShaderStandins.AirPitStandinsEnabled) &&
+                    _enableShaderFallbacks != null && _enableShaderFallbacks.Value, ShaderStandins.AirPitStandinsEnabled,
+                    ShaderStandins.BowlStandinsEnabled) &&
                 ShaderStandinPolicy.TryGetFallback(map.Key, originalName, out var fallbackName))
             {
                 target = FindLoadedExact(fallbackName) ?? Shader.Find(fallbackName);

@@ -1,0 +1,39 @@
+{
+  "_comment": "bowl PLAN-BOWL item 5 (docs/progress/bowl-release.md, 2026-10-18): optional sidecar read by tools/server/make_base_json.py next to tools/maps/bowl.json; emits base.json 'exits'. The client authors the ExfiltrationPoint objects at runtime from ArenaMapRegistry.Bowl.Exits (ArenaMapPort.Shared/ArenaMapDescriptor.cs): names, positions and box sizes there must equal this file (BowlMapTests). OFFLINE DRAFT, not walked on the host yet. One gate beyond each pocket as seen from the pocket: the BTR gate south of the east pocket's BTR_82_closed opening (the BTR stands at x 46.8..55.7, z -23.6..-19.4), the Army gate north of the west pocket's Gates_Army (x -54.1..-49.3, z -55.2..-54.2). Both boxes (4 x 3 x 4 m) lie on Arena's own 4,987 m2 NavMesh main component with 5.1 m / 5.1 m of border clearance at the centre (oracle in the world frame, 2026-10-18) and at least 20.9 m / 12.3 m from every pocket marker, so nobody spawns inside a trigger box. EntryPoints is always the map's infiltration name; names double as locale keys. The pockets open at raid start through opened_barriers (DOORS_SPAWN_A, DOORS_SPAWN_B), so a raid before item 7's bake may not reach them.",
+  "exits": [
+    {
+      "name": "Bowl BTR Gate",
+      "position": [
+        51.0,
+        0.1,
+        -31.0
+      ],
+      "box_size": [
+        4.0,
+        3.0,
+        4.0
+      ],
+      "rotation": 0.0,
+      "exfiltration_time": 8,
+      "chance": 100,
+      "type": "Individual"
+    },
+    {
+      "name": "Bowl Army Gate",
+      "position": [
+        -51.0,
+        0.1,
+        -49.0
+      ],
+      "box_size": [
+        4.0,
+        3.0,
+        4.0
+      ],
+      "rotation": 0.0,
+      "exfiltration_time": 8,
+      "chance": 100,
+      "type": "Individual"
+    }
+  ]
+}

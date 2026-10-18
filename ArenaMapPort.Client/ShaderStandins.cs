@@ -68,6 +68,7 @@ namespace ArenaMapPort.Client
         }
 
         static ConfigEntry<bool> _airPitStandins;
+        static ConfigEntry<bool> _bowlStandins;
         static ConfigEntry<FogSheetMode> _fogSheetMode;
         static ConfigEntry<float> _fogSheetOpacity;
 
@@ -79,6 +80,9 @@ namespace ArenaMapPort.Client
 
         internal static bool AirPitStandinsEnabled =>
             _airPitStandins != null ? _airPitStandins.Value : ShaderStandinPolicy.AirPitStandinsDefault;
+
+        internal static bool BowlStandinsEnabled =>
+            _bowlStandins != null ? _bowlStandins.Value : ShaderStandinPolicy.BowlStandinsDefault;
 
         internal static FogSheetMode FogMode =>
             _fogSheetMode != null ? _fogSheetMode.Value : ShaderStandinPolicy.FogSheetModeDefault;
@@ -94,6 +98,12 @@ namespace ArenaMapPort.Client
                 "MK4/Rock, fog sheet: Unlit/Transparent Colored with a generated soft texture); false = leave them on " +
                 "the magenta stand-in. The substitutes are inferred and not verified against Arena's look. The map " +
                 "bundle keeps rebound materials cached: restart EFT after switching this back to false.");
+            _bowlStandins = settings.Bind("MaterialFixes", "BowlShaderStandins", ShaderStandinPolicy.BowlStandinsDefault,
+                "Bowl only (arena_bowl). The tarp tunnel's Arena shader (p0/Reflective/Bumped Specular_TwoSided, 12 " +
+                "renderers) is not shipped by SPT. true = substitute Legacy Shaders/Transparent/Cutout/Bumped Diffuse " +
+                "2 side (draws both sides; a stand-in not verified against Arena's look); false = leave it on the " +
+                "magenta stand-in. The map bundle keeps rebound materials cached: restart EFT after switching this " +
+                "back to false.");
             _fogSheetMode = settings.Bind("MaterialFixes", "AirPitFogSheets", ShaderStandinPolicy.FogSheetModeDefault,
                 "AirPit only. StandIn = fog-sheet quads use the substitute shader (needs AirPitShaderStandins = true, " +
                 "otherwise they stay magenta). Hidden = their renderers are disabled at raid start, whatever " +

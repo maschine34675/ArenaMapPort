@@ -36,7 +36,7 @@ AIRPIT = nd.ARENA_SOURCES["airpit"]
 
 def marker_package():
     """An extracted Bowl package that holds the DesignStuff scene (v1 = Arena 0.6.0, spike = 0.5.4)."""
-    for name in ("bowl-native-v1", "bowl"):
+    for name in ("bowl-native-v2", "bowl-native-v1", "bowl"):
         if (REPO / "work" / "extract" / name / "scenes" / "Arena_Bowl_TeamFight_DesignStuff.json").is_file():
             return REPO / "work" / "extract" / name
     return None
@@ -107,7 +107,7 @@ class CommandLineDefaultsTests(unittest.TestCase):
 
     def test_map_bowl_selects_bowls_navmesh_mask_ai_scene_and_package(self):
         seen = self.run_main("--map", "bowl", "--live-core-points")
-        self.assertEqual(seen["package"], "work/extract/bowl-native-v1")
+        self.assertEqual(seen["package"], "work/extract/bowl-native-v2")
         self.assertEqual((seen["assets"], seen["path_id"]), ("sharedassets128.assets", 2))
         self.assertEqual(seen["cfg"].arena_layer_mask, 0x40040A00)
         self.assertEqual(seen["live"], (nd.DEFAULT_ARENA_DATA, 128, "Arena_Bowl_TeamFight_AI", "arena_bowl"))

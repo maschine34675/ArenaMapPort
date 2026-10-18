@@ -12,9 +12,10 @@
     "Arena_Bowl_TeamFight",
     "Arena_Bowl_TeamFight_DesignStuff"
   ],
+  "uses_server_time": true,
   "infiltration_name": "ArenaBowl",
-  "locale_name": "Arena: Bowl (spike)",
-  "locale_description": "Internal test build — TeamFight geometry/collision/NavMesh port.",
+  "locale_name": "Arena: Bowl",
+  "locale_description": "The Bowl from EFT Arena: the sunken field of an old sports arena with its stands, converted for death-fighting. Containers, barricades and a grounded Mi-26 fill the field between two gated team pockets at the east and west ends; the layer-29 border cubes of Arena bound the play space.",
   "icon_x": 919,
   "icon_y": 679,
   "template_key": "factory4_day",
@@ -24,5 +25,35 @@
     0.1385263055562973,
     0.14121440052986145
   ],
-  "keep_level_borders": true
+  "opened_barriers": [
+    "DOORS_SPAWN_A",
+    "DOORS_SPAWN_B"
+  ],
+  "start_gates": [
+    "DOORS_SPAWN_A",
+    "DOORS_SPAWN_B"
+  ],
+  "held_gates": [],
+  "navmesh_bake_exclusions": [
+    "Arena_Bowl_LevelBorders/Cube"
+  ],
+  "bake_bounds": [
+    -66,
+    62,
+    -2,
+    10,
+    -82,
+    11
+  ],
+  "navmesh_bake_layers": [
+    9,
+    11,
+    18,
+    29,
+    30
+  ],
+  "keep_level_borders": true,
+  "shader_fallback_names": [
+    "p0/Reflective/Bumped Specular_TwoSided"
+  ]
 }

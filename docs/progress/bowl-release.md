@@ -70,3 +70,38 @@ host evidence. Appended, never rewritten.
 - `KeepLevelBorders` (`6873576`): Bowl keeps its 354 layer-29 LevelBorder cubes (descriptor + sidecar
   `keep_level_borders: true`); the client's `RemoveTeamFightBorders` key defaults to false for Bowl and the bake treats
   layer 29 as physical when the map's `navmesh_bake_layers` lists it. 875 .NET tests OK.
+
+## 2026-10-18 - package v2 accepted input, oracle, bake-input analysis, sidecars and descriptor (items 4-7)
+
+- Third v2 run (09:32 UTC) with both fixes: `required = ["ballistics", "ambient_audio"]`, 33 players (two `indoor_wind`
+  leaves, the second now `indoor_wind~2`), 11 banks, 61 clips, `metal_rigging` pinned in `states.forced_mixer_players`
+  and routed like its group. `validate_extract.py` on v2 running (result below).
+- NavMesh oracle (`4cea40b`): Arena's Bowl NavMeshData is placed by a 90 degree yaw; in the world frame its main component
+  spans x -63.84..59.64, y 0.04..9.25, z -79.45..8.75 (4,987 m2, 1,477 polygons, 11 components), 19/19 core points and
+  20/20 spawn markers lie on it (3/19 and 3/20 in the raw frame). `navmesh_diff.py --map bowl` against the v1 colliders:
+  123,336 of 124,540 Arena samples passable, 63 without a port floor. AirPit's report is byte-identical.
+- Bake-input analysis (read-only agent, scratch `bowl-bake/`): the play space is bounded by architecture plus the 354
+  layer-29 cubes, which seal two side zones (about 475 + 453 m2) next to the pockets that Arena's own mesh never covered;
+  with the cubes kept the walk model overlaps Arena's mesh at 98 % (83 % without), route lengths unchanged (80 / 78 m
+  pocket to capture area, 149 m pocket to pocket). Each pocket has two independent exits (east: Bowl_Gates_Respawn_01 and
+  BTR_82_closed; west: Gates_Army_01 and the ambulance group), so all four direct children of the two GateEntity roots
+  open together; no name contains "frame", no layer-0 blockout exists, the two SPAWN_BOUND_FIGHTER boxes are the only
+  layer-0 solids. The 165 x 144 m under-floor slab `Arena_Bowl_LevelBorders/Cube` (y -1..0) must be excluded from the
+  bake or it becomes a walkable plane at floor level. Arena's mask is 9/11/18/30; y max 10 keeps the guard-tower tops.
+  Known cost of baking the cubes as solids: about 608 m2 of unreachable cube-top islands (accepted; bots spawn from fixed
+  core points, Arena's own mesh carries 133 m2 of islands too).
+- Decided and written (sidecar `tools/maps/bowl.json` + C# descriptor in one commit): `opened_barriers` and `start_gates`
+  = `DOORS_SPAWN_A`, `DOORS_SPAWN_B` (no held gates), `bake_bounds` [-66, 62, -2, 10, -82, 11], `navmesh_bake_layers`
+  [9, 11, 18, 29, 30], `navmesh_bake_exclusions` [`Arena_Bowl_LevelBorders/Cube`], `keep_level_borders` true,
+  `shader_fallback_names` [`p0/Reflective/Bumped Specular_TwoSided`], `uses_server_time` true, identity text
+  "Arena: Bowl" with an own-words description.
+- `bowl.exits.json` / descriptor Exits: `Bowl BTR Gate` (51.0, 0.1, -31.0) south of the BTR opening and `Bowl Army Gate`
+  (-51.0, 0.1, -49.0) north of Gates_Army; both on Arena's main component with 5.1 m border clearance, 20.9 m / 12.3 m
+  from the nearest pocket marker (oracle survey of a 1 m grid outside each gate). `bowl.bots.json`: four player spawns
+  on original markers ((5) and (8) east, (1) and (12) west), 17 bot spawns on Arena's core points (core 7 inside the west
+  pocket and core 17 on the east gate line skipped), waves and PMC boss waves from AirPit. `bowl.modes.json` from v2
+  (north = east pocket, south = west pocket, `side_rule` block). `make_base_json.py --map tools/maps/bowl.json`: Name
+  "Arena: Bowl", BotMax 8, 21 spawn points, 2 exits, 5 waves, 4 boss waves.
+- Open for the host: the capture-point centroid (-1.76, -33.92) lies under the Mi-26 belly (not on the mesh; the nearest
+  walkable cell is the helicopter top at y 1.6), the east guard-tower stairs, vault limits above 1.2 m, and
+  `BoothDoorRepairs.ReportRays`, which measures from the gate root at the origin and will print no verdict for Bowl.
