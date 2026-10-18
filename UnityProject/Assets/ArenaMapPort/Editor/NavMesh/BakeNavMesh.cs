@@ -498,8 +498,10 @@ namespace ArenaMapPort.Editor.NavMesh
             // Arena and installed EFT both name layer 29 LevelBorder. The importer preserves
             // numeric layers, but this Editor's TagManager leaves 29 unnamed. Bay5's borders
             // are called Cube, so name-only filtering kept walls removed by MapBorderRepairs.
-            // Match the component owner, as the runtime does; do not inherit a parent's layer.
-            if (t.gameObject.layer == 29) return "LevelBorder layer 29";
+            // Match the component owner, as the runtime does; do not inherit a parent's layer. A map whose
+            // descriptor keeps its borders (keep_level_borders; Bowl, whose 354 cubes are the stadium's only bound
+            // and stay active at runtime) bakes them as walls instead, so bots honour the same limit as players.
+            if (t.gameObject.layer == 29 && !ArenaPaths.Map.keep_level_borders) return "LevelBorder layer 29";
             return null;
         }
 

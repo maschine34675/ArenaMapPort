@@ -107,9 +107,12 @@ namespace ArenaMapPort.Client
             {
                 var state = new MapState();
                 string configSection = $"Map ({map.Key})";
-                state.RemoveTeamFightBorders = Plugin.Instance.Settings.Bind(configSection, "RemoveTeamFightBorders", true,
+                // Default per map: a map whose descriptor keeps its LevelBorder cubes (Bowl: the stadium's only bound,
+                // docs/PLAN-BOWL.md) starts with false; the key is new for such a map, so no saved value changes meaning.
+                state.RemoveTeamFightBorders = Plugin.Instance.Settings.Bind(configSection, "RemoveTeamFightBorders", !map.KeepLevelBorders,
                     $"Removes the invisible TeamFight play-area walls so the whole {map.Key} map is walkable. " +
-                    "false keeps Arena's TeamFight boundaries.");
+                    "false keeps Arena's TeamFight boundaries" +
+                    (map.KeepLevelBorders ? " (the default here: this map's border cubes are its only play-area bound)." : "."));
                 state.RemoveTeamFightBorders.SettingChanged += (_, __) => ReapplyIfLoaded(map, state);
                 _states[map.Key] = state;
             }

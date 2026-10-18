@@ -1,4 +1,8 @@
+using System;
 using System.Collections.Generic;
+using System.IO;
+using System.Linq;
+using System.Text.Json;
 using ArenaMapPort.Shared;
 using Xunit;
 
@@ -213,6 +217,33 @@ public class MapDescriptorConsistencyTests
     {
         Assert.NotEmpty(map.AllSceneNames);
         Assert.Equal(map.ScriptsSceneName, map.AllSceneNames[0]);
+    }
+
+    // 2026-10-18 (Bowl, docs/PLAN-BOWL.md): a map may keep Arena's layer-29 LevelBorder cubes as its play-area bound.
+    // The flag mirrors the sidecar's keep_level_borders (JsonUtility default false), only Bowl sets it, and such a map
+    // must let the bake collect layer 29 (BakeNavMesh.NonPhysicalLayerReason then treats the cubes as walls).
+    [Fact]
+    public void KeepLevelBorders_MirrorsTheSidecar_AndBakesLayer29()
+    {
+        foreach (var map in ArenaMapRegistry.Catalog)
+        {
+            var name = map.Key["arena_".Length..] + ".json";
+            string? path = null;
+            for (var dir = new DirectoryInfo(AppContext.BaseDirectory); dir != null; dir = dir.Parent)
+            {
+                var candidate = Path.Combine(dir.FullName, "tools", "maps", name);
+                if (!File.Exists(candidate)) continue;
+                path = candidate;
+                break;
+            }
+            Assert.NotNull(path);
+            using var document = JsonDocument.Parse(File.ReadAllText(path!));
+            bool sidecar = document.RootElement.TryGetProperty("keep_level_borders", out var keep) && keep.GetBoolean();
+            Assert.Equal(sidecar, map.KeepLevelBorders);
+            Assert.Equal(map == ArenaMapRegistry.Bowl, map.KeepLevelBorders);
+            if (map.KeepLevelBorders)
+                Assert.True(map.NavMeshBakeLayers.Length == 0 || map.NavMeshBakeLayers.Contains(29));
+        }
     }
 
     // 2026-10-17 (the original AirPit north team box): which opened barriers a mode plugin may hold (StartGates) and

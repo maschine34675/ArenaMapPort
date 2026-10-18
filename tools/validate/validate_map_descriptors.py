@@ -365,6 +365,14 @@ def bake_input_errors(map_json: dict) -> list[str]:
             errors.append("navmesh_bake_layers must not name layer 4 (Water is never collected)")
         elif len(layers) != len(set(layers)):
             errors.append("navmesh_bake_layers contains duplicate layers")
+    keep = map_json.get("keep_level_borders")
+    if keep is not None:
+        # Bowl (docs/PLAN-BOWL.md): the layer-29 LevelBorder cubes stay active and are baked as walls, so the bake must
+        # be allowed to collect layer 29 (an explicit layer list without it would silently drop the walls again).
+        if type(keep) is not bool:
+            errors.append("keep_level_borders must be a boolean (omit it for the default false)")
+        elif keep and isinstance(layers, list) and layers and 29 not in layers:
+            errors.append("keep_level_borders=true needs navmesh_bake_layers to include layer 29 (or no layer list)")
     return errors
 
 

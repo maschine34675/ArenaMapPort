@@ -233,6 +233,16 @@ class ValidatorTests(unittest.TestCase):
         self.assertTrue(any("inside an opened_barriers path" in e for e in overlap))
         self.assertTrue(any("inside an opened_barriers path" in e for e in errors(navmesh_bake_exclusions=["BUS_DOORS"])))
 
+    def test_keep_level_borders_needs_layer_29_in_an_explicit_layer_list(self):
+        # Bowl (docs/PLAN-BOWL.md): a map that keeps its layer-29 LevelBorder cubes bakes them as walls, so an explicit
+        # navmesh_bake_layers list must contain 29; no list (every layer but Water) is fine, and the flag is a boolean.
+        self.assertEqual(VD.bake_input_errors({"keep_level_borders": True}), [])
+        self.assertEqual(VD.bake_input_errors({"keep_level_borders": False, "navmesh_bake_layers": [9, 11, 18, 30]}), [])
+        self.assertEqual(VD.bake_input_errors({"keep_level_borders": True, "navmesh_bake_layers": [9, 11, 18, 29, 30]}), [])
+        self.assertTrue(any("include layer 29" in e for e in
+                            VD.bake_input_errors({"keep_level_borders": True, "navmesh_bake_layers": [9, 11, 18, 30]})))
+        self.assertTrue(any("boolean" in e for e in VD.bake_input_errors({"keep_level_borders": "yes"})))
+
     def test_a_map_without_bake_inputs_is_valid(self):
         self.assertEqual(VD.bake_input_errors({}), [])
         self.assertEqual(VD.bake_input_errors(sidecar("equator.json")), [])

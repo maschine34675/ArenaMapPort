@@ -63,6 +63,11 @@ namespace ArenaMapPort.Editor.Common
         public string[] navmesh_bake_exclusions;
         public float[] bake_bounds;
         public int[] navmesh_bake_layers;
+        // Bowl (docs/PLAN-BOWL.md, 2026-10-18): true keeps the layer-29 LevelBorder cubes as physical bake sources
+        // (BakeNavMesh.NonPhysicalLayerReason skips its layer-29 rule; navmesh_bake_layers must list 29) because they
+        // are the stadium's only play-area bound and stay active at runtime (ArenaMapDescriptor.KeepLevelBorders).
+        // JsonUtility leaves a missing bool false, so Equator, Bay5 and AirPit are unchanged.
+        public bool keep_level_borders;
 
         static readonly float[] DefaultFogColor = { 0.62f, 0.66f, 0.70f };
 

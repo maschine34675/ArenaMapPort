@@ -149,6 +149,12 @@ namespace ArenaMapPort.Shared
         // passport control, the north team box's gate). Both are subsets of OpenedBarriers, so the bake leaves them out.
         public string[] StartGates { get; }
         public string[] HeldGates { get; }
+        // Bowl (2026-10-18, docs/PLAN-BOWL.md): Arena bounds the stadium with 354 layer-29 LevelBorder cubes and
+        // has no data polygon, so the cubes are the only play-area bound. true keeps them: MapBorderRepairs leaves
+        // their colliders enabled (its RemoveTeamFightBorders key defaults to false for this map) and BakeNavMesh
+        // treats layer 29 as physical (the map's navmesh_bake_layers must list 29). Equator, Bay5 and AirPit keep
+        // false: their TeamFight walls open at raid start and the bake drops layer 29.
+        public bool KeepLevelBorders { get; }
         // PLAN-AIRPIT item 8 — Editor-side NavMesh bake inputs. The client never reads them; they live here so the one
         // per-map table stays complete and tools/maps/<key>.json cannot drift (validate_map_descriptors.py and the xunit
         // mirror tests). All empty for Equator and Bay5, whose bake is unchanged.
@@ -221,7 +227,8 @@ namespace ArenaMapPort.Shared
             ArenaBorderDescriptor[]? AuthoredBorders = null,
             ArenaLampFillDescriptor? LampFill = null,
             string[]? StartGates = null,
-            string[]? HeldGates = null)
+            string[]? HeldGates = null,
+            bool KeepLevelBorders = false)
 #nullable restore
         {
             this.Key = Key;
@@ -242,6 +249,7 @@ namespace ArenaMapPort.Shared
             this.OpenedBarriers = OpenedBarriers ?? new string[0];
             this.StartGates = StartGates ?? new string[0];
             this.HeldGates = HeldGates ?? new string[0];
+            this.KeepLevelBorders = KeepLevelBorders;
             this.NavMeshBakeExclusions = NavMeshBakeExclusions ?? new string[0];
             this.AuthoredBorders = AuthoredBorders ?? new ArenaBorderDescriptor[0];
             this.BakeBounds = BakeBounds ?? new float[0];
@@ -649,7 +657,10 @@ namespace ArenaMapPort.Shared
             LocaleDescription: "Internal test build — TeamFight geometry/collision/NavMesh port.",
             IconX: 919,
             IconY: 679,
-            DbBaseJsonPath: "arena_bowl/base.json");
+            DbBaseJsonPath: "arena_bowl/base.json",
+            // docs/PLAN-BOWL.md decision: the 354 layer-29 LevelBorder cubes are the stadium's only play-area bound;
+            // they stay active at raid start and the bake treats them as walls (mirrors keep_level_borders).
+            KeepLevelBorders: true);
 
         // Source scene selection: tools/extract/plans/prison.json. Identity is permanent.
         public static readonly ArenaMapDescriptor Prison = new(
