@@ -1,5 +1,8 @@
 """PLAN-AIRPIT item 4 -- mode-object sidecar extractor (tools/extract/extract_mode_objects.py).
 
+SideRuleTests / BowlSidecarTests (PLAN-BOWL item 5, 2026-10-18): the pocket rule that gives Bowl, whose two
+pockets both lie at z < 0, two balanced sides while the released maps keep the sign-of-z rule byte for byte.
+
 Synthetic scene JSON throughout (parent chains, scales, rotations, naming quirks), the same
 object shape extract_map.py / extract_equator.py write. The last class cross-checks the
 git-tracked tools/maps/*.modes.json against the ignored local packages when those exist; it
@@ -233,6 +236,9 @@ class SpawnTests(AlmostMixin, unittest.TestCase):
             obj(2, "Bear house (1)", parent=1, pos=(0, 0, 4)),      # +z local -> +x world: (14, 0, 5)
             obj(3, "Usec house (1)", parent=1, pos=(0, 0, -4), yaw=90),  # (6, 0, 5), yaw 180
             obj(4, "SPAWN_BOUND_X", parent=1, pos=(0, 0, 0), components=[box((0, 0, 3), (2, 2, 2))]),
+            # 2026-10-18: a layout on one side of z == 0 must now be two clear pockets (Bowl rule), so the
+            # fixture straddles the origin like every real map: local +x is world -z under this yaw -> (10, 0, -3)
+            obj(5, "Usec house (2)", parent=1, pos=(8, 0, 0)),
         ])
         found = extract([g])
         by_name = {m["name"]: m for side in found["spawn_markers"].values() for m in side}
@@ -261,7 +267,9 @@ class SpawnTests(AlmostMixin, unittest.TestCase):
             extract([g])
 
     def test_inactive_parent_is_reported_not_dropped(self):
-        g = graph([obj(1, "SPAWNS", active=False), obj(2, "ScavPMCspawn (1)", parent=1, pos=(0, 0, 2))])
+        # a second marker south of the origin: one marker on its own is no pair of pockets (see SideRuleTests)
+        g = graph([obj(1, "SPAWNS", active=False), obj(2, "ScavPMCspawn (1)", parent=1, pos=(0, 0, 2)),
+                   obj(3, "ScavPMCspawn (2)", parent=1, pos=(0, 0, -2))])
         marker = extract([g])["spawn_markers"]["north"][0]
         self.assertFalse(marker["active"])
 
@@ -276,6 +284,198 @@ class SpawnTests(AlmostMixin, unittest.TestCase):
         self.assertEqual(found["spawn_markers"], {"north": [], "south": []})
         self.assertIn("no SPAWN_BOUND", err)
         self.assertIn("no SPAWNS", err)
+
+
+def grid(x0, z0, dx, dz, columns=5, rows=2):
+    """columns x rows points, row by row, from (x0, z0)."""
+    return [(x0 + dx * c, z0 + dz * r) for r in range(rows) for c in range(columns)]
+
+
+def spawn_layout(pockets, bounds=(), scene="TF_DesignStuff"):
+    """A scene whose SPAWNS container holds one marker per (x, z) and one SPAWN_BOUND box per centre.
+
+    Markers are numbered through one index space, like Arena's single ``Bear house (n)`` row."""
+    objects = [obj(1, "SPAWNS")]
+    index = 0
+    for pocket in pockets:
+        for x, z in pocket:
+            objects.append(obj(len(objects) + 1, f"Bear house ({index})", parent=1, pos=(x, 0.05, z)))
+            index += 1
+    for x, z in bounds:
+        objects.append(obj(len(objects) + 1, "SPAWN_BOUND_FIGHTER", parent=1, pos=(x, 2.0, z),
+                           components=[box((0, 0, 0), (20, 4, 20))]))
+    return graph(objects, scene)
+
+
+# Bowl-like: both pockets have z < 0 (east x 46..56 / z -11..-3, west x -58..-49 / z -69..-60 in the source)
+EAST = grid(46.0, -11.0, 2.5, 8.0)
+WEST = grid(-58.0, -69.0, 2.25, 9.0)
+EAST_BOUND, WEST_BOUND = (51.0, -7.0), (-53.5, -64.5)
+
+
+def sides_of(found):
+    """{side: sorted list of marker x} of an extract_scenes result."""
+    return {side: sorted(round(m["position"][0], 2) for m in found["spawn_markers"][side])
+            for side in ("north", "south")}
+
+
+class SideRuleTests(AlmostMixin, unittest.TestCase):
+    """The side rule: sign of z while the origin lies between the pockets, the pockets themselves otherwise."""
+
+    def test_bowl_like_pockets_on_one_side_of_z_get_two_balanced_sides(self):
+        found = extract([spawn_layout([WEST, EAST], bounds=[WEST_BOUND, EAST_BOUND])])
+        sides = sides_of(found)
+        self.assertEqual((len(sides["north"]), len(sides["south"])), (10, 10))  # was 0 / 20 under the sign rule
+        self.assertTrue(all(x > 40 for x in sides["north"]))   # the pocket with the larger mean z (east)
+        self.assertTrue(all(x < -40 for x in sides["south"]))  # the west pocket
+        self.assertEqual({b["side"]: b["center"][0] for b in found["spawn_bounds"]}, {"north": 51.0, "south": -53.5})
+        rule = found["side_rule"]
+        self.assertEqual(rule["method"], "pocket_split")
+        self.assertEqual({side: rule["pockets"][side]["markers"] for side in rule["pockets"]}, {"north": 10, "south": 10})
+        self.assertVec(rule["pockets"]["north"]["centroid_xz"], (51.0, -7.0), places=3)
+        self.assertVec(rule["pockets"]["south"]["centroid_xz"], (-53.5, -64.5), places=3)
+        self.assertGreater(rule["cut_distance"], 100.0)   # nearest east / west markers: about 107 m apart
+        self.assertLess(rule["pocket_spread"], 15.0)
+
+    def test_the_name_follows_the_mean_z_not_the_input_order_or_the_x_side(self):
+        mirrored = [(-x, z) for x, z in EAST], [(-x, z) for x, z in WEST]
+        for pockets in ([WEST, EAST], [EAST, WEST], list(mirrored), list(reversed(mirrored))):
+            with self.subTest(first_x=pockets[0][0][0]):
+                found = extract([spawn_layout(pockets)])
+                north = [m["position"] for m in found["spawn_markers"]["north"]]
+                self.assertEqual(len(north), 10)
+                self.assertTrue(all(p[2] > -12.0 for p in north))  # the z -11..-3 pocket, whichever x it is at
+
+    def test_pocket_rule_also_applies_when_the_sign_of_z_would_cut_a_pocket(self):
+        # pockets side by side along x with both of them reaching across z == 0: the sign rule would mix them
+        east = grid(46.0, -3.0, 2.5, 15.0)
+        west = grid(-58.0, -12.0, 2.25, 15.0)
+        found = extract([spawn_layout([east, west], bounds=[(51.0, 4.5), (-53.5, -4.5)])])
+        sides = sides_of(found)
+        self.assertTrue(all(x > 40 for x in sides["north"]) and len(sides["north"]) == 10)  # mean z 4.5 vs -4.5
+        self.assertTrue(all(x < -40 for x in sides["south"]) and len(sides["south"]) == 10)
+        self.assertEqual(found["side_rule"]["method"], "pocket_split")
+
+    def test_released_layouts_keep_the_sign_rule_and_get_no_side_rule(self):
+        equator = [grid(-7.0, 44.5, 3.5, 4.1), grid(-7.0, -42.0, 3.5, 3.6)]
+        bay5 = [grid(140.0, 43.5, 3.0, 3.5, columns=2, rows=5), grid(48.0, -12.0, 3.25, 7.0)]
+        for name, pockets in (("equator", equator), ("bay5", bay5)):
+            with self.subTest(layout=name):
+                found = extract([spawn_layout(pockets)])
+                self.assertNotIn("side_rule", found)
+                self.assertTrue(all(m["position"][2] > 0 for m in found["spawn_markers"]["north"]))
+                self.assertTrue(all(m["position"][2] < 0 for m in found["spawn_markers"]["south"]))
+                self.assertEqual([len(found["spawn_markers"][s]) for s in ("north", "south")], [10, 10])
+                points = [(x, z) for pocket in pockets for x, z in pocket]
+                groups = M.split_pockets(points)
+                self.assertIsNotNone(groups)  # the pockets are clear, and they equal the sign groups
+                self.assertEqual({frozenset(groups[0]), frozenset(groups[1])},
+                                 {frozenset(range(10)), frozenset(range(10, 20))})
+        # Bay5's centres are further apart in x (87.6 m) than in z (60.2 m): naming by the larger spread
+        # would have turned its sides east/west. They stay north/south, by the sign of z, as released.
+        centre = lambda pocket: (sum(x for x, _ in pocket) / len(pocket), sum(z for _, z in pocket) / len(pocket))
+        (nx, nz), (sx, sz) = centre(bay5[0]), centre(bay5[1])
+        self.assertGreater(abs(nx - sx), abs(nz - sz))
+
+    def test_the_sign_rule_keeps_its_leniency_about_unequal_counts_and_unclear_pockets(self):
+        # 2 vs 1 across the origin (the pre-existing fixtures), not two clear pockets: nothing to fail on
+        found = extract([spawn_layout([[(0.0, -1.0), (0.0, -2.0)], [(0.0, 1.0)]])])
+        self.assertEqual([len(found["spawn_markers"][s]) for s in ("north", "south")], [1, 2])
+        self.assertNotIn("side_rule", found)
+
+    def test_odd_or_unequal_pockets_are_refused(self):
+        for label, pockets in (("19 markers", [WEST, EAST[:-1]]), ("21 markers", [WEST, EAST + [(51.0, -7.0)]]),
+                               ("12 against 8", [WEST + [(-50.0, -70.0), (-48.0, -70.0)], EAST[:8]])):
+            with self.subTest(layout=label), self.assertRaisesRegex(HardExtractError, "same number of markers"):
+                extract([spawn_layout(pockets)])
+
+    def test_one_side_of_z_without_two_separated_pockets_is_refused(self):
+        blob = grid(46.0, -11.0, 2.5, 3.0, 5, 4)  # twenty markers within 10 x 9 m, all z < 0
+        for label, pockets in (("one blob", [blob]), ("single marker", [[(0.0, 2.0)]])):
+            with self.subTest(layout=label), self.assertRaisesRegex(HardExtractError, "no two separated pockets"):
+                extract([spawn_layout(pockets)])
+        near = [grid(0.0, -10.0, 2.0, 0.0, 5, 1), grid(23.0, -10.0, 2.0, 0.0, 5, 1)]  # 15 m gap, 8 m groups
+        with self.assertRaisesRegex(HardExtractError, "no two separated pockets"):
+            extract([spawn_layout(near)])
+
+    def test_pockets_side_by_side_in_z_are_refused_rather_than_named_arbitrarily(self):
+        with self.assertRaisesRegex(HardExtractError, "arbitrary"):
+            extract([spawn_layout([grid(46.0, -10.0, 2.5, 8.0), grid(-58.0, -10.0, 2.25, 8.0)])])
+
+    def test_a_bound_between_the_pockets_is_refused(self):
+        with self.assertRaisesRegex(HardExtractError, "cannot be assigned to a side"):
+            extract([spawn_layout([WEST, EAST], bounds=[WEST_BOUND, (-1.0, -36.0)])])
+
+    def test_a_marker_on_z_zero_without_pockets_still_fails(self):
+        blob = grid(0.0, -4.0, 2.0, 4.0, 3, 3)  # z -4, 0, 4: straddles, no pockets, one marker exactly on the line
+        with self.assertRaisesRegex(HardExtractError, "z == 0"):
+            extract([spawn_layout([blob])])
+
+    def test_a_marker_on_z_zero_inside_a_clear_pocket_is_grouped_by_the_pockets(self):
+        # Bay5-like (north z 43..58, south z -12..-5) with one south marker moved onto z == 0: the sign rule would
+        # refuse it, but the pockets are unmistakable, so they decide (and the side_rule block says so)
+        north = grid(140.0, 43.5, 3.0, 3.5, columns=2, rows=5)
+        south = [(48.0, 0.0)] + grid(48.0, -12.0, 3.25, 7.0)[1:]
+        found = extract([spawn_layout([north, south])])
+        self.assertEqual([len(found["spawn_markers"][s]) for s in ("north", "south")], [10, 10])
+        self.assertTrue(all(m["position"][0] > 100 for m in found["spawn_markers"]["north"]))
+        self.assertIn((48.0, 0.0), [(m["position"][0], m["position"][2]) for m in found["spawn_markers"]["south"]])
+        self.assertEqual(found["side_rule"]["method"], "pocket_split")
+
+    def test_split_pockets_thresholds_and_determinism(self):
+        self.assertIsNone(M.split_pockets([]))
+        self.assertIsNone(M.split_pockets([(1.0, 1.0)]))
+        self.assertIsNone(M.split_pockets([(5.0, 5.0), (5.0, 5.0)]))  # coincident: a zero gap is no gap
+        row = lambda gap: [(0.0, 0.0), (8.0, 0.0), (8.0 + gap, 0.0), (16.0 + gap, 0.0)]  # two 8 m pockets
+        self.assertIsNone(M.split_pockets(row(16.0)))           # exactly twice the pocket: not clearly two
+        self.assertIsNotNone(M.split_pockets(row(16.01)))
+        group_a, group_b, cut, spread = M.split_pockets(row(30.0))
+        self.assertEqual((group_a, group_b), ([0, 1], [2, 3]))
+        self.assertAlmostEqual(cut, 30.0)
+        self.assertAlmostEqual(spread, 8.0)
+        reordered = [(8.0, 0.0), (38.0, 0.0), (0.0, 0.0), (46.0, 0.0)]  # same points, other order
+        a, b, _cut, _spread = M.split_pockets(reordered)
+        self.assertEqual(sorted(sorted(reordered[i][0] for i in g) for g in (a, b)), [[0.0, 8.0], [38.0, 46.0]])
+
+    def test_result_does_not_depend_on_object_order_and_leaves_no_scratch_key(self):
+        scene = spawn_layout([WEST, EAST], bounds=[WEST_BOUND, EAST_BOUND])
+        shuffled = graph(list(reversed(scene.objects)), "TF_DesignStuff")
+        first, second = extract([scene]), extract([shuffled])
+        self.assertEqual(first, second)
+        for item in first["spawn_bounds"] + first["spawn_markers"]["north"] + first["spawn_markers"]["south"]:
+            self.assertNotIn("_z", item)
+            self.assertIn(item["side"], ("north", "south"))
+
+    def test_package_and_cli_carry_the_rule_only_when_the_pockets_decided(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            package = PackageTests().make_package(tmp, {"map_key": "arena_x"}, scenes={
+                "Arena_X_TeamFight_DesignStuff": spawn_layout([WEST, EAST], bounds=[WEST_BOUND, EAST_BOUND]).objects})
+            first, second = Path(tmp) / "a.json", Path(tmp) / "b.json"
+            for target in (first, second):
+                code, err = quiet(M.main, ["--package", str(package), "--output", str(target)])
+                self.assertEqual(code, 0)
+            self.assertIn("markers north 10 / south 10 (pocket split)", err)
+            self.assertEqual(first.read_bytes(), second.read_bytes())
+            data = json.loads(first.read_text(encoding="utf-8"))
+            self.assertEqual(data["counts"], {"capture_zones": 0, "spawn_bounds": 2,
+                                              "spawn_markers_north": 10, "spawn_markers_south": 10})
+            self.assertEqual(data["schema_version"], 1)
+            self.assertEqual(data["side_rule"]["method"], "pocket_split")
+            plain = PackageTests().make_package(Path(tmp) / "plain", {"map_key": "arena_x"})
+            code, err = quiet(M.main, ["--package", str(plain), "--output", str(Path(tmp) / "c.json")])
+            self.assertEqual(code, 0)
+            self.assertNotIn("pocket split", err)
+            self.assertNotIn("side_rule", json.loads((Path(tmp) / "c.json").read_text(encoding="utf-8")))
+
+    def test_ambiguous_layout_is_reported_as_exit_2_without_writing_a_file(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            package = PackageTests().make_package(tmp, {"map_key": "arena_x"}, scenes={
+                "Arena_X_TeamFight_DesignStuff": spawn_layout([WEST, EAST[:-1]]).objects})
+            target = Path(tmp) / "out.json"
+            code, err = quiet(M.main, ["--package", str(package), "--output", str(target)])
+            self.assertEqual(code, 2)
+            self.assertIn("same number of markers", err)
+            self.assertFalse(target.exists())
 
 
 class PackageTests(unittest.TestCase):
@@ -408,6 +608,19 @@ class TrackedSidecarTests(unittest.TestCase):
                 self.assertTrue(all(m["position"][2] < 0 for m in data["spawn_markers"]["south"]))
                 self.assertEqual(sorted(b["side"] for b in data["spawn_bounds"]), ["north", "south"])
 
+    def test_released_sidecars_carry_no_side_rule_and_their_pockets_equal_the_sign_split(self):
+        # the side rule of 2026-10-18 (Bowl): where the pockets equal the sign-of-z groups the original rule and
+        # its output stay, so a released sidecar never has a side_rule block and the pocket analysis agrees with it
+        for stem in STEMS:
+            with self.subTest(map=stem):
+                data = json.loads(self.sidecar(stem).read_text(encoding="utf-8"))
+                self.assertNotIn("side_rule", data)
+                markers = data["spawn_markers"]["north"] + data["spawn_markers"]["south"]
+                groups = M.split_pockets([(m["position"][0], m["position"][2]) for m in markers])
+                self.assertIsNotNone(groups)
+                self.assertEqual({frozenset(groups[0]), frozenset(groups[1])},
+                                 {frozenset(range(10)), frozenset(range(10, 20))})
+
     def test_airpit_measured_values(self):
         data = json.loads(self.sidecar("airpit").read_text(encoding="utf-8"))
         point = data["capture_point"]
@@ -427,6 +640,37 @@ class TrackedSidecarTests(unittest.TestCase):
         for index, (x, z) in {19: (-10.24, 76.74), 16: (0.33, 78.30), 4: (-9.94, -74.40), 13: (-16.91, -71.70)}.items():
             self.assertAlmostEqual(by_index[index]["position"][0], x, places=2)
             self.assertAlmostEqual(by_index[index]["position"][2], z, places=2)
+
+
+class BowlSidecarTests(unittest.TestCase):
+    """tools/maps/bowl.modes.json, once the accepted package has produced it (PLAN-BOWL item 5)."""
+
+    def sidecar(self):
+        path = MAPS / "bowl.modes.json"
+        if not path.is_file():
+            self.skipTest("bowl.modes.json not generated yet")
+        return path
+
+    def test_equals_a_fresh_extraction_of_the_package_it_names(self):
+        text = self.sidecar().read_text(encoding="utf-8")
+        package = ROOT / "work" / "extract" / json.loads(text)["source_package"]["name"]
+        if not (package / "manifest.json").is_file():
+            self.skipTest(f"{package.name} package is local only")
+        data, _ = quiet(M.extract_package, package)
+        self.assertEqual(text, M.dumps(data))
+
+    def test_two_balanced_pockets_east_and_west_named_by_z(self):
+        data = json.loads(self.sidecar().read_text(encoding="utf-8"))
+        self.assertEqual(data["counts"], {"capture_zones": data["counts"]["capture_zones"], "spawn_bounds": 2,
+                                          "spawn_markers_north": 10, "spawn_markers_south": 10})
+        self.assertEqual(data["side_rule"]["method"], "pocket_split")  # both pockets have z < 0: the sign rule fails
+        north, south = data["spawn_markers"]["north"], data["spawn_markers"]["south"]
+        self.assertTrue(all(m["position"][0] > 40 for m in north))   # north = the east pocket (larger mean z)
+        self.assertTrue(all(m["position"][0] < -40 for m in south))  # south = the west pocket
+        self.assertGreater(min(m["position"][2] for m in north), max(m["position"][2] for m in south))
+        self.assertEqual(sorted(b["side"] for b in data["spawn_bounds"]), ["north", "south"])
+        for bound in data["spawn_bounds"]:
+            self.assertEqual(bound["center"][0] > 0, bound["side"] == "north")
 
 
 if __name__ == "__main__":

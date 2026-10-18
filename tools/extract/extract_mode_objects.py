@@ -36,28 +36,58 @@ case-folded, because Arena has ``SPAWN_BOUND_FIGHTER `` and ``EQUATOR_CAPTURE_PO
   ShootOut mode and is 2.6 m from the TeamFight point.
 * ``spawn_bounds`` - every ``SPAWN_BOUND*`` object with a BoxCollider: world ``center``,
   world ``size`` (collider size times lossy scale; the boxes are scaled 1.01 x 1 x 3.53 in
-  the source), world ``rotation`` quaternion, ``yaw``, and ``side`` by the sign of the
-  centre z.
+  the source), world ``rotation`` quaternion, ``yaw``, and ``side`` (see "Sides" below).
 * ``spawn_markers`` - the direct children of the object named ``SPAWNS`` other than the
   bounds: Equator and AirPit ``ScavPMCspawn (1..20)`` (a SphereCollider each), Bay5
   ``Bear house (n)`` / ``Usec house (n)`` (a BoxCollider each). World ``position``, ``yaw`` in
   degrees [0, 360) (Unity convention: 0 looks along +z, increasing towards +x), ``stem``
   and ``index`` from the ``name (n)`` suffix, ``active`` (active in hierarchy). They are
-  grouped ``north`` (z > 0) and ``south`` (z < 0); a marker on z == 0 cannot be grouped and
-  fails the run.
+  grouped into the two sides ``north`` and ``south`` (see "Sides" below).
+
+Sides. A TeamFight map has two spawn pockets, one per team. The original rule put a marker
+on ``north`` when its world z is positive and on ``south`` when it is negative, which is only
+true to the layout while the origin lies between the pockets: Equator (z 44..49 / -42..-38),
+Bay5 (z 44..58 / -12..-5) and AirPit (z 75..80 / -75..-72) all straddle z == 0. Bowl's pockets
+(east x 46..56, z -11..-3; west x -58..-49, z -69..-60) both have z < 0, so the rule reported
+north 0 / south 20. The pockets themselves are therefore found from the data: the markers'
+(x, z) positions are cut into two groups by single linkage (the cut falls on the shortest
+distance that joins the last two groups), and the cut counts as two pockets only when that
+distance exceeds ``POCKET_SEPARATION`` (2) times the wider group's diameter - measured (cut /
+wider pocket): Bowl 112.6 m / 10.2 m = 11.0, Equator 82.9 / 14.5 = 5.7, Bay5 97.4 / 14.4 = 6.7,
+AirPit 147.1 / 22.8 = 6.5. (Splitting along the axis with the larger spread of the pocket centres
+would not do: Bay5's centres are 87.6 m apart in x but 60.2 m in z, so its sides would turn
+east/west and break the released sidecar; Bay5 and Bowl are the same kind of diagonal layout.)
+* Pockets equal the sign-of-z groups (all three released maps, a test pins it): the original
+  rule stands, with its leniency about unequal counts, and the output is byte-identical to the
+  sidecars of release 0.2.x (no new key). So is a layout with no clear pockets that straddles
+  z == 0 (only synthetic fixtures); the sign rule is the fallback there.
+* Pockets differ from the sign-of-z groups, or no marker can be grouped by sign (every marker
+  on one side of z == 0, Bowl): the pockets are the sides. They must hold the same number of
+  markers, and the pocket with the larger mean z is ``north`` (the other ``south``), so a key
+  means the same on every map ("north" = the +z pocket); Bowl's ``north`` is therefore the
+  east pocket and ``south`` the west one. A bound belongs to
+  the side whose pocket centroid is nearest (at most half as far as the other). The sidecar
+  then carries one extra key, ``side_rule`` (method ``pocket_split``, the cut distance, the
+  pocket spread, per side the centroid (x, z) and marker count); sidecars made by the original
+  rule have none.
+* Neither works (every marker on one side of z == 0 and no two separated pockets, an odd or
+  unequal split, equal mean z so the names would be arbitrary, a bound between the pockets, a
+  marker on z == 0 while no two pockets are separated): the run fails; nothing is guessed.
 
 Transforms are composed as translate * rotate * scale with unit quaternions and no shear
 handling (Unity's lossy-scale approximation); values are rounded to 1e-4 m / degree, and
 -0.0 is written as 0.0, so the output is byte-reproducible.
 
 Fail closed (``HardExtractError``): a parent id that names no object, a parent cycle, a
-spawn bound without a BoxCollider, a marker on z == 0, a malformed vector. Missing
-categories only warn (stderr) and appear as empty lists / null.
+spawn bound without a BoxCollider, a malformed vector, a marker that cannot be grouped (z == 0
+without separated pockets, or any of the side failures above). Missing categories only warn
+(stderr) and appear as empty lists / null.
 
 CLI:
     python tools/extract/extract_mode_objects.py --package work/extract/equator-native-v5
     python tools/extract/extract_mode_objects.py --package work/extract/bay5-native-v5
-    python tools/extract/extract_mode_objects.py --package work/extract/airpit-native-v8
+    python tools/extract/extract_mode_objects.py --package work/extract/airpit-native-v9
+    python tools/extract/extract_mode_objects.py --package work/extract/bowl-native-v<N>
     (the map key comes from the manifest, or from the extractor script for the two legacy
      packages, or from --map-key; the output defaults to tools/maps/<stem>.modes.json)
 """
@@ -86,6 +116,9 @@ LEGACY_MAP_KEYS = {
 MAP_KEY = re.compile(r"arena_[a-z0-9_]+")
 INDEX_SUFFIX = re.compile(r"^(?P<stem>.*?)\s*\((?P<index>\d+)\)$")
 ROUND = 4  # decimals: 1e-4 m / degree
+POCKET_SEPARATION = 2.0  # pocket gap must exceed this multiple of the wider pocket's diameter
+POCKET_MIN_DZ = 1.0      # metres of mean-z difference below which north/south would be arbitrary
+BOUND_DOMINANCE = 2.0    # a bound's own pocket must be at least this many times nearer than the other
 
 
 # --------------------------------------------------------------------------
@@ -251,11 +284,124 @@ def _warn(message: str) -> None:
 
 
 def side_of(z: float, label: str) -> str:
+    """The original rule: sign of the world z (unrounded). Valid while the origin lies between the pockets."""
     if z > 0.0:
         return "north"
     if z < 0.0:
         return "south"
     raise HardExtractError(f"mode objects: {label} lies on z == 0; it cannot be grouped north/south")
+
+
+def split_pockets(points: list):
+    """Cut (x, z) points into two pockets by single linkage; None unless they are clearly two.
+
+    Kruskal on the complete graph, stopped at two components: the next edge that joins them is the
+    shortest distance between the pockets (``cut``). The groups count as pockets only when
+    ``cut > POCKET_SEPARATION * spread``, the larger of the two groups' diameters (0 for a single
+    point). That is also what makes the cut unambiguous: every distance inside a pocket is then
+    below half of ``cut``, so no tie between equally long edges can move the partition.
+    Returns ``(group_a, group_b, cut, spread)`` with sorted index lists, group_a holding point 0."""
+    n = len(points)
+    if n < 2:
+        return None
+    parent = list(range(n))
+
+    def find(i: int) -> int:
+        while parent[i] != i:
+            parent[i] = parent[parent[i]]
+            i = parent[i]
+        return i
+
+    edges = sorted((math.dist(points[i], points[j]), i, j) for i in range(n) for j in range(i + 1, n))
+    components, cut = n, None
+    for distance, i, j in edges:
+        ri, rj = find(i), find(j)
+        if ri == rj:
+            continue
+        if components == 2:
+            cut = distance
+            break
+        parent[max(ri, rj)] = min(ri, rj)
+        components -= 1
+    first = find(0)
+    group_a = [i for i in range(n) if find(i) == first]
+    group_b = [i for i in range(n) if find(i) != first]
+    spread = max((math.dist(points[i], points[j]) for group in (group_a, group_b)
+                  for i in group for j in group), default=0.0)
+    if cut is None or not cut > POCKET_SEPARATION * spread:
+        return None
+    return group_a, group_b, cut, spread
+
+
+def _label(item: dict) -> str:
+    return f"{item['scene']}/{item['path']}"
+
+
+def _pocket_sides(markers: list, bounds: list, pockets: tuple) -> dict:
+    """Name the two pockets north/south by mean z, set every side, return the ``side_rule`` record."""
+    group_a, group_b, cut, spread = pockets
+    if len(group_a) != len(group_b):
+        raise HardExtractError(
+            f"mode objects: the {len(markers)} spawn markers form two pockets of {len(group_a)} and "
+            f"{len(group_b)}; the sides must hold the same number of markers (a missing or stray marker?)")
+
+    def centroid(group):
+        return (sum(markers[i]["position"][0] for i in group) / len(group),
+                sum(markers[i]["position"][2] for i in group) / len(group))
+
+    centroid_a, centroid_b = centroid(group_a), centroid(group_b)
+    if abs(centroid_a[1] - centroid_b[1]) < POCKET_MIN_DZ:
+        raise HardExtractError(
+            f"mode objects: the two spawn pockets (centroids {_vec(centroid_a)} and {_vec(centroid_b)}) differ by "
+            f"less than {POCKET_MIN_DZ} m in z, so 'north'/'south' would be arbitrary; name the sides by hand")
+    north, south = ((group_a, group_b) if centroid_a[1] > centroid_b[1] else (group_b, group_a))
+    centroids = {"north": centroid(north), "south": centroid(south)}
+    for side, group in (("north", north), ("south", south)):
+        for i in group:
+            markers[i]["side"] = side
+    for bound in bounds:
+        near = {side: math.dist((bound["center"][0], bound["center"][2]), c) for side, c in centroids.items()}
+        own, other = sorted(near, key=near.get)
+        if not near[own] * BOUND_DOMINANCE <= near[other]:
+            raise HardExtractError(
+                f"mode objects: spawn bound {_label(bound)} lies {near['north']:.1f} m from the north and "
+                f"{near['south']:.1f} m from the south pocket; it cannot be assigned to a side")
+        bound["side"] = own
+    return {"method": "pocket_split",
+            "naming": "north = the pocket with the larger mean z, south = the other",
+            "cut_distance": _clean(cut), "pocket_spread": _clean(spread),
+            "pockets": {side: {"centroid_xz": [_clean(centroids[side][0]), _clean(centroids[side][1])],
+                               "markers": len(group)}
+                        for side, group in (("north", north), ("south", south))}}
+
+
+def assign_sides(markers: list, bounds: list):
+    """Set ``side`` on every marker and bound; return the ``side_rule`` record, or None for the sign rule.
+
+    The pockets decide when they differ from the sign-of-z groups (or no marker can be grouped by
+    sign because all lie on one side of z == 0); otherwise the original sign rule stands, so the
+    sidecars of the three released maps come out byte-identical. See the module docstring."""
+    points = [(m["position"][0], m["position"][2]) for m in markers]
+    zs = [m["_z"] for m in markers]
+    pockets = split_pockets(points)
+    sign_groups = None
+    if all(z != 0.0 for z in zs):
+        sign_groups = {frozenset(i for i, z in enumerate(zs) if z > 0.0),
+                       frozenset(i for i, z in enumerate(zs) if z < 0.0)}
+    rule = None
+    if pockets is not None and {frozenset(pockets[0]), frozenset(pockets[1])} != sign_groups:
+        rule = _pocket_sides(markers, bounds, pockets)
+    else:
+        if pockets is None and markers and (all(z > 0.0 for z in zs) or all(z < 0.0 for z in zs)):
+            raise HardExtractError(
+                f"mode objects: all {len(markers)} spawn markers lie on one side of z == 0 and form no two "
+                f"separated pockets (the gap between them must exceed {POCKET_SEPARATION:g} times the wider "
+                f"pocket); the sides cannot be told apart")
+        for item in markers + bounds:
+            item["side"] = side_of(item["_z"], _label(item))
+    for item in markers + bounds:
+        del item["_z"]
+    return rule
 
 
 def _first_component(obj: dict, kind: str):
@@ -276,12 +422,11 @@ def spawn_bound(graph: SceneGraph, obj: dict) -> dict:
     center = point(matrix, tuple(_finite(box["center"], 3, where + " BoxCollider.center")))
     return {"scene": graph.name, "path": graph.path(obj), "name": obj["name"].strip(),
             "center": _vec(center), "size": _vec(size), "rotation": rotation_quaternion(matrix),
-            "yaw": yaw_degrees(matrix), "side": side_of(center[2], where),
+            "yaw": yaw_degrees(matrix), "side": None, "_z": center[2],
             "active": graph.active_in_hierarchy(obj)}
 
 
 def spawn_marker(graph: SceneGraph, obj: dict) -> dict:
-    where = f"{graph.name}/{graph.path(obj)}"
     matrix = graph.world(obj)
     position = point(matrix)
     stem, index = obj["name"].strip(), None
@@ -290,7 +435,7 @@ def spawn_marker(graph: SceneGraph, obj: dict) -> dict:
         stem, index = suffix.group("stem"), int(suffix.group("index"))
     return {"scene": graph.name, "path": graph.path(obj), "name": obj["name"].strip(), "stem": stem,
             "index": index, "position": _vec(position), "yaw": yaw_degrees(matrix),
-            "side": side_of(position[2], where), "active": graph.active_in_hierarchy(obj)}
+            "side": None, "_z": position[2], "active": graph.active_in_hierarchy(obj)}
 
 
 def _at_origin(position) -> bool:
@@ -366,11 +511,15 @@ def extract_scenes(graphs: list) -> dict:
         _warn("no SPAWN_BOUND* object")
     if not markers:
         _warn("no SPAWNS container children")
+    side_rule = assign_sides(markers, bounds)
     bounds.sort(key=lambda b: (b["scene"], b["side"], b["path"]))
     zones.sort(key=lambda z: (z["scene"], z["path"]))
-    return {"capture_point": capture, "capture_zones": zones, "spawn_bounds": bounds,
-            "spawn_markers": {side: _sort_markers([m for m in markers if m["side"] == side])
-                              for side in ("north", "south")}}
+    found = {"capture_point": capture, "capture_zones": zones, "spawn_bounds": bounds,
+             "spawn_markers": {side: _sort_markers([m for m in markers if m["side"] == side])
+                               for side in ("north", "south")}}
+    if side_rule is not None:  # only when the original sign-of-z rule did not decide (Bowl)
+        found["side_rule"] = side_rule
+    return found
 
 
 def map_key_of(manifest: dict, override: str | None = None) -> str:
@@ -441,7 +590,8 @@ def main(argv=None) -> int:
     print(f"[extract_mode_objects] {data['map_key']}: capture point "
           f"{capture['position'] if capture else None} ({capture['method'] if capture else 'none'}), "
           f"{data['counts']['spawn_bounds']} spawn bound(s), markers north {data['counts']['spawn_markers_north']} / "
-          f"south {data['counts']['spawn_markers_south']} -> {output}", file=sys.stderr)
+          f"south {data['counts']['spawn_markers_south']}{' (pocket split)' if 'side_rule' in data else ''} "
+          f"-> {output}", file=sys.stderr)
     return 0
 
 
