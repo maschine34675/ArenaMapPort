@@ -20,8 +20,8 @@ NavMesh 12704 vertices / 5890 triangles, four import-policy fixes on the way), `
 sidecars`, deployed to `D:\SPT41` only. GPU-2 raids 1 (05:42, no bots) and 2 (12:00, medium bots) in one process: zero
 ArenaMapPort warnings, gates open, both exit boxes work (extraction after 8 s), west-to-east crossing 151 m along the
 NavMesh, 3 assault bots on PatrolAssault from the authored patrol way, ambient graph re-armed between raids, tarp
-stand-in renders, 120 fps / max 8.5 ms. Not yet done: hideout open check and F8 rain readback on the Bowl build
-(Windows MCP clicks unavailable), release texts for 0.3.0 (csproj descriptions, README, FORGE, dist manifest), DynamicMaps
+stand-in renders, 120 fps / max 8.5 ms. The hideout opened once after the raids (gpu-run scenario, no ArenaMapPort error). Not yet done: F8
+rain readback on the Bowl build, release texts for 0.3.0 (csproj descriptions, README, FORGE, dist manifest), DynamicMaps
 Bowl pack, MultiFlare, shot-acoustics room classes, bloom/HDR rows, the `Invalid windSettings` comparison with AirPit,
 the vanilla install (deploy only on the user's decision), ArenaMode catalog/formation (user). `feature/bowl` is not pushed.
 

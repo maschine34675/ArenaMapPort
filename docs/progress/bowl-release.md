@@ -328,7 +328,10 @@ names), `test_dynamicmaps_deploy.ps1` (unsupported selection `Prison`, not run, 
   151.4 m along the navmesh, arrived after 29.6 s sprinting - the two pockets and the field are one NavMesh component.
   Performance over 300 frames: 120.0 fps, mean 8.3 ms, p95 8.3 ms, max 8.5 ms; RAM 11.6 GB (managed 2.8 GB).
 - Left through `gpu-run leave` (DISCONNECT -> CONFIRM LEAVE -> ExitStatus ... -> HealthTreatment -> MainMenu, 24 s).
-- Not done in this session: the hideout open check after the Bowl client build (needs the Windows MCP clicks;
-  `windows-gpu-2` did not connect) and the F8 rain readback (both raids were dry). Items 11/12 of PLAN-BOWL are
+- Hideout check (12:55, after both raids in the same process): `gpu-run scenario` (its `click` step drives the
+  host's Windows MCP, which the VM's own `windows-gpu-2` connection could not reach): HIDEOUT clicked, screen
+  `Hideout` with the overview, 31 labels (ENTER, BACK, the seven station buttons, the bottom bar) after 8 s;
+  `logAbsent` level error contains `[ArenaMapPort]` passed, 0 warnings; BACK returned to `MainMenu`. Screenshot
+  `hideout-open.png` in the scenario report. Not done in this session: the F8 rain readback (both raids were dry). Items 11/12 of PLAN-BOWL are
   otherwise satisfied by U1: spawns, gates, borders, exits, bots, audio, lighting and the stand-in all behaved on the
   first build; no U2 is needed for playability.
