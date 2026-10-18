@@ -1,4 +1,12 @@
-# Current distribution contract: Equator, Bay5, AirPit and Bowl (0.3.0, staged, not released)
+# Current distribution contract: Equator, Bay5, AirPit and Bowl (0.3.0, candidate cut, not published)
+
+2026-10-18 (release 0.3.0 candidate cut, feature/bowl `26b9216`, NOT uploaded): `make_release_zips.py --single --extract-check`
+wrote `work/releases/0.3.0/maschine-ArenaMapPort-0.3.0.zip`, 3,078,043,845 B (2.87 GiB), SHA-256
+`8f9b65913501adda2206bbd60919e990e3ca312faa7db0f0a8d812a2edddeb8b`, plus its `.sha256`; extract-check: 86 files identical to
+dist. Against the final 0.2.2 ZIP's manifest (`326d71b`) the dist differs in exactly three files: both DLLs (0.3.0) and
+`locales/map-descriptions.json` (Bowl's text added); the other 64 files of Equator, Bay5 and Air Pit are byte-identical.
+The DLLs in dist are the host-verified build of `185f8f8` (`ProductVersion 0.3.0+185f8f8...`); the two commits after it are
+docs only. The paragraph below describes the same dist before the cut.
 
 2026-10-18 (0.3.0 integration, feature/bowl, not released): dist holds **86 files, 3,256,514,833 B (3,105.7 MiB)** for the
 four maps and `python tools/validate/validate_distribution.py` ends with `DISTRIBUTION_OK 4 maps 12 bundles 4 sidecars`.

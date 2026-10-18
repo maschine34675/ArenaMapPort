@@ -694,3 +694,18 @@ Host developer config set live through `uibridge_config_set` (`com.maschine.Aren
   then passed (`would teleport to (2.5, 0.0, -21.1)`). No ArenaMapPort warning. 120 fps, max 8.4 ms.
 - Conclusion: Bowl's two pocket gates hold and release like the other maps' (PLAN-BOWL item 19's SpawnGates side is covered);
   the release notes' "Pocket gates" limitation is withdrawn. ArenaMode's own hold/release on Bowl is still the user's.
+
+## 2026-10-18 - 0.3.0 candidate cut (not published)
+
+`python tools/release/make_release_zips.py --single --extract-check work/releases/0.3.0-extract-check` on the clean tree at
+`26b9216`: `writing single ZIP (full): 86 files, 3,256,514,833 raw bytes`, `maschine-ArenaMapPort-0.3.0.zip 3,078,043,845 B
+8f9b65913501adda2206bbd60919e990e3ca312faa7db0f0a8d812a2edddeb8b`, `single ZIP: 2.87 GiB`, `verified single ZIP`,
+`extract-check OK: 86 files identical to dist, 4 generated entries ignored`, `RELEASE_ZIPS_BUILT`. (The first call without the
+scratch directory argument stops at argparse: `--extract-check` needs an EMPTY directory.) Pre-cut comparison with the final 0.2.2
+ZIP's `parts/full.json` (source `326d71b`): identical=64, changed=3 (`maschine-ArenaMapPort.Client.dll` 815,104 -> 819,200 B,
+`maschine-ArenaMapPort.Server.dll` 73,216 -> 74,240 B, `locales/map-descriptions.json` 1,432 -> 1,813 B); every bundle, overview,
+acoustics, flare and art file of the three released maps is unchanged, as PLAN-BOWL item 18 requires. The ZIP ships the DLLs
+that ran raids 3-6 and the hideout on GPU-2 (`185f8f8`; `3e983c3` and `26b9216` changed only docs). Not done, by design: upload,
+VirusTotal, tag, GitHub release, the merge of `feature/bowl` into `main` (a fast-forward: `main` is at `a3188cd`, the merge base),
+the Forge entry and the `D:\SPT41vanilla` deploy; all of these wait for the user's decision. `docs/releases/v0.3.0.md` carries the
+size, SHA-256 and source commit; the Pixeldrain and VirusTotal placeholders remain.
