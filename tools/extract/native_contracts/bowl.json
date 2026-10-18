@@ -5,7 +5,8 @@
     "Pins from the first native extraction of Bowl on Arena 0.6.0.47752 (2026-10-18, package bowl-native-v1, docs/progress/bowl-release.md): BallisticCollider per scene {'41': 5048, '46': 2375, '95': 0, '45': 269, '43': 29, '47': 1421, '48': 73}, StaticDeferredDecal 766, CullingLightObject 106, VolumetricLight 4, LightFlicker 8, NavMeshModifier 39 + NavMeshModifierVolume 76, SmallPhysicsObject 341, rain cover 10 IndoorTrigger / 0 DryPlane / weather obstacle False.",
     "audio: pins from the census of level111 (Arena_Bowl_Sound) with the exporter's own parsers (2026-10-18, docs/progress/bowl-release.md): 33 AmbientSoundPlayer in 2 AmbientSoundPlayerGroup (CommonAmbientInGroup -> CommonAmbInEffects 15, CommonAmbientOutGroup -> CommonAmbOutEffects 18), 11 banks, 61 clips, all players grouped, none disabled, four inactive (cracles (2), water_drops, water_drops (1), water_drops (4)), no loop players. Package v2 = v1 + this feature.",
     "implicit_scene_identity stays false: generic packages always record source.map_key.",
-    "Two BallisticColliders of Arena_Bowl ('Guardian_Tower_Fance_BALLISTIC_MetalThin') carry the preset Chainfence over the material MetalThin; extract_ballistics imports the reviewed pair as authored (REVIEWED_PRESET_MATERIAL_PAIRS)."
+    "Two BallisticColliders of Arena_Bowl ('Guardian_Tower_Fance_BALLISTIC_MetalThin') carry the preset Chainfence over the material MetalThin; extract_ballistics imports the reviewed pair as authored (REVIEWED_PRESET_MATERIAL_PAIRS).",
+    "audio: 'metal_rigging' (level111:557) forces Arena's mixer group 'ArenaCommonAmb', which the port cannot provide; pinned in states.forced_mixer_players, the exporter marks it mixerPolicy 'group' and the Unity importer routes it like its group."
   ],
   "scenes": {
     "41": "Arena_Bowl",
@@ -83,7 +84,10 @@
         "CommonAmbOutEffects"
       ],
       "loops": {},
-      "loop_players": []
+      "loop_players": [],
+      "forced_mixer_players": {
+        "level111:557": "ArenaCommonAmb"
+      }
     }
   }
 }

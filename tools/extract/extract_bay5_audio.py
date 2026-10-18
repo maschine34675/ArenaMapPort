@@ -19,6 +19,12 @@ use for the object; disambiguate_sibling_paths gives the second and later duplic
 id order, the leaf suffix '~2', '~3' ... and the record keeps the authored leaf as 'sourceLeafName'
 (validate_native_features applies the same rule to the source recheck). Maps without duplicates
 (Equator, Bay5, AirPit) are byte-identical to before.
+A player normally inherits its group's mixer and never plays on awake; a player that forces an
+Arena mixer group of its own (Bowl level111: 'metal_rigging' forces 'ArenaCommonAmb', which the
+port cannot provide) is accepted only when the contract pins it in states.forced_mixer_players
+with that mixer's name. Its record keeps the authored fields (the source payload must round-trip),
+gains 'mixerGroupName' and the marker 'mixerPolicy': 'group', and the Unity importer routes it
+like its group (check_mixer_policy, apply_mixer_policy).
 """
 from __future__ import annotations
 import argparse, collections, hashlib, io, json, math, os, struct, sys, wave
@@ -197,6 +203,26 @@ def apply_sibling_paths(items):
             d['sourceLeafName']=d['path'].rsplit('/',1)[-1]; d['path']=renamed[d['id']]; changed.append(d['id'])
     return changed
 
+def check_mixer_policy(player, forced):
+    """A player inherits its group's mixer and never plays on awake. The only exception is a player the contract
+    pins in states.forced_mixer_players (id -> the Arena mixer it forces): it must really force that mixer and
+    carry the importer marker mixerPolicy 'group'. Anything else fails closed."""
+    if player['playOnAwake']: raise ValueError('audio source start/mixer policy changed')
+    forces=bool(player['forceSetMixerGroup']) or player['mixerGroup']['pathId']!=0
+    pinned=(forced or {}).get(player['id'])
+    if pinned is None:
+        if forces or player.get('mixerPolicy') is not None: raise ValueError('audio source start/mixer policy changed')
+        return
+    if not forces or player.get('mixerGroupName')!=pinned or player.get('mixerPolicy')!='group':
+        raise ValueError('audio source start/mixer policy changed')
+
+def apply_mixer_policy(players, states):
+    """Mark the pinned forced-mixer players for the importer (mixerPolicy 'group'); returns their ids."""
+    forced=(states or {}).get('forced_mixer_players',{}); marked=[]
+    for p in players:
+        if p['id'] in forced: p['mixerPolicy']='group'; marked.append(p['id'])
+    return marked
+
 def expected_group_members(players, audio):
     """Player ids the AmbientSoundPlayerGroup records must cover exactly once, per the contract rule."""
     if audio['group_coverage']=='all_players': return [d['id'] for d in players]
@@ -223,6 +249,8 @@ def export(source, package, map_key='arena_bay5'):
             d=parse_support(obj,kind); d.update(hierarchy(obj,preserve_states)); d.update(id=identity(obj),kind=kind,byteSize=obj.byte_size); support.append(d)
         if kind not in PLAYERS: continue
         d=parse_player(obj,kind); d.update(hierarchy(obj,preserve_states)); d.update(id=identity(obj),kind=kind,byteSize=obj.byte_size,sourceAudio=source_audio(obj))
+        if d['mixerGroup']['pathId']!=0:
+            forced_mixer=deref(obj,d['mixerGroup']); d['mixerGroupName']=forced_mixer.read_typetree()['m_Name'] if forced_mixer else None
         refs=[d['ambientBank']] if kind=='AmbientSoundPlayer' else list(d['seasonAmbientBanks'].values()) if kind=='SeasonAmbientSoundPlayer' else []
         for ptr in refs:
             bank=deref(obj,ptr,'MonoBehaviour')
@@ -246,6 +274,7 @@ def export(source, package, map_key='arena_bay5'):
             if co: clips[identity(co)]=co; d['loopClip']['resolved']=identity(co)
         players.append(d)
     apply_sibling_paths(players+support)  # same-named siblings get unique hierarchy paths (Bowl: indoor_wind~2)
+    apply_mixer_policy(players,contract.get('states'))  # pinned forced-mixer players are routed like their group
     # Validate all support edges against class identity; importing half a water graph is invalid.
     grouped=[]
     expected_refs={'splineEmitter':'AmbientPlayerSplineMappedEmitter','spline':'BezierSpline','soundPlayer':'LoopAmbientSoundPlayer'}
@@ -341,7 +370,7 @@ def validate_audio_states(players, support, audio):
         source=player['sourceAudio']
         if source['m_Enabled']!=1: raise ValueError('audio AudioSource activation changed')
         if source['Loop'] not in (0,1): raise ValueError('audio source loop changed')
-        if player['playOnAwake'] or player['forceSetMixerGroup'] or player['mixerGroup']['pathId']!=0: raise ValueError('audio source start/mixer policy changed')
+        check_mixer_policy(player,states.get('forced_mixer_players'))
     if {p['id']:p['path'].rsplit('/',1)[-1] for p in players if p['sourceAudio']['Loop']}!=states['loops']: raise ValueError('audio source loop changed')
     return expected_group_members(players,audio)
 

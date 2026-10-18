@@ -196,9 +196,12 @@ namespace ArenaMapPort.Editor.Import
                     player._volume = (float)item["volume"]; player._deltaVolume = (float)item["deltaVolume"];
                     player._randomPitchRange = Vec2(item["randomPitchRange"]);
                     player._fadeInDurationSec = (float)item["fadeInDurationSec"]; player._fadeOutDurationSec = (float)item["fadeOutDurationSec"];
-                    if ((long)item["mixerGroup"]["pathId"] != 0 || (bool)item["playOnAwake"])
+                    // A player the contract pins in states.forced_mixer_players (exporter marker mixerPolicy "group";
+                    // Bowl's metal_rigging forces Arena's own 'ArenaCommonAmb') is routed like its group instead.
+                    bool groupRouted = (string)item["mixerPolicy"] == "group";
+                    if (((long)item["mixerGroup"]["pathId"] != 0 && !groupRouted) || (bool)item["playOnAwake"])
                         throw new InvalidDataException("Source player mixer/start policy changed.");
-                    player.ForceSetMixerGroup = (bool)item["forceSetMixerGroup"]; player._playOnAwake = false;
+                    player.ForceSetMixerGroup = !groupRouted && (bool)item["forceSetMixerGroup"]; player._playOnAwake = false;
                     player._spread = (float)item["spread"]; player._spatialBlend = (float)item["spatialBlend"];
                     player._minDistance = (float)item["minDistance"]; player._maxDistance = (float)item["maxDistance"];
                     ApplyCurve(player, "_rolloffCurve", item["rolloffCurve"]);

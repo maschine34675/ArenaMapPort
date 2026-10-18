@@ -715,7 +715,14 @@ def validate_audio_source(package,manifest,data):
         if item['kind'] in PLAYERS:
             sources=[x for x in go['components'] if x.type.name=='AudioSource'];require(len(sources)==1,'source player AudioSource cardinality')
             compare_storage(sources[0].read_typetree(),item['sourceAudio'],'source AudioSource '+item['id'])
-            require(item['mixerGroup']['pathId']==0 and item['playOnAwake'] is False,'source mixer/start policy changed')
+            forced=(audio.get('states') or {}).get('forced_mixer_players',{})
+            if item['id'] in forced:  # pinned player forcing an Arena mixer the port cannot provide; routed like its group
+                require(item.get('mixerPolicy')=='group' and item['mixerGroup']['pathId']!=0 and item['playOnAwake'] is False
+                        and ptr(obj,item['mixerGroup']).read().m_Name==forced[item['id']]==item.get('mixerGroupName'),
+                        'pinned forced-mixer player '+item['id'])
+            else:
+                require(item['mixerGroup']['pathId']==0 and item['playOnAwake'] is False and 'mixerPolicy' not in item,
+                        'source mixer/start policy changed')
         if item['kind']=='AmbientSoundPlayerGroup':
             compare(ptr(obj,item['outputMixerGroup']).read().m_Name,item['mixerName'],'source native mixer name')
     require(reached_banks==set(data['banks']),'unreachable/missing source banks')
@@ -797,7 +804,8 @@ def curve_fields(value):
 def player_built_fields(item):
     scalar=('volume','deltaVolume','fadeInDurationSec','fadeOutDurationSec','spread','spatialBlend',
             'minDistance','maxDistance','playOnAwake','useCustomSpreadCurve')
-    expected={'m_Enabled':int(item['enabled']),'ForceSetMixerGroup':item['forceSetMixerGroup']}
+    # a pinned forced-mixer player (mixerPolicy 'group') is built without the force, routed like its group
+    expected={'m_Enabled':int(item['enabled']),'ForceSetMixerGroup':item['forceSetMixerGroup'] and item.get('mixerPolicy')!='group'}
     expected.update({'_'+k:item[k] for k in scalar})
     expected.update({'_'+k:vector(item[k]) for k in ('randomPitchRange','startPlayingDelay')})
     expected.update({'_'+k:curve_fields(item[k]) for k in ('rolloffCurve','spreadCurve')})

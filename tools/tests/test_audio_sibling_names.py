@@ -33,5 +33,40 @@ class SiblingNameTests(unittest.TestCase):
         self.assertNotIn("sourceLeafName", items[2])
 
 
+class ForcedMixerPolicyTests(unittest.TestCase):
+    """A player inherits its group's mixer unless the contract pins it in states.forced_mixer_players (Bowl's
+    metal_rigging forces Arena's 'ArenaCommonAmb'); pinned players carry mixerPolicy 'group' for the importer."""
+
+    @staticmethod
+    def player(**fields):
+        base = {"id": "level111:557", "playOnAwake": False, "forceSetMixerGroup": False, "mixerGroup": {"pathId": 0}}
+        base.update(fields)
+        return base
+
+    def test_plain_players_pass_and_any_force_or_awake_fails_without_a_pin(self):
+        audio.check_mixer_policy(self.player(), {})
+        for fields in ({"playOnAwake": True}, {"forceSetMixerGroup": True}, {"mixerGroup": {"pathId": 8987}},
+                       {"mixerPolicy": "group"}):
+            with self.subTest(fields=fields), self.assertRaisesRegex(ValueError, "start/mixer policy"):
+                audio.check_mixer_policy(self.player(**fields), {})
+
+    def test_a_pinned_player_needs_the_force_the_name_and_the_marker(self):
+        forced = {"level111:557": "ArenaCommonAmb"}
+        pinned = self.player(forceSetMixerGroup=True, mixerGroup={"pathId": 8987}, mixerGroupName="ArenaCommonAmb",
+                             mixerPolicy="group")
+        audio.check_mixer_policy(pinned, forced)
+        for fields in ({"mixerGroupName": "OtherMixer"}, {"mixerPolicy": None}, {"forceSetMixerGroup": False, "mixerGroup": {"pathId": 0}},
+                       {"playOnAwake": True}):
+            with self.subTest(fields=fields), self.assertRaisesRegex(ValueError, "start/mixer policy"):
+                audio.check_mixer_policy(dict(pinned, **fields), forced)
+
+    def test_apply_marks_only_the_pinned_players(self):
+        players = [self.player(), self.player(id="level111:9")]
+        self.assertEqual(audio.apply_mixer_policy(players, {"forced_mixer_players": {"level111:9": "ArenaCommonAmb"}}), ["level111:9"])
+        self.assertNotIn("mixerPolicy", players[0])
+        self.assertEqual(players[1]["mixerPolicy"], "group")
+        self.assertEqual(audio.apply_mixer_policy(players, None), [])
+
+
 if __name__ == "__main__":
     unittest.main()

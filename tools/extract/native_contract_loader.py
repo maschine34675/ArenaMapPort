@@ -48,7 +48,10 @@ Schema (version 1; every key is required unless marked optional, unknown keys ar
                                             inactive_players{id: leaf name},
                                             groups{group leaf name: {mixer, players}},
                                             group_mixers[names], loops{id: leaf name},
-                                            loop_players[ids]}}
+                                            loop_players[ids],
+                                            forced_mixer_players{id: Arena mixer name} (optional: players
+                                            that force an Arena mixer group the port cannot provide; the
+                                            exporter routes them like their group, marker mixerPolicy)}}
 
 Rules beyond types (each one closes a way for a pin to be weakened silently): duplicate JSON keys
 are an error; ``map_key`` must equal ``arena_`` + the file stem; ``ballistics`` must list exactly
@@ -289,8 +292,9 @@ def _groups(value, where: str) -> dict:
 
 
 def _parse_states(raw, where: str, audio: dict):
-    raw = _object(raw, where, _STATE_KEYS)
+    raw = _object(raw, where, _STATE_KEYS, optional=("forced_mixer_players",))
     states = {
+        "forced_mixer_players": _leaf_map(raw.get("forced_mixer_players", {}), where + ".forced_mixer_players", "player"),
         "grouped_players": _int(raw["grouped_players"], where + ".grouped_players"),
         "disabled_players": _strings(raw["disabled_players"], where + ".disabled_players"),
         "inactive_players": _leaf_map(raw["inactive_players"], where + ".inactive_players", "player"),

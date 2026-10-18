@@ -200,7 +200,8 @@ class GoldenLegacyTests(unittest.TestCase):
         # Added with the item-13 review: the loop is pinned by leaf name too (the importer and the client look it
         # up as 'electricity'), the single indoor group by name, mixer and member count (25 players - 2 dogs).
         states = v.MAPS['arena_equator']['audio']['states']
-        self.assertEqual(set(states), set(LEGACY_EQUATOR_STATES) | {'groups', 'loops'})
+        self.assertEqual(set(states), set(LEGACY_EQUATOR_STATES) | {'groups', 'loops', 'forced_mixer_players'})
+        self.assertEqual(states['forced_mixer_players'], {})  # optional pin, normalised to {} (Bowl pins metal_rigging)
         self.assertEqual(states['loops'], {'level56:965': 'electricity'})
         self.assertEqual(states['groups'], {'CommonAmbientInGroup': {'mixer': 'CommonAmbInEffects', 'players': 23}})
 
@@ -271,7 +272,7 @@ class GoldenLegacyTests(unittest.TestCase):
                        'groups': {'CommonAmbientOutGroup': {'mixer': 'CommonAmbOutEffects', 'players': 4},
                                   'CommonAmbientInGroup': {'mixer': 'CommonAmbInEffects', 'players': 22}},
                        'group_mixers': ['CommonAmbOutEffects', 'CommonAmbInEffects'],
-                       'loops': {}, 'loop_players': []}})
+                       'loops': {}, 'loop_players': [], 'forced_mixer_players': {}}})
         # AirPit is the first map with both an Out and an In group: the Out group comes first in source order
         # (kept in the group_mixers mirror), but the pins themselves are keyed by group name.
         self.assertEqual(audio['states']['group_mixers'][0], 'CommonAmbOutEffects')
