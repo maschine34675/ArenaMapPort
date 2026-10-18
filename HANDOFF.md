@@ -3,16 +3,27 @@
 Snapshot for whoever continues (human or agent). Verify the commits named here against `git log`; this file
 is updated by hand at each handover, it is not an automatic record. Read [AGENTS.md](AGENTS.md) first.
 
-## Update 2026-10-18 - Bowl started on `feature/bowl` (fourth map); passport-lamp green arrow recorded for later
+## Update 2026-10-18 - Bowl playable on `feature/bowl` (fourth map, U1 host-verified); passport-lamp green arrow recorded for later
 
 User decision: "mit der Bowl-Umsetzung starten, so wie du es am sinnvollsten erachtest; den gruenen Pfeil fuer spaeter
 festhalten". Plan and decisions in [docs/PLAN-BOWL.md](docs/PLAN-BOWL.md) (0.6.0 re-extract with native features,
 TeamFight, UsesServerTime, no grass, keep the layer-29 border cubes, four parallax images as loading art, release
-0.3.0); progress log `docs/progress/bowl-release.md`. Done so far: scene roles on `plans/bowl.json` (scripts 44, sound
-111, culling 96, ai 128; the roleless fixtures of `test_extractor_plan_roles.py` and `test_ai_anchors.py` moved to
-`prison.json`), the stale spike build moved to `work/build/bowl-spike-20260915/`. The first `--native-features`
-extraction failed closed with `Ballistics: preset/material disagreement` (the risk PLAN-AIRPIT item 2 named); the
-offending payloads are being identified before any rule changes.
+0.3.0); progress log [docs/progress/bowl-release.md](docs/progress/bowl-release.md). State at the end of the day
+(commits 4b5adc2..03714c1 plus the raid log): package `work/extract/bowl-native-v2` (v1 = native features, v2 = + ambient
+audio; new exporter rules: reviewed ballistic preset/material pair Chainfence/MetalThin, same-named audio siblings
+`indoor_wind~2`, forced-mixer pin `states.forced_mixer_players` with the importer marker `mixerPolicy: group`), contract
+`native_contracts/bowl.json`, sidecars `bowl.{json,bots,exits,modes,ai}.json` (two gates `DOORS_SPAWN_A/B` =
+`opened_barriers` = `start_gates`, bake bounds x -66..62 / y -2..10 / z -82..11, bake layers 9/11/18/29/30, the new
+`keep_level_borders` flag that keeps the 354 border cubes as walls, the TwoSided reflective stand-in, east/west pocket
+side rule), descriptor + `ArenaMapRegistry.All` promotion in lock step (3ef5132), Unity U1 (scenes 1,006,073,696 B,
+NavMesh 12704 vertices / 5890 triangles, four import-policy fixes on the way), `DISTRIBUTION_OK 4 maps 12 bundles 4
+sidecars`, deployed to `D:\SPT41` only. GPU-2 raids 1 (05:42, no bots) and 2 (12:00, medium bots) in one process: zero
+ArenaMapPort warnings, gates open, both exit boxes work (extraction after 8 s), west-to-east crossing 151 m along the
+NavMesh, 3 assault bots on PatrolAssault from the authored patrol way, ambient graph re-armed between raids, tarp
+stand-in renders, 120 fps / max 8.5 ms. Not yet done: hideout open check and F8 rain readback on the Bowl build
+(Windows MCP clicks unavailable), release texts for 0.3.0 (csproj descriptions, README, FORGE, dist manifest), DynamicMaps
+Bowl pack, MultiFlare, shot-acoustics room classes, bloom/HDR rows, the `Invalid windSettings` comparison with AirPit,
+the vanilla install (deploy only on the user's decision), ArenaMode catalog/formation (user). `feature/bowl` is not pushed.
 
 Open follow-up (AirPit, not started): the passport lamps' green arrow. Arena switches the booth lamps by dark cover
 quads, not by material: the hall lamps `..._RED_close_LOD0` (the X) and `..._GREEN_open_LOD0` (the arrow) are always lit;

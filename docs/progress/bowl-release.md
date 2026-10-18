@@ -270,3 +270,65 @@ names), `test_dynamicmaps_deploy.ps1` (unsupported selection `Prison`, not run, 
   Bowl's material properties: 22 stubs changed their property lists and two new ones appeared
   (`p0_Reflective_Bumped_Specular_TwoSided`, `Custom_Vert_Paint_SoftCutout_Decal`), committed with this build as the
   AirPit precedent did (d29bad4). Next: full client build staging the bundles, `validate_distribution`, deploy, raid.
+
+## 2026-10-18 - deploy and the first Bowl raid on GPU-2 (U1, item 11)
+
+- Full client Release build staged the Bowl bundles and `material-shaders.arena_bowl.json`; `validate_distribution`:
+  `DISTRIBUTION_OK 4 maps 12 bundles 4 sidecars`. `deploy-to-spt.ps1 -Confirm` into `D:\SPT41`: 81 files (9 new, 7
+  overwritten, 65 identical, 3,104 MB). `gpu-run deploy-wait --server --force --game`: 2,267 files identical on the host
+  after 120 s, SPT server stopped and started, EFT restarted, build 18/18 identical (12:38). Server log:
+  `Arena: Bowl is available in location selection`, banner wired.
+- Raid 1 (12:39-12:42, `gpu-run raid --mode pmc --map bowl --bots none`, tile "ARENA: BOWL"): no ArenaMapPort warning
+  or error. `[NavMesh] added navmesh for 'arena_bowl': 12704 vertices, 5890 triangles`; `[RaidFix] spawn openings:
+  spawn barrier 'DOORS_SPAWN_A' at (0.0, 0.0, 0.0): deactivated 2 part(s) ... 'DOORS_SPAWN_B' ... deactivated 2 part(s)`
+  (no ReportRays verdict, as predicted); `[RaidFix] arena_bowl TeamFight borders: 354 object(s) matched (layer
+  'LevelBorder'=29) - RemoveTeamFightBorders=False (colliders left enabled, renderers always disabled)`;
+  `[RebindShaders] 'p0/Reflective/Bumped Specular_TwoSided' has no SPT shader - using fallback 'Legacy
+  Shaders/Transparent/Cutout/Bumped Diffuse 2 side'` (341/341 + 21 + 21 + 18 + 37 + 9 stand-ins rebound);
+  `[NativeAudio] ready players=33 started=29 ... mixers=CommonAmbInEffects,CommonAmbOutEffects ... sourceInactive=4`;
+  `[Lighting] arena_bowl applied ... 106 light(s) (cullingLights=106, editorIntensityBaselines=104)`; `[TimeOfDay]
+  arena_bowl: native server time and weather`; `[RainCover] ... RainBounds ... center=(-2.00, 24.24, -35.50)
+  size=(208.00, 53.08, 173.00) ... 3096 outside the play space`. Spawn `SpawnPoint_Player_All` (50.2, 0.0, -3.2),
+  server time 05:42, autumn, 120 fps (max frame 8.3 ms). EFT's own errors.log: the usual ported-map lines
+  (`WeatherObstacle.Instance is null`, `SeasonsMaterialsFixer.Instance is null`, `ImpostorsRenderer.Instance is null`,
+  maperrors 3 scene markers deleted / 21 backend spawn points added) plus `Invalid windSettings` (to compare with AirPit).
+- Reachability: `uibridge_teleport dryRun` from the east pocket to both exits (51, 0.1, -31) and (-51, 0.1, -49) and to
+  core point 2 (2.5, 0.1, -21.1): all passable (gates open, pocket connected). `uibridge_walk` from the field centre to
+  the Army gate: 67.2 m along the navmesh, arrived after 12.5 s sprinting, and the player extracted through `Bowl Army
+  Gate` after 8 s (the exit boxes work; `uibridge_places` lists both exfils, type pmc, entryPoints arenabowl).
+- Stills (host `C:\Temp\uibridge-host\captures\stills\`): `bowl-u1-spawn` (east pocket at dawn: containers, roof
+  lattice, graffiti, a green signal smoke), `bowl-u1-center` (the Mi-26 with the Welcome graffiti and the crates). Both
+  dark (05:42); the daylight look, the tarp stand-in at (-3.5, 5.4, -72.8) / (13.5, 5.4, -71.2) and bots follow in
+  raid 2.
+
+## 2026-10-18 - raid 2: noon, medium bots, the tarp stand-in and the west pocket (U1, items 11/12)
+
+- Raid 2 (12:43-12:49, same EFT process as raid 1, `gpu-run raid --mode pmc --map bowl --bots medium --clock 12:00`;
+  "next-raid clock 12:00:00 applied at raid start"): every repair repeated with the raid-1 numbers (`[NavMesh] ...
+  12704 vertices, 5890 triangles`, both spawn barriers 2 parts deactivated, 354 borders kept, `[Lighting] ... 106
+  light(s)`, `[TimeOfDay] arena_bowl: native server time and weather`). The ambient graph re-armed in the same process:
+  raid 1 ended with `[NativeAudio] stopped ownedPlayers=29 emptyClipsReleased=29 cleanupFailures=0; owned graph
+  disposal scheduled`, raid 2 reported `[NativeAudio] ready players=33 started=29 ... sourceInactive=4` again. The
+  `[ArenaMapPort]` Warning/Error query over the whole process (buffer since 12:38:44, both raids) returned 0 lines.
+- Bots: `[BotSpawn] BotZone.Init 'BotZone_Main': markers=17 onNavMesh=17 points=17 maxPersons=-1 patrolWays=1`; the
+  zone took its real patrol way (7 hubs, 79 sub points) and 19 core points from `ai/bowl.ai.json`. Waves at 16 s, 146 s
+  and 251 s each created one assault Savage (`BotOwner.Create -> 'Bot1' startCorePoint=0`, `ActivateBotCallback ...
+  bot registered with BotsController`, `Updated assault bot ... to use: assault brain`). `uibridge_bots` at 12:48:
+  2/2 bots `state Active, layer PatrolAssault, standby active` at (-11.3, 0, -39.3) moving and (-16.3, 0, -35), 71-73 m
+  from the player in the east pocket - they patrol the field, not the pockets. Third-party noise as on Equator
+  (bots-stage1.md): Bot Placement System's `TryToSpawnInZonePatch EXCEPTION ... GetNewValidBotZone` once at the third
+  wave; Bot3 was created and registered right after it.
+- Tarp stand-in: teleports to (-3.5, 0.1, -66) and the marker side were refused as unreachable (the oracle's floor cells
+  sit at (-3.5, 0.04, -70.8) under the tarp building); from there `bowl-u2-tarp`, `bowl-u2-tarpA-south` and
+  `bowl-u2-tarpA-north` show the tunnel tarp rendered by the `Legacy Shaders/Transparent/Cutout/Bumped Diffuse 2 side`
+  stand-in (cloth texture, both faces, no magenta). `bowl-u2-spawn-noon` is the east pocket at 12:00 (daylight stadium,
+  stands, roof lattice, city skyline), `bowl-u2-west-pocket` the west pocket from marker (1) at (-55.3, 0.1, -69.1)
+  looking yaw 51 (containers, graffiti wall, road barriers, the green signal smoke, the skyline behind the roof).
+- Crossing: `uibridge_walk` from the west pocket marker back to the east spawn (50.2, 0.1, -3.3): 124.4 m straight,
+  151.4 m along the navmesh, arrived after 29.6 s sprinting - the two pockets and the field are one NavMesh component.
+  Performance over 300 frames: 120.0 fps, mean 8.3 ms, p95 8.3 ms, max 8.5 ms; RAM 11.6 GB (managed 2.8 GB).
+- Left through `gpu-run leave` (DISCONNECT -> CONFIRM LEAVE -> ExitStatus ... -> HealthTreatment -> MainMenu, 24 s).
+- Not done in this session: the hideout open check after the Bowl client build (needs the Windows MCP clicks;
+  `windows-gpu-2` did not connect) and the F8 rain readback (both raids were dry). Items 11/12 of PLAN-BOWL are
+  otherwise satisfied by U1: spawns, gates, borders, exits, bots, audio, lighting and the stand-in all behaved on the
+  first build; no U2 is needed for playability.
