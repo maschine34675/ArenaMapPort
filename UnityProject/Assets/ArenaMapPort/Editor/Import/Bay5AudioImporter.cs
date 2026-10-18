@@ -263,9 +263,12 @@ namespace ArenaMapPort.Editor.Import
             catch { UnityEngine.Object.DestroyImmediate(root); throw; }
         }
 
-        // The groups start exactly the enabled players that are active under their original ancestors. Bay5 and AirPit
-        // have no inactive or disabled player (that set is every player); Equator's two inactive dogs stay out of its group.
-        // The exact inactive/loop/mixer pins of each map live in the extraction contract and the bundle validators.
+        // The groups cover the players exactly once, either every enabled player that is active under its original
+        // ancestors (Equator: its two inactive dogs stay out of the group; contract group_coverage "active_players") or
+        // every player including the inactive ones (Bowl, 2026-10-18: Arena groups its four inactive water_drops/cracles
+        // players too; contract group_coverage "all_players"). Bay5 and AirPit have no inactive player, so both readings
+        // coincide there. The exact inactive/loop/mixer pins of each map live in the extraction contract and the
+        // bundle validators; an inactive member never plays, so the runtime routing is the same either way.
         static void ValidateMembership(JArray players, JArray support)
         {
             var ids = players.Select(p => (string)p["id"]).ToArray();
@@ -273,8 +276,9 @@ namespace ArenaMapPort.Editor.Import
             var grouped = groups.SelectMany(s => (JArray)s["soundPlayers"]).Select(p => (string)p["resolved"]).ToArray();
             var activePlayers = players.Where(p => (bool)p["enabled"] && (bool)p["activeInHierarchy"]).ToArray();
             var active = activePlayers.Select(p => (string)p["id"]).ToArray();
+            var groupedSet = new HashSet<string>(grouped);
             if (groups.Length == 0 || ids.Distinct().Count() != ids.Length || grouped.Distinct().Count() != grouped.Length ||
-                !new HashSet<string>(active).SetEquals(grouped))
+                !(groupedSet.SetEquals(active) || groupedSet.SetEquals(ids)))
                 throw new InvalidDataException("Native audio group membership differs from active source graph.");
             if (groups.Any(g => !(bool)g["enabled"] || !(bool)g["activeInHierarchy"]) ||
                 activePlayers.Any(p => (int)p["sourceAudio"]["m_Enabled"] != 1))
