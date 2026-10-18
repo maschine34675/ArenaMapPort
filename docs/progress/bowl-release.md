@@ -105,3 +105,18 @@ host evidence. Appended, never rewritten.
 - Open for the host: the capture-point centroid (-1.76, -33.92) lies under the Mi-26 belly (not on the mesh; the nearest
   walkable cell is the helicopter top at y 1.6), the east guard-tower stairs, vault limits above 1.2 m, and
   `BoothDoorRepairs.ReportRays`, which measures from the gate root at the origin and will print no verdict for Bowl.
+
+## 2026-10-18 - U1 build attempt 1: the backface cloth normal map
+
+- `build_all.ps1 -FullMap -BakeNavMesh` from v2 (11:42) failed closed before the Scripts-scene authoring:
+  `Normal texture 18ed78eea2b2b8a7 rejected: unverified normal encoding: format=DXT1, colorSpace=sRGB, R=49..181,
+  minA=255, maxGreenBlueDifference=178`. The texture is `City_Tarp_01_N` (1024 x 1024), bound by the material
+  `City_Antisniper_tarps` (`Cloth/ClothShader_backface`, slot `_NormalMap2`) on 80 renderers (Cloth_fabric_01,
+  Sniper_defence_tarps_02..04 LODs). Pixel census: B 231..255, R 49..181, G 69..182, alpha 255 everywhere, RGB unit
+  length 1.006 +/- 0.013 over every pixel, z reconstructed from xy within 0.010: a plain RGB tangent-space normal map,
+  the same texture AirPit binds on `Cloth/ClothShader` `_NormalMap1`, where the policy's `RgbNormal` plan already
+  accepts it. The policy counted only `Cloth/ClothShader` as an RGB reader, so the backface variant fell through.
+- Fix: `NormalTextureImportPolicy` treats both cloth variants alike (`IsClothShader`: `_NormalMap1`/`_NormalMap2` read
+  RGB, `_NormalsMask` is the mask); the DXT1/DXT5 plans and every other map are unchanged (Equator, Bay5 and AirPit
+  bind no normal texture on the backface shader). Test case added to `tools/tests/test_normal_texture_import.ps1`.
+  U1 attempt 2 started 11:55.

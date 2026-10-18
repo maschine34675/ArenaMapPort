@@ -19,6 +19,13 @@ namespace ArenaMapPort.Editor.Import
             // neither a normal reader nor an unsupported slot.
             const string RockShader = "ANGRYMESH/PBR Rocks/PBR BlendTopDetail (Legacy)";
             const string SpecMapShader = "p0/Reflective/Bumped Specular SMap";
+            // Arena's two cloth shader variants share the property set and read their normal maps as RGB; the
+            // backface variant appeared as a normal reader with Bowl (City_Antisniper_tarps binds City_Tarp_01_N,
+            // the same sRGB DXT1 RGB normal AirPit's Cloth/ClothShader uses, on _NormalMap2; measured 2026-10-18:
+            // unit length 1.006 +/- 0.013 over all 1024 x 1024 pixels, B 231..255, alpha 255).
+            const string ClothShader = "Cloth/ClothShader";
+            const string ClothBackfaceShader = "Cloth/ClothShader_backface";
+            static bool IsClothShader(string shader) => shader == ClothShader || shader == ClothBackfaceShader;
 
             public void Add(string shader, string property, bool dxt1Keyword)
             {
@@ -36,9 +43,9 @@ namespace ArenaMapPort.Editor.Import
                         NormalSlots++;
                         HasDxt1Keyword |= dxt1Keyword;
                         AllNormalReadersUseRgb &= dxt1Keyword ||
-                            (shader == "Cloth/ClothShader" && (property == "_NormalMap1" || property == "_NormalMap2"));
+                            (IsClothShader(shader) && (property == "_NormalMap1" || property == "_NormalMap2"));
                         break;
-                    case "_NormalsMask" when shader == "Cloth/ClothShader":
+                    case "_NormalsMask" when IsClothShader(shader):
                         ClothMaskSlots++;
                         break;
                     case "_SpecMap" when shader == SpecMapShader:
@@ -121,7 +128,8 @@ namespace ArenaMapPort.Editor.Import
             }
 
             // A real RGB-normal route must consume RGB, not the default packed R*A/G route.
-            // City_Tarp_01_N is this source-authored sRGB DXT1 case, on Cloth/_NormalMap1.
+            // City_Tarp_01_N is this source-authored sRGB DXT1 case, on Cloth/_NormalMap1 (AirPit) and on
+            // Cloth_backface/_NormalMap2 (Bowl, City_Antisniper_tarps).
             if (usage.NormalSlots > 0 && usage.AllNormalReadersUseRgb && sourceFormat == "DXT1"
                 && (colorSpace == "Linear" || colorSpace == "sRGB") && pixels.MinA == 255 && pixels.MinB >= 128)
                 return new Plan("RgbNormal", "DXT1", colorSpace == "sRGB");

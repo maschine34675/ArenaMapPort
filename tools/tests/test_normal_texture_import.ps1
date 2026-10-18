@@ -74,6 +74,12 @@ Assert-Rejected { Classify 'DXT1' 'Linear' (New-Pixels @(128,128,255,254)) $dxt1
 # Source-authored Cloth exceptions: RGB normal keeps sRGB; _NormalsMask is not a vector map.
 $cloth = New-Usage 'Cloth/ClothShader' '_NormalMap1'
 Assert-Plan (Classify 'DXT1' 'sRGB' $rgb $cloth) 'RgbNormal' 'DXT1' $true
+# Bowl (2026-10-18): City_Antisniper_tarps binds the same RGB normal (City_Tarp_01_N) on the BACKFACE cloth variant's
+# _NormalMap2; both cloth variants read their normal maps as RGB and carry the same _NormalsMask.
+$clothBack = New-Usage 'Cloth/ClothShader_backface' '_NormalMap2'
+Assert-Plan (Classify 'DXT1' 'sRGB' $rgb $clothBack) 'RgbNormal' 'DXT1' $true
+Assert-Plan (Classify 'DXT5' 'sRGB' (New-Pixels @(5,8,5,11)) (New-Usage 'Cloth/ClothShader_backface' '_NormalsMask')) 'ClothNormalsMask' 'DXT5' $true
+Assert-Rejected { Classify 'DXT5' 'sRGB' $box (New-Usage 'Cloth/ClothShader_backface' '_NormalMap2') }
 $mask = New-Usage 'Cloth/ClothShader' '_NormalsMask'
 Assert-Plan (Classify 'DXT5' 'sRGB' (New-Pixels @(5,8,5,11)) $mask) 'ClothNormalsMask' 'DXT5' $true
 Assert-Rejected { Classify 'DXT5' 'Linear' $box $mask }
