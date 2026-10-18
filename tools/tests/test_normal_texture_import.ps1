@@ -53,7 +53,11 @@ Assert-Plan (Classify 'DXT5' 'Linear' (New-Pixels @(255,128,128,128)) $normal) '
 $bc7 = New-Pixels @(239,100,109,120,255,128,128,128)
 Assert-Plan (Classify 'BC7' 'Linear' $bc7 $normal 'Tex2D' 2 1) 'PackedRaG' 'BC7' $false
 Assert-Rejected { Classify 'BC7' 'Linear' (New-Pixels @(238,128,128,120,255,128,128,128)) $normal 'Tex2D' 2 1 }
-Assert-Rejected { Classify 'BC7' 'Linear' (New-Pixels @(255,100,117,120)) $normal }
+# Bowl's City_Signs_Road_Metal_01_N: one BC7 pixel with a G/B difference of 18 (mean 0.00) is still the packed layout;
+# 25 and more is not (an RGB normal differs by 100 and more).
+Assert-Plan (Classify 'BC7' 'Linear' (New-Pixels @(251,100,118,120,255,128,128,128)) $normal 'Tex2D' 2 1) 'PackedRaG' 'BC7' $false
+Assert-Rejected { Classify 'BC7' 'Linear' (New-Pixels @(251,100,125,120,255,128,128,128)) $normal 'Tex2D' 2 1 }
+Assert-Rejected { Classify 'BC7' 'Linear' (New-Pixels @(255,100,126,120)) $normal }  # G/B 26: beyond the BC7 outlier bound of 24
 Assert-Rejected { Classify 'BC5' 'Linear' $box $normal }
 Assert-Rejected { Classify 'Unknown(77)' 'Linear' $box $normal }
 Assert-Rejected { Classify 'DXT5' 'sRGB' $box $normal }

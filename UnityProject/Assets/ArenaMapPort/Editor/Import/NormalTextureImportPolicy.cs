@@ -122,8 +122,12 @@ namespace ArenaMapPort.Editor.Import
                 // Verified BC7 sources have the same packed channels with small compression error
                 // in the nominally white R and duplicated G/B. Bounds deliberately reject other
                 // layouts rather than guessing from a texture's name. Original RGBA is preserved.
+                // The G/B bound was 16 (AirPit's ten BC7 normals); Bowl's City_Signs_Road_Metal_01_N
+                // (1024 x 1024) has ONE pixel at 18 with a mean G/B difference of 0.00 (2026-10-18,
+                // bowl-release.md), so 24 covers the BC7 outlier while an RGB normal (G/B differences of
+                // 100 and more, B near 255) stays rejected here.
                 if (sourceFormat == "BC7" && pixels.MinR >= 239 && pixels.MaxR == 255
-                    && pixels.MaxGreenBlueDifference <= 16 && pixels.MinA < 255)
+                    && pixels.MaxGreenBlueDifference <= 24 && pixels.MinA < 255)
                     return new Plan("PackedRaG", "BC7", false);
             }
 

@@ -120,3 +120,16 @@ host evidence. Appended, never rewritten.
   RGB, `_NormalsMask` is the mask); the DXT1/DXT5 plans and every other map are unchanged (Equator, Bay5 and AirPit
   bind no normal texture on the backface shader). Test case added to `tools/tests/test_normal_texture_import.ps1`.
   U1 attempt 2 started 11:55.
+
+## 2026-10-18 - U1 build attempt 2: a BC7 outlier pixel; package v2 validated
+
+- `validate_extract.py --package work/extract/bowl-native-v2`: `OK -- all checks passed` (18 non-blocking warnings, both
+  reproducibility runs exit 0, freshness 0 diffs). v2 is the accepted build input.
+- U1 attempt 2 (11:46) failed closed on `City_Signs_Road_Metal_01_N` (BC7 Linear, 1024 x 1024, `City_signs_metal_01`
+  on the SMap shader's `_BumpMap`): `R=251..255, minA=0, maxGreenBlueDifference=18`, two above the BC7 bound of 16
+  from AirPit's ten BC7 normals. A replica of the policy over all 291 normal textures of v2 (scratch
+  `bowl_normal_policy_check.py`): 278 DXT5 + 1 Format29 PackedRaG, 9 BC7 PackedRaG, 1 RgbNormal (the tarp), 1
+  ClothNormalsMask, and this single reject; its G/B difference is 18 in ONE pixel of 1,048,576 with a mean of 0.00
+  (the other nine BC7 normals peak at 1..9). Bound widened to 24 (an RGB normal differs by 100 and more and keeps
+  B near 255, so the other layout stays rejected); harness cases at 18 (accepted) and 25/26 (rejected). U1 attempt 3
+  started afterwards.
