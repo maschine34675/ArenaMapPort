@@ -26,7 +26,7 @@ namespace ArenaMapPort.Client
     /// </summary>
     internal static class ExfilSignals
     {
-        const string Tag = "[ArenaMapPort][Exfil]";
+        const string Tag = "[Exfil]";
         internal const string CrateBundle = "assets/content/location_objects/lootable/prefab/scontainer_crate.bundle";
         internal const string SignalSuffix = " signal";
 
@@ -126,7 +126,7 @@ namespace ArenaMapPort.Client
     /// <summary>One exit's signal; builds itself once the crate bundle is in.</summary>
     internal sealed class ExfilSmokeSignal : MonoBehaviour
     {
-        const string Tag = "[ArenaMapPort][Exfil]";
+        const string Tag = "[Exfil]";
 
         async void Start()
         {

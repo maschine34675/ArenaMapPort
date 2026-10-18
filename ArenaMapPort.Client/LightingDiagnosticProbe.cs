@@ -106,7 +106,7 @@ namespace ArenaMapPort.Client
                 }
                 catch (Exception e)
                 {
-                    Plugin.Log.LogError($"[ArenaMapPort][Diag] probe threw: {e}");
+                    Plugin.Log.LogError($"[Diag] probe threw: {e}");
                 }
             }
         }
@@ -121,7 +121,7 @@ namespace ArenaMapPort.Client
             _ranThisRaid = true;
 
             var sb = new StringBuilder();
-            sb.AppendLine($"[ArenaMapPort][Diag] ==== lighting/movement probe ({map.Key}, once per raid) ====");
+            sb.AppendLine($"[Diag] ==== lighting/movement probe ({map.Key}, once per raid) ====");
 
             ProbePlayerAndColliders(sb);
             ProbeSpawnColliders(sb);

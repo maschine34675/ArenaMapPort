@@ -16,7 +16,7 @@ namespace ArenaMapPort.Client
     /// </summary>
     internal sealed class NeonLightFlicker : IDisposable
     {
-        const string Tag = "[ArenaMapPort][NeonFlicker]";
+        const string Tag = "[NeonFlicker]";
         static readonly int Emission = Shader.PropertyToID("_EmissionColor");
         static ConfigEntry<float> _strength, _frequency;
         readonly List<Entry> _entries = new List<Entry>();

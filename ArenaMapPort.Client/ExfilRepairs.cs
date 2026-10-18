@@ -38,7 +38,7 @@ namespace ArenaMapPort.Client
     /// </summary>
     internal static class ExfilRepairs
     {
-        const string Tag = "[ArenaMapPort][Exfil]";
+        const string Tag = "[Exfil]";
         static readonly List<ExfiltrationPoint> _synthetic = new List<ExfiltrationPoint>();
         static readonly FieldInfo ContainerField = AccessTools.Field(typeof(LocationScene), "_typeToContainer");
 
@@ -54,7 +54,7 @@ namespace ArenaMapPort.Client
             harmony.Patch(init,
                 prefix: new HarmonyMethod(AccessTools.Method(typeof(ExfilRepairs), nameof(InitPrefix))),
                 postfix: new HarmonyMethod(AccessTools.Method(typeof(ExfilRepairs), nameof(InitPostfix))));
-            Plugin.Log.LogDebug("[ArenaMapPort][Harmony] patched ExfiltrationController.InitAllExfiltrationPoints (exfils-stage2: runtime-authored exits)");
+            Plugin.Log.LogDebug("[Harmony] patched ExfiltrationController.InitAllExfiltrationPoints (exfils-stage2: runtime-authored exits)");
         }
 
         // ExfiltrationController.InitAllExfiltrationPoints(MongoID locationId, BackendExitTriggerSettings[] settings, ...)

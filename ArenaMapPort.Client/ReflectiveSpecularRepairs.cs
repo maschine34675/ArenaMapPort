@@ -179,12 +179,12 @@ namespace ArenaMapPort.Client
                 catch (Exception error)
                 {
                     Restore(state);
-                    Plugin.Log.LogError($"[ArenaMapPort][SpecularCap] map={state.Map.Key} reverted after scan failure: {error}");
+                    Plugin.Log.LogError($"[SpecularCap] map={state.Map.Key} reverted after scan failure: {error}");
                     return;
                 }
             }
             if (state.Entries.Count != 0) DistantShadowCache.Invalidate(state.Map, "reflective apply");
-            Plugin.Log.LogDebug($"[ArenaMapPort][SpecularCap] map={state.Map.Key} cap={cap:0.00} " +
+            Plugin.Log.LogDebug($"[SpecularCap] map={state.Map.Key} cap={cap:0.00} " +
                 $"candidates={state.Candidates} capped={state.Changed} meshDecals={state.Decals} " +
                 $"renderers={state.Entries.Count}; RGB-only ceiling on _SpecColor * _Specularness; cap=1 restores inputs.");
         }

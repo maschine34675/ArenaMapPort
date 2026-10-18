@@ -111,7 +111,7 @@ already loaded under that same internal name --
 
     The AssetBundle '...\\arena_equator_preset.bundle' can't be loaded because another
     AssetBundle with the same files is already loaded.
-    [ArenaMapPort][Bundles] AssetBundle.LoadFromFile returned null for '...arena_equator_preset.bundle'
+    [Error  :maschine-ArenaMapPort] [Bundles] AssetBundle.LoadFromFile returned null for '...arena_equator_preset.bundle'
     Exception: Can't load bundle: maps/arena_equator_preset.bundle HTTP/1.1 404 Not Found
 
 -- silently aborting the raid start, with no indication the actual cause is a name collision

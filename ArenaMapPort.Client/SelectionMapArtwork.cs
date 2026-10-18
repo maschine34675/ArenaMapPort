@@ -19,7 +19,7 @@ namespace ArenaMapPort.Client
     /// </summary>
     internal static class SelectionMapArtwork
     {
-        private const string Tag = "[ArenaMapPort][SelectionMap]";
+        private const string Tag = "[SelectionMap]";
         private static Image _image;
         private static Sprite _original;
         private static Sprite _sprite;

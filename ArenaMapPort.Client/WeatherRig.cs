@@ -608,7 +608,7 @@ namespace ArenaMapPort.Client
                 if (Mathf.Approximately(cfg.IndoorFloorSmoothness.Value, 1f)) { cfg.IndoorFloorSmoothness.Value = 0.5f; moved++; }
                 cfg.DefaultsRevision.Value = 1;
                 // Record successful migrations in Debug, including any old defaults that changed.
-                string reseed = $"[ArenaMapPort][WeatherRig] {map.Key}: config re-seeded to defaults revision 1 " +
+                string reseed = $"[WeatherRig] {map.Key}: config re-seeded to defaults revision 1 " +
                     $"({moved} value(s) moved off their pre-§20 defaults; Donor='{cfg.Donor.Value}')";
                 Plugin.Log.LogDebug(reseed);
             }
@@ -619,7 +619,7 @@ namespace ArenaMapPort.Client
                 int moved = 0;
                 if (cfg.IndoorCoverPercent.Value == 50) { cfg.IndoorCoverPercent.Value = 30; moved++; }
                 cfg.DefaultsRevision.Value = 2;
-                string reseed2 = $"[ArenaMapPort][WeatherRig] {map.Key}: config re-seeded to defaults revision 2 " +
+                string reseed2 = $"[WeatherRig] {map.Key}: config re-seeded to defaults revision 2 " +
                     $"({moved} value(s) moved; IndoorCoverPercent={cfg.IndoorCoverPercent.Value})";
                 Plugin.Log.LogDebug(reseed2);
             }
@@ -631,7 +631,7 @@ namespace ArenaMapPort.Client
                 int moved = 0;
                 if (cfg.FullyIndoorCover.Value) { cfg.FullyIndoorCover.Value = false; moved++; }
                 cfg.DefaultsRevision.Value = 3;
-                string reseed3 = $"[ArenaMapPort][WeatherRig] {map.Key}: config re-seeded to defaults revision 3 " +
+                string reseed3 = $"[WeatherRig] {map.Key}: config re-seeded to defaults revision 3 " +
                     $"({moved} value(s) moved; FullyIndoorCover={cfg.FullyIndoorCover.Value})";
                 Plugin.Log.LogDebug(reseed3);
             }
@@ -643,7 +643,7 @@ namespace ArenaMapPort.Client
                 bool moved = cfg.AmbientIntensity.Value == 1f;
                 if (moved) cfg.AmbientIntensity.Value = 0.85f;
                 cfg.DefaultsRevision.Value = 4;
-                Plugin.Log.LogDebug($"[ArenaMapPort][WeatherRig] {map.Key}: config re-seeded to defaults revision 4 " +
+                Plugin.Log.LogDebug($"[WeatherRig] {map.Key}: config re-seeded to defaults revision 4 " +
                     $"(ambient moved={moved}; AmbientIntensity={cfg.AmbientIntensity.Value:0.00})");
             }
 
@@ -656,7 +656,7 @@ namespace ArenaMapPort.Client
                 if (cfg.ReflectionIntensity.Value == 1f) { cfg.ReflectionIntensity.Value = 0.85f; moved++; }
                 if (cfg.IndoorReflectionStrength.Value == 0.3f) { cfg.IndoorReflectionStrength.Value = 0.95f; moved++; }
                 cfg.DefaultsRevision.Value = 5;
-                Plugin.Log.LogDebug($"[ArenaMapPort][WeatherRig] {map.Key}: config re-seeded to defaults revision 5 " +
+                Plugin.Log.LogDebug($"[WeatherRig] {map.Key}: config re-seeded to defaults revision 5 " +
                     $"({moved} value(s) moved; ambient={cfg.AmbientIntensity.Value:0.00}, " +
                     $"reflection={cfg.ReflectionIntensity.Value:0.00}, indoorReflection={cfg.IndoorReflectionStrength.Value:0.00})");
             }
@@ -676,7 +676,7 @@ namespace ArenaMapPort.Client
                 case TextureBudgetTier.LaboratoryTier:
                     // Not measured this pass (only Reserve was harvested/inspected) — fall back to Stub
                     // rather than guess at a plausible-looking wrong number.
-                    Plugin.Log.LogWarning($"[ArenaMapPort][WeatherRig] TextureBudgetTier={tier} has no measured " +
+                    Plugin.Log.LogWarning($"[WeatherRig] TextureBudgetTier={tier} has no measured " +
                         "value yet this pass — falling back to Stub. See docs/progress/" +
                         "donor-settings-camera-weather.md §Deferred.");
                     return StubTextureBudget;
@@ -762,7 +762,7 @@ namespace ArenaMapPort.Client
                         yield return HarvestOne(donorName);
                     }
                 }
-                Plugin.Log.LogDebug("[ArenaMapPort][WeatherRig] harvest loop finished — " +
+                Plugin.Log.LogDebug("[WeatherRig] harvest loop finished — " +
                     $"{_harvested.Count} donor(s) ready, {_permanentlyFailed.Count} permanently failed this session.");
             }
             finally
@@ -804,7 +804,7 @@ namespace ArenaMapPort.Client
                 }
                 catch (Exception e)
                 {
-                    Plugin.Log.LogWarning($"[ArenaMapPort][WeatherRig] could not unload leftover '{donorName}': " +
+                    Plugin.Log.LogWarning($"[WeatherRig] could not unload leftover '{donorName}': " +
                         $"{e.GetType().Name}: {e.Message}");
                 }
                 if (leftoverOp != null)
@@ -898,7 +898,7 @@ namespace ArenaMapPort.Client
             catch (Exception e)
             {
                 // Non-fatal — see this block's own comment; the rig itself (Weather root) is unaffected.
-                Plugin.Log.LogWarning($"[ArenaMapPort][WeatherRig] '{donorName}': donor camera/preset capture " +
+                Plugin.Log.LogWarning($"[WeatherRig] '{donorName}': donor camera/preset capture " +
                     $"failed (non-fatal, rig harvest continues without it): {e.GetType().Name}: {e.Message}");
             }
 
@@ -1024,7 +1024,7 @@ namespace ArenaMapPort.Client
             }
             catch (Exception e)
             {
-                Plugin.Log.LogWarning($"[ArenaMapPort][WeatherRig] physics-broadphase revert failed (non-fatal): " +
+                Plugin.Log.LogWarning($"[WeatherRig] physics-broadphase revert failed (non-fatal): " +
                     $"{e.GetType().Name}: {e.Message}");
             }
 
@@ -1079,7 +1079,7 @@ namespace ArenaMapPort.Client
 
             EnsureOnRenderObjectManager(); // donor-independent; early attempt — see its own comment on the CameraManager.Exist gate; retried again from OnSceneLoaded
 
-            Plugin.Log.LogDebug($"[ArenaMapPort][WeatherRig] harvested '{donorName}' ({rig.Kind}) — " +
+            Plugin.Log.LogDebug($"[WeatherRig] harvested '{donorName}' ({rig.Kind}) — " +
                 $"{keptBefore} MonoBehaviour(s) on the clone; post-unload identity unchanged: " +
                 $"LevelSettings={lsUnchanged} LocationScene={locUnchanged} EnvironmentManager={envUnchanged}; " +
                 $"donor camera captured={donorCameraPrefab != null} " +
@@ -1092,13 +1092,13 @@ namespace ArenaMapPort.Client
         {
             int n = _failedAttempts.TryGetValue(donorName, out var c) ? c + 1 : 1;
             _failedAttempts[donorName] = n;
-            Plugin.Log.LogError($"[ArenaMapPort][WeatherRig] '{donorName}' harvest attempt {n}/{MaxHarvestAttempts} " +
+            Plugin.Log.LogError($"[WeatherRig] '{donorName}' harvest attempt {n}/{MaxHarvestAttempts} " +
                 $"failed: {reason}");
             if (n >= MaxHarvestAttempts)
             {
                 _pendingDonors.Remove(donorName);
                 _permanentlyFailed.Add(donorName);
-                Plugin.Log.LogError($"[ArenaMapPort][WeatherRig] giving up on '{donorName}' after {n} failed " +
+                Plugin.Log.LogError($"[WeatherRig] giving up on '{donorName}' after {n} failed " +
                     "attempts this session — every map configured with this Donor falls back to the existing " +
                     "ArenaLightingRepairs workaround for the rest of this session.");
             }
@@ -1204,7 +1204,7 @@ namespace ArenaMapPort.Client
             }
             catch (Exception e)
             {
-                Plugin.Log.LogError($"[ArenaMapPort][WeatherRig] cleanup unload also failed: " +
+                Plugin.Log.LogError($"[WeatherRig] cleanup unload also failed: " +
                     $"{e.GetType().Name}: {e.Message}");
             }
         }
@@ -1243,7 +1243,7 @@ namespace ArenaMapPort.Client
                 return; // not yet safe — see this method's own comment; retried on the next call site
             }
             _host.AddComponent<OnRenderObjectManager>();
-            Plugin.Log.LogDebug("[ArenaMapPort][WeatherRig] added OnRenderObjectManager (lives outside any " +
+            Plugin.Log.LogDebug("[WeatherRig] added OnRenderObjectManager (lives outside any " +
                 "donor's Weather subtree — _TechnicalManagers root).");
         }
 
@@ -1292,7 +1292,7 @@ namespace ArenaMapPort.Client
 
             if (!_harvested.TryGetValue(donorName, out var rig))
             {
-                Plugin.Log.LogWarning($"[ArenaMapPort][WeatherRig] {map.Key}: Donor='{donorName}' configured " +
+                Plugin.Log.LogWarning($"[WeatherRig] {map.Key}: Donor='{donorName}' configured " +
                     "but not harvested in time for this raid (still pending, or permanently failed this " +
                     "session) — falling back to the ArenaLightingRepairs workaround for this raid.");
                 return;
@@ -1330,7 +1330,7 @@ namespace ArenaMapPort.Client
                 _activeMap = map;
                 _activeRig = rig; // Review fix-ups #5 — OnSceneUnloaded deactivates THIS, not a re-derived lookup
                 EnsureOnRenderObjectManager(); // Review fix-ups #2 — retried here in case CameraManager.Exist was still false at harvest time
-                Plugin.Log.LogDebug($"[ArenaMapPort][WeatherRig] {map.Key}: activated '{donorName}' " +
+                Plugin.Log.LogDebug($"[WeatherRig] {map.Key}: activated '{donorName}' " +
                     $"({rig.Kind}) for this raid. SkyboxMode={cfg.SkyboxModeEntry.Value}.");
                 ApplySkyboxMode(rig, cfg.SkyboxModeEntry.Value);
 
@@ -1353,7 +1353,7 @@ namespace ArenaMapPort.Client
             }
             catch (Exception e)
             {
-                Plugin.Log.LogError($"[ArenaMapPort][WeatherRig] {map.Key}: activation failed — " +
+                Plugin.Log.LogError($"[WeatherRig] {map.Key}: activation failed — " +
                     $"{e.GetType().Name}: {e.Message}. Falling back to the ArenaLightingRepairs workaround " +
                     "for this raid.");
                 rig.CameraSubscriptions.Unbind(); // activation may have failed after binding the reused full rig
@@ -1401,7 +1401,7 @@ namespace ArenaMapPort.Client
             var ls = Singleton<LevelSettings>.Instantiated ? Singleton<LevelSettings>.Instance : null;
             if (ls == null)
             {
-                Plugin.Log.LogWarning($"[ArenaMapPort][WeatherRig] {map.Key}: LevelSettings singleton not found " +
+                Plugin.Log.LogWarning($"[WeatherRig] {map.Key}: LevelSettings singleton not found " +
                     "at donor-override apply time — skipped (should not happen; AuthorScriptsScene.cs authors " +
                     "one in every owned scene).");
                 return;
@@ -1468,7 +1468,7 @@ namespace ArenaMapPort.Client
             // RenderSettings.ambient* state (same mechanism LightingLab candidate A already uses).
             DynamicGI.UpdateEnvironment();
 
-            Plugin.Log.LogDebug($"[ArenaMapPort][LevelSettingsOverride] map={map.Key} " +
+            Plugin.Log.LogDebug($"[LevelSettingsOverride] map={map.Key} " +
                 $"ZeroLevel={ls.ZeroLevel:0.00} (was {oldZeroLevel:0.00}) " +
                 $"HeightFalloff={ls.HeightFalloff:0.000} (was {oldHeightFalloff:0.000}) " +
                 $"TextureBudget={cfg.TextureBudgetTierEntry.Value} (was {oldBudget}, now {ls.MaxMapTextureMemory}) " +
@@ -1490,7 +1490,7 @@ namespace ArenaMapPort.Client
             }
             if (rig.CameraPrefab == null)
             {
-                Plugin.Log.LogDebug($"[ArenaMapPort][CameraPrefabTakeover] {map.Key}: UseDonorCameraPrefab=true but " +
+                Plugin.Log.LogDebug($"[CameraPrefabTakeover] {map.Key}: UseDonorCameraPrefab=true but " +
                     "the harvested rig has no donor CameraPrefab (donor's own LevelSettings.CameraPrefab was null) " +
                     "— falling back to Cam2 for this raid.");
                 return;
@@ -1505,7 +1505,7 @@ namespace ArenaMapPort.Client
             ls.CameraPrefab = rig.CameraPrefab;
             ls.PrismPresetPrefab = rig.PrismPreset;             // may be null — SetCameraFromPrefab's own null-check covers it
             ls.PostProcessProfilePrefab = rig.PostProcessProfile; // may be null
-            Plugin.Log.LogDebug($"[ArenaMapPort][CameraPrefabTakeover] assigned donor camera for map={map.Key} " +
+            Plugin.Log.LogDebug($"[CameraPrefabTakeover] assigned donor camera for map={map.Key} " +
                 $"camera='{rig.CameraPrefab.name}' prism={rig.PrismPreset != null} postfx={rig.PostProcessProfile != null}");
         }
 
@@ -1650,7 +1650,7 @@ namespace ArenaMapPort.Client
                 }
                 catch (Exception e)
                 {
-                    Plugin.Log.LogError($"[ArenaMapPort][WeatherRig] {map.Key}: deactivation threw (non-fatal, " +
+                    Plugin.Log.LogError($"[WeatherRig] {map.Key}: deactivation threw (non-fatal, " +
                         $"raid already ending): {e.GetType().Name}: {e.Message}");
                 }
             }
@@ -1676,7 +1676,7 @@ namespace ArenaMapPort.Client
             // Native call binds the current camera/rain effects and renders the donor-owned photo.
             // RaidCoverBootstrap invokes this once after full raid readiness, then classifies that photo.
             if (!_activeRig.CameraSubscriptions.Refresh(CameraManager.Instance, _activeRig.Controller)) return false;
-            Plugin.Log.LogDebug($"[ArenaMapPort][WeatherRig] {_activeMap.Key}: refreshed weather/rain on current raid camera using donor-owned DepthPhotograper.");
+            Plugin.Log.LogDebug($"[WeatherRig] {_activeMap.Key}: refreshed weather/rain on current raid camera using donor-owned DepthPhotograper.");
             return true;
         }
 
@@ -1786,7 +1786,7 @@ namespace ArenaMapPort.Client
                 return;
             }
             ambient.method_3();
-            Plugin.Log.LogDebug($"[ArenaMapPort][WeatherRig] {map.Key}: ReflectionIntensity scale={ReflectionIntensityForCurrentMap():0.00} applied live");
+            Plugin.Log.LogDebug($"[WeatherRig] {map.Key}: ReflectionIntensity scale={ReflectionIntensityForCurrentMap():0.00} applied live");
         }
 
         // §18 — scale on the analytic diffuse SH ambient (ToDController.Update -> AmbientLight.SetSH /
@@ -1868,7 +1868,7 @@ namespace ArenaMapPort.Client
                 return;
             }
             tod.AmbientLightScript.SetSH(tod.SH);
-            Plugin.Log.LogDebug($"[ArenaMapPort][WeatherRig] {map.Key}: AmbientIntensity scale={AmbientIntensityForCurrentMap():0.00} applied live");
+            Plugin.Log.LogDebug($"[WeatherRig] {map.Key}: AmbientIntensity scale={AmbientIntensityForCurrentMap():0.00} applied live");
         }
 
         internal static RainCoverMode RainCoverForCurrentMap() =>

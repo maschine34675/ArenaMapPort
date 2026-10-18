@@ -87,7 +87,7 @@ namespace ArenaMapPort.Client
                 yield return new WaitForSeconds(1f);
             }
             raid.Startup = null;
-            if (IsCurrent(raid)) Plugin.Log.LogWarning($"[ArenaMapPort][HandsHighlight] map={raid.Map.Key} " +
+            if (IsCurrent(raid)) Plugin.Log.LogWarning($"[HandsHighlight] map={raid.Map.Key} " +
                 "startup camera wait expired; scene/config events remain available.");
         }
 
@@ -123,12 +123,12 @@ namespace ArenaMapPort.Client
                 }
                 float multiplier = EquatorProfiles.Value(Configs[raid.Map.Key]);
                 int changed = Apply(raid, multiplier);
-                Plugin.Log.LogDebug($"[ArenaMapPort][HandsHighlight] map={raid.Map.Key} {reason}: " +
+                Plugin.Log.LogDebug($"[HandsHighlight] map={raid.Map.Key} {reason}: " +
                     $"captured={raid.Highlights.Count}, scale={multiplier:0.00}, fieldsChanged={changed}");
             }
             catch (Exception e)
             {
-                Plugin.Log.LogWarning($"[ArenaMapPort][HandsHighlight] map={raid.Map.Key} {reason}: " +
+                Plugin.Log.LogWarning($"[HandsHighlight] map={raid.Map.Key} {reason}: " +
                     $"{e.GetType().Name}: {e.Message}");
             }
         }
@@ -169,7 +169,7 @@ namespace ArenaMapPort.Client
             if (raid.Startup != null) Plugin.Instance.StopCoroutine(raid.Startup);
             if (raid.CameraManager != null) raid.CameraManager.OnCameraChanged -= OnCameraChanged;
             int changed = Apply(raid, 1f);
-            Plugin.Log.LogDebug($"[ArenaMapPort][HandsHighlight] map={raid.Map.Key} released: " +
+            Plugin.Log.LogDebug($"[HandsHighlight] map={raid.Map.Key} released: " +
                 $"fieldsRestored={changed}, captured={raid.Highlights.Count}");
         }
     }

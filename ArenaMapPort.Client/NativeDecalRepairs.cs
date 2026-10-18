@@ -90,7 +90,7 @@ namespace ArenaMapPort.Client
                             {
                                 _failed = true;
                                 StopRenderer();
-                                Plugin.Log.LogError($"[ArenaMapPort][NativeDecals] map={Map.Key} initialization failed: {ex}");
+                                Plugin.Log.LogError($"[NativeDecals] map={Map.Key} initialization failed: {ex}");
                             }
                         }
                     }
@@ -126,7 +126,7 @@ namespace ArenaMapPort.Client
                 if (count == 0)
                 {
                     _failed = true;
-                    Plugin.Log.LogWarning($"[ArenaMapPort][NativeDecals] {Map.LocaleName}: decal data is missing; reinstall the complete map package.");
+                    Plugin.Log.LogWarning($"[NativeDecals] {Map.LocaleName}: decal data is missing; reinstall the complete map package.");
                     return;
                 }
                 // Arena's normal-map importer keeps readable bytes for bundle serialization.
@@ -142,7 +142,7 @@ namespace ArenaMapPort.Client
                         || !prepared.Add(texture)) continue;
                     texture.Apply(updateMipmaps: false, makeNoLongerReadable: true);
                 }
-                Plugin.Log.LogDebug($"[ArenaMapPort][NativeDecals] map={Map.Key} released {prepared.Count} compressed source CPU copies before atlas creation");
+                Plugin.Log.LogDebug($"[NativeDecals] map={Map.Key} released {prepared.Count} compressed source CPU copies before atlas creation");
                 var owner = new GameObject("ArenaMapPort StaticDeferredDecalRenderer");
                 owner.SetActive(false);
                 owner.transform.SetParent(transform, false);
@@ -163,7 +163,7 @@ namespace ArenaMapPort.Client
                     foreach (var draw in draws) registered += draw.Count;
                     if (registered != active)
                         throw new InvalidOperationException($"Native decal census {registered} differs from owned active set {active}");
-                    Plugin.Log.LogDebug($"[ArenaMapPort][NativeDecals] map={Map.Key} enabled: source={count} active={active} " +
+                    Plugin.Log.LogDebug($"[NativeDecals] map={Map.Key} enabled: source={count} active={active} " +
                         $"registered={registered} materials={materials.Count} groups={draws.Length} " +
                         $"nativeEnabled={EFTHardSettings.Instance.STATIC_DEFERRED_DECALS_ENABLED} " +
                         $"camera={Camera.main?.actualRenderingPath} renderer={_owned.GetInstanceID()}");
@@ -204,7 +204,7 @@ namespace ArenaMapPort.Client
                 foreach (var material in _materials)
                     if (material != null) UnityEngine.Object.DestroyImmediate(material);
                 foreach (var buffer in _buffers) buffer.Dispose();
-                Plugin.Log.LogDebug($"[ArenaMapPort][NativeDecals] map={Map.Key} renderer removed; " +
+                Plugin.Log.LogDebug($"[NativeDecals] map={Map.Key} renderer removed; " +
                     $"released {_materials.Count} material(s), {_buffers.Count} command buffer(s) and native callbacks");
                 _materials.Clear();
                 _buffers.Clear();

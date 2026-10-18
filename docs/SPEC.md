@@ -1067,7 +1067,7 @@ static void Prefix(BundlesManager __instance, string bundleName)
     if (!OurBundles.TryGetValue(bundleName, out var filePath)) return;   // case-insensitive dict, §0's 3 keys
     if (__instance._bundles.ContainsKey(bundleName)) return;             // already served/loaded
     var bundle = AssetBundle.LoadFromFile(filePath);                     // memory-mapped, cheap
-    if (bundle == null) { Plugin.Log.LogError($"[ArenaMapPort] failed to load {filePath}"); return; }
+    if (bundle == null) { Plugin.Log.LogError($"[Bundles] failed to load {filePath}"); return; }
     __instance._bundles[bundleName] = new BundlesManager.AssetBundleReference(bundle);
 }
 ```
@@ -1239,7 +1239,7 @@ A **separate, explicit, user-approved step** promotes `dist/` into the live `D:/
    error in the server log for the empty `Banners: []`).
 3. **Start a local PMC raid on it. Watch the client log (`D:\SPT41\BepInEx\LogOutput.log`, local time —
    per `ArenaMode/CLAUDE.md`'s own documented convention) for, in order**:
-   - `[ArenaMapPort][Bundles] loaded 'maps/arena_equator_preset.bundle'` / the scene bundle / the navmesh
+   - `[Bundles] loaded 'maps/arena_equator_preset.bundle'` / the scene bundle / the navmesh
      bundle (§F.1/F.5) — confirms the `BundlesManager` prefix actually intercepted all three.
    - All 6 scene names loading (Unity's own `"Loading level..."`-style engine log lines, or WP4's own
      per-scene confirmation, §F.5) — **if any scene is silently absent, re-check §B.WP3's `rcid` table
@@ -1247,7 +1247,7 @@ A **separate, explicit, user-approved step** promotes `dist/` into the live `D:/
    - **No** `"Loading data file failed"` exception around scene-load completion — this is the
      PerfectCulling risk (§F.6); if it appears, §F.6's prefix isn't engaging, check the Harmony patch
      target resolved (`AccessTools.Method` didn't silently return null).
-   - `[ArenaMapPort][NavMesh] added N tiles` (§F.2/F.5).
+   - `[NavMesh] added N tiles` (§F.2/F.5).
    - `[RebindShaders] Nx <name>` lines for each of the 20 distinct shaders, with **zero** materials left
      on `Hidden/InternalErrorShader` (§F.3/F.5) — visually, this means no magenta/checkerboard surfaces
      anywhere in view at spawn.

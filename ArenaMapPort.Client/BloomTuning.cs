@@ -17,7 +17,7 @@ namespace ArenaMapPort.Client
     /// </summary>
     internal static class BloomTuning
     {
-        const string Tag = "[ArenaMapPort][Bloom]";
+        const string Tag = "[Bloom]";
         const float DefaultThreshold = 2.1f;
         const float DefaultIntensity = 0.35f;
         // AirPit (user decision 2026-10-14, listening/looking pass item 9): the values the user tuned in their config

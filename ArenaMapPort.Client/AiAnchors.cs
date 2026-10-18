@@ -56,7 +56,7 @@ namespace ArenaMapPort.Client
         internal List<CorePointAnchor> CorePoints;
         internal List<PatrolWayAnchor> PatrolWays;
 
-        const string Tag = "[ArenaMapPort][AiAnchors]";
+        const string Tag = "[AiAnchors]";
 
         static readonly Dictionary<string, AiAnchors> _cache = new Dictionary<string, AiAnchors>();
         static readonly HashSet<string> _loggedOnce = new HashSet<string>();

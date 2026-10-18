@@ -100,7 +100,7 @@ namespace ArenaMapPort.Client
             var roots = scene.GetRootGameObjects().SelectMany(r => r.GetComponentsInChildren<Transform>(true))
                 .Where(t => t.name == profile.RootName).ToArray();
             if (roots.Length == 0) return; // Old packages do not contain this optional feature.
-            if (roots.Length != 1) { Plugin.Log.LogError("[ArenaMapPort][NativeAudio] duplicate owned audio roots; refusing playback"); return; }
+            if (roots.Length != 1) { Plugin.Log.LogError("[NativeAudio] duplicate owned audio roots; refusing playback"); return; }
             var settings = Bound[mapKey];
             _driver = Plugin.Instance.gameObject.AddComponent<Driver>();
             _driver.Initialize(roots[0].gameObject, profile, settings.Diagnostics, settings.GainDb, settings.Offset, settings.Range);
@@ -119,7 +119,7 @@ namespace ArenaMapPort.Client
             var driver = _driver;
             if (driver == null || driver.MapKey != mapKey) return;
             try { driver.ApplyUserSettingsLive(); }
-            catch (Exception ex) { Plugin.Log.LogWarning($"[ArenaMapPort][NativeAudio] live setting apply failed map={mapKey}: {ex.Message}"); }
+            catch (Exception ex) { Plugin.Log.LogWarning($"[NativeAudio] live setting apply failed map={mapKey}: {ex.Message}"); }
         }
 
         internal static void Shutdown()
@@ -194,11 +194,11 @@ namespace ArenaMapPort.Client
                 }
                 catch (Exception ex)
                 {
-                    Plugin.Log.LogError($"[ArenaMapPort][NativeAudio] invalid imported graph map={_mapKey}; refusing playback: {ex.Message}");
+                    Plugin.Log.LogError($"[NativeAudio] invalid imported graph map={_mapKey}; refusing playback: {ex.Message}");
                     Dispose();
                     return;
                 }
-                Plugin.Log.LogDebug($"[ArenaMapPort][NativeAudio] waiting for raid listener and native mixers; map={_mapKey} players={_players.Length} active={_activePlayers.Length}");
+                Plugin.Log.LogDebug($"[NativeAudio] waiting for raid listener and native mixers; map={_mapKey} players={_players.Length} active={_activePlayers.Length}");
             }
 
             void ValidateGraph()
@@ -264,7 +264,7 @@ namespace ArenaMapPort.Client
                         TryStart();
                         if (!_ready && _servicesSince >= 0f && Time.realtimeSinceStartup - _servicesSince > 180f)
                         {
-                            Plugin.Log.LogError("[ArenaMapPort][NativeAudio] raid audio services unavailable after 180s; playback remains off");
+                            Plugin.Log.LogError("[NativeAudio] raid audio services unavailable after 180s; playback remains off");
                             Dispose();
                         }
                         return;
@@ -285,7 +285,7 @@ namespace ArenaMapPort.Client
                 }
                 catch (Exception ex)
                 {
-                    Plugin.Log.LogError("[ArenaMapPort][NativeAudio] playback initialization/update failed; stopping owned sources: " + ex);
+                    Plugin.Log.LogError("[NativeAudio] playback initialization/update failed; stopping owned sources: " + ex);
                     Dispose();
                 }
             }
@@ -300,7 +300,7 @@ namespace ArenaMapPort.Client
                 }
                 catch (Exception ex)
                 {
-                    Plugin.Log.LogError("[ArenaMapPort][NativeAudio] shoreline update failed; stopping owned sources: " + ex);
+                    Plugin.Log.LogError("[NativeAudio] shoreline update failed; stopping owned sources: " + ex);
                     Dispose();
                 }
             }
@@ -360,7 +360,7 @@ namespace ArenaMapPort.Client
                 RefreshReverbRouting(RoomReverb.IsActive(_mapKey));
                 _nextReport = Time.realtimeSinceStartup + 5f;
                 string mixerNames = string.Join(",", mixers.Select(m => m.name));
-                Plugin.Log.LogDebug($"[ArenaMapPort][NativeAudio] ready players={_players.Length} started={started} seasonalSilent={seasonalSilence} season={_season} mixers={mixerNames} shoreline={(_profile.HasShoreline ? "stock" : "none")} listener={listener.transform.position} map={_mapKey} sourceInactive={_players.Length - _activePlayers.Length}");
+                Plugin.Log.LogDebug($"[NativeAudio] ready players={_players.Length} started={started} seasonalSilent={seasonalSilence} season={_season} mixers={mixerNames} shoreline={(_profile.HasShoreline ? "stock" : "none")} listener={listener.transform.position} map={_mapKey} sourceInactive={_players.Length - _activePlayers.Length}");
             }
 
             internal void RefreshReverbRouting(bool requested)
@@ -399,7 +399,7 @@ namespace ArenaMapPort.Client
                 {
                     foreach (var player in _players)
                         if (player != null && _baseline.TryGetValue(player, out var b0)) player._maxDistance = b0.MaxDistance;
-                    Plugin.Log.LogDebug($"[ArenaMapPort][NativeAudio] user range neutral (original Arena max distances) map={_mapKey}");
+                    Plugin.Log.LogDebug($"[NativeAudio] user range neutral (original Arena max distances) map={_mapKey}");
                     return;
                 }
                 int adjusted = 0;
@@ -412,7 +412,7 @@ namespace ArenaMapPort.Client
                     adjusted++;
                     if (adjusted <= 3) examples.Append($" '{player.name}' {before:F0}->{player._maxDistance:F0} m;");
                 }
-                Plugin.Log.LogDebug($"[ArenaMapPort][NativeAudio] user range x{m:F2}: max distance scaled on {adjusted} player(s); e.g.{examples} map={_mapKey}");
+                Plugin.Log.LogDebug($"[NativeAudio] user range x{m:F2}: max distance scaled on {adjusted} player(s); e.g.{examples} map={_mapKey}");
             }
 
             // Live re-apply from a SettingChanged: recompute the per-player fields from the baseline (ApplyUserRange /
@@ -435,7 +435,7 @@ namespace ArenaMapPort.Client
                         pushed++;
                     }
                 }
-                Plugin.Log.LogDebug($"[ArenaMapPort][NativeAudio] live settings applied: gainDb={_gainDb?.Value ?? 0f:F1} offset={_offset?.Value ?? 0f:F3} range=x{_range?.Value ?? 1f:F2}; re-targeted {pushed} playing source(s), max distance pushed on {_activePlayers.Length} map={_mapKey}");
+                Plugin.Log.LogDebug($"[NativeAudio] live settings applied: gainDb={_gainDb?.Value ?? 0f:F1} offset={_offset?.Value ?? 0f:F3} range=x{_range?.Value ?? 1f:F2}; re-targeted {pushed} playing source(s), max distance pushed on {_activePlayers.Length} map={_mapKey}");
             }
 
             // PLAN-TWO-MAPS item 1 — see the field comment on MapSettings.GainDb. Neutral settings leave every value untouched.
@@ -447,7 +447,7 @@ namespace ArenaMapPort.Client
                 {
                     foreach (var player in _activePlayers)
                         if (player != null && _baseline.TryGetValue(player, out var b0)) { player._volume = b0.Volume; player._deltaVolume = b0.Delta; }
-                    Plugin.Log.LogDebug($"[ArenaMapPort][NativeAudio] user mix neutral (original Arena volumes) map={_mapKey}");
+                    Plugin.Log.LogDebug($"[NativeAudio] user mix neutral (original Arena volumes) map={_mapKey}");
                     return;
                 }
                 float gain = Mathf.Pow(10f, gainDb / 20f);
@@ -467,7 +467,7 @@ namespace ArenaMapPort.Client
                     if (adjusted <= 3)
                         examples.Append($" '{player.name}' {volume:F3}-{delta:F3}->{newVolume:F3}-{newDelta:F3};");
                 }
-                Plugin.Log.LogDebug($"[ArenaMapPort][NativeAudio] user mix gainDb={gainDb:F1} offset={offset:F3}: adjusted {adjusted} player(s), dip capped on {capped}; e.g.{examples} map={_mapKey}");
+                Plugin.Log.LogDebug($"[NativeAudio] user mix gainDb={gainDb:F1} offset={offset:F3}: adjusted {adjusted} player(s), dip capped on {capped}; e.g.{examples} map={_mapKey}");
             }
 
             static AudioMixerGroup Mixer(AudioMixer mixer, string path, string exactName)
@@ -494,7 +494,7 @@ namespace ArenaMapPort.Client
                     previous != calculator._spline.transform))
                     throw new InvalidOperationException("unexpected native shoreline range origin");
                 centre.SetValue(calculator, calculator._spline.transform);
-                Plugin.Log.LogDebug($"[ArenaMapPort][NativeAudio] shoreline range origin aligned from={previous.position} to={calculator._spline.transform.position} radius={calculator._calculationRadius:F2}");
+                Plugin.Log.LogDebug($"[NativeAudio] shoreline range origin aligned from={previous.position} to={calculator._spline.transform.position} radius={calculator._calculationRadius:F2}");
 
                 // The first stock translation adds its direction to _lastPos, initially
                 // world zero. Schedule at the real listener first, then seed that origin
@@ -511,13 +511,13 @@ namespace ArenaMapPort.Client
                 var target = calculator.TargetPos;
                 if (!calculator.IsInRange() || target == (Vector3)lastPosition.GetValue(calculator))
                 {
-                    Plugin.Log.LogDebug("[ArenaMapPort][NativeAudio] shoreline initial calculation deferred to native listener movement");
+                    Plugin.Log.LogDebug("[NativeAudio] shoreline initial calculation deferred to native listener movement");
                     return;
                 }
                 foreach (var controller in _controllers) controller.Tick();
                 lastPosition.SetValue(calculator, target);
                 foreach (var controller in _controllers) controller.LateTick();
-                Plugin.Log.LogDebug($"[ArenaMapPort][NativeAudio] shoreline initial calculation listener={calculator.TargetPos} emitter={_water.EmitterPosition}");
+                Plugin.Log.LogDebug($"[NativeAudio] shoreline initial calculation listener={calculator.TargetPos} emitter={_water.EmitterPosition}");
             }
 
             void AcquireAmbientVolume(BetterAudio audio)
@@ -536,7 +536,7 @@ namespace ArenaMapPort.Client
                         throw new InvalidOperationException("native " + (bus == AmbientBus.In ? "interior" : "exterior") + " ambient volume contract changed");
                     var lease = AmbientBusLease.Acquire(_ambientMixer, parameter);
                     _leases.Add(bus, lease);
-                    Plugin.Log.LogDebug($"[ArenaMapPort][NativeAudio] {(bus == AmbientBus.In ? "interior" : "exterior")} bus leased neutral={lease.IsNeutral} map={_mapKey}");
+                    Plugin.Log.LogDebug($"[NativeAudio] {(bus == AmbientBus.In ? "interior" : "exterior")} bus leased neutral={lease.IsNeutral} map={_mapKey}");
                 }
             }
 
@@ -568,7 +568,7 @@ namespace ArenaMapPort.Client
                     else { player.CurrentBank = null; silent++; }
                 }
                 _season = season;
-                Plugin.Log.LogDebug($"[ArenaMapPort][NativeAudio] season={season} seasonalStarted={audible} seasonalSilent={silent}");
+                Plugin.Log.LogDebug($"[NativeAudio] season={season} seasonalStarted={audible} seasonalSilent={silent}");
             }
 
             internal void Report(bool detailed)
@@ -581,7 +581,7 @@ namespace ArenaMapPort.Client
                     var audio = BetterAudio.Instantiated ? BetterAudio.Instance : null;
                     var data = audio?.AudioMixerData;
                     if (audio?.Master != null && data != null)
-                        Plugin.Log.LogDebug($"[ArenaMapPort][NativeAudio] mix listenerVolume={AudioListener.volume:F3} paused={AudioListener.pause} mainDb={MixerValue(audio.Master, data.MainMixerVolume)} inGameDb={MixerValue(audio.Master, data.InGameVolumeMixer)} ambientOutDb={MixerValue(audio.Master, data.AmbientOutMixerVolume)} ambientInDb={MixerValue(audio.Master, data.AmbientInMixerVolume)} worldDb={MixerValue(audio.Master, data.WorldMixerVolume)} map={_mapKey}");
+                        Plugin.Log.LogDebug($"[NativeAudio] mix listenerVolume={AudioListener.volume:F3} paused={AudioListener.pause} mainDb={MixerValue(audio.Master, data.MainMixerVolume)} inGameDb={MixerValue(audio.Master, data.InGameVolumeMixer)} ambientOutDb={MixerValue(audio.Master, data.AmbientOutMixerVolume)} ambientInDb={MixerValue(audio.Master, data.AmbientInMixerVolume)} worldDb={MixerValue(audio.Master, data.WorldMixerVolume)} map={_mapKey}");
                 }
                 foreach (var player in _players)
                 {
@@ -607,13 +607,13 @@ namespace ArenaMapPort.Client
                             foreach (float sample in _outputSamples) energy += sample * sample;
                         }
                         float rms = Mathf.Sqrt(energy / _outputSamples.Length);
-                        Plugin.Log.LogDebug($"[ArenaMapPort][NativeAudio] source='{player.name}' clip='{source.clip?.name}' playing={source.isPlaying} virtual={source.isVirtual} sample={source.timeSamples} rms={rms:F6} volume={source.volume:F3} pitch={source.pitch:F3} muted={source.mute} distance={distance:F2} mixer={source.outputAudioMixerGroup?.name} pos={source.transform.position} active={player.gameObject.activeInHierarchy} initialized={initialized} loop={source.loop} map={_mapKey}");
+                        Plugin.Log.LogDebug($"[NativeAudio] source='{player.name}' clip='{source.clip?.name}' playing={source.isPlaying} virtual={source.isVirtual} sample={source.timeSamples} rms={rms:F6} volume={source.volume:F3} pitch={source.pitch:F3} muted={source.mute} distance={distance:F2} mixer={source.outputAudioMixerGroup?.name} pos={source.transform.position} active={player.gameObject.activeInHierarchy} initialized={initialized} loop={source.loop} map={_mapKey}");
                     }
                 }
                 Vector3 emitter = _water != null ? _water.EmitterPosition : Vector3.zero;
                 float moved = _hasEmitterPosition ? Vector3.Distance(emitter, _previousEmitter) : 0f;
                 _previousEmitter = emitter; _hasEmitterPosition = true;
-                Plugin.Log.LogDebug($"[ArenaMapPort][NativeAudio] playback sources={_players.Length} playing={playing} advancing={advanced} shorelinePosition={emitter} moved={moved:F2} season={_season} map={_mapKey} initialized={_players.Count(p => p != null && p.Fader != null && p.EmptyClip != null)} sourceInactive={_players.Length - _activePlayers.Length}");
+                Plugin.Log.LogDebug($"[NativeAudio] playback sources={_players.Length} playing={playing} advancing={advanced} shorelinePosition={emitter} moved={moved:F2} season={_season} map={_mapKey} initialized={_players.Count(p => p != null && p.Fader != null && p.EmptyClip != null)} sourceInactive={_players.Length - _activePlayers.Length}");
             }
 
             static string MixerValue(AudioMixer mixer, string parameter) =>
@@ -640,7 +640,7 @@ namespace ArenaMapPort.Client
                         catch (Exception ex)
                         {
                             failures++;
-                            Plugin.Log.LogWarning("[ArenaMapPort][NativeAudio] source stop failed; continuing owned cleanup: " + ex.Message);
+                            Plugin.Log.LogWarning("[NativeAudio] source stop failed; continuing owned cleanup: " + ex.Message);
                             // Do not leave the source audible if a stock culling/event callback failed.
                             try { var source = player.GetComponent<AudioSource>(); if (source != null) source.Stop(); }
                             catch (Exception) { /* Root destruction below still removes this source. */ }
@@ -650,11 +650,11 @@ namespace ArenaMapPort.Client
                 finally
                 {
                     try { ReleaseAmbientVolume(); }
-                    catch (Exception ex) { failures++; Plugin.Log.LogWarning("[ArenaMapPort][NativeAudio] mixer cleanup failed: " + ex.Message); }
+                    catch (Exception ex) { failures++; Plugin.Log.LogWarning("[NativeAudio] mixer cleanup failed: " + ex.Message); }
                     foreach (var clip in _emptyClips)
                     {
                         try { if (clip != null) { UnityEngine.Object.Destroy(clip); emptyClips++; } }
-                        catch (Exception ex) { failures++; Plugin.Log.LogWarning("[ArenaMapPort][NativeAudio] empty clip cleanup failed: " + ex.Message); }
+                        catch (Exception ex) { failures++; Plugin.Log.LogWarning("[NativeAudio] empty clip cleanup failed: " + ex.Message); }
                     }
                     _emptyClips.Clear();
                     _samples.Clear();
@@ -663,17 +663,17 @@ namespace ArenaMapPort.Client
                         var ownedRoot = _root;
                         _root = null;
                         try { ownedRoot.SetActive(false); }
-                        catch (Exception ex) { failures++; Plugin.Log.LogWarning("[ArenaMapPort][NativeAudio] root deactivation failed: " + ex.Message); }
+                        catch (Exception ex) { failures++; Plugin.Log.LogWarning("[NativeAudio] root deactivation failed: " + ex.Message); }
                         finally
                         {
                             // Stock calculator OnDestroy completes its job and disposes both NativeArrays.
                             // Bank/clip assets are bundle-owned and are never destroyed by this driver.
                             try { UnityEngine.Object.Destroy(ownedRoot); }
-                            catch (Exception ex) { failures++; Plugin.Log.LogWarning("[ArenaMapPort][NativeAudio] root destruction failed: " + ex.Message); }
+                            catch (Exception ex) { failures++; Plugin.Log.LogWarning("[NativeAudio] root destruction failed: " + ex.Message); }
                         }
                     }
                 }
-                Plugin.Log.LogDebug($"[ArenaMapPort][NativeAudio] stopped ownedPlayers={stopped} emptyClipsReleased={emptyClips} cleanupFailures={failures}; owned graph disposal scheduled map={_mapKey}");
+                Plugin.Log.LogDebug($"[NativeAudio] stopped ownedPlayers={stopped} emptyClipsReleased={emptyClips} cleanupFailures={failures}; owned graph disposal scheduled map={_mapKey}");
             }
 
             void OnDestroy() { Dispose(); if (_driver == this) _driver = null; }

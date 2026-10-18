@@ -278,7 +278,7 @@ namespace ArenaMapPort.Client
                 }
             }
 
-            Plugin.Log.LogDebug($"[ArenaMapPort][RebindShaders] {scene.name}: pass complete — " +
+            Plugin.Log.LogDebug($"[RebindShaders] {scene.name}: pass complete — " +
                                 $"{rebound}/{considered} stand-in material(s) rebound this pass");
         }
 
@@ -313,7 +313,7 @@ namespace ArenaMapPort.Client
             if (target != null && ShaderStandinPolicy.TryGetFallback(map.Key, originalName, out _) &&
                 _warnedOnce.Add("native-shader:" + originalName))
             {
-                Plugin.Log.LogDebug($"[ArenaMapPort][RebindShaders] '{originalName}' resolved to EFT's own loaded " +
+                Plugin.Log.LogDebug($"[RebindShaders] '{originalName}' resolved to EFT's own loaded " +
                                     $"shader; the stand-in substitute is not used (map={map.Key})");
             }
 
@@ -340,7 +340,7 @@ namespace ArenaMapPort.Client
                         // Must be read while the stand-in shader (which declares every imported property) is still assigned.
                         captured = ShaderStandins.Capture(material, originalName, map);
                     }
-                    Plugin.Log.LogDebug($"[ArenaMapPort][RebindShaders] '{originalName}' has no SPT shader — " +
+                    Plugin.Log.LogDebug($"[RebindShaders] '{originalName}' has no SPT shader — " +
                                         $"using fallback '{fallbackName}' (tentative, unverified visual " +
                                         $"correctness, map={map.Key})");
                 }
@@ -369,7 +369,7 @@ namespace ArenaMapPort.Client
                 if (!string.IsNullOrEmpty(entry.Shader) && entry.Shader != originalName &&
                     _warnedOnce.Add("sidecar-mismatch:" + material.name))
                 {
-                    Plugin.Log.LogWarning($"[ArenaMapPort][RebindShaders] '{material.name}': " +
+                    Plugin.Log.LogWarning($"[RebindShaders] '{material.name}': " +
                                            $"{SidecarFileName(map)} says shader '{entry.Shader}', but the stand-in " +
                                            $"shader on the material names '{originalName}' — using '{originalName}' " +
                                            "(derived from the material itself); renderQueue/keywords still " +
@@ -386,7 +386,7 @@ namespace ArenaMapPort.Client
                     material.renderQueue = queue;
                     if (queue != entry.RenderQueue && _warnedOnce.Add("queue-default:" + originalName))
                     {
-                        Plugin.Log.LogDebug($"[ArenaMapPort][RebindShaders] '{originalName}': sidecar queue " +
+                        Plugin.Log.LogDebug($"[RebindShaders] '{originalName}': sidecar queue " +
                                             $"{entry.RenderQueue} is the stand-in default, shader default is " +
                                             $"{target.renderQueue}; using the shader default (map={map.Key})");
                     }
@@ -438,7 +438,7 @@ namespace ArenaMapPort.Client
             if (Math.Abs(preFixBlendStrength - Bay5GroundExpectedBlendStrengthBeforeFix) > 0.01f &&
                 _warnedOnce.Add("bay5-ground-blendstrength-drift"))
             {
-                Plugin.Log.LogWarning($"[ArenaMapPort][MaterialFixes] material '{Bay5GroundMaterialHash}' " +
+                Plugin.Log.LogWarning($"[MaterialFixes] material '{Bay5GroundMaterialHash}' " +
                                        $"found (map={map.Key}, shader={realShaderName}) but its pre-fix " +
                                        $"_BlendStrength={preFixBlendStrength:0.0}, not the expected " +
                                        $"{Bay5GroundExpectedBlendStrengthBeforeFix:0.0} captured when this " +
@@ -459,7 +459,7 @@ namespace ArenaMapPort.Client
             // _ReflectionStrength (1.0) intentionally left untouched — it already matches vanilla's 1.0,
             // nothing about it is an outlier for this material.
 
-            Plugin.Log.LogDebug($"[ArenaMapPort][MaterialFixes] '{material.name}' (Bay5_Vertex_Paint_Ground): " +
+            Plugin.Log.LogDebug($"[MaterialFixes] '{material.name}' (Bay5_Vertex_Paint_Ground): " +
                                 $"_BlendStrength {preFixBlendStrength:0.0} -> {Bay5GroundBlendStrengthTarget:0.0}, " +
                                 $"_Smoothness0-2/_FresnelSpecular2 scaled by {scale:0.00}");
         }
@@ -527,7 +527,7 @@ namespace ArenaMapPort.Client
             var path = Path.Combine(PluginDir, fileName);
             if (!File.Exists(path))
             {
-                Plugin.Log.LogWarning($"[ArenaMapPort][RebindShaders] {fileName} not found at '{path}'; " +
+                Plugin.Log.LogWarning($"[RebindShaders] {fileName} not found at '{path}'; " +
                                        "shader identity rebind still runs, but per-material renderQueue/keywords " +
                                        "cannot be restored.");
                 return;
@@ -562,11 +562,11 @@ namespace ArenaMapPort.Client
                     sidecar[pair.Key] = entry;
                 }
 
-                Plugin.Log.LogDebug($"[ArenaMapPort][RebindShaders] {fileName}: {sidecar.Count} material entries");
+                Plugin.Log.LogDebug($"[RebindShaders] {fileName}: {sidecar.Count} material entries");
             }
             catch (Exception e)
             {
-                Plugin.Log.LogError($"[ArenaMapPort][RebindShaders] {fileName} could not be read: " +
+                Plugin.Log.LogError($"[RebindShaders] {fileName} could not be read: " +
                                      $"{e.GetType().Name}: {e.Message}");
             }
         }
@@ -591,13 +591,13 @@ namespace ArenaMapPort.Client
                 if (ShaderStandinPolicy.IsKnownGap(map.Key, name, ShaderStandins.AirPitStandinsEnabled))
                 {
                     knownGaps.Add(name);
-                    Plugin.Log.LogDebug($"[ArenaMapPort][RebindShaders] unresolved: '{name}' — no loaded shader of that " +
+                    Plugin.Log.LogDebug($"[RebindShaders] unresolved: '{name}' — no loaded shader of that " +
                                         "exact name and Shader.Find found none; material(s) using it stay on the " +
                                         $"'{StandinPrefix}{name}' stand-in (magenta, AirPitShaderStandins=false).");
                 }
                 else
                 {
-                    Plugin.Log.LogError($"[ArenaMapPort][RebindShaders] unresolved: '{name}' — no loaded shader of that " +
+                    Plugin.Log.LogError($"[RebindShaders] unresolved: '{name}' — no loaded shader of that " +
                                          "exact name and Shader.Find found none; material(s) using it stay on the " +
                                          $"'{StandinPrefix}{name}' stand-in (visible as a flat/incorrect surface, not " +
                                          "necessarily magenta, since the stand-in itself is a real, compiling shader).");
@@ -605,13 +605,13 @@ namespace ArenaMapPort.Client
             }
             if (knownGaps.Count > 0)
             {
-                Plugin.Log.LogInfo("[ArenaMapPort][RebindShaders] " + ShaderStandinPolicy.FormatUnresolvedSummary(map.Key, knownGaps));
+                Plugin.Log.LogInfo("[RebindShaders] " + ShaderStandinPolicy.FormatUnresolvedSummary(map.Key, knownGaps));
             }
             if (ShaderStandins.HiddenFogSheetRenderers > 0)
             {
                 // Counts every fog-sheet renderer whose own enabled flag was on, including those under groups the
                 // client deactivated at raid start (PASSPORT_CONTROL_DOORS), so up to 127 on the 0.6.0 package.
-                Plugin.Log.LogDebug($"[ArenaMapPort][RebindShaders] {map.Key}: AirPitFogSheets=Hidden, " +
+                Plugin.Log.LogDebug($"[RebindShaders] {map.Key}: AirPitFogSheets=Hidden, " +
                                     $"{ShaderStandins.HiddenFogSheetRenderers} fog-sheet renderer(s) disabled this raid " +
                                     "(inactive hierarchies included)");
             }

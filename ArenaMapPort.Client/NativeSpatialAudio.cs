@@ -32,7 +32,7 @@ namespace ArenaMapPort.Client
     /// </summary>
     internal static class NativeSpatialAudio
     {
-        internal const string Tag = "[ArenaMapPort][Acoustics]";
+        internal const string Tag = "[Acoustics]";
         static readonly Dictionary<string, ConfigEntry<bool>> Enabled = new Dictionary<string, ConfigEntry<bool>>();
         static State _state;
         internal static State Current => _state;

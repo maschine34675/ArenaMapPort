@@ -77,7 +77,7 @@ namespace ArenaMapPort.Client
             var type = AccessTools.TypeByName(SainLocationClass);
             if (type == null)
             {
-                Plugin.Log.LogDebug("[ArenaMapPort][SAIN] SAIN not loaded — location shim not installed (nothing to do).");
+                Plugin.Log.LogDebug("[SAIN] SAIN not loaded — location shim not installed (nothing to do).");
                 return false;
             }
             var find = AccessTools.Method(type, FindLocationMethod);
@@ -87,7 +87,7 @@ namespace ArenaMapPort.Client
             _foundLocation = AccessTools.Field(type, FoundField);
             if (find == null || _locationSetter == null || _eLocation == null || !_eLocation.IsEnum || _foundLocation == null)
             {
-                Plugin.Log.LogWarning($"[ArenaMapPort][SAIN] {SainLocationClass} does not look like the 2026-09 SAIN build " +
+                Plugin.Log.LogWarning($"[SAIN] {SainLocationClass} does not look like the 2026-09 SAIN build " +
                     $"(findLocation={(find != null)} Location.set={(_locationSetter != null)} enum={(_eLocation?.Name ?? "null")} " +
                     $"_foundLocation={(_foundLocation != null)}) — shim not installed; SAIN will log its own location error each tick.");
                 return false;
@@ -97,7 +97,7 @@ namespace ArenaMapPort.Client
             // could only ever hand control back to SAIN — validate once here instead of per tick.
             if (ParseOrNull(FallbackLocation) == null)
             {
-                Plugin.Log.LogWarning($"[ArenaMapPort][SAIN] '{FallbackLocation}' is not a member of {_eLocation.FullName} — shim not installed.");
+                Plugin.Log.LogWarning($"[SAIN] '{FallbackLocation}' is not a member of {_eLocation.FullName} — shim not installed.");
                 return false;
             }
             foreach (var kv in _configs)
@@ -108,7 +108,7 @@ namespace ArenaMapPort.Client
             ValidateEntry(_equatorNight);
 
             harmony.Patch(find, prefix: new HarmonyMethod(AccessTools.Method(typeof(SainLocationShim), nameof(FindLocationPrefix))));
-            Plugin.Log.LogDebug($"[ArenaMapPort][Harmony] patched {SainLocationClass}.{FindLocationMethod} (bots-stage1 SAIN location shim)");
+            Plugin.Log.LogDebug($"[Harmony] patched {SainLocationClass}.{FindLocationMethod} (bots-stage1 SAIN location shim)");
             return true;
         }
 
@@ -134,7 +134,7 @@ namespace ArenaMapPort.Client
         static void ValidateEntry(ConfigEntry<string> entry)
         {
             if (ParseOrNull(entry.Value) != null) return;
-            Plugin.Log.LogWarning($"[ArenaMapPort][SAIN] [{entry.Definition.Section}] SainLocation='{entry.Value}' is not a SAIN ELocation " +
+            Plugin.Log.LogWarning($"[SAIN] [{entry.Definition.Section}] SainLocation='{entry.Value}' is not a SAIN ELocation " +
                 $"name (valid: {string.Join(", ", Enum.GetNames(_eLocation))}) — {FallbackLocation} will be used for that profile.");
         }
 
@@ -180,14 +180,14 @@ namespace ArenaMapPort.Client
             }
             catch (Exception e)
             {
-                Plugin.Log.LogWarning($"[ArenaMapPort][SAIN] could not set SAIN's location for {map.Key}: {e.GetType().Name}: {e.Message} — letting SAIN run its own lookup.");
+                Plugin.Log.LogWarning($"[SAIN] could not set SAIN's location for {map.Key}: {e.GetType().Name}: {e.Message} — letting SAIN run its own lookup.");
                 return true;
             }
 
             if (_loggedForMap != map.Key)
             {
                 _loggedForMap = map.Key;
-                Plugin.Log.LogDebug($"[ArenaMapPort][SAIN] {map.Key}: SAIN location set to {value} " +
+                Plugin.Log.LogDebug($"[SAIN] {map.Key}: SAIN location set to {value} " +
                     $"(config [{entry?.Definition.Section ?? "fallback"}] SainLocation='{wanted}').");
             }
             return false; // skip SAIN's switch (and its per-tick error line)

@@ -55,7 +55,7 @@ namespace ArenaMapPort.Client
             if (__instance.GetComponent<FrostbiteEffect>() == null)
             {
                 __instance.gameObject.AddComponent<FrostbiteEffect>();
-                Plugin.Log.LogDebug("[ArenaMapPort][RaidFix] added missing FrostbiteEffect to fallback camera " +
+                Plugin.Log.LogDebug("[RaidFix] added missing FrostbiteEffect to fallback camera " +
                                     "(Cam2 predates it; EffectsController.Init disables it again immediately)");
             }
         }
@@ -124,7 +124,7 @@ namespace ArenaMapPort.Client
             if (!_logged)
             {
                 _logged = true;
-                Plugin.Log.LogWarning("[ArenaMapPort] Flashbang eye-burn overlay is unavailable: the map camera lacks this effect.");
+                Plugin.Log.LogWarning("Flashbang eye-burn overlay is unavailable: the map camera lacks this effect.");
             }
             return true;
         }
@@ -173,7 +173,7 @@ namespace ArenaMapPort.Client
             if (!_logged)
             {
                 _logged = true;
-                Plugin.Log.LogWarning("[ArenaMapPort] Stun-grenade screen flash is unavailable: the map camera lacks this effect.");
+                Plugin.Log.LogWarning("Stun-grenade screen flash is unavailable: the map camera lacks this effect.");
             }
             return false;
         }
@@ -230,7 +230,7 @@ namespace ArenaMapPort.Client
             if (!_applyDamageLogged)
             {
                 _applyDamageLogged = true;
-                Plugin.Log.LogWarning("[ArenaMapPort] Bleeding screen overlay is unavailable: the map camera lacks this effect.");
+                Plugin.Log.LogWarning("Bleeding screen overlay is unavailable: the map camera lacks this effect.");
             }
             return false;
         }
@@ -251,7 +251,7 @@ namespace ArenaMapPort.Client
             if (!_playerDamagedLogged)
             {
                 _playerDamagedLogged = true;
-                Plugin.Log.LogWarning("[ArenaMapPort][RaidFix] EffectsController.OnPlayerDamaged threw " +
+                Plugin.Log.LogWarning("[RaidFix] EffectsController.OnPlayerDamaged threw " +
                                       "(blur/blood-on-screen hit overlay degraded this raid — recoil kick and " +
                                       $"special-hit audio still play): {__exception.GetType().Name}: " +
                                       $"{__exception.Message} (fix-combat, EffectsController.cs:1288/1460-1470)");
@@ -308,7 +308,7 @@ namespace ArenaMapPort.Client
             if (!_logged)
             {
                 _logged = true;
-                Plugin.Log.LogDebug("[ArenaMapPort][RaidFix] EffectsController.OnHealthDied on Cam2 — " +
+                Plugin.Log.LogDebug("[RaidFix] EffectsController.OnHealthDied on Cam2 — " +
                                    $"death fade {(fade != null ? "played" : "missing")}, death blur " +
                                    $"{(blur != null ? "played" : "missing")} (stage 1, EffectsController.cs:1488-1497)");
             }

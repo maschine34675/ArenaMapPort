@@ -130,7 +130,7 @@ brain-table stand-in row (`ApplyBrainTable`/`ApplyPmcBrainTables`, Equator → `
 
 ## 5. Host raid checklist (log evidence into `docs/progress/<stem>-bots.md`)
 
-1. `[ArenaMapPort][BotSpawn] wave fired` and `ActivateBotCallback` lines; `uibridge_bots` shows brain layers
+1. `[BotSpawn] wave fired` and `ActivateBotCallback` lines; `uibridge_bots` shows brain layers
    (`PatrolAssault`/`Utility peace` = patrolling; a null layer after 30 s = activation failed, turn on
    `[Bots] ActivationDiagnostics` and read the finalizer lines).
 2. Patrol-way line: `zone '...' had no patrol ways — built N way(s) ... in C NavMesh-connected component(s)` —

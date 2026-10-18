@@ -145,7 +145,7 @@ namespace ArenaMapPort.Client
             }
             catch (Exception e)
             {
-                Plugin.Log.LogError($"[ArenaMapPort][WeatherTestOverride] applying '{mode}' threw: " +
+                Plugin.Log.LogError($"[WeatherTestOverride] applying '{mode}' threw: " +
                     $"{e.GetType().Name}: {e.Message}");
                 return;
             }
@@ -156,7 +156,7 @@ namespace ArenaMapPort.Client
             }
 
             var map = ArenaMapRaid.CurrentMap;
-            Plugin.Log.LogDebug($"[ArenaMapPort][WeatherTestOverride] applied '{mode}' " +
+            Plugin.Log.LogDebug($"[WeatherTestOverride] applied '{mode}' " +
                 $"(map={(map != null ? map.Key : "?")}; nightNeonRain={EquatorNightNeon.RainForCurrentRaid})");
         }
 

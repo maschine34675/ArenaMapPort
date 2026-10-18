@@ -38,7 +38,7 @@ namespace ArenaMapPort.Client
                     {
                         // A failed readback must not silence rain. Retry on the next photo,
                         // and keep the native room fallback for this revision.
-                        Plugin.Log.LogWarning($"[ArenaMapPort][RainAudio] roof snapshot unavailable; using room: {e.Message}");
+                        Plugin.Log.LogWarning($"[RainAudio] roof snapshot unavailable; using room: {e.Message}");
                     }
                 }
             }

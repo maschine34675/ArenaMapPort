@@ -32,7 +32,7 @@ namespace ArenaMapPort.Client
                     var group = root.GetComponent<LODGroup>();
                     if (!root.gameObject.activeInHierarchy || group == null || !group.enabled)
                     {
-                        Plugin.Log.LogWarning($"[ArenaMapPort][ShadowCaster] inactive/non-LOD target '{path}', skipped");
+                        Plugin.Log.LogWarning($"[ShadowCaster] inactive/non-LOD target '{path}', skipped");
                         continue;
                     }
                     // Enumerate only the renderers the existing LODGroup actually references.
@@ -56,13 +56,13 @@ namespace ArenaMapPort.Client
                     {
                         renderer.gameObject.SetActive(true);
                         activated++;
-                        Plugin.Log.LogDebug($"[ArenaMapPort][ShadowCaster] map={map.Key} restored '{path}/{renderer.name}' " +
+                        Plugin.Log.LogDebug($"[ShadowCaster] map={map.Key} restored '{path}/{renderer.name}' " +
                             $"casting={renderer.shadowCastingMode} position={renderer.transform.position:F2}");
                     }
                 }
                 catch (Exception e)
                 {
-                    Plugin.Log.LogWarning($"[ArenaMapPort][ShadowCaster] '{path}': {e.GetType().Name}: {e.Message}");
+                    Plugin.Log.LogWarning($"[ShadowCaster] '{path}': {e.GetType().Name}: {e.Message}");
                 }
             }
             if (activated > 0) DistantShadowCache.Invalidate(map, "restored shadow proxies");

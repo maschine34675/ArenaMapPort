@@ -98,7 +98,7 @@ namespace ArenaMapPort.Client
             var field = AccessTools.Field(typeof(UnityStandardAssets.ImageEffects.PostEffectsBase), "_ssaaPropagator");
             if (field == null || field.FieldType != typeof(SSAAPropagator))
             {
-                Plugin.Log.LogError("[ArenaMapPort][Flare] native SSAA field missing; flare restoration disabled");
+                Plugin.Log.LogError("[Flare] native SSAA field missing; flare restoration disabled");
                 return;
             }
             Propagator = AccessTools.FieldRefAccess<UnityStandardAssets.ImageEffects.PostEffectsBase, SSAAPropagator>(field);
@@ -124,14 +124,14 @@ namespace ArenaMapPort.Client
                 if (!original.RenderLogged)
                 {
                     original.RenderLogged = true;
-                    Plugin.Log.LogDebug("[ArenaMapPort][Flare] rendered native anamorphic pass before Prism HDR-to-LDR; later pass bypassed");
+                    Plugin.Log.LogDebug("[Flare] rendered native anamorphic pass before Prism HDR-to-LDR; later pass bypassed");
                 }
             }
             catch (Exception e)
             {
                 original.Restore();
                 BeforeTonemap.Remove(__instance);
-                Plugin.Log.LogError($"[ArenaMapPort][Flare] pre-tonemap render failed; restored camera defaults: {e}");
+                Plugin.Log.LogError($"[Flare] pre-tonemap render failed; restored camera defaults: {e}");
             }
             finally { _rendering = false; }
         }
@@ -186,7 +186,7 @@ namespace ArenaMapPort.Client
                 bool moved = _intensity.Value == 0.25f;
                 if (moved) _intensity.Value = 0.4f;
                 revision.Value = 1;
-                Plugin.Log.LogDebug($"[ArenaMapPort][AnamorphicFlare] config re-seeded to defaults revision 1 " +
+                Plugin.Log.LogDebug($"[AnamorphicFlare] config re-seeded to defaults revision 1 " +
                     $"(intensity moved={moved}; intensity={_intensity.Value:0.00})");
             }
             EquatorProfiles.Subscribe(_enabled, (_, __) => ApplyToCurrentCamera("setting changed"));
@@ -224,7 +224,7 @@ namespace ArenaMapPort.Client
                     { effect = candidate; break; }
                 if (effect == null)
                 {
-                    Plugin.Log.LogWarning($"[ArenaMapPort][Flare] '{camera.name}' has no enabled anamorphic BloomAndFlares pass");
+                    Plugin.Log.LogWarning($"[Flare] '{camera.name}' has no enabled anamorphic BloomAndFlares pass");
                     return;
                 }
                 if (!Originals.TryGetValue(effect, out var original))
@@ -243,7 +243,7 @@ namespace ArenaMapPort.Client
                 effect.lensflareIntensity = EquatorProfiles.Value(_intensity);
                 effect.flareColorA = ClampTint(EquatorProfiles.Value(_tint));
                 if (original.Ultimate != null) original.Ultimate.m_UseAnamorphicFlare = false;
-                Plugin.Log.LogDebug($"[ArenaMapPort][Flare] arena_equator '{camera.name}' ({reason}): " +
+                Plugin.Log.LogDebug($"[Flare] arena_equator '{camera.name}' ({reason}): " +
                     $"component={effect.GetInstanceID()} enabled={effect.enabled} lensflares={effect.lensflares} " +
                     $"mode={effect.lensflareMode} HDR={effect.hdr} cameraHDR={camera.allowHDR} " +
                     $"intensity={effect.lensflareIntensity:0.000} threshold={effect.lensflareThreshold:0.000} " +
@@ -253,7 +253,7 @@ namespace ArenaMapPort.Client
             }
             catch (Exception e)
             {
-                Plugin.Log.LogError($"[ArenaMapPort][Flare] apply failed ({reason}): {e}");
+                Plugin.Log.LogError($"[Flare] apply failed ({reason}): {e}");
             }
         }
 
@@ -262,7 +262,7 @@ namespace ArenaMapPort.Client
             MuzzleFlareMask.Release();
             if (Originals.Count == 0) return;
             foreach (var original in Originals.Values) original.Restore();
-            Plugin.Log.LogDebug($"[ArenaMapPort][Flare] released {Originals.Count} camera state(s)");
+            Plugin.Log.LogDebug($"[Flare] released {Originals.Count} camera state(s)");
             Originals.Clear();
             BeforeTonemap.Clear();
         }

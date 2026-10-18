@@ -25,7 +25,7 @@ namespace ArenaMapPort.Client
     /// </summary>
     internal static class NativeMultiFlare
     {
-        const string Tag = "[ArenaMapPort][MultiFlare]";
+        const string Tag = "[MultiFlare]";
         static readonly Dictionary<string, ConfigEntry<bool>> Enabled = new Dictionary<string, ConfigEntry<bool>>();
         static readonly Dictionary<string, ConfigEntry<float>> Intensity = new Dictionary<string, ConfigEntry<float>>();
         static Runner _runner;

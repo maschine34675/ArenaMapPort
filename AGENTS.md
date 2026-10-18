@@ -254,7 +254,7 @@ Same click points as before, raid start ≈ 9 s, `D:\SPT41` still mirrors it. Re
    (299,798), `BAY5 / WITH BOTS` (299,878), `BAY5 / NO BOTS` (299,958) — the old single-button positions moved;
    check with `uibridge_snapshot contains=BOTS`), then `uibridge_wait raidStarted=true`. Use NO BOTS for visual or
    measurement checks: SAIN bots kill the debug player within ~15–40 s.
-4. Observe: `uibridge_log` (BepInEx log, filter by `[ArenaMapPort]` tags), `uibridge_player`,
+4. Observe: `uibridge_log` (BepInEx log, source `maschine-ArenaMapPort`, filter by its `[<Area>]` tags), `uibridge_player`,
    `uibridge_bots` (positions, brain layers), `uibridge_teleport` (has a NavMesh reachability check —
    `reachable=false` for islands; `dryRun=true` to probe connectivity), `uibridge_look`, screenshots via
    `windows-gpu Screenshot`. Letter keys do not reach EFT; use `uibridge_command` for game commands.
@@ -272,7 +272,9 @@ the log; the user uses it to point at things.
 ## Conventions
 
 - One repair per file, a class doc comment that says what vanilla does, what the ported scene lacks, what
-  the repair does and which host test proved it. Log lines start with `[ArenaMapPort][<Area>]`.
+  the repair does and which host test proved it. Client log lines start with `[<Area>]` only: BepInEx
+  prints the source `maschine-ArenaMapPort` in front of every line, so an own mod prefix would appear
+  twice. Server lines keep `[ArenaMapPort]`, the shared server logger has no source name.
 - Per-map data belongs in `ArenaMapDescriptor` (Shared) and the matching `tools/maps` sidecar, never as a
   literal in a repair. Object names repeat inside Arena scenes: address scene objects by hierarchy path.
 - New tuning keys: `Plugin.Instance.Settings.Bind("<Section>", "<Key>", default, "<what/why, takes effect when>")`.
@@ -365,7 +367,7 @@ the log; the user uses it to point at things.
 - Syncthing replaces the client DLL while EFT runs; EFT keeps the old code until restarted. Trust
   `uibridge_status`'s MVID comparison, not file hashes. The same holds for rebuilt bundles: a loaded map
   bundle stays cached in the EFT process, so a new NavMesh/scenes bundle needs an EFT restart before the next
-  raid (the `[ArenaMapPort][NavMesh] added navmesh ... N vertices` line tells which bake is live).
+  raid (the `[NavMesh] added navmesh ... N vertices` line tells which bake is live).
 - `uibridge_wait logMatches`: only lines logged after the wait started count (use `sinceSeq`).
 - Partial scenes (AirPit level38/37, `docs/progress/airpit-release.md` "Phase 1"/"Phase 1b"): `PROJECTION`, `PHYSIC`,
   `VARIANT`, `PROPSnoCulling` are LEVEL ROOTS of level38, not children of `SBG_Arena_Airpit_Main_hall`; the `*` in

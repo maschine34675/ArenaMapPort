@@ -28,7 +28,7 @@ namespace ArenaMapPort.Client
                     args[1].ParameterType != typeof(RectTransform) ||
                     _target?.FieldType != typeof(Vector2) || _refresh == null || _refresh.IsStatic)
                 {
-                    Plugin.Log.LogDebug("[ArenaMapPort] ArenaMode map-position integration skipped: unsupported presentation contract.");
+                    Plugin.Log.LogDebug("ArenaMode map-position integration skipped: unsupported presentation contract.");
                     return;
                 }
                 harmony.Patch(create,
@@ -37,7 +37,7 @@ namespace ArenaMapPort.Client
             }
             catch (Exception e)
             {
-                Plugin.Log.LogWarning($"[ArenaMapPort] Could not align ArenaMode map labels: {e.Message}");
+                Plugin.Log.LogWarning($"Could not align ArenaMode map labels: {e.Message}");
             }
         }
 
@@ -57,7 +57,7 @@ namespace ArenaMapPort.Client
             }
             catch (Exception e)
             {
-                Plugin.Log.LogWarning($"[ArenaMapPort] Could not align an ArenaMode map label: {e.Message}");
+                Plugin.Log.LogWarning($"Could not align an ArenaMode map label: {e.Message}");
             }
         }
     }

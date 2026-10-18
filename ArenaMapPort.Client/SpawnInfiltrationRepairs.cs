@@ -96,7 +96,7 @@ namespace ArenaMapPort.Client
 
             if (fixedCount > 0) // once per raid — CreateFromScene runs exactly once per BaseLocalGame.Run
             {
-                Plugin.Log.LogDebug($"[ArenaMapPort][RaidFix] set Infiltration=\"{map.InfiltrationName}\" on " +
+                Plugin.Log.LogDebug($"[RaidFix] set Infiltration=\"{map.InfiltrationName}\" on " +
                                     $"{fixedCount} SpawnPointMarker(s) with no Infiltration authored " +
                                     "(prevents SPT.SinglePlayer.Patches.RaidFix.EmptyInfilFixPatch's NRE " +
                                     "at raid-start countdown end)");

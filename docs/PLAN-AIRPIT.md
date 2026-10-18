@@ -269,8 +269,8 @@ fails: `TH_Roll_door_01/02/03_closed` (-43.3,-43.5; -36.8,-26.8; -44.0,-10.1), `
 the TeamFight bound; `MapBorderRepairs` removes layer-29 objects by default and the bake excludes layer 29);
 `SPAWN_BOUND_FIGHTER` (disabled by `SpawnPlacementRepairs`, bake excludes the `SPAWN_BOUND` prefix); the 20
 `NavMeshModifier ignoreFromBuild` spawn markers.
-**Effort.** L (Unity iterations). **Rebuild.** Yes. **Host test.** Log `[ArenaMapPort][RaidFix] spawn openings:`
-shows the barriers deactivated and every player-spawn ray clear; `[ArenaMapPort][NavMesh] added navmesh ... N
+**Effort.** L (Unity iterations). **Rebuild.** Yes. **Host test.** Log `[RaidFix] spawn openings:`
+shows the barriers deactivated and every player-spawn ray clear; `[NavMesh] added navmesh ... N
 vertices` identifies the live bake after an EFT restart; `uibridge_teleport dryRun=true` from both spawn strips to
 the capture point and to all 19 Arena core points and 38 patrol points must be `reachable=true`; walk north spawn
 -> portal and south spawn -> bus -> apron once each.
@@ -376,7 +376,7 @@ ordinary PMC selection flow and confirm click points with `uibridge_snapshot`; u
 checks. Record: spawn placement, openings log, NavMesh vertex count, dryRun reachability, one screenshot each at
 north spawn, hall centre, south apron, a magenta census, F7/F8 baselines. Evidence goes into
 `docs/progress/airpit-first-raid.md` (append-only, timestamps, build id, log quotes).
-**Effort.** M. **Done when.** Raid starts; both spawn strips reach the capture point; no `[ArenaMapPort]` errors;
+**Effort.** M. **Done when.** Raid starts; both spawn strips reach the capture point; no `maschine-ArenaMapPort` errors;
 a defect list for items 8, 10, 11, 18 exists.
 
 ### Phase C - Native features in Equator/Bay5 order
@@ -403,7 +403,7 @@ code layers cannot keep their equator/bay5 booleans:
   new `Audio (arena_airpit)` section so no migration issue.
 - Also check the Equator problem class: in `native-audio.json` count players with `volume < deltaVolume` (the
   downward-only random draw can silence quiet sources, fixed on the other maps by `AmbientGainDb`).
-**Host test.** `[ArenaMapPort][NativeAudio]` shows 26 players / 2 groups adjusted; walk between hall, apron and
+**Host test.** `[NativeAudio]` shows 26 players / 2 groups adjusted; walk between hall, apron and
 passport hall and confirm both groups audible. **Done when.** Contract validates audio (not null); audio audible in
 both zones; Equator/Bay5 audio unchanged on a smoke raid.
 

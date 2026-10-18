@@ -593,7 +593,7 @@ public sealed class RoomShotAcousticsModelTests
 
     // Bowl's spatial-audio graph (work/extract/spatial-audio/arena_bowl: 14 rooms, 11 of them in the active group). Sizes are
     // the full AABB sizes in metres (twice the bounds extents). RoomId is the runtime ISpatialAudioRoom.ID (the graph's
-    // room_id), which the "[ArenaMapPort][ShotAcoustics] arena_bowl: room=<id>/<type>" line prints; GraphId is the graph's own
+    // room_id), which the "[ShotAcoustics] arena_bowl: room=<id>/<type>" line prints; GraphId is the graph's own
     // room id (what the group's room_ids, RoomReverb and the census use). Path is below SpatialAudioSystem/.
     static readonly (int RoomId, int GraphId, string Path, int Type, bool Outdoor, float W, float H, float D, RoomShotClass Class)[] BowlActiveRooms =
     {

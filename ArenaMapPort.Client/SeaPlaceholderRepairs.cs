@@ -107,7 +107,7 @@ namespace ArenaMapPort.Client
             if (_enabled == null || !_enabled.Value)
             {
                 LastResult = "disabled (config)";
-                Plugin.Log.LogDebug("[ArenaMapPort][Sea] EnableWaterPlaceholder=false — skipped");
+                Plugin.Log.LogDebug("[Sea] EnableWaterPlaceholder=false — skipped");
                 return;
             }
 
@@ -115,7 +115,7 @@ namespace ArenaMapPort.Client
             if (waterLayer < 0)
             {
                 LastResult = "skipped (no 'Water' layer)";
-                Plugin.Log.LogWarning("[ArenaMapPort][Sea] LayerMask.NameToLayer(\"Water\") returned -1 — " +
+                Plugin.Log.LogWarning("[Sea] LayerMask.NameToLayer(\"Water\") returned -1 — " +
                                        "this build has no 'Water' layer, skipping (should not happen, it's " +
                                        "one of Unity's built-in layers 0-7)");
                 return;
@@ -151,7 +151,7 @@ namespace ArenaMapPort.Client
                             renderer.enabled = false;
                         }
                         applied++;
-                        Plugin.Log.LogDebug($"[ArenaMapPort][Sea] '{renderer.gameObject.name}' (scene='{scene.name}') — " +
+                        Plugin.Log.LogDebug($"[Sea] '{renderer.gameObject.name}' (scene='{scene.name}') — " +
                                            $"{(placeholder != null ? "assigned placeholder water material" : "no placeholder shader found, disabled renderer")}");
                     }
                 }
@@ -160,7 +160,7 @@ namespace ArenaMapPort.Client
             LastResult = applied > 0
                 ? $"{(_placeholderMaterial != null ? "applied" : "disabled")} {applied}x"
                 : "none found";
-            Plugin.Log.LogDebug($"[ArenaMapPort][Sea] pass complete — {applied} empty-material 'Water'-layer " +
+            Plugin.Log.LogDebug($"[Sea] pass complete — {applied} empty-material 'Water'-layer " +
                                 "renderer(s) handled — daytime-and-visuals F6");
         }
 
@@ -175,7 +175,7 @@ namespace ArenaMapPort.Client
             var shader = Shader.Find(PlaceholderShaderName);
             if (shader == null)
             {
-                Plugin.Log.LogWarning($"[ArenaMapPort][Sea] Shader.Find(\"{PlaceholderShaderName}\") returned " +
+                Plugin.Log.LogWarning($"[Sea] Shader.Find(\"{PlaceholderShaderName}\") returned " +
                                        "null — falling back to disabling the renderer instead");
                 material = null;
                 return false;

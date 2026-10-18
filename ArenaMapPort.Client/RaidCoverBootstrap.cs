@@ -45,7 +45,7 @@ namespace ArenaMapPort.Client
             _host = new GameObject("ArenaMapPort_RaidCoverBootstrap") { hideFlags = HideFlags.HideAndDontSave };
             UnityEngine.Object.DontDestroyOnLoad(_host);
             _host.AddComponent<Runner>().StartCoroutine(Run(raid));
-            Plugin.Log.LogDebug($"[ArenaMapPort][RaidCover] map={map.Key} scheduled from Scripts scene; waiting for raid and camera readiness.");
+            Plugin.Log.LogDebug($"[RaidCover] map={map.Key} scheduled from Scripts scene; waiting for raid and camera readiness.");
         }
 
         static bool IsCurrent(Raid raid) => _raid == raid && ArenaMapRaid.CurrentMap == raid.Map
@@ -70,7 +70,7 @@ namespace ArenaMapPort.Client
             if (!IsCurrent(raid)) yield break;
             if (!ready)
             {
-                Plugin.Log.LogError($"[ArenaMapPort][RaidCover] map={raid.Map.Key} timed out waiting for raid/camera readiness; no classification performed.");
+                Plugin.Log.LogError($"[RaidCover] map={raid.Map.Key} timed out waiting for raid/camera readiness; no classification performed.");
                 yield break;
             }
             yield return new WaitForSeconds(3f);
@@ -83,17 +83,17 @@ namespace ArenaMapPort.Client
                     try { prepared = IndoorFloorSmoothnessRepairs.InitializeForCurrentRaid(raid.Map); }
                     catch (Exception error)
                     {
-                        Plugin.Log.LogError($"[ArenaMapPort][RaidCover] map={raid.Map.Key} initialization failed: {error}");
+                        Plugin.Log.LogError($"[RaidCover] map={raid.Map.Key} initialization failed: {error}");
                     }
                     if (prepared)
                     {
-                        Plugin.Log.LogDebug($"[ArenaMapPort][RaidCover] map={raid.Map.Key} automatic post-start cover/classification complete.");
+                        Plugin.Log.LogDebug($"[RaidCover] map={raid.Map.Key} automatic post-start cover/classification complete.");
                         yield break;
                     }
                 }
                 yield return new WaitForSeconds(1f);
             }
-            if (IsCurrent(raid)) Plugin.Log.LogError($"[ArenaMapPort][RaidCover] map={raid.Map.Key} could not initialize cover after camera readiness; retries exhausted.");
+            if (IsCurrent(raid)) Plugin.Log.LogError($"[RaidCover] map={raid.Map.Key} could not initialize cover after camera readiness; retries exhausted.");
         }
 
         static void OnSceneUnloaded(Scene scene)

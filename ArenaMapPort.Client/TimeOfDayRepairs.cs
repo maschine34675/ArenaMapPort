@@ -109,14 +109,14 @@ namespace ArenaMapPort.Client
                 new ConfigDescription("Internal migration marker for fixed menu choices.", null, BrowsableAttribute.No));
             if (revision.Value < 1)
             {
-                Plugin.Log.LogDebug("[ArenaMapPort][TimeOfDay] Fixed selection migration 1: Equator now starts at " +
+                Plugin.Log.LogDebug("[TimeOfDay] Fixed selection migration 1: Equator now starts at " +
                     "the selected 12:00/00:00. Legacy Enabled/ArenaFixedHour remain saved for other maps; " +
                     "no lighting values changed.");
                 revision.Value = 1;
             }
             if (revision.Value < 2)
             {
-                Plugin.Log.LogDebug("[ArenaMapPort][TimeOfDay] Time selection policy: Equator uses 12:00/00:00; " +
+                Plugin.Log.LogDebug("[TimeOfDay] Time selection policy: Equator uses 12:00/00:00; " +
                     "Bay5, AirPit and Bowl follow their selected server time. Legacy Enabled/ArenaFixedHour remain saved for other maps; " +
                     "no lighting values changed.");
                 revision.Value = 2;
@@ -126,7 +126,7 @@ namespace ArenaMapPort.Client
                 if (ArenaMapRaid.MapForScriptsScene(scene.name) != null) ActiveFixedHour = null;
             };
             if (SelectedDateTimeField == null)
-                Plugin.Log.LogError("[ArenaMapPort][TimeOfDay] _selectedDateTime missing; fixed menu selection cannot be applied.");
+                Plugin.Log.LogError("[TimeOfDay] _selectedDateTime missing; fixed menu selection cannot be applied.");
 
             // Review fix-up (daytime-and-visuals, 2026-09-17): ResolverField/BackendDateTimeField are
             // resolved by THIS class's own AccessTools.Field calls (above), independent of
@@ -140,7 +140,7 @@ namespace ArenaMapPort.Client
                     ? "_specialTimeResolver and _backendDateTime"
                     : ResolverField == null ? "_specialTimeResolver" : "_backendDateTime";
                 Plugin.Log.LogError(
-                    $"[ArenaMapPort][Harmony] target not found: EFT.BaseLocalGame<EFT.EftGamePlayerOwner>." +
+                    $"[Harmony] target not found: EFT.BaseLocalGame<EFT.EftGamePlayerOwner>." +
                     $"{missing} — TimeOfDayRepairs (daytime-and-visuals F1) is DISABLED for this session: " +
                     "arena_* raids fall back to InitWeather's own random/night-prone time selection. The " +
                     "decompiled evidence this field lookup relies on no longer matches the running game " +
@@ -175,7 +175,7 @@ namespace ArenaMapPort.Client
                 // settings it was called with (Apply may have written the ref struct before it threw).
                 timeAndWeather = original;
                 ActiveFixedHour = null;
-                Plugin.Log.LogError("[ArenaMapPort][TimeOfDay] InitWeather prefix failed for " +
+                Plugin.Log.LogError("[TimeOfDay] InitWeather prefix failed for " +
                     $"{game.GetType().Name}; native weather initialization continues with the original settings: {e}");
             }
         }
@@ -198,7 +198,7 @@ namespace ArenaMapPort.Client
                 // These are per-raid arguments only; never rewrite saved user configuration.
                 timeAndWeather.IsRandomTime = false;
                 timeAndWeather.IsRandomWeather = false;
-                Plugin.Log.LogDebug($"[ArenaMapPort][TimeOfDay] {location.Id}: native server time and weather; " +
+                Plugin.Log.LogDebug($"[TimeOfDay] {location.Id}: native server time and weather; " +
                     "legacy fixed-hour override bypassed, native weather initialization retained.");
                 return;
             }
@@ -227,7 +227,7 @@ namespace ArenaMapPort.Client
                 (selected == EDateTime.PAST ? fixedMap.FixedNightHour.Value : fixedMap.FixedDayHour.Value);
             resolver[location.Id] = backendDateTime.Calculate().Date.AddHours(hour);
             ActiveFixedHour = hour;
-            Plugin.Log.LogDebug($"[ArenaMapPort][TimeOfDay] {location.Id}: selected={selected} " +
+            Plugin.Log.LogDebug($"[TimeOfDay] {location.Id}: selected={selected} " +
                 $"start={hour:00}:00 fixedMenu={fixedMap != null}; native weather initialization retained.");
         }
     }

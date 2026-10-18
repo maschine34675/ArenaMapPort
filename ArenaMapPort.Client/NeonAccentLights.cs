@@ -16,7 +16,7 @@ namespace ArenaMapPort.Client
     /// </summary>
     internal sealed class NeonAccentLights : IDisposable
     {
-        const string Tag = "[ArenaMapPort][NightAccents]";
+        const string Tag = "[NightAccents]";
         const float Scale = 1.886f, FloorY = .03087f, DefaultStrength = 1.6f;
         static ConfigEntry<float> _strength;
         static readonly Color[] Colors = {

@@ -158,7 +158,7 @@ namespace ArenaMapPort.Client
             }
             catch (Exception e)
             {
-                Plugin.Log.LogWarning($"[ArenaMapPort][Camera] CameraManager.Instance.Camera threw: " +
+                Plugin.Log.LogWarning($"[Camera] CameraManager.Instance.Camera threw: " +
                                        $"{e.GetType().Name}: {e.Message}");
             }
             if (cam == null)
@@ -192,7 +192,7 @@ namespace ArenaMapPort.Client
                 // the two paths apart.
                 string source = WeatherRig.UseDonorCameraPrefabForCurrentMap() && WeatherRig.ActiveRig?.CameraPrefab != null
                     ? "donor" : "fallback (already fixed for this camera)";
-                Plugin.Log.LogDebug($"[ArenaMapPort][Camera] PrismEffects.useExposure already true on '{cam.name}' " +
+                Plugin.Log.LogDebug($"[Camera] PrismEffects.useExposure already true on '{cam.name}' " +
                                    $"(middleGrey={prism.exposureMiddleGrey:0.000} lower={prism.exposureLowerLimit:0.0} " +
                                    $"upper={prism.exposureUpperLimit:0.0}) — source={source}, no changes made");
                 return; // already on (real camera prefab, or this fix already ran for this camera)
@@ -202,7 +202,7 @@ namespace ArenaMapPort.Client
             prism.exposureMiddleGrey = _exposureMiddleGrey.Value;
             prism.exposureLowerLimit = _exposureLowerLimit.Value;
             prism.exposureUpperLimit = _exposureUpperLimit.Value;
-            Plugin.Log.LogDebug($"[ArenaMapPort][Camera] enabled PrismEffects.useExposure on '{cam.name}' " +
+            Plugin.Log.LogDebug($"[Camera] enabled PrismEffects.useExposure on '{cam.name}' " +
                                $"(middleGrey={prism.exposureMiddleGrey:0.000} lower={prism.exposureLowerLimit:0.0} " +
                                $"upper={prism.exposureUpperLimit:0.0}) — daytime-and-visuals F2, source=fallback (added)");
         }
@@ -235,7 +235,7 @@ namespace ArenaMapPort.Client
                 // logged here so that verification is visible in a real playtest's log, not just this
                 // comment.
                 UnityEngine.Object.Destroy(todCamera);
-                Plugin.Log.LogDebug($"[ArenaMapPort][Camera] destroyed stray TOD_Camera on '{cam.name}' " +
+                Plugin.Log.LogDebug($"[Camera] destroyed stray TOD_Camera on '{cam.name}' " +
                                    "(donor camera never carries one — should only fire on the Cam2 fallback path)");
             }
 
@@ -250,7 +250,7 @@ namespace ArenaMapPort.Client
                 scattering.Sky = sky;
                 if (added)
                 {
-                    Plugin.Log.LogDebug($"[ArenaMapPort][Camera] added TOD_Scattering to '{cam.name}' " +
+                    Plugin.Log.LogDebug($"[Camera] added TOD_Scattering to '{cam.name}' " +
                                        "(FromLevelSettings=true), wired to the active rig's TOD_Sky — " +
                                        "daytime-and-visuals F3, source=fallback (added)");
                 }
@@ -260,7 +260,7 @@ namespace ArenaMapPort.Client
                     // enabled with its own tuned FromLevelSettings/GlobalDensity/etc fields; skip the add
                     // entirely and leave those baked values untouched, just re-point Sky at this raid's
                     // rig (harmless even on a second activation of the same camera).
-                    Plugin.Log.LogDebug($"[ArenaMapPort][Camera] TOD_Scattering already present on '{cam.name}' " +
+                    Plugin.Log.LogDebug($"[Camera] TOD_Scattering already present on '{cam.name}' " +
                                        "— daytime-and-visuals F3, source=donor (already present, no changes made)");
                 }
             }
@@ -284,7 +284,7 @@ namespace ArenaMapPort.Client
                 if (_volumetricRendererLoggedCamera != cam)
                 {
                     _volumetricRendererLoggedCamera = cam;
-                    Plugin.Log.LogDebug($"[ArenaMapPort][Camera] VolumetricLightRenderer already present on '{cam.name}' — no changes made");
+                    Plugin.Log.LogDebug($"[Camera] VolumetricLightRenderer already present on '{cam.name}' — no changes made");
                 }
                 return;
             }
@@ -292,14 +292,14 @@ namespace ArenaMapPort.Client
             try
             {
                 cam.gameObject.AddComponent<VolumetricLightRenderer>();
-                Plugin.Log.LogDebug($"[ArenaMapPort][Camera] added VolumetricLightRenderer to '{cam.name}' " +
+                Plugin.Log.LogDebug($"[Camera] added VolumetricLightRenderer to '{cam.name}' " +
                                     "so this map's VolumetricLight components (light-shaft/god-ray cones) render " +
                                     "— self-destroys next frame if the player's Graphics > Volumetric Light " +
                                     "setting is off, same as a vanilla camera prefab.");
             }
             catch (Exception e)
             {
-                Plugin.Log.LogWarning($"[ArenaMapPort][Camera] AddComponent<VolumetricLightRenderer> on " +
+                Plugin.Log.LogWarning($"[Camera] AddComponent<VolumetricLightRenderer> on " +
                                        $"'{cam.name}' threw: {e.GetType().Name}: {e.Message} — volumetric light " +
                                        "cones stay unrendered on this camera, everything else in this plugin " +
                                        "keeps working.");

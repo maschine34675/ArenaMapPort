@@ -386,7 +386,7 @@ namespace ArenaMapPort.Client
             if (logSummary)
             {
                 Plugin.Log.LogDebug(
-                    $"[ArenaMapPort][Lighting] {map.Key} applied (Enabled={on}): LevelSettings-found={levelSettingsFound} " +
+                    $"[Lighting] {map.Key} applied (Enabled={on}): LevelSettings-found={levelSettingsFound} " +
                     $"(ambientColorMultiplier={EquatorProfiles.Value(cfg.AmbientColorMultiplier):0.00}), {lightsApplied} light(s) " +
                     $"(globalMultiplier={EquatorProfiles.Value(cfg.GlobalLightIntensityMultiplier):0.00}, " +
                     $"sunMultiplier={cfg.SunIntensity:0.00}, sunWhiteBlend={cfg.SunWhiteBlend:0.00}), " +
@@ -510,7 +510,7 @@ namespace ArenaMapPort.Client
             RenderSettings.ambientEquatorColor = fallback;
             RenderSettings.ambientGroundColor = fallback;
             ApplyFog(fogDensity, ownFogColor);
-            Plugin.Log.LogWarning("[ArenaMapPort][Lighting] LevelSettings singleton not found at apply time — " +
+            Plugin.Log.LogWarning("[Lighting] LevelSettings singleton not found at apply time — " +
                                    "wrote RenderSettings ambient directly as a fallback (should not happen; the " +
                                    "component is authored in AuthorScriptsScene.cs and was confirmed present in " +
                                    "the shipped bundle — see docs/progress/fix-lighting-movement.md).");
@@ -610,7 +610,7 @@ namespace ArenaMapPort.Client
                     ? cfg.SunIntensity : EquatorProfiles.Value(cfg.GlobalLightIntensityMultiplier);
                 float target = baseline.Intensity * multiplier * factor;
                 ApplyArtificialSun(baseline, target);
-                Plugin.Log.LogDebug($"[ArenaMapPort][NightSun] {map.Key}/{baseline.Light.name}: " +
+                Plugin.Log.LogDebug($"[NightSun] {map.Key}/{baseline.Light.name}: " +
                     $"factor={factor:0.000} target={target:0.000} live={baseline.Light.intensity:0.000} " +
                     $"startHour={TimeOfDayRepairs.ActiveFixedHour}");
             }
@@ -658,7 +658,7 @@ namespace ArenaMapPort.Client
                 BindingFlags.NonPublic | BindingFlags.Instance);
             if (_cullingLightFloat1Field == null)
             {
-                Plugin.Log.LogWarning("[ArenaMapPort][Lighting] CullingLightObject.float_1 field not found via " +
+                Plugin.Log.LogWarning("[Lighting] CullingLightObject.float_1 field not found via " +
                                        "reflection (renamed/removed?) — SyncCullingLightIntensity will not run " +
                                        "this raid; every other lighting repair keeps applying.");
             }

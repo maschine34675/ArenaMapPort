@@ -28,7 +28,7 @@ namespace ArenaMapPort.Client
             {
                 return;
             }
-            Plugin.Log.LogDebug($"[ArenaMapPort][Scene] loaded '{scene.name}' (mode={mode})");
+            Plugin.Log.LogDebug($"[Scene] loaded '{scene.name}' (mode={mode})");
         }
 
         static void OnSceneUnloaded(Scene scene)
@@ -37,7 +37,7 @@ namespace ArenaMapPort.Client
             {
                 return;
             }
-            Plugin.Log.LogDebug($"[ArenaMapPort][Scene] unloaded '{scene.name}'");
+            Plugin.Log.LogDebug($"[Scene] unloaded '{scene.name}'");
         }
     }
 }

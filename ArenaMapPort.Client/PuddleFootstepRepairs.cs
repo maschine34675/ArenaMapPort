@@ -17,7 +17,7 @@ namespace ArenaMapPort.Client
     /// </summary>
     internal static class PuddleFootstepRepairs
     {
-        const string Tag = "[ArenaMapPort][PuddleFootsteps] ";
+        const string Tag = "[PuddleFootsteps] ";
         const string ShaderName = "Decal/Water Deferred Decal";
         internal const float MinimumCoverage = 0.1f;
         internal const float MaximumFootPlaneDistance = 0.16f;

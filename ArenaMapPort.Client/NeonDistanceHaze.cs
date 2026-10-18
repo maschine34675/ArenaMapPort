@@ -13,7 +13,7 @@ namespace ArenaMapPort.Client
     /// </summary>
     internal sealed class NeonDistanceHaze : IDisposable
     {
-        const string Tag = "[ArenaMapPort][NightHaze]";
+        const string Tag = "[NightHaze]";
         static readonly Type FogType = AccessTools.TypeByName("UnityStandardAssets.ImageEffects.GlobalFog");
         static readonly FieldInfo MaterialField = FogType == null ? null : AccessTools.Field(FogType, "fogMaterial");
         static readonly int FogColorId = Shader.PropertyToID("unity_FogColor");

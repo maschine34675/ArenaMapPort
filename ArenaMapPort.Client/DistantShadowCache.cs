@@ -32,7 +32,7 @@ namespace ArenaMapPort.Client
                 if (!_layoutWarning)
                 {
                     _layoutWarning = true;
-                    Plugin.Log.LogWarning("[ArenaMapPort][DistantShadowCache] Unsupported native cache layout; " +
+                    Plugin.Log.LogWarning("[DistantShadowCache] Unsupported native cache layout; " +
                         "could not invalidate shadow references after a live renderer change.");
                 }
                 return;
@@ -57,12 +57,12 @@ namespace ArenaMapPort.Client
                 }
                 catch (Exception e)
                 {
-                    Plugin.Log.LogWarning($"[ArenaMapPort][DistantShadowCache] map={map.Key} {reason}: " +
+                    Plugin.Log.LogWarning($"[DistantShadowCache] map={map.Key} {reason}: " +
                         $"{e.GetType().Name}: {e.Message}");
                 }
             }
             if (reset != 0)
-                Plugin.Log.LogDebug($"[ArenaMapPort][DistantShadowCache] map={map.Key} {reason}: " +
+                Plugin.Log.LogDebug($"[DistantShadowCache] map={map.Key} {reason}: " +
                     $"invalidated={reset}; native shadow cache rebuild queued.");
         }
     }

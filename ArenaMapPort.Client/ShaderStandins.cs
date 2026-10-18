@@ -31,7 +31,7 @@ namespace ArenaMapPort.Client
     /// AirPitShaderStandins back to false after a raid that rebound the materials needs an EFT restart; the
     /// StandIn / Hidden choice works in both directions within one process (Hidden recognises the already
     /// rebound fog-sheet materials by instance id, StandIn rebinds the ones Hidden left alone).
-    /// Host test: docs/progress/airpit-release.md item 11 checklist (log lines <c>[ArenaMapPort][RebindShaders]</c>).
+    /// Host test: docs/progress/airpit-release.md item 11 checklist (log lines <c>[RebindShaders]</c>).
     ///
     /// 2026-10-12 host finding (raid 7): EFT 0.16.9.5 itself carries the three Arena shaders inside Customs'
     /// scene shared assets (<c>sharedassets13</c> fog sheet, <c>sharedassets5</c> both cloth variants,
@@ -210,7 +210,7 @@ namespace ArenaMapPort.Client
                       $"peak alpha={ShaderStandinPolicy.FogSheetPeakAlpha(captured.FogColor.a, captured.FogOpacityIntensity, UserOpacity()):0.000}";
             }
 
-            Plugin.Log.LogDebug($"[ArenaMapPort][RebindShaders] {map.Key}: '{material.name}' ({originalName}) -> " +
+            Plugin.Log.LogDebug($"[RebindShaders] {map.Key}: '{material.name}' ({originalName}) -> " +
                                 $"'{material.shader.name}': {textures} texture slot(s) copied, {floats} float override(s){fog}");
         }
 
@@ -282,7 +282,7 @@ namespace ArenaMapPort.Client
             PurgeDeadFog();
             float opacity = UserOpacity();
             foreach (var entry in Fog.Values) FillFogTexture(entry, opacity);
-            Plugin.Log.LogDebug($"[ArenaMapPort][RebindShaders] fog-sheet opacity {opacity:0.00}: {Fog.Count} generated texture(s) refreshed");
+            Plugin.Log.LogDebug($"[RebindShaders] fog-sheet opacity {opacity:0.00}: {Fog.Count} generated texture(s) refreshed");
         }
     }
 }

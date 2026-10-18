@@ -26,7 +26,7 @@ namespace ArenaMapPort.Client
     /// </summary>
     internal static class BallisticTwinRepairs
     {
-        const string Tag = "[ArenaMapPort][RaidFix]";
+        const string Tag = "[RaidFix]";
         const string TwinSuffix = "_BALLISTIC_twin";
         static ConfigEntry<bool> _enabled;
 

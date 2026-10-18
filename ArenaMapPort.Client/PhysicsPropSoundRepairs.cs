@@ -26,7 +26,7 @@ namespace ArenaMapPort.Client
     /// </summary>
     internal static class PhysicsPropSoundRepairs
     {
-        const string Tag = "[ArenaMapPort][Physics]";
+        const string Tag = "[Physics]";
         static readonly HashSet<int> _reported = new HashSet<int>();
 
         internal static void Install(Harmony harmony)
@@ -38,7 +38,7 @@ namespace ArenaMapPort.Client
             }
             var prefix = AccessTools.Method(typeof(PhysicsPropSoundRepairs), nameof(OnCollisionHandlerPrefix));
             harmony.Patch(target, prefix: new HarmonyMethod(prefix));
-            Plugin.Log.LogDebug("[ArenaMapPort][Harmony] patched SmallPhysicsObject.OnCollisionHandler (null impact SoundBank guard)");
+            Plugin.Log.LogDebug("[Harmony] patched SmallPhysicsObject.OnCollisionHandler (null impact SoundBank guard)");
         }
 
         /// <summary>Harmony prefix: <c>___</c> parameters bind the private/protected fields by name.</summary>

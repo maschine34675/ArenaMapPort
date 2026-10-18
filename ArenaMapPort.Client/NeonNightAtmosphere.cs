@@ -23,7 +23,7 @@ namespace ArenaMapPort.Client
     /// </summary>
     internal sealed class NeonNightAtmosphere : IDisposable
     {
-        const string Tag = "[ArenaMapPort][NightAtmosphere]";
+        const string Tag = "[NightAtmosphere]";
         static ConfigEntry<float> _haze, _smoke;
         readonly GameObject _root;
         readonly IList<Light> _lights;

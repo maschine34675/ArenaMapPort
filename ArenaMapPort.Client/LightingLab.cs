@@ -483,7 +483,7 @@ namespace ArenaMapPort.Client
                 _scanHost = null;
             }
 
-            Plugin.Log.LogDebug($"[ArenaMapPort][LightingLab] {map.Key}: raid ended — restored SSRFactor=1.00, " +
+            Plugin.Log.LogDebug($"[LightingLab] {map.Key}: raid ended — restored SSRFactor=1.00, " +
                 "WaterLevel=0.00, sun-intensity baseline (if captured), reflection-intensity baseline (if " +
                 $"captured), {restoredCount} ground material(s).");
 
@@ -503,7 +503,7 @@ namespace ArenaMapPort.Client
             var ls = Singleton<LevelSettings>.Instantiated ? Singleton<LevelSettings>.Instance : null;
             if (ls == null)
             {
-                Plugin.Log.LogWarning($"[ArenaMapPort][LightingLab] {map.Key}: LevelSettings singleton not " +
+                Plugin.Log.LogWarning($"[LightingLab] {map.Key}: LevelSettings singleton not " +
                     "found at A-apply time — skipped (should not happen; AuthorScriptsScene.cs authors one " +
                     "in every owned scene).");
                 return;
@@ -587,7 +587,7 @@ namespace ArenaMapPort.Client
             DynamicGI.UpdateEnvironment();
             state.AmbientOverrideApplied = preset != AmbientPreset.Off;
 
-            Plugin.Log.LogDebug($"[ArenaMapPort][LightingLab] A: applied preset={preset} SkyColor={ls.SkyColor} " +
+            Plugin.Log.LogDebug($"[LightingLab] A: applied preset={preset} SkyColor={ls.SkyColor} " +
                 $"EquatorColor={ls.EquatorColor} GroundColor={ls.GroundColor} " +
                 $"AmbientIntensity={ls.AmbientIntensity:0.00} (map={map.Key})");
         }
@@ -628,7 +628,7 @@ namespace ArenaMapPort.Client
                 state.GreyCube = BuildSolidCubemap(new Color(0.5f, 0.5f, 0.5f, 1f));
             }
 
-            Plugin.Log.LogDebug($"[ArenaMapPort][LightingLab] B: reflection override preset={preset} " +
+            Plugin.Log.LogDebug($"[LightingLab] B: reflection override preset={preset} " +
                 $"ambientFound={ambient != null} (map={map.Key})");
         }
 
@@ -706,7 +706,7 @@ namespace ArenaMapPort.Client
                 return; // already at target — steady-state no-op, no log spam
             }
             Shader.SetGlobalFloat(_ssrFactorId, value);
-            Plugin.Log.LogDebug($"[ArenaMapPort][LightingLab] C: SSRFactor override={value:0.00} " +
+            Plugin.Log.LogDebug($"[LightingLab] C: SSRFactor override={value:0.00} " +
                 $"(was {before:0.00}, map={map.Key})");
         }
 
@@ -719,7 +719,7 @@ namespace ArenaMapPort.Client
             string waterLevel = EquatorProfiles.Value(cfg.WaterLevelOverrideEnabled)
                 ? EquatorProfiles.Value(cfg.WaterLevelOverrideValue).ToString("0.00")
                 : "off";
-            Plugin.Log.LogDebug($"[ArenaMapPort][LightingLab] D: WaterLevel override={waterLevel} " +
+            Plugin.Log.LogDebug($"[LightingLab] D: WaterLevel override={waterLevel} " +
                 $"RainOff={EquatorProfiles.Value(cfg.RainOff)} (map={map.Key})");
         }
 
@@ -778,7 +778,7 @@ namespace ArenaMapPort.Client
                 }
                 catch (Exception e)
                 {
-                    Plugin.Log.LogError($"[ArenaMapPort][LightingLab] E: ground-material scan threw: {e}");
+                    Plugin.Log.LogError($"[LightingLab] E: ground-material scan threw: {e}");
                 }
             }
         }
@@ -860,11 +860,11 @@ namespace ArenaMapPort.Client
                 }
             }
 
-            Plugin.Log.LogDebug($"[ArenaMapPort][LightingLab] E: scanned {renderersScanned} renderer(s), " +
+            Plugin.Log.LogDebug($"[LightingLab] E: scanned {renderersScanned} renderer(s), " +
                 $"{materialsMatched} unique material(s) matched, multiplier={multiplier:0.00} (map={map.Key})");
             if (materialsMatched == 0)
             {
-                Plugin.Log.LogWarning("[ArenaMapPort][LightingLab] E: 0 material(s) matched — the renderer-" +
+                Plugin.Log.LogWarning("[LightingLab] E: 0 material(s) matched — the renderer-" +
                     "name filter ('floor'/'ground'/'asphalt') may need a hierarchy-path fallback (e.g. also " +
                     "checking the PARENT object's name) for this map's actual naming convention; the F10 " +
                     "SceneInspector hotkey (aim at the ground, press F10) shows the real renderer/material " +
@@ -969,7 +969,7 @@ namespace ArenaMapPort.Client
                 }
                 ApplyGroundSmoothness(entry.Material, entry.Props, multiplier);
             }
-            Plugin.Log.LogDebug($"[ArenaMapPort][LightingLab] E: multiplier={multiplier:0.00} reapplied live " +
+            Plugin.Log.LogDebug($"[LightingLab] E: multiplier={multiplier:0.00} reapplied live " +
                 $"to {state.GroundMaterials.Count} cached material(s) (map={map.Key})");
         }
 
@@ -1005,7 +1005,7 @@ namespace ArenaMapPort.Client
             sky.Day.LightIntensity = newDay;
             sky.Night.LightIntensity = newNight;
 
-            Plugin.Log.LogDebug($"[ArenaMapPort][LightingLab] F: SunIntensityMultiplier={multiplier:0.00} " +
+            Plugin.Log.LogDebug($"[LightingLab] F: SunIntensityMultiplier={multiplier:0.00} " +
                 $"Day.LightIntensity {oldDay:0.00} -> {newDay:0.00} Night.LightIntensity {oldNight:0.00} -> " +
                 $"{newNight:0.00} (map={map.Key})");
         }
@@ -1027,7 +1027,7 @@ namespace ArenaMapPort.Client
                 }
                 catch (Exception ex)
                 {
-                    Plugin.Log.LogWarning($"[ArenaMapPort][LightingLab] snapshot Update threw: {ex}");
+                    Plugin.Log.LogWarning($"[LightingLab] snapshot Update threw: {ex}");
                 }
             }
         }
@@ -1049,7 +1049,7 @@ namespace ArenaMapPort.Client
                     : "pos=n/a fwd=n/a (no active camera)";
 
                 var sb = new StringBuilder();
-                sb.AppendLine($"[ArenaMapPort][LightingLab][Snapshot] ==== {map.Key} ====");
+                sb.AppendLine($"[LightingLab][Snapshot] ==== {map.Key} ====");
                 sb.AppendLine($"  camera: {camInfo}");
                 sb.AppendLine($"  A UnityAmbient: preset={EquatorProfiles.Value(cfg.AmbientPresetEntry)} " +
                     $"customColor={EquatorProfiles.Value(cfg.AmbientCustomColor)}");
@@ -1105,7 +1105,7 @@ namespace ArenaMapPort.Client
             }
             catch (Exception ex)
             {
-                Plugin.Log.LogError($"[ArenaMapPort][LightingLab] RunSnapshot threw: {ex}");
+                Plugin.Log.LogError($"[LightingLab] RunSnapshot threw: {ex}");
             }
         }
 

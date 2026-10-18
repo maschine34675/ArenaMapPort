@@ -61,7 +61,7 @@ namespace ArenaMapPort.Client
                 || volume == null || volume.width <= 0 || volume.height <= 0 || volume.depth <= 0
                 || owner.GetComponent<LocalDustParticlesParent>() != null)
             {
-                Plugin.Log.LogWarning($"[ArenaMapPort][Dust] map={map.Key} '{dust.Scene}/{dust.Path}' skipped: " +
+                Plugin.Log.LogWarning($"[Dust] map={map.Key} '{dust.Scene}/{dust.Path}' skipped: " +
                     "requires active source renderer, generated mesh, native shader and Texture3D; old bundles remain unchanged");
                 return;
             }
@@ -93,7 +93,7 @@ namespace ArenaMapPort.Client
                 owner.SetActive(active); // native Awake binds the owned material and keeps the imported mesh
                 if (filter.sharedMesh != entry.Mesh)
                     throw new InvalidOperationException("native initialization replaced the source mesh");
-                Plugin.Log.LogDebug($"[ArenaMapPort][Dust] map={map.Key} initialized '{dust.Scene}/{dust.Path}' " +
+                Plugin.Log.LogDebug($"[Dust] map={map.Key} initialized '{dust.Scene}/{dust.Path}' " +
                     $"native={entry.Animator.GetType().FullName} speed={dust.TimeSpeed:F3} mesh={entry.Mesh.GetInstanceID()} " +
                     $"vertices={entry.Mesh.vertexCount} volume={volume.width}x{volume.height}x{volume.depth} " +
                     $"format={volume.format} queue={entry.Owned.renderQueue} bounds={renderer.localBounds}");
@@ -103,7 +103,7 @@ namespace ArenaMapPort.Client
             {
                 if (filter != null && filter.sharedMesh != entry.Mesh) filter.sharedMesh = entry.Mesh;
                 Clear(entry, "initialization rollback");
-                Plugin.Log.LogWarning($"[ArenaMapPort][Dust] map={map.Key} initialization failed: {ex.GetType().Name}: {ex.Message}");
+                Plugin.Log.LogWarning($"[Dust] map={map.Key} initialization failed: {ex.GetType().Name}: {ex.Message}");
             }
             finally
             {
@@ -123,7 +123,7 @@ namespace ArenaMapPort.Client
             if (entry.Disposed || entry.Owned == null) yield break;
             Vector4 after = entry.Owned.GetVector(TimeId);
             bool sameMesh = entry.Filter != null && entry.Filter.sharedMesh == entry.Mesh;
-            string evidence = $"[ArenaMapPort][Dust] map={entry.Map.Key} animation frames={Time.frameCount - frame} " +
+            string evidence = $"[Dust] map={entry.Map.Key} animation frames={Time.frameCount - frame} " +
                 $"before={before:F5} after={after:F5} advancing={(after - before).sqrMagnitude > 0f} " +
                 $"meshPreserved={sameMesh} visible={entry.Renderer != null && entry.Renderer.isVisible}";
             // Developer-only animation evidence; initialization failures are reported separately.
@@ -161,7 +161,7 @@ namespace ArenaMapPort.Client
                 entry.Driver.State = null;
                 UnityEngine.Object.Destroy(entry.Driver);
             }
-            Plugin.Log.LogDebug($"[ArenaMapPort][Dust] map={entry.Map.Key} cleanup reason={reason} ownedMaterials={materialsReleased} remaining={Entries.Count}");
+            Plugin.Log.LogDebug($"[Dust] map={entry.Map.Key} cleanup reason={reason} ownedMaterials={materialsReleased} remaining={Entries.Count}");
         }
 
         static GameObject Find(Scene scene, string path)

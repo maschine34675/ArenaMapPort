@@ -56,7 +56,7 @@ namespace ArenaMapPort.Client
     /// </summary>
     public static class SpawnGates
     {
-        const string Tag = "[ArenaMapPort][SpawnGates]";
+        const string Tag = "[SpawnGates]";
         const float ProbeFirstDelay = 0.5f, ProbeSecondDelay = 2.5f, PollSeconds = 0.25f;
         const int LayerDefault = 0, LayerLowPoly = 18;
 

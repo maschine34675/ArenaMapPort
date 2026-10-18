@@ -88,7 +88,7 @@ namespace ArenaMapPort.Client
                 // Defense in depth only — KeyboardShortcut.IsDown() cannot itself throw. Keeps this
                 // Update() following the same "never throws out of a hook" contract as the rest of the
                 // plugin's per-frame/per-event code (see e.g. WeatherRig's OnSceneLoaded try/catch).
-                Plugin.Log.LogWarning($"[ArenaMapPort][Inspector] Update threw: {ex}");
+                Plugin.Log.LogWarning($"[Inspector] Update threw: {ex}");
             }
         }
 
@@ -105,7 +105,7 @@ namespace ArenaMapPort.Client
                 Camera cam = ResolveActiveCamera();
                 if (cam == null)
                 {
-                    Plugin.Log.LogDebug("[ArenaMapPort][Inspector] no active camera resolved — skipping.");
+                    Plugin.Log.LogDebug("[Inspector] no active camera resolved — skipping.");
                     return;
                 }
 
@@ -116,7 +116,7 @@ namespace ArenaMapPort.Client
                 var ray = new Ray(cam.transform.position, cam.transform.forward);
 
                 var sb = new StringBuilder();
-                sb.AppendLine("[ArenaMapPort][Inspector] ==== inspection " +
+                sb.AppendLine("[Inspector] ==== inspection " +
                     $"(camera='{cam.name}' pos={Fmt(cam.transform.position)} " +
                     $"fwd={Fmt(cam.transform.forward)} scene='{SceneManager.GetActiveScene().name}') ====");
 
@@ -180,7 +180,7 @@ namespace ArenaMapPort.Client
             }
             catch (Exception ex)
             {
-                Plugin.Log.LogError($"[ArenaMapPort][Inspector] RunInspection threw: {ex}");
+                Plugin.Log.LogError($"[Inspector] RunInspection threw: {ex}");
             }
         }
 
@@ -189,7 +189,7 @@ namespace ArenaMapPort.Client
             var parts = SplitLogPayload(dump);
             int inspection = unchecked(++_inspectionSequence);
             for (int i = 0; i < parts.Count; i++)
-                Plugin.Log.LogDebug($"[ArenaMapPort][Inspector] inspection={inspection} part={i + 1}/{parts.Count} " + parts[i]);
+                Plugin.Log.LogDebug($"[Inspector] inspection={inspection} part={i + 1}/{parts.Count} " + parts[i]);
         }
 
         // Concatenating payloads reproduces the complete input, including line endings. Prefer whole

@@ -85,14 +85,14 @@ namespace ArenaMapPort.Client
                 var triangulation = NavMesh.CalculateTriangulation();
                 int vertices = triangulation.vertices?.Length ?? 0;
                 int triangles = (triangulation.indices?.Length ?? 0) / 3;
-                Plugin.Log.LogDebug($"[ArenaMapPort][NavMesh] added navmesh for '{map.Key}': " +
+                Plugin.Log.LogDebug($"[NavMesh] added navmesh for '{map.Key}': " +
                                     $"{vertices} vertices, {triangles} triangles");
                 try { Installed?.Invoke(); }
-                catch (Exception e) { Plugin.Log.LogError($"[ArenaMapPort][NavMesh] Installed handler failed: {e}"); }
+                catch (Exception e) { Plugin.Log.LogError($"[NavMesh] Installed handler failed: {e}"); }
             }
             catch (Exception e)
             {
-                Plugin.Log.LogError($"[ArenaMapPort][NavMesh] {e.GetType().Name}: {e.Message}");
+                Plugin.Log.LogError($"[NavMesh] {e.GetType().Name}: {e.Message}");
             }
         }
 
@@ -132,7 +132,7 @@ namespace ArenaMapPort.Client
             var path = Path.Combine(Path.Combine(pluginDir, "bundles"), map.NavMeshBundleFileName);
             if (!File.Exists(path))
             {
-                Plugin.Log.LogError($"[ArenaMapPort][NavMesh] expected bundle at '{path}' but it is missing");
+                Plugin.Log.LogError($"[NavMesh] expected bundle at '{path}' but it is missing");
                 return null;
             }
 
@@ -142,7 +142,7 @@ namespace ArenaMapPort.Client
                 bundle = AssetBundle.LoadFromFile(path);
                 if (bundle == null)
                 {
-                    Plugin.Log.LogError($"[ArenaMapPort][NavMesh] AssetBundle.LoadFromFile returned null for '{path}' " +
+                    Plugin.Log.LogError($"[NavMesh] AssetBundle.LoadFromFile returned null for '{path}' " +
                                          "(wrong BuildTarget, or a corrupt/incompatible file?)");
                     return null;
                 }
@@ -152,7 +152,7 @@ namespace ArenaMapPort.Client
                 var assets = bundle.LoadAllAssets(typeof(NavMeshData));
                 if (assets == null || assets.Length == 0)
                 {
-                    Plugin.Log.LogError($"[ArenaMapPort][NavMesh] '{path}' contains no NavMeshData");
+                    Plugin.Log.LogError($"[NavMesh] '{path}' contains no NavMeshData");
                     return null;
                 }
 
@@ -163,7 +163,7 @@ namespace ArenaMapPort.Client
             }
             catch (Exception e)
             {
-                Plugin.Log.LogError($"[ArenaMapPort][NavMesh] {e.GetType().Name}: {e.Message}");
+                Plugin.Log.LogError($"[NavMesh] {e.GetType().Name}: {e.Message}");
                 return null;
             }
             finally

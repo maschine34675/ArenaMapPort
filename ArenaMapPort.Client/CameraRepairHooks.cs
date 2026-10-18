@@ -24,7 +24,7 @@ namespace ArenaMapPort.Client
             {
                 if (ArenaMapRaid.MapForScriptsScene(scene.name) != null) Release();
             };
-            Plugin.Log.LogDebug("[ArenaMapPort][Camera] patched CameraManager.SetCamera; repairs survive manager disposal");
+            Plugin.Log.LogDebug("[Camera] patched CameraManager.SetCamera; repairs survive manager disposal");
         }
 
         static void AfterSetCamera(CameraManager __instance)
@@ -33,7 +33,7 @@ namespace ArenaMapPort.Client
             if (__instance.Camera == null) return;
             // Isolate repairs: an optional native effect failure must not suppress bloom/flare.
             try { CameraEffectsRepairs.OnCameraChanged(); }
-            catch (Exception e) { Plugin.Log.LogError($"[ArenaMapPort][Camera] repair failed: {e}"); }
+            catch (Exception e) { Plugin.Log.LogError($"[Camera] repair failed: {e}"); }
             BloomTuning.ApplyToCurrentCamera("camera set");
             AnamorphicFlareTuning.ApplyToCurrentCamera("camera set");
             HdrImageTuning.OnCameraChanged();

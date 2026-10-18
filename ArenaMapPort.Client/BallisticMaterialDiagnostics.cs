@@ -28,7 +28,7 @@ namespace ArenaMapPort.Client
                 new[] { typeof(float), typeof(Vector3), typeof(Vector3) });
             if (target == null)
             {
-                Plugin.Log.LogWarning("[ArenaMapPort][MaterialHits] Shot.HandleCollision unavailable; diagnostics disabled.");
+                Plugin.Log.LogWarning("[MaterialHits] Shot.HandleCollision unavailable; diagnostics disabled.");
                 return;
             }
             harmony.Patch(target, postfix: new HarmonyMethod(typeof(BallisticMaterialDiagnostics), nameof(AfterCollision)));
@@ -43,7 +43,7 @@ namespace ArenaMapPort.Client
                 if (hit == null || !ArenaMapRaid.IsOwnedScene(hit.gameObject.scene.name)) return;
                 --_remaining;
                 var material = __instance.HittedBallisticCollider;
-                Plugin.Log.LogDebug("[ArenaMapPort][MaterialHits] scene=" + hit.gameObject.scene.name +
+                Plugin.Log.LogDebug("[MaterialHits] scene=" + hit.gameObject.scene.name +
                     " collider='" + Path(hit.transform) + "' " + Describe(material) +
                     " defaultFallback=" + ReferenceEquals(material, __instance._defaultHitBody) +
                     " forward=" + __instance.IsForwardHit + " state=" + __instance.BulletState +
@@ -51,7 +51,7 @@ namespace ArenaMapPort.Client
             }
             catch (Exception error)
             {
-                Plugin.Log.LogWarning("[ArenaMapPort][MaterialHits] inspection failed: " + error.Message);
+                Plugin.Log.LogWarning("[MaterialHits] inspection failed: " + error.Message);
             }
         }
 

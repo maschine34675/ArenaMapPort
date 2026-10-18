@@ -72,7 +72,7 @@ namespace ArenaMapPort.Client
     /// </summary>
     internal static class AICorePointFallback
     {
-        const string Tag = "[ArenaMapPort][RaidFix]";
+        const string Tag = "[RaidFix]";
         internal const string HolderName = "AICorePointHolder(ArenaFallback)";
         internal const int FallbackId = 0;
         internal const int FallbackGroup = 0;
@@ -92,7 +92,7 @@ namespace ArenaMapPort.Client
             harmony.Patch(init, prefix: new HarmonyMethod(AccessTools.Method(typeof(AICorePointFallback), nameof(InitPrefix))));
             harmony.Patch(get, prefix: new HarmonyMethod(AccessTools.Method(typeof(AICorePointFallback), nameof(GetCorePointPrefix))));
             harmony.Patch(create, postfix: new HarmonyMethod(AccessTools.Method(typeof(AICorePointFallback), nameof(CreatePostfix))));
-            Plugin.Log.LogDebug("[ArenaMapPort][Harmony] patched BotsController.Init (core-point fallback, additional prefix), " +
+            Plugin.Log.LogDebug("[Harmony] patched BotsController.Init (core-point fallback, additional prefix), " +
                                "AICorePointHolder.GetCorePoint (null-list guard), BotOwner.Create (StartCorePoint fallback) — bots-stage1");
         }
 

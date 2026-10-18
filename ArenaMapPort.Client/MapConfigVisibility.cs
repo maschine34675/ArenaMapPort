@@ -22,7 +22,7 @@ namespace ArenaMapPort.Client
         {
             if (DescriptionField == null || DescriptionField.FieldType != typeof(ConfigDescription))
             {
-                Plugin.Log.LogWarning("[ArenaMapPort][Config] Unsupported BepInEx metadata layout; option filtering unavailable.");
+                Plugin.Log.LogWarning("[Config] Unsupported BepInEx metadata layout; option filtering unavailable.");
                 return;
             }
             int visible = 0, hidden = 0;
@@ -40,7 +40,7 @@ namespace ArenaMapPort.Client
                 DescriptionField.SetValue(entry, new ConfigDescription(original.Description, original.AcceptableValues, filtered));
                 if (show) visible++; else hidden++;
             }
-            Plugin.Log.LogDebug($"[ArenaMapPort][Config] mode={(developer ? "developer" : "player")}, visible={visible}, hidden={hidden}; saved values retained. Mode changes require restart.");
+            Plugin.Log.LogDebug($"[Config] mode={(developer ? "developer" : "player")}, visible={visible}, hidden={hidden}; saved values retained. Mode changes require restart.");
         }
 
         internal static bool IsPlayerOption(ConfigDefinition definition)

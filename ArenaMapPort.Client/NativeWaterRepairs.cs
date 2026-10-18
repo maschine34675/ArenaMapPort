@@ -23,7 +23,7 @@ namespace ArenaMapPort.Client
     /// </summary>
     internal static class NativeWaterRepairs
     {
-        const string Tag = "[ArenaMapPort][Water]";
+        const string Tag = "[Water]";
         static ConfigEntry<bool> _enabled;
         static Runner _runner;
         static readonly FieldInfo BuffersField = typeof(WaterRendererv3).GetField("commandBufferManager", BindingFlags.Instance | BindingFlags.NonPublic);

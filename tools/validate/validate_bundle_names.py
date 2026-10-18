@@ -20,7 +20,7 @@ an internal name with one already resident in the process -- reproduced by raidi
 
     The AssetBundle '...\\arena_equator_preset.bundle' can't be loaded because another AssetBundle
     with the same files is already loaded.
-    [ArenaMapPort][Bundles] AssetBundle.LoadFromFile returned null for '...arena_equator_preset.bundle'
+    [Error  :maschine-ArenaMapPort] [Bundles] AssetBundle.LoadFromFile returned null for '...arena_equator_preset.bundle'
     Exception: Can't load bundle: maps/arena_equator_preset.bundle HTTP/1.1 404 Not Found
 
 Full writeup: docs/progress/fix-preset-cab-and-bundle-lifetime.md.

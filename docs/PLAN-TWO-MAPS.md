@@ -52,7 +52,7 @@ are public fields; `Bay5AmbientAudio.Driver.TryStart()` already iterates `_activ
 **Effort.** S — one config key, one method edit, no scene/bundle touch.
 
 **Host test.** EQUATOR/BAY5 DEBUG raid, enable `PlaybackDiagnostics`, `uibridge_log` filter
-`[ArenaMapPort][NativeAudio]`, confirm the new per-player volume line; user listens at a few `AmbientGainDb`
+`[NativeAudio]`, confirm the new per-player volume line; user listens at a few `AmbientGainDb`
 values.
 
 **Done when.** Config key exists with neutral default, log line shows the applied gain, user confirms

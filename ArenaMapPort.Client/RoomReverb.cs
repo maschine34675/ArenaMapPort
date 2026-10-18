@@ -22,7 +22,7 @@ namespace ArenaMapPort.Client
     /// </summary>
     internal static class RoomReverb
     {
-        internal const string Tag = "[ArenaMapPort][RoomReverb]";
+        internal const string Tag = "[RoomReverb]";
         static readonly Dictionary<string, ConfigEntry<bool>> Enabled = new Dictionary<string, ConfigEntry<bool>>();
         static readonly HashSet<string> Allowed = new HashSet<string>((
             "AmbientReverbVolume AmbientReverbDryLevel AmbientReverbMix AmbientReverbDelay " +

@@ -84,7 +84,7 @@ namespace ArenaMapPort.Client
         {
             if (entry.Yielded) return;
             entry.Yielded = true;
-            Plugin.Log.LogDebug($"[ArenaMapPort][AudioBus] {entry.Parameter} changed externally; preserving its mix");
+            Plugin.Log.LogDebug($"[AudioBus] {entry.Parameter} changed externally; preserving its mix");
         }
 
         public void Dispose()
@@ -97,7 +97,7 @@ namespace ArenaMapPort.Client
             if (entry.Mixer.GetFloat(entry.Parameter, out float current) && Mathf.Approximately(current, 0f))
             {
                 if (!entry.Mixer.SetFloat(entry.Parameter, entry.Previous))
-                    Plugin.Log.LogWarning($"[ArenaMapPort][AudioBus] Could not restore {entry.Parameter}");
+                    Plugin.Log.LogWarning($"[AudioBus] Could not restore {entry.Parameter}");
             }
         }
     }

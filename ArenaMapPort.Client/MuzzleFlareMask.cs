@@ -47,7 +47,7 @@ namespace ArenaMapPort.Client
                 !HarmonyPatches.Verify(particles, typeof(MuzzleManager), "IMuzzleParticlePivot.Play") ||
                 jets == null || jets.FieldType != typeof(MuzzleJet[]))
             {
-                Plugin.Log.LogWarning("[ArenaMapPort][Flare] muzzle bindings unavailable; exclusion disabled");
+                Plugin.Log.LogWarning("[Flare] muzzle bindings unavailable; exclusion disabled");
                 return;
             }
             Jets = AccessTools.FieldRefAccess<MuzzleManager, MuzzleJet[]>(jets);
@@ -69,7 +69,7 @@ namespace ArenaMapPort.Client
                     code[i - 2].LoadsField(material)) { found = i; count++; }
             if (count != 1)
             {
-                Plugin.Log.LogWarning($"[ArenaMapPort][Flare] expected one native flare seed, found {count}; muzzle exclusion disabled");
+                Plugin.Log.LogWarning($"[Flare] expected one native flare seed, found {count}; muzzle exclusion disabled");
                 return code;
             }
             // Preserve branch/exception labels on the inserted argument, not the call.
@@ -81,7 +81,7 @@ namespace ArenaMapPort.Client
             code[found].operand = AccessTools.Method(typeof(MuzzleFlareMask), nameof(FilterSeed));
             code.Insert(found, instance);
             _installed = true;
-            Plugin.Log.LogDebug("[ArenaMapPort][Flare] muzzle mask bound to native flare seed before stretching");
+            Plugin.Log.LogDebug("[Flare] muzzle mask bound to native flare seed before stretching");
             return code;
         }
 
@@ -130,7 +130,7 @@ namespace ArenaMapPort.Client
             catch (Exception e)
             {
                 _failed = true;
-                Plugin.Log.LogWarning($"[ArenaMapPort][Flare] muzzle exclusion failed and is disabled for this raid: {e.Message}");
+                Plugin.Log.LogWarning($"[Flare] muzzle exclusion failed and is disabled for this raid: {e.Message}");
             }
         }
 

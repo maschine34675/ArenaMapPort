@@ -43,7 +43,7 @@ namespace ArenaMapPort.Client
     /// </summary>
     internal static class LampFillRepairs
     {
-        const string Tag = "[ArenaMapPort][LampFill]";
+        const string Tag = "[LampFill]";
         internal const string ConfigKey = "PassportHallLampFill";
         static readonly Dictionary<string, ConfigEntry<bool>> _enabled = new Dictionary<string, ConfigEntry<bool>>();
 

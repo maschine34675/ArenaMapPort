@@ -43,7 +43,7 @@ namespace ArenaMapPort.Client
     /// </summary>
     internal static class ScopeMaskRepairs
     {
-        const string Tag = "[ArenaMapPort][ScopeMask]";
+        const string Tag = "[ScopeMask]";
 
         static ConfigEntry<bool> _enabled;
         static GameObject _host;

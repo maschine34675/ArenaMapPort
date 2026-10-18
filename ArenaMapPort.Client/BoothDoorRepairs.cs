@@ -47,7 +47,7 @@ namespace ArenaMapPort.Client
     /// </summary>
     internal static class BoothDoorRepairs
     {
-        const string Tag = "[ArenaMapPort][RaidFix]";
+        const string Tag = "[RaidFix]";
         const string DoorPrefix = SpawnGateModel.DoorPrefix;
         const string FramePart = "frame";
         const float RayReach = 20f; // openings within this distance of a player spawn get a raycast verdict

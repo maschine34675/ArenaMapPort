@@ -84,7 +84,7 @@ namespace ArenaMapPort.Client
     /// </summary>
     internal static class LoadingScreenArt
     {
-        const string Tag = "[ArenaMapPort][LoadingScreen]";
+        const string Tag = "[LoadingScreen]";
         const string OverlayName = "ArenaMapPort_LoadingScreenArt";
 
         static ConfigEntry<bool> _enabled;

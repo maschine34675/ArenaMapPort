@@ -21,7 +21,7 @@ namespace ArenaMapPort.Client
     /// </summary>
     internal static class EquatorRoofShadowRepairs
     {
-        const string Tag = "[ArenaMapPort][RoofShadow]";
+        const string Tag = "[RoofShadow]";
         static string[] Paths => ArenaMapRegistry.Equator.DistantShadowCasterPaths;
         static readonly FieldInfo RenderList = typeof(DistantShadow).GetField("_renderList",
             BindingFlags.Instance | BindingFlags.NonPublic);

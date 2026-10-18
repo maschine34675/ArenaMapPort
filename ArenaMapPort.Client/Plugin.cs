@@ -54,7 +54,7 @@ namespace ArenaMapPort.Client
             {
                 // 2026-10-12: an IOException from the archive replace escaped here once and left the plugin without
                 // patches for the whole session (raid load aborted with a bundle 404). Degrade, never die.
-                Log.LogError($"[ArenaMapPort][Config] compact configuration failed ({e.GetType().Name}: {e.Message}); " +
+                Log.LogError($"[Config] compact configuration failed ({e.GetType().Name}: {e.Message}); " +
                              "using the public configuration file for this session");
                 Settings = CompactConfiguration.Fallback(Config);
             }
@@ -175,19 +175,19 @@ namespace ArenaMapPort.Client
             try
             {
                 int removed = RetiredConfiguration.RemoveSavedEntries(Settings, persist: false);
-                Log.LogDebug($"[ArenaMapPort][Config] Removed {removed} retired saved options; active settings preserved.");
+                Log.LogDebug($"[Config] Removed {removed} retired saved options; active settings preserved.");
             }
             catch (Exception e)
             {
-                Log.LogWarning($"[ArenaMapPort][Config] Retired saved-option cleanup skipped: {e.Message}");
+                Log.LogWarning($"[Config] Retired saved-option cleanup skipped: {e.Message}");
             }
             EquatorProfiles.BindAll(); // after legacy binds/migrations; independent Day/Night defaults
             MapConfigVisibility.Install(); // after all binds; keep F12 focused on the released maps
             CompactConfiguration.Complete(Config);
-            Log.LogDebug($"[ArenaMapPort][Config] Public entries={Config.Count}, tuning entries={Settings.Count}; " +
+            Log.LogDebug($"[Config] Public entries={Config.Count}, tuning entries={Settings.Count}; " +
                 $"tuning persistence={(DeveloperOptions.Enabled ? "developer" : "read-only")}, next-raid natural night={PlayerOptions.NaturalEquatorNight}.");
 
-            Log.LogInfo($"[ArenaMapPort] {PluginVersion} loaded. Maps: {string.Join(", ", ArenaMapRegistry.All.Select(map => map.LocaleName))}." +
+            Log.LogInfo($"Version {PluginVersion} loaded. Maps: {string.Join(", ", ArenaMapRegistry.All.Select(map => map.LocaleName))}." +
                 (DeveloperOptions.Enabled ? " Developer mode enabled; diagnostics use Debug logging." : ""));
         }
 
@@ -198,7 +198,7 @@ namespace ArenaMapPort.Client
             var pluginDir = Path.GetDirectoryName(typeof(Plugin).Assembly.Location) ?? ".";
             var bundlesDir = Path.Combine(pluginDir, "bundles");
 
-            Log.LogDebug($"[ArenaMapPort] plugin dir: {pluginDir}");
+            Log.LogDebug($"plugin dir: {pluginDir}");
 
             foreach (var map in ArenaMapRegistry.All)
             {
@@ -215,13 +215,13 @@ namespace ArenaMapPort.Client
         {
             if (File.Exists(path))
             {
-                Log.LogDebug($"[ArenaMapPort] found: {path}");
+                Log.LogDebug($"found: {path}");
             }
             else
             {
                 // Not fatal at Awake() — every hook that needs one of these degrades to a clear per-use
                 // error log rather than crashing plugin load (§B.WP4: "log clearly if a target is missing").
-                Log.LogWarning($"[ArenaMapPort] Required map file is missing: {path}. Reinstall the complete ArenaMapPort package.");
+                Log.LogWarning($"Required map file is missing: {path}. Reinstall the complete ArenaMapPort package.");
             }
         }
     }

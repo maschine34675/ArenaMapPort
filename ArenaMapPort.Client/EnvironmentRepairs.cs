@@ -108,7 +108,7 @@ namespace ArenaMapPort.Client
             if (EnvironmentManagerBase.Instance == null)
             {
                 new GameObject("EnvironmentManager(ArenaFallback)").AddComponent<EnvironmentManager>();
-                Plugin.Log.LogDebug("[ArenaMapPort][RaidFix] created missing EnvironmentManager singleton " +
+                Plugin.Log.LogDebug("[RaidFix] created missing EnvironmentManager singleton " +
                                     "(bare — no indoor triggers authored for this map, always-Outdoor; " +
                                     "Equator/Bay5 author their own real one instead, see RainCoverImporter.cs)");
             }
@@ -116,7 +116,7 @@ namespace ArenaMapPort.Client
             if (!Singleton<ObservedCullingManager>.Instantiated)
             {
                 new GameObject("ObservedCullingManager(ArenaFallback)").AddComponent<ObservedCullingManager>();
-                Plugin.Log.LogDebug("[ArenaMapPort][RaidFix] created missing ObservedCullingManager singleton " +
+                Plugin.Log.LogDebug("[RaidFix] created missing ObservedCullingManager singleton " +
                                     "(observed-body visibility culling)");
             }
 
@@ -124,7 +124,7 @@ namespace ArenaMapPort.Client
                 CullingManager.Instance == null)
             {
                 new GameObject("CullingManager (ArenaMapPort fallback)").AddComponent<CullingManager>();
-                Plugin.Log.LogDebug("[ArenaMapPort][Environment] created missing CullingManager singleton " +
+                Plugin.Log.LogDebug("[Environment] created missing CullingManager singleton " +
                                     "(per-light visibility/intensity culling — every CullingLightObject on this " +
                                     "map queued itself into CullingManager's static early-objects list at its own " +
                                     "Start(); CullingManager.Awake() drains that list right after setting Instance, " +

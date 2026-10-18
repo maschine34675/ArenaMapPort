@@ -3,6 +3,17 @@
 Snapshot for whoever continues (human or agent). Verify the commits named here against `git log`; this file
 is updated by hand at each handover, it is not an automatic record. Read [AGENTS.md](AGENTS.md) first.
 
+## Update 2026-10-18 (late) - client log lines without the own `[ArenaMapPort]` prefix
+
+User decision: "in ArenaMapPort das Präfix entfernen" (log-prefix convention: BepInEx already prints the source
+`maschine-ArenaMapPort` in front of every client line). Branch `feature/log-prefix`: 374 `[ArenaMapPort][<Area>]` tags in
+`ArenaMapPort.Client` are now `[<Area>]`, ten bare `[ArenaMapPort] ` prefixes are gone, the load line reads
+`Version <x> loaded. Maps: ...`. Server lines (shared SPT logger) and the Unity editor scripts keep `[ArenaMapPort]`;
+`tools/unity-log-scan.ps1` still finds `[ArenaMapPort][BuildBundles] DONE`. AGENTS, MAP-RECIPE, SPEC, PLAN-AIRPIT and
+PLAN-TWO-MAPS quote the new form; `docs/progress/` and older HANDOFF entries stay as recorded. Evidence: client compiles
+(0 warnings), 903 .NET tests, Python tests OK, `UNITY_LOG_TESTS_OK 8 cases`; not deployed, no host test. The cut 0.3.0
+candidate ZIP (built from `26b9216`) still has the old prefixes; a release from `main` after this merge needs a new cut.
+
 ## Update 2026-10-18 (evening) - Bowl polish integrated, host-verified and merged into `main` as the 0.3.0 candidate; passport-lamp green arrow recorded for later
 
 User decision: "mit der Bowl-Umsetzung starten, so wie du es am sinnvollsten erachtest; den gruenen Pfeil fuer spaeter

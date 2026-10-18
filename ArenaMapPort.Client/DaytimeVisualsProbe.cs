@@ -13,7 +13,7 @@ namespace ArenaMapPort.Client
     /// post-fix state (docs/progress/daytime-and-visuals.md), so a single log read plus a single
     /// overview screenshot is enough to confirm the whole pass without cross-referencing six different
     /// files' own scattered log lines. Every line below is tagged
-    /// "[ArenaMapPort][DaytimeVisualsProbe]" — <c>grep '\[DaytimeVisualsProbe\]' LogOutput.log</c> finds
+    /// "[DaytimeVisualsProbe]" — <c>grep '\[DaytimeVisualsProbe\]' LogOutput.log</c> finds
     /// the whole block regardless of what else logged around it.
     ///
     /// Timed like <see cref="LightingDiagnosticProbe"/> (waits for <c>GameStatus.Started</c>, then a
@@ -95,7 +95,7 @@ namespace ArenaMapPort.Client
                 }
                 catch (Exception e)
                 {
-                    Plugin.Log.LogError($"[ArenaMapPort][DaytimeVisualsProbe] probe threw: {e}");
+                    Plugin.Log.LogError($"[DaytimeVisualsProbe] probe threw: {e}");
                 }
             }
         }
@@ -109,7 +109,7 @@ namespace ArenaMapPort.Client
             }
             _ranThisRaid = true;
 
-            const string tag = "[ArenaMapPort][DaytimeVisualsProbe]";
+            const string tag = "[DaytimeVisualsProbe]";
             Plugin.Log.LogDebug($"{tag} ==== {map.Key} ====");
 
             ProbeTimeOfDay(tag, map);

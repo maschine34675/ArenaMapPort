@@ -118,7 +118,7 @@ namespace ArenaMapPort.Client
                 try { File.Copy(temporary, path, true); return; }
                 catch (IOException e) { last = e; }
                 catch (UnauthorizedAccessException e) { last = e; }
-                Warning?.Invoke($"[ArenaMapPort][Config] could not update the developer archive '{path}' " +
+                Warning?.Invoke($"[Config] could not update the developer archive '{path}' " +
                                 $"({last?.GetType().Name}: {last?.Message}); this session keeps the merged values in " +
                                 "memory and the file is retried at the next start");
             }

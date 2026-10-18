@@ -29,14 +29,14 @@ namespace ArenaMapPort.Client
             if (__result.OcclusionSettings == null)
             {
                 __result.OcclusionSettings = ScriptableObject.CreateInstance<AudioOcclusionSettings>();
-                Plugin.Log.LogDebug("[ArenaMapPort][RaidFix] SpatialAudioSystem.OcclusionSettings was null " +
+                Plugin.Log.LogDebug("[RaidFix] SpatialAudioSystem.OcclusionSettings was null " +
                                     "(scene carries no SpatialAudioSystem) — assigned a blank AudioOcclusionSettings instance");
             }
 
             if (__result.poolsConfig == null)
             {
                 __result.poolsConfig = new SpatialAudioPoolsConfig();
-                Plugin.Log.LogDebug("[ArenaMapPort][RaidFix] SpatialAudioSystem.poolsConfig was null — assigned class defaults");
+                Plugin.Log.LogDebug("[RaidFix] SpatialAudioSystem.poolsConfig was null — assigned class defaults");
             }
         }
     }
@@ -62,7 +62,7 @@ namespace ArenaMapPort.Client
 
             __result = Task.CompletedTask;
             SpatialAudioSystem.Initialized = false; // explicit: this is the invariant every other guard relies on
-            Plugin.Log.LogDebug("[ArenaMapPort][RaidFix] skipped SpatialAudioSystem.Initialize " +
+            Plugin.Log.LogDebug("[RaidFix] skipped SpatialAudioSystem.Initialize " +
                                 "(native acoustics disabled or no accepted source package for this map)");
             return false; // skip original body entirely
         }
@@ -130,7 +130,7 @@ namespace ArenaMapPort.Client
             __result = -1;
             if (_throwLogged++ < 5) // per-shot spam guard, matches ShaderRebind's dedup philosophy
             {
-                Plugin.Log.LogWarning($"[ArenaMapPort][RaidFix] SpatialAudioSystem.ProcessSourceOcclusion threw " +
+                Plugin.Log.LogWarning($"[RaidFix] SpatialAudioSystem.ProcessSourceOcclusion threw " +
                                        $"(sound degraded to unoccluded): {__exception.GetType().Name}: {__exception.Message}");
             }
             return null; // swallow — never let this escape into the caller's sound-playback flow
@@ -186,7 +186,7 @@ namespace ArenaMapPort.Client
 
             if (_throwLogged++ < 5) // per-call spam guard, matches SpatialAudioOcclusionGuard
             {
-                Plugin.Log.LogWarning($"[ArenaMapPort][RaidFix] SpatialAudioSystem.ProcessInteractiveObjectOcclusion " +
+                Plugin.Log.LogWarning($"[RaidFix] SpatialAudioSystem.ProcessInteractiveObjectOcclusion " +
                                        $"threw (interactive-object occlusion sound skipped): " +
                                        $"{__exception.GetType().Name}: {__exception.Message}");
             }

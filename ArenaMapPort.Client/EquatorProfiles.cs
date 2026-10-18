@@ -43,7 +43,7 @@ namespace ArenaMapPort.Client
             _installed = true;
             var load = AccessTools.Method(typeof(TarkovApplication), nameof(TarkovApplication.LoadMapAndData));
             if (load == null)
-                Plugin.Log.LogError("[ArenaMapPort][Profiles] LoadMapAndData unavailable; early profile capture cannot run.");
+                Plugin.Log.LogError("[Profiles] LoadMapAndData unavailable; early profile capture cannot run.");
             else
                 harmony.Patch(load, prefix: new HarmonyMethod(typeof(EquatorProfiles), nameof(LoadPrefix)),
                     postfix: new HarmonyMethod(typeof(EquatorProfiles), nameof(LoadPostfix)));
@@ -76,7 +76,7 @@ namespace ArenaMapPort.Client
             Current = Select(mapKey, selected);
             NaturalNight = Current == EquatorProfile.Night && PlayerOptions.NaturalEquatorNight;
             if (Current != EquatorProfile.None)
-                Plugin.Log.LogDebug($"[ArenaMapPort][Profiles] {mapKey}: selected {Current}, appearance={Appearance}, " +
+                Plugin.Log.LogDebug($"[Profiles] {mapKey}: selected {Current}, appearance={Appearance}, " +
                     $"naturalNight={NaturalNight} before scene loading (generation {_generation}).");
             return _generation;
         }
@@ -113,12 +113,12 @@ namespace ArenaMapPort.Client
             }
             else if (Current != requested)
             {
-                Plugin.Log.LogError($"[ArenaMapPort][Profiles] Selection mismatch: early={Current}, InitWeather={requested}; " +
+                Plugin.Log.LogError($"[Profiles] Selection mismatch: early={Current}, InitWeather={requested}; " +
                     "retaining the early profile to prevent mixed scene settings.");
                 return;
             }
             if (!_confirmed)
-                Plugin.Log.LogDebug($"[ArenaMapPort][Profiles] {mapKey}: confirmed {Current} at InitWeather; recipe locked for this raid.");
+                Plugin.Log.LogDebug($"[Profiles] {mapKey}: confirmed {Current} at InitWeather; recipe locked for this raid.");
             _confirmed = true;
         }
 
@@ -128,7 +128,7 @@ namespace ArenaMapPort.Client
         static void Reset(string reason)
         {
             if (Current != EquatorProfile.None)
-                Plugin.Log.LogDebug($"[ArenaMapPort][Profiles] Cleared {Current}: {reason}.");
+                Plugin.Log.LogDebug($"[Profiles] Cleared {Current}: {reason}.");
             Current = EquatorProfile.None;
             NaturalNight = false;
             _confirmed = false;
@@ -144,7 +144,7 @@ namespace ArenaMapPort.Client
                 if (IsAppearance(item.Key)) entries.Add(item.Value);
             foreach (var entry in entries)
                 RegisterMethod.MakeGenericMethod(entry.SettingType).Invoke(null, new object[] { entry });
-            Plugin.Log.LogDebug($"[ArenaMapPort][Profiles] Bound {entries.Count} independent appearance settings per Equator profile; " +
+            Plugin.Log.LogDebug($"[Profiles] Bound {entries.Count} independent appearance settings per Equator profile; " +
                 "legacy saved settings retained, Day uses accepted defaults, Night uses the 2026-10-07 recipe.");
         }
 

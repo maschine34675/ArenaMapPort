@@ -57,11 +57,11 @@ namespace ArenaMapPort.Client
         {
             _retry = true;
             if (!_loggedFailure)
-                Plugin.Log.LogWarning($"[ArenaMapPort][NightWetFloor] {owner} refresh failed; cleanup continues and refresh will retry: {error}");
+                Plugin.Log.LogWarning($"[NightWetFloor] {owner} refresh failed; cleanup continues and refresh will retry: {error}");
             _loggedFailure = true;
         }
 
-        internal static void Probe() => Plugin.Log.LogDebug($"[ArenaMapPort][NightWetFloor] " +
+        internal static void Probe() => Plugin.Log.LogDebug($"[NightWetFloor] " +
             $"active={(_owned && EquatorNightNeon.IsActive)} strength={_strength.Value:F2} " +
             $"nativeGlossTarget=2.200 savedIndoorMultiplier={WeatherRig.IndoorFloorSmoothnessForCurrentMap():F3}; saved values retained");
     }

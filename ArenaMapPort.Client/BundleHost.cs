@@ -85,7 +85,7 @@ namespace ArenaMapPort.Client
 
             if (!File.Exists(filePath))
             {
-                Plugin.Log.LogError($"[ArenaMapPort][Bundles] '{bundleName}' expected at '{filePath}' but the file is missing");
+                Plugin.Log.LogError($"[Bundles] '{bundleName}' expected at '{filePath}' but the file is missing");
                 return;
             }
 
@@ -96,7 +96,7 @@ namespace ArenaMapPort.Client
             }
             catch (Exception e)
             {
-                Plugin.Log.LogError($"[ArenaMapPort][Bundles] failed to load '{filePath}': {e.GetType().Name}: {e.Message}");
+                Plugin.Log.LogError($"[Bundles] failed to load '{filePath}': {e.GetType().Name}: {e.Message}");
                 return;
             }
 
@@ -104,7 +104,7 @@ namespace ArenaMapPort.Client
             {
                 // A bundle built for the wrong BuildTarget loads as null with no other signal
                 // (§B.WP2.8 / §H risk #12) — this is the runtime symptom if that ever regresses.
-                Plugin.Log.LogError($"[ArenaMapPort][Bundles] AssetBundle.LoadFromFile returned null for '{filePath}' " +
+                Plugin.Log.LogError($"[Bundles] AssetBundle.LoadFromFile returned null for '{filePath}' " +
                                      "(wrong BuildTarget, or a corrupt/incompatible file?)");
                 return;
             }
@@ -140,7 +140,7 @@ namespace ArenaMapPort.Client
             manager._bundles[bundleName] = reference;
 
             long bytes = SafeFileLength(filePath);
-            Plugin.Log.LogDebug($"[ArenaMapPort][Bundles] loaded '{bundleName}' from '{filePath}' ({bytes} bytes)");
+            Plugin.Log.LogDebug($"[Bundles] loaded '{bundleName}' from '{filePath}' ({bytes} bytes)");
         }
 
         static long SafeFileLength(string path)

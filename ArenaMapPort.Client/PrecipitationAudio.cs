@@ -28,7 +28,7 @@ namespace ArenaMapPort.Client
     /// </summary>
     internal static class PrecipitationAudio
     {
-        const string Tag = "[ArenaMapPort][RainAudio]";
+        const string Tag = "[RainAudio]";
         const string BundleKey = "assets/content/audio/data/soundcontainers/precipitationsoundstorageso.bundle";
         static readonly Dictionary<string, ConfigEntry<float>> Volumes = new Dictionary<string, ConfigEntry<float>>();
         static PrecipitationSoundStorageSO _cachedBank;

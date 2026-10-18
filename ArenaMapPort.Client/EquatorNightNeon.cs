@@ -24,7 +24,7 @@ namespace ArenaMapPort.Client
     /// </summary>
     internal static class EquatorNightNeon
     {
-        const string Tag = "[ArenaMapPort][NightNeon]";
+        const string Tag = "[NightNeon]";
         static ConfigEntry<bool> _enabled, _rain;
         static ConfigEntry<float> _lightIntensity, _glowIntensity;
         static ConfigEntry<Color> _cyan, _magenta;

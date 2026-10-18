@@ -13,7 +13,7 @@ namespace ArenaMapPort.Client
     /// <summary>On-demand observation of native footstep selection. No settings, audio playback or surface writes.</summary>
     internal static class FootstepSurfaceProbe
     {
-        const string Tag = "[ArenaMapPort][Footsteps] ";
+        const string Tag = "[Footsteps] ";
 
         internal static void Probe()
         {

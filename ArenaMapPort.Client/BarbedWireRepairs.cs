@@ -30,7 +30,7 @@ namespace ArenaMapPort.Client
     /// </summary>
     internal static class BarbedWireRepairs
     {
-        const string Tag = "[ArenaMapPort][RaidFix]";
+        const string Tag = "[RaidFix]";
         const string NamePrefix = "bruno_helix";
         static ConfigEntry<bool> _enabled;
 

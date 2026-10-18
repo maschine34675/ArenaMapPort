@@ -16,7 +16,7 @@ namespace ArenaMapPort.Client
     /// </summary>
     internal sealed class NeonNightPostFx : IDisposable
     {
-        const string Tag = "[ArenaMapPort][NightPostFx]";
+        const string Tag = "[NightPostFx]";
         static ConfigEntry<bool> _enabled;
         GradingPostFX _effect;
         PostFxSettingsGroup _lastUserSettings;

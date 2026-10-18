@@ -43,7 +43,7 @@ namespace ArenaMapPort.Client
     /// </summary>
     internal static class PhysicsPropRepairs
     {
-        const string Tag = "[ArenaMapPort][RaidFix]";
+        const string Tag = "[RaidFix]";
         const string ContainerName = "PHYSIC";
         static ConfigEntry<bool> _enabled;
 

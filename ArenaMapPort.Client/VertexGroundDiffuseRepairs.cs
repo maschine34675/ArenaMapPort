@@ -75,13 +75,13 @@ namespace ArenaMapPort.Client
             }
             if (entry.Tints.Count != LayerColors.Length)
             {
-                Plugin.Log.LogWarning($"[ArenaMapPort][GroundDiffuse] map={map.Key} material='{material.name}' " +
+                Plugin.Log.LogWarning($"[GroundDiffuse] map={map.Key} material='{material.name}' " +
                     "missing typed layer colors; left unchanged.");
                 return;
             }
             entries.Add(material, entry);
             Apply(entry, setting.Value);
-            Plugin.Log.LogDebug($"[ArenaMapPort][GroundDiffuse] map={map.Key} material='{material.name}' " +
+            Plugin.Log.LogDebug($"[GroundDiffuse] map={map.Key} material='{material.name}' " +
                 $"captured 3 layer tints, multiplier={setting.Value:0.00}");
         }
 
@@ -112,7 +112,7 @@ namespace ArenaMapPort.Client
             foreach (var entry in entries.Values) applied += Apply(entry, multiplier);
             // Indoor clones inherit the source RGB; this also composes with the outer p0 specular cap.
             IndoorFloorSmoothnessRepairs.ReclassifyIfLoaded(map);
-            Plugin.Log.LogDebug($"[ArenaMapPort][GroundDiffuse] map={map.Key} multiplier={multiplier:0.00} " +
+            Plugin.Log.LogDebug($"[GroundDiffuse] map={map.Key} multiplier={multiplier:0.00} " +
                 $"applied live to {applied} layer tint(s) in {entries.Count} material(s)");
         }
 
@@ -123,7 +123,7 @@ namespace ArenaMapPort.Client
             int restored = 0;
             foreach (var entry in entries.Values) restored += Apply(entry, 1f);
             States.Remove(map.Key);
-            Plugin.Log.LogDebug($"[ArenaMapPort][GroundDiffuse] map={map.Key} released {entries.Count} material(s), " +
+            Plugin.Log.LogDebug($"[GroundDiffuse] map={map.Key} released {entries.Count} material(s), " +
                 $"restored {restored} owned layer tint(s)");
         }
     }

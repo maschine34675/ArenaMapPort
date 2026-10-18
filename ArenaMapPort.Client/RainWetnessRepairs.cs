@@ -121,12 +121,12 @@ namespace ArenaMapPort.Client
             rain.PuddleWaterLevel = new Vector2(before.x, target);
             if (enabled)
             {
-                Plugin.Log.LogDebug($"[ArenaMapPort][RainClamp] map={map.Key} MaxLyingWater clamped " +
+                Plugin.Log.LogDebug($"[RainClamp] map={map.Key} MaxLyingWater clamped " +
                     $"{before.y:0.00} -> {target:0.00}");
             }
             else
             {
-                Plugin.Log.LogDebug($"[ArenaMapPort][RainClamp] map={map.Key} MaxLyingWater restored " +
+                Plugin.Log.LogDebug($"[RainClamp] map={map.Key} MaxLyingWater restored " +
                     $"{before.y:0.00} -> {target:0.00} (override disabled)");
             }
         }
@@ -170,7 +170,7 @@ namespace ArenaMapPort.Client
             if (!_damperLogged)
             {
                 _damperLogged = true;
-                Plugin.Log.LogDebug($"[ArenaMapPort][WetRendererDamper] intensity scaled by x{multiplier:0.00} " +
+                Plugin.Log.LogDebug($"[WetRendererDamper] intensity scaled by x{multiplier:0.00} " +
                     $"(now {wet.Intensity:0.00}) — logged once per session, applies every frame thereafter");
             }
         }

@@ -43,7 +43,7 @@ namespace ArenaMapPort.Client
     /// </summary>
     internal static class RoomShotAcoustics
     {
-        internal const string Tag = "[ArenaMapPort][ShotAcoustics]";
+        internal const string Tag = "[ShotAcoustics]";
         const string RoomObjectName = "ArenaMapPort Shot Acoustics Room";
 
         static readonly Dictionary<string, ConfigEntry<bool>> Enabled = new Dictionary<string, ConfigEntry<bool>>();

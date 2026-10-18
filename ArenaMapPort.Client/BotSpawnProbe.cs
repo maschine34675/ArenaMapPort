@@ -35,7 +35,7 @@ namespace ArenaMapPort.Client
     /// </summary>
     internal static class BotSpawnProbe
     {
-        const string Tag = "[ArenaMapPort][BotSpawn]";
+        const string Tag = "[BotSpawn]";
         static ConfigEntry<bool> _enabled;
         static ConfigEntry<bool> _activation;
         static readonly FieldInfo CanSpawnField = AccessTools.Field(typeof(BotsController), "_canSpawn");
@@ -79,7 +79,7 @@ namespace ArenaMapPort.Client
 
             if (!_activation.Value)
             {
-                Plugin.Log.LogDebug("[ArenaMapPort][Harmony] bots-stage1: deep activation diagnostics off ([Bots] ActivationDiagnostics)");
+                Plugin.Log.LogDebug("[Harmony] bots-stage1: deep activation diagnostics off ([Bots] ActivationDiagnostics)");
                 return;
             }
 
@@ -149,7 +149,7 @@ namespace ArenaMapPort.Client
             {
                 Plugin.Log.LogWarning($"{Tag} reading BotOwner.method_10 IL failed: {e.GetType().Name}: {e.Message}");
             }
-            Plugin.Log.LogDebug($"[ArenaMapPort][Harmony] bots-stage1: finalizers on {patched} activation step(s) called by BotOwner.method_10 ({failed} skipped)");
+            Plugin.Log.LogDebug($"[Harmony] bots-stage1: finalizers on {patched} activation step(s) called by BotOwner.method_10 ({failed} skipped)");
         }
 
         static Exception ActivationStepFinalizer(Exception __exception, MethodBase __originalMethod, object __instance)
@@ -286,7 +286,7 @@ namespace ArenaMapPort.Client
                     prefix: prefix != null ? new HarmonyMethod(AccessTools.Method(typeof(BotSpawnProbe), prefix)) : null,
                     postfix: postfix != null ? new HarmonyMethod(AccessTools.Method(typeof(BotSpawnProbe), postfix)) : null,
                     finalizer: finalizer != null ? new HarmonyMethod(AccessTools.Method(typeof(BotSpawnProbe), finalizer)) : null);
-                Plugin.Log.LogDebug($"[ArenaMapPort][Harmony] patched {label} (bots-stage1 spawn diagnostics)");
+                Plugin.Log.LogDebug($"[Harmony] patched {label} (bots-stage1 spawn diagnostics)");
             }
             catch (Exception e)
             {

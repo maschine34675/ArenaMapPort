@@ -57,7 +57,7 @@ namespace ArenaMapPort.Client
                 }
                 catch (Exception ex)
                 {
-                    Plugin.Log.LogWarning($"[ArenaMapPort][LightProbe] hotkey Update threw: {ex}");
+                    Plugin.Log.LogWarning($"[LightProbe] hotkey Update threw: {ex}");
                 }
             }
         }
@@ -69,7 +69,7 @@ namespace ArenaMapPort.Client
                 _float1Resolved = true;
                 _float1 = typeof(CullingLightObject).GetField("float_1", BindingFlags.NonPublic | BindingFlags.Instance);
                 if (_float1 == null)
-                    Plugin.Log.LogWarning("[ArenaMapPort][LightProbe] CullingLightObject.float_1 not found via reflection — reporting NaN");
+                    Plugin.Log.LogWarning("[LightProbe] CullingLightObject.float_1 not found via reflection — reporting NaN");
             }
             return _float1 != null ? (float)_float1.GetValue(clo) : float.NaN;
         }
@@ -94,7 +94,7 @@ namespace ArenaMapPort.Client
             Camera cam = ResolveActiveCamera();
             if (map == null || cam == null)
             {
-                Plugin.Log.LogDebug("[ArenaMapPort][LightProbe] no Arena map or no active camera — skipped");
+                Plugin.Log.LogDebug("[LightProbe] no Arena map or no active camera — skipped");
                 _running = false;
                 yield break;
             }
@@ -127,7 +127,7 @@ namespace ArenaMapPort.Client
                 else beyond[bucket]++;
             }
             var sb = new StringBuilder();
-            sb.Append($"[ArenaMapPort][LightProbe] {map.Key} camera=({F(camPos.x)}, {F(camPos.y)}, {F(camPos.z)}) " +
+            sb.Append($"[LightProbe] {map.Key} camera=({F(camPos.x)}, {F(camPos.y)}, {F(camPos.z)}) " +
                       $"CullingManager={(CullingManager.Instance != null)} cullingLights={lights.Count} visible={visible} | " +
                       $"inside fade start: full={inside[0]} partial={inside[1]} zero={inside[2]} | " +
                       $"fade window: full={window[0]} partial={window[1]} zero={window[2]} | " +
@@ -146,7 +146,7 @@ namespace ArenaMapPort.Client
             // and the renderer on the active camera.
             bool? setting = null;
             try { setting = Singleton<SettingsManager>.Instance?.Graphics.Settings.VolumetricLight.Value; }
-            catch (Exception ex) { Plugin.Log.LogWarning($"[ArenaMapPort][LightProbe] reading the VolumetricLight setting threw: {ex.GetType().Name}"); }
+            catch (Exception ex) { Plugin.Log.LogWarning($"[LightProbe] reading the VolumetricLight setting threw: {ex.GetType().Name}"); }
             int vlTotal = 0, vlActive = 0;
             var vlNames = new List<string>();
             foreach (var vl in UnityEngine.Object.FindObjectsOfType<VolumetricLight>())
@@ -156,7 +156,7 @@ namespace ArenaMapPort.Client
                 if (vl.isActiveAndEnabled) { vlActive++; if (vlNames.Count < 4) vlNames.Add(vl.gameObject.name); }
             }
             var renderer = cam.GetComponent<VolumetricLightRenderer>();
-            Plugin.Log.LogDebug($"[ArenaMapPort][LightProbe] {map.Key} volumetric: setting={(setting.HasValue ? setting.Value.ToString() : "unknown")} " +
+            Plugin.Log.LogDebug($"[LightProbe] {map.Key} volumetric: setting={(setting.HasValue ? setting.Value.ToString() : "unknown")} " +
                                $"components={vlTotal} activeAndEnabled={vlActive} [{string.Join(", ", vlNames)}] " +
                                $"renderer on '{cam.name}'={(renderer != null ? (renderer.enabled ? "enabled" : "disabled") : "missing")}");
 
@@ -179,7 +179,7 @@ namespace ArenaMapPort.Client
                     }
                     yield return new WaitForSeconds(0.1f);
                 }
-                var fsb = new StringBuilder($"[ArenaMapPort][LightProbe] {map.Key} flicker: {flickers.Count} enabled LightFlicker(s)");
+                var fsb = new StringBuilder($"[LightProbe] {map.Key} flicker: {flickers.Count} enabled LightFlicker(s)");
                 for (int i = 0; i < flickers.Count; i++)
                 {
                     float min = float.MaxValue, max = float.MinValue;
@@ -194,7 +194,7 @@ namespace ArenaMapPort.Client
             }
             else
             {
-                Plugin.Log.LogDebug($"[ArenaMapPort][LightProbe] {map.Key} flicker: no enabled LightFlicker");
+                Plugin.Log.LogDebug($"[LightProbe] {map.Key} flicker: no enabled LightFlicker");
             }
             LogCameraStack(map.Key, cam);
             HdrImageTuning.LogDiagnostics();
@@ -206,7 +206,7 @@ namespace ArenaMapPort.Client
         static void LogCameraStack(string mapKey, Camera cam)
         {
             var sb = new StringBuilder();
-            sb.Append($"[ArenaMapPort][LightProbe] {mapKey} camera stack '{cam.name}' hdr={cam.allowHDR} path={cam.actualRenderingPath}:");
+            sb.Append($"[LightProbe] {mapKey} camera stack '{cam.name}' hdr={cam.allowHDR} path={cam.actualRenderingPath}:");
             foreach (var b in cam.GetComponents<Behaviour>())
             {
                 if (b != null)
@@ -214,7 +214,7 @@ namespace ArenaMapPort.Client
             }
             Plugin.Log.LogDebug(sb.ToString());
             sb.Clear();
-            sb.Append($"[ArenaMapPort][LightProbe] {mapKey} camera exposure:");
+            sb.Append($"[LightProbe] {mapKey} camera exposure:");
             var prism = cam.GetComponent<PrismEffects>();
             if (prism != null)
             {
@@ -239,7 +239,7 @@ namespace ArenaMapPort.Client
                     continue;
                 var typeName = b.GetType().Name;
                 if (typeName == "UltimateBloom" || typeName == "BloomAndFlares")
-                    Plugin.Log.LogDebug($"[ArenaMapPort][LightProbe] {mapKey} {typeName}" +
+                    Plugin.Log.LogDebug($"[LightProbe] {mapKey} {typeName}" +
                         $"{(b.enabled ? "" : "(off)")}:{ScalarFields(b)}");
             }
         }
