@@ -1,5 +1,6 @@
 """Synthetic MultiFlare serialization checks; no proprietary source fixtures."""
 from copy import deepcopy
+import json
 from pathlib import Path
 import struct
 import sys
@@ -161,6 +162,112 @@ class MultiFlareExtractionTests(unittest.TestCase):
             d["textures"][0].update(changes)
             with self.assertRaises(ValueError):
                 M.validate_graph(d)
+
+
+class InactiveLightRuleAndBowlPinTests(unittest.TestCase):
+    """2026-10-18: Bowl joins; its six StreetLampFlareDistant lights are inactive and carry min 50 > max 15."""
+
+    @staticmethod
+    def bowl_graph(inactive_inverted=6, active=4):
+        d = graph()
+        d["map_key"] = "arena_bowl"
+        template = d["lights"][0]
+        lights = []
+        for i in range(active):
+            l = deepcopy(template)
+            l.update(id=f"active{i}", scene="Arena_Bowl_Light")
+            lights.append(l)
+        for i in range(inactive_inverted):
+            l = deepcopy(template)
+            l.update(id=f"inactive{i}", scene="Arena_Bowl_Light", active_in_hierarchy=False)
+            l["transform_chain"][0]["active_self"] = False
+            l["flares"][0].update(min_dist=50.0, max_dist=15.0)
+            lights.append(l)
+        d["lights"] = lights
+        return d
+
+    def test_light_is_active_needs_enabled_component_and_active_chain(self):
+        for enabled, in_hierarchy, expected in ((True, True, True), (True, False, False),
+                                                (False, True, False), (False, False, False)):
+            with self.subTest(enabled=enabled, in_hierarchy=in_hierarchy):
+                self.assertIs(M.light_is_active(dict(enabled=enabled, active_in_hierarchy=in_hierarchy)), expected)
+
+    def test_inverted_range_is_accepted_only_on_inactive_lights(self):
+        inverted = dict(min_dist=50.0, max_dist=15.0)
+        self.assertEqual(M.decode_light(light(enabled=0, **inverted))["flares"][0]["min_dist"], 50.0)
+        self.assertEqual(M.decode_light(light(**inverted), in_hierarchy=False)["flares"][0]["max_dist"], 15.0)
+        self.assertEqual(M.decode_light(light(enabled=0, **inverted), in_hierarchy=False)["enabled"], False)
+        for kwargs in ({}, dict(in_hierarchy=True)):
+            with self.subTest(kwargs=kwargs), self.assertRaises(ValueError):
+                M.decode_light(light(**inverted), **kwargs)
+        for equal in (dict(min_dist=15.0, max_dist=15.0), dict(min_dist=0.0, max_dist=0.0)):
+            with self.subTest(equal=equal), self.assertRaises(ValueError):
+                M.decode_light(light(**equal))
+
+    def test_inactive_lights_keep_every_other_requirement(self):
+        for change in (dict(total_scale=-1), dict(total_alpha=2), dict(cull_distance=0), dict(alpha=float("nan")),
+                       dict(min_dist=-1), dict(max_dist=-1), dict(min_scale=-1), dict(min_scale=0), dict(min_alpha=0),
+                       dict(flare_type=1), dict(tex_id=-1), dict(color=(1, 1, 1, float("inf")))):
+            with self.subTest(change=change, case="disabled component"), self.assertRaises(ValueError):
+                M.decode_light(light(enabled=0, **change))
+            with self.subTest(change=change, case="inactive chain"), self.assertRaises(ValueError):
+                M.decode_light(light(**change), in_hierarchy=False)
+
+    def test_graph_accepts_bowl_shaped_inactive_inversions_and_activity_follows_the_chain(self):
+        d = self.bowl_graph()
+        M.validate_graph(d)
+        self.assertEqual(sum(M.light_is_active(l) for l in d["lights"]), 4)
+        disabled = self.bowl_graph(inactive_inverted=0)
+        disabled["lights"][0]["enabled"] = False  # component off, chain active: still inactive
+        disabled["lights"][0]["flares"][0].update(min_dist=50.0, max_dist=15.0)
+        M.validate_graph(disabled)
+
+    def test_graph_rejects_inverted_range_on_a_light_the_runtime_would_consume(self):
+        d = self.bowl_graph(inactive_inverted=0)
+        d["lights"][0]["flares"][0].update(min_dist=50.0, max_dist=15.0)
+        with self.assertRaises(ValueError):
+            M.validate_graph(d)
+        # An inverted range does not excuse a hierarchy flag that contradicts the transform chain.
+        d = self.bowl_graph()
+        d["lights"][-1]["active_in_hierarchy"] = True
+        with self.assertRaises(ValueError):
+            M.validate_graph(d)
+
+    def test_graph_still_checks_the_rest_of_an_inactive_light(self):
+        for change in (lambda f: f.update(min_scale=0), lambda f: f.update(tex_id=5), lambda f: f.update(max_dist=-2.0)):
+            d = self.bowl_graph()
+            change(d["lights"][-1]["flares"][0])
+            with self.assertRaises(ValueError):
+                M.validate_graph(d)
+
+    def test_every_supported_map_has_scenes_matching_its_sidecar_and_a_census_pin(self):
+        maps = Path(__file__).resolve().parents[1] / "maps"
+        self.assertEqual(set(M.SCENES), set(M.EXPECTED_CENSUS))
+        for key, scenes in M.SCENES.items():
+            sidecar = json.loads((maps / (key.removeprefix("arena_") + ".json")).read_text(encoding="utf-8"))
+            with self.subTest(map=key):
+                self.assertEqual(set(sidecar["all_scene_names"]), set(scenes.values()))
+                self.assertEqual(len(set(scenes)), len(scenes))
+                lights, active, flares, active_flares = M.EXPECTED_CENSUS[key]
+                self.assertTrue(0 < active <= lights and 0 < active_flares <= flares)
+
+    def test_bowl_pins_scene_table_and_census(self):
+        self.assertEqual(M.SCENES["arena_bowl"], {
+            41: "Arena_Bowl", 43: "Arena_Bowl_DesignStuff", 44: "Arena_Bowl_Scripts", 45: "Arena_Bowl_Light",
+            46: "Arena_Bowl_Building", 47: "Arena_Bowl_TeamFight", 48: "Arena_Bowl_TeamFight_DesignStuff",
+            95: "Arena_Bowl_Grass"})
+        self.assertEqual(M.EXPECTED_CENSUS["arena_bowl"], (28, 4, 130, 20))
+        # The two accepted maps keep their original pins.
+        self.assertEqual(M.EXPECTED_CENSUS["arena_equator"], (28, 25, 48, 33))
+        self.assertEqual(M.EXPECTED_CENSUS["arena_bay5"], (25, 24, 116, 111))
+        self.assertEqual(set(M.SCENES["arena_equator"]), {51, 53, 54, 55, 57, 58})
+        self.assertEqual(set(M.SCENES["arena_bay5"]), {79, 80, 81, 82, 83, 84, 85, 86, 88, 89})
+
+    def test_graph_scene_ownership_is_per_map(self):
+        d = self.bowl_graph()
+        d["lights"][0]["scene"] = "Arena_Equator_Lighting"
+        with self.assertRaises(ValueError):
+            M.validate_graph(d)
 
 
 if __name__ == "__main__":

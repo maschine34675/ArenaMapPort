@@ -17,10 +17,10 @@
     <TargetFramework>netstandard2.1</TargetFramework>
     <AssemblyName>maschine-ArenaMapPort.Client</AssemblyName>
     <RootNamespace>ArenaMapPort.Client</RootNamespace>
-    <Description>Loads and repairs the Equator, Bay5 and Air Pit Arena maps in SPT.</Description>
+    <Description>Loads and repairs the Equator, Bay5, Air Pit and Bowl Arena maps in SPT.</Description>
     <Company>https://github.com/maschine34675/ArenaMapPort</Company>
     <Authors>maschine</Authors>
-    <Version>0.2.2</Version>
+    <Version>0.3.0</Version>
     <LangVersion>latest</LangVersion>
     <Nullable>disable</Nullable>
     <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
@@ -191,7 +191,7 @@
       <ArenaMapPortOverviewRoot>$(MSBuildThisFileDirectory)..\work\dynamicmaps\release</ArenaMapPortOverviewRoot>
     </PropertyGroup>
     <ItemGroup>
-      <ArenaMapPortOverview Include="ArenaMapPort_Equator\ArenaMapPort_Equator.jsonc;ArenaMapPort_Equator\Layers\Ground.svg;ArenaMapPort_Bay5\ArenaMapPort_Bay5.jsonc;ArenaMapPort_Bay5\Layers\Ground.svg;ArenaMapPort_AirPit\ArenaMapPort_AirPit.jsonc;ArenaMapPort_AirPit\Layers\Ground.svg" />
+      <ArenaMapPortOverview Include="ArenaMapPort_Equator\ArenaMapPort_Equator.jsonc;ArenaMapPort_Equator\Layers\Ground.svg;ArenaMapPort_Bay5\ArenaMapPort_Bay5.jsonc;ArenaMapPort_Bay5\Layers\Ground.svg;ArenaMapPort_AirPit\ArenaMapPort_AirPit.jsonc;ArenaMapPort_AirPit\Layers\Ground.svg;ArenaMapPort_Bowl\ArenaMapPort_Bowl.jsonc;ArenaMapPort_Bowl\Layers\Ground.svg" />
     </ItemGroup>
     <Error Condition="!Exists('$(ArenaMapPortOverviewRoot)\%(ArenaMapPortOverview.Identity)')" Text="Missing accepted overview map %(ArenaMapPortOverview.Identity); see tools/dynamicmaps/README.md" />
     <Copy SourceFiles="@(ArenaMapPortOverview->'$(ArenaMapPortOverviewRoot)\%(Identity)')" DestinationFiles="@(ArenaMapPortOverview->'$(ArenaMapPortDistDir)\dynamicmaps\%(Identity)')" />
@@ -237,12 +237,17 @@
     </PropertyGroup>
     <Error Condition="!Exists('$(ArenaMapPortFlareDir)\arena_equator\flares.json') Or !Exists('$(ArenaMapPortFlareDir)\arena_bay5\flares.json')"
            Text="Missing original flare input; run tools/extract/extract_multiflare.py" />
+    <Error Condition="!Exists('$(ArenaMapPortFlareDir)\arena_bowl\flares.json')"
+           Text="Missing original Bowl flare input; run tools/extract/extract_multiflare.py --map arena_bowl --output work/extract/multiflare/arena_bowl" />
     <ItemGroup>
       <ArenaMapPortFlareFile Include="$(ArenaMapPortFlareDir)\arena_equator\flares.json;$(ArenaMapPortFlareDir)\arena_equator\textures\*.bin">
         <MapKey>arena_equator</MapKey>
       </ArenaMapPortFlareFile>
       <ArenaMapPortFlareFile Include="$(ArenaMapPortFlareDir)\arena_bay5\flares.json;$(ArenaMapPortFlareDir)\arena_bay5\textures\*.bin">
         <MapKey>arena_bay5</MapKey>
+      </ArenaMapPortFlareFile>
+      <ArenaMapPortFlareFile Include="$(ArenaMapPortFlareDir)\arena_bowl\flares.json;$(ArenaMapPortFlareDir)\arena_bowl\textures\*.bin">
+        <MapKey>arena_bowl</MapKey>
       </ArenaMapPortFlareFile>
     </ItemGroup>
     <Copy SourceFiles="@(ArenaMapPortFlareFile)" DestinationFiles="@(ArenaMapPortFlareFile->'$(ArenaMapPortDistDir)\flares\%(MapKey)\%(Filename)%(Extension)')" Condition="'%(ArenaMapPortFlareFile.Extension)'=='.json'" />
@@ -295,7 +300,8 @@
            -OutputDir work/build/airpit (the U1 build); its preset bundle lands in the same shared preset dir. -->
       <ArenaMapPortAirPitBuildDir>$(MSBuildThisFileDirectory)..\work\build\airpit</ArenaMapPortAirPitBuildDir>
       <!-- Bowl (docs/PLAN-BOWL.md item 8/11): tools/build_all.ps1 -MapKey arena_bowl -FullMap -OutputDir work/build/bowl
-           (the U1 build); its preset bundle lands in the same shared preset dir. Not flares, water or DynamicMaps. -->
+           (the U1 build); its preset bundle lands in the same shared preset dir. Flares and the DynamicMaps overview have their own
+           targets above (0.3.0); there is no water package. -->
       <ArenaMapPortBowlBuildDir>$(MSBuildThisFileDirectory)..\work\build\bowl</ArenaMapPortBowlBuildDir>
     </PropertyGroup>
     <ItemGroup>

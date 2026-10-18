@@ -158,3 +158,115 @@ previously nondefault ArenaMapPort settings match the before-test snapshot,
 including the user's lighting and Clear weather. The user's own game needs a
 restart to load the new client; its local playthrough remains separate from
 GPU-2 verification.
+
+
+## Bowl (arena_bowl) - 2026-10-18 (PLAN-BOWL item 17)
+
+Bowl joins the exporter, the packaged data and `NativeMultiFlare.Install` (new keys `Lighting (arena_bowl) /
+NativeMultiFlare` = true and `NativeMultiFlareIntensity` = 0.5; Equator's and Bay5's keys and defaults are untouched).
+Not host-verified: no Bowl raid has run this build. No scene bundle rebuild.
+
+### Census (Arena 0.6.0.47752, read-only UnityPy over levels 41-48, 95, 96, 111, 128)
+
+- One `FlareSceneSettings`: `level44:229` (`TechnicalManagers/lightManager` of `Arena_Bowl_Scripts`), enabled, active,
+  `source_extra_scalar` 1. Atlas `sharedassets4.assets:21` (ten rectangles, equal to Equator's), batches 2048 / 512 / 256,
+  materials `:5` MultiFlare, `:6` ShitOnScreen, `:4` FlashLightFlares with floats, colors, keywords and render queue equal
+  to Equator's. Textures: the same two BC7 chains (atlas `sharedassets4.assets:11`, SHA256 `d04a4cfb...`; noise now
+  `resources.assets:2969`, was `:2812` in the 0.5.4 data, SHA256 `4a2028a2...` unchanged).
+- Every `FlareLight` is in `level45` (`Arena_Bowl_Light`, ids `6702`-`6729`): 28 lights, 130 elements (108 Normal,
+  22 Noise, no FlashLight). Levels 41, 42, 43, 44 (apart from the settings), 46, 47, 48, 95, 96, 111 and 128 hold none.
+- Activity (component enabled AND every ancestor active, the rule `NativeMultiFlare` applies):
+
+| Group | Lights | Elements |
+|---|---:|---:|
+| Active: `BACK_FLARES/Flare_City_background` (4 Normal + 1 Noise each, total alpha 1) | 4 | 20 (16 Normal, 4 Noise) |
+| Component disabled, chain active: `street_lamp1_destroyable*/StreetLampFlareMain` | 6 | 30 |
+| Component enabled, chain inactive: `StreetLampFlareDistant` x6, `Lum_lamp_destroyable*` x3, one glowstick | 10 | 41 |
+| Component disabled and chain inactive: glowsticks x7, one `Lum_lamp_destroyable` | 8 | 39 |
+| Total | 28 | 130 |
+
+So the pin is `(28, 4, 130, 20)`. PLAN-BOWL's statement is confirmed and sharpened: exactly six lights fail a require,
+all `StreetLampFlareDistant` (`level45:6720`-`6725`, the object itself is inactive), each on its fourth element only
+(the Noise element, `min_dist` 50 > `max_dist` 15, i.e. `invalid distance range`). The other 22 lights pass every require
+unchanged; the settings require ("inactive source settings") does not fail.
+
+### Inactive-light rule
+
+Inactive lights stay in the package as entries (as before on Equator/Bay5: 3 and 1). `validate_light(d, in_hierarchy)`
+demands `min_dist < max_dist` only for a light whose component is enabled and whose chain is active; for any other light
+it still demands both distances finite and non-negative, and every other rule (scale/alpha/culling, vectors,
+color/alpha, type 0 or 2, non-negative and non-zero native divisors, atlas index) stays for all lights.
+`validate_graph` derives the flag from the light's own `active_in_hierarchy` after proving it equals the transform chain.
+Why this is exact: `NativeMultiFlare.StartFlares` skips a light with `!enabled || !active_in_hierarchy` as the first
+statement of its loop, before the scene check, the transform proxies, `Resolve` and `ReadFlare`; only `ReadFlare` carries
+the native division guard (`maxDist > minDist`, `minScale > 0`, `minAlpha > 0`) that the six inverted lights would trip.
+A future runtime change that activates source-inactive lights must first re-apply the ordering requirement.
+`export` also compares against a per-map `EXPECTED_CENSUS` table now; the former `else` branch would have used Bay5's
+tuple for any third map.
+
+### Regression guard (Equator, Bay5)
+
+The accepted `work/extract/multiflare/arena_equator|arena_bay5` were exported from Arena 0.5.4 and are untouched. The
+install is 0.6.0 now, so a byte comparison against them cannot be the guard: it differs by provenance alone (43 and 45
+JSON paths: `source_raw_sha256` of settings, atlas, material and every light, `source/files[].sha256`, and the noise
+texture id/file name `resources.assets:2812` -> `:2969`; Bay5 additionally `settings.source_id`). Every light value,
+transform, flare element, material value, batch setting and texture byte (SHA256 of both `.bin` files) is equal.
+The decisive comparison runs the committed (HEAD) extractor and the patched one on the same 0.6.0 install:
+
+| Map | flares.json SHA256, HEAD extractor = patched extractor | textures |
+|---|---|---|
+| arena_equator | `6ee7507bcc381093d723f08f7cba73e3dc07e857a7eb91d576447dfc7a45dcf3` | both `.bin` identical |
+| arena_bay5 | `8013a1be671d633eef6d71d50bbe05b4f6c896a3f9ac2650c174f6e12ae21f92` | both `.bin` identical |
+
+Both printed their `MULTIFLARE VERIFIED` line unchanged (25/28, 33/48 and 24/25, 111/116). The accepted 0.5.4 inputs
+stay the distribution inputs; they need not be regenerated for this change.
+
+### Bowl output and runtime requires
+
+`python tools/extract/extract_multiflare.py --map arena_bowl --output work/extract/multiflare/arena_bowl` printed
+`MULTIFLARE VERIFIED: arena_bowl: 4/28 active lights, 20/130 active flares, 2 original textures`
+(`flares.json` 149,472 B, SHA256 `6090e9e4...c2a2`; `textures/sharedassets4.assets_11.bin` 1,048,576 B;
+`textures/resources.assets_2969.bin` 262,144 B). Replaying the data requires of `StartFlares` on the file: identity,
+settings, ten atlas rectangles, texture names/hash/layout, shader names and `_MainTex`/`_ShitTex` properties, capacities
+<= 8192, and for the four active lights scene membership in the descriptor list, cull distance > 0, native division,
+type and atlas index (tex ids 0, 1, 8) all hold; `lamps=4 flares=20` passes the "no active flares" guard.
+Offline `Resolve` against the extracted `Arena_Bowl_Light` scene (one `SBG_Bowl_Light` root): the four active lights
+resolve and sit exactly (0.00 m) on their proxies, inside the runtime's 2 cm tolerance. Of the 24 inactive lights,
+which the runtime never resolves, 23 also match and `level45:6712` does not (22.6 m): it shares its full path with
+`6711` (two `glowstick_rezerv/NewMultiFlareLight stick` siblings), which is why a path alone cannot address it.
+
+### Open: the four active lights are outside their own cull distance
+
+The active lights are the "city background" glows, at world (502.8, 394.5, 514.4), (420.6, 486.5, 632.8),
+(554.3, 399.8, 611.3) and (600.4, 300.1, 480.7). The nearest point of the play bounds (x -66..62, y -2..10, z -82..11)
+is 771.1-868.7 m away; even a generous box around the stands (x +-100, y -10..60, z -120..50) is 699.9-798.0 m away.
+Their `cull_distance` is 500 m, and `NativeMultiFlare.Update` keeps `Enabled` false for a lamp farther than that from
+every camera, so with the shipped rule the feature binds and allocates on Bowl but draws nothing. (The active
+elements' 0.1-40 m distance ranges are not a second limit: EFT's Flare tooltip says an element holds MaxScale and
+MaxAlpha at and beyond MaxDist.) Arena is IL2CPP, so the original cull semantics could not be read and nothing is
+claimed about them. A host raid shows it: the F7 probe's `[MultiFlare] arena_bowl lights=4` line and the four `lamp=...
+distance=` lines. Making the glows visible would need a changed cull rule for this map, a separate decision.
+
+### Staging rows still needed (integrator)
+
+1. `ArenaMapPort.Client/ArenaMapPort.Client.csproj`, target `ArenaMapPortStageMultiFlare`: add
+
+   ```xml
+   <Error Condition="!Exists('$(ArenaMapPortFlareDir)\arena_bowl\flares.json')"
+          Text="Missing original Bowl flare input; run tools/extract/extract_multiflare.py --map arena_bowl --output work/extract/multiflare/arena_bowl" />
+   ```
+
+   and, after the Bay5 row in the `ArenaMapPortFlareFile` item group:
+
+   ```xml
+   <ArenaMapPortFlareFile Include="$(ArenaMapPortFlareDir)\arena_bowl\flares.json;$(ArenaMapPortFlareDir)\arena_bowl\textures\*.bin">
+     <MapKey>arena_bowl</MapKey>
+   </ArenaMapPortFlareFile>
+   ```
+
+2. `tools/validate/validate_distribution.py`: `FLARE_MAP_KEYS = ('arena_equator', 'arena_bay5', 'arena_bowl')` and the
+   comment above it (AirPit alone has no flare package). The release tooling (`make_release_zips.py` classifies
+   `flares/<key>/` per map) needs no change.
+3. `tools/tests/test_validate_distribution.py`: add `("arena_bowl", "Arena_Bowl_Light")` to the fixture's key/scene
+   tuple and replace the Bowl assertions that no `flares/arena_bowl` may exist (`assertFalse(... "flares/arena_bowl"
+   ...exists())` and the stray-package block) by "present and valid, plus a stray file is refused".

@@ -1,4 +1,34 @@
-# Current distribution contract: Equator, Bay5 and AirPit (Bowl staged for 0.3.0)
+# Current distribution contract: Equator, Bay5, AirPit and Bowl (0.3.0, staged, not released)
+
+2026-10-18 (0.3.0 integration, feature/bowl, not released): dist holds **86 files, 3,256,514,833 B (3,105.7 MiB)** for the
+four maps and `python tools/validate/validate_distribution.py` ends with `DISTRIBUTION_OK 4 maps 12 bundles 4 sidecars`.
+This paragraph supersedes the "Pending" sentence and the "Bowl has no flares ... or DynamicMaps overview" sentence of the
+paragraph below. Bowl's bundles are staged from the accepted U1 build (`arena_bowl_scenes.bundle` 1,006,073,696 B,
+`arena_bowl_navmesh.bundle` 185,840 B, `arena_bowl_preset.bundle` 6,947 B, `material-shaders.arena_bowl.json` 62,154 B,
+`ai/bowl.ai.json` 17,413 B). New in dist since that paragraph, five files and 1,676,831 B:
+
+- `flares/arena_bowl/flares.json` 149,472 B (SHA-256 `6090e9e4...b3fc2a2`) and `flares/arena_bowl/textures/`
+  `resources.assets_2969.bin` 262,144 B + `sharedassets4.assets_11.bin` 1,048,576 B (together 1,460,192 B). The package comes from
+  `tools/extract/extract_multiflare.py --map arena_bowl` (28 source lights, 4 active, 130 elements, 20 active); the two textures
+  are the same bytes as Equator's, the noise texture just has the Arena 0.6.0 id. Bowl will draw no flare with the current rule: the
+  4 active lights are 771 to 869 m from the play space and the renderer culls beyond 500 m
+  ([native-multiflare.md](progress/native-multiflare.md)). It is staged anyway because `NativeMultiFlare.Install` binds the Bowl
+  key and `StartFlares` reads the file; without it every Bowl raid would log "disabled after error".
+- `dynamicmaps/ArenaMapPort_Bowl/ArenaMapPort_Bowl.jsonc` 1,671 B and `Layers/Ground.svg` 214,968 B (216,639 B together,
+  hash-identical to `work/dynamicmaps/release/ArenaMapPort_Bowl`; [bowl-dynamicmaps.md](progress/bowl-dynamicmaps.md)).
+  `DynamicMapAssets.Maps` now lists Bowl, the client csproj has the two overview rows, `OVERVIEW_MAP_NAMES` is all four maps.
+  Not yet opened in game.
+
+The validator's optional-payload lists are now `FLARE_MAP_KEYS = (arena_equator, arena_bay5, arena_bowl)` and
+`OVERVIEW_MAP_NAMES = (Equator, Bay5, AirPit, Bowl)`; AirPit still has no flare package and only Bay5 has a water package.
+The shipped file set per map (`make_release_zips.py`, real-dist smoke test): core 5, equator 20, bay5 25, airpit 17, bowl 19 files;
+`make_release_zips.py --plan` reads the `<Version>` of both csproj files, now 0.3.0. Both DLLs are 0.3.0: client 819,200 B (SHA-256
+`8AFF8B2D...3855F3`), server 74,240 B (`7662D8BB...DAE473`). Size: the estimated single ZIP is 3,148,925,260 B (2.93 GiB), against
+2.00 GiB for 0.2.2 (Bowl's scenes bundle alone is 1.0 GB); the multi-part layout would be five parts, the largest 964,531,607 B
+(Bowl), all far below the 2 GiB cap. A dry-run deploy to `D:\SPT41` (no `-Confirm`) planned 86 files, 5 new (exactly the files
+above), 2 to overwrite (the two DLLs) and 79 identical. The package is not cut: the first host raid of Bowl with these DLLs,
+the MAP check in DynamicMaps and the release texts of README, FORGE and `docs/releases/v0.3.0.md` (they still say that Bowl has
+no overview) come first.
 
 2026-10-18 (feature/bowl, PLAN-BOWL item 8, not released): Bowl is the fourth map of `ArenaMapRegistry.All`, so every list that
 names the release counts four maps: 12 bundles (three per map), 4 shader sidecars (`material-shaders.arena_<key>.json`), 4

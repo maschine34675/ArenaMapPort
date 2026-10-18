@@ -335,3 +335,282 @@ names), `test_dynamicmaps_deploy.ps1` (unsupported selection `Prison`, not run, 
   `hideout-open.png` in the scenario report. Not done in this session: the F8 rain readback (both raids were dry). Items 11/12 of PLAN-BOWL are
   otherwise satisfied by U1: spawns, gates, borders, exits, bots, audio, lighting and the stand-in all behaved on the
   first build; no U2 is needed for playability.
+
+## 2026-10-18 - release texts, identity checks, the windSettings line
+
+Texts and records only: README.md, FORGE.md, the new `docs/releases/v0.3.0.md`, the two Bowl sentences of AGENTS.md and
+`docs/progress/INDEX.md` (it now also lists `bowl-dynamicmaps.md` and `bowl-source-060.md`). No code, no version numbers
+(0.2.2 -> 0.3.0 is the integrator's), no csproj, no dist, no deploy, no Unity, no host. A review the same day corrected
+five points of the first draft; they are folded into the bullets below and listed under "Fix round" at the end of this section.
+
+### Release texts (PLAN-BOWL item 18, preparation)
+
+- `docs/releases/v0.3.0.md` follows `v0.2.2.md`: Included (four maps), Changes since 0.2.2 (Bowl as the new map, the weather
+  sky-provider rebind of 6c6a38c, the distribution note), Known limitations, Download, Installation. Every size, hash, URL,
+  source commit and VirusTotal value in Download is a placeholder in angle brackets inside a code span. The installation
+  needs the full ZIP (Bowl's bundles are new); the compatibility line is unchanged (SPT 4.1.6 / EFT 0.16.9.5-40743, server
+  `~4.1.5`, DynamicMaps 1.2.1). README.md and FORGE.md name four maps (title, map table or bullet list, gunshot-reverb
+  sentence and its `Audio (arena_bowl)` key, DynamicMaps sentence, natural-night "unaffected" list, scope sentence).
+- What the texts claim, and what each claim rests on, so the release step can re-check it:
+  - Flares: Bowl draws none. The four active `FlareLight`s are 771 to 869 m from the play space and the runtime culls beyond
+    500 m ([native-multiflare.md](native-multiflare.md), Bowl section). README and FORGE keep "Equator and Bay5 also have
+    restored ... lamp flares"; the release notes list it as a limitation.
+  - Overview: Bowl has none in the release as the tree stands, and the texts say so. The pack exists offline
+    (`work/dynamicmaps/release/ArenaMapPort_Bowl`, [bowl-dynamicmaps.md](bowl-dynamicmaps.md)) but is not staged: the client csproj
+    list has 0 Bowl rows, `DynamicMapAssets.Maps` is `{ Equator, Bay5, AirPit }` (the client would not register Bowl even with the
+    files staged), `validate_distribution.OVERVIEW_MAP_NAMES` excludes Bowl (staging the files fails it with "Unexpected or
+    missing overview map files"), the tests pin that state, and the pack has not been opened in game. The first draft promised the
+    overview in README, FORGE and the notes; README, FORGE and `v0.3.0.md` now say that Equator, Bay5 and Air Pit have overviews
+    and Bowl has none yet (a Known limitations bullet in the notes). Reinstatement: only after all six "Integration rows" of
+    bowl-dynamicmaps.md are applied AND one in-game MAP check passed. Then put back, in `v0.3.0.md`, the Included bullet
+    "Optional DynamicMaps overview maps for all four maps ... Air Pit and Bowl show their ground floor; their upper spectator
+    areas are omitted.", the Changes bullet "The DynamicMaps overview covers the ground floor: the field, both pockets (drawn
+    open), the outline of the Mi-26 and the containers. The stands, the Mi-26's roof and the tower platforms are not drawn." and
+    drop the "No DynamicMaps overview for Bowl yet" limitation; in README (DynamicMaps section) and FORGE (compatibility
+    paragraph) name all four maps again and say that Air Pit and Bowl omit their upper spectator areas.
+  - Gunshot reverb "on all four maps" holds (the switch defaults on; `RoomShotAcoustics.Install` loops
+    `ArenaMapRegistry.All`). The Mi-26 room-class change of [shot-acoustics.md](shot-acoustics.md) is not host-verified and the
+    texts do not mention it.
+  - Decals, ballistic surfaces, light culling, physics props and room acoustics are listed as included because the validated
+    build carries them; no host log line for them is quoted in this file yet (PLAN-BOWL item 13 is open).
+  - "The scenes and navigation of those three maps are unchanged from 0.2.2" is the plan's rule (their dist hashes stay
+    untouched); compare the bundles against the 0.2.2 manifest before the ZIP is cut. The client DLL differs from 0.2.2 by the
+    Bowl rows, generalisations whose old-map behaviour is pinned by tests, and the weather sky-provider rebind.
+  - Known limitations: no GPUInstancer grass, tree wind not ported (the line below), stands are scenery, the capture point
+    (-1.76, -0.05, -33.92) lies under the Mi-26 belly (see "Open for the host" above), no flares, no gate hold has run on Bowl
+    (see "Fix round"), no Bowl overview map.
+
+### Identity check (PLAN-BOWL item 16): what exists
+
+- Selection marker: `tools/maps/selection/markers.json` holds the entry `Bowl` / `Arena_Bowl` / `arena_bowl` (screenshot
+  `Screenshot 2026-10-13 112305.png`, screen centre 1251.186 / 395.681, `icon_x` 919, `icon_y` 679; the file has 14 markers).
+  `ArenaMapDescriptor.Bowl` carries `IconX: 919, IconY: 679` (`ArenaMapDescriptor.cs:658-659`), `tools/maps/bowl.json` carries
+  `icon_x` 919 / `icon_y` 679 and `dist/.../db/arena_bowl/base.json` carries `IconX` 919 / `IconY` 679 (read with a Python
+  one-liner in this pass). `SelectionMapPositionTests.ScreenshotPositionsMatchCatalogSidecarsAndDatabase` compares marker,
+  descriptor, sidecar and database for every catalog map with a marker, so it covers Bowl; it was not run here (no dotnet in this
+  pass), the last full run is the 887 passed above.
+- Banner: `extract_banners.BANNERS["arena_bowl"]` = `Matchmaker_Banner_TheBowl` (hint path_id 2538). Staged:
+  `dist/SPT_Runtime/user/mods/ArenaMapPort/banners/arena_bowl.jpg`, 219,073 B, 769 x 460, SHA-256 `5c433492...bb3ee`, identical
+  to the copy under `D:\SPT41`. The server log of the first raid said the banner is wired.
+- Loading screens: `extract_loadscreens.LOADSCREENS["arena_bowl"]` lists the four `Arena_MainMenu_Paralax_Bowl-1..4` images
+  (path ids 164, 1314, 274, 834; Arena ships no loading screen for Bowl, so there is no fifth). Staged:
+  `dist/BepInEx/plugins/maschine-ArenaMapPort/loadscreens/arena_bowl_1..4.jpg`, each 2048 x 1024 (1,055,400 / 1,005,830 /
+  973,521 / 1,062,160 B); the four files are also under `D:\SPT41`.
+- Official description: `extract_map_descriptions.DESCRIPTION_KEYS["arena_bowl"]` = `62eba95b7ba21c1d534d305a Description`.
+  `work/extract/map-descriptions/map-descriptions.json` (1,813 B, SHA-256 `89b9021d...e32d0bb0`) has a non-empty `arena_bowl`
+  string in en, ge and ru; it is byte-identical to the staged `locales/map-descriptions.json` in dist and under `D:\SPT41`.
+  The BSG-derived text is not copied into this repository's tracked files.
+- The region-selection artwork (`map-selection/region-map.png` + manifest) is staged unchanged since 2026-10-13.
+- Tests run in this pass: `python -m unittest tools/tests/test_banners.py` Ran 22 tests OK; `test_loadscreens.py` Ran 25 tests
+  OK; `test_map_descriptions.py` Ran 18 tests OK.
+- Not recorded anywhere yet: the Bowl banner and loading images seen on screen in the menu / loading screen on GPU-2.
+
+### The `Invalid windSettings` line
+
+- What it is: `WindController.SetWind(TreeWind.Settings[])` (decompile `EFT.Weather/WindController.cs:61-76`) logs
+  `Invalid windSettings` through `Debug.LogError` when the array is null or empty. The only caller of that overload in the
+  0.16.9.5 decompile is `LevelSettings.ApplyTreeWindSettings` (`LevelSettings.cs:306-323`, called from `OnPostLoadingScene`),
+  which passes `LocationScene.GetAll<TreeWind.Settings>()`; `LocationScene.FillTreeWinds` (`LocationScene.cs:470-483`) fills
+  those presets from the `TreeWind` components of the scene. None of the four accepted packages carries a `TreeWind` component
+  (a count of the string in `scenes/*.json`: `equator-native-v5` 0, `bay5-native-v5` 0, `airpit-native-v9` 0,
+  `bowl-native-v2` 0), nothing in the importer or the client creates one, so the array is empty on every ported map.
+  The wind compute calculator is then simply not created (`_windCalculator` stays null); `ApplyWindToPlants` still sets the
+  global wind shader vectors. This is the scenes' missing TreeWind data, not a Bowl defect and not something the weather rig
+  supplies (the wording "donor weather rig carries no TreeWind settings" of the task is corrected here).
+- Evidence (host EFT `errors.log`, entries stamped +02:00; the folders are the retained session folders under `D:\SPT41\Logs`):
+  - `log_2026.10.18_11-24-24...`: `13:25:22.788 ... Error|Default|Invalid windSettings`, followed by `New spatial system created`
+    (13:25:22.934), the `maperrors` lines (3 SpawnPointMarker deleted / 21 added, 13:25:23.9) and
+    `[Transit] ... Locations:arena_bowl` (13:25:24.674). `application.log`: `scene preset path:maps/arena_bowl_preset.bundle`
+    13:25:18.5, `LocationLoaded` 13:25:23.3. This session has exactly one Bowl load and one such line.
+  - `log_2026.10.18_11-56-56...`: `14:10:54.674 ... Invalid windSettings`, followed by `New spatial system created` (14:10:54.805),
+    `maperrors` (3 deleted / 38 added) and `[Transit] ... Locations:arena_airpit` (14:10:56.837); `scene preset path:maps/
+    arena_airpit_preset.bundle` 14:10:51.0, `LocationLoaded` 14:10:55.1. The same session loaded vanilla Factory twice
+    (14:01:20 and 14:18:56) and logged the line on neither; the other two retained sessions hold three more Factory loads and no
+    such line.
+  - [equator-profiles.md](equator-profiles.md) (2026-10-14) already counts it among "EFT's usual ported-map noise" next to
+    `WeatherObstacle.Instance is null`, the SpawnPointMarker counts, JetMaterial and the seasons singletons.
+- Effect: none visible; the only thing missing is EFT's GPU wind calculation for tree materials, and the ported scenes have no
+  `TreeWind` renderers to feed. It is a log line, not a repair target. Do not suppress it (AGENTS.md: never suppress
+  Unity/Harmony warnings globally). It is the reason the release notes say tree wind is not ported.
+- Clock note, resolved in the fix round: there is one clock, the host's local time (+02:00), and three machines write into the
+  mirror. EFT names its session folders in UTC (`log_2026.10.18_11-24-24` = 13:24:24 +02:00; the lines inside carry the +02:00
+  offset), the BepInEx logs under `D:\SPT41\BepInEx` are named by host and local time, and `BepInEx/logs/current-<host>.txt`
+  records "local = UTC (UTC+02:00)" per host. Mapping (BepInEx start vs EFT session start):
+  - `log_2026.10.18_11-24-24` (13:24:24) = MASCHINE11, a third machine, not GPU-2: `current-MASCHINE11.txt` says session start
+    13:24:10, `LogOutput-MASCHINE11-2026-10-18_13-24-10.log` holds the Bowl raid (`[TimeOfDay] arena_bowl` 13:25:23.802, `added
+    navmesh for 'arena_bowl': 12704 vertices, 5890 triangles` 13:25:27.089, the same U1 bake). So the Bowl `Invalid windSettings`
+    line quoted above comes from MASCHINE11's raid at 13:25.
+  - `log_2026.10.18_11-56-56` (13:56:56) = GPU-2 (`BepInEx/logs/LogOutput-SPT-GPU-2-2026-10-18_13-56-45.log`, which holds the AirPit
+    `[TimeOfDay] arena_airpit` 14:10:55.531 next to the EFT line at 14:10:54.674); `log_2026.10.18_12-59-32` (14:59:32) = GPU-2
+    (`..._14-59-20.log`); `log_2026.10.18_14-19-01` (16:19:01) = GPU-2 (`current-SPT-GPU-2.txt`, 16:18:49).
+  - GPU-2's raids 1 and 2 are in `BepInEx/logs/LogOutput-SPT-GPU-2-2026-10-18_12-38-36.log` (`[TimeOfDay] arena_bowl` 12:39:44.822 and
+    12:43:34.279, `added navmesh ... 12704 vertices, 5890 triangles` 12:39:48.002 and 12:43:36.699). The EFT session folder of that
+    process (`log_2026.10.18_10-38-xx` in UTC) is no longer retained, which is why the raid-1 `Invalid windSettings` line rests on
+    the errors.log read at the time (see the raid 1 section) and the retained Bowl proof is MASCHINE11's.
+
+### Also seen in the same Bowl errors.log (not analysed, recorded for item 13)
+
+- `13:30:22` `Coroutine couldn't be started because the game object 'MenuScreen' is inactive!`, then at `13:30:27.826` an EFT
+  exception `assets/content/audio/prefabs/shells/weaponsounds.bundle is not loaded` from `SmallPhysicsObject.SetupSoundBank`
+  <- `OnCollisionEnter` <- `Physics.Simulate` (`Simulation.Update`). A Bowl physics prop collided after the raid appears to have
+  been left. `PhysicsPropSoundRepairs` is gated on `ArenaMapRaid.IsLoaded()`, which is false then, so vanilla's lazy
+  `SetupSoundBank` ran and threw. No `[ArenaMapPort]` line accompanies it, and the AirPit session has no such exception. Whether
+  this is the same teardown noise as the `SmallPhysicsSystem.Update` line of two-maps-item-5-physics-props.md (Equator, 2026-09-25)
+  or a Bowl-specific case (341 props) is open.
+
+### Fix round (same day): five corrections to the first draft
+
+- "Football pitch" removed from README, FORGE and `v0.3.0.md` (they say "sunken stadium field" or "field"). Nothing supports a
+  pitch: `grep -rniE 'football|soccer'` found only the three new lines, the scene objects carry no pitch/turf/goal names (only
+  `Stadium_chair_*`), the descriptor text says "the sunken field of an old sports arena", and the staged loading images
+  `arena_bowl_1.jpg` and `arena_bowl_3.jpg` show a worn dirt and dry-grass field with sandbags, containers and the Mi-26, no pitch markings.
+- Overview promises removed (details in the Overview bullet above): the pack is not staged, `DynamicMapAssets.Maps` and
+  `validate_distribution.OVERVIEW_MAP_NAMES` do not know Bowl, and nothing was opened in game.
+- Gate hold: the notes said the hold "has not been exercised with ArenaMode on Bowl", which implied that only ArenaMode is missing.
+  No hold of any kind has run on Bowl. `docs/progress/spawn-gates.md` records its host evidence from the developer test hold
+  (`Spawns/SpawnGateHold`) on other maps; `grep -n -i 'SpawnGate\|hold' docs/progress/bowl-release.md` shows only descriptor and plan
+  mentions (`StartGates` = `DOORS_SPAWN_A`, `DOORS_SPAWN_B`, `HeldGates` empty) and the raid-1 opening of both barriers. The carving,
+  the sealing probe and the re-opening on Bowl's four gate parts are untested; the notes say exactly that. Host check when wanted:
+  a Bowl raid with `Spawns/SpawnGateHold` on, expecting the "held closed" and "released" lines and the sealing probe of
+  [spawn-gates.md](spawn-gates.md).
+- Border cubes: the notes said they "are also part of the navigation mesh". They are bake inputs, not mesh: `navmesh_bake_layers`
+  of `tools/maps/bowl.json` is [9, 11, 18, 29, 30] (29 = LevelBorder), so the 354 cubes are baked as solid colliders and the mesh
+  ends at them; the known cost is about 608 m2 of unreachable cube-top islands (Bake-input analysis above). The notes say "The
+  navigation mesh ends at them".
+- Clock note resolved (see above). Also reworded: bots "patrol the field along a patrol way built from Arena's own patrol points"
+  (the extraction turned Arena's 86 PatrolPoints into 7 hubs and 79 sub points; the 17 bot spawns sit on Arena's core points).
+- Not changed, for the integrator: `NativeMultiFlare.Install` in the working tree loops Equator, Bay5 and Bowl and binds
+  `NativeMultiFlare` (default true) for Bowl, but no Bowl flare package is staged or validated (`FLARE_MAP_KEYS` is Equator and Bay5,
+  the csproj has no `flares/arena_bowl` rows). A Bowl raid would then try to read `flares/arena_bowl/flares.json`, a file that is not staged, and `Fail` would log an Error (the zero-warning state of today's Bowl raids would be lost). The texts say Bowl
+  draws no flares, which holds either way; the consistent choices are to drop Bowl from the loop or to stage the package together with the
+  `FLARE_MAP_KEYS` change and the csproj rows of [native-multiflare.md](native-multiflare.md).
+
+## 2026-10-18 - polish integrated: flares, overview map, shot-acoustics classes, release texts, 0.3.0 version
+
+Integration pass after the four polish areas (MultiFlare, DynamicMaps overview, shot-acoustics classes, release texts) and their
+reviews. Build and test pass only: nothing was deployed, nothing was committed, no host raid ran. The client DLL, the server DLL
+and dist/ are 0.3.0 now; the release is not cut.
+
+### What was integrated
+
+- Version 0.2.2 -> 0.3.0 in `ArenaMapPort.Client.csproj` and `ArenaMapPort.Server.csproj` (`<Version>`), `Plugin.PluginVersion` and
+  `ModMetadata.Version`. `grep -rn 0.2.2` over `*.cs/*.csproj/*.py/*.ps1/*.json` found only these four spots and a descriptor
+  comment ("Equator, Bay5 and AirPit are the released ones (0.2.2)", still true); no test pins the version.
+  `make_release_zips.py --plan` reads both csproj versions and reports `version 0.3.0`.
+- Both csproj `<Description>` texts name the four maps ("Equator, Bay5, Air Pit and Bowl").
+- MultiFlare (area A): client csproj target `ArenaMapPortStageMultiFlare` got the Bowl `<Error>` row and the Bowl
+  `ArenaMapPortFlareFile` item (`flares.json` + `textures\*.bin`, `MapKey` `arena_bowl`); `validate_distribution.FLARE_MAP_KEYS` is
+  `(arena_equator, arena_bay5, arena_bowl)`; `NativeMultiFlare.cs` (area A, already in the tree) binds `Lighting (arena_bowl)`.
+  The review's order requirement holds: C# change, csproj rows, validator tuple and tests landed together, so a Bowl raid finds
+  `flares/arena_bowl/flares.json`.
+- DynamicMaps overview (area B): client csproj target `ArenaMapPortStageDynamicMaps` has the two Bowl rows (eight overview files),
+  `DynamicMapAssets.Maps` is `{ Equator, Bay5, AirPit, Bowl }`, `validate_distribution.OVERVIEW_MAP_NAMES` is all four maps,
+  `AGENTS.md` names `-DynamicMapsMap Equator|Bay5|AirPit|Bowl`. The deploy script already accepted `Bowl` (area B).
+- Tests moved with the rows: `tools/tests/test_validate_distribution.py` (fixture writes the Bowl overview files and a Bowl flare
+  package with scene `Arena_Bowl_Light`; the Bowl test is renamed `test_bowl_carries_four_loadscreens_an_overview_and_flares_but_no_water`
+  and now requires the pack and the package exactly: stray overview file, missing overview file, stale overview bytes, missing flare
+  texture, stray flare file are each refused; the water refusal stays) and `ArenaMapPort.Server.Tests/DynamicMapAssetsTests.cs`
+  (`[InlineData("Bowl")]`, the reload count is `DynamicMapAssets.Maps.Length`, the missing-pack list is `Bay5, AirPit, Bowl`).
+- Shot-acoustics classes (area C: Mi-26 IndoorMetalThick room of 15 m or more is Metal) needed no integration row; its tests are in
+  the 903 below.
+- No edit needed (read, not changed): `tools/release/make_release_zips.py` (its flare and dynamicmaps rules derive from
+  `RELEASE_MAP_KEYS/NAMES`; the real dist classifies as `86 files, 0 unclassified, parts core=5, equator=20, bay5=25, airpit=17,
+  bowl=19`), `tools/park-unreleased-dist.ps1` (Bowl left its list on the promotion, nothing of Bowl is parked: `PARKED_DIST_OK
+  Client 0 files`, `Server 0 files`), `test_release_zips.py`, `test_park_unreleased_dist.py`.
+
+### Evidence
+
+- `dotnet build ArenaMapPort.Client/ArenaMapPort.Client.csproj -c Release` (full, not DllOnly): `0 Warnung(en)  0 Fehler`, 12.65 s.
+  It printed the `[ArenaMapPort] staged ...` lines for all 12 bundles (`arena_bowl_scenes/navmesh/preset.bundle`) and the four
+  `material-shaders.arena_<key>.json`. The flare and overview `Copy` tasks print nothing at this verbosity; the proof is the dist
+  listing and the hash lines below. `PARKED_DIST_OK Client 0 files`.
+- `dotnet build ArenaMapPort.Server/ArenaMapPort.Server.csproj -c Release`: `0 Warnung(en)  0 Fehler`, 5.06 s; `PARKED_DIST_OK Server 0 files`.
+- `dotnet test ArenaMapPort.Server.Tests/ArenaMapPort.Server.Tests.csproj -c Release`:
+  `Bestanden!   : Fehler: 0, erfolgreich: 903, übersprungen: 0, gesamt: 903` (887 in the last U1 pass above; the 16 more are
+  area C's room-class tests and the new Bowl theory case of `DynamicMapAssetsTests`). The nullable-warning list of that build comes from the linked client sources in the
+  test project and is not new.
+- `python -m unittest discover -s tools/tests -p "test_*.py"`: `Ran 1818 tests in 174.461s`, `OK (skipped=55)`. The 55 skips are
+  26 `DynamicMaps exporter requires optional numpy and shapely`, 10 `optional cartography dependencies unavailable`, 9 Bay5 exporter
+  and 7 Bay5 package tests (numpy/shapely/Pillow), and one each for the superseded AirPit v8 plan, the already-filtered Lighthouse
+  set and the full-exporter fixture. Re-run with the optional-dependency venv:
+  `work/dynamicmaps/venv/Scripts/python.exe -m unittest discover -s tools/tests -p "test_dynamicmaps*.py"` -> `Ran 53 tests ... OK`
+  (includes the 9 `test_dynamicmaps_bowl.py` tests), and `test_multiflare_extraction.py` + `test_validate_distribution.py` -> `Ran 44 tests ... OK`.
+- `pwsh -NoProfile -File tools/tests/test_dynamicmaps_deploy.ps1`: `DYNAMICMAPS_DEPLOY_TESTS_PASSED 122 cases`.
+- `python tools/validate/validate_distribution.py`: `[validate_bundle_names] OK -- 12 bundle(s), every internal directory name is
+  unique`, then `DISTRIBUTION_OK 4 maps 12 bundles 4 sidecars`.
+- Staged Bowl additions equal their sources: `flares/arena_bowl/flares.json` SHA-256 `6090e9e448b33d186cd2581d372fa4fb21630cfc2178b1e3acfcf22f9b3fc2a2`
+  (= `work/extract/multiflare/arena_bowl/flares.json`), `ArenaMapPort_Bowl.jsonc`
+  `0a7601772705111075f4006412991bf917d52f8b4d4c61aee5c4138991de53e3`, `Ground.svg`
+  `138750ffc16aaef073c74bd2ac5579f1b4c00b839ba680889b10a96d079064dd` (= `work/dynamicmaps/release/ArenaMapPort_Bowl/...`). The two Bowl flare
+  textures have the same SHA-256 as Equator's and Bay5's (`4a2028a2...76601d`, `d04a4cfb...d95170`).
+- DLLs: client 819,200 B, SHA-256 `8AFF8B2DFD5417A780BD61E761491391952FA594D2DF394CB4D0B83DFA3855F3`; server 74,240 B,
+  `7662D8BBFB5390C277ABE8D5C10FCBA5490AC5A7741747FE9D53F945CDFAE473`; both `FileVersion 0.3.0.0`, `ProductVersion
+  0.3.0+5f0d479ce8fce2529d390c15a7063216efbd67c2` (the commit is HEAD; the tree is dirty, so a build for the release is made after
+  the commit).
+- `python tools/release/make_release_zips.py --single --plan` (writes nothing): `version 0.3.0`, `86 dist files, raw 3,256,514,833 B
+  (3,105.7 MiB), estimated zip 3,148,925,260 B`, `estimated single ZIP: 2.93 GiB`. Multi-part `--plan`: 5 parts (core 5 files, equator
+  20, bay5 25, airpit 17, bowl 19), the largest `maschine-ArenaMapPort-0.3.0-part5of5-bowl.zip` ~964,531,607 B, all below 2 GiB.
+- `pwsh -NoProfile -File tools/deploy-to-spt.ps1 -SptRoot 'D:\SPT41'` (dry run, no `-Confirm`, nothing copied): `plan: 86 file(s),
+  3105.7 MB total -- 5 new, 2 to overwrite, 79 already identical`; the 5 new are `ArenaMapPort_Bowl.jsonc`, `Ground.svg`,
+  `flares.json`, `resources.assets_2969.bin`, `sharedassets4.assets_11.bin`; the 2 overwrites are the two DLLs.
+- `git status --porcelain`: only tracked sources, tests and docs (25 modified, 3 untracked); nothing from `work/` or `dist/`.
+
+### dist listing (BepInEx/plugins/maschine-ArenaMapPort)
+
+```
+flares/arena_bay5/flares.json                                  109,370 B
+flares/arena_bay5/textures/resources.assets_2812.bin           262,144 B
+flares/arena_bay5/textures/sharedassets4.assets_11.bin       1,048,576 B
+flares/arena_bowl/flares.json                                  149,472 B
+flares/arena_bowl/textures/resources.assets_2969.bin           262,144 B
+flares/arena_bowl/textures/sharedassets4.assets_11.bin       1,048,576 B
+flares/arena_equator/flares.json                               115,141 B
+flares/arena_equator/textures/resources.assets_2812.bin        262,144 B
+flares/arena_equator/textures/sharedassets4.assets_11.bin    1,048,576 B
+dynamicmaps/ArenaMapPort_AirPit/ArenaMapPort_AirPit.jsonc        1,691 B
+dynamicmaps/ArenaMapPort_AirPit/Layers/Ground.svg              232,927 B
+dynamicmaps/ArenaMapPort_Bay5/ArenaMapPort_Bay5.jsonc            1,704 B
+dynamicmaps/ArenaMapPort_Bay5/Layers/Ground.svg                207,192 B
+dynamicmaps/ArenaMapPort_Bowl/ArenaMapPort_Bowl.jsonc            1,671 B
+dynamicmaps/ArenaMapPort_Bowl/Layers/Ground.svg                214,968 B
+dynamicmaps/ArenaMapPort_Equator/ArenaMapPort_Equator.jsonc      1,688 B
+dynamicmaps/ArenaMapPort_Equator/Layers/Ground.svg             153,567 B
+```
+
+There is no `flares/arena_airpit` and no `water/arena_bowl`, as intended.
+
+### Inconsistencies and findings the integrator could not fix inside its files
+
+- **Release texts vs dist.** README.md (line 84-89), FORGE.md (line 33-35) and `docs/releases/v0.3.0.md` (line 20, line 76) say that
+  Bowl has no DynamicMaps overview. With this integration dist, the client and the validator carry one. Either the texts get the
+  reinstatement of the "Overview" bullet above (after an in-game MAP check) or the Bowl overview rows are taken out again; staying
+  as it is would ship an undocumented, never-opened map pack. The flare statements of the texts ("No lamp flares on Bowl") stay true.
+- **Bowl flares draw nothing.** The 4 active lights are 771 to 869 m from the play space and `NativeMultiFlare.Update` keeps lamps
+  beyond their 500 m cull distance off. The package is staged only so the Bowl raid does not log an error. A raid should show the
+  F7 probe line `[MultiFlare] arena_bowl lights=4` and four `lamp=... distance=` lines; a visible glow needs a map-specific cull
+  rule, a separate decision.
+- **Doc corrections owed by their owners** (not made here, outside the integrator's file list): `docs/progress/native-multiflare.md`
+  section "Open: the four active lights are outside their own cull distance" says the elements "also fade within 0.1-40 m". The
+  review found no support: EFT's `Flare.cs` tooltip and `PrepareGpuData` give MaxScale/MaxAlpha at and beyond MaxDist, and the
+  package has element 1 `max_alpha` 1.0, element 2 0.3. Only the 500 m cull is established. `docs/progress/bowl-dynamicmaps.md`
+  says the walkable ground spans x -63.84..59.64, z -79.45..8.75 (that is the anchored pitch component; the muted ground reaches
+  x -66..62, z -81.7..10.9) and that core-12/13/14 stand "under" the helicopter (their y is 2.05, 1.81, 1.64: on the Mi-26 roof cells);
+  the 3.5 / 5.1 / 1.6 m distances stand.
+- **Release size.** The single ZIP estimates at 2.93 GiB (0.2.2: 2.00 GiB). Pixeldrain takes it; a channel with a 2 GiB file cap
+  needs the multi-part layout (5 parts, largest ~0.92 GiB).
+
+### Still needs the host (GPU-2, with the 0.3.0 DLLs and the five new files)
+
+1. Deploy (dry run first, then `-Confirm`; client DLL needs an EFT restart, server DLL a server restart) and confirm the new
+   client MVID with `uibridge_status`; check the server DLL hash on the host before the restart.
+2. Bowl raid: `[ArenaMapPort][MultiFlare] arena_bowl` must not log an error; F7 `[MultiFlare] arena_bowl lights=4` with the four
+   `distance=` lines (expected beyond 500 m, nothing drawn); no `disabled after error`.
+3. DynamicMaps (1.2.1): open inventory -> MAP in a Bowl raid: the pack registers (no `reportMissing` line), the ground-floor
+   plan is drawn, the player arrow sits correctly at several positions (spawn pockets, the Mi-26, the containers), and read the
+   sprite vertex count (`MapLayer.Image.sprite.vertices.Length`, estimated ~35,000 against the 65,500 limit). Then decide on the
+   release texts.
+4. Stand inside the Mi-26 (room 4, graph id 563) and read the `[RoomShotAcoustics]` line: expected class Metal (before: Shop);
+   the containers must still read Metal, the Offices rooms Shop, the FanZone Hall, the field Outdoor.
+5. F7/F8/F10 diagnostics as in the earlier Bowl raids; `uibridge_status` `max` frame time; the hideout opened once.
+6. Cross-map raids on Equator, Bay5 and AirPit with the same DLL (flares on Equator and Bay5 unchanged, AirPit and Bowl overview
+   present), then the 0.3.0 package cut from a committed tree.

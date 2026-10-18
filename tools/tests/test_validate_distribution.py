@@ -49,7 +49,7 @@ class DistributionSidecarTests(unittest.TestCase):
                                  hashlib.sha256(image.tobytes()).hexdigest())
         pixel_pin.start()
         self.addCleanup(pixel_pin.stop)
-        for name in ('Equator', 'Bay5', 'AirPit'):
+        for name in ('Equator', 'Bay5', 'AirPit', 'Bowl'):
             for file in (f'ArenaMapPort_{name}.jsonc', 'Layers/Ground.svg'):
                 relative = f'ArenaMapPort_{name}/{file}'
                 for root in (self.plugin/'dynamicmaps', self.repo/'work/dynamicmaps/release'):
@@ -62,7 +62,8 @@ class DistributionSidecarTests(unittest.TestCase):
             (bundles / f"arena_equator_{kind}.bundle").write_bytes(b"fixture bundle")
         (self.plugin / "material-shaders.arena_equator.json").write_text("{}", encoding="utf-8")
         for key, scene in (("arena_equator", "Arena_Equator_Lighting"),
-                           ("arena_bay5", "Arena_Bay5_Light")):
+                           ("arena_bay5", "Arena_Bay5_Light"),
+                           ("arena_bowl", "Arena_Bowl_Light")):
             package = flare_graph()
             package["map_key"] = key
             package["lights"][0]["scene"] = scene
@@ -106,8 +107,9 @@ class DistributionSidecarTests(unittest.TestCase):
         for folder in (self.server / "db/arena_airpit", self.repo / "ArenaMapPort.Server/db/arena_airpit"):
             folder.mkdir(parents=True)
             (folder / "base.json").write_text('{"Id": "arena_airpit"}', encoding="utf-8")
-        # Bowl (PLAN-BOWL item 8): bundles, shader sidecar, database, art, AI sidecar and acoustics; no overview pack, no
-        # flares, no water package, and four loading images (Arena ships no loading screen for it).
+        # Bowl (PLAN-BOWL item 8, overview and flares item 17): bundles, shader sidecar, database, art, AI sidecar,
+        # acoustics, an overview pack (the loop above) and a flare package (the loop above); no water package, and four
+        # loading images (Arena ships no loading screen for it).
         for kind in ("scenes", "navmesh", "preset"):
             (bundles / f"arena_bowl_{kind}.bundle").write_bytes(b"fixture bundle")
         (self.plugin / "material-shaders.arena_bowl.json").write_text("{}", encoding="utf-8")
@@ -361,7 +363,7 @@ class DistributionSidecarTests(unittest.TestCase):
                     finally:
                         path.write_bytes(original)
 
-    def test_bowl_carries_four_loadscreens_and_no_overview_flares_or_water(self):
+    def test_bowl_carries_four_loadscreens_an_overview_and_flares_but_no_water(self):
         # PLAN-BOWL item 8: Arena ships no loading screen for Bowl, only the four main-menu backgrounds, so the count of
         # the rotation comes from its LOADSCREENS list and a fifth image (or a missing fourth) is a set mismatch.
         self.assertEqual(4, len(extract_loadscreens.LOADSCREENS["arena_bowl"]))
@@ -384,20 +386,40 @@ class DistributionSidecarTests(unittest.TestCase):
                 self.validate()
         finally:
             fourth.write_bytes(original)
-        # No overview pack, flare package or water package may appear for Bowl before it is listed on purpose.
-        self.assertFalse((self.plugin / "dynamicmaps/ArenaMapPort_Bowl").exists())
-        self.assertFalse((self.plugin / "flares/arena_bowl").exists())
+        # Since 0.3.0 Bowl ships an overview pack and a flare package; both are required, exactly. It has no water
+        # package, and none may appear before it is listed on purpose.
+        self.assertTrue((self.plugin / "dynamicmaps/ArenaMapPort_Bowl/Layers/Ground.svg").exists())
+        self.assertTrue((self.plugin / "flares/arena_bowl/flares.json").exists())
         self.assertFalse((self.plugin / "water/arena_bowl").exists())
-        (self.plugin / "dynamicmaps/ArenaMapPort_Bowl").mkdir()
-        (self.plugin / "dynamicmaps/ArenaMapPort_Bowl/ArenaMapPort_Bowl.jsonc").write_text("{}", encoding="utf-8")
+        stray = self.plugin / "dynamicmaps/ArenaMapPort_Bowl/Layers/Unexpected.svg"
+        stray.write_text("<svg/>", encoding="utf-8")
         with self.assertRaisesRegex(ValueError, "Unexpected or missing overview"):
             self.validate()
-        shutil.rmtree(self.plugin / "dynamicmaps/ArenaMapPort_Bowl")
-        (self.plugin / "flares/arena_bowl").mkdir()
-        (self.plugin / "flares/arena_bowl/flares.json").write_text("{}", encoding="utf-8")
+        stray.unlink()
+        overview = self.plugin / "dynamicmaps/ArenaMapPort_Bowl/ArenaMapPort_Bowl.jsonc"
+        original = overview.read_bytes()
+        overview.unlink()
+        try:
+            with self.assertRaises(FileNotFoundError):
+                self.validate()
+        finally:
+            overview.write_bytes(original)
+        (self.plugin / "dynamicmaps/ArenaMapPort_Bowl/ArenaMapPort_Bowl.jsonc").write_bytes(b"stale bowl overview")
+        with self.assertRaisesRegex(ValueError, "Stale overview map: ArenaMapPort_Bowl/ArenaMapPort_Bowl.jsonc"):
+            self.validate()
+        overview.write_bytes(original)
+        flare = self.plugin / "flares/arena_bowl/textures/test.bin"
+        flare_bytes = flare.read_bytes()
+        flare.unlink()
+        try:
+            with self.assertRaises(FileNotFoundError):
+                self.validate()
+        finally:
+            flare.write_bytes(flare_bytes)
+        (self.plugin / "flares/arena_bowl/Unexpected.json").write_text("{}", encoding="utf-8")
         with self.assertRaisesRegex(ValueError, "Unexpected or missing flare package files"):
             self.validate()
-        shutil.rmtree(self.plugin / "flares/arena_bowl")
+        (self.plugin / "flares/arena_bowl/Unexpected.json").unlink()
         (self.plugin / "water/arena_bowl").mkdir(parents=True)
         (self.plugin / "water/arena_bowl/water.json").write_text("{}", encoding="utf-8")
         with self.assertRaisesRegex(ValueError, "Water file set mismatch"):

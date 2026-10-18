@@ -7,7 +7,7 @@ namespace ArenaMapPort.Client
     /// <summary>Exact two-file package paths; serialized image tokens remain compatible with older packs.</summary>
     internal sealed class DynamicMapAssets
     {
-        internal static readonly string[] Maps = { "Equator", "Bay5", "AirPit" };
+        internal static readonly string[] Maps = { "Equator", "Bay5", "AirPit", "Bowl" };
         internal readonly string Root;
         bool _loading;
 

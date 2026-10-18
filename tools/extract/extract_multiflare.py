@@ -5,6 +5,12 @@ weapon bundle type tree. Arena adds _cullDistance before the unchanged Flare[];
 its scene settings also contain a trailing scalar absent from EFT's type. That
 scalar is preserved explicitly and only the verified value 1 is accepted.
 Generated data is proprietary source content: output belongs in ignored work/.
+
+Inactive source lights (component disabled or an inactive ancestor) stay in the package as
+inactive entries, exactly like the Equator/Bay5 ones: the runtime never reads their fields.
+Every structural requirement still applies to them; only the distance ORDER (min < max) is
+demanded of the lights the runtime consumes, because that is the one rule they alone need.
+Bowl's StreetLampFlareDistant lights carry min 50 > max 15 on one element and are inactive.
 """
 from __future__ import annotations
 
@@ -30,7 +36,16 @@ SCENES = {
                    83: "Arena_Bay5_Light", 84: "Arena_Bay5_Main", 85: "Arena_Bay5_Scripts",
                    86: "Arena_Bay5_WAREHOUSE", 88: "Arena_Bay5_TeamFight_DesignStuff",
                    89: "Arena_Bay5_TeamFight"},
+    # Bowl's lights are all in level45 (Light); the one FlareSceneSettings sits under
+    # Scripts/TechnicalManagers/lightManager (level44). The sound/culling/ai scenes (111, 96, 128)
+    # and level42 hold none (2026-10-18 census, docs/progress/native-multiflare.md).
+    "arena_bowl": {41: "Arena_Bowl", 43: "Arena_Bowl_DesignStuff", 44: "Arena_Bowl_Scripts",
+                   45: "Arena_Bowl_Light", 46: "Arena_Bowl_Building", 47: "Arena_Bowl_TeamFight",
+                   48: "Arena_Bowl_TeamFight_DesignStuff", 95: "Arena_Bowl_Grass"},
 }
+# (source lights, active lights, source flare elements, active elements); a drifting Arena source fails the export.
+EXPECTED_CENSUS = {"arena_equator": (28, 25, 48, 33), "arena_bay5": (25, 24, 116, 111),
+                   "arena_bowl": (28, 4, 130, 20)}
 
 
 def require(value, message):
@@ -60,7 +75,12 @@ def _reader(raw):
     return Reader(raw if hasattr(raw, "get_raw_data") else RawObject(raw))
 
 
-def decode_light(raw):
+def light_is_active(light):
+    """True for a light the runtime consumes: component enabled and every ancestor active."""
+    return bool(light["enabled"] and light["active_in_hierarchy"])
+
+
+def decode_light(raw, in_hierarchy=True):
     r = _reader(raw)
     h = r.header()
     d = dict(enabled=h["enabled"], total_scale=r.take("f"), total_alpha=r.take("f"),
@@ -71,11 +91,18 @@ def decode_light(raw):
                                 min_scale=r.take("f"), max_scale=r.take("f"), min_alpha=r.take("f"),
                                 max_alpha=r.take("f"), tex_id=r.take("i")))
     r.done()
-    validate_light(d)
+    validate_light(d, in_hierarchy)
     return d
 
 
-def validate_light(d):
+def validate_light(d, in_hierarchy=True):
+    """Fail closed on malformed data. in_hierarchy is the source activity of the owning chain.
+
+    An inactive light (disabled or under an inactive ancestor) is kept as an inactive entry and never
+    read by the runtime, so only the ORDER of its distance range is waived. All other rules,
+    including non-negative distances and the native divisors, still apply to every light.
+    """
+    active = bool(d["enabled"]) and in_hierarchy
     require(finite(d), "nonfinite light data")
     require(d["total_scale"] >= 0 and 0 <= d["total_alpha"] <= 1 and d["cull_distance"] > 0,
             "invalid light scale/alpha/culling")
@@ -85,7 +112,8 @@ def validate_light(d):
                 "invalid flare vectors")
         require(0 <= f["alpha"] <= 1 and all(0 <= x <= 1 for x in f["color"]), "invalid flare color/alpha")
         require(f["flare_type"] in (0, 2), "unsupported scene flare type")
-        require(0 <= f["min_dist"] < f["max_dist"], "invalid distance range")
+        require(f["min_dist"] >= 0 and f["max_dist"] >= 0 and (not active or f["min_dist"] < f["max_dist"]),
+                "invalid distance range")
         require(min(f[k] for k in ("min_scale", "max_scale", "min_alpha", "max_alpha")) >= 0,
                 "negative distance multiplier")
         require(f["min_scale"] > 0 and f["min_alpha"] > 0, "zero native divisor")
@@ -159,10 +187,10 @@ def _object_info(obj, scene):
                 source_byte_count=obj.byte_size)
 
 
-def _schema_check(obj, schema):
+def _schema_check(obj, schema, in_hierarchy=True):
     require(script_hash(obj) == script_hash(schema), "FlareLight schema hash differs from source bundle")
     t = obj.read_typetree(nodes=schema.serialized_type.node, check_read=True)
-    decoded = decode_light(obj)
+    decoded = decode_light(obj, in_hierarchy)
     require(decoded["total_scale"] == t["_totalScale"] and decoded["total_alpha"] == t["_totalAlpha"]
             and decoded["cull_distance"] == t["_cullDistance"] and decoded["enabled"] == bool(t["m_Enabled"]),
             "light bundle schema mismatch")
@@ -196,10 +224,10 @@ def validate_graph(d):
         require(not path.is_absolute() and ".." not in path.parts and path.parts[0] == "textures",
                 "unsafe texture output path")
     for l in lights:
-        validate_light(l)
         require(l["scene"] in SCENES[d["map_key"]].values(), "light outside owned scene set")
         require(l["transform_chain"] and l["active_in_hierarchy"] == all(n["active_self"] for n in l["transform_chain"]),
                 "incorrect inherited activity")
+        validate_light(l, l["active_in_hierarchy"])
         for n in l["transform_chain"]:
             require(len(n["position"]) == 3 and len(n["rotation"]) == 4 and len(n["scale"]) == 3,
                     "invalid transform")
@@ -233,8 +261,9 @@ def export(source, output, map_key):
                 continue
             kind = script(obj)
             if kind == "FlareLight":
-                d = _schema_check(obj, schema)
-                d.update(_object_info(obj, name))
+                info = _object_info(obj, name)
+                d = _schema_check(obj, schema, info["active_in_hierarchy"])
+                d.update(info)
                 lights.append(d)
             elif kind == "FlareSceneSettings":
                 scene_settings.append((obj, name))
@@ -289,8 +318,8 @@ def export(source, output, map_key):
                          light_schema=dict(bundle=LIGHT_SCHEMA_BUNDLE, sha256=hashlib.sha256(schema_path.read_bytes()).hexdigest(),
                                            script_hash=script_hash(schema))))
     validate_graph(d)
-    expected = (28, 25, 48, 33) if map_key == "arena_equator" else (25, 24, 116, 111)
-    active = [l for l in lights if l["enabled"] and l["active_in_hierarchy"]]
+    expected = EXPECTED_CENSUS[map_key]
+    active = [l for l in lights if light_is_active(l)]
     require((len(lights), len(active), sum(len(l["flares"]) for l in lights), sum(len(l["flares"]) for l in active)) == expected,
             "source light/flare census drift")
     output.mkdir(parents=True, exist_ok=True)
