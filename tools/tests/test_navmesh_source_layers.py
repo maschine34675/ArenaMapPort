@@ -63,6 +63,10 @@ sealed class Transform
     }
 }
 
+// Stand-in for the descriptor the production rule reads (ArenaPaths.Map.keep_level_borders, PLAN-BOWL).
+sealed class ArenaMapDescriptorData { public bool keep_level_borders; }
+static class ArenaPaths { public static ArenaMapDescriptorData Map = new ArenaMapDescriptorData(); }
+
 static class Program
 {
     __PRODUCTION_FILTER__
@@ -120,6 +124,15 @@ static class Program
         Check("same-name-real-geometry", new Transform("Bear house (9)", 18), false);
         Check("spawn-bound", new Transform("Child", 18, new Transform("SPAWN_BOUND_FIGHTER", 0)), true);
         Check("named-border", new Transform("Cube", 18, new Transform("LevelBorder group", 0)), true);
+
+        // KeepLevelBorders (Bowl, docs/PLAN-BOWL.md): a map that keeps its layer-29 border cubes bakes them as
+        // physical sources; the Triggers rule and the name rules are unaffected.
+        ArenaPaths.Map.keep_level_borders = true;
+        Check("kept-border-layer-29", new Transform("Cube (301)", 29), false);
+        Check("kept-border-triggers-still-dropped", new Transform("Marker", 13), true);
+        Check("kept-border-named-prefix-still-dropped", new Transform("Cube", 18, new Transform("LevelBorder group", 0)), true);
+        ArenaPaths.Map.keep_level_borders = false;
+        Check("dropped-border-layer-29", new Transform("Cube (301)", 29), true);
         Check("sliding-door", new Transform("Door_Sliding_Respawn_L", 18), true);
 
         var barrier = new Transform("Gates_Depot_Frame", 0);
@@ -217,7 +230,7 @@ class NavMeshSourceLayerTests(unittest.TestCase):
     def test_numeric_layers_preserve_solid_children_and_existing_barrier_rules(self):
         result = run_filter(BAKE.read_text(encoding="utf-8"))
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
-        self.assertIn("NAVMESH_SOURCE_FILTER_PASSED cases=175", result.stdout)
+        self.assertIn("NAVMESH_SOURCE_FILTER_PASSED cases=179", result.stdout)
 
     def test_bake_composes_the_item8_inputs_in_the_documented_order(self):
         # The harness runs the production helper functions; this pins how Bake() wires them, so that the
