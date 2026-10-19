@@ -296,3 +296,35 @@ Two refinements of the verifier after the final review, both in `ArenaInstallati
   `Path.GetFullPath` and cannot stat the file. Such entries are skipped and counted (`LongPathsSkipped`, shown in the
   Info line as `..., N long paths skipped`) instead of failing the check; `ResolveInside` no longer normalises them (the
   text rule already refuses every escaping spelling). The default launcher folder (46 characters) skips nothing.
+
+## Host evidence (2026-10-19, build `ff4308c`, both GPU hosts)
+
+The user installed Arena on SPT-GPU-2 (host 2) through the BSG launcher and offered SPT-GPU-1 (host 1, no Arena) for the
+negative case. Both hosts mirror the same SPT installation, so one `deploy-to-spt.ps1 -Confirm` (3 overwrites: both DLLs and
+`locales/map-descriptions.json`, 64 identical) served both; `gpu-run deploy-wait --server --force` saw the files identical
+after 96.5 s (host 1) and 2 s (host 2), started each SPT server, and `gpu-run start` brought each EFT to the main menu with
+`17/17 identical` plugins (the 0.2.3 client, `ProductVersion 0.2.3+ff4308c`).
+
+- **Host 1, negative (no Arena, no registry entry).** Server log 19:29:26: `[ArenaMapPort] Escape from Tarkov: Arena not
+  found: No Escape from Tarkov: Arena installation is registered in the Windows registry
+  (HKEY_LOCAL_MACHINE\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\EscapeFromTarkovArena_live); install
+  Arena with the Battlestate Games launcher, or point the mod's Arena install path override at the folder that contains
+  EscapeFromTarkovArena.exe. The 3 Arena maps stay unregistered. Install Escape from Tarkov: Arena through the BSG launcher,
+  or set ...` and no `is available in location selection` line. Client log 19:30:10: `[ArenaMapPort][Arena] Escape from
+  Tarkov: Arena not found: No ... registered in the Windows registry (...)`, the hint line `the Arena maps need an installed
+  Escape from Tarkov: Arena; the server does not register them without one. Set General/ArenaInstallPath ...`, and the banner
+  `0.2.3 loaded. Maps: none available. Arena: not found.` The PMC location selection (`selection-check` scenario) listed
+  0 `ARENA` tiles among 30 labels (THE LAB ... TERMINAL); the hideout opened (`hideout-open`: screen Hideout, `logAbsent` error
+  passed) and closed after the profile's first-visit dialog. No ArenaMapPort warning or error.
+- **Host 2, positive (Arena 0.6.1.0.48206 at `C:\Battlestate Games\Escape from Tarkov Arena`).** Server log 19:31:33:
+  `[ArenaMapPort] Escape from Tarkov: Arena 0.6.1.0.48206 at C:\Battlestate Games\Escape from Tarkov Arena (registry;
+  15,351 files, 76.1 GB verified)` followed by the three `is available in location selection` lines, the fixed-raid-time
+  and APBS lines (`3 Arena map key(s)`). Client log 19:32:10: `[ArenaMapPort][Arena] Escape from Tarkov: Arena 0.6.1.0.48206
+  at C:\Battlestate Games\Escape from Tarkov Arena (registry; 15,351 files, 76.1 GB verified)` (the reflection registry probe
+  works under EFT's Mono: source `registry`), banner `0.2.3 loaded. Maps: Arena: Equator, Arena: Bay 5, Arena: Air Pit. Arena:
+  found 0.6.1.0.48206.` The selection listed the 3 `ARENA` tiles. An Air Pit raid (12:00, no bots) loaded its bundles
+  through the gate (`[Bundles] loaded 'arena_airpit/arena_airpit_scenes.bundle' ... (991967415 bytes)`, NavMesh 11787/5423,
+  acoustics 24/94), 0 ArenaMapPort warnings, left through `gpu-run leave`; the hideout opened and closed afterwards.
+- Not measured on the hosts: the check's cold-cache duration (the Info lines carry no timing; the client's 3 s startup wait
+  was not exceeded on either host, otherwise the banner would read `still being checked`). The override paths were exercised
+  by the unit tests and the VM probe only.

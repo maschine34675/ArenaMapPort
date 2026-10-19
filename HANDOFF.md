@@ -42,10 +42,10 @@ the "Integration" section of [arena-install-check.md](docs/progress/arena-instal
 
 Open:
 
-1. **Host run.** GPU-2 is getting Arena installed by the user. Negative (no Arena, or an override at an empty folder),
-   positive (Arena installed: Info lines on both sides, the three maps in the selection, one raid per map, a hideout
-   open, the check's duration and `max` frame time) and override runs, as listed in the progress doc's host plan;
-   evidence goes into its evidence table. README, FORGE and the notes claim only what this run confirms.
+1. **Host run: done** (build `ff4308c`, 2026-10-19 19:29-19:40): host 1 without Arena (server and client log the
+   not-found lines, 0 Arena tiles, hideout opens), host 2 with Arena 0.6.1.0.48206 (both sides `registry; 15,351 files,
+   76.1 GB verified`, 3 tiles, an Air Pit raid through the gate, hideout). Evidence section in the progress doc. Not
+   measured: cold-cache duration; the override paths ran in unit tests and the VM probe only.
 2. **Release cut.** Rebuild on the committed tree (the version is already 0.2.3 and the generated package `README.txt`
    carries the requirement), `tools/release/make_release_zips.py --single --extract-check`, fill the placeholders of
    `docs/releases/v0.2.3.md`, Pixeldrain, VirusTotal, tag `v0.2.3`, GitHub release. Still the user's: the Forge entry (text from FORGE.md) and whether a DLL-only package for 0.2.2
