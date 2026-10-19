@@ -190,3 +190,7 @@ compatibility are recorded in [room-reverb.md](progress/room-reverb.md).
 2,149,219,632 B (2.00 GiB), SHA-256 `f96ccc756cc7c56ff105861f0efcabf676edd0f09adf186fdcb8f4ddbb378090`, plus its `.sha256`;
 extract-check 67 files identical to dist. Same file set as 0.2.2 with the two 0.2.3 DLLs (the Arena installation check);
 everything else byte-identical to the final 0.2.2 ZIP.
+
+2026-10-19 (release 0.2.3 PUBLISHED): the candidate ZIP above went to Pixeldrain (https://pixeldrain.com/l/9jZS5CnU), both DLLs were
+scanned on VirusTotal (0/75 and 0/75 malicious), tag `v0.2.3` and the GitHub release were created,
+and 0.2.2 was withdrawn (release, tag and Pixeldrain files deleted; nobody had downloaded it).
