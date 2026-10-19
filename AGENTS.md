@@ -8,7 +8,9 @@ SPT server mod that registers the locations. Fourteen maps retain development in
 for release 0.2.2 (Equator and Bay5 were the first release; AirPit was added in 2026-10 on `feature/airpit`; 0.2.0 was built and withdrawn on 2026-10-16). All three have native
 playtest evidence. **Bowl** (the fourth map, on `main` since the 2026-10-18 fast-forward merge of `feature/bowl`) is registered and staged too, for release 0.3.0
 (PLAN-BOWL item 8, 2026-10-18); it is host-verified on GPU-2 (2026-10-18: raids 1 and 2 plus a hideout open)
-and not yet released. The maps exist to be played through the user's
+and not yet released. Release 0.2.3 (branch `release/0.2.3`, published 2026-10-19) is 0.2.2 plus the Arena installation check; 0.2.2 was withdrawn
+the same day (GitHub release, tag and Pixeldrain files deleted, nobody had downloaded it), and so were 0.2.1 and 0.1.0
+(releases with their assets, tags, Pixeldrain files): only 0.2.3 is downloadable, every package without the check is gone. The maps exist to be played through the user's
 ArenaMode mod (arena deathmatch with respawns); see the decisions below.
 
 Read this first, then [HANDOFF.md](HANDOFF.md) (dated working state, what is verified, what is next),
@@ -80,6 +82,11 @@ are not accepted build inputs. Keep the SPT bundle target on Unity 2022.3.43f1.
   silently: add a new key, or use the `DefaultsRevision` re-seed pattern in `WeatherRig.cs`.
 - `D:\SPT41vanilla` (the user's own test bed, no SAIN) receives only host-verified builds via the same
   deploy script with `-SptRoot 'D:\SPT41vanilla'`; restarting its server is the user's job.
+- Never add a switch that disables the Arena installation check (`ArenaInstallation` in Shared; release/0.2.3, user
+  decision 2026-10-19: Arena is sold separately from EFT, so the maps need an installed Arena). The override paths
+  (server `config/arena-install.json`, client `General/ArenaInstallPath`) still verify the installation. It is a
+  good-faith gate, not copy protection: never describe it as more. See
+  [arena-install-check.md](docs/progress/arena-install-check.md).
 - Git: author `maschine34675 <163792852+maschine34675@users.noreply.github.com>`, commit only when the
   user's task implies it, and end commit messages with the agent's co-author trailer. Working tree
   should be clean after a delivered task.
@@ -116,13 +123,17 @@ require DeveloperOptions.Enabled; gate their work, not only the log call. F7–F
 uses Debug (BepInEx's disk/console filters must include it when collecting diagnostics).
 Real degraded behavior and failures retain Warning/Error in player mode. Never suppress
 Unity/Harmony warnings globally; repair an owned cause or document its origin.
+Both the server and the client log the Arena installation state at Info at startup (the verified
+installation, or why none was found); see [arena-install-check.md](docs/progress/arena-install-check.md).
 
-Player mode is the default: one normal F12 switch, `Appearance/NaturalEquatorNight` (next raid).
+Player mode is the default: two normal F12 controls, `Appearance/NaturalEquatorNight` (next raid) and
+`General/ArenaInstallPath` (the Arena installation override of release 0.2.3, empty = automatic).
 `General/DeveloperMode` is visible with F12's Advanced settings filter enabled.
 It is latched on startup, exposes supported-map controls and enables F7–F10 diagnostics.
 Never gate functional repairs behind it. All tuning binds/enumeration must use
 `Plugin.Instance.Settings`, never `Config`: in normal mode Settings reads the optional
-developer archive without saving, while Config contains only two public-file entries.
+developer archive without saving, while Config contains only the three public-file entries
+(DeveloperMode, NaturalEquatorNight, ArenaInstallPath).
 In developer mode Settings is Config so ConfigurationManager sees the full controls.
 Never explicitly save normal-mode Settings. CompactConfiguration archives existing tuning
 before compaction and preserves unknown keys. Ambient bindings happen in Plugin.Awake.

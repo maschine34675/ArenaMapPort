@@ -16,9 +16,14 @@ namespace ArenaMapPort.Client
         static readonly PropertyInfo OrphansProperty = typeof(ConfigFile).GetProperty(
             "OrphanedEntries", BindingFlags.Instance | BindingFlags.NonPublic);
 
+        // The public file holds exactly these entries. General/ArenaInstallPath (0.2.3, ArenaInstallationGate) is the
+        // Arena installation override: it must stay public, otherwise compaction would archive a path the player
+        // typed and the next start would read the default again. Literals, not the gate's constants: the
+        // ConfigRetirementCheck tool compiles this file on its own.
         internal static bool IsPublic(ConfigDefinition key) =>
             (key.Section == "General" && key.Key == "DeveloperMode") ||
-            (key.Section == "Appearance" && key.Key == "NaturalEquatorNight");
+            (key.Section == "Appearance" && key.Key == "NaturalEquatorNight") ||
+            (key.Section == "General" && key.Key == "ArenaInstallPath");
 
         internal static string DeveloperPath(ConfigFile config) =>
             Path.ChangeExtension(config.ConfigFilePath, ".developer.cfg");

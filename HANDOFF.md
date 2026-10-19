@@ -3,6 +3,70 @@
 Snapshot for whoever continues (human or agent). Verify the commits named here against `git log`; this file
 is updated by hand at each handover, it is not an automatic record. Read [AGENTS.md](AGENTS.md) first.
 
+## Update 2026-10-19 - release/0.2.3: Arena installation check
+
+User decision (2026-10-19): Escape from Tarkov: Arena is sold separately from EFT, so from 0.2.3 on the maps work only
+with an installed Arena. The server registers the Arena locations only when an installation is found and verified, and
+the client serves the map bundles only then. It is a good-faith gate at SPT's own level, not copy protection: no
+disable switch, and two path overrides (server `config/arena-install.json`, client `General/ArenaInstallPath`) that
+run the same verification as the registry path. Design, floors and host plan:
+[arena-install-check.md](docs/progress/arena-install-check.md).
+
+Branch rationale: `release/0.2.3` was cut from `a3188cd` = the published 0.2.2 (`275b668`) plus the host-tested
+weather-provider rebind (`6c6a38c`, evidence `d956e2f`) and the thumbnail cleanup (`a3188cd`). The release therefore
+carries exactly that and the check. **Bowl stays on `main` for 0.3.0** and is not part of this release: here
+`ArenaMapRegistry.All` is Equator, Bay5 and Air Pit, and Bowl's descriptor and `db/arena_bowl/base.json` are only
+the retained development identity of a parked map. The check reaches main by a forward merge (open item 3).
+
+State when this block was written (nothing committed yet, version numbers still 0.2.2): the shared check
+`ArenaMapPort.Shared/ArenaInstallation.cs` with `ArenaMapPort.Server.Tests/ArenaInstallationTests.cs` passed in
+area A's own run (their report, not re-run for this block): Release builds of server and client
+`0 Warnung(en)` / `0 Fehler`, full server suite `Bestanden!   : Fehler:     0, erfolgreich:  1015, übersprungen:     0, gesamt:  1015` (141 of them `ArenaInstallationTests`, including the real-install, registry and
+sparse-install tests, which ran on this VM; the real installation verified in 195 ms). The two gates are in the tree
+as well: the server's (`ArenaMapPort.Server/ArenaInstallationGate.cs`, called from `ArenaMapRegistration.cs`: without a
+verified installation no location, locale transformer, weather hook or APBS patch is registered) and the client's
+(`ArenaMapPort.Client/ArenaInstallationGate.cs`, started in `Plugin.Awake`, enforced in `BundleHost.TryServe`;
+`General/ArenaInstallPath` is bound on the public config and listed in `CompactConfiguration.IsPublic`); their build
+and test results belong to the integrator's record, not to this block. README.md, FORGE.md,
+[docs/releases/v0.2.3.md](docs/releases/v0.2.3.md) (download and VirusTotal fields are placeholders), the progress doc
+and AGENTS.md (a Hard-rules bullet, an Info-logging line) carry the requirement. No host has run it yet.
+
+Integration (later the same day, still uncommitted): version bumped to 0.2.3 everywhere it is pinned; client and server
+Release builds `0 Warnung(en)`, server suite 1095/1095, Python suite 1728 tests OK, `DISTRIBUTION_OK 3 maps 9 bundles 3
+sidecars`, deploy dry run to `D:\SPT41` 0 new / 3 overwrite (both DLLs and `locales/map-descriptions.json`, whose host copy
+also holds Bowl's descriptions) / 64 identical. Added on top of the areas: `General/ArenaInstallPath` in
+`MapConfigVisibility.IsPlayerOption` (it is a normal F12 control), the same check in `NavMeshInstaller.LoadOnce` (that bundle
+is read from disk, not through `BundleHost`), the requirement in the generated package `README.txt`
+(`make_release_zips.py`, so the `readme_text` half of open item 2 is done). Evidence, DLL hashes and the host checklist:
+the "Integration" section of [arena-install-check.md](docs/progress/arena-install-check.md).
+
+Open:
+
+1. **Host run: done** (build `ff4308c`, 2026-10-19 19:29-19:40): host 1 without Arena (server and client log the
+   not-found lines, 0 Arena tiles, hideout opens), host 2 with Arena 0.6.1.0.48206 (both sides `registry; 15,351 files,
+   76.1 GB verified`, 3 tiles, an Air Pit raid through the gate, hideout). Evidence section in the progress doc. Not
+   measured: cold-cache duration; the override paths ran in unit tests and the VM probe only.
+2. **Published 2026-10-19** (user decision "uploaden, GitHub-Release mit VirusTotal-Links, 0.2.2 restlos loeschen"):
+   Pixeldrain list https://pixeldrain.com/l/9jZS5CnU (ZIP https://pixeldrain.com/u/xAdxjoW2, checksum https://pixeldrain.com/u/Uvk85ZiV), VirusTotal client
+   0/75 and server 0/75 malicious, tag `v0.2.3` and the GitHub release with the `.sha256` asset;
+   0.2.2 withdrawn (GitHub release, tag and Pixeldrain files deleted, see the record in `v0.2.2.md`), then 0.2.1 and 0.1.0 too
+   (user decision: no package without the check stays downloadable; Pixeldrain holds only the 0.2.3 files and list, GitHub only
+   the v0.2.3 release and tag). Still the user's: the Forge entry (text from FORGE.md) and whether a DLL-only package for 0.2.2
+   owners is published (the notes say the full ZIP is the supported path; the DLL-only sentence is a placeholder).
+3. **Forward-merge `release/0.2.3` into `main`** so 0.3.0 (Bowl, four maps) carries the check. Expect conflicts in
+   `AGENTS.md`, `HANDOFF.md`, `docs/progress/INDEX.md` (both sides prepend entries), `README.md`, `FORGE.md` and the two
+   csproj files; keep both sides, and put the requirement into main's 0.3.0 release texts for all four maps. Main
+dropped the own `[ArenaMapPort]` prefix from client log lines (`e66d512`), so the client gate's tag
+`[ArenaMapPort][Arena]` becomes `[Arena]` there.
+4. **Decisions and loose ends.** Tolerances after the review (same evening): a missing file still refuses the
+   installation, but `BattlEye\*` and `Logging.config` only have to exist (BattlEye rewrites its files in place, the
+   config is user-editable), and a listed file whose full path reaches 260 characters is skipped and counted
+   (`LongPathsSkipped`, named in the Info line) because EFT's Mono cannot stat it in a deep installation folder.
+   The public config file now has three entries (`General/ArenaInstallPath` joined the two of
+   `compact-player-config.md`, which still says two); a UiBridge check that expects two public entries needs the
+   third. Deploying goes through `tools/deploy-to-spt.ps1` only; `D:\SPT41vanilla` gets the build only after the host
+   run, and that machine needs Arena (or an override) too.
+
 ## Update 2026-10-18 (late) - client log lines without the own `[ArenaMapPort]` prefix
 
 User decision: "in ArenaMapPort das Präfix entfernen" (log-prefix convention: BepInEx already prints the source

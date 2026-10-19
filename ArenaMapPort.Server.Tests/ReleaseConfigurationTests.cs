@@ -5,6 +5,7 @@ using ArenaMapPort.Shared;
 using BepInEx.Configuration;
 using UnityEngine.SceneManagement;
 using Xunit;
+using ClientGate = ArenaMapPort.Client.ArenaInstallationGate; // the server mod has an ArenaInstallationGate of its own
 
 namespace ArenaMapPort.Server.Tests;
 
@@ -14,14 +15,16 @@ public sealed class ReleaseConfigurationTests
     static bool Visible(ConfigEntryBase entry) => entry.Description.Tags.OfType<BrowsableAttribute>().Last().Browsable;
 
     [Fact]
-    public void PlayerMenuRetainsOneNormalAndOneAdvancedControlWithTuningHidden()
+    public void PlayerMenuRetainsTwoNormalAndOneAdvancedControlWithTuningHidden()
     {
         var cfg = new ConfigFile();
+        // Release 0.2.3 adds the Arena installation override: three public entries in the player's F12 menu.
         var expected = new[] {
-            "Appearance/NaturalEquatorNight", "General/DeveloperMode"
+            "Appearance/NaturalEquatorNight", "General/ArenaInstallPath", "General/DeveloperMode"
         };
         cfg.Bind("Appearance", "NaturalEquatorNight", false, "Player control");
         DeveloperOptions.Install(cfg);
+        var arenaPath = ClientGate.BindConfig(cfg); // the plugin's own binding (Plugin.Awake)
         cfg.Bind("Audio (arena_equator)", "AmbientGainDb", 5f, "Hidden");
         cfg.Bind("Lighting (arena_equator Night)", "ExposureCompensationEV", .3f, "Hidden");
         var drawer = new object();
@@ -46,11 +49,16 @@ public sealed class ReleaseConfigurationTests
         Assert.Equal(true, advancedTag.GetType().GetField("IsAdvanced").GetValue(advancedTag));
         Assert.DoesNotContain(cfg.Get<bool>("Appearance", "NaturalEquatorNight").Description.Tags,
             t => t.GetType().GetField("IsAdvanced")?.GetValue(t) is true);
+        // The install path is a normal control: visible to players, never an Advanced-only entry, empty by default.
+        Assert.True(Visible(arenaPath));
+        Assert.DoesNotContain(arenaPath.Description.Tags, t => t.GetType().GetField("IsAdvanced")?.GetValue(t) is true);
+        Assert.Equal("", arenaPath.Value);
         for (int i = 0; i < 3; i++)
         {
             MapConfigVisibility.Apply(cfg, true);
             Assert.True(Visible(curve));
             Assert.True(Visible(developerEntry));
+            Assert.True(Visible(arenaPath));
             Assert.False(Visible(legacy)); Assert.False(Visible(parked)); Assert.False(Visible(revision));
             Assert.True(Visible(bay5)); Assert.True(Visible(airpit)); Assert.True(Visible(bowl)); Assert.False(Visible(airpit2));
             Assert.Equal(2, curve.Description.Tags.Length);
@@ -58,6 +66,7 @@ public sealed class ReleaseConfigurationTests
             Assert.Same(original.AcceptableValues, curve.Description.AcceptableValues);
             MapConfigVisibility.Apply(cfg, false);
             Assert.False(Visible(curve)); Assert.Equal(1.75f, curve.Value); Assert.Equal(.8f, legacy.Value);
+            Assert.True(Visible(arenaPath));
         }
         Assert.Single(original.Tags);
         curve.Value = 9f; Assert.Equal(2f, curve.Value);

@@ -38,7 +38,12 @@ namespace ArenaMapPort.Client
 
         Harmony _harmony;
 
-        void LateUpdate() => ArenaLightingRepairs.UpdateArtificialSun();
+        void LateUpdate()
+        {
+            ArenaLightingRepairs.UpdateArtificialSun();
+            // One flag read per frame; armed only while the Arena check outlives startup, disarmed after its one log line.
+            ArenaInstallationGate.PollOutcome();
+        }
 
         void Awake()
         {
@@ -57,6 +62,21 @@ namespace ArenaMapPort.Client
                 Log.LogError($"[Config] compact configuration failed ({e.GetType().Name}: {e.Message}); " +
                              "using the public configuration file for this session");
                 Settings = CompactConfiguration.Fallback(Config);
+            }
+
+            // Arena installation gate (0.2.3, user decision 2026-10-19): the maps work only with an installed
+            // Escape from Tarkov: Arena. Binds the public General/ArenaInstallPath entry (right after the compact
+            // configuration, which keeps it in the public file) and starts the one check on a worker thread; the
+            // server registers the locations only with a verified installation, BundleHost.TryServe serves the
+            // bundles only with one. Never throws: a failure leaves Arena not verified, the plugin alive.
+            try
+            {
+                ArenaInstallationGate.Initialize(Config);
+            }
+            catch (Exception e)
+            {
+                Log.LogError($"{ArenaInstallationGate.Tag} the Arena installation gate failed to start ({e.GetType().Name}: {e.Message}); " +
+                             "the Arena maps are not served this session.");
             }
             LogStartupBanner();
             Bay5AmbientAudio.BindConfig(); // accepted audio defaults before the release configuration policy
@@ -187,7 +207,10 @@ namespace ArenaMapPort.Client
             Log.LogDebug($"[Config] Public entries={Config.Count}, tuning entries={Settings.Count}; " +
                 $"tuning persistence={(DeveloperOptions.Enabled ? "developer" : "read-only")}, next-raid natural night={PlayerOptions.NaturalEquatorNight}.");
 
-            Log.LogInfo($"Version {PluginVersion} loaded. Maps: {string.Join(", ", ArenaMapRegistry.All.Select(map => map.LocaleName))}." +
+            // Without a verified Arena the server registers no Arena location, so the summary says "none available"
+            // instead of listing maps next to "not found" (ArenaInstallationGate.MapsSummary).
+            Log.LogInfo($"Version {PluginVersion} loaded. " +
+                $"{ArenaInstallationGate.MapsSummary(ArenaMapRegistry.All.Select(map => map.LocaleName))}" +
                 (DeveloperOptions.Enabled ? " Developer mode enabled; diagnostics use Debug logging." : ""));
         }
 
@@ -198,7 +221,7 @@ namespace ArenaMapPort.Client
             var pluginDir = Path.GetDirectoryName(typeof(Plugin).Assembly.Location) ?? ".";
             var bundlesDir = Path.Combine(pluginDir, "bundles");
 
-            Log.LogDebug($"plugin dir: {pluginDir}");
+            Log.LogDebug($"plugin dir: {pluginDir}; {ArenaInstallationGate.StateSummary()}");
 
             foreach (var map in ArenaMapRegistry.All)
             {

@@ -26,6 +26,15 @@ invented) and can be switched off per map with DeveloperMode enabled (enable it 
 
 Tested with **SPT 4.1.6 / EFT 0.16.9.5-40743**.
 
+Requires an installed **Escape from Tarkov: Arena**, which is sold separately from
+Escape from Tarkov. The maps are built from its files, so the server lists them and the
+client loads them only when the Battlestate Games launcher's Arena installation is found
+and complete (the same way SPT needs an installed Escape from Tarkov); without it the
+Arena locations do not appear. For an installation the launcher did not register, set its
+folder in `General / ArenaInstallPath` (client) and in
+`SPT_Runtime/user/mods/ArenaMapPort/config/arena-install.json` (server); the check still
+runs in full.
+
 Designed for **ArenaMode**, installed separately. ArenaMapPort provides the
 maps; ArenaMode provides its match rules and respawns. No loot or scav raids
 are included. Fika compatibility has not been verified.

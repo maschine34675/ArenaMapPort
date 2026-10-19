@@ -16,6 +16,11 @@ dated state in one screen; read it before this index if you only have a minute.
   receipt, deploy mode and the integration rows; the log states what is staged and what is host-tested.
 - [bowl-source-060.md](bowl-source-060.md) — Bowl's Arena 0.5.4 spike package against the 0.6.0 native package that
   fed package v1 (2026-10-18).
+- [arena-install-check.md](arena-install-check.md) — the Arena installation requirement of release 0.2.3
+  (user decision 2026-10-19, branch `release/0.2.3`): the maps are registered and served only with a verified
+  Escape from Tarkov: Arena installation (launcher registry entry, executable, `ConsistencyInfo` manifest,
+  plausibility floors, every listed file present with its size; 0.46 s warm), two path overrides, no disable
+  switch, a good-faith gate and not copy protection; host plan and the host evidence (GPU-1 without Arena, GPU-2 with Arena 0.6.1).
 - [weather-provider-rebind.md](weather-provider-rebind.md) — restore the separate
   native sky-provider reference when a cached owned Full/Simple weather rig is
   reused after a vanilla raid (2026-10-17); production-method regression and

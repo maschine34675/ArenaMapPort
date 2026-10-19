@@ -160,3 +160,10 @@ No DynamicMaps files were written. Final artifact SHA256:
 
 - Client: `4C3D143C068748CB755C78FDD838BD7F85C21E56756F631B139E71D6DA047AA0`
 - Server: `0C5AB8D480C697026850F80F0815891F2C5661D341BA0B2FA74CFCDB587C26DA`
+
+## 2026-10-19 - third public entry
+
+Release 0.2.3 adds `General/ArenaInstallPath` (the Arena installation override) to the public file, so the primary
+configuration holds three entries: the two above plus this normal F12 control. `CompactConfiguration.IsPublic`,
+`MapConfigVisibility.IsPlayerOption` and `ReleaseConfigurationTests` carry it; a UiBridge check that expects two public
+entries needs the third. See [arena-install-check.md](arena-install-check.md).

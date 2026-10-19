@@ -41,6 +41,12 @@
     <Compile Include="..\ArenaMapPort.Shared\ArenaMapDescriptor.cs" Link="Shared\ArenaMapDescriptor.cs" />
     <Compile Include="..\ArenaMapPort.Shared\ArenaDustDescriptor.cs" Link="Shared\ArenaDustDescriptor.cs" />
     <Compile Include="..\ArenaMapPort.Shared\ArenaNeonFixture.cs" Link="Shared\ArenaNeonFixture.cs" />
+    <Compile Include="..\ArenaMapPort.Shared\ArenaInstallation.cs" Link="Shared\ArenaInstallation.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- ArenaMapPort.Server.Tests exercises the internal registry probe, floors and manifest reader of Shared/ArenaInstallation.cs. -->
+    <InternalsVisibleTo Include="ArenaMapPort.Server.Tests" />
   </ItemGroup>
 
   <ItemGroup>

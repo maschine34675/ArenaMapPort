@@ -27,6 +27,23 @@ its harbor background and water.
 
 - Tested with **SPT 4.1.6 / EFT 0.16.9.5-40743**. The server declares `~4.1.5`.
 - Install **both** the client and server components.
+- Requires an installed **Escape from Tarkov: Arena**. Arena is sold separately from
+  Escape from Tarkov and the maps are built from its files, so the server registers the
+  maps and the client loads them only on a PC where Arena is installed with the
+  Battlestate Games launcher, the same way SPT itself needs an installed Escape from
+  Tarkov. Both components find Arena through the launcher's entry in the Windows registry
+  and check the installation folder: it must contain the game executable and the
+  launcher's file list (`ConsistencyInfo`), and every file in that list must exist with
+  the listed size. Only names and sizes are compared, no game data is read, nothing is
+  sent anywhere, and the check takes about a second. If Arena is installed but has no
+  launcher entry (a copied or moved folder), set its folder in `General / ArenaInstallPath`
+  in `BepInEx/config/com.maschine.ArenaMapPort.cfg` (client) and in
+  `SPT_Runtime/user/mods/ArenaMapPort/config/arena-install.json` (server,
+  `{"installPath": "D:\\Battlestate Games\\Escape from Tarkov Arena"}`); an override is
+  verified exactly like the automatic path, and nothing turns the check off. Without a
+  verified installation both components log the reason at Info; the server does not
+  register the Arena locations, so they are missing from the location selection, and the
+  client does not load the map files.
 - **ArenaMode** is the intended gameplay companion and is installed separately.
   It is not required to load the maps.
 - **DynamicMaps** is optional; integration was tested with version **1.2.1**.
@@ -92,7 +109,8 @@ spectator areas of Air Pit and Bowl are deliberately omitted.
 
 The release contains **Equator, Bay5, Air Pit and Bowl**. There is no loot or scav-raid
 support, and these locations are not intended as ordinary quest/progression
-maps. Arena match rules and respawns come from ArenaMode.
+maps. Arena match rules and respawns come from ArenaMode, and the maps work only
+with an installed Escape from Tarkov: Arena (see Compatibility).
 
 ## Development
 

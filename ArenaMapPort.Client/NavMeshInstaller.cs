@@ -126,6 +126,17 @@ namespace ArenaMapPort.Client
             {
                 return _data.TryGetValue(map.Key, out var cached) ? cached : null;
             }
+            // Arena installation gate (0.2.3, ArenaInstallationGate): the NavMesh bundle is derived from Arena's
+            // files like the scene bundles BundleHost.TryServe gates, and it is read from disk here, not through
+            // EFT's bundle manager, so it needs its own check. Not latched in _loadTried: a check that finishes
+            // later still lets a later raid load the mesh. Never reached without a registered map in practice
+            // (no verified Arena means no registered location and no served scene bundle).
+            if (!ArenaInstallationGate.EnsureVerified())
+            {
+                Plugin.Log.LogError($"[NavMesh] navmesh bundle for '{map.Key}' not loaded: " +
+                                    $"Escape from Tarkov: Arena not found ({ArenaInstallationGate.Reason})");
+                return null;
+            }
             _loadTried[map.Key] = true;
 
             var pluginDir = Path.GetDirectoryName(typeof(NavMeshInstaller).Assembly.Location) ?? ".";

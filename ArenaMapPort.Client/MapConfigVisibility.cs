@@ -45,8 +45,11 @@ namespace ArenaMapPort.Client
 
         internal static bool IsPlayerOption(ConfigDefinition definition)
         {
+            // General/ArenaInstallPath is the Arena installation override (0.2.3, ArenaInstallationGate): a normal
+            // control, because an owner whose Arena has no launcher registry entry has to find it in F12.
             return (definition.Section == "Appearance" && definition.Key == "NaturalEquatorNight") ||
-                (definition.Section == "General" && definition.Key == "DeveloperMode");
+                (definition.Section == "General" && definition.Key == "DeveloperMode") ||
+                (definition.Section == "General" && definition.Key == "ArenaInstallPath");
         }
 
         static bool IsPermanentHidden(ConfigDefinition definition, ConfigDescription original)
