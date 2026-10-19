@@ -341,3 +341,10 @@ DLLs are the host-verified build of `ff4308c` (`ProductVersion 0.2.3+ff4308c`; `
 Not done, by design: upload, VirusTotal, tag, GitHub release, the Forge entry, the forward merge into `main` and the
 `D:\SPT41vanilla` deploy (that machine needs Arena or an override too); all wait for the user. A DLL-only package for 0.2.2
 owners would be exactly the two DLLs; whether one is published is the user's decision (the notes keep that placeholder).
+
+## Merged into main (2026-10-19, late)
+
+`release/0.2.3` was merged into `main` (`12c3731`), so 0.3.0 (four maps) carries the check. On main the client tags follow
+`e66d512` (`[Arena]`, `[Bundles]`, `[NavMesh]`) and the load line reads `Version 0.3.0 loaded. Maps: ... Arena: found ...`.
+Merged-build evidence (DLLs `0.3.0+12c3731`): GPU-2 with Arena 0.6.1 registered all four maps after the found line, loaded a
+Bowl raid (0 warnings); GPU-1 without Arena logged the not-found lines on both sides and `Maps: none available`.

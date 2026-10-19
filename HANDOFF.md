@@ -3,6 +3,21 @@
 Snapshot for whoever continues (human or agent). Verify the commits named here against `git log`; this file
 is updated by hand at each handover, it is not an automatic record. Read [AGENTS.md](AGENTS.md) first.
 
+## Update 2026-10-19 (late) - release/0.2.3 merged into main: 0.3.0 = four maps + the Arena installation check; main pushed
+
+User decision: "alles in main zusammenfuehren in 0.3.0 mit Bowl und pushen, anschliessend Stufe 2 der Verschluesselung".
+Merge commit `12c3731` (conflicts: version 0.3.0 kept, the merged gate code and its tests use main's client tag convention
+`[Arena]` / `[Bundles]` / `[NavMesh]`, the load line is `Version 0.3.0 loaded. Maps: ... Arena: found ...`, AGENTS/HANDOFF/INDEX
+carry both sides, `docs/releases/v0.3.0.md` is rebased on 0.2.3). Merged main: client and server `0 Warnung(en)`, server suite
+1134/1134, Python 1818 tests OK (55 skips), `DISTRIBUTION_OK 4 maps 12 bundles 4 sidecars`; DLLs rebuilt on the merge commit
+(`ProductVersion 0.3.0+12c3731`) and deployed to `D:\SPT41` (3 overwrites). Hosts: GPU-2 (Arena 0.6.1) server
+`(registry; 15,351 files, 76.1 GB verified)` + four `is available` lines, client `[Arena]` found line and
+`Version 0.3.0 loaded. Maps: Arena: Equator, Arena: Bay 5, Arena: Air Pit, Arena: Bowl. Arena: found 0.6.1.0.48206.`, a Bowl
+raid loaded its bundles (scenes 1,006,073,696 B), NavMesh 12704/5890, acoustics 11/19, flares 4/28, 0 ArenaMapPort warnings;
+GPU-1 (no Arena) server and client not-found lines, `Maps: none available`. `main` is pushed; `release/0.2.3` stays as the
+0.2.3 record (tag `v0.2.3`). Next: stage 2 (bundles encrypted with keys derived from the user's Arena files), plan in
+`docs/PLAN-ENCRYPTION.md` once written; 0.3.0 is cut after the user's Bowl tests.
+
 ## Update 2026-10-19 - release/0.2.3: Arena installation check
 
 User decision (2026-10-19): Escape from Tarkov: Arena is sold separately from EFT, so from 0.2.3 on the maps work only
