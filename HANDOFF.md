@@ -46,9 +46,9 @@ Open:
    not-found lines, 0 Arena tiles, hideout opens), host 2 with Arena 0.6.1.0.48206 (both sides `registry; 15,351 files,
    76.1 GB verified`, 3 tiles, an Air Pit raid through the gate, hideout). Evidence section in the progress doc. Not
    measured: cold-cache duration; the override paths ran in unit tests and the VM probe only.
-2. **Release cut.** Rebuild on the committed tree (the version is already 0.2.3 and the generated package `README.txt`
-   carries the requirement), `tools/release/make_release_zips.py --single --extract-check`, fill the placeholders of
-   `docs/releases/v0.2.3.md`, Pixeldrain, VirusTotal, tag `v0.2.3`, GitHub release. Still the user's: the Forge entry (text from FORGE.md) and whether a DLL-only package for 0.2.2
+2. **Release cut: done, not published.** `work/releases/0.2.3/maschine-ArenaMapPort-0.2.3.zip`, 2,149,219,632 B,
+   SHA-256 `f96ccc75...378090`, built from `c6536e5` (DLLs of `ff4308c`), extract-check 67 files identical; size, SHA and
+   commit are in `docs/releases/v0.2.3.md`. Waiting for the user: Pixeldrain, VirusTotal, tag `v0.2.3`, GitHub release. Still the user's: the Forge entry (text from FORGE.md) and whether a DLL-only package for 0.2.2
    owners is published (the notes say the full ZIP is the supported path; the DLL-only sentence is a placeholder).
 3. **Forward-merge `release/0.2.3` into `main`** so 0.3.0 (Bowl, four maps) carries the check. Expect conflicts in
    `AGENTS.md`, `HANDOFF.md`, `docs/progress/INDEX.md` (both sides prepend entries), `README.md`, `FORGE.md` and the two

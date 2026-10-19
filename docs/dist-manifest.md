@@ -185,3 +185,8 @@ Final client SHA256 `963EFD5A0060DFFB77673B9C8F661F61C38620787107189C24394638F0D
 All 97 installed files independently hash-match dist in both installations after
 the approved deployment. Build, actual map-bus DSP tests and scoped Equator mixer
 compatibility are recorded in [room-reverb.md](progress/room-reverb.md).
+
+2026-10-19 (release 0.2.3 candidate cut, `release/0.2.3` at `c6536e5`, NOT uploaded): `maschine-ArenaMapPort-0.2.3.zip`,
+2,149,219,632 B (2.00 GiB), SHA-256 `f96ccc756cc7c56ff105861f0efcabf676edd0f09adf186fdcb8f4ddbb378090`, plus its `.sha256`;
+extract-check 67 files identical to dist. Same file set as 0.2.2 with the two 0.2.3 DLLs (the Arena installation check);
+everything else byte-identical to the final 0.2.2 ZIP.

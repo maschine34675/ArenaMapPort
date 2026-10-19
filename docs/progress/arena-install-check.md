@@ -328,3 +328,16 @@ after 96.5 s (host 1) and 2 s (host 2), started each SPT server, and `gpu-run st
 - Not measured on the hosts: the check's cold-cache duration (the Info lines carry no timing; the client's 3 s startup wait
   was not exceeded on either host, otherwise the banner would read `still being checked`). The override paths were exercised
   by the unit tests and the VM probe only.
+
+## 0.2.3 candidate cut (2026-10-19, not published)
+
+`python tools/release/make_release_zips.py --single --extract-check work/releases/0.2.3-extract-check` on the clean tree at
+`c6536e5`: `writing single ZIP (full): 67 files, 2,241,235,966 raw bytes`, `maschine-ArenaMapPort-0.2.3.zip 2,149,219,632 B
+f96ccc756cc7c56ff105861f0efcabf676edd0f09adf186fdcb8f4ddbb378090`, `single ZIP: 2.00 GiB`, `verified single ZIP`,
+`extract-check OK: 67 files identical to dist, 4 generated entries ignored`, `RELEASE_ZIPS_BUILT`. Against the final 0.2.2
+ZIP's manifest (`326d71b`) the dist differs in exactly the two DLLs (client 815,104 -> 845,312 B, server 73,216 -> 101,888 B);
+the other 65 files, including the regenerated banners, loading screens and `map-descriptions.json`, are byte-identical. The
+DLLs are the host-verified build of `ff4308c` (`ProductVersion 0.2.3+ff4308c`; `c6536e5` added only the host evidence).
+Not done, by design: upload, VirusTotal, tag, GitHub release, the Forge entry, the forward merge into `main` and the
+`D:\SPT41vanilla` deploy (that machine needs Arena or an override too); all wait for the user. A DLL-only package for 0.2.2
+owners would be exactly the two DLLs; whether one is published is the user's decision (the notes keep that placeholder).
