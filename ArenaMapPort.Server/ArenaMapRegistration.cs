@@ -323,6 +323,21 @@ public class ArenaMapPortMod(
         cancellationToken.ThrowIfCancellationRequested();
 
         var modDir = Path.GetDirectoryName(typeof(ArenaMapPortMod).Assembly.Location)!;
+
+        // Arena installation gate (user decision 2026-10-19, ArenaInstallationGate.cs): Escape from Tarkov: Arena is a
+        // separate purchase and the maps are derived from its files, so nothing below runs unless an Arena
+        // installation is found and verified (BSG launcher registry entry, or config/arena-install.json next to this
+        // DLL). Not verified means the server is left exactly as SPT built it: no location, no locale transformer, no
+        // weather hook, no APBS patch. Evaluate fails closed on an unexpected exception and logs it as an Error.
+        if (!ArenaInstallationGate.Evaluate(
+                modDir,
+                message => logger.Info(message),
+                message => logger.Warning(message),
+                message => logger.Error(message)))
+        {
+            return;
+        }
+
         // PLAN-TWO-MAPS item 10 — extract_banners.py writes straight into this same deployed
         // folder's "banners" subdirectory (dist/SPT_Runtime/user/mods/ArenaMapPort/banners/),
         // sitting alongside "db" rather than under it, specifically so it needs no csproj

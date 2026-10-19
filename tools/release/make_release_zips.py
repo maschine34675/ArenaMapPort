@@ -577,6 +577,23 @@ def install_instruction(parts) -> str:
             "existing ArenaMapPort files. The parts do not overlap and can be extracted in any order.")
 
 
+# The Arena installation requirement (release 0.2.3, docs/progress/arena-install-check.md). Same statement as
+# README.md and docs/releases/v0.2.3.md: a good-faith installation check on names and sizes, never copy protection.
+REQUIREMENT_TEXT = (
+    "Requirement: Escape from Tarkov: Arena must be installed. It is sold separately from Escape from\n"
+    "Tarkov, and these maps are built from its files, so the server registers the locations and the client\n"
+    "loads the map files only when Arena is found (the Battlestate Games launcher's entry in the Windows\n"
+    "registry) and its folder is complete: the game executable and the launcher's file list (ConsistencyInfo)\n"
+    "must be there and every listed file must exist with the listed size. Only names and sizes are compared;\n"
+    "no game data is read and nothing is sent anywhere. If Arena is installed without a launcher entry, set\n"
+    "its folder in General / ArenaInstallPath (BepInEx/config/com.maschine.ArenaMapPort.cfg) and in\n"
+    "SPT_Runtime/user/mods/ArenaMapPort/config/arena-install.json, for example\n"
+    "{\"installPath\": \"D:/Battlestate Games/Escape from Tarkov Arena\"}; both are checked like the automatic\n"
+    "path, and nothing turns the check off. Without a verified installation both components log the reason\n"
+    "and the Arena locations do not appear.\n\n"
+)
+
+
 def readme_text(spec: ReleaseSpec, parts) -> str:
     """The generated README.txt. The multi-part wording is fixed; the single-ZIP layout replaces exactly the
     three paragraphs that depend on it (what the release consists of, the extraction step, the verification)."""
@@ -609,7 +626,8 @@ def readme_text(spec: ReleaseSpec, parts) -> str:
                         "the files it installed.\n\n")
     return (f"ArenaMapPort {spec.version}\n\n"
             "Target: SPT 4.1.x / EFT 0.16.9.5\n\n"
-            + intro +
+            + REQUIREMENT_TEXT +
+            intro +
             "Installation\n"
             "1. Close the game and the SPT server.\n"
             + extract +
@@ -627,8 +645,9 @@ def readme_text(spec: ReleaseSpec, parts) -> str:
             "Optional DynamicMaps integration: overview map data lives in this plugin's own dynamicmaps\n"
             "folder and is registered automatically when DynamicMaps is installed.\n\n"
             "Settings: F12 exposes NaturalEquatorNight for a natural Equator midnight look on the next\n"
-            "raid. DeveloperMode appears under Advanced and requires a restart. A fresh installation\n"
-            "creates only the compact player configuration; existing user settings are preserved.\n\n"
+            "raid and ArenaInstallPath, the Arena installation folder (empty = automatic). DeveloperMode\n"
+            "appears under Advanced and requires a restart. A fresh installation creates only the compact\n"
+            "player configuration; existing user settings are preserved.\n\n"
             + verification +
             "See THIRD-PARTY-NOTICES.txt for third-party software attribution.\n")
 

@@ -1,5 +1,15 @@
 # Current distribution contract: Equator, Bay5 and AirPit
 
+2026-10-19 (release 0.2.3, branch `release/0.2.3`, not cut yet): the distribution is unchanged: 67 files, 2137.4 MB,
+`DISTRIBUTION_OK 3 maps 9 bundles 3 sidecars`. A full Release client build restaged every bundle and sidecar byte-identical
+(SHA-256 before and after); only the two DLLs differ from the dist as it stood before this build: client `cabc918b...8e055d`
+(844,800 B) and server `b0e2831f...edf0e2` (101,376 B), both FileVersion 0.2.3.0. They carry the Arena
+installation check ([arena-install-check.md](progress/arena-install-check.md)): no new file kind and no BSG-derived data in
+the check; it reads the user's own Arena installation at runtime. The deploy dry run against `D:\SPT41` (0.3.0 four-map build)
+planned 0 new, 3 overwrites (two DLLs and `locales/map-descriptions.json`, whose host copy also holds Bowl's descriptions)
+and 64 identical files; Bowl's files on the host are not in this dist and stay untouched. `ProductVersion` still names
+`a3188cd` (uncommitted tree); the release cut rebuilds from its commit.
+
 2026-10-17 (release 0.2.2, final cut): `maschine-ArenaMapPort-0.2.2.zip` is cut again from this dist (AirPit's U8 bundles
 with the crates, the redrawn AirPit DynamicMaps overview, the 0.2.2 DLLs): 2,149,195,967 B, SHA-256
 `d4790b66...5e7944`, built from `326d71b`, 67 files identical to dist after extraction; uploaded to Pixeldrain

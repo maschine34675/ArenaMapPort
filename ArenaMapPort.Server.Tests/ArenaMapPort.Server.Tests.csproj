@@ -46,6 +46,7 @@
     <Compile Include="..\ArenaMapPort.Client\AmbientBusLease.cs" Link="Client\AmbientBusLease.cs" />
     <Compile Include="..\ArenaMapPort.Client\ShaderStandinPolicy.cs" Link="Client\ShaderStandinPolicy.cs" />
     <Compile Include="..\ArenaMapPort.Client\MapLightingDefaults.cs" Link="Client\MapLightingDefaults.cs" />
+    <Compile Include="..\ArenaMapPort.Client\ArenaInstallationGate.cs" Link="Client\ArenaInstallationGate.cs" />
   </ItemGroup>
 
   <!--

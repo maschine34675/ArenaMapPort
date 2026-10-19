@@ -8,6 +8,12 @@ dated state in one screen; read it before this index if you only have a minute.
 
 ## Current — read these for the area you touch
 
+- [arena-install-check.md](arena-install-check.md) — the Arena installation requirement of release 0.2.3
+  (user decision 2026-10-19, branch `release/0.2.3`): the maps are registered and served only with a verified
+  Escape from Tarkov: Arena installation (launcher registry entry, executable, `ConsistencyInfo` manifest,
+  plausibility floors, every listed file present with its size; 0.46 s warm), two path overrides, no disable
+  switch, a good-faith gate and not copy protection; host plan, host evidence still pending.
+
 - [weather-provider-rebind.md](weather-provider-rebind.md) — restore the separate
   native sky-provider reference when a cached owned Full/Simple weather rig is
   reused after a vanilla raid (2026-10-17); production-method regression and

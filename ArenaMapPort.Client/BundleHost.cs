@@ -68,6 +68,14 @@ namespace ArenaMapPort.Client
             return _ourBundles;
         }
 
+        // Arena installation gate (0.2.3, ArenaInstallationGate): our bundles carry content derived from Escape from
+        // Tarkov: Arena, so they are served only when an installed Arena was verified (registry entry or the
+        // General/ArenaInstallPath override, both checked against the launcher's file manifest). Without it we do
+        // not hand the bundle to EFT: this prefix is void, so the original LoadBundleAsync still runs, finds no
+        // entry in _bundles and EFT reports the missing bundle - a loud failure. The server normally prevents
+        // that situation by not registering the Arena locations without an installation, so no raid asks for
+        // these bundles in the first place. A vanilla bundle never reaches the gate (the lookup above returns).
+        // The first request may wait for the check's worker thread (bounded, see ArenaInstallationGate).
         internal static void TryServe(BundlesManager manager, string bundleName)
         {
             if (manager == null || string.IsNullOrEmpty(bundleName))
@@ -77,6 +85,11 @@ namespace ArenaMapPort.Client
             if (!OurBundles().TryGetValue(bundleName, out var filePath))
             {
                 return; // not one of ours — vanilla behaviour
+            }
+            if (!ArenaInstallationGate.EnsureVerified())
+            {
+                Plugin.Log.LogError(ArenaInstallationGate.NotServedMessage(bundleName));
+                return; // before the File.Exists check: nothing of ours is touched without Arena
             }
             if (manager._bundles.ContainsKey(bundleName))
             {
