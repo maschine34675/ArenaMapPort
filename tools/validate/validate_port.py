@@ -120,11 +120,22 @@ def verify(stem, distribution=False, package=None):
             'Server preset reference mismatch')
     if distribution:
         plugin = REPO / 'dist/BepInEx/plugins/maschine-ArenaMapPort'
-        pairs = [(output / f'{key}_{kind}.bundle', plugin / 'bundles' / f'{key}_{kind}.bundle')
-                 for kind in ('scenes', 'navmesh')]
-        pairs.extend([(REPO / f'work/build/preset/{key}_preset.bundle', plugin / 'bundles' / f'{key}_preset.bundle'),
-                      (output / 'material-shaders.json', plugin / f'material-shaders.{key}.json'),
-                      (server_path, REPO / f'dist/SPT_Runtime/user/mods/ArenaMapPort/db/{descriptor["db_base_json_path"]}')])
+        # Stage 2 of the Arena gate (docs/PLAN-ENCRYPTION.md): the dist bundles are AMPB containers, so they can never equal
+        # the plaintext under work/build. The staged copy must be exactly the encryption of its build output (the container is
+        # deterministic), which the BundleCrypt tool compares without writing a temporary copy. Sidecar and base.json stay plain.
+        sys.path.insert(0, str(REPO / 'tools/bundle'))
+        import bundle_crypt
+        bundle_pairs = [(output / f'{key}_{kind}.bundle', plugin / 'bundles' / f'{key}_{kind}.bundle')
+                        for kind in ('scenes', 'navmesh')]
+        bundle_pairs.append((REPO / f'work/build/preset/{key}_preset.bundle', plugin / 'bundles' / f'{key}_preset.bundle'))
+        for source, target in bundle_pairs:
+            require(target.is_file(), f'Staged artifact missing: {target}')
+            try:
+                bundle_crypt.verify(key, source, target, key_store=REPO / 'work' / 'release-keys')
+            except bundle_crypt.BundleCryptError as exc:
+                raise ValueError(f'Staged artifact mismatch: {target} is not the encryption of {source} ({exc.message})')
+        pairs = [(output / 'material-shaders.json', plugin / f'material-shaders.{key}.json'),
+                 (server_path, REPO / f'dist/SPT_Runtime/user/mods/ArenaMapPort/db/{descriptor["db_base_json_path"]}')]
         for source, target in pairs:
             require(target.is_file() and sha256(source) == sha256(target), f'Staged artifact mismatch: {target}')
     summary = {'map_key': key, 'scenes': len(expected_scenes), 'meshes': len(manifest['meshes']),

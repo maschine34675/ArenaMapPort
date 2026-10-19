@@ -1,13 +1,30 @@
-"""Check the exact registered map bundle/sidecar/database set in dist."""
+"""Check the exact registered map bundle/sidecar/database set in dist.
+
+Since stage 2 of the Arena gate (docs/PLAN-ENCRYPTION.md) every distributed bundle is an AMPB container, so this
+also requires: the magic on every bundle (a plaintext UnityFS bundle is refused), a chunk-verified container whose
+header names the right map and whose plaintext starts with UnityFS, exactly one key file keys/<map>.json per
+released map that has the schema, plausible level-file names and sizes and no hash, and that unlocks the content
+key against the Arena installed on this machine (the build machine has it), and no file anywhere in dist that
+starts with "UnityFS". The container is read through tools/bundle/bundle_crypt.py (the C# tool), not in Python."""
 import json
 import hashlib
 from pathlib import Path
+import re
 import subprocess
 import sys
 
 from validate_map_descriptors import map_descriptor_paths, RELEASE_MAP_KEYS
 
 REPO = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(REPO/'tools/bundle'))
+import bundle_crypt  # noqa: E402 -- tests replace this module attribute with a stub
+
+BUNDLE_KINDS = ('scenes', 'navmesh', 'preset')
+AMPB_MAGIC = b'AMPB'
+UNITYFS_MAGIC = b'UnityFS\0'
+KEY_FILE_PATH_RE = re.compile(r'EscapeFromTarkovArena_Data/level([0-9]+)')
+HEX64_RE = re.compile(r'[0-9a-f]{64}')
+KEY_FILE_MAX_BYTES = 64 * 1024
 
 # Not every released map carries every optional payload. The key set of the release itself comes from
 # validate_map_descriptors.RELEASE_MAP_KEYS (four maps since Bowl, PLAN-BOWL item 8, 2026-10-18). All four have an
@@ -32,20 +49,147 @@ STALE_SPIKE_BUNDLES = {
 }
 
 
-def validate_not_spike_build(bundles):
-    """Refuse a distribution that still carries the AirPit spike bundles under the final map name. The size is
-    compared first so the 665 MB scenes bundle is only hashed when it could be the stale file."""
+def key_store_dir():
+    """The build machine's key store (ignored by git); a function so a test that patches REPO moves it too."""
+    return REPO/'work'/'release-keys'
+
+
+def _tool_call(what, call):
+    """Run one bundle_crypt call; any tool failure becomes a ValueError carrying the tool's own reason."""
+    try:
+        return call()
+    except bundle_crypt.BundleCryptError as exc:
+        raise ValueError(f'{what}: {exc.message}') from exc
+
+
+def validate_not_spike_build(bundles, key_store=None):
+    """Refuse a distribution that still carries the AirPit spike bundles under the final map name. The recorded size
+    and SHA-256 are those of the PLAINTEXT build, and dist/ holds AMPB containers, so the decrypted length (the tool's
+    `inspect`) is compared first and the 665 MB scenes bundle is only decrypted and hashed (`plain-sha256`, streamed)
+    when it could be the stale file. A file that is still a plain bundle is compared as it always was."""
     for name, (size, digest) in STALE_SPIKE_BUNDLES.items():
         path = bundles/name
-        if not path.is_file() or path.stat().st_size != size:
+        if not path.is_file():
             continue
-        with path.open('rb') as stream:
-            actual = hashlib.file_digest(stream, 'sha256').hexdigest()
+        if bundle_crypt.is_encrypted(path):
+            plain_size = _tool_call(f'Bundle {name}', lambda: bundle_crypt.inspect(path, key_store=key_store)['plaintext_length'])
+            if plain_size != size:
+                continue
+            actual = _tool_call(f'Bundle {name}', lambda: bundle_crypt.plain_sha256(path, key_store=key_store)[0])
+        else:
+            if path.stat().st_size != size:
+                continue
+            with path.open('rb') as stream:
+                actual = hashlib.file_digest(stream, 'sha256').hexdigest()
         if actual == digest:
             raise ValueError(
                 f'Stale AirPit bundle: {name} is the 2026-09-15 spike build (Arena 0.5.4 content, no native '
                 f'features). Run the AirPit Unity build (docs/progress/airpit-release.md), then a full, non-DllOnly '
                 f'client build so dist/ is restaged from work/build/airpit.')
+
+
+def validate_encrypted_bundles(bundles, keys, key_store=None):
+    """Every released map's three bundles are AMPB containers: the magic, a header that authenticates with the key
+    store's content key and names this map, every chunk hash intact (`inspect --verify-chunks`) and a plaintext that
+    starts with UnityFS (`read-range`). A plaintext bundle in dist is the one thing the release must never carry."""
+    for key in keys:
+        for kind in BUNDLE_KINDS:
+            name = f'{key}_{kind}.bundle'
+            path = bundles/name
+            with path.open('rb') as stream:
+                head = stream.read(4)
+            if head != AMPB_MAGIC:
+                raise ValueError(f'Plaintext bundle in dist (not an AMPB container): {name}; run a full, non-DllOnly '
+                                 f'client build so dist/ is restaged encrypted')
+            info = _tool_call(f'Bundle {name} failed inspection',
+                              lambda: bundle_crypt.inspect(path, key_store=key_store, verify_chunks=True))
+            if info.get('map_key') != key:
+                raise ValueError(f'Bundle {name} belongs to map {info.get("map_key")!r}, not {key!r}')
+            if info.get('mac_verified') is not True or info.get('chunks') != 'verified':
+                raise ValueError(f'Bundle {name} was not verified (header MAC {info.get("mac_verified")!r}, '
+                                 f'chunks {info.get("chunks")!r})')
+            prefix = _tool_call(f'Bundle {name} cannot be read', lambda: bundle_crypt.read_range(path, 0, 8, key_store=key_store))
+            if prefix != UNITYFS_MAGIC:
+                raise ValueError(f'Bundle {name} does not decrypt to a UnityFS bundle')
+
+
+def check_key_file_schema(path, key):
+    """The shipped key file keys/<key>.json, shape only: schema 1, this map, between 1 and 16 wraps of exactly
+    built_for / files / salt / wrapped_key / check, 1..32 files per wrap named EscapeFromTarkovArena_Data/level<N> in
+    ascending numeric order with a positive size, and 64 lowercase hex digits for the three values. Nothing else may
+    appear (the client would ignore an unknown field, the release must not carry one: a level-file hash would let
+    anyone derive the key). Canonical bytes: UTF-8, LF, no byte order mark, a final newline."""
+    raw = path.read_bytes()
+    if len(raw) > KEY_FILE_MAX_BYTES:
+        raise ValueError(f'Key file {path.name} is larger than 64 KiB')
+    try:
+        text = raw.decode('utf-8')
+        data = json.loads(text)
+    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise ValueError(f'Key file {path.name} is not valid UTF-8 JSON: {exc}') from exc
+    if text.startswith('﻿') or '\r' in text or not text.endswith('\n'):
+        raise ValueError(f'Key file {path.name} is not in canonical form (byte order mark, CR or missing final newline)')
+
+    def require(condition, message):
+        if not condition:
+            raise ValueError(f'Key file {path.name} is invalid: {message}')
+
+    def integer(value):
+        return isinstance(value, int) and not isinstance(value, bool)
+
+    require(isinstance(data, dict) and set(data) == {'schema', 'map_key', 'wraps'},
+            'the top level must hold exactly schema, map_key and wraps')
+    require(integer(data['schema']) and data['schema'] == 1, 'schema must be 1')
+    require(data['map_key'] == key, f'map_key must be {key!r}')
+    wraps = data['wraps']
+    require(isinstance(wraps, list) and 1 <= len(wraps) <= 16, 'wraps must list 1 to 16 entries')
+    for number, wrap in enumerate(wraps):
+        where = f'wrap {number}'
+        require(isinstance(wrap, dict) and set(wrap) == {'built_for', 'files', 'salt', 'wrapped_key', 'check'},
+                f'{where} must hold exactly built_for, files, salt, wrapped_key and check')
+        built_for = wrap['built_for']
+        require(isinstance(built_for, str) and 0 < len(built_for) <= 64 and built_for.isprintable(),
+                f'{where}: built_for must be a short printable string')
+        files = wrap['files']
+        require(isinstance(files, list) and 1 <= len(files) <= 32, f'{where}: files must list 1 to 32 entries')
+        previous = -1
+        for entry in files:
+            require(isinstance(entry, dict) and set(entry) == {'path', 'size'}, f'{where}: a file entry must hold exactly path and size')
+            match = KEY_FILE_PATH_RE.fullmatch(entry['path']) if isinstance(entry['path'], str) else None
+            require(match is not None, f'{where}: {entry["path"]!r} is not EscapeFromTarkovArena_Data/level<N>')
+            level = int(match.group(1))
+            require(level > previous, f'{where}: level files must be unique and in ascending numeric order')
+            previous = level
+            require(integer(entry['size']) and entry['size'] > 0, f'{where}: the size of {entry["path"]} must be a positive integer')
+        for field in ('salt', 'wrapped_key', 'check'):
+            require(isinstance(wrap[field], str) and HEX64_RE.fullmatch(wrap[field]) is not None,
+                    f'{where}: {field} must be 64 lowercase hex digits')
+
+
+def validate_key_files(plugin, keys, key_store=None, arena_unverified=None):
+    """keys/ holds exactly one file per released map. Each passes check_key_file_schema and unlocks the content key held
+    in the key store against the Arena installed on this machine (`verify-keys`: the player's own derivation, the full
+    chain). `arena_unverified` is the tool's test seam (a synthetic Arena folder; the environment must allow it)."""
+    root = plugin/'keys'
+    expected = {f'{key}.json' for key in keys}
+    actual = _files_under(root)
+    if actual != expected:
+        raise ValueError(f'Key file set mismatch: missing={sorted(expected - actual)} unexpected={sorted(actual - expected)}')
+    for key in keys:
+        check_key_file_schema(root/f'{key}.json', key)
+        _tool_call(f'Key file {key}.json does not unlock',
+                   lambda: bundle_crypt.verify_keys(key, root/f'{key}.json', key_store=key_store, arena_unverified=arena_unverified))
+
+
+def validate_no_plaintext_unityfs(dist):
+    """No file anywhere below dist/ may start with "UnityFS" + NUL (8 bytes read per file): a plaintext bundle under any
+    name or folder (a stray copy, a renamed one, a backup) is a release that gives the maps away."""
+    if not dist.is_dir():
+        return
+    for path in sorted(p for p in dist.rglob('*') if p.is_file()):
+        with path.open('rb') as stream:
+            if stream.read(8) == UNITYFS_MAGIC:
+                raise ValueError(f'Plaintext UnityFS file in dist: {path.relative_to(dist).as_posix()}')
 
 
 def _files_under(root):
@@ -254,7 +398,10 @@ def validate():
     actual_bundles = {p.relative_to(plugin/'bundles').as_posix() for p in (plugin/'bundles').rglob('*') if p.is_file()}
     if actual_bundles != expected_bundles:
         raise ValueError(f'Bundle set mismatch: missing={sorted(expected_bundles-actual_bundles)} unexpected={sorted(actual_bundles-expected_bundles)}')
-    validate_not_spike_build(plugin/'bundles')
+    validate_not_spike_build(plugin/'bundles', key_store_dir())
+    validate_encrypted_bundles(plugin/'bundles', keys, key_store_dir())
+    validate_key_files(plugin, keys, key_store_dir())
+    validate_no_plaintext_unityfs(REPO/'dist')
     # fix-preset-cab-and-bundle-lifetime: every dist bundle's internal UnityFS directory-table
     # name (its 'CAB-...'/'BuildPlayer-...' entry) must be unique across the WHOLE distribution --
     # a duplicate (as every *_preset.bundle used to share, before that fix) makes Unity's own
@@ -262,7 +409,7 @@ def validate():
     # in the same client session. See tools/validate/validate_bundle_names.py's module docstring
     # for the full root-cause evidence.
     subprocess.run([sys.executable, str(REPO/'tools/validate/validate_bundle_names.py'),
-                    '--bundles-dir', str(plugin/'bundles')], cwd=REPO, check=True)
+                    '--bundles-dir', str(plugin/'bundles'), '--key-store', str(key_store_dir())], cwd=REPO, check=True)
     expected_sidecars = {f'material-shaders.{key}.json' for key in keys}
     actual_sidecars = {p.name for p in plugin.glob('material-shaders*.json')}
     if actual_sidecars != expected_sidecars:
@@ -288,7 +435,7 @@ def validate():
         with built.open('rb') as source_stream, staged.open('rb') as target_stream:
             if hashlib.file_digest(source_stream,'sha256').digest() != hashlib.file_digest(target_stream,'sha256').digest():
                 raise ValueError(f'Stale staged {name} DLL')
-    print(f'DISTRIBUTION_OK {len(keys)} maps {len(expected_bundles)} bundles {len(expected_sidecars)} sidecars')
+    print(f'DISTRIBUTION_OK {len(keys)} maps {len(expected_bundles)} bundles {len(expected_sidecars)} sidecars encrypted')
 
 
 if __name__ == '__main__':

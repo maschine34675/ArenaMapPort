@@ -28,6 +28,7 @@ PLUGIN = "BepInEx/plugins/maschine-ArenaMapPort"
 SERVER = "SPT_Runtime/user/mods/ArenaMapPort"
 MAPS = (("arena_equator", "Equator"), ("arena_bay5", "Bay5"), ("arena_airpit", "AirPit"))
 COMMIT = "a" * 40
+AMPB = b"AMPB"
 
 MIT = """MIT License
 
@@ -65,7 +66,9 @@ def git_env():
 
 def fake_dist_files(maps=MAPS):
     """Tiny stand-ins named like the real dist: random bytes where the real file is incompressible (bundles,
-    DLLs), repeated text elsewhere. AirPit has no flares / water / overview map, Bay5 alone has water."""
+    DLLs), repeated text elsewhere. A bundle is "AMPB" + random bytes: since stage 2 of the Arena gate every
+    distributed bundle is an encrypted AMPB container and every map carries keys/<key>.json (the packer reads
+    four bytes, it never decrypts). AirPit has no flares / water / overview map, Bay5 alone has water."""
     rng = random.Random(20261012)
     text = lambda label: (label.encode() + b" ") * 200
     files = {
@@ -78,7 +81,8 @@ def fake_dist_files(maps=MAPS):
     for key, display in maps:
         stem = key.removeprefix("arena_")
         for kind in ("scenes", "navmesh", "preset"):
-            files[f"{PLUGIN}/bundles/{key}_{kind}.bundle"] = rng.randbytes(4096)
+            files[f"{PLUGIN}/bundles/{key}_{kind}.bundle"] = AMPB + rng.randbytes(4092)
+        files[f"{PLUGIN}/keys/{key}.json"] = text(key + "keys")
         files[f"{PLUGIN}/acoustics/{key}/spatial-audio.json"] = text(key + "audio")
         files[f"{PLUGIN}/acoustics/{key}/source.audiobakedata"] = text(key + "bake")
         files[f"{PLUGIN}/acoustics/{key}/room.assets_9.wav"] = rng.randbytes(1500)
@@ -1018,6 +1022,29 @@ class DamagedSetTests(FakeRepoCase):
         self.rename_entry(3, f"{PLUGIN}/bundles/arena_airpit_navmesh.bundle", f"{PLUGIN}/bundles/arena_airpit_navmesh.old")
         self.assert_rejected("arena_airpit_navmesh.bundle")
 
+    def test_a_map_part_without_its_key_file_is_refused(self):
+        self.rename_entry(3, f"{PLUGIN}/keys/arena_airpit.json", f"{PLUGIN}/keys/arena_airpit.json.old")
+        self.assert_rejected("keys/arena_airpit.json")
+
+    def test_a_key_file_that_is_not_with_its_bundles_is_refused(self):
+        key_file = f"{PLUGIN}/keys/arena_bay5.json"
+        self.rename_entry(2, key_file, f"{PLUGIN}/acoustics/arena_bay5/moved.wav")
+        self.rename_entry(1, f"{PLUGIN}/acoustics/arena_equator/room.assets_9.wav", key_file)
+        self.assert_rejected(key_file)
+
+    def test_a_plaintext_bundle_inside_a_finished_part_is_refused(self):
+        name = f"{PLUGIN}/bundles/arena_bay5_scenes.bundle"
+
+        def plaintext(entries, manifest):
+            entries[name] = b"UnityFS\0" + b"\x01" * 500
+            for entry in manifest["entries"]:
+                if entry["path"] == name:
+                    entry["size"] = len(entries[name])
+                    entry["sha256"] = hashlib.sha256(entries[name]).hexdigest()
+            manifest["parts"][2]["raw_bytes"] = sum(e["size"] for e in manifest["entries"] if e["origin"] == "dist")
+        self.rewrite_part(2, plaintext)
+        self.assert_rejected(f"plaintext bundle {name}")
+
     def test_the_core_part_must_come_first(self):
         verified = release.verify_set(self.copy, log=quiet)
         release.check_partition(verified.parts)
@@ -1928,6 +1955,27 @@ class DamagedSingleSetTests(FakeRepoCase):
                 self.rewrite(lambda entries, manifest: self.drop(entries, manifest, name))
                 self.assert_rejected(name)
 
+    def test_every_maps_key_file_must_be_present(self):
+        for key in ("arena_equator", "arena_bay5", "arena_airpit"):
+            with self.subTest(key=key):
+                shutil.rmtree(self.copy)
+                shutil.copytree(self.result.out_dir, self.copy)
+                self.rewrite(lambda entries, manifest: self.drop(entries, manifest, f"{PLUGIN}/keys/{key}.json"))
+                self.assert_rejected(f"map {key} lacks")
+
+    def test_a_plaintext_bundle_inside_the_single_zip_is_refused(self):
+        name = f"{PLUGIN}/bundles/arena_equator_navmesh.bundle"
+
+        def plaintext(entries, manifest):
+            entries[name] = b"UnityFS\0" + b"\x02" * 300
+            for entry in manifest["entries"]:
+                if entry["path"] == name:
+                    entry["size"] = len(entries[name])
+                    entry["sha256"] = hashlib.sha256(entries[name]).hexdigest()
+            manifest["parts"][0]["raw_bytes"] = sum(e["size"] for e in manifest["entries"] if e["origin"] == "dist")
+        self.rewrite(plaintext)
+        self.assert_rejected(f"plaintext bundle {name}")
+
     def test_a_single_zip_without_any_map_is_refused(self):
         def strip_maps(entries, manifest):
             for name in [n for n in entries if release.MAP_DATA_RE.fullmatch(n)]:
@@ -1936,10 +1984,10 @@ class DamagedSingleSetTests(FakeRepoCase):
         self.assert_rejected("carries no map")
 
     def drop_map(self, key):
-        """Every map-data entry of one released map (3 bundles + db/<key>/base.json), counters kept honest."""
+        """Every map-data entry of one released map (3 bundles + keys/<key>.json + db/<key>/base.json), counters kept honest."""
         def mutate(entries, manifest):
             names = [n for n in entries if (m := release.MAP_DATA_RE.fullmatch(n)) and key in m.groups()]
-            self.assertEqual(len(names), 4, names)
+            self.assertEqual(len(names), 5, names)
             for name in names:
                 self.drop(entries, manifest, name)
         self.rewrite(mutate)
@@ -1957,6 +2005,7 @@ class DamagedSingleSetTests(FakeRepoCase):
                 message = str(caught.exception)
                 self.assertIn(f"map {key} lacks", message)
                 self.assertIn(f"bundles/{key}_scenes.bundle", message)
+                self.assertIn(f"keys/{key}.json", message)
                 self.assertIn(f"db/{key}/base.json", message)
 
     def test_the_whole_map_guard_reaches_the_command_line(self):
@@ -2198,6 +2247,132 @@ class GitGateTests(FakeRepoCase):
         self.assertIn("unidentified", err)
 
 
+class EncryptedBundleTests(FakeRepoCase):
+    """Stage 2 of the Arena gate (docs/PLAN-ENCRYPTION.md): every bundle in dist is an AMPB container and every released
+    map ships keys/<key>.json. The packer reads four bytes of each bundle; it refuses a plaintext one before it writes
+    anything, classifies the key files per map, demands one per map and says in the generated README what the
+    encryption is and is not."""
+
+    def test_a_plaintext_bundle_in_dist_is_refused_for_every_bundle(self):
+        for key, _display in MAPS:
+            for kind in ("scenes", "navmesh", "preset"):
+                name = f"{PLUGIN}/bundles/{key}_{kind}.bundle"
+                path = self.dist / name
+                original = path.read_bytes()
+                for plaintext in (b"UnityFS\0" + b"x" * 200, b"", b"AMP", b"ampb" + b"x" * 20, b"\0AMPB" + b"x" * 20):
+                    with self.subTest(name=name, head=plaintext[:8]):
+                        path.write_bytes(plaintext)
+                        try:
+                            with self.assertRaises(release.PackagingError) as caught:
+                                self.partition()
+                            self.assertIn("plaintext bundle in dist", str(caught.exception))
+                            self.assertIn(name, str(caught.exception))
+                        finally:
+                            path.write_bytes(original)
+
+    def test_neither_layout_writes_anything_for_a_plaintext_bundle(self):
+        (self.dist / PLUGIN / "bundles/arena_bay5_scenes.bundle").write_bytes(b"UnityFS\0" + b"x" * 64)
+        for single in (False, True):
+            with self.subTest(single=single):
+                with self.assertRaises(release.PackagingError) as caught:
+                    self.build(f"out-{single}", single=single)
+                self.assertIn("plaintext bundle in dist", str(caught.exception))
+                self.assertFalse((self.tmp / f"out-{single}").exists())
+                code, _out, err = self.cli("--dist", str(self.dist), "--out", str(self.tmp / f"cli-{single}"),
+                                           "--allow-dirty", *(["--single"] if single else []))
+                self.assertEqual(code, 1)
+                self.assertIn("plaintext bundle in dist", err)
+        code, _out, err = self.cli("--dist", str(self.dist), "--plan")
+        self.assertEqual(code, 1, err)
+        self.assertIn("plaintext bundle in dist", err)
+
+    def test_ampb_bundles_are_accepted_whatever_follows_the_magic(self):
+        parts = self.partition()
+        self.assertEqual(sum(len(p.files) for p in parts), len(self.files))
+
+    def test_a_key_file_travels_with_its_map(self):
+        parts = {p.id: {f.rel for f in p.files} for p in self.partition()}
+        for key, _display in MAPS:
+            stem = key.removeprefix("arena_")
+            name = f"{PLUGIN}/keys/{key}.json"
+            self.assertIn(name, parts[stem])
+            for other, names in parts.items():
+                if other != stem:
+                    self.assertNotIn(name, names)
+        self.assertEqual({r.label for r in release.build_rules(self.spec)} & {"key file"}, {"key file"})
+
+    def test_a_map_without_its_key_file_is_not_installable(self):
+        for key, _display in MAPS:
+            name = f"{PLUGIN}/keys/{key}.json"
+            with self.subTest(key=key):
+                original = (self.dist / name).read_bytes()
+                (self.dist / name).unlink()
+                try:
+                    with self.assertRaises(release.PackagingError) as caught:
+                        self.partition()
+                    self.assertIn("incomplete dist", str(caught.exception))
+                    self.assertIn(name, str(caught.exception))
+                finally:
+                    (self.dist / name).write_bytes(original)
+        self.assertIn(f"{PLUGIN}/keys/arena_bay5.json", release.required_files(self.spec)["bay5"])
+
+    def test_only_a_released_maps_exact_key_file_is_classified(self):
+        for name in (f"{PLUGIN}/keys/arena_prison.json", f"{PLUGIN}/keys/arena_airpit2.json",
+                     f"{PLUGIN}/keys/arena_equator.json.bak", f"{PLUGIN}/keys/arena_equator.txt",
+                     f"{PLUGIN}/keys/arena_equator.key", f"{PLUGIN}/keys/sub/arena_equator.json",
+                     f"{PLUGIN}/keys/Thumbs.db", f"{PLUGIN}/arena_equator.json"):
+            with self.subTest(name=name):
+                (self.dist / name).parent.mkdir(parents=True, exist_ok=True)
+                (self.dist / name).write_bytes(b"{}")
+                try:
+                    with self.assertRaises(release.PackagingError):
+                        self.partition()
+                finally:
+                    (self.dist / name).unlink()
+
+    def test_the_gate_does_not_look_at_other_files(self):
+        # Only bundle-rule files are read for the magic: a sidecar that happens to start with UnityFS is a different check
+        # (validate_distribution), and the JSON key files are not bundles.
+        (self.dist / PLUGIN / "ai/airpit.ai.json").write_bytes(b"UnityFS\0 not a bundle")
+        self.assertEqual(sum(len(p.files) for p in self.partition()), len(self.files))
+
+    def test_the_generated_readme_states_what_the_encryption_is_and_is_not(self):
+        for single in (False, True):
+            parts = release.partition_single(self.scan(), self.spec) if single else self.partition()
+            text = release.readme_text(self.spec, parts)
+            with self.subTest(single=single):
+                self.assertIn("Encrypted bundles", text)
+                self.assertIn("your PC derives from the Arena level files each map is built from", text)
+                self.assertIn("by path and size only", text)
+                self.assertIn("not copy protection", text)
+                self.assertIn("reads no game data", text)  # the installation check's own statement, kept true next to the new paragraph
+                self.assertIn("are not encrypted", text)
+                for word in ("Loading screens", "audio"):
+                    self.assertIn(word, text.split("Encrypted bundles", 1)[1].split("Installation", 1)[0])
+                self.assertLess(text.index("Requirement:"), text.index("Encrypted bundles"))
+                self.assertLess(text.index("Encrypted bundles"), text.index("Installation"))
+
+    def test_built_sets_carry_the_key_files_and_verify(self):
+        self.pin_released_maps()
+        for single in (False, True):
+            with self.subTest(single=single):
+                result = self.build(f"set-{single}", single=single)
+                verified = release.verify_set(result.out_dir, "0.1.0", log=quiet, maps=[k for k, _d in MAPS])
+                names = {e["path"] for part in verified.parts for e in part.manifest["entries"]}
+                for key, _display in MAPS:
+                    self.assertIn(f"{PLUGIN}/keys/{key}.json", names)
+                    for kind in ("scenes", "navmesh", "preset"):
+                        self.assertIn(f"{PLUGIN}/bundles/{key}_{kind}.bundle", names)
+
+    def test_bundles_are_stored_not_compressed(self):
+        result = self.build("stored")
+        for zip_path in result.zips:
+            with zipfile.ZipFile(zip_path) as archive:
+                for info in archive.infolist():
+                    if info.filename.endswith(".bundle"):
+                        self.assertEqual(info.compress_type, zipfile.ZIP_STORED, info.filename)
+
+
 class RealRepoTests(unittest.TestCase):
     """Facts about the checked-in repository that must hold whether or not dist/ is staged."""
 
@@ -2210,6 +2385,18 @@ class RealRepoTests(unittest.TestCase):
     def test_client_and_server_versions_agree(self):
         spec = release.load_spec(REPO)  # raises when the two csproj versions differ or are missing
         self.assertTrue(release.VERSION_RE.fullmatch(spec.version), spec.version)
+
+    def test_the_arena_build_of_the_keys_is_named_the_same_everywhere(self):
+        """The generated README names the Arena build the shipped key files are built for (KEYS_BUILT_FOR); it must be the build of
+        tools/bundle/key-sources.json, the one every player-facing text states (README, FORGE, the release notes of this version)."""
+        sources = json.loads((REPO / "tools/bundle/key-sources.json").read_text(encoding="utf-8"))
+        self.assertEqual(release.KEYS_BUILT_FOR, sources["arena_build"])
+        self.assertIn(f"built for Arena {release.KEYS_BUILT_FOR}", release.ENCRYPTION_TEXT)
+        spec = release.load_spec(REPO)
+        for name in ("README.md", "FORGE.md", f"docs/releases/v{spec.version}.md"):
+            text = (REPO / name).read_text(encoding="utf-8")
+            with self.subTest(file=name):
+                self.assertIn(release.KEYS_BUILT_FOR, text)
 
 
 BOWL = ("arena_bowl", "Bowl")
@@ -2239,6 +2426,7 @@ class BowlPartTests(FakeRepoCase):
         names = {f.rel for f in parts[-1].files}
         self.assertEqual(names, {
             *(f"{PLUGIN}/bundles/arena_bowl_{kind}.bundle" for kind in ("scenes", "navmesh", "preset")),
+            f"{PLUGIN}/keys/arena_bowl.json",
             f"{PLUGIN}/acoustics/arena_bowl/spatial-audio.json", f"{PLUGIN}/acoustics/arena_bowl/source.audiobakedata",
             f"{PLUGIN}/acoustics/arena_bowl/room.assets_9.wav", f"{PLUGIN}/ai/bowl.ai.json",
             *(f"{PLUGIN}/loadscreens/arena_bowl_{n}.jpg" for n in (1, 2, 3, 4)),

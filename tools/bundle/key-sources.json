@@ -1,0 +1,43 @@
+{
+  "schema": 1,
+  "arena_build": "0.6.1.0.48206",
+  "note": "Which Arena level files unlock each map's bundles (docs/PLAN-ENCRYPTION.md 0.3). The files are EscapeFromTarkovArena_Data/level<index>, hashed in ascending index order. Pinned against the accepted extraction packages by tools/tests/test_bundle_crypt_tool.py. Indices only, never a hash.",
+  "maps": {
+    "arena_equator": [
+      { "index": 51, "scene": "Arena_Equator" },
+      { "index": 53, "scene": "Arena_Equator_DesignStuff" },
+      { "index": 55, "scene": "Arena_Equator_Lighting" },
+      { "index": 57, "scene": "Arena_Equator_TeamFight_DesignStuff" },
+      { "index": 58, "scene": "Arena_Equator_TeamFight" }
+    ],
+    "arena_bay5": [
+      { "index": 79, "scene": "Arena_Bay5_Background" },
+      { "index": 80, "scene": "Arena_Bay5_DEPOT" },
+      { "index": 81, "scene": "Arena_Bay5_DesignStuff" },
+      { "index": 82, "scene": "Arena_Bay5_HANGAR" },
+      { "index": 83, "scene": "Arena_Bay5_Light" },
+      { "index": 84, "scene": "Arena_Bay5_Main" },
+      { "index": 86, "scene": "Arena_Bay5_WAREHOUSE" },
+      { "index": 88, "scene": "Arena_Bay5_TeamFight_DesignStuff" },
+      { "index": 89, "scene": "Arena_Bay5_TeamFight" }
+    ],
+    "arena_airpit": [
+      { "index": 28, "scene": "Arena_Airpit_TeamFight_DesignStuff" },
+      { "index": 29, "scene": "Arena_Airpit_TeamFight" },
+      { "index": 37, "scene": "Arena_Airpit_Light" },
+      { "index": 38, "scene": "Arena_Airpit_Main_hall" },
+      { "index": 40, "scene": "Arena_Airpit_DesignStuff" },
+      { "index": 324, "scene": "Arena_AirPit_ShootOut" },
+      { "index": 325, "scene": "Arena_AirPit_ShootOut_Light" }
+    ],
+    "arena_bowl": [
+      { "index": 41, "scene": "Arena_Bowl" },
+      { "index": 43, "scene": "Arena_Bowl_DesignStuff" },
+      { "index": 45, "scene": "Arena_Bowl_Light" },
+      { "index": 46, "scene": "Arena_Bowl_Building" },
+      { "index": 47, "scene": "Arena_Bowl_TeamFight" },
+      { "index": 48, "scene": "Arena_Bowl_TeamFight_DesignStuff" },
+      { "index": 95, "scene": "Arena_Bowl_Grass" }
+    ]
+  }
+}

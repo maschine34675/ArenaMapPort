@@ -27,7 +27,13 @@ Two layouts, one classification, one verifier:
       maschine-ArenaMapPort-<version>.sha256                    '<sha256>  <zip name>' per part, in part order
 
 The released maps and their order come from tools/validate/validate_map_descriptors.py
-(RELEASE_MAP_KEYS / RELEASE_MAP_NAMES). The version comes from the `<Version>` of both csproj files, which must
+(RELEASE_MAP_KEYS / RELEASE_MAP_NAMES).
+
+Encrypted bundles (stage 2 of the Arena gate, docs/PLAN-ENCRYPTION.md): every bundle in dist is an AMPB container
+and every released map carries its key file keys/<key>.json (level-file names and sizes, never a hash). The packer
+refuses a plaintext bundle twice: on the dist files before anything is written (the first four bytes must be
+"AMPB") and on the finished ZIPs (the same four bytes of every bundle entry); a map part without its key file is
+not installable. Ciphertext does not compress, so the bundles are STORED. The version comes from the `<Version>` of both csproj files, which must
 agree (`--version` overrides). Outputs land under `--out` (default work/releases/<version>/).
 
 Classification is strict and anchored and identical for both layouts: every dist file must match exactly one
@@ -35,8 +41,8 @@ rule (see build_rules). A file that matches none (a parked map's output such as 
 ai/airpit2.ai.json, a stray .pdb or backup, a Thumbs.db or .bak inside an acoustics / flares / water /
 dynamicmaps folder) or more than one is a hard error, never a silent skip; so is a directory that cannot be
 listed. The rules pin the leaf names the build stages, and required_files() demands everything every released
-map must carry (bundles, database entry, shader sidecar, AI sidecar, banner, acoustic graph, first loading
-screen); only flares, water and the overview map are optional per map. Every ZIP carries
+map must carry (bundles, key file, database entry, shader sidecar, AI sidecar, banner, acoustic graph, first
+loading screen); only flares, water and the overview map are optional per map. Every ZIP carries
 BepInEx/plugins/maschine-ArenaMapPort/parts/<id>.json, a schema-1 manifest naming ALL parts (one, in the single
 layout) plus this ZIP's own entries with size and SHA-256, so any ZIP says which others complete the install.
 The core part (or the single ZIP) adds README.txt and THIRD-PARTY-NOTICES.txt (client and server root); the
@@ -132,6 +138,9 @@ LEAF = r"[A-Za-z0-9_.-]+"
 VERSION_RE = re.compile(r"\d+\.\d+\.\d+(?:-[0-9A-Za-z][0-9A-Za-z.-]*)?")
 SHA256_LINE_RE = re.compile(r"([0-9a-f]{64})  (\S+\.zip)")
 MANIFEST_PATH_RE = re.compile(re.escape(PLUGIN_ROOT) + r"/parts/([a-z0-9]+)\.json")
+
+AMPB_MAGIC = b"AMPB"  # the first four bytes of every distributed bundle (ArenaMapPort.Crypto, docs/PLAN-ENCRYPTION.md 0.5)
+BUNDLE_ENTRY_RE = re.compile(re.escape(f"{PLUGIN_ROOT}/bundles/") + r"arena_[a-z0-9]+_(?:scenes|navmesh|preset)\.bundle")
 
 README_NAME = f"{PLUGIN_ROOT}/README.txt"
 CLIENT_NOTICES_NAME = f"{PLUGIN_ROOT}/THIRD-PARTY-NOTICES.txt"
@@ -334,6 +343,7 @@ def build_rules(spec: ReleaseSpec) -> list:
     for m in spec.maps:
         key = re.escape(m.key)
         add(m.stem, "bundle", re.escape(f"{PLUGIN_ROOT}/bundles/") + key + r"_(?:scenes|navmesh|preset)\.bundle")
+        add(m.stem, "key file", re.escape(f"{PLUGIN_ROOT}/keys/{m.key}.json"))
         add(m.stem, "acoustics", re.escape(f"{PLUGIN_ROOT}/acoustics/{m.key}/")
             + rf"(?:spatial-audio\.json|source\.audiobakedata|{LEAF}\.wav)")
         add(m.stem, "ai sidecar", re.escape(f"{PLUGIN_ROOT}/ai/{m.stem}.ai.json"))
@@ -361,14 +371,16 @@ def classify(rel: str, rules) -> Rule:
 
 def required_files(spec: ReleaseSpec) -> dict:
     """Part id -> files that must exist in dist for that part to be installable. Mirrors what
-    tools/validate/validate_distribution.py treats as mandatory per released map: a missing AI sidecar silently
-    falls back to the NavMesh-synthesised AI, a missing shader sidecar leaves pink materials, and a map without
-    its acoustic graph, banner or loading screens is not the map the README promises. Only flares, water and the
+    tools/validate/validate_distribution.py treats as mandatory per released map: a map without its key file cannot
+    unlock its encrypted bundles, a missing AI sidecar silently falls back to the NavMesh-synthesised AI, a missing
+    shader sidecar leaves pink materials, and a map without its acoustic graph, banner or loading screens is not
+    the map the README promises. Only flares, water and the
     DynamicMaps overview are optional (AirPit has an overview but no flares or water package)."""
     required = {CORE_ID: [spec.client_dll, spec.server_dll, DESCRIPTIONS_NAME, *SELECTION_MAP_NAMES]}
     for m in spec.maps:
         names = [f"{PLUGIN_ROOT}/bundles/{m.key}_{kind}.bundle" for kind in ("scenes", "navmesh", "preset")]
         names += [f"{SERVER_ROOT}/db/{m.key}/base.json",
+                  f"{PLUGIN_ROOT}/keys/{m.key}.json",
                   f"{PLUGIN_ROOT}/{shader_sidecar_name(m.key)}",
                   f"{PLUGIN_ROOT}/ai/{m.stem}.ai.json",
                   f"{SERVER_ROOT}/banners/{m.key}.jpg",
@@ -382,13 +394,30 @@ def zip_name_for(spec: ReleaseSpec, index: int, count: int, part_id: str) -> str
     return f"{PACKAGE}-{spec.version}-part{index}of{count}-{part_id}.zip"
 
 
+def require_encrypted_bundle(f: DistFile) -> None:
+    """A bundle that is not an AMPB container is a plaintext map: the release must never carry one (stage 2 of the
+    Arena gate). Four bytes are enough here; tools/validate/validate_distribution.py authenticates the whole container."""
+    try:
+        with f.path.open("rb") as stream:
+            head = stream.read(4)
+    except OSError as exc:
+        raise PackagingError(f"cannot read {f.path}: {exc}") from exc
+    if head != AMPB_MAGIC:
+        raise PackagingError(f"plaintext bundle in dist (not an AMPB container): {f.rel}; "
+                             "run a full, non-DllOnly client build so dist/ is restaged encrypted")
+
+
 def partition_dist(files, spec: ReleaseSpec, rules=None) -> list:
-    """Assign every dist file to exactly one part. A map's database entry always travels with its bundles."""
+    """Assign every dist file to exactly one part. A map's database entry always travels with its bundles, and
+    every bundle must be an encrypted AMPB container (require_encrypted_bundle)."""
     rules = build_rules(spec) if rules is None else rules
     ids = [CORE_ID] + [m.stem for m in spec.maps]
     buckets = {part_id: [] for part_id in ids}
     for f in files:
-        buckets[classify(f.rel, rules).part].append(f)
+        rule = classify(f.rel, rules)
+        if rule.label == "bundle":
+            require_encrypted_bundle(f)
+        buckets[rule.part].append(f)
     present = {f.rel for f in files}
     for part_id, names in required_files(spec).items():
         missing = [name for name in names if name not in present]
@@ -584,13 +613,32 @@ REQUIREMENT_TEXT = (
     "Tarkov, and these maps are built from its files, so the server registers the locations and the client\n"
     "loads the map files only when Arena is found (the Battlestate Games launcher's entry in the Windows\n"
     "registry) and its folder is complete: the game executable and the launcher's file list (ConsistencyInfo)\n"
-    "must be there and every listed file must exist with the listed size. Only names and sizes are compared;\n"
-    "no game data is read and nothing is sent anywhere. If Arena is installed without a launcher entry, set\n"
+    "must be there and every listed file must exist with the listed size. The installation check compares only\n"
+    "names and sizes, reads no game data and sends nothing anywhere. If Arena is installed without a launcher entry, set\n"
     "its folder in General / ArenaInstallPath (BepInEx/config/com.maschine.ArenaMapPort.cfg) and in\n"
     "SPT_Runtime/user/mods/ArenaMapPort/config/arena-install.json, for example\n"
     "{\"installPath\": \"D:/Battlestate Games/Escape from Tarkov Arena\"}; both are checked like the automatic\n"
     "path, and nothing turns the check off. Without a verified installation both components log the reason\n"
     "and the Arena locations do not appear.\n\n"
+)
+
+# The Arena build the shipped key files are built for: the one installed on the build VM when `stage` wrote them (the launcher
+# manifest's version, which the client prints as "Arena: found <version>"). tools/bundle/key-sources.json ("arena_build"),
+# README.md, FORGE.md and the release notes name the same build; RealRepoTests pins the equality. Raise it with the key files.
+KEYS_BUILT_FOR = "0.6.1.0.48206"
+
+# The encrypted bundles (stage 2, docs/PLAN-ENCRYPTION.md). The same four statements as README.md and the release notes:
+# encrypted with a key derived from the player's Arena files, not copy protection, art and audio stay plaintext, and the
+# build the keys are built for.
+ENCRYPTION_TEXT = (
+    "Encrypted bundles: the map bundles in bundles/ (scenes, materials, textures, NavMesh) are encrypted with a key\n"
+    "that your PC derives from the Arena level files each map is built from (read when the map is first used and\n"
+    "never sent anywhere; keys/<map>.json lists them by path and size only). They work only next to your own Arena\n"
+    f"files. The keys in this release are built for Arena {KEYS_BUILT_FOR} (your build is in the client log at startup,\n"
+    "\"Arena: found ...\"); if a map's level files differ in your build, that map does not load (the client log names the\n"
+    "cause) until an updated ArenaMapPort package carries the key for your build, and the other maps keep working.\n"
+    "This is a requirement, not copy protection: anyone who owns Arena can derive the key. Loading screens, banners,\n"
+    "audio, overview maps and map descriptions are not encrypted.\n\n"
 )
 
 
@@ -626,7 +674,8 @@ def readme_text(spec: ReleaseSpec, parts) -> str:
                         "the files it installed.\n\n")
     return (f"ArenaMapPort {spec.version}\n\n"
             "Target: SPT 4.1.x / EFT 0.16.9.5\n\n"
-            + REQUIREMENT_TEXT +
+            + REQUIREMENT_TEXT
+            + ENCRYPTION_TEXT +
             intro +
             "Installation\n"
             "1. Close the game and the SPT server.\n"
@@ -1008,12 +1057,17 @@ def verify_zip(zip_path: Path, expected_name: str | None = None) -> dict:
                     continue
                 digest = hashlib.sha256()
                 count = 0
+                head = b""
                 with archive.open(info) as stream:
                     for block in iter(lambda: stream.read(CHUNK), b""):
+                        if len(head) < len(AMPB_MAGIC):
+                            head = (head + block)[:len(AMPB_MAGIC)]
                         digest.update(block)
                         count += len(block)
                 if count != info.file_size:
                     raise VerificationError(f"{name}: {info.filename} size differs from the ZIP directory")
+                if BUNDLE_ENTRY_RE.fullmatch(info.filename) and head != AMPB_MAGIC:
+                    raise VerificationError(f"{name}: plaintext bundle {info.filename} (not an AMPB container)")
                 actual[info.filename] = (count, digest.hexdigest())
     # NotImplementedError: an unsupported compression method; EOFError / RuntimeError: truncated or damaged streams.
     # Whatever the cause, a damaged ZIP is a verification failure with a message, never a traceback.
@@ -1107,7 +1161,8 @@ def find_sha256_file(directory: Path, version: str | None) -> tuple:
 def check_partition(parts) -> None:
     """The invariant partition_dist establishes, re-asserted on the finished ZIPs (extract_check cannot see it:
     the union of the parts still equals dist when a file sits in the wrong part). Part 1 is the core; every map part
-    carries its three bundles and its database entry; nothing of map X's bundles or db/ folder is in any other part."""
+    carries its three bundles, its key file and its database entry; nothing of map X's bundles, key file or db/ folder
+    is in any other part."""
     ids = [p.id for p in parts]
     if len(set(ids)) != len(ids) or ids[0] != CORE_ID or CORE_ID in ids[1:]:
         raise VerificationError(f"part ids must be unique with '{CORE_ID}' first: {ids}")
@@ -1115,6 +1170,7 @@ def check_partition(parts) -> None:
     for part in parts[1:]:
         key = f"arena_{part.id}"
         required = [f"{PLUGIN_ROOT}/bundles/{key}_{kind}.bundle" for kind in ("scenes", "navmesh", "preset")]
+        required.append(f"{PLUGIN_ROOT}/keys/{key}.json")
         required.append(f"{SERVER_ROOT}/db/{key}/base.json")
         missing = [name for name in required if name not in paths[part.id]]
         if missing:
@@ -1126,28 +1182,31 @@ def check_partition(parts) -> None:
             key = f"arena_{other.id}"
             foreign = sorted(name for name in paths[part.id]
                              if name.startswith(f"{SERVER_ROOT}/db/{key}/")
-                             or name.startswith(f"{PLUGIN_ROOT}/bundles/{key}_"))
+                             or name.startswith(f"{PLUGIN_ROOT}/bundles/{key}_")
+                             or name == f"{PLUGIN_ROOT}/keys/{key}.json")
             if foreign:
                 raise VerificationError(f"{part.zip_name} carries files that belong to part '{other.id}': {foreign}")
 
 
 MAP_DATA_RE = re.compile(re.escape(f"{PLUGIN_ROOT}/bundles/") + r"(arena_[a-z0-9]+)_(?:scenes|navmesh|preset)\.bundle"
-                         + "|" + re.escape(f"{SERVER_ROOT}/db/") + r"(arena_[a-z0-9]+)/base\.json")
+                         + "|" + re.escape(f"{SERVER_ROOT}/db/") + r"(arena_[a-z0-9]+)/base\.json"
+                         + "|" + re.escape(f"{PLUGIN_ROOT}/keys/") + r"(arena_[a-z0-9]+)\.json")
 
 
 def check_single(part, expected_keys=()) -> None:
     """The partition invariant of the single layout: the one archive is the core AND every map, so every released
-    map (`expected_keys`, e.g. 'arena_equator') carries its three bundles and its database entry, and so does every
-    other map the archive mentions (recognised by any bundle or db/<key>/base.json entry). At least one map must be
+    map (`expected_keys`, e.g. 'arena_equator') carries its three bundles, its key file and its database entry, and so
+    does every other map the archive mentions (recognised by any bundle, key file or db/<key>/base.json entry). At least one map must be
     present, and the generated README and notices must be there. The released map list is NOT recorded in the ZIP,
     so it has to come from the caller: deriving it from the archive's own entries would let a ZIP that lost a whole
     map (all three bundles and the database entry) pass, because nothing in it would mention that map any more."""
     entries = {e["path"]: e for e in part.manifest["entries"]}
-    found = {m.group(1) or m.group(2) for m in map(MAP_DATA_RE.fullmatch, entries) if m}
+    found = {m.group(1) or m.group(2) or m.group(3) for m in map(MAP_DATA_RE.fullmatch, entries) if m}
     if not found:
-        raise VerificationError(f"{part.zip_name}: single ZIP carries no map (no bundles or db/<key>/base.json)")
+        raise VerificationError(f"{part.zip_name}: single ZIP carries no map (no bundles, key files or db/<key>/base.json)")
     for key in sorted(found | set(expected_keys)):
         required = [f"{PLUGIN_ROOT}/bundles/{key}_{kind}.bundle" for kind in ("scenes", "navmesh", "preset")]
+        required.append(f"{PLUGIN_ROOT}/keys/{key}.json")
         required.append(f"{SERVER_ROOT}/db/{key}/base.json")
         missing = [name for name in required if name not in entries]
         if missing:

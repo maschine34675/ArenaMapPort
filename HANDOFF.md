@@ -3,6 +3,58 @@
 Snapshot for whoever continues (human or agent). Verify the commits named here against `git log`; this file
 is updated by hand at each handover, it is not an automatic record. Read [AGENTS.md](AGENTS.md) first.
 
+## Update 2026-10-19 (stage 2) - bundle encryption: integrated and verified on the build VM (uncommitted), host runs open
+
+User decision (2026-10-19, "Stufe 2", right after the merge below): the shipped map bundles are encrypted, and the content key of a
+map is derived from the bytes of the player's own Arena level files. Design, work split and host plan:
+[docs/PLAN-ENCRYPTION.md](docs/PLAN-ENCRYPTION.md); the record with its evidence placeholders:
+[docs/progress/bundle-encryption.md](docs/progress/bundle-encryption.md). It is a stronger requirement than stage 1 and **not copy
+protection**: any Arena owner can derive the key or decrypt the bundles, the key is tied to files and not to a purchase, and the art,
+audio and derived data in the ZIP stay plaintext. README, FORGE, `docs/releases/v0.3.0.md` and AGENTS.md say so in the same words.
+
+Decided (plan section 0): `AMPB` container (1 MiB chunks, AES-256-CTR, SHA-256 per ciphertext chunk, header HMAC-SHA256); a random
+`K_map` per map in the ignored `work/release-keys/<map_key>.key`; the key-encryption key is HKDF-SHA256 over the SHA-256 of the map's
+Arena level files (Equator 5 files, Bay5 9, Air Pit 7, Bowl 7, 21.8 to 41.1 MB per map; all 28 exist on this VM's Arena
+0.6.1.0.48206); the shipped `keys/<map_key>.json` lists paths and sizes and never a hash; the client decrypts through Windows CNG
+(managed fallback, one Warning) behind `AssetBundle.LoadFromStream`, verifying each chunk lazily; staging encrypts into `dist/` through
+the new net10.0 tool `tools/bundle/ArenaMapPort.BundleCrypt` and the Python validators read through it. A later Arena build adds a
+wrap per map to the key store (same `K_map`, bundles unchanged), so only `keys/*.json` change.
+
+State at integration (23:20, nothing committed; HEAD `cc3a5b0` plus the tree): the CORE, TOOL, CLIENT and DOCS work was integrated and
+verified on this VM, record and quoted evidence in [bundle-encryption.md](docs/progress/bundle-encryption.md) "Integration":
+`dotnet test` 1440 of 1440 (0 skipped), Python `unittest` OK (55 skipped), client (full), server and tool builds 0 warnings; a full client
+Release build staged twelve `AMPB` bundles and four `keys/<map_key>.json` (the first build created the four content keys in the ignored
+`work/release-keys`, copied outside the repo at once), a second full build left all 16 files byte-identical; `validate_distribution.py` ends
+`DISTRIBUTION_OK 4 maps 12 bundles 4 sidecars encrypted`; the tool's `inspect --verify-chunks` passes on all twelve, `verify` proves each
+equals the encryption of its `work/build` bundle and `verify-keys` unlocks each map's key against this VM's Arena; no dist file starts with
+`UnityFS`; no Arena level hash or content key appears in any repo or dist file; the deploy dry run to `D:\SPT41` plans 4 new (the key files),
+14 to overwrite (12 bundles, both DLLs), 72 identical. One review finding was fixed at integration: the staging build no longer creates a
+content key by default (`-p:ArenaMapPortCreateReleaseKeys=true` for the first stage of a map), so a lost key store is restored, never
+silently recreated. **Nothing has run in EFT**: the Mono P/Invoke path, `AssetBundle.LoadFromStream` on a roughly 1 GB scene bundle (risk
+R2) and the timing budget are the GPU-2 run's questions.
+
+Consequences for 0.3.0: the candidate cut of 2026-10-18 (`work/releases/0.3.0/maschine-ArenaMapPort-0.3.0.zip`, 3,078,043,845 B,
+SHA-256 `8f9b6591...ddeb8b`, from `26b9216`) is superseded: all twelve bundles change and a `keys` folder is new (it already predated the
+log-prefix change and the 0.2.3 merge). The Download block of `docs/releases/v0.3.0.md` now holds placeholders only (size, SHA-256,
+commit), to be filled from the encrypted cut. Ciphertext does not compress and the packer stores the bundles: dist was 3,256,631,057 B
+before staging (86 files; bundles 3,216,202,258 B, everything else 40,428,799 B) and is 3,256,734,280 B in 90 files now (the container adds
+99,616 B over the twelve bundles), and `make_release_zips.py --plan --single` estimates the single ZIP at 3,242,902,036 B (3.02 GiB), 5.4
+percent above the 3,078,043,845 B cut; the real cut is not made. The 0.3.0 keys cover Arena
+0.6.1.0.48206 only (one wrap per map, the build on this VM); README, FORGE and the release notes name it. The first
+encrypted deploy to `D:\SPT41` moves about 3.2 GB: close EFT first. `D:\SPT41vanilla` is untouched.
+
+Open, in order (plan sections 2.1 to 2.6; steps 1 and 2 are done, see above): (3) a plaintext baseline on GPU-2 (three raids per map, Bowl and
+Air Pit) BEFORE the deploy, because the deploy replaces the plaintext bundles; (4) close EFT on the synchronized host, `deploy-to-spt.ps1
+-SptRoot 'D:\SPT41' -Confirm` (about 3.2 GB through Syncthing; wait for the sync and check the client DLL's loaded MVID), restart EFT, then
+the GPU-2 run (Bowl and Air Pit, cross-map, hideout, WITH BOTS) against the timing budget; the first Bowl raid answers risk R2, a roughly
+1 GB scene bundle through `LoadFromStream`; (5) negative tests N1 to N3 (EFT restart after each, restore by a full staging build); (6)
+GPU-1 without Arena: no key or crypto line; (7) the 0.3.0 re-cut (a ZIP, the Download block of the release notes) and everything after it stay
+the user's. The handoff edits H1 to H5 of the record are done (validate_port through `verify`, the dist-manifest block, the install-check
+pointer, the plan's ZIP estimate, the Arena build in the generated README) plus H6, the create-key default.
+Open decisions for the user (recommendation in the plan, section 4): D5 lazy key resolution against a prefetch, D7 the server does not
+check keys (after an Arena update a map stays listed and fails at load), D9 who backs up `work/release-keys` and the rotation policy, D10
+a separate keys-update ZIP, D11 plan B for R2 (a decrypted temporary file, which weakens the claim), D15 a stage 3 for art and audio.
+
 ## Update 2026-10-19 (late) - release/0.2.3 merged into main: 0.3.0 = four maps + the Arena installation check; main pushed
 
 User decision: "alles in main zusammenfuehren in 0.3.0 mit Bowl und pushen, anschliessend Stufe 2 der Verschluesselung".

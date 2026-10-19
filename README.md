@@ -34,8 +34,8 @@ its harbor background and water.
   Tarkov. Both components find Arena through the launcher's entry in the Windows registry
   and check the installation folder: it must contain the game executable and the
   launcher's file list (`ConsistencyInfo`), and every file in that list must exist with
-  the listed size. Only names and sizes are compared, no game data is read, nothing is
-  sent anywhere, and the check takes about a second. If Arena is installed but has no
+  the listed size. The installation check compares only names and sizes, reads no game
+  data, sends nothing anywhere and takes about a second. If Arena is installed but has no
   launcher entry (a copied or moved folder), set its folder in `General / ArenaInstallPath`
   in `BepInEx/config/com.maschine.ArenaMapPort.cfg` (client) and in
   `SPT_Runtime/user/mods/ArenaMapPort/config/arena-install.json` (server,
@@ -43,7 +43,16 @@ its harbor background and water.
   verified exactly like the automatic path, and nothing turns the check off. Without a
   verified installation both components log the reason at Info; the server does not
   register the Arena locations, so they are missing from the location selection, and the
-  client does not load the map files.
+  client does not load the map files. The map bundles in the ZIP are encrypted with a key
+  that your PC derives from the Arena level files each map is built from (read when the map
+  is first used and never sent anywhere; the mod's `keys` folder lists them by path and size
+  only), so they work only next to your own Arena files; this is a requirement, not copy
+  protection (anyone with Arena can decrypt them), and the art and audio files shipped beside
+  the bundles are not encrypted. The keys in this release are built for Arena 0.6.1.0.48206
+  (your build is in the client log at startup, `Arena: found ...`); if your build has different
+  level files for a map, or an Arena update changes one of them, that map will not load (the
+  client log names the cause) until an updated ArenaMapPort package carries the key for your
+  build; the other maps keep working.
 - **ArenaMode** is the intended gameplay companion and is installed separately.
   It is not required to load the maps.
 - **DynamicMaps** is optional; integration was tested with version **1.2.1**.

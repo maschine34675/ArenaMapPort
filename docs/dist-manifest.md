@@ -1,4 +1,25 @@
-# Current distribution contract: Equator, Bay5, AirPit and Bowl (0.3.0, candidate cut, not published)
+# Current distribution contract: Equator, Bay5, AirPit and Bowl (0.3.0, encrypted bundles, not published)
+
+2026-10-19 (stage 2 of the Arena gate, integration build on `cc3a5b0` plus the uncommitted stage 2 tree; design
+[PLAN-ENCRYPTION.md](PLAN-ENCRYPTION.md), record [progress/bundle-encryption.md](progress/bundle-encryption.md), "Integration"):
+every bundle in dist is now an `AMPB` container and every map carries a key file. Per map the plugin folder holds
+`bundles/<key>_{scenes,navmesh,preset}.bundle` (AMPB: magic, version, map key, 96 B of header and MAC for these map keys plus 32 B per 1 MiB chunk, AES-256-CTR) and
+`keys/<key>.json` (schema 1, `built_for` `0.6.1.0.48206`, the paths and sizes of the Arena level files the map is keyed from, a salt,
+the wrapped content key and its check value; never a hash of an Arena file). dist holds **90 files, 3,256,734,280 B (3,105.9 MiB)**:
+the 86 files of the plaintext dist (3,256,631,057 B) with the twelve bundles replaced (3,216,202,258 B plaintext, 3,216,301,874 B
+encrypted, +99,616 B; Bowl's scenes bundle 1,006,073,696 B becomes 1,006,104,512 B in 960 chunks) and four new files, 3,607 B together.
+The shipped file set per map is core 5, equator 21, bay5 26, airpit 18, bowl 20 (the key file is the new one in each map part). The
+staging build writes them with the `BundleCrypt` tool (`ArenaMapPortStageWpOutputs`, one `stage` per map); the output is
+deterministic: a second full build left all 16 bundle and key files byte-identical and untouched. `python
+tools/validate/validate_distribution.py` ends with **`DISTRIBUTION_OK 4 maps 12 bundles 4 sidecars encrypted`**, which now also
+means: every bundle starts with `AMPB`, its header MAC and every chunk hash verify (`inspect --verify-chunks`), the header names the
+map of the file name, the decrypted prefix is `UnityFS`, `keys/` holds exactly one `<key>.json` per released map and each unlocks the
+key store's content key against this machine's Arena (`verify-keys`), and no file anywhere under `dist/` starts with `UnityFS`. A
+dist with a plaintext bundle or a missing key file is refused by the validator and by `make_release_zips.py` (which also names the Arena build of
+the keys in the generated README). The estimated single ZIP is 3,242,902,036 B (3.02 GiB; the bundles are STORED, ciphertext does not
+compress), 164.9 MB or 5.4 percent above the 2026-10-18 plaintext cut. A deploy dry run to `D:\SPT41` planned 90 files, 4 new (the key files),
+14 to overwrite (the twelve bundles and both DLLs) and 72 identical. The 2026-10-18 cut below is superseded; no ZIP of this dist is
+cut yet.
 
 2026-10-18 (release 0.3.0 candidate cut, feature/bowl `26b9216`, NOT uploaded): `make_release_zips.py --single --extract-check`
 wrote `work/releases/0.3.0/maschine-ArenaMapPort-0.3.0.zip`, 3,078,043,845 B (2.87 GiB), SHA-256

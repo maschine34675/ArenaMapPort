@@ -23,6 +23,8 @@
     <Version>0.3.0</Version>
     <LangVersion>latest</LangVersion>
     <Nullable>disable</Nullable>
+    <!-- ArenaMapPort.Crypto: the AES-CTR XOR loop and counter fill use ulong pointers (docs/PLAN-ENCRYPTION.md D14) -->
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
     <Configurations>Debug;Release</Configurations>
 
@@ -31,6 +33,15 @@
 
     <!-- O7/O4: build output lands under the repo's own dist/, never under D:/SPT41. -->
     <ArenaMapPortDistDir>$(MSBuildThisFileDirectory)..\dist\BepInEx\plugins\maschine-ArenaMapPort</ArenaMapPortDistDir>
+
+    <!-- Stage 2 of the Arena gate (docs/PLAN-ENCRYPTION.md): ArenaMapPortStageWpOutputs encrypts the plaintext bundles of work/build into
+         dist/.../bundles and writes dist/.../keys/<map>.json with the BundleCrypt tool, which is built on demand from tools/bundle.
+         The content keys live in the ignored work/release-keys folder (back it up; never commit or ship it). All four are plain
+         properties, so a test build can point them at scratch folders with -p:Name=value. -->
+    <ArenaMapPortBundleCryptDir>$(MSBuildThisFileDirectory)..\tools\bundle\ArenaMapPort.BundleCrypt</ArenaMapPortBundleCryptDir>
+    <ArenaMapPortBundleCryptExe>$(ArenaMapPortBundleCryptDir)\bin\Release\net10.0\ArenaMapPort.BundleCrypt.exe</ArenaMapPortBundleCryptExe>
+    <ArenaMapPortReleaseKeysDir>$(MSBuildThisFileDirectory)..\work\release-keys</ArenaMapPortReleaseKeysDir>
+    <ArenaMapPortKeySources>$(MSBuildThisFileDirectory)..\tools\bundle\key-sources.json</ArenaMapPortKeySources>
   </PropertyGroup>
 
   <ItemGroup>
@@ -42,6 +53,9 @@
     <Compile Include="..\ArenaMapPort.Shared\ArenaNeonFixture.cs" Link="Shared\ArenaNeonFixture.cs" />
     <Compile Include="..\ArenaMapPort.Shared\ArenaInstallation.cs" Link="Shared\ArenaInstallation.cs" />
     <Compile Include="..\ArenaMapPort.Shared\SpecularCapPolicy.cs" Link="Shared\SpecularCapPolicy.cs" />
+    <!-- AMPB container, AES-CTR, HKDF, key file and key resolution (docs/PLAN-ENCRYPTION.md): one netstandard2.1 source folder, linked into the
+         client, the BundleCrypt tool and the tests. No Unity, BepInEx or Shared reference inside. -->
+    <Compile Include="..\ArenaMapPort.Crypto\*.cs" Link="Crypto\%(Filename)%(Extension)" />
   </ItemGroup>
 
   <ItemGroup>
@@ -285,9 +299,16 @@
     error (below), not a silent skip; nothing under work/build/s1*/work/build/s1_diag/ is ever
     considered.
   -->
+  <!-- The BundleCrypt tool (net10.0 console, links ArenaMapPort.Crypto and the Shared Arena check, no packages). Its own obj/ and bin/ under
+       tools/bundle; the nested build is incremental (a few seconds when nothing changed) and leaves no build server behind (-nr:false). -->
+  <Target Name="ArenaMapPortBuildBundleCrypt">
+    <Exec Command="dotnet build &quot;$(ArenaMapPortBundleCryptDir)\ArenaMapPort.BundleCrypt.csproj&quot; -c Release -nologo -v:q -nr:false" />
+    <Error Condition="!Exists('$(ArenaMapPortBundleCryptExe)')" Text="[ArenaMapPort] the BundleCrypt tool was not built: $(ArenaMapPortBundleCryptExe)" />
+  </Target>
+
   <!-- Client-only iteration: "dotnet build -c Release -p:ArenaMapPortDllOnly=true" copies just the DLL
-       to dist and skips bundle staging. -->
-  <Target Name="ArenaMapPortStageWpOutputs" AfterTargets="ArenaMapPortDistCopy" Condition="'$(Configuration)'=='Release' And '$(ArenaMapPortDllOnly)'!='true'">
+       to dist and skips bundle staging (no work/build, no Arena, no key store needed). -->
+  <Target Name="ArenaMapPortStageWpOutputs" AfterTargets="ArenaMapPortDistCopy" DependsOnTargets="ArenaMapPortBuildBundleCrypt" Condition="'$(Configuration)'=='Release' And '$(ArenaMapPortDllOnly)'!='true'">
     <PropertyGroup>
       <ArenaMapPortFullBuildDir>$(MSBuildThisFileDirectory)..\work\build\full</ArenaMapPortFullBuildDir>
       <ArenaMapPortPresetBuildDir>$(MSBuildThisFileDirectory)..\work\build\preset</ArenaMapPortPresetBuildDir>
@@ -306,18 +327,18 @@
       <ArenaMapPortBowlBuildDir>$(MSBuildThisFileDirectory)..\work\build\bowl</ArenaMapPortBowlBuildDir>
     </PropertyGroup>
     <ItemGroup>
-      <ArenaMapPortBundles Include="$(ArenaMapPortFullBuildDir)\arena_equator_scenes.bundle" />
-      <ArenaMapPortBundles Include="$(ArenaMapPortFullBuildDir)\arena_equator_navmesh.bundle" />
-      <ArenaMapPortBundles Include="$(ArenaMapPortPresetBuildDir)\arena_equator_preset.bundle" />
+      <ArenaMapPortBundles Include="$(ArenaMapPortFullBuildDir)\arena_equator_scenes.bundle"><MapKey>arena_equator</MapKey></ArenaMapPortBundles>
+      <ArenaMapPortBundles Include="$(ArenaMapPortFullBuildDir)\arena_equator_navmesh.bundle"><MapKey>arena_equator</MapKey></ArenaMapPortBundles>
+      <ArenaMapPortBundles Include="$(ArenaMapPortPresetBuildDir)\arena_equator_preset.bundle"><MapKey>arena_equator</MapKey></ArenaMapPortBundles>
       <ArenaMapPortShaderSidecar Include="$(ArenaMapPortFullBuildDir)\material-shaders.json" />
       <!-- Bay5, kept as its own explicit list rather than folded into the two ItemGroups above or
            switched to a wildcard: dist-manifest.md's "exactly N expected files" invariant is a
            real, already-relied-on regression check (docs/progress/multimap-generalize.md SS8 note
            2/SS9 item 5); an explicit per-map list keeps that check meaningful for each map
            independently instead of silently accepting a stray leftover .bundle file. -->
-      <ArenaMapPortBundles Include="$(ArenaMapPortBay5BuildDir)\arena_bay5_scenes.bundle" />
-      <ArenaMapPortBundles Include="$(ArenaMapPortBay5BuildDir)\arena_bay5_navmesh.bundle" />
-      <ArenaMapPortBundles Include="$(ArenaMapPortPresetBuildDir)\arena_bay5_preset.bundle" />
+      <ArenaMapPortBundles Include="$(ArenaMapPortBay5BuildDir)\arena_bay5_scenes.bundle"><MapKey>arena_bay5</MapKey></ArenaMapPortBundles>
+      <ArenaMapPortBundles Include="$(ArenaMapPortBay5BuildDir)\arena_bay5_navmesh.bundle"><MapKey>arena_bay5</MapKey></ArenaMapPortBundles>
+      <ArenaMapPortBundles Include="$(ArenaMapPortPresetBuildDir)\arena_bay5_preset.bundle"><MapKey>arena_bay5</MapKey></ArenaMapPortBundles>
       <!-- ShaderRebind.SidecarFileName: every map's sidecar is staged as "material-shaders.<map.Key>.json"
            (Equator's pre-generalization "material-shaders.json" was renamed on 2026-10-17, before the first
            Forge release). Bay5's map.Key is "arena_bay5", not the short "bay5" tools/maps/ file stem, so the
@@ -325,14 +346,14 @@
       <ArenaMapPortBay5ShaderSidecarSrc Include="$(ArenaMapPortBay5BuildDir)\material-shaders.json" />
       <!-- AirPit: same explicit-list rule. NOTE: until the U1 rebuild (PLAN-AIRPIT item 12) work/build/airpit still
            holds the 2026-09-15 spike bundles, which this target stages as they are. -->
-      <ArenaMapPortBundles Include="$(ArenaMapPortAirPitBuildDir)\arena_airpit_scenes.bundle" />
-      <ArenaMapPortBundles Include="$(ArenaMapPortAirPitBuildDir)\arena_airpit_navmesh.bundle" />
-      <ArenaMapPortBundles Include="$(ArenaMapPortPresetBuildDir)\arena_airpit_preset.bundle" />
+      <ArenaMapPortBundles Include="$(ArenaMapPortAirPitBuildDir)\arena_airpit_scenes.bundle"><MapKey>arena_airpit</MapKey></ArenaMapPortBundles>
+      <ArenaMapPortBundles Include="$(ArenaMapPortAirPitBuildDir)\arena_airpit_navmesh.bundle"><MapKey>arena_airpit</MapKey></ArenaMapPortBundles>
+      <ArenaMapPortBundles Include="$(ArenaMapPortPresetBuildDir)\arena_airpit_preset.bundle"><MapKey>arena_airpit</MapKey></ArenaMapPortBundles>
       <ArenaMapPortAirPitShaderSidecarSrc Include="$(ArenaMapPortAirPitBuildDir)\material-shaders.json" />
       <!-- Bowl: same explicit-list rule (PLAN-BOWL item 8, 2026-10-18). Its bundles come from the U1 build. -->
-      <ArenaMapPortBundles Include="$(ArenaMapPortBowlBuildDir)\arena_bowl_scenes.bundle" />
-      <ArenaMapPortBundles Include="$(ArenaMapPortBowlBuildDir)\arena_bowl_navmesh.bundle" />
-      <ArenaMapPortBundles Include="$(ArenaMapPortPresetBuildDir)\arena_bowl_preset.bundle" />
+      <ArenaMapPortBundles Include="$(ArenaMapPortBowlBuildDir)\arena_bowl_scenes.bundle"><MapKey>arena_bowl</MapKey></ArenaMapPortBundles>
+      <ArenaMapPortBundles Include="$(ArenaMapPortBowlBuildDir)\arena_bowl_navmesh.bundle"><MapKey>arena_bowl</MapKey></ArenaMapPortBundles>
+      <ArenaMapPortBundles Include="$(ArenaMapPortPresetBuildDir)\arena_bowl_preset.bundle"><MapKey>arena_bowl</MapKey></ArenaMapPortBundles>
       <ArenaMapPortBowlShaderSidecarSrc Include="$(ArenaMapPortBowlBuildDir)\material-shaders.json" />
     </ItemGroup>
     <Error Text="[ArenaMapPort] expected bundle missing: %(ArenaMapPortBundles.Identity) -- run tools/build_all.ps1 (full, -MapKey arena_bay5, -MapKey arena_airpit -FullMap and -MapKey arena_bowl -FullMap) and tools/preset/patch_preset.py (all four maps) first"
@@ -345,14 +366,32 @@
            Condition="!Exists('%(ArenaMapPortAirPitShaderSidecarSrc.Identity)')" />
     <Error Text="[ArenaMapPort] expected Bowl material-shaders.json missing: %(ArenaMapPortBowlShaderSidecarSrc.Identity) -- run tools/build_all.ps1 -MapKey arena_bowl -FullMap first"
            Condition="!Exists('%(ArenaMapPortBowlShaderSidecarSrc.Identity)')" />
-    <MakeDir Directories="$(ArenaMapPortDistDir)\bundles" />
-    <Copy SourceFiles="@(ArenaMapPortBundles)" DestinationFolder="$(ArenaMapPortDistDir)\bundles" SkipUnchangedFiles="false" />
+    <!-- Stage 2 of the Arena gate: the bundles are not copied, they are ENCRYPTED into dist (AMPB containers, deterministic: an unchanged
+         bundle gives identical bytes and an unchanged output is left alone) and the per-map key file keys/<map>.json is written from the
+         Arena installation of this machine (found through the launcher's registry entry; ArenaMapPortArena=<folder> overrides). A content
+         key is created only on request: the first staging of a map passes -p:ArenaMapPortCreateReleaseKeys=true, creates the key in
+         $(ArenaMapPortReleaseKeysDir) and prints CREATED (back that folder up). Every other build refuses when a map's key file is missing, because
+         a lost key store must be restored from its backup, not recreated: a new key would make every released bundle of that map unreadable
+         (integration review, 2026-10-19). A DllOnly build never gets here. -->
+    <PropertyGroup>
+      <ArenaMapPortArenaArg Condition="'$(ArenaMapPortArena)'==''">auto</ArenaMapPortArenaArg>
+      <ArenaMapPortArenaArg Condition="'$(ArenaMapPortArena)'!=''">$(ArenaMapPortArena)</ArenaMapPortArenaArg>
+      <ArenaMapPortCreateKeyArg Condition="'$(ArenaMapPortCreateReleaseKeys)'=='true'">--create-key</ArenaMapPortCreateKeyArg>
+      <ArenaMapPortStageCommon>--out-dir &quot;$(ArenaMapPortDistDir)&quot; --key-store &quot;$(ArenaMapPortReleaseKeysDir)&quot; --levels &quot;$(ArenaMapPortKeySources)&quot; --arena &quot;$(ArenaMapPortArenaArg)&quot; $(ArenaMapPortCreateKeyArg)</ArenaMapPortStageCommon>
+    </PropertyGroup>
+    <Message Importance="high" Condition="'$(ArenaMapPortCreateReleaseKeys)'!='true'"
+             Text="[ArenaMapPort] content keys come from $(ArenaMapPortReleaseKeysDir); a map without a stored key stops the build here (the first staging of a map passes -p:ArenaMapPortCreateReleaseKeys=true, a lost key store is restored from its backup)" />
+    <MakeDir Directories="$(ArenaMapPortDistDir)\bundles;$(ArenaMapPortDistDir)\keys" />
+    <Exec Command="&quot;$(ArenaMapPortBundleCryptExe)&quot; stage --map-key arena_equator @(ArenaMapPortBundles->WithMetadataValue('MapKey','arena_equator')->'--bundle &quot;%(FullPath)&quot;', ' ') $(ArenaMapPortStageCommon)" StandardOutputImportance="high" />
+    <Exec Command="&quot;$(ArenaMapPortBundleCryptExe)&quot; stage --map-key arena_bay5 @(ArenaMapPortBundles->WithMetadataValue('MapKey','arena_bay5')->'--bundle &quot;%(FullPath)&quot;', ' ') $(ArenaMapPortStageCommon)" StandardOutputImportance="high" />
+    <Exec Command="&quot;$(ArenaMapPortBundleCryptExe)&quot; stage --map-key arena_airpit @(ArenaMapPortBundles->WithMetadataValue('MapKey','arena_airpit')->'--bundle &quot;%(FullPath)&quot;', ' ') $(ArenaMapPortStageCommon)" StandardOutputImportance="high" />
+    <Exec Command="&quot;$(ArenaMapPortBundleCryptExe)&quot; stage --map-key arena_bowl @(ArenaMapPortBundles->WithMetadataValue('MapKey','arena_bowl')->'--bundle &quot;%(FullPath)&quot;', ' ') $(ArenaMapPortStageCommon)" StandardOutputImportance="high" />
     <Copy SourceFiles="@(ArenaMapPortShaderSidecar)" DestinationFiles="$(ArenaMapPortDistDir)\material-shaders.arena_equator.json" SkipUnchangedFiles="false" />
     <Copy SourceFiles="@(ArenaMapPortBay5ShaderSidecarSrc)" DestinationFiles="$(ArenaMapPortDistDir)\material-shaders.arena_bay5.json" SkipUnchangedFiles="false" />
     <Copy SourceFiles="@(ArenaMapPortAirPitShaderSidecarSrc)" DestinationFiles="$(ArenaMapPortDistDir)\material-shaders.arena_airpit.json" SkipUnchangedFiles="false" />
     <Copy SourceFiles="@(ArenaMapPortBowlShaderSidecarSrc)" DestinationFiles="$(ArenaMapPortDistDir)\material-shaders.arena_bowl.json" SkipUnchangedFiles="false" />
     <Message Importance="high"
-             Text="[ArenaMapPort] staged %(ArenaMapPortBundles.Filename)%(ArenaMapPortBundles.Extension) from $(ArenaMapPortFullBuildDir)/$(ArenaMapPortPresetBuildDir)/$(ArenaMapPortBay5BuildDir) into dist/.../bundles/" />
+             Text="[ArenaMapPort] staged %(ArenaMapPortBundles.Filename)%(ArenaMapPortBundles.Extension) from work/build ENCRYPTED into dist/.../bundles/ (key files in dist/.../keys/)" />
     <Message Importance="high" Text="[ArenaMapPort] staged material-shaders.arena_equator.json from $(ArenaMapPortFullBuildDir) into dist/.../ArenaMapPort/" />
     <Message Importance="high" Text="[ArenaMapPort] staged material-shaders.arena_bay5.json from $(ArenaMapPortBay5BuildDir) into dist/.../ArenaMapPort/" />
     <Message Importance="high" Text="[ArenaMapPort] staged material-shaders.arena_airpit.json from $(ArenaMapPortAirPitBuildDir) into dist/.../ArenaMapPort/" />

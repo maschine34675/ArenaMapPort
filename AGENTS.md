@@ -10,7 +10,9 @@ playtest evidence. **Bowl** (the fourth map, on `main` since the 2026-10-18 fast
 (PLAN-BOWL item 8, 2026-10-18); it is host-verified on GPU-2 (2026-10-18: raids 1 and 2 plus a hideout open)
 and not yet released. Release 0.2.3 (branch `release/0.2.3`, published 2026-10-19) is 0.2.2 plus the Arena installation check; 0.2.2 was withdrawn
 the same day (GitHub release, tag and Pixeldrain files deleted, nobody had downloaded it), and so were 0.2.1 and 0.1.0
-(releases with their assets, tags, Pixeldrain files): only 0.2.3 is downloadable, every package without the check is gone. The maps exist to be played through the user's
+(releases with their assets, tags, Pixeldrain files): only 0.2.3 is downloadable, every package without the check is gone. Stage 2 of the gate (user decision 2026-10-19,
+release 0.3.0): the shipped map bundles are encrypted with keys derived from the user's own Arena level files, see the
+decisions below and [docs/progress/bundle-encryption.md](docs/progress/bundle-encryption.md). The maps exist to be played through the user's
 ArenaMode mod (arena deathmatch with respawns); see the decisions below.
 
 Read this first, then [HANDOFF.md](HANDOFF.md) (dated working state, what is verified, what is next),
@@ -30,7 +32,12 @@ are not accepted build inputs. Keep the SPT bundle target on Unity 2022.3.43f1.
   transits) is not a goal. A plain SPT raid started from the menu is only the test vehicle.
 - **No loot on any map, ever.** The server keeps the empty loot shape. Do not author or extract loot.
 - **No scav raids.** `DisabledForScav = true` stays.
-- **Bundles are distributed as built** (`dist/`), like other SPT map mods. Bundles still never go into git.
+- **Bundles are distributed encrypted** (`dist/`, from 0.3.0; stage 2 of the Arena gate, user decision 2026-10-19): the
+  staged `<key>_scenes|navmesh|preset.bundle` are AMPB containers (AES-256-CTR, 1 MiB chunks) whose content key opens only with
+  the player's own Arena level files; the plaintext bundles exist only under `work/build/`. Bundles still never go into git.
+  Design: [docs/PLAN-ENCRYPTION.md](docs/PLAN-ENCRYPTION.md). It raises the bar from "download and play" to "needs the game's
+  own files" and is **not copy protection** (any Arena owner can derive the key or decrypt the bundles): never describe it as
+  more. The art and audio files and the derived data beside the bundles stay plaintext.
 - **Release 0.2.2 = Equator, Bay5 and AirPit** (0.2.0 was built and withdrawn the same day; 0.2.1 went to GitHub and Pixeldrain
   only; 0.2.2 adds SpawnGates, AirPit's original north box, the renamed Equator sidecar and the crates under AirPit's tarp
   (package v9) and is the Forge candidate). The first release (user, 2026-09-25) was Equator and Bay5 only; AirPit was
@@ -87,6 +94,15 @@ are not accepted build inputs. Keep the SPT bundle target on Unity 2022.3.43f1.
   (server `config/arena-install.json`, client `General/ArenaInstallPath`) still verify the installation. It is a
   good-faith gate, not copy protection: never describe it as more. See
   [arena-install-check.md](docs/progress/arena-install-check.md).
+- Never commit, ship, log or paste a content key. `work/release-keys/<map_key>.key` (the 32-byte `K_map` per map, the
+  append-only list of key wraps and the per-file hashes of the Arena level files) is ignored by git (`work/`), never goes into
+  `dist/`, a ZIP, a log, a chat message or a progress doc, and is backed up outside the repo: losing an entry means no keys
+  update for the already released bundles of that map (the way out is the tool's `rotate-key --map-key K --yes`: new key, re-encrypt,
+  re-release; every released bundle of that map then stops opening). The shipped
+  key files `keys/<map_key>.json` carry the paths and sizes of Arena files, a salt, the wrapped key and its check value, and
+  never a hash or any other content of an Arena file (a published hash would let anyone derive the key). The tool's
+  `--arena-unverified` test seam needs `ARENAMAPPORT_TOOL_TEST=1`; staging and the validators never pass it. Arena's files are
+  only read. See [bundle-encryption.md](docs/progress/bundle-encryption.md).
 - Git: author `maschine34675 <163792852+maschine34675@users.noreply.github.com>`, commit only when the
   user's task implies it, and end commit messages with the agent's co-author trailer. Working tree
   should be clean after a delivered task.
@@ -99,6 +115,8 @@ are not accepted build inputs. Keep the SPT bundle target on Unity 2022.3.43f1.
 | `ArenaMapPort.Client/` | BepInEx/HarmonyX plugin (netstandard2.1). One file per repair; every patch is gated on `ArenaMapRaid.IsLoaded()` / `IsOwnedScene()` so vanilla maps are untouched. `HarmonyPatches.cs` installs everything in order and binds config. |
 | `ArenaMapPort.Server/` | SPT server mod (net10.0): registers each map from `db/<key>/base.json` (including `arena_equator`), locale, brain tables, bot caps, APBS shim. |
 | `ArenaMapPort.Shared/` | `ArenaMapDescriptor` / `ArenaMapRegistry`: the per-map table (keys, scenes, infiltration, exits, opened barriers). Compiled into both. |
+| `ArenaMapPort.Crypto/` | Stage 2 (bundle encryption): AES-CTR/SHA-256/HKDF providers (Windows CNG with a managed fallback), the AMPB container writer, the random-access decrypting stream, the key-file parser and `KeyResolver`. netstandard2.1, no Unity/BepInEx reference; linked into the client, the tool and the tests. |
+| `tools/bundle/ArenaMapPort.BundleCrypt/` | The net10.0 console tool of stage 2: `stage`, `encrypt`, `decrypt`, `inspect`, `read-range`, `keys`, `verify`, `verify-keys`, `plain-sha256`, `rotate-key` (needs `--yes`), `bench`; `ArenaMapPort.BundleCrypt help` prints the flags. Its keys live in the ignored `work/release-keys/`. |
 | `ArenaMapPort.Server.Tests/` | xunit; the only .NET tests. The client has none — test what is Unity-independent here. |
 | `tools/maps/<key>.json` (+ `.bots.json`, `.exits.json`) | Per-map sidecars for the Python/Unity side; mirrored by the descriptor and guarded by mirror tests. |
 | `tools/extract/`, `tools/bundle/`, `tools/preset/`, `tools/server/make_base_json.py`, `tools/validate/`, `tools/tests/` | The build pipeline and its pytest suite. |
@@ -125,6 +143,12 @@ Real degraded behavior and failures retain Warning/Error in player mode. Never s
 Unity/Harmony warnings globally; repair an owned cause or document its origin.
 Both the server and the client log the Arena installation state at Info at startup (the verified
 installation, or why none was found); see [arena-install-check.md](docs/progress/arena-install-check.md).
+Stage 2 adds no Info line. Its key and bundle lines are Debug (`[BundleKeys] key for '<map>' derived in N ms (...)`,
+`[Bundles] loaded '<key>' ... encrypted AMPB v1, N chunks`, `[Bundles] stream '<file>' (...): X MiB decrypted ...`). A key that
+cannot be recovered is one Error tagged `[BundleKeys]` (key file missing or corrupt, an Arena file unreadable, size differs or built for
+another Arena build, content differs); a bundle that is refused, damaged or fails to load is an Error tagged `[Bundles]`, or `[NavMesh]`
+for the NavMesh bundle; the one Warning is `[Bundles] Windows CNG unavailable (...); using managed crypto, which is slow: ...`. The tags
+are `BundleKeyResolver.KeyTag`, `BundlesTag` and `NavMeshTag`.
 
 Player mode is the default: two normal F12 controls, `Appearance/NaturalEquatorNight` (next raid) and
 `General/ArenaInstallPath` (the Arena installation override of release 0.2.3, empty = automatic).
@@ -157,11 +181,13 @@ dotnet test ArenaMapPort.Server.Tests/ArenaMapPort.Server.Tests.csproj -c Releas
 # Python pipeline tests (unittest, no pytest installed) and the PowerShell log-scan tests
 python -m unittest discover -s tools/tests -p "test_*.py"
 pwsh -NoProfile -File tools/tests/test_unity_log_scan.ps1
+# stage 2 tool: the staging build builds it by itself; build it alone for the Python tests and the validators
+dotnet build tools/bundle/ArenaMapPort.BundleCrypt/ArenaMapPort.BundleCrypt.csproj -c Release
 # rebuild Equator's bundles + NavMesh from its extracted package (≈ 15 min). The [bool] parameters only parse
 # from a PowerShell prompt or `pwsh -Command "& '...build_all.ps1' ... -BakeNavMesh \$true"`; `-File` from bash
 # turns "$true"/1 into strings and the script refuses them.
 pwsh tools/build_all.ps1 -MapKey arena_equator -MapDescriptor D:/ArenaMapPort/tools/maps/equator.json -PackageDir D:/ArenaMapPort/work/extract/equator-native-v5 -OutputDir D:/ArenaMapPort/work/build/full -BakeNavMesh $true -Verify $true -SkipGameRefsSync
-# then a client Release build WITHOUT DllOnly stages the new bundles into dist/, and:
+# then a client Release build WITHOUT DllOnly stages the new bundles into dist/ (encrypting them, see below), and:
 pwsh -NoProfile -File tools/deploy-to-spt.ps1 -SptRoot 'D:\SPT41' -Confirm
 ```
 
@@ -233,6 +259,36 @@ Keep these BSG-derived texts out of tracked source; see `docs/progress/official-
 `-FullMap` also regenerates that map's base.json and preset from the sidecars; to regenerate only base.json
 after a sidecar change, add `-SkipUnityBuild` (reuses the bundles). For Equator, base.json is regenerated
 with `python tools/server/make_base_json.py` (see its header for the arguments).
+
+Bundle encryption (stage 2, 0.3.0; design [PLAN-ENCRYPTION.md](docs/PLAN-ENCRYPTION.md), record
+[bundle-encryption.md](docs/progress/bundle-encryption.md)): `dist/` holds only encrypted bundles. A client Release build without
+`ArenaMapPortDllOnly` first builds the console tool `tools/bundle/ArenaMapPort.BundleCrypt` (net10.0; it links
+`ArenaMapPort.Crypto/*.cs` and `ArenaMapPort.Shared/ArenaInstallation.cs`, no packages) and then runs its `stage` command once per
+map (target `ArenaMapPortStageWpOutputs`): `stage --map-key K --bundle <plain> (three times) --out-dir <dist plugin dir> --key-store
+work/release-keys --levels tools/bundle/key-sources.json --arena auto`. The three plaintext bundles of `work/build/<stem>/`
+go in; three `AMPB` files under `BepInEx/plugins/maschine-ArenaMapPort/bundles/` and `keys/<map_key>.json` come out, with the map's
+content key `K_map` read from `work/release-keys/<map_key>.key`. A key is created only on request: the FIRST stage of a map passes
+`-p:ArenaMapPortCreateReleaseKeys=true`, which adds `--create-key` (the tool prints `CREATED ... BACK UP`: copy `work/release-keys`
+outside the repo at once). Every other build refuses, with the tool's `FAIL there is no content key for '<map>'`, when a map's key is
+missing, so a key store that went missing is restored from its backup and never silently recreated (a new key makes every released
+bundle of that map unreadable). `-p:ArenaMapPortArena=<folder>` replaces `--arena auto` (verified like a player's). Staging needs this VM's Arena installation, found with `ArenaInstallation.Detect()` and
+verified like a player's, because each key file wraps `K_map` with a key derived from that installation's level files;
+`tools/bundle/key-sources.json` names the level files per map. The output is deterministic: staging twice yields identical bundles and
+key files. `ArenaMapPortDllOnly=true` skips all of it and leaves `dist/` as it is. The tool's other commands (`inspect`, `read-range`,
+`decrypt`, `verify`, `verify-keys`, `plain-sha256`, `keys`, `rotate-key`, `bench`) are what `tools/bundle/bundle_crypt.py` wraps for the
+validators, which therefore need the VM's key store and Arena installation: `validate_distribution.py` requires the `AMPB` magic on every
+dist bundle, an authenticating header and intact chunks (`inspect --verify-chunks`), a plaintext that starts with `UnityFS`, a
+`keys/<map_key>.json` per map that unlocks the stored key against the installed Arena (`verify-keys`) and no `UnityFS` file anywhere in
+`dist/`; `validate_bundle_names.py` reads an encrypted bundle's CAB names through the tool (`read-range`; its UnityPy fallback decrypts a
+temporary copy under ignored `work/tmp`, removed afterwards). `validate_port.py --distribution` compares the three staged bundles
+of a map with their `work/build` outputs through the tool's `verify` (ENC must be exactly the encryption of PLAIN, the container is
+deterministic) and keeps the SHA-256 comparison for the shader sidecar and `base.json`; it passes for Bowl on 2026-10-19 (the other
+maps' packages fail its earlier source-plan checks for reasons that predate stage 2). Decrypted copies belong under ignored `work/` only. After a new Arena
+build is installed on the VM, run the staging build again: it adds one wrap per map to the key store (same `K_map`, the bundles stay
+byte-identical) and only `keys/*.json` change; ship those with the next release. The first encrypted deploy moves about 3.2 GB through
+Syncthing: close EFT first (an old client meeting an encrypted bundle, or a half-synced mix of plaintext and encrypted files, fails with
+its own error), wait for the sync, then restart EFT. `tools/deploy-to-spt.ps1` copies `dist/` recursively, so `keys/` travels with the
+bundles.
 
 After a deploy, Syncthing delivers to the host within ~20 s. A new client DLL needs an EFT restart; a new
 server DLL or base.json needs a server restart (the host server is restarted by closing its terminal
@@ -449,3 +505,20 @@ the log; the user uses it to point at things.
   `AudioSettings.OnAudioConfigurationChanged`. Measuring reverb on the muted host: `Audio diagnostics/ReverbPulse` with a
   Gunshots bus at `ReverbPulseVolume` 0.8 and the rain/ambience keys muted, otherwise the rain bed sits at the tail level
   (recipe in `docs/progress/shot-acoustics.md`).
+- Bundle encryption (stage 2, [PLAN-ENCRYPTION.md](docs/PLAN-ENCRYPTION.md); the host-dependent points are design until
+  [bundle-encryption.md](docs/progress/bundle-encryption.md) records the GPU-2 run): EFT's Mono has no hardware crypto in
+  managed code (managed AES and SHA-256 run at tens of MB/s, so a 1 GB scenes bundle would add tens of seconds to a raid
+  load), so the client decrypts through Windows CNG (`bcrypt.dll` P/Invoke, AES-ECB over counter blocks, one key handle per
+  stream) and uses managed crypto, with one Warning, only when the CNG provider cannot be created or fails its known-answer
+  self-test (decided once per process); a marshalling mistake gives wrong bytes without an exception, which is why that
+  self-test exists. `AssetBundle.LoadFromStream` keeps the stream for the bundle's lifetime and reads it from Unity's loading
+  thread, so the decrypting stream (`AmpbReadStream`) is seekable, reports the plaintext `Length` and locks its state. It is not
+  closed while the bundle is loaded: `BundleStreamRegistry` disposes it once EFT's bundle table no longer holds the bundle, and the
+  NavMesh bundle's stream right after its `Unload(false)`. `BundleHost.LoadAssetBundle` is the one loader behind
+  `BundleHost.TryServe` and `NavMeshInstaller.LoadOnce`; `AssetBundle.LoadFromFile` is still called there, and only there, for a
+  bundle without the AMPB magic (a development build), and keys are resolved in `BundleKeyResolver`. Chunk hashes are verified lazily
+  on first read, so a damaged bundle fails at the touched chunk, not at load. Key resolution and its log lines run on the game thread
+  only (the gate's worker thread never logs), once per map and session, and a failed derivation is cached: after changing key files
+  in a test, restart EFT. The nonce is derived from the plaintext, so the same plaintext always encrypts to the same bytes; never add
+  timestamps or random fields to the container or the key file, the "stage twice, identical hashes" check and the tool's `verify`
+  rely on it.

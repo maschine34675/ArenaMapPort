@@ -33,7 +33,12 @@ and complete (the same way SPT needs an installed Escape from Tarkov); without i
 Arena locations do not appear. For an installation the launcher did not register, set its
 folder in `General / ArenaInstallPath` (client) and in
 `SPT_Runtime/user/mods/ArenaMapPort/config/arena-install.json` (server); the check still
-runs in full.
+runs in full. The map bundles are encrypted with a key derived from the Arena files each map
+is built from, so they work only next to your own Arena files: a requirement, not copy
+protection (anyone with Arena can decrypt them; the art and audio shipped beside the bundles
+are not encrypted). The keys are built for Arena 0.6.1.0.48206; on a build that has different
+files for a map, or after an Arena update that changes one, that map waits for an updated
+ArenaMapPort package with the key for that build; the other maps keep working.
 
 Designed for **ArenaMode**, installed separately. ArenaMapPort provides the
 maps; ArenaMode provides its match rules and respawns. No loot or scav raids

@@ -348,3 +348,13 @@ owners would be exactly the two DLLs; whether one is published is the user's dec
 `e66d512` (`[Arena]`, `[Bundles]`, `[NavMesh]`) and the load line reads `Version 0.3.0 loaded. Maps: ... Arena: found ...`.
 Merged-build evidence (DLLs `0.3.0+12c3731`): GPU-2 with Arena 0.6.1 registered all four maps after the found line, loaded a
 Bowl raid (0 warnings); GPU-1 without Arena logged the not-found lines on both sides and `Maps: none available`.
+
+## Stage 2 (2026-10-19)
+
+Stage 2 of the gate encrypts the map bundles with a key derived from the player's Arena level files; the design is
+[../PLAN-ENCRYPTION.md](../PLAN-ENCRYPTION.md), the record [bundle-encryption.md](bundle-encryption.md). This check is unchanged and
+still comes first: it compares names and sizes only and reads no game data. Stage 2 is what reads game data, and only after this
+check has verified the installation: the first time a map's bundle is requested in a session the client hashes the level files that
+map is keyed from (`keys/<map_key>.json` lists their paths and sizes), derives the key and opens the bundles through a decrypting
+stream. It is not copy protection (an Arena owner can derive the key or decrypt the bundles), and like this check it stops nothing
+for a player who owns Arena.

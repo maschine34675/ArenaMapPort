@@ -1,0 +1,36 @@
+<!--
+  ArenaMapPort.BundleCrypt: the build-machine tool of the stage-2 Arena gate (docs/PLAN-ENCRYPTION.md).
+  It encrypts the map bundles into AMPB containers, writes the per-map key files from the Arena installed on the build
+  machine, and reads encrypted bundles back for the validators (inspect, read-range, plain-sha256, verify, verify-keys).
+  It is NOT shipped: the release ZIP carries the client plugin only (plan decision D12).
+
+  One implementation for everything: the AMPB container, AES-CTR, HKDF, the key file and the key derivation are the
+  netstandard2.1 sources of ArenaMapPort.Crypto, linked here exactly as the client plugin and the tests link them, so
+  the bytes this tool writes are decoded by the very code the player's client runs. No NuGet packages.
+  Build: dotnet build tools/bundle/ArenaMapPort.BundleCrypt/ArenaMapPort.BundleCrypt.csproj -c Release
+  (the client csproj's staging target and tools/bundle/bundle_crypt.py both do it on demand).
+-->
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <AssemblyName>ArenaMapPort.BundleCrypt</AssemblyName>
+    <RootNamespace>ArenaMapPort.BundleCrypt</RootNamespace>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <Nullable>disable</Nullable>
+    <LangVersion>latest</LangVersion>
+    <!-- ArenaMapPort.Crypto uses ulong pointer loops (docs/PLAN-ENCRYPTION.md D14). -->
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <InvariantGlobalization>true</InvariantGlobalization>
+    <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
+    <UseAppHost>true</UseAppHost>
+    <Version>1.0.0</Version>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="..\..\..\ArenaMapPort.Crypto\*.cs" Link="Crypto\%(Filename)%(Extension)" />
+    <Compile Include="..\..\..\ArenaMapPort.Shared\ArenaInstallation.cs" Link="Shared\ArenaInstallation.cs" />
+  </ItemGroup>
+
+</Project>

@@ -9,6 +9,8 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <IsPackable>false</IsPackable>
+    <!-- ArenaMapPort.Crypto uses unsafe pointer loops (docs/PLAN-ENCRYPTION.md D14) -->
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
   </PropertyGroup>
 
   <ItemGroup>
@@ -47,6 +49,9 @@
     <Compile Include="..\ArenaMapPort.Client\ShaderStandinPolicy.cs" Link="Client\ShaderStandinPolicy.cs" />
     <Compile Include="..\ArenaMapPort.Client\MapLightingDefaults.cs" Link="Client\MapLightingDefaults.cs" />
     <Compile Include="..\ArenaMapPort.Client\ArenaInstallationGate.cs" Link="Client\ArenaInstallationGate.cs" />
+    <Compile Include="..\ArenaMapPort.Client\BundleKeyResolver.cs" Link="Client\BundleKeyResolver.cs" />
+    <!-- The same Crypto sources the client and the BundleCrypt tool compile, so the tests exercise the shipped code. -->
+    <Compile Include="..\ArenaMapPort.Crypto\*.cs" Link="Crypto\%(Filename)%(Extension)" />
   </ItemGroup>
 
   <!--

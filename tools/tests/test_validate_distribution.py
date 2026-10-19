@@ -4,6 +4,7 @@ import hashlib
 import io
 import json
 from pathlib import Path
+import re
 import shutil
 import subprocess
 import sys
@@ -13,7 +14,9 @@ from unittest.mock import patch
 
 REPO = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO / "tools" / "validate"))
+sys.path.insert(0, str(REPO / "tools" / "bundle"))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+import bundle_crypt
 import validate_distribution as distribution
 from test_multiflare_extraction import graph as flare_graph
 import extract_banners
@@ -21,6 +24,72 @@ import extract_loadscreens
 import extract_selection_map
 import extract_water
 from PIL import Image
+
+
+UNITYFS = b"UnityFS\0"
+KEY_LEVELS = {"arena_equator": (51, 53, 55, 57, 58), "arena_bay5": (79, 80, 81, 82, 83, 84, 86, 88, 89),
+              "arena_airpit": (28, 29, 37, 38, 40, 324, 325), "arena_bowl": (41, 43, 45, 46, 47, 48, 95)}
+
+
+def key_file_data(key, wraps=1, files=None):
+    """A key file as the tool writes it (shape only: the hex values are not real). `files` replaces the level list."""
+    levels = files if files is not None else [{"path": f"EscapeFromTarkovArena_Data/level{n}", "size": 1000 + n} for n in KEY_LEVELS[key]]
+    return {"schema": 1, "map_key": key,
+            "wraps": [{"built_for": f"0.6.{w}.0.48206", "files": levels, "salt": f"{w:x}" * 64, "wrapped_key": "b" * 64, "check": "c" * 64}
+                      for w in range(1, wraps + 1)]}
+
+
+def key_file_text(data):
+    return json.dumps(data, indent=2) + "\n"
+
+
+class StubCrypt:
+    """Stands in for tools/bundle/bundle_crypt.py. A fixture bundle is b"AMPB" + text and 'decrypts' to b"UnityFS\0" + that
+    text; the key files are not really unlocked. The real tool and the real validators meet in test_bundle_crypt_tool.py."""
+    BundleCryptError = bundle_crypt.BundleCryptError
+    is_encrypted = staticmethod(bundle_crypt.is_encrypted)
+
+    def __init__(self):
+        self.calls = []
+        self.fail = {}          # (function, file name) -> reason: raise BundleCryptError
+        self.map_key_of = {}    # file name -> the map key the container header claims
+        self.prefix_of = {}     # file name -> what read-range returns
+        self.plaintext_of = {}  # file name -> a different plaintext
+
+    def plaintext(self, path):
+        path = Path(path)
+        return self.plaintext_of.get(path.name, UNITYFS + path.read_bytes()[4:])
+
+    def _fail_if_asked(self, function, name):
+        reason = self.fail.get((function, name))
+        if reason:
+            raise bundle_crypt.BundleCryptError(reason)
+
+    def inspect(self, path, key_store=None, verify_chunks=False):
+        name = Path(path).name
+        self.calls.append(("inspect", name, key_store, verify_chunks))
+        self._fail_if_asked("inspect", name)
+        key = self.map_key_of.get(name, re.sub(r"_(?:scenes|navmesh|preset)\.bundle$", "", name))
+        return {"map_key": key, "plaintext_length": len(self.plaintext(path)), "mac_verified": True,
+                "chunks": "verified" if verify_chunks else None}
+
+    def read_range(self, path, offset, length, key_store=None, clip=False):
+        name = Path(path).name
+        self.calls.append(("read_range", name, offset, length))
+        self._fail_if_asked("read_range", name)
+        return self.prefix_of.get(name, self.plaintext(path)[offset:offset + length])
+
+    def plain_sha256(self, path, key_store=None):
+        name = Path(path).name
+        self.calls.append(("plain_sha256", name))
+        self._fail_if_asked("plain_sha256", name)
+        plain = self.plaintext(path)
+        return hashlib.sha256(plain).hexdigest(), len(plain)
+
+    def verify_keys(self, map_key, keys_file, key_store=None, arena="auto", arena_unverified=None, built_for=None):
+        self.calls.append(("verify_keys", map_key, Path(keys_file).name, key_store, arena))
+        self._fail_if_asked("verify_keys", map_key)
+        return f"OK verify-keys {map_key}"
 
 
 class DistributionSidecarTests(unittest.TestCase):
@@ -58,8 +127,8 @@ class DistributionSidecarTests(unittest.TestCase):
                     path.write_bytes(b'accepted overview fixture')
         bundles = self.plugin / "bundles"
         bundles.mkdir(parents=True)
-        for kind in ("scenes", "navmesh", "preset"):
-            (bundles / f"arena_equator_{kind}.bundle").write_bytes(b"fixture bundle")
+        self.crypt = StubCrypt()
+        self.put_bundles("arena_equator")
         (self.plugin / "material-shaders.arena_equator.json").write_text("{}", encoding="utf-8")
         for key, scene in (("arena_equator", "Arena_Equator_Lighting"),
                            ("arena_bay5", "Arena_Bay5_Light"),
@@ -86,6 +155,7 @@ class DistributionSidecarTests(unittest.TestCase):
         self.put_ai()
         self.put_acoustics()
         self.put_water()
+        self.put_key_files()
         for folder in (self.server / "db/arena_equator", self.repo / "ArenaMapPort.Server/db/arena_equator"):
             folder.mkdir(parents=True)
             (folder / "base.json").write_text('{"Id": "arena_equator"}', encoding="utf-8")
@@ -94,15 +164,13 @@ class DistributionSidecarTests(unittest.TestCase):
         (self.maps / "bay5.json").write_text(json.dumps({"key": "arena_bay5", "db_base_json_path": "arena_bay5/base.json"}), encoding="utf-8")
         (self.maps / "airpit.json").write_text(json.dumps({"key": "arena_airpit", "db_base_json_path": "arena_airpit/base.json"}), encoding="utf-8")
         (self.maps / "bowl.json").write_text(json.dumps({"key": "arena_bowl", "db_base_json_path": "arena_bowl/base.json"}), encoding="utf-8")
-        for kind in ("scenes", "navmesh", "preset"):
-            (bundles / f"arena_bay5_{kind}.bundle").write_bytes(b"fixture bundle")
+        self.put_bundles("arena_bay5")
         (self.plugin / "material-shaders.arena_bay5.json").write_text("{}", encoding="utf-8")
         for folder in (self.server / "db/arena_bay5", self.repo / "ArenaMapPort.Server/db/arena_bay5"):
             folder.mkdir(parents=True)
             (folder / "base.json").write_text('{"Id": "arena_bay5"}', encoding="utf-8")
         # AirPit: bundles, shader sidecar, database and art, but neither an overview pack nor flares.
-        for kind in ("scenes", "navmesh", "preset"):
-            (bundles / f"arena_airpit_{kind}.bundle").write_bytes(b"fixture bundle")
+        self.put_bundles("arena_airpit")
         (self.plugin / "material-shaders.arena_airpit.json").write_text("{}", encoding="utf-8")
         for folder in (self.server / "db/arena_airpit", self.repo / "ArenaMapPort.Server/db/arena_airpit"):
             folder.mkdir(parents=True)
@@ -110,8 +178,7 @@ class DistributionSidecarTests(unittest.TestCase):
         # Bowl (PLAN-BOWL item 8, overview and flares item 17): bundles, shader sidecar, database, art, AI sidecar,
         # acoustics, an overview pack (the loop above) and a flare package (the loop above); no water package, and four
         # loading images (Arena ships no loading screen for it).
-        for kind in ("scenes", "navmesh", "preset"):
-            (bundles / f"arena_bowl_{kind}.bundle").write_bytes(b"fixture bundle")
+        self.put_bundles("arena_bowl")
         (self.plugin / "material-shaders.arena_bowl.json").write_text("{}", encoding="utf-8")
         for folder in (self.server / "db/arena_bowl", self.repo / "ArenaMapPort.Server/db/arena_bowl"):
             folder.mkdir(parents=True)
@@ -134,6 +201,17 @@ class DistributionSidecarTests(unittest.TestCase):
     def loadscreen_names():
         return {extract_loadscreens.output_filename(key, index) for key in DistributionSidecarTests.RELEASED
                 for index in range(1, len(extract_loadscreens.LOADSCREENS[key]) + 1)}
+
+    def put_bundles(self, key):
+        """The three bundles of one map as AMPB containers (only the magic and a distinct body matter to the stubbed tool)."""
+        for kind in ("scenes", "navmesh", "preset"):
+            (self.plugin / "bundles" / f"{key}_{kind}.bundle").write_bytes(b"AMPB" + f"fixture container {key} {kind}".encode())
+
+    def put_key_files(self):
+        """keys/<key>.json for every released map, as the tool writes them."""
+        (self.plugin / "keys").mkdir(parents=True, exist_ok=True)
+        for key in self.RELEASED:
+            (self.plugin / "keys" / f"{key}.json").write_text(key_file_text(key_file_data(key)), encoding="utf-8", newline="\n")
 
     def put_art(self):
         """Banners and loading screens as the extractors leave them (only the JPEG start marker matters here)."""
@@ -197,12 +275,15 @@ class DistributionSidecarTests(unittest.TestCase):
         # The fixture exercises distribution discovery and all file-set/content checks.
         # Registry parsing is covered below; Unity bundle parsing and MSBuild need real artifacts.
         with patch.object(distribution, "REPO", self.repo), \
+                patch.object(distribution, "bundle_crypt", self.crypt), \
                 patch.object(distribution.subprocess, "run") as run, \
                 patch.object(distribution.subprocess, "check_output", side_effect=target_path), \
                 redirect_stdout(output):
             distribution.validate()
         self.assertEqual(run.call_count, 2)
-        self.assertIn("DISTRIBUTION_OK 4 maps 12 bundles 4 sidecars", output.getvalue())
+        # The bundle-name validator is told where the key store is: it reads the encrypted bundles through the tool.
+        self.assertEqual(run.call_args_list[1].args[0][-2:], ["--key-store", str(self.repo / "work" / "release-keys")])
+        self.assertIn("DISTRIBUTION_OK 4 maps 12 bundles 4 sidecars encrypted", output.getvalue())
 
     def test_distribution_accepts_bots_exits_and_other_dotted_sidecars(self):
         (self.maps / "equator.bots.json").write_text('{"player_spawns": []}', encoding="utf-8")
@@ -317,17 +398,244 @@ class DistributionSidecarTests(unittest.TestCase):
         for name in real:
             with self.subTest(name=name):
                 path = self.plugin / "bundles" / name
-                stale = {name: (path.stat().st_size, hashlib.sha256(path.read_bytes()).hexdigest())}
+                # The recorded size and digest are those of the PLAINTEXT build; dist holds containers, so the tool's
+                # decrypted length and streamed digest are compared (the stub's plaintext is b"UnityFS\0" + the body).
+                plain = self.crypt.plaintext(path)
+                stale = {name: (len(plain), hashlib.sha256(plain).hexdigest())}
                 with patch.object(distribution, "STALE_SPIKE_BUNDLES", stale):
+                    self.crypt.calls.clear()
                     with self.assertRaisesRegex(ValueError, f"Stale AirPit bundle: {name}"):
                         self.validate()
                     # Same name and size, other bytes: a rebuilt bundle is accepted.
                     original = path.read_bytes()
-                    path.write_bytes(bytes([original[0] ^ 1]) + original[1:])
+                    path.write_bytes(original[:-1] + bytes([original[-1] ^ 1]))
                     try:
                         self.validate()
                     finally:
                         path.write_bytes(original)
+
+    def test_the_spike_check_hashes_only_a_bundle_whose_decrypted_length_matches(self):
+        name = "arena_airpit_scenes.bundle"
+        path = self.plugin / "bundles" / name
+        plain = self.crypt.plaintext(path)
+        for size, hashed in ((len(plain) + 1, False), (len(plain), True)):
+            with self.subTest(size=size):
+                self.crypt.calls.clear()
+                with patch.object(distribution, "STALE_SPIKE_BUNDLES", {name: (size, "0" * 64)}), \
+                        patch.object(distribution, "bundle_crypt", self.crypt):
+                    distribution.validate_not_spike_build(self.plugin / "bundles")
+                self.assertEqual(any(call[0] == "plain_sha256" for call in self.crypt.calls), hashed)
+
+    def test_a_tool_failure_while_checking_for_the_spike_build_is_reported(self):
+        name = "arena_airpit_navmesh.bundle"
+        self.crypt.fail[("inspect", name)] = "FAIL header authentication failed"
+        with self.assertRaisesRegex(ValueError, f"Bundle {name}: FAIL header authentication failed"):
+            self.validate()
+
+    def test_a_plain_bundle_is_still_compared_by_its_bytes_for_the_spike_check(self):
+        name = "arena_airpit_scenes.bundle"
+        path = self.plugin / "bundles" / name
+        path.write_bytes(b"UnityFS\0 an old plaintext bundle")
+        stale = {name: (path.stat().st_size, hashlib.sha256(path.read_bytes()).hexdigest())}
+        with patch.object(distribution, "STALE_SPIKE_BUNDLES", stale), patch.object(distribution, "bundle_crypt", self.crypt):
+            with self.assertRaisesRegex(ValueError, f"Stale AirPit bundle: {name}"):
+                distribution.validate_not_spike_build(self.plugin / "bundles")
+        self.assertEqual([c for c in self.crypt.calls if c[0] != "is_encrypted"], [])
+
+    def test_every_bundle_must_be_an_ampb_container(self):
+        for key in self.RELEASED:
+            for kind in ("scenes", "navmesh", "preset"):
+                name = f"{key}_{kind}.bundle"
+                path = self.plugin / "bundles" / name
+                original = path.read_bytes()
+                for plaintext in (b"UnityFS\0\x00\x01 a plaintext bundle", b"", b"AMP", b"ampb container", b"\0AMPB"):
+                    with self.subTest(name=name, head=plaintext[:8]):
+                        path.write_bytes(plaintext)
+                        try:
+                            with self.assertRaisesRegex(ValueError, f"Plaintext bundle in dist .*: {name}"):
+                                self.validate()
+                        finally:
+                            path.write_bytes(original)
+        self.validate()
+
+    def test_every_bundle_is_inspected_with_its_chunks_and_its_prefix_read(self):
+        self.validate()
+        calls = self.crypt.calls
+        for key in self.RELEASED:
+            for kind in ("scenes", "navmesh", "preset"):
+                name = f"{key}_{kind}.bundle"
+                self.assertIn(("inspect", name, self.repo / "work" / "release-keys", True), calls, name)
+                self.assertIn(("read_range", name, 0, 8), calls, name)
+        self.assertEqual(sorted(c[1] for c in calls if c[0] == "verify_keys"), sorted(self.RELEASED))
+        self.assertTrue(all(c[4] == "auto" for c in calls if c[0] == "verify_keys"))
+
+    def test_a_bundle_the_tool_rejects_is_a_distribution_failure(self):
+        for reason in ("FAIL ChunkIntegrity: chunk 3 (offset 3145728) failed its integrity check; the file is damaged",
+                       "FAIL HeaderAuth: header authentication failed (not the bundle set of this key, or a modified file)",
+                       "FAIL there is no content key for 'arena_bay5' in work/release-keys"):
+            with self.subTest(reason=reason):
+                self.crypt.fail[("inspect", "arena_bay5_scenes.bundle")] = reason
+                try:
+                    with self.assertRaisesRegex(ValueError, "Bundle arena_bay5_scenes.bundle failed inspection: " + re.escape(reason)):
+                        self.validate()
+                finally:
+                    self.crypt.fail.clear()
+
+    def test_a_container_of_another_map_or_with_another_plaintext_is_refused(self):
+        self.crypt.map_key_of["arena_equator_preset.bundle"] = "arena_bay5"
+        with self.assertRaisesRegex(ValueError, "Bundle arena_equator_preset.bundle belongs to map 'arena_bay5', not 'arena_equator'"):
+            self.validate()
+        self.crypt.map_key_of.clear()
+        self.crypt.prefix_of["arena_bowl_navmesh.bundle"] = b"PK\x03\x04\0\0\0\0"
+        with self.assertRaisesRegex(ValueError, "Bundle arena_bowl_navmesh.bundle does not decrypt to a UnityFS bundle"):
+            self.validate()
+        self.crypt.prefix_of.clear()
+        self.crypt.fail[("read_range", "arena_bowl_navmesh.bundle")] = "FAIL the offset is outside the plaintext"
+        with self.assertRaisesRegex(ValueError, "Bundle arena_bowl_navmesh.bundle cannot be read: FAIL the offset"):
+            self.validate()
+
+    def test_the_tools_answer_must_say_the_header_and_chunks_were_verified(self):
+        real_inspect = self.crypt.inspect
+        for answer in ({"mac_verified": None, "chunks": "verified"}, {"mac_verified": True, "chunks": None},
+                       {"mac_verified": True, "chunks": "consistent-with-unauthenticated-table"}):
+            with self.subTest(answer=answer):
+                self.crypt.inspect = lambda path, key_store=None, verify_chunks=False, answer=answer: {**real_inspect(path, key_store, verify_chunks), **answer}
+                try:
+                    with self.assertRaisesRegex(ValueError, "was not verified"):
+                        self.validate()
+                finally:
+                    del self.crypt.inspect
+        self.validate()
+
+    def test_keys_hold_exactly_one_file_per_released_map(self):
+        keys = self.plugin / "keys"
+        for name in self.RELEASED:
+            path = keys / f"{name}.json"
+            original = path.read_bytes()
+            path.unlink()
+            try:
+                with self.subTest(missing=name):
+                    with self.assertRaisesRegex(ValueError, rf"Key file set mismatch: missing=\['{name}.json'\] unexpected=\[\]"):
+                        self.validate()
+            finally:
+                path.write_bytes(original)
+        for stray in ("arena_prison.json", "arena_equator.json.bak", "arena_equator.key", "notes.txt", "sub/arena_equator.json"):
+            path = keys / stray
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text("{}", encoding="utf-8")
+            try:
+                with self.subTest(unexpected=stray):
+                    with self.assertRaisesRegex(ValueError, rf"Key file set mismatch: missing=\[\] unexpected=\['{re.escape(stray)}'\]"):
+                        self.validate()
+            finally:
+                path.unlink()
+                if path.parent != keys:
+                    path.parent.rmdir()
+        shutil.rmtree(keys)
+        with self.assertRaisesRegex(ValueError, "Key file set mismatch: missing=\\['arena_airpit.json', 'arena_bay5.json', 'arena_bowl.json', 'arena_equator.json'\\]"):
+            self.validate()
+
+    def test_key_files_must_have_the_schema_and_nothing_else(self):
+        level = lambda n, size=1000: {"path": f"EscapeFromTarkovArena_Data/level{n}", "size": size}
+
+        def mutate(change):
+            def apply(data):
+                change(data)
+                return data
+            return apply
+
+        wrap0 = lambda d: d["wraps"][0]
+        cases = {
+            "the top level must hold exactly": mutate(lambda d: d.update(note="x")),
+            "schema must be 1": mutate(lambda d: d.update(schema=2)),
+            "schema must be 1 ": mutate(lambda d: d.update(schema=True)),
+            "map_key must be 'arena_bowl'": mutate(lambda d: d.update(map_key="arena_bay5")),
+            "wraps must list 1 to 16": mutate(lambda d: d.update(wraps=[])),
+            "wraps must list 1 to 16 ": mutate(lambda d: d.update(wraps=[d["wraps"][0]] * 17)),
+            "wrap 0 must hold exactly": mutate(lambda d: wrap0(d).update(sha256="a" * 64)),
+            "wrap 0 must hold exactly ": mutate(lambda d: wrap0(d).pop("check")),
+            "built_for must be a short printable string": mutate(lambda d: wrap0(d).update(built_for="")),
+            "built_for must be a short printable string ": mutate(lambda d: wrap0(d).update(built_for="x" * 65)),
+            "built_for must be a short printable string  ": mutate(lambda d: wrap0(d).update(built_for="0.6\n1")),
+            "files must list 1 to 32": mutate(lambda d: wrap0(d).update(files=[])),
+            "files must list 1 to 32 ": mutate(lambda d: wrap0(d).update(files=[level(n) for n in range(1, 34)])),
+            "a file entry must hold exactly path and size": mutate(lambda d: wrap0(d)["files"][0].update(sha256="a" * 64)),
+            "a file entry must hold exactly path and size ": mutate(lambda d: wrap0(d)["files"][0].pop("size")),
+            "is not EscapeFromTarkovArena_Data/level<N>": mutate(lambda d: wrap0(d)["files"][0].update(path="EscapeFromTarkovArena_Data/../level41")),
+            "is not EscapeFromTarkovArena_Data/level<N> ": mutate(lambda d: wrap0(d)["files"][0].update(path="EscapeFromTarkovArena_Data\\level41")),
+            "is not EscapeFromTarkovArena_Data/level<N>  ": mutate(lambda d: wrap0(d)["files"][0].update(path="C:/level41")),
+            "is not EscapeFromTarkovArena_Data/level<N>   ": mutate(lambda d: wrap0(d)["files"][0].update(path="EscapeFromTarkovArena_Data/globalgamemanagers")),
+            "ascending numeric order": mutate(lambda d: wrap0(d).update(files=[level(43), level(41)])),
+            "ascending numeric order ": mutate(lambda d: wrap0(d).update(files=[level(41), level(41)])),
+            "ascending numeric order  ": mutate(lambda d: wrap0(d).update(files=[level(9), level(10), level(2)])),
+            "must be a positive integer": mutate(lambda d: wrap0(d)["files"][0].update(size=0)),
+            "must be a positive integer ": mutate(lambda d: wrap0(d)["files"][0].update(size=-5)),
+            "must be a positive integer  ": mutate(lambda d: wrap0(d)["files"][0].update(size=True)),
+            "must be a positive integer   ": mutate(lambda d: wrap0(d)["files"][0].update(size="1000")),
+            "salt must be 64 lowercase hex digits": mutate(lambda d: wrap0(d).update(salt="a" * 63)),
+            "wrapped_key must be 64 lowercase hex digits": mutate(lambda d: wrap0(d).update(wrapped_key="A" * 64)),
+            "check must be 64 lowercase hex digits": mutate(lambda d: wrap0(d).update(check="g" * 64)),
+            "check must be 64 lowercase hex digits ": mutate(lambda d: wrap0(d).update(check=None)),
+        }
+        path = self.plugin / "keys/arena_bowl.json"
+        original = path.read_bytes()
+        for fragment, change in cases.items():
+            with self.subTest(fragment=fragment):
+                path.write_text(key_file_text(change(key_file_data("arena_bowl"))), encoding="utf-8", newline="\n")
+                try:
+                    with self.assertRaisesRegex(ValueError, r"Key file arena_bowl\.json is invalid: .*" + re.escape(fragment.strip())):
+                        self.validate()
+                finally:
+                    path.write_bytes(original)
+        self.validate()
+
+    def test_key_files_must_be_canonical_utf8_json_of_a_sane_size(self):
+        path = self.plugin / "keys/arena_airpit.json"
+        original = path.read_bytes()
+        text = original.decode("utf-8")
+        for message, data in (("is not valid UTF-8 JSON", b"{"), ("is not valid UTF-8 JSON", b"\xff\xfe not utf-8\n"),
+                              ("is not valid UTF-8 JSON", b""), ("is invalid: the top level must hold", b"[]\n"),
+                              ("is not valid UTF-8 JSON", b"\xef\xbb\xbf" + original),
+                              ("is not in canonical form", text.replace("\n", "\r\n").encode("utf-8")),
+                              ("is not in canonical form", original.rstrip(b"\n")),
+                              ("is larger than 64 KiB", original + b" " * (64 * 1024))):
+            with self.subTest(message=message, head=data[:12]):
+                path.write_bytes(data)
+                try:
+                    with self.assertRaisesRegex(ValueError, "Key file arena_airpit.json " + message):
+                        self.validate()
+                finally:
+                    path.write_bytes(original)
+
+    def test_a_key_file_that_does_not_unlock_fails_the_distribution(self):
+        self.crypt.fail[("verify_keys", "arena_bay5")] = ("FAIL verify-keys arena_bay5: the key file does not unlock against Arena 0.6.1.0.48206 "
+                                                           "(SizeDiffers: 'EscapeFromTarkovArena_Data/level84' is 1 bytes, 2 expected)")
+        with self.assertRaisesRegex(ValueError, "Key file arena_bay5.json does not unlock: FAIL verify-keys arena_bay5: .*SizeDiffers"):
+            self.validate()
+
+    def test_a_plaintext_unityfs_file_anywhere_in_dist_is_refused(self):
+        for relative in ("stray.dat", "BepInEx/plugins/other/copy.bin", "SPT_Runtime/user/mods/ArenaMapPort/backup/arena_bay5_scenes.bundle.bak",
+                         "BepInEx/plugins/maschine-ArenaMapPort/UnityFS.txt"):
+            path = self.repo / "dist" / relative
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_bytes(b"UnityFS\0" + b"\x06 plaintext bundle")
+            try:
+                with self.subTest(relative=relative):
+                    with self.assertRaisesRegex(ValueError, "Plaintext UnityFS file in dist: " + re.escape(relative)):
+                        self.validate()
+            finally:
+                path.unlink()
+                if path.parent.name in ("other", "backup"):
+                    path.parent.rmdir()
+        # Only the exact 8-byte signature counts: a text file that merely mentions it, or a shorter prefix, does not.
+        (self.repo / "dist/note.txt").write_bytes(b"this mentions UnityFS but does not start with it")
+        (self.repo / "dist/short.bin").write_bytes(b"UnityFS")
+        self.validate()
+
+    def test_the_encryption_checks_run_after_the_bundle_set_check(self):
+        (self.plugin / "bundles/unregistered_scenes.bundle").write_bytes(b"UnityFS\0 stray")
+        with self.assertRaisesRegex(ValueError, "Bundle set mismatch"):
+            self.validate()
 
     def test_distribution_requires_every_released_maps_banner_and_loadscreens_exactly(self):
         for path, message in ((self.server / "banners/arena_airpit.jpg", "Banner file set mismatch"),

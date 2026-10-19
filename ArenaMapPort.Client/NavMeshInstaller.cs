@@ -57,6 +57,9 @@ namespace ArenaMapPort.Client
                 return; // every other map's raid — untouched
             }
 
+            // Stage 2 (encrypted bundles): what the scene bundle's decrypting stream cost while this raid's scenes loaded (Debug).
+            BundleHost.LogStreamStats(map.Key, "raid start");
+
             var data = LoadOnce(map);
             if (data == null)
             {
@@ -103,6 +106,8 @@ namespace ArenaMapPort.Client
             var map = ArenaMapRaid.MapForScriptsScene(scene.name);
             if (map != null)
             {
+                // The streams of a map's bundles stay open across the unload: EFT keeps a loaded map bundle cached for the next raid.
+                BundleHost.LogStreamStats(map.Key, "scene unload");
                 Drop(map.Key);
             }
         }
@@ -148,13 +153,14 @@ namespace ArenaMapPort.Client
             }
 
             AssetBundle bundle = null;
+            PreparedBundle prepared = null;
             try
             {
-                bundle = AssetBundle.LoadFromFile(path);
+                // Stage 2 (docs/PLAN-ENCRYPTION.md): an AMPB container opens as a decrypting stream, a plaintext development bundle
+                // loads from its file. BundleHost.LoadAssetBundle is the one loader of both and logs a refusal or a failure itself.
+                bundle = BundleHost.LoadAssetBundle(path, map.Key, null, true, out prepared);
                 if (bundle == null)
                 {
-                    Plugin.Log.LogError($"[NavMesh] AssetBundle.LoadFromFile returned null for '{path}' " +
-                                         "(wrong BuildTarget, or a corrupt/incompatible file?)");
                     return null;
                 }
 
@@ -180,6 +186,33 @@ namespace ArenaMapPort.Client
             finally
             {
                 bundle?.Unload(false);
+                CloseStream(prepared); // after Unload: Unity reads the stream until then
+            }
+        }
+
+        // The NavMesh bundle is read once and unloaded, so its decrypting stream is closed right after Unload(false); a damaged chunk
+        // is reported first (once), then the counters (Debug).
+        static void CloseStream(PreparedBundle prepared)
+        {
+            if (prepared == null)
+            {
+                return;
+            }
+            try
+            {
+                BundleKeyResolver.Default.Streams.ReportError(prepared);
+                if (prepared.Stream != null)
+                {
+                    Plugin.Log.LogDebug(BundleStreamRegistry.StatsLine(prepared, "navmesh load"));
+                }
+            }
+            catch (Exception e)
+            {
+                Plugin.Log.LogDebug($"[NavMesh] stream statistics failed ({e.GetType().Name}: {e.Message})");
+            }
+            finally
+            {
+                prepared.Dispose();
             }
         }
     }

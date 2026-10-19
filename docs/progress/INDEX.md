@@ -8,6 +8,19 @@ dated state in one screen; read it before this index if you only have a minute.
 
 ## Current — read these for the area you touch
 
+- [../PLAN-ENCRYPTION.md](../PLAN-ENCRYPTION.md) — the ordered plan for stage 2 of the Arena gate (user decision 2026-10-19):
+  every shipped map bundle encrypted (AMPB container, 1 MiB chunks, AES-256-CTR, per-chunk SHA-256, header HMAC), the content key
+  wrapped with a key derived by HKDF from the SHA-256 of the map's own Arena level files; key files `keys/<map>.json` list paths
+  and sizes only; a .NET tool `BundleCrypt` stages and verifies, the client decrypts through Windows CNG with a managed fallback
+  and `AssetBundle.LoadFromStream`; work items CORE/TOOL/CLIENT/DOCS, host plan for GPU-2 and GPU-1, risks, open decisions.
+  A plan, not a record; not copy protection.
+- [bundle-encryption.md](bundle-encryption.md) — the record of stage 2 of the Arena gate (2026-10-19): what is built and what is
+  verified of the encrypted bundles (AMPB container, the per-map content key wrapped under a key derived from the map's own Arena
+  level files, `keys/<map>.json`, the `BundleCrypt` tool, the client's decrypting stream), the wording rule (not copy protection;
+  art and audio stay plaintext) and the evidence blocks: builds and tests, staging and determinism, the plaintext baseline, the
+  GPU-2 run with its timing budget, the negative tests, GPU-1. Integrated and verified on the build VM on 2026-10-19 ("Integration"
+  quotes the builds, tests, staging, validators, dry-run deploy and size figures); the host-dependent claims (E4 to E7) are still
+  `<pending>` placeholders until the GPU-2 and GPU-1 runs.
 - [bowl-release.md](bowl-release.md) — Bowl as the fourth released map (started on `feature/bowl`, merged into `main` 2026-10-18; started 2026-10-18): plan roles,
   the native extraction from Arena 0.6.0 (reviewed Chainfence/MetalThin ballistics pair), then package, sidecars, bake,
   host raids. Plan: [../PLAN-BOWL.md](../PLAN-BOWL.md).
