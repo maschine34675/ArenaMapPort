@@ -194,3 +194,8 @@ everything else byte-identical to the final 0.2.2 ZIP.
 2026-10-19 (release 0.2.3 PUBLISHED): the candidate ZIP above went to Pixeldrain (https://pixeldrain.com/l/9jZS5CnU), both DLLs were
 scanned on VirusTotal (0/75 and 0/75 malicious), tag `v0.2.3` and the GitHub release were created,
 and 0.2.2 was withdrawn (release, tag and Pixeldrain files deleted; nobody had downloaded it).
+
+2026-10-19 (earlier releases withdrawn): after 0.2.3 went live the user had every earlier package removed: the GitHub
+releases 0.2.2, 0.2.1 (with its DLL-only ZIP) and 0.1.0 (with its 1.23 GB full ZIP) including their tags, and on Pixeldrain
+the 0.2.2 and 0.2.1 lists and files plus a 2026-10-15 upload-test file. The account holds only the 0.2.3 ZIP, its checksum and
+the 0.2.3 list; the only GitHub release and tag is v0.2.3. The `docs/releases/*.md` records carry withdrawn banners.

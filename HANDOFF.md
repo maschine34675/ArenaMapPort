@@ -49,7 +49,9 @@ Open:
 2. **Published 2026-10-19** (user decision "uploaden, GitHub-Release mit VirusTotal-Links, 0.2.2 restlos loeschen"):
    Pixeldrain list https://pixeldrain.com/l/9jZS5CnU (ZIP https://pixeldrain.com/u/xAdxjoW2, checksum https://pixeldrain.com/u/Uvk85ZiV), VirusTotal client
    0/75 and server 0/75 malicious, tag `v0.2.3` and the GitHub release with the `.sha256` asset;
-   0.2.2 withdrawn (GitHub release, tag and Pixeldrain files deleted, see the record in `v0.2.2.md`). Still the user's: the Forge entry (text from FORGE.md) and whether a DLL-only package for 0.2.2
+   0.2.2 withdrawn (GitHub release, tag and Pixeldrain files deleted, see the record in `v0.2.2.md`), then 0.2.1 and 0.1.0 too
+   (user decision: no package without the check stays downloadable; Pixeldrain holds only the 0.2.3 files and list, GitHub only
+   the v0.2.3 release and tag). Still the user's: the Forge entry (text from FORGE.md) and whether a DLL-only package for 0.2.2
    owners is published (the notes say the full ZIP is the supported path; the DLL-only sentence is a placeholder).
 3. **Forward-merge `release/0.2.3` into `main`** so 0.3.0 (Bowl, four maps) carries the check. Expect conflicts in
    `AGENTS.md`, `HANDOFF.md`, `docs/progress/INDEX.md` (both sides prepend entries), `README.md`, `FORGE.md` and the two

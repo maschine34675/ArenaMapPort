@@ -7,7 +7,8 @@ asset bundles, a BepInEx client plugin that repairs everything a ported scene la
 SPT server mod that registers the locations. Fourteen maps retain development inputs; **Equator, Bay5 and AirPit** are registered and staged
 for release 0.2.2 (Equator and Bay5 were the first release; AirPit was added in 2026-10 on `feature/airpit`; 0.2.0 was built and withdrawn on 2026-10-16). All three have native
 playtest evidence. Release 0.2.3 (branch `release/0.2.3`, published 2026-10-19) is 0.2.2 plus the Arena installation check; 0.2.2 was withdrawn
-the same day (GitHub release, tag and Pixeldrain files deleted, nobody had downloaded it). The maps exist to be played through the user's
+the same day (GitHub release, tag and Pixeldrain files deleted, nobody had downloaded it), and so were 0.2.1 and 0.1.0
+(releases with their assets, tags, Pixeldrain files): only 0.2.3 is downloadable, every package without the check is gone. The maps exist to be played through the user's
 ArenaMode mod (arena deathmatch with respawns); see the decisions below.
 
 Read this first, then [HANDOFF.md](HANDOFF.md) (dated working state, what is verified, what is next),
