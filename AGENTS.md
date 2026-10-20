@@ -193,7 +193,11 @@ pwsh -NoProfile -File tools/deploy-to-spt.ps1 -SptRoot 'D:\SPT41' -Confirm
 
 Equator's package predates the `-FullMap` convention (its manifest lists the scenes in a different order
 than the descriptor), so Equator is built WITHOUT `-FullMap`. Every other map uses `-FullMap` with
-`work/build/<stem>/` and `tools/maps/<stem>.json` (exact commands in `docs/progress/remaining-maps.md`).
+`work/build/<stem>/` and `tools/maps/<stem>.json` (exact commands in `docs/progress/remaining-maps.md`). For both accepted
+packages `build_all.ps1` stops in step 4 at `validate_extract.py` (the known drift of the v5 packages against the installed Arena 0.6.1,
+`docs/progress/airpit-release.md` "Accepted-package validator state"), after the bundles are built and identity-patched: run the
+remaining validators by hand (`validate_bundle_roundtrip.py` with step 4's arguments, Bay5 with `--require-navmesh`; `validate_preset.py`,
+Equator with `--allow-missing-scenes`; `validate_map_descriptors.py`), as on 2026-10-20.
 Current accepted inputs are `work/extract/equator-native-v5` and
 `work/extract/bay5-native-v5` (2026-09-28: v5 adds original StaticDeferredDecal components, their materials
 and textures, and `native_features.static_decals`; see `docs/progress/native-decals.md`). These retain
@@ -522,8 +526,20 @@ the log; the user uses it to point at things.
   in a test, restart EFT. The nonce is derived from the plaintext, so the same plaintext always encrypts to the same bytes; never add
   timestamps or random fields to the container or the key file, the "stage twice, identical hashes" check and the tool's `verify`
   rely on it.
-- Equator's and Bay5's scene bundles are single-block LZMA: `BuildBundles.cs` keeps `BuildAssetBundleOptions.None` for those two
-  entrypoints ("retain their previous build option"), so Unity decompresses the whole bundle (910 MB, 1.5 GB) when it opens it, 17 s and
-  30 s on GPU-2 with `LoadFromFile` as with `LoadFromStream` (EFT's `LocationLoaded ... diff:` line shows it; Bowl and Air Pit, chunked
-  LZ4HC, read lazily and show `diff:1.5`). A slow Equator or Bay5 load is the layout, not the decrypting stream; the fix is a rebuild with
-  `ChunkBasedCompression`, which changes the bundles (staging and host verification again).
+- Bundle layout: `BuildBundles.cs` builds every map with `BuildAssetBundleOptions.ChunkBasedCompression` (LZ4HC blocks of at most
+  128 KiB, read lazily) since 2026-10-20. Until then the Equator and Bay5 entrypoints kept `None` ("retain their previous build option"),
+  which is ONE LZMA block over the whole bundle: Unity decompressed the whole bundle (910 MB, 1.5 GB) when it opened it, 17 s and 30 s of
+  EFT's `LocationLoaded ... diff:` on GPU-2 with `LoadFromFile` as with `LoadFromStream`, against `diff:1.5` on Bowl and Air Pit. The
+  2026-10-20 rebuild (Equator 6,943 blocks, Bay5 11,807; NavMeshData byte-identical to the released bundles, uncompressed content
+  byte-equal to the September builds; dist grew by 145.9 MB and 258.8 MB) is recorded in
+  [bundle-encryption.md](docs/progress/bundle-encryption.md) ("LZ4 rebuild", after E5), with the UnityFS header fields a block-table
+  check reads. A slow map load is the layout, not the decrypting stream.
+- Mesh ids collide across packages: a mesh id is `sha1("<source file>:<path_id>:<type>")[:16]` (`tools/extract/common_ids.py`), a source
+  OBJECT, and Arena's level files repeat path ids across maps (Bay5 and Bowl share 798 ids, 228 with different geometry:
+  `1403b6e6f03151dd` is Bay5's 64-vertex sandbag shadow and Bowl's 4,228-vertex skyscraper background; materials and textures collide the
+  same way but are always rewritten from the current package). `Assets/ArenaImport/Meshes/<id>.asset` is ONE shared store, so
+  `MeshImporter` reconstructs every mesh from the package being built (since 2026-10-20; before, only packages with `source.map_key` did,
+  and Bay5's legacy package reused what Bowl's import had left: the first 2026-10-20 Bay5 rebuild carried Bowl geometry in 228 slots, its
+  bake box grew to 780 x 450 x 840 m and 29,586 vertices, and `validate_bundle_roundtrip.py` failed with 176 vertex/submesh mismatches -
+  that validator is the check and stays in every build; the released September Bay5 bundle audited clean, 0 of 3,890). Never build two maps
+  at once (the Unity lease guards it) and never copy mesh assets between projects by hand.

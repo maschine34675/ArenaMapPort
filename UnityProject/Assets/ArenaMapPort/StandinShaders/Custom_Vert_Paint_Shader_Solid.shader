@@ -7,6 +7,8 @@ Shader "Hidden/ArenaMapPort/Custom/Vert Paint Shader Solid"
 {
     Properties
     {
+        _AlphaHeight ("_AlphaHeight", Float) = 0
+        _AlphaStrength ("_AlphaStrength", Float) = 0
         _BlendStrength ("_BlendStrength", Float) = 0
         _BumpMap0 ("_BumpMap0", 2D) = "white" {}
         _BumpMap1 ("_BumpMap1", 2D) = "white" {}
@@ -19,10 +21,15 @@ Shader "Hidden/ArenaMapPort/Custom/Vert Paint Shader Solid"
         _Color2 ("_Color2", Color) = (1,1,1,1)
         _Cutoff ("_Cutoff", Float) = 0
         _DefVals ("_DefVals", Color) = (1,1,1,1)
+        _DefVals0 ("_DefVals0", Color) = (1,1,1,1)
+        _DefVals1 ("_DefVals1", Color) = (1,1,1,1)
+        _DefVals2 ("_DefVals2", Color) = (1,1,1,1)
         _DetailNormalMapScale ("_DetailNormalMapScale", Float) = 0
         _DropsSpec ("_DropsSpec", Float) = 0
         _DstBlend ("_DstBlend", Float) = 0
         _EmissionColor ("_EmissionColor", Color) = (1,1,1,1)
+        _EmissionColorUI ("_EmissionColorUI", Color) = (1,1,1,1)
+        _EmissionScaleUI ("_EmissionScaleUI", Float) = 0
         _Factor ("_Factor", Float) = 0
         _FresnelDiffuse0 ("_FresnelDiffuse0", Float) = 0
         _FresnelDiffuse1 ("_FresnelDiffuse1", Float) = 0
@@ -31,6 +38,9 @@ Shader "Hidden/ArenaMapPort/Custom/Vert Paint Shader Solid"
         _FresnelSpecular1 ("_FresnelSpecular1", Float) = 0
         _FresnelSpecular2 ("_FresnelSpecular2", Float) = 0
         _Glossiness ("_Glossiness", Float) = 0
+        _Glossiness0 ("_Glossiness0", Float) = 0
+        _Glossiness1 ("_Glossiness1", Float) = 0
+        _Glossiness2 ("_Glossiness2", Float) = 0
         _Glossness ("_Glossness", Float) = 0
         _Heights ("_Heights", 2D) = "white" {}
         _MainTex0 ("_MainTex0", 2D) = "white" {}
@@ -49,6 +59,7 @@ Shader "Hidden/ArenaMapPort/Custom/Vert Paint Shader Solid"
         _ReflectionStrength ("_ReflectionStrength", Float) = 0
         _RippleFakeLightIntensityOffset ("_RippleFakeLightIntensityOffset", Float) = 0
         _RippleTexScale ("_RippleTexScale", Float) = 0
+        _SSRPow ("_SSRPow", Float) = 0
         _Shininess ("_Shininess", Float) = 0
         _SkinnedMeshMaterial ("_SkinnedMeshMaterial", Float) = 0
         _Smoothness0 ("_Smoothness0", Float) = 0
@@ -60,6 +71,9 @@ Shader "Hidden/ArenaMapPort/Custom/Vert Paint Shader Solid"
         _SpecColor ("_SpecColor", Color) = (1,1,1,1)
         _SpecPower ("_SpecPower", Float) = 0
         _SpecVals ("_SpecVals", Color) = (1,1,1,1)
+        _SpecVals0 ("_SpecVals0", Color) = (1,1,1,1)
+        _SpecVals1 ("_SpecVals1", Color) = (1,1,1,1)
+        _SpecVals2 ("_SpecVals2", Color) = (1,1,1,1)
         _Specular0 ("_Specular0", Float) = 0
         _Specular1 ("_Specular1", Float) = 0
         _Specular2 ("_Specular2", Float) = 0

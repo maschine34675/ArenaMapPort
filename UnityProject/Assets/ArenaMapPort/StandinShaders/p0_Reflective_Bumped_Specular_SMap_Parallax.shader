@@ -34,12 +34,10 @@ Shader "Hidden/ArenaMapPort/p0/Reflective/Bumped Specular SMap Parallax"
         _ReflectColor ("_ReflectColor", Color) = (1,1,1,1)
         _RippleFakeLightIntensityOffset ("_RippleFakeLightIntensityOffset", Float) = 0
         _RippleTexScale ("_RippleTexScale", Float) = 0
-        _Shininess ("_Shininess", Float) = 0
         _SkinnedMeshMaterial ("_SkinnedMeshMaterial", Float) = 0
         _SmoothnessTextureChannel ("_SmoothnessTextureChannel", Float) = 0
         _SpecColor ("_SpecColor", Color) = (1,1,1,1)
         _SpecMap ("_SpecMap", 2D) = "white" {}
-        _SpecPower ("_SpecPower", Float) = 0
         _SpecVals ("_SpecVals", Color) = (1,1,1,1)
         _SpecularHighlights ("_SpecularHighlights", Float) = 0
         _Specularness ("_Specularness", Float) = 0

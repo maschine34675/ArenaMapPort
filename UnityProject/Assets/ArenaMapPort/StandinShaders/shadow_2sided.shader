@@ -22,7 +22,6 @@ Shader "Hidden/ArenaMapPort/shadow_2sided"
         _OcclusionStrength ("_OcclusionStrength", Float) = 0
         _Parallax ("_Parallax", Float) = 0
         _SmoothnessTextureChannel ("_SmoothnessTextureChannel", Float) = 0
-        _SpecColor ("_SpecColor", Color) = (1,1,1,1)
         _SpecularHighlights ("_SpecularHighlights", Float) = 0
         _SrcBlend ("_SrcBlend", Float) = 0
         _UVSec ("_UVSec", Float) = 0

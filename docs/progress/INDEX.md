@@ -21,7 +21,8 @@ dated state in one screen; read it before this index if you only have a minute.
   GPU-2 run with its timing budget, the negative tests, GPU-1. Integrated and verified on the build VM on 2026-10-19 ("Integration"
   quotes the builds, tests, staging, validators, dry-run deploy and size figures) and host-verified on 2026-10-20 (E3 to E7: GPU-2 raids on
   all four maps through the encrypted bundles with the timing budget, the negative tests N1 to N3, GPU-1 without Arena; plus the finding that
-  Equator and Bay5 are single-block LZMA bundles, which makes their loads slow independently of stage 2).
+  Equator and Bay5 were single-block LZMA bundles, slow to load independently of stage 2, and the "LZ4 rebuild" of 2026-10-20 that replaced
+  them with chunked LZ4HC bundles and found the mesh id collision across packages, fixed in `MeshImporter.cs`).
 - [bowl-release.md](bowl-release.md) — Bowl as the fourth released map (started on `feature/bowl`, merged into `main` 2026-10-18; started 2026-10-18): plan roles,
   the native extraction from Arena 0.6.0 (reviewed Chainfence/MetalThin ballistics pair), then package, sidecars, bake,
   host raids. Plan: [../PLAN-BOWL.md](../PLAN-BOWL.md).

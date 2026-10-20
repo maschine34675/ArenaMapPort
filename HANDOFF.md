@@ -3,6 +3,30 @@
 Snapshot for whoever continues (human or agent). Verify the commits named here against `git log`; this file
 is updated by hand at each handover, it is not an automatic record. Read [AGENTS.md](AGENTS.md) first.
 
+## Update 2026-10-20 (afternoon) - Equator and Bay5 rebuilt with chunked LZ4 (staged, host run pending); mesh id collision found and fixed
+
+`BuildBundles.cs` builds every map with `ChunkBasedCompression` now. Equator and Bay5 were rebuilt from their accepted v5 packages:
+6,943 and 11,807 LZ4HC blocks of at most 128 KiB instead of one LZMA block, uncompressed content byte-equal to the September builds
+(909,949,416 and 1,547,454,232 B), NavMeshData byte-identical to the released bundles (10404/4572, 22117/10213), presets and `base.json`
+unchanged. Staged into `dist/` (the four bundles rewritten, key files unchanged, `DISTRIBUTION_OK 4 maps 12 bundles 4 sidecars encrypted`,
+`verify` OK for all four, dist +145.9 MB and +258.8 MB), tests green (1,893 Python, 1,440 xunit, 8 log-scan).
+Deploy dry run: 6 files to overwrite (the four bundles, the rebuilt client and server DLLs of the same source), 84 identical. Not deployed
+and not host-run yet: the user reserved GPU-2 ("host2 ist noch belegt, mit den ingame tests noch warten"); the deploy moves about 1.6 GB
+through Syncthing, so close EFT on the host first. Expected on the host: `[Bundles] loaded` within about 50 ms of the preset line and EFT's
+`LocationLoaded ... diff:` near 1.5 s instead of 16.8 s and 29.6 s. Record: [bundle-encryption.md](docs/progress/bundle-encryption.md)
+"LZ4 rebuild" (after E5).
+
+Found on the way and fixed: mesh ids (`sha1(file:path_id:type)[:16]`) collide across packages (Bay5 and Bowl: 228 of 798 shared ids name
+different geometry), and `MeshImporter.cs` reused the shared `Assets/ArenaImport/Meshes` store for a package without `source.map_key`
+(Bay5's legacy manifest), so the first Bay5 rebuild after Bowl's 2026-10-18 import carried Bowl meshes in 228 slots (bake 29,586 vertices,
+`validate_bundle_roundtrip.py` 176 mismatches). Every package now reconstructs every mesh; the second Bay5 build is the staged one. The
+released September Bay5 bundle audited clean (0 of 3,890 meshes differ). `build_all.ps1` for both accepted packages stops at
+`validate_extract.py` on the known Arena-0.6.1 drift; the remaining validators were run by hand (AGENTS.md "Build, test, deploy"). The
+Unity build regenerated 14 stand-in shader stubs (committed with the build, as for Bowl and Air Pit).
+
+Next: deploy (`deploy-to-spt.ps1 -SptRoot 'D:\SPT41' -Confirm` with EFT closed on GPU-2, `gpu-run deploy-wait`, `gpu-run restart --host
+host2`), one Equator and one Bay5 raid without bots, the timing lines into the record, then the 0.3.0 cut as planned below.
+
 ## Update 2026-10-20 - stage 2 host-verified on GPU-2 and GPU-1 (evidence E3 to E7); one LZMA finding for Equator and Bay5
 
 Stage 2 is committed as `c55ef54` (2026-10-19, late) and was deployed to `D:\SPT41` the same night (90 files; the `deploy-wait --server

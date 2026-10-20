@@ -13,11 +13,13 @@ Shader "Hidden/ArenaMapPort/Global Fog/Transparent Reflective Specular"
         _BumpScale ("_BumpScale", Float) = 0
         _BumpTiling ("_BumpTiling", Float) = 0
         _Color ("_Color", Color) = (1,1,1,1)
-        _ColorMask ("_ColorMask", Float) = 0
         _CustomFogStrength ("_CustomFogStrength", Float) = 0
         _Cutoff ("_Cutoff", Float) = 0
         _DXT1_NM ("_DXT1_NM", Float) = 0
         _DefVals ("_DefVals", Color) = (1,1,1,1)
+        _DetailBumpStrength ("_DetailBumpStrength", Float) = 0
+        _DetailBumpTiling ("_DetailBumpTiling", Float) = 0
+        _DetailGloss ("_DetailGloss", Float) = 0
         _DetailNormalMapScale ("_DetailNormalMapScale", Float) = 0
         _DirtStrength ("_DirtStrength", Float) = 0
         _Distort ("_Distort", Float) = 0
@@ -25,8 +27,6 @@ Shader "Hidden/ArenaMapPort/Global Fog/Transparent Reflective Specular"
         _DstBlend ("_DstBlend", Float) = 0
         _Emission ("_Emission", Color) = (1,1,1,1)
         _EmissionColor ("_EmissionColor", Color) = (1,1,1,1)
-        _EmissionColorUI ("_EmissionColorUI", Color) = (1,1,1,1)
-        _EmissionScaleUI ("_EmissionScaleUI", Float) = 0
         _Factor ("_Factor", Float) = 0
         _FogUsage ("_FogUsage", Float) = 0
         _FresAdd ("_FresAdd", Float) = 0
@@ -36,15 +36,16 @@ Shader "Hidden/ArenaMapPort/Global Fog/Transparent Reflective Specular"
         _Glossiness ("_Glossiness", Float) = 0
         _Glossness ("_Glossness", Float) = 0
         _GlossyReflections ("_GlossyReflections", Float) = 0
-        _InvFade ("_InvFade", Float) = 0
         _MainTex ("_MainTex", 2D) = "white" {}
         _Metallic ("_Metallic", Float) = 0
         _Mode ("_Mode", Float) = 0
         _NdotLOffset ("_NdotLOffset", Float) = 0
         _NightRippleFakeLightOffset ("_NightRippleFakeLightOffset", Float) = 0
+        _NormalIntensity ("_NormalIntensity", Float) = 0
         _OcclusionStrength ("_OcclusionStrength", Float) = 0
         _Parallax ("_Parallax", Float) = 0
         _ReflectColor ("_ReflectColor", Color) = (1,1,1,1)
+        _ReflectionStrength ("_ReflectionStrength", Float) = 0
         _RippleFakeLightIntensityOffset ("_RippleFakeLightIntensityOffset", Float) = 0
         _RippleTexScale ("_RippleTexScale", Float) = 0
         _SSRPow ("_SSRPow", Float) = 0
@@ -61,20 +62,12 @@ Shader "Hidden/ArenaMapPort/Global Fog/Transparent Reflective Specular"
         _SpecularHighlights ("_SpecularHighlights", Float) = 0
         _Specularness ("_Specularness", Float) = 0
         _SrcBlend ("_SrcBlend", Float) = 0
-        _Stencil ("_Stencil", Float) = 0
-        _StencilComp ("_StencilComp", Float) = 0
-        _StencilOp ("_StencilOp", Float) = 0
-        _StencilReadMask ("_StencilReadMask", Float) = 0
         _StencilType ("_StencilType", Float) = 0
-        _StencilWriteMask ("_StencilWriteMask", Float) = 0
-        _Temperature ("_Temperature", Color) = (1,1,1,1)
         _Temperature2 ("_Temperature2", Color) = (1,1,1,1)
-        _TintColor ("_TintColor", Color) = (1,1,1,1)
         _USEDECALS ("_USEDECALS", Float) = 0
         _USERAIN ("_USERAIN", Float) = 0
         _UVSec ("_UVSec", Float) = 0
         _Units ("_Units", Float) = 0
-        _UseUIAlphaClip ("_UseUIAlphaClip", Float) = 0
         _ZWrite ("_ZWrite", Float) = 0
     }
     SubShader

@@ -18,10 +18,19 @@ namespace ArenaMapPort.Editor.Import
         {
             Directory.CreateDirectory(ArenaPaths.MeshesDir);
             var result = new Dictionary<string, Mesh>();
-            bool refreshFromPackage = !string.IsNullOrEmpty((string)pkg.Manifest["source"]?["map_key"]);
+            // Every package reconstructs every mesh from its own mesh.bin (2026-10-20). A mesh id is
+            // sha1(source file : path_id : type)[:16] (tools/extract/common_ids.py), which identifies a
+            // source OBJECT, not its geometry: Arena's level files repeat path ids across maps, so the
+            // same id names different meshes in different packages (Bay5 and Bowl share 798 ids and 228
+            // of them differ, e.g. 1403b6e6f03151dd = Bay5's Military_sandbag_barrier_02_SHADOW_LOD2,
+            // 64 vertices, and Bowl's City_skyscrapers_background_LOD0, 4228 vertices). Until this
+            // change only packages with manifest source.map_key (the generic maps) refreshed; Bay5's
+            // legacy package has none and reused whatever the last import left in the shared store:
+            // the 2026-10-20 Bay5 rebuild after Bowl's import carried Bowl geometry in 228 mesh slots
+            // and baked its NavMesh in a 780 x 450 x 840 m box (29,586 vertices instead of 22,117).
+            // validate_bundle_roundtrip.py's submesh/vertex comparison is the check that catches it.
+            bool refreshFromPackage = true;
             int refreshed = 0;
-            // Generic map IDs identify source objects, not their current geometry.
-            // Reconstruct from this package even when an earlier map imported the ID.
             // Batch asset creation so thousands of meshes need only one refresh.
             if (refreshFromPackage) AssetDatabase.StartAssetEditing();
             try

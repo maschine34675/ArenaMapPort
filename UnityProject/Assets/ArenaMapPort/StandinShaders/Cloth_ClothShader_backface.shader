@@ -21,10 +21,8 @@ Shader "Hidden/ArenaMapPort/Cloth/ClothShader_backface"
         _EmissionColor ("_EmissionColor", Color) = (1,1,1,1)
         _Factor ("_Factor", Float) = 0
         _GlossMap ("_GlossMap", 2D) = "white" {}
-        _GlossMapScale ("_GlossMapScale", Float) = 0
         _Glossiness ("_Glossiness", Float) = 0
         _Glossness ("_Glossness", Float) = 0
-        _GlossyReflections ("_GlossyReflections", Float) = 0
         _MainTex ("_MainTex", 2D) = "white" {}
         _Metallic ("_Metallic", Float) = 0
         _Mode ("_Mode", Float) = 0
@@ -46,11 +44,9 @@ Shader "Hidden/ArenaMapPort/Cloth/ClothShader_backface"
         _ScrollYSpeed ("_ScrollYSpeed", Float) = 0
         _Shininess ("_Shininess", Float) = 0
         _SkinnedMeshMaterial ("_SkinnedMeshMaterial", Float) = 0
-        _SmoothnessTextureChannel ("_SmoothnessTextureChannel", Float) = 0
         _SpecColor ("_SpecColor", Color) = (1,1,1,1)
         _SpecPower ("_SpecPower", Float) = 0
         _SpecVals ("_SpecVals", Color) = (1,1,1,1)
-        _SpecularHighlights ("_SpecularHighlights", Float) = 0
         _Specularness ("_Specularness", Float) = 0
         _SrcBlend ("_SrcBlend", Float) = 0
         _StencilType ("_StencilType", Float) = 0

@@ -382,11 +382,18 @@ namespace ArenaMapPort.Editor.BundleBuild
 
                 // §B.WP2.8 / §H risk #12: BuildTarget passed explicitly, never
                 // EditorUserBuildSettings.activeBuildTarget.
-                // New generic maps use LZ4 chunks: identity patching can preserve
-                // compression without repeatedly expanding/recompressing a huge LZMA blob.
-                // Existing Equator/Bay5 entrypoints retain their previous build option.
-                BuildAssetBundleOptions bundleOptions = VerifySpawnPlacement.Required(ctx.pkg)
-                    ? BuildAssetBundleOptions.ChunkBasedCompression : BuildAssetBundleOptions.None;
+                // Every map builds with LZ4 chunks (ChunkBasedCompression: LZ4HC blocks of at most
+                // 128 KiB). Unity reads such a bundle lazily, block by block, so a 1 GB scene bundle
+                // opens in about a second; BuildAssetBundleOptions.None is ONE LZMA block over the
+                // whole bundle, which Unity decompresses completely when it opens it (Equator 910 MB
+                // in 17 s, Bay5 1.5 GB in 30 s of raid load on GPU-2, docs/progress/bundle-encryption.md
+                // E5). Until 2026-10-20 the Equator and Bay5 entrypoints kept None ("retain their
+                // previous build option") while the generic maps (Bowl, Air Pit) used chunks; the
+                // identity patch (tools/bundle/patch_monoscript_identity.py, packer "original")
+                // preserves either layout. The spawn-placement condition
+                // (VerifySpawnPlacement.Required) only ever selected the compression here and keeps
+                // its own job below; nothing else in the pipeline depends on the LZMA layout.
+                BuildAssetBundleOptions bundleOptions = BuildAssetBundleOptions.ChunkBasedCompression;
                 AssetBundleManifest bundleManifest = UnityEditor.BuildPipeline.BuildAssetBundles(
                     bundleOutputDir, builds.ToArray(), bundleOptions, BuildTarget.StandaloneWindows64);
 

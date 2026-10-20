@@ -12,8 +12,8 @@ scene bundles came through `AssetBundle.LoadFromStream` (risk R2 answered), the 
 Warning or Error from `[BundleKeys]`, `[Bundles]` or `[NavMesh]`; the negative tests N1, N2, N3 logged exactly the planned lines and EFT
 returned to the menu or ran the raid without the NavMesh; GPU-1 (no Arena) stopped at stage 1 with no key or crypto line, opened the
 hideout and ran a vanilla raid. E3 to E7 below quote the lines. One finding outside stage 2: Equator's and Bay5's scene bundles are
-single-block LZMA, so Unity decompresses them whole at load (17 s and 30 s on GPU-2, the same before stage 2; see E5); a rebuild with
-chunked LZ4 is a separate follow-up.
+single-block LZMA, so Unity decompresses them whole at load (17 s and 30 s on GPU-2, the same before stage 2; see E5); rebuilt with
+chunked LZ4 on 2026-10-20 ("LZ4 rebuild" after E5; staged and validated, the host run pending at the time of writing).
 
 **Earlier status (2026-10-19, 23:20, before the commit): integrated and verified on the build VM, not yet run on a host.** The code of all areas
 (`ArenaMapPort.Crypto/`, the `BundleCrypt` tool, the client loaders, staging, validators, packer) and the texts are in one tree and were
@@ -217,6 +217,49 @@ the same `diff:18.32`. Bowl and Air Pit are `ChunkBasedCompression` (11,386 and 
 Follow-up outside stage 2: rebuild Equator and Bay5 with chunked compression (expected to take 17 s and 30 s off their loads and the whole
 decompressed copy out of memory); the bundles change, so it is a staging and host-verification step of its own.
 
+**LZ4 rebuild (2026-10-20, 13:56 to 16:05, build VM; the host run is pending while GPU-2 is reserved).** `BuildBundles.cs` now passes
+`BuildAssetBundleOptions.ChunkBasedCompression` for every map (the spawn-placement predicate had only ever chosen the compression there).
+Equator (`build_all.ps1` without `-FullMap`, `equator-native-v5`, 13:56 to 14:21) and Bay5 (`-FullMap`, `bay5-native-v5`, 14:42 to 15:12,
+the second run, see the finding below) were rebuilt; `patch_monoscript_identity.py` re-saved both scene bundles with packer `original`
+(17 and 22 MonoScripts patched, 3,728 and 1,017 other objects byte-identical). Block tables of the built bundles (a 40-line reader of the
+UnityFS header: signature, version 8, `size`, `compressedBlocksInfoSize`, `uncompressedBlocksInfoSize`, `flags` 0x243 = blocks info LZ4HC
+at the end of the file; per block uncompressed size, compressed size and `flags & 0x3F`): `arena_equator_scenes.bundle` 577,488,469 B,
+6,943 blocks (6,895 LZ4HC, 48 stored), each at most 131,072 B uncompressed, 909,949,416 B in all, byte-equal to the September bundle's
+one LZMA block; `arena_bay5_scenes.bundle` 1,044,553,465 B, 11,807 blocks (11,755 LZ4HC, 52 stored), 1,547,454,232 B in all, byte-equal
+to September; the NavMesh bundles are 3 and 7 LZ4HC blocks (338,376 and 821,500 B uncompressed as before). The NavMeshData objects are
+byte-identical to the released bundles (SHA-256 of the raw object: Equator `ba5abd54…`, 22 tiles, Bay5 `32b49ecf…`, 221 tiles; bake lines
+`vertices=10404 triangles=4572` and `vertices=22117 triangles=10213` with the September bounds), the presets are byte-identical
+(`patch_preset.py` re-run for Bay5) and `base.json` unchanged. Validators: `build_all.ps1` stops at `validate_extract.py` on the known
+drift of both v5 packages against Arena 0.6.1 (airpit-release.md "Accepted-package validator state"), so `validate_bundle_roundtrip.py`
+(Equator OK, Bay5 OK with `--require-navmesh`, the one known material-count warning each), `validate_preset.py` and
+`validate_map_descriptors.py` were run by hand, all OK. Staging (client Release build without DllOnly, 15:55):
+`arena_equator_scenes.bundle: 577,488,469 B plaintext, 577,506,197 B encrypted, 551 chunks, written`, `arena_equator_navmesh.bundle:
+137,136 B plaintext, 137,264 B encrypted, 1 chunks, written`, `arena_bay5_scenes.bundle: 1,044,553,465 B plaintext, 1,044,585,465 B
+encrypted, 997 chunks, written`, `arena_bay5_navmesh.bundle: 347,902 B plaintext, 348,030 B encrypted, 1 chunks, written`; the presets,
+Air Pit and Bowl `unchanged`; every key file `1 wrap(s) in the file (unchanged)`, no `CREATED`. `verify` reports each of the four
+`is exactly the encryption of` its plaintext; `validate_distribution.py`: `DISTRIBUTION_OK 4 maps 12 bundles 4 sidecars encrypted`;
+tests: 1,893 Python (55 skipped), 1,440 xunit, 8 log-scan cases. Deploy dry run: `plan: 90 file(s), 3491.9 MB total -- 0 new, 6 to
+overwrite, 84 already identical` (the four bundles plus the rebuilt client and server DLLs of the same source). dist grew by
+145,911,641 B (Equator) and 258,849,403 B (Bay5); the twelve bundles are now 3,620,950,950 B plaintext and 3,621,062,918 B encrypted
+(111,968 B of container overhead), and the release ZIP grows by about the same.
+
+**Found on the way: mesh id collisions across packages (fixed in `MeshImporter.cs`).** The first Bay5 rebuild (14:09 to 14:36) baked
+`vertices=29586 triangles=13556` in a box of 780 x 450 x 840 m (centre (93.55, -22.31, -97.91)) instead of September's 342 x 103 x 716 m,
+and `validate_bundle_roundtrip.py` failed with 176 meshes whose vertex or submesh counts differ from the package (e.g. `Mesh
+'fc67d4c4cf0b89ba': bundle vertex_count (1955) == package (145)`). An offline union of the package's renderers (the world AABB of every
+MeshRenderer from the imported mesh assets' `m_LocalAABB` through the hierarchy's transforms) reproduced the box exactly and named 15
+renderers, all `Military_sandbag_barrier_02_SHADOW_LOD2` with mesh `1403b6e6f03151dd`, whose asset
+`Assets/ArenaImport/Meshes/1403b6e6f03151dd.asset` (written 2026-10-18 12:10 by Bowl's import) holds Bowl's `City_skyscrapers_background_LOD0`
+(4,228 vertices, 545 m wide) instead of Bay5's 64-vertex sandbag shadow. A mesh id is `sha1("<source file>:<path_id>:<type>")[:16]`
+(`tools/extract/common_ids.py`), so Arena's repeated path ids make 228 of the 798 ids Bay5 shares with Bowl name different geometry (4 with
+Air Pit; Equator and Bowl 80; Equator and Bay5 0). `MeshImporter` refreshed existing assets from the package only for manifests with
+`source.map_key`; Bay5's legacy manifest has none, so its import reused the shared store as Bowl had left it. Materials (`CreateAsset`) and
+textures (`File.Copy` overwrite, `CopySerialized`) are always rewritten and were never affected. Fix: every package reconstructs every mesh
+(`refreshFromPackage = true`); the second Bay5 build logged `refreshed 3911 existing asset(s)` and restored the September bake and content.
+The released September Bay5 bundle predates the Air Pit and Bowl imports and audited clean (each of its 3,890 package meshes matches the
+manifest's vertex and submesh counts); Equator's manifest has a map key and was never affected. The mesh comparison of
+`validate_bundle_roundtrip.py` is the check that catches this and stays in every map's build.
+
 **E6 Negative tests** (2.5; copies under `work/negative/`, an EFT restart after each step and after the restore, a full staging build and a
 deploy dry run with `0 to overwrite` at the end):
 
@@ -385,6 +428,8 @@ without `bin/` and `obj/`, `bundle_crypt.py`, `key-sources.json`, the new tests,
 
 The overhead is 96 B of header and MAC (for these map keys) plus 32 B per 1 MiB chunk. The four key files add 3,607 B; dist went from 86 files and 3,256,631,057 B to 90 files and
 3,256,734,280 B (+103,223 B). The ZIP grows by the loss of deflate on the bundles, not by the container: see E2.
+Since the LZ4 rebuild of 2026-10-20 the Equator and Bay5 rows read 577,488,469 / 577,506,197 (551 chunks), 137,136 / 137,264,
+1,044,553,465 / 1,044,585,465 (997 chunks) and 347,902 / 348,030; the twelve bundles 3,620,950,950 / 3,621,062,918 B (overhead 111,968 B).
 
 ### Host checklist (the plan as written before the runs; done on 2026-10-20, results in E3 to E7)
 
@@ -414,8 +459,8 @@ The overhead is 96 B of header and MAC (for these map keys) plus 32 B per 1 MiB 
 - **R2 answered (2026-10-20, E5):** `AssetBundle.LoadFromStream` loads the 1 GB LZ4HC scene bundles lazily through `AmpbReadStream` from Unity's loading thread; no plan B, D11 is moot.
 - **Mono P/Invoke answered (E5):** the CNG path works under EFT's Mono (`crypto: CNG` on every key line, no fallback Warning); 1.2 GB of chunk reads cost 0.8 s of crypto on GPU-2. The managed
   fallback is still unmeasured on Mono (plan R4); no test PC lacks CNG.
-- **Equator and Bay5 are LZMA bundles** (E5 finding, older than stage 2): their whole-bundle decompression at load (17 s, 30 s) dwarfs the crypto share and is fixed by a rebuild with
-  `ChunkBasedCompression`, not in the loader.
+- **Equator and Bay5 were LZMA bundles** (E5 finding, older than stage 2): their whole-bundle decompression at load (17 s, 30 s) dwarfed the crypto share. Rebuilt with
+  `ChunkBasedCompression` on 2026-10-20 ("LZ4 rebuild" after E5), staged and validated; the host run was pending at the time of writing.
 - **Key store:** `work/release-keys` is the only copy of the four content keys apart from the same-machine backup above; losing both means `rotate-key`, a re-encrypt and a re-release, and every released
   bundle of that map stops opening (D9). The staging guard (H6) is the build-side protection against a silent re-creation.
 - **Level index table:** `tools/bundle/key-sources.json` takes the level indices from the accepted packages' manifests and extractor plans (extracted from Arena 0.5.4 and 0.6.0) and pins them against those; the

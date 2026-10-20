@@ -7,6 +7,7 @@ Shader "Hidden/ArenaMapPort/Standard"
 {
     Properties
     {
+        _AlphaTestRef ("_AlphaTestRef", Float) = 0
         _BumpMap ("_BumpMap", 2D) = "white" {}
         _BumpScale ("_BumpScale", Float) = 0
         _Color ("_Color", Color) = (1,1,1,1)
@@ -18,13 +19,17 @@ Shader "Hidden/ArenaMapPort/Standard"
         _DetailNormalMapScale ("_DetailNormalMapScale", Float) = 0
         _DstBlend ("_DstBlend", Float) = 0
         _EmissionColor ("_EmissionColor", Color) = (1,1,1,1)
+        _EmissionColorUI ("_EmissionColorUI", Color) = (1,1,1,1)
+        _EmissionColorWithMapUI ("_EmissionColorWithMapUI", Color) = (1,1,1,1)
         _EmissionMap ("_EmissionMap", 2D) = "white" {}
         _EmissionPower ("_EmissionPower", Float) = 0
+        _EmissionScaleUI ("_EmissionScaleUI", Float) = 0
         _EmissionVisibility ("_EmissionVisibility", Float) = 0
         _Factor ("_Factor", Float) = 0
         _GlossMapScale ("_GlossMapScale", Float) = 0
         _Glossiness ("_Glossiness", Float) = 0
         _GlossyReflections ("_GlossyReflections", Float) = 0
+        _Lightmapping ("_Lightmapping", Float) = 0
         _MainTex ("_MainTex", 2D) = "white" {}
         _Metallic ("_Metallic", Float) = 0
         _MetallicGlossMap ("_MetallicGlossMap", 2D) = "white" {}
@@ -34,7 +39,6 @@ Shader "Hidden/ArenaMapPort/Standard"
         _Parallax ("_Parallax", Float) = 0
         _ParallaxMap ("_ParallaxMap", 2D) = "white" {}
         _ReflectColor ("_ReflectColor", Color) = (1,1,1,1)
-        _SSRPow ("_SSRPow", Float) = 0
         _Shininess ("_Shininess", Float) = 0
         _SmoothnessTextureChannel ("_SmoothnessTextureChannel", Float) = 0
         _SpecColor ("_SpecColor", Color) = (1,1,1,1)

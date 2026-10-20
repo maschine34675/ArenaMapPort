@@ -7,7 +7,6 @@ Shader "Hidden/ArenaMapPort/Decal/DeferredDecalDiffuseNormalsDynamicEditor"
 {
     Properties
     {
-        _AddAlpha ("_AddAlpha", Float) = 0
         _AlphaMultiplier ("_AlphaMultiplier", Float) = 0
         _BumpMap ("_BumpMap", 2D) = "white" {}
         _BumpMapArray ("_BumpMapArray", 2D) = "white" {}
@@ -21,7 +20,6 @@ Shader "Hidden/ArenaMapPort/Decal/DeferredDecalDiffuseNormalsDynamicEditor"
         _DstBlend ("_DstBlend", Float) = 0
         _EmissionColor ("_EmissionColor", Color) = (1,1,1,1)
         _Factor ("_Factor", Float) = 0
-        _Fade ("_Fade", Float) = 0
         _GlossMapScale ("_GlossMapScale", Float) = 0
         _Glossiness ("_Glossiness", Float) = 0
         _Glossness ("_Glossness", Float) = 0
@@ -41,16 +39,13 @@ Shader "Hidden/ArenaMapPort/Decal/DeferredDecalDiffuseNormalsDynamicEditor"
         _ReflectColor ("_ReflectColor", Color) = (1,1,1,1)
         _RippleFakeLightIntensityOffset ("_RippleFakeLightIntensityOffset", Float) = 0
         _RippleTexScale ("_RippleTexScale", Float) = 0
-        _Roughness ("_Roughness", Float) = 0
         _Shininess ("_Shininess", Float) = 0
         _SkinnedMeshMaterial ("_SkinnedMeshMaterial", Float) = 0
-        _Smoothness ("_Smoothness", Float) = 0
         _SmoothnessTextureChannel ("_SmoothnessTextureChannel", Float) = 0
         _SpecColor ("_SpecColor", Color) = (1,1,1,1)
         _SpecPower ("_SpecPower", Float) = 0
         _SpecSmoothness ("_SpecSmoothness", Float) = 0
         _SpecVals ("_SpecVals", Color) = (1,1,1,1)
-        _Specular ("_Specular", Float) = 0
         _SpecularColor ("_SpecularColor", Color) = (1,1,1,1)
         _SpecularHighlights ("_SpecularHighlights", Float) = 0
         _Specularness ("_Specularness", Float) = 0
@@ -61,8 +56,6 @@ Shader "Hidden/ArenaMapPort/Decal/DeferredDecalDiffuseNormalsDynamicEditor"
         _UVSec ("_UVSec", Float) = 0
         _Units ("_Units", Float) = 0
         _ZWrite ("_ZWrite", Float) = 0
-        _alphaCutoff ("_alphaCutoff", Float) = 0
-        _intensiv ("_intensiv", Float) = 0
     }
     SubShader
     {

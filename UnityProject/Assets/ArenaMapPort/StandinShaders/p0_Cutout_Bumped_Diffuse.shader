@@ -8,13 +8,12 @@ Shader "Hidden/ArenaMapPort/p0/Cutout/Bumped Diffuse"
     Properties
     {
         _AddAlpha ("_AddAlpha", Float) = 0
-        _AlphaMultiplier ("_AlphaMultiplier", Float) = 0
         _BumpMap ("_BumpMap", 2D) = "white" {}
         _BumpScale ("_BumpScale", Float) = 0
         _BumpTiling ("_BumpTiling", Float) = 0
         _Color ("_Color", Color) = (1,1,1,1)
+        _CutOff ("_CutOff", Float) = 0
         _Cutoff ("_Cutoff", Float) = 0
-        _DXT1_NM ("_DXT1_NM", Float) = 0
         _DefVals ("_DefVals", Color) = (1,1,1,1)
         _DetailNormalMapScale ("_DetailNormalMapScale", Float) = 0
         _DropsSpec ("_DropsSpec", Float) = 0
@@ -23,20 +22,19 @@ Shader "Hidden/ArenaMapPort/p0/Cutout/Bumped Diffuse"
         _EmissionColor ("_EmissionColor", Color) = (1,1,1,1)
         _Factor ("_Factor", Float) = 0
         _Fade ("_Fade", Float) = 0
-        _GlobalReflectionStrength ("_GlobalReflectionStrength", Float) = 0
         _GlossMapScale ("_GlossMapScale", Float) = 0
         _Glossiness ("_Glossiness", Float) = 0
         _Glossness ("_Glossness", Float) = 0
         _GlossyReflections ("_GlossyReflections", Float) = 0
         _MainColor ("_MainColor", Color) = (1,1,1,1)
         _MainTex ("_MainTex", 2D) = "white" {}
-        _MatIndex ("_MatIndex", Float) = 0
         _Metallic ("_Metallic", Float) = 0
         _Mode ("_Mode", Float) = 0
         _NdotLOffset ("_NdotLOffset", Float) = 0
         _NightRippleFakeLightOffset ("_NightRippleFakeLightOffset", Float) = 0
+        _NormalBlendThreshold ("_NormalBlendThreshold", Float) = 0
+        _NormalBlendingRandomFactor ("_NormalBlendingRandomFactor", Float) = 0
         _NormalIntensity ("_NormalIntensity", Float) = 0
-        _NormalPower ("_NormalPower", Float) = 0
         _OcclusionStrength ("_OcclusionStrength", Float) = 0
         _Parallax ("_Parallax", Float) = 0
         _ReflectColor ("_ReflectColor", Color) = (1,1,1,1)
@@ -44,6 +42,9 @@ Shader "Hidden/ArenaMapPort/p0/Cutout/Bumped Diffuse"
         _RippleFakeLightIntensityOffset ("_RippleFakeLightIntensityOffset", Float) = 0
         _RippleTexScale ("_RippleTexScale", Float) = 0
         _Roughness ("_Roughness", Float) = 0
+        _ScrollSpeedRandomFactor ("_ScrollSpeedRandomFactor", Float) = 0
+        _ScrollXSpeed ("_ScrollXSpeed", Float) = 0
+        _ScrollYSpeed ("_ScrollYSpeed", Float) = 0
         _Shininess ("_Shininess", Float) = 0
         _SkinnedMeshMaterial ("_SkinnedMeshMaterial", Float) = 0
         _Smoothness ("_Smoothness", Float) = 0
@@ -51,10 +52,8 @@ Shader "Hidden/ArenaMapPort/p0/Cutout/Bumped Diffuse"
         _SnowShift ("_SnowShift", Float) = 0
         _SpecColor ("_SpecColor", Color) = (1,1,1,1)
         _SpecPower ("_SpecPower", Float) = 0
-        _SpecSmoothness ("_SpecSmoothness", Float) = 0
         _SpecVals ("_SpecVals", Color) = (1,1,1,1)
         _Specular ("_Specular", Float) = 0
-        _SpecularColor ("_SpecularColor", Color) = (1,1,1,1)
         _SpecularHighlights ("_SpecularHighlights", Float) = 0
         _Specularness ("_Specularness", Float) = 0
         _SrcBlend ("_SrcBlend", Float) = 0
@@ -64,6 +63,8 @@ Shader "Hidden/ArenaMapPort/p0/Cutout/Bumped Diffuse"
         _USERAIN ("_USERAIN", Float) = 0
         _UVSec ("_UVSec", Float) = 0
         _Units ("_Units", Float) = 0
+        _VertexAnimationScale ("_VertexAnimationScale", Float) = 0
+        _VertexTimeOffset ("_VertexTimeOffset", Float) = 0
         _ZWrite ("_ZWrite", Float) = 0
         _alphaCutoff ("_alphaCutoff", Float) = 0
         _intensiv ("_intensiv", Float) = 0
