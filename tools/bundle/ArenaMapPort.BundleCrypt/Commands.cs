@@ -11,7 +11,7 @@ using ArenaMapPort.Shared;
 
 namespace ArenaMapPort.BundleCrypt
 {
-    /// <summary>Where the Arena level files come from for one command: the folder and the launcher manifest version that goes into the key file's built_for.</summary>
+    /// <summary>Where the Arena files come from for one command: the folder and the launcher manifest version that goes into the key file's built_for.</summary>
     internal sealed class ArenaInfo
     {
         public string InstallPath;
@@ -35,15 +35,16 @@ namespace ArenaMapPort.BundleCrypt
   inspect      --in ENC [--verify-chunks] [--json] [KEYSOURCE]
   read-range   --in ENC --offset N --length L [--out FILE|-] [--clip]  KEYSOURCE   (N < 0 counts from the plaintext end; stdout by default)
   plain-sha256 --in ENC  KEYSOURCE
-  keys         --map-key K --key-store DIR (--levels FILE | --manifest FILE) --out KEYFILE [--create-key]  ARENA
+  keys         --map-key K --key-store DIR --sources FILE [--manifest FILE] --out KEYFILE [--create-key]  ARENA
   verify-keys  --map-key K --keys-file KEYFILE --key-store DIR  ARENA     (the player's derivation must return the store's key)
   verify       --map-key K --plain PLAIN --enc ENC --key-store DIR        (ENC must be exactly the encryption of PLAIN)
-  stage        --map-key K --bundle PLAIN [--bundle PLAIN ...] --out-dir PLUGINDIR --key-store DIR (--levels FILE | --manifest FILE) [--create-key]  ARENA
+  stage        --map-key K --bundle PLAIN [--bundle PLAIN ...] --out-dir PLUGINDIR --key-store DIR --sources FILE [--manifest FILE] [--create-key]  ARENA
                (encrypts into PLUGINDIR/bundles and writes PLUGINDIR/keys/K.json)
   rotate-key   --map-key K --key-store DIR --yes
-  bench        [--provider cng|managed] [--size-mib N]
+  bench        [--provider cng|managed|both] [--size-mib N] [--keys-dir DIR [ARENA]]   (--keys-dir: time the key derivation of every key file there)
 
   The container may be given as the one positional argument of inspect, read-range, plain-sha256 and decrypt instead of --in.
+  --sources FILE is tools/bundle/key-sources.json (--levels is its older name); --manifest cross-checks the scene indices of an extract manifest.
   KEYSOURCE = --key-store DIR  |  --keys-file FILE [ARENA]      ARENA = --arena DIR|auto  (default auto: the BSG launcher's registry entry)
   --provider cng|managed|auto selects the crypto implementation (default auto: Windows CNG when it passes its self-test).
   Exit 0 = success (one OK line), 1 = failure (one FAIL line on stderr), 2 = usage. Keys are never printed.
@@ -493,16 +494,18 @@ namespace ArenaMapPort.BundleCrypt
 
         // ---- keys, verify-keys, stage -----------------------------------------------------------------------------------
 
-        private static KeyWrap BuildWrap(string mapKey, KeyStoreEntry store, ArenaInfo arena, List<int> levels, ICryptoProvider p, out string[] hashHex, out long bytesHashed)
+        private static KeyWrap BuildWrap(string mapKey, KeyStoreEntry store, ArenaInfo arena, KeySourceSet sources, ICryptoProvider p, out string[] digestHex,
+            out long bytesHashed, out long bytesListed)
         {
             DirectoryArenaFiles files = new DirectoryArenaFiles(arena.InstallPath);
             List<KeyFileEntry> entries = new List<KeyFileEntry>();
-            byte[][] hashes = new byte[levels.Count][];
-            hashHex = new string[levels.Count];
+            byte[][] digests = new byte[sources.Paths.Count][];
+            digestHex = new string[sources.Paths.Count];
             bytesHashed = 0;
-            for (int i = 0; i < levels.Count; i++)
+            bytesListed = 0;
+            for (int i = 0; i < sources.Paths.Count; i++)
             {
-                string rel = LevelSources.RelativePath(levels[i]);
+                string rel = sources.Paths[i];
                 long size;
                 try
                 {
@@ -512,30 +515,33 @@ namespace ArenaMapPort.BundleCrypt
                 {
                     if (!(ex is IOException || ex is UnauthorizedAccessException))
                         throw;
-                    throw new ToolFailure("level file '" + rel + "' cannot be read in " + arena.InstallPath + " (" + ex.Message + ")");
+                    throw new ToolFailure("Arena file '" + rel + "' cannot be read in " + arena.InstallPath + " (" + ex.Message + ")");
                 }
                 if (size < 0)
-                    throw new ToolFailure("level file '" + rel + "' is missing in " + arena.InstallPath
-                        + " (Arena's level indices may have shifted: regenerate tools/bundle/key-sources.json)");
-                long hashed;
+                    throw new ToolFailure("Arena file '" + rel + "' is missing in " + arena.InstallPath
+                        + " (the scene indices or resource files of this Arena build differ from the key sources table: regenerate tools/bundle/key-sources.json)");
+                KeyFileEntry entry = new KeyFileEntry(rel, size);
+                long read;
                 try
                 {
-                    using (Stream s = files.Open(rel))
-                        hashes[i] = KeyResolver.HashStream(s, p, out hashed);
+                    digests[i] = KeyResolver.FileDigest(files, entry, sources.Sample, p, out read);
+                }
+                catch (ArenaFileChangedException ex)
+                {
+                    throw new ToolFailure("Arena file " + ex.Message);
                 }
                 catch (Exception ex)
                 {
                     if (!(ex is IOException || ex is UnauthorizedAccessException))
                         throw;
-                    throw new ToolFailure("level file '" + rel + "' cannot be read in " + arena.InstallPath + " (" + ex.Message + ")");
+                    throw new ToolFailure("Arena file '" + rel + "' cannot be read in " + arena.InstallPath + " (" + ex.Message + ")");
                 }
-                if (hashed != size)
-                    throw new ToolFailure("level file '" + rel + "' changed while it was hashed (" + hashed + " against " + size + " bytes)");
-                entries.Add(new KeyFileEntry(rel, size));
-                hashHex[i] = KeyStore.ToHex(hashes[i]);
-                bytesHashed += size;
+                entries.Add(entry);
+                digestHex[i] = KeyStore.ToHex(digests[i]);
+                bytesHashed += read;
+                bytesListed += size;
             }
-            return KeyResolver.Wrap(mapKey, store.KMap, arena.Version, entries, hashes, p);
+            return KeyResolver.Wrap(mapKey, store.KMap, arena.Version, sources.Sample, entries, digests, p);
         }
 
         private sealed class KeysOutcome
@@ -543,8 +549,10 @@ namespace ArenaMapPort.BundleCrypt
             public bool WrapAdded;
             public bool FileWritten;
             public int WrapCount;
+            public int RetiredCount;
             public int FileCount;
             public long BytesHashed;
+            public long BytesListed;
             public double Ms;
             public int WrapIndex;
         }
@@ -553,14 +561,14 @@ namespace ArenaMapPort.BundleCrypt
         /// Adds the wrap for the installed Arena to the store (when it is new), writes the shipped key file (canonical bytes, left alone when unchanged) and then
         /// resolves the written file against the same Arena folder exactly as a player's client does: the unwrapped key must equal the store's content key.
         /// </summary>
-        private static KeysOutcome WriteKeyFile(string mapKey, KeyStoreEntry store, ArenaInfo arena, List<int> levels, ICryptoProvider p, string outFile)
+        private static KeysOutcome WriteKeyFile(string mapKey, KeyStoreEntry store, ArenaInfo arena, KeySourceSet sources, ICryptoProvider p, string outFile)
         {
             long started = Stopwatch.GetTimestamp();
-            string[] hashHex;
-            long bytesHashed;
-            KeyWrap wrap = BuildWrap(mapKey, store, arena, levels, p, out hashHex, out bytesHashed);
+            string[] digestHex;
+            long bytesHashed, bytesListed;
+            KeyWrap wrap = BuildWrap(mapKey, store, arena, sources, p, out digestHex, out bytesHashed, out bytesListed);
             KeysOutcome o = new KeysOutcome();
-            o.WrapAdded = KeyStore.AddWrap(store, wrap, hashHex);
+            o.WrapAdded = KeyStore.AddWrap(store, wrap, digestHex);
             if (o.WrapAdded)
                 KeyStore.Save(store);
             KeyFile file = KeyStore.ToKeyFile(store);
@@ -570,9 +578,11 @@ namespace ArenaMapPort.BundleCrypt
             if (!r.Ok || !ConstantTime.AreEqual(r.MapKey, store.KMap))
                 throw new ToolFailure("self-check failed: the key file just written does not unlock the content key against " + arena.Description
                     + (r.Ok ? "" : " (" + DescribeFailure(r) + ")"));
-            o.WrapCount = store.Wraps.Count;
-            o.FileCount = levels.Count;
+            o.WrapCount = file.Wraps.Count;
+            o.RetiredCount = store.RetiredWraps;
+            o.FileCount = sources.Paths.Count;
             o.BytesHashed = bytesHashed;
+            o.BytesListed = bytesListed;
             o.WrapIndex = r.WrapIndex;
             o.Ms = Util.Ms(started);
             return o;
@@ -581,22 +591,28 @@ namespace ArenaMapPort.BundleCrypt
         private static string KeysLine(ArenaInfo arena, KeysOutcome o, ICryptoProvider p)
         {
             return (o.WrapAdded ? "new wrap for " : "wrap present for ") + "Arena " + arena.Version + ", " + o.WrapCount + " wrap(s) in the file ("
-                + (o.FileWritten ? "written" : "unchanged") + "), " + o.FileCount + " level files " + Util.N(o.BytesHashed) + " B hashed, self-check unlocks with wrap "
+                + (o.FileWritten ? "written" : "unchanged") + ")" + (o.RetiredCount > 0 ? " and " + o.RetiredCount + " retired level-file wrap(s) kept in the store" : "")
+                + ", " + o.FileCount + " files, " + Util.N(o.BytesHashed) + " of " + Util.N(o.BytesListed) + " B sampled, self-check unlocks with wrap "
                 + o.WrapIndex + ", " + Math.Round(o.Ms).ToString(CultureInfo.InvariantCulture) + " ms, crypto: " + p.Name;
         }
 
         private static int Keys(Args a)
         {
-            a.Check("map-key", "key-store", "levels", "manifest", "out", "create-key", "arena", "arena-unverified", "built-for", "provider");
+            a.Check("map-key", "key-store", "sources", "manifest", "out", "create-key", "arena", "arena-unverified", "built-for", "provider");
             string mapKey = MapKeyOf(a);
             ICryptoProvider p = GetProvider(a);
-            List<int> levels = LevelSources.Indices(mapKey, a.Get("levels"), a.Get("manifest"));
+            KeySourceSet sources = KeySources.Load(mapKey, a.Get("sources"), a.Get("manifest"));
             ArenaInfo arena = LocateArena(a);  // before the key store: a machine without a verified Arena must not leave a new key behind
             KeyStoreEntry store = KeyStore.Open(a.Require("key-store"), mapKey, a.Flag("create-key"));
             AnnounceCreated(store);
-            KeysOutcome o = WriteKeyFile(mapKey, store, arena, levels, p, a.Require("out"));
+            KeysOutcome o = WriteKeyFile(mapKey, store, arena, sources, p, a.Require("out"));
             Console.Out.WriteLine("OK keys " + mapKey + ": " + KeysLine(arena, o, p));
             return 0;
+        }
+
+        private static string DerivationFacts(KeyResolution r)
+        {
+            return r.FilesHashed + " files, " + Util.N(r.BytesHashed) + " of " + Util.N(r.BytesListed) + " B sampled, " + r.Ms + " ms, crypto: " + r.Provider;
         }
 
         private static int VerifyKeys(Args a)
@@ -613,7 +629,7 @@ namespace ArenaMapPort.BundleCrypt
             if (!ConstantTime.AreEqual(r.MapKey, store.KMap))
                 throw new ToolFailure("verify-keys " + mapKey + ": the key file unlocks a key that is not the one in the key store (the key file belongs to another build or key store)");
             Console.Out.WriteLine("OK verify-keys " + mapKey + ": wrap " + r.WrapIndex + " (built for " + r.BuiltFor + ") unlocks the store's content key against " + arena.Description + " ("
-                + r.FilesHashed + " files, " + Util.N(r.BytesHashed) + " B hashed, " + r.Ms + " ms, crypto: " + r.Provider + ")");
+                + DerivationFacts(r) + ")");
             return 0;
         }
 
@@ -647,7 +663,7 @@ namespace ArenaMapPort.BundleCrypt
 
         private static int Stage(Args a)
         {
-            a.Check("map-key", "bundle", "out-dir", "key-store", "levels", "manifest", "create-key", "arena", "arena-unverified", "built-for", "provider", "chunk-size");
+            a.Check("map-key", "bundle", "out-dir", "key-store", "sources", "manifest", "create-key", "arena", "arena-unverified", "built-for", "provider", "chunk-size");
             string mapKey = MapKeyOf(a);
             IList<string> bundles = a.GetAll("bundle");
             if (bundles.Count == 0)
@@ -666,7 +682,7 @@ namespace ArenaMapPort.BundleCrypt
                     throw new ToolFailure("file not found: " + bundle);
             }
             ICryptoProvider p = GetProvider(a);
-            List<int> levels = LevelSources.Indices(mapKey, a.Get("levels"), a.Get("manifest"));
+            KeySourceSet sources = KeySources.Load(mapKey, a.Get("sources"), a.Get("manifest"));
             ArenaInfo arena = LocateArena(a);  // before the key store: a machine without a verified Arena must not leave a new key behind
             KeyStoreEntry store = KeyStore.Open(a.Require("key-store"), mapKey, a.Flag("create-key"));
             AnnounceCreated(store);
@@ -682,7 +698,7 @@ namespace ArenaMapPort.BundleCrypt
                 Console.Out.WriteLine("  " + EncryptLine(name, o, p));
             }
             string keyPath = Path.Combine(outDir, "keys", mapKey + ".json");
-            KeysOutcome k = WriteKeyFile(mapKey, store, arena, levels, p, keyPath);
+            KeysOutcome k = WriteKeyFile(mapKey, store, arena, sources, p, keyPath);
             Console.Out.WriteLine("OK stage " + mapKey + ": " + bundles.Count + " bundles encrypted (" + written + " written), key file keys/" + mapKey + ".json: " + KeysLine(arena, k, p));
             return 0;
         }
@@ -706,7 +722,7 @@ namespace ArenaMapPort.BundleCrypt
 
         private static int Bench(Args a)
         {
-            a.Check("provider", "size-mib");
+            a.Check("provider", "size-mib", "keys-dir", "arena", "arena-unverified", "built-for");
             int mib = a.Has("size-mib") ? (int)a.GetLong("size-mib") : 64;
             if (mib < 1 || mib > 512)
                 throw new UsageException("--size-mib must be 1..512");
@@ -752,8 +768,51 @@ namespace ArenaMapPort.BundleCrypt
                 }, mib);
                 Console.Out.WriteLine("BENCH " + p.Name + " (" + mib + " MiB, best of 3, MiB/s): aes-ctr " + Math.Round(aes) + ", sha256 " + Math.Round(sha) + ", hmac-sha256 " + Math.Round(hmac));
             }
-            Console.Out.WriteLine("OK bench " + providers.Count + " provider(s)");
+            int keyFiles = a.Has("keys-dir") ? BenchKeys(a, providers) : 0;
+            Console.Out.WriteLine("OK bench " + providers.Count + " provider(s)" + (a.Has("keys-dir") ? ", " + keyFiles + " key file(s)" : ""));
             return 0;
+        }
+
+        /// <summary>
+        /// Times the player's key derivation (KeyResolver.ResolveFile, exactly what the client runs at a map's first bundle request) for every key file in
+        /// --keys-dir against the Arena folder, five times per provider: the first run is the one a player meets (cold when the files are not in the OS cache),
+        /// the best one is the cost of the work itself. Prints no key material; a key file that does not unlock is a failure.
+        /// </summary>
+        private static int BenchKeys(Args a, List<ICryptoProvider> providers)
+        {
+            string dir = a.Get("keys-dir");
+            if (!Directory.Exists(dir))
+                throw new ToolFailure("--keys-dir " + dir + " does not exist");
+            string[] keyFiles = Directory.GetFiles(dir, "*.json");
+            Array.Sort(keyFiles, StringComparer.Ordinal);
+            if (keyFiles.Length == 0)
+                throw new ToolFailure("--keys-dir " + dir + " holds no key file");
+            ArenaInfo arena = LocateArena(a);
+            DirectoryArenaFiles files = new DirectoryArenaFiles(arena.InstallPath);
+            foreach (ICryptoProvider p in providers)
+            {
+                foreach (string keyFile in keyFiles)
+                {
+                    string mapKey = Path.GetFileNameWithoutExtension(keyFile);
+                    double first = 0, best = double.MaxValue;
+                    KeyResolution last = null;
+                    for (int run = 0; run < 5; run++)
+                    {
+                        long t = Stopwatch.GetTimestamp();
+                        last = KeyResolver.ResolveFile(keyFile, arena.InstallPath, arena.Version, files, p, mapKey);
+                        double ms = Util.Ms(t);
+                        if (!last.Ok)
+                            throw new ToolFailure("bench " + mapKey + ": the key file does not unlock against " + arena.Description + " (" + DescribeFailure(last) + ")");
+                        if (run == 0)
+                            first = ms;
+                        best = Math.Min(best, ms);
+                    }
+                    Console.Out.WriteLine("BENCH keys " + mapKey + " (" + p.Name + ", " + arena.Description + "): first " + first.ToString("0.0", CultureInfo.InvariantCulture)
+                        + " ms, best of 5 " + best.ToString("0.0", CultureInfo.InvariantCulture) + " ms (" + last.FilesHashed + " files, " + Util.N(last.BytesHashed) + " of "
+                        + Util.N(last.BytesListed) + " B sampled)");
+                }
+            }
+            return keyFiles.Length;
         }
 
         private static double Best(Action work, int mib)

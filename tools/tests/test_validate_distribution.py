@@ -27,15 +27,26 @@ from PIL import Image
 
 
 UNITYFS = b"UnityFS\0"
-KEY_LEVELS = {"arena_equator": (51, 53, 55, 57, 58), "arena_bay5": (79, 80, 81, 82, 83, 84, 86, 88, 89),
-              "arena_airpit": (28, 29, 37, 38, 40, 324, 325), "arena_bowl": (41, 43, 45, 46, 47, 48, 95)}
+# the raw resource streams of tools/bundle/key-sources.json (index, kind)
+KEY_SOURCES = {"arena_equator": ((51, "assets.resS"), (55, "assets.resS"), (57, "assets.resS")),
+               "arena_bay5": ((79, "assets.resS"), (80, "assets.resS"), (82, "assets.resS"), (84, "assets.resS"), (84, "resource"),
+                              (86, "assets.resS"), (88, "assets.resS"), (89, "assets.resS")),
+               "arena_airpit": ((28, "assets.resS"), (28, "resource"), (29, "assets.resS"), (37, "assets.resS"), (38, "assets.resS"),
+                                (40, "assets.resS"), (324, "assets.resS")),
+               "arena_bowl": ((41, "assets.resS"), (41, "resource"), (45, "assets.resS"), (46, "assets.resS"), (47, "assets.resS"),
+                              (48, "assets.resS"), (48, "resource"), (95, "assets.resS"))}
+
+
+def source(n, kind="assets.resS", size=None):
+    return {"path": f"EscapeFromTarkovArena_Data/sharedassets{n}.{kind}", "size": size if size is not None else 1000 + n}
 
 
 def key_file_data(key, wraps=1, files=None):
-    """A key file as the tool writes it (shape only: the hex values are not real). `files` replaces the level list."""
-    levels = files if files is not None else [{"path": f"EscapeFromTarkovArena_Data/level{n}", "size": 1000 + n} for n in KEY_LEVELS[key]]
-    return {"schema": 1, "map_key": key,
-            "wraps": [{"built_for": f"0.6.{w}.0.48206", "files": levels, "salt": f"{w:x}" * 64, "wrapped_key": "b" * 64, "check": "c" * 64}
+    """A key file as the tool writes it (shape only: the hex values are not real). `files` replaces the file list."""
+    listed = files if files is not None else [source(n, kind) for n, kind in KEY_SOURCES[key]]
+    return {"schema": 2, "map_key": key,
+            "wraps": [{"built_for": f"0.6.{w}.0.48206", "sample": {"block_size": 65536, "blocks": 16}, "files": listed,
+                       "salt": f"{w:x}" * 64, "wrapped_key": "b" * 64, "check": "c" * 64}
                       for w in range(1, wraps + 1)]}
 
 
@@ -536,7 +547,7 @@ class DistributionSidecarTests(unittest.TestCase):
             self.validate()
 
     def test_key_files_must_have_the_schema_and_nothing_else(self):
-        level = lambda n, size=1000: {"path": f"EscapeFromTarkovArena_Data/level{n}", "size": size}
+        level = lambda n, kind="assets.resS": source(n, kind, 1000)
 
         def mutate(change):
             def apply(data):
@@ -547,8 +558,8 @@ class DistributionSidecarTests(unittest.TestCase):
         wrap0 = lambda d: d["wraps"][0]
         cases = {
             "the top level must hold exactly": mutate(lambda d: d.update(note="x")),
-            "schema must be 1": mutate(lambda d: d.update(schema=2)),
-            "schema must be 1 ": mutate(lambda d: d.update(schema=True)),
+            "schema must be 2": mutate(lambda d: d.update(schema=1)),
+            "schema must be 2 ": mutate(lambda d: d.update(schema=True)),
             "map_key must be 'arena_bowl'": mutate(lambda d: d.update(map_key="arena_bay5")),
             "wraps must list 1 to 16": mutate(lambda d: d.update(wraps=[])),
             "wraps must list 1 to 16 ": mutate(lambda d: d.update(wraps=[d["wraps"][0]] * 17)),
@@ -557,17 +568,36 @@ class DistributionSidecarTests(unittest.TestCase):
             "built_for must be a short printable string": mutate(lambda d: wrap0(d).update(built_for="")),
             "built_for must be a short printable string ": mutate(lambda d: wrap0(d).update(built_for="x" * 65)),
             "built_for must be a short printable string  ": mutate(lambda d: wrap0(d).update(built_for="0.6\n1")),
+            "wrap 0 must hold exactly  ": mutate(lambda d: wrap0(d).pop("sample")),
+            "sample must hold exactly block_size and blocks": mutate(lambda d: wrap0(d).update(sample=[65536, 16])),
+            "sample must hold exactly block_size and blocks ": mutate(lambda d: wrap0(d)["sample"].update(offset=0)),
+            "sample block_size must be a multiple of 4096": mutate(lambda d: wrap0(d)["sample"].update(block_size=65537)),
+            "sample block_size must be a multiple of 4096 ": mutate(lambda d: wrap0(d)["sample"].update(block_size=2048)),
+            "sample block_size must be a multiple of 4096  ": mutate(lambda d: wrap0(d)["sample"].update(block_size=True)),
+            "sample blocks must be 2 to 1024": mutate(lambda d: wrap0(d)["sample"].update(blocks=1)),
+            "sample blocks must be 2 to 1024 ": mutate(lambda d: wrap0(d)["sample"].update(blocks=1025)),
+            "sample blocks must be 2 to 1024  ": mutate(lambda d: wrap0(d)["sample"].update(block_size=1 << 20, blocks=65)),
             "files must list 1 to 32": mutate(lambda d: wrap0(d).update(files=[])),
             "files must list 1 to 32 ": mutate(lambda d: wrap0(d).update(files=[level(n) for n in range(1, 34)])),
             "a file entry must hold exactly path and size": mutate(lambda d: wrap0(d)["files"][0].update(sha256="a" * 64)),
             "a file entry must hold exactly path and size ": mutate(lambda d: wrap0(d)["files"][0].pop("size")),
-            "is not EscapeFromTarkovArena_Data/level<N>": mutate(lambda d: wrap0(d)["files"][0].update(path="EscapeFromTarkovArena_Data/../level41")),
-            "is not EscapeFromTarkovArena_Data/level<N> ": mutate(lambda d: wrap0(d)["files"][0].update(path="EscapeFromTarkovArena_Data\\level41")),
-            "is not EscapeFromTarkovArena_Data/level<N>  ": mutate(lambda d: wrap0(d)["files"][0].update(path="C:/level41")),
-            "is not EscapeFromTarkovArena_Data/level<N>   ": mutate(lambda d: wrap0(d)["files"][0].update(path="EscapeFromTarkovArena_Data/globalgamemanagers")),
+            "is not EscapeFromTarkovArena_Data/sharedassets<N>.assets.resS or .resource": mutate(
+                lambda d: wrap0(d)["files"][0].update(path="EscapeFromTarkovArena_Data/../sharedassets41.assets.resS")),
+            "is not EscapeFromTarkovArena_Data/sharedassets<N>.assets.resS or .resource ": mutate(
+                lambda d: wrap0(d)["files"][0].update(path="EscapeFromTarkovArena_Data\\sharedassets41.assets.resS")),
+            "is not EscapeFromTarkovArena_Data/sharedassets<N>.assets.resS or .resource  ": mutate(
+                lambda d: wrap0(d)["files"][0].update(path="C:/sharedassets41.resource")),
+            "is not EscapeFromTarkovArena_Data/sharedassets<N>.assets.resS or .resource   ": mutate(
+                lambda d: wrap0(d)["files"][0].update(path="EscapeFromTarkovArena_Data/globalgamemanagers")),
+            "is not EscapeFromTarkovArena_Data/sharedassets<N>.assets.resS or .resource    ": mutate(
+                lambda d: wrap0(d)["files"][0].update(path="EscapeFromTarkovArena_Data/level41")),  # the retired level-file scheme
+            "is not EscapeFromTarkovArena_Data/sharedassets<N>.assets.resS or .resource     ": mutate(
+                lambda d: wrap0(d)["files"][0].update(path="EscapeFromTarkovArena_Data/sharedassets41.assets")),
             "ascending numeric order": mutate(lambda d: wrap0(d).update(files=[level(43), level(41)])),
             "ascending numeric order ": mutate(lambda d: wrap0(d).update(files=[level(41), level(41)])),
             "ascending numeric order  ": mutate(lambda d: wrap0(d).update(files=[level(9), level(10), level(2)])),
+            "ascending numeric order, .assets.resS before .resource": mutate(
+                lambda d: wrap0(d).update(files=[level(41, "resource"), level(41)])),
             "must be a positive integer": mutate(lambda d: wrap0(d)["files"][0].update(size=0)),
             "must be a positive integer ": mutate(lambda d: wrap0(d)["files"][0].update(size=-5)),
             "must be a positive integer  ": mutate(lambda d: wrap0(d)["files"][0].update(size=True)),
@@ -609,7 +639,7 @@ class DistributionSidecarTests(unittest.TestCase):
 
     def test_a_key_file_that_does_not_unlock_fails_the_distribution(self):
         self.crypt.fail[("verify_keys", "arena_bay5")] = ("FAIL verify-keys arena_bay5: the key file does not unlock against Arena 0.6.1.0.48206 "
-                                                           "(SizeDiffers: 'EscapeFromTarkovArena_Data/level84' is 1 bytes, 2 expected)")
+                                                           "(SizeDiffers: 'EscapeFromTarkovArena_Data/sharedassets84.assets.resS' is 1 bytes, 2 expected)")
         with self.assertRaisesRegex(ValueError, "Key file arena_bay5.json does not unlock: FAIL verify-keys arena_bay5: .*SizeDiffers"):
             self.validate()
 

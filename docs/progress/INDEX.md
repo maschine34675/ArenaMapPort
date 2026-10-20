@@ -10,13 +10,15 @@ dated state in one screen; read it before this index if you only have a minute.
 
 - [../PLAN-ENCRYPTION.md](../PLAN-ENCRYPTION.md) — the ordered plan for stage 2 of the Arena gate (user decision 2026-10-19):
   every shipped map bundle encrypted (AMPB container, 1 MiB chunks, AES-256-CTR, per-chunk SHA-256, header HMAC), the content key
-  wrapped with a key derived by HKDF from the SHA-256 of the map's own Arena level files; key files `keys/<map>.json` list paths
-  and sizes only; a .NET tool `BundleCrypt` stages and verifies, the client decrypts through Windows CNG with a managed fallback
+  wrapped with a key derived by HKDF from the map's own Arena files (since 2026-10-20, section 6: a fixed sample of the scenes'
+  `sharedassets<N>.assets.resS` / `.resource` streams instead of the level files); key files `keys/<map>.json` list paths, sizes and the
+  sample only; a .NET tool `BundleCrypt` stages and verifies, the client decrypts through Windows CNG with a managed fallback
   and `AssetBundle.LoadFromStream`; work items CORE/TOOL/CLIENT/DOCS, host plan for GPU-2 and GPU-1, risks, open decisions.
   A plan, not a record; not copy protection.
 - [bundle-encryption.md](bundle-encryption.md) — the record of stage 2 of the Arena gate (2026-10-19): what is built and what is
   verified of the encrypted bundles (AMPB container, the per-map content key wrapped under a key derived from the map's own Arena
-  level files, `keys/<map>.json`, the `BundleCrypt` tool, the client's decrypting stream), the wording rule (not copy protection;
+  files, `keys/<map>.json`; "Key source v2" of 2026-10-20 moves the keys from the level files to sampled resource streams, verified on
+  Arena 0.6.1 and 0.6.0 and on GPU-2, the `BundleCrypt` tool, the client's decrypting stream), the wording rule (not copy protection;
   art and audio stay plaintext) and the evidence blocks: builds and tests, staging and determinism, the plaintext baseline, the
   GPU-2 run with its timing budget, the negative tests, GPU-1. Integrated and verified on the build VM on 2026-10-19 ("Integration"
   quotes the builds, tests, staging, validators, dry-run deploy and size figures) and host-verified on 2026-10-20 (E3 to E7: GPU-2 raids on

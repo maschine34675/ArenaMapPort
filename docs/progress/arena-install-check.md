@@ -358,3 +358,10 @@ check has verified the installation: the first time a map's bundle is requested 
 map is keyed from (`keys/<map_key>.json` lists their paths and sizes), derives the key and opens the bundles through a decrypting
 stream. It is not copy protection (an Arena owner can derive the key or decrypt the bundles), and like this check it stops nothing
 for a player who owns Arena.
+
+## Stage 2 key source v2 (2026-10-20)
+
+Stage 2 no longer reads the level files: since 2026-10-20 a map's key comes from a fixed sample (16 blocks of 64 KiB per file) of its scenes'
+raw resource streams (`sharedassets<N>.assets.resS` / `.resource`), because Arena's 0.6.0 to 0.6.1 hotfix rewrote every level file and left
+those streams byte-identical. This check is unchanged and still runs first. Record: [bundle-encryption.md](bundle-encryption.md) "Key source v2";
+design: [../PLAN-ENCRYPTION.md](../PLAN-ENCRYPTION.md) section 6.

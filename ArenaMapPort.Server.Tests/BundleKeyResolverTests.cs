@@ -13,13 +13,13 @@ using ClientGate = ArenaMapPort.Client.ArenaInstallationGate;
 namespace ArenaMapPort.Server.Tests;
 
 // Tests for the client side of the bundle encryption (docs/PLAN-ENCRYPTION.md, area CLIENT): the per-map key resolution of
-// BundleKeyResolver (stage-1 gate, key file, Arena level files, cache, the exact E1-E9 / W1 / D1-D3 lines), the opening of an AMPB container
+// BundleKeyResolver (stage-1 gate, key file, Arena resource files and their sample, cache, the exact E1-E9 / W1 / D1-D3 lines), the opening of an AMPB container
 // into a decrypting stream (Prepare), the stream registry that closes the streams Unity keeps open, and the source-level guards for the two
 // loaders (BundleHost.LoadAssetBundle, NavMeshInstaller). The loaders themselves call Unity and cannot run here; everything they decide is
 // in BundleKeyResolver.cs, which is linked into this assembly. The Crypto folder is the shipped code, linked too.
 
-/// <summary>A scratch Arena installation with three level files, a keys folder and a bundles folder in one temp directory, plus builders for
-/// wraps, key files and encrypted bundles.</summary>
+/// <summary>A scratch Arena installation with three resource files (two read whole, one through its sample), a keys folder and a bundles folder in
+/// one temp directory, plus builders for wraps, key files and encrypted bundles.</summary>
 internal sealed class KeyBed : IDisposable
 {
     internal const string Map = "arena_test";
@@ -27,14 +27,17 @@ internal sealed class KeyBed : IDisposable
     internal const string Version = "0.6.1.0.48206";
     internal const string OlderVersion = "0.6.0.0.47752";
 
-    internal static readonly string[] Levels =
+    internal static readonly string[] Sources =
     {
-        "EscapeFromTarkovArena_Data/level41",
-        "EscapeFromTarkovArena_Data/level43",
-        "EscapeFromTarkovArena_Data/level45",
+        "EscapeFromTarkovArena_Data/sharedassets41.assets.resS",
+        "EscapeFromTarkovArena_Data/sharedassets41.resource",
+        "EscapeFromTarkovArena_Data/sharedassets45.assets.resS",
     };
 
     internal static readonly int[] Sizes = { 5000, 1_200_000, 100 };
+
+    /// <summary>4 blocks of 64 KiB: the 1.2 MB file is read through its 256 KiB sample, the other two whole.</summary>
+    internal static readonly KeySample Sample = new(65536, 4);
 
     internal static readonly byte[] KMap = Enumerable.Range(0, 32).Select(i => (byte)(i * 11 + 3)).ToArray();
     internal static readonly byte[] OtherKMap = Enumerable.Range(0, 32).Select(i => (byte)(i * 5 + 9)).ToArray();
@@ -52,8 +55,8 @@ internal sealed class KeyBed : IDisposable
         Directory.CreateDirectory(Path.Combine(Install, "EscapeFromTarkovArena_Data"));
         Directory.CreateDirectory(Keys);
         Directory.CreateDirectory(Bundles);
-        for (int i = 0; i < Levels.Length; i++)
-            File.WriteAllBytes(LevelPath(i), Bytes(Sizes[i], 100 + i));
+        for (int i = 0; i < Sources.Length; i++)
+            File.WriteAllBytes(SourcePath(i), Bytes(Sizes[i], 100 + i));
     }
 
     public void Dispose()
@@ -71,7 +74,7 @@ internal sealed class KeyBed : IDisposable
 
     internal static string Hex(byte[] bytes) => Convert.ToHexString(bytes).ToLowerInvariant();
 
-    internal string LevelPath(int index) => Path.Combine(Install, Levels[index].Replace('/', Path.DirectorySeparatorChar));
+    internal string SourcePath(int index) => Path.Combine(Install, Sources[index].Replace('/', Path.DirectorySeparatorChar));
 
     internal string KeyFilePath(string map = Map) => Path.Combine(Keys, map + ".json");
 
@@ -79,13 +82,20 @@ internal sealed class KeyBed : IDisposable
     internal KeyWrap MakeWrap(string builtFor = Version, byte[] kMap = null, string map = Map)
     {
         var entries = new List<KeyFileEntry>();
-        var hashes = new List<byte[]>();
-        for (int i = 0; i < Levels.Length; i++)
+        var digests = new List<byte[]>();
+        for (int i = 0; i < Sources.Length; i++)
         {
-            entries.Add(new KeyFileEntry(Levels[i], new FileInfo(LevelPath(i)).Length));
-            hashes.Add(KeyResolver.HashFile(LevelPath(i), CryptoProviders.Managed));
+            var entry = new KeyFileEntry(Sources[i], new FileInfo(SourcePath(i)).Length);
+            entries.Add(entry);
+            digests.Add(SampleDigest(entry));
         }
-        return KeyResolver.Wrap(map, kMap ?? KMap, builtFor, entries, hashes.ToArray(), CryptoProviders.Managed);
+        return KeyResolver.Wrap(map, kMap ?? KMap, builtFor, Sample, entries, digests.ToArray(), CryptoProviders.Managed);
+    }
+
+    /// <summary>The digest a file contributes to the key (what must never appear in a log line).</summary>
+    internal byte[] SampleDigest(KeyFileEntry entry)
+    {
+        return KeyResolver.FileDigest(new DirectoryArenaFiles(Install), entry, Sample, CryptoProviders.Managed, out _);
     }
 
     internal void WriteKeyFile(string map, params KeyWrap[] wraps)
@@ -238,9 +248,9 @@ public sealed class BundleKeyResolverTests : IDisposable
         Assert.True(resolver.TryGetKey(Map, out byte[] key));
         Assert.Equal(KeyBed.Hex(KeyBed.KMap), KeyBed.Hex(key));
         Assert.Equal(1, resolver.Derivations);
-        Assert.Equal(KeyBed.Levels, env.Files.Opened.ToArray()); // the listed files, once each, in key file order
+        Assert.Equal(KeyBed.Sources, env.Files.Opened.ToArray()); // the listed files, once each, in key file order
         string line = Assert.Single(env.Debug);
-        Assert.Matches(new Regex(@"^\[BundleKeys\] key for 'arena_test' derived in \d+ ms \(3 files, 1\.2 MB hashed, built for Arena 0\.6\.1\.0\.48206, crypto: " +
+        Assert.Matches(new Regex(@"^\[BundleKeys\] key for 'arena_test' derived in \d+ ms \(3 files, 0\.3 MB sampled of 1\.2 MB, built for Arena 0\.6\.1\.0\.48206, crypto: " +
                                  provider.Name + @"\)$"), line);
         Assert.Empty(env.Errors);
         Assert.Empty(env.Warnings);
@@ -256,7 +266,7 @@ public sealed class BundleKeyResolverTests : IDisposable
         {
             CultureInfo.CurrentCulture = new CultureInfo("de-DE");
             string german = BundleKeyResolver.DerivedLine("arena_bowl", resolution);
-            Assert.Contains(" files, 1.2 MB hashed, built for Arena ", german);
+            Assert.Contains(" files, 0.3 MB sampled of 1.2 MB, built for Arena ", german);
             Assert.Equal(line.Replace(resolution.Ms + " ms", "N ms"), german.Replace(resolution.Ms + " ms", "N ms"));
         }
         finally
@@ -332,8 +342,9 @@ public sealed class BundleKeyResolverTests : IDisposable
     [InlineData("", "the key file is empty")]
     [InlineData("garbage", "unexpected character 'g'")]
     [InlineData("[1, 2]", "the key file is not a JSON object")]
-    [InlineData("{\"schema\": 2, \"map_key\": \"arena_test\", \"wraps\": []}", "unsupported key file schema 2")]
-    [InlineData("{\"schema\": 1, \"map_key\": \"arena_test\", \"wraps\": []}", "the key file lists no wraps")]
+    [InlineData("{\"schema\": 1, \"map_key\": \"arena_test\", \"wraps\": []}", "unsupported key file schema 1")] // the retired level-file scheme
+    [InlineData("{\"schema\": 3, \"map_key\": \"arena_test\", \"wraps\": []}", "unsupported key file schema 3")]
+    [InlineData("{\"schema\": 2, \"map_key\": \"arena_test\", \"wraps\": []}", "the key file lists no wraps")]
     public void E2ACorruptKeyFileSaysWhatIsWrongWithIt(string content, string reason)
     {
         File.WriteAllText(_bed.KeyFilePath(), content);
@@ -369,10 +380,10 @@ public sealed class BundleKeyResolverTests : IDisposable
     public void E3AnArenaFileThatDoesNotExistIsNamedWithTheInstallFolder()
     {
         _bed.WriteKeyFile();
-        File.Delete(_bed.LevelPath(1));
+        File.Delete(_bed.SourcePath(1));
         var (resolver, env) = Make();
         Assert.False(resolver.TryGetKey(Map, out _));
-        Assert.Equal(Head() + "Arena file 'EscapeFromTarkovArena_Data/level43' cannot be read in " + _bed.Install + " (the file does not exist)",
+        Assert.Equal(Head() + "Arena file 'EscapeFromTarkovArena_Data/sharedassets41.resource' cannot be read in " + _bed.Install + " (the file does not exist)",
             Assert.Single(env.Errors));
     }
 
@@ -383,10 +394,10 @@ public sealed class BundleKeyResolverTests : IDisposable
             return; // the sharing violation below is a Windows behaviour
         _bed.WriteKeyFile();
         var (resolver, env) = Make();
-        using (new FileStream(_bed.LevelPath(0), FileMode.Open, FileAccess.Read, FileShare.None))
+        using (new FileStream(_bed.SourcePath(0), FileMode.Open, FileAccess.Read, FileShare.None))
             Assert.False(resolver.TryGetKey(Map, out _));
         string line = Assert.Single(env.Errors);
-        Assert.StartsWith(Head() + "Arena file 'EscapeFromTarkovArena_Data/level41' cannot be read in " + _bed.Install + " (", line);
+        Assert.StartsWith(Head() + "Arena file 'EscapeFromTarkovArena_Data/sharedassets41.assets.resS' cannot be read in " + _bed.Install + " (", line);
         Assert.EndsWith(")", line);
     }
 
@@ -395,11 +406,11 @@ public sealed class BundleKeyResolverTests : IDisposable
     {
         var wrap = _bed.MakeWrap(KeyBed.OlderVersion);
         _bed.WriteKeyFile(Map, wrap);
-        File.AppendAllText(_bed.LevelPath(1), "x"); // 1,200,001 bytes now
+        File.AppendAllText(_bed.SourcePath(1), "x"); // 1,200,001 bytes now
         var (resolver, env) = Make();
         Assert.False(resolver.TryGetKey(Map, out _));
         Assert.Equal(Head() + "the maps were built for Arena 0.6.0.0.47752 but 0.6.1.0.48206 is installed " +
-                     "('EscapeFromTarkovArena_Data/level43' is 1200001 bytes there, 1200000 expected); a keys update for this Arena build is needed",
+                     "('EscapeFromTarkovArena_Data/sharedassets41.resource' is 1200001 bytes there, 1200000 expected); a keys update for this Arena build is needed",
             Assert.Single(env.Errors));
     }
 
@@ -407,10 +418,10 @@ public sealed class BundleKeyResolverTests : IDisposable
     public void E4TheSameVersionWithAnotherSizeSaysItDiffersFromTheKeyFile()
     {
         _bed.WriteKeyFile();
-        File.AppendAllText(_bed.LevelPath(1), "x");
+        File.AppendAllText(_bed.SourcePath(1), "x");
         var (resolver, env) = Make();
         Assert.False(resolver.TryGetKey(Map, out _));
-        Assert.Equal(Head() + "Arena file 'EscapeFromTarkovArena_Data/level43' differs in size from the key file " +
+        Assert.Equal(Head() + "Arena file 'EscapeFromTarkovArena_Data/sharedassets41.resource' differs in size from the key file " +
                      "(1200001 against 1200000 bytes, Arena 0.6.1.0.48206)",
             Assert.Single(env.Errors));
     }
@@ -419,12 +430,12 @@ public sealed class BundleKeyResolverTests : IDisposable
     public void E4AnUnknownInstalledVersionIsCalledAnotherBuild()
     {
         _bed.WriteKeyFile(Map, _bed.MakeWrap(KeyBed.OlderVersion));
-        File.AppendAllText(_bed.LevelPath(2), "x");
+        File.AppendAllText(_bed.SourcePath(2), "x");
         var (resolver, env) = Make();
         env.VersionValue = null;
         Assert.False(resolver.TryGetKey(Map, out _));
         Assert.Equal(Head() + "the maps were built for Arena 0.6.0.0.47752 but another build is installed " +
-                     "('EscapeFromTarkovArena_Data/level45' is 101 bytes there, 100 expected); a keys update for this Arena build is needed",
+                     "('EscapeFromTarkovArena_Data/sharedassets45.assets.resS' is 101 bytes there, 100 expected); a keys update for this Arena build is needed",
             Assert.Single(env.Errors));
     }
 
@@ -432,7 +443,7 @@ public sealed class BundleKeyResolverTests : IDisposable
     public void E5RightSizesButAnotherContentDoNotUnlockTheKey()
     {
         _bed.WriteKeyFile();
-        KeyBed.FlipByte(_bed.LevelPath(0), 17); // same size, one byte differs
+        KeyBed.FlipByte(_bed.SourcePath(0), 17); // same size, one byte differs
         var (resolver, env) = Make();
         Assert.False(resolver.TryGetKey(Map, out byte[] key));
         Assert.Null(key);
@@ -504,7 +515,7 @@ public sealed class BundleKeyResolverTests : IDisposable
     public void AnOlderWrapStillApplies()
     {
         var older = _bed.MakeWrap(KeyBed.OlderVersion);             // made for the files as they are now
-        File.AppendAllText(_bed.LevelPath(1), "update");             // BSG's update changes a level file ...
+        File.AppendAllText(_bed.SourcePath(1), "update");            // BSG's update changes a resource file ...
         var newer = _bed.MakeWrap(KeyBed.Version);                   // ... and a second wrap is added for it
         _bed.WriteKeyFile(Map, older, newer);
 
@@ -513,7 +524,7 @@ public sealed class BundleKeyResolverTests : IDisposable
         Assert.Equal(KeyBed.Hex(KeyBed.KMap), KeyBed.Hex(key));
         Assert.Contains("built for Arena 0.6.1.0.48206", Assert.Single(env.Debug));
 
-        File.WriteAllBytes(_bed.LevelPath(1), KeyBed.Bytes(KeyBed.Sizes[1], 101)); // a player still on the old build
+        File.WriteAllBytes(_bed.SourcePath(1), KeyBed.Bytes(KeyBed.Sizes[1], 101)); // a player still on the old build
         var (oldResolver, oldEnv) = Make();
         Assert.True(oldResolver.TryGetKey(Map, out key));
         Assert.Equal(KeyBed.Hex(KeyBed.KMap), KeyBed.Hex(key));
@@ -525,16 +536,16 @@ public sealed class BundleKeyResolverTests : IDisposable
     public void WhenNoWrapAppliesTheNewestBuildIsReported()
     {
         var older = _bed.MakeWrap(KeyBed.OlderVersion);
-        File.AppendAllText(_bed.LevelPath(1), "update");
+        File.AppendAllText(_bed.SourcePath(1), "update");
         var newer = _bed.MakeWrap("0.6.1.0.48206");
         _bed.WriteKeyFile(Map, older, newer);
-        File.AppendAllText(_bed.LevelPath(1), "again"); // an Arena build neither wrap knows
+        File.AppendAllText(_bed.SourcePath(1), "again"); // an Arena build neither wrap knows
 
         var (resolver, env) = Make();
         env.VersionValue = "0.7.0.0.50000";
         Assert.False(resolver.TryGetKey(Map, out _));
         Assert.Equal(Head() + "the maps were built for Arena 0.6.1.0.48206 but 0.7.0.0.50000 is installed " +
-                     "('EscapeFromTarkovArena_Data/level43' is 1200011 bytes there, 1200006 expected); a keys update for this Arena build is needed",
+                     "('EscapeFromTarkovArena_Data/sharedassets41.resource' is 1200011 bytes there, 1200006 expected); a keys update for this Arena build is needed",
             Assert.Single(env.Errors));
     }
 
@@ -558,7 +569,7 @@ public sealed class BundleKeyResolverTests : IDisposable
 
         Assert.Equal(1, resolver.Derivations);
         Assert.Equal(1, env.OpenFilesCalls);
-        Assert.Equal(KeyBed.Levels.Length, env.Files.Opens); // each level file read once
+        Assert.Equal(KeyBed.Sources.Length, env.Files.Opens); // each listed file read once
         Assert.Single(env.Debug);
         Assert.All(keys, k => Assert.Same(keys[0], k));
     }
@@ -614,20 +625,23 @@ public sealed class BundleKeyResolverTests : IDisposable
         var wrap = _bed.MakeWrap();
         _bed.WriteKeyFile(Map, wrap);
         var secrets = new List<string> { KeyBed.Hex(KeyBed.KMap), KeyBed.Hex(wrap.Salt), KeyBed.Hex(wrap.WrappedKey), KeyBed.Hex(wrap.Check) };
-        for (int i = 0; i < KeyBed.Levels.Length; i++)
-            secrets.Add(KeyBed.Hex(SHA256.HashData(File.ReadAllBytes(_bed.LevelPath(i)))));
+        for (int i = 0; i < KeyBed.Sources.Length; i++)
+        {
+            secrets.Add(KeyBed.Hex(SHA256.HashData(File.ReadAllBytes(_bed.SourcePath(i)))));
+            secrets.Add(KeyBed.Hex(_bed.SampleDigest(wrap.Files[i])));   // the digest that enters the key
+        }
 
         var lines = new List<string>();
         var (resolver, env) = Make();
         Assert.True(resolver.TryGetKey(Map, out _));
         lines.AddRange(env.AllLines());
 
-        KeyBed.FlipByte(_bed.LevelPath(0), 3);
+        KeyBed.FlipByte(_bed.SourcePath(0), 3);
         var (flipped, flippedEnv) = Make();
         Assert.False(flipped.TryGetKey(Map, out _));
         lines.AddRange(flippedEnv.AllLines());
 
-        File.AppendAllText(_bed.LevelPath(1), "x");
+        File.AppendAllText(_bed.SourcePath(1), "x");
         var (resized, resizedEnv) = Make();
         Assert.False(resized.TryGetKey(Map, out _));
         lines.AddRange(resizedEnv.AllLines());
@@ -1184,7 +1198,7 @@ public sealed class BundleKeyEnvironmentGateTests : IDisposable
         Assert.True(ClientGate.WaitForResult(Patience));
         Assert.True(resolver.TryGetKey(KeyBed.Map, out byte[] key));
         Assert.Equal(KeyBed.Hex(KeyBed.KMap), KeyBed.Hex(key));
-        Assert.Equal(KeyBed.Levels.Length, env.Files.Opens);
+        Assert.Equal(KeyBed.Sources.Length, env.Files.Opens);
     }
 
     /// <summary>The real gate and the real install-path and version properties, with the keys folder and the file access of a <see cref="KeyBed"/>.</summary>

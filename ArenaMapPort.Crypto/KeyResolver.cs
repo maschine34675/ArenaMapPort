@@ -13,7 +13,7 @@ namespace ArenaMapPort.Crypto
     {
         /// <summary>The size of the file at the plain relative path (key file spelling, '/' separated), or -1 when it does not exist. Other failures throw IOException or UnauthorizedAccessException.</summary>
         long Length(string relativePath);
-        /// <summary>Opens the file for sequential reading (shared with a running game).</summary>
+        /// <summary>Opens the file for reading: a seekable stream (the key sample reads blocks at offsets), shared with a running game.</summary>
         Stream Open(string relativePath);
     }
 
@@ -53,7 +53,7 @@ namespace ArenaMapPort.Crypto
 
         public Stream Open(string relativePath)
         {
-            return new FileStream(Resolve(relativePath), FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete, 4096, FileOptions.SequentialScan);
+            return new FileStream(Resolve(relativePath), FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete, 4096, FileOptions.RandomAccess);
         }
     }
 
@@ -98,8 +98,12 @@ namespace ArenaMapPort.Crypto
         public long ExpectedSize { get; internal set; }
         /// <summary>Index of the wrap that unlocked the key, or -1.</summary>
         public int WrapIndex { get; internal set; }
+        /// <summary>How many distinct files were read (a file shared by several wraps counts once).</summary>
         public int FilesHashed { get; internal set; }
+        /// <summary>How many bytes of those files were read and hashed (the samples, docs/PLAN-ENCRYPTION.md section 6).</summary>
         public long BytesHashed { get; internal set; }
+        /// <summary>The total size of the files the unlocking wrap lists (what a whole-file hash would have read); 0 on failure.</summary>
+        public long BytesListed { get; internal set; }
         /// <summary>Wall time of the whole resolution in milliseconds.</summary>
         public int Ms { get; internal set; }
         /// <summary>"CNG" or "managed".</summary>
@@ -128,62 +132,135 @@ namespace ArenaMapPort.Crypto
         }
     }
 
+    /// <summary>A listed Arena file has another size than the key file lists, found while it was read (it changed after the size check).</summary>
+    public sealed class ArenaFileChangedException : IOException
+    {
+        public ArenaFileChangedException(string path, long actual, long expected)
+            : base("'" + path + "' changed size while it was read (" + actual.ToString(CultureInfo.InvariantCulture) + " against " + expected.ToString(CultureInfo.InvariantCulture) + " bytes)")
+        {
+            Path = path;
+            Actual = actual;
+            Expected = expected;
+        }
+
+        public string Path { get; private set; }
+        public long Actual { get; private set; }
+        public long Expected { get; private set; }
+    }
+
     /// <summary>
-    /// Key derivation and key wrap (docs/PLAN-ENCRYPTION.md 0.2): the player's Arena level files are hashed (SHA-256, whole file, in key-file order) into
-    /// the input keying material; HKDF (salt from the key file, info "ArenaMapPort bundle key v1 &lt;map_key&gt;") gives 72 bytes: KEK_enc, KEK_mac and the wrap
-    /// nonce; the wrapped content key is K_map under AES-256-CTR with a check value HMAC(KEK_mac, label, map key, wrapped key) that is verified in
+    /// Key derivation and key wrap (docs/PLAN-ENCRYPTION.md 0.2, with the key source of section 6). Every file a wrap lists contributes one 32-byte digest,
+    /// SHA-256 of <see cref="SampleHeader"/> (a label, the file's path and size and the sample parameters) followed by the file's sample
+    /// (<see cref="KeySample"/>: evenly spaced blocks whose offsets depend only on the size, or the whole file when it is small); the digests in key-file order
+    /// are the input keying material; HKDF (salt from the key file, info "ArenaMapPort bundle key v2 &lt;map_key&gt;") gives 72 bytes: KEK_enc, KEK_mac and the
+    /// wrap nonce; the wrapped content key is K_map under AES-256-CTR with a check value HMAC(KEK_mac, label, map key, wrapped key) that is verified in
     /// constant time BEFORE the key is decrypted. The wrap is deterministic (the salt is an HMAC of the entry's inputs under K_map), so a rebuild with the
     /// same inputs gives a byte-identical key file. <see cref="Resolve"/> is the player-side algorithm (pure: file access is injected, it never logs and
-    /// never throws), <see cref="Wrap"/> the build-side one. Proved by BundleCryptoTests (pinned info string, wrap round trip, determinism, order and size
-    /// sensitivity, several wraps, one-bit content change, every failure cause).
+    /// never throws), <see cref="Wrap"/> the build-side one. Proved by BundleCryptoTests (pinned labels, a golden sample digest and a golden wrap from
+    /// independent implementations, wrap round trip, determinism, sensitivity to order, size, sample parameters and one changed byte inside the sample,
+    /// several wraps, every failure cause).
     /// </summary>
     public static class KeyResolver
     {
-        const int BlockSize = 1 << 20;
+        const int ReadSize = 1 << 20;
 
-        /// <summary>The HKDF info string of a map: "ArenaMapPort bundle key v1 &lt;map_key&gt;" (UTF-8).</summary>
+        /// <summary>The HKDF info string of a map: "ArenaMapPort bundle key v2 &lt;map_key&gt;" (UTF-8).</summary>
         public static byte[] KekInfo(string mapKey)
         {
-            return Encoding.UTF8.GetBytes("ArenaMapPort bundle key v1 " + mapKey);
+            return Encoding.UTF8.GetBytes("ArenaMapPort bundle key v2 " + mapKey);
         }
 
-        /// <summary>SHA-256 of a whole stream, read in 1 MiB blocks; <paramref name="length"/> receives the number of bytes read.</summary>
-        public static byte[] HashStream(Stream stream, ICryptoProvider provider, out long length)
+        /// <summary>
+        /// What is hashed in front of a file's sample: "ArenaMapPort file sample v2" 00 path 00 size 00 block_size 00 blocks 00, the path in key-file spelling
+        /// and the numbers as decimal ASCII. It binds each digest to the file it names and to how that file was read.
+        /// </summary>
+        public static byte[] SampleHeader(string path, long size, KeySample sample)
         {
-            byte[] buffer = new byte[BlockSize];
+            if (path == null) throw new ArgumentNullException("path");
+            if (sample == null) throw new ArgumentNullException("sample");
+            using (MemoryStream data = new MemoryStream())
+            {
+                Append(data, "ArenaMapPort file sample v2");
+                data.WriteByte(0);
+                Append(data, path);
+                data.WriteByte(0);
+                Append(data, size.ToString(CultureInfo.InvariantCulture));
+                data.WriteByte(0);
+                Append(data, sample.BlockSize.ToString(CultureInfo.InvariantCulture));
+                data.WriteByte(0);
+                Append(data, sample.Blocks.ToString(CultureInfo.InvariantCulture));
+                data.WriteByte(0);
+                return data.ToArray();
+            }
+        }
+
+        /// <summary>
+        /// The digest a file contributes to the input keying material: SHA-256(<see cref="SampleHeader"/> || sample), where the sample is the whole file when it
+        /// is at most <see cref="KeySample.BytesPerFile"/> bytes, otherwise the <see cref="KeySample.Blocks"/> blocks at <see cref="KeySample.BlockOffset"/> in
+        /// ascending order (the stream must then be seekable). <paramref name="bytesRead"/> receives the number of file bytes hashed. A stream that does not hold
+        /// exactly <paramref name="size"/> bytes throws <see cref="ArenaFileChangedException"/>.
+        /// </summary>
+        public static byte[] FileDigest(Stream stream, string path, long size, KeySample sample, ICryptoProvider provider, out long bytesRead)
+        {
+            if (stream == null) throw new ArgumentNullException("stream");
+            if (sample == null) throw new ArgumentNullException("sample");
+            string problem = sample.Problem();
+            if (problem != null) throw new ArgumentException("sample " + problem, "sample");
+            if (size < 0) throw new ArgumentOutOfRangeException("size");
+            if (provider == null) provider = CryptoProviders.Select(null);
+            byte[] header = SampleHeader(path, size, sample);
             long total = 0;
             using (ISha256Stream hash = provider.NewSha256())
             {
-                int n;
-                while ((n = stream.Read(buffer, 0, buffer.Length)) > 0)
+                hash.Update(header, 0, header.Length);
+                if (sample.ReadsWholeFile(size))
                 {
-                    hash.Update(buffer, 0, n);
-                    total += n;
+                    byte[] buffer = new byte[(int)Math.Min(ReadSize, size + 1)];
+                    int n;
+                    // reads at most one byte past the listed size: a file that grew is detected without hashing all of it
+                    while (total <= size && (n = stream.Read(buffer, 0, buffer.Length)) > 0)
+                    {
+                        hash.Update(buffer, 0, n);
+                        total += n;
+                    }
+                    if (total != size)
+                        throw new ArenaFileChangedException(path, stream.CanSeek ? stream.Length : total, size);
                 }
-                length = total;
+                else
+                {
+                    long length = stream.Length;
+                    if (length != size)
+                        throw new ArenaFileChangedException(path, length, size);
+                    byte[] buffer = new byte[sample.BlockSize];
+                    for (int k = 0; k < sample.Blocks; k++)
+                    {
+                        stream.Position = sample.BlockOffset(size, k);
+                        int got = 0;
+                        while (got < buffer.Length)
+                        {
+                            int n = stream.Read(buffer, got, buffer.Length - got);
+                            if (n <= 0)
+                                break;
+                            got += n;
+                        }
+                        if (got != buffer.Length)
+                            throw new ArenaFileChangedException(path, stream.Length, size);
+                        hash.Update(buffer, 0, got);
+                        total += got;
+                    }
+                }
+                bytesRead = total;
                 return hash.Finish();
             }
         }
 
-        /// <summary>SHA-256 of a file (shared read).</summary>
-        public static byte[] HashFile(string path, ICryptoProvider provider)
+        /// <summary>The digest of one listed file, opened through <paramref name="files"/> (see the stream overload).</summary>
+        public static byte[] FileDigest(IArenaFiles files, KeyFileEntry entry, KeySample sample, ICryptoProvider provider, out long bytesRead)
         {
-            using (FileStream fs = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete, 4096, FileOptions.SequentialScan))
-            {
-                long length;
-                return HashStream(fs, provider, out length);
-            }
-        }
-
-        /// <summary>The input keying material of a file list: SHA-256(file 1) || SHA-256(file 2) || ... in list order (32 bytes per file).</summary>
-        public static byte[] ComputeIkm(IEnumerable<string> filePaths, ICryptoProvider provider)
-        {
-            if (filePaths == null) throw new ArgumentNullException("filePaths");
-            if (provider == null) provider = CryptoProviders.Select(null);
-            List<byte> ikm = new List<byte>();
-            foreach (string path in filePaths)
-                ikm.AddRange(HashFile(path, provider));
-            return ikm.ToArray();
+            if (files == null) throw new ArgumentNullException("files");
+            if (entry == null) throw new ArgumentNullException("entry");
+            using (Stream s = files.Open(entry.Path))
+                return FileDigest(s, entry.Path, entry.Size, sample, provider, out bytesRead);
         }
 
         /// <summary>The key-wrapping key from an IKM: HKDF-Extract(salt, ikm), HKDF-Expand(info of <paramref name="mapKey"/>, 72) split into 32 + 32 + 8 bytes.</summary>
@@ -201,13 +278,6 @@ namespace ArenaMapPort.Crypto
             Array.Clear(prk, 0, prk.Length);
             Array.Clear(okm, 0, okm.Length);
             return new Kek(enc, mac, nonce);
-        }
-
-        /// <summary>The key-wrapping key from the files themselves (absolute paths, hashed in the order given).</summary>
-        public static Kek DeriveKek(IEnumerable<string> filePaths, byte[] salt, string mapKey, ICryptoProvider provider = null)
-        {
-            if (provider == null) provider = CryptoProviders.Select(null);
-            return DeriveKek(ComputeIkm(filePaths, provider), salt, mapKey, provider);
         }
 
         /// <summary>
@@ -229,28 +299,30 @@ namespace ArenaMapPort.Crypto
         }
 
         /// <summary>
-        /// Builds the wrap of <paramref name="kMap"/> for one Arena build: <paramref name="fileHashes"/> are the SHA-256 values of <paramref name="files"/> in
-        /// that order (the hashes are used and never stored). The salt is deterministic: HMAC(K_map, "ArenaMapPort wrap salt v1" 00 map_key 00 built_for 00
-        /// (path 00 size 00)*).
+        /// Builds the wrap of <paramref name="kMap"/> for one Arena build: <paramref name="fileDigests"/> are the <see cref="FileDigest"/> values of
+        /// <paramref name="files"/> under <paramref name="sample"/>, in that order (the digests are used and never stored). The salt is deterministic:
+        /// HMAC(K_map, "ArenaMapPort wrap salt v2" 00 map_key 00 built_for 00 block_size 00 blocks 00 (path 00 size 00)*).
         /// </summary>
-        public static KeyWrap Wrap(string mapKey, byte[] kMap, string builtFor, IList<KeyFileEntry> files, byte[][] fileHashes, ICryptoProvider provider = null)
+        public static KeyWrap Wrap(string mapKey, byte[] kMap, string builtFor, KeySample sample, IList<KeyFileEntry> files, byte[][] fileDigests, ICryptoProvider provider = null)
         {
             Ampb.RequireKey(kMap);
             if (!Ampb.IsValidMapKey(mapKey)) throw new ArgumentException("invalid map key", "mapKey");
             if (builtFor == null) throw new ArgumentNullException("builtFor");
+            if (sample == null) throw new ArgumentNullException("sample");
+            if (sample.Problem() != null) throw new ArgumentException("sample " + sample.Problem(), "sample");
             if (files == null) throw new ArgumentNullException("files");
-            if (fileHashes == null || fileHashes.Length != files.Count) throw new ArgumentException("one hash per file is required", "fileHashes");
+            if (fileDigests == null || fileDigests.Length != files.Count) throw new ArgumentException("one digest per file is required", "fileDigests");
             if (provider == null) provider = CryptoProviders.Select(null);
 
             byte[] ikm = new byte[32 * files.Count];
             for (int i = 0; i < files.Count; i++)
             {
-                if (fileHashes[i] == null || fileHashes[i].Length != 32)
-                    throw new ArgumentException("every file hash is 32 bytes", "fileHashes");
-                Buffer.BlockCopy(fileHashes[i], 0, ikm, 32 * i, 32);
+                if (fileDigests[i] == null || fileDigests[i].Length != 32)
+                    throw new ArgumentException("every file digest is 32 bytes", "fileDigests");
+                Buffer.BlockCopy(fileDigests[i], 0, ikm, 32 * i, 32);
             }
 
-            byte[] salt = ComputeSalt(mapKey, kMap, builtFor, files, provider);
+            byte[] salt = ComputeSalt(mapKey, kMap, builtFor, sample, files, provider);
             Kek kek = DeriveKek(ikm, salt, mapKey, provider);
             try
             {
@@ -261,7 +333,7 @@ namespace ArenaMapPort.Crypto
                 List<KeyFileEntry> copy = new List<KeyFileEntry>(files.Count);
                 foreach (KeyFileEntry e in files)
                     copy.Add(new KeyFileEntry(e.Path, e.Size));
-                return new KeyWrap(builtFor, copy, salt, wrapped, check);
+                return new KeyWrap(builtFor, new KeySample(sample.BlockSize, sample.Blocks), copy, salt, wrapped, check);
             }
             finally
             {
@@ -270,15 +342,19 @@ namespace ArenaMapPort.Crypto
             }
         }
 
-        static byte[] ComputeSalt(string mapKey, byte[] kMap, string builtFor, IList<KeyFileEntry> files, ICryptoProvider provider)
+        static byte[] ComputeSalt(string mapKey, byte[] kMap, string builtFor, KeySample sample, IList<KeyFileEntry> files, ICryptoProvider provider)
         {
             using (MemoryStream data = new MemoryStream())
             {
-                Append(data, "ArenaMapPort wrap salt v1");
+                Append(data, "ArenaMapPort wrap salt v2");
                 data.WriteByte(0);
                 Append(data, mapKey);
                 data.WriteByte(0);
                 Append(data, builtFor);
+                data.WriteByte(0);
+                Append(data, sample.BlockSize.ToString(CultureInfo.InvariantCulture));
+                data.WriteByte(0);
+                Append(data, sample.Blocks.ToString(CultureInfo.InvariantCulture));
                 data.WriteByte(0);
                 foreach (KeyFileEntry e in files)
                 {
@@ -296,7 +372,7 @@ namespace ArenaMapPort.Crypto
         {
             using (MemoryStream data = new MemoryStream())
             {
-                Append(data, "ArenaMapPort wrap check v1");
+                Append(data, "ArenaMapPort wrap check v2");
                 data.WriteByte(0);
                 Append(data, mapKey);
                 data.WriteByte(0);
@@ -348,7 +424,7 @@ namespace ArenaMapPort.Crypto
         /// The player-side algorithm. Wraps are tried in file order; a wrap applies when all its files exist with the listed sizes; the first
         /// applicable wrap whose check verifies wins and yields K_map. Otherwise the cause is ContentDiffers when some wrap applied but no
         /// check verified (right sizes, wrong content), else the failure of the LAST wrap (the newest build): ArenaFileUnreadable or SizeDiffers.
-        /// Never throws: an unexpected exception becomes Internal. Hashes are cached per file, so wraps that share files read them once.
+        /// Never throws: an unexpected exception becomes Internal. Digests are cached per file and sample, so wraps that share them read once.
         /// </summary>
         public static KeyResolution Resolve(KeyFile keyFile, string installDirectory, string installedVersion, IArenaFiles files, ICryptoProvider provider, string expectedMapKey = null)
         {
@@ -369,7 +445,7 @@ namespace ArenaMapPort.Crypto
                 if (files == null)
                     return Finish(result, started, KeyFailure.Internal, "no file access was given");
 
-                Dictionary<string, byte[]> hashes = new Dictionary<string, byte[]>(StringComparer.Ordinal);
+                Dictionary<string, byte[]> digests = new Dictionary<string, byte[]>(StringComparer.Ordinal);
                 bool someApplied = false;
                 KeyFailure lastCause = KeyFailure.None;
                 string lastDetail = null;
@@ -390,14 +466,14 @@ namespace ArenaMapPort.Crypto
                         result.ExpectedSize = expected;
                         continue;
                     }
-                    someApplied = true;
                     byte[] ikm;
                     try
                     {
-                        ikm = Ikm(wrap, files, p, hashes, result);
+                        ikm = Ikm(wrap, files, p, digests, result);
                     }
-                    catch (SizeChangedException ex)
+                    catch (ArenaFileChangedException ex)
                     {
+                        // the sizes did not hold while the files were read: a size failure, not "right sizes, wrong content"
                         lastCause = KeyFailure.SizeDiffers;
                         lastDetail = ex.Message;
                         result.FailedPath = ex.Path;
@@ -409,6 +485,7 @@ namespace ArenaMapPort.Crypto
                     {
                         return FinishUnreadable(result, started, ex.Message, ex.Path);
                     }
+                    someApplied = true;
                     Kek kek = DeriveKek(ikm, wrap.Salt, keyFile.MapKey, p);
                     byte[] kMap;
                     try
@@ -418,14 +495,19 @@ namespace ArenaMapPort.Crypto
                     finally
                     {
                         kek.Clear();
+                        Array.Clear(ikm, 0, ikm.Length);
                     }
                     if (kMap != null)
                     {
+                        long listed = 0;
+                        foreach (KeyFileEntry e in wrap.Files)
+                            listed += e.Size;
                         result.Ok = true;
                         result.MapKey = kMap;
                         result.Cause = KeyFailure.None;
                         result.WrapIndex = w;
                         result.BuiltFor = wrap.BuiltFor;
+                        result.BytesListed = listed;
                         result.FailedPath = null;
                         result.ActualSize = 0;
                         result.ExpectedSize = 0;
@@ -451,21 +533,6 @@ namespace ArenaMapPort.Crypto
             {
                 return Finish(result, started, KeyFailure.Internal, ex.GetType().Name + ": " + ex.Message);
             }
-        }
-
-        sealed class SizeChangedException : Exception
-        {
-            public SizeChangedException(string path, long actual, long expected)
-                : base("'" + path + "' changed size while it was read (" + actual.ToString(CultureInfo.InvariantCulture) + " against " + expected.ToString(CultureInfo.InvariantCulture) + " bytes)")
-            {
-                Path = path;
-                Actual = actual;
-                Expected = expected;
-            }
-
-            public string Path { get; private set; }
-            public long Actual { get; private set; }
-            public long Expected { get; private set; }
         }
 
         sealed class FileReadException : Exception
@@ -527,15 +594,19 @@ namespace ArenaMapPort.Crypto
             for (int i = 0; i < wrap.Files.Count; i++)
             {
                 KeyFileEntry entry = wrap.Files[i];
-                byte[] hash;
-                string cacheKey = entry.Path + "\n" + entry.Size.ToString(CultureInfo.InvariantCulture);
-                if (!cache.TryGetValue(cacheKey, out hash))
+                byte[] digest;
+                string cacheKey = entry.Path + "\n" + entry.Size.ToString(CultureInfo.InvariantCulture) + "\n" +
+                                  wrap.Sample.BlockSize.ToString(CultureInfo.InvariantCulture) + "\n" + wrap.Sample.Blocks.ToString(CultureInfo.InvariantCulture);
+                if (!cache.TryGetValue(cacheKey, out digest))
                 {
-                    long length;
+                    long read;
                     try
                     {
-                        using (Stream s = files.Open(entry.Path))
-                            hash = HashStream(s, p, out length);
+                        digest = FileDigest(files, entry, wrap.Sample, p, out read);
+                    }
+                    catch (ArenaFileChangedException)
+                    {
+                        throw;
                     }
                     catch (Exception ex)
                     {
@@ -543,13 +614,11 @@ namespace ArenaMapPort.Crypto
                             throw new FileReadException(entry.Path, ex.Message);
                         throw;
                     }
-                    if (length != entry.Size)
-                        throw new SizeChangedException(entry.Path, length, entry.Size);
-                    cache[cacheKey] = hash;
+                    cache[cacheKey] = digest;
                     stats.FilesHashed++;
-                    stats.BytesHashed += length;
+                    stats.BytesHashed += read;
                 }
-                Buffer.BlockCopy(hash, 0, ikm, 32 * i, 32);
+                Buffer.BlockCopy(digest, 0, ikm, 32 * i, 32);
             }
             return ikm;
         }
@@ -566,6 +635,7 @@ namespace ArenaMapPort.Crypto
             r.MapKey = null;
             r.Cause = cause;
             r.Detail = detail;
+            r.BytesListed = 0;
             r.Ms = Elapsed(started);
             return r;
         }

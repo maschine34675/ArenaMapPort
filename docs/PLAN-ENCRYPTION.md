@@ -30,6 +30,10 @@ and the NavMesh are in the bundles, so they are the part this stage covers. The 
 
 ### 0.2 Key hierarchy (exact parameters)
 
+> 2026-10-20: the IKM, the HKDF info, the salt and the check below are those of key source v1 (whole level files). Key source v2 (section 6)
+> keeps the structure and `K_map`, replaces the files and the per-file hash with a sampled digest of the resource streams, and moves every
+> label to `v2`.
+
 - **`K_map`**: 32 random bytes per map, generated once by the tool and kept in `work/release-keys/<map_key>.key` (ignored by git, never shipped).
   It is not derivable from `dist/`. Never regenerated without `--rotate` (D9).
 - **IKM** = `SHA-256(file_1) || SHA-256(file_2) || ...` (32 bytes per file, whole-file hashes), files in the order of the key file's `files` list =
@@ -47,6 +51,9 @@ and the NavMesh are in the bundles, so they are the part this stage covers. The 
   "HMAC under K_map"; separate subkeys are the refinement (D1).
 
 ### 0.3 Which Arena files, per map
+
+> 2026-10-20: superseded by section 6. The level files listed here changed in Arena's 0.6.0 to 0.6.1 hotfix; the keys now come from the
+> scenes' raw resource streams (`sharedassets<N>.assets.resS` / `.resource`), table schema 2.
 
 The key files come from the scenes the map is built from. The accepted manifests do **not** all carry them: `airpit-native-v9` and `bowl-native-v2`
 have `source.scene_registry` [{index, name, asset_path}] (AirPit includes the partial scenes 37 and 38), but `equator-native-v5` and `bay5-native-v5`
@@ -66,6 +73,9 @@ All 28 files exist on this VM's 0.6.1 install. They are small (a map's scenes, n
 even on Mono's managed SHA-256 **(inferred, 100 MB/s: 0.2-0.4 s)**.
 
 ### 0.4 Key file `keys/<map_key>.json` (shipped, `BepInEx/plugins/maschine-ArenaMapPort/keys/`)
+
+> 2026-10-20: the shipped key files are schema 2 (section 6): each wrap adds `"sample": { "block_size": 65536, "blocks": 16 }` after
+> `built_for` and lists resource streams instead of level files; the client refuses schema 1.
 
 The brief's flat fields become one object per Arena build in a `wraps` array (several entries per map are required for Arena updates, 0.8):
 
@@ -169,6 +179,10 @@ vector: SP 800-38A F.5.5 with `nonce = f0..f7`, first counter `f8f9fafbfcfdfeff`
   8 MiB self-benchmark (behind `DeveloperOptions.Enabled`, AGENTS release rules) prints the real Mono numbers on the host.
 
 ### 0.8 Arena updates, and what the player sees
+
+> 2026-10-20: the first Arena patch after the plan did exactly what this section expected, on every map: 0.6.0 to 0.6.1 rewrote all 28
+> key-source level files. Section 6 moves the keys to files that patch left alone; the maintainer flow below is unchanged for the cases
+> section 6 lists as not survived.
 
 Level files change when BSG edits a map: the 0.6.0 audit found Bay5's main scene changed against 0.5.4 (three more decal/render objects, new mesh data;
 arena-update-20261003.md), so the first Arena patch after release will likely break at least one map's key until the keys are updated.
@@ -388,3 +402,56 @@ The plan above is kept as written; where the code differs, the code is right and
 | 1.2 TOOL-5 `validate_port.py --distribution` uses `verify` | done at integration (it passed for Bowl); the other three maps' packages fail its earlier source-plan checks for reasons older than stage 2 |
 | 1.2 TOOL-8 `test_bundle_key_sources.py` | `KeySourcesTests` inside `test_bundle_crypt_tool.py`; `tools/bundle/key-sources.json` carries `arena_build` |
 | 2.1 step 4 `bench` | CNG and managed on .NET 10 on the build VM are within noise of each other (both OS-backed); the reason for CNG is Mono's slow managed crypto, which only the GPU-2 run can measure (open) |
+
+## 6. Key source v2: sampled resource streams (2026-10-20)
+
+Decision of the integrating session after a user report (the user's PC on Arena 0.6.0.0.47752 could not open Air Pit, E5 line
+`... have the listed sizes but do not unlock the key ...`); record and evidence in
+[progress/bundle-encryption.md](progress/bundle-encryption.md), "Key source v2". 0.3.0 was not released, so the key-file schema could change
+without a migration for players.
+
+**Finding.** Arena's 0.6.0 to 0.6.1 hotfix rewrote 381 of 388 `level<N>` and 381 of 388 `sharedassets<N>.assets` files with unchanged sizes
+(the serialized scenes and assets), so all 28 level files of the four maps differ and every level-file key locked. It left 129 of 130
+`sharedassets<N>.assets.resS` and all 40 `sharedassets<N>.resource` byte-identical (the raw texture, mesh and audio data the serialized files
+point into), including all 26 that belong to the four maps' scenes. The resource streams are also what a map's look is made of, so they are
+a fair stand-in for "the map's own files".
+
+**Key source.** Per scene index of a map (the indices of 0.3): `EscapeFromTarkovArena_Data/sharedassets<index>.assets.resS` and
+`sharedassets<index>.resource`, those that exist in the build, in ascending index order, `.assets.resS` first. `tools/bundle/key-sources.json`
+schema 2 lists them per scene (`{index, scene, files}`) next to the sample parameters; `KeySourcesTests` pins the scenes against the
+extractor tables, plans and manifests as before and the files (exactly the existing streams per scene) and their total sizes against the
+installed Arena. Equator 3 files (218.0 MB), Bay5 8 (358.2 MB), Air Pit 7 (603.5 MB), Bowl 8 (754.5 MB) on 0.6.1.0.48206.
+
+**Sample.** Hashing 0.2 to 0.75 GB per map at the loading screen is too slow on a hard disk or with the managed fallback, so each file
+contributes a deterministic sample: `blocks` blocks of `block_size` bytes, block k at `floor(k * (size - block_size) / (blocks - 1))` for
+k = 0 .. blocks - 1 (offsets depend only on the size; the first block starts at 0, the last ends at the end of the file, blocks never
+overlap), or the whole file when `size <= blocks * block_size`. Shipped: 64 KiB x 16 = at most 1 MiB per file, 3.1 to 7.4 MB per map,
+at most 16 positioned reads per file. Rules (key file and table): block_size a multiple of 4 KiB from 4 KiB to 1 MiB, 2 to 1024 blocks, at
+most 64 MiB per file. The parameters are stored per wrap, so a later wrap can choose others without a client change.
+
+**Derivation (labels `v2`).** Per file `digest = SHA-256("ArenaMapPort file sample v2" 00 path 00 size 00 block_size 00 blocks 00 || sample)`
+(path in key-file spelling, numbers decimal ASCII: path, size and sample are bound into the key itself, not only into the salt); IKM = the
+digests in key-file order; `info = "ArenaMapPort bundle key v2 " + map_key`; `salt = HMAC(K_map, "ArenaMapPort wrap salt v2" 00 map_key 00
+built_for 00 block_size 00 blocks 00 (path 00 size 00)*)`; `check = HMAC(KEK_mac, "ArenaMapPort wrap check v2" 00 map_key 00 wrapped_key)`;
+HKDF, AES-256-CTR wrap and the check-before-decrypt order as in 0.2. The container subkeys of `K_map` (0.2, 0.5) are untouched, so the
+bundles are byte-identical. Golden vectors from independent implementations (Python `hashlib` for the digest, PowerShell on
+`System.Security.Cryptography` for the wrap) pin it in `KeyDerivationTests`.
+
+**Key file schema 2.** `{schema: 2, map_key, wraps: [{built_for, sample: {block_size, blocks}, files: [{path, size}], salt, wrapped_key,
+check}]}`, 1 to 32 files per wrap, canonical bytes as in 0.4. The client refuses schema 1: no released package carried a key file (0.2.3
+ships plaintext bundles), the only schema-1 files were development deploys, and a second derivation would only ever unlock Arena 0.6.1,
+which the v2 wraps cover. The key store keeps its schema-1 wraps verbatim as `"scheme": "level-files-v1"` (append-only, never shipped) and
+stores `"sample-v2"` wraps with each file's digest (`sample_sha256`, never shipped).
+
+**Cost.** Measured: 3 to 9 ms of work per map on this VM (`bench --keys-dir`, best of 5), 3 to 55 ms for a first run here (the files were in the
+OS cache), 60 to 246 ms
+over SMB to the user's 0.6.0 install, and 29 to 55 ms per map on GPU-2's first raid of each map (against 45 to 58 ms for the 22 to 41 MB of
+level files). On a hard disk each positioned read costs a seek: up to about 113 reads per map, an estimated 1 to 1.5 s once per map and
+session **(inferred, not measured: no test PC has Arena on a hard disk)**.
+
+**Limits.** It survives a hotfix that rebuilds the serialized files but keeps the raw streams (0.6.0 to 0.6.1) and changes between the sampled
+blocks. It does not survive a Unity upgrade of Arena (expected to re-serialize the raw streams), re-imported textures, meshes or audio of a
+map's scenes, shifted scene indices (as 0.5.4 to 0.6.0 did for seven maps), or a scene gaining or losing a raw stream; each needs a staging
+build on the new Arena (a new wrap, and for shifted indices a regenerated `key-sources.json`), shipped as a keys update (D10). Before shipping
+keys, `verify-keys --arena <folder>` against every Arena build at hand. Not copy protection, as before: a key needs 3 to 7.4 MB of Arena's
+files instead of 22 to 41 MB, which changes nothing about sharing a derived key or decrypted bundles.

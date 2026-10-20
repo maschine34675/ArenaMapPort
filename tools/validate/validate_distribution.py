@@ -3,7 +3,7 @@
 Since stage 2 of the Arena gate (docs/PLAN-ENCRYPTION.md) every distributed bundle is an AMPB container, so this
 also requires: the magic on every bundle (a plaintext UnityFS bundle is refused), a chunk-verified container whose
 header names the right map and whose plaintext starts with UnityFS, exactly one key file keys/<map>.json per
-released map that has the schema, plausible level-file names and sizes and no hash, and that unlocks the content
+released map that has the schema, plausible resource-file names, sizes and sample parameters and no hash, and that unlocks the content
 key against the Arena installed on this machine (the build machine has it), and no file anywhere in dist that
 starts with "UnityFS". The container is read through tools/bundle/bundle_crypt.py (the C# tool), not in Python."""
 import json
@@ -22,7 +22,8 @@ import bundle_crypt  # noqa: E402 -- tests replace this module attribute with a 
 BUNDLE_KINDS = ('scenes', 'navmesh', 'preset')
 AMPB_MAGIC = b'AMPB'
 UNITYFS_MAGIC = b'UnityFS\0'
-KEY_FILE_PATH_RE = re.compile(r'EscapeFromTarkovArena_Data/level([0-9]+)')
+KEY_FILE_PATH_RE = re.compile(r'EscapeFromTarkovArena_Data/sharedassets([0-9]+)\.(assets\.resS|resource)')
+KEY_FILE_KIND_ORDER = {'assets.resS': 0, 'resource': 1}
 HEX64_RE = re.compile(r'[0-9a-f]{64}')
 KEY_FILE_MAX_BYTES = 64 * 1024
 
@@ -114,11 +115,14 @@ def validate_encrypted_bundles(bundles, keys, key_store=None):
 
 
 def check_key_file_schema(path, key):
-    """The shipped key file keys/<key>.json, shape only: schema 1, this map, between 1 and 16 wraps of exactly
-    built_for / files / salt / wrapped_key / check, 1..32 files per wrap named EscapeFromTarkovArena_Data/level<N> in
-    ascending numeric order with a positive size, and 64 lowercase hex digits for the three values. Nothing else may
-    appear (the client would ignore an unknown field, the release must not carry one: a level-file hash would let
-    anyone derive the key). Canonical bytes: UTF-8, LF, no byte order mark, a final newline."""
+    """The shipped key file keys/<key>.json, shape only: schema 2, this map, between 1 and 16 wraps of exactly
+    built_for / sample / files / salt / wrapped_key / check, a sample of exactly block_size (a multiple of 4096 from 4096
+    to 1 MiB) and blocks (2..1024, at most 64 MiB per file), 1..32 files per wrap named
+    EscapeFromTarkovArena_Data/sharedassets<N>.assets.resS or .resource in ascending numeric order (.assets.resS before
+    .resource of the same N) with a positive size, and 64 lowercase hex digits for the three values. Nothing else may
+    appear (the client would ignore an unknown field, the release must not carry one: a hash of an Arena file would let
+    anyone derive the key). Canonical bytes: UTF-8, LF, no byte order mark, a final newline (docs/PLAN-ENCRYPTION.md
+    section 6)."""
     raw = path.read_bytes()
     if len(raw) > KEY_FILE_MAX_BYTES:
         raise ValueError(f'Key file {path.name} is larger than 64 KiB')
@@ -139,27 +143,34 @@ def check_key_file_schema(path, key):
 
     require(isinstance(data, dict) and set(data) == {'schema', 'map_key', 'wraps'},
             'the top level must hold exactly schema, map_key and wraps')
-    require(integer(data['schema']) and data['schema'] == 1, 'schema must be 1')
+    require(integer(data['schema']) and data['schema'] == 2, 'schema must be 2')
     require(data['map_key'] == key, f'map_key must be {key!r}')
     wraps = data['wraps']
     require(isinstance(wraps, list) and 1 <= len(wraps) <= 16, 'wraps must list 1 to 16 entries')
     for number, wrap in enumerate(wraps):
         where = f'wrap {number}'
-        require(isinstance(wrap, dict) and set(wrap) == {'built_for', 'files', 'salt', 'wrapped_key', 'check'},
-                f'{where} must hold exactly built_for, files, salt, wrapped_key and check')
+        require(isinstance(wrap, dict) and set(wrap) == {'built_for', 'sample', 'files', 'salt', 'wrapped_key', 'check'},
+                f'{where} must hold exactly built_for, sample, files, salt, wrapped_key and check')
         built_for = wrap['built_for']
         require(isinstance(built_for, str) and 0 < len(built_for) <= 64 and built_for.isprintable(),
                 f'{where}: built_for must be a short printable string')
+        sample = wrap['sample']
+        require(isinstance(sample, dict) and set(sample) == {'block_size', 'blocks'}, f'{where}: sample must hold exactly block_size and blocks')
+        block_size, blocks = sample['block_size'], sample['blocks']
+        require(integer(block_size) and 4096 <= block_size <= 1 << 20 and block_size % 4096 == 0,
+                f'{where}: sample block_size must be a multiple of 4096 from 4096 to 1048576')
+        require(integer(blocks) and 2 <= blocks <= 1024 and block_size * blocks <= 64 << 20,
+                f'{where}: sample blocks must be 2 to 1024 and block_size * blocks at most 64 MiB')
         files = wrap['files']
         require(isinstance(files, list) and 1 <= len(files) <= 32, f'{where}: files must list 1 to 32 entries')
-        previous = -1
+        previous = (-1, -1)
         for entry in files:
             require(isinstance(entry, dict) and set(entry) == {'path', 'size'}, f'{where}: a file entry must hold exactly path and size')
             match = KEY_FILE_PATH_RE.fullmatch(entry['path']) if isinstance(entry['path'], str) else None
-            require(match is not None, f'{where}: {entry["path"]!r} is not EscapeFromTarkovArena_Data/level<N>')
-            level = int(match.group(1))
-            require(level > previous, f'{where}: level files must be unique and in ascending numeric order')
-            previous = level
+            require(match is not None, f'{where}: {entry["path"]!r} is not EscapeFromTarkovArena_Data/sharedassets<N>.assets.resS or .resource')
+            order = (int(match.group(1)), KEY_FILE_KIND_ORDER[match.group(2)])
+            require(order > previous, f'{where}: files must be unique and in ascending numeric order, .assets.resS before .resource')
+            previous = order
             require(integer(entry['size']) and entry['size'] > 0, f'{where}: the size of {entry["path"]} must be a positive integer')
         for field in ('salt', 'wrapped_key', 'check'):
             require(isinstance(wrap[field], str) and HEX64_RE.fullmatch(wrap[field]) is not None,

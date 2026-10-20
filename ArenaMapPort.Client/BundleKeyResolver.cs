@@ -288,13 +288,15 @@ namespace ArenaMapPort.Client
     /// <see cref="NavMeshInstaller"/>, which read them from the plugin folder.
     ///
     /// What the shipped bundles lack. Since stage 2 each <c>*.bundle</c> is an AMPB container (AES-256-CTR in 1 MiB chunks) that Unity cannot read.
-    /// Its content key K_map is not in the release: the release carries <c>keys/&lt;map_key&gt;.json</c> instead, which lists the Arena level files
-    /// of that map (paths and sizes) and the key wrapped under a key derived from the bytes of those files. This is not copy protection: anyone with
-    /// the Arena files, or with a derived key, can read the bundles.
+    /// Its content key K_map is not in the release: the release carries <c>keys/&lt;map_key&gt;.json</c> instead, which lists Arena files of that map
+    /// (paths and sizes: since 2026-10-20 the raw resource streams <c>sharedassets&lt;N&gt;.assets.resS</c> / <c>.resource</c> of its scenes, which Arena's
+    /// 0.6.0 to 0.6.1 hotfix left byte-identical while it rewrote every level file) and the key wrapped under a key derived from a fixed sample of
+    /// those files' bytes. This is not copy protection: anyone with the Arena files, or with a derived key, can read the bundles.
     ///
     /// What this class does. <see cref="TryGetKey"/> resolves the key of one map once per session (requires the verified stage-1 gate and its
-    /// installation folder): sizes of the listed files are checked first, the files are hashed, the key-wrapping key is derived and the check
-    /// value verified before the key is decrypted (all of it is <see cref="KeyResolver"/>, shared with the build tool). Success and failure are cached
+    /// installation folder): sizes of the listed files are checked first, the sample of each file is hashed (a few MB per map, not the hundreds of MB
+    /// the files hold), the key-wrapping key is derived and the check value verified before the key is decrypted (all of it is
+    /// <see cref="KeyResolver"/>, shared with the build tool, docs/PLAN-ENCRYPTION.md section 6). Success and failure are cached
     /// per map under a per-map lock, so eight concurrent callers cause one derivation; a failure logs its one Error line (E1-E6) once, later
     /// callers get E9 only. Arena not verified is not cached and logs nothing here (stage 1 owns that message). <see cref="Prepare"/> opens a bundle
     /// path: an AMPB container becomes a seekable decrypting stream for <c>AssetBundle.LoadFromStream</c>, anything else is a plaintext bundle
@@ -302,7 +304,7 @@ namespace ArenaMapPort.Client
     /// (BundleKeyResolverTests); the loaders are <see cref="BundleHost.LoadAssetBundle"/> and <see cref="NavMeshInstaller"/>.
     ///
     /// Log tags: key resolution [BundleKeys], served bundles [Bundles], the NavMesh bundle [NavMesh]. Every line comes from the game thread.
-    /// Host test: GPU-2 plan in docs/PLAN-ENCRYPTION.md 2.4 (not run yet).
+    /// Host tests: GPU-2 and GPU-1 on 2026-10-20 (docs/progress/bundle-encryption.md E5 to E7, and "Key source v2" for the sampled resource streams).
     /// </summary>
     internal sealed class BundleKeyResolver
     {
@@ -411,7 +413,7 @@ namespace ArenaMapPort.Client
             }
         }
 
-        /// <summary>One derivation: reads the key file, hashes the level files, logs D1 or the E-line. Never throws.</summary>
+        /// <summary>One derivation: reads the key file, hashes the sample of each listed Arena file, logs D1 or the E-line. Never throws.</summary>
         KeyEntry Derive(string mapKey)
         {
             string keyFile = null;
@@ -526,12 +528,16 @@ namespace ArenaMapPort.Client
 
         // ---- the log lines ------------------------------------------------------------------------------------
 
-        /// <summary>D1: <c>[BundleKeys] key for '&lt;map&gt;' derived in &lt;ms&gt; ms (&lt;n&gt; files, &lt;x&gt; MB hashed, built for Arena &lt;v&gt;, crypto: CNG)</c>.</summary>
+        /// <summary>
+        /// D1: <c>[BundleKeys] key for '&lt;map&gt;' derived in &lt;ms&gt; ms (&lt;n&gt; files, &lt;x&gt; MB sampled of &lt;y&gt; MB, built for Arena &lt;v&gt;, crypto: CNG)</c>:
+        /// x is what was read and hashed, y the size of the files the key depends on.
+        /// </summary>
         internal static string DerivedLine(string mapKey, KeyResolution resolution)
         {
             return KeyTag + " key for '" + mapKey + "' derived in " + resolution.Ms.ToString(CultureInfo.InvariantCulture) + " ms (" +
                    resolution.FilesHashed.ToString(CultureInfo.InvariantCulture) + " files, " +
-                   (resolution.BytesHashed / 1000000.0).ToString("0.0", CultureInfo.InvariantCulture) + " MB hashed, built for Arena " +
+                   (resolution.BytesHashed / 1000000.0).ToString("0.0", CultureInfo.InvariantCulture) + " MB sampled of " +
+                   (resolution.BytesListed / 1000000.0).ToString("0.0", CultureInfo.InvariantCulture) + " MB, built for Arena " +
                    resolution.BuiltFor + ", crypto: " + resolution.Provider + ")";
         }
 

@@ -1,43 +1,44 @@
 {
-  "schema": 1,
+  "schema": 2,
   "arena_build": "0.6.1.0.48206",
-  "note": "Which Arena level files unlock each map's bundles (docs/PLAN-ENCRYPTION.md 0.3). The files are EscapeFromTarkovArena_Data/level<index>, hashed in ascending index order. Pinned against the accepted extraction packages by tools/tests/test_bundle_crypt_tool.py. Indices only, never a hash.",
+  "note": "Which Arena files unlock each map's bundles (docs/PLAN-ENCRYPTION.md section 6). Per scene of the map (its BuildSettings index): the raw resource streams of that scene that exist in this Arena build, sharedassets<index>.assets.resS and sharedassets<index>.resource, listed as EscapeFromTarkovArena_Data/<name> in ascending index order. Each file is read through the sample: blocks of block_size bytes at offsets that depend only on the file size, the whole file when it is at most blocks * block_size bytes. The level files are not used any more: Arena's 0.6.0 to 0.6.1 hotfix rewrote all of them while every file listed here stayed byte-identical. Pinned against the accepted extraction packages and the installed Arena by tools/tests/test_bundle_crypt_tool.py. Indices and names only, never a hash.",
+  "sample": { "block_size": 65536, "blocks": 16 },
   "maps": {
     "arena_equator": [
-      { "index": 51, "scene": "Arena_Equator" },
-      { "index": 53, "scene": "Arena_Equator_DesignStuff" },
-      { "index": 55, "scene": "Arena_Equator_Lighting" },
-      { "index": 57, "scene": "Arena_Equator_TeamFight_DesignStuff" },
-      { "index": 58, "scene": "Arena_Equator_TeamFight" }
+      { "index": 51, "scene": "Arena_Equator", "files": ["sharedassets51.assets.resS"] },
+      { "index": 53, "scene": "Arena_Equator_DesignStuff", "files": [] },
+      { "index": 55, "scene": "Arena_Equator_Lighting", "files": ["sharedassets55.assets.resS"] },
+      { "index": 57, "scene": "Arena_Equator_TeamFight_DesignStuff", "files": ["sharedassets57.assets.resS"] },
+      { "index": 58, "scene": "Arena_Equator_TeamFight", "files": [] }
     ],
     "arena_bay5": [
-      { "index": 79, "scene": "Arena_Bay5_Background" },
-      { "index": 80, "scene": "Arena_Bay5_DEPOT" },
-      { "index": 81, "scene": "Arena_Bay5_DesignStuff" },
-      { "index": 82, "scene": "Arena_Bay5_HANGAR" },
-      { "index": 83, "scene": "Arena_Bay5_Light" },
-      { "index": 84, "scene": "Arena_Bay5_Main" },
-      { "index": 86, "scene": "Arena_Bay5_WAREHOUSE" },
-      { "index": 88, "scene": "Arena_Bay5_TeamFight_DesignStuff" },
-      { "index": 89, "scene": "Arena_Bay5_TeamFight" }
+      { "index": 79, "scene": "Arena_Bay5_Background", "files": ["sharedassets79.assets.resS"] },
+      { "index": 80, "scene": "Arena_Bay5_DEPOT", "files": ["sharedassets80.assets.resS"] },
+      { "index": 81, "scene": "Arena_Bay5_DesignStuff", "files": [] },
+      { "index": 82, "scene": "Arena_Bay5_HANGAR", "files": ["sharedassets82.assets.resS"] },
+      { "index": 83, "scene": "Arena_Bay5_Light", "files": [] },
+      { "index": 84, "scene": "Arena_Bay5_Main", "files": ["sharedassets84.assets.resS", "sharedassets84.resource"] },
+      { "index": 86, "scene": "Arena_Bay5_WAREHOUSE", "files": ["sharedassets86.assets.resS"] },
+      { "index": 88, "scene": "Arena_Bay5_TeamFight_DesignStuff", "files": ["sharedassets88.assets.resS"] },
+      { "index": 89, "scene": "Arena_Bay5_TeamFight", "files": ["sharedassets89.assets.resS"] }
     ],
     "arena_airpit": [
-      { "index": 28, "scene": "Arena_Airpit_TeamFight_DesignStuff" },
-      { "index": 29, "scene": "Arena_Airpit_TeamFight" },
-      { "index": 37, "scene": "Arena_Airpit_Light" },
-      { "index": 38, "scene": "Arena_Airpit_Main_hall" },
-      { "index": 40, "scene": "Arena_Airpit_DesignStuff" },
-      { "index": 324, "scene": "Arena_AirPit_ShootOut" },
-      { "index": 325, "scene": "Arena_AirPit_ShootOut_Light" }
+      { "index": 28, "scene": "Arena_Airpit_TeamFight_DesignStuff", "files": ["sharedassets28.assets.resS", "sharedassets28.resource"] },
+      { "index": 29, "scene": "Arena_Airpit_TeamFight", "files": ["sharedassets29.assets.resS"] },
+      { "index": 37, "scene": "Arena_Airpit_Light", "files": ["sharedassets37.assets.resS"] },
+      { "index": 38, "scene": "Arena_Airpit_Main_hall", "files": ["sharedassets38.assets.resS"] },
+      { "index": 40, "scene": "Arena_Airpit_DesignStuff", "files": ["sharedassets40.assets.resS"] },
+      { "index": 324, "scene": "Arena_AirPit_ShootOut", "files": ["sharedassets324.assets.resS"] },
+      { "index": 325, "scene": "Arena_AirPit_ShootOut_Light", "files": [] }
     ],
     "arena_bowl": [
-      { "index": 41, "scene": "Arena_Bowl" },
-      { "index": 43, "scene": "Arena_Bowl_DesignStuff" },
-      { "index": 45, "scene": "Arena_Bowl_Light" },
-      { "index": 46, "scene": "Arena_Bowl_Building" },
-      { "index": 47, "scene": "Arena_Bowl_TeamFight" },
-      { "index": 48, "scene": "Arena_Bowl_TeamFight_DesignStuff" },
-      { "index": 95, "scene": "Arena_Bowl_Grass" }
+      { "index": 41, "scene": "Arena_Bowl", "files": ["sharedassets41.assets.resS", "sharedassets41.resource"] },
+      { "index": 43, "scene": "Arena_Bowl_DesignStuff", "files": [] },
+      { "index": 45, "scene": "Arena_Bowl_Light", "files": ["sharedassets45.assets.resS"] },
+      { "index": 46, "scene": "Arena_Bowl_Building", "files": ["sharedassets46.assets.resS"] },
+      { "index": 47, "scene": "Arena_Bowl_TeamFight", "files": ["sharedassets47.assets.resS"] },
+      { "index": 48, "scene": "Arena_Bowl_TeamFight_DesignStuff", "files": ["sharedassets48.assets.resS", "sharedassets48.resource"] },
+      { "index": 95, "scene": "Arena_Bowl_Grass", "files": ["sharedassets95.assets.resS"] }
     ]
   }
 }

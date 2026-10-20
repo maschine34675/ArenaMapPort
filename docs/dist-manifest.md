@@ -1,5 +1,12 @@
 # Current distribution contract: Equator, Bay5, AirPit and Bowl (0.3.0, encrypted bundles, not published)
 
+2026-10-20 (key source v2, [PLAN-ENCRYPTION.md](PLAN-ENCRYPTION.md) section 6, record
+[progress/bundle-encryption.md](progress/bundle-encryption.md) "Key source v2"): the four `keys/<key>.json` are schema 2 now (one wrap each,
+`built_for` `0.6.1.0.48206`, `sample` `{block_size 65536, blocks 16}`, the paths and sizes of the map's `sharedassets<N>.assets.resS` /
+`.resource` streams: 3, 8, 7 and 8 files; 719, 1,185, 1,094 and 1,182 B). The twelve bundles are byte-identical to the 2026-10-20 LZ4
+staging (same content keys). `DISTRIBUTION_OK 4 maps 12 bundles 4 sidecars encrypted`; `check_key_file_schema` requires schema 2, the
+`sample` object and the resource-stream names in ascending order. dist: 90 files.
+
 2026-10-19 (stage 2 of the Arena gate, integration build on `cc3a5b0` plus the uncommitted stage 2 tree; design
 [PLAN-ENCRYPTION.md](PLAN-ENCRYPTION.md), record [progress/bundle-encryption.md](progress/bundle-encryption.md), "Integration"):
 every bundle in dist is now an `AMPB` container and every map carries a key file. Per map the plugin folder holds

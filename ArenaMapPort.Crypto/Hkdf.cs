@@ -4,7 +4,7 @@ using System;
 namespace ArenaMapPort.Crypto
 {
     /// <summary>
-    /// HKDF with HMAC-SHA-256 (RFC 5869): Extract turns the input keying material (the hashes of the player's Arena level files) into
+    /// HKDF with HMAC-SHA-256 (RFC 5869): Extract turns the input keying material (the digests of samples of the player's Arena files) into
     /// a pseudo-random key, Expand stretches a key into as many bytes as needed (the 72 bytes of the key-wrapping key, and the
     /// container subkeys derived from the map key). Written against <see cref="ICryptoProvider"/> so both providers produce the same
     /// bytes. Proved by BundleCryptoTests (RFC 5869 test cases 1-3 on both providers, equality with System.Security.Cryptography.HKDF).

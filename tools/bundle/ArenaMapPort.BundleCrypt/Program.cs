@@ -73,14 +73,15 @@ namespace ArenaMapPort.BundleCrypt
 
     /// <summary>
     /// The parsed command line: "--name value" or "--name=value" options, flags without a value, repeated options (--bundle) and positional
-    /// arguments. An unknown option is a usage error, so a typo never passes silently. "--map" is an alias of "--map-key", "--arena-dir" of "--arena".
+    /// arguments. An unknown option is a usage error, so a typo never passes silently. "--map" is an alias of "--map-key", "--arena-dir" of "--arena",
+    /// "--levels" (the name before the key sources table listed resource files, 2026-10-20) of "--sources".
     /// </summary>
     internal sealed class Args
     {
         private static readonly HashSet<string> ValueOptions = new HashSet<string>(StringComparer.Ordinal)
         {
-            "in", "out", "map-key", "key-store", "arena", "arena-unverified", "built-for", "levels", "manifest", "keys-file",
-            "offset", "length", "provider", "chunk-size", "bundle", "out-dir", "plain", "enc", "size-mib",
+            "in", "out", "map-key", "key-store", "arena", "arena-unverified", "built-for", "sources", "manifest", "keys-file",
+            "offset", "length", "provider", "chunk-size", "bundle", "out-dir", "plain", "enc", "size-mib", "keys-dir",
         };
 
         private static readonly HashSet<string> FlagOptions = new HashSet<string>(StringComparer.Ordinal)
@@ -118,6 +119,7 @@ namespace ArenaMapPort.BundleCrypt
                 }
                 if (name == "map") name = "map-key";
                 if (name == "arena-dir") name = "arena";
+                if (name == "levels") name = "sources";
                 if (FlagOptions.Contains(name))
                 {
                     if (inline != null)

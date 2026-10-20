@@ -377,7 +377,7 @@
       <ArenaMapPortArenaArg Condition="'$(ArenaMapPortArena)'==''">auto</ArenaMapPortArenaArg>
       <ArenaMapPortArenaArg Condition="'$(ArenaMapPortArena)'!=''">$(ArenaMapPortArena)</ArenaMapPortArenaArg>
       <ArenaMapPortCreateKeyArg Condition="'$(ArenaMapPortCreateReleaseKeys)'=='true'">--create-key</ArenaMapPortCreateKeyArg>
-      <ArenaMapPortStageCommon>--out-dir &quot;$(ArenaMapPortDistDir)&quot; --key-store &quot;$(ArenaMapPortReleaseKeysDir)&quot; --levels &quot;$(ArenaMapPortKeySources)&quot; --arena &quot;$(ArenaMapPortArenaArg)&quot; $(ArenaMapPortCreateKeyArg)</ArenaMapPortStageCommon>
+      <ArenaMapPortStageCommon>--out-dir &quot;$(ArenaMapPortDistDir)&quot; --key-store &quot;$(ArenaMapPortReleaseKeysDir)&quot; --sources &quot;$(ArenaMapPortKeySources)&quot; --arena &quot;$(ArenaMapPortArenaArg)&quot; $(ArenaMapPortCreateKeyArg)</ArenaMapPortStageCommon>
     </PropertyGroup>
     <Message Importance="high" Condition="'$(ArenaMapPortCreateReleaseKeys)'!='true'"
              Text="[ArenaMapPort] content keys come from $(ArenaMapPortReleaseKeysDir); a map without a stored key stops the build here (the first staging of a map passes -p:ArenaMapPortCreateReleaseKeys=true, a lost key store is restored from its backup)" />

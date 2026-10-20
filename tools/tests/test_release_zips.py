@@ -2342,8 +2342,10 @@ class EncryptedBundleTests(FakeRepoCase):
             text = release.readme_text(self.spec, parts)
             with self.subTest(single=single):
                 self.assertIn("Encrypted bundles", text)
-                self.assertIn("your PC derives from the Arena level files each map is built from", text)
+                self.assertIn("your PC derives from the Arena resource files each map is built from", text)
+                self.assertIn("a fixed sample of a few MB", text)
                 self.assertIn("by path and size only", text)
+                self.assertNotIn("level files", text)
                 self.assertIn("not copy protection", text)
                 self.assertIn("reads no game data", text)  # the installation check's own statement, kept true next to the new paragraph
                 self.assertIn("are not encrypted", text)

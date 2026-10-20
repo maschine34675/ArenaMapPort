@@ -1319,6 +1319,8 @@ internal sealed class FakeFiles : IArenaFiles
     public readonly List<string> Opened = new();
     public Func<string, Exception?>? FailLength;
     public Func<string, Exception?>? FailOpen;
+    /// <summary>Bytes Open returns instead of the file's (a file that changed between the size check and the read).</summary>
+    public Func<string, byte[]?>? Replace;
 
     public long Length(string relativePath)
     {
@@ -1334,7 +1336,7 @@ internal sealed class FakeFiles : IArenaFiles
         Exception? failure = FailOpen?.Invoke(relativePath);
         if (failure != null)
             throw failure;
-        return new MemoryStream(Files[relativePath]);
+        return new MemoryStream(Replace?.Invoke(relativePath) ?? Files[relativePath]);
     }
 
     public FakeFiles Clone()
@@ -1347,8 +1349,9 @@ internal sealed class FakeFiles : IArenaFiles
 }
 
 /// <summary>
-/// Key derivation, key wrap and key resolution: the pinned HKDF info, wrap and unwrap, the deterministic salt, sensitivity to one bit of content,
-/// to the order and to the sizes of the files, several wraps per key file, and every failure cause (E1-E6 of docs/PLAN-ENCRYPTION.md 0.9).
+/// Key derivation, key wrap and key resolution: the pinned labels, the sample of each file (offsets, whole small files, a golden digest from an
+/// independent implementation), wrap and unwrap, the deterministic salt, sensitivity to one byte inside the sample, to the order and size of the files
+/// and to the sample parameters, several wraps per key file, and every failure cause (E1-E6 of docs/PLAN-ENCRYPTION.md 0.9; key source of section 6).
 /// </summary>
 public sealed class KeyDerivationTests : IDisposable
 {
@@ -1356,10 +1359,13 @@ public sealed class KeyDerivationTests : IDisposable
     const string Version = "0.6.1.0.48206";
     static readonly string[] Paths =
     {
-        "EscapeFromTarkovArena_Data/level41",
-        "EscapeFromTarkovArena_Data/level43",
-        "EscapeFromTarkovArena_Data/level45",
+        "EscapeFromTarkovArena_Data/sharedassets41.assets.resS",
+        "EscapeFromTarkovArena_Data/sharedassets41.resource",
+        "EscapeFromTarkovArena_Data/sharedassets45.assets.resS",
     };
+
+    /// <summary>8 blocks of 4 KiB: files up to 32 KiB are read whole, the 2.5 MB file through its sample.</summary>
+    static readonly KeySample Sample = new(4096, 8);
 
     readonly List<string> _tempDirs = new();
 
@@ -1372,7 +1378,7 @@ public sealed class KeyDerivationTests : IDisposable
         }
     }
 
-    // sizes are chosen so the hashing loop sees a file under one block, one above two blocks and a tiny one
+    // a file read whole, one read through its sample and a tiny one
     static FakeFiles Install(int seed = 0)
     {
         var fs = new FakeFiles();
@@ -1382,12 +1388,16 @@ public sealed class KeyDerivationTests : IDisposable
         return fs;
     }
 
-    static KeyWrap MakeWrap(FakeFiles fs, ICryptoProvider p, string builtFor = Version, string[]? paths = null, byte[]? kMap = null, string map = Map)
+    // straight from the bytes, so the open log of the FakeFiles records only what Resolve opens
+    static byte[] Digest(FakeFiles fs, string path, ICryptoProvider p, KeySample? sample = null) =>
+        KeyResolver.FileDigest(new MemoryStream(fs.Files[path]), path, fs.Files[path].Length, sample ?? Sample, p, out _);
+
+    static KeyWrap MakeWrap(FakeFiles fs, ICryptoProvider p, string builtFor = Version, string[]? paths = null, byte[]? kMap = null, string map = Map, KeySample? sample = null)
     {
         paths ??= Paths;
         var entries = paths.Select(x => new KeyFileEntry(x, fs.Files[x].Length)).ToList();
-        byte[][] hashes = paths.Select(x => p.Sha256(fs.Files[x], 0, fs.Files[x].Length)).ToArray();
-        return KeyResolver.Wrap(map, kMap ?? Crypt.KMap, builtFor, entries, hashes, p);
+        byte[][] digests = paths.Select(x => Digest(fs, x, p, sample)).ToArray();
+        return KeyResolver.Wrap(map, kMap ?? Crypt.KMap, builtFor, sample ?? Sample, entries, digests, p);
     }
 
     static KeyFile KeyOf(params KeyWrap[] wraps)
@@ -1397,6 +1407,8 @@ public sealed class KeyDerivationTests : IDisposable
             kf.Wraps.Add(w);
         return kf;
     }
+
+    static KeyWrap WithSample(KeyWrap w, KeySample sample) => new(w.BuiltFor, sample, w.Files, w.Salt, w.WrappedKey, w.Check);
 
     [Theory, ProviderData]
     public void Resolve_RecoversTheContentKey_FromTheArenaFiles(string name)
@@ -1411,7 +1423,8 @@ public sealed class KeyDerivationTests : IDisposable
         Assert.Equal(KeyFailure.None, r.Cause);
         Assert.Equal(0, r.WrapIndex);
         Assert.Equal(3, r.FilesHashed);
-        Assert.Equal(5000L + 2_500_000 + 100, r.BytesHashed);
+        Assert.Equal(5000L + 8 * 4096 + 100, r.BytesHashed);       // the small files whole, the large one through its sample
+        Assert.Equal(5000L + 2_500_000 + 100, r.BytesListed);
         Assert.Equal(Version, r.BuiltFor);
         Assert.Equal(p.Name, r.Provider);
         Assert.True(r.Ms >= 0);
@@ -1441,16 +1454,121 @@ public sealed class KeyDerivationTests : IDisposable
         ICryptoProvider? p = Crypt.Get(name);
         if (p == null)
             return;
-        Assert.Equal("ArenaMapPort bundle key v1 arena_bowl", Encoding.UTF8.GetString(KeyResolver.KekInfo("arena_bowl")));
+        Assert.Equal("ArenaMapPort bundle key v2 arena_bowl", Encoding.UTF8.GetString(KeyResolver.KekInfo("arena_bowl")));
         byte[] ikm = Crypt.Random(96, 5);
         byte[] salt = Crypt.Random(32, 6);
-        byte[] expected = HKDF.DeriveKey(HashAlgorithmName.SHA256, ikm, 72, salt, Crypt.Ascii("ArenaMapPort bundle key v1 arena_bowl"));
+        byte[] expected = HKDF.DeriveKey(HashAlgorithmName.SHA256, ikm, 72, salt, Crypt.Ascii("ArenaMapPort bundle key v2 arena_bowl"));
         Kek kek = KeyResolver.DeriveKek(ikm, salt, "arena_bowl", p);
         Assert.Equal(Crypt.ToHex(expected[..32]), Crypt.ToHex(kek.Enc));
         Assert.Equal(Crypt.ToHex(expected[32..64]), Crypt.ToHex(kek.Mac));
         Assert.Equal(Crypt.ToHex(expected[64..72]), Crypt.ToHex(kek.Nonce));
         Kek other = KeyResolver.DeriveKek(ikm, salt, "arena_bay5", p);
         Assert.NotEqual(Crypt.ToHex(kek.Enc), Crypt.ToHex(other.Enc));
+    }
+
+    [Fact]
+    public void TheSampleOffsets_DependOnlyOnTheSize_StartAtZero_EndAtTheEnd_AndNeverOverlap()
+    {
+        var sample = new KeySample(4096, 8);
+        Assert.Equal(32768, sample.BytesPerFile);
+        Assert.True(sample.ReadsWholeFile(32768));
+        Assert.False(sample.ReadsWholeFile(32769));
+        Assert.Equal(31_488, sample.BytesRead(31_488));
+        Assert.Equal(32768, sample.BytesRead(578_163_152));
+        // the offsets the independent Python reference printed for 300,000 bytes
+        Assert.Equal(new long[] { 0, 42272, 84544, 126816, 169088, 211360, 253632, 295904 }, Enumerable.Range(0, 8).Select(k => sample.BlockOffset(300_000, k)));
+        foreach (long size in new long[] { 32769, 40_000, 1_000_003, 578_163_152, 5L << 32 })
+        {
+            long[] offsets = Enumerable.Range(0, 8).Select(k => sample.BlockOffset(size, k)).ToArray();
+            Assert.Equal(0, offsets[0]);
+            Assert.Equal(size, offsets[^1] + 4096);
+            for (int k = 1; k < offsets.Length; k++)
+                Assert.True(offsets[k] >= offsets[k - 1] + 4096, size + ": blocks " + (k - 1) + " and " + k + " overlap");
+        }
+        Assert.Throws<InvalidOperationException>(() => sample.BlockOffset(32768, 0));
+        Assert.Throws<ArgumentOutOfRangeException>(() => sample.BlockOffset(300_000, 8));
+        Assert.Throws<ArgumentOutOfRangeException>(() => sample.BlockOffset(300_000, -1));
+    }
+
+    [Theory]
+    [InlineData(4096, 2, null)]
+    [InlineData(65536, 16, null)]
+    [InlineData(1 << 20, 64, null)]
+    [InlineData(4095, 16, "block_size")]
+    [InlineData(4097, 16, "block_size")]
+    [InlineData(0, 16, "block_size")]
+    [InlineData((1 << 20) + 4096, 2, "block_size")]
+    [InlineData(65536, 1, "blocks")]
+    [InlineData(4096, 1025, "blocks")]
+    [InlineData(1 << 20, 65, "64 MiB")]
+    public void TheSampleRules_AreChecked(int blockSize, int blocks, string? problem)
+    {
+        string? actual = new KeySample(blockSize, blocks).Problem();
+        if (problem == null)
+            Assert.Null(actual);
+        else
+            Assert.Contains(problem, actual);
+    }
+
+    [Theory, ProviderData]
+    public void FileDigest_IsPinnedByAnIndependentImplementation(string name)
+    {
+        // Values printed by a 20-line Python reference (hashlib only, no ArenaMapPort code, 2026-10-20) of docs/PLAN-ENCRYPTION.md section 6 over the
+        // byte pattern (i * 31 + 7) & 0xFF. If they change, every shipped key file stops working: that needs a new key file schema, not a new constant here.
+        ICryptoProvider? p = Crypt.Get(name);
+        if (p == null)
+            return;
+        (string Path, int Size, KeySample Sample, string Digest)[] cases =
+        {
+            ("EscapeFromTarkovArena_Data/sharedassets41.assets.resS", 300_000, new KeySample(4096, 8), "5ca9efc805b8508376d0a7db8f658f5e2c4e253753938269b1ab12d16f19bf27"),
+            ("EscapeFromTarkovArena_Data/sharedassets48.resource", 31_488, new KeySample(4096, 8), "03a2793c183a99f9d546de14979eb958bb51d4fada7f5f571455706733c2a2a8"),
+            ("EscapeFromTarkovArena_Data/sharedassets95.assets.resS", 1_048_577, new KeySample(65536, 16), "c6d3c1b27fbe2b4e08ef18dc4b8a3a157609803c4072227a4665720959e62a2e"),
+        };
+        foreach (var c in cases)
+        {
+            byte[] digest = KeyResolver.FileDigest(new MemoryStream(Crypt.Pattern(c.Size)), c.Path, c.Size, c.Sample, p, out long read);
+            Assert.Equal(c.Digest, Crypt.ToHex(digest));
+            Assert.Equal(c.Sample.BytesRead(c.Size), read);
+        }
+        Assert.Equal("ArenaMapPort file sample v2\0a/b\0" + "7\0" + "4096\0" + "8\0",
+            Encoding.UTF8.GetString(KeyResolver.SampleHeader("a/b", 7, new KeySample(4096, 8))));
+    }
+
+    [Theory, ProviderData]
+    public void FileDigest_BindsThePathTheSizeAndTheSample_AndReadsOnlyTheSample(string name)
+    {
+        ICryptoProvider? p = Crypt.Get(name);
+        if (p == null)
+            return;
+        byte[] data = Crypt.Random(300_000, 9);
+        string path = Paths[0];
+        string Hex(string at, long size, KeySample sample, byte[] bytes) => Crypt.ToHex(KeyResolver.FileDigest(new MemoryStream(bytes), at, size, sample, p, out _));
+        string baseline = Hex(path, data.Length, Sample, data);
+        Assert.NotEqual(baseline, Hex(Paths[2], data.Length, Sample, data));                 // same bytes under another name
+        Assert.NotEqual(baseline, Hex(path, data.Length, new KeySample(4096, 9), data));      // another sample
+        Assert.NotEqual(baseline, Hex(path, data.Length, new KeySample(8192, 8), data));
+        // equal to SHA-256 of the header and the eight blocks, computed here by hand
+        using (var sha = IncrementalHash.CreateHash(HashAlgorithmName.SHA256))
+        {
+            sha.AppendData(KeyResolver.SampleHeader(path, data.Length, Sample));
+            for (int k = 0; k < 8; k++)
+                sha.AppendData(data, (int)Sample.BlockOffset(data.Length, k), 4096);
+            Assert.Equal(Crypt.ToHex(sha.GetHashAndReset()), baseline);
+        }
+        // a byte between two blocks is not read; a byte inside the first, a middle and the last block is
+        long gap = Sample.BlockOffset(data.Length, 3) + 4096 + 100;
+        Assert.True(gap < Sample.BlockOffset(data.Length, 4));
+        foreach ((long offset, bool read) in new[] { (0L, true), (Sample.BlockOffset(data.Length, 4) + 7, true), (data.Length - 1L, true), (gap, false) })
+        {
+            byte[] changed = (byte[])data.Clone();
+            changed[offset] ^= 0x01;
+            Assert.Equal(read, Hex(path, data.Length, Sample, changed) != baseline);
+        }
+        // a stream that does not hold the listed size
+        Assert.Throws<ArenaFileChangedException>(() => KeyResolver.FileDigest(new MemoryStream(data), path, data.Length + 1, Sample, p, out _));
+        Assert.Throws<ArenaFileChangedException>(() => KeyResolver.FileDigest(new MemoryStream(new byte[5000]), path, 4999, Sample, p, out _));
+        Assert.Throws<ArenaFileChangedException>(() => KeyResolver.FileDigest(new MemoryStream(new byte[5000]), path, 5001, Sample, p, out _));
+        Assert.Throws<ArgumentException>(() => KeyResolver.FileDigest(new MemoryStream(data), path, data.Length, new KeySample(100, 8), p, out _));
     }
 
     [Theory, ProviderData]
@@ -1468,6 +1586,8 @@ public sealed class KeyDerivationTests : IDisposable
         Assert.Equal(32, a.Salt.Length);
         Assert.Equal(32, a.WrappedKey.Length);
         Assert.Equal(32, a.Check.Length);
+        Assert.Equal(4096, a.Sample.BlockSize);
+        Assert.Equal(8, a.Sample.Blocks);
         Assert.NotEqual(Crypt.ToHex(Crypt.KMap), Crypt.ToHex(a.WrappedKey));
 
         byte[] otherKey = (byte[])Crypt.KMap.Clone();
@@ -1476,34 +1596,37 @@ public sealed class KeyDerivationTests : IDisposable
         Assert.NotEqual(Crypt.ToHex(a.Salt), Crypt.ToHex(MakeWrap(fs, p, builtFor: "0.6.2.0.1").Salt));
         Assert.NotEqual(Crypt.ToHex(a.Salt), Crypt.ToHex(MakeWrap(fs, p, paths: new[] { Paths[1], Paths[0], Paths[2] }).Salt));
         Assert.NotEqual(Crypt.ToHex(a.Salt), Crypt.ToHex(MakeWrap(fs, p, map: "arena_other").Salt));
+        Assert.NotEqual(Crypt.ToHex(a.Salt), Crypt.ToHex(MakeWrap(fs, p, sample: new KeySample(4096, 9)).Salt));
+        Assert.Throws<ArgumentException>(() => KeyResolver.Wrap(Map, Crypt.KMap, Version, new KeySample(4096, 1), a.Files, new byte[3][], p));
     }
 
     [Theory, ProviderData]
     public void Wrap_IsPinnedByAGoldenVector(string name)
     {
-        // Fixed inputs (K_map = i * 7 + 1, two file hashes of short stand-in strings). The three values were first produced by an independent
-        // implementation of docs/PLAN-ENCRYPTION.md 0.2 in PowerShell on System.Security.Cryptography (no ArenaMapPort code, 2026-10-19).
-        // If they change, every shipped key file stops working: that needs a new key file schema, not a new constant here.
+        // Fixed inputs (K_map = i * 7 + 1, Bowl's two sharedassets41 files with their 0.6.1 sizes, two digests of short stand-in strings, sample 64 KiB x 16).
+        // The three values were first produced by an independent implementation of docs/PLAN-ENCRYPTION.md 0.2 and section 6 in PowerShell on
+        // System.Security.Cryptography (no ArenaMapPort code, 2026-10-20). If they change, every shipped key file stops working: that needs a new key file
+        // schema, not a new constant here.
         ICryptoProvider? p = Crypt.Get(name);
         if (p == null)
             return;
         var files = new List<KeyFileEntry>
         {
-            new("EscapeFromTarkovArena_Data/level41", 18935904),
-            new("EscapeFromTarkovArena_Data/level43", 10015988),
+            new("EscapeFromTarkovArena_Data/sharedassets41.assets.resS", 578163152),
+            new("EscapeFromTarkovArena_Data/sharedassets41.resource", 5433376),
         };
-        byte[][] hashes =
+        byte[][] digests =
         {
-            SHA256.HashData(Encoding.UTF8.GetBytes("level41 content")),
-            SHA256.HashData(Encoding.UTF8.GetBytes("level43 content")),
+            SHA256.HashData(Encoding.UTF8.GetBytes("sharedassets41.assets.resS sample")),
+            SHA256.HashData(Encoding.UTF8.GetBytes("sharedassets41.resource sample")),
         };
-        KeyWrap wrap = KeyResolver.Wrap("arena_test", Crypt.KMap, "0.6.1.0.48206", files, hashes, p);
-        Assert.Equal("5496e8f8ca05dce566b03891ede5b117722fb0375a7b688d57d50001da193bc2", Crypt.ToHex(wrap.Salt));
-        Assert.Equal("e0b97e83be49ef58936ab8c3a8807aa2276168222fd280a32a3f1ad568cc31a6", Crypt.ToHex(wrap.WrappedKey));
-        Assert.Equal("9ec3ecb6fc15a6ad1f474243553aef43c07dd6f0e2df89e181dbf226b7cf2eb5", Crypt.ToHex(wrap.Check));
+        KeyWrap wrap = KeyResolver.Wrap("arena_test", Crypt.KMap, "0.6.1.0.48206", new KeySample(65536, 16), files, digests, p);
+        Assert.Equal("0d2225a7262a73586b27da3b329cf145578799174e1f0dd6b78345a543666338", Crypt.ToHex(wrap.Salt));
+        Assert.Equal("d4ca7790cb402b68b845a375231201116729aea8c7757a13e4ef808bbcbdd36f", Crypt.ToHex(wrap.WrappedKey));
+        Assert.Equal("c05cda0c89d8d3590f5650767b573c3b04619f3132d1fd3e6ab70078a263ccad", Crypt.ToHex(wrap.Check));
 
-        // and the player side recovers K_map from the same two hashes
-        byte[] ikm = hashes.SelectMany(h => h).ToArray();
+        // and the player side recovers K_map from the same two digests
+        byte[] ikm = digests.SelectMany(h => h).ToArray();
         Kek kek = KeyResolver.DeriveKek(ikm, wrap.Salt, "arena_test", p);
         Assert.Equal(Crypt.ToHex(Crypt.KMap), Crypt.ToHex(KeyResolver.Unwrap(wrap, "arena_test", kek, p)!));
     }
@@ -1516,17 +1639,17 @@ public sealed class KeyDerivationTests : IDisposable
             return;
         FakeFiles fs = Install();
         KeyWrap wrap = MakeWrap(fs, p);
-        byte[] ikm = Paths.SelectMany(x => p.Sha256(fs.Files[x], 0, fs.Files[x].Length)).ToArray();
+        byte[] ikm = Paths.SelectMany(x => Digest(fs, x, p)).ToArray();
         Kek kek = KeyResolver.DeriveKek(ikm, wrap.Salt, Map, p);
         Assert.Equal(Crypt.ToHex(Crypt.KMap), Crypt.ToHex(KeyResolver.Unwrap(wrap, Map, kek, p)!));
         Assert.Null(KeyResolver.Unwrap(wrap, "arena_other", kek, p));
 
         byte[] badCheck = (byte[])wrap.Check.Clone();
         badCheck[31] ^= 1;
-        Assert.Null(KeyResolver.Unwrap(new KeyWrap(wrap.BuiltFor, wrap.Files, wrap.Salt, wrap.WrappedKey, badCheck), Map, kek, p));
+        Assert.Null(KeyResolver.Unwrap(new KeyWrap(wrap.BuiltFor, wrap.Sample, wrap.Files, wrap.Salt, wrap.WrappedKey, badCheck), Map, kek, p));
         byte[] badWrapped = (byte[])wrap.WrappedKey.Clone();
         badWrapped[0] ^= 1;
-        Assert.Null(KeyResolver.Unwrap(new KeyWrap(wrap.BuiltFor, wrap.Files, wrap.Salt, badWrapped, wrap.Check), Map, kek, p));
+        Assert.Null(KeyResolver.Unwrap(new KeyWrap(wrap.BuiltFor, wrap.Sample, wrap.Files, wrap.Salt, badWrapped, wrap.Check), Map, kek, p));
 
         Assert.False(ConstantTime.AreEqual(new byte[] { 1, 2 }, new byte[] { 1, 2, 3 }));
         Assert.False(ConstantTime.AreEqual(null!, new byte[1]));
@@ -1534,14 +1657,15 @@ public sealed class KeyDerivationTests : IDisposable
     }
 
     [Theory, ProviderData]
-    public void OneChangedBit_InAnyFile_GivesContentDiffers(string name)
+    public void OneChangedByte_InsideTheSample_GivesContentDiffers_AndOutsideItDoesNot(string name)
     {
         ICryptoProvider? p = Crypt.Get(name);
         if (p == null)
             return;
         FakeFiles fs = Install();
         KeyFile key = KeyOf(MakeWrap(fs, p));
-        foreach ((string path, int offset) in new[] { (Paths[0], 0), (Paths[1], 1_048_576), (Paths[1], 2_499_999), (Paths[2], 99) })
+        long block5 = Sample.BlockOffset(2_500_000, 5);
+        foreach ((string path, long offset) in new[] { (Paths[0], 0L), (Paths[0], 4999L), (Paths[1], 0L), (Paths[1], block5 + 4095), (Paths[1], 2_499_999L), (Paths[2], 99L) })
         {
             FakeFiles changed = fs.Clone();
             changed.Files[path][offset] ^= 0x01;
@@ -1552,10 +1676,14 @@ public sealed class KeyDerivationTests : IDisposable
             Assert.Contains("do not unlock the key", r.Detail);
             Assert.Equal(Version, r.BuiltFor);
         }
+        // a byte between two blocks of the large file is not part of the key: an update that touches only such bytes keeps the key working
+        FakeFiles untouched = fs.Clone();
+        untouched.Files[Paths[1]][block5 + 4096 + 1000] ^= 0x01;
+        Assert.True(KeyResolver.Resolve(key, "x", Version, untouched, p).Ok);
     }
 
     [Theory, ProviderData]
-    public void TheFileOrder_IsPartOfTheKey(string name)
+    public void TheFileOrder_AndTheSampleParameters_ArePartOfTheKey(string name)
     {
         ICryptoProvider? p = Crypt.Get(name);
         if (p == null)
@@ -1564,10 +1692,13 @@ public sealed class KeyDerivationTests : IDisposable
         KeyWrap wrap = MakeWrap(fs, p);
         // the same wrap with two entries swapped (each entry keeps its own size, so the sizes still match)
         var swapped = new List<KeyFileEntry> { wrap.Files[1], wrap.Files[0], wrap.Files[2] };
-        KeyWrap reordered = new(wrap.BuiltFor, swapped, wrap.Salt, wrap.WrappedKey, wrap.Check);
+        KeyWrap reordered = new(wrap.BuiltFor, wrap.Sample, swapped, wrap.Salt, wrap.WrappedKey, wrap.Check);
         KeyResolution r = KeyResolver.Resolve(KeyOf(reordered), "x", Version, fs, p);
         Assert.False(r.Ok);
         Assert.Equal(KeyFailure.ContentDiffers, r.Cause);
+        // a key file whose sample parameters were edited reads other bytes and does not unlock
+        Assert.Equal(KeyFailure.ContentDiffers, KeyResolver.Resolve(KeyOf(WithSample(wrap, new KeySample(4096, 9))), "x", Version, fs, p).Cause);
+        Assert.Equal(KeyFailure.ContentDiffers, KeyResolver.Resolve(KeyOf(WithSample(wrap, new KeySample(8192, 8))), "x", Version, fs, p).Cause);
         Assert.True(KeyResolver.Resolve(KeyOf(wrap), "x", Version, fs, p).Ok);
     }
 
@@ -1625,6 +1756,30 @@ public sealed class KeyDerivationTests : IDisposable
         Assert.Equal(KeyFailure.SizeDiffers, same.Cause);
         Assert.Equal(same.BuiltFor, same.InstalledVersion);
         Assert.Null(KeyResolver.Resolve(key, "x", null, other, p).InstalledVersion);
+    }
+
+    [Theory, ProviderData]
+    public void AFileThatChangesBetweenTheSizeCheckAndTheRead_IsSizeDiffers(string name)
+    {
+        ICryptoProvider? p = Crypt.Get(name);
+        if (p == null)
+            return;
+        FakeFiles fs = Install();
+        KeyFile key = KeyOf(MakeWrap(fs, p));
+        // the sampled file: its stream reports another length
+        fs.Replace = path => path == Paths[1] ? new byte[2_400_000] : null;
+        KeyResolution r = KeyResolver.Resolve(key, "x", Version, fs, p);
+        Assert.Equal(KeyFailure.SizeDiffers, r.Cause);
+        Assert.Equal(Paths[1], r.FailedPath);
+        Assert.Equal(2_400_000, r.ActualSize);
+        Assert.Equal(2_500_000, r.ExpectedSize);
+        Assert.Contains("changed size while it was read", r.Detail);
+        // a file read whole that ends early
+        fs.Replace = path => path == Paths[0] ? new byte[4000] : null;
+        r = KeyResolver.Resolve(key, "x", Version, fs, p);
+        Assert.Equal(KeyFailure.SizeDiffers, r.Cause);
+        Assert.Equal(Paths[0], r.FailedPath);
+        Assert.Equal(4000, r.ActualSize);
     }
 
     [Theory, ProviderData]
@@ -1691,6 +1846,12 @@ public sealed class KeyDerivationTests : IDisposable
         Assert.Equal(KeyFailure.KeyFileInvalid, wrongMap.Cause);
         Assert.Contains("arena_test", wrongMap.Detail);
 
+        // a key file of the retired level-file scheme (schema 1) is refused like any unknown schema
+        File.WriteAllText(path, File.ReadAllText(path).Replace("\"schema\": 2", "\"schema\": 1"));
+        KeyResolution retired = KeyResolver.ResolveFile(path, "x", Version, fs, p, Map);
+        Assert.Equal(KeyFailure.KeyFileInvalid, retired.Cause);
+        Assert.Equal("unsupported key file schema 1", retired.Detail);
+
         File.WriteAllBytes(path, new byte[70_000]);
         Assert.Equal(KeyFailure.KeyFileInvalid, KeyResolver.ResolveFile(path, "x", Version, fs, p).Cause);
     }
@@ -1722,47 +1883,43 @@ public sealed class KeyDerivationTests : IDisposable
         FakeFiles fs = Install();
         // two wraps over the same files: the first has a wrong check value, the second is good; the files are hashed once for both
         KeyWrap first = MakeWrap(fs, p, builtFor: "a");
-        KeyWrap tampered = new(first.BuiltFor, first.Files, first.Salt, first.WrappedKey, new byte[32]);
+        KeyWrap tampered = new(first.BuiltFor, first.Sample, first.Files, first.Salt, first.WrappedKey, new byte[32]);
         KeyWrap second = MakeWrap(fs, p, builtFor: "b");
         KeyResolution r = KeyResolver.Resolve(KeyOf(tampered, second), "x", "b", fs, p);
         Assert.True(r.Ok);
         Assert.Equal(1, r.WrapIndex);
         Assert.Equal(3, r.FilesHashed);
         Assert.Equal(3, fs.Opened.Count);
+        // a wrap with other sample parameters reads the files again (other bytes)
+        fs.Opened.Clear();
+        KeyWrap other = MakeWrap(fs, p, builtFor: "c", sample: new KeySample(8192, 4));
+        r = KeyResolver.Resolve(KeyOf(tampered, other), "x", "c", fs, p);
+        Assert.True(r.Ok);
+        Assert.Equal(6, r.FilesHashed);
     }
 
     [Theory, ProviderData]
-    public void DeriveKek_FromRealFiles_IsSensitiveToOrderAndSize(string name)
+    public void FileDigest_ThroughTheRealFileAccess_EqualsTheStreamDigest(string name)
     {
         ICryptoProvider? p = Crypt.Get(name);
         if (p == null)
             return;
         string dir = TempDir();
-        string a = Path.Combine(dir, "level41");
-        string b = Path.Combine(dir, "level43");
-        File.WriteAllBytes(a, Crypt.Random(3000, 1));
-        File.WriteAllBytes(b, Crypt.Random(1_200_000, 2));
-        byte[] salt = Crypt.Random(32, 3);
-
-        Kek ab = KeyResolver.DeriveKek(new[] { a, b }, salt, Map, p);
-        Kek ab2 = KeyResolver.DeriveKek(new[] { a, b }, salt, Map, p);
-        Kek ba = KeyResolver.DeriveKek(new[] { b, a }, salt, Map, p);
-        Assert.Equal(Crypt.ToHex(ab.Enc), Crypt.ToHex(ab2.Enc));
-        Assert.NotEqual(Crypt.ToHex(ab.Enc), Crypt.ToHex(ba.Enc));
-
-        File.AppendAllText(b, "x");   // one byte longer
-        Kek longer = KeyResolver.DeriveKek(new[] { a, b }, salt, Map, p);
-        Assert.NotEqual(Crypt.ToHex(ab.Enc), Crypt.ToHex(longer.Enc));
-        Assert.NotEqual(Crypt.ToHex(ab.Mac), Crypt.ToHex(longer.Mac));
-
-        // the file-based derivation equals the IKM-based one, and the IKM is the concatenated whole-file hashes
-        byte[] ikm = KeyResolver.ComputeIkm(new[] { a, b }, p);
-        Assert.Equal(64, ikm.Length);
-        Assert.Equal(Crypt.ToHex(SHA256.HashData(File.ReadAllBytes(a))), Crypt.ToHex(ikm[..32]));
-        Assert.Equal(Crypt.ToHex(SHA256.HashData(File.ReadAllBytes(b))), Crypt.ToHex(ikm[32..]));
-        Assert.Equal(Crypt.ToHex(longer.Enc), Crypt.ToHex(KeyResolver.DeriveKek(ikm, salt, Map, p).Enc));
-        Assert.Equal(Crypt.ToHex(SHA256.HashData(File.ReadAllBytes(a))), Crypt.ToHex(KeyResolver.HashFile(a, p)));
-        Assert.Throws<FileNotFoundException>(() => KeyResolver.ComputeIkm(new[] { Path.Combine(dir, "absent") }, p));
+        Directory.CreateDirectory(Path.Combine(dir, "EscapeFromTarkovArena_Data"));
+        byte[] large = Crypt.Random(1_200_000, 2);
+        byte[] small = Crypt.Random(3000, 1);
+        File.WriteAllBytes(Path.Combine(dir, "EscapeFromTarkovArena_Data", "sharedassets41.assets.resS"), large);
+        File.WriteAllBytes(Path.Combine(dir, "EscapeFromTarkovArena_Data", "sharedassets41.resource"), small);
+        var files = new DirectoryArenaFiles(dir);
+        foreach ((string rel, byte[] data) in new[] { (Paths[0], large), (Paths[1], small) })
+        {
+            byte[] fromDisk = KeyResolver.FileDigest(files, new KeyFileEntry(rel, data.Length), Sample, p, out long read);
+            byte[] fromMemory = KeyResolver.FileDigest(new MemoryStream(data), rel, data.Length, Sample, p, out _);
+            Assert.Equal(Crypt.ToHex(fromMemory), Crypt.ToHex(fromDisk));
+            Assert.Equal(Sample.BytesRead(data.Length), read);
+        }
+        Assert.Throws<ArenaFileChangedException>(() => KeyResolver.FileDigest(files, new KeyFileEntry(Paths[0], large.Length - 1), Sample, p, out _));
+        Assert.Throws<FileNotFoundException>(() => KeyResolver.FileDigest(files, new KeyFileEntry(Paths[2], 5), Sample, p, out _));
     }
 
     [Fact]
@@ -1776,7 +1933,10 @@ public sealed class KeyDerivationTests : IDisposable
         Assert.Equal(3, files.Length(@"EscapeFromTarkovArena_Data\level41"));
         Assert.Equal(-1, files.Length("EscapeFromTarkovArena_Data/level42"));
         using (Stream s = files.Open("EscapeFromTarkovArena_Data/level41"))
+        {
             Assert.Equal(3, s.Length);
+            Assert.True(s.CanSeek);
+        }
         foreach (string bad in new[] { "../x", "..", "a/../../x", "C:/Windows/win.ini", "/abs", "", "a//b" })
             Assert.Throws<IOException>(() => files.Length(bad));
         Assert.Throws<IOException>(() => files.Open("../" + Path.GetFileName(dir) + "/EscapeFromTarkovArena_Data/level41"));
@@ -1813,10 +1973,17 @@ public sealed class KeyFileTests : IDisposable
 
     static byte[] Fill(byte value) => Enumerable.Repeat(value, 32).ToArray();
 
+    static readonly KeySample Sample64K = new(65536, 16);
+
+    static readonly string[] BowlFiles = { "EscapeFromTarkovArena_Data/sharedassets41.assets.resS", "EscapeFromTarkovArena_Data/sharedassets41.resource" };
+
     static KeyWrap Wrap(string builtFor = "0.6.1.0.48206", int files = 2, byte salt = 0x11) => new(
         builtFor,
-        Enumerable.Range(0, files).Select(i => new KeyFileEntry("EscapeFromTarkovArena_Data/level" + (41 + 2 * i), i == 0 ? 18935904 : 10015988)).ToList(),
+        Sample64K,
+        Enumerable.Range(0, files).Select(i => new KeyFileEntry(i < 2 ? BowlFiles[i] : "EscapeFromTarkovArena_Data/sharedassets" + (43 + i) + ".assets.resS", i == 0 ? 578163152 : 5433376)).ToList(),
         Fill(salt), Fill(0x22), Fill(0x33));
+
+    static KeyWrap Simple(string builtFor, IList<KeyFileEntry> files, byte[] salt, KeySample? sample = null) => new(builtFor, sample ?? Sample64K, files, salt, Fill(2), Fill(3));
 
     static KeyFile Sample(int wraps = 1)
     {
@@ -1834,19 +2001,22 @@ public sealed class KeyFileTests : IDisposable
 
     static readonly string Golden = Lines(
         "{",
-        "  \"schema\": 1,",
+        "  \"schema\": 2,",
         "  \"map_key\": \"arena_bowl\",",
         "  \"wraps\": [",
         "    {",
         "      \"built_for\": \"0.6.1.0.48206\",",
+        "      \"sample\": { \"block_size\": 65536, \"blocks\": 16 },",
         "      \"files\": [",
-        "        { \"path\": \"EscapeFromTarkovArena_Data/level41\", \"size\": 18935904 },",
-        "        { \"path\": \"EscapeFromTarkovArena_Data/level43\", \"size\": 10015988 }",
+        "        { \"path\": \"EscapeFromTarkovArena_Data/sharedassets41.assets.resS\", \"size\": 578163152 },",
+        "        { \"path\": \"EscapeFromTarkovArena_Data/sharedassets41.resource\", \"size\": 5433376 }",
         "      ],",
         $"      \"salt\": \"{H11}\", \"wrapped_key\": \"{H22}\", \"check\": \"{H33}\"",
         "    }",
         "  ]",
         "}");
+
+    const string ResS = "\"EscapeFromTarkovArena_Data/sharedassets41.assets.resS\"";
 
     [Fact]
     public void CanonicalWriter_IsPinnedByAGoldenString()
@@ -1862,15 +2032,16 @@ public sealed class KeyFileTests : IDisposable
     public void CanonicalWriter_SeparatesSeveralWraps_AndWritesLowercaseHex()
     {
         KeyFile two = Sample();
-        two.Wraps.Add(new KeyWrap("0.6.2.0.50000", new List<KeyFileEntry> { new("EscapeFromTarkovArena_Data/level41", 5) },
+        two.Wraps.Add(new KeyWrap("0.6.2.0.50000", new KeySample(4096, 2), new List<KeyFileEntry> { new(BowlFiles[0], 5) },
             Enumerable.Repeat((byte)0xAB, 32).ToArray(), Fill(0xCD), Fill(0xEF)));
         string json = two.ToCanonicalJson();
-        Assert.Contains("    },\n    {\n      \"built_for\": \"0.6.2.0.50000\"", json);
+        Assert.Contains("    },\n    {\n      \"built_for\": \"0.6.2.0.50000\",\n      \"sample\": { \"block_size\": 4096, \"blocks\": 2 },", json);
         Assert.Contains(string.Concat(Enumerable.Repeat("ab", 32)), json);
         Assert.DoesNotContain("AB", json);
         Assert.Equal(json, KeyFile.Parse(json).ToCanonicalJson());
         Assert.Equal(2, KeyFile.Parse(json).Wraps.Count);
-        Assert.Equal("{\n  \"schema\": 1,\n  \"map_key\": \"arena_bowl\",\n  \"wraps\": []\n}\n", new KeyFile("arena_bowl").ToCanonicalJson());
+        Assert.Equal(4096, KeyFile.Parse(json).Wraps[1].Sample.BlockSize);
+        Assert.Equal("{\n  \"schema\": 2,\n  \"map_key\": \"arena_bowl\",\n  \"wraps\": []\n}\n", new KeyFile("arena_bowl").ToCanonicalJson());
         Assert.Empty(KeyFile.Parse(new KeyFile("arena_bowl").ToCanonicalJson()).Wraps);
     }
 
@@ -1881,10 +2052,12 @@ public sealed class KeyFileTests : IDisposable
         Assert.Equal("arena_bowl", parsed.MapKey);
         KeyWrap wrap = Assert.Single(parsed.Wraps);
         Assert.Equal("0.6.1.0.48206", wrap.BuiltFor);
+        Assert.Equal(65536, wrap.Sample.BlockSize);
+        Assert.Equal(16, wrap.Sample.Blocks);
         Assert.Equal(2, wrap.Files.Count);
-        Assert.Equal("EscapeFromTarkovArena_Data/level41", wrap.Files[0].Path);
-        Assert.Equal(18935904, wrap.Files[0].Size);
-        Assert.Equal(10015988, wrap.Files[1].Size);
+        Assert.Equal(BowlFiles[0], wrap.Files[0].Path);
+        Assert.Equal(578163152, wrap.Files[0].Size);
+        Assert.Equal(5433376, wrap.Files[1].Size);
         Assert.Equal(H11, Crypt.ToHex(wrap.Salt));
         Assert.Equal(H22, Crypt.ToHex(wrap.WrappedKey));
         Assert.Equal(H33, Crypt.ToHex(wrap.Check));
@@ -1911,25 +2084,27 @@ public sealed class KeyFileTests : IDisposable
         Assert.Equal(Golden, KeyFile.Parse(Golden.Replace("\n", "\r\n")).ToCanonicalJson());
         Assert.Equal(Golden, KeyFile.Parse(Golden.Replace("\n", "")).ToCanonicalJson());
 
-        string escaped = Golden.Replace("\"0.6.1.0.48206\"", "\"0.6.\\u0031.0.\\u00348206\"").Replace("EscapeFromTarkovArena_Data/level41", "EscapeFromTarkovArena_Data\\/level41");
+        string escaped = Golden.Replace("\"0.6.1.0.48206\"", "\"0.6.\\u0031.0.\\u00348206\"").Replace(BowlFiles[0], "EscapeFromTarkovArena_Data\\/sharedassets41.assets.resS");
         KeyFile parsed = KeyFile.Parse(escaped);
         Assert.Equal("0.6.1.0.48206", parsed.Wraps[0].BuiltFor);
-        Assert.Equal("EscapeFromTarkovArena_Data/level41", parsed.Wraps[0].Files[0].Path);
+        Assert.Equal(BowlFiles[0], parsed.Wraps[0].Files[0].Path);
 
         string unknown = Golden
-            .Replace("\"schema\": 1,", "\"schema\": 1, \"comment\": {\"a\": [1, 2.5e3, true, null, \"x\", {\"b\": []}]},")
+            .Replace("\"schema\": 2,", "\"schema\": 2, \"comment\": {\"a\": [1, 2.5e3, true, null, \"x\", {\"b\": []}]},")
             .Replace("\"built_for\"", "\"future\": [[[]]], \"built_for\"")
+            .Replace("{ \"block_size\"", "{ \"stride\": 3, \"block_size\"")
             .Replace("{ \"path\"", "{ \"note\": \"n\", \"path\"");
         Assert.Equal(Golden, KeyFile.Parse(unknown).ToCanonicalJson());
         Assert.Equal(Golden, KeyFile.Parse(Golden.Replace(H11, H11.ToUpperInvariant())).ToCanonicalJson());
     }
 
     [Theory]
-    [InlineData("\"schema\": 1", "\"schema\": 2", "schema")]
-    [InlineData("\"schema\": 1", "\"schema\": 0", "schema")]
-    [InlineData("\"schema\": 1", "\"schema\": \"1\"", "integer")]
-    [InlineData("\"schema\": 1", "\"schema\": 1.0", "integer")]
-    [InlineData("\"schema\": 1,", "", "'schema'")]
+    [InlineData("\"schema\": 2", "\"schema\": 1", "unsupported key file schema 1")]
+    [InlineData("\"schema\": 2", "\"schema\": 3", "schema")]
+    [InlineData("\"schema\": 2", "\"schema\": 0", "schema")]
+    [InlineData("\"schema\": 2", "\"schema\": \"2\"", "integer")]
+    [InlineData("\"schema\": 2", "\"schema\": 2.0", "integer")]
+    [InlineData("\"schema\": 2,", "", "'schema'")]
     [InlineData("\"map_key\"", "\"mapkey\"", "'map_key'")]
     [InlineData("\"arena_bowl\"", "\"Arena_Bowl\"", "map_key")]
     [InlineData("\"arena_bowl\"", "\"\"", "map_key")]
@@ -1938,33 +2113,58 @@ public sealed class KeyFileTests : IDisposable
     [InlineData("\"wraps\": [", "\"wraps\": 5, \"x\": [", "array")]
     [InlineData("\"built_for\": \"0.6.1.0.48206\",", "", "'built_for'")]
     [InlineData("\"0.6.1.0.48206\"", "\"0.6\\n1\"", "control character")]
+    [InlineData("\"sample\": { \"block_size\": 65536, \"blocks\": 16 },", "", "'sample'")]
+    [InlineData("\"sample\": { \"block_size\": 65536, \"blocks\": 16 }", "\"sample\": [65536, 16]", "'sample' must be an object")]
+    [InlineData("\"block_size\": 65536, ", "", "'block_size'")]
+    [InlineData(", \"blocks\": 16", "", "'blocks'")]
+    [InlineData("\"block_size\": 65536", "\"block_size\": 65537", "block_size must be a multiple of 4096")]
+    [InlineData("\"block_size\": 65536", "\"block_size\": 2048", "block_size must be a multiple of 4096")]
+    [InlineData("\"block_size\": 65536", "\"block_size\": 2097152", "block_size must be a multiple of 4096")]
+    [InlineData("\"block_size\": 65536", "\"block_size\": -4096", "non-negative")]
+    [InlineData("\"block_size\": 65536", "\"block_size\": 4294967296", "non-negative")]
+    [InlineData("\"block_size\": 65536", "\"block_size\": \"65536\"", "integer")]
+    [InlineData("\"blocks\": 16", "\"blocks\": 1", "blocks must be from 2")]
+    [InlineData("\"blocks\": 16", "\"blocks\": 1025", "blocks must be from 2")]
+    [InlineData("\"blocks\": 16", "\"blocks\": 1.5", "integer")]
+    [InlineData("\"block_size\": 65536, \"blocks\": 16", "\"block_size\": 1048576, \"blocks\": 65", "64 MiB")]
     [InlineData("\"files\"", "\"fils\"", "'files'")]
-    [InlineData("\"path\": \"EscapeFromTarkovArena_Data/level41\"", "\"path\": \"../level41\"", "plain relative path")]
-    [InlineData("\"path\": \"EscapeFromTarkovArena_Data/level41\"", "\"path\": \"C:/level41\"", "plain relative path")]
-    [InlineData("\"path\": \"EscapeFromTarkovArena_Data/level41\"", "\"path\": \"/level41\"", "plain relative path")]
-    [InlineData("\"path\": \"EscapeFromTarkovArena_Data/level41\"", "\"path\": \"a/.. /b\"", "plain relative path")]
-    [InlineData("\"path\": \"EscapeFromTarkovArena_Data/level41\"", "\"path\": \"\"", "plain relative path")]
-    [InlineData("\"path\": \"EscapeFromTarkovArena_Data/level41\"", "\"path\": 4", "string")]
-    [InlineData("\"size\": 18935904", "\"size\": -1", "negative")]
-    [InlineData("\"size\": 18935904", "\"size\": 1.5", "integer")]
-    [InlineData("\"size\": 18935904", "\"size\": \"5\"", "integer")]
-    [InlineData("\"size\": 18935904", "\"size\": 99999999999999999999", "integer")]
-    [InlineData("\"size\": 18935904", "\"size\": 007", "leading zero")]
-    [InlineData("\"schema\": 1,", "\"schema\": 1,,", "object key")]
+    [InlineData(ResS, "\"../level41\"", "plain relative path")]
+    [InlineData(ResS, "\"C:/level41\"", "plain relative path")]
+    [InlineData(ResS, "\"/level41\"", "plain relative path")]
+    [InlineData(ResS, "\"a/.. /b\"", "plain relative path")]
+    [InlineData(ResS, "\"\"", "plain relative path")]
+    [InlineData(ResS, "4", "string")]
+    [InlineData("\"size\": 578163152", "\"size\": -1", "negative")]
+    [InlineData("\"size\": 578163152", "\"size\": 1.5", "integer")]
+    [InlineData("\"size\": 578163152", "\"size\": \"5\"", "integer")]
+    [InlineData("\"size\": 578163152", "\"size\": 99999999999999999999", "integer")]
+    [InlineData("\"size\": 578163152", "\"size\": 007", "leading zero")]
+    [InlineData("\"schema\": 2,", "\"schema\": 2,,", "object key")]
     [InlineData("check\": \"3333", "check\": \"3333\u0001", "control character")]
-    [InlineData("\"schema\": 1", "\"schema\": tru", "literal")]
-    [InlineData("\"schema\": 1", "\"schema\": 1e", "number")]
-    [InlineData("\"schema\": 1", "\"schema\": -", "number")]
-    [InlineData("\"schema\": 1", "\"schema\": '1'", "unexpected character")]
-    [InlineData("\"schema\": 1,", "\"schema\": 1, \"schema\": 1,", "duplicate key 'schema'")]
+    [InlineData("\"schema\": 2", "\"schema\": tru", "literal")]
+    [InlineData("\"schema\": 2", "\"schema\": 2e", "number")]
+    [InlineData("\"schema\": 2", "\"schema\": -", "number")]
+    [InlineData("\"schema\": 2", "\"schema\": '2'", "unexpected character")]
+    [InlineData("\"schema\": 2,", "\"schema\": 2, \"schema\": 2,", "duplicate key 'schema'")]
     [InlineData("\"built_for\": \"0.6.1.0.48206\",", "\"built_for\": \"a\", \"built_for\": \"b\",", "duplicate key 'built_for'")]
-    [InlineData("\"schema\": 1,", "\"schema\": 1, \"x\": \"\\q\",", "invalid escape")]
-    [InlineData("\"schema\": 1,", "\"schema\": 1, \"x\": \"\\u12\",", "\\u")]
+    [InlineData("\"blocks\": 16", "\"blocks\": 16, \"blocks\": 16", "duplicate key 'blocks'")]
+    [InlineData("\"schema\": 2,", "\"schema\": 2, \"x\": \"\\q\",", "invalid escape")]
+    [InlineData("\"schema\": 2,", "\"schema\": 2, \"x\": \"\\u12\",", "\\u")]
     public void Parse_RefusesMalformedInput(string find, string replace, string reasonContains)
     {
         Assert.Contains(find, Golden);
         KeyFileException ex = Assert.Throws<KeyFileException>(() => KeyFile.Parse(Golden.Replace(find, replace)));
         Assert.Contains(reasonContains, ex.Message);
+    }
+
+    [Fact]
+    public void Parse_RefusesAWrapWithoutFiles()
+    {
+        string none = Golden.Replace(
+            "      \"files\": [\n        { \"path\": \"EscapeFromTarkovArena_Data/sharedassets41.assets.resS\", \"size\": 578163152 },\n" +
+            "        { \"path\": \"EscapeFromTarkovArena_Data/sharedassets41.resource\", \"size\": 5433376 }\n      ],", "      \"files\": [],");
+        Assert.NotEqual(Golden, none);
+        Assert.Contains("lists no files", Assert.Throws<KeyFileException>(() => KeyFile.Parse(none)).Message);
     }
 
     [Fact]
@@ -1995,9 +2195,9 @@ public sealed class KeyFileTests : IDisposable
         Assert.Throws<KeyFileException>(() => KeyFile.Parse((string)null!));
         Assert.Throws<KeyFileException>(() => KeyFile.Parse((byte[])null!));
         Assert.Contains("UTF-8", Assert.Throws<KeyFileException>(() => KeyFile.Parse(new byte[] { 0x7B, 0xFF, 0xFE, 0x7D })).Message);
-        string deep = Golden.Replace("\"schema\": 1,", "\"schema\": 1, \"x\": " + new string('[', 40) + new string(']', 40) + ",");
+        string deep = Golden.Replace("\"schema\": 2,", "\"schema\": 2, \"x\": " + new string('[', 40) + new string(']', 40) + ",");
         Assert.Contains("too deeply", Assert.Throws<KeyFileException>(() => KeyFile.Parse(deep)).Message);
-        string fine = Golden.Replace("\"schema\": 1,", "\"schema\": 1, \"x\": " + new string('[', 10) + new string(']', 10) + ",");
+        string fine = Golden.Replace("\"schema\": 2,", "\"schema\": 2, \"x\": " + new string('[', 10) + new string(']', 10) + ",");
         Assert.Equal(Golden, KeyFile.Parse(fine).ToCanonicalJson());
     }
 
@@ -2005,10 +2205,11 @@ public sealed class KeyFileTests : IDisposable
     public void Caps_AreEnforced_OnSeventeenWraps_ThirtyThreeFiles_AndSixtyFiveKiB()
     {
         string WrapJson(int files) =>
-            "{\"built_for\":\"x\",\"files\":[" + string.Join(",", Enumerable.Range(0, files).Select(i => $"{{\"path\":\"a/f{i}\",\"size\":{i}}}")) +
+            "{\"built_for\":\"x\",\"sample\":{\"block_size\":65536,\"blocks\":16},\"files\":[" +
+            string.Join(",", Enumerable.Range(0, files).Select(i => $"{{\"path\":\"a/f{i}\",\"size\":{i}}}")) +
             $"],\"salt\":\"{H11}\",\"wrapped_key\":\"{H22}\",\"check\":\"{H33}\"}}";
         string Doc(int wraps, int files) =>
-            "{\"schema\":1,\"map_key\":\"arena_bowl\",\"wraps\":[" + string.Join(",", Enumerable.Repeat(WrapJson(files), wraps)) + "]}";
+            "{\"schema\":2,\"map_key\":\"arena_bowl\",\"wraps\":[" + string.Join(",", Enumerable.Repeat(WrapJson(files), wraps)) + "]}";
 
         Assert.Equal(16, KeyFile.Parse(Doc(16, 32)).Wraps.Count);
         Assert.Contains("more than 16 wraps", Assert.Throws<KeyFileException>(() => KeyFile.Parse(Doc(17, 1))).Message);
@@ -2029,22 +2230,31 @@ public sealed class KeyFileTests : IDisposable
         Assert.Throws<KeyFileException>(() => tooMany.ToCanonicalJson());
         Assert.Throws<KeyFileException>(() => new KeyFile("Arena").ToCanonicalJson());
         KeyFile bad = new("arena_bowl");
-        bad.Wraps.Add(new KeyWrap("v", new List<KeyFileEntry> { new("../x", 1) }, Fill(1), Fill(2), Fill(3)));
+        bad.Wraps.Add(Simple("v", new List<KeyFileEntry> { new("../x", 1) }, Fill(1)));
         Assert.Throws<KeyFileException>(() => bad.ToCanonicalJson());
         KeyFile shortSalt = new("arena_bowl");
-        shortSalt.Wraps.Add(new KeyWrap("v", new List<KeyFileEntry> { new("a/b", 1) }, new byte[31], Fill(2), Fill(3)));
+        shortSalt.Wraps.Add(Simple("v", new List<KeyFileEntry> { new("a/b", 1) }, new byte[31]));
         Assert.Throws<KeyFileException>(() => shortSalt.ToCanonicalJson());
         KeyFile longBuilt = new("arena_bowl");
-        longBuilt.Wraps.Add(new KeyWrap(new string('x', 65), new List<KeyFileEntry> { new("a/b", 1) }, Fill(1), Fill(2), Fill(3)));
+        longBuilt.Wraps.Add(Simple(new string('x', 65), new List<KeyFileEntry> { new("a/b", 1) }, Fill(1)));
         Assert.Throws<KeyFileException>(() => longBuilt.ToCanonicalJson());
         KeyFile negative = new("arena_bowl");
-        negative.Wraps.Add(new KeyWrap("v", new List<KeyFileEntry> { new("a/b", -1) }, Fill(1), Fill(2), Fill(3)));
+        negative.Wraps.Add(Simple("v", new List<KeyFileEntry> { new("a/b", -1) }, Fill(1)));
         Assert.Throws<KeyFileException>(() => negative.ToCanonicalJson());
         KeyFile tooManyFiles = new("arena_bowl");
         tooManyFiles.Wraps.Add(Wrap(files: 33));
         Assert.Throws<KeyFileException>(() => tooManyFiles.ToCanonicalJson());
+        KeyFile noFiles = new("arena_bowl");
+        noFiles.Wraps.Add(Simple("v", new List<KeyFileEntry>(), Fill(1)));
+        Assert.Contains("lists no files", Assert.Throws<KeyFileException>(() => noFiles.ToCanonicalJson()).Message);
+        KeyFile noSample = new("arena_bowl");
+        noSample.Wraps.Add(new KeyWrap("v", null!, new List<KeyFileEntry> { new("a/b", 1) }, Fill(1), Fill(2), Fill(3)));
+        Assert.Contains("has no sample", Assert.Throws<KeyFileException>(() => noSample.ToCanonicalJson()).Message);
+        KeyFile badSample = new("arena_bowl");
+        badSample.Wraps.Add(Simple("v", new List<KeyFileEntry> { new("a/b", 1) }, Fill(1), new KeySample(65536, 1)));
+        Assert.Contains("sample blocks", Assert.Throws<KeyFileException>(() => badSample.ToCanonicalJson()).Message);
         KeyFile quoted = new("arena_bowl");
-        quoted.Wraps.Add(new KeyWrap("a\"b\\c", new List<KeyFileEntry> { new("a/b", 1) }, Fill(1), Fill(2), Fill(3)));
+        quoted.Wraps.Add(Simple("a\"b\\c", new List<KeyFileEntry> { new("a/b", 1) }, Fill(1)));
         Assert.Equal("a\"b\\c", KeyFile.Parse(quoted.ToCanonicalJson()).Wraps[0].BuiltFor);
     }
 
@@ -2110,24 +2320,29 @@ public sealed class KeyFileTests : IDisposable
     public void KeyPath_AlsoRefusesControlCharacters(string path)
     {
         Assert.False(KeyPath.IsSafe(path));
-        string json = Golden.Replace("\"EscapeFromTarkovArena_Data/level41\"", JsonSerializer.Serialize(path));
+        string json = Golden.Replace(ResS, JsonSerializer.Serialize(path));
         Assert.Contains("plain relative path", Assert.Throws<KeyFileException>(() => KeyFile.Parse(json)).Message);
     }
 }
 
-/// <summary>Real data, skipped without the developer's Arena installation (and without staged key files): the four maps' level files on this machine.</summary>
+/// <summary>
+/// Real data, skipped without the developer's Arena installation (and without staged key files): the four maps' key sources on this machine. The
+/// environment variable ARENAMAPPORT_SECOND_ARENA names a second, read-only Arena folder of another build (2026-10-20: the user's 0.6.0 install on a
+/// network share); when it is set, the staged key files must unlock against it too.
+/// </summary>
 public sealed class CryptoRealDataTests
 {
     readonly ITestOutputHelper _out;
 
     public CryptoRealDataTests(ITestOutputHelper output) => _out = output;
 
-    static readonly (string Key, int[] Levels, long Bytes)[] Maps =
+    // files and listed bytes per map on Arena 0.6.1.0.48206 (the raw resource streams of tools/bundle/key-sources.json)
+    static readonly (string Key, int Files, long Bytes)[] Maps =
     {
-        ("arena_equator", new[] { 51, 53, 55, 57, 58 }, 21_817_368),
-        ("arena_bay5", new[] { 79, 80, 81, 82, 83, 84, 86, 88, 89 }, 31_784_868),
-        ("arena_airpit", new[] { 28, 29, 37, 38, 40, 324, 325 }, 38_725_724),
-        ("arena_bowl", new[] { 41, 43, 45, 46, 47, 48, 95 }, 41_126_600),
+        ("arena_equator", 3, 218_007_984),
+        ("arena_bay5", 8, 358_204_848),
+        ("arena_airpit", 7, 603_532_272),
+        ("arena_bowl", 8, 754_464_336),
     };
 
     static string RepoRoot()
@@ -2138,40 +2353,55 @@ public sealed class CryptoRealDataTests
         return dir ?? throw new InvalidOperationException("repository root not found");
     }
 
+    /// <summary>The sample and the files of one map, read from tools/bundle/key-sources.json the way the build tool reads them.</summary>
+    static (KeySample Sample, string[] Paths) Sources(string key)
+    {
+        using JsonDocument doc = JsonDocument.Parse(File.ReadAllText(Path.Combine(RepoRoot(), "tools", "bundle", "key-sources.json"), Encoding.UTF8));
+        JsonElement root = doc.RootElement;
+        Assert.Equal(2, root.GetProperty("schema").GetInt32());
+        JsonElement sample = root.GetProperty("sample");
+        var paths = new List<string>();
+        foreach (JsonElement scene in root.GetProperty("maps").GetProperty(key).EnumerateArray())
+            foreach (JsonElement name in scene.GetProperty("files").EnumerateArray())
+                paths.Add("EscapeFromTarkovArena_Data/" + name.GetString());
+        return (new KeySample(sample.GetProperty("block_size").GetInt32(), sample.GetProperty("blocks").GetInt32()), paths.ToArray());
+    }
+
     [RealInstallFact]
-    public void TheFourMapsDeriveTheirKeyFromTheInstalledLevelFiles()
+    public void TheFourMapsDeriveTheirKeyFromTheInstalledResourceStreams()
     {
         string manifest = File.ReadAllText(Path.Combine(RealArena.Folder, "ConsistencyInfo"), Encoding.UTF8);
         using JsonDocument document = JsonDocument.Parse(manifest);
         string installed = document.RootElement.GetProperty("Version").GetString()!;
         var files = new DirectoryArenaFiles(RealArena.Folder);
         ICryptoProvider p = CryptoProviders.Select(null);
-        foreach ((string key, int[] levels, long bytes) in Maps)
+        foreach ((string key, int count, long bytes) in Maps)
         {
-            string[] paths = levels.Select(n => "EscapeFromTarkovArena_Data/level" + n).ToArray();
+            (KeySample sample, string[] paths) = Sources(key);
+            Assert.Equal(count, paths.Length);
             long total = 0;
+            var entries = new List<KeyFileEntry>();
             foreach (string path in paths)
             {
                 long length = files.Length(path);
                 Assert.True(length > 0, key + ": " + path + " is missing");
                 total += length;
+                entries.Add(new KeyFileEntry(path, length));
             }
             if (installed == "0.6.1.0.48206")
                 Assert.Equal(bytes, total);
             byte[] kMap = Crypt.Random(32, key.Length);
-            byte[][] hashes = paths.Select(path =>
-            {
-                using Stream s = files.Open(path);
-                return KeyResolver.HashStream(s, p, out _);
-            }).ToArray();
+            byte[][] digests = entries.Select(e => KeyResolver.FileDigest(files, e, sample, p, out _)).ToArray();
             KeyFile file = new(key);
-            file.Wraps.Add(KeyResolver.Wrap(key, kMap, installed, paths.Select((path, i) => new KeyFileEntry(path, files.Length(path))).ToList(), hashes, p));
+            file.Wraps.Add(KeyResolver.Wrap(key, kMap, installed, sample, entries, digests, p));
             KeyResolution r = KeyResolver.Resolve(KeyFile.Parse(file.ToCanonicalJson()), RealArena.Folder, installed, files, p, key);
             Assert.True(r.Ok, key + ": " + r.Detail);
             Assert.Equal(Crypt.ToHex(kMap), Crypt.ToHex(r.MapKey));
             Assert.Equal(paths.Length, r.FilesHashed);
-            Assert.Equal(total, r.BytesHashed);
-            _out.WriteLine($"{key}: {paths.Length} files, {total:N0} bytes, key derived in {r.Ms} ms ({r.Provider}), Arena {installed}");
+            Assert.Equal(total, r.BytesListed);
+            Assert.Equal(entries.Sum(e => sample.BytesRead(e.Size)), r.BytesHashed);
+            Assert.True(r.BytesHashed <= paths.Length * sample.BytesPerFile);
+            _out.WriteLine($"{key}: {paths.Length} files, {r.BytesHashed:N0} of {total:N0} bytes sampled, key derived in {r.Ms} ms ({r.Provider}), Arena {installed}");
         }
     }
 
@@ -2181,7 +2411,10 @@ public sealed class CryptoRealDataTests
         string root = RepoRoot();
         string keysDir = Path.Combine(root, "dist", "BepInEx", "plugins", "maschine-ArenaMapPort", "keys");
         string storeDir = Path.Combine(root, "work", "release-keys");
-        var files = new DirectoryArenaFiles(RealArena.Folder);
+        var installs = new List<string> { RealArena.Folder };
+        string? second = Environment.GetEnvironmentVariable("ARENAMAPPORT_SECOND_ARENA");
+        if (!string.IsNullOrWhiteSpace(second))
+            installs.Add(second);
         int checkedMaps = 0;
         foreach ((string key, _, _) in Maps)
         {
@@ -2194,13 +2427,16 @@ public sealed class CryptoRealDataTests
             }
             using JsonDocument doc = JsonDocument.Parse(File.ReadAllText(store, Encoding.UTF8));
             string kMapHex = doc.RootElement.GetProperty("k_map").GetString()!;
-            KeyResolution r = KeyResolver.ResolveFile(keyFile, RealArena.Folder, null, files, CryptoProviders.Select(null), key);
-            Assert.True(r.Ok, key + ": " + r.Detail);
-            Assert.Equal(kMapHex.ToLowerInvariant(), Crypt.ToHex(r.MapKey));
-            _out.WriteLine($"{key}: staged key file unlocks the key store's K_map in {r.Ms} ms");
+            foreach (string install in installs)
+            {
+                KeyResolution r = KeyResolver.ResolveFile(keyFile, install, null, new DirectoryArenaFiles(install), CryptoProviders.Select(null), key);
+                Assert.True(r.Ok, key + " against " + install + ": " + r.Detail);
+                Assert.Equal(kMapHex.ToLowerInvariant(), Crypt.ToHex(r.MapKey));
+                _out.WriteLine($"{key}: staged key file unlocks the key store's K_map against {install} in {r.Ms} ms ({r.BytesHashed:N0} of {r.BytesListed:N0} bytes sampled)");
+            }
             checkedMaps++;
         }
-        _out.WriteLine($"{checkedMaps} of {Maps.Length} maps checked");
+        _out.WriteLine($"{checkedMaps} of {Maps.Length} maps checked against {installs.Count} installation(s)");
     }
 }
 

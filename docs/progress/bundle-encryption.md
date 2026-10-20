@@ -16,6 +16,12 @@ single-block LZMA, so Unity decompresses them whole at load (17 s and 30 s on GP
 chunked LZ4 on 2026-10-20 ("LZ4 rebuild" after E5; staged, validated and host-verified on GPU-2 the same afternoon: `diff:1.36` and
 `diff:1.42`).
 
+**Key source v2 (2026-10-20, 18:45): the keys no longer depend on the level files.** Arena's 0.6.0 to 0.6.1 hotfix rewrote all 28 level files of
+the four maps (same sizes, other bytes), so a player on 0.6.0.0.47752 got `ContentDiffers` on every map. Each map's key now comes from a fixed
+sample (16 blocks of 64 KiB per file) of its scenes' raw resource streams (`sharedassets<N>.assets.resS` / `.resource`), which the hotfix left
+byte-identical; `K_map` and the bundles are unchanged, the key files are schema 2. `verify-keys` unlocks all four maps against 0.6.1 (this VM)
+and 0.6.0 (the user's install), and GPU-2 loaded all four through the new keys (derived in 29 to 55 ms). Record: "Key source v2" at the end.
+
 **Earlier status (2026-10-19, 23:20, before the commit): integrated and verified on the build VM, not yet run on a host.** The code of all areas
 (`ArenaMapPort.Crypto/`, the `BundleCrypt` tool, the client loaders, staging, validators, packer) and the texts are in one tree and were
 built, tested, staged, validated and dry-run-deployed by the integrator: see "Integration" at the end, which quotes every result. What
@@ -499,3 +505,133 @@ Since the LZ4 rebuild of 2026-10-20 the Equator and Bay5 rows read 577,488,469 /
 - **ZIP size:** the packer's estimate is 3.02 GiB; Pixeldrain takes it (no size cap), GitHub's 2 GiB asset cap was already out of reach for four maps (R7). The real figure comes from the cut.
 - **Commit-dependent bytes:** both DLLs carry the commit id; committing this tree changes their hash (not their behavior), so the host-verified DLL and the released DLL differ in that suffix unless the release is
   built from the verified commit.
+
+## Key source v2: sampled resource streams instead of level files (2026-10-20, 17:00 to 18:45)
+
+Design: [../PLAN-ENCRYPTION.md](../PLAN-ENCRYPTION.md) section 6. Task from the integrating session (local_6814c91c); `K_map` and the twelve
+bundles are unchanged, only the derivation, the wraps and the key-file schema changed.
+
+**Why.** On 2026-10-20 the user's own PC with Arena 0.6.0.0.47752 could not open Air Pit: `[BundleKeys] key for 'arena_airpit' unavailable:
+the Arena files have the listed sizes but do not unlock the key (another build with equal sizes, or modified files)`. The 0.6.0 to 0.6.1
+hotfix rewrote the serialized Unity files with unchanged sizes (an earlier read-only comparison of the user's install, shared read-only as
+`\\MASCHINE11\Battlestate Games\Escape from Tarkov Arena`, with the VM's 0.6.1.0.48206: 381 of 388 `level<N>` and 381 of 388
+`sharedassets<N>.assets` files differ, while 129 of 130 `sharedassets<N>.assets.resS` and all 40 `sharedassets<N>.resource` are
+byte-identical; the launcher manifests `ConsistencyInfo` of both builds say the same). Re-checked here for the four maps by whole-file
+SHA-256 of both installs (compared in memory, no value printed, script under the session's scratchpad): all 28 key-source level files
+DIFFER, all 26 raw resource streams of the maps' scenes (1,934,209,440 B) are IDENTICAL. Before the change the shipped level-file key files
+failed on 0.6.0 for every map (`verify-keys --arena '\\MASCHINE11\...'`, 17:13):
+`FAIL verify-keys arena_airpit: the key file does not unlock against Arena 0.6.0.0.47752 at \\MASCHINE11\Battlestate Games\Escape from Tarkov
+Arena (ContentDiffers: the Arena files have the listed sizes but do not unlock the key (another build with equal sizes, or modified files))`,
+and the same for Equator, Bay5 and Bowl.
+
+**What changed.**
+
+| Part | Level files (2026-10-19, schema 1) | Resource streams (2026-10-20, schema 2) |
+|---|---|---|
+| Files per map | `EscapeFromTarkovArena_Data/level<N>` of every scene (5 / 9 / 7 / 7) | the scenes' raw streams `sharedassets<N>.assets.resS` and `sharedassets<N>.resource` that exist (Equator 3, Bay5 8, Air Pit 7, Bowl 8; `tools/bundle/key-sources.json` names them per scene) |
+| Bytes listed per map (0.6.1) | 21.8 / 31.8 / 38.7 / 41.1 MB | 218.0 / 358.2 / 603.5 / 754.5 MB |
+| What is hashed | each whole file | a sample: 16 blocks of 64 KiB at `floor(k * (size - 65536) / 15)`, k = 0..15 (first block at 0, last one ends at the end, no overlap), or the whole file when it is at most 1 MiB; 3.1 / 7.4 / 6.9 / 7.4 MB per map |
+| Per-file digest | `SHA-256(file)` | `SHA-256("ArenaMapPort file sample v2" 00 path 00 size 00 block_size 00 blocks 00 ‖ sample)`: path, size and sample bound into each digest |
+| IKM, HKDF info, salt, check | digests in key-file order; `bundle key v1`; `wrap salt v1` (map, built_for, paths, sizes); `wrap check v1` | the same structure with `v2` labels; the salt also binds block_size and blocks |
+| Key file | `{schema 1, map_key, wraps: [{built_for, files, salt, wrapped_key, check}]}` | `{schema 2, ..., wraps: [{built_for, sample: {block_size, blocks}, files, salt, wrapped_key, check}]}`; a wrap must list 1 to 32 files; sample rules: block_size a multiple of 4 KiB from 4 KiB to 1 MiB, 2 to 1024 blocks, at most 64 MiB per file |
+| Key store | `{schema 1, ..., wraps: [{built_for, files: [{path, size, sha256}], ...}]}` | `{schema 2, ...}`; the old wraps kept verbatim as `"scheme": "level-files-v1"` (append-only, never shipped), new wraps `"scheme": "sample-v2"` with `sample` and `files: [{path, size, sample_sha256}]` |
+| Tool | `keys`/`stage --levels FILE` or `--manifest FILE` | `--sources FILE` (`--levels` stays as an alias; `--manifest` only cross-checks the scene indices); `stage`/`keys`/`verify-keys` print `N files, X of Y B sampled`; `bench --keys-dir DIR [--arena]` times the player's derivation per key file |
+| Client line D1 | `(5 files, 21.8 MB hashed, ...)` | `(3 files, 3.1 MB sampled of 218.0 MB, ...)` |
+
+**The client refuses schema 1** (`unsupported key file schema 1`, the E2 line "is not valid (...); reinstall ArenaMapPort"). No released
+package ever carried a key file: 0.2.3 ships plaintext bundles, 0.3.0 is unreleased, and the only schema-1 files that existed were the
+development deploys on the two hosts, which this deploy replaced. Keeping a second derivation for them would keep a code path that unlocks
+nothing except Arena 0.6.1 itself, whose files the new wraps cover anyway; one schema keeps the parser and the player's E-lines simple.
+The validators (`check_key_file_schema`) and `KeyFileTests` pin schema 2; `BundleKeyResolverTests` pins the refusal of schema 1.
+
+**Found on the way (fixed):** `KeyResolver.Resolve` marked a wrap as "applied" before it read the files, so a file that changed size
+during the read (`ArenaFileChangedException`, the old `SizeChangedException`) ended as `ContentDiffers` instead of `SizeDiffers` whenever no
+other wrap applied. The wrap now counts as applied only after its files were read; `AFileThatChangesBetweenTheSizeCheckAndTheRead_IsSizeDiffers`
+covers both the sampled and the whole-file case.
+
+**Evidence (build VM, 2026-10-20).**
+
+- Independent references: the sample digest of three cases (300,000 B sampled 4 KiB x 8, 31,488 B read whole, 1,048,577 B sampled 64 KiB x 16)
+  from a 20-line Python script on `hashlib` only, and a full v2 wrap (Bowl's two `sharedassets41` files with their 0.6.1 sizes) from a PowerShell
+  script on `System.Security.Cryptography` only; both pinned in `KeyDerivationTests` (`FileDigest_IsPinnedByAnIndependentImplementation`,
+  `Wrap_IsPinnedByAGoldenVector`) and matched by the C# code on both providers at the first run. `test_bundle_crypt_tool.py` carries its own
+  Python reference of the digest and checks the key store's `sample_sha256` values against it.
+- Tests: `dotnet test ArenaMapPort.Server.Tests -c Release` `Bestanden! : Fehler: 0, erfolgreich: 1475, übersprungen: 0, gesamt: 1475`
+  (1,440 before); `python -m unittest discover -s tools/tests -p "test_*.py"` `Ran 1895 tests in 272.159s`, `OK (skipped=55)` (1,893 before);
+  `test_unity_log_scan.ps1` `UNITY_LOG_TESTS_OK 8 cases`. With `ARENAMAPPORT_SECOND_ARENA` set to the share (from PowerShell; Git Bash
+  rewrites the UNC value), `StagedKeyFiles_UnlockTheKeyStoreKeys_WhenTheyExist` unlocks all four staged key files against both installs:
+  `arena_bowl: staged key file unlocks the key store's K_map against \\MASCHINE11\Battlestate Games\Escape from Tarkov Arena in 180 ms
+  (7.371.520 of 754.464.336 bytes sampled)`, `4 of 4 maps checked against 2 installation(s)`.
+- Key store: copied to `C:\Users\Administrator\ArenaMapPort-release-keys-backup\20261020-before-sample-v2\` before the first run (byte-identical
+  to the 2026-10-19 backup) and to `...\20261020-sample-v2\` right after the migration (byte-identical copies). Each map's store now reads
+  `schema 2 ['level-files-v1', 'sample-v2']`; `k_map` and `created_utc` unchanged.
+- Staging (client Release build without DllOnly and without `ArenaMapPortCreateReleaseKeys`, 18:28, 21.7 s, `0 Warnung(en)`, `0 Fehler`): every
+  bundle line `unchanged` (no `CREATED`), for example `arena_bowl_scenes.bundle: 1,006,073,696 B plaintext, 1,006,104,512 B encrypted, 960 chunks,
+  unchanged, 2805 ms, crypto: CNG`, and
+  `OK stage arena_equator: 3 bundles encrypted (0 written), key file keys/arena_equator.json: new wrap for Arena 0.6.1.0.48206, 1 wrap(s) in the file (written) and 1 retired level-file wrap(s) kept in the store, 3 files, 3,145,728 of 218,007,984 B sampled, self-check unlocks with wrap 0, 28 ms, crypto: CNG`,
+  `OK stage arena_bay5: ... 8 files, 7,403,104 of 358,204,848 B sampled, ... 57 ms`, `OK stage arena_airpit: ... 7 files, 6,906,912 of 603,532,272 B
+  sampled, ... 50 ms`, `OK stage arena_bowl: ... 8 files, 7,371,520 of 754,464,336 B sampled, ... 43 ms`. The SHA-256 of all twelve dist bundles
+  equals the listing taken before the build. A second full staging build: every line `wrap present ... (unchanged)`, key files with the same
+  SHA-256 and modification times, key store unchanged, bundles unchanged. Key files: 719 (Equator), 1,185 (Bay5), 1,094 (Air Pit), 1,182 B (Bowl).
+- `python tools/validate/validate_distribution.py`: `[validate_bundle_names] OK -- 12 bundle(s), every internal directory name is unique`,
+  `DISTRIBUTION_OK 4 maps 12 bundles 4 sidecars encrypted`.
+- `verify-keys` with the staged key files (18:30; the share read-only, from PowerShell):
+
+  | Map | Arena 0.6.1.0.48206, this VM | Arena 0.6.0.0.47752, `\\MASCHINE11\...` |
+  |---|---|---|
+  | Equator | `wrap 0 (built for 0.6.1.0.48206) unlocks the store's content key ... (3 files, 3,145,728 of 218,007,984 B sampled, 11 ms, crypto: CNG)` | same wrap, `60 ms` |
+  | Bay5 | `(8 files, 7,403,104 of 358,204,848 B sampled, 14 ms, ...)` | `180 ms` |
+  | Air Pit | `(7 files, 6,906,912 of 603,532,272 B sampled, 55 ms, ...)` | `153 ms` |
+  | Bowl | `(8 files, 7,371,520 of 754,464,336 B sampled, 22 ms, ...)` | `116 ms` |
+
+- `bench` (.NET 10, this VM): `BENCH CNG (64 MiB, best of 3, MiB/s): aes-ctr 2022, sha256 1462, hmac-sha256 1266`; key derivation per key file,
+  local (first run, best of 5): Air Pit `20.6 / 6.6 ms`, Bay5 `9.2 / 7.6 ms`, Bowl `9.6 / 6.6 ms`, Equator `3.3 / 2.8 ms` (managed: 2.9 to 13.3 ms);
+  over SMB to the 0.6.0 share: Air Pit `172.6 / 9.2 ms`, Bay5 `246.2 / 8.6 ms`, Bowl `15.1 / 8.8 ms`, Equator `71.2 / 2.6 ms`. The work itself is
+  3 to 9 ms per map; the first run is the reads (48 to 113 positioned 64 KiB reads per map plus the small files read whole), cheap from an SSD and dearer over a network.
+- Secrets scan (after staging): the four content keys, the 28 whole-file hashes of the retired level wraps, the 26 sample digests of the new
+  wraps and the whole-file SHA-256 of the 26 resource streams, as hex in both cases and as raw bytes, in the 831 git-visible files plus all of
+  `dist/`: `TOTAL HITS: 0`; positive control (a key store file) hit.
+
+**GPU-2 run (2026-10-20, 18:37 to 18:45).** Deploy: dry run `plan: 90 file(s), 3491.9 MB total -- 0 new, 6 to overwrite, 84 already
+identical` (client DLL, server DLL, the four key files), then `-Confirm` at 18:37 (`OK -- 90 file(s) copied into D:\SPT41`; EFT was not running
+on either host, `gpu-run hosts` checked first); `gpu-run deploy-wait --host host2 --server --files <client DLL, keys, server DLL>`: `6 file(s)
+identical on the host after 10.1 s · server was not running · server started (pid 18832), ready after 5 s` (the server DLL hash compared on the
+host before the start). `gpu-run start --host host2`: `ok 58 s ... 17/17 identical`; `uibridge_status` `17 identical (VM build = host disk =
+loaded)`, EFT instance `c8b735b8` started 18:38:42. Startup: `[Arena] Escape from Tarkov: Arena 0.6.1.0.48206 at C:\Battlestate Games\Escape
+from Tarkov Arena (registry; 15,351 files, 76.1 GB verified)` and `Version 0.3.0 loaded. Maps: Arena: Equator, Arena: Bay 5, Arena: Air Pit,
+Arena: Bowl. Arena: found 0.6.1.0.48206. Developer mode enabled; diagnostics use Debug logging.`; server `Arena: Bowl is available in location
+selection.` and the other three. One raid per map, `gpu-run raid --mode pmc --map <tile> --bots none --clock 12:00 --weather clear`, then
+`gpu-run leave` (the PMC tile of Bay5 is `bay 5`; a first call with `bay5` stopped on the location screen and was repeated):
+
+| Raid (time, to `raidStarted`) | `[BundleKeys]` (first request of the map, cold) | preset to scenes `loaded` | `[Bundles] stream '<map>_scenes.bundle' (raid start)` | EFT `LocationLoaded` | `[NavMesh] added` |
+|---|---|---|---|---|---|
+| Equator (18:39, 37 s) | `key for 'arena_equator' derived in 29 ms (3 files, 3.1 MB sampled of 218.0 MB, built for Arena 0.6.1.0.48206, crypto: CNG)` | 21 ms (`577488469 bytes plaintext, encrypted AMPB v1, 551 chunks`) | `629.7 MiB decrypted in 630 chunks, cache hits 819 / misses 630, crypto 412 ms` | `3.5 real:4.82 diff:1.32` | `10404 vertices, 4572 triangles` |
+| Bay5 (18:41, 31 s) | `derived in 55 ms (8 files, 7.4 MB sampled of 358.2 MB, ...)` | 70 ms (`1044553465 bytes`, 997 chunks) | `1652.2 MiB in 1653 chunks, cache hits 1354 / misses 1653, crypto 928 ms` | `3.75 real:5.03 diff:1.28` | `22117 / 10213` |
+| Air Pit (18:42, 31 s) | `derived in 37 ms (7 files, 6.9 MB sampled of 603.5 MB, ...)` | 31 ms (`991967415 bytes`, 947 chunks) | `1072.0 MiB in 1073 chunks, cache hits 1364 / misses 1073, crypto 703 ms` | `3.48 real:4.81 diff:1.32` | `11787 / 5423` |
+| Bowl (18:43, 32 s) | `derived in 43 ms (8 files, 7.4 MB sampled of 754.5 MB, ...)` | 32 ms (`1006073696 bytes`, 960 chunks) | `1217.5 MiB in 1218 chunks, cache hits 1336 / misses 1218, crypto 756 ms` | `3.63 real:5.09 diff:1.46` | `12704 / 5890` |
+
+In the Bowl raid `uibridge_status` read 120.0 fps, mean 8.3 ms, max 8.4 ms over 300 frames. The hideout opened from the main menu in 5.9 s
+afterwards and BACK returned to the menu. In the whole session: no Warning or Error from `maschine-ArenaMapPort` (`uibridge_log file=true
+level=warning`), no Error line in the BepInEx log after the raids. Every map loaded through the new keys on the first request; the
+derivation cost 29 to 55 ms per map against 45 to 58 ms for the level files in E5 and 39 / 48 ms in the LZ4 run, so the sample keeps it
+where it was although the files behind it are 10 to 18 times larger. EFT was left on the main menu. GPU-1 (no Arena) received the same files
+through the mirror and was not started; its stage-1 behaviour does not depend on the key files (E7). `D:\SPT41vanilla` has not received this build.
+
+**What the new key source survives, and what it does not.** It survives a hotfix like 0.6.0 to 0.6.1 that rebuilds the serialized scene and
+asset files (`level<N>`, `sharedassets<N>.assets`) but keeps the raw texture, mesh and audio streams, and any change to bytes between the
+sampled blocks. It does not survive (each of these needs a new wrap from a staging build on the new Arena, shipped as a keys update):
+
+- a Unity upgrade of Arena (expected, not yet observed: the player build re-serializes the raw streams with the new version's layout);
+- re-imported or changed textures, meshes or audio in a map's scenes (a different size, or other bytes in a sampled block);
+- shifted scene indices (0.5.4 to 0.6.0 moved the indices of seven maps, [arena-update-20261003.md](arena-update-20261003.md)): the file
+  names change, so a player's client reports the file as missing or of another size and `stage` fails with `Arena file '...' is missing ...
+  regenerate tools/bundle/key-sources.json`; `KeySourcesTests.test_the_installed_arena_has_exactly_the_listed_resource_streams` fails too;
+- a scene that gains or loses a raw stream (the table pins exactly the existing ones per scene).
+
+It is still not copy protection: a player now needs 3 to 7.4 MB of Arena's files per map to derive a key instead of 22 to 41 MB, which changes
+nothing, because any Arena owner can share the derived key (32 bytes) or decrypted bundles anyway.
+
+Texts updated with this change: AGENTS.md (decision, hard rule on the key store, staging paragraph, the encryption trap),
+[../PLAN-ENCRYPTION.md](../PLAN-ENCRYPTION.md) section 6 (and pointers in 0.2 to 0.4 and 0.8), README.md, FORGE.md,
+`docs/releases/v0.3.0.md`, the generated package README (`ENCRYPTION_TEXT` in `make_release_zips.py`), [../dist-manifest.md](../dist-manifest.md),
+[arena-install-check.md](arena-install-check.md) (pointer), HANDOFF.md and INDEX.md.

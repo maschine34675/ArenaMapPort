@@ -3,6 +3,24 @@
 Snapshot for whoever continues (human or agent). Verify the commits named here against `git log`; this file
 is updated by hand at each handover, it is not an automatic record. Read [AGENTS.md](AGENTS.md) first.
 
+## Update 2026-10-20 (evening) - key source v2: the map keys come from sampled resource streams (deployed, host-verified on GPU-2)
+
+The user's PC on Arena 0.6.0.0.47752 could not open Air Pit (`[BundleKeys] ... have the listed sizes but do not unlock the key`): the 0.6.0 to
+0.6.1 hotfix rewrote all 28 level files of the four maps with the same sizes, while all 26 raw resource streams of their scenes
+(`sharedassets<N>.assets.resS` / `.resource`) stayed byte-identical. Each map's key-wrapping key is now derived from a fixed sample of those
+streams (16 blocks of 64 KiB per file at size-only offsets, small files whole, path, size and sample bound into each digest, labels `v2`);
+`K_map` and all twelve bundles are unchanged (staging said `unchanged`, SHA-256 equal), the key files are schema 2 with a `sample` object, the
+client refuses schema 1 (never released), the key store is schema 2 and keeps the retired level-file wraps (backups
+`20261020-before-sample-v2` and `20261020-sample-v2` next to the first one). The tool takes `--sources` (`--levels` remains an alias) and
+`bench --keys-dir`. Proof: `verify-keys` unlocks all four shipped key files against the VM's 0.6.1 and the user's 0.6.0 install on the
+read-only share (11 to 55 ms local, 60 to 180 ms over SMB); GPU-2 (18:38 to 18:45, 17/17 identical) loaded Equator, Bay5, Air Pit and Bowl with
+`[BundleKeys] key for '<map>' derived in 29 / 55 / 37 / 43 ms (... MB sampled of ... MB, ... crypto: CNG)`, unchanged NavMesh counts, `diff`
+1.28 to 1.46, hideout open, no Warning or Error. Fixed on the way: a file changing size during the key read was reported as `ContentDiffers`.
+Tests: 1,475 xunit, 1,895 Python (55 skipped), 8 log-scan; `DISTRIBUTION_OK`; secrets scan 0 hits. Record:
+[bundle-encryption.md](docs/progress/bundle-encryption.md) "Key source v2"; design: [PLAN-ENCRYPTION.md](docs/PLAN-ENCRYPTION.md) section 6.
+Does not survive a Unity upgrade, re-imported textures or meshes, or shifted scene indices: those need a staging build on the new Arena and a
+keys update. `D:\SPT41vanilla` has not received this build. Not pushed.
+
 ## Update 2026-10-20 (afternoon) - Equator and Bay5 rebuilt with chunked LZ4 (deployed, host-verified on GPU-2); mesh id collision found and fixed
 
 `BuildBundles.cs` builds every map with `ChunkBasedCompression` now. Equator and Bay5 were rebuilt from their accepted v5 packages:

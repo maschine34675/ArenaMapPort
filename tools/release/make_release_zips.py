@@ -30,7 +30,7 @@ The released maps and their order come from tools/validate/validate_map_descript
 (RELEASE_MAP_KEYS / RELEASE_MAP_NAMES).
 
 Encrypted bundles (stage 2 of the Arena gate, docs/PLAN-ENCRYPTION.md): every bundle in dist is an AMPB container
-and every released map carries its key file keys/<key>.json (level-file names and sizes, never a hash). The packer
+and every released map carries its key file keys/<key>.json (Arena file names, sizes and the sample, never a hash). The packer
 refuses a plaintext bundle twice: on the dist files before anything is written (the first four bytes must be
 "AMPB") and on the finished ZIPs (the same four bytes of every bundle entry); a map part without its key file is
 not installable. Ciphertext does not compress, so the bundles are STORED. The version comes from the `<Version>` of both csproj files, which must
@@ -627,18 +627,19 @@ REQUIREMENT_TEXT = (
 # README.md, FORGE.md and the release notes name the same build; RealRepoTests pins the equality. Raise it with the key files.
 KEYS_BUILT_FOR = "0.6.1.0.48206"
 
-# The encrypted bundles (stage 2, docs/PLAN-ENCRYPTION.md). The same four statements as README.md and the release notes:
-# encrypted with a key derived from the player's Arena files, not copy protection, art and audio stay plaintext, and the
-# build the keys are built for.
+# The encrypted bundles (stage 2, docs/PLAN-ENCRYPTION.md, key source of section 6). The same four statements as README.md and
+# the release notes: encrypted with a key derived from the player's Arena files, not copy protection, art and audio stay
+# plaintext, and the build the keys are built for (and the 0.6.0 build verified to open them, its resource files being identical).
 ENCRYPTION_TEXT = (
     "Encrypted bundles: the map bundles in bundles/ (scenes, materials, textures, NavMesh) are encrypted with a key\n"
-    "that your PC derives from the Arena level files each map is built from (read when the map is first used and\n"
-    "never sent anywhere; keys/<map>.json lists them by path and size only). They work only next to your own Arena\n"
-    f"files. The keys in this release are built for Arena {KEYS_BUILT_FOR} (your build is in the client log at startup,\n"
-    "\"Arena: found ...\"); if a map's level files differ in your build, that map does not load (the client log names the\n"
-    "cause) until an updated ArenaMapPort package carries the key for your build, and the other maps keep working.\n"
-    "This is a requirement, not copy protection: anyone who owns Arena can derive the key. Loading screens, banners,\n"
-    "audio, overview maps and map descriptions are not encrypted.\n\n"
+    "that your PC derives from the Arena resource files each map is built from (the texture and mesh data of its\n"
+    "scenes; a fixed sample of a few MB is read when the map is first used and never sent anywhere; keys/<map>.json\n"
+    "lists the files by path and size only). They work only next to your own Arena files. The keys in this release\n"
+    f"are built for Arena {KEYS_BUILT_FOR} and also open on 0.6.0.0.47752, whose resource files are identical (your\n"
+    "build is in the client log at startup, \"Arena: found ...\"); if an Arena update changes a map's resource files,\n"
+    "that map does not load (the client log names the cause) until an updated ArenaMapPort package carries the key\n"
+    "for your build, and the other maps keep working. This is a requirement, not copy protection: anyone who owns\n"
+    "Arena can derive the key. Loading screens, banners, audio, overview maps and map descriptions are not encrypted.\n\n"
 )
 
 

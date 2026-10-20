@@ -11,7 +11,8 @@ playtest evidence. **Bowl** (the fourth map, on `main` since the 2026-10-18 fast
 and not yet released. Release 0.2.3 (branch `release/0.2.3`, published 2026-10-19) is 0.2.2 plus the Arena installation check; 0.2.2 was withdrawn
 the same day (GitHub release, tag and Pixeldrain files deleted, nobody had downloaded it), and so were 0.2.1 and 0.1.0
 (releases with their assets, tags, Pixeldrain files): only 0.2.3 is downloadable, every package without the check is gone. Stage 2 of the gate (user decision 2026-10-19,
-release 0.3.0): the shipped map bundles are encrypted with keys derived from the user's own Arena level files, see the
+release 0.3.0): the shipped map bundles are encrypted with keys derived from the user's own Arena files (since 2026-10-20 a sample of
+the maps' raw resource streams, which survive an Arena hotfix that rewrites every level file), see the
 decisions below and [docs/progress/bundle-encryption.md](docs/progress/bundle-encryption.md). The maps exist to be played through the user's
 ArenaMode mod (arena deathmatch with respawns); see the decisions below.
 
@@ -34,7 +35,8 @@ are not accepted build inputs. Keep the SPT bundle target on Unity 2022.3.43f1.
 - **No scav raids.** `DisabledForScav = true` stays.
 - **Bundles are distributed encrypted** (`dist/`, from 0.3.0; stage 2 of the Arena gate, user decision 2026-10-19): the
   staged `<key>_scenes|navmesh|preset.bundle` are AMPB containers (AES-256-CTR, 1 MiB chunks) whose content key opens only with
-  the player's own Arena level files; the plaintext bundles exist only under `work/build/`. Bundles still never go into git.
+  the player's own Arena files (a fixed sample of the map's `sharedassets<N>.assets.resS` / `.resource` streams, key source v2 of
+  2026-10-20); the plaintext bundles exist only under `work/build/`. Bundles still never go into git.
   Design: [docs/PLAN-ENCRYPTION.md](docs/PLAN-ENCRYPTION.md). It raises the bar from "download and play" to "needs the game's
   own files" and is **not copy protection** (any Arena owner can derive the key or decrypt the bundles): never describe it as
   more. The art and audio files and the derived data beside the bundles stay plaintext.
@@ -95,12 +97,14 @@ are not accepted build inputs. Keep the SPT bundle target on Unity 2022.3.43f1.
   good-faith gate, not copy protection: never describe it as more. See
   [arena-install-check.md](docs/progress/arena-install-check.md).
 - Never commit, ship, log or paste a content key. `work/release-keys/<map_key>.key` (the 32-byte `K_map` per map, the
-  append-only list of key wraps and the per-file hashes of the Arena level files) is ignored by git (`work/`), never goes into
+  append-only list of key wraps, the retired level-file wraps of 2026-10-19 included, and the per-file digests that entered each key) is
+  ignored by git (`work/`), never goes into
   `dist/`, a ZIP, a log, a chat message or a progress doc, and is backed up outside the repo: losing an entry means no keys
   update for the already released bundles of that map (the way out is the tool's `rotate-key --map-key K --yes`: new key, re-encrypt,
   re-release; every released bundle of that map then stops opening). The shipped
-  key files `keys/<map_key>.json` carry the paths and sizes of Arena files, a salt, the wrapped key and its check value, and
-  never a hash or any other content of an Arena file (a published hash would let anyone derive the key). The tool's
+  key files `keys/<map_key>.json` carry the paths and sizes of Arena files, the sample parameters, a salt, the wrapped key and its
+  check value, and never a hash, a sample digest or any other content of an Arena file (a published hash would let anyone derive the
+  key). The tool's
   `--arena-unverified` test seam needs `ARENAMAPPORT_TOOL_TEST=1`; staging and the validators never pass it. Arena's files are
   only read. See [bundle-encryption.md](docs/progress/bundle-encryption.md).
 - Git: author `maschine34675 <163792852+maschine34675@users.noreply.github.com>`, commit only when the
@@ -269,17 +273,26 @@ Bundle encryption (stage 2, 0.3.0; design [PLAN-ENCRYPTION.md](docs/PLAN-ENCRYPT
 `ArenaMapPortDllOnly` first builds the console tool `tools/bundle/ArenaMapPort.BundleCrypt` (net10.0; it links
 `ArenaMapPort.Crypto/*.cs` and `ArenaMapPort.Shared/ArenaInstallation.cs`, no packages) and then runs its `stage` command once per
 map (target `ArenaMapPortStageWpOutputs`): `stage --map-key K --bundle <plain> (three times) --out-dir <dist plugin dir> --key-store
-work/release-keys --levels tools/bundle/key-sources.json --arena auto`. The three plaintext bundles of `work/build/<stem>/`
+work/release-keys --sources tools/bundle/key-sources.json --arena auto` (`--levels` is the older name of `--sources`). The three
+plaintext bundles of `work/build/<stem>/`
 go in; three `AMPB` files under `BepInEx/plugins/maschine-ArenaMapPort/bundles/` and `keys/<map_key>.json` come out, with the map's
 content key `K_map` read from `work/release-keys/<map_key>.key`. A key is created only on request: the FIRST stage of a map passes
 `-p:ArenaMapPortCreateReleaseKeys=true`, which adds `--create-key` (the tool prints `CREATED ... BACK UP`: copy `work/release-keys`
 outside the repo at once). Every other build refuses, with the tool's `FAIL there is no content key for '<map>'`, when a map's key is
 missing, so a key store that went missing is restored from its backup and never silently recreated (a new key makes every released
 bundle of that map unreadable). `-p:ArenaMapPortArena=<folder>` replaces `--arena auto` (verified like a player's). Staging needs this VM's Arena installation, found with `ArenaInstallation.Detect()` and
-verified like a player's, because each key file wraps `K_map` with a key derived from that installation's level files;
-`tools/bundle/key-sources.json` names the level files per map. The output is deterministic: staging twice yields identical bundles and
-key files. `ArenaMapPortDllOnly=true` skips all of it and leaves `dist/` as it is. The tool's other commands (`inspect`, `read-range`,
-`decrypt`, `verify`, `verify-keys`, `plain-sha256`, `keys`, `rotate-key`, `bench`) are what `tools/bundle/bundle_crypt.py` wraps for the
+verified like a player's, because each key file wraps `K_map` with a key derived from that installation's files.
+`tools/bundle/key-sources.json` (schema 2) names, per scene of a map, the raw resource streams that scene has
+(`sharedassets<index>.assets.resS`, `.resource`), and the sample: 16 blocks of 64 KiB per file at offsets that depend only on the
+file size, a file of at most 1 MiB read whole, path, size and sample bound into each file's digest. That is 3 to 7.4 MB read
+for 218 to 754 MB of files per map, about 10 ms warm on the VM. Key source v2 (2026-10-20, docs/PLAN-ENCRYPTION.md section 6) replaced
+the level files because Arena's 0.6.0 to 0.6.1 hotfix rewrote all 28 level files of the four maps (a user on 0.6.0 got
+`ContentDiffers`) while it left all 26 resource streams byte-identical. It does NOT survive a Unity upgrade of Arena, re-imported
+textures or meshes, or shifted scene indices (the tool then fails with "is missing ... regenerate tools/bundle/key-sources.json" or a
+new wrap is needed); `KeySourcesTests` pins the table against the installed Arena. The client refuses schema 1 key files (no released
+package carried one). The output is deterministic: staging twice yields identical bundles and key files. `ArenaMapPortDllOnly=true` skips all of it and leaves `dist/` as it is. The tool's other commands (`inspect`, `read-range`,
+`decrypt`, `verify`, `verify-keys`, `plain-sha256`, `keys`, `rotate-key`, `bench`; `bench --keys-dir <dist keys> --arena DIR|auto` times a
+player's key derivation per map) are what `tools/bundle/bundle_crypt.py` wraps for the
 validators, which therefore need the VM's key store and Arena installation: `validate_distribution.py` requires the `AMPB` magic on every
 dist bundle, an authenticating header and intact chunks (`inspect --verify-chunks`), a plaintext that starts with `UnityFS`, a
 `keys/<map_key>.json` per map that unlocks the stored key against the installed Arena (`verify-keys`) and no `UnityFS` file anywhere in
@@ -288,8 +301,11 @@ temporary copy under ignored `work/tmp`, removed afterwards). `validate_port.py 
 of a map with their `work/build` outputs through the tool's `verify` (ENC must be exactly the encryption of PLAIN, the container is
 deterministic) and keeps the SHA-256 comparison for the shader sidecar and `base.json`; it passes for Bowl on 2026-10-19 (the other
 maps' packages fail its earlier source-plan checks for reasons that predate stage 2). Decrypted copies belong under ignored `work/` only. After a new Arena
-build is installed on the VM, run the staging build again: it adds one wrap per map to the key store (same `K_map`, the bundles stay
-byte-identical) and only `keys/*.json` change; ship those with the next release. The first encrypted deploy moves about 3.2 GB through
+build is installed on the VM, run the staging build again: it adds one wrap per map to the key store when the sampled bytes changed
+(same `K_map`, the bundles stay byte-identical; a build with the same resource streams adds nothing) and only `keys/*.json` change;
+ship those with the next release. `verify-keys --arena <folder>` checks a key file against any other Arena folder read-only (2026-10-20:
+the user's 0.6.0 install on `\\MASCHINE11\Battlestate Games\Escape from Tarkov Arena`; pass UNC paths from PowerShell, Git Bash
+mangles them), and the xunit real-data test reads a second install from `ARENAMAPPORT_SECOND_ARENA`. The first encrypted deploy moves about 3.2 GB through
 Syncthing: close EFT first (an old client meeting an encrypted bundle, or a half-synced mix of plaintext and encrypted files, fails with
 its own error), wait for the sync, then restart EFT. `tools/deploy-to-spt.ps1` copies `dist/` recursively, so `keys/` travels with the
 bundles.
@@ -525,7 +541,10 @@ the log; the user uses it to point at things.
   only (the gate's worker thread never logs), once per map and session, and a failed derivation is cached: after changing key files
   in a test, restart EFT. The nonce is derived from the plaintext, so the same plaintext always encrypts to the same bytes; never add
   timestamps or random fields to the container or the key file, the "stage twice, identical hashes" check and the tool's `verify`
-  rely on it.
+  rely on it. A key that unlocks on the VM can still lock a player on another Arena build: on 2026-10-20 the level-file keys gave a
+  user on 0.6.0.0.47752 `ContentDiffers` on all four maps (the 0.6.1 hotfix rewrote every level file with the same sizes), which is
+  why the key source is now the sampled resource streams; before shipping keys, run `verify-keys --arena <folder>` against every
+  Arena build at hand.
 - Bundle layout: `BuildBundles.cs` builds every map with `BuildAssetBundleOptions.ChunkBasedCompression` (LZ4HC blocks of at most
   128 KiB, read lazily) since 2026-10-20. Until then the Equator and Bay5 entrypoints kept `None` ("retain their previous build option"),
   which is ONE LZMA block over the whole bundle: Unity decompressed the whole bundle (910 MB, 1.5 GB) when it opened it, 17 s and 30 s of

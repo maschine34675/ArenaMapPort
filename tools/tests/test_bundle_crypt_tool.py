@@ -1,7 +1,7 @@
 """The BundleCrypt tool (tools/bundle/ArenaMapPort.BundleCrypt, docs/PLAN-ENCRYPTION.md TOOL) and the Python pieces built on it.
 
 Every test runs the BUILT tool (`dotnet build` once per process through tools/bundle/bundle_crypt.py) on synthetic data:
-bundle-like files of random bytes and a synthetic "Arena" folder the test creates (level files of random bytes). The tool's
+bundle-like files of random bytes and a synthetic "Arena" folder the test creates (resource files of random bytes). The tool's
 test seam (--arena-unverified, enabled by ARENAMAPPORT_TOOL_TEST=1 in the environment of these tests only) stands in for the
 installation check a fake folder could never pass; the staging build and the validators never use it. Nothing here reads the
 real Arena except the pin tests at the end, which skip without it. The crypto itself (known answers, container, key derivation)
@@ -208,7 +208,7 @@ class EncryptRoundTripTests(ToolCase):
         self.assertFalse(self.store.exists())
         proc = self.encrypt(self.source, self.enc)
         entry = json.loads((self.store / "arena_test.key").read_text(encoding="utf-8"))
-        self.assertEqual((entry["schema"], entry["map_key"], entry["wraps"]), (1, "arena_test", []))
+        self.assertEqual((entry["schema"], entry["map_key"], entry["wraps"]), (2, "arena_test", []))
         self.assertRegex(entry["k_map"], r"^[0-9a-f]{64}$")
         shown = proc.stdout.decode() + proc.stderr.decode() + json.dumps(bundle_crypt.inspect(self.enc, key_store=self.store))
         self.assertNotIn(entry["k_map"], shown)
@@ -359,32 +359,59 @@ class EncryptRoundTripTests(ToolCase):
         self.assertIn("OK bench", text)
 
 
+def sample_digest(path, data, block_size, blocks):
+    """Python reference of the tool's per-file digest (docs/PLAN-ENCRYPTION.md section 6): SHA-256 of a header naming the file, its size
+    and the sample, then the whole file when it is small, else `blocks` blocks at k * (size - block_size) // (blocks - 1)."""
+    size = len(data)
+    sha = hashlib.sha256(b"ArenaMapPort file sample v2\0" + f"{path}\0{size}\0{block_size}\0{blocks}\0".encode())
+    if size <= block_size * blocks:
+        sha.update(data)
+    else:
+        for k in range(blocks):
+            offset = k * (size - block_size) // (blocks - 1)
+            sha.update(data[offset:offset + block_size])
+    return sha.hexdigest()
+
+
 class FakeArenaCase(ToolCase):
-    """A synthetic Arena folder (levels 2, 3 and 10: numeric order is not text order) and a key sources table for two maps."""
+    """A synthetic Arena folder (the resource files of scenes 2, 3 and 10: numeric order is not text order; scene 3 has both kinds, so
+    .assets.resS comes before .resource) and a key sources table for two maps, sampled in 4 blocks of 4 KiB."""
 
     MAP = "arena_test"
-    LEVELS = (2, 3, 10)
+    SOURCES = ("sharedassets2.assets.resS", "sharedassets3.assets.resS", "sharedassets3.resource", "sharedassets10.assets.resS")
+    SIZES = {"sharedassets2.assets.resS": 34_000, "sharedassets3.assets.resS": 41_000, "sharedassets3.resource": 3_000,
+             "sharedassets10.assets.resS": 90_000}
+    BLOCK_SIZE, BLOCKS = 4096, 4
 
     def setUp(self):
         super().setUp()
         self.arena = self.tmp / "arena"
-        for index in self.LEVELS:
-            self.write_level(index, random_bytes(100 + index, 20_000 + 7_000 * index))
-        self.levels = self.tmp / "levels.json"
-        self.levels.write_text(json.dumps({"schema": 1, "maps": {
-            self.MAP: [{"index": 10, "scene": "C"}, {"index": 2, "scene": "A"}, {"index": 3, "scene": "B"}],
-            "arena_airpit": [{"index": 2, "scene": "A"}]}}), encoding="utf-8")
+        for n, name in enumerate(self.SOURCES):
+            self.write_source(name, random_bytes(100 + n, self.SIZES[name]))
+        self.sources = self.tmp / "key-sources.json"
+        self.sources.write_text(json.dumps({"schema": 2, "sample": {"block_size": self.BLOCK_SIZE, "blocks": self.BLOCKS}, "maps": {
+            self.MAP: [{"index": 2, "scene": "A", "files": ["sharedassets2.assets.resS"]},
+                       {"index": 3, "scene": "B", "files": ["sharedassets3.assets.resS", "sharedassets3.resource"]},
+                       {"index": 7, "scene": "D", "files": []},
+                       {"index": 10, "scene": "C", "files": ["sharedassets10.assets.resS"]}],
+            "arena_airpit": [{"index": 2, "scene": "A", "files": ["sharedassets2.assets.resS"]}]}}), encoding="utf-8")
         self.plugin = self.tmp / "plugin"
         self.bundles = {kind: self.plain(f"{self.MAP}_{kind}.bundle", size, seed=n, folder=self.tmp / "build")
                         for n, (kind, size) in enumerate((("scenes", 2 * MIB + 77), ("navmesh", 40_000), ("preset", 6_000)), 5)}
 
-    def level_path(self, index):
-        return self.arena / "EscapeFromTarkovArena_Data" / f"level{index}"
+    def source_path(self, name):
+        return self.arena / "EscapeFromTarkovArena_Data" / name
 
-    def write_level(self, index, data):
-        path = self.level_path(index)
+    def write_source(self, name, data):
+        path = self.source_path(name)
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_bytes(data)
+
+    def gap_offset(self, name):
+        """An offset between the first and the second sampled block of a sampled file: not part of the key."""
+        size = self.SIZES[name]
+        assert size > self.BLOCK_SIZE * self.BLOCKS
+        return self.BLOCK_SIZE + ((size - self.BLOCK_SIZE) // (self.BLOCKS - 1) - self.BLOCK_SIZE) // 2
 
     def key_file(self, key=None):
         return self.plugin / "keys" / f"{key or self.MAP}.json"
@@ -394,7 +421,7 @@ class FakeArenaCase(ToolCase):
         args = ["stage", "--map-key", key]
         for bundle in bundles if bundles is not None else self.bundles.values():
             args += ["--bundle", bundle]
-        args += ["--out-dir", out_dir or self.plugin, "--key-store", self.store, "--levels", self.levels,
+        args += ["--out-dir", out_dir or self.plugin, "--key-store", self.store, "--sources", self.sources,
                  "--arena-unverified", self.arena, "--built-for", built_for]
         if create:
             args.append("--create-key")
@@ -411,33 +438,40 @@ class FakeArenaCase(ToolCase):
 
 
 class KeysTests(FakeArenaCase):
-    def test_the_key_file_names_files_and_sizes_but_carries_no_hash(self):
+    def test_the_key_file_names_files_sizes_and_the_sample_but_carries_no_hash(self):
         out = self.tmp / "keys.json"
         proc = self.tool("keys", "--map-key", self.MAP, "--arena-unverified", self.arena, "--built-for", "Arena-1", "--key-store", self.store,
-                         "--levels", self.levels, "--out", out, "--create-key")
-        self.assertIn("OK keys arena_test: new wrap for Arena Arena-1, 1 wrap(s) in the file (written), 3 level files", proc.stdout.decode())
+                         "--sources", self.sources, "--out", out, "--create-key")
+        sampled = sum(min(size, self.BLOCK_SIZE * self.BLOCKS) for size in self.SIZES.values())
+        self.assertIn(f"OK keys arena_test: new wrap for Arena Arena-1, 1 wrap(s) in the file (written), 4 files, {sampled:,} of "
+                      f"{sum(self.SIZES.values()):,} B sampled", proc.stdout.decode())
         text = out.read_text(encoding="utf-8")
         self.assertTrue(text.endswith("\n") and "\r" not in text and not text.startswith("\ufeff"))
         data = json.loads(text)
         self.assertEqual(list(data), ["schema", "map_key", "wraps"])
-        self.assertEqual((data["schema"], data["map_key"], len(data["wraps"])), (1, self.MAP, 1))
+        self.assertEqual((data["schema"], data["map_key"], len(data["wraps"])), (2, self.MAP, 1))
         wrap = data["wraps"][0]
-        self.assertEqual(list(wrap), ["built_for", "files", "salt", "wrapped_key", "check"])
+        self.assertEqual(list(wrap), ["built_for", "sample", "files", "salt", "wrapped_key", "check"])
         self.assertEqual(wrap["built_for"], "Arena-1")
-        self.assertEqual([f["path"] for f in wrap["files"]], [f"EscapeFromTarkovArena_Data/level{n}" for n in (2, 3, 10)])
-        self.assertEqual([f["size"] for f in wrap["files"]], [self.level_path(n).stat().st_size for n in (2, 3, 10)])
+        self.assertEqual(wrap["sample"], {"block_size": self.BLOCK_SIZE, "blocks": self.BLOCKS})
+        self.assertEqual([f["path"] for f in wrap["files"]], [f"EscapeFromTarkovArena_Data/{name}" for name in self.SOURCES])
+        self.assertEqual([f["size"] for f in wrap["files"]], [self.SIZES[name] for name in self.SOURCES])
         for value in (wrap["salt"], wrap["wrapped_key"], wrap["check"]):
             self.assertRegex(value, r"^[0-9a-f]{64}$")
-        # no level-file hash, and not the content key, anywhere in the shipped file
+        # the store keeps the digest each file contributed (never shipped), equal to the Python reference of the sample
         key_store = json.loads((self.store / f"{self.MAP}.key").read_text(encoding="utf-8"))
-        for index in self.LEVELS:
-            self.assertNotIn(hashlib.sha256(self.level_path(index).read_bytes()).hexdigest(), text)
+        self.assertEqual(key_store["schema"], 2)
+        self.assertEqual(key_store["wraps"][0]["scheme"], "sample-v2")
+        digests = [sample_digest(f"EscapeFromTarkovArena_Data/{name}", self.source_path(name).read_bytes(), self.BLOCK_SIZE, self.BLOCKS)
+                   for name in self.SOURCES]
+        self.assertEqual([f["sample_sha256"] for f in key_store["wraps"][0]["files"]], digests)
+        # no hash of an Arena file (whole or sampled), and not the content key, anywhere in the shipped file
+        for name, digest in zip(self.SOURCES, digests):
+            self.assertNotIn(hashlib.sha256(self.source_path(name).read_bytes()).hexdigest(), text)
+            self.assertNotIn(digest, text)
         self.assertNotIn(key_store["k_map"], text)
         self.assertNotIn(wrap["wrapped_key"], key_store["k_map"])
-        # the store keeps the per-file hashes (never shipped): the first Arena update shows which files changed
-        self.assertEqual([f["sha256"] for f in key_store["wraps"][0]["files"]],
-                         [hashlib.sha256(self.level_path(n).read_bytes()).hexdigest() for n in (2, 3, 10)])
-        self.assertEqual(distribution.check_key_file_schema(out, self.MAP), None)
+        self.assertEqual(distribution.check_key_file_schema(out, self.MAP), None)  # the synthetic names follow the release rule
 
     def test_the_players_derivation_unlocks_the_store_key_and_every_defect_is_named(self):
         self.stage()
@@ -459,22 +493,28 @@ class KeysTests(FakeArenaCase):
 
         # a wrong size entry (the player has another build of that file)
         refuse(write(lambda d: d["wraps"][0]["files"][0].update(size=d["wraps"][0]["files"][0]["size"] + 1)),
-               "SizeDiffers: 'EscapeFromTarkovArena_Data/level2' is")
-        # right sizes, another content: one digit of the check value, or one flipped byte in a level file
+               "SizeDiffers: 'EscapeFromTarkovArena_Data/sharedassets2.assets.resS' is")
+        # right sizes, another content: one digit of the check value, the salt, the sample parameters, or one flipped byte inside a sampled block
         refuse(write(lambda d: d["wraps"][0].update(check=("0" if d["wraps"][0]["check"][0] != "0" else "1") + d["wraps"][0]["check"][1:])),
                "ContentDiffers")
         refuse(write(lambda d: d["wraps"][0].update(salt="0" * 64)), "ContentDiffers")
-        self.flip(self.level_path(3), 100)
-        refuse(self.key_file(), "ContentDiffers")
-        self.flip(self.level_path(3), 100)
+        refuse(write(lambda d: d["wraps"][0]["sample"].update(blocks=5)), "ContentDiffers")
+        for name, offset in (("sharedassets3.assets.resS", 100), ("sharedassets3.resource", 2_999), ("sharedassets10.assets.resS", 89_999)):
+            self.flip(self.source_path(name), offset)
+            refuse(self.key_file(), "ContentDiffers")
+            self.flip(self.source_path(name), offset)
         self.verify_keys()
-        # a missing level file, a level file that grew
-        saved = self.level_path(10).read_bytes()
-        self.level_path(10).unlink()
+        # a byte between two sampled blocks is not part of the key (an update that touches only such bytes keeps the maps working)
+        self.flip(self.source_path("sharedassets10.assets.resS"), self.gap_offset("sharedassets10.assets.resS"))
+        self.verify_keys()
+        self.flip(self.source_path("sharedassets10.assets.resS"), self.gap_offset("sharedassets10.assets.resS"))
+        # a missing file, a file that grew
+        saved = self.source_path("sharedassets10.assets.resS").read_bytes()
+        self.source_path("sharedassets10.assets.resS").unlink()
         refuse(self.key_file(), "ArenaFileUnreadable: the file does not exist")
-        self.write_level(10, saved + b"x")
+        self.write_source("sharedassets10.assets.resS", saved + b"x")
         refuse(self.key_file(), "SizeDiffers")
-        self.write_level(10, saved)
+        self.write_source("sharedassets10.assets.resS", saved)
         self.verify_keys()
         # a key file of another map, a key file naming a file outside the installation, malformed files
         other = self.tool("encrypt", "--map-key", "arena_airpit", "--in", self.bundles["preset"], "--out", self.tmp / "ap.bundle",
@@ -483,7 +523,9 @@ class KeysTests(FakeArenaCase):
         refuse(self.key_file(), "the key file is for 'arena_test', not for 'arena_airpit'", key="arena_airpit")
         refuse(write(lambda d: d["wraps"][0]["files"][0].update(path="../outside")), "is not a plain relative path")
         refuse(write(lambda d: d["wraps"][0]["files"][0].update(path="C:/Windows/notepad.exe")), "is not a plain relative path")
-        refuse(write(lambda d: d.update(schema=2)), "unsupported key file schema 2")
+        refuse(write(lambda d: d.update(schema=1)), "unsupported key file schema 1")  # the retired level-file scheme
+        refuse(write(lambda d: d.update(schema=3)), "unsupported key file schema 3")
+        refuse(write(lambda d: d["wraps"][0]["sample"].update(blocks=1)), "sample blocks must be from 2")
         refuse(write(lambda d: d.update(wraps=[])), "lists no wraps")
         refuse(write(lambda d: d["wraps"][0].update(salt="zz")), "must be 64 hex digits")
         bad = self.tmp / "bad.json"
@@ -499,33 +541,51 @@ class KeysTests(FakeArenaCase):
         self.expect_fail("verify-keys", "--map-key", self.MAP, "--keys-file", self.key_file(), "--key-store", elsewhere,
                   "--arena-unverified", self.arena, "--built-for", "Arena-1", fragment="not the one in the key store")
 
-    def test_levels_come_from_the_table_and_a_manifest_must_agree(self):
+    def test_files_come_from_the_table_and_a_manifest_must_agree(self):
         out = self.tmp / "keys.json"
         base = ["keys", "--map-key", self.MAP, "--arena-unverified", self.arena, "--key-store", self.store, "--out", out, "--create-key"]
         manifest = self.tmp / "manifest.json"
-        manifest.write_text(json.dumps({"source": {"scene_registry": [{"index": 3, "name": "B"}, {"index": 2, "name": "A"}, {"index": 10, "name": "C"}]}}),
-                            encoding="utf-8")
-        self.tool(*base, "--manifest", manifest)  # a manifest alone is enough when it carries a scene registry
-        self.tool(*base, "--manifest", manifest, "--levels", self.levels)
+        manifest.write_text(json.dumps({"source": {"scene_registry": [{"index": 3, "name": "B"}, {"index": 2, "name": "A"}, {"index": 10, "name": "C"},
+                                                                       {"index": 7, "name": "D"}]}}), encoding="utf-8")
+        self.tool(*base, "--manifest", manifest, "--sources", self.sources)
+        self.tool(*base, "--levels", self.sources)  # the older name of --sources
+        self.expect_fail(*base, "--manifest", manifest, code=2, fragment="--sources FILE")  # a manifest names scenes, not files
         manifest.write_text(json.dumps({"source": {"scene_registry": [{"index": 2}, {"index": 3}]}}), encoding="utf-8")
-        self.expect_fail(*base, "--manifest", manifest, "--levels", self.levels, fragment="list different level files")
+        self.expect_fail(*base, "--manifest", manifest, "--sources", self.sources, fragment="list different scenes")
         manifest.write_text(json.dumps({"source": {"scenes": []}}), encoding="utf-8")
-        self.expect_fail(*base, "--manifest", manifest, fragment="no source.scene_registry")
-        self.expect_fail(*base, code=2, fragment="--levels FILE")
-        self.expect_fail(*base, "--levels", self.tmp / "nothing.json", fragment="file not found")
-        table = json.loads(self.levels.read_text(encoding="utf-8"))
-        table["maps"][self.MAP].append({"index": 3, "scene": "dup"})
-        self.levels.write_text(json.dumps(table), encoding="utf-8")
-        self.expect_fail(*base, "--levels", self.levels, fragment="level 3 is listed twice")
-        table["maps"][self.MAP] = [{"index": 2}, {"index": 999}]
-        self.levels.write_text(json.dumps(table), encoding="utf-8")
-        self.expect_fail(*base, "--levels", self.levels, fragment="'EscapeFromTarkovArena_Data/level999' is missing")
+        self.expect_fail(*base, "--manifest", manifest, "--sources", self.sources, fragment="no source.scene_registry")
+        self.expect_fail(*base, code=2, fragment="--sources FILE")
+        self.expect_fail(*base, "--sources", self.tmp / "nothing.json", fragment="file not found")
+        original = json.loads(self.sources.read_text(encoding="utf-8"))
+
+        def table(change, fragment):
+            data = json.loads(json.dumps(original))
+            change(data)
+            self.sources.write_text(json.dumps(data), encoding="utf-8")
+            self.expect_fail(*base, "--sources", self.sources, fragment=fragment)
+
+        entries = lambda d: d["maps"][self.MAP]
+        table(lambda d: entries(d).append({"index": 10, "scene": "dup", "files": []}), "scene 10 is listed twice")
+        table(lambda d: entries(d).reverse(), "not in ascending index order")
+        table(lambda d: entries(d)[0]["files"].append("sharedassets3.assets.resS"), "only sharedassets2.assets.resS and sharedassets2.resource belong to it")
+        table(lambda d: entries(d)[0].update(files=["level2"]), "only sharedassets2.assets.resS")
+        table(lambda d: entries(d)[0].update(files=["sharedassets2.assets"]), "only sharedassets2.assets.resS")
+        table(lambda d: entries(d)[1].update(files=["sharedassets3.resource", "sharedassets3.assets.resS"]), ".assets.resS before .resource")
+        table(lambda d: entries(d)[0].update(files=["sharedassets2.assets.resS", "sharedassets2.assets.resS"]), ".assets.resS before .resource")
+        table(lambda d: entries(d)[0].pop("files"), "has no 'files' array")
+        table(lambda d: d["maps"].update({self.MAP: [{"index": 2, "scene": "A", "files": []}]}), "lists no files for 'arena_test'")
+        table(lambda d: entries(d).append({"index": 999, "scene": "X", "files": ["sharedassets999.assets.resS"]}),
+              "'EscapeFromTarkovArena_Data/sharedassets999.assets.resS' is missing")
+        table(lambda d: d.update(schema=1), "must have schema 2")
+        table(lambda d: d.pop("sample"), "has no 'sample' object")
+        table(lambda d: d["sample"].update(block_size=1000), "sample block_size must be a multiple of 4096")
+        self.sources.write_text(json.dumps(original), encoding="utf-8")
         self.expect_fail("keys", "--map-key", "arena_nomap", "--arena-unverified", self.arena, "--key-store", self.store, "--out", out, "--create-key",
-                  "--levels", self.levels, fragment="no entry for 'arena_nomap'")
+                  "--sources", self.sources, fragment="no entry for 'arena_nomap'")
 
     def test_the_installation_check_cannot_be_skipped_without_the_test_environment(self):
         out = self.tmp / "keys.json"
-        args = ("keys", "--map-key", self.MAP, "--arena-unverified", self.arena, "--key-store", self.store, "--levels", self.levels,
+        args = ("keys", "--map-key", self.MAP, "--arena-unverified", self.arena, "--key-store", self.store, "--sources", self.sources,
                 "--out", out, "--create-key")
         with patch.dict(os.environ):
             os.environ.pop("ARENAMAPPORT_TOOL_TEST")
@@ -534,11 +594,11 @@ class KeysTests(FakeArenaCase):
         self.expect_fail(*args, code=2, fragment="needs ARENAMAPPORT_TOOL_TEST=1")
         os.environ["ARENAMAPPORT_TOOL_TEST"] = "1"
         self.expect_fail("keys", "--map-key", self.MAP, "--arena-unverified", self.arena, "--arena", "auto", "--key-store", self.store,
-                  "--levels", self.levels, "--out", out, code=2, fragment="exclude each other")
-        self.expect_fail("keys", "--map-key", self.MAP, "--built-for", "x", "--key-store", self.store, "--levels", self.levels, "--out", out,
+                  "--sources", self.sources, "--out", out, code=2, fragment="exclude each other")
+        self.expect_fail("keys", "--map-key", self.MAP, "--built-for", "x", "--key-store", self.store, "--sources", self.sources, "--out", out,
                   code=2, fragment="--built-for belongs to --arena-unverified")
         # an explicit folder is verified like the registry's: a synthetic one cannot pass the floors
-        text = self.expect_fail("keys", "--map-key", self.MAP, "--arena", self.arena, "--key-store", self.store, "--levels", self.levels, "--out", out,
+        text = self.expect_fail("keys", "--map-key", self.MAP, "--arena", self.arena, "--key-store", self.store, "--sources", self.sources, "--out", out,
                          "--create-key", fragment="the Arena installation is not verified")
         self.assertNotIn("FAIL unexpected", text)
         self.assertFalse(out.exists())
@@ -589,9 +649,9 @@ class StageTests(FakeArenaCase):
         self.stage()
         before = self.snapshot()
         first = json.loads(self.key_file().read_text(encoding="utf-8"))
-        original = {n: self.level_path(n).read_bytes() for n in self.LEVELS}
-        # the Arena is updated: other content (and size) in one level file, another version
-        self.write_level(3, original[3] + b"patched by the next Arena build")
+        original = {name: self.source_path(name).read_bytes() for name in self.SOURCES}
+        # the Arena is updated: other content (and size) in one resource file, another version
+        self.write_source("sharedassets3.assets.resS", original["sharedassets3.assets.resS"] + b"patched by the next Arena build")
         self.tool("verify-keys", "--map-key", self.MAP, "--keys-file", self.key_file(), "--key-store", self.store,
                   "--arena-unverified", self.arena, "--built-for", "Arena-2", expect=1)
         text = self.stage(built_for="Arena-2").stdout.decode()
@@ -606,27 +666,66 @@ class StageTests(FakeArenaCase):
         self.assertEqual(data["wraps"][0], first["wraps"][0])  # the first wrap is carried over untouched
         # the same shipped file opens against BOTH Arena builds
         self.assertIn("wrap 1 (built for Arena-2)", self.verify_keys("Arena-2").stdout.decode())
-        for index, data_ in original.items():
-            self.write_level(index, data_)
+        for name, data_ in original.items():
+            self.write_source(name, data_)
         self.assertIn("wrap 0 (built for Arena-1)", self.verify_keys("Arena-1").stdout.decode())
         # and restaging the old Arena again adds nothing
         self.assertIn("2 wrap(s) in the file (unchanged)", self.stage().stdout.decode())
 
     def test_a_hotfix_with_the_same_sizes_and_version_adds_a_wrap_too(self):
         self.stage()
-        self.flip(self.level_path(2), 500)
+        self.flip(self.source_path("sharedassets2.assets.resS"), 500)  # inside the first sampled block
         self.tool("verify-keys", "--map-key", self.MAP, "--keys-file", self.key_file(), "--key-store", self.store,
                   "--arena-unverified", self.arena, "--built-for", "Arena-1", expect=1)
         self.assertIn("2 wrap(s) in the file", self.stage().stdout.decode())
         self.assertIn("wrap 1", self.verify_keys().stdout.decode())
-        self.flip(self.level_path(2), 500)
+        self.flip(self.source_path("sharedassets2.assets.resS"), 500)
         self.assertIn("wrap 0", self.verify_keys().stdout.decode())
+
+    def test_a_hotfix_that_leaves_the_sampled_bytes_alone_needs_no_new_wrap(self):
+        self.stage()
+        before = self.snapshot()
+        self.flip(self.source_path("sharedassets2.assets.resS"), self.gap_offset("sharedassets2.assets.resS"))
+        self.assertIn("wrap 0", self.verify_keys().stdout.decode())
+        self.assertIn("1 wrap(s) in the file (unchanged)", self.stage().stdout.decode())
+        self.assertEqual(self.snapshot(), before)
+
+    def test_a_store_of_the_retired_level_file_scheme_keeps_its_key_and_its_wraps_and_ships_only_the_new_wrap(self):
+        # a schema 1 store as the 2026-10-19 build wrote it: the content key and one wrap over whole level files
+        self.store.mkdir()
+        k_map = "5a" * 32
+        retired = {"built_for": "0.6.1.0.48206", "files": [{"path": "EscapeFromTarkovArena_Data/level41", "size": 18935904, "sha256": "ab" * 32}],
+                   "salt": "01" * 32, "wrapped_key": "02" * 32, "check": "03" * 32}
+        (self.store / f"{self.MAP}.key").write_text(json.dumps({"schema": 1, "map_key": self.MAP, "k_map": k_map, "created_utc": "2026-10-19T20:56:00Z",
+                                                                "wraps": [retired]}, indent=2), encoding="utf-8")
+        text = self.stage(create=False).stdout.decode()
+        self.assertNotIn("CREATED", text)
+        self.assertIn("new wrap for Arena Arena-1, 1 wrap(s) in the file (written) and 1 retired level-file wrap(s) kept in the store", text)
+        store = json.loads((self.store / f"{self.MAP}.key").read_text(encoding="utf-8"))
+        self.assertEqual((store["schema"], store["k_map"], store["created_utc"]), (2, k_map, "2026-10-19T20:56:00Z"))
+        self.assertEqual(len(store["wraps"]), 2)
+        self.assertEqual(store["wraps"][0], {"scheme": "level-files-v1", **retired})  # kept as it was, the scheme named in front
+        self.assertEqual(store["wraps"][1]["scheme"], "sample-v2")
+        shipped = json.loads(self.key_file().read_text(encoding="utf-8"))
+        self.assertEqual(len(shipped["wraps"]), 1)
+        self.assertNotIn("level41", self.key_file().read_text(encoding="utf-8"))
+        self.verify_keys()
+        # restaging changes nothing, and the retired wrap stays
+        store_bytes = (self.store / f"{self.MAP}.key").read_bytes()
+        self.assertIn("1 wrap(s) in the file (unchanged) and 1 retired level-file wrap(s) kept in the store", self.stage(create=False).stdout.decode())
+        self.assertEqual((self.store / f"{self.MAP}.key").read_bytes(), store_bytes)
+        # a wrap of an unknown scheme is refused, not dropped
+        broken = json.loads(store_bytes)
+        broken["wraps"][0]["scheme"] = "level-files-v0"
+        (self.store / f"{self.MAP}.key").write_text(json.dumps(broken), encoding="utf-8")
+        self.expect_fail("verify-keys", "--map-key", self.MAP, "--keys-file", self.key_file(), "--key-store", self.store,
+                         "--arena-unverified", self.arena, "--built-for", "Arena-1", fragment="unknown scheme 'level-files-v0'")
 
     def test_a_lost_key_store_is_never_recreated_silently(self):
         self.stage()
         shutil.rmtree(self.store)
         text = self.expect_fail("stage", "--map-key", self.MAP, *sum((["--bundle", b] for b in self.bundles.values()), []), "--out-dir", self.plugin,
-                         "--key-store", self.store, "--levels", self.levels, "--arena-unverified", self.arena, "--built-for", "Arena-1",
+                         "--key-store", self.store, "--sources", self.sources, "--arena-unverified", self.arena, "--built-for", "Arena-1",
                          fragment="no content key for 'arena_test'")
         self.assertIn("restored from its backup", text)
 
@@ -640,18 +739,18 @@ class StageTests(FakeArenaCase):
 
     def test_stage_refuses_what_is_not_a_bundle_of_the_map(self):
         stray = self.plain("arena_other_scenes.bundle", 5000)
-        self.expect_fail("stage", "--map-key", self.MAP, "--bundle", stray, "--out-dir", self.plugin, "--key-store", self.store, "--levels", self.levels,
+        self.expect_fail("stage", "--map-key", self.MAP, "--bundle", stray, "--out-dir", self.plugin, "--key-store", self.store, "--sources", self.sources,
                   "--arena-unverified", self.arena, "--create-key", fragment="is not a bundle of 'arena_test'")
         for name in ("arena_test_other.bundle", "arena_test_scenes.bundle.bak", "xarena_test_scenes.bundle", "arena_test_scenes.BUNDLE"):
             self.expect_fail("stage", "--map-key", self.MAP, "--bundle", self.plain(name, 5000, folder=self.tmp / "strays"), "--out-dir", self.plugin,
                              "--key-store", self.store,
-                      "--levels", self.levels, "--arena-unverified", self.arena, "--create-key", fragment="is not a bundle of")
+                      "--sources", self.sources, "--arena-unverified", self.arena, "--create-key", fragment="is not a bundle of")
         self.expect_fail("stage", "--map-key", self.MAP, "--bundle", self.bundles["scenes"], "--bundle", self.bundles["scenes"], "--out-dir", self.plugin,
-                  "--key-store", self.store, "--levels", self.levels, "--arena-unverified", self.arena, code=2, fragment="listed twice")
+                  "--key-store", self.store, "--sources", self.sources, "--arena-unverified", self.arena, code=2, fragment="listed twice")
         self.expect_fail("stage", "--map-key", self.MAP, "--bundle", self.tmp / "missing" / "arena_test_scenes.bundle", "--out-dir", self.plugin,
                          "--key-store", self.store,
-                  "--levels", self.levels, "--arena-unverified", self.arena, "--create-key", fragment="file not found")
-        self.expect_fail("stage", "--map-key", self.MAP, "--out-dir", self.plugin, "--key-store", self.store, "--levels", self.levels,
+                  "--sources", self.sources, "--arena-unverified", self.arena, "--create-key", fragment="file not found")
+        self.expect_fail("stage", "--map-key", self.MAP, "--out-dir", self.plugin, "--key-store", self.store, "--sources", self.sources,
                   "--arena-unverified", self.arena, code=2, fragment="--bundle")
         self.assertFalse(self.plugin.exists())
         self.assertFalse(self.store.exists())  # nothing was created by a refused stage
@@ -660,7 +759,7 @@ class StageTests(FakeArenaCase):
         self.stage()
         staged = self.plugin / "bundles" / self.bundles["preset"].name
         self.expect_fail("stage", "--map-key", self.MAP, "--bundle", staged, "--out-dir", self.tmp / "again", "--key-store", self.store,
-                  "--levels", self.levels, "--arena-unverified", self.arena, fragment="already an AMPB container")
+                  "--sources", self.sources, "--arena-unverified", self.arena, fragment="already an AMPB container")
 
     def test_two_maps_keep_separate_keys(self):
         self.stage()
@@ -788,19 +887,19 @@ class ValidatorsWithTheRealToolTests(FakeArenaCase):
         with self.assertRaisesRegex(ValueError, "failed inspection: FAIL there is no content key for 'arena_test'"):
             distribution.validate_encrypted_bundles(bundles, keys, self.tmp / "empty-store")
 
-        # the key file: a wrong size entry and a flipped level byte do not unlock; schema defects name themselves
+        # the key file: a wrong size entry and a flipped byte inside the sample do not unlock
         key_path = self.key_file()
         good = key_path.read_bytes()
         data = json.loads(good)
         data["wraps"][0]["files"][1]["size"] += 1
         key_path.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8", newline="\n")
-        with self.assertRaisesRegex(ValueError, "Key file arena_test.json does not unlock: .*SizeDiffers: 'EscapeFromTarkovArena_Data/level3'"):
+        with self.assertRaisesRegex(ValueError, "Key file arena_test.json does not unlock: .*SizeDiffers: 'EscapeFromTarkovArena_Data/sharedassets3.assets.resS'"):
             distribution.validate_key_files(self.plugin, keys, self.store, arena_unverified=self.arena)
         key_path.write_bytes(good)
-        self.flip(self.level_path(10), 9)
+        self.flip(self.source_path("sharedassets10.assets.resS"), 9)
         with self.assertRaisesRegex(ValueError, "does not unlock: .*ContentDiffers"):
             distribution.validate_key_files(self.plugin, keys, self.store, arena_unverified=self.arena)
-        self.flip(self.level_path(10), 9)
+        self.flip(self.source_path("sharedassets10.assets.resS"), 9)
         distribution.validate_key_files(self.plugin, keys, self.store, arena_unverified=self.arena)
         (self.plugin / "keys" / "arena_other.json").write_bytes(good)
         with self.assertRaisesRegex(ValueError, "Key file set mismatch: missing=\\[\\] unexpected=\\['arena_other.json'\\]"):
@@ -836,9 +935,12 @@ class ValidatorsWithTheRealToolTests(FakeArenaCase):
 
 
 class KeySourcesTests(unittest.TestCase):
-    """tools/bundle/key-sources.json names the Arena level files each map's key depends on (docs/PLAN-ENCRYPTION.md 0.3). It is pinned
-    against the tracked extractor tables and extraction plans always, against the extraction manifests when they are present, and against
-    the installed Arena when there is one."""
+    """tools/bundle/key-sources.json names the scenes of each map and the raw resource streams of those scenes its key depends on
+    (docs/PLAN-ENCRYPTION.md section 6). The scenes are pinned against the tracked extractor tables and extraction plans always and against the
+    extraction manifests when they are present; the files and their sizes against the installed Arena when there is one."""
+
+    # files and listed bytes per map on Arena 0.6.1.0.48206 (2026-10-20)
+    LISTED = {"arena_equator": (3, 218_007_984), "arena_bay5": (8, 358_204_848), "arena_airpit": (7, 603_532_272), "arena_bowl": (8, 754_464_336)}
 
     @classmethod
     def setUpClass(cls):
@@ -858,16 +960,22 @@ class KeySourcesTests(unittest.TestCase):
 
     def test_the_table_is_well_formed_and_lists_exactly_the_released_maps(self):
         from validate_map_descriptors import RELEASE_MAP_KEYS
-        self.assertEqual(self.table["schema"], 1)
+        self.assertEqual(self.table["schema"], 2)
+        self.assertEqual(list(self.table), ["schema", "arena_build", "note", "sample", "maps"])
+        self.assertEqual(self.table["sample"], {"block_size": 65536, "blocks": 16})
         self.assertEqual(sorted(self.table["maps"]), sorted(RELEASE_MAP_KEYS))
         text = KEY_SOURCES.read_text(encoding="utf-8")
-        self.assertNotRegex(text, r"[0-9a-f]{40,}")  # indices and scene names only, never a hash
+        self.assertNotRegex(text, r"[0-9a-f]{40,}")  # indices and names only, never a hash
         for key, entries in self.table["maps"].items():
             with self.subTest(key=key):
                 indices = [e["index"] for e in entries]
                 self.assertEqual(indices, sorted(set(indices)), "ascending and unique")
                 self.assertTrue(all(isinstance(i, int) and 0 < i < 10_000 for i in indices))
-                self.assertTrue(all(set(e) == {"index", "scene"} and e["scene"].startswith("Arena_") for e in entries))
+                self.assertTrue(all(set(e) == {"index", "scene", "files"} and e["scene"].startswith("Arena_") for e in entries))
+                for e in entries:
+                    allowed = [f"sharedassets{e['index']}.assets.resS", f"sharedassets{e['index']}.resource"]
+                    self.assertEqual(e["files"], [name for name in allowed if name in e["files"]], f"scene {e['index']}: its own streams, .assets.resS first")
+                self.assertEqual(sum(len(e["files"]) for e in entries), self.LISTED[key][0])
 
     def test_equator_and_bay5_match_their_extractor_tables(self):
         equator = self.literal_assignment(REPO / "tools/extract/extract_equator.py", "SCENE_REGISTRY")
@@ -901,13 +1009,21 @@ class KeySourcesTests(unittest.TestCase):
             self.skipTest("no accepted extraction package under work/extract")
 
     @unittest.skipUnless((REAL_ARENA / "EscapeFromTarkovArena_Data").is_dir(), "no Arena installation here")
-    def test_the_installed_arena_has_every_listed_level_file(self):
+    def test_the_installed_arena_has_exactly_the_listed_resource_streams(self):
+        data = REAL_ARENA / "EscapeFromTarkovArena_Data"
+        installed = json.loads((REAL_ARENA / "ConsistencyInfo").read_text(encoding="utf-8")).get("Version")
         for key, entries in self.table["maps"].items():
+            listed = 0
             for entry in entries:
-                path = REAL_ARENA / "EscapeFromTarkovArena_Data" / f"level{entry['index']}"
-                with self.subTest(key=key, level=entry["index"]):
-                    self.assertTrue(path.is_file(), f"{path} is missing: the level indices may have shifted in this Arena build")
-                    self.assertGreater(path.stat().st_size, 0)
+                with self.subTest(key=key, scene=entry["index"]):
+                    self.assertTrue((data / f"level{entry['index']}").is_file(), f"level{entry['index']} is missing: the scene indices may have shifted")
+                    present = [name for name in (f"sharedassets{entry['index']}.assets.resS", f"sharedassets{entry['index']}.resource")
+                               if (data / name).is_file()]
+                    self.assertEqual(entry["files"], present, "the table must name exactly the resource streams this Arena build has")
+                    listed += sum((data / name).stat().st_size for name in present)
+            if installed == self.table["arena_build"]:
+                with self.subTest(key=key):
+                    self.assertEqual(listed, self.LISTED[key][1])
 
 
 class BuildWiringTests(unittest.TestCase):
@@ -939,7 +1055,8 @@ class BuildWiringTests(unittest.TestCase):
                 self.assertEqual(len(re.findall(rf'<MapKey>{key}</MapKey></ArenaMapPortBundles>', body)), 3)
         self.assertEqual(len(re.findall(r"<ArenaMapPortBundles Include=", body)), 3 * len(RELEASE_MAP_KEYS))
         self.assertEqual(len(re.findall(r'<Exec Command="[^"]*stage --map-key', body.replace("&quot;", ""))), len(RELEASE_MAP_KEYS))
-        self.assertIn("--levels", body)
+        self.assertIn("--sources", body)
+        self.assertNotIn("--levels", body)
         self.assertIn("--key-store", body)
         build_target = re.search(r'<Target Name="ArenaMapPortBuildBundleCrypt">(.*?)</Target>', text, re.S)
         self.assertIsNotNone(build_target)

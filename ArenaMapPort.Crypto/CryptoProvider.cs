@@ -12,7 +12,7 @@ namespace ArenaMapPort.Crypto
         byte[] Finish();
     }
 
-    /// <summary>Streaming SHA-256 (the level files are hashed 1 MiB at a time without a 40 MB buffer).</summary>
+    /// <summary>Streaming SHA-256 (a key file's Arena files are hashed block by block, never through one large buffer).</summary>
     public interface ISha256Stream : IHashStream { }
 
     /// <summary>

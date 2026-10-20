@@ -13,7 +13,7 @@ namespace ArenaMapPort.Crypto
         public KeyFileException(string message) : base(message) { }
     }
 
-    /// <summary>One Arena level file a key wrap depends on: a plain relative path ('/' separated) inside the installation and the file's size in bytes. Never a hash.</summary>
+    /// <summary>One Arena file a key wrap depends on: a plain relative path ('/' separated) inside the installation and the file's size in bytes. Never a hash.</summary>
     public sealed class KeyFileEntry
     {
         public KeyFileEntry(string path, long size)
@@ -27,15 +27,81 @@ namespace ArenaMapPort.Crypto
     }
 
     /// <summary>
-    /// The content key of a map wrapped for one Arena build: which level files (paths and sizes only) unlock it, the salt of the key-derivation
-    /// step, the wrapped key and its check value (docs/PLAN-ENCRYPTION.md 0.2/0.4). <see cref="BuiltFor"/> is informational (the launcher
-    /// manifest version) and never gates anything.
+    /// Which bytes of each listed file a wrap reads (docs/PLAN-ENCRYPTION.md section 6): <see cref="Blocks"/> blocks of <see cref="BlockSize"/> bytes whose
+    /// offsets depend only on the file's size, block k (0 .. Blocks - 1) at floor(k * (size - BlockSize) / (Blocks - 1)), so the first block starts at
+    /// offset 0, the last one ends at the end of the file and the blocks never overlap; a file of at most Blocks * BlockSize bytes is read whole instead.
+    /// The sample keeps the derivation cheap (at most Blocks * BlockSize bytes per file, a few MB per map) on files of hundreds of MB. Rules (also checked
+    /// for every wrap of a key file): BlockSize a multiple of 4 KiB from 4 KiB to 1 MiB, Blocks from 2 to 1024, at most 64 MiB per file.
+    /// </summary>
+    public sealed class KeySample
+    {
+        public const int MinBlockSize = 4096;
+        public const int MaxBlockSize = 1 << 20;
+        public const int MinBlocks = 2;
+        public const int MaxBlocks = 1024;
+        public const long MaxBytesPerFile = 64L << 20;
+
+        public KeySample(int blockSize, int blocks)
+        {
+            BlockSize = blockSize;
+            Blocks = blocks;
+        }
+
+        public int BlockSize { get; private set; }
+        public int Blocks { get; private set; }
+
+        /// <summary>Blocks * BlockSize: the most a file contributes; a file of at most this size is read whole.</summary>
+        public long BytesPerFile
+        {
+            get { return (long)BlockSize * Blocks; }
+        }
+
+        /// <summary>Null when the parameters follow the rules, otherwise the reason (key file wording).</summary>
+        public string Problem()
+        {
+            if (BlockSize < MinBlockSize || BlockSize > MaxBlockSize || BlockSize % MinBlockSize != 0)
+                return "block_size must be a multiple of 4096 from 4096 to 1048576";
+            if (Blocks < MinBlocks || Blocks > MaxBlocks)
+                return "blocks must be from " + MinBlocks + " to " + MaxBlocks;
+            if (BytesPerFile > MaxBytesPerFile)
+                return "block_size * blocks must not exceed 64 MiB";
+            return null;
+        }
+
+        /// <summary>True when a file of <paramref name="size"/> bytes is read whole (it is not larger than <see cref="BytesPerFile"/>).</summary>
+        public bool ReadsWholeFile(long size)
+        {
+            return size <= BytesPerFile;
+        }
+
+        /// <summary>How many bytes of a file of <paramref name="size"/> bytes the sample reads.</summary>
+        public long BytesRead(long size)
+        {
+            return ReadsWholeFile(size) ? size : BytesPerFile;
+        }
+
+        /// <summary>The offset of block <paramref name="k"/> in a file of <paramref name="size"/> bytes (a file larger than <see cref="BytesPerFile"/>).</summary>
+        public long BlockOffset(long size, int k)
+        {
+            if (ReadsWholeFile(size))
+                throw new InvalidOperationException("a file of " + size.ToString(CultureInfo.InvariantCulture) + " bytes is read whole");
+            if (k < 0 || k >= Blocks)
+                throw new ArgumentOutOfRangeException("k");
+            return k * (size - BlockSize) / (Blocks - 1);
+        }
+    }
+
+    /// <summary>
+    /// The content key of a map wrapped for one Arena build: which files (paths and sizes only) unlock it, the sample read from each, the salt of the
+    /// key-derivation step, the wrapped key and its check value (docs/PLAN-ENCRYPTION.md 0.2/0.4 and section 6). <see cref="BuiltFor"/> is informational
+    /// (the launcher manifest version) and never gates anything.
     /// </summary>
     public sealed class KeyWrap
     {
-        public KeyWrap(string builtFor, IList<KeyFileEntry> files, byte[] salt, byte[] wrappedKey, byte[] check)
+        public KeyWrap(string builtFor, KeySample sample, IList<KeyFileEntry> files, byte[] salt, byte[] wrappedKey, byte[] check)
         {
             BuiltFor = builtFor;
+            Sample = sample;
             Files = files;
             Salt = salt;
             WrappedKey = wrappedKey;
@@ -43,6 +109,7 @@ namespace ArenaMapPort.Crypto
         }
 
         public string BuiltFor { get; private set; }
+        public KeySample Sample { get; private set; }
         public IList<KeyFileEntry> Files { get; private set; }
         public byte[] Salt { get; private set; }
         public byte[] WrappedKey { get; private set; }
@@ -78,14 +145,15 @@ namespace ArenaMapPort.Crypto
     /// <summary>
     /// The shipped key file <c>keys/&lt;map_key&gt;.json</c>: one object per Arena build in <see cref="Wraps"/> (several entries let later Arena builds be
     /// added without touching the bundles). Parsed by a hand-written minimal JSON reader (no JSON package in the client), as untrusted
-    /// input: schema must be 1, at most 16 wraps, at most 32 files per wrap, a file of at most 64 KiB, safe relative paths, exact hex lengths;
-    /// unknown keys are ignored, duplicate keys are refused. <see cref="ToCanonicalJson"/> writes the one canonical byte form (fixed key order,
-    /// 2-space indent, lowercase hex, LF, UTF-8 without BOM, trailing newline) so a rebuild with the same inputs gives an identical file.
-    /// Proved by BundleCryptoTests (golden string, round trip, malformed inputs, caps).
+    /// input: schema must be 2, at most 16 wraps, 1 to 32 files per wrap, sample parameters within <see cref="KeySample"/>'s rules, a file of at most
+    /// 64 KiB, safe relative paths, exact hex lengths; unknown keys are ignored, duplicate keys are refused. Schema 1 (whole level files, the unreleased
+    /// 0.3.0 candidate of 2026-10-19) is refused: no released package ever carried a key file, so nothing needs it (docs/PLAN-ENCRYPTION.md section 6).
+    /// <see cref="ToCanonicalJson"/> writes the one canonical byte form (fixed key order, 2-space indent, lowercase hex, LF, UTF-8 without BOM, trailing
+    /// newline) so a rebuild with the same inputs gives an identical file. Proved by BundleCryptoTests (golden string, round trip, malformed inputs, caps).
     /// </summary>
     public sealed class KeyFile
     {
-        public const int SchemaVersion = 1;
+        public const int SchemaVersion = 2;
         public const int MaxBytes = 64 * 1024;
         public const int MaxWraps = 16;
         public const int MaxFilesPerWrap = 32;
@@ -134,6 +202,11 @@ namespace ArenaMapPort.Crypto
                 if (wrap == null)
                     throw new KeyFileException(where + " is not an object");
                 string builtFor = RequireString(wrap, "built_for", where);
+                Dictionary<string, object> sample = RequireObject(wrap, "sample", where);
+                long blockSize = RequireInteger(sample, "block_size", where + " sample");
+                long blocks = RequireInteger(sample, "blocks", where + " sample");
+                if (blockSize < 0 || blockSize > int.MaxValue || blocks < 0 || blocks > int.MaxValue)
+                    throw new KeyFileException(where + ": sample block_size and blocks must be small non-negative integers");
                 List<object> files = RequireArray(wrap, "files", where);
                 if (files.Count > MaxFilesPerWrap)
                     throw new KeyFileException(where + " lists more than " + MaxFilesPerWrap + " files");
@@ -148,7 +221,7 @@ namespace ArenaMapPort.Crypto
                 byte[] salt = RequireHex(wrap, "salt", where);
                 byte[] wrapped = RequireHex(wrap, "wrapped_key", where);
                 byte[] check = RequireHex(wrap, "check", where);
-                file._wraps.Add(new KeyWrap(builtFor, entries, salt, wrapped, check));
+                file._wraps.Add(new KeyWrap(builtFor, new KeySample((int)blockSize, (int)blocks), entries, salt, wrapped, check));
             }
             file.Validate();
             return file;
@@ -213,8 +286,15 @@ namespace ArenaMapPort.Crypto
                 foreach (char c in wrap.BuiltFor)
                     if (c < ' ' || c == '\u007f')
                         throw new KeyFileException(where + ": built_for contains a control character");
+                if (wrap.Sample == null)
+                    throw new KeyFileException(where + " has no sample");
+                string sampleProblem = wrap.Sample.Problem();
+                if (sampleProblem != null)
+                    throw new KeyFileException(where + ": sample " + sampleProblem);
                 if (wrap.Files.Count > MaxFilesPerWrap)
                     throw new KeyFileException(where + " lists more than " + MaxFilesPerWrap + " files");
+                if (wrap.Files.Count == 0)
+                    throw new KeyFileException(where + " lists no files");
                 foreach (KeyFileEntry e in wrap.Files)
                 {
                     if (e == null || !KeyPath.IsSafe(e.Path))
@@ -243,6 +323,8 @@ namespace ArenaMapPort.Crypto
                 sb.Append(w == 0 ? "\n" : ",\n");
                 sb.Append("    {\n");
                 sb.Append("      \"built_for\": ").Append(Quote(wrap.BuiltFor)).Append(",\n");
+                sb.Append("      \"sample\": { \"block_size\": ").Append(wrap.Sample.BlockSize.ToString(CultureInfo.InvariantCulture))
+                  .Append(", \"blocks\": ").Append(wrap.Sample.Blocks.ToString(CultureInfo.InvariantCulture)).Append(" },\n");
                 sb.Append("      \"files\": [");
                 for (int f = 0; f < wrap.Files.Count; f++)
                 {
@@ -319,6 +401,17 @@ namespace ArenaMapPort.Crypto
             if (!(v is long))
                 throw new KeyFileException(where + ": '" + key + "' must be an integer");
             return (long)v;
+        }
+
+        static Dictionary<string, object> RequireObject(Dictionary<string, object> obj, string key, string where)
+        {
+            object v;
+            if (!obj.TryGetValue(key, out v))
+                throw new KeyFileException(where + " has no '" + key + "'");
+            Dictionary<string, object> inner = v as Dictionary<string, object>;
+            if (inner == null)
+                throw new KeyFileException(where + ": '" + key + "' must be an object");
+            return inner;
         }
 
         static List<object> RequireArray(Dictionary<string, object> obj, string key, string where)

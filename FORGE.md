@@ -36,8 +36,8 @@ folder in `General / ArenaInstallPath` (client) and in
 runs in full. The map bundles are encrypted with a key derived from the Arena files each map
 is built from, so they work only next to your own Arena files: a requirement, not copy
 protection (anyone with Arena can decrypt them; the art and audio shipped beside the bundles
-are not encrypted). The keys are built for Arena 0.6.1.0.48206; on a build that has different
-files for a map, or after an Arena update that changes one, that map waits for an updated
+are not encrypted). The keys are built for Arena 0.6.1.0.48206 and also open on 0.6.0.0.47752;
+after an Arena update that changes a map's resource files, that map waits for an updated
 ArenaMapPort package with the key for that build; the other maps keep working.
 
 Designed for **ArenaMode**, installed separately. ArenaMapPort provides the
