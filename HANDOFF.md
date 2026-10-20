@@ -3,18 +3,21 @@
 Snapshot for whoever continues (human or agent). Verify the commits named here against `git log`; this file
 is updated by hand at each handover, it is not an automatic record. Read [AGENTS.md](AGENTS.md) first.
 
-## Update 2026-10-20 (afternoon) - Equator and Bay5 rebuilt with chunked LZ4 (staged, host run pending); mesh id collision found and fixed
+## Update 2026-10-20 (afternoon) - Equator and Bay5 rebuilt with chunked LZ4 (deployed, host-verified on GPU-2); mesh id collision found and fixed
 
 `BuildBundles.cs` builds every map with `ChunkBasedCompression` now. Equator and Bay5 were rebuilt from their accepted v5 packages:
 6,943 and 11,807 LZ4HC blocks of at most 128 KiB instead of one LZMA block, uncompressed content byte-equal to the September builds
 (909,949,416 and 1,547,454,232 B), NavMeshData byte-identical to the released bundles (10404/4572, 22117/10213), presets and `base.json`
 unchanged. Staged into `dist/` (the four bundles rewritten, key files unchanged, `DISTRIBUTION_OK 4 maps 12 bundles 4 sidecars encrypted`,
 `verify` OK for all four, dist +145.9 MB and +258.8 MB), tests green (1,893 Python, 1,440 xunit, 8 log-scan).
-Deploy dry run: 6 files to overwrite (the four bundles, the rebuilt client and server DLLs of the same source), 84 identical. Not deployed
-and not host-run yet: the user reserved GPU-2 ("host2 ist noch belegt, mit den ingame tests noch warten"); the deploy moves about 1.6 GB
-through Syncthing, so close EFT on the host first. Expected on the host: `[Bundles] loaded` within about 50 ms of the preset line and EFT's
-`LocationLoaded ... diff:` near 1.5 s instead of 16.8 s and 29.6 s. Record: [bundle-encryption.md](docs/progress/bundle-encryption.md)
-"LZ4 rebuild" (after E5).
+Deployed to `D:\SPT41` at 15:49 (90 files, 6 changed: the four bundles plus the rebuilt client and server DLLs of the same source; the
+user released the hosts first) and host-verified on GPU-2 at 15:51 to 15:57 (commit `53590de`, 17 of 17 plugins identical): Equator
+`[Bundles] loaded ... 551 chunks` 21 ms after the preset line (was 15.5 s), EFT `LocationLoaded:3.31 real:4.68 diff:1.36` (was
+`diff:16.8`), 37 s to the raid (was 45 s); Bay5 `loaded ... 997 chunks` 33 ms after the preset (was 28.1 s), `LocationLoaded:3.71 real:5.14
+diff:1.42` (was `diff:29.56`), 31 s to the raid (was 59 s); NavMesh 10404/4572 and 22117/10213, keys derived in 39 and 48 ms (CNG), 120 fps
+with max frame times of 11.1 and 8.3 ms, no Warning or Error from `[BundleKeys]`, `[Bundles]` or `[NavMesh]`, both scenes render (stills
+`equator-lz4-20261020`, `bay5-lz4-20261020`). Record with the quoted lines: [bundle-encryption.md](docs/progress/bundle-encryption.md)
+"LZ4 rebuild" and "LZ4 rebuild, GPU-2 run" (after E5). The plan's timing budget now holds for all four maps.
 
 Found on the way and fixed: mesh ids (`sha1(file:path_id:type)[:16]`) collide across packages (Bay5 and Bowl: 228 of 798 shared ids name
 different geometry), and `MeshImporter.cs` reused the shared `Assets/ArenaImport/Meshes` store for a package without `source.map_key`
@@ -24,8 +27,8 @@ released September Bay5 bundle audited clean (0 of 3,890 meshes differ). `build_
 `validate_extract.py` on the known Arena-0.6.1 drift; the remaining validators were run by hand (AGENTS.md "Build, test, deploy"). The
 Unity build regenerated 14 stand-in shader stubs (committed with the build, as for Bowl and Air Pit).
 
-Next: deploy (`deploy-to-spt.ps1 -SptRoot 'D:\SPT41' -Confirm` with EFT closed on GPU-2, `gpu-run deploy-wait`, `gpu-run restart --host
-host2`), one Equator and one Bay5 raid without bots, the timing lines into the record, then the 0.3.0 cut as planned below.
+Next: the 0.3.0 cut as planned below (the release ZIP grows by about 405 MB with the LZ4 bundles); `D:\SPT41vanilla` has not received
+this build.
 
 ## Update 2026-10-20 - stage 2 host-verified on GPU-2 and GPU-1 (evidence E3 to E7); one LZMA finding for Equator and Bay5
 

@@ -13,7 +13,8 @@ Warning or Error from `[BundleKeys]`, `[Bundles]` or `[NavMesh]`; the negative t
 returned to the menu or ran the raid without the NavMesh; GPU-1 (no Arena) stopped at stage 1 with no key or crypto line, opened the
 hideout and ran a vanilla raid. E3 to E7 below quote the lines. One finding outside stage 2: Equator's and Bay5's scene bundles are
 single-block LZMA, so Unity decompresses them whole at load (17 s and 30 s on GPU-2, the same before stage 2; see E5); rebuilt with
-chunked LZ4 on 2026-10-20 ("LZ4 rebuild" after E5; staged and validated, the host run pending at the time of writing).
+chunked LZ4 on 2026-10-20 ("LZ4 rebuild" after E5; staged, validated and host-verified on GPU-2 the same afternoon: `diff:1.36` and
+`diff:1.42`).
 
 **Earlier status (2026-10-19, 23:20, before the commit): integrated and verified on the build VM, not yet run on a host.** The code of all areas
 (`ArenaMapPort.Crypto/`, the `BundleCrypt` tool, the client loaders, staging, validators, packer) and the texts are in one tree and were
@@ -217,7 +218,7 @@ the same `diff:18.32`. Bowl and Air Pit are `ChunkBasedCompression` (11,386 and 
 Follow-up outside stage 2: rebuild Equator and Bay5 with chunked compression (expected to take 17 s and 30 s off their loads and the whole
 decompressed copy out of memory); the bundles change, so it is a staging and host-verification step of its own.
 
-**LZ4 rebuild (2026-10-20, 13:56 to 16:05, build VM; the host run is pending while GPU-2 is reserved).** `BuildBundles.cs` now passes
+**LZ4 rebuild (2026-10-20, 13:56 to 16:05, build VM; GPU-2 run 15:49 to 15:57, below).** `BuildBundles.cs` now passes
 `BuildAssetBundleOptions.ChunkBasedCompression` for every map (the spawn-placement predicate had only ever chosen the compression there).
 Equator (`build_all.ps1` without `-FullMap`, `equator-native-v5`, 13:56 to 14:21) and Bay5 (`-FullMap`, `bay5-native-v5`, 14:42 to 15:12,
 the second run, see the finding below) were rebuilt; `patch_monoscript_identity.py` re-saved both scene bundles with packer `original`
@@ -259,6 +260,29 @@ textures (`File.Copy` overwrite, `CopySerialized`) are always rewritten and were
 The released September Bay5 bundle predates the Air Pit and Bowl imports and audited clean (each of its 3,890 package meshes matches the
 manifest's vertex and submesh counts); Equator's manifest has a map key and was never affected. The mesh comparison of
 `validate_bundle_roundtrip.py` is the check that catches this and stays in every map's build.
+
+**LZ4 rebuild, GPU-2 run (2026-10-20, 15:49 to 15:57; commit `53590de`, the VM build = host disk = loaded, 17 of 17).** Deploy with
+`deploy-to-spt.ps1 -SptRoot 'D:\SPT41' -Confirm` (90 files copied, EFT not running on the host), `gpu-run deploy-wait --host host2
+--server`: `6 file(s) identical on the host after 44.8 s · server was not running · server started (pid 1832), ready after 20 s`;
+`gpu-run start --host host2`: 62 s to the menu, `17/17 identical`. Equator, PMC, NO BOTS (`gpu-run raid`, 37 s to the raid; E5: 45 s):
+`[BundleKeys] key for 'arena_equator' derived in 39 ms (5 files, 21.8 MB hashed, built for Arena 0.6.1.0.48206, crypto: CNG)` at
+15:52:36.187, the preset `loaded` at .190 and `[Bundles] loaded 'arena_equator/arena_equator_scenes.bundle' ... (577488469 bytes
+plaintext, encrypted AMPB v1, 551 chunks)` at .211, 21 ms after the preset (E5: 15.5 s); at raid start `stream 'arena_equator_scenes.bundle'
+(raid start): 629.7 MiB decrypted in 630 chunks, cache hits 813 / misses 630, crypto 412 ms` (1.09 x the plaintext, read lazily with cache
+hits; E5: one sequential pass, `cache hits 1`); `[NavMesh] added navmesh for 'arena_equator': 10404 vertices, 4572 triangles`; EFT
+`LocationLoaded:3.31 real:4.68 diff:1.36` (4.7 s; E5: `2.06 real:18.86 diff:16.8`, 18.9 s); 119.8 fps, mean 8.4 ms, max 11.1 ms over 300
+frames, RAM 8,670 MB; no Warning or Error from the plugin; the still `equator-lz4-20261020` shows the mall (lift doors, props, lamps lit).
+On the way out `stream 'arena_equator_scenes.bundle' (scene unload): 804.9 MiB decrypted in 807 chunks, cache hits 920 / misses 807, crypto
+461 ms`. Bay5, PMC, NO BOTS (31 s to the raid; E5: 59 s): `key for 'arena_bay5' derived in 48 ms (9 files, 31.8 MB hashed, ...)` at
+15:54:27.062, the preset at .063, `loaded 'arena_bay5/arena_bay5_scenes.bundle' ... (1044553465 bytes plaintext, encrypted AMPB v1, 997
+chunks)` at .096, 33 ms after the preset (E5: 28.1 s); `(raid start): 1649.2 MiB decrypted in 1650 chunks, cache hits 1345 / misses 1650,
+crypto 896 ms` (1.58 x the plaintext); `[NavMesh] added navmesh for 'arena_bay5': 22117 vertices, 10213 triangles`; EFT `LocationLoaded:3.71
+real:5.14 diff:1.42` (5.1 s; E5: `2.68 real:32.25 diff:29.56`, 32.3 s); 120.0 fps, mean 8.3 ms, max 8.3 ms, RAM 11,069 MB; no Warning or
+Error; the still `bay5-lz4-20261020` at the raid clock 04:27 (night, clear) shows the containers and the hangar wall. Both raids left with
+`gpu-run leave` (22 s each). Result: both maps now load like Bowl and Air Pit (`diff` 1.4 s against 1.3 to 1.6 s), the 17 s and 30 s of
+whole-bundle decompression are gone, and the stream counters show the lazy block reads (cache hits above zero) that the LZMA layout never
+had. The plan's timing budget ("baseline + 3 s cold") is met for all four maps now; the plaintext LZ4 baseline of Equator and Bay5 was
+never measured (E4), so their comparison is against the LZMA samples.
 
 **E6 Negative tests** (2.5; copies under `work/negative/`, an EFT restart after each step and after the restore, a full staging build and a
 deploy dry run with `0 to overwrite` at the end):
@@ -460,7 +484,8 @@ Since the LZ4 rebuild of 2026-10-20 the Equator and Bay5 rows read 577,488,469 /
 - **Mono P/Invoke answered (E5):** the CNG path works under EFT's Mono (`crypto: CNG` on every key line, no fallback Warning); 1.2 GB of chunk reads cost 0.8 s of crypto on GPU-2. The managed
   fallback is still unmeasured on Mono (plan R4); no test PC lacks CNG.
 - **Equator and Bay5 were LZMA bundles** (E5 finding, older than stage 2): their whole-bundle decompression at load (17 s, 30 s) dwarfed the crypto share. Rebuilt with
-  `ChunkBasedCompression` on 2026-10-20 ("LZ4 rebuild" after E5), staged and validated; the host run was pending at the time of writing.
+  `ChunkBasedCompression` on 2026-10-20 ("LZ4 rebuild" after E5) and host-verified on GPU-2 the same afternoon: `diff:1.36` and `diff:1.42`, the
+  scenes bundle `loaded` 21 ms and 33 ms after the preset.
 - **Key store:** `work/release-keys` is the only copy of the four content keys apart from the same-machine backup above; losing both means `rotate-key`, a re-encrypt and a re-release, and every released
   bundle of that map stops opening (D9). The staging guard (H6) is the build-side protection against a silent re-creation.
 - **Level index table:** `tools/bundle/key-sources.json` takes the level indices from the accepted packages' manifests and extractor plans (extracted from Arena 0.5.4 and 0.6.0) and pins them against those; the

@@ -533,7 +533,8 @@ the log; the user uses it to point at things.
   2026-10-20 rebuild (Equator 6,943 blocks, Bay5 11,807; NavMeshData byte-identical to the released bundles, uncompressed content
   byte-equal to the September builds; dist grew by 145.9 MB and 258.8 MB) is recorded in
   [bundle-encryption.md](docs/progress/bundle-encryption.md) ("LZ4 rebuild", after E5), with the UnityFS header fields a block-table
-  check reads. A slow map load is the layout, not the decrypting stream.
+  check reads; host-verified on GPU-2 the same day (`diff:1.36` and `diff:1.42`, the scenes bundle `loaded` 21 ms and 33 ms after the
+  preset, 37 s and 31 s to the raid). A slow map load is the layout, not the decrypting stream.
 - Mesh ids collide across packages: a mesh id is `sha1("<source file>:<path_id>:<type>")[:16]` (`tools/extract/common_ids.py`), a source
   OBJECT, and Arena's level files repeat path ids across maps (Bay5 and Bowl share 798 ids, 228 with different geometry:
   `1403b6e6f03151dd` is Bay5's 64-vertex sandbag shadow and Bowl's 4,228-vertex skyscraper background; materials and textures collide the
