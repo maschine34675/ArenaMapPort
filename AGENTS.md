@@ -505,8 +505,8 @@ the log; the user uses it to point at things.
   `AudioSettings.OnAudioConfigurationChanged`. Measuring reverb on the muted host: `Audio diagnostics/ReverbPulse` with a
   Gunshots bus at `ReverbPulseVolume` 0.8 and the rain/ambience keys muted, otherwise the rain bed sits at the tail level
   (recipe in `docs/progress/shot-acoustics.md`).
-- Bundle encryption (stage 2, [PLAN-ENCRYPTION.md](docs/PLAN-ENCRYPTION.md); the host-dependent points are design until
-  [bundle-encryption.md](docs/progress/bundle-encryption.md) records the GPU-2 run): EFT's Mono has no hardware crypto in
+- Bundle encryption (stage 2, [PLAN-ENCRYPTION.md](docs/PLAN-ENCRYPTION.md); host-verified on GPU-2 and GPU-1 on 2026-10-20,
+  record and quoted lines in [bundle-encryption.md](docs/progress/bundle-encryption.md)): EFT's Mono has no hardware crypto in
   managed code (managed AES and SHA-256 run at tens of MB/s, so a 1 GB scenes bundle would add tens of seconds to a raid
   load), so the client decrypts through Windows CNG (`bcrypt.dll` P/Invoke, AES-ECB over counter blocks, one key handle per
   stream) and uses managed crypto, with one Warning, only when the CNG provider cannot be created or fails its known-answer
@@ -522,3 +522,8 @@ the log; the user uses it to point at things.
   in a test, restart EFT. The nonce is derived from the plaintext, so the same plaintext always encrypts to the same bytes; never add
   timestamps or random fields to the container or the key file, the "stage twice, identical hashes" check and the tool's `verify`
   rely on it.
+- Equator's and Bay5's scene bundles are single-block LZMA: `BuildBundles.cs` keeps `BuildAssetBundleOptions.None` for those two
+  entrypoints ("retain their previous build option"), so Unity decompresses the whole bundle (910 MB, 1.5 GB) when it opens it, 17 s and
+  30 s on GPU-2 with `LoadFromFile` as with `LoadFromStream` (EFT's `LocationLoaded ... diff:` line shows it; Bowl and Air Pit, chunked
+  LZ4HC, read lazily and show `diff:1.5`). A slow Equator or Bay5 load is the layout, not the decrypting stream; the fix is a rebuild with
+  `ChunkBasedCompression`, which changes the bundles (staging and host verification again).

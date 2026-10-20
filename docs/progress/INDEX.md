@@ -19,8 +19,9 @@ dated state in one screen; read it before this index if you only have a minute.
   level files, `keys/<map>.json`, the `BundleCrypt` tool, the client's decrypting stream), the wording rule (not copy protection;
   art and audio stay plaintext) and the evidence blocks: builds and tests, staging and determinism, the plaintext baseline, the
   GPU-2 run with its timing budget, the negative tests, GPU-1. Integrated and verified on the build VM on 2026-10-19 ("Integration"
-  quotes the builds, tests, staging, validators, dry-run deploy and size figures); the host-dependent claims (E4 to E7) are still
-  `<pending>` placeholders until the GPU-2 and GPU-1 runs.
+  quotes the builds, tests, staging, validators, dry-run deploy and size figures) and host-verified on 2026-10-20 (E3 to E7: GPU-2 raids on
+  all four maps through the encrypted bundles with the timing budget, the negative tests N1 to N3, GPU-1 without Arena; plus the finding that
+  Equator and Bay5 are single-block LZMA bundles, which makes their loads slow independently of stage 2).
 - [bowl-release.md](bowl-release.md) — Bowl as the fourth released map (started on `feature/bowl`, merged into `main` 2026-10-18; started 2026-10-18): plan roles,
   the native extraction from Arena 0.6.0 (reviewed Chainfence/MetalThin ballistics pair), then package, sidecars, bake,
   host raids. Plan: [../PLAN-BOWL.md](../PLAN-BOWL.md).

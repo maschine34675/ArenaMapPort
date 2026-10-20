@@ -4,10 +4,21 @@ Record for stage 2 of the Arena gate (user decision 2026-10-19, "Stufe 2", after
 `main` as `12c3731`; stage 1 is [arena-install-check.md](arena-install-check.md)). The design, the work split and the host plan are
 in [../PLAN-ENCRYPTION.md](../PLAN-ENCRYPTION.md); this file is the record and is appended to as items land.
 
-**Status (2026-10-19, 23:20, nothing committed): integrated and verified on the build VM, not yet run on a host.** The code of all areas
+**Status (2026-10-20, 13:45): host-verified.** The commit `c55ef54` (2026-10-19, late) holds the code and texts of the integration below;
+the deploy to `D:\SPT41` (E3) was done the same night and the host runs were made on 2026-10-20 with the DLLs of that commit:
+GPU-2 (Arena 0.6.1.0.48206) loaded all four maps through the encrypted bundles (Bowl cold and warm, Air Pit, Equator, Bay5, one raid
+with bots on Bowl and on Air Pit, a hideout open), the key of each map derived through Windows CNG in 45 to 58 ms, the roughly 1 GB
+scene bundles came through `AssetBundle.LoadFromStream` (risk R2 answered), the loads stayed within a second of the plaintext ones, no
+Warning or Error from `[BundleKeys]`, `[Bundles]` or `[NavMesh]`; the negative tests N1, N2, N3 logged exactly the planned lines and EFT
+returned to the menu or ran the raid without the NavMesh; GPU-1 (no Arena) stopped at stage 1 with no key or crypto line, opened the
+hideout and ran a vanilla raid. E3 to E7 below quote the lines. One finding outside stage 2: Equator's and Bay5's scene bundles are
+single-block LZMA, so Unity decompresses them whole at load (17 s and 30 s on GPU-2, the same before stage 2; see E5); a rebuild with
+chunked LZ4 is a separate follow-up.
+
+**Earlier status (2026-10-19, 23:20, before the commit): integrated and verified on the build VM, not yet run on a host.** The code of all areas
 (`ArenaMapPort.Crypto/`, the `BundleCrypt` tool, the client loaders, staging, validators, packer) and the texts are in one tree and were
 built, tested, staged, validated and dry-run-deployed by the integrator: see "Integration" at the end, which quotes every result. What
-only a host can answer is still written as `<pending: ...>` (E4 to E7 and the host lines of the release notes): the plaintext baseline,
+only a host can answer was written as `<pending: ...>` then (E4 to E7 and the host lines of the release notes): the plaintext baseline,
 the GPU-2 run with the timing budget and the first Bowl raid through `AssetBundle.LoadFromStream` (risk R2), the negative tests, the
 GPU-1 run. Nothing here is "host-verified" until those blocks are filled. (Earlier status, kept: the plan and the texts were written
 first, the DOCS area read the code for names, flags, log lines and sizes only, and the texts were revised once after the first review.)
@@ -107,7 +118,8 @@ narrowed, `ENCRYPTION_TEXT` added; the pin in `test_release_zips.py` is theirs).
 
 ## Evidence
 
-Each block carries date, time and build id (`uibridge_status` MVID for host runs). E1 to E3 and E8 were run at integration (2026-10-19, build VM) and are quoted in "Integration"; E4 to E7 are host runs and have not been done.
+Each block carries date, time and build id (`uibridge_status` MVID for host runs). E1, E2 and E8 were run at integration (2026-10-19, build VM) and are quoted in "Integration"; E3 (the deploy) was done the same night and checked on the hosts
+on 2026-10-20; E4 to E7 are the host runs of 2026-10-20 on GPU-2 (host 2, Arena 0.6.1.0.48206) and GPU-1 (host 1, no Arena) with the DLLs of `c55ef54`.
 
 **E1 Builds and tests** (plan 2.1 steps 1-2): `dotnet test ArenaMapPort.Server.Tests -c Release`: `Bestanden!   : Fehler:     0, erfolgreich:  1440, übersprungen:     0, gesamt:  1440`
 (baseline before stage 2 was 1134/1134); tool, client (full) and server Release builds `0 Warnung(en)`, `0 Fehler`;
@@ -129,15 +141,21 @@ version (`0.3.0+cc3a5b0...` here, `0.3.0+12c3731...` on `D:\SPT41`), so the host
 swap the deploy plans.
 
 **E3 Deploy** (2.2): the dry run to `D:\SPT41` (2026-10-19, no `-Confirm`) planned `90 file(s), 3105.9 MB total -- 4 new, 14 to overwrite, 72
-already identical`: the 12 bundles, the client DLL and the server DLL overwrite, the four `keys/*.json` are NEW. The real deploy has NOT been
-done (user's step: EFT closed first; then `-Confirm`, wait for Syncthing, check the loaded-plugin MVID `<pending>`).
+already identical`: the 12 bundles, the client DLL and the server DLL overwrite, the four `keys/*.json` are NEW. The real deploy was done on 2026-10-19 at about 23:40 (`-Confirm`: `90 file(s) copied into D:\SPT41`, the same plan as the dry run), with EFT
+closed on GPU-1 and, by mistake, while the user's own session was in a raid on GPU-2: the `deploy-wait --server --force` that followed stopped and
+restarted the SPT server on GPU-2 during that raid (reported to the user). Syncthing delivered the 3.2 GB to both hosts; on 2026-10-20 at 12:50 the
+GPU-2 plugin folder held the twelve released bundles with the `AMPB` magic (the 30 plaintext bundles of the ten unreleased maps from older deploys
+are still there, unregistered and never requested) and `keys/` with the four files (905, 1050, 899 and 753 B); client and server DLL on both hosts
+`0.3.0+c55ef54`; `uibridge_status` after each EFT start: `17 identical (VM build = host disk = loaded)`.
 
-**E4 Plaintext baseline** (2.3, before the deploy): three raids per map on the current build, NO BOTS.
-
-| Map | Cold raidStarted (s) | Warm 1 | Warm 2 | `uibridge_status` max frame (ms) | `[NavMesh]` line |
-|---|---|---|---|---|---|
-| Bowl | `<pending>` | `<pending>` | `<pending>` | `<pending>` | `<pending>` (12704 / 5890 on 2026-10-19) |
-| Air Pit | `<pending>` | `<pending>` | `<pending>` | `<pending>` | `<pending>` (11787 / 5423 on 2026-10-19) |
+**E4 Plaintext baseline** (2.3): NOT recorded as planned. The deploy (E3) replaced the plaintext bundles before any baseline raid was timed, so
+the baseline comes from EFT's own load line in the hosts' earlier `traces.log` files instead: EFT prints `LocationLoaded:<scene> real:<total>
+diff:<outside the scene load>` once per raid, about 1 to 1.5 s before the raid timer starts, and the time from its `scene preset path:
+maps/<map>_preset.bundle` line to that line is the map load. Plaintext samples (host, date, build): Bowl on GPU-2, 2026-10-19 20:21, `12c3731`:
+`LocationLoaded:3.59 real:5.31 diff:1.72`, 5.3 s from the preset request; Bowl 4.8 s and Air Pit 4.1 s in the earlier sessions quoted in
+[bowl-release.md](bowl-release.md) ("Loading screens"); Equator on GPU-1, 2026-09-19 21:06: `LocationLoaded:2.94 real:21.26 diff:18.32`,
+21.3 s. No plaintext Bay5 sample survives in the hosts' log folders. The in-raid frame time of the plaintext Bowl raids was 8.3 ms mean and
+max at 120 fps (bowl-release.md). The NavMesh lines were `12704 / 5890` (Bowl) and `11787 / 5423` (Air Pit).
 
 **E5 GPU-2 run** (2.4; Bowl and Air Pit, a cross-map sequence, one hideout open, one WITH BOTS raid on each of the two): per first request of a
 map the Debug lines `[BundleKeys] key for 'arena_bowl' derived in <= 500 ms (7 files, 41.1 MB hashed, built for Arena 0.6.1.0.48206, crypto: CNG)`,
@@ -146,29 +164,89 @@ map the Debug lines `[BundleKeys] key for 'arena_bowl' derived in <= 500 ms (7 f
 MiB decrypted in ... chunks, cache hits ... / misses ..., crypto ... ms` line; unchanged `[NavMesh] added navmesh for 'arena_bowl': 12704 vertices, 5890 triangles`,
 acoustics 11/19, flares 4/28, no ArenaMapPort warning or error.
 
+Run on 2026-10-20, 12:58 to 13:16, GPU-2 (host 2, 192.168.178.109), EFT instance `fdf96b34` started 12:58:42 by `gpu-run start --host host2` (74 s,
+`17/17 identical`), DLLs `0.3.0+c55ef54`, Arena 0.6.1.0.48206, developer mode (Debug lines on). Startup: client `[Arena] Escape from Tarkov: Arena
+0.6.1.0.48206 at C:\Battlestate Games\Escape from Tarkov Arena (registry; 15,351 files, 76.1 GB verified)` (12:58:39) and `Version 0.3.0 loaded.
+Maps: Arena: Equator, Arena: Bay 5, Arena: Air Pit, Arena: Bowl. Arena: found 0.6.1.0.48206.`; server `(registry; 15,351 files, 76.1 GB verified)`
+and four `is available in location selection` lines. Raids with `gpu-run raid --mode pmc --bots none --clock 12:00 --weather clear` (the seconds
+are the recipe's menu-to-`raidStarted` time), then `gpu-run leave`; the EFT `LocationLoaded` line as in E4.
+
+| Raid (time) | to `raidStarted` | `[BundleKeys]` | scene bundle | `[Bundles] stream ... (raid start)` | EFT `LocationLoaded` (preset to loaded) | `[NavMesh] added` | fps / max frame |
+|---|---|---|---|---|---|---|---|
+| Bowl, cold (12:59) | 40 s | `key for 'arena_bowl' derived in 55 ms (7 files, 41.1 MB hashed, built for Arena 0.6.1.0.48206, crypto: CNG)` | `1006073696 bytes plaintext, encrypted AMPB v1, 960 chunks`, `loaded` 41 ms after the preset | `1218.5 MiB decrypted in 1219 chunks, cache hits 1329 / misses 1219, crypto 785 ms` (1.27 x) | `4.66 real:6.23 diff:1.57` (6.2 s; plaintext 5.3 s) | `12704 vertices, 5890 triangles` | 120 / 8.5 ms |
+| Air Pit (13:02) | 31 s | `derived in 47 ms (7 files, 38.7 MB hashed, ...)` | `991967415 bytes`, 947 chunks, `loaded` 32 ms after the preset | `1072.0 MiB in 1073 chunks, cache hits 1360 / misses 1073, crypto 736 ms` (1.13 x) | `3.46 real:4.77 diff:1.3` (4.8 s; plaintext 4.1 s) | `11787 / 5423` | 120 / 8.4 ms |
+| Equator (13:04) | 45 s | `derived in 45 ms (5 files, 21.8 MB hashed, ...)` | `431645444 bytes`, 412 chunks, `loaded` 15.5 s after the preset | `411.6 MiB in 412 chunks, cache hits 1 / misses 412, crypto 299 ms` (1.00 x, one sequential pass) | `2.06 real:18.86 diff:16.8` (18.9 s; plaintext 21.3 s on 2026-09-19) | `10404 / 4572` | 119.9 / 10.9 ms |
+| Bowl, warm (13:06) | 32 s | none (cached for the session) | no `loaded` line: EFT kept the bundle and its stream | `2552.7 MiB in 2558 chunks, cache hits 2809 / misses 2558, crypto 1204 ms` cumulative for the stream, so this raid read 1199.5 MiB in 377 ms | `2.83 real:4.33 diff:1.5` (4.3 s) | `12704 / 5890` | 119.9 / 9.1 ms |
+| Bay5 (13:09) | 59 s | `derived in 58 ms (9 files, 31.8 MB hashed, ...)` | `785870418 bytes`, 750 chunks, `loaded` 28.1 s after the preset | `749.5 MiB in 750 chunks, cache hits 1 / misses 750, crypto 548 ms` (1.00 x) | `2.68 real:32.25 diff:29.56` (32.3 s) | `22117 / 10213` | 120 / 8.3 ms |
+| Bowl WITH BOTS, Low (13:12) | 32 s | none | kept | as warm | n/a | `12704 / 5890` | 3 bots alive (assault), player untouched |
+| Air Pit WITH BOTS, Low (13:14) | 32 s | none | kept | as warm | n/a | `11787 / 5423` | 5 bots alive (3 assault, 2 PMC) |
+
+The hideout opened from the menu in 8 s after the raids (13:15), with no ArenaMapPort error, and BACK returned to the menu. The acoustics and
+flare lines were unchanged: Bowl `prepared rooms=11, portals=19, bake pairs=55, routes=196`, `[MultiFlare] arena_bowl enabled: sourceLights=28
+activeLights=4 flares=20`; Air Pit `rooms=24, portals=94, bake pairs=276, routes=16304`; Equator `rooms=21, portals=50`. At scene unload the
+registry reported each stream once more (`[Bundles] stream 'arena_bowl_scenes.bundle' (scene unload): 1353.2 MiB decrypted in 1358 chunks,
+cache hits 1472 / misses 1358, crypto 827 ms`, that is 1.41 x the 959.5 MiB plaintext over the whole first raid; Air Pit `1215.0 MiB in 1218
+chunks, crypto 780 ms`, 1.28 x). The stream counters are per stream life: EFT keeps a loaded bundle across raids of the same map in one session,
+so the warm Bowl raid logged no `[BundleKeys]` and no `loaded` line and its numbers are the deltas above. Stills of the Bowl and Air Pit raids
+are under ignored `work/screenshots/stage2/` (`bowl-encrypted-raid1.png`, `airpit-encrypted-raid1.png`: the stadium field and the Air Pit
+hall render as before). EFT's own `errors.log` lines were the usual ported-map ones (`Invalid windSettings`, the spatial-audio system, the
+SpawnPointMarker counts, `WeatherObstacle.Instance is null`, the seasons fixers); the only other lines were Unity's four pre-existing Equator
+`LODGroup` warnings (`refrigerator_drink`) and one `Coroutine couldn't be started because the the game object 'MenuScreen' is inactive!` in
+the menu between raids (source `Unity Log`, not ours).
+
 | Budget | Measured |
 |---|---|
-| raid start to `raidStarted`: baseline + 3 s cold, + 2 s warm, per map | `<pending>` |
-| key derivation: at most 0.5 s per map | `<pending>` |
-| `max` frame time: unchanged except one loading-screen frame of at most 0.6 s | `<pending>` |
-| decrypted bytes per scenes bundle: at most 1.5 x its size | `<pending>` |
-| no new `[BundleKeys]` / `[Bundles]` / `[NavMesh]` Warning or Error | `<pending>` |
+| raid start to `raidStarted`: baseline + 3 s cold, + 2 s warm, per map | met: Bowl 6.2 s cold against 5.3 s plaintext (+0.9 s), 4.3 s warm; Air Pit 4.8 s against 4.1 s (+0.7 s); Equator 18.9 s against 21.3 s; Bay5 32.3 s (no plaintext sample; see the LZMA finding) |
+| key derivation: at most 0.5 s per map | met: 45 to 58 ms (22 to 30 ms in the later sessions of the day), all `crypto: CNG`, no managed fallback and no CNG Warning |
+| `max` frame time: unchanged except one loading-screen frame of at most 0.6 s | in-raid max 8.3 to 10.9 ms at 120 fps as before (plaintext Bowl: 8.3 ms); the loading-screen frame was not measured (ModProfiler's headless capture was off, `uibridge_status` covers the last 300 frames only) |
+| decrypted bytes per scenes bundle: at most 1.5 x its size | met: Bowl 1.27 x at raid start and 1.41 x over the whole raid; Air Pit 1.13 x and 1.28 x; Equator and Bay5 1.00 x (one sequential pass) |
+| no new `[BundleKeys]` / `[Bundles]` / `[NavMesh]` Warning or Error | met: none in any of the seven raids, the hideout or the menus |
 
-The first Bowl raid also answers plan risk R2 (a roughly 1 GB scene bundle through `AssetBundle.LoadFromStream`): `<pending>`. If it fails, plan B (a
-decrypted temporary file) needs the user's decision D11 and weakens the claim "no decrypted copy is written to disk" in the release notes.
+The first Bowl raid answered plan risk R2 (a roughly 1 GB scene bundle through `AssetBundle.LoadFromStream`): it works, `loaded` came 41 ms
+after the preset bundle and Unity read the LZ4HC chunks lazily from its loading thread (1.27 x the plaintext by raid start). Plan B (a decrypted
+temporary file, D11) is not needed, and the release-notes claim "no decrypted copy is written to disk" stands.
+
+**Finding (not stage 2): Equator and Bay5 load through one LZMA block.** Their `loaded` line came 15.5 s and 28.1 s after the preset bundle,
+the stream counters show exactly one sequential pass (`cache hits 1`), and EFT's `diff` (the time outside the scene load) is 16.8 s and 29.6 s
+against 1.3 to 1.6 s on Bowl and Air Pit, while the crypto share is 0.3 s and 0.55 s. The cause is the bundle layout, not the stream:
+`BuildBundles.cs` keeps `BuildAssetBundleOptions.None` for the Equator and Bay5 entrypoints ("Existing Equator/Bay5 entrypoints retain their
+previous build option"), which is LZMA, and the UnityFS block tables of `work/build/full/arena_equator_scenes.bundle` and
+`work/build/bay5/arena_bay5_scenes.bundle` hold ONE block each (909,949,416 and 1,547,454,232 B uncompressed, flag LZMA), so Unity
+decompresses the whole bundle when it is opened, with `LoadFromFile` as with `LoadFromStream`: the plaintext Equator raid of 2026-09-19 shows
+the same `diff:18.32`. Bowl and Air Pit are `ChunkBasedCompression` (11,386 and 11,698 LZ4HC blocks of at most 128 KiB) and load lazily.
+Follow-up outside stage 2: rebuild Equator and Bay5 with chunked compression (expected to take 17 s and 30 s off their loads and the whole
+decompressed copy out of memory); the bundles change, so it is a staging and host-verification step of its own.
 
 **E6 Negative tests** (2.5; copies under `work/negative/`, an EFT restart after each step and after the restore, a full staging build and a
 deploy dry run with `0 to overwrite` at the end):
 
 | Test | Setup | Expected | Result |
 |---|---|---|---|
-| N1 wrong size | Bowl key file with the first `size` + 1 | `[BundleKeys] key for 'arena_bowl' unavailable: ...` (E4, size differs) at Bowl's first request, no Bowl raid, an Air Pit raid in the same session works | `<pending>` |
-| N2 content mismatch | one hex digit of a `check` changed | the E5 line (the files have the listed sizes but do not unlock the key) | `<pending>` |
-| N3 tamper | one byte flipped in chunk 0 of the Bowl NavMesh bundle, and one in a header byte | `[NavMesh] 'arena_bowl_navmesh.bundle' failed its integrity check at chunk 0`, no NavMesh; for the header byte the E7 line (not a valid map bundle) | `<pending>` |
+| N1 wrong size | Bowl key file with the first `size` + 1 (`level41` 18935904 -> 18935905), deployed through the script (`1 to overwrite`), on the host after 16 s, EFT restarted (13:18) | `[BundleKeys] key for 'arena_bowl' unavailable: ...` (E4, size differs) at Bowl's first request, no Bowl raid, an Air Pit raid in the same session works | **as expected** (13:18:45): `[BundleKeys] key for 'arena_bowl' unavailable: Arena file 'EscapeFromTarkovArena_Data/level41' differs in size from the key file (18935904 against 18935905 bytes, Arena 0.6.1.0.48206)`, `[Bundles] 'maps/arena_bowl_preset.bundle' not served: no key for 'arena_bowl' (see the line above)`; EFT logged `Exception: Can't load bundle: maps/arena_bowl_preset.bundle HTTP/1.1 404 Not Found` from `TarkovApplication.LoadMapAndData`, left the loading screen after 1 s and was back on the main menu 14 s later (no hang, `gpu-run raid` reported the two lines and the menu); Air Pit in the same session: `key for 'arena_airpit' derived in 30 ms`, `11787 / 5423`, raid in 37 s |
+| N2 content mismatch | first hex digit of `check` changed, same deploy path (on the host after 30 s), EFT restarted (13:23) | the E5 line (the files have the listed sizes but do not unlock the key) | **as expected** (13:23:18): `[BundleKeys] key for 'arena_bowl' unavailable: the Arena files have the listed sizes but do not unlock the key (another build with equal sizes, or modified files)`, then the same `not served` line, the same EFT exception and the menu after 14 s |
+| N3 tamper | (a) byte 1128 of the Bowl NavMesh bundle (chunk 0, payload offset 128) XOR 1, key file restored; (b) byte 35 (the nonce in the fixed header) XOR 1; each deployed and EFT restarted (13:26, 13:30) | `[NavMesh] 'arena_bowl_navmesh.bundle' failed its integrity check at chunk 0`, no NavMesh; for the header byte the E7 line (not a valid map bundle) | **as expected.** (a) the raid started (38 s, scenes and preset fine), then `[NavMesh] 'arena_bowl_navmesh.bundle' failed its integrity check at chunk 0 (offset 0); the file is damaged, reinstall ArenaMapPort` and `[NavMesh] AssetBundle.LoadFromStream returned null for '...arena_bowl_navmesh.bundle' (wrong BuildTarget, or a corrupt/incompatible file?)`, no `added navmesh` line; Unity itself logged the `AmpbException` twice from `ManagedStreamHelpers.ManagedStreamRead` plus `Unable to read header from archive file` and `Failed to read data for the AssetBundle 'IO.Stream'` (its reader surfaces the stream's exception before returning null). (b) the raid started (37 s) and the one line `[NavMesh] navmesh bundle for 'arena_bowl' not loaded: 'arena_bowl_navmesh.bundle' is not a valid map bundle (header authentication failed (not the bundle set of this key, or a modified file))`, nothing from Unity |
 | E1, E2 | missing and corrupt key file | unit tests only (the deploy script never deletes) | the two causes are covered by `BundleKeyResolverTests` (green in the 1440); no host run possible |
 
-**E7 GPU-1, no Arena** (2.6): stage 1 stops everything first: the not-found lines, `Maps: none available`, no `[BundleKeys]` line, no E-line, no `crypto:`
-line, no read of `keys/`, hideout opens, a vanilla raid starts; how the build reached that host `<pending>`.
+The tampered files were made under ignored `work/negative/` (`orig/`, `n1/`, `n2/`, `n3a/`, `n3b/`) and checked with the tool before each deploy:
+`inspect --verify-chunks` on (a) `FAIL ChunkIntegrity: chunk 0 (offset 0) failed its integrity check; the file is damaged`, on (b) `FAIL HeaderAuth:
+header authentication failed (not the bundle set of this key, or a modified file)`; `verify-keys` on N1 `... (SizeDiffers: 'EscapeFromTarkovArena_Data/level41'
+is 18935904 bytes, 18935905 expected)`, on N2 `... (ContentDiffers: the Arena files have the listed sizes but do not unlock the key ...)`. Restore (13:33):
+the byte-identical backups copied back into `dist/` (SHA-256 `bc3b1580...` for the key file, `a391f826...` for the NavMesh bundle, equal to the staged
+originals), deploy `1 to overwrite`, then the dry run `90 file(s), 3105.9 MB total -- 0 new, 0 to overwrite, 90 already identical`, host synced,
+EFT restarted, Bowl raid in 38 s with `key for 'arena_bowl' derived in 23 ms`, `[NavMesh] loaded navmesh bundle for 'arena_bowl' ... (185840 bytes
+plaintext, encrypted AMPB v1, 1 chunks)` and `added navmesh for 'arena_bowl': 12704 vertices, 5890 triangles`, 0 warnings. The staging build was
+not re-run for the restore (its determinism is E2's second build); the deploy dry run is the proof that `dist/` equals the deployed state.
+
+**E7 GPU-1, no Arena** (2.6; host 1, 192.168.178.114, 2026-10-20 13:36, EFT instance `04c6209a`, `gpu-run start --host host1` 123 s, `17/17
+identical`, DLLs `0.3.0+c55ef54` through the same `D:\SPT41` mirror as GPU-2): stage 1 stopped everything first. Client `[Arena] Escape from Tarkov:
+Arena not found: No Escape from Tarkov: Arena installation is registered in the Windows registry (HKEY_LOCAL_MACHINE\SOFTWARE\WOW6432Node\...\
+EscapeFromTarkovArena_live); install Arena with the Battlestate Games launcher, or point the mod's Arena install path override at the folder that
+contains EscapeFromTarkovArena.exe.`, `[Arena] the Arena maps need an installed Escape from Tarkov: Arena; the server does not register them without
+one. ...` and `Version 0.3.0 loaded. Maps: none available. Arena: not found.`; server `[ArenaMapPort] Escape from Tarkov: Arena not found: ...` and no
+`is available` line. In the whole session no `[BundleKeys]`, `[Bundles]` or `[NavMesh]` line, no `crypto:` and no `keys` path (regex over the log file),
+0 warnings from the mod. The hideout opened in 8 s (first visit of that profile: the "WELCOME TO THE HIDEOUT" dialog, OK, BACK); the vanilla raid:
+a PMC raid on Factory with no bots started (`gpu-run raid --host host1 --mode pmc --map factory --bots none`, 144 s to
+`raidStarted`, EFT's `LocationLoaded` for a vanilla map) and was left through DISCONNECT and the treatment screen to the main menu; 0 warnings from the mod in the session.
 
 **E8 Text checklist** (plan 1.4), results of the check run on 2026-10-19 against the tree as it was then; the integrator re-runs it
 after the other areas finish:
@@ -308,7 +386,7 @@ without `bin/` and `obj/`, `bundle_crypt.py`, `key-sources.json`, the new tests,
 The overhead is 96 B of header and MAC (for these map keys) plus 32 B per 1 MiB chunk. The four key files add 3,607 B; dist went from 86 files and 3,256,631,057 B to 90 files and
 3,256,734,280 B (+103,223 B). The ZIP grows by the loss of deflate on the bundles, not by the container: see E2.
 
-### Host checklist (what is still open; nothing below has been done)
+### Host checklist (the plan as written before the runs; done on 2026-10-20, results in E3 to E7)
 
 1. **Baseline first (E4).** The deploy replaces the plaintext bundles, so record the plaintext baseline on GPU-2 before it: restart EFT with `gpu-run restart --host host2`,
    three NO BOTS raids on Bowl and three on Air Pit (the first after the restart is cold), `uibridge_wait raidStarted=true` wall time, `uibridge_status` `max` frame time, the
@@ -333,10 +411,11 @@ The overhead is 96 B of header and MAC (for these map keys) plus 32 B per 1 MiB 
 
 ### Open risks
 
-- **R2 is untested in EFT:** `AssetBundle.LoadFromStream` on a roughly 1 GB LZ4HC scene bundle through a managed stream, with reads from Unity's loading thread, has run nowhere but in unit tests with
-  `AmpbReadStream`. If it fails, plan B (a decrypted temporary file) needs the user's decision D11 and weakens the claim that no decrypted copy is written to disk.
-- **Mono P/Invoke and speed:** the CNG path (`bcrypt.dll`) is proven on .NET 10 and by known-answer self-test, but EFT's Mono marshalling is first exercised on the host; the managed fallback is slow on
-  Mono (plan R4) and logs one Warning. Throughput on Mono is not measured.
+- **R2 answered (2026-10-20, E5):** `AssetBundle.LoadFromStream` loads the 1 GB LZ4HC scene bundles lazily through `AmpbReadStream` from Unity's loading thread; no plan B, D11 is moot.
+- **Mono P/Invoke answered (E5):** the CNG path works under EFT's Mono (`crypto: CNG` on every key line, no fallback Warning); 1.2 GB of chunk reads cost 0.8 s of crypto on GPU-2. The managed
+  fallback is still unmeasured on Mono (plan R4); no test PC lacks CNG.
+- **Equator and Bay5 are LZMA bundles** (E5 finding, older than stage 2): their whole-bundle decompression at load (17 s, 30 s) dwarfs the crypto share and is fixed by a rebuild with
+  `ChunkBasedCompression`, not in the loader.
 - **Key store:** `work/release-keys` is the only copy of the four content keys apart from the same-machine backup above; losing both means `rotate-key`, a re-encrypt and a re-release, and every released
   bundle of that map stops opening (D9). The staging guard (H6) is the build-side protection against a silent re-creation.
 - **Level index table:** `tools/bundle/key-sources.json` takes the level indices from the accepted packages' manifests and extractor plans (extracted from Arena 0.5.4 and 0.6.0) and pins them against those; the

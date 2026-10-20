@@ -3,6 +3,32 @@
 Snapshot for whoever continues (human or agent). Verify the commits named here against `git log`; this file
 is updated by hand at each handover, it is not an automatic record. Read [AGENTS.md](AGENTS.md) first.
 
+## Update 2026-10-20 - stage 2 host-verified on GPU-2 and GPU-1 (evidence E3 to E7); one LZMA finding for Equator and Bay5
+
+Stage 2 is committed as `c55ef54` (2026-10-19, late) and was deployed to `D:\SPT41` the same night (90 files; the `deploy-wait --server
+--force` after it restarted the SPT server on GPU-2 while the user's own session was in a raid there, reported). On 2026-10-20 (12:58 to 13:45) both
+hosts ran the DLLs of that commit, record in [bundle-encryption.md](docs/progress/bundle-encryption.md) (E3 to E7, each with the quoted lines):
+GPU-2 (Arena 0.6.1.0.48206) loaded Bowl (cold 40 s to `raidStarted`, warm 32 s), Air Pit (31 s), Equator (45 s) and Bay5 (59 s) through the
+encrypted bundles, plus a raid with bots on Bowl and on Air Pit and a hideout open; `[BundleKeys] key for '<map>' derived in 45..58 ms (... crypto:
+CNG)` once per map and session, `loaded ... encrypted AMPB v1, 960 chunks` for Bowl's 1 GB scene bundle through `AssetBundle.LoadFromStream` (risk
+R2 answered, 1.27 x the plaintext read by raid start, 785 ms of crypto), NavMesh counts unchanged (12704/5890, 11787/5423, 10404/4572,
+22117/10213), EFT's own `LocationLoaded` lines within a second of the plaintext samples for Bowl and Air Pit, 120 fps, no Warning or Error from
+`[BundleKeys]`/`[Bundles]`/`[NavMesh]`. Negative tests through the deploy script and an EFT restart each: N1 (size + 1) and N2 (check digit) gave
+the planned `[BundleKeys] key for 'arena_bowl' unavailable: ...` line, the preset bundle was refused, EFT logged `Can't load bundle ... 404` and was
+back on the menu in 14 s, Air Pit still worked; N3 (a payload byte, a header byte of the NavMesh bundle) gave the planned `[NavMesh]` lines and the
+raid ran without a NavMesh; restore from the byte-identical backups, dry run `0 to overwrite`, Bowl raid clean. GPU-1 (no Arena): the stage-1
+not-found lines, `Maps: none available`, no key, bundle or crypto line, hideout and a vanilla raid fine. E4 (a timed plaintext baseline before the
+deploy) was skipped by mistake; EFT's `LocationLoaded` lines in the hosts' earlier logs serve as the baseline.
+
+Finding outside stage 2: Equator's and Bay5's scene bundles are single-block LZMA (`BuildBundles.cs` keeps `BuildAssetBundleOptions.None` for
+those two entrypoints), so Unity decompresses the whole bundle when it opens it: 16.8 s (Equator) and 29.6 s (Bay5) of EFT's `diff` against 1.3 to
+1.6 s on the chunked LZ4HC bundles of Bowl and Air Pit, the same before stage 2 (Equator 2026-09-19: `diff:18.32`). A rebuild of both with
+`ChunkBasedCompression` is the fix (new bundles, so staging plus host verification); user decision.
+
+Next: the user's Bowl tests, then the 0.3.0 cut (`make_release_zips.py --single --extract-check`, the real ZIP size and SHA-256 into the Download
+block), upload, VirusTotal, tag, Forge. Open decisions unchanged: D7 (server does not check keys), D9 (off-machine key backup), D10 (keys-only
+update ZIP), D15 (stage 3 for art and audio).
+
 ## Update 2026-10-19 (stage 2) - bundle encryption: integrated and verified on the build VM (uncommitted), host runs open
 
 User decision (2026-10-19, "Stufe 2", right after the merge below): the shipped map bundles are encrypted, and the content key of a
