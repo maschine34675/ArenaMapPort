@@ -242,6 +242,12 @@ capture point (ArenaMode), the publication of the cut candidate (`work/releases/
 user's decision), ArenaMode catalog/formation for Bowl (user), the green arrow below. User decision 2026-10-18 evening: `feature/bowl`
 was fast-forwarded into `main` (`a3188cd` -> `eee77e2`) and deleted; `main` is not pushed.
 
+Open follow-up (Bowl, not started, user report 2026-10-21): the "missing wall" at the east pocket is the BTR's parked
+position. Arena animates the four Bowl door parts (BTR reverses 5.6 m into the slot's west opening, the ambulance drives
+4.8 m, the army gate leaves swing open, the respawn gate sinks); the port hides all four, so both vehicles leave openings
+closed only by invisible border cubes. Decoded end poses and the proposed fix (park instead of hide) are in
+docs/progress/bowl-release.md, section 2026-10-21.
+
 Open follow-up (AirPit, not started): the passport lamps' green arrow. Arena switches the booth lamps by dark cover
 quads, not by material: the hall lamps `..._RED_close_LOD0` (the X) and `..._GREEN_open_LOD0` (the arrow) are always lit;
 `PASSPORT_CONTROL_DOORS/RED/RedFog` (active: 10 `GREY` covers over the arrows + 18 red fog sheets) and `GREEN/GreenFog`

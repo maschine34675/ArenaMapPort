@@ -728,3 +728,41 @@ EFT had been closed on the host at 19:44 (the user's session); `gpu-run start` (
   inRaid=false` matched after 5.7 s (the extraction timer ran from the teleport into the box; the wait was issued a few seconds
   later), the result screens followed (`gpu-run menu`: ExitStatus -> KillList -> SessionStatistics ->
   SessionExperience -> MainMenu). With raid 1's Army gate walk both exits have extracted a player once.
+
+## 2026-10-21 - user report "missing wall, collider present": Arena parks the door vehicles, the port hides them
+
+User report on GPU-2 (22:59, Bowl, 0.3.0 client of `646b928`): a visible opening that cannot be passed. The player stood at
+(45.38, 1.53, -21.54) looking east (yaw 100), i.e. in the back strip behind the east pocket's west wall (reached by a teleport;
+the strip is an island of the port's NavMesh and not on Arena's at all). F10: `Physics.Raycast: hit 'Arena_Bowl_LevelBorders/Cube
+(127)' dist=1.76 layer=LevelBorder ... ballistic=<none>`. Cube (127) (scene `Arena_Bowl_DesignStuff`, renderer disabled in
+Arena's own data) is a 5.3 x 1.0 x 11.1 m slab, world AABB x 46.0..49.1, z -24.7..-19.5, y -0.25..10.8, in the west end of the
+BTR slot; next to it sit `Arena_Bowl_LevelBorders_TeamFight/Cube (30)` (x 47.3..49.3, z -23.8..-18.9) and `Cube (29)`, and the
+base cubes (128) and (226) frame the same spot.
+
+Cause, from Arena's data (read-only): `sharedassets48.assets` (the TeamFight DesignStuff scene's shared assets) holds four
+AnimatorControllers (`BTR_82_closed`, `Bowl_Gates_Respawn_01`, `Gates_Army`, `Bowl_Respawn_Ambulance_Animated`) and their
+Mecanim clips. Decoded end poses (streamed clips; script pattern: per frame time + key count, per key curve index + cubic
+coefficients, the value is the last finite key's constant term):
+
+| Door part | Clip, duration | Closed pose | Open (end) pose |
+|---|---|---|---|
+| `DOORS_SPAWN_A/BTR_82_closed` | `BTR_82_Respawn_Animation`, 7.68 s | pos (51.18, -0.04, -21.50), euler (-90, 0, 83.51) | pos (45.61, -0.04, -22.14), euler (-90.3, 266.47, -182.96): the same heading (y+z = 83.51 at x = -90), reversed 5.6 m west |
+| `DOORS_SPAWN_B/.../Bowl_Respawn_Ambulance_Animated` | `Opened`, 8.3 s | local (0, 0, 0) | local (4.773, 0, 0) = world root (-42.09, -69.82) -> (-38.72, -66.44) |
+| `DOORS_SPAWN_B/Gates_Army_01` leaves | `Gates_Army_02_Animation`, 10 s | euler z 0.37 / 0 | euler z 142.9 / -161.3 (both leaves swing open) |
+| `DOORS_SPAWN_A/Bowl_Gates_Respawn_01` | `Bowl_Gates_Respawn_01_Animation`, 13.5 s | leaf y 1.97 | leaf y -1.83 (sinks into the ground) |
+
+So Arena does not hide the BTR at the opening: it reverses it out of the slot into the west opening, where it closes the gap
+the user saw; Cubes (127), (128), (226), (29), (30) lie inside or around its parked body. Arena's own NavMesh agrees: across
+z -22.0 it is walkable only from x 50.5 (the parked BTR's nose plus the agent radius), the port's from x 49.5 (Cube (30) plus
+radius). The ambulance parks 4.8 m further out, among base cubes (109), (110), (210), (246) and TeamFight (26)..(28); it also
+carries its own layer-29 `Cube (205)` as a child. The port's `opened_barriers` rule deactivates all four parts at the opening
+(and SpawnGates on release), so both vehicles vanish and leave an opening that only invisible border cubes close: the same
+picture is visible from inside the slot at x 49.3 (east pocket) and at the ambulance's parked spot (west pocket). The sinking
+gate is equivalent to hiding it; the army gate's open leaves are missing as visible dressing only.
+
+Proposed fix (not started; needs the user's go): carry each door part's open pose as data (extracted from these clips into
+the sidecar and the descriptor, one commit), and at the opening/release move the BTR, the ambulance and the army gate leaves to
+that pose (optionally over the clip's duration) instead of deactivating them; keep deactivation for the sinking gate. NavMesh:
+the parked BTR's nose overlaps the port's mesh by about 0.6 m (x 49.5..50.1), to be sealed by a carving obstacle (the SpawnGates
+carver) or a rebake with the parked pose; the ambulance's parked spot is already off both meshes. Host check: stand in the BTR
+slot looking west and at the west pocket's ambulance exit after the release.
