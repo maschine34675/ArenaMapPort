@@ -51,6 +51,10 @@ dated state in one screen; read it before this index if you only have a minute.
 - [spawn-gates.md](spawn-gates.md) — spawn enclosures held closed until a mode plugin releases them (`SpawnGates`
   API Hold/Release/IsHeld, NavMesh carvers over the closed parts, Equator's leaves slide open), what Arena had, what
   ArenaMode's Team DM needs, GPU-2 evidence that carving works on the ported NavMesh (2026-10-17).
+- [door-poses.md](door-poses.md) — Arena's animated gate parts park at their clip's end pose instead of being hidden
+  (2026-10-22, Bowl's BTR, ambulance, army gate leaves and respawn gate): the Mecanim clip decoder and CRC32 path rule
+  of `extract_door_poses.py`, the `<stem>.doors.json` sidecar mirrored by the descriptor's `DoorPoses`, the runtime
+  (park at raid start, re-close on hold, drive on release over the clip's length, park carvers), host recipe.
 - [scope-mask.md](scope-mask.md) — blurred image inside magnifying optics on every ported map: the vanilla Scripts
   scenes' `TechnicalManagers/ScopeMaskRenderer` is missing, so the aiming depth-of-field blurred the sight picture;
   `ScopeMaskRepairs` provides it (GPU-2 AirPit vs Factory stills, 2026-10-16).

@@ -72,7 +72,7 @@ def load_map(map_path: Path) -> dict:
 def map_descriptor_paths(maps_dir: Path) -> list[Path]:
     """Select map files by name, leaving malformed descriptors visible to validation.
 
-    Dotted stems (<stem>.bots.json, .exits.json, .opened.json) are map sidecars.
+    Dotted stems (<stem>.bots.json, .exits.json, .doors.json, .opened.json) are map sidecars.
     Both registry and distribution validation must use the same descriptor set.
     """
     return sorted(p for p in maps_dir.glob("*.json") if "." not in p.stem)
@@ -154,6 +154,20 @@ def parse_lamp_fill_literal(v: str) -> dict:
     return {"template": values[0], "y": values[1], "cells": [list(flat[i:i + 2]) for i in range(0, len(flat), 2)]}
 
 
+def parse_door_pose_literal(v: str) -> dict:
+    """Door poses: `new ArenaDoorPose(barrier, part, node, clip, seconds, closedPosition, closedEuler, openPosition,
+    openEuler)` with four `new[] { x, y, z }` vectors; spelled as one entry of the sidecar's "poses" array."""
+    inner = v[len("new ArenaDoorPose("):].rstrip()
+    if not inner.endswith(")"):
+        fail(f"could not parse door pose literal: {v[:80]!r}")
+    values = [parse_cs_value(x) for x in split_top_level_args(inner[:-1])]
+    if len(values) != 9 or any(not isinstance(x, str) for x in values[:4]) or any(not isinstance(x, list) for x in values[5:]):
+        fail("door pose literal requires (barrier, part, node, clip, seconds, new[] closedPosition, new[] closedEuler, "
+             f"new[] openPosition, new[] openEuler): {v[:80]!r}")
+    return {"barrier": values[0], "part": values[1], "node": values[2], "clip": values[3], "seconds": values[4],
+            "closed": {"position": values[5], "euler": values[6]}, "open": {"position": values[7], "euler": values[8]}}
+
+
 def parse_cs_value(raw: str):
     """Parses one named-argument value into a Python str / int / list[str] / ("ref", "A.B")."""
     v = raw.strip()
@@ -197,6 +211,8 @@ def parse_cs_value(raw: str):
                     bounds_center=values[6:9], bounds_extents=values[9:12])
     if v.startswith("new ArenaLampFillDescriptor("):
         return parse_lamp_fill_literal(v)
+    if v.startswith("new ArenaDoorPose("):
+        return parse_door_pose_literal(v)
     if re.fullmatch(r"[A-Za-z_]\w*\.[A-Za-z_]\w*", v):
         return ("ref", v)
     if re.fullmatch(r"[A-Za-z_]\w*", v):
@@ -427,6 +443,84 @@ def shader_fallback_errors(map_json: dict) -> list[str]:
     return []
 
 
+DOOR_POSE_KEYS = ("barrier", "part", "node", "clip", "seconds", "closed", "open")
+DOOR_SIDECAR_SCHEMA = 1
+
+
+def is_finite_vec3(value) -> bool:
+    return isinstance(value, list) and len(value) == 3 and all(
+        isinstance(x, (int, float)) and not isinstance(x, bool) and math.isfinite(x) for x in value)
+
+
+def door_pose_errors(map_json: dict, doors_path: Path, registry_poses) -> list[str]:
+    """tools/maps/<stem>.doors.json (written by tools/extract/extract_door_poses.py) against the map descriptor and the
+    registry's DoorPoses: schema, barriers that really are opened_barriers, and the same poses in the same order with the
+    same numbers on both sides. A map without the sidecar must have no DoorPoses."""
+    name = doors_path.name
+    registry_poses = registry_poses or []
+    if not doors_path.exists():
+        return [f"registry DoorPoses has {len(registry_poses)} entr{'y' if len(registry_poses) == 1 else 'ies'} but {name} does not exist"] \
+            if registry_poses else []
+    try:
+        doc = json.loads(doors_path.read_text(encoding="utf-8"))
+    except ValueError as exc:
+        return [f"{name} is not valid JSON: {exc}"]
+    errors: list[str] = []
+    if not isinstance(doc, dict):
+        return [f"{name} must be an object"]
+    if doc.get("schema_version") != DOOR_SIDECAR_SCHEMA:
+        errors.append(f"{name}: schema_version must be {DOOR_SIDECAR_SCHEMA}")
+    if doc.get("key") != map_json.get("key"):
+        errors.append(f"{name}: key {doc.get('key')!r} is not the map's {map_json.get('key')!r}")
+    source = doc.get("source")
+    if not isinstance(source, dict) or source.get("scene") not in map_json.get("all_scene_names", []) \
+            or type(source.get("level")) is not int or not isinstance(source.get("assets"), str) \
+            or not isinstance(source.get("arena_version"), str):
+        errors.append(f"{name}: source needs scene (a scene of the map), level (int), assets and arena_version")
+    poses = doc.get("poses")
+    if not isinstance(poses, list) or not poses:
+        return errors + [f"{name}: poses must be a non-empty array"]
+    barriers = map_json.get("opened_barriers", [])
+    seen: set = set()
+    for i, pose in enumerate(poses):
+        label = f"{name} poses[{i}]"
+        if not isinstance(pose, dict) or set(pose) != set(DOOR_POSE_KEYS):
+            errors.append(f"{label}: needs exactly the keys {', '.join(DOOR_POSE_KEYS)}")
+            continue
+        for field in ("barrier", "part", "clip"):
+            if not isinstance(pose[field], str) or not pose[field]:
+                errors.append(f"{label}: {field} must be a non-empty string")
+        if not isinstance(pose["node"], str):
+            errors.append(f"{label}: node must be a string (\"\" = the part itself)")
+        if pose["barrier"] not in barriers:
+            errors.append(f"{label}: barrier {pose['barrier']!r} is not an opened_barriers entry")
+        if isinstance(pose["seconds"], bool) or not isinstance(pose["seconds"], (int, float)) \
+                or not math.isfinite(pose["seconds"]) or pose["seconds"] <= 0:
+            errors.append(f"{label}: seconds must be a positive finite number")
+        for state in ("closed", "open"):
+            block = pose[state]
+            if not isinstance(block, dict) or set(block) != {"position", "euler"} \
+                    or not is_finite_vec3(block.get("position")) or not is_finite_vec3(block.get("euler")):
+                errors.append(f"{label}: {state} needs position and euler, three finite numbers each")
+        identity = (pose["barrier"], pose["part"], pose["node"])
+        if identity in seen:
+            errors.append(f"{label}: duplicate pose for {'/'.join(x for x in identity if x)}")
+        seen.add(identity)
+    if errors:
+        return errors
+    if len(poses) != len(registry_poses):
+        errors.append(f"{name} has {len(poses)} poses, the registry's DoorPoses {len(registry_poses)}")
+    for i, (side, reg) in enumerate(zip(poses, registry_poses)):
+        if not isinstance(reg, dict):
+            errors.append(f"registry DoorPoses[{i}] is not an ArenaDoorPose literal")
+            continue
+        if side != reg:
+            diff = [k for k in DOOR_POSE_KEYS if side.get(k) != reg.get(k)]
+            errors.append(f"{name} poses[{i}] ({side['barrier']}/{side['part']}/{side['node']}) differs from the registry in "
+                          f"{', '.join(diff)}: sidecar { {k: side[k] for k in diff} }, registry { {k: reg.get(k) for k in diff} }")
+    return errors
+
+
 def check_map_against_registry_entry(
     map_json: dict, registry_args: dict, ref_scope: dict, map_path: Path, cs_var_name: str, errors: list
 ) -> None:
@@ -436,6 +530,8 @@ def check_map_against_registry_entry(
     errors.extend(f"{where}: {error}" for error in shader_fallback_errors(map_json))
     errors.extend(f"{where}: {error}" for error in lamp_fill_errors(map_json))
     check_field(errors, where, "lamp_fill", map_json.get("lamp_fill"), registry_args.get("LampFill"))
+    errors.extend(f"{where}: {error}" for error in door_pose_errors(
+        map_json, map_path.with_name(f"{map_path.stem}.doors.json"), registry_args.get("DoorPoses")))
     check_field(errors, where, "shader_fallback_names", map_json.get("shader_fallback_names", []),
                 resolve(registry_args.get("ShaderFallbackNames", []), ref_scope))
     for json_field, cs_field in (("opened_barriers", "OpenedBarriers"), ("navmesh_bake_exclusions", "NavMeshBakeExclusions"),
@@ -622,6 +718,9 @@ def main() -> int:
             errors.append(f"{path.name}: fog_color must contain three finite numbers")
     for missing in sorted(set(registry_by_key) - map_keys):
         errors.append(f"runtime registry map {missing} has no tools/maps JSON descriptor")
+    for doors in sorted(maps_dir.glob("*.doors.json")):
+        if not (maps_dir / f"{doors.name.removesuffix('.doors.json')}.json").exists():
+            errors.append(f"{doors.name}: no tools/maps descriptor {doors.name.removesuffix('.doors.json')}.json beside it")
 
     equator_json_path = maps_dir / "equator.json"
     if not equator_json_path.exists():

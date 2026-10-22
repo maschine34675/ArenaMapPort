@@ -766,3 +766,103 @@ that pose (optionally over the clip's duration) instead of deactivating them; ke
 the parked BTR's nose overlaps the port's mesh by about 0.6 m (x 49.5..50.1), to be sealed by a carving obstacle (the SpawnGates
 carver) or a rebake with the parked pose; the ambulance's parked spot is already off both meshes. Host check: stand in the BTR
 slot looking west and at the west pocket's ambulance exit after the release.
+
+### Correction 2026-10-22: the respawn gate does not sink; the fix was approved and built
+
+The 2026-10-21 lines above (the table row "leaf y -1.83 (sinks into the ground)", "The sinking gate is equivalent to hiding it" and
+"keep deactivation for the sinking gate") read a LOCAL y value as a world direction and are wrong on that one point; the rest of the
+section stands. The parent `Bowl_Gates_Respawn_01` is rotated -90 degrees about x (local rotation (-0.621, 0.337, 0.337, 0.621) at
+(39.871, 0.114, -2.345)), so the clip's local y is horizontal in the world. Recomputed through the parent chain from
+`work/extract/bowl-native-v2`: the leaf `Bowl_Gates_Respawn_01_Gate` goes from world (38.104, 0.233, -3.279) to (41.311, 0.233, -1.197),
+3.823 m horizontally and 0.000 m vertically; its `_COLLIDER` stays 0.23..2.82 m high (x 35.67..40.55 -> 38.87..43.76, z -4.89..-1.68 ->
+-2.81..0.40) and lands on the static `Bowl_Gates_Respawn_01_RAIL_COLLIDER`. So the leaf slides sideways onto its rail, stays visible and
+solid beside the doorway, and is parked in that pose like the other three parts (with a park carver), not kept deactivated.
+
+The proposed fix above was approved by the user on 2026-10-22 ("ja gerne in Endstellung parken") and is built: the poses are the
+sidecar `tools/maps/bowl.doors.json` and `ArenaMapRegistry.Bowl.DoorPoses` ([door-poses.md](door-poses.md), "Corrections to the data
+record"), the client applies them in `BoothDoorRepairs` / `SpawnGates` ([spawn-gates.md](spawn-gates.md)). Host verification of the
+parked pose is still open.
+
+## 2026-10-22 - door poses: Bowl's vehicles and gate leaves park in Arena's end pose (implemented, host test pending)
+
+Status: implemented on the build VM, built, unit-tested and validated (evidence below); NOT deployed, not committed at the time of
+writing, and no raid has run it. It carries out the fix proposed at the end of the 2026-10-21 section, approved by the user on
+2026-10-22 ("ja gerne in Endstellung parken"; the same message asks to look, later, at recreating the door animations instead of
+hiding or parking: HANDOFF.md "later"). Records: [door-poses.md](door-poses.md) (data, runtime, cost model, host recipe),
+[spawn-gates.md](spawn-gates.md) ("Follow-up 2026-10-22"), `docs/MAP-RECIPE.md` section 3a.
+
+### The decoded table, short (19 poses; sidecar `tools/maps/bowl.doors.json` = `ArenaMapRegistry.Bowl.DoorPoses`, Arena 0.6.1.0.48206)
+
+| Part (under) | Clip, seconds | Poses | Closed -> open (local to the parent) |
+|---|---|---|---|
+| `BTR_82_closed` (`DOORS_SPAWN_A`) | `BTR_82_Respawn_Animation`, 7.683 | 9: body + 8 wheels | body pos (51.182, -0.035, -21.498) -> (45.61, -0.04, -22.14), euler (-90, 0, 83.511) -> (-90.3, 266.474, -182.962) (same heading, 5.6 m west); wheels spin to about -553 / -542..-537 degrees |
+| `Bowl_Gates_Respawn_01` (`DOORS_SPAWN_A`) | `Bowl_Gates_Respawn_01_Animation`, 13.5 | 1: the leaf | local y 1.99 -> -1.833; WORLD (38.104, 0.233, -3.279) -> (41.311, 0.233, -1.197): it slides 3.82 m sideways onto its rail (it does not sink, see the correction above) |
+| `Gates_Army_01` (`DOORS_SPAWN_B`) | `Gates_Army_02_Animation`, 10 | 2: both leaves | euler z 0 -> 142.922 and 0 -> -161.335 |
+| `Bowl_Respawn_Ambulance_Animated Group` (`DOORS_SPAWN_B`) | `Opened`, 8.3 | 7: root, hood, tow rope, 4 wheels | root local x 0 -> 4.773 = world (-42.09, -69.82) -> (-38.72, -66.44); wheels 406.9 degrees; rope jumps at 4.58 s; hood 1.9 degrees |
+
+Closed = the scene's own local transform (checked against the extracted package within 1 mm / 0.05 degrees, against Arena's clip
+start within 2 cm / 1 degree: two BTR wheels differ by 3.7 / 3.1 cm in z, an authoring offset, warned by design). Open = the clip's
+value at its stop time; euler clips keep their raw multi-turn values.
+
+### Runtime rules
+
+- A part with poses is never switched off. `BoothDoorRepairs.OpenBarriers` (both raid-start passes, idempotent) calls
+  `SpawnGates.NotePoses` (resolve the nodes, compare them with the closed pose, measure the closed colliders), then the existing
+  `OfferHeld` / `Offer`, then `SpawnGates.Park`: the nodes snap to the open pose, the part stays active, `Physics.SyncTransforms()`.
+  A part without usable poses (or one whose scene pose is more than 5 cm / 2 degrees off the data) logs one Warning and goes the old
+  way (`SetActive(false)`).
+- `Hold` puts parked or driving parts back in the closed pose (hold carvers seal them); `Release` drives each part to the open pose
+  over its clip's seconds (smoothstep ease, position by lerp, euler angles component-wise, one coroutine, each part finishes on its
+  own clip: hold carvers go, park carvers come). Equator's slide and the `SetActive(false)` of parts without poses are unchanged.
+- Park carvers: a carving box over each movement collider that Arena MOVED and that rises more than 0.3 m over the floor line: 24 on
+  Bowl (BTR 10, respawn gate 1, army leaves 2, ambulance 11). The four static colliders (the gate's rail, the army frame, the two
+  `Telfer_Help` pillars) stay uncarved: the army frame is two posts whose AABB spans the doorway the leaves open.
+- Config: new key `Spawns/SpawnGateDrive` (bool, default true, next release; false snaps the parts to the open pose at the release).
+  `Spawns/SpawnGateCarve` (default unchanged, description extended: it now also governs the park carvers, a widened meaning that a
+  review flagged) and `Spawns/OpenSpawnBarriers` (description extended) keep their defaults.
+- Colliders are static ones moved by transform; no Rigidbody (measured slower, see door-poses.md "Cost of the drive").
+
+### Evidence (build VM, 2026-10-22 15:40 to 15:48, repo e54b292 plus the uncommitted files of this task)
+
+```
+dotnet build ArenaMapPort.Client -c Release -p:ArenaMapPortDllOnly=true   0 Warnung(en), 0 Fehler   (dll 928,768 B, = dist copy)
+    client sha256 e19e69e9ace18ac383299fb6fe62bf8af86b31f4f8b57d5b67787287a75f0f45
+dotnet build ArenaMapPort.Server -c Release                               0 Warnung(en), 0 Fehler   (= dist copy)
+    server sha256 6703abe3d39fda6eb09e450faf965ffa94552d9db5d6793f3f733c320b4803ab
+dotnet test ArenaMapPort.Server.Tests -c Release                          Bestanden!: Fehler: 0, erfolgreich: 1565, uebersprungen: 0, gesamt: 1565
+python -m unittest discover -s tools/tests -p "test_*.py"                 Ran 1950 tests in 297.040s / OK (skipped=55)
+python tools/validate/validate_map_descriptors.py                         OK - 14 tools/maps descriptors, all 14 catalog registry entries, release All membership, and ArenaPaths.cs's EquatorDefault() all agree.
+extract_door_poses.py decode self-check: 493,983 key spans, each cubic reaches the next key (worst error 1.9e-04); package check: 19 node(s) exist once in bowl-native-v2 with Arena's closed transform
+offline raster model of the built Bowl NavMesh (door-poses.md): hold carvers = pockets not reachable; park carvers (movers only) = east and west pocket spawns -> field reachable (2 of 2 each), army and respawn gate doorways reachable; carving the army frame too = army doorway NOT reachable
+drive cost model (scratch Unity 2022.3.43, Script physics): static colliders +0.1..+0.2 ms a frame; kinematic Rigidbody 0.08..0.24 ms slower, so none is added
+```
+
+### Host recipe (GPU-2; the full steps are in door-poses.md "Host recipe")
+
+0. Deploy (EFT closed, `uibridge_status` afterwards): `pwsh -NoProfile -File tools/deploy-to-spt.ps1 -SptRoot 'D:\SPT41'` dry run
+   first, then `-Confirm`. The expected changes are the two DLLs (client and server; ArenaMapPort.Shared changed, so the SERVER DLL hash must be
+   compared on the host before the SPT restart, UiBridge compares the client only), the dry run lists anything else. Restart EFT and the SPT server.
+1. Plain raid on Bowl, bots None: `[SpawnGates] park:` x4 and `parked N part(s) at the open pose` x2, 0 Warnings; the east pocket
+   looking west shows the BTR's rear end in the slot (F10 hit `BTR_82_exterior_closed_COLLIDER`, not `LevelBorders/Cube (30)`), the
+   west pocket the ambulance at about (-38.7, -66.4) and the swung army leaves, the respawn gate leaf over its rail at (41.3, -1.2);
+   `uibridge_teleport dryRun` pocket spawn -> field (2.5, 0.0, -21.1) reachable, into the BTR's footprint not reachable.
+2. Developer hold (`Spawns/SpawnGateHold` true, `SpawnGateHoldSeconds` 60): closed pose before 60 s, then the drive (BTR 7.7 s,
+   ambulance 8.3 s, army 10 s, gate 13.5 s), the `released` line with `drove 4 part(s) ... 24 park carver(s) in place`, the
+   `drive frames: N frame(s) in 13.5 s, mean X ms, max Y ms (...)` line (accept: mean = the raid's usual frame time, max within about
+   8 ms), then `navmesh probe: every probed gate open` with the respawn gate "not judged".
+3. `SpawnGateDrive = false` (live): hold/release snaps all four. Leave the raid and open the hideout once; return the developer keys.
+
+### Not covered by the build (reviews of this task; none is a failing test)
+
+- `SpawnGates.Open` calls `CreateParkCarvers("released")` without a try/catch (`SealParked`, `NotePoses` and `Park` are guarded):
+  an exception there would end the coroutine with `_opening` still set; a part's `Carved` flag is also set only after its collider
+  loop. Proposed: call `SealParked("released")` instead.
+- A second `Hold` after the parts were parked (an ArenaMode round restart in the same raid) puts the BTR and the ambulance back into
+  their closed footprint in one frame; a player standing there is embedded. `IsHeld` turns false at `Release`, while the BTR slot
+  stays sealed for 7.7 s and the respawn gate for 13.5 s: ArenaMode cannot see when the doorways are really open.
+- The five layer-29 box colliders under the gate parts (BTR `Cube (205)`, army `Cube (207)` / `(208)`, gate `Cube (206)`, ambulance
+  `Cube (205)`) are now active, invisible walls at the parked pose (they were off with their parts).
+- The park carver boxes start at the collider's own lowest point (BTR hull y 0.41, ambulance body y 0.19, floor mesh about y 0.05);
+  the host dryRun into the footprints is the check.
+- The motion between the end poses is a smoothstep stand-in, not Arena's curves; nothing replays the real clips yet (HANDOFF.md
+  "later").

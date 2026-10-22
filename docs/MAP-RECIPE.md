@@ -114,6 +114,49 @@ beyond its table row. Its greedy list names the smallest set of props whose
 exclusion joins all probe points; `--descriptor` applies the barrier and exclusion lists above (held gates included;
 `bake_bounds` is not modelled).
 
+### 3a. Door poses — `tools/maps/<stem>.doors.json` (optional, Bowl only so far)
+
+Some barriers are not static in Arena: an `Animator` plays a Mecanim clip that moves the gate parts (Bowl: the BTR reverses out of
+its slot, the ambulance drives out of its bay, the army gate's leaves swing open, the second gate's leaf slides 3.8 m sideways onto
+its rail; it does NOT sink: the parent is rotated -90 degrees about x, so the clip's local y is a horizontal world direction and the
+leaf keeps its world height). The raid-start opening
+used to hide these parts; the sidecar carries the OPEN END pose of every node a clip moves, next to its closed pose, so the client
+can park the part in its open position instead (user decision 2026-10-22). Read a pose in the frame of the node's parent, not as a
+world direction: a "local y" number says nothing about up or down until the parent chain is known (compute the world pose through
+the scene hierarchy before describing a motion in prose). Before adding a map, check whether it has any:
+`tools/extract/extract_door_poses.py` lists the Animators below the map's `opened_barriers` (Equator and Bay5 have none; AirPit's three
+bus doors use a controller with no clip, so they are reported as ignored). Full method, table and limits:
+[docs/progress/door-poses.md](progress/door-poses.md).
+
+```powershell
+python tools/extract/extract_door_poses.py --map arena_bowl --arena auto --package work/extract/bowl-native-v2 --output tools/maps/bowl.doors.json --csharp
+python tools/validate/validate_map_descriptors.py       # must print OK
+```
+
+The sidecar is generated output: never edit it by hand. A new map needs a row in `MAP_SOURCES` (scene name, descriptor), the scene
+in `tools/bundle/key-sources.json` (that is where the level index comes from) and a Windows install of Arena with UnityPy. Shape:
+
+```json
+{ "schema_version": 1, "key": "arena_bowl",
+  "source": { "scene": "Arena_Bowl_TeamFight_DesignStuff", "level": 48, "assets": "sharedassets48.assets", "arena_version": "0.6.1.0.48206" },
+  "poses": [ { "barrier": "DOORS_SPAWN_A", "part": "BTR_82_closed", "node": "", "clip": "BTR_82_Respawn_Animation", "seconds": 7.683,
+               "closed": { "position": [51.182, -0.035, -21.498], "euler": [-90.0, 0.0, 83.511] },
+               "open":   { "position": [45.61, -0.04, -22.14],   "euler": [-90.3, 266.474, -182.962] } } ] }
+```
+
+- `barrier`: an `opened_barriers` path. `part`: the barrier root's direct child (the object `BoothDoorRepairs` deactivates; a part whose
+  name contains "frame" is never hidden and never listed). `node`: the transform path below the part that the clip animates, `""` = the
+  part itself. Positions and euler angles are LOCAL to the node's parent (`localPosition` / `localEulerAngles`); euler angles are the
+  clip's own raw values (multi-turn spins survive), to be interpolated component-wise.
+- One entry per animated node whose open pose differs from its closed pose by more than 1 cm or 1 degree. The closed pose is the
+  scene's own local transform (cross-checked against the clip: 2 cm / 1 degree warning, 10 cm / 5 degrees stop); the open pose is the
+  clip's value at its stop time. The open clip of a controller is the one whose name does not end in "closed".
+- Mirrored by `ArenaMapDescriptor.DoorPoses` (`ArenaDoorPose[]`, empty on every other map; `DoorPosesOf(barrier, part)` returns one part's
+  poses, the part itself first). `validate_map_descriptors.py` checks the sidecar's schema, that every barrier is an `opened_barriers`
+  entry, and that sidecar and registry carry the same poses in the same order with the same numbers; `BowlMapTests` does the same in C#
+  and `test_door_poses.py` pins that the registry holds exactly the text `--csharp` prints. A map with poses must keep the sidecar and
+  the C# literals in one commit. Re-run the tool after an Arena update (the real-data test fails if the installed clips changed).
+
 ## 4. Generate, test, deploy
 
 ```powershell

@@ -159,3 +159,64 @@ closed` per barrier (4 registered), `navmesh installed: 28 carver(s) over 28 mov
 1.5 m of their probe points) and a `uibridge_teleport dryRun` from the east spawn to the field was refused as unreachable. At
 60.0 s: `released (developer test hold ...): 0 leaf(s) slid, 4 gate part(s) switched off, 28 carver(s) removed`, `every probed gate
 open (3 probed)` with PathComplete for all three, and the same dryRun passed. Details in bowl-release.md (raid 6).
+
+## Follow-up 2026-10-22: parked parts (Arena's animated end poses)
+
+User decision 2026-10-22 ("ja gerne in Endstellung parken"; for later: recreate the door animations instead of hiding them).
+Arena does not hide Bowl's BTR, ambulance, army gate leaves and respawn gate leaf, it animates them to an end pose; the port
+switched them off. The data (descriptor `DoorPoses`, sidecar `tools/maps/bowl.doors.json`) is recorded in
+[door-poses.md](door-poses.md), together with the log lines and the host recipe of this change (section "Runtime"). The rules:
+
+- **A part with poses is never switched off.** `BoothDoorRepairs.OpenBarriers` calls `SpawnGates.NotePoses` (resolve nodes, check
+  them against the scene, measure the closed colliders), then the existing `OfferHeld` / `Offer`, then `SpawnGates.Park`; only a
+  part without usable poses reaches `SetActive(false)`. `Park` snaps the nodes to the open pose (positions and euler angles from
+  the data, bit for bit, so the second pass changes nothing) and calls `Physics.SyncTransforms()`.
+- **Roles.** A Start-role part (Bowl: both barriers) is registered either way, so `Hold` can bring it back and `Release` can drive
+  it; a Plain-role part with poses would be parked but never touched by a hold. A Held-role part with poses stays closed until a
+  release that follows a hold, then drives like the others.
+- **Hold**: every parked or driving part returns to its closed pose (data), loses its park carvers, an opening in progress is
+  cancelled as before, and `CreateCarvers` seals it (it skips parts that are parked or driving, so a mixed state is fine).
+- **Release**: parts without poses go the old way (Equator's leaves slide for `SpawnGateSlideSeconds`, then `SetActive(false)` and
+  their carvers go, at the end of the slide, not of the drive). Parts with poses drive over their own clip's seconds with
+  `DoorPoseModel.Ease`; `Spawns/SpawnGateDrive = false` snaps. Each part finishing: pose snapped to the data, its own hold carvers
+  destroyed (`_carversOf`), park carvers created. The `released` line gains `, drove N part(s) to the open pose in X s, M park
+  carver(s) in place`; the probe follows 0.5 s after the last part.
+- **Park carvers**: boxes over the movement colliders (layers 0 and 18) that sit on or below a pose node
+  (`DoorPoseModel.IsMoved`, path below the part) and rise more than 0.3 m over the part's floor line
+  (`ParkedBodyStands`; nothing in Bowl is that low, the guard keeps a pose that really sinks from carving its doorway shut). They are
+  made when the NavMesh is installed or when a part finishes its drive, are kept for the raid, die with the host object on the
+  Scripts scene's unload, and follow `SpawnGateCarve`. Colliders no pose node contains (the army frame, the Telfer pillars, the
+  respawn gate's rail) stay uncarved. Why: the army frame is two posts whose AABB spans the doorway; carving every collider at
+  the open pose seals the army gate (offline raster model of the built Bowl NavMesh: pocket side to field side reachable
+  without carvers, not reachable with the hold carvers, reachable with the movers' park carvers, NOT reachable when the frame
+  is carved too; table in door-poses.md).
+- **Probe**: the post-release probe still expects every probed doorway open, across the CLOSED bounds of the part. A doorway whose
+  probe segment (`ProbeSegment`: 1.5 m either side of the closed bounds' centre along the thin axis) runs through a park carver
+  is reported as `not judged` (`DoorPoseModel.SegmentTouchesBox`): offline the respawn gate's segment (x 39.79, z -3.69..-0.69)
+  touches its leaf's box (x 38.67..43.96, z -3.01..0.60), the BTR's (x 51.23, z -22.97..-19.97) clears the body's (x 41.19..50.15),
+  the army's (x -51.68) clears both leaves' boxes. A hold's `expectSealed` probe is unaffected (the park carvers are gone then).
+- **Baseline**: `EnsureBaseline()` (factored out of `CreateCarvers`) runs before the first hold or park carver of a raid, over every
+  part whose closed bounds are known; parked parts have theirs from `NotePoses`, so a part parked at raid start is judged against the
+  map's own NavMesh like any other.
+- **Fallback, errors**: pose data that does not fit the scene (node missing, scene pose more than 5 cm / 2 degrees off the data's
+  closed pose, a malformed triple) logs one Warning per part and the part switches off like before; `NotePoses`, `Park` and
+  `SealParked` catch everything, the Harmony postfix of the raid start never sees an exception.
+- **Mode contract unchanged.** `Hold`, `Release`, `IsHeld`, `ClosedParts` keep their signatures; the new members are `internal`.
+  `ClosedParts` counts the parked Start-role parts too (registered either way).
+
+Pure rules in `ArenaMapPort.Client/DoorPoseModel.cs` (no Unity types, linked into the tests as `SpawnGateModel` is): `Progress`,
+`Finished`, `Ease`, `Lerp` / `Lerp3` (exact endpoints), `IsMoved`, `ParkedBodyStands`, `SegmentTouchesBox`, `PoseMatchesScene`.
+Tests: `ArenaMapPort.Server.Tests/DoorPoseModelTests.cs` (model rules; Bowl's real pose data through them; wiring of
+BoothDoorRepairs and SpawnGates read as text). `SpawnGateModelTests.cs` is unchanged and still passes (the refactor of
+`CreateCarvers` kept every string it pins).
+
+Cost of the drive (review finding, door-poses.md "Cost of the drive"): the parts are re-posed by transform every frame and their
+colliders stay static. A scratch Unity 2022.3.43 model of the 19 nodes / 70 colliders measured +0.1 to +0.2 ms a frame in worlds
+of 20k to 62k static colliders (EFT's Script simulation mode, `autoSyncTransforms` False and True), and a kinematic `Rigidbody` on
+the node roots, the usual advice for moving colliders, measured 0.08 to 0.24 ms slower, so none is added (the wiring test pins
+that). The release logs `drive frames: N frame(s) in 13.5 s, mean X ms, max Y ms (...; Physics.autoSyncTransforms <value>)` at
+Debug, the whole frame while any part is still posed, so the host check is one log line.
+
+Not done / not measured: nothing of this has run in a raid yet (host check: door-poses.md "Host recipe"); the 13.5 s of the
+respawn gate is the waiting time of the last doorway after a mode's Release (`SpawnGateDrive = false` removes it); players or
+bots standing where a body drives are not pushed out by the port.

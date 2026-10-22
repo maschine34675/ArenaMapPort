@@ -122,6 +122,43 @@ namespace ArenaMapPort.Shared
         }
     }
 
+    /// <summary>
+    /// One node an Arena gate animation moves (tools/maps/&lt;stem&gt;.doors.json, docs/progress/door-poses.md): the
+    /// closed pose it has in the scene and the open END pose of Arena's own clip. <see cref="Barrier"/> is the
+    /// OpenedBarriers path, <see cref="Part"/> the barrier root's direct child (the object BoothDoorRepairs switches
+    /// off), <see cref="Node"/> the transform path below the part that the clip animates ("" = the part itself).
+    /// Positions and euler angles are LOCAL to the node's parent (Unity localPosition / localEulerAngles). Where
+    /// the clip stores euler curves the angles are its raw values, multi-turn spins included, so they are meant to be
+    /// interpolated component-wise (Quaternion.Euler of a lerped triple), not as quaternions. <see cref="Seconds"/> is the
+    /// clip's length. Mirrors the sidecar's "poses" number for number (BowlMapTests, validate_map_descriptors.py).
+    /// </summary>
+    public sealed class ArenaDoorPose
+    {
+        public string Barrier { get; }
+        public string Part { get; }
+        public string Node { get; }
+        public string Clip { get; }
+        public float Seconds { get; }
+        public float[] ClosedPosition { get; }
+        public float[] ClosedEuler { get; }
+        public float[] OpenPosition { get; }
+        public float[] OpenEuler { get; }
+
+        public ArenaDoorPose(string Barrier, string Part, string Node, string Clip, float Seconds,
+            float[] ClosedPosition, float[] ClosedEuler, float[] OpenPosition, float[] OpenEuler)
+        {
+            this.Barrier = Barrier;
+            this.Part = Part;
+            this.Node = Node;
+            this.Clip = Clip;
+            this.Seconds = Seconds;
+            this.ClosedPosition = ClosedPosition;
+            this.ClosedEuler = ClosedEuler;
+            this.OpenPosition = OpenPosition;
+            this.OpenEuler = OpenEuler;
+        }
+    }
+
     public sealed class ArenaMapDescriptor
     {
         public string Key { get; }                 // "arena_equator" / "arena_bay5" — LocationTable key, base.json Id
@@ -155,6 +192,10 @@ namespace ArenaMapPort.Shared
         // treats layer 29 as physical (the map's navmesh_bake_layers must list 29). Equator, Bay5 and AirPit keep
         // false: their TeamFight walls open at raid start and the bake drops layer 29.
         public bool KeepLevelBorders { get; }
+        // Door poses (2026-10-22, docs/progress/door-poses.md): the open END pose of every node Arena's gate animations
+        // move, so the raid-start opening can park a gate part in its open position instead of hiding it. Empty = the
+        // map's barriers are hidden as before. Mirrors tools/maps/<stem>.doors.json.
+        public ArenaDoorPose[] DoorPoses { get; }
         // PLAN-AIRPIT item 8 — Editor-side NavMesh bake inputs. The client never reads them; they live here so the one
         // per-map table stays complete and tools/maps/<key>.json cannot drift (validate_map_descriptors.py and the xunit
         // mirror tests). All empty for Equator and Bay5, whose bake is unchanged.
@@ -228,7 +269,8 @@ namespace ArenaMapPort.Shared
             ArenaLampFillDescriptor? LampFill = null,
             string[]? StartGates = null,
             string[]? HeldGates = null,
-            bool KeepLevelBorders = false)
+            bool KeepLevelBorders = false,
+            ArenaDoorPose[]? DoorPoses = null)
 #nullable restore
         {
             this.Key = Key;
@@ -250,6 +292,7 @@ namespace ArenaMapPort.Shared
             this.StartGates = StartGates ?? new string[0];
             this.HeldGates = HeldGates ?? new string[0];
             this.KeepLevelBorders = KeepLevelBorders;
+            this.DoorPoses = DoorPoses ?? new ArenaDoorPose[0];
             this.NavMeshBakeExclusions = NavMeshBakeExclusions ?? new string[0];
             this.AuthoredBorders = AuthoredBorders ?? new ArenaBorderDescriptor[0];
             this.BakeBounds = BakeBounds ?? new float[0];
@@ -282,6 +325,17 @@ namespace ArenaMapPort.Shared
             if (System.Array.IndexOf(HeldGates, path) >= 0) return ArenaGateRole.Held;
             if (StartGates.Length == 0 || System.Array.IndexOf(StartGates, path) >= 0) return ArenaGateRole.Start;
             return ArenaGateRole.Plain;
+        }
+
+        /// <summary>The poses of one gate part (the barrier path and the part name BoothDoorRepairs sees), in sidecar order:
+        /// the part itself first (Node == ""), then the animated nodes below it. Empty when Arena animates nothing there.</summary>
+        public ArenaDoorPose[] DoorPosesOf(string barrier, string part)
+        {
+            var result = new List<ArenaDoorPose>();
+            foreach (ArenaDoorPose pose in DoorPoses)
+                if (pose.Barrier == barrier && pose.Part == part)
+                    result.Add(pose);
+            return result.ToArray();
         }
 
         // Physical bundle filenames are always the served key's basename — never stored
@@ -688,7 +742,71 @@ namespace ArenaMapPort.Shared
             UsesServerTime: true,
             // docs/PLAN-BOWL.md decision: the 354 layer-29 LevelBorder cubes are the stadium's only play-area bound;
             // they stay active at raid start and the bake treats them as walls (mirrors keep_level_borders).
-            KeepLevelBorders: true);
+            KeepLevelBorders: true,
+            // Arena animates the four gate parts of the two team pockets (level48's Animators: BTR_82_closed and
+            // Bowl_Gates_Respawn_01 at DOORS_SPAWN_A, Gates_Army_01 and the ambulance group at DOORS_SPAWN_B); these are the
+            // closed pose in the scene and the END pose of each node the open clip moves, decoded by
+            // tools/extract/extract_door_poses.py (Arena 0.6.1.0.48206). Mirrors tools/maps/bowl.doors.json (BowlMapTests).
+            DoorPoses: new[]
+            {
+                new ArenaDoorPose("DOORS_SPAWN_A", "BTR_82_closed", "", "BTR_82_Respawn_Animation", 7.683f,
+                    new[] { 51.182f, -0.035f, -21.498f }, new[] { -90.0f, 0.0f, 83.511f },
+                    new[] { 45.61f, -0.04f, -22.14f }, new[] { -90.3f, 266.474f, -182.962f }),
+                new ArenaDoorPose("DOORS_SPAWN_A", "BTR_82_closed", "BTR_82_wheel_L_01", "BTR_82_Respawn_Animation", 7.683f,
+                    new[] { 1.334f, 2.25f, 0.629f }, new[] { 0.0f, 3.0f, 0.0f },
+                    new[] { 1.334f, 2.25f, 0.629f }, new[] { -553.313f, 3.0f, 0.0f }),
+                new ArenaDoorPose("DOORS_SPAWN_A", "BTR_82_closed", "BTR_82_wheel_L_02", "BTR_82_Respawn_Animation", 7.683f,
+                    new[] { 1.307f, 0.7f, 0.63f }, new[] { 0.0f, 3.0f, 0.0f },
+                    new[] { 1.307f, 0.7f, 0.63f }, new[] { -553.313f, 3.0f, 0.0f }),
+                new ArenaDoorPose("DOORS_SPAWN_A", "BTR_82_closed", "BTR_82_wheel_L_03", "BTR_82_Respawn_Animation", 7.683f,
+                    new[] { 1.334f, -1.224f, 0.629f }, new[] { 0.0f, 3.0f, 0.0f },
+                    new[] { 1.334f, -1.224f, 0.659f }, new[] { -553.313f, 3.0f, 0.0f }),
+                new ArenaDoorPose("DOORS_SPAWN_A", "BTR_82_closed", "BTR_82_wheel_L_04", "BTR_82_Respawn_Animation", 7.683f,
+                    new[] { 1.307f, -2.737f, 0.63f }, new[] { 0.0f, 3.0f, 0.0f },
+                    new[] { 1.307f, -2.737f, 0.633f }, new[] { -553.313f, 3.0f, 0.0f }),
+                new ArenaDoorPose("DOORS_SPAWN_A", "BTR_82_closed", "BTR_82_wheel_R_01", "BTR_82_Respawn_Animation", 7.683f,
+                    new[] { -1.342f, 2.25f, 0.629f }, new[] { 0.0f, -3.0f, 0.0f },
+                    new[] { -1.342f, 2.25f, 0.629f }, new[] { -542.205f, -3.0f, 0.0f }),
+                new ArenaDoorPose("DOORS_SPAWN_A", "BTR_82_closed", "BTR_82_wheel_R_02", "BTR_82_Respawn_Animation", 7.683f,
+                    new[] { -1.342f, 0.7f, 0.629f }, new[] { 0.0f, -3.0f, 0.0f },
+                    new[] { -1.342f, 0.7f, 0.629f }, new[] { -537.425f, -3.0f, 0.0f }),
+                new ArenaDoorPose("DOORS_SPAWN_A", "BTR_82_closed", "BTR_82_wheel_R_03", "BTR_82_Respawn_Animation", 7.683f,
+                    new[] { -1.342f, -1.224f, 0.629f }, new[] { 0.0f, -3.0f, 0.0f },
+                    new[] { -1.342f, -1.224f, 0.636f }, new[] { -540.698f, -3.0f, 0.0f }),
+                new ArenaDoorPose("DOORS_SPAWN_A", "BTR_82_closed", "BTR_82_wheel_R_04", "BTR_82_Respawn_Animation", 7.683f,
+                    new[] { -1.342f, -2.737f, 0.629f }, new[] { 0.0f, -3.0f, 0.0f },
+                    new[] { -1.342f, -2.737f, 0.651f }, new[] { -551.416f, -3.0f, 0.0f }),
+                new ArenaDoorPose("DOORS_SPAWN_A", "Bowl_Gates_Respawn_01", "Bowl_Gates_Respawn_01_Gate", "Bowl_Gates_Respawn_01_Animation", 13.5f,
+                    new[] { -0.179f, 1.99f, 0.119f }, new[] { 0.0f, 0.0f, 0.0f },
+                    new[] { -0.179f, -1.833f, 0.119f }, new[] { -0.089f, 0.0f, 0.0f }),
+                new ArenaDoorPose("DOORS_SPAWN_B", "Bowl_Respawn_Ambulance_Animated Group", "Bowl_Respawn_Ambulance_Animated", "Opened", 8.3f,
+                    new[] { 0.0f, 0.0f, 0.0f }, new[] { -90.0f, 0.0f, 0.0f },
+                    new[] { 4.773f, 0.0f, 0.0f }, new[] { -90.0f, 0.0f, 0.0f }),
+                new ArenaDoorPose("DOORS_SPAWN_B", "Bowl_Respawn_Ambulance_Animated Group", "Bowl_Respawn_Ambulance_Animated/Bowl_Respawn_Ambulance_Body/Bowl_Respawn_Ambulance_Body_HOOD", "Opened", 8.3f,
+                    new[] { -2.034f, 0.022f, 1.306f }, new[] { -0.364f, -3.069f, -6.75f },
+                    new[] { -2.034f, 0.022f, 1.306f }, new[] { -0.584f, -4.935f, -6.734f }),
+                new ArenaDoorPose("DOORS_SPAWN_B", "Bowl_Respawn_Ambulance_Animated Group", "Bowl_Respawn_Ambulance_Animated/Bowl_Respawn_Ambulance_Body/Bowl_Respawn_Ambulance_Body_tros_02", "Opened", 8.3f,
+                    new[] { 6.276f, 0.006f, 0.556f }, new[] { 0.0f, 0.0f, 0.0f },
+                    new[] { 0.724f, 0.006f, 2.199f }, new[] { 0.0f, 0.0f, 0.0f }),
+                new ArenaDoorPose("DOORS_SPAWN_B", "Bowl_Respawn_Ambulance_Animated Group", "Bowl_Respawn_Ambulance_Animated/Bowl_Respawn_Ambulance_Wheel_L", "Opened", 8.3f,
+                    new[] { -1.71f, 0.826f, 0.331f }, new[] { 0.0f, 0.029f, 0.0f },
+                    new[] { -1.71f, 0.826f, 0.331f }, new[] { 0.0f, 406.884f, 0.0f }),
+                new ArenaDoorPose("DOORS_SPAWN_B", "Bowl_Respawn_Ambulance_Animated Group", "Bowl_Respawn_Ambulance_Animated/Bowl_Respawn_Ambulance_Wheel_L_Back", "Opened", 8.3f,
+                    new[] { 1.2f, 0.814f, 0.331f }, new[] { 0.0f, 0.029f, 180.0f },
+                    new[] { 1.2f, 0.814f, 0.331f }, new[] { 0.0f, 406.884f, 180.0f }),
+                new ArenaDoorPose("DOORS_SPAWN_B", "Bowl_Respawn_Ambulance_Animated Group", "Bowl_Respawn_Ambulance_Animated/Bowl_Respawn_Ambulance_Wheel_R", "Opened", 8.3f,
+                    new[] { -1.71f, -0.804f, 0.331f }, new[] { 0.0f, 0.032f, 0.0f },
+                    new[] { -1.71f, -0.804f, 0.331f }, new[] { 0.0f, 406.884f, 0.0f }),
+                new ArenaDoorPose("DOORS_SPAWN_B", "Bowl_Respawn_Ambulance_Animated Group", "Bowl_Respawn_Ambulance_Animated/Bowl_Respawn_Ambulance_Wheel_R_Back", "Opened", 8.3f,
+                    new[] { 1.2f, -0.824f, 0.331f }, new[] { -0.015f, 0.032f, 0.0f },
+                    new[] { 1.2f, -0.824f, 0.331f }, new[] { 0.0f, 406.884f, 0.0f }),
+                new ArenaDoorPose("DOORS_SPAWN_B", "Gates_Army_01", "Gates_Army/Gates_Army_door_01", "Gates_Army_02_Animation", 10.0f,
+                    new[] { 1.95f, -0.001f, 1.1f }, new[] { 0.0f, 0.0f, 0.0f },
+                    new[] { 1.95f, -0.001f, 1.1f }, new[] { 0.0f, 0.0f, 142.922f }),
+                new ArenaDoorPose("DOORS_SPAWN_B", "Gates_Army_01", "Gates_Army/Gates_Army_door_02", "Gates_Army_02_Animation", 10.0f,
+                    new[] { -1.95f, -0.001f, 1.1f }, new[] { 0.0f, 0.0f, 0.0f },
+                    new[] { -1.95f, -0.001f, 1.1f }, new[] { 0.0f, 0.0f, -161.335f }),
+            });
 
         // Source scene selection: tools/extract/plans/prison.json. Identity is permanent.
         public static readonly ArenaMapDescriptor Prison = new(

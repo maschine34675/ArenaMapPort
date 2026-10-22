@@ -3,6 +3,7 @@ using System.Collections;
 using System.Collections.Generic;
 using System.Text;
 using BepInEx.Configuration;
+using ArenaMapPort.Shared;
 using Comfort.Common;
 using EFT;
 using UnityEngine;
@@ -39,6 +40,19 @@ namespace ArenaMapPort.Client
     /// <see cref="ClosedParts"/> counts them. Which opened barriers a hold may close at all is the descriptor's
     /// <c>StartGates</c> list (AirPit: only the bus doors; shop shells, portal fences and blockout panels stay open).
     ///
+    /// Parked parts (descriptor <c>DoorPoses</c>, 2026-10-22, docs/progress/door-poses.md; Bowl): Arena does not hide the
+    /// BTR, the ambulance, the army gate's leaves or the respawn gate's leaf at the opening, it animates them to an END
+    /// pose. A part with poses is therefore never switched off: <see cref="NotePoses"/> resolves its nodes and measures its
+    /// closed colliders (BoothDoorRepairs, before anything moves), <see cref="Park"/> snaps the nodes to the open pose at
+    /// raid start, <see cref="Hold"/> puts them back in the closed pose (the part stays active, the hold carvers seal it as
+    /// for any other part) and <see cref="Release"/> DRIVES them there over the clip's seconds
+    /// (<c>SpawnGateDrive</c>; false snaps), each part finishing on its own clip: its hold carvers go, its park carvers
+    /// come. A park carver is a carving box over a collider that Arena MOVED (a collider outside every pose node, such as
+    /// the army gate's frame, is left alone: its bounds span the doorway the leaves opened) and stays for the raid, so bots
+    /// cannot path through a body that now stands in the way (the BTR's nose overlaps the port's mesh by 0.6 m). A node
+    /// whose pose does not match the scene, or is not found, logs one Warning and the whole part falls back to the
+    /// switch-off.
+    ///
     /// Contract for a mode plugin (reflection, like ArenaMapPort's own ArenaModeMapPositionIntegration does the other
     /// way round): type <c>ArenaMapPort.Client.SpawnGates</c>, all members on the Unity main thread.
     /// <c>public static bool Hold(string reason)</c>: in the menu (applies to the next owned raid; call Release on every
@@ -68,7 +82,32 @@ namespace ArenaMapPort.Client
             internal Quaternion LocalRotation;
         }
 
-        static ConfigEntry<bool> _enabled, _testHold, _carve;
+        // One transform Arena's clip moves (a pose of the descriptor, resolved below the part) and the poses it moves between.
+        sealed class PoseNode
+        {
+            internal Transform Node;
+            internal float[] ClosedPosition, ClosedEuler, OpenPosition, OpenEuler;
+        }
+
+        // A gate part with Arena's animated end pose (descriptor DoorPoses): it is never switched off. Parked = its nodes
+        // stand at the open pose, Driving = a release is moving them there, neither = closed. Carved = the park carvers were
+        // attempted for this parking (Carvers may still be empty when no collider qualified).
+        sealed class PosedPart
+        {
+            internal Transform Part;
+            internal PoseNode[] Nodes;
+            internal string[] NodePaths;
+            internal string Clip;
+            internal float Seconds;
+            internal float FloorY;
+            internal bool HasClosedBounds;
+            internal Bounds ClosedBounds;
+            internal bool Parked, Driving, Carved;
+            internal readonly List<GameObject> Carvers = new List<GameObject>();
+            internal readonly List<Bounds> Boxes = new List<Bounds>();
+        }
+
+        static ConfigEntry<bool> _enabled, _testHold, _carve, _drive;
         static ConfigEntry<float> _testHoldSeconds, _slideSeconds, _maxHoldSeconds;
         static bool _installed;
 
@@ -83,6 +122,12 @@ namespace ArenaMapPort.Client
         // Baseline per part, probed before the first carve: false = the doorway is disconnected on the map's own NavMesh.
         static readonly Dictionary<Transform, bool> _baseline = new Dictionary<Transform, bool>();
         static readonly List<GameObject> _carvers = new List<GameObject>();
+        // The hold carvers of each part, so a part that finishes its drive early loses only its own.
+        static readonly Dictionary<Transform, List<GameObject>> _carversOf = new Dictionary<Transform, List<GameObject>>();
+        // Gate parts with Arena's end pose (descriptor DoorPoses), by part; parts whose pose data failed to apply are
+        // remembered in _poseFallback (one Warning each) and switch off like any other part.
+        static readonly Dictionary<Transform, PosedPart> _posed = new Dictionary<Transform, PosedPart>();
+        static readonly HashSet<Transform> _poseFallback = new HashSet<Transform>();
         // Held gates (descriptor HeldGates): closed at raid start in every mode, carved from the NavMesh install on,
         // opened only by a Release that follows a hold. _carved remembers the parts that already have carvers, so a
         // later Hold adds the start gates' carvers without touching the held gate's.
@@ -130,7 +175,7 @@ namespace ArenaMapPort.Client
                 _opening = false;
                 cancelledOpening = true;
             }
-            int reclosed = 0;
+            int reclosed = 0, unparked = 0;
             foreach (var part in _parts)
             {
                 if (part == null) continue;
@@ -144,9 +189,17 @@ namespace ArenaMapPort.Client
                     part.gameObject.SetActive(true);
                     reclosed++;
                 }
+                // A parked or driving part goes back to its closed pose and loses its park carvers; the hold carvers below
+                // seal it like any other closed part.
+                if (_posed.TryGetValue(part, out var posed) && (posed.Parked || posed.Driving))
+                {
+                    Reclose(posed);
+                    unparked++;
+                }
             }
             Plugin.Log.LogDebug($"{Tag} hold requested ({reason ?? "no reason"}): {_parts.Count} gate part(s) registered, " +
-                                $"{reclosed} re-closed{(cancelledOpening ? ", an opening in progress cancelled" : "")}, " +
+                                $"{reclosed} re-closed{(unparked > 0 ? $", {unparked} parked part(s) back in the closed pose" : "")}" +
+                                $"{(cancelledOpening ? ", an opening in progress cancelled" : "")}, " +
                                 $"navmesh {(_navMeshReady ? "installed" : "not installed yet")}");
             if (_parts.Count > 0)
             {
@@ -156,9 +209,10 @@ namespace ArenaMapPort.Client
             return true;
         }
 
-        /// <summary>Open the gates now: slide Equator's leaves, switch every part off, remove the carvers. A held gate
-        /// (descriptor HeldGates) opens with this release only when a hold was outstanding; without one it stays closed
-        /// (Hold followed by Release opens it in any raid).</summary>
+        /// <summary>Open the gates now: slide Equator's leaves, switch every part off, remove the carvers; a part with
+        /// Arena's end pose (descriptor DoorPoses) drives there instead and stays. A held gate (descriptor HeldGates)
+        /// opens with this release only when a hold was outstanding; without one it stays closed (Hold followed by
+        /// Release opens it in any raid).</summary>
         public static void Release(string reason)
         {
             if (!_installed) return;
@@ -191,11 +245,17 @@ namespace ArenaMapPort.Client
                 "in every mode. Off: every gate opens at raid start, the held gates too. Next raid.");
             _carve = s.Bind("Spawns", "SpawnGateCarve", true,
                 "While the gates are held closed, cut the NavMesh at every closed gate part with a carving obstacle, so bots " +
-                "inside stay inside instead of pressing against or clipping through a leaf the bake does not know. A map's " +
-                "held gates (AirPit's passport control) depend on it: off opens them at raid start. Next hold / next raid.");
+                "inside stay inside instead of pressing against or clipping through a leaf the bake does not know; also cut " +
+                "the NavMesh at every collider Arena moved out of the way (Bowl's parked BTR, ambulance, army gate leaves and " +
+                "respawn gate). A map's held gates (AirPit's passport control) depend on it: off opens them at raid start. " +
+                "Next hold / next raid.");
             _slideSeconds = s.Bind("Spawns", "SpawnGateSlideSeconds", 1.0f, new ConfigDescription(
                 "How long Equator's sliding leaves take to slide into their frame pockets when the gates release; 0 opens " +
                 "instantly. Other gates switch off without a motion. Next release.", new AcceptableValueRange<float>(0f, 5f)));
+            _drive = s.Bind("Spawns", "SpawnGateDrive", true,
+                "Parts with Arena's animated end pose (Bowl's BTR, ambulance, army gate leaves and respawn gate) drive there " +
+                "over the clip's duration (7.7 to 13.5 s) when the gates release; false snaps them to the open pose at once. " +
+                "Next release.");
             _maxHoldSeconds = s.Bind("Spawns", "SpawnGateMaxHoldSeconds", 300f, new ConfigDescription(
                 "Safety limit: a hold nobody releases opens the gates this many seconds after the hold (or after the raid " +
                 "timer starts, for a hold made before it), with a warning. Live.", new AcceptableValueRange<float>(10f, 3600f)));
@@ -247,6 +307,269 @@ namespace ArenaMapPort.Client
             if (_parts.Contains(part)) return;
             _parts.Add(part);
             _closedPose[part] = new Pose { LocalPosition = part.localPosition, LocalRotation = part.localRotation };
+            // A part with Arena's end pose is parked before CreateCarvers ever sees it closed: the closed colliders that
+            // NotePoses measured are what the probe after a release reads.
+            if (_posed.TryGetValue(part, out var posed) && posed.HasClosedBounds && !_bounds.ContainsKey(part))
+                _bounds[part] = posed.ClosedBounds;
+        }
+
+        // ---- Arena's end poses (descriptor DoorPoses, docs/progress/door-poses.md) -------------------------------------
+
+        /// <summary>BoothDoorRepairs, for a gate part the descriptor has poses for, BEFORE the part is offered and before
+        /// anything moves: resolves the animated nodes below the part, checks each against the scene's own closed pose and
+        /// measures the closed movement colliders (floor line, probe bounds). Idempotent. A part that cannot be resolved
+        /// logs one Warning and counts as pose-less afterwards (<see cref="Park"/> returns false, it switches off).</summary>
+        internal static void NotePoses(Transform part, ArenaDoorPose[] poses)
+        {
+            if (part == null || poses == null || poses.Length == 0) return;
+            if (_posed.ContainsKey(part) || _poseFallback.Contains(part)) return;
+            try
+            {
+                var nodes = new PoseNode[poses.Length];
+                var paths = new string[poses.Length];
+                float seconds = 0f;
+                for (int i = 0; i < poses.Length; i++)
+                {
+                    var pose = poses[i];
+                    if (!IsTriple(pose.ClosedPosition) || !IsTriple(pose.ClosedEuler) || !IsTriple(pose.OpenPosition) || !IsTriple(pose.OpenEuler))
+                    {
+                        PoseFallback(part, "a pose of the descriptor is not three floats");
+                        return;
+                    }
+                    string path = pose.Node ?? "";
+                    var node = path.Length == 0 ? part : part.Find(path);
+                    if (node == null)
+                    {
+                        PoseFallback(part, $"node '{path}' not found below it");
+                        return;
+                    }
+                    float positionError = Vector3.Distance(node.localPosition, ToVector(pose.ClosedPosition));
+                    float angleError = Quaternion.Angle(node.localRotation, Quaternion.Euler(ToVector(pose.ClosedEuler)));
+                    if (!DoorPoseModel.PoseMatchesScene(positionError, angleError))
+                    {
+                        PoseFallback(part, $"node '{path}' stands {positionError:F2} m / {angleError:F1} deg off the data's closed pose");
+                        return;
+                    }
+                    nodes[i] = new PoseNode
+                    {
+                        Node = node,
+                        ClosedPosition = pose.ClosedPosition, ClosedEuler = pose.ClosedEuler,
+                        OpenPosition = pose.OpenPosition, OpenEuler = pose.OpenEuler,
+                    };
+                    paths[i] = path;
+                    seconds = Mathf.Max(seconds, pose.Seconds);
+                }
+                var posed = new PosedPart { Part = part, Nodes = nodes, NodePaths = paths, Clip = poses[0].Clip, Seconds = seconds };
+                MeasureClosed(posed);
+                _posed[part] = posed;
+            }
+            catch (Exception e)
+            {
+                PoseFallback(part, e.GetType().Name + ": " + e.Message);
+            }
+        }
+
+        /// <summary>The part is to open now and Arena animates it: snap its nodes to the open pose and keep it active.
+        /// True = parked (the caller must not switch it off); false = no usable poses, the caller switches it off as
+        /// before. Idempotent over the two raid-start passes; the park carvers follow with the NavMesh install
+        /// (<see cref="SealParked"/>, <see cref="OnNavMeshInstalled"/>).</summary>
+        internal static bool Park(Transform part)
+        {
+            if (part == null || !_posed.TryGetValue(part, out var posed)) return false;
+            if (posed.Parked || posed.Driving) return true;
+            try
+            {
+                ApplyPose(posed, 1f);
+                posed.Parked = true;
+                Physics.SyncTransforms(); // the colliders follow the transforms now, not at the next physics step
+                Plugin.Log.LogDebug($"{Tag} park: '{part.name}' snapped to the open pose ({posed.Nodes.Length} node(s), clip {posed.Clip}); " +
+                                    $"park carvers follow {(_navMeshReady ? "now" : "the navmesh install")}");
+                return true;
+            }
+            catch (Exception e)
+            {
+                _posed.Remove(part);
+                PoseFallback(part, e.GetType().Name + ": " + e.Message);
+                return false;
+            }
+        }
+
+        /// <summary>Once per raid-start opening pass, after every part was offered: carves the parked bodies at once when
+        /// the NavMesh is already installed (otherwise the install does it).</summary>
+        internal static void SealParked(string why)
+        {
+            try
+            {
+                if (_navMeshReady) CreateParkCarvers(why);
+            }
+            catch (Exception e)
+            {
+                Plugin.Log.LogWarning($"{Tag} park carvers failed ({e.GetType().Name}: {e.Message}); the parked bodies are not carved");
+            }
+        }
+
+        static void PoseFallback(Transform part, string why)
+        {
+            if (!_poseFallback.Add(part)) return;
+            Plugin.Log.LogWarning($"{Tag} door pose of '{part.name}' not applied ({why}); the part switches off as before");
+        }
+
+        static bool IsTriple(float[] v) => v != null && v.Length == 3;
+
+        static Vector3 ToVector(float[] v) => new Vector3(v[0], v[1], v[2]);
+
+        static bool IsParkedOrDriving(Transform part) =>
+            _posed.TryGetValue(part, out var posed) && (posed.Parked || posed.Driving);
+
+        // k is the eased progress: 0 = Arena's closed pose, 1 = the END pose of the open clip (positions lerp, euler angles
+        // lerp component-wise like Unity's euler clips, so the wheels keep their extra turns).
+        static void ApplyPose(PosedPart posed, float k)
+        {
+            foreach (var n in posed.Nodes)
+            {
+                if (n.Node == null) continue;
+                DoorPoseModel.Lerp3(n.ClosedPosition, n.OpenPosition, k, out float px, out float py, out float pz);
+                DoorPoseModel.Lerp3(n.ClosedEuler, n.OpenEuler, k, out float ex, out float ey, out float ez);
+                n.Node.localPosition = new Vector3(px, py, pz);
+                n.Node.localEulerAngles = new Vector3(ex, ey, ez);
+            }
+        }
+
+        // Hold: back to the closed pose, park carvers gone (CreateCarvers seals the closed part again).
+        static void Reclose(PosedPart posed)
+        {
+            DestroyParkCarvers(posed);
+            posed.Parked = false;
+            posed.Driving = false;
+            posed.Carved = false;
+            ApplyPose(posed, 0f);
+        }
+
+        static void DestroyParkCarvers(PosedPart posed)
+        {
+            foreach (var go in posed.Carvers)
+            {
+                if (go != null) UnityEngine.Object.Destroy(go);
+            }
+            posed.Carvers.Clear();
+            posed.Boxes.Clear();
+        }
+
+        // The movement colliders of a gate part: what a player collides with (layers 0 and 18), enabled and active.
+        static bool IsMovementCollider(Collider collider)
+        {
+            int layer = collider.gameObject.layer;
+            return !collider.isTrigger && collider.enabled && collider.gameObject.activeInHierarchy &&
+                   (layer == LayerDefault || layer == LayerLowPoly);
+        }
+
+        // The path of a transform below a root, "" for the root itself (the form DoorPoseModel.IsMoved reads).
+        static string RelativePath(Transform root, Transform t)
+        {
+            if (t == root) return "";
+            var sb = new StringBuilder(t.name);
+            for (var p = t.parent; p != null && p != root; p = p.parent) sb.Insert(0, '/').Insert(0, p.name);
+            return sb.ToString();
+        }
+
+        // The closed movement colliders of a part, taken while it stands at the scene's pose: the lowest point is its floor
+        // line (a parked collider must rise above it to count), the union is what the probe after a release crosses.
+        static void MeasureClosed(PosedPart posed)
+        {
+            Physics.SyncTransforms();
+            float floor = float.MaxValue;
+            foreach (var collider in posed.Part.GetComponentsInChildren<Collider>(true))
+            {
+                if (!IsMovementCollider(collider)) continue;
+                var b = collider.bounds;
+                if (posed.HasClosedBounds) posed.ClosedBounds.Encapsulate(b);
+                else { posed.ClosedBounds = b; posed.HasClosedBounds = true; }
+                floor = Mathf.Min(floor, b.min.y);
+            }
+            posed.FloorY = posed.HasClosedBounds ? floor : posed.Part.position.y;
+        }
+
+        // Park carvers: a carving box over every movement collider that Arena MOVED (DoorPoseModel.IsMoved), once the part
+        // stands at its open pose and the NavMesh is installed. They stay for the raid. Hold removes them (Reclose), a
+        // release creates them when each part finishes its drive.
+        static void CreateParkCarvers(string why)
+        {
+            if (!_navMeshReady || !_carve.Value) return;
+            List<PosedPart> todo = null;
+            foreach (var posed in _posed.Values)
+            {
+                if (posed.Parked && !posed.Carved && posed.Part != null)
+                {
+                    if (todo == null) todo = new List<PosedPart>();
+                    todo.Add(posed);
+                }
+            }
+            if (todo == null) return;
+            EnsureRunner();
+            EnsureBaseline(); // before a park carver changes the mesh: which doorways were disconnected to begin with
+            Physics.SyncTransforms();
+            foreach (var posed in todo)
+            {
+                int made = 0, unmoved = 0, low = 0;
+                posed.Carved = true; // before the loop: a failure midway must not make a later pass add duplicate carvers
+                foreach (var collider in posed.Part.GetComponentsInChildren<Collider>(true))
+                {
+                    if (!IsMovementCollider(collider)) continue;
+                    if (!DoorPoseModel.IsMoved(RelativePath(posed.Part, collider.transform), posed.NodePaths)) { unmoved++; continue; }
+                    var b = collider.bounds;
+                    if (!DoorPoseModel.ParkedBodyStands(b.max.y, posed.FloorY)) { low++; continue; }
+                    posed.Carvers.Add(MakeCarver("Park carver " + collider.name, b, out var box));
+                    posed.Boxes.Add(box);
+                    made++;
+                }
+                Plugin.Log.LogDebug($"{Tag} parked '{posed.Part.name}': {posed.Nodes.Length} node(s) at the open pose (clip {posed.Clip}), " +
+                                    $"{made} park carver(s) ({why})" +
+                                    (unmoved > 0 ? $"; {unmoved} collider(s) Arena does not move stay uncarved" : "") +
+                                    (low > 0 ? $"; {low} collider(s) lower than {DoorPoseModel.ParkedBodyMinHeight:F1} m above the floor line skipped" : ""));
+            }
+        }
+
+        // One carving NavMeshObstacle box over a collider's world bounds (SpawnGateModel.CarverBox), parented to the host.
+        static GameObject MakeCarver(string name, Bounds b, out Bounds box)
+        {
+            SpawnGateModel.CarverBox(b.min.x, b.min.y, b.min.z, b.max.x, b.max.y, b.max.z,
+                out float cx, out float cy, out float cz, out float sx, out float sy, out float sz);
+            var go = new GameObject(name);
+            go.transform.SetParent(_host.transform, false);
+            go.transform.position = new Vector3(cx, cy, cz);
+            var obstacle = go.AddComponent<NavMeshObstacle>();
+            obstacle.shape = NavMeshObstacleShape.Box;
+            obstacle.center = Vector3.zero;
+            obstacle.size = new Vector3(sx, sy, sz);
+            obstacle.carveOnlyStationary = true;
+            obstacle.carvingTimeToStationary = 0f;
+            obstacle.carving = true;
+            box = new Bounds(new Vector3(cx, cy, cz), new Vector3(sx, sy, sz));
+            return go;
+        }
+
+        // Baseline per part, probed before the first carve: false = the doorway is disconnected on the map's own NavMesh.
+        static void EnsureBaseline()
+        {
+            foreach (var pair in _bounds)
+            {
+                if (!_baseline.ContainsKey(pair.Key))
+                    _baseline[pair.Key] = ProbePath(pair.Value, out _) == NavMeshPathStatus.PathComplete;
+            }
+        }
+
+        // Does the probe segment across a gate's closed bounds run through a parked body (a park carver)?
+        static bool ParkedBodyOnProbe(Bounds bounds)
+        {
+            ProbeSegment(bounds, out var a, out var b);
+            foreach (var posed in _posed.Values)
+            {
+                foreach (var box in posed.Boxes)
+                {
+                    if (DoorPoseModel.SegmentTouchesBox(a.x, a.z, b.x, b.z, box.min.x, box.min.z, box.max.x, box.max.z)) return true;
+                }
+            }
+            return false;
         }
 
         /// <summary>One line for BoothDoorRepairs' spawn-openings log, held-gate variant.</summary>
@@ -264,6 +587,7 @@ namespace ArenaMapPort.Client
         {
             _navMeshReady = true;
             if ((IsHeld || HeldGatesClosed) && _parts.Count > 0) CreateCarvers("navmesh installed");
+            SealParked("navmesh installed"); // parts parked at raid start (no hold): their bodies now stand in the way
         }
 
         static void EnsureRunner()
@@ -310,6 +634,7 @@ namespace ArenaMapPort.Client
         {
             if (!_carve.Value) return;
             EnsureRunner();
+            Physics.SyncTransforms(); // a part a hold just put back in its closed pose: the bounds read below follow it
             int colliders = 0;
             // Pass 1: the movement colliders' world bounds (only an active part has them) and, before anything is cut,
             // the baseline: is the doorway connected on the map's own NavMesh at all? Equator's door (3) leads into a
@@ -319,43 +644,26 @@ namespace ArenaMapPort.Client
             foreach (var part in _parts)
             {
                 if (part == null || _carved.Contains(part)) continue;
+                if (IsParkedOrDriving(part)) continue; // a part at its open pose is carved by CreateParkCarvers
                 foreach (var collider in part.GetComponentsInChildren<Collider>(true))
                 {
-                    int layer = collider.gameObject.layer;
-                    if (collider.isTrigger || !collider.enabled || !collider.gameObject.activeInHierarchy ||
-                        (layer != LayerDefault && layer != LayerLowPoly)) continue;
+                    if (!IsMovementCollider(collider)) continue;
                     var b = collider.bounds;
                     if (_bounds.TryGetValue(part, out var known)) { known.Encapsulate(b); _bounds[part] = known; }
                     else _bounds[part] = b;
                     movement.Add((part, collider));
                 }
             }
-            foreach (var pair in _bounds)
-            {
-                if (!_baseline.ContainsKey(pair.Key))
-                    _baseline[pair.Key] = ProbePath(pair.Value, out _) == NavMeshPathStatus.PathComplete;
-            }
+            EnsureBaseline();
             // Pass 2: one carver box per movement collider.
             foreach (var (part, collider) in movement)
             {
-                {
-                    var b = collider.bounds;
-                    SpawnGateModel.CarverBox(b.min.x, b.min.y, b.min.z, b.max.x, b.max.y, b.max.z,
-                        out float cx, out float cy, out float cz, out float sx, out float sy, out float sz);
-                    var go = new GameObject("Carver " + part.name);
-                    go.transform.SetParent(_host.transform, false);
-                    go.transform.position = new Vector3(cx, cy, cz);
-                    var obstacle = go.AddComponent<NavMeshObstacle>();
-                    obstacle.shape = NavMeshObstacleShape.Box;
-                    obstacle.center = Vector3.zero;
-                    obstacle.size = new Vector3(sx, sy, sz);
-                    obstacle.carveOnlyStationary = true;
-                    obstacle.carvingTimeToStationary = 0f;
-                    obstacle.carving = true;
-                    _carvers.Add(go);
-                    _carved.Add(part);
-                    colliders++;
-                }
+                var go = MakeCarver("Carver " + part.name, collider.bounds, out _);
+                _carvers.Add(go);
+                _carved.Add(part);
+                if (!_carversOf.TryGetValue(part, out var own)) _carversOf[part] = own = new List<GameObject>();
+                own.Add(go);
+                colliders++;
             }
             int disconnected = 0;
             foreach (var pair in _baseline) if (!pair.Value) disconnected++;
@@ -379,6 +687,22 @@ namespace ArenaMapPort.Client
             }
             _carvers.Clear();
             _carved.Clear();
+            _carversOf.Clear();
+        }
+
+        // The hold carvers of one part (a part that finished its drive); returns how many were removed.
+        static int DestroyHoldCarversOf(Transform part)
+        {
+            if (part == null || !_carversOf.TryGetValue(part, out var own)) return 0;
+            foreach (var go in own)
+            {
+                if (go != null) UnityEngine.Object.Destroy(go);
+                _carvers.Remove(go);
+            }
+            int removed = own.Count;
+            _carversOf.Remove(part);
+            _carved.Remove(part);
+            return removed;
         }
 
         // NavMesh path across every gate, 0.5 s after the carvers changed and once more at 2.5 s when the first probe
@@ -415,7 +739,7 @@ namespace ArenaMapPort.Client
             contradicted = false;
             probed = 0;
             inconclusive = 0;
-            int skipped = 0, disconnected = 0;
+            int skipped = 0, disconnected = 0, occupied = 0;
             // Verdicts per enclosure (SpawnGateModel.EnclosureContradicts): the parts under one barrier root or door
             // assembly. AirPit's bus pocket has an authored-open inner row behind the closed outer row, so three of its
             // six doorways stay passable while the pocket is sealed; a per-part verdict warned on them (GPU-2 2026-10-17).
@@ -426,6 +750,14 @@ namespace ArenaMapPort.Client
                 // Parts without a movement collider (a gate's LOD meshes, ballistic twins) have no doorway to probe.
                 if (!_bounds.TryGetValue(part, out var bounds)) { skipped++; continue; }
                 if (_baseline.TryGetValue(part, out bool connected) && !connected) { disconnected++; continue; }
+                // Arena parks the BTR, the ambulance and the swung leaves at the doorway they open; a probe segment that
+                // runs through such a body (a park carver) says nothing about the gate, so it is not judged "open".
+                if (!expectSealed && ParkedBodyOnProbe(bounds))
+                {
+                    occupied++;
+                    sb.Append($"\n  '{part.name}' at {bounds.center:F1}: the probe segment runs through a parked body, not judged");
+                    continue;
+                }
                 var status = ProbePath(bounds, out string detail);
                 if (status == null)
                 {
@@ -448,16 +780,23 @@ namespace ArenaMapPort.Client
                     sb.Append($"\n  '{pair.Key}': {pair.Value.probed - pair.Value.sealedDoorways} passable doorway(s) inside the sealed enclosure (authored-open leaves behind the closed row)");
             }
             if (disconnected > 0) sb.Append($"\n  {disconnected} doorway(s) disconnected on the map's own navmesh not judged");
+            if (occupied > 0) sb.Append($"\n  {occupied} doorway(s) occupied by a parked body not judged");
             if (skipped > 0) sb.Append($"\n  {skipped} part(s) without a movement collider not probed");
             return sb.ToString();
+        }
+
+        // The two probe points across a gate's thin axis, 1.5 m either side of the centre of its (closed) bounds.
+        static void ProbeSegment(Bounds bounds, out Vector3 a, out Vector3 b)
+        {
+            var axis = SpawnGateModel.ThinAxis(bounds.size.x, bounds.size.z) == 0 ? Vector3.right : Vector3.forward;
+            a = bounds.center - axis * SpawnGateModel.ProbeReach;
+            b = bounds.center + axis * SpawnGateModel.ProbeReach;
         }
 
         // One NavMesh path across a gate's thin axis; null when a probe point has no NavMesh within reach.
         static NavMeshPathStatus? ProbePath(Bounds bounds, out string detail)
         {
-            var axis = SpawnGateModel.ThinAxis(bounds.size.x, bounds.size.z) == 0 ? Vector3.right : Vector3.forward;
-            var a = bounds.center - axis * SpawnGateModel.ProbeReach;
-            var b = bounds.center + axis * SpawnGateModel.ProbeReach;
+            ProbeSegment(bounds, out var a, out var b);
             if (!NavMesh.SamplePosition(a, out var ha, SpawnGateModel.ProbeSampleRadius, NavMesh.AllAreas) ||
                 !NavMesh.SamplePosition(b, out var hb, SpawnGateModel.ProbeSampleRadius, NavMesh.AllAreas))
             {
@@ -471,13 +810,33 @@ namespace ArenaMapPort.Client
             return path.status;
         }
 
+        // The release: Equator's leaves slide for SpawnGateSlideSeconds, then every part without Arena's end pose switches
+        // off exactly as the raid-start opening would have; a part WITH poses drives from the closed to the open pose
+        // over its clip's seconds (SpawnGateDrive false: at once) and stays active. One coroutine moves them all, each part
+        // finishing on its own clip: its hold carvers go and its park carvers come, so a doorway opens for bots as soon as
+        // its own gate has finished. The parts are re-posed by transform every frame, their colliders stay static ones: a
+        // scratch Unity 2022.3.43 model (62k static colliders, 19 nodes / 70 colliders, 200 raycasts a frame, EFT's Script
+        // simulation mode) measured +0.2 ms a frame, and a kinematic Rigidbody on the node roots measured +0.1 to +0.2 ms
+        // MORE, so no body is added (docs/progress/door-poses.md, "Cost of the drive"). The `drive frames` line is the host
+        // check of that model.
         static IEnumerator Open(string reason)
         {
             float seconds = Mathf.Max(0f, _slideSeconds.Value);
+            bool drive = _drive.Value;
             var sliders = new List<(Transform part, Vector3 from, Vector3 to)>();
+            var drivers = new List<PosedPart>();
             foreach (var part in _parts)
             {
                 if (part == null || !part.gameObject.activeSelf) continue;
+                if (_posed.TryGetValue(part, out var posed))
+                {
+                    if (!posed.Parked)
+                    {
+                        posed.Driving = true;
+                        drivers.Add(posed);
+                    }
+                    continue;
+                }
                 int dir = SpawnGateModel.SlideDirection(part.name);
                 if (dir != 0 && seconds > 0f)
                 {
@@ -486,37 +845,95 @@ namespace ArenaMapPort.Client
                 }
             }
             float t0 = Time.time;
-            while (sliders.Count > 0 && Time.time - t0 < seconds)
+            bool slideDone = false;
+            int off = 0, removed = 0, driven = 0, driveFrames = 0;
+            float driveEnd = 0f, driveSum = 0f, driveMax = 0f;
+            while (true)
             {
-                float k = Mathf.Clamp01((Time.time - t0) / seconds);
-                foreach (var s in sliders)
+                float elapsed = Time.time - t0;
+                if (elapsed > 0f && drivers.Count > 0)
                 {
-                    if (s.part != null) s.part.localPosition = Vector3.Lerp(s.from, s.to, k);
+                    // The whole frame while a part is still being posed (the first pass of the loop belongs to the frame that
+                    // released): the host evidence for what re-posing static colliders every frame costs (see the log below).
+                    float frame = Time.unscaledDeltaTime;
+                    driveFrames++;
+                    driveSum += frame;
+                    if (frame > driveMax) driveMax = frame;
                 }
+                if (!slideDone)
+                {
+                    if (sliders.Count > 0 && elapsed < seconds)
+                    {
+                        float k = Mathf.Clamp01(elapsed / seconds);
+                        foreach (var s in sliders)
+                        {
+                            if (s.part != null) s.part.localPosition = Vector3.Lerp(s.from, s.to, k);
+                        }
+                    }
+                    else
+                    {
+                        foreach (var part in _parts)
+                        {
+                            if (part != null && part.gameObject.activeSelf && !_posed.ContainsKey(part))
+                            {
+                                part.gameObject.SetActive(false);
+                                removed += DestroyHoldCarversOf(part);
+                                off++;
+                            }
+                        }
+                        slideDone = true;
+                    }
+                }
+                bool finished = false;
+                for (int i = drivers.Count - 1; i >= 0; i--)
+                {
+                    var posed = drivers[i];
+                    if (posed.Part == null) { drivers.RemoveAt(i); continue; }
+                    if (!drive || DoorPoseModel.Finished(elapsed, posed.Seconds))
+                    {
+                        ApplyPose(posed, 1f);
+                        posed.Driving = false;
+                        posed.Parked = true;
+                        removed += DestroyHoldCarversOf(posed.Part);
+                        driven++;
+                        driveEnd = elapsed;
+                        drivers.RemoveAt(i);
+                        finished = true;
+                    }
+                    else
+                    {
+                        ApplyPose(posed, DoorPoseModel.Ease(DoorPoseModel.Progress(elapsed, posed.Seconds)));
+                    }
+                }
+                if (finished) SealParked("released"); // guarded: a carver failure must not leave the coroutine (and _opening) stuck
+                if (slideDone && drivers.Count == 0) break;
                 yield return null;
             }
-            int off = 0;
-            foreach (var part in _parts)
-            {
-                if (part != null && part.gameObject.activeSelf)
-                {
-                    part.gameObject.SetActive(false);
-                    off++;
-                }
-            }
-            int carvers = _carvers.Count;
+            removed += _carvers.Count; // whatever else stood (a carver of a part that was already off)
             DestroyCarvers();
             _opening = false;
             _openCoroutine = null;
+            int parkCarvers = 0;
+            foreach (var posed in _posed.Values) parkCarvers += posed.Carvers.Count;
             Plugin.Log.LogDebug($"{Tag} released ({reason}): {sliders.Count} leaf(s) slid {SpawnGateModel.SlideDistance:F2} m in " +
-                                $"{seconds:F1} s, {off} gate part(s) switched off, {carvers} carver(s) removed");
-            if (carvers > 0 && _runner != null) _runner.StartCoroutine(Probe(expectSealed: false));
+                                $"{seconds:F1} s, {off} gate part(s) switched off, {removed} carver(s) removed" +
+                                (driven > 0 ? $", {(drive ? "drove" : "snapped")} {driven} part(s) to the open pose in {driveEnd:F1} s, " +
+                                              $"{parkCarvers} park carver(s) in place" : ""));
+            if (driveFrames > 0)
+            {
+                Plugin.Log.LogDebug($"{Tag} drive frames: {driveFrames} frame(s) in {driveEnd:F1} s, mean {driveSum / driveFrames * 1000f:F1} ms, " +
+                                    $"max {driveMax * 1000f:F1} ms (the whole frame, not the poses alone; Physics.autoSyncTransforms {Physics.autoSyncTransforms})");
+            }
+            if (removed > 0 && _runner != null) _runner.StartCoroutine(Probe(expectSealed: false));
         }
 
         static void OnSceneUnloaded(Scene scene)
         {
             if (ArenaMapRaid.MapForScriptsScene(scene.name) == null) return;
             DestroyCarvers();
+            foreach (var posed in _posed.Values) DestroyParkCarvers(posed);
+            _posed.Clear();
+            _poseFallback.Clear();
             if (_host != null) UnityEngine.Object.Destroy(_host);
             _host = null;
             _runner = null;

@@ -44,6 +44,12 @@ namespace ArenaMapPort.Client
     /// offered (AirPit: the bus doors only), <c>HeldGates</c> stay closed at raid start in every mode and open only on
     /// the plugin's release (AirPit's passport control, the original north team box's gate), every other opened
     /// barrier is switched off here without a way back (shop shells, portal fences, blockout panels).
+    ///
+    /// Since 2026-10-22 (user: "in Endstellung parken") a part that Arena ANIMATES is not switched off but parked: Bowl's
+    /// BTR, ambulance, army gate leaves and respawn gate carry the end pose of their open clip in the descriptor
+    /// (<see cref="ArenaMapPort.Shared.ArenaMapDescriptor.DoorPoses"/>, docs/progress/door-poses.md); the part stays active,
+    /// its nodes snap to that pose (<see cref="SpawnGates.Park"/>) and a later hold and release close and drive it again.
+    /// A part whose poses cannot be applied logs one Warning and is switched off as before.
     /// </summary>
     internal static class BoothDoorRepairs
     {
@@ -62,7 +68,8 @@ namespace ArenaMapPort.Client
             _barriers = Plugin.Instance.Settings.Bind("Spawns", "OpenSpawnBarriers", true,
                 "Deactivate the moving parts (everything but the frame) of the static scene objects the map lists as " +
                 "spawn barriers — on Equator the roller shutter that closes the FCK hall at the Usec spawn (Arena opens " +
-                "it per round by a script that is not ported). A map's held gates (AirPit's passport control) are not " +
+                "it per round by a script that is not ported). A part Arena animates (Bowl's BTR, ambulance and gates) is " +
+                "parked at the open pose of its animation instead of deactivated. A map's held gates (AirPit's passport control) are not " +
                 "governed by this switch: they stay closed until a mode plugin releases them, and open at raid start only " +
                 "when Spawns/SpawnGates or SpawnGateCarve is off. Takes effect on the next raid.");
         }
@@ -91,6 +98,7 @@ namespace ArenaMapPort.Client
             if (barriers || heldGates)
             {
                 OpenBarriers(openings, sb, barriers);
+                SpawnGates.SealParked("parked parts registered after the navmesh install");
             }
             if (heldGates)
             {
@@ -175,7 +183,7 @@ namespace ArenaMapPort.Client
                 }
                 foreach (var barrier in found)
                 {
-                    int opened = 0, kept = 0, alreadyOff = 0, held = 0;
+                    int opened = 0, kept = 0, alreadyOff = 0, held = 0, parked = 0;
                     for (int i = 0; i < barrier.childCount; i++)
                     {
                         var part = barrier.GetChild(i);
@@ -186,8 +194,10 @@ namespace ArenaMapPort.Client
                         }
                         if (part.gameObject.activeSelf)
                         {
+                            SpawnGates.NotePoses(part, map.DoorPosesOf(path, part.name)); // Arena's end pose, resolved while the part is still closed
                             if (role == ArenaGateRole.Held && SpawnGates.OfferHeld(part)) { held++; continue; } // closed until the mode plugin's release
                             if (role == ArenaGateRole.Start && SpawnGates.Offer(part)) { held++; continue; } // registered either way; a hold keeps the enclosure closed for now
+                            if (SpawnGates.Park(part)) { parked++; continue; } // Arena animates it: stands at the open pose, active
                             part.gameObject.SetActive(false);
                             opened++;
                         }
@@ -198,6 +208,7 @@ namespace ArenaMapPort.Client
                     }
                     sb.Append($"\n  spawn barrier '{barrier.name}' at {barrier.position:F1}: deactivated {opened} part(s), " +
                               $"{alreadyOff} already off, kept {kept} frame part(s)" +
+                              (parked > 0 ? $", parked {parked} part(s) at the open pose" : "") +
                               (held > 0 ? $", {held} part(s) {(role == ArenaGateRole.Held ? SpawnGates.DescribeHeldGate() : SpawnGates.Describe())}" : ""));
                     if (role != ArenaGateRole.Held) openings.Add(barrier); // a held gate is BLOCKED on purpose
                 }
