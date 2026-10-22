@@ -7,6 +7,22 @@ using BepInEx.Configuration;
 namespace ArenaMapPort.Client
 {
     /// <summary>
+    /// Where the client's one Arena check stands, as the in-game map notices (MapNotices, 2026-10-22) read it:
+    /// <see cref="ArenaInstallationGate.State"/>. NotStarted is permanent (<c>Initialize</c> failed in Awake or never ran),
+    /// Running and TimedOut are "the check has not finished" (TimedOut: a bundle request waited <see cref="ArenaInstallationGate.BundleWait"/>
+    /// for it), CheckFailed is "the check threw or returned nothing", Verified and NotVerified carry a result.
+    /// </summary>
+    public enum GateState
+    {
+        NotStarted,
+        Running,
+        TimedOut,
+        CheckFailed,
+        Verified,
+        NotVerified,
+    }
+
+    /// <summary>
     /// Client side of the Arena installation gate (user decision 2026-10-19, release 0.2.3).
     ///
     /// What this is. Escape from Tarkov: Arena is a separate purchase from Escape from Tarkov, and this mod ships maps
@@ -110,6 +126,33 @@ namespace ArenaMapPort.Client
                     return "the Arena installation check failed (" + _failure + ")";
                 }
             }
+        }
+
+        /// <summary>
+        /// Where the check stands (same lock and logic as <see cref="Reason"/>), for the in-game map notices. Does not block, never throws,
+        /// and changes no state. See <see cref="FailureDetail"/> for the text of a <see cref="GateState.CheckFailed"/>.
+        /// </summary>
+        internal static GateState State
+        {
+            get
+            {
+                lock (Sync)
+                {
+                    if (!_started)
+                        return GateState.NotStarted;
+                    if (!_done.IsSet)
+                        return _timedOut ? GateState.TimedOut : GateState.Running;
+                    if (_result != null)
+                        return _result.Verified ? GateState.Verified : GateState.NotVerified;
+                    return GateState.CheckFailed;
+                }
+            }
+        }
+
+        /// <summary>What went wrong when <see cref="State"/> is <see cref="GateState.CheckFailed"/> (an exception's type and message, or the unreadable-setting text); null otherwise. Does not block.</summary>
+        internal static string FailureDetail
+        {
+            get { lock (Sync) return _failure; }
         }
 
         /// <summary>Bind the public config key. The result is the entry, whose value is the path ("" = automatic).</summary>
@@ -301,6 +344,18 @@ namespace ArenaMapPort.Client
         /// <summary>The Info line that tells a player what to do when Arena is not verified.</summary>
         internal static string HintLine() => Tag + " " + NotFoundHint;
 
+        /// <summary>
+        /// The one extra Info line of a failed check that found no registry entry: which Uninstall subkeys mention Arena or Tarkov, where they
+        /// point and whether the game executable is there (docs/progress/map-notices.md, "Steam finding and detection"). Support evidence for a
+        /// launcher that registers Arena under another name; null for every other result. The client logs it, the server never does.
+        /// </summary>
+        internal static string RegistryDiagnosticLine(ArenaInstallationResult result)
+        {
+            if (result == null || result.Verified || result.Cause != ArenaInstallCause.NotRegistered)
+                return null;
+            return Tag + " no registry entry; Uninstall subkeys matching Arena or Tarkov: " + result.DescribeRegistryCandidates();
+        }
+
         /// <summary>The Error line for a refused bundle request.</summary>
         internal static string NotServedMessage(string bundleName) =>
             "[Bundles] '" + bundleName + "' not served: Escape from Tarkov: Arena not found (" + Reason + ")";
@@ -363,6 +418,9 @@ namespace ArenaMapPort.Client
                     Plugin.Log.LogInfo(OutcomeLine(result));
                 if (!verified)
                     Plugin.Log.LogInfo(HintLine());
+                string diagnostic = RegistryDiagnosticLine(result);
+                if (diagnostic != null)
+                    Plugin.Log.LogInfo(diagnostic);
                 if (result != null && !verified)
                     foreach (string mismatch in result.Mismatches)
                         Plugin.Log.LogDebug(Tag + " mismatch: " + mismatch);

@@ -17,6 +17,8 @@
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.11.1" />
     <PackageReference Include="xunit" Version="2.9.2" />
     <PackageReference Include="xunit.runner.visualstudio" Version="2.8.2" />
+    <!-- ServerStatusParser reads the status document with Newtonsoft.Json, the library EFT ships and the client already uses (13.0.1 on the host). -->
+    <PackageReference Include="Newtonsoft.Json" Version="13.0.1" />
   </ItemGroup>
 
   <ItemGroup>
@@ -51,6 +53,18 @@
     <Compile Include="..\ArenaMapPort.Client\MapLightingDefaults.cs" Link="Client\MapLightingDefaults.cs" />
     <Compile Include="..\ArenaMapPort.Client\ArenaInstallationGate.cs" Link="Client\ArenaInstallationGate.cs" />
     <Compile Include="..\ArenaMapPort.Client\BundleKeyResolver.cs" Link="Client\BundleKeyResolver.cs" />
+    <!-- The Unity-free core of the in-game map notices (docs/progress/map-notices.md): texts, input builder, selector, scheduler, failure registry, status parser.
+         None of them may use Plugin.Log beyond the stub's four methods. -->
+    <Compile Include="..\ArenaMapPort.Client\MapNoticeText.cs" Link="Client\MapNoticeText.cs" />
+    <Compile Include="..\ArenaMapPort.Client\MapNoticeInputs.cs" Link="Client\MapNoticeInputs.cs" />
+    <Compile Include="..\ArenaMapPort.Client\MapNoticeSelector.cs" Link="Client\MapNoticeSelector.cs" />
+    <Compile Include="..\ArenaMapPort.Client\MapNoticeScheduler.cs" Link="Client\MapNoticeScheduler.cs" />
+    <Compile Include="..\ArenaMapPort.Client\MapLoadFailures.cs" Link="Client\MapLoadFailures.cs" />
+    <Compile Include="..\ArenaMapPort.Client\ServerStatusParser.cs" Link="Client\ServerStatusParser.cs" />
+    <!-- Skipped Harmony targets (the HOOK_MISSING row) and the quiet status probe: both free of Unity and EFT. The probe reaches SPT's HTTP client by reflection;
+         the tests bring a stand-in SPT.Common.Http.RequestHandler (ServerStatusClientTests). -->
+    <Compile Include="..\ArenaMapPort.Client\SkippedHooks.cs" Link="Client\SkippedHooks.cs" />
+    <Compile Include="..\ArenaMapPort.Client\ServerStatusClient.cs" Link="Client\ServerStatusClient.cs" />
     <!-- The same Crypto sources the client and the BundleCrypt tool compile, so the tests exercise the shipped code. -->
     <Compile Include="..\ArenaMapPort.Crypto\*.cs" Link="Crypto\%(Filename)%(Extension)" />
   </ItemGroup>

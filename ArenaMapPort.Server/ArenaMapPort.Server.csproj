@@ -42,6 +42,7 @@
     <Compile Include="..\ArenaMapPort.Shared\ArenaDustDescriptor.cs" Link="Shared\ArenaDustDescriptor.cs" />
     <Compile Include="..\ArenaMapPort.Shared\ArenaNeonFixture.cs" Link="Shared\ArenaNeonFixture.cs" />
     <Compile Include="..\ArenaMapPort.Shared\ArenaInstallation.cs" Link="Shared\ArenaInstallation.cs" />
+    <Compile Include="..\ArenaMapPort.Shared\ArenaStatusContract.cs" Link="Shared\ArenaStatusContract.cs" />
   </ItemGroup>
 
   <ItemGroup>

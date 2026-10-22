@@ -42,7 +42,8 @@ its harbor background and water.
   `{"installPath": "D:\\Battlestate Games\\Escape from Tarkov Arena"}`); an override is
   verified exactly like the automatic path, and nothing turns the check off. Without a
   verified installation both components log the reason at Info; the server does not
-  register the Arena locations, so they are missing from the location selection, and the
+  register the Arena locations, so they are missing from the location selection (a message
+  at the main menu then names the reason and what to do), and the
   client does not load the map files. The map bundles in the ZIP are encrypted with a key
   that your PC derives from the Arena resource files each map is built from (the texture and
   mesh data of its scenes; a fixed sample of a few MB is read when the map is first used and
@@ -92,6 +93,16 @@ Equator Day, Bay5, Air Pit and Bowl are unaffected.
 Night PostFX are temporary and do not overwrite your saved game settings.
 The colored volumetric haze requires the game's **Volumetric Light** option.
 
+**General / ShowMapNotices** is on by default. When the Arena maps are not
+available (Arena is not installed or not found, the server does not offer the
+maps, a map file is missing) it shows a message at the main menu with the reason
+and what to do, and it names the cause after a map failed to load. Turning it off
+hides only the main-menu message, the "still checking" notice and the reminder in
+the location selection: the Arena check, the server's registration and the log
+lines stay as they are, and the message that answers a failed raid start still
+appears. The server's exact reason needs the client and the server of the same
+version.
+
 **General / DeveloperMode** is visible with the F12 **Advanced settings** filter.
 It is off by default; enabling it and restarting exposes development controls
 and diagnostics. Normal installations keep a compact configuration file.
@@ -105,6 +116,51 @@ values. It can be switched off per map under `Audio (arena_equator)`,
 `Audio (arena_bay5)`, `Audio (arena_airpit)` or `Audio (arena_bowl)` with
 **General / DeveloperMode** enabled (enable it and restart EFT, the keys then appear in F12); switching it off
 restores the shipped gunshot acoustics.
+
+## If the maps do not show up
+
+When the Arena maps are not available, ArenaMapPort shows a message at the main menu with the reason and what to do, and after a map
+fails to load it names the cause. The message is in English or German, following the game's language, and its last line carries a ref
+code such as `ArenaMapPort 0.3.0 - ref NO_ARENA`. Find the ref below and follow the fix. If you report a problem at
+https://github.com/maschine34675/ArenaMapPort/issues, include the ref and the lines marked `[Arena]` from `BepInEx/LogOutput.log`.
+The setting **General / ShowMapNotices** hides the main-menu message, the "still checking" notice and the reminder in the location selection;
+it never turns the Arena check off, and the message that answers a failed raid start still appears. With **ShowMapNotices** on and this
+version installed, no ArenaMapPort message means the ArenaMapPort side is fine.
+
+The server's exact reason (the `SERVER_` refs) needs the client and the server of the same version: install both parts from the same ZIP,
+with the SPT server closed (a running server keeps its DLL locked). An older server cannot say why, and the message then asks for exactly
+that.
+
+| Ref | What it means | What to do |
+|---|---|---|
+| `NO_ARENA` | Arena was not found on this PC. | Install Arena with the Battlestate Games launcher, then restart the game and the SPT server. Installed but not found: set its folder in `F12 > maschine-ArenaMapPort > General > ArenaInstallPath` and in the server's `arena-install.json` (see Compatibility). |
+| `REGISTRY` | The Windows registry could not be read to look for Arena. | Restart the game once; if it repeats, set the Arena folder (the one with `EscapeFromTarkovArena.exe`) in `ArenaInstallPath`. |
+| `OVERRIDE_BAD` | The folder set in `ArenaInstallPath` cannot be used. | Set it to the Arena folder that contains `EscapeFromTarkovArena.exe` (not the launcher folder), or clear it. Restart the game. |
+| `FOLDER_BAD` | The launcher lists an Arena folder that cannot be used. | Reinstall or update Arena in the launcher, or fix the folder if you moved it. Restart the game and the server. |
+| `ARENA_INCOMPLETE` | Your Arena installation looks incomplete or is still updating. | Let the launcher finish updating, or check the installation there. Arena has to be complete and up to date. |
+| `CHECK_FAILED` | The installation check hit an internal error. | Restart the game; if it repeats, send the `[Arena]` lines of `BepInEx/LogOutput.log`. |
+| `CHECK_SLOW` | The installation check did not finish in time (slow disk or unreachable folder). | Start the raid again; if it repeats, check that the Arena folder is on a local, connected drive. |
+| `HOOK_MISSING` | This ArenaMapPort build does not fit your game version. | Install the ArenaMapPort release that matches your SPT version. |
+| `SERVER_NO_ARENA` | The SPT server could not verify Arena, although this game found it. | Follow the message: usually create `SPT_Runtime/user/mods/ArenaMapPort/config/arena-install.json` on the server PC (the message shows the content), fix its path or its backslashes, let the launcher finish updating Arena there, or restart the server. |
+| `SERVER_UNKNOWN` | The server does not offer the maps and did not say why (its ArenaMapPort is missing or older, or could not find Arena). | Close the server, reinstall both parts from the same ZIP, restart the server and the game. The server console says why in lines starting with `[ArenaMapPort]`. |
+| `SERVER_NO_ANSWER` | The server did not answer the question why (timeout or error). | Restart the SPT server, then the game. |
+| `SERVER_ALL_FAILED` | The server could not register any Arena map. | Close the server, reinstall the server files (`SPT_Runtime/user/mods/ArenaMapPort`) from the ZIP, restart it. |
+| `SERVER_PARTIAL` | The server does not offer some maps this game knows (its ArenaMapPort is probably older). | Close the server, copy the ZIP's `SPT_Runtime` folder over the installation (overwrite its files), restart it. |
+| `SERVER_PARTIAL_FAILED` | The server could not register some maps. | Close the server, reinstall the server files from the ZIP, restart it. |
+| `FILES_MISSING` | ArenaMapPort's files for some maps are missing (a half-copied ZIP). | Extract the complete ZIP again (client folder `BepInEx/plugins/maschine-ArenaMapPort` with its `bundles` and `keys`), restart the game. |
+| `KEY_UPDATED` | A map cannot be opened: your Arena is newer than the build this ArenaMapPort was made for, and files it needs changed. | Install the newest ArenaMapPort release. |
+| `KEY_ARENA_OLDER` | A map cannot be opened: your Arena is older than the build this ArenaMapPort was made for. | Update Arena in the launcher. |
+| `KEY_DIFFERS` | A map cannot be opened: the Arena files it is built from do not match the unlock file. | Repair Arena in the launcher (damaged or modified files); if it stays, your Arena version needs an ArenaMapPort update. |
+| `KEY_UNREADABLE` | ArenaMapPort cannot read an Arena file it needs (locked, access denied). | Close the launcher and any scan of the Arena folder, check the folder's permissions. |
+| `KEY_FILE_BAD` | The unlock file of a map (`keys` folder) is missing or damaged. | Reinstall ArenaMapPort and copy the complete client folder, including `keys`. |
+| `KEY_INTERNAL` | An internal error while reading your Arena files. | Restart the game; if it repeats, send the `[BundleKeys]` lines of `BepInEx/LogOutput.log`. |
+| `BUNDLE_BAD` | One of ArenaMapPort's map files is missing or damaged. | Reinstall ArenaMapPort and copy the complete client folder (bundles and keys included). |
+| `NO_CAUSE` | A map did not start and ArenaMapPort recorded no cause. | Send `BepInEx/LogOutput.log` and the newest `errors.log` of the game's `Logs` folder. |
+
+Four short notices appear as a toast, without a ref: "still checking your Arena installation" (a slow check; the maps load once it
+passes), "the Arena maps are not available" (shown once in the location selection with the short fix), "the navigation data could not
+be loaded" (a raid started without bot navigation: reinstall the complete client folder) and "a map file reported damage during the
+raid" (reinstall the complete client folder).
 
 ## DynamicMaps
 

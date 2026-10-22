@@ -606,8 +606,9 @@ def install_instruction(parts) -> str:
             "existing ArenaMapPort files. The parts do not overlap and can be extracted in any order.")
 
 
-# The Arena installation requirement (release 0.2.3, docs/progress/arena-install-check.md). Same statement as
-# README.md and docs/releases/v0.2.3.md: a good-faith installation check on names and sizes, never copy protection.
+# The Arena installation requirement (release 0.2.3, docs/progress/arena-install-check.md). The same statement as
+# README.md, FORGE.md and docs/releases/v0.2.3.md (a good-faith installation check on names and sizes, never copy protection),
+# plus, since the in-game map notices of 0.3.0, the clause that a message at the main menu names the reason.
 REQUIREMENT_TEXT = (
     "Requirement: Escape from Tarkov: Arena must be installed. It is sold separately from Escape from\n"
     "Tarkov, and these maps are built from its files, so the server registers the locations and the client\n"
@@ -619,7 +620,8 @@ REQUIREMENT_TEXT = (
     "SPT_Runtime/user/mods/ArenaMapPort/config/arena-install.json, for example\n"
     "{\"installPath\": \"D:/Battlestate Games/Escape from Tarkov Arena\"}; both are checked like the automatic\n"
     "path, and nothing turns the check off. Without a verified installation both components log the reason\n"
-    "and the Arena locations do not appear.\n\n"
+    "and the Arena locations do not appear; the game shows a message at the main menu that names the reason\n"
+    "and what to do (General / ShowMapNotices hides that message; it never turns the check off).\n\n"
 )
 
 # The Arena build the shipped key files are built for: the one installed on the build VM when `stage` wrote them (the launcher
@@ -695,7 +697,9 @@ def readme_text(spec: ReleaseSpec, parts) -> str:
             "Optional DynamicMaps integration: overview map data lives in this plugin's own dynamicmaps\n"
             "folder and is registered automatically when DynamicMaps is installed.\n\n"
             "Settings: F12 exposes NaturalEquatorNight for a natural Equator midnight look on the next\n"
-            "raid and ArenaInstallPath, the Arena installation folder (empty = automatic). DeveloperMode\n"
+            "raid, ArenaInstallPath, the Arena installation folder (empty = automatic), and ShowMapNotices\n"
+            "(on by default), the message at the main menu that names why the Arena maps are not available;\n"
+            "turning it off hides only that message, never the Arena check. DeveloperMode\n"
             "appears under Advanced and requires a restart. A fresh installation creates only the compact\n"
             "player configuration; existing user settings are preserved.\n\n"
             + verification +

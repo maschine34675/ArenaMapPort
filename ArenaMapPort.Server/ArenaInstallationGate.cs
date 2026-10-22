@@ -13,7 +13,8 @@ namespace ArenaMapPort.Server;
 ///
 /// Kept DI-free and static, like <see cref="ArenaMapRegistration"/>, so the tests can run the whole decision without
 /// a live server. When the gate says no, <see cref="ArenaMapPortMod"/> returns before it touches anything: no
-/// location, no locale transformer, no weather hook, no APBS patch.
+/// location, no locale transformer, no weather hook, no APBS patch. The one exception is the read-only status route
+/// (<see cref="ArenaMapPortStatusRouter"/>), which reports the verdict recorded here to the game client as codes.
 /// </summary>
 public static class ArenaInstallationGate
 {
@@ -125,7 +126,9 @@ public static class ArenaInstallationGate
     /// Runs the whole gate: reads the override, detects and verifies the installation, logs the verdict and returns
     /// whether the maps may be registered. Fails closed: an unexpected exception is logged through <paramref name="error"/>
     /// and counts as not verified. <paramref name="detect"/> is the test seam; production passes none and gets
-    /// <see cref="ArenaInstallation.Detect(string)"/>.
+    /// <see cref="ArenaInstallation.Detect(string)"/>. The verdict (or the failure) is also recorded in
+    /// <see cref="ArenaServerStatus"/>, a plain write that logs nothing, so the status route can tell the game client why no map
+    /// is offered; the log lines are the same as before.
     /// </summary>
     public static bool Evaluate(
         string modDir,
@@ -134,19 +137,25 @@ public static class ArenaInstallationGate
         Action<string> error,
         Func<string?, ArenaInstallationResult>? detect = null)
     {
+        var overrideFile = ArenaStatusContract.OverrideAbsent;
         try
         {
             var read = ReadOverride(modDir);
+            overrideFile = read.Warning is not null
+                ? ArenaStatusContract.OverrideIgnored
+                : read.InstallPath is not null ? ArenaStatusContract.OverrideUsed : ArenaStatusContract.OverrideAbsent;
             if (read.Warning is not null)
                 warning(read.Warning);
 
             var result = (detect ?? ArenaInstallation.Detect)(read.InstallPath);
             var decision = Decide(result, modDir);
+            ArenaServerStatus.RecordGate(result, overrideFile);
             info(decision.Message);
             return decision.Register;
         }
         catch (Exception e)
         {
+            ArenaServerStatus.RecordGateError(overrideFile);
             error(LogPrefix + "Looking for the Escape from Tarkov: Arena installation failed unexpectedly ("
                   + e.GetType().Name + ": " + e.Message + "). The " + ArenaMapRegistry.All.Count
                   + " Arena maps stay unregistered.");

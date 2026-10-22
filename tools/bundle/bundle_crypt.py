@@ -57,6 +57,7 @@ def _sources():
     yield CSPROJ
     yield from (REPO / "ArenaMapPort.Crypto").glob("*.cs")
     yield REPO / "ArenaMapPort.Shared" / "ArenaInstallation.cs"
+    yield REPO / "ArenaMapPort.Shared" / "ArenaStatusContract.cs"
 
 
 def _up_to_date() -> bool:

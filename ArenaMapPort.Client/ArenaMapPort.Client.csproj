@@ -52,6 +52,7 @@
     <Compile Include="..\ArenaMapPort.Shared\ArenaDustDescriptor.cs" Link="Shared\ArenaDustDescriptor.cs" />
     <Compile Include="..\ArenaMapPort.Shared\ArenaNeonFixture.cs" Link="Shared\ArenaNeonFixture.cs" />
     <Compile Include="..\ArenaMapPort.Shared\ArenaInstallation.cs" Link="Shared\ArenaInstallation.cs" />
+    <Compile Include="..\ArenaMapPort.Shared\ArenaStatusContract.cs" Link="Shared\ArenaStatusContract.cs" />
     <Compile Include="..\ArenaMapPort.Shared\SpecularCapPolicy.cs" Link="Shared\SpecularCapPolicy.cs" />
     <!-- AMPB container, AES-CTR, HKDF, key file and key resolution (docs/PLAN-ENCRYPTION.md): one netstandard2.1 source folder, linked into the
          client, the BundleCrypt tool and the tests. No Unity, BepInEx or Shared reference inside. -->

@@ -108,6 +108,42 @@ internal static class CompactChecks
             foreach (string file in Directory.GetFiles(directory)) File.Delete(file);
             Directory.Delete(directory);
         }
+        ShowMapNoticesStaysPublic();
+    }
+
+    // General/ShowMapNotices (the in-game map notices, 2026-10-22) is the fourth public entry: a player who turned the message off must find the choice
+    // in the public file after the next start, never in the developer archive, and the compaction must not remove it.
+    static void ShowMapNoticesStaysPublic()
+    {
+        string directory = Path.Combine(Path.GetTempPath(), "ArenaMapPort-notices-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(directory);
+        string path = Path.Combine(directory, "plugin.cfg");
+        try
+        {
+            var main = new ConfigFile(path, false);
+            var tuning = CompactConfiguration.Initialize(main);
+            main.Bind("General", "ShowMapNotices", true).Value = false; // bound on the public file, like MapNotices.BindConfig
+            tuning.Bind("Audio (arena_equator)", "AmbientGainDb", 5f).Value = 7f;
+            CompactConfiguration.Complete(main);
+            Check(File.ReadAllText(path).Contains("ShowMapNotices = false"), "ShowMapNotices was not saved in the public file");
+
+            for (int i = 0; i < 2; i++)
+            {
+                main = new ConfigFile(path, false);
+                tuning = CompactConfiguration.Initialize(main);
+                Check(!main.Bind("General", "ShowMapNotices", true).Value, "ShowMapNotices was reset by a restart");
+                CompactConfiguration.Complete(main);
+                Check(File.ReadAllText(path).Contains("ShowMapNotices = false"), "ShowMapNotices left the public file during compaction");
+                string archive = CompactConfiguration.DeveloperPath(main);
+                Check(!File.Exists(archive) || !File.ReadAllText(archive).Contains("ShowMapNotices"), "ShowMapNotices was archived as tuning");
+            }
+            Console.WriteLine("SHOW_MAP_NOTICES_PUBLIC_OK: the message switch stays in the public file across restarts");
+        }
+        finally
+        {
+            foreach (string file in Directory.GetFiles(directory)) File.Delete(file);
+            Directory.Delete(directory);
+        }
     }
 
     static int Assignments(string path) => File.ReadLines(path).Count(line =>

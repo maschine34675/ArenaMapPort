@@ -47,9 +47,12 @@ namespace ArenaMapPort.Client
         {
             // General/ArenaInstallPath is the Arena installation override (0.2.3, ArenaInstallationGate): a normal
             // control, because an owner whose Arena has no launcher registry entry has to find it in F12.
+            // General/ShowMapNotices (MapNotices, 2026-10-22) is the switch of the main-menu messages: a normal control too,
+            // otherwise the message that names it would send the player to a setting that is not there.
             return (definition.Section == "Appearance" && definition.Key == "NaturalEquatorNight") ||
                 (definition.Section == "General" && definition.Key == "DeveloperMode") ||
-                (definition.Section == "General" && definition.Key == "ArenaInstallPath");
+                (definition.Section == "General" && definition.Key == "ArenaInstallPath") ||
+                (definition.Section == "General" && definition.Key == "ShowMapNotices");
         }
 
         static bool IsPermanentHidden(ConfigDefinition definition, ConfigDescription original)

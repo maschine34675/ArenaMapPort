@@ -295,6 +295,172 @@ public static class ArenaMapRegistration
         locale[map.IdField + " Description"] = description ?? map.LocaleDescription;
         return locale;
     }
+
+    /// <summary>
+    /// One map's whole registration, extracted from <see cref="ArenaMapPortMod.OnLoadAsync"/>'s loop so the outcome sites can be
+    /// tested without the DI container (every SPT service it touches arrives through <paramref name="inputs"/>). Multimap
+    /// generalization (docs/progress/multimap-generalize.md): one map's bad or missing base.json, or a registration conflict, must
+    /// not block any OTHER map's registration, so this method never throws for those (an <see cref="OperationCanceledException"/>
+    /// still propagates). The log lines, their texts and their order are exactly the ones the loop body had.
+    ///
+    /// Each outcome is also recorded in <see cref="ArenaServerStatus"/> (a plain write, no logging): <c>base_json_parse</c> and
+    /// <c>base_json_missing</c> where the two Error lines are, <c>registration</c> in the catch, and <c>registered</c> right after
+    /// <see cref="Register"/>, so the status route can tell the client which map failed and why.
+    /// </summary>
+    internal static async Task RegisterMapAsync(
+        ArenaMapDescriptor map,
+        MapRegistrationInputs inputs,
+        ISptLogger<ArenaMapPortMod> logger,
+        CancellationToken cancellationToken)
+    {
+        // PLAN-TWO-MAPS item 10 — extract_banners.py writes straight into this same deployed
+        // folder's "banners" subdirectory (dist/SPT_Runtime/user/mods/ArenaMapPort/banners/),
+        // sitting alongside "db" rather than under it, specifically so it needs no csproj
+        // Content/DeployToDist glob change (that folder is never touched by `dotnet build`).
+        var bannersDir = Path.Combine(inputs.ModDir, "banners");
+
+        var basePath = Path.Combine(inputs.ModDir, "db", map.DbBaseJsonPath);
+        var registered = false;
+        try
+        {
+            LocationBase? newBase;
+            try
+            {
+                newBase = await inputs.LoadBase(basePath, cancellationToken);
+            }
+            catch (Exception e) when (e is not OperationCanceledException)
+            {
+                logger.Error($"[ArenaMapPort] {map.Key}: {basePath} failed to parse — location NOT enabled: {e.Message}");
+                ArenaServerStatus.RecordMap(map.Key, ArenaStatusContract.MapFailed, ArenaStatusContract.MapCauseBaseJsonParse);
+                return;
+            }
+
+            if (newBase is null)
+            {
+                logger.Error($"[ArenaMapPort] {map.Key}: could not load {basePath} — location NOT enabled");
+                ArenaServerStatus.RecordMap(map.Key, ArenaStatusContract.MapFailed, ArenaStatusContract.MapCauseBaseJsonMissing);
+                return;
+            }
+
+            // Availability is checked BEFORE building the Location so a duplicate-key
+            // conflict surfaces as a clear startup error naming the conflicting key
+            // (EnsureAvailable's own message), not a silent overwrite further down.
+            EnsureAvailable(inputs.LocationTable, map);
+            var location = BuildLocation(newBase, map);
+
+            ApplyLocationConfig(
+                inputs.StaticLootMultiplier,
+                inputs.LooseLootMultiplier,
+                inputs.ScavRaidTimeMaps,
+                inputs.CloneScavRaidTime,
+                map);
+
+            // bots-stage1 (docs/progress/bots-stage1.md): a map whose base.json ships BotMax > 0 gets
+            // that value into BotConfig.MaxBotCap too. PostDbLoadService.AdjustLocationBotValues runs
+            // from GameCallbacks (OnLoadOrder 200000, i.e. AFTER this Preload+90000 hook) and writes
+            // Location.BotMax only for keys present in that dictionary — configs/bot.json has no
+            // arena_* key, so without this the cap would silently fall back to the raw JSON value.
+            // A map without bots (BotMax 0, every map but Equator today) is left alone.
+            ApplyBotCap(inputs.MaxBotCap, newBase.BotMax, map);
+            // bots-stage1 (docs/progress/bots-stage1.md, "Host test 8") — SPT's client CustomAiPatch picks a
+            // brain per ASSAULT/player-scav bot from BotConfig.AssaultBrainType[<map id lowercased>] /
+            // PlayerScavBrainType[...] (spt-custom AIBrainSpawnWeightAdjustment.cs:55-66) and throws
+            // "the assault cache still doesn't contain data" for a map the table does not know. Give every
+            // Arena map the stand-in map's row (Equator → interchange, others → factory4_day).
+            ApplyBrainTable(inputs.AssaultBrainType, map);
+            ApplyBrainTable(inputs.PlayerScavBrainType, map);
+            // bots-stage3 (docs/progress/bots-stage3.md): the same lookup for PMCs — pmc.json pmcType[pmcbear|pmcusec][map]
+            // is what spt-custom's GetPmcWildSpawnType indexes without a guard (KeyNotFoundException per PMC otherwise).
+            ApplyPmcBrainTables(inputs.PmcType, map);
+
+            // exfils-stage2 (docs/progress/exfils-stage2.md): base.json exits and the client's authored
+            // positions (ArenaMapRegistry.<Map>.Exits) must name the same set — regenerate base.json from
+            // tools/maps/<key>.exits.json when this warns.
+            var exitMismatches = ExitNameMismatches(newBase.Exits?.Select(e => e.Name), map);
+            if (exitMismatches.Count > 0)
+            {
+                logger.Warning($"[ArenaMapPort] {map.Key}: exit names differ between base.json and the client table — " +
+                               string.Join(", ", exitMismatches));
+            }
+
+            // PLAN-TWO-MAPS item 10 (docs/progress/two-maps-item-10-banners.md): base.json
+            // keeps shipping Banners: [] for every map, unchanged (SPEC §B.WP5 step 7 / §E.4)
+            // — Equator/Bay5 get a real entry assigned here in memory instead, and only when
+            // ArenaMapBanners.Resolve finds the extracted image file already on disk. This
+            // runs in its own try/catch (docs/PLAN-TWO-MAPS.md §10's own instruction) so a
+            // banner-wiring failure can never block this map's own Register() call below —
+            // Icebreaker's own documented landmine (an unresolvable Banners entry -> an
+            // "[UNHANDLED]" server log line + an empty client error dialog at the menu) is
+            // exactly why ArenaMapBanners.Resolve refuses to hand back a Banner at all when
+            // no file backs it, rather than relying on this catch to paper over that case.
+            try
+            {
+                var resolvedBanner = ArenaMapBanners.Resolve(
+                    map, bannersDir, message => logger.Warning($"[ArenaMapPort] {message}"));
+                if (resolvedBanner is { } banner)
+                {
+                    newBase.Banners = new List<Banner> { banner.Banner };
+                    inputs.AddImageRoute(banner.RouteKey, banner.FilePath);
+                    logger.Debug(
+                        $"[ArenaMapPort] {map.Key}: location-select banner wired ({banner.RouteKey} -> {banner.FilePath})");
+                }
+            }
+            catch (Exception e) when (e is not OperationCanceledException)
+            {
+                logger.Warning(
+                    $"[ArenaMapPort] {map.Key}: banner wiring failed (location-select falls back to the default art): {e.Message}");
+            }
+
+            Register(inputs.LocationTable, location, map);
+            registered = true;
+            ArenaServerStatus.RecordMap(map.Key, ArenaStatusContract.MapRegistered, ArenaStatusContract.MapCauseNone);
+            logger.Info($"[ArenaMapPort] {map.LocaleName} is available in location selection.");
+        }
+        catch (Exception e) when (e is not OperationCanceledException)
+        {
+            logger.Error($"[ArenaMapPort] {map.Key} registration failed: {e.Message}");
+            // The caller continues with the next map — one map's failure must not block the others.
+            if (!registered)
+                ArenaServerStatus.RecordMap(map.Key, ArenaStatusContract.MapFailed, ArenaStatusContract.MapCauseRegistration);
+        }
+    }
+}
+
+/// <summary>
+/// Everything one map's registration (<see cref="ArenaMapRegistration.RegisterMapAsync"/>) reads or writes, as plain collections and
+/// delegates instead of SPT's DI services, so the tests can drive it without a container. Production fills it from
+/// <see cref="ArenaMapPortMod"/>'s injected services in <c>OnLoadAsync</c>, after the Arena gate passed.
+/// </summary>
+// A record so a test can vary one input with "with" and keep the rest.
+internal sealed record MapRegistrationInputs
+{
+    /// <summary>The server mod's folder (the DLL's directory): <c>db\&lt;map&gt;\base.json</c> and <c>banners</c> sit below it.</summary>
+    public required string ModDir { get; init; }
+
+    /// <summary>Reads and deserializes a base.json (production: <c>JsonUtil.DeserializeFromFileAsync&lt;LocationBase&gt;</c>).</summary>
+    public required Func<string, CancellationToken, Task<LocationBase?>> LoadBase { get; init; }
+
+    public required LocationTable LocationTable { get; init; }
+
+    public required Dictionary<string, double> StaticLootMultiplier { get; init; }
+
+    public required Dictionary<string, double> LooseLootMultiplier { get; init; }
+
+    public required Dictionary<string, ScavRaidTimeLocationSettings?> ScavRaidTimeMaps { get; init; }
+
+    /// <summary>Clones the template map's scav raid-time settings (production: the injected <c>ICloner</c>).</summary>
+    public required Func<ScavRaidTimeLocationSettings, ScavRaidTimeLocationSettings> CloneScavRaidTime { get; init; }
+
+    public required Dictionary<string, int> MaxBotCap { get; init; }
+
+    public required Dictionary<string, Dictionary<string, int>> AssaultBrainType { get; init; }
+
+    public required Dictionary<string, Dictionary<string, int>> PlayerScavBrainType { get; init; }
+
+    public required Dictionary<string, Dictionary<string, Dictionary<string, double>>> PmcType { get; init; }
+
+    /// <summary>Registers a banner image route (production: <c>ImageRouter.AddRoute</c>).</summary>
+    public required Action<string, string> AddImageRoute { get; init; }
 }
 
 // Locale keys (SPEC §E.5, §B.WP5 step 6) — LocationInfoPanel reads "<_Id> Name" /
@@ -328,7 +494,9 @@ public class ArenaMapPortMod(
         // separate purchase and the maps are derived from its files, so nothing below runs unless an Arena
         // installation is found and verified (BSG launcher registry entry, or config/arena-install.json next to this
         // DLL). Not verified means the server is left exactly as SPT built it: no location, no locale transformer, no
-        // weather hook, no APBS patch. Evaluate fails closed on an unexpected exception and logs it as an Error.
+        // weather hook, no APBS patch. Evaluate fails closed on an unexpected exception and logs it as an Error. The one
+        // exception is the read-only status route (ArenaMapPortStatusRouter, a router of its own, so it answers here too):
+        // it tells the game client WHY nothing was registered, from the verdict Evaluate recorded in ArenaServerStatus.
         if (!ArenaInstallationGate.Evaluate(
                 modDir,
                 message => logger.Info(message),
@@ -338,115 +506,49 @@ public class ArenaMapPortMod(
             return;
         }
 
-        // PLAN-TWO-MAPS item 10 — extract_banners.py writes straight into this same deployed
-        // folder's "banners" subdirectory (dist/SPT_Runtime/user/mods/ArenaMapPort/banners/),
-        // sitting alongside "db" rather than under it, specifically so it needs no csproj
-        // Content/DeployToDist glob change (that folder is never touched by `dotnet build`).
-        var bannersDir = Path.Combine(modDir, "banners");
-
         // Multimap generalization (docs/progress/multimap-generalize.md): one map's bad/missing
         // base.json must not block any OTHER map's registration (both Equator's and Bay5's
         // base.json exist on disk today — docs/progress/bay5-port.md — but the isolation still
         // matters for whichever map breaks next). Each map is independently try/caught, mirroring
-        // the existing per-hook independence already used client-side (HarmonyPatches.cs).
-        foreach (var map in ArenaMapRegistry.All)
+        // the existing per-hook independence already used client-side (HarmonyPatches.cs). The
+        // per-map body is ArenaMapRegistration.RegisterMapAsync (extracted so its outcomes, which
+        // the status route reports, are testable without the DI container).
+        // The inputs read SPT's config objects (before the extraction those reads sat inside each map's try block): building them is guarded the same way,
+        // so a config object that throws is one "registration failed" Error and status record per map, as it used to be, and never an exception out of
+        // OnLoadAsync that would skip the locale, weather and APBS steps below.
+        MapRegistrationInputs? inputs = null;
+        try
         {
-            var basePath = Path.Combine(modDir, "db", map.DbBaseJsonPath);
-            try
+            inputs = new MapRegistrationInputs
             {
-                LocationBase? newBase;
-                try
-                {
-                    newBase = await jsonUtil.DeserializeFromFileAsync<LocationBase>(basePath, cancellationToken);
-                }
-                catch (Exception e) when (e is not OperationCanceledException)
-                {
-                    logger.Error($"[ArenaMapPort] {map.Key}: {basePath} failed to parse — location NOT enabled: {e.Message}");
-                    continue;
-                }
-
-                if (newBase is null)
-                {
-                    logger.Error($"[ArenaMapPort] {map.Key}: could not load {basePath} — location NOT enabled");
-                    continue;
-                }
-
-                // Availability is checked BEFORE building the Location so a duplicate-key
-                // conflict surfaces as a clear startup error naming the conflicting key
-                // (EnsureAvailable's own message), not a silent overwrite further down.
-                ArenaMapRegistration.EnsureAvailable(locationTable, map);
-                var location = ArenaMapRegistration.BuildLocation(newBase, map);
-
-                ArenaMapRegistration.ApplyLocationConfig(
-                    locationConfig.StaticLootMultiplier,
-                    locationConfig.LooseLootMultiplier,
-                    locationConfig.ScavRaidTimeSettings.Maps,
-                    settings => cloner.Clone(settings)!,
-                    map);
-
-                // bots-stage1 (docs/progress/bots-stage1.md): a map whose base.json ships BotMax > 0 gets
-                // that value into BotConfig.MaxBotCap too. PostDbLoadService.AdjustLocationBotValues runs
-                // from GameCallbacks (OnLoadOrder 200000, i.e. AFTER this Preload+90000 hook) and writes
-                // Location.BotMax only for keys present in that dictionary — configs/bot.json has no
-                // arena_* key, so without this the cap would silently fall back to the raw JSON value.
-                // A map without bots (BotMax 0, every map but Equator today) is left alone.
-                ArenaMapRegistration.ApplyBotCap(botConfig.MaxBotCap, newBase.BotMax, map);
-                // bots-stage1 (docs/progress/bots-stage1.md, "Host test 8") — SPT's client CustomAiPatch picks a
-                // brain per ASSAULT/player-scav bot from BotConfig.AssaultBrainType[<map id lowercased>] /
-                // PlayerScavBrainType[...] (spt-custom AIBrainSpawnWeightAdjustment.cs:55-66) and throws
-                // "the assault cache still doesn't contain data" for a map the table does not know. Give every
-                // Arena map the stand-in map's row (Equator → interchange, others → factory4_day).
-                ArenaMapRegistration.ApplyBrainTable(botConfig.AssaultBrainType, map);
-                ArenaMapRegistration.ApplyBrainTable(botConfig.PlayerScavBrainType, map);
-                // bots-stage3 (docs/progress/bots-stage3.md): the same lookup for PMCs — pmc.json pmcType[pmcbear|pmcusec][map]
-                // is what spt-custom's GetPmcWildSpawnType indexes without a guard (KeyNotFoundException per PMC otherwise).
-                ArenaMapRegistration.ApplyPmcBrainTables(pmcConfig.PmcType, map);
-
-                // exfils-stage2 (docs/progress/exfils-stage2.md): base.json exits and the client's authored
-                // positions (ArenaMapRegistry.<Map>.Exits) must name the same set — regenerate base.json from
-                // tools/maps/<key>.exits.json when this warns.
-                var exitMismatches = ArenaMapRegistration.ExitNameMismatches(newBase.Exits?.Select(e => e.Name), map);
-                if (exitMismatches.Count > 0)
-                {
-                    logger.Warning($"[ArenaMapPort] {map.Key}: exit names differ between base.json and the client table — " +
-                                   string.Join(", ", exitMismatches));
-                }
-
-                // PLAN-TWO-MAPS item 10 (docs/progress/two-maps-item-10-banners.md): base.json
-                // keeps shipping Banners: [] for every map, unchanged (SPEC §B.WP5 step 7 / §E.4)
-                // — Equator/Bay5 get a real entry assigned here in memory instead, and only when
-                // ArenaMapBanners.Resolve finds the extracted image file already on disk. This
-                // runs in its own try/catch (docs/PLAN-TWO-MAPS.md §10's own instruction) so a
-                // banner-wiring failure can never block this map's own Register() call below —
-                // Icebreaker's own documented landmine (an unresolvable Banners entry -> an
-                // "[UNHANDLED]" server log line + an empty client error dialog at the menu) is
-                // exactly why ArenaMapBanners.Resolve refuses to hand back a Banner at all when
-                // no file backs it, rather than relying on this catch to paper over that case.
-                try
-                {
-                    var resolvedBanner = ArenaMapBanners.Resolve(
-                        map, bannersDir, message => logger.Warning($"[ArenaMapPort] {message}"));
-                    if (resolvedBanner is { } banner)
-                    {
-                        newBase.Banners = new List<Banner> { banner.Banner };
-                        imageRouter.AddRoute(banner.RouteKey, banner.FilePath);
-                        logger.Debug(
-                            $"[ArenaMapPort] {map.Key}: location-select banner wired ({banner.RouteKey} -> {banner.FilePath})");
-                    }
-                }
-                catch (Exception e) when (e is not OperationCanceledException)
-                {
-                    logger.Warning(
-                        $"[ArenaMapPort] {map.Key}: banner wiring failed (location-select falls back to the default art): {e.Message}");
-                }
-
-                ArenaMapRegistration.Register(locationTable, location, map);
-                logger.Info($"[ArenaMapPort] {map.LocaleName} is available in location selection.");
-            }
-            catch (Exception e) when (e is not OperationCanceledException)
+                ModDir = modDir,
+                LoadBase = (path, token) => jsonUtil.DeserializeFromFileAsync<LocationBase>(path, token),
+                LocationTable = locationTable,
+                StaticLootMultiplier = locationConfig.StaticLootMultiplier,
+                LooseLootMultiplier = locationConfig.LooseLootMultiplier,
+                ScavRaidTimeMaps = locationConfig.ScavRaidTimeSettings.Maps,
+                CloneScavRaidTime = settings => cloner.Clone(settings)!,
+                MaxBotCap = botConfig.MaxBotCap,
+                AssaultBrainType = botConfig.AssaultBrainType,
+                PlayerScavBrainType = botConfig.PlayerScavBrainType,
+                PmcType = pmcConfig.PmcType,
+                AddImageRoute = (key, file) => imageRouter.AddRoute(key, file),
+            };
+        }
+        catch (Exception e) when (e is not OperationCanceledException)
+        {
+            foreach (var map in ArenaMapRegistry.All)
             {
                 logger.Error($"[ArenaMapPort] {map.Key} registration failed: {e.Message}");
-                // continue to the next map — one map's failure must not block the others.
+                ArenaServerStatus.RecordMap(map.Key, ArenaStatusContract.MapFailed, ArenaStatusContract.MapCauseRegistration);
+            }
+        }
+
+        if (inputs is not null)
+        {
+            foreach (var map in ArenaMapRegistry.All)
+            {
+                await ArenaMapRegistration.RegisterMapAsync(map, inputs, logger, cancellationToken);
             }
         }
 

@@ -1033,6 +1033,8 @@ class BuildWiringTests(unittest.TestCase):
         text = (REPO / "tools/bundle/ArenaMapPort.BundleCrypt/ArenaMapPort.BundleCrypt.csproj").read_text(encoding="utf-8")
         self.assertIn(r'<Compile Include="..\..\..\ArenaMapPort.Crypto\*.cs"', text)
         self.assertIn(r'<Compile Include="..\..\..\ArenaMapPort.Shared\ArenaInstallation.cs"', text)
+        # ArenaInstallation.cs names ArenaInstallCause, which lives in the status contract (map notices, 2026-10-22)
+        self.assertIn(r'<Compile Include="..\..\..\ArenaMapPort.Shared\ArenaStatusContract.cs"', text)
         self.assertIn("<TargetFramework>net10.0</TargetFramework>", text)
         self.assertIn("<AllowUnsafeBlocks>true</AllowUnsafeBlocks>", text)
         self.assertNotIn("PackageReference", text)

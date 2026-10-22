@@ -194,6 +194,8 @@ namespace ArenaMapPort.Client
                 {
                     if (map.Key == locationId)
                     {
+                        // The in-game map notices open an attempt here (docs/progress/map-notices.md); the call is total, nothing it does can reach EFT.
+                        MapNotices.NoteAttemptStarted(map.Key);
                         Show(map, (__instance as Component)?.transform);
                         if (_visible)
                         {
@@ -255,6 +257,7 @@ namespace ArenaMapPort.Client
         {
             try
             {
+                MapNotices.NoteComeback(); // an attempt that never reached "started" failed: the notice follows at the next main menu
                 Hide("ComebackToMainMenu");
             }
             catch (Exception e)

@@ -60,20 +60,20 @@ namespace ArenaMapPort.Client
             // Stage 2 (encrypted bundles): what the scene bundle's decrypting stream cost while this raid's scenes loaded (Debug).
             BundleHost.LogStreamStats(map.Key, "raid start");
 
+            // Registered before the load, not after it: the unload also ends a pending "raid without NavMesh" record of the in-game notices, and a process
+            // whose NavMesh never loads (the case that record exists for) used to never register this handler.
+            HookSceneUnload();
+
             var data = LoadOnce(map);
             if (data == null)
             {
+                // N1 of the in-game map notices: the raid goes on without NavMesh and the toast follows once it has started (guarded inside).
+                MapNotices.NoteRaidWithoutNavMesh(map.Key);
                 return; // already logged inside LoadOnce()
             }
 
             try
             {
-                if (!_unloadHooked)
-                {
-                    _unloadHooked = true;
-                    SceneManager.sceneUnloaded += OnSceneUnloaded;
-                }
-
                 Drop(map.Key);
                 // Order matters: remove BEFORE add, or ours is dropped along with the map's own
                 // (InterchangeRework's own documented ordering note, NavMeshExtension.cs). Only OUR
@@ -99,6 +99,23 @@ namespace ArenaMapPort.Client
             }
         }
 
+        static void HookSceneUnload()
+        {
+            if (_unloadHooked)
+            {
+                return;
+            }
+            try
+            {
+                _unloadHooked = true;
+                SceneManager.sceneUnloaded += OnSceneUnloaded;
+            }
+            catch (Exception e)
+            {
+                Plugin.Log.LogError($"[NavMesh] {e.GetType().Name}: {e.Message}");
+            }
+        }
+
         static void OnSceneUnloaded(Scene scene)
         {
             // Stateless resolution (not ArenaMapRaid.CurrentMap) — see ArenaMapRaid's own doc comment
@@ -109,7 +126,15 @@ namespace ArenaMapPort.Client
                 // The streams of a map's bundles stay open across the unload: EFT keeps a loaded map bundle cached for the next raid.
                 BundleHost.LogStreamStats(map.Key, "scene unload");
                 Drop(map.Key);
+                MapNotices.NoteRaidEnded(); // a pending "raid without NavMesh" record never fires for another raid (guarded inside)
             }
+        }
+
+        // The in-game map notices (docs/progress/map-notices.md): why this raid has no NavMesh. Recorded before the Error line it belongs to, through the
+        // resolver's NoteSafe (LoadOnce runs inside EFT's BotsController.Init and a note must not be able to break it). Never blocking: the raid starts.
+        static void NoteNavMesh(string mapKey, NavMeshCause cause, string detail, string file)
+        {
+            BundleKeyResolver.Default.NoteSafe(failures => failures.NoteNavMesh(mapKey, cause, detail, file));
         }
 
         static void Drop(string mapKey)
@@ -138,6 +163,7 @@ namespace ArenaMapPort.Client
             // (no verified Arena means no registered location and no served scene bundle).
             if (!ArenaInstallationGate.EnsureVerified())
             {
+                NoteNavMesh(map.Key, NavMeshCause.Unverified, ArenaInstallationGate.Reason, map.NavMeshBundleFileName);
                 Plugin.Log.LogError($"[NavMesh] navmesh bundle for '{map.Key}' not loaded: " +
                                     $"Escape from Tarkov: Arena not found ({ArenaInstallationGate.Reason})");
                 return null;
@@ -148,6 +174,7 @@ namespace ArenaMapPort.Client
             var path = Path.Combine(Path.Combine(pluginDir, "bundles"), map.NavMeshBundleFileName);
             if (!File.Exists(path))
             {
+                NoteNavMesh(map.Key, NavMeshCause.FileMissing, "the file is missing", map.NavMeshBundleFileName);
                 Plugin.Log.LogError($"[NavMesh] expected bundle at '{path}' but it is missing");
                 return null;
             }
@@ -169,6 +196,7 @@ namespace ArenaMapPort.Client
                 var assets = bundle.LoadAllAssets(typeof(NavMeshData));
                 if (assets == null || assets.Length == 0)
                 {
+                    NoteNavMesh(map.Key, NavMeshCause.Damaged, "the bundle holds no NavMeshData", map.NavMeshBundleFileName);
                     Plugin.Log.LogError($"[NavMesh] '{path}' contains no NavMeshData");
                     return null;
                 }
@@ -180,6 +208,7 @@ namespace ArenaMapPort.Client
             }
             catch (Exception e)
             {
+                NoteNavMesh(map.Key, NavMeshCause.Damaged, e.GetType().Name + ": " + e.Message, map.NavMeshBundleFileName);
                 Plugin.Log.LogError($"[NavMesh] {e.GetType().Name}: {e.Message}");
                 return null;
             }

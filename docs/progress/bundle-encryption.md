@@ -635,3 +635,15 @@ Texts updated with this change: AGENTS.md (decision, hard rule on the key store,
 [../PLAN-ENCRYPTION.md](../PLAN-ENCRYPTION.md) section 6 (and pointers in 0.2 to 0.4 and 0.8), README.md, FORGE.md,
 `docs/releases/v0.3.0.md`, the generated package README (`ENCRYPTION_TEXT` in `make_release_zips.py`), [../dist-manifest.md](../dist-manifest.md),
 [arena-install-check.md](arena-install-check.md) (pointer), HANDOFF.md and INDEX.md.
+
+## Key and bundle failures now produce a notice (2026-10-22)
+
+A key that cannot be recovered, or a bundle that is refused, damaged or fails to load, is no longer only a `[BundleKeys]` or `[Bundles]`
+Error line. `BundleKeyResolver` keeps the cause (`KeyEntry` with cause, detail, the Arena version the key file was built for and the
+installed one) and records every refusal in a per-map failure registry (`MapLoadFailures`); after the failed raid attempt the main menu shows
+a message that names the cause and the fix (`KeyUpdated`, `KeyArenaOlder`, `KeyDiffers`, `KeyUnreadable`, `KeyFileBad`, `KeyInternal`,
+`BundleBad`), and a damaged chunk found in a raid that ran gives a toast. Nothing in the encryption changed: keys are still resolved on the
+game thread at `TryServe` time and never at the menu, the log lines and their pinned texts are unchanged, and no key, hash or file content
+enters a record or a message (only the key file name, the bundle name and the two Arena versions, which are compared component by component
+because Arena's versions have five numbers). The messages say "unlock file", never "key file". Record: [map-notices.md](map-notices.md)
+(rows 18 to 20 and 22); host evidence pending.

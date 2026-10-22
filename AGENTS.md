@@ -96,6 +96,13 @@ are not accepted build inputs. Keep the SPT bundle target on Unity 2022.3.43f1.
   (server `config/arena-install.json`, client `General/ArenaInstallPath`) still verify the installation. It is a
   good-faith gate, not copy protection: never describe it as more. See
   [arena-install-check.md](docs/progress/arena-install-check.md).
+- `General/ShowMapNotices` (the public key of the in-game map notices, 2026-10-22) is not a switch for the Arena check and never becomes
+  one: it silences only the main-menu messages (T1), the pending toast and the location-selection reminder. The answer to a failed raid
+  attempt, the in-raid NavMesh toast and the damaged-file toast always show, and the check, the server's registration and the bundle
+  refusal never read the key. Notice code (`MapNotice*.cs`, `MapNotices.cs`, `MapLoadFailures.cs`, `ServerStatus*.cs`, `SkippedHooks.cs`)
+  never calls `ArenaInstallationGate.EnsureVerified()` (it can block the game thread for 30 s): it reads the gate through `State`,
+  `Result` and `FailureDetail`, and `MapNoticeSourcePinTests` enforces it. No notice text calls the check or the encryption
+  "copy protection" or "protect". See [map-notices.md](docs/progress/map-notices.md).
 - Never commit, ship, log or paste a content key. `work/release-keys/<map_key>.key` (the 32-byte `K_map` per map, the
   append-only list of key wraps, the retired level-file wraps of 2026-10-19 included, and the per-file digests that entered each key) is
   ignored by git (`work/`), never goes into
@@ -120,6 +127,8 @@ are not accepted build inputs. Keep the SPT bundle target on Unity 2022.3.43f1.
 | `ArenaMapPort.Server/` | SPT server mod (net10.0): registers each map from `db/<key>/base.json` (including `arena_equator`), locale, brain tables, bot caps, APBS shim. |
 | `ArenaMapPort.Shared/` | `ArenaMapDescriptor` / `ArenaMapRegistry`: the per-map table (keys, scenes, infiltration, exits, opened barriers). Compiled into both. |
 | `ArenaMapPort.Crypto/` | Stage 2 (bundle encryption): AES-CTR/SHA-256/HKDF providers (Windows CNG with a managed fallback), the AMPB container writer, the random-access decrypting stream, the key-file parser and `KeyResolver`. netstandard2.1, no Unity/BepInEx reference; linked into the client, the tool and the tests. |
+| `ArenaMapPort.Client/MapNotices.cs` + `MapNotice{Text,Inputs,Selector,Scheduler}.cs`, `MapLoadFailures.cs`, `ServerStatusClient.cs` / `ServerStatusParser.cs`, `SkippedHooks.cs` | The in-game map notices (2026-10-22, [map-notices.md](docs/progress/map-notices.md)): `MapNotices` is the only file that calls EFT's UI (modal window, toast, screen manager, language); every decision is in the Unity-free core linked into the tests (texts en/de, input builder, selector, scheduler state machine, per-map failure registry, parser). |
+| `ArenaMapPort.Shared/ArenaStatusContract.cs`, `ArenaMapPort.Server/ArenaServerStatus.cs`, `ArenaMapPortStatusRouter.cs` | The server's one route, read-only `GET /arenamapport/status` (schema 1, codes only: gate verdict with an `ArenaInstallCause`, per-map registration outcome); the client asks it only when maps are missing. |
 | `tools/bundle/ArenaMapPort.BundleCrypt/` | The net10.0 console tool of stage 2: `stage`, `encrypt`, `decrypt`, `inspect`, `read-range`, `keys`, `verify`, `verify-keys`, `plain-sha256`, `rotate-key` (needs `--yes`), `bench`; `ArenaMapPort.BundleCrypt help` prints the flags. Its keys live in the ignored `work/release-keys/`. |
 | `ArenaMapPort.Server.Tests/` | xunit; the only .NET tests. The client has none — test what is Unity-independent here. |
 | `tools/maps/<key>.json` (+ `.bots.json`, `.exits.json`) | Per-map sidecars for the Python/Unity side; mirrored by the descriptor and guarded by mirror tests. |
@@ -153,15 +162,26 @@ cannot be recovered is one Error tagged `[BundleKeys]` (key file missing or corr
 another Arena build, content differs); a bundle that is refused, damaged or fails to load is an Error tagged `[Bundles]`, or `[NavMesh]`
 for the NavMesh bundle; the one Warning is `[Bundles] Windows CNG unavailable (...); using managed crypto, which is slow: ...`. The tags
 are `BundleKeyResolver.KeyTag`, `BundlesTag` and `NavMeshTag`.
+The in-game map notices (`MapNotices`, 2026-10-22) log with the tag `[Notice]` (`MapNoticeScheduler.Tag`): one Info line per shown
+notice (`[Notice] showing '<id>' (modal|toast) ref=<REF> client=<state>:<cause> server=... offered=<n>/<m>`, cause codes only, the
+map-availability summary a support log needs) and, when no launcher entry for Arena was found, one client-only Info line
+`[Arena] no registry entry; Uninstall subkeys matching Arena or Tarkov: ...` from the gate's `LogOutcome`; availability, waiting,
+probe result and load-failure records are Debug; a notice that cannot be shown is one Warning per id. Nothing logs from a worker
+thread, nothing logs a key, a hash or Arena file content, and the server adds no log line (its status route is silent). See
+[map-notices.md](docs/progress/map-notices.md).
 
-Player mode is the default: two normal F12 controls, `Appearance/NaturalEquatorNight` (next raid) and
-`General/ArenaInstallPath` (the Arena installation override of release 0.2.3, empty = automatic).
+Player mode is the default: three normal F12 controls, `Appearance/NaturalEquatorNight` (next raid),
+`General/ArenaInstallPath` (the Arena installation override of release 0.2.3, empty = automatic) and
+`General/ShowMapNotices` (the in-game messages that say why the Arena maps are missing, default on, 2026-10-22; it silences only the
+main-menu messages and the selection reminder, see the hard rule above and [map-notices.md](docs/progress/map-notices.md)).
+A new public key goes into `CompactConfiguration.IsPublic` AND `MapConfigVisibility.IsPlayerOption` (a key missing from the second is
+`Browsable=No` in player mode), the README settings text and the package texts in `tools/release/make_release_zips.py`.
 `General/DeveloperMode` is visible with F12's Advanced settings filter enabled.
 It is latched on startup, exposes supported-map controls and enables F7–F10 diagnostics.
 Never gate functional repairs behind it. All tuning binds/enumeration must use
 `Plugin.Instance.Settings`, never `Config`: in normal mode Settings reads the optional
-developer archive without saving, while Config contains only the three public-file entries
-(DeveloperMode, NaturalEquatorNight, ArenaInstallPath).
+developer archive without saving, while Config contains only the four public-file entries
+(DeveloperMode, NaturalEquatorNight, ArenaInstallPath, ShowMapNotices).
 In developer mode Settings is Config so ConfigurationManager sees the full controls.
 Never explicitly save normal-mode Settings. CompactConfiguration archives existing tuning
 before compaction and preserves unknown keys. Ambient bindings happen in Plugin.Awake.
@@ -322,7 +342,11 @@ project if future debugging explicitly needs it.
 
 Two MCP servers drive the test host. Since 2026-09-26 the host is **SPT-GPU-2**, reached through `uibridge-2`
 (sees inside the running EFT) and `windows-gpu-2` (clicks, keys, screenshots); the un-suffixed `uibridge`/`windows-gpu`
-servers belong to the retired first host — do not test there. The tool names below are written without the suffix.
+servers belong to the retired first host — do not test there, with one exception (decision of 2026-10-22, the in-game map notices):
+the no-Arena checks V2 and V3 of [map-notices.md](docs/progress/map-notices.md) may run on that host, because it is the one PC
+without Arena, as the 0.2.3 negative checks did; confirm which MCP prefix is live before deploying. The lead does the deploy and the
+host work: an agent never writes to that host, and `deploy-to-spt.ps1` still has no mode that does. The tool names below are written
+without the suffix.
 Same click points as before, raid start ≈ 9 s, `D:\SPT41` still mirrors it. Recipe that has worked for every host test:
 
 0. `uibridge_help topic=overview` once per session (UiBridge proxy 0.8.1+): the playbooks (start, raid, inventory,
@@ -563,3 +587,21 @@ the log; the user uses it to point at things.
   bake box grew to 780 x 450 x 840 m and 29,586 vertices, and `validate_bundle_roundtrip.py` failed with 176 vertex/submesh mismatches -
   that validator is the check and stays in every build; the released September Bay5 bundle audited clean, 0 of 3,890). Never build two maps
   at once (the Unity lease guards it) and never copy mesh assets between projects by hand.
+- In-game map notices (`MapNotices`, [map-notices.md](docs/progress/map-notices.md); unit-tested, host evidence pending): the EFT UI facts
+  the glue stands on. (1) `NotificationManager` drops a toast silently when `Singleton<NotificationManager>` is not instantiated (it is
+  recreated on every return to the menu): wait on `Instantiated`, and never use `Infinite` (an un-clicked toast stalls every later one).
+  (2) `ItemUiContext.ShowMessageWindow` `Decline()`s an open message window and calls `RequestGlobalClose()`, so EFT's own windows and
+  error screens displace ours: a modal counts as seen only after OK or two seconds on screen, otherwise it is re-queued (three times, then a
+  toast). (3) `InGameStatus.InRaid` stays true after a start that failed late and makes an unforced `ShowMessageWindow` auto-accept and show
+  nothing: the modal passes `forceShow: true`, and `ModalPossible` does not read the flag either (it would refuse for the whole session after a start
+  that failed after `GamePrepare`); a running or half-started raid is the `AbstractGame` singleton, which `ComebackToMainMenu` releases. (4) The in-raid Esc menu is also a
+  `MenuScreen` of type `MainMenu` and calls `Show` with a null profile: the menu postfix ignores `profile == null`, or a running raid would
+  count as a main menu. (5) EFT shows its own message windows right after the menu appears (PvE first time, system messages): a settle time
+  of 2 menu-seconds lets them go first, and the menu clock counts only main-menu time. (6) `RequestHandler.GetJson` retries three times with
+  an Error line per attempt, so a 404 from an older server costs four Error lines in a player's log: the status probe sends its own request
+  with SPT's `Client` (by reflection, own 5 s token, never the shared `Timeout`) and never logs from its worker thread. (7)
+  `PreloaderUI.ShowErrorScreen` is not used (shared queue, 500-character cut, closed by `PrepareGameJob`), and `_messageOnLoadMenu` is a
+  private-field poke tied to EFT's load flow: it stays the documented fallback only. (8) Keys resolve at `TryServe` time, not at the menu, so
+  a stage 2 key failure is explained AFTER the failed attempt (records by attempt window), never at the first menu; do not pre-resolve keys
+  there (3 to 7.4 MB per map at every start). (9) Arena versions have five numbers (`0.6.1.0.48206`) that `System.Version` cannot parse:
+  compare component by component, or `KeyUpdated` and `KeyArenaOlder` never fire.

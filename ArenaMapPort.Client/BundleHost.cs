@@ -100,6 +100,7 @@ namespace ArenaMapPort.Client
             }
             if (!ArenaInstallationGate.EnsureVerified())
             {
+                NoteFailure(bundleName, MapLoadFailureKind.GateRefused, ArenaInstallationGate.Reason); // for the in-game notice after a failed attempt
                 Plugin.Log.LogError(ArenaInstallationGate.NotServedMessage(bundleName));
                 return; // before the File.Exists check: nothing of ours is touched without Arena
             }
@@ -111,6 +112,7 @@ namespace ArenaMapPort.Client
 
             if (!File.Exists(filePath))
             {
+                NoteFailure(bundleName, MapLoadFailureKind.BundleMissing, "the file is missing");
                 Plugin.Log.LogError($"[Bundles] '{bundleName}' expected at '{filePath}' but the file is missing");
                 return;
             }
@@ -157,6 +159,51 @@ namespace ArenaMapPort.Client
             // Unity reads the stream of an encrypted bundle until the bundle is unloaded: keep it, and close it once EFT's own
             // table no longer holds this bundle (the plaintext path has no stream, Track ignores it).
             BundleKeyResolver.Default.Streams.Track(prepared, () => IsStillServed(manager, bundleName, bundle));
+        }
+
+        // The in-game map notices (MapNotices, docs/progress/map-notices.md) explain a failed load after the fact, so every refusal here leaves a record in
+        // the resolver's failure registry, written before the Error line it belongs to. This helper maps the bundle name to its map and goes through
+        // NoteSafe: TryServe runs inside EFT's bundle request and a note must never be able to break it. A name that is not ours returns silently.
+        static void NoteFailure(string bundleName, MapLoadFailureKind kind, string detail)
+        {
+            try
+            {
+                if (_ourMapKeys == null || !_ourMapKeys.TryGetValue(bundleName, out var mapKey))
+                {
+                    return;
+                }
+                _ourBundles.TryGetValue(bundleName, out var filePath);
+                var file = Path.GetFileName(filePath ?? "");
+                BundleKeyResolver.Default.NoteSafe(failures => failures.NoteBundle(mapKey, kind, file, detail));
+            }
+            catch
+            {
+                // a record that cannot be written changes nothing about the load
+            }
+        }
+
+        // A bundle that opened but would not load (Unity threw or returned null): a bundle record for the scenes and the preset, a NavMesh cause for the
+        // NavMesh bundle (the raid still starts without it).
+        static void NoteLoadFailure(BundleKeyResolver resolver, string mapKey, bool navMesh, string filePath, string detail)
+        {
+            try
+            {
+                // Path.GetFileName throws on an invalid path character: this runs inside the catch block of a failed load, and a note must not replace the
+                // Error line that follows it with an exception in EFT's bundle request.
+                var file = Path.GetFileName(filePath ?? "");
+                if (navMesh)
+                {
+                    resolver.NoteSafe(failures => failures.NoteNavMesh(mapKey, NavMeshCause.Damaged, detail, file));
+                }
+                else
+                {
+                    resolver.NoteSafe(failures => failures.NoteBundle(mapKey, MapLoadFailureKind.BundleLoadFailed, file, detail));
+                }
+            }
+            catch
+            {
+                // a record that cannot be written changes nothing about the load
+            }
         }
 
         // The AssetBundle is alive while EFT's table still holds exactly this instance (BundlesManager.UnloadBundle unloads it and
@@ -208,6 +255,7 @@ namespace ArenaMapPort.Client
             catch (Exception e)
             {
                 resolver.Streams.ReportError(prepared);
+                NoteLoadFailure(resolver, mapKey, navMesh, filePath, e.GetType().Name + ": " + e.Message);
                 Plugin.Log.LogError($"{tag} failed to load '{filePath}': {e.GetType().Name}: {e.Message}");
                 prepared.Dispose();
                 prepared = null;
@@ -220,6 +268,7 @@ namespace ArenaMapPort.Client
                 // (§B.WP2.8 / §H risk #12) — this is the runtime symptom if that ever regresses. For an encrypted bundle the
                 // stream may know better: a damaged chunk is reported first.
                 resolver.Streams.ReportError(prepared);
+                NoteLoadFailure(resolver, mapKey, navMesh, filePath, api + " returned null");
                 Plugin.Log.LogError($"{tag} {api} returned null for '{filePath}' " +
                                      "(wrong BuildTarget, or a corrupt/incompatible file?)");
                 prepared.Dispose();

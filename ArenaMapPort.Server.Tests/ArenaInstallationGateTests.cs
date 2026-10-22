@@ -11,16 +11,23 @@ namespace ArenaMapPort.Server.Tests;
 /// <summary>
 /// The server side of the Arena installation gate: the optional config\arena-install.json, the one log line per
 /// outcome and the fail-closed rule. ArenaInstallationTests covers the detection and verification itself.
+/// Evaluate also writes the verdict into the static status holder, so the class shares the holder's xunit collection.
 /// </summary>
+[Collection(StatusHolderCollection.Name)]
 public sealed class ArenaInstallationGateTests : IDisposable
 {
     private readonly string _root = Path.Combine(Path.GetTempPath(), "ArenaInstallationGate_" + Guid.NewGuid().ToString("N"));
     private int _next;
 
-    public ArenaInstallationGateTests() => Directory.CreateDirectory(_root);
+    public ArenaInstallationGateTests()
+    {
+        Directory.CreateDirectory(_root);
+        ArenaServerStatus.ResetForTests();
+    }
 
     public void Dispose()
     {
+        ArenaServerStatus.ResetForTests();
         try { Directory.Delete(_root, true); } catch (IOException) { } catch (UnauthorizedAccessException) { }
     }
 
@@ -472,8 +479,11 @@ public class RecordingLogger : DispatchProxy
 /// Runs ArenaMapPortMod.OnLoadAsync itself against an Arena folder that does not verify. Every SPT dependency is null:
 /// the mod must return from the gate before it touches any of them, so a NullReferenceException here means a
 /// registration step ran ahead of the gate. The override file goes next to the test copy of the server DLL, where
-/// the mod looks for it; this class is the only writer there and its tests run one after the other.
+/// the mod looks for it; this class is the only writer there and its tests run one after the other. The gate also
+/// records its verdict in the static status holder (and the mod marks every registry map as not registered because of
+/// the gate), so the class shares the holder's xunit collection.
 /// </summary>
+[Collection(StatusHolderCollection.Name)]
 public sealed class ArenaMapPortModGateTests : IDisposable
 {
     private static readonly string ModDir = Path.GetDirectoryName(typeof(ArenaMapPortMod).Assembly.Location)!;
@@ -485,6 +495,7 @@ public sealed class ArenaMapPortModGateTests : IDisposable
 
     public ArenaMapPortModGateTests()
     {
+        ArenaServerStatus.ResetForTests();
         Directory.CreateDirectory(_empty);
         string configFolder = Path.GetDirectoryName(OverrideFile)!;
         _createdConfigFolder = !Directory.Exists(configFolder);
@@ -494,6 +505,7 @@ public sealed class ArenaMapPortModGateTests : IDisposable
 
     public void Dispose()
     {
+        ArenaServerStatus.ResetForTests();
         if (_previousFile is not null)
             File.WriteAllBytes(OverrideFile, _previousFile);
         else if (File.Exists(OverrideFile))
@@ -525,4 +537,23 @@ public sealed class ArenaMapPortModGateTests : IDisposable
         Assert.Contains("The " + ArenaMapRegistry.All.Count + " Arena maps stay unregistered.", call.Message);
         Assert.Contains(OverrideFile, call.Message);
     }
+
+    [Fact]
+    public async Task OnLoad_WithoutAVerifiedInstallation_RecordsTheGateAndEveryMapAsNotRegisteredBecauseOfIt()
+    {
+        File.WriteAllText(OverrideFile, JsonSerializer.Serialize(new { installPath = _empty }));
+        var mod = NewMod(out var recorder);
+
+        await mod.OnLoadAsync(CancellationToken.None);
+
+        // The status route tells the game client what the log said, as codes: the override file was used and the folder has no exe.
+        var snapshot = ArenaServerStatus.Snapshot();
+        Assert.Equal(new ArenaGateStatus("not_verified", "not_arena_folder", "override", null, 0, "used"), snapshot.Gate);
+        Assert.Equal(ArenaMapRegistry.All.Count, snapshot.Maps.Count);
+        Assert.All(snapshot.Maps, map => Assert.Equal(("not_registered", "gate"), (map.State, map.Cause)));
+        Assert.DoesNotContain(_empty, ArenaServerStatus.ToJson());
+        // Still exactly one logger call, and still the one Info line: the holder logs nothing.
+        Assert.Equal("Info", Assert.Single(recorder.Calls).Method);
+    }
+
 }

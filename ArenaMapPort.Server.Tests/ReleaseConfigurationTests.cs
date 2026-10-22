@@ -15,16 +15,19 @@ public sealed class ReleaseConfigurationTests
     static bool Visible(ConfigEntryBase entry) => entry.Description.Tags.OfType<BrowsableAttribute>().Last().Browsable;
 
     [Fact]
-    public void PlayerMenuRetainsTwoNormalAndOneAdvancedControlWithTuningHidden()
+    public void PlayerMenuRetainsThreeNormalAndOneAdvancedControlWithTuningHidden()
     {
         var cfg = new ConfigFile();
-        // Release 0.2.3 adds the Arena installation override: three public entries in the player's F12 menu.
+        // Release 0.2.3 added the Arena installation override and the in-game map notices (2026-10-22) their switch: four public entries in the
+        // player's F12 menu (three normal controls and DeveloperMode under Advanced).
         var expected = new[] {
-            "Appearance/NaturalEquatorNight", "General/ArenaInstallPath", "General/DeveloperMode"
+            "Appearance/NaturalEquatorNight", "General/ArenaInstallPath", "General/DeveloperMode", "General/ShowMapNotices"
         };
         cfg.Bind("Appearance", "NaturalEquatorNight", false, "Player control");
         DeveloperOptions.Install(cfg);
         var arenaPath = ClientGate.BindConfig(cfg); // the plugin's own binding (Plugin.Awake)
+        // MapNotices.BindConfig binds exactly this (the glue calls EFT's UI and cannot be compiled here; a source pin keeps the two together)
+        var showNotices = cfg.Bind(MapNoticeText.ShowMapNoticesSection, MapNoticeText.ShowMapNoticesKey, true, MapNoticeText.ShowMapNoticesDescription);
         cfg.Bind("Audio (arena_equator)", "AmbientGainDb", 5f, "Hidden");
         cfg.Bind("Lighting (arena_equator Night)", "ExposureCompensationEV", .3f, "Hidden");
         var drawer = new object();
@@ -53,12 +56,18 @@ public sealed class ReleaseConfigurationTests
         Assert.True(Visible(arenaPath));
         Assert.DoesNotContain(arenaPath.Description.Tags, t => t.GetType().GetField("IsAdvanced")?.GetValue(t) is true);
         Assert.Equal("", arenaPath.Value);
+        // The message switch is a normal control too (the message that names it must send the player to a setting that is there): default on.
+        Assert.True(Visible(showNotices));
+        Assert.DoesNotContain(showNotices.Description.Tags, t => t.GetType().GetField("IsAdvanced")?.GetValue(t) is true);
+        Assert.True(showNotices.Value);
+        Assert.Equal(MapNoticeText.ShowMapNoticesDescription, showNotices.Description.Description);
         for (int i = 0; i < 3; i++)
         {
             MapConfigVisibility.Apply(cfg, true);
             Assert.True(Visible(curve));
             Assert.True(Visible(developerEntry));
             Assert.True(Visible(arenaPath));
+            Assert.True(Visible(showNotices));
             Assert.False(Visible(legacy)); Assert.False(Visible(parked)); Assert.False(Visible(revision));
             Assert.True(Visible(bay5)); Assert.True(Visible(airpit)); Assert.True(Visible(bowl)); Assert.False(Visible(airpit2));
             Assert.Equal(2, curve.Description.Tags.Length);
@@ -67,6 +76,7 @@ public sealed class ReleaseConfigurationTests
             MapConfigVisibility.Apply(cfg, false);
             Assert.False(Visible(curve)); Assert.Equal(1.75f, curve.Value); Assert.Equal(.8f, legacy.Value);
             Assert.True(Visible(arenaPath));
+            Assert.True(Visible(showNotices));
         }
         Assert.Single(original.Tags);
         curve.Value = 9f; Assert.Equal(2f, curve.Value);

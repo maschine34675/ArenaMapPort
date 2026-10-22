@@ -16,9 +16,12 @@ namespace ArenaMapPort.Shared
     {
         internal ArenaInstallationResult(bool verified, string installPath, string source, string manifestVersion,
             string registryVersion, int entriesChecked, long totalBytes, string reason, int mismatchCount,
-            IReadOnlyList<string> mismatches, int longPathsSkipped = 0)
+            IReadOnlyList<string> mismatches, int longPathsSkipped = 0, ArenaInstallCause cause = ArenaInstallCause.None,
+            IReadOnlyList<ArenaRegistryCandidate> registryCandidates = null)
         {
             LongPathsSkipped = longPathsSkipped;
+            Cause = cause;
+            RegistryCandidates = registryCandidates ?? new ArenaRegistryCandidate[0];
             Verified = verified;
             InstallPath = installPath;
             Source = source ?? ArenaInstallation.SourceNone;
@@ -69,6 +72,41 @@ namespace ArenaMapPort.Shared
         /// </summary>
         public int LongPathsSkipped { get; }
 
+        /// <summary>
+        /// Machine-readable reason for a failed check, one value per failure site of <see cref="ArenaInstallation"/>;
+        /// <see cref="ArenaInstallCause.None"/> exactly when <see cref="Verified"/>. <see cref="Reason"/> stays the sentence for the logs.
+        /// </summary>
+        public ArenaInstallCause Cause { get; }
+
+        /// <summary>
+        /// Filled only when no registry entry was found (<see cref="ArenaInstallCause.NotRegistered"/>): the Uninstall subkeys whose
+        /// name contains "Arena" or "Tarkov", with their InstallLocation and whether EscapeFromTarkovArena.exe is there (at most
+        /// <see cref="ArenaInstallation.MaxRegistryCandidates"/>). Support evidence for a launcher that registers Arena under another
+        /// name; carries local paths, so it goes into the client's own log and never onto the status route.
+        /// </summary>
+        public IReadOnlyList<ArenaRegistryCandidate> RegistryCandidates { get; }
+
+        /// <summary>
+        /// <see cref="RegistryCandidates"/> as one line fragment, "name=InstallLocation, exe=yes|no|not checked; ..." ("none" when no subkey
+        /// matched, "-" for an entry without InstallLocation, "not checked" for a network location whose probe could block). Names and paths are
+        /// cut at 120 and 260 characters, line breaks removed.
+        /// </summary>
+        public string DescribeRegistryCandidates()
+        {
+            if (RegistryCandidates.Count == 0)
+                return "none";
+            var text = new StringBuilder();
+            foreach (ArenaRegistryCandidate candidate in RegistryCandidates)
+            {
+                if (text.Length > 0)
+                    text.Append("; ");
+                text.Append(ArenaRegistryCandidate.OneLine(candidate.Name, 120)).Append('=')
+                    .Append(candidate.InstallLocation == null ? "-" : ArenaRegistryCandidate.OneLine(candidate.InstallLocation, 260))
+                    .Append(", exe=").Append(!candidate.ExeChecked ? "not checked" : candidate.ExeFound ? "yes" : "no");
+            }
+            return text.ToString();
+        }
+
         /// <summary>One line for an Info log.</summary>
         public string Describe()
         {
@@ -82,6 +120,38 @@ namespace ArenaMapPort.Shared
         }
 
         public override string ToString() => Describe();
+    }
+
+    /// <summary>One Uninstall subkey that might be an Arena registration under another name (see <see cref="ArenaInstallationResult.RegistryCandidates"/>).</summary>
+    public sealed class ArenaRegistryCandidate
+    {
+        internal ArenaRegistryCandidate(string name, string installLocation, bool exeFound, bool exeChecked = true)
+        {
+            Name = name;
+            InstallLocation = installLocation;
+            ExeFound = exeFound;
+            ExeChecked = exeChecked;
+        }
+
+        /// <summary>The subkey name (not the full key path).</summary>
+        public string Name { get; }
+
+        /// <summary>Its InstallLocation value, trimmed; null when the entry has none.</summary>
+        public string InstallLocation { get; }
+
+        /// <summary>Whether EscapeFromTarkovArena.exe exists in <see cref="InstallLocation"/>.</summary>
+        public bool ExeFound { get; }
+
+        /// <summary>False when the probe was skipped because <see cref="InstallLocation"/> is a network location (a stale entry there can block a probe for 20 s or more).</summary>
+        public bool ExeChecked { get; }
+
+        internal static string OneLine(string text, int max)
+        {
+            if (text == null)
+                return "";
+            string line = text.Replace('\r', ' ').Replace('\n', ' ');
+            return line.Length <= max ? line : line.Substring(0, max) + "...";
+        }
     }
 
     /// <summary>
@@ -125,6 +195,8 @@ namespace ArenaMapPort.Shared
         internal const string GameAssemblyName = "GameAssembly.dll";
         internal const string LevelPrefix = @"EscapeFromTarkovArena_Data\level";
         internal const int MaxReportedMismatches = 8;
+        /// <summary>How many Uninstall subkeys the "no registry entry" diagnostic lists at most.</summary>
+        internal const int MaxRegistryCandidates = 8;
         /// <summary>Windows' classic MAX_PATH; a listed file whose full path is this long or longer is skipped, not compared.</summary>
         internal const int MaxPathLength = 260;
         const long MaxManifestBytes = 64L * 1000 * 1000;
@@ -159,13 +231,15 @@ namespace ArenaMapPort.Shared
 
                 if (registry == null || !registry.IsAvailable)
                     return NotFound(SourceNone, null, null,
-                        "The Windows registry cannot be read on this system, so the installation cannot be located automatically; " + OverrideHint + ".");
+                        "The Windows registry cannot be read on this system, so the installation cannot be located automatically; " + OverrideHint + ".",
+                        ArenaInstallCause.RegistryUnavailable);
 
                 List<ArenaRegistryEntry> entries = FindRegistryEntries(registry);
                 if (entries.Count == 0)
                     return NotFound(SourceNone, null, null,
                         "No Escape from Tarkov: Arena installation is registered in the Windows registry (" + RegistryKeyDisplay
-                        + "); install Arena with the Battlestate Games launcher, or " + OverrideHint + ".");
+                        + "); install Arena with the Battlestate Games launcher, or " + OverrideHint + ".",
+                        ArenaInstallCause.NotRegistered, registryCandidates: FindRegistryCandidates(registry));
 
                 ArenaInstallationResult first = null;
                 foreach (ArenaRegistryEntry entry in entries)
@@ -180,7 +254,8 @@ namespace ArenaMapPort.Shared
             }
             catch (Exception ex)
             {
-                return NotFound(SourceNone, null, null, "Looking for the Arena installation failed unexpectedly: " + ex.Message);
+                return NotFound(SourceNone, null, null, "Looking for the Arena installation failed unexpectedly: " + ex.Message,
+                    ArenaInstallCause.CheckFailed);
             }
         }
 
@@ -192,16 +267,17 @@ namespace ArenaMapPort.Shared
                 floors = floors ?? ArenaInstallationFloors.Default;
                 dir = NormalizeDirectory(installDir);
                 if (dir == null)
-                    return NotFound(source, null, registryVersion, "No installation folder was given.");
+                    return NotFound(source, null, registryVersion, "No installation folder was given.", ArenaInstallCause.FolderMissing);
                 return VerifyCore(dir, source, registryVersion, floors);
             }
             catch (ArgumentException ex)
             {
-                return NotFound(source, dir, registryVersion, "The installation folder path is not valid: " + ex.Message);
+                return NotFound(source, dir, registryVersion, "The installation folder path is not valid: " + ex.Message, ArenaInstallCause.FolderMissing);
             }
             catch (Exception ex)
             {
-                return NotFound(source, dir, registryVersion, "Verifying the installation failed unexpectedly: " + ex.Message);
+                return NotFound(source, dir, registryVersion, "Verifying the installation failed unexpectedly: " + ex.Message,
+                    ArenaInstallCause.CheckFailed);
             }
         }
 
@@ -210,45 +286,51 @@ namespace ArenaMapPort.Shared
             if (!Directory.Exists(dir))
                 return NotFound(source, dir, registryVersion, File.Exists(dir)
                     ? "The installation path is a file, not the installation folder: " + dir + "."
-                    : "The installation folder does not exist: " + dir + ".");
+                    : "The installation folder does not exist: " + dir + ".", ArenaInstallCause.FolderMissing);
             if (!File.Exists(Path.Combine(dir, ExeName)))
-                return NotFound(source, dir, registryVersion, dir + " does not contain " + ExeName + ".");
+                return NotFound(source, dir, registryVersion, dir + " does not contain " + ExeName + ".", ArenaInstallCause.NotArenaFolder);
 
             string manifestPath = Path.Combine(dir, ManifestName);
             if (!File.Exists(manifestPath))
-                return NotFound(source, dir, registryVersion, dir + " does not contain the launcher manifest " + ManifestName + ".");
+                return NotFound(source, dir, registryVersion, dir + " does not contain the launcher manifest " + ManifestName + ".",
+                    ArenaInstallCause.ManifestMissing);
 
             ArenaManifest manifest;
             try
             {
                 long manifestBytes = new FileInfo(manifestPath).Length;
                 if (manifestBytes > MaxManifestBytes)
-                    return NotFound(source, dir, registryVersion, "The launcher manifest " + ManifestName + " is implausibly large.");
+                    return NotFound(source, dir, registryVersion, "The launcher manifest " + ManifestName + " is implausibly large.",
+                        ArenaInstallCause.ManifestInvalid);
                 manifest = ArenaManifest.Parse(File.ReadAllText(manifestPath, Encoding.UTF8));
             }
             catch (FormatException ex)
             {
-                return NotFound(source, dir, registryVersion, "The launcher manifest " + ManifestName + " is not valid: " + ex.Message + ".");
+                return NotFound(source, dir, registryVersion, "The launcher manifest " + ManifestName + " is not valid: " + ex.Message + ".",
+                    ArenaInstallCause.ManifestInvalid);
             }
             catch (Exception ex)
             {
-                return NotFound(source, dir, registryVersion, "The launcher manifest " + ManifestName + " cannot be read: " + ex.Message);
+                return NotFound(source, dir, registryVersion, "The launcher manifest " + ManifestName + " cannot be read: " + ex.Message,
+                    ArenaInstallCause.ManifestInvalid);
             }
 
             string version = manifest.Version == null ? null : manifest.Version.Trim();
             if (string.IsNullOrEmpty(version))
-                return NotFound(source, dir, registryVersion, "The launcher manifest " + ManifestName + " has no version.");
+                return NotFound(source, dir, registryVersion, "The launcher manifest " + ManifestName + " has no version.",
+                    ArenaInstallCause.ManifestInvalid);
             if (manifest.Entries.Count == 0)
-                return NotFound(source, dir, registryVersion, "The launcher manifest " + ManifestName + " lists no files.", version);
+                return NotFound(source, dir, registryVersion, "The launcher manifest " + ManifestName + " lists no files.",
+                    ArenaInstallCause.ManifestInvalid, version);
 
             string conflict;
             List<ArenaPreparedEntry> files = PrepareEntries(dir, manifest, out conflict);
             if (conflict != null)
-                return NotFound(source, dir, registryVersion, conflict, version);
+                return NotFound(source, dir, registryVersion, conflict, ArenaInstallCause.ManifestInvalid, version);
 
             string floorReason = CheckFloors(files, floors);
             if (floorReason != null)
-                return NotFound(source, dir, registryVersion, floorReason, version);
+                return NotFound(source, dir, registryVersion, floorReason, ArenaInstallCause.ManifestInvalid, version);
 
             int checkedCount = 0;
             int mismatchCount = 0;
@@ -281,7 +363,8 @@ namespace ArenaMapPort.Shared
                 string reason = string.Format(CultureInfo.InvariantCulture,
                     "{0:N0} of {1:N0} files listed in {2} are missing or have a different size (first: {3}); the installation is incomplete, still updating or damaged.",
                     mismatchCount, checkedCount, ManifestName, mismatches[0]);
-                return new ArenaInstallationResult(false, dir, source, version, registryVersion, checkedCount, verifiedBytes, reason, mismatchCount, mismatches, longPathsSkipped);
+                return new ArenaInstallationResult(false, dir, source, version, registryVersion, checkedCount, verifiedBytes, reason, mismatchCount, mismatches, longPathsSkipped,
+                    ArenaInstallCause.FilesMismatch);
             }
             return new ArenaInstallationResult(true, dir, source, version, registryVersion, checkedCount, verifiedBytes, null, 0, null, longPathsSkipped);
         }
@@ -466,8 +549,13 @@ namespace ArenaMapPort.Shared
             return full;
         }
 
-        static ArenaInstallationResult NotFound(string source, string installPath, string registryVersion, string reason, string manifestVersion = null) =>
-            new ArenaInstallationResult(false, installPath, source, manifestVersion, registryVersion, 0, 0, reason, 0, null);
+        /// <summary>
+        /// The one factory of a failed result. <paramref name="cause"/> is required on purpose: a new failure site that forgets to name
+        /// its <see cref="ArenaInstallCause"/> does not compile, so "not verified" never reaches the status route without a cause.
+        /// </summary>
+        static ArenaInstallationResult NotFound(string source, string installPath, string registryVersion, string reason, ArenaInstallCause cause,
+            string manifestVersion = null, IReadOnlyList<ArenaRegistryCandidate> registryCandidates = null) =>
+            new ArenaInstallationResult(false, installPath, source, manifestVersion, registryVersion, 0, 0, reason, 0, null, 0, cause, registryCandidates);
 
         internal static string FormatGigabytes(long bytes) =>
             (bytes / 1e9).ToString("0.0", CultureInfo.InvariantCulture);
@@ -508,6 +596,84 @@ namespace ArenaMapPort.Shared
                 }
             }
             return result;
+        }
+
+        /// <summary>
+        /// Support evidence for "I have Arena but the mod finds none": every Uninstall subkey (both branches) whose name contains
+        /// "Arena" or "Tarkov", name order within a branch, at most <see cref="MaxRegistryCandidates"/>, each with its InstallLocation and
+        /// whether <see cref="ExeName"/> exists there. Reads only; a probe or file-system failure ends the list early and never throws.
+        /// Runs only in the "no registry entry" branch of <see cref="Detect(string, IRegistryProbe, ArenaInstallationFloors)"/>, so a
+        /// healthy start pays nothing for it. It changes no verdict: the verification of a folder against ConsistencyInfo stays the gate.
+        /// </summary>
+        internal static List<ArenaRegistryCandidate> FindRegistryCandidates(IRegistryProbe registry)
+        {
+            var result = new List<ArenaRegistryCandidate>();
+            try
+            {
+                foreach (string baseKey in new[] { UninstallWow, UninstallPlain })
+                {
+                    string[] subKeys = registry.GetSubKeyNames(baseKey);
+                    if (subKeys == null)
+                        continue;
+                    var matching = new List<string>();
+                    foreach (string name in subKeys)
+                        if (name != null && (name.IndexOf("Arena", StringComparison.OrdinalIgnoreCase) >= 0
+                                             || name.IndexOf("Tarkov", StringComparison.OrdinalIgnoreCase) >= 0))
+                            matching.Add(name);
+                    matching.Sort(StringComparer.Ordinal);
+
+                    foreach (string name in matching)
+                    {
+                        if (result.Count >= MaxRegistryCandidates)
+                            return result;
+                        string location = CleanPath(registry.GetValue(baseKey + "\\" + name, "InstallLocation"));
+                        bool network = IsNetworkLocation(location);
+                        result.Add(new ArenaRegistryCandidate(name, location.Length == 0 ? null : location, !network && ExeExistsIn(location), !network));
+                    }
+                }
+            }
+            catch (Exception)
+            {
+                // diagnostic only: whatever was collected so far is what the log gets
+            }
+            return result;
+        }
+
+        /// <summary>
+        /// A UNC path or a path on a mapped network drive. Both can block a file probe for a long time when the share is gone (the measured 21 s of an
+        /// unreachable UNC folder), and this diagnostic also runs on the server's startup thread, so it never probes them. A path whose drive cannot be
+        /// asked counts as local (that is the cheap answer of a missing drive letter).
+        /// </summary>
+        internal static bool IsNetworkLocation(string location)
+        {
+            if (string.IsNullOrEmpty(location))
+                return false;
+            if (location.StartsWith("\\\\", StringComparison.Ordinal) || location.StartsWith("//", StringComparison.Ordinal))
+                return true;
+            try
+            {
+                if (location.Length >= 2 && location[1] == ':' && char.IsLetter(location[0]))
+                    return new DriveInfo(location.Substring(0, 1)).DriveType == DriveType.Network;
+            }
+            catch (Exception)
+            {
+                // an unknown drive is not a network drive
+            }
+            return false;
+        }
+
+        static bool ExeExistsIn(string location)
+        {
+            if (string.IsNullOrEmpty(location))
+                return false;
+            try
+            {
+                return File.Exists(Path.Combine(location, ExeName));
+            }
+            catch (Exception)
+            {
+                return false;
+            }
         }
 
         internal sealed class ArenaRegistryEntry

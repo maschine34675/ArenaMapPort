@@ -8,6 +8,10 @@ dated state in one screen; read it before this index if you only have a minute.
 
 ## Current — read these for the area you touch
 
+- [map-notices.md](map-notices.md) — the in-game message that says why the Arena maps are missing or failed to load (design record
+  2026-10-22, `main`, host evidence pending): failure states and ref codes, the modal and toast delivery with its menu clock and attempt
+  latch, the server's read-only status route `/arenamapport/status` (codes only), the stage 2 failure records, the English and German
+  texts as implemented, the public key `General/ShowMapNotices` (not a switch for the Arena check) and host steps V1 to V8.
 - [../PLAN-ENCRYPTION.md](../PLAN-ENCRYPTION.md) — the ordered plan for stage 2 of the Arena gate (user decision 2026-10-19):
   every shipped map bundle encrypted (AMPB container, 1 MiB chunks, AES-256-CTR, per-chunk SHA-256, header HMAC), the content key
   wrapped with a key derived by HKDF from the map's own Arena files (since 2026-10-20, section 6: a fixed sample of the scenes'

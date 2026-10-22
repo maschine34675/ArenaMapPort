@@ -126,10 +126,15 @@ namespace ArenaMapPort.Client
         readonly object _sync = new object();
         readonly List<Entry> _entries = new List<Entry>();
         readonly IBundleKeyEnvironment _env;
+        readonly MapLoadFailures _failures;
 
-        internal BundleStreamRegistry(IBundleKeyEnvironment env)
+        /// <summary>
+        /// <paramref name="failures"/> receives the damaged chunks <see cref="ReportError"/> finds (the in-game map notices read them); null keeps no record.
+        /// </summary>
+        internal BundleStreamRegistry(IBundleKeyEnvironment env, MapLoadFailures failures = null)
         {
             _env = env;
+            _failures = failures;
         }
 
         /// <summary>How many streams are tracked.</summary>
@@ -227,7 +232,28 @@ namespace ArenaMapPort.Client
             if (error == null)
                 return;
             bundle.ErrorLogged = true;
+            NoteIntegrity(bundle, error);
             _env.LogError(IntegrityErrorLine(bundle, error));
+        }
+
+        // A damaged chunk of a live scenes or preset stream is an Integrity record (blocking inside a failed attempt, a late toast outside one); the
+        // NavMesh bundle's own damage is a NavMesh record, which never blocks a raid. Never throws.
+        void NoteIntegrity(PreparedBundle bundle, AmpbException error)
+        {
+            try
+            {
+                if (_failures == null)
+                    return;
+                string detail = "chunk " + error.Chunk.ToString(CultureInfo.InvariantCulture) + " failed its integrity check";
+                if (bundle.NavMesh)
+                    _failures.NoteNavMesh(bundle.MapKey, NavMeshCause.Damaged, detail, bundle.FileName);
+                else
+                    _failures.NoteIntegrity(bundle.MapKey, bundle.FileName, detail);
+            }
+            catch
+            {
+                // a record that cannot be written changes nothing about the load
+            }
         }
 
         /// <summary>Maintains the registry, then logs the counters of every tracked stream of <paramref name="mapKey"/> at Debug.</summary>
@@ -319,10 +345,19 @@ namespace ArenaMapPort.Client
         /// <summary>Unity's managed read buffer for <c>AssetBundle.LoadFromStream</c>: one chunk (D13 of the plan).</summary>
         internal const uint ReadBufferSize = 1u << 20;
 
+        // The cached outcome of one map's key derivation. A failure keeps what KeyResolver said (cause, one-line detail, the Arena build the key file was built
+        // for and the installed one, the Arena file it names) and the key file's name, so every later refusal of that map can be recorded for the in-game map
+        // notices without deriving again. It holds no key material but the key itself.
         sealed class KeyEntry
         {
             internal bool Ok;
             internal byte[] Key;
+            internal KeyFailure Cause;
+            internal string Detail;
+            internal string BuiltFor;
+            internal string InstalledVersion;
+            internal string FailedPath;
+            internal string KeyFile;
         }
 
         static BundleKeyResolver _default;
@@ -336,7 +371,8 @@ namespace ArenaMapPort.Client
         internal BundleKeyResolver(IBundleKeyEnvironment env)
         {
             _env = env ?? throw new ArgumentNullException(nameof(env));
-            Streams = new BundleStreamRegistry(env);
+            Failures = new MapLoadFailures();
+            Streams = new BundleStreamRegistry(env, Failures);
         }
 
         /// <summary>The process-wide resolver (the real environment). Creating it touches no file and no crypto.</summary>
@@ -354,6 +390,28 @@ namespace ArenaMapPort.Client
 
         /// <summary>The streams Unity keeps open for the encrypted bundles that were loaded.</summary>
         internal BundleStreamRegistry Streams { get; }
+
+        /// <summary>
+        /// What went wrong while a map's bundles were being served, per map and in order, for the in-game map notices (MapNotices reads it after a failed
+        /// raid attempt). Written only through <see cref="NoteSafe"/>.
+        /// </summary>
+        internal MapLoadFailures Failures { get; }
+
+        /// <summary>
+        /// Writes one record into <see cref="Failures"/> and never throws: the loaders run inside EFT's bundle request and raid start, and a note must not
+        /// be able to break them. A source pin keeps BundleHost and NavMeshInstaller from calling the registry any other way.
+        /// </summary>
+        internal void NoteSafe(Action<MapLoadFailures> note)
+        {
+            try
+            {
+                note(Failures);
+            }
+            catch
+            {
+                // a record that cannot be written changes nothing about the load
+            }
+        }
 
         /// <summary>How many key derivations ran (a derivation = one <see cref="KeyResolver.ResolveFile"/> call); for tests.</summary>
         internal int Derivations => Volatile.Read(ref _derivations);
@@ -438,7 +496,12 @@ namespace ArenaMapPort.Client
                 }
 
                 _env.LogError(FailureLine(mapKey, resolution, keyFile, install));
-                return new KeyEntry { Ok = false };
+                return new KeyEntry
+                {
+                    Ok = false, Cause = resolution.Cause, Detail = resolution.Detail, BuiltFor = resolution.BuiltFor,
+                    InstalledVersion = resolution.InstalledVersion ?? _env.InstalledVersion, FailedPath = resolution.FailedPath,
+                    KeyFile = Path.GetFileName(keyFile),
+                };
             }
             catch (Exception e)
             {
@@ -457,7 +520,23 @@ namespace ArenaMapPort.Client
             {
                 // the entry below is what matters: the failure is cached either way
             }
-            return new KeyEntry { Ok = false };
+            return new KeyEntry
+            {
+                Ok = false, Cause = cause, Detail = detail, InstalledVersion = SafeInstalledVersion(),
+                KeyFile = string.IsNullOrEmpty(keyFile) ? mapKey + ".json" : Path.GetFileName(keyFile),
+            };
+        }
+
+        string SafeInstalledVersion()
+        {
+            try
+            {
+                return _env.InstalledVersion;
+            }
+            catch
+            {
+                return null;
+            }
         }
 
         /// <summary>The crypto provider; the one Warning W1 (CNG unavailable) is raised through the environment's log, once per process.</summary>
@@ -490,6 +569,8 @@ namespace ArenaMapPort.Client
             {
                 file?.Dispose();
                 string reason = e is IOException || e is UnauthorizedAccessException ? e.Message : e.GetType().Name + ": " + e.Message;
+                NoteBundleProblem(mapKey, navMesh, e is FileNotFoundException || e is DirectoryNotFoundException
+                    ? MapLoadFailureKind.BundleMissing : MapLoadFailureKind.BundleUnreadable, filePath, reason);
                 _env.LogError(RefusedLine(filePath, mapKey, servedKey, navMesh, "cannot be read", reason));
                 return Refused(filePath, mapKey, servedKey, navMesh);
             }
@@ -498,6 +579,7 @@ namespace ArenaMapPort.Client
             if (!TryGetKey(mapKey, out key))
             {
                 file.Dispose();
+                NoteNoKey(mapKey, navMesh, filePath);
                 _env.LogError(NoKeyLine(mapKey, servedKey, navMesh));
                 return Refused(filePath, mapKey, servedKey, navMesh);
             }
@@ -511,14 +593,69 @@ namespace ArenaMapPort.Client
             catch (AmpbException e)
             {
                 // the stream's constructor closed the file
+                NoteBundleProblem(mapKey, navMesh, MapLoadFailureKind.BundleInvalid, filePath, e.Message);
                 _env.LogError(RefusedLine(filePath, mapKey, servedKey, navMesh, "is not a valid map bundle", e.Message));
             }
             catch (Exception e)
             {
                 file.Dispose();
+                NoteBundleProblem(mapKey, navMesh, MapLoadFailureKind.BundleUnreadable, filePath, e.GetType().Name + ": " + e.Message);
                 _env.LogError(RefusedLine(filePath, mapKey, servedKey, navMesh, "cannot be read", e.GetType().Name + ": " + e.Message));
             }
             return Refused(filePath, mapKey, servedKey, navMesh);
+        }
+
+        // ---- the failure records of Prepare ------------------------------------------------------------------
+
+        // A bundle that is missing, not a valid container or unreadable. The NavMesh bundle is never a blocking record (the raid starts without bots'
+        // NavMesh), so it is noted as a NavMesh cause instead of a bundle kind.
+        void NoteBundleProblem(string mapKey, bool navMesh, MapLoadFailureKind kind, string filePath, string detail)
+        {
+            string file = FileNameOf(filePath);
+            if (navMesh)
+            {
+                NavMeshCause cause = kind == MapLoadFailureKind.BundleMissing ? NavMeshCause.FileMissing : NavMeshCause.Damaged;
+                NoteSafe(failures => failures.NoteNavMesh(mapKey, cause, detail, file));
+            }
+            else
+            {
+                NoteSafe(failures => failures.NoteBundle(mapKey, kind, file, detail));
+            }
+        }
+
+        // The bundle was refused for want of a key: the cached derivation failure of the map (recorded again for every attempt, like the E9 line), or, when
+        // the key was never derived because the stage-1 gate did not verify Arena, a gate refusal.
+        void NoteNoKey(string mapKey, bool navMesh, string filePath)
+        {
+            KeyEntry entry;
+            lock (_sync)
+                _cache.TryGetValue(mapKey, out entry);
+            string file = FileNameOf(filePath);
+            if (entry == null)
+            {
+                string detail = "the Arena installation was not verified";
+                if (navMesh)
+                    NoteSafe(failures => failures.NoteNavMesh(mapKey, NavMeshCause.Unverified, detail, file));
+                else
+                    NoteSafe(failures => failures.NoteGateRefused(mapKey, detail, file));
+                return;
+            }
+            if (navMesh)
+                NoteSafe(failures => failures.NoteNavMesh(mapKey, NavMeshCause.NoKey, entry.Detail, entry.KeyFile));
+            else
+                NoteSafe(failures => failures.NoteKey(mapKey, entry.Cause, entry.Detail, entry.BuiltFor, entry.InstalledVersion, entry.FailedPath, entry.KeyFile));
+        }
+
+        static string FileNameOf(string filePath)
+        {
+            try
+            {
+                return Path.GetFileName(filePath ?? "");
+            }
+            catch
+            {
+                return null;
+            }
         }
 
         static PreparedBundle Refused(string filePath, string mapKey, string servedKey, bool navMesh)

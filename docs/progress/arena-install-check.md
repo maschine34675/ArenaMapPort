@@ -365,3 +365,13 @@ Stage 2 no longer reads the level files: since 2026-10-20 a map's key comes from
 raw resource streams (`sharedassets<N>.assets.resS` / `.resource`), because Arena's 0.6.0 to 0.6.1 hotfix rewrote every level file and left
 those streams byte-identical. This check is unchanged and still runs first. Record: [bundle-encryption.md](bundle-encryption.md) "Key source v2";
 design: [../PLAN-ENCRYPTION.md](../PLAN-ENCRYPTION.md) section 6.
+
+## In-game notices (2026-10-22)
+
+The check is unchanged, but its result no longer stays in the logs. Every failure site of `ArenaInstallation` now carries a machine-readable
+`ArenaInstallCause` (the `Reason` strings and the gate texts are unchanged); the server records its verdict and the per-map registration
+outcomes and answers the read-only route `GET /arenamapport/status` (codes only, no path); and the client shows a message at the main menu
+that names the cause and the fix (`ClientNoArena`, `ClientOverrideBad`, `ServerNoArena` and the others). `General/ShowMapNotices` hides the
+main-menu message only: it is not a switch for this check, and notice code never calls `EnsureVerified`. When no launcher entry is found
+the client also logs one extra Info line listing the Uninstall subkeys that mention Arena or Tarkov (support evidence for a launcher that
+registers Arena under another name; the server never logs it). Record: [map-notices.md](map-notices.md); host evidence pending.

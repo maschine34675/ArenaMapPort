@@ -3,6 +3,30 @@
 Snapshot for whoever continues (human or agent). Verify the commits named here against `git log`; this file
 is updated by hand at each handover, it is not an automatic record. Read [AGENTS.md](AGENTS.md) first.
 
+## Update 2026-10-22 - in-game map notices: why the Arena maps are missing or failed to load (host-verified)
+
+User request (2026-10-22): show a notice in the game when the maps cannot be loaded, with the reason; a player had written only "I have Arena,
+the maps do not show up". Design, texts (English and German) and host evidence: [docs/progress/map-notices.md](docs/progress/map-notices.md).
+- **Client:** a modal at the first main menu when the maps are not available (the client's own Arena check; the server's reason via the new
+  read-only route `GET /arenamapport/status`; missing package files), a modal at the next main menu after a failed Arena raid start naming the
+  cause (Arena check, unlock-file causes, damaged bundle), toasts for the location selection, a pending check and a raid without NavMesh. Log tag
+  `[Notice]`, one Info line per shown notice with a ref code. New public entry `General/ShowMapNotices` (default on; hides the main-menu notices
+  only, never the check, and never the answer to a failed raid start): the public file now has four entries, F12 three normal controls.
+- **Server:** `ArenaServerStatus` records the gate and per-map outcomes, `ArenaMapPortStatusRouter` serves them as codes (no paths, no reason
+  text, no hash). `ArenaInstallationResult.Cause` (enum `ArenaInstallCause` in `ArenaMapPort.Shared/ArenaStatusContract.cs`); when no registry
+  entry is found the client logs one extra `[Arena] no registry entry; Uninstall subkeys matching Arena or Tarkov: ...` line for support.
+- **Verified (2026-10-22, 21:07-21:27, DLLs 0.3.0+0dd0b2a plus the tree):** GPU-2 positive (no notice, `offered=4/4`, Bowl raid, hideout, 120 fps);
+  GPU-1 without Arena (`ClientNoArena` modal at the first menu, the selection toast); GPU-2 with a server override to a missing folder
+  (`ServerNoArena` with the server's cause through the route, 200 in 16 ms); GPU-2 with a Bowl key file of one wrong size (`KeyDiffers` modal 17 s
+  after the refused raid). Not run on a host: V4 (client override, the config is mirrored to every machine), V6-V8. dotnet test 2123/2123, Python
+  1950 OK (55 skipped; `test_door_poses` needs `PYTHONUTF8=1` on this console, unrelated). The stage-2 timing test
+  `CryptoThroughputTests.Cng_ReachesAtLeast300MiBPerSecond...` failed once in seven runs under parallel load (236 MiB/s), unrelated and flaky.
+- **Left on the installs:** `SPT_Runtime/user/mods/ArenaMapPort/config/arena-install.json` = `{ "installPath": "" }` (explicit "no override", no
+  warning) on every machine the mirror reaches, from the V3 restore; the user may delete it.
+- **Next:** the notices reach players with the next release; the reporter is on 0.2.3, so a 0.2.4 backport of the stage-1 part is the faster
+  route (map-notices.md "Release vehicle"), the user's decision. Ask the reporter for the `[Arena]` log lines (the new registry line will name a
+  non-standard launcher entry such as a Steam one).
+
 ## Update 2026-10-22 - door poses: Bowl's BTR, ambulance and gate leaves park in Arena's end pose (committed 736d620, deployed to D:\SPT41, host-verified on GPU-2)
 
 User decision 2026-10-22 ("ja gerne in Endstellung parken") on the 2026-10-21 finding: Arena animates Bowl's four door parts to an end

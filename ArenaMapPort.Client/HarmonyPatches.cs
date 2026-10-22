@@ -655,6 +655,9 @@ namespace ArenaMapPort.Client
                 return true;
             }
 
+            // For the main-menu notice (MapNotices): a skipped map-critical target is named there. Never throws.
+            SkippedHooks.Record(declaringType?.FullName, methodName);
+
             Plugin.Log.LogError(
                 $"[Harmony] target not found: {declaringType.FullName}.{methodName} — this hook " +
                 "is DISABLED for this session. The decompiled evidence docs/SPEC.md §F cites for this target no " +

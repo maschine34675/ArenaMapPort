@@ -43,6 +43,8 @@ namespace ArenaMapPort.Client
             ArenaLightingRepairs.UpdateArtificialSun();
             // One flag read per frame; armed only while the Arena check outlives startup, disarmed after its one log line.
             ArenaInstallationGate.PollOutcome();
+            // The in-game map notices (docs/progress/map-notices.md): one flag read per frame while nothing is pending.
+            MapNotices.Tick();
         }
 
         void Awake()
@@ -78,6 +80,27 @@ namespace ArenaMapPort.Client
                 Log.LogError($"{ArenaInstallationGate.Tag} the Arena installation gate failed to start ({e.GetType().Name}: {e.Message}); " +
                              "the Arena maps are not served this session.");
             }
+
+            // In-game map notices (2026-10-22, docs/progress/map-notices.md): the public General/ShowMapNotices switch and the hooks that show why the maps
+            // are missing or failed to load. Each step is isolated: an exception must never leave Awake (the 2026-10-12 incident above), and the notices
+            // are only a message, never a condition of the maps. The Harmony instance is created here so the hooks are in place before the banner.
+            _harmony = new Harmony(PluginGuid);
+            try
+            {
+                MapNotices.BindConfig(Config);
+            }
+            catch (Exception e)
+            {
+                Log.LogError($"[Notice] the General/ShowMapNotices setting could not be bound ({e.GetType().Name}: {e.Message}); the messages stay on.");
+            }
+            try
+            {
+                MapNotices.Install(_harmony);
+            }
+            catch (Exception e)
+            {
+                Log.LogError($"[Notice] the map messages could not be installed ({e.GetType().Name}: {e.Message}); the maps themselves are not affected.");
+            }
             LogStartupBanner();
             Bay5AmbientAudio.BindConfig(); // accepted audio defaults before the release configuration policy
 
@@ -91,7 +114,6 @@ namespace ArenaMapPort.Client
             RainWetnessRepairs.Install();
             WeatherTestOverride.Install();
 
-            _harmony = new Harmony(PluginGuid);
             EquatorProfiles.Install(_harmony); // capture the chosen profile before owned scenes load
             HarmonyPatches.InstallAll(_harmony);
             LightingModCompatibility.Install(_harmony);

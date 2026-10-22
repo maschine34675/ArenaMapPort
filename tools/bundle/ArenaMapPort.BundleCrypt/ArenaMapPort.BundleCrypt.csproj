@@ -31,6 +31,7 @@
   <ItemGroup>
     <Compile Include="..\..\..\ArenaMapPort.Crypto\*.cs" Link="Crypto\%(Filename)%(Extension)" />
     <Compile Include="..\..\..\ArenaMapPort.Shared\ArenaInstallation.cs" Link="Shared\ArenaInstallation.cs" />
+    <Compile Include="..\..\..\ArenaMapPort.Shared\ArenaStatusContract.cs" Link="Shared\ArenaStatusContract.cs" />
   </ItemGroup>
 
 </Project>

@@ -1055,6 +1055,390 @@ public sealed class ArenaInstallationTests : IDisposable
         Assert.True(result.EntriesChecked >= 10000);
     }
 
+    // ---- the machine-readable cause (map notices, 2026-10-22) -----------------------------------------------------
+    // Every failure site of ArenaInstallation names an ArenaInstallCause (the NotFound factory requires it, so a new site that
+    // forgets does not compile). These tests pin which cause each site gives and that the Reason sentences stay as they were.
+
+    [Fact]
+    public void Cause_AVerifiedInstallationHasNone()
+    {
+        Install install = MakeInstall();
+        ArenaInstallationResult result = ArenaInstallation.Verify(install.Dir, "override", null, Small);
+        Assert.True(result.Verified, result.Describe());
+        Assert.Equal(ArenaInstallCause.None, result.Cause);
+        Assert.Empty(result.RegistryCandidates);
+    }
+
+    [Fact]
+    public void Cause_ARegistryThatCannotBeReadIsRegistryUnavailable()
+    {
+        ArenaInstallationResult result = ArenaInstallation.Detect(null!, new FakeRegistry { Available = false }, Small);
+        Assert.Equal(ArenaInstallCause.RegistryUnavailable, result.Cause);
+        Assert.Contains("registry cannot be read", result.Reason);
+    }
+
+    [Fact]
+    public void Cause_NoRegistryEntryIsNotRegistered()
+    {
+        ArenaInstallationResult result = ArenaInstallation.Detect(null!, new FakeRegistry(), Small);
+        Assert.Equal(ArenaInstallCause.NotRegistered, result.Cause);
+        Assert.Contains("No Escape from Tarkov: Arena installation is registered", result.Reason);
+    }
+
+    [Fact]
+    public void Cause_ARegistryProbeThatThrowsIsCheckFailed()
+    {
+        ArenaInstallationResult result = ArenaInstallation.Detect(null!, new FakeRegistry { Throws = true }, Small);
+        Assert.Equal(ArenaInstallCause.CheckFailed, result.Cause);
+        Assert.Contains("failed unexpectedly", result.Reason);
+    }
+
+    [Fact]
+    public void Cause_AFolderThatDoesNotExistIsFolderMissing()
+    {
+        string missing = Path.Combine(Path.GetTempPath(), "arenamapport-no-such-" + Guid.NewGuid().ToString("N"));
+        Assert.Equal(ArenaInstallCause.FolderMissing, ArenaInstallation.Verify(missing, "override", null, Small).Cause);
+    }
+
+    [Fact]
+    public void Cause_AFileInsteadOfAFolderIsFolderMissing()
+    {
+        string file = Path.Combine(NewTempDir(), "EscapeFromTarkovArena.exe");
+        File.WriteAllText(file, "x");
+        Assert.Equal(ArenaInstallCause.FolderMissing, ArenaInstallation.Verify(file, "override", null, Small).Cause);
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("   ")]
+    [InlineData("\"\"")]
+    public void Cause_NoFolderGivenIsFolderMissing(string path)
+    {
+        Assert.Equal(ArenaInstallCause.FolderMissing, ArenaInstallation.Verify(path, "override", null, Small).Cause);
+    }
+
+    [Fact]
+    public void Cause_AnInvalidPathIsFolderMissing()
+    {
+        // An embedded NUL makes Path.GetFullPath throw an ArgumentException: the "path is not valid" site.
+        ArenaInstallationResult result = ArenaInstallation.Verify("C:\\bad\0path", "override", null, Small);
+        Assert.Equal(ArenaInstallCause.FolderMissing, result.Cause);
+        Assert.Contains("is not valid", result.Reason);
+    }
+
+    [Fact]
+    public void Cause_AFolderWithoutTheExeIsNotArenaFolder()
+    {
+        ArenaInstallationResult result = ArenaInstallation.Verify(NewTempDir(), "override", null, Small);
+        Assert.Equal(ArenaInstallCause.NotArenaFolder, result.Cause);
+    }
+
+    [Fact]
+    public void Cause_AMissingManifestIsManifestMissing()
+    {
+        Install install = MakeInstall();
+        File.Delete(Path.Combine(install.Dir, "ConsistencyInfo"));
+        Assert.Equal(ArenaInstallCause.ManifestMissing, ArenaInstallation.Verify(install.Dir, "override", null, Small).Cause);
+    }
+
+    [Fact]
+    public void Cause_AnImplausiblyLargeManifestIsManifestInvalid()
+    {
+        Install install = MakeInstall();
+        File.WriteAllBytes(Path.Combine(install.Dir, "ConsistencyInfo"), new byte[64_000_001]);
+        ArenaInstallationResult result = ArenaInstallation.Verify(install.Dir, "override", null, Small);
+        Assert.Equal(ArenaInstallCause.ManifestInvalid, result.Cause);
+        Assert.Contains("implausibly large", result.Reason);
+    }
+
+    [Fact]
+    public void Cause_AnUnparsableOrTruncatedManifestIsManifestInvalid()
+    {
+        Install install = MakeInstall();
+        string path = Path.Combine(install.Dir, "ConsistencyInfo");
+        File.WriteAllText(path, "not json at all");
+        Assert.Equal(ArenaInstallCause.ManifestInvalid, ArenaInstallation.Verify(install.Dir, "override", null, Small).Cause);
+
+        WriteManifest(install);
+        string text = File.ReadAllText(path);
+        File.WriteAllText(path, text.Substring(0, text.Length / 2));
+        Assert.Equal(ArenaInstallCause.ManifestInvalid, ArenaInstallation.Verify(install.Dir, "override", null, Small).Cause);
+    }
+
+    [WindowsFact]
+    public void Cause_AManifestThatCannotBeReadIsManifestInvalid()
+    {
+        Install install = MakeInstall();
+        using var locked = new FileStream(Path.Combine(install.Dir, "ConsistencyInfo"), FileMode.Open, FileAccess.ReadWrite, FileShare.None);
+        ArenaInstallationResult result = ArenaInstallation.Verify(install.Dir, "override", null, Small);
+        Assert.Equal(ArenaInstallCause.ManifestInvalid, result.Cause);
+        Assert.Contains("cannot be read", result.Reason);
+    }
+
+    [Fact]
+    public void Cause_AManifestWithoutAVersionOrWithoutEntriesIsManifestInvalid()
+    {
+        Install install = MakeInstall();
+        WriteManifest(install, version: "  ");
+        Assert.Equal(ArenaInstallCause.ManifestInvalid, ArenaInstallation.Verify(install.Dir, "override", null, Small).Cause);
+
+        WriteManifest(install, entries: Array.Empty<(string, long)>(), withOwnEntry: false);
+        Assert.Equal(ArenaInstallCause.ManifestInvalid, ArenaInstallation.Verify(install.Dir, "override", null, Small).Cause);
+    }
+
+    [Fact]
+    public void Cause_ASelfContradictingManifestIsManifestInvalid()
+    {
+        Install install = MakeInstall();
+        var entries = install.Listed.ToList();
+        entries.Add(("GameAssembly.dll", 601));
+        WriteManifest(install, entries: entries);
+        ArenaInstallationResult result = ArenaInstallation.Verify(install.Dir, "override", null, Small);
+        Assert.Equal(ArenaInstallCause.ManifestInvalid, result.Cause);
+        Assert.Contains("more than once with different sizes", result.Reason);
+    }
+
+    [Fact]
+    public void Cause_EveryPlausibilityFloorIsManifestInvalid()
+    {
+        Install install = MakeInstall();
+        foreach (ArenaInstallationFloors floors in new[]
+                 {
+                     new ArenaInstallationFloors(100, 4000, 2, 500),                  // entries
+                     new ArenaInstallationFloors(8, 40_000_000_000L, 2, 500),         // listed size
+                     new ArenaInstallationFloors(8, 3000, 50, 500),                   // level files
+                     new ArenaInstallationFloors(8, 3000, 2, 5_000_000),              // GameAssembly.dll size
+                 })
+        {
+            ArenaInstallationResult result = ArenaInstallation.Verify(install.Dir, "override", null, floors);
+            Assert.False(result.Verified);
+            Assert.Equal(ArenaInstallCause.ManifestInvalid, result.Cause);
+        }
+
+        // A manifest that does not list the exe at all.
+        var withoutExe = install.Listed.Where(entry => entry.Path != "EscapeFromTarkovArena.exe").ToList();
+        WriteManifest(install, entries: withoutExe);
+        ArenaInstallationResult noExe = ArenaInstallation.Verify(install.Dir, "override", null, Small);
+        Assert.Equal(ArenaInstallCause.ManifestInvalid, noExe.Cause);
+        Assert.Contains("does not list EscapeFromTarkovArena.exe", noExe.Reason);
+    }
+
+    [Fact]
+    public void Cause_MissingOrResizedFilesAreFilesMismatch()
+    {
+        Install install = MakeInstall();
+        File.Delete(Path.Combine(install.Dir, "EscapeFromTarkovArena_Data", "level1"));
+        ArenaInstallationResult result = ArenaInstallation.Verify(install.Dir, "override", null, Small);
+        Assert.False(result.Verified);
+        Assert.Equal(ArenaInstallCause.FilesMismatch, result.Cause);
+        Assert.Equal(1, result.MismatchCount);
+        Assert.Equal(Version, result.ManifestVersion);
+    }
+
+    [Fact]
+    public void Cause_NamedAtEveryFailureSeam_AndNoneOnlyWhenVerified()
+    {
+        string missing = Path.Combine(Path.GetTempPath(), "arenamapport-no-such-" + Guid.NewGuid().ToString("N"));
+        Install mismatch = MakeInstall();
+        File.Delete(Path.Combine(mismatch.Dir, "GameAssembly.dll"));
+        Install noManifest = MakeInstall();
+        File.Delete(Path.Combine(noManifest.Dir, "ConsistencyInfo"));
+        Install badManifest = MakeInstall();
+        File.WriteAllText(Path.Combine(badManifest.Dir, "ConsistencyInfo"), "{");
+
+        var seams = new Dictionary<string, ArenaInstallationResult>
+        {
+            ["registry unavailable"] = ArenaInstallation.Detect(null!, new FakeRegistry { Available = false }, Small),
+            ["not registered"] = ArenaInstallation.Detect(null!, new FakeRegistry(), Small),
+            ["probe throws"] = ArenaInstallation.Detect(null!, new FakeRegistry { Throws = true }, Small),
+            ["folder missing"] = ArenaInstallation.Verify(missing, "override", null, Small),
+            ["no folder"] = ArenaInstallation.Verify("", "override", null, Small),
+            ["not arena folder"] = ArenaInstallation.Verify(NewTempDir(), "registry", "1", Small),
+            ["manifest missing"] = ArenaInstallation.Verify(noManifest.Dir, "override", null, Small),
+            ["manifest invalid"] = ArenaInstallation.Verify(badManifest.Dir, "override", null, Small),
+            ["files mismatch"] = ArenaInstallation.Verify(mismatch.Dir, "override", null, Small),
+            ["production floors"] = ArenaInstallation.Verify(MakeInstall().Dir),
+            ["explicit wrong override through Detect"] = ArenaInstallation.Detect(missing, new FakeRegistry(), Small),
+        };
+
+        foreach (var (name, result) in seams)
+        {
+            Assert.False(result.Verified, name);
+            Assert.NotEqual(ArenaInstallCause.None, result.Cause);
+            Assert.False(string.IsNullOrEmpty(result.Reason), name);
+        }
+
+        Install healthy = MakeInstall();
+        Assert.Equal(ArenaInstallCause.None, ArenaInstallation.Verify(healthy.Dir, "override", null, Small).Cause);
+    }
+
+    // ---- the "no registry entry" diagnostic ----------------------------------------------------------------------
+
+    [Fact]
+    public void RegistryCandidates_AreEmptyWhenNothingMatchesArenaOrTarkov()
+    {
+        var registry = new FakeRegistry().Add(Uninstall + "SomethingElse", @"C:\Games\Other", "1");
+
+        ArenaInstallationResult result = ArenaInstallation.Detect(null!, registry, Small);
+
+        Assert.Equal(ArenaInstallCause.NotRegistered, result.Cause);
+        Assert.Empty(result.RegistryCandidates);
+        Assert.Equal("none", result.DescribeRegistryCandidates());
+    }
+
+    [Fact]
+    public void RegistryCandidates_ListSubkeysWithArenaOrTarkovInTheirNameAndWhetherTheExeIsThere()
+    {
+        Install withExe = MakeInstall();
+        string withoutExe = NewTempDir();
+        var registry = new FakeRegistry()
+            .Add(Uninstall + "EscapeFromTarkov", withoutExe, "0.16.9.5")           // the main game: matches "Tarkov", no exe
+            .Add(UninstallPlain + "BSG Arena (Steam)", withExe.Dir, "0.6.1")         // matches "Arena", the exe is there
+            .Add(Uninstall + "Unrelated", withExe.Dir, "1")                           // matches neither
+            .Add(Uninstall + "arena-without-location", "", "2");                      // matches, but no InstallLocation
+
+        ArenaInstallationResult result = ArenaInstallation.Detect(null!, registry, Small);
+
+        Assert.False(result.Verified);
+        Assert.Equal(ArenaInstallCause.NotRegistered, result.Cause);
+        Assert.Equal("none", result.Source);
+        Assert.Equal(
+            new[] { "EscapeFromTarkov", "arena-without-location", "BSG Arena (Steam)" },
+            result.RegistryCandidates.Select(candidate => candidate.Name).ToArray());
+        Assert.Equal(new[] { false, false, true }, result.RegistryCandidates.Select(candidate => candidate.ExeFound).ToArray());
+        Assert.Equal(withoutExe, result.RegistryCandidates[0].InstallLocation);
+        Assert.Null(result.RegistryCandidates[1].InstallLocation);
+        Assert.Equal(
+            "EscapeFromTarkov=" + withoutExe + ", exe=no; arena-without-location=-, exe=no; BSG Arena (Steam)=" + withExe.Dir + ", exe=yes",
+            result.DescribeRegistryCandidates());
+        // The verdict and its sentence are the same as without the diagnostic.
+        Assert.Contains("No Escape from Tarkov: Arena installation is registered", result.Reason);
+        Assert.DoesNotContain(withExe.Dir, result.Reason);
+    }
+
+    [Fact]
+    public void RegistryCandidates_NeverProbeAFileOnANetworkLocation()
+    {
+        // a stale entry that points at an unreachable share blocks a file probe for 20 s or more, and the server runs this diagnostic on its startup thread
+        var registry = new FakeRegistry()
+            .Add(Uninstall + "EscapeFromTarkov", @"\\unreachable-server\share\EFT", "1")
+            .Add(UninstallPlain + "Arena (old)", "//unreachable-server/share/Arena", "1");
+
+        ArenaInstallationResult result = ArenaInstallation.Detect(null!, registry, Small);
+
+        Assert.Equal(ArenaInstallCause.NotRegistered, result.Cause);
+        Assert.Equal(new[] { false, false }, result.RegistryCandidates.Select(candidate => candidate.ExeChecked).ToArray());
+        Assert.Equal(new[] { false, false }, result.RegistryCandidates.Select(candidate => candidate.ExeFound).ToArray());
+        Assert.Equal(
+            @"EscapeFromTarkov=\\unreachable-server\share\EFT, exe=not checked; Arena (old)=//unreachable-server/share/Arena, exe=not checked",
+            result.DescribeRegistryCandidates());
+    }
+
+    [Theory]
+    [InlineData(@"\\server\share\Arena", true)]
+    [InlineData("//server/share/Arena", true)]
+    [InlineData(@"C:\Games\Arena", false)]
+    [InlineData(@"D:\Nowhere", false)]
+    [InlineData("", false)]
+    [InlineData(null, false)]
+    public void IsNetworkLocation_RecognisesUncAndLeavesLocalAndUnknownDrivesAlone(string? location, bool network)
+    {
+        Assert.Equal(network, ArenaInstallation.IsNetworkLocation(location!));
+    }
+
+    [Fact]
+    public void RegistryCandidates_AreBoundedAndLineBreaksAreRemoved()
+    {
+        var registry = new FakeRegistry();
+        for (int i = 0; i < 12; i++)
+            registry.Add(Uninstall + "Arena" + i.ToString("00"), @"C:\Nowhere\" + i, "1");
+        registry.Add(UninstallPlain + "Tarkov\nWith Break", @"C:\Nowhere\" + new string('x', 400), "1");
+
+        ArenaInstallationResult result = ArenaInstallation.Detect(null!, registry, Small);
+
+        Assert.Equal(ArenaInstallation.MaxRegistryCandidates, result.RegistryCandidates.Count);
+        string line = result.DescribeRegistryCandidates();
+        Assert.DoesNotContain("\n", line);
+        Assert.DoesNotContain("\r", line);
+
+        var long400 = new FakeRegistry().Add(Uninstall + "Tarkov\r\nWith Break", @"C:\Nowhere\" + new string('x', 400), "1");
+        string cut = ArenaInstallation.Detect(null!, long400, Small).DescribeRegistryCandidates();
+        Assert.DoesNotContain("\n", cut);
+        Assert.DoesNotContain("\r", cut);
+        Assert.Contains("...", cut);
+        Assert.True(cut.Length < 400, cut.Length.ToString());
+    }
+
+    [Fact]
+    public void RegistryCandidates_AreOnlyFilledForTheNoRegistryEntryBranch()
+    {
+        Install install = MakeInstall();
+        string gone = Path.Combine(Path.GetTempPath(), "arenamapport-gone-" + Guid.NewGuid().ToString("N"));
+        var registry = new FakeRegistry()
+            .Add(Uninstall + "EscapeFromTarkovArena_live", gone, "0.6.1")
+            .Add(Uninstall + "EscapeFromTarkov", install.Dir, "0.16.9.5");
+
+        ArenaInstallationResult failed = ArenaInstallation.Detect(null!, registry, Small);
+        Assert.Equal(ArenaInstallCause.FolderMissing, failed.Cause);
+        Assert.Equal("registry", failed.Source);
+        Assert.Empty(failed.RegistryCandidates);
+
+        Assert.Empty(ArenaInstallation.Detect(null!, new FakeRegistry { Available = false }, Small).RegistryCandidates);
+        Assert.Empty(ArenaInstallation.Verify(NewTempDir(), "override", null, Small).RegistryCandidates);
+    }
+
+    [Fact]
+    public void RegistryCandidates_AProbeThatFailsDuringTheDiagnosticChangesNoVerdict()
+    {
+        // FindRegistryEntries makes four probe calls here (two sub-key listings, the preferred key in each branch); the diagnostic's own
+        // first call is the fifth. A probe that starts throwing then must leave the NotRegistered verdict and an empty list.
+        var registry = new ThrowAfterProbe(new FakeRegistry().Add(Uninstall + "EscapeFromTarkov", @"C:\Nowhere", "1"), allowedCalls: 4);
+
+        ArenaInstallationResult result = ArenaInstallation.Detect(null!, registry, Small);
+
+        Assert.False(result.Verified);
+        Assert.Equal(ArenaInstallCause.NotRegistered, result.Cause);
+        Assert.Empty(result.RegistryCandidates);
+        Assert.True(registry.Threw, "the diagnostic never reached the failing probe call");
+    }
+
+    sealed class ThrowAfterProbe : IRegistryProbe
+    {
+        readonly IRegistryProbe _inner;
+        readonly int _allowedCalls;
+        int _calls;
+
+        public ThrowAfterProbe(IRegistryProbe inner, int allowedCalls)
+        {
+            _inner = inner;
+            _allowedCalls = allowedCalls;
+        }
+
+        public bool Threw { get; private set; }
+
+        public bool IsAvailable => _inner.IsAvailable;
+
+        public string? GetValue(string keyName, string valueName)
+        {
+            Count();
+            return _inner.GetValue(keyName, valueName);
+        }
+
+        public string[] GetSubKeyNames(string keyName)
+        {
+            Count();
+            return _inner.GetSubKeyNames(keyName);
+        }
+
+        void Count()
+        {
+            if (++_calls <= _allowedCalls)
+                return;
+            Threw = true;
+            throw new InvalidOperationException("registry probe failure after " + _allowedCalls + " calls");
+        }
+    }
+
     // ---- helpers ---------------------------------------------------------------------------------------------
 
     sealed class Install

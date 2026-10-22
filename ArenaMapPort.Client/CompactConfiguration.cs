@@ -18,12 +18,15 @@ namespace ArenaMapPort.Client
 
         // The public file holds exactly these entries. General/ArenaInstallPath (0.2.3, ArenaInstallationGate) is the
         // Arena installation override: it must stay public, otherwise compaction would archive a path the player
-        // typed and the next start would read the default again. Literals, not the gate's constants: the
-        // ConfigRetirementCheck tool compiles this file on its own.
+        // typed and the next start would read the default again. General/ShowMapNotices (MapNotices, 2026-10-22) is
+        // the switch of the in-game "the maps are not available" messages and stays public for the same reason: a
+        // player who turned the message off must not see it come back. Literals, not the constants of those classes:
+        // the ConfigRetirementCheck tool compiles this file on its own.
         internal static bool IsPublic(ConfigDefinition key) =>
             (key.Section == "General" && key.Key == "DeveloperMode") ||
             (key.Section == "Appearance" && key.Key == "NaturalEquatorNight") ||
-            (key.Section == "General" && key.Key == "ArenaInstallPath");
+            (key.Section == "General" && key.Key == "ArenaInstallPath") ||
+            (key.Section == "General" && key.Key == "ShowMapNotices");
 
         internal static string DeveloperPath(ConfigFile config) =>
             Path.ChangeExtension(config.ConfigFilePath, ".developer.cfg");
