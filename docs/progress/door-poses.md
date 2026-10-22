@@ -413,3 +413,13 @@ false` snaps (and removes the wait), or shorten the clips.
   `docs/MAP-RECIPE.md` (3a); `docs/progress/bowl-release.md` keeps its 2026-10-21 lines as written (append-only log) and has a
   correction note and the 2026-10-22 section at its end; `HANDOFF.md`'s Bowl follow-up paragraph was corrected by the integrator
   the same day. The data in the sidecar and the descriptor is correct as it is.
+
+## 2026-10-22 - host evidence (GPU-2)
+
+Verified in two raids of the 736d620 build (the full quotes are in `bowl-release.md`, section "host verification of the door poses"):
+a plain raid parks all four parts at raid start with 24 park carvers after the NavMesh install and the parked BTR's rear closes its
+slot's west opening (still `bowl-park-btr-slot`), the carved edge lies at x 50.5 like Arena's own mesh edge, the pockets stay
+connected to the field; the developer hold re-closes the parts (28 hold carvers, every probed gate sealed, the field unreachable
+from the pocket) and the release drives them to their poses in 7.7 / 8.3 / 10.0 / 13.5 s with `drive frames: 1620 frame(s) in
+13.5 s, mean 8.3 ms, max 11.2 ms`, after which every probed gate is open and the field reachable again. 0 warnings; the hideout
+opened once afterwards. Open: a hold during a drive, `SpawnGateDrive = false`, a player in a body's path.

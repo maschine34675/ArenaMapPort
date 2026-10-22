@@ -866,3 +866,42 @@ drive cost model (scratch Unity 2022.3.43, Script physics): static colliders +0.
   the host dryRun into the footprints is the check.
 - The motion between the end poses is a smoothstep stand-in, not Arena's curves; nothing replays the real clips yet (HANDOFF.md
   "later").
+
+## 2026-10-22 - host verification of the door poses on GPU-2 (commit 736d620: raids 8 and 9, hideout)
+
+Before the deploy the operator applied two review items on top of the workflow's result: `SpawnGates.Open` now reaches the park
+carvers through the guarded `SealParked("released")` (a carver failure can no longer leave the coroutine and `_opening` stuck),
+`CreateParkCarvers` marks a part `Carved` before its collider loop (no duplicate carvers after a failure midway), and the sidecar
+comment says "object names and derived end-pose numbers only; no Arena asset, file or curve is stored" (the extractor regenerates
+the file byte-identically, SHA-256 `76b91df7...`). Builds 0 warnings, 1,565 xunit, `test_door_poses.py` OK, descriptor validator OK.
+Deploy: `deploy-to-spt.ps1 -Confirm` (90 files, only the two DLLs differed), `gpu-run deploy-wait --server --force --game`
+(both DLLs identical on the host after 12 s, server restarted, EFT restarted, 16/16 identical). The whole process (instance
+19f702cb, 15:56) logged 0 ArenaMapPort warnings or errors.
+
+- **Raid 8 (15:57, Bowl, no bots, 12:00 clear, plain raid).** Spawn openings: `spawn barrier 'DOORS_SPAWN_A' ...: deactivated 0
+  part(s), 0 already off, kept 0 frame part(s), parked 2 part(s) at the open pose` and the same for `DOORS_SPAWN_B` (both passes);
+  `[SpawnGates] park: 'BTR_82_closed' snapped to the open pose (9 node(s), clip BTR_82_Respawn_Animation)` and the three other
+  parts (1 / 2 / 7 nodes); after the NavMesh install `parked 'BTR_82_closed': 9 node(s) at the open pose ..., 10 park carver(s)
+  (navmesh installed)`, respawn gate 1 carver (1 collider uncarved), army gate 2 carvers (3 uncarved), ambulance 11 carvers: 24 park
+  carvers, as the offline model predicted. The parked BTR seals its old slot's west end: `uibridge_teleport dryRun` to (49.8, 0.1,
+  -22) and (49.7, 0.1, -23) snapped to x 50.5 (0.7 / 0.8 m away) = the carved edge, Arena's own edge; the ambulance's parked spot
+  (-37.5, 0.1, -66) is unreachable. The pockets stay open: from the west pocket, the field centre (2.5, 0.1, -21.1), the Army gate
+  exit box (-51, 0.1, -49), (-40, 0.1, -72) and (-44, 0.1, -66) are all reachable (the points (-30..-40, -58..-62) south-east of
+  the ambulance are an island of the mesh, not a seal). Stills (host `captures/stills/`): `bowl-park-btr-slot` (from (51.5, 0.1,
+  -22) looking west: the BTR's rear fills the opening, the user's "missing wall"), `bowl-park-army-gate` (from (-51.7, 0.1, -60)
+  looking north: both leaves swung open), `bowl-park-ambulance-2` (from (-44, 0.1, -66) looking east: the ambulance's white front
+  parked at the pocket exit). 120 fps, max 8.5 ms.
+- **Raid 9 (16:02, Bowl, no bots, developer hold `Spawns/SpawnGateHold = true`, `SpawnGateHoldSeconds = 60`, set and restored
+  through `uibridge_config_set`).** Hold: `2 part(s) held closed (4 part(s) registered; developer test hold 60 s)` per barrier,
+  `[SpawnGates] navmesh installed: 28 carver(s) over 28 movement collider(s) of 4 gate part(s)`, `navmesh probe: every probed gate
+  sealed (1 probed, 2 inconclusive)` (`Gates_Army_01` PathPartial, the BTR and the ambulance have no NavMesh within 1.5 m of their
+  probe points), dryRun from the east spawn to (51.5, 0.1, -27) and to the field refused. Release at 60.0 s: `parked 'BTR_82_closed'
+  ... 10 park carver(s) (released)` 7.7 s later (16:03:33.6), the ambulance at 8.3 s, the army gate at 10.0 s, the respawn gate at
+  13.5 s; then `released (developer test hold, 60.0 s after the raid timer started): 0 leaf(s) slid 1.38 m in 1.0 s, 0 gate part(s)
+  switched off, 28 carver(s) removed, drove 4 part(s) to the open pose in 13.5 s, 24 park carver(s) in place`; `drive frames: 1620
+  frame(s) in 13.5 s, mean 8.3 ms, max 11.2 ms (the whole frame, not the poses alone; Physics.autoSyncTransforms False)`: the
+  drive costs nothing measurable at 120 fps; `navmesh probe: every probed gate open (3 probed)`: BTR (51.2, 0.1, -23.0) -> (51.2,
+  0.1, -20.0) PathComplete, army PathComplete, ambulance (-43.7, 0.1, -69.8) -> (-40.7, 0.1, -69.8) PathComplete; dryRun from the
+  east spawn to the field passed. The hideout opened and closed once afterwards (scenario, `logAbsent` error passed).
+- Not tested: a Hold during a drive (needs a mode plugin; the developer hold acts only at raid start), `SpawnGateDrive = false`
+  (the snap path is the same code as the raid-start park), a player standing in a body's path at the release.

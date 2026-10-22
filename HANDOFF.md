@@ -3,7 +3,7 @@
 Snapshot for whoever continues (human or agent). Verify the commits named here against `git log`; this file
 is updated by hand at each handover, it is not an automatic record. Read [AGENTS.md](AGENTS.md) first.
 
-## Update 2026-10-22 - door poses: Bowl's BTR, ambulance and gate leaves park in Arena's end pose (implemented, built, not deployed, host test pending)
+## Update 2026-10-22 - door poses: Bowl's BTR, ambulance and gate leaves park in Arena's end pose (committed 736d620, deployed to D:\SPT41, host-verified on GPU-2)
 
 User decision 2026-10-22 ("ja gerne in Endstellung parken") on the 2026-10-21 finding: Arena animates Bowl's four door parts to an end
 pose, the port hid them. Data: the clips were decoded from `sharedassets48.assets` (read-only) into 19 poses (BTR body + 8 wheels, the
@@ -16,14 +16,16 @@ the respawn gate leaf slides 3.8 m onto its rail (a local-y misreading said "sin
 (smoothstep stand-in, new key `Spawns/SpawnGateDrive`, default true, false snaps) and 24 park carvers keep bots out of the
 bodies (the army frame and the gate rail stay uncarved); parts without poses (Equator and the other maps) behave as before.
 Built and tested on the VM (client and server Release 0 warnings, 1,565 xunit, 1,950 Python with 55 environment skips, descriptor
-validator OK; client DLL sha256 `e19e69e9...a75f0f45`, server DLL `6703abe3...f4803ab`), NOT committed, NOT deployed to `D:\SPT41`
-(the SERVER DLL changes too because `ArenaMapPort.Shared` did: compare its hash on the host before restarting SPT), no raid has run it.
-Host test pending: [door-poses.md](docs/progress/door-poses.md) "Host recipe" (plain Bowl raid, then the developer hold with
-`drive frames:` timing, then `SpawnGateDrive = false`, hideout once). Review items still open are listed at the end of
-[bowl-release.md](docs/progress/bowl-release.md) (section 2026-10-22): the unguarded `CreateParkCarvers("released")` in
-`SpawnGates.Open` (use `SealParked`), a second `Hold` after parking snapping the BTR back in one frame, `IsHeld` false while
-the doorways stay sealed for 7.7 to 13.5 s, the layer-29 boxes under the parts now active, park carver boxes starting at the
-collider's lowest point. Record: [door-poses.md](docs/progress/door-poses.md), [spawn-gates.md](docs/progress/spawn-gates.md)
+validator OK). Committed as `736d620` (with the guarded `SealParked("released")` in `SpawnGates.Open`, `Carved` set before the
+collider loop and the softened sidecar comment; client DLL sha256 `e94b581b...`, server DLL `6703abe3...`), deployed to `D:\SPT41`
+and host-verified on GPU-2 the same day (raids 8 and 9 in [bowl-release.md](docs/progress/bowl-release.md)): plain raid parks all
+four parts with 24 park carvers, the parked BTR's rear closes the user's "missing wall" (carved edge at x 50.5 = Arena's), the
+developer hold seals the pockets with 28 carvers and the release drives the parts in 7.7 / 8.3 / 10 / 13.5 s at 120 fps (`drive
+frames` max 11.2 ms), probes open, field reachable, hideout once, 0 warnings. `D:\SPT41vanilla` not deployed. Still open from the
+reviews: a second `Hold` after parking snaps the BTR back in one frame (ArenaMode round restarts; nobody is pushed out), `IsHeld`
+turns false while the doorways stay sealed for up to 13.5 s (ArenaMode should expect it or use `SpawnGateDrive = false`), the
+layer-29 boxes under the parts are active at the parked pose (0.17 m2 of footprint, harmless), a hold during a drive and
+`SpawnGateDrive = false` are untested on the host. Record: [door-poses.md](docs/progress/door-poses.md), [spawn-gates.md](docs/progress/spawn-gates.md)
 ("Follow-up 2026-10-22"), [bowl-release.md](docs/progress/bowl-release.md) (2026-10-22).
 
 Later (user remark 2026-10-22): replay the door animations of every map instead of hiding them (Equator's booth doors, Bay5's
