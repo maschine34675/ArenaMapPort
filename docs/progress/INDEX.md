@@ -55,6 +55,9 @@ dated state in one screen; read it before this index if you only have a minute.
 - [spawn-gates.md](spawn-gates.md) — spawn enclosures held closed until a mode plugin releases them (`SpawnGates`
   API Hold/Release/IsHeld, NavMesh carvers over the closed parts, Equator's leaves slide open), what Arena had, what
   ArenaMode's Team DM needs, GPU-2 evidence that carving works on the ported NavMesh (2026-10-17).
+- [door-animations-survey.md](door-animations-survey.md) — research record (2026-10-23): how Arena moves the gates and roller
+  shutters of Equator, Bay5 and AirPit (its `DotAnimator` tween script with end value, duration and ease, decoded per door; no
+  clips; nothing in EFT to borrow), the per-door table of portable approaches, the shutter answer and the recommended order.
 - [door-poses.md](door-poses.md) — Arena's animated gate parts park at their clip's end pose instead of being hidden
   (2026-10-22, Bowl's BTR, ambulance, army gate leaves and respawn gate): the Mecanim clip decoder and CRC32 path rule
   of `extract_door_poses.py`, the `<stem>.doors.json` sidecar mirrored by the descriptor's `DoorPoses`, the runtime
