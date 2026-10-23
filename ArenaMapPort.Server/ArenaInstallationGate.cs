@@ -105,7 +105,8 @@ public static class ArenaInstallationGate
 
     /// <summary>
     /// Turns the verification result into the one Info line for the log and the go/no-go for registration.
-    /// <paramref name="modDir"/> is only used to tell the player which file to create.
+    /// <paramref name="modDir"/> is only used to tell the player which file to create. The not-found line carries the advice
+    /// once: the shared reason states only what was found (2026-10-23, the user saw the launcher advice twice in one line).
     /// </summary>
     public static Decision Decide(ArenaInstallationResult result, string modDir)
     {
@@ -128,14 +129,17 @@ public static class ArenaInstallationGate
     /// and counts as not verified. <paramref name="detect"/> is the test seam; production passes none and gets
     /// <see cref="ArenaInstallation.Detect(string)"/>. The verdict (or the failure) is also recorded in
     /// <see cref="ArenaServerStatus"/>, a plain write that logs nothing, so the status route can tell the game client why no map
-    /// is offered; the log lines are the same as before.
+    /// is offered; the log lines are the same as before. The not-found verdict goes through <paramref name="notFound"/> when
+    /// given (the mod logs it in red at Info level, user request 2026-10-23: the console line that explains missing maps must
+    /// stand out), else through <paramref name="info"/> like the verified one.
     /// </summary>
     public static bool Evaluate(
         string modDir,
         Action<string> info,
         Action<string> warning,
         Action<string> error,
-        Func<string?, ArenaInstallationResult>? detect = null)
+        Func<string?, ArenaInstallationResult>? detect = null,
+        Action<string>? notFound = null)
     {
         var overrideFile = ArenaStatusContract.OverrideAbsent;
         try
@@ -150,7 +154,10 @@ public static class ArenaInstallationGate
             var result = (detect ?? ArenaInstallation.Detect)(read.InstallPath);
             var decision = Decide(result, modDir);
             ArenaServerStatus.RecordGate(result, overrideFile);
-            info(decision.Message);
+            if (decision.Register || notFound is null)
+                info(decision.Message);
+            else
+                notFound(decision.Message);
             return decision.Register;
         }
         catch (Exception e)

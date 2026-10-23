@@ -3,6 +3,15 @@
 Snapshot for whoever continues (human or agent). Verify the commits named here against `git log`; this file
 is updated by hand at each handover, it is not an automatic record. Read [AGENTS.md](AGENTS.md) first.
 
+## Update 2026-10-23 - server not-found line in red, launcher advice once
+
+User request: the server's failure line in red, without the doubled text. The shared reasons of the registry causes no longer carry
+advice (each side adds its own once), and the server logs the not-found verdict with `LogWithColor(..., Color.Red)` at Info level.
+Verified on GPU-1 (no Arena): red in a console started from the `SPT.Server` shortcut; a console started by gpu-run's host helper shows no
+colours at all (also SPT's own green lines), see AGENTS "Release configuration". Record: [arena-install-check.md](docs/progress/arena-install-check.md)
+("Red not-found line, advice once"). GPU-2's server still runs the previous server DLL until its next restart (it is verified there, so
+its line stays white either way).
+
 ## Update 2026-10-22 - in-game map notices: why the Arena maps are missing or failed to load (host-verified)
 
 User request (2026-10-22): show a notice in the game when the maps cannot be loaded, with the reason; a player had written only "I have Arena,

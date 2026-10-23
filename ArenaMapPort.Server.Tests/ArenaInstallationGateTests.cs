@@ -275,6 +275,64 @@ public sealed class ArenaInstallationGateTests : IDisposable
     }
 
     [Fact]
+    public void Evaluate_SendsTheNotFoundLineThroughNotFoundAndTheVerifiedLineThroughInfo()
+    {
+        string modDir = Path.Combine(_root, "mod");
+        var info = new List<string>();
+        var red = new List<string>();
+
+        bool registered = ArenaInstallationGate.Evaluate(modDir, info.Add, _ => { }, _ => { },
+            _ => NotVerified("Nothing here."), red.Add);
+
+        Assert.False(registered);
+        Assert.Empty(info);
+        Assert.StartsWith("[ArenaMapPort] Escape from Tarkov: Arena not found: Nothing here.", Assert.Single(red));
+
+        red.Clear();
+        Assert.True(ArenaInstallationGate.Evaluate(modDir, info.Add, _ => { }, _ => { }, _ => Verified(), red.Add));
+        Assert.Empty(red);
+        Assert.StartsWith("[ArenaMapPort] Escape from Tarkov: Arena ", Assert.Single(info));
+    }
+
+    [Fact]
+    public void Evaluate_WithoutANotFoundSink_KeepsTheNotFoundLineOnInfo()
+    {
+        var info = new List<string>();
+
+        Assert.False(ArenaInstallationGate.Evaluate(Path.Combine(_root, "mod"), info.Add, _ => { }, _ => { },
+            _ => NotVerified("Nothing here.")));
+
+        Assert.Single(info);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void Decide_TheRegistryVerdictsGiveTheLauncherAdviceOnce(bool registryReadable)
+    {
+        // 2026-10-23: the shared reason used to end in its own advice ("install Arena with the Battlestate Games launcher, or point
+        // the mod's Arena install path override at ..."), and the server appended its advice after it: the user saw both in one line.
+        var result = ArenaInstallation.Detect(null!, new ArenaInstallationTests.FakeRegistry { Available = registryReadable }, ArenaInstallationTests.Small);
+        var decision = ArenaInstallationGate.Decide(result, Path.Combine(_root, "mod"));
+
+        Assert.False(decision.Register);
+        Assert.Equal(1, CountOf(decision.Message, "Install Escape from Tarkov: Arena"));
+        Assert.Equal(1, CountOf(decision.Message, "installPath"));
+        Assert.Equal(0, CountOf(decision.Message, "Battlestate Games launcher"));
+        Assert.Equal(0, CountOf(decision.Message, "install path override"));
+        Assert.DoesNotContain("Battlestate Games launcher", result.Reason);
+        Assert.DoesNotContain("override", result.Reason);
+    }
+
+    private static int CountOf(string text, string word)
+    {
+        int count = 0;
+        for (int at = text.IndexOf(word, StringComparison.Ordinal); at >= 0; at = text.IndexOf(word, at + word.Length, StringComparison.Ordinal))
+            count++;
+        return count;
+    }
+
+    [Fact]
     public void Decide_NullResult_Throws()
     {
         Assert.Throws<ArgumentNullException>(() => ArenaInstallationGate.Decide(null!, Path.Combine(_root, "mod")));
@@ -465,11 +523,15 @@ public class RecordingLogger : DispatchProxy
 {
     public readonly List<(string Method, string? Message)> Calls = new();
 
+    /// <summary>The arguments of each call in <see cref="Calls"/>, same order (a LogWithColor call carries its colour second).</summary>
+    public readonly List<object?[]> Arguments = new();
+
     protected override object? Invoke(MethodInfo? targetMethod, object?[]? args)
     {
         if (targetMethod is null)
             return null;
         Calls.Add((targetMethod.Name, args is { Length: > 0 } ? args[0] as string : null));
+        Arguments.Add(args ?? Array.Empty<object?>());
         Type returnType = targetMethod.ReturnType;
         return returnType == typeof(void) || !returnType.IsValueType ? null : Activator.CreateInstance(returnType);
     }
@@ -531,7 +593,9 @@ public sealed class ArenaMapPortModGateTests : IDisposable
         await mod.OnLoadAsync(CancellationToken.None);
 
         var call = Assert.Single(recorder.Calls);
-        Assert.Equal("Info", call.Method);
+        // Red at Info level (user request 2026-10-23): LogWithColor, not Error, so SPT's Info-level log file keeps it.
+        Assert.Equal("LogWithColor", call.Method);
+        Assert.Equal(Spectre.Console.Color.Red, recorder.Arguments[0][1]);
         Assert.StartsWith("[ArenaMapPort] Escape from Tarkov: Arena not found: ", call.Message);
         Assert.Contains(_empty + " does not contain EscapeFromTarkovArena.exe", call.Message);
         Assert.Contains("The " + ArenaMapRegistry.All.Count + " Arena maps stay unregistered.", call.Message);
@@ -552,8 +616,8 @@ public sealed class ArenaMapPortModGateTests : IDisposable
         Assert.Equal(ArenaMapRegistry.All.Count, snapshot.Maps.Count);
         Assert.All(snapshot.Maps, map => Assert.Equal(("not_registered", "gate"), (map.State, map.Cause)));
         Assert.DoesNotContain(_empty, ArenaServerStatus.ToJson());
-        // Still exactly one logger call, and still the one Info line: the holder logs nothing.
-        Assert.Equal("Info", Assert.Single(recorder.Calls).Method);
+        // Still exactly one logger call, and still the one red not-found line: the holder logs nothing.
+        Assert.Equal("LogWithColor", Assert.Single(recorder.Calls).Method);
     }
 
 }

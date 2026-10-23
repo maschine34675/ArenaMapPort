@@ -497,11 +497,14 @@ public class ArenaMapPortMod(
         // weather hook, no APBS patch. Evaluate fails closed on an unexpected exception and logs it as an Error. The one
         // exception is the read-only status route (ArenaMapPortStatusRouter, a router of its own, so it answers here too):
         // it tells the game client WHY nothing was registered, from the verdict Evaluate recorded in ArenaServerStatus.
+        // The not-found verdict is logged in red at Info level (user request 2026-10-23): it is the one console line that
+        // explains missing maps, and LogWithColor keeps it in SPT's Info-level log file like the verified line.
         if (!ArenaInstallationGate.Evaluate(
                 modDir,
                 message => logger.Info(message),
                 message => logger.Warning(message),
-                message => logger.Error(message)))
+                message => logger.Error(message),
+                notFound: message => logger.LogWithColor(message, Spectre.Console.Color.Red)))
         {
             return;
         }

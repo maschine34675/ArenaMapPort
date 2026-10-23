@@ -375,3 +375,29 @@ that names the cause and the fix (`ClientNoArena`, `ClientOverrideBad`, `ServerN
 main-menu message only: it is not a switch for this check, and notice code never calls `EnsureVerified`. When no launcher entry is found
 the client also logs one extra Info line listing the Uninstall subkeys that mention Arena or Tarkov (support evidence for a launcher that
 registers Arena under another name; the server never logs it). Record: [map-notices.md](map-notices.md); host evidence pending.
+
+## Red not-found line, advice once (2026-10-23)
+
+User request: show the server's failure line in red and remove the doubled text. Before, the not-registered line read "... is registered
+in the Windows registry (...); install Arena with the Battlestate Games launcher, or point the mod's Arena install path override at the
+folder that contains EscapeFromTarkovArena.exe. The 4 Arena maps stay unregistered. Install Escape from Tarkov: Arena through the BSG
+launcher, or set "installPath" in ...": the shared reason carried its own advice and the server appended its own. Now the shared reasons
+of the registry causes (`NotRegistered`, `RegistryUnavailable`) state only the finding, the server line gives the advice once, and the
+client line is followed by its existing hint line (`Set General/ArenaInstallPath ...`) as before. `ArenaInstallationGate.Evaluate` takes an
+optional `notFound` sink; the mod passes `logger.LogWithColor(message, Spectre.Console.Color.Red)`, which SPT 4.1.6 logs at Information
+level with the colour (`SptLogger.LogWithColor`, the same path its own `Error` uses for red), so the file log is unchanged in level.
+Tests: `ArenaMapPortModGateTests` expect the single `LogWithColor` call with `Color.Red`; `Evaluate_SendsTheNotFoundLine...`,
+`Evaluate_WithoutANotFoundSink...` and `Decide_TheRegistryVerdictsGiveTheLauncherAdviceOnce` pin the routing and the single advice;
+dotnet test 2127/2127.
+
+Host evidence (GPU-1, no Arena, 2026-10-23 10:08 to 10:18, both DLLs rebuilt on `48c47cd` plus this change, deployed with `2 to
+overwrite`): the server log file line `[2026-10-23 08:12:45.405][Information][ArenaMapPort.Server.ArenaMapPortMod] [ArenaMapPort] Escape from
+Tarkov: Arena not found: No Escape from Tarkov: Arena installation is registered in the Windows registry (...EscapeFromTarkovArena_live).
+The 4 Arena maps stay unregistered. Install Escape from Tarkov: Arena through the BSG launcher, or set "installPath" in
+C:\SPT41\SPT_Runtime\user\mods\ArenaMapPort\config\arena-install.json for an installation without the launcher's registry entry.`
+(UTC). The server first came up through `gpu-run deploy-wait --server`: its console window showed every line white, SPT's own green
+`Webserver unter ... gestartet` too, so that console renders no colours. Started again from the host's `SPT.Server` desktop shortcut, the
+console showed SPT's green and yellow lines and the ArenaMapPort line in red (screenshot `work/screenshots/notices/server-not-found-red-host1.png`).
+The client log of the next EFT start: `[Arena] Escape from Tarkov: Arena not found: No Escape from Tarkov: Arena installation is registered
+in the Windows registry (...EscapeFromTarkovArena_live).`, then the unchanged hint line, the registry diagnostic line and `Maps: none
+available`; the main-menu notice showed as before.

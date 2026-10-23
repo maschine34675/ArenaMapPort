@@ -206,9 +206,6 @@ namespace ArenaMapPort.Shared
         const string KeyPrefix = "EscapeFromTarkovArena";
         const string PreferredKey = "EscapeFromTarkovArena_live";
 
-        const string OverrideHint =
-            "point the mod's Arena install path override at the folder that contains " + ExeName;
-
         /// <summary>
         /// Locate and verify Arena. A non-empty <paramref name="overridePath"/> is verified as given (an explicit but
         /// wrong override is NOT verified and does not fall back to the registry: the user asked for that path); else the
@@ -231,14 +228,13 @@ namespace ArenaMapPort.Shared
 
                 if (registry == null || !registry.IsAvailable)
                     return NotFound(SourceNone, null, null,
-                        "The Windows registry cannot be read on this system, so the installation cannot be located automatically; " + OverrideHint + ".",
+                        "The Windows registry cannot be read on this system, so the installation cannot be located automatically.",
                         ArenaInstallCause.RegistryUnavailable);
 
                 List<ArenaRegistryEntry> entries = FindRegistryEntries(registry);
                 if (entries.Count == 0)
                     return NotFound(SourceNone, null, null,
-                        "No Escape from Tarkov: Arena installation is registered in the Windows registry (" + RegistryKeyDisplay
-                        + "); install Arena with the Battlestate Games launcher, or " + OverrideHint + ".",
+                        "No Escape from Tarkov: Arena installation is registered in the Windows registry (" + RegistryKeyDisplay + ").",
                         ArenaInstallCause.NotRegistered, registryCandidates: FindRegistryCandidates(registry));
 
                 ArenaInstallationResult first = null;

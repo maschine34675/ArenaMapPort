@@ -109,7 +109,7 @@ public sealed class ArenaInstallationTests : IDisposable
     const string LevelDir = @"EscapeFromTarkovArena_Data\";
 
     // The default floors (5,000 entries, 40 GB, 100 level files, 50 MB GameAssembly.dll) scaled to the synthetic install.
-    static readonly ArenaInstallationFloors Small = new(minEntries: 8, minTotalBytes: 3000, minLevelEntries: 2, minGameAssemblyBytes: 500);
+    internal static readonly ArenaInstallationFloors Small = new(minEntries: 8, minTotalBytes: 3000, minLevelEntries: 2, minGameAssemblyBytes: 500);
 
     readonly List<string> _tempDirs = new();
 
@@ -822,7 +822,7 @@ public sealed class ArenaInstallationTests : IDisposable
     }
 
     [Fact]
-    public void Detect_NothingFoundNamesTheRegistryKeyAndTheOverride()
+    public void Detect_NothingFoundNamesTheRegistryKeyAndLeavesTheAdviceToTheCaller()
     {
         ArenaInstallationResult result = ArenaInstallation.Detect(null!, new FakeRegistry(), Small);
 
@@ -830,18 +830,21 @@ public sealed class ArenaInstallationTests : IDisposable
         Assert.Equal("none", result.Source);
         Assert.Null(result.InstallPath);
         Assert.Contains(@"SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\EscapeFromTarkovArena_live", result.Reason);
-        Assert.Contains("override", result.Reason);
+        // The reason states what was found; the server and the client each add their own advice once (2026-10-23: the server line
+        // used to carry the launcher and override advice twice, once from this reason and once from its own sentence).
+        Assert.DoesNotContain("override", result.Reason);
+        Assert.DoesNotContain("launcher", result.Reason);
         Assert.StartsWith("Escape from Tarkov: Arena not found: ", result.Describe());
     }
 
     [Fact]
-    public void Detect_ARegistryThatCannotBeReadSaysSoAndNamesTheOverride()
+    public void Detect_ARegistryThatCannotBeReadSaysSoAndLeavesTheAdviceToTheCaller()
     {
         ArenaInstallationResult result = ArenaInstallation.Detect(null!, new FakeRegistry { Available = false }, Small);
 
         Assert.False(result.Verified);
         Assert.Contains("registry cannot be read", result.Reason);
-        Assert.Contains("override", result.Reason);
+        Assert.DoesNotContain("override", result.Reason);
     }
 
     [Fact]
@@ -1509,7 +1512,7 @@ public sealed class ArenaInstallationTests : IDisposable
 
     sealed record ManifestFile(string Version, List<ManifestEntry> Entries);
 
-    sealed class FakeRegistry : IRegistryProbe
+    internal sealed class FakeRegistry : IRegistryProbe
     {
         readonly Dictionary<string, Dictionary<string, string>> _keys = new(StringComparer.OrdinalIgnoreCase);
 

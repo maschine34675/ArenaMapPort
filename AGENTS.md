@@ -155,7 +155,12 @@ uses Debug (BepInEx's disk/console filters must include it when collecting diagn
 Real degraded behavior and failures retain Warning/Error in player mode. Never suppress
 Unity/Harmony warnings globally; repair an owned cause or document its origin.
 Both the server and the client log the Arena installation state at Info at startup (the verified
-installation, or why none was found); see [arena-install-check.md](docs/progress/arena-install-check.md).
+installation, or why none was found); see [arena-install-check.md](docs/progress/arena-install-check.md). The server's not-found
+line is red in the console (`ArenaInstallationGate.Evaluate`'s `notFound` sink, `logger.LogWithColor(message, Color.Red)`, still
+Info level, so SPT's Info file log keeps it; user request 2026-10-23), the verified line stays white. The shared reason
+(`ArenaInstallationResult.Reason`) states only the finding; the server sentence and the client's second `[Arena]` line each add the
+advice once. A console that gpu-run's host helper started shows no colours at all (SPT's own green start lines are white there):
+judge console colours on a server started from the `SPT.Server` desktop shortcut.
 Stage 2 adds no Info line. Its key and bundle lines are Debug (`[BundleKeys] key for '<map>' derived in N ms (...)`,
 `[Bundles] loaded '<key>' ... encrypted AMPB v1, N chunks`, `[Bundles] stream '<file>' (...): X MiB decrypted ...`). A key that
 cannot be recovered is one Error tagged `[BundleKeys]` (key file missing or corrupt, an Arena file unreadable, size differs or built for
