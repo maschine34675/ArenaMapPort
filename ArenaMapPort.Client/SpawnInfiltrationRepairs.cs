@@ -75,7 +75,15 @@ namespace ArenaMapPort.Client
 
             SpawnColliderRepairs.EnsureAllTriggers();
             SpawnPlacementRepairs.Apply(__result);
-            BoothDoorRepairs.OpenAll(__result); // exfils-stage2 follow-up: open Arena's respawn-booth doors
+            try
+            {
+                BoothDoorRepairs.OpenAll(__result); // exfils-stage2 follow-up: open Arena's respawn-booth doors
+            }
+            catch (System.Exception e)
+            {
+                // Never into EFT's load chain (AGENTS.md, traps): a failed opening leaves the gates as they are and the raid goes on.
+                Plugin.Log.LogError($"[RaidFix] opening the spawn gates failed; the gates stay as they are: {e}");
+            }
             AuthoredBorderRepairs.Apply(); // AirPit: invisible walls along Arena's TeamFight outline (after the openings)
             BallisticTwinRepairs.Apply();       // stage 1: HighPolyCollider twins for LowPolyCollider-only props
             BarbedWireRepairs.Apply();          // PLAN-TWO-MAPS item 2: EFT's BarbedWire on Arena's concertina wire

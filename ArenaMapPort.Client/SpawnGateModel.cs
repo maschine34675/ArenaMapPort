@@ -8,15 +8,17 @@ namespace ArenaMapPort.Client
     /// slides which way when a booth opens, how a NavMesh carver box is sized from a part's world bounds, when a held
     /// gate releases itself, and how a NavMesh probe across the doorway is judged. The numbers are design data: the
     /// slide distance is the leaf width of Equator's sliding respawn doors, which equals the depth of the frame pocket
-    /// next to each leaf (work/extract/equator-native-v5, leaf x 0..1.38, frame x up to 2.82); Arena's own slide script
-    /// is not readable, so the motion is an inference from that geometry, not Arena data.
+    /// next to each leaf (work/extract/equator-native-v5, leaf x 0..1.38, frame x up to 2.82). Since 2026-10-23 the slide is
+    /// only the fallback for a leaf WITHOUT an Arena pose: Arena's own motion (its DotAnimator script, travel 1.278 to
+    /// 1.294 m, 5 to 7 s) is in the descriptor's DoorPoses for all ten Equator leaves and is driven by SpawnGates through
+    /// DoorPoseModel, so this inference moves no leaf of the shipped maps.
     /// </summary>
     internal static class SpawnGateModel
     {
         /// <summary>Name prefix of Arena's sliding respawn-booth door assemblies and their two leaves.</summary>
         internal const string DoorPrefix = "Door_Sliding_Respawn";
 
-        /// <summary>How far a sliding leaf moves along its local x axis when the booth opens (metres).</summary>
+        /// <summary>How far a sliding leaf WITHOUT an Arena pose moves along its local x axis when the booth opens (metres).</summary>
         internal const float SlideDistance = 1.38f;
 
         /// <summary>Extra width per horizontal side of a carver box, so the agent radius (0.3 m on the ported bakes)
@@ -36,7 +38,7 @@ namespace ArenaMapPort.Client
         internal const int PathComplete = 0;
 
         /// <summary>+1 for the left leaf (slides towards +x into its frame pocket), -1 for the right leaf, 0 for any
-        /// other gate part (those switch off without a motion: Bay5's warehouse gates, AirPit's bus doors).</summary>
+        /// other gate part (those switch off without a motion: AirPit's bus doors). Used for a leaf that has no pose row.</summary>
         internal static int SlideDirection(string partName)
         {
             if (partName == DoorPrefix + "_L") return 1;

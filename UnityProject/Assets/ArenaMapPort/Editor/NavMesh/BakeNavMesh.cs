@@ -177,9 +177,35 @@ namespace ArenaMapPort.Editor.NavMesh
             // (AirPit: BUS_DOORS / PASSPORT_CONTROL_DOORS and the south spawn pocket). Every released map's paths
             // resolve (Equator 1, Bay5 3 in their accepted build logs, AirPit 2 on the 0.6.0 package), so this
             // changes no successful build; the parked maps list none.
+            //
+            // 2026-10-23 (docs/progress/door-poses.md, "NavMesh bake"): a barrier with rows in tools/maps/<stem>.doors.json
+            // is one the client no longer hides. BoothDoorRepairs parks (or SpawnGates drives) only its posed parts and
+            // leaves every other part standing, so the legacy rule above ("every non-frame part is air") would make Bay5's
+            // Telfer_Help posts walls for the player and air for bots. For such a barrier the bake drops only the posed
+            // parts' subtrees (movedSubtrees: the barrier root itself when a row's part is "", as for Bay5's rollers),
+            // wherever they sit, and bakes every other part, frame or not, as the wall it is. A barrier without rows keeps
+            // the legacy rule. A path that repeats (Bay5's two depot gates) is told apart by the rows' 'at'. A row that
+            // resolves to nothing fails the build like a missing path. Equator lists no barrier any more (the FCK hall
+            // shutter stays shut, so its colliders are ordinary walls); its booth leaves are still dropped by name.
             List<string> unresolvedBarriers;
-            var openedBarriers = ResolveHierarchyPaths(geometryRoots, ArenaPaths.Map.opened_barriers, out unresolvedBarriers);
+            var movedSubtrees = new List<Transform>();
+            int posedBarriers;
+            var openedBarriers = ResolveOpenedBarriers(geometryRoots, ArenaPaths.Map.opened_barriers, ArenaPaths.DoorRows,
+                                                       movedSubtrees, out unresolvedBarriers, out posedBarriers);
             FailOnUnresolvedPaths("opened_barriers", unresolvedBarriers);
+            int barrierPathCount = ArenaPaths.Map.opened_barriers != null ? ArenaPaths.Map.opened_barriers.Length : 0;
+            if (barrierPathCount == 0)
+                Debug.Log("[ArenaMapPort][BakeNavMesh] opened_barriers: none; only SPAWN_BOUND*/LevelBorder objects and the booth leaves are dropped by name, " +
+                          "so every shutter and gate collider (Equator's FCK hall shutter included) is baked as a wall");
+            else
+            {
+                var movedNames = new System.Text.StringBuilder();
+                foreach (Transform moved in movedSubtrees)
+                    movedNames.Append(movedNames.Length == 0 ? "" : ", ").Append(moved.name);
+                Debug.Log("[ArenaMapPort][BakeNavMesh] opened_barriers: " + barrierPathCount + " path(s); " + posedBarriers + " with door poses (" +
+                          ArenaPaths.DoorRows.Length + " row(s) loaded) drop " + movedSubtrees.Count + " moved subtree(s) [" + movedNames + "] and bake every other part as a wall; " +
+                          (barrierPathCount - posedBarriers) + " without door poses drop their non-frame parts");
+            }
 
             // PLAN-AIRPIT item 8 (user decision 2026-10-11, "no mode toggler exists"): objects that STAY active at
             // runtime but whose colliders must not shape the NavMesh, because Arena's own bake walks through them
@@ -211,7 +237,7 @@ namespace ArenaMapPort.Editor.NavMesh
                 // Same round-open exclusion as the collider sources (names/opened barriers only — NOT the
                 // layer rule, see NonPhysicalLayerReason): a modifier under an opened barrier must not carve
                 // a hole the client's runtime removal then walks through.
-                string modifierReason = RoundOpenedReason(m.transform, openedBarriers) ?? BakeOnlyExclusionReason(m.transform, bakeExclusions);
+                string modifierReason = RoundOpenedReason(m.transform, openedBarriers, movedSubtrees) ?? BakeOnlyExclusionReason(m.transform, bakeExclusions);
                 if (modifierReason != null)
                 {
                     int nm;
@@ -241,7 +267,7 @@ namespace ArenaMapPort.Editor.NavMesh
             {
                 Transform t = s.component != null ? s.component.transform : null;
                 if (t == null) continue;
-                string reason = NonPhysicalLayerReason(t) ?? RoundOpenedReason(t, openedBarriers) ?? BakeOnlyExclusionReason(t, bakeExclusions);
+                string reason = NonPhysicalLayerReason(t) ?? RoundOpenedReason(t, openedBarriers, movedSubtrees) ?? BakeOnlyExclusionReason(t, bakeExclusions);
                 if (reason != null)
                 {
                     int n;
@@ -274,7 +300,7 @@ namespace ArenaMapPort.Editor.NavMesh
                 foreach (var rt in rootTransforms) { if (v.transform.IsChildOf(rt)) { underRoot = true; break; } }
                 if (!underRoot) continue;
                 if (!v.AffectsAgentType(0)) continue; // parity with NavMeshSurface.AppendModifierVolumes
-                if (RoundOpenedReason(v.transform, openedBarriers) != null) continue; // symmetric with the collider filter
+                if (RoundOpenedReason(v.transform, openedBarriers, movedSubtrees) != null) continue; // symmetric with the collider filter
                 if (BakeOnlyExclusionReason(v.transform, bakeExclusions) != null) continue;
                 Vector3 worldCenter = v.transform.TransformPoint(v.center);
                 Vector3 scale = v.transform.lossyScale;
@@ -351,7 +377,8 @@ namespace ArenaMapPort.Editor.NavMesh
                       ", Water layer(" + waterLayer + ") " + (waterLayer >= 0 ? "excluded from sourceLayerMask" : "not found in TagManager, no exclusion applied") + ")");
             Debug.Log("[ArenaMapPort][BakeNavMesh] bake inputs: bounds " + (explicitBounds ? "from the descriptor (bake_bounds)" : "from the renderer union") +
                       ", layer mask 0x" + sourceLayerMask.ToString("X8") + (bakeLayers != null && bakeLayers.Length > 0 ? " (navmesh_bake_layers)" : " (every layer but Water)") +
-                      ", " + bakeExclusions.Count + " navmesh_bake_exclusions, " + openedBarriers.Count + " opened_barriers");
+                      ", " + bakeExclusions.Count + " navmesh_bake_exclusions, " + barrierPathCount + " opened_barriers (" + posedBarriers +
+                      " with door poses: " + movedSubtrees.Count + " moved subtree(s))");
 
             // s2-build: report vertex/triangle counts for comparison against Arena's own bake
             // (analysis/equator_census.json's navmesh block: 41 tiles for Equator's full geometry,
@@ -435,8 +462,143 @@ namespace ArenaMapPort.Editor.NavMesh
         // layer 29), which MapBorderRepairs removes at raid start (RemoveTeamFightBorders, default on). Baked in,
         // 'LevelBorder (83)' sat exactly in the FCK hall's doorway and kept the hall a NavMesh island even with the
         // shutter excluded (host test 2026-09-20 19:05: NavMesh gap x -10.0..-9.2 at z 36).
+        // "Door_Sliding_Respawn_L/_R": Equator's booth door leaves, all five of them (four SPAWN_DOORS assemblies and the one
+        // under SBG_Arena_Equator/SOO/Respawn_2). Since 2026-10-23 the client parks them at Arena's open pose (x +-2.0) and drives
+        // them there on a release instead of switching them off, and tools/maps/equator.doors.json has a row per leaf; they
+        // stay dropped BY NAME: their assembly roots are not opened_barriers entries, so no row is read for them here, and a
+        // leaf is not a NavMesh source in either state (the client's park/hold carvers seal the parked or closed body).
         static readonly string[] ExcludedNamePrefixes = { "SPAWN_BOUND", "LevelBorder" };
         static readonly string[] ExcludedLeafNames = { "Door_Sliding_Respawn_L", "Door_Sliding_Respawn_R" };
+
+        // ArenaDoorPose.AtTolerance (ArenaMapPort.Shared): a row's 'at' names the barrier root instance within this distance.
+        const float DoorAtTolerance = 0.05f;
+
+        // Does the row hold for the barrier root instance standing at `position`? ArenaDoorPose.AppliesTo: a row without
+        // 'at' holds for every instance, otherwise the world distance must be within DoorAtTolerance (Euclidean).
+        static bool DoorRowAppliesTo(ArenaDoorRow row, Vector3 position)
+        {
+            if (row.at == null) return true;
+            float dx = position.x - row.at[0], dy = position.y - row.at[1], dz = position.z - row.at[2];
+            return dx * dx + dy * dy + dz * dz <= DoorAtTolerance * DoorAtTolerance;
+        }
+
+        // "(x, y, z)" with three decimals, culture-independent (the batch editor may run under a decimal-comma culture).
+        static string FormatDoorPosition(Vector3 p)
+        {
+            return "(" + p.x.ToString("F3", System.Globalization.CultureInfo.InvariantCulture) + ", " +
+                   p.y.ToString("F3", System.Globalization.CultureInfo.InvariantCulture) + ", " +
+                   p.z.ToString("F3", System.Globalization.CultureInfo.InvariantCulture) + ")";
+        }
+
+        // EVERY object a hierarchy path names, not just the first: a root object called like the first segment (in any content
+        // scene), then at each level all children with the next name. ResolveHierarchyPaths (Transform.Find) takes the first
+        // child per level; a repeated path (Bay5: two OLD_WAREHOUSE_DOORS/Gates_Depot_Frame) needs all instances so the rows'
+        // 'at' can pick them. Inactive objects count, as for Find.
+        static List<Transform> FindAllInstances(GameObject[] geometryRoots, string path)
+        {
+            var found = new List<Transform>();
+            string[] segments = path.Split('/');
+            foreach (var root in geometryRoots)
+            {
+                if (root == null || root.name != segments[0]) continue;
+                var level = new List<Transform> { root.transform };
+                for (int i = 1; i < segments.Length && level.Count > 0; i++)
+                {
+                    var next = new List<Transform>();
+                    foreach (Transform parent in level)
+                        for (int c = 0; c < parent.childCount; c++)
+                        {
+                            Transform child = parent.GetChild(c);
+                            if (child.name == segments[i]) next.Add(child);
+                        }
+                    level = next;
+                }
+                found.AddRange(level);
+            }
+            return found;
+        }
+
+        // Splits the descriptor's opened_barriers into the two bake rules (2026-10-23, see the comment in Bake):
+        //  * a path WITHOUT rows in the doors sidecar is returned (resolved by ResolveHierarchyPaths, as before) and keeps the
+        //    legacy rule of RoundOpenedReason: every non-frame descendant is dropped, the barrier object stays;
+        //  * a path WITH rows adds the moved subtrees to `movedSubtrees`: per barrier root instance (all instances of the
+        //    path when any row carries 'at', otherwise the Find() instances) and per applicable row the row's part, or the
+        //    instance itself for part "". Several rows on one part (a vehicle's wheels) add it once. Nothing else of the
+        //    barrier is dropped, frame-named or not.
+        // Everything that cannot be resolved goes to `unresolved` (a missing path, a row whose 'at' names no instance, a
+        // part that does not exist): the caller fails the build, because a row the bake skipped would leave the part baked
+        // as a wall while the client moves it away (or the opposite). An instance no row applies to (a third gate that the
+        // sidecar does not know) is left as a wall with a Warning; it is neither moved nor legacy-dropped.
+        // Rows of barriers that are not listed (Equator's booth assemblies, opened by leaf name) are ignored here.
+        static List<Transform> ResolveOpenedBarriers(GameObject[] geometryRoots, string[] paths, ArenaDoorRow[] rows,
+                                                     List<Transform> movedSubtrees, out List<string> unresolved, out int posedBarriers)
+        {
+            var legacy = new List<Transform>();
+            unresolved = new List<string>();
+            posedBarriers = 0;
+            if (paths == null) return legacy;
+            foreach (string path in paths)
+            {
+                if (string.IsNullOrEmpty(path)) continue;
+                var pathRows = new List<ArenaDoorRow>();
+                bool positioned = false;
+                if (rows != null)
+                    foreach (var row in rows)
+                    {
+                        if (row == null || row.barrier != path) continue;
+                        pathRows.Add(row);
+                        if (row.at != null) positioned = true;
+                    }
+                List<string> missing;
+                if (pathRows.Count == 0)
+                {
+                    legacy.AddRange(ResolveHierarchyPaths(geometryRoots, new[] { path }, out missing));
+                    unresolved.AddRange(missing);
+                    continue;
+                }
+                posedBarriers++;
+                List<Transform> instances;
+                if (positioned)
+                {
+                    instances = FindAllInstances(geometryRoots, path);
+                    if (instances.Count == 0) unresolved.Add(path);
+                }
+                else
+                {
+                    instances = ResolveHierarchyPaths(geometryRoots, new[] { path }, out missing);
+                    unresolved.AddRange(missing);
+                }
+                var rowUsed = new bool[pathRows.Count];
+                foreach (Transform instance in instances)
+                {
+                    bool covered = false;
+                    for (int i = 0; i < pathRows.Count; i++)
+                    {
+                        ArenaDoorRow row = pathRows[i];
+                        if (!DoorRowAppliesTo(row, instance.position)) continue;
+                        rowUsed[i] = true;
+                        covered = true;
+                        Transform moved = string.IsNullOrEmpty(row.part) ? instance : instance.Find(row.part);
+                        if (moved == null)
+                        {
+                            unresolved.Add(path + "/" + row.part + " (door pose part; barrier root at " + FormatDoorPosition(instance.position) + ")");
+                            continue;
+                        }
+                        if (!movedSubtrees.Contains(moved)) movedSubtrees.Add(moved);
+                    }
+                    if (!covered)
+                        Debug.LogWarning("[ArenaMapPort][BakeNavMesh] opened_barriers path '" + path + "': the instance at " + FormatDoorPosition(instance.position) +
+                                         " matches no door pose row, so it stays baked as a wall (add a row with its 'at' to tools/maps/<stem>.doors.json)");
+                }
+                if (instances.Count > 0)
+                    for (int i = 0; i < pathRows.Count; i++)
+                        if (!rowUsed[i])
+                            unresolved.Add(path + " (door pose row for the barrier root at " +
+                                           (pathRows[i].at != null ? FormatDoorPosition(new Vector3(pathRows[i].at[0], pathRows[i].at[1], pathRows[i].at[2])) : "(any)") +
+                                           ", part '" + pathRows[i].part + "', matches no instance)");
+            }
+            return legacy;
+        }
 
         // Resolves hierarchy paths ("Root/Child/... (n)"; ArenaPaths.Map.opened_barriers and
         // navmesh_bake_exclusions) against the content-scene roots the same way the client does (first segment =
@@ -477,8 +639,8 @@ namespace ArenaMapPort.Editor.NavMesh
         }
 
         // Non-null for a nonphysical source or one the client opens at raid start: a SPAWN_BOUND* barrier, a
-        // sliding-door leaf, or a non-frame part of a listed barrier (BoothDoorRepairs keeps every child whose
-        // name contains "frame").
+        // sliding-door leaf, a moved part of a listed barrier that has door poses, or a non-frame part of a listed
+        // barrier without (BoothDoorRepairs keeps every child whose name contains "frame").
         /// <summary>
         /// Collider-source-only exclusion by the owner's numeric layer. Kept apart from
         /// <see cref="RoundOpenedReason"/> because a NavMeshModifier markup legitimately sits on a
@@ -509,8 +671,12 @@ namespace ArenaMapPort.Editor.NavMesh
         /// Objects the client opens/removes at raid start (name prefixes, leaf names, descriptor-listed
         /// opened_barriers). Applied to collider sources AND to NavMeshModifier/Volume markups: a markup
         /// under such an object must not carve a hole the runtime removal then walks through.
+        /// <paramref name="openedBarriers"/> are the barriers without door poses (every non-frame descendant goes, the
+        /// barrier object itself stays); <paramref name="movedSubtrees"/> are the parts and roots Arena animates, found
+        /// by <see cref="ResolveOpenedBarriers"/>: the object itself and everything below it goes, whatever it is called,
+        /// because the whole subtree travels with the pose and is parked or driven away from its closed place.
         /// </summary>
-        static string RoundOpenedReason(Transform t, List<Transform> openedBarriers)
+        static string RoundOpenedReason(Transform t, List<Transform> openedBarriers, List<Transform> movedSubtrees)
         {
             for (Transform cur = t; cur != null; cur = cur.parent)
             {
@@ -519,6 +685,8 @@ namespace ArenaMapPort.Editor.NavMesh
                 foreach (string leaf in ExcludedLeafNames)
                     if (cur.name == leaf) return leaf;
             }
+            foreach (Transform moved in movedSubtrees)
+                if (t.IsChildOf(moved)) return "door_poses:" + moved.name;
             foreach (Transform barrier in openedBarriers)
             {
                 if (t == barrier || !t.IsChildOf(barrier)) continue;

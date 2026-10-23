@@ -9,11 +9,31 @@
 // ArenaMapPort.Shared.ArenaMapRegistry.Equator / tools/maps/equator.json byte-for-byte) when the
 // flag is absent.
 using System;
+using System.Collections.Generic;
 using System.IO;
+using Newtonsoft.Json.Linq;
 using UnityEngine;
 
 namespace ArenaMapPort.Editor.Common
 {
+    /// <summary>
+    /// One pose row of tools/maps/&lt;stem&gt;.doors.json as the NavMesh bake needs it (2026-10-23, docs/progress/door-poses.md,
+    /// "NavMesh bake"): which node of which gate Arena moves. The poses themselves (closed and open transforms, seconds, ease,
+    /// curve) are the client's business and are not read here. Plain fields, no Unity types, so the bake's test harness
+    /// (tools/tests/test_navmesh_source_layers.py) compiles this class from the production text.
+    /// </summary>
+    public sealed class ArenaDoorRow
+    {
+        /// <summary>Hierarchy path of the gate's root (an opened_barriers entry; Equator's booth assemblies are not entries).</summary>
+        public string barrier;
+        /// <summary>The barrier root's direct child that moves; "" = the barrier root itself (Bay5's rollers).</summary>
+        public string part;
+        /// <summary>Transform path below the part of the animated node; "" = the part itself. The bake does not need it.</summary>
+        public string node;
+        /// <summary>World position of the barrier root instance (tells repeated paths apart); null = every instance of the path.</summary>
+        public float[] at;
+    }
+
     /// <summary>
     /// JsonUtility-compatible mirror of tools/maps/&lt;key&gt;.json (same field names, snake_case
     /// to match the Python side exactly) — see that directory's own files for the canonical
@@ -51,6 +71,10 @@ namespace ArenaMapPort.Editor.Common
         // client opens at raid start (BoothDoorRepairs.OpenBarriers, mirrored from ArenaMapDescriptor.OpenedBarriers
         // by BaseJsonTests.OpenedBarriers_DescriptorMirrorsSidecar). BakeNavMesh excludes their non-frame parts
         // from the NavMesh sources so the spaces behind them are not islands. Optional (null/empty = none).
+        // 2026-10-23: a barrier that has pose rows in tools/maps/<stem>.doors.json (ArenaPaths.DoorRows) is different: the
+        // client parks or drives only its posed parts and leaves every other part standing, so the bake drops only the
+        // posed parts' subtrees (BakeNavMesh.ResolveOpenedBarriers). Equator lists none since the same day: its FCK hall
+        // shutter stays shut, like Arena's.
         public string[] opened_barriers;
         // PLAN-AIRPIT item 8 (docs/progress/airpit-release.md). Three optional bake-only inputs, mirrored from
         // tools/maps/<key>.json by ArenaMapDescriptor.NavMeshBakeExclusions / BakeBounds / NavMeshBakeLayers and
@@ -163,6 +187,91 @@ namespace ArenaMapPort.Editor.Common
             }
         }
 
+        static ArenaDoorRow[] _doorRows;
+
+        /// <summary>
+        /// The pose rows of this invocation's map: tools/maps/&lt;stem&gt;.doors.json next to the -mapDescriptor file
+        /// (bay5.json -> bay5.doors.json), loaded once. Empty when the flag is absent (Equator's built-in default has no
+        /// barrier with poses: its booth leaves are dropped by name) or the map has no such sidecar (AirPit). Only
+        /// barrier/part/node/at are kept; the file must be schema 2 and belong to the same map key as the descriptor.
+        /// A malformed file throws: a bake that silently ignored its rows would drop a different set of colliders than
+        /// the client moves.
+        /// </summary>
+        public static ArenaDoorRow[] DoorRows
+        {
+            get
+            {
+                if (_doorRows != null) return _doorRows;
+                string path = DoorSidecarPath(GetArg("-mapDescriptor", null));
+                if (path == null || !File.Exists(path))
+                {
+                    _doorRows = new ArenaDoorRow[0];
+                    return _doorRows;
+                }
+                _doorRows = ParseDoorRows(File.ReadAllText(path), path, Map.key);
+                Debug.Log("[ArenaMapPort][ArenaPaths] loaded " + _doorRows.Length + " door pose row(s) from " + path);
+                return _doorRows;
+            }
+        }
+
+        /// <summary>
+        /// "&lt;dir&gt;/bay5.json" -> "&lt;dir&gt;/bay5.doors.json"; null for no descriptor path, a path that is not a .json file
+        /// or one that already is a .doors.json file.
+        /// </summary>
+        public static string DoorSidecarPath(string descriptorPath)
+        {
+            const string json = ".json";
+            if (string.IsNullOrEmpty(descriptorPath) || !descriptorPath.EndsWith(json, StringComparison.OrdinalIgnoreCase)) return null;
+            if (descriptorPath.EndsWith(".doors.json", StringComparison.OrdinalIgnoreCase)) return null;
+            return descriptorPath.Substring(0, descriptorPath.Length - json.Length) + ".doors.json";
+        }
+
+        /// <summary>
+        /// Reads the rows out of a doors sidecar (schema 2: "key", "poses" with barrier, part, node and at per pose).
+        /// Throws InvalidOperationException naming <paramref name="origin"/> for a wrong schema or key, a pose without a
+        /// barrier, a part or node that is not a string, or an "at" that is neither null nor three numbers.
+        /// </summary>
+        public static ArenaDoorRow[] ParseDoorRows(string json, string origin, string expectedKey)
+        {
+            JObject root = JObject.Parse(json);
+            JToken schema = root["schema_version"];
+            if (schema == null || schema.Type != JTokenType.Integer || (int)schema != 2)
+                throw new InvalidOperationException("[ArenaMapPort][ArenaPaths] " + origin + ": schema_version must be 2");
+            JToken key = root["key"];
+            if (key == null || key.Type != JTokenType.String || (string)key != expectedKey)
+                throw new InvalidOperationException("[ArenaMapPort][ArenaPaths] " + origin + ": key '" + (key == null ? "(missing)" : key.ToString()) +
+                                                    "' is not the descriptor's '" + expectedKey + "'");
+            JArray poses = root["poses"] as JArray;
+            if (poses == null)
+                throw new InvalidOperationException("[ArenaMapPort][ArenaPaths] " + origin + ": 'poses' is not an array");
+            var rows = new List<ArenaDoorRow>();
+            for (int i = 0; i < poses.Count; i++)
+            {
+                JObject pose = poses[i] as JObject;
+                JToken barrier = pose != null ? pose["barrier"] : null;
+                JToken part = pose != null ? pose["part"] : null;
+                JToken node = pose != null ? pose["node"] : null;
+                if (barrier == null || barrier.Type != JTokenType.String || ((string)barrier).Length == 0 ||
+                    part == null || part.Type != JTokenType.String || node == null || node.Type != JTokenType.String)
+                    throw new InvalidOperationException("[ArenaMapPort][ArenaPaths] " + origin + ": poses[" + i +
+                                                        "] needs a non-empty string 'barrier' and string 'part' and 'node' (\"\" is allowed for the last two)");
+                float[] at = null;
+                JToken atToken = pose["at"];
+                if (atToken != null && atToken.Type != JTokenType.Null)
+                {
+                    JArray array = atToken as JArray;
+                    if (array == null || array.Count != 3 ||
+                        (array[0].Type != JTokenType.Float && array[0].Type != JTokenType.Integer) ||
+                        (array[1].Type != JTokenType.Float && array[1].Type != JTokenType.Integer) ||
+                        (array[2].Type != JTokenType.Float && array[2].Type != JTokenType.Integer))
+                        throw new InvalidOperationException("[ArenaMapPort][ArenaPaths] " + origin + ": poses[" + i + "].at must be null or three numbers");
+                    at = new[] { (float)array[0], (float)array[1], (float)array[2] };
+                }
+                rows.Add(new ArenaDoorRow { barrier = (string)barrier, part = (string)part, node = (string)node, at = at });
+            }
+            return rows.ToArray();
+        }
+
         static ArenaMapDescriptorData EquatorDefault()
         {
             return new ArenaMapDescriptorData
@@ -180,7 +289,9 @@ namespace ArenaMapPort.Editor.Common
                     "Arena_Equator_TeamFight_DesignStuff",
                 },
                 infiltration_name = "ArenaEquator",
-                opened_barriers = new[] { "SBG_Arena_Equator/SOO_LOD0/equator_roller_shutters_02 (9)" },
+                // No opened_barriers (user decision 2026-10-23): the FCK hall's roller shutter
+                // 'SBG_Arena_Equator/SOO_LOD0/equator_roller_shutters_02 (9)' stays shut, like Arena's, and is baked as a
+                // wall. Equator's booth leaves are dropped by name (BakeNavMesh.ExcludedLeafNames), not by a barrier entry.
                 locale_name = "Arena: Equator",
                 locale_description = "The Equator shopping mall from EFT Arena. Ground floor playable; the upper rings are scenery.",
             icon_x = 788,

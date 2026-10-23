@@ -61,7 +61,13 @@ dated state in one screen; read it before this index if you only have a minute.
 - [door-poses.md](door-poses.md) — Arena's animated gate parts park at their clip's end pose instead of being hidden
   (2026-10-22, Bowl's BTR, ambulance, army gate leaves and respawn gate): the Mecanim clip decoder and CRC32 path rule
   of `extract_door_poses.py`, the `<stem>.doors.json` sidecar mirrored by the descriptor's `DoorPoses`, the runtime
-  (park at raid start, re-close on hold, drive on release over the clip's length, park carvers), host recipe.
+  (park at raid start, re-close on hold, drive on release over the clip's length, park carvers), host recipe. Since 2026-10-23
+  also Arena's `DotAnimator` motions of Equator's booth doors and Bay5's rollers and depot gates (sidecar schema 2: source,
+  ease, Hermite curve, `at` for repeated paths), the eases and slerp in the client, `Spawns/SpawnGateDriveScale` (default 0.5,
+  every map), the per-part bake rule (`BakeNavMesh.ResolveOpenedBarriers`) and the 2026-10-24 rebakes of both maps.
+- [equator-booth-spawns.md](equator-booth-spawns.md) — Equator's player spawns on Arena's own booth markers, the FCK shutter
+  closed again (Equator lists no opened barrier), Bay5 opens the six gates Arena moves plus `Door_01 (3)` with every instance of
+  a repeated path (2026-10-23; data, rebake and staging done; the host test is appended when it has run).
 - [scope-mask.md](scope-mask.md) — blurred image inside magnifying optics on every ported map: the vanilla Scripts
   scenes' `TechnicalManagers/ScopeMaskRenderer` is missing, so the aiming depth-of-field blurred the sight picture;
   `ScopeMaskRepairs` provides it (GPU-2 AirPit vs Factory stills, 2026-10-16).

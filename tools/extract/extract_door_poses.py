@@ -33,9 +33,42 @@ Method:
      next key's value) and, with --package, that every node exists once in the extracted port scene.
   6. A node enters the sidecar when its open pose differs from the closed pose by more than 1 cm or 1 degree.
 
+Second source, the DotAnimator (Equator and Bay5, 2026-10-23, docs/progress/door-animations-survey.md and the
+"DotAnimator" section of door-poses.md): Equator's booth doors and Bay5's roller gates and depot gates have NO Animator and no
+clip. Arena moves them with its own tween script, the MonoBehaviour CommonAssets.Scripts.Game.Modes.Data.DotAnimator (DOTween
+based), which stores the END value, the duration and the ease of one move or rotation per target. Its serialized tail is read
+from the raw bytes (no typetree exists for player-built script classes):
+
+    MonoBehaviour head   m_GameObject PPtr (12 bytes), m_Enabled (4), m_Script PPtr (12), m_Name (int32 length + bytes, 4-aligned)
+    tail                 5 header words (0, 1, 0, flag, element count), then per element 53 words + 7 words per curve key:
+      words 0-2          PPtr (fileID 0, pathID) to the element's own target GameObject
+      word 3             float, unknown (-1 / -2 / 0)
+      word 4             float, duration in seconds (kept UNSCALED; the client scales it)
+      word 5             int kind: 1 = move to a LOCAL position, 2 = rotate to LOCAL euler angles, 3 = switch (SetActive / emissive)
+      word 7             int DOTween ease: 1 Linear, 16 InOutQuint, 37 INTERNAL_Custom (use the stored curve)
+      word 11            int curve key count n, then n x 7 words (time, value, inSlope, outSlope, weightedMode, inWeight, outWeight),
+                         then the words 2, 2, 4 (the curve's wrap modes and rotation order), then a 38-word payload whose words
+                         1-3 are the TARGET vector (x, y, z)
+The decode of an object is trusted only when the offset after the last field equals the object's byte length. The targets are
+ABSOLUTE local values in the parent's frame (Bay5's roller targets keep the node's x and z and change only y; Equator's
++-2.0 as an offset would push each leaf 0.58 m out of its frame), so a kind-1 pose is closed position -> target, a kind-2 pose
+closed euler -> target euler (interpolate rotations as a quaternion slerp between Quaternion.Euler of the two triples), a
+kind-3 element (a lamp) is skipped. A DotAnimator on an inactive GameObject (Bay5's Gates_PTOR_medium twins) moves nothing
+and is skipped. Where Arena authors no motion for a sibling gate the sidecar borrows the neighbour's (source "borrowed",
+checked: the borrower really has no DotAnimator). Per-map scan roots, barrier depth and borrowed gates are in DOT_SOURCES.
+
+Sidecar schema 2 adds to every pose: "source" (clip / dotanimator / borrowed), "ease" (smoothstep = the client's stand-in for
+Bowl's clips, linear, inOutQuint, curve), "curve" (null, or Hermite keys [time, value, inSlope, outSlope] on a 0..1 timeline,
+used when ease is "curve") and "at" (null, or the WORLD position of the barrier root instance, which tells repeated hierarchy
+paths apart). "part" may be "" (the barrier root itself moves: Bay5's rollers).
+
 CLI:
     python tools/extract/extract_door_poses.py --map arena_bowl --arena auto \\
         --package work/extract/bowl-native-v2 --output tools/maps/bowl.doors.json [--csharp]
+    python tools/extract/extract_door_poses.py --map arena_equator --package work/extract/equator-native-v5 \\
+        --output tools/maps/equator.doors.json --csharp
+    python tools/extract/extract_door_poses.py --map arena_bay5 --package work/extract/bay5-native-v5 \\
+        --output tools/maps/bay5.doors.json --csharp
 `--csharp` also prints the `new ArenaDoorPose(...)` literals for ArenaMapRegistry.<Map>.DoorPoses; the output is
 byte-stable. The verification summary goes to stdout; a failed check goes to stderr with exit code 1 and no file written.
 """
@@ -52,17 +85,74 @@ from pathlib import Path
 from typing import Iterable
 
 REPO = Path(__file__).resolve().parents[2]
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2       # 1 (Bowl until 2026-10-23) lacked source / ease / curve / at; the tool writes 2 for every map
 DATA_DIR = "EscapeFromTarkovArena_Data"
 DEFAULT_DATA = Path("D:/Battlestate Games/Escape from Tarkov Arena") / DATA_DIR
 KEY_SOURCES = REPO / "tools" / "bundle" / "key-sources.json"
 
-# map key -> the scene that holds the gate objects and the descriptor sidecar. Only Bowl has gate animations to port: no
-# scene of Equator or Bay5 has an Animator under an opened barrier, AirPit's three bus-door Animators use a controller
-# without clips (docs/progress/door-poses.md, "Other maps").
+# Pose provenance and ease names of the sidecar (schema 2).
+SOURCE_CLIP, SOURCE_DOT, SOURCE_BORROWED = "clip", "dotanimator", "borrowed"
+SOURCES = (SOURCE_CLIP, SOURCE_DOT, SOURCE_BORROWED)
+EASE_SMOOTHSTEP, EASE_LINEAR, EASE_IN_OUT_QUINT, EASE_CURVE = "smoothstep", "linear", "inOutQuint", "curve"
+EASES = (EASE_SMOOTHSTEP, EASE_LINEAR, EASE_IN_OUT_QUINT, EASE_CURVE)
+CURVE_DECIMALS = 5
+AT_TOLERANCE = 0.05       # m, two barrier roots closer than this are the same instance (client DoorPosesOf uses the same)
+
+# map key -> the scene that holds the gate objects and the descriptor sidecar of the Mecanim clip source. Only Bowl's gates are
+# animated by clips; Equator and Bay5 use the DotAnimator (DOT_SOURCES below); AirPit's three bus-door Animators use a
+# controller without clips and its passport doors are a later change set (docs/progress/door-poses.md, "Other maps").
 MAP_SOURCES = {
     "arena_bowl": {"scene": "Arena_Bowl_TeamFight_DesignStuff", "descriptor": REPO / "tools" / "maps" / "bowl.json"},
 }
+
+# DotAnimator source (see the module doc). Per map:
+#   scene      the TeamFight_DesignStuff level that holds the gate groups
+#   scans      [{"root", "depth", "at"}]: every active DotAnimator below the scene path `root` is a gate element. `depth` is the
+#              number of path segments that make the BARRIER root (Equator: SPAWN_DOORS/<assembly>; Bay5 rollers:
+#              WAREHOUSE_DOORS (1)/<roller>, which is also the node that moves, so part = ""; Bay5 depot:
+#              OLD_WAREHOUSE_DOORS/Gates_Depot_Frame); the next segment is the part, the rest the node. `at` = True records
+#              the barrier root's world position (repeated paths: both unnumbered Equator assemblies, both depot frames).
+#   borrowed   gates Arena authors no motion for, given the neighbour's: {"scene", "barrier", "parts": [part names, "" = the
+#              root], "lender": {"barrier", "at"?}, "mode"}. mode "absolute" copies the lender's end value on every axis the
+#              lender moves (Equator: x = +-2.0), "offset" adds the lender's travel (Bay5: y + 3.089). The borrower must carry
+#              no DotAnimator itself, or the tool stops.
+DOT_SOURCES = {
+    "arena_equator": {
+        "scene": "Arena_Equator_TeamFight_DesignStuff",
+        "descriptor": REPO / "tools" / "maps" / "equator.json",
+        "scans": [{"root": "SPAWN_DOORS", "depth": 2, "at": True}],
+        "borrowed": [{
+            "scene": "Arena_Equator",
+            "barrier": "SBG_Arena_Equator/SOO/Respawn_2/Door_Sliding_Respawn (3)",
+            "parts": ["Door_Sliding_Respawn_L", "Door_Sliding_Respawn_R"],
+            "lender": {"barrier": "SPAWN_DOORS/Door_Sliding_Respawn (1)"},
+            "mode": "absolute",
+            "at": True,
+        }],
+    },
+    "arena_bay5": {
+        "scene": "Arena_Bay5_TeamFight_DesignStuff",
+        "descriptor": REPO / "tools" / "maps" / "bay5.json",
+        "scans": [{"root": "WAREHOUSE_DOORS (1)", "depth": 2, "at": False},
+                  {"root": "OLD_WAREHOUSE_DOORS", "depth": 2, "at": True}],
+        "borrowed": [{
+            "scene": "Arena_Bay5_TeamFight_DesignStuff",
+            "barrier": "WAREHOUSE_DOORS (1)/Bay5_Warehouse_Gate_Door_01 (3)",
+            "parts": [""],
+            "lender": {"barrier": "WAREHOUSE_DOORS (1)/Bay5_Warehouse_Gate_Door_01 (4)"},
+            "mode": "offset",
+            "at": False,
+        }],
+    },
+}
+DOT_SCRIPT = "CommonAssets.Scripts.Game.Modes.Data.DotAnimator"
+DOTWEEN_EASE = {1: EASE_LINEAR, 16: EASE_IN_OUT_QUINT, 37: EASE_CURVE}   # DOTween.Ease numbers (EFT's Managed/DOTween.dll)
+DOT_KIND_MOVE, DOT_KIND_ROTATE, DOT_KIND_SWITCH = 1, 2, 3
+DOT_HEADER_WORDS = 5
+DOT_ELEMENT_WORDS = 53
+DOT_KEY_WORDS = 7
+DOT_PAYLOAD_WORDS = 38
+DOT_WRAP = (2, 2, 4)
 
 # Tolerances (docs/progress/door-poses.md).
 CLOSED_POS_TOL = 0.02     # m, closed pose of the scene against the closed clip / the open clip's first key
@@ -104,6 +194,25 @@ def quat_mul(a, b):
             aw * by - ax * bz + ay * bw + az * bx,
             aw * bz + ax * by - ay * bx + az * bw,
             aw * bw - ax * bx - ay * by - az * bz)
+
+
+def quat_rotate(q, v):
+    """Rotate the vector v by the quaternion q (x, y, z, w)."""
+    x, y, z, w = q
+    r = quat_mul(quat_mul(q, (v[0], v[1], v[2], 0.0)), (-x, -y, -z, w))
+    return (r[0], r[1], r[2])
+
+
+def world_position_of(chain):
+    """World position of the last entry of a chain [(local position, local rotation xyzw, local scale), ...] that runs from the
+    scene root down: every level adds its position, scaled and rotated by everything above it."""
+    pos, rot, scl = (0.0, 0.0, 0.0), (0.0, 0.0, 0.0, 1.0), (1.0, 1.0, 1.0)
+    for lp, lr, ls in chain:
+        moved = quat_rotate(rot, (lp[0] * scl[0], lp[1] * scl[1], lp[2] * scl[2]))
+        pos = (pos[0] + moved[0], pos[1] + moved[1], pos[2] + moved[2])
+        rot = quat_mul(rot, tuple(lr))
+        scl = (scl[0] * ls[0], scl[1] * ls[1], scl[2] * ls[2])
+    return pos
 
 
 def euler_to_quat(euler):
@@ -329,9 +438,168 @@ def key_residual(clip: Clip) -> tuple[int, float, int]:
     return spans, worst, bad
 
 
+# ---------------------------------------------------------------------------------------------------------------
+# DotAnimator decoder (pure: unit-tested on synthetic bytes)
+# ---------------------------------------------------------------------------------------------------------------
+
+@dataclass
+class DotElement:
+    """One tween of a DotAnimator: what moves (a PPtr to a GameObject), for how long, how, and to where."""
+    target_file: int
+    target_path: int
+    unknown: float            # word 3: -1 / -2 / 0, meaning unknown
+    seconds: float            # word 4, unscaled
+    kind: int                 # word 5: 1 move, 2 rotate, 3 switch
+    ease: int                 # word 7: DOTween Ease number
+    keys: list = field(default_factory=list)      # (time, value, inSlope, outSlope, weightedMode, inWeight, outWeight)
+    target: tuple = (0.0, 0.0, 0.0)               # payload words 1-3: the absolute local end vector
+    payload: tuple = ()                           # the 38 payload words
+
+
+@dataclass
+class DotAnimator:
+    game_object: int          # path id of the GameObject the component sits on
+    script: tuple             # (file id, path id) of the MonoScript
+    name: str
+    header: tuple             # the first four header words
+    elements: list = field(default_factory=list)
+
+
+def parse_mono_head(raw: bytes):
+    """(GameObject file, GameObject path, enabled, script file, script path, name, tail offset) of a MonoBehaviour's raw data:
+    m_GameObject PPtr (int32 + int64), m_Enabled (4 bytes with padding), m_Script PPtr, m_Name (int32 length, bytes, 4-aligned)."""
+    if len(raw) < 32:
+        raise DoorPoseError(f"MonoBehaviour of {len(raw)} bytes is shorter than its head")
+    gf, gp, enabled, sf, sp, nlen = struct.unpack_from("<iqiiqi", raw, 0)
+    if nlen < 0 or 32 + nlen > len(raw):
+        raise DoorPoseError(f"MonoBehaviour name length {nlen} is out of range")
+    return gf, gp, enabled, sf, sp, raw[32:32 + nlen].decode("utf-8", "replace"), (32 + nlen + 3) & ~3
+
+
+def decode_dot_animator(raw: bytes) -> DotAnimator:
+    """The DotAnimator in the raw data of a MonoBehaviour whose script is DotAnimator. Fails closed (DoorPoseError) unless the
+    offset after the last field equals the object's byte length, the header, the curve wrap words and every kind are the
+    known ones and every number is finite: a layout that merely looks right must not reach a sidecar."""
+    gf, gp, _enabled, sf, sp, name, off = parse_mono_head(raw)
+    tail = raw[off:]
+    if len(tail) % 4:
+        raise DoorPoseError(f"DotAnimator tail of {len(tail)} bytes is not a whole number of words")
+    n = len(tail) // 4
+    words = struct.unpack("<%di" % n, tail)
+    floats = struct.unpack("<%df" % n, tail)
+    if n < DOT_HEADER_WORDS:
+        raise DoorPoseError("DotAnimator tail is shorter than its header")
+    if tuple(words[:3]) != (0, 1, 0):
+        raise DoorPoseError(f"DotAnimator header words {words[:4]} are not (0, 1, 0, flag)")
+    count = words[4]
+    if not 0 <= count <= 256:
+        raise DoorPoseError(f"DotAnimator element count {count} is out of range")
+    pos = DOT_HEADER_WORDS
+    elements = []
+    for index in range(count):
+        if pos + 12 > n:
+            raise DoorPoseError(f"DotAnimator element {index} is cut off")
+        nkeys = words[pos + 11]
+        if not 0 <= nkeys <= 256:
+            raise DoorPoseError(f"DotAnimator element {index}: curve key count {nkeys} is out of range")
+        end = pos + DOT_ELEMENT_WORDS + DOT_KEY_WORDS * nkeys
+        if end > n:
+            raise DoorPoseError(f"DotAnimator element {index} needs {end - pos} words, {n - pos} are left")
+        target_file, target_path = struct.unpack_from("<iq", tail, 4 * pos)
+        keys = []
+        for i in range(nkeys):
+            q = pos + 12 + DOT_KEY_WORDS * i
+            keys.append((floats[q], floats[q + 1], floats[q + 2], floats[q + 3], words[q + 4], floats[q + 5], floats[q + 6]))
+        w = pos + 12 + DOT_KEY_WORDS * nkeys
+        if tuple(words[w:w + 3]) != DOT_WRAP:
+            raise DoorPoseError(f"DotAnimator element {index}: curve wrap words {words[w:w + 3]} are not {DOT_WRAP}")
+        payload = tuple(words[w + 3:w + 3 + DOT_PAYLOAD_WORDS])
+        element = DotElement(target_file, target_path, floats[pos + 3], floats[pos + 4], words[pos + 5], words[pos + 7], keys,
+                             tuple(floats[w + 4:w + 7]), payload)
+        if element.kind not in (DOT_KIND_MOVE, DOT_KIND_ROTATE, DOT_KIND_SWITCH):
+            raise DoorPoseError(f"DotAnimator element {index}: unknown kind {element.kind}")
+        numbers = [element.unknown, element.seconds, *element.target] + [v for k in keys for v in (k[0], k[1], k[2], k[3], k[5], k[6])]
+        if not all(math.isfinite(v) for v in numbers):
+            raise DoorPoseError(f"DotAnimator element {index} carries a non-finite number")
+        if element.kind != DOT_KIND_SWITCH and element.seconds <= 0:
+            raise DoorPoseError(f"DotAnimator element {index}: duration {element.seconds} is not positive")
+        elements.append(element)
+        pos = end
+    if pos != n:
+        raise DoorPoseError(f"DotAnimator decode ends at word {pos}, the object has {n} words: the layout is wrong")
+    return DotAnimator(gp, (sf, sp), name, tuple(words[:4]), elements)
+
+
+def dot_ease_name(number: int) -> str:
+    """The sidecar ease of a DOTween Ease number; anything but Linear (1), InOutQuint (16) and the custom curve (37) stops the tool."""
+    if number not in DOTWEEN_EASE:
+        raise DoorPoseError(f"DOTween ease {number} is not one of {dict(sorted(DOTWEEN_EASE.items()))}: add it to the "
+                            "sidecar schema and the client before porting this gate")
+    return DOTWEEN_EASE[number]
+
+
+def curve_from_keys(keys: list) -> list[list[float]]:
+    """[time, value, inSlope, outSlope] per key of an ease-37 curve, on a 0..1 timeline from value 0 to value 1; anything else
+    (fewer than two keys, unsorted times, a curve that does not start at 0 or end at 1) stops the tool."""
+    if len(keys) < 2:
+        raise DoorPoseError(f"a custom ease curve needs at least 2 keys, got {len(keys)}")
+    if any(k[4] != 0 for k in keys):
+        raise DoorPoseError("a custom ease curve with weighted tangents is not supported (the sidecar stores slopes only)")
+    curve = [[round(k[0], CURVE_DECIMALS) + 0.0, round(k[1], CURVE_DECIMALS) + 0.0,
+              round(k[2], CURVE_DECIMALS) + 0.0, round(k[3], CURVE_DECIMALS) + 0.0] for k in keys]
+    times = [k[0] for k in curve]
+    if any(b <= a for a, b in zip(times, times[1:])):
+        raise DoorPoseError(f"custom ease curve times {times} are not increasing")
+    if abs(times[0]) > 1e-4 or abs(times[-1] - 1.0) > 1e-4:
+        raise DoorPoseError(f"custom ease curve runs {times[0]}..{times[-1]}, not 0..1")
+    if abs(curve[0][1]) > 1e-3 or abs(curve[-1][1] - 1.0) > 1e-3:
+        raise DoorPoseError(f"custom ease curve runs from {curve[0][1]} to {curve[-1][1]}, not from 0 to 1")
+    return curve
+
+
+def hermite_value(curve: list, t: float) -> float:
+    """Unity AnimationCurve.Evaluate of unweighted keys [time, value, inSlope, outSlope]: a cubic Hermite between the two keys
+    around t, using the left key's out slope and the right key's in slope; the first/last value outside the keys."""
+    if t <= curve[0][0]:
+        return curve[0][1]
+    for a, b in zip(curve, curve[1:]):
+        if a[0] <= t <= b[0]:
+            dt = b[0] - a[0]
+            s = (t - a[0]) / dt
+            h00 = 2 * s ** 3 - 3 * s ** 2 + 1
+            h10 = s ** 3 - 2 * s ** 2 + s
+            h01 = -2 * s ** 3 + 3 * s ** 2
+            h11 = s ** 3 - s ** 2
+            return h00 * a[1] + h10 * dt * a[3] + h01 * b[1] + h11 * dt * b[2]
+    return curve[-1][1]
+
+
+def ease_fraction(ease: str, curve: list | None, k: float) -> float:
+    """How far along its path a part is after the fraction `k` of its duration (the formulas DOTween uses; the client mirrors
+    them in DoorPoseModel)."""
+    k = min(1.0, max(0.0, k))
+    if ease == EASE_LINEAR:
+        return k
+    if ease == EASE_SMOOTHSTEP:
+        return k * k * (3.0 - 2.0 * k)
+    if ease == EASE_IN_OUT_QUINT:
+        t = 2.0 * k
+        return 0.5 * t ** 5 if t < 1.0 else 0.5 * ((t - 2.0) ** 5 + 2.0)
+    if ease == EASE_CURVE:
+        if not curve:
+            raise DoorPoseError("ease 'curve' without keys")
+        return hermite_value(curve, k)
+    raise DoorPoseError(f"unknown ease {ease!r}")
+
+
 @dataclass
 class NodePose:
-    """Closed and open pose of one node, local to the node's parent (Unity localPosition / localEulerAngles)."""
+    """Closed and open pose of one node, local to the node's parent (Unity localPosition / localEulerAngles).
+
+    source / ease / curve / at are the schema-2 fields: where the pose comes from (a Mecanim clip, a DotAnimator, a
+    neighbour's), the interpolation (Bowl's clips keep the client's smoothstep stand-in), the Hermite keys of ease "curve"
+    ([time, value, inSlope, outSlope] on a 0..1 timeline) and the barrier root's world position for repeated paths. `scene`
+    is the Arena scene the node was read from (package check only, not written)."""
     barrier: str
     part: str
     node: str
@@ -342,6 +610,11 @@ class NodePose:
     open_position: list
     open_euler: list
     moved: bool = True
+    source: str = SOURCE_CLIP
+    ease: str = EASE_SMOOTHSTEP
+    curve: list | None = None
+    at: list | None = None
+    scene: str = ""
 
 
 def continuous_euler(channel: Channel, stop: float, start_euler, per_second: int = 240):
@@ -437,7 +710,10 @@ def motion_window(channels: Iterable[Channel], stop: float, rate: float = 60.0, 
 
 def sidecar_pose(p: NodePose) -> dict:
     return {
-        "barrier": p.barrier, "part": p.part, "node": p.node, "clip": p.clip, "seconds": round(p.seconds, DECIMALS),
+        "barrier": p.barrier, "part": p.part, "node": p.node, "clip": p.clip, "source": p.source,
+        "seconds": round(p.seconds, DECIMALS), "ease": p.ease,
+        "curve": None if p.curve is None else [[round(v, CURVE_DECIMALS) + 0.0 for v in key] for key in p.curve],
+        "at": None if p.at is None else tidy(p.at),
         "closed": {"position": tidy(p.closed_position), "euler": tidy(p.closed_euler)},
         "open": {"position": tidy(p.open_position), "euler": tidy(p.open_euler)},
     }
@@ -450,31 +726,58 @@ def csharp_float(value: float) -> str:
     return text + "f"
 
 
+def has_default_extras(p: dict) -> bool:
+    """A pose from a Mecanim clip with the smoothstep stand-in, no curve and no `at`: ArenaDoorPose's last four constructor
+    parameters take their defaults, so Bowl's literals stay the nine-argument form."""
+    return (p.get("source", SOURCE_CLIP) == SOURCE_CLIP and p.get("ease", EASE_SMOOTHSTEP) == EASE_SMOOTHSTEP
+            and p.get("curve") is None and p.get("at") is None)
+
+
 def render_csharp(poses: list[dict], indent: str = " " * 16) -> str:
-    """The `new ArenaDoorPose(...)` literals of ArenaMapRegistry.<Map>.DoorPoses for a sidecar's poses, one pose per three
-    lines, ready to paste between `DoorPoses: new[] {` and `}` (a test pins that the registry carries exactly this text)."""
+    """The `new ArenaDoorPose(...)` literals of ArenaMapRegistry.<Map>.DoorPoses for a sidecar's poses, ready to paste between
+    `DoorPoses: new[] {` and `}` (a test pins that the registry carries exactly this text). A default pose (clip source,
+    smoothstep, no curve, no `at`) is three lines of nine arguments; every other pose adds a fourth line with the last four
+    arguments `source, ease, curve, at` (curve = a flat float[] of time, value, inSlope, outSlope per key, or null)."""
     def vec(values):
         return "new[] { " + ", ".join(csharp_float(v) for v in values) + " }"
 
     lines = []
     for p in poses:
+        default = has_default_extras(p)
         lines.append(f"{indent}new ArenaDoorPose({json.dumps(p['barrier'])}, {json.dumps(p['part'])}, {json.dumps(p['node'])}, "
                      f"{json.dumps(p['clip'])}, {csharp_float(p['seconds'])},")
         lines.append(f"{indent}    {vec(p['closed']['position'])}, {vec(p['closed']['euler'])},")
-        lines.append(f"{indent}    {vec(p['open']['position'])}, {vec(p['open']['euler'])}),")
+        if default:
+            lines.append(f"{indent}    {vec(p['open']['position'])}, {vec(p['open']['euler'])}),")
+            continue
+        lines.append(f"{indent}    {vec(p['open']['position'])}, {vec(p['open']['euler'])},")
+        curve = p.get("curve")
+        curve_text = "null" if curve is None else vec([v for key in curve for v in key])
+        at = p.get("at")
+        at_text = "null" if at is None else vec(at)
+        lines.append(f"{indent}    {json.dumps(p.get('source', SOURCE_CLIP))}, {json.dumps(p.get('ease', EASE_SMOOTHSTEP))}, "
+                     f"{curve_text}, {at_text}),")
     return "\n".join(lines)
 
 
 def render_sidecar(key: str, source: dict, poses: list[dict]) -> str:
     doc = {
         "_comment": ("Generated by tools/extract/extract_door_poses.py (docs/progress/door-poses.md): the END POSE of every node "
-                     "Arena's gate animations move, next to the node's closed pose in the scene. barrier = the opened_barriers path, "
-                     "part = the barrier root's direct child (what BoothDoorRepairs switches off), node = the transform path below "
-                     "the part that the clip animates (\"\" = the part itself), positions and euler angles are LOCAL to the node's "
-                     "parent (Unity localPosition / localEulerAngles). Euler angles are the clip's own raw values where the clip "
-                     "stores euler curves (multi-turn spins survive; interpolate them component-wise, not as quaternions). "
+                     "Arena's gates move, next to the node's closed pose in the scene. barrier = the path of the gate's root "
+                     "(an opened_barriers entry; Equator's booth doors are not barriers: the assembly root under SPAWN_DOORS or "
+                     "Respawn_2), part = the barrier root's direct child (what BoothDoorRepairs switches off; \"\" = the root "
+                     "itself moves), node = the transform path below the part that is animated (\"\" = the part itself), "
+                     "positions and euler angles are LOCAL to the node's parent (Unity localPosition / localEulerAngles). "
+                     "source = clip (a Mecanim clip: Bowl), dotanimator (Arena's DOTween script: Equator, Bay5) or borrowed "
+                     "(Arena authors no motion for this gate; a neighbour's is used). seconds = Arena's own duration, unscaled. "
+                     "ease = smoothstep (the client's stand-in for Bowl's clips), linear, inOutQuint or curve (curve = Hermite "
+                     "keys [time, value, inSlope, outSlope] on a 0..1 timeline). at = null, or the WORLD position of the "
+                     "barrier root instance (tells repeated hierarchy paths apart, matched within 0.05 m). Euler angles of clip "
+                     "poses are the clip's own raw values (interpolate component-wise); rotations of dotanimator poses are "
+                     "interpolated as a quaternion slerp between the two triples. "
                      "ArenaMapRegistry.<Map>.DoorPoses mirrors this file number for number (validate_map_descriptors.py and "
-                     "BowlMapTests). Object names and derived end-pose numbers only; no Arena asset, file or curve is stored."),
+                     "the DoorPoseSidecarTests). Object names and derived numbers only (the curve keys are derived numbers too); no Arena asset "
+                     "or file is stored."),
         "schema_version": SCHEMA_VERSION,
         "key": key,
         "source": source,
@@ -561,6 +864,8 @@ class ArenaScene:
         self.go2tr = {t["m_GameObject"]["m_PathID"]: pid for pid, t in self.tr.items()}
         self.animators = [obj for obj in level_objects.values() if obj.type.name == "Animator"]
         self._paths: dict[int, str] = {}
+        self._by_path: dict[str, list] | None = None
+        self._script_names: dict[tuple, str] = {}
         self.assets_file = self.animators[0].assets_file if self.animators else None
 
     def name(self, tpid: int) -> str:
@@ -586,6 +891,60 @@ class ArenaScene:
         t = self.tr[tpid]
         p, r, s = t["m_LocalPosition"], t["m_LocalRotation"], t["m_LocalScale"]
         return ((p["x"], p["y"], p["z"]), (r["x"], r["y"], r["z"], r["w"]), (s["x"], s["y"], s["z"]))
+
+    def world_position(self, tpid: int):
+        """World position of a transform, composed through the parent chain (rotation and scale of the parents included)."""
+        chain = []
+        t = tpid
+        while t:
+            chain.append(self.local(t))
+            t = self.tr[t]["m_Father"]["m_PathID"]
+        return world_position_of(list(reversed(chain)))
+
+    def find_path(self, path: str) -> list[int]:
+        """Every transform whose hierarchy path is `path` (names repeat: the result may hold several instances)."""
+        if self._by_path is None:
+            self._by_path = {}
+            for tpid in self.tr:
+                self._by_path.setdefault(self.path(tpid), []).append(tpid)
+        return sorted(self._by_path.get(path, []))
+
+    def active_in_hierarchy(self, tpid: int) -> bool:
+        """Is the GameObject and every ancestor active (the scene's own flags, as the importer reads them)."""
+        t = tpid
+        while t:
+            if not self.go[self.tr[t]["m_GameObject"]["m_PathID"]]["m_IsActive"]:
+                return False
+            t = self.tr[t]["m_Father"]["m_PathID"]
+        return True
+
+    def mono_class(self, obj) -> str:
+        """The full script class name ('Namespace.Class') of a MonoBehaviour, '' when its script cannot be read. The script
+        PPtr sits at byte 16 of the raw data; one lookup per distinct script."""
+        raw = obj.get_raw_data()
+        key = struct.unpack_from("<iq", raw, 16)
+        if key not in self._script_names:
+            name = ""
+            if key[1]:
+                try:
+                    st = obj.parse_monobehaviour_head().m_Script.read_typetree()
+                    name = ((st.get("m_Namespace") or "") + "." if st.get("m_Namespace") else "") + st.get("m_ClassName", "")
+                except Exception:
+                    name = ""
+            self._script_names[key] = name
+        return self._script_names[key]
+
+    def monobehaviours(self, tpid: int) -> list:
+        """The MonoBehaviour objects on the GameObject of a transform (level file only)."""
+        out = []
+        for entry in self.go[self.tr[tpid]["m_GameObject"]["m_PathID"]]["m_Component"]:
+            ptr = entry["component"]
+            if ptr["m_FileID"]:
+                continue
+            obj = self.files[self.level_name].get(ptr["m_PathID"])
+            if obj is not None and obj.type.name == "MonoBehaviour":
+                out.append(obj)
+        return out
 
     def deref(self, obj, pptr: dict):
         """The object a PPtr of `obj` points at (same file, or an external file that was loaded)."""
@@ -748,32 +1107,66 @@ def solve_gate(scene: ArenaScene, gate: Gate) -> GateResult:
     return result
 
 
-def check_package(package: Path, scene_name: str, poses: list[NodePose], scene: ArenaScene) -> list[str]:
-    """Every sidecar node exists exactly once in the extracted port scene with Arena's local transform."""
-    path = package / "scenes" / f"{scene_name}.json"
-    if not path.is_file():
-        raise DoorPoseError(f"package scene {path} not found")
-    objects = json.loads(path.read_text(encoding="utf-8"))["objects"]
-    by_id = {o["id"]: o for o in objects}
-    cache: dict[str, str] = {}
+class PackageScene:
+    """One scene of an extracted package (scenes/<name>.json): hierarchy paths, instances of a repeated path and world positions."""
 
-    def full_path(o):
-        if o["id"] not in cache:
-            parent = by_id.get(o.get("parent_id"))
-            cache[o["id"]] = f"{full_path(parent)}/{o['name']}" if parent else o["name"]
-        return cache[o["id"]]
+    def __init__(self, package: Path, scene_name: str):
+        path = package / "scenes" / f"{scene_name}.json"
+        if not path.is_file():
+            raise DoorPoseError(f"package scene {path} not found")
+        self.name = scene_name
+        self.objects = json.loads(path.read_text(encoding="utf-8"))["objects"]
+        self.by_id = {o["id"]: o for o in self.objects}
+        self._paths: dict[str, str] = {}
+        self.index: dict[str, list] = {}
+        self.children: dict[tuple, list] = {}
+        for o in self.objects:
+            self.index.setdefault(self.full_path(o), []).append(o)
+            self.children.setdefault((o.get("parent_id"), o["name"]), []).append(o)
 
-    index: dict[str, list] = {}
-    for o in objects:
-        index.setdefault(full_path(o), []).append(o)
+    def full_path(self, o) -> str:
+        if o["id"] not in self._paths:
+            parent = self.by_id.get(o.get("parent_id"))
+            self._paths[o["id"]] = f"{self.full_path(parent)}/{o['name']}" if parent else o["name"]
+        return self._paths[o["id"]]
+
+    def world_position(self, o):
+        chain = []
+        while o is not None:
+            chain.append((o["local_position"], o["local_rotation"], o["local_scale"]))
+            o = self.by_id.get(o.get("parent_id"))
+        return world_position_of(list(reversed(chain)))
+
+
+def check_package(package: Path, scene_name: str, poses: list[NodePose], scene: ArenaScene | None = None) -> list[str]:
+    """Every sidecar node exists exactly once in the extracted port scene with Arena's local transform. A pose with `at`
+    finds its barrier root among the instances of a repeated path by world position (AT_TOLERANCE); a pose read from another
+    Arena scene (a borrowed gate) is looked up in that scene of the package."""
+    scenes: dict[str, PackageScene] = {}
     problems = []
     for p in poses:
+        name = p.scene or scene_name
+        if name not in scenes:
+            scenes[name] = PackageScene(package, name)
+        ps = scenes[name]
         key = "/".join(x for x in (p.barrier, p.part, p.node) if x)
-        hits = index.get(key, [])
-        if len(hits) != 1:
-            problems.append(f"package: {key} found {len(hits)} time(s) in {scene_name}")
+        roots = ps.index.get(p.barrier, [])
+        if p.at is not None:
+            roots = [r for r in roots if math.dist(ps.world_position(r), p.at) <= AT_TOLERANCE]
+        if len(roots) != 1:
+            problems.append(f"package: barrier {p.barrier} found {len(roots)} time(s) in {name}"
+                            + (f" at {tidy(p.at)}" if p.at is not None else ""))
             continue
-        o = hits[0]
+        o = roots[0]
+        for segment in [s for s in (p.part, *p.node.split("/")) if s]:
+            hits = ps.children.get((o["id"], segment), [])
+            if len(hits) != 1:
+                problems.append(f"package: {key} found {len(hits)} child(ren) named {segment!r} in {name}")
+                o = None
+                break
+            o = hits[0]
+        if o is None:
+            continue
         if math.dist(o["local_position"], p.closed_position) > 1e-3:
             problems.append(f"package: {key} local position {o['local_position']} != Arena {tidy(p.closed_position)}")
         if quat_angle(o["local_rotation"], euler_to_quat(p.closed_euler)) > 0.05:
@@ -782,9 +1175,17 @@ def check_package(package: Path, scene_name: str, poses: list[NodePose], scene: 
 
 
 def extract(map_key: str, arena: str, package: Path | None) -> tuple[str, dict, list[str]]:
-    """(sidecar text, source block, verification summary lines)."""
-    if map_key not in MAP_SOURCES:
-        raise DoorPoseError(f"no door-pose source for {map_key}; known: {sorted(MAP_SOURCES)}")
+    """(sidecar text, source block, verification summary lines): the Mecanim clip path for Bowl, the DotAnimator path for
+    Equator and Bay5."""
+    if map_key in DOT_SOURCES:
+        return extract_dot(map_key, arena, package)
+    if map_key in MAP_SOURCES:
+        return extract_clips(map_key, arena, package)
+    raise DoorPoseError(f"no door-pose source for {map_key}; known: {sorted(set(MAP_SOURCES) | set(DOT_SOURCES))}")
+
+
+def extract_clips(map_key: str, arena: str, package: Path | None) -> tuple[str, dict, list[str]]:
+    """Bowl: the end poses of the Mecanim gate clips below the map's opened barriers."""
     src = MAP_SOURCES[map_key]
     descriptor = json.loads(src["descriptor"].read_text(encoding="utf-8"))
     barriers = list(descriptor["opened_barriers"])
@@ -837,9 +1238,252 @@ def extract(map_key: str, arena: str, package: Path | None) -> tuple[str, dict, 
     return render_sidecar(map_key, source, [sidecar_pose(p) for p in ordered]), source, summary
 
 
+@dataclass
+class DotScan:
+    """What one DotAnimator scan (or one borrowed gate) found."""
+    poses: list = field(default_factory=list)        # NodePose
+    lines: list = field(default_factory=list)        # verification summary lines
+    objects: int = 0                                 # DotAnimator components decoded (offset == byte length each)
+    elements: int = 0
+    skipped_inactive: int = 0
+    skipped_switch: int = 0
+    warnings: list = field(default_factory=list)
+
+
+def closed_pose_of(scene: ArenaScene, tpid: int):
+    """(local position, local euler in (-180, 180], local rotation) of a node as the scene has it. The euler triple is checked
+    against the quaternion, so a gimbal-lock branch can never hide a different rotation."""
+    pos, quat, _ = scene.local(tpid)
+    euler = [centered(v) for v in quat_to_euler(quat)]
+    if quat_angle(euler_to_quat(euler), quat) > SAME_ROT:
+        raise DoorPoseError(f"{scene.path(tpid)}: euler {tidy(euler)} does not reproduce the scene rotation")
+    return list(pos), euler, quat
+
+
+def ancestor(scene: ArenaScene, tpid: int, levels: int) -> int:
+    for _ in range(levels):
+        tpid = scene.tr[tpid]["m_Father"]["m_PathID"]
+    return tpid
+
+
+def merge_elements(label: str, elements: list) -> tuple:
+    """(move element, rotate element) of one target node; one of each kind at most, and a node that both moves and rotates must
+    do both with one duration, ease and curve (the pose has one of each)."""
+    move = [e for e in elements if e.kind == DOT_KIND_MOVE]
+    rot = [e for e in elements if e.kind == DOT_KIND_ROTATE]
+    if len(move) > 1 or len(rot) > 1:
+        raise DoorPoseError(f"{label}: several DotAnimator elements of the same kind move this node")
+    if move and rot and (move[0].seconds != rot[0].seconds or move[0].ease != rot[0].ease or move[0].keys != rot[0].keys):
+        raise DoorPoseError(f"{label}: its move and its rotation differ in duration, ease or curve; the pose has one of each")
+    return (move[0] if move else None), (rot[0] if rot else None)
+
+
+def scan_dot_animators(scene: ArenaScene, scene_name: str, scan: dict) -> DotScan:
+    """The poses of every active DotAnimator below the scene path scan['root'] (see DOT_SOURCES)."""
+    roots = scene.find_path(scan["root"])
+    if not roots:
+        raise DoorPoseError(f"scan root {scan['root']!r} not found in {scene_name}")
+    depth = scan["depth"]
+    result = DotScan()
+    moves: dict[int, list] = {}
+    for root in roots:
+        for _rel, tpid in [("", root), *scene.descendants(root)]:
+            for obj in scene.monobehaviours(tpid):
+                if scene.mono_class(obj) != DOT_SCRIPT:
+                    continue
+                animator = decode_dot_animator(obj.get_raw_data())
+                result.objects += 1
+                own = scene.tr[tpid]["m_GameObject"]["m_PathID"]
+                if animator.game_object != own:
+                    raise DoorPoseError(f"{scene.path(tpid)}: the DotAnimator names GameObject {animator.game_object}, not {own}")
+                result.elements += len(animator.elements)
+                if not scene.active_in_hierarchy(tpid):
+                    result.skipped_inactive += 1
+                    result.lines.append(f"    - skipped (inactive in the scene, moves nothing): {scene.path(tpid)}")
+                    continue
+                for element in animator.elements:
+                    if element.kind == DOT_KIND_SWITCH:
+                        result.skipped_switch += 1
+                        result.lines.append(f"    - skipped kind-3 element (switch / lamp): {scene.path(tpid)}")
+                        continue
+                    if element.target_file != 0:
+                        raise DoorPoseError(f"{scene.path(tpid)}: a DotAnimator element targets another file ({element.target_file})")
+                    target = scene.go2tr.get(element.target_path)
+                    if target is None:
+                        raise DoorPoseError(f"{scene.path(tpid)}: the element's target GameObject {element.target_path} is not in this scene")
+                    path = scene.path(target)
+                    if path != scan["root"] and not path.startswith(scan["root"] + "/"):
+                        raise DoorPoseError(f"{scene.path(tpid)}: the element's target {path} lies outside the scan root {scan['root']}")
+                    moves.setdefault(target, []).append(element)
+    for target in sorted(moves, key=lambda t: (scene.path(t), t)):
+        path = scene.path(target)
+        segments = path.split("/")
+        if len(segments) < depth:
+            raise DoorPoseError(f"{path}: shallower than the barrier depth {depth}")
+        move, rotate = merge_elements(path, moves[target])
+        barrier_root = ancestor(scene, target, len(segments) - depth)
+        rest = segments[depth:]
+        part, node = (rest[0] if rest else ""), "/".join(rest[1:])
+        pos, euler, quat = closed_pose_of(scene, target)
+        open_position = list(move.target) if move else list(pos)
+        open_euler = list(rotate.target) if rotate else list(euler)
+        lead = move or rotate
+        ease = dot_ease_name(lead.ease)
+        if ease == EASE_CURVE:
+            curve = curve_from_keys(lead.keys)
+        else:
+            curve = None
+            if lead.keys:
+                result.warnings.append(f"{path}: {len(lead.keys)} curve key(s) beside the non-curve ease {ease} are ignored")
+        if move is not None:
+            unchanged = sum(1 for a, b in zip(open_position, pos) if abs(a - b) < 5e-3)
+            if unchanged == 0:
+                result.warnings.append(f"{path}: the move target {tidy(open_position)} differs from the closed position "
+                                       f"{tidy(pos)} on all three axes; check the absolute-target reading")
+        moved = (math.dist(open_position, pos) > DIFF_POS
+                 or quat_angle(euler_to_quat(open_euler), quat) > DIFF_ROT)
+        if not moved:
+            result.lines.append(f"    - dropped (no net change): {path}")
+            continue
+        at = list(scene.world_position(barrier_root)) if scan["at"] else None
+        result.poses.append(NodePose("/".join(segments[:depth]), part, node, "DotAnimator", lead.seconds, pos, euler,
+                                     open_position, open_euler, True, SOURCE_DOT, ease, curve, at, scene_name))
+    return result
+
+
+def build_borrowed(scene: ArenaScene, scene_name: str, spec: dict, decoded: list) -> DotScan:
+    """The poses of a gate Arena authors no motion for, taken from a neighbour's decoded pose (see DOT_SOURCES). Stops when the
+    borrower carries a DotAnimator of its own (it is then not borrowed), is missing or ambiguous, or the lender moves nothing."""
+    result = DotScan()
+    roots = scene.find_path(spec["barrier"])
+    if len(roots) != 1:
+        raise DoorPoseError(f"borrowed gate {spec['barrier']!r} found {len(roots)} time(s) in {scene_name}")
+    root = roots[0]
+    for _rel, tpid in [("", root), *scene.descendants(root)]:
+        for obj in scene.monobehaviours(tpid):
+            if scene.mono_class(obj) == DOT_SCRIPT:
+                raise DoorPoseError(f"{scene.path(tpid)} has a DotAnimator of its own: it is not a borrowed gate")
+    for part in spec["parts"]:
+        if part:
+            hits = [c for c in scene.children(root) if scene.name(c) == part]
+            if len(hits) != 1:
+                raise DoorPoseError(f"borrowed gate {spec['barrier']}: part {part!r} found {len(hits)} time(s)")
+            target = hits[0]
+        else:
+            target = root
+        lender_barrier = spec["lender"]["barrier"]
+        lenders = [p for p in decoded if p.barrier == lender_barrier and p.part == part and p.node == ""
+                   and (spec["lender"].get("at") is None or (p.at is not None
+                                                             and math.dist(p.at, spec["lender"]["at"]) <= AT_TOLERANCE))]
+        if len(lenders) != 1:
+            raise DoorPoseError(f"lender {lender_barrier}/{part or '.'} found {len(lenders)} time(s) among the decoded poses")
+        lender = lenders[0]
+        pos, euler, quat = closed_pose_of(scene, target)
+        open_position, open_euler = list(pos), list(euler)
+        moved_axes = 0
+        for i in range(3):
+            travel = lender.open_position[i] - lender.closed_position[i]
+            if abs(travel) > DIFF_POS:
+                moved_axes += 1
+                open_position[i] = lender.open_position[i] if spec["mode"] == "absolute" else pos[i] + travel
+            turn = lender.open_euler[i] - lender.closed_euler[i]
+            if abs(turn) > DIFF_ROT:
+                moved_axes += 1
+                open_euler[i] = lender.open_euler[i] if spec["mode"] == "absolute" else euler[i] + turn
+        if not moved_axes:
+            raise DoorPoseError(f"lender {lender_barrier}/{part or '.'} moves nothing")
+        at = list(scene.world_position(root)) if spec["at"] else None
+        result.poses.append(NodePose(spec["barrier"], part, "", f"borrowed from {lender_barrier}", lender.seconds, pos, euler,
+                                     open_position, open_euler, True, SOURCE_BORROWED, lender.ease, lender.curve, at, scene_name))
+    return result
+
+
+def check_identities(poses: list) -> None:
+    """A (barrier, part, node) may occur twice only for two different instances of a repeated hierarchy path, and then both
+    poses carry `at` more than AT_TOLERANCE apart; the client could not choose between them otherwise."""
+    seen: dict[tuple, list] = {}
+    for p in poses:
+        slot = (p.barrier, p.part, p.node)
+        label = "/".join(x for x in slot if x)
+        for other in seen.get(slot, []):
+            if p.at is None or other.at is None:
+                raise DoorPoseError(f"{label} occurs twice and a pose lacks 'at' to tell the instances apart")
+            if math.dist(p.at, other.at) <= AT_TOLERANCE:
+                raise DoorPoseError(f"{label} occurs twice at {tidy(p.at)}")
+        seen.setdefault(slot, []).append(p)
+
+
+def pose_row(p: NodePose) -> str:
+    curve = f", {len(p.curve)}-key curve" if p.curve else ""
+    at = f", at {tidy(p.at)}" if p.at is not None else ""
+    return (f"    + [{p.source}] {p.barrier} | {p.part or '.'} | {p.node or '.'}: pos {tidy(p.closed_position)} -> "
+            f"{tidy(p.open_position)}, euler {tidy(p.closed_euler)} -> {tidy(p.open_euler)}, {round(p.seconds, DECIMALS)} s "
+            f"{p.ease}{curve}{at}")
+
+
+def extract_dot(map_key: str, arena: str, package: Path | None) -> tuple[str, dict, list[str]]:
+    """Equator and Bay5: the end poses of the DotAnimators below the scan roots of DOT_SOURCES, plus the borrowed gates."""
+    src = DOT_SOURCES[map_key]
+    data_dir, version = find_arena(arena)
+    scenes: dict[str, ArenaScene] = {}
+
+    def scene_of(name: str) -> ArenaScene:
+        if name not in scenes:
+            scenes[name] = ArenaScene(data_dir, scene_level_index(map_key, name))
+        return scenes[name]
+
+    main = scene_of(src["scene"])
+    level = scene_level_index(map_key, src["scene"])
+    summary = [f"scene {src['scene']} = level{level} + sharedassets{level}.assets, Arena {version or '(version unknown)'}, "
+               f"{len(main.tr)} transforms"]
+    poses: list[NodePose] = []
+    warnings: list[str] = []
+    objects = elements = 0
+    for scan in src["scans"]:
+        scanned = scan_dot_animators(main, src["scene"], scan)
+        poses.extend(scanned.poses)
+        warnings.extend(scanned.warnings)
+        objects += scanned.objects
+        elements += scanned.elements
+        summary.append(f"scan {scan['root']} (barrier depth {scan['depth']}): {scanned.objects} DotAnimator(s), {scanned.elements} "
+                       f"element(s), {len(scanned.poses)} pose(s), {scanned.skipped_inactive} inactive, {scanned.skipped_switch} switch")
+        summary.extend(scanned.lines)
+        summary.extend(pose_row(p) for p in scanned.poses)
+    summary.append(f"decode self-check: {objects} DotAnimator object(s), {elements} element(s); every decode ends exactly at the "
+                   "object's byte length, every wrap word is (2, 2, 4), every kind and ease is known")
+    for spec in src.get("borrowed", []):
+        borrowed = build_borrowed(scene_of(spec["scene"]), spec["scene"], spec, poses)
+        poses.extend(borrowed.poses)
+        summary.append(f"borrowed {spec['barrier']} (scene {spec['scene']}, from {spec['lender']['barrier']}, mode {spec['mode']}, "
+                       f"no DotAnimator of its own): {len(borrowed.poses)} pose(s)")
+        summary.extend(pose_row(p) for p in borrowed.poses)
+    if not poses:
+        raise DoorPoseError(f"no DotAnimator pose for {map_key}")
+    check_identities(poses)
+    if package is not None:
+        problems = check_package(package, src["scene"], poses, main)
+        if problems:
+            raise DoorPoseError("verification failed:\n  " + "\n  ".join(problems))
+        summary.append(f"package check: {len(poses)} pose(s) exist in {package.name} with Arena's closed transform "
+                       f"(repeated paths told apart by 'at')")
+    summary.extend(f"WARN {text}" for text in warnings)
+    ordered = sorted(poses, key=lambda p: (p.barrier, tuple(tidy(p.at)) if p.at is not None else (), p.part, p.node))
+    source = {"scene": src["scene"], "level": level, "assets": f"sharedassets{level}.assets", "arena_version": version or "unknown"}
+    extra = []
+    for name in scenes:
+        if name != src["scene"]:
+            index = scene_level_index(map_key, name)
+            extra.append({"scene": name, "level": index, "assets": f"sharedassets{index}.assets"})
+    if extra:
+        source["extra_scenes"] = extra
+    counts = {s: sum(1 for p in ordered if p.source == s) for s in SOURCES}
+    summary.append(f"poses {len(ordered)}: " + ", ".join(f"{n} {s}" for s, n in counts.items() if n))
+    return render_sidecar(map_key, source, [sidecar_pose(p) for p in ordered]), source, summary
+
+
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("--map", required=True, choices=sorted(MAP_SOURCES))
+    parser.add_argument("--map", required=True, choices=sorted(set(MAP_SOURCES) | set(DOT_SOURCES)))
     parser.add_argument("--arena", default="auto", help="'auto' (launcher registry, default location) or an Arena folder (read-only)")
     parser.add_argument("--package", type=Path, default=None, help="extracted package to cross-check names and closed transforms")
     parser.add_argument("--output", type=Path, required=True)

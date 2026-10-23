@@ -141,7 +141,7 @@ public sealed class SpawnGatesWiringTests
     public void EveryGatePartIsOfferedBeforeItIsSwitchedOff()
     {
         var code = Text("ArenaMapPort.Client/BoothDoorRepairs.cs");
-        Assert.Equal(2, Regex.Matches(code, @"SpawnGates\.Offer\(").Count); // door leaves and descriptor barriers
+        Assert.Equal(3, Regex.Matches(code, @"SpawnGates\.Offer\(").Count); // door leaves, descriptor barrier parts and barrier roots (Bay5's rollers)
         // In both loops the part is offered first and only switched off when the offer says "not held".
         foreach (var variable in new[] { "t", "part" })
         {

@@ -3,6 +3,20 @@
 Snapshot for whoever continues (human or agent). Verify the commits named here against `git log`; this file
 is updated by hand at each handover, it is not an automatic record. Read [AGENTS.md](AGENTS.md) first.
 
+## Update 2026-10-24 - Equator and Bay5 gate motions, Equator spawns in the booths, drive scale (built and rebaked, NOT deployed, host test pending)
+
+User request (2026-10-23): Equator's spawns behind the booth doors instead of the FCK shop and the FCK shutter shut again; every Bay5 gate open
+with Arena's own motion at half the original time. Implemented from the DotAnimator decode of [door-animations-survey.md](docs/progress/door-animations-survey.md):
+sidecar schema 2 with `tools/maps/equator.doors.json` (10 rows) and `bay5.doors.json` (8 rows), `BoothDoorRepairs`/`SpawnGates`/`DoorPoseModel` park, hold and
+drive the booth leaves, the Bay5 rollers and both depot gates (instance by world position), new `Spawns/SpawnGateDriveScale` (default 0.5, Bowl included),
+Equator's four player spawns on Arena's booth markers and `opened_barriers` empty. Both NavMesh bundles were rebaked on 2026-10-24 (Equator 10404/4572
+-> 10395/4567 triangulation, the FCK hall is a cut-off 95-polygon pocket; Bay5 22117/10213 -> 22141/10223, `Door_01 (2)`, `One_man_Door` and depot gate 822
+now open), the scenes bundles are content-equal, `dist/` is restaged encrypted (`DISTRIBUTION_OK`), dotnet 2215/2215, Python 2044 OK, deploy dry run =
+7 files (both DLLs, 4 bundles, Equator `base.json`; ~1.6 GB). Deploy order and host recipe: [door-poses.md](docs/progress/door-poses.md) "2026-10-23 - Equator and Bay5
+door motions ..." and [equator-booth-spawns.md](docs/progress/equator-booth-spawns.md) (restart the SPT server before EFT). Bay5's unnumbered `Door_01` and `Door_01 (1)`
+stay shut on purpose (static twin, planks, fence). The 0.3.0 candidate ZIP of 2026-10-18 is superseded (old NavMesh bundles, old Equator database, old DLLs).
+Nothing is committed.
+
 ## Update 2026-10-23 - server not-found line in red, launcher advice once
 
 User request: the server's failure line in red, without the doubled text. The shared reasons of the registry causes no longer carry

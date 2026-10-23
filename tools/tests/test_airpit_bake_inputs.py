@@ -8,6 +8,10 @@ every path in the lists resolves to exactly the object the NavMesh model flagged
 shaped the way both consumers (the client opens direct children, the bake drops descendants) agree on. The C# side
 is ArenaMapPort.Server.Tests (AirPitMapTests, MapDescriptorConsistencyTests) and test_navmesh_source_layers.py
 (BakeNavMesh's pure helpers, executed from the production text); the offline model is test_navmesh_diff.py.
+
+Since 2026-10-23 the file also holds the door-pose side of the bake (docs/progress/door-poses.md, "NavMesh bake"): Equator and
+Bay5's barrier lists, the Python mirror of BakeNavMesh.ResolveOpenedBarriers (BarrierBake) and its runs over the real packages,
+which reproduce the last real bake logs for the old configuration and count what the new rule changes.
 """
 import copy
 import json
@@ -97,8 +101,16 @@ class SidecarContentTests(unittest.TestCase):
             data = sidecar(name)
             for key in ("navmesh_bake_exclusions", "bake_bounds", "navmesh_bake_layers", "start_gates", "held_gates"):
                 self.assertNotIn(key, data, f"{name} must not carry {key}")
-        self.assertEqual(len(sidecar("equator.json")["opened_barriers"]), 1)
-        self.assertEqual(len(sidecar("bay5.json")["opened_barriers"]), 3)
+        # 2026-10-23 (docs/progress/equator-booth-spawns.md): Equator's FCK shutter is a wall again (no opened barriers), Bay5 opens
+        # every gate Arena moves plus Door_01 (3): four warehouse rollers and the depot frame (listed once, two instances).
+        self.assertEqual(sidecar("equator.json")["opened_barriers"], [])
+        self.assertEqual(sidecar("bay5.json")["opened_barriers"], [
+            "WAREHOUSE_DOORS (1)/Bay5_Warehouse_Gate_Door_01 (2)",
+            "WAREHOUSE_DOORS (1)/Bay5_Warehouse_Gate_Door_01 (3)",
+            "WAREHOUSE_DOORS (1)/Bay5_Warehouse_Gate_Door_01 (4)",
+            "WAREHOUSE_DOORS (1)/One_man_Door",
+            "OLD_WAREHOUSE_DOORS/Gates_Depot_Frame",
+        ])
 
     def test_no_other_sidecar_uses_the_new_keys(self):
         # AirPit and, since PLAN-BOWL item 7 (2026-10-18), Bowl carry bake inputs and gate roles; no other sidecar does.
@@ -428,6 +440,431 @@ class PackageTests(unittest.TestCase):
         self.assertFalse({cset.owners[i].layer for i in range(len(cset.owners)) if masked[i]} - set(ARENA_LAYERS))
         # AirPit has no live non-trigger collider on the Triggers layer, so keeping the owner rule costs nothing here
         self.assertFalse([o for o in cset.owners if o.layer == 13])
+
+
+# ---------------------------------------------------------------------------------------------------------------------
+# Door poses (2026-10-23): the offline mirror of BakeNavMesh.ResolveOpenedBarriers / RoundOpenedReason.
+#
+# A barrier of opened_barriers that has rows in tools/maps/<stem>.doors.json is one the client no longer hides: it parks or
+# drives the posed parts and leaves every other part standing. The bake therefore drops only the posed parts' subtrees (the
+# barrier root itself for a row with part "", as for Bay5's rollers) and bakes the rest as walls; a barrier without rows keeps
+# the old rule (every non-frame descendant goes). Repeated paths (Bay5's two depot gates) are told apart by the rows' 'at'.
+# The C# is executed by test_navmesh_source_layers.py (production text on a stand-in hierarchy); this mirror lets the same rule
+# run over the real packages, where it reproduces the numbers of the last real bake logs for the old configuration.
+# ---------------------------------------------------------------------------------------------------------------------
+try:
+    import port_colliders as pc
+except ImportError:                    # numpy missing: the model tests skip, the sidecar pins above still run
+    pc = None
+
+EQUATOR_BARRIERS: list = []            # the FCK hall shutter stays shut (user decision 2026-10-23)
+BAY5_BARRIERS = [
+    "WAREHOUSE_DOORS (1)/Bay5_Warehouse_Gate_Door_01 (2)",
+    "WAREHOUSE_DOORS (1)/Bay5_Warehouse_Gate_Door_01 (3)",
+    "WAREHOUSE_DOORS (1)/Bay5_Warehouse_Gate_Door_01 (4)",
+    "WAREHOUSE_DOORS (1)/One_man_Door",
+    "OLD_WAREHOUSE_DOORS/Gates_Depot_Frame",
+]
+OLD_BAY5_BARRIERS = BAY5_BARRIERS[1:3] + BAY5_BARRIERS[4:]            # (3), (4) and the depot frame: the 0.2.x configuration
+OLD_EQUATOR_BARRIERS = ["SBG_Arena_Equator/SOO_LOD0/equator_roller_shutters_02 (9)"]
+AT_TOLERANCE = 0.05                    # ArenaDoorPose.AtTolerance == BakeNavMesh.DoorAtTolerance
+EQUATOR_PACKAGE = REPO / "work" / "extract" / "equator-native-v5"
+BAY5_PACKAGE = REPO / "work" / "extract" / "bay5-native-v5"
+BOWL_PACKAGE = REPO / "work" / "extract" / "bowl-native-v2"
+
+
+def door_rows(stem):
+    """The rows the bake reads (ArenaPaths.DoorRows): barrier, part, node, at of tools/maps/<stem>.doors.json; none without the file."""
+    path = REPO / "tools" / "maps" / f"{stem}.doors.json"
+    if not path.is_file():
+        return []
+    doc = json.loads(path.read_text(encoding="utf-8"))
+    if doc["schema_version"] != 2:
+        raise AssertionError(f"{path.name}: the bake reads schema 2")
+    return [{"barrier": p["barrier"], "part": p["part"], "node": p["node"], "at": p["at"]} for p in doc["poses"]]
+
+
+def find_all_instances(scenes, path):
+    """BakeNavMesh.FindAllInstances: every object the path names (all roots of the first name, all children per level)."""
+    segments = path.split("/")
+    found = []
+    for scene in scenes.values():
+        level = [r for r in scene.roots() if scene.objects[r]["name"] == segments[0]]
+        for segment in segments[1:]:
+            level = [c for k in level for c in scene.children.get(k, []) if scene.objects[c]["name"] == segment]
+        found += [(scene.name, k) for k in level]
+    return found
+
+
+def row_applies(row, position):
+    """ArenaDoorPose.AppliesTo / BakeNavMesh.DoorRowAppliesTo: no 'at' = every instance, else Euclidean within 0.05 m."""
+    if row["at"] is None:
+        return True
+    return sum((float(position[i]) - row["at"][i]) ** 2 for i in range(3)) <= AT_TOLERANCE ** 2
+
+
+def resolve_opened_barriers(scenes, paths, rows):
+    """BakeNavMesh.ResolveOpenedBarriers -> (legacy paths, moved [(scene, key)], unresolved [str], posed count, uncovered [(path, scene, key)])."""
+    legacy, moved, unresolved, uncovered, posed = [], [], [], [], 0
+    for path in paths or []:
+        if not path:
+            continue
+        path_rows = [r for r in rows if r["barrier"] == path]
+        if not path_rows:
+            legacy.append(path)                      # resolved by pc.mark_barriers (Transform.Find semantics), as before
+            continue
+        posed += 1
+        if any(r["at"] is not None for r in path_rows):
+            instances = find_all_instances(scenes, path)
+        else:
+            instances, _missing = pc.resolve_barriers(scenes, [path])
+        if not instances:
+            unresolved.append(path)
+            continue
+        used = [False] * len(path_rows)
+        for scene_name, key in instances:
+            scene = scenes[scene_name]
+            position = scene.world(key)[:3, 3]
+            covered = False
+            for i, row in enumerate(path_rows):
+                if not row_applies(row, position):
+                    continue
+                used[i] = covered = True
+                target = key if not row["part"] else scene.find(key, row["part"])
+                if target is None:
+                    unresolved.append(f"{path}/{row['part']}")
+                elif (scene_name, target) not in moved:
+                    moved.append((scene_name, target))
+            if not covered:
+                uncovered.append((path, scene_name, key))
+        unresolved += [f"{path} (row {i} matches no instance)" for i, hit in enumerate(used) if not hit]
+    return legacy, moved, unresolved, posed, uncovered
+
+
+class BarrierBake:
+    """The barrier part of the port bake for one loaded package: which collider owners the rule drops, and under which label."""
+
+    def __init__(self, cset, paths, rows):
+        self.cset = cset
+        self.legacy_paths, self.moved, self.unresolved, self.posed, self.uncovered = resolve_opened_barriers(cset.scenes, paths, rows)
+        pc.mark_barriers(cset, self.legacy_paths)
+        self.unresolved += list(cset.unresolved_barriers)
+        names = {}
+        for scene_name, key in self.moved:
+            names.setdefault(scene_name, {})[key] = cset.scenes[scene_name].objects[key]["name"]
+        self.reason = {}
+        for o in cset.owners:
+            label = None
+            for key in cset.scenes[o.scene].path(o.obj_id):                      # root .. owner; a moved subtree contains its owners
+                if key in names.get(o.scene, {}):
+                    label = "door_poses:" + names[o.scene][key]
+                    break
+            base = pc.bake_exclusion_reason(o)
+            if label and base in (None, "opened_barriers", "navmesh_bake_exclusions"):
+                base = label                                                       # RoundOpenedReason checks the moved subtrees first
+            self.reason[o.index] = base
+
+    def sources(self):
+        return {o.index for o in self.cset.owners if self.reason[o.index] is None}
+
+    def dropped_by_barriers(self):
+        return {i for i, r in self.reason.items() if r == "opened_barriers" or (r or "").startswith("door_poses:")}
+
+    def counts(self):
+        out = {}
+        for r in self.reason.values():
+            if r is not None:
+                out[r] = out.get(r, 0) + 1
+        return out
+
+    def owners_named(self, fragment):
+        return {o.index for o in self.cset.owners if fragment in o.path}
+
+    def static_twins(self, tolerance=0.05):
+        """(dropped, twin) path pairs: a collider the barrier rule drops (or the booth leaves, dropped by name) that has a SOURCE collider
+        of the same object name, layer and kind and an equal world AABB (centre and extent within `tolerance`) in the package. That
+        is a copy of the gate the bake keeps as a wall: a second scene's static slab stays shut when only this copy is opened, in the
+        NavMesh and (the twin's renderer stays up too) on screen. Needs numpy (the model tests skip without it)."""
+        import numpy as np
+
+        def box(o):
+            t = self.cset.tris[o.tri_start:o.tri_start + o.tri_count].reshape(-1, 3)
+            return t.min(0), t.max(0)
+
+        def dropped_gate(reason):
+            return reason is not None and (reason.startswith("door_poses:") or reason in ("opened_barriers", "Door_Sliding_Respawn_L", "Door_Sliding_Respawn_R"))
+
+        kept = {}
+        for q in self.cset.owners:
+            if self.reason[q.index] is None and q.tri_count:
+                kept.setdefault((q.names[-1], q.layer, q.kind), []).append(q)
+        pairs = []
+        for o in self.cset.owners:
+            if not o.tri_count or not dropped_gate(self.reason[o.index]):
+                continue
+            lo, hi = box(o)
+            for q in kept.get((o.names[-1], o.layer, o.kind), []):
+                qlo, qhi = box(q)
+                if max(np.abs(qlo - lo).max(), np.abs(qhi - hi).max()) <= tolerance:
+                    pairs.append((f"{o.scene}:{o.path}", f"{q.scene}:{q.path}"))
+        return pairs
+
+
+def load_colliders(package):
+    return pc.load_package_colliders(package)
+
+
+def synthetic_package(directory):
+    """Two depot gates (same path, different positions), three rollers, a legacy barrier and one unlisted gate, all box colliders."""
+    def obj(oid, name, parent=None, pos=(0, 0, 0), layer=18, comps=()):
+        return {"id": oid, "name": name, "parent_id": parent, "active": True, "layer": layer, "tag": "Untagged",
+                "local_position": list(pos), "local_rotation": [0, 0, 0, 1], "local_scale": [1, 1, 1], "components": list(comps)}
+
+    box = [{"type": "BoxCollider", "size": [1, 1, 1], "center": [0, 0, 0], "enabled": True, "is_trigger": False}]
+    objects = [obj("1", "OLD_WAREHOUSE_DOORS", layer=0)]
+    n = 10
+    for gate, (x, z) in enumerate(((50.574, 7.525), (69.045, -6.317))):
+        base = n
+        objects += [
+            obj(str(base), "Gates_Depot_Frame", "1", (x, -3.895, z), 0),
+            obj(str(base + 1), "Telfer_Help (2)", str(base), (1, 0, 0), 0),
+            obj(str(base + 2), "Telfer_Help_Collider", str(base + 1), comps=box),
+            obj(str(base + 3), "Gates_Depot_Frame_COLLIDER", str(base), comps=box),
+            obj(str(base + 4), "Gates_Depot_Door_L", str(base), (0, 0, 0), 0),
+            obj(str(base + 5), "Gates_Depot_Door_L_Leaf", str(base + 4), (2, 0, 0), 0),
+            obj(str(base + 6), "Gates_Depot_Door_L_COLLIDER", str(base + 5), comps=box),
+            obj(str(base + 7), "Gates_Depot_Door_R", str(base), (0, 0, 0), 0),
+            obj(str(base + 8), "Gates_Depot_Door_R_Leaf", str(base + 7), (-2, 0, 0), 0),
+            obj(str(base + 9), "Gates_Depot_Door_R_COLLIDER", str(base + 8), comps=box),
+        ]
+        n += 20
+    objects += [obj("500", "WAREHOUSE_DOORS (1)", layer=0)]
+    for i, name in enumerate(("Roller (2)", "Roller (3)", "Roller (5)")):
+        objects += [obj(str(510 + 2 * i), name, "500", (100 + 10 * i, 0, 40), 0),
+                    obj(str(511 + 2 * i), "Rollete_COLLIDER", str(510 + 2 * i), comps=box)]
+    objects += [obj("600", "Legacy", layer=0), obj("601", "Leaf_COLLIDER", "600", comps=box), obj("602", "Legacy_frame_COLLIDER", "600", comps=box)]
+    (directory / "scenes").mkdir(parents=True)
+    (directory / "meshes").mkdir()
+    (directory / "scenes" / "Test.json").write_text(json.dumps({"scene_name": "Test", "objects": objects}), encoding="utf-8")
+    return directory
+
+
+@unittest.skipIf(pc is None, "numpy / port_colliders not available")
+class DoorPoseBakeModelTests(unittest.TestCase):
+    DEPOT = "OLD_WAREHOUSE_DOORS/Gates_Depot_Frame"
+    ROW_L1 = {"barrier": DEPOT, "part": "Gates_Depot_Door_L", "node": "Gates_Depot_Door_L_Leaf", "at": [50.574, -3.895, 7.525]}
+    ROW_R1 = {"barrier": DEPOT, "part": "Gates_Depot_Door_R", "node": "Gates_Depot_Door_R_Leaf", "at": [50.574, -3.895, 7.525]}
+    ROW_L2 = {"barrier": DEPOT, "part": "Gates_Depot_Door_L", "node": "Gates_Depot_Door_L_Leaf", "at": [69.045, -3.883, -6.317]}
+    ROW_R2 = {"barrier": DEPOT, "part": "Gates_Depot_Door_R", "node": "Gates_Depot_Door_R_Leaf", "at": [69.045, -3.883, -6.317]}
+
+    def bake(self, paths, rows):
+        import tempfile
+        directory = tempfile.TemporaryDirectory()
+        self.addCleanup(directory.cleanup)
+        cset = pc.load_package_colliders(synthetic_package(Path(directory.name) / "pkg"))
+        return BarrierBake(cset, paths, rows)
+
+    def names(self, bake, indexes):
+        return sorted(bake.cset.owners[i].path.split("/", 1)[1] for i in indexes)
+
+    def test_both_depot_instances_are_posed_and_only_their_door_parts_go(self):
+        b = self.bake([self.DEPOT], [self.ROW_L1, self.ROW_R1, self.ROW_L2, self.ROW_R2])
+        self.assertEqual((b.posed, b.legacy_paths, b.unresolved, b.uncovered), (1, [], [], []))
+        self.assertEqual(len(b.moved), 4)
+        self.assertEqual(sorted(b.counts().items()), [("door_poses:Gates_Depot_Door_L", 2), ("door_poses:Gates_Depot_Door_R", 2)])
+        dropped = self.names(b, b.dropped_by_barriers())
+        self.assertEqual(dropped, sorted(f"Gates_Depot_Frame/Gates_Depot_Door_{s}/Gates_Depot_Door_{s}_Leaf/Gates_Depot_Door_{s}_COLLIDER"
+                                         for s in "LRLR"))
+        # posts and the frame collider of BOTH instances stay walls
+        stays = {o.path.split("/", 1)[1] for o in b.cset.owners if b.reason[o.index] is None and "Gates_Depot_Frame" in o.path}
+        self.assertEqual(stays, {"Gates_Depot_Frame/Telfer_Help (2)/Telfer_Help_Collider", "Gates_Depot_Frame/Gates_Depot_Frame_COLLIDER"})
+
+    def test_the_old_rule_drops_the_posts_and_misses_the_second_instance(self):
+        b = self.bake([self.DEPOT], [])
+        self.assertEqual((b.posed, b.legacy_paths), (0, [self.DEPOT]))
+        self.assertEqual(self.names(b, b.dropped_by_barriers()), sorted([
+            "Gates_Depot_Frame/Telfer_Help (2)/Telfer_Help_Collider", "Gates_Depot_Frame/Gates_Depot_Door_L/Gates_Depot_Door_L_Leaf/Gates_Depot_Door_L_COLLIDER",
+            "Gates_Depot_Frame/Gates_Depot_Door_R/Gates_Depot_Door_R_Leaf/Gates_Depot_Door_R_COLLIDER"]))   # first instance only
+
+    def test_a_row_for_one_instance_leaves_the_other_a_wall(self):
+        b = self.bake([self.DEPOT], [self.ROW_L2])
+        self.assertEqual(len(b.moved), 1)
+        self.assertEqual([u[0] for u in b.uncovered], [self.DEPOT])
+        self.assertEqual(b.unresolved, [])
+        self.assertEqual(len(b.dropped_by_barriers()), 1)
+
+    def test_rows_that_resolve_to_nothing_are_reported(self):
+        stale = dict(self.ROW_L1, at=[51.0, -3.895, 7.525])
+        self.assertEqual(self.bake([self.DEPOT], [stale, self.ROW_L2]).unresolved, [f"{self.DEPOT} (row 0 matches no instance)"])
+        self.assertEqual(self.bake([self.DEPOT], [dict(self.ROW_L1, part="Gates_Depot_Door_Q")]).unresolved, [f"{self.DEPOT}/Gates_Depot_Door_Q"])
+        self.assertEqual(self.bake(["OLD_WAREHOUSE_DOORS/Gates_Missing"], [dict(self.ROW_L1, barrier="OLD_WAREHOUSE_DOORS/Gates_Missing")]).unresolved,
+                         ["OLD_WAREHOUSE_DOORS/Gates_Missing"])
+
+    def test_the_at_match_is_euclidean_within_five_centimetres(self):
+        near = dict(self.ROW_L1, at=[50.574 + 0.03, -3.895 + 0.03, 7.525])
+        far = dict(self.ROW_L1, at=[50.574 + 0.04, -3.895 + 0.04, 7.525])         # 0.0566 m away
+        self.assertEqual(len(self.bake([self.DEPOT], [near]).moved), 1)
+        self.assertEqual(len(self.bake([self.DEPOT], [far]).moved), 0)
+
+    def test_rollers_move_as_a_whole_root_and_neighbours_stay(self):
+        paths = ["WAREHOUSE_DOORS (1)/Roller (2)", "WAREHOUSE_DOORS (1)/Roller (3)"]
+        rows = [{"barrier": p, "part": "", "node": "", "at": None} for p in paths]
+        b = self.bake(paths, rows)
+        self.assertEqual((b.posed, b.legacy_paths, b.unresolved), (2, [], []))
+        self.assertEqual(sorted(b.counts().items()), [("door_poses:Roller (2)", 1), ("door_poses:Roller (3)", 1)])
+        unlisted = b.owners_named("Roller (5)")
+        self.assertEqual(len(unlisted), 1)
+        self.assertTrue(all(b.reason[i] is None for i in unlisted))
+
+    def test_mixed_list_applies_each_rule_to_its_own_barrier(self):
+        rows = [self.ROW_L1, self.ROW_R1, self.ROW_L2, self.ROW_R2]
+        b = self.bake([self.DEPOT, "Legacy"], rows)
+        self.assertEqual((b.posed, b.legacy_paths), (1, ["Legacy"]))
+        legacy_leaf = next(o.index for o in b.cset.owners if o.path.endswith("Legacy/Leaf_COLLIDER"))
+        legacy_frame = next(o.index for o in b.cset.owners if o.path.endswith("Legacy_frame_COLLIDER"))
+        self.assertEqual((b.reason[legacy_leaf], b.reason[legacy_frame]), ("opened_barriers", None))
+
+    def test_rows_of_unlisted_barriers_are_ignored(self):
+        b = self.bake([], [self.ROW_L1, self.ROW_R1])
+        self.assertEqual((b.posed, b.legacy_paths, b.moved, b.unresolved), (0, [], [], []))
+        self.assertEqual(b.dropped_by_barriers(), set())
+
+
+def package_cases(*packages):
+    return unittest.skipUnless(pc is not None and all((p / "scenes").is_dir() for p in packages),
+                               "numpy or work/extract packages not present")
+
+
+@package_cases(EQUATOR_PACKAGE, BAY5_PACKAGE, BOWL_PACKAGE)
+class DoorPoseBakePackageTests(unittest.TestCase):
+    """The rule over the real packages. The old configuration reproduces the last real bake logs (Equator: 4104 sources, Bay5:
+    10501 = 10367 + 134 modifier volumes), so the model and the Unity bake count the same colliders."""
+
+    def test_the_model_reproduces_the_last_real_bake_of_the_old_configuration(self):
+        equator = BarrierBake(load_colliders(EQUATOR_PACKAGE), OLD_EQUATOR_BARRIERS, [])
+        self.assertEqual((len(equator.cset.owners), len(equator.sources())), (4169, 4104))             # "collected 4169 ... sources=4104"
+        self.assertEqual(equator.counts(), {"SPAWN_BOUND*": 2, "LevelBorder layer 29": 41, "Door_Sliding_Respawn_L": 10,
+                                            "Door_Sliding_Respawn_R": 10, "opened_barriers": 2})        # the 2026-10-20 build log's lines
+        bay5 = BarrierBake(load_colliders(BAY5_PACKAGE), OLD_BAY5_BARRIERS, [])
+        self.assertEqual(len(bay5.sources()) + 134, 10501)                                              # + 134 NavMeshModifierVolume sources
+        self.assertEqual(bay5.counts()["opened_barriers"], 14)                                          # (4) 2 + (3) 2 + depot 10
+
+    def test_equator_has_no_opened_barrier_and_the_fck_shutter_is_a_wall(self):
+        old = BarrierBake(load_colliders(EQUATOR_PACKAGE), OLD_EQUATOR_BARRIERS, [])
+        new = BarrierBake(load_colliders(EQUATOR_PACKAGE), EQUATOR_BARRIERS, door_rows("equator"))
+        self.assertEqual((new.posed, new.legacy_paths, new.moved, new.unresolved, new.uncovered), (0, [], [], [], []))
+        self.assertEqual(new.dropped_by_barriers(), set())
+        # the booth leaves are dropped by name, ten colliders per side (five assemblies x COLLIDER + BALLISTIC), exactly as before
+        self.assertEqual(new.counts(), {"SPAWN_BOUND*": 2, "LevelBorder layer 29": 41, "Door_Sliding_Respawn_L": 10, "Door_Sliding_Respawn_R": 10})
+        # the shutter's four colliders (two non-frame, two frame) are all sources now; before the two non-frame ones were dropped
+        shutter = new.owners_named("equator_roller_shutters_02 (9)")
+        self.assertEqual(sorted(new.cset.owners[i].names[-1] for i in shutter), [
+            "roller_shutters_02_BALLISTIC_metalthin", "roller_shutters_02_COLLIDER",
+            "roller_shutters_frame_02_BALLISTIC_metalthin", "roller_shutters_frame_02_COLLIDER"])
+        self.assertTrue(shutter <= new.sources())
+        self.assertEqual(old.owners_named("equator_roller_shutters_02 (9)"), shutter)
+        self.assertEqual(shutter - old.sources(), old.dropped_by_barriers())
+        self.assertEqual((len(old.sources()), len(new.sources())), (4104, 4106))                         # the real bake: sources=4104 -> 4106
+
+    def test_equator_booth_assemblies_keep_their_surround_as_a_wall(self):
+        new = BarrierBake(load_colliders(EQUATOR_PACKAGE), EQUATOR_BARRIERS, door_rows("equator"))
+        booths = [o for o in new.cset.owners if "/Door_Sliding_Respawn" in o.path or o.path.startswith("SPAWN_DOORS/")]
+        leaves = [o for o in booths if new.reason[o.index] in ("Door_Sliding_Respawn_L", "Door_Sliding_Respawn_R")]
+        self.assertEqual(len(leaves), 20)
+        # root-level colliders of an assembly (surround, ballistic plastic/metal) are sources; only the leaf subtrees go
+        surround = [o for o in booths if o.names[-1] in ("Door_Sliding_Respawn_COLLIDER", "Door_Sliding_Respawn_BALLISTIC_metalthin",
+                                                         "Door_Sliding_Respawn_BALLISTIC_plastic")]
+        self.assertEqual(len(surround), 15)                                                               # five assemblies x three
+        self.assertTrue(all(new.reason[o.index] is None for o in surround))
+
+    def test_bay5_opens_every_gate_and_keeps_the_depot_frame_and_posts_standing(self):
+        old = BarrierBake(load_colliders(BAY5_PACKAGE), OLD_BAY5_BARRIERS, [])
+        new = BarrierBake(load_colliders(BAY5_PACKAGE), BAY5_BARRIERS, door_rows("bay5"))
+        self.assertEqual((new.posed, new.legacy_paths, new.unresolved, new.uncovered), (5, [], [], []))
+        self.assertEqual(sorted(new.cset.scenes[s].objects[k]["name"] for s, k in new.moved), [
+            "Bay5_Warehouse_Gate_Door_01 (2)", "Bay5_Warehouse_Gate_Door_01 (3)", "Bay5_Warehouse_Gate_Door_01 (4)", "Gates_Depot_Door_L",
+            "Gates_Depot_Door_L", "Gates_Depot_Door_R", "Gates_Depot_Door_R", "One_man_Door"])
+        self.assertEqual(new.counts()["door_poses:Gates_Depot_Door_L"], 8)         # per gate: leaf, second panel, and their two ballistic twins
+        self.assertEqual(new.counts()["door_poses:Gates_Depot_Door_R"], 4)
+        for name in ("Bay5_Warehouse_Gate_Door_01 (2)", "Bay5_Warehouse_Gate_Door_01 (3)", "Bay5_Warehouse_Gate_Door_01 (4)"):
+            self.assertEqual(new.counts()["door_poses:" + name], 2, name)         # COLLIDER + BALLISTIC_metalthin
+        self.assertEqual(new.counts()["door_poses:One_man_Door"], 4)              # top and bottom panel, two colliders each
+        self.assertNotIn("opened_barriers", new.counts())
+        self.assertEqual(len(new.dropped_by_barriers()), 22)
+        self.assertEqual(len(old.dropped_by_barriers()), 14)
+        # newly walls: the first depot gate's two posts (a Telfer_Help_Collider on 18 and a Telfer_Help_Metal on 12 each);
+        # newly gone: the second depot gate's leaves (the old rule never found that instance), Door_01 (2) and the one-man door
+        newly_walls = old.dropped_by_barriers() - new.dropped_by_barriers()
+        newly_gone = new.dropped_by_barriers() - old.dropped_by_barriers()
+        self.assertEqual((len(newly_walls), len(newly_gone)), (4, 12))
+        self.assertTrue(all("Telfer_Help" in new.cset.owners[i].path for i in newly_walls))
+        self.assertEqual(sorted(new.cset.owners[i].layer for i in newly_walls), [12, 12, 18, 18])
+        self.assertEqual(len([i for i in newly_gone if "Gates_Depot_Door_" in new.cset.owners[i].path]), 6)
+        self.assertEqual(len([i for i in newly_gone if "Bay5_Warehouse_Gate_Door_01 (2)" in new.cset.owners[i].path]), 2)
+        self.assertEqual(len([i for i in newly_gone if "One_man_Door" in new.cset.owners[i].path]), 4)
+        # every Telfer_Help post and every Gates_Depot_Frame_* collider of both depot gates is a source
+        for fragment in ("Telfer_Help", "Gates_Depot_Frame_COLLIDER", "Gates_Depot_Frame_BALLISTIC_metalthick"):
+            owners = new.owners_named("Gates_Depot_Frame/") if fragment == "Telfer_Help" else new.owners_named(fragment)
+            owners = {i for i in owners if fragment in new.cset.owners[i].path}
+            self.assertEqual(len(owners), {"Telfer_Help": 8, "Gates_Depot_Frame_COLLIDER": 2, "Gates_Depot_Frame_BALLISTIC_metalthick": 2}[fragment], fragment)
+            self.assertTrue(owners <= new.sources(), fragment)
+        self.assertEqual((len(old.sources()), len(new.sources())), (10367, 10359))                       # + 134 volume sources in the real log
+
+    def test_bay5_gates_carry_no_navmesh_markup_that_the_rule_would_drop_or_keep_by_accident(self):
+        new = BarrierBake(load_colliders(BAY5_PACKAGE), BAY5_BARRIERS, door_rows("bay5"))
+        for scene_name, key in new.moved:
+            scene = new.cset.scenes[scene_name]
+            stack = [key]
+            while stack:
+                k = stack.pop()
+                stack += scene.children.get(k, [])
+                for comp in scene.objects[k].get("components", []):
+                    self.assertNotIn(comp["type"], ("NavMeshModifier", "NavMeshModifierVolume"), scene.path_names(k))
+
+    def test_bowl_keeps_exactly_the_colliders_it_dropped_before(self):
+        # Bowl's two barriers have rows now (schema 2); every direct child of DOORS_SPAWN_A/B is a posed part, so the per-part rule
+        # drops the same owners as the old non-frame rule did (a finer per-node rule would have turned the army gate's frame,
+        # its two Telfer_Help posts and the gate rail into walls and changed the host-verified Bowl NavMesh).
+        barriers = sidecar("bowl.json")["opened_barriers"]
+        old = BarrierBake(load_colliders(BOWL_PACKAGE), barriers, [])
+        new = BarrierBake(load_colliders(BOWL_PACKAGE), barriers, door_rows("bowl"))
+        self.assertEqual((new.posed, new.legacy_paths, new.unresolved, new.uncovered), (2, [], [], []))
+        self.assertEqual(new.dropped_by_barriers(), old.dropped_by_barriers())
+        self.assertEqual(new.sources(), old.sources())
+        self.assertEqual(sorted(new.cset.scenes[s].objects[k]["name"] for s, k in new.moved), [
+            "BTR_82_closed", "Bowl_Gates_Respawn_01", "Bowl_Respawn_Ambulance_Animated Group", "Gates_Army_01"])
+
+    def test_no_opened_gate_has_a_static_twin_left_standing(self):
+        # A gate that is opened in one scene while an identical, active copy stays in another scene is not opened at all: the
+        # copy is baked as a wall and drawn. None of the listed barriers and none of Equator's booth leaves has one.
+        for package, stem, barriers in ((EQUATOR_PACKAGE, "equator", EQUATOR_BARRIERS), (BAY5_PACKAGE, "bay5", BAY5_BARRIERS),
+                                        (BOWL_PACKAGE, "bowl", sidecar("bowl.json")["opened_barriers"])):
+            bake = BarrierBake(load_colliders(package), barriers, door_rows(stem))
+            self.assertEqual(bake.static_twins(), [], stem)
+
+    def test_the_unnumbered_bay5_door_01_has_a_static_twin_so_listing_it_alone_would_not_open_it(self):
+        # Positive control for the check above, and the evidence for the open question whether the east-wall gates Arena keeps shut
+        # join Bay5's opened_barriers: the WAREHOUSE scene keeps its own Door_01 slab under GATES/FOR_ANIMATIONS at the same spot
+        # (146.5, -2.91, 56.92), active, with the same COLLIDER and BALLISTIC_metalthin, so listing the TeamFight copy alone changes
+        # neither the NavMesh nor the picture. Door_01 (1) has no such copy (its FOR_ANIMATIONS entry is the frame only).
+        door = "WAREHOUSE_DOORS (1)/Bay5_Warehouse_Gate_Door_01"
+        rows = [{"barrier": door, "part": "", "node": "", "at": None}]
+        bake = BarrierBake(load_colliders(BAY5_PACKAGE), BAY5_BARRIERS + [door], door_rows("bay5") + rows)
+        self.assertEqual((bake.unresolved, bake.uncovered), ([], []))
+        twins = bake.static_twins()
+        self.assertEqual(sorted((a.split(":", 1)[1].rsplit("/", 1)[1], b.split(":", 1)[0]) for a, b in twins),
+                         [("Rollete_Gate_Door_01_BALLISTIC_metalthin", "Arena_Bay5_WAREHOUSE"), ("Rollete_Gate_Door_01_COLLIDER", "Arena_Bay5_WAREHOUSE")])
+        self.assertTrue(all(b.split(":", 1)[1] == "SBG_Arena_Bay5_WAREHOUSE/OO/GATES/FOR_ANIMATIONS/Bay5_Warehouse_Gate_Door_01/" + a.rsplit("/", 1)[1]
+                            for a, b in twins))
+        one = "WAREHOUSE_DOORS (1)/Bay5_Warehouse_Gate_Door_01 (1)"
+        bake = BarrierBake(load_colliders(BAY5_PACKAGE), BAY5_BARRIERS + [one], door_rows("bay5") + [dict(rows[0], barrier=one)])
+        self.assertEqual(bake.static_twins(), [])
+
+    def test_every_row_of_every_listed_barrier_resolves_to_a_part(self):
+        for package, stem, barriers in ((EQUATOR_PACKAGE, "equator", EQUATOR_BARRIERS), (BAY5_PACKAGE, "bay5", BAY5_BARRIERS),
+                                        (BOWL_PACKAGE, "bowl", sidecar("bowl.json")["opened_barriers"])):
+            bake = BarrierBake(load_colliders(package), barriers, door_rows(stem))
+            self.assertEqual((bake.unresolved, bake.uncovered), ([], []), stem)
 
 
 if __name__ == "__main__":

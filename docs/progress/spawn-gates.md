@@ -220,3 +220,31 @@ Debug, the whole frame while any part is still posed, so the host check is one l
 Not done / not measured: nothing of this has run in a raid yet (host check: door-poses.md "Host recipe"); the 13.5 s of the
 respawn gate is the waiting time of the last doorway after a mode's Release (`SpawnGateDrive = false` removes it); players or
 bots standing where a body drives are not pushed out by the port.
+
+## Follow-up 2026-10-23: Arena's own gate motion on Equator and Bay5, instances, root poses, the timing scale
+
+User decisions 2026-10-23 (German: Equator's spawn points belong behind the booth doors, not in the FCK shop, and the FCK gate is shut
+again; on Bay5 "alle Tore aufmachen", the timing may be faster than the original, "half is probably enough"). The research is
+[door-animations-survey.md](door-animations-survey.md) (Arena moves these gates with its DOTween script `DotAnimator`, end pose, duration and
+ease per node), the data is [door-poses.md](door-poses.md) ("DotAnimator", sidecar schema 2), the runtime record with log lines, the host
+recipe and the offline carver prediction is door-poses.md "Runtime 2". The rules this file keeps:
+
+- **Equator's booth leaves are parked like Bowl's parts**, not slid by the inferred 1.38 m: `BoothDoorRepairs.OpenDoors` finds a leaf by
+  name, looks its pose up by the parent assembly's hierarchy path plus world position and runs `NotePoses` / `Offer` / `Park`; `Hold`
+  re-closes it, `Release` drives it (local x to +-2.0, InOutQuint, 5 s, one leaf 7 s, times the scale). The slide and
+  `Spawns/SpawnGateSlideSeconds` remain for a leaf without a row (none on the shipped maps; one Warning when the descriptor has poses but a
+  leaf finds none). The earlier statement above ("Release: Equator's leaves slide for `SpawnGateSlideSeconds`") is superseded for every
+  leaf that has a row, i.e. all ten.
+- **Parts and roots.** A barrier that has any pose row keeps its unposed parts standing (Bay5's `Telfer_Help` posts, frames); a row with part ""
+  moves the barrier root itself (Bay5's four roller gates; the root is then the registered gate part, hold carvers and all); a barrier
+  without rows is hidden as before (AirPit). Every instance of an `opened_barriers` path opens (Bay5's second depot gate, which the 2026-09
+  note "the duplicate eastern depot gate stayed closed" recorded as shut).
+- **Timing.** `Spawns/SpawnGateDriveScale` (default 0.5, range 0.1 to 1.0) multiplies the authored seconds of every drive on every map, Bowl
+  included; `SpawnGateDrive = false` snaps. A mode plugin that Releases therefore waits 2.5 to 3.5 s for the Equator booths, 2 s (rollers)
+  to 3.5 s (depot gates) on Bay5, 3.8 to 6.75 s for Bowl's pockets at the default.
+- **Park carvers** cover only moved colliders in the walking band (bottom below the part's floor line + 1.8 m, top above + 0.3 m): the Bay5
+  roller slabs, lifted 3.09 m, and Bowl's BTR turret carve nothing; the depot leaves and wickets, the Equator leaves and the BTR body do.
+- Mode contract unchanged (`Hold`, `Release`, `IsHeld`, `ClosedParts`); new members are `internal` (`HasPoses`).
+- Tests: `DoorPoseModelTests.cs` (eases, Hermite on the depot curve, scale, band, instance resolver, the real Equator / Bay5 rows through
+  the lookups, wiring of `BoothDoorRepairs` / `SpawnGates` read as text), `SpawnGateModelTests.cs` (the offer count is three: leaves, barrier
+  parts, barrier roots).

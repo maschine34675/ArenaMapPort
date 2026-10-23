@@ -156,21 +156,34 @@ def parse_lamp_fill_literal(v: str) -> dict:
 
 def parse_door_pose_literal(v: str) -> dict:
     """Door poses: `new ArenaDoorPose(barrier, part, node, clip, seconds, closedPosition, closedEuler, openPosition,
-    openEuler)` with four `new[] { x, y, z }` vectors; spelled as one entry of the sidecar's "poses" array."""
+    openEuler[, source, ease, curve, at])` with four `new[] { x, y, z }` vectors; spelled as one entry of the sidecar's "poses"
+    array. The last four arguments default to ("clip", "smoothstep", null, null) when omitted (Bowl's rows). `curve` is null or
+    a flat `new[] { time, value, inSlope, outSlope, ... }` that is grouped by four here; `at` is null or a vector."""
     inner = v[len("new ArenaDoorPose("):].rstrip()
     if not inner.endswith(")"):
         fail(f"could not parse door pose literal: {v[:80]!r}")
     values = [parse_cs_value(x) for x in split_top_level_args(inner[:-1])]
-    if len(values) != 9 or any(not isinstance(x, str) for x in values[:4]) or any(not isinstance(x, list) for x in values[5:]):
+    if len(values) not in (9, 13) or any(not isinstance(x, str) for x in values[:4]) or any(not isinstance(x, list) for x in values[5:9]):
         fail("door pose literal requires (barrier, part, node, clip, seconds, new[] closedPosition, new[] closedEuler, "
-             f"new[] openPosition, new[] openEuler): {v[:80]!r}")
-    return {"barrier": values[0], "part": values[1], "node": values[2], "clip": values[3], "seconds": values[4],
+             f"new[] openPosition, new[] openEuler[, source, ease, curve, at]): {v[:80]!r}")
+    source, ease, curve, at = values[9:] if len(values) == 13 else ("clip", "smoothstep", None, None)
+    if not isinstance(source, str) or not isinstance(ease, str) or (curve is not None and not isinstance(curve, list)) \
+            or (at is not None and not isinstance(at, list)):
+        fail(f"door pose literal: source and ease are strings, curve and at are null or arrays: {v[:80]!r}")
+    if curve is not None:
+        if len(curve) % 4:
+            fail(f"door pose literal: curve has {len(curve)} numbers, not a multiple of 4: {v[:80]!r}")
+        curve = [list(curve[i:i + 4]) for i in range(0, len(curve), 4)]
+    return {"barrier": values[0], "part": values[1], "node": values[2], "clip": values[3], "source": source, "seconds": values[4],
+            "ease": ease, "curve": curve, "at": at,
             "closed": {"position": values[5], "euler": values[6]}, "open": {"position": values[7], "euler": values[8]}}
 
 
 def parse_cs_value(raw: str):
     """Parses one named-argument value into a Python str / int / list[str] / ("ref", "A.B")."""
     v = raw.strip()
+    if v == "null":
+        return None
     if v.startswith('"') and v.endswith('"'):
         return v[1:-1]
     if re.fullmatch(r"-?\d+", v):
@@ -443,8 +456,17 @@ def shader_fallback_errors(map_json: dict) -> list[str]:
     return []
 
 
-DOOR_POSE_KEYS = ("barrier", "part", "node", "clip", "seconds", "closed", "open")
-DOOR_SIDECAR_SCHEMA = 1
+DOOR_POSE_KEYS = ("barrier", "part", "node", "clip", "source", "seconds", "ease", "curve", "at", "closed", "open")
+DOOR_SIDECAR_SCHEMA = 2
+DOOR_SOURCES = ("clip", "dotanimator", "borrowed")
+DOOR_EASES = ("smoothstep", "linear", "inOutQuint", "curve")
+DOOR_AT_TOLERANCE = 0.05   # m: the client matches a barrier root instance to `at` within this (ArenaDoorPose.AtTolerance)
+# Pose barriers that are NOT opened_barriers entries. Equator's booth doors are opened by BoothDoorRepairs.OpenDoors by the NAME of
+# their leaves, not as barriers; their poses name the assembly root (SPAWN_DOORS/Door_Sliding_Respawn[ (n)], and the fifth door
+# under Respawn_2) with the root's world position in `at`, and the client matches a leaf to them by parent path + position.
+DOOR_BARRIER_EXCEPTIONS = {
+    "arena_equator": re.compile(r"(SPAWN_DOORS|SBG_Arena_Equator/SOO/Respawn_2)/Door_Sliding_Respawn( \(\d+\))?"),
+}
 
 
 def is_finite_vec3(value) -> bool:
@@ -452,10 +474,28 @@ def is_finite_vec3(value) -> bool:
         isinstance(x, (int, float)) and not isinstance(x, bool) and math.isfinite(x) for x in value)
 
 
+def door_curve_errors(curve) -> list[str]:
+    """A Hermite curve [[time, value, inSlope, outSlope], ...] on a 0..1 timeline from value 0 to value 1."""
+    if not isinstance(curve, list) or len(curve) < 2 or not all(
+            isinstance(k, list) and len(k) == 4 and all(
+                isinstance(x, (int, float)) and not isinstance(x, bool) and math.isfinite(x) for x in k) for k in curve):
+        return ["curve must be a list of at least two [time, value, inSlope, outSlope] keys of finite numbers"]
+    times = [k[0] for k in curve]
+    errors = []
+    if any(b <= a for a, b in zip(times, times[1:])):
+        errors.append("curve times must increase")
+    if abs(times[0]) > 1e-4 or abs(times[-1] - 1.0) > 1e-4:
+        errors.append("curve must run from time 0 to time 1")
+    if abs(curve[0][1]) > 1e-3 or abs(curve[-1][1] - 1.0) > 1e-3:
+        errors.append("curve must run from value 0 to value 1")
+    return errors
+
+
 def door_pose_errors(map_json: dict, doors_path: Path, registry_poses) -> list[str]:
     """tools/maps/<stem>.doors.json (written by tools/extract/extract_door_poses.py) against the map descriptor and the
-    registry's DoorPoses: schema, barriers that really are opened_barriers, and the same poses in the same order with the
-    same numbers on both sides. A map without the sidecar must have no DoorPoses."""
+    registry's DoorPoses: schema 2, barriers that really are opened_barriers (or Equator's booth assembly roots, see
+    DOOR_BARRIER_EXCEPTIONS), the rules of source / ease / curve / at, and the same poses in the same order with the same
+    numbers on both sides. A map without the sidecar must have no DoorPoses."""
     name = doors_path.name
     registry_poses = registry_poses or []
     if not doors_path.exists():
@@ -472,40 +512,82 @@ def door_pose_errors(map_json: dict, doors_path: Path, registry_poses) -> list[s
         errors.append(f"{name}: schema_version must be {DOOR_SIDECAR_SCHEMA}")
     if doc.get("key") != map_json.get("key"):
         errors.append(f"{name}: key {doc.get('key')!r} is not the map's {map_json.get('key')!r}")
+    scenes = map_json.get("all_scene_names", [])
     source = doc.get("source")
-    if not isinstance(source, dict) or source.get("scene") not in map_json.get("all_scene_names", []) \
+    if not isinstance(source, dict) or source.get("scene") not in scenes \
             or type(source.get("level")) is not int or not isinstance(source.get("assets"), str) \
             or not isinstance(source.get("arena_version"), str):
         errors.append(f"{name}: source needs scene (a scene of the map), level (int), assets and arena_version")
+    elif "extra_scenes" in source:
+        extra = source["extra_scenes"]
+        if not isinstance(extra, list) or not extra or any(
+                not isinstance(e, dict) or set(e) != {"scene", "level", "assets"} or e["scene"] not in scenes
+                or type(e["level"]) is not int or not isinstance(e["assets"], str) for e in extra):
+            errors.append(f"{name}: source.extra_scenes must list {{scene (a scene of the map), level (int), assets}} objects")
     poses = doc.get("poses")
     if not isinstance(poses, list) or not poses:
         return errors + [f"{name}: poses must be a non-empty array"]
     barriers = map_json.get("opened_barriers", [])
-    seen: set = set()
+    exception = DOOR_BARRIER_EXCEPTIONS.get(map_json.get("key"))
+    seen: dict[tuple, list] = {}
     for i, pose in enumerate(poses):
         label = f"{name} poses[{i}]"
         if not isinstance(pose, dict) or set(pose) != set(DOOR_POSE_KEYS):
             errors.append(f"{label}: needs exactly the keys {', '.join(DOOR_POSE_KEYS)}")
             continue
-        for field in ("barrier", "part", "clip"):
+        for field in ("barrier", "clip"):
             if not isinstance(pose[field], str) or not pose[field]:
                 errors.append(f"{label}: {field} must be a non-empty string")
-        if not isinstance(pose["node"], str):
-            errors.append(f"{label}: node must be a string (\"\" = the part itself)")
-        if pose["barrier"] not in barriers:
-            errors.append(f"{label}: barrier {pose['barrier']!r} is not an opened_barriers entry")
+        if not isinstance(pose["part"], str) or not isinstance(pose["node"], str):
+            errors.append(f"{label}: part and node must be strings (\"\" = the barrier root / the part itself)")
+        elif not pose["part"] and pose["node"]:
+            errors.append(f"{label}: a node needs a part (part \"\" means the barrier root itself moves)")
+        if isinstance(pose["barrier"], str) and pose["barrier"] not in barriers \
+                and not (exception is not None and exception.fullmatch(pose["barrier"])):
+            errors.append(f"{label}: barrier {pose['barrier']!r} is not an opened_barriers entry"
+                          + (" or a booth assembly root" if exception is not None else ""))
+        if isinstance(pose["part"], str) and "frame" in pose["part"].lower():
+            errors.append(f"{label}: part {pose['part']!r} contains 'frame': BoothDoorRepairs never switches a frame part off")
         if isinstance(pose["seconds"], bool) or not isinstance(pose["seconds"], (int, float)) \
                 or not math.isfinite(pose["seconds"]) or pose["seconds"] <= 0:
             errors.append(f"{label}: seconds must be a positive finite number")
+        if pose["source"] not in DOOR_SOURCES:
+            errors.append(f"{label}: source must be one of {', '.join(DOOR_SOURCES)}")
+        if pose["ease"] not in DOOR_EASES:
+            errors.append(f"{label}: ease must be one of {', '.join(DOOR_EASES)}")
+        elif (pose["source"] == "clip") != (pose["ease"] == "smoothstep"):
+            errors.append(f"{label}: ease smoothstep is the stand-in for Mecanim clips and only for them "
+                          f"(source {pose['source']!r}, ease {pose['ease']!r})")
+        if pose["ease"] == "curve":
+            errors.extend(f"{label}: {e}" for e in door_curve_errors(pose["curve"]))
+        elif pose["curve"] is not None:
+            errors.append(f"{label}: curve must be null unless ease is 'curve'")
+        if pose["at"] is not None and not is_finite_vec3(pose["at"]):
+            errors.append(f"{label}: at must be null or three finite numbers")
+        if pose["source"] == "dotanimator" and pose["clip"] != "DotAnimator":
+            errors.append(f"{label}: a dotanimator pose names the clip 'DotAnimator'")
+        if pose["source"] == "borrowed" and not str(pose["clip"]).startswith("borrowed from "):
+            errors.append(f"{label}: a borrowed pose names its lender: 'borrowed from <barrier>'")
         for state in ("closed", "open"):
             block = pose[state]
             if not isinstance(block, dict) or set(block) != {"position", "euler"} \
                     or not is_finite_vec3(block.get("position")) or not is_finite_vec3(block.get("euler")):
                 errors.append(f"{label}: {state} needs position and euler, three finite numbers each")
         identity = (pose["barrier"], pose["part"], pose["node"])
-        if identity in seen:
-            errors.append(f"{label}: duplicate pose for {'/'.join(x for x in identity if x)}")
-        seen.add(identity)
+        at = pose["at"] if is_finite_vec3(pose["at"]) else None
+        for other in seen.get(identity, []):
+            if at is None or other is None:
+                errors.append(f"{label}: {'/'.join(x for x in identity if x)} occurs twice and a pose lacks 'at' to tell the instances apart")
+            elif math.dist(at, other) <= DOOR_AT_TOLERANCE:
+                errors.append(f"{label}: duplicate pose for {'/'.join(x for x in identity if x)} at {at}")
+        seen.setdefault(identity, []).append(at)
+    by_barrier: dict[str, set] = {}
+    for pose in poses:
+        if isinstance(pose, dict) and isinstance(pose.get("barrier"), str):
+            by_barrier.setdefault(pose["barrier"], set()).add(pose.get("at") is None)
+    for barrier, flags in by_barrier.items():
+        if len(flags) > 1:
+            errors.append(f"{name}: barrier {barrier!r} has poses with and without 'at'; use it on all of them or none")
     if errors:
         return errors
     if len(poses) != len(registry_poses):

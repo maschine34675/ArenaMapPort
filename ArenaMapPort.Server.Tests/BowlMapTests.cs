@@ -8,7 +8,8 @@ namespace ArenaMapPort.Server.Tests;
 /// Bowl's gate door poses (docs/progress/door-poses.md): tools/maps/bowl.doors.json is written by
 /// tools/extract/extract_door_poses.py from Arena's own gate animations, ArenaMapRegistry.Bowl.DoorPoses is the typed copy
 /// the client reads. The two must agree number for number (validate_map_descriptors.py checks the same on the Python
-/// side), every pose must lie below one of the map's opened barriers, and no other map carries poses.
+/// side) and every pose must lie below one of the map's opened barriers. Equator and Bay5 (DotAnimator poses, schema 2)
+/// have their own checks in DoorPoseSidecarTests, which also covers Bowl's schema-2 fields.
 /// </summary>
 public sealed class BowlMapTests
 {
@@ -30,7 +31,7 @@ public sealed class BowlMapTests
     {
         using var doc = JsonDocument.Parse(File.ReadAllText(Sidecar("bowl.doors.json")));
         var root = doc.RootElement;
-        Assert.Equal(1, root.GetProperty("schema_version").GetInt32());
+        Assert.Equal(2, root.GetProperty("schema_version").GetInt32());
         Assert.Equal(ArenaMapRegistry.Bowl.Key, root.GetProperty("key").GetString());
         Assert.Contains(root.GetProperty("source").GetProperty("scene").GetString(), ArenaMapRegistry.Bowl.AllSceneNames);
 
@@ -128,12 +129,13 @@ public sealed class BowlMapTests
     }
 
     [Fact]
-    public void OnlyBowlCarriesDoorPoses()
+    public void BowlsPosesAreClipPosesWithTheDefaultsOfSchemaTwo()
     {
-        foreach (var map in ArenaMapRegistry.Catalog)
+        Assert.All(ArenaMapRegistry.Bowl.DoorPoses, p =>
         {
-            if (ReferenceEquals(map, ArenaMapRegistry.Bowl)) continue;
-            Assert.Empty(map.DoorPoses);
-        }
+            Assert.Equal((ArenaDoorPose.SourceClip, ArenaDoorPose.EaseSmoothstep), (p.Source, p.Ease));
+            Assert.Null(p.Curve);
+            Assert.Null(p.At);
+        });
     }
 }

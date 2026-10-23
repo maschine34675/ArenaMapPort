@@ -32,9 +32,7 @@
     0.66,
     0.7
   ],
-  "opened_barriers": [
-    "SBG_Arena_Equator/SOO_LOD0/equator_roller_shutters_02 (9)"
-  ],
+  "opened_barriers": [],
   "dust": {
     "scene": "Arena_Equator_Lighting",
     "path": "EQUATOR_DUST",

@@ -679,9 +679,9 @@
       "Id": "arena_equator-player-all",
       "Infiltration": "ArenaEquator",
       "Position": {
-        "x": -4.5,
-        "y": 0.1,
-        "z": 38.5
+        "x": -4.897,
+        "y": 0.08,
+        "z": 45.44
       },
       "Rotation": 180.0,
       "Sides": [
@@ -709,9 +709,9 @@
       "Id": "arena_equator-player-usec",
       "Infiltration": "ArenaEquator",
       "Position": {
-        "x": -11.7,
-        "y": 0.1,
-        "z": 48.6
+        "x": 6.52,
+        "y": 0.08,
+        "z": 48.589
       },
       "Rotation": 180.0,
       "Sides": [
@@ -739,9 +739,9 @@
       "Id": "arena_equator-player-bear",
       "Infiltration": "ArenaEquator",
       "Position": {
-        "x": 5.0,
-        "y": 0.1,
-        "z": -33.5
+        "x": 4.974,
+        "y": 0.08,
+        "z": -39.087
       },
       "Rotation": 0.0,
       "Sides": [
@@ -769,9 +769,9 @@
       "Id": "arena_equator-player-south-all",
       "Infiltration": "ArenaEquator",
       "Position": {
-        "x": -5,
-        "y": 0.1,
-        "z": -33.5
+        "x": -4.346,
+        "y": 0.08,
+        "z": -39.087
       },
       "Rotation": 0.0,
       "Sides": [
@@ -1017,9 +1017,9 @@
       "Id": "arena_equator-bot-north-hall",
       "Infiltration": "",
       "Position": {
-        "x": -11.5,
+        "x": -5.5,
         "y": 0.1,
-        "z": 37
+        "z": 33.0
       },
       "Rotation": 180.0,
       "Sides": [

@@ -151,11 +151,11 @@ class ValidatorTests(unittest.TestCase):
         entry = VD.registry_entries(text)["Bay5"]
         data = copy.deepcopy(sidecar("bay5.json"))
         errors: list = []
-        VD.check_map_against_registry_entry(data, entry, {"ArenaEquatorLocation": {}}, Path("bay5.json"), "Bay5", errors)
+        VD.check_map_against_registry_entry(data, entry, {"ArenaEquatorLocation": {}}, REPO / "tools" / "maps" / "bay5.json", "Bay5", errors)
         self.assertEqual(errors, [])                                  # control: Bay5 as shipped is clean
         data["lamp_fill"] = copy.deepcopy(sidecar("airpit.json")["lamp_fill"])
         errors = []
-        VD.check_map_against_registry_entry(data, entry, {"ArenaEquatorLocation": {}}, Path("bay5.json"), "Bay5", errors)
+        VD.check_map_against_registry_entry(data, entry, {"ArenaEquatorLocation": {}}, REPO / "tools" / "maps" / "bay5.json", "Bay5", errors)
         self.assertTrue(any("lamp_fill mismatch" in e for e in errors))
 
     def test_malformed_values_are_rejected(self):

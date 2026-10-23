@@ -55,7 +55,7 @@ public class MapDescriptorConsistencyTests
         Assert.Equal("arena_equator/base.json", ArenaMapRegistry.Equator.DbBaseJsonPath);
     }
 
-    // Spawn barriers are authored by hierarchy path only for the walked maps (Equator, Bay5, AirPit).
+    // Spawn barriers are authored by hierarchy path only for the walked maps (Bay5, AirPit, Bowl; Equator's list is empty since 2026-10-23).
     // Every remaining map keeps the empty default until its own barriers have been checked.
     // A path is a root object name followed by optional "/"-separated children, so a single segment
     // (AirPit's BUS_DOORS and PASSPORT_CONTROL_DOORS gate groups) is a valid root path and AirPit's two
@@ -64,11 +64,16 @@ public class MapDescriptorConsistencyTests
     [Fact]
     public void OpenedBarriers_WalkedMapsNamePaths_OtherMapsNone()
     {
-        Assert.Equal(new[] { "SBG_Arena_Equator/SOO_LOD0/equator_roller_shutters_02 (9)" }, ArenaMapRegistry.Equator.OpenedBarriers);
+        // Equator (2026-10-23, docs/progress/equator-booth-spawns.md): no opened barriers. The FCK roller shutter stays a wall
+        // as in Arena (LevelBorder (83) walls it off); the booth doors are opened by the names of their leaves, not as barriers.
+        Assert.Empty(ArenaMapRegistry.Equator.OpenedBarriers);
+        // Bay5 (2026-10-23): every gate Arena moves plus Door_01 (3); the depot path is one entry for two sibling instances.
         Assert.Equal(new[]
         {
+            "WAREHOUSE_DOORS (1)/Bay5_Warehouse_Gate_Door_01 (2)",
             "WAREHOUSE_DOORS (1)/Bay5_Warehouse_Gate_Door_01 (3)",
             "WAREHOUSE_DOORS (1)/Bay5_Warehouse_Gate_Door_01 (4)",
+            "WAREHOUSE_DOORS (1)/One_man_Door",
             "OLD_WAREHOUSE_DOORS/Gates_Depot_Frame",
         }, ArenaMapRegistry.Bay5.OpenedBarriers);
         Assert.Equal(new[]

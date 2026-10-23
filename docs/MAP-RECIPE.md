@@ -74,12 +74,29 @@ on the far side of a spawn zone, 10 m from the nearest spawn. `name` doubles as 
 ## 3. Barriers the client must open — `opened_barriers` in `tools/maps/<stem>.json`
 
 Arena closes spawn areas per round with sliding booth doors (`Door_Sliding_Respawn*`, generic — opened on
-every map by `BoothDoorRepairs`) — since 2026-10-17 every such part is registered with `SpawnGates`, so a mode plugin can hold the enclosures closed and release them later (docs/progress/spawn-gates.md), `SPAWN_BOUND*` boxes (generic — `SpawnPlacementRepairs`) and, on Equator,
-one static roller shutter. Anything map-specific goes into `opened_barriers` as a hierarchy path (object
+every map by `BoothDoorRepairs`) — since 2026-10-17 every such part is registered with `SpawnGates`, so a mode plugin can hold the enclosures closed and release them later (docs/progress/spawn-gates.md), `SPAWN_BOUND*` boxes (generic — `SpawnPlacementRepairs`). Equator's FCK roller shutter
+(`equator_roller_shutters_02 (9)`) was an `opened_barriers` entry until 2026-10-23 and is not any more: Arena never opens it (it walls
+it off with `LevelBorder (83)`), the spawns stand on Arena's own markers behind the booth doors and the shutter is a baked wall
+([equator-booth-spawns.md](progress/equator-booth-spawns.md)), so Equator's list is empty. Anything map-specific goes into
+`opened_barriers` as a hierarchy path (object
 names repeat), mirrored by `ArenaMapDescriptor.OpenedBarriers` (test `OpenedBarriers_DescriptorMirrorsSidecar`).
 `BakeNavMesh` excludes the same objects from the NavMesh sources, so a new entry means a bundle rebuild.
 Find candidates with the in-game F10 inspector (aim at the obstacle) and the scene dump. A path may be a single
 segment: a bare name addresses the scene root object itself (AirPit: `BUS_DOORS`, `PASSPORT_CONTROL_DOORS`).
+
+Two rules since 2026-10-23 (Bay5's gates, [equator-booth-spawns.md](progress/equator-booth-spawns.md)):
+
+- A path that exists twice (two sibling objects of one name: Bay5's `OLD_WAREHOUSE_DOORS/Gates_Depot_Frame`, the gates at world
+  (50.574, -3.895, 7.525) and (69.045, -3.883, -6.317)) is listed ONCE and means EVERY instance. The client opens every instance
+  (`BoothDoorRepairs.FindAllByPath`; `FindByPath` still returns the first one, for `LampFillRepairs`' template lookup). The bake
+  resolves every instance (`BakeNavMesh.FindAllInstances`) when the barrier's pose rows carry `at`, and the first one (`Transform.Find`)
+  for a barrier without rows, as before. The descriptor stays free of duplicate strings (`Distinct` is tested) and a door pose tells
+  the instances apart by its `at` (3a). No other opened barrier of Equator, Bay5, AirPit or Bowl has a repeated path (resolved offline
+  on the four packages, 2026-10-23), so nothing else changes. The offline mirror `port_colliders.resolve_barriers` still takes the
+  first instance.
+- A barrier that has pose data (3a) keeps every part WITHOUT a pose standing as structure (Bay5's `Telfer_Help` posts next to the
+  frames) and only the posed parts move; the bake drops only the posed parts' subtrees and bakes the rest as walls. A barrier without
+  any pose keeps the old rule: every part whose name does not contain `frame` is switched off and left out of the bake.
 
 Two optional spawn-gate keys (2026-10-17; mirrored by `ArenaMapDescriptor.StartGates` / `HeldGates`; a map that declares
 `held_gates` must also declare `start_gates`) and three optional bake-only keys (PLAN-AIRPIT item 8; Equator and Bay5 carry
@@ -114,9 +131,12 @@ beyond its table row. Its greedy list names the smallest set of props whose
 exclusion joins all probe points; `--descriptor` applies the barrier and exclusion lists above (held gates included;
 `bake_bounds` is not modelled).
 
-### 3a. Door poses — `tools/maps/<stem>.doors.json` (optional, Bowl only so far)
+### 3a. Door poses — `tools/maps/<stem>.doors.json` (optional: Bowl, Equator, Bay5)
 
-Some barriers are not static in Arena: an `Animator` plays a Mecanim clip that moves the gate parts (Bowl: the BTR reverses out of
+Some barriers are not static in Arena: an `Animator` plays a Mecanim clip that moves the gate parts, or Arena's DOTween script
+`DotAnimator` tweens them to an end value (Equator's booth doors, Bay5's rollers and depot gates; schema 2, 2026-10-23: the decode, the
+`source`, `ease`, `curve` and `at` fields and the lookup API are in [door-poses.md](progress/door-poses.md)). Bowl is the clip case
+(the BTR reverses out of
 its slot, the ambulance drives out of its bay, the army gate's leaves swing open, the second gate's leaf slides 3.8 m sideways onto
 its rail; it does NOT sink: the parent is rotated -90 degrees about x, so the clip's local y is a horizontal world direction and the
 leaf keeps its world height). The raid-start opening
@@ -124,8 +144,8 @@ used to hide these parts; the sidecar carries the OPEN END pose of every node a 
 can park the part in its open position instead (user decision 2026-10-22). Read a pose in the frame of the node's parent, not as a
 world direction: a "local y" number says nothing about up or down until the parent chain is known (compute the world pose through
 the scene hierarchy before describing a motion in prose). Before adding a map, check whether it has any:
-`tools/extract/extract_door_poses.py` lists the Animators below the map's `opened_barriers` (Equator and Bay5 have none; AirPit's three
-bus doors use a controller with no clip, so they are reported as ignored). Full method, table and limits:
+`tools/extract/extract_door_poses.py` lists the Animators and DotAnimators below the map's `opened_barriers` (AirPit's three bus doors
+use a controller with no clip, so they are reported as ignored; its DotAnimator passport doors come in a later change set). Full method, table and limits:
 [docs/progress/door-poses.md](progress/door-poses.md).
 
 ```powershell
@@ -137,9 +157,10 @@ The sidecar is generated output: never edit it by hand. A new map needs a row in
 in `tools/bundle/key-sources.json` (that is where the level index comes from) and a Windows install of Arena with UnityPy. Shape:
 
 ```json
-{ "schema_version": 1, "key": "arena_bowl",
+{ "schema_version": 2, "key": "arena_bowl",
   "source": { "scene": "Arena_Bowl_TeamFight_DesignStuff", "level": 48, "assets": "sharedassets48.assets", "arena_version": "0.6.1.0.48206" },
-  "poses": [ { "barrier": "DOORS_SPAWN_A", "part": "BTR_82_closed", "node": "", "clip": "BTR_82_Respawn_Animation", "seconds": 7.683,
+  "poses": [ { "barrier": "DOORS_SPAWN_A", "part": "BTR_82_closed", "node": "", "clip": "BTR_82_Respawn_Animation", "source": "clip",
+               "seconds": 7.683, "ease": "smoothstep", "curve": null, "at": null,
                "closed": { "position": [51.182, -0.035, -21.498], "euler": [-90.0, 0.0, 83.511] },
                "open":   { "position": [45.61, -0.04, -22.14],   "euler": [-90.3, 266.474, -182.962] } } ] }
 ```
@@ -147,12 +168,14 @@ in `tools/bundle/key-sources.json` (that is where the level index comes from) an
 - `barrier`: an `opened_barriers` path. `part`: the barrier root's direct child (the object `BoothDoorRepairs` deactivates; a part whose
   name contains "frame" is never hidden and never listed). `node`: the transform path below the part that the clip animates, `""` = the
   part itself. Positions and euler angles are LOCAL to the node's parent (`localPosition` / `localEulerAngles`); euler angles are the
-  clip's own raw values (multi-turn spins survive), to be interpolated component-wise.
+  clip's own raw values (multi-turn spins survive), to be interpolated component-wise (a `dotanimator` or `borrowed` row is interpolated
+  as a quaternion slerp between the two euler triples instead). `at` is null or the WORLD position of the barrier root instance: it tells
+  repeated hierarchy paths apart (Bay5's two depot gates, Equator's booth assemblies).
 - One entry per animated node whose open pose differs from its closed pose by more than 1 cm or 1 degree. The closed pose is the
   scene's own local transform (cross-checked against the clip: 2 cm / 1 degree warning, 10 cm / 5 degrees stop); the open pose is the
   clip's value at its stop time. The open clip of a controller is the one whose name does not end in "closed".
-- Mirrored by `ArenaMapDescriptor.DoorPoses` (`ArenaDoorPose[]`, empty on every other map; `DoorPosesOf(barrier, part)` returns one part's
-  poses, the part itself first). `validate_map_descriptors.py` checks the sidecar's schema, that every barrier is an `opened_barriers`
+- Mirrored by `ArenaMapDescriptor.DoorPoses` (`ArenaDoorPose[]`, empty on a map without poses; `DoorPosesOf(barrier, part)` returns one part's
+  poses, the part itself first; the position-aware overloads `DoorPosesOf(barrier, part, x, y, z)` and `DoorPosesOfBarrier(...)` are in door-poses.md). `validate_map_descriptors.py` checks the sidecar's schema, that every barrier is an `opened_barriers`
   entry, and that sidecar and registry carry the same poses in the same order with the same numbers; `BowlMapTests` does the same in C#
   and `test_door_poses.py` pins that the registry holds exactly the text `--csharp` prints. A map with poses must keep the sidecar and
   the C# literals in one commit. Re-run the tool after an Arena update (the real-data test fails if the installed clips changed).

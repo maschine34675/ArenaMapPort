@@ -123,17 +123,42 @@ namespace ArenaMapPort.Shared
     }
 
     /// <summary>
-    /// One node an Arena gate animation moves (tools/maps/&lt;stem&gt;.doors.json, docs/progress/door-poses.md): the
-    /// closed pose it has in the scene and the open END pose of Arena's own clip. <see cref="Barrier"/> is the
-    /// OpenedBarriers path, <see cref="Part"/> the barrier root's direct child (the object BoothDoorRepairs switches
-    /// off), <see cref="Node"/> the transform path below the part that the clip animates ("" = the part itself).
-    /// Positions and euler angles are LOCAL to the node's parent (Unity localPosition / localEulerAngles). Where
-    /// the clip stores euler curves the angles are its raw values, multi-turn spins included, so they are meant to be
-    /// interpolated component-wise (Quaternion.Euler of a lerped triple), not as quaternions. <see cref="Seconds"/> is the
-    /// clip's length. Mirrors the sidecar's "poses" number for number (BowlMapTests, validate_map_descriptors.py).
+    /// One node an Arena gate moves (tools/maps/&lt;stem&gt;.doors.json, docs/progress/door-poses.md): the closed pose it
+    /// has in the scene and the open END pose of Arena's own animation. <see cref="Barrier"/> is the path of the gate's
+    /// root (an OpenedBarriers entry; Equator's booth doors are not barriers, their path is the assembly root under
+    /// SPAWN_DOORS or Respawn_2), <see cref="Part"/> the barrier root's direct child (the object BoothDoorRepairs switches
+    /// off; "" = the barrier root itself moves: Bay5's rollers), <see cref="Node"/> the transform path below the part that
+    /// is animated ("" = the part itself). Positions and euler angles are LOCAL to the node's parent (Unity localPosition
+    /// / localEulerAngles).
+    ///
+    /// Source: <see cref="SourceClip"/> (a Mecanim clip, Bowl: the angles are the clip's raw values, multi-turn spins
+    /// included, meant to be interpolated component-wise as Quaternion.Euler of a lerped triple),
+    /// <see cref="SourceDotAnimator"/> (Arena's DOTween script: the targets are absolute local values, rotations are
+    /// meant to be interpolated as a quaternion slerp between Quaternion.Euler(ClosedEuler) and Quaternion.Euler(OpenEuler))
+    /// or <see cref="SourceBorrowed"/> (Arena authors no motion for this gate, the neighbour's is used).
+    /// <see cref="Seconds"/> is Arena's own duration, unscaled. <see cref="Ease"/> maps the elapsed fraction k of the
+    /// duration to the fraction of the path: smoothstep k*k*(3-2k) (the client's stand-in for Bowl's clips), linear k,
+    /// inOutQuint (DOTween: k2 = 2k; k2 &lt; 1 ? 0.5*k2^5 : 0.5*((k2-2)^5 + 2)) or curve (Unity AnimationCurve of
+    /// <see cref="Curve"/>: a flat array of time, value, inSlope, outSlope per key on a 0..1 timeline, cubic Hermite between
+    /// neighbouring keys with the left key's out slope and the right key's in slope; null for the other eases).
+    /// <see cref="At"/> is null, or the WORLD position of the barrier root instance the pose is for (the same hierarchy
+    /// path occurs twice: Equator's two unnumbered Door_Sliding_Respawn, Bay5's two Gates_Depot_Frame); it matches an
+    /// instance within <see cref="AtTolerance"/>. Mirrors the sidecar's "poses" number for number (DoorPoseSidecarTests,
+    /// validate_map_descriptors.py).
     /// </summary>
     public sealed class ArenaDoorPose
     {
+        public const string SourceClip = "clip";
+        public const string SourceDotAnimator = "dotanimator";
+        public const string SourceBorrowed = "borrowed";
+        public const string EaseSmoothstep = "smoothstep";
+        public const string EaseLinear = "linear";
+        public const string EaseInOutQuint = "inOutQuint";
+        public const string EaseCurve = "curve";
+
+        /// <summary>A barrier root closer than this (metres) to <see cref="At"/> is the instance the pose is for.</summary>
+        public const float AtTolerance = 0.05f;
+
         public string Barrier { get; }
         public string Part { get; }
         public string Node { get; }
@@ -143,9 +168,30 @@ namespace ArenaMapPort.Shared
         public float[] ClosedEuler { get; }
         public float[] OpenPosition { get; }
         public float[] OpenEuler { get; }
+        public string Source { get; }
+        public string Ease { get; }
+#nullable enable
+        public float[]? Curve { get; }
+        public float[]? At { get; }
+#nullable restore
 
+        /// <summary>Number of keys of <see cref="Curve"/> (4 floats each); 0 when there is none.</summary>
+        public int CurveKeyCount => Curve == null ? 0 : Curve.Length / 4;
+
+        /// <summary>Is this pose for the barrier root instance at the world position (x, y, z)? A pose without <see cref="At"/>
+        /// is for every instance of its path.</summary>
+        public bool AppliesTo(float x, float y, float z)
+        {
+            if (At == null) return true;
+            float dx = At[0] - x, dy = At[1] - y, dz = At[2] - z;
+            return dx * dx + dy * dy + dz * dz <= AtTolerance * AtTolerance;
+        }
+
+#nullable enable
         public ArenaDoorPose(string Barrier, string Part, string Node, string Clip, float Seconds,
-            float[] ClosedPosition, float[] ClosedEuler, float[] OpenPosition, float[] OpenEuler)
+            float[] ClosedPosition, float[] ClosedEuler, float[] OpenPosition, float[] OpenEuler,
+            string Source = SourceClip, string Ease = EaseSmoothstep, float[]? Curve = null, float[]? At = null)
+#nullable restore
         {
             this.Barrier = Barrier;
             this.Part = Part;
@@ -156,6 +202,10 @@ namespace ArenaMapPort.Shared
             this.ClosedEuler = ClosedEuler;
             this.OpenPosition = OpenPosition;
             this.OpenEuler = OpenEuler;
+            this.Source = Source;
+            this.Ease = Ease;
+            this.Curve = Curve;
+            this.At = At;
         }
     }
 
@@ -192,9 +242,11 @@ namespace ArenaMapPort.Shared
         // treats layer 29 as physical (the map's navmesh_bake_layers must list 29). Equator, Bay5 and AirPit keep
         // false: their TeamFight walls open at raid start and the bake drops layer 29.
         public bool KeepLevelBorders { get; }
-        // Door poses (2026-10-22, docs/progress/door-poses.md): the open END pose of every node Arena's gate animations
-        // move, so the raid-start opening can park a gate part in its open position instead of hiding it. Empty = the
-        // map's barriers are hidden as before. Mirrors tools/maps/<stem>.doors.json.
+        // Door poses (2026-10-22 Bowl, 2026-10-23 Equator and Bay5, docs/progress/door-poses.md): the open END pose of every
+        // node Arena's gates move (Bowl: Mecanim clips; Equator and Bay5: the DotAnimator script, with the duration and the
+        // ease), so the raid-start opening can park a gate part in its open position instead of hiding it. Empty = the
+        // map's barriers are hidden as before. Mirrors tools/maps/<stem>.doors.json. Look poses up with DoorPosesOf /
+        // DoorPosesOfBarrier; where a hierarchy path repeats they need the barrier root's world position.
         public ArenaDoorPose[] DoorPoses { get; }
         // PLAN-AIRPIT item 8 — Editor-side NavMesh bake inputs. The client never reads them; they live here so the one
         // per-map table stays complete and tools/maps/<key>.json cannot drift (validate_map_descriptors.py and the xunit
@@ -327,14 +379,36 @@ namespace ArenaMapPort.Shared
             return ArenaGateRole.Plain;
         }
 
-        /// <summary>The poses of one gate part (the barrier path and the part name BoothDoorRepairs sees), in sidecar order:
-        /// the part itself first (Node == ""), then the animated nodes below it. Empty when Arena animates nothing there.</summary>
-        public ArenaDoorPose[] DoorPosesOf(string barrier, string part)
+        /// <summary>The poses of one gate part (the barrier path and the part name BoothDoorRepairs sees) that hold for EVERY
+        /// instance of the barrier path (<see cref="ArenaDoorPose.At"/> == null), in sidecar order: the part itself first
+        /// (Node == ""), then the animated nodes below it. Empty when Arena animates nothing there. A pose with an
+        /// <c>At</c> is only returned by the overload that names the barrier root's world position.</summary>
+        public ArenaDoorPose[] DoorPosesOf(string barrier, string part) => Select(barrier, part, false, 0f, 0f, 0f);
+
+        /// <summary>The poses of one gate part of the barrier root instance standing at the world position (x, y, z): the poses
+        /// without an <c>At</c> and those whose <c>At</c> lies within <see cref="ArenaDoorPose.AtTolerance"/> of it. Use this
+        /// where a hierarchy path repeats (Equator's booth doors, Bay5's depot gates). part "" = the barrier root itself.</summary>
+        public ArenaDoorPose[] DoorPosesOf(string barrier, string part, float x, float y, float z) => Select(barrier, part, true, x, y, z);
+
+        /// <summary>Every pose of a barrier (any part) that holds for every instance of the path, in sidecar order. Non-empty
+        /// means Arena animates something of this barrier: its parts without a pose of their own are structure that stays.</summary>
+        public ArenaDoorPose[] DoorPosesOfBarrier(string barrier) => Select(barrier, null, false, 0f, 0f, 0f);
+
+        /// <summary>Every pose of the barrier root instance at the world position (x, y, z), any part, in sidecar order.</summary>
+        public ArenaDoorPose[] DoorPosesOfBarrier(string barrier, float x, float y, float z) => Select(barrier, null, true, x, y, z);
+
+#nullable enable
+        private ArenaDoorPose[] Select(string barrier, string? part, bool positioned, float x, float y, float z)
+#nullable restore
         {
             var result = new List<ArenaDoorPose>();
             foreach (ArenaDoorPose pose in DoorPoses)
-                if (pose.Barrier == barrier && pose.Part == part)
-                    result.Add(pose);
+            {
+                if (pose.Barrier != barrier) continue;
+                if (part != null && pose.Part != part) continue;
+                if (positioned ? !pose.AppliesTo(x, y, z) : pose.At != null) continue;
+                result.Add(pose);
+            }
             return result.ToArray();
         }
 
@@ -380,18 +454,19 @@ namespace ArenaMapPort.Shared
                 // Host test 1 (20.09.): the floor ends at z ≈ 49.6 / -44; the spawn booths are NavMesh islands
                 // (physically open), and a box within 5 m of a spawn point would extract a fresh spawn — so the
                 // gates sit on the far side of each spawn zone, 10 m from the nearest spawn.
+                // 2026-10-23 (docs/progress/equator-booth-spawns.md): the player spawns now stand on Arena's own markers INSIDE
+                // the booths (north z 45.4 and 48.6, south z -39.1), so the boxes share the booths with them. The nearest spawn
+                // point is 2.6 m outside a box (Usec, North Gate) and EFT places a player on the point itself, so nobody starts
+                // inside a trigger; walking out through the door crosses a box in well under its 8 s.
                 new ArenaExitDescriptor("Equator North Gate", 2.0f, 0.1f, 46.0f),
                 new ArenaExitDescriptor("Equator South Gate", 5.0f, 0.1f, -44.0f),
             },
-            OpenedBarriers: new[]
-            {
-                // Spawn barriers (20.09. evening, docs/progress/exfils-stage2.md "Spawn barriers"): the Usec spawn
-                // (-11.7, 48.6) sits in the FCK hall, whose corner exit is this roller shutter at (-9.7, 0, 36.0) —
-                // static geometry Arena opens per round by a script that is not ported. Of Equator's 20 shutters this
-                // is the only one near a spawn; the other 19 line the outer walls. A hierarchy path, not a name: the
-                // "(n)" names repeat in the scene ("equator_roller_shutters_02 (4)" exists twice).
-                "SBG_Arena_Equator/SOO_LOD0/equator_roller_shutters_02 (9)",
-            },
+            // No opened barriers (2026-10-23, user, docs/progress/equator-booth-spawns.md). Until then the roller shutter
+            // "SBG_Arena_Equator/SOO_LOD0/equator_roller_shutters_02 (9)" at (-9.7, 0, 36.0) was opened because the Usec
+            // spawn (-11.7, 48.6) stood inside the FCK hall behind it. Arena never opens it (LevelBorder (83) walls it off;
+            // all 20 of its spawn markers lie in the two booths), so the shutter is a baked wall again, the spawns sit on
+            // Arena's own markers behind the booth doors and the FCK hall is outside the play area. The booth doors are not
+            // barriers: BoothDoorRepairs opens them by the name of their leaves (DoorPoses below).
             Dust: new ArenaDustDescriptor("Arena_Equator_Lighting", "EQUATOR_DUST", 0.09f, 0.03f, 1, 1.0f,
                 2.280590057373047f, 1.6160001754760742f, 3.3339996337890625f,
                 31.478260040283203f, 5.016374111175537f, 48.85846710205078f),
@@ -409,6 +484,52 @@ namespace ArenaMapPort.Shared
                 "SBG_Arena_Equator/SOO_LOD0/STRUCTURES/Floors/equator_floor_01/equator_floor_01_SHADOW_LOD0",
                 "SBG_Arena_Equator/SOO_LOD0/STRUCTURES/Floors/equator_floor_02/equator_floor_02_SHADOW_LOD0",
                 "SBG_Arena_Equator/SOO_LOD0/STRUCTURES/Floors/equator_floor_03/equator_floor_03_SHADOW_LOD0"
+            },
+            // Arena's sliding booth doors (2026-10-23, tools/maps/equator.doors.json, docs/progress/door-poses.md "DotAnimator"):
+            // the four assemblies under SPAWN_DOORS (their DotAnimator end poses; the two unnumbered ones are told apart by
+            // the world position of their root) plus the fifth door under Respawn_2, which Arena gives no motion (borrowed).
+            DoorPoses: new[]
+            {
+                new ArenaDoorPose("SBG_Arena_Equator/SOO/Respawn_2/Door_Sliding_Respawn (3)", "Door_Sliding_Respawn_L", "", "borrowed from SPAWN_DOORS/Door_Sliding_Respawn (1)", 5.0f,
+                    new[] { 0.683f, 0.0f, 0.0f }, new[] { 0.0f, 0.0f, 0.0f },
+                    new[] { 2.0f, 0.0f, 0.0f }, new[] { 0.0f, 0.0f, 0.0f },
+                    "borrowed", "inOutQuint", null, new[] { -3.753f, 0.048f, -45.87f }),
+                new ArenaDoorPose("SBG_Arena_Equator/SOO/Respawn_2/Door_Sliding_Respawn (3)", "Door_Sliding_Respawn_R", "", "borrowed from SPAWN_DOORS/Door_Sliding_Respawn (1)", 5.0f,
+                    new[] { -0.686f, 0.0f, 0.0f }, new[] { 0.0f, 0.0f, 0.0f },
+                    new[] { -2.0f, 0.0f, 0.0f }, new[] { 0.0f, 0.0f, 0.0f },
+                    "borrowed", "inOutQuint", null, new[] { -3.753f, 0.048f, -45.87f }),
+                new ArenaDoorPose("SPAWN_DOORS/Door_Sliding_Respawn", "Door_Sliding_Respawn_L", "", "DotAnimator", 5.0f,
+                    new[] { 0.717f, 0.0f, 0.0f }, new[] { 0.0f, 0.0f, 0.0f },
+                    new[] { 2.0f, 0.0f, 0.0f }, new[] { 0.0f, 0.0f, 0.0f },
+                    "dotanimator", "inOutQuint", null, new[] { -4.328f, 0.048f, 40.02f }),
+                new ArenaDoorPose("SPAWN_DOORS/Door_Sliding_Respawn", "Door_Sliding_Respawn_R", "", "DotAnimator", 5.0f,
+                    new[] { -0.709f, 0.0f, 0.0f }, new[] { 0.0f, 0.0f, 0.0f },
+                    new[] { -2.0f, 0.0f, 0.0f }, new[] { 0.0f, 0.0f, 0.0f },
+                    "dotanimator", "inOutQuint", null, new[] { -4.328f, 0.048f, 40.02f }),
+                new ArenaDoorPose("SPAWN_DOORS/Door_Sliding_Respawn", "Door_Sliding_Respawn_L", "", "DotAnimator", 5.0f,
+                    new[] { 0.709f, 0.0f, 0.0f }, new[] { 0.0f, 0.0f, 0.0f },
+                    new[] { 2.0f, 0.0f, 0.0f }, new[] { 0.0f, 0.0f, 0.0f },
+                    "dotanimator", "inOutQuint", null, new[] { 4.535f, 0.048f, 40.02f }),
+                new ArenaDoorPose("SPAWN_DOORS/Door_Sliding_Respawn", "Door_Sliding_Respawn_R", "", "DotAnimator", 7.0f,
+                    new[] { -0.722f, 0.0f, 0.0f }, new[] { 0.0f, 0.0f, 0.0f },
+                    new[] { -2.0f, 0.0f, 0.0f }, new[] { 0.0f, 0.0f, 0.0f },
+                    "dotanimator", "inOutQuint", null, new[] { 4.535f, 0.048f, 40.02f }),
+                new ArenaDoorPose("SPAWN_DOORS/Door_Sliding_Respawn (1)", "Door_Sliding_Respawn_L", "", "DotAnimator", 5.0f,
+                    new[] { 0.711f, 0.0f, 0.0f }, new[] { 0.0f, 0.0f, 0.0f },
+                    new[] { 2.0f, 0.0f, 0.0f }, new[] { 0.0f, 0.0f, 0.0f },
+                    "dotanimator", "inOutQuint", null, new[] { -4.46f, 0.048f, -35.045f }),
+                new ArenaDoorPose("SPAWN_DOORS/Door_Sliding_Respawn (1)", "Door_Sliding_Respawn_R", "", "DotAnimator", 5.0f,
+                    new[] { -0.722f, 0.0f, 0.0f }, new[] { 0.0f, 0.0f, 0.0f },
+                    new[] { -2.0f, 0.0f, 0.0f }, new[] { 0.0f, 0.0f, 0.0f },
+                    "dotanimator", "inOutQuint", null, new[] { -4.46f, 0.048f, -35.045f }),
+                new ArenaDoorPose("SPAWN_DOORS/Door_Sliding_Respawn (2)", "Door_Sliding_Respawn_L", "", "DotAnimator", 5.0f,
+                    new[] { 0.714f, 0.0f, 0.0f }, new[] { 0.0f, 0.0f, 0.0f },
+                    new[] { 2.0f, 0.0f, 0.0f }, new[] { 0.0f, 0.0f, 0.0f },
+                    "dotanimator", "inOutQuint", null, new[] { 4.403f, 0.048f, -35.045f }),
+                new ArenaDoorPose("SPAWN_DOORS/Door_Sliding_Respawn (2)", "Door_Sliding_Respawn_R", "", "DotAnimator", 5.0f,
+                    new[] { -0.706f, 0.0f, 0.0f }, new[] { 0.0f, 0.0f, 0.0f },
+                    new[] { -2.0f, 0.0f, 0.0f }, new[] { 0.0f, 0.0f, 0.0f },
+                    "dotanimator", "inOutQuint", null, new[] { 4.403f, 0.048f, -35.045f }),
             });
 
         /// <summary>
@@ -449,11 +570,15 @@ namespace ArenaMapPort.Shared
             },
             OpenedBarriers: new[]
             {
-                // Two west-facing USEC warehouse leaves and the first/northern BEAR depot gate.
-                // The latter has a duplicate sibling name; both existing path resolvers select
-                // the first assembly. No claim that its eastern duplicate is opened.
+                // Every gate Arena moves, plus (3) (2026-10-23, user: "alle Tore aufmachen"; docs/progress/equator-booth-spawns.md):
+                // the four warehouse rollers (Door_01 (2), (3), (4) and One_man_Door; Arena keeps (3) shut in TeamFight,
+                // it borrows (4)'s lift) and the two depot gates. The depot path exists TWICE as sibling objects (go 821
+                // at world (50.574, -3.895, 7.525) and go 822 at (69.045, -3.883, -6.317)) and is listed ONCE: the client
+                // and the bake open every instance of a path (DoorPosesOf(barrier, part, x, y, z) tells them apart by `at`).
+                "WAREHOUSE_DOORS (1)/Bay5_Warehouse_Gate_Door_01 (2)",
                 "WAREHOUSE_DOORS (1)/Bay5_Warehouse_Gate_Door_01 (3)",
                 "WAREHOUSE_DOORS (1)/Bay5_Warehouse_Gate_Door_01 (4)",
+                "WAREHOUSE_DOORS (1)/One_man_Door",
                 "OLD_WAREHOUSE_DOORS/Gates_Depot_Frame",
             },
             RestoredShadowCasterRoots: new[]
@@ -483,7 +608,45 @@ namespace ArenaMapPort.Shared
             Dust: new ArenaDustDescriptor("Arena_Bay5_Light", "DUST", 0.07f, 0.04f, 1, 0.0f,
                 99.63274383544922f, -1.5299997329711914f, 30.428937911987305f,
                 52.685890197753906f, 12.275176048278809f, 42.59858703613281f),
-            UsesServerTime: true);
+            UsesServerTime: true,
+            // Arena's roller gates and depot gates (2026-10-23, tools/maps/bay5.doors.json): the DotAnimator end poses of the
+            // warehouse rollers (the whole root lifts, part ""), the swing of both depot gates' leaves (told apart by the
+            // world position of the Gates_Depot_Frame root) and the borrowed lift of Door_01 (3).
+            DoorPoses: new[]
+            {
+                new ArenaDoorPose("OLD_WAREHOUSE_DOORS/Gates_Depot_Frame", "Gates_Depot_Door_L", "Gates_Depot_Door_L_Leaf", "DotAnimator", 7.0f,
+                    new[] { 2.377f, -0.112f, 0.282f }, new[] { 0.0f, 0.0f, 3.8f },
+                    new[] { 2.377f, -0.112f, 0.282f }, new[] { 0.0f, 0.0f, 162.432f },
+                    "dotanimator", "curve", new[] { 0.0f, 0.0f, 2.0f, 2.0f, 0.4f, 0.79929f, 0.89601f, 0.89601f, 1.0f, 1.0f, 0.0f, 0.0f }, new[] { 50.574f, -3.895f, 7.525f }),
+                new ArenaDoorPose("OLD_WAREHOUSE_DOORS/Gates_Depot_Frame", "Gates_Depot_Door_R", "Gates_Depot_Door_R_Leaf", "DotAnimator", 7.0f,
+                    new[] { -2.432f, -0.115f, 0.282f }, new[] { 0.0f, 0.0f, 0.0f },
+                    new[] { -2.432f, -0.115f, 0.282f }, new[] { 0.0f, 0.0f, -141.759f },
+                    "dotanimator", "curve", new[] { 0.0f, 0.0f, 2.0f, 2.0f, 0.4f, 0.8f, 0.88513f, 0.88513f, 1.0f, 1.0f, 0.0f, 0.0f }, new[] { 50.574f, -3.895f, 7.525f }),
+                new ArenaDoorPose("OLD_WAREHOUSE_DOORS/Gates_Depot_Frame", "Gates_Depot_Door_L", "Gates_Depot_Door_L_Leaf", "DotAnimator", 7.0f,
+                    new[] { 2.377f, -0.112f, 0.282f }, new[] { 0.0f, 0.0f, 0.0f },
+                    new[] { 2.377f, -0.112f, 0.282f }, new[] { 0.0f, 0.0f, 138.837f },
+                    "dotanimator", "curve", new[] { 0.0f, 0.0f, 2.0f, 2.0f, 0.4f, 0.80016f, 0.99404f, 0.99404f, 1.0f, 1.0f, 0.0f, 0.0f }, new[] { 69.045f, -3.883f, -6.317f }),
+                new ArenaDoorPose("OLD_WAREHOUSE_DOORS/Gates_Depot_Frame", "Gates_Depot_Door_R", "Gates_Depot_Door_R_Leaf", "DotAnimator", 7.0f,
+                    new[] { -2.432f, -0.115f, 0.282f }, new[] { 0.0f, 0.0f, -2.042f },
+                    new[] { -2.432f, -0.115f, 0.282f }, new[] { 0.0f, 0.0f, -98.974f },
+                    "dotanimator", "curve", new[] { 0.0f, 0.0f, 2.0f, 2.0f, 0.4f, 0.80194f, 0.88599f, 0.88599f, 1.0f, 1.0f, 0.0f, 0.0f }, new[] { 69.045f, -3.883f, -6.317f }),
+                new ArenaDoorPose("WAREHOUSE_DOORS (1)/Bay5_Warehouse_Gate_Door_01 (2)", "", "", "DotAnimator", 4.0f,
+                    new[] { 9.822f, 0.13f, -27.705f }, new[] { -90.0f, -90.0f, 0.0f },
+                    new[] { 9.822f, 3.222f, -27.705f }, new[] { -90.0f, -90.0f, 0.0f },
+                    "dotanimator", "linear", null, null),
+                new ArenaDoorPose("WAREHOUSE_DOORS (1)/Bay5_Warehouse_Gate_Door_01 (3)", "", "", "borrowed from WAREHOUSE_DOORS (1)/Bay5_Warehouse_Gate_Door_01 (4)", 4.0f,
+                    new[] { -6.227f, 0.092f, -26.511f }, new[] { -90.0f, 0.0f, 0.0f },
+                    new[] { -6.227f, 3.181f, -26.511f }, new[] { -90.0f, 0.0f, 0.0f },
+                    "borrowed", "linear", null, null),
+                new ArenaDoorPose("WAREHOUSE_DOORS (1)/Bay5_Warehouse_Gate_Door_01 (4)", "", "", "DotAnimator", 4.0f,
+                    new[] { -6.227f, 0.124f, -21.562f }, new[] { -90.0f, 0.0f, 0.0f },
+                    new[] { -6.227f, 3.213f, -21.562f }, new[] { -90.0f, 0.0f, 0.0f },
+                    "dotanimator", "linear", null, null),
+                new ArenaDoorPose("WAREHOUSE_DOORS (1)/One_man_Door", "", "", "DotAnimator", 4.0f,
+                    new[] { -6.076f, 0.15f, 0.858f }, new[] { 0.0f, 0.0f, 0.0f },
+                    new[] { -6.076f, 3.323f, 0.858f }, new[] { 0.0f, 0.0f, 0.0f },
+                    "dotanimator", "linear", null, null),
+            });
 
         // Source scene selection: tools/extract/plans/airpit.json. Identity is permanent.
         public static readonly ArenaMapDescriptor AirPit = new(
