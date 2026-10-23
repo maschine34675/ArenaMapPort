@@ -798,6 +798,19 @@ public sealed class DoorPoseWiringTests
         Assert.Contains("part.name.IndexOf(FramePart, StringComparison.OrdinalIgnoreCase) >= 0", barriers);
     }
 
+    /// <summary>The spawn placement repair must not push a spawn out of a respawn booth any more: Equator's player spawns stand
+    /// on Arena's markers inside the booths (2026-10-23), and the old booth-avoidance rule moved them 6 to 7.5 m out, one into
+    /// the revolving entrance door (GPU-2, 2026-10-24 01:43). The SPAWN_BOUND disabling and the physics checks stay.</summary>
+    [Fact]
+    public void TheSpawnPlacementRepairLeavesTheBoothSpawnsWhereArenaPutThem()
+    {
+        var code = Text("ArenaMapPort.Client/SpawnPlacementRepairs.cs");
+        Assert.DoesNotContain("name.Contains(\"_Respawn_\")", code);
+        Assert.DoesNotContain("boothBounds", code);
+        Assert.Contains("StartsWith(\"SPAWN_BOUND\")", code);
+        Assert.Contains("Physics.CheckCapsule(bottom, top, CapsuleRadius, mask, QueryTriggerInteraction.Ignore)", code);
+    }
+
     [Fact]
     public void EveryInstanceOfABarrierPathOpensAndTheFirstMatchResolverStaysForLampFill()
     {

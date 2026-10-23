@@ -7,7 +7,8 @@ using UnityEngine.SceneManagement;
 namespace ArenaMapPort.Client
 {
     /// <summary>
-    /// Moves our player spawn points out of Arena's own spawn enclosures before spawn selection.
+    /// Moves a spawn point that stands inside solid geometry before spawn selection (and, from 2026-09-14 to
+    /// 2026-10-24, one that stood inside Arena's own spawn booths: see the last paragraph).
     ///
     /// The 2026-09-14 19:33 probe put the player at (-5.73, 0.08, 48.59) overlapping
     /// 'SPAWN_BOUND_FIGHTER' (Default layer, solid) and 'Equator_Respawn_01_COLLIDER' (LowPolyCollider):
@@ -18,6 +19,16 @@ namespace ArenaMapPort.Client
     /// Runs from SpawnInfiltrationFixPostfix (CreateFromScene, BaseLocalGame.cs:526), i.e. before
     /// SelectSpawnPoint reads SpawnPoint.Position (BaseLocalGame.cs:576). The NavMesh is not installed
     /// yet at that point (BotsController.Init comes later), so placement uses physics queries only.
+    ///
+    /// 2026-10-24 (docs/progress/equator-booth-spawns.md): the respawn-booth rule is gone. It collected the bounds of every
+    /// enabled solid collider whose name carried the booth marker (Equator: the Equator_Respawn_NN booth walls AND the
+    /// Door_Sliding_Respawn door leaves, 45 colliders) and moved a spawn point whose feet stood inside one of them to the
+    /// nearest free spot outside. Since 2026-09-20 BoothDoorRepairs opens the booth doors at raid start (or a mode plugin
+    /// holds them closed on purpose), and since 2026-10-23 the player spawns stand on Arena's own markers INSIDE the booths,
+    /// which the rule pushed 6 to 7.5 m out again: the first host raid of that build (GPU-2, 2026-10-24 01:43) put the Usec
+    /// spawn into the mall's revolving entrance door at (3.65, 0.09, 55.52), unreachable from the floor, and the All spawn
+    /// into the FCK hall behind the shut shutter. The physics checks stay: the SPAWN_BOUND barriers are disabled, a point
+    /// whose capsule overlaps a solid, has no floor or stands within 1.2 m of another is moved.
     /// </summary>
     internal static class SpawnPlacementRepairs
     {
@@ -26,14 +37,12 @@ namespace ArenaMapPort.Client
         const float MaxSearchRadius = 40f;
         const float RingStep = 1.5f;
         const int Directions = 16;
-        const float BoothMargin = 0.75f;
         const float MinSpacing = 1.2f;
 
         internal static void Apply(SpawnPointsCollection spawnPoints)
         {
             int mask = PlayerCollisionMask();
-            var boothBounds = new List<Bounds>();
-            int barriersDisabled = ScanOwnedScenes(boothBounds);
+            int barriersDisabled = ScanOwnedScenes();
             // EFT can switch Physics.autoSyncTransforms off (PhysicsExtensions.cs:332); make the disabled
             // barriers visible to the queries below either way.
             Physics.SyncTransforms();
@@ -48,13 +57,13 @@ namespace ArenaMapPort.Client
                 }
 
                 Vector3 origin = spawn.Position;
-                if (IsValid(origin, mask, boothBounds, placed))
+                if (IsValid(origin, mask, placed))
                 {
                     placed.Add(origin);
                     continue;
                 }
 
-                if (TryFindFree(origin, mask, boothBounds, placed, out var position))
+                if (TryFindFree(origin, mask, placed, out var position))
                 {
                     spawn.Position = position;
                     // Move the marker too: its BoxCollider bounds back ISpawnPointCollider.Contains
@@ -75,12 +84,12 @@ namespace ArenaMapPort.Client
             }
 
             Plugin.Log.LogDebug($"[RaidFix] spawn placement: disabled {barriersDisabled} SPAWN_BOUND " +
-                                $"barrier collider(s), {boothBounds.Count} respawn-booth collider(s) avoided;" +
+                                "barrier collider(s);" +
                                 (log.Length > 0 ? log.ToString() : " all spawn points already free"));
         }
 
-        // Disables Arena's pre-round barriers and collects respawn-booth bounds from our own scenes.
-        static int ScanOwnedScenes(List<Bounds> boothBounds)
+        // Disables Arena's pre-round SPAWN_BOUND barriers in our own scenes.
+        static int ScanOwnedScenes()
         {
             int disabled = 0;
             for (int i = 0; i < SceneManager.sceneCount; i++)
@@ -95,21 +104,10 @@ namespace ArenaMapPort.Client
                 {
                     foreach (var collider in root.GetComponentsInChildren<Collider>(true))
                     {
-                        string name = collider.gameObject.name;
-                        if (name.StartsWith("SPAWN_BOUND"))
+                        if (collider.gameObject.name.StartsWith("SPAWN_BOUND") && collider.enabled)
                         {
-                            if (collider.enabled)
-                            {
-                                collider.enabled = false;
-                                disabled++;
-                            }
-                        }
-                        else if (name.Contains("_Respawn_") && collider.enabled && !collider.isTrigger &&
-                                 collider.gameObject.activeInHierarchy)
-                        {
-                            var bounds = collider.bounds;
-                            bounds.Expand(BoothMargin * 2f);
-                            boothBounds.Add(bounds);
+                            collider.enabled = false;
+                            disabled++;
                         }
                     }
                 }
@@ -117,8 +115,7 @@ namespace ArenaMapPort.Client
             return disabled;
         }
 
-        static bool TryFindFree(Vector3 origin, int mask, List<Bounds> boothBounds, List<Vector3> placed,
-            out Vector3 position)
+        static bool TryFindFree(Vector3 origin, int mask, List<Vector3> placed, out Vector3 position)
         {
             for (float radius = RingStep; radius <= MaxSearchRadius; radius += RingStep)
             {
@@ -135,7 +132,7 @@ namespace ArenaMapPort.Client
                     }
 
                     var grounded = hit.point + Vector3.up * 0.02f;
-                    if (IsValid(grounded, mask, boothBounds, placed))
+                    if (IsValid(grounded, mask, placed))
                     {
                         position = grounded;
                         return true;
@@ -147,15 +144,8 @@ namespace ArenaMapPort.Client
             return false;
         }
 
-        static bool IsValid(Vector3 feet, int mask, List<Bounds> boothBounds, List<Vector3> placed)
+        static bool IsValid(Vector3 feet, int mask, List<Vector3> placed)
         {
-            for (int i = 0; i < boothBounds.Count; i++)
-            {
-                if (boothBounds[i].Contains(feet + Vector3.up * 0.9f))
-                {
-                    return false;
-                }
-            }
             for (int i = 0; i < placed.Count; i++)
             {
                 if ((placed[i] - feet).sqrMagnitude < MinSpacing * MinSpacing)
