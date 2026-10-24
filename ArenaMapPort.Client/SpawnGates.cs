@@ -55,12 +55,27 @@ namespace ArenaMapPort.Client
     /// switch-off.
     ///
     /// DotAnimator poses (descriptor <c>DoorPoses</c> of source dotanimator / borrowed, 2026-10-23; Equator's ten booth leaves,
-    /// Bay5's four roller gates and both depot gates) run through the same machine with four additions. A pose has its own ease
+    /// Bay5's three roller gates and both depot gates, AirPit's passport leaves, lamps and front bus doors) run through the same
+    /// machine with four additions. A pose has its own ease
     /// (smoothstep, linear, DOTween InOutQuint or a stored Hermite curve, <see cref="DoorPoseModel.EaseOf"/>) and turns its node
     /// by a quaternion slerp instead of a component-wise euler lerp; a pose row with part "" moves the barrier ROOT (Bay5's
     /// rollers), which is then the registered part; every authored duration is multiplied by <c>SpawnGateDriveScale</c> (default
     /// 0.5, Bowl included); and a park carver is made only for a moved collider that occupies the walking band
     /// (<see cref="DoorPoseModel.OccupiesWalkingBand"/>), so a roller slab lifted 3.09 m into the lintel carves nothing.
+    ///
+    /// AirPit (2026-10-24, docs/progress/door-poses.md "Runtime 3") adds three more. (1) A part NAME may repeat among a
+    /// barrier's children (the 16 passport leaves reuse six names): <see cref="RowsForPart"/> / <see cref="NotePoses"/> take, for
+    /// every node of a part, the one row whose closed position is the node's own local position
+    /// (<see cref="DoorPoseModel.SelectRowsForNode"/>, 0.05 m); a part none of whose rows matches logs one Warning and falls back
+    /// to the switch-off like any part with poses that do not fit. (2) A SWITCH row (<see cref="ArenaDoorPose.IsSwitch"/>: Arena's
+    /// SetActive element, the passport lamps RED / GREEN flipping RedFog off and GreenFog on) sets a node's active state instead of
+    /// moving it: closed state while the part is closed (<see cref="NotePoses"/> checks that the scene agrees, else the part falls
+    /// back), open state when the part is parked or its drive ENDS, nothing in between
+    /// (<see cref="DoorPoseModel.SwitchStateAt"/>); it moves no collider, so it is never carved. A part with only switches takes as
+    /// long as the longest drive of the other parts under its barrier root (<see cref="DoorPoseModel.SwitchPartDriveSeconds"/>), so the
+    /// lamp flips when the last leaf stands open. (3) A held gate's parts with rows open exactly as the start gates do, on a Release
+    /// that follows a hold (<see cref="OfferHeld"/> registers and keeps them closed, the hold's release drives them); without a hold
+    /// the held gate stays closed as before.
     ///
     /// Contract for a mode plugin (reflection, like ArenaMapPort's own ArenaModeMapPositionIntegration does the other
     /// way round): type <c>ArenaMapPort.Client.SpawnGates</c>, all members on the Unity main thread.
@@ -101,6 +116,8 @@ namespace ArenaMapPort.Client
             internal bool Slerp;                // dotanimator / borrowed: quaternion slerp between the two rotations below
             internal bool WriteRotation;        // false: the pose only slides the node, its scene rotation stays untouched
             internal Quaternion ClosedRotation, OpenRotation;
+            internal bool Switch;               // a SetActive element (AirPit's lamps): sets the node's active state, moves nothing
+            internal bool ClosedActive, OpenActive; // the node's active state while closed (the scene's) and once open
         }
 
         // A gate part with Arena's animated end pose (descriptor DoorPoses): it is never switched off. Parked = its nodes
@@ -114,6 +131,8 @@ namespace ArenaMapPort.Client
             internal string Clip;
             internal float Seconds;             // Arena's own duration (the longest of the nodes), unscaled
             internal float DriveSeconds;        // Seconds * SpawnGateDriveScale, fixed when a release starts to drive the part
+            internal int Switches;              // how many of the nodes are switches (SetActive), the rest moves
+            internal bool SwitchOnly;           // every node is a switch: nothing to carve, finishes with the barrier's last drive
             internal float FloorY;
             internal bool HasClosedBounds;
             internal Bounds ClosedBounds;
@@ -264,7 +283,7 @@ namespace ArenaMapPort.Client
                 "inside stay inside instead of pressing against or clipping through a leaf the bake does not know; also cut " +
                 "the NavMesh at every collider Arena moved out of the way and that stands in the walking band (Bowl's parked " +
                 "BTR, ambulance, army gate leaves and respawn gate, Equator's slid booth leaves, Bay5's swung depot leaves; a " +
-                "roller slab lifted above head height is not cut). A map's held gates (AirPit's passport control) depend on " +
+                "roller slab lifted above head height is not cut; AirPit's swung bus doors and passport leaves are). A map's held gates (AirPit's passport control) depend on " +
                 "it: off opens them at raid start. Next hold / next raid.");
             _slideSeconds = s.Bind("Spawns", "SpawnGateSlideSeconds", 1.0f, new ConfigDescription(
                 "How long a sliding respawn-booth leaf WITHOUT an Arena pose takes to slide into its frame pocket when the " +
@@ -273,11 +292,11 @@ namespace ArenaMapPort.Client
                 "Other gates without a pose switch off without a motion. Next release.", new AcceptableValueRange<float>(0f, 5f)));
             _drive = s.Bind("Spawns", "SpawnGateDrive", true,
                 "Parts with Arena's animated end pose (Bowl's BTR, ambulance, army gate leaves and respawn gate; Equator's " +
-                "booth doors; Bay5's roller and depot gates) drive there over Arena's duration times Spawns/SpawnGateDriveScale " +
+                "booth doors; Bay5's roller and depot gates; AirPit's bus doors and passport leaves) drive there over Arena's duration times Spawns/SpawnGateDriveScale " +
                 "when the gates release; false snaps them to the open pose at once. Next release.");
             _driveScale = s.Bind("Spawns", "SpawnGateDriveScale", DoorPoseModel.DefaultDriveScale, new ConfigDescription(
                 "Multiplies the authored drive durations of every map, Bowl included; 1 = Arena's own timing (Equator's booth " +
-                "doors 5 to 7 s, Bay5's rollers 4 s and depot gates 7 s, Bowl's vehicles and gates 7.7 to 13.5 s), 0.5 (default) " +
+                "doors 5 to 7 s, Bay5's rollers 4 s and depot gates 7 s, AirPit's passport leaves 1.7 s and bus doors 3 s, Bowl's vehicles and gates 7.7 to 13.5 s), 0.5 (default) " +
                 "= half of it. Spawns/SpawnGateDrive = false still snaps. Next release.",
                 new AcceptableValueRange<float>(DoorPoseModel.MinDriveScale, DoorPoseModel.MaxDriveScale)));
             _maxHoldSeconds = s.Bind("Spawns", "SpawnGateMaxHoldSeconds", 300f, new ConfigDescription(
@@ -344,18 +363,52 @@ namespace ArenaMapPort.Client
         /// parks the root, so a root whose data failed to apply is hidden child by child like any barrier without poses.</summary>
         internal static bool HasPoses(Transform part) => part != null && _posed.ContainsKey(part);
 
+        /// <summary>BoothDoorRepairs, for a part whose NAME repeats among its siblings (AirPit's passport leaves: six names for 16
+        /// leaves), BEFORE <see cref="NotePoses"/>: of the rows that carry the part's name, the ones that belong to THIS part. For
+        /// every node of the part (the part itself, or a path below it) the row whose closed position is the node's own local
+        /// position (<see cref="DoorPoseModel.SelectRowsForNode"/>, 0.05 m) is taken; a node with a single row takes it as it is.
+        /// An empty result means the part's name has rows but none is its own.</summary>
+        internal static ArenaDoorPose[] RowsForPart(Transform part, ArenaDoorPose[] rows)
+        {
+            if (part == null || rows == null || rows.Length < 2) return rows ?? new ArenaDoorPose[0];
+            return DoorPoseModel.SelectRowsForPart(rows, nodePath =>
+            {
+                var node = string.IsNullOrEmpty(nodePath) ? part : part.Find(nodePath);
+                if (node == null) return null; // NotePoses reports the missing node
+                var local = node.localPosition;
+                return new[] { local.x, local.y, local.z };
+            });
+        }
+
+        /// <summary>How many of the part's nodes are switches (SetActive elements), 0 for a part without poses or without
+        /// switches. BoothDoorRepairs adds it to its opening summary.</summary>
+        internal static int SwitchCountOf(Transform part) =>
+            part != null && _posed.TryGetValue(part, out var posed) ? posed.Switches : 0;
+
         /// <summary>BoothDoorRepairs, for a gate part the descriptor has poses for, BEFORE the part is offered and before
         /// anything moves: resolves the animated nodes below the part, checks each against the scene's own closed pose and
         /// measures the closed movement colliders (floor line, probe bounds). Idempotent. A part that cannot be resolved
-        /// logs one Warning and counts as pose-less afterwards (<see cref="Park"/> returns false, it switches off).</summary>
+        /// logs one Warning and counts as pose-less afterwards (<see cref="Park"/> returns false, it switches off). The rows
+        /// are narrowed to this part's own first (<see cref="RowsForPart"/>; a no-op for a name that does not repeat), and a
+        /// part none of whose rows matches its closed position falls back like any other mismatch. A SWITCH row is checked
+        /// against the node's active state instead of its transform: the scene must agree with the row's closed state.</summary>
         internal static void NotePoses(Transform part, ArenaDoorPose[] poses)
         {
             if (part == null || poses == null || poses.Length == 0) return;
             if (_posed.ContainsKey(part) || _poseFallback.Contains(part)) return;
             try
             {
+                int candidates = poses.Length;
+                poses = RowsForPart(part, poses);
+                if (poses.Length == 0)
+                {
+                    var here = part.localPosition;
+                    PoseFallback(part, $"none of the {candidates} row(s) for this name has its closed position (local {here.x:F3}, {here.y:F3}, {here.z:F3})");
+                    return;
+                }
                 var nodes = new PoseNode[poses.Length];
-                var paths = new string[poses.Length];
+                var paths = new List<string>(poses.Length); // the transform rows only: a switch node moves no collider
+                int switches = 0;
                 float seconds = 0f;
                 for (int i = 0; i < poses.Length; i++)
                 {
@@ -377,6 +430,33 @@ namespace ArenaMapPort.Client
                         PoseFallback(part, $"node '{path}' not found below it");
                         return;
                     }
+                    if (pose.IsSwitch)
+                    {
+                        // a SetActive element: the scene has to stand in the row's closed state (the data's identity check for a
+                        // switch, it has no transform to compare), and the part itself is never a switch (it would switch itself off)
+                        if (path.Length == 0 || !pose.OpenActive.HasValue)
+                        {
+                            PoseFallback(part, path.Length == 0 ? "a switch row names the part itself" : $"switch node '{path}' has no open state");
+                            return;
+                        }
+                        bool active = node.gameObject.activeSelf;
+                        if (active != pose.ClosedActive.Value)
+                        {
+                            PoseFallback(part, $"switch node '{path}' is {(active ? "active" : "inactive")} in the scene, the data's closed state is " +
+                                               $"{(pose.ClosedActive.Value ? "active" : "inactive")}");
+                            return;
+                        }
+                        nodes[i] = new PoseNode
+                        {
+                            Node = node, Switch = true, ClosedActive = pose.ClosedActive.Value, OpenActive = pose.OpenActive.Value,
+                            ClosedPosition = pose.ClosedPosition, ClosedEuler = pose.ClosedEuler,
+                            OpenPosition = pose.OpenPosition, OpenEuler = pose.OpenEuler,
+                            Ease = pose.Ease, Curve = pose.Curve,
+                        };
+                        switches++;
+                        seconds = Mathf.Max(seconds, pose.Seconds);
+                        continue;
+                    }
                     float positionError = Vector3.Distance(node.localPosition, ToVector(pose.ClosedPosition));
                     float angleError = Quaternion.Angle(node.localRotation, Quaternion.Euler(ToVector(pose.ClosedEuler)));
                     if (!DoorPoseModel.PoseMatchesScene(positionError, angleError))
@@ -396,10 +476,14 @@ namespace ArenaMapPort.Client
                         ClosedRotation = Quaternion.Euler(ToVector(pose.ClosedEuler)),
                         OpenRotation = Quaternion.Euler(ToVector(pose.OpenEuler)),
                     };
-                    paths[i] = path;
+                    paths.Add(path);
                     seconds = Mathf.Max(seconds, pose.Seconds);
                 }
-                var posed = new PosedPart { Part = part, Nodes = nodes, NodePaths = paths, Clip = poses[0].Clip, Seconds = seconds };
+                var posed = new PosedPart
+                {
+                    Part = part, Nodes = nodes, NodePaths = paths.ToArray(), Clip = poses[0].Clip, Seconds = seconds,
+                    Switches = switches, SwitchOnly = switches == nodes.Length,
+                };
                 MeasureClosed(posed);
                 _posed[part] = posed;
             }
@@ -422,7 +506,8 @@ namespace ArenaMapPort.Client
                 ApplyPose(posed, 1f);
                 posed.Parked = true;
                 Physics.SyncTransforms(); // the colliders follow the transforms now, not at the next physics step
-                Plugin.Log.LogDebug($"{Tag} park: '{part.name}' snapped to the open pose ({posed.Nodes.Length} node(s), clip {posed.Clip}); " +
+                Plugin.Log.LogDebug($"{Tag} park: '{part.name}' snapped to the open pose ({posed.Nodes.Length} node(s)" +
+                                    $"{(posed.Switches > 0 ? $", {posed.Switches} switch(es)" : "")}, clip {posed.Clip}); " +
                                     $"park carvers follow {(_navMeshReady ? "now" : "the navmesh install")}");
                 return true;
             }
@@ -465,12 +550,20 @@ namespace ArenaMapPort.Client
         // node maps it through its own ease (exact at both ends, so 0 and 1 are the data bit for bit). Positions lerp; a Mecanim
         // clip's euler angles lerp component-wise like Unity's euler clips (the wheels keep their extra turns), a DotAnimator
         // node turns by a quaternion slerp between the two rotations (and keeps its scene rotation when the pose only slides it).
+        // A switch node (SetActive element) moves nothing: it takes its closed state at progress 0 and its open state at 1, and
+        // keeps its state in between (DoorPoseModel.SwitchStateAt), so a lamp flips when the drive ends.
         static void ApplyPose(PosedPart posed, float progress)
         {
             foreach (var n in posed.Nodes)
             {
                 if (n.Node == null) continue;
                 float k = DoorPoseModel.EaseOf(n.Ease, n.Curve, progress);
+                if (n.Switch)
+                {
+                    var state = DoorPoseModel.SwitchStateAt(k, n.ClosedActive, n.OpenActive);
+                    if (state.HasValue && n.Node.gameObject.activeSelf != state.Value) n.Node.gameObject.SetActive(state.Value);
+                    continue;
+                }
                 DoorPoseModel.Lerp3(n.ClosedPosition, n.OpenPosition, k, out float px, out float py, out float pz);
                 n.Node.localPosition = new Vector3(px, py, pz);
                 if (!n.WriteRotation) continue;
@@ -564,6 +657,12 @@ namespace ArenaMapPort.Client
             {
                 int made = 0, unmoved = 0, low = 0, high = 0;
                 posed.Carved = true; // before the loop: a failure midway must not make a later pass add duplicate carvers
+                if (posed.SwitchOnly)
+                {
+                    // AirPit's lamps: no body moved, nothing to carve (the switches were set by Park / the end of the drive)
+                    Plugin.Log.LogDebug($"{Tag} parked '{posed.Part.name}': {posed.Switches} switch(es) in the open state, no collider to carve ({why})");
+                    continue;
+                }
                 foreach (var collider in posed.Part.GetComponentsInChildren<Collider>(true))
                 {
                     if (!IsMovementCollider(collider)) continue;
@@ -577,6 +676,7 @@ namespace ArenaMapPort.Client
                 }
                 Plugin.Log.LogDebug($"{Tag} parked '{posed.Part.name}': {posed.Nodes.Length} node(s) at the open pose (clip {posed.Clip}), " +
                                     $"{made} park carver(s) ({why})" +
+                                    (posed.Switches > 0 ? $"; {posed.Switches} switch(es) in the open state" : "") +
                                     (unmoved > 0 ? $"; {unmoved} collider(s) Arena does not move stay uncarved" : "") +
                                     (low > 0 ? $"; {low} collider(s) lower than {DoorPoseModel.ParkedBodyMinHeight:F1} m above the floor line skipped" : "") +
                                     (high > 0 ? $"; {high} collider(s) above the {DoorPoseModel.WalkingBandHeight:F1} m walking band skipped" : ""));
@@ -793,16 +893,21 @@ namespace ArenaMapPort.Client
             contradicted = false;
             probed = 0;
             inconclusive = 0;
-            int skipped = 0, disconnected = 0, occupied = 0;
+            int skipped = 0, disconnected = 0, occupied = 0, parkedOpen = 0;
             // Verdicts per enclosure (SpawnGateModel.EnclosureContradicts): the parts under one barrier root or door
-            // assembly. AirPit's bus pocket has an authored-open inner row behind the closed outer row, so three of its
-            // six doorways stay passable while the pocket is sealed; a per-part verdict warned on them (GPU-2 2026-10-17).
+            // assembly. AirPit's bus pocket had an authored-open inner row behind the closed outer row, so three of its
+            // six doorways stayed passable while the pocket was sealed; a per-part verdict warned on them (GPU-2 2026-10-17).
+            // Since 2026-10-24 that row has no pose rows and is not registered; the verdict stays per enclosure (a doorway
+            // that stays passable behind a sealed one lies inside the box).
             var enclosures = new Dictionary<string, (int probed, int sealedDoorways)>();
             foreach (var part in _parts)
             {
                 if (part == null) continue;
                 // Parts without a movement collider (a gate's LOD meshes, ballistic twins) have no doorway to probe.
                 if (!_bounds.TryGetValue(part, out var bounds)) { skipped++; continue; }
+                // A part at its open pose is no closed gate (Register keeps the CLOSED bounds of a posed part, so a parked bus
+                // assembly has a doorway here): the sealed probe does not judge it, whatever the park carvers did to the path.
+                if (!DoorPoseModel.ProbeJudgesPart(expectSealed, IsParkedOrDriving(part))) { parkedOpen++; continue; }
                 if (_baseline.TryGetValue(part, out bool connected) && !connected) { disconnected++; continue; }
                 // Arena parks the BTR, the ambulance and the swung leaves at the doorway they open; a probe segment that
                 // runs through such a body (a park carver) says nothing about the gate, so it is not judged "open".
@@ -835,6 +940,7 @@ namespace ArenaMapPort.Client
             }
             if (disconnected > 0) sb.Append($"\n  {disconnected} doorway(s) disconnected on the map's own navmesh not judged");
             if (occupied > 0) sb.Append($"\n  {occupied} doorway(s) occupied by a parked body not judged");
+            if (parkedOpen > 0) sb.Append($"\n  {parkedOpen} part(s) parked at the open pose, not a closed gate, not judged");
             if (skipped > 0) sb.Append($"\n  {skipped} part(s) without a movement collider not probed");
             return sb.ToString();
         }
@@ -900,9 +1006,21 @@ namespace ArenaMapPort.Client
                     sliders.Add((part, from, from + new Vector3(dir * SpawnGateModel.SlideDistance, 0f, 0f)));
                 }
             }
+            // A part with only switches (AirPit's lamps RED / GREEN) takes as long as the longest drive of the other parts under its
+            // barrier root: the lamp flips when the last leaf stands open, not at the first frame of the release.
+            foreach (var posed in drivers)
+            {
+                if (!posed.SwitchOnly || posed.Part == null) continue;
+                var siblings = new List<float>();
+                foreach (var other in drivers)
+                {
+                    if (other != posed && !other.SwitchOnly && other.Part != null && other.Part.parent == posed.Part.parent) siblings.Add(other.DriveSeconds);
+                }
+                posed.DriveSeconds = DoorPoseModel.SwitchPartDriveSeconds(siblings);
+            }
             float t0 = Time.time;
             bool slideDone = false;
-            int off = 0, removed = 0, driven = 0, driveFrames = 0;
+            int off = 0, removed = 0, driven = 0, switched = 0, driveFrames = 0;
             float driveEnd = 0f, driveSum = 0f, driveMax = 0f;
             while (true)
             {
@@ -952,6 +1070,7 @@ namespace ArenaMapPort.Client
                         posed.Parked = true;
                         removed += DestroyHoldCarversOf(posed.Part);
                         driven++;
+                        switched += posed.Switches;
                         driveEnd = elapsed;
                         drivers.RemoveAt(i);
                         finished = true;
@@ -974,7 +1093,8 @@ namespace ArenaMapPort.Client
             Plugin.Log.LogDebug($"{Tag} released ({reason}): {sliders.Count} leaf(s) slid {SpawnGateModel.SlideDistance:F2} m in " +
                                 $"{seconds:F1} s, {off} gate part(s) switched off, {removed} carver(s) removed" +
                                 (driven > 0 ? $", {(drive ? "drove" : "snapped")} {driven} part(s) to the open pose in {driveEnd:F1} s (scale {scale:F2}), " +
-                                              $"{parkCarvers} park carver(s) in place" : ""));
+                                              $"{parkCarvers} park carver(s) in place" : "") +
+                                (switched > 0 ? $", {switched} switch(es) set to the open state" : ""));
             if (driveFrames > 0)
             {
                 Plugin.Log.LogDebug($"{Tag} drive frames: {driveFrames} frame(s) in {driveEnd:F1} s, mean {driveSum / driveFrames * 1000f:F1} ms, " +

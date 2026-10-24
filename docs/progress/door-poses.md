@@ -1229,3 +1229,802 @@ Stills: host `C:\Temp\uibridge-host\captures\stills\` (`equator-spawn-view-1` is
   part's position would judge them.
 - Bay5's bot spawn `bot-east-lane` and Equator's `bot-south-west` are still moved 1.5 m by the placement repair on every raid (known
   mesh-edge points, unchanged by this change set).
+
+## 2026-10-24 - Bay5 `Door_01 (3)` shut again
+
+Status: data, descriptor and pins done on the build VM (the Bay5 NavMesh bundle is rebuilt by the integration step of the same change
+set; nothing of this has run in a raid). User decision 2026-10-24 (German, after looking at both maps on GPU-2): "auf bay5 scheint
+mir Rolltor (3) mit der Plane aber irgendwie sehr ueberfluessig, glaube nicht dass das im original geoeffnet wird". Arena authors no
+motion and no sound for `WAREHOUSE_DOORS (1)/Bay5_Warehouse_Gate_Door_01 (3)` (level 88 holds three roller scripts, on (2), (4) and
+`One_man_Door`, and none on (3)), and a tarp with a carton stack stands in its doorway. The 2026-10-23 row only borrowed (4)'s lift
+because "alle Tore aufmachen" had covered it. It is shut again, like `Door_01` and `Door_01 (1)`.
+
+What changed:
+
+- `tools/extract/extract_door_poses.py`: `DOT_SOURCES["arena_bay5"]` has no `borrowed` entry any more (the modes `offset` and `absolute`
+  stay in the tool and in its unit tests; nothing uses them on Bay5 now, Equator's `Door_Sliding_Respawn (3)` still uses `absolute`).
+- `tools/maps/bay5.json` `opened_barriers`: five entries became four (the two depot frames are still ONE entry for two instances).
+  `ArenaMapRegistry.Bay5.OpenedBarriers` follows (same commit).
+- `tools/maps/bay5.doors.json` regenerated: 8 rows became 7 (three rollers `(2)`, `(4)`, `One_man_Door` and the four depot leaves, all
+  `dotanimator`); the removed row is the only difference of the file (the other 7 rows and the header are byte for byte as before).
+  `ArenaMapRegistry.Bay5.DoorPoses` holds the tool's `--csharp` output, 7 literals.
+- Pins: `test_door_poses.py` (Bay5: 7 rows, 3 rollers, nothing borrowed, `(3)` has no row), `DoorPoseSidecarTests.cs`,
+  `MapDescriptorConsistencyTests.cs` (the 4-entry list), `DoorPoseModelTests.cs` (the `InlineData` row of `(3)` removed),
+  `test_bay5_arena_spawns.py` (list of 4, and the parked footprint of roller (3) is gone: it parks nowhere),
+  `test_airpit_bake_inputs.py` (Bay5 pins only: `BAY5_BARRIERS` 4 entries, `OLD_BAY5_BARRIERS` spelled out as the 0.2.x list).
+- Offline bake model over `bay5-native-v5` (`BarrierBake`, `DoorPoseBakePackageTests`): posed barriers 5 to 4, colliders dropped by
+  barriers 22 to 20, sources 10359 to 10361 (10495 with the 134 modifier volumes of the real log); the slab's two colliders (`COLLIDER`
+  on layer 18, `BALLISTIC_metalthin` on layer 12) are sources again, so 6 of the old configuration's 14 dropped colliders are newly walls
+  (the first depot gate's four `Telfer_Help` posts and these two). The old 0.2.x configuration still reproduces its real bake (10367
+  sources, 14 dropped). The Bay5 NavMesh must be rebaked.
+
+This supersedes, in the 2026-10-23 sections above: the `(3)` row of the Bay5 table and "8 rows" / "7 dotanimator, 1 borrowed" (now 7 /
+7 dotanimator), the Bay5 half of the borrowed-gate rule ("Bay5's (3) the 3.089 m lift and 4.0 s of `Door_01 (4)`"), the "four warehouse
+rollers" of the runtime and bake sections, and, in [equator-booth-spawns.md](equator-booth-spawns.md), the line that keeps (3) opened
+("borrows (4)'s lift (kept, user)"). Evidence: `python tools/extract/extract_door_poses.py --map arena_bay5 --package
+work/extract/bay5-native-v5 --output tools/maps/bay5.doors.json --csharp` -> `decode self-check: 11 DotAnimator object(s), 11 element(s)`,
+`package check: 7 pose(s) exist in bay5-native-v5 ...`, `poses 7: 7 dotanimator`.
+
+## 2026-10-24 - AirPit: passport leaves, lamp switches, bus doors
+
+Status: data, descriptor, decoder and checks done on the build VM (Arena 0.6.1.0.48206, `work/extract/airpit-native-v9`); the client
+and the bake read the new rows in the runtime and bake steps of the same change set; nothing of this has run in a raid. User decision
+2026-10-24 ("dann gerne noch AirPit als nächstes"): the same way as Equator and Bay5 - Arena's own motions from its `DotAnimator`
+script, parked at the open pose, driven on a release at `Spawns/SpawnGateDriveScale` (0.5). Research and per-door numbers:
+[door-animations-survey.md](door-animations-survey.md) F5; the held-gate design: [spawn-gates.md](spawn-gates.md),
+[airpit-team-boxes.md](airpit-team-boxes.md).
+
+### What was found
+
+`tools/maps/airpit.doors.json` (schema 2, scene `Arena_Airpit_TeamFight_DesignStuff` = level 28, no extra scene) has **30 rows**:
+
+| Barrier | Rows | Source | What |
+|---|---|---|---|
+| `PASSPORT_CONTROL_DOORS` (held gate) | 16 | `dotanimator` | the turnstile leaves `Passport_control_01_Door (N)`, one kind-2 element each, 1.7 s, InOutQuint |
+| `PASSPORT_CONTROL_DOORS` (held gate) | 2 | `dotanimator` | switch rows `RED/RedFog` and `GREEN/GreenFog` (kind 3) |
+| `BUS_DOORS` (start gate) | 12 | `borrowed` | the three front-row bus assemblies, 4 nodes each, the pose of the static back row, 3.0 s (the port's) |
+
+`PASSPORT_CONTROL_EMISSIVE` (held gate, the 18 red sheets) has no DotAnimator and no row: it keeps today's rule (hidden on release).
+`BUS_LIGHT` (three DotAnimators of kind 3, nine lamp elements) is outside the scan root and stays untouched (later).
+
+**Passport leaves.** The root `PASSPORT_CONTROL_DOORS` IS the barrier (scan depth 1: part = the leaf, node = ""). Sixteen leaves share
+only six names, so the rows of a name are told apart by the closed LOCAL position (all 16 are at least 0.356 m apart; the client matches
+within 0.05 m, `ArenaDoorPose.ClosedPositionTolerance`). Each turns about the parent's vertical axis by 89 to 91 degrees: the scene's
+euler is (-90, 0, 0), (-90, 179, 0) or (-90, -179, 0) (a gimbal-lock heading, the tool writes it centered) and the target is
+(-90, +90, 0) or (-90, -90, 0). Positions are local to the root at (-16.146, 3.945, 63.186), the leaves stand at local y -3.230.
+
+| Name | Leaves | local x (world x) | local z (world z) | closed euler | open euler |
+|---|---|---|---|---|---|
+| `(1)` | 3 | -0.481, 4.483, 9.446 (-16.627, -11.663, -6.699) | 3.099 (66.285) | (-90, 0, 0) | (-90, +90, 0) |
+| `(2)` | 3 | -0.481, 4.483, 9.446 | 5.938 (69.124) | (-90, 0, 0) | (-90, -90, 0) |
+| `(3)` | 4 | -5.089, -0.125, 4.838, 9.802 (-21.235, -16.271, -11.308, -6.344) | 3.099 | (-90, 179, 0) | (-90, +90, 0) |
+| `(4)` | 4 | -5.089, -0.125, 4.838, 9.802 | 5.938 | (-90, -179, 0) | (-90, -90, 0) |
+| `(5)` | 1 | 19.370 (3.224) | 3.099 | (-90, 0, 0) | (-90, +90, 0) |
+| `(6)` | 1 | 19.370 (3.224) | 5.938 | (-90, 0, 0) | (-90, -90, 0) |
+
+Position does not change (a turn in place), `seconds` 1.7 (the float32 1.7000000476837158, written rounded), `ease` `inOutQuint`,
+`clip` `DotAnimator`. The sign is fixed by geometry: the leaf collider (`..._COLLIDER`, layer 18) pivots at its end, and moving it with
+these rows (offline, the extracted meshes, every one of the 16 leaves) reproduces the survey's open footprint exactly: the lane at
+world z 66.285 ends up along z 66.34 to 67.43 and the lane at world z 69.124 along z 67.98 to 69.07, so the leaves of the two lanes open
+toward each other and their tips stay 0.55 m apart; closed, a leaf covers 1.09 m of x, z 66.24..66.35 / 69.07..69.17, y -0.02..1.35.
+
+**Lamp switches.** `PASSPORT_CONTROL_DOORS/RED` and `/GREEN` each carry a DotAnimator with ONE kind-3 element whose target is the fog
+node below them: `RedFog` (28 children: ten grey covers over the green arrows and 18 red sheets, ACTIVE in the scene) and `GreenFog`
+(the same covers over the red X and 18 green sheets, INACTIVE in the scene). Kind 3 has no duration (seconds 0) and an ease word of 17
+that is not read (it is the unused default; DOTween's 17 is InExpo). The bool a switch sets sits in **payload word 8** (the 38-word
+payload of a move or rotate holds the target vector in words 1-3, a switch holds its state in word 8: 1 sets active, 0 sets
+inactive). Evidence, all 23 kind-3 elements of the two gate levels set the OPPOSITE of the scene state of their target:
+
+| Level | Elements | payload word 8 | target `activeSelf` in the scene |
+|---|---|---|---|
+| Equator 57 (`EXIT_LIGHT_EMISSIVE`, four lamp objects x 3 elements) | 12 | 1 | inactive |
+| AirPit 28 `BUS_LIGHT` (three lamp objects x 3 elements) | 9 | 1 | inactive |
+| AirPit 28 `GREEN/GreenFog` | 1 | 1 | inactive |
+| AirPit 28 `RED/RedFog` | 1 | 0 | active |
+
+(`RealAirPitTests.test_every_switch_of_the_surveyed_levels_flips_the_state_of_its_node` re-checks it on the installed Arena.) So the
+rule is the bool in word 8 and the cross-check "it flips the scene state" holds for every switch; a switch that did not flip would be
+dropped with a note ("no net change"). The two rows: `RED/RedFog` closed active, open inactive; `GREEN/GreenFog` closed inactive,
+open active - the red-X-to-green-arrow flip of spawn-gates.md (2026-10-18). Both rows have `seconds` 0, `ease` `linear` (unused),
+and the node's own scene transform (position and euler all zero) on both sides; neither part has a collider.
+
+**Bus doors.** Six assemblies `Apron_bus_MAZ_doors` and `(1)` to `(5)` under `BUS_DOORS`. The three front ones (z -65.000) carry an
+`Animator` (a controller that lists no clip: `animator_clip_counts == [0]` for each) and an `EntityAnimator`; the back ones (`(3)`,
+`(4)`, `(5)`, z -68.160) have neither and stand OPEN in the scene. All three back assemblies carry the same local poses (worst
+difference 0.0000 m / 0.000 degrees over 36 nodes each), so `(3)` is the lender for all three front assemblies. Each assembly has
+the same 36 nodes (two hinges, a leaf below each, meshes and colliders below those); the open pose of a node is the lender's current
+local transform of the same-named node, the closed pose is the borrower's own, and exactly four nodes per assembly differ:
+
+| Node (below the assembly) | closed position | closed euler | open position | open euler |
+|---|---|---|---|---|
+| `Apron_bus_MAZ_door_L_01_part_01` (hinge) | (-0.129, 0.729, 2.152) | (0, 0, 0) | same | (0, 0, +127) |
+| `.../Apron_bus_MAZ_door_L_01` (leaf) | (0.010, -0.404, -1.780) | (0, 0, 0) | (0.076, -0.328, -1.780) | (0.24, -0.181, -127) |
+| `Apron_bus_MAZ_door_L_02_part_01` (hinge) | (-0.129, -0.728, 2.152) | (0, 0, 0) | same | (0, 0, -127) |
+| `.../Apron_bus_MAZ_door_L_02` (leaf) | (0.010, 0.403, -1.780) | (0, 0, 0) | (0.076, 0.328, -1.780) | (0, 0, +127) |
+
+The same four rows for `Apron_bus_MAZ_doors`, `(1)` and `(2)` (12 rows), `seconds` 3.0 (1.5 s at the default scale), `ease`
+`inOutQuint`, `source` `borrowed`, `clip` `borrowed from the static open pose of BUS_DOORS/Apron_bus_MAZ_doors (3); seconds are the
+port's`. The leaf turns back by the hinge's angle (net orientation about unchanged), so a door swings like a plug door: in the
+assembly frame each leaf moves 0.66 m apart along the door line and 0.21 m toward the field (the survey's "0.65 to 0.66 m and 0.2 m";
+`test_the_door_swing_moves_each_leaf_065_m_apart_and_02_m_toward_the_field` computes it from the rows). The back row gets no row and
+keeps standing (the keep-structure rule of a barrier with rows). The seconds are the port's: Arena authors no duration for these doors
+(state speed 0.8, transition 0.25 s in the controller), and the choice of the back row's pose as the open state is our reading of
+"Arena intends them to open" (sound players exist, no clip anywhere).
+
+### Tool, schema and API
+
+- **Schema 2 stays.** A row may carry the optional key `"switch": {"closed": bool, "open": bool}` (a SetActive node); a transform row
+  never has it, so the Bowl, Equator and Bay5 sidecars are unchanged (Equator and Bowl byte for byte, Bay5 only by the removed row).
+  A switch row's closed and open transforms are the node's scene transform, `seconds` the element's duration word (0), `ease`
+  `linear`, `source` `dotanimator`; the validators require that it flips the node and that nothing moves. Positive seconds stay
+  required for every other row.
+- **`ArenaDoorPose`** (C#, `ArenaMapPort.Shared`): constructor parameters `bool? ClosedActive = null, bool? OpenActive = null` appended
+  after `At`; properties `ClosedActive`, `OpenActive`, `bool IsSwitch => ClosedActive.HasValue`; new constant `ClosedPositionTolerance
+  = 0.05f`. `render_csharp` prints the named arguments `ClosedActive: true, OpenActive: false` for a switch row only (the 4th line of
+  the literal ends `"dotanimator", "linear", null, null, ClosedActive: false, OpenActive: true),`).
+- **Repeated part names.** `DoorPosesOf(barrier, part)` returns EVERY row of the name (there is no `at`); the client keeps the rows of
+  a part transform whose `ClosedPosition` lies within 0.05 m of the node's localPosition when more than one row shares (part, node)
+  (`DoorPoseModel.SelectRowsForNode`); the bake drops every same-named child that matches a row (the sidecar's `closed.position`).
+  `check_identities` refuses two rows of one name without `at` closer than 0.05 m; `check_package` finds each row's object by name and
+  closed position, needs a different object for every row and, for a switch row, the package's `active` flag to equal `closed`.
+- **Scene borrow** (`DOT_SOURCES["arena_airpit"]["borrowed"]`, mode `scene`): see MAP-RECIPE 3a ("Borrowed rows"). The tool stops unless
+  the lender has no Animator and no DotAnimator, no borrower has a DotAnimator or an Animator controller with clips, both sides have
+  the same unique node paths and scales, and the lender's twins carry the lender's poses.
+- **Decoder.** `DotElement.active` (payload word 8 of a kind-3 element; `decode_dot_animator` refuses a state other than 0 or 1 and a
+  negative duration); a scan reads kind-3 elements as switches only with `"switches": true` (AirPit's passport scan), otherwise they
+  are skipped with a note as before. A target may be switched or moved, not both; one switch element per node.
+- **Order and text.** Rows sort by barrier, `at`, part, node and closed position (the last key is new, all earlier sidecars have
+  unique keys without it). The `_comment` of a sidecar grows by one paragraph only when it has a switch row or a repeated name
+  without `at`, so the other three files keep their text.
+
+### Corrections to the notes this was built from
+
+- The change set's brief had the two lanes' local z swapped: the lane at local z 3.099 (world z 66.284) opens to +90 degrees, the lane
+  at local z 5.938 (world z 69.123) to -90 (the survey had it right by world z). The "leaf local x origins" of the brief are the WORLD
+  x values; the local ones are in the table above.
+- Sixteen leaves share six names, not eight: (1) and (2) three times, (3) and (4) four times, (5) and (6) once.
+- The kind-3 ease word 17 is not an ease; the tool reads no ease for a switch.
+
+### Verification (build VM, 2026-10-24)
+
+- `python tools/extract/extract_door_poses.py --map arena_airpit --package work/extract/airpit-native-v9 --output tools/maps/airpit.doors.json --csharp`
+  -> `scan PASSPORT_CONTROL_DOORS (barrier depth 1): 18 DotAnimator(s), 18 element(s), 18 pose(s) (2 switch row(s)), 0 inactive, 0 switch
+  element(s) skipped`, `decode self-check: 18 DotAnimator object(s), 18 element(s); every decode ends exactly at the object's byte
+  length ...`, `lender twin 'Apron_bus_MAZ_doors (4)' carries the same poses (worst 0.0000 m / 0.000 deg)` (and `(5)`), `... 36 node(s), 4 differ
+  from 'Apron_bus_MAZ_doors (3)' and become rows` for each front assembly, `package check: 30 pose(s) exist in airpit-native-v9 with
+  Arena's closed transform (repeated paths told apart by 'at', repeated names by the closed position, each object claimed once)`,
+  `poses 30: 18 dotanimator, 12 borrowed`.
+- Byte-stable: a second run and a run without `--package` write identical text. The Equator sidecar regenerates byte for byte, the
+  Bay5 one differs from HEAD by the removed row only.
+- The 30 C# literals are the tool's `--csharp` output pasted into `ArenaMapRegistry.AirPit` as `DoorPoses: new[] { ... }`;
+  `validate_map_descriptors.py` -> OK (the parser reads the named switch arguments; `DoorPoseSidecarTests`, `test_door_poses.py`
+  `AirPitSidecarTests` / `AirPitValidatorRuleTests` check sidecar and registry number for number).
+- Offline footprint of the 16 leaves at the closed and the open pose (extracted meshes): see "Passport leaves" above.
+
+### Limits and open points
+
+- Not in the data (as for the other DotAnimator maps): the trigger, the closing motion and word 3 / words 8-10 of an element. The
+  passport leaves' 1.7 s and ease are Arena's; their opening in the TeamFight round is our held-gate release.
+- The bus doors' open state is the static back row (our reading), their timing the port's. The slerp from identity to the leaf's
+  (0.24, -0.181, -127) euler is a rotation about z by 127 degrees plus a 0.3 degree wobble; a host look at the swing (hinge and leaf
+  together) is the check.
+- Switch rows move nothing and need no park carver; `PASSPORT_CONTROL_EMISSIVE`, `BUS_LIGHT`, the two `Prison_Metal_Fence_01` roots
+  and the shop shells keep their legacy rules. The AirPit NavMesh must be rebaked (the front bus row is dropped, the back row becomes
+  walls with 1.32 m gaps, the passport leaves stay dropped; the bake step of the change set).
+
+## 2026-10-24 - Runtime 3: the client opens AirPit's bus doors and passport control (repeated names, lamp switches, held gate with rows)
+
+Status: built and unit-tested on the build VM (client `dotnet build -c Release -p:ArenaMapPortDllOnly=true`: 0 warnings, 0 errors;
+`dotnet test ArenaMapPort.Server.Tests -c Release`: 2261 passed (2256 before the probe review fix below), 0 failed, 0 skipped; two of them read the ignored extract
+`work/extract/airpit-native-v9` and run here), NOT yet run in a raid. The data (30 AirPit rows, the optional `switch` key, the lookups) is
+the section above; the NavMesh bake side (which parts the bake drops) is the bake step of the same change set. User decisions 2026-10-24:
+AirPit "the same way as Equator and Bay5" (Arena's own motions parked at the open pose, driven on a release at
+`Spawns/SpawnGateDriveScale`), and Bay5's roller `(3)` shut again (data only, nothing for the client to do).
+
+### What the client does now (files: `BoothDoorRepairs`, `SpawnGates`, `DoorPoseModel`)
+
+- **Repeated part names.** `PASSPORT_CONTROL_DOORS` has 16 leaves under six names, and the descriptor holds one row per leaf, told apart by
+  the closed LOCAL position. `DoorPoseModel.SelectRowsForNode(rows, x, y, z)` (pure): of the rows of ONE node, a single row is taken as it
+  is (every other map, and the leaf names that occur once: the existing pose match then reports a node that stands elsewhere), several rows
+  keep those whose `ClosedPosition` is within `ArenaDoorPose.ClosedPositionTolerance` (0.05 m, as a distance) of the node's local position,
+  none is an empty answer. `SelectRowsForPart(rows, localPositionOfNode)` groups a part's rows by node path and applies it per group (the
+  position of a node comes from a callback, `""` = the part itself; a group whose node is missing is kept whole so that `NotePoses` reports
+  the missing node); the result keeps the sidecar's order. `SpawnGates.RowsForPart(part, rows)` is the Unity side of it (`part.Find` for a
+  node path, `node.localPosition`). `BoothDoorRepairs.OpenBarriers` reads, per child: `named = DoorPosesOf(path, part.name, at)` (every row
+  of the NAME), `poses = RowsForPart(part, named)` (this child's), `unmatched = named.Length > 0 && poses.Length == 0`. An unmatched child
+  is NOT structure: it is not counted as "left standing", it goes through `NotePoses(part, named)`, which narrows to nothing and logs ONE
+  Warning through `PoseFallback` (`door pose of 'Passport_control_01_Door (4)' not applied (none of the 4 row(s) for this name has its
+  closed position (local x, y, z)); the part switches off as before`, also on the second raid-start pass), and then the part is held closed
+  (`OfferHeld`) and switched off on the release like every pose-less part. `NotePoses` narrows the rows itself too (the root pass and any
+  other caller); for a name that does not repeat (one row per node: Equator, Bay5, Bowl, AirPit's bus assemblies) both calls are the
+  identity, which `TheOtherMapsRowsNeedNoPositionToTellTheirPartsApart` pins on all three maps.
+- **Switch rows** (`ArenaDoorPose.IsSwitch`, AirPit's `RED/RedFog` and `GREEN/GreenFog`). `NotePoses` does not compare a transform for a
+  switch node (it has none to compare); the scene's identity check is the node's active state: `node.gameObject.activeSelf` must equal the
+  row's `ClosedActive` (RedFog active, GreenFog inactive in the extract), else the usual one Warning (`switch node 'GreenFog' is active in
+  the scene, the data's closed state is inactive`) and the part falls back to the switch-off. A switch row that names the part itself
+  (`node ""`) or has no open state is refused the same way (it would switch the part itself off). `ApplyPose` maps the drive through the
+  row's ease (linear, exact ends) and `DoorPoseModel.SwitchStateAt(k, closedActive, openActive)` gives: closed state at progress 0 (and
+  below, NaN included), open state at progress 1, nothing in between. So `Park` (progress 1) sets the open state, `Reclose` (a Hold,
+  progress 0) the closed state, and a release sets it in the frame its part's drive ENDS - a lamp flips when the leaves stand open, never on
+  a fraction of the swing. `SetActive` is called only on a change. A switch node is no moved body: `PosedPart.NodePaths` (what
+  `IsMoved` reads for the park carvers) holds the transform rows only.
+- **A part with only switches** (`PosedPart.SwitchOnly`: AirPit's RED and GREEN) has no motion of its own (`Seconds` 0) and no collider.
+  The release gives it the length of the longest drive among the OTHER parts under the same barrier root
+  (`DoorPoseModel.SwitchPartDriveSeconds`, fixed in `Open` right after every moving part got `ScaledSeconds(Seconds, scale)`): the 16 leaves
+  take 0.85 s at the default scale, so the lamps flip in the frame the last leaf finishes. The choice (document, per the brief): "last part of
+  its barrier" rather than "first frame of the release" because the red X should not turn green while the leaves still swing. A barrier
+  whose siblings do not move gives zero (the lamp flips in the first frame). `CreateParkCarvers` skips a switch-only part before it looks
+  at a collider (`parked 'RED': 1 switch(es) in the open state, no collider to carve (released)`); a mixed part carves its moved colliders
+  as before and adds `; N switch(es) in the open state` to its line.
+- **Held gate with rows (`PASSPORT_CONTROL_DOORS`, role Held).** Unchanged flow, now with poses: `OpenBarriers` resolves the poses of each
+  child (`NotePoses`) BEFORE `OfferHeld`; `OfferHeld` registers it (closed pose) and keeps it active and closed in every mode (carved from the
+  NavMesh install on, 16 hold carvers over the 16 leaf colliders; RED and GREEN have none); `Release` opens it only when a hold is
+  outstanding (`bool held = IsHeld; if (!held ...) return` - "nothing held; 36 held-gate part(s) stay closed"), and then `Open` drives every
+  registered, active, not yet parked part: the 16 leaves (0.85 s, InOutQuint, quaternion slerp about the vertical axis) and the two lamp
+  parts. The developer hold (`Spawns/SpawnGateHold`, `SpawnGateHoldSeconds`) and a mode plugin's `Hold`/`Release` take the same path
+  (`Watch()` calls `Release("developer test hold, ...")`). A leaf that finishes loses its hold carver and gets a park carver (movement collider
+  that Arena moved, top above floor + 0.3 m, bottom below floor + 1.8 m: expected 16, one `_COLLIDER` of layer 18 per leaf; the layer-12
+  `_BALLISTIC_Metalthin` is no movement collider). With `Spawns/SpawnGates` or `SpawnGateCarve` off the held gate no longer stays shut:
+  `OfferHeld` answers false and `Park` snaps the leaves to the open pose and the lamps to their open state at raid start (before this change
+  the 18 parts were switched off); EMISSIVE (no rows) is still switched off.
+- **Start gate with rows (`BUS_DOORS`).** The three front assemblies are `NotePoses`d, `Offer`ed and, in a plain raid, `Park`ed at the open
+  pose (four nodes each: two hinges and a leaf below each, borrowed from the static back row, 3.0 s = 1.5 s at the default scale, InOutQuint,
+  slerp); a hold keeps them closed and the release drives them. The back row `(3)`, `(4)`, `(5)` has no row, the barrier has rows, so the
+  existing keep-structure rule leaves them standing untouched (they already stand open in the scene): `3 part(s) without a pose left
+  standing`. Before this change `OpenBarriers` hid all six assemblies. With `Spawns/OpenSpawnBarriers` off the barrier is not opened at all.
+- **Summary lines.** The barrier line of the `[RaidFix] spawn openings` block ends `, N switch(es)` when a part carries switches (counted
+  through `SpawnGates.SwitchCountOf` for an offered, held or parked part); the `park:` line says `(4 node(s), 1 switch(es), clip ...)`; the
+  release line ends `, 2 switch(es) set to the open state`. All Debug; the only new Warnings are the fallbacks above.
+- **Nothing else moved.** The mode contract (`Hold`, `Release`, `IsHeld`, `ClosedParts`) is unchanged, the new members are `internal`
+  (`RowsForPart`, `SwitchCountOf`), no new state needs a reset (everything lives in `PosedPart`), no new BepInEx key. Descriptions of
+  `OpenSpawnBarriers`, `SpawnGateCarve`, `SpawnGateDrive` and `SpawnGateDriveScale` now name AirPit's parts and timings (meaning and defaults
+  kept). The occupancy rule is unchanged and the back row is not registered any more, so a bus enclosure that is judged at all (a hold)
+  has its three front doorways (before: six, three of them authored open). The sealed probe itself changed in the review fix below.
+
+### Log lines to expect on the host (Debug, source `maschine-ArenaMapPort`)
+
+AirPit, plain raid (no hold), both opening passes:
+
+```
+[SpawnGates] park: 'Apron_bus_MAZ_doors' snapped to the open pose (4 node(s), clip borrowed from the static open pose of BUS_DOORS/Apron_bus_MAZ_doors (3); seconds are the port's); park carvers follow the navmesh install    (x3: '', ' (1)', ' (2)')
+[RaidFix] spawn openings:
+  spawn barrier 'BUS_DOORS' at (...): deactivated 0 part(s), 0 already off, kept 0 frame part(s), 3 part(s) without a pose left standing, parked 3 part(s) at the open pose
+  spawn barrier 'PASSPORT_CONTROL_DOORS' at (...): deactivated 0 part(s), 0 already off, kept 0 frame part(s), 18 part(s) closed until Release (18 held-gate part(s), carved from the navmesh install on), 2 switch(es)
+  spawn barrier 'PASSPORT_CONTROL_EMISSIVE' at (...): deactivated 0 part(s), ..., 18 part(s) closed until Release (36 held-gate part(s), ...)
+[SpawnGates] navmesh installed: 16+ carver(s) over 16+ movement collider(s) of 36 gate part(s) (...)       (the 16 leaves; the EMISSIVE sheets add theirs if they have colliders)
+[SpawnGates] navmesh probe: every probed gate sealed (16 probed, ...)       (0.5 s later; the three parked bus assemblies are "not judged", see the review fix)
+[SpawnGates] parked 'Apron_bus_MAZ_doors': 4 node(s) at the open pose (clip ...), N park carver(s) (navmesh installed)    (x3, N <= 4: four movement colliders per assembly, all under a moved node)
+```
+
+No Warning. A `door pose of 'Passport_control_01_Door (n)' not applied` Warning would mean a leaf's local position differs from every row of its
+name by more than 5 cm (scene changed), a `switch node ... is ... in the scene` Warning that RedFog / GreenFog changed their active state.
+After a plain-raid Release (`release (...): nothing held; 36 held-gate part(s) stay closed (a held gate opens only with a hold)`) the gate
+stays shut; that is the unchanged rule.
+
+AirPit, developer hold (`Spawns/SpawnGateHold = true`, `SpawnGateHoldSeconds = 60`): the BUS_DOORS line says `3 part(s) held closed (39 part(s)
+registered; developer test hold 60 s)`, `navmesh installed: N carver(s) over N movement collider(s) of 39 gate part(s)`, and at the release:
+
+```
+[SpawnGates] released (developer test hold, 60.x s after the raid timer started): 0 leaf(s) slid 1.38 m in 1.0 s, 18 gate part(s) switched off, N carver(s) removed, drove 21 part(s) to the open pose in 1.5 s (scale 0.50), M park carver(s) in place, 2 switch(es) set to the open state
+```
+
+21 = 3 bus assemblies + 16 leaves + the 2 lamp parts; `18 gate part(s) switched off` are the EMISSIVE sheets (no rows, hidden at the first
+frame as before); the leaves and both lamp parts finish together at 0.85 s (`parked 'Passport_control_01_Door (1)': 1 node(s) at the open pose ...,
+1 park carver(s) (released)` x16, `parked 'RED': 1 switch(es) in the open state, no collider to carve (released)`, the same for GREEN), the bus
+doors at 1.5 s, which is the `in 1.5 s` of the line; M is at most 16 + 12. `drive frames: ...` follows. Without a hold in the raid nothing of
+this appears.
+
+Bay5, plain raid: seven `park:` lines (three rollers, four depot leaves), no line for `Door_01 (3)`; hold: `drove 7 part(s) to the open pose in 3.5 s
+(scale 0.50), 6 park carver(s) in place`.
+
+### Host recipe (GPU-2; the client DLL, the AirPit and Bay5 NavMesh bundles and the changed descriptor of the same change set deployed, EFT restarted)
+
+1. `uibridge_status` (loaded DLL = VM build; max frame time), `uibridge_help topic=overview`. AirPit, bots None, clear weather. Hideout opened
+   once at the end (a client build is accepted only with that).
+2. **AirPit plain raid.** `uibridge_log` filter `[SpawnGates]` / `[RaidFix]`: the lines above, 0 Warnings. `uibridge_inspect gameObject` on
+   `BUS_DOORS/Apron_bus_MAZ_doors/Apron_bus_MAZ_door_L_01_part_01`: `localEulerAngles.z` 127 (and L_02 233 = -127), its child leaf
+   `localPosition` (0.076, -0.328, -1.780); the same on `(1)` and `(2)`; the back row `(3)`..`(5)` untouched. A still from the south pocket
+   (player spawn (-16.91, 0.1, -71.7)) looking north at the bus doors: leaves swung out on the front row, the back row standing open;
+   `uibridge_walk` through a back-row gap and a front doorway ("N m along the navmesh"). The passport gate stays shut: `Passport_control_01_Door
+   (1)` `localEulerAngles` (270, 0, 0) (`(3)`: (270, 179, 0), `(4)`: (270, 181, 0)), RedFog active, GreenFog inactive, `uibridge_teleport dryRun` into the
+   north pocket (-26, 0.1, 72) refused (Partial), a still from (-26, 0.1, 72) looking south: red X lamps, closed leaves.
+3. **AirPit release.** `SpawnGateHold = true`, `SpawnGateHoldSeconds = 60`, new raid. Before 60 s: bus doors closed (hinge z 0), the hold
+   carvers seal the south pocket (`dryRun` out refused), passport as in 2. At 60 s read at about +0.5 s: leaves partway (euler y between 0
+   and +-90: InOutQuint(0.588) = 0.81 of the swing, about 73 degrees, at 0.5 s of 0.85 s), **RedFog still active and GreenFog still inactive**; at +1.0 s:
+   every leaf at y 90 (lanes at local z 3.099) / -90 (5.938) exactly, RedFog inactive, GreenFog active, the bus hinges at z 127 / -127 after
+   1.5 s. The release line above, `dryRun` into the pocket passes (the NavMesh coverage of the lanes is the open question of the bake step),
+   a still from (-26, 0.1, 72) looking south: the green arrows lit, the leaves flush with the lane walls, the 0.55 m between the two lanes'
+   leaf tips; `uibridge_walk` through one lane and through the bus doors. Players and bots standing in a lane are not pushed.
+4. **Variants.** `SpawnGateDriveScale = 1.0`: leaves 1.7 s, bus doors 3.0 s (`scale 1.00`); `SpawnGateDrive = false`: `snapped 21 part(s) ...
+   2 switch(es)`; `SpawnGateCarve = false` in the menu: the passport leaves stand open from raid start, GreenFog active.
+5. **Bay5.** Plain raid: seven `park:` lines; `WAREHOUSE_DOORS (1)/Bay5_Warehouse_Gate_Door_01 (3)` `localPosition.y` 0.092 (shut, not
+   moved); `uibridge_teleport dryRun` through its doorway refused on the rebaked NavMesh (it is a baked wall again, like `Door_01` and
+   `Door_01 (1)`), rollers (2), (4) and `One_man_Door` open as before (3.222 / 3.213 / 3.323), depot gates as in Runtime 2.
+6. **Regression.** Equator plain raid and hold (ten leaves, `drove 10 part(s)`), Bowl plain raid and hold (`drove 4 part(s)`, 23 park carvers):
+   unchanged lines, no Warning.
+7. Return the developer keys to their defaults.
+
+### Open risks
+
+- Nothing of this has run in a raid. The slerp of the bus hinge (127 degrees about z) with its leaf (0.24, -0.181, -127 euler) is the
+  decoder's reading of "net orientation about unchanged"; a look at the swing is the check. The bus doors' open state is our reading of the
+  static back row, their timing the port's.
+- When the lamps flip is our choice (the end of the last leaf's drive); Arena's start offset and trigger are not in the data. The EMISSIVE
+  sheets (red haze, no rows) still disappear in the first frame of a release, 0.85 s before RedFog does: a short stretch where the haze is
+  gone and the red X still shows. If it looks wrong the fix is to give EMISSIVE the same delay, not to flip the lamps earlier.
+- The park carvers of the open leaves sit 0.2 m (`CarveMargin`) outside each leaf's bounds; the offline model gives the tips of the two
+  lanes' leaves 0.55 m apart, so the boxes leave 0.15 m between them, and the lane itself should stay about 0.8 m wide beside the leaf.
+  `dryRun` and `uibridge_walk` through every lane are the check; the post-release probe may log `not judged` for a leaf whose segment
+  touches a neighbour's box (Debug).
+- This replaces the not-started lamp design of spawn-gates.md (2026-10-18: `held_gate_indicators`, GREEN no longer a gate part): RED and
+  GREEN stay gate parts with a switch row each, and RedFog goes off too. Visually the covers (grey over the arrows / over the X)
+  are what flips; with `MaterialFixes/AirPitFogSheets = Hidden` the fog sheets of both groups stay disabled, as the key says.
+- A leaf (or the bus doors) swings through space where a player or bot stands and pushes nobody. Held gates and `Hold` mid-drive: a Hold
+  cancels the coroutine and re-closes by `Reclose`, which also puts the lamps back in the closed state.
+- With `Spawns/SpawnGates` or `SpawnGateCarve` off the passport gate is now open at raid start with the leaves parked turned (it was
+  hidden before): that is the documented "opened at raid start" rule, but the picture differs from the old one.
+- The bus enclosure's `expectSealed` verdict now has three doorways instead of six (the back row is not registered); a hold must seal at
+  least one of them for the probe to be content.
+
+### Review fix 2026-10-24: the sealed probe does not judge a part at its open pose
+
+Found in review, before any raid: in a PLAIN AirPit raid the passport leaves are held closed, so `OnNavMeshInstalled` runs
+`CreateCarvers` and then `Probe(expectSealed: true)` (Equator, Bay5 and Bowl have no held gate and never run that probe in a plain raid).
+The three front bus assemblies are parked open at that moment, but `Register` keeps the CLOSED bounds of a posed part in `_bounds` (the
+probe after a release reads them), so `ProbeOnce` probed three open doorways, found `PathComplete` three times, tallied `BUS_DOORS` as
+probed 3 / sealed 0 and `EnclosureContradicts(true, 3, 0)` raised a false `[SpawnGates] navmesh probe: a gate is NOT sealed (bots can path
+through a closed gate)` Warning on every plain raid (and, had the park carvers happened to sever a doorway, the opposite wrong claim
+"sealed"). Fix: `DoorPoseModel.ProbeJudgesPart(expectSealed, parkedOrDriving)` (pure; false only for a sealed probe of a parked or
+driving part); `ProbeOnce` calls it right after the bounds lookup and before the baseline, the path probe and the enclosure tally, counts
+the part in `parkedOpen` and appends `N part(s) parked at the open pose, not a closed gate, not judged` to the report. The probe after a
+release (`expectSealed` false) judges every part as before. Expected on the host, AirPit plain raid:
+`navmesh probe: every probed gate sealed (16 probed, ...)` (the 16 passport leaves; the two lamp parts have no collider and the three bus
+assemblies are parked: `2 part(s) without a movement collider not probed`, `3 part(s) parked at the open pose, not a closed gate, not
+judged`), no Warning; with a hold, the bus assemblies are closed and judged again (`BUS_DOORS` needs one sealed doorway). Tests:
+`TheSealedProbeJudgesOnlyClosedGateParts` (four cases) and `AParkedBusDoorwayIsNeverCountedByTheSealedProbe` (the source order: bounds,
+parked check, baseline, path probe, tally); `dotnet test ArenaMapPort.Server.Tests -c Release`: 2261 passed.
+
+## 2026-10-24 - NavMesh bake 2: AirPit's rows (repeated leaf names, lamp switches, the bus back row) and Bay5 `(3)` a wall again
+
+Status: code and tests done on the build VM; no Unity run yet (the integrator rebuilds the AirPit and Bay5 NavMesh bundles), no host
+evidence. Files: `UnityProject/Assets/ArenaMapPort/Editor/NavMesh/BakeNavMesh.cs`, `Editor/Common/ArenaPaths.cs`,
+`tools/tests/test_navmesh_source_layers.py`, `tools/tests/test_airpit_bake_inputs.py`. The data is "AirPit: passport leaves, lamp switches,
+bus doors" above, the client side "Runtime 3"; this section is the bake side of the same change set.
+
+### What changed in the rule
+
+The 2026-10-23 rule ("NavMesh bake" above: a barrier with rows drops only the subtrees that move, everything else stays a wall) is
+unchanged. Three things were added so that AirPit's rows fit it.
+
+1. **Repeated part names (`PartsOfRow`).** `PASSPORT_CONTROL_DOORS` has 16 direct children under six names, and `Transform.Find` takes the
+   first child of a name, so one row per leaf would have dropped the first leaf of its name 16 times. `ResolveOpenedBarriers` now looks
+   at ALL direct children called like the row's part (`ChildrenNamed`). A name that occurs once is taken as before, whatever the row's
+   closed position says (every unique part of Equator, Bay5, Bowl and AirPit's bus assemblies). A name that repeats takes every child
+   whose closed local position lies within 0.05 m (Euclidean, `ArenaDoorPose.ClosedPositionTolerance`, mirrored as
+   `DoorClosedPositionTolerance`) of the row's `closed.position`. A row without a closed position takes the first child, as before.
+   A repeated name where no child stands at the row's position fails the build (`.../Passport_control_01_Door (4) (door pose part standing
+   at the closed position (4.898, -3.230, 5.938); barrier root at ...)`); a same-named child that NO row stands for stays a wall and gets
+   one Warning (`the part 'X' at local (...) ... matches no door pose row, so it stays baked as a wall`), because the client would not
+   move it either.
+2. **Which transform the position belongs to.** The sidecar's `closed.position` is the local position of the ANIMATED NODE: the part for
+   node `""` (the passport leaves), else the node below it (a bus hinge inside its assembly, Bay5's depot leaf inside its door part). The
+   bake compares that transform (`child` or `child.Find(node)`; a child without the node cannot match), the same rule as the client's
+   `DoorPoseModel.SelectRowsForNode`. This is why the position is NOT compared unconditionally: all 12 bus rows and Bay5's four depot rows
+   describe a node, not the part, and the part's own localPosition (the assembly at e.g. (3.4, -5.5, 4.3), the depot door part at the
+   origin of its frame) would match none of them and fail the build.
+3. **Switch rows.** A row with a `switch` object (`ArenaDoorRow.is_switch`; AirPit's `RED/RedFog` and `GREEN/GreenFog`) moves nothing and
+   has no collider: it drops nothing and is never reported as unresolved (a part or node the scene lacks, an `at` that names no
+   instance). It still counts for "this barrier has rows", so the client's keep-structure rule and the bake agree (a barrier with only
+   switch rows bakes every collider as a wall). The bake logs the switch rows once (`door pose switch rows: ...`).
+
+`ParseDoorRows` reads two more fields (`ArenaDoorRow.closed_position`, `float[]`, null when `closed.position` is absent; `is_switch`) and
+throws, naming the file and the pose, for a present `closed.position` that is not three numbers or a `switch` that is neither null nor an
+object. Everything else of the loader is unchanged.
+
+### Expected log lines of the rebuilds (Unity log; the leading `[ArenaMapPort]` of every line is left out)
+
+AirPit (`-FullMap`, `airpit.json`; the old numbers are the 2026-10-17 19:43 build, `unity_build_all_20261017_194323.log`):
+
+```
+[ArenaPaths] loaded 30 door pose row(s) from D:/ArenaMapPort/tools/maps/airpit.doors.json                 (the old log has none)
+[BakeNavMesh] opened_barriers: 12 path(s); 2 with door poses (30 row(s) loaded) drop 19 moved subtree(s) [Apron_bus_MAZ_doors, Apron_bus_MAZ_doors (1), Apron_bus_MAZ_doors (2), Passport_control_01_Door (1), Passport_control_01_Door (1), Passport_control_01_Door (1), Passport_control_01_Door (2) x3, (3) x4, (4) x4, (5), (6)] and bake every other part as a wall; 10 without door poses drop their non-frame parts
+[BakeNavMesh] door pose switch rows: 2 SetActive row(s) [PASSPORT_CONTROL_DOORS/GREEN/GreenFog, PASSPORT_CONTROL_DOORS/RED/RedFog] move nothing and drop nothing from the bake
+[BakeNavMesh] excluded 4 ...: door_poses:Apron_bus_MAZ_doors           (x3: '', ' (1)', ' (2)'; the old 'opened_barriers:BUS_DOORS' was 24)
+[BakeNavMesh] excluded 3 ...: door_poses:Passport_control_01_Door (1)    (also (2) 3, (3) 4, (4) 4, (5) 1, (6) 1 = 16; the old 'opened_barriers:PASSPORT_CONTROL_DOORS' was 16)
+[BakeNavMesh] excluded 1 ...: opened_barriers:<Prison_Metal_Fence_01 (2) / (3), Airport_Shop_BS_closed_closed, DonB_Ramen_closed x2, TH_Roll_door_01..03_closed>   (eight lines of 1, unchanged)
+[BakeNavMesh] NavMesh modifiers: 20 markup(s) in bake scope (0 area-override, 20 ignoreFromBuild), 12 volume source(s) added ...   (unchanged)
+[BakeNavMesh] baked NavMeshData: ... bounds=Center: (-10.00, 3.00, 0.00), Extents: (47.00, 5.00, 83.00) sources=3047 (root=null collected 3071 total, 3047 kept ...)    (was 3035 / 3035)
+[BakeNavMesh] bake inputs: bounds from the descriptor (bake_bounds), layer mask 0x40042A00 (navmesh_bake_layers), 0 navmesh_bake_exclusions, 12 opened_barriers (2 with door poses: 19 moved subtree(s))
+```
+
+The order of the per-reason lines follows the scene order of the collected sources (a `Dictionary`), so only the set of lines and the
+numbers are fixed; the moved names are printed in `opened_barriers` order and, per barrier, in the sidecar's row order. No Warning
+`matches no door pose row` may appear (neither the instance one nor the leaf one); no `path not found in the content scenes` Error.
+Numbers: the movement-layer colliders (mask 0x40042A00 drops layer 12 at collection) of the front row (12) and the leaves (16) leave the
+sources, 40 became 28, so 12 more sources than before: the six back-row door leaves' movement colliders (4 per assembly). Collected
+stays 3071.
+
+Bay5 (`-FullMap`, `bay5.json`; `(3)` left the list and the sidecar, see "Bay5 `Door_01 (3)` shut again"): replaces the 2026-10-23 block above.
+
+```
+[ArenaPaths] loaded 7 door pose row(s) from D:/ArenaMapPort/tools/maps/bay5.doors.json                    (was 8)
+[BakeNavMesh] opened_barriers: 4 path(s); 4 with door poses (7 row(s) loaded) drop 7 moved subtree(s) [Bay5_Warehouse_Gate_Door_01 (2), Bay5_Warehouse_Gate_Door_01 (4), One_man_Door, Gates_Depot_Door_L, Gates_Depot_Door_R, Gates_Depot_Door_L, Gates_Depot_Door_R] and bake every other part as a wall; 0 without door poses drop their non-frame parts
+[BakeNavMesh] excluded 2 ...: door_poses:Bay5_Warehouse_Gate_Door_01 (2)      (and (4) 2, One_man_Door 4, Gates_Depot_Door_L 8, Gates_Depot_Door_R 4)
+        (no line for Door_01 (3): its COLLIDER and BALLISTIC_metalthin are NavMesh sources again; in the first rebuild plan it was 2)
+[BakeNavMesh] excluded 200 ...: LevelBorder layer 29 / 2 ...: SPAWN_BOUND*                                 (unchanged)
+[BakeNavMesh] NavMesh modifiers: 109 markup(s) in bake scope (81 area-override, 28 ignoreFromBuild), 134 volume source(s) added ...   (unchanged)
+[BakeNavMesh] baked NavMeshData: ... sources=10495 (root=null collected 10583 total, 10495 kept ...)           (the 2026-10-23 plan said 10493; the 2026-10-20 build 10501)
+[BakeNavMesh] bake inputs: bounds from the renderer union, layer mask 0xFFFFFFEF (every layer but Water), 0 navmesh_bake_exclusions, 4 opened_barriers (4 with door poses: 7 moved subtree(s))
+```
+
+The two depot instances are still enumerated with `FindAllInstances` (their rows carry `at`); each has one `Gates_Depot_Door_L` and one
+`_R`, so the repeated-name rule never engages there and the leaf rows' `closed.position` (2.377, -0.112, 0.282 is the leaf's, not the
+door part's) is not compared. Equator is not rebuilt by this change set (no opened barrier, no change in the bake).
+
+### What changes, collider by collider (offline model over the extracted package)
+
+`BarrierBake` (`test_airpit_bake_inputs.py`) now mirrors the part rule, the repeated-name match and the switch rows; its old configuration
+(no rows) still reproduces the 2026-10-17 log (3071 collected / 3035 sources with the 12 volumes). AirPit, colliders (enabled, non-trigger,
+active; L18 = movement, L12 = ballistic twin):
+
+| Barrier / part | Colliders | Old bake | New bake |
+|---|---|---|---|
+| `BUS_DOORS` front row `Apron_bus_MAZ_doors`, `(1)`, `(2)` | 3 x (4 L18 + 6 L12) | dropped | dropped (`door_poses`, 10 each) |
+| `BUS_DOORS` back row `(3)`, `(4)`, `(5)` | 3 x (4 L18 + 6 L12) = 12 + 18 | dropped | **wall** |
+| `PASSPORT_CONTROL_DOORS` 16 leaves | 16 L18 + 16 L12 | dropped | dropped (`door_poses`, one row per leaf: (1) 6, (2) 6, (3) 8, (4) 8, (5) 2, (6) 2) |
+| `PASSPORT_CONTROL_DOORS/RED`, `/GREEN` | none (fog nodes and covers) | nothing to drop | nothing to drop (switch rows) |
+| `PASSPORT_CONTROL_EMISSIVE`, two portal gates, six shop shells, the cover cubes | 0 + 4 + 14 + 3 = 21 | dropped | dropped (legacy rule, unchanged) |
+
+Totals: barrier colliders dropped 113 to 83; **newly walls 30** (exactly the six back-row door leaves' 4 L18 + 6 L12 per assembly), newly
+dropped 0; sources 7747 to 7777 (all layers), 3023 to 3035 on Arena's layer mask (+12 volumes = the log's 3035 to 3047). No collider of a
+dropped gate has a static copy standing in another scene (`static_twins() == []`), no `NavMeshModifier` sits under a moved subtree.
+The same run for Equator, Bay5 and Bowl reports no unresolved row, no uncovered instance and no leaf without a row.
+
+### The back-row doors: footprints, spawns, exits, AI points and the routes north
+
+Geometry (`BUS_DOORS/Apron_bus_MAZ_doors (n)` movement colliders, world): each back assembly is two open door leaves in a line along x at
+z -68.37..-68.01 (y 0.31..2.49): `(5)` x -19.62..-16.88, `(3)` x -15.53..-12.79, `(4)` x -12.41..-9.67. The doorway between the two leaves
+of each assembly is **1.18 m** at the leaves' thick end and 1.32 m at the wall plane (`AirPitDoorBakePackageTests` pins >= 1.1 m, the agent
+needs 0.6 m). The 0.38 m between `(3)` and `(4)` and the 1.34 m between `(5)` and `(3)` need no attention: the current NavMesh has no cells
+there (something static stands in those gaps, see the runs below), so they are closed with or without the doors.
+
+Points (`test_no_spawn_exit_or_ai_point_stands_in_or_beside_a_back_row_door`): the 105 points of `airpit.bots.json` (4 player and 14 bot
+spawns), `airpit.exits.json` (two boxes: centre and four corners each), `airpit.ai.json` (19 core points and every patrol hub and sub
+point) and `airpit.modes.json` (the 20 team-box markers). None lies inside a back-row door's footprint, none within the agent radius
+0.3 m, none within 1 m: the nearest is the south player spawn `(-16.91, 0.1, -71.7)` and marker `ScavPMCspawn (13)` at 3.33 m, then
+marker (12) at 3.48 m, (11) 3.54 m, (14) 3.58 m, the south bot spawn at 5.13 m (exact distance to the triangles; the test uses the boxes,
+a lower bound).
+
+Routes (scratch analysis, 2026-10-24, not a repo test because it reads a build output): the current `work/build/airpit/arena_airpit_navmesh.bundle`
+(SHA-256 `2a72a71ba0c959a816c26885c58ea50412075625ae62e4cfdb420b54d185d275`, 169,055 B, baked 2026-10-17 with every `BUS_DOORS` collider
+dropped, 3182 polygons, components 8002 / 4406 / 2989 m2) loaded with `navmesh_diff.load_bundle_mesh`, sampled on a 0.1 m lattice (877,290
+nodes in x -62..40, z -90..-2), every node within 0.3 m of a back-row movement collider removed (133 nodes, about 1.3 m2), Dijkstra over
+the 8-neighbourhood, |dy| <= 0.5 per step:
+
+- The three south spawns and the ten south markers all snap to the main component (0.01..0.04 m) and reach `bot-south-apron` and
+  `bot-center-east` (-3.21, -12.09) with and without the doors: 13 sources x 2 targets = 26 routes, the largest increase **0.1 m**
+  (e.g. south-all to the apron 13.5 m to 13.6 m, to centre-east 65.4 m unchanged).
+- The shortest routes cross the door line z -68.17 in the three doorways, at x -18.1 (marker 3), -14.4 / -13.9 (south-all, bear, markers
+  1, 2, 4, 11-13) and -10.8 / -10.9 (bot-south-end, markers 5, 14, 15).
+- Free runs along z -68.2 without the doors: x -34.9..-27.0, -25.4..-24.6, -23.0..-22.1, three doorways of 0.7 m centre-line width (x
+  -18.6..-17.9, -14.5..-13.8, -11.4..-10.7), and the open east end; with the back row standing the doorways shrink to 0.5 m
+  centre-line width (x -18.5..-18.0, -14.4..-13.9, -11.3..-10.8), i.e. 1.1 m of free width at the agent radius 0.3, and nothing else
+  changes. The south pocket therefore keeps three doorways plus the open ends; the front-row doors (dropped) add nothing to this line.
+- `bot-plane-south` (-15.51, -37.64) is not reached by the lattice in either case although it is in the same polygon component (the
+  0.1 m lattice model loses a narrow link); `bot-west-south` and `bot-east-south` sit in the NavMesh's second component. None of this
+  depends on the doors.
+
+### Evidence (build VM, 2026-10-24)
+
+- `python -m unittest discover -s tools/tests -p "test_navmesh_source_layers.py"`: 15 tests OK (about 45 s; 14 before the fix round, which
+  added the missing-sidecar Warning `MissingDoorSidecarWarning` to the loader harness and a negative control for it). The harness prints
+  `NAVMESH_SOURCE_FILTER_PASSED cases=429` (292 before) and now also compiles `PartsOfRow`, `ClosedPositionMatches` and `ChildrenNamed`
+  from the production text. New cases: the passport shape (16 leaves under six names built in another order than the rows, two switch
+  rows, RED / GREEN covers stay, moved order = row order, per-leaf collider reasons), the same hierarchy under the old rule, switch rows
+  alone, a switch row for a missing part / a stale `at` / a leaf name, a 17th leaf with an existing name (one Warning with its local
+  position), a shifted closed position (reported with the position), four same-named leaves (one row moves one, rows pick by position not by
+  sibling order, 4 cm matches / 5.2 cm does not / 4.2 cm diagonal matches, two rows on one leaf add it once, every matching sibling
+  goes), no closed position (first child, the rest named), a unique name with a wrong closed position (taken), node rows of repeated
+  names (the node decides, a twin without the node cannot match), and AirPit's bus (6 assemblies, 12 rows on the 3 front ones: the front
+  row drops, the back row stays a wall, the old rule dropped all six, a row for a back assembly would drop it).
+- Negative controls, each turns the run red at a named case (permanent tests): switch exemption removed (`passport-moved-count`),
+  position match accepting every sibling and first-child-only (`passport-row-0-moves-its-own-leaf` / `passport-no-warning`), node
+  position replaced by the part's (`node-row-moves-one-twin`), a stale switch row failing the build
+  (`switch-missing-part-and-stale-at-unresolved-empty`), plus the three of 2026-10-23. Scratch mutations beyond those, all red: no
+  Warning for an unclaimed leaf (`unknown-leaf-warning-count`), tolerance 0.5 m (`shifted-closed-position-reported`), unguarded null
+  closed position (NullReferenceException), a missing part not reported (`missing-part-reported`), a part added twice
+  (`vehicle-parts-deduplicated`), a stale row not reported (`stale-at-reported`).
+- The loader: `ParseDoorRows`, `DoorSidecarPath` and `ArenaDoorRow` (production text) compiled against the .NET SDK's `Newtonsoft.Json.dll`
+  now run inside the test suite (`test_the_loader_reads_the_four_real_sidecars_and_the_airpit_fields`, skipped when no SDK ships the
+  assembly): airpit 30 rows / 2 switch / 30 with closed_position, bay5 7 / 0 / 4 with `at`, bowl 19, equator 10 (all with `at`);
+  malformed `closed.position` (two numbers, a string, a non-number) and `switch` (a string, a bool) throw with the file and the pose.
+  A loader that ignores the switch flag turns it red.
+- `python -m unittest discover -s tools/tests -p "test_airpit_bake_inputs.py"`: 50 tests OK (36 before): the Python mirror of
+  `ResolveOpenedBarriers` follows the C# (repeated names, node position, switch rows, unclaimed children), 7 synthetic cases and 5
+  real-package cases (above). Mirror mutations (first child only, every sibling matches, switch rows as move rows, tolerance 0.5 m)
+  each turn at least one test red. `ValidatorTests.check` now passes the real `tools/maps/airpit.json` path to
+  `check_map_against_registry_entry`, which looks for `airpit.doors.json` beside it. The full suite of the first pass had two reds in
+  `tools/tests/test_lamp_fill.py` (`ValidatorTests.check` and `check_consistent_change` pass the bare `Path("airpit.json")`, so the
+  validator looks for `airpit.doors.json` in the working directory); the fix, `REPO / "tools" / "maps" / "airpit.json"` at lines 103 and 134,
+  was checked on a scratch copy (20 tests OK) and left to the owner of that file.
+- Not run: Unity. `ArenaPaths.cs` / `BakeNavMesh.cs` compile in the harness for everything except `Bake()` itself and the Unity
+  types (stand-ins); the first batch is the compile check of the Editor assembly (the additions in `Bake()` are a StringBuilder loop and
+  one `Debug.Log`).
+
+### Handoff: rebuilding the AirPit and Bay5 NavMesh bundles
+
+Step 0, before the first build: keep the current bundles. **Done on the build VM, 2026-10-24 11:50 (fix round)**, with `cp -n` into the
+ignored `work/tmp/old-navmesh/` (the plaintext NavMesh bundles exist only in `work/build/<map>`; the originals are overwritten by the
+rebuilds; `dist/` holds them encrypted):
+
+| File in `work/tmp/old-navmesh/` | SHA-256 (start) | What it is |
+|---|---|---|
+| `arena_airpit_navmesh.bundle` (+ `.manifest`) | `2a72a71ba0c959a8...` | AirPit's 2026-10-17 bake, every `BUS_DOORS` and passport leaf dropped: the "before" of this change set |
+| `arena_bay5_navmesh.with-door3-open.bundle` (+ `.manifest`) | `90720288b514af29...` | Bay5's 2026-10-24 01:08 bake, `Door_01 (3)` dropped (open): the "before" of the `(3)` revert |
+| `arena_bay5_navmesh.bundle` | `5d051485e8da669c...` | Bay5's 2026-10-20 bake, the older reference |
+
+(The folder `work/tmp/post-build-bay5-20261024-011320` that an earlier version of this paragraph named holds only three validator logs, no
+bundle.) `tools/maps/airpit.doors.json` is untracked until the operator's commit: the bake reads it from the working tree, so build from
+THIS tree, and look for `[ArenaPaths] loaded 30 door pose row(s)` in the log. Without the file `ArenaPaths` loads zero rows and the bake runs
+the legacy rule (every `BUS_DOORS` / `PASSPORT_CONTROL_DOORS` part dropped, the back row included), which contradicts the new client; since
+the fix round that case logs `[ArenaMapPort][ArenaPaths] no door pose sidecar at ... although the descriptor lists 12 opened_barriers` (Warning).
+Two Unity builds one after the other, from a PowerShell prompt:
+
+```powershell
+# AirPit: WITH -FullMap, into work/build/airpit (validate_extract.py needs its 1800 s default timeout; the extraction alone takes about 5 min)
+& ./tools/build_all.ps1 -MapKey arena_airpit -MapDescriptor D:/ArenaMapPort/tools/maps/airpit.json -PackageDir D:/ArenaMapPort/work/extract/airpit-native-v9 -OutputDir D:/ArenaMapPort/work/build/airpit -FullMap -BakeNavMesh $true -Verify $true -SkipGameRefsSync
+# Bay5: WITH -FullMap, into work/build/bay5 (as on 2026-10-24)
+& ./tools/build_all.ps1 -MapKey arena_bay5 -MapDescriptor D:/ArenaMapPort/tools/maps/bay5.json -PackageDir D:/ArenaMapPort/work/extract/bay5-native-v5 -OutputDir D:/ArenaMapPort/work/build/bay5 -FullMap -BakeNavMesh $true -Verify $true -SkipGameRefsSync
+```
+
+If a build stops in step 4 at `validate_extract.py` (Bay5: the known v5 drift), run the rest by hand from `D:\ArenaMapPort`; AirPit's
+arguments are step 4's:
+
+```powershell
+python -u tools/validate/validate_bundle_roundtrip.py --scenes-bundle work/build/airpit/arena_airpit_scenes.bundle --navmesh-bundle work/build/airpit/arena_airpit_navmesh.bundle --package work/extract/airpit-native-v9 --material-shaders work/build/airpit/material-shaders.json --editor-verify work/build/airpit/editor_verify.json --scripts-scene-name Arena_AirPit_Scripts --require-navmesh
+python tools/validate/validate_preset.py --map D:/ArenaMapPort/tools/maps/airpit.json --scenes-bundle work/build/airpit/arena_airpit_scenes.bundle
+python tools/validate/validate_map_descriptors.py
+```
+
+(Bay5: the 2026-10-23 block above.) Then the Unity log of each build (`work/build/<airpit|bay5>/unity_build_all_*.log`, the newest) against
+the expected lines above, and these pins:
+
+- no `error CS####` (this is the first Unity compile of the 2026-10-24 `ArenaPaths.cs` / `BakeNavMesh.cs`), the `[ArenaPaths] loaded 30 / 7
+  door pose row(s)` line exists, no `matches no door pose row` Warning, no `no door pose sidecar at` Warning (the sidecar was missing from the
+  tree), no `path not found in the content scenes` Error.
+- AirPit: `MeshImporter ... imported 3474 meshes` (as on 2026-10-17); the bake box did not move (`Center: (-10.00, 3.00, 0.00), Extents:
+  (47.00, 5.00, 83.00)`, explicit `bake_bounds`); `sources=3047`, `collected 3071`, modifiers `0 area-override, 20 ignoreFromBuild, 12 volume`;
+  `door_poses:` lines 4 / 4 / 4 and 3 / 3 / 4 / 4 / 1 / 1 (28), no `opened_barriers:BUS_DOORS` and no `opened_barriers:PASSPORT_CONTROL_DOORS` line.
+  `triangulation: vertices=11787 triangles=5423` was the old figure; it moves by the six leaf footprints.
+- Bay5: `sources=10495`, `collected 10583`, bake box extents Bay5 (24.55, 3.39, -157.84) / (170.82, 51.47, 358.07), triangulation near 22117 / 10213.
+- Before and after (`navmesh_diff.load_bundle_mesh`, the method of step 4 above): the AirPit bundle must differ from the backup; the
+  structural diff loses only cells around the six back-row leaves (the model: about 133 lattice nodes of 0.1 m, a strip 0.3 m either
+  side of each leaf, inside x -19.9..-9.4, z -68.7..-67.7) and gains none; a lost or gained cluster elsewhere is a drift to explain. The
+  passport lanes and the front bus row are dropped as before, so they must not change. Bay5 against the post-build copy: gains nothing, loses
+  the footprint of `Door_01 (3)`'s slab (its two colliders; the doorway was open in the 2026-10-24 01:14 build).
+
+Staging, distribution validators and the deploy are the integration's, as after the 2026-10-23 rebuilds (a client Release build without
+`ArenaMapPortDllOnly` stages and encrypts; `validate_distribution.py` and `validate_port.py --distribution` run after that).
+
+**Deploy order (nothing goes to `D:\SPT41` before step 3).** State of `dist/` on 2026-10-24 11:50: the client and server DLLs are the new
+ones (11:49, a `-p:ArenaMapPortDllOnly=true` build copies them), the AirPit NavMesh bundle is still the one of 2026-10-19 (every bus door
+dropped) and Bay5's still the 01:17 one (`Door_01 (3)` dropped). The new client with those bundles is a wrong pair on both maps: bots would
+walk into the back-row bus leaves (standing in the client, absent from the old mesh) and into Bay5's shut roller `(3)` (a wall in the client,
+a doorway in the old mesh). Order: (1) the two Unity rebuilds above and their pins; (2) a client Release build WITHOUT `ArenaMapPortDllOnly`
+(stages and encrypts the new NavMesh bundles; `dist/` then holds a matching set); (3) the distribution validators; (4)
+`deploy-to-spt.ps1 -SptRoot 'D:\SPT41'` as a dry run, then with `-Confirm`; (5) EFT and the server restart (a loaded NavMesh bundle stays
+cached in the process). Equator is untouched by the bake change and needs no rebuild.
+
+### Open risks
+
+- **The runtime and the bake must agree on the open back-row pose.** The bake bakes the three back assemblies as they stand in the
+  package (open, local poses of the lender); the client leaves them untouched. If a later change moved them (a row for `(3)`..`(5)`),
+  `ResolveOpenedBarriers` would drop them with no other edit, so the sidecar is the single place that decides.
+- **Doorways of 1.1 m free width.** The three back-row doorways are narrower than before (1.3 m free) once the leaves are walls. A mover
+  that is wider than the agent radius (a bot with a large collision capsule is 0.3 m too) is fine; the post-rebuild check is
+  `uibridge_walk` through each doorway ("N m along the navmesh") and `uibridge_teleport dryRun` from the south pocket to the apron.
+- **The front-row park carvers are the narrowest the project has built, and those three doorways are the only exit of the south pocket
+  (found by the review, reproduced in the fix round, 2026-10-24).** The park carvers belong to the client (`SpawnGates.CreateParkCarvers`,
+  not the bake), but their input is the baked mesh. Offline model (scratch `front_carvers.py`: the lender `(3)`'s four movement colliders
+  mapped into each front assembly's frame, `CarverBox` rule, against `work/tmp/old-navmesh/arena_airpit_navmesh.bundle`): every front
+  assembly gets four carvers (two hinge arms x 0.42 m, y 0.619..2.465, z depth 0.30; two leaf plates 0.71 x 0.035 m, y 0.312..2.491). The
+  baked doorway strip is 0.70..0.95 m wide (centre line; x -14.52..-13.78 at the middle assembly, the same at x -18.62..-17.88 and
+  -11.42..-10.68). The arm boxes (+0.2 m per side) end at x -14.549 and -13.773, so with the box exactly as built the strip stays
+  **0.75 m**; if Unity widens a carve by the baked agent radius (0.3 m; unobserved, `airpit-team-boxes.md`) it becomes a **0.15 m ribbon**
+  (x -14.23..-14.08, -18.32..-18.18, -11.12..-10.98) over about 1.3 m of length (the carver band z -65.36..-64.59 plus 0.3 m widening at each
+  end), which the tile cache may not keep. Second doubt: the arm
+  boxes start at the collider's own bottom (y 0.619, `CarverBox` is fed `collider.bounds`), 0.27..0.31 m above the baked surface there
+  (y 0.306..0.350), and the plate boxes (bottom 0.312) sit 0.15..0.26 m above the apron surface (0.05..0.19) outside the bus, so a carver
+  that needs the surface inside its y range may cut nothing at all. Either way the front row needs no carver: the arms and plates lie
+  0.19..0.27 m outside the baked strip. Players are unaffected (1.18 m clear between the arms), bots, ArenaMode's south team and
+  `dryRun` reachability are. Host check, plain raid then a developer hold with release: the `parked 'Apron_bus_MAZ_doors*': 4 node(s) ...
+  N park carver(s)` lines (4 per assembly expected), `uibridge_teleport dryRun` from the Bear spawn (-9.94, 0.1, -74.4) and from inside the
+  bus (-14.16, 0.35, -66.5) to the apron (-14.72, 0.1, -59.28) and the South Gate (-3, 0.1, -58), `uibridge_walk` through x -18.25, -14.16 and
+  -11.04 in both directions ("N m along the navmesh"). If a dryRun is false while the log shows park carvers: no park carvers for `BUS_DOORS`
+  (a descriptor flag) or margin 0 for them. Handoff to the runtime owner; nothing in the bake changes (the bake sees the closed front row,
+  the open pose exists only at runtime).
+- **The lattice model is not a bake.** The route analysis lets a node survive when it is more than 0.3 m from a leaf collider and
+  ignores the voxel erosion of the real bake (agent height under the 0.31 m gap beneath a leaf included); a doorway the model keeps at
+  1.1 m can come out narrower. The rebuilt bundle is the check (the same Dijkstra on it, without the extra blocking).
+- **A leaf under a repeated name that the package gains.** Needs a new row (the Warning says which); a leaf row whose position drifts by
+  more than 5 cm fails the build instead of silently leaving the leaf standing.
+- **Offline-model drift.** `port_colliders.mark_barriers` (used by `navmesh_diff.py`) still implements the old non-frame rule only;
+  `navmesh_diff.py --descriptor tools/maps/airpit.json` therefore still treats the whole of `BUS_DOORS` and `PASSPORT_CONTROL_DOORS` as dropped.
+  `BarrierBake` is the door-pose-aware version (as noted for Bay5 on 2026-10-23).
+
+## 2026-10-24 - integration: Bay5 (3) shut, AirPit door poses
+
+Status: the change set of the sections above ("Bay5 `Door_01 (3)` shut again", "AirPit: passport leaves, lamp switches, bus doors", "Runtime 3",
+"NavMesh bake 2") is built together: tests green, both NavMesh bundles rebaked in Unity, `dist/` restaged encrypted and validated, deploy dry run
+read. **Not deployed** (nothing under `D:\SPT41` was touched), **no host evidence yet**. The integrator applied one handoff edit: the two bare
+`Path("airpit.json")` of `tools/tests/test_lamp_fill.py` (lines 103 and 134) became `REPO / "tools" / "maps" / "airpit.json"`, because the validator now
+looks for `airpit.doors.json` beside that path.
+
+### Builds and tests (build VM, in this order)
+
+| Step | Result |
+|---|---|
+| `dotnet build ArenaMapPort.Client -c Release -p:ArenaMapPortDllOnly=true` | `0 Warnung(en)`, `0 Fehler` |
+| `dotnet build ArenaMapPort.Server -c Release` | `0 Warnung(en)`, `0 Fehler` |
+| `dotnet test ArenaMapPort.Server.Tests -c Release` | `Bestanden! Fehler: 0, erfolgreich: 2261, übersprungen: 0, gesamt: 2261` |
+| `python -m unittest discover -s tools/tests -p "test_*.py"` | `Ran 2119 tests in 326.204s`, `OK (skipped=55)` (2118 run with 2 failures before the `test_lamp_fill` edit) |
+| `python tools/validate/validate_map_descriptors.py` | `OK - 14 tools/maps descriptors, all 14 catalog registry entries, release All membership, and ArenaPaths.cs's EquatorDefault() all agree.` |
+| `pwsh -NoProfile -File tools/tests/test_unity_log_scan.ps1` | `UNITY_LOG_TESTS_OK 8 cases` |
+
+### Unity rebuilds (serial, `tools/build_all.ps1 ... -FullMap -BakeNavMesh $true -Verify $true -SkipGameRefsSync`, Bay5 first)
+
+The old NavMesh bundles were copied to the ignored `work/tmp/old-navmesh-2/` first (`arena_airpit_navmesh.bundle` `2a72a71ba0c959a8...`, the
+2026-10-17 bake; `arena_bay5_navmesh.bundle` `90720288b514af29...`, the 2026-10-24 01:08 bake with `Door_01 (3)` open). This was the first Unity compile of
+the 2026-10-24 `ArenaPaths.cs` / `BakeNavMesh.cs`: no `error CS`, no `matches no door pose row`, no `no door pose sidecar at`, no
+`path not found in the content scenes` in either log (`work/build/bay5/unity_build_all_20261024_121145.log`,
+`work/build/airpit/unity_build_all_20261024_122716.log`). Both builds ended `[BuildBundles] DONE`, passed the log scan and the MonoScript identity patch.
+
+Bay5:
+
+```
+[ArenaPaths] loaded 7 door pose row(s) from D:/ArenaMapPort/tools/maps/bay5.doors.json
+[BakeNavMesh] opened_barriers: 4 path(s); 4 with door poses (7 row(s) loaded) drop 7 moved subtree(s) [Bay5_Warehouse_Gate_Door_01 (2), Bay5_Warehouse_Gate_Door_01 (4), One_man_Door, Gates_Depot_Door_L, Gates_Depot_Door_R, Gates_Depot_Door_L, Gates_Depot_Door_R] and bake every other part as a wall; 0 without door poses drop their non-frame parts
+[BakeNavMesh] excluded 200 ...: LevelBorder layer 29 | 4: door_poses:One_man_Door | 2: SPAWN_BOUND* | 2: door_poses:Bay5_Warehouse_Gate_Door_01 (2) | 2: ... (4) | 4: door_poses:Gates_Depot_Door_R | 8: door_poses:Gates_Depot_Door_L
+[BakeNavMesh] NavMesh modifiers: 109 markup(s) in bake scope (81 area-override, 28 ignoreFromBuild), 134 volume source(s) added
+[BakeNavMesh] baked NavMeshData: ... bounds=Center: (24.55, 3.39, -157.84), Extents: (170.82, 51.47, 358.07) sources=10495 (root=null collected 10583 total, 10495 kept ...)
+[BakeNavMesh] bake inputs: bounds from the renderer union, layer mask 0xFFFFFFEF (every layer but Water), 0 navmesh_bake_exclusions, 4 opened_barriers (4 with door poses: 7 moved subtree(s))
+[BakeNavMesh] triangulation: vertices=22130 triangles=10220 (indices=30660)
+```
+
+No excluded-line for `Door_01 (3)`: its two colliders are NavMesh sources again (the 2026-10-24 01:08 plan said 10493 sources, now 10495). AirPit:
+
+```
+[MeshImporter] imported 3474 meshes -> Assets/ArenaImport/Meshes     (as on 2026-10-17)
+[ArenaPaths] loaded 30 door pose row(s) from D:/ArenaMapPort/tools/maps/airpit.doors.json
+[BakeNavMesh] opened_barriers: 12 path(s); 2 with door poses (30 row(s) loaded) drop 19 moved subtree(s) [Apron_bus_MAZ_doors, Apron_bus_MAZ_doors (1), Apron_bus_MAZ_doors (2), Passport_control_01_Door (1) x3, (2) x3, (3) x4, (4) x4, (5), (6)] and bake every other part as a wall; ...
+[BakeNavMesh] door pose switch rows: 2 SetActive row(s) [PASSPORT_CONTROL_DOORS/GREEN/GreenFog, PASSPORT_CONTROL_DOORS/RED/RedFog] move nothing and drop nothing from the bake
+[BakeNavMesh] excluded 1 ...: door_poses:Passport_control_01_Door (6) | 1: (5) | 4: (4) | 4: (3) | 3: (2) | 3: (1)           (= 16 leaves)
+[BakeNavMesh] excluded 1 ...: opened_barriers:<Prison_Metal_Fence_01 (3), (2); TH_Roll_door_03/02/01_closed; Airport_Shop_BS_closed_closed; DonB_Ramen_closed (1) and plain>   (eight lines of 1, legacy rule, unchanged)
+[BakeNavMesh] excluded 4 ...: door_poses:Apron_bus_MAZ_doors | 4: ... (1) | 4: ... (2)                                            (front row only; no excluded line for (3), (4), (5))
+[BakeNavMesh] NavMesh modifiers: 20 markup(s) in bake scope (0 area-override, 20 ignoreFromBuild), 12 volume source(s) added; volume area distribution: area1=12
+[BakeNavMesh] baked NavMeshData: ... bounds=Center: (-10.00, 3.00, 0.00), Extents: (47.00, 5.00, 83.00) sources=3047 (root=null collected 3071 total, 3047 kept ...)
+[BakeNavMesh] bake inputs: bounds from the descriptor (bake_bounds), layer mask 0x40042A00 (navmesh_bake_layers), 0 navmesh_bake_exclusions, 12 opened_barriers (2 with door poses: 19 moved subtree(s))
+[BakeNavMesh] triangulation: vertices=11811 triangles=5433 (indices=16299)
+```
+
+All of the "Expected log lines" above matched (sources 3035 to 3047 with the 12 volumes, `door_poses:` 4/4/4 and 3/3/4/4/1/1, no
+`opened_barriers:BUS_DOORS` and no `opened_barriers:PASSPORT_CONTROL_DOORS` line, the bake box unchanged). `base.json` and the presets: `-FullMap`
+regenerated `ArenaMapPort.Server/db/arena_bay5/base.json` and `arena_airpit/base.json` and `work/build/preset/*`; `git status` shows no change to either `base.json`
+and the staging reported both presets `unchanged`, so there is nothing to explain.
+
+| | AirPit old (2026-10-17) | AirPit new | Bay5 old (01:08, `(3)` open) | Bay5 new (`(3)` shut) |
+|---|---|---|---|---|
+| NavMesh bundle bytes | 169,055 | 169,349 | 348,394 | 348,285 |
+| NavMesh bundle SHA-256 | `2a72a71ba0c959a8...` | `c1b93506f4c05853...` | `90720288b514af29...` | `8c7e17c2925f397d...` |
+| `triangulation:` vertices / triangles | 11787 / 5423 | 11811 / 5433 | 22141 / 10223 | 22130 / 10220 |
+| polygons / vertices (loaded mesh) | 3182 / 5920 | 3189 / 5930 | 5959 / 12179 | 5955 / 12178 |
+| walkable area xz | 21299.9 m2 | 21298.2 m2 | 123671.0 m2 | 123669.7 m2 |
+| components | 126 | 126 | 572 | 573 |
+| main component (polygons, m2) | 2240, 8002.2 | 2247, 8000.6 | 1286, 94745.6 | 1286, 94745.6 |
+| lattice cells (0.25 m) lost / gained | | 29 (1.81 m2, six clusters) / 0 | | 22 (1.38 m2, one cluster) / 1 (0.06 m2) |
+
+By-hand validators after each build (each stopped `build_all.ps1` in step 4 at `validate_extract.py`, see below; arguments as step 4 passes them):
+`validate_bundle_roundtrip.py ... --require-navmesh` OK on both ("all checks passed (1 non-blocking warning(s))", the known +1 material: 501 against 500, 536
+against 535), `validate_preset.py` OK on both, `validate_map_descriptors.py` OK.
+
+**`validate_extract.py` stops (not caused by this change set).** Bay5: the two known v5 drift FAILs (`source_presets.offset: 5708 != 5716`, `Arena_Bay5_Main.json: disabled
+MeshRenderer count (302) == Arena's own authored count (305)`), as on 2026-10-23. **AirPit stopped earlier and for a different reason:**
+`generic package source provenance FAILED: source plan digest drift: package was extracted from a different plan`. The package `airpit-native-v9`
+records the digest `54972ae0d7b4b9bc...` (plan as of commit `718695c`); `tools/extract/plans/airpit.json` at HEAD hashes to `61410590398fb73c...`. The only
+difference is ONE character: commit `275b668` ("Release 0.2.2 published", 22:23 on 2026-10-17) corrected `2026-10-18` to `2026-10-17` inside the level38 `select.reason`
+text, and `plan_digest` covers the whole plan. HEAD has this drift already (`bundle-encryption.md` notes it for `validate_port --map airpit`); the bake did
+not touch the plan. Options for the operator, not done here: re-pin the package manifest's `source_plan_sha256` (the selection did not change), restore the old
+date in the plan, or re-extract v10. Until then `validate_port.py --map airpit` and `build_all.ps1` for AirPit stop at that check, and the validators above are run by hand.
+
+### What the new meshes show (read-only checks on the built bundles; scratch scripts `mesh_check.py`, `bay5_gates.py` in the 2026-10-24 scratchpad, `navmesh_diff.load_bundle_mesh`)
+
+**AirPit.** The structural diff against the 2026-10-17 bundle on a 0.25 m lattice loses 29 cells (1.81 m2) in six clusters around the back-row leaves, all inside
+x -19.75..-9.50, y 0.05..0.35, z -68.75..-67.75 (the model predicted a strip 0.3 m either side of each leaf inside x -19.9..-9.4, z -68.7..-67.7), and gains
+none: the passport lanes, the front bus row, everything else is cell-for-cell the old mesh. The 28 points of the sidecars (4 player and 14 bot spawns of
+`airpit.bots.json`, centre and four corners of both boxes of `airpit.exits.json`) all lie on component 0 of the new mesh (`points not on the main component of the new mesh: 0`).
+Routes over the polygon adjacency (Dijkstra over polygon centroids, so the length is an upper estimate, the component is the real test) from the south spawns to the field (0, 0.1, 0):
+south-all (-16.91, -71.7), Bear (-9.94, -74.4) and `bot-south-end` (-6.04, -71.99) 45 hops 110.5 m before, 46 hops 111.1 m now; `bot-south-apron` (-14.72, -59.28) 28 hops 88.3 m
+unchanged; the north spawns 69 hops 150.4 m and 67 hops 136.5 m unchanged. Free centre-line runs (2 cm steps) along the back-row door line z -68.17:
+
+| | old | new |
+|---|---|---|
+| doorway 1 | x -18.66..-17.84 (0.82 m) | x -18.50..-18.00 (0.50 m) |
+| doorway 2 | x -14.52..-13.78 (0.74 m) | x -14.46..-13.92 (0.54 m) |
+| doorway 3 | x -11.40..-10.68 (0.72 m) | x -11.30..-10.74 (0.56 m) |
+| the rest | -40.00..-26.98 and -23.02..-22.04 | the same |
+
+so each south doorway keeps about 0.5 m of centre-line width (1.1 m free at the agent radius 0.3), as modelled. Along the front-row line z -65.0 the old and the new
+mesh are identical (three runs of 0.82 m at x -18.66..-17.84, -14.56..-13.74, -11.46..-10.64); the passport lanes (z 66.3 and 69.1, five runs of 0.48 to 0.60 m) are identical too.
+
+**Bay5.** The diff against the 01:08 bundle loses 22 cells (1.38 m2) in ONE cluster, x 129.00..129.75, y -2.88, z 41.50..44.75, which is the footprint of `Door_01 (3)`'s slab
+(collider x 129.36..129.40, z 41.04..45.36), and gains one 0.06 m2 cell at its west face (x 128.75..129.00, z 42.50..42.75; a polygon-edge sample, not a new route). On the line
+x 129.38 the old mesh had a run z 41.50..42.78 (1.28 m) at y about -2.0, the new one has no mesh. The probes west (128.3, -2.0, 43.2) and east (130.5, -2.0, 43.2) of the slab were
+one component and 5 polygons (7.5 m) apart before; now they are in components 2 and 56 and `route NONE`: the doorway is closed. The other five gates are unchanged against the
+01:08 bundle the host walked through on 2026-10-24 (`Door_01 (2)` at (145.20, -2.87, 39.77), `Door_01 (4)` (129.15, -2.88, 45.92), `One_man_Door` (129.30, -2.85, 68.34), depot
+gates (50.57, -3.90, 7.53) and (69.05, -3.88, -6.32)): the count of walkable cells within 1.5 m / 3.0 m of each gate origin is the same old and new (78/307, 52/313, 105/355,
+113/410), except `Door_01 (4)` (40 to 39 and 302 to 295), whose 3 m circle reaches the far end of the `(3)` slab (z up to 44.75, the cluster above).
+
+### Staging, distribution, deploy plan
+
+`dotnet build ArenaMapPort.Client -c Release` without `DllOnly` (0 warnings, 0 errors; keys from `work/release-keys`, no key created):
+
+```
+OK stage arena_equator: 3 bundles encrypted (0 written), key file keys/arena_equator.json: wrap present for Arena 0.6.1.0.48206, 1 wrap(s) in the file (unchanged) ...
+    arena_bay5_scenes.bundle: 1,044,553,782 B plaintext, 1,044,585,782 B encrypted, 997 chunks, written, 3494 ms, crypto: CNG
+    arena_bay5_navmesh.bundle: 348,285 B plaintext, 348,413 B encrypted, 1 chunks, written, 5 ms, crypto: CNG
+    arena_bay5_preset.bundle: 7,107 B plaintext, 7,235 B encrypted, 1 chunks, unchanged, 1 ms, crypto: CNG
+OK stage arena_bay5: 3 bundles encrypted (2 written), key file keys/arena_bay5.json: ... (unchanged) ...
+    arena_airpit_scenes.bundle: 991,967,772 B plaintext, 991,998,172 B encrypted, 947 chunks, written, 3573 ms, crypto: CNG
+    arena_airpit_navmesh.bundle: 169,349 B plaintext, 169,477 B encrypted, 1 chunks, written, 2 ms, crypto: CNG
+    arena_airpit_preset.bundle: 7,027 B plaintext, 7,155 B encrypted, 1 chunks, unchanged, 1 ms, crypto: CNG
+OK stage arena_airpit: 3 bundles encrypted (2 written), key file keys/arena_airpit.json: ... (unchanged) ...
+OK stage arena_bowl: 3 bundles encrypted (0 written), key file keys/arena_bowl.json: ... (unchanged) ...
+```
+
+Staging is deterministic: Equator and Bowl wrote nothing, no key file changed, and a before/after SHA-256 of all 90 files of `dist/` differs in exactly four: the Bay5 and AirPit
+scenes and NavMesh bundles (the DLLs were already the 11:49 build in the "before" listing). `ArenaMapPort.BundleCrypt verify` on all six rebuilt bundles: `OK verify ...
+is exactly the encryption of ...`. `python tools/validate/validate_distribution.py`: `DISTRIBUTION_OK 4 maps 12 bundles 4 sidecars encrypted` (12 bundles with unique internal names).
+
+`pwsh -NoProfile -File tools/deploy-to-spt.ps1 -SptRoot 'D:\SPT41'` (DRY RUN, no `-Confirm`):
+
+```
+maschine-ArenaMapPort.Client.dll       1056,5 KB   [WILL OVERWRITE (differs)]
+arena_airpit_navmesh.bundle             165,5 KB   [WILL OVERWRITE (differs)]
+arena_airpit_scenes.bundle           968748,2 KB   [WILL OVERWRITE (differs)]
+arena_bay5_navmesh.bundle               340,2 KB   [WILL OVERWRITE (differs)]
+arena_bay5_scenes.bundle            1020103,3 KB   [WILL OVERWRITE (differs)]
+maschine-ArenaMapPort.Server.dll         143 KB    [WILL OVERWRITE (differs)]
+[deploy-to-spt] plan: 90 file(s), 3492.1 MB total -- 0 new, 6 to overwrite, 84 already identical
+```
+
+Six files, about 1.9 GB to move through Syncthing (the two rebuilt scenes bundles are re-encrypted but their content is the old one: Unity allocates path ids differently on every
+build; this round did not repeat the 2026-10-23 per-object comparison, the roundtrip validator against the package is the guard). Both `base.json`, all sidecars, the key files and
+Equator's and Bowl's bundles are identical to the host. Client DLL `496212ba7ad922fa...` (1,081,856 B), server DLL `82aa85b20ce2f10d...` (146,432 B), both built 11:49 and
+unchanged since (the sources were not edited after that build).
+
+### Host recipe (GPU-2; deploy order of "Deploy order" above: `-Confirm` only after the operator's go, close EFT first, wait for the sync, verify the host's server DLL hash, restart the server, then EFT)
+
+1. `uibridge_status`: loaded DLL = VM build `496212ba7a...`, max frame time. `uibridge_help topic=overview`. Bots None for the walk checks, clear weather.
+2. **AirPit plain raid** (the Runtime 3 recipe, step 2): `[SpawnGates]` / `[RaidFix]` lines with 0 Warnings; expect `navmesh probe: every probed gate sealed (16 probed, ...)` plus `2 part(s) without a movement
+   collider not probed` and `3 part(s) parked at the open pose, not a closed gate, not judged`; the three front bus assemblies at hinge z 127 / -127, the back row untouched; the passport gate shut (RedFog on,
+   GreenFog off). **The one new thing the rebake makes checkable: walk through every doorway of both bus rows** with `uibridge_walk` ("N m along the navmesh") from the Bear spawn (-9.94, 0.1, -74.4) and from the
+   south-all spawn (-16.91, 0.1, -71.7) to the apron (-14.72, 0.1, -59.28) and to the South Gate (-3, 0.1, -58), and `uibridge_teleport dryRun=true` the same pairs. Back-row doorways at x -18.25, -14.2, -11.0
+   (0.5 m centre-line each), front-row doorways at x -18.25, -14.15, -11.05 (0.82 m on the baked mesh before the park carvers).
+3. **AirPit developer hold** (`Spawns/SpawnGateHold = true`, `SpawnGateHoldSeconds = 60`): before 60 s the bus doors closed, the south pocket sealed (`dryRun` out refused) and the probe content with at least
+   one sealed BUS_DOORS doorway; at 60 s the 21-part drive (`drove 21 part(s) to the open pose in 1.5 s (scale 0.50)`), RedFog off and GreenFog on at the end of the leaves' 0.85 s, `dryRun` into the north pocket
+   (-26, 0.1, 72) passing, a walk through one lane.
+4. **Bay5 `Door_01 (3)`:** `WAREHOUSE_DOORS (1)/Bay5_Warehouse_Gate_Door_01 (3)` stays at `localPosition.y` 0.092 in a plain raid and after a hold; `uibridge_teleport dryRun=true` from (128.3, -2.0, 43.2)
+   to (130.5, -2.0, 43.2) refused (different components on the new mesh); the seven `park:` lines of the other five gates, the walks through them as on 2026-10-24.
+5. **Bowl untouched:** one plain raid and one hold, `drove 4 part(s)`, 23 park carvers, no Warning. Hideout opened once at the end. Equator needs no raid for this change set (no bundle, no sidecar row changed).
+6. Return the developer keys to their defaults.
+
+### Open risks (new or changed by the integration)
+
+- **The front-row park carvers (carried over, now with the numbers of the real mesh).** On the new mesh the front doorways are 0.82 m wide on the centre line (z -65.0; the bake agent's model
+  said 0.70 to 0.95 m); the carvers the client plants for the three open front assemblies stand 0.19 to 0.27 m from those strips. Whether Unity widens a carve by the agent radius (0.3 m) is
+  unobserved; if it does, the strip shrinks to a ribbon of about 0.15 m and the south pocket's only exits are closed to bots. The check is step 2 (`dryRun`, `uibridge_walk` through the three front
+  doorways, plain raid AND after a hold release, because both create the carvers); the fallbacks are in "NavMesh bake 2 / Open risks" (no park carvers for `BUS_DOORS`, or a descriptor flag).
+- **AirPit `validate_extract.py` / `validate_port.py` fail on a one-character plan edit (above).** It does not block the bundles; it blocks the scripted pipeline until the operator re-pins or re-extracts.
+- **The back-row doorways are 0.5 m on the centre line** (0.50 / 0.54 / 0.56 m): the agent radius is 0.3 and every model number agrees, but a bot with a larger capsule or SAIN's own avoidance may still
+  snag; `uibridge_bots` over a minute of an AirPit raid with bots, looking for a bot that stands in the south pocket for more than a few seconds.
+- **No host evidence.** The slerp reading of the bus hinges (127 degrees about z with the leaf offset), the timing of the lamps and the sealed-probe expectation above are model results.

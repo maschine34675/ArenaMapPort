@@ -3,6 +3,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Text.Json;
 using System.Text.RegularExpressions;
 using ArenaMapPort.Client;
 using ArenaMapPort.Shared;
@@ -416,6 +417,139 @@ public sealed class DoorPoseModelTests
         Assert.Equal(slerp, DoorPoseModel.UsesSlerp(source));
     }
 
+    // ---- AirPit (2026-10-24, docs/progress/door-poses.md "Runtime 3"): repeated part names, switch rows -------------------
+
+    static ArenaDoorPose Row(string part, string node, float x, float y, float z, float openY = 90f) =>
+        new ArenaDoorPose("BARRIER", part, node, "DotAnimator", 1.7f,
+            new[] { x, y, z }, new[] { -90f, 0f, 0f }, new[] { x, y, z }, new[] { -90f, openY, 0f }, "dotanimator", "inOutQuint");
+
+    [Fact]
+    public void ASingleRowIsTakenAsItIsWhateverItsPosition()
+    {
+        var only = Row("Leaf", "", 1f, 2f, 3f);
+        var picked = DoorPoseModel.SelectRowsForNode(new[] { only }, 50f, 50f, 50f);
+        Assert.Same(only, Assert.Single(picked));     // a name that does not repeat: NotePoses' pose match reports a node that stands elsewhere
+    }
+
+    [Fact]
+    public void SeveralRowsAreToldApartByTheClosedPositionWithinFiveCentimetres()
+    {
+        var a = Row("Leaf", "", -0.481f, -3.23f, 3.099f);
+        var b = Row("Leaf", "", 4.483f, -3.23f, 3.099f);
+        var c = Row("Leaf", "", 9.446f, -3.23f, 3.099f);
+        var rows = new[] { a, b, c };
+        Assert.Same(a, Assert.Single(DoorPoseModel.SelectRowsForNode(rows, -0.481f, -3.23f, 3.099f)));
+        Assert.Same(b, Assert.Single(DoorPoseModel.SelectRowsForNode(rows, 4.483f, -3.2300f, 3.099f)));
+        Assert.Same(c, Assert.Single(DoorPoseModel.SelectRowsForNode(rows, 9.446f, -3.2296f, 3.0987f)));   // the scene's own float noise (AirPit: y -3.2296 / -3.2300)
+        // the tolerance is ClosedPositionTolerance (0.05 m) as a distance, not per axis
+        Assert.Equal(0.05f, ArenaDoorPose.ClosedPositionTolerance);
+        Assert.Same(b, Assert.Single(DoorPoseModel.SelectRowsForNode(rows, 4.483f + 0.04f, -3.23f, 3.099f)));
+        Assert.Empty(DoorPoseModel.SelectRowsForNode(rows, 4.483f + 0.06f, -3.23f, 3.099f));
+        Assert.Empty(DoorPoseModel.SelectRowsForNode(rows, 4.483f + 0.04f, -3.23f + 0.04f, 3.099f));      // 0.057 m
+    }
+
+    [Fact]
+    public void NoRowMatchesAnEmptyAnswerNotAGuess()
+    {
+        var rows = new[] { Row("Leaf", "", 0f, 0f, 0f), Row("Leaf", "", 5f, 0f, 0f) };
+        Assert.Empty(DoorPoseModel.SelectRowsForNode(rows, 2.5f, 0f, 0f));
+        Assert.Empty(DoorPoseModel.SelectRowsForNode(rows, float.NaN, 0f, 0f));
+        Assert.Empty(DoorPoseModel.SelectRowsForNode(null, 0f, 0f, 0f));
+        Assert.Empty(DoorPoseModel.SelectRowsForNode(new ArenaDoorPose[0], 0f, 0f, 0f));
+    }
+
+    [Fact]
+    public void SeveralMatchingRowsAreAllKeptInTheirOrder()
+    {
+        // two rows for one position cannot happen with the real data (the sidecar test pins >= 0.356 m between namesakes);
+        // the helper does not pick one at random, it returns both in sidecar order and NotePoses poses the node by each
+        var first = Row("Leaf", "", 1f, 0f, 0f);
+        var second = Row("Leaf", "", 1.01f, 0f, 0f);
+        var other = Row("Leaf", "", 9f, 0f, 0f);
+        var picked = DoorPoseModel.SelectRowsForNode(new[] { first, other, second }, 1f, 0f, 0f);
+        Assert.Equal(new[] { first, second }, picked);
+    }
+
+    [Fact]
+    public void APartKeepsOneRowPerNodeAndTheSidecarOrder()
+    {
+        // a part with its own pose (node "") that repeats, and two nodes below it (one unique, one that repeats too)
+        var leafA = Row("Leaf", "", 1f, 0f, 0f);
+        var leafB = Row("Leaf", "", 8f, 0f, 0f);
+        var hinge = Row("Leaf", "Hinge/Arm", 0f, 1f, 0f);
+        var lampA = Row("Leaf", "Lamp", 0f, 0f, 1f);
+        var lampB = Row("Leaf", "Lamp", 0f, 0f, 7f);
+        var rows = new[] { leafA, hinge, leafB, lampA, lampB };
+        var positions = new Dictionary<string, float[]>
+        {
+            [""] = new[] { 8.01f, 0f, 0f },
+            ["Hinge/Arm"] = new[] { 100f, 100f, 100f },     // a single row: never checked here
+            ["Lamp"] = new[] { 0f, 0f, 1.02f },
+        };
+        var picked = DoorPoseModel.SelectRowsForPart(rows, node => positions[node]);
+        Assert.Equal(new[] { hinge, leafB, lampA }, picked);
+    }
+
+    [Fact]
+    public void APartWhoseNodeIsMissingKeepsItsWholeGroupSoTheCallerReportsTheNode()
+    {
+        var a = Row("Leaf", "Gone", 0f, 0f, 0f);
+        var b = Row("Leaf", "Gone", 5f, 0f, 0f);
+        var kept = Row("Leaf", "", 0f, 0f, 0f);
+        var picked = DoorPoseModel.SelectRowsForPart(new[] { a, b, kept }, node => node == "Gone" ? null : new[] { 0f, 0f, 0f });
+        Assert.Equal(new[] { a, b, kept }, picked);
+        // a part none of whose repeated rows is its own: an empty answer
+        Assert.Empty(DoorPoseModel.SelectRowsForPart(new[] { a, b }, node => new[] { 2.5f, 0f, 0f }));
+    }
+
+    [Fact]
+    public void APartWithoutRowsOrWithOneRowComesBackUntouched()
+    {
+        var one = Row("Leaf", "", 1f, 2f, 3f);
+        var rows = new[] { one };
+        Assert.Same(rows, DoorPoseModel.SelectRowsForPart(rows, node => throw new InvalidOperationException("one row needs no position")));
+        Assert.Empty(DoorPoseModel.SelectRowsForPart(null, node => null));
+        Assert.Empty(DoorPoseModel.SelectRowsForPart(new ArenaDoorPose[0], node => null));
+        var two = new[] { Row("A", "x", 0f, 0f, 0f), Row("A", "y", 0f, 0f, 0f) };
+        Assert.Equal(two, DoorPoseModel.SelectRowsForPart(two, node => throw new InvalidOperationException("one row per node needs no position")));
+        Assert.Same(two, DoorPoseModel.SelectRowsForPart(two, null));
+    }
+
+    [Theory]
+    [InlineData(0f, false, true, false)]        // closed: RedFog is on
+    [InlineData(-1f, false, true, false)]
+    [InlineData(float.NaN, false, true, false)]
+    [InlineData(1f, false, true, true)]         // open: GreenFog is on
+    [InlineData(7f, false, true, true)]
+    [InlineData(0f, true, false, true)]         // RedFog: on while closed, off once open
+    [InlineData(1f, true, false, false)]
+    public void ASwitchTakesItsClosedStateAtTheStartAndItsOpenStateAtTheEnd(float k, bool closedActive, bool openActive, bool expected)
+    {
+        Assert.Equal((bool?)expected, DoorPoseModel.SwitchStateAt(k, closedActive, openActive));
+    }
+
+    [Theory]
+    [InlineData(0.001f)]
+    [InlineData(0.25f)]
+    [InlineData(0.5f)]
+    [InlineData(0.999f)]
+    public void ASwitchKeepsWhateverStateItHasWhileTheDriveRuns(float k)
+    {
+        Assert.Null(DoorPoseModel.SwitchStateAt(k, false, true));
+        Assert.Null(DoorPoseModel.SwitchStateAt(k, true, false));
+    }
+
+    [Fact]
+    public void ASwitchPartTakesAsLongAsTheLongestDriveOfItsBarrier()
+    {
+        Assert.Equal(0.85f, DoorPoseModel.SwitchPartDriveSeconds(new[] { 0.85f, 0.85f, 0.85f }));
+        Assert.Equal(3.5f, DoorPoseModel.SwitchPartDriveSeconds(new[] { 2.5f, 3.5f, 0f, 2f }));
+        Assert.Equal(0f, DoorPoseModel.SwitchPartDriveSeconds(new float[0]));                 // nothing moves: the lamp flips in the first frame
+        Assert.Equal(0f, DoorPoseModel.SwitchPartDriveSeconds(null));
+        Assert.Equal(0f, DoorPoseModel.SwitchPartDriveSeconds(new[] { float.NaN, -2f }));
+        Assert.Equal(1f, DoorPoseModel.SwitchPartDriveSeconds(new[] { float.NaN, 1f }));
+    }
+
     sealed class Node
     {
         public string Name;
@@ -540,20 +674,195 @@ public sealed class DoorPoseDataTests
     }
 
     [Fact]
-    public void AirPitDrivesNothingYet()
+    public void EquatorHasTenBoothLeavesBay5SevenGatePosesAndAirPitThirtyRows()
     {
-        // its passport and bus doors come in a later change set (docs/progress/door-animations-survey.md)
-        Assert.Empty(ArenaMapRegistry.AirPit.DoorPoses);
-        Assert.Empty(ArenaMapRegistry.AirPit.DoorPosesOf("BUS_DOORS", "Apron_bus_MAZ_doors"));
-        Assert.Empty(ArenaMapRegistry.AirPit.DoorPosesOfBarrier("PASSPORT_CONTROL_DOORS"));
+        Assert.Equal(10, ArenaMapRegistry.Equator.DoorPoses.Length);
+        Assert.Equal(7, ArenaMapRegistry.Bay5.DoorPoses.Length);   // roller (3) shuts again (user, 2026-10-24): no row, no opened barrier
+        Assert.Equal(19, ArenaMapRegistry.Bowl.DoorPoses.Length);
+        Assert.Equal(30, ArenaMapRegistry.AirPit.DoorPoses.Length);
+    }
+
+    const string Passport = "PASSPORT_CONTROL_DOORS";
+
+    static readonly string[] BusAssemblies = { "Apron_bus_MAZ_doors", "Apron_bus_MAZ_doors (1)", "Apron_bus_MAZ_doors (2)" };
+
+    [Fact]
+    public void TheFrontBusAssembliesHaveFourNodeRowsEachAndTheStandingBackRowHasNone()
+    {
+        var map = ArenaMapRegistry.AirPit;
+        foreach (var assembly in BusAssemblies)
+        {
+            var rows = map.DoorPosesOf("BUS_DOORS", assembly);
+            Assert.Equal(4, rows.Length);
+            Assert.Equal(4, rows.Select(r => r.Node).Distinct().Count());                    // one row per node: no position needed to tell them apart
+            Assert.Same(rows[0], DoorPoseModel.SelectRowsForPart(rows, node => throw new InvalidOperationException()).First());
+            Assert.All(rows, r =>
+            {
+                Assert.Equal("borrowed", r.Source);
+                Assert.Equal("inOutQuint", r.Ease);
+                Assert.Equal(3.0f, r.Seconds);
+                Assert.False(r.IsSwitch);
+                Assert.True(DoorPoseModel.UsesSlerp(r.Source));
+                Assert.True(DoorPoseModel.EaseIsUsable(r.Ease, r.Curve, out string why), why);
+            });
+            // the hinge swings 127 degrees about its z axis, the leaf below it follows; both nodes move
+            Assert.Equal(new[] { "Apron_bus_MAZ_door_L_01_part_01", "Apron_bus_MAZ_door_L_01_part_01/Apron_bus_MAZ_door_L_01",
+                                 "Apron_bus_MAZ_door_L_02_part_01", "Apron_bus_MAZ_door_L_02_part_01/Apron_bus_MAZ_door_L_02" },
+                         rows.Select(r => r.Node).ToArray());
+            Assert.All(rows, r => Assert.True(DoorPoseModel.RotationMoves(r.ClosedEuler, r.OpenEuler)));
+        }
+        // the back row stands open as Arena built it (the keep-structure rule): no row at all, but the barrier has rows
+        foreach (var assembly in new[] { "Apron_bus_MAZ_doors (3)", "Apron_bus_MAZ_doors (4)", "Apron_bus_MAZ_doors (5)" })
+            Assert.Empty(map.DoorPosesOf("BUS_DOORS", assembly));
+        Assert.Equal(12, map.DoorPosesOfBarrier("BUS_DOORS").Length);
+        // the walking band keeps its meaning: a collider under a moved hinge or leaf is a moved body, the assembly's frame is not
+        var nodes = map.DoorPosesOf("BUS_DOORS", BusAssemblies[0]).Select(p => p.Node).ToArray();
+        Assert.True(DoorPoseModel.IsMoved("Apron_bus_MAZ_door_L_01_part_01/Apron_bus_MAZ_door_L_01/Apron_bus_MAZ_door_L_01_COLLIDER", nodes));
+        Assert.False(DoorPoseModel.IsMoved("Apron_bus_MAZ_body_COLLIDER", nodes));
+    }
+
+    static readonly (string name, int rows)[] PassportNames =
+    {
+        ("Passport_control_01_Door (1)", 3), ("Passport_control_01_Door (2)", 3), ("Passport_control_01_Door (3)", 4),
+        ("Passport_control_01_Door (4)", 4), ("Passport_control_01_Door (5)", 1), ("Passport_control_01_Door (6)", 1),
+    };
+
+    [Fact]
+    public void EachOfTheSixteenPassportLeavesResolvesToExactlyOneRowByItsClosedPosition()
+    {
+        var map = ArenaMapRegistry.AirPit;
+        var claimed = new HashSet<ArenaDoorPose>();
+        foreach (var (name, count) in PassportNames)
+        {
+            var named = map.DoorPosesOf(Passport, name);          // every row of the NAME: no `at`, so any instance position finds them
+            Assert.Equal(count, named.Length);
+            Assert.Equal(named, map.DoorPosesOf(Passport, name, -16.1f, 3.9f, 63.2f));
+            foreach (var row in named)
+            {
+                Assert.Equal("", row.Node);                       // the leaf itself turns
+                var own = DoorPoseModel.SelectRowsForNode(named, row.ClosedPosition[0], row.ClosedPosition[1], row.ClosedPosition[2]);
+                Assert.Same(row, Assert.Single(own));
+                Assert.True(claimed.Add(row), "one leaf per row");
+                // the scene's y differs by 0.0004 m between the two lanes (-3.2296 / -3.2300): still the same leaf
+                Assert.Same(row, Assert.Single(DoorPoseModel.SelectRowsForPart(named, node => new[] { row.ClosedPosition[0], row.ClosedPosition[1] + 0.0004f, row.ClosedPosition[2] })));
+                if (count > 1)
+                {
+                    // a leaf one handspan off every row is nobody's: the part falls back
+                    Assert.Empty(DoorPoseModel.SelectRowsForNode(named, row.ClosedPosition[0] + 0.06f, row.ClosedPosition[1], row.ClosedPosition[2]));
+                }
+            }
+        }
+        Assert.Equal(16, claimed.Count);
     }
 
     [Fact]
-    public void EquatorHasTenBoothLeavesAndBay5EightGatePoses()
+    public void ThePassportLeavesTurnAboutTheVerticalAxisInArenasSeventeenTenthsOfASecond()
     {
-        Assert.Equal(10, ArenaMapRegistry.Equator.DoorPoses.Length);
-        Assert.Equal(8, ArenaMapRegistry.Bay5.DoorPoses.Length);
-        Assert.Equal(19, ArenaMapRegistry.Bowl.DoorPoses.Length);
+        var leaves = ArenaMapRegistry.AirPit.DoorPosesOfBarrier(Passport).Where(p => !p.IsSwitch).ToArray();
+        Assert.Equal(16, leaves.Length);
+        foreach (var leaf in leaves)
+        {
+            Assert.Equal("dotanimator", leaf.Source);
+            Assert.Equal("inOutQuint", leaf.Ease);
+            Assert.Equal(1.7f, leaf.Seconds);
+            Assert.Equal(leaf.ClosedPosition, leaf.OpenPosition);                          // turned, not moved
+            Assert.True(DoorPoseModel.RotationMoves(leaf.ClosedEuler, leaf.OpenEuler));
+            Assert.True(DoorPoseModel.UsesSlerp(leaf.Source));
+            // one axis (the euler y, the vertical one after the -90 x), under 180 degrees: the quaternion slerp is the short turn
+            Assert.Equal(leaf.ClosedEuler[0], leaf.OpenEuler[0]);
+            Assert.Equal(leaf.ClosedEuler[2], leaf.OpenEuler[2]);
+            Assert.InRange(Math.Abs(leaf.OpenEuler[1] - leaf.ClosedEuler[1]), 89f, 91f);
+            Assert.Equal(0.85f, DoorPoseModel.ScaledSeconds(leaf.Seconds, DoorPoseModel.DefaultDriveScale), 4);
+        }
+        // the lane at local z 3.099 (world z 66.28) opens to +90 degrees, the one at 5.938 (world z 69.12) to -90 (the data agent's correction of the brief)
+        Assert.All(leaves.Where(p => Math.Abs(p.ClosedPosition[2] - 3.099f) < 0.01f), p => Assert.Equal(90f, p.OpenEuler[1]));
+        Assert.All(leaves.Where(p => Math.Abs(p.ClosedPosition[2] - 5.938f) < 0.01f), p => Assert.Equal(-90f, p.OpenEuler[1]));
+    }
+
+    [Fact]
+    public void TheTwoLampsAreSwitchesWithNothingToMoveAndNothingToCarve()
+    {
+        var map = ArenaMapRegistry.AirPit;
+        var red = Assert.Single(map.DoorPosesOf(Passport, "RED"));
+        var green = Assert.Single(map.DoorPosesOf(Passport, "GREEN"));
+        Assert.Equal("RedFog", red.Node);
+        Assert.Equal("GreenFog", green.Node);
+        Assert.True(red.IsSwitch && green.IsSwitch);
+        Assert.Equal((true, false), (red.ClosedActive.Value, red.OpenActive.Value));          // the red lamp goes out ...
+        Assert.Equal((false, true), (green.ClosedActive.Value, green.OpenActive.Value));      // ... and the green one comes on
+        foreach (var sw in new[] { red, green })
+        {
+            Assert.Equal(0f, sw.Seconds);
+            Assert.Equal("linear", sw.Ease);
+            Assert.Equal(sw.ClosedPosition, sw.OpenPosition);                                  // the scene's transform on both sides
+            Assert.Equal(sw.ClosedEuler, sw.OpenEuler);
+            Assert.True(DoorPoseModel.EaseIsUsable(sw.Ease, sw.Curve, out string why), why);
+            // the ease maps the drive to the switch: closed at the start, open at the end, untouched in between
+            Assert.Equal(sw.ClosedActive, DoorPoseModel.SwitchStateAt(DoorPoseModel.EaseOf(sw.Ease, sw.Curve, 0f), sw.ClosedActive.Value, sw.OpenActive.Value));
+            Assert.Null(DoorPoseModel.SwitchStateAt(DoorPoseModel.EaseOf(sw.Ease, sw.Curve, 0.5f), sw.ClosedActive.Value, sw.OpenActive.Value));
+            Assert.Equal(sw.OpenActive, DoorPoseModel.SwitchStateAt(DoorPoseModel.EaseOf(sw.Ease, sw.Curve, 1f), sw.ClosedActive.Value, sw.OpenActive.Value));
+            // Arena's duration word is 0: nothing to scale, the part's own drive length comes from its barrier (SwitchPartDriveSeconds)
+            Assert.Equal(0f, DoorPoseModel.ScaledSeconds(sw.Seconds, DoorPoseModel.DefaultDriveScale));
+        }
+        // nothing else of the barrier is a switch, and no other map has one
+        Assert.Equal(2, map.DoorPoses.Count(p => p.IsSwitch));
+        Assert.DoesNotContain(new[] { ArenaMapRegistry.Equator, ArenaMapRegistry.Bay5, ArenaMapRegistry.Bowl }.SelectMany(m => m.DoorPoses), p => p.IsSwitch);
+    }
+
+    /// <summary>The release of a held passport gate, simulated with the same pure rules the coroutine reads (SpawnGates.Open): the
+    /// 16 leaves drive 0.85 s, the two lamp parts (no motion of their own) take the longest drive of their barrier, so the lamps
+    /// flip in the frame the last leaf finishes and in no earlier one.</summary>
+    [Fact]
+    public void TheLampsFlipInTheFrameTheLastLeafStandsOpenAndNotBefore()
+    {
+        var map = ArenaMapRegistry.AirPit;
+        float scale = DoorPoseModel.DefaultDriveScale;
+        var leafSeconds = map.DoorPosesOfBarrier(Passport).Where(p => !p.IsSwitch).Select(p => DoorPoseModel.ScaledSeconds(p.Seconds, scale)).ToArray();
+        float lampSeconds = DoorPoseModel.SwitchPartDriveSeconds(leafSeconds);
+        Assert.Equal(0.85f, lampSeconds, 4);
+        var red = map.DoorPosesOf(Passport, "RED").Single();
+        var green = map.DoorPosesOf(Passport, "GREEN").Single();
+        bool redOn = red.ClosedActive.Value, greenOn = green.ClosedActive.Value;
+        bool leavesOpen = false;
+        int flippedAt = -1;
+        const float dt = 1f / 60f;
+        for (int frame = 0; frame < 120 && flippedAt < 0; frame++)
+        {
+            float elapsed = frame * dt;
+            bool done = DoorPoseModel.Finished(elapsed, lampSeconds);
+            // the same frame test as the leaves' own: every leaf is done in the frame the lamps are
+            Assert.Equal(done, leafSeconds.All(sec => DoorPoseModel.Finished(elapsed, sec)));
+            float progress = DoorPoseModel.Progress(elapsed, lampSeconds);
+            var r = DoorPoseModel.SwitchStateAt(DoorPoseModel.EaseOf(red.Ease, red.Curve, done ? 1f : progress), red.ClosedActive.Value, red.OpenActive.Value);
+            var g = DoorPoseModel.SwitchStateAt(DoorPoseModel.EaseOf(green.Ease, green.Curve, done ? 1f : progress), green.ClosedActive.Value, green.OpenActive.Value);
+            if (r.HasValue) redOn = r.Value;
+            if (g.HasValue) greenOn = g.Value;
+            if (!done)
+            {
+                Assert.True(redOn && !greenOn, $"frame {frame}: the lamps keep their closed state while the leaves swing");
+                continue;
+            }
+            leavesOpen = true;
+            flippedAt = frame;
+        }
+        Assert.True(leavesOpen);
+        Assert.False(redOn);
+        Assert.True(greenOn);
+        Assert.InRange(flippedAt * dt, 0.85f, 0.85f + dt + 1e-4f);
+        // a release that snaps (SpawnGateDrive false) is Progress 1 at once: the same end state
+        Assert.Equal((bool?)false, DoorPoseModel.SwitchStateAt(DoorPoseModel.EaseOf(red.Ease, red.Curve, 1f), true, false));
+    }
+
+    [Fact]
+    public void AtTheDefaultScaleAirPitOpensInAboutOneAndAHalfSecondsAndTheSwitchesAreInstant()
+    {
+        float scale = DoorPoseModel.DefaultDriveScale;
+        var map = ArenaMapRegistry.AirPit;
+        Assert.All(map.DoorPoses.Where(p => p.Barrier == "BUS_DOORS"), p => Assert.Equal(1.5f, DoorPoseModel.ScaledSeconds(p.Seconds, scale), 4));
+        Assert.All(map.DoorPoses.Where(p => p.Barrier == Passport && !p.IsSwitch), p => Assert.Equal(0.85f, DoorPoseModel.ScaledSeconds(p.Seconds, scale), 4));
+        Assert.Equal(1.5f, map.DoorPoses.Max(p => DoorPoseModel.ScaledSeconds(p.Seconds, scale)), 4);
+        // at Arena's own timing (scale 1) the bus doors take the port's 3 s, the passport leaves Arena's 1.7 s
+        Assert.Equal(3.0f, map.DoorPoses.Max(p => DoorPoseModel.ScaledSeconds(p.Seconds, 1f)), 4);
     }
 
     static readonly (string barrier, float x, float y, float z, float secondsL, float secondsR, string source)[] BoothAssemblies =
@@ -620,7 +929,6 @@ public sealed class DoorPoseDataTests
 
     [Theory]
     [InlineData("WAREHOUSE_DOORS (1)/Bay5_Warehouse_Gate_Door_01 (2)", 0.13f, 3.222f, "dotanimator")]
-    [InlineData("WAREHOUSE_DOORS (1)/Bay5_Warehouse_Gate_Door_01 (3)", 0.092f, 3.181f, "borrowed")]
     [InlineData("WAREHOUSE_DOORS (1)/Bay5_Warehouse_Gate_Door_01 (4)", 0.124f, 3.213f, "dotanimator")]
     [InlineData("WAREHOUSE_DOORS (1)/One_man_Door", 0.15f, 3.323f, "dotanimator")]
     public void EveryRollerLiftsItsWholeRootInYAndIsFoundWithoutAPosition(string barrier, float closedY, float openY, string source)
@@ -724,11 +1032,154 @@ public sealed class DoorPoseDataTests
     }
 }
 
+/// <summary>Runs only when the ignored extract of AirPit (work/extract/airpit-native-v9, BSG-derived) is on this machine.</summary>
+internal sealed class AirPitSceneFactAttribute : FactAttribute
+{
+    public AirPitSceneFactAttribute()
+    {
+        if (AirPitScene.Path() == null) Skip = "work/extract/airpit-native-v9 is not present (BSG-derived, ignored by git)";
+    }
+}
+
+/// <summary>The gate scene of AirPit (Arena level 28) as the extractor wrote it: objects with id, parent_id, name, active and a
+/// local position; read as data only.</summary>
+internal static class AirPitScene
+{
+    internal sealed class Obj
+    {
+        public string Id, Name, ParentId;
+        public bool Active;
+        public float[] LocalPosition;
+        public readonly List<Obj> Children = new List<Obj>();
+    }
+
+    internal static string Path()
+    {
+        for (var dir = new DirectoryInfo(AppContext.BaseDirectory); dir != null; dir = dir.Parent)
+        {
+            var path = System.IO.Path.Combine(dir.FullName, "work", "extract", "airpit-native-v9", "scenes", "Arena_Airpit_TeamFight_DesignStuff.json");
+            if (File.Exists(path)) return path;
+        }
+        return null;
+    }
+
+    internal static List<Obj> Load()
+    {
+        using var doc = JsonDocument.Parse(File.ReadAllText(Path()));
+        var all = new Dictionary<string, Obj>();
+        var order = new List<Obj>();
+        foreach (var o in doc.RootElement.GetProperty("objects").EnumerateArray())
+        {
+            var obj = new Obj
+            {
+                Id = o.GetProperty("id").GetString(),
+                Name = o.GetProperty("name").GetString(),
+                ParentId = o.TryGetProperty("parent_id", out var parent) && parent.ValueKind == JsonValueKind.String ? parent.GetString() : null,
+                Active = o.GetProperty("active").GetBoolean(),
+                LocalPosition = o.GetProperty("local_position").EnumerateArray().Select(v => (float)v.GetDouble()).ToArray(),
+            };
+            all[obj.Id] = obj;
+            order.Add(obj);
+        }
+        foreach (var obj in order)
+        {
+            if (obj.ParentId != null && all.TryGetValue(obj.ParentId, out var parent)) parent.Children.Add(obj);
+        }
+        return order;
+    }
+
+    /// <summary>The node below <paramref name="start"/> a '/'-separated path of names leads to (first match per level, like
+    /// Transform.Find), null when there is none.</summary>
+    internal static Obj Find(Obj start, string path)
+    {
+        var current = start;
+        foreach (var segment in path.Split('/'))
+        {
+            current = current.Children.FirstOrDefault(c => c.Name == segment);
+            if (current == null) return null;
+        }
+        return current;
+    }
+}
+
+/// <summary>
+/// The AirPit rows read against the real scene (the lookups the client runs at raid start, offline): every passport leaf of the
+/// scene takes exactly one row, the lamps agree with the scene's active state, every node of every bus-door row exists at the
+/// row's closed position, and the standing back row has no row. Skipped without the ignored extract.
+/// </summary>
+public sealed class DoorPoseAirPitSceneTests
+{
+    const string Passport = "PASSPORT_CONTROL_DOORS";
+
+    [AirPitSceneFact]
+    public void EveryPassportChildOfTheSceneHasRowsAndEveryLeafTakesExactlyOneByItsPosition()
+    {
+        var map = ArenaMapRegistry.AirPit;
+        var scene = AirPitScene.Load();
+        var barrier = Assert.Single(scene, o => o.Name == Passport);
+        Assert.Equal(18, barrier.Children.Count);                                   // 16 leaves + RED + GREEN, nothing else would be left standing
+        var claimed = new HashSet<ArenaDoorPose>();
+        foreach (var child in barrier.Children)
+        {
+            var named = map.DoorPosesOf(Passport, child.Name, barrier.LocalPosition[0], barrier.LocalPosition[1], barrier.LocalPosition[2]);
+            Assert.True(named.Length > 0, $"'{child.Name}' has no row: the keep-structure rule would leave it standing");
+            if (child.Name == "RED" || child.Name == "GREEN")
+            {
+                var lamp = Assert.Single(named);
+                Assert.True(lamp.IsSwitch);
+                var fog = Assert.Single(child.Children);                             // RedFog / GreenFog
+                Assert.Equal(lamp.Node, fog.Name);
+                Assert.True(child.Active);                                           // the part stays active, only the fog node switches
+                Assert.Equal(lamp.ClosedActive.Value, fog.Active);                   // the scene agrees with the row's closed state (NotePoses' check)
+                continue;
+            }
+            var own = Assert.Single(DoorPoseModel.SelectRowsForNode(named, child.LocalPosition[0], child.LocalPosition[1], child.LocalPosition[2]));
+            Assert.True(claimed.Add(own), $"'{child.Name}' at {child.LocalPosition[0]:F3}, {child.LocalPosition[2]:F3} takes a row another leaf took");
+            Assert.True(DoorPoseModel.PoseMatchesScene(
+                (float)Math.Sqrt(Enumerable.Range(0, 3).Sum(i => Math.Pow(child.LocalPosition[i] - own.ClosedPosition[i], 2))), 0f));
+        }
+        Assert.Equal(16, claimed.Count);
+        // PASSPORT_CONTROL_EMISSIVE keeps the legacy rule (hidden on the release): no row
+        Assert.Empty(map.DoorPosesOfBarrier("PASSPORT_CONTROL_EMISSIVE"));
+    }
+
+    [AirPitSceneFact]
+    public void TheBusDoorRowsNameNodesThatExistAtTheirClosedPositionAndTheBackRowIsLeftStanding()
+    {
+        var map = ArenaMapRegistry.AirPit;
+        var scene = AirPitScene.Load();
+        var bus = Assert.Single(scene, o => o.Name == "BUS_DOORS");
+        Assert.Equal(6, bus.Children.Count);
+        foreach (var assembly in bus.Children)
+        {
+            var rows = map.DoorPosesOf("BUS_DOORS", assembly.Name);
+            bool front = assembly.Name == "Apron_bus_MAZ_doors" || assembly.Name == "Apron_bus_MAZ_doors (1)" || assembly.Name == "Apron_bus_MAZ_doors (2)";
+            if (!front)
+            {
+                Assert.Empty(rows);                                                  // already open in the scene: stands as Arena built it
+                continue;
+            }
+            Assert.Equal(4, rows.Length);
+            Assert.Equal(rows, DoorPoseModel.SelectRowsForPart(rows, node => throw new InvalidOperationException("one row per node needs no position")));
+            foreach (var row in rows)
+            {
+                var node = AirPitScene.Find(assembly, row.Node);
+                Assert.True(node != null, $"{assembly.Name}: node '{row.Node}' not found");
+                Assert.True(node.Active);
+                double error = Math.Sqrt(Enumerable.Range(0, 3).Sum(i => Math.Pow(node.LocalPosition[i] - row.ClosedPosition[i], 2)));
+                Assert.True(error <= DoorPoseModel.PoseMatchPosition, $"{assembly.Name}/{row.Node}: {error:F3} m off the data's closed position");
+            }
+        }
+    }
+}
+
 /// <summary>
 /// The client files sit on Unity types; their wiring is read as text like the other runtime files (SpawnGatesWiringTests).
 /// </summary>
 public sealed class DoorPoseWiringTests
 {
+    const string Passport = "PASSPORT_CONTROL_DOORS";
+
     static string Text(string relative)
     {
         for (var dir = new DirectoryInfo(AppContext.BaseDirectory); dir != null; dir = dir.Parent)
@@ -753,13 +1204,15 @@ public sealed class DoorPoseWiringTests
     {
         var code = Text("ArenaMapPort.Client/BoothDoorRepairs.cs");
         var barriers = Between(code, "static void OpenBarriers(List<Transform> openings, StringBuilder sb, bool openPlain)", "// Is the way out clear?");
-        int poses = barriers.IndexOf("var poses = map.DoorPosesOf(path, part.name, at.x, at.y, at.z);", StringComparison.Ordinal);
-        int note = barriers.IndexOf("SpawnGates.NotePoses(part, poses);", StringComparison.Ordinal);
+        int named = barriers.IndexOf("var named = map.DoorPosesOf(path, part.name, at.x, at.y, at.z);", StringComparison.Ordinal);
+        int poses = barriers.IndexOf("var poses = SpawnGates.RowsForPart(part, named);", StringComparison.Ordinal);
+        int note = barriers.IndexOf("SpawnGates.NotePoses(part, unmatched ? named : poses);", StringComparison.Ordinal);
         int held = barriers.IndexOf("SpawnGates.OfferHeld(part)", StringComparison.Ordinal);
         int start = barriers.IndexOf("SpawnGates.Offer(part)", StringComparison.Ordinal);
         int park = barriers.IndexOf("SpawnGates.Park(part)", StringComparison.Ordinal);
         int off = barriers.IndexOf("part.gameObject.SetActive(false);", park, StringComparison.Ordinal);
-        Assert.True(poses > 0 && poses < note && note < held && held < start && start < park && park < off, "DoorPosesOf, NotePoses, OfferHeld, Offer, Park, SetActive(false)");
+        Assert.True(named > 0 && named < poses && poses < note && note < held && held < start && start < park && park < off,
+            "DoorPosesOf (every row of the name), RowsForPart (this child's), NotePoses, OfferHeld, Offer, Park, SetActive(false)");
         Assert.True(off - start < 400, "the existing offer-before-switch-off distance still holds");
         Assert.Contains("parked > 0 ? $\", parked {parked} part(s) at the open pose\"", code);
         // the park carvers wait for the NavMesh: one seal after BOTH opening steps (booth leaves and barrier parts), like the held gates
@@ -791,7 +1244,7 @@ public sealed class DoorPoseWiringTests
         Assert.Contains("var instancePoses = map.DoorPosesOfBarrier(path, at.x, at.y, at.z);", barriers);
         Assert.Contains("if (instancePoses.Length == 0 && PathHasPoseRows(map, path))", barriers);
         Assert.Contains("bool keepStructure = instancePoses.Length > 0 && !(rootPoses.Length > 0 && !rootDone);", barriers);
-        Assert.Contains("if (poses.Length == 0 && keepStructure)", barriers);
+        Assert.Contains("if (poses.Length == 0 && keepStructure && !unmatched)", barriers);
         Assert.Contains("part(s) without a pose left standing", barriers);
         // the old rule (hide every non-frame part) is still the only switch-off, and still skips frame parts
         Assert.Single(Regex.Matches(barriers, @"SetActive\(false\)"));
@@ -979,6 +1432,41 @@ public sealed class DoorPoseWiringTests
         Assert.Equal(2, Regex.Matches(gates, @"ProbeSegment\(bounds, out var a, out var b\);").Count);
     }
 
+    [Theory]
+    [InlineData(true, true, false)]    // the sealed probe: a part at its open pose is no closed gate
+    [InlineData(true, false, true)]    // ... a closed one is judged
+    [InlineData(false, true, true)]    // the probe after a release judges every part (a parked body on the segment is handled there)
+    [InlineData(false, false, true)]
+    public void TheSealedProbeJudgesOnlyClosedGateParts(bool expectSealed, bool parkedOrDriving, bool judged)
+    {
+        Assert.Equal(judged, DoorPoseModel.ProbeJudgesPart(expectSealed, parkedOrDriving));
+    }
+
+    [Fact]
+    public void AParkedBusDoorwayIsNeverCountedByTheSealedProbe()
+    {
+        // The GPU-2 picture this guards (a plain AirPit raid): the passport leaves are held closed, so the NavMesh install runs
+        // CreateCarvers + Probe(expectSealed: true); the three front bus assemblies are parked open and have their CLOSED bounds
+        // in _bounds (Register). Judged, they were probed = 3, sealed = 0 in the BUS_DOORS enclosure: EnclosureContradicts(true, 3, 0)
+        // and a false "a gate is NOT sealed" Warning.
+        Assert.True(SpawnGateModel.EnclosureContradicts(true, 3, 0));
+        // Skipped, the enclosure never reaches the tally and the passport enclosure is judged alone.
+        Assert.False(SpawnGateModel.EnclosureContradicts(true, 0, 0));
+        var gates = Text("ArenaMapPort.Client/SpawnGates.cs");
+        var probe = Between(gates, "static string ProbeOnce(bool expectSealed", "// The two probe points across a gate's thin axis");
+        int bounds = probe.IndexOf("if (!_bounds.TryGetValue(part, out var bounds))", StringComparison.Ordinal);
+        int parked = probe.IndexOf("DoorPoseModel.ProbeJudgesPart(expectSealed, IsParkedOrDriving(part))", StringComparison.Ordinal);
+        int baseline = probe.IndexOf("_baseline.TryGetValue(part", StringComparison.Ordinal);
+        int path = probe.IndexOf("ProbePath(bounds, out string detail)", StringComparison.Ordinal);
+        int tally = probe.IndexOf("enclosures[enclosure] =", StringComparison.Ordinal);
+        Assert.True(bounds > 0 && bounds < parked && parked < baseline && baseline < path && path < tally,
+            "the parked check must come before the path probe and the enclosure tally");
+        Assert.Contains("parkedOpen++; continue;", probe);
+        Assert.Contains("part(s) parked at the open pose, not a closed gate, not judged", probe);
+        // the part table is unchanged: a parked posed part still registers its closed bounds (the probe after a release reads them)
+        Assert.Contains("_bounds[part] = posed.ClosedBounds;", Between(gates, "static void Register(Transform part)", "// ---- Arena's end poses"));
+    }
+
     [Fact]
     public void PoseDataThatDoesNotFitFallsBackToTheSwitchOffWithOneWarning()
     {
@@ -1058,5 +1546,171 @@ public sealed class DoorPoseWiringTests
         Assert.DoesNotContain("public static void NotePoses", gates);
         Assert.DoesNotContain("public static void SealParked", gates);
         Assert.DoesNotContain("public static bool HasPoses", gates);
+    }
+
+    // ---- AirPit (2026-10-24, docs/progress/door-poses.md "Runtime 3") --------------------------------------------------
+
+    [Fact]
+    public void ARepeatedPartNameTakesTheRowsOfItsOwnClosedPositionAndAnUnmatchedChildIsNeverLeftStanding()
+    {
+        var doors = Text("ArenaMapPort.Client/BoothDoorRepairs.cs");
+        var barriers = Between(doors, "static void OpenBarriers(List<Transform> openings, StringBuilder sb, bool openPlain)", "// Is the way out clear?");
+        // every row of the child's NAME, then the rows of THIS child, then "the name has rows but none is this child's"
+        Assert.Contains("var named = map.DoorPosesOf(path, part.name, at.x, at.y, at.z);", barriers);
+        Assert.Contains("var poses = SpawnGates.RowsForPart(part, named);", barriers);
+        Assert.Contains("bool unmatched = named.Length > 0 && poses.Length == 0;", barriers);
+        // an unmatched child is not structure: it goes through the offer / switch-off like a part without a pose, and NotePoses gets the
+        // whole name so that its ONE Warning (PoseFallback) is logged, also on the second raid-start pass
+        Assert.Contains("SpawnGates.NotePoses(part, unmatched ? named : poses);", barriers);
+        int standing = barriers.IndexOf("if (poses.Length == 0 && keepStructure && !unmatched)", StringComparison.Ordinal);
+        int note = barriers.IndexOf("SpawnGates.NotePoses(part, unmatched ? named : poses);", StringComparison.Ordinal);
+        Assert.True(standing > 0 && standing < note);
+        // the booth leaves keep their own lookup (assembly path + position): unchanged
+        Assert.Contains("map.DoorPosesOf(HierarchyPath(assembly), leaf.name, at.x, at.y, at.z)", doors);
+
+        var gates = Text("ArenaMapPort.Client/SpawnGates.cs");
+        var rows = Between(gates, "internal static ArenaDoorPose[] RowsForPart(Transform part, ArenaDoorPose[] rows)", "internal static int SwitchCountOf(Transform part)");
+        Assert.Contains("DoorPoseModel.SelectRowsForPart(rows, nodePath =>", rows);
+        Assert.Contains("string.IsNullOrEmpty(nodePath) ? part : part.Find(nodePath)", rows);   // the node's own local position, "" = the part
+        Assert.Contains("node.localPosition", rows);
+        Assert.Contains("rows.Length < 2", rows);                                                // a name that does not repeat is taken as before
+        // NotePoses narrows the rows itself too (the root pass and any other caller), before it reads a single row
+        var note2 = Between(gates, "internal static void NotePoses(Transform part, ArenaDoorPose[] poses)", "internal static bool Park(Transform part)");
+        int narrow = note2.IndexOf("poses = RowsForPart(part, poses);", StringComparison.Ordinal);
+        int first = note2.IndexOf("var pose = poses[i];", StringComparison.Ordinal);
+        Assert.True(narrow > 0 && narrow < first);
+        Assert.Contains("if (poses.Length == 0)", note2);
+        Assert.Contains("row(s) for this name has its closed position", note2);       // the one Warning, through PoseFallback
+        Assert.Contains("PoseFallback(part,", note2);
+    }
+
+    [Fact]
+    public void ASwitchRowIsCheckedAgainstTheScenesActiveStateAndSetOnlyAtTheEndsOfTheDrive()
+    {
+        var gates = Text("ArenaMapPort.Client/SpawnGates.cs");
+        var note = Between(gates, "internal static void NotePoses(Transform part, ArenaDoorPose[] poses)", "internal static bool Park(Transform part)");
+        Assert.Contains("if (pose.IsSwitch)", note);
+        Assert.Contains("node.gameObject.activeSelf", note);
+        Assert.Contains("active != pose.ClosedActive.Value", note);                    // the identity check of a switch: the scene must agree with the closed state
+        Assert.Contains("in the scene, the data's closed state is", note);
+        Assert.Contains("a switch row names the part itself", note);                  // never a switch on the part (it would switch itself off)
+        Assert.Contains("Switch = true, ClosedActive = pose.ClosedActive.Value, OpenActive = pose.OpenActive.Value", note);
+        // a switch node is no moved body: only the transform rows give park-carver node paths
+        Assert.Contains("paths.Add(path);", note);
+        Assert.Single(Regex.Matches(note, @"paths\.Add\("));
+        Assert.Contains("NodePaths = paths.ToArray()", note);
+        Assert.Contains("Switches = switches, SwitchOnly = switches == nodes.Length", note);
+
+        var apply = Between(gates, "static void ApplyPose(PosedPart posed, float progress)", "// Hold: back to the closed pose");
+        int sw = apply.IndexOf("if (n.Switch)", StringComparison.Ordinal);
+        int lerp = apply.IndexOf("DoorPoseModel.Lerp3(n.ClosedPosition, n.OpenPosition, k", StringComparison.Ordinal);
+        Assert.True(sw > 0 && sw < lerp, "a switch node never reaches the transform code");
+        Assert.Contains("DoorPoseModel.SwitchStateAt(k, n.ClosedActive, n.OpenActive)", apply);
+        Assert.Contains("n.Node.gameObject.activeSelf != state.Value", apply);          // SetActive only on a change
+        Assert.Contains("n.Node.gameObject.SetActive(state.Value);", apply);
+        // Park applies progress 1 (the open state), Reclose progress 0 (the closed state): nothing else sets a switch
+        var park = Between(gates, "internal static bool Park(Transform part)", "internal static void SealParked(string why)");
+        Assert.Contains("ApplyPose(posed, 1f);", park);
+        var reclose = Between(gates, "static void Reclose(PosedPart posed)", "static void DestroyParkCarvers(PosedPart posed)");
+        Assert.Contains("ApplyPose(posed, 0f);", reclose);
+        Assert.Single(Regex.Matches(gates, @"gameObject\.SetActive\(state\.Value\)"));
+    }
+
+    [Fact]
+    public void APartWithOnlySwitchesFinishesWithTheLongestDriveOfItsBarrierAndCarvesNothing()
+    {
+        var gates = Text("ArenaMapPort.Client/SpawnGates.cs");
+        var open = Between(gates, "static IEnumerator Open(string reason)", "static void OnSceneUnloaded(Scene scene)");
+        // the drive seconds of the moving parts are fixed first, then the lamps take the longest of their siblings under the same root
+        int scaled = open.IndexOf("posed.DriveSeconds = DoorPoseModel.ScaledSeconds(posed.Seconds, scale);", StringComparison.Ordinal);
+        int lamps = open.IndexOf("posed.DriveSeconds = DoorPoseModel.SwitchPartDriveSeconds(siblings);", StringComparison.Ordinal);
+        int clock = open.IndexOf("float t0 = Time.time;", StringComparison.Ordinal);
+        Assert.True(scaled > 0 && scaled < lamps && lamps < clock);
+        Assert.Contains("if (!posed.SwitchOnly || posed.Part == null) continue;", open);
+        Assert.Contains("other.Part.parent == posed.Part.parent", open);
+        Assert.Contains("!other.SwitchOnly", open);
+        // the switch part is a driver like any other: it is finished by the same frame test as the leaves, and counted
+        Assert.Contains("switched += posed.Switches;", open);
+        Assert.Contains("switch(es) set to the open state", open);
+        Assert.Single(System.Text.RegularExpressions.Regex.Matches(open, @"SetActive\(false\)"));   // the lamps are never switched off by the release
+        var carve = Between(gates, "static void CreateParkCarvers(string why)", "static GameObject MakeCarver(");
+        int only = carve.IndexOf("if (posed.SwitchOnly)", StringComparison.Ordinal);
+        int walk = carve.IndexOf("foreach (var collider in posed.Part.GetComponentsInChildren<Collider>(true))", StringComparison.Ordinal);
+        Assert.True(only > 0 && only < walk, "a switch-only part is skipped before any collider is looked at");
+        Assert.Contains("no collider to carve", carve);
+        Assert.Contains("switch(es) in the open state", carve);
+    }
+
+    [Fact]
+    public void AHeldGateWithRowsIsRegisteredClosedAndDrivenOnlyByTheReleaseOfAHold()
+    {
+        var doors = Text("ArenaMapPort.Client/BoothDoorRepairs.cs");
+        var barriers = Between(doors, "static void OpenBarriers(List<Transform> openings, StringBuilder sb, bool openPlain)", "// Is the way out clear?");
+        // the poses are resolved BEFORE the held part is offered, so a Release can drive it
+        int note = barriers.IndexOf("SpawnGates.NotePoses(part, unmatched ? named : poses);", StringComparison.Ordinal);
+        int held = barriers.IndexOf("role == ArenaGateRole.Held && SpawnGates.OfferHeld(part)", StringComparison.Ordinal);
+        Assert.True(note > 0 && note < held);
+        var gates = Text("ArenaMapPort.Client/SpawnGates.cs");
+        // OfferHeld registers (closed pose, held-gate set) and keeps the part active; nothing in it parks or drives
+        var offerHeld = Between(gates, "internal static bool OfferHeld(Transform part)", "/// <summary>Once per raid-start opening, after every held part was offered");
+        Assert.Contains("Register(part);", offerHeld);
+        Assert.Contains("_heldGateParts.Add(part);", offerHeld);
+        Assert.DoesNotContain("Park(", offerHeld);
+        // Release opens only when a hold was outstanding; the Open coroutine then drives every registered, active, not yet parked part
+        int from = Regex.Match(gates, @"public static void Release\(string reason\)\s*\r?\n").Index;
+        int to = gates.IndexOf("internal static void Install()", StringComparison.Ordinal);
+        var release = gates.Substring(from, to - from);
+        Assert.Contains("bool held = IsHeld;", release);
+        Assert.Contains("if (!held || _parts.Count == 0)", release);
+        Assert.Contains("_heldGatesOpened = true;", release);
+        Assert.Contains("_openCoroutine = _runner.StartCoroutine(Open(reason ?? \"no reason\"));", release);
+        var open = Between(gates, "static IEnumerator Open(string reason)", "static void OnSceneUnloaded(Scene scene)");
+        Assert.Contains("foreach (var part in _parts)", open);
+        Assert.Contains("if (part == null || !part.gameObject.activeSelf) continue;", open);
+        Assert.Contains("if (!posed.Parked)", open);
+        Assert.Contains("posed.Driving = true;", open);
+        // the developer hold (Spawns/SpawnGateHold) follows the same path: Watch() calls Release once SpawnGateHoldSeconds have passed
+        Assert.Contains("Release($\"developer test hold, {sinceStart:F1} s after the raid timer started\");", gates);
+        // the held-gate parts are carved from the NavMesh install on, and a driven part loses its hold carvers as it finishes
+        Assert.Contains("DestroyHoldCarversOf(posed.Part)", open);
+    }
+
+    [Fact]
+    public void AnAirPitBusRowAndTheStandingBackRowMeetTheKeepStructureRule()
+    {
+        var doors = Text("ArenaMapPort.Client/BoothDoorRepairs.cs");
+        var barriers = Between(doors, "static void OpenBarriers(List<Transform> openings, StringBuilder sb, bool openPlain)", "// Is the way out clear?");
+        // a barrier with rows keeps every child without a row of its name standing (AirPit's back row), and says so in its summary
+        Assert.Contains("bool keepStructure = instancePoses.Length > 0 && !(rootPoses.Length > 0 && !rootDone);", barriers);
+        Assert.Contains("part(s) without a pose left standing", barriers);
+        Assert.Contains("parked > 0 ? $\", parked {parked} part(s) at the open pose\"", barriers);
+        Assert.Contains("switches > 0 ? $\", {switches} switch(es)\"", barriers);
+        // the summary counts the lamps through SpawnGates, once per offered, held or parked part
+        Assert.Equal(3, Regex.Matches(barriers, @"switches \+= SpawnGates\.SwitchCountOf\(part\);").Count);
+        // the descriptor side: the bus doors are the start gate (offered, parked in a plain raid), the passport control the held one
+        var map = ArenaMapRegistry.AirPit;
+        Assert.Equal(ArenaGateRole.Start, map.GateRoleOf("BUS_DOORS"));
+        Assert.Equal(ArenaGateRole.Held, map.GateRoleOf(Passport));
+        Assert.Equal(ArenaGateRole.Held, map.GateRoleOf("PASSPORT_CONTROL_EMISSIVE"));
+        Assert.Contains("BUS_DOORS", map.OpenedBarriers);
+        Assert.Contains(Passport, map.OpenedBarriers);
+        // every direct child of the two barriers that has a row is a part the client registers; the rest of the map is untouched
+        Assert.Empty(map.DoorPosesOfBarrier("PASSPORT_CONTROL_EMISSIVE"));
+    }
+
+    [Fact]
+    public void TheOtherMapsRowsNeedNoPositionToTellTheirPartsApart()
+    {
+        // Equator, Bay5 and Bowl keep their lookups: (part, node, at) is unique per row, so SelectRowsForPart is the identity there
+        foreach (var map in new[] { ArenaMapRegistry.Equator, ArenaMapRegistry.Bay5, ArenaMapRegistry.Bowl })
+        {
+            var keys = map.DoorPoses.Select(p => (p.Barrier, p.Part, p.Node, At: p.At == null ? "" : string.Join(",", p.At))).ToArray();
+            Assert.Equal(keys.Length, keys.Distinct().Count());
+            foreach (var group in map.DoorPoses.GroupBy(p => (p.Barrier, p.Part, At: p.At == null ? "" : string.Join(",", p.At))))
+            {
+                var rows = group.ToArray();
+                Assert.Equal(rows, DoorPoseModel.SelectRowsForPart(rows, node => throw new InvalidOperationException("nothing to tell apart")));
+            }
+        }
     }
 }

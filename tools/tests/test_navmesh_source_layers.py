@@ -39,6 +39,7 @@ def filter_source(source, paths_source):
                            "static string BakeOnlyExclusionReason(", "static int SourceLayerMask(",
                            "static bool UsesExplicitBakeBounds(", "static bool DoorRowAppliesTo(",
                            "static string FormatDoorPosition(", "static List<Transform> FindAllInstances(",
+                           "static List<Transform> ChildrenNamed(", "static bool ClosedPositionMatches(", "static List<Transform> PartsOfRow(",
                            "static List<Transform> ResolveOpenedBarriers(", "static List<Transform> ResolveHierarchyPaths("))
     arrays = []
     for name in ("ExcludedNamePrefixes", "ExcludedLeafNames"):
@@ -49,8 +50,11 @@ def filter_source(source, paths_source):
     tolerance = re.findall(r"const float DoorAtTolerance\s*=\s*0\.05f;", source)
     if len(tolerance) != 1:
         raise ValueError("Expected one DoorAtTolerance = 0.05f declaration")
+    closed_tolerance = re.findall(r"const float DoorClosedPositionTolerance\s*=\s*0\.05f;", source)
+    if len(closed_tolerance) != 1:
+        raise ValueError("Expected one DoorClosedPositionTolerance = 0.05f declaration")
     row_class = extract_function(paths_source, "public sealed class ArenaDoorRow")
-    return "\n".join(arrays) + "\n" + tolerance[0] + "\n" + row_class + "\n" + functions
+    return "\n".join(arrays) + "\n" + tolerance[0] + "\n" + closed_tolerance[0] + "\n" + row_class + "\n" + functions
 
 
 HARNESS = r"""
@@ -86,6 +90,7 @@ sealed class Transform
     public Transform parent;
     public GameObject gameObject = new GameObject();
     public Vector3 position;
+    public Vector3 localPosition;
     public List<Transform> children = new List<Transform>();
     public int childCount { get { return children.Count; } }
     public Transform(string name, int layer, Transform parent = null)
@@ -170,6 +175,7 @@ static class Program
     {
         var t = new Transform(name, layer, parent);
         t.position = new Vector3(x, y, z);
+        t.localPosition = t.position;
         return t;
     }
     static ArenaDoorRow Row(string barrier, string part, string node, params float[] at)
@@ -456,6 +462,331 @@ static class Program
         CheckTrue("equator-booth-rows-are-not-read-for-the-bake", moved.Count == 0 && unresolved.Count == 0 && posed == 0);
     }
 
+    // ---- 2026-10-24 (AirPit): repeated part names told apart by the closed position, switch rows, node rows of unique parts ----
+    static ArenaDoorRow RowClosed(string barrier, string part, string node, float cx, float cy, float cz, params float[] at)
+    {
+        return new ArenaDoorRow { barrier = barrier, part = part, node = node, at = at.Length == 0 ? null : at, closed_position = new[] { cx, cy, cz } };
+    }
+    static ArenaDoorRow SwitchRow(string barrier, string part, string node, params float[] at)
+    {
+        return new ArenaDoorRow { barrier = barrier, part = part, node = node, at = at.Length == 0 ? null : at, closed_position = new[] { 0f, 0f, 0f }, is_switch = true };
+    }
+    // A child at a LOCAL position (the stand-in has no rotation or scale, so the world position is the sum).
+    static Transform MakeLocal(string name, int layer, Transform parent, float x, float y, float z)
+    {
+        var t = new Transform(name, layer, parent);
+        t.localPosition = new Vector3(x, y, z);
+        t.position = new Vector3(parent.position.x + x, parent.position.y + y, parent.position.z + z);
+        return t;
+    }
+
+    // AirPit's PASSPORT_CONTROL_DOORS as the package has it: RED and GREEN lamp covers (a fog node with a cover below, no collider)
+    // and 16 leaves under six names, each with a movement collider (layer 18) and a ballistic twin (layer 12).
+    sealed class Passport
+    {
+        public Transform root, red, redFog, redCover, green, greenFog, greenCover, unknownLeaf, unknownCollider;
+        public Transform[] leaves, colliders, ballistics;          // in the sidecar's row order
+        public List<ArenaDoorRow> rows = new List<ArenaDoorRow>(); // GREEN, the 16 leaves, RED (the sidecar's order: sorted by part)
+    }
+    const string PASSPORT = "PASSPORT_CONTROL_DOORS";
+    static Passport MakePassport(bool withUnknownLeaf)
+    {
+        var p = new Passport();
+        p.root = new Transform(PASSPORT, 0);
+        p.root.position = new Vector3(-16.146f, 3.945f, 63.186f);
+        p.green = MakeLocal("GREEN", 0, p.root, 15.671f, 12.003f, -74.448f);
+        p.greenFog = MakeLocal("GreenFog", 0, p.green, 0f, 0f, 0f);
+        p.greenCover = MakeLocal("Passport_control_lamp_cover", 0, p.greenFog, 0f, 0f, 0f);
+        p.red = MakeLocal("RED", 0, p.root, 15.671f, 12.003f, -74.448f);
+        p.redFog = MakeLocal("RedFog", 0, p.red, 0f, 0f, 0f);
+        p.redCover = MakeLocal("Passport_control_lamp_cover", 0, p.redFog, 0f, 0f, 0f);
+        var spec = new List<float[]>();                              // { number, local x, local z }
+        foreach (float x in new[] { -0.481f, 4.483f, 9.446f }) spec.Add(new[] { 1f, x, 3.099f });
+        foreach (float x in new[] { -0.481f, 4.483f, 9.446f }) spec.Add(new[] { 2f, x, 5.938f });
+        foreach (float x in new[] { -5.089f, -0.125f, 4.838f, 9.802f }) spec.Add(new[] { 3f, x, 3.099f });
+        foreach (float x in new[] { -5.089f, -0.125f, 4.838f, 9.802f }) spec.Add(new[] { 4f, x, 5.938f });
+        spec.Add(new[] { 5f, 19.37f, 3.099f });
+        spec.Add(new[] { 6f, 19.37f, 5.938f });
+        p.leaves = new Transform[spec.Count]; p.colliders = new Transform[spec.Count]; p.ballistics = new Transform[spec.Count];
+        for (int i = spec.Count - 1; i >= 0; i--)                    // the scene lists the leaves in another order than the sidecar
+        {
+            string name = "Passport_control_01_Door (" + (int)spec[i][0] + ")";
+            p.leaves[i] = MakeLocal(name, 0, p.root, spec[i][1], -3.23f, spec[i][2]);
+            Make("Passport_control_01_Door_LOD0", 0, p.leaves[i]);
+            p.colliders[i] = Make("Passport_control_01_Door_COLLIDER", 18, p.leaves[i]);
+            p.ballistics[i] = Make("Passport_control_01_Door_BALLISTIC_Metalthin", 12, p.leaves[i]);
+        }
+        if (withUnknownLeaf)
+        {
+            p.unknownLeaf = MakeLocal("Passport_control_01_Door (4)", 0, p.root, 30f, -3.23f, 5.938f);
+            p.unknownCollider = Make("Passport_control_01_Door_COLLIDER", 18, p.unknownLeaf);
+        }
+        p.rows.Add(SwitchRow(PASSPORT, "GREEN", "GreenFog"));
+        for (int i = 0; i < spec.Count; i++)
+            p.rows.Add(RowClosed(PASSPORT, "Passport_control_01_Door (" + (int)spec[i][0] + ")", "", spec[i][1], -3.23f, spec[i][2]));
+        p.rows.Add(SwitchRow(PASSPORT, "RED", "RedFog"));
+        return p;
+    }
+
+    static void PassportCases()
+    {
+        List<string> unresolved;
+        int posed;
+
+        // --- the real shape: 16 rows tell 16 leaves apart under six names, the two switch rows drop nothing
+        Debug.Warnings.Clear();
+        var p = MakePassport(false);
+        var moved = new List<Transform>();
+        var legacy = ResolveOpenedBarriers(new[] { p.root.gameObject }, new[] { PASSPORT }, p.rows.ToArray(), moved, out unresolved, out posed);
+        CheckEqual("passport-posed", posed, 1);
+        CheckEqual("passport-legacy-empty", legacy.Count, 0);
+        CheckEqual("passport-unresolved-empty", Describe(unresolved), "");
+        CheckEqual("passport-no-warning", Debug.Warnings.Count, 0);
+        CheckEqual("passport-moved-count", moved.Count, 16);
+        for (int k = 0; k < 16; k++)
+        {
+            CheckTrue("passport-row-" + k + "-moves-its-own-leaf", moved[k] == p.leaves[k]);
+            CheckReason("passport-collider-" + k + "-goes", p.colliders[k], "door_poses:" + p.leaves[k].name, legacy, moved);
+            CheckReason("passport-ballistic-" + k + "-goes", p.ballistics[k], "door_poses:" + p.leaves[k].name, legacy, moved);
+        }
+        // the lamp covers and the barrier root are not dropped: the switch rows move nothing and the client keeps them standing
+        CheckReason("passport-green-part-stays", p.green, null, legacy, moved);
+        CheckReason("passport-green-fog-stays", p.greenFog, null, legacy, moved);
+        CheckReason("passport-green-cover-stays", p.greenCover, null, legacy, moved);
+        CheckReason("passport-red-cover-stays", p.redCover, null, legacy, moved);
+        CheckReason("passport-root-stays", p.root, null, legacy, moved);
+
+        // --- the same leaves under the legacy rule (no rows): every non-frame descendant goes, which is what the rows replace
+        var legacyMoved = new List<Transform>();
+        var legacyList = ResolveOpenedBarriers(new[] { p.root.gameObject }, new[] { PASSPORT }, new ArenaDoorRow[0], legacyMoved, out unresolved, out posed);
+        CheckEqual("passport-legacy-rule-posed-zero", posed, 0);
+        CheckReason("passport-legacy-rule-drops-the-green-cover-too", p.greenCover, "opened_barriers:" + PASSPORT, legacyList, legacyMoved);
+
+        // --- only the switch rows: the barrier counts as posed (the client keeps everything standing) and nothing is dropped
+        moved = new List<Transform>();
+        legacy = ResolveOpenedBarriers(new[] { p.root.gameObject }, new[] { PASSPORT },
+                                       new[] { SwitchRow(PASSPORT, "GREEN", "GreenFog"), SwitchRow(PASSPORT, "RED", "RedFog") }, moved, out unresolved, out posed);
+        CheckEqual("switch-only-posed", posed, 1);
+        CheckEqual("switch-only-nothing-moved", moved.Count, 0);
+        CheckEqual("switch-only-legacy-empty", legacy.Count, 0);
+        CheckEqual("switch-only-unresolved-empty", Describe(unresolved), "");
+        CheckReason("switch-only-leaf-collider-stays-a-wall", p.colliders[0], null, legacy, moved);
+        CheckReason("switch-only-lamp-cover-stays", p.greenCover, null, legacy, moved);
+
+        // --- a switch row never fails the build: a part or node the scene does not have, or an 'at' that names no instance
+        Debug.Warnings.Clear();
+        moved = new List<Transform>();
+        ResolveOpenedBarriers(new[] { p.root.gameObject }, new[] { PASSPORT },
+                              new[] { SwitchRow(PASSPORT, "Nonexistent", "Nowhere"), SwitchRow(PASSPORT, "GREEN", "GreenFog", 1000f, 0f, 0f), p.rows[1] },
+                              moved, out unresolved, out posed);
+        CheckEqual("switch-missing-part-and-stale-at-unresolved-empty", Describe(unresolved), "");
+        CheckEqual("switch-rows-move-nothing-the-move-row-moves-its-leaf", moved.Count, 1);
+        CheckTrue("switch-rows-leave-the-leaf-row-alone", moved[0] == p.leaves[0]);
+        // ... and a switch row that sits on a part a move row also names does not make the part move on its own
+        moved = new List<Transform>();
+        ResolveOpenedBarriers(new[] { p.root.gameObject }, new[] { PASSPORT }, new[] { SwitchRow(PASSPORT, "Passport_control_01_Door (5)", "") }, moved, out unresolved, out posed);
+        CheckEqual("switch-row-on-a-leaf-name-drops-nothing", moved.Count, 0);
+        // a move row with the same missing part still fails (the switch exemption is the row's, not the barrier's)
+        moved = new List<Transform>();
+        ResolveOpenedBarriers(new[] { p.root.gameObject }, new[] { PASSPORT }, new[] { RowClosed(PASSPORT, "Nonexistent", "Nowhere", 0f, 0f, 0f) }, moved, out unresolved, out posed);
+        CheckEqual("move-row-with-a-missing-part-still-fails", unresolved.Count, 1);
+
+        // --- a leaf no row stands for stays a wall and the bake says so (a 17th leaf under an existing name)
+        Debug.Warnings.Clear();
+        var q = MakePassport(true);
+        moved = new List<Transform>();
+        legacy = ResolveOpenedBarriers(new[] { q.root.gameObject }, new[] { PASSPORT }, q.rows.ToArray(), moved, out unresolved, out posed);
+        CheckEqual("unknown-leaf-moved-count", moved.Count, 16);
+        CheckEqual("unknown-leaf-unresolved-empty", Describe(unresolved), "");
+        CheckEqual("unknown-leaf-warning-count", Debug.Warnings.Count, 1);
+        CheckTrue("unknown-leaf-warning-names-it", Debug.Warnings[0].Contains("Passport_control_01_Door (4)") && Debug.Warnings[0].Contains("(30.000, -3.230, 5.938)") &&
+                                                   Debug.Warnings[0].Contains("stays baked as a wall"));
+        CheckReason("unknown-leaf-collider-stays-a-wall", q.unknownCollider, null, legacy, moved);
+        CheckReason("unknown-leaf-same-named-neighbour-goes", q.colliders[11], "door_poses:Passport_control_01_Door (4)", legacy, moved);
+        Debug.Warnings.Clear();
+
+        // --- a leaf row whose closed position matches no same-named child fails the build, naming the position
+        moved = new List<Transform>();
+        var shifted = RowClosed(PASSPORT, "Passport_control_01_Door (4)", "", 4.838f + 0.06f, -3.23f, 5.938f);
+        ResolveOpenedBarriers(new[] { p.root.gameObject }, new[] { PASSPORT }, new[] { shifted }, moved, out unresolved, out posed);
+        CheckEqual("shifted-closed-position-reported", unresolved.Count, 1);
+        CheckTrue("shifted-closed-position-names-the-part-and-position", unresolved[0].Contains("Passport_control_01_Door (4)") && unresolved[0].Contains("door pose part") &&
+                                                                      unresolved[0].Contains("closed position (4.898, -3.230, 5.938)"));
+        CheckEqual("shifted-closed-position-moves-nothing", moved.Count, 0);
+    }
+
+    static void RepeatedNameCases()
+    {
+        List<string> unresolved;
+        int posed;
+        const string B = "Yard/Gate";
+        var scene = new Transform("Yard", 0);
+        var gate = Make("Gate", 0, scene, 10f, 0f, 0f);
+        var leaf = new Transform[4];
+        var leafCollider = new Transform[4];
+        for (int i = 0; i < 4; i++)
+        {
+            leaf[i] = MakeLocal("Leaf", 0, gate, (float)i, 0f, 0f);
+            leafCollider[i] = Make("Leaf_COLLIDER", 18, leaf[i]);
+        }
+        var roots = new[] { scene.gameObject };
+
+        // --- one row of four same-named leaves: only the one standing at its closed position goes, the other three are named
+        Debug.Warnings.Clear();
+        var moved = new List<Transform>();
+        var legacy = ResolveOpenedBarriers(roots, new[] { B }, new[] { RowClosed(B, "Leaf", "", 2f, 0f, 0f) }, moved, out unresolved, out posed);
+        CheckEqual("repeat-one-row-moves-one", moved.Count, 1);
+        CheckTrue("repeat-one-row-moves-the-third", moved[0] == leaf[2]);
+        CheckEqual("repeat-one-row-unresolved-empty", Describe(unresolved), "");
+        CheckEqual("repeat-one-row-warns-for-the-other-three", Debug.Warnings.Count, 3);
+        CheckTrue("repeat-warning-names-a-position", Debug.Warnings[0].Contains("'Leaf'") && Debug.Warnings[0].Contains("(10.000, 0.000, 0.000)") && Debug.Warnings[0].Contains("stays baked as a wall"));
+        CheckReason("repeat-moved-leaf-goes", leafCollider[2], "door_poses:Leaf", legacy, moved);
+        CheckReason("repeat-first-leaf-stays", leafCollider[0], null, legacy, moved);   // Transform.Find would have taken this one for every row
+        CheckReason("repeat-last-leaf-stays", leafCollider[3], null, legacy, moved);
+
+        // --- four rows, four leaves, in any row order; the rows pick by position, not by sibling order
+        Debug.Warnings.Clear();
+        moved = new List<Transform>();
+        ResolveOpenedBarriers(roots, new[] { B }, new[] { RowClosed(B, "Leaf", "", 3f, 0f, 0f), RowClosed(B, "Leaf", "", 0f, 0f, 0f),
+                                                          RowClosed(B, "Leaf", "", 2f, 0f, 0f), RowClosed(B, "Leaf", "", 1f, 0f, 0f) }, moved, out unresolved, out posed);
+        CheckEqual("repeat-four-rows-move-four", moved.Count, 4);
+        CheckTrue("repeat-rows-pick-by-position", moved[0] == leaf[3] && moved[1] == leaf[0] && moved[2] == leaf[2] && moved[3] == leaf[1]);
+        CheckEqual("repeat-four-rows-no-warning", Debug.Warnings.Count, 0);
+        CheckEqual("repeat-four-rows-unresolved-empty", Describe(unresolved), "");
+
+        // --- Euclidean tolerance of 0.05 m on the local position
+        moved = new List<Transform>();
+        ResolveOpenedBarriers(roots, new[] { B }, new[] { RowClosed(B, "Leaf", "", 2.04f, 0f, 0f) }, moved, out unresolved, out posed);
+        CheckEqual("repeat-4cm-off-still-matches", moved.Count, 1);
+        moved = new List<Transform>();
+        ResolveOpenedBarriers(roots, new[] { B }, new[] { RowClosed(B, "Leaf", "", 2.03f, 0.03f, 0.03f) }, moved, out unresolved, out posed);   // 0.052 m
+        CheckEqual("repeat-52mm-off-does-not-match", moved.Count, 0);
+        CheckEqual("repeat-52mm-off-is-reported", unresolved.Count, 1);
+        moved = new List<Transform>();
+        ResolveOpenedBarriers(roots, new[] { B }, new[] { RowClosed(B, "Leaf", "", 2.03f, 0.03f, 0f) }, moved, out unresolved, out posed);          // 0.042 m
+        CheckEqual("repeat-42mm-off-matches", moved.Count, 1);
+        Debug.Warnings.Clear();
+
+        // --- two rows that match the same leaf add it once; a row whose position fits two leaves (closer than the tolerance) takes both
+        moved = new List<Transform>();
+        ResolveOpenedBarriers(roots, new[] { B }, new[] { RowClosed(B, "Leaf", "", 1f, 0f, 0f), RowClosed(B, "Leaf", "", 1.01f, 0f, 0f) }, moved, out unresolved, out posed);
+        CheckEqual("repeat-two-rows-one-leaf-added-once", moved.Count, 1);
+        var crowd = Make("Gate", 0, scene, 40f, 0f, 0f);
+        MakeLocal("Leaf", 0, crowd, 5f, 0f, 0f); MakeLocal("Leaf", 0, crowd, 5.02f, 0f, 0f); MakeLocal("Leaf", 0, crowd, 9f, 0f, 0f);
+        moved = new List<Transform>();
+        ResolveOpenedBarriers(roots, new[] { B }, new[] { RowClosed(B, "Leaf", "", 5.01f, 0f, 0f, 40f, 0f, 0f) }, moved, out unresolved, out posed);
+        CheckEqual("repeat-every-matching-sibling-goes", moved.Count, 2);
+        crowd.parent.children.Remove(crowd);
+
+        // --- a row without a closed position takes the first child of the name, as Transform.Find did (and the others are named)
+        Debug.Warnings.Clear();
+        moved = new List<Transform>();
+        ResolveOpenedBarriers(roots, new[] { B }, new[] { new ArenaDoorRow { barrier = B, part = "Leaf", node = "" } }, moved, out unresolved, out posed);
+        CheckEqual("repeat-no-closed-position-first-child-only", moved.Count, 1);
+        CheckTrue("repeat-no-closed-position-is-the-first-child", moved[0] == leaf[0]);
+        CheckEqual("repeat-no-closed-position-names-the-rest", Debug.Warnings.Count, 3);
+        Debug.Warnings.Clear();
+
+        // --- a name that occurs ONCE is taken whatever the closed position says (every unique part of the other maps)
+        var solo = Make("Solo", 0, scene);
+        var soloPart = MakeLocal("Panel", 0, solo, 7f, 0f, 0f);
+        var soloCollider = Make("Panel_COLLIDER", 18, soloPart);
+        moved = new List<Transform>();
+        legacy = ResolveOpenedBarriers(roots, new[] { "Yard/Solo" }, new[] { RowClosed("Yard/Solo", "Panel", "", 99f, 99f, 99f) }, moved, out unresolved, out posed);
+        CheckEqual("unique-name-ignores-the-closed-position", moved.Count, 1);
+        CheckEqual("unique-name-unresolved-empty", Describe(unresolved), "");
+        CheckEqual("unique-name-no-warning", Debug.Warnings.Count, 0);
+        CheckReason("unique-name-collider-goes", soloCollider, "door_poses:Panel", legacy, moved);
+
+        // --- a node row of a repeated name is told apart by the NODE's local position, and a twin without the node cannot match
+        var pair = Make("Pair", 0, scene);
+        var twinA = MakeLocal("Twin", 0, pair, 0f, 0f, 0f);
+        var twinB = MakeLocal("Twin", 0, pair, 5f, 0f, 0f);
+        var twinC = MakeLocal("Twin", 0, pair, 9f, 0f, 0f);
+        var hingeA = MakeLocal("Hinge", 0, twinA, 1f, 0f, 0f);
+        var hingeB = MakeLocal("Hinge", 0, twinB, 2f, 0f, 0f);                // twinC has no Hinge at all
+        var colliderB = Make("Hinge_COLLIDER", 18, hingeB);
+        moved = new List<Transform>();
+        legacy = ResolveOpenedBarriers(roots, new[] { "Yard/Pair" }, new[] { RowClosed("Yard/Pair", "Twin", "Hinge", 2f, 0f, 0f) }, moved, out unresolved, out posed);
+        CheckEqual("node-row-moves-one-twin", moved.Count, 1);
+        CheckTrue("node-row-picks-the-twin-by-its-hinge-position", moved[0] == twinB);
+        CheckEqual("node-row-unresolved-empty", Describe(unresolved), "");
+        CheckReason("node-row-whole-twin-subtree-goes", colliderB, "door_poses:Twin", legacy, moved);
+        CheckEqual("node-row-names-the-twins-no-row-stands-for", Debug.Warnings.Count, 2);
+        Debug.Warnings.Clear();
+        moved = new List<Transform>();
+        ResolveOpenedBarriers(roots, new[] { "Yard/Pair" }, new[] { RowClosed("Yard/Pair", "Twin", "Hinge", 1f, 0f, 0f) }, moved, out unresolved, out posed);
+        CheckTrue("node-row-position-of-the-part-itself-would-not-match", moved.Count == 1 && moved[0] == twinA);   // twin A sits at 0, its hinge at 1: the node decides
+        Debug.Warnings.Clear();
+    }
+
+    // AirPit's BUS_DOORS: six assemblies with unique names, each with two hinges that hold a leaf; the sidecar has four node rows for each of the
+    // three FRONT assemblies (the closed positions are the nodes', local to their parent) and none for the back row, which stands open.
+    static void BusDoorCases()
+    {
+        List<string> unresolved;
+        int posed;
+        const string BUS = "BUS_DOORS";
+        var root = new Transform(BUS, 0);
+        root.position = new Vector3(-17.567f, 5.829f, -69.347f);
+        string[] names = { "Apron_bus_MAZ_doors (1)", "Apron_bus_MAZ_doors", "Apron_bus_MAZ_doors (5)", "Apron_bus_MAZ_doors (4)", "Apron_bus_MAZ_doors (2)", "Apron_bus_MAZ_doors (3)" };
+        float[] xs = { 3.406f, 6.528f, -0.679f, 6.528f, -0.679f, 3.406f };
+        float[] zs = { 4.347f, 4.347f, 1.187f, 1.187f, 4.347f, 1.187f };
+        var assembly = new Transform[6];
+        var legCollider = new Transform[6];
+        var bodyCollider = new Transform[6];
+        var rows = new List<ArenaDoorRow>();
+        for (int i = 0; i < 6; i++)
+        {
+            assembly[i] = MakeLocal(names[i], 0, root, xs[i], -5.516f, zs[i]);
+            bodyCollider[i] = Make("Apron_bus_MAZ_doors_COLLIDER", 18, assembly[i]);
+            var hinge1 = MakeLocal("Apron_bus_MAZ_door_L_01_part_01", 0, assembly[i], -0.129f, 0.729f, 2.152f);
+            var leaf1 = MakeLocal("Apron_bus_MAZ_door_L_01", 0, hinge1, 0.01f, -0.404f, -1.78f);
+            var hinge2 = MakeLocal("Apron_bus_MAZ_door_L_02_part_01", 0, assembly[i], -0.129f, -0.728f, 2.152f);
+            var leaf2 = MakeLocal("Apron_bus_MAZ_door_L_02", 0, hinge2, 0.01f, 0.403f, -1.78f);
+            legCollider[i] = Make("Apron_bus_MAZ_door_L_01_COLLIDER", 18, leaf1);
+            Make("Apron_bus_MAZ_door_L_02_COLLIDER", 18, leaf2);
+        }
+        foreach (string front in new[] { "Apron_bus_MAZ_doors", "Apron_bus_MAZ_doors (1)", "Apron_bus_MAZ_doors (2)" })
+        {
+            rows.Add(RowClosed(BUS, front, "Apron_bus_MAZ_door_L_01_part_01", -0.129f, 0.729f, 2.152f));
+            rows.Add(RowClosed(BUS, front, "Apron_bus_MAZ_door_L_01_part_01/Apron_bus_MAZ_door_L_01", 0.01f, -0.404f, -1.78f));
+            rows.Add(RowClosed(BUS, front, "Apron_bus_MAZ_door_L_02_part_01", -0.129f, -0.728f, 2.152f));
+            rows.Add(RowClosed(BUS, front, "Apron_bus_MAZ_door_L_02_part_01/Apron_bus_MAZ_door_L_02", 0.01f, 0.403f, -1.78f));
+        }
+        Debug.Warnings.Clear();
+        var moved = new List<Transform>();
+        var legacy = ResolveOpenedBarriers(new[] { root.gameObject }, new[] { BUS }, rows.ToArray(), moved, out unresolved, out posed);
+        CheckEqual("bus-posed", posed, 1);
+        CheckEqual("bus-unresolved-empty", Describe(unresolved), "");
+        CheckEqual("bus-no-warning", Debug.Warnings.Count, 0);
+        CheckEqual("bus-three-front-assemblies-move", moved.Count, 3);
+        CheckTrue("bus-front-assemblies-in-row-order", moved[0] == assembly[1] && moved[1] == assembly[0] && moved[2] == assembly[4]);
+        foreach (int i in new[] { 0, 1, 4 })
+        {
+            CheckReason("bus-front-body-" + i + "-goes", bodyCollider[i], "door_poses:" + names[i], legacy, moved);
+            CheckReason("bus-front-leaf-" + i + "-goes", legCollider[i], "door_poses:" + names[i], legacy, moved);
+        }
+        foreach (int i in new[] { 2, 3, 5 })
+        {
+            CheckReason("bus-back-body-" + i + "-is-a-wall", bodyCollider[i], null, legacy, moved);
+            CheckReason("bus-back-leaf-" + i + "-is-a-wall", legCollider[i], null, legacy, moved);
+        }
+        CheckReason("bus-root-stays", root, null, legacy, moved);
+        // the old rule dropped all six assemblies (every non-frame descendant): the three back ones are what the rows give back
+        var oldMoved = new List<Transform>();
+        var oldLegacy = ResolveOpenedBarriers(new[] { root.gameObject }, new[] { BUS }, new ArenaDoorRow[0], oldMoved, out unresolved, out posed);
+        for (int i = 0; i < 6; i++)
+            CheckReason("bus-old-rule-dropped-assembly-" + i, bodyCollider[i], "opened_barriers:" + BUS, oldLegacy, oldMoved);
+        // a back-row assembly with a row of its own would be dropped too (the sidecar has none: it keeps standing open)
+        moved = new List<Transform>();
+        legacy = ResolveOpenedBarriers(new[] { root.gameObject }, new[] { BUS }, new[] { RowClosed(BUS, "Apron_bus_MAZ_doors (3)", "Apron_bus_MAZ_door_L_01_part_01", -0.129f, 0.729f, 2.152f) },
+                                       moved, out unresolved, out posed);
+        CheckTrue("bus-a-row-for-a-back-assembly-drops-it", moved.Count == 1 && moved[0] == assembly[5]);
+        CheckReason("bus-other-back-assemblies-stay", bodyCollider[3], null, legacy, moved);
+        Debug.Warnings.Clear();
+    }
+
     static void Main()
     {
         // Numeric layer identity must work with the Editor's unnamed custom layers.
@@ -556,6 +887,9 @@ static class Program
         CheckThrows("bounds-nan", new[] { -80f, float.NaN, -2f, 8f, -96f, 92f });
 
         DoorPoseCases();
+        PassportCases();
+        RepeatedNameCases();
+        BusDoorCases();
         Console.WriteLine("NAVMESH_SOURCE_FILTER_PASSED cases=" + checkedCases);
     }
 }
@@ -580,11 +914,121 @@ def run_filter(source, paths_source=None):
                               cwd=folder, capture_output=True, text=True, timeout=120)
 
 
+# ---------------------------------------------------------------------------------------------------------------------
+# The sidecar loader (ArenaPaths.ParseDoorRows): the production text of ArenaDoorRow, DoorSidecarPath and ParseDoorRows compiled against
+# the .NET SDK's own Newtonsoft.Json.dll (standing in for the editor's), reading the real tools/maps/*.doors.json and malformed variants.
+# Skipped when no SDK ships that assembly.
+# ---------------------------------------------------------------------------------------------------------------------
+LOADER_HARNESS = r"""
+using System;
+using System.Collections.Generic;
+using System.IO;
+using Newtonsoft.Json.Linq;
+
+__ROW__
+
+static class ArenaPaths
+{
+    __SIDECAR__
+    __WARN__
+    __PARSE__
+}
+
+static class Program
+{
+    static int failures;
+    static void Expect(string label, bool ok) { if (!ok) { failures++; Console.WriteLine("FAIL " + label); } }
+    static string Throws(string json)
+    {
+        try { ArenaPaths.ParseDoorRows(json, "test.json", "k"); return null; }
+        catch (InvalidOperationException e) { return e.Message; }
+    }
+    static void Main(string[] args)
+    {
+        foreach (string file in args)
+        {
+            string key = Path.GetFileName(file).Replace(".doors.json", "");
+            var json = File.ReadAllText(file);
+            string mapKey = JObject.Parse(json)["key"].ToString();
+            ArenaDoorRow[] rows = ArenaPaths.ParseDoorRows(json, file, mapKey);
+            int sw = 0, withAt = 0, withClosed = 0;
+            foreach (var r in rows) { if (r.is_switch) sw++; if (r.at != null) withAt++; if (r.closed_position != null) withClosed++; }
+            Console.WriteLine(key + ": " + rows.Length + " row(s), " + sw + " switch, " + withAt + " with at, " + withClosed + " with closed_position; first = " + rows[0].barrier + " | " + rows[0].part + " | " + rows[0].node +
+                              " | " + (rows[0].closed_position == null ? "null" : string.Join(",", rows[0].closed_position)));
+        }
+        string head = "{\"schema_version\":2,\"key\":\"k\",\"poses\":[";
+        string tail = "]}";
+        var ok = ArenaPaths.ParseDoorRows(head + "{\"barrier\":\"B\",\"part\":\"P\",\"node\":\"\",\"closed\":{\"position\":[1,2.5,-3]},\"switch\":{\"closed\":true,\"open\":false}}" + tail, "t", "k");
+        Expect("fields", ok.Length == 1 && ok[0].is_switch && ok[0].closed_position[0] == 1f && ok[0].closed_position[1] == 2.5f && ok[0].closed_position[2] == -3f && ok[0].at == null);
+        var plain = ArenaPaths.ParseDoorRows(head + "{\"barrier\":\"B\",\"part\":\"P\",\"node\":\"\",\"switch\":null}" + tail, "t", "k");
+        Expect("absent closed and null switch", !plain[0].is_switch && plain[0].closed_position == null);
+        var nullPos = ArenaPaths.ParseDoorRows(head + "{\"barrier\":\"B\",\"part\":\"P\",\"node\":\"\",\"closed\":{\"position\":null}}" + tail, "t", "k");
+        Expect("null closed.position", nullPos[0].closed_position == null);
+        string e1 = Throws(head + "{\"barrier\":\"B\",\"part\":\"P\",\"node\":\"\",\"closed\":{\"position\":[1,2]}}" + tail);
+        Expect("two-number closed.position throws", e1 != null && e1.Contains("poses[0].closed.position must be three numbers") && e1.Contains("test.json"));
+        string e2 = Throws(head + "{\"barrier\":\"B\",\"part\":\"P\",\"node\":\"\",\"closed\":{\"position\":\"x\"}}" + tail);
+        Expect("string closed.position throws", e2 != null);
+        string e3 = Throws(head + "{\"barrier\":\"B\",\"part\":\"P\",\"node\":\"\",\"closed\":{\"position\":[1,\"a\",3]}}" + tail);
+        Expect("non-number closed.position throws", e3 != null);
+        string e4 = Throws(head + "{\"barrier\":\"B\",\"part\":\"P\",\"node\":\"\",\"switch\":\"yes\"}" + tail);
+        Expect("string switch throws", e4 != null && e4.Contains("poses[0].switch must be an object or absent"));
+        string e5 = Throws(head + "{\"barrier\":\"B\",\"part\":\"P\",\"node\":\"\",\"switch\":true}" + tail);
+        Expect("bool switch throws", e5 != null);
+        Expect("existing rule: missing node still throws", Throws(head + "{\"barrier\":\"B\",\"part\":\"P\"}" + tail) != null);
+        Expect("existing rule: schema 1 throws", Throws("{\"schema_version\":1,\"key\":\"k\",\"poses\":[]}") != null);
+        Expect("existing rule: wrong key throws", Throws("{\"schema_version\":2,\"key\":\"other\",\"poses\":[]}") != null);
+        Expect("sidecar path", ArenaPaths.DoorSidecarPath("D:/x/airpit.json") == "D:/x/airpit.doors.json");
+        // the missing-sidecar Warning (2026-10-24 review): only for a derivable path AND at least one opened barrier
+        string warn = ArenaPaths.MissingDoorSidecarWarning("D:/x/airpit.doors.json", 12);
+        Expect("missing sidecar with barriers warns", warn != null && warn.Contains("D:/x/airpit.doors.json") && warn.Contains("12 opened_barriers") && warn.Contains("LEGACY"));
+        Expect("missing sidecar, no barrier: silent", ArenaPaths.MissingDoorSidecarWarning("D:/x/equator.doors.json", 0) == null);
+        Expect("no sidecar path: silent", ArenaPaths.MissingDoorSidecarWarning(null, 12) == null && ArenaPaths.MissingDoorSidecarWarning("", 12) == null);
+        Console.WriteLine(failures == 0 ? "LOADER_CHECKS_PASSED" : ("LOADER_CHECKS_FAILED " + failures));
+    }
+}
+"""
+
+
+def newtonsoft_dll():
+    try:
+        listing = subprocess.run(["dotnet", "--list-sdks"], capture_output=True, text=True, timeout=60).stdout
+    except (OSError, subprocess.SubprocessError):
+        return None
+    found = []
+    for line in listing.splitlines():
+        match = re.match(r"(\S+) \[(.+)\]", line.strip())
+        if match and (Path(match.group(2)) / match.group(1) / "Newtonsoft.Json.dll").is_file():
+            found.append(Path(match.group(2)) / match.group(1) / "Newtonsoft.Json.dll")
+    return found[-1] if found else None
+
+
+def run_loader(paths_source=None):
+    if paths_source is None:
+        paths_source = PATHS.read_text(encoding="utf-8")
+    dll = newtonsoft_dll()
+    program = (LOADER_HARNESS.replace("__ROW__", extract_function(paths_source, "public sealed class ArenaDoorRow"))
+               .replace("__SIDECAR__", extract_function(paths_source, "public static string DoorSidecarPath("))
+               .replace("__WARN__", extract_function(paths_source, "public static string MissingDoorSidecarWarning("))
+               .replace("__PARSE__", extract_function(paths_source, "public static ArenaDoorRow[] ParseDoorRows(")))
+    with tempfile.TemporaryDirectory(prefix="arena-doorloader-") as directory:
+        folder = Path(directory)
+        (folder / "Program.cs").write_text(program, encoding="utf-8")
+        (folder / "Loader.csproj").write_text(
+            '<Project Sdk="Microsoft.NET.Sdk"><PropertyGroup><OutputType>Exe</OutputType><TargetFramework>net10.0</TargetFramework>'
+            '<LangVersion>9.0</LangVersion><Nullable>disable</Nullable></PropertyGroup><ItemGroup><Reference Include="Newtonsoft.Json">'
+            '<HintPath>' + dll.as_posix() + '</HintPath></Reference></ItemGroup></Project>', encoding="utf-8")
+        (folder / "NuGet.Config").write_text('<configuration><packageSources><clear /></packageSources></configuration>', encoding="utf-8")
+        sidecars = sorted(str(p) for p in (REPO / "tools" / "maps").glob("*.doors.json"))
+        return subprocess.run(["dotnet", "run", "--project", str(folder / "Loader.csproj"), "-c", "Release", "--"] + sidecars,
+                              cwd=folder, capture_output=True, text=True, timeout=180)
+
+
 class NavMeshSourceLayerTests(unittest.TestCase):
     def test_numeric_layers_preserve_solid_children_and_existing_barrier_rules(self):
         result = run_filter(BAKE.read_text(encoding="utf-8"))
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
-        self.assertIn("NAVMESH_SOURCE_FILTER_PASSED cases=292", result.stdout)
+        # 292 before the AirPit rows of 2026-10-24 (repeated leaf names, switch rows, node rows of unique assemblies)
+        self.assertIn("NAVMESH_SOURCE_FILTER_PASSED cases=429", result.stdout)
 
     def test_bake_composes_the_item8_inputs_in_the_documented_order(self):
         # The harness runs the production helper functions; this pins how Bake() wires them, so that the
@@ -635,23 +1079,77 @@ class NavMeshSourceLayerTests(unittest.TestCase):
         shared = (REPO / "ArenaMapPort.Shared" / "ArenaMapDescriptor.cs").read_text(encoding="utf-8")
         self.assertRegex(shared, r"public const float AtTolerance = 0\.05f;")
         self.assertIn("const float DoorAtTolerance = 0.05f;", source)
+        # 2026-10-24 (AirPit): same-named leaves are told apart by the closed position, with the descriptor's tolerance; the resolver goes
+        # through PartsOfRow and skips switch rows; the log names the switch rows once
+        self.assertRegex(shared, r"public const float ClosedPositionTolerance = 0\.05f;")
+        self.assertIn("const float DoorClosedPositionTolerance = 0.05f;", source)
+        self.assertIn("List<Transform> parts = PartsOfRow(instance, row);", source)
+        self.assertEqual(source.count("PartsOfRow("), 2)                        # the call and the definition
+        self.assertIn("if (row.is_switch) continue;", source)
+        self.assertIn("if (!rowUsed[i] && !pathRows[i].is_switch)", source)
+        self.assertIn('"[ArenaMapPort][BakeNavMesh] door pose switch rows: "', source)
 
     def test_the_paths_loader_reads_the_rows_next_to_the_descriptor(self):
         # ArenaPaths cannot run here (Unity + Newtonsoft); pin its contract as text. The class the harness compiles is the
         # production one, so the field names the bake reads cannot drift.
         paths = PATHS.read_text(encoding="utf-8")
         for fragment in ("public sealed class ArenaDoorRow", "public string barrier;", "public string part;", "public string node;", "public float[] at;",
+                         "public float[] closed_position;", "public bool is_switch;",
+                         "closed_position = closedPosition, is_switch = isSwitch", "].closed.position must be three numbers", "].switch must be an object or absent",
                          "public static ArenaDoorRow[] DoorRows", "public static string DoorSidecarPath(string descriptorPath)",
                          'descriptorPath.EndsWith(".doors.json"', 'return descriptorPath.Substring(0, descriptorPath.Length - json.Length) + ".doors.json";',
                          "public static ArenaDoorRow[] ParseDoorRows(string json, string origin, string expectedKey)",
-                         "schema_version must be 2", "is not the descriptor's", "ParseDoorRows(File.ReadAllText(path), path, Map.key)"):
+                         "schema_version must be 2", "is not the descriptor's", "ParseDoorRows(File.ReadAllText(path), path, Map.key)",
+                         # 2026-10-24 review: a sidecar absent from the tree is a Warning, never a silent legacy-rule bake
+                         "public static string MissingDoorSidecarWarning(string sidecarPath, int openedBarrierCount)",
+                         "MissingDoorSidecarWarning(path, path != null && Map.opened_barriers != null ? Map.opened_barriers.Length : 0)",
+                         'Debug.LogWarning("[ArenaMapPort][ArenaPaths] " + missing);'):
             self.assertIn(fragment, paths)
+        # the Warning sits in the branch of a sidecar that was not found, before the empty array is returned
+        branch = paths[paths.index("if (path == null || !File.Exists(path))"):]
+        self.assertLess(branch.index("MissingDoorSidecarWarning("), branch.index("_doorRows = new ArenaDoorRow[0];"))
         # Equator's built-in default lists no opened barrier any more (user decision 2026-10-23), like tools/maps/equator.json
         default = paths[paths.index("static ArenaMapDescriptorData EquatorDefault()"):]
         initializer = re.sub(r"//[^\r\n]*", "", default.split("};")[0])                 # code only, the comment explains the omission
         self.assertNotIn("opened_barriers", initializer)
         self.assertNotIn("equator_roller_shutters_02", initializer)
         self.assertIn('infiltration_name = "ArenaEquator"', initializer)
+
+    @unittest.skipUnless(newtonsoft_dll() is not None, "no .NET SDK with Newtonsoft.Json.dll")
+    def test_the_loader_reads_the_four_real_sidecars_and_the_airpit_fields(self):
+        # 2026-10-24: closed_position and is_switch are new. All four sidecars parse (airpit 30 rows / 2 switch, bay5 7, bowl 19, equator 10),
+        # a malformed closed.position or switch throws with a message naming the file and the pose, and the older rules still hold.
+        result = run_loader()
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn("LOADER_CHECKS_PASSED", result.stdout)
+        for line in ("airpit: 30 row(s), 2 switch, 0 with at, 30 with closed_position", "bay5: 7 row(s), 0 switch, 4 with at, 7 with closed_position",
+                     "bowl: 19 row(s), 0 switch, 0 with at, 19 with closed_position", "equator: 10 row(s), 0 switch, 10 with at, 10 with closed_position"):
+            self.assertIn(line, result.stdout)
+
+    @unittest.skipUnless(newtonsoft_dll() is not None, "no .NET SDK with Newtonsoft.Json.dll")
+    def test_a_loader_that_ignores_the_switch_flag_fails_the_loader_checks(self):
+        paths = PATHS.read_text(encoding="utf-8")
+        paths, replacements = re.subn(r"isSwitch = true;", "isSwitch = false;", paths)
+        self.assertEqual(replacements, 1)
+        result = run_loader(paths)
+        self.assertIn("FAIL fields", result.stdout + result.stderr)
+        self.assertNotIn("LOADER_CHECKS_PASSED", result.stdout)
+
+    @unittest.skipUnless(newtonsoft_dll() is not None, "no .NET SDK with Newtonsoft.Json.dll")
+    def test_a_loader_that_never_warns_about_a_missing_sidecar_fails_the_loader_checks(self):
+        paths = PATHS.read_text(encoding="utf-8")
+        paths, replacements = re.subn(r"if \(string\.IsNullOrEmpty\(sidecarPath\) \|\| openedBarrierCount <= 0\) return null;",
+                                      "return null;", paths)
+        self.assertEqual(replacements, 1)
+        result = run_loader(paths)
+        self.assertIn("FAIL missing sidecar with barriers warns", result.stdout + result.stderr)
+        self.assertNotIn("LOADER_CHECKS_PASSED", result.stdout)
+        # and one that warns for a map without barriers or without a path is just as wrong
+        paths = PATHS.read_text(encoding="utf-8")
+        paths, replacements = re.subn(r"if \(string\.IsNullOrEmpty\(sidecarPath\) \|\| openedBarrierCount <= 0\) return null;", "", paths)
+        self.assertEqual(replacements, 1)
+        result = run_loader(paths)
+        self.assertIn("FAIL missing sidecar, no barrier: silent", result.stdout + result.stderr)
 
     def test_missing_trigger_exclusion_fails_the_spawn_layer_assertion(self):
         source = BAKE.read_text(encoding="utf-8")
@@ -680,6 +1178,36 @@ class NavMeshSourceLayerTests(unittest.TestCase):
         result = run_filter(source)
         self.assertNotEqual(result.returncode, 0, result.stdout + result.stderr)
         self.assertNotIn("NAVMESH_SOURCE_FILTER_PASSED", result.stdout)
+
+    def negative_control(self, pattern, replacement, expected_case):
+        # Mutating the production text must turn the harness red, at the named case.
+        source = BAKE.read_text(encoding="utf-8")
+        source, replacements = re.subn(pattern, replacement, source)
+        self.assertEqual(replacements, 1, "Negative control must change the real text: " + pattern)
+        result = run_filter(source)
+        self.assertNotEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn(expected_case, result.stdout + result.stderr)
+        self.assertNotIn("NAVMESH_SOURCE_FILTER_PASSED", result.stdout)
+
+    def test_a_switch_row_that_drops_its_part_fails_the_assertions(self):
+        # Without the exemption RED and GREEN would be moved parts: the passport's 18 children go instead of its 16 leaves.
+        self.negative_control(r"if \(row\.is_switch\) continue;", "", "passport-moved-count")
+
+    def test_a_closed_position_match_that_accepts_every_sibling_fails_the_assertions(self):
+        self.negative_control(r"if \(ClosedPositionMatches\(child, row\)\) matching\.Add\(child\);", "matching.Add(child);",
+                              "passport-row-0-moves-its-own-leaf")
+
+    def test_taking_only_the_first_same_named_child_fails_the_assertions(self):
+        # The Transform.Find behaviour the rows replace: every leaf row would move the first leaf of its name.
+        self.negative_control(r"if \(named\.Count <= 1 \|\| row\.closed_position == null\)", "if (true)", "passport-no-warning")   # 10 leaves no row reaches are reported
+
+    def test_comparing_the_part_instead_of_the_node_fails_the_assertions(self):
+        # A node row's closed.position is the node's local position (a bus hinge inside its assembly), not the part's.
+        self.negative_control(r"string\.IsNullOrEmpty\(row\.node\) \? child : child\.Find\(row\.node\)", "child", "node-row-moves-one-twin")
+
+    def test_a_switch_row_that_can_fail_the_build_fails_the_assertions(self):
+        self.negative_control(r"if \(!rowUsed\[i\] && !pathRows\[i\]\.is_switch\)", "if (!rowUsed[i])",
+                              "switch-missing-part-and-stale-at-unresolved-empty")
 
 
 if __name__ == "__main__":

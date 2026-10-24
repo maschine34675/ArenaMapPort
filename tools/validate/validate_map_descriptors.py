@@ -156,16 +156,32 @@ def parse_lamp_fill_literal(v: str) -> dict:
 
 def parse_door_pose_literal(v: str) -> dict:
     """Door poses: `new ArenaDoorPose(barrier, part, node, clip, seconds, closedPosition, closedEuler, openPosition,
-    openEuler[, source, ease, curve, at])` with four `new[] { x, y, z }` vectors; spelled as one entry of the sidecar's "poses"
-    array. The last four arguments default to ("clip", "smoothstep", null, null) when omitted (Bowl's rows). `curve` is null or
-    a flat `new[] { time, value, inSlope, outSlope, ... }` that is grouped by four here; `at` is null or a vector."""
+    openEuler[, source, ease, curve, at[, ClosedActive: bool, OpenActive: bool]])` with four `new[] { x, y, z }` vectors; spelled
+    as one entry of the sidecar's "poses" array. The last four arguments default to ("clip", "smoothstep", null, null) when
+    omitted (Bowl's rows). `curve` is null or a flat `new[] { time, value, inSlope, outSlope, ... }` that is grouped by four
+    here; `at` is null or a vector. A switch row (AirPit's passport lamps) appends the NAMED arguments ClosedActive and
+    OpenActive, in that order; the parsed pose then carries the sidecar's `"switch": {"closed", "open"}` (a transform row has
+    no `switch` key at all)."""
     inner = v[len("new ArenaDoorPose("):].rstrip()
     if not inner.endswith(")"):
         fail(f"could not parse door pose literal: {v[:80]!r}")
-    values = [parse_cs_value(x) for x in split_top_level_args(inner[:-1])]
+    raw_args = split_top_level_args(inner[:-1])
+    switch = None
+    if len(raw_args) == 15:
+        flags = []
+        for raw, name in zip(raw_args[13:], ("ClosedActive", "OpenActive")):
+            m = re.fullmatch(rf"\s*{name}\s*:\s*(true|false)\s*", raw)
+            if not m:
+                fail(f"door pose literal: the 14th and 15th arguments must be `ClosedActive: true|false, OpenActive: true|false`: {v[:80]!r}")
+            flags.append(m.group(1) == "true")
+        switch = {"closed": flags[0], "open": flags[1]}
+        raw_args = raw_args[:13]
+    values = [parse_cs_value(x) for x in raw_args]
     if len(values) not in (9, 13) or any(not isinstance(x, str) for x in values[:4]) or any(not isinstance(x, list) for x in values[5:9]):
         fail("door pose literal requires (barrier, part, node, clip, seconds, new[] closedPosition, new[] closedEuler, "
-             f"new[] openPosition, new[] openEuler[, source, ease, curve, at]): {v[:80]!r}")
+             f"new[] openPosition, new[] openEuler[, source, ease, curve, at[, ClosedActive: bool, OpenActive: bool]]): {v[:80]!r}")
+    if switch is not None and len(values) != 13:
+        fail(f"door pose literal: a switch row needs the full thirteen leading arguments: {v[:80]!r}")
     source, ease, curve, at = values[9:] if len(values) == 13 else ("clip", "smoothstep", None, None)
     if not isinstance(source, str) or not isinstance(ease, str) or (curve is not None and not isinstance(curve, list)) \
             or (at is not None and not isinstance(at, list)):
@@ -174,9 +190,12 @@ def parse_door_pose_literal(v: str) -> dict:
         if len(curve) % 4:
             fail(f"door pose literal: curve has {len(curve)} numbers, not a multiple of 4: {v[:80]!r}")
         curve = [list(curve[i:i + 4]) for i in range(0, len(curve), 4)]
-    return {"barrier": values[0], "part": values[1], "node": values[2], "clip": values[3], "source": source, "seconds": values[4],
+    pose = {"barrier": values[0], "part": values[1], "node": values[2], "clip": values[3], "source": source, "seconds": values[4],
             "ease": ease, "curve": curve, "at": at,
             "closed": {"position": values[5], "euler": values[6]}, "open": {"position": values[7], "euler": values[8]}}
+    if switch is not None:
+        pose["switch"] = switch
+    return pose
 
 
 def parse_cs_value(raw: str):
@@ -457,10 +476,13 @@ def shader_fallback_errors(map_json: dict) -> list[str]:
 
 
 DOOR_POSE_KEYS = ("barrier", "part", "node", "clip", "source", "seconds", "ease", "curve", "at", "closed", "open")
+DOOR_SWITCH_KEY = "switch"   # optional (AirPit's passport lamps): {"closed": bool, "open": bool}, a SetActive row
 DOOR_SIDECAR_SCHEMA = 2
 DOOR_SOURCES = ("clip", "dotanimator", "borrowed")
 DOOR_EASES = ("smoothstep", "linear", "inOutQuint", "curve")
 DOOR_AT_TOLERANCE = 0.05   # m: the client matches a barrier root instance to `at` within this (ArenaDoorPose.AtTolerance)
+DOOR_CLOSED_TOLERANCE = 0.05   # m: rows that repeat a part name are told apart by the closed position within this
+                               # (ArenaDoorPose.ClosedPositionTolerance, DoorPoseModel.SelectRowsForNode)
 # Pose barriers that are NOT opened_barriers entries. Equator's booth doors are opened by BoothDoorRepairs.OpenDoors by the NAME of
 # their leaves, not as barriers; their poses name the assembly root (SPAWN_DOORS/Door_Sliding_Respawn[ (n)], and the fifth door
 # under Respawn_2) with the root's world position in `at`, and the client matches a leaf to them by parent path + position.
@@ -488,6 +510,25 @@ def door_curve_errors(curve) -> list[str]:
         errors.append("curve must run from time 0 to time 1")
     if abs(curve[0][1]) > 1e-3 or abs(curve[-1][1] - 1.0) > 1e-3:
         errors.append("curve must run from value 0 to value 1")
+    return errors
+
+
+def door_switch_errors(pose: dict) -> list[str]:
+    """The rules of a SWITCH row (a SetActive node: AirPit's RedFog / GreenFog): {"closed": bool, "open": bool} that really
+    flips the node, source dotanimator with the linear ease and no curve (the ease number of a switch is not read), a node
+    path, and the node's scene transform on both sides (nothing moves)."""
+    errors = []
+    switch = pose.get(DOOR_SWITCH_KEY)
+    if not isinstance(switch, dict) or set(switch) != {"closed", "open"} or not all(type(v) is bool for v in switch.values()):
+        return ['switch must be {"closed": bool, "open": bool}']
+    if switch["closed"] == switch["open"]:
+        errors.append("a switch must flip the node (the closed and the open active state differ)")
+    if pose.get("source") != "dotanimator" or pose.get("ease") != "linear" or pose.get("curve") is not None:
+        errors.append("a switch row is source 'dotanimator', ease 'linear', curve null")
+    if not pose.get("node"):
+        errors.append("a switch row names the node it switches (below its part)")
+    if isinstance(pose.get("closed"), dict) and isinstance(pose.get("open"), dict) and pose["closed"] != pose["open"]:
+        errors.append("a switch row moves nothing: its closed and open transforms are the node's scene transform")
     return errors
 
 
@@ -532,9 +573,10 @@ def door_pose_errors(map_json: dict, doors_path: Path, registry_poses) -> list[s
     seen: dict[tuple, list] = {}
     for i, pose in enumerate(poses):
         label = f"{name} poses[{i}]"
-        if not isinstance(pose, dict) or set(pose) != set(DOOR_POSE_KEYS):
-            errors.append(f"{label}: needs exactly the keys {', '.join(DOOR_POSE_KEYS)}")
+        if not isinstance(pose, dict) or set(pose) not in (set(DOOR_POSE_KEYS), set(DOOR_POSE_KEYS) | {DOOR_SWITCH_KEY}):
+            errors.append(f"{label}: needs exactly the keys {', '.join(DOOR_POSE_KEYS)} (and, on a switch row only, {DOOR_SWITCH_KEY})")
             continue
+        is_switch = DOOR_SWITCH_KEY in pose
         for field in ("barrier", "clip"):
             if not isinstance(pose[field], str) or not pose[field]:
                 errors.append(f"{label}: {field} must be a non-empty string")
@@ -549,8 +591,8 @@ def door_pose_errors(map_json: dict, doors_path: Path, registry_poses) -> list[s
         if isinstance(pose["part"], str) and "frame" in pose["part"].lower():
             errors.append(f"{label}: part {pose['part']!r} contains 'frame': BoothDoorRepairs never switches a frame part off")
         if isinstance(pose["seconds"], bool) or not isinstance(pose["seconds"], (int, float)) \
-                or not math.isfinite(pose["seconds"]) or pose["seconds"] <= 0:
-            errors.append(f"{label}: seconds must be a positive finite number")
+                or not math.isfinite(pose["seconds"]) or pose["seconds"] < (0 if is_switch else 1e-9):
+            errors.append(f"{label}: seconds must be a positive finite number" + (" (a switch row: zero or more)" if is_switch else ""))
         if pose["source"] not in DOOR_SOURCES:
             errors.append(f"{label}: source must be one of {', '.join(DOOR_SOURCES)}")
         if pose["ease"] not in DOOR_EASES:
@@ -573,14 +615,24 @@ def door_pose_errors(map_json: dict, doors_path: Path, registry_poses) -> list[s
             if not isinstance(block, dict) or set(block) != {"position", "euler"} \
                     or not is_finite_vec3(block.get("position")) or not is_finite_vec3(block.get("euler")):
                 errors.append(f"{label}: {state} needs position and euler, three finite numbers each")
+        if is_switch:
+            errors.extend(f"{label}: {e}" for e in door_switch_errors(pose))
         identity = (pose["barrier"], pose["part"], pose["node"])
         at = pose["at"] if is_finite_vec3(pose["at"]) else None
-        for other in seen.get(identity, []):
-            if at is None or other is None:
-                errors.append(f"{label}: {'/'.join(x for x in identity if x)} occurs twice and a pose lacks 'at' to tell the instances apart")
-            elif math.dist(at, other) <= DOOR_AT_TOLERANCE:
-                errors.append(f"{label}: duplicate pose for {'/'.join(x for x in identity if x)} at {at}")
-        seen.setdefault(identity, []).append(at)
+        closed = pose["closed"]["position"] if isinstance(pose["closed"], dict) and is_finite_vec3(pose["closed"].get("position")) else None
+        for other_at, other_closed in seen.get(identity, []):
+            name = "/".join(x for x in identity if x)
+            if at is None and other_at is None:
+                # one barrier, one name, no `at`: AirPit's passport leaves reuse names; the closed local position tells the
+                # rows apart (the client matches within DOOR_CLOSED_TOLERANCE), so two rows closer than that are one row twice
+                if closed is None or other_closed is None or math.dist(closed, other_closed) <= DOOR_CLOSED_TOLERANCE:
+                    errors.append(f"{label}: {name} occurs twice and a pose lacks 'at' to tell the instances apart (the closed "
+                                  f"positions are within {DOOR_CLOSED_TOLERANCE} m of each other, so they do not tell the rows apart either)")
+            elif at is None or other_at is None:
+                errors.append(f"{label}: {name} occurs twice and a pose lacks 'at' to tell the instances apart")
+            elif math.dist(at, other_at) <= DOOR_AT_TOLERANCE:
+                errors.append(f"{label}: duplicate pose for {name} at {at}")
+        seen.setdefault(identity, []).append((at, closed))
     by_barrier: dict[str, set] = {}
     for pose in poses:
         if isinstance(pose, dict) and isinstance(pose.get("barrier"), str):
@@ -597,7 +649,7 @@ def door_pose_errors(map_json: dict, doors_path: Path, registry_poses) -> list[s
             errors.append(f"registry DoorPoses[{i}] is not an ArenaDoorPose literal")
             continue
         if side != reg:
-            diff = [k for k in DOOR_POSE_KEYS if side.get(k) != reg.get(k)]
+            diff = [k for k in (*DOOR_POSE_KEYS, DOOR_SWITCH_KEY) if side.get(k) != reg.get(k)]
             errors.append(f"{name} poses[{i}] ({side['barrier']}/{side['part']}/{side['node']}) differs from the registry in "
                           f"{', '.join(diff)}: sidecar { {k: side[k] for k in diff} }, registry { {k: reg.get(k) for k in diff} }")
     return errors

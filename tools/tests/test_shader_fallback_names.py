@@ -74,7 +74,7 @@ class ShaderFallbackNamesShapeTests(unittest.TestCase):
 class ShaderFallbackNamesMirrorTests(unittest.TestCase):
     def run_check(self, map_json, registry_args):
         errors = []
-        VD.check_map_against_registry_entry(map_json, registry_args, {}, Path("airpit.json"), "AirPit", errors)
+        VD.check_map_against_registry_entry(map_json, registry_args, {}, REPO / "tools" / "maps" / "airpit.json", "AirPit", errors)
         return [e for e in errors if "shader_fallback_names" in e]
 
     def test_a_drifted_registry_list_is_reported(self):

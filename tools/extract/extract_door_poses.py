@@ -33,9 +33,9 @@ Method:
      next key's value) and, with --package, that every node exists once in the extracted port scene.
   6. A node enters the sidecar when its open pose differs from the closed pose by more than 1 cm or 1 degree.
 
-Second source, the DotAnimator (Equator and Bay5, 2026-10-23, docs/progress/door-animations-survey.md and the
-"DotAnimator" section of door-poses.md): Equator's booth doors and Bay5's roller gates and depot gates have NO Animator and no
-clip. Arena moves them with its own tween script, the MonoBehaviour CommonAssets.Scripts.Game.Modes.Data.DotAnimator (DOTween
+Second source, the DotAnimator (Equator, Bay5 and AirPit, 2026-10-23/24, docs/progress/door-animations-survey.md and the
+"DotAnimator" sections of door-poses.md): Equator's booth doors, Bay5's roller gates and depot gates and AirPit's passport
+leaves have NO Animator and no clip. Arena moves them with its own tween script, the MonoBehaviour CommonAssets.Scripts.Game.Modes.Data.DotAnimator (DOTween
 based), which stores the END value, the duration and the ease of one move or rotation per target. Its serialized tail is read
 from the raw bytes (no typetree exists for player-built script classes):
 
@@ -45,22 +45,31 @@ from the raw bytes (no typetree exists for player-built script classes):
       word 3             float, unknown (-1 / -2 / 0)
       word 4             float, duration in seconds (kept UNSCALED; the client scales it)
       word 5             int kind: 1 = move to a LOCAL position, 2 = rotate to LOCAL euler angles, 3 = switch (SetActive / emissive)
-      word 7             int DOTween ease: 1 Linear, 16 InOutQuint, 37 INTERNAL_Custom (use the stored curve)
+      word 7             int DOTween ease: 1 Linear, 16 InOutQuint, 37 INTERNAL_Custom (use the stored curve); a switch carries 17
+                         (the unused default), which is not read
       word 11            int curve key count n, then n x 7 words (time, value, inSlope, outSlope, weightedMode, inWeight, outWeight),
                          then the words 2, 2, 4 (the curve's wrap modes and rotation order), then a 38-word payload whose words
-                         1-3 are the TARGET vector (x, y, z)
+                         1-3 are the TARGET vector (x, y, z) of a move / rotate and whose word 8 is, for a switch, the active state
+                         it sets (0 / 1; 2026-10-24: 23 of 23 switches of Equator level 57 and AirPit level 28 set the OPPOSITE of
+                         their target's scene state, RedFog 1 -> 0, GreenFog 0 -> 1, every lamp 0 -> 1)
 The decode of an object is trusted only when the offset after the last field equals the object's byte length. The targets are
 ABSOLUTE local values in the parent's frame (Bay5's roller targets keep the node's x and z and change only y; Equator's
 +-2.0 as an offset would push each leaf 0.58 m out of its frame), so a kind-1 pose is closed position -> target, a kind-2 pose
-closed euler -> target euler (interpolate rotations as a quaternion slerp between Quaternion.Euler of the two triples), a
-kind-3 element (a lamp) is skipped. A DotAnimator on an inactive GameObject (Bay5's Gates_PTOR_medium twins) moves nothing
-and is skipped. Where Arena authors no motion for a sibling gate the sidecar borrows the neighbour's (source "borrowed",
-checked: the borrower really has no DotAnimator). Per-map scan roots, barrier depth and borrowed gates are in DOT_SOURCES.
+closed euler -> target euler (interpolate rotations as a quaternion slerp between Quaternion.Euler of the two triples). A kind-3
+element is skipped (a lamp) unless the scan sets "switches": then it becomes a SWITCH row (the sidecar's optional "switch":
+{"closed": the target's scene activeSelf, "open": the payload bool}; its closed and open transforms are the node's scene
+transform; AirPit's passport lamps RED / GREEN). A DotAnimator on an inactive GameObject (Bay5's Gates_PTOR_medium twins) moves
+nothing and is skipped. Where Arena authors no motion for a sibling gate the sidecar borrows the neighbour's (source "borrowed",
+checked: the borrower really has no DotAnimator); mode "scene" (AirPit's bus doors) borrows the lender's STATIC pose instead of
+a motion: the open pose of a node is the lender's current local transform of the same-named node. Per-map scan roots, barrier
+depth and borrowed gates are in DOT_SOURCES.
 
 Sidecar schema 2 adds to every pose: "source" (clip / dotanimator / borrowed), "ease" (smoothstep = the client's stand-in for
 Bowl's clips, linear, inOutQuint, curve), "curve" (null, or Hermite keys [time, value, inSlope, outSlope] on a 0..1 timeline,
 used when ease is "curve") and "at" (null, or the WORLD position of the barrier root instance, which tells repeated hierarchy
-paths apart). "part" may be "" (the barrier root itself moves: Bay5's rollers).
+paths apart). "part" may be "" (the barrier root itself moves: Bay5's rollers). A part name may repeat among the direct
+children of a barrier (AirPit's 16 passport leaves reuse 6 names): such rows are told apart by their closed position, which
+the client matches within CLOSED_MATCH_TOL (0.05 m).
 
 CLI:
     python tools/extract/extract_door_poses.py --map arena_bowl --arena auto \\
@@ -69,6 +78,8 @@ CLI:
         --output tools/maps/equator.doors.json --csharp
     python tools/extract/extract_door_poses.py --map arena_bay5 --package work/extract/bay5-native-v5 \\
         --output tools/maps/bay5.doors.json --csharp
+    python tools/extract/extract_door_poses.py --map arena_airpit --package work/extract/airpit-native-v9 \\
+        --output tools/maps/airpit.doors.json --csharp
 `--csharp` also prints the `new ArenaDoorPose(...)` literals for ArenaMapRegistry.<Map>.DoorPoses; the output is
 byte-stable. The verification summary goes to stdout; a failed check goes to stderr with exit code 1 and no file written.
 """
@@ -99,23 +110,28 @@ CURVE_DECIMALS = 5
 AT_TOLERANCE = 0.05       # m, two barrier roots closer than this are the same instance (client DoorPosesOf uses the same)
 
 # map key -> the scene that holds the gate objects and the descriptor sidecar of the Mecanim clip source. Only Bowl's gates are
-# animated by clips; Equator and Bay5 use the DotAnimator (DOT_SOURCES below); AirPit's three bus-door Animators use a
-# controller without clips and its passport doors are a later change set (docs/progress/door-poses.md, "Other maps").
+# animated by clips; Equator, Bay5 and AirPit use the DotAnimator (DOT_SOURCES below); AirPit's three bus-door Animators use a
+# controller without clips (their open pose is the static back row, mode "scene"; docs/progress/door-poses.md, "AirPit").
 MAP_SOURCES = {
     "arena_bowl": {"scene": "Arena_Bowl_TeamFight_DesignStuff", "descriptor": REPO / "tools" / "maps" / "bowl.json"},
 }
 
 # DotAnimator source (see the module doc). Per map:
 #   scene      the TeamFight_DesignStuff level that holds the gate groups
-#   scans      [{"root", "depth", "at"}]: every active DotAnimator below the scene path `root` is a gate element. `depth` is the
-#              number of path segments that make the BARRIER root (Equator: SPAWN_DOORS/<assembly>; Bay5 rollers:
+#   scans      [{"root", "depth", "at", "switches"?}]: every active DotAnimator below the scene path `root` is a gate element.
+#              `depth` is the number of path segments that make the BARRIER root (Equator: SPAWN_DOORS/<assembly>; Bay5 rollers:
 #              WAREHOUSE_DOORS (1)/<roller>, which is also the node that moves, so part = ""; Bay5 depot:
-#              OLD_WAREHOUSE_DOORS/Gates_Depot_Frame); the next segment is the part, the rest the node. `at` = True records
-#              the barrier root's world position (repeated paths: both unnumbered Equator assemblies, both depot frames).
-#   borrowed   gates Arena authors no motion for, given the neighbour's: {"scene", "barrier", "parts": [part names, "" = the
+#              OLD_WAREHOUSE_DOORS/Gates_Depot_Frame; AirPit: PASSPORT_CONTROL_DOORS itself, depth 1, the root IS the barrier);
+#              the next segment is the part, the rest the node. `at` = True records the barrier root's world position (repeated
+#              paths: both unnumbered Equator assemblies, both depot frames). `switches` = True reads the kind-3 elements below
+#              the root as switch rows (AirPit's RED / GREEN lamps); without it they are skipped with a note.
+#   borrowed   gates Arena authors no motion for, given a neighbour's: {"scene", "barrier", "parts": [part names, "" = the
 #              root], "lender": {"barrier", "at"?}, "mode"}. mode "absolute" copies the lender's end value on every axis the
 #              lender moves (Equator: x = +-2.0), "offset" adds the lender's travel (Bay5: y + 3.089). The borrower must carry
-#              no DotAnimator itself, or the tool stops.
+#              no DotAnimator itself, or the tool stops. mode "scene" (AirPit's bus doors) takes no motion at all: the open pose
+#              of every node below a borrower part is the CURRENT local transform of the same-named node below the lender
+#              (`lender`: {"barrier", "part", "twins": [parts that must carry the same poses]}), the closed pose the borrower's
+#              own; `seconds` and `ease` are the port's (Arena authors no duration for these doors).
 DOT_SOURCES = {
     "arena_equator": {
         "scene": "Arena_Equator_TeamFight_DesignStuff",
@@ -133,14 +149,26 @@ DOT_SOURCES = {
     "arena_bay5": {
         "scene": "Arena_Bay5_TeamFight_DesignStuff",
         "descriptor": REPO / "tools" / "maps" / "bay5.json",
+        # Door_01 (3) is NOT borrowed any more (user decision 2026-10-24): Arena authors no motion and no sound for it and a tarp
+        # with a carton stack stands in its doorway, so it stays shut like Door_01 and Door_01 (1).
         "scans": [{"root": "WAREHOUSE_DOORS (1)", "depth": 2, "at": False},
                   {"root": "OLD_WAREHOUSE_DOORS", "depth": 2, "at": True}],
+    },
+    "arena_airpit": {
+        "scene": "Arena_Airpit_TeamFight_DesignStuff",
+        "descriptor": REPO / "tools" / "maps" / "airpit.json",
+        # PASSPORT_CONTROL_DOORS is the barrier itself: its 16 turnstile leaves (kind 2) are the parts, RED / GREEN carry the lamp
+        # switches (kind 3, RedFog off / GreenFog on).
+        "scans": [{"root": "PASSPORT_CONTROL_DOORS", "depth": 1, "at": False, "switches": True}],
         "borrowed": [{
-            "scene": "Arena_Bay5_TeamFight_DesignStuff",
-            "barrier": "WAREHOUSE_DOORS (1)/Bay5_Warehouse_Gate_Door_01 (3)",
-            "parts": [""],
-            "lender": {"barrier": "WAREHOUSE_DOORS (1)/Bay5_Warehouse_Gate_Door_01 (4)"},
-            "mode": "offset",
+            "scene": "Arena_Airpit_TeamFight_DesignStuff",
+            "barrier": "BUS_DOORS",
+            "parts": ["Apron_bus_MAZ_doors", "Apron_bus_MAZ_doors (1)", "Apron_bus_MAZ_doors (2)"],
+            "lender": {"barrier": "BUS_DOORS", "part": "Apron_bus_MAZ_doors (3)",
+                       "twins": ["Apron_bus_MAZ_doors (4)", "Apron_bus_MAZ_doors (5)"]},
+            "mode": "scene",
+            "seconds": 3.0,
+            "ease": EASE_IN_OUT_QUINT,
             "at": False,
         }],
     },
@@ -153,6 +181,7 @@ DOT_ELEMENT_WORDS = 53
 DOT_KEY_WORDS = 7
 DOT_PAYLOAD_WORDS = 38
 DOT_WRAP = (2, 2, 4)
+DOT_SWITCH_WORD = 8       # payload word of a kind-3 element that holds the active state it sets (0 / 1)
 
 # Tolerances (docs/progress/door-poses.md).
 CLOSED_POS_TOL = 0.02     # m, closed pose of the scene against the closed clip / the open clip's first key
@@ -167,6 +196,8 @@ DIFF_ROT = 1.0            # degrees
 DIFF_SCALE = 0.01         # relative; a scale change is reported, the sidecar has no scale
 FRAME_PART = "frame"      # BoothDoorRepairs.FramePart: a part whose name contains it is never switched off
 DECIMALS = 3
+CLOSED_MATCH_TOL = 0.05   # m, rows of one repeated part name are told apart by their closed local position (AirPit's passport leaves;
+                          # the client's DoorPoseModel.SelectRowsForNode uses the same tolerance)
 
 BIND_POSITION, BIND_ROTATION, BIND_SCALE, BIND_EULER = 1, 2, 3, 4
 BIND_WIDTH = {BIND_POSITION: 3, BIND_ROTATION: 4, BIND_SCALE: 3, BIND_EULER: 3}
@@ -455,6 +486,13 @@ class DotElement:
     target: tuple = (0.0, 0.0, 0.0)               # payload words 1-3: the absolute local end vector
     payload: tuple = ()                           # the 38 payload words
 
+    @property
+    def active(self) -> bool | None:
+        """The active state a kind-3 (switch) element sets: payload word 8; None for a move / rotate element."""
+        if self.kind != DOT_KIND_SWITCH:
+            return None
+        return bool(self.payload[DOT_SWITCH_WORD])
+
 
 @dataclass
 class DotAnimator:
@@ -523,6 +561,9 @@ def decode_dot_animator(raw: bytes) -> DotAnimator:
             raise DoorPoseError(f"DotAnimator element {index} carries a non-finite number")
         if element.kind != DOT_KIND_SWITCH and element.seconds <= 0:
             raise DoorPoseError(f"DotAnimator element {index}: duration {element.seconds} is not positive")
+        if element.kind == DOT_KIND_SWITCH and (element.seconds < 0 or payload[DOT_SWITCH_WORD] not in (0, 1)):
+            raise DoorPoseError(f"DotAnimator element {index}: a switch needs a duration >= 0 and an active state of 0 or 1 in payload "
+                                f"word {DOT_SWITCH_WORD}, got {element.seconds} and {payload[DOT_SWITCH_WORD]}")
         elements.append(element)
         pos = end
     if pos != n:
@@ -599,7 +640,8 @@ class NodePose:
     source / ease / curve / at are the schema-2 fields: where the pose comes from (a Mecanim clip, a DotAnimator, a
     neighbour's), the interpolation (Bowl's clips keep the client's smoothstep stand-in), the Hermite keys of ease "curve"
     ([time, value, inSlope, outSlope] on a 0..1 timeline) and the barrier root's world position for repeated paths. `scene`
-    is the Arena scene the node was read from (package check only, not written)."""
+    is the Arena scene the node was read from (package check only, not written). `switch` = (closed active, open active)
+    makes the row a SWITCH: the node is switched, not moved; its closed and open transforms are the scene transform."""
     barrier: str
     part: str
     node: str
@@ -615,6 +657,7 @@ class NodePose:
     curve: list | None = None
     at: list | None = None
     scene: str = ""
+    switch: tuple | None = None     # (closed active, open active) of a SetActive node (a lamp); None for a transform pose
 
 
 def continuous_euler(channel: Channel, stop: float, start_euler, per_second: int = 240):
@@ -709,14 +752,17 @@ def motion_window(channels: Iterable[Channel], stop: float, rate: float = 60.0, 
 
 
 def sidecar_pose(p: NodePose) -> dict:
-    return {
+    row = {
         "barrier": p.barrier, "part": p.part, "node": p.node, "clip": p.clip, "source": p.source,
-        "seconds": round(p.seconds, DECIMALS), "ease": p.ease,
+        "seconds": round(p.seconds, DECIMALS) + 0.0, "ease": p.ease,
         "curve": None if p.curve is None else [[round(v, CURVE_DECIMALS) + 0.0 for v in key] for key in p.curve],
         "at": None if p.at is None else tidy(p.at),
         "closed": {"position": tidy(p.closed_position), "euler": tidy(p.closed_euler)},
         "open": {"position": tidy(p.open_position), "euler": tidy(p.open_euler)},
     }
+    if p.switch is not None:          # only a switch row carries the key; the transform rows of the other sidecars stay as they were
+        row["switch"] = {"closed": bool(p.switch[0]), "open": bool(p.switch[1])}
+    return row
 
 
 def csharp_float(value: float) -> str:
@@ -727,17 +773,19 @@ def csharp_float(value: float) -> str:
 
 
 def has_default_extras(p: dict) -> bool:
-    """A pose from a Mecanim clip with the smoothstep stand-in, no curve and no `at`: ArenaDoorPose's last four constructor
-    parameters take their defaults, so Bowl's literals stay the nine-argument form."""
+    """A pose from a Mecanim clip with the smoothstep stand-in, no curve, no `at` and no switch: ArenaDoorPose's last four
+    constructor parameters take their defaults, so Bowl's literals stay the nine-argument form."""
     return (p.get("source", SOURCE_CLIP) == SOURCE_CLIP and p.get("ease", EASE_SMOOTHSTEP) == EASE_SMOOTHSTEP
-            and p.get("curve") is None and p.get("at") is None)
+            and p.get("curve") is None and p.get("at") is None and p.get("switch") is None)
 
 
 def render_csharp(poses: list[dict], indent: str = " " * 16) -> str:
     """The `new ArenaDoorPose(...)` literals of ArenaMapRegistry.<Map>.DoorPoses for a sidecar's poses, ready to paste between
     `DoorPoses: new[] {` and `}` (a test pins that the registry carries exactly this text). A default pose (clip source,
     smoothstep, no curve, no `at`) is three lines of nine arguments; every other pose adds a fourth line with the last four
-    arguments `source, ease, curve, at` (curve = a flat float[] of time, value, inSlope, outSlope per key, or null)."""
+    arguments `source, ease, curve, at` (curve = a flat float[] of time, value, inSlope, outSlope per key, or null). A switch
+    row appends the named arguments `ClosedActive: true, OpenActive: false` to that fourth line (the constructor's optional
+    trailing parameters; a transform row never prints them)."""
     def vec(values):
         return "new[] { " + ", ".join(csharp_float(v) for v in values) + " }"
 
@@ -755,29 +803,48 @@ def render_csharp(poses: list[dict], indent: str = " " * 16) -> str:
         curve_text = "null" if curve is None else vec([v for key in curve for v in key])
         at = p.get("at")
         at_text = "null" if at is None else vec(at)
+        switch = p.get("switch")
+        switch_text = "" if switch is None else (f", ClosedActive: {str(bool(switch['closed'])).lower()}, "
+                                                 f"OpenActive: {str(bool(switch['open'])).lower()}")
         lines.append(f"{indent}    {json.dumps(p.get('source', SOURCE_CLIP))}, {json.dumps(p.get('ease', EASE_SMOOTHSTEP))}, "
-                     f"{curve_text}, {at_text}),")
+                     f"{curve_text}, {at_text}{switch_text}),")
     return "\n".join(lines)
 
 
+SIDECAR_COMMENT = (
+    "Generated by tools/extract/extract_door_poses.py (docs/progress/door-poses.md): the END POSE of every node "
+    "Arena's gates move, next to the node's closed pose in the scene. barrier = the path of the gate's root "
+    "(an opened_barriers entry; Equator's booth doors are not barriers: the assembly root under SPAWN_DOORS or "
+    "Respawn_2), part = the barrier root's direct child (what BoothDoorRepairs switches off; \"\" = the root "
+    "itself moves), node = the transform path below the part that is animated (\"\" = the part itself), "
+    "positions and euler angles are LOCAL to the node's parent (Unity localPosition / localEulerAngles). "
+    "source = clip (a Mecanim clip: Bowl), dotanimator (Arena's DOTween script: Equator, Bay5) or borrowed "
+    "(Arena authors no motion for this gate; a neighbour's is used). seconds = Arena's own duration, unscaled. "
+    "ease = smoothstep (the client's stand-in for Bowl's clips), linear, inOutQuint or curve (curve = Hermite "
+    "keys [time, value, inSlope, outSlope] on a 0..1 timeline). at = null, or the WORLD position of the "
+    "barrier root instance (tells repeated hierarchy paths apart, matched within 0.05 m). Euler angles of clip "
+    "poses are the clip's own raw values (interpolate component-wise); rotations of dotanimator poses are "
+    "interpolated as a quaternion slerp between the two triples. "
+    "ArenaMapRegistry.<Map>.DoorPoses mirrors this file number for number (validate_map_descriptors.py and "
+    "the DoorPoseSidecarTests). Object names and derived numbers only (the curve keys are derived numbers too); no Arena asset "
+    "or file is stored.")
+
+# Appended only to a sidecar that uses the AirPit features (a switch row, a repeated part name), so the Equator / Bay5 / Bowl
+# files keep their text byte for byte.
+SIDECAR_COMMENT_SWITCHES = (
+    " A row with a \"switch\" key {closed, open} switches the node on or off instead of moving it (AirPit's passport lamps: "
+    "closed = the node's active state in the scene, open = the state Arena's DotAnimator sets; the row's transforms are the "
+    "node's scene transform on both sides, seconds is Arena's duration word, 0 for a switch). A part name may repeat among a "
+    "barrier's direct children (the 16 passport leaves reuse 6 names): such rows are told apart by their closed position, "
+    "matched within 0.05 m. A borrowed row whose clip says \"static open pose\" takes the open pose from a neighbour that stands "
+    "open in the scene (AirPit's bus doors); its seconds are the port's, not Arena's.")
+
+
 def render_sidecar(key: str, source: dict, poses: list[dict]) -> str:
+    identities = [(p["barrier"], p["part"], p["node"], tuple(p["at"]) if p.get("at") else None) for p in poses]
+    extra = any(p.get("switch") is not None for p in poses) or len(set(identities)) != len(identities)
     doc = {
-        "_comment": ("Generated by tools/extract/extract_door_poses.py (docs/progress/door-poses.md): the END POSE of every node "
-                     "Arena's gates move, next to the node's closed pose in the scene. barrier = the path of the gate's root "
-                     "(an opened_barriers entry; Equator's booth doors are not barriers: the assembly root under SPAWN_DOORS or "
-                     "Respawn_2), part = the barrier root's direct child (what BoothDoorRepairs switches off; \"\" = the root "
-                     "itself moves), node = the transform path below the part that is animated (\"\" = the part itself), "
-                     "positions and euler angles are LOCAL to the node's parent (Unity localPosition / localEulerAngles). "
-                     "source = clip (a Mecanim clip: Bowl), dotanimator (Arena's DOTween script: Equator, Bay5) or borrowed "
-                     "(Arena authors no motion for this gate; a neighbour's is used). seconds = Arena's own duration, unscaled. "
-                     "ease = smoothstep (the client's stand-in for Bowl's clips), linear, inOutQuint or curve (curve = Hermite "
-                     "keys [time, value, inSlope, outSlope] on a 0..1 timeline). at = null, or the WORLD position of the "
-                     "barrier root instance (tells repeated hierarchy paths apart, matched within 0.05 m). Euler angles of clip "
-                     "poses are the clip's own raw values (interpolate component-wise); rotations of dotanimator poses are "
-                     "interpolated as a quaternion slerp between the two triples. "
-                     "ArenaMapRegistry.<Map>.DoorPoses mirrors this file number for number (validate_map_descriptors.py and "
-                     "the DoorPoseSidecarTests). Object names and derived numbers only (the curve keys are derived numbers too); no Arena asset "
-                     "or file is stored."),
+        "_comment": SIDECAR_COMMENT + (SIDECAR_COMMENT_SWITCHES if extra else ""),
         "schema_version": SCHEMA_VERSION,
         "key": key,
         "source": source,
@@ -945,6 +1012,21 @@ class ArenaScene:
             if obj is not None and obj.type.name == "MonoBehaviour":
                 out.append(obj)
         return out
+
+    def animator_clip_counts(self, tpid: int) -> list[int]:
+        """The number of clips of the controller of every Animator on the GameObject of a transform (level file only; a
+        missing controller counts 0). Empty when the object carries no Animator."""
+        go = self.tr[tpid]["m_GameObject"]["m_PathID"]
+        counts = []
+        for animator in sorted(self.animators, key=lambda o: o.path_id):
+            tt = animator.read_typetree()
+            if tt["m_GameObject"]["m_PathID"] != go:
+                continue
+            if not tt["m_Controller"]["m_PathID"]:
+                counts.append(0)
+                continue
+            counts.append(len(self.deref(animator, tt["m_Controller"]).read_typetree()["m_AnimationClips"]))
+        return counts
 
     def deref(self, obj, pptr: dict):
         """The object a PPtr of `obj` points at (same file, or an external file that was loaded)."""
@@ -1141,9 +1223,12 @@ class PackageScene:
 def check_package(package: Path, scene_name: str, poses: list[NodePose], scene: ArenaScene | None = None) -> list[str]:
     """Every sidecar node exists exactly once in the extracted port scene with Arena's local transform. A pose with `at`
     finds its barrier root among the instances of a repeated path by world position (AT_TOLERANCE); a pose read from another
-    Arena scene (a borrowed gate) is looked up in that scene of the package."""
+    Arena scene (a borrowed gate) is looked up in that scene of the package. A node name that repeats among its parent's
+    children (AirPit's passport leaves) is told apart by the pose's closed local position (CLOSED_MATCH_TOL), and two rows
+    must never resolve to the same object. A switch row also needs the node's active flag to be its `closed` state."""
     scenes: dict[str, PackageScene] = {}
     problems = []
+    claimed: dict[tuple, str] = {}
     for p in poses:
         name = p.scene or scene_name
         if name not in scenes:
@@ -1158,19 +1243,29 @@ def check_package(package: Path, scene_name: str, poses: list[NodePose], scene: 
                             + (f" at {tidy(p.at)}" if p.at is not None else ""))
             continue
         o = roots[0]
-        for segment in [s for s in (p.part, *p.node.split("/")) if s]:
+        segments = [s for s in (p.part, *p.node.split("/")) if s]
+        for index, segment in enumerate(segments):
             hits = ps.children.get((o["id"], segment), [])
+            if len(hits) > 1 and index == len(segments) - 1:
+                hits = [h for h in hits if math.dist(h["local_position"], p.closed_position) <= CLOSED_MATCH_TOL]
             if len(hits) != 1:
-                problems.append(f"package: {key} found {len(hits)} child(ren) named {segment!r} in {name}")
+                problems.append(f"package: {key} found {len(hits)} child(ren) named {segment!r} in {name}"
+                                + (f" at the closed position {tidy(p.closed_position)}" if index == len(segments) - 1 else ""))
                 o = None
                 break
             o = hits[0]
         if o is None:
             continue
+        if (name, o["id"]) in claimed:
+            problems.append(f"package: {key} and {claimed[(name, o['id'])]} resolve to the same object in {name}")
+        claimed[(name, o["id"])] = key
         if math.dist(o["local_position"], p.closed_position) > 1e-3:
             problems.append(f"package: {key} local position {o['local_position']} != Arena {tidy(p.closed_position)}")
         if quat_angle(o["local_rotation"], euler_to_quat(p.closed_euler)) > 0.05:
             problems.append(f"package: {key} local rotation differs from the closed euler {tidy(p.closed_euler)}")
+        if p.switch is not None and bool(o.get("active", True)) != bool(p.switch[0]):
+            problems.append(f"package: {key} is {'active' if o.get('active', True) else 'inactive'}, the switch row says it starts "
+                            f"{'active' if p.switch[0] else 'inactive'}")
     return problems
 
 
@@ -1247,6 +1342,7 @@ class DotScan:
     elements: int = 0
     skipped_inactive: int = 0
     skipped_switch: int = 0
+    switches: int = 0                               # switch rows read (scan option `switches`)
     warnings: list = field(default_factory=list)
 
 
@@ -1279,13 +1375,16 @@ def merge_elements(label: str, elements: list) -> tuple:
 
 
 def scan_dot_animators(scene: ArenaScene, scene_name: str, scan: dict) -> DotScan:
-    """The poses of every active DotAnimator below the scene path scan['root'] (see DOT_SOURCES)."""
+    """The poses of every active DotAnimator below the scene path scan['root'] (see DOT_SOURCES). With scan['switches'] the
+    kind-3 elements become switch rows; without it they are skipped with a note (lamps are not gates)."""
     roots = scene.find_path(scan["root"])
     if not roots:
         raise DoorPoseError(f"scan root {scan['root']!r} not found in {scene_name}")
     depth = scan["depth"]
+    read_switches = bool(scan.get("switches"))
     result = DotScan()
     moves: dict[int, list] = {}
+    switches: dict[int, list] = {}
     for root in roots:
         for _rel, tpid in [("", root), *scene.descendants(root)]:
             for obj in scene.monobehaviours(tpid):
@@ -1302,7 +1401,7 @@ def scan_dot_animators(scene: ArenaScene, scene_name: str, scan: dict) -> DotSca
                     result.lines.append(f"    - skipped (inactive in the scene, moves nothing): {scene.path(tpid)}")
                     continue
                 for element in animator.elements:
-                    if element.kind == DOT_KIND_SWITCH:
+                    if element.kind == DOT_KIND_SWITCH and not read_switches:
                         result.skipped_switch += 1
                         result.lines.append(f"    - skipped kind-3 element (switch / lamp): {scene.path(tpid)}")
                         continue
@@ -1314,7 +1413,7 @@ def scan_dot_animators(scene: ArenaScene, scene_name: str, scan: dict) -> DotSca
                     path = scene.path(target)
                     if path != scan["root"] and not path.startswith(scan["root"] + "/"):
                         raise DoorPoseError(f"{scene.path(tpid)}: the element's target {path} lies outside the scan root {scan['root']}")
-                    moves.setdefault(target, []).append(element)
+                    (switches if element.kind == DOT_KIND_SWITCH else moves).setdefault(target, []).append(element)
     for target in sorted(moves, key=lambda t: (scene.path(t), t)):
         path = scene.path(target)
         segments = path.split("/")
@@ -1348,12 +1447,47 @@ def scan_dot_animators(scene: ArenaScene, scene_name: str, scan: dict) -> DotSca
         at = list(scene.world_position(barrier_root)) if scan["at"] else None
         result.poses.append(NodePose("/".join(segments[:depth]), part, node, "DotAnimator", lead.seconds, pos, euler,
                                      open_position, open_euler, True, SOURCE_DOT, ease, curve, at, scene_name))
+    for target in sorted(switches, key=lambda t: (scene.path(t), t)):
+        path = scene.path(target)
+        segments = path.split("/")
+        if len(segments) <= depth:
+            raise DoorPoseError(f"{path}: a switch needs a part below the barrier root (depth {depth}); the root itself cannot be switched")
+        if target in moves:
+            raise DoorPoseError(f"{path}: this node is both switched and moved; the pose has one or the other")
+        if len(switches[target]) > 1:
+            raise DoorPoseError(f"{path}: several DotAnimator switch elements target this node")
+        element = switches[target][0]
+        closed_active = bool(scene.go[scene.tr[target]["m_GameObject"]["m_PathID"]]["m_IsActive"])
+        open_active = bool(element.active)
+        if closed_active == open_active:
+            result.lines.append(f"    - dropped (no net change, stays {'active' if closed_active else 'inactive'}): {path}")
+            continue
+        barrier_root = ancestor(scene, target, len(segments) - depth)
+        rest = segments[depth:]
+        pos, euler, _ = closed_pose_of(scene, target)
+        at = list(scene.world_position(barrier_root)) if scan["at"] else None
+        result.switches += 1
+        result.poses.append(NodePose("/".join(segments[:depth]), rest[0], "/".join(rest[1:]), "DotAnimator", element.seconds,
+                                     pos, euler, list(pos), list(euler), True, SOURCE_DOT, EASE_LINEAR, None, at, scene_name,
+                                     (closed_active, open_active)))
     return result
 
 
+def dot_animator_paths(scene: ArenaScene, root: int) -> list[str]:
+    """The hierarchy paths of the DotAnimator components on a transform and below it."""
+    found = []
+    for _rel, tpid in [("", root), *scene.descendants(root)]:
+        if any(scene.mono_class(obj) == DOT_SCRIPT for obj in scene.monobehaviours(tpid)):
+            found.append(scene.path(tpid))
+    return found
+
+
 def build_borrowed(scene: ArenaScene, scene_name: str, spec: dict, decoded: list) -> DotScan:
-    """The poses of a gate Arena authors no motion for, taken from a neighbour's decoded pose (see DOT_SOURCES). Stops when the
-    borrower carries a DotAnimator of its own (it is then not borrowed), is missing or ambiguous, or the lender moves nothing."""
+    """The poses of a gate Arena authors no motion for, taken from a neighbour (see DOT_SOURCES): the neighbour's decoded
+    motion (modes "absolute" and "offset") or the neighbour's static pose in the scene (mode "scene"). Stops when the borrower
+    carries a DotAnimator of its own (it is then not borrowed), is missing or ambiguous, or the lender moves nothing."""
+    if spec["mode"] == "scene":
+        return build_scene_borrowed(scene, scene_name, spec)
     result = DotScan()
     roots = scene.find_path(spec["barrier"])
     if len(roots) != 1:
@@ -1398,16 +1532,109 @@ def build_borrowed(scene: ArenaScene, scene_name: str, spec: dict, decoded: list
     return result
 
 
+def build_scene_borrowed(scene: ArenaScene, scene_name: str, spec: dict) -> DotScan:
+    """Mode "scene" (AirPit's front-row bus doors): Arena authors neither a motion nor a duration for them (an Animator with a
+    controller that has no clip), but the back row of the same assemblies stands OPEN in the scene. The open pose of every node
+    below a borrower part is the lender's CURRENT local transform of the same-named node (same relative path), the closed pose
+    the borrower's own; a node whose two poses differ by more than 1 cm / 1 degree becomes one row. Seconds and ease are the
+    port's (spec). Stops unless: the barrier, the lender and every part exist exactly once; neither side carries a DotAnimator;
+    the lender has no Animator and every borrower Animator a controller without clips (nothing else could pose these nodes); both
+    sides have the same node paths (unique per side) and scales; the lender's twins carry the lender's poses."""
+    lender_spec = spec["lender"]
+    result = DotScan()
+    roots = scene.find_path(spec["barrier"])
+    if len(roots) != 1:
+        raise DoorPoseError(f"borrowed gate {spec['barrier']!r} found {len(roots)} time(s) in {scene_name}")
+    root = roots[0]
+    lender_roots = scene.find_path(lender_spec["barrier"])
+    if len(lender_roots) != 1:
+        raise DoorPoseError(f"lender barrier {lender_spec['barrier']!r} found {len(lender_roots)} time(s) in {scene_name}")
+
+    def child(parent: int, name: str, what: str) -> int:
+        hits = [c for c in scene.children(parent) if scene.name(c) == name]
+        if len(hits) != 1:
+            raise DoorPoseError(f"{what} {name!r} found {len(hits)} time(s) below {scene.path(parent)}")
+        return hits[0]
+
+    def nodes_of(tpid: int, what: str) -> dict:
+        found: dict[str, int] = {}
+        for rel, node in scene.descendants(tpid):
+            if rel in found:
+                raise DoorPoseError(f"{what}: the node path {rel!r} occurs twice below {scene.path(tpid)}; a scene borrow needs unique paths")
+            found[rel] = node
+        return found
+
+    def difference(a: int, b: int) -> tuple[float, float]:
+        (pa, qa, sa), (pb, qb, sb) = scene.local(a), scene.local(b)
+        if any(abs(x - y) > DIFF_SCALE * max(1.0, abs(y)) for x, y in zip(sa, sb)):
+            raise DoorPoseError(f"{scene.path(a)} and {scene.path(b)} differ in scale {tidy(sa)} / {tidy(sb)}: the sidecar carries no scale")
+        return math.dist(pa, pb), quat_angle(qa, qb)
+
+    lender = child(lender_roots[0], lender_spec["part"], "lender part")
+    if dot_animator_paths(scene, lender):
+        raise DoorPoseError(f"{scene.path(lender)} has a DotAnimator of its own: its pose is not the static one this mode borrows")
+    if scene.animator_clip_counts(lender):
+        raise DoorPoseError(f"{scene.path(lender)} carries an Animator: its pose may be driven, not static")
+    lender_nodes = nodes_of(lender, "lender")
+    lender_label = f"{lender_spec['barrier']}/{lender_spec['part']}"
+    for twin in lender_spec.get("twins", []):
+        twin_nodes = nodes_of(child(lender_roots[0], twin, "lender twin"), "lender twin")
+        if set(twin_nodes) != set(lender_nodes):
+            raise DoorPoseError(f"lender twin {twin!r} has other nodes than {lender_spec['part']!r}")
+        shift = turn = 0.0
+        for rel in lender_nodes:
+            d_shift, d_turn = difference(twin_nodes[rel], lender_nodes[rel])
+            shift, turn = max(shift, d_shift), max(turn, d_turn)
+        if shift > 0.005 or turn > 0.5:
+            raise DoorPoseError(f"lender twin {twin!r} differs from {lender_spec['part']!r} by {shift:.3f} m / {turn:.2f} deg: "
+                                "the back row is not one pose")
+        result.lines.append(f"    lender twin {twin!r} carries the same poses (worst {shift:.4f} m / {turn:.3f} deg)")
+    for part in spec["parts"]:
+        borrower = child(root, part, "borrowed part")
+        nested = dot_animator_paths(scene, borrower)
+        if nested:
+            raise DoorPoseError(f"{nested[0]} has a DotAnimator of its own: it is not a borrowed gate")
+        clips = scene.animator_clip_counts(borrower)
+        if any(clips):
+            raise DoorPoseError(f"{scene.path(borrower)} has an Animator whose controller carries {clips} clip(s): Arena animates it")
+        nodes = nodes_of(borrower, "borrowed part")
+        if set(nodes) != set(lender_nodes):
+            only = sorted(set(nodes) ^ set(lender_nodes))[:4]
+            raise DoorPoseError(f"{scene.path(borrower)} and {lender_label} have different node paths (e.g. {only})")
+        at = list(scene.world_position(root)) if spec["at"] else None
+        kept = 0
+        for rel, node in sorted(nodes.items()):
+            shift, turn = difference(node, lender_nodes[rel])
+            if shift <= DIFF_POS and turn <= DIFF_ROT:
+                continue
+            pos, euler, _ = closed_pose_of(scene, node)
+            open_pos, open_euler, _ = closed_pose_of(scene, lender_nodes[rel])
+            result.poses.append(NodePose(
+                spec["barrier"], part, rel, f"borrowed from the static open pose of {lender_label}; seconds are the port's",
+                spec["seconds"], pos, euler, open_pos, open_euler, True, SOURCE_BORROWED, spec["ease"], None, at, scene_name))
+            kept += 1
+        result.lines.append(f"    {part}: {len(nodes)} node(s), {kept} differ from {lender_spec['part']!r} and become rows")
+        if not kept:
+            raise DoorPoseError(f"{scene.path(borrower)} already stands like {lender_label}: nothing to borrow")
+    return result
+
+
 def check_identities(poses: list) -> None:
     """A (barrier, part, node) may occur twice only for two different instances of a repeated hierarchy path, and then both
-    poses carry `at` more than AT_TOLERANCE apart; the client could not choose between them otherwise."""
+    poses carry `at` more than AT_TOLERANCE apart; the client could not choose between them otherwise. Without `at` a repeated
+    NAME among one parent's children (AirPit's passport leaves) is allowed when the closed local positions are more than
+    CLOSED_MATCH_TOL apart: the client picks the row of a node by that position (DoorPoseModel.SelectRowsForNode)."""
     seen: dict[tuple, list] = {}
     for p in poses:
         slot = (p.barrier, p.part, p.node)
         label = "/".join(x for x in slot if x)
         for other in seen.get(slot, []):
+            if p.at is None and other.at is None and math.dist(p.closed_position, other.closed_position) > CLOSED_MATCH_TOL:
+                continue
             if p.at is None or other.at is None:
-                raise DoorPoseError(f"{label} occurs twice and a pose lacks 'at' to tell the instances apart")
+                raise DoorPoseError(f"{label} occurs twice and a pose lacks 'at' to tell the instances apart "
+                                    f"(closed positions {tidy(p.closed_position)} and {tidy(other.closed_position)} are within "
+                                    f"{CLOSED_MATCH_TOL} m)")
             if math.dist(p.at, other.at) <= AT_TOLERANCE:
                 raise DoorPoseError(f"{label} occurs twice at {tidy(p.at)}")
         seen.setdefault(slot, []).append(p)
@@ -1416,13 +1643,18 @@ def check_identities(poses: list) -> None:
 def pose_row(p: NodePose) -> str:
     curve = f", {len(p.curve)}-key curve" if p.curve else ""
     at = f", at {tidy(p.at)}" if p.at is not None else ""
+    if p.switch is not None:
+        return (f"    + [{p.source}] {p.barrier} | {p.part or '.'} | {p.node or '.'}: SWITCH "
+                f"{'active' if p.switch[0] else 'inactive'} -> {'active' if p.switch[1] else 'inactive'}, at the scene transform "
+                f"pos {tidy(p.closed_position)} euler {tidy(p.closed_euler)}, {round(p.seconds, DECIMALS)} s{at}")
     return (f"    + [{p.source}] {p.barrier} | {p.part or '.'} | {p.node or '.'}: pos {tidy(p.closed_position)} -> "
             f"{tidy(p.open_position)}, euler {tidy(p.closed_euler)} -> {tidy(p.open_euler)}, {round(p.seconds, DECIMALS)} s "
             f"{p.ease}{curve}{at}")
 
 
 def extract_dot(map_key: str, arena: str, package: Path | None) -> tuple[str, dict, list[str]]:
-    """Equator and Bay5: the end poses of the DotAnimators below the scan roots of DOT_SOURCES, plus the borrowed gates."""
+    """Equator, Bay5 and AirPit: the end poses of the DotAnimators below the scan roots of DOT_SOURCES (switch rows included
+    where a scan asks for them), plus the borrowed gates."""
     src = DOT_SOURCES[map_key]
     data_dir, version = find_arena(arena)
     scenes: dict[str, ArenaScene] = {}
@@ -1446,7 +1678,8 @@ def extract_dot(map_key: str, arena: str, package: Path | None) -> tuple[str, di
         objects += scanned.objects
         elements += scanned.elements
         summary.append(f"scan {scan['root']} (barrier depth {scan['depth']}): {scanned.objects} DotAnimator(s), {scanned.elements} "
-                       f"element(s), {len(scanned.poses)} pose(s), {scanned.skipped_inactive} inactive, {scanned.skipped_switch} switch")
+                       f"element(s), {len(scanned.poses)} pose(s) ({scanned.switches} switch row(s)), {scanned.skipped_inactive} inactive, "
+                       f"{scanned.skipped_switch} switch element(s) skipped")
         summary.extend(scanned.lines)
         summary.extend(pose_row(p) for p in scanned.poses)
     summary.append(f"decode self-check: {objects} DotAnimator object(s), {elements} element(s); every decode ends exactly at the "
@@ -1454,8 +1687,11 @@ def extract_dot(map_key: str, arena: str, package: Path | None) -> tuple[str, di
     for spec in src.get("borrowed", []):
         borrowed = build_borrowed(scene_of(spec["scene"]), spec["scene"], spec, poses)
         poses.extend(borrowed.poses)
-        summary.append(f"borrowed {spec['barrier']} (scene {spec['scene']}, from {spec['lender']['barrier']}, mode {spec['mode']}, "
+        lender_label = (f"{spec['lender']['barrier']}/{spec['lender']['part']}" if spec["mode"] == "scene"
+                        else spec["lender"]["barrier"])
+        summary.append(f"borrowed {spec['barrier']} (scene {spec['scene']}, from {lender_label}, mode {spec['mode']}, "
                        f"no DotAnimator of its own): {len(borrowed.poses)} pose(s)")
+        summary.extend(borrowed.lines)
         summary.extend(pose_row(p) for p in borrowed.poses)
     if not poses:
         raise DoorPoseError(f"no DotAnimator pose for {map_key}")
@@ -1465,9 +1701,10 @@ def extract_dot(map_key: str, arena: str, package: Path | None) -> tuple[str, di
         if problems:
             raise DoorPoseError("verification failed:\n  " + "\n  ".join(problems))
         summary.append(f"package check: {len(poses)} pose(s) exist in {package.name} with Arena's closed transform "
-                       f"(repeated paths told apart by 'at')")
+                       f"(repeated paths told apart by 'at', repeated names by the closed position, each object claimed once)")
     summary.extend(f"WARN {text}" for text in warnings)
-    ordered = sorted(poses, key=lambda p: (p.barrier, tuple(tidy(p.at)) if p.at is not None else (), p.part, p.node))
+    ordered = sorted(poses, key=lambda p: (p.barrier, tuple(tidy(p.at)) if p.at is not None else (), p.part, p.node,
+                                           tuple(tidy(p.closed_position))))
     source = {"scene": src["scene"], "level": level, "assets": f"sharedassets{level}.assets", "arena_version": version or "unknown"}
     extra = []
     for name in scenes:

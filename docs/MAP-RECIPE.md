@@ -131,11 +131,12 @@ beyond its table row. Its greedy list names the smallest set of props whose
 exclusion joins all probe points; `--descriptor` applies the barrier and exclusion lists above (held gates included;
 `bake_bounds` is not modelled).
 
-### 3a. Door poses — `tools/maps/<stem>.doors.json` (optional: Bowl, Equator, Bay5)
+### 3a. Door poses — `tools/maps/<stem>.doors.json` (optional: Bowl, Equator, Bay5, AirPit)
 
 Some barriers are not static in Arena: an `Animator` plays a Mecanim clip that moves the gate parts, or Arena's DOTween script
-`DotAnimator` tweens them to an end value (Equator's booth doors, Bay5's rollers and depot gates; schema 2, 2026-10-23: the decode, the
-`source`, `ease`, `curve` and `at` fields and the lookup API are in [door-poses.md](progress/door-poses.md)). Bowl is the clip case
+`DotAnimator` tweens them to an end value (Equator's booth doors, Bay5's rollers and depot gates, AirPit's passport leaves; schema 2,
+2026-10-23: the decode, the `source`, `ease`, `curve` and `at` fields and the lookup API are in [door-poses.md](progress/door-poses.md);
+the `switch` rows, repeated part names and the static-pose borrow of AirPit, 2026-10-24, are described below). Bowl is the clip case
 (the BTR reverses out of
 its slot, the ambulance drives out of its bay, the army gate's leaves swing open, the second gate's leaf slides 3.8 m sideways onto
 its rail; it does NOT sink: the parent is rotated -90 degrees about x, so the clip's local y is a horizontal world direction and the
@@ -144,17 +145,19 @@ used to hide these parts; the sidecar carries the OPEN END pose of every node a 
 can park the part in its open position instead (user decision 2026-10-22). Read a pose in the frame of the node's parent, not as a
 world direction: a "local y" number says nothing about up or down until the parent chain is known (compute the world pose through
 the scene hierarchy before describing a motion in prose). Before adding a map, check whether it has any:
-`tools/extract/extract_door_poses.py` lists the Animators and DotAnimators below the map's `opened_barriers` (AirPit's three bus doors
-use a controller with no clip, so they are reported as ignored; its DotAnimator passport doors come in a later change set). Full method, table and limits:
-[docs/progress/door-poses.md](progress/door-poses.md).
+`tools/extract/extract_door_poses.py` lists the Animators and DotAnimators below the map's `opened_barriers` (AirPit's three bus-door
+Animators use a controller with no clip, so the clip path reports them as ignored; their open pose is the static back row's, see
+"Borrowed rows" below). Full method, table and limits: [docs/progress/door-poses.md](progress/door-poses.md).
 
 ```powershell
 python tools/extract/extract_door_poses.py --map arena_bowl --arena auto --package work/extract/bowl-native-v2 --output tools/maps/bowl.doors.json --csharp
+python tools/extract/extract_door_poses.py --map arena_airpit --package work/extract/airpit-native-v9 --output tools/maps/airpit.doors.json --csharp
 python tools/validate/validate_map_descriptors.py       # must print OK
 ```
 
-The sidecar is generated output: never edit it by hand. A new map needs a row in `MAP_SOURCES` (scene name, descriptor), the scene
-in `tools/bundle/key-sources.json` (that is where the level index comes from) and a Windows install of Arena with UnityPy. Shape:
+The sidecar is generated output: never edit it by hand. A new map needs a row in `MAP_SOURCES` (Mecanim clips) or `DOT_SOURCES`
+(DotAnimator scans, borrowed gates; scene name, descriptor), the scene in `tools/bundle/key-sources.json` (that is where the level
+index comes from) and a Windows install of Arena with UnityPy. Shape:
 
 ```json
 { "schema_version": 2, "key": "arena_bowl",
@@ -179,6 +182,31 @@ in `tools/bundle/key-sources.json` (that is where the level index comes from) an
   entry, and that sidecar and registry carry the same poses in the same order with the same numbers; `BowlMapTests` does the same in C#
   and `test_door_poses.py` pins that the registry holds exactly the text `--csharp` prints. A map with poses must keep the sidecar and
   the C# literals in one commit. Re-run the tool after an Arena update (the real-data test fails if the installed clips changed).
+- **Switch rows** (AirPit's passport lamps, 2026-10-24). A DotAnimator element of kind 3 is a SetActive: the sidecar row carries the
+  optional key `"switch": {"closed": <bool>, "open": <bool>}` and nothing else changes shape. `closed` is the target node's own active
+  state in the scene, `open` is the state Arena sets (payload word 8 of the element: 23 of 23 switches of Equator's and AirPit's gate
+  levels set the opposite of the scene state), `part` is the lamp group (`RED`, `GREEN`), `node` the node switched (`RedFog`: on,
+  then off; `GreenFog`: off, then on), the closed and open transforms are the node's scene transform on both sides, `seconds` is the
+  element's duration word (0), `ease` `linear` and unused. The C# literal appends the named arguments `ClosedActive: true,
+  OpenActive: false` (the constructor's last two optional parameters, `IsSwitch` is `ClosedActive.HasValue`); a transform row never
+  prints them. A scan reads kind-3 elements as switches only with `"switches": true` in `DOT_SOURCES`; lamps elsewhere (AirPit's
+  `BUS_LIGHT`, Equator's exit lights) are not gates and stay out. A switch row removes nothing from the bake (no collider) and the
+  validators require that it flips the node.
+- **Repeated part names** (AirPit's `PASSPORT_CONTROL_DOORS`: sixteen leaves, six names). A part name may repeat among a barrier's
+  direct children; `part` keeps the name and `node` is `""`. Rows of one name are told apart by `closed.position` (the node's local
+  position in the scene): the client keeps the rows of a node whose local position lies within 0.05 m of the row's closed position
+  (`ArenaDoorPose.ClosedPositionTolerance`), the bake drops every same-named child that matches a row. The tool and the validators
+  refuse two rows of one name without `at` whose closed positions are within 0.05 m of each other, and `check_package` needs every
+  row to resolve to a different object of the package.
+- **Borrowed rows** (Arena authors no motion for a gate). Mode `offset` / `absolute` give the neighbour's decoded motion to the gate
+  (Equator's `Door_Sliding_Respawn (3)`; Bay5's `Door_01 (3)` used it until 2026-10-24 and is shut again). Mode `scene` (AirPit's front
+  bus doors, whose Animator has no clip) takes no motion at all: the open pose of every node below the borrower part is the CURRENT
+  local transform of the same-named node below a lender part that stands open in the scene (the back row `Apron_bus_MAZ_doors (3)`,
+  cross-checked against its twins `(4)` and `(5)`), the closed pose is the borrower's own, one row per node that differs by more than
+  1 cm or 1 degree, `seconds` and `ease` are the port's (3.0 s, `inOutQuint`), `clip` says `borrowed from the static open pose of
+  <lender>; seconds are the port's`. The tool stops unless both sides have the same node paths and scales and nothing could drive the
+  pose (no DotAnimator on either side, no Animator on the lender, only clip-less controllers on the borrowers). The lender parts get
+  no rows of their own and keep standing (the keep-structure rule: a barrier with rows leaves every part without a row alone).
 
 ## 4. Generate, test, deploy
 

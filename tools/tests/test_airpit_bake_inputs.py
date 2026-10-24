@@ -102,11 +102,11 @@ class SidecarContentTests(unittest.TestCase):
             for key in ("navmesh_bake_exclusions", "bake_bounds", "navmesh_bake_layers", "start_gates", "held_gates"):
                 self.assertNotIn(key, data, f"{name} must not carry {key}")
         # 2026-10-23 (docs/progress/equator-booth-spawns.md): Equator's FCK shutter is a wall again (no opened barriers), Bay5 opens
-        # every gate Arena moves plus Door_01 (3): four warehouse rollers and the depot frame (listed once, two instances).
+        # every gate Arena moves: three warehouse rollers and the depot frame (listed once, two instances). Door_01 (3) was in the
+        # list from 2026-10-23 and left it on 2026-10-24 (user: Arena authors no motion and no sound for it; it stays shut).
         self.assertEqual(sidecar("equator.json")["opened_barriers"], [])
         self.assertEqual(sidecar("bay5.json")["opened_barriers"], [
             "WAREHOUSE_DOORS (1)/Bay5_Warehouse_Gate_Door_01 (2)",
-            "WAREHOUSE_DOORS (1)/Bay5_Warehouse_Gate_Door_01 (3)",
             "WAREHOUSE_DOORS (1)/Bay5_Warehouse_Gate_Door_01 (4)",
             "WAREHOUSE_DOORS (1)/One_man_Door",
             "OLD_WAREHOUSE_DOORS/Gates_Depot_Frame",
@@ -208,7 +208,8 @@ class ValidatorTests(unittest.TestCase):
         data = copy.deepcopy(sidecar("airpit.json"))
         mutate(data)
         errors: list = []
-        VD.check_map_against_registry_entry(data, entry, {"ArenaEquatorLocation": {}}, Path("airpit.json"), "AirPit", errors)
+        # the real path: the validator now looks for airpit.doors.json beside it (2026-10-24), a bare name would look in the cwd
+        VD.check_map_against_registry_entry(data, entry, {"ArenaEquatorLocation": {}}, REPO / "tools" / "maps" / "airpit.json", "AirPit", errors)
         return errors
 
     def test_untouched_sidecar_is_clean(self):
@@ -458,30 +459,36 @@ except ImportError:                    # numpy missing: the model tests skip, th
     pc = None
 
 EQUATOR_BARRIERS: list = []            # the FCK hall shutter stays shut (user decision 2026-10-23)
-BAY5_BARRIERS = [
+BAY5_BARRIERS = [                      # Door_01 (3) is not in the list since 2026-10-24: it stays shut, a baked wall
     "WAREHOUSE_DOORS (1)/Bay5_Warehouse_Gate_Door_01 (2)",
-    "WAREHOUSE_DOORS (1)/Bay5_Warehouse_Gate_Door_01 (3)",
     "WAREHOUSE_DOORS (1)/Bay5_Warehouse_Gate_Door_01 (4)",
     "WAREHOUSE_DOORS (1)/One_man_Door",
     "OLD_WAREHOUSE_DOORS/Gates_Depot_Frame",
 ]
-OLD_BAY5_BARRIERS = BAY5_BARRIERS[1:3] + BAY5_BARRIERS[4:]            # (3), (4) and the depot frame: the 0.2.x configuration
+OLD_BAY5_BARRIERS = [                  # (3), (4) and the depot frame: the 0.2.x configuration (the model test pins its real bake log)
+    "WAREHOUSE_DOORS (1)/Bay5_Warehouse_Gate_Door_01 (3)",
+    "WAREHOUSE_DOORS (1)/Bay5_Warehouse_Gate_Door_01 (4)",
+    "OLD_WAREHOUSE_DOORS/Gates_Depot_Frame",
+]
 OLD_EQUATOR_BARRIERS = ["SBG_Arena_Equator/SOO_LOD0/equator_roller_shutters_02 (9)"]
 AT_TOLERANCE = 0.05                    # ArenaDoorPose.AtTolerance == BakeNavMesh.DoorAtTolerance
+CLOSED_POSITION_TOLERANCE = 0.05       # ArenaDoorPose.ClosedPositionTolerance == BakeNavMesh.DoorClosedPositionTolerance
 EQUATOR_PACKAGE = REPO / "work" / "extract" / "equator-native-v5"
 BAY5_PACKAGE = REPO / "work" / "extract" / "bay5-native-v5"
 BOWL_PACKAGE = REPO / "work" / "extract" / "bowl-native-v2"
 
 
 def door_rows(stem):
-    """The rows the bake reads (ArenaPaths.DoorRows): barrier, part, node, at of tools/maps/<stem>.doors.json; none without the file."""
+    """The rows the bake reads (ArenaPaths.DoorRows): barrier, part, node, at, closed_position and the switch flag of
+    tools/maps/<stem>.doors.json; none without the file."""
     path = REPO / "tools" / "maps" / f"{stem}.doors.json"
     if not path.is_file():
         return []
     doc = json.loads(path.read_text(encoding="utf-8"))
     if doc["schema_version"] != 2:
         raise AssertionError(f"{path.name}: the bake reads schema 2")
-    return [{"barrier": p["barrier"], "part": p["part"], "node": p["node"], "at": p["at"]} for p in doc["poses"]]
+    return [{"barrier": p["barrier"], "part": p["part"], "node": p["node"], "at": p["at"], "closed_position": p["closed"]["position"],
+             "switch": p.get("switch") is not None} for p in doc["poses"]]
 
 
 def find_all_instances(scenes, path):
@@ -503,9 +510,34 @@ def row_applies(row, position):
     return sum((float(position[i]) - row["at"][i]) ** 2 for i in range(3)) <= AT_TOLERANCE ** 2
 
 
+def children_named(scene, key, name):
+    """BakeNavMesh.ChildrenNamed: every direct child called `name`, in sibling order (Transform.Find takes the first only)."""
+    return [c for c in scene.children.get(key, []) if scene.objects[c]["name"] == name]
+
+
+def closed_position_matches(scene, child, row):
+    """BakeNavMesh.ClosedPositionMatches: the child's (node "": itself, else the node below it) LOCAL position is within 0.05 m of the
+    row's closed position; a child without that node cannot match."""
+    probe = child if not row["node"] else scene.find(child, row["node"])
+    if probe is None:
+        return False
+    local = scene.objects[probe]["local_position"]
+    return sum((float(local[i]) - row["closed_position"][i]) ** 2 for i in range(3)) <= CLOSED_POSITION_TOLERANCE ** 2
+
+
+def parts_of_row(scene, instance, row):
+    """BakeNavMesh.PartsOfRow: a name that occurs once (or a row without a closed position) takes the first child, as Transform.Find did;
+    a repeated name takes every child standing at the row's closed position."""
+    named = children_named(scene, instance, row["part"])
+    if len(named) <= 1 or row.get("closed_position") is None:
+        return named[:1]
+    return [c for c in named if closed_position_matches(scene, c, row)]
+
+
 def resolve_opened_barriers(scenes, paths, rows):
-    """BakeNavMesh.ResolveOpenedBarriers -> (legacy paths, moved [(scene, key)], unresolved [str], posed count, uncovered [(path, scene, key)])."""
-    legacy, moved, unresolved, uncovered, posed = [], [], [], [], 0
+    """BakeNavMesh.ResolveOpenedBarriers -> (legacy paths, moved [(scene, key)], unresolved [str], posed count, uncovered [(path, scene, key)],
+    unclaimed [(path, scene, key)]): `unclaimed` are the children of a repeated part name that no row stands for (a Warning in the bake)."""
+    legacy, moved, unresolved, uncovered, unclaimed, posed = [], [], [], [], [], 0
     for path in paths or []:
         if not path:
             continue
@@ -526,19 +558,36 @@ def resolve_opened_barriers(scenes, paths, rows):
             scene = scenes[scene_name]
             position = scene.world(key)[:3, 3]
             covered = False
+            ambiguous = []
             for i, row in enumerate(path_rows):
                 if not row_applies(row, position):
                     continue
                 used[i] = covered = True
-                target = key if not row["part"] else scene.find(key, row["part"])
-                if target is None:
-                    unresolved.append(f"{path}/{row['part']}")
-                elif (scene_name, target) not in moved:
-                    moved.append((scene_name, target))
+                if row.get("switch"):                # a SetActive row moves nothing and has no collider: never dropped, never unresolved
+                    continue
+                if not row["part"]:
+                    if (scene_name, key) not in moved:
+                        moved.append((scene_name, key))
+                    continue
+                parts = parts_of_row(scene, key, row)
+                if not parts:
+                    named = children_named(scene, key, row["part"])
+                    if row.get("closed_position") is not None and len(named) > 1:
+                        unresolved.append(f"{path}/{row['part']} (no child at the closed position {row['closed_position']})")
+                    else:
+                        unresolved.append(f"{path}/{row['part']}")
+                    continue
+                for part in parts:
+                    if (scene_name, part) not in moved:
+                        moved.append((scene_name, part))
+                if len(children_named(scene, key, row["part"])) > 1 and row["part"] not in ambiguous:
+                    ambiguous.append(row["part"])
             if not covered:
                 uncovered.append((path, scene_name, key))
-        unresolved += [f"{path} (row {i} matches no instance)" for i, hit in enumerate(used) if not hit]
-    return legacy, moved, unresolved, posed, uncovered
+            for name in ambiguous:
+                unclaimed += [(path, scene_name, c) for c in children_named(scene, key, name) if (scene_name, c) not in moved]
+        unresolved += [f"{path} (row {i} matches no instance)" for i, hit in enumerate(used) if not hit and not path_rows[i].get("switch")]
+    return legacy, moved, unresolved, posed, uncovered, unclaimed
 
 
 class BarrierBake:
@@ -546,7 +595,7 @@ class BarrierBake:
 
     def __init__(self, cset, paths, rows):
         self.cset = cset
-        self.legacy_paths, self.moved, self.unresolved, self.posed, self.uncovered = resolve_opened_barriers(cset.scenes, paths, rows)
+        self.legacy_paths, self.moved, self.unresolved, self.posed, self.uncovered, self.unclaimed = resolve_opened_barriers(cset.scenes, paths, rows)
         pc.mark_barriers(cset, self.legacy_paths)
         self.unresolved += list(cset.unresolved_barriers)
         names = {}
@@ -643,6 +692,12 @@ def synthetic_package(directory):
         objects += [obj(str(510 + 2 * i), name, "500", (100 + 10 * i, 0, 40), 0),
                     obj(str(511 + 2 * i), "Rollete_COLLIDER", str(510 + 2 * i), comps=box)]
     objects += [obj("600", "Legacy", layer=0), obj("601", "Leaf_COLLIDER", "600", comps=box), obj("602", "Legacy_frame_COLLIDER", "600", comps=box)]
+    # AirPit's passport control in miniature (2026-10-24): a RED lamp cover with a collider (a switch row must not drop it) and four
+    # leaves under one name, at local x 0, 1, 2 and 10
+    objects += [obj("700", "PASSPORT", layer=0), obj("701", "RED", "700", layer=0), obj("702", "RedFog", "701", layer=0),
+                obj("703", "Cover_COLLIDER", "702", comps=box)]
+    for k, x in enumerate((0.0, 1.0, 2.0, 10.0)):
+        objects += [obj(str(710 + 2 * k), "Leaf", "700", (x, -3.0, 3.0), 0), obj(str(711 + 2 * k), "Leaf_COLLIDER", str(710 + 2 * k), comps=box)]
     (directory / "scenes").mkdir(parents=True)
     (directory / "meshes").mkdir()
     (directory / "scenes" / "Test.json").write_text(json.dumps({"scene_name": "Test", "objects": objects}), encoding="utf-8")
@@ -729,6 +784,68 @@ class DoorPoseBakeModelTests(unittest.TestCase):
         self.assertEqual((b.posed, b.legacy_paths, b.moved, b.unresolved), (0, [], [], []))
         self.assertEqual(b.dropped_by_barriers(), set())
 
+    # --- 2026-10-24 (AirPit): repeated part names told apart by the closed position, and switch rows (SetActive) that drop nothing.
+    # The synthetic PASSPORT barrier has a RED lamp cover (a collider under it on purpose: a switch row must still drop nothing) and four
+    # leaves called "Leaf" at local x 0, 1, 2 and 10, each with a collider.
+    PASSPORT = "PASSPORT"
+    SWITCH_RED = {"barrier": "PASSPORT", "part": "RED", "node": "RedFog", "at": None, "closed_position": [0.0, 0.0, 0.0], "switch": True}
+
+    def leaf_row(self, x, **changes):
+        return {"barrier": self.PASSPORT, "part": "Leaf", "node": "", "at": None, "closed_position": [x, -3.0, 3.0], "switch": False, **changes}
+
+    def leaf_collider(self, b, x):
+        object_id = str(711 + 2 * (0.0, 1.0, 2.0, 10.0).index(x))
+        return next(o.index for o in b.cset.owners if o.obj_id == object_id)
+
+    def moved_x(self, b):
+        return [b.cset.scenes[s].objects[k]["local_position"][0] for s, k in b.moved]
+
+    def test_repeated_leaf_names_are_told_apart_by_the_closed_position(self):
+        rows = [self.leaf_row(0.0), self.leaf_row(1.0), self.leaf_row(2.0), self.SWITCH_RED]
+        b = self.bake([self.PASSPORT], rows)
+        self.assertEqual((b.posed, b.legacy_paths, b.unresolved, b.uncovered), (1, [], [], []))
+        self.assertEqual(b.counts(), {"door_poses:Leaf": 3})
+        self.assertEqual(self.moved_x(b), [0.0, 1.0, 2.0])                       # row order, not the scene's sibling order
+        # the fourth leaf has no row: it stays a wall and is reported; the switch row dropped nothing below RED
+        self.assertEqual([b.cset.scenes[s].objects[k]["local_position"][0] for _path, s, k in b.unclaimed], [10.0])
+        self.assertIsNone(b.reason[self.leaf_collider(b, 10.0)])
+        red = next(o.index for o in b.cset.owners if o.path == "PASSPORT/RED/RedFog/Cover_COLLIDER")
+        self.assertIsNone(b.reason[red])
+
+    def test_the_old_rule_would_have_dropped_every_leaf_and_the_lamp_cover(self):
+        b = self.bake([self.PASSPORT], [])
+        self.assertEqual(b.counts(), {"opened_barriers": 5})
+        self.assertEqual(b.unclaimed, [])
+
+    def test_a_name_that_occurs_once_is_taken_whatever_the_closed_position_says(self):
+        barrier = "WAREHOUSE_DOORS (1)/Roller (2)"
+        b = self.bake([barrier], [{"barrier": barrier, "part": "Rollete_COLLIDER", "node": "", "at": None, "closed_position": [99.0, 99.0, 99.0], "switch": False}])
+        self.assertEqual((b.unresolved, len(b.moved)), ([], 1))
+
+    def test_a_row_without_a_closed_position_takes_the_first_of_the_same_named_leaves(self):
+        b = self.bake([self.PASSPORT], [self.leaf_row(5.0, closed_position=None)])
+        self.assertEqual(self.moved_x(b), [0.0])
+        self.assertEqual(len(b.unclaimed), 3)
+
+    def test_a_closed_position_that_fits_no_leaf_is_unresolved(self):
+        b = self.bake([self.PASSPORT], [self.leaf_row(2.06)])
+        self.assertEqual(len(b.moved), 0)
+        self.assertEqual(len(b.unresolved), 1)
+        self.assertIn("PASSPORT/Leaf", b.unresolved[0])
+        self.assertIn("closed position", b.unresolved[0])
+        self.assertEqual(len(self.bake([self.PASSPORT], [self.leaf_row(2.04)]).moved), 1)                       # within 5 cm
+
+    def test_two_rows_for_one_leaf_move_it_once(self):
+        self.assertEqual(self.moved_x(self.bake([self.PASSPORT], [self.leaf_row(1.0), self.leaf_row(1.01)])), [1.0])
+
+    def test_switch_rows_alone_make_a_posed_barrier_that_drops_nothing_and_cannot_fail(self):
+        b = self.bake([self.PASSPORT], [self.SWITCH_RED, dict(self.SWITCH_RED, part="Missing", node="Nowhere"),
+                                        dict(self.SWITCH_RED, at=[1000.0, 0.0, 0.0])])
+        self.assertEqual((b.posed, b.legacy_paths, b.moved, b.unresolved, b.uncovered, b.dropped_by_barriers()), (1, [], [], [], [], set()))
+        self.assertEqual(set(b.reason.values()), {None})                         # every collider stays a source
+        # while a move row for a missing part still fails the build
+        self.assertEqual(len(self.bake([self.PASSPORT], [self.leaf_row(0.0, part="Missing")]).unresolved), 1)
+
 
 def package_cases(*packages):
     return unittest.skipUnless(pc is not None and all((p / "scenes").is_dir() for p in packages),
@@ -780,25 +897,29 @@ class DoorPoseBakePackageTests(unittest.TestCase):
     def test_bay5_opens_every_gate_and_keeps_the_depot_frame_and_posts_standing(self):
         old = BarrierBake(load_colliders(BAY5_PACKAGE), OLD_BAY5_BARRIERS, [])
         new = BarrierBake(load_colliders(BAY5_PACKAGE), BAY5_BARRIERS, door_rows("bay5"))
-        self.assertEqual((new.posed, new.legacy_paths, new.unresolved, new.uncovered), (5, [], [], []))
+        self.assertEqual((new.posed, new.legacy_paths, new.unresolved, new.uncovered), (4, [], [], []))
         self.assertEqual(sorted(new.cset.scenes[s].objects[k]["name"] for s, k in new.moved), [
-            "Bay5_Warehouse_Gate_Door_01 (2)", "Bay5_Warehouse_Gate_Door_01 (3)", "Bay5_Warehouse_Gate_Door_01 (4)", "Gates_Depot_Door_L",
+            "Bay5_Warehouse_Gate_Door_01 (2)", "Bay5_Warehouse_Gate_Door_01 (4)", "Gates_Depot_Door_L",
             "Gates_Depot_Door_L", "Gates_Depot_Door_R", "Gates_Depot_Door_R", "One_man_Door"])
         self.assertEqual(new.counts()["door_poses:Gates_Depot_Door_L"], 8)         # per gate: leaf, second panel, and their two ballistic twins
         self.assertEqual(new.counts()["door_poses:Gates_Depot_Door_R"], 4)
-        for name in ("Bay5_Warehouse_Gate_Door_01 (2)", "Bay5_Warehouse_Gate_Door_01 (3)", "Bay5_Warehouse_Gate_Door_01 (4)"):
+        for name in ("Bay5_Warehouse_Gate_Door_01 (2)", "Bay5_Warehouse_Gate_Door_01 (4)"):
             self.assertEqual(new.counts()["door_poses:" + name], 2, name)         # COLLIDER + BALLISTIC_metalthin
+        self.assertNotIn("door_poses:Bay5_Warehouse_Gate_Door_01 (3)", new.counts())      # (3) stays shut: no row, no drop
         self.assertEqual(new.counts()["door_poses:One_man_Door"], 4)              # top and bottom panel, two colliders each
         self.assertNotIn("opened_barriers", new.counts())
-        self.assertEqual(len(new.dropped_by_barriers()), 22)
+        self.assertEqual(len(new.dropped_by_barriers()), 20)
         self.assertEqual(len(old.dropped_by_barriers()), 14)
-        # newly walls: the first depot gate's two posts (a Telfer_Help_Collider on 18 and a Telfer_Help_Metal on 12 each);
-        # newly gone: the second depot gate's leaves (the old rule never found that instance), Door_01 (2) and the one-man door
+        # newly walls: the first depot gate's two posts (a Telfer_Help_Collider on 18 and a Telfer_Help_Metal on 12 each) and, since
+        # 2026-10-24, the two colliders of Door_01 (3)'s slab (COLLIDER on 18, BALLISTIC_metalthin on 12): the old configuration
+        # dropped them and the roller stays shut now; newly gone: the second depot gate's leaves (the old rule never found that
+        # instance), Door_01 (2) and the one-man door
         newly_walls = old.dropped_by_barriers() - new.dropped_by_barriers()
         newly_gone = new.dropped_by_barriers() - old.dropped_by_barriers()
-        self.assertEqual((len(newly_walls), len(newly_gone)), (4, 12))
-        self.assertTrue(all("Telfer_Help" in new.cset.owners[i].path for i in newly_walls))
-        self.assertEqual(sorted(new.cset.owners[i].layer for i in newly_walls), [12, 12, 18, 18])
+        self.assertEqual((len(newly_walls), len(newly_gone)), (6, 12))
+        self.assertEqual(len([i for i in newly_walls if "Telfer_Help" in new.cset.owners[i].path]), 4)
+        self.assertEqual(len([i for i in newly_walls if "Bay5_Warehouse_Gate_Door_01 (3)" in new.cset.owners[i].path]), 2)
+        self.assertEqual(sorted(new.cset.owners[i].layer for i in newly_walls), [12, 12, 12, 18, 18, 18])
         self.assertEqual(len([i for i in newly_gone if "Gates_Depot_Door_" in new.cset.owners[i].path]), 6)
         self.assertEqual(len([i for i in newly_gone if "Bay5_Warehouse_Gate_Door_01 (2)" in new.cset.owners[i].path]), 2)
         self.assertEqual(len([i for i in newly_gone if "One_man_Door" in new.cset.owners[i].path]), 4)
@@ -808,7 +929,7 @@ class DoorPoseBakePackageTests(unittest.TestCase):
             owners = {i for i in owners if fragment in new.cset.owners[i].path}
             self.assertEqual(len(owners), {"Telfer_Help": 8, "Gates_Depot_Frame_COLLIDER": 2, "Gates_Depot_Frame_BALLISTIC_metalthick": 2}[fragment], fragment)
             self.assertTrue(owners <= new.sources(), fragment)
-        self.assertEqual((len(old.sources()), len(new.sources())), (10367, 10359))                       # + 134 volume sources in the real log
+        self.assertEqual((len(old.sources()), len(new.sources())), (10367, 10361))                       # + 134 volume sources in the real log
 
     def test_bay5_gates_carry_no_navmesh_markup_that_the_rule_would_drop_or_keep_by_accident(self):
         new = BarrierBake(load_colliders(BAY5_PACKAGE), BAY5_BARRIERS, door_rows("bay5"))
@@ -865,6 +986,135 @@ class DoorPoseBakePackageTests(unittest.TestCase):
                                         (BOWL_PACKAGE, "bowl", sidecar("bowl.json")["opened_barriers"])):
             bake = BarrierBake(load_colliders(package), barriers, door_rows(stem))
             self.assertEqual((bake.unresolved, bake.uncovered), ([], []), stem)
+            self.assertEqual(bake.unclaimed, [], stem)                    # no repeated part name leaves a child without a row (2026-10-24: no Warning)
+
+
+# ---------------------------------------------------------------------------------------------------------------------
+# AirPit's rows (2026-10-24, tools/maps/airpit.doors.json): the passport leaves (16 leaves under six names, told apart by their closed
+# positions), the RED / GREEN lamp covers (switch rows) and the three front bus assemblies. The mirror's synthetic cases are in
+# DoorPoseBakeModelTests, the real package here.
+# ---------------------------------------------------------------------------------------------------------------------
+BACK_ROW = ["Apron_bus_MAZ_doors (3)", "Apron_bus_MAZ_doors (4)", "Apron_bus_MAZ_doors (5)"]
+FRONT_ROW = ["Apron_bus_MAZ_doors", "Apron_bus_MAZ_doors (1)", "Apron_bus_MAZ_doors (2)"]
+AGENT_RADIUS = 0.3                                                                    # BakeNavMesh.AgentRadius
+
+
+def airpit_points():
+    """Every point an AirPit spawn, exit or AI decision stands on: (label, [x, y, z])."""
+    bots, exits = sidecar("airpit.bots.json"), sidecar("airpit.exits.json")
+    ai, modes = sidecar("airpit.ai.json"), sidecar("airpit.modes.json")
+    points = [(p["id"], p["position"]) for p in bots["player_spawns"] + bots["bot_spawns"]]
+    for e in exits["exits"]:                                                          # the box centre and its four corners
+        x, y, z = e["position"]
+        sx, _sy, sz = e["box_size"]
+        points += [(f"{e['name']} {dx:+.1f},{dz:+.1f}", [x + dx * sx / 2, y, z + dz * sz / 2]) for dx, dz in ((0, 0), (-1, -1), (1, -1), (-1, 1), (1, 1))]
+    points += [(f"ai core {c['id']}", c["position"]) for c in ai["core_points"]]
+    for way in ai["patrol_ways"]:
+        for hub in way["hubs"]:
+            points.append((f"patrol hub of core {hub['core_point_id']}", hub["position"]))
+            points += [(f"patrol point of core {hub['core_point_id']}", sp) for sp in hub["sub_points"]]
+    for side in ("north", "south"):
+        points += [(f"{side} marker {m['name']}", m["position"]) for m in modes["spawn_markers"][side]]
+    return points
+
+
+@unittest.skipUnless(pc is not None and HAVE_PACKAGE, "numpy or work/extract/airpit-native-v9 not present")
+class AirPitDoorBakePackageTests(unittest.TestCase):
+    """The rows over the real v9 package: which colliders the new bake drops, which become walls, and what the new walls stand next to."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.old = BarrierBake(load_colliders(PACKAGE), BARRIERS, [])
+        cls.new = BarrierBake(load_colliders(PACKAGE), BARRIERS, door_rows("airpit"))
+
+    def test_the_rows_resolve_to_nineteen_parts_and_nothing_is_left_over(self):
+        new = self.new
+        self.assertEqual((new.posed, len(new.legacy_paths), new.unresolved, new.uncovered, new.unclaimed), (2, 10, [], [], []))
+        self.assertEqual(sorted(new.cset.scenes[s].objects[k]["name"] for s, k in new.moved),
+                         sorted(FRONT_ROW + [f"Passport_control_01_Door ({n})" for n in (1, 1, 1, 2, 2, 2, 3, 3, 3, 3, 4, 4, 4, 4, 5, 6)]))
+        # the 16 leaves are 16 different objects (one row each), the three assemblies the front row
+        self.assertEqual(len(set(new.moved)), 19)
+        self.assertEqual(sum(1 for r in door_rows("airpit") if r["switch"]), 2)
+
+    def test_the_old_rule_dropped_the_whole_barriers_and_the_rows_give_back_exactly_the_back_row(self):
+        old, new = self.old, self.new
+        self.assertEqual((len(old.dropped_by_barriers()), len(new.dropped_by_barriers())), (113, 83))
+        newly_walls = old.dropped_by_barriers() - new.dropped_by_barriers()
+        self.assertEqual(old.dropped_by_barriers() - newly_walls, new.dropped_by_barriers())           # nothing is newly dropped
+        # newly walls: every collider of the three back-row assemblies (4 movement + 6 ballistic each), nothing else
+        self.assertEqual(len(newly_walls), 30)
+        self.assertEqual({new.cset.owners[i].path.split("/")[1] for i in newly_walls}, set(BACK_ROW))
+        self.assertEqual(sorted(new.cset.owners[i].layer for i in newly_walls), [12] * 18 + [18] * 12)
+        self.assertTrue(newly_walls <= new.sources())
+        # still dropped by door poses: the front row (10 colliders each) and the leaves (a movement collider and a ballistic twin each)
+        counts = {k: v for k, v in new.counts().items() if k.startswith("door_poses:")}
+        self.assertEqual(counts, {**{f"door_poses:{n}": 10 for n in FRONT_ROW},
+                                  "door_poses:Passport_control_01_Door (1)": 6, "door_poses:Passport_control_01_Door (2)": 6,
+                                  "door_poses:Passport_control_01_Door (3)": 8, "door_poses:Passport_control_01_Door (4)": 8,
+                                  "door_poses:Passport_control_01_Door (5)": 2, "door_poses:Passport_control_01_Door (6)": 2})
+        self.assertEqual(new.counts()["opened_barriers"], 21)             # EMISSIVE (none), two portal gates (4), six shop shells (14), cover cubes (3)
+        # the lamp covers hold no collider, so the switch rows have nothing to drop either way
+        for owner in new.cset.owners:
+            self.assertNotIn("/RED/", owner.path + "/")
+            self.assertNotIn("/GREEN/", owner.path + "/")
+        self.assertEqual(new.static_twins(), [])                          # no copy of a dropped gate stands in another scene
+
+    def test_source_counts_of_the_real_bake_logs(self):
+        # The old configuration reproduces the 2026-10-17 build log (3071 collected, 3035 sources = 3023 + 12 volumes, 40 gate colliders
+        # excluded: 'opened_barriers:BUS_DOORS' 24 and 'opened_barriers:PASSPORT_CONTROL_DOORS' 16 on the Arena layer mask); the new
+        # one drops 28 of them by door poses (12 front-row bus colliders + 16 leaves) and keeps the 12 back-row movement colliders.
+        mask = pc.layers_to_mask(ARENA_LAYERS)
+
+        def on_mask(bake):
+            return {i for i in bake.sources() if (mask >> bake.cset.owners[i].layer) & 1}
+
+        self.assertEqual((len(self.old.sources()), len(on_mask(self.old))), (7747, 3023))
+        self.assertEqual((len(self.new.sources()), len(on_mask(self.new))), (7777, 3035))
+        self.assertEqual(len(on_mask(self.new)) + 12, 3047)                      # + the 12 NavMeshModifierVolume sources of the real log
+        dropped_on_mask = {k: len([i for i in self.new.dropped_by_barriers() if self.new.reason[i] == k and (mask >> self.new.cset.owners[i].layer) & 1])
+                           for k in self.new.counts() if k.startswith("door_poses:")}
+        self.assertEqual(sum(dropped_on_mask.values()), 28)
+        self.assertEqual(dropped_on_mask["door_poses:Apron_bus_MAZ_doors"], 4)
+        self.assertEqual(dropped_on_mask["door_poses:Passport_control_01_Door (3)"], 4)
+
+    def test_the_back_row_doorways_stay_wider_than_the_agent_with_room_to_spare(self):
+        # Each back-row assembly is two door leaves (hinge L_01 / L_02) standing open in a line along x at z -68.0..-68.4. The gap between
+        # the leaves' movement colliders is the doorway the bots and players walk through: 1.18 m at its narrowest (the thick end of the
+        # leaves), 1.32 m at the wall plane. The agent needs 2 x 0.3 m.
+        import numpy as np
+        new = self.new
+        for name in BACK_ROW:
+            leaves = {1: [], 2: []}
+            for o in new.cset.owners:
+                parts = o.path.split("/")
+                if parts[0] == "BUS_DOORS" and parts[1] == name and o.layer == 18:
+                    hinge = 1 if "door_L_01" in parts[2] else 2
+                    leaves[hinge].append(new.cset.tris[o.tri_start:o.tri_start + o.tri_count].reshape(-1, 3))
+            self.assertTrue(leaves[1] and leaves[2], name)
+            first, second = np.concatenate(leaves[1]), np.concatenate(leaves[2])
+            low, high = sorted(((first[:, 0].min(), first[:, 0].max()), (second[:, 0].min(), second[:, 0].max())))
+            gap = high[0] - low[1]
+            self.assertTrue(2 * AGENT_RADIUS + 0.5 <= gap <= 1.4, (name, gap))
+
+    def test_no_spawn_exit_or_ai_point_stands_in_or_beside_a_back_row_door(self):
+        # 105 points (spawns, exit boxes, AI core and patrol points, the 20 team-box markers): the nearest is the south player spawn at
+        # 3.3 m. The distance is to each collider's axis-aligned box in xz, a lower bound of the distance to its triangles.
+        new = self.new
+        boxes = []
+        for o in new.cset.owners:
+            if o.path.startswith("BUS_DOORS/") and new.reason[o.index] is None:
+                t = new.cset.tris[o.tri_start:o.tri_start + o.tri_count].reshape(-1, 3)
+                boxes.append((t.min(0), t.max(0)))
+        self.assertEqual(len(boxes), 30)
+        points = airpit_points()
+        self.assertEqual(len(points), 105)
+        nearest = []
+        for label, (x, y, z) in points:
+            squares = [max(lo[0] - x, 0.0, x - hi[0]) ** 2 + max(lo[2] - z, 0.0, z - hi[2]) ** 2
+                       for lo, hi in boxes if hi[1] >= y and lo[1] <= y + 1.7]          # a point at another height (a mezzanine) is never beside one
+            nearest.append((math.sqrt(min(squares)) if squares else math.inf, label))
+        nearest.sort()
+        self.assertGreater(nearest[0][0], 3.0, nearest[:3])
 
 
 if __name__ == "__main__":

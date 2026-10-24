@@ -40,12 +40,13 @@ class Bay5ArenaSpawnTests(unittest.TestCase):
             self.assertTrue(any(p["position"][2] > 50 for p in points), side)
 
     def test_every_gate_arena_moves_is_an_opened_barrier_with_a_pose(self):
-        # 2026-10-23 (docs/progress/equator-booth-spawns.md, user: "alle Tore aufmachen"): the four warehouse rollers and the depot
-        # frame (two instances behind one path). The pose table names exactly these barriers.
+        # 2026-10-23 (docs/progress/equator-booth-spawns.md, user: "alle Tore aufmachen"): the warehouse rollers and the depot
+        # frame (two instances behind one path). Door_01 (3) left the list on 2026-10-24 (user: Arena authors no motion and no sound
+        # for it, a tarp with a carton stack stands in its doorway; it stays shut, a baked wall again). The pose table names exactly
+        # these barriers.
         barriers = self.map["opened_barriers"]
         self.assertEqual(barriers, [
             "WAREHOUSE_DOORS (1)/Bay5_Warehouse_Gate_Door_01 (2)",
-            "WAREHOUSE_DOORS (1)/Bay5_Warehouse_Gate_Door_01 (3)",
             "WAREHOUSE_DOORS (1)/Bay5_Warehouse_Gate_Door_01 (4)",
             "WAREHOUSE_DOORS (1)/One_man_Door",
             "OLD_WAREHOUSE_DOORS/Gates_Depot_Frame",
@@ -56,14 +57,14 @@ class Bay5ArenaSpawnTests(unittest.TestCase):
 
     # World footprints (x0, x1, z0, z1) of every opened gate part at its OPEN pose, measured from the colliders of the
     # bay5-native-v5 package moved by bay5.doors.json (2026-10-23, the survey's depot numbers reproduce to 0.1 m): the depot leaves
-    # after their swing, the roller slabs after their lift (xz does not change). Derived numbers only.
+    # after their swing, the roller slabs after their lift (xz does not change). Derived numbers only. Roller (3) stays shut since
+    # 2026-10-24 and parks nowhere (its old footprint (129.3, 129.5, 41.0, 45.4) is a closed wall again).
     PARKED_FOOTPRINTS = {
         "depot 821 L leaf": (52.9, 55.3, 7.5, 8.6),
         "depot 821 R leaf": (46.2, 48.3, 7.5, 9.3),
         "depot 822 L leaf": (69.1, 70.9, -10.5, -8.6),
         "depot 822 R leaf": (69.1, 71.6, -4.1, -3.5),
         "roller (2)": (140.8, 145.2, 39.9, 40.1),
-        "roller (3)": (129.3, 129.5, 41.0, 45.4),
         "roller (4)": (129.3, 129.5, 45.9, 50.4),
         "One_man_Door": (129.3, 129.4, 68.3, 70.7),
     }

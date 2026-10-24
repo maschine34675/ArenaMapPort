@@ -187,6 +187,12 @@ namespace ArenaMapPort.Editor.NavMesh
             // the legacy rule. A path that repeats (Bay5's two depot gates) is told apart by the rows' 'at'. A row that
             // resolves to nothing fails the build like a missing path. Equator lists no barrier any more (the FCK hall
             // shutter stays shut, so its colliders are ordinary walls); its booth leaves are still dropped by name.
+            //
+            // 2026-10-24 (AirPit, docs/progress/door-poses.md "NavMesh bake 2"): BUS_DOORS and PASSPORT_CONTROL_DOORS have rows now.
+            // The three FRONT bus assemblies (the ones Arena's mode opens; the client parks them at the back row's open pose) and the
+            // 16 passport leaves (told apart by their closed positions, they reuse six names) are dropped; the three back-row
+            // assemblies, which stand open in Arena's scene and keep standing, are baked as the walls they are; the lamp covers RED
+            // and GREEN (switch rows) drop nothing. Door_01 (3) of Bay5 left its list the same day and is a wall again.
             List<string> unresolvedBarriers;
             var movedSubtrees = new List<Transform>();
             int posedBarriers;
@@ -205,6 +211,17 @@ namespace ArenaMapPort.Editor.NavMesh
                 Debug.Log("[ArenaMapPort][BakeNavMesh] opened_barriers: " + barrierPathCount + " path(s); " + posedBarriers + " with door poses (" +
                           ArenaPaths.DoorRows.Length + " row(s) loaded) drop " + movedSubtrees.Count + " moved subtree(s) [" + movedNames + "] and bake every other part as a wall; " +
                           (barrierPathCount - posedBarriers) + " without door poses drop their non-frame parts");
+                // Switch rows (SetActive, AirPit's RED / GREEN lamp covers): named once so a log check can see they were read and skipped.
+                var switchNames = new System.Text.StringBuilder();
+                int switchRows = 0;
+                foreach (ArenaDoorRow row in ArenaPaths.DoorRows)
+                    if (row != null && row.is_switch)
+                    {
+                        switchRows++;
+                        switchNames.Append(switchNames.Length == 0 ? "" : ", ").Append(row.barrier).Append('/').Append(row.part).Append('/').Append(row.node);
+                    }
+                if (switchRows > 0)
+                    Debug.Log("[ArenaMapPort][BakeNavMesh] door pose switch rows: " + switchRows + " SetActive row(s) [" + switchNames + "] move nothing and drop nothing from the bake");
             }
 
             // PLAN-AIRPIT item 8 (user decision 2026-10-11, "no mode toggler exists"): objects that STAY active at
@@ -473,6 +490,10 @@ namespace ArenaMapPort.Editor.NavMesh
         // ArenaDoorPose.AtTolerance (ArenaMapPort.Shared): a row's 'at' names the barrier root instance within this distance.
         const float DoorAtTolerance = 0.05f;
 
+        // ArenaDoorPose.ClosedPositionTolerance (ArenaMapPort.Shared): a row's closed position names one of several same-named
+        // children within this distance (Euclidean, local space).
+        const float DoorClosedPositionTolerance = 0.05f;
+
         // Does the row hold for the barrier root instance standing at `position`? ArenaDoorPose.AppliesTo: a row without
         // 'at' holds for every instance, otherwise the world distance must be within DoorAtTolerance (Euclidean).
         static bool DoorRowAppliesTo(ArenaDoorRow row, Vector3 position)
@@ -480,6 +501,51 @@ namespace ArenaMapPort.Editor.NavMesh
             if (row.at == null) return true;
             float dx = position.x - row.at[0], dy = position.y - row.at[1], dz = position.z - row.at[2];
             return dx * dx + dy * dy + dz * dz <= DoorAtTolerance * DoorAtTolerance;
+        }
+
+        // Every DIRECT child of `instance` called `part`, in sibling order. Transform.Find takes the first one only; AirPit's
+        // PASSPORT_CONTROL_DOORS has 16 leaves under six names ('Passport_control_01_Door (4)' four times).
+        static List<Transform> ChildrenNamed(Transform instance, string part)
+        {
+            var found = new List<Transform>();
+            for (int c = 0; c < instance.childCount; c++)
+            {
+                Transform child = instance.GetChild(c);
+                if (child.name == part) found.Add(child);
+            }
+            return found;
+        }
+
+        // Is the row's closed position the local position of this child (node "": the child itself) or, for a node row, of the node
+        // below it (the sidecar's closed.position belongs to the animated node; a bus door's hinge sits inside its assembly)?
+        // A child without that node cannot match. The client picks rows by the same rule (DoorPoseModel.SelectRowsForNode).
+        static bool ClosedPositionMatches(Transform child, ArenaDoorRow row)
+        {
+            Transform probe = string.IsNullOrEmpty(row.node) ? child : child.Find(row.node);
+            if (probe == null) return false;
+            float dx = probe.localPosition.x - row.closed_position[0];
+            float dy = probe.localPosition.y - row.closed_position[1];
+            float dz = probe.localPosition.z - row.closed_position[2];
+            return dx * dx + dy * dy + dz * dz <= DoorClosedPositionTolerance * DoorClosedPositionTolerance;
+        }
+
+        // The direct children of the barrier root instance that a row with a part name moves. A name that occurs once (or a row
+        // without a closed position) takes that first child, exactly as Transform.Find did, so every unique part of Equator, Bay5,
+        // Bowl and AirPit's bus assemblies is resolved as before. A name that repeats takes EVERY child whose closed local position
+        // is within 0.05 m of the row's (ClosedPositionMatches): one row per leaf, and Transform.Find would have found the first
+        // leaf of the name for all of them. Empty = the part does not exist, or no same-named child stands where the row says.
+        static List<Transform> PartsOfRow(Transform instance, ArenaDoorRow row)
+        {
+            List<Transform> named = ChildrenNamed(instance, row.part);
+            if (named.Count <= 1 || row.closed_position == null)
+            {
+                if (named.Count > 1) named.RemoveRange(1, named.Count - 1);
+                return named;
+            }
+            var matching = new List<Transform>();
+            foreach (Transform child in named)
+                if (ClosedPositionMatches(child, row)) matching.Add(child);
+            return matching;
         }
 
         // "(x, y, z)" with three decimals, culture-independent (the batch editor may run under a decimal-comma culture).
@@ -525,10 +591,17 @@ namespace ArenaMapPort.Editor.NavMesh
         //    path when any row carries 'at', otherwise the Find() instances) and per applicable row the row's part, or the
         //    instance itself for part "". Several rows on one part (a vehicle's wheels) add it once. Nothing else of the
         //    barrier is dropped, frame-named or not.
+        //    2026-10-24 (AirPit): a part NAME may repeat among the instance's direct children (the 16 passport leaves reuse six
+        //    names). Then PartsOfRow takes every same-named child whose closed local position lies within 0.05 m of the row's
+        //    closed.position (for a node row: the node's), one row per leaf; a name that occurs once is taken as before, whatever
+        //    the row's position says. A same-named child no row stands for stays a wall and gets a Warning. A SWITCH row (the
+        //    passport lamp covers RED / GREEN, SetActive) moves nothing and has no collider: it drops nothing and is never
+        //    reported as unresolved, but it still makes its barrier a posed one (the client keeps its other parts standing).
         // Everything that cannot be resolved goes to `unresolved` (a missing path, a row whose 'at' names no instance, a
-        // part that does not exist): the caller fails the build, because a row the bake skipped would leave the part baked
-        // as a wall while the client moves it away (or the opposite). An instance no row applies to (a third gate that the
-        // sidecar does not know) is left as a wall with a Warning; it is neither moved nor legacy-dropped.
+        // part that does not exist or, for a repeated name, no child standing at the row's closed position): the caller fails
+        // the build, because a row the bake skipped would leave the part baked as a wall while the client moves it away (or
+        // the opposite). An instance no row applies to (a third gate that the sidecar does not know) is left as a wall with a
+        // Warning; it is neither moved nor legacy-dropped.
         // Rows of barriers that are not listed (Equator's booth assemblies, opened by leaf name) are ignored here.
         static List<Transform> ResolveOpenedBarriers(GameObject[] geometryRoots, string[] paths, ArenaDoorRow[] rows,
                                                      List<Transform> movedSubtrees, out List<string> unresolved, out int posedBarriers)
@@ -572,27 +645,50 @@ namespace ArenaMapPort.Editor.NavMesh
                 foreach (Transform instance in instances)
                 {
                     bool covered = false;
+                    var ambiguousNames = new List<string>();
                     for (int i = 0; i < pathRows.Count; i++)
                     {
                         ArenaDoorRow row = pathRows[i];
                         if (!DoorRowAppliesTo(row, instance.position)) continue;
                         rowUsed[i] = true;
                         covered = true;
-                        Transform moved = string.IsNullOrEmpty(row.part) ? instance : instance.Find(row.part);
-                        if (moved == null)
+                        // A SetActive row (AirPit's RED / GREEN lamp covers) moves nothing and holds no collider: nothing to drop,
+                        // and nothing that could fail to resolve (the client reports a switch that does not fit its scene).
+                        if (row.is_switch) continue;
+                        if (string.IsNullOrEmpty(row.part))
                         {
-                            unresolved.Add(path + "/" + row.part + " (door pose part; barrier root at " + FormatDoorPosition(instance.position) + ")");
+                            if (!movedSubtrees.Contains(instance)) movedSubtrees.Add(instance);
                             continue;
                         }
-                        if (!movedSubtrees.Contains(moved)) movedSubtrees.Add(moved);
+                        List<Transform> parts = PartsOfRow(instance, row);
+                        if (parts.Count == 0)
+                        {
+                            bool ambiguous = row.closed_position != null && ChildrenNamed(instance, row.part).Count > 1;
+                            unresolved.Add(path + "/" + row.part + " (door pose part" +
+                                           (ambiguous ? " standing at the closed position " + FormatDoorPosition(new Vector3(row.closed_position[0], row.closed_position[1], row.closed_position[2])) : "") +
+                                           "; barrier root at " + FormatDoorPosition(instance.position) + ")");
+                            continue;
+                        }
+                        foreach (Transform part in parts)
+                            if (!movedSubtrees.Contains(part)) movedSubtrees.Add(part);
+                        if (!ambiguousNames.Contains(row.part) && ChildrenNamed(instance, row.part).Count > 1) ambiguousNames.Add(row.part);
                     }
                     if (!covered)
                         Debug.LogWarning("[ArenaMapPort][BakeNavMesh] opened_barriers path '" + path + "': the instance at " + FormatDoorPosition(instance.position) +
                                          " matches no door pose row, so it stays baked as a wall (add a row with its 'at' to tools/maps/<stem>.doors.json)");
+                    // A repeated part name (AirPit's passport leaves) may hold a child no row stands for: it stays baked as a wall, while
+                    // the client holds it closed and switches it off on the release (its 'unmatched' branch, one Warning there too). Say
+                    // so, because the rows were written for a package with fewer of them.
+                    foreach (string name in ambiguousNames)
+                        foreach (Transform child in ChildrenNamed(instance, name))
+                            if (!movedSubtrees.Contains(child))
+                                Debug.LogWarning("[ArenaMapPort][BakeNavMesh] opened_barriers path '" + path + "': the part '" + name + "' at local " +
+                                                 FormatDoorPosition(child.localPosition) + " (barrier root at " + FormatDoorPosition(instance.position) +
+                                                 ") matches no door pose row, so it stays baked as a wall (add a row with its closed position to tools/maps/<stem>.doors.json)");
                 }
                 if (instances.Count > 0)
                     for (int i = 0; i < pathRows.Count; i++)
-                        if (!rowUsed[i])
+                        if (!rowUsed[i] && !pathRows[i].is_switch)
                             unresolved.Add(path + " (door pose row for the barrier root at " +
                                            (pathRows[i].at != null ? FormatDoorPosition(new Vector3(pathRows[i].at[0], pathRows[i].at[1], pathRows[i].at[2])) : "(any)") +
                                            ", part '" + pathRows[i].part + "', matches no instance)");

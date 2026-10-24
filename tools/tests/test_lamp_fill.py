@@ -100,7 +100,7 @@ class ValidatorTests(unittest.TestCase):
         data = copy.deepcopy(sidecar("airpit.json"))
         mutate(data)
         errors: list = []
-        VD.check_map_against_registry_entry(data, entry, {"ArenaEquatorLocation": {}}, Path("airpit.json"), "AirPit", errors)
+        VD.check_map_against_registry_entry(data, entry, {"ArenaEquatorLocation": {}}, REPO / "tools" / "maps" / "airpit.json", "AirPit", errors)
         return errors
 
     def lamp_errors(self, **changes):
@@ -131,7 +131,7 @@ class ValidatorTests(unittest.TestCase):
         mutate(data["lamp_fill"])
         mutate(entry["LampFill"])
         errors: list = []
-        VD.check_map_against_registry_entry(data, entry, {"ArenaEquatorLocation": {}}, Path("airpit.json"), "AirPit", errors)
+        VD.check_map_against_registry_entry(data, entry, {"ArenaEquatorLocation": {}}, REPO / "tools" / "maps" / "airpit.json", "AirPit", errors)
         return errors
 
     def test_the_structural_checks_run_on_the_cli_path_even_when_sidecar_and_registry_agree(self):

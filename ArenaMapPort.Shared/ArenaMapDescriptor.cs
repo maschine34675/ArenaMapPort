@@ -145,6 +145,15 @@ namespace ArenaMapPort.Shared
     /// path occurs twice: Equator's two unnumbered Door_Sliding_Respawn, Bay5's two Gates_Depot_Frame); it matches an
     /// instance within <see cref="AtTolerance"/>. Mirrors the sidecar's "poses" number for number (DoorPoseSidecarTests,
     /// validate_map_descriptors.py).
+    ///
+    /// A SWITCH row (<see cref="IsSwitch"/>, AirPit's passport lamps RED / GREEN, 2026-10-24) does not move its node: it
+    /// sets the node's active state, <see cref="ClosedActive"/> while the gate is closed (the node's state in the scene) and
+    /// <see cref="OpenActive"/> once it is open. Its closed and open transforms are the node's scene transform on both
+    /// sides, <see cref="Seconds"/> is Arena's duration word (0), <see cref="Ease"/> is linear and unused. The two switch
+    /// parameters are the constructor's last optional ones (named arguments in the registry), so every transform row is
+    /// unchanged. A part NAME may repeat among one barrier's direct children (AirPit's 16 passport leaves reuse 6 names): the
+    /// lookup returns every row of the name and the client picks the rows of a node by the closed position
+    /// (DoorPoseModel.SelectRowsForNode, within <see cref="ClosedPositionTolerance"/>).
     /// </summary>
     public sealed class ArenaDoorPose
     {
@@ -158,6 +167,10 @@ namespace ArenaMapPort.Shared
 
         /// <summary>A barrier root closer than this (metres) to <see cref="At"/> is the instance the pose is for.</summary>
         public const float AtTolerance = 0.05f;
+
+        /// <summary>Rows that share a part (and node) name are told apart by the closed local position: a node whose local
+        /// position lies within this many metres of <see cref="ClosedPosition"/> takes the row (AirPit's passport leaves).</summary>
+        public const float ClosedPositionTolerance = 0.05f;
 
         public string Barrier { get; }
         public string Part { get; }
@@ -173,7 +186,15 @@ namespace ArenaMapPort.Shared
 #nullable enable
         public float[]? Curve { get; }
         public float[]? At { get; }
+
+        /// <summary>Switch rows only (null on a transform row): the node's active state while the gate is closed / once it is
+        /// open. Both are set or both are null (the validators and the sidecar tests pin that).</summary>
+        public bool? ClosedActive { get; }
+        public bool? OpenActive { get; }
 #nullable restore
+
+        /// <summary>Is this row a switch (SetActive) rather than a transform pose?</summary>
+        public bool IsSwitch => ClosedActive.HasValue;
 
         /// <summary>Number of keys of <see cref="Curve"/> (4 floats each); 0 when there is none.</summary>
         public int CurveKeyCount => Curve == null ? 0 : Curve.Length / 4;
@@ -190,7 +211,8 @@ namespace ArenaMapPort.Shared
 #nullable enable
         public ArenaDoorPose(string Barrier, string Part, string Node, string Clip, float Seconds,
             float[] ClosedPosition, float[] ClosedEuler, float[] OpenPosition, float[] OpenEuler,
-            string Source = SourceClip, string Ease = EaseSmoothstep, float[]? Curve = null, float[]? At = null)
+            string Source = SourceClip, string Ease = EaseSmoothstep, float[]? Curve = null, float[]? At = null,
+            bool? ClosedActive = null, bool? OpenActive = null)
 #nullable restore
         {
             this.Barrier = Barrier;
@@ -206,6 +228,8 @@ namespace ArenaMapPort.Shared
             this.Ease = Ease;
             this.Curve = Curve;
             this.At = At;
+            this.ClosedActive = ClosedActive;
+            this.OpenActive = OpenActive;
         }
     }
 
@@ -570,13 +594,14 @@ namespace ArenaMapPort.Shared
             },
             OpenedBarriers: new[]
             {
-                // Every gate Arena moves, plus (3) (2026-10-23, user: "alle Tore aufmachen"; docs/progress/equator-booth-spawns.md):
-                // the four warehouse rollers (Door_01 (2), (3), (4) and One_man_Door; Arena keeps (3) shut in TeamFight,
-                // it borrows (4)'s lift) and the two depot gates. The depot path exists TWICE as sibling objects (go 821
-                // at world (50.574, -3.895, 7.525) and go 822 at (69.045, -3.883, -6.317)) and is listed ONCE: the client
-                // and the bake open every instance of a path (DoorPosesOf(barrier, part, x, y, z) tells them apart by `at`).
+                // Every gate Arena moves (2026-10-23, user: "alle Tore aufmachen"; docs/progress/equator-booth-spawns.md): the
+                // three warehouse rollers (Door_01 (2), (4) and One_man_Door) and the two depot gates. Door_01 (3) is NOT here
+                // (user decision 2026-10-24): Arena authors no motion and no sound for it and a tarp with a carton stack stands in
+                // its doorway, so it stays shut like Door_01 and Door_01 (1) (a baked wall again). The depot path exists TWICE as
+                // sibling objects (go 821 at world (50.574, -3.895, 7.525) and go 822 at (69.045, -3.883, -6.317)) and is listed
+                // ONCE: the client and the bake open every instance of a path (DoorPosesOf(barrier, part, x, y, z) tells them
+                // apart by `at`).
                 "WAREHOUSE_DOORS (1)/Bay5_Warehouse_Gate_Door_01 (2)",
-                "WAREHOUSE_DOORS (1)/Bay5_Warehouse_Gate_Door_01 (3)",
                 "WAREHOUSE_DOORS (1)/Bay5_Warehouse_Gate_Door_01 (4)",
                 "WAREHOUSE_DOORS (1)/One_man_Door",
                 "OLD_WAREHOUSE_DOORS/Gates_Depot_Frame",
@@ -610,8 +635,8 @@ namespace ArenaMapPort.Shared
                 52.685890197753906f, 12.275176048278809f, 42.59858703613281f),
             UsesServerTime: true,
             // Arena's roller gates and depot gates (2026-10-23, tools/maps/bay5.doors.json): the DotAnimator end poses of the
-            // warehouse rollers (the whole root lifts, part ""), the swing of both depot gates' leaves (told apart by the
-            // world position of the Gates_Depot_Frame root) and the borrowed lift of Door_01 (3).
+            // warehouse rollers (the whole root lifts, part "") and the swing of both depot gates' leaves (told apart by the
+            // world position of the Gates_Depot_Frame root). Seven rows; Door_01 (3) has none (shut, 2026-10-24).
             DoorPoses: new[]
             {
                 new ArenaDoorPose("OLD_WAREHOUSE_DOORS/Gates_Depot_Frame", "Gates_Depot_Door_L", "Gates_Depot_Door_L_Leaf", "DotAnimator", 7.0f,
@@ -634,10 +659,6 @@ namespace ArenaMapPort.Shared
                     new[] { 9.822f, 0.13f, -27.705f }, new[] { -90.0f, -90.0f, 0.0f },
                     new[] { 9.822f, 3.222f, -27.705f }, new[] { -90.0f, -90.0f, 0.0f },
                     "dotanimator", "linear", null, null),
-                new ArenaDoorPose("WAREHOUSE_DOORS (1)/Bay5_Warehouse_Gate_Door_01 (3)", "", "", "borrowed from WAREHOUSE_DOORS (1)/Bay5_Warehouse_Gate_Door_01 (4)", 4.0f,
-                    new[] { -6.227f, 0.092f, -26.511f }, new[] { -90.0f, 0.0f, 0.0f },
-                    new[] { -6.227f, 3.181f, -26.511f }, new[] { -90.0f, 0.0f, 0.0f },
-                    "borrowed", "linear", null, null),
                 new ArenaDoorPose("WAREHOUSE_DOORS (1)/Bay5_Warehouse_Gate_Door_01 (4)", "", "", "DotAnimator", 4.0f,
                     new[] { -6.227f, 0.124f, -21.562f }, new[] { -90.0f, 0.0f, 0.0f },
                     new[] { -6.227f, 3.213f, -21.562f }, new[] { -90.0f, 0.0f, 0.0f },
@@ -823,7 +844,138 @@ namespace ArenaMapPort.Shared
             // CURR/PAST choice, an advancing sky and backend weather. No fixed hours, no sun (the map has no
             // Directional light). Night is uncertified until a host look-test (509 of 813 lights are saved off).
             // Mirrors tools/maps/airpit.json (FixedRaidTimeWeatherTests).
-            UsesServerTime: true);
+            UsesServerTime: true,
+            // Arena's own gate motions (2026-10-24, tools/maps/airpit.doors.json, docs/progress/door-poses.md "AirPit"; thirty
+            // rows, in the sidecar's order). BUS_DOORS: the three front-row bus assemblies (Arena authors no clip and no duration;
+            // its sound level 39 carries sound players for exactly these three, but no bus clip is installed) open to the pose the
+            // STATIC back row already stands in, hinge and leaf of each door, 3.0 s
+            // (the port's seconds). PASSPORT_CONTROL_DOORS: the 16 turnstile leaves turn about 90 degrees about the vertical
+            // axis in Arena's 1.7 s (InOutQuint); their names repeat (6 names for 16 leaves), so the client picks the rows of a
+            // leaf by the closed position; RED / GREEN carry the switch rows of the lamp flip (RedFog off, GreenFog on, the
+            // ClosedActive / OpenActive arguments).
+            DoorPoses: new[]
+            {
+                new ArenaDoorPose("BUS_DOORS", "Apron_bus_MAZ_doors", "Apron_bus_MAZ_door_L_01_part_01", "borrowed from the static open pose of BUS_DOORS/Apron_bus_MAZ_doors (3); seconds are the port's", 3.0f,
+                    new[] { -0.129f, 0.729f, 2.152f }, new[] { 0.0f, 0.0f, 0.0f },
+                    new[] { -0.129f, 0.729f, 2.152f }, new[] { 0.0f, 0.0f, 127.0f },
+                    "borrowed", "inOutQuint", null, null),
+                new ArenaDoorPose("BUS_DOORS", "Apron_bus_MAZ_doors", "Apron_bus_MAZ_door_L_01_part_01/Apron_bus_MAZ_door_L_01", "borrowed from the static open pose of BUS_DOORS/Apron_bus_MAZ_doors (3); seconds are the port's", 3.0f,
+                    new[] { 0.01f, -0.404f, -1.78f }, new[] { 0.0f, 0.0f, 0.0f },
+                    new[] { 0.076f, -0.328f, -1.78f }, new[] { 0.24f, -0.181f, -127.0f },
+                    "borrowed", "inOutQuint", null, null),
+                new ArenaDoorPose("BUS_DOORS", "Apron_bus_MAZ_doors", "Apron_bus_MAZ_door_L_02_part_01", "borrowed from the static open pose of BUS_DOORS/Apron_bus_MAZ_doors (3); seconds are the port's", 3.0f,
+                    new[] { -0.129f, -0.728f, 2.152f }, new[] { 0.0f, 0.0f, 0.0f },
+                    new[] { -0.129f, -0.728f, 2.152f }, new[] { 0.0f, 0.0f, -127.0f },
+                    "borrowed", "inOutQuint", null, null),
+                new ArenaDoorPose("BUS_DOORS", "Apron_bus_MAZ_doors", "Apron_bus_MAZ_door_L_02_part_01/Apron_bus_MAZ_door_L_02", "borrowed from the static open pose of BUS_DOORS/Apron_bus_MAZ_doors (3); seconds are the port's", 3.0f,
+                    new[] { 0.01f, 0.403f, -1.78f }, new[] { 0.0f, 0.0f, 0.0f },
+                    new[] { 0.076f, 0.328f, -1.78f }, new[] { 0.0f, 0.0f, 127.0f },
+                    "borrowed", "inOutQuint", null, null),
+                new ArenaDoorPose("BUS_DOORS", "Apron_bus_MAZ_doors (1)", "Apron_bus_MAZ_door_L_01_part_01", "borrowed from the static open pose of BUS_DOORS/Apron_bus_MAZ_doors (3); seconds are the port's", 3.0f,
+                    new[] { -0.129f, 0.729f, 2.152f }, new[] { 0.0f, 0.0f, 0.0f },
+                    new[] { -0.129f, 0.729f, 2.152f }, new[] { 0.0f, 0.0f, 127.0f },
+                    "borrowed", "inOutQuint", null, null),
+                new ArenaDoorPose("BUS_DOORS", "Apron_bus_MAZ_doors (1)", "Apron_bus_MAZ_door_L_01_part_01/Apron_bus_MAZ_door_L_01", "borrowed from the static open pose of BUS_DOORS/Apron_bus_MAZ_doors (3); seconds are the port's", 3.0f,
+                    new[] { 0.01f, -0.404f, -1.78f }, new[] { 0.0f, 0.0f, 0.0f },
+                    new[] { 0.076f, -0.328f, -1.78f }, new[] { 0.24f, -0.181f, -127.0f },
+                    "borrowed", "inOutQuint", null, null),
+                new ArenaDoorPose("BUS_DOORS", "Apron_bus_MAZ_doors (1)", "Apron_bus_MAZ_door_L_02_part_01", "borrowed from the static open pose of BUS_DOORS/Apron_bus_MAZ_doors (3); seconds are the port's", 3.0f,
+                    new[] { -0.129f, -0.728f, 2.152f }, new[] { 0.0f, 0.0f, 0.0f },
+                    new[] { -0.129f, -0.728f, 2.152f }, new[] { 0.0f, 0.0f, -127.0f },
+                    "borrowed", "inOutQuint", null, null),
+                new ArenaDoorPose("BUS_DOORS", "Apron_bus_MAZ_doors (1)", "Apron_bus_MAZ_door_L_02_part_01/Apron_bus_MAZ_door_L_02", "borrowed from the static open pose of BUS_DOORS/Apron_bus_MAZ_doors (3); seconds are the port's", 3.0f,
+                    new[] { 0.01f, 0.403f, -1.78f }, new[] { 0.0f, 0.0f, 0.0f },
+                    new[] { 0.076f, 0.328f, -1.78f }, new[] { 0.0f, 0.0f, 127.0f },
+                    "borrowed", "inOutQuint", null, null),
+                new ArenaDoorPose("BUS_DOORS", "Apron_bus_MAZ_doors (2)", "Apron_bus_MAZ_door_L_01_part_01", "borrowed from the static open pose of BUS_DOORS/Apron_bus_MAZ_doors (3); seconds are the port's", 3.0f,
+                    new[] { -0.129f, 0.729f, 2.152f }, new[] { 0.0f, 0.0f, 0.0f },
+                    new[] { -0.129f, 0.729f, 2.152f }, new[] { 0.0f, 0.0f, 127.0f },
+                    "borrowed", "inOutQuint", null, null),
+                new ArenaDoorPose("BUS_DOORS", "Apron_bus_MAZ_doors (2)", "Apron_bus_MAZ_door_L_01_part_01/Apron_bus_MAZ_door_L_01", "borrowed from the static open pose of BUS_DOORS/Apron_bus_MAZ_doors (3); seconds are the port's", 3.0f,
+                    new[] { 0.01f, -0.404f, -1.78f }, new[] { 0.0f, 0.0f, 0.0f },
+                    new[] { 0.076f, -0.328f, -1.78f }, new[] { 0.24f, -0.181f, -127.0f },
+                    "borrowed", "inOutQuint", null, null),
+                new ArenaDoorPose("BUS_DOORS", "Apron_bus_MAZ_doors (2)", "Apron_bus_MAZ_door_L_02_part_01", "borrowed from the static open pose of BUS_DOORS/Apron_bus_MAZ_doors (3); seconds are the port's", 3.0f,
+                    new[] { -0.129f, -0.728f, 2.152f }, new[] { 0.0f, 0.0f, 0.0f },
+                    new[] { -0.129f, -0.728f, 2.152f }, new[] { 0.0f, 0.0f, -127.0f },
+                    "borrowed", "inOutQuint", null, null),
+                new ArenaDoorPose("BUS_DOORS", "Apron_bus_MAZ_doors (2)", "Apron_bus_MAZ_door_L_02_part_01/Apron_bus_MAZ_door_L_02", "borrowed from the static open pose of BUS_DOORS/Apron_bus_MAZ_doors (3); seconds are the port's", 3.0f,
+                    new[] { 0.01f, 0.403f, -1.78f }, new[] { 0.0f, 0.0f, 0.0f },
+                    new[] { 0.076f, 0.328f, -1.78f }, new[] { 0.0f, 0.0f, 127.0f },
+                    "borrowed", "inOutQuint", null, null),
+                new ArenaDoorPose("PASSPORT_CONTROL_DOORS", "GREEN", "GreenFog", "DotAnimator", 0.0f,
+                    new[] { 0.0f, 0.0f, 0.0f }, new[] { 0.0f, 0.0f, 0.0f },
+                    new[] { 0.0f, 0.0f, 0.0f }, new[] { 0.0f, 0.0f, 0.0f },
+                    "dotanimator", "linear", null, null, ClosedActive: false, OpenActive: true),
+                new ArenaDoorPose("PASSPORT_CONTROL_DOORS", "Passport_control_01_Door (1)", "", "DotAnimator", 1.7f,
+                    new[] { -0.481f, -3.23f, 3.099f }, new[] { -90.0f, 0.0f, 0.0f },
+                    new[] { -0.481f, -3.23f, 3.099f }, new[] { -90.0f, 90.0f, 0.0f },
+                    "dotanimator", "inOutQuint", null, null),
+                new ArenaDoorPose("PASSPORT_CONTROL_DOORS", "Passport_control_01_Door (1)", "", "DotAnimator", 1.7f,
+                    new[] { 4.483f, -3.23f, 3.099f }, new[] { -90.0f, 0.0f, 0.0f },
+                    new[] { 4.483f, -3.23f, 3.099f }, new[] { -90.0f, 90.0f, 0.0f },
+                    "dotanimator", "inOutQuint", null, null),
+                new ArenaDoorPose("PASSPORT_CONTROL_DOORS", "Passport_control_01_Door (1)", "", "DotAnimator", 1.7f,
+                    new[] { 9.446f, -3.23f, 3.099f }, new[] { -90.0f, 0.0f, 0.0f },
+                    new[] { 9.446f, -3.23f, 3.099f }, new[] { -90.0f, 90.0f, 0.0f },
+                    "dotanimator", "inOutQuint", null, null),
+                new ArenaDoorPose("PASSPORT_CONTROL_DOORS", "Passport_control_01_Door (2)", "", "DotAnimator", 1.7f,
+                    new[] { -0.481f, -3.23f, 5.938f }, new[] { -90.0f, 0.0f, 0.0f },
+                    new[] { -0.481f, -3.23f, 5.938f }, new[] { -90.0f, -90.0f, 0.0f },
+                    "dotanimator", "inOutQuint", null, null),
+                new ArenaDoorPose("PASSPORT_CONTROL_DOORS", "Passport_control_01_Door (2)", "", "DotAnimator", 1.7f,
+                    new[] { 4.483f, -3.23f, 5.938f }, new[] { -90.0f, 0.0f, 0.0f },
+                    new[] { 4.483f, -3.23f, 5.938f }, new[] { -90.0f, -90.0f, 0.0f },
+                    "dotanimator", "inOutQuint", null, null),
+                new ArenaDoorPose("PASSPORT_CONTROL_DOORS", "Passport_control_01_Door (2)", "", "DotAnimator", 1.7f,
+                    new[] { 9.446f, -3.23f, 5.938f }, new[] { -90.0f, 0.0f, 0.0f },
+                    new[] { 9.446f, -3.23f, 5.938f }, new[] { -90.0f, -90.0f, 0.0f },
+                    "dotanimator", "inOutQuint", null, null),
+                new ArenaDoorPose("PASSPORT_CONTROL_DOORS", "Passport_control_01_Door (3)", "", "DotAnimator", 1.7f,
+                    new[] { -5.089f, -3.23f, 3.099f }, new[] { -90.0f, 179.0f, 0.0f },
+                    new[] { -5.089f, -3.23f, 3.099f }, new[] { -90.0f, 90.0f, 0.0f },
+                    "dotanimator", "inOutQuint", null, null),
+                new ArenaDoorPose("PASSPORT_CONTROL_DOORS", "Passport_control_01_Door (3)", "", "DotAnimator", 1.7f,
+                    new[] { -0.125f, -3.23f, 3.099f }, new[] { -90.0f, 179.0f, 0.0f },
+                    new[] { -0.125f, -3.23f, 3.099f }, new[] { -90.0f, 90.0f, 0.0f },
+                    "dotanimator", "inOutQuint", null, null),
+                new ArenaDoorPose("PASSPORT_CONTROL_DOORS", "Passport_control_01_Door (3)", "", "DotAnimator", 1.7f,
+                    new[] { 4.838f, -3.23f, 3.099f }, new[] { -90.0f, 179.0f, 0.0f },
+                    new[] { 4.838f, -3.23f, 3.099f }, new[] { -90.0f, 90.0f, 0.0f },
+                    "dotanimator", "inOutQuint", null, null),
+                new ArenaDoorPose("PASSPORT_CONTROL_DOORS", "Passport_control_01_Door (3)", "", "DotAnimator", 1.7f,
+                    new[] { 9.802f, -3.23f, 3.099f }, new[] { -90.0f, 179.0f, 0.0f },
+                    new[] { 9.802f, -3.23f, 3.099f }, new[] { -90.0f, 90.0f, 0.0f },
+                    "dotanimator", "inOutQuint", null, null),
+                new ArenaDoorPose("PASSPORT_CONTROL_DOORS", "Passport_control_01_Door (4)", "", "DotAnimator", 1.7f,
+                    new[] { -5.089f, -3.23f, 5.938f }, new[] { -90.0f, -179.0f, 0.0f },
+                    new[] { -5.089f, -3.23f, 5.938f }, new[] { -90.0f, -90.0f, 0.0f },
+                    "dotanimator", "inOutQuint", null, null),
+                new ArenaDoorPose("PASSPORT_CONTROL_DOORS", "Passport_control_01_Door (4)", "", "DotAnimator", 1.7f,
+                    new[] { -0.125f, -3.23f, 5.938f }, new[] { -90.0f, -179.0f, 0.0f },
+                    new[] { -0.125f, -3.23f, 5.938f }, new[] { -90.0f, -90.0f, 0.0f },
+                    "dotanimator", "inOutQuint", null, null),
+                new ArenaDoorPose("PASSPORT_CONTROL_DOORS", "Passport_control_01_Door (4)", "", "DotAnimator", 1.7f,
+                    new[] { 4.838f, -3.23f, 5.938f }, new[] { -90.0f, -179.0f, 0.0f },
+                    new[] { 4.838f, -3.23f, 5.938f }, new[] { -90.0f, -90.0f, 0.0f },
+                    "dotanimator", "inOutQuint", null, null),
+                new ArenaDoorPose("PASSPORT_CONTROL_DOORS", "Passport_control_01_Door (4)", "", "DotAnimator", 1.7f,
+                    new[] { 9.802f, -3.23f, 5.938f }, new[] { -90.0f, -179.0f, 0.0f },
+                    new[] { 9.802f, -3.23f, 5.938f }, new[] { -90.0f, -90.0f, 0.0f },
+                    "dotanimator", "inOutQuint", null, null),
+                new ArenaDoorPose("PASSPORT_CONTROL_DOORS", "Passport_control_01_Door (5)", "", "DotAnimator", 1.7f,
+                    new[] { 19.37f, -3.23f, 3.099f }, new[] { -90.0f, 0.0f, 0.0f },
+                    new[] { 19.37f, -3.23f, 3.099f }, new[] { -90.0f, 90.0f, 0.0f },
+                    "dotanimator", "inOutQuint", null, null),
+                new ArenaDoorPose("PASSPORT_CONTROL_DOORS", "Passport_control_01_Door (6)", "", "DotAnimator", 1.7f,
+                    new[] { 19.37f, -3.23f, 5.938f }, new[] { -90.0f, 0.0f, 0.0f },
+                    new[] { 19.37f, -3.23f, 5.938f }, new[] { -90.0f, -90.0f, 0.0f },
+                    "dotanimator", "inOutQuint", null, null),
+                new ArenaDoorPose("PASSPORT_CONTROL_DOORS", "RED", "RedFog", "DotAnimator", 0.0f,
+                    new[] { 0.0f, 0.0f, 0.0f }, new[] { 0.0f, 0.0f, 0.0f },
+                    new[] { 0.0f, 0.0f, 0.0f }, new[] { 0.0f, 0.0f, 0.0f },
+                    "dotanimator", "linear", null, null, ClosedActive: true, OpenActive: false),
+            });
 
         // Source scene selection: tools/extract/plans/airpit2.json. Identity is permanent.
         public static readonly ArenaMapDescriptor AirPit2 = new(

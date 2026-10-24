@@ -248,3 +248,39 @@ recipe and the offline carver prediction is door-poses.md "Runtime 2". The rules
 - Tests: `DoorPoseModelTests.cs` (eases, Hermite on the depot curve, scale, band, instance resolver, the real Equator / Bay5 rows through
   the lookups, wiring of `BoothDoorRepairs` / `SpawnGates` read as text), `SpawnGateModelTests.cs` (the offer count is three: leaves, barrier
   parts, barrier roots).
+
+## Follow-up 2026-10-24: AirPit's bus doors and passport control run through the pose machine
+
+User decision 2026-10-24: AirPit "the same way as Equator and Bay5" - Arena's own motions from its DotAnimator script, parked at the open
+pose, driven on a release at `Spawns/SpawnGateDriveScale`. Data: [door-poses.md](door-poses.md) ("AirPit: passport leaves, lamp switches, bus
+doors"), the client record with log lines and the host recipe: door-poses.md "Runtime 3". What this file keeps:
+
+- **The start gate (`BUS_DOORS`) is parked, not hidden.** The three front assemblies carry rows (hinges and leaves swing out, borrowed from
+  the static back row, 3.0 s = 1.5 s at the default scale): a plain raid parks them, a hold re-closes and seals them, the release drives them
+  and gives each moved collider in the walking band a park carver. The back row `(3)`, `(4)`, `(5)` has no row and stands open as Arena built
+  it (the keep-structure rule of a barrier that has rows), so it is no longer registered, no longer carved on a hold and no longer part of
+  the probe: the pocket is sealed by the three front doorways. The 2026-10-17 note that a hold keeps "three of six doorways passable behind
+  the sealed row" is history; the enclosure verdict rule itself (`EnclosureContradicts`) is unchanged.
+- **The held gate (`PASSPORT_CONTROL_DOORS`) now opens by motion.** Its 16 leaves are registered by `OfferHeld` exactly as before (closed,
+  carved from the NavMesh install on, in every mode); a Release that follows a hold (a mode plugin's `Hold`/`Release`, or the developer hold)
+  drives them 90 degrees about the vertical axis in 1.7 s x scale (0.85 s) instead of switching them off, and gives each open leaf a park
+  carver. Without a hold the gate stays shut: `release (...): nothing held; N held-gate part(s) stay closed (a held gate opens only with a
+  hold)` is unchanged. `PASSPORT_CONTROL_EMISSIVE` (no rows) still switches off in the first frame of the release.
+- **The lamps** `RED` / `GREEN` (the red X to green arrow flip of 2026-10-18) are registered parts with ONE switch row each: RedFog goes
+  from active to inactive, GreenFog the other way. A switch changes a node's active state only at the END of its part's drive; a part that has
+  only switches takes as long as the longest drive of the other parts under its barrier root, so both lamps flip in the frame the last leaf
+  stands open (0.85 s at the default scale), not in the first frame. `Park` sets the open state (a gate opened at raid start because
+  `Spawns/SpawnGates` or `SpawnGateCarve` is off shows the green arrows), `Hold` puts the closed state back, and the scene must agree with the
+  row's closed state when the part is noted or the part falls back to the switch-off with one Warning.
+- This supersedes the not-started design of 2026-10-18 above (`held_gate_indicators`, GREEN no longer a gate part, 41/35 parts): the lamps
+  are two ordinary gate parts with a switch row each, and RedFog goes off as well (Arena's script does both; the old design only switched
+  GreenFog on). `AirPitFogSheets = Hidden` still disables the fog-sheet renderers of both groups, so with it only the dark covers flip.
+- **Repeated names.** The 16 leaves share six names; the rows of a name are told apart by the closed local position (0.05 m,
+  `DoorPoseModel.SelectRowsForNode`); a leaf none of whose rows matches is one Warning and handled as a part without a pose (held closed,
+  switched off on the release), never left standing.
+- **Unchanged:** the mode contract (`Hold`, `Release`, `IsHeld`, `ClosedParts`; `ClosedParts` counts the registered parts, 39 on AirPit now: 3 bus
+  assemblies, 18 passport parts, 18 emissive sheets; it was 42 with the back row), the config keys and their defaults, the probe and the occupancy rule, the Equator / Bay5 /
+  Bowl behaviour (their rows have unique (part, node, at) keys, so the new selection is the identity there).
+- Tests: `DoorPoseModelTests.cs` (the selection helpers, the switch rules, a frame-by-frame model of the lamp flip, the real AirPit rows
+  through the lookups, two tests against the ignored extract `work/extract/airpit-native-v9` that skip without it, wiring pins for the held-gate
+  flow), `SpawnGateModelTests.cs` (the offer count stays three).

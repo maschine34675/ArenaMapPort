@@ -13,7 +13,10 @@ namespace ArenaMapPort.Client
     /// pose and the END pose of its open animation, which colliders of a parked part are the ones Arena MOVED (and so
     /// get a park carver), when a parked collider occupies the walking band at all, whether a NavMesh probe segment runs
     /// through a parked body, how long a drive takes at the player's timing scale, and how a hierarchy path resolves to
-    /// every instance that carries it.
+    /// every instance that carries it. Since 2026-10-24 (AirPit, "Runtime 3") also: which of several rows that share a part
+    /// name belong to the node at hand (<see cref="SelectRowsForNode"/>, by the closed position), the active state a switch
+    /// row sets at the start and the end of a drive (<see cref="SwitchStateAt"/>) and how long a part with only switches takes
+    /// (<see cref="SwitchPartDriveSeconds"/>).
     ///
     /// Interpolation of a Mecanim clip's node (source "clip", Bowl) is component-wise on the euler triple, as Unity
     /// animates euler clips: the BTR's wheels turn 1.5 revolutions on the way (-553 degrees), a quaternion slerp would
@@ -231,6 +234,15 @@ namespace ArenaMapPort.Client
         internal static bool OccupiesWalkingBand(float colliderMinY, float colliderMaxY, float floorY) =>
             ParkedBodyStands(colliderMaxY, floorY) && colliderMinY < floorY + WalkingBandHeight;
 
+        /// <summary>Does the navmesh probe judge a gate part? The probe that follows a hold or the NavMesh install
+        /// (<c>expectSealed</c>) asks whether a CLOSED gate seals its doorway: a part that stands at its open pose (parked, or
+        /// still driving there) is no closed gate and is not judged. AirPit parks its bus assemblies in a plain raid while the
+        /// passport leaves are held closed, so that raid runs the sealed probe with open bus doorways in the part table; counting
+        /// them gave a false "a gate is NOT sealed" Warning. The probe after a release (<c>!expectSealed</c>) judges every part
+        /// (a parked body on the segment is handled there).</summary>
+        internal static bool ProbeJudgesPart(bool expectSealed, bool parkedOrDriving) =>
+            !(expectSealed && parkedOrDriving);
+
         /// <summary>Does the horizontal probe segment (a to b, x/z) touch a park carver box (x/z extents)? Liang-Barsky
         /// clip of the segment against the rectangle; a touching edge counts. The probe after a release is not judged for
         /// a doorway whose segment runs through a parked body.</summary>
@@ -265,6 +277,97 @@ namespace ArenaMapPort.Client
         /// that is far off (another hierarchy, another build) makes the whole part fall back to the switch-off.</summary>
         internal static bool PoseMatchesScene(float positionErrorMetres, float angleErrorDegrees) =>
             positionErrorMetres <= PoseMatchPosition && angleErrorDegrees <= PoseMatchAngle;
+
+        /// <summary>Which of the rows of ONE node (the same part and the same node path) belong to the node that stands at the
+        /// local position (x, y, z)? Arena's scenes repeat names: AirPit's 16 passport leaves reuse six, so the descriptor holds
+        /// several rows for part "Passport_control_01_Door (4)" with node "" and tells them apart only by <see cref="ArenaDoorPose.ClosedPosition"/>
+        /// (docs/progress/door-poses.md, "Repeated names"). A single row is taken as it is, whatever its position (the
+        /// ordinary case on every other map; <see cref="PoseMatchesScene"/> then reports a node that stands elsewhere). With
+        /// several rows only those whose closed position lies within <see cref="ArenaDoorPose.ClosedPositionTolerance"/> of
+        /// the node's own are returned, in the given order; none of them is an empty array (the caller falls back).</summary>
+        internal static ArenaDoorPose[] SelectRowsForNode(ArenaDoorPose[] rows, float x, float y, float z)
+        {
+            if (rows == null || rows.Length == 0) return new ArenaDoorPose[0];
+            if (rows.Length == 1) return rows;
+            float tolerance2 = ArenaDoorPose.ClosedPositionTolerance * ArenaDoorPose.ClosedPositionTolerance;
+            var matching = new List<ArenaDoorPose>();
+            foreach (var row in rows)
+            {
+                var p = row.ClosedPosition;
+                if (p == null || p.Length != 3) continue;
+                float dx = p[0] - x, dy = p[1] - y, dz = p[2] - z;
+                if (dx * dx + dy * dy + dz * dz <= tolerance2) matching.Add(row);
+            }
+            return matching.ToArray();
+        }
+
+        /// <summary>The rows that belong to ONE gate part out of every row of its NAME: the rows are grouped by node path
+        /// ("" = the part itself) and <see cref="SelectRowsForNode"/> picks within every group that has several rows, with the
+        /// local position <paramref name="localPositionOfNode"/> returns for that node path (null = the node does not exist
+        /// below the part: the group is kept whole so the caller reports the missing node). The result keeps the sidecar's
+        /// order. A name that does not repeat (one row per node) comes back unchanged.</summary>
+        internal static ArenaDoorPose[] SelectRowsForPart(ArenaDoorPose[] rows, Func<string, float[]> localPositionOfNode)
+        {
+            if (rows == null || rows.Length == 0) return new ArenaDoorPose[0];
+            if (rows.Length == 1 || localPositionOfNode == null) return rows;
+            var groups = new Dictionary<string, List<ArenaDoorPose>>(StringComparer.Ordinal);
+            var order = new List<string>();
+            foreach (var row in rows)
+            {
+                string node = row.Node ?? "";
+                if (!groups.TryGetValue(node, out var group))
+                {
+                    groups[node] = group = new List<ArenaDoorPose>();
+                    order.Add(node);
+                }
+                group.Add(row);
+            }
+            var keep = new HashSet<ArenaDoorPose>();
+            foreach (var node in order)
+            {
+                var group = groups[node];
+                float[] at = group.Count > 1 ? localPositionOfNode(node) : null;
+                if (at == null || at.Length != 3)
+                {
+                    foreach (var row in group) keep.Add(row);
+                    continue;
+                }
+                foreach (var row in SelectRowsForNode(group.ToArray(), at[0], at[1], at[2])) keep.Add(row);
+            }
+            var result = new List<ArenaDoorPose>();
+            foreach (var row in rows)
+            {
+                if (keep.Contains(row)) result.Add(row);
+            }
+            return result.ToArray();
+        }
+
+        /// <summary>The active state a SWITCH row (<see cref="ArenaDoorPose.IsSwitch"/>, a SetActive node of Arena's DotAnimator:
+        /// AirPit's passport lamps) puts its node in when its part's drive is <paramref name="k"/> (0..1) of the way through:
+        /// <paramref name="closedActive"/> at the start (and for anything below 0, NaN included), <paramref name="openActive"/> at
+        /// the end (and above), and null in between, where the node keeps whatever state it has. A switch flips at the END of its
+        /// part's drive, never on a fraction of it: the lamp changes when the leaves stand open, not while they swing.</summary>
+        internal static bool? SwitchStateAt(float k, bool closedActive, bool openActive)
+        {
+            if (!(k > 0f)) return closedActive;
+            if (k >= 1f) return openActive;
+            return null;
+        }
+
+        /// <summary>How long a part that has only SWITCH rows (AirPit's RED and GREEN: no collider, no motion) takes on a
+        /// release: as long as the longest drive among the other parts of its barrier, so the lamp flips when the last leaf is
+        /// open. <paramref name="otherDriveSeconds"/> are the (already scaled) drive seconds of the parts that move; nothing
+        /// moving, or only values that are not positive numbers, gives zero (the switch flips in the first frame).</summary>
+        internal static float SwitchPartDriveSeconds(IEnumerable<float> otherDriveSeconds)
+        {
+            float longest = 0f;
+            if (otherDriveSeconds == null) return longest;
+            foreach (var seconds in otherDriveSeconds)
+            {
+                if (seconds > longest) longest = seconds;
+            }
+            return longest;
+        }
 
         /// <summary>Every node a '/'-separated hierarchy path leads to: the roots named like the first segment, then at every
         /// further segment ALL children of ALL current matches with that name, in tree order. Transform.Find returns the first

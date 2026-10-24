@@ -67,11 +67,11 @@ public class MapDescriptorConsistencyTests
         // Equator (2026-10-23, docs/progress/equator-booth-spawns.md): no opened barriers. The FCK roller shutter stays a wall
         // as in Arena (LevelBorder (83) walls it off); the booth doors are opened by the names of their leaves, not as barriers.
         Assert.Empty(ArenaMapRegistry.Equator.OpenedBarriers);
-        // Bay5 (2026-10-23): every gate Arena moves plus Door_01 (3); the depot path is one entry for two sibling instances.
+        // Bay5 (2026-10-23): every gate Arena moves; the depot path is one entry for two sibling instances. Door_01 (3) is not one
+        // (user decision 2026-10-24: Arena authors no motion and no sound for it, a tarp stands in its doorway; it stays shut).
         Assert.Equal(new[]
         {
             "WAREHOUSE_DOORS (1)/Bay5_Warehouse_Gate_Door_01 (2)",
-            "WAREHOUSE_DOORS (1)/Bay5_Warehouse_Gate_Door_01 (3)",
             "WAREHOUSE_DOORS (1)/Bay5_Warehouse_Gate_Door_01 (4)",
             "WAREHOUSE_DOORS (1)/One_man_Door",
             "OLD_WAREHOUSE_DOORS/Gates_Depot_Frame",

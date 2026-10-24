@@ -32,6 +32,16 @@ namespace ArenaMapPort.Editor.Common
         public string node;
         /// <summary>World position of the barrier root instance (tells repeated paths apart); null = every instance of the path.</summary>
         public float[] at;
+        /// <summary>
+        /// The sidecar's closed.position: the LOCAL position of the node the row animates in its closed pose (the part itself
+        /// for node ""). The bake uses it only to tell same-named direct children apart (AirPit's 16 passport leaves reuse six
+        /// names): the child (for a node row: its node) whose localPosition is within 0.05 m takes the row. Null = the sidecar
+        /// gave none; the first child of the name is taken, as before.
+        /// </summary>
+        public float[] closed_position;
+        /// <summary>True for a SetActive row (the sidecar's "switch" object: AirPit's RED / GREEN lamp covers). It moves nothing
+        /// and has no colliders, so the bake drops nothing for it and never reports it as unresolved.</summary>
+        public bool is_switch;
     }
 
     /// <summary>
@@ -192,8 +202,10 @@ namespace ArenaMapPort.Editor.Common
         /// <summary>
         /// The pose rows of this invocation's map: tools/maps/&lt;stem&gt;.doors.json next to the -mapDescriptor file
         /// (bay5.json -> bay5.doors.json), loaded once. Empty when the flag is absent (Equator's built-in default has no
-        /// barrier with poses: its booth leaves are dropped by name) or the map has no such sidecar (AirPit). Only
-        /// barrier/part/node/at are kept; the file must be schema 2 and belong to the same map key as the descriptor.
+        /// barrier with poses: its booth leaves are dropped by name) or the map has no such sidecar (none of the four released
+        /// maps since 2026-10-24; a map that lists opened barriers without one gets a Warning, see MissingDoorSidecarWarning). Only
+        /// barrier/part/node/at, the closed position and the switch flag are kept (2026-10-24: AirPit's repeated leaf names and
+        /// lamp switches); the file must be schema 2 and belong to the same map key as the descriptor.
         /// A malformed file throws: a bake that silently ignored its rows would drop a different set of colliders than
         /// the client moves.
         /// </summary>
@@ -205,6 +217,11 @@ namespace ArenaMapPort.Editor.Common
                 string path = DoorSidecarPath(GetArg("-mapDescriptor", null));
                 if (path == null || !File.Exists(path))
                 {
+                    // 2026-10-24 (review of the AirPit rows): a sidecar that is absent from the working tree (airpit.doors.json was
+                    // untracked until its commit) used to give zero rows without a word, and the bake then ran the legacy rule that
+                    // the client no longer follows. The build stays possible (a map with an unanimated barrier needs no rows), but it says so.
+                    string missing = MissingDoorSidecarWarning(path, path != null && Map.opened_barriers != null ? Map.opened_barriers.Length : 0);
+                    if (missing != null) Debug.LogWarning("[ArenaMapPort][ArenaPaths] " + missing);
                     _doorRows = new ArenaDoorRow[0];
                     return _doorRows;
                 }
@@ -227,9 +244,24 @@ namespace ArenaMapPort.Editor.Common
         }
 
         /// <summary>
-        /// Reads the rows out of a doors sidecar (schema 2: "key", "poses" with barrier, part, node and at per pose).
+        /// The Warning for a map that lists opened barriers while no doors sidecar exists at <paramref name="sidecarPath"/>; null when
+        /// there is nothing to say (no descriptor path to derive a sidecar from, no opened barrier). Only called for a sidecar that was
+        /// not found. Every registered map with opened barriers has one (airpit, bay5, bowl), so the Warning is a missing-file signal.
+        /// </summary>
+        public static string MissingDoorSidecarWarning(string sidecarPath, int openedBarrierCount)
+        {
+            if (string.IsNullOrEmpty(sidecarPath) || openedBarrierCount <= 0) return null;
+            return "no door pose sidecar at " + sidecarPath + " although the descriptor lists " + openedBarrierCount +
+                   " opened_barriers: the bake uses the LEGACY rule (every non-frame part of every opened barrier is dropped), which does not " +
+                   "match a client that follows the descriptor's door poses. Restore the file, or add an empty one if no barrier of this map is animated";
+        }
+
+        /// <summary>
+        /// Reads the rows out of a doors sidecar (schema 2: "key", "poses" with barrier, part, node, at, closed.position and
+        /// an optional switch per pose).
         /// Throws InvalidOperationException naming <paramref name="origin"/> for a wrong schema or key, a pose without a
-        /// barrier, a part or node that is not a string, or an "at" that is neither null nor three numbers.
+        /// barrier, a part or node that is not a string, an "at" that is neither null nor three numbers, a closed.position
+        /// that is present but not three numbers, or a "switch" that is neither null nor an object.
         /// </summary>
         public static ArenaDoorRow[] ParseDoorRows(string json, string origin, string expectedKey)
         {
@@ -267,7 +299,31 @@ namespace ArenaMapPort.Editor.Common
                         throw new InvalidOperationException("[ArenaMapPort][ArenaPaths] " + origin + ": poses[" + i + "].at must be null or three numbers");
                     at = new[] { (float)array[0], (float)array[1], (float)array[2] };
                 }
-                rows.Add(new ArenaDoorRow { barrier = (string)barrier, part = (string)part, node = (string)node, at = at });
+                // closed.position: absent = no discriminator (null); present it must be three numbers. A "switch" object marks a
+                // SetActive row (its contents are the client's business). Both were added for AirPit (2026-10-24).
+                float[] closedPosition = null;
+                JToken closed = pose["closed"];
+                JToken closedPositionToken = closed != null && closed.Type == JTokenType.Object ? closed["position"] : null;
+                if (closedPositionToken != null && closedPositionToken.Type != JTokenType.Null)
+                {
+                    JArray array = closedPositionToken as JArray;
+                    if (array == null || array.Count != 3 ||
+                        (array[0].Type != JTokenType.Float && array[0].Type != JTokenType.Integer) ||
+                        (array[1].Type != JTokenType.Float && array[1].Type != JTokenType.Integer) ||
+                        (array[2].Type != JTokenType.Float && array[2].Type != JTokenType.Integer))
+                        throw new InvalidOperationException("[ArenaMapPort][ArenaPaths] " + origin + ": poses[" + i + "].closed.position must be three numbers");
+                    closedPosition = new[] { (float)array[0], (float)array[1], (float)array[2] };
+                }
+                bool isSwitch = false;
+                JToken switchToken = pose["switch"];
+                if (switchToken != null && switchToken.Type != JTokenType.Null)
+                {
+                    if (switchToken.Type != JTokenType.Object)
+                        throw new InvalidOperationException("[ArenaMapPort][ArenaPaths] " + origin + ": poses[" + i + "].switch must be an object or absent");
+                    isSwitch = true;
+                }
+                rows.Add(new ArenaDoorRow { barrier = (string)barrier, part = (string)part, node = (string)node, at = at,
+                                            closed_position = closedPosition, is_switch = isSwitch });
             }
             return rows.ToArray();
         }

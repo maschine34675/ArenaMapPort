@@ -59,6 +59,14 @@ namespace ArenaMapPort.Client
     /// (a pose row with part ""), and a barrier that has any pose row keeps the parts without a pose standing (the depot gates' Telfer
     /// posts and frame meshes are structure Arena leaves in place; only a barrier without poses hides every non-frame part). A path in
     /// <c>OpenedBarriers</c> opens EVERY instance that carries it (Bay5 has two depot gates under one path).
+    ///
+    /// Since 2026-10-24 (user: AirPit "the same way as Equator and Bay5") AirPit's bus doors and passport control carry rows too
+    /// (docs/progress/door-poses.md, "Runtime 3"). BUS_DOORS: the three front assemblies are parked at the open pose (hinges and leaves
+    /// swung out, borrowed from the static back row), the three back ones have no row and stand open as Arena built them (the
+    /// keep-structure rule). PASSPORT_CONTROL_DOORS (a held gate): the 16 leaves reuse six names, so a child takes the rows of its
+    /// name narrowed by its own closed position (<see cref="SpawnGates.RowsForPart"/>); a child whose name has rows but none for its
+    /// position logs one Warning and is handled like a part without a pose (held closed, switched off on the release), never left
+    /// standing as structure. RED and GREEN carry switch rows (the lamp flip). Without a hold the held gate stays closed as before.
     /// </summary>
     internal static class BoothDoorRepairs
     {
@@ -77,10 +85,10 @@ namespace ArenaMapPort.Client
                 "them (Arena opens them per round by a script that is not ported). Takes effect on the next raid.");
             _barriers = Plugin.Instance.Settings.Bind("Spawns", "OpenSpawnBarriers", true,
                 "Open the static scene objects the map lists as spawn barriers (Arena opens them per round by a script " +
-                "that is not ported): Bowl's vehicles and gates, Bay5's warehouse roller gates and depot gates and Arena's " +
-                "animated parts in general are parked at the open pose of Arena's animation, every other non-frame part of a " +
-                "barrier without an animation is deactivated (AirPit's bus doors, portal fences and shop shells). A barrier " +
-                "Arena animates keeps its parts without an animation standing. A map's held gates (AirPit's passport control) are not " +
+                "that is not ported): Bowl's vehicles and gates, Bay5's warehouse roller gates and depot gates, AirPit's front bus doors and " +
+                "Arena's animated parts in general are parked at the open pose of Arena's animation, every other non-frame part of a " +
+                "barrier without an animation is deactivated (AirPit's portal fences and shop shells). A barrier " +
+                "Arena animates keeps its parts without an animation standing (AirPit's back bus-door row). A map's held gates (AirPit's passport control) are not " +
                 "governed by this switch: they stay closed until a mode plugin releases them, and open at raid start only " +
                 "when Spawns/SpawnGates or SpawnGateCarve is off. Takes effect on the next raid.");
         }
@@ -207,7 +215,7 @@ namespace ArenaMapPort.Client
                 }
                 foreach (var barrier in found)
                 {
-                    int opened = 0, kept = 0, standing = 0, alreadyOff = 0, held = 0, parked = 0;
+                    int opened = 0, kept = 0, standing = 0, alreadyOff = 0, held = 0, parked = 0, switches = 0;
                     var at = barrier.position;
                     // Pose rows of THIS instance (a row with an `at` belongs to the instance standing there; rows without one to every instance).
                     var rootPoses = map.DoorPosesOf(path, "", at.x, at.y, at.z);
@@ -240,18 +248,21 @@ namespace ArenaMapPort.Client
                             kept++;
                             continue;
                         }
-                        var poses = map.DoorPosesOf(path, part.name, at.x, at.y, at.z);
-                        if (poses.Length == 0 && keepStructure)
+                        var named = map.DoorPosesOf(path, part.name, at.x, at.y, at.z); // every row of this NAME (AirPit's passport leaves repeat six)
+                        var poses = SpawnGates.RowsForPart(part, named);                  // ... of THIS child: told apart by the closed position
+                        bool unmatched = named.Length > 0 && poses.Length == 0;           // rows for the name, none for this position
+                        if (poses.Length == 0 && keepStructure && !unmatched)
                         {
                             standing++;
                             continue;
                         }
                         if (part.gameObject.activeSelf)
                         {
-                            SpawnGates.NotePoses(part, poses); // Arena's end pose, resolved while the part is still closed
-                            if (role == ArenaGateRole.Held && SpawnGates.OfferHeld(part)) { held++; continue; } // closed until the mode plugin's release
-                            if (role == ArenaGateRole.Start && SpawnGates.Offer(part)) { held++; continue; } // registered either way; a hold keeps the enclosure closed for now
-                            if (SpawnGates.Park(part)) { parked++; continue; } // Arena animates it: stands at the open pose, active
+                            // a name none of whose rows is this child's goes in whole: NotePoses logs its one Warning and the part counts as pose-less
+                            SpawnGates.NotePoses(part, unmatched ? named : poses); // Arena's end pose, resolved while the part is still closed
+                            if (role == ArenaGateRole.Held && SpawnGates.OfferHeld(part)) { held++; switches += SpawnGates.SwitchCountOf(part); continue; } // closed until the mode plugin's release
+                            if (role == ArenaGateRole.Start && SpawnGates.Offer(part)) { held++; switches += SpawnGates.SwitchCountOf(part); continue; } // registered either way; a hold keeps the enclosure closed for now
+                            if (SpawnGates.Park(part)) { parked++; switches += SpawnGates.SwitchCountOf(part); continue; } // Arena animates it: stands at the open pose, active
                             part.gameObject.SetActive(false);
                             opened++;
                         }
@@ -264,7 +275,8 @@ namespace ArenaMapPort.Client
                               $"{alreadyOff} already off, kept {kept} frame part(s)" +
                               (standing > 0 ? $", {standing} part(s) without a pose left standing" : "") +
                               (parked > 0 ? $", parked {parked} part(s) at the open pose" : "") +
-                              (held > 0 ? $", {held} part(s) {(role == ArenaGateRole.Held ? SpawnGates.DescribeHeldGate() : SpawnGates.Describe())}" : ""));
+                              (held > 0 ? $", {held} part(s) {(role == ArenaGateRole.Held ? SpawnGates.DescribeHeldGate() : SpawnGates.Describe())}" : "") +
+                              (switches > 0 ? $", {switches} switch(es)" : ""));
                     if (role != ArenaGateRole.Held) openings.Add(barrier); // a held gate is BLOCKED on purpose
                 }
             }

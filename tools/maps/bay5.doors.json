@@ -277,41 +277,6 @@
       }
     },
     {
-      "barrier": "WAREHOUSE_DOORS (1)/Bay5_Warehouse_Gate_Door_01 (3)",
-      "part": "",
-      "node": "",
-      "clip": "borrowed from WAREHOUSE_DOORS (1)/Bay5_Warehouse_Gate_Door_01 (4)",
-      "source": "borrowed",
-      "seconds": 4.0,
-      "ease": "linear",
-      "curve": null,
-      "at": null,
-      "closed": {
-        "position": [
-          -6.227,
-          0.092,
-          -26.511
-        ],
-        "euler": [
-          -90.0,
-          0.0,
-          0.0
-        ]
-      },
-      "open": {
-        "position": [
-          -6.227,
-          3.181,
-          -26.511
-        ],
-        "euler": [
-          -90.0,
-          0.0,
-          0.0
-        ]
-      }
-    },
-    {
       "barrier": "WAREHOUSE_DOORS (1)/Bay5_Warehouse_Gate_Door_01 (4)",
       "part": "",
       "node": "",

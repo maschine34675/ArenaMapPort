@@ -436,7 +436,7 @@ class SidecarTests(unittest.TestCase):
         entries = VD.registry_entries(text)
         self.assertEqual(VD.door_pose_errors(self.bowl, SIDECAR, entries["Bowl"].get("DoorPoses")), [])
         for name, entry in entries.items():
-            if name not in ("Bowl", "Equator", "Bay5"):        # AirPit's doors come in a later change set
+            if name not in ("Bowl", "Equator", "Bay5", "AirPit"):     # the four released maps; the spike maps carry none
                 self.assertIsNone(entry.get("DoorPoses"), name)
 
     def test_the_registry_carries_exactly_the_generated_csharp(self):
@@ -553,9 +553,10 @@ class MirrorValidatorTests(unittest.TestCase):
 DEPOT_CURVE = [(0.0, 0.0, 2.0, 2.0), (0.4, 0.8, 0.886, 0.886), (1.0, 1.0, 0.0, 0.0)]
 
 
-def dot_element(target, kind=1, seconds=5.0, ease=16, vector=(2.0, 0.0, 0.0), keys=(), unknown=0.0, wrap=(2, 2, 4), file_id=0):
+def dot_element(target, kind=1, seconds=5.0, ease=16, vector=(2.0, 0.0, 0.0), keys=(), unknown=0.0, wrap=(2, 2, 4), file_id=0, active=0):
+    """`active` is payload word 8: the active state a kind-3 (switch) element sets (a move / rotate leaves it 0)."""
     return {"target": target, "kind": kind, "seconds": seconds, "ease": ease, "vector": vector, "keys": list(keys),
-            "unknown": unknown, "wrap": wrap, "file_id": file_id}
+            "unknown": unknown, "wrap": wrap, "file_id": file_id, "active": active}
 
 
 def dot_blob(elements, name="", game_object=100, script=(1, 4154), flag=0, header=(0, 1, 0)):
@@ -571,7 +572,8 @@ def dot_blob(elements, name="", game_object=100, script=(1, 4154), flag=0, heade
         for t, v, slope_in, slope_out in e["keys"]:
             out += struct.pack("<ffffiff", t, v, slope_in, slope_out, 0, 0.0, 0.0)
         out += struct.pack("<3i", *e["wrap"])
-        out += struct.pack("<i3f", 0, *e["vector"]) + b"\0" * (34 * 4)
+        # the 38-word payload: word 0, the target vector (words 1-3), words 4-7, the switch state (word 8), words 9-37
+        out += struct.pack("<i3f", 0, *e["vector"]) + b"\0" * (4 * 4) + struct.pack("<i", e["active"]) + b"\0" * (29 * 4)
     return out
 
 
@@ -631,6 +633,23 @@ class DotAnimatorDecoderTests(unittest.TestCase):
 
     def test_a_switch_element_may_have_no_duration(self):
         self.assertEqual(E.decode_dot_animator(dot_blob([dot_element(11, kind=3, seconds=0.0)])).elements[0].kind, 3)
+
+    def test_a_switch_reads_the_state_it_sets_from_payload_word_8(self):
+        animator = E.decode_dot_animator(dot_blob([dot_element(11, 3, 0.0, 17, (1.0, 1.0, 1.0), active=1),
+                                                   dot_element(12, 3, 0.0, 17, (1.0, 1.0, 1.0), active=0),
+                                                   dot_element(13, 1, 5.0, 16, (2.0, 0.0, 0.0), active=1)]))
+        on, off, move = animator.elements
+        self.assertEqual((on.active, off.active, move.active), (True, False, None))         # a move / rotate has no state
+        self.assertEqual((on.payload[E.DOT_SWITCH_WORD], off.payload[E.DOT_SWITCH_WORD]), (1, 0))
+        self.assertEqual(tuple(round(v, 4) for v in on.target), (1.0, 1.0, 1.0))             # words 1-3 stay the vector
+
+    def test_a_switch_with_another_state_word_or_a_negative_duration_is_refused(self):
+        for label, blob in (("state 2", dot_blob([dot_element(11, 3, 0.0, 17, active=2)])),
+                            ("state -1", dot_blob([dot_element(11, 3, 0.0, 17, active=-1)])),
+                            ("negative duration", dot_blob([dot_element(11, 3, -1.0, 17, active=1)]))):
+            with self.subTest(label), self.assertRaises(E.DoorPoseError):
+                E.decode_dot_animator(blob)
+        E.decode_dot_animator(dot_blob([dot_element(11, 1, 5.0, 16, active=7)]))             # word 8 of a move is not read
 
     def test_an_absurd_count_or_a_cut_off_element_is_refused(self):
         good = dot_blob([dot_element(11)])
@@ -729,6 +748,7 @@ class FakeScene(E.ArenaScene):
         self._paths, self._by_path, self._script_names = {}, None, {}
         self.level_name = "level0"
         self.blobs = {}
+        self.clip_counts = {}          # transform id -> the clip counts of the Animators on it (absent = no Animator)
         self._next = 1
 
     def add(self, name, parent=0, pos=(0.0, 0.0, 0.0), euler=(0.0, 0.0, 0.0), active=True):
@@ -755,6 +775,9 @@ class FakeScene(E.ArenaScene):
     def monobehaviours(self, tpid):
         return list(self.blobs.get(tpid, []))
 
+    def animator_clip_counts(self, tpid):
+        return list(self.clip_counts.get(tpid, []))
+
     def mono_class(self, obj):
         return obj.script
 
@@ -765,7 +788,7 @@ class FakeScene(E.ArenaScene):
             p, r = t["m_LocalPosition"], t["m_LocalRotation"]
             objects.append({"id": str(tp), "name": self.name(tp), "parent_id": str(t["m_Father"]["m_PathID"]) if t["m_Father"]["m_PathID"] else None,
                             "local_position": [p["x"], p["y"], p["z"]], "local_rotation": [r["x"], r["y"], r["z"], r["w"]],
-                            "local_scale": [1.0, 1.0, 1.0]})
+                            "local_scale": [1.0, 1.0, 1.0], "active": self.go[t["m_GameObject"]["m_PathID"]]["m_IsActive"]})
         (Path(directory) / "scenes").mkdir(parents=True, exist_ok=True)
         (Path(directory) / "scenes" / f"{scene_name}.json").write_text(json.dumps({"objects": objects}), encoding="utf-8")
 
@@ -1126,17 +1149,341 @@ class SchemaTwoRenderTests(unittest.TestCase):
         self.assertFalse(math.copysign(1.0, row["closed"]["position"][2]) < 0)
 
 
+# ---------------------------------------------------------------------------------------------------------------
+# AirPit (2026-10-24): switch rows (the passport lamps), repeated part names (the passport leaves), the static-pose borrow
+# (the bus doors). Synthetic hierarchies; the real data is in AirPitSidecarTests and RealArenaDotAnimatorTests.
+# ---------------------------------------------------------------------------------------------------------------
+
+PASSPORT_SCAN = {"root": "PASSPORT", "depth": 1, "at": False, "switches": True}
+
+
+def passport_scene(gap=0.0):
+    """A barrier that IS the scan root (depth 1): three leaves, two of them named alike at different closed positions, and
+    the lamp parts RED (RedFog starts active, switches off) and GREEN (GreenFog starts inactive, switches on). `gap` moves
+    the second 'Door (1)' that far from the first along x (default: 4.964 m)."""
+    sc = FakeScene()
+    root = sc.add("PASSPORT", pos=(-16.1, 3.9, 63.2))
+    x_second = -0.481 + gap if gap else 4.483
+    for name, x, z, target in (("Door (1)", -0.481, 3.099, 90.0), ("Door (1)", x_second, 3.099, 90.0), ("Door (2)", 9.446, 5.938, -90.0)):
+        leaf = sc.add(name, root, pos=(x, -3.23, z), euler=(270.0, 0.0, 0.0))
+        sc.add_dot(leaf, [dot_element(sc.go_of(leaf), 2, 1.7, 16, (-90.0, target, 0.0))])
+    red = sc.add("RED", root)
+    red_fog = sc.add("RedFog", red)
+    green = sc.add("GREEN", root)
+    green_fog = sc.add("GreenFog", green, active=False)
+    sc.add_dot(red, [dot_element(sc.go_of(red_fog), 3, 0.0, 17, (1.0, 1.0, 1.0), active=0)])
+    sc.add_dot(green, [dot_element(sc.go_of(green_fog), 3, 0.0, 17, (1.0, 1.0, 1.0), active=1)])
+    return sc
+
+
+class PassportScanTests(unittest.TestCase):
+    def test_leaves_that_share_a_name_get_one_row_each_told_apart_by_the_closed_position(self):
+        scan = E.scan_dot_animators(passport_scene(), "S", PASSPORT_SCAN)
+        self.assertEqual((scan.objects, scan.elements, len(scan.poses), scan.switches), (5, 5, 5, 2))
+        leaves = [p for p in scan.poses if p.switch is None]
+        self.assertEqual(sorted((p.part, tuple(tidy3(p.closed_position))) for p in leaves),
+                         [("Door (1)", (-0.481, -3.23, 3.099)), ("Door (1)", (4.483, -3.23, 3.099)), ("Door (2)", (9.446, -3.23, 5.938))])
+        self.assertTrue(all((p.barrier, p.node, p.at, round(p.seconds, 3), p.ease, p.source) == ("PASSPORT", "", None, 1.7, "inOutQuint", "dotanimator")
+                            for p in leaves))              # the duration word is a float32: 1.7000000476837158, rounded in the sidecar
+        by_x = {round(p.closed_position[0], 3): p for p in leaves}
+        self.assertEqual(by_x[-0.481].open_euler, [-90.0, 90.0, 0.0])
+        self.assertEqual(by_x[9.446].open_euler, [-90.0, -90.0, 0.0])
+        self.assertEqual(by_x[-0.481].open_position, by_x[-0.481].closed_position)       # a turn, not a slide
+        E.check_identities(scan.poses)                                                    # the closed positions tell the rows apart
+
+    def test_two_rows_of_one_name_closer_than_five_centimetres_cannot_be_told_apart(self):
+        near = E.scan_dot_animators(passport_scene(gap=0.03), "S", PASSPORT_SCAN).poses
+        with self.assertRaisesRegex(E.DoorPoseError, "lacks 'at'"):
+            E.check_identities(near)
+        far = E.scan_dot_animators(passport_scene(gap=0.06), "S", PASSPORT_SCAN).poses
+        E.check_identities(far)
+
+    def test_a_repeated_name_still_needs_at_when_only_one_row_has_it(self):
+        poses = E.scan_dot_animators(passport_scene(), "S", PASSPORT_SCAN).poses
+        leaves = [p for p in poses if p.switch is None and p.part == "Door (1)"]
+        leaves[0].at = [1.0, 2.0, 3.0]
+        with self.assertRaisesRegex(E.DoorPoseError, "lacks 'at'"):
+            E.check_identities(poses)
+
+    def test_lamp_switches_become_rows_with_the_scene_state_as_closed_and_the_payload_bool_as_open(self):
+        scan = E.scan_dot_animators(passport_scene(), "S", PASSPORT_SCAN)
+        switches = {(p.part, p.node): p for p in scan.poses if p.switch is not None}
+        self.assertEqual(sorted(switches), [("GREEN", "GreenFog"), ("RED", "RedFog")])
+        red, green = switches[("RED", "RedFog")], switches[("GREEN", "GreenFog")]
+        self.assertEqual((red.switch, green.switch), ((True, False), (False, True)))
+        for p in (red, green):
+            self.assertEqual((p.barrier, p.source, p.clip, p.ease, p.curve, p.at, p.seconds), ("PASSPORT", "dotanimator", "DotAnimator", "linear", None, None, 0.0))
+            self.assertEqual((p.open_position, p.open_euler), (p.closed_position, p.closed_euler))     # nothing moves
+        row = E.sidecar_pose(red)
+        self.assertEqual(row["switch"], {"closed": True, "open": False})
+        self.assertEqual(list(row)[-1], "switch")
+        self.assertEqual(row["seconds"], 0.0)
+        for p in scan.poses:                                                               # a transform row never carries the key
+            self.assertEqual("switch" in E.sidecar_pose(p), p.switch is not None)
+        self.assertEqual(tuple(E.sidecar_pose(next(p for p in scan.poses if p.switch is None))), E_KEYS)
+
+    def test_a_switch_that_does_not_flip_its_node_is_dropped_with_a_note(self):
+        sc = passport_scene()
+        fog = [tp for tp in sc.tr if sc.name(tp) == "RedFog"][0]
+        red = [tp for tp in sc.tr if sc.name(tp) == "RED"][0]
+        sc.blobs[red] = []
+        sc.add_dot(red, [dot_element(sc.go_of(fog), 3, 0.0, 17, (1.0, 1.0, 1.0), active=1)])      # RedFog starts active and "switches on"
+        scan = E.scan_dot_animators(sc, "S", PASSPORT_SCAN)
+        self.assertEqual(scan.switches, 1)                                                  # only GREEN's flip remains
+        self.assertTrue(any("no net change, stays active" in line and "RedFog" in line for line in scan.lines))
+
+    def test_without_the_switches_option_the_kind_3_elements_stay_skipped(self):
+        scan = E.scan_dot_animators(passport_scene(), "S", dict(PASSPORT_SCAN, switches=False))
+        self.assertEqual((scan.switches, scan.skipped_switch, len(scan.poses)), (0, 2, 3))
+        self.assertEqual(E.scan_dot_animators(passport_scene(), "S", {"root": "PASSPORT", "depth": 1, "at": False}).skipped_switch, 2)
+
+    def test_a_switch_on_an_inactive_object_moves_nothing_and_is_skipped(self):
+        sc = FakeScene()
+        root = sc.add("P")
+        lamp = sc.add("RED", root, active=False)
+        fog = sc.add("RedFog", lamp)
+        sc.add_dot(lamp, [dot_element(sc.go_of(fog), 3, 0.0, 17, active=0)])
+        scan = E.scan_dot_animators(sc, "S", {"root": "P", "depth": 1, "at": False, "switches": True})
+        self.assertEqual((len(scan.poses), scan.skipped_inactive), (0, 1))
+
+    def test_misused_switches_stop_the_tool(self):
+        sc = FakeScene()
+        root = sc.add("P")
+        lamp = sc.add("RED", root)
+        sc.add_dot(lamp, [dot_element(sc.go_of(root), 3, 0.0, 17, active=0)])               # the barrier root itself
+        with self.assertRaisesRegex(E.DoorPoseError, "root itself cannot be switched"):
+            E.scan_dot_animators(sc, "S", {"root": "P", "depth": 1, "at": False, "switches": True})
+        sc2 = FakeScene()
+        r2 = sc2.add("P")
+        l2 = sc2.add("RED", r2)
+        f2 = sc2.add("RedFog", l2)
+        sc2.add_dot(l2, [dot_element(sc2.go_of(f2), 3, 0.0, 17, active=0), dot_element(sc2.go_of(f2), 3, 0.0, 17, active=0)])
+        with self.assertRaisesRegex(E.DoorPoseError, "several DotAnimator switch elements"):
+            E.scan_dot_animators(sc2, "S", {"root": "P", "depth": 1, "at": False, "switches": True})
+        sc3 = FakeScene()
+        r3 = sc3.add("P")
+        l3 = sc3.add("RED", r3)
+        f3 = sc3.add("RedFog", l3)
+        sc3.add_dot(l3, [dot_element(sc3.go_of(f3), 3, 0.0, 17, active=0), dot_element(sc3.go_of(f3), 1, 2.0, 1, (0.0, 3.0, 0.0))])
+        with self.assertRaisesRegex(E.DoorPoseError, "both switched and moved"):
+            E.scan_dot_animators(sc3, "S", {"root": "P", "depth": 1, "at": False, "switches": True})
+
+    def test_a_switch_target_outside_the_scan_root_stops_the_tool(self):
+        sc = FakeScene()
+        root = sc.add("P")
+        other = sc.add("Elsewhere")
+        lamp = sc.add("RED", root)
+        sc.add_dot(lamp, [dot_element(sc.go_of(other), 3, 0.0, 17, active=1)])
+        with self.assertRaisesRegex(E.DoorPoseError, "outside the scan root"):
+            E.scan_dot_animators(sc, "S", {"root": "P", "depth": 1, "at": False, "switches": True})
+
+    def test_the_rows_of_a_matching_package_resolve_each_object_once(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            sc = passport_scene()
+            sc.export_package(tmp, "S")
+            poses = E.scan_dot_animators(sc, "S", PASSPORT_SCAN).poses
+            self.assertEqual(E.check_package(Path(tmp), "S", poses, sc), [])
+
+    def test_a_package_row_that_matches_no_leaf_or_the_same_leaf_twice_or_a_wrong_start_state_is_reported(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            sc = passport_scene()
+            sc.export_package(tmp, "S")
+            poses = E.scan_dot_animators(sc, "S", PASSPORT_SCAN).poses
+            leaves = [p for p in poses if p.switch is None and p.part == "Door (1)"]
+            stray = copy.deepcopy(leaves[0])
+            stray.closed_position = [stray.closed_position[0] + 0.5, stray.closed_position[1], stray.closed_position[2]]
+            problems = E.check_package(Path(tmp), "S", [stray], sc)
+            self.assertEqual(len(problems), 1)
+            self.assertIn("found 0 child(ren) named 'Door (1)'", problems[0])
+            twice = E.check_package(Path(tmp), "S", [leaves[0], copy.deepcopy(leaves[0])], sc)
+            self.assertTrue(any("resolve to the same object" in p for p in twice), twice)
+            red = next(p for p in poses if p.part == "RED")
+            wrong = copy.deepcopy(red)
+            wrong.switch = (False, True)
+            self.assertTrue(any("starts inactive" in p for p in E.check_package(Path(tmp), "S", [wrong], sc)))
+
+
+def bus_scene(twin_shift=0.0, extra_node=False, front_scale=1.0, front_open=False, duplicate_name=False):
+    """Three front assemblies in the closed pose and three back ones in the open pose (the first back one is the lender, the
+    other two its twins): per assembly two hinges, a leaf below each and a mesh below that, the way Arena's bus doors nest."""
+    sc = FakeScene()
+    root = sc.add("BUS")
+
+    def assembly(name, z, is_open, shift=0.0):
+        a = sc.add(name, root, pos=(0.0, 0.0, z), euler=(270.0, 180.0 if is_open else 0.0, 0.0))
+        for hinge_name, leaf_name, y, turn in (("Hinge_1", "Leaf_1", 0.729, 127.0), ("Hinge_2", "Leaf_2", -0.728, -127.0)):
+            h = sc.add(hinge_name, a, pos=(-0.129 + shift, y, 2.152), euler=(0.0, 0.0, turn if is_open else 0.0))
+            leaf_pos = (0.076, -0.328 if turn > 0 else 0.328, -1.78) if is_open else (0.01, -0.404 if turn > 0 else 0.403, -1.78)
+            leaf = sc.add(leaf_name, h, pos=leaf_pos, euler=(0.24 if turn > 0 else 0.0, -0.181 if turn > 0 else 0.0, -turn) if is_open else (0.0, 0.0, 0.0))
+            sc.add("Mesh", leaf)
+        if extra_node and not is_open:
+            sc.add("Extra", a)
+        if duplicate_name and is_open:
+            sc.add("Hinge_1", a)
+        return a
+
+    front = [assembly(n, -65.0, front_open) for n in ("Front", "Front (1)", "Front (2)")]
+    back = [assembly("Back", -68.16, True), assembly("Back (1)", -68.16, True, twin_shift), assembly("Back (2)", -68.16, True)]
+    if front_scale != 1.0:
+        sc.tr[front[0]]["m_LocalScale"]["x"] = front_scale
+        for child in sc.children(front[0]):
+            sc.tr[child]["m_LocalScale"]["x"] = front_scale
+    return sc, front, back
+
+
+BUS_SPEC = {"scene": "S", "barrier": "BUS", "parts": ["Front", "Front (1)", "Front (2)"],
+            "lender": {"barrier": "BUS", "part": "Back", "twins": ["Back (1)", "Back (2)"]},
+            "mode": "scene", "seconds": 3.0, "ease": "inOutQuint", "at": False}
+
+
+class SceneBorrowTests(unittest.TestCase):
+    def rows(self, **kwargs):
+        sc, _, _ = bus_scene(**{k: v for k, v in kwargs.items() if k in ("twin_shift", "extra_node", "front_scale", "front_open", "duplicate_name")})
+        return E.build_borrowed(sc, "S", dict(BUS_SPEC, **{k: v for k, v in kwargs.items() if k in ("parts", "lender", "seconds", "ease")}), []), sc
+
+    def test_the_open_pose_is_the_lenders_current_local_transform_of_the_same_named_node(self):
+        borrowed, _ = self.rows()
+        self.assertEqual(len(borrowed.poses), 12)                                           # 3 assemblies x (2 hinges + 2 leaves); meshes do not move
+        self.assertEqual({p.part for p in borrowed.poses}, {"Front", "Front (1)", "Front (2)"})        # the back row gets no row
+        self.assertEqual(sorted({p.node for p in borrowed.poses}), ["Hinge_1", "Hinge_1/Leaf_1", "Hinge_2", "Hinge_2/Leaf_2"])
+        for p in borrowed.poses:
+            self.assertEqual((p.barrier, p.source, p.seconds, p.ease, p.curve, p.at, p.switch), ("BUS", "borrowed", 3.0, "inOutQuint", None, None, None))
+            self.assertEqual(p.clip, "borrowed from the static open pose of BUS/Back; seconds are the port's")
+        one = next(p for p in borrowed.poses if p.part == "Front" and p.node == "Hinge_1")
+        self.assertEqual((tidy3(one.closed_position), tidy3(one.closed_euler)), ([-0.129, 0.729, 2.152], [0.0, 0.0, 0.0]))
+        self.assertEqual((tidy3(one.open_position), tidy3(one.open_euler)), ([-0.129, 0.729, 2.152], [0.0, 0.0, 127.0]))
+        leaf = next(p for p in borrowed.poses if p.part == "Front (2)" and p.node == "Hinge_1/Leaf_1")
+        self.assertEqual((tidy3(leaf.closed_position), tidy3(leaf.open_position)), ([0.01, -0.404, -1.78], [0.076, -0.328, -1.78]))
+        self.assertEqual(tidy3(leaf.open_euler), [0.24, -0.181, -127.0])
+        other = next(p for p in borrowed.poses if p.part == "Front" and p.node == "Hinge_2")
+        self.assertEqual(tidy3(other.open_euler), [0.0, 0.0, -127.0])       # centered: the lender's 233 is -127 in the sidecar
+
+    def test_the_assembly_rotation_does_not_matter_only_the_local_transforms_do(self):
+        # the lender assemblies are turned 180 degrees about y, the borrowers are not; the rows are local to each node's parent
+        sc, front, back = bus_scene()
+        self.assertNotEqual(sc.local(front[0])[1], sc.local(back[0])[1])
+        borrowed = E.build_borrowed(sc, "S", BUS_SPEC, [])
+        self.assertEqual(len(borrowed.poses), 12)
+
+    def test_the_lender_twins_are_cross_checked_and_reported(self):
+        borrowed, _ = self.rows()
+        self.assertEqual(sum(1 for line in borrowed.lines if "lender twin" in line and "same poses" in line), 2)
+        with self.assertRaisesRegex(E.DoorPoseError, "back row is not one pose"):
+            self.rows(twin_shift=0.02)
+
+    def test_the_rows_resolve_in_a_matching_package(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            borrowed, sc = self.rows()
+            sc.export_package(tmp, "S")
+            self.assertEqual(E.check_package(Path(tmp), "S", borrowed.poses, sc), [])
+
+    def test_a_borrower_that_stands_open_already_has_nothing_to_borrow(self):
+        with self.assertRaisesRegex(E.DoorPoseError, "nothing to borrow"):
+            self.rows(front_open=True)
+
+    def test_the_two_sides_must_have_the_same_nodes_and_scales(self):
+        with self.assertRaisesRegex(E.DoorPoseError, "different node paths"):
+            self.rows(extra_node=True)
+        with self.assertRaisesRegex(E.DoorPoseError, "differ in scale"):
+            self.rows(front_scale=2.0)
+        with self.assertRaisesRegex(E.DoorPoseError, "occurs twice"):
+            self.rows(duplicate_name=True)
+
+    def test_a_dotanimator_or_a_driven_pose_on_either_side_stops_the_tool(self):
+        sc, front, back = bus_scene()
+        sc.add_dot(front[1], [dot_element(sc.go_of(front[1]))])
+        with self.assertRaisesRegex(E.DoorPoseError, "DotAnimator of its own"):
+            E.build_borrowed(sc, "S", BUS_SPEC, [])
+        sc, front, back = bus_scene()
+        sc.add_dot(back[0], [dot_element(sc.go_of(back[0]))])
+        with self.assertRaisesRegex(E.DoorPoseError, "not the static one"):
+            E.build_borrowed(sc, "S", BUS_SPEC, [])
+        sc, front, back = bus_scene()
+        sc.clip_counts[back[0]] = [0]
+        with self.assertRaisesRegex(E.DoorPoseError, "carries an Animator"):
+            E.build_borrowed(sc, "S", BUS_SPEC, [])
+        sc, front, back = bus_scene()
+        sc.clip_counts[front[0]] = [0]                       # AirPit: an Animator whose controller has no clip, nothing to port
+        self.assertEqual(len(E.build_borrowed(sc, "S", BUS_SPEC, []).poses), 12)
+        sc.clip_counts[front[0]] = [2]
+        with self.assertRaisesRegex(E.DoorPoseError, "Arena animates it"):
+            E.build_borrowed(sc, "S", BUS_SPEC, [])
+
+    def test_missing_or_repeated_barriers_parts_and_lenders_stop_the_tool(self):
+        sc, _, _ = bus_scene()
+        for change, pattern in (({"barrier": "NOPE"}, "found 0 time"),
+                                ({"parts": ["Missing"]}, "found 0 time"),
+                                ({"lender": {"barrier": "NOPE", "part": "Back"}}, "found 0 time"),
+                                ({"lender": {"barrier": "BUS", "part": "Missing"}}, "found 0 time"),
+                                ({"lender": {"barrier": "BUS", "part": "Back", "twins": ["Missing"]}}, "found 0 time")):
+            with self.subTest(change), self.assertRaisesRegex(E.DoorPoseError, pattern):
+                E.build_borrowed(sc, "S", dict(BUS_SPEC, **change), [])
+
+    def test_the_other_modes_are_unchanged_by_the_dispatch(self):
+        # offset / absolute still need the decoded lender; mode "scene" never reads it
+        self.assertEqual(len(E.build_borrowed(bus_scene()[0], "S", BUS_SPEC, [object()]).poses), 12)
+        with self.assertRaisesRegex(E.DoorPoseError, "among the decoded poses"):
+            E.build_borrowed(bus_scene()[0], "S", dict(BUS_SPEC, mode="offset"), [])
+
+
+class SwitchRenderTests(unittest.TestCase):
+    SWITCH = {"barrier": "G", "part": "RED", "node": "RedFog", "clip": "DotAnimator", "source": "dotanimator", "seconds": 0.0,
+              "ease": "linear", "curve": None, "at": None,
+              "closed": {"position": [0.0, 0.0, 0.0], "euler": [0.0, 0.0, 0.0]}, "open": {"position": [0.0, 0.0, 0.0], "euler": [0.0, 0.0, 0.0]},
+              "switch": {"closed": True, "open": False}}
+
+    def test_a_switch_row_appends_the_named_arguments_to_the_fourth_line(self):
+        lines = E.render_csharp([self.SWITCH], indent="").split("\n")
+        self.assertEqual(len(lines), 4)
+        self.assertEqual(lines[3], '    "dotanimator", "linear", null, null, ClosedActive: true, OpenActive: false),')
+        flipped = dict(self.SWITCH, switch={"closed": False, "open": True})
+        self.assertTrue(E.render_csharp([flipped], indent="").endswith("ClosedActive: false, OpenActive: true),"))
+
+    def test_a_transform_row_never_prints_the_switch_arguments(self):
+        plain = {k: v for k, v in self.SWITCH.items() if k != "switch"}
+        self.assertNotIn("Active", E.render_csharp([plain]))
+        clip = dict(plain, source="clip", ease="smoothstep", clip="X")
+        self.assertEqual(len(E.render_csharp([clip]).split("\n")), 3)
+        self.assertFalse(E.has_default_extras(self.SWITCH))
+        self.assertFalse(E.has_default_extras(dict(clip, switch={"closed": True, "open": False})))
+
+    def test_the_rendered_switch_literal_parses_back_to_the_sidecar_row(self):
+        for switch in ({"closed": True, "open": False}, {"closed": False, "open": True}):
+            row = dict(self.SWITCH, switch=switch)
+            text = E.render_csharp([row], indent="").replace("\n", " ")
+            self.assertEqual(VD.parse_door_pose_literal(text.rstrip(",")), row)
+        plain = {k: v for k, v in self.SWITCH.items() if k != "switch"}
+        self.assertNotIn("switch", VD.parse_door_pose_literal(E.render_csharp([plain], indent="").replace("\n", " ").rstrip(",")))
+
+    def test_a_malformed_switch_literal_is_refused(self):
+        good = E.render_csharp([self.SWITCH], indent="").replace("\n", " ").rstrip(",")
+        for label, bad in (("positional bools", good.replace("ClosedActive: true, OpenActive: false", "true, false")),
+                           ("swapped names", good.replace("ClosedActive: true, OpenActive: false", "OpenActive: false, ClosedActive: true")),
+                           ("not a bool", good.replace("OpenActive: false", "OpenActive: 0")),
+                           ("one name only", good.replace(", OpenActive: false", ""))):
+            with self.subTest(label), contextlib.redirect_stderr(io.StringIO()), self.assertRaises(SystemExit):
+                VD.parse_door_pose_literal(bad)
+
+    def test_the_sidecar_comment_grows_only_for_the_airpit_features(self):
+        transform = {k: v for k, v in self.SWITCH.items() if k != "switch"}
+        plain = json.loads(E.render_sidecar("arena_x", {}, [transform]))["_comment"]
+        with_switch = json.loads(E.render_sidecar("arena_x", {}, [self.SWITCH]))["_comment"]
+        self.assertEqual(plain, E.SIDECAR_COMMENT)
+        self.assertEqual(with_switch, E.SIDECAR_COMMENT + E.SIDECAR_COMMENT_SWITCHES)
+        repeated = json.loads(E.render_sidecar("arena_x", {}, [transform, dict(transform, closed={"position": [9.0, 0.0, 0.0], "euler": [0.0, 0.0, 0.0]})]))["_comment"]
+        self.assertEqual(repeated, with_switch)                                             # a repeated name without `at` counts
+        two_gates = json.loads(E.render_sidecar("arena_x", {}, [dict(transform, at=[1.0, 0.0, 0.0]), dict(transform, at=[2.0, 0.0, 0.0])]))["_comment"]
+        self.assertEqual(two_gates, E.SIDECAR_COMMENT)                                      # told apart by `at`: Bay5's depot gates
+
+
 def sidecar_doc(stem):
     return json.loads((REPO / "tools" / "maps" / f"{stem}.doors.json").read_text(encoding="utf-8"))
 
 
 def final_state_map(stem):
-    """The map descriptor with the opened_barriers the map-data change set of 2026-10-23 gives it: every pose barrier of Bay5 is an
-    opened_barriers entry (Door_01 (2) and One_man_Door join today's three). Equator's booth roots are not barriers at all."""
-    map_json = json.loads((REPO / "tools" / "maps" / f"{stem}.json").read_text(encoding="utf-8"))
-    if stem == "bay5":
-        map_json["opened_barriers"] = list(dict.fromkeys(list(map_json["opened_barriers"]) + [p["barrier"] for p in sidecar_doc(stem)["poses"]]))
-    return map_json
+    """The map descriptor as it ships. Every pose barrier of Bay5 and AirPit is an opened_barriers entry (Bay5's seven rows name
+    exactly its opened barriers since Door_01 (3) went shut on 2026-10-24); Equator's booth roots are not barriers at all."""
+    return json.loads((REPO / "tools" / "maps" / f"{stem}.json").read_text(encoding="utf-8"))
 
 
 class DotSidecarTests(unittest.TestCase):
@@ -1197,12 +1544,13 @@ class DotSidecarTests(unittest.TestCase):
 
     def test_bay5s_rollers_and_depot_gates(self):
         poses = self.bay5["poses"]
-        self.assertEqual(len(poses), 8)
+        self.assertEqual(len(poses), 7)                                               # Door_01 (3) has no row since 2026-10-24
         rollers = {p["barrier"].split("/")[-1]: p for p in poses if p["part"] == ""}
-        self.assertEqual(sorted(rollers), ["Bay5_Warehouse_Gate_Door_01 (2)", "Bay5_Warehouse_Gate_Door_01 (3)",
-                                           "Bay5_Warehouse_Gate_Door_01 (4)", "One_man_Door"])
+        self.assertEqual(sorted(rollers), ["Bay5_Warehouse_Gate_Door_01 (2)", "Bay5_Warehouse_Gate_Door_01 (4)", "One_man_Door"])
+        self.assertFalse([p for p in poses if "Door_01 (3)" in p["barrier"]])
+        self.assertEqual({p["source"] for p in poses}, {"dotanimator"})                # nothing is borrowed on Bay5 any more
         for name, (closed_y, open_y) in {"Bay5_Warehouse_Gate_Door_01 (2)": (0.13, 3.222), "Bay5_Warehouse_Gate_Door_01 (4)": (0.124, 3.213),
-                                         "One_man_Door": (0.15, 3.323), "Bay5_Warehouse_Gate_Door_01 (3)": (0.092, 3.181)}.items():
+                                         "One_man_Door": (0.15, 3.323)}.items():
             with self.subTest(name):
                 p = rollers[name]
                 self.assertEqual((p["seconds"], p["ease"], p["curve"], p["at"], p["node"]), (4.0, "linear", None, None, ""))
@@ -1210,11 +1558,7 @@ class DotSidecarTests(unittest.TestCase):
                 self.assertEqual(p["open"]["position"][0::2], p["closed"]["position"][0::2])         # only y changes
                 self.assertEqual(p["open"]["euler"], p["closed"]["euler"])
         self.assertEqual({n: p["source"] for n, p in rollers.items()}, {
-            "Bay5_Warehouse_Gate_Door_01 (2)": "dotanimator", "Bay5_Warehouse_Gate_Door_01 (3)": "borrowed",
-            "Bay5_Warehouse_Gate_Door_01 (4)": "dotanimator", "One_man_Door": "dotanimator"})
-        lift = lambda p: p["open"]["position"][1] - p["closed"]["position"][1]
-        self.assertAlmostEqual(lift(rollers["Bay5_Warehouse_Gate_Door_01 (3)"]), lift(rollers["Bay5_Warehouse_Gate_Door_01 (4)"]), delta=0.002)
-        self.assertEqual(rollers["Bay5_Warehouse_Gate_Door_01 (3)"]["clip"], "borrowed from WAREHOUSE_DOORS (1)/Bay5_Warehouse_Gate_Door_01 (4)")
+            "Bay5_Warehouse_Gate_Door_01 (2)": "dotanimator", "Bay5_Warehouse_Gate_Door_01 (4)": "dotanimator", "One_man_Door": "dotanimator"})
         depot = [p for p in poses if p["barrier"] == "OLD_WAREHOUSE_DOORS/Gates_Depot_Frame"]
         self.assertEqual(len(depot), 4)
         table = {(tuple(p["at"]), p["part"]): (p["closed"]["euler"][2], p["open"]["euler"][2]) for p in depot}
@@ -1275,12 +1619,13 @@ class DoorValidatorRuleTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / f"{stem}.doors.json"
             path.write_text(json.dumps(doc), encoding="utf-8")
-            reg = self.entries[{"equator": "Equator", "bay5": "Bay5"}[stem]].get("DoorPoses") if registry is None else registry
+            reg = self.entries[{"equator": "Equator", "bay5": "Bay5", "airpit": "AirPit"}[stem]].get("DoorPoses") if registry is None else registry
             return VD.door_pose_errors(final_state_map(stem), path, reg)
 
     def test_clean(self):
         self.assertEqual(self.run_case("equator", lambda d: None), [])
         self.assertEqual(self.run_case("bay5", lambda d: None), [])
+        self.assertEqual(self.run_case("airpit", lambda d: None), [])
 
     def test_source_ease_and_curve_rules(self):
         def poses(doc, **kw):
@@ -1297,7 +1642,7 @@ class DoorValidatorRuleTests(unittest.TestCase):
         self.assertTrue(self.run_case("bay5", lambda d: d["poses"][0].update(curve=[[0.0, 0.0, 1.0, 1.0], [1.0, 0.5, 1.0, 1.0]])))   # ends at v 0.5
         self.assertTrue(self.run_case("bay5", lambda d: d["poses"][0].update(curve=[[0.0, 0.0, 1.0, 1.0], [0.0, 1.0, 1.0, 1.0]])))   # times do not increase
         self.assertTrue(self.run_case("equator", lambda d: d["poses"][0].update(clip="Something")))   # dotanimator / borrowed clip names
-        self.assertTrue(self.run_case("bay5", lambda d: [p.update(clip="mine") for p in d["poses"] if p["source"] == "borrowed"]))
+        self.assertTrue(self.run_case("equator", lambda d: [p.update(clip="mine") for p in d["poses"] if p["source"] == "borrowed"]))
 
     def test_at_rules(self):
         self.assertTrue(self.run_case("equator", lambda d: d["poses"][0].update(at=[1.0, 2.0])))
@@ -1339,6 +1684,322 @@ class DoorValidatorRuleTests(unittest.TestCase):
         errors = self.run_case("bay5", lambda d: d["poses"][0]["open"]["euler"].__setitem__(2, 1.0))
         self.assertTrue(any("open" in e for e in errors), errors)
         self.assertTrue(self.run_case("equator", lambda d: None, registry=self.entries["Equator"]["DoorPoses"][:-1]))
+
+
+class AirPitSidecarTests(unittest.TestCase):
+    """tools/maps/airpit.doors.json (30 rows: 12 bus-door, 16 passport-leaf, 2 lamp-switch) and the registry's copy."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.doc = sidecar_doc("airpit")
+        cls.poses = cls.doc["poses"]
+        cls.map = json.loads((REPO / "tools" / "maps" / "airpit.json").read_text(encoding="utf-8"))
+        text = (REPO / "ArenaMapPort.Shared" / "ArenaMapDescriptor.cs").read_text(encoding="utf-8")
+        cls.cs_text = text
+        cls.entry = VD.registry_entries(text)["AirPit"]
+        cls.bus = [p for p in cls.poses if p["barrier"] == "BUS_DOORS"]
+        cls.leaves = [p for p in cls.poses if p["barrier"] == "PASSPORT_CONTROL_DOORS" and "switch" not in p]
+        cls.lamps = [p for p in cls.poses if "switch" in p]
+
+    def test_header(self):
+        self.assertEqual((self.doc["schema_version"], self.doc["key"]), (2, "arena_airpit"))
+        self.assertEqual((self.doc["source"]["scene"], self.doc["source"]["level"], self.doc["source"]["assets"]),
+                         ("Arena_Airpit_TeamFight_DesignStuff", 28, "sharedassets28.assets"))
+        self.assertNotIn("extra_scenes", self.doc["source"])
+        self.assertIn(self.doc["source"]["scene"], self.map["all_scene_names"])
+        self.assertTrue(self.doc["_comment"].startswith("Generated by tools/extract/extract_door_poses.py"))
+        self.assertTrue(self.doc["_comment"].endswith(E.SIDECAR_COMMENT_SWITCHES))
+        self.assertEqual(len(self.poses), 30)
+        self.assertEqual((len(self.bus), len(self.leaves), len(self.lamps)), (12, 16, 2))
+
+    def test_row_keys_switch_only_on_the_two_lamps(self):
+        for p in self.poses:
+            self.assertEqual(tuple(p), E_KEYS + (("switch",) if "switch" in p else ()))
+        self.assertEqual(sorted((p["part"], p["node"]) for p in self.lamps), [("GREEN", "GreenFog"), ("RED", "RedFog")])
+
+    def test_the_barriers_are_the_released_gate_groups_and_the_roles_stay(self):
+        self.assertEqual({p["barrier"] for p in self.poses}, {"BUS_DOORS", "PASSPORT_CONTROL_DOORS"})
+        for barrier in {p["barrier"] for p in self.poses}:
+            self.assertIn(barrier, self.map["opened_barriers"])
+        self.assertEqual(self.map["start_gates"], ["BUS_DOORS"])                             # the roles are not changed by the rows
+        self.assertEqual(self.map["held_gates"], ["PASSPORT_CONTROL_DOORS", "PASSPORT_CONTROL_EMISSIVE"])
+        self.assertNotIn("PASSPORT_CONTROL_EMISSIVE", {p["barrier"] for p in self.poses})     # the 18 red sheets keep the legacy rule
+
+    def test_the_sixteen_passport_leaves_turn_about_ninety_degrees_about_the_vertical_axis(self):
+        for p in self.leaves:
+            with self.subTest(part=p["part"], x=p["closed"]["position"][0]):
+                self.assertEqual((p["node"], p["source"], p["clip"], p["seconds"], p["ease"], p["curve"], p["at"]),
+                                 ("", "dotanimator", "DotAnimator", 1.7, "inOutQuint", None, None))
+                self.assertRegex(p["part"], r"^Passport_control_01_Door \(\d\)$")
+                self.assertEqual(p["open"]["position"], p["closed"]["position"])               # a turn in place
+                self.assertEqual(p["closed"]["euler"][0], -90.0)
+                self.assertEqual(p["open"]["euler"][0::2], [-90.0, 0.0])
+                turn = E.quat_angle(E.euler_to_quat(p["closed"]["euler"]), E.euler_to_quat(p["open"]["euler"]))
+                self.assertAlmostEqual(turn, 90.0, delta=1.5)                                  # 89 to 91 degrees (the scene's own heading)
+                # the turn is about the parent's vertical axis: the rotation open * closed^-1 has no x or z component
+                cx, cy, cz, cw = E.euler_to_quat(p["closed"]["euler"])
+                turn_q = E.quat_mul(E.euler_to_quat(p["open"]["euler"]), (-cx, -cy, -cz, cw))
+                self.assertLess(max(abs(turn_q[0]), abs(turn_q[2])), 1e-3)
+                self.assertGreater(abs(turn_q[1]), 0.65)                                         # sin(45 degrees) = 0.707
+
+    def test_the_two_lanes_open_toward_each_other(self):
+        # local z 3.099 (world z 66.284) opens to +90 degrees, local z 5.938 (world z 69.123) to -90: the leaves lie along z
+        # between the two rows (survey F5: row 1 z 66.34..67.43, row 2 z 67.98..69.07), tips 0.55 m apart
+        near = [p for p in self.leaves if abs(p["closed"]["position"][2] - 3.099) < 0.01]
+        far = [p for p in self.leaves if abs(p["closed"]["position"][2] - 5.938) < 0.01]
+        self.assertEqual((len(near), len(far)), (8, 8))
+        self.assertTrue(all(p["open"]["euler"][1] == 90.0 for p in near))
+        self.assertTrue(all(p["open"]["euler"][1] == -90.0 for p in far))
+        self.assertEqual(sorted(round(p["closed"]["position"][0], 3) for p in near), sorted(round(p["closed"]["position"][0], 3) for p in far))
+
+    def test_six_names_cover_sixteen_leaves_and_the_closed_position_tells_them_apart(self):
+        names = {}
+        for p in self.leaves:
+            names.setdefault(p["part"], []).append(p["closed"]["position"])
+        self.assertEqual(sorted((n, len(v)) for n, v in names.items()), [(f"Passport_control_01_Door ({i})", c) for i, c in ((1, 3), (2, 3), (3, 4), (4, 4), (5, 1), (6, 1))])
+        positions = [p["closed"]["position"] for p in self.leaves]
+        distances = [math.dist(a, b) for i, a in enumerate(positions) for b in positions[i + 1:]]
+        self.assertGreater(min(distances), 0.3)                                                # far above the client's 0.05 m match
+        for rows in names.values():
+            self.assertGreater(min((math.dist(a, b) for i, a in enumerate(rows) for b in rows[i + 1:]), default=1.0), 0.3)
+        self.assertEqual(sorted({round(v[0], 3) for v in positions}),
+                         [-5.089, -0.481, -0.125, 4.483, 4.838, 9.446, 9.802, 19.37])        # eight x origins, both lanes
+
+    def test_the_lamp_switches_flip_red_off_and_green_on(self):
+        red = next(p for p in self.lamps if p["part"] == "RED")
+        green = next(p for p in self.lamps if p["part"] == "GREEN")
+        self.assertEqual((red["node"], red["switch"]), ("RedFog", {"closed": True, "open": False}))
+        self.assertEqual((green["node"], green["switch"]), ("GreenFog", {"closed": False, "open": True}))
+        for p in self.lamps:
+            self.assertEqual((p["barrier"], p["source"], p["clip"], p["ease"], p["curve"], p["at"], p["seconds"]),
+                             ("PASSPORT_CONTROL_DOORS", "dotanimator", "DotAnimator", "linear", None, None, 0.0))
+            self.assertEqual(p["open"], p["closed"])
+            self.assertEqual(p["closed"], {"position": [0.0, 0.0, 0.0], "euler": [0.0, 0.0, 0.0]})
+
+    def test_twelve_bus_door_rows_open_the_front_row_to_the_back_rows_pose(self):
+        self.assertEqual({p["part"] for p in self.bus}, {"Apron_bus_MAZ_doors", "Apron_bus_MAZ_doors (1)", "Apron_bus_MAZ_doors (2)"})
+        self.assertEqual(sorted({p["node"] for p in self.bus}), [
+            "Apron_bus_MAZ_door_L_01_part_01", "Apron_bus_MAZ_door_L_01_part_01/Apron_bus_MAZ_door_L_01",
+            "Apron_bus_MAZ_door_L_02_part_01", "Apron_bus_MAZ_door_L_02_part_01/Apron_bus_MAZ_door_L_02"])
+        for p in self.bus:
+            self.assertEqual((p["source"], p["seconds"], p["ease"], p["curve"], p["at"], p["clip"]), (
+                "borrowed", 3.0, "inOutQuint", None, None,
+                "borrowed from the static open pose of BUS_DOORS/Apron_bus_MAZ_doors (3); seconds are the port's"))
+        for part in ("Apron_bus_MAZ_doors", "Apron_bus_MAZ_doors (1)", "Apron_bus_MAZ_doors (2)"):
+            rows = {p["node"].rsplit("/", 1)[-1]: p for p in self.bus if p["part"] == part}
+            self.assertEqual(len(rows), 4, part)
+            hinge1, hinge2 = rows["Apron_bus_MAZ_door_L_01_part_01"], rows["Apron_bus_MAZ_door_L_02_part_01"]
+            leaf1, leaf2 = rows["Apron_bus_MAZ_door_L_01"], rows["Apron_bus_MAZ_door_L_02"]
+            self.assertEqual((hinge1["closed"]["euler"], hinge1["open"]["euler"]), ([0.0, 0.0, 0.0], [0.0, 0.0, 127.0]))
+            self.assertEqual((hinge2["closed"]["euler"], hinge2["open"]["euler"]), ([0.0, 0.0, 0.0], [0.0, 0.0, -127.0]))
+            self.assertEqual(hinge1["open"]["position"], hinge1["closed"]["position"])          # the hinges turn in place
+            self.assertEqual(hinge2["open"]["position"], hinge2["closed"]["position"])
+            self.assertEqual((leaf1["closed"]["position"], leaf1["open"]["position"]), ([0.01, -0.404, -1.78], [0.076, -0.328, -1.78]))
+            self.assertEqual((leaf2["closed"]["position"], leaf2["open"]["position"]), ([0.01, 0.403, -1.78], [0.076, 0.328, -1.78]))
+            self.assertEqual(leaf1["open"]["euler"], [0.24, -0.181, -127.0])
+            self.assertEqual(leaf2["open"]["euler"], [0.0, 0.0, 127.0])
+            self.assertEqual((leaf1["closed"]["euler"], leaf2["closed"]["euler"]), ([0.0, 0.0, 0.0], [0.0, 0.0, 0.0]))
+
+    def test_the_door_swing_moves_each_leaf_065_m_apart_and_02_m_toward_the_field(self):
+        # survey F5: "each leaf moves 0.65 to 0.66 m apart and 0.2 m toward the field": the leaf's position in the assembly frame
+        # is the hinge position plus the leaf's local position turned by the hinge's z rotation
+        def leaf_in_assembly(hinge, leaf, state):
+            angle = math.radians(hinge[state]["euler"][2])
+            x, y, _ = leaf[state]["position"]
+            return (hinge[state]["position"][0] + x * math.cos(angle) - y * math.sin(angle),
+                    hinge[state]["position"][1] + x * math.sin(angle) + y * math.cos(angle))
+
+        rows = {p["node"].rsplit("/", 1)[-1]: p for p in self.bus if p["part"] == "Apron_bus_MAZ_doors"}
+        for hinge_name, leaf_name, sign in (("Apron_bus_MAZ_door_L_01_part_01", "Apron_bus_MAZ_door_L_01", 1.0),
+                                            ("Apron_bus_MAZ_door_L_02_part_01", "Apron_bus_MAZ_door_L_02", -1.0)):
+            closed = leaf_in_assembly(rows[hinge_name], rows[leaf_name], "closed")
+            opened = leaf_in_assembly(rows[hinge_name], rows[leaf_name], "open")
+            self.assertAlmostEqual(sign * (opened[1] - closed[1]), 0.66, delta=0.02)                # apart, along the door line
+            self.assertAlmostEqual(abs(opened[0] - closed[0]), 0.2, delta=0.02)                    # toward the field
+
+    def test_the_back_row_gets_no_row(self):
+        names = {p["part"] for p in self.poses}
+        for number in (3, 4, 5):
+            self.assertNotIn(f"Apron_bus_MAZ_doors ({number})", names)
+
+    def test_the_rows_are_sorted_by_barrier_part_node_and_closed_position(self):
+        keys = [(p["barrier"], p["part"], p["node"], tuple(p["closed"]["position"])) for p in self.poses]
+        self.assertEqual(keys, sorted(keys))
+        self.assertTrue(all(p["at"] is None for p in self.poses))                                # no repeated hierarchy path on AirPit
+
+    def test_no_row_names_a_frame_part_or_a_node_without_a_part(self):
+        for p in self.poses:
+            self.assertNotIn("frame", p["part"].lower())
+            self.assertTrue(p["part"])
+
+    def test_the_registry_carries_exactly_the_generated_csharp_and_mirrors_the_sidecar(self):
+        self.assertIn(E.render_csharp(self.poses), self.cs_text)
+        self.assertEqual(VD.door_pose_errors(self.map, REPO / "tools" / "maps" / "airpit.doors.json", self.entry.get("DoorPoses")), [])
+        self.assertEqual(sum(1 for r in self.entry["DoorPoses"] if "switch" in r), 2)
+        self.assertEqual(sum(1 for r in self.entry["DoorPoses"] if "switch" not in r), 28)
+
+    def test_the_sidecar_regenerates_byte_for_byte_from_its_rows(self):
+        again = E.render_sidecar(self.doc["key"], self.doc["source"], self.doc["poses"])
+        self.assertEqual(json.loads(again), self.doc)
+        self.assertTrue(again.endswith("}\n"))
+        self.assertNotIn("\r", again)
+        raw = (REPO / "tools" / "maps" / "airpit.doors.json").read_bytes().decode("utf-8")
+        self.assertEqual(raw.replace("\r\n", "\n"), again)
+
+    def test_the_other_sidecars_have_no_switch_row_and_keep_their_comment(self):
+        for stem in ("equator", "bay5", "bowl"):
+            doc = sidecar_doc(stem)
+            self.assertTrue(all("switch" not in p for p in doc["poses"]), stem)
+            self.assertEqual(doc["_comment"], E.SIDECAR_COMMENT, stem)                         # their text is byte for byte the old one
+
+
+class AirPitValidatorRuleTests(unittest.TestCase):
+    """validate_map_descriptors.door_pose_errors on switch rows and repeated part names, by mutating the AirPit sidecar."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.entry = VD.registry_entries((REPO / "ArenaMapPort.Shared" / "ArenaMapDescriptor.cs").read_text(encoding="utf-8"))["AirPit"]
+        cls.map = json.loads((REPO / "tools" / "maps" / "airpit.json").read_text(encoding="utf-8"))
+
+    def run_case(self, change, registry=None):
+        doc = sidecar_doc("airpit")
+        change(doc)
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "airpit.doors.json"
+            path.write_text(json.dumps(doc), encoding="utf-8")
+            return VD.door_pose_errors(self.map, path, self.entry["DoorPoses"] if registry is None else registry)
+
+    @staticmethod
+    def lamp(doc, part="RED"):
+        return next(p for p in doc["poses"] if p.get("part") == part and "switch" in p)
+
+    @staticmethod
+    def leaf(doc, index=0):
+        return [p for p in doc["poses"] if p["part"].startswith("Passport_control_01_Door")][index]
+
+    def test_clean(self):
+        self.assertEqual(self.run_case(lambda d: None), [])
+
+    def test_the_switch_key_belongs_to_switch_rows_with_two_booleans_that_differ(self):
+        self.assertTrue(self.run_case(lambda d: self.leaf(d).update(switch={"closed": True, "open": False})))     # a leaf is no lamp
+        for bad in ({"closed": True, "open": True}, {"closed": True}, {"closed": 1, "open": 0}, {"closed": True, "open": False, "x": 1},
+                    "off", None):
+            with self.subTest(bad=bad):
+                self.assertTrue(self.run_case(lambda d, b=bad: self.lamp(d).update(switch=b)))
+
+    def test_a_switch_row_is_dotanimator_linear_without_a_curve_and_moves_nothing(self):
+        self.assertTrue(self.run_case(lambda d: self.lamp(d).update(ease="inOutQuint")))
+        self.assertTrue(self.run_case(lambda d: self.lamp(d).update(source="borrowed", clip="borrowed from X")))
+        self.assertTrue(self.run_case(lambda d: self.lamp(d).update(ease="curve", curve=[[0.0, 0.0, 1.0, 1.0], [1.0, 1.0, 1.0, 1.0]])))
+        self.assertTrue(self.run_case(lambda d: self.lamp(d)["open"].update(position=[0.0, 1.0, 0.0])))
+        self.assertTrue(self.run_case(lambda d: self.lamp(d)["open"].update(euler=[0.0, 0.0, 5.0])))
+        self.assertTrue(self.run_case(lambda d: self.lamp(d).update(node="")))
+
+    def test_seconds_may_be_zero_only_on_a_switch_row(self):
+        self.assertEqual(self.run_case(lambda d: self.lamp(d).update(seconds=0.0)), [])
+        self.assertTrue(self.run_case(lambda d: self.lamp(d).update(seconds=-0.5)))
+        self.assertTrue(self.run_case(lambda d: self.leaf(d).update(seconds=0.0)))
+        self.assertTrue(self.run_case(lambda d: self.lamp(d).update(seconds=float("nan"))))
+
+    def test_a_switch_must_be_mirrored_by_the_registry(self):
+        def flipped(doc):
+            self.lamp(doc)["switch"] = {"closed": False, "open": True}
+
+        errors = self.run_case(flipped)
+        self.assertTrue(any("switch" in e for e in errors), errors)
+        stripped = [{k: v for k, v in r.items() if k != "switch"} for r in self.entry["DoorPoses"]]
+        self.assertTrue(any("switch" in e for e in self.run_case(lambda d: None, registry=stripped)))
+
+    def test_leaves_with_one_name_need_closed_positions_more_than_five_centimetres_apart(self):
+        def collide(doc):
+            same = [p for p in doc["poses"] if p["part"] == "Passport_control_01_Door (1)"]
+            same[1]["closed"]["position"] = [v + (0.03 if i == 0 else 0.0) for i, v in enumerate(same[0]["closed"]["position"])]
+
+        errors = self.run_case(collide)
+        self.assertTrue(any("lacks 'at'" in e for e in errors), errors)
+
+        def spread(doc):
+            same = [p for p in doc["poses"] if p["part"] == "Passport_control_01_Door (1)"]
+            same[1]["closed"]["position"] = [v + (0.06 if i == 0 else 0.0) for i, v in enumerate(same[0]["closed"]["position"])]
+
+        self.assertEqual([e for e in self.run_case(spread) if "lacks 'at'" in e], [])         # told apart; the registry mismatch is the only error
+        exact = self.run_case(lambda d: d["poses"].append(copy.deepcopy(self.leaf(d))))
+        self.assertTrue(any("lacks 'at'" in e for e in exact), exact)
+
+    def test_one_barrier_still_has_at_on_all_rows_or_none(self):
+        self.assertTrue(any("with and without 'at'" in e for e in self.run_case(lambda d: self.leaf(d).update(at=[1.0, 2.0, 3.0]))))
+
+    def test_the_bus_rows_follow_the_borrowed_clip_wording(self):
+        bus = lambda d: [p for p in d["poses"] if p["barrier"] == "BUS_DOORS"][0]
+        self.assertTrue(self.run_case(lambda d: bus(d).update(clip="mine")))
+        self.assertTrue(self.run_case(lambda d: bus(d).update(source="clip", ease="smoothstep")))
+
+    def test_every_pose_barrier_must_be_an_opened_barrier(self):
+        self.assertTrue(any("not an opened_barriers entry" in e
+                            for e in self.run_case(lambda d: self.leaf(d).update(barrier="PASSPORT_CONTROL_EMISSIVE_X"))))
+
+
+class RealAirPitTests(unittest.TestCase):
+    """AirPit's sidecar against the installed Arena and the accepted package (skipped without them)."""
+
+    @classmethod
+    def setUpClass(cls):
+        if not (ARENA_DATA / "level28").is_file():
+            raise unittest.SkipTest("Arena is not installed")
+        try:
+            import UnityPy  # noqa: F401
+        except ImportError:
+            raise unittest.SkipTest("UnityPy is not installed")
+        package = REPO / "work" / "extract" / "airpit-native-v9"
+        cls.package = package if (package / "scenes" / "Arena_Airpit_TeamFight_DesignStuff.json").is_file() else None
+        cls.text, cls.source, cls.summary = E.extract("arena_airpit", "auto", cls.package)
+
+    def test_the_tracked_sidecar_is_what_the_installed_arena_yields(self):
+        tracked = sidecar_doc("airpit")
+        fresh = json.loads(self.text)
+        self.assertEqual(fresh["poses"], tracked["poses"])
+        strip = lambda s: {k: v for k, v in s.items() if k != "arena_version"}
+        self.assertEqual(strip(fresh["source"]), strip(tracked["source"]))
+        self.assertEqual(fresh["_comment"], tracked["_comment"])
+        self.assertEqual(self.text, E.extract("arena_airpit", "auto", None)[0])               # byte-stable with or without the package
+        self.assertNotIn("\r", self.text)
+
+    def test_the_scan_reads_the_eighteen_dotanimators_under_the_passport_root_and_leaves_the_bus_lights(self):
+        check = [line for line in self.summary if line.startswith("decode self-check:")][0]
+        self.assertIn("18 DotAnimator object(s), 18 element(s)", check)                      # 16 leaves + RED + GREEN; BUS_LIGHT stays out
+        scan = [line for line in self.summary if line.startswith("scan PASSPORT_CONTROL_DOORS")][0]
+        self.assertIn("18 pose(s) (2 switch row(s)), 0 inactive, 0 switch element(s) skipped", scan)
+        self.assertEqual(self.summary[-1], "poses 30: 18 dotanimator, 12 borrowed")
+        if self.package is not None:
+            self.assertTrue(any(line.startswith("package check: 30 pose(s) exist in airpit-native-v9") for line in self.summary))
+        self.assertEqual(sum(1 for line in self.summary if "lender twin" in line), 2)
+
+    def test_every_switch_of_the_surveyed_levels_flips_the_state_of_its_node(self):
+        # the evidence behind payload word 8 (2026-10-24): 23 of 23 kind-3 elements set the OPPOSITE of their target's scene state
+        seen = 0
+        for level in (57, 28):
+            scene = E.ArenaScene(ARENA_DATA, level)
+            for tp in scene.tr:
+                for obj in scene.monobehaviours(tp):
+                    if scene.mono_class(obj) != E.DOT_SCRIPT:
+                        continue
+                    for element in E.decode_dot_animator(obj.get_raw_data()).elements:
+                        if element.kind != E.DOT_KIND_SWITCH:
+                            continue
+                        target = scene.go2tr[element.target_path]
+                        scene_state = scene.go[scene.tr[target]["m_GameObject"]["m_PathID"]]["m_IsActive"]
+                        self.assertNotEqual(element.active, scene_state, scene.path(target))
+                        seen += 1
+        self.assertEqual(seen, 23)
+
+    def test_the_lenders_and_borrowers_of_the_bus_doors_are_what_the_notes_say(self):
+        scene = E.ArenaScene(ARENA_DATA, 28)
+        root = scene.find_path("BUS_DOORS")[0]
+        by_name = {scene.name(c): c for c in scene.children(root)}
+        for name in ("Apron_bus_MAZ_doors", "Apron_bus_MAZ_doors (1)", "Apron_bus_MAZ_doors (2)"):
+            self.assertEqual(scene.animator_clip_counts(by_name[name]), [0], name)           # an Animator whose controller has no clip
+        for name in ("Apron_bus_MAZ_doors (3)", "Apron_bus_MAZ_doors (4)", "Apron_bus_MAZ_doors (5)"):
+            self.assertEqual(scene.animator_clip_counts(by_name[name]), [], name)            # nothing drives the back row
 
 
 class RealArenaDotAnimatorTests(unittest.TestCase):
