@@ -13,6 +13,20 @@ gate-completion API work is separate. 61 Python tests, 122 deployment fixture ca
 acceptance gates passed; 91 third-party DynamicMaps files/configs unchanged. Native EFT retest not run; restart EFT to
 clear cached maps. Full record and source/output receipts: [dynamicmaps-gate-refresh-20261024.md](docs/progress/dynamicmaps-gate-refresh-20261024.md).
 
+## Update 2026-10-24 (evening) - 0.3.0 release preparation: done signal for mode plugins, changelog and release texts (committed a673568 + e1f5428, deployed, host-verified)
+
+User decisions: 0.3.0 is to be released; a CHANGELOG.md from 0.2.3 on; README/FORGE updated; and, quoting a Codex review of ArenaMode (its
+team-box catalog waits a fixed 13.5 s on Bowl while the drives now take at most 6.75 s), a public done signal in `SpawnGates`:
+`IsOpening`, `GatesOpen`, `OpeningSecondsRemaining` and the event `GatesOpened` (contract in the class doc and spawn-gates.md "the done
+signal"; ArenaMode is to wait for it, with its path checks, instead of the constant). Host-verified on GPU-2 the same evening (spawn-gates.md
+"Host evidence of the done signal"): Equator `gates open (navmesh installed)` once, Bowl `gates open (released)` in the frame the 6.8 s drive
+ends, Air Pit with bots (path checks through the bus doors pass; a bot walking through was not observed), hideout once, 0 Warnings.
+Release texts: CHANGELOG.md (tested by `test_changelog.py`), docs/releases/v0.3.0.md (Download block still placeholders), README, FORGE,
+the package README in `make_release_zips.py`. Codex (the user's other agent) committed the refreshed DynamicMaps overviews (e652fc9) and
+deployed them. Next: the cut (`make_release_zips.py --single --force --extract-check`), VirusTotal, the Download block, then with the user's
+go Pixeldrain, tag v0.3.0, GitHub release, Forge entry. Open: an off-VM backup of `work/release-keys`; `D:\SPT41vanilla`; BUS_LIGHT lamps,
+fences, gate sounds; the v9 plan-digest drift of `validate_extract`.
+
 ## Update 2026-10-24 (later) - AirPit door motions and Bay5 `Door_01 (3)` shut again (committed fa76bc0, deployed to D:\SPT41, host-verified on GPU-2)
 
 Host verification 2026-10-24 13:04-13:17 (four raids, hideout once, 0 Warnings in the whole process; quotes in [door-poses.md](docs/progress/door-poses.md)

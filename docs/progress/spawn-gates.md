@@ -313,3 +313,23 @@ margin as the timeout, and run the formation path checks after it; the hold itse
 when the fight starts). Tests: `SpawnGateModelTests` (the state rule, the remaining-time rule, wiring pins for the two raise sites and
 the isolated handlers). Host check: a developer hold on Bowl, `gates open (released)` right after `released (...)`, 6.8 s after the
 release at the default scale; an ordinary Equator raid logs `gates open (navmesh installed)` once.
+
+### Host evidence of the done signal (GPU-2, 2026-10-24 14:17-14:30, build a673568, the DLLs of the 0.3.0 cut)
+
+Deployed with `deploy-to-spt.ps1 -Confirm` (client and server DLL) and `gpu-run deploy-wait --server --game` (2 files identical after
+6 s, server and EFT restarted, 16/16 plugins identical). 0 Warnings and 0 Errors from the mod in the whole process.
+
+- **Equator, ordinary raid (14:17, no bots):** spawn at the south All marker (-4.3, 0.1, -39.1), the first host start from a south
+  marker; after the ten `parked ... (navmesh installed)` lines: `[SpawnGates] gates open (navmesh installed): 10 part(s) registered,
+  10 park carver(s) in place; 0 listener(s) notified`, once.
+- **Bowl, developer hold 30 s (14:19):** `navmesh installed: 28 carver(s) ...` without a `gates open` line (held); release at 30.1 s:
+  `released (...): ... drove 4 part(s) to the open pose in 6.8 s (scale 0.50), 23 park carver(s) in place`, `drive frames: 810 frame(s) in
+  6.8 s, mean 8.3 ms, max 8.6 ms`, then in the same frame `gates open (released): 4 part(s) registered, 23 park carver(s) in place; 0
+  listener(s) notified`: the signal comes 6.8 s after the release, when the last part stands and its carvers are in place, which is what
+  ArenaMode can wait for instead of its 13.5 s.
+- **Air Pit with bots (14:21, Medium, godmode):** `dryRun` from the field spawn into the south pocket and, from inside the pocket, to the
+  bots on the field (`path complete 67.3 m, 10 corners`) both pass with the front-row park carvers in place; a walk from the field into
+  the pocket arrived through the bus doors in 19 s; the PMC and assault bots (up to 6) fought on the field at 120 fps (max 10.4 ms) and
+  did not pursue the player into the pocket, so a bot walking through the bus doorways was not observed; the NavMesh path they would
+  take exists.
+- Hideout opened and closed once afterwards.
