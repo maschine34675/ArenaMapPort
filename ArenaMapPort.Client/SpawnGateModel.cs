@@ -91,5 +91,19 @@ namespace ArenaMapPort.Client
         /// <summary>A carved doorway yields a Partial or Invalid NavMesh path between the two probe points; a complete
         /// path means the gate is NOT sealed for bots.</summary>
         internal static bool Sealed(int pathStatus) => pathStatus != PathComplete;
+
+        /// <summary>The public done signal (SpawnGates.GatesOpen, 2026-10-24): the feature installed, the ported NavMesh
+        /// installed (hold carvers gone, park carvers placed), at least one gate part registered, no hold outstanding and
+        /// no opening in progress. A map without gates never reports open.</summary>
+        internal static bool GatesOpen(bool installed, bool navMeshReady, int registeredParts, bool held, bool opening) =>
+            installed && navMeshReady && registeredParts > 0 && !held && !opening;
+
+        /// <summary>Seconds left of an opening whose longest drive (the slide included) takes <paramref name="longestSeconds"/>,
+        /// never negative; a mode plugin's timeout is this plus its own margin.</summary>
+        internal static float OpeningSecondsRemaining(float longestSeconds, float elapsedSeconds)
+        {
+            float remaining = longestSeconds - elapsedSeconds;
+            return remaining > 0f ? remaining : 0f;
+        }
     }
 }

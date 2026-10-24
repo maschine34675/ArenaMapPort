@@ -284,3 +284,32 @@ doors"), the client record with log lines and the host recipe: door-poses.md "Ru
 - Tests: `DoorPoseModelTests.cs` (the selection helpers, the switch rules, a frame-by-frame model of the lamp flip, the real AirPit rows
   through the lookups, two tests against the ignored extract `work/extract/airpit-native-v9` that skip without it, wiring pins for the held-gate
   flow), `SpawnGateModelTests.cs` (the offer count stays three).
+
+## Follow-up 2026-10-24 (2): the done signal for mode plugins
+
+User request (quoting a Codex review of ArenaMode): Bowl's team-box catalog waited a fixed 13.5 s for the gates
+(`ArenaMode.Shared/ArenaTeamBoxCatalog.cs`, the pre-door-pose drive length) while the drives now take at most 6.75 s at the
+default scale; rather than halving the number, ArenaMapPort should say when the gates are open and ArenaMode should wait for
+that, together with its path checks, which covers every map, every drive scale and `SpawnGateDrive = false`. Added to the
+reflection contract of `SpawnGates` (all on the Unity main thread):
+
+- `public static bool IsOpening`: a Release is still driving (or sliding), the park carvers of the last part are not placed yet.
+- `public static bool GatesOpen`: every registered part stands open for bots as well as players: no hold outstanding, no opening in
+  progress, the ported NavMesh installed (hold carvers gone, park carvers placed). True in an ordinary raid from the NavMesh install
+  on; after a Hold, true when the Release has driven its last part (1.5 s AirPit, 3.5 s Equator and Bay5, 6.8 s Bowl at the default
+  scale; at once with `SpawnGateDrive = false`). False while held and before the opening ran: `ClosedParts == 0` (a map without
+  gates) never reports open, so a plugin waits only when `ClosedParts > 0`. A held gate nobody held (AirPit's passport control in an
+  ordinary raid) stays closed by design and does not count.
+- `public static float OpeningSecondsRemaining`: the longest drive of the opening in progress (slide included) minus the elapsed time,
+  0 when nothing opens: the timeout for the wait is this plus the plugin's own margin.
+- `public static event Action GatesOpened`: raised each time `GatesOpen` turns true (the navmesh install of an ordinary raid; the end
+  of a release, right after the `released` log line, before the post-release probe). Subscribe once by reflection
+  (`EventInfo.AddEventHandler`, a `System.Action`); the subscribers survive the scene unload. Every handler runs in its own try/catch,
+  a throwing handler is one Warning, the opening never depends on a handler. Log: `[SpawnGates] gates open (released|navmesh
+  installed): N part(s) registered, M park carver(s) in place; K listener(s) notified` (Debug).
+
+For ArenaMode: wait for `GatesOpened` (or poll `GatesOpen`) instead of the 13.5 s constant, with `OpeningSecondsRemaining` plus a
+margin as the timeout, and run the formation path checks after it; the hold itself is unchanged (`Hold` before the raid, `Release`
+when the fight starts). Tests: `SpawnGateModelTests` (the state rule, the remaining-time rule, wiring pins for the two raise sites and
+the isolated handlers). Host check: a developer hold on Bowl, `gates open (released)` right after `released (...)`, 6.8 s after the
+release at the default scale; an ordinary Equator raid logs `gates open (navmesh installed)` once.

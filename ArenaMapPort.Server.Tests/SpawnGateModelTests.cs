@@ -114,6 +114,31 @@ public sealed class SpawnGateModelTests
     {
         Assert.Equal(sealedExpected, SpawnGateModel.Sealed(status));
     }
+
+    /// <summary>The done signal for mode plugins (2026-10-24): open means installed, NavMesh installed, parts registered,
+    /// no hold and no opening in progress; a map without gates never reports open.</summary>
+    [Theory]
+    [InlineData(true, true, 4, false, false, true)]   // an ordinary raid after the navmesh install, or a finished release
+    [InlineData(true, true, 4, true, false, false)]   // held
+    [InlineData(true, true, 4, false, true, false)]   // a release still driving
+    [InlineData(true, false, 4, false, false, false)] // navmesh not installed yet: hold carvers may still come
+    [InlineData(true, true, 0, false, false, false)]  // nothing registered: a map without gates, or before the opening ran
+    [InlineData(false, true, 4, false, false, false)] // feature not installed
+    public void GatesAreOpenOnlyWithPartsRegisteredNoHoldNoOpeningAndTheNavMeshInstalled(
+        bool installed, bool navMeshReady, int parts, bool held, bool opening, bool expected)
+    {
+        Assert.Equal(expected, SpawnGateModel.GatesOpen(installed, navMeshReady, parts, held, opening));
+    }
+
+    [Theory]
+    [InlineData(3.5f, 1.0f, 2.5f)]
+    [InlineData(3.5f, 3.5f, 0f)]
+    [InlineData(3.5f, 9f, 0f)]
+    [InlineData(0f, 0f, 0f)]
+    public void TheRemainingOpeningTimeCountsDownToZeroAndNeverBelow(float longest, float elapsed, float expected)
+    {
+        Assert.Equal(expected, SpawnGateModel.OpeningSecondsRemaining(longest, elapsed), 3);
+    }
 }
 
 /// <summary>
@@ -250,5 +275,37 @@ public sealed class SpawnGatesWiringTests
         Assert.Single(Regex.Matches(gates, @"public static bool Hold\(string reason\)\s*\r?\n"));
         Assert.Single(Regex.Matches(gates, @"public static void Release\(string reason\)\s*\r?\n"));
         Assert.DoesNotContain("public static bool HeldGatesClosed", gates);
+    }
+
+    /// <summary>The done signal (2026-10-24): three public members and one public event, raised at the two transitions to
+    /// open (the navmesh install of an ordinary raid, the end of a release after the park carvers), handlers isolated by a
+    /// try/catch, the subscribers kept across raids.</summary>
+    [Fact]
+    public void TheDoneSignalIsPublicAndRaisedAtBothTransitionsToOpen()
+    {
+        var gates = Text("ArenaMapPort.Client/SpawnGates.cs");
+        Assert.Contains("public static bool IsOpening => _opening;", gates);
+        Assert.Contains("public static bool GatesOpen => SpawnGateModel.GatesOpen(_installed, _navMeshReady, _parts.Count, IsHeld, _opening);", gates);
+        Assert.Contains("public static float OpeningSecondsRemaining =>", gates);
+        Assert.Contains("public static event Action GatesOpened;", gates);
+        // an ordinary raid: raised at the navmesh install, after the parked parts got their carvers
+        int seal = gates.IndexOf("SealParked(\"navmesh installed\");", StringComparison.Ordinal);
+        int raiseInstall = gates.IndexOf("if (GatesOpen) RaiseGatesOpened(\"navmesh installed\");", StringComparison.Ordinal);
+        Assert.True(seal > 0 && raiseInstall > seal, "raised after SealParked at the navmesh install");
+        // a release: raised after the released log line and before the post-release probe starts
+        int releasedLine = gates.IndexOf("released ({reason}):", StringComparison.Ordinal);
+        int raiseRelease = gates.IndexOf("RaiseGatesOpened(\"released\");", StringComparison.Ordinal);
+        int probe = gates.IndexOf("_runner.StartCoroutine(Probe(expectSealed: false));", StringComparison.Ordinal);
+        Assert.True(releasedLine > 0 && raiseRelease > releasedLine && probe > raiseRelease, "raised between the released line and the probe");
+        Assert.Equal(2, gates.Split(new[] { "RaiseGatesOpened(\"" }, StringSplitOptions.None).Length - 1); // the two call sites
+        // handlers run isolated; the event survives the scene unload
+        var raise = gates.Substring(gates.IndexOf("static void RaiseGatesOpened(string why)", StringComparison.Ordinal));
+        raise = raise.Substring(0, raise.IndexOf("gates open ({why})", StringComparison.Ordinal));
+        Assert.Contains("foreach (Delegate handler in handlers.GetInvocationList())", raise);
+        Assert.Contains("catch (Exception e)", raise);
+        Assert.DoesNotContain("GatesOpened = null", gates);
+        // the remaining time counts from the longest drive of the release, the slide included
+        Assert.Contains("if (drive) foreach (var d in drivers) longest = Mathf.Max(longest, d.DriveSeconds);", gates);
+        Assert.Contains("_openLongestSeconds = longest;", gates);
     }
 }

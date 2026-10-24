@@ -89,6 +89,15 @@ namespace ArenaMapPort.Client
     /// must expect a Partial path while the carvers stand. Developer keys: <c>Spawns/SpawnGateHold</c> plus
     /// <c>SpawnGateHoldSeconds</c> hold the gates without a caller (host testing), <c>SpawnGateCarve</c>,
     /// <c>SpawnGateSlideSeconds</c>, <c>SpawnGateDrive</c>, <c>SpawnGateDriveScale</c>, <c>SpawnGateMaxHoldSeconds</c>.
+    /// The done signal (2026-10-24, user request: ArenaMode waited a fixed 13.5 s on Bowl while the drives now take at most
+    /// 6.75 s): <c>public static bool IsOpening</c> (a Release is still driving), <c>public static bool GatesOpen</c> (every
+    /// registered part stands open for bots as well as players: no hold, no opening in progress, the ported NavMesh installed
+    /// with the hold carvers gone and the park carvers placed), <c>public static float OpeningSecondsRemaining</c> (the longest
+    /// drive of the opening in progress, for a timeout) and <c>public static event Action GatesOpened</c> (raised on the main
+    /// thread each time GatesOpen turns true; handlers run in their own try/catch). A mode plugin waits for the event (or
+    /// polls GatesOpen), with OpeningSecondsRemaining plus a margin as its timeout, and runs its path checks after it,
+    /// whatever the map, the drive scale or <c>SpawnGateDrive = false</c>; a map without gates never reports open
+    /// (ClosedParts stays 0), so it waits only when ClosedParts is above 0.
     ///
     /// Host test: docs/progress/spawn-gates.md (GPU-2, 2026-10-17).
     /// </summary>
@@ -172,6 +181,9 @@ namespace ArenaMapPort.Client
         static Runner _runner;
         static Coroutine _openCoroutine;
         static float _startedAt = -1f, _heldSince = -1f;
+        // The opening in progress: when it started and how long its longest drive (the slide included) takes, for
+        // OpeningSecondsRemaining.
+        static float _openStartedAt = -1f, _openLongestSeconds;
 
         /// <summary>True while the gates of the current (or next) owned raid are to stay closed and have not been
         /// released yet.</summary>
@@ -181,6 +193,64 @@ namespace ArenaMapPort.Client
         /// <summary>Number of gate parts registered in this raid (0 outside an owned raid, before the raid-start
         /// opening ran, or on a map without gates).</summary>
         public static int ClosedParts => _parts.Count;
+
+        /// <summary>True while a <see cref="Release"/> is still opening the gates: a booth leaf without a pose still sliding,
+        /// a part still driving to Arena's open pose, or the park carvers of the last part not placed yet. False before the
+        /// raid-start opening, while a hold stands, and once <see cref="GatesOpen"/> is true.</summary>
+        public static bool IsOpening => _opening;
+
+        /// <summary>True once the registered gate parts of this raid stand open for bots as well as players: no hold
+        /// outstanding, no opening in progress and the ported NavMesh installed, so the hold carvers are gone and the park
+        /// carvers of the parts Arena animates stand (a NavMesh path check made at that moment sees the final mesh). In an
+        /// ordinary raid it turns true at the NavMesh install after the raid-start opening; after a <see cref="Hold"/> it
+        /// turns true when the Release has driven the last part (at the default drive scale 1.5 s on Air Pit, 3.5 s on
+        /// Equator and Bay5, 6.8 s on Bowl; at once with <c>SpawnGateDrive = false</c>). False while the gates are held, and
+        /// before the opening ran (<see cref="ClosedParts"/> == 0: a map without gates never reports open, so a mode plugin
+        /// waits only when ClosedParts is above 0). A held gate (descriptor HeldGates, AirPit's passport control) that no
+        /// hold released stays closed by design and does not count. Every transition to true raises <see cref="GatesOpened"/>.</summary>
+        public static bool GatesOpen => SpawnGateModel.GatesOpen(_installed, _navMeshReady, _parts.Count, IsHeld, _opening);
+
+        /// <summary>Seconds until the opening in progress has driven its last part (the longest drive of this release at the
+        /// current drive scale, the slide included), 0 when nothing is opening. A mode plugin that waits for
+        /// <see cref="GatesOpened"/> can take this plus a margin as its timeout instead of a fixed number per map.</summary>
+        public static float OpeningSecondsRemaining =>
+            _opening ? SpawnGateModel.OpeningSecondsRemaining(_openLongestSeconds, Time.time - _openStartedAt) : 0f;
+
+        /// <summary>Raised on the Unity main thread each time <see cref="GatesOpen"/> turns true: after the ordinary
+        /// raid-start opening once the ported NavMesh is installed (the park carvers are in place), and after a Release
+        /// once the last part has finished its drive and its park carvers stand (right after the <c>released</c> log
+        /// line). Subscribe once: the event is static and survives raids, a handler is called in every owned raid; by
+        /// reflection with <c>EventInfo.AddEventHandler</c> and a <c>System.Action</c>. Every handler runs inside its own
+        /// try/catch: one that throws is logged as a Warning and the others still run; nothing a handler does can stop
+        /// the opening.</summary>
+        public static event Action GatesOpened;
+
+        // Raises GatesOpened once per transition to open (two call sites: OnNavMeshInstalled, the end of Open).
+        static void RaiseGatesOpened(string why)
+        {
+            int parkCarvers = 0;
+            foreach (var posed in _posed.Values) parkCarvers += posed.Carvers.Count;
+            var handlers = GatesOpened;
+            int notified = 0, failed = 0;
+            if (handlers != null)
+            {
+                foreach (Delegate handler in handlers.GetInvocationList())
+                {
+                    try
+                    {
+                        ((Action)handler)();
+                        notified++;
+                    }
+                    catch (Exception e)
+                    {
+                        failed++;
+                        Plugin.Log.LogWarning($"{Tag} a GatesOpened listener threw ({handler.Method.DeclaringType?.FullName}.{handler.Method.Name}): {e}");
+                    }
+                }
+            }
+            Plugin.Log.LogDebug($"{Tag} gates open ({why}): {_parts.Count} part(s) registered, {parkCarvers} park carver(s) in place; " +
+                                $"{notified} listener(s) notified{(failed > 0 ? $", {failed} threw" : "")}");
+        }
 
         /// <summary>True while a held gate (descriptor HeldGates) stands closed: registered held-gate parts that no
         /// Release has opened yet. Independent of <see cref="IsHeld"/>, which reflects only a hold.</summary>
@@ -742,6 +812,7 @@ namespace ArenaMapPort.Client
             _navMeshReady = true;
             if ((IsHeld || HeldGatesClosed) && _parts.Count > 0) CreateCarvers("navmesh installed");
             SealParked("navmesh installed"); // parts parked at raid start (no hold): their bodies now stand in the way
+            if (GatesOpen) RaiseGatesOpened("navmesh installed"); // an ordinary raid: open from here on, carvers in place
         }
 
         static void EnsureRunner()
@@ -1019,6 +1090,10 @@ namespace ArenaMapPort.Client
                 posed.DriveSeconds = DoorPoseModel.SwitchPartDriveSeconds(siblings);
             }
             float t0 = Time.time;
+            _openStartedAt = t0;
+            float longest = sliders.Count > 0 ? seconds : 0f;
+            if (drive) foreach (var d in drivers) longest = Mathf.Max(longest, d.DriveSeconds);
+            _openLongestSeconds = longest; // OpeningSecondsRemaining counts down from here
             bool slideDone = false;
             int off = 0, removed = 0, driven = 0, switched = 0, driveFrames = 0;
             float driveEnd = 0f, driveSum = 0f, driveMax = 0f;
@@ -1100,6 +1175,7 @@ namespace ArenaMapPort.Client
                 Plugin.Log.LogDebug($"{Tag} drive frames: {driveFrames} frame(s) in {driveEnd:F1} s, mean {driveSum / driveFrames * 1000f:F1} ms, " +
                                     $"max {driveMax * 1000f:F1} ms (the whole frame, not the poses alone; Physics.autoSyncTransforms {Physics.autoSyncTransforms})");
             }
+            RaiseGatesOpened("released"); // the last part stands at its open pose and its park carvers are in place
             if (removed > 0 && _runner != null) _runner.StartCoroutine(Probe(expectSealed: false));
         }
 
@@ -1127,6 +1203,8 @@ namespace ArenaMapPort.Client
             _opening = false;
             _startedAt = -1f;
             _heldSince = -1f;
+            _openStartedAt = -1f;
+            _openLongestSeconds = 0f; // GatesOpened keeps its subscribers: a mode plugin subscribes once
         }
     }
 }
