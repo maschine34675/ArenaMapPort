@@ -6,7 +6,7 @@ dist/ holds two install roots, `BepInEx/plugins/maschine-ArenaMapPort/...` (clie
 
 Two layouts, one classification, one verifier:
 
-  --single   (the release form the user chose; about 2.1 GiB, hosted on Pixeldrain, not GitHub)
+  --single   (the release form the user chose; about 3.4 GiB with the four encrypted maps of 0.3.0, hosted on Pixeldrain, not GitHub)
       maschine-ArenaMapPort-<version>.zip     EVERY dist file, the generated README.txt and
                                               THIRD-PARTY-NOTICES.txt entries, and the manifest
                                               BepInEx/plugins/maschine-ArenaMapPort/parts/full.json
@@ -691,9 +691,23 @@ def readme_text(spec: ReleaseSpec, parts) -> str:
             "   DynamicMaps/Maps/ArenaMapPort_Equator and ArenaMapPort_Bay5 if still present, to avoid\n"
             "   duplicate maps. Unused arena-audio and arena-ui folders may be removed too.\n"
             "4. Start the SPT server, then the game.\n\n"
+            "Updating: extract the complete ZIP over the installation with the SPT server closed, so that the client\n"
+            "and the server DLL, the bundles, the keys folder and the server database all come from this release (a\n"
+            "running server keeps its DLL locked); keep BepInEx/config. The keys folder\n"
+            "(BepInEx/plugins/maschine-ArenaMapPort/keys) belongs to the bundles next to it: a missing or damaged key\n"
+            "file is reported as an error in the client log, and the maps do not load.\n\n"
+            "If the maps do not show up: the game shows a message at the main menu that ends with a ref code, for\n"
+            "example \"ref NO_ARENA\". The refs and their fixes are listed in the project README, section \"If the maps\n"
+            "do not show up\" (https://github.com/maschine34675/ArenaMapPort). When you report a problem, include the\n"
+            "ref and the lines marked [Arena] from BepInEx/LogOutput.log.\n\n"
             f"Included locations: {names}.\n"
             "These maps are intended for ArenaMode; no loot or scav raids are provided.\n"
-            "ArenaMode and other mods are not included.\n\n"
+            "ArenaMode and other mods are not included.\n"
+            "The gates and vehicles at the team spawn enclosures use Arena's own open positions and, where Arena\n"
+            "has them, its motions (at half their time). They stand open from raid start, or a mode plugin such as\n"
+            "ArenaMode holds them closed and opens them when the fight starts; Air Pit's passport control stays\n"
+            "shut until a mode plugin opens it. A few doors that Arena itself never moves (three warehouse\n"
+            "rollers on Bay5, the FCK shop's roller shutter on Equator) stay shut.\n\n"
             "Optional DynamicMaps integration: overview map data lives in this plugin's own dynamicmaps\n"
             "folder and is registered automatically when DynamicMaps is installed.\n\n"
             "Settings: F12 exposes NaturalEquatorNight for a natural Equator midnight look on the next\n"

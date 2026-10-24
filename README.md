@@ -23,6 +23,13 @@ navigation, with restored ambience, material sounds, room acoustics and decals.
 Equator and Bay5 also have restored dust and original lamp flares. Bay5 includes
 its harbor background and water.
 
+The gates and vehicles at the team spawn enclosures use Arena's own open positions
+and, where Arena has them, its motions (at half their time). They stand open from raid
+start, or a mode plugin such as ArenaMode holds them closed and opens them when the
+fight starts; Air Pit's passport control stays shut until a mode plugin opens it. A few doors that
+Arena itself never moves (three warehouse rollers on Bay5, the FCK shop's roller shutter on Equator)
+stay shut.
+
 ## Compatibility
 
 - Tested with **SPT 4.1.6 / EFT 0.16.9.5-40743**. The server declares `~4.1.5`.
@@ -187,4 +194,5 @@ The repository also retains development tooling for maps outside the release.
 - [Development instructions](AGENTS.md)
 - [Current working state](HANDOFF.md)
 - [Build and validation history](docs/progress/INDEX.md)
+- [Changelog](CHANGELOG.md)
 - [Third-party notices](THIRD-PARTY-NOTICES.md)

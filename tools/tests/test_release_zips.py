@@ -10,6 +10,7 @@ import json
 import os
 from pathlib import Path
 import random
+import re
 import shutil
 import struct
 import subprocess
@@ -29,6 +30,12 @@ SERVER = "SPT_Runtime/user/mods/ArenaMapPort"
 MAPS = (("arena_equator", "Equator"), ("arena_bay5", "Bay5"), ("arena_airpit", "AirPit"))
 COMMIT = "a" * 40
 AMPB = b"AMPB"
+# The one statement about the gates of the team spawn enclosures that README.md, FORGE.md and the generated package README share
+# (whitespace-normalised; docs/progress/door-poses.md, spawn-gates.md): open positions from Arena's data, Arena's own motion where it has one.
+GATE_RULE = ("use Arena's own open positions and, where Arena has them, its motions (at half their time). They stand open from raid "
+             "start, or a mode plugin such as ArenaMode holds them closed and opens them when the fight starts; Air Pit's passport "
+             "control stays shut until a mode plugin opens it. A few doors that Arena itself never moves (three warehouse rollers on "
+             "Bay5, the FCK shop's roller shutter on Equator) stay shut.")
 
 MIT = """MIT License
 
@@ -2354,6 +2361,23 @@ class EncryptedBundleTests(FakeRepoCase):
                 self.assertLess(text.index("Requirement:"), text.index("Encrypted bundles"))
                 self.assertLess(text.index("Encrypted bundles"), text.index("Installation"))
 
+    def test_the_generated_readme_names_the_keys_folder_the_refs_and_the_gate_rule(self):
+        # 0.3.0 texts: the keys folder belongs to the bundles, the main-menu message carries a ref code, and the gates of the team
+        # spawn enclosures stand open at raid start unless a mode plugin holds them (Air Pit's passport control is held in every raid).
+        for single in (False, True):
+            parts = release.partition_single(self.scan(), self.spec) if single else self.partition()
+            text = re.sub(r"\s+", " ", release.readme_text(self.spec, parts))
+            with self.subTest(single=single):
+                self.assertIn("Updating: extract the complete ZIP over the installation with the SPT server closed", text)
+                self.assertIn("The keys folder (BepInEx/plugins/maschine-ArenaMapPort/keys) belongs to the bundles next to it", text)
+                self.assertIn("a missing or damaged key file is reported as an error in the client log, and the maps do not load", text)
+                self.assertIn('ends with a ref code, for example "ref NO_ARENA"', text)
+                self.assertIn('section "If the maps do not show up"', text)
+                self.assertIn("the lines marked [Arena] from BepInEx/LogOutput.log", text)
+                self.assertIn(GATE_RULE, text)
+                self.assertLess(text.index("Updating:"), text.index("Included locations:"))
+                self.assertLess(text.index("Included locations:"), text.index(GATE_RULE))
+
     def test_built_sets_carry_the_key_files_and_verify(self):
         self.pin_released_maps()
         for single in (False, True):
@@ -2399,6 +2423,17 @@ class RealRepoTests(unittest.TestCase):
             text = (REPO / name).read_text(encoding="utf-8")
             with self.subTest(file=name):
                 self.assertIn(release.KEYS_BUILT_FOR, text)
+
+    def test_the_gate_rule_reads_the_same_in_the_player_texts_and_names_no_developer_key(self):
+        """README.md and FORGE.md carry the shared GATE_RULE sentence (the generated package README is pinned in
+        EncryptedBundleTests), and neither names a developer key of the gates: Spawns/* are developer settings, the public F12
+        keys stay NaturalEquatorNight, ArenaInstallPath and ShowMapNotices."""
+        for name in ("README.md", "FORGE.md"):
+            text = re.sub(r"\s+", " ", (REPO / name).read_text(encoding="utf-8"))
+            with self.subTest(file=name):
+                self.assertIn(GATE_RULE, text)
+                self.assertNotIn("Spawns/", text)
+                self.assertNotIn("SpawnGate", text)
 
 
 BOWL = ("arena_bowl", "Bowl")
