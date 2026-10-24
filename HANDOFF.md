@@ -3,7 +3,7 @@
 Snapshot for whoever continues (human or agent). Verify the commits named here against `git log`; this file
 is updated by hand at each handover, it is not an automatic record. Read [AGENTS.md](AGENTS.md) first.
 
-## Update 2026-10-24 - Equator and Bay5 gate motions, Equator spawns in the booths, drive scale (built and rebaked, NOT deployed, host test pending)
+## Update 2026-10-24 - Equator and Bay5 gate motions, Equator spawns in the booths, drive scale (committed f3fe11e + c699420, deployed to D:\SPT41, host-verified on GPU-2)
 
 User request (2026-10-23): Equator's spawns behind the booth doors instead of the FCK shop and the FCK shutter shut again; every Bay5 gate open
 with Arena's own motion at half the original time. Implemented from the DotAnimator decode of [door-animations-survey.md](docs/progress/door-animations-survey.md):
@@ -15,7 +15,15 @@ now open), the scenes bundles are content-equal, `dist/` is restaged encrypted (
 7 files (both DLLs, 4 bundles, Equator `base.json`; ~1.6 GB). Deploy order and host recipe: [door-poses.md](docs/progress/door-poses.md) "2026-10-23 - Equator and Bay5
 door motions ..." and [equator-booth-spawns.md](docs/progress/equator-booth-spawns.md) (restart the SPT server before EFT). Bay5's unnumbered `Door_01` and `Door_01 (1)`
 stay shut on purpose (static twin, planks, fence). The 0.3.0 candidate ZIP of 2026-10-18 is superseded (old NavMesh bundles, old Equator database, old DLLs).
-Nothing is committed.
+Committed as `f3fe11e`; deployed on 2026-10-24 (7 files, server restarted before EFT). The first host raid found the one defect: `SpawnPlacementRepairs`'
+booth-avoidance rule of 2026-09-14 pushed the four booth spawns 6 to 7.5 m out again (Usec into the revolving entrance door, cut off from the floor);
+removed in `c699420` (deployed, EFT and server restarted). Then host-verified in five raids plus a hideout open, 0 Warnings in the whole process
+([door-poses.md](docs/progress/door-poses.md) "2026-10-24 - host verification"): Equator spawns on marker 6 behind the parked-open booth door, walk out
+through the door, FCK hall unreachable and the shutter a wall; developer hold seals the booth and the release drives 10 leaves to x +-2.0 in 3.5 s
+(max 8.3 ms); Bay5 parks the four rollers (y 3.222 / 3.181 / 3.213 / 3.323, 0 carvers, slabs above the walking band) and both depot gates (leaves
+162.4 / -141.8 and 138.8 / -99.0 degrees, Telfer posts standing, 6 park carvers), walks straight through all six doorways on the new mesh, hold
+and release in 3.5 s; Bowl at the new default: 6.8 s, 23 park carvers, max 12.2 ms. Known: the NavMesh probe cannot judge Bay5's root-posed
+rollers and hinged depot leaves ("not judged", Debug only); `D:\SPT41vanilla` not deployed; the 0.3.0 ZIP is not recut.
 
 ## Update 2026-10-23 - server not-found line in red, launcher advice once
 

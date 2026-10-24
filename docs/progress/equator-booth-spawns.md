@@ -1,7 +1,7 @@
 # Equator booth spawns, the closed FCK shutter and Bay5's gates (2026-10-23)
 
-Status: data done and unit-tested; both NavMesh bundles were rebaked and staged on 2026-10-24 ([door-poses.md](door-poses.md),
-"2026-10-23 - Equator and Bay5 door motions"); the host test on GPU-2 is recorded at the end of this file when it has run. User request (German, 2026-10-23): "habe mir equator nochmal angeschaut, da haben
+Status: done and host-verified on GPU-2 on 2026-10-24 (commits f3fe11e + c699420; the raids are quoted at the end of this file
+and in [door-poses.md](door-poses.md) "2026-10-24 - host verification"). Both NavMesh bundles were rebaked and staged on 2026-10-24. User request (German, 2026-10-23): "habe mir equator nochmal angeschaut, da haben
 wir offenbar die spawnpunkte falsch gesetzt, statt im FCK-laden müssten die auch hinter den booth-türen sein. das FCK-tor wieder zu
 machen. zu bay5, ich würde alle tore aufmachen, auch wenn ich mir grad nicht sicher bin welche das sind. das timing kann gerne
 schneller sein als im original, die hälfte reicht vermutlich."
@@ -214,3 +214,26 @@ NavMesh bundle only means bots still treat the newly opened gates as walls and t
    booths (they now share them with the spawns).
 4. If the DynamicMaps pack of Equator is exported again, `tools/dynamicmaps/export_equator.py` hides `opened_barriers`; the FCK
    shutter is no longer hidden there.
+
+## 2026-10-24 - host verification on GPU-2, and the one defect it found
+
+The first raid of build f3fe11e put the player at (3.65, 0.09, 55.52): inside the mall's revolving entrance door, cut off from the
+floor. `SpawnPlacementRepairs` (2026-09-14, "moves our player spawn points out of Arena's own spawn enclosures") collected the bounds
+of every solid collider named like the booths (the `Equator_Respawn_NN` walls and the `Door_Sliding_Respawn` leaves, 45 colliders on
+Equator) and moved every spawn whose feet stood inside one of them to the nearest free spot outside: Usec 7.5 m north into the
+revolving door, All 6.0 m west into the FCK hall behind the shut shutter, Bear and South_All 6.0 m north out of the south booth
+(`[RaidFix] spawn placement: ... 45 respawn-booth collider(s) avoided; ...`). The rule predates `BoothDoorRepairs` opening the
+booth doors (2026-09-20) and had never fired before, because no spawn stood inside a booth. Commit c699420 removes it (the
+SPAWN_BOUND disabling and the capsule, floor and spacing checks stay; a wiring test pins the removal). Open item 1 of the list
+above (the rebuild) is done; item 2 reads as follows after the second raid (the quotes are in door-poses.md):
+
+- Plain raid: `spawn placement: disabled 2 SPAWN_BOUND barrier collider(s); 'arena_equator-bot-south-west' ... (1.5 m)` and no player
+  spawn moved; `uibridge_player` (6.5, 0.1, 48.6) yaw 180 = marker 6 (Usec), inside the north booth facing the parked-open door;
+  the walk to the atrium went through the door (29.3 m away, 33.3 m along the navmesh); the FCK shutter is a wall (still, and a walk
+  toward (-12, 36) ends 2.6 m short on the corridor side); the hall is unreachable (`dryRun` to (-11.7, 0.1, 48.6) refused).
+- Developer hold: the player starts behind the CLOSED leaves (still `equator-booth-held-closed`), the booth is sealed for bots (10
+  carvers, every probed doorway PathPartial, `dryRun` out refused), and the release drives all ten leaves to x +-2.0 in 3.5 s at the
+  default scale (`drove 10 part(s) ... (scale 0.50)`, `drive frames ... max 8.3 ms`), after which every probed doorway is PathComplete.
+- Only the Usec and the north All marker were started from (the profile is USEC; EFT picks among the side's points). The Bear and
+  South_All points stand on the same kind of marker inside the south booth and were not started from in person.
+- Item 3 stays open (one pair at a time; the exits in the booths), item 4 too (DynamicMaps export).

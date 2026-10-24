@@ -1145,3 +1145,87 @@ Order matters; the details of the combinations are in [equator-booth-spawns.md](
   old DLLs. A new ZIP needs a new staging pass (nothing in the cut step has run).
 - The ad-hoc checks used here (validators plus log pins, mesh checks, content diff) are not committed; the log pins and the validator
   commands are in "Handoff: rebuilding the two NavMesh bundles" above.
+
+## 2026-10-24 - host verification on GPU-2 (commits f3fe11e + c699420; five raids and a hideout open)
+
+Deploy: `deploy-to-spt.ps1 -Confirm` (7 of 90 files differed: both DLLs, the Equator and Bay5 scenes and NavMesh bundles, Equator's
+`base.json`; ~1.6 GB), `gpu-run deploy-wait --server` (7 files identical on the host after 67.8 s, the SPT server was not running and was
+started with the new DLL and database), `gpu-run start` (16/16 plugins identical). The whole EFT process of the final build (instance
+40f40695, 01:53 to 02:10, log file `LogOutput-SPT-GPU-2-2026-10-24_01-53-47.log`, 18,081 lines) holds 0 Warnings and 0 Errors from
+`maschine-ArenaMapPort`; every `gpu-run raid` line read `warnings 0 from mods ... errors 0`.
+
+- **Raid 1 (01:43, Equator, no bots, build f3fe11e): the one defect, found and fixed.** The player stood at (3.65, 0.09, 55.52), inside the
+  mall's revolving entrance door, unreachable from the floor (`uibridge_teleport dryRun` to the Usec marker and to the atrium both
+  refused). `[RaidFix] spawn placement: disabled 2 SPAWN_BOUND barrier collider(s), 45 respawn-booth collider(s) avoided; ...
+  'arena_equator-player-usec' (6.52, 0.08, 48.59) -> (3.65, 0.09, 55.52) (7.5 m); 'arena_equator-player-all' (-4.90, 0.08, 45.44) ->
+  (-10.90, 0.05, 45.44) (6.0 m)` (and Bear / South_All 6.0 m out of the south booth): `SpawnPlacementRepairs`' rule of 2026-09-14 moved every
+  spawn whose feet stood inside the bounds of a collider named like the booths (the `Equator_Respawn_NN` walls AND the
+  `Door_Sliding_Respawn` leaves) out of the booth. The rule predates the opened booth doors and is removed in c699420 (the SPAWN_BOUND
+  disabling and the capsule / floor / spacing checks stay; wiring test `TheSpawnPlacementRepairLeavesTheBoothSpawnsWhereArenaPutThem`).
+  Everything else of raid 1 was already right: `respawn doors: deactivated 0 sliding-door leaf(s) on 5 door assembly(s), parked 10 leaf(s)
+  at the open pose`, ten `[SpawnGates] park: 'Door_Sliding_Respawn_L|R' snapped to the open pose (1 node(s), clip DotAnimator)` (two
+  `clip borrowed from SPAWN_DOORS/Door_Sliding_Respawn (1)`), `[NavMesh] added navmesh for 'arena_equator': 10395 vertices, 4567
+  triangles`, ten `parked ... 1 park carver(s) (navmesh installed)`, the shutter `equator_roller_shutters_02 (9)` active with its slab
+  LODs and colliders (inspector), leaf `localPosition.x` = 2.0.
+- **Raid 2 (01:54, Equator, no bots, build c699420, deployed with `deploy-wait --game` and a server restart).** `spawn placement:
+  disabled 2 SPAWN_BOUND barrier collider(s); 'arena_equator-bot-south-west' (-9.00, 0.10, -28.00) -> (-7.50, 0.05, -28.00) (1.5 m)` (the
+  known 0.00 m clearance point; no player spawn moved). `uibridge_player`: (6.5, 0.1, 48.6) yaw 180 = Arena's marker 6, the Usec spawn,
+  inside the north booth facing the door (still `equator-booth-spawn-2`: both leaves parked in their pockets, the mall corridor behind the
+  open door). `dryRun` to the old Usec spawn (-11.7, 0.1, 48.6) in the FCK hall refused, to the atrium (0, 0.2, 2) accepted;
+  `uibridge_walk` to (0, 0.2, 20) arrived through the booth door (29.3 m away, 33.3 m along the navmesh). From (-8, 0.1, 36) looking
+  west the shutter is a closed wall (still `equator-fck-shutter-closed`); a walk to (-12, 0.1, 36) ended `time_up, 2.6 m short` at
+  (-12.2, 0.1, 33.6), the corridor side of the hall front: the hall has no NavMesh connection. R leaf of the assembly at x 4.535:
+  `localPosition.x` = -2.0. 119.5 fps, max 14.2 ms.
+- **Raid 3 (01:58, Equator, developer hold 30 s).** `10 leaf(s) held closed (10 part(s) registered; developer test hold 30 s)`,
+  `navmesh installed: 10 carver(s) over 10 movement collider(s) of 10 gate part(s) ...; 2 doorway(s) already disconnected on the
+  map's own navmesh (not judged)` (door (3) of the south booth, as before), `navmesh probe: every probed gate sealed (8 probed)`
+  (PathPartial on all eight), `dryRun` out of the booth refused, still `equator-booth-held-closed` (both leaves shut, glass, the mall
+  behind). Release at 30.1 s: `released (developer test hold ...): ... 10 carver(s) removed, drove 10 part(s) to the open pose in 3.5 s
+  (scale 0.50), 10 park carver(s) in place`, `drive frames: 420 frame(s) in 3.5 s, mean 8.3 ms, max 8.3 ms`, `navmesh probe: every
+  probed gate open (8 probed)` (PathComplete, 2 corners each), `dryRun` to the atrium accepted, R leaf `localPosition.x` = -2.0 after
+  the drive (the 7 s leaf, 3.5 s at the default scale). 120 fps, max 8.3 ms.
+- **Raid 4 (02:00, Bay5, no bots).** `spawn placement: ... 'arena_bay5-bot-east-lane' (117.89, -3.86, 43.10) -> (119.39, -3.87, 43.10)
+  (1.5 m)` (the known off-mesh bot point, unchanged behaviour). Eight `park:` lines; `spawn barrier 'Bay5_Warehouse_Gate_Door_01 (2)' at
+  (145.2, 0.2, 39.8): ... parked 1 part(s) at the open pose` and the same for `(3)`, `(4)` and `One_man_Door`; `spawn barrier
+  'OLD_WAREHOUSE_DOORS/Gates_Depot_Frame': 2 instance(s) share this path - opening all of them`; `spawn barrier 'Gates_Depot_Frame' at
+  (50.6, -3.9, 7.5): deactivated 0 part(s), 0 already off, kept 5 frame part(s), 2 part(s) without a pose left standing, parked 2
+  part(s) at the open pose` and the same at (69.0, -3.9, -6.3). `[NavMesh] added navmesh for 'arena_bay5': 22141 vertices, 10223
+  triangles`; `parked 'Bay5_Warehouse_Gate_Door_01 (2)': 1 node(s) at the open pose (clip DotAnimator), 0 park carver(s) (navmesh
+  installed); 1 collider(s) above the 1.8 m walking band skipped` ((3) borrowed, (4) the same; `One_man_Door` 2 colliders skipped);
+  `parked 'Gates_Depot_Door_L': ... 2 park carver(s)` and `'Gates_Depot_Door_R': ... 1 park carver(s)` for both gates: 6 park carvers,
+  as the offline model said. Inspector: roller (2) `localPosition.y` 3.222, (3) 3.181, (4) 3.213, `One_man_Door` 3.323; gate at
+  x 50.574 `Gates_Depot_Door_L_Leaf localEulerAngles.z` 162.432; gate at x 69.045 (the second instance, `#1`) `_R_Leaf` 261.026
+  (= -98.974); `Telfer_Help` and `Telfer_Help (1)` active on both frames. Walks straight through every doorway (`uibridge_walk`
+  reports the navmesh length next to the straight distance): depot 821 (50.5, 2.5) -> (50.5, 12.0) 9.5 m / 9.5 m; depot 822
+  (65.5, -6.4) -> (72.5, -6.4) 7.0 m / 7.0 m; roller (4) (126.0, 48.6) -> (132.0, 48.6) 6.0 m / 6.0 m; roller (2) (142.8, 43.0) ->
+  (142.8, 36.0) 7.0 m / 7.1 m; `One_man_Door` (126.0, 69.5) -> (132.0, 69.5) 6.0 m / 6.0 m; roller (3) (127.5, 43.5) -> (131.0,
+  41.5) 4.0 m / 4.0 m (the point 3.3 m west of (3) has no room to stand: the tarp and the carton stack in front of it). Stills
+  `bay5-depot-821-open`, `bay5-depot-822-open` (both leaves swung to the walls, the posts standing), `bay5-roller-4-lifted` (the slab
+  in the lintel; in the background the two shut east-wall doors `Door_01` / `Door_01 (1)` behind their barricades), `bay5-roller-2-lifted`,
+  `bay5-one-man-door-lifted`, `bay5-roller-3-lifted`. 119.9 fps, max 10.2 ms.
+- **Raid 5 (02:05, Bay5, developer hold 30 s).** `1 part(s) held closed` per roller and `2 part(s) held closed` per depot gate
+  (`8 part(s) registered`), `navmesh installed: 11 carver(s) over 11 movement collider(s) of 8 gate part(s)`, `navmesh probe: no
+  gate could be probed (0 inconclusive) 8 doorway(s) disconnected on the map's own navmesh not judged` (see the limitation below).
+  Release at 30.0 s: `11 carver(s) removed, drove 8 part(s) to the open pose in 3.5 s (scale 0.50), 6 park carver(s) in place`,
+  `drive frames: 420 frame(s) in 3.5 s, mean 8.3 ms, max 8.4 ms`; `dryRun` from the north-east spawn to (50.5, -3.9, 10.5) beyond
+  depot 821 accepted. 120 fps, max 8.5 ms.
+- **Raid 6 (02:07, Bowl, developer hold 30 s: the regression at the new default).** Hold as on 2026-10-22 (`28 carver(s) over 28
+  movement collider(s) of 4 gate part(s)`, `every probed gate sealed (1 probed, 2 inconclusive)`); release: `28 carver(s) removed,
+  drove 4 part(s) to the open pose in 6.8 s (scale 0.50), 23 park carver(s) in place` (`parked 'BTR_82_closed': 9 node(s) ..., 9 park
+  carver(s) (released); 1 collider(s) above the 1.8 m walking band skipped`, ambulance 11, army gate 2, respawn gate 1), `drive
+  frames: 810 frame(s) in 6.8 s, mean 8.3 ms, max 12.2 ms`, `navmesh probe: every probed gate open (3 probed)`. One 36.7 ms frame
+  showed in `uibridge_status` after the release (outside the drive window; the park carvers, the probe and the log line land in one
+  frame), the drive itself stayed under 12.2 ms.
+- The hideout opened and closed once afterwards (scenarios `hideout-open` / `hideout-back`, `logAbsent` error passed).
+
+Stills: host `C:\Temp\uibridge-host\captures\stills\` (`equator-spawn-view-1` is raid 1's revolving-door view).
+
+### Limitations seen on the host
+
+- The post-install / post-release NavMesh probe does not fit Bay5's parts: a roller's registered part is its ROOT (the probe points
+  1.5 m either side of the root's position lie off the doorway for the rotated rollers) and a depot leaf's position is its hinge, so
+  all 8 doorways report "disconnected on the map's own navmesh, not judged" (Debug, no Warning) in both states. The doorway walks of
+  raid 4 are the evidence that the new Bay5 mesh is open at all six gates; a probe along the moved collider's bounds instead of the
+  part's position would judge them.
+- Bay5's bot spawn `bot-east-lane` and Equator's `bot-south-west` are still moved 1.5 m by the placement repair on every raid (known
+  mesh-edge points, unchanged by this change set).

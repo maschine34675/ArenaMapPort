@@ -905,3 +905,14 @@ Deploy: `deploy-to-spt.ps1 -Confirm` (90 files, only the two DLLs differed), `gp
   east spawn to the field passed. The hideout opened and closed once afterwards (scenario, `logAbsent` error passed).
 - Not tested: a Hold during a drive (needs a mode plugin; the developer hold acts only at raid start), `SpawnGateDrive = false`
   (the snap path is the same code as the raid-start park), a player standing in a body's path at the release.
+
+## 2026-10-24 - regression at the halved drive (commit f3fe11e + c699420, GPU-2 raid 02:07)
+
+The door-pose change set for Equator and Bay5 ([door-poses.md](door-poses.md) "2026-10-24 - host verification") touches Bowl in two
+ways: `Spawns/SpawnGateDriveScale` (default 0.5) halves every drive, and a park carver is made only for a moved collider in the
+walking band. One developer-hold raid confirmed both: hold identical to 2026-10-22 (`28 carver(s) over 28 movement collider(s) of 4
+gate part(s)`, `every probed gate sealed (1 probed, 2 inconclusive)`); release `drove 4 part(s) to the open pose in 6.8 s (scale
+0.50), 23 park carver(s) in place` (BTR 9 carvers with `1 collider(s) above the 1.8 m walking band skipped`, the turret; ambulance 11,
+army gate 2, respawn gate 1), `drive frames: 810 frame(s) in 6.8 s, mean 8.3 ms, max 12.2 ms`, `navmesh probe: every probed gate open
+(3 probed)`; hideout opened once. The 0.3.0 candidate ZIP of 2026-10-18 is superseded by this build (new DLLs, the Equator and Bay5
+bundles and Equator's database changed); it is recut with `make_release_zips.py` when the user decides to publish.
