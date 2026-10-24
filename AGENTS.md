@@ -620,7 +620,9 @@ the log; the user uses it to point at things.
   of 2 menu-seconds lets them go first, and the menu clock counts only main-menu time. (6) `RequestHandler.GetJson` retries three times with
   an Error line per attempt, so a 404 from an older server costs four Error lines in a player's log: the status probe sends its own request
   with SPT's `Client` (by reflection, own 5 s token, never the shared `Timeout`) and never logs from its worker thread. (7)
-  `PreloaderUI.ShowErrorScreen` is not used (shared queue, 500-character cut, closed by `PrepareGameJob`), and `_messageOnLoadMenu` is a
+  `PreloaderUI.ShowErrorScreen` is never called by our notices (shared queue, 500-character cut, closed by `PrepareGameJob`). Since
+  2026-10-24 its string overload is observed after the original to suppress only a redundant `NO_CAUSE` answer for that open attempt;
+  owned gate/key/bundle/integrity records retain priority, and a new attempt never inherits the marker. `_messageOnLoadMenu` is a
   private-field poke tied to EFT's load flow: it stays the documented fallback only. (8) Keys resolve at `TryServe` time, not at the menu, so
   a stage 2 key failure is explained AFTER the failed attempt (records by attempt window), never at the first menu; do not pre-resolve keys
   there (3 to 7.4 MB per map at every start). (9) Arena versions have five numbers (`0.6.1.0.48206`) that `System.Version` cannot parse:

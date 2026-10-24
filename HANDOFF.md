@@ -3,6 +3,18 @@
 Snapshot for whoever continues (human or agent). Verify the commits named here against `git log`; this file
 is updated by hand at each handover, it is not an automatic record. Read [AGENTS.md](AGENTS.md) first.
 
+## Update 2026-10-24 - do not follow an EFT load error with an unsubstantiated map-error dialog
+
+The reported Bay5 attempt was refused by ArenaMode's PFT protection, but MapPort subsequently
+showed `NO_CAUSE` despite recording zero map failures. The native error observer now marks only
+the open load attempt; that marker suppresses only the no-cause fallback. Specific map failures,
+the original EFT error and all loading/cancellation behavior stay intact. A retry resets it.
+Client Release build: zero warnings/errors. Full .NET suite: 2,280 passed, zero skipped.
+Client-only deployment through `deploy-to-spt.ps1`; no map/server/config changes. This failure
+sequence has not been deliberately repeated in-game after the fix; automated scheduler/wiring
+coverage and the exact original log are recorded in [map-notices.md](docs/progress/map-notices.md),
+the final 2026-10-24 section.
+
 ## Update 2026-10-24 - all four DynamicMaps overviews refreshed for original gate poses (data-only deployed)
 
 Equator, Bay5, AirPit and Bowl regenerated from current native triangulation and `.doors.json` open combat poses.

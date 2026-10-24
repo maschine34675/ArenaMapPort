@@ -11,7 +11,7 @@ namespace ArenaMapPort.Client
     internal sealed class AttemptFailureInput
     {
         internal AttemptFailureInput(string mapKey, string mapName, IReadOnlyList<MapLoadFailure> records, GateSnapshot gate,
-            bool canceledByPlayer, bool reachedStarted, string clientVersion)
+            bool canceledByPlayer, bool reachedStarted, string clientVersion, bool nativeErrorReported = false)
         {
             MapKey = mapKey;
             MapName = mapName;
@@ -20,6 +20,7 @@ namespace ArenaMapPort.Client
             CanceledByPlayer = canceledByPlayer;
             ReachedStarted = reachedStarted;
             ClientVersion = clientVersion;
+            NativeErrorReported = nativeErrorReported;
         }
 
         internal string MapKey { get; }
@@ -33,6 +34,8 @@ namespace ArenaMapPort.Client
         internal bool CanceledByPlayer { get; }
         internal bool ReachedStarted { get; }
         internal string ClientVersion { get; }
+        /// <summary>EFT already queued an error for this exact loading attempt; only the no-cause fallback is redundant.</summary>
+        internal bool NativeErrorReported { get; }
     }
 
     /// <summary>
@@ -50,7 +53,7 @@ namespace ArenaMapPort.Client
     /// becomes one of six key texts (an Arena version newer than the key file's means "update ArenaMapPort", an older one "update Arena"; versions are
     /// compared component by component because Arena's own versions have five numbers, which <c>System.Version</c> cannot hold), a bundle problem
     /// becomes <see cref="NoticeId.BundleBad"/>, and no record at all becomes <see cref="NoticeId.LoadNoCause"/> unless the player cancelled or the
-    /// raid started. <see cref="SelectNavMesh"/> (row 21), <see cref="SelectFileDamaged"/> (row 22) and <see cref="SelectPending"/> (row 7) are the toasts.
+    /// raid started or EFT already reported an error for that attempt. <see cref="SelectNavMesh"/> (row 21), <see cref="SelectFileDamaged"/> (row 22) and <see cref="SelectPending"/> (row 7) are the toasts.
     ///
     /// Not here: any Unity or EFT call, any logging, the timing (<see cref="MapNoticeScheduler"/>) and the words (<see cref="MapNoticeText"/>).
     /// Host test: docs/progress/map-notices.md.
@@ -343,7 +346,7 @@ namespace ArenaMapPort.Client
             MapNoticePlan plan;
             if (newest == null)
             {
-                if (input.CanceledByPlayer || input.ReachedStarted)
+                if (input.CanceledByPlayer || input.ReachedStarted || input.NativeErrorReported)
                     return null;
                 plan = new MapNoticePlan(NoticeId.LoadNoCause);
             }

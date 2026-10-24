@@ -936,6 +936,70 @@ public sealed class MapNoticeSchedulerTests
     }
 
     [Fact]
+    public void NativeErrorDuringLoadingSuppressesOnlyTheRedundantNoCauseAnswer()
+    {
+        Harness h = HealthyAfterT1();
+        FailedAttempt(h, () => h.Sched.NoteNativeErrorReported());
+        Assert.Empty(h.Env.Modals);
+        Assert.Contains(h.Env.Debugs, line => line.Contains("error already reported by EFT; no map failure recorded"));
+
+        // A fresh attempt, even on the same map, does not inherit that error.
+        FailedAttempt(h, null);
+        Assert.EndsWith("- ref NO_CAUSE", Assert.Single(h.Env.Modals).Text);
+    }
+
+    [Theory]
+    [InlineData(MapLoadFailureKind.BundleMissing)]
+    [InlineData(MapLoadFailureKind.Integrity)]
+    [InlineData(MapLoadFailureKind.GateRefused)]
+    [InlineData(MapLoadFailureKind.Key)]
+    public void NativeErrorDoesNotHideAnOwnedFailureEvenWithMenuNoticesDisabled(MapLoadFailureKind kind)
+    {
+        Harness h = HealthyAfterT1();
+        h.Env.NoticesEnabled = false;
+        FailedAttempt(h, () =>
+        {
+            h.Sched.NoteNativeErrorReported();
+            if (kind == MapLoadFailureKind.GateRefused) h.Failures.NoteGateRefused("arena_bowl", "gate");
+            else if (kind == MapLoadFailureKind.Key) h.Failures.NoteKey("arena_bowl", KeyFailure.KeyFileMissing, "missing", null, null, null, "bowl.json");
+            else h.Failures.NoteBundle("arena_bowl", kind, "bowl.bundle", "missing or damaged");
+        });
+        Assert.DoesNotContain("NO_CAUSE", Assert.Single(h.Env.Modals).Text);
+    }
+
+    [Fact]
+    public void NativeErrorsOutsideTheLoadingAttemptDoNotSilenceItsFallback()
+    {
+        Harness h = HealthyAfterT1();
+        h.Sched.NoteNativeErrorReported(); // menu error before loading
+        h.Sched.NoteAttemptStarted("arena_bowl");
+        h.Env.InStartedRaid = true; // runtime error before the scheduler has polled Started
+        h.Sched.NoteNativeErrorReported();
+        h.Env.InStartedRaid = false;
+        h.Env.MenuIsCurrent = false;
+        h.Sched.NoteComeback();
+        h.Sched.NoteNativeErrorReported(); // cannot withdraw an already queued answer
+        h.Env.MenuIsCurrent = true;
+        h.Sched.OnMenuShown(true);
+        h.Run(3);
+        Assert.EndsWith("- ref NO_CAUSE", Assert.Single(h.Env.Modals).Text);
+    }
+
+    [Fact]
+    public void NativeErrorDoesNotConsumeNonblockingOrOtherMapRecords()
+    {
+        Harness h = HealthyAfterT1();
+        FailedAttempt(h, () =>
+        {
+            h.Sched.NoteNativeErrorReported();
+            h.Failures.NoteNavMesh("arena_bowl", NavMeshCause.NoKey, "missing");
+            h.Failures.NoteBundle("arena_bay5", MapLoadFailureKind.BundleMissing, "bay5.bundle", "other map");
+        });
+        Assert.Empty(h.Env.Modals);
+        Assert.Equal(2, h.Failures.Count);
+    }
+
+    [Fact]
     public void OnlyRecordsOfTheAttemptsWindowAndMapAreAnsweredAndTheOthersWait()
     {
         Harness h = HealthyAfterT1();

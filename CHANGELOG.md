@@ -6,6 +6,12 @@ their notes stay under [docs/releases/](docs/releases/) for the record, and 0.2.
 Dates are ISO dates. Each entry links its full release note (download links, checksums, install and upgrade steps),
 and the settings text is in the [README](README.md).
 
+## Unreleased
+
+- Avoid a second, misleading `NO_CAUSE` map-error dialog when EFT already reported
+  the failure during that loading attempt. Recorded map-file and Arena-installation
+  errors still show their specific explanation.
+
 ## 0.3.0 - 2026-10-24
 
 Full release note: [docs/releases/v0.3.0.md](docs/releases/v0.3.0.md).

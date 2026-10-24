@@ -214,6 +214,7 @@ namespace ArenaMapPort.Client
             internal string Key;
             internal long StartSequence;
             internal AttemptState State;
+            internal bool NativeErrorReported;
         }
 
         sealed class ModalJob
@@ -420,6 +421,19 @@ namespace ArenaMapPort.Client
             });
         }
 
+        /// <summary>Remember EFT's own error only for the current loading attempt. Never retain it for the next raid.</summary>
+        internal void NoteNativeErrorReported()
+        {
+            Guard("native error", () =>
+            {
+                Attempt attempt = _attempt;
+                if (attempt == null || attempt.State != AttemptState.Open || attempt.NativeErrorReported || Pred(() => _env.InStartedRaid))
+                    return;
+                attempt.NativeErrorReported = true;
+                Debug("attempt: map=" + attempt.Key + " error already reported by EFT");
+            });
+        }
+
         /// <summary>
         /// <c>ComebackToMainMenu</c> ran. An open attempt (the raid never started) fails: its blocking records are taken now and the answer is queued for the
         /// next main menu. A finished attempt (the raid started and ended) is left alone.
@@ -441,11 +455,12 @@ namespace ArenaMapPort.Client
                 bool canceled = Pred(() => _env.MatchingCanceledByPlayer);
                 Debug("attempt: map=" + attempt.Key + " failed records=" + records.Count.ToString(CultureInfo.InvariantCulture));
 
-                var input = new AttemptFailureInput(attempt.Key, NameOf(attempt.Key), records, ReadGate(), canceled, false, SafeVersion());
+                var input = new AttemptFailureInput(attempt.Key, NameOf(attempt.Key), records, ReadGate(), canceled, false, SafeVersion(), attempt.NativeErrorReported);
                 MapNoticePlan plan = MapNoticeSelector.SelectAttempt(input);
                 if (plan == null)
                 {
-                    Debug("attempt: map=" + attempt.Key + " no notice (" + (canceled ? "cancelled by the player" : "nothing to say") + ")");
+                    Debug("attempt: map=" + attempt.Key + " no notice (" + (canceled ? "cancelled by the player" :
+                        attempt.NativeErrorReported ? "error already reported by EFT; no map failure recorded" : "nothing to say") + ")");
                     return;
                 }
                 Wake();

@@ -5,6 +5,7 @@ using System.IO;
 using ArenaMapPort.Shared;
 using BepInEx.Configuration;
 using Comfort.Common;
+using Diz.Utils;
 using EFT;
 using EFT.Communications;
 using EFT.Settings;
@@ -71,7 +72,7 @@ namespace ArenaMapPort.Client
         // ---- installation ----------------------------------------------------------------------------------------------------
 
         /// <summary>
-        /// Creates the scheduler and installs the two Harmony hooks, each in its own guard; a hook that cannot be installed is one Error line from
+        /// Creates the scheduler and installs the Harmony hooks, each in its own guard; a hook that cannot be installed is one Error line from
         /// <see cref="HarmonyPatches.Verify"/> (or a Warning here) and never stops the plugin. Plugin.Awake calls this in its own try/catch, before
         /// the startup banner.
         /// </summary>
@@ -83,6 +84,7 @@ namespace ArenaMapPort.Client
 
             bool menuHooked = false;
             bool selectionHooked = false;
+            bool errorHooked = false;
 
             Guard("hooking the main menu", () =>
             {
@@ -118,9 +120,37 @@ namespace ArenaMapPort.Client
                 }
             });
 
+            Guard("observing native load errors", () =>
+            {
+                Type preloader = AccessTools.TypeByName("EFT.UI.PreloaderUI");
+                if (preloader == null)
+                {
+                    Plugin.Log.LogError("[Notice] type not found: EFT.UI.PreloaderUI: native load errors cannot suppress the no-cause fallback.");
+                    return;
+                }
+                var show = AccessTools.Method(preloader, "ShowErrorScreen", new[] { typeof(string), typeof(string), typeof(Action) });
+                if (HarmonyPatches.Verify(show, preloader, "ShowErrorScreen(string, string, Action)"))
+                {
+                    harmony.Patch(show, postfix: new HarmonyMethod(typeof(MapNotices), nameof(NativeErrorReportedPostfix)));
+                    errorHooked = true;
+                }
+            });
+
             _scheduler.MenuPostfixInstalled = menuHooked;
             Plugin.Log.LogDebug("[Notice] installed (main menu hook=" + (menuHooked ? "yes" : "no, polling") + ", selection hook=" +
-                                (selectionHooked ? "yes" : "no") + ", ShowMapNotices=" + (_show == null || _show.Value ? "on" : "off") + ")");
+                                (selectionHooked ? "yes" : "no") + ", native error hook=" + (errorHooked ? "yes" : "no") +
+                                ", ShowMapNotices=" + (_show == null || _show.Value ? "on" : "off") + ")");
+        }
+
+        // The exception overload forwards here. Observe the queued error without reading its
+        // wording, replacing it or touching the callback that returns EFT to the menu.
+        static void NativeErrorReportedPostfix(string __1, bool __runOriginal)
+        {
+            Guard("native load error", () =>
+            {
+                if (__runOriginal && AsyncWorker.CheckIsMainThread() && !string.IsNullOrWhiteSpace(__1))
+                    _scheduler?.NoteNativeErrorReported();
+            });
         }
 
         static void EnsureCreated()

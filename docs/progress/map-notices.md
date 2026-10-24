@@ -1596,3 +1596,41 @@ that 17 s), the displacement callbacks (V8) and the German texts on a host (both
 - [arena-install-check.md](arena-install-check.md): the check these notices explain; the status route reads its result, the gate texts are unchanged.
 - [bundle-encryption.md](bundle-encryption.md): the key and bundle failures the T3 modals name.
 - [../../README.md](../../README.md): the player-facing "If the maps do not show up" list (ref to fix).
+
+## 2026-10-24 - suppress the no-cause follow-up after EFT already reported a load error
+
+This section qualifies row 20 and the earlier T3 fallback description. In the reported
+`LogOutput-MASCHINE11-2026-10-24_17-31-12.log`, ArenaMode refused the PFT arm at
+17:38:20.935. MapPort then recorded `attempt: map=arena_bay5 failed records=0` at
+17:38:26.484 and displayed `LoadNoCause / NO_CAUSE` at 17:38:46.031. The second dialog
+suggested reporting a map issue although MapPort had no supporting failure record.
+
+`PreloaderUI.ShowErrorScreen(string, Exception, Action)` forwards to the string overload;
+that overload queues the native message on the main thread. The matching error handler
+returns through `ComebackToMainMenu` when the player accepts it (EFT 0.16.9.5 decompile:
+`PreloaderUI.cs:385-411`, `TarkovApplication.cs:2498`). A guarded postfix now observes the
+string overload. It requires the original to have run, the main thread and a nonblank
+message. It neither reads the wording nor changes the message, callback or load result.
+There is no ArenaMode/PFT dependency or exception-text matching.
+
+Only the currently open loading attempt receives `NativeErrorReported`; errors before
+loading, after comeback or in a started raid do not mark it. The flag means the native
+queue accepted an error, not that pixels were independently observed. A new attempt,
+including a retry on the same map, starts with a fresh flag. With no blocking map record,
+that flag suppresses the redundant no-cause modal. Actual gate, key, bundle and integrity
+records still win, including when menu notices are disabled. No queued modal is withdrawn,
+and unrelated-map and nonblocking NavMesh records remain in their registry.
+
+Validation: the full Release .NET suite passed 2,280 tests, zero failures/skips, including
+new attempt-lifetime, retry, own-failure-priority and observer-wiring cases. The client
+Release/DllOnly build completed with zero warnings/errors. An independent source review
+found no additional issue. The initial targeted run found an existing two-hook source
+pin; it now counts the added third observer and still checks each hook's guard.
+
+Deployment: `tools/deploy-to-spt.ps1 -SptRoot D:\SPT41 -DllOnly -DllTarget Client`, dry run
+then `-Confirm`, updates exactly one client DLL. No bundles, server files or configs are
+included. The deployed client SHA-256 is
+`D974E2E3CDE7D4A2350BFA7687C4EE175364D4F0E17FEA3585C2D5DB79912178`.
+Raw test/build/deploy receipts are ignored under `work/notice-native-error/`.
+No new native failed-load reproduction was performed; this is source, automated-test,
+build and deployment evidence. The original user log supplies the native failure sequence.

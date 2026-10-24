@@ -112,10 +112,26 @@ public sealed class MapNoticeWiringTests
         Assert.Contains("ui.ShowScrolledMessageWindow(text, accepted, null, caption, 0f, true)", glue);
         Assert.Contains("NotificationManager.DisplaySingletonWarningNotification(text, ENotificationDurationType.Long)", glue);
         Assert.DoesNotContain("ENotificationDurationType.Infinite", glue); // an un-clicked toast stalls every later one
-        Assert.DoesNotContain("ShowErrorScreen", glue);
+        Assert.DoesNotContain(".ShowErrorScreen(", glue); // observing the native error is allowed; replacing or creating it is not
         Assert.DoesNotContain("ShowCriticalErrorScreen", glue);
         Assert.DoesNotContain("_messageOnLoadMenu", glue);
         Assert.Contains("Singleton<NotificationManager>.Instantiated", glue); // EFT drops a toast silently without its manager
+    }
+
+    [Fact]
+    public void NativeErrorsAreObservedAfterTheOriginalQueuedThemWithoutTextMatchingOrChangingTheCallback()
+    {
+        string glue = Source("MapNotices.cs");
+        Assert.Contains("AccessTools.Method(preloader, \"ShowErrorScreen\", new[] { typeof(string), typeof(string), typeof(Action) })", glue);
+        Assert.Contains("HarmonyPatches.Verify(show, preloader, \"ShowErrorScreen(string, string, Action)\")", glue);
+        Assert.Contains("harmony.Patch(show, postfix: new HarmonyMethod(typeof(MapNotices), nameof(NativeErrorReportedPostfix)))", glue);
+        string observer = Between(glue, "static void NativeErrorReportedPostfix(", "static void EnsureCreated()");
+        Assert.Contains("__runOriginal && AsyncWorker.CheckIsMainThread() && !string.IsNullOrWhiteSpace(__1)", observer);
+        Assert.Contains("_scheduler?.NoteNativeErrorReported();", observer);
+        Assert.DoesNotContain("ArenaMode", observer);
+        Assert.DoesNotContain("PitFireTeam", observer);
+        Assert.DoesNotContain("ShowErrorScreen", observer);
+        Assert.DoesNotContain("ref ", observer);
     }
 
     [Fact]
@@ -193,7 +209,7 @@ public sealed class MapNoticeWiringTests
     }
 
     [Fact]
-    public void BothHooksAreResolvedByNameVerifiedAndGuardedAndTheMenuHookIgnoresACallWithoutAProfile()
+    public void AllHooksAreResolvedByNameVerifiedAndGuardedAndTheMenuHookIgnoresACallWithoutAProfile()
     {
         string glue = Source("MapNotices.cs");
         Assert.Contains("AccessTools.TypeByName(\"EFT.UI.MenuScreen\")", glue);
@@ -201,8 +217,9 @@ public sealed class MapNoticeWiringTests
         Assert.Contains("HarmonyPatches.Verify(show, menuScreen, \"Show(Profile, MatchmakerPlayersController, ESessionMode)\")", glue);
         Assert.Contains("AccessTools.TypeByName(\"EFT.UI.Matchmaker.MatchMakerSelectionLocationScreen\")", glue);
         Assert.Contains("HarmonyPatches.Verify(show, selection, \"ShowInternal(RaidSettings)\")", glue);
-        Assert.Equal(2, Regex.Matches(glue, @"harmony\.Patch\(").Count);
-        Assert.Equal(2, Regex.Matches(glue, @"Guard\(""hooking the ").Count); // each patch in its own guard
+        Assert.Equal(3, Regex.Matches(glue, @"harmony\.Patch\(").Count);
+        Assert.Equal(2, Regex.Matches(glue, @"Guard\(""hooking the ").Count);
+        Assert.Contains("Guard(\"observing native load errors\", () =>", glue); // the observer also has its own guard
         Assert.Matches(new Regex(@"static void MenuShownPostfix\(Profile profile\)\s*\{\s*OnMenuShown\(profile != null\);"), glue);
         Assert.Contains("_scheduler.MenuPostfixInstalled = menuHooked;", glue); // the scheduler polls when the postfix is missing
     }
