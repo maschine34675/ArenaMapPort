@@ -23,8 +23,11 @@ signal"; ArenaMode is to wait for it, with its path checks, instead of the const
 ends, Air Pit with bots (path checks through the bus doors pass; a bot walking through was not observed), hideout once, 0 Warnings.
 Release texts: CHANGELOG.md (tested by `test_changelog.py`), docs/releases/v0.3.0.md (Download block still placeholders), README, FORGE,
 the package README in `make_release_zips.py`. Codex (the user's other agent) committed the refreshed DynamicMaps overviews (e652fc9) and
-deployed them. Next: the cut (`make_release_zips.py --single --force --extract-check`), VirusTotal, the Download block, then with the user's
-go Pixeldrain, tag v0.3.0, GitHub release, Forge entry. Open: an off-VM backup of `work/release-keys`; `D:\SPT41vanilla`; BUS_LIGHT lamps,
+deployed them. The cut is done (2026-10-24 14:28, `make_release_zips.py --single --force --extract-check`: `maschine-ArenaMapPort-0.3.0.zip`
+3,647,749,962 B = 3.40 GiB, SHA-256 `9ed79ac488a9cd1659199fb87244e9df203ba3b6c284c87614a007012c9b559b`, 94 entries, extract-check OK against dist, built from `67b75b1`;
+VirusTotal 0 malicious, 0 suspicious of 75 engines for both DLLs), and the Download block of docs/releases/v0.3.0.md holds these values;
+only the Pixeldrain links are still placeholders. Next, with the user's go: Pixeldrain upload (`upload_pixeldrain.py --dry-run`, then
+`--timeout 300`), the Pixeldrain links into the notes, tag v0.3.0, push, GitHub release, Forge entry. Open: an off-VM backup of `work/release-keys`; `D:\SPT41vanilla`; BUS_LIGHT lamps,
 fences, gate sounds; the v9 plan-digest drift of `validate_extract`.
 
 ## Update 2026-10-24 (later) - AirPit door motions and Bay5 `Door_01 (3)` shut again (committed fa76bc0, deployed to D:\SPT41, host-verified on GPU-2)
