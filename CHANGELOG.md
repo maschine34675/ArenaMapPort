@@ -60,7 +60,6 @@ Full release note: [docs/releases/v0.3.0.md](docs/releases/v0.3.0.md).
   not copy protection: anyone who has Arena can derive the key or decrypt the bundles, and the art, audio and data
   files beside the bundles stay plain. The overhead is small: on the test PC key derivation takes tens of
   milliseconds per map and decryption adds up to about 0.9 s to a map load.
-
 - **A done signal for mode plugins.** A mode plugin such as ArenaMode can ask when the gates are open instead of
   waiting a fixed time: `SpawnGates.GatesOpen`, `SpawnGates.IsOpening`, `SpawnGates.OpeningSecondsRemaining` and the
   event `SpawnGates.GatesOpened`. `GatesOpen` is true once no hold is outstanding, no opening is in progress and the

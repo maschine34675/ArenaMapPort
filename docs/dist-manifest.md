@@ -1,11 +1,17 @@
-# Current distribution contract: Equator, Bay5, AirPit and Bowl (0.3.0, encrypted bundles, not published)
+# Current distribution contract: Equator, Bay5, AirPit and Bowl (0.3.0, encrypted bundles, published 2026-10-24)
+
+2026-10-24 (release 0.3.0 PUBLISHED, user decision "ja, gerne veröffentlichen. 0.2.3 wird später gelöscht"): the cut below went to Pixeldrain
+(https://pixeldrain.com/l/UtjWQemL; ZIP https://pixeldrain.com/u/J1ajrRA8, checksum https://pixeldrain.com/u/RTaSMHNm), both DLLs had been scanned on VirusTotal (0 malicious of 70 and 71
+verdicts, 75 engines listed), tag `v0.3.0` and the GitHub release "ArenaMapPort 0.3.0" with the `.sha256` asset were created. 0.2.3 stays downloadable until
+the user deletes it; the Forge entry (FORGE.md) is the user's.
 
 2026-10-24 (the 0.3.0 cut, `make_release_zips.py --single --force --extract-check`, commit `67b75b1`): dist holds 90 files,
 3,661,721,167 B (3,492.1 MiB); the single ZIP `maschine-ArenaMapPort-0.3.0.zip` is 3,647,749,962 B (3.40 GiB), SHA-256
-`9ed79ac488a9cd1659199fb87244e9df203ba3b6c284c87614a007012c9b559b`, 94 entries (the 90 dist files stored or deflated, plus README.txt,
-THIRD-PARTY-NOTICES.txt, the manifest and the checksum entry); `extract-check OK: 90 files identical to dist`. Client DLL 1,083,904 B
-sha256 `8434651566a968a0d41bbb3a6b6bd239fb03557cfacbc36ac164b1295cd943a3`, server DLL 146,432 B sha256 `f28b03ae39aac81910a1b5d25ba90a46c04283ad8d62b53325c05f54a0d415c5` (the build of a673568, the done signal for mode
-plugins, host-verified on GPU-2 the same afternoon). The Equator, Bay5 and AirPit scenes and NavMesh bundles are the 2026-10-24
+`9ed79ac488a9cd1659199fb87244e9df203ba3b6c284c87614a007012c9b559b`, 94 entries (the 90 dist files stored or deflated, plus README.txt, the two
+THIRD-PARTY-NOTICES.txt copies (client and server folder) and the manifest `parts/full.json`; the `.sha256` file sits beside the ZIP); `extract-check OK: 90 files identical to dist`. Client DLL 1,083,904 B
+sha256 `8434651566a968a0d41bbb3a6b6bd239fb03557cfacbc36ac164b1295cd943a3`, server DLL 146,432 B sha256 `f28b03ae39aac81910a1b5d25ba90a46c04283ad8d62b53325c05f54a0d415c5` (the build of the a673568 tree at 14:10, five minutes before that
+commit, so the DLLs' informational version reads `0.3.0+e652fc9`; the done signal for mode plugins is in them, host-verified on GPU-2 the same
+afternoon). The Equator, Bay5 and AirPit scenes and NavMesh bundles are the 2026-10-24
 rebakes (door poses; Bay5 roller (3) shut again); Bowl's bundles are unchanged since 2026-10-20. The four DynamicMaps overviews are
 the 2026-10-24 refresh (e652fc9). The twelve bundles verify against `work/build`; the four key files are unchanged since 2026-10-20
 (Bowl's restored 2026-10-22). The 2026-10-18 candidate cut is deleted (superseded by this one).

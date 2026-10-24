@@ -4,13 +4,15 @@ ArenaMapPort imports the maps of Escape from Tarkov: Arena (read from the user's
 install) into SPT 4.1.5 (EFT 0.16.9.5, Unity 2022.3.43f1) as separate locations: a Python extractor,
 a Unity 2022.3.43f1 batch importer that rebuilds scenes, materials, colliders and a fresh NavMesh into
 asset bundles, a BepInEx client plugin that repairs everything a ported scene lacks at raid time, and an
-SPT server mod that registers the locations. Fourteen maps retain development inputs; **Equator, Bay5 and AirPit** are registered and staged
-for release 0.2.2 (Equator and Bay5 were the first release; AirPit was added in 2026-10 on `feature/airpit`; 0.2.0 was built and withdrawn on 2026-10-16). All three have native
-playtest evidence. **Bowl** (the fourth map, on `main` since the 2026-10-18 fast-forward merge of `feature/bowl`) is registered and staged too, for release 0.3.0
-(PLAN-BOWL item 8, 2026-10-18); it is host-verified on GPU-2 (2026-10-18: raids 1 and 2 plus a hideout open)
-and not yet released. Release 0.2.3 (branch `release/0.2.3`, published 2026-10-19) is 0.2.2 plus the Arena installation check; 0.2.2 was withdrawn
+SPT server mod that registers the locations. Fourteen maps retain development inputs; **Equator, Bay5, AirPit and Bowl** are registered and
+released (Equator and Bay5 were the first release; AirPit was added in 2026-10 on `feature/airpit` and shipped with 0.2.2/0.2.3; 0.2.0 was built
+and withdrawn on 2026-10-16; Bowl shipped with 0.3.0). All four have native playtest evidence. **Bowl** (the fourth map, on `main` since the 2026-10-18 fast-forward merge of `feature/bowl`; PLAN-BOWL item 8) was
+**released with 0.3.0 on 2026-10-24** (tag `v0.3.0`, GitHub release, Pixeldrain; the four-map release with Arena's door poses, the done signal
+for mode plugins and the encrypted bundles of stage 2; [CHANGELOG.md](CHANGELOG.md), [docs/releases/v0.3.0.md](docs/releases/v0.3.0.md)).
+Release 0.2.3 (branch `release/0.2.3`, published 2026-10-19) is 0.2.2 plus the Arena installation check; 0.2.2 was withdrawn
 the same day (GitHub release, tag and Pixeldrain files deleted, nobody had downloaded it), and so were 0.2.1 and 0.1.0
-(releases with their assets, tags, Pixeldrain files): only 0.2.3 is downloadable, every package without the check is gone. Stage 2 of the gate (user decision 2026-10-19,
+(releases with their assets, tags, Pixeldrain files): 0.3.0 and 0.2.3 are downloadable (0.2.3 is to be deleted later, user decision 2026-10-24),
+every package without the check is gone. Stage 2 of the gate (user decision 2026-10-19,
 release 0.3.0): the shipped map bundles are encrypted with keys derived from the user's own Arena files (since 2026-10-20 a sample of
 the maps' raw resource streams, which survive an Arena hotfix that rewrites every level file), see the
 decisions below and [docs/progress/bundle-encryption.md](docs/progress/bundle-encryption.md). The maps exist to be played through the user's
@@ -42,18 +44,15 @@ are not accepted build inputs. Keep the SPT bundle target on Unity 2022.3.43f1.
   more. The art and audio files and the derived data beside the bundles stay plaintext.
 - **Release 0.2.2 = Equator, Bay5 and AirPit** (0.2.0 was built and withdrawn the same day; 0.2.1 went to GitHub and Pixeldrain
   only; 0.2.2 adds SpawnGates, AirPit's original north box, the renamed Equator sidecar and the crates under AirPit's tarp
-  (package v9) and is the Forge candidate). The first release (user, 2026-09-25) was Equator and Bay5 only; AirPit was
-  added in 2026-10 on `feature/airpit` and is registered and staged. **Bowl is registered and staged on `main` (merged from `feature/bowl` on 2026-10-18) for 0.3.0
-  (host-verified on GPU-2 on 2026-10-18 with raids 1 and 2 plus a hideout open, staged for 0.3.0, not yet released;
-  docs/PLAN-BOWL.md, user decision 2026-10-18 "so wie du es am sinnvollsten erachtest"):** it is in
-  ArenaMapRegistry.All, so the validators, the park script and the csproj staging rows treat it as released, but 0.2.2 stays the
-  three-map release; Bowl's Unity build (U1) and first host raids are done, and no release file is cut until the
-  release items of the plan are. Bowl builds from
+  (package v9); 0.2.3 added the Arena installation check). The first release (user, 2026-09-25) was Equator and Bay5 only; AirPit was
+  added in 2026-10 on `feature/airpit` and is registered and staged. **Bowl is on `main` (merged from `feature/bowl` on 2026-10-18) and
+  released with 0.3.0 on 2026-10-24 (docs/PLAN-BOWL.md, user decision 2026-10-18 "so wie du es am sinnvollsten erachtest"):** it is in
+  ArenaMapRegistry.All; 0.3.0 is the four-map release (CHANGELOG.md, docs/releases/v0.3.0.md), 0.2.2/0.2.3 were the three-map line. Bowl builds from
   `work/extract/bowl-native-v2` with `-FullMap` and `-OutputDir D:/ArenaMapPort/work/build/bowl`; `tools/build_remaining.ps1`
   refuses it (that runner would use the Arena 0.5.4 spike package). The other ten maps retain source and work/build inputs,
-  but are excluded from ArenaMapRegistry.All and dist; Catalog retains their identities. Make these three maps as good as they can be (native content,
+  but are excluded from ArenaMapRegistry.All and dist; Catalog retains their identities. Make these four maps as good as they can be (native content,
   bots, audio, lighting, physics — see docs/PLAN-TWO-MAPS.md) BEFORE ArenaMode features such as team starts and
-  pickups, which come later on all three maps.
+  pickups, which come later on all four maps.
 
 ## Hard rules — never do these
 
