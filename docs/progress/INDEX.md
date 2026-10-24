@@ -8,6 +8,9 @@ dated state in one screen; read it before this index if you only have a minute.
 
 ## Current — read these for the area you touch
 
+- [dynamicmaps-gate-refresh-20261024.md](dynamicmaps-gate-refresh-20261024.md) — all four overviews regenerated from current
+  triangulation and original open gate poses; preserved standing structure/parked obstacles, exact SVG/offline checks and
+  scoped data-only deployment. Native EFT retest remains separate.
 - [map-notices.md](map-notices.md) — the in-game message that says why the Arena maps are missing or failed to load (design record
   2026-10-22, `main`, host evidence pending): failure states and ref codes, the modal and toast delivery with its menu clock and attempt
   latch, the server's read-only status route `/arenamapport/status` (codes only), the stage 2 failure records, the English and German

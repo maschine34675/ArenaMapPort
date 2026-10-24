@@ -17,7 +17,7 @@ python -m venv work/dynamicmaps/venv
 
 $editor = 'C:/Program Files/Unity/Hub/Editor/2022.3.43f1/Editor/Unity.exe'
 $repo = (Get-Location).Path
-$navBundle = "$repo/dist/BepInEx/plugins/maschine-ArenaMapPort/bundles/arena_equator_navmesh.bundle"
+$navBundle = "$repo/work/build/full/arena_equator_navmesh.bundle"
 $output = "$repo/work/dynamicmaps/equator"
 New-Item -ItemType Directory -Force -Path $output | Out-Null
 Start-Process -FilePath $editor -WindowStyle Hidden -Wait -ArgumentList @(
@@ -42,8 +42,11 @@ pwsh -NoProfile -File tools/deploy-to-spt.ps1 -SptRoot 'D:/SPT41' `
 
 Run the Unity export in a fresh batch editor with no loaded NavMesh. This reads the
 existing bundle using Unity's own triangulation API; it does **not** rebuild anything.
-`navmesh.json` records the bundle SHA-256. Use the same NavMesh bundle as the live
-install and preserve that receipt when regenerating the drawing. Restart EFT after
+`navmesh.json` records the bundle SHA-256. Use the plaintext build counterpart of the
+installed bundle and preserve that receipt. Since 0.3.0, `dist/` and the install contain
+encrypted AMPB containers, which this Unity probe cannot load; use `work/build/full`
+(Equator), `work/build/bay5`, `work/build/airpit` or `work/build/bowl`. Verify the staged
+container corresponds to that build through the bundle tooling. Restart EFT after
 installing/replacing the pack to avoid cached map definitions/sprites.
 
 Pack destination:
@@ -113,7 +116,7 @@ Legacy cleanup remains restricted to the old Equator/Bay5 packages.
 
 ## Bowl (PLAN-BOWL item 17, 2026-10-18)
 
-Export `arena_bowl_navmesh.bundle` from `work/build/bowl` (byte-identical to dist's copy; compare the SHA-256) in the
+Export the plaintext `arena_bowl_navmesh.bundle` from `work/build/bowl` (the source of dist's encrypted copy) in the
 isolated Unity probe, then generate and review the two-file plan:
 
 ```powershell
@@ -155,8 +158,8 @@ Add `-Confirm` only for the authorized installation; omitting `-DynamicMapsMap B
   rows that otherwise draw two full-width strips along z=10 and z=-81. The prefixes match whole path segments.
 - Two `Cabin_ladder` MeshColliders carry no mesh (`mesh_id: null`); the exporter skips explicit nulls and counts them
   (`meshless_mesh_colliders_skipped` in the receipt). A malformed non-null ID still fails.
-- `DOORS_SPAWN_A/B` are roots of the TeamFight design scene and are in `opened_barriers`: both pockets are drawn open,
-  as they are during the mode.
+- `DOORS_SPAWN_A/B` are roots of the TeamFight design scene. Their `.doors.json` poses keep the BTR, ambulance and
+  gate leaves visible in their open combat positions, including standing frames and rails.
 
 Source, counts and limits: [Bowl overview](../../docs/progress/bowl-dynamicmaps.md).
 
@@ -166,10 +169,10 @@ Accepted packs are stored under ignored
 `work/dynamicmaps/release/ArenaMapPort_Equator/` and `ArenaMapPort_Bay5/`, plus `ArenaMapPort_AirPit/` and
 `ArenaMapPort_Bowl/` (item 17).
 Copy the approved files from each accepted `pack/` there after visual validation.
-Equator/Bay5 inputs remain byte-identical to `work/dynamicmaps/north-marker/{Equator,Bay5}/pack`;
-do not replace them with the older compass drawings. Every client Release build stages
-these six explicit files under `dist/BepInEx/plugins/maschine-ArenaMapPort/dynamicmaps/`,
-including DLL-only builds (Bowl's two files join them once its client rows are in; see the Bowl overview log).
+The 2026-10-24 gate refresh supersedes the earlier compass-only Equator/Bay5 packs and the October AirPit/Bowl packs;
+see [the regeneration record](../../docs/progress/dynamicmaps-gate-refresh-20261024.md).
+Every client Release build stages these eight explicit files under
+`dist/BepInEx/plugins/maschine-ArenaMapPort/dynamicmaps/`, including DLL-only builds.
 Preview PNGs and generation receipts are not shipped.
 
 DynamicMaps remains optional. Its soft dependency enables two reflected hooks when
@@ -205,15 +208,27 @@ old definitions when files are deleted during a running process.
 - Bay5 selects native ground triangles entirely within world Y **-4.5..-2.5 m** and
   the projected component containing X/Z **(90,30)**. This excludes most higher
   prop/container surfaces and large disconnected background regions. Its bounds are
-  X **41..149**, Z **-18..74**. Height alone is not a semantic floor classifier.
+  X **41..149**, Z **-18..75** with the 2026-10-24 triangulation (previous north edge 74;
+  the extra metre is drawing padding). Height alone is not a semantic floor classifier.
 - Bay5 obstacle heights are relative to the nearest native ground triangle, with
   barycentric interpolation and clamping at triangle edges. Its varying floor and
   ramp elevations therefore do not require one global zero plane. Native projected
   floor area takes priority over obstacle overlays, preventing large floor triangles
   from producing false diagonal cover. Overhangs above that ground are omitted.
 - Original floor faces within ±0.45 m and obstacle slabs at 0.4–1.8 m contribute.
-  Disabled/inactive/trigger colliders, water, numeric trigger/border layers, round-open
-  doors and listed shutter leaves are excluded. Listed shutter frames remain.
+  Disabled/inactive/trigger colliders, water and numeric trigger/border layers are excluded.
+- The sibling `.doors.json` sidecar places gates in their **released combat poses**. Resolve against the original scene
+  first: full hierarchy path, optional closed-world `at` within 5 cm, repeated part names by closed local position;
+  reject missing/ambiguous rows and closed-pose drift over 5 cm / 2 degrees. Euler composition follows Unity's Z-X-Y
+  order; pure DotAnimator slides keep their scene rotation, switches change only active state.
+  Unposed structure remains (depot posts, Bowl rails, AirPit's back bus-door row). Legacy barriers without pose rows
+  retain the former child-hiding/frame-preserving treatment. Profile `hidden_paths` always hides exact path segments.
+- Animated collider projections survive the usual native-floor subtraction: their parked positions are absent from the
+  static bake, with runtime carvers added after opening. Whole gate/frame bounds are never drawn as solid barriers.
+  Tall closed meshes can appear as contours. The map is static: AirPit's passport gates are drawn open for team combat
+  although they stay closed in raids without a hold/release. It does not display the current opening animation or carver state.
+- Each receipt records the door-sidecar hash, resolved row and switch counts and parked projected areas. Validate all rows
+  for every production map (currently Equator 10, Bay5 7, AirPit 30, Bowl 19); a missing sidecar must not be accepted as a refresh.
 - Geometry is simplified (12 cm Equator / 18 cm Bay5 / 20 cm AirPit / 20 cm Bowl obstacle tolerance, 4.5 cm NavMesh tolerance,
   7 cm obstacle closing, tiny holes below 0.15 m² removed). This improves legibility;
   the result is not an exact collision, line-of-sight or navigation guarantee.

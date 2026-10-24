@@ -3,6 +3,16 @@
 Snapshot for whoever continues (human or agent). Verify the commits named here against `git log`; this file
 is updated by hand at each handover, it is not an automatic record. Read [AGENTS.md](AGENTS.md) first.
 
+## Update 2026-10-24 - all four DynamicMaps overviews refreshed for original gate poses (data-only deployed)
+
+Equator, Bay5, AirPit and Bowl regenerated from current native triangulation and `.doors.json` open combat poses.
+The exporter preserves parked moving colliders and unanimated gate structure; all 66 pose rows resolve, all SVGs remain
+below 16,000 points. Bay5's automatic north drawing margin increases by 1 m (Z74 to75); exits/world axes are unchanged.
+Accepted `work/dynamicmaps/release`, `dist` and `D:\SPT41` contain matching map data. No DLL/map rebuild; the parallel
+gate-completion API work is separate. 61 Python tests, 122 deployment fixture cases, exact SVG render review and four
+acceptance gates passed; 91 third-party DynamicMaps files/configs unchanged. Native EFT retest not run; restart EFT to
+clear cached maps. Full record and source/output receipts: [dynamicmaps-gate-refresh-20261024.md](docs/progress/dynamicmaps-gate-refresh-20261024.md).
+
 ## Update 2026-10-24 (later) - AirPit door motions and Bay5 `Door_01 (3)` shut again (committed fa76bc0, deployed to D:\SPT41, host-verified on GPU-2)
 
 Host verification 2026-10-24 13:04-13:17 (four raids, hideout once, 0 Warnings in the whole process; quotes in [door-poses.md](docs/progress/door-poses.md)

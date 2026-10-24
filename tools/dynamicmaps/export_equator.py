@@ -81,11 +81,31 @@ def local_matrix(owner):
     return result
 
 
+def unity_euler_quaternion(euler):
+    """Unity Quaternion.Euler: apply Z, then X, then Y (qY * qX * qZ)."""
+    angles = np.asarray(euler, dtype=float)
+    if angles.shape != (3,) or not np.isfinite(angles).all():
+        raise ValueError("Invalid door Euler triple")
+    sx, sy, sz = np.sin(np.radians(angles) / 2)
+    cx, cy, cz = np.cos(np.radians(angles) / 2)
+    return np.array([cy*sx*cz + sy*cx*sz, sy*cx*cz - cy*sx*sz,
+                     cy*cx*sz - sy*sx*cz, cy*cx*cz + sy*sx*sz])
+
+
+def near_position(a, b):
+    a, b = np.asarray(a, dtype=float), np.asarray(b, dtype=float)
+    if a.shape != (3,) or b.shape != (3,) or not np.isfinite([a, b]).all():
+        raise ValueError("Invalid door position triple")
+    return np.linalg.norm(a-b) <= .05
+
+
 class Scene:
     def __init__(self, data):
         self.objects = {o["id"]: o for o in data["objects"]}
         if len(self.objects) != len(data["objects"]):
             raise ValueError("Duplicate object ID")
+        self.posed_nodes = set()
+        self.posed_barriers = set()
 
     @lru_cache(maxsize=None)
     def lineage(self, key):
@@ -106,17 +126,95 @@ class Scene:
             result = result @ local_matrix(obj)
         return result
 
-    def included(self, key, opened):
+    def apply_open_poses(self, rows):
+        """Resolve against CLOSED geometry first, then pose an independent scene copy.
+
+        The overview depicts the released combat layout, not the live gate state.
+        Missing rows across all selected scenes fail generation; ambiguous/stale
+        rows fail here rather than falling back to invisible obstacles.
+        """
+        by_path = {}
+        for key in self.objects:
+            path = "/".join(o["name"] for o in self.lineage(key))
+            by_path.setdefault(path, []).append(key)
+        changes, matches, barriers = {}, Counter(), set()
+        for index, row in enumerate(rows):
+            path = "/".join(p for p in (row["barrier"], row["part"], row["node"]) if p)
+            candidates = []
+            for key in by_path.get(path, []):
+                chain = self.lineage(key)
+                barrier = chain[len(row["barrier"].split("/"))-1]
+                if row.get("at") is not None and not near_position(self.world(barrier["id"])[:3, 3], row["at"]):
+                    continue
+                candidates.append((key, barrier["id"]))
+            if not candidates:
+                continue
+            # AirPit's repeated sibling names are distinguished by their CLOSED local position.
+            if len(candidates) > 1:
+                candidates = [(key, barrier) for key, barrier in candidates
+                              if near_position(self.objects[key]["local_position"], row["closed"]["position"])]
+            if len(candidates) != 1:
+                raise ValueError(f"Door pose {index} has missing/ambiguous target: {path}")
+            key, barrier = candidates[0]
+            owner = self.objects[key]
+            if key in changes:
+                raise ValueError(f"Multiple door poses target the same node: {path}")
+            replacement = dict(owner)
+            if "switch" in row:
+                switch = row["switch"]
+                if (not row["node"] or type(switch.get("open")) is not bool
+                        or type(switch.get("closed")) is not bool
+                        or owner.get("active", True) != switch["closed"]):
+                    raise ValueError(f"Stale/invalid door switch: {path}")
+                replacement["active"] = switch["open"]
+            else:
+                closed_rotation = unity_euler_quaternion(row["closed"]["euler"])
+                actual_rotation = np.asarray(owner["local_rotation"], dtype=float)
+                actual_rotation /= np.linalg.norm(actual_rotation)
+                error = math.degrees(2 * math.acos(np.clip(abs(np.dot(actual_rotation, closed_rotation)), 0, 1)))
+                if not near_position(owner["local_position"], row["closed"]["position"]) or not math.isfinite(error) or error > 2:
+                    raise ValueError(f"Stale closed door pose: {path} (rotation error {error:.3f} degrees)")
+                # Validate the end position as well, even when it is not used for matching.
+                near_position(row["open"]["position"], row["open"]["position"])
+                replacement["local_position"] = row["open"]["position"]
+                rotation = unity_euler_quaternion(row["open"]["euler"])
+                if (row.get("source", "clip") == "clip" or
+                        np.any(np.abs(np.asarray(row["closed"]["euler"])-row["open"]["euler"]) > 1e-4)):
+                    replacement["local_rotation"] = rotation.tolist()
+            changes[key] = (replacement, "switch" not in row)
+            barriers.add(barrier)
+            matches[index] += 1
+        # Parent world transforms and active states must not affect row matching order.
+        for key, (replacement, moves) in changes.items():
+            self.objects[key] = replacement
+            if moves:
+                self.posed_nodes.add(key)
+        self.posed_barriers.update(barriers)
+        self.world.cache_clear()
+        self.lineage.cache_clear()
+        return matches
+
+    def moved(self, key):
+        return any(o["id"] in self.posed_nodes for o in self.lineage(key))
+
+    def included(self, key, opened, hidden=()):
         chain = self.lineage(key)
         if any(not o.get("active", True) for o in chain):
             return False
         if chain[-1]["layer"] in (4, 13, 29):
             return False
         names = [o["name"] for o in chain]
-        if any(n.startswith(("SPAWN_BOUND", "LevelBorder")) or n in (
-                "Door_Sliding_Respawn_L", "Door_Sliding_Respawn_R") for n in names):
+        if any(n.startswith(("SPAWN_BOUND", "LevelBorder")) for n in names):
             return False
         path = "/".join(names)
+        if any(path == prefix or path.startswith(prefix + "/") for prefix in hidden):
+            return False
+        posed_barrier = any(o["id"] in self.posed_barriers for o in chain)
+        if not posed_barrier and any(n in ("Door_Sliding_Respawn_L", "Door_Sliding_Respawn_R") for n in names):
+            return False
+        if posed_barrier:
+            # Unanimated structure stays: depot posts, Bowl rails, AirPit back bus row.
+            return True
         for barrier in opened:
             if path.startswith(barrier + "/") and "frame" not in path[len(barrier)+1:].lower():
                 return False
@@ -323,10 +421,19 @@ def generate(package, descriptor, output, navmesh=None):
     if profile["relative"] and navmesh is None:
         raise ValueError(profile["folder"].removeprefix("ArenaMapPort_") + " requires native ground triangulation for height calibration")
     inputs = {str(descriptor): digest(descriptor)}
-    # Profile "hidden_paths" are hierarchy prefixes dropped from the drawing exactly like opened barriers
-    # (they stay in the scene; only the overview omits them).
-    opened = config.get("opened_barriers", []) + profile.get("hidden_paths", [])
+    doors_path = descriptor.with_suffix(".doors.json")
+    door_rows = []
+    if doors_path.exists():
+        doors = json.loads(doors_path.read_text(encoding="utf-8"))
+        if doors.get("key") != config["key"] or doors.get("schema_version") not in (1, 2):
+            raise ValueError("Door sidecar map identity or schema mismatch")
+        door_rows = doors["poses"]
+        inputs[str(doors_path)] = digest(doors_path)
+    opened = config.get("opened_barriers", [])
     floor_parts, low_parts, high_parts = [], [], []
+    parked_low_parts, parked_high_parts = [], []
+    door_matches = Counter()
+    moved_colliders = 0
     stats, meshless = Counter(), 0
     walkable = read_triangulation(navmesh, profile["heights"]) if navmesh else None
     if walkable is not None and profile.get("seam_grid"):
@@ -359,8 +466,9 @@ def generate(package, descriptor, output, navmesh=None):
             continue
         inputs[str(scene_path)] = digest(scene_path)
         scene = Scene(json.loads(scene_path.read_text(encoding="utf-8")))
+        door_matches.update(scene.apply_open_poses(door_rows))
         for key, owner in scene.objects.items():
-            if not scene.included(key, opened):
+            if not scene.included(key, opened, profile.get("hidden_paths", [])):
                 continue
             for component in owner["components"]:
                 kind = component["type"]
@@ -390,6 +498,9 @@ def generate(package, descriptor, output, navmesh=None):
                 if verts[:, 1].min() > 1.8 or verts[:, 1].max() < -.45:
                     continue
                 stats[kind] += 1
+                moved = scene.moved(key)
+                if moved:
+                    moved_colliders += 1
                 tris = verts[indices]
                 # Near-horizontal ground faces only; walls cannot inflate the floor footprint.
                 normal = np.cross(tris[:, 1]-tris[:, 0], tris[:, 2]-tris[:, 0])
@@ -401,13 +512,15 @@ def generate(package, descriptor, output, navmesh=None):
                 low = project_slab(tris, .4, 1.05)
                 high = project_slab(tris, 1.1, 1.8)
                 if not low.is_empty:
-                    low_parts.append(low)
+                    (parked_low_parts if moved else low_parts).append(low)
                 if not high.is_empty:
-                    high_parts.append(high)
+                    (parked_high_parts if moved else high_parts).append(high)
         print(f"Read {scene_path.name}: {sum(stats.values())} ground-height colliders", flush=True)
         scene.world.cache_clear()
         scene.lineage.cache_clear()
 
+    if any(door_matches[index] != 1 for index in range(len(door_rows))):
+        raise ValueError(f"Door rows must each resolve once across selected scenes: {dict(door_matches)} / {len(door_rows)}")
     floor = clean(unary_union(floor_parts), min_area=2)
     # Keep all substantial ground pieces, including spawn booths; remove tiny prop-top islands.
     if floor.is_empty:
@@ -426,6 +539,12 @@ def generate(package, descriptor, output, navmesh=None):
         # priority over projected obstacles; genuine obstacle holes stay unfilled.
         # Overhangs above otherwise walkable ground are intentionally omitted.
         low, high = low.difference(walkable), high.difference(walkable)
+    # The static bake removes moving subtrees. Runtime park carvers are added only
+    # after opening, so their physical geometry must survive over the static floor.
+    # Use actual moved collider projections, never the whole gate/frame bounds.
+    parked_low = unary_union(parked_low_parts).intersection(drawing_clip)
+    parked_high = unary_union(parked_high_parts).intersection(drawing_clip)
+    low, high = low.union(parked_low), high.union(parked_high)
     low = clean(low, tolerance=detail_tolerance)
     high = clean(high, tolerance=detail_tolerance)
     layers = [(floor.intersection(drawing_clip), "#46545e" if walkable is not None else "#a8b1b5")]
@@ -482,11 +601,16 @@ def generate(package, descriptor, output, navmesh=None):
         "native_walkable_area_m2": walkable.area if walkable is not None else None,
         "atrium_component_area_m2": connected.area if connected is not None else None,
         "ground_profile": profile,
+        "door_poses": {"state": "released_combat", "rows": len(door_rows),
+                       "matched_rows": sum(door_matches.values()), "switch_rows": sum("switch" in r for r in door_rows),
+                       "ground_height_moved_colliders": moved_colliders,
+                       "parked_low_area_m2": parked_low.area, "parked_high_area_m2": parked_high.area},
         "layer_points": layer_points,
         "obstacle_tolerance_m": detail_tolerance,
         "limitations": ["Ground floor only; higher surfaces and container tops omitted",
                         "Approximate slab projection at 0.4–1.8 m above the reference ground",
                         "Bay5 obstacle overlays omit overhangs above projected native ground",
+                        "Gate geometry depicts the released combat layout, not live gate state; AirPit passport gates stay closed without hold/release",
                         "Round primitive colliders use conservative boxes", "Not a walkability or line-of-sight guarantee"]}
     (output / "receipt.json").write_text(json.dumps(receipt, indent=2)+"\n", encoding="utf-8")
     print(json.dumps({k: v for k, v in receipt.items() if k not in ("inputs_sha256",)}, indent=2))
