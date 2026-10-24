@@ -2028,3 +2028,56 @@ unchanged since (the sources were not edited after that build).
 - **The back-row doorways are 0.5 m on the centre line** (0.50 / 0.54 / 0.56 m): the agent radius is 0.3 and every model number agrees, but a bot with a larger capsule or SAIN's own avoidance may still
   snag; `uibridge_bots` over a minute of an AirPit raid with bots, looking for a bot that stands in the south pocket for more than a few seconds.
 - **No host evidence.** The slerp reading of the bus hinges (127 degrees about z with the leaf offset), the timing of the lamps and the sealed-probe expectation above are model results.
+
+## 2026-10-24 - host verification on GPU-2 of fa76bc0 (AirPit door poses, Bay5 `Door_01 (3)` shut): four raids and a hideout open
+
+Deploy: `deploy-to-spt.ps1 -Confirm` (6 of 90 files: both DLLs, the AirPit and Bay5 scenes and NavMesh bundles, ~1.9 GB), `gpu-run
+deploy-wait --server` (6 files identical on the host after 19.9 s, the SPT server was down and was started with the new DLL),
+`gpu-run start` (16/16 plugins identical). The whole EFT process (`LogOutput-SPT-GPU-2-2026-10-24_13-03-10.log`) holds 0 Warnings and 0
+Errors from `maschine-ArenaMapPort`; every `gpu-run raid` line read `warnings 0 ... errors 0`. Stills on the host under
+`C:\Temp\uibridge-host\captures\stills\`.
+
+- **Raid 1 (13:04, AirPit, no bots, plain).** Spawn at the north All point (-21.5, 0.0, 61.5). `[SpawnGates] park: 'Apron_bus_MAZ_doors (1)'
+  snapped to the open pose (4 node(s), clip borrowed from the static open pose of BUS_DOORS/Apron_bus_MAZ_doors (3); seconds are the port's)`
+  and the same for the two other front assemblies; `spawn barrier 'BUS_DOORS' at (-17.6, 5.8, -69.3): deactivated 0 part(s), 0 already off,
+  kept 0 frame part(s), 3 part(s) without a pose left standing, parked 3 part(s) at the open pose`; `spawn barrier 'PASSPORT_CONTROL_DOORS'
+  ...: 18 part(s) closed until Release (18 held-gate part(s), carved from the navmesh install on), 2 switch(es)`; `PASSPORT_CONTROL_EMISSIVE
+  ...: 18 part(s) closed until Release`; `[NavMesh] added navmesh for 'arena_airpit': 11811 vertices, 5433 triangles`; `navmesh installed:
+  16 carver(s) over 16 movement collider(s) of 39 gate part(s) (16 carver(s) in place, 36 held-gate part(s))`; `parked 'Apron_bus_MAZ_doors
+  (1)': 4 node(s) at the open pose (...), 4 park carver(s) (navmesh installed)` x 3; `navmesh probe: every probed gate sealed (16 probed)`
+  (the 16 leaves PathPartial) `... 3 part(s) parked at the open pose, not a closed gate, not judged   20 part(s) without a movement collider
+  not probed`: the review fix holds, no false Warning. Inspector: hinge `Apron_bus_MAZ_door_L_01_part_01` of `(1)` `localEulerAngles.z`
+  127.000; `GreenFog` inactive, `RedFog` active. `uibridge_teleport dryRun` from the north spawn to the Bear spawn (-9.94, 0.1, -74.4) in the
+  south pocket: `path complete 152.7 m, 18 corners`, so the pocket's only exits, the three front bus doorways, stay open for agents with the
+  12 front-row park carvers in place (the reviewers' 0.15 m ribbon did not happen; the carve boxes do not reach the baked strip).
+  `uibridge_walk` from inside the pocket (-14.2, 0.1, -70.5) to (-14.2, 0.3, -61.0): `9.5 m away (9.5 m along the navmesh)`, arrived through
+  the standing back-row door and the parked front door. Stills `airpit-passport-closed-red` (the hall side of the booths: red X),
+  `airpit-bus-doors-from-pocket` (the back row standing open, the front row open behind it), `airpit-bus-front-open-from-apron` (the two
+  front leaves folded flush along the bus side, the aisle through the bus open: Arena's own plug-door pose). 119.9 fps, max 9.2 ms.
+- **Raid 2 (13:06, AirPit, developer hold 30 s).** Spawn at the south All point (-16.9, 0.0, -71.7) inside the south pocket. `BUS_DOORS ...:
+  3 part(s) without a pose left standing, 3 part(s) held closed`; `navmesh installed: 28 carver(s) over 28 movement collider(s) of 39 gate
+  part(s)`; `navmesh probe: every probed gate sealed (19 probed)` (3 bus doorways and 16 leaves PathPartial). Release at 30.0 s:
+  `released (developer test hold, 30.0 s after the raid timer started): 0 leaf(s) slid 1.38 m in 1.0 s, 18 gate part(s) switched off, 28
+  carver(s) removed, drove 21 part(s) to the open pose in 1.5 s (scale 0.50), 28 park carver(s) in place, 2 switch(es) set to the open state`
+  (the 18 switched-off parts are the EMISSIVE sheets), `drive frames: 180 frame(s) in 1.5 s, mean 8.3 ms, max 8.4 ms`, `navmesh probe: every
+  probed gate open (19 probed)` (PathComplete, 2 corners each). Inspector after the release: `GreenFog` active, leaf
+  `Passport_control_01_Door (5)` world euler (270, 90, 0) = the row's open euler. `dryRun` from the south pocket into the north pocket
+  (-17.2, 0.1, 75) `path complete 158.6 m`; `uibridge_walk` from the south pocket to (-17.2, 0.1, 72): `143.7 m away (156.2 m along the
+  navmesh)`, arrived: through the front bus door, the hall and an open passport lane.
+- **Raid 3 (13:15, AirPit, developer hold 30 s: the lamps.** A still of raid 2 taken from (-11, 0.1, 61) looking north showed the red X still
+  lit and no arrow, in thick green haze. Both had other causes: (-11, 61) lies inside the 4 x 4 m `Air Pit North Gate` exit box, whose EFT
+  extraction smoke is green (the raid ended by extraction 8 s later; the user spotted the flare), and the booths' SOUTH face, the one seen
+  from the hall, carries only the X quad (`Passport_control_01_Emissive_controller_RED_close_LOD0` renderer bounds span z 66.06..69.33 while
+  `..._GREEN_open_LOD0` and both GREY covers lie at z 69.33 only, the NORTH face). From (-11, 0.1, 57.5) the hall side still shows the X
+  after the release (still `airpit-passport-open-lamps`, the exit smoke visible in the box); from inside the north pocket (-11, 0.1, 75)
+  looking south (still `airpit-passport-north-face-open`) every lane shows a lit green arrow next to a greyed X above open leaves: the
+  flip is exactly Arena's, on the face the pocket's team sees.
+- **Raid 4 (13:09, Bay5, no bots).** Seven `park:` lines (no `(3)`), `[NavMesh] added navmesh for 'arena_bay5': 22130 vertices, 10220
+  triangles`; from (127.5, -2.9, 43.5) a walk to (131, -3, 41.5) through the `(3)` doorway reads `4.0 m away (2.5 m along the navmesh,
+  partial path)` and ends `time_up, 2.1 m short`: the slab is a wall for bots again (still `bay5-roller-3-shut-again`, the shut slab with
+  the tarp beside it).
+- The hideout opened and closed once afterwards (scenarios `hideout-open` / `hideout-back`, `logAbsent` error passed).
+
+Open after this: the 0.3.0 candidate ZIP is superseded again (recut when the user publishes); `D:\SPT41vanilla` not deployed; the
+`validate_extract` plan-digest drift of the v9 AirPit package (a one-character plan edit in 275b668) blocks only the scripted pipeline;
+BUS_LIGHT's kind-3 lamps, the fences' twins and the gate sounds are the remaining AirPit items.

@@ -72,7 +72,8 @@ dated state in one screen; read it before this index if you only have a minute.
   closed again (Equator lists no opened barrier), Bay5 opens the five gates Arena moves (three rollers and both depot gates) with
   every instance of a repeated path (2026-10-23; rebaked, deployed and host-verified on GPU-2 on 2026-10-24, where the first raid
   found and removed the old booth-avoidance rule of `SpawnPlacementRepairs`). `Door_01 (3)`, which this record had opened as a
-  borrowed sixth gate, goes shut again on 2026-10-24 (user decision, see door-poses.md).
+  borrowed sixth gate, goes shut again on 2026-10-24 (user decision, see door-poses.md; host-verified the same day together with
+  AirPit's passport leaves, lamp switches and front bus doors, fa76bc0).
 - [scope-mask.md](scope-mask.md) — blurred image inside magnifying optics on every ported map: the vanilla Scripts
   scenes' `TechnicalManagers/ScopeMaskRenderer` is missing, so the aiming depth-of-field blurred the sight picture;
   `ScopeMaskRepairs` provides it (GPU-2 AirPit vs Factory stills, 2026-10-16).
