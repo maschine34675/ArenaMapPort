@@ -93,6 +93,8 @@ def fake_dist_files(maps=MAPS):
         files[f"{PLUGIN}/acoustics/{key}/spatial-audio.json"] = text(key + "audio")
         files[f"{PLUGIN}/acoustics/{key}/source.audiobakedata"] = text(key + "bake")
         files[f"{PLUGIN}/acoustics/{key}/room.assets_9.wav"] = rng.randbytes(1500)
+        files[f"{PLUGIN}/gate-sounds/{key}/gate-sounds.json"] = text(key + "gatesounds")
+        files[f"{PLUGIN}/gate-sounds/{key}/{key}_door.wav"] = random.Random(key).randbytes(1200)   # its own generator: the bytes below keep their values
         files[f"{PLUGIN}/ai/{stem}.ai.json"] = text(key + "ai")
         for n in (1, 2):
             files[f"{PLUGIN}/loadscreens/{key}_{n}.jpg"] = b"\xff\xd8\xff" + b"\x00" * 3000
@@ -215,6 +217,9 @@ class PartitionTests(FakeRepoCase):
                      f"{PLUGIN}/acoustics/arena_bay5/Thumbs.db", f"{PLUGIN}/acoustics/arena_bay5/notes.txt",
                      f"{PLUGIN}/acoustics/arena_equator/old/spatial-audio.json",
                      f"{PLUGIN}/acoustics/arena_equator/clip.wav.bak",
+                     f"{PLUGIN}/gate-sounds/arena_bay5/Thumbs.db", f"{PLUGIN}/gate-sounds/arena_bay5/notes.txt",
+                     f"{PLUGIN}/gate-sounds/arena_equator/old/gate-sounds.json", f"{PLUGIN}/gate-sounds/arena_equator/clip.wav.bak",
+                     f"{PLUGIN}/gate-sounds/arena_equator/gate-sounds.json.bak", f"{PLUGIN}/gate-sounds/loose.wav",
                      f"{PLUGIN}/flares/arena_equator/flares.json.bak", f"{PLUGIN}/flares/arena_equator/other.json",
                      f"{PLUGIN}/flares/arena_equator/textures/desktop.ini",
                      f"{PLUGIN}/flares/arena_equator/textures/nested/a.bin",
@@ -241,6 +246,7 @@ class PartitionTests(FakeRepoCase):
         parked = (f"{PLUGIN}/bundles/arena_airpit2_scenes.bundle", f"{PLUGIN}/bundles/arena_airpit2_navmesh.bundle",
                   f"{PLUGIN}/bundles/arena_airpit2_preset.bundle", f"{PLUGIN}/ai/airpit2.ai.json",
                   f"{PLUGIN}/material-shaders.arena_airpit2.json", f"{PLUGIN}/acoustics/arena_airpit2/a.json",
+                  f"{PLUGIN}/gate-sounds/arena_airpit2/gate-sounds.json", f"{PLUGIN}/gate-sounds/arena_prison/gate-sounds.json",
                   f"{PLUGIN}/flares/arena_airpit2/flares.json", f"{PLUGIN}/water/arena_airpit2/water.json",
                   f"{PLUGIN}/loadscreens/arena_airpit2_1.jpg", f"{PLUGIN}/dynamicmaps/ArenaMapPort_AirPit2/a.jsonc",
                   f"{SERVER}/db/arena_airpit2/base.json", f"{SERVER}/banners/arena_airpit2.jpg",
@@ -281,7 +287,7 @@ class PartitionTests(FakeRepoCase):
         for key, _display in MAPS:  # everything validate_distribution.py demands of every released map
             names += [f"{PLUGIN}/{shader_sidecar(key)}", f"{PLUGIN}/ai/{key.removeprefix('arena_')}.ai.json",
                       f"{SERVER}/banners/{key}.jpg", f"{PLUGIN}/acoustics/{key}/spatial-audio.json",
-                      f"{PLUGIN}/loadscreens/{key}_1.jpg"]
+                      f"{PLUGIN}/gate-sounds/{key}/gate-sounds.json", f"{PLUGIN}/loadscreens/{key}_1.jpg"]
         for name in names:
             with self.subTest(name=name):
                 data = (self.dist / name).read_bytes()
@@ -305,6 +311,8 @@ class PartitionTests(FakeRepoCase):
         rules = release.build_rules(self.spec)
         for name in (f"{PLUGIN}/acoustics/arena_bay5/sharedassets87.assets_74.wav",
                      f"{PLUGIN}/acoustics/arena_bay5/source.audiobakedata",
+                     f"{PLUGIN}/gate-sounds/arena_bay5/gate-sounds.json", f"{PLUGIN}/gate-sounds/arena_bay5/arena_bay5_roller_door_full.wav",
+                     f"{PLUGIN}/gate-sounds/arena_airpit/arena_airpit_metal_gates.wav",
                      f"{PLUGIN}/flares/arena_equator/textures/resources.assets_2812.bin",
                      f"{PLUGIN}/water/arena_bay5/textures/normalsDetails.bin",
                      f"{PLUGIN}/map-selection/region-map.png", f"{PLUGIN}/map-selection/manifest.json",
@@ -2466,6 +2474,7 @@ class BowlPartTests(FakeRepoCase):
             f"{PLUGIN}/keys/arena_bowl.json",
             f"{PLUGIN}/acoustics/arena_bowl/spatial-audio.json", f"{PLUGIN}/acoustics/arena_bowl/source.audiobakedata",
             f"{PLUGIN}/acoustics/arena_bowl/room.assets_9.wav", f"{PLUGIN}/ai/bowl.ai.json",
+            f"{PLUGIN}/gate-sounds/arena_bowl/gate-sounds.json", f"{PLUGIN}/gate-sounds/arena_bowl/arena_bowl_door.wav",
             *(f"{PLUGIN}/loadscreens/arena_bowl_{n}.jpg" for n in (1, 2, 3, 4)),
             f"{PLUGIN}/material-shaders.arena_bowl.json", f"{SERVER}/db/arena_bowl/base.json",
             f"{SERVER}/banners/arena_bowl.jpg"})

@@ -60,6 +60,7 @@ namespace ArenaMapPort.Client
             ExfilSignals.BindConfig(); // [Exfils] SmokeSignals / SmokeSignalSound / SmokeSignalColor
             BoothDoorRepairs.BindConfig(); // [Spawns] OpenRespawnDoors — runs from SpawnInfiltrationRepairs' postfix
             SpawnGates.Install();          // [Spawns] SpawnGates* — a mode plugin keeps the enclosures closed, then releases (2026-10-17)
+            GateSounds.Install();          // [Spawns] GateSound* — Arena's gate and door sounds when SpawnGates releases (2026-10-25), after SpawnGates' own keys
             AuthoredBorderRepairs.BindConfig(); // [Map (<key>)] AuthoredBorders — same postfix, after the openings
             LampFillRepairs.BindConfig();      // [Map (<key>)] PassportHallLampFill — AirPit only, descriptor LampFill
             LampFillRepairs.Install();         // sceneLoaded, subscribed here so it runs before ShaderRebind & the lighting repairs

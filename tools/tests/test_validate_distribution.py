@@ -10,6 +10,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+import wave
 from unittest.mock import patch
 
 REPO = Path(__file__).resolve().parents[2]
@@ -165,6 +166,7 @@ class DistributionSidecarTests(unittest.TestCase):
         self.put_art()
         self.put_ai()
         self.put_acoustics()
+        self.put_gate_sounds()
         self.put_water()
         self.put_key_files()
         for folder in (self.server / "db/arena_equator", self.repo / "ArenaMapPort.Server/db/arena_equator"):
@@ -256,6 +258,43 @@ class DistributionSidecarTests(unittest.TestCase):
             (folder / "spatial-audio.json").write_text(json.dumps({
                 "schema_version": 1, "map_key": key, "bake": listed("source.audiobakedata"),
                 "clips": [{"id": "fixture:1", "decoded": listed(f"{key}_tone.wav")}]}), encoding="utf-8")
+
+    def put_gate_sounds(self):
+        """One gate sound package per released map as the extractor leaves it (work/extract/gate-sounds) and as the client build stages
+        it (dist/.../gate-sounds): a manifest, one tiny PCM16 WAV per clip, the tracked row sidecar and a doors sidecar the row resolves
+        to. AirPit's clip lives in sharedassets28.resource, a key-source file of the map, so it is pitch-baked."""
+        (self.repo / "tools/bundle").mkdir(parents=True, exist_ok=True)
+        shutil.copy(REPO / "tools/bundle/key-sources.json", self.repo / "tools/bundle/key-sources.json")
+        for key in self.RELEASED:
+            stem = key.removeprefix("arena_")
+            clip_id = f"{key}_gate"
+            wav = io.BytesIO()
+            with wave.open(wav, "wb") as w:
+                w.setnchannels(2)
+                w.setsampwidth(2)
+                w.setframerate(44100)
+                w.writeframes(bytes(range(32)))
+            blob = wav.getvalue()
+            baked = key == "arena_airpit"
+            row = {"barrier": f"{stem.upper()}/Gate", "part": None, "at": None, "closed_position": None, "clip": clip_id,
+                   "emitter": [0.0, 1.0, 0.0], "source_volume": 1.0, "player_volume": 1.0, "authored_pitch": 1.25 if baked else 1.0,
+                   "pitch": 1.0, "min_distance": 0.4, "max_distance": 30.0, "mixer": "ArenaGates", "mixer_db": -15.0,
+                   "source_mixer": None, "origin": "level1 SOUND/Gate", "match_distance": 0.0}
+            mixer = {"name": "ArenaGates", "db": -15.0, "path": "Master/ArenaGates"}
+            pose = {"barrier": row["barrier"], "part": "Leaf", "node": "", "at": None, "closed": {"position": [0.0, 0.0, 0.0]}}
+            (self.maps / f"{stem}.doors.json").write_text(json.dumps({"poses": [pose]}), encoding="utf-8")
+            (self.maps / f"{stem}.gatesounds.json").write_text(json.dumps({"rows": [row], "mixer": mixer}), encoding="utf-8")
+            manifest = {"schema_version": 1, "map_key": key, "arena_version": "0.6.1.0.48206", "mixer": mixer, "rows": [row],
+                        "clips": [{"id": clip_id, "file": f"{clip_id}.wav", "channels": 2, "sampleRate": 44100, "frames": 8, "bytes": len(blob),
+                                   "sha256": hashlib.sha256(blob).hexdigest(), "pitch_baked": baked, "baked_pitch": 1.25 if baked else 1.0,
+                                   "source": {"asset": "sharedassets28.assets" if baked else "sharedassets56.assets", "path_id": 99, "format": "PCM16",
+                                              "resource": {"file": "sharedassets28.resource" if baked else "sharedassets56.resource",
+                                                           "offset": 0, "size": 705728}},
+                                   "fit": {"mode": "as_is"}}]}
+            for folder in (self.plugin / "gate-sounds" / key, self.repo / "work/extract/gate-sounds" / key):
+                folder.mkdir(parents=True, exist_ok=True)
+                (folder / f"{clip_id}.wav").write_bytes(blob)
+                (folder / "gate-sounds.json").write_text(json.dumps(manifest), encoding="utf-8")
 
     def put_water(self):
         """Bay5's harbor water package as extract_water.py leaves it: water.json plus the four raw mip chains it
@@ -789,6 +828,114 @@ class DistributionSidecarTests(unittest.TestCase):
         source.write_text(wrong, encoding="utf-8")
         staged.write_text(wrong, encoding="utf-8")
         with self.assertRaisesRegex(ValueError, "AI sidecar map key mismatch: airpit.ai.json"):
+            self.validate()
+
+    def gate_manifest(self, key, root=None):
+        return (root or self.plugin) / "gate-sounds" / key / "gate-sounds.json"
+
+    def change_gate_manifest(self, key, mutate, also_extracted=True):
+        """Rewrite a staged manifest (and, by default, the extracted one it must equal) after `mutate(dict)`."""
+        for path in (self.gate_manifest(key), self.repo / "work/extract/gate-sounds" / key / "gate-sounds.json"):
+            if path == self.gate_manifest(key) or also_extracted:
+                package = json.loads(path.read_text(encoding="utf-8"))
+                mutate(package)
+                path.write_text(json.dumps(package), encoding="utf-8")
+
+    def test_distribution_requires_every_released_maps_gate_sounds_exactly_and_intact(self):
+        self.validate()
+        airpit = self.plugin / "gate-sounds/arena_airpit"
+        wav = airpit / "arena_airpit_gate.wav"
+        manifest = airpit / "gate-sounds.json"
+        for path, message in ((wav, "Gate sounds file set mismatch"), (manifest, "Missing gate sound package: arena_airpit/gate-sounds.json")):
+            with self.subTest(missing=path.name):
+                original = path.read_bytes()
+                path.unlink()
+                try:
+                    with self.assertRaisesRegex(ValueError, message):
+                        self.validate()
+                finally:
+                    path.write_bytes(original)
+        for path in (airpit / "stray.wav", self.plugin / "gate-sounds/arena_prison/gate-sounds.json", self.plugin / "gate-sounds/loose.json"):
+            with self.subTest(unexpected=path.name):
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_bytes(b"stray")
+                try:
+                    with self.assertRaisesRegex(ValueError, "Gate sounds file set mismatch"):
+                        self.validate()
+                finally:
+                    path.unlink()
+        blob = wav.read_bytes()
+        wav.write_bytes(bytes([blob[0]]) + blob[1:-1] + bytes([blob[-1] ^ 1]))       # same length, other bytes: only the SHA-256 can tell
+        with self.assertRaisesRegex(ValueError, "Gate sound file length/hash mismatch: arena_airpit/arena_airpit_gate.wav"):
+            self.validate()
+        wav.write_bytes(blob + b"!")
+        with self.assertRaisesRegex(ValueError, "Gate sound file length/hash mismatch"):
+            self.validate()
+        wav.write_bytes(blob)
+        self.validate()
+
+    def test_a_staged_gate_sound_manifest_must_be_the_extracted_one(self):
+        key = "arena_bay5"
+        extracted = self.repo / "work/extract/gate-sounds" / key / "gate-sounds.json"
+        extracted.write_text(extracted.read_text(encoding="utf-8").replace("arena_bay5_gate.wav", "arena_bay5_gate.wav "), encoding="utf-8")
+        with self.assertRaisesRegex(ValueError, "Stale gate sound package: arena_bay5"):
+            self.validate()
+        extracted.unlink()
+        with self.assertRaisesRegex(ValueError, "Stale gate sound package: arena_bay5"):
+            self.validate()
+
+    def test_gate_sound_rows_must_be_the_tracked_rows_and_resolve_to_a_door_pose(self):
+        key, stem = "arena_bowl", "bowl"
+        with self.assertRaisesRegex(ValueError, "Gate sound rows differ from tools/maps/bowl.gatesounds.json"):
+            self.change_gate_manifest(key, lambda p: p["rows"][0].update(max_distance=99.0))
+            self.validate()
+        self.change_gate_manifest(key, lambda p: p["rows"][0].update(max_distance=30.0))
+        self.validate()
+        # a row that names a barrier without a door pose is refused, even when the tracked sidecar says the same
+        sidecar = self.maps / f"{stem}.gatesounds.json"
+        document = json.loads(sidecar.read_text(encoding="utf-8"))
+        document["rows"][0]["barrier"] = "NOWHERE/Gate"
+        sidecar.write_text(json.dumps(document), encoding="utf-8")
+        self.change_gate_manifest(key, lambda p: p["rows"][0].update(barrier="NOWHERE/Gate"))
+        with self.assertRaisesRegex(ValueError, "Gate sound row matches no door pose: arena_bowl NOWHERE/Gate"):
+            self.validate()
+
+    def test_gate_sound_rows_play_at_pitch_one_and_the_mixer_is_the_gates_minus_fifteen(self):
+        sidecar = self.maps / "equator.gatesounds.json"
+        for label, mutate, message in (
+                ("pitch", lambda row: row.update(pitch=1.25), "not playable at pitch 1"),
+                ("mixer db", lambda row: row.update(mixer_db=-3.0), "not playable at pitch 1"),
+                ("clip", lambda row: row.update(clip="other"), "not playable at pitch 1")):
+            with self.subTest(label):
+                original = sidecar.read_text(encoding="utf-8")
+                document = json.loads(original)
+                mutate(document["rows"][0])
+                sidecar.write_text(json.dumps(document), encoding="utf-8")
+                self.change_gate_manifest("arena_equator", lambda p: mutate(p["rows"][0]))
+                try:
+                    with self.assertRaisesRegex(ValueError, message):
+                        self.validate()
+                finally:
+                    sidecar.write_text(original, encoding="utf-8")
+                    self.change_gate_manifest("arena_equator", lambda p: p["rows"][0].update(pitch=1.0, mixer_db=-15.0, clip="arena_equator_gate"))
+        self.validate()
+        with self.assertRaisesRegex(ValueError, "Gate sound mixer is not ArenaGates at -15.0 dB: arena_equator"):
+            self.change_gate_manifest("arena_equator", lambda p: p["mixer"].update(db=-12.0))
+            self.validate()
+
+    def test_a_gate_clip_that_is_a_key_source_file_must_be_pitch_baked(self):
+        # AirPit's passport clip lives in sharedassets28.resource, a key source of the map: shipped as decoded it would publish the file
+        def unbake(package):
+            clip = package["clips"][0]
+            clip.update(pitch_baked=False, baked_pitch=1.0)
+        self.change_gate_manifest("arena_airpit", unbake)
+        with self.assertRaisesRegex(ValueError, "copy of a key-source file of the map, bake its pitch: arena_airpit/arena_airpit_gate"):
+            self.validate()
+        # a clip of another file is fine unbaked (Equator's lives in sharedassets56.resource, no key source), but must not claim a bake it lacks
+        self.change_gate_manifest("arena_airpit", lambda p: p["clips"][0].update(pitch_baked=True, baked_pitch=1.25))
+        self.validate()
+        self.change_gate_manifest("arena_equator", lambda p: p["clips"][0].update(pitch_baked=True))
+        with self.assertRaisesRegex(ValueError, "pitch_baked disagrees with baked_pitch: arena_equator"):
             self.validate()
 
     def test_distribution_requires_every_released_maps_acoustics_exactly_and_intact(self):

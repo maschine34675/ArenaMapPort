@@ -246,6 +246,25 @@
     <Copy SourceFiles="@(ArenaMapPortAcousticFile)" DestinationFiles="@(ArenaMapPortAcousticFile->'$(ArenaMapPortDistDir)\acoustics\%(MapKey)\%(RecursiveDir)%(Filename)%(Extension)')" />
   </Target>
 
+  <!-- Gate and door sounds (docs/progress/gate-sounds.md): Arena's own clips for the gates the port moves, decoded by
+       tools/extract/extract_gate_sounds.py clips into the ignored work/extract/gate-sounds/<key> (WAVs plus gate-sounds.json: rows, clips and
+       the seam tables of the fitter), staged in Release and DllOnly builds like the acoustics. Plaintext on purpose, like the room tones:
+       GateSounds.cs reads them at raid start. AirPit's two clips are pitch-baked at extraction (the passport clip is a stage-2 key-source file). -->
+  <Target Name="ArenaMapPortStageGateSounds" AfterTargets="ArenaMapPortDistCopy" Condition="'$(Configuration)'=='Release'">
+    <PropertyGroup>
+      <ArenaMapPortGateSoundsDir>$(MSBuildThisFileDirectory)..\work\extract\gate-sounds</ArenaMapPortGateSoundsDir>
+    </PropertyGroup>
+    <Error Condition="!Exists('$(ArenaMapPortGateSoundsDir)\arena_equator\gate-sounds.json') Or !Exists('$(ArenaMapPortGateSoundsDir)\arena_bay5\gate-sounds.json') Or !Exists('$(ArenaMapPortGateSoundsDir)\arena_airpit\gate-sounds.json') Or !Exists('$(ArenaMapPortGateSoundsDir)\arena_bowl\gate-sounds.json')"
+           Text="Missing gate sound input; run tools/extract/extract_gate_sounds.py clips" />
+    <ItemGroup>
+      <ArenaMapPortGateSoundFile Include="$(ArenaMapPortGateSoundsDir)\arena_equator\gate-sounds.json;$(ArenaMapPortGateSoundsDir)\arena_equator\*.wav"><MapKey>arena_equator</MapKey></ArenaMapPortGateSoundFile>
+      <ArenaMapPortGateSoundFile Include="$(ArenaMapPortGateSoundsDir)\arena_bay5\gate-sounds.json;$(ArenaMapPortGateSoundsDir)\arena_bay5\*.wav"><MapKey>arena_bay5</MapKey></ArenaMapPortGateSoundFile>
+      <ArenaMapPortGateSoundFile Include="$(ArenaMapPortGateSoundsDir)\arena_airpit\gate-sounds.json;$(ArenaMapPortGateSoundsDir)\arena_airpit\*.wav"><MapKey>arena_airpit</MapKey></ArenaMapPortGateSoundFile>
+      <ArenaMapPortGateSoundFile Include="$(ArenaMapPortGateSoundsDir)\arena_bowl\gate-sounds.json;$(ArenaMapPortGateSoundsDir)\arena_bowl\*.wav"><MapKey>arena_bowl</MapKey></ArenaMapPortGateSoundFile>
+    </ItemGroup>
+    <Copy SourceFiles="@(ArenaMapPortGateSoundFile)" DestinationFiles="@(ArenaMapPortGateSoundFile->'$(ArenaMapPortDistDir)\gate-sounds\%(MapKey)\%(Filename)%(Extension)')" />
+  </Target>
+
   <!-- Original map flares and raw source atlas; isolated native renderer, no scene rebuild. -->
   <Target Name="ArenaMapPortStageMultiFlare" AfterTargets="ArenaMapPortDistCopy" Condition="'$(Configuration)'=='Release'">
     <PropertyGroup>

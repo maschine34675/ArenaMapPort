@@ -31,6 +31,9 @@
     <Compile Include="..\ArenaMapPort.Client\SpawnGateModel.cs" Link="Client\SpawnGateModel.cs" />
     <Compile Include="..\ArenaMapPort.Client\PuddleCacheGate.cs" Link="Client\PuddleCacheGate.cs" />
     <Compile Include="..\ArenaMapPort.Client\DoorPoseModel.cs" Link="Client\DoorPoseModel.cs" />
+    <!-- Gate and door sounds (docs/progress/gate-sounds.md): the manifest, row matching, gain, seam pick and cut, and the WAV reader. No Unity type inside. -->
+    <Compile Include="..\ArenaMapPort.Client\GateSoundModel.cs" Link="Client\GateSoundModel.cs" />
+    <Compile Include="..\ArenaMapPort.Client\PcmWav.cs" Link="Client\PcmWav.cs" />
     <Compile Include="..\ArenaMapPort.Client\AmbientAudioProfiles.cs" Link="Client\AmbientAudioProfiles.cs" />
     <Compile Include="..\ArenaMapPort.Client\DynamicMapAssets.cs" Link="Client\DynamicMapAssets.cs" />
     <Compile Include="..\ArenaMapPort.Shared\SpecularCapPolicy.cs" Link="Shared\SpecularCapPolicy.cs" />

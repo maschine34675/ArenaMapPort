@@ -298,3 +298,17 @@ and 0.2.2 was withdrawn (release, tag and Pixeldrain files deleted; nobody had d
 releases 0.2.2, 0.2.1 (with its DLL-only ZIP) and 0.1.0 (with its 1.23 GB full ZIP) including their tags, and on Pixeldrain
 the 0.2.2 and 0.2.1 lists and files plus a 2026-10-15 upload-test file. The account holds only the 0.2.3 ZIP, its checksum and
 the 0.2.3 list; the only GitHub release and tag is v0.2.3. The `docs/releases/*.md` records carry withdrawn banners.
+
+## Gate and door sounds addition — 2026-10-25
+
+New folder `BepInEx/plugins/maschine-ArenaMapPort/gate-sounds/<arena_equator|arena_bay5|arena_airpit|arena_bowl>/`: one `gate-sounds.json`
+(schema 1: the rows of `tools/maps/<stem>.gatesounds.json`, the mixer, and per clip the recorded size, SHA-256, the source names without any
+hash of an Arena file and the seam table of the fitter) and one PCM16 WAV per clip, plaintext like the room tones. 13 files, 9,433,137 B
+(9,380,584 B of WAV in nine clips: Equator 1, Bay5 2, AirPit 2, Bowl 4; 52,553 B of manifests), so dist grows from 90 to 103 files. The
+extractor is `tools/extract/extract_gate_sounds.py clips` (output under the ignored `work/extract/gate-sounds`, staged by the client csproj
+target `ArenaMapPortStageGateSounds` in Release and DllOnly builds); AirPit's two clips are resampled by their authored pitch (1.25 and 1.2) at
+extraction because the passport clip is `sharedassets28.resource`, a stage-2 key-source file of `arena_airpit` (the shipped bytes are
+no copy; `validate_distribution.py` and `test_gate_sounds.py` guard it). Per released map part this adds `gate-sounds.json` (required) and the
+WAVs (rule `gate sounds` of `make_release_zips.py`): `make_release_zips.py --plan` reads core 5, equator 23, bay5 29, airpit 21, bowl 25
+files (103 in all, raw 3,671,190,143 B; each part's count was 21, 26, 18, 20 before, the key files included). Bundles, key files,
+server data and `key-sources.json` are unchanged. Design, numbers and host checks: [gate-sounds.md](progress/gate-sounds.md).

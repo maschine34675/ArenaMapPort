@@ -1,0 +1,26 @@
+{
+  "_comment": "Tracked inputs of tools/extract/extract_gate_sounds.py (docs/progress/gate-sounds.md). clips: per Arena gate clip (by its AudioClip name) how the client may shorten it to the port's door timing and whether the extractor bakes the authored pitch. mode body_cut = the client may remove ONE stationary stretch of the clip between body[0] and body[1] seconds (equal-power crossfade, head, impact and tail untouched) so that the end event (the thunk or bang that marks the end of the motion, event_s seconds into the clip) lands about when the shortened motion ends; mode as_is = never cut (an impulse-like or very short clip). event_s and body are analysis numbers measured on the decoded clips (envelope and transient scan, 2026-10-25), not Arena data. bake_pitch = the clip is resampled by this factor when it is extracted (AirPit's passport and bus-door players play their clip at pitch 1.25 / 1.2): the shipped bytes are then no copy of the clip, which for the passport clip lives in sharedassets28.resource, a stage-2 key-source file of arena_airpit (docs/PLAN-ENCRYPTION.md section 6). borrowed_rows: sound rows for gates that Arena authors a motion for in the port but no emitter: the row copies its lender's sound and puts the emitter at the same offset from the door origin.",
+  "schema_version": 1,
+  "xfade_s": 0.06,
+  "clips": {
+    "arena_equator_old_slide_doors": {"mode": "body_cut", "event_s": 3.0, "body": [0.45, 2.85]},
+    "arena_bay5_roller_door_full": {"mode": "body_cut", "event_s": 4.02, "body": [0.5, 3.85]},
+    "arena_bay5_big_gates": {"mode": "body_cut", "event_s": 2.55, "body": [0.6, 2.4]},
+    "arena_airpit_metal_gates": {"mode": "as_is", "bake_pitch": 1.25},
+    "arena_airpit_bus_doors": {"mode": "as_is", "bake_pitch": 1.2},
+    "arena_bowl_btr_gates": {"mode": "body_cut", "event_s": 5.95, "body": [2.0, 5.7]},
+    "arena_bowl_emergency_car_gates_full": {"mode": "body_cut", "event_s": 6.16, "body": [0.6, 5.9]},
+    "arena_bowl_double_metal_gates": {"mode": "body_cut", "event_s": 4.88, "body": [0.9, 4.7]},
+    "arena_bowl_roller_gates": {"mode": "body_cut", "event_s": 4.75, "body": [0.4, 3.8]}
+  },
+  "borrowed_rows": {
+    "arena_equator": [
+      {
+        "barrier": "SBG_Arena_Equator/SOO/Respawn_2/Door_Sliding_Respawn (3)",
+        "part": null,
+        "at": [-3.753, 0.048, -45.87],
+        "lender": {"barrier": "SPAWN_DOORS/Door_Sliding_Respawn (1)", "at": [-4.46, 0.048, -35.045]}
+      }
+    ]
+  }
+}

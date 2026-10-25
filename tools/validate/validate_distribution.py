@@ -13,7 +13,7 @@ import re
 import subprocess
 import sys
 
-from validate_map_descriptors import map_descriptor_paths, RELEASE_MAP_KEYS
+from validate_map_descriptors import map_descriptor_paths, RELEASE_MAP_KEYS, gate_row_resolves
 
 REPO = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO/'tools/bundle'))
@@ -286,6 +286,75 @@ def validate_acoustics(plugin, keys):
                 raise ValueError(f'Acoustic file length/hash mismatch: {key}/{item["file"]}')
 
 
+GATE_SOUND_MANIFEST_KEYS = {'schema_version', 'map_key', 'arena_version', 'mixer', 'rows', 'clips'}
+GATE_SOUND_CLIP_KEYS = {'id', 'file', 'channels', 'sampleRate', 'frames', 'bytes', 'sha256', 'pitch_baked', 'baked_pitch', 'source', 'fit'}
+
+
+def validate_gate_sounds(plugin, keys):
+    """Gate and door sounds (docs/progress/gate-sounds.md), staged by the client csproj (Release and DllOnly) from the ignored
+    work/extract/gate-sounds input of tools/extract/extract_gate_sounds.py. GateSounds.cs reads <plugin>/gate-sounds/<key>/gate-sounds.json at
+    raid start: schema 1, the map's own key, the rows (equal to the tracked tools/maps/<stem>.gatesounds.json and every one of them resolving
+    to a transform row of tools/maps/<stem>.doors.json), the mixer at -15 dB, and one PCM16 WAV per clip with the recorded length and SHA-256.
+    The staged manifest must equal the extracted one byte for byte, the directory must hold exactly those files for the released maps, and a
+    clip whose resource file is a stage-2 key-source file of the map (tools/bundle/key-sources.json) must be pitch-baked: the passport clip of
+    AirPit is sharedassets28.resource itself, and its PCM payload would otherwise ship byte for byte in plaintext."""
+    root = plugin/'gate-sounds'
+    sources = json.loads((REPO/'tools/bundle/key-sources.json').read_text(encoding='utf-8'))['maps']
+    expected_files = set()
+    packages = {}
+    for key in keys:
+        stem = key.removeprefix('arena_')
+        path = root/key/'gate-sounds.json'
+        if not path.is_file():
+            raise ValueError(f'Missing gate sound package: {key}/gate-sounds.json')
+        staged = path.read_bytes()
+        package = json.loads(staged.decode('utf-8'))
+        if not isinstance(package, dict) or set(package) != GATE_SOUND_MANIFEST_KEYS or package['schema_version'] != 1 or package['map_key'] != key:
+            raise ValueError(f'Gate sound package map or schema mismatch: {key}')
+        extracted = REPO/'work/extract/gate-sounds'/key/'gate-sounds.json'
+        if not extracted.is_file() or extracted.read_bytes() != staged:
+            raise ValueError(f'Stale gate sound package: {key}/gate-sounds.json differs from work/extract/gate-sounds/{key}')
+        mixer = package['mixer']
+        if mixer.get('name') != 'ArenaGates' or mixer.get('db') != -15.0:
+            raise ValueError(f'Gate sound mixer is not ArenaGates at -15.0 dB: {key}')
+        tracked = json.loads((REPO/'tools/maps'/f'{stem}.gatesounds.json').read_text(encoding='utf-8'))
+        if package['rows'] != tracked['rows'] or package['mixer'] != tracked['mixer']:
+            raise ValueError(f'Gate sound rows differ from tools/maps/{stem}.gatesounds.json: {key}')
+        poses = json.loads((REPO/'tools/maps'/f'{stem}.doors.json').read_text(encoding='utf-8'))['poses']
+        ids = [clip['id'] for clip in package['clips']]
+        if not package['rows'] or not ids or len(ids) != len(set(ids)):
+            raise ValueError(f'Gate sound package has no rows or duplicate clips: {key}')
+        for row in package['rows']:
+            if row['pitch'] != 1.0 or row['clip'] not in ids or row['mixer_db'] != (-15.0 if row['mixer'] == 'ArenaGates' else 0.0):
+                raise ValueError(f'Gate sound row is not playable at pitch 1 with its mixer level: {key} {row["barrier"]}/{row["part"]}')
+            if not gate_row_resolves(row, poses):
+                raise ValueError(f'Gate sound row matches no door pose: {key} {row["barrier"]}/{row["part"]}')
+        protected = {Path(name).name for entry in sources[key] for name in entry['files']}
+        listed = []
+        for clip in package['clips']:
+            if set(clip) != GATE_SOUND_CLIP_KEYS or clip['file'] != clip['id'] + '.wav':
+                raise ValueError(f'Gate sound clip entry is malformed: {key}/{clip.get("id")}')
+            if clip['source']['resource']['file'] in protected and not (clip['pitch_baked'] and clip['baked_pitch'] != 1.0):
+                raise ValueError(f'Gate sound clip is a copy of a key-source file of the map, bake its pitch: {key}/{clip["id"]}')
+            if clip['pitch_baked'] != (clip['baked_pitch'] != 1.0):
+                raise ValueError(f'Gate sound clip pitch_baked disagrees with baked_pitch: {key}/{clip["id"]}')
+            listed.append(clip)
+        packages[key] = listed
+        expected_files.add(f'{key}/gate-sounds.json')
+        expected_files.update(f'{key}/{clip["file"]}' for clip in listed)
+    actual_files = _files_under(root)
+    if actual_files != expected_files:
+        raise ValueError(f'Gate sounds file set mismatch: missing={sorted(expected_files - actual_files)} '
+                         f'unexpected={sorted(actual_files - expected_files)}')
+    for key, listed in packages.items():
+        for clip in listed:
+            blob = (root/key/clip['file']).read_bytes()
+            if len(blob) != clip['bytes'] or hashlib.sha256(blob).hexdigest() != clip['sha256']:
+                raise ValueError(f'Gate sound file length/hash mismatch: {key}/{clip["file"]}')
+            if blob[:4] != b'RIFF' or blob[8:12] != b'WAVE' or len(blob) != 44 + clip['frames'] * clip['channels'] * 2:
+                raise ValueError(f'Gate sound file is not a PCM16 WAV of the recorded size: {key}/{clip["file"]}')
+
+
 def validate_water(plugin):
     """Original harbor water settings and raw texture mip chains, staged by the client csproj (Release and DllOnly)
     from the ignored work/extract/bay5-water input of tools/extract/extract_water.py (docs/progress/bay5-water.md).
@@ -388,6 +457,7 @@ def validate():
     validate_art(plugin, REPO/'dist/SPT_Runtime/user/mods/ArenaMapPort', keys)
     validate_ai_sidecars(plugin, keys)
     validate_acoustics(plugin, keys)
+    validate_gate_sounds(plugin, keys)
     from extract_multiflare import validate_graph
     expected_flare_files = set()
     for key in FLARE_MAP_KEYS:

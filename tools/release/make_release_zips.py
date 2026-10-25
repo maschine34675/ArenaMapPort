@@ -20,7 +20,7 @@ Two layouts, one classification, one verifier:
       parts that install by extracting EVERY part into the SPT root:
 
       part1ofN-core         client DLL, server DLL, original map descriptions, selection artwork, README, notices
-      part2ofN-<map stem>   one part per released map: bundles, db/<key>/base.json, acoustics, AI sidecar,
+      part2ofN-<map stem>   one part per released map: bundles, db/<key>/base.json, acoustics, gate sounds, AI sidecar,
                             flares, water, loading screens, overview map, shader sidecar, banner
 
       maschine-ArenaMapPort-<version>-part<i>of<N>-<id>.zip     one per part
@@ -38,11 +38,11 @@ agree (`--version` overrides). Outputs land under `--out` (default work/releases
 
 Classification is strict and anchored and identical for both layouts: every dist file must match exactly one
 rule (see build_rules). A file that matches none (a parked map's output such as arena_airpit2_scenes.bundle or
-ai/airpit2.ai.json, a stray .pdb or backup, a Thumbs.db or .bak inside an acoustics / flares / water /
+ai/airpit2.ai.json, a stray .pdb or backup, a Thumbs.db or .bak inside an acoustics / gate-sounds / flares / water /
 dynamicmaps folder) or more than one is a hard error, never a silent skip; so is a directory that cannot be
 listed. The rules pin the leaf names the build stages, and required_files() demands everything every released
-map must carry (bundles, key file, database entry, shader sidecar, AI sidecar, banner, acoustic graph, first
-loading screen); only flares, water and the overview map are optional per map. Every ZIP carries
+map must carry (bundles, key file, database entry, shader sidecar, AI sidecar, banner, acoustic graph, gate sound
+manifest, first loading screen); only flares, water and the overview map are optional per map. Every ZIP carries
 BepInEx/plugins/maschine-ArenaMapPort/parts/<id>.json, a schema-1 manifest naming ALL parts (one, in the single
 layout) plus this ZIP's own entries with size and SHA-256, so any ZIP says which others complete the install.
 The core part (or the single ZIP) adds README.txt and THIRD-PARTY-NOTICES.txt (client and server root); the
@@ -327,7 +327,7 @@ def build_rules(spec: ReleaseSpec) -> list:
     """Exactly the dist layout the build stages. Every pattern is matched with fullmatch, and the key / stem /
     display name is escaped and followed by its delimiter ('/', '_', '.'), so the parked arena_airpit2 can never
     match arena_airpit (and ai/airpit2.ai.json never matches ai/airpit.ai.json). The folder rules (acoustics,
-    flares, water, dynamicmaps) pin the leaf names the build stages (ArenaMapPort.Client.csproj, the spatial-audio
+    flares, water, dynamicmaps, gate sounds) pin the leaf names the build stages (ArenaMapPort.Client.csproj, the spatial-audio
     and flare extractors), flat or one 'textures/' / 'Layers/' level deep, so a stray Thumbs.db, desktop.ini,
     .bak, .git folder or nested leftover is a classification error instead of shipping."""
     rules = []
@@ -346,6 +346,7 @@ def build_rules(spec: ReleaseSpec) -> list:
         add(m.stem, "key file", re.escape(f"{PLUGIN_ROOT}/keys/{m.key}.json"))
         add(m.stem, "acoustics", re.escape(f"{PLUGIN_ROOT}/acoustics/{m.key}/")
             + rf"(?:spatial-audio\.json|source\.audiobakedata|{LEAF}\.wav)")
+        add(m.stem, "gate sounds", re.escape(f"{PLUGIN_ROOT}/gate-sounds/{m.key}/") + rf"(?:gate-sounds\.json|{LEAF}\.wav)")
         add(m.stem, "ai sidecar", re.escape(f"{PLUGIN_ROOT}/ai/{m.stem}.ai.json"))
         add(m.stem, "flares", re.escape(f"{PLUGIN_ROOT}/flares/{m.key}/") + rf"(?:flares\.json|textures/{LEAF}\.bin)")
         add(m.stem, "water", re.escape(f"{PLUGIN_ROOT}/water/{m.key}/") + rf"(?:water\.json|textures/{LEAF}\.bin)")
@@ -373,8 +374,8 @@ def required_files(spec: ReleaseSpec) -> dict:
     """Part id -> files that must exist in dist for that part to be installable. Mirrors what
     tools/validate/validate_distribution.py treats as mandatory per released map: a map without its key file cannot
     unlock its encrypted bundles, a missing AI sidecar silently falls back to the NavMesh-synthesised AI, a missing
-    shader sidecar leaves pink materials, and a map without its acoustic graph, banner or loading screens is not
-    the map the README promises. Only flares, water and the
+    shader sidecar leaves pink materials, a map without its gate sound manifest has silent gates, and a map without its
+    acoustic graph, banner or loading screens is not the map the README promises. Only flares, water and the
     DynamicMaps overview are optional (AirPit has an overview but no flares or water package)."""
     required = {CORE_ID: [spec.client_dll, spec.server_dll, DESCRIPTIONS_NAME, *SELECTION_MAP_NAMES]}
     for m in spec.maps:
@@ -385,6 +386,7 @@ def required_files(spec: ReleaseSpec) -> dict:
                   f"{PLUGIN_ROOT}/ai/{m.stem}.ai.json",
                   f"{SERVER_ROOT}/banners/{m.key}.jpg",
                   f"{PLUGIN_ROOT}/acoustics/{m.key}/spatial-audio.json",
+                  f"{PLUGIN_ROOT}/gate-sounds/{m.key}/gate-sounds.json",
                   f"{PLUGIN_ROOT}/loadscreens/{m.key}_1.jpg"]
         required[m.stem] = names
     return required

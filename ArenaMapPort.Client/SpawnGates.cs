@@ -85,6 +85,11 @@ namespace ArenaMapPort.Client
     /// raid start without a hold. The first activation of a lamp light re-caches the intensity of its CullingLightObject, so a node
     /// switched on is re-synced by <c>ArenaLightingRepairs.SyncSwitchedOn</c> in the same frame.
     ///
+    /// Gate sounds (2026-10-25, docs/progress/gate-sounds.md): <see cref="GateSounds"/> plays Arena's own clip of every gate that has one,
+    /// in the first frame of a Release that drives it. Each posed part carries a <c>Key</c> (the barrier / part / at of its first pose
+    /// row and its closed local position, taken in <see cref="NotePoses"/>); <see cref="Open"/> hands the keys of the driven parts and the
+    /// drive scale over, <see cref="Hold"/> stops what a release started. Silent when nothing drives (a plain raid), on a snap and for lamps.
+    ///
     /// Contract for a mode plugin (reflection, like ArenaMapPort's own ArenaModeMapPositionIntegration does the other
     /// way round): type <c>ArenaMapPort.Client.SpawnGates</c>, all members on the Unity main thread.
     /// <c>public static bool Hold(string reason)</c>: in the menu (applies to the next owned raid; call Release on every
@@ -149,6 +154,7 @@ namespace ArenaMapPort.Client
             internal float Seconds;             // Arena's own duration (the longest of the nodes), unscaled
             internal float DriveSeconds;        // Seconds * SpawnGateDriveScale, fixed when a release starts to drive the part
             internal int Switches;              // how many of the nodes are switches (SetActive), the rest moves
+            internal GateSoundModel.PartKey Key; // what GateSounds matches its rows against (docs/progress/gate-sounds.md)
             internal bool SwitchOnly;           // every node is a switch: nothing to carve, finishes with the barrier's last drive
             internal float FloorY;
             internal bool HasClosedBounds;
@@ -287,6 +293,7 @@ namespace ArenaMapPort.Client
                 _opening = false;
                 cancelledOpening = true;
             }
+            GateSounds.OnHold(); // the gates close again: what the last release started to play stops (never throws)
             int reclosed = 0, unparked = 0;
             foreach (var part in _parts)
             {
@@ -561,9 +568,11 @@ namespace ArenaMapPort.Client
                 {
                     Part = part, Nodes = nodes, NodePaths = paths.ToArray(), Clip = poses[0].Clip, Seconds = seconds,
                     Switches = switches, SwitchOnly = switches == nodes.Length,
+                    Key = GateSoundModel.KeyOf(poses[0].Barrier, poses[0].Part, poses[0].At, part.localPosition.x, part.localPosition.y, part.localPosition.z),
                 };
                 MeasureClosed(posed);
                 _posed[part] = posed;
+                GateSounds.Prepare(); // the first noted part starts loading the gate sound package in the background (once per raid, never throws)
             }
             catch (Exception e)
             {
@@ -1055,6 +1064,17 @@ namespace ArenaMapPort.Client
             return path.status;
         }
 
+        // The gate parts a release drives that can sound: a part with only switches (a lamp) moves nothing and has no clip.
+        static GateSoundModel.PartKey[] SoundKeys(List<PosedPart> drivers)
+        {
+            var keys = new List<GateSoundModel.PartKey>(drivers.Count);
+            foreach (var driver in drivers)
+            {
+                if (!driver.SwitchOnly) keys.Add(driver.Key);
+            }
+            return keys.ToArray();
+        }
+
         // The release: a booth leaf without a pose slides for SpawnGateSlideSeconds, then every part without Arena's end pose
         // switches off exactly as the raid-start opening would have; a part WITH poses drives from the closed to the open pose
         // over Arena's seconds times SpawnGateDriveScale (SpawnGateDrive false: at once) and stays active. One coroutine moves
@@ -1108,6 +1128,7 @@ namespace ArenaMapPort.Client
             float longest = sliders.Count > 0 ? seconds : 0f;
             if (drive) foreach (var d in drivers) longest = Mathf.Max(longest, d.DriveSeconds);
             _openLongestSeconds = longest; // OpeningSecondsRemaining counts down from here
+            if (drive) GateSounds.OnRelease(SoundKeys(drivers), scale); // the sounds of the parts that drive now; silent when they snap (never throws)
             bool slideDone = false;
             int off = 0, removed = 0, driven = 0, switched = 0, driveFrames = 0;
             float driveEnd = 0f, driveSum = 0f, driveMax = 0f;

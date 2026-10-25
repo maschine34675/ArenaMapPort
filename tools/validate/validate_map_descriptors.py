@@ -705,6 +705,131 @@ def door_pose_errors(map_json: dict, doors_path: Path, registry_poses) -> list[s
     return errors
 
 
+GATE_SOUND_SCHEMA = 1
+GATE_SOUND_ROW_KEYS = ("barrier", "part", "at", "closed_position", "clip", "emitter", "source_volume", "player_volume", "authored_pitch", "pitch",
+                       "min_distance", "max_distance", "mixer", "mixer_db", "source_mixer", "origin", "match_distance")
+GATE_SOUND_CLIP_KEYS = ("id", "asset", "path_id", "format", "channels", "sample_rate", "seconds", "resource")
+GATE_SOUND_MIXER = "ArenaGates"
+GATE_SOUND_MIXER_DB = -15.0   # the ArenaGates fader (docs/progress/gate-sounds.md); a row that names no mixer plays at 0 dB
+
+
+def gate_row_resolves(row: dict, poses: list) -> bool:
+    """Does a transform row of the doors sidecar belong to a sound row? The client's rule (GateSoundModel.RowApplies, same as
+    extract_gate_sounds.row_resolves): barrier equal, part null or equal, at null or within DOOR_AT_TOLERANCE, closed_position null or
+    the closed local position of the part itself (node "") within DOOR_CLOSED_TOLERANCE."""
+    for pose in poses:
+        if DOOR_SWITCH_KEY in pose or pose["barrier"] != row["barrier"]:
+            continue
+        if row["part"] is not None and pose["part"] != row["part"]:
+            continue
+        if row["at"] is not None and not (pose["at"] is not None and math.dist(row["at"], pose["at"]) <= DOOR_AT_TOLERANCE):
+            continue
+        if row["closed_position"] is not None and not (pose["node"] == "" and math.dist(row["closed_position"], pose["closed"]["position"]) <= DOOR_CLOSED_TOLERANCE):
+            continue
+        return True
+    return False
+
+
+def gate_sound_errors(map_json: dict, sounds_path: Path, doors_path: Path) -> list[str]:
+    """tools/maps/<stem>.gatesounds.json (written by tools/extract/extract_gate_sounds.py rows) against the map descriptor and its doors
+    sidecar: schema, the exact key set of every row, finite numbers, the pitch the client applies (1: the pitch is baked into the clip),
+    the mixer levels (ArenaGates -15 dB or none), clips that exist, rows that are unique and resolve to a transform row of the doors
+    sidecar. A map without the sidecar has no gate sounds; a sidecar without a doors sidecar is an error."""
+    name = sounds_path.name
+    if not sounds_path.exists():
+        return []
+    try:
+        doc = json.loads(sounds_path.read_text(encoding="utf-8"))
+    except ValueError as exc:
+        return [f"{name} is not valid JSON: {exc}"]
+    if not isinstance(doc, dict):
+        return [f"{name} must be an object"]
+    errors: list[str] = []
+    if doc.get("schema_version") != GATE_SOUND_SCHEMA:
+        errors.append(f"{name}: schema_version must be {GATE_SOUND_SCHEMA}")
+    if doc.get("key") != map_json.get("key"):
+        errors.append(f"{name}: key {doc.get('key')!r} is not the map's {map_json.get('key')!r}")
+    source = doc.get("source")
+    scenes = map_json.get("all_scene_names", [])
+    gate = source.get("gate_scene") if isinstance(source, dict) else None
+    sound = source.get("sound_scene") if isinstance(source, dict) else None
+    if not isinstance(gate, dict) or gate.get("scene") not in scenes or type(gate.get("level")) is not int \
+            or not isinstance(sound, dict) or type(sound.get("level")) is not int or not isinstance(source.get("arena_version"), str):
+        errors.append(f"{name}: source needs arena_version, gate_scene {{scene (a scene of the map), level}} and sound_scene {{level}}")
+    mixer = doc.get("mixer")
+    if not isinstance(mixer, dict) or mixer.get("name") != GATE_SOUND_MIXER or mixer.get("db") != GATE_SOUND_MIXER_DB:
+        errors.append(f"{name}: mixer must be {GATE_SOUND_MIXER} at {GATE_SOUND_MIXER_DB} dB")
+    clips = doc.get("clips")
+    clip_ids: set[str] = set()
+    if not isinstance(clips, list) or not clips:
+        errors.append(f"{name}: clips must be a non-empty array")
+        clips = []
+    for i, clip in enumerate(clips):
+        label = f"{name} clips[{i}]"
+        if not isinstance(clip, dict) or set(clip) != set(GATE_SOUND_CLIP_KEYS):
+            errors.append(f"{label}: needs exactly the keys {', '.join(GATE_SOUND_CLIP_KEYS)}")
+            continue
+        if not isinstance(clip["id"], str) or not re.fullmatch(r"[A-Za-z0-9_.-]+", clip["id"]) or clip["id"] in clip_ids:
+            errors.append(f"{label}: id must be a unique file-safe name")
+        clip_ids.add(clip["id"])
+        if clip["format"] not in ("PCM16", "Vorbis") or clip["channels"] not in (1, 2) or type(clip["sample_rate"]) is not int \
+                or not isinstance(clip["resource"], dict) or set(clip["resource"]) != {"file", "offset", "size"}:
+            errors.append(f"{label}: format PCM16 or Vorbis, 1 or 2 channels, an integer sample_rate and resource {{file, offset, size}}")
+    rows = doc.get("rows")
+    if not isinstance(rows, list) or not rows:
+        return errors + [f"{name}: rows must be a non-empty array"]
+    try:
+        poses = json.loads(doors_path.read_text(encoding="utf-8"))["poses"]
+    except (OSError, ValueError, KeyError):
+        return errors + [f"{name}: there is no readable {doors_path.name} beside it (every sound row belongs to a door row)"]
+    seen: set[tuple] = set()
+    for i, row in enumerate(rows):
+        label = f"{name} rows[{i}]"
+        if not isinstance(row, dict) or set(row) != set(GATE_SOUND_ROW_KEYS):
+            errors.append(f"{label}: needs exactly the keys {', '.join(GATE_SOUND_ROW_KEYS)}")
+            continue
+        problems = []
+        if not isinstance(row["barrier"], str) or not row["barrier"]:
+            problems.append("barrier must be a non-empty string")
+        if row["part"] is not None and not isinstance(row["part"], str):
+            problems.append("part must be null (every part), \"\" (the barrier root) or a name")
+        for field in ("at", "closed_position"):
+            if row[field] is not None and not is_finite_vec3(row[field]):
+                problems.append(f"{field} must be null or three finite numbers")
+        if not is_finite_vec3(row["emitter"]):
+            problems.append("emitter must be three finite numbers")
+        for field in ("source_volume", "player_volume"):
+            if isinstance(row[field], bool) or not isinstance(row[field], (int, float)) or not math.isfinite(row[field]) or not 0 < row[field] <= 2:
+                problems.append(f"{field} must be a number above 0 and at most 2")
+        if row["pitch"] != 1.0:
+            problems.append("pitch must be 1.0: the client plays every clip at pitch 1, a clip's authored pitch is baked into it (gate_sound_fit.json bake_pitch)")
+        if isinstance(row["authored_pitch"], bool) or not isinstance(row["authored_pitch"], (int, float)) or not 0.5 <= row["authored_pitch"] <= 2:
+            problems.append("authored_pitch must be a number from 0.5 to 2")
+        distances = (row["min_distance"], row["max_distance"])
+        if any(isinstance(d, bool) or not isinstance(d, (int, float)) or not math.isfinite(d) for d in distances) or not 0 < distances[0] < distances[1]:
+            problems.append("min_distance and max_distance must be finite numbers with 0 < min < max")
+        if row["mixer"] not in (None, GATE_SOUND_MIXER) or row["mixer_db"] != (GATE_SOUND_MIXER_DB if row["mixer"] else 0.0):
+            problems.append(f"mixer is null (0 dB) or {GATE_SOUND_MIXER} ({GATE_SOUND_MIXER_DB} dB), and mixer_db says so")
+        if row["clip"] not in clip_ids:
+            problems.append(f"clip {row['clip']!r} is not in clips")
+        if not isinstance(row["origin"], str) or not row["origin"]:
+            problems.append("origin must be a non-empty string")
+        errors.extend(f"{label}: {p}" for p in problems)
+        if problems:
+            continue
+        identity = (row["barrier"], row["part"], tuple(row["at"]) if row["at"] else None,
+                    tuple(row["closed_position"]) if row["closed_position"] else None)
+        if identity in seen:
+            errors.append(f"{label}: duplicate row for {row['barrier']}/{row['part']}")
+        seen.add(identity)
+        if not gate_row_resolves(row, poses):
+            errors.append(f"{label}: {row['barrier']}/{row['part']} at {row['at']} closed {row['closed_position']} matches no transform row of {doors_path.name}")
+    unused = clip_ids - {r.get("clip") for r in rows if isinstance(r, dict)}
+    if unused:
+        errors.append(f"{name}: clips {sorted(unused)} are used by no row")
+    return errors
+
+
 def check_map_against_registry_entry(
     map_json: dict, registry_args: dict, ref_scope: dict, map_path: Path, cs_var_name: str, errors: list
 ) -> None:
@@ -721,6 +846,8 @@ def check_map_against_registry_entry(
     check_field(errors, where, "lamp_fill", map_json.get("lamp_fill"), registry_args.get("LampFill"))
     errors.extend(f"{where}: {error}" for error in door_pose_errors(
         map_json, map_path.with_name(f"{map_path.stem}.doors.json"), registry_args.get("DoorPoses")))
+    errors.extend(f"{where}: {error}" for error in gate_sound_errors(
+        map_json, map_path.with_name(f"{map_path.stem}.gatesounds.json"), map_path.with_name(f"{map_path.stem}.doors.json")))
     check_field(errors, where, "shader_fallback_names", map_json.get("shader_fallback_names", []),
                 resolve(registry_args.get("ShaderFallbackNames", []), ref_scope))
     for json_field, cs_field in (("opened_barriers", "OpenedBarriers"), ("navmesh_bake_exclusions", "NavMeshBakeExclusions"),
@@ -910,6 +1037,14 @@ def main() -> int:
     for doors in sorted(maps_dir.glob("*.doors.json")):
         if not (maps_dir / f"{doors.name.removesuffix('.doors.json')}.json").exists():
             errors.append(f"{doors.name}: no tools/maps descriptor {doors.name.removesuffix('.doors.json')}.json beside it")
+
+    for sounds in sorted(maps_dir.glob("*.gatesounds.json")):
+        if not (maps_dir / f"{sounds.name.removesuffix('.gatesounds.json')}.json").exists():
+            errors.append(f"{sounds.name}: no tools/maps descriptor {sounds.name.removesuffix('.gatesounds.json')}.json beside it")
+    for key in RELEASE_MAP_KEYS:
+        stem = key.removeprefix("arena_")
+        if (maps_dir / f"{stem}.json").exists() and not (maps_dir / f"{stem}.gatesounds.json").exists():
+            errors.append(f"{stem}.gatesounds.json is missing: every released map has gate sounds (tools/extract/extract_gate_sounds.py rows)")
 
     equator_json_path = maps_dir / "equator.json"
     if not equator_json_path.exists():

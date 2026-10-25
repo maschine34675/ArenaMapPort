@@ -362,3 +362,15 @@ controllers, 153 EFT clips and 29 EFT controllers censused); the `DotAnimator` l
 and the static open back row; the FCK shutter with nothing authored and `LevelBorder (83)` wrapping it. The corrections it asked
 for (Bowl has no `DotAnimator`; 82, not 74, elements; the bus doors' sound players; 13 `_02` shutters; two, not four, hidden
 `Telfer_Help` posts; the current Bay5 sound scenes; Arena's child order vs the extract's) are applied above.
+
+## Correction 2026-10-25 (gate sounds): the audio clip of the bus doors exists
+
+The "Short answer" above says that the whole install "holds no bus or apron clip" for AirPit's bus doors. That meant no ANIMATION clip (no
+`AnimationClip`, no override controller: the bus-door motion is still ours), and it stays true. An AUDIO clip does exist: the three
+`EntitySoundPlayer` objects of the front-row assemblies in `Arena_Airpit_Sound` (level 39) play `arena_airpit_bus_doors`
+(`sharedassets39.assets` path 56, PCM16, 44.1 kHz stereo, 2.548 s; AudioSource volume 0.65, player volume 0.95, pitch 1.2, mixer group
+ArenaGates). The same census found a gate clip for every door the port animates, Equator's booths (`arena_equator_old_slide_doors`; the fifth
+booth door has no player), Bay5's rollers and depot gates, AirPit's passport leaves (players on the leaves of level 28) and all four Bowl
+gates: 24 players plus one borrowed row, played by `GateSounds` from 2026-10-25 (implemented and unit-tested, not yet heard on a host: [gate-sounds.md](gate-sounds.md)). One hint for the
+door work from that clip: its motor runs 0 to 0.9 s, the clunk sits at 0.91 s and it is over after 1.13 s (after the pitch is applied), so
+Arena's bus-door cycle looks like 1.1 to 1.4 s, against the 3.0 s (1.5 s at the default scale) the port borrows for the pose; not acted on.
