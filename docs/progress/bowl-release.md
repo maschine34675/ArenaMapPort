@@ -916,3 +916,25 @@ gate part(s)`, `every probed gate sealed (1 probed, 2 inconclusive)`); release `
 army gate 2, respawn gate 1), `drive frames: 810 frame(s) in 6.8 s, mean 8.3 ms, max 12.2 ms`, `navmesh probe: every probed gate open
 (3 probed)`; hideout opened once. The 0.3.0 candidate ZIP of 2026-10-18 is superseded by this build (new DLLs, the Equator and Bay5
 bundles and Equator's database changed); it is recut with `make_release_zips.py` when the user decides to publish.
+
+## Correction 2026-10-25: Bowl guard towers (to "raid 7: guard towers" of 2026-10-18)
+
+Raid 7 above says: "The west big tower has no NavMesh within 2 m at y 3.0, 4.5 and 7.0 (its platform is not in the bake band or not baked),
+and both small towers have a NavMesh patch at y 4.5 that is 'not reachable on foot'". The open list built on it
+(the lead's German survey of 2026-10-25, untracked under `work/reports/`; its Bowl entry on the guard towers) carried the west tower as an island. A probe on GPU-2
+on 2026-10-25 (build cc2f024, developer hold raid 5, `uibridge_teleport dryRun` batches) shows that this was wrong for the big towers:
+
+- Method. The probes start on the main component. A first batch from the teleport point (36, 0.1, -16) started off the main component and
+  is discarded.
+- From East All (50.16, 0.1, -3.25): east stair (51.56, 4.94, -64.61) path complete, 71.8 m; east deck (57.3, 9.15, -65.13) complete, 84.6 m;
+  **west stair (-56.2, 4.99, -8.71) complete, 134.0 m; west deck (-61.97, 9.25, -7.97) complete, 146.9 m**; the small tower at (50.9, 4.8, 2.8)
+  and the small tower at (-53.3, 4.8, -76.0) `path_partial`, 5.8 m and 6.9 m short.
+- From West Bear (-55.33, 0.1, -69.09): west stair complete, 70.1 m; west deck complete, 82.9 m; east stair complete, 123.6 m.
+
+Result. Both big towers (`Guardian_Tower` at (53.4, -64.2) and `Guardian_Tower_1` at (-58.1, -9.1)) are on the connected NavMesh, stairs and
+decks (the decks at y 9.15 and 9.25 lie inside the bake band, whose y maximum is 10). The "no NavMesh within 2 m" reading of 2026-10-18 was
+the 2 m probe radius against the tower position of that note, (-58.1, -9.1): by these numbers the stair point lies 1.9 m and the deck point
+4.0 m from it horizontally, at or beyond the 2 m radius. The platform is baked. The two small towers are
+unreachable islands, which the probes confirm (they stop 5.8 m and 6.9 m short), and the lead reads them as lying outside Arena's play area.
+Nothing to change: no bake input, no descriptor field, no sidecar. Vault limits above 1.2 m are still untested (they need player input), and
+these probes check reachability only, not a walk.

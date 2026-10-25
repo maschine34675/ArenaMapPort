@@ -291,3 +291,16 @@ server is restarted anyway - see the opening paragraphs and "Host checks (lead)"
 2. `uibridge_teleport dryRun=true` to (-7.5, 0.1, -28.0) and (7.5, 0.1, -29.0): `reachable=true`.
 3. With bots: the two points are in the rotation of the 10 Bot rows; a bot spawned at either is not pushed (no `[RaidFix]` move line, no
    bot standing in the wall). Check ArenaMode's pickups only if the pixel offset matters to someone.
+
+## 2026-10-25 - host verification on GPU-2 of the moved bot rows (build cc2f024)
+
+Equator raid 1 (17:09, plain, PMC, bots None; build, deploy and test values in `docs/progress/door-poses.md`, section "2026-10-25 - host
+verification on GPU-2 of the exit lamps and the moved Bay5 spawns") logged `[RaidFix] spawn placement: disabled 2 SPAWN_BOUND barrier
+collider(s); all spawn points already free`. No point is moved any more; before the data moved, every raid also logged a 1.5 m move of
+`'arena_equator-bot-south-west'`. That is item 1 of the host checks above. The Bay5 half (the player spawned on the moved
+`player-north-west` point, the same line) is in `door-poses.md`, section of the same date.
+
+Not done: item 2 (`uibridge_teleport dryRun=true` to (-7.5, 0.1, -28.0) and (7.5, 0.1, -29.0)) and item 3 (a raid with bots, to see a bot
+spawned at either point stay where it was authored); there was no bot raid in the session. The same session read Equator's booth screens
+(score monitors) from inside the north booth, which is the North Gate extraction box: the raid ended by extraction after 8 s
+(`docs/progress/score-monitors.md`, section "Host evidence").

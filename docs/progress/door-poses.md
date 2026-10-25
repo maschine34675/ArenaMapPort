@@ -2253,3 +2253,57 @@ Host checks (lead): plain Bay5 raid, Debug `[RaidFix] spawn placement: disabled 
 `arena_bay5-bot-east-lane` move (the line had a 1.5 m move on every earlier Bay5 raid) and no `arena_bay5-player-north-west` entry;
 `uibridge_teleport dryRun=true` to (55.2, -3.875, 53.0) and (118.3, -3.875, 44.4) `reachable=true`; with an ArenaMode team spawn on the
 north-west marker the player stands on the floor 1.25 m from the nearest border, not on the rim.
+
+## 2026-10-25 - host verification on GPU-2 of the exit lamps and the moved Bay5 spawns (build cc2f024: five raids and a hideout open)
+
+The same session also checked the gate sounds, the score monitors, the puddle footsteps and the moved Equator spawns; their records are
+[gate-sounds.md](gate-sounds.md), [score-monitors.md](score-monitors.md), [puddle-footsteps-all-maps.md](puddle-footsteps-all-maps.md) and
+[equator-booth-spawns.md](equator-booth-spawns.md). This section holds the build, the deploy and the test values of the whole session, and
+the lamp and Bay5 spawn evidence.
+
+Build and deploy. HEAD `cc2f024` (it holds 490e227, the commit of the two 2026-10-25 sections above, plus the gate sounds, the changelog
+test and the score monitors). Client DLL 1,160,192 B, SHA-256 `0a7a5eaaca2f52885c5274ce6529da73e89f84b149629047df964eb100e43f43`; server DLL
+156,672 B, SHA-256 `f28fb0692aeeb07514c961c6dc7c9f3359afbc502d39ff7bf493a27a82679c21`; both built 17:03 from cc2f024 (client DllOnly).
+Deploy 17:05: `deploy-to-spt.ps1 -Confirm`, plan 113 files, 23 new (13 gate-sounds files, 10 monitors files), 4 overwritten (client DLL,
+server DLL, Equator and Bay5 `base.json`), 86 identical. `gpu-run deploy-wait --server`: 2300 files identical on the host after 141.1 s,
+the SPT server started. EFT started 17:08:21 (`gpu-run start`), `16/16 identical (VM build = host disk = loaded)`. Test values set with
+`uibridge_config_set persist=false` (not saved to the .cfg): `Monitors/Demo` = Cycle, `Spawns/SpawnGateHold` = true,
+`Spawns/SpawnGateHoldSeconds` = 20 (raids 2 to 5). All raids PMC, bots None, clock 12:00, weather clear. The whole process
+(`LogOutput-SPT-GPU-2-2026-10-25_17-08-12.log`, 19,305 lines) holds 0 Warning and 0 Error lines from `maschine-ArenaMapPort`; the only Error
+in it is Unity's `Coroutine couldn't be started because the the game object 'MenuScreen' is inactive!` at 17:13:55 when leaving a raid
+(pre-existing, unexplained, not from the mod).
+
+- **Raid 1 (17:09, Equator, plain).** Lamps: the four park lines, one per lamp part, `[SpawnGates] park: 'emergency_exit_light_emissive
+  (5|2|1|4)' snapped to the open pose (2 node(s), 2 switch(es), clip DotAnimator)` (the evidence writes the four names as one pattern); the
+  spawn-openings block `exit lamps 'EXIT_LIGHT_EMISSIVE': 4 lamp part(s), 8 switch(es), 4 on`; `gates open (navmesh installed): 14 part(s)
+  registered, 10 park carver(s) in place` (10 booth leaves + 4 lamps). The Point light of lamp (1) was active and its
+  `CullingLightObject.float_1` read 0.875, which is 1.75 x the map's 0.5: `ArenaLightingRepairs.SyncSwitchedOn` worked (without it the value
+  would be the authored 1.75).
+- **Raid 2 (17:12, Equator, developer hold 20 s).** During the hold the Point light (2) of the lamp was inactive (`activeSelf` false). At
+  17:12:50.188 `released (developer test hold, 20.1 s after the raid timer started): ... drove 14 part(s) to the open pose in 3.5 s (scale
+  0.50), 10 park carver(s) in place, 8 switch(es) set to the open state`, the count the lamp section above expected, then `gates open
+  (released): 14 part(s) registered`. Lamp (1) after the release, looked at from 8.5 m: `Light.intensity` 0.867 (= 0.875 x the distance
+  fade), `IsVisible` true, culling index 458. `uibridge_status` over the last 20 s: 119.7 fps, mean 8.4 ms, p95 8.3 ms, max 33.0 ms (one
+  frame of the window; the evidence does not attribute it). 0 ArenaMapPort warnings (four Unity duplicate-LOD warnings for
+  `refrigerator_drink`, pre-existing).
+- **Raid 3 (17:14, Bay5, hold 20 s): the moved spawns.** The player spawned at (55.2, -3.9, 53.0), the moved `player-north-west` point of
+  "2026-10-25 - Bay5's two edge spawns move inboard", and the placement repair logged `all spawn points already free`: no point was moved
+  (before the data moved, `bot-east-lane` was pushed 1.5 m on every Bay5 raid). Release at 17:15:14.76: `released ...: drove 7 part(s) to
+  the open pose in 3.5 s (scale 0.50), 6 park carver(s) in place`, `gates open (released): 7 part(s)`. Bay5 has no lamp group.
+- **Raid 4 (17:16, Air Pit, hold 20 s).** At 17:17:31.745 `released ...: 18 gate part(s) switched off, 28 carver(s) removed, drove 24
+  part(s) to the open pose in 1.5 s (scale 0.50), 28 park carver(s) in place, 8 switch(es) set to the open state`: the 24 parts (3 bus
+  doors, 16 leaves, RED, GREEN, 3 lamps) and the 8 switches (RedFog, GreenFog and the 6 lamp rows) are what the lamp section above expected.
+  Then `gates open (released): 42 part(s) registered, 28 park carver(s) in place`. The six `BUS_LIGHT` Point lights were active after the
+  release.
+- **Hideout.** 17:22 scenario `hideout-open` (screen Hideout, `logAbsent` error passed), `hideout-back` (MainMenu).
+
+Against the host recipe of the lamp section: (1) Equator plain raid: the four park lines, the summary line and the multiplier
+(`float_1` 0.875, not 1.75) are recorded; F7 `LightCullingProbe` and a still of an exit sign are not. (2) Equator hold: dark before, 8
+switches at the release, lit afterwards: recorded. (3) Air Pit: the hold is recorded (24 parts, 1.5 s, 8 switches, the six lights
+active); the plain raid (three `park:` lines, 42 registered parts at raid start), the passport fog flip at +0.85 s and the held-gate
+count 36 are not. (4) Frame time and the hideout are recorded; EFT's own `Logs/<session>/*errors.log` is not in the evidence.
+
+This closes the first open risk of the lamp section: a `CullingLightObject` that was activated late is registered (culling index 458),
+visible and at the map's multiplier. No still of a lit sign was taken, so how the lamps look (a mild green halo of 0.5 m and 1.14 m
+reach, Arena's wash is not ported) is for the user's look pass. Bay5's two moved spawn rows: the `uibridge_teleport dryRun` probes to
+(55.2, -3.875, 53.0) and (118.3, -3.875, 44.4) and an ArenaMode team spawn on the north-west marker were not run.

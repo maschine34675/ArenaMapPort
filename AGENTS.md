@@ -128,6 +128,8 @@ are not accepted build inputs. Keep the SPT bundle target on Unity 2022.3.43f1.
 | `ArenaMapPort.Crypto/` | Stage 2 (bundle encryption): AES-CTR/SHA-256/HKDF providers (Windows CNG with a managed fallback), the AMPB container writer, the random-access decrypting stream, the key-file parser and `KeyResolver`. netstandard2.1, no Unity/BepInEx reference; linked into the client, the tool and the tests. |
 | `ArenaMapPort.Client/MapNotices.cs` + `MapNotice{Text,Inputs,Selector,Scheduler}.cs`, `MapLoadFailures.cs`, `ServerStatusClient.cs` / `ServerStatusParser.cs`, `SkippedHooks.cs` | The in-game map notices (2026-10-22, [map-notices.md](docs/progress/map-notices.md)): `MapNotices` is the only file that calls EFT's UI (modal window, toast, screen manager, language); every decision is in the Unity-free core linked into the tests (texts en/de, input builder, selector, scheduler state machine, per-map failure registry, parser). |
 | `ArenaMapPort.Shared/ArenaStatusContract.cs`, `ArenaMapPort.Server/ArenaServerStatus.cs`, `ArenaMapPortStatusRouter.cs` | The server's one route, read-only `GET /arenamapport/status` (schema 1, codes only: gate verdict with an `ArenaInstallCause`, per-map registration outcome); the client asks it only when maps are missing. |
+| `ArenaMapPort.Client/GateSounds.cs`, `GateSoundModel.cs`, `PcmWav.cs`; `tools/extract/extract_gate_sounds.py`; `tools/maps/<stem>.gatesounds.json`; `work/extract/gate-sounds` | Gate and door sounds (2026-10-25, [gate-sounds.md](docs/progress/gate-sounds.md)): the extractor decodes Arena's `EntitySoundPlayer` objects into the tracked rows (`rows`) and into nine clips with precomputed seam tables (`clips`, ignored `work/extract/gate-sounds`, staged to `dist/.../gate-sounds/<key>/`); `GateSounds` is the Unity glue that plays a release's rows through `BetterAudio`, `GateSoundModel` and `PcmWav` are Unity-free and linked into the tests. |
+| `ArenaMapPort.Client/ScoreMonitors.cs` (public contract), `ScoreMonitorHub.cs`, `ScoreMonitorModel.cs`, `ScoreMonitorLayout.cs`, `ScoreMonitorView.cs`, `ScoreMonitorDemo.cs`; `tools/extract/extract_score_monitors.py`, `tools/extract/extract_monitor_templates.py`; `tools/maps/<stem>.monitors.json`; `work/extract/monitors` | Score monitors (2026-10-25, [score-monitors.md](docs/progress/score-monitors.md)): `ScoreMonitors` is the public, append-only contract that ArenaMode binds by reflection; the hub holds the claim and the snapshot, model and layout are Unity-free, `ScoreMonitorView` is the only Unity file (world-space canvases on Arena's TV props), `ScoreMonitorDemo` the developer test cycle. The extractors write the tracked holder rows and the ignored nine-sprite package (staged to `dist/.../monitors/`). |
 | `tools/bundle/ArenaMapPort.BundleCrypt/` | The net10.0 console tool of stage 2: `stage`, `encrypt`, `decrypt`, `inspect`, `read-range`, `keys`, `verify`, `verify-keys`, `plain-sha256`, `rotate-key` (needs `--yes`), `bench`; `ArenaMapPort.BundleCrypt help` prints the flags. Its keys live in the ignored `work/release-keys/`. |
 | `ArenaMapPort.Server.Tests/` | xunit; the only .NET tests. The client has none — test what is Unity-independent here. |
 | `tools/maps/<key>.json` (+ `.bots.json`, `.exits.json`) | Per-map sidecars for the Python/Unity side; mirrored by the descriptor and guarded by mirror tests. |
@@ -268,6 +270,17 @@ Generate each with `tools/extract/extract_multiflare.py --map <key> --output <di
 Release/DllOnly builds stage JSON plus two raw textures per map. The original Arena
 atlas differs from EFT's; keep it. NativeMultiFlare owns isolated native batches,
 never the global weapon-light manager. See `docs/progress/native-multiflare.md`.
+
+Gate sounds and score monitors (2026-10-25) add two more hard inputs to **every Release client build, `-p:ArenaMapPortDllOnly=true`
+included** (client csproj targets `ArenaMapPortStageGateSounds` and `ArenaMapPortStageMonitors`, both after `ArenaMapPortDistCopy`). On a
+fresh clone run, before the build, `python tools/extract/extract_gate_sounds.py clips` (the clips and manifests under ignored
+`work/extract/gate-sounds/<map_key>`; it needs UnityPy, fmod_toolkit, numpy and the installed Arena, and reads the tracked rows that the
+same script's `rows` step writes, which is rerun only after an Arena update) and `python tools/extract/extract_monitor_templates.py` (nine
+PNGs and `monitors.json` under ignored `work/extract/monitors`). A missing input stops the build with an Error that names the extractor.
+Both folders are plaintext, like the selection artwork. `dist/` now holds 113 files (90 before; the gate sounds add 13 and the
+monitors 10); `make_release_zips.py --plan` reads the parts core 15, equator 23, bay5 29, airpit 21, bowl 25. See
+[gate-sounds.md](docs/progress/gate-sounds.md), [score-monitors.md](docs/progress/score-monitors.md) and
+[dist-manifest.md](docs/dist-manifest.md).
 
 Optional Arena audio/UI exports remain development inputs under ignored `work/extract/arena-audio`
 and `work/extract/arena-ui`. Neither current mod consumes them; Release/DllOnly builds no longer stage
@@ -464,6 +477,13 @@ the log; the user uses it to point at things.
   dry holes and oil are excluded. Never use texture alpha or whole quad bounds as the wet footprint, and never
   unconditionally linearize the mask (this EFT project uses Gamma). F10 logs native/result surfaces and clip
   examples. Historical packages showed no lost water collider; the user's earlier sound remains unexplained.
+  Since 2026-10-25 the repair runs on all four maps from the descriptor (`PuddleWaterMaterialNames`; a map with an empty list is
+  skipped; Bay5's key `Water (arena_bay5)/PuddleFootsteps` is unchanged, the other maps bind the same key in their own section). Bowl
+  also counts its Soil floor as eligible ground (`PuddleExtraSurfaces`: its whole floor is one soil collider, so Concrete/Asphalt alone
+  would stay silent there), and the cache rebuild is bounded by `PuddleCacheGate` (at most five full scans per set of attempts, one line
+  for a scene that is not loaded); the old once-a-second retry was a 1 Hz freeze trap (see below). Host 2026-10-25: cache lines
+  `surfaces=40 masks=2` (Air Pit) and `surfaces=13 masks=1` (Bowl) and one 55.5 ms frame for Bowl's one-time build; Equator's cache,
+  rain-driven puddles and the F10 probe are not host-checked yet ([puddle-footsteps-all-maps.md](docs/progress/puddle-footsteps-all-maps.md)).
 - Harbor water: Bay5 now translates the source WaterContainer settings to native `WaterForSSRv3`, using
   `work/extract/bay5-water` (regenerate with `tools/extract/extract_water.py`). The four original raw texture mip
   chains and water.json stage with client builds, including DllOnly. They are BSG-derived and must stay ignored.
@@ -547,7 +567,7 @@ the log; the user uses it to point at things.
   descriptor change in one commit. Door poses (2026-10-22 Bowl, 2026-10-23 Equator and Bay5, 2026-10-24 AirPit; `docs/progress/door-poses.md`):
   `tools/maps/<stem>.doors.json` (generated by `extract_door_poses.py` from Bowl's Mecanim clips and from the `DotAnimator`
   tween script of Equator's booth doors, Bay5's rollers and depot gates and AirPit's passport leaves; mirrored by the descriptor's
-  `DoorPoses`) holds the OPEN end pose, duration and ease of every node Arena moves. AirPit's 30 rows are three kinds: the 16
+  `DoorPoses`) holds the OPEN end pose, duration and ease of every node Arena moves. AirPit's 30 motion rows (36 rows since the exit lamps of 2026-10-25 added six `BUS_LIGHT` switch rows) are three kinds: the 16
   passport leaves (six names for sixteen leaves, so the rows of a name are told apart by their CLOSED position within 0.05 m, not
   by `at`), two `switch` rows (`RedFog` off, `GreenFog` on: a SetActive row has `"switch": {"closed", "open"}`, the C# named arguments
   `ClosedActive` / `OpenActive`, the bool is payload word 8 of the DotAnimator's kind-3 element) and 12 bus-door rows that Arena
@@ -607,7 +627,7 @@ the log; the user uses it to point at things.
   bake box grew to 780 x 450 x 840 m and 29,586 vertices, and `validate_bundle_roundtrip.py` failed with 176 vertex/submesh mismatches -
   that validator is the check and stays in every build; the released September Bay5 bundle audited clean, 0 of 3,890). Never build two maps
   at once (the Unity lease guards it) and never copy mesh assets between projects by hand.
-- In-game map notices (`MapNotices`, [map-notices.md](docs/progress/map-notices.md); unit-tested, host evidence pending): the EFT UI facts
+- In-game map notices (`MapNotices`, [map-notices.md](docs/progress/map-notices.md); unit-tested; host-verified on 2026-10-22: V1, V2, V3 as a server-side variant and V5 passed, V4, V6, V7 and V8 not run): the EFT UI facts
   the glue stands on. (1) `NotificationManager` drops a toast silently when `Singleton<NotificationManager>` is not instantiated (it is
   recreated on every return to the menu): wait on `Instantiated`, and never use `Infinite` (an un-clicked toast stalls every later one).
   (2) `ItemUiContext.ShowMessageWindow` `Decline()`s an open message window and calls `RequestGlobalClose()`, so EFT's own windows and
@@ -627,3 +647,30 @@ the log; the user uses it to point at things.
   a stage 2 key failure is explained AFTER the failed attempt (records by attempt window), never at the first menu; do not pre-resolve keys
   there (3 to 7.4 MB per map at every start). (9) Arena versions have five numbers (`0.6.1.0.48206`) that `System.Version` cannot parse:
   compare component by component, or `KeyUpdated` and `KeyArenaOlder` never fire.
+- Gate sounds (2026-10-25, [gate-sounds.md](docs/progress/gate-sounds.md); logged on GPU-2, never listened to): Arena plays a clip on every gate
+  it moves from an `EntitySoundPlayer` on an emitter object of the sound scenes (Air Pit's passports from the leaves of its TeamFight scene),
+  mixer group ArenaGates at -15 dB. `GateSounds` plays a release's rows through `BetterAudio.PlayAtPoint` (the InteractiveObjects pool, reach
+  30 to 60 m from each row's `max_distance`) in the first frame of the drive. A plain raid is silent by design: the gates are parked open at
+  raid start and a `Release` without a hold returns before `Open`, so a listening test needs `Spawns/SpawnGateHold` (+ `SpawnGateHoldSeconds`)
+  or ArenaMode. The clips are fitted to the halved drive by cutting one stationary stretch at a precomputed seam (no FFT at run time). Air
+  Pit's two clips are pitch-baked at extraction: the passport clip IS `sharedassets28.resource`, a stage-2 key-source file, and its plain
+  decode would ship the very bytes the key is derived from. The extractor, `validate_distribution.py` and `test_gate_sounds.py` each refuse
+  a shipped file that copies a key-source file; never ship a decoded clip without checking it against `tools/bundle/key-sources.json`.
+- Score monitors (2026-10-25, [score-monitors.md](docs/progress/score-monitors.md); the developer demo is host-verified on GPU-2, ArenaMode has
+  not adopted the contract yet): Arena's canvas plane lies 0.0071 prop-local units BEHIND the TV's opaque screen quad, so a surface at Arena's
+  pose is hidden. The surface is lifted toward the reader by `Monitors/ScreenLift` (default 0.01, live, range 0 to 0.03); the negative control
+  lift 0 shows the dark grey screen (host 2026-10-25). Monitors exist only after a claim (`ScoreMonitors.Claim`; the developer demo
+  `Monitors/Demo = Cycle` claims as `developer-demo`, a plugin's claim takes over) and only on rows that are active in the imported scene and
+  carry a face (type words 0, 1, 2 and 6; 7 and 10 stay dark): Equator 9 of 11, Bay5 8 of 8, Air Pit 6 of 8, Bowl 6 of 16. `ScoreMonitors` is
+  a public contract that ArenaMode binds by name through reflection: members are append-only and `ContractVersion` changes only on a removal
+  or a change of meaning (`ScoreMonitorContractTests` fails on a tenth member). The tick never searches a scene (props are found by path,
+  retried twice a second for 20 s at most; the 1 Hz freeze trap above). Equator's booth screens are read from inside the booth, and the
+  north booth is an exfil box (4 x 4 m, 8 s): a tester reading that screen is extracted. The binder and the Team Deathmatch mapping are code
+  blocks in score-monitors.md; ArenaMode (never edited from here) has to adopt them.
+- Exit lamps (2026-10-25, [door-poses.md](docs/progress/door-poses.md) "Exit lamps"; host-verified on GPU-2): Equator's `EXIT_LIGHT_EMISSIVE`
+  and Air Pit's `BUS_LIGHT` are lamp groups whose rows are all `switch` rows (two Point lights per lamp part). They are NOT `opened_barriers`
+  entries (no bake input, no NavMesh rebuild; `validate_map_descriptors.py` allows a pose barrier outside `opened_barriers` only when every
+  row of it is a switch row). They are on at raid start, dark during a hold and lit in the first frame of a release, and the sign mesh itself
+  stays lit. A `CullingLightObject` that is activated late runs `Awake` again and re-caches `float_1` to its authored 1.75 (there is no
+  `OnEnable`), which erases the map's multiplier: `ArenaLightingRepairs.SyncSwitchedOn` re-applies it after each switch-on (host: `float_1`
+  0.875 = 1.75 x 0.5, intensity 0.867 at 8.5 m). Lamp parts count among the registered parts of `SpawnGates` (Equator 14, Air Pit 42).

@@ -3,6 +3,74 @@
 Snapshot for whoever continues (human or agent). Verify the commits named here against `git log`; this file
 is updated by hand at each handover, it is not an automatic record. Read [AGENTS.md](AGENTS.md) first.
 
+## Update 2026-10-25 - exit lamps, gate sounds, score monitors, spawn and puddle fixes (committed 490e227, 5342400, d13f074, cc2f024; deployed; host-verified on GPU-2)
+
+User request (2026-10-25, after the survey of open map work, `work/reports/offene-kartenarbeit-2026-10-25.md`, German, untracked): "werde mir die looks
+nochmal ingame anschauen/anhoeren. setze bitte schonmal punkte 4,5,7 um. wenn wir die score-monitore auf allen maps fuer die anzeige des punktestandes
+im team-dm nutzen koennen waere das super." Points 4, 5 and 7 of that list are the exit lamps (Equator's exit signs, Air Pit's `BUS_LIGHT`), the gate
+sounds, and the small data fixes (spawn points on the NavMesh edge, puddle footsteps on Equator, Air Pit and Bowl, Bowl's guard towers). All of it is on
+`main`; the tree was clean at cc2f024.
+
+What was built:
+- **490e227 - exit lamps, spawns, puddles.** Equator's four `EXIT_LIGHT_EMISSIVE` lamps and Air Pit's three `BUS_LIGHT` lamps get `switch` rows from
+  Arena's own gate-script data (Equator 18 door rows, Air Pit 36; Bay5 and Bowl unchanged); `BoothDoorRepairs.OpenLamps` registers them as gate parts
+  (on at raid start, dark during a hold, lit in the first frame of a release) and `ArenaLightingRepairs.SyncSwitchedOn` re-applies the map's light
+  multiplier after a late `CullingLightObject.Awake`. No bake input changes. Four spawn rows moved 1.28 to 1.50 m inboard (Equator `bot-south-west` and
+  `bot-south-east`, Bay5 `player-north-west` and `bot-east-lane`; `base.json` of both regenerated; the message of 490e227 says 0.8 to 1.5 m, the coordinates give 1.28 to 1.50 m). Puddle footsteps on Equator, Air Pit and Bowl are
+  driven by the descriptor (`PuddleWaterMaterialNames`, new `PuddleExtraSurfaces`: Bowl counts its soil floor) with a bounded cache rebuild
+  (`PuddleCacheGate`). Records: [door-poses.md](docs/progress/door-poses.md), [equator-booth-spawns.md](docs/progress/equator-booth-spawns.md),
+  [puddle-footsteps-all-maps.md](docs/progress/puddle-footsteps-all-maps.md).
+- **5342400 - gate and door sounds.** `extract_gate_sounds.py` decodes Arena's gate sound players into `tools/maps/<stem>.gatesounds.json` (25 rows) and nine
+  clips with precomputed seam fits (ignored `work/extract/gate-sounds`, staged to `dist/.../gate-sounds/<key>/`); Air Pit's two clips are pitch-baked so no
+  shipped file copies a stage-2 key-source file. `GateSounds` plays a release's rows through `BetterAudio` at Arena's -15 dB level, silent in a plain raid.
+  Developer keys only (`Spawns/GateSounds`, `GateSoundVolume` 0 to 8, `GateSoundFit`, `GateSoundRolloffScale`). Record: [gate-sounds.md](docs/progress/gate-sounds.md).
+- **d13f074** `test_changelog.py` accepts a leading `## Unreleased` section.
+- **cc2f024 - score monitors.** Arena's TV props show a mode's timer, team score and alive counts: tracked holder rows `tools/maps/<stem>.monitors.json`,
+  a nine-sprite artwork package (ignored `work/extract/monitors`, staged to `dist/.../monitors/`), the public append-only contract
+  `ArenaMapPort.Client.ScoreMonitors` (ContractVersion 1) and the developer demo `Monitors/Demo = Cycle`. ArenaMode itself is not changed; the binder and the
+  Team Deathmatch mapping are code blocks in [score-monitors.md](docs/progress/score-monitors.md). `dist/` now holds 113 files (90 before) and every Release
+  client build, DllOnly included, needs `extract_gate_sounds.py clips` and `extract_monitor_templates.py` first (AGENTS.md "Build, test, deploy").
+- **Bowl's guard towers: no change.** A probe batch showed both big towers on the connected NavMesh (the 2026-10-18 "west tower has no mesh" note was the
+  probe radius) and the two small towers as islands outside Arena's play area: [bowl-release.md](docs/progress/bowl-release.md) "Correction 2026-10-25".
+
+Host evidence (GPU-2, 2026-10-25 17:03 to 17:22; build cc2f024, client DLL 1,160,192 B and server DLL 156,672 B built 17:03; deploy 17:05 through
+`deploy-to-spt.ps1 -Confirm`, plan 113 files, 23 new, 4 overwritten, 86 identical; 2300 files identical on the host after 141.1 s, server started; EFT
+started 17:08:21, 16/16 identical; test values `Monitors/Demo` = Cycle and a 20 s developer hold, `persist=false`; five raids on four maps and a hideout open;
+0 Warning and 0 Error lines from the mod in the whole process, the only Error is Unity's pre-existing `MenuScreen` coroutine message):
+- **Exit lamps.** Equator: four `park:` lines, `exit lamps 'EXIT_LIGHT_EMISSIVE': 4 lamp part(s), 8 switch(es), 4 on`; the lamp light inactive during the hold, 8
+  switches at the release, `float_1` 0.875 (= 1.75 x 0.5, the multiplier survived), intensity 0.867 at 8.5 m, visible. Air Pit: 8 switches at the release and the
+  six `BUS_LIGHT` lights active afterwards. No still of a lit sign was taken.
+- **Spawns.** Equator `all spawn points already free` (before, `bot-south-west` was moved 1.5 m on every raid); Bay5 spawned on the moved `player-north-west`
+  point, the same line.
+- **Gate sounds** (logged, not listened to; the host is muted). Prepared clips with their seams on every map (Equator -1.303 s, Bay5 -1.205 and -1.999 s, Air
+  Pit whole, Bowl -2.900, -2.403, -3.001 and -2.301 s); the release lines: Equator 5 rows / 2 playing, Air Pit 11 / 3, Bowl 4 / 2, each `one frame later` all
+  playing, 0 failed; Bay5 5 rows / 0 playing (all beyond 30 m from the spawn). The Equator plain raid played nothing, as designed.
+- **Score monitors.** `[Monitors]` 9 of 11 (Equator), 8 of 8 (Bay5), 6 of 8 (Air Pit), 6 of 16 (Bowl); font `Jovanny Lemonad - Bender Normal SDF`; the big sprites
+  load in 16 to 24 ms each, one per frame; surfaces built 3 per frame in 0.5 to 4.0 ms (Equator, Bay5). Stills: the score face on Equator, Bay5 and Air Pit,
+  Equator's atrium row with score, timer and alive, and Bowl's timer board, readable at 65 m with no z-fight. Negative control: `Monitors/ScreenLift` = 0 turns the screens dark grey, 0.01 brings them back. The
+  Equator north booth screen is read from inside the exfil box (extracted after 8 s).
+- **Puddles.** After a walk `cached water surfaces=40 masks=2` (Air Pit) and `surfaces=13 masks=1` (Bowl), one 55.5 ms frame for Bowl's one-time build.
+  Equator's line is not in the evidence (no walk is recorded in its raids).
+- **Done signal** ([spawn-gates.md](docs/progress/spawn-gates.md)): Equator `gates open` 14 parts (was 10, the lamps count), Bay5 7, Bowl 4, and Air Pit `gates open
+  (released): 42 part(s) registered, 28 park carver(s) in place`, the first Air Pit record.
+- Frame time 119.7 to 119.8 fps, mean 8.4 ms; maxima of 33.0 ms (Equator window, not attributed) and 55.5 ms (Bowl, the puddle cache).
+
+Open:
+- **The user's look and listening pass** (his words above). The gate sounds were never heard: loudness (`Spawns/GateSoundVolume` goes up to 8 since today, default 1
+  = Arena's -15 dB), reach (`GateSoundRolloffScale`), seam audibility (`GateSoundFit`, Equator's is the marginal one) and the passport level; Bay5's sounds never
+  played in the session (out of reach), so a run next to a roller is needed. The lit exit signs and the monitor faces by eye. The Bowl and Bay5 looks (day and night,
+  lamps by day) of the open-work list belong to the same pass.
+- **ArenaMode adoption, by the user's other agent** (we never edit ArenaMode): the score-monitor binder and the Team Deathmatch mapping, after which host check B of
+  score-monitors.md runs; and `SpawnGates.GatesOpened` instead of the fixed 13.5 s (now host-recorded on all four maps).
+- **Not host-checked:** rain-driven puddles (`USERAIN`) and the F10 probe at the documented points, Equator's puddle cache line, a bot raid (bots at the moved spawns, in
+  the booths, through the bus doors), Air Pit's plain-raid lamp lines, `SpawnGateDrive` false, a Hold during a drive, a Hold that stops running sounds, and items 4 to 8
+  of monitor check A (puddle and monitor records list what is missing).
+- **Release.** The next release number and notes are the user's decision. CHANGELOG.md "Unreleased" now lists the five changes of today (and Codex's `NO_CAUSE` fix);
+  0.3.0's "Known limitations" line that gates move without Arena's gate sounds is history for the next note. The ZIP is recut with `make_release_zips.py` (113 files).
+  Test counts after cc2f024 are not recorded in the docs (2296 dotnet tests passed for the tree at 490e227): run all suites before a release.
+- **Housekeeping, unchanged:** 0.2.3 is to be deleted (user), the Forge entry (user), an off-VM backup of `work/release-keys`, the deploy to `D:\SPT41vanilla`, the v9
+  plan-digest drift of `validate_extract`.
+
 ## Update 2026-10-24 - do not follow an EFT load error with an unsubstantiated map-error dialog
 
 The reported Bay5 attempt was refused by ArenaMode's PFT protection, but MapPort subsequently
@@ -43,7 +111,7 @@ DLLs, 70 and 71 of 75 engines returned a verdict), and the Download block of doc
 (ZIP https://pixeldrain.com/u/J1ajrRA8, checksum https://pixeldrain.com/u/RTaSMHNm), tag `v0.3.0` on the publication commit, GitHub release "ArenaMapPort 0.3.0" with the
 `.sha256` asset and the notes as body; 0.2.3 stays until the user deletes it. Still the user's: the Forge entry (FORGE.md), deleting 0.2.3
 later, and ArenaMode's switch from its fixed 13.5 s to `SpawnGates.GatesOpened`. Open: an off-VM backup of `work/release-keys`; `D:\SPT41vanilla`; BUS_LIGHT lamps,
-fences, gate sounds; the v9 plan-digest drift of `validate_extract`.
+fences, gate sounds (BUS_LIGHT lamps and gate sounds done 2026-10-25, see the update at the top); the v9 plan-digest drift of `validate_extract`.
 
 ## Update 2026-10-24 (later) - AirPit door motions and Bay5 `Door_01 (3)` shut again (committed fa76bc0, deployed to D:\SPT41, host-verified on GPU-2)
 
@@ -54,7 +122,7 @@ exits stay open for agents (dryRun path 152.7 m) and a walk passes both bus door
 (max 8.4 ms), flips RedFog/GreenFog, opens every probed doorway, and a walk from the south pocket reaches the north pocket through a lane; the
 green arrows show on the booths' NORTH face (the pocket side), the hall side carries only the X quad by Arena's data (an earlier "green haze"
 was the North Gate exit smoke). Bay5: `(3)` is a wall again (walk 2.5 m partial). Open: the 0.3.0 ZIP (superseded), vanilla, BUS_LIGHT lamps,
-fences, gate sounds, the v9 plan-digest drift of `validate_extract`.
+fences, gate sounds (BUS_LIGHT lamps and gate sounds done 2026-10-25, see the update at the top), the v9 plan-digest drift of `validate_extract`.
 
 User request (2026-10-24): Bay5's roller `Door_01 (3)` (tarp and carton stack in its doorway, no motion and no sound in Arena) goes shut again, then AirPit the same way as Equator and Bay5. Implemented on the working tree (uncommitted): `tools/maps/bay5.doors.json` 7 rows (the `(3)` row, its `opened_barriers` entry and its descriptor literal removed) and the new `tools/maps/airpit.doors.json` (30 rows: 12 borrowed rows that open the three front bus assemblies to the pose of the standing-open back row `(3)` at the port's 3.0 s, 16 passport leaves from the DotAnimator at 1.7 s, and two `switch` rows that flip the RedFog / GreenFog lamps); sidecar schema 2 gained the optional `switch` object (`ArenaDoorPose.ClosedActive/OpenActive`), repeated part names are told apart by the closed position, the passport gate opens its leaves with the hold release, and the sealed navmesh probe skips a part parked at its open pose (it raised a false "gate is NOT sealed" Warning on every plain AirPit raid); the bake (`BakeNavMesh`, `ArenaPaths`) drops only the moved subtrees and warns when a descriptor lists barriers but its sidecar is missing; two lines of `test_lamp_fill.py` follow the new sidecar lookup. Built and checked on the VM: dotnet 2261/2261, Python 2119 OK (55 skipped), Bay5 rebaked (triangulation 22141/10223 -> 22130/10220, only the `(3)` slab footprint lost, the other five gates cell-for-cell as walked on 2026-10-24), AirPit rebaked (11787/5423 -> 11811/5433; 1.81 m2 lost around the six back-row leaves, nothing gained, all 28 spawn and exit points on the main component, routes from the south spawns to the field exist, the three back-row doorways keep 0.5 m of centre line), `dist/` restaged encrypted (`DISTRIBUTION_OK 4 maps 12 bundles 4 sidecars`; four files changed), deploy DRY RUN = 6 files (both DLLs and the Bay5 / AirPit scenes and NavMesh bundles, about 1.9 GB), `base.json` and the presets unchanged. Nothing was deployed to `D:\SPT41`. Host test (GPU-2) pending: AirPit plain raid, AirPit developer hold, Bay5 `(3)` check, Bowl untouched, recipe in [door-poses.md](docs/progress/door-poses.md) "2026-10-24 - integration"; the item to watch first is the south pocket's three front bus doorways with the park carvers (`uibridge_teleport dryRun`, `uibridge_walk`). Known and not caused by this change: AirPit's `validate_extract.py` stops at "source plan digest drift" (commit `275b668` corrected one date inside the level38 `select.reason`, the v9 manifest still holds the old digest); the operator decides between re-pinning the manifest and re-extracting.
 
@@ -381,7 +449,8 @@ and light probes, the four shot-acoustics rooms, F8 in a container, DynamicMaps 
 12:00 in rain (F8 open sky, F10 border cube), Air Pit after them (NavMesh, acoustics, 16 sealed gate carvers), hideout open:
 0 ArenaMapPort warnings, 120 fps, max 11.2 ms. The user played Bowl in ArenaMode teamdeathmatch on their own machine at 13:25
 (0 warnings). The developer gate hold on Bowl sealed both pockets and released them after 60 s (raid 6); the east guard-tower
-stairs are on the connected NavMesh and the BTR gate extracted a player (raid 7). Not done: vault limits above 1.2 m, the Mi-26
+stairs are on the connected NavMesh and the BTR gate extracted a player (raid 7; the west big tower is connected too, the small towers are islands:
+bowl-release.md "Correction 2026-10-25"). Not done: vault limits above 1.2 m, the Mi-26
 capture point (ArenaMode), the publication of the cut candidate (`work/releases/0.3.0/maschine-ArenaMapPort-0.3.0.zip`, 3,078,043,845 B, SHA-256
 `8f9b6591...ddeb8b`, built from `26b9216`: Pixeldrain, VirusTotal, tag, GitHub release, Forge; `D:\SPT41vanilla` only after the
 user's decision), ArenaMode catalog/formation for Bowl (user), the green arrow below. User decision 2026-10-18 evening: `feature/bowl`

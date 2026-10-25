@@ -8,11 +8,24 @@ dated state in one screen; read it before this index if you only have a minute.
 
 ## Current — read these for the area you touch
 
+- [score-monitors.md](score-monitors.md) — Arena's TV screens show a mode's timer, team score and alive counts (2026-10-25): the
+  holder extractor and `tools/maps/<stem>.monitors.json`, the nine-sprite artwork package, the three faces, the public contract
+  `ArenaMapPort.Client.ScoreMonitors` (append-only, bound by name from ArenaMode), the lift in front of the TV's opaque screen quad
+  (`Monitors/ScreenLift`), the developer demo, the ArenaMode binder and Team Deathmatch mapping as code blocks. Host-verified on GPU-2
+  the same day in the developer demo on all four maps (negative control included); ArenaMode has not adopted it yet.
+- [gate-sounds.md](gate-sounds.md) — Arena's gate and door sounds (2026-10-25): the `EntitySoundPlayer` decode, 25 rows in
+  `tools/maps/<stem>.gatesounds.json`, nine clips with a precomputed seam fit for the halved drive, Air Pit's two pitch-baked clips (no
+  copy of a key-source file), `GateSounds` through `BetterAudio` at the ArenaGates level, silent in a plain raid. Logged on GPU-2 the same
+  day on all four maps (rows, seams, playing counts); not yet listened to.
+- [puddle-footsteps-all-maps.md](puddle-footsteps-all-maps.md) — Bay5's puddle footsteps extended to Equator, Air Pit and Bowl
+  (2026-10-25): `PuddleWaterMaterialNames` and `PuddleExtraSurfaces` in the descriptor (Bowl's soil floor), the census, the bounded cache
+  rebuild (`PuddleCacheGate`). Cache counts host-checked on Air Pit (40/2) and Bowl (13/1); Equator's cache, rain-driven puddles and the
+  F10 probe still open.
 - [dynamicmaps-gate-refresh-20261024.md](dynamicmaps-gate-refresh-20261024.md) — all four overviews regenerated from current
   triangulation and original open gate poses; preserved standing structure/parked obstacles, exact SVG/offline checks and
   scoped data-only deployment. Native EFT retest remains separate.
 - [map-notices.md](map-notices.md) — the in-game message that says why the Arena maps are missing or failed to load (design record
-  2026-10-22, `main`, host evidence pending): failure states and ref codes, the modal and toast delivery with its menu clock and attempt
+  2026-10-22, `main`; host-verified on 2026-10-22: V1, V2, V3 as a server-side variant and V5 passed, V4, V6, V7 and V8 not run): failure states and ref codes, the modal and toast delivery with its menu clock and attempt
   latch, the server's read-only status route `/arenamapport/status` (codes only), the stage 2 failure records, the English and German
   texts as implemented, the public key `General/ShowMapNotices` (not a switch for the Arena check) and host steps V1 to V8.
 - [../PLAN-ENCRYPTION.md](../PLAN-ENCRYPTION.md) — the ordered plan for stage 2 of the Arena gate (user decision 2026-10-19):
@@ -57,7 +70,8 @@ dated state in one screen; read it before this index if you only have a minute.
   Follow-up 2026-10-17: the original north box implemented (bake z 83, passport control a held gate, start-gate subset).
 - [spawn-gates.md](spawn-gates.md) — spawn enclosures held closed until a mode plugin releases them (`SpawnGates`
   API Hold/Release/IsHeld, NavMesh carvers over the closed parts, Equator's leaves slide open), what Arena had, what
-  ArenaMode's Team DM needs, GPU-2 evidence that carving works on the ported NavMesh (2026-10-17).
+  ArenaMode's Team DM needs, GPU-2 evidence that carving works on the ported NavMesh (2026-10-17). The done signal for mode plugins
+  (`GatesOpen`, `GatesOpened`) is host-recorded on all four maps since 2026-10-25.
 - [door-animations-survey.md](door-animations-survey.md) — research record (2026-10-23): how Arena moves the gates and roller
   shutters of Equator, Bay5 and AirPit (its `DotAnimator` tween script with end value, duration and ease, decoded per door; no
   clips; nothing in EFT to borrow), the per-door table of portable approaches, the shutter answer and the recommended order.
@@ -70,13 +84,16 @@ dated state in one screen; read it before this index if you only have a minute.
   every map), the per-part bake rule (`BakeNavMesh.ResolveOpenedBarriers`) and the 2026-10-24 rebakes of both maps. On
   2026-10-24 AirPit joins (sidecar rows with `switch` for the passport lamps, repeated part names told apart by the closed
   position, and the bus doors borrowed from the static back row; data section "AirPit: passport leaves, lamp switches, bus
-  doors") and Bay5's `Door_01 (3)` goes shut again.
+  doors") and Bay5's `Door_01 (3)` goes shut again. On 2026-10-25 Equator's exit lamps and AirPit's `BUS_LIGHT` lamps switch with the
+  gates (switch rows, `ArenaLightingRepairs.SyncSwitchedOn`) and Bay5's `player-north-west` and `bot-east-lane` spawns move inboard;
+  host-verified on GPU-2 the same day (lamps dark during a hold, 8 switches at the release, `float_1` 0.875).
 - [equator-booth-spawns.md](equator-booth-spawns.md) — Equator's player spawns on Arena's own booth markers, the FCK shutter
   closed again (Equator lists no opened barrier), Bay5 opens the five gates Arena moves (three rollers and both depot gates) with
   every instance of a repeated path (2026-10-23; rebaked, deployed and host-verified on GPU-2 on 2026-10-24, where the first raid
   found and removed the old booth-avoidance rule of `SpawnPlacementRepairs`). `Door_01 (3)`, which this record had opened as a
   borrowed sixth gate, goes shut again on 2026-10-24 (user decision, see door-poses.md; host-verified the same day together with
-  AirPit's passport leaves, lamp switches and front bus doors, fa76bc0).
+  AirPit's passport leaves, lamp switches and front bus doors, fa76bc0). On 2026-10-25 the two bot rows on the mesh edge move inboard
+  (host-verified the same day: `all spawn points already free`).
 - [scope-mask.md](scope-mask.md) — blurred image inside magnifying optics on every ported map: the vanilla Scripts
   scenes' `TechnicalManagers/ScopeMaskRenderer` is missing, so the aiming depth-of-field blurred the sight picture;
   `ScopeMaskRepairs` provides it (GPU-2 AirPit vs Factory stills, 2026-10-16).
@@ -228,7 +245,8 @@ dated state in one screen; read it before this index if you only have a minute.
   bakes, native attenuation and room tones; reverb/blending boundary (2026-09-28).
 
 - [bay5-water.md](bay5-water.md) — source harbor water textures/settings on the native deferred renderer,
-  night/day comparison, shader-mask-based puddle footsteps and historical investigation (2026-09-28).
+  night/day comparison, shader-mask-based puddle footsteps and historical investigation (2026-09-28). The footsteps run on all four
+  maps since 2026-10-25, see puddle-footsteps-all-maps.md.
 
 - [native-decals.md](native-decals.md) — original projection decals on Equator and Bay5,
   source material recovery, native renderer lifecycle and atlas-coordinate validation (2026-09-27).
@@ -513,6 +531,10 @@ successor instead unless you're specifically investigating that cycle's history.
 | What is the shader sidecar? | `wp2.md` (origin: `StandinShaderGenerator` + `material-shaders.json`); `dist-manifest.md` (how it's staged into `dist/` and loaded) |
 | How are bundles served to the client? | `dist-manifest.md` (`BundleHost.cs`'s expected paths); `fix-preset-cab-and-bundle-lifetime.md` (the refcount/internal-name fixes to that same class) |
 | Which decisions are fixed (not up for debate)? | `AGENTS.md` "Decisions that shape every task"; `HANDOFF.md` "Decisions (user, 2026-09-20)"; both point to `docs/SPEC.md`'s "Decisions 2026-09-20" section as the source |
+| Do the gates make sound? | `gate-sounds.md` (rows, clips, the seam fit, `GateSounds`, host checks; silent in a plain raid by design) |
+| How do the TV screens show a mode's score, and how does ArenaMode drive them? | `score-monitors.md` (contract `ArenaMapPort.Client.ScoreMonitors`, the binder and Team Deathmatch mapping, host checks A and B) |
+| Why do puddles splash on a map, and which materials count? | `puddle-footsteps-all-maps.md` (Equator, Air Pit, Bowl, Bay5); `bay5-water.md` (the original Bay5 mechanism) |
+| Do the exit signs light, and when? | `door-poses.md` "2026-10-25 - Exit lamps" and its host verification of the same date |
 
 ## Added 2026-09-20 — distribution repair and ArenaMode acceptance
 

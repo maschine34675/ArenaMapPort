@@ -184,3 +184,26 @@ Order: deploy (full, not `-DllOnly`: base.json changes), verify the host server 
   over steps); the 16 cm foot-plane rule leaves them dry, which is intended.
 - Rebuilding a map's scenes bundle does not change this feature (it reads materials, meshes and textures at raid time); renaming a water
   material would, and `test_puddle_sidecar_drift_is_rejected` / the xunit theory pin the lists.
+
+## Host evidence (GPU-2, 2026-10-25 17:09 to 17:22, build cc2f024): partial
+
+Correction to the status line at the top ("nothing of this has run in a raid yet"): the cache line was logged in two of the five raids (Air Pit and Bowl, both with a walk); the
+rest of the host checks did not run. Build, deploy and test values: [door-poses.md](door-poses.md), section "2026-10-25 - host verification on
+GPU-2 of the exit lamps and the moved Bay5 spawns" (HEAD cc2f024, client and server DLL built 17:03, EFT started 17:08:21, 16/16 identical).
+The whole process holds 0 Warning and 0 Error lines from `maschine-ArenaMapPort`.
+
+- **Air Pit (raid 4, 17:16).** After a 12 m walk: `[PuddleFootsteps] cached water surfaces=40 masks=2 colorSpace=Gamma ...`, the expected `surfaces=40
+  masks=2`.
+- **Bowl (raid 5, 17:19).** After a 9 m walk: `[PuddleFootsteps] cached water surfaces=13 masks=1 ...`, the expected `surfaces=13 masks=1`; Soil is
+  eligible ground there, and the line appeared on the first step. `uibridge_status` over 30 s: 119.8 fps, mean 8.4 ms, max 55.5 ms. The lead
+  reads the maximum as the frame of the one-time cache build at the first step on Bowl (80k objects); the forecast above was a single hitch
+  of 20 to 60 ms, largest on Bowl. A 1 Hz retry would repeat such a spike; the window shows one maximum and a mean of 8.4 ms, but ModProfiler's
+  per-frame list is not in the evidence.
+- **Equator: no cache line is in the evidence.** The cache is built at the first eligible footstep and no walk is recorded in the Equator
+  raids, so the expected `surfaces=38 masks=2` is neither confirmed nor refuted. Bay5's line is not in the evidence either.
+- Hideout opened once at 17:22 (`logAbsent` error passed).
+
+Not done in this session: the F10 probe at the wet and dry points of the table in "Host checks" above, the rain-driven material through the
+LightingLab water level (the `USERAIN` puddles of Equator, Air Pit and Bowl are still never host-verified), listening to the splash against
+the floor sound (the host is muted), the `PuddleFootsteps` toggle per map and Bay5's stored value. The Debug lines `water cache of <key> not
+built` and `still lack shader` were not searched for; the Warning-free process says only that no Warning was logged.

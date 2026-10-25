@@ -374,3 +374,11 @@ booth door has no player), Bay5's rollers and depot gates, AirPit's passport lea
 gates: 24 players plus one borrowed row, played by `GateSounds` from 2026-10-25 (implemented and unit-tested, not yet heard on a host: [gate-sounds.md](gate-sounds.md)). One hint for the
 door work from that clip: its motor runs 0 to 0.9 s, the clunk sits at 0.91 s and it is over after 1.13 s (after the pitch is applied), so
 Arena's bus-door cycle looks like 1.1 to 1.4 s, against the 3.0 s (1.5 s at the default scale) the port borrows for the pose; not acted on.
+
+## Correction 2026-10-25 (host): gate sounds logged, exit lamps verified
+
+The two entries of 2026-10-25 above call the gate sounds "implemented and unit-tested, not yet heard on a host" and close the exit-lamp
+questions on the data side only. On the same day GPU-2 (build cc2f024) logged the gate sounds on all four maps, with rows, seams and playing counts
+(gate-sounds.md, "Host evidence"); they are still not listened to, and Bay5's rows were out of reach in the session. The exit lamps are
+host-verified: dark during a hold, lit with the release, the map's light multiplier kept (door-poses.md, "2026-10-25 - host verification on GPU-2
+of the exit lamps and the moved Bay5 spawns"). The bus-door cycle hint of 1.1 to 1.4 s is still not acted on.

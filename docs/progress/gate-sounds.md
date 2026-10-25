@@ -208,3 +208,58 @@ change. A deploy moves the client DLL, 4 manifests and 9 WAVs (about 9.4 MB).
 - Extractor dependencies (UnityPy 1.25.2, fmod_toolkit 0.1.3, numpy 2.5.0) are present on the build VM. An Arena update that renames or moves
   a clip, or changes a player's layout, fails the extraction loudly (the counts 5 / 5 / 11 / 4 rows, 9 clips and -15.0 dB are pinned);
   the clips are found by name, the path ids are hints.
+
+## Host evidence (GPU-2, 2026-10-25 17:09 to 17:22, build cc2f024): all four maps logged, nothing listened to
+
+Correction to the status line at the top of this file ("not yet heard or logged on a host"): the sounds were **logged on a host** in the
+session below and were **not listened to** (the host is muted). Build, deploy and test values are in [door-poses.md](door-poses.md),
+section "2026-10-25 - host verification on GPU-2 of the exit lamps and the moved Bay5 spawns". In short: HEAD cc2f024, client DLL
+1,160,192 B built 17:03, deployed 17:05 (13 gate-sounds files new), EFT started 17:08:21 with 16/16 plugins identical; for raids 2 to 5
+`Spawns/SpawnGateHold` true and `SpawnGateHoldSeconds` 20 (`persist=false`); PMC, bots None. The whole process holds 0 Warning and 0 Error
+lines from `maschine-ArenaMapPort`.
+
+Per map (all lines Debug, tag `[GateSounds]`):
+
+| map (raid, time) | clips prepared for scale 0.50 (seam = the removed stretch) | release | rows | playing | one frame later |
+|---|---|---|---|---|---|
+| Equator (2, 17:12) | `arena_equator_old_slide_doors`: seam -1.303 s (end event at 1.697 s of 3.00 s), 2.27 s long; `prepared 1/1 clip(s) of arena_equator for drive scale 0.50` | 17:12:46.70 | 5 | 2 | 2/2 |
+| Bay5 (3, 17:14) | `arena_bay5_big_gates`: seam -1.205 s (end event at 1.345 s of 2.55 s); `arena_bay5_roller_door_full`: seam -1.999 s (end event at 2.021 s of 4.02 s); `prepared 2/2` | 17:15:11.27 | 5 | 0 | not quoted |
+| Air Pit (4, 17:16) | `arena_airpit_bus_doors`: whole, 2.12 s; `arena_airpit_metal_gates`: whole, 3.20 s (pitch-baked); `prepared 2/2` | 17:17:30.25 | 11 | 3 | 3/3 |
+| Bowl (5, 17:19) | BTR: seam -2.900 s (end event 3.050 s of 5.95 s); double metal gates: -2.403 s (2.477 s of 4.88 s); emergency car: -3.001 s (3.159 s of 6.16 s); roller: -2.301 s (2.449 s of 4.75 s); `prepared 4/4` | 17:19:59.26 | 4 | 2 | 2/2 |
+
+The live seams equal the picks of the table in "Clips" above (Equator 1.303 -> 1.697, Bay5 1.205 -> 1.345 and 1.999 -> 2.021, Bowl 2.900 ->
+3.050, 2.403 -> 2.477, 3.001 -> 3.159, 2.301 -> 2.449).
+
+The release lines:
+
+- **Equator.** 17:12:46.70 `[GateSounds] ... Door_Sliding_Respawn / arena_equator_old_slide_doors: volume 0.178 (-15.0 dB), reaches 30 m,
+  from (4.5, 1.0, 40.0), occlusion OneShotPropagation`, the same for `Door_Sliding_Respawn (1)`; the two south-booth rows and the borrowed row
+  `not played (the listener is beyond 30 m ...)`; `released 10 part(s): 5 sound row(s), 2 playing, 3 out of reach or without a free source,
+  0 failed (drive scale 0.50, fit on, volume 1.00)`; `one frame later: 2/2 playing`. The drive's own `released (...)` line followed at
+  17:12:50.188, 3.5 s later: the sound starts in the first frame of the drive.
+- **Bay5.** 17:15:11.27 `5 sound row(s), 0 playing`: every row was beyond 30 m from the north-west spawn (55.2, -3.9, 53.0); 0 failed. The
+  drive's line followed at 17:15:14.76.
+- **Air Pit.** The player was teleported from the south pocket (-16.9, 0, -71.7) to (-14, 0.1, -58) before the release. 17:17:30.25: the
+  three bus-door rows `volume 0.110 (-19.2 dB), reaches 35 m, from (-11.0|-14.2|-18.2, 0.3, -65.0)`; the eight passport rows beyond 35 m;
+  `released 19 part(s): 11 sound row(s), 3 playing, 8 out of reach ..., 0 failed`; `one frame later: 3/3 playing`. The drive's line followed at
+  17:17:31.745.
+- **Bowl.** The player stood at (36, 0.1, -16). 17:19:59.26: the BTR row `volume 0.178 (-15.0 dB), reaches 60 m, from (51.2, 0.0, -21.5)` and the
+  respawn-gate row (reach 50 m) playing; the ambulance and the army gate beyond reach; `released 4 part(s): 4 sound row(s), 2 playing ...`;
+  `one frame later: 2/2`. The drive's line followed at 17:20:06.004 (6.8 s).
+- **Plain raid.** Equator raid 1 (17:09, no hold) logged the prepare lines (`clip arena_equator_old_slide_doors: seam -1.303 s ...`,
+  `prepared 1/1 ...`) and played nothing, as designed. The plain raids of the other maps were not run.
+
+Against the host checks above: the row counts (Equator 4 + 1, Bay5 5, Air Pit 11, Bowl 4), the gains (-15.0 dB on Equator and Bowl, -19.2 dB
+for the Air Pit bus doors) and 0 failed on every map are as expected; the reaches seen are 30 m (Equator), 35 m (bus doors), 50 m and 60 m
+(Bowl). The hideout was opened once at 17:22 (`logAbsent` error passed).
+
+Not covered, so these stay open:
+
+- **Listening.** Loudness (`Spawns/GateSoundVolume`, 0 to 8 since today, default 1 = Arena's -15 dB), the reach against EFT's steeper
+  falloff (`GateSoundRolloffScale`), whether any seam is audible (`GateSoundFit` on against off; Equator's is the marginal one) and the
+  passport level are for the user's ears (developer hold or ArenaMode).
+- **Bay5 never played in this session.** From the north-west spawn every row was out of reach and no second run next to a roller was made.
+  Air Pit's eight passport rows were out of reach as well (only the bus doors played), so the passport clip and its level were not exercised.
+- **The source pool.** 3 of Air Pit's 11 rows played, so 11 simultaneous sources against the pool of 16 (8 precached) are still untested.
+- No evidence from this session for a Hold that stops running sources, for `SpawnGateDrive` false, or for ArenaMode's own Hold and Release.
+- No separate frame reading for the first release. The Equator window around it read max 33.0 ms (not attributed to the sounds).

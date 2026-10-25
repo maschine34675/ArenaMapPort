@@ -656,3 +656,47 @@ Bowl's boards read from the pit.
 * Rendering in EFT is unverified in three places the host check answers: that the FPS camera draws a world-space canvas on layer 0, how EFT's exposure treats the unlit UI shader, and the z-fight
   window at distance. Fallback if canvases do not draw: TMP 3D text and a `Sprites/Default` quad with the same core, layout and contract.
 * The texture cost (about 45 MB, 10 to 40 ms per big PNG) is paid per raid and only after a claim. Compressing them (a readable load, `Compress`) would cost more time than it saves.
+
+## Host evidence (GPU-2, 2026-10-25 17:09 to 17:22, build cc2f024): part A in the developer demo, ArenaMode not yet
+
+Correction to the status lines at the top and under "The client (step 2)" ("nothing of it has run on a host"): part A of the host checks ran
+on GPU-2 in the session below, with `Monitors/Demo` = Cycle (`persist=false`) on all four maps, PMC, bots None. Part B (a mode plugin's own
+claim, ArenaMode's Team Deathmatch) did not run. Build, deploy and test values: [door-poses.md](door-poses.md), section "2026-10-25 - host
+verification on GPU-2 of the exit lamps and the moved Bay5 spawns" (HEAD cc2f024, client DLL 1,160,192 B built 17:03, 10 monitors files new,
+EFT started 17:08:21, 16/16 plugins identical). The whole process holds 0 Warning and 0 Error lines from `maschine-ArenaMapPort`.
+
+| map (raid) | `[Monitors]` map line | surfaces built | still | from | what it shows |
+|---|---|---|---|---|---|
+| Equator (1, plain; 2, hold) | `arena_equator: 9 of 11 monitor row(s) can show a face` | 3 in 4.0 ms (6 pending), then 1.4 ms and 0.6 ms (9 total, 0 pending) | `mon-equator-north-booth` | inside the north booth (its screen is at (0.1, 2.2, 40.7)) | the score face: trophy, two blocks, numbers |
+| Equator | | | `mon-equator-atrium-west` | (-5, 0.1, 3) | the west atrium row: score 17:11 with the trophy, timer 00:00 in green, alive with 16 toggles per side and the skull |
+| Bay5 (3) | `arena_bay5: 8 of 8 monitor row(s) can show a face` | 3, 3 and 2 in 0.8, 0.6 and 0.5 ms | `mon-bay5-score` | (63.5, -3.8, -6.6) | the warehouse score screen (16:11) |
+| Air Pit (4) | `arena_airpit: 6 of 8 monitor row(s) can show a face` | 3 + 3 | `mon-airpit-score` | (-27, 0.1, 8) | the hall score screen in Arena's red and blue (9:7) |
+| Bowl (5) | `arena_bowl: 6 of 16 monitor row(s) can show a face` | 3 + 3 | `mon-bowl-timer-board` | (36, 0.1, -16), 65 m away | the 20 m timer board (00:00) and the edge of a score board, readable, no z-fight |
+
+The usable-row counts are the 9 / 8 / 6 / 6 of "Rows for the host checks" (Equator's two small TeamFight boards (word 7), Air Pit's two inactive team-box TVs and Bowl's ten base-set props stay
+dark by the row rule).
+
+Other numbers, all from raid 1 (Equator) unless noted:
+
+- The claim: `claimed by 'developer-demo' (handle 1, developer demo)`. Font: `font 'Jovanny Lemonad - Bender Normal SDF'`, as expected.
+- Nine sprites loaded one per frame; the largest: Vignette (1920 x 1080) 24.4 ms, Background 19.1 ms, Timer_Glow_White 16.1 ms (the 10 to
+  40 ms per big PNG that "Life cycle and cost" expected).
+- **Negative control (raid 2).** `Monitors/ScreenLift` = 0, set live: all three screens of the west atrium row turned dark grey, which
+  confirms the finding that Arena's canvas plane lies behind the TV's opaque screen quad. With 0.01 restored they were visible again;
+  `ScreenLift` applies at once. The values 0.0078 and 0.02 at several distances were not tried; at the default 0.0100 the Bowl board
+  read at 65 m shows no z-fight.
+- **Frame time.** Raid 2, over the last 20 s: 119.7 fps, mean 8.4 ms, p95 8.3 ms, max 33.0 ms (one frame, not attributed). Bowl, over 30 s:
+  119.8 fps, mean 8.4 ms, max 55.5 ms, which the lead reads as the one-time puddle cache build of the first step ([puddle-footsteps-all-maps.md](puddle-footsteps-all-maps.md)). ModProfiler's
+  `max_ms_in_frame` is not in the evidence.
+- **Equator's booth screens are read from inside the booth.** The north booth is Equator's North Gate extraction box (4 x 4 m): standing
+  there to read the screen ended the raid by extraction after 8 s (expected, see AGENTS.md "Spawn gates"). The atrium rows are the screens for a
+  long look. The south booth's screen is not in the evidence.
+
+Part A items 4 to 8 of "Host checks (not run)" have no evidence from this session beyond the above: the dark-on-purpose TVs were not looked
+at, each still catches one moment of the demo cycle, the second-raid cleanup line (`monitor(s) removed (raid ended)`) is
+not quoted although five raids with claims ran one after the other, and no report of dim screens is recorded (the colours were not compared
+with Arena's). The hideout opened once at 17:22.
+
+What remains is on the ArenaMode side: its agent has to adopt the binder and the Team Deathmatch mapping (the code blocks under "The ArenaMode
+binder" and "The Team Deathmatch mapping" above; ArenaMode is never edited from this repo), then part B runs. Until then the screens show
+nothing without the developer demo.

@@ -11,6 +11,27 @@ and the settings text is in the [README](README.md).
 - Avoid a second, misleading `NO_CAUSE` map-error dialog when EFT already reported
   the failure during that loading attempt. Recorded map-file and Arena-installation
   errors still show their specific explanation.
+- **Exit signs light with the gates (Equator, Air Pit).** The exit signs above Equator's booth doors and above Air Pit's
+  three front bus doors now cast their small green light while the gates stand open: dark while a mode plugin holds the
+  gates closed, on in the first moment of the release, and lit from the start in an ordinary raid. The signs themselves
+  were always visible; Arena's wider glow around them is not ported.
+- **Gate and door sounds.** When a mode plugin releases the held gates, Arena's own sounds play at them on all four maps
+  (Equator's booth doors, Bay5's roller and depot gates, Air Pit's bus doors and passport lanes, Bowl's BTR, ambulance and
+  gates), at Arena's level and out to 30 to 60 m depending on the gate. Most sounds are shortened to fit the faster motion
+  of the gates (half of Arena's time by default). Nothing plays in an ordinary raid, where the gates already stand open.
+  A new `gate-sounds` folder with the clips (plain audio files) ships beside the DLL; four developer settings under
+  `Spawns/` tune the sound (they need `General/DeveloperMode`).
+- **The TV screens can show a mode's timer, team score and alive counts** in Arena's look (its colours, trophy and skull
+  icons and the Bender font): 9 screens on Equator, 8 on Bay5 and 6 each on Air Pit and Bowl; the other TVs stay dark.
+  Nothing changes without a mode plugin that uses it, such as a future ArenaMode version. Mod authors: the public class
+  `ArenaMapPort.Client.ScoreMonitors` (contract version 1) is described in `docs/progress/score-monitors.md`. A new
+  `monitors` folder with nine images ships beside the DLL, and the developer setting `Monitors/Demo` shows a test
+  cycle without a mode plugin.
+- **Puddle footsteps on Equator, Air Pit and Bowl.** Steps on the water puddles use the splash footstep sound on these
+  three maps, as they already did on Bay5. On Bowl the bare soil floor counts as ground for the puddles.
+- **Four spawn points moved off the navigation edge.** Equator's two southern bot spawns and Bay5's north-west player
+  spawn and east-lane bot spawn stood on the very edge of the navigation mesh, and the game pushed at least one of them
+  1.5 m inboard at every raid start. They now start 1.3 to 1.5 m further in, where they ended up anyway.
 
 ## 0.3.0 - 2026-10-24
 

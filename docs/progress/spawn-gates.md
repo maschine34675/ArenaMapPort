@@ -333,3 +333,27 @@ Deployed with `deploy-to-spt.ps1 -Confirm` (client and server DLL) and `gpu-run 
   did not pursue the player into the pocket, so a bot walking through the bus doorways was not observed; the NavMesh path they would
   take exists.
 - Hideout opened and closed once afterwards.
+
+## Host evidence of the done signal on all four maps (GPU-2, 2026-10-25 17:09 to 17:20, build cc2f024)
+
+The 2026-10-24 record above covered Equator (plain) and Bowl (hold). This session logged the signal on every map; build, deploy and test values
+are in [door-poses.md](door-poses.md), section "2026-10-25 - host verification on GPU-2 of the exit lamps and the moved Bay5 spawns" (developer
+hold 20 s from raid 2 on). Debug lines, source `maschine-ArenaMapPort`:
+
+| map (raid) | release line | done signal |
+|---|---|---|
+| Equator, plain (1, 17:09) | none (parked open at raid start) | `gates open (navmesh installed): 14 part(s) registered, 10 park carver(s) in place` |
+| Equator, hold (2, 17:12) | 17:12:50.188 `drove 14 part(s) to the open pose in 3.5 s (scale 0.50), 10 park carver(s) in place, 8 switch(es) set to the open state` | `gates open (released): 14 part(s) registered` |
+| Bay5, hold (3, 17:14) | 17:15:14.76 `drove 7 part(s) to the open pose in 3.5 s (scale 0.50), 6 park carver(s) in place` | `gates open (released): 7 part(s)` |
+| Air Pit, hold (4, 17:16) | 17:17:31.745 `18 gate part(s) switched off, 28 carver(s) removed, drove 24 part(s) to the open pose in 1.5 s (scale 0.50), 28 park carver(s) in place, 8 switch(es) set to the open state` | 17:17:31.747 `gates open (released): 42 part(s) registered, 28 park carver(s) in place` |
+| Bowl, hold (5, 17:19) | 17:20:06.004 `drove 4 part(s) to the open pose in 6.8 s (scale 0.50), 23 park carver(s) in place` | `gates open (released): 4 part(s)` |
+
+- **Air Pit is the first record there** (the 2026-10-24 follow-up, and the open list built on it, had the signal only on Equator and Bowl). It
+  fires 2 ms after the `released` line, when the 1.5 s drive has ended and the park carvers stand.
+- **The part counts grew with the lamps** (490e227, [door-poses.md](door-poses.md) "Exit lamps"): the exit-lamp parts are registered gate parts,
+  so Equator reports 14 where the 2026-10-24 record said 10 (10 booth leaves + 4 lamps), and Air Pit 42 where the "39" of the 2026-10-24 follow-up
+  above (3 bus assemblies, 18 passport parts, 18 emissive sheets) now has 3 lamp parts more. The contract asks a plugin only for
+  `ClosedParts > 0`, never for a number.
+- Bay5's and Bowl's counts are the earlier ones (7 and 4). The number of listeners notified is not in the quoted lines; no plugin was
+  subscribed, and ArenaMode's own switch from its fixed 13.5 s to `GatesOpened` has still to be made by its agent.
+- 0 Warning and 0 Error lines from the mod in the whole process; the hideout opened once at 17:22.
