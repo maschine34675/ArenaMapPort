@@ -1,5 +1,5 @@
 {
-  "_comment": "Bay5 ArenaMode integration, 2026-09-21. Coordinates derived from Arena source AI bearing points and checked in the native map. Four Player/All points distribute respawns across both ends; bot markers are separate. Background port moves the northeast-lane bot 3 m south to avoid automatic placement on a disconnected container-side patch; see docs/progress/bay5-background.md. No loot or Scav raids.",
+  "_comment": "Bay5 ArenaMode integration, 2026-09-21. Coordinates derived from Arena source AI bearing points and checked in the native map. Four Player/All points distribute respawns across both ends; bot markers are separate. Background port moves the northeast-lane bot 3 m south to avoid automatic placement on a disconnected container-side patch; see docs/progress/bay5-background.md. No loot or Scav raids. 2026-10-25 (docs/progress/door-poses.md): player-north-west moved (54.2, 53.8) -> (55.2, 53.0) and the east-lane bot (117.8917, 43.099) -> (118.3, 44.4) because both stood on the edge of the NavMesh (0.03 m and 0.09 m of clearance, outside the mesh); the new points have 1.25 m and 1.28 m of clearance in the play component.",
   "zone": "BotZone_Main",
   "max_bots": 8,
   "player_spawns": [
@@ -38,9 +38,9 @@
         "All"
       ],
       "position": [
-        54.2,
+        55.2,
         -3.8574,
-        53.8
+        53.0
       ],
       "rotation": 135,
       "radius": 5
@@ -168,9 +168,9 @@
     {
       "id": "arena_bay5-bot-east-lane",
       "position": [
-        117.8917,
+        118.3,
         -3.8574,
-        43.099
+        44.4
       ],
       "radius": 25,
       "categories": [

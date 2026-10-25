@@ -228,7 +228,7 @@ old definitions when files are deleted during a running process.
   Tall closed meshes can appear as contours. The map is static: AirPit's passport gates are drawn open for team combat
   although they stay closed in raids without a hold/release. It does not display the current opening animation or carver state.
 - Each receipt records the door-sidecar hash, resolved row and switch counts and parked projected areas. Validate all rows
-  for every production map (currently Equator 10, Bay5 7, AirPit 30, Bowl 19); a missing sidecar must not be accepted as a refresh.
+  for every production map (currently Equator 18, Bay5 7, AirPit 36, Bowl 19; since 2026-10-25 the exit-lamp switch rows count); a missing sidecar must not be accepted as a refresh.
 - Geometry is simplified (12 cm Equator / 18 cm Bay5 / 20 cm AirPit / 20 cm Bowl obstacle tolerance, 4.5 cm NavMesh tolerance,
   7 cm obstacle closing, tiny holes below 0.15 m² removed). This improves legibility;
   the result is not an exact collision, line-of-sight or navigation guarantee.

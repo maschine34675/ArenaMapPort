@@ -1034,7 +1034,11 @@ class AirPitDoorBakePackageTests(unittest.TestCase):
                          sorted(FRONT_ROW + [f"Passport_control_01_Door ({n})" for n in (1, 1, 1, 2, 2, 2, 3, 3, 3, 3, 4, 4, 4, 4, 5, 6)]))
         # the 16 leaves are 16 different objects (one row each), the three assemblies the front row
         self.assertEqual(len(set(new.moved)), 19)
-        self.assertEqual(sum(1 for r in door_rows("airpit") if r["switch"]), 2)
+        # the passport lamps RED / GREEN are switch rows of an opened barrier; since 2026-10-25 so are BUS_LIGHT's six exit-lamp rows, but a
+        # lamp group is no opened_barriers entry, so the bake never resolves them (posed above stays 2) and they change no collider
+        switches = [r for r in door_rows("airpit") if r["switch"]]
+        self.assertEqual((len(switches), sum(1 for r in switches if r["barrier"] == "PASSPORT_CONTROL_DOORS")), (8, 2))
+        self.assertEqual({r["barrier"] for r in switches} - set(BARRIERS), {"BUS_LIGHT"})
 
     def test_the_old_rule_dropped_the_whole_barriers_and_the_rows_give_back_exactly_the_back_row(self):
         old, new = self.old, self.new

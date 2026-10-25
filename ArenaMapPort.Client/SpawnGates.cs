@@ -55,7 +55,8 @@ namespace ArenaMapPort.Client
     /// switch-off.
     ///
     /// DotAnimator poses (descriptor <c>DoorPoses</c> of source dotanimator / borrowed, 2026-10-23; Equator's ten booth leaves,
-    /// Bay5's three roller gates and both depot gates, AirPit's passport leaves, lamps and front bus doors) run through the same
+    /// Bay5's three roller gates and both depot gates, AirPit's passport leaves, passport lamps and front bus doors, and the
+    /// exit lamps of Equator and AirPit, see below) run through the same
     /// machine with four additions. A pose has its own ease
     /// (smoothstep, linear, DOTween InOutQuint or a stored Hermite curve, <see cref="DoorPoseModel.EaseOf"/>) and turns its node
     /// by a quaternion slerp instead of a component-wise euler lerp; a pose row with part "" moves the barrier ROOT (Bay5's
@@ -76,6 +77,13 @@ namespace ArenaMapPort.Client
     /// lamp flips when the last leaf stands open. (3) A held gate's parts with rows open exactly as the start gates do, on a Release
     /// that follows a hold (<see cref="OfferHeld"/> registers and keeps them closed, the hold's release drives them); without a hold
     /// the held gate stays closed as before.
+    ///
+    /// Exit lamps (2026-10-25, docs/progress/door-poses.md "Exit lamps"): Equator's EXIT_LIGHT_EMISSIVE and AirPit's BUS_LIGHT are
+    /// LAMP GROUPS, barriers of switch rows only (<see cref="DoorPoseModel.LampBarriers"/>); <see cref="BoothDoorRepairs"/> registers
+    /// each lamp part like any part with poses, its two Point lights are switch nodes (off in the scene, on in the open pose). A lamp
+    /// part has no collider and no motion, so it takes no carver and drives for 0 s: it flips in the first frame of a release, or at
+    /// raid start without a hold. The first activation of a lamp light re-caches the intensity of its CullingLightObject, so a node
+    /// switched on is re-synced by <c>ArenaLightingRepairs.SyncSwitchedOn</c> in the same frame.
     ///
     /// Contract for a mode plugin (reflection, like ArenaMapPort's own ArenaModeMapPositionIntegration does the other
     /// way round): type <c>ArenaMapPort.Client.SpawnGates</c>, all members on the Unity main thread.
@@ -621,7 +629,9 @@ namespace ArenaMapPort.Client
         // clip's euler angles lerp component-wise like Unity's euler clips (the wheels keep their extra turns), a DotAnimator
         // node turns by a quaternion slerp between the two rotations (and keeps its scene rotation when the pose only slides it).
         // A switch node (SetActive element) moves nothing: it takes its closed state at progress 0 and its open state at 1, and
-        // keeps its state in between (DoorPoseModel.SwitchStateAt), so a lamp flips when the drive ends.
+        // keeps its state in between (DoorPoseModel.SwitchStateAt), so a lamp flips when the drive ends. A node switched ON is a
+        // lamp's Point light (an exit lamp, 2026-10-25) or a fog sheet: the lighting repair re-syncs the intensity its CullingLightObject
+        // just re-cached on the first activation (ArenaLightingRepairs.SyncSwitchedOn; a node without a Light is a no-op).
         static void ApplyPose(PosedPart posed, float progress)
         {
             foreach (var n in posed.Nodes)
@@ -631,7 +641,11 @@ namespace ArenaMapPort.Client
                 if (n.Switch)
                 {
                     var state = DoorPoseModel.SwitchStateAt(k, n.ClosedActive, n.OpenActive);
-                    if (state.HasValue && n.Node.gameObject.activeSelf != state.Value) n.Node.gameObject.SetActive(state.Value);
+                    if (state.HasValue && n.Node.gameObject.activeSelf != state.Value)
+                    {
+                        n.Node.gameObject.SetActive(state.Value);
+                        if (state.Value) ArenaLightingRepairs.SyncSwitchedOn(n.Node); // a lamp light's Awake just re-cached its authored intensity
+                    }
                     continue;
                 }
                 DoorPoseModel.Lerp3(n.ClosedPosition, n.OpenPosition, k, out float px, out float py, out float pz);

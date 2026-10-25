@@ -14,6 +14,12 @@ namespace ArenaMapPort.Client
     /// <summary>
     /// Map-authored water decals have no physics surface. Translate the existing native ground
     /// result only inside their visible mask, without creating collision or playing audio.
+    /// Per-map data (2026-10-25, docs/progress/puddle-footsteps-all-maps.md): a map takes part when its descriptor lists
+    /// <see cref="ArenaMapDescriptor.PuddleWaterMaterialNames"/> (Bay5 since 2026-09-28; Equator, Air Pit and Bowl since
+    /// 2026-10-25), and <see cref="ArenaMapDescriptor.PuddleExtraSurfaces"/> names ground surfaces besides Concrete/Asphalt that
+    /// the Puddle set may replace (Bowl: its whole field is one soil collider). Every map has its own
+    /// "Water (&lt;key&gt;)/PuddleFootsteps" developer switch (Bay5's key is the one of 2026-09-28, unchanged). The cache is
+    /// built lazily on the first eligible footstep and paced by <see cref="PuddleCacheGate"/>.
     /// </summary>
     internal static class PuddleFootstepRepairs
     {
@@ -21,9 +27,12 @@ namespace ArenaMapPort.Client
         const string ShaderName = "Decal/Water Deferred Decal";
         internal const float MinimumCoverage = 0.1f;
         internal const float MaximumFootPlaneDistance = 0.16f;
-        static ConfigEntry<bool> _enabled;
+        static readonly Dictionary<string, ConfigEntry<bool>> Enabled = new Dictionary<string, ConfigEntry<bool>>();
+        static readonly PuddleCacheGate Gate = new PuddleCacheGate();
         static bool _installed, _dirty = true, _warned;
-        static float _nextBuild;
+        static ArenaMapDescriptor _cacheMap;     // the map the cache was built (or is being built) for
+        static ArenaMapDescriptor _extraMap;     // the map _extraSurfaces was parsed for
+        static BaseBallistic.ESurfaceSound[] _extraSurfaces = new BaseBallistic.ESurfaceSound[0];
         static readonly List<Entry> Entries = new List<Entry>();
         static readonly Dictionary<Texture2D, Mask> Masks = new Dictionary<Texture2D, Mask>();
         static readonly List<Material> CurrentMaterials = new List<Material>();
@@ -73,20 +82,34 @@ namespace ArenaMapPort.Client
                 Plugin.Log.LogWarning(Tag + "native surface query unavailable; puddle translation disabled.");
                 return;
             }
-            _enabled = Plugin.Instance.Settings.Bind("Water (arena_bay5)", "PuddleFootsteps", true,
-                "Use native puddle footsteps on Bay5's original water decals. Matches mesh triangles and " +
-                "the shader's red texture mask (at least 10% coverage), within 16 cm of the feet. " +
-                "Oil, dry/faded edges, elevated surfaces and other ground materials stay unchanged. Live.");
+            // One developer switch per participating map, "Water (<key>)/PuddleFootsteps". Bay5's key and text are the
+            // ones of 2026-09-28 (a saved value keeps applying); the other maps bind the same key name in their own section.
+            foreach (var map in ArenaMapRegistry.All)
+            {
+                if (map.PuddleWaterMaterialNames.Length == 0) continue;
+                var setting = Plugin.Instance.Settings.Bind("Water (" + map.Key + ")", "PuddleFootsteps", true,
+                    "Use native puddle footsteps on " + (map.Key == ArenaMapRegistry.Bay5.Key ? "Bay5's" : "this map's") +
+                    " original water decals. Matches mesh triangles and " +
+                    "the shader's red texture mask (at least 10% coverage), within 16 cm of the feet. " +
+                    "Oil, dry/faded edges, elevated surfaces and other ground materials stay unchanged. Live." +
+                    (map.PuddleExtraSurfaces.Length > 0
+                        ? " Also replaces " + string.Join(", ", map.PuddleExtraSurfaces) + " ground under the decals." : ""));
+                setting.SettingChanged += (_, __) => Reset();
+                Enabled[map.Key] = setting;
+            }
             harmony.Patch(target,
                 postfix: new HarmonyMethod(typeof(PuddleFootstepRepairs), nameof(AfterSurface)));
-            _enabled.SettingChanged += (_, __) => Reset();
-            SceneManager.sceneLoaded += (scene, _) => { if (IsBay5Scene(scene.name)) Reset(); };
-            SceneManager.sceneUnloaded += scene => { if (IsBay5Scene(scene.name)) Reset(); };
+            SceneManager.sceneLoaded += (scene, _) => { if (ArenaMapRaid.IsOwnedScene(scene.name)) Reset(); };
+            SceneManager.sceneUnloaded += scene => { if (ArenaMapRaid.IsOwnedScene(scene.name)) Reset(); };
             _installed = true;
         }
 
-        static bool IsBay5Scene(string scene) => Array.IndexOf(ArenaMapRegistry.Bay5.AllSceneNames, scene) >= 0;
-        static bool InBay5() => ArenaMapRaid.CurrentMap?.Key == "arena_bay5";
+        /// <summary>The current map when it lists water materials, otherwise null (every other raid, the hideout, vanilla maps).</summary>
+        static ArenaMapDescriptor PuddleMap()
+        {
+            var map = ArenaMapRaid.CurrentMap;
+            return map != null && map.PuddleWaterMaterialNames.Length > 0 ? map : null;
+        }
 
         static void Reset()
         {
@@ -94,19 +117,21 @@ namespace ArenaMapPort.Client
             Masks.Clear(); // Only managed pixel arrays persist; readback objects are released immediately.
             CurrentMaterials.Clear();
             _dirty = true;
-            _nextBuild = 0f;
+            _cacheMap = null;
+            Gate.Reset();
             _warned = false;
             _last = default;
         }
 
         static void AfterSurface(Player __instance, ref ValueTuple<bool, BaseBallistic.ESurfaceSound> __result)
         {
-            if (!InBay5() || __instance == null) return;
+            var map = PuddleMap();
+            if (map == null || __instance == null) return;
             var native = __result;
             Match match = default;
             try
             {
-                if (_enabled.Value && Eligible(native) && EnsureCache())
+                if (Enabled.TryGetValue(map.Key, out var enabled) && enabled.Value && Eligible(map, native) && EnsureCache(map))
                 {
                     match = FindMatch(__instance.Position);
                     if (match.Entry != null && match.Coverage >= MinimumCoverage)
@@ -130,24 +155,60 @@ namespace ArenaMapPort.Client
                 _last = new Observation { Player = __instance, Native = native, Result = __result, Match = match };
         }
 
-        static bool Eligible(ValueTuple<bool, BaseBallistic.ESurfaceSound> result) => result.Item1 &&
-            (result.Item2 == BaseBallistic.ESurfaceSound.Concrete || result.Item2 == BaseBallistic.ESurfaceSound.Asphalt);
-
-        static bool EnsureCache()
+        // Concrete and Asphalt are always eligible; the map's PuddleExtraSurfaces add to them (Bowl: Soil).
+        static bool Eligible(ArenaMapDescriptor map, ValueTuple<bool, BaseBallistic.ESurfaceSound> result)
         {
+            if (!result.Item1) return false;
+            if (result.Item2 == BaseBallistic.ESurfaceSound.Concrete || result.Item2 == BaseBallistic.ESurfaceSound.Asphalt) return true;
+            var extra = ExtraSurfaces(map);
+            for (int i = 0; i < extra.Length; i++)
+                if (extra[i] == result.Item2) return true;
+            return false;
+        }
+
+        // The descriptor names the extra surfaces as text (Shared does not reference EFT); parse them once per map.
+        static BaseBallistic.ESurfaceSound[] ExtraSurfaces(ArenaMapDescriptor map)
+        {
+            if (_extraMap == map) return _extraSurfaces;
+            var parsed = new List<BaseBallistic.ESurfaceSound>();
+            foreach (string name in map.PuddleExtraSurfaces)
+            {
+                if (Enum.TryParse(name, false, out BaseBallistic.ESurfaceSound surface) &&
+                    Enum.IsDefined(typeof(BaseBallistic.ESurfaceSound), surface))
+                    parsed.Add(surface);
+                else
+                    Plugin.Log.LogWarning(Tag + map.Key + ": '" + name + "' in PuddleExtraSurfaces is not a ground surface; ignored.");
+            }
+            _extraSurfaces = parsed.ToArray();
+            _extraMap = map;
+            return _extraSurfaces;
+        }
+
+        static bool EnsureCache(ArenaMapDescriptor map)
+        {
+            if (_cacheMap != map)
+            {
+                // A different map than the cache was built for (every scene change already resets; this is the cheap guard).
+                Reset();
+                _cacheMap = map;
+            }
             if (!_dirty) return true;
-            if (Time.unscaledTime < _nextBuild) return false;
-            _nextBuild = Time.unscaledTime + 1f;
-            foreach (string name in ArenaMapRegistry.Bay5.AllSceneNames)
+            if (!Gate.TryBegin(Time.unscaledTime)) return false;
+            foreach (string name in map.AllSceneNames)
             {
                 var scene = SceneManager.GetSceneByName(name);
-                if (!scene.IsValid() || !scene.isLoaded) return false;
+                if (scene.IsValid() && scene.isLoaded) continue;
+                // Cheap check, repeated each second until the scene is there; say it once so a cache that never builds is not silent.
+                if (Gate.ReportScenesMissing())
+                    Plugin.Log.LogDebug(Tag + "water cache of " + map.Key + " not built: scene '" + name + "' is not loaded.");
+                return false;
             }
             Entries.Clear();
             bool waitingForRebind = false;
-            foreach (string name in ArenaMapRegistry.Bay5.AllSceneNames)
+            int unready = 0;
+            foreach (string name in map.AllSceneNames)
             {
-                if (ArenaMapRegistry.Bay5.IsBackgroundScene(name)) continue;
+                if (map.IsBackgroundScene(name)) continue;
                 foreach (var root in SceneManager.GetSceneByName(name).GetRootGameObjects())
                 foreach (var renderer in root.GetComponentsInChildren<MeshRenderer>(true))
                 {
@@ -159,10 +220,11 @@ namespace ArenaMapPort.Client
                     for (int sub = 0; sub < materials.Length; sub++)
                     {
                         var material = materials[sub];
-                        if (material == null || !IsWaterMaterial(material)) continue;
+                        if (material == null || !IsWaterMaterial(map, material)) continue;
                         if (material.shader == null || material.shader.name != ShaderName)
                         {
                             waitingForRebind = true;
+                            unready++;
                             continue;
                         }
                         var texture = material.GetTexture("_MainTex") as Texture2D;
@@ -181,7 +243,14 @@ namespace ArenaMapPort.Client
                     }
                 }
             }
-            _dirty = waitingForRebind;
+            // A listed water renderer that does not yet wear the native shader (ShaderRebind has not reached it) asks for another
+            // scan, but only MaxFullScans times: every scan walks all renderers of the map, and an unbounded wait repeated that
+            // once a second while the player walked on concrete.
+            var scan = Gate.AfterFullScan(waitingForRebind);
+            _dirty = scan == PuddleScanResult.Retry;
+            if (scan == PuddleScanResult.GaveUp)
+                Plugin.Log.LogDebug(Tag + "water cache of " + map.Key + ": " + unready + " listed water material slot(s) still lack shader '" +
+                    ShaderName + "' after " + Gate.FullScans + " scans; keeping the " + Entries.Count + " surfaces that have it.");
             if (!_dirty)
                 Plugin.Log.LogDebug(Tag + "cached water surfaces=" + Entries.Count + " masks=" + Masks.Count +
                     " colorSpace=" + QualitySettings.activeColorSpace + " minimumShaderCoverage=" + F(MinimumCoverage) +
@@ -189,11 +258,11 @@ namespace ArenaMapPort.Client
             return !_dirty;
         }
 
-        static bool IsWaterMaterial(Material material)
+        static bool IsWaterMaterial(ArenaMapDescriptor map, Material material)
         {
             // Reviewed source water identities belong to map data: the same native shader also
             // renders oil, and some water objects themselves are misleadingly named puddle_oil.
-            foreach (string name in ArenaMapRegistry.Bay5.PuddleWaterMaterialNames)
+            foreach (string name in map.PuddleWaterMaterialNames)
                 if (material.name == name || material.name == name + " (Instance)") return true;
             return false;
         }
@@ -322,14 +391,16 @@ namespace ArenaMapPort.Client
         internal static void Probe()
         {
             if (!DeveloperOptions.Enabled) return;
-            if (!_installed || !InBay5()) return;
+            var map = PuddleMap();
+            if (!_installed || map == null) return;
             try
             {
                 var player = Singleton<GameWorld>.Instantiated ? Singleton<GameWorld>.Instance.MainPlayer : null;
                 if (player == null) return;
                 var result = player.CalculateMovementSurface(); // Captures the unmodified native result in our postfix.
-                Match match = EnsureCache() ? FindMatch(player.Position) : default;
-                Plugin.Log.LogDebug(Tag + "enabled=" + _enabled.Value + " cached=" + Entries.Count +
+                Match match = EnsureCache(map) ? FindMatch(player.Position) : default;
+                Plugin.Log.LogDebug(Tag + "map=" + map.Key + " enabled=" + (Enabled.TryGetValue(map.Key, out var enabled) && enabled.Value) +
+                    " cached=" + Entries.Count +
                     " native=" + _last.Native.Item1 + "/" + _last.Native.Item2 +
                     " result=" + result.Item1 + "/" + result.Item2 + " feet=" + player.Position.ToString("F3") +
                     " matched=" + (match.Entry != null) + " coverage=" + F(match.Coverage) +

@@ -179,7 +179,8 @@ index comes from) and a Windows install of Arena with UnityPy. Shape:
   clip's value at its stop time. The open clip of a controller is the one whose name does not end in "closed".
 - Mirrored by `ArenaMapDescriptor.DoorPoses` (`ArenaDoorPose[]`, empty on a map without poses; `DoorPosesOf(barrier, part)` returns one part's
   poses, the part itself first; the position-aware overloads `DoorPosesOf(barrier, part, x, y, z)` and `DoorPosesOfBarrier(...)` are in door-poses.md). `validate_map_descriptors.py` checks the sidecar's schema, that every barrier is an `opened_barriers`
-  entry, and that sidecar and registry carry the same poses in the same order with the same numbers; `BowlMapTests` does the same in C#
+  entry, a booth assembly root (Equator) or a lamp group (every row a switch row, no gate of any role, see below), and that sidecar and
+  registry carry the same poses in the same order with the same numbers; `BowlMapTests` does the same in C#
   and `test_door_poses.py` pins that the registry holds exactly the text `--csharp` prints. A map with poses must keep the sidecar and
   the C# literals in one commit. Re-run the tool after an Arena update (the real-data test fails if the installed clips changed).
 - **Switch rows** (AirPit's passport lamps, 2026-10-24). A DotAnimator element of kind 3 is a SetActive: the sidecar row carries the
@@ -189,9 +190,19 @@ index comes from) and a Windows install of Arena with UnityPy. Shape:
   then off; `GreenFog`: off, then on), the closed and open transforms are the node's scene transform on both sides, `seconds` is the
   element's duration word (0), `ease` `linear` and unused. The C# literal appends the named arguments `ClosedActive: true,
   OpenActive: false` (the constructor's last two optional parameters, `IsSwitch` is `ClosedActive.HasValue`); a transform row never
-  prints them. A scan reads kind-3 elements as switches only with `"switches": true` in `DOT_SOURCES`; lamps elsewhere (AirPit's
-  `BUS_LIGHT`, Equator's exit lights) are not gates and stay out. A switch row removes nothing from the bake (no collider) and the
-  validators require that it flips the node.
+  prints them. A scan reads kind-3 elements as switches only with `"switches": true` in `DOT_SOURCES`. A switch row removes nothing from the
+  bake (no collider) and the validators require that it flips the node.
+- **Lamp groups** (2026-10-25: Equator's `EXIT_LIGHT_EMISSIVE`, AirPit's `BUS_LIGHT`; door-poses.md "Exit lamps"). Arena lights its green
+  emergency-exit lamps with the same kind-3 elements, so a barrier whose rows are ALL switch rows is a LAMP GROUP: it is no `opened_barriers`
+  entry (the bake never sees it; the validators accept it because every row is a switch and it is no start or held gate), `part` is a lamp
+  (a direct child of the group root), the `node` of each row is one of its two Point lights, `closed` false, `open` true, `seconds` 0. The
+  client registers the lamp parts with `SpawnGates` like gate parts (`DoorPoseModel.LampBarriers`, `BoothDoorRepairs.OpenLamps`; they follow
+  `Spawns/OpenRespawnDoors || Spawns/OpenSpawnBarriers`): lit at raid start without a hold, dark during a hold and lit in the first frame
+  of the release; a lamp light's culling component re-caches its authored intensity on the first activation, so the lighting repair re-syncs
+  it (`ArenaLightingRepairs.SyncSwitchedOn`). Arena's trigger also switches a glow node beside every lamp (`Exit1 (N)`, a direct child of the
+  group root with only AreaLight stand-ins below it): the scan option `"skip_part_switches": true` leaves such a part-level switch out with
+  a note, after checking its components (anything but a Transform, a MeshFilter, a disabled material-less MeshRenderer and the AreaLight
+  script stops the tool).
 - **Repeated part names** (AirPit's `PASSPORT_CONTROL_DOORS`: sixteen leaves, six names). A part name may repeat among a barrier's
   direct children; `part` keeps the name and `node` is `""`. Rows of one name are told apart by `closed.position` (the node's local
   position in the scene): the client keeps the rows of a node whose local position lies within 0.05 m of the row's closed position

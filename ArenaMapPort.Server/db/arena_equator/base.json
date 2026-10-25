@@ -1048,9 +1048,9 @@
       "Id": "arena_equator-bot-south-west",
       "Infiltration": "",
       "Position": {
-        "x": -9,
+        "x": -7.5,
         "y": 0.1,
-        "z": -28
+        "z": -28.0
       },
       "Rotation": 0.0,
       "Sides": [
@@ -1079,9 +1079,9 @@
       "Id": "arena_equator-bot-south-east",
       "Infiltration": "",
       "Position": {
-        "x": 8.7,
+        "x": 7.5,
         "y": 0.1,
-        "z": -28.4
+        "z": -29.0
       },
       "Rotation": 0.0,
       "Sides": [

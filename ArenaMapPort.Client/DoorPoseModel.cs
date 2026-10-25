@@ -15,8 +15,9 @@ namespace ArenaMapPort.Client
     /// through a parked body, how long a drive takes at the player's timing scale, and how a hierarchy path resolves to
     /// every instance that carries it. Since 2026-10-24 (AirPit, "Runtime 3") also: which of several rows that share a part
     /// name belong to the node at hand (<see cref="SelectRowsForNode"/>, by the closed position), the active state a switch
-    /// row sets at the start and the end of a drive (<see cref="SwitchStateAt"/>) and how long a part with only switches takes
-    /// (<see cref="SwitchPartDriveSeconds"/>).
+    /// row sets at the start and the end of a drive (<see cref="SwitchStateAt"/>), how long a part with only switches takes
+    /// (<see cref="SwitchPartDriveSeconds"/>) and, since 2026-10-25, which barriers of a map are LAMP GROUPS, Arena's exit lamps
+    /// (<see cref="LampBarriers"/>).
     ///
     /// Interpolation of a Mecanim clip's node (source "clip", Bowl) is component-wise on the euler triple, as Unity
     /// animates euler clips: the BTR's wheels turn 1.5 revolutions on the way (-553 degrees), a quaternion slerp would
@@ -367,6 +368,32 @@ namespace ArenaMapPort.Client
                 if (seconds > longest) longest = seconds;
             }
             return longest;
+        }
+
+        /// <summary>The barriers that are LAMP GROUPS (Equator's EXIT_LIGHT_EMISSIVE, AirPit's BUS_LIGHT, 2026-10-25: the green
+        /// emergency-exit lamps Arena lights when the gates open): every row of the barrier is a SWITCH row and the barrier is no
+        /// entry of <paramref name="openedBarriers"/>, so the bake and the keep-structure rule never see it. Distinct barrier paths
+        /// in row order. A barrier with any transform row (AirPit's PASSPORT_CONTROL_DOORS: leaves turn, RED / GREEN switch) or listed
+        /// as opened (it has its own handling) is not one; no rows, or no barrier name, give an empty list.
+        /// tools/validate/validate_map_descriptors.py (door_lamp_groups) states the same rule for the sidecar.</summary>
+        internal static List<string> LampBarriers(IEnumerable<ArenaDoorPose> rows, IEnumerable<string> openedBarriers)
+        {
+            var opened = new HashSet<string>(openedBarriers ?? new string[0], StringComparer.Ordinal);
+            var order = new List<string>();
+            var allSwitch = new Dictionary<string, bool>(StringComparer.Ordinal);
+            if (rows == null) return order;
+            foreach (var row in rows)
+            {
+                if (row == null || string.IsNullOrEmpty(row.Barrier)) continue;
+                if (!allSwitch.TryGetValue(row.Barrier, out bool all))
+                {
+                    order.Add(row.Barrier);
+                    all = true;
+                }
+                allSwitch[row.Barrier] = all && row.IsSwitch;
+            }
+            order.RemoveAll(barrier => !allSwitch[barrier] || opened.Contains(barrier));
+            return order;
         }
 
         /// <summary>Every node a '/'-separated hierarchy path leads to: the roots named like the first segment, then at every

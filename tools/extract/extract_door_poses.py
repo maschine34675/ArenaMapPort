@@ -58,8 +58,14 @@ ABSOLUTE local values in the parent's frame (Bay5's roller targets keep the node
 closed euler -> target euler (interpolate rotations as a quaternion slerp between Quaternion.Euler of the two triples). A kind-3
 element is skipped (a lamp) unless the scan sets "switches": then it becomes a SWITCH row (the sidecar's optional "switch":
 {"closed": the target's scene activeSelf, "open": the payload bool}; its closed and open transforms are the node's scene
-transform; AirPit's passport lamps RED / GREEN). A DotAnimator on an inactive GameObject (Bay5's Gates_PTOR_medium twins) moves
-nothing and is skipped. Where Arena authors no motion for a sibling gate the sidecar borrows the neighbour's (source "borrowed",
+transform; AirPit's passport lamps RED / GREEN). A barrier whose rows are ALL switch rows is a LAMP GROUP (2026-10-25: Equator's
+EXIT_LIGHT_EMISSIVE and AirPit's BUS_LIGHT, the green emergency-exit lamps Arena lights when the gates open): each lamp part is a
+direct child of the group root and its two `Point light` objects are the switched nodes (off in the scene, on when the gates are
+open, duration 0). Arena's trigger also switches a sibling GLOW node of every lamp (`Exit1 (N)`, a direct child of the group root,
+holding only Arena's AreaLight helper objects, which the port does not carry); a scan with "skip_part_switches" skips such a part-level switch with a note after
+checking that nothing but a Transform, a MeshFilter, a disabled MeshRenderer without materials and the AreaLight script hangs
+below it (any Light, any other script or any renderer with a material stops the tool). A DotAnimator on an inactive GameObject
+(Bay5's Gates_PTOR_medium twins) moves nothing and is skipped. Where Arena authors no motion for a sibling gate the sidecar borrows the neighbour's (source "borrowed",
 checked: the borrower really has no DotAnimator); mode "scene" (AirPit's bus doors) borrows the lender's STATIC pose instead of
 a motion: the open pose of a node is the lender's current local transform of the same-named node. Per-map scan roots, barrier
 depth and borrowed gates are in DOT_SOURCES.
@@ -124,7 +130,9 @@ MAP_SOURCES = {
 #              OLD_WAREHOUSE_DOORS/Gates_Depot_Frame; AirPit: PASSPORT_CONTROL_DOORS itself, depth 1, the root IS the barrier);
 #              the next segment is the part, the rest the node. `at` = True records the barrier root's world position (repeated
 #              paths: both unnumbered Equator assemblies, both depot frames). `switches` = True reads the kind-3 elements below
-#              the root as switch rows (AirPit's RED / GREEN lamps); without it they are skipped with a note.
+#              the root as switch rows (AirPit's RED / GREEN lamps; the exit-lamp groups); without it they are skipped with a note.
+#              `skip_part_switches` = True skips (counted, noted, never silent) a switch whose target is a DIRECT child of the barrier
+#              root (the lamp groups' glow nodes) after checking its components (glow_node_problem).
 #   borrowed   gates Arena authors no motion for, given a neighbour's: {"scene", "barrier", "parts": [part names, "" = the
 #              root], "lender": {"barrier", "at"?}, "mode"}. mode "absolute" copies the lender's end value on every axis the
 #              lender moves (Equator: x = +-2.0), "offset" adds the lender's travel (Bay5: y + 3.089). The borrower must carry
@@ -136,7 +144,9 @@ DOT_SOURCES = {
     "arena_equator": {
         "scene": "Arena_Equator_TeamFight_DesignStuff",
         "descriptor": REPO / "tools" / "maps" / "equator.json",
-        "scans": [{"root": "SPAWN_DOORS", "depth": 2, "at": True}],
+        # EXIT_LIGHT_EMISSIVE is a lamp group (2026-10-25): switch rows only, no gate part; the glow nodes beside the lamps are skipped.
+        "scans": [{"root": "SPAWN_DOORS", "depth": 2, "at": True},
+                  {"root": "EXIT_LIGHT_EMISSIVE", "depth": 1, "at": False, "switches": True, "skip_part_switches": True}],
         "borrowed": [{
             "scene": "Arena_Equator",
             "barrier": "SBG_Arena_Equator/SOO/Respawn_2/Door_Sliding_Respawn (3)",
@@ -159,7 +169,9 @@ DOT_SOURCES = {
         "descriptor": REPO / "tools" / "maps" / "airpit.json",
         # PASSPORT_CONTROL_DOORS is the barrier itself: its 16 turnstile leaves (kind 2) are the parts, RED / GREEN carry the lamp
         # switches (kind 3, RedFog off / GreenFog on).
-        "scans": [{"root": "PASSPORT_CONTROL_DOORS", "depth": 1, "at": False, "switches": True}],
+        # BUS_LIGHT is a lamp group (2026-10-25): the bus's three green exit lamps, switch rows only, glow nodes skipped.
+        "scans": [{"root": "PASSPORT_CONTROL_DOORS", "depth": 1, "at": False, "switches": True},
+                  {"root": "BUS_LIGHT", "depth": 1, "at": False, "switches": True, "skip_part_switches": True}],
         "borrowed": [{
             "scene": "Arena_Airpit_TeamFight_DesignStuff",
             "barrier": "BUS_DOORS",
@@ -832,9 +844,12 @@ SIDECAR_COMMENT = (
 # Appended only to a sidecar that uses the AirPit features (a switch row, a repeated part name), so the Equator / Bay5 / Bowl
 # files keep their text byte for byte.
 SIDECAR_COMMENT_SWITCHES = (
-    " A row with a \"switch\" key {closed, open} switches the node on or off instead of moving it (AirPit's passport lamps: "
-    "closed = the node's active state in the scene, open = the state Arena's DotAnimator sets; the row's transforms are the "
-    "node's scene transform on both sides, seconds is Arena's duration word, 0 for a switch). A part name may repeat among a "
+    " A row with a \"switch\" key {closed, open} switches the node on or off instead of moving it (AirPit's passport lamps and the "
+    "exit lamps of Equator and AirPit: closed = the node's active state in the scene, open = the state Arena's DotAnimator "
+    "sets; the row's transforms are the node's scene transform on both sides, seconds is Arena's duration word, 0 for a "
+    "switch). A barrier whose rows are all switch rows is a lamp group, not an opened_barriers entry (Equator's "
+    "EXIT_LIGHT_EMISSIVE, AirPit's BUS_LIGHT: the part is a lamp, its two Point lights are the nodes, off in the scene and on "
+    "once the gates are open; the switch of the glow node beside each lamp is not carried). A part name may repeat among a "
     "barrier's direct children (the 16 passport leaves reuse 6 names): such rows are told apart by their closed position, "
     "matched within 0.05 m. A borrowed row whose clip says \"static open pose\" takes the open pose from a neighbour that stands "
     "open in the scene (AirPit's bus doors); its seconds are the port's, not Arena's.")
@@ -1012,6 +1027,28 @@ class ArenaScene:
             if obj is not None and obj.type.name == "MonoBehaviour":
                 out.append(obj)
         return out
+
+    def components(self, tpid: int) -> list[str]:
+        """What the GameObject of a transform carries, one label per component (level file only): the object's type name; a
+        MeshRenderer as 'MeshRenderer(off)' when it is disabled and holds no material, else 'MeshRenderer(on)'; a MonoBehaviour as
+        'MonoBehaviour:<class>'; 'external' / 'missing' for a component the level file does not hold."""
+        labels = []
+        table = self.files[self.level_name]
+        for entry in self.go[self.tr[tpid]["m_GameObject"]["m_PathID"]]["m_Component"]:
+            ptr = entry["component"]
+            obj = None if ptr["m_FileID"] else table.get(ptr["m_PathID"])
+            if obj is None:
+                labels.append("external" if ptr["m_FileID"] else "missing")
+                continue
+            kind = obj.type.name
+            if kind == "MeshRenderer":
+                tt = obj.read_typetree()
+                dark = not tt["m_Enabled"] and not any(m["m_PathID"] for m in tt["m_Materials"])
+                kind = "MeshRenderer(off)" if dark else "MeshRenderer(on)"
+            elif kind == "MonoBehaviour":
+                kind = "MonoBehaviour:" + self.mono_class(obj)
+            labels.append(kind)
+        return labels
 
     def animator_clip_counts(self, tpid: int) -> list[int]:
         """The number of clips of the controller of every Animator on the GameObject of a transform (level file only; a
@@ -1342,6 +1379,7 @@ class DotScan:
     elements: int = 0
     skipped_inactive: int = 0
     skipped_switch: int = 0
+    skipped_part_switch: int = 0                    # part-level switches left out (scan option `skip_part_switches`), each noted in `lines`
     switches: int = 0                               # switch rows read (scan option `switches`)
     warnings: list = field(default_factory=list)
 
@@ -1372,6 +1410,22 @@ def merge_elements(label: str, elements: list) -> tuple:
     if move and rot and (move[0].seconds != rot[0].seconds or move[0].ease != rot[0].ease or move[0].keys != rot[0].keys):
         raise DoorPoseError(f"{label}: its move and its rotation differ in duration, ease or curve; the pose has one of each")
     return (move[0] if move else None), (rot[0] if rot else None)
+
+
+# What may hang on the glow node a lamp group's trigger switches and below it (verified on Equator level 57 and AirPit level 28,
+# 2026-10-25): the AreaLight stand-ins, each a Transform, a MonoBehaviour of the AreaLight script and a MeshFilter with a disabled
+# MeshRenderer that holds no material. A Light, any other script or a renderer with a material would be something the skip loses.
+GLOW_NODE_COMPONENTS = ("Transform", "MeshFilter", "MeshRenderer(off)", "MonoBehaviour:AreaLight")
+
+
+def glow_node_problem(scene: ArenaScene, node: int) -> str | None:
+    """None when every component on the node and below it is one of GLOW_NODE_COMPONENTS, else a sentence naming the first
+    object that carries something else (the scan then stops: a skipped switch must not hide a light or a visible mesh)."""
+    for _rel, tpid in [("", node), *scene.descendants(node)]:
+        for label in scene.components(tpid):
+            if label not in GLOW_NODE_COMPONENTS:
+                return f"{scene.path(tpid)} carries {label}"
+    return None
 
 
 def scan_dot_animators(scene: ArenaScene, scene_name: str, scan: dict) -> DotScan:
@@ -1454,6 +1508,14 @@ def scan_dot_animators(scene: ArenaScene, scene_name: str, scan: dict) -> DotSca
             raise DoorPoseError(f"{path}: a switch needs a part below the barrier root (depth {depth}); the root itself cannot be switched")
         if target in moves:
             raise DoorPoseError(f"{path}: this node is both switched and moved; the pose has one or the other")
+        if scan.get("skip_part_switches") and len(segments) == depth + 1:
+            problem = glow_node_problem(scene, target)
+            if problem is not None:
+                raise DoorPoseError(f"{path}: a part-level switch is skipped only when nothing but Arena's AreaLight stand-ins hangs "
+                                    f"below the node, and {problem}")
+            result.skipped_part_switch += 1
+            result.lines.append(f"    - skipped part-level switch (the glow node; only its AreaLight stand-ins hang below, not ported): {path}")
+            continue
         if len(switches[target]) > 1:
             raise DoorPoseError(f"{path}: several DotAnimator switch elements target this node")
         element = switches[target][0]
@@ -1679,7 +1741,8 @@ def extract_dot(map_key: str, arena: str, package: Path | None) -> tuple[str, di
         elements += scanned.elements
         summary.append(f"scan {scan['root']} (barrier depth {scan['depth']}): {scanned.objects} DotAnimator(s), {scanned.elements} "
                        f"element(s), {len(scanned.poses)} pose(s) ({scanned.switches} switch row(s)), {scanned.skipped_inactive} inactive, "
-                       f"{scanned.skipped_switch} switch element(s) skipped")
+                       f"{scanned.skipped_switch} switch element(s) skipped"
+                       + (f", {scanned.skipped_part_switch} part-level switch(es) skipped" if scanned.skipped_part_switch else ""))
         summary.extend(scanned.lines)
         summary.extend(pose_row(p) for p in scanned.poses)
     summary.append(f"decode self-check: {objects} DotAnimator object(s), {elements} element(s); every decode ends exactly at the "

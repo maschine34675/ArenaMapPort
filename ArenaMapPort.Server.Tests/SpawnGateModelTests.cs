@@ -166,7 +166,7 @@ public sealed class SpawnGatesWiringTests
     public void EveryGatePartIsOfferedBeforeItIsSwitchedOff()
     {
         var code = Text("ArenaMapPort.Client/BoothDoorRepairs.cs");
-        Assert.Equal(3, Regex.Matches(code, @"SpawnGates\.Offer\(").Count); // door leaves, descriptor barrier parts and barrier roots (Bay5's rollers)
+        Assert.Equal(4, Regex.Matches(code, @"SpawnGates\.Offer\(").Count); // door leaves, descriptor barrier parts, barrier roots (Bay5's rollers) and the exit lamps (2026-10-25)
         // In both loops the part is offered first and only switched off when the offer says "not held".
         foreach (var variable in new[] { "t", "part" })
         {
@@ -175,6 +175,12 @@ public sealed class SpawnGatesWiringTests
             Assert.True(offer > 0 && off > offer && off - offer < 400, $"offer before switch-off for '{variable}'");
         }
         Assert.Contains("const string DoorPrefix = SpawnGateModel.DoorPrefix;", code);
+        // the fourth offer belongs to OpenLamps, behind the other three: a lamp is offered and parked, never switched off (no SetActive(false) follows it)
+        int lamps = code.IndexOf("static void OpenLamps(", StringComparison.Ordinal);
+        int lastBefore = code.LastIndexOf("SpawnGates.Offer(", lamps, StringComparison.Ordinal);
+        Assert.True(lamps > 0 && lastBefore > 0 && lastBefore < lamps, "the three offers of the gate steps precede OpenLamps");
+        Assert.Single(Regex.Matches(code.Substring(lamps), @"SpawnGates\.Offer\("));
+        Assert.DoesNotContain("SetActive(false)", code.Substring(lamps, code.IndexOf("static IEnumerable<GameObject> OwnedSceneRoots()", lamps, StringComparison.Ordinal) - lamps));
     }
 
     [Fact]

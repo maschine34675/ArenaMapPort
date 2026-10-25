@@ -60,15 +60,50 @@ public sealed class Bay5MapTests
             Assert.Empty(map.DistantShadowCasterPaths);
     }
 
-    [Fact]
-    public void PuddleWaterMaterialsMatchTheSidecarAndRemainBay5Only()
+    // Puddle footsteps (PuddleFootstepRepairs; Bay5 since 2026-09-28, Equator, Air Pit and Bowl since 2026-10-25, see
+    // docs/progress/puddle-footsteps-all-maps.md): the exact water material names of each released map and the ground surfaces besides
+    // Concrete/Asphalt that may turn into the Puddle sound. 70f045bb011600e7 = "puddle indoor static" (fixed water level),
+    // 0877f2335044042e = "puddle" (rain driven), 1b8546c701e1d1dc = "Airpit_puddle_white" (static). Oil decals share the shader and stay
+    // out: Bay5's "puddle benz" 25519639aa567c85 and Air Pit's two inactive runway decals 823c859e2c5d11bc.
+    [Theory]
+    [InlineData("equator", "70f045bb011600e7,0877f2335044042e", "")]
+    [InlineData("bay5", "70f045bb011600e7", "")]
+    [InlineData("airpit", "1b8546c701e1d1dc,0877f2335044042e", "")]
+    [InlineData("bowl", "0877f2335044042e", "Soil")] // the whole field is one Bowl_floor_BALLISTIC_soil collider
+    public void PuddleDataMatchesTheSidecarAndTheExpectedLists(string stem, string materials, string surfaces)
     {
-        using var doc = JsonDocument.Parse(File.ReadAllText(Sidecar("bay5.json")));
+        var expectedMaterials = materials.Split(',', StringSplitOptions.RemoveEmptyEntries);
+        var expectedSurfaces = surfaces.Split(',', StringSplitOptions.RemoveEmptyEntries);
+        var map = ArenaMapRegistry.All.Single(m => m.Key == "arena_" + stem);
+        using var doc = JsonDocument.Parse(File.ReadAllText(Sidecar(stem + ".json")));
         var names = doc.RootElement.GetProperty("puddle_water_material_names").EnumerateArray().Select(e => e.GetString()).ToArray();
-        Assert.Equal(new[] { "70f045bb011600e7" }, names); // Original "puddle indoor static", not oil decals.
-        Assert.Equal(names, ArenaMapRegistry.Bay5.PuddleWaterMaterialNames);
-        foreach (var map in ArenaMapRegistry.Catalog.Where(m => m != ArenaMapRegistry.Bay5))
+        Assert.Equal(expectedMaterials, names);
+        Assert.Equal(names, map.PuddleWaterMaterialNames);
+        var extra = doc.RootElement.TryGetProperty("puddle_extra_surfaces", out var surfaceList)
+            ? surfaceList.EnumerateArray().Select(e => e.GetString()).ToArray() : new string?[0];
+        Assert.Equal(expectedSurfaces, extra);
+        Assert.Equal(extra, map.PuddleExtraSurfaces);
+    }
+
+    [Fact]
+    public void ParkedMapsListNoPuddleDataAndTheSurfacesAreMembersOfTheNativeEnum()
+    {
+        foreach (var map in ArenaMapRegistry.Catalog.Where(m => !ArenaMapRegistry.All.Contains(m)))
+        {
             Assert.Empty(map.PuddleWaterMaterialNames);
+            Assert.Empty(map.PuddleExtraSurfaces);
+        }
+        // The extra surfaces are BaseBallistic.ESurfaceSound names (EFT 0.16.9.5); Concrete and Asphalt are built in, Puddle is the result.
+        var native = new[] { "Concrete", "Metal", "Wood", "Soil", "Grass", "Asphalt", "Glass", "Gravel", "MetalThin", "Puddle", "Slate",
+            "Tile", "WoodThick", "Swamp", "Garbage", "GarbageMetal", "Plastic", "WholeGlass", "WoodThin", "Snow" };
+        foreach (var map in ArenaMapRegistry.All)
+        {
+            Assert.All(map.PuddleExtraSurfaces, s => Assert.Contains(s, native));
+            Assert.All(map.PuddleExtraSurfaces, s => Assert.DoesNotContain(s, new[] { "Concrete", "Asphalt", "Puddle" }));
+            Assert.Equal(map.PuddleExtraSurfaces.Length, map.PuddleExtraSurfaces.Distinct().Count());
+            Assert.Equal(map.PuddleWaterMaterialNames.Length, map.PuddleWaterMaterialNames.Distinct().Count());
+            if (map.PuddleExtraSurfaces.Length > 0) Assert.NotEmpty(map.PuddleWaterMaterialNames);
+        }
     }
 
     [Fact]

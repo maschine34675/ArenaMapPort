@@ -331,6 +331,12 @@ translated slab (Bay5) or a vanished slab (Equator today) shows no curl.
   are animated, the inactive `Gates_PTOR_medium` twins are a variant with the same targets; the fence twins are unproven.
 - Task brief: the booth doors are under `SPAWN_DOORS` in level 57 (not `Respawn_1/2`); the client opens ONE depot gate, not both; AirPit has
   3 bus-door Animators, not 6, and they have no clips.
+- 2026-10-25 (door-poses.md "Exit lamps"): E5 ("cosmetic lamp, not decoded", "D (later)"), A4's `BUS_LIGHT` lamps and open question 8
+  ("Not decoded: the 688-byte `DotAnimator` of the emergency lights") are closed. The lamp `DotAnimator`s decode with the layout of this survey (Equator 4
+  objects / 12 elements, AirPit 3 / 9, all kind 3, duration 0, each switching the lamp's two `Point light` objects and the sibling glow node on); the
+  port carries the two Point lights of every lamp as switch rows (Equator 8 rows, AirPit 6) and skips the glow node. What stays open: Arena's
+  `AreaLight` wash below the glow node (EFT has its own AreaLight classes; not ported), the `EmissiveAnimator` of the sign meshes (the port keeps
+  the sign always lit) and the trigger (GateEntity 24006 / 3005 may fire at another moment than the doors; not in the data).
 
 ## Scripts written
 

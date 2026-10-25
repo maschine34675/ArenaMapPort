@@ -739,9 +739,9 @@
       "Id": "arena_bay5-player-north-west",
       "Infiltration": "ArenaBay5",
       "Position": {
-        "x": 54.2,
+        "x": 55.2,
         "y": -3.8574,
-        "z": 53.8
+        "z": 53.0
       },
       "Rotation": 135,
       "Sides": [
@@ -1048,9 +1048,9 @@
       "Id": "arena_bay5-bot-east-lane",
       "Infiltration": "",
       "Position": {
-        "x": 117.8917,
+        "x": 118.3,
         "y": -3.8574,
-        "z": 43.099
+        "z": 44.4
       },
       "Rotation": 0.0,
       "Sides": [

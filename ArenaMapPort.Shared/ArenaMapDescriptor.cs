@@ -126,7 +126,8 @@ namespace ArenaMapPort.Shared
     /// One node an Arena gate moves (tools/maps/&lt;stem&gt;.doors.json, docs/progress/door-poses.md): the closed pose it
     /// has in the scene and the open END pose of Arena's own animation. <see cref="Barrier"/> is the path of the gate's
     /// root (an OpenedBarriers entry; Equator's booth doors are not barriers, their path is the assembly root under
-    /// SPAWN_DOORS or Respawn_2), <see cref="Part"/> the barrier root's direct child (the object BoothDoorRepairs switches
+    /// SPAWN_DOORS or Respawn_2; a LAMP GROUP is no barrier either: Equator's EXIT_LIGHT_EMISSIVE and AirPit's BUS_LIGHT carry
+    /// switch rows only, DoorPoseModel.LampBarriers), <see cref="Part"/> the barrier root's direct child (the object BoothDoorRepairs switches
     /// off; "" = the barrier root itself moves: Bay5's rollers), <see cref="Node"/> the transform path below the part that
     /// is animated ("" = the part itself). Positions and euler angles are LOCAL to the node's parent (Unity localPosition
     /// / localEulerAngles).
@@ -146,7 +147,7 @@ namespace ArenaMapPort.Shared
     /// instance within <see cref="AtTolerance"/>. Mirrors the sidecar's "poses" number for number (DoorPoseSidecarTests,
     /// validate_map_descriptors.py).
     ///
-    /// A SWITCH row (<see cref="IsSwitch"/>, AirPit's passport lamps RED / GREEN, 2026-10-24) does not move its node: it
+    /// A SWITCH row (<see cref="IsSwitch"/>, AirPit's passport lamps RED / GREEN, 2026-10-24; the exit lamps of Equator and AirPit, 2026-10-25) does not move its node: it
     /// sets the node's active state, <see cref="ClosedActive"/> while the gate is closed (the node's state in the scene) and
     /// <see cref="OpenActive"/> once it is open. Its closed and open transforms are the node's scene transform on both
     /// sides, <see cref="Seconds"/> is Arena's duration word (0), <see cref="Ease"/> is linear and unused. The two switch
@@ -283,6 +284,12 @@ namespace ArenaMapPort.Shared
         public string[] RestoredShadowCasterRoots { get; } // exact active LOD roots with source-disabled shadow proxies to restore
         public string[] DistantShadowCasterPaths { get; } // active shadow proxies missing native LOD registration
         public string[] PuddleWaterMaterialNames { get; } // exact imported water-puddle material names; excludes oil decals
+        // Puddle footsteps (PuddleFootstepRepairs, docs/progress/puddle-footsteps-all-maps.md): the repair turns a native ground
+        // result of Concrete/Asphalt into the Puddle set inside the visible mask of the listed water materials. PuddleExtraSurfaces
+        // names further BaseBallistic.ESurfaceSound members (as text, this project does not reference EFT) that may be replaced
+        // the same way; empty = exactly Concrete/Asphalt (Bay5, Equator, Air Pit). Bowl lists "Soil": its whole field is one
+        // Bowl_floor_BALLISTIC_soil collider, so with the Concrete/Asphalt rule alone its puddles would stay silent.
+        public string[] PuddleExtraSurfaces { get; }
         // PLAN-AIRPIT item 11 — the per-map allow-list of ShaderRebind's fallback table: Arena shader names this map's
         // materials may be rebound to an SPT substitute (client ShaderStandinPolicy owns the original -> substitute rows,
         // the switches and the AirPit texture work). Empty = the map never substitutes (Equator and the parked maps).
@@ -332,6 +339,7 @@ namespace ArenaMapPort.Shared
             string? SunScene = null,
             string[]? SunPaths = null,
             string[]? PuddleWaterMaterialNames = null,
+            string[]? PuddleExtraSurfaces = null,
             string[]? DistantShadowCasterPaths = null,
             bool InheritIndoorFloorDetails = false,
             ArenaNeonFixture[]? NeonFixtures = null,
@@ -384,6 +392,7 @@ namespace ArenaMapPort.Shared
             this.SunScene = SunScene ?? string.Empty;
             this.SunPaths = SunPaths ?? new string[0];
             this.PuddleWaterMaterialNames = PuddleWaterMaterialNames ?? new string[0];
+            this.PuddleExtraSurfaces = PuddleExtraSurfaces ?? new string[0];
             this.ShaderFallbackNames = ShaderFallbackNames ?? new string[0];
             this.InheritIndoorFloorDetails = InheritIndoorFloorDetails;
             this.NeonFixtures = NeonFixtures ?? new ArenaNeonFixture[0];
@@ -501,6 +510,14 @@ namespace ArenaMapPort.Shared
             FixedNightHour: 0,
             SunScene: "Arena_Equator_Lighting",
             SunPaths: new[] { "FAKE_SUN", "FAKE_SUN_VOLUME" },
+            PuddleWaterMaterialNames: new[]
+            {
+                // Both are the original water decals of the mall floor (Decal/Water Deferred Decal, 17 + 21 active quads in
+                // Arena_Equator): "puddle indoor static" (a fixed water level) and the rain-driven "puddle" (USERAIN, global
+                // _WaterLevel). Equator has no oil decal. Mirrors tools/maps/equator.json (2026-10-25).
+                "70f045bb011600e7",
+                "0877f2335044042e",
+            },
             DistantShadowCasterPaths: new[]
             {
                 // Original active ceiling proxies lack LOD membership required by EFT DistantShadow.
@@ -512,8 +529,43 @@ namespace ArenaMapPort.Shared
             // Arena's sliding booth doors (2026-10-23, tools/maps/equator.doors.json, docs/progress/door-poses.md "DotAnimator"):
             // the four assemblies under SPAWN_DOORS (their DotAnimator end poses; the two unnumbered ones are told apart by
             // the world position of their root) plus the fifth door under Respawn_2, which Arena gives no motion (borrowed).
+            // Since 2026-10-25 the sidecar's first eight rows are the exit lamps (a LAMP GROUP, EXIT_LIGHT_EMISSIVE: switch rows
+            // only, no opened_barriers entry): the two Point lights of each of the four green emergency-exit lamps are off in the
+            // scene and on once the gates are open (Arena's DotAnimator, duration 0; door-poses.md "Exit lamps").
             DoorPoses: new[]
             {
+                new ArenaDoorPose("EXIT_LIGHT_EMISSIVE", "emergency_exit_light_emissive (1)", "emergency_exit_light 1/Point light", "DotAnimator", 0.0f,
+                    new[] { 0.0f, 0.0f, 0.228f }, new[] { 0.0f, 0.0f, 0.0f },
+                    new[] { 0.0f, 0.0f, 0.228f }, new[] { 0.0f, 0.0f, 0.0f },
+                    "dotanimator", "linear", null, null, ClosedActive: false, OpenActive: true),
+                new ArenaDoorPose("EXIT_LIGHT_EMISSIVE", "emergency_exit_light_emissive (1)", "emergency_exit_light 1/Point light (1)", "DotAnimator", 0.0f,
+                    new[] { 0.0f, -0.163f, 1.307f }, new[] { 0.0f, 0.0f, 0.0f },
+                    new[] { 0.0f, -0.163f, 1.307f }, new[] { 0.0f, 0.0f, 0.0f },
+                    "dotanimator", "linear", null, null, ClosedActive: false, OpenActive: true),
+                new ArenaDoorPose("EXIT_LIGHT_EMISSIVE", "emergency_exit_light_emissive (2)", "emergency_exit_light 1/Point light", "DotAnimator", 0.0f,
+                    new[] { 0.0f, 0.0f, 0.228f }, new[] { 0.0f, 0.0f, 0.0f },
+                    new[] { 0.0f, 0.0f, 0.228f }, new[] { 0.0f, 0.0f, 0.0f },
+                    "dotanimator", "linear", null, null, ClosedActive: false, OpenActive: true),
+                new ArenaDoorPose("EXIT_LIGHT_EMISSIVE", "emergency_exit_light_emissive (2)", "emergency_exit_light 1/Point light (1)", "DotAnimator", 0.0f,
+                    new[] { 0.0f, -0.163f, 1.307f }, new[] { 0.0f, 0.0f, 0.0f },
+                    new[] { 0.0f, -0.163f, 1.307f }, new[] { 0.0f, 0.0f, 0.0f },
+                    "dotanimator", "linear", null, null, ClosedActive: false, OpenActive: true),
+                new ArenaDoorPose("EXIT_LIGHT_EMISSIVE", "emergency_exit_light_emissive (4)", "emergency_exit_light 1/Point light", "DotAnimator", 0.0f,
+                    new[] { 0.0f, 0.0f, 0.228f }, new[] { 0.0f, 0.0f, 0.0f },
+                    new[] { 0.0f, 0.0f, 0.228f }, new[] { 0.0f, 0.0f, 0.0f },
+                    "dotanimator", "linear", null, null, ClosedActive: false, OpenActive: true),
+                new ArenaDoorPose("EXIT_LIGHT_EMISSIVE", "emergency_exit_light_emissive (4)", "emergency_exit_light 1/Point light (1)", "DotAnimator", 0.0f,
+                    new[] { 0.0f, -0.163f, 1.307f }, new[] { 0.0f, 0.0f, 0.0f },
+                    new[] { 0.0f, -0.163f, 1.307f }, new[] { 0.0f, 0.0f, 0.0f },
+                    "dotanimator", "linear", null, null, ClosedActive: false, OpenActive: true),
+                new ArenaDoorPose("EXIT_LIGHT_EMISSIVE", "emergency_exit_light_emissive (5)", "emergency_exit_light 1/Point light", "DotAnimator", 0.0f,
+                    new[] { 0.0f, 0.0f, 0.228f }, new[] { 0.0f, 0.0f, 0.0f },
+                    new[] { 0.0f, 0.0f, 0.228f }, new[] { 0.0f, 0.0f, 0.0f },
+                    "dotanimator", "linear", null, null, ClosedActive: false, OpenActive: true),
+                new ArenaDoorPose("EXIT_LIGHT_EMISSIVE", "emergency_exit_light_emissive (5)", "emergency_exit_light 1/Point light (1)", "DotAnimator", 0.0f,
+                    new[] { 0.0f, -0.163f, 1.307f }, new[] { 0.0f, 0.0f, 0.0f },
+                    new[] { 0.0f, -0.163f, 1.307f }, new[] { 0.0f, 0.0f, 0.0f },
+                    "dotanimator", "linear", null, null, ClosedActive: false, OpenActive: true),
                 new ArenaDoorPose("SBG_Arena_Equator/SOO/Respawn_2/Door_Sliding_Respawn (3)", "Door_Sliding_Respawn_L", "", "borrowed from SPAWN_DOORS/Door_Sliding_Respawn (1)", 5.0f,
                     new[] { 0.683f, 0.0f, 0.0f }, new[] { 0.0f, 0.0f, 0.0f },
                     new[] { 2.0f, 0.0f, 0.0f }, new[] { 0.0f, 0.0f, 0.0f },
@@ -742,6 +794,10 @@ namespace ArenaMapPort.Shared
             // panels are plain openings that must not come back during a hold. The passport control is the held gate.
             StartGates: new[] { "BUS_DOORS" },
             HeldGates: new[] { "PASSPORT_CONTROL_DOORS", "PASSPORT_CONTROL_EMISSIVE" },
+            // Puddle footsteps (2026-10-25): "Airpit_puddle_white" (static, 14 active quads) and the rain-driven "puddle" (USERAIN,
+            // 26 active quads). The third water material of the extract, "City_puddle_atlas_OUTDOOR" (823c859e2c5d11bc), has only
+            // two inactive runway decals off the map and stays out. Mirrors tools/maps/airpit.json.
+            PuddleWaterMaterialNames: new[] { "1b8546c701e1d1dc", "0877f2335044042e" },
             // No NavMeshBakeExclusions: the four bake-only cutters of 2026-10-11 (DonB_Ramen_closed x2,
             // TH_Roll_door_01_closed, fence_ema_01_white (18)) let the NavMesh run through shutters that stay solid;
             // host raid 1 walked the player into the DonB_Ramen shutter at (-46.2, 0, 43.4). Every solid is baked.
@@ -852,7 +908,9 @@ namespace ArenaMapPort.Shared
             // (the port's seconds). PASSPORT_CONTROL_DOORS: the 16 turnstile leaves turn about 90 degrees about the vertical
             // axis in Arena's 1.7 s (InOutQuint); their names repeat (6 names for 16 leaves), so the client picks the rows of a
             // leaf by the closed position; RED / GREEN carry the switch rows of the lamp flip (RedFog off, GreenFog on, the
-            // ClosedActive / OpenActive arguments).
+            // ClosedActive / OpenActive arguments). Since 2026-10-25 thirty-six rows: BUS_LIGHT (between the two) is a LAMP
+            // GROUP of switch rows only, the two Point lights of each of the bus's three green exit lamps (off in the scene, on
+            // once the gates are open, duration 0).
             DoorPoses: new[]
             {
                 new ArenaDoorPose("BUS_DOORS", "Apron_bus_MAZ_doors", "Apron_bus_MAZ_door_L_01_part_01", "borrowed from the static open pose of BUS_DOORS/Apron_bus_MAZ_doors (3); seconds are the port's", 3.0f,
@@ -903,6 +961,30 @@ namespace ArenaMapPort.Shared
                     new[] { 0.01f, 0.403f, -1.78f }, new[] { 0.0f, 0.0f, 0.0f },
                     new[] { 0.076f, 0.328f, -1.78f }, new[] { 0.0f, 0.0f, 127.0f },
                     "borrowed", "inOutQuint", null, null),
+                new ArenaDoorPose("BUS_LIGHT", "emergency_exit_light_emissive", "emergency_exit_light 1/Point light", "DotAnimator", 0.0f,
+                    new[] { 0.0f, 0.0f, 0.228f }, new[] { 0.0f, 0.0f, 0.0f },
+                    new[] { 0.0f, 0.0f, 0.228f }, new[] { 0.0f, 0.0f, 0.0f },
+                    "dotanimator", "linear", null, null, ClosedActive: false, OpenActive: true),
+                new ArenaDoorPose("BUS_LIGHT", "emergency_exit_light_emissive", "emergency_exit_light 1/Point light (1)", "DotAnimator", 0.0f,
+                    new[] { 0.0f, -0.163f, 1.307f }, new[] { 0.0f, 0.0f, 0.0f },
+                    new[] { 0.0f, -0.163f, 1.307f }, new[] { 0.0f, 0.0f, 0.0f },
+                    "dotanimator", "linear", null, null, ClosedActive: false, OpenActive: true),
+                new ArenaDoorPose("BUS_LIGHT", "emergency_exit_light_emissive (1)", "emergency_exit_light 1/Point light", "DotAnimator", 0.0f,
+                    new[] { 0.0f, 0.0f, 0.228f }, new[] { 0.0f, 0.0f, 0.0f },
+                    new[] { 0.0f, 0.0f, 0.228f }, new[] { 0.0f, 0.0f, 0.0f },
+                    "dotanimator", "linear", null, null, ClosedActive: false, OpenActive: true),
+                new ArenaDoorPose("BUS_LIGHT", "emergency_exit_light_emissive (1)", "emergency_exit_light 1/Point light (1)", "DotAnimator", 0.0f,
+                    new[] { 0.0f, -0.163f, 1.307f }, new[] { 0.0f, 0.0f, 0.0f },
+                    new[] { 0.0f, -0.163f, 1.307f }, new[] { 0.0f, 0.0f, 0.0f },
+                    "dotanimator", "linear", null, null, ClosedActive: false, OpenActive: true),
+                new ArenaDoorPose("BUS_LIGHT", "emergency_exit_light_emissive (2)", "emergency_exit_light 1/Point light", "DotAnimator", 0.0f,
+                    new[] { 0.0f, 0.0f, 0.228f }, new[] { 0.0f, 0.0f, 0.0f },
+                    new[] { 0.0f, 0.0f, 0.228f }, new[] { 0.0f, 0.0f, 0.0f },
+                    "dotanimator", "linear", null, null, ClosedActive: false, OpenActive: true),
+                new ArenaDoorPose("BUS_LIGHT", "emergency_exit_light_emissive (2)", "emergency_exit_light 1/Point light (1)", "DotAnimator", 0.0f,
+                    new[] { 0.0f, -0.163f, 1.307f }, new[] { 0.0f, 0.0f, 0.0f },
+                    new[] { 0.0f, -0.163f, 1.307f }, new[] { 0.0f, 0.0f, 0.0f },
+                    "dotanimator", "linear", null, null, ClosedActive: false, OpenActive: true),
                 new ArenaDoorPose("PASSPORT_CONTROL_DOORS", "GREEN", "GreenFog", "DotAnimator", 0.0f,
                     new[] { 0.0f, 0.0f, 0.0f }, new[] { 0.0f, 0.0f, 0.0f },
                     new[] { 0.0f, 0.0f, 0.0f }, new[] { 0.0f, 0.0f, 0.0f },
@@ -1052,6 +1134,14 @@ namespace ArenaMapPort.Shared
             // The one shader of Bowl's 23 that EFT 0.16.9.5 does not ship (Tarp_Tunnel, 12 renderers); the client's
             // ShaderStandinPolicy owns the substitute row (PLAN-BOWL item 10).
             ShaderFallbackNames: new[] { "p0/Reflective/Bumped Specular_TwoSided" },
+            // Puddle footsteps (2026-10-25): the rain-driven "puddle" decal (USERAIN, 13 active quads in Arena_Bowl). The field is one
+            // Bowl_floor_BALLISTIC_soil collider, so Soil is an eligible ground for the puddle sound (the Concrete/Asphalt rule
+            // alone would leave every Bowl puddle silent); metal and plastic containers on top keep their own sound. EFT's
+            // BaseBallistic.Associate gives Rubber, Fabric and GenericSoft no ground sound of their own (the serialized default,
+            // normally Concrete), so a rubber mat inside a decal's mask may sound as puddle too. Mirrors tools/maps/bowl.json
+            // puddle_water_material_names / puddle_extra_surfaces.
+            PuddleWaterMaterialNames: new[] { "0877f2335044042e" },
+            PuddleExtraSurfaces: new[] { "Soil" },
             // Bay5/AirPit-style native server time: no Directional light exists in the imported scenes (Bowl's sun and
             // sky sit in the excluded Scripts scene), the WeatherRig supplies both.
             UsesServerTime: true,

@@ -237,3 +237,57 @@ above (the rebuild) is done; item 2 reads as follows after the second raid (the 
 - Only the Usec and the north All marker were started from (the profile is USEC; EFT picks among the side's points). The Bear and
   South_All points stand on the same kind of marker inside the south booth and were not started from in person.
 - Item 3 stays open (one pair at a time; the exits in the booths), item 4 too (DynamicMaps export).
+
+## 2026-10-25 - the two bot rows on the mesh edge move inboard (and the two Bay5 rows with them)
+
+Status: data only, done on the build VM; no Unity rebuild, no rebake, nothing of this has run in a raid yet. The host checks are at the end.
+The Bay5 half of the same change is recorded in `docs/progress/door-poses.md` ("2026-10-25 - Bay5's two edge spawns move inboard").
+
+Why. The notes above ("Bot spawns", the door-poses.md NavMesh paragraph, the 2026-10-24 raid list) record that `south-west` (-9, -28) and
+`south-east` (8.7, -28.4) sit on the mesh border (0.00 m and 0.05 m), "host-verified in 2026-09, untouched", and the plain raid logs `spawn placement: ... 'arena_equator-bot-south-west' (-9.00, 0.10,
+-28.00) -> (-7.50, 0.05, -28.00) (1.5 m)` on every start, so `SpawnPlacementRepairs` pushed the point 1.5 m inboard each time. The
+user asked (2026-10-25, point 7a of the open list) to author those points where they end up anyway. The placement repair stays as the
+safety net; only the data moved.
+
+| Row (`equator.bots.json`) | Was | Is | Move | Clearance to the mesh border was -> is | Disc of 0.3 m around the new point (worst) | Nearest other spawn | Nearest solid at body height |
+|---|---|---|---|---|---|---|---|
+| `arena_equator-bot-south-west` | (-9, 0.1, -28) | (-7.5, 0.1, -28.0) | 1.50 m | 0.00 -> 1.50 m | 1.20 m | 11.5 m | 1.85 m |
+| `arena_equator-bot-south-east` | (8.7, 0.1, -28.4) | (7.5, 0.1, -29.0) | 1.34 m | 0.05 -> 1.27 m | 0.85 m | 10.4 m | 1.63 m |
+
+Measured on the built Equator NavMesh (`work/build/full/arena_equator_navmesh.bundle`, 2026-10-24 00:54, the plaintext bundle the staged
+one is the encryption of) with the oracle of `tools/validate/navmesh_oracle.py` / `navmesh_diff.load_bundle_mesh`: both new points lie inside a
+polygon at surface y 0.056, in component 1 (852 polygons, 2783 m2, the ground-floor play area, the component of every other Equator
+spawn), the numbers were measured by the planning pass and re-run unchanged by the review and by the implementation on 2026-10-25. The y of the rows stays 0.1 (the
+placement repair snaps to the mesh at raid time; the authored 0.1 is what the whole table uses). Exits: the gap to the nearest exit box is
+13.0 m (south-east) and 17.5 m (south-west), more than 72 m to the north gate; nothing starts in a trigger.
+
+What the move cannot disturb (checked):
+
+- The 25 m burst rule of ArenaMode (`test_three_distant_bot_points_cover_playable_ground_envelope`) and the 70 m rule: no pair of authored
+  spawn rows crosses 25 m or 70 m through these two moves, the fewest distant points over the x -25..25 / z -46..50 envelope stays at 3.
+- No bot row within 2 m of a player row (the closest pair is 10.3 m, unchanged); categories (`Bot`, `BotPmc`), zone, radius 25 and rotation 0.0
+  are untouched; both ids are unchanged.
+- ArenaMode's pickup seeds (`ArenaPickupMapLayout`) are built from the Bot rows by farthest-point sampling, so a candidate moves by up to
+  1.5 m with these rows. Harmless: the live floor and path gate decides what is used; only a pixel-exact observer sees the difference.
+- Not moved on purpose: `arena_equator-bot-atrium` (0, 0.2, 2.0) and the other donors ArenaMode pins (`ArenaTeamBoxCatalog`: Bay5
+  `bot-west-centre`, Air Pit `bot-center-east`, Bowl `bot-core-02`). `tools/tests/test_spawn_navmesh_clearance.py` pins all four
+  donor rows at their coordinates.
+
+Files: `tools/maps/equator.bots.json` (two rows, in place, the `_comment` got one dated sentence at its end),
+`ArenaMapPort.Server/db/arena_equator/base.json` regenerated with `python tools/server/make_base_json.py` (the unmodified sidecar
+reproduced the file byte for byte before the edit; after it `git diff` shows exactly four changed lines: x and z of the two
+SpawnPointParams). New: `tools/tests/test_spawn_navmesh_clearance.py` (the moved coordinates, the 10 m neighbour rule, the donor rows,
+and - skipped without UnityPy, numpy or the bundle - every Equator spawn on component 1 with at least 0.5 m of clearance, the moved
+ones with at least 1.0 m).
+
+Tests (2026-10-25): `python -m unittest discover -s tools/tests -p test_equator_arena_spawns.py` 11 OK, `test_bay5_arena_spawns.py`
+5 OK, `test_spawn_navmesh_clearance.py` 6 OK (the two mesh tests ran, they are not skipped here).
+
+Host checks (lead; the server DLL does not change because of the spawns, but the same change set changes the shared descriptor, so the
+server is restarted anyway - see the opening paragraphs and "Host checks (lead)" of `docs/progress/puddle-footsteps-all-maps.md`):
+
+1. Plain Equator raid: `[RaidFix] spawn placement: disabled 2 SPAWN_BOUND barrier collider(s); all spawn points already free` (before: the
+   `'arena_equator-bot-south-west' ... (1.5 m)` move). Any other moved point on that line is new information, not an error of this change.
+2. `uibridge_teleport dryRun=true` to (-7.5, 0.1, -28.0) and (7.5, 0.1, -29.0): `reachable=true`.
+3. With bots: the two points are in the rotation of the 10 Bot rows; a bot spawned at either is not pushed (no `[RaidFix]` move line, no
+   bot standing in the wall). Check ArenaMode's pickups only if the pixel offset matters to someone.

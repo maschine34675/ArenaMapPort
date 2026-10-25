@@ -674,12 +674,12 @@ public sealed class DoorPoseDataTests
     }
 
     [Fact]
-    public void EquatorHasTenBoothLeavesBay5SevenGatePosesAndAirPitThirtyRows()
+    public void EquatorHasEighteenRowsBay5SevenBowlNineteenAndAirPitThirtySix()
     {
-        Assert.Equal(10, ArenaMapRegistry.Equator.DoorPoses.Length);
+        Assert.Equal(18, ArenaMapRegistry.Equator.DoorPoses.Length);   // ten booth leaves + the four exit lamps' eight switch rows (2026-10-25)
         Assert.Equal(7, ArenaMapRegistry.Bay5.DoorPoses.Length);   // roller (3) shuts again (user, 2026-10-24): no row, no opened barrier
         Assert.Equal(19, ArenaMapRegistry.Bowl.DoorPoses.Length);
-        Assert.Equal(30, ArenaMapRegistry.AirPit.DoorPoses.Length);
+        Assert.Equal(36, ArenaMapRegistry.AirPit.DoorPoses.Length);    // 30 + BUS_LIGHT's six switch rows (2026-10-25)
     }
 
     const string Passport = "PASSPORT_CONTROL_DOORS";
@@ -780,7 +780,7 @@ public sealed class DoorPoseDataTests
     }
 
     [Fact]
-    public void TheTwoLampsAreSwitchesWithNothingToMoveAndNothingToCarve()
+    public void ThePassportLampsAreSwitchesWithNothingToMoveAndNothingToCarve()
     {
         var map = ArenaMapRegistry.AirPit;
         var red = Assert.Single(map.DoorPosesOf(Passport, "RED"));
@@ -804,9 +804,13 @@ public sealed class DoorPoseDataTests
             // Arena's duration word is 0: nothing to scale, the part's own drive length comes from its barrier (SwitchPartDriveSeconds)
             Assert.Equal(0f, DoorPoseModel.ScaledSeconds(sw.Seconds, DoorPoseModel.DefaultDriveScale));
         }
-        // nothing else of the barrier is a switch, and no other map has one
-        Assert.Equal(2, map.DoorPoses.Count(p => p.IsSwitch));
-        Assert.DoesNotContain(new[] { ArenaMapRegistry.Equator, ArenaMapRegistry.Bay5, ArenaMapRegistry.Bowl }.SelectMany(m => m.DoorPoses), p => p.IsSwitch);
+        // nothing else of the passport barrier is a switch; the other switches of the map are BUS_LIGHT's six exit-lamp rows (2026-10-25),
+        // and of the other maps only Equator's eight exit-lamp rows are (Bay5 and Bowl have none)
+        Assert.Equal(2, map.DoorPosesOfBarrier(Passport).Count(p => p.IsSwitch));
+        Assert.Equal(8, map.DoorPoses.Count(p => p.IsSwitch));
+        Assert.Equal(new[] { Passport, "BUS_LIGHT" }.OrderBy(b => b), map.DoorPoses.Where(p => p.IsSwitch).Select(p => p.Barrier).Distinct().OrderBy(b => b));
+        Assert.Equal(8, ArenaMapRegistry.Equator.DoorPoses.Count(p => p.IsSwitch));
+        Assert.DoesNotContain(new[] { ArenaMapRegistry.Bay5, ArenaMapRegistry.Bowl }.SelectMany(m => m.DoorPoses), p => p.IsSwitch);
     }
 
     /// <summary>The release of a held passport gate, simulated with the same pure rules the coroutine reads (SpawnGates.Open): the
@@ -863,6 +867,112 @@ public sealed class DoorPoseDataTests
         Assert.Equal(1.5f, map.DoorPoses.Max(p => DoorPoseModel.ScaledSeconds(p.Seconds, scale)), 4);
         // at Arena's own timing (scale 1) the bus doors take the port's 3 s, the passport leaves Arena's 1.7 s
         Assert.Equal(3.0f, map.DoorPoses.Max(p => DoorPoseModel.ScaledSeconds(p.Seconds, 1f)), 4);
+    }
+
+    // ---- Arena's exit lamps (2026-10-25, docs/progress/door-poses.md "Exit lamps"): Equator's EXIT_LIGHT_EMISSIVE, AirPit's BUS_LIGHT ----
+
+    const string ExitLamps = "EXIT_LIGHT_EMISSIVE";
+    const string BusLamps = "BUS_LIGHT";
+    static readonly string[] LampNodes = { "emergency_exit_light 1/Point light", "emergency_exit_light 1/Point light (1)" };
+    static readonly string[] EquatorLampParts =
+        { "emergency_exit_light_emissive (1)", "emergency_exit_light_emissive (2)", "emergency_exit_light_emissive (4)", "emergency_exit_light_emissive (5)" };
+    static readonly string[] BusLampParts = { "emergency_exit_light_emissive", "emergency_exit_light_emissive (1)", "emergency_exit_light_emissive (2)" };
+
+    static ArenaDoorPose SwitchRow(string barrier, string part, string node = "N") =>
+        new ArenaDoorPose(barrier, part, node, "DotAnimator", 0f, new[] { 0f, 0f, 0f }, new[] { 0f, 0f, 0f }, new[] { 0f, 0f, 0f }, new[] { 0f, 0f, 0f },
+            ArenaDoorPose.SourceDotAnimator, ArenaDoorPose.EaseLinear, ClosedActive: false, OpenActive: true);
+
+    static ArenaDoorPose MoveRow(string barrier, string part) =>
+        new ArenaDoorPose(barrier, part, "", "DotAnimator", 1f, new[] { 0f, 0f, 0f }, new[] { 0f, 0f, 0f }, new[] { 1f, 0f, 0f }, new[] { 0f, 0f, 0f },
+            ArenaDoorPose.SourceDotAnimator, ArenaDoorPose.EaseLinear);
+
+    [Fact]
+    public void TheLampGroupsAreTheBarriersWhoseRowsAreAllSwitchesAndThatAreNoOpenedBarrier()
+    {
+        var eq = ArenaMapRegistry.Equator;
+        var ap = ArenaMapRegistry.AirPit;
+        Assert.Equal(new[] { ExitLamps }, DoorPoseModel.LampBarriers(eq.DoorPoses, eq.OpenedBarriers));
+        // AirPit: BUS_DOORS moves, PASSPORT_CONTROL_DOORS turns 16 leaves beside its two lamp switches (and is an opened barrier)
+        Assert.Equal(new[] { BusLamps }, DoorPoseModel.LampBarriers(ap.DoorPoses, ap.OpenedBarriers));
+        Assert.Empty(DoorPoseModel.LampBarriers(ArenaMapRegistry.Bay5.DoorPoses, ArenaMapRegistry.Bay5.OpenedBarriers));
+        Assert.Empty(DoorPoseModel.LampBarriers(ArenaMapRegistry.Bowl.DoorPoses, ArenaMapRegistry.Bowl.OpenedBarriers));
+        // the pure rule: distinct barriers in row order, a move row anywhere in the barrier disqualifies it, an opened barrier is excluded
+        var rows = new[]
+        {
+            SwitchRow("B", "p"), SwitchRow("B", "q"), SwitchRow("A", "p"), MoveRow("C", "p"), SwitchRow("C", "q"), SwitchRow("D", "p"), SwitchRow("B", "p", "M"),
+        };
+        Assert.Equal(new[] { "B", "A", "D" }, DoorPoseModel.LampBarriers(rows, new string[0]));
+        Assert.Equal(new[] { "B", "A" }, DoorPoseModel.LampBarriers(rows, new[] { "D", "C" }));
+        Assert.Equal(new[] { "A" }, DoorPoseModel.LampBarriers(new[] { null!, SwitchRow("", "p"), SwitchRow("A", "p") }, null!));   // a null row and an unnamed barrier are skipped
+        Assert.Empty(DoorPoseModel.LampBarriers(null!, null!));
+        Assert.Empty(DoorPoseModel.LampBarriers(new ArenaDoorPose[0], new string[0]));
+    }
+
+    [Fact]
+    public void EveryExitLampIsTwoSwitchRowsForItsTwoPointLightsOffInTheSceneAndOnOnceTheGatesAreOpen()
+    {
+        foreach (var (map, barrier, parts) in new[]
+                 {
+                     (ArenaMapRegistry.Equator, ExitLamps, EquatorLampParts),
+                     (ArenaMapRegistry.AirPit, BusLamps, BusLampParts),
+                 })
+        {
+            var rows = map.DoorPosesOfBarrier(barrier);
+            Assert.Equal(parts.Length * 2, rows.Length);
+            Assert.Equal(parts, rows.Select(r => r.Part).Distinct().ToArray());
+            Assert.DoesNotContain(map.OpenedBarriers.Concat(map.StartGates).Concat(map.HeldGates), b => b == barrier);   // a lamp group is no gate
+            foreach (var part in parts)
+            {
+                var own = map.DoorPosesOf(barrier, part);
+                Assert.Equal(LampNodes, own.Select(r => r.Node).ToArray());              // distinct nodes: no position is needed to tell the rows apart
+                Assert.All(own, r =>
+                {
+                    Assert.True(r.IsSwitch);
+                    Assert.Equal((false, true), (r.ClosedActive!.Value, r.OpenActive!.Value));
+                    Assert.Equal(0f, r.Seconds);
+                    Assert.Equal(("DotAnimator", ArenaDoorPose.SourceDotAnimator, ArenaDoorPose.EaseLinear), (r.Clip, r.Source, r.Ease));
+                    Assert.Null(r.At);
+                    Assert.Null(r.Curve);
+                    Assert.Equal(r.ClosedPosition, r.OpenPosition);                       // the scene's transform on both sides
+                    Assert.Equal(r.ClosedEuler, r.OpenEuler);
+                    Assert.True(DoorPoseModel.EaseIsUsable(r.Ease, r.Curve, out string why), why);
+                });
+                // the two lights keep the offsets the scene has: the near one 0.228 m in front of the sign, the far one 1.307 m and 0.163 m lower
+                Assert.Equal(new[] { 0f, 0f, 0.228f }, own[0].ClosedPosition);
+                Assert.Equal(new[] { 0f, -0.163f, 1.307f }, own[1].ClosedPosition);
+            }
+            // Arena's trigger also switches the glow node beside each lamp (Exit1 ...): it is skipped by the extractor, never carried
+            Assert.DoesNotContain(rows, r => r.Part.StartsWith("Exit", StringComparison.Ordinal) || r.Node.StartsWith("Exit", StringComparison.Ordinal));
+        }
+    }
+
+    /// <summary>The lamps of a release and of a plain raid, with the same pure rules the code reads: a part of switches only
+    /// takes the longest drive of its NON-switch siblings under its parent (SpawnGates.Open), and a lamp group has none, so the
+    /// lamp parts drive 0 s, are finished in the first pass of the coroutine and put every light in the open state in the frame of
+    /// the release. A plain raid parks the part at progress 1 (the same state), a hold re-closes it at progress 0. The passport
+    /// lamps of AirPit keep the leaves' 0.85 s.</summary>
+    [Fact]
+    public void ExitLampsFlipInTheFirstFrameOfAReleaseWhilePassportLampsStillWaitForTheLastLeaf()
+    {
+        float scale = DoorPoseModel.DefaultDriveScale;
+        foreach (var (map, barrier) in new[] { (ArenaMapRegistry.Equator, ExitLamps), (ArenaMapRegistry.AirPit, BusLamps) })
+        {
+            var siblings = map.DoorPosesOfBarrier(barrier).Where(p => !p.IsSwitch).Select(p => DoorPoseModel.ScaledSeconds(p.Seconds, scale)).ToArray();
+            Assert.Empty(siblings);
+            float lampSeconds = DoorPoseModel.SwitchPartDriveSeconds(siblings);
+            Assert.Equal(0f, lampSeconds);
+            Assert.True(DoorPoseModel.Finished(0f, lampSeconds));                      // finished in the first pass of the coroutine (elapsed 0)
+            foreach (var row in map.DoorPosesOfBarrier(barrier))
+            {
+                float release = DoorPoseModel.EaseOf(row.Ease, row.Curve, DoorPoseModel.Progress(0f, lampSeconds));
+                Assert.Equal(row.OpenActive, DoorPoseModel.SwitchStateAt(release, row.ClosedActive!.Value, row.OpenActive!.Value));
+                // Park (progress 1) and Reclose (progress 0) of the same row
+                Assert.Equal(row.OpenActive, DoorPoseModel.SwitchStateAt(DoorPoseModel.EaseOf(row.Ease, row.Curve, 1f), row.ClosedActive.Value, row.OpenActive.Value));
+                Assert.Equal(row.ClosedActive, DoorPoseModel.SwitchStateAt(DoorPoseModel.EaseOf(row.Ease, row.Curve, 0f), row.ClosedActive.Value, row.OpenActive.Value));
+            }
+        }
+        var leaves = ArenaMapRegistry.AirPit.DoorPosesOfBarrier(Passport).Where(p => !p.IsSwitch).Select(p => DoorPoseModel.ScaledSeconds(p.Seconds, scale)).ToArray();
+        Assert.Equal(0.85f, DoorPoseModel.SwitchPartDriveSeconds(leaves), 4);              // RedFog / GreenFog: unchanged
     }
 
     static readonly (string barrier, float x, float y, float z, float secondsL, float secondsR, string source)[] BoothAssemblies =
@@ -1014,7 +1124,9 @@ public sealed class DoorPoseDataTests
         // 2.5 s for a booth leaf, 3.5 s for the slow one and the depot gates, 2 s for a roller; Bowl's longest drive is 6.75 s
         foreach (var map in new[] { ArenaMapRegistry.Equator, ArenaMapRegistry.Bay5 })
         {
-            Assert.All(map.DoorPoses, p => Assert.InRange(DoorPoseModel.ScaledSeconds(p.Seconds, DoorPoseModel.DefaultDriveScale), 2f, 3.5f));
+            // a switch row (Equator's exit lamps) has no duration of its own: it flips in the first frame, see ExitLampsFlipInTheFirstFrame...
+            Assert.All(map.DoorPoses.Where(p => !p.IsSwitch), p => Assert.InRange(DoorPoseModel.ScaledSeconds(p.Seconds, DoorPoseModel.DefaultDriveScale), 2f, 3.5f));
+            Assert.All(map.DoorPoses.Where(p => p.IsSwitch), p => Assert.Equal(0f, DoorPoseModel.ScaledSeconds(p.Seconds, DoorPoseModel.DefaultDriveScale)));
         }
         Assert.Equal(6.75f, ArenaMapRegistry.Bowl.DoorPoses.Max(p => DoorPoseModel.ScaledSeconds(p.Seconds, DoorPoseModel.DefaultDriveScale)), 4);
     }
@@ -1221,6 +1333,67 @@ public sealed class DoorPoseWiringTests
         int seal = code.IndexOf("SpawnGates.SealParked(", barriersStep, StringComparison.Ordinal);
         Assert.True(doorsStep > 0 && doorsStep < barriersStep && barriersStep < seal);
         Assert.Single(Regex.Matches(code, @"SpawnGates\.SealParked\("));
+    }
+
+    [Fact]
+    public void TheExitLampsAreRegisteredAfterTheBarrierStepAndAreNeverSwitchedOff()
+    {
+        var code = Text("ArenaMapPort.Client/BoothDoorRepairs.cs");
+        var lamps = Between(code, "static void OpenLamps(StringBuilder sb)", "static IEnumerable<GameObject> OwnedSceneRoots()");
+        int groups = lamps.IndexOf("DoorPoseModel.LampBarriers(map.DoorPoses, map.OpenedBarriers)", StringComparison.Ordinal);
+        int find = lamps.IndexOf("FindAllByPath(path)", StringComparison.Ordinal);
+        int rows = lamps.IndexOf("map.DoorPosesOf(path, part.name)", StringComparison.Ordinal);
+        int note = lamps.IndexOf("SpawnGates.NotePoses(part, poses);", StringComparison.Ordinal);
+        int has = lamps.IndexOf("if (!SpawnGates.HasPoses(part)) continue;", StringComparison.Ordinal);
+        int offer = lamps.IndexOf("if (SpawnGates.Offer(part)) held++;", StringComparison.Ordinal);
+        int park = lamps.IndexOf("else if (SpawnGates.Park(part)) parked++;", StringComparison.Ordinal);
+        Assert.True(groups > 0 && groups < find && find < rows && rows < note && note < has && has < offer && offer < park,
+            "LampBarriers, FindAllByPath, DoorPosesOf, NotePoses, HasPoses, Offer, Park");
+        Assert.Contains("if (!part.gameObject.activeSelf) continue;", lamps);              // the glow nodes start inactive and carry no rows
+        Assert.Contains("if (poses.Length == 0) continue;", lamps);
+        // the sign mesh under a lamp must stay visible: a lamp part is never switched off, never sealed on its own, never an opening
+        Assert.DoesNotContain("SetActive(false)", lamps);
+        Assert.DoesNotContain("SealParked(", lamps);
+        Assert.DoesNotContain("OfferHeld(", lamps);
+        Assert.DoesNotContain("openings", lamps);
+        Assert.Contains("LogWarning", lamps);                                              // a group missing from the scenes is reported
+        // the call: after the barrier step, before the one seal, under 'a booth or barrier step runs', the early return untouched
+        var openAll = Between(code, "internal static void OpenAll(SpawnPointsCollection spawnPoints)", "// Arena's sliding booth doors");
+        int barriersStep = openAll.IndexOf("OpenBarriers(openings, sb, barriers);", StringComparison.Ordinal);
+        int lampStep = openAll.IndexOf("OpenLamps(sb);", StringComparison.Ordinal);
+        int seal = openAll.IndexOf("SpawnGates.SealParked(", StringComparison.Ordinal);
+        Assert.True(barriersStep > 0 && barriersStep < lampStep && lampStep < seal, "OpenBarriers, OpenLamps, the one SealParked");
+        Assert.Contains("if (doors || barriers)", openAll.Substring(barriersStep, lampStep - barriersStep));
+        Assert.Contains("if (!doors && !barriers && !heldGates)", openAll);
+        // OpenLamps sits behind ReportRays: outside the slices the offer pins cut from OpenDoors and OpenBarriers
+        Assert.True(code.IndexOf("static void OpenLamps(", StringComparison.Ordinal) > code.IndexOf("static void ReportRays(", StringComparison.Ordinal));
+        Assert.Single(Regex.Matches(code, @"static void OpenLamps\("));
+    }
+
+    [Fact]
+    public void ASwitchedOnLampLightIsReSyncedOnceWithTheMapsOwnMultiplier()
+    {
+        var gates = Text("ArenaMapPort.Client/SpawnGates.cs");
+        var apply = Between(gates, "static void ApplyPose(PosedPart posed, float progress)", "// Hold: back to the closed pose");
+        int changed = apply.IndexOf("n.Node.gameObject.activeSelf != state.Value", StringComparison.Ordinal);
+        int set = apply.IndexOf("n.Node.gameObject.SetActive(state.Value);", StringComparison.Ordinal);
+        int sync = apply.IndexOf("if (state.Value) ArenaLightingRepairs.SyncSwitchedOn(n.Node);", StringComparison.Ordinal);
+        Assert.True(changed > 0 && changed < set && set < sync, "only on a change, after the SetActive, only when switched ON");
+        Assert.Single(Regex.Matches(gates, @"ArenaLightingRepairs\.SyncSwitchedOn\("));
+        var light = Text("ArenaMapPort.Client/ArenaLightingRepairs.cs");
+        var body = Between(light, "internal static void SyncSwitchedOn(Transform node)", "static float SunFactor(ConfigBundle cfg)");
+        // ApplyAll's own expression for the multiplier, the baseline captured at scene load, the culling field only with its switch
+        Assert.Contains("cfg.Enabled.Value ? EquatorProfiles.Value(cfg.GlobalLightIntensityMultiplier) : 1f", body);
+        Assert.Contains("on ? EquatorProfiles.Value(cfg.GlobalLightIntensityMultiplier) : 1f", Between(light, "static void ApplyAll(ArenaMapDescriptor map, bool logSummary)", "float fillLightIntensity"));
+        Assert.Contains("cfg.SyncCullingLightIntensity.Value ? GetCullingLightFloat1Field() : null", body);
+        Assert.Contains("baseline.IsArtificialSun || light.type == LightType.Directional", body);
+        Assert.Contains("float target = baseline.Intensity * multiplier;", body);
+        Assert.Contains("light.intensity = target;", body);
+        Assert.Contains("float1Field.SetValue(culling, target);", body);
+        // the node's own lights only (never a scene-wide search), and nothing escapes into a drive coroutine
+        Assert.Contains("node.GetComponentsInChildren<Light>(true)", body);
+        Assert.DoesNotContain("FindObjectsOfType", body);
+        Assert.Contains("catch (System.Exception", body);
     }
 
     [Fact]

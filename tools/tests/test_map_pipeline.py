@@ -794,6 +794,50 @@ class RegistryTests(unittest.TestCase):
                 if altered:
                     self.assertIn("distant_shadow_caster_paths mismatch", output.getvalue())
 
+    def test_puddle_sidecar_drift_is_rejected(self):
+        # 2026-10-25 (docs/progress/puddle-footsteps-all-maps.md): the water material names and the extra eligible surfaces of the
+        # puddle footstep repair exist twice, in tools/maps/<stem>.json and in the descriptor; either side alone must fail.
+        original_load = VD.load_map
+        for file, field, value in (("equator.json", "puddle_water_material_names", ["0877f2335044042e"]),
+                                   ("airpit.json", "puddle_water_material_names", []),
+                                   ("bowl.json", "puddle_extra_surfaces", []),
+                                   ("bowl.json", "puddle_water_material_names", ["70f045bb011600e7"]),
+                                   ("bay5.json", "puddle_extra_surfaces", ["Soil"])):
+            def read_map(path, file=file, field=field, value=value):
+                data = original_load(path)
+                if path.name == file:
+                    data[field] = value
+                return data
+
+            output = StringIO()
+            with self.subTest(file=file, field=field), \
+                 patch.object(sys, "argv", ["validate_map_descriptors.py"]), \
+                 patch.object(VD, "load_map", side_effect=read_map), \
+                 redirect_stdout(output), redirect_stderr(output):
+                self.assertEqual(VD.main(), 1)
+                self.assertIn(field + " mismatch", output.getvalue())
+
+    def test_puddle_field_shapes(self):
+        good = {"puddle_water_material_names": ["70f045bb011600e7", "0877f2335044042e"], "puddle_extra_surfaces": ["Soil", "Gravel"]}
+        self.assertEqual(VD.puddle_errors(good), [])
+        self.assertEqual(VD.puddle_errors({}), [])
+        names = ["0877f2335044042e"]
+        for label, data in (
+                ("padded name", {"puddle_water_material_names": [" 0877f2335044042e"]}),
+                ("empty name", {"puddle_water_material_names": [""]}),
+                ("not a list", {"puddle_water_material_names": "0877f2335044042e"}),
+                ("duplicate name", {"puddle_water_material_names": names * 2}),
+                ("unknown surface", {"puddle_water_material_names": names, "puddle_extra_surfaces": ["Dirt"]}),
+                ("wrong case", {"puddle_water_material_names": names, "puddle_extra_surfaces": ["soil"]}),
+                ("built-in Concrete", {"puddle_water_material_names": names, "puddle_extra_surfaces": ["Concrete"]}),
+                ("built-in Asphalt", {"puddle_water_material_names": names, "puddle_extra_surfaces": ["Asphalt"]}),
+                ("the result itself", {"puddle_water_material_names": names, "puddle_extra_surfaces": ["Puddle"]}),
+                ("duplicate surface", {"puddle_water_material_names": names, "puddle_extra_surfaces": ["Soil", "Soil"]}),
+                ("surfaces without water", {"puddle_extra_surfaces": ["Soil"]}),
+                ("surface not a list", {"puddle_water_material_names": names, "puddle_extra_surfaces": "Soil"})):
+            with self.subTest(label):
+                self.assertTrue(VD.puddle_errors(data), label)
+
     def test_catalog_and_release_membership_are_independently_checked(self):
         # The released set is Equator, Bay5, AirPit and Bowl (RELEASE_MAP_NAMES, Bowl since PLAN-BOWL item 8,
         # 2026-10-18); Third stands for any parked map.

@@ -67,6 +67,13 @@ namespace ArenaMapPort.Client
     /// name narrowed by its own closed position (<see cref="SpawnGates.RowsForPart"/>); a child whose name has rows but none for its
     /// position logs one Warning and is handled like a part without a pose (held closed, switched off on the release), never left
     /// standing as structure. RED and GREEN carry switch rows (the lamp flip). Without a hold the held gate stays closed as before.
+    ///
+    /// Since 2026-10-25 (docs/progress/door-poses.md, "Exit lamps") Arena's green emergency-exit lamps are lit by the same switch
+    /// rows: Equator's EXIT_LIGHT_EMISSIVE (four lamps) and AirPit's BUS_LIGHT (three) are LAMP GROUPS, barriers whose rows are all
+    /// switches and that are no opened barrier (<see cref="DoorPoseModel.LampBarriers"/>). <see cref="OpenLamps"/> registers every
+    /// lamp part with <see cref="SpawnGates"/> like a gate part: its two Point lights are off in the scene, on in the open pose, so a
+    /// raid without a hold has them lit at once and a hold keeps them dark until the release flips them with the doors. A lamp part
+    /// is never switched off here (its sign mesh stays lit as the scene has it).
     /// </summary>
     internal static class BoothDoorRepairs
     {
@@ -82,7 +89,8 @@ namespace ArenaMapPort.Client
             _doors = Plugin.Instance.Settings.Bind("Spawns", "OpenRespawnDoors", true,
                 "Open Arena's sliding respawn-booth doors at raid start so players can leave the spawn booth: the leaves " +
                 "stand at the open pose of Arena's own animation (Equator), or are deactivated when the map has no pose for " +
-                "them (Arena opens them per round by a script that is not ported). Takes effect on the next raid.");
+                "them (Arena opens them per round by a script that is not ported). With either this or OpenSpawnBarriers on, Arena's " +
+                "green exit lamps (Equator, AirPit) light together with the gates. Takes effect on the next raid.");
             _barriers = Plugin.Instance.Settings.Bind("Spawns", "OpenSpawnBarriers", true,
                 "Open the static scene objects the map lists as spawn barriers (Arena opens them per round by a script " +
                 "that is not ported): Bowl's vehicles and gates, Bay5's warehouse roller gates and depot gates, AirPit's front bus doors and " +
@@ -90,7 +98,8 @@ namespace ArenaMapPort.Client
                 "barrier without an animation is deactivated (AirPit's portal fences and shop shells). A barrier " +
                 "Arena animates keeps its parts without an animation standing (AirPit's back bus-door row). A map's held gates (AirPit's passport control) are not " +
                 "governed by this switch: they stay closed until a mode plugin releases them, and open at raid start only " +
-                "when Spawns/SpawnGates or SpawnGateCarve is off. Takes effect on the next raid.");
+                "when Spawns/SpawnGates or SpawnGateCarve is off. Arena's green exit lamps (Equator, AirPit) light together with the " +
+                "gates, whether this or OpenRespawnDoors is on. Takes effect on the next raid.");
         }
 
         internal static void OpenAll(SpawnPointsCollection spawnPoints)
@@ -117,6 +126,10 @@ namespace ArenaMapPort.Client
             if (barriers || heldGates)
             {
                 OpenBarriers(openings, sb, barriers);
+            }
+            if (doors || barriers)
+            {
+                OpenLamps(sb); // Arena's exit lamps: switch rows of a lamp group, registered with the gate parts
             }
             SpawnGates.SealParked("parked parts registered after the navmesh install"); // the booth leaves and the barrier parts, once
             if (heldGates)
@@ -313,6 +326,50 @@ namespace ArenaMapPort.Client
                     }
                     sb.Append($"\n    spawn '{sp.Name}' -> '{opening.name}' {dist:F1} m: {verdict}");
                 }
+            }
+        }
+
+        // Arena's exit lamps (Equator's EXIT_LIGHT_EMISSIVE, AirPit's BUS_LIGHT): a barrier whose rows are all switches
+        // (DoorPoseModel.LampBarriers). Each active direct child with rows is a lamp part; its two Point lights are switch nodes, off
+        // while the gates are closed and on once they are open. A lamp is registered like any part with poses (a hold keeps it dark and
+        // the release flips it with the doors; without a hold it is parked in the open pose, lit, at once). It is NEVER switched off here:
+        // the sign mesh under it must stay visible whatever the rows do, and a part whose rows do not fit the scene is left as the scene
+        // has it (NotePoses logs the one Warning). Not an opening (no ray), no SealParked call of its own (the caller's one call follows).
+        static void OpenLamps(StringBuilder sb)
+        {
+            var map = ArenaMapRaid.CurrentMap;
+            if (map == null || map.DoorPoses.Length == 0)
+            {
+                return;
+            }
+            foreach (var path in DoorPoseModel.LampBarriers(map.DoorPoses, map.OpenedBarriers))
+            {
+                var found = FindAllByPath(path);
+                if (found.Count == 0)
+                {
+                    sb.Append($"\n  exit lamps '{path}': NOT FOUND in the loaded scenes");
+                    Plugin.Log.LogWarning($"{Tag} exit lamp group '{path}' not found in the loaded scenes - the lamps stay as the scene has them");
+                    continue;
+                }
+                int lamps = 0, held = 0, parked = 0, switches = 0;
+                foreach (var root in found)
+                {
+                    for (int i = 0; i < root.childCount; i++)
+                    {
+                        var part = root.GetChild(i);
+                        if (!part.gameObject.activeSelf) continue; // the glow nodes (Exit1 ...) have no rows and start inactive
+                        var poses = map.DoorPosesOf(path, part.name);
+                        if (poses.Length == 0) continue;
+                        SpawnGates.NotePoses(part, poses); // the lights' rows, resolved while the lamp is still dark
+                        if (!SpawnGates.HasPoses(part)) continue; // a row did not fit the scene (one Warning): the lamp stays as it is
+                        lamps++;
+                        switches += SpawnGates.SwitchCountOf(part);
+                        if (SpawnGates.Offer(part)) held++; // registered either way; a hold keeps the lamp dark for now
+                        else if (SpawnGates.Park(part)) parked++; // no hold: lit at once, with the gates that stand open
+                    }
+                }
+                sb.Append($"\n  exit lamps '{path}': {lamps} lamp part(s), {switches} switch(es)" +
+                          (parked > 0 ? $", {parked} on" : "") + (held > 0 ? $", {held} off until the gates open" : ""));
             }
         }
 

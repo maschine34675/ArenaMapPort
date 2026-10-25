@@ -580,6 +580,58 @@ namespace ArenaMapPort.Client
             return applied;
         }
 
+        static bool _syncSwitchedOnWarned;
+
+        /// <summary>A node <see cref="SpawnGates"/> has just switched ON (an exit lamp's Point light, docs/progress/door-poses.md
+        /// "Exit lamps"): the Light started inactive, so its <c>CullingLightObject.Awake</c> ran at that SetActive and re-cached
+        /// <c>float_1 = _maxLightIntensity</c> (the authored 1.75), undoing the multiplier the scene-load pass wrote
+        /// (<see cref="ApplyLights"/>), and the light would run at twice the brightness of the map's other lights. Writes the value
+        /// <see cref="ApplyAll"/> writes (the same expression: the master switch off gives the identity multiplier, the
+        /// culling sync only with <c>SyncCullingLightIntensity</c>) for the Lights below the node, directional and artificial-sun
+        /// baselines excluded. Once per activation, never per frame; never throws into the caller (a drive coroutine).</summary>
+        internal static void SyncSwitchedOn(Transform node)
+        {
+            try
+            {
+                var map = ArenaMapRaid.CurrentMap;
+                if (node == null || map == null || !_states.TryGetValue(map.Key, out var state) || !_configs.TryGetValue(map.Key, out var cfg))
+                {
+                    return;
+                }
+                float multiplier = cfg.Enabled.Value ? EquatorProfiles.Value(cfg.GlobalLightIntensityMultiplier) : 1f;
+                var float1Field = cfg.SyncCullingLightIntensity.Value ? GetCullingLightFloat1Field() : null;
+                foreach (var light in node.GetComponentsInChildren<Light>(true))
+                {
+                    for (int i = 0; i < state.Lights.Count; i++)
+                    {
+                        var baseline = state.Lights[i];
+                        if (baseline.Light != light)
+                        {
+                            continue;
+                        }
+                        if (baseline.IsArtificialSun || light.type == LightType.Directional)
+                        {
+                            break;
+                        }
+                        float target = baseline.Intensity * multiplier;
+                        light.intensity = target;
+                        var culling = float1Field != null ? light.GetComponent<CullingLightObject>() : null;
+                        if (culling != null)
+                        {
+                            float1Field.SetValue(culling, target);
+                        }
+                        break;
+                    }
+                }
+            }
+            catch (System.Exception e)
+            {
+                if (_syncSwitchedOnWarned) return;
+                _syncSwitchedOnWarned = true;
+                Plugin.Log.LogWarning($"[Lighting] switched-on light not re-synced ({e.GetType().Name}: {e.Message}); an exit lamp may run brighter than the map's other lights");
+            }
+        }
+
         static float SunFactor(ConfigBundle cfg)
         {
             if (!cfg.Enabled.Value || cfg.NightSunMultiplier == null) return 1f;

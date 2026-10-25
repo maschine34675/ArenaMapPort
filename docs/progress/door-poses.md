@@ -2081,3 +2081,175 @@ Errors from `maschine-ArenaMapPort`; every `gpu-run raid` line read `warnings 0 
 Open after this: the 0.3.0 candidate ZIP is superseded again (recut when the user publishes); `D:\SPT41vanilla` not deployed; the
 `validate_extract` plan-digest drift of the v9 AirPit package (a one-character plan edit in 275b668) blocks only the scripted pipeline;
 BUS_LIGHT's kind-3 lamps, the fences' twins and the gate sounds are the remaining AirPit items.
+
+## 2026-10-25 - Exit lamps: Equator's `EXIT_LIGHT_EMISSIVE` and AirPit's `BUS_LIGHT` light together with the gates
+
+Status: data, validators, client and tests done on the build VM (Arena 0.6.1.0.48206, `work/extract/equator-native-v5`, `airpit-native-v9`);
+NOT run in a raid, the host checks at the end are the lead's. No Unity run, no scenes or NavMesh bundle rebuild, no NavMesh rebake, no
+re-extraction and no new staged file: the lamp objects, their Point lights and their `CullingLightObject`s are already in both packages and in
+the shipped Equator scenes bundle; only the sidecars, the registry literals and the client DLL change. Closes the "`BUS_LIGHT` ... stays untouched
+(later)" notes of the 2026-10-24 AirPit sections ("What was found", "Limits and open points") and "BUS_LIGHT's kind-3 lamps" of the host
+verification's "Open after this". User decisions (the lead, 2026-10-25): ship the two Point lights per lamp only (no AreaLight stand-in); flip the
+lamps in the first frame of a release; in a plain raid (no hold) the lamps are on from raid start, together with the parked-open doors; the
+0.85 s timing of the passport haze stays as it is; the lamps follow `OpenRespawnDoors || OpenSpawnBarriers`. Research and review:
+[door-animations-survey.md](door-animations-survey.md) E5 / A4 / question 8 (corrected there).
+
+### What Arena does (read-only decode, the `DotAnimator` layout of the survey)
+
+| | Equator | AirPit |
+|---|---|---|
+| Group root | `EXIT_LIGHT_EMISSIVE` (scene root of level 57, GateEntity 24006) | `BUS_LIGHT` (level 28, GateEntity 3005) |
+| Lamps (direct children, each carries one `DotAnimator`) | `emergency_exit_light_emissive (1)`, `(2)`, `(4)`, `(5)`: above the booth doors, e.g. (4.531, 2.408, 39.973) | `emergency_exit_light_emissive`, `(1)`, `(2)`: above the three front bus assemblies, e.g. (-14.160, 2.553, -65.055), scale 0.698 |
+| Elements | 4 objects, 12 elements | 3 objects, 9 elements |
+| Every element | kind 3 (switch), duration 0, ease word 17 (the unused default), payload word 8 = 1 (switch ON), the target is inactive in the scene | same |
+| Targets per lamp | `<lamp>/emergency_exit_light 1/Point light`, `<lamp>/emergency_exit_light 1/Point light (1)` and the sibling GLOW node `EXIT_LIGHT_EMISSIVE/Exit1 (7..10)` | the same two lights and `BUS_LIGHT/Exit1`, `Exit2`, `Exit3` |
+
+The two lights: Point, layer 12, realtime, colour (0.366, 1.0, 0.0), range 0.5 m (local (0, 0, 0.228), at the sign) and 1.144 m (local
+(0, -0.163, 1.307)), each with a `CullingLightObject` (`_useLightIntensityFromEditor`, `_maxLightIntensity` 1.75, fade 8..15 m); the
+serialized `Light.intensity` (1.75, 0.0 on one lamp, 1.04 / 1.28 on another) is the culled state, not an authored value. The sign mesh
+(`emergency_exit_light 1`, Standard with `_EMISSION`, `_EmissionColor` (0.844, 0.981, 0.584), a MeshCollider on layer 12 = HighPolyCollider) is
+active in the scene; an `EmissiveAnimator` (36 bytes, tail 0, seven instances, only on the lamp meshes) is not decoded further. All 23 kind-3
+elements of the two gate levels (2 passport + 9 AirPit lamp + 12 Equator lamp elements, the census of `RealAirPitTests`) set the OPPOSITE of their
+target's scene state, as the passport lamps do. Arena's trigger is the lamp group's own GateEntity (24006 / 3005), not the doors' (24002 to 24005 /
+3004): the data does not say whether Arena fires the lamps at the same moment as the doors.
+
+Below every glow node hang `AreaLight` MonoBehaviours (Arena's light-wash helper) with a MeshRenderer that is disabled and holds no material;
+the node stays inactive in the port's scenes and nothing there switches it on. Skipping the glow node therefore drops nothing the port
+could show; Arena's wash itself is not ported (EFT has its own `AreaLight` classes; a real port is the "L" item of PLAN-AIRPIT.md).
+The sign's emission stays always lit in the port.
+
+### Data
+
+- `tools/extract/extract_door_poses.py`: one more scan per map in `DOT_SOURCES` (`{"root": "EXIT_LIGHT_EMISSIVE" | "BUS_LIGHT", "depth": 1, "at": false,
+  "switches": true, "skip_part_switches": true}`). `skip_part_switches` skips a switch whose target is a DIRECT child of the barrier root (the
+  glow node) with a note line and a counter, after `glow_node_problem` walked the node and everything below it: only `Transform`, `MeshFilter`, a
+  disabled `MeshRenderer` without materials and the `AreaLight` script are allowed, anything else stops the tool (`ArenaScene.components` labels
+  the components of a GameObject; the fail-closed cases are in `LampScanTests`). The scan summary line gains `, N part-level switch(es) skipped`
+  only where N > 0. `SIDECAR_COMMENT_SWITCHES` names the exit lamps and the lamp group, so the Equator and AirPit `_comment` changed (Equator gets
+  the switch paragraph because it now has switch rows); Bay5 and Bowl regenerate byte for byte (checked).
+- `tools/maps/equator.doors.json` 10 -> **18 rows**: the eight lamp rows sort FIRST (`EXIT_LIGHT_EMISSIVE` < `SBG_...` < `SPAWN_DOORS`); the ten booth
+  rows are byte-identical. `tools/maps/airpit.doors.json` 30 -> **36 rows**: the six `BUS_LIGHT` rows sort between `BUS_DOORS` and
+  `PASSPORT_CONTROL_DOORS`; the 30 old rows are byte-identical. Per lamp part two rows with the nodes `emergency_exit_light 1/Point light` and
+  `emergency_exit_light 1/Point light (1)`, `switch {closed: false, open: true}`, `seconds` 0, `linear`, `at` null, both transforms the node's scene
+  transform. The registry literals (`ArenaMapDescriptor.cs`) are the extractor's `--csharp` text (`render_csharp`, 8 literals at the top of Equator's
+  `DoorPoses`, 6 between `BUS_DOORS` and `PASSPORT_CONTROL_DOORS` on AirPit); `test_door_poses.py` pins that they are exactly that text.
+- A lamp group is **not** an `opened_barriers` entry (no bake input changes: `BakeNavMesh.ResolveOpenedBarriers` walks `opened_barriers` only, the
+  loader just parses the rows). `validate_map_descriptors.py` (`door_lamp_groups`) accepts a pose barrier that is no `opened_barriers` entry when
+  EVERY row of it is a switch row and it is no `opened_barriers` / `start_gates` / `held_gates` entry; the booth exception for Equator stays.
+
+### What the client does
+
+- `DoorPoseModel.LampBarriers(rows, openedBarriers)` (pure, unit-tested): the distinct barriers, in row order, whose rows are all switch rows and that are
+  no opened barrier (Equator -> `EXIT_LIGHT_EMISSIVE`, AirPit -> `BUS_LIGHT`; `PASSPORT_CONTROL_DOORS` has leaf rows; Bay5 and Bowl -> none).
+- `BoothDoorRepairs.OpenLamps` (called from `OpenAll` between the barrier step and the one `SealParked`, under `doors || barriers`; defined behind
+  `ReportRays` because the wiring tests cut text slices of `OpenDoors` and `OpenBarriers`): for each lamp group, every active direct child with rows
+  is a lamp part: `NotePoses`, only if `HasPoses`, then `Offer` (a hold keeps it dark) else `Park` (lit at once). It never switches a part off (the
+  sign mesh must stay visible), never seals on its own, is no opening for the ray report, and logs one Warning when the group is not in the scenes.
+  One Debug line per group in the `spawn openings` block: `exit lamps 'EXIT_LIGHT_EMISSIVE': 4 lamp part(s), 8 switch(es), 4 on`.
+- `SpawnGates` needs no new machine: a lamp part is a switch-only posed part (no collider, no carver, `SwitchPartDriveSeconds` of its non-switch
+  siblings = none = 0 s), so it flips in the first pass of the release coroutine (the frame of `Release`), is lit by `Park` in a plain raid and is
+  darkened again by a hold's `Reclose`. The one addition is in `ApplyPose`: after `SetActive(true)` of a switch node it calls
+  `ArenaLightingRepairs.SyncSwitchedOn(node)` (only on a change, only when switched ON; `ApplyPose` still holds no search call).
+- `ArenaLightingRepairs.SyncSwitchedOn`: `CullingLightObject.Awake` runs at the first `SetActive(true)` of a light that started inactive and
+  re-caches `float_1 = _maxLightIntensity` (there is no `OnEnable`), undoing the multiplier `ApplyLights` wrote at scene load; without the sync a
+  lamp light runs at the authored 1.75 times its fade, twice the 0.875 of the map's other lights at the default `GlobalLightIntensityMultiplier` 0.5.
+  The method writes `Light.intensity` and `float_1` with `ApplyAll`'s own expression (`Enabled` ? `EquatorProfiles.Value(GlobalLightIntensityMultiplier)`
+  : 1, the culling field only with `SyncCullingLightIntensity`, directional and artificial-sun baselines skipped) for the lights below the node, found
+  by index in the baseline list captured at scene load; once per activation, never per frame, and it never throws into the drive coroutine (one
+  Warning on a failure). The passport fog nodes take the same call and have no light: a no-op.
+- Config: no new key, no default changed. The descriptions of `Spawns/OpenRespawnDoors` and `Spawns/OpenSpawnBarriers` say that the lamps follow
+  either of them; with both off the lamps keep the scene's state (dark). With `OpenRespawnDoors` on and `OpenSpawnBarriers` off on AirPit the
+  lamps light while the bus doors stay shut (a developer-only combination).
+
+### Builds and tests (build VM, 2026-10-25)
+
+- Extractor (`PYTHONDONTWRITEBYTECODE=1`): Equator `decode self-check: 12 DotAnimator object(s), 20 element(s)`, `scan EXIT_LIGHT_EMISSIVE (barrier depth 1): 4
+  DotAnimator(s), 12 element(s), 8 pose(s) (8 switch row(s)), 0 inactive, 0 switch element(s) skipped, 4 part-level switch(es) skipped`, `package check:
+  18 pose(s) exist in equator-native-v5`, `poses 18: 16 dotanimator, 2 borrowed`; AirPit `decode self-check: 21 DotAnimator object(s), 27 element(s)`, `scan
+  BUS_LIGHT ...: 3 DotAnimator(s), 9 element(s), 6 pose(s) (6 switch row(s)), ... 3 part-level switch(es) skipped`, `package check: 36 pose(s) exist in
+  airpit-native-v9`, `poses 36: 24 dotanimator, 12 borrowed`. Bay5 and Bowl: byte-identical output.
+- `validate_map_descriptors.py`: OK, 14 descriptors. Client Release build (`-p:ArenaMapPortDllOnly=true`) and server Release build: 0 warnings, 0 errors.
+  `dotnet test ArenaMapPort.Server.Tests -c Release`: 2285 passed, 0 failed (2280 before; 5 new tests: `LampBarriers`, the lamp rows, the release model, the
+  `OpenLamps` wiring pin, the `SyncSwitchedOn` wiring pin). `python -m unittest discover -s tools/tests -p "test_*.py"`: 2150 tests, 63 skipped, the 12
+  failures this change would have caused in `test_door_poses.py` plus one in `test_airpit_bake_inputs.py` and one in `test_navmesh_source_layers.py`
+  updated; what remains failing is not from this change: the 7 `test_changelog.ChangelogShapeTests` (`CHANGELOG.md` carries a `## Unreleased` heading at
+  HEAD that the shape tests call malformed; neither file is touched here) and `SidecarTests.test_the_validator_run_passes` (the validator prints a
+  cp1252 character that the test decodes as UTF-8; it passes with `PYTHONUTF8=1`).
+- Tests changed: `DoorPoseModelTests.cs` (counts 18 / 36, the passport lamps test renamed, `AtTheDefaultScale...` excludes switch rows) and
+  `DoorPoseSidecarTests.cs` (the lamp-group rule, 18 / 36 rows, switches on Equator), `SpawnGateModelTests.cs` (`SpawnGates.Offer(` count 3 -> 4),
+  `test_door_poses.py` (the Equator and AirPit sidecar tests, the validator's positional mutations moved to the booth rows by `BOOTH0`),
+  `test_airpit_bake_inputs.py` (8 switch rows, 2 passport), `test_navmesh_source_layers.py` (`airpit: 36 row(s), 8 switch ...`, `equator: 18 row(s), 8
+  switch, 10 with at ...`). New: `LampScanTests`, `LampBarriers` and lamp-row tests, the validator lamp-group tests, the two wiring pins.
+
+### Log lines to expect on the host (Debug, source `maschine-ArenaMapPort`)
+
+- Plain raid (no hold): per lamp part `[SpawnGates] park: 'emergency_exit_light_emissive (1)' snapped to the open pose (2 node(s), 2 switch(es), clip
+  DotAnimator); ...` (4 lines on Equator, 3 on AirPit), then once the navmesh is installed `parked '...': 2 switch(es) in the open state, no collider to
+  carve (navmesh installed)`; one `exit lamps 'EXIT_LIGHT_EMISSIVE': 4 lamp part(s), 8 switch(es), 4 on` (AirPit: `'BUS_LIGHT': 3 lamp part(s), 6 switch(es),
+  3 on`) in the `spawn openings` block; `ClosedParts` 14 on Equator, 42 on AirPit (39 + 3); the probe's "N part(s) without a movement collider not
+  probed" grows by the lamp parts. No Warning.
+- Hold (`SpawnGateHold`, 30 s): `exit lamps ...: ... N off until the gates open`; the lamps' Point lights `activeSelf` false until the release, then in
+  the release frame `released (...): ... drove 14 part(s) to the open pose in 3.5 s (scale 0.50) ..., 8 switch(es) set to the open state` on Equator
+  (10 booth leaves + 4 lamps; the 3.5 s is the 7 s leaf), `drove 24 part(s) to the open pose in 1.5 s ..., 8 switch(es) ...` on AirPit (3 bus + 16 leaves +
+  RED + GREEN + 3 lamps; the passport RedFog / GreenFog still flip at +0.85 s, the lamps in the first frame). Held-gate part count on AirPit stays 36.
+
+### Host recipe (GPU-2; the client DLL only: `deploy-to-spt.ps1 -SptRoot 'D:\SPT41' -DllOnly -DllTarget Client`, dry run first; the server never reads `DoorPoses`)
+
+1. Equator plain raid: four `park:` lines with 2 switch(es), the summary line above, `uibridge_inspect` of
+   `EXIT_LIGHT_EMISSIVE/emergency_exit_light_emissive (1)/emergency_exit_light 1/Point light`: active, `Light.intensity` about 0.875 x its distance fade (NOT 1.75 x), a
+   dim green halo at the sign; F7 `LightCullingProbe` lists the lamp lights; a still from inside a booth looking at the exit sign.
+2. Equator hold 30 s: lights inactive before, `drove 14 part(s) ... 8 switch(es)` at the release, lit in the release frame, `ClosedParts 14`.
+3. AirPit plain raid and hold 30 s: `park:` x 3 for the lamps, `ClosedParts 42`, `drove 24 part(s) ... in 1.5 s ... 8 switch(es)`, the passport fog flip at +0.85 s,
+   the held-gate count 36. Bay5 and Bowl: unchanged (no `exit lamps` line).
+4. `max` frame time and ModProfiler's `max_ms_in_frame` (the first activation of a `CullingLightObject` must not hitch), EFT's own
+   `Logs/<session>/*errors.log` for a first-activation exception (it does not reach BepInEx's log), the hideout opened once.
+
+### Open risks and limits
+
+- No host evidence yet for the first activation of an imported `CullingLightObject` on an object that started inactive. The shipped bundle carries
+  `_transform`, `Awake` sets `_light` and `float_1` on the first `SetActive`; what remains for the host is the `CullingGroup` visibility event of a
+  late-registered sphere.
+- Expectation: the port has no AreaLight wash and keeps the sign always lit, so "lamps on" is a small visible change (a mild green halo of 0.5 m and
+  1.14 m reach); Arena's dominant lit look is the wash. A stand-in (1 to 2 green Lights per lamp at the decoded AreaLight positions, driven by the same
+  rows) needs part-level switch support or a relative-node row and is a guess to tune by eye: decide after the host look.
+- A scene rename of a lamp node gives one `NotePoses` Warning and leaves that lamp as the scene has it (dark). The trigger is the lamp group's own
+  GateEntity: Arena may light the lamps at another moment than the doors open; the port ties them to the gates.
+
+## 2026-10-25 - Bay5's two edge spawns move inboard
+
+Status: data only, done on the build VM; no Unity rebuild, no rebake, nothing of this has run in a raid yet. The Equator half of the
+same change (two bot rows) is in `docs/progress/equator-booth-spawns.md` ("2026-10-25 - the two bot rows on the mesh edge move
+inboard"). The open list of 2026-10-24 ("Bay5's bot spawn `bot-east-lane` and Equator's `bot-south-west` are still moved 1.5 m by the
+placement repair on every raid") and the NavMesh paragraph of 2026-10-23 ("`player-north-west` and `bot-east-lane` are 0.64 m and 0.76 m from
+the nearest vertex but outside every polygon, identically on the 2026-10-20 mesh") are closed by it for these two rows.
+
+| Row (`bay5.bots.json`) | Was | Is | Move | Clearance was -> is | Disc of 0.3 m around the new point (worst) | Nearest other spawn | Nearest solid at body height |
+|---|---|---|---|---|---|---|---|
+| `arena_bay5-player-north-west` (rotation 135, radius 5, sides All) | (54.2, -3.8574, 53.8) | (55.2, -3.8574, 53.0) | 1.28 m | 0.03 m, outside every polygon -> 1.25 m, surface y -3.875 | 0.83 m | 10.6 m | 1.66 m |
+| `arena_bay5-bot-east-lane` (radius 25) | (117.8917, -3.8574, 43.099) | (118.3, -3.8574, 44.4) | 1.36 m | 0.09 m, outside every polygon -> 1.28 m, surface y -3.875 | 0.91 m | 13.5 m | 1.71 m |
+
+Measured on the built Bay5 NavMesh (`work/build/bay5/arena_bay5_navmesh.bundle`, 2026-10-24 12:21, the one with `Door_01 (3)` shut): both new
+points are inside a polygon of component 2 (1393 polygons, 4398 m2, the playfield component every other Bay5 spawn stands in), and the
+planning pass, its review and this implementation read the same numbers. The exit boxes are 39.3 m / 68.2 m (north-west) and 25.0 m / 48.4 m
+(east lane) away, far outside the 10 m rule of `test_respawns_do_not_overlap_ai_arrivals_or_extract_on_entry`. The parked gate
+parts of the 2026-10-23/24 notes stay at least 5 m (players) and 3 m (bots) away: `test_no_spawn_stands_where_an_opened_gate_part_parks`
+passes with the new coordinates (nearest: the 821 L leaf footprint is 5.8 m from `player-south-west`, which does not move).
+
+What stays: the id, name, sides, rotation 135 and radius 5 of the player row; the categories and radius 25 of the bot row;
+`arena_bay5-bot-west-centre` (63.497, -3.8574, 42.2217), the Bay5 donor row ArenaMode pins, and every other Bay5 row. The 25 m burst
+coverage test over x 44..147 / z -15..72 passes (at least three distant points everywhere). The "Tier B" set - ten more Bay5 points with
+0.02 to 0.45 m of clearance that move 0.76 to 1.56 m to get 1.2 m (coordinates in the plan's `proposed_spawn_changes.json`) - is NOT applied:
+no known host defect, and `player-south-west` would stand 5.2 m from the depot 821 L leaf against the 5.0 m test limit. Bay5
+`bot-north-lane` (77.7537, -3.5284, 61.7423) has its authored y 0.31 m above the mesh and the host never moves it; left as it is.
+Like the Equator rows, the east-lane row feeds ArenaMode's pickup seeds (farthest-point sampling), which shift by up to 1.5 m.
+
+Files: `tools/maps/bay5.bots.json` (two rows in place and one dated sentence at the end of the `_comment`),
+`ArenaMapPort.Server/db/arena_bay5/base.json` regenerated with `python tools/server/make_base_json.py --map tools/maps/bay5.json`
+(byte-identical before the edit, afterwards four changed lines: x and z of the two SpawnPointParams). `test_bay5_arena_spawns.py` 5 OK;
+`test_spawn_navmesh_clearance.py` asserts both rows inside the mesh and on the play component with at least 1.0 m of clearance (it
+deliberately asserts no minimum for the ten Tier B points).
+
+Host checks (lead): plain Bay5 raid, Debug `[RaidFix] spawn placement: disabled N SPAWN_BOUND barrier collider(s); ...` with no
+`arena_bay5-bot-east-lane` move (the line had a 1.5 m move on every earlier Bay5 raid) and no `arena_bay5-player-north-west` entry;
+`uibridge_teleport dryRun=true` to (55.2, -3.875, 53.0) and (118.3, -3.875, 44.4) `reachable=true`; with an ArenaMode team spawn on the
+north-west marker the player stands on the floor 1.25 m from the nearest border, not on the rim.

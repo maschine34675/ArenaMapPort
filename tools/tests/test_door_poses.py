@@ -14,6 +14,7 @@ import struct
 import subprocess
 import sys
 import tempfile
+import types
 import unittest
 from pathlib import Path
 
@@ -749,6 +750,7 @@ class FakeScene(E.ArenaScene):
         self.level_name = "level0"
         self.blobs = {}
         self.clip_counts = {}          # transform id -> the clip counts of the Animators on it (absent = no Animator)
+        self.parts = {}                # transform id -> the component labels of its GameObject (absent = a bare Transform)
         self._next = 1
 
     def add(self, name, parent=0, pos=(0.0, 0.0, 0.0), euler=(0.0, 0.0, 0.0), active=True):
@@ -777,6 +779,9 @@ class FakeScene(E.ArenaScene):
 
     def animator_clip_counts(self, tpid):
         return list(self.clip_counts.get(tpid, []))
+
+    def components(self, tpid):
+        return list(self.parts.get(tpid, ["Transform"]))
 
     def mono_class(self, obj):
         return obj.script
@@ -1303,6 +1308,120 @@ class PassportScanTests(unittest.TestCase):
             self.assertTrue(any("starts inactive" in p for p in E.check_package(Path(tmp), "S", [wrong], sc)))
 
 
+# ---------------------------------------------------------------------------------------------------------------
+# Exit lamps (2026-10-25): Equator's EXIT_LIGHT_EMISSIVE and AirPit's BUS_LIGHT. A lamp group is a barrier of switch rows only; the
+# trigger also switches a GLOW node beside every lamp (a direct child of the group root), which a scan with skip_part_switches
+# leaves out after checking what hangs on and below it. Synthetic hierarchies; the real data is in RealAirPitTests and
+# RealArenaDotAnimatorTests.
+# ---------------------------------------------------------------------------------------------------------------
+
+LAMP_SCAN = {"root": "LAMPS", "depth": 1, "at": False, "switches": True, "skip_part_switches": True}
+GLOW_OK = ["Transform", "MonoBehaviour:AreaLight", "MeshFilter", "MeshRenderer(off)"]
+
+
+def lamp_scene(glow_node=None, glow_child=None, lamps=2):
+    """A lamp group: `lamps` lamp parts, each with two Point lights (inactive, the switched nodes) below 'Light 1', and one glow
+    node per lamp beside it (inactive, a direct child of the root, with one AreaLight child) that the lamp's DotAnimator switches
+    too. `glow_node` / `glow_child` replace the component labels of the glow node and of its child."""
+    sc = FakeScene()
+    root = sc.add("LAMPS")
+    for i in range(lamps):
+        lamp = sc.add(f"Lamp ({i})", root, pos=(float(i), 0.0, 0.0))
+        holder = sc.add("Light 1", lamp)
+        near = sc.add("Point light", holder, pos=(0.0, 0.0, 0.228), active=False)
+        far = sc.add("Point light (1)", holder, pos=(0.0, -0.163, 1.307), active=False)
+        glow = sc.add(f"Exit1 ({i})", root, active=False)
+        child = sc.add("AreaLight", glow)
+        sc.parts[glow] = list(glow_node or ["Transform"])
+        sc.parts[child] = list(glow_child or GLOW_OK)
+        sc.add_dot(lamp, [dot_element(sc.go_of(near), 3, 0.0, 17, active=1), dot_element(sc.go_of(far), 3, 0.0, 17, active=1),
+                          dot_element(sc.go_of(glow), 3, 0.0, 17, active=1)])
+    return sc
+
+
+class FakeComponent:
+    def __init__(self, kind, tree=None, script=""):
+        self.type = types.SimpleNamespace(name=kind)
+        self._tree, self.script = tree or {}, script
+
+    def read_typetree(self):
+        return self._tree
+
+    def get_raw_data(self):
+        return b""
+
+
+class LampScanTests(unittest.TestCase):
+    def test_each_lamp_gives_two_switch_rows_for_its_point_lights_and_the_glow_node_is_skipped_with_a_note(self):
+        scan = E.scan_dot_animators(lamp_scene(), "S", LAMP_SCAN)
+        self.assertEqual((scan.objects, scan.elements, len(scan.poses), scan.switches, scan.skipped_part_switch), (2, 6, 4, 4, 2))
+        self.assertEqual(sorted((p.part, p.node) for p in scan.poses), [
+            ("Lamp (0)", "Light 1/Point light"), ("Lamp (0)", "Light 1/Point light (1)"),
+            ("Lamp (1)", "Light 1/Point light"), ("Lamp (1)", "Light 1/Point light (1)")])
+        for p in scan.poses:
+            self.assertEqual((p.barrier, p.switch, p.seconds, p.source, p.ease, p.at), ("LAMPS", (False, True), 0.0, "dotanimator", "linear", None))
+            self.assertEqual((p.open_position, p.open_euler), (p.closed_position, p.closed_euler))     # nothing moves
+        notes = [line for line in scan.lines if "skipped part-level switch" in line]
+        self.assertEqual(len(notes), 2)                                                              # counted AND noted, never silent
+        self.assertTrue(any(line.endswith("LAMPS/Exit1 (0)") for line in notes) and any(line.endswith("LAMPS/Exit1 (1)") for line in notes))
+        self.assertEqual(scan.skipped_switch, 0)
+        E.check_identities(scan.poses)                  # the two lights of a lamp have distinct node paths: no `at`, no position needed
+
+    def test_a_deeper_switch_is_never_skipped_and_without_the_option_the_glow_switch_is_a_part_level_row(self):
+        scan = E.scan_dot_animators(lamp_scene(), "S", dict(LAMP_SCAN, skip_part_switches=False))
+        glow = [p for p in scan.poses if p.part.startswith("Exit1")]
+        self.assertEqual((len(scan.poses), len(glow), scan.skipped_part_switch), (6, 2, 0))
+        self.assertEqual({p.node for p in glow}, {""})                                               # the part itself would be switched
+        self.assertFalse([line for line in scan.lines if "skipped part-level switch" in line])
+        with_option = E.scan_dot_animators(lamp_scene(), "S", LAMP_SCAN)
+        self.assertEqual(sum(1 for p in with_option.poses if p.node), 4)                             # the Point lights stay rows with the option on
+
+    def test_a_glow_node_that_carries_more_than_the_area_light_stand_ins_stops_the_tool(self):
+        for label, node, child in (("a Light below", None, GLOW_OK + ["Light"]),
+                                   ("a visible renderer", None, ["Transform", "MeshFilter", "MeshRenderer(on)"]),
+                                   ("another script", None, ["Transform", "MonoBehaviour:Other.Thing"]),
+                                   ("a collider", None, GLOW_OK + ["BoxCollider"]),
+                                   ("a Light on the node itself", ["Transform", "Light"], None),
+                                   ("a component outside the level file", ["Transform", "external"], None),
+                                   ("a component that cannot be found", ["Transform", "missing"], None)):
+            with self.subTest(label), self.assertRaisesRegex(E.DoorPoseError, r"hangs below the node, and .* carries"):
+                E.scan_dot_animators(lamp_scene(glow_node=node, glow_child=child), "S", LAMP_SCAN)
+
+    def test_glow_node_problem_names_the_first_offender_and_walks_every_descendant(self):
+        sc = lamp_scene()
+        glow = next(tp for tp in sc.tr if sc.name(tp) == "Exit1 (0)")
+        self.assertIsNone(E.glow_node_problem(sc, glow))
+        child = sc.children(glow)[0]
+        sc.parts[sc.add("Deep", child)] = ["Transform", "Rigidbody"]
+        problem = E.glow_node_problem(sc, glow)
+        self.assertIn("carries Rigidbody", problem)
+        self.assertIn("Exit1 (0)/AreaLight/Deep", problem)
+
+    def test_components_labels_a_renderer_by_its_state_and_a_script_by_its_class(self):
+        sc = FakeScene()
+        tp = sc.add("X")
+        objects = {1: FakeComponent("Transform"), 2: FakeComponent("MeshFilter"),
+                   3: FakeComponent("MeshRenderer", {"m_Enabled": 0, "m_Materials": []}),
+                   4: FakeComponent("MeshRenderer", {"m_Enabled": 1, "m_Materials": []}),
+                   5: FakeComponent("MeshRenderer", {"m_Enabled": 0, "m_Materials": [{"m_PathID": 77}]}),
+                   6: FakeComponent("MonoBehaviour", script="AreaLight"), 7: FakeComponent("Light")}
+        sc.files = {"level0": objects}
+        sc.go[sc.go_of(tp)]["m_Component"] = ([{"component": {"m_FileID": 0, "m_PathID": pid}} for pid in objects]
+                                              + [{"component": {"m_FileID": 1, "m_PathID": 9}}, {"component": {"m_FileID": 0, "m_PathID": 99}}])
+        self.assertEqual(E.ArenaScene.components(sc, tp), ["Transform", "MeshFilter", "MeshRenderer(off)", "MeshRenderer(on)",
+                                                           "MeshRenderer(on)", "MonoBehaviour:AreaLight", "Light", "external", "missing"])
+        self.assertEqual(set(E.GLOW_NODE_COMPONENTS), {"Transform", "MeshFilter", "MeshRenderer(off)", "MonoBehaviour:AreaLight"})
+
+    def test_the_summary_line_counts_the_skipped_part_switches_only_where_there_are_any(self):
+        self.assertEqual(E.scan_dot_animators(passport_scene(), "S", PASSPORT_SCAN).skipped_part_switch, 0)
+        self.assertEqual(E.DOT_SOURCES["arena_equator"]["scans"][1],
+                         {"root": "EXIT_LIGHT_EMISSIVE", "depth": 1, "at": False, "switches": True, "skip_part_switches": True})
+        self.assertEqual(E.DOT_SOURCES["arena_airpit"]["scans"][1],
+                         {"root": "BUS_LIGHT", "depth": 1, "at": False, "switches": True, "skip_part_switches": True})
+        for key in ("arena_bay5",):
+            self.assertFalse([s for s in E.DOT_SOURCES[key]["scans"] if s.get("skip_part_switches")])
+
+
 def bus_scene(twin_shift=0.0, extra_node=False, front_scale=1.0, front_open=False, duplicate_name=False):
     """Three front assemblies in the closed pose and three back ones in the open pose (the first back one is the lender, the
     other two its twins): per assembly two hinges, a leaf below each and a mesh below that, the way Arena's bus doors nest."""
@@ -1504,12 +1623,31 @@ class DotSidecarTests(unittest.TestCase):
                                  (scene, level, f"sharedassets{level}.assets"))
                 self.assertTrue(doc["_comment"].startswith("Generated by tools/extract/extract_door_poses.py"))
                 for pose in doc["poses"]:
-                    self.assertEqual(tuple(pose), E_KEYS)
+                    self.assertEqual(tuple(pose), E_KEYS + (("switch",) if "switch" in pose else ()))   # Equator's exit lamps are switch rows
         self.assertEqual(self.equator["source"]["extra_scenes"], [{"scene": "Arena_Equator", "level": 51, "assets": "sharedassets51.assets"}])
         self.assertNotIn("extra_scenes", self.bay5["source"])
 
+    def test_equators_exit_lamps(self):
+        lamps = [p for p in self.equator["poses"] if p["barrier"] == "EXIT_LIGHT_EMISSIVE"]
+        self.assertEqual(len(lamps), 8)
+        self.assertEqual(self.equator["poses"][:8], lamps)                                 # the group sorts ahead of SBG_... and SPAWN_DOORS
+        self.assertEqual(sorted({p["part"] for p in lamps}), [f"emergency_exit_light_emissive ({n})" for n in (1, 2, 4, 5)])
+        for part in {p["part"] for p in lamps}:
+            own = [p for p in lamps if p["part"] == part]
+            self.assertEqual([p["node"] for p in own], ["emergency_exit_light 1/Point light", "emergency_exit_light 1/Point light (1)"])
+            self.assertEqual([p["closed"]["position"] for p in own], [[0.0, 0.0, 0.228], [0.0, -0.163, 1.307]])
+        for p in lamps:
+            self.assertEqual(tuple(p), E_KEYS + ("switch",))
+            self.assertEqual((p["source"], p["clip"], p["ease"], p["curve"], p["at"], p["seconds"], p["switch"]),
+                             ("dotanimator", "DotAnimator", "linear", None, None, 0.0, {"closed": False, "open": True}))
+            self.assertEqual(p["open"], p["closed"])                                       # nothing moves
+        self.assertFalse([p for p in self.equator["poses"] if "Exit1" in p["part"] or p["node"].startswith("Exit1")])   # the glow nodes are not carried
+        self.assertEqual(self.equator["_comment"], E.SIDECAR_COMMENT + E.SIDECAR_COMMENT_SWITCHES)    # a switch row brings the switch paragraph
+        self.assertIn("lamp group", self.equator["_comment"])
+        self.assertEqual(self.bay5["_comment"], E.SIDECAR_COMMENT)
+
     def test_equators_booth_doors(self):
-        poses = self.equator["poses"]
+        poses = [p for p in self.equator["poses"] if "switch" not in p]
         self.assertEqual(len(poses), 10)
         self.assertEqual({p["source"] for p in poses}, {"dotanimator", "borrowed"})
         self.assertEqual(sum(1 for p in poses if p["source"] == "dotanimator"), 8)
@@ -1606,6 +1744,9 @@ class DotSidecarTests(unittest.TestCase):
             self.assertNotIn("\r", again)
 
 
+BOOTH0 = 8     # the first eight rows of Equator's sidecar are the exit lamps (2026-10-25): its booth rows start here
+
+
 class DoorValidatorRuleTests(unittest.TestCase):
     """validate_map_descriptors.door_pose_errors on the schema-2 rules, by mutating the Equator and Bay5 sidecars."""
 
@@ -1641,13 +1782,16 @@ class DoorValidatorRuleTests(unittest.TestCase):
         self.assertTrue(self.run_case("bay5", lambda d: d["poses"][0].update(curve=[[0.0, 0.0, 1.0, 1.0], [0.5, 1.0, 1.0, 1.0]])))   # ends at t 0.5
         self.assertTrue(self.run_case("bay5", lambda d: d["poses"][0].update(curve=[[0.0, 0.0, 1.0, 1.0], [1.0, 0.5, 1.0, 1.0]])))   # ends at v 0.5
         self.assertTrue(self.run_case("bay5", lambda d: d["poses"][0].update(curve=[[0.0, 0.0, 1.0, 1.0], [0.0, 1.0, 1.0, 1.0]])))   # times do not increase
-        self.assertTrue(self.run_case("equator", lambda d: d["poses"][0].update(clip="Something")))   # dotanimator / borrowed clip names
+        self.assertTrue(self.run_case("equator", lambda d: d["poses"][BOOTH0].update(clip="Something")))   # dotanimator / borrowed clip names
         self.assertTrue(self.run_case("equator", lambda d: [p.update(clip="mine") for p in d["poses"] if p["source"] == "borrowed"]))
 
     def test_at_rules(self):
-        self.assertTrue(self.run_case("equator", lambda d: d["poses"][0].update(at=[1.0, 2.0])))
-        self.assertTrue(self.run_case("equator", lambda d: d["poses"][0].update(at=None)))                 # mixed at / no at under one barrier
-        self.assertTrue(self.run_case("equator", lambda d: d["poses"].append(copy.deepcopy(d["poses"][2]))))   # duplicate at the same place
+        self.assertTrue(self.run_case("equator", lambda d: d["poses"][BOOTH0].update(at=[1.0, 2.0])))
+        self.assertTrue(self.run_case("equator", lambda d: d["poses"][BOOTH0].update(at=None)))            # mixed at / no at under one barrier
+        self.assertTrue(self.run_case("equator", lambda d: d["poses"].append(copy.deepcopy(d["poses"][BOOTH0 + 2]))))   # duplicate at the same place
+        # a lamp row twice (same part and node, neither has an `at`, the same closed position) is one row twice
+        self.assertTrue(any("lacks 'at'" in e for e in self.run_case("equator", lambda d: d["poses"].append(copy.deepcopy(d["poses"][0])))))
+        self.assertTrue(self.run_case("equator", lambda d: d["poses"][0].update(at=[1.0, 2.0, 3.0])))     # a lamp group has no `at` on some rows only
         # a repeated identity needs distinct `at`: two depot gates moved onto each other
         def merge_gates(doc):
             for p in doc["poses"]:
@@ -1662,12 +1806,40 @@ class DoorValidatorRuleTests(unittest.TestCase):
         self.assertTrue(any("without 'at'" in e or "lacks 'at'" in e for e in self.run_case("bay5", drop_at)))
 
     def test_barriers_part_and_node_rules(self):
-        self.assertTrue(self.run_case("equator", lambda d: d["poses"][1].update(barrier="SPAWN_DOORS/Other")))    # not a booth assembly root
-        self.assertTrue(self.run_case("equator", lambda d: d["poses"][1].update(barrier="SPAWN_DOORS/Door_Sliding_Respawn (1)/x")))
+        self.assertTrue(self.run_case("equator", lambda d: d["poses"][BOOTH0 + 1].update(barrier="SPAWN_DOORS/Other")))    # not a booth assembly root
+        self.assertTrue(self.run_case("equator", lambda d: d["poses"][BOOTH0 + 1].update(barrier="SPAWN_DOORS/Door_Sliding_Respawn (1)/x")))
         self.assertTrue(self.run_case("bay5", lambda d: d["poses"][0].update(barrier="SPAWN_DOORS/Door_Sliding_Respawn")))   # the exception is Equator's
         self.assertTrue(self.run_case("bay5", lambda d: d["poses"][4].update(part="", node="Leaf")))          # a node needs a part
         self.assertTrue(self.run_case("bay5", lambda d: d["poses"][0].update(part="Gates_Depot_Frame_X")))      # a frame part
         self.assertEqual(self.run_case("bay5", lambda d: [p.update(node="") for p in d["poses"] if p["part"] == ""]), [])    # part "" is fine
+
+    def test_a_lamp_group_is_an_all_switch_barrier_that_is_no_gate(self):
+        # Equator's EXIT_LIGHT_EMISSIVE is no opened_barriers entry and the real sidecar is clean (test_clean); the rule is the lamp group's
+        self.assertEqual(VD.door_lamp_groups(final_state_map("equator"), sidecar_doc("equator")["poses"]), {"EXIT_LIGHT_EMISSIVE"})
+        self.assertEqual(VD.door_lamp_groups(final_state_map("airpit"), sidecar_doc("airpit")["poses"]), {"BUS_LIGHT"})
+        self.assertEqual(VD.door_lamp_groups(final_state_map("bay5"), sidecar_doc("bay5")["poses"]), set())
+
+        def mix(doc):                                           # a transform row inside the lamp group: no longer a lamp group
+            doc["poses"][BOOTH0]["barrier"] = "EXIT_LIGHT_EMISSIVE"
+        errors = self.run_case("equator", mix)
+        self.assertTrue(any("is not an opened_barriers entry" in e and "lamp group" in e for e in errors), errors)
+
+        def renamed(doc):                                       # an all-switch barrier under another name is a lamp group as well
+            for p in doc["poses"]:
+                if p["barrier"] == "EXIT_LIGHT_EMISSIVE":
+                    p["barrier"] = "SOME_OTHER_LAMPS"
+        self.assertFalse([e for e in self.run_case("equator", renamed) if "opened_barriers" in e])      # only the registry mismatch remains
+        # a lamp group listed as a gate of any role is no lamp group: the gate lists are subsets of opened_barriers
+        for role in ("held_gates", "start_gates"):
+            with self.subTest(role):
+                map_json = final_state_map("equator")
+                map_json[role] = ["EXIT_LIGHT_EMISSIVE"]
+                errors = VD.door_pose_errors(map_json, REPO / "tools" / "maps" / "equator.doors.json", self.entries["Equator"].get("DoorPoses"))
+                self.assertTrue(any("is not an opened_barriers entry" in e for e in errors), errors)
+        # a barrier that IS an opened_barriers entry is no lamp group (it has its own handling): the helper leaves it out
+        listed = final_state_map("airpit")
+        listed["opened_barriers"] = [*listed["opened_barriers"], "BUS_LIGHT"]
+        self.assertEqual(VD.door_lamp_groups(listed, sidecar_doc("airpit")["poses"]), set())
 
     def test_extra_scenes_and_the_source_block(self):
         self.assertTrue(self.run_case("equator", lambda d: d["source"].update(extra_scenes=[{"scene": "Arena_Nowhere", "level": 1, "assets": "x"}])))
@@ -1677,7 +1849,7 @@ class DoorValidatorRuleTests(unittest.TestCase):
     def test_every_field_the_registry_mirrors_is_compared(self):
         for field, value in (("ease", "linear"), ("source", "borrowed"), ("at", [0.0, 0.0, 0.0]), ("seconds", 9.0), ("clip", "borrowed from X")):
             with self.subTest(field):
-                errors = self.run_case("equator", lambda d, f=field, v=value: d["poses"][3].update({f: v}))
+                errors = self.run_case("equator", lambda d, f=field, v=value: d["poses"][BOOTH0 + 3].update({f: v}))
                 self.assertTrue(errors)
         errors = self.run_case("bay5", lambda d: d["poses"][0]["curve"][1].__setitem__(1, 0.7))
         self.assertTrue(any("curve" in e for e in errors), errors)
@@ -1687,7 +1859,7 @@ class DoorValidatorRuleTests(unittest.TestCase):
 
 
 class AirPitSidecarTests(unittest.TestCase):
-    """tools/maps/airpit.doors.json (30 rows: 12 bus-door, 16 passport-leaf, 2 lamp-switch) and the registry's copy."""
+    """tools/maps/airpit.doors.json (36 rows: 12 bus-door, 6 bus-lamp switch, 16 passport-leaf, 2 passport-lamp switch) and the registry's copy."""
 
     @classmethod
     def setUpClass(cls):
@@ -1699,7 +1871,8 @@ class AirPitSidecarTests(unittest.TestCase):
         cls.entry = VD.registry_entries(text)["AirPit"]
         cls.bus = [p for p in cls.poses if p["barrier"] == "BUS_DOORS"]
         cls.leaves = [p for p in cls.poses if p["barrier"] == "PASSPORT_CONTROL_DOORS" and "switch" not in p]
-        cls.lamps = [p for p in cls.poses if "switch" in p]
+        cls.lamps = [p for p in cls.poses if p["barrier"] == "PASSPORT_CONTROL_DOORS" and "switch" in p]
+        cls.bus_lamps = [p for p in cls.poses if p["barrier"] == "BUS_LIGHT"]
 
     def test_header(self):
         self.assertEqual((self.doc["schema_version"], self.doc["key"]), (2, "arena_airpit"))
@@ -1709,18 +1882,22 @@ class AirPitSidecarTests(unittest.TestCase):
         self.assertIn(self.doc["source"]["scene"], self.map["all_scene_names"])
         self.assertTrue(self.doc["_comment"].startswith("Generated by tools/extract/extract_door_poses.py"))
         self.assertTrue(self.doc["_comment"].endswith(E.SIDECAR_COMMENT_SWITCHES))
-        self.assertEqual(len(self.poses), 30)
-        self.assertEqual((len(self.bus), len(self.leaves), len(self.lamps)), (12, 16, 2))
+        self.assertEqual(len(self.poses), 36)
+        self.assertEqual((len(self.bus), len(self.bus_lamps), len(self.leaves), len(self.lamps)), (12, 6, 16, 2))
 
-    def test_row_keys_switch_only_on_the_two_lamps(self):
+    def test_row_keys_switch_only_on_the_lamps(self):
         for p in self.poses:
             self.assertEqual(tuple(p), E_KEYS + (("switch",) if "switch" in p else ()))
         self.assertEqual(sorted((p["part"], p["node"]) for p in self.lamps), [("GREEN", "GreenFog"), ("RED", "RedFog")])
+        self.assertEqual({p["barrier"] for p in self.poses if "switch" in p}, {"PASSPORT_CONTROL_DOORS", "BUS_LIGHT"})
+        self.assertTrue(all("switch" in p for p in self.bus_lamps))
 
-    def test_the_barriers_are_the_released_gate_groups_and_the_roles_stay(self):
-        self.assertEqual({p["barrier"] for p in self.poses}, {"BUS_DOORS", "PASSPORT_CONTROL_DOORS"})
-        for barrier in {p["barrier"] for p in self.poses}:
+    def test_the_barriers_are_the_released_gate_groups_plus_the_bus_lamp_group_and_the_roles_stay(self):
+        self.assertEqual({p["barrier"] for p in self.poses}, {"BUS_DOORS", "BUS_LIGHT", "PASSPORT_CONTROL_DOORS"})
+        for barrier in ("BUS_DOORS", "PASSPORT_CONTROL_DOORS"):
             self.assertIn(barrier, self.map["opened_barriers"])
+        for role in ("opened_barriers", "start_gates", "held_gates"):
+            self.assertNotIn("BUS_LIGHT", self.map[role])                                      # a lamp group is no gate: all its rows are switches
         self.assertEqual(self.map["start_gates"], ["BUS_DOORS"])                             # the roles are not changed by the rows
         self.assertEqual(self.map["held_gates"], ["PASSPORT_CONTROL_DOORS", "PASSPORT_CONTROL_EMISSIVE"])
         self.assertNotIn("PASSPORT_CONTROL_EMISSIVE", {p["barrier"] for p in self.poses})     # the 18 red sheets keep the legacy rule
@@ -1775,6 +1952,22 @@ class AirPitSidecarTests(unittest.TestCase):
                              ("PASSPORT_CONTROL_DOORS", "dotanimator", "DotAnimator", "linear", None, None, 0.0))
             self.assertEqual(p["open"], p["closed"])
             self.assertEqual(p["closed"], {"position": [0.0, 0.0, 0.0], "euler": [0.0, 0.0, 0.0]})
+
+    def test_the_bus_lamps_are_three_lamps_with_two_point_lights_each_off_in_the_scene_and_on_when_the_gates_open(self):
+        self.assertEqual(sorted({p["part"] for p in self.bus_lamps}),
+                         ["emergency_exit_light_emissive", "emergency_exit_light_emissive (1)", "emergency_exit_light_emissive (2)"])
+        for part in {p["part"] for p in self.bus_lamps}:
+            own = [p for p in self.bus_lamps if p["part"] == part]
+            self.assertEqual([p["node"] for p in own], ["emergency_exit_light 1/Point light", "emergency_exit_light 1/Point light (1)"])
+            self.assertEqual([p["closed"]["position"] for p in own], [[0.0, 0.0, 0.228], [0.0, -0.163, 1.307]])
+        for p in self.bus_lamps:
+            self.assertEqual((p["source"], p["clip"], p["ease"], p["curve"], p["at"], p["seconds"], p["switch"]),
+                             ("dotanimator", "DotAnimator", "linear", None, None, 0.0, {"closed": False, "open": True}))
+            self.assertEqual(p["open"], p["closed"])
+        self.assertFalse([p for p in self.poses if p["part"].startswith("Exit") or p["node"].startswith("Exit")])   # the glow nodes are not carried
+        keys = [(p["barrier"], p["part"], p["node"]) for p in self.poses]
+        self.assertLess(max(i for i, k in enumerate(keys) if k[0] == "BUS_DOORS"), min(i for i, k in enumerate(keys) if k[0] == "BUS_LIGHT"))
+        self.assertLess(max(i for i, k in enumerate(keys) if k[0] == "BUS_LIGHT"), min(i for i, k in enumerate(keys) if k[0] == "PASSPORT_CONTROL_DOORS"))
 
     def test_twelve_bus_door_rows_open_the_front_row_to_the_back_rows_pose(self):
         self.assertEqual({p["part"] for p in self.bus}, {"Apron_bus_MAZ_doors", "Apron_bus_MAZ_doors (1)", "Apron_bus_MAZ_doors (2)"})
@@ -1835,7 +2028,7 @@ class AirPitSidecarTests(unittest.TestCase):
     def test_the_registry_carries_exactly_the_generated_csharp_and_mirrors_the_sidecar(self):
         self.assertIn(E.render_csharp(self.poses), self.cs_text)
         self.assertEqual(VD.door_pose_errors(self.map, REPO / "tools" / "maps" / "airpit.doors.json", self.entry.get("DoorPoses")), [])
-        self.assertEqual(sum(1 for r in self.entry["DoorPoses"] if "switch" in r), 2)
+        self.assertEqual(sum(1 for r in self.entry["DoorPoses"] if "switch" in r), 8)
         self.assertEqual(sum(1 for r in self.entry["DoorPoses"] if "switch" not in r), 28)
 
     def test_the_sidecar_regenerates_byte_for_byte_from_its_rows(self):
@@ -1846,11 +2039,18 @@ class AirPitSidecarTests(unittest.TestCase):
         raw = (REPO / "tools" / "maps" / "airpit.doors.json").read_bytes().decode("utf-8")
         self.assertEqual(raw.replace("\r\n", "\n"), again)
 
-    def test_the_other_sidecars_have_no_switch_row_and_keep_their_comment(self):
-        for stem in ("equator", "bay5", "bowl"):
+    def test_bay5_and_bowl_have_no_switch_row_and_keep_their_comment(self):
+        for stem in ("bay5", "bowl"):
             doc = sidecar_doc(stem)
             self.assertTrue(all("switch" not in p for p in doc["poses"]), stem)
             self.assertEqual(doc["_comment"], E.SIDECAR_COMMENT, stem)                         # their text is byte for byte the old one
+
+    def test_equators_switch_rows_are_its_exit_lamps_and_its_comment_carries_the_switch_paragraph(self):
+        doc = sidecar_doc("equator")
+        self.assertEqual({p["barrier"] for p in doc["poses"] if "switch" in p}, {"EXIT_LIGHT_EMISSIVE"})
+        self.assertEqual(sum(1 for p in doc["poses"] if "switch" in p), 8)
+        self.assertEqual(doc["_comment"], E.SIDECAR_COMMENT + E.SIDECAR_COMMENT_SWITCHES)
+        self.assertEqual(self.doc["_comment"], E.SIDECAR_COMMENT + E.SIDECAR_COMMENT_SWITCHES)
 
 
 class AirPitValidatorRuleTests(unittest.TestCase):
@@ -1934,9 +2134,17 @@ class AirPitValidatorRuleTests(unittest.TestCase):
         self.assertTrue(self.run_case(lambda d: bus(d).update(clip="mine")))
         self.assertTrue(self.run_case(lambda d: bus(d).update(source="clip", ease="smoothstep")))
 
-    def test_every_pose_barrier_must_be_an_opened_barrier(self):
+    def test_every_pose_barrier_must_be_an_opened_barrier_or_a_lamp_group(self):
         self.assertTrue(any("not an opened_barriers entry" in e
                             for e in self.run_case(lambda d: self.leaf(d).update(barrier="PASSPORT_CONTROL_EMISSIVE_X"))))
+        # BUS_LIGHT is a lamp group (every row a switch, no gate of any role): clean; one transform row in it, or a gate role, ends that
+        self.assertEqual(self.run_case(lambda d: None), [])
+        bus_door = lambda d: next(p for p in d["poses"] if p["barrier"] == "BUS_DOORS")
+        errors = self.run_case(lambda d: bus_door(d).update(barrier="BUS_LIGHT"))
+        self.assertTrue(any("lamp group" in e for e in errors), errors)
+        held = dict(self.map, held_gates=[*self.map["held_gates"], "BUS_LIGHT"])
+        self.assertTrue(any("is not an opened_barriers entry" in e for e in
+                            VD.door_pose_errors(held, REPO / "tools" / "maps" / "airpit.doors.json", self.entry["DoorPoses"])))
 
 
 class RealAirPitTests(unittest.TestCase):
@@ -1964,14 +2172,20 @@ class RealAirPitTests(unittest.TestCase):
         self.assertEqual(self.text, E.extract("arena_airpit", "auto", None)[0])               # byte-stable with or without the package
         self.assertNotIn("\r", self.text)
 
-    def test_the_scan_reads_the_eighteen_dotanimators_under_the_passport_root_and_leaves_the_bus_lights(self):
+    def test_the_scan_reads_the_passport_root_and_the_three_bus_lamps_and_skips_the_glow_nodes(self):
         check = [line for line in self.summary if line.startswith("decode self-check:")][0]
-        self.assertIn("18 DotAnimator object(s), 18 element(s)", check)                      # 16 leaves + RED + GREEN; BUS_LIGHT stays out
+        self.assertIn("21 DotAnimator object(s), 27 element(s)", check)                      # 16 leaves + RED + GREEN (18 / 18) + the 3 bus lamps (3 / 9)
         scan = [line for line in self.summary if line.startswith("scan PASSPORT_CONTROL_DOORS")][0]
         self.assertIn("18 pose(s) (2 switch row(s)), 0 inactive, 0 switch element(s) skipped", scan)
-        self.assertEqual(self.summary[-1], "poses 30: 18 dotanimator, 12 borrowed")
+        self.assertNotIn("part-level", scan)                                                 # the passport scan has no glow node
+        lamps = [line for line in self.summary if line.startswith("scan BUS_LIGHT")][0]
+        self.assertIn("3 DotAnimator(s), 9 element(s), 6 pose(s) (6 switch row(s)), 0 inactive, 0 switch element(s) skipped, "
+                      "3 part-level switch(es) skipped", lamps)
+        glow = [line for line in self.summary if "skipped part-level switch" in line]
+        self.assertEqual(sorted(line.rsplit(": ", 1)[1] for line in glow), ["BUS_LIGHT/Exit1", "BUS_LIGHT/Exit2", "BUS_LIGHT/Exit3"])
+        self.assertEqual(self.summary[-1], "poses 36: 24 dotanimator, 12 borrowed")
         if self.package is not None:
-            self.assertTrue(any(line.startswith("package check: 30 pose(s) exist in airpit-native-v9") for line in self.summary))
+            self.assertTrue(any(line.startswith("package check: 36 pose(s) exist in airpit-native-v9") for line in self.summary))
         self.assertEqual(sum(1 for line in self.summary if "lender twin" in line), 2)
 
     def test_every_switch_of_the_surveyed_levels_flips_the_state_of_its_node(self):
@@ -2047,10 +2261,19 @@ class RealArenaDotAnimatorTests(unittest.TestCase):
         check = [line for line in summary if line.startswith("decode self-check:")][0]
         self.assertIn("11 DotAnimator object(s), 11 element(s)", check)
 
-    def test_equators_booth_scan_finds_the_eight_leaf_animators_and_the_lamps_stay_out(self):
+    def test_equators_scans_find_the_eight_leaf_animators_and_the_four_exit_lamps_and_skip_the_glow_nodes(self):
         _, _, summary = E.extract("arena_equator", "auto", None)
-        self.assertIn("8 DotAnimator object(s), 8 element(s)", [line for line in summary if line.startswith("decode self-check:")][0])
-        self.assertIn("poses 10: 8 dotanimator, 2 borrowed", summary[-1])
+        self.assertIn("12 DotAnimator object(s), 20 element(s)", [line for line in summary if line.startswith("decode self-check:")][0])   # 8 + 4 lamps (12 elements)
+        booth = [line for line in summary if line.startswith("scan SPAWN_DOORS")][0]
+        self.assertIn("8 DotAnimator(s), 8 element(s), 8 pose(s) (0 switch row(s)), 0 inactive, 0 switch element(s) skipped", booth)
+        self.assertNotIn("part-level", booth)
+        lamps = [line for line in summary if line.startswith("scan EXIT_LIGHT_EMISSIVE")][0]
+        self.assertIn("4 DotAnimator(s), 12 element(s), 8 pose(s) (8 switch row(s)), 0 inactive, 0 switch element(s) skipped, "
+                      "4 part-level switch(es) skipped", lamps)
+        glow = [line for line in summary if "skipped part-level switch" in line]
+        self.assertEqual(len(glow), 4)
+        self.assertTrue(all("EXIT_LIGHT_EMISSIVE/Exit1 (" in line for line in glow))
+        self.assertIn("poses 18: 16 dotanimator, 2 borrowed", summary[-1])
 
     def test_a_borrowed_gate_with_its_own_script_would_be_refused(self):
         scene = E.ArenaScene(ARENA_DATA, 57)               # level 57 holds the booth leaves WITH a DotAnimator

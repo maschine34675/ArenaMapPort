@@ -78,6 +78,10 @@
   },
   "bake_bounds": [-57, 37, -2, 8, -83, 83],
   "navmesh_bake_layers": [9, 11, 13, 18, 30],
+  "puddle_water_material_names": [
+    "1b8546c701e1d1dc",
+    "0877f2335044042e"
+  ],
   "shader_fallback_names": [
     "Custom/Billboard_FogSheet_Simple",
     "Cloth/ClothShader",

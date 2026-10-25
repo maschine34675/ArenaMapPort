@@ -475,6 +475,42 @@ def shader_fallback_errors(map_json: dict) -> list[str]:
     return []
 
 
+# BaseBallistic.ESurfaceSound of EFT 0.16.9.5 (D:/SPT41/Development/_decompiled/BaseBallistic.cs, in declaration order). The
+# client parses puddle_extra_surfaces against this enum (PuddleFootstepRepairs); Concrete and Asphalt are always eligible
+# there and Puddle is the result, so none of the three is a meaningful extra.
+ESURFACE_SOUNDS = ("Concrete", "Metal", "Wood", "Soil", "Grass", "Asphalt", "Glass", "Gravel", "MetalThin", "Puddle", "Slate",
+                   "Tile", "WoodThick", "Swamp", "Garbage", "GarbageMetal", "Plastic", "WholeGlass", "WoodThin", "Snow")
+PUDDLE_BUILT_IN_SURFACES = ("Concrete", "Asphalt", "Puddle")
+
+
+def puddle_errors(map_json: dict) -> list[str]:
+    """Shape of the optional puddle fields (PuddleFootstepRepairs, docs/progress/puddle-footsteps-all-maps.md):
+    puddle_water_material_names = the exact imported material names of the map's water decals (oil decals sharing the shader
+    stay out), puddle_extra_surfaces = further BaseBallistic.ESurfaceSound names (besides Concrete/Asphalt) whose native
+    footstep may turn into the Puddle set inside a decal's mask. Empty/absent = the map is left alone / exactly Concrete+Asphalt."""
+    errors = []
+    names = map_json.get("puddle_water_material_names", [])
+    if not isinstance(names, list) or any(not isinstance(n, str) or not n or n != n.strip() for n in names):
+        errors.append("puddle_water_material_names must be an array of nonempty, unpadded material names")
+        names = []
+    elif len(names) != len(set(names)):
+        errors.append("puddle_water_material_names contains duplicate names")
+    extra = map_json.get("puddle_extra_surfaces", [])
+    if not isinstance(extra, list) or any(not isinstance(n, str) for n in extra):
+        errors.append("puddle_extra_surfaces must be an array of BaseBallistic.ESurfaceSound names")
+        return errors
+    if len(extra) != len(set(extra)):
+        errors.append("puddle_extra_surfaces contains duplicate names")
+    for surface in extra:
+        if surface not in ESURFACE_SOUNDS:
+            errors.append(f"puddle_extra_surfaces: {surface!r} is not a BaseBallistic.ESurfaceSound member (case-sensitive)")
+        elif surface in PUDDLE_BUILT_IN_SURFACES:
+            errors.append(f"puddle_extra_surfaces: {surface!r} is built in (Concrete and Asphalt are always eligible, Puddle is the result)")
+    if extra and not names:
+        errors.append("puddle_extra_surfaces without puddle_water_material_names has no effect: the map has no listed water decal")
+    return errors
+
+
 DOOR_POSE_KEYS = ("barrier", "part", "node", "clip", "source", "seconds", "ease", "curve", "at", "closed", "open")
 DOOR_SWITCH_KEY = "switch"   # optional (AirPit's passport lamps): {"closed": bool, "open": bool}, a SetActive row
 DOOR_SIDECAR_SCHEMA = 2
@@ -532,11 +568,23 @@ def door_switch_errors(pose: dict) -> list[str]:
     return errors
 
 
+def door_lamp_groups(map_json: dict, poses) -> set[str]:
+    """The barriers of a doors sidecar that are LAMP GROUPS (2026-10-25: Equator's EXIT_LIGHT_EMISSIVE, AirPit's BUS_LIGHT): every
+    row of the barrier is a switch row, and it is no opened_barriers / start_gates / held_gates entry (a gate has transform rows or
+    its own handling; a lamp group is only lit when the gates open, DoorPoseModel.LampBarriers is the client's twin of this rule)."""
+    flags: dict[str, list[bool]] = {}
+    for pose in poses if isinstance(poses, list) else []:
+        if isinstance(pose, dict) and isinstance(pose.get("barrier"), str):
+            flags.setdefault(pose["barrier"], []).append(DOOR_SWITCH_KEY in pose)
+    gates = {*map_json.get("opened_barriers", []), *map_json.get("start_gates", []), *map_json.get("held_gates", [])}
+    return {barrier for barrier, rows in flags.items() if all(rows) and barrier not in gates}
+
+
 def door_pose_errors(map_json: dict, doors_path: Path, registry_poses) -> list[str]:
     """tools/maps/<stem>.doors.json (written by tools/extract/extract_door_poses.py) against the map descriptor and the
     registry's DoorPoses: schema 2, barriers that really are opened_barriers (or Equator's booth assembly roots, see
-    DOOR_BARRIER_EXCEPTIONS), the rules of source / ease / curve / at, and the same poses in the same order with the same
-    numbers on both sides. A map without the sidecar must have no DoorPoses."""
+    DOOR_BARRIER_EXCEPTIONS, or a lamp group, see door_lamp_groups), the rules of source / ease / curve / at, and the same poses
+    in the same order with the same numbers on both sides. A map without the sidecar must have no DoorPoses."""
     name = doors_path.name
     registry_poses = registry_poses or []
     if not doors_path.exists():
@@ -569,6 +617,7 @@ def door_pose_errors(map_json: dict, doors_path: Path, registry_poses) -> list[s
     if not isinstance(poses, list) or not poses:
         return errors + [f"{name}: poses must be a non-empty array"]
     barriers = map_json.get("opened_barriers", [])
+    lamp_groups = door_lamp_groups(map_json, poses)
     exception = DOOR_BARRIER_EXCEPTIONS.get(map_json.get("key"))
     seen: dict[tuple, list] = {}
     for i, pose in enumerate(poses):
@@ -584,10 +633,11 @@ def door_pose_errors(map_json: dict, doors_path: Path, registry_poses) -> list[s
             errors.append(f"{label}: part and node must be strings (\"\" = the barrier root / the part itself)")
         elif not pose["part"] and pose["node"]:
             errors.append(f"{label}: a node needs a part (part \"\" means the barrier root itself moves)")
-        if isinstance(pose["barrier"], str) and pose["barrier"] not in barriers \
+        if isinstance(pose["barrier"], str) and pose["barrier"] not in barriers and pose["barrier"] not in lamp_groups \
                 and not (exception is not None and exception.fullmatch(pose["barrier"])):
             errors.append(f"{label}: barrier {pose['barrier']!r} is not an opened_barriers entry"
-                          + (" or a booth assembly root" if exception is not None else ""))
+                          + (" or a booth assembly root" if exception is not None else "")
+                          + " or a lamp group (every row of the barrier a switch row)")
         if isinstance(pose["part"], str) and "frame" in pose["part"].lower():
             errors.append(f"{label}: part {pose['part']!r} contains 'frame': BoothDoorRepairs never switches a frame part off")
         if isinstance(pose["seconds"], bool) or not isinstance(pose["seconds"], (int, float)) \
@@ -662,6 +712,11 @@ def check_map_against_registry_entry(
     errors.extend(f"{where}: {error}" for error in background_scene_errors(map_json, registry_args, ref_scope))
     errors.extend(f"{where}: {error}" for error in bake_input_errors(map_json))
     errors.extend(f"{where}: {error}" for error in shader_fallback_errors(map_json))
+    errors.extend(f"{where}: {error}" for error in puddle_errors(map_json))
+    check_field(errors, where, "puddle_water_material_names", map_json.get("puddle_water_material_names", []),
+                resolve(registry_args.get("PuddleWaterMaterialNames", []), ref_scope))
+    check_field(errors, where, "puddle_extra_surfaces", map_json.get("puddle_extra_surfaces", []),
+                resolve(registry_args.get("PuddleExtraSurfaces", []), ref_scope))
     errors.extend(f"{where}: {error}" for error in lamp_fill_errors(map_json))
     check_field(errors, where, "lamp_fill", map_json.get("lamp_fill"), registry_args.get("LampFill"))
     errors.extend(f"{where}: {error}" for error in door_pose_errors(

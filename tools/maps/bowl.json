@@ -53,6 +53,12 @@
     30
   ],
   "keep_level_borders": true,
+  "puddle_water_material_names": [
+    "0877f2335044042e"
+  ],
+  "puddle_extra_surfaces": [
+    "Soil"
+  ],
   "shader_fallback_names": [
     "p0/Reflective/Bumped Specular_TwoSided"
   ]

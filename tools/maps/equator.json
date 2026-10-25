@@ -22,6 +22,10 @@
   "fixed_night_hour": 0,
   "sun_scene": "Arena_Equator_Lighting",
   "sun_paths": ["FAKE_SUN", "FAKE_SUN_VOLUME"],
+  "puddle_water_material_names": [
+    "70f045bb011600e7",
+    "0877f2335044042e"
+  ],
   "distant_shadow_caster_paths": [
     "SBG_Arena_Equator/SOO_LOD0/STRUCTURES/Floors/equator_floor_01/equator_floor_01_SHADOW_LOD0",
     "SBG_Arena_Equator/SOO_LOD0/STRUCTURES/Floors/equator_floor_02/equator_floor_02_SHADOW_LOD0",

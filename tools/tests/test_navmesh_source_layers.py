@@ -1117,13 +1117,14 @@ class NavMeshSourceLayerTests(unittest.TestCase):
 
     @unittest.skipUnless(newtonsoft_dll() is not None, "no .NET SDK with Newtonsoft.Json.dll")
     def test_the_loader_reads_the_four_real_sidecars_and_the_airpit_fields(self):
-        # 2026-10-24: closed_position and is_switch are new. All four sidecars parse (airpit 30 rows / 2 switch, bay5 7, bowl 19, equator 10),
+        # 2026-10-24: closed_position and is_switch are new. All four sidecars parse (airpit 36 rows / 8 switch, bay5 7, bowl 19, equator 18 / 8 switch;
+        # 2026-10-25: the exit-lamp groups EXIT_LIGHT_EMISSIVE and BUS_LIGHT add switch rows the bake reads and ignores),
         # a malformed closed.position or switch throws with a message naming the file and the pose, and the older rules still hold.
         result = run_loader()
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         self.assertIn("LOADER_CHECKS_PASSED", result.stdout)
-        for line in ("airpit: 30 row(s), 2 switch, 0 with at, 30 with closed_position", "bay5: 7 row(s), 0 switch, 4 with at, 7 with closed_position",
-                     "bowl: 19 row(s), 0 switch, 0 with at, 19 with closed_position", "equator: 10 row(s), 0 switch, 10 with at, 10 with closed_position"):
+        for line in ("airpit: 36 row(s), 8 switch, 0 with at, 36 with closed_position", "bay5: 7 row(s), 0 switch, 4 with at, 7 with closed_position",
+                     "bowl: 19 row(s), 0 switch, 0 with at, 19 with closed_position", "equator: 18 row(s), 8 switch, 10 with at, 18 with closed_position"):
             self.assertIn(line, result.stdout)
 
     @unittest.skipUnless(newtonsoft_dll() is not None, "no .NET SDK with Newtonsoft.Json.dll")

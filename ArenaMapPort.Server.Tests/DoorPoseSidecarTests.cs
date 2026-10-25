@@ -201,15 +201,21 @@ public sealed class DoorPoseSidecarTests
 
     [Theory]
     [MemberData(nameof(Maps))]
-    public void EveryPoseBarrierIsAnOpenedBarrierOrAnEquatorBoothRoot(string stem)
+    public void EveryPoseBarrierIsAnOpenedBarrierAnEquatorBoothRootOrALampGroup(string stem)
     {
         var map = MapOf(stem);
         foreach (var pose in map.DoorPoses)
         {
             var boothRoot = stem == "equator" && BoothAssemblyRoot.IsMatch(pose.Barrier);
-            Assert.True(boothRoot || map.OpenedBarriers.Contains(pose.Barrier),
-                $"{stem}: pose barrier '{pose.Barrier}' is neither an OpenedBarriers entry nor a booth assembly root");
+            // a lamp group (2026-10-25): every row of the barrier is a switch row and it is no gate of any role
+            var lampGroup = map.DoorPoses.Where(p => p.Barrier == pose.Barrier).All(p => p.IsSwitch)
+                && !map.OpenedBarriers.Contains(pose.Barrier) && !map.StartGates.Contains(pose.Barrier) && !map.HeldGates.Contains(pose.Barrier);
+            Assert.True(boothRoot || map.OpenedBarriers.Contains(pose.Barrier) || lampGroup,
+                $"{stem}: pose barrier '{pose.Barrier}' is neither an OpenedBarriers entry, a booth assembly root nor a lamp group");
         }
+        // which barriers are lamp groups: Equator's EXIT_LIGHT_EMISSIVE and AirPit's BUS_LIGHT, nothing on Bowl and Bay5
+        var groups = map.DoorPoses.GroupBy(p => p.Barrier).Where(g => g.All(p => p.IsSwitch)).Select(g => g.Key).ToArray();
+        Assert.Equal(stem switch { "equator" => new[] { "EXIT_LIGHT_EMISSIVE" }, "airpit" => new[] { "BUS_LIGHT" }, _ => new string[0] }, groups);
     }
 
     [Fact]
@@ -237,9 +243,14 @@ public sealed class DoorPoseSidecarTests
     }
 
     [Fact]
-    public void EquatorHasTenBoothDoorPosesEightFromArenasScriptAndTwoBorrowed()
+    public void EquatorHasTenBoothDoorPosesEightFromArenasScriptAndTwoBorrowedBesideEightLampSwitches()
     {
-        var poses = ArenaMapRegistry.Equator.DoorPoses;
+        var all = ArenaMapRegistry.Equator.DoorPoses;
+        Assert.Equal(18, all.Length);
+        Assert.Equal(8, all.Count(p => p.IsSwitch));                                       // the exit lamps' Point lights (EXIT_LIGHT_EMISSIVE)
+        Assert.All(all.Where(p => p.IsSwitch), p => Assert.Equal("EXIT_LIGHT_EMISSIVE", p.Barrier));
+        Assert.Equal("EXIT_LIGHT_EMISSIVE", all[0].Barrier);                              // the sidecar sorts the lamp group ahead of the booth doors
+        var poses = all.Where(p => !p.IsSwitch).ToArray();
         Assert.Equal(10, poses.Length);
         Assert.Equal(8, poses.Count(p => p.Source == ArenaDoorPose.SourceDotAnimator));
         Assert.Equal(2, poses.Count(p => p.Source == ArenaDoorPose.SourceBorrowed));
@@ -383,22 +394,26 @@ public sealed class DoorPoseSidecarTests
                 || ReferenceEquals(map, ArenaMapRegistry.Bay5) || ReferenceEquals(map, ArenaMapRegistry.AirPit)) continue;
             Assert.Empty(map.DoorPoses);
         }
-        Assert.All(ArenaMapRegistry.Bowl.DoorPoses.Concat(ArenaMapRegistry.Equator.DoorPoses).Concat(ArenaMapRegistry.Bay5.DoorPoses),
-            p => Assert.False(p.IsSwitch));                                         // only AirPit's two lamp rows are switches
+        Assert.All(ArenaMapRegistry.Bowl.DoorPoses.Concat(ArenaMapRegistry.Bay5.DoorPoses),
+            p => Assert.False(p.IsSwitch));                                         // switches: AirPit's lamps and both maps' exit lamps only
+        Assert.All(ArenaMapRegistry.Equator.DoorPoses.Where(p => p.IsSwitch), p => Assert.Equal("EXIT_LIGHT_EMISSIVE", p.Barrier));
     }
 
     private const string Passport = "PASSPORT_CONTROL_DOORS";
     private const string Bus = "BUS_DOORS";
 
     [Fact]
-    public void AirPitHasThirtyRowsTwelveBusDoorsSixteenPassportLeavesAndTwoLampSwitches()
+    public void AirPitHasThirtySixRowsTwelveBusDoorsSixBusLampsSixteenPassportLeavesAndTwoPassportLamps()
     {
         var ap = ArenaMapRegistry.AirPit;
-        Assert.Equal(30, ap.DoorPoses.Length);
+        Assert.Equal(36, ap.DoorPoses.Length);
         Assert.Equal(12, ap.DoorPosesOfBarrier(Bus).Length);
+        Assert.Equal(6, ap.DoorPosesOfBarrier("BUS_LIGHT").Length);                     // 2026-10-25: three lamps x two Point lights, all switches
+        Assert.All(ap.DoorPosesOfBarrier("BUS_LIGHT"), p => Assert.True(p.IsSwitch));
         Assert.Equal(18, ap.DoorPosesOfBarrier(Passport).Length);
         Assert.Equal(16, ap.DoorPosesOfBarrier(Passport).Count(p => !p.IsSwitch));
-        Assert.Equal(2, ap.DoorPoses.Count(p => p.IsSwitch));
+        Assert.Equal(2, ap.DoorPosesOfBarrier(Passport).Count(p => p.IsSwitch));
+        Assert.Equal(8, ap.DoorPoses.Count(p => p.IsSwitch));
         Assert.All(ap.DoorPoses, p => Assert.Null(p.At));                          // no repeated hierarchy path on this map
         // the roles are not changed by the rows: the bus doors are the start gate, the passport control and its sheets are held
         Assert.Equal(new[] { Bus }, ap.StartGates);
