@@ -19,7 +19,8 @@ Two layouts, one classification, one verifier:
   (default)  the multi-part layout, kept available for channels with a file size cap. The release is cut into
       parts that install by extracting EVERY part into the SPT root:
 
-      part1ofN-core         client DLL, server DLL, original map descriptions, selection artwork, README, notices
+      part1ofN-core         client DLL, server DLL, original map descriptions, selection artwork, score monitor sprites,
+                            README, notices
       part2ofN-<map stem>   one part per released map: bundles, db/<key>/base.json, acoustics, gate sounds, AI sidecar,
                             flares, water, loading screens, overview map, shader sidecar, banner
 
@@ -148,6 +149,9 @@ SERVER_NOTICES_NAME = f"{SERVER_ROOT}/THIRD-PARTY-NOTICES.txt"
 DESCRIPTIONS_NAME = f"{SERVER_ROOT}/locales/map-descriptions.json"
 SELECTION_MAP_NAMES = (f"{PLUGIN_ROOT}/map-selection/region-map.png",
                        f"{PLUGIN_ROOT}/map-selection/manifest.json")
+# The artwork of the score monitor faces (docs/progress/score-monitors.md): one manifest and one PNG per sprite, the same for every map, so
+# they travel in the core part. The rule pins the folder and leaf shape; validate_distribution.py checks the exact file set.
+MONITORS_MANIFEST_NAME = f"{PLUGIN_ROOT}/monitors/monitors.json"
 
 
 class PackagingError(Exception):
@@ -327,7 +331,7 @@ def build_rules(spec: ReleaseSpec) -> list:
     """Exactly the dist layout the build stages. Every pattern is matched with fullmatch, and the key / stem /
     display name is escaped and followed by its delimiter ('/', '_', '.'), so the parked arena_airpit2 can never
     match arena_airpit (and ai/airpit2.ai.json never matches ai/airpit.ai.json). The folder rules (acoustics,
-    flares, water, dynamicmaps, gate sounds) pin the leaf names the build stages (ArenaMapPort.Client.csproj, the spatial-audio
+    flares, water, dynamicmaps, gate sounds, score monitors) pin the leaf names the build stages (ArenaMapPort.Client.csproj, the spatial-audio
     and flare extractors), flat or one 'textures/' / 'Layers/' level deep, so a stray Thumbs.db, desktop.ini,
     .bak, .git folder or nested leftover is a classification error instead of shipping."""
     rules = []
@@ -340,6 +344,7 @@ def build_rules(spec: ReleaseSpec) -> list:
     add(CORE_ID, "map descriptions", re.escape(DESCRIPTIONS_NAME))
     for name in SELECTION_MAP_NAMES:
         add(CORE_ID, "selection map", re.escape(name))
+    add(CORE_ID, "score monitors", re.escape(f"{PLUGIN_ROOT}/monitors/") + rf"(?:monitors\.json|{LEAF}\.png)")
     for m in spec.maps:
         key = re.escape(m.key)
         add(m.stem, "bundle", re.escape(f"{PLUGIN_ROOT}/bundles/") + key + r"_(?:scenes|navmesh|preset)\.bundle")
@@ -375,9 +380,10 @@ def required_files(spec: ReleaseSpec) -> dict:
     tools/validate/validate_distribution.py treats as mandatory per released map: a map without its key file cannot
     unlock its encrypted bundles, a missing AI sidecar silently falls back to the NavMesh-synthesised AI, a missing
     shader sidecar leaves pink materials, a map without its gate sound manifest has silent gates, and a map without its
-    acoustic graph, banner or loading screens is not the map the README promises. Only flares, water and the
+    acoustic graph, banner or loading screens is not the map the README promises; the core part needs the score monitor
+    manifest the client reads when a mode plugin claims the TV screens. Only flares, water and the
     DynamicMaps overview are optional (AirPit has an overview but no flares or water package)."""
-    required = {CORE_ID: [spec.client_dll, spec.server_dll, DESCRIPTIONS_NAME, *SELECTION_MAP_NAMES]}
+    required = {CORE_ID: [spec.client_dll, spec.server_dll, DESCRIPTIONS_NAME, *SELECTION_MAP_NAMES, MONITORS_MANIFEST_NAME]}
     for m in spec.maps:
         names = [f"{PLUGIN_ROOT}/bundles/{m.key}_{kind}.bundle" for kind in ("scenes", "navmesh", "preset")]
         names += [f"{SERVER_ROOT}/db/{m.key}/base.json",
@@ -665,7 +671,7 @@ def readme_text(spec: ReleaseSpec, parts) -> str:
         display = {m.stem: m.display for m in spec.maps}
         lines = []
         for p in parts:
-            what = ("plugin, server mod, original map descriptions, selection artwork, notices" if p.id == CORE_ID
+            what = ("plugin, server mod, original map descriptions, selection artwork, score monitor sprites, notices" if p.id == CORE_ID
                     else f"{display[p.id]} map data (bundles, NavMesh, server database entry, audio, art)")
             lines.append(f"  {p.index} of {p.count}  {p.zip_name}\n         {what}")
         intro = (f"This release comes in {len(parts)} ZIP parts. Install ALL of them; a map is complete only with\n"

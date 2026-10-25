@@ -200,6 +200,21 @@
     <Copy SourceFiles="@(ArenaMapPortSelectionMapFile)" DestinationFolder="$(ArenaMapPortDistDir)\map-selection" />
   </Target>
 
+  <!-- Score monitor artwork (docs/progress/score-monitors.md): the nine sprites of Arena's timer, score and alive faces, exported by
+       tools/extract/extract_monitor_templates.py into the ignored work/extract/monitors (one PNG per sprite plus monitors.json), staged in Release and
+       DllOnly builds like the selection map. Plaintext on purpose (art, not a bundle, and no key-source file is among its sources): ScoreMonitors reads
+       <plugin>/monitors/monitors.json when a mode plugin claims the TV screens. validate_distribution.py checks the exact file set and the pinned pixels. -->
+  <Target Name="ArenaMapPortStageMonitors" AfterTargets="ArenaMapPortDistCopy" Condition="'$(Configuration)'=='Release'">
+    <PropertyGroup>
+      <ArenaMapPortMonitorsDir>$(MSBuildThisFileDirectory)..\work\extract\monitors</ArenaMapPortMonitorsDir>
+    </PropertyGroup>
+    <Error Condition="!Exists('$(ArenaMapPortMonitorsDir)\monitors.json')" Text="Missing score monitor artwork; run tools/extract/extract_monitor_templates.py" />
+    <ItemGroup>
+      <ArenaMapPortMonitorFile Include="$(ArenaMapPortMonitorsDir)\monitors.json;$(ArenaMapPortMonitorsDir)\*.png" />
+    </ItemGroup>
+    <Copy SourceFiles="@(ArenaMapPortMonitorFile)" DestinationFolder="$(ArenaMapPortDistDir)\monitors" />
+  </Target>
+
   <!-- Accepted overview maps live with this plugin, not in DynamicMaps' installation.
        Logical SVG paths in the original definitions are resolved by DynamicMapsIntegration. -->
   <Target Name="ArenaMapPortStageDynamicMaps" AfterTargets="ArenaMapPortDistCopy" Condition="'$(Configuration)'=='Release'">

@@ -312,3 +312,27 @@ no copy; `validate_distribution.py` and `test_gate_sounds.py` guard it). Per rel
 WAVs (rule `gate sounds` of `make_release_zips.py`): `make_release_zips.py --plan` reads core 5, equator 23, bay5 29, airpit 21, bowl 25
 files (103 in all, raw 3,671,190,143 B; each part's count was 21, 26, 18, 20 before, the key files included). Bundles, key files,
 server data and `key-sources.json` are unchanged. Design, numbers and host checks: [gate-sounds.md](progress/gate-sounds.md).
+
+## Score monitor artwork addition — 2026-10-25
+
+New folder `BepInEx/plugins/maschine-ArenaMapPort/monitors/`: `monitors.json` (schema 1: per sprite the file, size, pivot, pixels per unit, border, the SHA-256 of
+the decoded RGBA pixels, the PNG's length and SHA-256, the faces that draw it and its source ids) and nine PNG sprites of Arena's timer, score and alive faces
+(Background, Timer_Glow_White, Vignette, Icon_Glow, Icon_Background, Score_Icon_Scull, Status_Icon_Scull, Status_Toggle_On, Status_Toggle_Off), plaintext like the
+selection artwork. 10 files, 2,651,235 B (2,646,533 B of PNG, 4,702 B of manifest), so dist grows from 103 to 113 files. The extractor is
+`tools/extract/extract_monitor_templates.py` (output under the ignored `work/extract/monitors`, staged by the client csproj target `ArenaMapPortStageMonitors` in
+Release and DllOnly builds, which stops with an Error naming the extractor when the package is missing); the three noise sprites and the interference texture of
+Arena's templates are not exported. The sprites come from `sharedassets1.assets`, which is no stage-2 key source (the extractor, `validate_distribution.py` and a
+test each refuse a sprite whose asset or `.resS` stream is one); the pins are hashes of decoded pixels only. The folder is the same for every map, so it travels in
+the core part (rule `score monitors` of `make_release_zips.py`, `monitors.json` required): `make_release_zips.py --plan` reads core 15 (was 5), equator 23, bay5 29,
+airpit 21, bowl 25 files (113 in all, raw 3,673,865,954 B, the rebuilt client DLL included). Bundles, key files, server data and `key-sources.json` are unchanged.
+The per-map placement sidecars `tools/maps/<stem>.monitors.json` are tracked sources that compile into the client through the registry; they are not staged.
+Design and numbers: [score-monitors.md](progress/score-monitors.md).
+
+## Score monitors client addition — 2026-10-25
+
+No new file: the client DLL (`maschine-ArenaMapPort.Client.dll`) now reads the `monitors/` folder of the section above. `ScoreMonitorView` loads the sprites its faces need (by the
+names of `ScoreMonitorLayout`, one PNG per frame, at the first claim of a raid) and nothing at startup, so a missing or damaged file costs one Warning and plain colour blocks, not the
+raid. The file set of the folder is unchanged and still checked by `validate_distribution.py`; bundles, key files, server data and `key-sources.json` are unchanged. Only the DLL grows
+(26,112 B): `make_release_zips.py --plan` reads 113 files, raw 3,673,892,066 B, parts core 15, equator 23, bay5 29, airpit 21, bowl 25 as before. The developer keys
+`Monitors/Enabled`, `Monitors/ScreenLift` and `Monitors/Demo` are not public (no player text changes). Design, contract and host checks:
+[score-monitors.md](progress/score-monitors.md).

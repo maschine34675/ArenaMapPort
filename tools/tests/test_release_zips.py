@@ -84,6 +84,8 @@ def fake_dist_files(maps=MAPS):
         f"{SERVER}/locales/map-descriptions.json": text("descriptions"),
         f"{PLUGIN}/map-selection/region-map.png": b"\x89PNG\r\n\x1a\n" + rng.randbytes(1000),
         f"{PLUGIN}/map-selection/manifest.json": text("selection map manifest"),
+        f"{PLUGIN}/monitors/monitors.json": text("monitor manifest"),
+        f"{PLUGIN}/monitors/Arena_Scoreboard_Status_Toggle_On.png": b"\x89PNG\r\n\x1a\n" + random.Random("monitors").randbytes(900),   # its own generator: the bytes below keep their values
     }
     for key, display in maps:
         stem = key.removeprefix("arena_")
@@ -174,12 +176,13 @@ class PartitionTests(FakeRepoCase):
             "maschine-ArenaMapPort-0.1.0-part3of4-bay5.zip",
             "maschine-ArenaMapPort-0.1.0-part4of4-airpit.zip"])
 
-    def test_core_holds_only_the_five_shared_files(self):
+    def test_core_holds_only_the_seven_shared_files(self):
         core = self.partition()[0]
         self.assertEqual({f.rel for f in core.files}, {
             f"{PLUGIN}/maschine-ArenaMapPort.Client.dll", f"{SERVER}/maschine-ArenaMapPort.Server.dll",
             f"{SERVER}/locales/map-descriptions.json",
-            f"{PLUGIN}/map-selection/region-map.png", f"{PLUGIN}/map-selection/manifest.json"})
+            f"{PLUGIN}/map-selection/region-map.png", f"{PLUGIN}/map-selection/manifest.json",
+            f"{PLUGIN}/monitors/monitors.json", f"{PLUGIN}/monitors/Arena_Scoreboard_Status_Toggle_On.png"})
 
     def test_each_map_part_holds_only_its_own_files(self):
         for part, (key, display) in zip(self.partition()[1:], MAPS):
@@ -213,6 +216,8 @@ class PartitionTests(FakeRepoCase):
                      f"{PLUGIN}/map-selection/Thumbs.db", f"{PLUGIN}/map-selection/region-map.png.bak",
                      f"{PLUGIN}/map-selection/manifest.json.bak", f"{PLUGIN}/map-selection/other.png",
                      f"{PLUGIN}/map-selection/nested/region-map.png",
+                     f"{PLUGIN}/monitors/Thumbs.db", f"{PLUGIN}/monitors/monitors.json.bak", f"{PLUGIN}/monitors/sprite.png.bak",
+                     f"{PLUGIN}/monitors/nested/sprite.png", f"{PLUGIN}/monitors/other.json", f"{PLUGIN}/monitors/arena_bay5/monitors.json",
                      # strays inside the folders the build stages file by file
                      f"{PLUGIN}/acoustics/arena_bay5/Thumbs.db", f"{PLUGIN}/acoustics/arena_bay5/notes.txt",
                      f"{PLUGIN}/acoustics/arena_equator/old/spatial-audio.json",
@@ -283,7 +288,7 @@ class PartitionTests(FakeRepoCase):
         names = [f"{SERVER}/db/arena_bay5/base.json", f"{PLUGIN}/bundles/arena_equator_navmesh.bundle",
                  f"{SERVER}/locales/map-descriptions.json", f"{PLUGIN}/maschine-ArenaMapPort.Client.dll",
                  f"{SERVER}/maschine-ArenaMapPort.Server.dll",
-                 f"{PLUGIN}/map-selection/region-map.png", f"{PLUGIN}/map-selection/manifest.json"]
+                 f"{PLUGIN}/map-selection/region-map.png", f"{PLUGIN}/map-selection/manifest.json", f"{PLUGIN}/monitors/monitors.json"]
         for key, _display in MAPS:  # everything validate_distribution.py demands of every released map
             names += [f"{PLUGIN}/{shader_sidecar(key)}", f"{PLUGIN}/ai/{key.removeprefix('arena_')}.ai.json",
                       f"{SERVER}/banners/{key}.jpg", f"{PLUGIN}/acoustics/{key}/spatial-audio.json",
@@ -316,6 +321,7 @@ class PartitionTests(FakeRepoCase):
                      f"{PLUGIN}/flares/arena_equator/textures/resources.assets_2812.bin",
                      f"{PLUGIN}/water/arena_bay5/textures/normalsDetails.bin",
                      f"{PLUGIN}/map-selection/region-map.png", f"{PLUGIN}/map-selection/manifest.json",
+                     f"{PLUGIN}/monitors/monitors.json", f"{PLUGIN}/monitors/Arena_Scoreboard_AllBoards_Vignette.png",
                      f"{PLUGIN}/dynamicmaps/ArenaMapPort_Equator/Layers/Ground.svg"):
             with self.subTest(name=name):
                 self.assertEqual(len([r for r in rules if r.regex.fullmatch(name)]), 1)
@@ -568,6 +574,7 @@ class BuildTests(FakeRepoCase):
         self.assertIn("close", readme.lower())
         self.assertIn("Equator, Bay5, AirPit", readme)
         self.assertIn("selection artwork", readme)
+        self.assertIn("score monitor sprites", readme)
         notices = core[f"{PLUGIN}/THIRD-PARTY-NOTICES.txt"]
         self.assertEqual(notices, core[f"{SERVER}/THIRD-PARTY-NOTICES.txt"])
         text = notices.decode("utf-8")
@@ -587,6 +594,22 @@ class BuildTests(FakeRepoCase):
         for path in (f"{PLUGIN}/map-selection/region-map.png", f"{PLUGIN}/map-selection/manifest.json"):
             self.assertEqual(contents[core_name][path], self.files[path])
             self.assertEqual([name for name, entries in contents.items() if path in entries], [core_name])
+
+    def test_score_monitor_artwork_is_byte_identical_and_core_only(self):
+        result = self.build()
+        contents = self.read_zips(result)
+        core_name = "maschine-ArenaMapPort-0.1.0-part1of4-core.zip"
+        for path in (f"{PLUGIN}/monitors/monitors.json", f"{PLUGIN}/monitors/Arena_Scoreboard_Status_Toggle_On.png"):
+            self.assertEqual(contents[core_name][path], self.files[path])
+            self.assertEqual([name for name, entries in contents.items() if path in entries], [core_name])
+
+    def test_a_dist_without_the_monitor_manifest_is_incomplete_but_a_missing_sprite_is_not_the_packagers_business(self):
+        (self.dist / PLUGIN / "monitors" / "Arena_Scoreboard_Status_Toggle_On.png").unlink()
+        self.partition()          # the exact sprite set is validate_distribution.py's job (its manifest lists it)
+        (self.dist / PLUGIN / "monitors" / "monitors.json").unlink()
+        with self.assertRaises(release.PackagingError) as caught:
+            self.partition()
+        self.assertIn("incomplete dist", str(caught.exception))
 
     def test_zip_timestamps_and_attributes_are_fixed(self):
         result = self.build()

@@ -72,7 +72,7 @@ def load_map(map_path: Path) -> dict:
 def map_descriptor_paths(maps_dir: Path) -> list[Path]:
     """Select map files by name, leaving malformed descriptors visible to validation.
 
-    Dotted stems (<stem>.bots.json, .exits.json, .doors.json, .opened.json) are map sidecars.
+    Dotted stems (<stem>.bots.json, .exits.json, .doors.json, .opened.json, .gatesounds.json, .monitors.json) are map sidecars.
     Both registry and distribution validation must use the same descriptor set.
     """
     return sorted(p for p in maps_dir.glob("*.json") if "." not in p.stem)
@@ -198,6 +198,23 @@ def parse_door_pose_literal(v: str) -> dict:
     return pose
 
 
+def parse_score_monitor_literal(v: str) -> dict:
+    """Score monitors: `new ArenaScoreMonitor(scene, path, new[] { x, y, z }, arenaType, activeInScene)`; spelled as the five fields of the
+    sidecar's "monitors" rows that the registry mirrors (scene, path, at, arena_type, active_in_scene). The last argument is a literal
+    `true` / `false` (parse_cs_value reads a bare word as a reference, so it is matched here)."""
+    inner = v[len("new ArenaScoreMonitor("):].rstrip()
+    if not inner.endswith(")"):
+        fail(f"could not parse score monitor literal: {v[:80]!r}")
+    raw_args = split_top_level_args(inner[:-1])
+    flag = re.fullmatch(r"\s*(true|false)\s*", raw_args[-1]) if raw_args else None
+    if len(raw_args) != 5 or flag is None:
+        fail("score monitor literal requires (scene, path, new[] { x, y, z }, arenaType, true|false): " + repr(v[:80]))
+    values = [parse_cs_value(x) for x in raw_args[:4]]
+    if not isinstance(values[0], str) or not isinstance(values[1], str) or not isinstance(values[2], list) or type(values[3]) is not int:
+        fail("score monitor literal requires (string scene, string path, new[] { x, y, z }, int arenaType, bool activeInScene): " + repr(v[:80]))
+    return {"scene": values[0], "path": values[1], "at": values[2], "arena_type": values[3], "active_in_scene": flag.group(1) == "true"}
+
+
 def parse_cs_value(raw: str):
     """Parses one named-argument value into a Python str / int / list[str] / ("ref", "A.B")."""
     v = raw.strip()
@@ -245,6 +262,8 @@ def parse_cs_value(raw: str):
         return parse_lamp_fill_literal(v)
     if v.startswith("new ArenaDoorPose("):
         return parse_door_pose_literal(v)
+    if v.startswith("new ArenaScoreMonitor("):
+        return parse_score_monitor_literal(v)
     if re.fullmatch(r"[A-Za-z_]\w*\.[A-Za-z_]\w*", v):
         return ("ref", v)
     if re.fullmatch(r"[A-Za-z_]\w*", v):
@@ -830,6 +849,117 @@ def gate_sound_errors(map_json: dict, sounds_path: Path, doors_path: Path) -> li
     return errors
 
 
+SCORE_MONITOR_SCHEMA = 1
+SCORE_MONITOR_ROW_KEYS = ("scene", "path", "at", "arena_type", "template", "confirmed", "face", "active_in_scene", "prop_scale", "world_size_m",
+                          "viewer_yaw")
+SCORE_MONITOR_MIRRORED = ("scene", "path", "at", "arena_type", "active_in_scene")   # the five fields ArenaScoreMonitor carries
+# type word -> (Arena template, confirmed, face): the table of tools/extract/extract_score_monitors.TYPE_WORDS and of the client's
+# ScoreMonitorLayout.FaceOf (a test pins all three). 0, 1, 2 are confirmed by Bowl's TIMER / SCORE / ALIVE prop names; 6 and 7 are inferred from the
+# template order; 10 names no template. A word that is not here is refused: an Arena build that adds one needs a human decision.
+SCORE_MONITOR_TYPE_WORDS = {
+    0: ("MonitorTimer", True, "timer"),
+    1: ("MonitorTeamsCommonRoundScore", True, "score"),
+    2: ("MonitorAlivePlayers", True, "alive"),
+    6: ("MonitorTeamsFinalRoundScore", False, "score"),
+    7: ("MonitorPlayerboard", False, "none"),
+    10: (None, False, "none"),
+}
+# the pose of every ArenaMonitorHolder below its TV prop; ArenaScoreMonitorMount (Shared) mirrors it (ScoreMonitorSidecarTests)
+SCORE_MONITOR_MOUNT = {"position": [0.0, 0.0, 0.369285], "rotation": [-0.5, 0.5, 0.5, -0.5], "scale": 0.00054, "size": [1930, 1163], "pivot": [0.5, 0.5]}
+SCORE_MONITOR_AT_TOLERANCE = 0.05   # m, ArenaScoreMonitor.AtTolerance: two rows of one path closer than this are one row twice
+
+
+def score_monitor_errors(map_json: dict, monitors_path: Path, registry_rows) -> list[str]:
+    """tools/maps/<stem>.monitors.json (written by tools/extract/extract_score_monitors.py) against the map descriptor and the registry's
+    ScoreMonitors: schema 1, the source block, the shared mount pose, the exact key set of every row, scenes the map imports, finite positions,
+    a known type word with its template / confirmed / face, rows that are unique, a canvas size that fits prop_scale, and the same rows in the
+    same order with the same scene, path, at, arena_type and active_in_scene on both sides. A map without the sidecar must have no ScoreMonitors."""
+    name = monitors_path.name
+    registry_rows = registry_rows or []
+    if not monitors_path.exists():
+        return [f"registry ScoreMonitors has {len(registry_rows)} entr{'y' if len(registry_rows) == 1 else 'ies'} but {name} does not exist"] \
+            if registry_rows else []
+    try:
+        doc = json.loads(monitors_path.read_text(encoding="utf-8"))
+    except ValueError as exc:
+        return [f"{name} is not valid JSON: {exc}"]
+    if not isinstance(doc, dict):
+        return [f"{name} must be an object"]
+    errors: list[str] = []
+    if doc.get("schema_version") != SCORE_MONITOR_SCHEMA:
+        errors.append(f"{name}: schema_version must be {SCORE_MONITOR_SCHEMA}")
+    if doc.get("key") != map_json.get("key"):
+        errors.append(f"{name}: key {doc.get('key')!r} is not the map's {map_json.get('key')!r}")
+    scenes = map_json.get("all_scene_names", [])
+    source = doc.get("source")
+    read = source.get("scenes") if isinstance(source, dict) else None
+    read_names = []
+    if not isinstance(read, list) or not read or any(
+            not isinstance(e, dict) or set(e) != {"scene", "level"} or e["scene"] not in scenes or type(e["level"]) is not int for e in read) \
+            or not isinstance(source.get("arena_version"), str) or not isinstance(source.get("tool"), str):
+        errors.append(f"{name}: source needs arena_version, tool and scenes [{{scene (a scene of the map), level (int)}}, ...]")
+    else:
+        read_names = [e["scene"] for e in read]
+    if doc.get("mount") != SCORE_MONITOR_MOUNT:
+        errors.append(f"{name}: mount must be the shared holder pose {SCORE_MONITOR_MOUNT}")
+    rows = doc.get("monitors")
+    if not isinstance(rows, list) or not rows:
+        return errors + [f"{name}: monitors must be a non-empty array"]
+    identities: list[tuple] = []
+    for i, row in enumerate(rows):
+        label = f"{name} monitors[{i}]"
+        if not isinstance(row, dict) or set(row) != set(SCORE_MONITOR_ROW_KEYS):
+            errors.append(f"{label}: needs exactly the keys {', '.join(SCORE_MONITOR_ROW_KEYS)}")
+            continue
+        problems = []
+        if not isinstance(row["scene"], str) or row["scene"] not in scenes or (read_names and row["scene"] not in read_names):
+            problems.append("scene must be a scene of the map that source.scenes lists")
+        if not is_hierarchy_path(row["path"]):
+            problems.append("path must be a hierarchy path (no empty segment)")
+        if not is_finite_vec3(row["at"]):
+            problems.append("at must be three finite numbers")
+        word = row["arena_type"]
+        if type(word) is not int or word not in SCORE_MONITOR_TYPE_WORDS:
+            problems.append(f"arena_type must be one of {sorted(SCORE_MONITOR_TYPE_WORDS)}")
+        elif (row["template"], row["confirmed"], row["face"]) != SCORE_MONITOR_TYPE_WORDS[word]:
+            problems.append(f"template, confirmed and face of the type word {word} must be {SCORE_MONITOR_TYPE_WORDS[word]}")
+        if type(row["active_in_scene"]) is not bool:
+            problems.append("active_in_scene must be a boolean")
+        scale = row["prop_scale"]
+        if isinstance(scale, bool) or not isinstance(scale, (int, float)) or not math.isfinite(scale) or not 0 < scale <= 100:
+            problems.append("prop_scale must be a number above 0 and at most 100")
+        else:
+            expected = [SCORE_MONITOR_MOUNT["size"][0] * SCORE_MONITOR_MOUNT["scale"] * scale, SCORE_MONITOR_MOUNT["size"][1] * SCORE_MONITOR_MOUNT["scale"] * scale]
+            size = row["world_size_m"]
+            if not isinstance(size, list) or len(size) != 2 or any(isinstance(x, bool) or not isinstance(x, (int, float)) for x in size) \
+                    or any(abs(a - b) > 0.002 for a, b in zip(size, expected)):
+                problems.append(f"world_size_m must be the canvas size for prop_scale {scale}: about {[round(v, 3) for v in expected]}")
+        yaw = row["viewer_yaw"]
+        if isinstance(yaw, bool) or not isinstance(yaw, (int, float)) or not math.isfinite(yaw) or not 0 <= yaw < 360:
+            problems.append("viewer_yaw must be a number from 0 up to (not including) 360")
+        errors.extend(f"{label}: {p}" for p in problems)
+        if problems:
+            continue
+        for scene_name, path, at in identities:
+            if scene_name == row["scene"] and path == row["path"] and math.dist(at, row["at"]) <= SCORE_MONITOR_AT_TOLERANCE:
+                errors.append(f"{label}: duplicate row for {row['scene']} {row['path']} at {row['at']}")
+        identities.append((row["scene"], row["path"], row["at"]))
+    if errors:
+        return errors
+    if len(rows) != len(registry_rows):
+        errors.append(f"{name} has {len(rows)} monitors, the registry's ScoreMonitors {len(registry_rows)}")
+    for i, (side, reg) in enumerate(zip(rows, registry_rows)):
+        if not isinstance(reg, dict):
+            errors.append(f"registry ScoreMonitors[{i}] is not an ArenaScoreMonitor literal")
+            continue
+        mirrored = {k: side[k] for k in SCORE_MONITOR_MIRRORED}
+        if mirrored != reg:
+            diff = [k for k in SCORE_MONITOR_MIRRORED if mirrored[k] != reg.get(k)]
+            errors.append(f"{name} monitors[{i}] ({side['scene']} {side['path']}) differs from the registry in {', '.join(diff)}: "
+                          f"sidecar { {k: mirrored[k] for k in diff} }, registry { {k: reg.get(k) for k in diff} }")
+    return errors
+
+
 def check_map_against_registry_entry(
     map_json: dict, registry_args: dict, ref_scope: dict, map_path: Path, cs_var_name: str, errors: list
 ) -> None:
@@ -848,6 +978,8 @@ def check_map_against_registry_entry(
         map_json, map_path.with_name(f"{map_path.stem}.doors.json"), registry_args.get("DoorPoses")))
     errors.extend(f"{where}: {error}" for error in gate_sound_errors(
         map_json, map_path.with_name(f"{map_path.stem}.gatesounds.json"), map_path.with_name(f"{map_path.stem}.doors.json")))
+    errors.extend(f"{where}: {error}" for error in score_monitor_errors(
+        map_json, map_path.with_name(f"{map_path.stem}.monitors.json"), registry_args.get("ScoreMonitors")))
     check_field(errors, where, "shader_fallback_names", map_json.get("shader_fallback_names", []),
                 resolve(registry_args.get("ShaderFallbackNames", []), ref_scope))
     for json_field, cs_field in (("opened_barriers", "OpenedBarriers"), ("navmesh_bake_exclusions", "NavMeshBakeExclusions"),
@@ -1045,6 +1177,14 @@ def main() -> int:
         stem = key.removeprefix("arena_")
         if (maps_dir / f"{stem}.json").exists() and not (maps_dir / f"{stem}.gatesounds.json").exists():
             errors.append(f"{stem}.gatesounds.json is missing: every released map has gate sounds (tools/extract/extract_gate_sounds.py rows)")
+
+    for monitors in sorted(maps_dir.glob("*.monitors.json")):
+        if not (maps_dir / f"{monitors.name.removesuffix('.monitors.json')}.json").exists():
+            errors.append(f"{monitors.name}: no tools/maps descriptor {monitors.name.removesuffix('.monitors.json')}.json beside it")
+    for key in RELEASE_MAP_KEYS:
+        stem = key.removeprefix("arena_")
+        if (maps_dir / f"{stem}.json").exists() and not (maps_dir / f"{stem}.monitors.json").exists():
+            errors.append(f"{stem}.monitors.json is missing: every released map has score monitors (tools/extract/extract_score_monitors.py)")
 
     equator_json_path = maps_dir / "equator.json"
     if not equator_json_path.exists():

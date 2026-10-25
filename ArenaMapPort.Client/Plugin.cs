@@ -41,6 +41,9 @@ namespace ArenaMapPort.Client
         void LateUpdate()
         {
             ArenaLightingRepairs.UpdateArtificialSun();
+            // The score monitors (docs/progress/score-monitors.md): one flag read per frame while nothing is claimed and no owned raid is loaded. Placed before the
+            // gate poll and the notices on purpose: MapNoticeWiringTests pins the notices' tick as the last statement of this method.
+            ScoreMonitorView.Tick();
             // One flag read per frame; armed only while the Arena check outlives startup, disarmed after its one log line.
             ArenaInstallationGate.PollOutcome();
             // The in-game map notices (docs/progress/map-notices.md): one flag read per frame while nothing is pending.

@@ -234,6 +234,61 @@ namespace ArenaMapPort.Shared
         }
     }
 
+    /// <summary>
+    /// One Arena TV prop whose <c>ArenaMonitorHolder</c> shows a mode's timer, score or alive count (tools/maps/&lt;stem&gt;.monitors.json, written by
+    /// tools/extract/extract_score_monitors.py; docs/progress/score-monitors.md). <see cref="Path"/> is the PROP's hierarchy path (the holder's parent,
+    /// "TV/Arena_Home_theater (3)") inside <see cref="Scene"/> (Equator's two DesignStuff scenes repeat the same paths). <see cref="At"/> is the holder's
+    /// WORLD position in the scene data, the canvas centre: it tells apart a path that repeats inside one scene (Bowl's two "... SCORE" props) and is
+    /// checked against the loaded prop (<see cref="AppliesTo"/>). <see cref="ArenaType"/> is the holder's raw type word: 0 timer, 1 score, 2 alive
+    /// (confirmed by Bowl's prop names), 6 final score and 7 player board (inferred), 10 unknown; what the port draws for a word is
+    /// <c>ScoreMonitorLayout.FaceOf</c>, and the sidecar's <c>face</c> says the same. <see cref="ActiveInScene"/> is the prop's activity in the imported scene
+    /// data: only an active prop gets a screen (AirPit's two team-box screens and Bowl's inactive base set stay dark). The sidecar also carries the
+    /// template name, the confirmed flag, the prop scale, the canvas size and the reader's side; the client reads those from the prop itself.
+    /// </summary>
+    public sealed class ArenaScoreMonitor
+    {
+        /// <summary>A prop whose mount point lies closer than this (metres) to <see cref="At"/> is the prop the row is for.</summary>
+        public const float AtTolerance = 0.05f;
+
+        public string Scene { get; }
+        public string Path { get; }
+        public float[] At { get; }
+        public int ArenaType { get; }
+        public bool ActiveInScene { get; }
+
+        /// <summary>Is a prop whose <see cref="ArenaScoreMonitorMount"/> point stands at the world position (x, y, z) the one this row is for?</summary>
+        public bool AppliesTo(float x, float y, float z)
+        {
+            float dx = At[0] - x, dy = At[1] - y, dz = At[2] - z;
+            return dx * dx + dy * dy + dz * dz <= AtTolerance * AtTolerance;
+        }
+
+        public ArenaScoreMonitor(string Scene, string Path, float[] At, int ArenaType, bool ActiveInScene)
+        {
+            this.Scene = Scene;
+            this.Path = Path;
+            this.At = At;
+            this.ArenaType = ArenaType;
+            this.ActiveInScene = ActiveInScene;
+        }
+    }
+
+    /// <summary>
+    /// The one pose every <c>ArenaMonitorHolder</c> has below its TV prop (43 of 43 holders of the four maps agree; the sidecars' <c>mount</c> block):
+    /// prop-local position and rotation (quaternion x, y, z, w), the uniform local scale and the canvas rect in canvas pixels, pivot in the middle. The
+    /// canvas is readable from the prop's +X side (its forward, local +Z, is the prop's -X). World size = prop scale x <see cref="Scale"/> x rect.
+    /// </summary>
+    public static class ArenaScoreMonitorMount
+    {
+        public static readonly float[] Position = { 0f, 0f, 0.369285f };
+        public static readonly float[] Rotation = { -0.5f, 0.5f, 0.5f, -0.5f };
+        public const float Scale = 0.00054f;
+        public const float Width = 1930f;
+        public const float Height = 1163f;
+        public const float PivotX = 0.5f;
+        public const float PivotY = 0.5f;
+    }
+
     public sealed class ArenaMapDescriptor
     {
         public string Key { get; }                 // "arena_equator" / "arena_bay5" — LocationTable key, base.json Id
@@ -273,6 +328,10 @@ namespace ArenaMapPort.Shared
         // map's barriers are hidden as before. Mirrors tools/maps/<stem>.doors.json. Look poses up with DoorPosesOf /
         // DoorPosesOfBarrier; where a hierarchy path repeats they need the barrier root's world position.
         public ArenaDoorPose[] DoorPoses { get; }
+        // Score monitors (2026-10-25, docs/progress/score-monitors.md): the TV props of Arena's design scenes whose ArenaMonitorHolder shows a mode's
+        // timer, score or alive count. The client draws its own face on every ACTIVE row's prop while a mode plugin has claimed the monitors
+        // (ScoreMonitors); empty = the map has none. Mirrors tools/maps/<stem>.monitors.json.
+        public ArenaScoreMonitor[] ScoreMonitors { get; }
         // PLAN-AIRPIT item 8 — Editor-side NavMesh bake inputs. The client never reads them; they live here so the one
         // per-map table stays complete and tools/maps/<key>.json cannot drift (validate_map_descriptors.py and the xunit
         // mirror tests). All empty for Equator and Bay5, whose bake is unchanged.
@@ -354,7 +413,8 @@ namespace ArenaMapPort.Shared
             string[]? StartGates = null,
             string[]? HeldGates = null,
             bool KeepLevelBorders = false,
-            ArenaDoorPose[]? DoorPoses = null)
+            ArenaDoorPose[]? DoorPoses = null,
+            ArenaScoreMonitor[]? ScoreMonitors = null)
 #nullable restore
         {
             this.Key = Key;
@@ -377,6 +437,7 @@ namespace ArenaMapPort.Shared
             this.HeldGates = HeldGates ?? new string[0];
             this.KeepLevelBorders = KeepLevelBorders;
             this.DoorPoses = DoorPoses ?? new ArenaDoorPose[0];
+            this.ScoreMonitors = ScoreMonitors ?? new ArenaScoreMonitor[0];
             this.NavMeshBakeExclusions = NavMeshBakeExclusions ?? new string[0];
             this.AuthoredBorders = AuthoredBorders ?? new ArenaBorderDescriptor[0];
             this.BakeBounds = BakeBounds ?? new float[0];
@@ -606,6 +667,24 @@ namespace ArenaMapPort.Shared
                     new[] { -0.706f, 0.0f, 0.0f }, new[] { 0.0f, 0.0f, 0.0f },
                     new[] { -2.0f, 0.0f, 0.0f }, new[] { 0.0f, 0.0f, 0.0f },
                     "dotanimator", "inOutQuint", null, new[] { 4.403f, 0.048f, -35.045f }),
+            },
+            // Score monitors (2026-10-25, tools/maps/equator.monitors.json, docs/progress/score-monitors.md): the 11 TV props of the two design scenes,
+            // 7 in Arena_Equator_DesignStuff (three on the west atrium wall, two on the east one, a score screen in each booth) and 4 in
+            // Arena_Equator_TeamFight_DesignStuff (two final-score boards, two player boards). All 11 are active; the two player boards (type 7)
+            // get no face and stay dark.
+            ScoreMonitors: new[]
+            {
+                new ArenaScoreMonitor("Arena_Equator_DesignStuff", "TV/Arena_Home_theater", new[] { -17.848f, 10.3089f, -1.496f }, 1, true),
+                new ArenaScoreMonitor("Arena_Equator_DesignStuff", "TV/Arena_Home_theater (1)", new[] { -17.848f, 10.3089f, 3.25f }, 0, true),
+                new ArenaScoreMonitor("Arena_Equator_DesignStuff", "TV/Arena_Home_theater (2)", new[] { -17.848f, 10.3089f, 7.75f }, 2, true),
+                new ArenaScoreMonitor("Arena_Equator_DesignStuff", "TV/Arena_Home_theater (3)", new[] { 17.265f, 10.3699f, -1.343f }, 2, true),
+                new ArenaScoreMonitor("Arena_Equator_DesignStuff", "TV/Arena_Home_theater (4)", new[] { 17.265f, 10.3191f, 7.6757f }, 0, true),
+                new ArenaScoreMonitor("Arena_Equator_DesignStuff", "TV/Arena_Home_theater (5)", new[] { 0.104f, 2.2133f, 40.6855f }, 1, true),
+                new ArenaScoreMonitor("Arena_Equator_DesignStuff", "TV/Arena_Home_theater (6)", new[] { 0.551f, 2.2275f, -35.133f }, 1, true),
+                new ArenaScoreMonitor("Arena_Equator_TeamFight_DesignStuff", "TV/Arena_Home_theater (5)", new[] { 17.6673f, 11.568f, 4.027f }, 7, true),
+                new ArenaScoreMonitor("Arena_Equator_TeamFight_DesignStuff", "TV/Arena_Home_theater (6)", new[] { 27.177f, 12.3886f, 1.612f }, 6, true),
+                new ArenaScoreMonitor("Arena_Equator_TeamFight_DesignStuff", "TV/Arena_Home_theater (7)", new[] { -18.334f, 11.7685f, 1.362f }, 7, true),
+                new ArenaScoreMonitor("Arena_Equator_TeamFight_DesignStuff", "TV/Arena_Home_theater (8)", new[] { -26.405f, 12.7166f, 4.903f }, 6, true),
             });
 
         /// <summary>
@@ -719,6 +798,19 @@ namespace ArenaMapPort.Shared
                     new[] { -6.076f, 0.15f, 0.858f }, new[] { 0.0f, 0.0f, 0.0f },
                     new[] { -6.076f, 3.323f, 0.858f }, new[] { 0.0f, 0.0f, 0.0f },
                     "dotanimator", "linear", null, null),
+            },
+            // Score monitors (2026-10-25, tools/maps/bay5.monitors.json, docs/progress/score-monitors.md): the 8 TV props of
+            // Arena_Bay5_TeamFight_DesignStuff (3 timers, 2 scores, 3 alive counts), all active.
+            ScoreMonitors: new[]
+            {
+                new ArenaScoreMonitor("Arena_Bay5_TeamFight_DesignStuff", "TV/Arena_Home_theater (5)", new[] { 105.79f, 10.3899f, -16.741f }, 0, true),
+                new ArenaScoreMonitor("Arena_Bay5_TeamFight_DesignStuff", "TV/Arena_Home_theater (7)", new[] { 67.183f, 5.1336f, 24.203f }, 0, true),
+                new ArenaScoreMonitor("Arena_Bay5_TeamFight_DesignStuff", "TV/Arena_Home_theater (9)", new[] { 130.5764f, 1.8432f, 71.0636f }, 1, true),
+                new ArenaScoreMonitor("Arena_Bay5_TeamFight_DesignStuff", "TV/Arena_Home_theater (14)", new[] { 61.788f, 5.3759f, 67.848f }, 0, true),
+                new ArenaScoreMonitor("Arena_Bay5_TeamFight_DesignStuff", "TV/Arena_Home_theater (16)", new[] { 98.159f, 6.8189f, -14.178f }, 2, true),
+                new ArenaScoreMonitor("Arena_Bay5_TeamFight_DesignStuff", "TV/Arena_Home_theater (18)", new[] { 61.1756f, 4.1859f, 44.536f }, 2, true),
+                new ArenaScoreMonitor("Arena_Bay5_TeamFight_DesignStuff", "TV/Arena_Home_theater (22)", new[] { 113.448f, 2.3362f, 35.697f }, 2, true),
+                new ArenaScoreMonitor("Arena_Bay5_TeamFight_DesignStuff", "TV/Arena_Home_theater (24)", new[] { 67.63f, -1.1154f, -10.065f }, 1, true),
             });
 
         // Source scene selection: tools/extract/plans/airpit.json. Identity is permanent.
@@ -1057,6 +1149,20 @@ namespace ArenaMapPort.Shared
                     new[] { 0.0f, 0.0f, 0.0f }, new[] { 0.0f, 0.0f, 0.0f },
                     new[] { 0.0f, 0.0f, 0.0f }, new[] { 0.0f, 0.0f, 0.0f },
                     "dotanimator", "linear", null, null, ClosedActive: true, OpenActive: false),
+            },
+            // Score monitors (2026-10-25, tools/maps/airpit.monitors.json, docs/progress/score-monitors.md): the 8 TV props of Arena_Airpit_DesignStuff.
+            // The two team-box screens (9 north, 11 south) are inactive in the scene data and stay dark, so 6 screens (2 timers, 2 scores,
+            // 2 alive counts) get a face.
+            ScoreMonitors: new[]
+            {
+                new ArenaScoreMonitor("Arena_Airpit_DesignStuff", "TV/Arena_Home_theater", new[] { -33.444f, 7.4179f, -6.44f }, 2, true),
+                new ArenaScoreMonitor("Arena_Airpit_DesignStuff", "TV/Arena_Home_theater (1)", new[] { -43.9198f, 8.9279f, 2.24f }, 0, true),
+                new ArenaScoreMonitor("Arena_Airpit_DesignStuff", "TV/Arena_Home_theater (2)", new[] { -34.5398f, 7.4179f, 14.7902f }, 1, true),
+                new ArenaScoreMonitor("Arena_Airpit_DesignStuff", "TV/Arena_Home_theater (3)", new[] { 9.3982f, 7.4179f, 5.345f }, 2, true),
+                new ArenaScoreMonitor("Arena_Airpit_DesignStuff", "TV/Arena_Home_theater (4)", new[] { 19.9602f, 8.9279f, -3.34f }, 0, true),
+                new ArenaScoreMonitor("Arena_Airpit_DesignStuff", "TV/Arena_Home_theater (5)", new[] { 10.3432f, 7.4179f, -16.3198f }, 1, true),
+                new ArenaScoreMonitor("Arena_Airpit_DesignStuff", "TV/Arena_Home_theater (9)", new[] { -31.6808f, 3.9988f, 77.6882f }, 1, false),
+                new ArenaScoreMonitor("Arena_Airpit_DesignStuff", "TV/Arena_Home_theater (11)", new[] { -12.6215f, 1.6693f, -68.3997f }, 1, false),
             });
 
         // Source scene selection: tools/extract/plans/airpit2.json. Identity is permanent.
@@ -1211,6 +1317,28 @@ namespace ArenaMapPort.Shared
                 new ArenaDoorPose("DOORS_SPAWN_B", "Gates_Army_01", "Gates_Army/Gates_Army_door_02", "Gates_Army_02_Animation", 10.0f,
                     new[] { -1.95f, -0.001f, 1.1f }, new[] { 0.0f, 0.0f, 0.0f },
                     new[] { -1.95f, -0.001f, 1.1f }, new[] { 0.0f, 0.0f, -161.335f }),
+            },
+            // Score monitors (2026-10-25, tools/maps/bowl.monitors.json, docs/progress/score-monitors.md): 16 TV props. The 10 of
+            // Arena_Bowl_DesignStuff's base set are inactive (the TeamFight set stands at the same spots) and stay dark; the 6 of
+            // Arena_Bowl_TeamFight_DesignStuff (2 timers, 2 scores, 2 alive counts, 20.5 x 12.4 m on the stadium walls) get a face.
+            ScoreMonitors: new[]
+            {
+                new ArenaScoreMonitor("Arena_Bowl_DesignStuff", "TV/Arena_Home_theater", new[] { -83.8338f, 32.7618f, 25.2892f }, 1, false),
+                new ArenaScoreMonitor("Arena_Bowl_DesignStuff", "TV/Arena_Home_theater (1)", new[] { -84.5238f, 32.2618f, -95.3208f }, 0, false),
+                new ArenaScoreMonitor("Arena_Bowl_DesignStuff", "TV/Arena_Home_theater (2)", new[] { 82.2962f, 32.3518f, -95.9808f }, 2, false),
+                new ArenaScoreMonitor("Arena_Bowl_DesignStuff", "TV/Arena_Home_theater (3)", new[] { 85.1534f, 31.1138f, 26.6207f }, 0, false),
+                new ArenaScoreMonitor("Arena_Bowl_DesignStuff", "TV/Arena_Home_theater (4)", new[] { 90.1961f, 32.504f, -34.7598f }, 1, false),
+                new ArenaScoreMonitor("Arena_Bowl_DesignStuff", "TV/Arena_Home_theater (5)", new[] { -92.943f, 32.3369f, -35.3581f }, 2, false),
+                new ArenaScoreMonitor("Arena_Bowl_DesignStuff", "TV/Arena_Home_theater (6)", new[] { 41.7962f, 1.6688f, -12.1358f }, 1, false),
+                new ArenaScoreMonitor("Arena_Bowl_DesignStuff", "TV/Arena_Home_theater (7)", new[] { -45.3298f, 1.6868f, -58.7758f }, 1, false),
+                new ArenaScoreMonitor("Arena_Bowl_DesignStuff", "TV/Arena_Home_theater (8)", new[] { 43.8112f, 1.6688f, -14.2218f }, 10, false),
+                new ArenaScoreMonitor("Arena_Bowl_DesignStuff", "TV/Arena_Home_theater (9)", new[] { -43.5238f, 1.6868f, -61.0628f }, 10, false),
+                new ArenaScoreMonitor("Arena_Bowl_TeamFight_DesignStuff", "TV_Wires_TeamFight/Arena_Home_theater ALIVE", new[] { -84.37f, 32.2618f, -95.17f }, 2, true),
+                new ArenaScoreMonitor("Arena_Bowl_TeamFight_DesignStuff", "TV_Wires_TeamFight/Arena_Home_theater ALIVE", new[] { 84.9772f, 31.1138f, 26.4015f }, 2, true),
+                new ArenaScoreMonitor("Arena_Bowl_TeamFight_DesignStuff", "TV_Wires_TeamFight/Arena_Home_theater SCORE", new[] { -83.8338f, 32.7618f, 25.2892f }, 1, true),
+                new ArenaScoreMonitor("Arena_Bowl_TeamFight_DesignStuff", "TV_Wires_TeamFight/Arena_Home_theater SCORE", new[] { 82.2962f, 32.3518f, -95.9808f }, 1, true),
+                new ArenaScoreMonitor("Arena_Bowl_TeamFight_DesignStuff", "TV_Wires_TeamFight/Arena_Home_theater TIMER", new[] { -92.6392f, 32.2636f, -35.3672f }, 0, true),
+                new ArenaScoreMonitor("Arena_Bowl_TeamFight_DesignStuff", "TV_Wires_TeamFight/Arena_Home_theater TIMER", new[] { 89.8399f, 32.4507f, -34.7589f }, 0, true),
             });
 
         // Source scene selection: tools/extract/plans/prison.json. Identity is permanent.

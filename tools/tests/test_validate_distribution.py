@@ -22,6 +22,7 @@ import validate_distribution as distribution
 from test_multiflare_extraction import graph as flare_graph
 import extract_banners
 import extract_loadscreens
+import extract_monitor_templates as extract_monitors
 import extract_selection_map
 import extract_water
 from PIL import Image
@@ -167,6 +168,7 @@ class DistributionSidecarTests(unittest.TestCase):
         self.put_ai()
         self.put_acoustics()
         self.put_gate_sounds()
+        self.put_monitors()
         self.put_water()
         self.put_key_files()
         for folder in (self.server / "db/arena_equator", self.repo / "ArenaMapPort.Server/db/arena_equator"):
@@ -295,6 +297,35 @@ class DistributionSidecarTests(unittest.TestCase):
                 folder.mkdir(parents=True, exist_ok=True)
                 (folder / f"{clip_id}.wav").write_bytes(blob)
                 (folder / "gate-sounds.json").write_text(json.dumps(manifest), encoding="utf-8")
+
+    def put_monitors(self):
+        """The score monitor package as extract_monitor_templates.py leaves it (work/extract/monitors) and as the client build stages it
+        (dist/.../monitors): a manifest and one PNG per sprite. The extractor's sprite table is replaced by three tiny sprites for the test (the
+        real pins are of the real artwork); everything else, the validate of the extractor included, runs as shipped."""
+        table = {}
+        images = {}
+        for index, (name, size, border, faces) in enumerate((("Fixture_Ground", (8, 8), (0, 0, 0, 0), ("timer",)),
+                                                              ("Fixture_Frame", (16, 8), (2, 2, 2, 2), ("timer", "score", "alive")),
+                                                              ("Fixture_Icon", (4, 4), (0, 0, 0, 0), ("score",)))):
+            image = Image.new("RGBA", size, (10 + index, 20, 30, 255 if index == 0 else 128))
+            image.putpixel((1, 1), (200, 100, 50 + index, 255))
+            images[name] = image
+            table[name] = {"size": size, "border": border, "used_by": faces, "pixels_sha256": extract_monitors.pixel_hash(image)}
+        patcher = patch.object(extract_monitors, "SPRITES", table)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+        entries = []
+        blobs = {}
+        for name, image in images.items():
+            blob = extract_monitors.png_bytes(image)
+            blobs[extract_monitors.file_name(name)] = blob
+            entries.append(extract_monitors.manifest_entry(name, blob, {"asset": "sharedassets1.assets", "sprite_path_id": 1, "texture_path_id": 2, "texture_format": 4}))
+        manifest = extract_monitors.render_manifest("0.6.1.0.48206", entries)
+        for folder in (self.plugin / "monitors", self.repo / "work/extract/monitors"):
+            folder.mkdir(parents=True, exist_ok=True)
+            for name, blob in blobs.items():
+                (folder / name).write_bytes(blob)
+            (folder / extract_monitors.MANIFEST).write_text(manifest, encoding="utf-8", newline="\n")
 
     def put_water(self):
         """Bay5's harbor water package as extract_water.py leaves it: water.json plus the four raw mip chains it
@@ -937,6 +968,114 @@ class DistributionSidecarTests(unittest.TestCase):
         self.change_gate_manifest("arena_equator", lambda p: p["clips"][0].update(pitch_baked=True))
         with self.assertRaisesRegex(ValueError, "pitch_baked disagrees with baked_pitch: arena_equator"):
             self.validate()
+
+    def test_distribution_requires_the_score_monitor_artwork_exactly_and_intact(self):
+        self.validate()
+        root = self.plugin / "monitors"
+        for path, message in ((root / "Fixture_Icon.png", "file set differs|is missing"), (root / "monitors.json", "is invalid|is missing")):
+            with self.subTest(missing=path.name):
+                original = path.read_bytes()
+                path.unlink()
+                try:
+                    with self.assertRaisesRegex(ValueError, message):
+                        self.validate()
+                finally:
+                    path.write_bytes(original)
+        for path in (root / "Fixture_Extra.png", root / "notes.txt", root / "nested" / "Fixture_Icon.png"):
+            with self.subTest(unexpected=path.name):
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_bytes(b"stray")
+                try:
+                    with self.assertRaisesRegex(ValueError, "Score monitor artwork is invalid"):
+                        self.validate()
+                finally:
+                    path.unlink()
+                    if path.parent != root:
+                        path.parent.rmdir()
+        shutil.rmtree(root)
+        with self.assertRaisesRegex(ValueError, "Missing score monitor artwork"):
+            self.validate()
+
+    def test_a_changed_score_monitor_png_is_refused_by_length_hash_and_pixels(self):
+        root = self.plugin / "monitors"
+        png = root / "Fixture_Frame.png"
+        original = png.read_bytes()
+        png.write_bytes(original + b"!")
+        with self.assertRaisesRegex(ValueError, "does not match its manifest entry"):
+            self.validate()
+        # same length, other bytes: only the SHA-256 can tell
+        png.write_bytes(original[:-1] + bytes([original[-1] ^ 1]))
+        with self.assertRaisesRegex(ValueError, "does not match its manifest entry|cannot identify|broken|invalid"):
+            self.validate()
+        png.write_bytes(original)
+        # a repainted sprite with its manifest entry made consistent still fails the pinned pixels
+        other = Image.new("RGBA", (16, 8), (1, 2, 3, 255))
+        blob = extract_monitors.png_bytes(other)
+        png.write_bytes(blob)
+        manifest = json.loads((root / "monitors.json").read_text(encoding="utf-8"))
+        entry = next(e for e in manifest["sprites"] if e["name"] == "Fixture_Frame")
+        entry.update(bytes=len(blob), sha256=hashlib.sha256(blob).hexdigest())
+        (root / "monitors.json").write_text(json.dumps(manifest), encoding="utf-8")
+        with self.assertRaisesRegex(ValueError, "artwork changed"):
+            self.validate()
+
+    def test_a_staged_score_monitor_file_must_be_the_extracted_one(self):
+        extracted = self.repo / "work/extract/monitors"
+        # the extracted package changed after staging (same manifest, other bytes in one PNG): the staged copy is stale
+        png = extracted / "Fixture_Icon.png"
+        data = png.read_bytes()
+        png.write_bytes(data[:-1] + bytes([data[-1] ^ 1]))
+        with self.assertRaisesRegex(ValueError, "Stale score monitor artwork file: Fixture_Icon.png"):
+            self.validate()
+        png.write_bytes(data)
+        (extracted / "Fixture_Icon.png").unlink()
+        with self.assertRaisesRegex(ValueError, "file set differs from work/extract/monitors"):
+            self.validate()
+        png.write_bytes(data)
+        (extracted / "monitors.json").write_text((extracted / "monitors.json").read_text(encoding="utf-8").replace("0.6.1.0.48206", "0.6.2.0.1"),
+                                                 encoding="utf-8")
+        with self.assertRaisesRegex(ValueError, "Stale score monitor artwork file: monitors.json"):
+            self.validate()
+
+    def test_a_score_monitor_manifest_may_not_change_the_reviewed_table(self):
+        root = self.plugin / "monitors"
+        extracted = self.repo / "work/extract/monitors"
+        original = (root / "monitors.json").read_text(encoding="utf-8")
+        for label, mutate in (("size", lambda m: m["sprites"][0].update(width=9)),
+                              ("order", lambda m: m["sprites"].reverse()),
+                              ("border", lambda m: m["sprites"][1].update(border=[0, 0, 0, 0])),
+                              ("pivot", lambda m: m["sprites"][0].update(pivot=[0.0, 0.0])),
+                              ("faces", lambda m: m["sprites"][2].update(used_by=["alive"])),
+                              ("extra key", lambda m: m["sprites"][0].update(note="x")),
+                              ("schema", lambda m: m.update(schema_version=2)),
+                              ("source", lambda m: m["sprites"][0].update(source={"asset": "other.assets"}))):
+            with self.subTest(label):
+                manifest = json.loads(original)
+                mutate(manifest)
+                text = json.dumps(manifest)
+                for folder in (root, extracted):
+                    (folder / "monitors.json").write_text(text, encoding="utf-8")
+                try:
+                    with self.assertRaisesRegex(ValueError, "Score monitor artwork is invalid"):
+                        self.validate()
+                finally:
+                    for folder in (root, extracted):
+                        (folder / "monitors.json").write_text(original, encoding="utf-8", newline="\n")
+        self.validate()
+
+    def test_a_score_monitor_sprite_from_a_key_source_file_is_refused(self):
+        # the art is plaintext: it must never be sampled bytes of a stage-2 key source (the asset or its .resS stream)
+        sources = self.repo / "tools/bundle/key-sources.json"
+        original = sources.read_text(encoding="utf-8")
+        document = json.loads(original)
+        document["maps"]["arena_equator"][0]["files"].append("sharedassets1.assets.resS")
+        sources.write_text(json.dumps(document), encoding="utf-8")
+        try:
+            with self.assertRaisesRegex(ValueError, "comes from a key-source file of the maps: Fixture_Ground"):
+                self.validate()
+        finally:
+            sources.write_text(original, encoding="utf-8")
+        self.validate()
 
     def test_distribution_requires_every_released_maps_acoustics_exactly_and_intact(self):
         airpit = self.plugin / "acoustics/arena_airpit"

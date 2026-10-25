@@ -34,6 +34,14 @@
     <!-- Gate and door sounds (docs/progress/gate-sounds.md): the manifest, row matching, gain, seam pick and cut, and the WAV reader. No Unity type inside. -->
     <Compile Include="..\ArenaMapPort.Client\GateSoundModel.cs" Link="Client\GateSoundModel.cs" />
     <Compile Include="..\ArenaMapPort.Client\PcmWav.cs" Link="Client\PcmWav.cs" />
+    <!-- Score monitors (docs/progress/score-monitors.md): the layout of the three faces (Arena's decoded template numbers, colours, sprite table). No Unity type inside. -->
+    <Compile Include="..\ArenaMapPort.Client\ScoreMonitorLayout.cs" Link="Client\ScoreMonitorLayout.cs" />
+    <!-- The Unity-free core of the monitor contract (docs/progress/score-monitors.md): the model (clamps, clock, frames, usable rows), the hub (claim semantics), the demo cycle and the public
+         ScoreMonitors class an ArenaMode binder finds by reflection. ScoreMonitorView.cs (UGUI, TextMeshPro) stays out; ScoreMonitorSourcePinTests reads it as text. -->
+    <Compile Include="..\ArenaMapPort.Client\ScoreMonitorModel.cs" Link="Client\ScoreMonitorModel.cs" />
+    <Compile Include="..\ArenaMapPort.Client\ScoreMonitorHub.cs" Link="Client\ScoreMonitorHub.cs" />
+    <Compile Include="..\ArenaMapPort.Client\ScoreMonitorDemo.cs" Link="Client\ScoreMonitorDemo.cs" />
+    <Compile Include="..\ArenaMapPort.Client\ScoreMonitors.cs" Link="Client\ScoreMonitors.cs" />
     <Compile Include="..\ArenaMapPort.Client\AmbientAudioProfiles.cs" Link="Client\AmbientAudioProfiles.cs" />
     <Compile Include="..\ArenaMapPort.Client\DynamicMapAssets.cs" Link="Client\DynamicMapAssets.cs" />
     <Compile Include="..\ArenaMapPort.Shared\SpecularCapPolicy.cs" Link="Shared\SpecularCapPolicy.cs" />

@@ -355,6 +355,37 @@ def validate_gate_sounds(plugin, keys):
                 raise ValueError(f'Gate sound file is not a PCM16 WAV of the recorded size: {key}/{clip["file"]}')
 
 
+def validate_monitors(plugin):
+    """Score monitor artwork (docs/progress/score-monitors.md), staged by the client csproj (Release and DllOnly) from the ignored
+    work/extract/monitors input of tools/extract/extract_monitor_templates.py. ScoreMonitors reads <plugin>/monitors/monitors.json when a mode plugin
+    claims the TV screens: schema 1, the nine sprites of the reviewed table in its order (name, file, size, pivot, pixels per unit, border, faces), every PNG
+    with the recorded length and SHA-256 and the pinned decoded pixels, and nothing else in the folder (the extractor's own validate). The staged files must
+    equal the extracted ones byte for byte, and no sprite may come from a stage-2 key-source file (tools/bundle/key-sources.json): the art is plaintext, so
+    a sampled stream of the content keys must never be among its sources (the asset and its .resS stream are both checked)."""
+    import extract_monitor_templates as monitors
+    root = plugin/'monitors'
+    extracted = REPO/'work/extract/monitors'
+    if not root.is_dir():
+        raise ValueError('Missing score monitor artwork: monitors/')
+    try:
+        manifest = monitors.validate(root)
+    except monitors.MonitorTemplateError as exc:
+        raise ValueError(f'Score monitor artwork is invalid: {exc}') from exc
+    actual = _files_under(root)
+    if actual != _files_under(extracted):
+        raise ValueError(f'Score monitor file set differs from work/extract/monitors: '
+                         f'missing={sorted(_files_under(extracted) - actual)} unexpected={sorted(actual - _files_under(extracted))}')
+    for name in sorted(actual):
+        if (root/name).read_bytes() != (extracted/name).read_bytes():
+            raise ValueError(f'Stale score monitor artwork file: {name}')
+    sources = json.loads((REPO/'tools/bundle/key-sources.json').read_text(encoding='utf-8'))['maps']
+    protected = {Path(name).name for entries in sources.values() for entry in entries for name in entry['files']}
+    for sprite in manifest['sprites']:
+        asset = sprite['source']['asset']
+        if asset in protected or f'{asset}.resS' in protected:
+            raise ValueError(f'Score monitor sprite comes from a key-source file of the maps: {sprite["name"]} ({asset})')
+
+
 def validate_water(plugin):
     """Original harbor water settings and raw texture mip chains, staged by the client csproj (Release and DllOnly)
     from the ignored work/extract/bay5-water input of tools/extract/extract_water.py (docs/progress/bay5-water.md).
@@ -458,6 +489,7 @@ def validate():
     validate_ai_sidecars(plugin, keys)
     validate_acoustics(plugin, keys)
     validate_gate_sounds(plugin, keys)
+    validate_monitors(plugin)
     from extract_multiflare import validate_graph
     expected_flare_files = set()
     for key in FLARE_MAP_KEYS:
