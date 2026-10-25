@@ -6,6 +6,9 @@ file's shape so a release cannot go out with a changelog that lags the version i
 a malformed heading, a missing release-note link, or a sentence that calls the Arena gate or
 the bundle encryption more than it is (AGENTS.md: a good-faith requirement, never copy
 protection). No game data and no Arena install are read.
+
+An optional '## Unreleased' section (no version, no date, no release-note link; changes on main since the
+newest release) may stand first; the versioned rules apply to the sections below it (2026-10-25).
 """
 from __future__ import annotations
 
@@ -20,6 +23,7 @@ CLIENT_CSPROJ = ROOT / "ArenaMapPort.Client" / "ArenaMapPort.Client.csproj"
 RELEASE_NOTES = ROOT / "docs" / "releases"
 
 SECTION = re.compile(r"^## (?P<version>\d+\.\d+\.\d+) - (?P<date>\d{4}-\d{2}-\d{2}|unreleased)$")
+UNRELEASED = "## Unreleased"
 WITHDRAWN = ("0.1.0", "0.2.0", "0.2.1", "0.2.2")
 SUBHEADINGS = {"Added", "Changed", "Fixed", "Changed (internal)", "Known limitations", "Compatibility"}
 
@@ -35,11 +39,13 @@ def _csproj_version() -> str:
 
 
 def _sections() -> list[tuple[str, str, str]]:
-    """(version, date, body) of every '## ' section, in file order."""
+    """(version, date, body) of every versioned '## ' section, in file order (an '## Unreleased' section is skipped)."""
     sections = []
     current = None
     for line in _read().splitlines():
-        if line.startswith("## "):
+        if line.rstrip() == UNRELEASED:
+            current = None
+        elif line.startswith("## "):
             match = SECTION.match(line)
             assert match, f"malformed section heading: {line!r}"
             current = [match.group("version"), match.group("date"), []]
@@ -59,13 +65,19 @@ class ChangelogShapeTests(unittest.TestCase):
         self.assertTrue(_read().startswith("# Changelog"))
 
     def test_every_section_heading_is_version_dash_iso_date_or_unreleased(self):
-        headings = [line for line in _read().splitlines() if line.startswith("## ")]
+        headings = [line for line in _read().splitlines() if line.startswith("## ") and line.rstrip() != UNRELEASED]
         self.assertGreaterEqual(len(headings), 2)
         for line in headings:
             match = SECTION.match(line)
             self.assertIsNotNone(match, f"heading is not '## <version> - <YYYY-MM-DD>' or '## <version> - unreleased': {line!r}")
             if match.group("date") != "unreleased":
                 datetime.date.fromisoformat(match.group("date"))  # a real calendar date
+
+    def test_an_unreleased_section_is_optional_and_only_first(self):
+        headings = [line.rstrip() for line in _read().splitlines() if line.startswith("## ")]
+        self.assertLessEqual(headings.count(UNRELEASED), 1, "'## Unreleased' appears twice")
+        if UNRELEASED in headings:
+            self.assertEqual(headings[0], UNRELEASED, "'## Unreleased' must be the first section")
 
     def test_the_newest_section_names_the_client_csproj_version(self):
         newest_version = _sections()[0][0]
