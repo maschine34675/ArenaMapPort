@@ -8,6 +8,9 @@ dated state in one screen; read it before this index if you only have a minute.
 
 ## Current — read these for the area you touch
 
+- [airpit-spectator.md](airpit-spectator.md) — one original AirPit gallery spectator with skinned
+  meshes, original idle and cheer; original Euler rotation order preserved, map-scoped lifecycle.
+
 - [score-monitors.md](score-monitors.md) — Arena's TV screens show a mode's timer, team score and alive counts (2026-10-25): the
   holder extractor and `tools/maps/<stem>.monitors.json`, the nine-sprite artwork package, the three faces, the public contract
   `ArenaMapPort.Client.ScoreMonitors` (append-only, bound by name from ArenaMode), the lift in front of the TV's opaque screen quad

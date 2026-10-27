@@ -187,6 +187,17 @@
   <!-- Optional ArenaMode audio/UI exports remain development inputs only.
        ArenaMapPort has no runtime consumers and does not distribute them. -->
 
+  <Target Name="ArenaMapPortStageSpectator" AfterTargets="ArenaMapPortDistCopy" Condition="'$(Configuration)'=='Release'">
+    <PropertyGroup>
+      <ArenaMapPortSpectatorDir>$(MSBuildThisFileDirectory)..\work\extract\spectator-airpit</ArenaMapPortSpectatorDir>
+    </PropertyGroup>
+    <Error Condition="!Exists('$(ArenaMapPortSpectatorDir)\spectator.json.gz')" Text="Missing AirPit spectator; run python tools/extract/extract_spectator.py extract" />
+    <ItemGroup>
+      <ArenaMapPortSpectatorFile Include="$(ArenaMapPortSpectatorDir)\spectator.json.gz;$(ArenaMapPortSpectatorDir)\*.png" />
+    </ItemGroup>
+    <Copy SourceFiles="@(ArenaMapPortSpectatorFile)" DestinationFolder="$(ArenaMapPortDistDir)\spectators\arena_airpit" SkipUnchangedFiles="true" />
+  </Target>
+
   <!-- Original Arena region artwork, with its native texture padding preserved.
        SelectionMapArtwork selects the aligned geographic window at runtime. -->
   <Target Name="ArenaMapPortStageSelectionMap" AfterTargets="ArenaMapPortDistCopy" Condition="'$(Configuration)'=='Release'">

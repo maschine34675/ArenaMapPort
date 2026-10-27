@@ -8,6 +8,9 @@ and the settings text is in the [README](README.md).
 
 ## Unreleased
 
+- One spectator on Air Pit's gallery now uses his original model, idle animation and cheering
+  animation. This first prototype alternates automatically; it does not react to the match yet.
+
 - Avoid a second, misleading `NO_CAUSE` map-error dialog when EFT already reported
   the failure during that loading attempt. Recorded map-file and Arena-installation
   errors still show their specific explanation.

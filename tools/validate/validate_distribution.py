@@ -490,6 +490,15 @@ def validate():
     validate_acoustics(plugin, keys)
     validate_gate_sounds(plugin, keys)
     validate_monitors(plugin)
+    from extract_spectator import verify as verify_spectator
+    spectator = plugin/'spectators/arena_airpit'
+    verify_spectator(spectator)
+    extracted_spectator = REPO/'work/extract/spectator-airpit'
+    if _files_under(spectator) != _files_under(extracted_spectator):
+        raise ValueError('Spectator package file set differs from extracted source')
+    for name in _files_under(spectator):
+        if (spectator/name).read_bytes() != (extracted_spectator/name).read_bytes():
+            raise ValueError(f'Stale spectator data: {name}')
     from extract_multiflare import validate_graph
     expected_flare_files = set()
     for key in FLARE_MAP_KEYS:

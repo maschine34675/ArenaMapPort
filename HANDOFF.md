@@ -3,6 +3,23 @@
 Snapshot for whoever continues (human or agent). Verify the commits named here against `git log`; this file
 is updated by hand at each handover, it is not an automatic record. Read [AGENTS.md](AGENTS.md) first.
 
+## Update 2026-10-27 - one original AirPit spectator (feature/airpit-spectator; deployed and tested on GPU-2)
+
+User approved one spectator with original idle and cheer before expanding the crowd. `AirPitSpectator`
+creates one purely decorative original fan at `(9.81, 8.51, 13.93)`, using four skinned parts and two
+original clips, cycling automatically. `extract_spectator.py` exports owner-sourced art and animation
+to ignored `work/extract/spectator-airpit`; client Release builds stage `spectators/arena_airpit`.
+The original imported Euler order is preserved (XYZ, not Unity's default ZXY). No gameplay scripts,
+colliders or match-event coupling. Existing map bundles, navigation and DynamicMaps are unchanged.
+
+Verified: 14 focused tests, 184 existing door-pose tests, clean Release build, full distribution
+validation; two fresh AirPit raids on GPU-2 with exactly one actor, visible idle/cheer, zero warnings
+or errors on both starts, and zero actors after both exits. Close-ups were taken with a test-only
+teleport onto the gallery. The original position is partly obscured from ground level by its railing
+and corrugated panels. GPU-2 was left in the main menu, healed. No release/push. Details and evidence:
+[airpit-spectator.md](docs/progress/airpit-spectator.md). Remaining crowd, match reactions and audio
+are outside this prototype; first let the user judge this one.
+
 ## Update 2026-10-25 - exit lamps, gate sounds, score monitors, spawn and puddle fixes (committed 490e227, 5342400, d13f074, cc2f024; deployed; host-verified on GPU-2)
 
 User request (2026-10-25, after the survey of open map work, `work/reports/offene-kartenarbeit-2026-10-25.md`, German, untracked): "werde mir die looks

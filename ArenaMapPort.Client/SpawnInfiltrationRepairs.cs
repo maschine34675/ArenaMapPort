@@ -88,6 +88,7 @@ namespace ArenaMapPort.Client
             BallisticTwinRepairs.Apply();       // stage 1: HighPolyCollider twins for LowPolyCollider-only props
             BarbedWireRepairs.Apply();          // PLAN-TWO-MAPS item 2: EFT's BarbedWire on Arena's concertina wire
             PhysicsPropRepairs.Apply();         // PLAN-TWO-MAPS item 5: activate Arena's PHYSIC prop containers
+            AirPitSpectator.Create();           // one original decorative fan, idle/cheer prototype
 
             int fixedCount = 0;
             foreach (var point in __result)
