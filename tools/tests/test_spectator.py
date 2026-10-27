@@ -1,4 +1,5 @@
 """Skinning/package safety fixtures; no Arena content is embedded in these tests."""
+import copy
 import gzip
 import json
 from pathlib import Path
@@ -14,10 +15,15 @@ def fixture():
     mesh = dict(vertices=[[0, 0, 0]], normals=[[0, 1, 0]], tangents=[[1, 0, 0, 1]], uv=[[0, 0]],
                 triangles=[[0, 0, 0]], weights=[[1, 0, 0, 0]], indices=[[0, 0, 0, 0]],
                 bindposes=[[1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]])
-    return dict(schema=1, map='arena_airpit', nodes=[dict(parent=-1, position=[0, 0, 0],
-                rotation=[0, 0, 0, 1], scale=[1, 1, 1])],
-                parts=[dict(node=0, bones=[0], materials=['m'], mesh=mesh)],
-                clips=[dict(duration=1, frames=2, tracks=[dict(node=0, kind=2, values=[0, 0, 0, 1]*2)]) for _ in range(2)])
+    mesh['bone_hashes'] = [0]
+    actor = dict(source_id=1, name='synthetic', nodes=[dict(name='synthetic', path_hash=0,
+                 parent=-1, position=[0, 0, 0], rotation=[0, 0, 0, 1], scale=[1, 1, 1])],
+                 parts=[dict(node=0, root=0, bones=[0], materials=['m'], mesh_id='mesh')])
+    return dict(schema=2, map='arena_airpit', source_count=1, actors=[actor], meshes={'mesh': mesh},
+                materials={'m': {'textures': {}}}, textures={},
+                clips=[dict(name=name, duration=1, frames=2,
+                       tracks=[dict(path_hash=0, kind=2, values=[0, 0, 0, 1]*2)]) for name in S.CLIPS])
+
 
 
 class SpectatorValidation(unittest.TestCase):
@@ -38,28 +44,51 @@ class SpectatorValidation(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'rotation order'):
             S.euler_quaternion([0, 0, 0], 7)
 
+    def test_implicit_single_influence_weights(self):
+        weights, indices = S.skin_channels(None, [(0,), (2,)], 3)
+        self.assertEqual(weights, [[1, 0, 0, 0]] * 2)
+        self.assertEqual(indices, [[0, 0, 0, 0], [2, 0, 0, 0]])
+
+    def test_missing_multi_influence_weights_rejected(self):
+        with self.assertRaisesRegex(ValueError, 'missing non-rigid'):
+            S.skin_channels(None, [(0, 1)], 2)
+
+    def test_swapped_in_range_bones_rejected(self):
+        import zlib
+        node = copy.deepcopy(self.data['actors'][0]['nodes'][0])
+        node.update(name='head', parent=0, path_hash=zlib.crc32(b'head'))
+        self.data['actors'][0]['nodes'].append(node)
+        mesh = self.data['meshes']['mesh']
+        mesh['bindposes'] *= 2
+        mesh['bone_hashes'] = [0, node['path_hash']]
+        self.data['actors'][0]['parts'][0]['bones'] = [0, 1]
+        S.validate(self.data)
+        self.data['actors'][0]['parts'][0]['bones'] = [1, 0]
+        with self.assertRaisesRegex(ValueError, 'bone path order'):
+            S.validate(self.data)
+
     def test_weight_sum(self):
-        self.data['parts'][0]['mesh']['weights'][0] = [.1, .1, .1, .1]
+        self.data['meshes']['mesh']['weights'][0] = [.1, .1, .1, .1]
         with self.assertRaisesRegex(ValueError, 'weights'):
             S.validate(self.data)
 
     def test_nonfinite_weight(self):
-        self.data['parts'][0]['mesh']['weights'][0][0] = float('nan')
+        self.data['meshes']['mesh']['weights'][0][0] = float('nan')
         with self.assertRaisesRegex(ValueError, 'non-finite'):
             S.validate(self.data)
 
     def test_bone_out_of_range(self):
-        self.data['parts'][0]['mesh']['indices'][0][0] = 1
+        self.data['meshes']['mesh']['indices'][0][0] = 1
         with self.assertRaisesRegex(ValueError, 'bone index'):
             S.validate(self.data)
 
     def test_missing_bindpose(self):
-        self.data['parts'][0]['mesh']['bindposes'] = []
-        with self.assertRaisesRegex(ValueError, 'bind pose'):
+        self.data['meshes']['mesh']['bindposes'] = []
+        with self.assertRaisesRegex(ValueError, 'bind pose|skin binding'):
             S.validate(self.data)
 
     def test_parent_cycle(self):
-        self.data['nodes'][0]['parent'] = 0
+        self.data['actors'][0]['nodes'][0]['parent'] = 0
         with self.assertRaisesRegex(ValueError, 'hierarchy'):
             S.validate(self.data)
 
@@ -69,8 +98,8 @@ class SpectatorValidation(unittest.TestCase):
             S.validate(self.data)
 
     def test_unknown_track(self):
-        self.data['clips'][0]['tracks'][0]['node'] = 1
-        with self.assertRaisesRegex(ValueError, 'track'):
+        self.data['clips'][0]['tracks'][0]['path_hash'] = 1
+        with self.assertRaisesRegex(ValueError, 'bindings|track'):
             S.validate(self.data)
 
     def test_duplicate_track(self):
@@ -79,7 +108,7 @@ class SpectatorValidation(unittest.TestCase):
             S.validate(self.data)
 
     def test_triangle_outside_mesh(self):
-        self.data['parts'][0]['mesh']['triangles'][0][0] = 20
+        self.data['meshes']['mesh']['triangles'][0][0] = 20
         with self.assertRaisesRegex(ValueError, 'triangle outside'):
             S.validate(self.data)
 
@@ -88,13 +117,74 @@ class SpectatorValidation(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'non-finite'):
             S.validate(self.data)
 
+    def test_shared_mesh_independent_placements(self):
+        second = copy.deepcopy(self.data['actors'][0])
+        second['source_id'] = 2
+        second['nodes'][0]['position'] = [12, 8, -4]
+        self.data['actors'].append(second)
+        self.data['source_count'] = 2
+        S.validate(self.data)
+        self.assertEqual(len(self.data['meshes']), 1)
+
+    def test_truncated_crowd(self):
+        self.data['source_count'] = 99
+        with self.assertRaisesRegex(ValueError, 'crowd count'):
+            S.validate(self.data)
+
+    def test_duplicate_source_id(self):
+        self.data['actors'] *= 2
+        self.data['source_count'] = 2
+        with self.assertRaisesRegex(ValueError, 'duplicate spectator'):
+            S.validate(self.data)
+
+    def test_unresolved_source_mesh(self):
+        self.data['actors'][0]['missing'] = ['head']
+        with self.assertRaisesRegex(ValueError, 'unresolved spectator'):
+            S.validate(self.data)
+
+    def test_skin_cannot_be_static(self):
+        self.data['actors'][0]['parts'][0]['bones'] = []
+        with self.assertRaisesRegex(ValueError, 'skin binding'):
+            S.validate(self.data)
+
+    def test_bone_path_order(self):
+        self.data['meshes']['mesh']['bone_hashes'] = [123]
+        with self.assertRaisesRegex(ValueError, 'bone path order'):
+            S.validate(self.data)
+
+    def test_missing_shared_mesh(self):
+        self.data['actors'][0]['parts'][0]['mesh_id'] = 'missing'
+        with self.assertRaisesRegex(ValueError, 'missing shared'):
+            S.validate(self.data)
+
+    def test_orphan_shared_mesh(self):
+        self.data['meshes']['orphan'] = self.data['meshes']['mesh']
+        with self.assertRaisesRegex(ValueError, 'unreferenced shared'):
+            S.validate(self.data)
+
+    def test_missing_texture(self):
+        self.data['materials']['m']['textures']['_MainTex'] = {'id': 'missing'}
+        with self.assertRaisesRegex(ValueError, 'material texture'):
+            S.validate(self.data)
+
+    def test_invalid_attribute(self):
+        self.data['meshes']['mesh']['normals'] = []
+        with self.assertRaisesRegex(ValueError, 'attribute count'):
+            S.validate(self.data)
+
+    def test_node_path_hash(self):
+        self.data['actors'][0]['nodes'][0]['path_hash'] = 1
+        with self.assertRaisesRegex(ValueError, 'node path hash'):
+            S.validate(self.data)
+
     @unittest.skipUnless((S.DEFAULT_PACKAGE / 'spectator.json.gz').exists(), 'owner-extracted package unavailable')
     def test_real_package(self):
         data = json.loads(gzip.decompress((S.DEFAULT_PACKAGE / 'spectator.json.gz').read_bytes()))
         S.validate(data)
-        self.assertEqual(data['source_id'], 5434)
-        self.assertEqual(len(data['parts']), 4)
-        self.assertEqual(sum(len(p['mesh']['vertices']) for p in data['parts']), 4333)
+        self.assertEqual(len(data['actors']), 99)
+        self.assertEqual(len({a['name'].split(' (')[0] for a in data['actors']}), 15)
+        self.assertTrue(all(not a['missing'] for a in data['actors']))
+        self.assertLess(len(data['meshes']), sum(len(a['parts']) for a in data['actors']))
         self.assertEqual([c['name'] for c in data['clips']], list(S.CLIPS))
         for clip in data['clips']:
             self.assertEqual({x['path_hash'] for x in clip['absent_optional_tracks']}, {S.ABSENT_OPTIONAL_PATH})

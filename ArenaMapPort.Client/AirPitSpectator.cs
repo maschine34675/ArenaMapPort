@@ -12,30 +12,25 @@ using Object = UnityEngine.Object;
 namespace ArenaMapPort.Client
 {
     /// <summary>
-    /// One original, decorative AirPit fan. The owner-sourced sidecar retains skinning and samples
-    /// Arena's Transform curves at 60 Hz. There is no Player, AI, physics, loot or Arena ECS code.
-    /// Source ApplyRootMotion is false. Idle/cheer cycle automatically for this bounded prototype.
-    /// The actor belongs to the design scene; its meshes/materials/textures die with it.
+    /// Original decorative AirPit crowd. Shared owner-sourced meshes, materials and 60 Hz source
+    /// animation samples; independent source skeletons/placements. No Player, AI, physics or loot.
+    /// In-place idle/cheer phases are staggered. All resources belong to the owned design scene.
     /// </summary>
     internal sealed class AirPitSpectator : MonoBehaviour
     {
         const string Tag = "[Spectator]";
-        const string ActorName = "ArenaMapPort_AirPitSpectator";
+        const string ActorName = "ArenaMapPort_AirPitSpectators";
         const string SceneName = "Arena_Airpit_DesignStuff";
         const float FadeSeconds = .3f;
         readonly List<Object> _assets = new List<Object>();
-        Transform[] _nodes;
-        SpectatorData _data;
-        Vector3[] _position, _scale, _fromPosition, _fromScale;
-        Quaternion[] _rotation, _fromRotation;
-        float _phaseStart, _fadeStart;
-        int _clip, _loops;
+        readonly List<Fan> _fans = new List<Fan>();
+        readonly Plane[] _planes = new Plane[6];
+        Clip[] _clips;
+        float _started;
         bool _ready;
-
-        // Inspector evidence, without a developer hotkey or public gameplay API.
-        public string CurrentAnimation;
-        public int CompletedTransitions;
-        public float ClipTime;
+        public int ActorCount, RendererCount, SharedMeshCount, SharedMaterialCount;
+        public int VisibleActors, CheeringActors, CompletedTransitions;
+        public float AnimationUpdateMilliseconds;
 
         internal static void Create()
         {
@@ -44,7 +39,7 @@ namespace ArenaMapPort.Client
             if (!scene.IsValid() || !scene.isLoaded) return;
             if (scene.GetRootGameObjects().Any(x => x.name == ActorName)) return;
             GameObject root = null;
-            AirPitSpectator actor = null;
+            AirPitSpectator crowd = null;
             try
             {
                 string folder = Path.Combine(Path.GetDirectoryName(typeof(Plugin).Assembly.Location) ?? "", "spectators", "arena_airpit");
@@ -53,24 +48,25 @@ namespace ArenaMapPort.Client
                 using (var reader = new StreamReader(gzip))
                 {
                     var data = JsonConvert.DeserializeObject<SpectatorData>(reader.ReadToEnd());
-                    if (data == null || data.schema != 1 || data.map != "arena_airpit" || data.nodes.Length > 400 || data.clips.Length != 2)
+                    if (data == null || data.schema != 2 || data.map != "arena_airpit" || data.actors.Length < 1 ||
+                        data.actors.Length > 200 || data.source_count != data.actors.Length || data.clips.Length != 2)
                         throw new InvalidDataException("unsupported spectator package");
                     root = new GameObject(ActorName);
                     root.SetActive(false);
                     SceneManager.MoveGameObjectToScene(root, scene);
-                    actor = root.AddComponent<AirPitSpectator>();
-                    actor.Build(data, folder);
+                    crowd = root.AddComponent<AirPitSpectator>();
+                    crowd.Build(data, folder);
                     root.SetActive(true);
-                    Plugin.Log.LogDebug($"{Tag} one original fan at {root.transform.position}: {data.parts.Length} renderers, " +
-                        $"{actor._nodes.Length} transforms; {string.Join(" / ", data.clips.Select(c => c.name))}");
+                    Plugin.Log.LogDebug($"{Tag} {crowd.ActorCount} original fans, {crowd.RendererCount} renderers; " +
+                        $"shared {crowd.SharedMeshCount} meshes, {crowd.SharedMaterialCount} materials; idle/cheer staggered");
                 }
             }
             catch (Exception e)
             {
-                // OnDestroy need not run for an object that failed before its first activation.
-                if (actor != null) actor.DisposeOwnedAssets();
+                // An inactive object may fail before its first activation: OnDestroy is not sufficient.
+                if (crowd != null) crowd.DisposeOwnedAssets();
                 if (root != null) Object.Destroy(root);
-                Plugin.Log.LogWarning($"{Tag} the AirPit spectator could not be loaded ({e.GetType().Name}: {e.Message}); the raid continues without him");
+                Plugin.Log.LogWarning($"{Tag} the AirPit crowd could not be loaded ({e.GetType().Name}: {e.Message}); the raid continues without spectators");
             }
         }
 
@@ -80,22 +76,7 @@ namespace ArenaMapPort.Client
 
         void Build(SpectatorData data, string folder)
         {
-            _data = data;
-            int count = data.nodes.Length;
-            _nodes = new Transform[count];
-            _position = new Vector3[count]; _scale = new Vector3[count]; _rotation = new Quaternion[count];
-            _fromPosition = new Vector3[count]; _fromScale = new Vector3[count]; _fromRotation = new Quaternion[count];
-            for (int i = 0; i < count; i++)
-            {
-                var row = data.nodes[i];
-                if ((i == 0 && row.parent != -1) || (i > 0 && (row.parent < 0 || row.parent >= i)))
-                    throw new InvalidDataException("invalid spectator hierarchy");
-                var tf = i == 0 ? transform : new GameObject(row.name).transform;
-                if (i > 0) tf.SetParent(_nodes[row.parent], false);
-                tf.localPosition = V(row.position); tf.localRotation = Q(row.rotation); tf.localScale = V(row.scale);
-                _nodes[i] = tf;
-                _fromPosition[i] = tf.localPosition; _fromRotation[i] = tf.localRotation; _fromScale[i] = tf.localScale;
-            }
+            _clips = data.clips;
             var textures = new Dictionary<string, Texture>();
             foreach (var pair in data.textures)
             {
@@ -152,9 +133,10 @@ namespace ArenaMapPort.Client
                 }
                 materials.Add(pair.Key, mat);
             }
-            foreach (var part in data.parts)
+            var meshes = new Dictionary<string, Mesh>();
+            foreach (var pair in data.meshes)
             {
-                var m = part.mesh;
+                var m = pair.Value;
                 var mesh = Own(new Mesh { name = m.name, indexFormat = m.vertices.Length > 65535 ? IndexFormat.UInt32 : IndexFormat.UInt16 });
                 mesh.vertices = m.vertices.Select(V).ToArray();
                 mesh.normals = m.normals.Select(V).ToArray();
@@ -162,9 +144,7 @@ namespace ArenaMapPort.Client
                 mesh.uv = m.uv.Select(a => new Vector2(a[0], a[1])).ToArray();
                 mesh.subMeshCount = m.triangles.Length;
                 for (int i = 0; i < m.triangles.Length; i++) mesh.SetTriangles(m.triangles[i], i);
-                Renderer renderer;
-                var go = _nodes[part.node].gameObject;
-                if (part.bones.Length != 0)
+                if (m.weights != null)
                 {
                     var weights = new BoneWeight[m.weights.Length];
                     for (int i = 0; i < weights.Length; i++)
@@ -177,29 +157,71 @@ namespace ArenaMapPort.Client
                         for (int r = 0; r < 4; r++) for (int c = 0; c < 4; c++) matrix[r, c] = a[r * 4 + c];
                         return matrix;
                     }).ToArray();
-                    var skin = go.AddComponent<SkinnedMeshRenderer>();
-                    skin.sharedMesh = mesh; skin.bones = part.bones.Select(i => _nodes[i]).ToArray(); skin.rootBone = _nodes[part.root];
-                    skin.quality = SkinQuality.Bone4;
-                    // One small prototype: keep skinning alive off-screen, avoiding wrong bind-pose bounds.
-                    skin.updateWhenOffscreen = true;
-                    renderer = skin;
                 }
-                else
-                {
-                    go.AddComponent<MeshFilter>().sharedMesh = mesh;
-                    renderer = go.AddComponent<MeshRenderer>();
-                }
-                renderer.sharedMaterials = part.materials.Select(id => materials[id]).ToArray();
-                renderer.shadowCastingMode = ShadowCastingMode.On;
-                renderer.receiveShadows = true;
-                renderer.lightProbeUsage = LightProbeUsage.BlendProbes;
-                renderer.reflectionProbeUsage = ReflectionProbeUsage.BlendProbes;
+                mesh.RecalculateBounds();
+                meshes.Add(pair.Key, mesh);
             }
-            _phaseStart = Time.time;
-            _fadeStart = float.NegativeInfinity;
-            CurrentAnimation = data.clips[0].name;
+            foreach (var source in data.actors)
+            {
+                if (source.nodes.Length < 1 || source.nodes.Length > 400)
+                    throw new InvalidDataException("invalid spectator hierarchy size");
+                var nodes = new Transform[source.nodes.Length];
+                var byPath = new Dictionary<uint, Transform>();
+                for (int i = 0; i < nodes.Length; i++)
+                {
+                    var row = source.nodes[i];
+                    if ((i == 0 && row.parent != -1) || (i > 0 && (row.parent < 0 || row.parent >= i)))
+                        throw new InvalidDataException("invalid spectator hierarchy");
+                    var tf = new GameObject(row.name).transform;
+                    tf.SetParent(i == 0 ? transform : nodes[row.parent], false);
+                    tf.localPosition = V(row.position); tf.localRotation = Q(row.rotation); tf.localScale = V(row.scale);
+                    nodes[i] = tf;
+                    byPath.Add(row.path_hash, tf);
+                }
+                foreach (var part in source.parts)
+                {
+                    Renderer renderer;
+                    var go = nodes[part.node].gameObject;
+                    if (part.bones.Length != 0)
+                    {
+                        var skin = go.AddComponent<SkinnedMeshRenderer>();
+                        skin.sharedMesh = meshes[part.mesh_id];
+                        skin.bones = part.bones.Select(i => nodes[i]).ToArray();
+                        skin.rootBone = nodes[part.root];
+                        skin.quality = SkinQuality.Bone4;
+                        // Covers the full standing/raised-arm envelope around the source root bone.
+                        // The small serialized head bounds were bone-local, not a whole-fan bound.
+                        skin.localBounds = new Bounds(Vector3.zero, Vector3.one * 6f);
+                        skin.updateWhenOffscreen = false;
+                        renderer = skin;
+                    }
+                    else
+                    {
+                        go.AddComponent<MeshFilter>().sharedMesh = meshes[part.mesh_id];
+                        renderer = go.AddComponent<MeshRenderer>();
+                    }
+                    renderer.sharedMaterials = part.materials.Select(id => materials[id]).ToArray();
+                    renderer.shadowCastingMode = ShadowCastingMode.On;
+                    renderer.receiveShadows = true;
+                    renderer.lightProbeUsage = LightProbeUsage.BlendProbes;
+                    renderer.reflectionProbeUsage = ReflectionProbeUsage.BlendProbes;
+                    RendererCount++;
+                }
+                // Source IDs give repeatable independent timing without touching Unity's global RNG.
+                uint seed = unchecked((uint)source.source_id * 2654435761u);
+                float idleDuration = _clips[0].duration * (3 + seed % 8);
+                var fan = new Fan {
+                    Position = nodes[0].position, IdleDuration = idleDuration,
+                    Offset = (seed & 65535) / 65536f * (idleDuration + _clips[1].duration),
+                    Targets = _clips.Select(c => c.tracks.Select(t => byPath[t.path_hash]).ToArray()).ToArray(),
+                    Bounds = new Bounds(nodes[0].position + Vector3.up * 1.2f, new Vector3(4f, 6f, 4f))
+                };
+                _fans.Add(fan);
+                UpdateFan(fan, 0, true);
+            }
+            ActorCount = _fans.Count; SharedMeshCount = meshes.Count; SharedMaterialCount = materials.Count;
+            _started = Time.time;
             _ready = true;
-            LateUpdate();
         }
 
         static Texture2D LoadImage(string folder, string file, bool linear, bool mips)
@@ -218,79 +240,126 @@ namespace ArenaMapPort.Client
         void LateUpdate()
         {
             if (!_ready) return;
-            var clip = _data.clips[_clip];
-            float elapsed = Time.time - _phaseStart;
-            if (elapsed >= clip.duration)
+            long stamp = System.Diagnostics.Stopwatch.GetTimestamp();
+            float now = Time.time - _started;
+            var camera = Camera.main;
+            bool hasCamera = camera != null;
+            if (hasCamera) GeometryUtility.CalculateFrustumPlanes(camera, _planes);
+            VisibleActors = CheeringActors = 0;
+            foreach (var fan in _fans)
             {
-                for (int i = 0; i < _nodes.Length; i++)
+                float cycle = Mathf.Repeat(now + fan.Offset, fan.IdleDuration + _clips[1].duration);
+                int clip = cycle >= fan.IdleDuration ? 1 : 0;
+                if (clip != fan.Clip) { fan.Clip = clip; CompletedTransitions++; }
+                if (clip == 1) CheeringActors++;
+                bool visible = !hasCamera || GeometryUtility.TestPlanesAABB(_planes, fan.Bounds);
+                if (!visible) { fan.WasVisible = false; continue; }
+                VisibleActors++;
+                if (fan.WasVisible && now < fan.NextUpdate) continue;
+                UpdateFan(fan, now, false);
+                fan.WasVisible = true;
+                float distanceSquared = hasCamera ? (camera.transform.position - fan.Position).sqrMagnitude : 0;
+                fan.NextUpdate = now + (distanceSquared > 45f * 45f ? 1f / 15 : 1f / 30);
+            }
+            AnimationUpdateMilliseconds = (float)((System.Diagnostics.Stopwatch.GetTimestamp() - stamp) * 1000.0 /
+                System.Diagnostics.Stopwatch.Frequency);
+        }
+
+        void UpdateFan(Fan fan, float now, bool initial)
+        {
+            float cycle = Mathf.Repeat(now + fan.Offset, fan.IdleDuration + _clips[1].duration);
+            int index = cycle >= fan.IdleDuration ? 1 : 0;
+            float segment = index == 1 ? cycle - fan.IdleDuration : cycle;
+            var clip = _clips[index];
+            float time = index == 1 ? segment : Mathf.Repeat(segment, clip.duration);
+            float frame = Mathf.Clamp01(time / clip.duration) * (clip.frames - 1);
+            float blend = Mathf.SmoothStep(0, 1, Mathf.Clamp01(segment / FadeSeconds));
+            var previous = _clips[1 - index];
+            // Export validation pins the same ordered path/kind bindings in both clips.
+            for (int i = 0; i < clip.tracks.Length; i++)
+            {
+                var track = clip.tracks[i];
+                var target = fan.Targets[index][i];
+                if (track.path_hash == 0) continue; // source ApplyRootMotion=false
+                Vector4 value = Sample(track, frame, clip.frames);
+                if (blend < 1)
                 {
-                    _fromPosition[i] = _nodes[i].localPosition;
-                    _fromRotation[i] = _nodes[i].localRotation;
-                    _fromScale[i] = _nodes[i].localScale;
+                    Vector4 from = Sample(previous.tracks[i], previous.frames - 1, previous.frames);
+                    value = Mix(from, value, blend, track.kind == 2);
                 }
-                _loops++;
-                if (_clip == 1 || _loops >= 3) { _clip = 1 - _clip; _loops = 0; CompletedTransitions++; }
-                clip = _data.clips[_clip];
-                _phaseStart = Time.time; _fadeStart = Time.time; elapsed = 0;
-                CurrentAnimation = clip.name;
-            }
-            ClipTime = elapsed;
-            for (int i = 0; i < _nodes.Length; i++)
-            {
-                _position[i] = V(_data.nodes[i].position);
-                _rotation[i] = Q(_data.nodes[i].rotation);
-                _scale[i] = V(_data.nodes[i].scale);
-            }
-            float frame = Mathf.Clamp01(elapsed / clip.duration) * (clip.frames - 1);
-            int lo = (int)frame, hi = Math.Min(lo + 1, clip.frames - 1);
-            float fraction = frame - lo;
-            foreach (var track in clip.tracks)
-            {
-                int width = track.kind == 2 ? 4 : 3, a = lo * width, b = hi * width, n = track.node;
-                var v = track.values;
                 if (track.kind == 2)
-                    _rotation[n] = Quaternion.SlerpUnclamped(new Quaternion(v[a], v[a + 1], v[a + 2], v[a + 3]).normalized,
-                        new Quaternion(v[b], v[b + 1], v[b + 2], v[b + 3]).normalized, fraction);
+                {
+                    var rotation = new Quaternion(value.x, value.y, value.z, value.w);
+                    if (initial || target.localRotation != rotation) target.localRotation = rotation;
+                }
+                else if (track.kind == 1)
+                {
+                    Vector3 position = value;
+                    if (initial || target.localPosition != position) target.localPosition = position;
+                }
                 else
                 {
-                    var value = Vector3.LerpUnclamped(new Vector3(v[a], v[a + 1], v[a + 2]), new Vector3(v[b], v[b + 1], v[b + 2]), fraction);
-                    if (track.kind == 1) _position[n] = value;
-                    else if (track.kind == 3) _scale[n] = value;
+                    Vector3 scale = value;
+                    if (initial || target.localScale != scale) target.localScale = scale;
                 }
             }
-            float blend = Mathf.SmoothStep(0, 1, Mathf.Clamp01((Time.time - _fadeStart) / FadeSeconds));
-            for (int i = 1; i < _nodes.Length; i++) // actor root stays at its original placement (no root motion)
-            {
-                _nodes[i].localPosition = Vector3.LerpUnclamped(_fromPosition[i], _position[i], blend);
-                _nodes[i].localRotation = Quaternion.SlerpUnclamped(_fromRotation[i], _rotation[i], blend);
-                _nodes[i].localScale = Vector3.LerpUnclamped(_fromScale[i], _scale[i], blend);
-            }
+            fan.Clip = index;
+        }
+
+        static Vector4 Sample(Track track, float frame, int frames)
+        {
+            int lo = (int)frame, hi = Math.Min(lo + 1, frames - 1), width = track.kind == 2 ? 4 : 3;
+            int a = lo * width, b = hi * width;
+            var v = track.values;
+            var first = new Vector4(v[a], v[a + 1], v[a + 2], width == 4 ? v[a + 3] : 0);
+            var second = new Vector4(v[b], v[b + 1], v[b + 2], width == 4 ? v[b + 3] : 0);
+            return Mix(first, second, frame - lo, width == 4);
+        }
+
+        static Vector4 Mix(Vector4 a, Vector4 b, float amount, bool rotation)
+        {
+            if (!rotation) return Vector4.LerpUnclamped(a, b, amount);
+            var q = Quaternion.SlerpUnclamped(new Quaternion(a.x, a.y, a.z, a.w), new Quaternion(b.x, b.y, b.z, b.w), amount);
+            return new Vector4(q.x, q.y, q.z, q.w);
         }
 
         void OnDestroy()
         {
             DisposeOwnedAssets();
-            Plugin.Log.LogDebug($"{Tag} spectator and owned assets removed");
+            Plugin.Log.LogDebug($"{Tag} crowd and shared assets removed");
         }
 
         void DisposeOwnedAssets()
         {
             _ready = false;
+            _fans.Clear();
+            _clips = null;
             foreach (var asset in _assets) if (asset != null) Object.Destroy(asset);
             _assets.Clear();
         }
 
+        sealed class Fan
+        {
+            public Transform[][] Targets;
+            public Vector3 Position;
+            public Bounds Bounds;
+            public float IdleDuration, Offset, NextUpdate;
+            public int Clip;
+            public bool WasVisible;
+        }
+
         // Private package schema; no BSG content is compiled into the plugin or tracked in git.
         #pragma warning disable CS0649 // Populated by Newtonsoft.Json from the validated export.
-        sealed class SpectatorData { public int schema; public string map; public Node[] nodes; public Part[] parts; public Dictionary<string, MaterialData> materials; public Dictionary<string, TextureData> textures; public Clip[] clips; }
-        sealed class Node { public string name; public int parent; public float[] position, rotation, scale; }
-        sealed class Part { public int node, root; public int[] bones; public MeshData mesh; public string[] materials; }
+        sealed class SpectatorData { public int schema, source_count; public string map; public Actor[] actors; public Dictionary<string, MeshData> meshes; public Dictionary<string, MaterialData> materials; public Dictionary<string, TextureData> textures; public Clip[] clips; }
+        sealed class Actor { public long source_id; public string name; public Node[] nodes; public Part[] parts; }
+        sealed class Node { public string name; public uint path_hash; public int parent; public float[] position, rotation, scale; }
+        sealed class Part { public int node, root; public int[] bones; public string mesh_id; public string[] materials; }
         sealed class MeshData { public string name; public float[][] vertices, normals, tangents, uv, weights, bindposes; public int[][] indices, triangles; }
         sealed class MaterialData { public string name, shader; public int queue; public string[] keywords; public Dictionary<string, float> floats; public Dictionary<string, float[]> colors; public Dictionary<string, TexEnv> textures; }
         sealed class TextureData { public string name; public bool linear; public int wrap, filter; public string[] files; }
         sealed class TexEnv { public string id; public float[] scale, offset; }
         sealed class Clip { public string name; public float duration; public int frames; public Track[] tracks; }
-        sealed class Track { public int node, kind; public float[] values; }
+        sealed class Track { public uint path_hash; public int kind; public float[] values; }
         #pragma warning restore CS0649
     }
 }

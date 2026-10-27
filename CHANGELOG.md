@@ -8,8 +8,9 @@ and the settings text is in the [README](README.md).
 
 ## Unreleased
 
-- One spectator on Air Pit's gallery now uses his original model, idle animation and cheering
-  animation. This first prototype alternates automatically; it does not react to the match yet.
+- All 99 Air Pit spectators are restored at their original gallery positions, with 15 appearances
+  and original idle/cheering animations at staggered intervals. The missing legacy face cloth uses
+  Arena's current half-mask. The crowd is decorative and does not react to match events yet.
 
 - Avoid a second, misleading `NO_CAUSE` map-error dialog when EFT already reported
   the failure during that loading attempt. Recorded map-file and Arena-installation

@@ -3,6 +3,31 @@
 Snapshot for whoever continues (human or agent). Verify the commits named here against `git log`; this file
 is updated by hand at each handover, it is not an automatic record. Read [AGENTS.md](AGENTS.md) first.
 
+## Update 2026-10-27 - complete AirPit crowd (feature/airpit-spectator; deployed and tested on GPU-2)
+
+User approved expanding the prototype to every original spectator. The schema-2 sidecar restores
+all 99 source placements / 15 appearances / 495 renderer parts. One `AirPitSpectator` scene manager
+shares 39 meshes, 33 materials, 103 textures and the two original idle/cheer clips. Each source
+skeleton has independent timing; visible poses update at 30 Hz (15 Hz beyond 45 m), off-screen
+figures resume at their elapsed phase. No new setting, gameplay AI, collider, audio or match reaction.
+
+166 source renderer slots have null meshes. The extractor recovers their matching current Arena
+head/body/hat meshes and maps the exact mesh bone hashes, including implicit single-influence
+weights. The legacy lower-face cloth is absent from the current Arena installation: its 27 slots
+use Arena's current Shroud half-mask, with the correct material. This is a documented substitution.
+
+Verified: 28 focused tests; independent source census and CPU deformation of all 15 variants in
+435 poses; clean Release build; full four-map distribution validation. GPU-2 fresh process
+`e4fe774b` loaded matching files, then completed two AirPit raids, both with 99 fans and no mod
+warnings/errors. No duplicates; zero crowd managers and zero owned spectator materials after each
+exit. Three steady 10 s windows measured 120 FPS / p95 8.33 ms at the host's frame cap. Early raid
+windows still contain the previously observed ~1.9 s startup hitch; no isolated performance-cost
+claim. Gallery close-ups use test-only teleports; the playable area and DynamicMaps stay unchanged.
+
+GPU-2 is in the main menu, healed. Changes are deployed to `D:\SPT41` through the authorized script,
+with all 125 client/package files verified on the host. No release/upload/push. Details:
+[airpit-spectator.md](docs/progress/airpit-spectator.md); local evidence `work/spectators-crowd/`.
+
 ## Update 2026-10-27 - one original AirPit spectator (feature/airpit-spectator; deployed and tested on GPU-2)
 
 User approved one spectator with original idle and cheer before expanding the crowd. `AirPitSpectator`
