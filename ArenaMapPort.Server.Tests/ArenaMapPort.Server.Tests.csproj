@@ -34,6 +34,7 @@
     <!-- Gate and door sounds (docs/progress/gate-sounds.md): the manifest, row matching, gain, seam pick and cut, and the WAV reader. No Unity type inside. -->
     <Compile Include="..\ArenaMapPort.Client\GateSoundModel.cs" Link="Client\GateSoundModel.cs" />
     <Compile Include="..\ArenaMapPort.Client\PcmWav.cs" Link="Client\PcmWav.cs" />
+    <Compile Include="..\ArenaMapPort.Client\SpectatorAudioModel.cs" Link="Client\SpectatorAudioModel.cs" />
     <!-- Score monitors (docs/progress/score-monitors.md): the layout of the three faces (Arena's decoded template numbers, colours, sprite table). No Unity type inside. -->
     <Compile Include="..\ArenaMapPort.Client\ScoreMonitorLayout.cs" Link="Client\ScoreMonitorLayout.cs" />
     <!-- The Unity-free core of the monitor contract (docs/progress/score-monitors.md): the model (clamps, clock, frames, usable rows), the hub (claim semantics), the demo cycle and the public

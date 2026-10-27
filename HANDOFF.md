@@ -3,6 +3,32 @@
 Snapshot for whoever continues (human or agent). Verify the commits named here against `git log`; this file
 is updated by hand at each handover, it is not an automatic record. Read [AGENTS.md](AGENTS.md) first.
 
+## Update 2026-10-27 - original spectator calls (feature/airpit-spectator; deployed and tested on GPU-2)
+
+All four restored crowds now make occasional spatial calls from 13 original embedded clips of
+Arena's Participating bank (trigger 1123). One voice per crowd, 12-20 s initial delay, then 16-28 s
+silence after each clip; nearby original actor positions, no immediate clip/actor repeats where
+alternatives exist. Native Environment mixer and Combined room occlusion; source, propagation
+registration and generated clips are owned and cleaned up. No new setting or ArenaMode change;
+kill/round-win reactions remain unimplemented.
+
+`python tools/extract/extract_spectator_audio.py extract` produces the ignored shared
+`work/extract/spectator-audio` package (13 mono PCM WAVs + manifest, about 2.8 MB). Release/DllOnly
+builds stage it in the plugin's `spectator-audio/` folder; it belongs to the common core ZIP part.
+A full deployment is needed for this addition. Source exports stay local and ignored.
+
+Verified: eight extraction/negative/audio-level tests, five timing/selection/package C# tests,
+183-case packaging suite, clean Release client build and full distribution validation. Independent
+source/PCM/API review. GPU-2 fresh process `0d9c548b` loaded matching MVID
+`8a58fde8-089f-42e3-bb14-9e792a4169aa`; five consecutive raids covered Air Pit, Bowl, Equator day/night
+and Bay5. 17 call starts, positive output PCM/playing confirmations on every map, native room
+attenuation, no immediate repeats, and zero managers/clips after every exit. All eight gates met.
+Zero ArenaMapPort warnings/errors; known Unity refrigerator/menu messages are recorded separately.
+The actual output device has not been listened to: subjective mix still needs a hearing test.
+
+GPU-2 is in the main menu with the profile healed. No release/upload/push. Details and limits:
+[spectator-audio.md](docs/progress/spectator-audio.md); evidence `work/spectator-audio/`.
+
 ## Update 2026-10-27 - crowds on all four maps (feature/airpit-spectator; deployed and tested on GPU-2)
 
 User accepted AirPit and requested the other three maps. `ArenaSpectators` now restores Equator

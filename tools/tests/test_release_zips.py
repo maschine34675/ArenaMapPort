@@ -85,6 +85,8 @@ def fake_dist_files(maps=MAPS):
         f"{PLUGIN}/map-selection/region-map.png": b"\x89PNG\r\n\x1a\n" + rng.randbytes(1000),
         f"{PLUGIN}/map-selection/manifest.json": text("selection map manifest"),
         f"{PLUGIN}/monitors/monitors.json": text("monitor manifest"),
+        f"{PLUGIN}/spectator-audio/spectator-audio.json": text("fan manifest"),
+        f"{PLUGIN}/spectator-audio/arena_fan7_participating_01.wav": b"RIFF fan fixture",
         f"{PLUGIN}/monitors/Arena_Scoreboard_Status_Toggle_On.png": b"\x89PNG\r\n\x1a\n" + random.Random("monitors").randbytes(900),   # its own generator: the bytes below keep their values
     }
     for key, display in maps:
@@ -178,13 +180,14 @@ class PartitionTests(FakeRepoCase):
             "maschine-ArenaMapPort-0.1.0-part3of4-bay5.zip",
             "maschine-ArenaMapPort-0.1.0-part4of4-airpit.zip"])
 
-    def test_core_holds_only_the_seven_shared_files(self):
+    def test_core_holds_only_shared_files(self):
         core = self.partition()[0]
         self.assertEqual({f.rel for f in core.files}, {
             f"{PLUGIN}/maschine-ArenaMapPort.Client.dll", f"{SERVER}/maschine-ArenaMapPort.Server.dll",
             f"{SERVER}/locales/map-descriptions.json",
             f"{PLUGIN}/map-selection/region-map.png", f"{PLUGIN}/map-selection/manifest.json",
-            f"{PLUGIN}/monitors/monitors.json", f"{PLUGIN}/monitors/Arena_Scoreboard_Status_Toggle_On.png"})
+            f"{PLUGIN}/monitors/monitors.json", f"{PLUGIN}/monitors/Arena_Scoreboard_Status_Toggle_On.png",
+            f"{PLUGIN}/spectator-audio/spectator-audio.json", f"{PLUGIN}/spectator-audio/arena_fan7_participating_01.wav"})
 
     def test_each_map_part_holds_only_its_own_files(self):
         for part, (key, display) in zip(self.partition()[1:], MAPS):
@@ -290,7 +293,8 @@ class PartitionTests(FakeRepoCase):
         names = [f"{SERVER}/db/arena_bay5/base.json", f"{PLUGIN}/bundles/arena_equator_navmesh.bundle",
                  f"{SERVER}/locales/map-descriptions.json", f"{PLUGIN}/maschine-ArenaMapPort.Client.dll",
                  f"{SERVER}/maschine-ArenaMapPort.Server.dll",
-                 f"{PLUGIN}/map-selection/region-map.png", f"{PLUGIN}/map-selection/manifest.json", f"{PLUGIN}/monitors/monitors.json"]
+                 f"{PLUGIN}/map-selection/region-map.png", f"{PLUGIN}/map-selection/manifest.json", f"{PLUGIN}/monitors/monitors.json",
+                 f"{PLUGIN}/spectator-audio/spectator-audio.json"]
         for key, _display in MAPS:  # everything validate_distribution.py demands of every released map
             names += [f"{PLUGIN}/{shader_sidecar(key)}", f"{PLUGIN}/ai/{key.removeprefix('arena_')}.ai.json",
                       f"{SERVER}/banners/{key}.jpg", f"{PLUGIN}/acoustics/{key}/spatial-audio.json",
@@ -328,6 +332,15 @@ class PartitionTests(FakeRepoCase):
                      f"{PLUGIN}/dynamicmaps/ArenaMapPort_Equator/Layers/Ground.svg"):
             with self.subTest(name=name):
                 self.assertEqual(len([r for r in rules if r.regex.fullmatch(name)]), 1)
+
+    def test_spectator_audio_is_shared_and_rejects_unrelated_clips(self):
+        rules = release.build_rules(self.spec)
+        for name in ('spectator-audio.json', 'arena_fan7_participating_01.wav'):
+            self.assertEqual(release.classify(f'{PLUGIN}/spectator-audio/{name}', rules).part, release.CORE_ID)
+        for name in ('arena_fan7_kill_cheer_01.wav', 'arena_fan7_participating_01.wav.bak',
+                     'arena_fans_ambient_postmatch.ogg', 'old/spectator-audio.json', 'Thumbs.db'):
+            with self.assertRaises(release.ClassificationError):
+                release.classify(f'{PLUGIN}/spectator-audio/{name}', rules)
 
     def test_spectators_stay_in_their_map_part_and_reject_strays(self):
         rules = release.build_rules(self.spec)

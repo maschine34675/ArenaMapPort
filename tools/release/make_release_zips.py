@@ -152,6 +152,7 @@ SELECTION_MAP_NAMES = (f"{PLUGIN_ROOT}/map-selection/region-map.png",
 # The artwork of the score monitor faces (docs/progress/score-monitors.md): one manifest and one PNG per sprite, the same for every map, so
 # they travel in the core part. The rule pins the folder and leaf shape; validate_distribution.py checks the exact file set.
 MONITORS_MANIFEST_NAME = f"{PLUGIN_ROOT}/monitors/monitors.json"
+SPECTATOR_AUDIO_MANIFEST_NAME = f"{PLUGIN_ROOT}/spectator-audio/spectator-audio.json"
 
 
 class PackagingError(Exception):
@@ -345,6 +346,7 @@ def build_rules(spec: ReleaseSpec) -> list:
     for name in SELECTION_MAP_NAMES:
         add(CORE_ID, "selection map", re.escape(name))
     add(CORE_ID, "score monitors", re.escape(f"{PLUGIN_ROOT}/monitors/") + rf"(?:monitors\.json|{LEAF}\.png)")
+    add(CORE_ID, "spectator audio", re.escape(f"{PLUGIN_ROOT}/spectator-audio/") + r"(?:spectator-audio\.json|arena_fan(?:[7-9]|1[0-3])_participating_\d{2}\.wav)")
     for m in spec.maps:
         key = re.escape(m.key)
         add(m.stem, "bundle", re.escape(f"{PLUGIN_ROOT}/bundles/") + key + r"_(?:scenes|navmesh|preset)\.bundle")
@@ -384,7 +386,7 @@ def required_files(spec: ReleaseSpec) -> dict:
     acoustic graph, banner or loading screens is not the map the README promises; the core part needs the score monitor
     manifest the client reads when a mode plugin claims the TV screens. Only flares, water and the
     DynamicMaps overview are optional (AirPit has an overview but no flares or water package)."""
-    required = {CORE_ID: [spec.client_dll, spec.server_dll, DESCRIPTIONS_NAME, *SELECTION_MAP_NAMES, MONITORS_MANIFEST_NAME]}
+    required = {CORE_ID: [spec.client_dll, spec.server_dll, DESCRIPTIONS_NAME, *SELECTION_MAP_NAMES, MONITORS_MANIFEST_NAME, SPECTATOR_AUDIO_MANIFEST_NAME]}
     for m in spec.maps:
         names = [f"{PLUGIN_ROOT}/bundles/{m.key}_{kind}.bundle" for kind in ("scenes", "navmesh", "preset")]
         names += [f"{SERVER_ROOT}/db/{m.key}/base.json",

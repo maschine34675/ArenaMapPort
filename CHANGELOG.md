@@ -8,6 +8,9 @@ and the settings text is in the [README](README.md).
 
 ## Unreleased
 
+- Spectators on all four maps occasionally call out using 13 original Arena voice clips, with
+  spatial positioning, room obstruction and pauses between calls. No kill/round-win reactions yet.
+
 - Original spectators are restored on Air Pit (99), Equator day/night (99), Bay5 (88) and Bowl (99), with 15 appearances
   and original idle/cheering animations at staggered intervals. The missing legacy face cloth uses
   Arena's current half-mask. The crowd is decorative and does not react to match events yet.

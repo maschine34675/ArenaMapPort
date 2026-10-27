@@ -85,6 +85,7 @@ namespace ArenaMapPort.Client
                         original.SetActive(false);
                     }
                     root.SetActive(true);
+                    SpectatorAudio.Create(crowd, crowd._fans.Select(f => f.Position + Vector3.up * 1.6f).ToArray());
                     Plugin.Log.LogDebug($"{Tag} {mapKey}: {crowd.ActorCount} original fans, {crowd.RendererCount} renderers; " +
                         $"shared {crowd.SharedMeshCount} meshes, {crowd.SharedMaterialCount} materials; idle/cheer staggered");
                 }

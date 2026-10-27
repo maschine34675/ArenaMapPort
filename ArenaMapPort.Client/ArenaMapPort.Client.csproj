@@ -202,6 +202,18 @@
     <Copy SourceFiles="@(ArenaMapPortSpectatorFile)" DestinationFolder="$(ArenaMapPortDistDir)\spectators\%(ArenaMapPortSpectatorFile.Map)" SkipUnchangedFiles="true" />
   </Target>
 
+  <!-- One small voice bank shared by all spectator crowds. -->
+  <Target Name="ArenaMapPortStageSpectatorAudio" AfterTargets="ArenaMapPortDistCopy" Condition="'$(Configuration)'=='Release'">
+    <PropertyGroup>
+      <ArenaMapPortSpectatorAudioDir>$(MSBuildThisFileDirectory)..\work\extract\spectator-audio</ArenaMapPortSpectatorAudioDir>
+    </PropertyGroup>
+    <Error Condition="!Exists('$(ArenaMapPortSpectatorAudioDir)\spectator-audio.json')" Text="Missing spectator audio; run python tools/extract/extract_spectator_audio.py extract" />
+    <ItemGroup>
+      <ArenaMapPortSpectatorAudioFile Include="$(ArenaMapPortSpectatorAudioDir)\spectator-audio.json;$(ArenaMapPortSpectatorAudioDir)\*.wav" />
+    </ItemGroup>
+    <Copy SourceFiles="@(ArenaMapPortSpectatorAudioFile)" DestinationFolder="$(ArenaMapPortDistDir)\spectator-audio" SkipUnchangedFiles="true" />
+  </Target>
+
   <!-- Original Arena region artwork, with its native texture padding preserved.
        SelectionMapArtwork selects the aligned geographic window at runtime. -->
   <Target Name="ArenaMapPortStageSelectionMap" AfterTargets="ArenaMapPortDistCopy" Condition="'$(Configuration)'=='Release'">

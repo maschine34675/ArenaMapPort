@@ -490,6 +490,15 @@ def validate():
     validate_acoustics(plugin, keys)
     validate_gate_sounds(plugin, keys)
     validate_monitors(plugin)
+    from extract_spectator_audio import validate as verify_spectator_audio
+    audio = plugin/'spectator-audio'
+    verify_spectator_audio(audio)
+    extracted_audio = REPO/'work/extract/spectator-audio'
+    if _files_under(audio) != _files_under(extracted_audio):
+        raise ValueError('Spectator audio file set differs from extracted data')
+    for name in _files_under(audio):
+        if (audio/name).read_bytes() != (extracted_audio/name).read_bytes():
+            raise ValueError(f'Stale spectator audio: {name}')
     from extract_spectator import MAP_SCENES, package_path, verify as verify_spectator
     if {p.name for p in (plugin/'spectators').iterdir()} != {f'arena_{name}' for name in MAP_SCENES}:
         raise ValueError('Unexpected or missing spectator map package')
