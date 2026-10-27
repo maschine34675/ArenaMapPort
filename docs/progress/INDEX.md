@@ -8,7 +8,10 @@ dated state in one screen; read it before this index if you only have a minute.
 
 ## Current — read these for the area you touch
 
-- [airpit-spectator.md](airpit-spectator.md) — the AirPit gallery crowd: 99 original placements,
+- [spectators-allmaps.md](spectators-allmaps.md) — original crowds on all four maps: Equator day/night,
+  Bay5's translated group and inactive legacy colliders, Bowl and the accepted AirPit crowd; shared runtime,
+  exact source/animation audits, staging and release packaging.
+- [airpit-spectator.md](airpit-spectator.md) — the initial AirPit gallery crowd: 99 original placements,
   15 appearances, shared skinned meshes and staggered original idle/cheer animations; source recovery,
   original Euler rotation order and map-scoped lifecycle.
 

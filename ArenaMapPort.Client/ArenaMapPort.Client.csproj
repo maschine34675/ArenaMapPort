@@ -189,13 +189,17 @@
 
   <Target Name="ArenaMapPortStageSpectator" AfterTargets="ArenaMapPortDistCopy" Condition="'$(Configuration)'=='Release'">
     <PropertyGroup>
-      <ArenaMapPortSpectatorDir>$(MSBuildThisFileDirectory)..\work\extract\spectator-airpit</ArenaMapPortSpectatorDir>
+      <ArenaMapPortSpectatorDir>$(MSBuildThisFileDirectory)..\work\extract</ArenaMapPortSpectatorDir>
     </PropertyGroup>
-    <Error Condition="!Exists('$(ArenaMapPortSpectatorDir)\spectator.json.gz')" Text="Missing AirPit spectator; run python tools/extract/extract_spectator.py extract" />
     <ItemGroup>
-      <ArenaMapPortSpectatorFile Include="$(ArenaMapPortSpectatorDir)\spectator.json.gz;$(ArenaMapPortSpectatorDir)\*.png" />
+      <ArenaMapPortSpectatorMap Include="airpit;equator;bay5;bowl" />
+      <ArenaMapPortSpectatorFile Include="$(ArenaMapPortSpectatorDir)\spectator-airpit\spectator.json.gz;$(ArenaMapPortSpectatorDir)\spectator-airpit\*.png" Map="arena_airpit" />
+      <ArenaMapPortSpectatorFile Include="$(ArenaMapPortSpectatorDir)\spectator-equator\spectator.json.gz;$(ArenaMapPortSpectatorDir)\spectator-equator\*.png" Map="arena_equator" />
+      <ArenaMapPortSpectatorFile Include="$(ArenaMapPortSpectatorDir)\spectator-bay5\spectator.json.gz;$(ArenaMapPortSpectatorDir)\spectator-bay5\*.png" Map="arena_bay5" />
+      <ArenaMapPortSpectatorFile Include="$(ArenaMapPortSpectatorDir)\spectator-bowl\spectator.json.gz;$(ArenaMapPortSpectatorDir)\spectator-bowl\*.png" Map="arena_bowl" />
     </ItemGroup>
-    <Copy SourceFiles="@(ArenaMapPortSpectatorFile)" DestinationFolder="$(ArenaMapPortDistDir)\spectators\arena_airpit" SkipUnchangedFiles="true" />
+    <Error Condition="!Exists('$(ArenaMapPortSpectatorDir)\spectator-%(ArenaMapPortSpectatorMap.Identity)\spectator.json.gz')" Text="Missing spectator package for %(ArenaMapPortSpectatorMap.Identity); run python tools/extract/extract_spectator.py extract --map all" />
+    <Copy SourceFiles="@(ArenaMapPortSpectatorFile)" DestinationFolder="$(ArenaMapPortDistDir)\spectators\%(ArenaMapPortSpectatorFile.Map)" SkipUnchangedFiles="true" />
   </Target>
 
   <!-- Original Arena region artwork, with its native texture padding preserved.

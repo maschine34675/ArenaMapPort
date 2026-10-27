@@ -8,7 +8,7 @@ and the settings text is in the [README](README.md).
 
 ## Unreleased
 
-- All 99 Air Pit spectators are restored at their original gallery positions, with 15 appearances
+- Original spectators are restored on Air Pit (99), Equator day/night (99), Bay5 (88) and Bowl (99), with 15 appearances
   and original idle/cheering animations at staggered intervals. The missing legacy face cloth uses
   Arena's current half-mask. The crowd is decorative and does not react to match events yet.
 

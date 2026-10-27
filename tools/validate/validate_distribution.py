@@ -490,15 +490,18 @@ def validate():
     validate_acoustics(plugin, keys)
     validate_gate_sounds(plugin, keys)
     validate_monitors(plugin)
-    from extract_spectator import verify as verify_spectator
-    spectator = plugin/'spectators/arena_airpit'
-    verify_spectator(spectator)
-    extracted_spectator = REPO/'work/extract/spectator-airpit'
-    if _files_under(spectator) != _files_under(extracted_spectator):
-        raise ValueError('Spectator package file set differs from extracted source')
-    for name in _files_under(spectator):
-        if (spectator/name).read_bytes() != (extracted_spectator/name).read_bytes():
-            raise ValueError(f'Stale spectator data: {name}')
+    from extract_spectator import MAP_SCENES, package_path, verify as verify_spectator
+    if {p.name for p in (plugin/'spectators').iterdir()} != {f'arena_{name}' for name in MAP_SCENES}:
+        raise ValueError('Unexpected or missing spectator map package')
+    for map_name in MAP_SCENES:
+        spectator = plugin/'spectators'/f'arena_{map_name}'
+        verify_spectator(spectator, f'arena_{map_name}')
+        extracted_spectator = package_path(map_name)
+        if _files_under(spectator) != _files_under(extracted_spectator):
+            raise ValueError(f'Spectator package file set differs from extracted source: {map_name}')
+        for name in _files_under(spectator):
+            if (spectator/name).read_bytes() != (extracted_spectator/name).read_bytes():
+                raise ValueError(f'Stale spectator data: {map_name}/{name}')
     from extract_multiflare import validate_graph
     expected_flare_files = set()
     for key in FLARE_MAP_KEYS:

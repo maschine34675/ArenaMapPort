@@ -19,7 +19,9 @@ def fixture():
     actor = dict(source_id=1, name='synthetic', nodes=[dict(name='synthetic', path_hash=0,
                  parent=-1, position=[0, 0, 0], rotation=[0, 0, 0, 1], scale=[1, 1, 1])],
                  parts=[dict(node=0, root=0, bones=[0], materials=['m'], mesh_id='mesh')])
-    return dict(schema=2, map='arena_airpit', source_count=1, actors=[actor], meshes={'mesh': mesh},
+    return dict(schema=3, map='arena_airpit', source_scene=S.MAP_SCENES['airpit'],
+                container=dict(position=[0, 0, 0], rotation=[0, 0, 0, 1], scale=[1, 1, 1]),
+                source_count=1, actors=[actor], meshes={'mesh': mesh},
                 materials={'m': {'textures': {}}}, textures={},
                 clips=[dict(name=name, duration=1, frames=2,
                        tracks=[dict(path_hash=0, kind=2, values=[0, 0, 0, 1]*2)]) for name in S.CLIPS])
@@ -32,6 +34,56 @@ class SpectatorValidation(unittest.TestCase):
 
     def test_valid_positive_control(self):
         S.validate(self.data)
+
+    def test_supported_map_scene_pairs(self):
+        for name, scene in S.MAP_SCENES.items():
+            with self.subTest(map=name):
+                self.data.update(map=f'arena_{name}', source_scene=scene)
+                S.validate(self.data, f'arena_{name}')
+
+    def test_package_copied_under_wrong_map_rejected(self):
+        with self.assertRaisesRegex(ValueError, 'package map'):
+            S.validate(self.data, 'arena_bay5')
+
+    def test_unrelated_map_rejected(self):
+        self.data['map'] = 'factory4_day'
+        with self.assertRaisesRegex(ValueError, 'schema/map'):
+            S.validate(self.data)
+
+    def test_wrong_scene_rejected(self):
+        self.data['source_scene'] = S.MAP_SCENES['bay5']
+        with self.assertRaisesRegex(ValueError, 'source scene'):
+            S.validate(self.data)
+
+    def test_legacy_package_without_container_rejected(self):
+        self.data['schema'] = 2
+        del self.data['container']
+        with self.assertRaisesRegex(ValueError, 'schema/map'):
+            S.validate(self.data)
+
+    def test_translated_container_preserves_actor_local_placement(self):
+        self.data.update(map='arena_bay5', source_scene=S.MAP_SCENES['bay5'])
+        self.data['container']['position'] = [104.146446228, 6.381745338, -16.224702835]
+        self.data['actors'][0]['nodes'][0]['position'] = [-10, 0, 2]
+        S.validate(self.data, 'arena_bay5')
+        self.assertEqual(self.data['actors'][0]['nodes'][0]['position'], [-10, 0, 2])
+
+    def test_invalid_container_rejected(self):
+        for prop, value in [('position', [0, 0]), ('position', [0, float('nan'), 0]),
+                            ('rotation', [0, 0, 0, 0]), ('scale', [2, 1, 1])]:
+            with self.subTest(prop=prop, value=value):
+                data = copy.deepcopy(self.data)
+                data['container'][prop] = value
+                with self.assertRaises(ValueError):
+                    S.validate(data)
+
+    def test_scene_discovery_follows_build_settings_order(self):
+        paths = ['Assets/Other.unity', 'Assets/Maps/Arena_Bay5_DesignStuff.unity']
+        self.assertEqual(S.scene_index(paths, S.MAP_SCENES['bay5']), 1)
+        self.assertEqual(S.scene_index(paths[::-1], S.MAP_SCENES['bay5']), 0)
+        for invalid in [paths[:1], paths + paths]:
+            with self.assertRaisesRegex(ValueError, 'one BuildSettings scene'):
+                S.scene_index(invalid, S.MAP_SCENES['bay5'])
 
     def test_original_euler_xyz_order(self):
         # First X=90, then Z=90: qz*qx. Default Unity ZXY gives a different sign for y.
@@ -177,11 +229,18 @@ class SpectatorValidation(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'node path hash'):
             S.validate(self.data)
 
-    @unittest.skipUnless((S.DEFAULT_PACKAGE / 'spectator.json.gz').exists(), 'owner-extracted package unavailable')
-    def test_real_package(self):
-        data = json.loads(gzip.decompress((S.DEFAULT_PACKAGE / 'spectator.json.gz').read_bytes()))
-        S.validate(data)
-        self.assertEqual(len(data['actors']), 99)
+    @unittest.skipUnless(all((S.package_path(m) / 'spectator.json.gz').exists() for m in S.MAP_SCENES),
+                         'owner-extracted packages unavailable')
+    def test_real_packages(self):
+        for name in S.MAP_SCENES:
+            with self.subTest(map=name):
+                self.check_real_package(name)
+
+    def check_real_package(self, name):
+        package = S.package_path(name)
+        data = json.loads(gzip.decompress((package / 'spectator.json.gz').read_bytes()))
+        S.validate(data, f'arena_{name}')
+        self.assertEqual(len(data['actors']), 88 if name == 'bay5' else 99)
         self.assertEqual(len({a['name'].split(' (')[0] for a in data['actors']}), 15)
         self.assertTrue(all(not a['missing'] for a in data['actors']))
         self.assertLess(len(data['meshes']), sum(len(a['parts']) for a in data['actors']))
@@ -191,7 +250,7 @@ class SpectatorValidation(unittest.TestCase):
             self.assertEqual({x['kind'] for x in clip['absent_optional_tracks']}, {1, 2, 3})
             self.assertFalse(clip['root_motion'])
             self.assertTrue(any(max(t['values']) - min(t['values']) > .1 for t in clip['tracks']))
-        S.verify(S.DEFAULT_PACKAGE)
+        S.verify(package, f'arena_{name}')
 
 
 if __name__ == '__main__':

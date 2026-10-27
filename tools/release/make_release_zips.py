@@ -22,7 +22,7 @@ Two layouts, one classification, one verifier:
       part1ofN-core         client DLL, server DLL, original map descriptions, selection artwork, score monitor sprites,
                             README, notices
       part2ofN-<map stem>   one part per released map: bundles, db/<key>/base.json, acoustics, gate sounds, AI sidecar,
-                            flares, water, loading screens, overview map, shader sidecar, banner
+                            spectators, flares, water, loading screens, overview map, shader sidecar, banner
 
       maschine-ArenaMapPort-<version>-part<i>of<N>-<id>.zip     one per part
       maschine-ArenaMapPort-<version>.sha256                    '<sha256>  <zip name>' per part, in part order
@@ -43,7 +43,7 @@ ai/airpit2.ai.json, a stray .pdb or backup, a Thumbs.db or .bak inside an acoust
 dynamicmaps folder) or more than one is a hard error, never a silent skip; so is a directory that cannot be
 listed. The rules pin the leaf names the build stages, and required_files() demands everything every released
 map must carry (bundles, key file, database entry, shader sidecar, AI sidecar, banner, acoustic graph, gate sound
-manifest, first loading screen); only flares, water and the overview map are optional per map. Every ZIP carries
+manifest, spectator package, first loading screen); only flares, water and the overview map are optional per map. Every ZIP carries
 BepInEx/plugins/maschine-ArenaMapPort/parts/<id>.json, a schema-1 manifest naming ALL parts (one, in the single
 layout) plus this ZIP's own entries with size and SHA-256, so any ZIP says which others complete the install.
 The core part (or the single ZIP) adds README.txt and THIRD-PARTY-NOTICES.txt (client and server root); the
@@ -352,6 +352,7 @@ def build_rules(spec: ReleaseSpec) -> list:
         add(m.stem, "acoustics", re.escape(f"{PLUGIN_ROOT}/acoustics/{m.key}/")
             + rf"(?:spatial-audio\.json|source\.audiobakedata|{LEAF}\.wav)")
         add(m.stem, "gate sounds", re.escape(f"{PLUGIN_ROOT}/gate-sounds/{m.key}/") + rf"(?:gate-sounds\.json|{LEAF}\.wav)")
+        add(m.stem, "spectators", re.escape(f"{PLUGIN_ROOT}/spectators/{m.key}/") + r"(?:spectator\.json\.gz|[0-9a-f]{16}(?:-[0-5])?\.png)")
         add(m.stem, "ai sidecar", re.escape(f"{PLUGIN_ROOT}/ai/{m.stem}.ai.json"))
         add(m.stem, "flares", re.escape(f"{PLUGIN_ROOT}/flares/{m.key}/") + rf"(?:flares\.json|textures/{LEAF}\.bin)")
         add(m.stem, "water", re.escape(f"{PLUGIN_ROOT}/water/{m.key}/") + rf"(?:water\.json|textures/{LEAF}\.bin)")
@@ -393,6 +394,7 @@ def required_files(spec: ReleaseSpec) -> dict:
                   f"{SERVER_ROOT}/banners/{m.key}.jpg",
                   f"{PLUGIN_ROOT}/acoustics/{m.key}/spatial-audio.json",
                   f"{PLUGIN_ROOT}/gate-sounds/{m.key}/gate-sounds.json",
+                  f"{PLUGIN_ROOT}/spectators/{m.key}/spectator.json.gz",
                   f"{PLUGIN_ROOT}/loadscreens/{m.key}_1.jpg"]
         required[m.stem] = names
     return required

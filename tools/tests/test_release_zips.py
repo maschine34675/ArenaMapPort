@@ -97,6 +97,8 @@ def fake_dist_files(maps=MAPS):
         files[f"{PLUGIN}/acoustics/{key}/room.assets_9.wav"] = rng.randbytes(1500)
         files[f"{PLUGIN}/gate-sounds/{key}/gate-sounds.json"] = text(key + "gatesounds")
         files[f"{PLUGIN}/gate-sounds/{key}/{key}_door.wav"] = random.Random(key).randbytes(1200)   # its own generator: the bytes below keep their values
+        files[f"{PLUGIN}/spectators/{key}/spectator.json.gz"] = text(key + "crowd")
+        files[f"{PLUGIN}/spectators/{key}/0123456789abcdef.png"] = random.Random(key + "crowd").randbytes(900)
         files[f"{PLUGIN}/ai/{stem}.ai.json"] = text(key + "ai")
         for n in (1, 2):
             files[f"{PLUGIN}/loadscreens/{key}_{n}.jpg"] = b"\xff\xd8\xff" + b"\x00" * 3000
@@ -292,7 +294,8 @@ class PartitionTests(FakeRepoCase):
         for key, _display in MAPS:  # everything validate_distribution.py demands of every released map
             names += [f"{PLUGIN}/{shader_sidecar(key)}", f"{PLUGIN}/ai/{key.removeprefix('arena_')}.ai.json",
                       f"{SERVER}/banners/{key}.jpg", f"{PLUGIN}/acoustics/{key}/spatial-audio.json",
-                      f"{PLUGIN}/gate-sounds/{key}/gate-sounds.json", f"{PLUGIN}/loadscreens/{key}_1.jpg"]
+                      f"{PLUGIN}/gate-sounds/{key}/gate-sounds.json", f"{PLUGIN}/spectators/{key}/spectator.json.gz",
+                      f"{PLUGIN}/loadscreens/{key}_1.jpg"]
         for name in names:
             with self.subTest(name=name):
                 data = (self.dist / name).read_bytes()
@@ -325,6 +328,18 @@ class PartitionTests(FakeRepoCase):
                      f"{PLUGIN}/dynamicmaps/ArenaMapPort_Equator/Layers/Ground.svg"):
             with self.subTest(name=name):
                 self.assertEqual(len([r for r in rules if r.regex.fullmatch(name)]), 1)
+
+    def test_spectators_stay_in_their_map_part_and_reject_strays(self):
+        rules = release.build_rules(self.spec)
+        for key, _ in MAPS:
+            for leaf in ('spectator.json.gz', '0123456789abcdef.png', '0123456789abcdef-5.png'):
+                self.assertEqual(release.classify(f'{PLUGIN}/spectators/{key}/{leaf}', rules).part,
+                                 key.removeprefix('arena_'))
+        for relative in ('arena_airpit2/spectator.json.gz', 'arena_prison/spectator.json.gz',
+                         'arena_bay5/spectator.json.gz.bak', 'arena_bay5/Thumbs.db',
+                         'arena_bay5/nested/0123456789abcdef.png', 'arena_bay5/0123456789abcdef-6.png'):
+            with self.subTest(relative=relative), self.assertRaises(release.ClassificationError):
+                release.classify(f'{PLUGIN}/spectators/{relative}', rules)
 
     def test_an_unlistable_directory_is_an_error_not_a_silent_skip(self):
         real_scandir = os.scandir
@@ -2498,6 +2513,7 @@ class BowlPartTests(FakeRepoCase):
             f"{PLUGIN}/acoustics/arena_bowl/spatial-audio.json", f"{PLUGIN}/acoustics/arena_bowl/source.audiobakedata",
             f"{PLUGIN}/acoustics/arena_bowl/room.assets_9.wav", f"{PLUGIN}/ai/bowl.ai.json",
             f"{PLUGIN}/gate-sounds/arena_bowl/gate-sounds.json", f"{PLUGIN}/gate-sounds/arena_bowl/arena_bowl_door.wav",
+            f"{PLUGIN}/spectators/arena_bowl/spectator.json.gz", f"{PLUGIN}/spectators/arena_bowl/0123456789abcdef.png",
             *(f"{PLUGIN}/loadscreens/arena_bowl_{n}.jpg" for n in (1, 2, 3, 4)),
             f"{PLUGIN}/material-shaders.arena_bowl.json", f"{SERVER}/db/arena_bowl/base.json",
             f"{SERVER}/banners/arena_bowl.jpg"})

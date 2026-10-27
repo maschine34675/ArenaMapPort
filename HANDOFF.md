@@ -3,6 +3,32 @@
 Snapshot for whoever continues (human or agent). Verify the commits named here against `git log`; this file
 is updated by hand at each handover, it is not an automatic record. Read [AGENTS.md](AGENTS.md) first.
 
+## Update 2026-10-27 - crowds on all four maps (feature/airpit-spectator; deployed and tested on GPU-2)
+
+User accepted AirPit and requested the other three maps. `ArenaSpectators` now restores Equator
+day/night (99), Bay5 (88), Bowl (99), and AirPit (99), retaining original placements, 15 appearances,
+shared meshes/materials and staggered original idle/cheer animation. No new setting or gameplay AI.
+Schema 3 includes the container transform: Bay5's source root is translated and active. The old
+owned crowd root is disabled only after replacement succeeds, removing its leftover accessories
+and 1,056 colliders. Original legacy-mask substitutions remain documented.
+
+All four extracts are required by DLL-only staging: `python tools/extract/extract_spectator.py
+extract --map all` (single line). Full deployment is necessary when upgrading from schema 2.
+Art remains ignored; encrypted bundles are unchanged. Release packaging now accepts the exact
+spectator filenames and requires each map's manifest; 609 dist files classify without omissions.
+
+Verified: 36 spectator fixtures, 182 packaging fixtures, Release client, full distribution validator,
+independent source/mesh/animation/CPU audits of all four packages. Five consecutive native GPU-2
+raids (Equator day/night, Bay5, Bowl, AirPit) had correct counts and zero ArenaMapPort warnings/errors.
+Each exit left zero crowd managers/materials. Steady 10 s windows reached the 120 FPS cap; startup
+hitches remain and this is not an isolated performance-cost claim. Bowl's stands are distant and
+partly occluded; further source/import geometry comparisons ruled out a layout mismatch.
+
+Deployed via the sanctioned script, with all 497 client/crowd files verified on GPU-2. Fresh process
+`d19997e6` loaded matching client MVID `183ff357-4e67-46f2-b5c1-0d1edcb6e23c`. The host is in the
+main menu with the profile healed. No release/upload/push. Details:
+[spectators-allmaps.md](docs/progress/spectators-allmaps.md); evidence `work/spectators-allmaps/`.
+
 ## Update 2026-10-27 - complete AirPit crowd (feature/airpit-spectator; deployed and tested on GPU-2)
 
 User approved expanding the prototype to every original spectator. The schema-2 sidecar restores

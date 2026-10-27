@@ -204,8 +204,8 @@ confirm changed server behavior in the new process log as well.
 
 ```powershell
 # client plugin (Release; DllOnly skips re-staging the bundles into dist/)
-# AirPit's complete spectator crowd (also needed by DLL-only staging; ignored original art/animation data):
-python tools/extract/extract_spectator.py extract
+# Complete crowds on all four maps (also needed by DLL-only staging; ignored original art/animation data):
+python tools/extract/extract_spectator.py extract --map all
 dotnet build ArenaMapPort.Client/ArenaMapPort.Client.csproj -c Release -p:ArenaMapPortDllOnly=true
 # server mod + tests (always -c Release: a Debug test run would redeploy a Debug DLL into dist/)
 dotnet build ArenaMapPort.Server/ArenaMapPort.Server.csproj -c Release

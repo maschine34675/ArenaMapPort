@@ -12,15 +12,13 @@ using Object = UnityEngine.Object;
 namespace ArenaMapPort.Client
 {
     /// <summary>
-    /// Original decorative AirPit crowd. Shared owner-sourced meshes, materials and 60 Hz source
+    /// Original decorative crowds. Shared owner-sourced meshes, materials and 60 Hz source
     /// animation samples; independent source skeletons/placements. No Player, AI, physics or loot.
     /// In-place idle/cheer phases are staggered. All resources belong to the owned design scene.
     /// </summary>
-    internal sealed class AirPitSpectator : MonoBehaviour
+    internal sealed class ArenaSpectators : MonoBehaviour
     {
         const string Tag = "[Spectator]";
-        const string ActorName = "ArenaMapPort_AirPitSpectators";
-        const string SceneName = "Arena_Airpit_DesignStuff";
         const float FadeSeconds = .3f;
         readonly List<Object> _assets = new List<Object>();
         readonly List<Fan> _fans = new List<Fan>();
@@ -31,33 +29,63 @@ namespace ArenaMapPort.Client
         public int ActorCount, RendererCount, SharedMeshCount, SharedMaterialCount;
         public int VisibleActors, CheeringActors, CompletedTransitions;
         public float AnimationUpdateMilliseconds;
+        public string MapKey;
+        public int OriginalGroupsDisabled;
+
+        static string DesignScene(string key)
+        {
+            switch (key)
+            {
+                case "arena_airpit": return "Arena_Airpit_DesignStuff";
+                case "arena_equator": return "Arena_Equator_DesignStuff"; // Both location IDs share the scene/crowd.
+                case "arena_bay5": return "Arena_Bay5_DesignStuff";
+                case "arena_bowl": return "Arena_Bowl_DesignStuff";
+                default: return null;
+            }
+        }
 
         internal static void Create()
         {
-            if (ArenaMapRaid.CurrentMap?.Key != "arena_airpit") return;
-            var scene = SceneManager.GetSceneByName(SceneName);
+            string mapKey = ArenaMapRaid.CurrentMap?.Key;
+            string sceneName = DesignScene(mapKey);
+            if (sceneName == null || !ArenaMapRaid.IsOwnedScene(sceneName)) return;
+            var scene = SceneManager.GetSceneByName(sceneName);
             if (!scene.IsValid() || !scene.isLoaded) return;
-            if (scene.GetRootGameObjects().Any(x => x.name == ActorName)) return;
+            string actorName = "ArenaMapPort_Spectators_" + mapKey;
+            if (scene.GetRootGameObjects().Any(x => x.name == actorName)) return;
             GameObject root = null;
-            AirPitSpectator crowd = null;
+            ArenaSpectators crowd = null;
             try
             {
-                string folder = Path.Combine(Path.GetDirectoryName(typeof(Plugin).Assembly.Location) ?? "", "spectators", "arena_airpit");
+                string folder = Path.Combine(Path.GetDirectoryName(typeof(Plugin).Assembly.Location) ?? "", "spectators", mapKey);
                 using (var file = File.OpenRead(Path.Combine(folder, "spectator.json.gz")))
                 using (var gzip = new GZipStream(file, CompressionMode.Decompress))
                 using (var reader = new StreamReader(gzip))
                 {
                     var data = JsonConvert.DeserializeObject<SpectatorData>(reader.ReadToEnd());
-                    if (data == null || data.schema != 2 || data.map != "arena_airpit" || data.actors.Length < 1 ||
+                    if (data == null || data.schema != 3 || data.map != mapKey || data.source_scene != sceneName ||
+                        data.container == null || data.actors.Length < 1 ||
                         data.actors.Length > 200 || data.source_count != data.actors.Length || data.clips.Length != 2)
                         throw new InvalidDataException("unsupported spectator package");
-                    root = new GameObject(ActorName);
+                    ValidateContainer(data.container);
+                    root = new GameObject(actorName);
                     root.SetActive(false);
                     SceneManager.MoveGameObjectToScene(root, scene);
-                    crowd = root.AddComponent<AirPitSpectator>();
+                    root.transform.localPosition = V(data.container.position);
+                    root.transform.localRotation = Q(data.container.rotation);
+                    root.transform.localScale = V(data.container.scale);
+                    crowd = root.AddComponent<ArenaSpectators>();
+                    crowd.MapKey = mapKey;
                     crowd.Build(data, folder);
+                    // Bay5's imported crowd still carries active accessories and colliders. Replace
+                    // only this owned scene root, after all replacement resources loaded successfully.
+                    foreach (var original in scene.GetRootGameObjects().Where(x => x.name == "SCAV_SPECTATORS"))
+                    {
+                        if (original.activeSelf) crowd.OriginalGroupsDisabled++;
+                        original.SetActive(false);
+                    }
                     root.SetActive(true);
-                    Plugin.Log.LogDebug($"{Tag} {crowd.ActorCount} original fans, {crowd.RendererCount} renderers; " +
+                    Plugin.Log.LogDebug($"{Tag} {mapKey}: {crowd.ActorCount} original fans, {crowd.RendererCount} renderers; " +
                         $"shared {crowd.SharedMeshCount} meshes, {crowd.SharedMaterialCount} materials; idle/cheer staggered");
                 }
             }
@@ -66,13 +94,21 @@ namespace ArenaMapPort.Client
                 // An inactive object may fail before its first activation: OnDestroy is not sufficient.
                 if (crowd != null) crowd.DisposeOwnedAssets();
                 if (root != null) Object.Destroy(root);
-                Plugin.Log.LogWarning($"{Tag} the AirPit crowd could not be loaded ({e.GetType().Name}: {e.Message}); the raid continues without spectators");
+                Plugin.Log.LogWarning($"{Tag} the {mapKey} crowd could not be restored ({e.GetType().Name}: {e.Message}); the raid continues");
             }
         }
 
         T Own<T>(T asset) where T : Object { _assets.Add(asset); return asset; }
         static Vector3 V(float[] a) => new Vector3(a[0], a[1], a[2]);
         static Quaternion Q(float[] a) => new Quaternion(a[0], a[1], a[2], a[3]).normalized;
+
+        static void ValidateContainer(Placement value)
+        {
+            if (value.position?.Length != 3 || value.rotation?.Length != 4 || value.scale?.Length != 3 ||
+                value.position.Concat(value.rotation).Concat(value.scale).Any(v => float.IsNaN(v) || float.IsInfinity(v)) ||
+                Math.Abs(value.rotation.Sum(v => v * v) - 1) > .002f || value.scale.Any(v => v != 1f))
+                throw new InvalidDataException("invalid spectator container transform");
+        }
 
         void Build(SpectatorData data, string folder)
         {
@@ -350,7 +386,8 @@ namespace ArenaMapPort.Client
 
         // Private package schema; no BSG content is compiled into the plugin or tracked in git.
         #pragma warning disable CS0649 // Populated by Newtonsoft.Json from the validated export.
-        sealed class SpectatorData { public int schema, source_count; public string map; public Actor[] actors; public Dictionary<string, MeshData> meshes; public Dictionary<string, MaterialData> materials; public Dictionary<string, TextureData> textures; public Clip[] clips; }
+        sealed class SpectatorData { public int schema, source_count; public string map, source_scene; public Placement container; public Actor[] actors; public Dictionary<string, MeshData> meshes; public Dictionary<string, MaterialData> materials; public Dictionary<string, TextureData> textures; public Clip[] clips; }
+        sealed class Placement { public float[] position, rotation, scale; }
         sealed class Actor { public long source_id; public string name; public Node[] nodes; public Part[] parts; }
         sealed class Node { public string name; public uint path_hash; public int parent; public float[] position, rotation, scale; }
         sealed class Part { public int node, root; public int[] bones; public string mesh_id; public string[] materials; }

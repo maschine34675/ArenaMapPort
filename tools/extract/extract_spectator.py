@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""The original decorative AirPit crowd, from the owner's Arena installation. No bots or game scripts.
+"""Original decorative crowds, from the owner's Arena installation. No bots or game scripts.
 
 The ignored payload contains original meshes, skin weights, materials, and sampled Transform
 animation. Animator root-motion channels are deliberately not applied: the source Animator
@@ -18,8 +18,12 @@ from extract_door_poses import build_clip
 
 REPO = Path(__file__).resolve().parents[2]
 DEFAULT_SOURCE = Path('D:/Battlestate Games/Escape from Tarkov Arena/EscapeFromTarkovArena_Data')
-DEFAULT_PACKAGE = REPO / 'work/extract/spectator-airpit'
-PROTOTYPE_ID = 5434
+MAP_SCENES = {
+    'airpit': 'Arena_Airpit_DesignStuff',
+    'equator': 'Arena_Equator_DesignStuff',
+    'bay5': 'Arena_Bay5_DesignStuff',
+    'bowl': 'Arena_Bowl_DesignStuff',
+}
 CLIPS = ('ArenaFan_Idle_000_loop', 'ArenaFan_Idle_Cheer_001')
 # One optional target absent from every fan and every Transform in source level40.
 # No renderer bone references it. The three P/R/S curves are retained as provenance below.
@@ -78,6 +82,29 @@ def finite(values):
         raise ValueError('non-finite data')
 
 
+def package_path(map_name):
+    return REPO / 'work/extract' / f'spectator-{map_name}'
+
+
+def scene_index(scenes, name):
+    matches = [i for i, path in enumerate(scenes) if Path(path).stem == name]
+    if len(matches) != 1:
+        raise ValueError(f'expected one BuildSettings scene: {name}')
+    return matches[0]
+
+
+def validate_container(container):
+    for prop, width in [('position', 3), ('rotation', 4), ('scale', 3)]:
+        finite(container[prop])
+        if len(container[prop]) != width:
+            raise ValueError('invalid crowd container transform')
+    if abs(sum(v*v for v in container['rotation']) - 1) > .002:
+        raise ValueError('invalid crowd container quaternion')
+    # The runtime visibility envelope is in metres; a newly scaled crowd needs a bounds review.
+    if container['scale'] != [1, 1, 1]:
+        raise ValueError('unsupported crowd container scale')
+
+
 def validate_skin(mesh, bone_count):
     n = len(mesh['vertices'])
     if not n or len(mesh['weights']) != n or len(mesh['indices']) != n:
@@ -110,9 +137,15 @@ def skin_channels(weights, indices, bindpose_count):
             [list(i) + [0] * (4 - len(i)) for i in indices])
 
 
-def validate(data):
-    if data['schema'] != 2 or data['map'] != 'arena_airpit':
+def validate(data, expected_map=None):
+    scenes = {f'arena_{name}': scene for name, scene in MAP_SCENES.items()}
+    if data['schema'] != 3 or data['map'] not in scenes:
         raise ValueError('wrong schema/map')
+    if expected_map is not None and data['map'] != expected_map:
+        raise ValueError('wrong package map')
+    if data['source_scene'] != scenes[data['map']]:
+        raise ValueError('wrong source scene')
+    validate_container(data['container'])
     actors = data['actors']
     if not 1 <= len(actors) <= 200 or len(actors) != data['source_count']:
         raise ValueError('source crowd count mismatch')
@@ -209,14 +242,20 @@ def validate(data):
         raise ValueError('unresolved or unreferenced material texture')
 
 
-def extract(source, output):
+def extract(source, output, map_name):
     import UnityPy
     from UnityPy.helpers.MeshHelper import MeshHandler
     from common_ids import content_id
     from extract_equator import resolve_shader_name, _decode_cubemap_faces
 
-    env = UnityPy.load(str(source / 'level40'), str(source / 'sharedassets40.assets'))
-    scene = next(f for k, f in env.files.items() if Path(k).name == 'level40')
+    source_scene = MAP_SCENES[map_name]
+    settings_env = UnityPy.load(str(source / 'globalgamemanagers'))
+    settings = [o.read_typetree() for o in settings_env.objects if o.type.name == 'BuildSettings']
+    if len(settings) != 1:
+        raise ValueError('expected one BuildSettings object')
+    level = scene_index(settings[0]['scenes'], source_scene)
+    env = UnityPy.load(str(source / f'level{level}'), str(source / f'sharedassets{level}.assets'))
+    scene = next(f for k, f in env.files.items() if Path(k).name == f'level{level}')
     output.mkdir(parents=True, exist_ok=True)
     materials, textures = {}, {}
     recovery_cache = {}
@@ -287,13 +326,16 @@ def extract(source, output):
         materials[cid] = row
         return cid
 
+    controllers = {}
     def actor_data(game_object):
         root = next(c.component.deref().read() for c in game_object.m_Component
                     if c.component.deref().type.name == 'Transform')
         animator = next(c.component.deref().read() for c in game_object.m_Component
                         if c.component.deref().type.name == 'Animator')
         if animator.m_ApplyRootMotion or animator.m_Avatar.path_id:
-            raise ValueError('prototype expects a generic in-place Animator')
+            raise ValueError('crowd expects a generic in-place Animator')
+        controller = animator.m_Controller.deref()
+        controllers[(Path(controller.assets_file.name).name, controller.path_id)] = controller
 
         nodes, transforms, gos, paths, lookup = [], [], [], [], {}
         def walk(tf, parent, path):
@@ -392,23 +434,26 @@ def extract(source, output):
         return dict(source_id=game_object.object_reader.path_id, name=game_object.m_Name,
                     nodes=nodes, parts=parts, missing=missing)
 
-    # The original crowd container is disabled as a whole; all of its authored figures are restored.
+    # Restore every authored figure, whether the original container was enabled or disabled.
     containers = [o.read() for o in scene.objects.values() if o.type.name == 'GameObject' and o.read().m_Name == 'SCAV_SPECTATORS']
     if len(containers) != 1:
         raise ValueError('expected one original SCAV_SPECTATORS container')
     container = next(c.component.deref().read() for c in containers[0].m_Component if c.component.deref().type.name == 'Transform')
-    if vec(container.m_LocalPosition) != [0, 0, 0] or vec(container.m_LocalRotation, 'xyzw') != [0, 0, 0, 1] or vec(container.m_LocalScale) != [1, 1, 1]:
-        raise ValueError('crowd container transform changed; review world-space placement')
+    if container.m_Father.path_id:
+        raise ValueError('crowd container is no longer a scene root; review world-space placement')
+    placement = dict(position=vec(container.m_LocalPosition), rotation=vec(container.m_LocalRotation, 'xyzw'),
+                     scale=vec(container.m_LocalScale))
+    validate_container(placement)
     meshes = {}
     actors = [actor_data(c.deref().read().m_GameObject.deref().read()) for c in container.m_Children]
     all_hashes = {n['path_hash'] for actor in actors for n in actor['nodes']}
     for actor in actors:
         if actor['missing']:
             print('Missing source meshes:', actor['name'], actor['missing'])
-    prototype = scene.objects[PROTOTYPE_ID].read()
-    animator = next(c.component.deref().read() for c in prototype.m_Component if c.component.deref().type.name == 'Animator')
+    if len(controllers) != 1:
+        raise ValueError('expected one shared crowd animation controller')
     clips = []
-    refs = {p.path_id: p for p in animator.m_Controller.deref().read().m_AnimationClips}
+    refs = {p.path_id: p for p in next(iter(controllers.values())).read().m_AnimationClips}
     for name in CLIPS:
         matches = [p.deref() for p in refs.values() if p.deref().read().m_Name == name]
         if len(matches) != 1:
@@ -442,20 +487,20 @@ def extract(source, output):
         clips.append(dict(name=name, source_id=matches[0].path_id, duration=decoded.stop, frames=frames,
                           tracks=sorted(tracks, key=lambda t: (t['path_hash'], t['kind'])),
                           absent_optional_tracks=absent, root_motion=False))
-    data = dict(schema=2, map='arena_airpit', source_scene='Arena_Airpit_DesignStuff',
+    data = dict(schema=3, map=f'arena_{map_name}', source_scene=source_scene, container=placement,
                 source_count=len(container.m_Children), actors=actors, meshes=meshes,
                 materials=materials, textures=textures, clips=clips)
     validate(data)
     raw = json.dumps(data, separators=(',', ':'), allow_nan=False).encode()
     (output / 'spectator.json.gz').write_bytes(gzip.compress(raw, mtime=0))
-    print(f'Extracted {len(actors)} original spectators, {len(meshes)} shared meshes, '
+    print(f'{map_name}: extracted {len(actors)} original spectators, {len(meshes)} shared meshes, '
           f'{len(materials)} materials, {len(textures)} textures, {len(clips)} shared animations')
 
 
 
-def verify(package):
+def verify(package, expected_map=None):
     data = json.loads(gzip.decompress((package / 'spectator.json.gz').read_bytes()))
-    validate(data)
+    validate(data, expected_map)
     from PIL import Image
     expected = {'spectator.json.gz'}
     for texture in data['textures'].values():
@@ -476,9 +521,16 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('command', choices=('extract', 'verify'))
     parser.add_argument('--source', type=Path, default=DEFAULT_SOURCE)
-    parser.add_argument('--package', type=Path, default=DEFAULT_PACKAGE)
+    parser.add_argument('--map', choices=(*MAP_SCENES, 'all'), default='airpit')
+    parser.add_argument('--package', type=Path, help='Override the output/input directory for one map')
     args = parser.parse_args()
-    if args.command == 'extract':
-        extract(args.source, args.package)
-    else:
-        verify(args.package)
+    if args.map == 'all' and args.package:
+        parser.error('--package requires a single --map')
+    for name in MAP_SCENES if args.map == 'all' else [args.map]:
+        package = args.package or package_path(name)
+        if args.command == 'extract':
+            extract(args.source, package, name)
+        else:
+            verify(package, f'arena_{name}')
+    if args.command == 'verify' and args.map == 'all':
+        print('SPECTATOR_ALL_PACKAGES_OK')
