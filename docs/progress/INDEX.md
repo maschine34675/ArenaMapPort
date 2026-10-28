@@ -8,6 +8,9 @@ dated state in one screen; read it before this index if you only have a minute.
 
 ## Current — read these for the area you touch
 
+- [spectator-shared-textures.md](spectator-shared-textures.md) — 0.4.0: shared texture staging,
+  graph/manifest/image integrity, safe development-package migration and release-candidate checks.
+
 - [spectator-audio.md](spectator-audio.md) — overlapping original participating calls across all four
   crowds; shared audio, up to three independent spatial/room sources, bounded cadence and cleanup.
 - [spectators-allmaps.md](spectators-allmaps.md) — original crowds on all four maps: Equator day/night,

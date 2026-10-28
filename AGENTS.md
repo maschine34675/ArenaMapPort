@@ -288,7 +288,15 @@ Original spectator visuals and voices (2026-10-27/28) are also required by Relea
 Run `python tools/extract/extract_spectator.py extract --map all` and
 `python tools/extract/extract_spectator_audio.py extract` on a fresh checkout. The ignored outputs
 are `work/extract/spectator-{airpit,equator,bay5,bowl}` and `work/extract/spectator-audio`;
-staging puts visuals in `spectators/<map_key>/` and the shared audio in `spectator-audio/`.
+Release/DllOnly staging runs `tools/extract/stage_spectators.py stage`: schema-3 source exports
+stay intact, schema-4 map graphs go to `spectators/<map_key>/`, and the identical PNGs plus
+their manifest go once to `spectators/shared/` (core ZIP part). Each graph pins the manifest's
+hash and runtime verifies the image bytes before decoding. Same-name/different-byte exports
+are refused. The shared audio stays in `spectator-audio/`.
+For old development installs, full-deploy first, then dry-run `-RemoveLegacySpectatorTextures`
+and confirm through the same deploy script with EFT closed. It verifies the DLL, all graphs and
+shared replacements before removing only byte-identical old map PNGs; unknown or changed files
+are refused. Sources remain local. Published 0.3.0 has no spectator files to clean up.
 Keep only the 13 embedded Participating fan clips: the nine external Scav references are deliberately
 excluded after the user's listening feedback. The current cap is three simultaneous voices, gain 0.5,
 2-5 s initial delay and 0.8-1.6 s between starts, waiting when all slots are occupied. Match reactions

@@ -3,6 +3,20 @@
 Snapshot for whoever continues (human or agent). Verify the commits named here against `git log`; this file
 is updated by hand at each handover, it is not an automatic record. Read [AGENTS.md](AGENTS.md) first.
 
+## Update 2026-10-28 - 0.4.0 candidate preparation (release/0.4.0)
+
+User requested shared spectator textures followed by release preparation, and explicitly freed GPU-2
+and authorized resuming the local `D:\SPT41` Syncthing folder. It is resumed. The new schema-4 graph
+and common `spectators/shared` layout remove three duplicate 123-PNG sets (440,067,072 bytes).
+Map graphs pin the shared manifest, which pins the PNGs; runtime validates both before decoding.
+Original source exports are unchanged. Full deployment is required; the sanctioned
+`-RemoveLegacySpectatorTextures` mode verifies all replacements before removing known old copies.
+
+Versions and draft release notes are 0.4.0. The candidate includes every change since 0.3.0 listed
+in CHANGELOG, with the three-voice limit retained. Build, native and archive acceptance is in progress;
+see [spectator-shared-textures.md](docs/progress/spectator-shared-textures.md) and
+`work/release-0.4.0/GATES.md`. This task prepares a local release; no publishing or tagging is authorized.
+
 ## Update 2026-10-28 - spectator branch completion (three-voice cap; unreleased)
 
 The final crowd limit is **three simultaneous voices**, at the user's request. Gain, timing and the

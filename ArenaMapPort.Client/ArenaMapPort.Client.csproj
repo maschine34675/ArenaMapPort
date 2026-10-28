@@ -20,7 +20,7 @@
     <Description>Loads and repairs the Equator, Bay5, Air Pit and Bowl Arena maps in SPT.</Description>
     <Company>https://github.com/maschine34675/ArenaMapPort</Company>
     <Authors>maschine</Authors>
-    <Version>0.3.0</Version>
+    <Version>0.4.0</Version>
     <LangVersion>latest</LangVersion>
     <Nullable>disable</Nullable>
     <!-- ArenaMapPort.Crypto: the AES-CTR XOR loop and counter fill use ulong pointers (docs/PLAN-ENCRYPTION.md D14) -->
@@ -188,18 +188,7 @@
        ArenaMapPort has no runtime consumers and does not distribute them. -->
 
   <Target Name="ArenaMapPortStageSpectator" AfterTargets="ArenaMapPortDistCopy" Condition="'$(Configuration)'=='Release'">
-    <PropertyGroup>
-      <ArenaMapPortSpectatorDir>$(MSBuildThisFileDirectory)..\work\extract</ArenaMapPortSpectatorDir>
-    </PropertyGroup>
-    <ItemGroup>
-      <ArenaMapPortSpectatorMap Include="airpit;equator;bay5;bowl" />
-      <ArenaMapPortSpectatorFile Include="$(ArenaMapPortSpectatorDir)\spectator-airpit\spectator.json.gz;$(ArenaMapPortSpectatorDir)\spectator-airpit\*.png" Map="arena_airpit" />
-      <ArenaMapPortSpectatorFile Include="$(ArenaMapPortSpectatorDir)\spectator-equator\spectator.json.gz;$(ArenaMapPortSpectatorDir)\spectator-equator\*.png" Map="arena_equator" />
-      <ArenaMapPortSpectatorFile Include="$(ArenaMapPortSpectatorDir)\spectator-bay5\spectator.json.gz;$(ArenaMapPortSpectatorDir)\spectator-bay5\*.png" Map="arena_bay5" />
-      <ArenaMapPortSpectatorFile Include="$(ArenaMapPortSpectatorDir)\spectator-bowl\spectator.json.gz;$(ArenaMapPortSpectatorDir)\spectator-bowl\*.png" Map="arena_bowl" />
-    </ItemGroup>
-    <Error Condition="!Exists('$(ArenaMapPortSpectatorDir)\spectator-%(ArenaMapPortSpectatorMap.Identity)\spectator.json.gz')" Text="Missing spectator package for %(ArenaMapPortSpectatorMap.Identity); run python tools/extract/extract_spectator.py extract --map all" />
-    <Copy SourceFiles="@(ArenaMapPortSpectatorFile)" DestinationFolder="$(ArenaMapPortDistDir)\spectators\%(ArenaMapPortSpectatorFile.Map)" SkipUnchangedFiles="true" />
+    <Exec Command="python &quot;$(MSBuildThisFileDirectory)..\tools\extract\stage_spectators.py&quot; stage --output &quot;$(ArenaMapPortDistDir)\spectators&quot;" />
   </Target>
 
   <!-- One small voice bank shared by all spectator crowds. -->
