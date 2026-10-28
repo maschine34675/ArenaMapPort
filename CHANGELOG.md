@@ -8,8 +8,9 @@ and the settings text is in the [README](README.md).
 
 ## Unreleased
 
-- Spectators on all four maps occasionally call out using 13 original Arena voice clips, with
-  spatial positioning, room obstruction and pauses between calls. No kill/round-win reactions yet.
+- Spectators on all four maps call out using 13 original Arena voice clips, with spatial positioning
+  and room obstruction. Calls overlap at 0.8-1.6 second intervals, with at most four voices together;
+  active speakers and recorded voice families do not duplicate. No kill/round-win reactions yet.
 
 - Original spectators are restored on Air Pit (99), Equator day/night (99), Bay5 (88) and Bowl (99), with 15 appearances
   and original idle/cheering animations at staggered intervals. The missing legacy face cloth uses

@@ -106,3 +106,52 @@ Limits: the actual output device was not listened to, so spoken content and subj
 against combat remain for a hearing test. No bots, multiplayer, forced death or mid-call device
 unplug were exercised. Native pool/propagation ownership and interruption paths were additionally
 reviewed against the installed EFT assembly. No release archive, upload or push was made.
+
+## Denser crowd after hearing feedback — 2026-10-28
+
+The user clarified that the isolated voice disappearing in the mix calls for many more voices,
+not merely more gain. A gain-only draft was built but never deployed. Per-voice gain remains 0.5;
+the original PCM and attenuation ranges remain unchanged. A new call starts every 0.8-1.6 seconds
+after an initial 2-5 second delay, overlapping the existing clips. The shared scheduler caps active
+voices at four and starts at most one per frame, with no catch-up burst after a stall. Given the
+mean clip duration of 2.455 seconds, the expected steady overlap is about two voices.
+
+Each of four reusable voice slots owns a distinct emitter GameObject, BetterSource and native
+propagation-container ID. A shared emitter would incorrectly merge source positions and let one
+release remove the other voices' occlusion. Active spectators, active clips and other recordings
+from the same active voice family are excluded from the next draw. The family label is taken from
+the original clip name, not inferred from a spectator model. The clip cache remains shared.
+
+Each slot releases independently on its DSP end time, measured after Play as in the native audio
+path. Failure during one start releases only that slot. Reset, death, disable and scene destruction
+stop all slots before discarding the shared clips. Individual-call Debug logs now require developer
+mode; read-only counters expose active/playing/peak counts and the active speaker/clip names.
+
+Seven pure C# tests cover dense cadence, restart delay, exclusions, absent candidates, package
+validation, and a ten-minute simulation with overlap but never more than four voices. Release client
+build and the unchanged 13-clip package verification pass. Independent read-only review confirms
+native Environment pool capacity (32 pre-created sources), separate ownership and cleanup.
+Deployment uses the sanctioned client-DLL-only path; no server, audio asset or config deployment.
+
+Native verification: fresh GPU-2 process `3c9c8a11` loaded client MVID
+`5989165c-bc20-40bd-b3eb-ab05adfa097b`, identical to build and host disk (SHA-256
+`29920C46634F784BD3C35FBD4868D0B3FFD0AE1C9ABAB34AB63C2E938647D38F`). An Equator day no-bot raid
+recorded 135 calls at 0.825-1.595 s intervals. `PeakConcurrentVoices` reached four from actual
+`AudioSource.isPlaying` checks. Captures confirmed distinct active speaker IDs and voice families,
+and nonzero output PCM. One simultaneous native read showed separate source positions
+`(-17.025, 7.01, -20.698)` and `(17.986, 12.376, 10.839)` with container IDs 114 and 115;
+the other two idle slots had null sources and container -1. The audio reset at raid startup was
+handled and room occlusion remained active.
+
+After exit, inspectors found zero managers, zero spectator AudioClips and zero voice emitters.
+The test profile was healed. The complete process log had no ArenaMapPort warnings/errors;
+four previously known refrigerator LOD warnings and one inactive MenuScreen coroutine error
+occurred separately. Read-only steady samples were near the 120 FPS cap; no isolated performance
+benchmark or subjective hearing claim is made. Evidence: `work/spectator-volume/`, with
+`check-evidence.py` checking cadence, caps, captured exclusions, cleanup and mod log.
+
+Other sessions started ArenaMode/Redeploy updates before the additional Bay5 raid. No conflicting
+action was forced. The user explicitly accepted the Equator test as sufficient for this change;
+Bay5 and the other maps were not retested with the denser cadence. All four gates for that agreed
+scope are met. The initial gain-only draft was superseded; the delivered change increases the
+number of voices, retaining per-voice gain 0.5. No release/upload/push.

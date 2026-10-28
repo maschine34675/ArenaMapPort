@@ -1,5 +1,7 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Security.Cryptography;
 using Audio.SpatialSystem;
 using Comfort.Common;
@@ -9,7 +11,7 @@ using UnityEngine;
 
 namespace ArenaMapPort.Client
 {
-    /// <summary>One occasional voice for the whole crowd. Owned source, native mixer and room propagation;
+    /// <summary>Bounded overlapping crowd calls. Owned sources, native mixer and room propagation;
     /// no player/AI phrase events, no match announcements, no changes to shared audio presets.</summary>
     internal sealed class SpectatorAudio : MonoBehaviour
     {
@@ -21,19 +23,32 @@ namespace ArenaMapPort.Client
         short[][] _pcm;
         AudioClip[] _clips;
         SpectatorAudioSchedule _schedule;
-        BetterSource _source;
-        SpatialAudioSystem _system;
-        int _container = -1;
-        float _endsAt;
+        Voice[] _voices;
+        string[] _families;
+        readonly HashSet<int> _busySpeakers = new HashSet<int>();
+        readonly HashSet<int> _busyClips = new HashSet<int>();
+        Voice _lastVoice;
         bool _ready, _reset, _warned;
         readonly float[] _outputSamples = new float[256];
-        float _nextOutputProbe;
         public string MapKey, LastClip;
         public int PlaybackCount, ConfirmedPlaybackCount, LastSpeaker = -1, AudioResets;
         public float LastDistance, Rolloff, LastStartedAt, NextCallAt;
         public Vector3 LastPosition;
         public bool Playing, NativeOcclusion;
         public float OcclusionGain, SourceVolume, LastOutputPeak;
+        public int ActiveVoices, PlayingVoices, PeakConcurrentVoices;
+        public string ActiveSpeakerIds, ActiveClipNames;
+
+        sealed class Voice
+        {
+            public GameObject Emitter;
+            public BetterSource Source;
+            public SpatialAudioSystem System;
+            public int Container = -1, Speaker, Clip;
+            public double EndsAt;
+            public float NextOutputProbe;
+            public bool Confirmed;
+        }
 
         internal static void Create(ArenaSpectators crowd, Vector3[] positions)
         {
@@ -64,11 +79,19 @@ namespace ArenaMapPort.Client
                 voice._positions = positions;
                 voice._distances = new float[positions.Length];
                 voice._manifest = manifest; voice._pcm = pcm; voice._clips = new AudioClip[pcm.Length];
+                voice._families = manifest.clips.Select(c => c.name.Substring(0, c.name.IndexOf("_participating", StringComparison.Ordinal))).ToArray();
+                voice._voices = new Voice[SpectatorAudioSchedule.MaxConcurrent];
+                for (int i = 0; i < voice._voices.Length; i++)
+                {
+                    var emitter = new GameObject("SpectatorVoiceEmitter_" + i);
+                    emitter.transform.SetParent(root.transform, false);
+                    voice._voices[i] = new Voice { Emitter = emitter };
+                }
                 voice.Rolloff = crowd.MapKey == "arena_bowl" ? 150 : 90;
                 voice._schedule = new SpectatorAudioSchedule(unchecked(Environment.TickCount ^ crowd.GetInstanceID()));
                 AudioSettings.OnAudioConfigurationChanged += voice.AudioChanged;
                 voice._ready = true;
-                Plugin.Log.LogDebug($"{Tag} {crowd.MapKey}: {pcm.Length} participating clips, {positions.Length} emitters, one voice at a time");
+                Plugin.Log.LogDebug($"{Tag} {crowd.MapKey}: {pcm.Length} participating clips, {positions.Length} positions, up to {voice._voices.Length} simultaneous voices");
             }
             catch (Exception e)
             {
@@ -87,76 +110,94 @@ namespace ArenaMapPort.Client
                 if (_reset)
                 {
                     _reset = false; AudioResets++;
-                    StopVoice(); ClearClips(); _schedule.Stop();
+                    StopAllVoices(); ClearClips(); _schedule.Stop();
                 }
                 var player = GamePlayerOwner.MyPlayer;
                 if (!Singleton<AbstractGame>.Instantiated || Singleton<AbstractGame>.Instance.Status != GameStatus.Started ||
                     player == null || player.HealthController == null || !player.HealthController.IsAlive)
                 {
-                    StopVoice(); _schedule.Stop(); NextCallAt = -1; return;
+                    StopAllVoices(); _schedule.Stop(); NextCallAt = -1; return;
                 }
                 float now = Time.realtimeSinceStartup;
                 _schedule.Start(now);
-                if (_source != null)
+                if (!SpatialAudioSystem.Initialized || !MonoBehaviourSingleton<SpatialAudioSystem>.Instantiated)
+                { StopAllVoices(); return; }
+                PlayingVoices = 0;
+                foreach (var voice in _voices)
                 {
-                    if (!SpatialAudioSystem.Initialized || _system == null) { StopVoice(); return; }
-                    Playing = _source.source1 != null && _source.source1.isPlaying;
-                    OcclusionGain = _source.OcclusionVolumeFactor;
-                    SourceVolume = _source.source1 != null ? _source.source1.volume : 0;
-                    if (Playing && !_confirmed) { ConfirmedPlaybackCount++; _confirmed = true; }
-                    if (Playing && now >= _nextOutputProbe)
+                    if (voice.Source == null) continue;
+                    if (voice.System == null || AudioSettings.dspTime >= voice.EndsAt) { StopVoice(voice); continue; }
+                    var source = voice.Source.source1;
+                    bool on = source != null && source.isPlaying;
+                    if (on) PlayingVoices++;
+                    if (on && !voice.Confirmed) { ConfirmedPlaybackCount++; voice.Confirmed = true; }
+                    if (voice != _lastVoice) continue;
+                    OcclusionGain = voice.Source.OcclusionVolumeFactor;
+                    SourceVolume = source != null ? source.volume : 0;
+                    if (on && now >= voice.NextOutputProbe)
                     {
-                        _nextOutputProbe = now + .2f;
-                        _source.source1.GetOutputData(_outputSamples, 0);
+                        voice.NextOutputProbe = now + .2f;
+                        source.GetOutputData(_outputSamples, 0);
                         foreach (float sample in _outputSamples) LastOutputPeak = Mathf.Max(LastOutputPeak, Mathf.Abs(sample));
                     }
-                    if (now >= _endsAt) StopVoice();
                 }
+                Playing = PlayingVoices > 0;
+                PeakConcurrentVoices = Math.Max(PeakConcurrentVoices, PlayingVoices);
                 NextCallAt = (float)_schedule.NextAt;
-                if (_source != null || !_schedule.Due(now)) return;
+                if (!_schedule.Due(now, ActiveVoices)) return;
                 _schedule.Retry(now);
                 if (!MonoBehaviourSingleton<BetterAudio>.Exist(out var audio)) return;
-                // Wait for the owned room graph rather than start a voice through ceilings/walls.
-                if (!SpatialAudioSystem.Initialized || !MonoBehaviourSingleton<SpatialAudioSystem>.Instantiated) return;
-                for (int i = 0; i < _positions.Length; i++) _distances[i] = Vector3.Distance(player.Transform.position, _positions[i]);
-                int speaker = _schedule.ChooseSpeaker(_distances, Rolloff * .8f);
-                if (speaker < 0) return;
-                int pick = _schedule.ChooseClip(_clips.Length);
-                var clip = Clip(pick);
-                // Keep the handle before any setup that can throw. No native automatic-release queue.
-                _source = audio.GetSource(BetterAudio.AudioSourceGroupType.Environment);
-                if (_source == null) return;
-                transform.position = _positions[speaker];
-                _source.Position = transform.position;
-                _source.SetMixerGroup(audio.SourceGroups[(int)BetterAudio.AudioSourceGroupType.Environment].MixerGroup);
-                _source.SetPitch(1); _source.Loop = false;
-                _source.SetRolloff(Rolloff); _source.SetSpatialBlend(1);
-                _source.IncludeInOcclusionProcess(true); _source.EnabledEQ(true);
-                _source.Play(clip, null, 1, Gain, false, false);
-                NativeOcclusion = SpatialAudioSystem.Initialized && MonoBehaviourSingleton<SpatialAudioSystem>.Instantiated;
-                if (NativeOcclusion)
+                _busySpeakers.Clear(); _busyClips.Clear();
+                foreach (var voice in _voices)
                 {
-                    _system = MonoBehaviourSingleton<SpatialAudioSystem>.Instance;
-                    _container = _system.ProcessSourceOcclusion(gameObject, _source, EOcclusionTest.Combined);
+                    if (voice.Source == null) continue;
+                    _busySpeakers.Add(voice.Speaker);
+                    // Different takes of the same recorded voice must not sound from two places together.
+                    for (int i = 0; i < _families.Length; i++)
+                        if (_families[i] == _families[voice.Clip]) _busyClips.Add(i);
                 }
-                _endsAt = now + clip.length;
-                LastOutputPeak = 0; _nextOutputProbe = now + .15f;
-                _confirmed = false;
+                for (int i = 0; i < _positions.Length; i++) _distances[i] = Vector3.Distance(player.Transform.position, _positions[i]);
+                int speaker = _schedule.ChooseSpeaker(_distances, Rolloff * .8f, _busySpeakers);
+                int pick = _schedule.ChooseClip(_clips.Length, _busyClips);
+                if (speaker < 0 || pick < 0) return;
+                var clip = Clip(pick);
+                var slot = _voices.First(v => v.Source == null);
+                try
+                {
+                    // Own each handle before setup; distinct emitter IDs keep propagation containers independent.
+                    slot.Source = audio.GetSource(BetterAudio.AudioSourceGroupType.Environment);
+                    if (slot.Source == null) return;
+                    slot.Emitter.transform.position = _positions[speaker];
+                    slot.Source.Position = slot.Emitter.transform.position;
+                    slot.Source.SetMixerGroup(audio.SourceGroups[(int)BetterAudio.AudioSourceGroupType.Environment].MixerGroup);
+                    slot.Source.SetPitch(1); slot.Source.Loop = false;
+                    slot.Source.SetRolloff(Rolloff); slot.Source.SetSpatialBlend(1);
+                    slot.Source.IncludeInOcclusionProcess(true); slot.Source.EnabledEQ(true);
+                    slot.Source.Play(clip, null, 1, Gain, false, false);
+                    slot.EndsAt = AudioSettings.dspTime + clip.length;
+                    slot.System = MonoBehaviourSingleton<SpatialAudioSystem>.Instance;
+                    slot.Container = slot.System.ProcessSourceOcclusion(slot.Emitter, slot.Source, EOcclusionTest.Combined);
+                }
+                catch (Exception e) { StopVoice(slot); Warn(e); return; }
+                slot.Confirmed = false; slot.Speaker = speaker; slot.Clip = pick;
+                slot.NextOutputProbe = now + .15f;
+                _lastVoice = slot; NativeOcclusion = true; LastOutputPeak = 0;
                 LastClip = _manifest.clips[pick].name; LastSpeaker = speaker;
-                LastPosition = transform.position; LastDistance = _distances[speaker]; LastStartedAt = now;
+                LastPosition = slot.Emitter.transform.position; LastDistance = _distances[speaker]; LastStartedAt = now;
                 PlaybackCount++;
-                _schedule.Played(now, clip.length, speaker, pick);
+                RefreshVoices();
+                _schedule.Played(now, speaker, pick);
                 NextCallAt = (float)_schedule.NextAt;
-                Plugin.Log.LogDebug($"{Tag} {MapKey}: {LastClip}, fan {speaker} at {LastDistance:F1} m; native occlusion={NativeOcclusion}, next in {NextCallAt - now:F1} s");
+                // Individual calls are frequent now; counters remain available without filling normal debug logs.
+                if (DeveloperOptions.Enabled)
+                    Plugin.Log.LogDebug($"{Tag} {MapKey}: {LastClip}, fan {speaker} at {LastDistance:F1} m; voices={ActiveVoices}, next in {NextCallAt - now:F1} s");
             }
             catch (Exception e)
             {
-                StopVoice();
-                _schedule.Played(Time.realtimeSinceStartup, 0, LastSpeaker, -1);
+                _schedule.Retry(Time.realtimeSinceStartup);
                 Warn(e);
             }
         }
-        bool _confirmed;
 
         AudioClip Clip(int index)
         {
@@ -168,10 +209,10 @@ namespace ArenaMapPort.Client
             return _clips[index] = clip;
         }
 
-        void StopVoice()
+        void StopVoice(Voice voice)
         {
-            var source = _source; var system = _system; int container = _container;
-            _source = null; _system = null; _container = -1; Playing = false;
+            var source = voice.Source; var system = voice.System; int container = voice.Container;
+            voice.Source = null; voice.System = null; voice.Container = -1;
             try
             {
                 if (system != null && SpatialAudioSystem.Initialized && container >= 0) system.UnregisterContainer(container);
@@ -181,6 +222,23 @@ namespace ArenaMapPort.Client
             {
                 if (source != null) try { source.Release(); } catch (Exception e) { Warn(e); }
             }
+            RefreshVoices();
+        }
+
+        void RefreshVoices()
+        {
+            if (_voices == null) return;
+            var active = _voices.Where(v => v != null && v.Source != null).ToArray();
+            ActiveVoices = active.Length;
+            ActiveSpeakerIds = string.Join(",", active.Select(v => v.Speaker));
+            ActiveClipNames = string.Join(",", active.Select(v => _manifest.clips[v.Clip].name));
+        }
+
+        void StopAllVoices()
+        {
+            if (_voices != null) foreach (var voice in _voices)
+                if (voice != null && (voice.Source != null || voice.Container >= 0)) StopVoice(voice);
+            Playing = false; PlayingVoices = 0;
         }
 
         void Warn(Exception e)
@@ -194,13 +252,13 @@ namespace ArenaMapPort.Client
             if (_clips == null) return;
             for (int i = 0; i < _clips.Length; i++) { if (_clips[i] != null) Destroy(_clips[i]); _clips[i] = null; }
         }
-        void OnDisable() { StopVoice(); _schedule?.Stop(); }
+        void OnDisable() { StopAllVoices(); _schedule?.Stop(); }
         void OnDestroy()
         {
             _ready = false;
             AudioSettings.OnAudioConfigurationChanged -= AudioChanged;
-            StopVoice(); ClearClips(); _pcm = null;
-            Plugin.Log.LogDebug($"{Tag} {MapKey}: source, propagation and clips removed");
+            StopAllVoices(); ClearClips(); _pcm = null;
+            Plugin.Log.LogDebug($"{Tag} {MapKey}: all voices, propagation and clips removed");
         }
     }
 }

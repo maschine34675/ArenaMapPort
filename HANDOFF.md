@@ -3,6 +3,28 @@
 Snapshot for whoever continues (human or agent). Verify the commits named here against `git log`; this file
 is updated by hand at each handover, it is not an automatic record. Read [AGENTS.md](AGENTS.md) first.
 
+## Update 2026-10-28 - overlapping spectator voices (feature/airpit-spectator; deployed, Equator tested)
+
+User clarified that the isolated voice needed more simultaneous spectators, not just more gain.
+Calls now start every 0.8-1.6 s after 2-5 s initial delay, overlapping with a hard cap of four.
+Per-voice gain stays 0.5; no audio files, attenuation ranges, new settings or server behavior changed.
+Each reusable slot owns a separate emitter, BetterSource and occlusion container. The shared
+scheduler excludes active speakers and all recordings of an active voice family. Reset/exit
+releases all slots before shared clips; individual-call Debug logs require developer mode.
+
+Seven focused C# tests, Release client build and unchanged 13-clip package verification passed.
+Native review found no ownership issues. Sanctioned client-DLL-only deployment and synchronization;
+fresh GPU-2 process `3c9c8a11` loaded matching MVID `5989165c-bc20-40bd-b3eb-ab05adfa097b`.
+Equator day produced 135 calls, 0.825-1.595 s apart, reaching four actually playing voices.
+Separate source positions/container IDs, native occlusion and positive output PCM were checked.
+Exit left zero managers/clips/emitters and the profile healed. No ArenaMapPort warnings/errors.
+
+GPU-2 was subsequently taken by other sessions for ArenaMode/Redeploy updates. The user accepted
+the Equator test as sufficient; Bay5/other maps were not retested with the new density. All four
+gates for that agreed scope are met. Subjective crowd balance still needs the user's hearing test.
+No release/upload/push. See [spectator-audio.md](docs/progress/spectator-audio.md), evidence
+`work/spectator-volume/`. Do not restart or take over GPU-2 without a fresh availability check.
+
 ## Update 2026-10-27 - original spectator calls (feature/airpit-spectator; deployed and tested on GPU-2)
 
 All four restored crowds now make occasional spatial calls from 13 original embedded clips of

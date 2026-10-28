@@ -37,6 +37,7 @@ namespace ArenaMapPort.Client
 
     internal sealed class SpectatorAudioSchedule
     {
+        public const int MaxConcurrent = 4;
         readonly Random _random;
         bool _running;
         int _lastSpeaker = -1, _lastClip = -1;
@@ -46,26 +47,28 @@ namespace ArenaMapPort.Client
         {
             if (_running) return;
             _running = true;
-            NextAt = now + 12 + _random.NextDouble() * 8;
+            NextAt = now + 2 + _random.NextDouble() * 3;
         }
         public void Stop() { _running = false; NextAt = double.PositiveInfinity; }
-        public bool Due(double now) => _running && now >= NextAt;
+        public bool Due(double now, int activeVoices = 0) => _running && activeVoices < MaxConcurrent && now >= NextAt;
         public void Retry(double now) { NextAt = now + 3; }
-        public void Played(double now, double duration, int speaker, int clip)
+        public void Played(double now, int speaker, int clip)
         {
             _lastSpeaker = speaker; _lastClip = clip;
-            NextAt = now + duration + 16 + _random.NextDouble() * 12;
+            NextAt = now + .8 + _random.NextDouble() * .8;
         }
-        public int ChooseClip(int count) => Pick(Enumerable.Range(0, count).ToList(), _lastClip);
+        public int ChooseClip(int count, ISet<int> busy = null) =>
+            Pick(Enumerable.Range(0, count).Where(i => busy == null || !busy.Contains(i)).ToList(), _lastClip);
 
-        public int ChooseSpeaker(float[] distances, float maxDistance)
+        public int ChooseSpeaker(float[] distances, float maxDistance, ISet<int> busy = null)
         {
             // Prefer the nearest section of the stands, independently of the view direction.
             float nearest = float.PositiveInfinity;
             foreach (float d in distances) if (d >= 0 && d <= maxDistance && d < nearest) nearest = d;
             var eligible = new List<int>();
             for (int i = 0; i < distances.Length; i++)
-                if (distances[i] >= 0 && distances[i] <= Math.Min(maxDistance, nearest + 15)) eligible.Add(i);
+                if (distances[i] >= 0 && distances[i] <= Math.Min(maxDistance, nearest + 15) &&
+                    (busy == null || !busy.Contains(i))) eligible.Add(i);
             return Pick(eligible, _lastSpeaker);
         }
 
