@@ -9,7 +9,7 @@ and the settings text is in the [README](README.md).
 ## Unreleased
 
 - Spectators on all four maps call out using 13 original Arena voice clips, with spatial positioning
-  and room obstruction. Calls overlap at 0.8-1.6 second intervals, with at most four voices together;
+  and room obstruction. Calls are scheduled at 0.8-1.6 second intervals, waiting if three voices are already active;
   active speakers and recorded voice families do not duplicate. No kill/round-win reactions yet.
 
 - Original spectators are restored on Air Pit (99), Equator day/night (99), Bay5 (88) and Bowl (99), with 15 appearances

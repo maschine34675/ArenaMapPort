@@ -9,7 +9,7 @@ dated state in one screen; read it before this index if you only have a minute.
 ## Current — read these for the area you touch
 
 - [spectator-audio.md](spectator-audio.md) — overlapping original participating calls across all four
-  crowds; shared audio, up to four independent spatial/room sources, bounded cadence and cleanup.
+  crowds; shared audio, up to three independent spatial/room sources, bounded cadence and cleanup.
 - [spectators-allmaps.md](spectators-allmaps.md) — original crowds on all four maps: Equator day/night,
   Bay5's translated group and inactive legacy colliders, Bowl and the accepted AirPit crowd; shared runtime,
   exact source/animation audits, staging and release packaging.

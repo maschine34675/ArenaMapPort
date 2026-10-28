@@ -37,7 +37,7 @@ namespace ArenaMapPort.Client
 
     internal sealed class SpectatorAudioSchedule
     {
-        public const int MaxConcurrent = 4;
+        public const int MaxConcurrent = 3;
         readonly Random _random;
         bool _running;
         int _lastSpeaker = -1, _lastClip = -1;

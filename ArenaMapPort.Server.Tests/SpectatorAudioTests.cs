@@ -78,7 +78,7 @@ public sealed class SpectatorAudioTests
     }
 
     [Fact]
-    public void RepeatedCallsOverlapButNeverExceedFourConcurrentVoices()
+    public void RepeatedCallsOverlapButNeverExceedThreeConcurrentVoices()
     {
         var clock = new SpectatorAudioSchedule(27);
         var active = new List<(double End, int Speaker, int Clip)>();
@@ -88,7 +88,7 @@ public sealed class SpectatorAudioTests
         {
             double now = tick / 10.0;
             active.RemoveAll(v => v.End <= now);
-            Assert.False(clock.Due(now, 4));
+            Assert.False(clock.Due(now, 3));
             if (clock.Due(now, active.Count))
             {
                 int speaker = clock.ChooseSpeaker(Enumerable.Repeat(20f, 99).ToArray(), 72,
@@ -100,9 +100,9 @@ public sealed class SpectatorAudioTests
                 starts++;
             }
             peak = Math.Max(peak, active.Count);
-            Assert.InRange(active.Count, 0, 4);
+            Assert.InRange(active.Count, 0, 3);
         }
-        Assert.Equal(4, peak);
+        Assert.Equal(3, peak);
         Assert.InRange(starts, 400, 600);
     }
 

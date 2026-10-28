@@ -336,3 +336,25 @@ raid. The file set of the folder is unchanged and still checked by `validate_dis
 (26,112 B): `make_release_zips.py --plan` reads 113 files, raw 3,673,892,066 B, parts core 15, equator 23, bay5 29, airpit 21, bowl 25 as before. The developer keys
 `Monitors/Enabled`, `Monitors/ScreenLift` and `Monitors/Demo` are not public (no player text changes). Design, contract and host checks:
 [score-monitors.md](progress/score-monitors.md).
+
+## Spectator visuals and shared calls — 2026-10-28 (unreleased)
+
+The current staged distribution contains 623 files. Each of the four map parts adds
+`spectators/<map_key>/spectator.json.gz` and 123 PNG textures (496 files across the four maps).
+The common core adds `spectator-audio/spectator-audio.json` and 13 PCM WAVs (14 files, 2,815,818
+bytes of WAV audio). All nine external Scav references remain omitted. The current runtime permits
+at most three simultaneous voices; the audio package itself is unchanged by that adjustment.
+
+The visuals come from `extract_spectator.py extract --map all`, the calls from
+`extract_spectator_audio.py extract`. Both are mandatory Release/DllOnly inputs under ignored
+`work/extract/`; source assets never enter Git. The release classifier assigns visuals to their own
+map part and the calls to core. The existing twelve map bundles, keys and navigation data need no
+rebuild for this addition. Validation and native-test limits are in
+[spectator-audio.md](progress/spectator-audio.md) and [spectators-allmaps.md](progress/spectators-allmaps.md).
+
+This is a staging-contract update, not a new published ZIP. Before publication, update the four
+version declarations, promote all `Unreleased` changes into a new versioned note, build the final
+client/server candidate, validate it, then make a ZIP with the extract comparison and test that
+candidate. The existing single-ZIP plan is approximately 3.98 GiB. A later shared-texture layout
+could remove 440,067,072 bytes of identical per-map copies; that optimization is not a release
+requirement and has not been implemented.

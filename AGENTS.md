@@ -284,6 +284,17 @@ monitors 10); `make_release_zips.py --plan` reads the parts core 15, equator 23,
 [gate-sounds.md](docs/progress/gate-sounds.md), [score-monitors.md](docs/progress/score-monitors.md) and
 [dist-manifest.md](docs/dist-manifest.md).
 
+Original spectator visuals and voices (2026-10-27/28) are also required by Release/DllOnly builds.
+Run `python tools/extract/extract_spectator.py extract --map all` and
+`python tools/extract/extract_spectator_audio.py extract` on a fresh checkout. The ignored outputs
+are `work/extract/spectator-{airpit,equator,bay5,bowl}` and `work/extract/spectator-audio`;
+staging puts visuals in `spectators/<map_key>/` and the shared audio in `spectator-audio/`.
+Keep only the 13 embedded Participating fan clips: the nine external Scav references are deliberately
+excluded after the user's listening feedback. The current cap is three simultaneous voices, gain 0.5,
+2-5 s initial delay and 0.8-1.6 s between starts, waiting when all slots are occupied. Match reactions
+are not implemented. See [spectator-audio.md](docs/progress/spectator-audio.md) and
+[spectators-allmaps.md](docs/progress/spectators-allmaps.md) for source and native evidence.
+
 Optional Arena audio/UI exports remain development inputs under ignored `work/extract/arena-audio`
 and `work/extract/arena-ui`. Neither current mod consumes them; Release/DllOnly builds no longer stage
 them. The release cleanup archives old dist copies without changing the extraction inputs.

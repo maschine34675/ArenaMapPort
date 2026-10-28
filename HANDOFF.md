@@ -3,6 +3,33 @@
 Snapshot for whoever continues (human or agent). Verify the commits named here against `git log`; this file
 is updated by hand at each handover, it is not an automatic record. Read [AGENTS.md](AGENTS.md) first.
 
+## Update 2026-10-28 - spectator branch completion (three-voice cap; unreleased)
+
+The final crowd limit is **three simultaneous voices**, at the user's request. Gain, timing and the
+13 original Participating fan clips are unchanged; all nine external Scav references remain excluded.
+The source audit found no fan1-fan6 or fan14 in 35,618 AudioClip names across all 636 audio bundles:
+fan7-fan13 and fan15 are present, with fan15 confined to other reaction categories. Original crowd
+beds and event-driven reactions remain optional future work. README/FORGE describe the next release,
+and AGENTS plus the distribution contract include the required local visual/audio exports.
+
+Focused C# tests (including the ten-minute three-voice simulation), Release client build, audio and
+release-packaging fixtures, changelog checks, and full distribution validation passed. The sanctioned
+dry run and client-DLL-only deployment updated `D:\SPT41`; the server and all data/configs were left
+alone. Candidate SHA-256 `C281D2B094AE47F05353D6BE23420909C2EEE9DFC67B7FFB50B011A329841E6B`, built
+from the modified `5e13840` tree. There is **no new native test** of this final constant change:
+the prior Equator run below used four voices; the earlier all-map run used one. GPU-2's disk still
+holds the four-voice build: the local Syncthing folder for `D:\SPT41` is paused, although GPU-2 is
+connected. The pause was not changed because other sessions use this installation. Resume that
+folder when those sessions allow it, wait for the client hash above, then restart EFT before testing.
+
+The user requested merge to main, removal of `feature/airpit-spectator`, and push. No new release
+archive/tag/upload is part of this task. Remaining release steps: bump the four 0.3.0 version fields,
+write a versioned note for every Unreleased item (also the already merged gate/monitor/puddle work),
+build the final client/server candidate, validate and archive with an extract comparison, then smoke
+test the final package and publish. Current staging: 623 files, approximately 3.98 GiB as one ZIP.
+No new map bake is needed; deduplicating spectator textures (~440 MB) is optional later work.
+Details: [spectator-audio.md](docs/progress/spectator-audio.md), local evidence `work/spectator-finalize/`.
+
 ## Update 2026-10-28 - overlapping spectator voices (feature/airpit-spectator; deployed, Equator tested)
 
 User clarified that the isolated voice needed more simultaneous spectators, not just more gain.

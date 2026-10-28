@@ -155,3 +155,57 @@ action was forced. The user explicitly accepted the Equator test as sufficient f
 Bay5 and the other maps were not retested with the denser cadence. All four gates for that agreed
 scope are met. The initial gain-only draft was superseded; the delivered change increases the
 number of voices, retaining per-voice gain 0.5. No release/upload/push.
+
+## Final voice selection and three-voice cap — 2026-10-28
+
+The user preferred the fan recordings after hearing the nine externally referenced Scav clips.
+Those references remain intentionally excluded: the package still contains exactly the 13 original
+embedded Participating clips. No new audio or event reactions are added. `MaxConcurrent` is now three;
+the native emitter-slot array uses that same constant. Gain 0.5, source range, initial delay,
+candidate/family exclusions and the 0.8-1.6 second scheduling interval are unchanged. A full set of
+three occupied slots delays the next start until a slot is free, so actual intervals can be longer.
+The existing ten-minute simulation now asserts a peak of three and refusal at three active voices.
+
+The filename audit read AudioClip metadata from all 636 `/audio/` bundle entries in the installed
+Arena's `Windows.json`: 35,618 names and zero read errors. No `arena_fan1` through `arena_fan6`, or
+`arena_fan14`, occurs in that inventory. All numbered fan clips found are in `fan_speaker_voice.bundle`:
+
+| Voice | All recordings | Embedded Participating recordings |
+| --- | ---: | ---: |
+| fan7 | 8 | 2 |
+| fan8 | 11 | 1 |
+| fan9 | 9 | 2 |
+| fan10 | 7 | 1 |
+| fan11 | 14 | 2 |
+| fan12 | 50 | 3 |
+| fan13 | 31 | 2 |
+| fan15 | 6 | 0 |
+| Total | 136 | 13 |
+
+The numbering alone does not explain why earlier numbers are absent. It is not evidence of a
+failed export. `ambient_voice.bundle` additionally has seven stereo crowd beds (three Angry,
+three Cheer and one Neutral), not additional numbered individual voices. This was a metadata
+audit, not a listening/transcription review. Evidence: ignored
+`work/spectator-finalize/fan-name-audit.json`.
+
+The earlier reference audit resolved all nine external Participating slots to `scav1.bundle`
+(six enemy-contact names, one session-late, one enemy-USEC and one enemy-sniper name). The decoded
+preview and reference table remain local under `work/spectator-references/`; they are not staged
+or shipped. Event integration remains future work: ArenaMode can publish confirmed kills and
+round results through an optional adapter, but shot activity and true team wipes need additional
+notifications. No ArenaMode files were changed. The current living-local-player guard also means
+crowd playback stops during death, including a death camera.
+
+The focused C# tests and Release client build passed, as did the audio fixtures, release-packaging
+fixtures, changelog checks, original 13-clip verification and full staged distribution validation.
+The existing native evidence above is not evidence for this final three-voice build;
+the earlier all-map audio test used one voice, and the dense Equator test used up to four. No new
+raid or subjective hearing check was performed in this finalization. The sanctioned client-only
+deployment updated `D:\SPT41` after its dry run; candidate SHA-256
+`C281D2B094AE47F05353D6BE23420909C2EEE9DFC67B7FFB50B011A329841E6B` (built from the modified
+`5e13840` tree). Server, audio, settings and bundles were not deployed. The host synchronization
+wait did not complete: a read-only Syncthing check found the local `D:\SPT41` folder paused,
+while GPU-2 itself is connected and unpaused. No system error was reported. Its disk still has
+the prior four-voice DLL (`29920C46634F784BD3C35FBD4868D0B3FFD0AE1C9ABAB34AB63C2E938647D38F`).
+The pause was left unchanged because parallel sessions share this installation. Resume synchronization
+when those sessions allow it, verify the new DLL hash, and restart EFT before a native check.

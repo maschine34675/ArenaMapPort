@@ -22,6 +22,10 @@ lamp flares. Gunshots ring differently in a big hall than in a small shop: the
 per-room gunshot reverb is on by default on all four maps (its room data is
 invented) and can be switched off per map with DeveloperMode enabled (enable it and restart EFT).
 
+The next release adds the original animated spectators on all four maps, with
+spatial crowd calls and up to three voices at once. The crowd does not react to
+kills or round results yet.
+
 The gates and vehicles at the team spawn enclosures use Arena's own open positions and,
 where Arena has them, its motions (at half their time). They stand open from raid start, or a
 mode plugin such as ArenaMode holds them closed and opens them when the fight starts; Air Pit's

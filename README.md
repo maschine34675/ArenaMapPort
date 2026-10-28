@@ -23,6 +23,11 @@ navigation, with restored ambience, material sounds, room acoustics and decals.
 Equator and Bay5 also have restored dust and original lamp flares. Bay5 includes
 its harbor background and water.
 
+The next release also restores the original animated spectators on all four maps,
+with spatial crowd calls from 13 original fan recordings and at most three voices
+at once. Their idle and cheering animations run independently of match events;
+kill and round-result reactions are not implemented yet.
+
 The gates and vehicles at the team spawn enclosures use Arena's own open positions
 and, where Arena has them, its motions (at half their time). They stand open from raid
 start, or a mode plugin such as ArenaMode holds them closed and opens them when the
