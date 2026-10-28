@@ -5,6 +5,41 @@ is updated by hand at each handover, it is not an automatic record. Read [AGENTS
 
 ## Update 2026-10-28 - 0.4.0 candidate preparation (release/0.4.0)
 
+### Latest status: package prepared; native acceptance awaits host repair
+
+Code candidate `2f8cff0`, client and server version 0.4.0. Shared texture staging, migration,
+runtime integrity checks and DLL version checks are committed. Client build, full C# regression,
+Python fixtures, full distribution validation and byte-for-byte ZIP extraction passed. The
+read-only code review found no remaining defect. Source exports are retained unchanged.
+
+Local candidate: `work/releases/0.4.0/maschine-ArenaMapPort-0.4.0.zip`, 3,834,882,881 bytes
+(3.57 GiB), SHA-256 `f8fcfb7294c6eef8467a3ef6953d02e6091d12f1f7115e0956153813b532926f`.
+The `.sha256` companion is beside it. A rejected intermediate ZIP with an old client is isolated
+under `work/release-0.4.0/rejected-stale-client/` and must never be used. Final build proof:
+client SHA-256 `EA267A012112621EC9A1D434FA526C84078554037FADD94886B7B0B53AF75484`, server
+`A90899A03D5F9855E5A06B873CA3580FB68F3BD415C10AC24F982042D4F8D72F`.
+
+The authorized Syncthing resume, full deployment and legacy-PNG migration are complete. All
+255 candidate files matched GPU-2; all four per-map PNG directories are empty of images,
+and `shared` contains 123 PNGs plus the manifest. Migration removed 492 known copies; a
+repeat removed zero. The exact PNG saving is 440,067,072 bytes. Existing configurations and
+ArenaMode/profile/recovery data were not edited.
+
+**Do not treat this as native acceptance or publish yet.** SPT startup on GPU-2 fails in
+ArenaMode `RewardOfflineSession.RecoverBeforeStartup` with `Offline Arena recovery is incomplete`.
+The user chose to have it repaired in the other session. The waiting start recipe timed out and
+ended; EFT stayed closed. No current game process loaded this candidate. Gates G1-G4/G6 are
+complete; G5 stays pending, with no waived check. Once the user says the host is ready, use
+`gpu-run start --host host2`, record current loaded MVIDs, run no-bot raids on AirPit/Equator/Bay5/Bowl,
+and check crowd counts 99/99/88/99, three simultaneous voices at most, scene-exit resource cleanup
+and hideout. Helpers/evidence: `work/release-0.4.0/capture.ps1`, `view-*.json`, `GATES.md`.
+
+No tag, upload, publication, main merge or push was performed for this preparation. The release
+branch remains local. A separate untracked `assets/Screenshot-Equator-2.png` appeared during the
+task; it was neither created, modified nor staged by this task.
+
+### Earlier preparation note (retained)
+
 User requested shared spectator textures followed by release preparation, and explicitly freed GPU-2
 and authorized resuming the local `D:\SPT41` Syncthing folder. It is resumed. The new schema-4 graph
 and common `spectators/shared` layout remove three duplicate 123-PNG sets (440,067,072 bytes).

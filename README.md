@@ -135,11 +135,11 @@ restores the shipped gunshot acoustics.
 
 When the Arena maps are not available, ArenaMapPort shows a message at the main menu with the reason and what to do, and after a map
 fails to load it names the cause. The message is in English or German, following the game's language, and its last line carries a ref
-code such as `ArenaMapPort 0.3.0 - ref NO_ARENA`. Find the ref below and follow the fix. If you report a problem at
+code such as `ArenaMapPort 0.4.0 - ref NO_ARENA`. Find the ref below and follow the fix. If you report a problem at
 https://github.com/maschine34675/ArenaMapPort/issues, include the ref and the lines marked `[Arena]` from `BepInEx/LogOutput.log`.
 The setting **General / ShowMapNotices** hides the main-menu message, the "still checking" notice and the reminder in the location selection;
-it never turns the Arena check off, and the message that answers a failed raid start still appears. With **ShowMapNotices** on and this
-version installed, no ArenaMapPort message means the ArenaMapPort side is fine.
+it never turns the Arena check off, and the message that answers a failed raid start still appears. These notices cover installation
+and map-loading failures; optional feature warnings may still appear in the log.
 
 The server's exact reason (the `SERVER_` refs) needs the client and the server of the same version: install both parts from the same ZIP,
 with the SPT server closed (a running server keeps its DLL locked). An older server cannot say why, and the message then asks for exactly

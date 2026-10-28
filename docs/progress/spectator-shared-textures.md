@@ -32,3 +32,50 @@ The chosen next version is 0.4.0, reflecting the additive features since 0.3.0. 
 runtime version declarations agree. CHANGELOG and the new release note include all existing
 unreleased changes, not only this size reduction. Publication, tags and uploads are outside this
 request. Native and archive evidence follows after the candidate checks.
+
+## Offline acceptance and package — 2026-10-28
+
+The final code candidate is `2f8cff0` on `release/0.4.0`. The full C# Release regression,
+client Release build, nine staging cases, five migration cases, release-packaging/changelog
+fixtures and the new stale-DLL negative check passed. A read-only second-agent review found
+no remaining defect after the graph/manifest-reference checks were added to migration.
+The client build completed without warnings or errors. The distribution validator checks
+both source/project version declarations and staged DLL metadata, not only byte equality
+between build and staging. It rejects an old DLL even if both copies are equally stale.
+
+The first combined check attempt failed; standalone C# and client checks and the complete
+final rerun passed. An intermediate ZIP containing an old client was rejected and moved to
+ignored `work/release-0.4.0/rejected-stale-client/`; it was neither deployed nor published.
+The final archive gate additionally requires a successful build proof for the current
+commit and both exact DLL hashes before packaging.
+
+The final package has 255 distribution files (3,851,842,535 bytes), plus four generated
+release files inside the ZIP. Full distribution validation and an extraction comparison
+against every staged file passed. The local full ZIP is 3,834,882,881 bytes (3.57 GiB):
+`work/releases/0.4.0/maschine-ArenaMapPort-0.4.0.zip`, SHA-256
+`f8fcfb7294c6eef8467a3ef6953d02e6091d12f1f7115e0956153813b532926f`.
+PNG accounting independently confirms 586,756,096 bytes before and 146,689,024 after,
+with all original source exports retained. This is exactly 440,067,072 fewer PNG bytes;
+new graph/manifest metadata is additional and is included in the final package figures.
+
+The sanctioned full deployment copied the 255 staged files. Migration dry-run found 492
+known identical old PNGs; confirmation removed those exact files, and a repeated dry-run
+found zero. GPU-2 also has zero per-map PNGs and 124 shared files (123 images plus manifest).
+Syncthing was explicitly authorized to resume and reached 100 percent with zero pending
+items/deletions. Local evidence is under `work/release-0.4.0/`.
+
+## Native acceptance blocked by host startup — 2026-10-28
+
+`deploy-wait` first timed out while hashing the entire older development installation (2,442 files);
+the exact 255-file candidate list then matched twice on GPU-2 in 40 seconds. Server startup failed
+after that successful comparison: ArenaMode's `RewardOfflineSession.RecoverBeforeStartup` throws
+`Offline Arena recovery is incomplete; normal startup stopped without replacing a profile.`
+The server never opened port 6969; EFT remained closed. This is not an ArenaMapPort load failure.
+The failed start waiter ended normally at its timeout; no task runner remains active.
+
+The user chose to have the ArenaMode error repaired in the other session. No ArenaMode source,
+profile, recovery state or third-party configuration was modified. The four-map/no-bot crowd,
+three-voice, cleanup and hideout checks remain pending. Existing pre-deduplication playtests must
+not be presented as acceptance of this candidate. Prepared capture/view helpers are in
+`work/release-0.4.0/`; resume with a fresh process after the host is repaired, record loaded MVIDs,
+and finish G5 before publishing. All original acceptance gates remain in place.
