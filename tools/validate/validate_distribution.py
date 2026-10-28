@@ -442,6 +442,8 @@ def validate_water(plugin):
 
 
 def validate():
+    subprocess.run(['pwsh', '-NoProfile', '-File', str(REPO/'tools/validate/validate_dll_versions.ps1'),
+                    '-RepoRoot', str(REPO)], cwd=REPO, check=True)
     # This check also runs on fully resumed distributions, when no fresh map build
     # would otherwise compare the current C# registry with the JSON descriptors.
     subprocess.run([sys.executable, str(REPO/'tools/validate/validate_map_descriptors.py')],
