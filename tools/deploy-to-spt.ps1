@@ -652,6 +652,7 @@ function Invoke-LegacySpectatorTextureRemoval {
     $staged = Assert-PlainPath (Join-Path (Join-Path $repo 'dist') $relativeRoot) 'Directory'
     $manifestPath = Assert-PlainPath (Join-Path $staged 'spectators/shared/spectator-textures.json') 'File'
     $manifest = Get-Content -LiteralPath $manifestPath -Raw | ConvertFrom-Json
+    $manifestHash = (Get-FileHash -LiteralPath $manifestPath).Hash
     if ($manifest.schema -ne 1 -or @($manifest.files).Count -lt 1) { throw 'Invalid shared texture manifest' }
     $textures = @{}
     $replacements = @('maschine-ArenaMapPort.Client.dll', 'spectators/shared/spectator-textures.json')
@@ -687,6 +688,16 @@ function Invoke-LegacySpectatorTextureRemoval {
             try { $graph = $reader.ReadToEnd() | ConvertFrom-Json } finally { $reader.Dispose() }
         } finally { $stream.Dispose() }
         if ($graph.schema -ne 4 -or $graph.map -cne $map) { throw 'Expected the new schema-4 map graph' }
+        if ($graph.texture_manifest_sha256 -ne $manifestHash -or $null -eq $graph.textures -or
+            @($graph.textures.PSObject.Properties).Count -lt 1) { throw 'Map/shared spectator manifest mismatch' }
+        foreach ($texture in $graph.textures.PSObject.Properties) {
+            $files = $texture.Value.files
+            if ($files -isnot [Array] -or $files.Count -notin @(1, 6)) { throw 'Invalid map texture references' }
+            foreach ($file in $files) {
+                if ($file -isnot [string] -or $file -cnotmatch '^[0-9a-f]{16}(-[0-5])?\.png$' -or
+                    -not $textures.ContainsKey($file)) { throw 'Map references a missing shared texture' }
+            }
+        }
         foreach ($file in Get-ChildItem -LiteralPath $folder -Force) {
             $path = Assert-PlainPath $file.FullName 'File'
             if ($file.Name -ceq 'spectator.json.gz') { continue }

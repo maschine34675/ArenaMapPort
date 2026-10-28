@@ -34,7 +34,9 @@ class SpectatorMigration(unittest.TestCase):
         for key in MAPS:
             folder = staged / 'spectators' / key
             folder.mkdir()
-            (folder / 'spectator.json.gz').write_bytes(gzip.compress(json.dumps(dict(schema=4, map=key)).encode()))
+            (folder / 'spectator.json.gz').write_bytes(gzip.compress(json.dumps(dict(schema=4, map=key,
+                texture_manifest_sha256=hashlib.sha256((shared / 'spectator-textures.json').read_bytes()).hexdigest(),
+                textures={'t': dict(files=[self.image])})).encode()))
         shutil.copytree(staged, self.install / PLUGIN)
         self.legacy = [self.install / PLUGIN / 'spectators' / key / self.image for key in MAPS]
         for file in self.legacy:
@@ -76,6 +78,22 @@ class SpectatorMigration(unittest.TestCase):
         self.assertNotEqual(self.run_migration('-Confirm').returncode, 0)
         self.assertNotEqual(self.run_migration('-Confirm', '-DllOnly').returncode, 0)
         self.assertTrue(all(p.exists() for p in self.legacy))
+
+    def test_matching_installed_and_staged_but_unusable_graph_refused(self):
+        rel = PLUGIN / 'spectators/arena_airpit/spectator.json.gz'
+        staged = self.root / 'dist' / rel
+        original = json.loads(gzip.decompress(staged.read_bytes()))
+        for kind in ('pin', 'missing'):
+            graph = json.loads(json.dumps(original))
+            if kind == 'pin':
+                del graph['texture_manifest_sha256']
+            else:
+                graph['textures']['t']['files'] = ['fedcba9876543210.png']
+            payload = gzip.compress(json.dumps(graph).encode())
+            staged.write_bytes(payload)
+            (self.install / rel).write_bytes(payload)
+            self.assertNotEqual(self.run_migration('-Confirm').returncode, 0)
+            self.assertTrue(all(p.exists() for p in self.legacy))
 
 
 if __name__ == '__main__':
