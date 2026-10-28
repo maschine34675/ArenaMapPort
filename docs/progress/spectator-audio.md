@@ -209,3 +209,41 @@ while GPU-2 itself is connected and unpaused. No system error was reported. Its 
 the prior four-voice DLL (`29920C46634F784BD3C35FBD4868D0B3FFD0AE1C9ABAB34AB63C2E938647D38F`).
 The pause was left unchanged because parallel sessions share this installation. Resume synchronization
 when those sessions allow it, verify the new DLL hash, and restart EFT before a native check.
+
+## Intermittent noise investigation — 2026-10-28 (unresolved)
+
+The user reported a short intermittent noise newly noticed after spectator calls were added,
+with no established relation to a call start/end. The identified session is Equator TDM on
+MASCHINE11, `LogOutput-MASCHINE11-2026-10-28_19-26-57.log`. It loaded the development client
+still labelled 0.3.0, before the shared-texture 0.4.0 deployment. The log records 254 calls
+between 19:31:33.861 and 19:36:53.905, never more than three voices. The three long pauses
+match player deaths/respawns. No spectator, MetaXR or other audio runtime failure is logged;
+the sole Error is UiBridge binding at startup. This absence does not rule out an audible glitch.
+
+An independent PCM audit and root recheck freshly decoded the 13 original Arena clips and
+reproduced all shipped WAVs exactly, including their normalization. Source exports and staged
+files/manifest are byte-identical. No clipped samples were found in originals or exports;
+export peaks are -10.93 to -5.06 dBFS, RMS -22 dBFS. First/last samples are at most 15/32768
+(about -66.8 dBFS), with no large boundary step. Original recordings contain brief high-frequency
+speech passages; without a recording/time of the reported noise these cannot be labelled faults.
+No filter, normalization or asset change is justified by these measurements.
+
+The native `Audio/prewarm_sound` was independently decoded twice: all 2,756 mono samples at
+44.1 kHz are zero (62.5 ms of digital silence). Environment's current server preset also has
+`enabledPrewarm=false`. The native warm-up *sample* therefore is not a noise recording; this
+does not establish the behavior of the native audio plugin under every state transition.
+Pool release, pitch/Doppler reset, container cleanup and DSP expiry follow native patterns.
+Registering occlusion before Play was considered but not changed: Combined propagation defers
+its actual calculation to update/late-update, so simply reordering the calls is not a proven fix.
+
+The user's log confirms **SurroundAudio 1.0.0 with 5.1 output at 48 kHz**. Its source changes
+the presets/spatialization and routes unspatialized direct voices through the separate MetaXR
+reverb helper when KeepReverb is enabled. This differs from the previous GPU playback tests;
+it is a testable lead, not a proven incompatibility. The user was asked for a live comparison:
+F12 -> maschine-SurroundAudio -> General -> KeepReverb=false, otherwise unchanged Equator TDM,
+then restore the setting. That disables the optional MetaXR helper share, not all EFT reverb.
+The result is pending. No external mod, user setting, playback code or release archive was altered.
+
+Evidence: ignored `work/spectator-noise/clip-audit/` (reproducible source/PCM analysis and native
+silent prewarm sample) and `work/spectator-noise/log-audit.py` / `log-audit.json`. GPU-2 remains
+reserved for the user's separate ArenaMode startup recovery; no new raid was started here.

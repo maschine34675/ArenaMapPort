@@ -5,6 +5,20 @@ is updated by hand at each handover, it is not an automatic record. Read [AGENTS
 
 ## Update 2026-10-28 - 0.4.0 candidate preparation (release/0.4.0)
 
+### New user-reported audio issue: investigation pending a hearing comparison
+
+After candidate preparation, the user reported intermittent short noise during Equator TDM on
+MASCHINE11. Their `LogOutput-MASCHINE11-2026-10-28_19-26-57.log` loaded the earlier development
+0.3.0 label, recorded 254 calls with the three-voice cap and no audio error, and confirms
+SurroundAudio 1.0.0 / 5.1 / 48 kHz. All 13 WAVs were re-derived from Arena and match byte-for-byte;
+no clipping or large boundary discontinuity. Native prewarm PCM is entirely silent. No cause or
+fix is confirmed; do not claim the source-start/occlusion ordering is a fix (the combined solver
+updates later). The user was asked to compare `SurroundAudio/General/KeepReverb=false` live while
+leaving everything else unchanged, then restore it. Await that result before changing playback.
+No playback code, other-mod files/settings, deployed DLL or release ZIP changed for this diagnosis.
+Details: [spectator-audio.md](docs/progress/spectator-audio.md), evidence `work/spectator-noise/`.
+This audio report and the existing blocked GPU-2 native acceptance remain open before publication.
+
 ### Latest status: package prepared; native acceptance awaits host repair
 
 Code candidate `2f8cff0`, client and server version 0.4.0. Shared texture staging, migration,
