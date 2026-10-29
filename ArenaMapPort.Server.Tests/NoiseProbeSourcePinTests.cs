@@ -185,6 +185,14 @@ namespace ArenaMapPort.Server.Tests
             Assert.Contains("catch (ArgumentException) { break; }", probe);
             Assert.Contains("_readChannels = ReadableChannels(_channels);", Between(code, "static void ReadAudioFormat()", "static int ReadableChannels("));
             Assert.Contains("if (_readChannels < 1) throw", Between(code, "static void Arm(double now)", "static void ReadAudioFormat()"));
+            // the filter tap delivers the device format too (2 channels on that driver): a channel mismatch re-creates the ring with the tap's
+            // count instead of waiting for a speaker mode that never comes, and an empty ring is reported as empty, not as overwritten
+            var gap = Between(code, "static void TapGapTick(double now)", "static string RequestCapture(");
+            Assert.Contains("_tapChannels = mismatch;", gap);
+            Assert.Contains("AttachTap();", gap);
+            Assert.DoesNotContain("if (_channels == mismatch) AttachTap();", gap);
+            Assert.Contains("new NoisePcmRing(_tapChannels > 0 ? _tapChannels : _channels, _rate, RingSeconds)", Between(code, "static void AttachTap()", "static void DetachTap()"));
+            Assert.Contains("the capture ring is empty (the filter tap has written nothing)", code);
             Assert.Contains("if (now - _lastRead >= ReadInterval) Read(now);", code);
             Assert.Contains("const double ReadInterval = 0.012", code);
         }

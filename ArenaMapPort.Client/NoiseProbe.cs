@@ -61,7 +61,7 @@ namespace ArenaMapPort.Client
         static volatile bool _dirty;
         static NoiseProbeMode _active;
         static double _raidStart, _lastRead, _lastCensus, _labelUntil;
-        static int _channels = 2, _readChannels = 2, _rate = 48000, _markNumber, _calibMinutes, _lastRoom = int.MinValue, _gc0, _gc1, _gc2;
+        static int _channels = 2, _readChannels = 2, _tapChannels, _rate = 48000, _markNumber, _calibMinutes, _lastRoom = int.MinValue, _gc0, _gc1, _gc2;
         static string _lastCensusText = "";
         static string _lastShotSignature, _mapKey = "vanilla";
         static int _lastReverbCategory = int.MinValue;
@@ -444,6 +444,7 @@ namespace ArenaMapPort.Client
                 _gap.Reset();
                 int channels = _channels, rate = _rate;
                 ReadAudioFormat();
+                _tapChannels = 0; // a new device may deliver another count; the next mismatch teaches it again
                 if (_active == NoiseProbeMode.Capture && (channels != _channels || rate != _rate)) AttachTap();
             }
             DrainResults();
@@ -781,7 +782,7 @@ namespace ArenaMapPort.Client
                     Plugin.Log.LogWarning($"{Tag} the listener object has no AudioListener component; Capture stays off (Detect still runs)");
                     return;
                 }
-                _pcm = new NoisePcmRing(_channels, _rate, RingSeconds);
+                _pcm = new NoisePcmRing(_tapChannels > 0 ? _tapChannels : _channels, _rate, RingSeconds);
                 NoiseTap.Dead = false; NoiseTap.ChannelMismatch = 0; NoiseTap.LastTicks = 0; Volatile.Write(ref NoiseTap.MaxGapTicks, 0);
                 NoiseTap.Ring = _pcm;
                 _tap = manager.gameObject.AddComponent<NoiseTap>();
@@ -812,9 +813,13 @@ namespace ArenaMapPort.Client
             int mismatch = NoiseTap.ChannelMismatch;
             if (mismatch != 0)
             {
+                // OnAudioFilterRead on the listener delivers the DEVICE format: 2 channels on a stereo driver under a 5.1 speaker mode
+                // (GPU-2, 2026-10-29: the ring stayed empty and every mark ended in "nothing written"). The ring adopts the tap's count.
                 NoiseTap.ChannelMismatch = 0;
                 ReadAudioFormat();
-                if (_channels == mismatch) AttachTap();
+                _tapChannels = mismatch;
+                Plugin.Log.LogDebug($"{Tag} the filter tap delivers {mismatch} channel(s) under speaker mode {AudioSettings.GetConfiguration().speakerMode}; ring re-created");
+                AttachTap();
                 return;
             }
             long gapTicks = Interlocked.Exchange(ref NoiseTap.MaxGapTicks, 0L);
@@ -898,7 +903,12 @@ namespace ArenaMapPort.Client
                 TrimOld(directory, (long)job.Frames * channels * 2 + NoiseWav.HeaderBytes);
                 var data = new short[job.Frames * channels];
                 if (!job.Ring.TryCopy(job.EndFrame, job.Frames, data, out long start, out int copied))
-                { results.Enqueue("!the capture ring was overwritten during the copy; nothing written"); return; }
+                {
+                    results.Enqueue(job.Ring.WrittenFrames == 0
+                        ? "!the capture ring is empty (the filter tap has written nothing); nothing written"
+                        : "!the capture ring was overwritten during the copy; nothing written");
+                    return;
+                }
                 string wav = Path.Combine(directory, job.Name + ".wav");
                 using (var stream = new FileStream(wav, FileMode.Create, FileAccess.Write, FileShare.Read))
                     NoiseWav.Write(stream, data, copied, channels, rate);
