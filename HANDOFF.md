@@ -1,5 +1,20 @@
 # HANDOFF — dated working state
 
+## Publication postponed by user — 2026-10-29
+
+Do not publish ArenaMapPort 0.4.0 yet. The user explicitly postponed this release while
+authorizing ArenaMode 0.4.0 and Redeploy 1.1.0, which are now public. No ArenaMapPort 0.4.0
+remote release, uploaded asset or remote tag was created; prepared source commits remain local.
+
+Local candidate source `fe45b84350a247b662b0e42434421e1e12897241` was built without live
+deployment. C# 2,545 tests and 196 release/version/changelog fixtures passed. Distribution
+authentication and combined extraction comparison passed for all 255 files / 12 encrypted bundles.
+The five ZIPs plus checksum are retained at `D:\AMP040-29\packages`; local manifests pin
+the build source and each payload hash. The final root record is ArenaMode's ignored
+`artifacts/publish-20261029/mapport-build.json`. These files have not been uploaded or
+covered by the final ArenaMode/Redeploy executable scans. Recheck current source/package
+identity and security scans before any later authorized publication. Audio limits remain open.
+
 Snapshot for whoever continues (human or agent). Verify the commits named here against `git log`; this file
 is updated by hand at each handover, it is not an automatic record. Read [AGENTS.md](AGENTS.md) first.
 

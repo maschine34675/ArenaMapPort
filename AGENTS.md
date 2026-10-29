@@ -148,6 +148,10 @@ member name pinned in the client (`method_N`, `vmethod_N`) is verified there and
 
 ## Release configuration
 
+**2026-10-29: publication is postponed at the user's request.** Keep the prepared 0.4.0
+source/package local; do not create a remote tag or upload a release until reauthorized.
+See the top of HANDOFF.md. The preparation plan below is retained for that later step.
+
 The 2026-10-29 user-authorized 0.4.0 GitHub release uses the existing multipart packer form:
 core plus Equator/Bay5/AirPit/Bowl, all five ordinary ZIPs extracted into the same SPT root.
 The full distribution has 255 files after shared spectator texture staging. The October 28 single
