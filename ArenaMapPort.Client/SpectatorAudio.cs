@@ -150,7 +150,8 @@ namespace ArenaMapPort.Client
                     if (voice != _lastVoice) continue;
                     OcclusionGain = voice.Source.OcclusionVolumeFactor;
                     SourceVolume = source != null ? source.volume : 0;
-                    if (on && now >= voice.NextOutputProbe)
+                    // Output readback is a developer probe; playback never depends on its peak.
+                    if (DeveloperOptions.Enabled && on && now >= voice.NextOutputProbe)
                     {
                         voice.NextOutputProbe = now + .2f;
                         source.GetOutputData(_outputSamples, 0);

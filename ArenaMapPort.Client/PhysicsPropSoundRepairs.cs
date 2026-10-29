@@ -22,7 +22,9 @@ namespace ArenaMapPort.Client
     /// is the real fix; this prefix is the safety net for any type whose WeaponSounds bank is still null on this
     /// SPT build: it runs the same lazy setup, and if no bank exists it skips only the sound, keeps the vanilla
     /// 0.5 s collision-tracking timer and logs once per SoundType. Everything else (force, fragments, tracking)
-    /// stays vanilla. Gated on <see cref="ArenaMapRaid.IsLoaded"/>; vanilla maps are untouched.
+    /// stays vanilla. Late callbacks on an owned scene also stay guarded after its Scripts scene
+    /// unloads: shared sound assets may already be released while geometry still collides.
+    /// Vanilla maps are untouched.
     /// </summary>
     internal static class PhysicsPropSoundRepairs
     {
@@ -47,7 +49,12 @@ namespace ArenaMapPort.Client
         {
             if (!ArenaMapRaid.IsLoaded())
             {
-                return true;
+                var scene = __instance.gameObject.scene;
+                if (!scene.IsValid() || !ArenaMapRaid.IsOwnedScene(scene.name)) return true;
+                // Geometry can outlive Scripts and the shared WeaponSounds/BetterAudio assets.
+                // Skip only this late sound callback, even if it still holds a bank reference.
+                ___IgnoreCollisionTrackingTimer = Time.time + 0.5f;
+                return false;
             }
             if (____collisionSoundBank == null || resetSound)
             {

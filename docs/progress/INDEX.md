@@ -8,6 +8,9 @@ dated state in one screen; read it before this index if you only have a minute.
 
 ## Current — read these for the area you touch
 
+- [release-sweep-20261029.md](release-sweep-20261029.md) — mixed native checks on both hosts,
+  spectator diagnostic gating, late physics sound callback fix and remaining audio limits.
+
 - [spectator-shared-textures.md](spectator-shared-textures.md) — 0.4.0: shared texture staging,
   graph/manifest/image integrity, safe development-package migration and release-candidate checks.
 

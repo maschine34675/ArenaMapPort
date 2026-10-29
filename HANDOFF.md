@@ -3,6 +3,22 @@
 Snapshot for whoever continues (human or agent). Verify the commits named here against `git log`; this file
 is updated by hand at each handover, it is not an automatic record. Read [AGENTS.md](AGENTS.md) first.
 
+## Update 2026-10-29 - mixed native sweep and final R2 client
+
+Both test hosts were used concurrently with ArenaMode/Redeploy; GPU-2 loaded all
+four maps, bots/objectives, animated crowds and two spatial spectator voices.
+Spectator output readback now requires DeveloperMode. A late Bowl collision after
+Scripts unload exposed a released soundbundle request; the owned-scene guard now
+skips that sound callback while preserving the collision timer. Full suite:
+2,545 passed, including 21 actual-prefix lifecycle cases; client build: zero warnings/errors.
+Final client SHA256 `D847AB2F3B1914A5598F497CD1CD8A960E5616387A1053AE52FE688C4FB6090D`,
+loaded MVID `c64f36e8-3853-49f2-9ce4-2a4d94e8c7c1`, installed locally and on both hosts.
+R2 Bowl natural end/cleanup passed without the soundbundle exception; Equator's
+developer-on comparison retains positive output measurement. See
+[release-sweep-20261029.md](docs/progress/release-sweep-20261029.md).
+Missing Books impacts and intermittent user-reported noise remain separate open
+audio findings. The older ZIP is still outdated; this sweep does not publish it.
+
 ## Update 2026-10-29 - two spectator voices; noise still unresolved
 
 User's KeepReverb=false hearing test was negative: three noise bursts on Equator, no noticed burst
