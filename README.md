@@ -24,7 +24,7 @@ Equator and Bay5 also have restored dust and original lamp flares. Bay5 includes
 its harbor background and water.
 
 The 0.4.0 candidate restores the original animated spectators on all four maps,
-with spatial crowd calls from 13 original fan recordings and at most three voices
+with spatial crowd calls from 13 original fan recordings and at most two voices
 at once. Their idle and cheering animations run independently of match events;
 kill and round-result reactions are not implemented yet.
 Their textures are stored once for all maps, saving about 440 MB compared with

@@ -298,8 +298,10 @@ and confirm through the same deploy script with EFT closed. It verifies the DLL,
 shared replacements before removing only byte-identical old map PNGs; unknown or changed files
 are refused. Sources remain local. Published 0.3.0 has no spectator files to clean up.
 Keep only the 13 embedded Participating fan clips: the nine external Scav references are deliberately
-excluded after the user's listening feedback. The current cap is three simultaneous voices, gain 0.5,
-2-5 s initial delay and 0.8-1.6 s between starts, waiting when all slots are occupied. Match reactions
+excluded after the user's listening feedback. The current cap is two simultaneous voices, gain 0.5,
+2-5 s initial delay and 1.6-3.2 s between starts, waiting when all slots are occupied. The live developer-only
+`Audio diagnostics/SpectatorCalls` switch stops only the calls for hearing comparisons; it is ignored
+outside DeveloperMode and leaves visual crowds and map ambience alone. Match reactions
 are not implemented. See [spectator-audio.md](docs/progress/spectator-audio.md) and
 [spectators-allmaps.md](docs/progress/spectators-allmaps.md) for source and native evidence.
 

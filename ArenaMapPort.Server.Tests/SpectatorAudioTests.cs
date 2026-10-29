@@ -20,12 +20,12 @@ public sealed class SpectatorAudioTests
             double now = clock.NextAt;
             Assert.True(clock.Due(now));
             clock.Played(now, i, i%13);
-            Assert.InRange(clock.NextAt - now, .8, 1.6);
-            Assert.False(clock.Due(now + .799));
+            Assert.InRange(clock.NextAt - now, 1.6, 3.2);
+            Assert.False(clock.Due(now + 1.599));
         }
         clock.Played(10000, 1, 1); // A long stall never creates a catch-up burst.
         Assert.False(clock.Due(10000));
-        Assert.InRange(clock.NextAt, 10000.8, 10001.6);
+        Assert.InRange(clock.NextAt, 10001.6, 10003.2);
     }
 
     [Fact]
@@ -78,7 +78,7 @@ public sealed class SpectatorAudioTests
     }
 
     [Fact]
-    public void RepeatedCallsOverlapButNeverExceedThreeConcurrentVoices()
+    public void RepeatedCallsOverlapButNeverExceedTwoConcurrentVoices()
     {
         var clock = new SpectatorAudioSchedule(27);
         var active = new List<(double End, int Speaker, int Clip)>();
@@ -88,6 +88,7 @@ public sealed class SpectatorAudioTests
         {
             double now = tick / 10.0;
             active.RemoveAll(v => v.End <= now);
+            Assert.False(clock.Due(now, 2));
             Assert.False(clock.Due(now, 3));
             if (clock.Due(now, active.Count))
             {
@@ -100,10 +101,10 @@ public sealed class SpectatorAudioTests
                 starts++;
             }
             peak = Math.Max(peak, active.Count);
-            Assert.InRange(active.Count, 0, 3);
+            Assert.InRange(active.Count, 0, 2);
         }
-        Assert.Equal(3, peak);
-        Assert.InRange(starts, 400, 600);
+        Assert.Equal(2, peak);
+        Assert.InRange(starts, 200, 300);
     }
 
     [Fact]
