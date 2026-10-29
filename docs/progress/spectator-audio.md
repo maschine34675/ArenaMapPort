@@ -247,3 +247,47 @@ The result is pending. No external mod, user setting, playback code or release a
 Evidence: ignored `work/spectator-noise/clip-audit/` (reproducible source/PCM analysis and native
 silent prewarm sample) and `work/spectator-noise/log-audit.py` / `log-audit.json`. GPU-2 remains
 reserved for the user's separate ArenaMode startup recovery; no new raid was started here.
+
+## Two-voice cadence and negative reverb comparison — 2026-10-29
+
+The user heard the noise three more times on Equator with SurroundAudio `KeepReverb=false`,
+then left immediately after the last occurrence. AirPit afterwards had no noticed occurrence.
+This does not support the optional reverb helper as the sole cause; no playback-order, filter
+or asset fix has been made on that hypothesis.
+
+The new MASCHINE11 log `LogOutput-MASCHINE11-2026-10-29_10-55-45.log` loads client 0.4.0 and
+contains 320 Equator calls and 318 AirPit calls, both using all 13 clips and at most three voices.
+The last 30 seconds before the first Equator menu indicator at **11:04:45.454** contain 24 calls
+and no warning/error. The last room change is 11:04:19.195 (hall update 19.207), then no further
+room/audio-reset event in the window. Last pre-menu starts are fan10_01 at 42.213, fan9_02 at
+43.681 and fan12_04 at 44.679. Native Stop(Left) is **11:04:47.061**, after the reported noise,
+so exit cleanup cannot explain that pre-exit occurrence. The single whole-log Error is UiBridge
+startup, not audio. Log analysis is reproducible in `work/spectator-cadence-20261029/log-audit.py`.
+
+Other candidates remain unproven. Equator has original electricity/cracles ambient banks absent
+from AirPit, with independent random scheduling; individual ambient starts are not logged here.
+Equator's weather probe shows no rain, and dust has no audio playback. A one-time missing stun
+screen-flash warning at 10:59:35.792 proves a stun effect occurred, but supplies no connection
+to the noise immediately before leaving. A Molotov at 11:04:25.851 has a logged six-second burn,
+well before the menu. None of these facts justifies removing or altering an unrelated sound.
+
+Independently requested behavior change, committed as `d8b51d7`: **two simultaneous spectator
+voices**, with **1.6-3.2 seconds between call starts**, twice the previous 0.8-1.6 interval. The
+2-5 second initial/restart delay and three-second failed-selection retry are unchanged; those
+are not the cadence between calls. Gain 0.5, the original 13 clips, family/speaker exclusions
+and native room processing remain unchanged. The ten-minute simulation reaches two voices,
+never exceeds two, and verifies the reduced start count and doubled interval.
+
+Added `Audio diagnostics/SpectatorCalls`, default true, for a controlled hearing comparison.
+Only DeveloperMode can honor a false value. It is not added to the compact player configuration.
+Off releases all active spectator sources and pauses their schedule; on uses the normal initial
+delay. Visible spectators, map ambience, other sounds and third-party configuration remain intact.
+The setting change is logged at Debug in developer mode so the next log can establish the comparison.
+
+Seven focused C# tests, 13 changelog/version fixtures, the Release client build (zero warnings/errors)
+and full distribution validation passed. Independent code review found no concrete issue. Sanctioned
+client-only dry-run and deployment updated exactly one DLL in `D:\SPT41`; built and installed SHA-256:
+`40056EA3DF2C55BCFF6305FFBD6B49FE16014CE91340C93D7DCE74C56B165FA4`.
+No game was started/restarted and no fresh native acceptance is claimed. Evidence is under
+`work/spectator-cadence-20261029/`. The 2026-10-28 release ZIP still contains the earlier three-voice
+build and must be rebuilt after final audio acceptance; it was not uploaded or published.

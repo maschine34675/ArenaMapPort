@@ -3,6 +3,30 @@
 Snapshot for whoever continues (human or agent). Verify the commits named here against `git log`; this file
 is updated by hand at each handover, it is not an automatic record. Read [AGENTS.md](AGENTS.md) first.
 
+## Update 2026-10-29 - two spectator voices; noise still unresolved
+
+User's KeepReverb=false hearing test was negative: three noise bursts on Equator, no noticed burst
+on AirPit afterwards. The supplied MASCHINE11 `10-55-45` log loads 0.4.0 and records 320/318 calls
+using the same 13 clips, no audio errors. Equator's first menu indicator is 11:04:45.454, last room
+change 11:04:19.195, native Stop 11:04:47.061; the reported noise precedes exit cleanup. Ambient
+electricity/cracles and stun audio are possible alternatives, not proven causes. Do not remove clips
+or change audio filters/order speculatively. See [spectator-audio.md](docs/progress/spectator-audio.md).
+
+Requested cadence change is committed as `d8b51d7`: two simultaneous voices, 1.6-3.2 seconds between
+starts. Initial delay (2-5 seconds), retry delay, gains and original clips stay unchanged. The new
+live developer-only `Audio diagnostics/SpectatorCalls` switch isolates the calls from visual crowds
+and all other audio; false is ignored outside DeveloperMode. Next user test can switch it off and
+check whether the noise remains. Toggle changes log at Debug.
+
+Seven focused C# tests, 13 changelog/version fixtures, client Release build (zero warnings/errors),
+full distribution validation and read-only review passed. The sanctioned client-only dry/confirmed
+deployment copied exactly the DLL to `D:\SPT41`, hash
+`40056EA3DF2C55BCFF6305FFBD6B49FE16014CE91340C93D7DCE74C56B165FA4`.
+No fresh game run or runtime-loaded acceptance; GPU-2 is still awaiting a fresh release from the
+other session's ArenaMode recovery work. Evidence: `work/spectator-cadence-20261029/`.
+**The October 28 release ZIP is now outdated (three voices); rebuild it after final audio acceptance.**
+No tag, upload, publication or push. Existing untracked `assets/Thumbs.db` was not touched.
+
 ## Update 2026-10-28 - 0.4.0 candidate preparation (release/0.4.0)
 
 ### New user-reported audio issue: investigation pending a hearing comparison
