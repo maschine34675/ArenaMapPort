@@ -135,7 +135,10 @@ namespace ArenaMapPort.Client
                 {
                     match = FindMatch(__instance.Position);
                     if (match.Entry != null && match.Coverage >= MinimumCoverage)
+                    {
                         __result = (native.Item1, BaseBallistic.ESurfaceSound.Puddle);
+                        if (NoiseProbe.Armed) NoiseProbe.NoteAt(NoiseEv.Puddle, __instance.Position, __instance.IsYourPlayer ? "you" : "bot");
+                    }
                 }
             }
             catch (Exception error)

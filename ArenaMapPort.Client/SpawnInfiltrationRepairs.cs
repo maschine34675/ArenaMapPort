@@ -73,6 +73,7 @@ namespace ArenaMapPort.Client
                 return; // every other map's raid — untouched
             }
 
+            ArenaSpectators.Prewarm();          // crowd package on a worker thread while the repairs below run; a no-op when Install() started it at the Scripts scene
             SpawnColliderRepairs.EnsureAllTriggers();
             SpawnPlacementRepairs.Apply(__result);
             try

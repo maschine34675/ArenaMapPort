@@ -384,6 +384,7 @@ namespace ArenaMapPort.Client
                 if (clip != _requested)
                 {
                     _requested = clip;
+                    if (NoiseProbe.Armed) NoiseProbe.Note(NoiseEv.Rain, clip != null ? clip.name : "none");
                     _elapsed = 0f;
                     _target = -1;
                     if (clip != null)
@@ -413,6 +414,7 @@ namespace ArenaMapPort.Client
                     {
                         source.time = UnityEngine.Random.Range(0f, source.clip.length);
                         source.Play();
+                        if (NoiseProbe.Armed) NoiseProbe.Note(NoiseEv.RainPlay, source.clip.name, 0, 0, source.volume);
                     }
                     else if (_weights[i] <= 0f && i != _target)
                     {

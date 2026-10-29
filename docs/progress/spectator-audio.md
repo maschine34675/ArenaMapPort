@@ -291,3 +291,125 @@ client-only dry-run and deployment updated exactly one DLL in `D:\SPT41`; built 
 No game was started/restarted and no fresh native acceptance is claimed. Evidence is under
 `work/spectator-cadence-20261029/`. The 2026-10-28 release ZIP still contains the earlier three-voice
 build and must be rebuilt after final audio acceptance; it was not uploaded or published.
+
+## NoiseProbe diagnostic (2026-10-29)
+
+Status: implemented and unit-tested offline; **not run on any host, nothing was recorded or heard**. It exists because the
+intermittent Equator noise has no timestamp in any log and nobody has ever measured the mixed listener output during a real match
+(the earlier GetOutputData probes read channel 0 of one voice, pre-mixer, 256 samples every 0.2 s). The offline synthesis that
+designed it ranks the candidates (Equator's boosted ambient one-shots, the spectator onset overshoot, physics-prop impacts, the
+death hard-cut, a fault below Unity) and states that none exceeds about 25 %; the probe is how those are separated in one or two
+sessions. It is developer-only, off by default, and changes nothing that is played unless an explicit A/B switch is turned on.
+
+**Files.** `ArenaMapPort.Client/NoiseProbeModel.cs` (Unity-free: block statistics, detector, event ring, report text, self-test,
+PCM ring, WAV writer, capture policy; linked into the tests), `NoiseProbe.cs` (config, taps, driver, mark key, census, audio
+filter tap, export). One-line taps, each behind `if (NoiseProbe.Armed)`, sit in `SpectatorAudio.cs`, `Bay5AmbientAudio.cs`
+(driver poll), `PhysicsPropSoundRepairs.cs`, `RoomReverb.cs`, `RoomShotAcoustics.cs`, `GateSounds.cs`, `PuddleFootstepRepairs.cs`
+and `PrecipitationAudio.cs`; `Plugin.cs` has one `NoiseProbe.Install()` line after `SpectatorAudio.Install()`. Tests:
+`NoiseProbeModelTests` (synthetic signals) and `NoiseProbeSourcePinTests` (the rules of the glue, read as text).
+
+**Keys** (section `Audio diagnostics`, `Plugin.Instance.Settings`, none public, all honoured only with DeveloperMode, all live):
+
+| Key | Default | Meaning |
+|---|---|---|
+| `NoiseProbe` | `Off` | `Off`, `Detect` or `Capture`. Armed only inside a raid; everything stops at raid end. |
+| `NoiseProbeMarkKey` | `Pause` | KeyCode polled with `Input.GetKeyDown` (works while WASD is held; `Mouse3`/`Mouse4` allowed). |
+| `NoiseProbeSelfTest` | `false` | Request; starts 4 s into the next armed raid (or at once), then resets to `false`. |
+| `NoiseProbeMuteAmbient` | empty | Comma list of exact ambient player names (`electricity,cracles,cracles (1),cracles (2)`), `AudioSource.mute`, reversible, works without `NoiseProbe`. |
+| `NoiseProbeMuteProps` | `false` | Every physics-prop impact bank is skipped (the 0.5 s collision timer is kept). |
+| `NoiseProbeSpectatorFade` | `false` | 150 ms fade-in at the start of a call; an early stop (death, calls switched off) fades out over 80 ms and the source is released afterwards. Ended calls, resets and failed setups are never faded. |
+
+Existing live keys the experiments use: `SpectatorCalls`, `Audio (arena_equator)/AmbientGainDb`, `AmbientVolumeOffset`,
+`AmbientRangeMultiplier`, `PuddleFootsteps`, `RoomShotAcoustics`, `NativeRoomReverb`, `Spawns/GateSounds`, `Physics/EnablePhysicsProps`.
+
+**Detect** (main thread, no managed code on the audio thread): at most every 12 ms in `LateUpdate`,
+`AudioListener.GetOutputData(buf1024, ch)` for every channel of `AudioSettings.GetConfiguration().speakerMode` (6 for 5.1). Per
+block: peak, rms over all channels, D1 (largest first difference), HF (rms of the first difference / (rms x sqrt 2): white noise 1.0,
+1 kHz sine 0.09, 6 kHz 0.54), per-channel peaks, count of samples at full scale, non-finite samples. The baseline is the median of
+the last 64 blocks. Kinds and starting thresholds (`NoiseThresholds`, to be calibrated on the first minutes): PEAK = peak >= 0.03
+(-30.5 dBFS) and >= 15 dB over the baseline peak and >= 10 dB over the baseline rms and HF >= 0.30 (LOUD from 0.25: counted, at most
+4 lines a minute); CLICK = D1 >= 0.04 and >= 8 x median D1 and >= 0.5 x peak and peak < 0.25 (a block that qualifies as PEAK, or
+lies within 150 ms of one, is not also a CLICK); DROPOUT = two or more all-zero blocks over an rms floor of 3e-4; GAP = the DSP
+clock stepped behind real time by more than 60 ms against the minimum of the last second (the brief's "60 ms over two frames" cannot
+exceed 20 ms at 100 fps, so the step form is used; a main-thread hitch moves both clocks and is not a gap), or, in Capture, a gap
+between two audio filter callbacks of more than three buffers; CLIP = a sample at full scale or non-finite. Refractory 150 ms per
+kind, consecutive blocks are one event (logged when it ends, `dur` = its length), PEAK/CLICK are ignored for 3 s after arming or an
+audio reset, at most 12 lines per kind per minute (the rest is counted as `suppressed`). Level alone cannot separate speech sibilants
+from noise below about -30 dBFS: the real classifiers are the ORPHAN flags and the mark WAV.
+
+**Event ring** (1024 entries, no allocation per event: structs and interned labels). Tokens, in the order of the mark dump:
+`spec+` (clip, call number, distance, occlusion factor, voices), `spec-` (reason `ended|dead|reset|slot|stopall|toggle|notstarted|noservices|disable`,
+ms played, clip time left), `spec.on` (source.volume and `OcclusionVolumeFactor` at frames 1, 2, 3, 5, 8, 13 after Play), `amb+`,
+`amb~` (clip changed or `timeSamples` rewound while playing, a loop wrap excluded) and `amb-` from the `isPlaying` edges of the owned
+active ambient players (polled in the existing driver, no scene search), `prop` (name, SoundType, distance, `played|skipped|muted`),
+`room` (id/type), `roomReverb` (mixer category, changed 0/1), `roomShot` (room, class, changed 0/1), `gate`, `puddle` (you/bot, distance),
+`rain` and `rain.play`, `audioConfig` (device changed), `reset`, `life` (alive/dead flips), `hitch` (>= 50 ms), `gc`, `MARK`, `burst`,
+`selftest`. A burst is **ORPHAN** (`orphan=1`) when no cause event (everything above except `spec.on`, `amb-`, `gc`, `MARK`, `burst`) lies in
+[-400 ms, +50 ms] of its start and no spectator call with source volume >= 0.01 is playing; `evOrphan=1` ignores the voice test.
+Not knowable from the plugin: EFT gunshots, footsteps, bot voices, explosions, and ArenaMode's announcer, hitmarker, PMC voice and Molotov
+(join those by wall clock with ArenaMode's own Debug lines).
+
+**Log lines** (all Debug, tag `[NoiseProbe]`, BepInEx adds `maschine-ArenaMapPort`; local wall clock so ArenaMode lines can be joined; one
+Warning if the probe cannot arm or stops, none otherwise):
+
+```
+armed mode=Detect map=arena_equator speakers=Mode5point1 driver=Stereo ch=6 rate=48000 dsp=1024 voices=196/256 calls=on mix=g2.0/o0.40/r2.50 roomShot=on roomReverb=on tap=readback ring=none
+BURST #12 15:04:12.481 kind=peak lvl=MID pk=-24.1@ch3 rms=-39.0 bg=-58.2 over=+19.1 overPk=+22.0 d1=0.021 hf=0.62 dur=21ms ch=[-30,-29,-27,-24,-33,-41] pos=(x,y,z) room=19/IndoorConcrete fps=118 voices=1 orphan=0 evOrphan=0 | spec=[fan9_02#74@11.0m occ0.64] amb=[cracles (1)@14.2m age120ms] prop=[Glass@6.2m age80ms] ev=[spec+@-0.32s,room@-0.90s] census=[pool=143 playing=9 AmbientIn:3 Environment:2 ownedAmbient=3 ownedSpectator=1]
+BURST #3 15:04:15.020 kind=gap lvl=MID lag=87ms src=dsp          (src=tap: audio filter callback gap; kind=clip adds clipped=n nonfinite=m)
+MARK #3 15:04:13.002 frame=48213 pos=(x,y,z) room=19/IndoorConcrete fps=118 voices=1 (the reaction lag is 0.3-1.5 s)
+  -7.412s spec+ fan10_01#5 12.5m occ0.31 voices=2          (one line per ring event of the last 10 s, at most 200)
+  hits in window: BURST #12 (-0.84s, +19.1 dB)
+  voices: [...] census=[...]
+capture wav=<path> 12.0s 6ch 6.9MB                          (Capture only, written ~2 s after the mark)
+minute map=arena_equator blocks=n cover=% bursts peak=a click=b dropout=c gap=d clip=e loud=f suppressed=g refractory=r orphan=h evOrphan=i bgMedian=-dBFS hitch50=i gc=g0/g1/g2 spec=+x/-y amb=+z restarts=r props=p rooms=n resets=n probeMs=avg/max
+calib minute=1 pk50=-62.1 pk99=-41.2 pk999=-30.5 over50=+0.4 over99=+9.8 over999=+16.2   (first five minutes: the calibration percentiles)
+selftest -24dBFS PASS latency 96 ms over +22.1 dB        selftest -36dBFS MISS block peak -37.2 dBFS, background peak -64.0 dBFS
+selftest done 3/4 detected; weakest detected -30dBFS     (in Capture each line also ends with tap=<peak seen by the filter>dBFS)
+```
+
+Channels are numbered from 1 in the lines (`@ch3` is the third channel). `cover` is the share of real time covered by readback windows
+(windows overlap above ~47 fps and leave gaps below); `probeMs` is the probe's own cost per frame (average / maximum).
+
+**Self-test.** Four 10 ms Hann-windowed white-noise bursts (deterministic, the largest sample is exactly the level) at -18, -24, -30 and
+-36 dBFS, 1.2 s apart, through an owned 2D `AudioSource` on the Environment mixer group; each must be answered by a PEAK/CLICK hit within
+0.5 s. Offline, with the model's thresholds on a -60 dBFS bed, -18/-24/-30 are found every time and -36 never (below the 0.03 peak floor):
+that is the sensitivity a negative host result can claim, and the host line shows what the real mixer chain does to the level. In Capture the
+line's `tap=` also proves (or refutes) that the `OnAudioFilterRead` tap on the listener object sees mixer-routed content; if it does not,
+stay with Detect.
+
+**Capture.** A `NoiseTap` component on the `AudioListenerConsistencyManager` object (it must carry the `AudioListener`, else Capture stays off
+with one Warning) keeps the last 15 s as PCM16 in a preallocated ring (6 channels at 48 kHz: 8.6 MB). `OnAudioFilterRead` allocates nothing, takes
+no lock, calls no Unity API, and a catch-all switches it off; it also records the largest gap between callbacks. A mark (or an ORPHAN
+MID/CLICK burst, at most 3 per raid) exports 12 s (10 s before, 2 s after) from a thread-pool task: canonical 44-byte header,
+`noise-<yyyyMMdd-HHmmss>-mark<n>.wav` (`-auto<n>` for bursts) plus a `.txt` with the log block, in `BepInEx/logs/ArenaMapPort-noise/`
+(fallback: `diagnostics/` beside the plugin). Limits: 6 per raid, 5 s apart (a mark within 5 s of the pending one shares its capture), at
+least 500 MB free (else one Warning and Capture is off for the raid), 64 MB kept (oldest deleted first). `PcmWav.Read` reads mono and stereo
+only; the 6-channel file is for Audacity and for `NoiseWav.TryReadHeader`. A noise that is in the WAV is in the Unity mix; reliable marks with a
+clean WAV point below Unity (device, driver, 5.1 path). Caveat: the filter changes the DSP graph and adds managed code on the audio thread (Mono's GC
+can block it); use Capture for the marking run and compare the GAP counts with Detect.
+
+**Cost.** Off: one static bool read per tap and, in DeveloperMode, two static reads per frame (no component exists in player mode). Detect: at
+most 83 readbacks of 6 x 1024 samples per second (estimate 0.05-0.10 ms each; `probeMs` measures it). The census (`GetComponentsInChildren<AudioSource>`
+on BetterAudio's transform) runs only at a logged burst or a mark, at most every 250 ms; nothing else searches a scene (`NoiseProbeSourcePinTests`).
+
+**Host recipe** (GPU-2; `uibridge_status` first; DeveloperMode on; `uibridge_config_set` leases block `gpu-run` for ~90 s, set keys before the restart or
+accept the wait). P0: `NoiseProbe=Detect`, `NoiseProbeSelfTest=true`, Equator NO BOTS raid, 10 s: expect `armed`, four `selftest` lines and the
+summary, no Unity error about `GetOutputData` in `Player.log`; repeat with `Capture` and read `tap=`. P1: 10 min, `calib` lines, target < 1 false hit a minute in
+quiet idle (calls off, bots off); adjust `NoiseThresholds` from the percentiles. P2: Equator TDM through ArenaMode with `SpectatorCalls` ABAB inside a raid
+(on 4 min, off 4, on 4, off 4), the same on Air Pit, and a plain PMC raid with bots. P3 if still open: `NoiseProbeMuteAmbient`, `AmbientVolumeOffset=0`,
+`NoiseProbeMuteProps`, `RoomShotAcoustics`/`NativeRoomReverb` off, `NoiseProbeSpectatorFade`, each 2 x 6 min. Analyse with a script under ignored
+`work/`: orphan bursts per minute by condition and kind, the nearest preceding event kind in [-50, +300] ms against a time-shifted control, LOUD blocks and
+the 400 ms after them excluded. Decision rules: calls on >= 2x calls off (>= 10 events per arm) = spectators, then read `spec.on` and the `spec-` reasons;
+>= 50 % of orphans within [-50, +300] ms of one player's `amb+`/`amb~` = ambient, confirm with the mute list; alignment with `room`/`roomShot` = room
+parameter jumps; zero orphans in >= 60 min of Equator = the Unity signal chain is clean above the self-test sensitivity, then Capture or a WASAPI loopback
+recording on MASCHINE11 (marks must be pressed 0.3-1.5 s after the noise).
+
+**Unverified assumptions (host checks).** `GetOutputData` on channels 2-5 of a 5.1 mix without a Unity error; the `OnAudioFilterRead` tap on the
+listener object receiving the post-mixer sum; the thresholds on real material; `Pause` (or a mouse side button) being free in the user's setup; the
+Syncthing sync of the `ArenaMapPort-noise` subfolder (BepInEx/logs is not excluded in `.stignore`); `VolumeFadeIn`/`VolumeFadeOut` on a
+`ReverbSimpleSource` (the Meta reverb helper source is not faded) and no audible change from the fade code with the key off.
+
+**Incidental changes in the same commit.** `SpectatorAudio` hashes its 13 WAVs with the CNG provider (`CryptoProviders.Select(null).Sha256`,
+the managed fallback when CNG is unavailable) instead of `SHA256.Create()`; the check stays fail-closed. `AudioChanged` now logs one Debug line in
+DeveloperMode. `SpectatorAudio.Current` (the live crowd) and `Bay5AmbientAudio.MixSummary()` / `RoomShotAcoustics.IsOn()` were added for the probe's
+armed line and census. Voices are released through `BetterSource.Release()` exactly as before unless `NoiseProbeSpectatorFade` is on.

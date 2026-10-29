@@ -1,5 +1,7 @@
 """Distribution discovery must ignore map sidecars without hiding broken maps."""
-from contextlib import redirect_stdout
+from contextlib import contextmanager, redirect_stdout
+import functools
+import gzip
 import hashlib
 import io
 import json
@@ -24,8 +26,13 @@ import extract_banners
 import extract_loadscreens
 import extract_monitor_templates as extract_monitors
 import extract_selection_map
+import extract_spectator
+import extract_spectator_audio as spectator_audio
 import extract_water
+import numpy as np
+import stage_spectators
 from PIL import Image
+from test_spectator import fixture as spectator_fixture
 
 
 UNITYFS = b"UnityFS\0"
@@ -105,6 +112,14 @@ class StubCrypt:
         return f"OK verify-keys {map_key}"
 
 
+@functools.lru_cache(maxsize=1)
+def fan_call_wav():
+    """One canonical fan call for the spectator voice fixtures: 0.5 s of a 440 Hz tone at amplitude 0.08 (mono, 44.1 kHz, PCM16),
+    the shortest clip extract_spectator_audio.validate accepts (22050 frames, 44 + 2 * frames bytes). Synthetic: no Arena audio."""
+    wave_ = .08 * np.sin(np.arange(22050)[:, None] * (2 * np.pi * 440 / 44100))
+    return spectator_audio.write_wav(wave_, 44100)
+
+
 class DistributionSidecarTests(unittest.TestCase):
     def setUp(self):
         temporary = tempfile.TemporaryDirectory()
@@ -169,6 +184,8 @@ class DistributionSidecarTests(unittest.TestCase):
         self.put_acoustics()
         self.put_gate_sounds()
         self.put_monitors()
+        self.put_spectator_audio()
+        self.put_spectators()
         self.put_water()
         self.put_key_files()
         for folder in (self.server / "db/arena_equator", self.repo / "ArenaMapPort.Server/db/arena_equator"):
@@ -327,6 +344,57 @@ class DistributionSidecarTests(unittest.TestCase):
                 (folder / name).write_bytes(blob)
             (folder / extract_monitors.MANIFEST).write_text(manifest, encoding="utf-8", newline="\n")
 
+    SPECTATOR_IMAGE = "0123456789abcdef.png"
+
+    def put_spectator_audio(self):
+        """The shared fan voices as extract_spectator_audio.py leaves them (work/extract/spectator-audio) and as the client build stages
+        them (dist/.../spectator-audio): the manifest and the 13 embedded Participating clips the extractor's own validate demands
+        (name pattern, canonical mono 44.1 kHz PCM16, hashes, levels). One synthetic tone stands in for every clip."""
+        payload = fan_call_wav()
+        rows = [spectator_audio.clip_record(f"arena_fan{7 + index % 7}_participating_{index // 7:02}", payload) for index in range(13)]
+        manifest = json.dumps({"schema": 1, "bank": "Participating", "trigger": 1123, "source_bundle": spectator_audio.BUNDLE,
+                               "external_entries_omitted": 9, "clips": rows}, indent=2) + "\n"
+        for folder in (self.plugin / "spectator-audio", self.repo / "work/extract/spectator-audio"):
+            folder.mkdir(parents=True, exist_ok=True)
+            for row in rows:
+                (folder / row["file"]).write_bytes(payload)
+            (folder / spectator_audio.MANIFEST).write_text(manifest, encoding="utf-8", newline="\n")
+
+    def put_spectators(self):
+        """The four crowd packages: one tiny synthetic schema-3 source export per map under work/extract/spectator-<map> (the same
+        graph as test_spectator.fixture, all four sharing one image) and dist's staged tree, produced by stage_spectators.stage
+        itself (schema-4 graphs plus shared/). The validator finds the sources through extract_spectator.package_path, which is moved
+        into the temporary repository here."""
+        sources = {}
+        for name, scene in extract_spectator.MAP_SCENES.items():
+            folder = self.repo / "work/extract" / f"spectator-{name}"
+            folder.mkdir(parents=True)
+            data = spectator_fixture()
+            data.update(map=f"arena_{name}", source_scene=scene)
+            data["textures"] = {"t": {"files": [self.SPECTATOR_IMAGE], "linear": False, "wrap": 0, "filter": 1}}
+            data["materials"]["m"]["textures"] = {"_MainTex": {"id": "t"}}
+            (folder / stage_spectators.GRAPH).write_bytes(gzip.compress(json.dumps(data).encode(), mtime=0))
+            Image.new("RGBA", (2, 2), "red").save(folder / self.SPECTATOR_IMAGE)
+            sources[name] = folder
+        with redirect_stdout(io.StringIO()):
+            stage_spectators.stage(sources, self.plugin / "spectators")
+        mover = patch.object(extract_spectator, "package_path", lambda name: self.repo / "work/extract" / f"spectator-{name}")
+        mover.start()
+        self.addCleanup(mover.stop)
+
+    @contextmanager
+    def changed(self, path, data=None):
+        """Replace the bytes of a fixture file (or remove it, data=None) for the block; the original bytes come back afterwards."""
+        original = path.read_bytes()
+        try:
+            if data is None:
+                path.unlink()
+            else:
+                path.write_bytes(data)
+            yield original
+        finally:
+            path.write_bytes(original)
+
     def put_water(self):
         """Bay5's harbor water package as extract_water.py leaves it: water.json plus the four raw mip chains it
         lists, each sized by the extractor's own mip-chain arithmetic (8 x 8 px, four mips) and hashed as recorded."""
@@ -347,23 +415,28 @@ class DistributionSidecarTests(unittest.TestCase):
             "target": {"scene": "Arena_Bay5_Main", "hierarchy_path": "Sea/Plane"},
             "settings": {}, "textures": textures}), encoding="utf-8")
 
-    def validate(self):
+    def validate(self, run_effect=None):
         def target_path(command, **kwargs):
             name = Path(command[2]).stem.removeprefix("ArenaMapPort.")
             return str(self.built[name])
 
         output = io.StringIO()
         # The fixture exercises distribution discovery and all file-set/content checks.
-        # Registry parsing is covered below; Unity bundle parsing and MSBuild need real artifacts.
+        # Registry parsing is covered below; Unity bundle parsing, MSBuild and the PowerShell version check need real artifacts,
+        # so the three child processes validate() starts are mocked (run_effect, a side effect for them, fails one on purpose).
         with patch.object(distribution, "REPO", self.repo), \
                 patch.object(distribution, "bundle_crypt", self.crypt), \
-                patch.object(distribution.subprocess, "run") as run, \
+                patch.object(distribution.subprocess, "run", side_effect=run_effect) as run, \
                 patch.object(distribution.subprocess, "check_output", side_effect=target_path), \
                 redirect_stdout(output):
             distribution.validate()
-        self.assertEqual(run.call_count, 2)
+        self.assertEqual(run.call_count, 3)
+        # In order: the version check (source, project and staged binaries), the descriptor validator, the bundle-name validator.
+        versions, descriptors, names = (call.args[0] for call in run.call_args_list)
+        self.assertEqual([Path(versions[3]).name, versions[-2:]], ["validate_dll_versions.ps1", ["-RepoRoot", str(self.repo)]])
+        self.assertEqual(Path(descriptors[1]).name, "validate_map_descriptors.py")
         # The bundle-name validator is told where the key store is: it reads the encrypted bundles through the tool.
-        self.assertEqual(run.call_args_list[1].args[0][-2:], ["--key-store", str(self.repo / "work" / "release-keys")])
+        self.assertEqual(names[-2:], ["--key-store", str(self.repo / "work" / "release-keys")])
         self.assertIn("DISTRIBUTION_OK 4 maps 12 bundles 4 sidecars encrypted", output.getvalue())
 
     def test_distribution_accepts_bots_exits_and_other_dotted_sidecars(self):
@@ -1075,6 +1148,145 @@ class DistributionSidecarTests(unittest.TestCase):
                 self.validate()
         finally:
             sources.write_text(original, encoding="utf-8")
+        self.validate()
+
+    def test_a_failing_dll_version_check_fails_the_distribution(self):
+        # validate_dll_versions.ps1 is the first step of validate(): when source, project and staged binaries disagree, nothing else runs
+        def stale_dll(command, **kwargs):
+            if any(Path(str(part)).name == "validate_dll_versions.ps1" for part in command):
+                raise subprocess.CalledProcessError(1, command)
+
+        with self.assertRaises(subprocess.CalledProcessError):
+            self.validate(run_effect=stale_dll)
+        self.assertEqual(self.crypt.calls, [])
+
+    def test_the_spectator_voices_are_required_exactly_intact_and_current(self):
+        audio = self.plugin / "spectator-audio"
+        extracted = self.repo / "work/extract/spectator-audio"
+        manifest, clip = spectator_audio.MANIFEST, "arena_fan7_participating_00.wav"
+        self.assertEqual(13, len(list(audio.glob("*.wav"))))
+        self.validate()
+        with self.changed(audio / manifest), self.assertRaisesRegex(FileNotFoundError, re.escape(manifest)):
+            self.validate()
+        with self.changed(audio / clip), self.assertRaisesRegex(ValueError, "missing/oversized spectator clip"):
+            self.validate()
+        blob = (audio / clip).read_bytes()
+        # same length, other bytes: only the recorded SHA-256 can tell
+        with self.changed(audio / clip, blob[:-1] + bytes([blob[-1] ^ 1])), \
+                self.assertRaisesRegex(ValueError, "arena_fan7_participating_00: sha256 mismatch"):
+            self.validate()
+        # a clip beyond the recorded 13, an unlisted file, a manifest that lists 12
+        (audio / "old.wav").write_bytes(blob)
+        try:
+            with self.assertRaisesRegex(ValueError, "unexpected spectator audio files"):
+                self.validate()
+        finally:
+            (audio / "old.wav").unlink()
+        document = json.loads((audio / manifest).read_text(encoding="utf-8"))
+        del document["clips"][-1]
+        with self.changed(audio / manifest, json.dumps(document, indent=2).encode() + b"\n"), \
+                self.assertRaisesRegex(ValueError, "expected 13 embedded participating calls"):
+            self.validate()
+        shutil.rmtree(audio)
+        with self.assertRaisesRegex(FileNotFoundError, re.escape(manifest)):
+            self.validate()
+
+    def test_the_spectator_voices_must_be_the_extracted_ones(self):
+        extracted = self.repo / "work/extract/spectator-audio"
+        clip = "arena_fan7_participating_00.wav"
+        original = (extracted / clip).read_bytes()
+        with self.changed(extracted / clip, original[:-1] + bytes([original[-1] ^ 1])), \
+                self.assertRaisesRegex(ValueError, f"Stale spectator audio: {clip}"):
+            self.validate()
+        with self.changed(extracted / clip), self.assertRaisesRegex(ValueError, "Spectator audio file set differs from extracted data"):
+            self.validate()
+        # the same manifest in other bytes (key order, indent): valid on its own, but not the extractor's output
+        document = json.loads((extracted / spectator_audio.MANIFEST).read_text(encoding="utf-8"))
+        with self.changed(extracted / spectator_audio.MANIFEST, json.dumps(document).encode()), \
+                self.assertRaisesRegex(ValueError, f"Stale spectator audio: {spectator_audio.MANIFEST}"):
+            self.validate()
+        shutil.rmtree(extracted)
+        with self.assertRaisesRegex(ValueError, "Spectator audio file set differs from extracted data"):
+            self.validate()
+
+    def test_the_spectator_crowds_are_required_exactly_intact_and_current(self):
+        spectators = self.plugin / "spectators"
+        shared = spectators / "shared"
+        image, manifest, graph = self.SPECTATOR_IMAGE, stage_spectators.MANIFEST, stage_spectators.GRAPH
+        self.assertEqual({"arena_airpit", "arena_bay5", "arena_bowl", "arena_equator", "shared"}, {p.name for p in spectators.iterdir()})
+        self.validate()
+        with self.changed(shared / image), self.assertRaisesRegex(FileNotFoundError, image):
+            self.validate()
+        blob = (shared / image).read_bytes()
+        with self.changed(shared / image, blob[:-1] + bytes([blob[-1] ^ 1])), \
+                self.assertRaisesRegex(ValueError, f"damaged shared spectator texture: {image}"):
+            self.validate()
+        with self.changed(shared / manifest), self.assertRaisesRegex(FileNotFoundError, manifest):
+            self.validate()
+        # a manifest that is valid on its own but no longer the one every map graph pins
+        with self.changed(shared / manifest, (shared / manifest).read_bytes() + b"\n"), \
+                self.assertRaisesRegex(ValueError, "map and shared spectator manifest mismatch"):
+            self.validate()
+        with self.changed(spectators / "arena_bowl" / graph), self.assertRaisesRegex(ValueError, "legacy or unexpected spectator map file"):
+            self.validate()
+        # a schema-3 source export copied over a staged graph
+        old = (self.repo / "work/extract/spectator-bowl" / graph).read_bytes()
+        with self.changed(spectators / "arena_bowl" / graph, old), self.assertRaisesRegex(ValueError, "expected shared spectator schema 4"):
+            self.validate()
+        for path, message in ((spectators / "arena_airpit" / image, "legacy or unexpected spectator map file"),
+                              (spectators / "arena_airpit" / "notes.txt", "legacy or unexpected spectator map file"),
+                              (shared / "fedcba9876543210.png", "unexpected shared texture file")):
+            with self.subTest(unexpected=path.name):
+                path.write_bytes(blob)
+                try:
+                    with self.assertRaisesRegex(ValueError, message):
+                        self.validate()
+                finally:
+                    path.unlink()
+        (spectators / "arena_woods").mkdir()
+        try:
+            with self.assertRaisesRegex(ValueError, "unexpected or missing spectator folder"):
+                self.validate()
+        finally:
+            (spectators / "arena_woods").rmdir()
+        backup = self.repo / "spectators-backup"
+        shutil.copytree(spectators / "arena_bay5", backup)
+        shutil.rmtree(spectators / "arena_bay5")
+        try:
+            with self.assertRaisesRegex(ValueError, "unexpected or missing spectator folder"):
+                self.validate()
+        finally:
+            shutil.copytree(backup, spectators / "arena_bay5")
+        self.validate()
+        shutil.rmtree(spectators)
+        with self.assertRaisesRegex(FileNotFoundError, "spectators"):
+            self.validate()
+
+    def test_the_staged_spectators_must_be_the_ones_the_source_exports_give(self):
+        sources = self.repo / "work/extract"
+        graph = sources / "spectator-bowl" / stage_spectators.GRAPH
+        # a source export that changed after staging: its graph is stale
+        data = json.loads(gzip.decompress(graph.read_bytes()))
+        data["actors"][0]["name"] = "renamed"
+        with self.changed(graph, gzip.compress(json.dumps(data).encode(), mtime=0)), \
+                self.assertRaisesRegex(ValueError, "stale spectator graph: arena_bowl"):
+            self.validate()
+        # another image under the same name in every source: the shared manifest and texture are stale
+        paths = [sources / f"spectator-{name}" / self.SPECTATOR_IMAGE for name in extract_spectator.MAP_SCENES]
+        originals = [path.read_bytes() for path in paths]
+        try:
+            for path in paths:
+                Image.new("RGBA", (2, 2), "blue").save(path)
+            with self.assertRaisesRegex(ValueError, "stale shared texture manifest"):
+                self.validate()
+        finally:
+            for path, original in zip(paths, originals):
+                path.write_bytes(original)
+        # a source export that is gone, damaged or not a valid crowd cannot vouch for the staged tree
+        with self.changed(graph), self.assertRaisesRegex(FileNotFoundError, re.escape(stage_spectators.GRAPH)):
+            self.validate()
+        with self.changed(graph, gzip.compress(json.dumps({**data, "schema": 2}).encode(), mtime=0)), self.assertRaises(ValueError):
+            self.validate()
         self.validate()
 
     def test_distribution_requires_every_released_maps_acoustics_exactly_and_intact(self):

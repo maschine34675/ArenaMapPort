@@ -169,6 +169,7 @@ namespace ArenaMapPort.Client
                         _applied[name] = value;
                     }
                     Plugin.Log.LogDebug($"{Tag} applied room type={type}, source category={(EAudioRoomTypeMask)category}, owned={_applied.Count}");
+                    if (NoiseProbe.Armed) NoiseProbe.NoteRoomReverb(category);
                     Log();
                 }
                 catch (Exception e)

@@ -35,6 +35,10 @@
     <Compile Include="..\ArenaMapPort.Client\GateSoundModel.cs" Link="Client\GateSoundModel.cs" />
     <Compile Include="..\ArenaMapPort.Client\PcmWav.cs" Link="Client\PcmWav.cs" />
     <Compile Include="..\ArenaMapPort.Client\SpectatorAudioModel.cs" Link="Client\SpectatorAudioModel.cs" />
+    <!-- The Unity-free core of the developer noise probe (docs/progress/spectator-audio.md "NoiseProbe diagnostic"): block statistics, burst detector, event ring, report text,
+         self-test, PCM ring, WAV writer, capture policy. NoiseProbe.cs (config, taps, hotkey, census, export) stays out; NoiseProbeSourcePinTests reads it as text and brings a stand-in
+         NoiseProbe for the linked PhysicsPropSoundRepairs.cs. -->
+    <Compile Include="..\ArenaMapPort.Client\NoiseProbeModel.cs" Link="Client\NoiseProbeModel.cs" />
     <Compile Include="..\ArenaMapPort.Client\SpectatorTexturePackage.cs" Link="Client\SpectatorTexturePackage.cs" />
     <!-- Score monitors (docs/progress/score-monitors.md): the layout of the three faces (Arena's decoded template numbers, colours, sprite table). No Unity type inside. -->
     <Compile Include="..\ArenaMapPort.Client\ScoreMonitorLayout.cs" Link="Client\ScoreMonitorLayout.cs" />

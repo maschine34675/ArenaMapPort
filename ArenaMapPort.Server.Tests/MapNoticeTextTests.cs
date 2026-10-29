@@ -248,6 +248,28 @@ public sealed class MapNoticeTextTests
         }
     }
 
+    /// <summary>
+    /// 0.4.0 ships five ZIP parts (core plus one per map), all extracted into the same SPT root: the reinstall advice of the server and
+    /// file texts says "release package (all its ZIP parts)", never "the ZIP" (a player would extract only one part again).
+    /// </summary>
+    [Fact]
+    public void ReinstallAdviceNamesTheReleasePackageWithAllItsZipPartsInBothLanguages()
+    {
+        NoticeId[] ids = { NoticeId.ServerUnknown, NoticeId.ServerAllFailed, NoticeId.ServerSomeMissing, NoticeId.ServerSomeFailed, NoticeId.InstallIncomplete };
+        foreach (NoticeId id in ids)
+        {
+            string en = MapNoticeText.Compose(NoticeTestData.FullPlan(id), "en").Text;
+            string de = MapNoticeText.Compose(NoticeTestData.FullPlan(id), "de").Text;
+            Assert.Contains("release package", en);
+            Assert.Contains("all its ZIP parts", en);
+            Assert.Contains("Release-Paket", de);
+            Assert.Contains("alle seine ZIP-Teile", de);
+            // no leftover singular wording: every "ZIP" that remains is part of "ZIP parts" / "ZIP-Teile"
+            Assert.DoesNotContain("ZIP", en.Replace("ZIP parts", ""));
+            Assert.DoesNotContain("ZIP", de.Replace("ZIP-Teile", ""));
+        }
+    }
+
     [Fact]
     public void TheGermanTextsAddressThePlayerInformally()
     {

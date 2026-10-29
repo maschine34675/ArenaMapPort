@@ -359,6 +359,7 @@ namespace ArenaMapPort.Client
                     continue;
                 }
                 started++;
+                if (NoiseProbe.Armed) NoiseProbe.NoteAt(NoiseEv.Gate, position, label, 0, 0, volume);
                 state.Active.Add(new ActiveSound { Source = source, EndsAt = Time.realtimeSinceStartup + Mathf.Max(clip.length, 1f) - 0.1f, Label = label });
                 Plugin.Log.LogDebug($"{Tag} {label}: volume {volume:F3} ({20f * Mathf.Log10(Mathf.Max(volume, 1e-6f)):F1} dB), reaches {rolloff} m, " +
                                     $"from ({position.x:F1}, {position.y:F1}, {position.z:F1}), occlusion {occlusion}");

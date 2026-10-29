@@ -136,6 +136,9 @@ namespace ArenaMapPort.Client
         static RoomShotTuning ReadTuning() =>
             new RoomShotTuning(Read(_hall), Read(_shop), Read(_metal), _hallMaxDimension.Value);
 
+        /// <summary>Whether the repair is switched on for a map (the NoiseProbe armed line).</summary>
+        internal static bool IsOn(string mapKey) => mapKey != null && Enabled.TryGetValue(mapKey, out var entry) && entry.Value;
+
         /// <summary>Called every frame from NativeSpatialAudio.RoomToneRunner. Never throws.</summary>
         internal static void Tick(NativeSpatialAudio.State state)
         {
@@ -232,6 +235,7 @@ namespace ArenaMapPort.Client
                 $"dims={preset?.DimensionsText ?? "none"} materials={preset?.MaterialsText ?? "none"} " +
                 $"clutter={(preset != null ? preset.ClutterFactor.ToString("0.00", c) : "none")} model={MetaPlugin.ModelName()}{resent}" +
                 (preset != null && preset.UsedClassDefaults ? $" class-default-fallback=[{preset.CorrectionsText}]" : ""));
+            if (NoiseProbe.Armed) NoiseProbe.NoteRoomShot(room.ID, roomClass.ToString(), preset?.DimensionsText, preset?.MaterialsText);
         }
 
         static Behaviour CreateRoom(NativeSpatialAudio.State state)

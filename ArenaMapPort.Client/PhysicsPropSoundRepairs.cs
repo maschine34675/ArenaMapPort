@@ -24,6 +24,8 @@ namespace ArenaMapPort.Client
     /// 0.5 s collision-tracking timer and logs once per SoundType. Everything else (force, fragments, tracking)
     /// stays vanilla. Late callbacks on an owned scene also stay guarded after its Scripts scene
     /// unloads: shared sound assets may already be released while geometry still collides.
+    /// Developer diagnostic (NoiseProbe, Audio diagnostics section): every impact is noted in the probe's event ring (played, skipped or muted), and
+    /// NoiseProbeMuteProps skips all impact sounds for an A/B listening test.
     /// Vanilla maps are untouched.
     /// </summary>
     internal static class PhysicsPropSoundRepairs
@@ -56,6 +58,12 @@ namespace ArenaMapPort.Client
                 ___IgnoreCollisionTrackingTimer = Time.time + 0.5f;
                 return false;
             }
+            if (NoiseProbe.PropsMuted)
+            {
+                ___IgnoreCollisionTrackingTimer = Time.time + 0.5f; // what vanilla sets after PlayAtPoint
+                if (NoiseProbe.Armed) NoiseProbe.NoteProp(__instance, 2);
+                return false;
+            }
             if (____collisionSoundBank == null || resetSound)
             {
                 try
@@ -69,10 +77,12 @@ namespace ArenaMapPort.Client
             }
             if (____collisionSoundBank != null)
             {
+                if (NoiseProbe.Armed) NoiseProbe.NoteProp(__instance, 1);
                 return true; // vanilla path plays the sound
             }
             ReportOnce(__instance, "WeaponSounds has no impact SoundBank for this type; prop stays silent");
             ___IgnoreCollisionTrackingTimer = Time.time + 0.5f; // what vanilla would have set after PlayAtPoint
+            if (NoiseProbe.Armed) NoiseProbe.NoteProp(__instance, 0);
             return false;
         }
 

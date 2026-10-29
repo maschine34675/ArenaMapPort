@@ -140,6 +140,9 @@ namespace ArenaMapPort.Client
 
         internal static void RestoreReverbRouting() { if (_driver != null) _driver.RefreshReverbRouting(false); }
 
+        /// <summary>"g2.0/o0.40/r2.50": the user mix of the running driver (NoiseProbe armed line); "n/a" without one.</summary>
+        internal static string MixSummary() => _driver != null ? _driver.MixText : "n/a";
+
         public sealed class Driver : MonoBehaviour
         {
             GameObject _root;
@@ -175,6 +178,16 @@ namespace ArenaMapPort.Client
             ESeasonStatus _season;
             Vector3 _previousEmitter;
             bool _hasEmitterPosition;
+            // NoiseProbe (developer diagnostic): what ProbePoll saw last per active player, and the version of the mute list applied to them.
+            bool[] _probeOn;
+            int[] _probeSamples;
+            AudioClip[] _probeClip;
+            string[] _probeNames;
+            int _probeMuteVersion;
+            bool _probeBroken;
+            internal string MixText => "g" + (_gainDb?.Value ?? 0f).ToString("0.0", System.Globalization.CultureInfo.InvariantCulture) +
+                "/o" + (_offset?.Value ?? 0f).ToString("0.00", System.Globalization.CultureInfo.InvariantCulture) +
+                "/r" + (_range?.Value ?? 1f).ToString("0.00", System.Globalization.CultureInfo.InvariantCulture);
 
             internal void Initialize(GameObject root, AmbientAudioProfile profile, ConfigEntry<bool> diagnostics,
                 ConfigEntry<float> gainDb, ConfigEntry<float> offset, ConfigEntry<float> range)
@@ -276,6 +289,7 @@ namespace ArenaMapPort.Client
                     if (_profile.UsesSeasons && Seasons.Controller != null && Seasons.Controller.Status != _season)
                         ApplySeason(Seasons.Controller.Status);
                     foreach (var controller in _controllers) controller.Tick();
+                    if (NoiseProbe.Armed || _probeMuteVersion != NoiseProbe.AmbientMuteVersion) ProbePoll();
                     if (DeveloperOptions.Enabled && (_diagnostics?.Value ?? false) && Time.realtimeSinceStartup >= _nextReport)
                     {
                         Report(false);
@@ -614,6 +628,80 @@ namespace ArenaMapPort.Client
                 float moved = _hasEmitterPosition ? Vector3.Distance(emitter, _previousEmitter) : 0f;
                 _previousEmitter = emitter; _hasEmitterPosition = true;
                 Plugin.Log.LogDebug($"[NativeAudio] playback sources={_players.Length} playing={playing} advancing={advanced} shorelinePosition={emitter} moved={moved:F2} season={_season} map={_mapKey} initialized={_players.Count(p => p != null && p.Fader != null && p.EmptyClip != null)} sourceInactive={_players.Length - _activePlayers.Length}");
+            }
+
+            // NoiseProbe, developer diagnostic (docs/progress/spectator-audio.md "NoiseProbe diagnostic"): one pass over the owned active players per frame, no scene search.
+            // It applies the A/B mute list (AudioSource.mute, reversible, re-applied when the list changes) and, while the probe is armed, records the isPlaying edges and
+            // in-place restarts that the random players leave no log of. Update disposes the driver on an exception, so a failure here switches only this part off.
+            void ProbePoll()
+            {
+                if (_probeBroken) return;
+                try
+                {
+                    var players = _activePlayers;
+                    if (_probeOn == null || _probeOn.Length != players.Length)
+                    {
+                        _probeOn = new bool[players.Length]; _probeSamples = new int[players.Length]; _probeClip = new AudioClip[players.Length];
+                        _probeNames = new string[players.Length];
+                        for (int i = 0; i < players.Length; i++) _probeNames[i] = players[i] != null ? players[i].name : "";
+                        _probeMuteVersion = -1;
+                    }
+                    if (_probeMuteVersion != NoiseProbe.AmbientMuteVersion)
+                    {
+                        _probeMuteVersion = NoiseProbe.AmbientMuteVersion;
+                        for (int i = 0; i < players.Length; i++)
+                        {
+                            var target = players[i] != null ? players[i].Source : null;
+                            bool wanted = NoiseProbe.IsAmbientMuted(_probeNames[i]);
+                            if (target != null && target.mute != wanted) target.mute = wanted;
+                        }
+                    }
+                    if (!NoiseProbe.Armed) return;
+                    var listener = Singleton<AudioListenerConsistencyManager>.Instantiated ? Singleton<AudioListenerConsistencyManager>.Instance.transform : null;
+                    float advance = Time.unscaledDeltaTime;
+                    int playing = 0;
+                    for (int i = 0; i < players.Length; i++)
+                    {
+                        var player = players[i];
+                        var source = player != null ? player.Source : null;
+                        if (source == null) continue;
+                        if (source.isPlaying)
+                        {
+                            playing++;
+                            var clip = source.clip;
+                            int samples = source.timeSamples;
+                            if (!_probeOn[i]) ProbeNote(NoiseEv.AmbStart, i, source, clip, listener);
+                            else if (clip != _probeClip[i] || (samples < _probeSamples[i] && !LoopWrapped(source, clip, _probeSamples[i], advance)))
+                                ProbeNote(NoiseEv.AmbRestart, i, source, clip, listener);
+                            _probeSamples[i] = samples; _probeClip[i] = clip; _probeOn[i] = true;
+                        }
+                        else if (_probeOn[i])
+                        {
+                            NoiseProbe.Note(NoiseEv.AmbStop, _probeNames[i]);
+                            _probeOn[i] = false; _probeClip[i] = null;
+                        }
+                    }
+                    NoiseProbe.AmbientPlaying = playing;
+                }
+                catch (Exception ex)
+                {
+                    _probeBroken = true;
+                    Plugin.Log.LogWarning($"[NoiseProbe] the ambient poll stopped ({ex.GetType().Name}: {ex.Message}); ambient playback is unaffected map={_mapKey}");
+                }
+            }
+
+            // A looping source that passed the end of its clip since the last poll is a wrap, not a restart.
+            static bool LoopWrapped(AudioSource source, AudioClip clip, int previous, float advance)
+            {
+                if (!source.loop || clip == null) return false;
+                int expected = (int)(clip.frequency * Mathf.Abs(source.pitch) * advance * 1.5f) + 64;
+                return previous + expected >= clip.samples;
+            }
+
+            void ProbeNote(NoiseEv kind, int index, AudioSource source, AudioClip clip, Transform listener)
+            {
+                float distance = listener != null ? Vector3.Distance(listener.position, source.transform.position) : -1f;
+                NoiseProbe.Note(kind, _probeNames[index], (int)(source.pitch * 1000f), 0, distance, source.volume, clip != null ? clip.name : "");
             }
 
             static string MixerValue(AudioMixer mixer, string parameter) =>

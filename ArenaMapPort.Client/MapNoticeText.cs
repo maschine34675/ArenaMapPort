@@ -648,7 +648,7 @@ namespace ArenaMapPort.Client
             t.Bodies[NoticeId.ServerUnknown] = new[]
             {
                 L("The SPT server does not offer the Arena maps and did not say why: its ArenaMapPort mod is missing, older than this game's ({ver}), or could not find Arena."),
-                L("Close the server, reinstall both parts of ArenaMapPort from the same ZIP, then restart the server and this game. The server console shows the reason in lines starting with [ArenaMapPort]. Server on another PC? Ask whoever runs it."),
+                L("Close the server, reinstall both parts of ArenaMapPort from the same release package (all its ZIP parts), then restart the server and this game. The server console shows the reason in lines starting with [ArenaMapPort]. Server on another PC? Ask whoever runs it."),
             };
             t.Bodies[NoticeId.ServerNoAnswer] = new[]
             {
@@ -658,22 +658,22 @@ namespace ArenaMapPort.Client
             t.Bodies[NoticeId.ServerAllFailed] = new[]
             {
                 L("The SPT server could not register any Arena map ({why})."),
-                L(@"Close the server, reinstall the ArenaMapPort server files (SPT_Runtime\user\mods\ArenaMapPort) from the ZIP and restart it. The console shows the reason in lines starting with [ArenaMapPort]."),
+                L(@"Close the server, reinstall the ArenaMapPort server files (SPT_Runtime\user\mods\ArenaMapPort) from the release package (all its ZIP parts) and restart it. The console shows the reason in lines starting with [ArenaMapPort]."),
             };
             t.Bodies[NoticeId.ServerSomeMissing] = new[]
             {
                 L("The SPT server does not offer {maps}, which this game knows. The server's ArenaMapPort is probably older than this game's ({ver})."),
-                L(@"Close the SPT server (a running server keeps its DLL locked), copy the SPT_Runtime folder of the same ZIP over the installation (overwrite its files), then restart it. Console lines starting with [ArenaMapPort] show details."),
+                L(@"Close the SPT server (a running server keeps its DLL locked), copy the SPT_Runtime folder of the same release package (all its ZIP parts) over the installation (overwrite its files), then restart it. Console lines starting with [ArenaMapPort] show details."),
             };
             t.Bodies[NoticeId.ServerSomeFailed] = new[]
             {
                 L("The SPT server could not register {maps} ({why})."),
-                L(@"Close the server, reinstall the ArenaMapPort server files (SPT_Runtime\user\mods\ArenaMapPort) from the ZIP, and restart it. Console lines starting with [ArenaMapPort] show the reason."),
+                L(@"Close the server, reinstall the ArenaMapPort server files (SPT_Runtime\user\mods\ArenaMapPort) from the release package (all its ZIP parts), and restart it. Console lines starting with [ArenaMapPort] show the reason."),
             };
             t.Bodies[NoticeId.InstallIncomplete] = new[]
             {
                 L("ArenaMapPort's files for {maps} are incomplete (missing: {n}, for example {file})."),
-                L(@"Extract the complete ZIP again (client folder BepInEx\plugins\maschine-ArenaMapPort, with its bundles and keys), then restart the game."),
+                L(@"Extract the complete release package again (all its ZIP parts; client folder BepInEx\plugins\maschine-ArenaMapPort, with its bundles and keys), then restart the game."),
             };
 
             // ---- the NoArena why and action tables of the server text
@@ -882,7 +882,7 @@ namespace ArenaMapPort.Client
             t.Bodies[NoticeId.ServerUnknown] = new[]
             {
                 L("Der SPT-Server bietet die Arena-Karten nicht an und hat nicht gesagt, warum: Sein ArenaMapPort fehlt, ist älter als das ArenaMapPort dieses Spiels ({ver}) oder konnte Arena nicht finden."),
-                L("Schließe den Server, installiere beide Teile von ArenaMapPort aus demselben ZIP neu und starte dann den Server und dieses Spiel neu. Die Server-Konsole nennt den Grund in Zeilen, die mit [ArenaMapPort] beginnen. Läuft der Server auf einem anderen PC? Frage die Person, die ihn betreibt."),
+                L("Schließe den Server, installiere beide Teile von ArenaMapPort aus demselben Release-Paket (alle seine ZIP-Teile) neu und starte dann den Server und dieses Spiel neu. Die Server-Konsole nennt den Grund in Zeilen, die mit [ArenaMapPort] beginnen. Läuft der Server auf einem anderen PC? Frage die Person, die ihn betreibt."),
             };
             t.Bodies[NoticeId.ServerNoAnswer] = new[]
             {
@@ -892,22 +892,22 @@ namespace ArenaMapPort.Client
             t.Bodies[NoticeId.ServerAllFailed] = new[]
             {
                 L("Der SPT-Server konnte keine Arena-Karte registrieren ({why})."),
-                L(@"Schließe den Server, installiere die ArenaMapPort-Serverdateien (SPT_Runtime\user\mods\ArenaMapPort) aus dem ZIP neu und starte ihn wieder. Die Konsole nennt den Grund in Zeilen, die mit [ArenaMapPort] beginnen."),
+                L(@"Schließe den Server, installiere die ArenaMapPort-Serverdateien (SPT_Runtime\user\mods\ArenaMapPort) aus dem Release-Paket (alle seine ZIP-Teile) neu und starte ihn wieder. Die Konsole nennt den Grund in Zeilen, die mit [ArenaMapPort] beginnen."),
             };
             t.Bodies[NoticeId.ServerSomeMissing] = new[]
             {
                 L("Der SPT-Server bietet {maps} nicht an, dieses Spiel kennt sie aber. Das ArenaMapPort des Servers ist wahrscheinlich älter als das dieses Spiels ({ver})."),
-                L(@"Schließe den SPT-Server (ein laufender Server sperrt seine DLL), kopiere den Ordner SPT_Runtime aus demselben ZIP über die Installation (vorhandene Dateien überschreiben) und starte ihn neu. Konsolenzeilen, die mit [ArenaMapPort] beginnen, zeigen Details."),
+                L(@"Schließe den SPT-Server (ein laufender Server sperrt seine DLL), kopiere den Ordner SPT_Runtime aus demselben Release-Paket (alle seine ZIP-Teile) über die Installation (vorhandene Dateien überschreiben) und starte ihn neu. Konsolenzeilen, die mit [ArenaMapPort] beginnen, zeigen Details."),
             };
             t.Bodies[NoticeId.ServerSomeFailed] = new[]
             {
                 L("Der SPT-Server konnte {maps} nicht registrieren ({why})."),
-                L(@"Schließe den Server, installiere die ArenaMapPort-Serverdateien (SPT_Runtime\user\mods\ArenaMapPort) aus dem ZIP neu und starte ihn neu. Konsolenzeilen, die mit [ArenaMapPort] beginnen, zeigen den Grund."),
+                L(@"Schließe den Server, installiere die ArenaMapPort-Serverdateien (SPT_Runtime\user\mods\ArenaMapPort) aus dem Release-Paket (alle seine ZIP-Teile) neu und starte ihn neu. Konsolenzeilen, die mit [ArenaMapPort] beginnen, zeigen den Grund."),
             };
             t.Bodies[NoticeId.InstallIncomplete] = new[]
             {
                 L("Die Dateien von ArenaMapPort für {maps} sind unvollständig (fehlend: {n}, zum Beispiel {file})."),
-                L(@"Entpacke das komplette ZIP erneut (Client-Ordner BepInEx\plugins\maschine-ArenaMapPort mit seinen Bundles und Keys) und starte dann das Spiel neu."),
+                L(@"Entpacke das komplette Release-Paket erneut (alle seine ZIP-Teile; Client-Ordner BepInEx\plugins\maschine-ArenaMapPort mit seinen Bundles und Keys) und starte dann das Spiel neu."),
             };
 
             t.Whys[NoticeWhy.FolderMissing] = "der Ordner existiert nicht";
