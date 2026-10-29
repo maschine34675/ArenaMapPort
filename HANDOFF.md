@@ -26,14 +26,21 @@ Two local candidates exist:
   warnings or errors (numbers in the update below; the user's MASCHINE11 log of the 16:41 build reads 2.12-2.20 s on Equator too), so README, FORGE,
   CHANGELOG and the release note say "about two seconds". Their Known-limitations sentence on the Equator noise says that the user heard it again on
   2026-10-29 in a plain PMC raid with the shipped two-voice schedule (the ZIP README written by the packer still carries the old wording, see the open
-  list below). Not covered: bots, and listening to anything. Its DLLs sit on the `D:\SPT41` mirror but are **not** the release DLLs: those are to be rebuilt from the commit that
-  carries these texts (ProductVersion embeds the commit), deployed to the mirror, given one more Equator raid on GPU-2, then cut (five parts,
-  extract-check) and scanned on VirusTotal. The cut `work/releases/0.4.0/github-8941caa` and its VirusTotal lines are **superseded**;
-  "Built from commit" and the VirusTotal lines in docs/releases/v0.4.0.md are placeholders again (`<BUILD_COMMIT>`, `<scan date>`,
-  `<VirusTotal URL>`, `<n>`), to be filled after that scan.
+  list below). Not covered: bots, and listening to anything.
+- **The release build is `a4aa0af`** (the texts commit on top of `52c8a28`; no code change against `52c8a28`): both DLLs rebuilt from it
+  (client SHA-256 `18c197197086e9df6fc7b6eb429a5790acdf179c2a7a4ecd56055067606715f7`, server
+  `f415a2e1ae2044d3d48c3e4a5694a752860c109b3bdab558fc9319436a5ab372`, ProductVersion `0.4.0+a4aa0af...`), deployed to the `D:\SPT41` mirror at
+  22:03, one more Equator raid on GPU-2 at 22:06 (instance `6b8bf6e7`, bots None, `NoiseProbe` set Off for the process; DeveloperMode stayed on in the
+  host .cfg as in every acceptance run: 120 fps, mean 8.3 ms, max 11.6 ms in a 10 s window 41 s in; `load total=2127 ms (wait=1, hash=61, parse=1972,
+  textures=2057, actors=55, audio=9; ... worker thread, crypto CNG)`; 0 ArenaMapPort warnings; no `[NoiseProbe]` line), then the five-part cut
+  `work/releases/0.4.0/github-a4aa0af` (packer log `work/releases/0.4.0-make-a4aa0af.log`: extract-check 255 files identical to dist, RELEASE_ZIPS_BUILT;
+  part hashes in its `maschine-ArenaMapPort-0.4.0.sha256`: core `1f8c7d61...`, equator `13973b86...`, bay5 `898b7813...`, airpit `0125f5a4...`, bowl
+  `750a0c51...`) and the VirusTotal scan of both DLLs (`work/releases/0.4.0-vt-a4aa0af.log`, `work/releases/0.4.0/virustotal.json`: 0 malicious, 0
+  suspicious of 75 engines each, 21:08:56Z and 21:10:38Z). docs/releases/v0.4.0.md carries the build commit and the VirusTotal lines; the cut
+  `work/releases/0.4.0/github-8941caa` and the `8941caa` scan are **superseded**. The ZIP README of the packer says the noise was heard again on a test
+  build with the two-voice schedule (reworded in `a4aa0af`).
 
-The `fe45b84` package has not been uploaded or covered by the final ArenaMode/Redeploy executable scans, and the corrected candidate has no package yet
-(the `github-8941caa` cut is superseded).
+Neither the `fe45b84` package nor `github-a4aa0af` has been uploaded or covered by the final ArenaMode/Redeploy executable scans.
 Recheck current source/package identity and security scans before any later authorized
 publication, and publish only a package whose manifests pin the commit it was built from.
 Audio limits remain open.
@@ -172,12 +179,11 @@ rebuilt from `52c8a28` (client SHA-256 `c052926a3e7373cb40d47bc7344fc753dd820e95
 - **Host run: done for `52c8a28`** (results in the checklist above; 4 plain PMC raids without bots, the hideout once, 0 ArenaMapPort warnings or errors).
   GPU-2 is runnable again: the SPT server of the 16:45 blockage (ArenaMode's recovery state, not an ArenaMapPort matter) starts, ArenaMapPort 0.4.0 is
   loaded and Arena 0.6.1.0.48206 verified. What it did not cover: bots, listening. The release DLLs are a later rebuild (bullet "Release DLLs and package").
-- **Placeholders** in the release texts: `<CROWD_LOAD_SECONDS>` is filled ("two", CHANGELOG.md, README.md, FORGE.md twice, docs/releases/v0.4.0.md). Open in
-  v0.4.0.md, to fill after the rebuild and the scan: `<BUILD_COMMIT>`, `<scan date>` and the VirusTotal URLs and counts of the two DLLs (the scan of the
-  `8941caa` DLLs and the cut `work/releases/0.4.0/github-8941caa` are superseded).
-- **Release DLLs and package:** rebuild both DLLs from the commit that carries these texts (ProductVersion embeds the commit), deploy to the mirror, one more
-  Equator raid on GPU-2 with DeveloperMode and `NoiseProbe` off, as players run it (the 21:00-21:06 run had DeveloperMode on), then the five-part cut
-  (extract-check) and the VirusTotal scan of the two DLLs.
+- **Placeholders** in the release texts: `<CROWD_LOAD_SECONDS>` is filled ("two", CHANGELOG.md, README.md, FORGE.md twice, docs/releases/v0.4.0.md);
+  `<BUILD_COMMIT>` (`a4aa0af`), the scan date and the VirusTotal lines of v0.4.0.md are filled after the rebuild and the scan (top of this file).
+- **Release DLLs and package: done for `a4aa0af`** (top of this file): rebuilt, deployed, one Equator raid at 22:06 (`NoiseProbe` Off for the process;
+  DeveloperMode stayed on in the host .cfg, as in every acceptance run, so a run without it is still unmeasured), the five-part cut
+  `work/releases/0.4.0/github-a4aa0af` with extract-check, VirusTotal 0/0 of 75 for both DLLs.
 - **ZIP README sentence:** `tools/release/make_release_zips.py` ("Known audio limits") still says the Equator noise was reported "on development builds with a
   denser crowd-call schedule than this release uses", and `tools/tests/test_release_zips.py` pins that phrase
   (`test_the_readme_names_both_missing_impact_banks_and_the_noise_context`). The user heard the noise again with the shipped schedule, so reword both before the

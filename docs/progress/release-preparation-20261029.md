@@ -129,3 +129,36 @@ schedule; the five-part cut from that commit
 (extract-check against dist) and a VirusTotal scan of its two DLLs; `<BUILD_COMMIT>`, `<scan date>` and the VirusTotal URLs and counts filled; the tag on
 that commit; a re-dating of the changelog heading and the release note if the publication happens on another day than 2026-10-29. Nothing was tagged,
 uploaded or pushed.
+
+## The release build a4aa0af: rebuild, raid, cut and scan - 2026-10-29 (22:03-22:12)
+
+`a4aa0af` is the commit that carries the records of the `52c8a28` host run and the release texts; its code is `52c8a28`. Both DLLs were rebuilt
+from it (client SHA-256 `18c197197086e9df6fc7b6eb429a5790acdf179c2a7a4ecd56055067606715f7`, server
+`f415a2e1ae2044d3d48c3e4a5694a752860c109b3bdab558fc9319436a5ab372`, ProductVersion `0.4.0+a4aa0af0e88ec01d2d392ef8252d617951ce55de`) and deployed to
+the `D:\SPT41` mirror at 22:03 (255 files, the two DLLs overwritten); `gpu-run deploy-wait --server --game` found them on the host after 2 s and
+restarted the server and the game (instance `6b8bf6e7`, started 22:05:18; server log 22:04:51 `Mod: ArenaMapPort Version: 0.4.0`, 22:04:55 Arena
+0.6.1.0.48206 verified). `NoiseProbe` was set `Off` for the process (`persist=false`; the host .cfg keeps `Capture`), DeveloperMode stayed on in the host
+.cfg as in every acceptance run (a run with it off is still unmeasured). Equator, plain PMC, bots None, 12:00, clear, 22:06: location 5.1 s, game
+started 33.3 s; `[Spectator] arena_equator: ... load total=2127 ms (wait=1, hash=61, parse=1972, textures=2057, actors=55, audio=9; hash and parse
+on the worker thread, crypto CNG)`; 120 fps, mean 8.3 ms, p95 8.3 ms, max 11.6 ms in the 10 s window 41 s after the start; RAM 9074 MB; no
+`[NoiseProbe]` line; warnings since the raid start: Unity's four `refrigerator_drink` LOD lines only. Left through the pause menu.
+
+Cut: `python tools/release/make_release_zips.py --out work/releases/0.4.0/github-a4aa0af --extract-check work/releases/0.4.0/github-a4aa0af-extracted`
+(log `work/releases/0.4.0-make-a4aa0af.log`): five parts, `verified part 1..5 of 5`, `extract-check OK: 255 files identical to dist, 8 generated entries
+ignored`, `RELEASE_ZIPS_BUILT`. Part hashes (`maschine-ArenaMapPort-0.4.0.sha256`): core `1f8c7d616ab956149e130432cc352a34f0a9936f0bb822904e314c8f44cdb2c4`
+(153,917,399 B), equator `13973b86670c1c3c467aa3de6a9e47451181d6270196fd2d0124b6ae3c710017` (591,356,187 B), bay5
+`898b7813c66a976d61bda5c37fae78de6364f6f48e4a2ac5d05eb44a8fb21a7e` (1,060,689,233 B), airpit
+`0125f5a438c39a2b3247b80ab3c291dc0670eb2342566cbf0edd48f8eec05b93` (1,005,320,455 B), bowl
+`750a0c510d6c94f6ec74e2c2398c809df1140ffe83db6c6fc7796c1830a80631` (1,023,629,157 B). VirusTotal (`scan_virustotal.py --version 0.4.0`, log
+`work/releases/0.4.0-vt-a4aa0af.log`, record `work/releases/0.4.0/virustotal.json`): client 0 malicious, 0 suspicious of 75 engines (2026-10-29T21:08:56Z),
+server 0/0 of 75 (21:10:38Z), `VIRUSTOTAL_SCAN_CLEAN 0.4.0`. docs/releases/v0.4.0.md carries `a4aa0af` and both VirusTotal lines; the
+`github-8941caa` cut and the `8941caa` scan are superseded.
+
+**Before any publication:** the user's reauthorization; the tag on the commit that carries this paragraph or a descendant (the package manifests pin
+`a4aa0af`); a re-dating of the changelog heading and the release note if the publication happens on another day than 2026-10-29. Nothing was tagged,
+uploaded or pushed. The ZIP README sentence of the packer was reworded in `a4aa0af` (open item of the previous section, done).
+
+Test state at `a4aa0af` plus these records: xunit 2,619 tests; two of eight full runs this evening reported one failure each
+(`Fehler: 1`) that the next run did not repeat, and the failing test's name was not captured (the default console logger prints the summary only;
+a verbose run and three further runs passed 2,619/2,619). An intermittent test exists in the suite; identify it with `--logger "console;verbosity=normal"`
+on a failing run before the next release. Python: `test_release_zips` 187 and `test_changelog` 12 OK after the texts.

@@ -154,9 +154,10 @@ source/package local; do not create a remote tag or upload a release until reaut
 See the top of HANDOFF.md. The preparation plan below is retained for that later step.
 The corrected candidate is `52c8a28` plus the commit that carries the release texts of 2026-10-29 evening (crowd worker with CNG hashing, NoiseProbe
 that arms on a stereo driver, five-part texts after the release audit). `52c8a28` had its host run on GPU-2 (20:55-21:08: four plain PMC raids without bots,
-the hideout once; crowd build 2.08-2.16 s on the main thread, 0 ArenaMapPort warnings); the release DLLs are still to be rebuilt from the texts commit,
-given one more Equator raid, cut and scanned on VirusTotal before any publication. The `github-8941caa` package and its VirusTotal lines are superseded;
-the `fe45b84` package is the earlier host-verified fallback (see HANDOFF.md).
+the hideout once; crowd build 2.08-2.16 s on the main thread, 0 ArenaMapPort warnings). The release build is `a4aa0af` (the texts commit, no code
+change): both DLLs rebuilt from it, deployed, one more Equator raid on GPU-2 at 22:06, the five-part cut `work/releases/0.4.0/github-a4aa0af`
+(extract-check 255 files identical) and VirusTotal 0/0 of 75 for both DLLs. The `github-8941caa` package and its VirusTotal lines are superseded;
+the `fe45b84` package is the earlier host-verified fallback (see HANDOFF.md). Nothing is tagged, uploaded or pushed.
 
 The 2026-10-29 user-authorized 0.4.0 GitHub release uses the existing multipart packer form:
 core plus Equator/Bay5/AirPit/Bowl, all five ordinary ZIPs extracted into the same SPT root.
