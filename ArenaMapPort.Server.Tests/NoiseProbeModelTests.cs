@@ -545,8 +545,10 @@ namespace ArenaMapPort.Server.Tests
         public void TheArmedMinuteMarkAndCalibrationLinesHaveTheDocumentedShape()
         {
             Assert.Equal("armed mode=Detect map=arena_equator speakers=Mode5point1 driver=Stereo ch=6 rate=48000 dsp=1024 voices=196/256 calls=on mix=g2.0/o0.40/r2.50 roomShot=on roomReverb=on tap=readback ring=none",
-                NoiseReport.Armed(NoiseProbeMode.Detect, "arena_equator", "Mode5point1", "Stereo", 6, 48000, 1024, 196, 256, "on", "g2.0/o0.40/r2.50", "on", "on", 15));
-            Assert.EndsWith("tap=readback+filter ring=15s", NoiseReport.Armed(NoiseProbeMode.Capture, "arena_bowl", "Stereo", "Stereo", 2, 44100, 1024, 196, 256, "off", "n/a", "off", "off", 15));
+                NoiseReport.Armed(NoiseProbeMode.Detect, "arena_equator", "Mode5point1", "Stereo", 6, 6, 48000, 1024, 196, 256, "on", "g2.0/o0.40/r2.50", "on", "on", 15));
+            Assert.EndsWith("tap=readback+filter ring=15s", NoiseReport.Armed(NoiseProbeMode.Capture, "arena_bowl", "Stereo", "Stereo", 2, 2, 44100, 1024, 196, 256, "off", "n/a", "off", "off", 15));
+            // a stereo driver under a 5.1 speaker mode (GPU-2): Detect reads the two device channels, the tap records the six mix channels
+            Assert.Contains(" driver=Stereo ch=2/6 rate=48000 ", NoiseReport.Armed(NoiseProbeMode.Capture, "arena_equator", "Mode5point1", "Stereo", 2, 6, 48000, 1024, 196, 256, "on", "g2.0/o0.40/r2.50", "on", "on", 15));
 
             var detector = Fresh();
             var signal = Bed(Rate * 12, -60, 5);

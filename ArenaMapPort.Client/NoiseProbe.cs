@@ -61,7 +61,7 @@ namespace ArenaMapPort.Client
         static volatile bool _dirty;
         static NoiseProbeMode _active;
         static double _raidStart, _lastRead, _lastCensus, _labelUntil;
-        static int _channels = 2, _rate = 48000, _markNumber, _calibMinutes, _lastRoom = int.MinValue, _gc0, _gc1, _gc2;
+        static int _channels = 2, _readChannels = 2, _rate = 48000, _markNumber, _calibMinutes, _lastRoom = int.MinValue, _gc0, _gc1, _gc2;
         static string _lastCensusText = "";
         static string _lastShotSignature, _mapKey = "vanilla";
         static int _lastReverbCategory = int.MinValue;
@@ -317,8 +317,8 @@ namespace ArenaMapPort.Client
                 ReadAudioFormat();
                 _audioReset = false; // a reset that happened before the probe armed (EFT resets the audio once at raid start) is not an event of this run
                 _listener = Singleton<AudioListenerConsistencyManager>.Instance.transform;
-                // Proves the readback works for every channel before anything is logged as a finding.
-                for (int c = 0; c < _channels; c++) AudioListener.GetOutputData(_buf, c);
+                // ReadAudioFormat proved the readback on every channel it will use; a driver that refuses even channel 0 cannot be probed.
+                if (_readChannels < 1) throw new InvalidOperationException("AudioListener.GetOutputData refuses every channel (driver " + AudioSettings.driverCapabilities + ")");
                 _mapKey = ArenaMapRaid.CurrentMap?.Key ?? "vanilla";
                 _detector.Reset(now);
                 _detector.NextNumber = 1;
@@ -351,6 +351,23 @@ namespace ArenaMapPort.Client
             var config = AudioSettings.GetConfiguration();
             _channels = ChannelsOf(config.speakerMode);
             _rate = config.sampleRate > 0 ? config.sampleRate : AudioSettings.outputSampleRate;
+            _readChannels = ReadableChannels(_channels);
+        }
+
+        // AudioListener.GetOutputData reads the DEVICE output, not the mix: under a 5.1 speaker mode on a stereo driver (GPU-2, 2026-10-29:
+        // "driver=Stereo", SurroundAudio forcing Mode5point1) it throws ArgumentException "invalid channel" from channel 2 on, while the
+        // OnAudioFilterRead tap still receives all six mix channels. Detect therefore reads the channels the driver has (the downmix a
+        // player hears) and Capture records the mix; the armed line says "ch=2/6" when the two differ.
+        static int ReadableChannels(int mixChannels)
+        {
+            int count = 0;
+            for (int c = 0; c < mixChannels; c++)
+            {
+                try { AudioListener.GetOutputData(_buf, c); }
+                catch (ArgumentException) { break; }
+                count++;
+            }
+            return count;
         }
 
         static int ChannelsOf(AudioSpeakerMode mode)
@@ -370,7 +387,7 @@ namespace ArenaMapPort.Client
         {
             var config = AudioSettings.GetConfiguration();
             var spectators = SpectatorAudio.Current;
-            Plugin.Log.LogDebug($"{Tag} " + NoiseReport.Armed(_active, _mapKey, config.speakerMode.ToString(), AudioSettings.driverCapabilities.ToString(), _channels,
+            Plugin.Log.LogDebug($"{Tag} " + NoiseReport.Armed(_active, _mapKey, config.speakerMode.ToString(), AudioSettings.driverCapabilities.ToString(), _readChannels, _channels,
                 _rate, config.dspBufferSize, config.numRealVoices, config.numVirtualVoices,
                 spectators == null ? "n/a" : spectators.CallsEnabled ? "on" : "off", Bay5AmbientAudio.MixSummary(),
                 RoomShotAcoustics.IsOn(_mapKey) ? "on" : "off", RoomReverb.IsActive(_mapKey) ? "on" : "off", RingSeconds));
@@ -484,7 +501,7 @@ namespace ArenaMapPort.Client
         {
             _lastRead = now;
             _block.Reset();
-            for (int c = 0; c < _channels; c++)
+            for (int c = 0; c < _readChannels; c++)
             {
                 AudioListener.GetOutputData(_buf, c);
                 _block.AddChannel(c, _buf, 0, 1, _buf.Length);

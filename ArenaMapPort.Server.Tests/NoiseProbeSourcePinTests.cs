@@ -174,9 +174,17 @@ namespace ArenaMapPort.Server.Tests
             Assert.Contains("Disarm(\"mode off\")", code);
             // the tap component and the listener readback exist only on the armed paths
             Assert.Single(Regex.Matches(code, @"AddComponent<NoiseTap>\(\)"));
-            Assert.Equal(2, Regex.Matches(code, @"AudioListener\.GetOutputData\(").Count);   // the arm-time proof and the read
+            Assert.Equal(2, Regex.Matches(code, @"AudioListener\.GetOutputData\(").Count);   // the channel probe at arm time and the read
             var read = Between(code, "static void Read(double now)", "static void HandleHits(");
             Assert.Contains("AudioListener.GetOutputData(_buf, c)", read);
+            // GetOutputData reads the DEVICE output: a stereo driver under a 5.1 speaker mode refuses channels 2-5 (GPU-2, 2026-10-29), so the
+            // read loops over the channels the probe proved readable, the probe stops at the first ArgumentException, and arming fails only
+            // when channel 0 is refused
+            Assert.Contains("for (int c = 0; c < _readChannels; c++)", read);
+            var probe = Between(code, "static int ReadableChannels(int mixChannels)", "static void LogArmed()");
+            Assert.Contains("catch (ArgumentException) { break; }", probe);
+            Assert.Contains("_readChannels = ReadableChannels(_channels);", Between(code, "static void ReadAudioFormat()", "static int ReadableChannels("));
+            Assert.Contains("if (_readChannels < 1) throw", Between(code, "static void Arm(double now)", "static void ReadAudioFormat()"));
             Assert.Contains("if (now - _lastRead >= ReadInterval) Read(now);", code);
             Assert.Contains("const double ReadInterval = 0.012", code);
         }

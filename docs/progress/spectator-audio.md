@@ -323,7 +323,9 @@ Existing live keys the experiments use: `SpectatorCalls`, `Audio (arena_equator)
 `AmbientRangeMultiplier`, `PuddleFootsteps`, `RoomShotAcoustics`, `NativeRoomReverb`, `Spawns/GateSounds`, `Physics/EnablePhysicsProps`.
 
 **Detect** (main thread, no managed code on the audio thread): at most every 12 ms in `LateUpdate`,
-`AudioListener.GetOutputData(buf1024, ch)` for every channel of `AudioSettings.GetConfiguration().speakerMode` (6 for 5.1). Per
+`AudioListener.GetOutputData(buf1024, ch)` for every channel the DEVICE delivers (`GetOutputData` reads the device output, not the mix:
+on a stereo driver under a 5.1 speaker mode channels 2-5 throw `ArgumentException: invalid channel`, found on GPU-2 on 2026-10-29, so arming
+probes the channels once, reads the ones that answer and prints `ch=2/6` in the armed line; the user's 5.1 driver reads all six). Per
 block: peak, rms over all channels, D1 (largest first difference), HF (rms of the first difference / (rms x sqrt 2): white noise 1.0,
 1 kHz sine 0.09, 6 kHz 0.54), per-channel peaks, count of samples at full scale, non-finite samples. The baseline is the median of
 the last 64 blocks. Kinds and starting thresholds (`NoiseThresholds`, to be calibrated on the first minutes): PEAK = peak >= 0.03

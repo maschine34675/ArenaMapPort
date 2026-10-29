@@ -656,10 +656,13 @@ namespace ArenaMapPort.Client
             }
         }
 
-        internal static string Armed(NoiseProbeMode mode, string map, string speakers, string driver, int channels, int rate, int dspLength,
+        /// <param name="readChannels">Channels AudioListener.GetOutputData reads (the device output); <paramref name="mixChannels"/> the speaker mode's.
+        /// They differ on a stereo driver under a 5.1 speaker mode, printed as "ch=2/6".</param>
+        internal static string Armed(NoiseProbeMode mode, string map, string speakers, string driver, int readChannels, int mixChannels, int rate, int dspLength,
             int realVoices, int virtualVoices, string calls, string mix, string roomShot, string roomReverb, double ringSeconds)
         {
-            return "armed mode=" + mode + " map=" + map + " speakers=" + speakers + " driver=" + driver + " ch=" + channels.ToString(NoiseText.Inv) +
+            string channels = readChannels.ToString(NoiseText.Inv) + (readChannels != mixChannels ? "/" + mixChannels.ToString(NoiseText.Inv) : "");
+            return "armed mode=" + mode + " map=" + map + " speakers=" + speakers + " driver=" + driver + " ch=" + channels +
                 " rate=" + rate.ToString(NoiseText.Inv) + " dsp=" + dspLength.ToString(NoiseText.Inv) +
                 " voices=" + realVoices.ToString(NoiseText.Inv) + "/" + virtualVoices.ToString(NoiseText.Inv) + " calls=" + calls + " mix=" + mix +
                 " roomShot=" + roomShot + " roomReverb=" + roomReverb + " tap=" + (mode == NoiseProbeMode.Capture ? "readback+filter" : "readback") +
