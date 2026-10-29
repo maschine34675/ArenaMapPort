@@ -148,6 +148,13 @@ member name pinned in the client (`method_N`, `vmethod_N`) is verified there and
 
 ## Release configuration
 
+The 2026-10-29 user-authorized 0.4.0 GitHub release uses the existing multipart packer form:
+core plus Equator/Bay5/AirPit/Bowl, all five ordinary ZIPs extracted into the same SPT root.
+The full distribution has 255 files after shared spectator texture staging. The October 28 single
+candidate ZIP is obsolete. Preserve historical notes below and use
+[release-preparation-20261029.md](docs/progress/release-preparation-20261029.md) for the current cut.
+Intermittent Equator noise and missing Books impact sounds remain documented limitations.
+
 Logging: Info is reserved for a concise startup/map-availability summary or actionable
 player information. Successful patches/repairs, counts, file paths, configuration and
 cleanup use Debug. Expensive probes, per-object dumps and GPU readbacks additionally

@@ -6,7 +6,7 @@ their notes stay under [docs/releases/](docs/releases/) for the record, and 0.2.
 Dates are ISO dates. Each entry links its full release note (download links, checksums, install and upgrade steps),
 and the settings text is in the [README](README.md).
 
-## 0.4.0 - unreleased
+## 0.4.0 - 2026-10-29
 
 Full release note: [docs/releases/v0.4.0.md](docs/releases/v0.4.0.md).
 
@@ -46,6 +46,26 @@ Full release note: [docs/releases/v0.4.0.md](docs/releases/v0.4.0.md).
 - **Four spawn points moved off the navigation edge.** Equator's two southern bot spawns and Bay5's north-west player
   spawn and east-lane bot spawn stood on the very edge of the navigation mesh, and the game pushed at least one of them
   1.5 m inboard at every raid start. They now start 1.3 to 1.5 m further in, where they ended up anyway.
+
+### Fixed
+
+- Late collisions from remaining Arena props after map teardown no longer request the already unloaded
+  native sound bundle. The guard is limited to owned Arena scenes and preserves the collision timer;
+  ordinary-map behavior and warnings for missing sound banks during a live raid remain unchanged.
+
+### Changed (internal)
+
+- Spectator audio output readback runs only with startup-enabled `General/DeveloperMode`, avoiding the
+  diagnostic work in normal play. Scheduling and playback stay unchanged.
+- The live developer-only `Audio diagnostics/SpectatorCalls` switch isolates crowd calls for hearing
+  comparisons without disabling visual spectators or map ambience.
+- GitHub downloads use five complete ZIP parts: core, Equator, Bay5, Air Pit and Bowl. Install all five.
+
+### Known limitations
+
+- Intermittent short noise reported during Equator play remains unresolved; no noise fix or subjective
+  audio-quality acceptance is claimed. A reverb-disabled comparison did not eliminate it.
+- The native Books impact-sound bank is missing; those prop impacts remain silent.
 
 ### Compatibility
 

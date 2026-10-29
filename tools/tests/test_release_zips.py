@@ -2432,7 +2432,7 @@ class EncryptedBundleTests(FakeRepoCase):
             parts = release.partition_single(self.scan(), self.spec) if single else self.partition()
             text = re.sub(r"\s+", " ", release.readme_text(self.spec, parts))
             with self.subTest(single=single):
-                self.assertIn("Updating: extract the complete ZIP over the installation with the SPT server closed", text)
+                self.assertIn("Updating: extract the complete release package (ALL parts if split) with the SPT server closed", text)
                 self.assertIn("The keys folder (BepInEx/plugins/maschine-ArenaMapPort/keys) belongs to the bundles next to it", text)
                 self.assertIn("a missing or damaged key file is reported as an error in the client log, and the maps do not load", text)
                 self.assertIn('ends with a ref code, for example "ref NO_ARENA"', text)

@@ -3,6 +3,26 @@
 Snapshot for whoever continues (human or agent). Verify the commits named here against `git log`; this file
 is updated by hand at each handover, it is not an automatic record. Read [AGENTS.md](AGENTS.md) first.
 
+## Update 2026-10-29 - GitHub 0.4.0 release preparation
+
+The user now authorizes the public GitHub release. Current client/server metadata is already 0.4.0;
+the changelog is dated 2026-10-29 and the release note includes final two-voice scheduling, diagnostic
+gating and the late physics-sound guard. The mixed native sweep below supersedes October 28's blocked
+startup state, but does not prove that intermittent noise is fixed; missing Books impacts remain open too.
+
+Use the existing five-part packer layout for GitHub: core, Equator, Bay5, Air Pit and Bowl, plus the
+checksum file. All five normal ZIPs install into the SPT root. The October 28 single ZIP remains obsolete
+and must not be uploaded. Current dist has 255 files; core carries shared spectator textures/calls, and
+each map carries its encrypted bundles, wrapped-key JSON and database together. The packer enforces
+GitHub's under-2-GiB per-asset limit. Versioned publication text is [v0.4.0.md](docs/releases/v0.4.0.md).
+
+The root must review/commit, rebuild both components from that commit, authenticate the distribution,
+prove DLL ProductVersion and all manifests match the commit, extract/compare the new five-part set,
+then publish and read back the release. Preparation oracle and exact commands:
+`work/releases/0.4.0/Verify-Preparation.ps1` and `PREPARATION.md`. No build, deployment, commit, push,
+tag or upload was performed by the preparation worker. See
+[release-preparation-20261029.md](docs/progress/release-preparation-20261029.md).
+
 ## Update 2026-10-29 - mixed native sweep and final R2 client
 
 Both test hosts were used concurrently with ArenaMode/Redeploy; GPU-2 loaded all

@@ -677,7 +677,7 @@ def readme_text(spec: ReleaseSpec, parts) -> str:
         display = {m.stem: m.display for m in spec.maps}
         lines = []
         for p in parts:
-            what = ("plugin, server mod, original map descriptions, selection artwork, score monitor sprites, notices" if p.id == CORE_ID
+            what = ("plugin, server mod, shared spectator textures/calls, original map descriptions, selection artwork, score monitor sprites, notices" if p.id == CORE_ID
                     else f"{display[p.id]} map data (bundles, NavMesh, server database entry, audio, art)")
             lines.append(f"  {p.index} of {p.count}  {p.zip_name}\n         {what}")
         intro = (f"This release comes in {len(parts)} ZIP parts. Install ALL of them; a map is complete only with\n"
@@ -705,7 +705,7 @@ def readme_text(spec: ReleaseSpec, parts) -> str:
             "   DynamicMaps/Maps/ArenaMapPort_Equator and ArenaMapPort_Bay5 if still present, to avoid\n"
             "   duplicate maps. Unused arena-audio and arena-ui folders may be removed too.\n"
             "4. Start the SPT server, then the game.\n\n"
-            "Updating: extract the complete ZIP over the installation with the SPT server closed, so that the client\n"
+            "Updating: extract the complete release package (ALL parts if split) with the SPT server closed, so the client\n"
             "and the server DLL, the bundles, the keys folder and the server database all come from this release (a\n"
             "running server keeps its DLL locked); keep BepInEx/config. The keys folder\n"
             "(BepInEx/plugins/maschine-ArenaMapPort/keys) belongs to the bundles next to it: a missing or damaged key\n"
@@ -717,6 +717,8 @@ def readme_text(spec: ReleaseSpec, parts) -> str:
             f"Included locations: {names}.\n"
             "These maps are intended for ArenaMode; no loot or scav raids are provided.\n"
             "ArenaMode and other mods are not included.\n"
+            "Known audio limits: intermittent short noise reported on Equator remains unresolved; no noise fix is\n"
+            "claimed. The Books impact-sound bank is missing, so those prop impacts remain silent.\n"
             "The gates and vehicles at the team spawn enclosures use Arena's own open positions and, where Arena\n"
             "has them, its motions (at half their time). They stand open from raid start, or a mode plugin such as\n"
             "ArenaMode holds them closed and opens them when the fight starts; Air Pit's passport control stays\n"

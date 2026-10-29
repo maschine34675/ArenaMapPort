@@ -8,6 +8,9 @@ dated state in one screen; read it before this index if you only have a minute.
 
 ## Current — read these for the area you touch
 
+- [release-preparation-20261029.md](release-preparation-20261029.md) — current 0.4.0 release notes,
+  five-part GitHub package plan, final rebuild/authentication requirements and explicit audio limits.
+
 - [release-sweep-20261029.md](release-sweep-20261029.md) — mixed native checks on both hosts,
   spectator diagnostic gating, late physics sound callback fix and remaining audio limits.
 
