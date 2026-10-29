@@ -433,6 +433,12 @@
     <Message Importance="high" Condition="'$(ArenaMapPortCreateReleaseKeys)'!='true'"
              Text="[ArenaMapPort] content keys come from $(ArenaMapPortReleaseKeysDir); a map without a stored key stops the build here (the first staging of a map passes -p:ArenaMapPortCreateReleaseKeys=true, a lost key store is restored from its backup)" />
     <MakeDir Directories="$(ArenaMapPortDistDir)\bundles;$(ArenaMapPortDistDir)\keys" />
+    <!-- Gate before the encryption (2026-10-29, the intermittent Equator noise): a plaintext bundle with a data block that carries a
+         compression flag and csize >= usize would be encrypted as it is, and Unity's player evidently reads such a block as stored data
+         (raw LZ4 bytes reach the audio clip that sits there). The validator reads only each bundle's header and block table and stops
+         the build here, before any bundle is encrypted into dist; repair the bundle with tools/bundle/fix_stored_blocks.py (build_all.ps1
+         step 3b does) and build again. -->
+    <Exec Command="python &quot;$(MSBuildThisFileDirectory)..\tools\validate\validate_bundle_blocks.py&quot; @(ArenaMapPortBundles->'&quot;%(FullPath)&quot;', ' ')" StandardOutputImportance="high" />
     <Exec Command="&quot;$(ArenaMapPortBundleCryptExe)&quot; stage --map-key arena_equator @(ArenaMapPortBundles->WithMetadataValue('MapKey','arena_equator')->'--bundle &quot;%(FullPath)&quot;', ' ') $(ArenaMapPortStageCommon)" StandardOutputImportance="high" />
     <Exec Command="&quot;$(ArenaMapPortBundleCryptExe)&quot; stage --map-key arena_bay5 @(ArenaMapPortBundles->WithMetadataValue('MapKey','arena_bay5')->'--bundle &quot;%(FullPath)&quot;', ' ') $(ArenaMapPortStageCommon)" StandardOutputImportance="high" />
     <Exec Command="&quot;$(ArenaMapPortBundleCryptExe)&quot; stage --map-key arena_airpit @(ArenaMapPortBundles->WithMetadataValue('MapKey','arena_airpit')->'--bundle &quot;%(FullPath)&quot;', ' ') $(ArenaMapPortStageCommon)" StandardOutputImportance="high" />

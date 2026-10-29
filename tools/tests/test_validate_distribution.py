@@ -20,7 +20,9 @@ sys.path.insert(0, str(REPO / "tools" / "validate"))
 sys.path.insert(0, str(REPO / "tools" / "bundle"))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import bundle_crypt
+import fix_stored_blocks
 import validate_distribution as distribution
+from test_bundle_blocks import build_unityfs, equal_size_chunk, fixture_unityfs, packed, stored
 from test_multiflare_extraction import graph as flare_graph
 import extract_banners
 import extract_loadscreens
@@ -235,9 +237,12 @@ class DistributionSidecarTests(unittest.TestCase):
                 for index in range(1, len(extract_loadscreens.LOADSCREENS[key]) + 1)}
 
     def put_bundles(self, key):
-        """The three bundles of one map as AMPB containers (only the magic and a distinct body matter to the stubbed tool)."""
+        """The three bundles of one map as AMPB containers. The stubbed tool 'decrypts' b"AMPB" + X to b"UnityFS\\0" + X, so X is the
+        rest of a small valid UnityFS bundle that differs per file: the block table check reads it like a real plaintext."""
         for kind in ("scenes", "navmesh", "preset"):
-            (self.plugin / "bundles" / f"{key}_{kind}.bundle").write_bytes(b"AMPB" + f"fixture container {key} {kind}".encode())
+            plain = fixture_unityfs(f"fixture container {key} {kind}")
+            assert plain.startswith(UNITYFS)
+            (self.plugin / "bundles" / f"{key}_{kind}.bundle").write_bytes(b"AMPB" + plain[len(UNITYFS):])
 
     def put_key_files(self):
         """keys/<key>.json for every released map, as the tool writes them."""
@@ -622,6 +627,51 @@ class DistributionSidecarTests(unittest.TestCase):
                 self.assertIn(("read_range", name, 0, 8), calls, name)
         self.assertEqual(sorted(c[1] for c in calls if c[0] == "verify_keys"), sorted(self.RELEASED))
         self.assertTrue(all(c[4] == "auto" for c in calls if c[0] == "verify_keys"))
+
+    # The block table checks call validate_block_tables directly: DistributionSidecarTests.validate() cannot get as far as the bundles
+    # (its fixture has no spectator packages, so distribution.validate() stops at verify_spectator_audio before it reaches them).
+    def block_tables(self, key_store=None):
+        with patch.object(distribution, "bundle_crypt", self.crypt):
+            distribution.validate_block_tables(self.plugin / "bundles", list(self.RELEASED), key_store)
+
+    def test_every_bundles_header_and_block_table_are_read_through_the_tool_and_nothing_else(self):
+        self.block_tables(self.repo / "work" / "release-keys")
+        for key in self.RELEASED:
+            for kind in ("scenes", "navmesh", "preset"):
+                name = f"{key}_{kind}.bundle"
+                header = fix_stored_blocks.parse_header(fix_stored_blocks.MemoryReader(self.crypt.plaintext(self.plugin / "bundles" / name)))
+                reads = [c for c in self.crypt.calls if c[0] == "read_range" and c[1] == name]
+                self.assertEqual([(c[2], c[3]) for c in reads],
+                                 [(0, fix_stored_blocks.HEADER_PROBE), (header.table_offset, header.table_csize)], name)
+
+    def test_a_bundle_with_a_flagged_block_that_is_not_smaller_fails_the_distribution(self):
+        """The 2026-10-29 defect: a compression flag on a block with csize >= usize reaches Unity's player as raw LZ4 bytes."""
+        data, stream = equal_size_chunk(600)
+        bad = build_unityfs([stored(b"head" * 20), (stream, 600, 3), packed(b"tail " * 100)])
+        name = "arena_bay5_scenes.bundle"
+        self.crypt.plaintext_of[name] = bad
+        with self.assertRaisesRegex(ValueError, rf"Bundle {name} fails the block table check: block 1 of 3: lz4hc flag 0x3, csize 600 >= usize 600"):
+            self.block_tables()
+        self.crypt.plaintext_of[name] = build_unityfs([stored(b"head" * 20), stored(data), packed(b"tail " * 100)])
+        self.block_tables()
+
+    def test_a_bundle_whose_block_table_cannot_be_parsed_fails_the_distribution(self):
+        name = "arena_bowl_navmesh.bundle"
+        self.crypt.plaintext_of[name] = UNITYFS + b"\0\0\0\x07 not a real header"
+        with self.assertRaisesRegex(ValueError, rf"Bundle {name} fails the block table check: cannot be checked"):
+            self.block_tables()
+
+    def test_a_tool_failure_while_reading_a_block_table_fails_the_distribution(self):
+        self.crypt.fail[("read_range", "arena_equator_scenes.bundle")] = "FAIL the offset is outside the plaintext"
+        with self.assertRaisesRegex(ValueError, "Bundle arena_equator_scenes.bundle fails the block table check: cannot be read through the BundleCrypt tool"):
+            self.block_tables()
+
+    def test_the_block_table_check_sits_between_the_encryption_checks_and_the_key_files(self):
+        source = (REPO / "tools" / "validate" / "validate_distribution.py").read_text(encoding="utf-8")
+        order = [source.index(call) for call in ("    validate_encrypted_bundles(plugin/'bundles', keys, key_store_dir())",
+                                                 "    validate_block_tables(plugin/'bundles', keys, key_store_dir())",
+                                                 "    validate_key_files(plugin, keys, key_store_dir())")]
+        self.assertEqual(order, sorted(order))
 
     def test_a_bundle_the_tool_rejects_is_a_distribution_failure(self):
         for reason in ("FAIL ChunkIntegrity: chunk 3 (offset 3145728) failed its integrity check; the file is damaged",

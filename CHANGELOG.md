@@ -54,6 +54,7 @@ Full release note: [docs/releases/v0.4.0.md](docs/releases/v0.4.0.md).
   errors still show their specific explanation.
 - Late collisions from remaining Arena props after map teardown no longer request the already unloaded
   native sound bundle.
+- [AFTER HOST RUN: the Equator static: cause and fix sentence]
 
 ### Changed (internal)
 

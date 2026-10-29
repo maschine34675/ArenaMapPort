@@ -164,7 +164,12 @@ core plus Equator/Bay5/AirPit/Bowl, all five ordinary ZIPs extracted into the sa
 The full distribution has 255 files after shared spectator texture staging. The October 28 single
 candidate ZIP is obsolete. Preserve historical notes below and use
 [release-preparation-20261029.md](docs/progress/release-preparation-20261029.md) for the current cut.
-Intermittent Equator noise and missing Books and CardBoard impact sounds remain documented limitations.
+Intermittent Equator noise and missing Books and CardBoard impact sounds remain documented limitations. For the noise the cause is found
+(one compressed-flag block of Equator's scenes bundle that Unity plays raw, [equator-noise-bundle-block.md](docs/progress/equator-noise-bundle-block.md))
+and the fix is in the pipeline (corrected chunk compressor, repair step, `validate_bundle_blocks.py`); host verification and the user's ear are
+pending, so it stays a limitation in the texts until then. **The Equator scenes bundle of 0.3.0 and of the local 0.4.0 packages (`fe45b84`,
+`github-a4aa0af`) carries the defective block**; the 0.4.0 package is to be re-cut after the repair (the Equator part and the checksum file change; the
+DLLs stay as built, no key file changes). Whether the public 0.3.0 gets a 0.3.1 with only that bundle replaced is the user's decision.
 
 Logging: Info is reserved for a concise startup/map-availability summary or actionable
 player information. Successful patches/repairs, counts, file paths, configuration and
@@ -248,6 +253,10 @@ packages `build_all.ps1` stops in step 4 at `validate_extract.py` (the known dri
 `docs/progress/airpit-release.md` "Accepted-package validator state"), after the bundles are built and identity-patched: run the
 remaining validators by hand (`validate_bundle_roundtrip.py` with step 4's arguments, Bay5 with `--require-navmesh`; `validate_preset.py`,
 Equator with `--allow-missing-scenes`; `validate_map_descriptors.py`), as on 2026-10-20.
+Since 2026-10-29 the step after the identity patch runs `tools/bundle/fix_stored_blocks.py` (a compressed-flag block with csize == usize is stored
+raw and Unity plays it as it is), the identity patch itself saves with a corrected chunk compressor, and `tools/validate/validate_bundle_blocks.py`
+is one of the validators (run it by hand with the others when the script stopped before it; `validate_distribution.py` runs it on `dist/`). Ship no
+bundle that fails it; see the Traps entry "UnityFS blocks" and [equator-noise-bundle-block.md](docs/progress/equator-noise-bundle-block.md).
 Current accepted inputs are `work/extract/equator-native-v5` and
 `work/extract/bay5-native-v5` (2026-09-28: v5 adds original StaticDeferredDecal components, their materials
 and textures, and `native_features.static_decals`; see `docs/progress/native-decals.md`). These retain
@@ -730,7 +739,8 @@ the log; the user uses it to point at things.
   shared PNGs on the main thread of every raid (CNG: about 1 GiB/s). `SpectatorWorkerSourcePinTests` pins the worker rules (no Unity API, no log,
   `Install()` once, `Create` starts and takes the package inside its try), `SpectatorLoadTests` the package and prefetch.
 - NoiseProbe (2026-10-29, `694143d`; [spectator-audio.md](docs/progress/spectator-audio.md) "NoiseProbe diagnostic"; unit-tested; run on GPU-2 on
-  2026-10-29 21:00 (arming, self-test, a minute line) and by the user on MASCHINE11 (Capture, four captures, under analysis)): developer-only
+  2026-10-29 21:00 (arming, self-test, a minute line) and by the user on MASCHINE11 (Capture, four captures; analysed, the cause was a bundle block, see
+  the "UnityFS blocks" entry below)): developer-only
   (`Audio diagnostics/NoiseProbe` `Off|Detect|Capture` plus five more keys, none public, all honoured only with
   DeveloperMode). Off must cost one static bool read per tap: every tap in the owned audio code (`SpectatorAudio`, `Bay5AmbientAudio`,
   `PhysicsPropSoundRepairs`, `RoomReverb`, `RoomShotAcoustics`, `GateSounds`, `PuddleFootstepRepairs`, `PrecipitationAudio`) is a one-liner behind
@@ -748,3 +758,20 @@ the log; the user uses it to point at things.
   about 10 s into every raid and blocks it for 2-3 s on Air Pit and Bowl (GPU-2 log of 14:34: 2,593 ms Air Pit, 3,130 ms Bowl; 21:04-21:05 on `52c8a28`: 1,815 and 2,936 ms; older logs 1,755-3,006 ms).
   It is logged at Debug as `[IndoorSurface] map=... elapsedMs=`. It is not the crowd and not a regression of a given build; a candidate for a worker or
   a time-sliced scan, and the first thing to rule out when a raid shows a hitch about 10 s after its start.
+- UnityFS blocks (2026-10-29, [equator-noise-bundle-block.md](docs/progress/equator-noise-bundle-block.md); cause found offline from the user's NoiseProbe
+  captures, fix not host-verified yet): a block whose compression flag is set but whose csize == usize is played RAW by Unity's player (inferred from the
+  data, R2 0.92, not read from Unity's source), so the LZ4 token stream reaches whatever reads that range. In Equator's scenes bundle it was block 6657 of
+  6,943 (131,072 B, flags 3), inside the AudioClip `moll_indoor_wind_04`: a 4.5 s burst of full-scale static every wind cycle from `indoor_wind (4)`, the
+  intermittent Equator "Rauschen". The public 0.3.0 bundle and the local 0.4.0 packages carry it; Bay5, Air Pit and Bowl have no such block, but blocks
+  within 16 B below usize exist in other `work/build` bundles, so it is a per-rebuild lottery for any map. Origin: UnityPy's `chunk_based_compress`
+  (`helpers/CompressionHelper.py`, UnityPy 1.25.2, lines 191 and 213) stores a chunk raw only when its LZ4HC output is LARGER than the chunk (`>` where
+  `>=` is needed), so an output of exactly the chunk size is written compressed with the flag set; `patch_monoscript_identity.py` reaches it through
+  `BundleFile.save(packer=...)`. Rules: the identity patch installs a corrected compressor before `save`; `tools/bundle/fix_stored_blocks.py` (repair;
+  `--check` only reports) runs right after it in `build_all.ps1`, decodes such a block, stores it with flag 0 and recompresses the table (it refuses a table
+  at the end of the file and a block that does not decode); `tools/validate/validate_bundle_blocks.py` fails on any block with a compression flag and
+  `csize >= usize`, runs inside `validate_distribution.py` (an AMPB bundle's header and table are read through `BundleCrypt read-range`, so it needs the key
+  store and Arena) and among the step-4 validators. **Never stage, deploy or ship a bundle that has not passed it.** A repaired plaintext keeps its size:
+  re-stage it with a Release client build without DllOnly (`K_map` exists, no `--create-key`) instead of a 15-minute Unity rebuild, then
+  `validate_distribution.py` and `validate_port.py --distribution`. Why no probe saw it: the ring logs `isPlaying` edges of owned one-shots, the detector keys
+  on transients and the census counts pooled sources, while this is a continuous plateau of one owned, non-pooled looping player. `indoor_wind (4)` is audible
+  at 29.8 m only through the port's `AmbientRangeMultiplier` 2.5: not a mix bug, change no mix default for it.

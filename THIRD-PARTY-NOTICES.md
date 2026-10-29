@@ -377,3 +377,36 @@ Unity APIs, written from the decompile (`EFT/EasyAssetsExtensions.cs`, `EFT.Aird
 No line of HiddenCaches is reproduced here; credit to RaiRaiTheRaichu for showing that the crate's effect is
 the one reusable always-on smoke in the game.
 
+
+## UnityPy — chunk compressor guard (build tool, nothing shipped)
+
+Source: https://github.com/K0lb3/UnityPy (version 1.25.2, MIT License).
+
+`tools/bundle/chunk_compressor_guard.py` (`corrected_chunk_based_compress`) is a copy of UnityPy's
+`helpers/CompressionHelper.py` `chunk_based_compress` with its two loops merged into one and its size comparisons changed from
+`>` to `>=`, so that a chunk whose compressed form is exactly as long as the chunk is stored raw (the 2026-10-29 Equator noise). It is a
+build-time tool: it ships in no release ZIP, which is why this licence text is indented here and
+is not one of the fenced `MIT License` blocks that `tools/release/make_release_zips.py` (`notices_text`) copies into the
+package notices (that gate demands exactly the two blocks above and fails on a third). The permission notice of the source:
+
+    MIT License
+
+    Copyright (c) 2019-2021 K0lb3
+
+    Permission is hereby granted, free of charge, to any person obtaining a copy
+    of this software and associated documentation files (the "Software"), to deal
+    in the Software without restriction, including without limitation the rights
+    to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+    copies of the Software, and to permit persons to whom the Software is
+    furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in all
+    copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+    OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+    SOFTWARE.

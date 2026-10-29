@@ -530,3 +530,16 @@ the sound is "Rauschen" (a hiss or rush of noise), direction and duration are no
 of the unverified assumptions is answered) and the crowd schedule was the shipped one (`up to 2 simultaneous voices`). Both armed lines read `calls=on`. The
 `bgMedian` of the first raid's minute lines is -34.7, -29.7, -29.2 and, in the final partial minute, -27.2. A forensics workflow over
 the captures is in progress; its result is to be appended here, and the ranked hypotheses above stay as they are until then.
+
+## Result of the captures: the raw bytes were the cause - 2026-10-29 (late evening)
+
+The forensics over the four captures found the cause, and it is neither the crowd nor the mix. The loud static in `noise-20261029-203147-mark1.wav` (WAV
+t 6.0-9.68 s, the chopped part 8.727-9.6805 s is what the user reacted to) is bytes of the LZ4-compressed Equator scenes bundle played as if they were PCM
+samples of the ambient clip `moll_indoor_wind_04` by the owned player `indoor_wind (4)`: block 6657 of `arena_equator_scenes.bundle` has the LZ4HC flag
+with csize == usize, and Unity's player evidently takes such a block as stored. The NoiseProbe recorded it (the capture holds the whole episode), but
+none of its taps could name it: the event ring logs `isPlaying` edges of owned one-shots only, the detector keys on transients, and the census counts
+pooled sources, while this is a continuous plateau of one non-pooled looping player. Of the ranked hypotheses above, the one-shot family (#1) named the
+right area, an owned Equator ambient player at the port's boosted range, but not the mechanism; the others are refuted for this static. The whole story
+with its numbers, the UnityPy origin (`chunk_based_compress` writes a chunk compressed when its LZ4HC output is exactly the chunk size), the repair, the
+validator, the release consequence and what stays open (the steady hiss, the click bursts, the boosted wind bed as a taste question) is in
+[equator-noise-bundle-block.md](equator-noise-bundle-block.md); its fix has not been host-verified yet and the user has not listened to a repaired build.

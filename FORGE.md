@@ -83,6 +83,7 @@ stays unchanged. Equator Day, Bay5, Air Pit and Bowl are unaffected.
 
 ## Known limitations
 
+- [AFTER HOST RUN: the Equator static: cause and fix sentence]
 - Intermittent short noise reported during Equator play remains unresolved and no fix is
   claimed. It was reported on development builds that allowed three overlapping crowd voices
   at twice the call rate, by a player using the SurroundAudio mod (5.1), and was heard again on

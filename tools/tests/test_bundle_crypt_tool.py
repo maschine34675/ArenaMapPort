@@ -25,10 +25,14 @@ REPO = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO / "tools" / "bundle"))
 sys.path.insert(0, str(REPO / "tools" / "validate"))
 sys.path.insert(0, str(REPO / "tools" / "release"))
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 import bundle_crypt
+import fix_stored_blocks
 import make_release_zips as release
+import validate_bundle_blocks as bundle_blocks
 import validate_bundle_names as bundle_names
 import validate_distribution as distribution
+from test_bundle_blocks import build_unityfs, equal_size_chunk, packed, stored
 
 MIB = 1 << 20
 REAL_ARENA = Path(os.environ.get("ARENAMAPPORT_ARENA_DIR", r"D:\Battlestate Games\Escape from Tarkov Arena"))
@@ -828,6 +832,38 @@ class ValidatorsWithTheRealToolTests(FakeArenaCase):
         self.assertEqual(reads[0], (0, 64))
         self.assertLess(reads[1][1], 200)  # the blocks-info blob: far smaller than the 3 MiB of data
         self.assertLess(reads[1][0], 0)    # counted from the end: BlocksInfoAtTheEnd
+
+    def test_the_block_table_check_reads_an_encrypted_bundle_through_the_tool(self):
+        """tools/validate/validate_bundle_blocks.py on a real AMPB container: the defective block (a valid LZ4 stream as long as its
+        content) is found in the plaintext the tool serves, the repaired bundle passes, and only the header and the table are read."""
+        data, stream = equal_size_chunk(600)
+        pieces = [stored(b"head" * 50), (stream, 600, 3), packed(b"tail " * 4000), stored(random_bytes(7, 2 * MIB))]
+        plain = self.tmp / f"{self.MAP}_scenes.bundle"
+        plain.write_bytes(build_unityfs(pieces))
+        self.stage(bundles=[plain])
+        staged = self.plugin / "bundles" / plain.name
+        reads = []
+        real = bundle_crypt.read_range
+
+        def spy(path, offset, length, **kwargs):
+            reads.append((offset, length))
+            return real(path, offset, length, **kwargs)
+
+        with patch.object(bundle_blocks.bundle_crypt, "read_range", spy):
+            report = bundle_blocks.check_bundle(staged, key_store=self.store)
+        self.assertEqual(len(report.problems), 1, report.problems)
+        self.assertIn("block 1 of 4: lz4hc flag 0x3, csize 600 >= usize 600", report.problems[0])
+        self.assertEqual(len(reads), 2)
+        self.assertEqual(reads[0], (0, fix_stored_blocks.HEADER_PROBE))
+        self.assertLess(reads[1][1], 400)          # the table only: far smaller than the 2 MiB of data
+        # the repaired plaintext, staged again, passes
+        fix_stored_blocks.repair_file(plain)
+        shutil.rmtree(self.plugin, ignore_errors=True)
+        self.stage(bundles=[plain])
+        self.assertEqual(bundle_blocks.check_bundle(staged, key_store=self.store).problems, [])
+        # and the same through validate_distribution's own function
+        with self.assertRaisesRegex(ValueError, "Bundle arena_test_scenes.bundle fails the block table check: cannot be read through the BundleCrypt tool"):
+            distribution.validate_block_tables(self.plugin / "bundles", [self.MAP], self.tmp / "no-store")
 
     @unittest.skipUnless((REPO / "work/build/preset/arena_bowl_preset.bundle").is_file(), "work/build/preset/arena_bowl_preset.bundle is not built here")
     def test_the_unitypy_fallback_decrypts_to_a_temporary_file_and_removes_it(self):

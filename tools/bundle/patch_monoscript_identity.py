@@ -50,6 +50,19 @@ empirically-verified spelling the actual EFT client uses (`Assembly-CSharp` /
 `Assembly-CSharp-firstpass`, no `.dll` suffix) — touching nothing else in the bundle (every other
 object, and every other MonoScript field, is byte-for-byte untouched; verified below).
 
+# Chunk compressor guard (2026-10-29)
+
+`BundleFile.save(packer=...)` compresses the data region in 128 KiB LZ4HC chunks through UnityPy's
+`CompressionHelper.chunk_based_compress`, which (UnityPy 1.25.2, lines 191 and 213) stores a chunk raw only when
+its compressed form is LARGER than the chunk (`>` where `>=` is needed). A chunk whose LZ4HC form is exactly the
+chunk size is written compressed, flag set, csize == usize, and Unity's player evidently takes such a block for
+stored data: the raw LZ4 stream reached the AudioClip moll_indoor_wind_04 in the released Equator scenes bundle
+(block 6657 of 6943), an intermittent burst of static in the map's ambience. tools/bundle/chunk_compressor_guard.py
+holds the corrected function and `install_corrected_chunk_compressor()`, which runs before every save here (and in
+tools/preset/patch_preset.py); the saved file is scanned for the defect afterwards.
+tools/bundle/fix_stored_blocks.py (build_all.ps1 step 3b) stays the safety net and
+tools/validate/validate_bundle_blocks.py the check. Drop the override once UnityPy is fixed upstream.
+
 # Usage
 
     python tools/bundle/patch_monoscript_identity.py --bundle work/build/s1/arena_equator_scenes.bundle
@@ -74,6 +87,13 @@ import time
 import traceback
 from pathlib import Path
 from typing import NoReturn
+
+# The shared chunk compressor guard (also used by tools/preset/patch_preset.py), re-exported here under its old names, and
+# the stored-block scanner: both sit beside this script.
+if str(Path(__file__).resolve().parent) not in sys.path:
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+import fix_stored_blocks  # noqa: E402
+from chunk_compressor_guard import corrected_chunk_based_compress, install_corrected_chunk_compressor  # noqa: E402,F401
 
 # ---------------------------------------------------------------------------
 # The rename map — every spelling `tools/gamerefs-fixup`/`tools/sync-game-refs.ps1` are known (or
@@ -107,6 +127,16 @@ RENAME_MAP: dict[str, str] = {
 REAL_ASSEMBLY_NAMES = {"Assembly-CSharp", "Assembly-CSharp-firstpass"}
 
 COMPRESSION_SWITCH_NAMES = {0: "none", 1: "lzma", 2: "lz4", 3: "lz4hc", 4: "lzham"}
+
+
+def stored_block_defects(path: Path) -> list[str]:
+    """One description per data block of the bundle at `path` that has a compression flag and csize >= usize (and one for
+    the block table itself); empty = clean. Reads only the header and the block table."""
+    header = fix_stored_blocks.inspect_file(path)
+    found = [block.describe(len(header.blocks)) for block in fix_stored_blocks.scan_blocks(header)]
+    if header.table_bad:
+        found.append("the block table has a compression flag and csize >= usize")
+    return found
 
 
 def die(msg: str) -> NoReturn:
@@ -446,6 +476,14 @@ def main() -> None:
     # half-written bundle at out_path on failure. BundleFile.save()'s own packer semantics accept
     # the string "original" directly (reuses self.dataflags/self._block_info_flags as read).
     packer_arg = args.packer
+    # Guard at the source (see the module docstring "Chunk compressor guard"): UnityPy 1.25.2 writes a 128 KiB chunk
+    # whose compressed form is exactly its size as a compressed block, which Unity's player evidently reads as stored data.
+    try:
+        install_corrected_chunk_compressor()
+    except Exception as e:  # noqa: BLE001
+        die(f"could not install the corrected chunk compressor: {e}\n{traceback.format_exc()}")
+    print(f"[patch_monoscript_identity] installed the corrected chunk compressor (UnityPy {UnityPy.__version__}: "
+          f"a chunk is stored raw when its compressed size is >= the chunk size)")
     print(f"[patch_monoscript_identity] saving with packer={packer_arg!r} ...")
     try:
         data = bundle_file.save(packer=packer_arg)
@@ -559,6 +597,23 @@ def main() -> None:
               f"{scope} (MonoBehaviour/Mesh/Material/Texture2D/GameObject/... — everything but the "
               f"{len(patched)} patched MonoScript(s)) are byte-for-byte identical before vs after "
               f"the patch")
+
+    # Flagged blocks that are not smaller than their content (the UnityPy chunk compressor defect). The corrected compressor
+    # installed before the save should leave none; a WARN (not a FAIL) because build_all.ps1 step 3b repairs it and the
+    # step-4 validator rejects it, but a standalone run deserves to be told.
+    try:
+        stored_defects = stored_block_defects(out_path)
+    except Exception as e:  # noqa: BLE001
+        stored_defects = None
+        print(f"[patch_monoscript_identity] WARN: could not scan {out_path.name} for flagged blocks that are not smaller "
+              f"than their content ({type(e).__name__}: {e})", file=sys.stderr)
+    if stored_defects:
+        print(f"[patch_monoscript_identity] WARN: {len(stored_defects)} data block(s) of {out_path.name} carry a compression "
+              f"flag but are not smaller than their content, which Unity's player evidently reads as stored data: {stored_defects}. "
+              f"The corrected chunk compressor did not take effect; repair the file with "
+              f"tools/bundle/fix_stored_blocks.py (build_all.ps1 step 3b does)", file=sys.stderr)
+    elif stored_defects is not None:
+        print("[patch_monoscript_identity]  ok : no data block has a compression flag with csize >= usize")
 
     # compression fidelity: report whether the requested packer reproduced the original flags
     # exactly (informational unless --packer original was requested and failed to match, which

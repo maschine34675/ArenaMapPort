@@ -5,7 +5,10 @@ also requires: the magic on every bundle (a plaintext UnityFS bundle is refused)
 header names the right map and whose plaintext starts with UnityFS, exactly one key file keys/<map>.json per
 released map that has the schema, plausible resource-file names, sizes and sample parameters and no hash, and that unlocks the content
 key against the Arena installed on this machine (the build machine has it), and no file anywhere in dist that
-starts with "UnityFS". The container is read through tools/bundle/bundle_crypt.py (the C# tool), not in Python."""
+starts with "UnityFS". The container is read through tools/bundle/bundle_crypt.py (the C# tool), not in Python.
+
+Every bundle's block table is also checked (tools/validate/validate_bundle_blocks.py, 2026-10-29): a data block with a
+compression flag and csize >= usize evidently reaches Unity's player as raw LZ4 bytes (the intermittent Equator noise)."""
 import json
 import hashlib
 from pathlib import Path
@@ -14,6 +17,7 @@ import subprocess
 import sys
 
 from validate_map_descriptors import map_descriptor_paths, RELEASE_MAP_KEYS, gate_row_resolves
+import validate_bundle_blocks
 
 REPO = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO/'tools/bundle'))
@@ -112,6 +116,21 @@ def validate_encrypted_bundles(bundles, keys, key_store=None):
             prefix = _tool_call(f'Bundle {name} cannot be read', lambda: bundle_crypt.read_range(path, 0, 8, key_store=key_store))
             if prefix != UNITYFS_MAGIC:
                 raise ValueError(f'Bundle {name} does not decrypt to a UnityFS bundle')
+
+
+def validate_block_tables(bundles, keys, key_store=None):
+    """No distributed bundle may carry a data block with a compression flag and csize >= usize. Unity's player evidently reads such a
+    block as stored data, so the raw LZ4 token stream reaches the consumer: block 6657 of the Equator scenes bundle held the
+    tail of the AudioClip moll_indoor_wind_04 and played as static every wind cycle (released in 0.3.0). Only the UnityFS
+    header and the block table are read, through the tool (`read-range`), once per bundle. UnityPy's chunk compressor
+    writes such blocks; tools/bundle/fix_stored_blocks.py repairs the plaintext bundle, build_all.ps1 runs it as step 3b."""
+    for key in keys:
+        for kind in BUNDLE_KINDS:
+            name = f'{key}_{kind}.bundle'
+            report = validate_bundle_blocks.check_bundle(bundles/name, key_store=key_store, encrypted=True, crypt=bundle_crypt)
+            if report.problems:
+                raise ValueError(f'Bundle {name} fails the block table check: {"; ".join(report.problems)}; repair the plaintext '
+                                 f'bundle with tools/bundle/fix_stored_blocks.py and stage it again')
 
 
 def check_key_file_schema(path, key):
@@ -527,6 +546,7 @@ def validate():
         raise ValueError(f'Bundle set mismatch: missing={sorted(expected_bundles-actual_bundles)} unexpected={sorted(actual_bundles-expected_bundles)}')
     validate_not_spike_build(plugin/'bundles', key_store_dir())
     validate_encrypted_bundles(plugin/'bundles', keys, key_store_dir())
+    validate_block_tables(plugin/'bundles', keys, key_store_dir())
     validate_key_files(plugin, keys, key_store_dir())
     validate_no_plaintext_unityfs(REPO/'dist')
     # fix-preset-cab-and-bundle-lifetime: every dist bundle's internal UnityFS directory-table

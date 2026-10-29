@@ -200,6 +200,8 @@ with an installed Escape from Tarkov: Arena (see Compatibility).
 
 ## Known limitations
 
+[AFTER HOST RUN: the Equator static: cause and fix sentence]
+
 Intermittent short noise reported during Equator play remains unresolved; this
 release does not claim to fix it. It was reported on development builds that allowed
 up to three overlapping crowd voices at twice the call rate, with the SurroundAudio

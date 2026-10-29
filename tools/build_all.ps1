@@ -2,8 +2,8 @@
 .SYNOPSIS
   ArenaMapPort pipeline orchestrator (task label `identity-fix`, item 2) — the ONLY sanctioned way
   to produce an S1/S2 build that is safe to copy into dist/. Wraps GameRefs sync -> Unity
-  BuildBundles -> the MANDATORY MonoScript-identity post-build patch -> all three SS B.WP6
-  validators, and fails loudly (non-zero exit) the moment any step does.
+  BuildBundles -> the MANDATORY MonoScript-identity post-build patch -> the MANDATORY stored-block
+  repair -> all SS B.WP6 validators plus the block-table check, and fails loudly (non-zero exit) the moment any step does.
 
 .DESCRIPTION
   BuildBundles.cs (the Unity -executeMethod pipeline) builds arena_equator_scenes.bundle /
@@ -27,9 +27,16 @@
        tools/unity-log-scan.ps1 for the exact rules and the one allowlisted editor-startup source.
     3. tools/bundle/patch_monoscript_identity.py against every
        *.bundle BuildBundles.Run produced (scenes AND navmesh)  -- MANDATORY, never skippable
-    4. tools/validate/validate_extract.py
-       tools/validate/validate_bundle_roundtrip.py (strict, default flags)
-       tools/validate/validate_preset.py --allow-missing-scenes
+    3b. tools/bundle/fix_stored_blocks.py against the same *.bundle files -- MANDATORY, never skippable,
+       idempotent (a clean bundle is left untouched). The save inside step 3 goes through UnityPy's chunk
+       compressor, which can write a 128 KiB chunk as a compressed block with csize == usize; Unity's player
+       evidently reads that as stored data and plays the raw LZ4 bytes (the 2026-10-29 Equator noise). Step 3
+       installs a corrected compressor; this step is the safety net and repairs whatever is left.
+    4. tools/validate/validate_bundle_blocks.py (no flagged block with csize >= usize; run first, so it also
+       runs when validate_extract.py stops this step on the known drift of the accepted packages),
+       tools/validate/validate_extract.py,
+       tools/validate/validate_bundle_roundtrip.py (strict, default flags),
+       tools/validate/validate_preset.py --allow-missing-scenes and
        tools/validate/validate_map_descriptors.py -- MANDATORY, never skippable. The last one
        cross-checks tools/maps/*.json against ArenaMapDescriptor.cs's ArenaMapRegistry entries and
        ArenaPaths.cs's EquatorDefault() (not just the map under test) -- it is a whole-registry
@@ -59,8 +66,8 @@
 
 .PARAMETER SkipUnityBuild
   Skip step 2 entirely (assume $OutputDir already holds a built arena_equator_scenes.bundle /
-  arena_equator_navmesh.bundle from a prior run) — steps 3+4 (the mandatory identity patch +
-  validators) still run against whatever is already there. Useful for re-running just the
+  arena_equator_navmesh.bundle from a prior run) — steps 3, 3b and 4 (the mandatory identity patch, the
+  stored-block repair and the validators) still run against whatever is already there. Useful for re-running just the
   mandatory patch/validate steps without paying Unity's ~5 minute startup+import cost again.
 
 .PARAMETER UnityExe
@@ -261,7 +268,20 @@ foreach ($b in $bundles) {
 }
 
 # ---------------------------------------------------------------------------
-# Step 4 — all three SS B.WP6 validators, strict/default flags. MANDATORY.
+# Step 3b — stored-block repair, every *.bundle. MANDATORY and idempotent: a bundle without a flagged block
+# whose csize >= usize is left untouched; otherwise the block is decoded and stored (flags cleared), verified
+# and replaced atomically. Safety net behind the corrected chunk compressor that step 3 installs (UnityPy
+# writes such a block when a 128 KiB chunk compresses to exactly its size; Unity's player evidently reads it as stored).
+# ---------------------------------------------------------------------------
+Write-Step "3b/4 tools/bundle/fix_stored_blocks.py (MANDATORY, every bundle, idempotent)"
+foreach ($b in $bundles) {
+    Write-Host "[build_all] checking data blocks of $($b.FullName)"
+    & python -u (Join-Path $RepoRoot "tools/bundle/fix_stored_blocks.py") $b.FullName
+    if ($LASTEXITCODE -ne 0) { Fail "fix_stored_blocks.py FAILED for $($b.FullName) (exit $LASTEXITCODE) -- see BLOCKS_FAIL above" }
+}
+
+# ---------------------------------------------------------------------------
+# Step 4 — the SS B.WP6 validators and the block-table check, strict/default flags. MANDATORY.
 # ---------------------------------------------------------------------------
 Write-Step "4/4 validators (strict/default flags)"
 
@@ -274,6 +294,13 @@ if ($FullMap) {
     & python -u (Join-Path $RepoRoot 'tools/preset/patch_preset.py') --map $MapDescriptor
     if ($LASTEXITCODE -ne 0) { Fail 'Current preset generation failed.' }
 }
+
+# No data block of any built bundle may carry a compression flag with csize >= usize (Unity's player evidently reads it as
+# stored data: the 2026-10-29 Equator noise). Steps 3 and 3b leave none; this is the independent check on the final files, run
+# first so that it also runs when validate_extract.py below stops the step on the accepted packages' known drift.
+$blockBundles = @(Get-ChildItem -Path $OutputDir -Filter "*.bundle" -File | ForEach-Object { $_.FullName })
+& python -u (Join-Path $RepoRoot "tools/validate/validate_bundle_blocks.py") @blockBundles
+if ($LASTEXITCODE -ne 0) { Fail "validate_bundle_blocks.py FAILED (exit $LASTEXITCODE) -- a flagged block with csize >= usize evidently reaches Unity's player as raw LZ4 bytes" }
 
 # The reproducibility check re-runs the whole extraction twice (minutes per map); opt in with
 # -CheckReproducibility when the extractor itself changed.

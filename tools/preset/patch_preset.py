@@ -143,6 +143,13 @@ from typing import NoReturn
 import UnityPy
 from UnityPy.files.SerializedFile import SerializedFile
 
+# UnityPy's chunk compressor writes a chunk that compresses to exactly its own size as a flagged block with csize == usize,
+# which Unity's player evidently reads as stored data (the 2026-10-29 Equator noise). The default packer "none" stores the
+# data as it is, so nothing is exposed today; --packer lz4 and --packer original compress, so the corrected compressor is
+# installed before the save.
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "bundle"))
+from chunk_compressor_guard import install_corrected_chunk_compressor  # noqa: E402
+
 # ----------------------------------------------------------------------------------------
 # Constants (SPEC.md SS0 / SS B.WP3 / SS E.1 / SS E.3)
 #
@@ -425,6 +432,7 @@ def save_and_verify(env, mono_obj, mono_path_id: int, bundle_obj, out_path: Path
             donor_script_ptr = obj.read_typetree().get("m_Script")
             break
 
+    install_corrected_chunk_compressor()
     data = env.file.save(packer=packer)
     out_path.parent.mkdir(parents=True, exist_ok=True)
     out_path.write_bytes(data)
