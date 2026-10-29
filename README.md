@@ -23,12 +23,14 @@ navigation, with restored ambience, material sounds, room acoustics and decals.
 Equator and Bay5 also have restored dust and original lamp flares. Bay5 includes
 its harbor background and water.
 
-Version 0.4.0 restores the original animated spectators on all four maps,
+Version 0.4.0 adds the original animated spectators on all four maps,
 with spatial crowd calls from 13 original fan recordings and at most two voices
 at once. Their idle and cheering animations run independently of match events;
 kill and round-result reactions are not implemented yet.
-Their textures are stored once for all maps, saving about 440 MB compared with
-the earlier development packages, with identical image quality.
+Their textures are stored once for all maps (about 147 MB on disk). The crowds
+decode 123 shared images into about 0.5 GB of video memory per raid on every map
+and add about <CROWD_LOAD_SECONDS> seconds to raid loading; the
+[0.4.0 release notes](docs/releases/v0.4.0.md) explain how to skip a map's crowd.
 
 The gates and vehicles at the team spawn enclosures use Arena's own open positions
 and, where Arena has them, its motions (at half their time). They stand open from raid
@@ -96,8 +98,9 @@ When upgrading an older development package, move the former
 `BepInEx/plugins/ArenaMapPort` directory outside `BepInEx/plugins` before
 extracting, so only one client is installed. Keep your configuration files.
 The release's `.sha256` file lists the checksum of each ZIP part. The core part's
-package README includes cleanup instructions for retired debug-helper and
-DynamicMaps development files.
+package README includes cleanup instructions for old DynamicMaps and development
+files; the [0.4.0 release notes](docs/releases/v0.4.0.md) also cover the retired
+debug helper and the upgrade from 0.3.0.
 
 ## Settings
 
@@ -163,7 +166,7 @@ that.
 | `SERVER_NO_ANSWER` | The server did not answer the question why (timeout or error). | Restart the SPT server, then the game. |
 | `SERVER_ALL_FAILED` | The server could not register any Arena map. | Close the server, reinstall the server files (`SPT_Runtime/user/mods/ArenaMapPort`) from all five release parts, restart it. |
 | `SERVER_PARTIAL` | The server does not offer some maps this game knows (its ArenaMapPort is probably older). | Close the server, copy each release part's `SPT_Runtime` folder over the installation (overwrite its files), restart it. |
-| `SERVER_PARTIAL_FAILED` | The server could not register some maps. | Close the server, reinstall the server files from the ZIP, restart it. |
+| `SERVER_PARTIAL_FAILED` | The server could not register some maps. | Close the server, reinstall the server files (`SPT_Runtime/user/mods/ArenaMapPort`) from all five release parts, restart it. |
 | `FILES_MISSING` | ArenaMapPort's files for some maps are missing (an incomplete installation). | Extract all five ZIP parts again (client folder `BepInEx/plugins/maschine-ArenaMapPort` with its `bundles` and `keys`), restart the game. |
 | `KEY_UPDATED` | A map cannot be opened: your Arena is newer than the build this ArenaMapPort was made for, and files it needs changed. | Install the newest ArenaMapPort release. |
 | `KEY_ARENA_OLDER` | A map cannot be opened: your Arena is older than the build this ArenaMapPort was made for. | Update Arena in the launcher. |
@@ -198,10 +201,15 @@ with an installed Escape from Tarkov: Arena (see Compatibility).
 ## Known limitations
 
 Intermittent short noise reported during Equator play remains unresolved; this
-release does not claim to fix it. The Books impact-sound bank is missing, so those
-prop impacts remain silent. Fika compatibility and crowd reactions to match events
-are not included in the verified scope. The [0.4.0 release notes](docs/releases/v0.4.0.md)
-describe the bounded native checks and the developer-only crowd-call comparison.
+release does not claim to fix it. It was reported on development builds that allowed
+up to three overlapping crowd voices at twice the call rate, with the SurroundAudio
+mod (5.1) installed, and has not yet been re-tested with the shipped two-voice
+schedule. EFT's own sound bundle has no impact sounds for the Books and CardBoard
+prop types, so 39 Equator props (shoes, books, blue cups, a road cone, pizza boxes
+and office folders) and any props of those types on other maps stay silent when they
+hit something. Fika compatibility and crowd reactions to match events are not included
+in the verified scope. The [0.4.0 release notes](docs/releases/v0.4.0.md) describe the
+bounded native checks and what has not been checked yet.
 
 ## Development
 

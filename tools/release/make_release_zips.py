@@ -659,10 +659,19 @@ ENCRYPTION_TEXT = (
 )
 
 
+# The game's own spelling of a map in prose. MapRelease.display is a folder name (DynamicMaps' ArenaMapPort_AirPit) and stays
+# as it is; every sentence of the generated README.txt says "Air Pit", like README.md, the release notes and the in-game name.
+PROSE_NAMES = {"AirPit": "Air Pit"}
+
+
+def prose_name(display: str) -> str:
+    return PROSE_NAMES.get(display, display)
+
+
 def readme_text(spec: ReleaseSpec, parts) -> str:
     """The generated README.txt. The multi-part wording is fixed; the single-ZIP layout replaces exactly the
     three paragraphs that depend on it (what the release consists of, the extraction step, the verification)."""
-    names = ", ".join(m.display for m in spec.maps)
+    names = ", ".join(prose_name(m.display) for m in spec.maps)
     sha_name = f"{PACKAGE}-{spec.version}.sha256"
     if is_single_layout(parts):
         intro = (f"This release is ONE ZIP: {parts[0].zip_name}. It holds the plugin, the server mod and the\n"
@@ -673,8 +682,9 @@ def readme_text(spec: ReleaseSpec, parts) -> str:
         verification = (f"Verification: {sha_name} lists the SHA-256 of the ZIP\n"
                         "(Get-FileHash in PowerShell). BepInEx/plugins/maschine-ArenaMapPort/parts/full.json records\n"
                         "the files it installed.\n\n")
+        from_single = ""
     else:
-        display = {m.stem: m.display for m in spec.maps}
+        display = {m.stem: prose_name(m.display) for m in spec.maps}
         lines = []
         for p in parts:
             what = ("plugin, server mod, shared spectator textures/calls, original map descriptions, selection artwork, score monitor sprites, notices" if p.id == CORE_ID
@@ -689,8 +699,12 @@ def readme_text(spec: ReleaseSpec, parts) -> str:
         verification = (f"Verification: {sha_name} lists the SHA-256 of every part\n"
                         "(Get-FileHash in PowerShell). BepInEx/plugins/maschine-ArenaMapPort/parts/ records, per part,\n"
                         "the files it installed.\n\n")
+        # 0.3.0 was ONE ZIP whose manifest is parts/full.json; the parts do not replace it, and a stale manifest of the
+        # former package only misleads (nothing reads it).
+        from_single = ("   When upgrading from 0.3.0, also delete BepInEx/plugins/maschine-ArenaMapPort/parts/full.json,\n"
+                       "   the manifest of the former single ZIP: this release no longer ships it and nothing reads it.\n")
     return (f"ArenaMapPort {spec.version}\n\n"
-            "Target: SPT 4.1.x / EFT 0.16.9.5\n\n"
+            "Target: SPT 4.1.5 or later 4.1.x (the server declares ~4.1.5; tested with 4.1.6) / EFT 0.16.9.5\n\n"
             + REQUIREMENT_TEXT
             + ENCRYPTION_TEXT +
             intro +
@@ -704,6 +718,7 @@ def readme_text(spec: ReleaseSpec, parts) -> str:
             "   material-shaders.arena_equator.json), and the development copies\n"
             "   DynamicMaps/Maps/ArenaMapPort_Equator and ArenaMapPort_Bay5 if still present, to avoid\n"
             "   duplicate maps. Unused arena-audio and arena-ui folders may be removed too.\n"
+            + from_single +
             "4. Start the SPT server, then the game.\n\n"
             "Updating: extract the complete release package (ALL parts if split) with the SPT server closed, so the client\n"
             "and the server DLL, the bundles, the keys folder and the server database all come from this release (a\n"
@@ -717,8 +732,10 @@ def readme_text(spec: ReleaseSpec, parts) -> str:
             f"Included locations: {names}.\n"
             "These maps are intended for ArenaMode; no loot or scav raids are provided.\n"
             "ArenaMode and other mods are not included.\n"
-            "Known audio limits: intermittent short noise reported on Equator remains unresolved; no noise fix is\n"
-            "claimed. The Books impact-sound bank is missing, so those prop impacts remain silent.\n"
+            "Known audio limits: intermittent short noise reported on Equator (on development builds with a denser\n"
+            "crowd-call schedule than this release uses) remains unresolved; no noise fix is claimed. The game's own\n"
+            "sound bundle has no impact sounds for the Books and CardBoard prop types, so 39 Equator props (shoes,\n"
+            "books, blue cups, a road cone, pizza boxes and office folders) stay silent when they hit something.\n"
             "The gates and vehicles at the team spawn enclosures use Arena's own open positions and, where Arena\n"
             "has them, its motions (at half their time). They stand open from raid start, or a mode plugin such as\n"
             "ArenaMode holds them closed and opens them when the fight starts; Air Pit's passport control stays\n"

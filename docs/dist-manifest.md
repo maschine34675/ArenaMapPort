@@ -396,3 +396,17 @@ authenticate the encrypted distribution and installed-Arena key derivation, then
 ZIP below 2 GiB and compare its extracted union byte-for-byte with dist. Verify both DLL ProductVersions
 and every manifest against the final commit. See [the preparation record](progress/release-preparation-20261029.md).
 No final package sizes, hashes or publication are asserted by this preparation entry.
+
+## Package texts after the release audit — 2026-10-29 (0.4.0 candidate)
+
+The audit of the five-part cut corrected the texts around it; the partition does not change (255 distribution files:
+core 153, Equator 24, Bay5 30, Air Pit 22, Bowl 26) and no hash or size is asserted by this entry. The generated
+`README.txt` of the core part changed in four places: the target line reads "SPT 4.1.5 or later 4.1.x (the server declares
+~4.1.5; tested with 4.1.6)", prose names the map "Air Pit" (`make_release_zips.PROSE_NAMES`; the display name stays
+"AirPit" because DynamicMaps' folder is `ArenaMapPort_AirPit`), the multi-part text tells a player upgrading from 0.3.0 to
+delete `BepInEx/plugins/maschine-ArenaMapPort/parts/full.json` (the manifest of the former single ZIP, which the five parts
+do not replace; the single-ZIP layout ships that file and says nothing of the kind), and the known audio limits name both
+prop types without an impact bank in EFT's own sound bundle (Books and CardBoard, 39 Equator props) and the context of the
+noise report. Any core ZIP built before this change carries the old README.txt and has to be rebuilt, with its hash. The
+release note `docs/releases/v0.4.0.md` keeps placeholders (build commit, VirusTotal block, crowd loading time) that the cut
+fills in. See [release-preparation-20261029.md](progress/release-preparation-20261029.md).

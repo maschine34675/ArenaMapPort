@@ -12,29 +12,27 @@ Full release note: [docs/releases/v0.4.0.md](docs/releases/v0.4.0.md).
 
 ### Added
 
-- Spectators on all four maps call out using 13 original Arena voice clips, with spatial positioning
-  and room obstruction. Calls are scheduled at 1.6-3.2 second intervals, waiting if two voices are already active;
-  active speakers and recorded voice families do not duplicate. No kill/round-win reactions yet.
-
-- Original spectators are restored on Air Pit (99), Equator day/night (99), Bay5 (88) and Bowl (99), with 15 appearances
-  and original idle/cheering animations at staggered intervals. The missing legacy face cloth uses
-  Arena's current half-mask. The crowd is decorative and does not react to match events yet.
-- Spectator textures are shared across all four maps, saving about 440 MB compared with the development packages,
-  with identical image quality. Map and texture integrity checks detect mixed or damaged installations.
-
-- Avoid a second, misleading `NO_CAUSE` map-error dialog when EFT already reported
-  the failure during that loading attempt. Recorded map-file and Arena-installation
-  errors still show their specific explanation.
+- **Original animated spectators on all four maps**: Air Pit (99), Equator day/night (99), Bay5 (88) and Bowl (99), with 15
+  appearances and original idle/cheering animations at staggered intervals. The missing legacy face cloth uses Arena's current
+  half-mask. The crowd is decorative and does not react to match events yet. The 123 shared images decode into about 0.5 GB of
+  video memory per raid on every map and building a crowd adds about <CROWD_LOAD_SECONDS> seconds to raid loading; a map's crowd
+  can be skipped by deleting its `spectators` folder (see the release note).
+- **Spectator calls.** Spectators call out using 13 original Arena voice clips, with spatial positioning and room obstruction.
+  Calls are scheduled at 1.6-3.2 second intervals, waiting if two voices are already active; active speakers and recorded voice
+  families do not duplicate. No kill/round-win reactions yet.
+- **Shared spectator textures.** The crowd textures are stored once for all four maps (about 147 MB on disk). Map and texture
+  integrity checks detect mixed or damaged installations.
 - **Exit signs light with the gates (Equator, Air Pit).** The exit signs above Equator's booth doors and above Air Pit's
   three front bus doors now cast their small green light while the gates stand open: dark while a mode plugin holds the
   gates closed, on in the first moment of the release, and lit from the start in an ordinary raid. The signs themselves
-  were always visible; Arena's wider glow around them is not ported.
-- **Gate and door sounds.** When a mode plugin releases the held gates, Arena's own sounds play at them on all four maps
+  were always visible; Arena's wider glow around them is not ported. Checked by reading the lamp state, not yet by eye.
+- **Gate and door sounds.** When a mode plugin releases the held gates, Arena's own sounds start at them on all four maps
   (Equator's booth doors, Bay5's roller and depot gates, Air Pit's bus doors and passport lanes, Bowl's BTR, ambulance and
   gates), at Arena's level and out to 30 to 60 m depending on the gate. Most sounds are shortened to fit the faster motion
   of the gates (half of Arena's time by default). Nothing plays in an ordinary raid, where the gates already stand open.
   A new `gate-sounds` folder with the clips (plain audio files) ships beside the DLL; four developer settings under
-  `Spawns/` tune the sound (they need `General/DeveloperMode`).
+  `Spawns/` tune the sound (they need `General/DeveloperMode`). Confirmed in the log on Equator, Air Pit and Bowl, not yet
+  listened to (see Known limitations).
 - **The TV screens can show a mode's timer, team score and alive counts** in Arena's look (its colours, trophy and skull
   icons and the Bender font): 9 screens on Equator, 8 on Bay5 and 6 each on Air Pit and Bowl; the other TVs stay dark.
   Nothing changes without a mode plugin that uses it. Mod authors: the public class
@@ -42,34 +40,54 @@ Full release note: [docs/releases/v0.4.0.md](docs/releases/v0.4.0.md).
   `monitors` folder with nine images ships beside the DLL, and the developer setting `Monitors/Demo` shows a test
   cycle without a mode plugin.
 - **Puddle footsteps on Equator, Air Pit and Bowl.** Steps on the water puddles use the splash footstep sound on these
-  three maps, as they already did on Bay5. On Bowl the bare soil floor counts as ground for the puddles.
+  three maps, as they already did on Bay5. On Bowl the bare soil floor counts as ground for the puddles. The Air Pit and Bowl
+  caches were checked in the log; Equator's cache and the rain-driven puddles have not yet been checked in game, and the
+  splash was not listened to.
 - **Four spawn points moved off the navigation edge.** Equator's two southern bot spawns and Bay5's north-west player
   spawn and east-lane bot spawn stood on the very edge of the navigation mesh, and the game pushed at least one of them
   1.5 m inboard at every raid start. They now start 1.3 to 1.5 m further in, where they ended up anyway.
 
 ### Fixed
 
+- Avoid a second, misleading `NO_CAUSE` map-error dialog when EFT already reported
+  the failure during that loading attempt. Recorded map-file and Arena-installation
+  errors still show their specific explanation.
 - Late collisions from remaining Arena props after map teardown no longer request the already unloaded
-  native sound bundle. The guard is limited to owned Arena scenes and preserves the collision timer;
-  ordinary-map behavior and warnings for missing sound banks during a live raid remain unchanged.
+  native sound bundle.
 
 ### Changed (internal)
 
 - Spectator audio output readback runs only with startup-enabled `General/DeveloperMode`, avoiding the
-  diagnostic work in normal play. Scheduling and playback stay unchanged.
+  diagnostic work in normal play. Scheduling and playback stay unchanged. The output peaks are a developer
+  diagnostic: a zero peak with DeveloperMode off means the diagnostic did not run, not that playback was silent.
 - The live developer-only `Audio diagnostics/SpectatorCalls` switch isolates crowd calls for hearing
   comparisons without disabling visual spectators or map ambience.
-- GitHub downloads use five complete ZIP parts: core, Equator, Bay5, Air Pit and Bowl. Install all five.
+- The late-collision guard is limited to owned Arena scenes and preserves the collision timer; ordinary-map
+  behavior and the warnings for missing sound banks during a live raid are unchanged.
+- A developer-only noise probe, `Audio diagnostics/NoiseProbe` (`Off`, `Detect` or `Capture`; the key that marks "I just
+  heard it" is `Audio diagnostics/NoiseProbeMarkKey`, default Pause), supports locating the intermittent Equator noise. It
+  needs `General/DeveloperMode`, adds no public setting and has not yet been run in a game.
 
 ### Known limitations
 
-- Intermittent short noise reported during Equator play remains unresolved; no noise fix or subjective
-  audio-quality acceptance is claimed. A reverb-disabled comparison did not eliminate it.
-- The native Books impact-sound bank is missing; those prop impacts remain silent.
+- Gate and door sounds were checked in the log only and have not been listened to. Bay5's gate sounds were never in
+  range during a test; loudness, reach and the fit of the clips shortened to the faster gate motion are untuned.
+  The exit lamps were checked by reading their state, not by eye.
+- Equator's puddle cache and the rain-driven puddles have not been checked in game, and the splash sound has not been
+  listened to on any map.
+- Intermittent short noise reported during Equator play remains unresolved; no noise fix or subjective audio-quality
+  acceptance is claimed. It was reported on development builds that allowed up to three overlapping crowd voices at twice
+  the call rate, with the SurroundAudio mod (5.1) installed. Disabling that mod's reverb helper did not remove it, and it
+  has not yet been re-tested with the shipped two-voice schedule.
+- EFT's own sound bundle has no impact sounds for the Books and CardBoard prop types. On Equator 39 props (30 Books: shoes,
+  books, blue cups and a road cone; 9 CardBoard: pizza boxes and office folders), and any props of those types on other
+  maps, stay silent when they hit something.
 
 ### Compatibility
 
 - SPT 4.1.6 / EFT 0.16.9.5-40743; server range remains `~4.1.5`.
+- GitHub downloads use five complete ZIP parts: core, Equator, Bay5, Air Pit and Bowl. Install all five. When upgrading
+  from 0.3.0, delete `BepInEx/plugins/maschine-ArenaMapPort/parts/full.json` (the manifest of the former single ZIP).
 - Requires an installed Escape from Tarkov: Arena. Both client and server must be updated together.
 - Fika compatibility has not been verified. No match-event crowd reactions are included.
 

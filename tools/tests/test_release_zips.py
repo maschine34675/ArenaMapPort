@@ -605,7 +605,7 @@ class BuildTests(FakeRepoCase):
             self.assertIn(plan.zip_name, readme)
         self.assertIn("EVERY part", readme)
         self.assertIn("close", readme.lower())
-        self.assertIn("Equator, Bay5, AirPit", readme)
+        self.assertIn("Equator, Bay5, Air Pit", readme)
         self.assertIn("selection artwork", readme)
         self.assertIn("score monitor sprites", readme)
         notices = core[f"{PLUGIN}/THIRD-PARTY-NOTICES.txt"]
@@ -619,6 +619,41 @@ class BuildTests(FakeRepoCase):
                 continue
             self.assertEqual({n for n in entries if n not in self.files},
                              {f"{PLUGIN}/parts/{name.rsplit('-', 1)[1].removesuffix('.zip')}.json"}, name)
+
+    def core_readme(self) -> str:
+        core = self.read_zips(self.build())["maschine-ArenaMapPort-0.1.0-part1of4-core.zip"]
+        return core[f"{PLUGIN}/README.txt"].decode("utf-8")
+
+    def test_the_readme_states_the_spt_range_the_server_declares_and_what_was_tested(self):
+        # ArenaMapPort.Server/ModMetadata.cs declares ~4.1.5 (>=4.1.5 <4.2.0); 4.1.6 is the tested version.
+        readme = self.core_readme()
+        self.assertIn("Target: SPT 4.1.5 or later 4.1.x (the server declares ~4.1.5; tested with 4.1.6) / EFT 0.16.9.5", readme)
+        self.assertNotIn("Target: SPT 4.1.x", readme)
+
+    def test_the_readme_says_air_pit_in_prose_and_keeps_the_folder_name_for_the_dynamicmaps_folder(self):
+        # MapRelease.display ("AirPit") is the DynamicMaps folder name; the prose names the map like the game does.
+        readme = self.core_readme()
+        self.assertNotIn("AirPit", readme)
+        self.assertIn("Air Pit map data", readme)
+        self.assertIn("Included locations: Equator, Bay5, Air Pit.", readme)
+        self.assertEqual(release.prose_name("AirPit"), "Air Pit")
+        self.assertEqual(release.prose_name("Bowl"), "Bowl")
+        self.assertEqual(release.MapRelease("arena_airpit", "airpit", "AirPit").display, "AirPit")
+
+    def test_the_multi_part_readme_tells_a_0_3_0_player_to_delete_the_old_single_zip_manifest(self):
+        readme = re.sub(r"\s+", " ", self.core_readme())
+        old = ("When upgrading from 0.3.0, also delete BepInEx/plugins/maschine-ArenaMapPort/parts/full.json, the manifest "
+               "of the former single ZIP: this release no longer ships it and nothing reads it.")
+        self.assertIn(old, readme)
+        self.assertLess(readme.index("3. When upgrading from 0.2.1"), readme.index(old))
+        self.assertLess(readme.index(old), readme.index("4. Start the SPT server"))
+
+    def test_the_readme_names_both_missing_impact_banks_and_the_noise_context(self):
+        readme = re.sub(r"\s+", " ", self.core_readme())
+        self.assertIn("no impact sounds for the Books and CardBoard prop types", readme)
+        self.assertIn("39 Equator props", readme)
+        self.assertIn("on development builds with a denser crowd-call schedule than this release uses", readme)
+        self.assertIn("no noise fix is claimed", readme)
 
     def test_selection_artwork_is_byte_identical_and_core_only(self):
         result = self.build()
@@ -1346,10 +1381,13 @@ class SingleLayoutTests(FakeRepoCase):
         self.assertIn("Extract the ZIP into your SPT installation directory", readme)
         self.assertIn("BepInEx and SPT_Runtime", readme)
         self.assertIn("close", readme.lower())
-        self.assertIn("Equator, Bay5, AirPit", readme)
+        self.assertIn("Equator, Bay5, Air Pit", readme)
         # the Verification paragraph describes the single checksum line, not "every part"
         self.assertIn(f"Verification: {SHA_NAME} lists the SHA-256 of the ZIP", readme)
         self.assertIn("parts/full.json records", readme)
+        # the single ZIP ships parts/full.json: the multi-part note that tells a 0.3.0 player to delete it does not apply
+        self.assertNotIn("also delete", readme)
+        self.assertNotIn("former single ZIP", readme)
         for multi_part_wording in ("EVERY part", "ZIP parts", "ALL of them", "part1of", "of every part", "any order",
                                    "core part"):
             self.assertNotIn(multi_part_wording, readme)

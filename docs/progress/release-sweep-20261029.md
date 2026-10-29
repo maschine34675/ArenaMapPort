@@ -92,3 +92,14 @@ variants differed only in the documented native time fields. Current ordinary
 profiles, all 470 original host configs and candidate binaries were independently
 checked after propagation; inventories remain unchanged. Historical conflicts
 and archived evidence were preserved.
+
+## Correction after the release audit (2026-10-29)
+
+The sentence under "Remaining limits" that names two shoe props understates the gap. In the accepted Equator source
+package (`work/extract/equator-native-v5`, `Arena_Equator.json`) 30 of the 391 `SmallPhysicsObject` components carry the
+sound type Books (13 shoes, 10 books, 6 blue cups, 1 road cone) and 9 more carry CardBoard (3 pizza boxes, 6 office
+folders). EFT's own `weaponsounds` bundle has no impact bank for either type (the audit read both references as null), so
+those 39 props stay silent when they hit something. The guard logs once per sound type, which is why only a few names
+appear in the logs. Bay5, Bowl and Air Pit hold no props of those two types. This supersedes "Books is the only type
+without a bank" in [two-maps-item-5-physics-props.md](two-maps-item-5-physics-props.md); the release texts of 0.4.0 name
+both types and the Equator count.

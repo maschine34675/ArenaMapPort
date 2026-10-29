@@ -24,7 +24,8 @@ invented) and can be switched off per map with DeveloperMode enabled (enable it 
 
 Version 0.4.0 adds the original animated spectators on all four maps, with
 spatial crowd calls and up to two voices at once. The crowd does not react to
-kills or round results yet.
+kills or round results yet. The crowds use about 0.5 GB of video memory per raid
+and add about <CROWD_LOAD_SECONDS> seconds to raid loading (see Known limitations).
 
 The gates and vehicles at the team spawn enclosures use Arena's own open positions and,
 where Arena has them, its motions (at half their time). They stand open from raid start, or a
@@ -61,8 +62,15 @@ their upper spectator areas are omitted.
 
 ## Installation
 
-Close EFT and the SPT server, then extract the ZIP into your SPT directory.
-Merge both `BepInEx` and `SPT_Runtime`, then restart the server and game.
+Close EFT and the SPT server. Download **all five ZIP parts** of the release (core,
+Equator, Bay5, Air Pit and Bowl) and extract every part into your SPT directory, merging
+`BepInEx` and `SPT_Runtime`. The parts can be extracted in any order and must not be joined
+into one archive; a map works only with its own part and the core part, and the release's
+`.sha256` file lists the checksum of each part. Then restart the server and game.
+
+Upgrading from 0.3.0: extract all five parts over the installation, then delete
+`BepInEx/plugins/maschine-ArenaMapPort/parts/full.json`, the manifest of the former single
+ZIP, which this release no longer ships.
 
 Updating a development build? Move the old `BepInEx/plugins/ArenaMapPort`
 directory outside `BepInEx/plugins` before extracting to avoid duplicate plugins.
@@ -72,3 +80,18 @@ directory outside `BepInEx/plugins` before extracting to avoid duplicate plugins
 In F12, enable **Appearance / NaturalEquatorNight** before your next raid to
 remove the added neon treatment. The time remains midnight and the weather
 stays unchanged. Equator Day, Bay5, Air Pit and Bowl are unaffected.
+
+## Known limitations
+
+- Intermittent short noise reported during Equator play remains unresolved and no fix is
+  claimed. It was reported on development builds that allowed three overlapping crowd voices
+  at twice the call rate, by a player using the SurroundAudio mod (5.1), and has not yet been
+  re-tested with the shipped two-voice schedule.
+- EFT's own sound bundle has no impact sounds for the Books and CardBoard prop types, so 39
+  Equator props (30 Books: shoes, books, blue cups and a road cone; 9 CardBoard: pizza boxes
+  and office folders) and any props of those types on the other maps stay silent when they hit
+  something.
+- The crowds decode 123 shared images into about 0.5 GB of video memory per raid on
+  every map and add about <CROWD_LOAD_SECONDS> seconds to raid loading. The GitHub release
+  notes explain how to skip a map's crowd.
+- Fika compatibility has not been verified, and the crowd does not react to match events.

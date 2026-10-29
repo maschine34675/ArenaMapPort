@@ -1,7 +1,7 @@
 # ArenaMapPort — working notes for agents
 
 ArenaMapPort imports the maps of Escape from Tarkov: Arena (read from the user's own Arena
-install) into SPT 4.1.5 (EFT 0.16.9.5, Unity 2022.3.43f1) as separate locations: a Python extractor,
+install) into SPT 4.1.6 (EFT 0.16.9.5, Unity 2022.3.43f1; the server declares `~4.1.5`) as separate locations: a Python extractor,
 a Unity 2022.3.43f1 batch importer that rebuilds scenes, materials, colliders and a fresh NavMesh into
 asset bundles, a BepInEx client plugin that repairs everything a ported scene lacks at raid time, and an
 SPT server mod that registers the locations. Fourteen maps retain development inputs; **Equator, Bay5, AirPit and Bowl** are registered and
@@ -290,8 +290,9 @@ fresh clone run, before the build, `python tools/extract/extract_gate_sounds.py 
 `work/extract/gate-sounds/<map_key>`; it needs UnityPy, fmod_toolkit, numpy and the installed Arena, and reads the tracked rows that the
 same script's `rows` step writes, which is rerun only after an Arena update) and `python tools/extract/extract_monitor_templates.py` (nine
 PNGs and `monitors.json` under ignored `work/extract/monitors`). A missing input stops the build with an Error that names the extractor.
-Both folders are plaintext, like the selection artwork. `dist/` now holds 113 files (90 before; the gate sounds add 13 and the
-monitors 10); `make_release_zips.py --plan` reads the parts core 15, equator 23, bay5 29, airpit 21, bowl 25. See
+Both folders are plaintext, like the selection artwork. `dist/` now holds 255 files (113 after those two additions, 90 before; the
+gate sounds add 13 and the monitors 10, the spectator files of 2026-10-27/28 the rest); `make_release_zips.py --plan` reads the parts
+core 153, equator 24, bay5 30, airpit 22, bowl 26. See
 [gate-sounds.md](docs/progress/gate-sounds.md), [score-monitors.md](docs/progress/score-monitors.md) and
 [dist-manifest.md](docs/dist-manifest.md).
 
