@@ -37,7 +37,7 @@ namespace ArenaMapPort.Client
 
     internal sealed class SpectatorAudioSchedule
     {
-        public const int MaxConcurrent = 3;
+        public const int MaxConcurrent = 2;
         readonly Random _random;
         bool _running;
         int _lastSpeaker = -1, _lastClip = -1;
@@ -55,7 +55,7 @@ namespace ArenaMapPort.Client
         public void Played(double now, int speaker, int clip)
         {
             _lastSpeaker = speaker; _lastClip = clip;
-            NextAt = now + .8 + _random.NextDouble() * .8;
+            NextAt = now + 1.6 + _random.NextDouble() * 1.6;
         }
         public int ChooseClip(int count, ISet<int> busy = null) =>
             Pick(Enumerable.Range(0, count).Where(i => busy == null || !busy.Contains(i)).ToList(), _lastClip);

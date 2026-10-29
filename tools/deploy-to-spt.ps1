@@ -79,6 +79,12 @@
   only its known DLL from either historical plugin path, verifying the accepted helper hash.
   Close EFT first. Leaves folders/configuration untouched. Dry run unless Confirm is supplied.
 
+.PARAMETER RemoveLegacySpectatorTextures
+  Separate development-package migration after full deployment, with EFT closed. Requires the
+  installed DLL, four schema-4 graphs and shared textures to match dist. Removes only old per-map
+  PNGs byte-identical to the verified shared replacements. Original exports remain in work/extract.
+  Unknown or changed files refuse the operation before removal. Dry run unless Confirm is supplied.
+
 .PARAMETER RenameClientFolder
   Separate migration from BepInEx/plugins/ArenaMapPort to maschine-ArenaMapPort.
   Renames the complete directory without changing any file contents or the server folder.
@@ -111,6 +117,7 @@ param(
     [switch]$RemoveLegacyDynamicMaps,
     [switch]$RemoveLegacyEquatorDb,
     [switch]$RemoveLegacyShaderSidecar,
+    [switch]$RemoveLegacySpectatorTextures,
     [switch]$RemoveDebugHelper,
     [switch]$RenameClientFolder,
     [string]$DynamicMapsPackage,
@@ -636,6 +643,98 @@ function Invoke-ClientFolderRename {
     # Directory.Move refuses an existing destination instead of nesting/merging.
     [IO.Directory]::Move($source, $target)
     Write-Output 'CLIENT_FOLDER_RENAMED all contents preserved; server folder untouched'
+}
+
+function Invoke-LegacySpectatorTextureRemoval {
+    $repo = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
+    $relativeRoot = 'BepInEx/plugins/maschine-ArenaMapPort'
+    $installed = Assert-PlainPath (Join-Path $SptRoot $relativeRoot) 'Directory'
+    $staged = Assert-PlainPath (Join-Path (Join-Path $repo 'dist') $relativeRoot) 'Directory'
+    $manifestPath = Assert-PlainPath (Join-Path $staged 'spectators/shared/spectator-textures.json') 'File'
+    $manifest = Get-Content -LiteralPath $manifestPath -Raw | ConvertFrom-Json
+    $manifestHash = (Get-FileHash -LiteralPath $manifestPath).Hash
+    if ($manifest.schema -ne 1 -or @($manifest.files).Count -lt 1) { throw 'Invalid shared texture manifest' }
+    $textures = @{}
+    $replacements = @('maschine-ArenaMapPort.Client.dll', 'spectators/shared/spectator-textures.json')
+    foreach ($row in $manifest.files) {
+        if ($row.file -cnotmatch '^[0-9a-f]{16}(-[0-5])?\.png$' -or $textures.ContainsKey($row.file) -or
+            $row.sha256 -cnotmatch '^[0-9a-f]{64}$' -or $row.bytes -le 0) { throw 'Invalid shared texture row' }
+        $textures[$row.file] = $row
+        $replacements += 'spectators/shared/' + $row.file
+    }
+    $maps = @('arena_airpit', 'arena_equator', 'arena_bay5', 'arena_bowl')
+    foreach ($map in $maps) { $replacements += "spectators/$map/spectator.json.gz" }
+    foreach ($relative in $replacements) {
+        $source = Assert-PlainPath (Join-Path $staged $relative) 'File'
+        $target = Assert-PlainPath (Join-Path $installed $relative) 'File'
+        if (-not (Test-Path -LiteralPath $target -PathType Leaf) -or
+            (Get-FileHash -LiteralPath $source).Hash -ne (Get-FileHash -LiteralPath $target).Hash) {
+            throw "Deploy all shared spectator files and the client DLL first: $relative"
+        }
+    }
+    foreach ($row in $textures.Values) {
+        $file = Get-Item -LiteralPath (Join-Path $installed ('spectators/shared/' + $row.file))
+        if ($file.Length -ne $row.bytes -or (Get-FileHash -LiteralPath $file.FullName).Hash -ne $row.sha256) {
+            throw 'Damaged shared spectator replacement'
+        }
+    }
+    $plan = @()
+    foreach ($map in $maps) {
+        $folder = Assert-PlainPath (Join-Path $installed "spectators/$map") 'Directory'
+        $stream = [IO.File]::OpenRead((Join-Path $folder 'spectator.json.gz'))
+        try {
+            $gzip = [IO.Compression.GZipStream]::new($stream, [IO.Compression.CompressionMode]::Decompress)
+            $reader = [IO.StreamReader]::new($gzip)
+            try { $graph = $reader.ReadToEnd() | ConvertFrom-Json } finally { $reader.Dispose() }
+        } finally { $stream.Dispose() }
+        if ($graph.schema -ne 4 -or $graph.map -cne $map) { throw 'Expected the new schema-4 map graph' }
+        if ($graph.texture_manifest_sha256 -ne $manifestHash -or $null -eq $graph.textures -or
+            @($graph.textures.PSObject.Properties).Count -lt 1) { throw 'Map/shared spectator manifest mismatch' }
+        foreach ($texture in $graph.textures.PSObject.Properties) {
+            $files = $texture.Value.files
+            if ($files -isnot [Array] -or $files.Count -notin @(1, 6)) { throw 'Invalid map texture references' }
+            foreach ($file in $files) {
+                if ($file -isnot [string] -or $file -cnotmatch '^[0-9a-f]{16}(-[0-5])?\.png$' -or
+                    -not $textures.ContainsKey($file)) { throw 'Map references a missing shared texture' }
+            }
+        }
+        foreach ($file in Get-ChildItem -LiteralPath $folder -Force) {
+            $path = Assert-PlainPath $file.FullName 'File'
+            if ($file.Name -ceq 'spectator.json.gz') { continue }
+            if (-not $textures.ContainsKey($file.Name) -or
+                (Get-FileHash -LiteralPath $path).Hash -ne $textures[$file.Name].sha256) {
+                throw "Unknown or changed legacy spectator file: $path"
+            }
+            $plan += $path
+        }
+    }
+    $eftPath = [IO.Path]::GetFullPath((Join-Path $SptRoot 'EscapeFromTarkov.exe'))
+    foreach ($process in Get-Process -Name EscapeFromTarkov -ErrorAction SilentlyContinue) {
+        if ($process.Path -eq $eftPath) { throw 'Close EFT before removing legacy spectator textures' }
+    }
+    Write-Output "Legacy spectator textures: $($plan.Count) identical redundant files"
+    if (-not $Confirm) { Write-Output 'DRY RUN: no files changed'; return }
+    foreach ($path in $plan) {
+        $resolved = Assert-PlainPath $path 'File'
+        if (-not $resolved.StartsWith($installed + [IO.Path]::DirectorySeparatorChar, [StringComparison]::OrdinalIgnoreCase) -or
+            (Get-FileHash -LiteralPath $resolved).Hash -ne $textures[[IO.Path]::GetFileName($resolved)].sha256) {
+            throw 'Legacy texture changed during migration; removal stopped'
+        }
+        Remove-Item -LiteralPath $resolved
+    }
+    Write-Output "LEGACY_SPECTATOR_TEXTURES_OK removed=$($plan.Count); shared replacements retained"
+}
+
+if ($RemoveLegacySpectatorTextures) {
+    try {
+        if ($RemoveLegacyShaderSidecar -or $RemoveDebugHelper -or $RemoveLegacyEquatorDb -or $RemoveLegacyDynamicMaps -or
+            $RenameClientFolder -or $DllOnly -or $PSBoundParameters.ContainsKey('DllTarget') -or
+            $PSBoundParameters.ContainsKey('DynamicMapsPackage') -or $PSBoundParameters.ContainsKey('DynamicMapsMap')) {
+            throw 'RemoveLegacySpectatorTextures cannot be combined with other deployment modes'
+        }
+        Invoke-LegacySpectatorTextureRemoval
+    } catch { Fail $_.Exception.Message }
+    exit 0
 }
 
 if ($PSBoundParameters.ContainsKey('DllTarget') -and -not $DllOnly) {

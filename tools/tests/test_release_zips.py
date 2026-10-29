@@ -86,6 +86,8 @@ def fake_dist_files(maps=MAPS):
         f"{PLUGIN}/map-selection/manifest.json": text("selection map manifest"),
         f"{PLUGIN}/monitors/monitors.json": text("monitor manifest"),
         f"{PLUGIN}/spectator-audio/spectator-audio.json": text("fan manifest"),
+        f"{PLUGIN}/spectators/shared/spectator-textures.json": text("shared textures"),
+        f"{PLUGIN}/spectators/shared/0123456789abcdef.png": random.Random("crowd").randbytes(900),
         f"{PLUGIN}/spectator-audio/arena_fan7_participating_01.wav": b"RIFF fan fixture",
         f"{PLUGIN}/monitors/Arena_Scoreboard_Status_Toggle_On.png": b"\x89PNG\r\n\x1a\n" + random.Random("monitors").randbytes(900),   # its own generator: the bytes below keep their values
     }
@@ -100,7 +102,6 @@ def fake_dist_files(maps=MAPS):
         files[f"{PLUGIN}/gate-sounds/{key}/gate-sounds.json"] = text(key + "gatesounds")
         files[f"{PLUGIN}/gate-sounds/{key}/{key}_door.wav"] = random.Random(key).randbytes(1200)   # its own generator: the bytes below keep their values
         files[f"{PLUGIN}/spectators/{key}/spectator.json.gz"] = text(key + "crowd")
-        files[f"{PLUGIN}/spectators/{key}/0123456789abcdef.png"] = random.Random(key + "crowd").randbytes(900)
         files[f"{PLUGIN}/ai/{stem}.ai.json"] = text(key + "ai")
         for n in (1, 2):
             files[f"{PLUGIN}/loadscreens/{key}_{n}.jpg"] = b"\xff\xd8\xff" + b"\x00" * 3000
@@ -187,7 +188,8 @@ class PartitionTests(FakeRepoCase):
             f"{SERVER}/locales/map-descriptions.json",
             f"{PLUGIN}/map-selection/region-map.png", f"{PLUGIN}/map-selection/manifest.json",
             f"{PLUGIN}/monitors/monitors.json", f"{PLUGIN}/monitors/Arena_Scoreboard_Status_Toggle_On.png",
-            f"{PLUGIN}/spectator-audio/spectator-audio.json", f"{PLUGIN}/spectator-audio/arena_fan7_participating_01.wav"})
+            f"{PLUGIN}/spectator-audio/spectator-audio.json", f"{PLUGIN}/spectator-audio/arena_fan7_participating_01.wav",
+            f"{PLUGIN}/spectators/shared/spectator-textures.json", f"{PLUGIN}/spectators/shared/0123456789abcdef.png"})
 
     def test_each_map_part_holds_only_its_own_files(self):
         for part, (key, display) in zip(self.partition()[1:], MAPS):
@@ -294,7 +296,7 @@ class PartitionTests(FakeRepoCase):
                  f"{SERVER}/locales/map-descriptions.json", f"{PLUGIN}/maschine-ArenaMapPort.Client.dll",
                  f"{SERVER}/maschine-ArenaMapPort.Server.dll",
                  f"{PLUGIN}/map-selection/region-map.png", f"{PLUGIN}/map-selection/manifest.json", f"{PLUGIN}/monitors/monitors.json",
-                 f"{PLUGIN}/spectator-audio/spectator-audio.json"]
+                 f"{PLUGIN}/spectator-audio/spectator-audio.json", f"{PLUGIN}/spectators/shared/spectator-textures.json"]
         for key, _display in MAPS:  # everything validate_distribution.py demands of every released map
             names += [f"{PLUGIN}/{shader_sidecar(key)}", f"{PLUGIN}/ai/{key.removeprefix('arena_')}.ai.json",
                       f"{SERVER}/banners/{key}.jpg", f"{PLUGIN}/acoustics/{key}/spatial-audio.json",
@@ -345,10 +347,13 @@ class PartitionTests(FakeRepoCase):
     def test_spectators_stay_in_their_map_part_and_reject_strays(self):
         rules = release.build_rules(self.spec)
         for key, _ in MAPS:
-            for leaf in ('spectator.json.gz', '0123456789abcdef.png', '0123456789abcdef-5.png'):
+            for leaf in ('spectator.json.gz',):
                 self.assertEqual(release.classify(f'{PLUGIN}/spectators/{key}/{leaf}', rules).part,
                                  key.removeprefix('arena_'))
-        for relative in ('arena_airpit2/spectator.json.gz', 'arena_prison/spectator.json.gz',
+        for leaf in ('spectator-textures.json', '0123456789abcdef.png', '0123456789abcdef-5.png'):
+            self.assertEqual(release.classify(f'{PLUGIN}/spectators/shared/{leaf}', rules).part, release.CORE_ID)
+        for relative in ('arena_airpit2/spectator.json.gz', 'arena_prison/spectator.json.gz', 'arena_airpit/0123456789abcdef.png',
+                         'shared/0123456789abcdef-6.png', 'shared/nested/0123456789abcdef.png',
                          'arena_bay5/spectator.json.gz.bak', 'arena_bay5/Thumbs.db',
                          'arena_bay5/nested/0123456789abcdef.png', 'arena_bay5/0123456789abcdef-6.png'):
             with self.subTest(relative=relative), self.assertRaises(release.ClassificationError):
@@ -2427,7 +2432,7 @@ class EncryptedBundleTests(FakeRepoCase):
             parts = release.partition_single(self.scan(), self.spec) if single else self.partition()
             text = re.sub(r"\s+", " ", release.readme_text(self.spec, parts))
             with self.subTest(single=single):
-                self.assertIn("Updating: extract the complete ZIP over the installation with the SPT server closed", text)
+                self.assertIn("Updating: extract the complete release package (ALL parts if split) with the SPT server closed", text)
                 self.assertIn("The keys folder (BepInEx/plugins/maschine-ArenaMapPort/keys) belongs to the bundles next to it", text)
                 self.assertIn("a missing or damaged key file is reported as an error in the client log, and the maps do not load", text)
                 self.assertIn('ends with a ref code, for example "ref NO_ARENA"', text)
@@ -2526,7 +2531,7 @@ class BowlPartTests(FakeRepoCase):
             f"{PLUGIN}/acoustics/arena_bowl/spatial-audio.json", f"{PLUGIN}/acoustics/arena_bowl/source.audiobakedata",
             f"{PLUGIN}/acoustics/arena_bowl/room.assets_9.wav", f"{PLUGIN}/ai/bowl.ai.json",
             f"{PLUGIN}/gate-sounds/arena_bowl/gate-sounds.json", f"{PLUGIN}/gate-sounds/arena_bowl/arena_bowl_door.wav",
-            f"{PLUGIN}/spectators/arena_bowl/spectator.json.gz", f"{PLUGIN}/spectators/arena_bowl/0123456789abcdef.png",
+            f"{PLUGIN}/spectators/arena_bowl/spectator.json.gz",
             *(f"{PLUGIN}/loadscreens/arena_bowl_{n}.jpg" for n in (1, 2, 3, 4)),
             f"{PLUGIN}/material-shaders.arena_bowl.json", f"{SERVER}/db/arena_bowl/base.json",
             f"{SERVER}/banners/arena_bowl.jpg"})

@@ -4,6 +4,7 @@ using System.IO;
 using System.Linq;
 using System.Security.Cryptography;
 using Audio.SpatialSystem;
+using BepInEx.Configuration;
 using Comfort.Common;
 using EFT;
 using Newtonsoft.Json;
@@ -17,6 +18,7 @@ namespace ArenaMapPort.Client
     {
         const string Tag = "[SpectatorAudio]";
         const float Gain = .5f;
+        static ConfigEntry<bool> _callsEnabled;
         Vector3[] _positions;
         float[] _distances;
         SpectatorAudioManifest _manifest;
@@ -38,6 +40,20 @@ namespace ArenaMapPort.Client
         public float OcclusionGain, SourceVolume, LastOutputPeak;
         public int ActiveVoices, PlayingVoices, PeakConcurrentVoices;
         public string ActiveSpeakerIds, ActiveClipNames;
+        public bool CallsEnabled => !DeveloperOptions.Enabled || _callsEnabled == null || _callsEnabled.Value;
+
+        internal static void Install()
+        {
+            _callsEnabled = Plugin.Instance.Settings.Bind("Audio diagnostics", "SpectatorCalls", true,
+                "Developer hearing comparison: enable original spectator calls. Live; off stops only spectator " +
+                "voices and keeps the visual crowd, map ambience and other sounds. On restarts the normal initial delay. " +
+                "Ignored outside DeveloperMode.");
+            _callsEnabled.SettingChanged += (_, __) =>
+            {
+                if (DeveloperOptions.Enabled)
+                    Plugin.Log.LogDebug($"{Tag} developer hearing comparison: spectator calls enabled={_callsEnabled.Value}");
+            };
+        }
 
         sealed class Voice
         {
@@ -113,7 +129,7 @@ namespace ArenaMapPort.Client
                     StopAllVoices(); ClearClips(); _schedule.Stop();
                 }
                 var player = GamePlayerOwner.MyPlayer;
-                if (!Singleton<AbstractGame>.Instantiated || Singleton<AbstractGame>.Instance.Status != GameStatus.Started ||
+                if (!CallsEnabled || !Singleton<AbstractGame>.Instantiated || Singleton<AbstractGame>.Instance.Status != GameStatus.Started ||
                     player == null || player.HealthController == null || !player.HealthController.IsAlive)
                 {
                     StopAllVoices(); _schedule.Stop(); NextCallAt = -1; return;
@@ -134,7 +150,8 @@ namespace ArenaMapPort.Client
                     if (voice != _lastVoice) continue;
                     OcclusionGain = voice.Source.OcclusionVolumeFactor;
                     SourceVolume = source != null ? source.volume : 0;
-                    if (on && now >= voice.NextOutputProbe)
+                    // Output readback is a developer probe; playback never depends on its peak.
+                    if (DeveloperOptions.Enabled && on && now >= voice.NextOutputProbe)
                     {
                         voice.NextOutputProbe = now + .2f;
                         source.GetOutputData(_outputSamples, 0);

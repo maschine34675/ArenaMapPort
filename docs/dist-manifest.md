@@ -358,3 +358,41 @@ client/server candidate, validate it, then make a ZIP with the extract compariso
 candidate. The existing single-ZIP plan is approximately 3.98 GiB. A later shared-texture layout
 could remove 440,067,072 bytes of identical per-map copies; that optimization is not a release
 requirement and has not been implemented.
+
+## Shared spectator textures — 2026-10-28 (0.4.0 local candidate)
+
+This supersedes the preceding development layout. The four map parts now each carry only
+`spectators/<map_key>/spectator.json.gz` (schema 4). Core owns `spectators/shared/` with 123
+PNG files and `spectator-textures.json`; each graph pins that exact manifest and each manifest
+row pins the image bytes. Old per-map PNGs are rejected by release classification/validation.
+The audio package is unchanged (13 original Participating clips, three simultaneous speakers).
+
+Candidate `2f8cff0`: 255 distribution files, 3,851,842,535 raw bytes. The full ZIP adds four
+generated release files and is 3,834,882,881 bytes (3.57 GiB), SHA-256
+`f8fcfb7294c6eef8467a3ef6953d02e6091d12f1f7115e0956153813b532926f`.
+The 440,067,072-byte reduction counts duplicate PNGs only; new integrity metadata is included
+in the final package size. Source exports remain untouched. Full distribution and extract
+comparison passed, followed by a matching GPU-2 deployment and safe legacy-PNG migration.
+The final in-game test is pending because the separate ArenaMode recovery blocks host startup;
+see [spectator-shared-textures.md](progress/spectator-shared-textures.md). No publishing occurred.
+
+## GitHub five-part cut preparation — 2026-10-29
+
+This supersedes the October 28 candidate's release status and audio cap, while preserving its
+historical measurements above. Current runtime permits two spectator voices and gates output
+readback behind DeveloperMode. The late owned-scene collision guard is included in the final client.
+The native sweep passed its bounded checks; intermittent noise and missing Books impacts remain open.
+
+The existing multipart packer partitions the current 255 distribution files as core 153, Equator 24,
+Bay5 30, Air Pit 22 and Bowl 26. Core holds the 123 shared PNGs and their manifest plus 13 original
+Participating WAVs and their manifest; per-map schema-4 graphs remain with their maps. Each map part
+also carries its three encrypted AMPB bundles, schema-2 wrapped-key JSON and server database entry.
+The generated README/notices/part manifests add eight entries across five normal ZIPs. The checksum
+file lists all five assets. All parts are required and extract into the same SPT root in any order.
+
+Use a fresh output directory for the GitHub set. The obsolete 3,834,882,881-byte single ZIP stays local;
+it exceeds GitHub's per-file limit and contains the prior client. Rebuild from the final clean commit,
+authenticate the encrypted distribution and installed-Arena key derivation, then require each finished
+ZIP below 2 GiB and compare its extracted union byte-for-byte with dist. Verify both DLL ProductVersions
+and every manifest against the final commit. See [the preparation record](progress/release-preparation-20261029.md).
+No final package sizes, hashes or publication are asserted by this preparation entry.

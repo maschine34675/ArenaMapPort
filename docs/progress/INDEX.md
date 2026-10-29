@@ -8,8 +8,18 @@ dated state in one screen; read it before this index if you only have a minute.
 
 ## Current — read these for the area you touch
 
+- [release-preparation-20261029.md](release-preparation-20261029.md) — current 0.4.0 release notes,
+  five-part GitHub package plan, final rebuild/authentication requirements and explicit audio limits.
+
+- [release-sweep-20261029.md](release-sweep-20261029.md) — mixed native checks on both hosts,
+  spectator diagnostic gating, late physics sound callback fix and remaining audio limits.
+
+- [spectator-shared-textures.md](spectator-shared-textures.md) — 0.4.0: shared texture staging,
+  graph/manifest/image integrity, safe development-package migration and release-candidate checks.
+
 - [spectator-audio.md](spectator-audio.md) — overlapping original participating calls across all four
-  crowds; shared audio, up to three independent spatial/room sources, bounded cadence and cleanup.
+  crowds; shared audio, up to two independent spatial/room sources, 1.6-3.2 s cadence and cleanup;
+  intermittent-noise investigation: KeepReverb comparison negative, spectator-only comparison available.
 - [spectators-allmaps.md](spectators-allmaps.md) — original crowds on all four maps: Equator day/night,
   Bay5's translated group and inactive legacy colliders, Bowl and the accepted AirPit crowd; shared runtime,
   exact source/animation audits, staging and release packaging.

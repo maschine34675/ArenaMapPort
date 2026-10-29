@@ -6,15 +6,21 @@ their notes stay under [docs/releases/](docs/releases/) for the record, and 0.2.
 Dates are ISO dates. Each entry links its full release note (download links, checksums, install and upgrade steps),
 and the settings text is in the [README](README.md).
 
-## Unreleased
+## 0.4.0 - 2026-10-29
+
+Full release note: [docs/releases/v0.4.0.md](docs/releases/v0.4.0.md).
+
+### Added
 
 - Spectators on all four maps call out using 13 original Arena voice clips, with spatial positioning
-  and room obstruction. Calls are scheduled at 0.8-1.6 second intervals, waiting if three voices are already active;
+  and room obstruction. Calls are scheduled at 1.6-3.2 second intervals, waiting if two voices are already active;
   active speakers and recorded voice families do not duplicate. No kill/round-win reactions yet.
 
 - Original spectators are restored on Air Pit (99), Equator day/night (99), Bay5 (88) and Bowl (99), with 15 appearances
   and original idle/cheering animations at staggered intervals. The missing legacy face cloth uses
   Arena's current half-mask. The crowd is decorative and does not react to match events yet.
+- Spectator textures are shared across all four maps, saving about 440 MB compared with the development packages,
+  with identical image quality. Map and texture integrity checks detect mixed or damaged installations.
 
 - Avoid a second, misleading `NO_CAUSE` map-error dialog when EFT already reported
   the failure during that loading attempt. Recorded map-file and Arena-installation
@@ -31,7 +37,7 @@ and the settings text is in the [README](README.md).
   `Spawns/` tune the sound (they need `General/DeveloperMode`).
 - **The TV screens can show a mode's timer, team score and alive counts** in Arena's look (its colours, trophy and skull
   icons and the Bender font): 9 screens on Equator, 8 on Bay5 and 6 each on Air Pit and Bowl; the other TVs stay dark.
-  Nothing changes without a mode plugin that uses it, such as a future ArenaMode version. Mod authors: the public class
+  Nothing changes without a mode plugin that uses it. Mod authors: the public class
   `ArenaMapPort.Client.ScoreMonitors` (contract version 1) is described in `docs/progress/score-monitors.md`. A new
   `monitors` folder with nine images ships beside the DLL, and the developer setting `Monitors/Demo` shows a test
   cycle without a mode plugin.
@@ -40,6 +46,32 @@ and the settings text is in the [README](README.md).
 - **Four spawn points moved off the navigation edge.** Equator's two southern bot spawns and Bay5's north-west player
   spawn and east-lane bot spawn stood on the very edge of the navigation mesh, and the game pushed at least one of them
   1.5 m inboard at every raid start. They now start 1.3 to 1.5 m further in, where they ended up anyway.
+
+### Fixed
+
+- Late collisions from remaining Arena props after map teardown no longer request the already unloaded
+  native sound bundle. The guard is limited to owned Arena scenes and preserves the collision timer;
+  ordinary-map behavior and warnings for missing sound banks during a live raid remain unchanged.
+
+### Changed (internal)
+
+- Spectator audio output readback runs only with startup-enabled `General/DeveloperMode`, avoiding the
+  diagnostic work in normal play. Scheduling and playback stay unchanged.
+- The live developer-only `Audio diagnostics/SpectatorCalls` switch isolates crowd calls for hearing
+  comparisons without disabling visual spectators or map ambience.
+- GitHub downloads use five complete ZIP parts: core, Equator, Bay5, Air Pit and Bowl. Install all five.
+
+### Known limitations
+
+- Intermittent short noise reported during Equator play remains unresolved; no noise fix or subjective
+  audio-quality acceptance is claimed. A reverb-disabled comparison did not eliminate it.
+- The native Books impact-sound bank is missing; those prop impacts remain silent.
+
+### Compatibility
+
+- SPT 4.1.6 / EFT 0.16.9.5-40743; server range remains `~4.1.5`.
+- Requires an installed Escape from Tarkov: Arena. Both client and server must be updated together.
+- Fika compatibility has not been verified. No match-event crowd reactions are included.
 
 ## 0.3.0 - 2026-10-24
 

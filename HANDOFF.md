@@ -3,6 +3,129 @@
 Snapshot for whoever continues (human or agent). Verify the commits named here against `git log`; this file
 is updated by hand at each handover, it is not an automatic record. Read [AGENTS.md](AGENTS.md) first.
 
+## Update 2026-10-29 - GitHub 0.4.0 release preparation
+
+The user now authorizes the public GitHub release. Current client/server metadata is already 0.4.0;
+the changelog is dated 2026-10-29 and the release note includes final two-voice scheduling, diagnostic
+gating and the late physics-sound guard. The mixed native sweep below supersedes October 28's blocked
+startup state, but does not prove that intermittent noise is fixed; missing Books impacts remain open too.
+
+Use the existing five-part packer layout for GitHub: core, Equator, Bay5, Air Pit and Bowl, plus the
+checksum file. All five normal ZIPs install into the SPT root. The October 28 single ZIP remains obsolete
+and must not be uploaded. Current dist has 255 files; core carries shared spectator textures/calls, and
+each map carries its encrypted bundles, wrapped-key JSON and database together. The packer enforces
+GitHub's under-2-GiB per-asset limit. Versioned publication text is [v0.4.0.md](docs/releases/v0.4.0.md).
+
+The root must review/commit, rebuild both components from that commit, authenticate the distribution,
+prove DLL ProductVersion and all manifests match the commit, extract/compare the new five-part set,
+then publish and read back the release. Preparation oracle and exact commands:
+`work/releases/0.4.0/Verify-Preparation.ps1` and `PREPARATION.md`. No build, deployment, commit, push,
+tag or upload was performed by the preparation worker. See
+[release-preparation-20261029.md](docs/progress/release-preparation-20261029.md).
+
+## Update 2026-10-29 - mixed native sweep and final R2 client
+
+Both test hosts were used concurrently with ArenaMode/Redeploy; GPU-2 loaded all
+four maps, bots/objectives, animated crowds and two spatial spectator voices.
+Spectator output readback now requires DeveloperMode. A late Bowl collision after
+Scripts unload exposed a released soundbundle request; the owned-scene guard now
+skips that sound callback while preserving the collision timer. Full suite:
+2,545 passed, including 21 actual-prefix lifecycle cases; client build: zero warnings/errors.
+Final client SHA256 `D847AB2F3B1914A5598F497CD1CD8A960E5616387A1053AE52FE688C4FB6090D`,
+loaded MVID `c64f36e8-3853-49f2-9ce4-2a4d94e8c7c1`, installed locally and on both hosts.
+R2 Bowl natural end/cleanup passed without the soundbundle exception; Equator's
+developer-on comparison retains positive output measurement. See
+[release-sweep-20261029.md](docs/progress/release-sweep-20261029.md).
+Missing Books impacts and intermittent user-reported noise remain separate open
+audio findings. The older ZIP is still outdated; this sweep does not publish it.
+
+## Update 2026-10-29 - two spectator voices; noise still unresolved
+
+User's KeepReverb=false hearing test was negative: three noise bursts on Equator, no noticed burst
+on AirPit afterwards. The supplied MASCHINE11 `10-55-45` log loads 0.4.0 and records 320/318 calls
+using the same 13 clips, no audio errors. Equator's first menu indicator is 11:04:45.454, last room
+change 11:04:19.195, native Stop 11:04:47.061; the reported noise precedes exit cleanup. Ambient
+electricity/cracles and stun audio are possible alternatives, not proven causes. Do not remove clips
+or change audio filters/order speculatively. See [spectator-audio.md](docs/progress/spectator-audio.md).
+
+Requested cadence change is committed as `d8b51d7`: two simultaneous voices, 1.6-3.2 seconds between
+starts. Initial delay (2-5 seconds), retry delay, gains and original clips stay unchanged. The new
+live developer-only `Audio diagnostics/SpectatorCalls` switch isolates the calls from visual crowds
+and all other audio; false is ignored outside DeveloperMode. Next user test can switch it off and
+check whether the noise remains. Toggle changes log at Debug.
+
+Seven focused C# tests, 13 changelog/version fixtures, client Release build (zero warnings/errors),
+full distribution validation and read-only review passed. The sanctioned client-only dry/confirmed
+deployment copied exactly the DLL to `D:\SPT41`, hash
+`40056EA3DF2C55BCFF6305FFBD6B49FE16014CE91340C93D7DCE74C56B165FA4`.
+No fresh game run or runtime-loaded acceptance; GPU-2 is still awaiting a fresh release from the
+other session's ArenaMode recovery work. Evidence: `work/spectator-cadence-20261029/`.
+**The October 28 release ZIP is now outdated (three voices); rebuild it after final audio acceptance.**
+No tag, upload, publication or push. Existing untracked `assets/Thumbs.db` was not touched.
+
+## Update 2026-10-28 - 0.4.0 candidate preparation (release/0.4.0)
+
+### New user-reported audio issue: investigation pending a hearing comparison
+
+After candidate preparation, the user reported intermittent short noise during Equator TDM on
+MASCHINE11. Their `LogOutput-MASCHINE11-2026-10-28_19-26-57.log` loaded the earlier development
+0.3.0 label, recorded 254 calls with the three-voice cap and no audio error, and confirms
+SurroundAudio 1.0.0 / 5.1 / 48 kHz. All 13 WAVs were re-derived from Arena and match byte-for-byte;
+no clipping or large boundary discontinuity. Native prewarm PCM is entirely silent. No cause or
+fix is confirmed; do not claim the source-start/occlusion ordering is a fix (the combined solver
+updates later). The user was asked to compare `SurroundAudio/General/KeepReverb=false` live while
+leaving everything else unchanged, then restore it. Await that result before changing playback.
+No playback code, other-mod files/settings, deployed DLL or release ZIP changed for this diagnosis.
+Details: [spectator-audio.md](docs/progress/spectator-audio.md), evidence `work/spectator-noise/`.
+This audio report and the existing blocked GPU-2 native acceptance remain open before publication.
+
+### Latest status: package prepared; native acceptance awaits host repair
+
+Code candidate `2f8cff0`, client and server version 0.4.0. Shared texture staging, migration,
+runtime integrity checks and DLL version checks are committed. Client build, full C# regression,
+Python fixtures, full distribution validation and byte-for-byte ZIP extraction passed. The
+read-only code review found no remaining defect. Source exports are retained unchanged.
+
+Local candidate: `work/releases/0.4.0/maschine-ArenaMapPort-0.4.0.zip`, 3,834,882,881 bytes
+(3.57 GiB), SHA-256 `f8fcfb7294c6eef8467a3ef6953d02e6091d12f1f7115e0956153813b532926f`.
+The `.sha256` companion is beside it. A rejected intermediate ZIP with an old client is isolated
+under `work/release-0.4.0/rejected-stale-client/` and must never be used. Final build proof:
+client SHA-256 `EA267A012112621EC9A1D434FA526C84078554037FADD94886B7B0B53AF75484`, server
+`A90899A03D5F9855E5A06B873CA3580FB68F3BD415C10AC24F982042D4F8D72F`.
+
+The authorized Syncthing resume, full deployment and legacy-PNG migration are complete. All
+255 candidate files matched GPU-2; all four per-map PNG directories are empty of images,
+and `shared` contains 123 PNGs plus the manifest. Migration removed 492 known copies; a
+repeat removed zero. The exact PNG saving is 440,067,072 bytes. Existing configurations and
+ArenaMode/profile/recovery data were not edited.
+
+**Do not treat this as native acceptance or publish yet.** SPT startup on GPU-2 fails in
+ArenaMode `RewardOfflineSession.RecoverBeforeStartup` with `Offline Arena recovery is incomplete`.
+The user chose to have it repaired in the other session. The waiting start recipe timed out and
+ended; EFT stayed closed. No current game process loaded this candidate. Gates G1-G4/G6 are
+complete; G5 stays pending, with no waived check. Once the user says the host is ready, use
+`gpu-run start --host host2`, record current loaded MVIDs, run no-bot raids on AirPit/Equator/Bay5/Bowl,
+and check crowd counts 99/99/88/99, three simultaneous voices at most, scene-exit resource cleanup
+and hideout. Helpers/evidence: `work/release-0.4.0/capture.ps1`, `view-*.json`, `GATES.md`.
+
+No tag, upload, publication, main merge or push was performed for this preparation. The release
+branch remains local. A separate untracked `assets/Screenshot-Equator-2.png` appeared during the
+task; it was neither created, modified nor staged by this task.
+
+### Earlier preparation note (retained)
+
+User requested shared spectator textures followed by release preparation, and explicitly freed GPU-2
+and authorized resuming the local `D:\SPT41` Syncthing folder. It is resumed. The new schema-4 graph
+and common `spectators/shared` layout remove three duplicate 123-PNG sets (440,067,072 bytes).
+Map graphs pin the shared manifest, which pins the PNGs; runtime validates both before decoding.
+Original source exports are unchanged. Full deployment is required; the sanctioned
+`-RemoveLegacySpectatorTextures` mode verifies all replacements before removing known old copies.
+
+Versions and draft release notes are 0.4.0. The candidate includes every change since 0.3.0 listed
+in CHANGELOG, with the three-voice limit retained. Build, native and archive acceptance is in progress;
+see [spectator-shared-textures.md](docs/progress/spectator-shared-textures.md) and
+`work/release-0.4.0/GATES.md`. This task prepares a local release; no publishing or tagging is authorized.
+
 ## Update 2026-10-28 - spectator branch completion (three-voice cap; unreleased)
 
 The final crowd limit is **three simultaneous voices**, at the user's request. Gain, timing and the

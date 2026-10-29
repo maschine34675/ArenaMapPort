@@ -442,6 +442,8 @@ def validate_water(plugin):
 
 
 def validate():
+    subprocess.run(['pwsh', '-NoProfile', '-File', str(REPO/'tools/validate/validate_dll_versions.ps1'),
+                    '-RepoRoot', str(REPO)], cwd=REPO, check=True)
     # This check also runs on fully resumed distributions, when no fresh map build
     # would otherwise compare the current C# registry with the JSON descriptors.
     subprocess.run([sys.executable, str(REPO/'tools/validate/validate_map_descriptors.py')],
@@ -499,18 +501,9 @@ def validate():
     for name in _files_under(audio):
         if (audio/name).read_bytes() != (extracted_audio/name).read_bytes():
             raise ValueError(f'Stale spectator audio: {name}')
-    from extract_spectator import MAP_SCENES, package_path, verify as verify_spectator
-    if {p.name for p in (plugin/'spectators').iterdir()} != {f'arena_{name}' for name in MAP_SCENES}:
-        raise ValueError('Unexpected or missing spectator map package')
-    for map_name in MAP_SCENES:
-        spectator = plugin/'spectators'/f'arena_{map_name}'
-        verify_spectator(spectator, f'arena_{map_name}')
-        extracted_spectator = package_path(map_name)
-        if _files_under(spectator) != _files_under(extracted_spectator):
-            raise ValueError(f'Spectator package file set differs from extracted source: {map_name}')
-        for name in _files_under(spectator):
-            if (spectator/name).read_bytes() != (extracted_spectator/name).read_bytes():
-                raise ValueError(f'Stale spectator data: {map_name}/{name}')
+    from extract_spectator import MAP_SCENES, package_path
+    from stage_spectators import validate_staged
+    validate_staged(plugin/'spectators', {name: package_path(name) for name in MAP_SCENES})
     from extract_multiflare import validate_graph
     expected_flare_files = set()
     for key in FLARE_MAP_KEYS:

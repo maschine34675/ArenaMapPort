@@ -209,3 +209,85 @@ while GPU-2 itself is connected and unpaused. No system error was reported. Its 
 the prior four-voice DLL (`29920C46634F784BD3C35FBD4868D0B3FFD0AE1C9ABAB34AB63C2E938647D38F`).
 The pause was left unchanged because parallel sessions share this installation. Resume synchronization
 when those sessions allow it, verify the new DLL hash, and restart EFT before a native check.
+
+## Intermittent noise investigation — 2026-10-28 (unresolved)
+
+The user reported a short intermittent noise newly noticed after spectator calls were added,
+with no established relation to a call start/end. The identified session is Equator TDM on
+MASCHINE11, `LogOutput-MASCHINE11-2026-10-28_19-26-57.log`. It loaded the development client
+still labelled 0.3.0, before the shared-texture 0.4.0 deployment. The log records 254 calls
+between 19:31:33.861 and 19:36:53.905, never more than three voices. The three long pauses
+match player deaths/respawns. No spectator, MetaXR or other audio runtime failure is logged;
+the sole Error is UiBridge binding at startup. This absence does not rule out an audible glitch.
+
+An independent PCM audit and root recheck freshly decoded the 13 original Arena clips and
+reproduced all shipped WAVs exactly, including their normalization. Source exports and staged
+files/manifest are byte-identical. No clipped samples were found in originals or exports;
+export peaks are -10.93 to -5.06 dBFS, RMS -22 dBFS. First/last samples are at most 15/32768
+(about -66.8 dBFS), with no large boundary step. Original recordings contain brief high-frequency
+speech passages; without a recording/time of the reported noise these cannot be labelled faults.
+No filter, normalization or asset change is justified by these measurements.
+
+The native `Audio/prewarm_sound` was independently decoded twice: all 2,756 mono samples at
+44.1 kHz are zero (62.5 ms of digital silence). Environment's current server preset also has
+`enabledPrewarm=false`. The native warm-up *sample* therefore is not a noise recording; this
+does not establish the behavior of the native audio plugin under every state transition.
+Pool release, pitch/Doppler reset, container cleanup and DSP expiry follow native patterns.
+Registering occlusion before Play was considered but not changed: Combined propagation defers
+its actual calculation to update/late-update, so simply reordering the calls is not a proven fix.
+
+The user's log confirms **SurroundAudio 1.0.0 with 5.1 output at 48 kHz**. Its source changes
+the presets/spatialization and routes unspatialized direct voices through the separate MetaXR
+reverb helper when KeepReverb is enabled. This differs from the previous GPU playback tests;
+it is a testable lead, not a proven incompatibility. The user was asked for a live comparison:
+F12 -> maschine-SurroundAudio -> General -> KeepReverb=false, otherwise unchanged Equator TDM,
+then restore the setting. That disables the optional MetaXR helper share, not all EFT reverb.
+The result is pending. No external mod, user setting, playback code or release archive was altered.
+
+Evidence: ignored `work/spectator-noise/clip-audit/` (reproducible source/PCM analysis and native
+silent prewarm sample) and `work/spectator-noise/log-audit.py` / `log-audit.json`. GPU-2 remains
+reserved for the user's separate ArenaMode startup recovery; no new raid was started here.
+
+## Two-voice cadence and negative reverb comparison — 2026-10-29
+
+The user heard the noise three more times on Equator with SurroundAudio `KeepReverb=false`,
+then left immediately after the last occurrence. AirPit afterwards had no noticed occurrence.
+This does not support the optional reverb helper as the sole cause; no playback-order, filter
+or asset fix has been made on that hypothesis.
+
+The new MASCHINE11 log `LogOutput-MASCHINE11-2026-10-29_10-55-45.log` loads client 0.4.0 and
+contains 320 Equator calls and 318 AirPit calls, both using all 13 clips and at most three voices.
+The last 30 seconds before the first Equator menu indicator at **11:04:45.454** contain 24 calls
+and no warning/error. The last room change is 11:04:19.195 (hall update 19.207), then no further
+room/audio-reset event in the window. Last pre-menu starts are fan10_01 at 42.213, fan9_02 at
+43.681 and fan12_04 at 44.679. Native Stop(Left) is **11:04:47.061**, after the reported noise,
+so exit cleanup cannot explain that pre-exit occurrence. The single whole-log Error is UiBridge
+startup, not audio. Log analysis is reproducible in `work/spectator-cadence-20261029/log-audit.py`.
+
+Other candidates remain unproven. Equator has original electricity/cracles ambient banks absent
+from AirPit, with independent random scheduling; individual ambient starts are not logged here.
+Equator's weather probe shows no rain, and dust has no audio playback. A one-time missing stun
+screen-flash warning at 10:59:35.792 proves a stun effect occurred, but supplies no connection
+to the noise immediately before leaving. A Molotov at 11:04:25.851 has a logged six-second burn,
+well before the menu. None of these facts justifies removing or altering an unrelated sound.
+
+Independently requested behavior change, committed as `d8b51d7`: **two simultaneous spectator
+voices**, with **1.6-3.2 seconds between call starts**, twice the previous 0.8-1.6 interval. The
+2-5 second initial/restart delay and three-second failed-selection retry are unchanged; those
+are not the cadence between calls. Gain 0.5, the original 13 clips, family/speaker exclusions
+and native room processing remain unchanged. The ten-minute simulation reaches two voices,
+never exceeds two, and verifies the reduced start count and doubled interval.
+
+Added `Audio diagnostics/SpectatorCalls`, default true, for a controlled hearing comparison.
+Only DeveloperMode can honor a false value. It is not added to the compact player configuration.
+Off releases all active spectator sources and pauses their schedule; on uses the normal initial
+delay. Visible spectators, map ambience, other sounds and third-party configuration remain intact.
+The setting change is logged at Debug in developer mode so the next log can establish the comparison.
+
+Seven focused C# tests, 13 changelog/version fixtures, the Release client build (zero warnings/errors)
+and full distribution validation passed. Independent code review found no concrete issue. Sanctioned
+client-only dry-run and deployment updated exactly one DLL in `D:\SPT41`; built and installed SHA-256:
+`40056EA3DF2C55BCFF6305FFBD6B49FE16014CE91340C93D7DCE74C56B165FA4`.
+No game was started/restarted and no fresh native acceptance is claimed. Evidence is under
+`work/spectator-cadence-20261029/`. The 2026-10-28 release ZIP still contains the earlier three-voice
+build and must be rebuilt after final audio acceptance; it was not uploaded or published.

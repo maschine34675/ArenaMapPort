@@ -63,7 +63,7 @@ namespace ArenaMapPort.Client
                 using (var reader = new StreamReader(gzip))
                 {
                     var data = JsonConvert.DeserializeObject<SpectatorData>(reader.ReadToEnd());
-                    if (data == null || data.schema != 3 || data.map != mapKey || data.source_scene != sceneName ||
+                    if (data == null || data.schema != 4 || data.map != mapKey || data.source_scene != sceneName ||
                         data.container == null || data.actors.Length < 1 ||
                         data.actors.Length > 200 || data.source_count != data.actors.Length || data.clips.Length != 2)
                         throw new InvalidDataException("unsupported spectator package");
@@ -76,7 +76,7 @@ namespace ArenaMapPort.Client
                     root.transform.localScale = V(data.container.scale);
                     crowd = root.AddComponent<ArenaSpectators>();
                     crowd.MapKey = mapKey;
-                    crowd.Build(data, folder);
+                    crowd.Build(data, Path.Combine(Path.GetDirectoryName(folder), "shared"));
                     // Bay5's imported crowd still carries active accessories and colliders. Replace
                     // only this owned scene root, after all replacement resources loaded successfully.
                     foreach (var original in scene.GetRootGameObjects().Where(x => x.name == "SCAV_SPECTATORS"))
@@ -114,13 +114,15 @@ namespace ArenaMapPort.Client
         void Build(SpectatorData data, string folder)
         {
             _clips = data.clips;
+            var package = new SpectatorTexturePackage(File.ReadAllBytes(Path.Combine(folder, "spectator-textures.json")),
+                data.texture_manifest_sha256);
             var textures = new Dictionary<string, Texture>();
             foreach (var pair in data.textures)
             {
                 var row = pair.Value;
                 if (row.files.Length == 1)
                 {
-                    var tex = LoadImage(folder, row.files[0], row.linear, true);
+                    var tex = LoadImage(package.Read(folder, row.files[0]), row.linear, true);
                     tex.name = row.name; tex.wrapMode = (TextureWrapMode)row.wrap; tex.filterMode = (FilterMode)row.filter;
                     tex.Apply(true, true);
                     textures.Add(pair.Key, Own(tex));
@@ -130,7 +132,7 @@ namespace ArenaMapPort.Client
                     Cubemap cube = null;
                     for (int face = 0; face < 6; face++)
                     {
-                        var image = LoadImage(folder, row.files[face], row.linear, false);
+                        var image = LoadImage(package.Read(folder, row.files[face]), row.linear, false);
                         try
                         {
                             if (cube == null)
@@ -261,13 +263,12 @@ namespace ArenaMapPort.Client
             _ready = true;
         }
 
-        static Texture2D LoadImage(string folder, string file, bool linear, bool mips)
+        static Texture2D LoadImage(byte[] bytes, bool linear, bool mips)
         {
-            if (Path.GetFileName(file) != file) throw new InvalidDataException("invalid spectator texture path");
             var tex = new Texture2D(2, 2, TextureFormat.RGBA32, mips, linear);
             try
             {
-                if (!ImageConversion.LoadImage(tex, File.ReadAllBytes(Path.Combine(folder, file)), false))
+                if (!ImageConversion.LoadImage(tex, bytes, false))
                     throw new InvalidDataException("invalid spectator image");
                 return tex;
             }
@@ -387,7 +388,7 @@ namespace ArenaMapPort.Client
 
         // Private package schema; no BSG content is compiled into the plugin or tracked in git.
         #pragma warning disable CS0649 // Populated by Newtonsoft.Json from the validated export.
-        sealed class SpectatorData { public int schema, source_count; public string map, source_scene; public Placement container; public Actor[] actors; public Dictionary<string, MeshData> meshes; public Dictionary<string, MaterialData> materials; public Dictionary<string, TextureData> textures; public Clip[] clips; }
+        sealed class SpectatorData { public int schema, source_count; public string map, source_scene, texture_manifest_sha256; public Placement container; public Actor[] actors; public Dictionary<string, MeshData> meshes; public Dictionary<string, MaterialData> materials; public Dictionary<string, TextureData> textures; public Clip[] clips; }
         sealed class Placement { public float[] position, rotation, scale; }
         sealed class Actor { public long source_id; public string name; public Node[] nodes; public Part[] parts; }
         sealed class Node { public string name; public uint path_hash; public int parent; public float[] position, rotation, scale; }
