@@ -10,19 +10,28 @@ dated state in one screen; read it before this index if you only have a minute.
 
 - [release-preparation-20261029.md](release-preparation-20261029.md) — current 0.4.0 release notes,
   five-part GitHub package plan, final rebuild/authentication requirements and explicit audio limits.
+  Superseded in part by the 2026-10-29 evening fixes (`8941caa`): the release audit (no blocker), the crowd worker,
+  the five-part texts and the new cut `github-8941caa`; the host run of `8941caa` is pending and publication stays
+  postponed (the `fe45b84` package is the host-verified fallback).
 
 - [release-sweep-20261029.md](release-sweep-20261029.md) — mixed native checks on both hosts,
-  spectator diagnostic gating, late physics sound callback fix and remaining audio limits.
+  spectator diagnostic gating, late physics sound callback fix and remaining audio limits. Its 2026-10-29 correction
+  names both silent prop types (Books and CardBoard: 39 Equator props).
 
 - [spectator-shared-textures.md](spectator-shared-textures.md) — 0.4.0: shared texture staging,
   graph/manifest/image integrity, safe development-package migration and release-candidate checks.
 
 - [spectator-audio.md](spectator-audio.md) — overlapping original participating calls across all four
   crowds; shared audio, up to two independent spatial/room sources, 1.6-3.2 s cadence and cleanup;
-  intermittent-noise investigation: KeepReverb comparison negative, spectator-only comparison available.
+  intermittent-noise investigation: KeepReverb comparison negative, spectator-only comparison available; since
+  2026-10-29 also the NoiseProbe developer diagnostic (burst detector, event ring, mark key, self-test, capture;
+  implemented and unit-tested, not run on any host) and the ranked hypotheses of the lead's investigation (cause not
+  identified, none above about 25 %) with the questions for the user.
 - [spectators-allmaps.md](spectators-allmaps.md) — original crowds on all four maps: Equator day/night,
   Bay5's translated group and inactive legacy colliders, Bowl and the accepted AirPit crowd; shared runtime,
-  exact source/animation audits, staging and release packaging.
+  exact source/animation audits, staging and release packaging; since 2026-10-29 the crowd package is prepared on a
+  worker thread with CNG hashing (expected to take about 4.7 s per raid off the main thread; the host figure of the new
+  build is pending), with the correction of the wiring order and the host baseline of `fe45b84`.
 - [airpit-spectator.md](airpit-spectator.md) — the initial AirPit gallery crowd: 99 original placements,
   15 appearances, shared skinned meshes and staggered original idle/cheer animations; source recovery,
   original Euler rotation order and map-scoped lifecycle.
@@ -554,6 +563,8 @@ successor instead unless you're specifically investigating that cycle's history.
 | How do the TV screens show a mode's score, and how does ArenaMode drive them? | `score-monitors.md` (contract `ArenaMapPort.Client.ScoreMonitors`, the binder and Team Deathmatch mapping, host checks A and B) |
 | Why do puddles splash on a map, and which materials count? | `puddle-footsteps-all-maps.md` (Equator, Air Pit, Bowl, Bay5); `bay5-water.md` (the original Bay5 mechanism) |
 | Do the exit signs light, and when? | `door-poses.md` "2026-10-25 - Exit lamps" and its host verification of the same date |
+| Why is there a short noise on Equator, and how is it recorded? | `spectator-audio.md` ("Investigation 2026-10-29 (lead): ranked hypotheses", "NoiseProbe diagnostic (2026-10-29)") |
+| Can 0.4.0 be published, and which package is host-verified? | `HANDOFF.md` (top two blocks); `release-preparation-20261029.md` ("Release audit, fixes and the corrected candidate"); `release-sweep-20261029.md` ("Correction after the release audit") |
 
 ## Added 2026-09-20 — distribution repair and ArenaMode acceptance
 

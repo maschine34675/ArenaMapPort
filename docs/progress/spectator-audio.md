@@ -413,3 +413,42 @@ Syncthing sync of the `ArenaMapPort-noise` subfolder (BepInEx/logs is not exclud
 the managed fallback when CNG is unavailable) instead of `SHA256.Create()`; the check stays fail-closed. `AudioChanged` now logs one Debug line in
 DeveloperMode. `SpectatorAudio.Current` (the live crowd) and `Bay5AmbientAudio.MixSummary()` / `RoomShotAcoustics.IsOn()` were added for the probe's
 armed line and census. Voices are released through `BetterSource.Release()` exactly as before unless `NoiseProbeSpectatorFade` is on.
+
+## Investigation 2026-10-29 (lead): ranked hypotheses
+
+The cause of the intermittent Equator noise is **not identified**. The lead ran a 39-agent investigation (with skeptic review) on top of the
+reports above. No audio fault is logged in any of the 12 MASCHINE11 sessions examined, which does not rule out an audible
+glitch (see 2026-10-28). After the skeptics, no hypothesis stands above about 25 %; the weights are the investigation's subjective estimates, not
+measurements. What would separate them is the NoiseProbe (section "NoiseProbe diagnostic (2026-10-29)" above: keys, log lines, host recipe P0-P3,
+decision rules; implemented and unit-tested, not run on any host at the time of this note).
+
+| # | Hypothesis | Weight | Separated by |
+|---|---|---|---|
+| 1 | Equator's own ambient one-shots at the port's boosted mix (crackles, water-drop ticks, metal) | 20-25 % | `amb+`/`amb~` events before orphan bursts; `NoiseProbeMuteAmbient`, `AmbientVolumeOffset=0` |
+| 2 | Spectator call onset overshoot (Play before the occlusion result is applied) | 15-20 % | calls on against calls off (`SpectatorCalls`), `spec.on` frames |
+| 3 | Physics-prop impacts | 10-12 % | `prop` events; `NoiseProbeMuteProps` |
+| 4 | Spectator hard cut at death/respawn | 8-10 % | `spec-` reasons `dead`/`toggle`/`reset`; `NoiseProbeSpectatorFade` |
+| 5 | A fault below Unity on the user's 5.1 / 48 kHz path | about 8 % | marks with a clean Capture WAV (the noise is not in Unity's mix) |
+
+Refuted or judged negligible by the investigation: room-reverb and shot-acoustics parameter jumps, stun/tinnitus, exit flare hiss, gate sounds, the
+voice limits, GC and main-thread stalls, DSP starvation, and the KeepReverb helper path (the reasoning is in the lead's scratch synthesis, which is not
+tracked).
+
+Facts established on the way:
+
+- The user already ran a calls-off/calls-on A/B in the log `2026-10-29_11-35-17`: `SpectatorCalls=false` at 11:36:28 with an Equator raid at
+  11:37:08-11:40:12 and 0 calls; `true` at 11:41:15 with a raid at 11:43:04-11:45:28 and 55 calls. **Nobody recorded what he heard** in either raid.
+- The `KeepReverb=false` comparison covered at most 138 s of the 10:57 Equator raid, so the negative reading in "Two-voice cadence and negative reverb
+  comparison" above rests on that stretch only, and the time the setting was switched is not recorded.
+- The one-time missing stun screen-flash warning of 10:59:35.792 is not a stun marker. The same section reads it as proof that a stun effect occurred;
+  that reading is withdrawn.
+- Equator's `Books` and `CardBoard` impact banks are both null (39 Equator props, see release-sweep-20261029.md): those props are silent when they hit
+  something, so they cannot be a source, while other prop types still can (hypothesis 3).
+- Exposure is unequal between the conditions (about 4-6 min of Equator without calls against 23-25 min with calls in the logs): compare rates, not counts.
+
+**Questions for the user** (the three decisive ones, then one practical ask):
+
+1. In which of the two runs above, calls off (11:37-11:40) or calls on (11:43-11:45), did you hear the noise: in the first only, the second only, both, or neither?
+2. When exactly was SurroundAudio `KeepReverb=false` during the 10:57 raid (it covered at most 138 s of it)?
+3. What does it sound like (crackle, tick, click, hiss, thump), from which direction, and how long does it last?
+4. Which key is free for the NoiseProbe mark (default `Pause`; a mouse side button works)? It is pressed 0.3-1.5 s after the noise.

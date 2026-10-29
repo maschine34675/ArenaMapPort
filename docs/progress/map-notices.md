@@ -1634,3 +1634,18 @@ included. The deployed client SHA-256 is
 Raw test/build/deploy receipts are ignored under `work/notice-native-error/`.
 No new native failed-load reproduction was performed; this is source, automated-test,
 build and deployment evidence. The original user log supplies the native failure sequence.
+
+## 2026-10-29 - the reinstall advice names the release package with all its ZIP parts
+
+0.4.0 ships five ZIP parts (core plus one per map) that are extracted into the same SPT root, so "the ZIP" in the reinstall advice would send a
+player to extract one part again. Commit `694143d` changes the five texts that carried it: `ServerUnknown`, `ServerAllFailed`, `ServerSomeMissing`,
+`ServerSomeFailed` and `InstallIncomplete`. English now says "release package (all its ZIP parts)", German "Release-Paket (alle seine ZIP-Teile)";
+`InstallIncomplete` reads "Extract the complete release package again (all its ZIP parts; client folder ...)" and "Entpacke das komplette
+Release-Paket erneut (alle seine ZIP-Teile; Client-Ordner ...)".
+`MapNoticeTextTests.ReinstallAdviceNamesTheReleasePackageWithAllItsZipPartsInBothLanguages` pins it: all five texts, in both languages, contain the
+new wording, and no "ZIP" remains outside "ZIP parts" / "ZIP-Teile".
+
+Only wording changed. Ids, placeholders, selector, scheduler, delivery rules and `General/ShowMapNotices` are as before, and no notice file gained a
+call to `ArenaInstallationGate.EnsureVerified()`. The text tables of the 2026-10-22 design above ("Server and installed files") still show the old
+"the ZIP" wording and stay as the historical record; the code is the source of the implemented texts. The changed texts are covered by the unit test
+only: they have not been shown in the game, because the host run of the build that carries them (`8941caa`) is blocked (see HANDOFF.md).

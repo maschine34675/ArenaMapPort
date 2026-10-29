@@ -5,15 +5,144 @@
 Do not publish ArenaMapPort 0.4.0 yet. The user explicitly postponed this release while
 authorizing ArenaMode 0.4.0 and Redeploy 1.1.0, which are now public. No ArenaMapPort 0.4.0
 remote release, uploaded asset or remote tag was created; prepared source commits remain local.
+The evening work below (audit, fixes, noise investigation) does not change that: no tag, upload
+or push until the user reauthorizes publication.
 
-Local candidate source `fe45b84350a247b662b0e42434421e1e12897241` was built without live
-deployment. C# 2,545 tests and 196 release/version/changelog fixtures passed. Distribution
-authentication and combined extraction comparison passed for all 255 files / 12 encrypted bundles.
-The five ZIPs plus checksum are retained at `D:\AMP040-29\packages`; local manifests pin
-the build source and each payload hash. The final root record is ArenaMode's ignored
-`artifacts/publish-20261029/mapport-build.json`. These files have not been uploaded or
-covered by the final ArenaMode/Redeploy executable scans. Recheck current source/package
-identity and security scans before any later authorized publication. Audio limits remain open.
+Two local candidates exist:
+
+- `fe45b84` (`fe45b84350a247b662b0e42434421e1e12897241`), the first cut, built without live
+  deployment: C# 2,545 tests and 196 release/version/changelog fixtures passed; distribution
+  authentication and combined extraction comparison passed for all 255 files / 12 encrypted bundles.
+  Its five ZIPs plus checksum are retained at `D:\AMP040-29\packages`; local manifests pin the
+  build source and each payload hash. The final root record is ArenaMode's ignored
+  `artifacts/publish-20261029/mapport-build.json`. It was host-run on GPU-2 on 2026-10-29
+  (14:34-14:47) and is the **host-verified fallback**, but it still carries what the release audit
+  found (crowd build blocking the main thread about 4.7 s per raid, "the ZIP" in the in-game
+  reinstall texts, claims beyond the records, no VirusTotal scan).
+- `8941caa` is the **corrected candidate** (commits `694143d` and `8941caa`): crowd worker with CNG
+  hashing, the NoiseProbe diagnostic, five-part texts, hedged release notes. Its DLLs are rebuilt
+  and deployed to the `D:\SPT41` mirror; its five-part cut exists under `work/releases/0.4.0/github-8941caa`
+  (extract-check: 255 files identical to dist; VirusTotal 0 malicious / 0 suspicious of 75 engines for both DLLs,
+  links in docs/releases/v0.4.0.md). It has **not had a host run yet** (blocked, see the update below); the
+  one open placeholder is `<CROWD_LOAD_SECONDS>` (README, FORGE, CHANGELOG, the release note), to be filled
+  from the new `[Spectator] ... load total=` line of that host run.
+
+Neither package has been uploaded or covered by the final ArenaMode/Redeploy executable scans.
+Recheck current source/package identity and security scans before any later authorized
+publication, and publish only a package whose manifests pin the commit it was built from.
+Audio limits remain open.
+
+## Update 2026-10-29 (evening) - 0.4.0 audit, fixes, Equator noise investigation (committed 694143d, 8941caa; host run of the new build blocked)
+
+**Request (user, German):** "schau mal über den aktuellen stand ob der so als 0.4.0 veröffentlicht werden kann.
+vielleicht kannst du auch mal die dokumentierte audio auffälligkeit auf Equator untersuchen". Two questions: can the
+local candidate `fe45b84` go out as 0.4.0, and what is behind the documented intermittent Equator noise. The audit
+found no blocker for the first; the second is still open. Publication stays postponed (top of this file).
+
+**Release audit: no blocker.** A read-only audit with 63 agents found should-fix items only. They are fixed in
+`694143d` (crowd worker and CNG hashing, NoiseProbe, five-part notice texts, repaired distribution test fixtures) and
+`8941caa` (release texts after the audit). What it established, and what became of it:
+
+- The crowd build blocked the main thread for about 4.7 s per raid on every map (measured in the MASCHINE11 and GPU-2
+  logs): `SHA256Managed` over the 147 MB of shared PNGs about 2.0-2.3 s, the Newtonsoft parse of the 20.7 MB graph
+  1.6-3.0 s. Fixed in `694143d`: texture and voice hashes use the CNG provider of `ArenaMapPort.Crypto`, and gunzip, parse
+  and texture reads run on a worker started at the Scripts-scene load, joined in `Create` with a bounded wait and a
+  synchronous fallback with one Warning. The Debug summary line now carries the timings, see
+  [spectators-allmaps.md](docs/progress/spectators-allmaps.md) "Load cost".
+- The 123 PNGs decode to about 0.5 GB of RGBA32 video memory per raid (calculated from the image sizes, not measured).
+  The release texts now say so, with the way to skip one map's crowd ("Crowd cost" in
+  [v0.4.0.md](docs/releases/v0.4.0.md)).
+- 31 of 44 `DistributionSidecarTests` (`tools/tests/test_validate_distribution.py`) errored on HEAD because their
+  fixtures lacked the spectator files the validator now requires: repaired, 5 negative tests added.
+- VirusTotal had not been run for the `fe45b84` DLLs: a scan of the two `8941caa` DLLs is running (open, below).
+- FORGE.md said "extract the ZIP" and the in-game notices said "the same ZIP". Five ZIP parts everywhere now; the five
+  reinstall texts say "release package (all its ZIP parts)" ([map-notices.md](docs/progress/map-notices.md)).
+- Several claims exceeded the records and are hedged now: gate sounds were never listened to, Equator's puddles were not
+  checked in game, the exit lamps were checked by reading state only.
+- Books AND CardBoard impact banks are both null in EFT's `weaponsounds` bundle: 39 Equator props are silent (30 Books,
+  9 CardBoard). Release texts name both; correction in
+  [release-sweep-20261029.md](docs/progress/release-sweep-20261029.md).
+- A player upgrading from 0.3.0 keeps a stale `parts/full.json` (upgrade note added); the public notes mentioned the
+  internal October 28 candidate (removed).
+
+**Host evidence of the `fe45b84` build (lead, GPU-2, 14:34-14:47, `LogOutput-SPT-GPU-2-2026-10-29_14-34-27.log`).** Plain
+PMC raids with Medium bots on all four maps: crowds 99 / 88 / 99 / 99 fans (Bay5 is the 88), two spectator voices on every
+map, 120 fps steady (mean frame 8.3-8.4 ms, p95 8.3-9.0 ms), RAM 9.5-13.0 GB, the hideout opened once, 0 ArenaMapPort
+warnings or errors. The crowd build delta of 4.68-4.70 s per raid was confirmed in that log. The known raid-start hitches
+were there too and are not the crowd: RainCover bootstrap 474 ms on Bay5, and the IndoorFloorSmoothness classification
+2,593 ms on Air Pit and 3,130 ms on Bowl (`[IndoorSurface] ... elapsedMs=`; pre-existing, older logs show 1,755-3,006 ms;
+see AGENTS.md Traps).
+
+**Equator noise: cause still not identified.** A 39-agent investigation found no audio fault logged in 12 MASCHINE11
+sessions. After skeptic review no hypothesis stands above about 25 % (subjective weights of the investigation):
+
+| # | Hypothesis | Weight |
+|---|---|---|
+| 1 | Equator's own ambient one-shots at the port's boosted mix (crackles, water-drop ticks, metal) | 20-25 % |
+| 2 | Spectator call onset overshoot (Play before the occlusion result is applied) | 15-20 % |
+| 3 | Physics-prop impacts | 10-12 % |
+| 4 | Spectator hard cut at death/respawn | 8-10 % |
+| 5 | A fault below Unity on the user's 5.1 / 48 kHz path | about 8 % |
+
+Refuted or negligible: room-reverb and shot-acoustics jumps, stun/tinnitus, exit flare hiss, gate sounds, voice limits,
+GC/main-thread stalls, DSP starvation, the KeepReverb helper path. Facts that matter for the next step:
+
+- The user already ran a calls-off/calls-on A/B in the log `2026-10-29_11-35-17`: `SpectatorCalls=false` at 11:36:28,
+  Equator raid 11:37:08-11:40:12 with 0 calls; `true` at 11:41:15, raid 11:43:04-11:45:28 with 55 calls. Nobody recorded
+  what he heard.
+- The `KeepReverb=false` comparison covered at most 138 s of the 10:57 Equator raid, so the earlier "negative" reading
+  (block "two spectator voices" below) rests on that stretch only.
+- The one-time missing stun screen-flash warning of 10:59:35.792 is not a stun marker (it does not show that or when a
+  stun happened).
+- Books and CardBoard banks are both null (39 Equator props): those props are silent when they hit something, so they
+  cannot be a source; the other prop types still can (hypothesis 3).
+- Exposure is unequal between the conditions (about 4-6 min of Equator without calls against 23-25 min with calls in the
+  logs); compare rates, not counts.
+
+Questions for the user (they decide the next step): (1) in which of the two runs above, calls off (11:37-11:40) or calls
+on (11:43-11:45), did you hear the noise, or in both, or neither? (2) When exactly was `KeepReverb=false` during the 10:57
+raid? (3) What does it sound like (crackle, tick, click, hiss), from which direction, and how long? And one practical
+ask: which key is free for the NoiseProbe mark (default Pause; a mouse side button works)?
+
+**NoiseProbe (developer-only, default Off; implemented and unit-tested, not run in any game).** Keys in the section
+`Audio diagnostics`, all honoured only with DeveloperMode, all live: `NoiseProbe` (`Off|Detect|Capture`),
+`NoiseProbeMarkKey` (default Pause), `NoiseProbeSelfTest`, `NoiseProbeMuteAmbient` (comma list of exact ambient player
+names), `NoiseProbeMuteProps`, `NoiseProbeSpectatorFade`. Design, log lines and decision rules:
+[spectator-audio.md](docs/progress/spectator-audio.md) "NoiseProbe diagnostic (2026-10-29)".
+
+Host checklist for the first run of `8941caa` (GPU-2; `uibridge_status` first: loaded DLL equals the VM build):
+
+1. Self-test: DeveloperMode on, `NoiseProbe=Detect`, `NoiseProbeSelfTest=true`, Equator NO BOTS. Expect the
+   `[NoiseProbe] armed ...` line, four `selftest` lines with -18, -24 and -30 dBFS PASS and -36 dBFS MISS (below the 0.03
+   peak floor, by design), then `selftest done 3/4 detected`. Repeat with `Capture` and read `tap=`.
+2. A plain raid with `NoiseProbe=Off`: the probe logs nothing.
+3. Read the new Debug summary of the `[Spectator]` crowd on every map (BepInEx's disk log filter must include Debug), in the form
+   `load total=... ms (wait=, hash=, parse=, textures=, actors=, audio=; hash and parse on the worker|main thread, crypto CNG|managed)`.
+   Expect worker and CNG; it supplies the number for `<CROWD_LOAD_SECONDS>` (the 4.68-4.70 s of `fe45b84` does not apply).
+4. RAM headroom while loading on Bay5 and Equator: the worker now holds the parsed graph and up to 48 MiB of PNG bytes
+   during loading.
+5. The hideout once, and the usual acceptance (`uibridge_status` `max` frame time, ModProfiler `max_ms_in_frame`, no
+   ArenaMapPort warning).
+
+**Current build and what is open.** HEAD `8941caa`; the dist DLLs were rebuilt from it (client SHA-256
+`b624acc2a497258bece9bed48700160a14d40506868f7c2561658d1bc56cf36a`, server
+`d3b7a274038b1b2b82cb9cfe2ceea5e92ad7f1d37d0eae0403d6fbeb6784ea16`, ProductVersion `0.4.0+8941caa...`) and deployed to the
+`D:\SPT41` mirror at 16:45. Open:
+
+- **Host run of `8941caa`.** Blocked: since 16:45 the GPU-2 SPT server refuses to start because ArenaMode's server mod stops
+  on "A paid Tarkova Cola reward needs companion-file recovery" (`RewardColaRecoveryException`, expected-object; the profile
+  was written by a 15:02-15:07 session of another agent). That is not an ArenaMapPort matter, and ArenaMode and host
+  profiles are not touched from here. The `fe45b84` package stays the host-verified fallback.
+- **Placeholders** in the release texts, to fill after the host run and the scan: `<CROWD_LOAD_SECONDS>` (CHANGELOG.md,
+  README.md, FORGE.md twice, docs/releases/v0.4.0.md), and in v0.4.0.md `<BUILD_COMMIT>`, `<scan date>` and the
+  VirusTotal URLs and counts of the two DLLs (a scan of the `8941caa` DLLs is running, as is the cut
+  `work/releases/0.4.0/github-8941caa`).
+- **The user's answers** to the questions above, then the NoiseProbe sessions (recipe P0-P3 in spectator-audio.md).
+- **Dates:** the changelog heading and the release note carry 2026-10-29 / "29 October 2026"; re-date them if the
+  publication happens on another day.
+- **The tag must contain the correction** in `docs/progress/release-sweep-20261029.md` (the release note links that file at
+  the tag): tag `8941caa` or a descendant, never `fe45b84`.
+- Publication itself, only when the user reauthorizes it.
 
 Snapshot for whoever continues (human or agent). Verify the commits named here against `git log`; this file
 is updated by hand at each handover, it is not an automatic record. Read [AGENTS.md](AGENTS.md) first.
@@ -23,7 +152,8 @@ is updated by hand at each handover, it is not an automatic record. Read [AGENTS
 The user now authorizes the public GitHub release. Current client/server metadata is already 0.4.0;
 the changelog is dated 2026-10-29 and the release note includes final two-voice scheduling, diagnostic
 gating and the late physics-sound guard. The mixed native sweep below supersedes October 28's blocked
-startup state, but does not prove that intermittent noise is fixed; missing Books impacts remain open too.
+startup state, but does not prove that intermittent noise is fixed; missing Books impacts (and CardBoard: 39 Equator
+props, see 8941caa) remain open too.
 
 Use the existing five-part packer layout for GitHub: core, Equator, Bay5, Air Pit and Bowl, plus the
 checksum file. All five normal ZIPs install into the SPT root. The October 28 single ZIP remains obsolete
@@ -51,8 +181,8 @@ loaded MVID `c64f36e8-3853-49f2-9ce4-2a4d94e8c7c1`, installed locally and on bot
 R2 Bowl natural end/cleanup passed without the soundbundle exception; Equator's
 developer-on comparison retains positive output measurement. See
 [release-sweep-20261029.md](docs/progress/release-sweep-20261029.md).
-Missing Books impacts and intermittent user-reported noise remain separate open
-audio findings. The older ZIP is still outdated; this sweep does not publish it.
+Missing Books impacts (and CardBoard: 39 Equator props, see 8941caa) and intermittent user-reported noise remain
+separate open audio findings. The older ZIP is still outdated; this sweep does not publish it.
 
 ## Update 2026-10-29 - two spectator voices; noise still unresolved
 
@@ -2259,7 +2389,7 @@ the roundtrip validator needs the authored rain-cover objects (`raincover_extra_
 dry floor under Bay5's warehouse roof in forced rain. Evidence: the three `docs/progress/two-maps-item-{4,5,6}-*.md`
 "Lead integration"/"Host evidence" sections. Deployed to `D:\SPT41`; `D:\SPT41vanilla` gets the same build
 (user restarts its server). Known noise: one `SmallPhysicsSystem.Update` NRE per raid end (vanilla teardown
-order), `Books` props are silent (no bank on this SPT build).
+order), `Books` props are silent (no bank on this SPT build; and CardBoard: 39 Equator props, see 8941caa).
 
 **Evening correction (user report: rain indoors on both maps, ambience only audible next to the source).**
 Item 6's rain part was wrong: `AuthoredRainCover=true` had switched the depth-photo heuristic off, Equator has

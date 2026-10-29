@@ -197,3 +197,30 @@ contended with the loading threads.
   file; concurrent reads; in-order delivery inside the budget; a file larger than the budget; a damaged and a missing
   file surfacing from `Take` with the original cause after the files before it; order mismatch; dispose of a worker
   that waits for room; timeout; asking for more than scheduled; double start).
+
+## Corrections and the host baseline of `fe45b84` (2026-10-29, evening)
+
+Corrections to "Load cost: crowd package prepared off the main thread" above, from the read-only review of `694143d` and the lead's host session:
+
+- **Wiring.** `ArenaSpectators.Install()` is wired in `Plugin.cs` right after `NoiseProbe.Install()` (the order there is `SpectatorAudio.Install();`,
+  `NoiseProbe.Install();`, `ArenaSpectators.Install();`), not "next to `SpectatorAudio.Install()`" as the "Early start" bullet says.
+  `NoiseProbeSourcePinTests` pins `NoiseProbe.Install()` directly after `SpectatorAudio.Install()`, so the crowd call has to stay after the probe's and
+  never go between the two; `SpectatorWorkerSourcePinTests` pins that the crowd call exists exactly once.
+- **Failure logging.** A persistent crowd failure logs once per `CreateFromScene` pass, that is twice per raid: EFT calls it twice, a failed `Create`
+  leaves no crowd root, so the second pass tries again and logs the `could not be restored` Warning again (the case the release note describes for a
+  deleted `spectators/<map_key>` folder). A fallback that works logs its one Warning, and the second pass then finds the crowd and stays silent.
+- **Stale note.** The first bullet of "Notes" (`SpectatorAudio.Create` still hashes its 13 WAV files with `SHA256.Create()`) is outdated: the same
+  commit moved that hash to `CryptoProviders.Select(null)` as well (`SpectatorAudio.cs`; [spectator-audio.md](spectator-audio.md) "NoiseProbe
+  diagnostic", "Incidental changes"). The check stays fail closed.
+
+Host baseline of `fe45b84` (lead, GPU-2, 14:34-14:47, `LogOutput-SPT-GPU-2-2026-10-29_14-34-27.log`; this build still builds the crowd on the main
+thread, without the worker): plain PMC raids with Medium bots on all four maps. The crowd build delta was **4.68-4.70 s per raid**, measured in that
+log, which confirms the 4.7 s of the earlier MASCHINE11 and GPU-2 logs. Crowds of 99 / 88 / 99 / 99 fans (Bay5 88) and at most two spectator voices on
+every map; 120 fps steady with crowds and bots (mean frame 8.3-8.4 ms, p95 8.3-9.0 ms); RAM 9.5-13.0 GB; the hideout opened once; 0 ArenaMapPort
+warnings or errors. Hitches in the same log that are not the crowd: RainCover bootstrap 474 ms on Bay5 and the IndoorFloorSmoothness classification
+2,593 ms on Air Pit and 3,130 ms on Bowl (`[IndoorSurface] ... elapsedMs=`, pre-existing, see AGENTS.md Traps).
+
+The worker build (`8941caa`) has **no host run**: GPU-2's SPT server has not started since 16:45 because of ArenaMode's recovery state (HANDOFF.md).
+Its Debug line (`load total=... ms (wait=, hash=, parse=, textures=, actors=, audio=; ...)`) is the number to compare with the 4.7 s above; until it
+is read, "off the main thread" is an expectation, not a measurement. Read the RAM headroom during loading on Bay5 and Equator as well: the worker holds
+the parsed graph and up to 48 MiB of PNG bytes at that time.
