@@ -652,7 +652,7 @@ class BuildTests(FakeRepoCase):
         readme = re.sub(r"\s+", " ", self.core_readme())
         self.assertIn("no impact sounds for the Books and CardBoard prop types", readme)
         self.assertIn("39 Equator props", readme)
-        self.assertIn("on development builds with a denser crowd-call schedule than this release uses", readme)
+        self.assertIn("on development builds with a denser crowd-call schedule, and heard again on a test build with this release's two-voice schedule", readme)
         self.assertIn("no noise fix is claimed", readme)
 
     def test_selection_artwork_is_byte_identical_and_core_only(self):

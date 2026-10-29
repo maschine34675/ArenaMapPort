@@ -223,4 +223,44 @@ warnings or errors. Hitches in the same log that are not the crowd: RainCover bo
 The worker build (`8941caa`) has **no host run**: GPU-2's SPT server has not started since 16:45 because of ArenaMode's recovery state (HANDOFF.md).
 Its Debug line (`load total=... ms (wait=, hash=, parse=, textures=, actors=, audio=; ...)`) is the number to compare with the 4.7 s above; until it
 is read, "off the main thread" is an expectation, not a measurement. Read the RAM headroom during loading on Bay5 and Equator as well: the worker holds
-the parsed graph and up to 48 MiB of PNG bytes at that time.
+the parsed graph and up to 48 MiB of PNG bytes at that time. [Superseded the same evening: the worker build was host-run, see "Host run of the worker build" below.]
+
+## Host run of the worker build (2026-10-29, evening)
+
+The Debug line `load total=` read on GPU-2 (lead; build `52c8a28`, EFT instance `2896f154`, `LogOutput-SPT-GPU-2-2026-10-29_20-59-01.log`; DeveloperMode on for the whole process; plain PMC
+raids, bots None, 12:00, clear; one raid per map). Every line says `hash and parse on the worker thread, crypto CNG` and `wait=0`, so the number the "Load cost"
+section called an expectation is now measured. Milliseconds:
+
+| Raid | total | wait | hash | parse | textures | actors | audio |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| Equator 21:00 | 2110 | 0 | 58 | 1953 | 2049 | 49 | 7 |
+| Bay5 21:02 (88 fans) | 2076 | 0 | 68 | 1844 | 2030 | 38 | 4 |
+| Air Pit 21:04 (99 fans) | 2100 | 0 | 60 | 1885 | 2055 | 40 | 4 |
+| Bowl 21:05 (99 fans) | 2158 | 0 | 60 | 1973 | 2112 | 41 | 4 |
+
+The first read of the worker came earlier that evening from build `8941caa` (instance `ee010ad5`, Equator, 20:46-20:49): `load total=2179 ms (wait=0,
+hash=60, parse=1926, textures=2064, actors=50, audio=62)`, also on the worker with CNG. (`audio=62` there against 4-7 ms in the later lines is not
+investigated.)
+
+- **Main thread: 2.08-2.16 s per raid instead of the 4.68-4.70 s of `fe45b84`**, 2.5-2.6 s less. The remainder is the decode loop (`textures=`, PNG decode
+  and `Apply`, 2.03-2.11 s), which has to stay on the main thread, plus 38-49 ms of actors and 4-7 ms of audio. The release texts therefore say "about two
+  seconds".
+- **Worker:** `hash` 58-68 ms and `parse` 1.84-1.97 s were finished before `Create` needed them (`wait=0` on all four maps).
+- **Second machine.** The user's MASCHINE11 log of the same day (plugin 0.4.0 of 16:41, the `694143d`/`8941caa` code, DeveloperMode on, Equator) holds two lines of
+  the same form: 20:25:19 `load total=2204 ms (wait=1, hash=56, parse=1920, textures=2093, actors=51, audio=54; hash and parse on the worker thread, crypto CNG)` and
+  20:30:01 `load total=2124 ms (wait=0, hash=60, parse=1885, textures=2081, actors=38, audio=4; ...)`. "About two seconds" stands on two machines.
+- **No fallback.** No `could not be prepared` and no `could not be restored` line on any map, so the synchronous path was not exercised in the game; it stays
+  covered by the unit tests only.
+- **RAM** as read per raid: Equator 9041-9048 MB, Bay5 11862 MB, Air Pit 12069 MB, Bowl 12574 MB. None is above the 13.0 GB of the `fe45b84` run. The
+  evidence has one figure per raid, not the loading-time peak with the worker's 48 MiB of prefetched PNG bytes, so that peak is not isolated.
+- **Frame times** (the Bay5, Air Pit and Bowl hitches are the pre-existing ones of the baseline above, not the crowd): Equator steady 120 fps (mean 8.3 ms, p95 8.3 ms, max 10.4 ms
+  in a 10 s window 50 s into the raid, most likely inside the NoiseProbe's armed span 21:00:51-21:02:07, with DeveloperMode on; raid-start max 955 ms about 4 s after the start, not attributed); Bay5 max 484.5 ms 4 s after the start (RainCover
+  bootstrap, 474 ms in the `fe45b84` run); Air Pit max 1915.5 ms = `[IndoorSurface] map=arena_airpit ... elapsedMs=1815`; Bowl max 3067.1 ms =
+  `[IndoorSurface] map=arena_bowl ... elapsedMs=2936` (2,593 ms and 3,130 ms in the `fe45b84` run; AGENTS.md Traps).
+- **Warnings** in the whole process: 0 ArenaMapPort warnings or errors. The log holds the startup warnings of third-party plugins (three FixPluginTypesSerialization
+  and four HarmonyX notices, 20:59:01-20:59:13), Unity's `refrigerator_drink` and `light_CellPlafonds` LOD lines, one `Can not play a disabled audio source` (Unity, in
+  the hideout) and the known `Coroutine couldn't be started because the the game object 'MenuScreen' is inactive!` error on leaving Equator. The hideout (21:06)
+  opened from the main menu and returned to it.
+
+What this run does not cover: bots (the raids were plain PMC raids with bots None), listening to anything, and the release DLLs themselves, which are rebuilt
+from the commit that carries the release texts ([release-preparation-20261029.md](release-preparation-20261029.md)).

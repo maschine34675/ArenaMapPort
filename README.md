@@ -29,7 +29,7 @@ at once. Their idle and cheering animations run independently of match events;
 kill and round-result reactions are not implemented yet.
 Their textures are stored once for all maps (about 147 MB on disk). The crowds
 decode 123 shared images into about 0.5 GB of video memory per raid on every map
-and add about <CROWD_LOAD_SECONDS> seconds to raid loading; the
+and add about two seconds to raid loading; the
 [0.4.0 release notes](docs/releases/v0.4.0.md) explain how to skip a map's crowd.
 
 The gates and vehicles at the team spawn enclosures use Arena's own open positions
@@ -203,8 +203,9 @@ with an installed Escape from Tarkov: Arena (see Compatibility).
 Intermittent short noise reported during Equator play remains unresolved; this
 release does not claim to fix it. It was reported on development builds that allowed
 up to three overlapping crowd voices at twice the call rate, with the SurroundAudio
-mod (5.1) installed, and has not yet been re-tested with the shipped two-voice
-schedule. EFT's own sound bundle has no impact sounds for the Books and CardBoard
+mod (5.1) installed, and was heard again on 2026-10-29 in a plain PMC raid on a 0.4.0
+test build with the shipped two-voice schedule (SurroundAudio still installed); its
+cause is not identified. EFT's own sound bundle has no impact sounds for the Books and CardBoard
 prop types, so 39 Equator props (shoes, books, blue cups, a road cone, pizza boxes
 and office folders) and any props of those types on other maps stay silent when they
 hit something. Fika compatibility and crowd reactions to match events are not included

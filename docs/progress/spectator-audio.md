@@ -294,7 +294,9 @@ build and must be rebuilt after final audio acceptance; it was not uploaded or p
 
 ## NoiseProbe diagnostic (2026-10-29)
 
-Status: implemented and unit-tested offline; **not run on any host, nothing was recorded or heard**. It exists because the
+Status: implemented and unit-tested offline; **not run on any host, nothing was recorded or heard** (superseded the same evening: it ran on GPU-2 and
+on the user's MASCHINE11, see "Host run of 52c8a28 and the user's captures" at the end of this file; nobody listened on GPU-2, and the user's captures are
+under analysis). It exists because the
 intermittent Equator noise has no timestamp in any log and nobody has ever measured the mixed listener output during a real match
 (the earlier GetOutputData probes read channel 0 of one voice, pre-mixer, 256 samples every 0.2 s). The offline synthesis that
 designed it ranks the candidates (Equator's boosted ambient one-shots, the spectator onset overshoot, physics-prop impacts, the
@@ -375,7 +377,8 @@ Channels are numbered from 1 in the lines (`@ch3` is the third channel). `cover`
 **Self-test.** Four 10 ms Hann-windowed white-noise bursts (deterministic, the largest sample is exactly the level) at -18, -24, -30 and
 -36 dBFS, 1.2 s apart, through an owned 2D `AudioSource` on the Environment mixer group; each must be answered by a PEAK/CLICK hit within
 0.5 s. Offline, with the model's thresholds on a -60 dBFS bed, -18/-24/-30 are found every time and -36 never (below the 0.03 peak floor):
-that is the sensitivity a negative host result can claim, and the host line shows what the real mixer chain does to the level. In Capture the
+that is the sensitivity a negative host result can claim, and the host line shows what the real mixer chain does to the level [the detector is relative and the
+first host read was 1 of 4: see "Host run of 52c8a28 and the user's captures" at the end of this file]. In Capture the
 line's `tap=` also proves (or refutes) that the `OnAudioFilterRead` tap on the listener object sees mixer-routed content; if it does not,
 stay with Detect.
 
@@ -454,3 +457,76 @@ Facts established on the way:
 2. When exactly was SurroundAudio `KeepReverb=false` during the 10:57 raid (it covered at most 138 s of it)?
 3. What does it sound like (crackle, tick, click, hiss, thump), from which direction, and how long does it last?
 4. Which key is free for the NoiseProbe mark (default `Pause`; a mouse side button works)? It is pressed 0.3-1.5 s after the noise.
+
+## Host run of 52c8a28 and the user's captures - 2026-10-29 (evening)
+
+**`8941caa` could not arm on GPU-2.** Equator raid of EFT instance `ee010ad5`, 20:46-20:49 (`logs/LogOutput-SPT-GPU-2-2026-10-29_20-46-22.log`):
+`[NoiseProbe] the probe cannot arm (ArgumentException: AudioListener.GetOutputData failed; invalid channel); audio is unaffected` at 20:48:21.876.
+SurroundAudio logs `Driver capabilities: Stereo` and `Speaker mode requested: Mode5point1, active: Mode5point1 @ 48000 Hz` on that host: the mixer runs
+5.1 on a stereo device, `GetOutputData` reads the device output, and the 0-based channels 2-5 (the third to the sixth) are refused. That answers the first of
+the unverified assumptions above (`GetOutputData` on channels 2-5 without a Unity error) with no, on a stereo device; on the user's 5.1 driver (`driver=Mode5point1
+ch=6`, below) all six channels were read and his log holds no `GetOutputData` error. `52c8a28` fixes the stereo case: `ReadAudioFormat` probes the channels once
+(`ReadableChannels`), `Read` loops over `_readChannels`, arming fails only when channel 0 is refused, and the armed line prints `ch=2/6` when the read and the
+mix channel counts differ (the sample armed line in the log-line block above still shows the 5.1-driver form `ch=6`). The Capture tap still records all mix
+channels. xunit: 2,619 tests pass, 56 of them NoiseProbe tests.
+
+**Host run of `52c8a28`** (lead, GPU-2; deploy 20:55, 255 files with 2 overwritten, ProductVersion `0.4.0+52c8a281cf765bcb13473104366f5a1cd06348f8`; EFT
+instance `2896f154` started 20:59:11, log `LogOutput-SPT-GPU-2-2026-10-29_20-59-01.log`; plain PMC raid on Equator at 21:00, bots None, DeveloperMode on, the
+NoiseProbe values set live with `persist=false`, so the host's `.cfg` kept Capture/false). Lines of that log (the BepInEx prefix `[Debug  :maschine-ArenaMapPort]`
+is left out):
+
+```
+21:00:51.036 [NoiseProbe] armed mode=Detect map=arena_equator speakers=Mode5point1 driver=Stereo ch=2/6 rate=48000 dsp=1024 voices=196/256 calls=on mix=g2.0/o0.40/r2.50 roomShot=on roomReverb=on tap=readback ring=none
+21:00:54.600 [NoiseProbe] selftest started: four 10 ms noise bursts at -18, -24, -30, -36 dBFS through an owned 2D source
+21:00:56.107 [NoiseProbe] selftest -18dBFS PASS latency 17 ms over +17.6 dB
+21:00:57.335 [NoiseProbe] selftest -24dBFS MISS block peak -27.9 dBFS, background peak -37.0 dBFS
+21:00:58.542 [NoiseProbe] selftest -30dBFS MISS block peak -30.3 dBFS, background peak -38.2 dBFS
+21:00:59.742 [NoiseProbe] selftest -36dBFS MISS block peak -36.0 dBFS, background peak -37.8 dBFS
+21:00:59.744 [NoiseProbe] selftest done 1/4 detected; weakest detected -18dBFS
+21:01:20.345 [NoiseProbe] armed mode=Capture map=arena_equator speakers=Mode5point1 driver=Stereo ch=2/6 rate=48000 dsp=1024 voices=196/256 calls=on mix=g2.0/o0.40/r2.50 roomShot=on roomReverb=on tap=readback+filter ring=15s
+21:01:51.037 [NoiseProbe] minute map=arena_equator blocks=3526 cover=98% bursts peak=1 click=0 dropout=0 gap=0 clip=0 loud=0 suppressed=0 refractory=0 orphan=0 evOrphan=0 bgMedian=-51.9 hitch50=3 gc=0/0/0 spec=+26/-25 amb=+47 restarts=5 props=0 rooms=1 resets=0 probeMs=0.031/10.194
+21:01:51.039 [NoiseProbe] calib minute=1 pk50=-37.0 pk99=-27.3 pk999=-23.6 over50=+0.0 over99=+8.0 over999=+12.2
+21:02:07.538 [NoiseProbe] minute map=arena_equator blocks=989 cover=100% bursts peak=0 click=0 dropout=0 gap=0 clip=0 loud=0 suppressed=0 refractory=0 orphan=0 evOrphan=0 bgMedian=-48.1 hitch50=0 gc=0/0/0 spec=+6/-6 amb=+12 restarts=3 props=0 rooms=0 resets=0 probeMs=0.033/3.220 (final)
+21:02:07.538 [NoiseProbe] disarmed (mode off)
+```
+
+Reading. The probe arms and runs on a stereo driver under a 5.1 speaker mode, reading the 2 device channels of the 6 mix channels; everything below covers
+those two channels only. The self-test found 1 of 4, not the 3 of 4 the design and the HANDOFF checklist expected. The detector is not changed: it is
+relative (PEAK needs at least 15 dB over the baseline peak, and a block peak of at least 0.03, which is -30.5 dBFS). The background peaks of the three MISS lines
+were -37.0, -38.2 and -37.8 dBFS, and the `calib` line of the first minute reads `pk50=-37.0` (the median block peak), against the -60 dBFS bed the 3/4 was
+designed on. The -24 and -30 dBFS blocks reached +9.1 and +7.9 dB over their background peak (computed from the quoted levels; 15 dB are required). The -36 dBFS burst
+arrived at -36.0 dBFS, below the 0.03 floor, and misses at any background level. By the peak criterion and the quoted block peaks, -24 and -30 dBFS need a baseline
+peak of about -43 and -45 dBFS or quieter (the rms and HF criteria are not checked), so the "3/4" holds on a quiet background; that is arithmetic, not a host reading. `bgMedian` is another statistic (the
+median of the baseline rms): -51.9 dBFS in the first minute line of this raid, -45.8 dBFS in the 20:31:20 minute line of the user's second Capture run (below), whose
+final partial minute with his mark reads -39.2; these figures are quoted for scale and are not the self-test's background peak. A quiet Detect result therefore
+claims only what the background level allows: read the `background peak` of the self-test lines before reading a MISS as a blind probe, and calibrate the
+thresholds on the first minutes (recipe P1) before counting orphans. The HANDOFF expectation "3/4 with -36 MISS" is corrected accordingly.
+
+**Detect to Capture.** The switch at 21:01:20 (`config ... NoiseProbe Detect -> Capture`, not saved) logged the armed line again with `tap=readback+filter ring=15s`.
+`Frame()` re-attaches the tap and logs the line on a mode change; it does not reset the detector or its minute clock. The minute line of 21:01:51.037 (exactly 60 s
+after the Detect arming) therefore spans 29 s of Detect, the self-test included, and 31 s of Capture; the final line of 21:02:07.538 (989 blocks, about 17 s) is all
+Capture and also reads `gap=0` and `orphan=0`. The evidence records no self-test in Capture, so the `tap=` figure that shows whether the filter tap sees
+mixer-routed content was not read there. `probeMs=0.031/10.194` is the probe's own cost per frame, average and worst frame (what the worst frame was is not
+investigated). The three raids after it (Bay5 21:02, Air Pit 21:04, Bowl 21:05) ran with `NoiseProbe=Off` and logged no `[NoiseProbe]` line. This was a functional check
+without bots: nobody listened and no noise was hunted.
+
+**The user's captures.** On 2026-10-29 the user heard the noise in a plain PMC raid on Equator while standing still and ran `NoiseProbe=Capture` twice (log
+`D:\SPT41\BepInEx\LogOutput-MASCHINE11-2026-10-29_20-21-38.log`). Build: `maschine-ArenaMapPort.Client.dll` 0.4.0 of 2026-10-29 16:41 (the `694143d`/`8941caa`
+code, before the stereo fix, so the armed line has no `ch=x/y` form), Arena 0.6.0.0.47752, SurroundAudio 1.0.0, DeveloperMode on. Lines of that log (prefix left out):
+
+```
+20:25:19.611 [SpectatorAudio] arena_equator: 13 participating clips, 99 positions, up to 2 simultaneous voices
+20:25:34.572 [NoiseProbe] armed mode=Capture map=arena_equator speakers=Mode5point1 driver=Mode5point1 ch=6 rate=48000 dsp=1024 voices=196/256 calls=on mix=g2.0/o0.40/r2.50 roomShot=on roomReverb=on tap=readback+filter ring=15s
+20:28:45.918 [NoiseProbe] MARK #1 20:28:45.918 frame=28421 pos=(20.9,5.5,8.8) room=19/IndoorConcrete fps=82 voices=1 (the reaction lag is 0.3-1.5 s)
+20:30:20.254 [NoiseProbe] armed [the same line as at 20:25:34.572]
+20:31:20.260 [NoiseProbe] minute map=arena_equator blocks=3844 cover=97% bursts peak=2 click=6 dropout=0 gap=0 clip=0 loud=0 suppressed=0 refractory=7 orphan=0 evOrphan=2 bgMedian=-45.8 hitch50=3 gc=0/0/0 spec=+22/-21 amb=+41 restarts=7 props=0 rooms=4 resets=0 probeMs=0.058/1.667
+20:31:47.597 [NoiseProbe] MARK #1 20:31:47.597 frame=47015 pos=(6.0,0.1,31.5) room=5/IndoorGeneric fps=139 voices=1 (the reaction lag is 0.3-1.5 s)
+```
+
+Both raids logged a "MARK #1": the first at 20:28:45.918 in the first raid (armed 20:25:34, ended 20:28:52), the second at 20:31:47.597
+in the second raid (armed 20:30:20, ended 20:32:00). The four captures under `BepInEx/logs/ArenaMapPort-noise/` are `noise-20261029-202805-auto1`, `-202845-mark1`,
+`-203147-mark1` and `-203156-auto1` (each 12.0 s, 6 channels, 6.6 MB). He names `noise-20261029-203147-mark1.wav` as a recording in which it is well audible; his word for
+the sound is "Rauschen" (a hiss or rush of noise), direction and duration are not recorded. The mark key worked, the captures reached the mirror (the Syncthing item
+of the unverified assumptions is answered) and the crowd schedule was the shipped one (`up to 2 simultaneous voices`). Both armed lines read `calls=on`. The
+`bgMedian` of the first raid's minute lines is -34.7, -29.7, -29.2 and, in the final partial minute, -27.2. A forensics workflow over
+the captures is in progress; its result is to be appended here, and the ranked hypotheses above stay as they are until then.

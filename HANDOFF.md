@@ -19,20 +19,26 @@ Two local candidates exist:
   (14:34-14:47) and is the **host-verified fallback**, but it still carries what the release audit
   found (crowd build blocking the main thread about 4.7 s per raid, "the ZIP" in the in-game
   reinstall texts, claims beyond the records, no VirusTotal scan).
-- `8941caa` is the **corrected candidate** (commits `694143d` and `8941caa`): crowd worker with CNG
-  hashing, the NoiseProbe diagnostic, five-part texts, hedged release notes. Its DLLs are rebuilt
-  and deployed to the `D:\SPT41` mirror; its five-part cut exists under `work/releases/0.4.0/github-8941caa`
-  (extract-check: 255 files identical to dist; VirusTotal 0 malicious / 0 suspicious of 75 engines for both DLLs,
-  links in docs/releases/v0.4.0.md). It has **not had a host run yet** (blocked, see the update below); the
-  one open placeholder is `<CROWD_LOAD_SECONDS>` (README, FORGE, CHANGELOG, the release note), to be filled
-  from the new `[Spectator] ... load total=` line of that host run.
+- The **corrected candidate** is `52c8a28` plus the commit that carries the release texts of the 2026-10-29 evening (commits `694143d`,
+  `8941caa`, `52c8a28`): crowd worker with CNG hashing, the NoiseProbe diagnostic (it arms on a stereo driver under a 5.1 speaker mode since
+  `52c8a28`), five-part texts, hedged release notes. `52c8a28` had its **host run on GPU-2 on 2026-10-29 (20:55-21:08)**: four plain PMC raids
+  without bots, one per map, and the hideout once; the crowd build takes 2.08-2.16 s on the main thread (`fe45b84`: 4.68-4.70 s), 0 ArenaMapPort
+  warnings or errors (numbers in the update below; the user's MASCHINE11 log of the 16:41 build reads 2.12-2.20 s on Equator too), so README, FORGE,
+  CHANGELOG and the release note say "about two seconds". Their Known-limitations sentence on the Equator noise says that the user heard it again on
+  2026-10-29 in a plain PMC raid with the shipped two-voice schedule (the ZIP README written by the packer still carries the old wording, see the open
+  list below). Not covered: bots, and listening to anything. Its DLLs sit on the `D:\SPT41` mirror but are **not** the release DLLs: those are to be rebuilt from the commit that
+  carries these texts (ProductVersion embeds the commit), deployed to the mirror, given one more Equator raid on GPU-2, then cut (five parts,
+  extract-check) and scanned on VirusTotal. The cut `work/releases/0.4.0/github-8941caa` and its VirusTotal lines are **superseded**;
+  "Built from commit" and the VirusTotal lines in docs/releases/v0.4.0.md are placeholders again (`<BUILD_COMMIT>`, `<scan date>`,
+  `<VirusTotal URL>`, `<n>`), to be filled after that scan.
 
-Neither package has been uploaded or covered by the final ArenaMode/Redeploy executable scans.
+The `fe45b84` package has not been uploaded or covered by the final ArenaMode/Redeploy executable scans, and the corrected candidate has no package yet
+(the `github-8941caa` cut is superseded).
 Recheck current source/package identity and security scans before any later authorized
 publication, and publish only a package whose manifests pin the commit it was built from.
 Audio limits remain open.
 
-## Update 2026-10-29 (evening) - 0.4.0 audit, fixes, Equator noise investigation (committed 694143d, 8941caa; host run of the new build blocked)
+## Update 2026-10-29 (evening) - 0.4.0 audit, fixes, Equator noise investigation (committed 694143d, 8941caa, 52c8a28; host run of 52c8a28 done 20:55-21:08)
 
 **Request (user, German):** "schau mal über den aktuellen stand ob der so als 0.4.0 veröffentlicht werden kann.
 vielleicht kannst du auch mal die dokumentierte audio auffälligkeit auf Equator untersuchen". Two questions: can the
@@ -54,7 +60,8 @@ found no blocker for the first; the second is still open. Publication stays post
   [v0.4.0.md](docs/releases/v0.4.0.md)).
 - 31 of 44 `DistributionSidecarTests` (`tools/tests/test_validate_distribution.py`) errored on HEAD because their
   fixtures lacked the spectator files the validator now requires: repaired, 5 negative tests added.
-- VirusTotal had not been run for the `fe45b84` DLLs: a scan of the two `8941caa` DLLs is running (open, below).
+- VirusTotal had not been run for the `fe45b84` DLLs: the two `8941caa` DLLs were scanned afterwards (0 malicious, 0 suspicious), but the release
+  DLLs are rebuilt again, so that scan is superseded; scan the final pair (open, below).
 - FORGE.md said "extract the ZIP" and the in-game notices said "the same ZIP". Five ZIP parts everywhere now; the five
   reinstall texts say "release package (all its ZIP parts)" ([map-notices.md](docs/progress/map-notices.md)).
 - Several claims exceeded the records and are hedged now: gate sounds were never listened to, Equator's puddles were not
@@ -104,44 +111,83 @@ on (11:43-11:45), did you hear the noise, or in both, or neither? (2) When exact
 raid? (3) What does it sound like (crackle, tick, click, hiss), from which direction, and how long? And one practical
 ask: which key is free for the NoiseProbe mark (default Pause; a mouse side button works)?
 
-**NoiseProbe (developer-only, default Off; implemented and unit-tested, not run in any game).** Keys in the section
+**The user's captures (late evening).** On 2026-10-29 he heard the noise in a plain PMC raid on Equator while standing still and ran `NoiseProbe=Capture`
+twice (`D:\SPT41\BepInEx\LogOutput-MASCHINE11-2026-10-29_20-21-38.log`; plugin `maschine-ArenaMapPort.Client.dll` 0.4.0 of 2026-10-29 16:41, i.e. the
+`694143d`/`8941caa` code before the stereo fix; Arena 0.6.0.0.47752; SurroundAudio 1.0.0 loaded; DeveloperMode on). Both armed lines (20:25:34.572 and
+20:30:20.254) read `mode=Capture ... speakers=Mode5point1 driver=Mode5point1 ch=6 ... calls=on ... tap=readback+filter ring=15s`; the crowd line reads
+`up to 2 simultaneous voices`; the log has no `GetOutputData` error. Four captures under `BepInEx/logs/ArenaMapPort-noise/`: `noise-20261029-202805-auto1`,
+`-202845-mark1` (MARK #1 of the first raid, 20:28:45.918, pos (20.9, 5.5, 8.8), room 19/IndoorConcrete), `-203147-mark1` (MARK #1 of the second raid,
+20:31:47.597, pos (6.0, 0.1, 31.5), room 5/IndoorGeneric) and `-203156-auto1`. He names `noise-20261029-203147-mark1.wav` as a recording in which it is well
+audible; his word for the sound is "Rauschen" (a hiss or rush of noise). The mark key worked and the captures reached the mirror. The calls were on at both
+armings, which answers neither question 1 (whether it also occurs with the calls off) nor question 2 (the time of `KeepReverb=false`); both stay open. A forensics workflow over the captures is in progress; its
+result is to be appended to [spectator-audio.md](docs/progress/spectator-audio.md) ("Host run of 52c8a28 and the user's captures"), and the table of
+hypotheses above stays as it is until then.
+
+**NoiseProbe (developer-only, default Off; unit-tested; first host runs on the evening of 2026-10-29, results below).** Keys in the section
 `Audio diagnostics`, all honoured only with DeveloperMode, all live: `NoiseProbe` (`Off|Detect|Capture`),
 `NoiseProbeMarkKey` (default Pause), `NoiseProbeSelfTest`, `NoiseProbeMuteAmbient` (comma list of exact ambient player
 names), `NoiseProbeMuteProps`, `NoiseProbeSpectatorFade`. Design, log lines and decision rules:
 [spectator-audio.md](docs/progress/spectator-audio.md) "NoiseProbe diagnostic (2026-10-29)".
 
-Host checklist for the first run of `8941caa` (GPU-2; `uibridge_status` first: loaded DLL equals the VM build):
+Host checklist for the first run of the corrected candidate (GPU-2; `uibridge_status` first: loaded DLL equals the VM build). It was planned for
+`8941caa`; `52c8a28` ran it on 2026-10-29 at 20:55-21:08 (lead, instance `2896f154`, `LogOutput-SPT-GPU-2-2026-10-29_20-59-01.log`, DeveloperMode on for the whole process, plain PMC
+raids with bots None, 12:00, clear), results in italics:
 
 1. Self-test: DeveloperMode on, `NoiseProbe=Detect`, `NoiseProbeSelfTest=true`, Equator NO BOTS. Expect the
-   `[NoiseProbe] armed ...` line, four `selftest` lines with -18, -24 and -30 dBFS PASS and -36 dBFS MISS (below the 0.03
-   peak floor, by design), then `selftest done 3/4 detected`. Repeat with `Capture` and read `tap=`.
-2. A plain raid with `NoiseProbe=Off`: the probe logs nothing.
+   `[NoiseProbe] armed ...` line and four `selftest` lines; how many pass depends on the background level ("3/4 with -36 MISS", this checklist's earlier
+   expectation, was designed on a -60 dBFS bed: -36 dBFS lies below the 0.03 peak floor and misses at any background level, by the peak criterion alone -24 and -30 dBFS need a
+   baseline peak of about -43 and -45 dBFS or quieter). Repeat with `Capture` and read `tap=`. *`8941caa` could not arm there ("the probe cannot arm
+   (ArgumentException: AudioListener.GetOutputData failed; invalid channel)", 20:48:21.876 in `logs/LogOutput-SPT-GPU-2-2026-10-29_20-46-22.log`, instance
+   `ee010ad5`: a stereo driver under Mode5point1); `52c8a28` armed at 21:00:51 with `driver=Stereo ch=2/6 ... tap=readback`, the self-test found 1/4 (-18 PASS,
+   +17.6 dB; -24, -30 and -36 MISS at block peaks -27.9, -30.3 and -36.0 dBFS against background peaks -37.0, -38.2 and -37.8 dBFS; the `calib` line of the
+   first minute reads `pk50=-37.0`, the median block peak), the detector is relative (15 dB over the baseline peak) and unchanged, the expectation is
+   corrected; the result covers the two device channels only. The switch to Capture at 21:01:20 logged the armed line again (`tap=readback+filter ring=15s`)
+   and left the detector and its minute clock running, so the minute line of 21:01:51 (`blocks=3526 cover=98% ... gap=0 ... orphan=0`) spans 29 s of Detect
+   and 31 s of Capture; the final line of 21:02:07 (`blocks=989 cover=100% ... gap=0 orphan=0`, about 17 s) is all Capture. No self-test was recorded in
+   Capture, so the `tap=` proof is still unread. Details in [spectator-audio.md](docs/progress/spectator-audio.md).*
+2. A plain raid with `NoiseProbe=Off`: the probe logs nothing. *Bay5, Air Pit and Bowl: no `[NoiseProbe]` line; Equator's `Off` logged "disarmed (mode off)" at
+   21:02:07.*
 3. Read the new Debug summary of the `[Spectator]` crowd on every map (BepInEx's disk log filter must include Debug), in the form
    `load total=... ms (wait=, hash=, parse=, textures=, actors=, audio=; hash and parse on the worker|main thread, crypto CNG|managed)`.
-   Expect worker and CNG; it supplies the number for `<CROWD_LOAD_SECONDS>` (the 4.68-4.70 s of `fe45b84` does not apply).
+   Expect worker and CNG; it supplies the number for the former `<CROWD_LOAD_SECONDS>` (the 4.68-4.70 s of `fe45b84` does not apply). *Worker and CNG on
+   all four maps, `wait=0`: total 2110 ms Equator, 2076 Bay5, 2100 Air Pit, 2158 Bowl (`textures=` 2.03-2.11 s of it, `hash=` 58-68 ms and `parse=` 1.84-1.97
+   s on the worker); no "could not be prepared" or "could not be restored" line. The user's MASCHINE11 log of the 16:41 build holds two Equator lines of the
+   same kind (20:25:19 `load total=2204 ms (wait=1, ...)` and 20:30:01 `2124 ms (wait=0, ...)`, worker and CNG). The texts say "about two seconds". Table in
+   [spectators-allmaps.md](docs/progress/spectators-allmaps.md) "Host run of the worker build".*
 4. RAM headroom while loading on Bay5 and Equator: the worker now holds the parsed graph and up to 48 MiB of PNG bytes
-   during loading.
+   during loading. *One RAM figure per raid: Equator 9041-9048 MB, Bay5 11862, Air Pit 12069, Bowl 12574 MB, none above the 9.5-13.0 GB of the `fe45b84`
+   run; the loading-time peak itself is not isolated.*
 5. The hideout once, and the usual acceptance (`uibridge_status` `max` frame time, ModProfiler `max_ms_in_frame`, no
-   ArenaMapPort warning).
+   ArenaMapPort warning). *Hideout opened and back to the menu at 21:06 (EFT's first-time "WELCOME TO THE HIDEOUT" window had to be closed by hand). Equator
+   steady 120 fps (mean 8.3 ms, max 10.4 ms in a 10 s window 50 s in, most likely inside the probe's armed span; raid-start max 955 ms); the known hitches: Bay5 484.5 ms (RainCover bootstrap), Air
+   Pit 1915.5 ms (`[IndoorSurface]` 1815 ms), Bowl 3067.1 ms (`[IndoorSurface]` 2936 ms). 0 ArenaMapPort warnings or errors; besides three FixPluginTypesSerialization and four HarmonyX notices at startup (third-party plugins, none ours) the
+   process had Unity's LOD lines, one Unity "Can not play a disabled audio source" in the hideout and the known "Coroutine couldn't be started ... 'MenuScreen' is inactive!" error on
+   leaving Equator.*
 
-**Current build and what is open.** HEAD `8941caa`; the dist DLLs were rebuilt from it (client SHA-256
-`b624acc2a497258bece9bed48700160a14d40506868f7c2561658d1bc56cf36a`, server
-`d3b7a274038b1b2b82cb9cfe2ceea5e92ad7f1d37d0eae0403d6fbeb6784ea16`, ProductVersion `0.4.0+8941caa...`) and deployed to the
-`D:\SPT41` mirror at 16:45. Open:
+**Current build and what is open.** HEAD `52c8a28` when this was written (the commit that carries these texts is made after it); the dist DLLs were
+rebuilt from `52c8a28` (client SHA-256 `c052926a3e7373cb40d47bc7344fc753dd820e95d93ba60be7ebcac205574327`, server
+`aaeae0c77e52aba5b3174fdf041e43aba64f24a881b69d14895c1020aa5b0a00`, ProductVersion `0.4.0+52c8a281cf765bcb13473104366f5a1cd06348f8`) and deployed to the
+`D:\SPT41` mirror at 20:55 (the `8941caa` DLLs, client `b624acc2...` and server `d3b7a274...`, are replaced). Open:
 
-- **Host run of `8941caa`.** Blocked: since 16:45 the GPU-2 SPT server refuses to start because ArenaMode's server mod stops
-  on "A paid Tarkova Cola reward needs companion-file recovery" (`RewardColaRecoveryException`, expected-object; the profile
-  was written by a 15:02-15:07 session of another agent). That is not an ArenaMapPort matter, and ArenaMode and host
-  profiles are not touched from here. The `fe45b84` package stays the host-verified fallback.
-- **Placeholders** in the release texts, to fill after the host run and the scan: `<CROWD_LOAD_SECONDS>` (CHANGELOG.md,
-  README.md, FORGE.md twice, docs/releases/v0.4.0.md), and in v0.4.0.md `<BUILD_COMMIT>`, `<scan date>` and the
-  VirusTotal URLs and counts of the two DLLs (a scan of the `8941caa` DLLs is running, as is the cut
-  `work/releases/0.4.0/github-8941caa`).
-- **The user's answers** to the questions above, then the NoiseProbe sessions (recipe P0-P3 in spectator-audio.md).
+- **Host run: done for `52c8a28`** (results in the checklist above; 4 plain PMC raids without bots, the hideout once, 0 ArenaMapPort warnings or errors).
+  GPU-2 is runnable again: the SPT server of the 16:45 blockage (ArenaMode's recovery state, not an ArenaMapPort matter) starts, ArenaMapPort 0.4.0 is
+  loaded and Arena 0.6.1.0.48206 verified. What it did not cover: bots, listening. The release DLLs are a later rebuild (bullet "Release DLLs and package").
+- **Placeholders** in the release texts: `<CROWD_LOAD_SECONDS>` is filled ("two", CHANGELOG.md, README.md, FORGE.md twice, docs/releases/v0.4.0.md). Open in
+  v0.4.0.md, to fill after the rebuild and the scan: `<BUILD_COMMIT>`, `<scan date>` and the VirusTotal URLs and counts of the two DLLs (the scan of the
+  `8941caa` DLLs and the cut `work/releases/0.4.0/github-8941caa` are superseded).
+- **Release DLLs and package:** rebuild both DLLs from the commit that carries these texts (ProductVersion embeds the commit), deploy to the mirror, one more
+  Equator raid on GPU-2 with DeveloperMode and `NoiseProbe` off, as players run it (the 21:00-21:06 run had DeveloperMode on), then the five-part cut
+  (extract-check) and the VirusTotal scan of the two DLLs.
+- **ZIP README sentence:** `tools/release/make_release_zips.py` ("Known audio limits") still says the Equator noise was reported "on development builds with a
+  denser crowd-call schedule than this release uses", and `tools/tests/test_release_zips.py` pins that phrase
+  (`test_the_readme_names_both_missing_impact_banks_and_the_noise_context`). The user heard the noise again with the shipped schedule, so reword both before the
+  cut (tools/ was outside this docs commit).- **The user's answers** to the questions above: only the captures of the late evening so far (Capture twice, four captures, analysis in progress, result to be
+  appended to spectator-audio.md); questions 1 and 2 are open. Then the NoiseProbe sessions (recipe P0-P3 in spectator-audio.md; P0 is done in part, with the
+  calibration caveat of the self-test: calibrate the thresholds on the first minutes, P1, before counting orphans).
 - **Dates:** the changelog heading and the release note carry 2026-10-29 / "29 October 2026"; re-date them if the
   publication happens on another day.
 - **The tag must contain the correction** in `docs/progress/release-sweep-20261029.md` (the release note links that file at
-  the tag): tag `8941caa` or a descendant, never `fe45b84`.
+  the tag): tag the commit that carries these texts or a descendant, never `fe45b84`.
 - Publication itself, only when the user reauthorizes it.
 
 Snapshot for whoever continues (human or agent). Verify the commits named here against `git log`; this file

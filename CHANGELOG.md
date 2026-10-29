@@ -15,7 +15,7 @@ Full release note: [docs/releases/v0.4.0.md](docs/releases/v0.4.0.md).
 - **Original animated spectators on all four maps**: Air Pit (99), Equator day/night (99), Bay5 (88) and Bowl (99), with 15
   appearances and original idle/cheering animations at staggered intervals. The missing legacy face cloth uses Arena's current
   half-mask. The crowd is decorative and does not react to match events yet. The 123 shared images decode into about 0.5 GB of
-  video memory per raid on every map and building a crowd adds about <CROWD_LOAD_SECONDS> seconds to raid loading; a map's crowd
+  video memory per raid on every map and building a crowd adds about two seconds to raid loading; a map's crowd
   can be skipped by deleting its `spectators` folder (see the release note).
 - **Spectator calls.** Spectators call out using 13 original Arena voice clips, with spatial positioning and room obstruction.
   Calls are scheduled at 1.6-3.2 second intervals, waiting if two voices are already active; active speakers and recorded voice
@@ -66,7 +66,9 @@ Full release note: [docs/releases/v0.4.0.md](docs/releases/v0.4.0.md).
   behavior and the warnings for missing sound banks during a live raid are unchanged.
 - A developer-only noise probe, `Audio diagnostics/NoiseProbe` (`Off`, `Detect` or `Capture`; the key that marks "I just
   heard it" is `Audio diagnostics/NoiseProbeMarkKey`, default Pause), supports locating the intermittent Equator noise. It
-  needs `General/DeveloperMode`, adds no public setting and has not yet been run in a game.
+  reads the output channels the audio driver delivers (two on a stereo driver under a 5.1 speaker mode) and says how many in
+  its start line. It needs `General/DeveloperMode`, adds no public setting and has been run in test raids; the intermittent
+  noise remains an open limitation.
 
 ### Known limitations
 
@@ -78,7 +80,8 @@ Full release note: [docs/releases/v0.4.0.md](docs/releases/v0.4.0.md).
 - Intermittent short noise reported during Equator play remains unresolved; no noise fix or subjective audio-quality
   acceptance is claimed. It was reported on development builds that allowed up to three overlapping crowd voices at twice
   the call rate, with the SurroundAudio mod (5.1) installed. Disabling that mod's reverb helper did not remove it, and it
-  has not yet been re-tested with the shipped two-voice schedule.
+  was heard again on 2026-10-29 in a plain PMC raid on a 0.4.0 test build with the shipped two-voice schedule
+  (SurroundAudio still installed); the cause is not identified.
 - EFT's own sound bundle has no impact sounds for the Books and CardBoard prop types. On Equator 39 props (30 Books: shoes,
   books, blue cups and a road cone; 9 CardBoard: pizza boxes and office folders), and any props of those types on other
   maps, stay silent when they hit something.

@@ -74,3 +74,58 @@ the VirusTotal URLs and counts of the two DLLs.
 correction in release-sweep-20261029.md (the release note links that file at the tag); a re-dating of the changelog heading and the release note if the
 publication happens on another day than 2026-10-29; a package whose part manifests pin the commit it was built from. Nothing was tagged, uploaded or
 pushed.
+
+## The 52c8a28 state: host run and the candidate - 2026-10-29 (late evening)
+
+Publication is still postponed by the user (HANDOFF.md, top). This section supersedes the corrected-candidate and "host run blocked" paragraphs above.
+
+**Build and host run.** GPU-2 is runnable again. `52c8a28` (`8941caa` plus the NoiseProbe fix for a stereo driver under a 5.1 speaker mode, see
+[spectator-audio.md](spectator-audio.md); xunit: 2,619 tests pass) was deployed at 20:55 (255 files, 2 overwritten: client SHA-256
+`c052926a3e7373cb40d47bc7344fc753dd820e95d93ba60be7ebcac205574327`, server `aaeae0c77e52aba5b3174fdf041e43aba64f24a881b69d14895c1020aa5b0a00`, ProductVersion
+`0.4.0+52c8a281cf765bcb13473104366f5a1cd06348f8`; the deploy-wait took 116 s). The server log shows ArenaMapPort 0.4.0 loaded, Arena 0.6.1.0.48206 verified and
+four maps available. EFT instance `2896f154` started at 20:59:11 (`LogOutput-SPT-GPU-2-2026-10-29_20-59-01.log`; DeveloperMode was on for the whole process, so every figure below comes from a developer-mode process).
+Four plain PMC raids without bots (bots None, 12:00, clear) on Equator (21:00), Bay5 (21:02), Air Pit (21:04) and Bowl (21:05), then the hideout once (21:06, opened and back to the menu; EFT's
+first-time "WELCOME TO THE HIDEOUT" window had to be closed by hand):
+
+| Raid | Load location / game (diff) | Crowd build on the main thread | Steady perf and first-seconds maxima | RAM |
+| --- | --- | --- | --- | --- |
+| Equator (first raid of the process) | 4.7 s / 31.5 s (1.4 / 14.2) | 2110 ms | 120 fps, mean 8.3 ms, max 10.4 ms (10 s window 50 s in, most likely inside the probe's armed span 21:00:51-21:02:07); raid-start max 955 ms | 9041-9048 MB |
+| Bay5 | 5.5 s / 26.0 s (1.4 / 8.2) | 2076 ms | 99 fps mean 10.1 ms over the first 10 s, max 484.5 ms (RainCover bootstrap) | 11862 MB |
+| Air Pit | 5.2 s / 25.9 s (1.5 / 8.4) | 2100 ms | 76.8 fps mean 13.0 ms over the first 10 s, max 1915.5 ms (`[IndoorSurface]` 1815 ms) | 12069 MB |
+| Bowl | 5.3 s / 26.7 s (1.5 / 9.1) | 2158 ms | 72.7 fps mean 13.8 ms over the first 10 s, max 3067.1 ms (`[IndoorSurface]` 2936 ms) | 12574 MB |
+
+Crowd lines: worker, CNG, `wait=0` on every map; `fe45b84` blocked the main thread 4.68-4.70 s ([spectators-allmaps.md](spectators-allmaps.md) "Host run of
+the worker build"). No `could not be prepared` or `could not be restored` line. 0 ArenaMapPort warnings or errors in the whole process. The log also holds third-party startup
+warnings (three FixPluginTypesSerialization and four HarmonyX notices, 20:59:01-20:59:13), Unity's `refrigerator_drink` and `light_CellPlafonds` LOD lines, one
+Unity `Can not play a disabled audio source` in the hideout and the known `MenuScreen` coroutine error on leaving Equator; none is ours. The user's MASCHINE11
+log (the 16:41 build, Equator, DeveloperMode on) holds two more crowd lines of the same form, 20:25:19 `load total=2204 ms (wait=1, hash=56, parse=1920,
+textures=2093, actors=51, audio=54)` and 20:30:01 `2124 ms (wait=0, hash=60, parse=1885, textures=2081, actors=38, audio=4)`, both on the worker with CNG, so "about
+two seconds" stands on a second machine. The Equator load row is the first raid of the process; the other three maps ran after it, and no cause is claimed for
+its longer game load (14.2 s against 8.2-9.1 s of diff). NoiseProbe on Equator: armed on the stereo driver (`ch=2/6`), the self-test found 1 of 4 with a background
+peak of about -37 dBFS (the detector is relative; [spectator-audio.md](spectator-audio.md) "Host run of 52c8a28"), `Off` logged nothing on the other three maps.
+
+**What this run does not cover:** bots, and listening to anything (gate and door sounds, puddle splash, the spectator voices, the Equator noise). It is a
+functional run of the worker build and of the probe; the claims in the release texts that are hedged on "not listened to" stay hedged.
+
+**Texts.** `<CROWD_LOAD_SECONDS>` is filled: "about two seconds to raid loading" in CHANGELOG.md, README.md, FORGE.md (twice) and v0.4.0.md (measured 2.08-2.16
+s). "Built from commit" and the VirusTotal lines of v0.4.0.md are placeholders again (`<BUILD_COMMIT>`, `<scan date>`, `<VirusTotal URL>`, `<n>`), because the
+cut and the scan of `8941caa` no longer describe the build that is shipped: the package `work/releases/0.4.0/github-8941caa` and its VirusTotal lines are
+superseded. The CHANGELOG bullet about the NoiseProbe diagnostic now says that the probe reads the output channels the driver delivers and no longer says that it was never run in
+a game. The Known-limitations sentence "has not yet been re-tested with the shipped two-voice schedule" (README.md, FORGE.md, CHANGELOG.md, v0.4.0.md) is replaced: the
+user heard the noise again on 2026-10-29 (below) and his log shows the shipped two-voice schedule.
+Python fixtures `test_release_zips` and `test_changelog`: 199 tests OK with the texts of this commit.
+
+**The user's Equator noise.** The user heard the noise again in a plain PMC raid on Equator while standing still and ran `NoiseProbe=Capture` twice
+(`D:\SPT41\BepInEx\LogOutput-MASCHINE11-2026-10-29_20-21-38.log`, four captures); an analysis of those captures is in progress, its result is to be appended
+to [spectator-audio.md](spectator-audio.md). His build was `maschine-ArenaMapPort.Client.dll` 0.4.0 of 2026-10-29 16:41 (the `694143d`/`8941caa` code, before the
+stereo fix) with Arena 0.6.0.0.47752, SurroundAudio 1.0.0 and DeveloperMode on; the crowd line reads `up to 2 simultaneous voices` and both armed lines `calls=on`,
+`ch=6`. The noise stays an open limitation of the release.
+
+**Before any publication** (in this order): the user's reauthorization; the commit that carries these texts; the release DLLs rebuilt from that commit
+(ProductVersion embeds the commit) and deployed to the `D:\SPT41` mirror; one more Equator raid on GPU-2 with those DLLs, with DeveloperMode and `NoiseProbe` off as
+players run it (this run had DeveloperMode on); the ZIP README sentence in `tools/release/make_release_zips.py` ("Known audio limits", "on development builds with a
+denser crowd-call schedule than this release uses") and its pin in `tools/tests/test_release_zips.py` reworded, because the noise was heard again with the shipped
+schedule; the five-part cut from that commit
+(extract-check against dist) and a VirusTotal scan of its two DLLs; `<BUILD_COMMIT>`, `<scan date>` and the VirusTotal URLs and counts filled; the tag on
+that commit; a re-dating of the changelog heading and the release note if the publication happens on another day than 2026-10-29. Nothing was tagged,
+uploaded or pushed.

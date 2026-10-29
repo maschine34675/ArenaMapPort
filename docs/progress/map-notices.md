@@ -1648,4 +1648,6 @@ new wording, and no "ZIP" remains outside "ZIP parts" / "ZIP-Teile".
 Only wording changed. Ids, placeholders, selector, scheduler, delivery rules and `General/ShowMapNotices` are as before, and no notice file gained a
 call to `ArenaInstallationGate.EnsureVerified()`. The text tables of the 2026-10-22 design above ("Server and installed files") still show the old
 "the ZIP" wording and stay as the historical record; the code is the source of the implemented texts. The changed texts are covered by the unit test
-only: they have not been shown in the game, because the host run of the build that carries them (`8941caa`) is blocked (see HANDOFF.md).
+only: they have not been shown in the game, because the host run of the build that carries them (`8941caa`) is blocked (see HANDOFF.md). [2026-10-29 21:08: GPU-2
+runs again and `52c8a28` was host-run on a healthy install (four maps available, Arena verified), so no failure notice was exercised; the texts stay
+unit-test-only.]

@@ -25,7 +25,7 @@ invented) and can be switched off per map with DeveloperMode enabled (enable it 
 Version 0.4.0 adds the original animated spectators on all four maps, with
 spatial crowd calls and up to two voices at once. The crowd does not react to
 kills or round results yet. The crowds use about 0.5 GB of video memory per raid
-and add about <CROWD_LOAD_SECONDS> seconds to raid loading (see Known limitations).
+and add about two seconds to raid loading (see Known limitations).
 
 The gates and vehicles at the team spawn enclosures use Arena's own open positions and,
 where Arena has them, its motions (at half their time). They stand open from raid start, or a
@@ -85,13 +85,14 @@ stays unchanged. Equator Day, Bay5, Air Pit and Bowl are unaffected.
 
 - Intermittent short noise reported during Equator play remains unresolved and no fix is
   claimed. It was reported on development builds that allowed three overlapping crowd voices
-  at twice the call rate, by a player using the SurroundAudio mod (5.1), and has not yet been
-  re-tested with the shipped two-voice schedule.
+  at twice the call rate, by a player using the SurroundAudio mod (5.1), and was heard again on
+  2026-10-29 in a plain PMC raid on a 0.4.0 test build with the shipped two-voice schedule
+  (SurroundAudio still installed); its cause is not identified.
 - EFT's own sound bundle has no impact sounds for the Books and CardBoard prop types, so 39
   Equator props (30 Books: shoes, books, blue cups and a road cone; 9 CardBoard: pizza boxes
   and office folders) and any props of those types on the other maps stay silent when they hit
   something.
 - The crowds decode 123 shared images into about 0.5 GB of video memory per raid on
-  every map and add about <CROWD_LOAD_SECONDS> seconds to raid loading. The GitHub release
+  every map and add about two seconds to raid loading. The GitHub release
   notes explain how to skip a map's crowd.
 - Fika compatibility has not been verified, and the crowd does not react to match events.

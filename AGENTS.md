@@ -130,7 +130,7 @@ are not accepted build inputs. Keep the SPT bundle target on Unity 2022.3.43f1.
 | `ArenaMapPort.Shared/ArenaStatusContract.cs`, `ArenaMapPort.Server/ArenaServerStatus.cs`, `ArenaMapPortStatusRouter.cs` | The server's one route, read-only `GET /arenamapport/status` (schema 1, codes only: gate verdict with an `ArenaInstallCause`, per-map registration outcome); the client asks it only when maps are missing. |
 | `ArenaMapPort.Client/GateSounds.cs`, `GateSoundModel.cs`, `PcmWav.cs`; `tools/extract/extract_gate_sounds.py`; `tools/maps/<stem>.gatesounds.json`; `work/extract/gate-sounds` | Gate and door sounds (2026-10-25, [gate-sounds.md](docs/progress/gate-sounds.md)): the extractor decodes Arena's `EntitySoundPlayer` objects into the tracked rows (`rows`) and into nine clips with precomputed seam tables (`clips`, ignored `work/extract/gate-sounds`, staged to `dist/.../gate-sounds/<key>/`); `GateSounds` is the Unity glue that plays a release's rows through `BetterAudio`, `GateSoundModel` and `PcmWav` are Unity-free and linked into the tests. |
 | `ArenaMapPort.Client/ScoreMonitors.cs` (public contract), `ScoreMonitorHub.cs`, `ScoreMonitorModel.cs`, `ScoreMonitorLayout.cs`, `ScoreMonitorView.cs`, `ScoreMonitorDemo.cs`; `tools/extract/extract_score_monitors.py`, `tools/extract/extract_monitor_templates.py`; `tools/maps/<stem>.monitors.json`; `work/extract/monitors` | Score monitors (2026-10-25, [score-monitors.md](docs/progress/score-monitors.md)): `ScoreMonitors` is the public, append-only contract that ArenaMode binds by reflection; the hub holds the claim and the snapshot, model and layout are Unity-free, `ScoreMonitorView` is the only Unity file (world-space canvases on Arena's TV props), `ScoreMonitorDemo` the developer test cycle. The extractors write the tracked holder rows and the ignored nine-sprite package (staged to `dist/.../monitors/`). |
-| `ArenaMapPort.Client/NoiseProbe.cs`, `NoiseProbeModel.cs`; `ArenaMapPort.Server.Tests/NoiseProbeModelTests.cs`, `NoiseProbeSourcePinTests.cs` | The developer-only audio noise probe (2026-10-29, [spectator-audio.md](docs/progress/spectator-audio.md) "NoiseProbe diagnostic"; implemented and unit-tested, not run in a game yet): `NoiseProbe` is the Unity glue (the `Audio diagnostics/NoiseProbe*` keys, the one-line taps, driver, mark key, census, `OnAudioFilterRead` tap, export), `NoiseProbeModel` the Unity-free core (block statistics, burst detector, event ring, report text, self-test, PCM ring, WAV writer, capture policy) linked into the tests. Off by default; built for the intermittent Equator noise. |
+| `ArenaMapPort.Client/NoiseProbe.cs`, `NoiseProbeModel.cs`; `ArenaMapPort.Server.Tests/NoiseProbeModelTests.cs`, `NoiseProbeSourcePinTests.cs` | The developer-only audio noise probe (2026-10-29, [spectator-audio.md](docs/progress/spectator-audio.md) "NoiseProbe diagnostic"; unit-tested, first host runs 2026-10-29, see the Traps entry): `NoiseProbe` is the Unity glue (the `Audio diagnostics/NoiseProbe*` keys, the one-line taps, driver, mark key, census, `OnAudioFilterRead` tap, export), `NoiseProbeModel` the Unity-free core (block statistics, burst detector, event ring, report text, self-test, PCM ring, WAV writer, capture policy) linked into the tests. Off by default; built for the intermittent Equator noise. |
 | `tools/bundle/ArenaMapPort.BundleCrypt/` | The net10.0 console tool of stage 2: `stage`, `encrypt`, `decrypt`, `inspect`, `read-range`, `keys`, `verify`, `verify-keys`, `plain-sha256`, `rotate-key` (needs `--yes`), `bench`; `ArenaMapPort.BundleCrypt help` prints the flags. Its keys live in the ignored `work/release-keys/`. |
 | `ArenaMapPort.Server.Tests/` | xunit; the only .NET tests. The client has none — test what is Unity-independent here. |
 | `tools/maps/<key>.json` (+ `.bots.json`, `.exits.json`) | Per-map sidecars for the Python/Unity side; mirrored by the descriptor and guarded by mirror tests. |
@@ -152,8 +152,11 @@ member name pinned in the client (`method_N`, `vmethod_N`) is verified there and
 **2026-10-29: publication is postponed at the user's request.** Keep the prepared 0.4.0
 source/package local; do not create a remote tag or upload a release until reauthorized.
 See the top of HANDOFF.md. The preparation plan below is retained for that later step.
-Commit `8941caa` is the corrected candidate (crowd worker with CNG hashing, NoiseProbe, five-part texts after the release
-audit) and must get a host run before any publication; the `fe45b84` package is the host-verified fallback.
+The corrected candidate is `52c8a28` plus the commit that carries the release texts of 2026-10-29 evening (crowd worker with CNG hashing, NoiseProbe
+that arms on a stereo driver, five-part texts after the release audit). `52c8a28` had its host run on GPU-2 (20:55-21:08: four plain PMC raids without bots,
+the hideout once; crowd build 2.08-2.16 s on the main thread, 0 ArenaMapPort warnings); the release DLLs are still to be rebuilt from the texts commit,
+given one more Equator raid, cut and scanned on VirusTotal before any publication. The `github-8941caa` package and its VirusTotal lines are superseded;
+the `fe45b84` package is the earlier host-verified fallback (see HANDOFF.md).
 
 The 2026-10-29 user-authorized 0.4.0 GitHub release uses the existing multipart packer form:
 core plus Equator/Bay5/AirPit/Bowl, all five ordinary ZIPs extracted into the same SPT root.
@@ -713,7 +716,10 @@ the log; the user uses it to point at things.
   `OnEnable`), which erases the map's multiplier: `ArenaLightingRepairs.SyncSwitchedOn` re-applies it after each switch-on (host: `float_1`
   0.875 = 1.75 x 0.5, intensity 0.867 at 8.5 m). Lamp parts count among the registered parts of `SpawnGates` (Equator 14, Air Pit 42).
 - Crowd worker (2026-10-29, `694143d`; [spectators-allmaps.md](docs/progress/spectators-allmaps.md) "Load cost"; the Unity-free parts are
-  unit-tested, the worker itself has no host run yet): `ArenaSpectators.Install()` (called in `Plugin.Awake` right after `NoiseProbe.Install()`)
+  unit-tested; the worker ran on GPU-2 at 21:00-21:05 (build `52c8a28`): `load total=` 2,076-2,158 ms on the four maps, `wait=0`, `hash=` 58-68 ms and `parse=`
+  1.84-1.97 s on the worker, `textures=` 2.03-2.11 s of PNG decode on the main thread, against 4.68-4.70 s of `fe45b84`; 2,204 and 2,124 ms in the user's
+  MASCHINE11 log of the 16:41 build): `ArenaSpectators.Install()`
+  (called in `Plugin.Awake` right after `NoiseProbe.Install()`)
   subscribes `sceneLoaded`/`sceneUnloaded`, and the Scripts-scene load of a ported map starts one `LongRunning` worker that gunzips, parses and
   hashes the crowd package (graph and texture prefetch, which keeps at most 48 MiB of verified PNG bytes waiting). The worker never touches Unity
   and never logs (a failure travels in `Loaded.Error`). `Create` joins it with a bounded 30 s wait and falls back to the synchronous main-thread
@@ -722,15 +728,22 @@ the log; the user uses it to point at things.
   CNG provider (`CryptoProviders.Select(null)`): `SHA256Managed` runs at about 70 MiB/s on EFT's Mono, which was 2.0-2.3 s for the 147 MB of the 123
   shared PNGs on the main thread of every raid (CNG: about 1 GiB/s). `SpectatorWorkerSourcePinTests` pins the worker rules (no Unity API, no log,
   `Install()` once, `Create` starts and takes the package inside its try), `SpectatorLoadTests` the package and prefetch.
-- NoiseProbe (2026-10-29, `694143d`; [spectator-audio.md](docs/progress/spectator-audio.md) "NoiseProbe diagnostic"; unit-tested, never run in a
-  game): developer-only (`Audio diagnostics/NoiseProbe` `Off|Detect|Capture` plus five more keys, none public, all honoured only with
+- NoiseProbe (2026-10-29, `694143d`; [spectator-audio.md](docs/progress/spectator-audio.md) "NoiseProbe diagnostic"; unit-tested; run on GPU-2 on
+  2026-10-29 21:00 (arming, self-test, a minute line) and by the user on MASCHINE11 (Capture, four captures, under analysis)): developer-only
+  (`Audio diagnostics/NoiseProbe` `Off|Detect|Capture` plus five more keys, none public, all honoured only with
   DeveloperMode). Off must cost one static bool read per tap: every tap in the owned audio code (`SpectatorAudio`, `Bay5AmbientAudio`,
   `PhysicsPropSoundRepairs`, `RoomReverb`, `RoomShotAcoustics`, `GateSounds`, `PuddleFootstepRepairs`, `PrecipitationAudio`) is a one-liner behind
   `if (NoiseProbe.Armed)`; keep new taps that way, with no scene search and no allocation. Nothing logs from the audio thread (the `OnAudioFilterRead`
   tap touches no Unity API and allocates nothing) or from the export worker; the lines are Debug with the tag `[NoiseProbe]`, and the only Warnings are
   a failure to arm or run. `PhysicsPropSoundRepairs.cs` is linked into the tests with a stand-in `NoiseProbe`; `NoiseProbeSourcePinTests` pins the
-  rules and `NoiseProbe.Install()` directly after `SpectatorAudio.Install()` in `Plugin.cs`.
+  rules and `NoiseProbe.Install()` directly after `SpectatorAudio.Install()` in `Plugin.cs`. `AudioListener.GetOutputData` reads the DEVICE output, not the 5.1 mix: on
+  GPU-2 (SurroundAudio logs driver Stereo and requests Mode5point1) the 0-based channels 2-5 (the third to the sixth) throw `ArgumentException: invalid channel`, so `ReadAudioFormat` probes the channels
+  once (`ReadableChannels`), `Read` loops over `_readChannels`, arming fails only when channel 0 is refused and the armed line prints `ch=2/6` when the read and
+  mix counts differ (the Capture tap still records every mix channel; build `8941caa` logged "the probe cannot arm" there). The self-test is background-relative: PEAK
+  needs 15 dB over the baseline peak, so on the Equator spawn with the calls on (background peak about -37 dBFS) only the -18 dBFS burst passes, 1/4 on GPU-2 (two
+  device channels read). The -36 dBFS burst is below the 0.03 peak floor and misses at any background level; the 3/4 was designed on a -60 dBFS bed (by the peak criterion alone, -24 and -30 dBFS
+  need a baseline peak of about -43 and -45 dBFS or quieter). Read a MISS line's `background peak` before calling the probe blind.
 - IndoorFloorSmoothness classification freeze (pre-existing, seen again 2026-10-29): `IndoorFloorSmoothnessRepairs.Classify` runs on the main thread
-  about 10 s into every raid and blocks it for 2-3 s on Air Pit and Bowl (GPU-2 log of 14:34: 2,593 ms Air Pit, 3,130 ms Bowl; older logs 1,755-3,006 ms).
+  about 10 s into every raid and blocks it for 2-3 s on Air Pit and Bowl (GPU-2 log of 14:34: 2,593 ms Air Pit, 3,130 ms Bowl; 21:04-21:05 on `52c8a28`: 1,815 and 2,936 ms; older logs 1,755-3,006 ms).
   It is logged at Debug as `[IndoorSurface] map=... elapsedMs=`. It is not the crowd and not a regression of a given build; a candidate for a worker or
   a time-sliced scan, and the first thing to rule out when a raid shows a hitch about 10 s after its start.
