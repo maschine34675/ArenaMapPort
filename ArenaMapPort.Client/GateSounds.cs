@@ -87,7 +87,7 @@ namespace ArenaMapPort.Client
             var s = Plugin.Instance.Settings;
             _enabled = s.Bind("Spawns", "GateSounds", true,
                 "Plays Arena's own gate and door sounds (booth doors, warehouse rollers and depot gates, passport leaves and bus doors, the Bowl " +
-                "gates) when a mode plugin releases the held spawn gates (SpawnGates.Release, or the developer test hold). A plain raid has no " +
+                "gates, Iceberg's sanatorium gates) when a mode plugin releases the held spawn gates (SpawnGates.Release, or the developer test hold). A plain raid has no " +
                 "release and stays silent. Next release.");
             _volume = s.Bind("Spawns", "GateSoundVolume", 1.0f, new ConfigDescription(
                 "Loudness of the gate sounds: 1 = Arena's own level through its ArenaGates mixer group (-15 dB; an estimate for the gates whose " +

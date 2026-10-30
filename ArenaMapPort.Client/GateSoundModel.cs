@@ -263,7 +263,7 @@ namespace ArenaMapPort.Client
 
         /// <summary>The volume handed to BetterAudio: the AudioSource's volume times the player's volume times the mixer group's fader (the
         /// ArenaGates group is -15 dB, 0.1778) times the user's <c>Spawns/GateSoundVolume</c>. A gain table of the shipped maps: -15.0 dB on
-        /// Equator and Bowl, -15.9 dB Bay5's rollers, -17.5 dB its depot gates, -19.2 dB AirPit's bus doors, -14.9 dB its passport leaves.</summary>
+        /// Equator and Bowl, -15.9 dB Bay5's rollers, -17.5 dB its depot gates, -19.2 dB AirPit's bus doors, -14.9 dB its passport leaves, and -0.9 dB all six of Iceberg's (no mixer group, player volume 0.9: an open listening item).</summary>
         internal static float Gain(Row row, float userVolume)
         {
             if (float.IsNaN(userVolume)) userVolume = 1f;

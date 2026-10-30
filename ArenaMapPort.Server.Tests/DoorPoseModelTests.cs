@@ -1874,8 +1874,8 @@ public sealed class DoorPoseWiringTests
     [Fact]
     public void TheOtherMapsRowsNeedNoPositionToTellTheirPartsApart()
     {
-        // Equator, Bay5 and Bowl keep their lookups: (part, node, at) is unique per row, so SelectRowsForPart is the identity there
-        foreach (var map in new[] { ArenaMapRegistry.Equator, ArenaMapRegistry.Bay5, ArenaMapRegistry.Bowl })
+        // Equator, Bay5, Bowl and Iceberg keep their lookups: (part, node, at) is unique per row, so SelectRowsForPart is the identity there
+        foreach (var map in new[] { ArenaMapRegistry.Equator, ArenaMapRegistry.Bay5, ArenaMapRegistry.Bowl, ArenaMapRegistry.Iceberg })
         {
             var keys = map.DoorPoses.Select(p => (p.Barrier, p.Part, p.Node, At: p.At == null ? "" : string.Join(",", p.At))).ToArray();
             Assert.Equal(keys.Length, keys.Distinct().Count());

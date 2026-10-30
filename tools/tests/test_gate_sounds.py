@@ -31,7 +31,7 @@ import extract_gate_sounds as G  # noqa: E402
 import validate_map_descriptors as VD  # noqa: E402
 
 MAPS = ("arena_equator", "arena_bay5", "arena_airpit", "arena_bowl")
-ICEBERG = "arena_iceberg"     # prepared ahead of its promotion (PLAN-ICEBERG item 8): its own classes below, the four-map loops stay as they are
+ICEBERG = "arena_iceberg"     # joined the released set on 2026-10-30 (PLAN-ICEBERG item 12): its rows, clips and fits are per map, so it has its own classes below and the four-map loops stay as they are
 STEM = {key: key.removeprefix("arena_") for key in MAPS + (ICEBERG,)}
 # ARENAMAPPORT_GATE_SOUNDS_DIR points the package tests at another work/extract/gate-sounds (a worktree has no ignored work/ folder)
 PACKAGE = Path(os.environ.get("ARENAMAPPORT_GATE_SOUNDS_DIR", REPO / "work" / "extract" / "gate-sounds"))

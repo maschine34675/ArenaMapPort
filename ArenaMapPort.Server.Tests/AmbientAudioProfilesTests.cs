@@ -356,7 +356,7 @@ public sealed class AmbientAudioProfilesTests
         Assert.Contains("AmbientAudioProfiles.TryGet(mapKey, out var profile)", code);
         Assert.Contains("foreach (var profile in AmbientAudioProfiles.All)", code);
         Assert.DoesNotMatch(@"[!=]=\s*""arena_", code);
-        Assert.DoesNotMatch(@"ArenaMapRegistry\.(Equator|Bay5|AirPit|Bowl)\b", code);
+        Assert.DoesNotMatch(@"ArenaMapRegistry\.(Equator|Bay5|AirPit|Bowl|Iceberg)\b", code);
         // Bowl's groups list the inactive players too (PLAN-BOWL item 9): the member count and the started set come from the
         // profile, never from the group lists alone.
         Assert.Contains("profile.GroupedPlayers", code);

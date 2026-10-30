@@ -284,7 +284,7 @@ namespace ArenaMapPort.Client
                     new ConfigDescription("Multiply the live native exposure adaptation speed. 1 preserves indoor/outdoor behavior; higher values adapt faster. Does not enable exposure. Live.",
                         new AcceptableValueRange<float>(0.1f, 4f))),
                 Tone = config.Bind(section, "TonemapProfile", equator ? ToneProfile.Filmic : ToneProfile.Original,
-                    "Original preserves native tonemapping and its current parameters. Filmic, RomB and ACES enable that native profile, using its native preset unless TonemapCustomCurve is on. Equator defaults to the accepted custom Filmic curve; Bay5, AirPit and Bowl keep Original. Off disables tonemapping. Live."),
+                    "Original preserves native tonemapping and its current parameters. Filmic, RomB and ACES enable that native profile, using its native preset unless TonemapCustomCurve is on. Equator defaults to the accepted custom Filmic curve; Bay5, AirPit, Bowl and Iceberg keep Original. Off disables tonemapping. Live."),
                 CustomCurve = config.Bind(section, "TonemapCustomCurve", equator,
                     new ConfigDescription("Use the two advanced raw native parameter vectors. Requires an explicit Filmic, RomB or ACES profile; Original and Off ignore them. Invalid or out-of-range vectors fall back to that profile. Live.", null, new ConfigurationManagerAttributes())),
                 Curve = config.Bind(section, "TonemapCurve", equator ? new Vector3(7f, 0.35f, 0.7f) : new Vector3(-1f, 2.72f, 0.15f),

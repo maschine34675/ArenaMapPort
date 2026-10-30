@@ -36,7 +36,7 @@ public sealed class GateSoundModelTests
         return null;
     }
 
-    static readonly string[] Maps = { "equator", "bay5", "airpit", "bowl" };
+    static readonly string[] Maps = { "equator", "bay5", "airpit", "bowl", "iceberg" };
 
     // ---- manifest built from the tracked row sidecar (the real rows, synthetic whole clips) --------------------------------
 
@@ -129,7 +129,7 @@ public sealed class GateSoundModelTests
     [Fact]
     public void TheRealRowsGiveEveryGatePartAtMostOneSoundAndTheSoundingPartsAreThePlanSet()
     {
-        var expected = new Dictionary<string, int> { ["equator"] = 5, ["bay5"] = 5, ["airpit"] = 11, ["bowl"] = 4 };
+        var expected = new Dictionary<string, int> { ["equator"] = 5, ["bay5"] = 5, ["airpit"] = 11, ["bowl"] = 4, ["iceberg"] = 6 };
         foreach (var stem in Maps)
         {
             var manifest = FromSidecar(stem);
@@ -153,7 +153,8 @@ public sealed class GateSoundModelTests
                 Assert.True(hits <= 1, $"{stem}: {key.Barrier}/{key.Part} has {hits} sounds");
                 sounding += hits;
             }
-            Assert.Equal(new Dictionary<string, int> { ["equator"] = 10, ["bay5"] = 7, ["airpit"] = 11, ["bowl"] = 4 }[stem], sounding);
+            // Iceberg: 6 rows, 11 gate keys (4 + 6 + 1 pose groups), every key hits exactly one row (2026-10-30 second pass of the integration review)
+            Assert.Equal(new Dictionary<string, int> { ["equator"] = 10, ["bay5"] = 7, ["airpit"] = 11, ["bowl"] = 4, ["iceberg"] = 11 }[stem], sounding);
         }
     }
 
@@ -167,7 +168,10 @@ public sealed class GateSoundModelTests
         {
             foreach (var row in FromSidecar(stem).Rows)
             {
-                double expected = row.Clip switch
+                // Iceberg's six players name no mixer group (mixer null, mixer_db 0) and a player volume of 0.9: 20 log10(0.9) = -0.9 dB for
+                // all of them, whatever the clip is called (its check-point clip is Equator's arena_equator_old_slide_doors, which is -15.0 dB
+                // there). That loudness is an open listening item of docs/progress/iceberg-release.md, so the number is pinned per map, not per clip.
+                double expected = stem == "iceberg" ? -0.9 : row.Clip switch
                 {
                     "arena_bay5_roller_door_full" => -15.9,
                     "arena_bay5_big_gates" => -17.5,
@@ -262,6 +266,9 @@ public sealed class GateSoundModelTests
             ("arena_bay5", "arena_bay5_big_gates", 1.205, 1.345), ("arena_bowl", "arena_bowl_btr_gates", 2.900, 3.050),
             ("arena_bowl", "arena_bowl_emergency_car_gates_full", 3.001, 3.159), ("arena_bowl", "arena_bowl_double_metal_gates", 2.403, 2.477),
             ("arena_bowl", "arena_bowl_roller_gates", 2.301, 2.449),
+            // Iceberg's clips are fitted per map (gate_sound_fit.json map_clips): its check-point clip has its own table, not Equator's
+            ("arena_iceberg", "arena_san_gates_blue", 1.198, 1.352), ("arena_iceberg", "arena_san_gates_red", 2.499, 2.651),
+            ("arena_iceberg", "arena_equator_old_slide_doors", 1.297, 1.313),
         };
         int checkedClips = 0;
         foreach (var map in expected.Select(e => e.map).Distinct())
@@ -480,7 +487,8 @@ public sealed class GateSoundModelTests
             Assert.All(manifest.Rows, r => Assert.NotNull(manifest.ClipOf(r.Clip)));
             Assert.All(manifest.Rows, r => Assert.True(r.MaxDistance >= 30f && r.MinDistance < 1.5f));
         }
-        Assert.Equal(9, Maps.SelectMany(s => FromSidecar(s).Clips).Select(c => c.Id).Distinct().Count());
+        // 9 ids of the four older maps plus Iceberg's two own ones (arena_san_gates_blue/red); its check-point clip reuses Equator's id
+        Assert.Equal(11, Maps.SelectMany(s => FromSidecar(s).Clips).Select(c => c.Id).Distinct().Count());
     }
 
     // ---- PCM ------------------------------------------------------------------------------------------------------------------------
@@ -534,7 +542,7 @@ public sealed class GateSoundModelTests
     public void TheStagedWavsMatchTheirManifestWhenThePackageIsExtracted()
     {
         int checkedFiles = 0;
-        foreach (var map in new[] { "arena_equator", "arena_bay5", "arena_airpit", "arena_bowl" })
+        foreach (var map in new[] { "arena_equator", "arena_bay5", "arena_airpit", "arena_bowl", "arena_iceberg" })
         {
             string text = RepoTextOrNull($"work/extract/gate-sounds/{map}/gate-sounds.json");
             if (text == null) continue;
@@ -562,6 +570,6 @@ public sealed class GateSoundModelTests
                 checkedFiles++;
             }
         }
-        Assert.True(checkedFiles == 0 || checkedFiles == 9, "a package of some maps only");
+        Assert.True(checkedFiles == 0 || checkedFiles == 12, "a package of some maps only");   // 9 clips of the four older maps and Iceberg's 3
     }
 }

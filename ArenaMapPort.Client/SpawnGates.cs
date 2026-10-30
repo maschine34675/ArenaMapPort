@@ -218,7 +218,7 @@ namespace ArenaMapPort.Client
         /// carvers of the parts Arena animates stand (a NavMesh path check made at that moment sees the final mesh). In an
         /// ordinary raid it turns true at the NavMesh install after the raid-start opening; after a <see cref="Hold"/> it
         /// turns true when the Release has driven the last part (at the default drive scale 1.5 s on Air Pit, 3.5 s on
-        /// Equator and Bay5, 6.8 s on Bowl; at once with <c>SpawnGateDrive = false</c>). False while the gates are held, and
+        /// Equator and Bay5, 2.5 s on Iceberg, 6.8 s on Bowl; at once with <c>SpawnGateDrive = false</c>). False while the gates are held, and
         /// before the opening ran (<see cref="ClosedParts"/> == 0: a map without gates never reports open, so a mode plugin
         /// waits only when ClosedParts is above 0). A held gate (descriptor HeldGates, AirPit's passport control) that no
         /// hold released stays closed by design and does not count. Every transition to true raises <see cref="GatesOpened"/>.</summary>
@@ -377,11 +377,11 @@ namespace ArenaMapPort.Client
                 "Other gates without a pose switch off without a motion. Next release.", new AcceptableValueRange<float>(0f, 5f)));
             _drive = s.Bind("Spawns", "SpawnGateDrive", true,
                 "Parts with Arena's animated end pose (Bowl's BTR, ambulance, army gate leaves and respawn gate; Equator's " +
-                "booth doors; Bay5's roller and depot gates; AirPit's bus doors and passport leaves) drive there over Arena's duration times Spawns/SpawnGateDriveScale " +
+                "booth doors; Bay5's roller and depot gates; AirPit's bus doors and passport leaves; Iceberg's gate leaves) drive there over Arena's duration times Spawns/SpawnGateDriveScale " +
                 "when the gates release; false snaps them to the open pose at once. Next release.");
             _driveScale = s.Bind("Spawns", "SpawnGateDriveScale", DoorPoseModel.DefaultDriveScale, new ConfigDescription(
                 "Multiplies the authored drive durations of every map, Bowl included; 1 = Arena's own timing (Equator's booth " +
-                "doors 5 to 7 s, Bay5's rollers 4 s and depot gates 7 s, AirPit's passport leaves 1.7 s and bus doors 3 s, Bowl's vehicles and gates 7.7 to 13.5 s), 0.5 (default) " +
+                "doors 5 to 7 s, Bay5's rollers 4 s and depot gates 7 s, AirPit's passport leaves 1.7 s and bus doors 3 s, Iceberg's gate leaves 2 to 5 s and check-point gate 3 s, Bowl's vehicles and gates 7.7 to 13.5 s), 0.5 (default) " +
                 "= half of it. Spawns/SpawnGateDrive = false still snaps. Next release.",
                 new AcceptableValueRange<float>(DoorPoseModel.MinDriveScale, DoorPoseModel.MaxDriveScale)));
             _maxHoldSeconds = s.Bind("Spawns", "SpawnGateMaxHoldSeconds", 300f, new ConfigDescription(

@@ -35,7 +35,7 @@ the largest `ok` entry whose removal does not exceed (1 - scale) * event_s and c
 CLI:
     python tools/extract/extract_gate_sounds.py rows  [--map arena_bowl] [--arena auto] [--check]
     python tools/extract/extract_gate_sounds.py clips [--map arena_bowl] [--arena auto] [--output work/extract/gate-sounds]
-Without --map every map of MAPS (the four released maps and Iceberg, whose rows and clips are prepared ahead of its promotion). A clip's fit entry
+Without --map every map of MAPS (the four released maps and Iceberg, which joined the released set on 2026-10-30). A clip's fit entry
 is fit["clips"][name], or fit["map_clips"][map_key][name] where one map plays a clip another map shares at a different authored pitch (Iceberg
 plays Equator's slide clip at 1.15). `rows --check` compares with the tracked sidecars and writes nothing. The output is byte-stable.
 """

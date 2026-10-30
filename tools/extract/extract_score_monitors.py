@@ -41,7 +41,7 @@ of the direction from the screen towards the reader: the side the canvas is read
 
 CLI:
     python tools/extract/extract_score_monitors.py [--map arena_bowl ...] [--arena auto] [--check] [--csharp] [--no-package]
-Without --map every map of MAPS (the four released maps and Iceberg, prepared ahead of its promotion). `--check` compares with the tracked sidecars and writes nothing (exit 1 when one differs). `--csharp` also
+Without --map every map of MAPS (the four released maps and Iceberg, which joined the released set on 2026-10-30). `--check` compares with the tracked sidecars and writes nothing (exit 1 when one differs). `--csharp` also
 prints the `new ArenaScoreMonitor(...)` literals for ArenaMapRegistry.<Map>.ScoreMonitors. The output is byte-stable.
 """
 from __future__ import annotations

@@ -2343,7 +2343,7 @@ public sealed class CryptoRealDataTests
         ("arena_bay5", 8, 358_204_848),
         ("arena_airpit", 7, 603_532_272),
         ("arena_bowl", 8, 754_464_336),
-        // Iceberg's row is prepared ahead of its promotion (PLAN-ICEBERG item 6): four streams, no .resource file, no key store entry yet
+        // Iceberg (PLAN-ICEBERG item 6, promoted 2026-10-30): four streams, no .resource file; its key store entry is created by the first stage (U1)
         ("arena_iceberg", 4, 560_470_032),
     };
 

@@ -175,10 +175,10 @@ public class MapDescriptorConsistencyTests
         }
     }
 
-    // PLAN-AIRPIT item 8: the bake-only inputs exist for AirPit alone; Equator's and Bay5's NavMesh bake keeps its
+    // PLAN-AIRPIT item 8: the bake-only inputs exist for AirPit, Bowl and Iceberg (the last two joined later); Equator's and Bay5's NavMesh bake keeps its
     // renderer-union volume, its every-layer mask and no exclusion, which is what their shipped bundles were built with.
     [Fact]
-    public void NavMeshBakeInputs_ExistForAirPitAndBowlOnly()
+    public void NavMeshBakeInputs_ExistForAirPitBowlAndIcebergOnly()
     {
         var airPit = ArenaMapRegistry.AirPit;
         var bowl = ArenaMapRegistry.Bowl;

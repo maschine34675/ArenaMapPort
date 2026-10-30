@@ -108,7 +108,7 @@ namespace ArenaMapPort.Client
             _applyOnServerTime = Plugin.Instance.Settings.Bind("Weather (test)", "ApplyOnServerTimeMaps", false,
                 "Developer mode only (General/DeveloperMode latched at startup). false = Bay5, AirPit, Bowl and Iceberg keep " +
                 "the backend weather and ignore 'Weather'. true = the 'Weather' value (Clear/Overcast/Rain/Fog) " +
-                "also replaces the backend weather nodes on Bay5/AirPit/Bowl, on every initialization and PVE_OFFLINE " +
+                "also replaces the backend weather nodes on Bay5/AirPit/Bowl/Iceberg, on every initialization and PVE_OFFLINE " +
                 "re-sync; Server = no change. Time of day keeps following the backend clock. For rain checks " +
                 "(F8 depth readback, streak screenshots). Applies on the next raid load, not live.");
         }
