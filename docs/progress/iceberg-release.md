@@ -97,7 +97,9 @@ host evidence. Appended, never rewritten.
   records without a key behave as before. Evidence: Iceberg's three renames are exactly the players above, no support record is
   renamed; a Bay5 audio re-export from the live Arena (scratch) has the same 24 players, 6 support records, ids and paths as
   `bay5-native-v5` (the only differences are Arena build pointers: mixer and script path ids of 0.5.4 against 0.6.1, and the
-  scene hash); `validate_audio_source` passes on both the Iceberg and the Bay5 re-export. `test_audio_sibling_names` covers the
+  scene hash); the Bowl, AirPit and Equator re-exports likewise have the ids, paths and `sourceLeafName` values of
+  `bowl-native-v2` (`indoor_wind~2` kept), `airpit-native-v9` and `equator-native-v5`; `validate_audio_source` passes on the
+  Iceberg, Bay5, Bowl and Equator re-exports. `test_audio_sibling_names` covers the
   rule (commit `963492d`).
 - **Registration and contract** (commit `6c0c5b9`): `AUDIO_EXPORTERS["arena_iceberg"] = ("ambient_audio", export)`, contract
   `audio` block (schema 2, `level259`, root `ArenaMapPort_IcebergNativeAudio`, `group_coverage` `all_players`, states as above;
