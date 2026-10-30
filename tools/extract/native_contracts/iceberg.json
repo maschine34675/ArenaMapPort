@@ -5,7 +5,9 @@
   "Pins from the first native extraction of Iceberg on Arena 0.6.1.0.48206 (2026-10-30, package iceberg-native-v1, docs/progress/iceberg-release.md): BallisticCollider per scene {'256': 6077, '260': 0, '258': 801, '257': 11, '375': 337, '376': 61}, StaticDeferredDecal 215, CullingLightObject 1126, VolumetricLight 276, LightFlicker 7, NavMeshModifier 228 + NavMeshModifierVolume 0, SmallPhysicsObject 0, rain cover 23 IndoorTrigger / 0 DryPlane / weather obstacle False.",
   "implicit_scene_identity stays false: generic packages always record source.map_key.",
   "Eight cement-bag colliders of Arena_Sanatorium ('bag_cement_block*/concrete') carry the preset Gravel over the material Concrete; extract_ballistics imports the reviewed pair as authored (REVIEWED_PRESET_MATERIAL_PAIRS).",
-  "Eleven Glass colliders (car lights in Arena_Sanatorium, Lamp_Industrial_01_BALLISTIC_glass in Arena_Sanatorium_Light) carry EHitType.Lamp with network id 0; extract_ballistics.reviewed_hit_role imports them as plain Glass (HitType Default, NetId 0)."
+  "Eleven Glass colliders (car lights in Arena_Sanatorium, Lamp_Industrial_01_BALLISTIC_glass in Arena_Sanatorium_Light) carry EHitType.Lamp with network id 0; extract_ballistics.reviewed_hit_role imports them as plain Glass (HitType Default, NetId 0).",
+  "audio: PLAN-ICEBERG item 5 pins from the dry-run census of level259 (Arena_Sanatorium_Sound, plan role 'sound') with the exporter's own parsers on Arena 0.6.1.0.48206 (2026-10-30, docs/progress/iceberg-release.md): schema 2, 104 players (52 AmbientSoundPlayer, 22 SeasonAmbientSoundPlayer, 30 LoopAmbientSoundPlayer), 4 AmbientSoundPlayerGroup, 1 BezierSpline, 1 AmbientSplineEmitterController, 1 SoundAmbientZoneCalculator, 1 AmbientPlayerSplineMappedEmitter, 28 SoundBank (27 names), 237 clips. Every player is grouped exactly once (all_players, grouped_players 104): CommonAmbientInGroup 46 and LampsAmbientInGroup 20 on CommonAmbInEffects, CommonAmbientOutGroup 37 on CommonAmbOutEffects, AmbientSplineEmitterWaterGroup 1 on CommonAmbOutBypass (the group records are in source order; group_mixers mirrors it for AmbientAudioProfilesTests). Three players are inactive in the source (river, river (2), sparks (2)); none is disabled, no AudioSource has Loop set (the 30 LoopAmbientSoundPlayers set it themselves in Awake), none plays on awake or forces a mixer.",
+  "audio: 21 LoopAmbientSoundPlayers (20 neon_lamp*, projector) author minDistance 0 with maxDistance 3, 5 or 7 m; extract_bay5_audio.parse_player accepts it under the reviewed rule documented there (0 <= minDistance <= maxDistance, maxDistance > 0; every other bound unchanged). Three same-named players are renamed by the sibling rule (cracles~2, far_misc~2, soft_metal_derbis (3)~2); components of one GameObject (group + controller, calculator + mapped emitter) share its path and are never renamed apart (the same shape as Bay5). 22 season players carry banks for 6 season keys (Summer 22, Spring 22, Autumn 20, SpringEarly 17, AutumnLate 13, Winter 4), most of them for only some of the keys."
  ],
  "scenes": {
   "256": "Arena_Sanatorium",
@@ -43,5 +45,60 @@
   },
   "small_physics_objects": 0
  },
- "audio": null
+ "audio": {
+  "feature": "ambient_audio",
+  "schema": 2,
+  "scene": "level259",
+  "root": "ArenaMapPort_IcebergNativeAudio",
+  "players": {
+   "AmbientSoundPlayer": 52,
+   "SeasonAmbientSoundPlayer": 22,
+   "LoopAmbientSoundPlayer": 30
+  },
+  "support": {
+   "AmbientSoundPlayerGroup": 4,
+   "BezierSpline": 1,
+   "AmbientSplineEmitterController": 1,
+   "SoundAmbientZoneCalculator": 1,
+   "AmbientPlayerSplineMappedEmitter": 1
+  },
+  "banks": 28,
+  "clips": 237,
+  "group_coverage": "all_players",
+  "states": {
+   "grouped_players": 104,
+   "disabled_players": [],
+   "inactive_players": {
+    "level259:1617": "river (2)",
+    "level259:1751": "river",
+    "level259:1886": "sparks (2)"
+   },
+   "groups": {
+    "CommonAmbientInGroup": {
+     "mixer": "CommonAmbInEffects",
+     "players": 46
+    },
+    "LampsAmbientInGroup": {
+     "mixer": "CommonAmbInEffects",
+     "players": 20
+    },
+    "CommonAmbientOutGroup": {
+     "mixer": "CommonAmbOutEffects",
+     "players": 37
+    },
+    "AmbientSplineEmitterWaterGroup": {
+     "mixer": "CommonAmbOutBypass",
+     "players": 1
+    }
+   },
+   "group_mixers": [
+    "CommonAmbInEffects",
+    "CommonAmbInEffects",
+    "CommonAmbOutEffects",
+    "CommonAmbOutBypass"
+   ],
+   "loops": {},
+   "loop_players": []
+  }
+ }
 }
