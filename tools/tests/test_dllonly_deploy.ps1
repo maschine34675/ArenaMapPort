@@ -242,6 +242,29 @@ try {
     Require ([IO.File]::ReadAllText((Join-Path $f.Spt 'BepInEx/plugins/maschine-ArenaMapPort/bundles/keep.bundle')) -eq 'different-staged-content') 'Normal mode stopped deploying assets'
     Require ([IO.File]::ReadAllText((Join-Path $f.Spt 'BepInEx/config/com.maschine.ArenaMapPort.cfg')) -eq 'saved-user-config') 'Normal mode changed config'
     $cases++
+
+    # 2026-10-30: a map whose server db is staged but whose client bundles or key file are not (the state of dist/ between a new map's
+    # sidecars and its first encrypted staging) stops a whole-dist deploy, in the dry run too, and touches nothing; -DllOnly is not affected.
+    $f = New-Fixture
+    $clientRoot = 'BepInEx/plugins/maschine-ArenaMapPort'
+    Write-File (Join-Path $f.Repo 'dist/SPT_Runtime/user/mods/ArenaMapPort/db/arena_fake/base.json') '{}'
+    $before = Snapshot $f.Root
+    foreach ($confirmed in @($false, $true)) {
+        $result = if ($confirmed) { Invoke-Deploy $f -Confirm -Normal } else { Invoke-Deploy $f -Normal }
+        Require ($result.Code -ne 0 -and $result.Output -match 'dist/ is incomplete for a registered map' -and $result.Output -match 'arena_fake \(missing bundles/arena_fake_scenes\.bundle\)' -and $result.Output -match 'arena_fake \(missing keys/arena_fake\.json\)') "Incomplete map was not refused (confirm=$confirmed): $($result.Output)"
+        Require ((Snapshot $f.Root) -ceq $before) "Refused deploy changed files (confirm=$confirmed)"
+    }
+    $dllOnly = Invoke-Deploy $f -Confirm
+    Require ($dllOnly.Code -eq 0) "-DllOnly was blocked by the incomplete-map check: $($dllOnly.Output)"
+    foreach ($relative in @('bundles/arena_fake_scenes.bundle', 'bundles/arena_fake_navmesh.bundle', 'bundles/arena_fake_preset.bundle')) {
+        Write-File (Join-Path $f.Repo "dist/$clientRoot/$relative") 'bundle'
+    }
+    $result = Invoke-Deploy $f -Normal
+    Require ($result.Code -ne 0 -and $result.Output -match 'arena_fake \(missing keys/arena_fake\.json\)' -and $result.Output -notmatch 'arena_fake \(missing bundles') "A missing key file alone was not the only finding: $($result.Output)"
+    Write-File (Join-Path $f.Repo "dist/$clientRoot/keys/arena_fake.json") '{}'
+    $result = Invoke-Deploy $f -Normal
+    Require ($result.Code -eq 0 -and $result.Output -match 'DRY RUN') "A complete map was refused: $($result.Output)"
+    $cases++
     Write-Output "DLL_ONLY_DEPLOY_TESTS_PASSED ($cases cases)"
 } finally {
     if (Test-Path -LiteralPath $rootFull) {

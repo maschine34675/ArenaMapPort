@@ -844,6 +844,29 @@ foreach ($m in $Mappings) {
     }
 }
 
+# A map the server registers (a db/<map_key> folder in the staged server mod) must come with its client files: the three bundles and the
+# key file. 2026-10-30 (second integration review of Iceberg): dist/ holds a new map's server, art, acoustics and AI files long before
+# its bundles are built and encrypted, and a deploy of that half would offer the map in the selection while the client, which counts the
+# map's files at every start, raises an incomplete-install notice. This check reads dist/ only, in the dry run too. -DllOnly,
+# the DynamicMaps mode and the migrations never get here. Park the unfinished map's files or finish its build (build_all, then a client
+# Release build without DllOnly) before a whole-dist deploy.
+$stagedDb = Join-Path $Mappings[1].SrcRoot 'db'
+if (Test-Path -LiteralPath $stagedDb -PathType Container) {
+    $incompleteMaps = @()
+    foreach ($mapDir in (Get-ChildItem -LiteralPath $stagedDb -Directory)) {
+        $mapKey = $mapDir.Name
+        foreach ($relativeFile in @("bundles/${mapKey}_scenes.bundle", "bundles/${mapKey}_navmesh.bundle", "bundles/${mapKey}_preset.bundle", "keys/${mapKey}.json")) {
+            if (-not (Test-Path -LiteralPath (Join-Path $Mappings[0].SrcRoot $relativeFile) -PathType Leaf)) {
+                $incompleteMaps += "$mapKey (missing $relativeFile)"
+            }
+        }
+    }
+    if ($incompleteMaps.Count -gt 0) {
+        Fail ("dist/ is incomplete for a registered map -- the server mod stages db/<map> but the client plugin lacks its files: " +
+            ($incompleteMaps -join '; ') + ". Finish the map's build and run a client Release build without DllOnly (or park its files) before a whole-dist deploy; nothing was copied.")
+    }
+}
+
 # ---------------------------------------------------------------------------
 # Build the copy plan: every file under each SrcRoot, its destination, size, and whether the
 # destination already exists with identical content (SHA256) -- informational in both modes.
