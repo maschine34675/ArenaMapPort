@@ -1,5 +1,9 @@
 """PLAN-AIRPIT item 4 -- mode-object sidecar extractor (tools/extract/extract_mode_objects.py).
 
+TeamBoundRuleTests / StageRecordDecodeTests / StageGraphTests / IcebergSidecarTests (PLAN-ICEBERG item 7, 2026-10-30): the
+per-map team rule that gives Iceberg (70 markers, 12 bounds, 10 against 10 only in the pockets) sides by team and a stage
+table raw-decoded from Arena, while every released sidecar stays byte-identical.
+
 SideRuleTests / BowlSidecarTests (PLAN-BOWL item 5, 2026-10-18): the pocket rule that gives Bowl, whose two
 pockets both lie at z < 0, two balanced sides while the released maps keep the sign-of-z rule byte for byte.
 
@@ -14,12 +18,20 @@ import contextlib
 import io
 import json
 import math
+import os
 from pathlib import Path
+import struct
 import sys
 import tempfile
 import unittest
 
 ROOT = Path(__file__).resolve().parents[2]
+# The ignored work/ folder and the installed Arena. A second checkout of the repository has no work/ of its own, so
+# a developer points ARENAMAPPORT_WORK_DIR at the main checkout's (never a link); every check that needs them skips
+# when the input is absent.
+WORK = Path(os.environ.get("ARENAMAPPORT_WORK_DIR") or ROOT / "work")
+ARENA_DATA = Path(os.environ.get("ARENAMAPPORT_ARENA_DATA")
+                  or "D:/Battlestate Games/Escape from Tarkov Arena/EscapeFromTarkovArena_Data")
 sys.path.insert(0, str(ROOT / "tools" / "extract"))
 import extract_mode_objects as M  # noqa: E402
 from common_ids import HardExtractError  # noqa: E402
@@ -570,7 +582,7 @@ class TrackedSidecarTests(unittest.TestCase):
             with self.subTest(map=stem):
                 path = self.sidecar(stem)
                 text = path.read_text(encoding="utf-8")  # universal newlines: a CRLF checkout compares equal
-                package = ROOT / "work" / "extract" / json.loads(text)["source_package"]["name"]
+                package = WORK / "extract" / json.loads(text)["source_package"]["name"]
                 if not (package / "manifest.json").is_file():
                     self.skipTest(f"{package.name} package is local only")
                 data, _ = quiet(M.extract_package, package)
@@ -588,7 +600,7 @@ class TrackedSidecarTests(unittest.TestCase):
         # airpit-native-v8 widens the two partial scenes (twin descendants, exclusions, decoration box); the first five
         # scenes are still byte-identical, again only source_package (name, extracted_utc) changed. 2026-10-17: v9 adds
         # three SOO crates to Arena_Airpit_Main_hall; the TeamFight scenes are byte-identical, only source_package changed.
-        accepted = ROOT / "work" / "extract" / "airpit-native-v9"
+        accepted = WORK / "extract" / "airpit-native-v9"
         if not (accepted / "manifest.json").is_file():
             self.skipTest("airpit-native-v9 not extracted yet (the furnished hall plus the crates under the tarp)")
         name = json.loads(self.sidecar("airpit").read_text(encoding="utf-8"))["source_package"]["name"]
@@ -653,7 +665,7 @@ class BowlSidecarTests(unittest.TestCase):
 
     def test_equals_a_fresh_extraction_of_the_package_it_names(self):
         text = self.sidecar().read_text(encoding="utf-8")
-        package = ROOT / "work" / "extract" / json.loads(text)["source_package"]["name"]
+        package = WORK / "extract" / json.loads(text)["source_package"]["name"]
         if not (package / "manifest.json").is_file():
             self.skipTest(f"{package.name} package is local only")
         data, _ = quiet(M.extract_package, package)
@@ -671,6 +683,489 @@ class BowlSidecarTests(unittest.TestCase):
         self.assertEqual(sorted(b["side"] for b in data["spawn_bounds"]), ["north", "south"])
         for bound in data["spawn_bounds"]:
             self.assertEqual(bound["center"][0] > 0, bound["side"] == "north")
+
+
+# --------------------------------------------------------------------------------------------------------------
+# PLAN-ICEBERG item 7 (2026-10-30): the team-bound rule, the stage record decoder and Iceberg's sidecar
+# --------------------------------------------------------------------------------------------------------------
+
+RULE = M.TEAM_BOUND_RULES["arena_iceberg"]
+
+
+def team_layout(bear_pocket=((88.0, -90.0), (90.0, -88.0), (92.0, -92.0)), bear_stage=((30.0, -60.0), (32.0, -58.0)),
+                usec_pocket=((-41.0, -88.0), (-39.0, -86.0)), usec_stage=((-10.0, -60.0),), bounds=None, lights="ABC",
+                scene=None, extra_markers=()):
+    """A CheckPoint-like scene: SPAWNS with Bear / Usec markers (one index space per team, pockets first) and
+    spawn bounds (the two unsuffixed pocket bounds plus one numbered stage bound per team), plus a CAPTURE_POINT
+    container with one ``..._LIGHT_02_<letter>`` child per letter. Unequal pockets (3 against 2) on purpose."""
+    objects = [obj(1, "SPAWNS")]
+
+    def add(name, pos, **kw):
+        objects.append(obj(len(objects) + 1, name, parent=1, pos=pos, **kw))
+
+    for stem, groups in (("Bear house", (bear_pocket, bear_stage)), ("Usec house", (usec_pocket, usec_stage))):
+        index = 5
+        for group in groups:
+            for x, z in group:
+                add(f"{stem} ({index})", (x, 0.05, z))
+                index += 1
+    for name, x, z in extra_markers:
+        add(name, (x, 0.05, z))
+    for name, center, size, yaw in (bounds or [
+            ("SPAWN_BOUND_FIGHTER", (90.0, 2.0, -90.0), (20.0, 6.0, 20.0), 0.0),
+            ("SPAWN_BOUND_FIGHTER (1)", (31.0, 2.0, -59.0), (10.0, 6.0, 10.0), 90.0),
+            ("SPAWN_BOUND_DEFENCE", (-40.0, 2.0, -87.0), (8.0, 6.0, 8.0), 90.0),
+            ("SPAWN_BOUND_DEFENCE (1)", (-10.0, 2.0, -60.0), (10.0, 6.0, 10.0), 0.0)]):
+        add(name, center, yaw=yaw, components=[box((0, 0, 0), size)])
+    if lights:
+        objects.append(obj(len(objects) + 1, "CAPTURE_POINT"))
+        container = len(objects)
+        for letter, (x, z) in zip(lights, ((17.0, -91.0), (10.0, -77.0), (22.0, -47.0))):
+            objects.append(obj(len(objects) + 1, f"CAPTURE_POINT_LIGHT_02_{letter}", parent=container, pos=(x, 3.0, z)))
+    return graph(objects, scene or RULE.scene)
+
+
+def team_extract(scene, rule=RULE):
+    return quiet(M.extract_scenes, [scene], rule)[0]
+
+
+def names_of(found, side, pocket=None):
+    return sorted(m["index"] for m in found["spawn_markers"][side] if pocket is None or m["pocket"] == pocket)
+
+
+class TeamBoundRuleTests(AlmostMixin, unittest.TestCase):
+    """The per-map rule that replaces the two-pocket side rule (module docstring, "Team bounds")."""
+
+    def test_only_iceberg_has_a_team_rule_so_the_released_maps_keep_the_original_rule(self):
+        self.assertEqual(sorted(M.TEAM_BOUND_RULES), ["arena_iceberg"])
+        self.assertEqual([(t.key, t.stem, t.bound, t.arena_team) for t in RULE.teams],
+                         [("bear", "Bear house", "SPAWN_BOUND_FIGHTER", 1), ("usec", "Usec house", "SPAWN_BOUND_DEFENCE", 0)])
+        self.assertEqual(RULE.scene, "Arena_Sanatorium_CheckPoint_DesignStuff")
+
+    def test_sides_are_the_teams_and_pockets_are_the_unsuffixed_bounds(self):
+        found = team_extract(team_layout())
+        self.assertEqual(sorted(found["spawn_markers"]), ["bear", "usec"])
+        self.assertEqual((len(found["spawn_markers"]["bear"]), len(found["spawn_markers"]["usec"])), (5, 3))
+        self.assertEqual(names_of(found, "bear", True), [5, 6, 7])    # the pocket needs no twin: 3 against 2
+        self.assertEqual(names_of(found, "usec", True), [5, 6])
+        self.assertEqual(names_of(found, "bear", False), [8, 9])      # stage markers stay, flagged
+        self.assertEqual(names_of(found, "usec", False), [7])
+        self.assertEqual({b["name"]: (b["side"], b["initial"]) for b in found["spawn_bounds"]},
+                         {"SPAWN_BOUND_FIGHTER": ("bear", True), "SPAWN_BOUND_FIGHTER (1)": ("bear", False),
+                          "SPAWN_BOUND_DEFENCE": ("usec", True), "SPAWN_BOUND_DEFENCE (1)": ("usec", False)})
+        for item in found["spawn_bounds"] + found["spawn_markers"]["bear"] + found["spawn_markers"]["usec"]:
+            self.assertNotIn("_z", item)
+        self.assertNotIn("north", found["spawn_markers"])
+
+    def test_the_name_never_follows_the_mean_z_or_the_input_order(self):
+        # 1 m of mean-z difference decided north/south before; the team names do not care which pocket is further north
+        forward = team_extract(team_layout())
+        flipped = team_extract(team_layout(bear_pocket=((88.0, -50.0), (90.0, -48.0), (92.0, -52.0)),
+                                           usec_pocket=((-41.0, -128.0), (-39.0, -126.0)),
+                                           bounds=[("SPAWN_BOUND_FIGHTER", (90.0, 2.0, -50.0), (20.0, 6.0, 20.0), 0.0),
+                                                   ("SPAWN_BOUND_FIGHTER (1)", (31.0, 2.0, -59.0), (10.0, 6.0, 10.0), 90.0),
+                                                   ("SPAWN_BOUND_DEFENCE", (-40.0, 2.0, -127.0), (8.0, 6.0, 8.0), 90.0),
+                                                   ("SPAWN_BOUND_DEFENCE (1)", (-10.0, 2.0, -60.0), (10.0, 6.0, 10.0), 0.0)]))
+        for found in (forward, flipped):
+            self.assertEqual(names_of(found, "bear", True), [5, 6, 7])
+            self.assertEqual(names_of(found, "usec", True), [5, 6])
+        scene = team_layout()
+        shuffled = graph(list(reversed(scene.objects)), RULE.scene)
+        self.assertEqual(team_extract(scene), team_extract(shuffled))
+
+    def test_the_side_rule_record_names_the_method_the_tolerance_and_the_counts(self):
+        rule = team_extract(team_layout())["side_rule"]
+        self.assertEqual(rule["method"], "team_bounds")
+        self.assertEqual(rule["edge_tolerance"], M.BOUND_EDGE_TOLERANCE)
+        self.assertEqual(rule["teams"]["bear"]["markers"], 5)
+        self.assertEqual({k: rule["teams"]["bear"][k] for k in ("pocket_markers", "stage_bounds", "pocket_bound", "marker_stem")},
+                         {"pocket_markers": 3, "stage_bounds": 1, "pocket_bound": "SPAWN_BOUND_FIGHTER", "marker_stem": "Bear house"})
+        self.assertEqual(rule["teams"]["usec"]["pocket_markers"], 2)
+        self.assertVec(rule["teams"]["bear"]["pocket_centroid_xz"], (90.0, -90.0))
+        self.assertVec(rule["teams"]["usec"]["pocket_centroid_xz"], (-40.0, -87.0))
+
+    def test_a_marker_on_the_edge_of_the_pocket_bound_is_in_and_one_clearly_outside_is_not(self):
+        bounds = [("SPAWN_BOUND_FIGHTER", (90.0, 2.0, -90.0), (20.0, 6.0, 20.0), 0.0),
+                  ("SPAWN_BOUND_DEFENCE", (-40.0, 2.0, -87.0), (8.0, 6.0, 8.0), 90.0)]
+        # Bear box x 80..100; Usec box (yawed 90 degrees, 8 x 8) x -44..-36, z -91..-83
+        found = team_extract(team_layout(bear_pocket=((100.04, -90.0), (100.2, -90.0), (90.0, -90.0)), bear_stage=(),
+                                         usec_pocket=((-40.0, -87.0), (-35.97, -87.0)), usec_stage=(), bounds=bounds))
+        self.assertEqual(names_of(found, "bear", True), [5, 7])     # 4 cm outside is on the edge, 20 cm is a stage marker
+        self.assertEqual(names_of(found, "bear", False), [6])
+        self.assertEqual(names_of(found, "usec", True), [5, 6])     # 3 cm outside the yawed box
+
+    def test_box_margin_uses_the_published_rotation_and_size(self):
+        # 4 x 8 x 12 box yawed 90 degrees: its local z (12 m) runs along world x, its local x (4 m) along world z
+        bound = {"center": [10.0, 0.0, 20.0], "size": [4.0, 8.0, 12.0], "rotation": [0.0, 0.7071, 0.0, 0.7071]}
+        self.assertAlmostEqual(M.box_margin(bound, (10.0, 0.0, 20.0)), 2.0, places=3)    # centre: the 4 m side is nearest
+        self.assertAlmostEqual(M.box_margin(bound, (15.5, 0.0, 20.0)), 0.5, places=2)    # 5.5 m along world x of a 6 m half
+        self.assertAlmostEqual(M.box_margin(bound, (10.0, 0.0, 22.5)), -0.5, places=2)   # 2.5 m along world z of a 2 m half
+        self.assertAlmostEqual(M.box_margin(bound, (10.0, 3.0, 20.0)), 1.0, places=3)    # 3 m above the middle of an 8 m box
+
+    def test_a_scaled_and_rotated_parent_moves_bounds_and_markers_together(self):
+        objects = [obj(1, "Root", pos=(100.0, 0.0, -50.0), yaw=90.0, scale=(2.0, 1.0, 2.0)),
+                   obj(2, "SPAWNS", parent=1),
+                   obj(3, "Bear house (5)", parent=2, pos=(0.0, 0.0, 5.0)),
+                   obj(4, "Usec house (5)", parent=2, pos=(0.0, 0.0, -30.0)),
+                   obj(5, "SPAWN_BOUND_FIGHTER", parent=2, pos=(0.0, 0.0, 5.0), components=[box((0, 0, 0), (4.0, 4.0, 4.0))]),
+                   obj(6, "SPAWN_BOUND_DEFENCE", parent=2, pos=(0.0, 0.0, -30.0), components=[box((0, 0, 0), (4.0, 4.0, 4.0))])]
+        found = team_extract(graph(objects, RULE.scene))
+        self.assertVec(found["spawn_markers"]["bear"][0]["position"], (110.0, 0.0, -50.0))
+        self.assertTrue(found["spawn_markers"]["bear"][0]["pocket"] and found["spawn_markers"]["usec"][0]["pocket"])
+        self.assertVec(found["spawn_bounds"][0]["size"], (8.0, 4.0, 8.0))
+
+    def test_a_marker_inside_the_other_teams_pocket_bound_is_refused(self):
+        with self.assertRaisesRegex(HardExtractError, r"Bear house \(7\).*inside the pocket bound SPAWN_BOUND_DEFENCE"):
+            team_extract(team_layout(extra_markers=[("Bear house (7)", -40.0, -87.0)]))
+
+    def test_a_team_without_a_pocket_marker_or_without_its_unsuffixed_bound_is_refused(self):
+        with self.assertRaisesRegex(HardExtractError, "no Usec house marker lies inside the pocket bound SPAWN_BOUND_DEFENCE"):
+            team_extract(team_layout(usec_pocket=((-10.0, -60.5),), usec_stage=()))
+        with self.assertRaisesRegex(HardExtractError, "team usec has no unsuffixed spawn bound SPAWN_BOUND_DEFENCE"):
+            team_extract(team_layout(bounds=[("SPAWN_BOUND_FIGHTER", (90.0, 2.0, -90.0), (20.0, 6.0, 20.0), 0.0),
+                                             ("SPAWN_BOUND_DEFENCE (1)", (-10.0, 2.0, -60.0), (10.0, 6.0, 10.0), 0.0)]))
+
+    def test_two_unsuffixed_bounds_of_one_team_are_refused(self):
+        bounds = [("SPAWN_BOUND_FIGHTER", (90.0, 2.0, -90.0), (20.0, 6.0, 20.0), 0.0),
+                  ("SPAWN_BOUND_FIGHTER ", (90.0, 2.0, -90.0), (20.0, 6.0, 20.0), 0.0),
+                  ("SPAWN_BOUND_DEFENCE", (-40.0, 2.0, -87.0), (8.0, 6.0, 8.0), 90.0)]
+        with self.assertRaisesRegex(HardExtractError, "two unsuffixed spawn bounds"):
+            team_extract(team_layout(bounds=bounds))
+
+    def test_unknown_names_are_refused_rather_than_guessed(self):
+        with self.assertRaisesRegex(HardExtractError, "none of the teams"):
+            team_extract(team_layout(extra_markers=[("Scav house (1)", 0.0, 0.0)]))
+        bounds = [("SPAWN_BOUND_FIGHTER", (90.0, 2.0, -90.0), (20.0, 6.0, 20.0), 0.0),
+                  ("SPAWN_BOUND_DEFENCE", (-40.0, 2.0, -87.0), (8.0, 6.0, 8.0), 90.0),
+                  ("SPAWN_BOUND_NEUTRAL", (0.0, 2.0, 0.0), (8.0, 6.0, 8.0), 0.0)]
+        with self.assertRaisesRegex(HardExtractError, "neither"):
+            team_extract(team_layout(bounds=bounds))
+        with self.assertRaisesRegex(HardExtractError, "not in the scene"):
+            team_extract(team_layout(scene="Some_Other_Scene"))
+
+    def test_the_capture_points_are_listed_one_by_one_without_a_centroid(self):
+        found = team_extract(team_layout())
+        self.assertIsNone(found["capture_point"])
+        self.assertEqual([(p["label"], p["position"]) for p in found["capture_points"]],
+                         [("A", [17.0, 3.0, -91.0]), ("B", [10.0, 3.0, -77.0]), ("C", [22.0, 3.0, -47.0])])
+        self.assertEqual(found["capture_points"][0]["path"], "CAPTURE_POINT/CAPTURE_POINT_LIGHT_02_A")
+        # without a team rule the same kind of lights collapse into one centroid (what the released maps need)
+        lone = quiet(M.extract_scenes, [graph([obj(1, "CAPTURE_POINT"), obj(2, "CAPTURE_POINT_LIGHT_02_A", parent=1, pos=(1, 0, 1)),
+                                               obj(3, "CAPTURE_POINT_LIGHT_02_B", parent=1, pos=(3, 0, 3))])])[0]
+        self.assertEqual(lone["capture_point"]["position"], [2.0, 0.0, 2.0])
+        self.assertNotIn("capture_points", lone)
+
+    def test_capture_labels_must_exist_and_be_unique(self):
+        with self.assertRaisesRegex(HardExtractError, "no _A/_B/_C label"):
+            M.capture_points_of([{"scene": "S", "path": "CAPTURE_POINT/CAPTURE_POINT_LIGHT", "position": [0, 0, 0]}])
+        with self.assertRaisesRegex(HardExtractError, "repeat"):
+            M.capture_points_of([{"scene": "S", "path": "CAPTURE_POINT/L_A", "position": [0, 0, 0]},
+                                 {"scene": "S", "path": "CAPTURE_POINT/L2_A", "position": [1, 0, 0]}])
+        no_lights = quiet(M.extract_scenes, [team_layout(lights="")], RULE)
+        self.assertEqual(no_lights[0]["capture_points"], [])
+        self.assertIn("no capture points", no_lights[1])
+
+    def test_the_package_and_the_command_line_carry_the_team_records(self):
+        scenes = {RULE.scene: team_layout().objects}
+        with tempfile.TemporaryDirectory() as tmp:
+            package = PackageTests().make_package(tmp, {"map_key": "arena_iceberg", "extractor_script": "tools/extract/extract_map.py"},
+                                                  scenes=scenes)
+            first, second = Path(tmp) / "a.json", Path(tmp) / "b.json"
+            for target in (first, second):
+                code, err = quiet(M.main, ["--package", str(package), "--output", str(target)])
+                self.assertEqual(code, 0)
+            self.assertIn("bear 5 markers (3 in the pocket), usec 3 markers (2 in the pocket) (team bounds), no stage table", err)
+            self.assertEqual(first.read_bytes(), second.read_bytes())
+            data = json.loads(first.read_text(encoding="utf-8"))
+        self.assertEqual(data["counts"], {"capture_points": 3, "capture_zones": 0, "spawn_bounds": 4, "spawn_markers_bear": 5,
+                                          "spawn_markers_usec": 3, "pocket_markers_bear": 3, "pocket_markers_usec": 2})
+        self.assertEqual(data["side_rule"]["method"], "team_bounds")
+        self.assertNotIn("stages", data)
+        self.assertIn("CheckPoint", data["_comment"])
+        self.assertNotIn("spawn_markers_north", data["counts"])
+
+    def test_a_map_without_a_team_rule_ignores_the_arena_install(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            package = PackageTests().make_package(tmp, {"map_key": "arena_x"})
+            data = quiet(M.extract_package, package, None, "no/such/arena")[0]
+        self.assertNotIn("stages", data)
+        self.assertEqual(data["counts"]["spawn_markers_north"], 1)
+
+
+def pptr(path_id, file_id=0):
+    return struct.pack("<iq", file_id, path_id)
+
+
+def stage_bytes(game_object=7, team=1, initial=0, flag=1, links=(), markers=(), capture=(), null=0, name=b"", tail=b"",
+                list_counts=None):
+    """An ArenaSpawnBoundCheckPointData body as Arena stores it: the MonoBehaviour head, three ints, then three
+    PPtr lists around one null PPtr."""
+    head = pptr(game_object) + struct.pack("<i", 1) + pptr(99) + struct.pack("<i", len(name)) + name
+    head += b"\0" * (-len(name) % 4)
+    counts = list_counts or (len(links), len(markers), len(capture))
+    body = struct.pack("<iii", team, initial, flag) + struct.pack("<i", counts[0]) + b"".join(pptr(p) for p in links)
+    body += pptr(null) + struct.pack("<i", counts[1]) + b"".join(pptr(p) for p in markers)
+    body += struct.pack("<i", counts[2]) + b"".join(pptr(p) for p in capture)
+    return head + body + tail
+
+
+class StageRecordDecodeTests(unittest.TestCase):
+    def test_a_record_is_decoded_field_by_field(self):
+        record = M.decode_stage_record(stage_bytes(game_object=139, team=1, initial=0, flag=1, links=[587, 12],
+                                                   markers=[6, 7, 8], capture=[172], name=b"SPAWN_BOUND_FIGHTER (4)"))
+        self.assertEqual(record, {"game_object": 139, "team": 1, "initial": False, "flag": 1, "links": [587, 12],
+                                  "markers": [6, 7, 8], "capture": [172]})
+
+    def test_empty_lists_and_an_unaligned_name_still_end_on_the_object_size(self):
+        for name in (b"", b"a", b"ab", b"abc", b"abcd", b"abcde"):
+            with self.subTest(name=name):
+                record = M.decode_stage_record(stage_bytes(initial=1, team=0, name=name))
+                self.assertEqual((record["links"], record["markers"], record["capture"], record["initial"]), ([], [], [], True))
+
+    def test_the_layout_is_checked_against_the_object_size(self):
+        good = stage_bytes(markers=[1, 2])
+        with self.assertRaisesRegex(HardExtractError, "ended at"):
+            M.decode_stage_record(good + b"\0\0\0\0")
+        with self.assertRaisesRegex(HardExtractError, "shorter than its layout"):
+            M.decode_stage_record(good[:-4])
+        with self.assertRaisesRegex(HardExtractError, "claims 5 entries"):
+            M.decode_stage_record(stage_bytes(markers=[1, 2], list_counts=(0, 5, 0)))
+        with self.assertRaisesRegex(HardExtractError, "claims -1 entries"):
+            M.decode_stage_record(stage_bytes(list_counts=(-1, 0, 0)))
+
+    def test_a_layout_drift_is_refused_instead_of_misread(self):
+        with self.assertRaisesRegex(HardExtractError, "null one"):
+            M.decode_stage_record(stage_bytes(null=44))
+        with self.assertRaisesRegex(HardExtractError, "expected 0 or 1"):
+            M.decode_stage_record(stage_bytes(team=2))
+        with self.assertRaisesRegex(HardExtractError, "expected 0 or 1"):
+            M.decode_stage_record(stage_bytes(initial=-1))
+        far = stage_bytes(markers=[3]).replace(pptr(3), pptr(3, file_id=1))
+        with self.assertRaisesRegex(HardExtractError, "another file"):
+            M.decode_stage_record(far)
+        with self.assertRaisesRegex(HardExtractError, "bad m_Name length"):
+            M.decode_stage_record(pptr(1) + struct.pack("<i", 1) + pptr(2) + struct.pack("<i", 9999))
+
+
+def stage_world():
+    """team_layout() plus the decoded records a consistent Arena would hold for it (GameObject path ids)."""
+    scene = team_layout()
+    found = team_extract(scene)
+    ids = {o["name"]: int(o["id"]) for o in scene.objects}
+    markers = found["spawn_markers"]["bear"] + found["spawn_markers"]["usec"]
+
+    def names(side, pocket):
+        return [ids[m["name"]] for m in markers if m["side"] == side and m["pocket"] == pocket]
+
+    records = [
+        {"game_object": ids["SPAWN_BOUND_FIGHTER"], "team": 1, "initial": True, "flag": 1, "links": [], "markers": names("bear", True), "capture": []},
+        {"game_object": ids["SPAWN_BOUND_FIGHTER (1)"], "team": 1, "initial": False, "flag": 1, "links": [ids["SPAWN_BOUND_DEFENCE (1)"]],
+         "markers": names("bear", False), "capture": [ids["CAPTURE_POINT_LIGHT_02_B"]]},
+        {"game_object": ids["SPAWN_BOUND_DEFENCE"], "team": 0, "initial": True, "flag": 1, "links": [], "markers": names("usec", True), "capture": []},
+        {"game_object": ids["SPAWN_BOUND_DEFENCE (1)"], "team": 0, "initial": False, "flag": 1, "links": [],
+         "markers": names("usec", False), "capture": [ids["CAPTURE_POINT_LIGHT_02_C"], ids["CAPTURE_POINT_LIGHT_02_A"]]},
+    ]
+    return scene, found, ids, records
+
+
+def build(scene, found, records, rule=RULE):
+    return M.build_stages(records, scene, rule, found["spawn_markers"]["bear"] + found["spawn_markers"]["usec"],
+                          found["spawn_bounds"], found["capture_points"])
+
+
+class StageGraphTests(unittest.TestCase):
+    def test_a_consistent_table_becomes_the_stage_list(self):
+        scene, found, _ids, records = stage_world()
+        stages = build(scene, found, records)
+        self.assertEqual([(s["bound"], s["team"], s["initial"]) for s in stages],
+                         [("SPAWN_BOUND_FIGHTER", "bear", True), ("SPAWN_BOUND_FIGHTER (1)", "bear", False),
+                          ("SPAWN_BOUND_DEFENCE", "usec", True), ("SPAWN_BOUND_DEFENCE (1)", "usec", False)])
+        by_bound = {s["bound"]: s for s in stages}
+        self.assertEqual(by_bound["SPAWN_BOUND_FIGHTER (1)"]["links"], ["SPAWN_BOUND_DEFENCE (1)"])  # a link may cross teams
+        self.assertEqual(by_bound["SPAWN_BOUND_FIGHTER (1)"]["capture_points"], ["B"])
+        self.assertEqual(by_bound["SPAWN_BOUND_DEFENCE (1)"]["capture_points"], ["A", "C"])           # sorted labels
+        self.assertEqual(by_bound["SPAWN_BOUND_FIGHTER"]["markers"], ["Bear house (5)", "Bear house (6)", "Bear house (7)"])
+        self.assertEqual(by_bound["SPAWN_BOUND_FIGHTER (1)"]["flag"], 1)
+
+    def test_markers_sort_by_their_number_not_their_text(self):
+        scene = team_layout(bear_pocket=tuple((88.0 + i * 0.1, -90.0) for i in range(6)), bear_stage=((30.0, -60.0),))
+        found = team_extract(scene)
+        ids = {o["name"]: int(o["id"]) for o in scene.objects}
+        markers = found["spawn_markers"]["bear"] + found["spawn_markers"]["usec"]
+        pick = lambda side, pocket: [ids[m["name"]] for m in markers if m["side"] == side and m["pocket"] == pocket]  # noqa: E731
+        records = [{"game_object": ids["SPAWN_BOUND_FIGHTER"], "team": 1, "initial": True, "flag": 1, "links": [],
+                    "markers": pick("bear", True), "capture": []},
+                   {"game_object": ids["SPAWN_BOUND_FIGHTER (1)"], "team": 1, "initial": False, "flag": 1, "links": [],
+                    "markers": pick("bear", False), "capture": []},
+                   {"game_object": ids["SPAWN_BOUND_DEFENCE"], "team": 0, "initial": True, "flag": 1, "links": [],
+                    "markers": pick("usec", True), "capture": []},
+                   {"game_object": ids["SPAWN_BOUND_DEFENCE (1)"], "team": 0, "initial": False, "flag": 1, "links": [],
+                    "markers": pick("usec", False), "capture": []}]
+        stages = build(scene, found, records)
+        self.assertEqual(stages[0]["markers"], [f"Bear house ({i})" for i in range(5, 11)])   # (10) after (9), not after (1)
+
+    def mutated(self, change):
+        scene, found, ids, records = stage_world()
+        change(records, ids)
+        return build(scene, found, records)
+
+    def test_every_disagreement_between_arena_and_the_package_fails_closed(self):
+        cases = {
+            "has no stage record": lambda r, ids: r.pop(1),
+            "two stage records": lambda r, ids: r.append(dict(r[0])),
+            "is not a spawn bound": lambda r, ids: r[0].update(game_object=ids["Bear house (5)"]),
+            "says team 0": lambda r, ids: r[0].update(team=0),
+            "has initial=True": lambda r, ids: r[1].update(initial=True),
+            "links to a GameObject that is not a spawn bound": lambda r, ids: r[1].update(links=[ids["Bear house (5)"]]),
+            "lists a GameObject that is not a spawn marker": lambda r, ids: r[1]["markers"].append(ids["SPAWN_BOUND_FIGHTER"]),
+            "is listed by": lambda r, ids: r[1]["markers"].append(r[0]["markers"][0]),
+            "of team usec": lambda r, ids: r[1]["markers"].append(ids["Usec house (5)"]),
+            "belong to no stage record": lambda r, ids: r[1]["markers"].pop(),
+            "serves a GameObject that is not a capture point light": lambda r, ids: r[1].update(capture=[ids["SPAWNS"]]),
+            "the installed Arena is not the build": lambda r, ids: r[1]["markers"].append(424242),
+            "initial record SPAWN_BOUND_FIGHTER lists": lambda r, ids: (r[0]["markers"].pop(), r[1]["markers"].append(ids["Bear house (7)"])),
+        }
+        for fragment, change in cases.items():
+            with self.subTest(case=fragment), self.assertRaisesRegex(HardExtractError, fragment):
+                self.mutated(change)
+
+    def test_the_arena_read_is_only_attempted_with_an_arena_folder_and_names_what_is_missing(self):
+        with self.assertRaisesRegex(HardExtractError, "does not exist"):
+            M.read_stage_records("D:/no/such/arena", 376)
+        with self.assertRaisesRegex(HardExtractError, "lists no scene"):
+            M.scene_index_of(ROOT / "tools" / "extract" / "plans" / "iceberg.json", "Arena_Nope")
+        self.assertEqual(M.scene_index_of(ROOT / "tools" / "extract" / "plans" / "iceberg.json", RULE.scene), 376)
+
+
+# measured on the installed Arena 0.6.1.0.48206 / package iceberg-native-v1, 2026-10-30
+ICEBERG_CAPTURE_POINTS = {"A": [16.77, 3.9, -91.39], "B": [10.614, 2.69, -77.727], "C": [21.91, 2.85, -47.3]}
+# bound -> (team, capture points served, markers); the stage graph of level376's ArenaSpawnBoundCheckPointData
+ICEBERG_STAGES = {
+    "SPAWN_BOUND_FIGHTER": ("bear", [], list(range(5, 15))),
+    "SPAWN_BOUND_FIGHTER (1)": ("bear", ["A"], list(range(15, 20))),
+    "SPAWN_BOUND_FIGHTER (2)": ("bear", ["B"], [25, 26, 27, 29, 30]),
+    "SPAWN_BOUND_FIGHTER (3)": ("bear", ["C"], list(range(31, 36))),
+    "SPAWN_BOUND_FIGHTER (4)": ("bear", ["B"], [36, 38, 39, 40]),
+    "SPAWN_BOUND_FIGHTER (5)": ("bear", ["A"], list(range(41, 47))),
+    "SPAWN_BOUND_FIGHTER (6)": ("bear", ["C"], list(range(47, 52))),
+    "SPAWN_BOUND_DEFENCE": ("usec", [], list(range(5, 15))),
+    "SPAWN_BOUND_DEFENCE (1)": ("usec", ["B", "C"], [15, 16, 17, 19, 20]),
+    "SPAWN_BOUND_DEFENCE (2)": ("usec", ["A", "B"], [18, 21, 22, 23, 24]),
+    "SPAWN_BOUND_DEFENCE (4)": ("usec", ["A"], list(range(30, 35))),
+    "SPAWN_BOUND_DEFENCE (5)": ("usec", ["C"], list(range(35, 40))),
+}
+
+
+class IcebergSidecarTests(unittest.TestCase):
+    """tools/maps/iceberg.modes.json (PLAN-ICEBERG item 7): the data half needs only the file."""
+
+    def data(self):
+        path = MAPS / "iceberg.modes.json"
+        if not path.is_file():
+            self.skipTest("iceberg.modes.json not generated yet")
+        return json.loads(path.read_text(encoding="utf-8"))
+
+    def test_equals_a_fresh_extraction_of_the_package_and_the_stage_table_it_names(self):
+        text = (MAPS / "iceberg.modes.json").read_text(encoding="utf-8")
+        package = WORK / "extract" / json.loads(text)["source_package"]["name"]
+        if not (package / "manifest.json").is_file():
+            self.skipTest(f"{package.name} package is local only")
+        if not (ARENA_DATA / "level376").is_file():
+            self.skipTest("Arena is not installed (the stage table is read from level376)")
+        try:
+            import UnityPy  # noqa: F401
+        except ImportError:
+            self.skipTest("UnityPy is not installed")
+        data, _ = quiet(M.extract_package, package, None, str(ARENA_DATA))
+        self.assertEqual(text, M.dumps(data))
+
+    def test_the_package_alone_gives_the_same_file_without_the_stage_block(self):
+        data = self.data()
+        package = WORK / "extract" / data["source_package"]["name"]
+        if not (package / "manifest.json").is_file():
+            self.skipTest(f"{package.name} package is local only")
+        plain, _ = quiet(M.extract_package, package)
+        data = {k: v for k, v in data.items() if k not in ("stages", "stages_source")}
+        self.assertEqual(M.dumps(data), M.dumps(plain))
+
+    def test_counts_sides_and_the_rule_record(self):
+        data = self.data()
+        self.assertEqual(data["counts"], {"capture_points": 3, "capture_zones": 0, "spawn_bounds": 12, "spawn_markers_bear": 40,
+                                          "spawn_markers_usec": 30, "pocket_markers_bear": 10, "pocket_markers_usec": 10})
+        self.assertEqual(sorted(data["spawn_markers"]), ["bear", "usec"])
+        self.assertNotIn("north", data["spawn_markers"])
+        rule = data["side_rule"]
+        self.assertEqual(rule["method"], "team_bounds")
+        self.assertEqual({k: (v["markers"], v["pocket_markers"], v["stage_bounds"]) for k, v in rule["teams"].items()},
+                         {"bear": (40, 10, 6), "usec": (30, 10, 4)})
+        self.assertIsNone(data["capture_point"])
+
+    def test_the_three_capture_points_are_arenas_a_b_c(self):
+        points = {p["label"]: p["position"] for p in self.data()["capture_points"]}
+        self.assertEqual(points, ICEBERG_CAPTURE_POINTS)
+
+    def test_bear_starts_in_the_east_pocket_and_usec_in_the_west_one(self):
+        data = self.data()
+        bear = [m for m in data["spawn_markers"]["bear"] if m["pocket"]]
+        usec = [m for m in data["spawn_markers"]["usec"] if m["pocket"]]
+        self.assertEqual((sorted(m["index"] for m in bear), sorted(m["index"] for m in usec)), (list(range(5, 15)),) * 2)
+        self.assertTrue(all(89.0 < m["position"][0] < 98.5 and -96.5 < m["position"][2] < -83.0 for m in bear))
+        self.assertTrue(all(-45.0 < m["position"][0] < -36.5 and -95.5 < m["position"][2] < -79.5 for m in usec))
+        # the stage markers are the respawn points of the capture stages and stay out of the pockets
+        stage = [m for side in data["spawn_markers"].values() for m in side if not m["pocket"]]
+        self.assertEqual(len(stage), 50)
+        bounds = {b["name"]: b for b in data["spawn_bounds"] if b["initial"]}
+        for marker in stage:
+            for bound in bounds.values():
+                self.assertLess(M.box_margin(bound, marker["position"]), -M.BOUND_EDGE_TOLERANCE, marker["name"])
+
+    def test_the_pocket_bounds_are_the_two_unsuffixed_ones(self):
+        bounds = {b["name"]: b for b in self.data()["spawn_bounds"]}
+        self.assertEqual(sorted(n for n, b in bounds.items() if b["initial"]), ["SPAWN_BOUND_DEFENCE", "SPAWN_BOUND_FIGHTER"])
+        self.assertEqual((bounds["SPAWN_BOUND_FIGHTER"]["side"], bounds["SPAWN_BOUND_DEFENCE"]["side"]), ("bear", "usec"))
+        self.assertGreater(bounds["SPAWN_BOUND_FIGHTER"]["center"][0], 90.0)
+        self.assertLess(bounds["SPAWN_BOUND_DEFENCE"]["center"][0], -35.0)
+
+    def test_the_stage_graph_is_the_one_arena_stores(self):
+        data = self.data()
+        if "stages" not in data:
+            self.fail("the tracked sidecar must carry the stage table (regenerate it with --arena-data)")
+        got = {s["bound"]: (s["team"], s["capture_points"], [int(m.rsplit("(", 1)[1].rstrip(")")) for m in s["markers"]])
+               for s in data["stages"]}
+        self.assertEqual(got, ICEBERG_STAGES)
+        self.assertEqual(data["stages_source"]["scene_index"], 376)
+        self.assertEqual({s["flag"] for s in data["stages"]}, {1})
+        every = [m["name"] for side in data["spawn_markers"].values() for m in side]
+        listed = [m for s in data["stages"] for m in s["markers"]]
+        self.assertEqual(sorted(every), sorted(listed))                       # all 70, each exactly once
+        self.assertEqual(len(listed), 70)
+        bounds = {b["name"] for b in data["spawn_bounds"]}
+        self.assertEqual(bounds, set(ICEBERG_STAGES))
+        for stage in data["stages"]:
+            self.assertTrue(set(stage["links"]) <= bounds)
+
+    def test_every_marker_lies_inside_the_bound_that_lists_it(self):
+        data = self.data()
+        if "stages" not in data:
+            self.skipTest("no stage table in the sidecar")
+        bounds = {b["name"]: b for b in data["spawn_bounds"]}
+        markers = {m["name"]: m for side in data["spawn_markers"].values() for m in side}
+        for stage in data["stages"]:
+            for name in stage["markers"]:
+                with self.subTest(bound=stage["bound"], marker=name):
+                    # measured 2026-10-30: 0.225 m (Bear (29)) to 7.318 m, Usec (6) on the edge at -0.002 m
+                    self.assertGreaterEqual(M.box_margin(bounds[stage["bound"]], markers[name]["position"]),
+                                            -M.BOUND_EDGE_TOLERANCE)
+
+    def test_the_released_maps_have_no_team_records(self):
+        for stem in STEMS + ("bowl",):
+            path = MAPS / f"{stem}.modes.json"
+            if not path.is_file():
+                continue
+            data = json.loads(path.read_text(encoding="utf-8"))
+            self.assertNotIn("capture_points", data)
+            self.assertNotIn("stages", data)
+            self.assertNotEqual(data.get("side_rule", {}).get("method"), "team_bounds")
 
 
 if __name__ == "__main__":

@@ -1,0 +1,1763 @@
+{
+  "_comment": "Arena CheckPoint mode objects (positions only) composed from the extracted scenes by tools/extract/extract_mode_objects.py with the team-bound rule (sides are the teams, pockets are the unsuffixed spawn bounds, every capture point on its own); schema and method in docs/progress/iceberg-release.md. Data for ArenaMode, not read by the map mod itself.",
+  "capture_point": null,
+  "capture_points": [
+    {
+      "label": "A",
+      "path": "CAPTURE_POINT/CAPTURE_POINT_LIGHT_02_A",
+      "position": [
+        16.77,
+        3.9,
+        -91.39
+      ],
+      "scene": "Arena_Sanatorium_CheckPoint_DesignStuff"
+    },
+    {
+      "label": "B",
+      "path": "CAPTURE_POINT/CAPTURE_POINT_LIGHT_02_B",
+      "position": [
+        10.614,
+        2.69,
+        -77.727
+      ],
+      "scene": "Arena_Sanatorium_CheckPoint_DesignStuff"
+    },
+    {
+      "label": "C",
+      "path": "CAPTURE_POINT/CAPTURE_POINT_LIGHT_02_C",
+      "position": [
+        21.91,
+        2.85,
+        -47.3
+      ],
+      "scene": "Arena_Sanatorium_CheckPoint_DesignStuff"
+    }
+  ],
+  "capture_zones": [],
+  "counts": {
+    "capture_points": 3,
+    "capture_zones": 0,
+    "pocket_markers_bear": 10,
+    "pocket_markers_usec": 10,
+    "spawn_bounds": 12,
+    "spawn_markers_bear": 40,
+    "spawn_markers_usec": 30
+  },
+  "map_key": "arena_iceberg",
+  "schema_version": 1,
+  "side_rule": {
+    "edge_tolerance": 0.05,
+    "method": "team_bounds",
+    "naming": "side = the team (bear, usec) by marker stem and bound name; never north/south, never by mean z",
+    "pocket": "a marker is a pocket (initial start) marker when it lies inside its own team's unsuffixed spawn bound (published box, edge_tolerance); every other marker belongs to a stage bound",
+    "teams": {
+      "bear": {
+        "marker_stem": "Bear house",
+        "markers": 40,
+        "pocket_bound": "SPAWN_BOUND_FIGHTER",
+        "pocket_centroid_xz": [
+          94.6408,
+          -89.9172
+        ],
+        "pocket_markers": 10,
+        "stage_bounds": 6
+      },
+      "usec": {
+        "marker_stem": "Usec house",
+        "markers": 30,
+        "pocket_bound": "SPAWN_BOUND_DEFENCE",
+        "pocket_centroid_xz": [
+          -40.5586,
+          -88.8454
+        ],
+        "pocket_markers": 10,
+        "stage_bounds": 4
+      }
+    }
+  },
+  "source_package": {
+    "extracted_utc": "2026-10-30T13:30:37Z",
+    "extractor_script": "tools/extract/extract_map.py",
+    "name": "iceberg-native-v1",
+    "scenes": [
+      "Arena_Sanatorium",
+      "Arena_Sanatorium_Grass",
+      "Arena_Sanatorium_Light",
+      "Arena_Sanatorium_DesignStuff",
+      "Arena_Sanatorium_CheckPoint",
+      "Arena_Sanatorium_CheckPoint_DesignStuff"
+    ]
+  },
+  "spawn_bounds": [
+    {
+      "active": true,
+      "center": [
+        97.877,
+        -0.1051,
+        -88.344
+      ],
+      "initial": true,
+      "name": "SPAWN_BOUND_FIGHTER",
+      "path": "SPAWNS/SPAWN_BOUND_FIGHTER",
+      "rotation": [
+        0.0,
+        -0.7057,
+        0.0,
+        0.7085
+      ],
+      "scene": "Arena_Sanatorium_CheckPoint_DesignStuff",
+      "side": "bear",
+      "size": [
+        20.9424,
+        16.3147,
+        33.8347
+      ],
+      "yaw": 270.2255
+    },
+    {
+      "active": true,
+      "center": [
+        45.6501,
+        6.8449,
+        -111.6526
+      ],
+      "initial": false,
+      "name": "SPAWN_BOUND_FIGHTER (1)",
+      "path": "SPAWNS/SPAWN_BOUND_FIGHTER (1)",
+      "rotation": [
+        0.0,
+        -1.0,
+        0.0,
+        0.002
+      ],
+      "scene": "Arena_Sanatorium_CheckPoint_DesignStuff",
+      "side": "bear",
+      "size": [
+        37.6714,
+        16.3147,
+        31.7414
+      ],
+      "yaw": 180.2254
+    },
+    {
+      "active": true,
+      "center": [
+        44.1211,
+        4.4158,
+        -85.9313
+      ],
+      "initial": false,
+      "name": "SPAWN_BOUND_FIGHTER (2)",
+      "path": "SPAWNS/SPAWN_BOUND_FIGHTER (2)",
+      "rotation": [
+        0.0,
+        0.7099,
+        0.0,
+        0.7043
+      ],
+      "scene": "Arena_Sanatorium_CheckPoint_DesignStuff",
+      "side": "bear",
+      "size": [
+        32.5823,
+        5.4531,
+        12.1482
+      ],
+      "yaw": 90.4542
+    },
+    {
+      "active": true,
+      "center": [
+        31.6482,
+        4.4158,
+        -54.5536
+      ],
+      "initial": false,
+      "name": "SPAWN_BOUND_FIGHTER (3)",
+      "path": "SPAWNS/SPAWN_BOUND_FIGHTER (3)",
+      "rotation": [
+        0.0,
+        0.7143,
+        0.0,
+        0.6998
+      ],
+      "scene": "Arena_Sanatorium_CheckPoint_DesignStuff",
+      "side": "bear",
+      "size": [
+        42.221,
+        5.4531,
+        12.6382
+      ],
+      "yaw": 91.1729
+    },
+    {
+      "active": true,
+      "center": [
+        30.1649,
+        4.4158,
+        -72.8161
+      ],
+      "initial": false,
+      "name": "SPAWN_BOUND_FIGHTER (4)",
+      "path": "SPAWNS/SPAWN_BOUND_FIGHTER (4)",
+      "rotation": [
+        0.0,
+        0.7078,
+        0.0,
+        0.7064
+      ],
+      "scene": "Arena_Sanatorium_CheckPoint_DesignStuff",
+      "side": "bear",
+      "size": [
+        26.9925,
+        5.4531,
+        17.6783
+      ],
+      "yaw": 90.1202
+    },
+    {
+      "active": true,
+      "center": [
+        61.7931,
+        6.8449,
+        -113.497
+      ],
+      "initial": false,
+      "name": "SPAWN_BOUND_FIGHTER (5)",
+      "path": "SPAWNS/SPAWN_BOUND_FIGHTER (5)",
+      "rotation": [
+        0.0,
+        -1.0,
+        0.0,
+        0.002
+      ],
+      "scene": "Arena_Sanatorium_CheckPoint_DesignStuff",
+      "side": "bear",
+      "size": [
+        30.2918,
+        16.3147,
+        27.3284
+      ],
+      "yaw": 180.2254
+    },
+    {
+      "active": true,
+      "center": [
+        50.5242,
+        6.8449,
+        -66.7334
+      ],
+      "initial": false,
+      "name": "SPAWN_BOUND_FIGHTER (6)",
+      "path": "SPAWNS/SPAWN_BOUND_FIGHTER (6)",
+      "rotation": [
+        0.0,
+        0.9246,
+        0.0,
+        0.3809
+      ],
+      "scene": "Arena_Sanatorium_CheckPoint_DesignStuff",
+      "side": "bear",
+      "size": [
+        12.2555,
+        16.3147,
+        27.3284
+      ],
+      "yaw": 135.2254
+    },
+    {
+      "active": true,
+      "center": [
+        -40.7858,
+        6.2993,
+        -88.6048
+      ],
+      "initial": true,
+      "name": "SPAWN_BOUND_DEFENCE",
+      "path": "SPAWNS/SPAWN_BOUND_DEFENCE",
+      "rotation": [
+        0.0,
+        1.0,
+        0.0,
+        0.0
+      ],
+      "scene": "Arena_Sanatorium_CheckPoint_DesignStuff",
+      "side": "usec",
+      "size": [
+        15.7494,
+        7.9432,
+        17.3427
+      ],
+      "yaw": 179.9999
+    },
+    {
+      "active": true,
+      "center": [
+        -13.3353,
+        3.4436,
+        -49.7905
+      ],
+      "initial": false,
+      "name": "SPAWN_BOUND_DEFENCE (1)",
+      "path": "SPAWNS/SPAWN_BOUND_DEFENCE (1)",
+      "rotation": [
+        0.0,
+        1.0,
+        0.0,
+        0.0
+      ],
+      "scene": "Arena_Sanatorium_CheckPoint_DesignStuff",
+      "side": "usec",
+      "size": [
+        24.2206,
+        4.0718,
+        35.0013
+      ],
+      "yaw": 179.9999
+    },
+    {
+      "active": true,
+      "center": [
+        -19.6142,
+        6.2993,
+        -92.3566
+      ],
+      "initial": false,
+      "name": "SPAWN_BOUND_DEFENCE (2)",
+      "path": "SPAWNS/SPAWN_BOUND_DEFENCE (2)",
+      "rotation": [
+        0.0,
+        1.0,
+        0.0,
+        0.0
+      ],
+      "scene": "Arena_Sanatorium_CheckPoint_DesignStuff",
+      "side": "usec",
+      "size": [
+        12.7461,
+        7.9432,
+        28.5991
+      ],
+      "yaw": 179.9999
+    },
+    {
+      "active": true,
+      "center": [
+        -9.7774,
+        6.2993,
+        -102.2993
+      ],
+      "initial": false,
+      "name": "SPAWN_BOUND_DEFENCE (4)",
+      "path": "SPAWNS/SPAWN_BOUND_DEFENCE (4)",
+      "rotation": [
+        0.0,
+        0.9893,
+        0.0,
+        0.1461
+      ],
+      "scene": "Arena_Sanatorium_CheckPoint_DesignStuff",
+      "side": "usec",
+      "size": [
+        17.7306,
+        7.9432,
+        22.891
+      ],
+      "yaw": 163.2007
+    },
+    {
+      "active": true,
+      "center": [
+        -1.2653,
+        4.9541,
+        -47.5
+      ],
+      "initial": false,
+      "name": "SPAWN_BOUND_DEFENCE (5)",
+      "path": "SPAWNS/SPAWN_BOUND_DEFENCE (5)",
+      "rotation": [
+        0.0,
+        1.0,
+        0.0,
+        0.0
+      ],
+      "scene": "Arena_Sanatorium_CheckPoint_DesignStuff",
+      "side": "usec",
+      "size": [
+        24.2206,
+        7.4157,
+        29.7744
+      ],
+      "yaw": 179.9999
+    }
+  ],
+  "spawn_markers": {
+    "bear": [
+      {
+        "active": true,
+        "index": 5,
+        "name": "Bear house (5)",
+        "path": "SPAWNS/Bear house (5)",
+        "pocket": true,
+        "position": [
+          97.9361,
+          0.7345,
+          -83.7253
+        ],
+        "scene": "Arena_Sanatorium_CheckPoint_DesignStuff",
+        "side": "bear",
+        "stem": "Bear house",
+        "yaw": 251.5087
+      },
+      {
+        "active": true,
+        "index": 6,
+        "name": "Bear house (6)",
+        "path": "SPAWNS/Bear house (6)",
+        "pocket": true,
+        "position": [
+          97.3612,
+          0.7345,
+          -86.7347
+        ],
+        "scene": "Arena_Sanatorium_CheckPoint_DesignStuff",
+        "side": "bear",
+        "stem": "Bear house",
+        "yaw": 267.5384
+      },
+      {
+        "active": true,
+        "index": 7,
+        "name": "Bear house (7)",
+        "path": "SPAWNS/Bear house (7)",
+        "pocket": true,
+        "position": [
+          90.7486,
+          1.8862,
+          -94.3529
+        ],
+        "scene": "Arena_Sanatorium_CheckPoint_DesignStuff",
+        "side": "bear",
+        "stem": "Bear house",
+        "yaw": 303.1341
+      },
+      {
+        "active": true,
+        "index": 8,
+        "name": "Bear house (8)",
+        "path": "SPAWNS/Bear house (8)",
+        "pocket": true,
+        "position": [
+          95.9648,
+          0.7345,
+          -94.074
+        ],
+        "scene": "Arena_Sanatorium_CheckPoint_DesignStuff",
+        "side": "bear",
+        "stem": "Bear house",
+        "yaw": 265.3582
+      },
+      {
+        "active": true,
+        "index": 9,
+        "name": "Bear house (9)",
+        "path": "SPAWNS/Bear house (9)",
+        "pocket": true,
+        "position": [
+          89.2948,
+          1.8862,
+          -86.464
+        ],
+        "scene": "Arena_Sanatorium_CheckPoint_DesignStuff",
+        "side": "bear",
+        "stem": "Bear house",
+        "yaw": 271.4964
+      },
+      {
+        "active": true,
+        "index": 10,
+        "name": "Bear house (10)",
+        "path": "SPAWNS/Bear house (10)",
+        "pocket": true,
+        "position": [
+          94.6365,
+          0.7345,
+          -84.9785
+        ],
+        "scene": "Arena_Sanatorium_CheckPoint_DesignStuff",
+        "side": "bear",
+        "stem": "Bear house",
+        "yaw": 266.5088
+      },
+      {
+        "active": true,
+        "index": 11,
+        "name": "Bear house (11)",
+        "path": "SPAWNS/Bear house (11)",
+        "pocket": true,
+        "position": [
+          90.7653,
+          1.8862,
+          -91.9553
+        ],
+        "scene": "Arena_Sanatorium_CheckPoint_DesignStuff",
+        "side": "bear",
+        "stem": "Bear house",
+        "yaw": 258.906
+      },
+      {
+        "active": true,
+        "index": 12,
+        "name": "Bear house (12)",
+        "path": "SPAWNS/Bear house (12)",
+        "pocket": true,
+        "position": [
+          97.7513,
+          0.7345,
+          -96.1495
+        ],
+        "scene": "Arena_Sanatorium_CheckPoint_DesignStuff",
+        "side": "bear",
+        "stem": "Bear house",
+        "yaw": 276.4523
+      },
+      {
+        "active": true,
+        "index": 13,
+        "name": "Bear house (13)",
+        "path": "SPAWNS/Bear house (13)",
+        "pocket": true,
+        "position": [
+          96.6548,
+          0.7345,
+          -91.174
+        ],
+        "scene": "Arena_Sanatorium_CheckPoint_DesignStuff",
+        "side": "bear",
+        "stem": "Bear house",
+        "yaw": 258.9876
+      },
+      {
+        "active": true,
+        "index": 14,
+        "name": "Bear house (14)",
+        "path": "SPAWNS/Bear house (14)",
+        "pocket": true,
+        "position": [
+          95.2948,
+          0.8753,
+          -89.564
+        ],
+        "scene": "Arena_Sanatorium_CheckPoint_DesignStuff",
+        "side": "bear",
+        "stem": "Bear house",
+        "yaw": 273.3514
+      },
+      {
+        "active": true,
+        "index": 15,
+        "name": "Bear house (15)",
+        "path": "SPAWNS/Bear house (15)",
+        "pocket": false,
+        "position": [
+          39.5348,
+          3.5816,
+          -112.809
+        ],
+        "scene": "Arena_Sanatorium_CheckPoint_DesignStuff",
+        "side": "bear",
+        "stem": "Bear house",
+        "yaw": 200.3001
+      },
+      {
+        "active": true,
+        "index": 16,
+        "name": "Bear house (16)",
+        "path": "SPAWNS/Bear house (16)",
+        "pocket": false,
+        "position": [
+          40.9038,
+          3.5816,
+          -111.1919
+        ],
+        "scene": "Arena_Sanatorium_CheckPoint_DesignStuff",
+        "side": "bear",
+        "stem": "Bear house",
+        "yaw": 207.5384
+      },
+      {
+        "active": true,
+        "index": 17,
+        "name": "Bear house (17)",
+        "path": "SPAWNS/Bear house (17)",
+        "pocket": false,
+        "position": [
+          37.3028,
+          4.3618,
+          -106.161
+        ],
+        "scene": "Arena_Sanatorium_CheckPoint_DesignStuff",
+        "side": "bear",
+        "stem": "Bear house",
+        "yaw": 33.8367
+      },
+      {
+        "active": true,
+        "index": 18,
+        "name": "Bear house (18)",
+        "path": "SPAWNS/Bear house (18)",
+        "pocket": false,
+        "position": [
+          37.7269,
+          4.3618,
+          -107.8573
+        ],
+        "scene": "Arena_Sanatorium_CheckPoint_DesignStuff",
+        "side": "bear",
+        "stem": "Bear house",
+        "yaw": 24.1856
+      },
+      {
+        "active": true,
+        "index": 19,
+        "name": "Bear house (19)",
+        "path": "SPAWNS/Bear house (19)",
+        "pocket": false,
+        "position": [
+          40.3438,
+          3.5816,
+          -108.402
+        ],
+        "scene": "Arena_Sanatorium_CheckPoint_DesignStuff",
+        "side": "bear",
+        "stem": "Bear house",
+        "yaw": 349.7841
+      },
+      {
+        "active": true,
+        "index": 25,
+        "name": "Bear house (25)",
+        "path": "SPAWNS/Bear house (25)",
+        "pocket": false,
+        "position": [
+          44.9198,
+          3.4463,
+          -89.708
+        ],
+        "scene": "Arena_Sanatorium_CheckPoint_DesignStuff",
+        "side": "bear",
+        "stem": "Bear house",
+        "yaw": 353.4634
+      },
+      {
+        "active": true,
+        "index": 26,
+        "name": "Bear house (26)",
+        "path": "SPAWNS/Bear house (26)",
+        "pocket": false,
+        "position": [
+          48.8738,
+          2.4743,
+          -88.846
+        ],
+        "scene": "Arena_Sanatorium_CheckPoint_DesignStuff",
+        "side": "bear",
+        "stem": "Bear house",
+        "yaw": 334.2055
+      },
+      {
+        "active": true,
+        "index": 27,
+        "name": "Bear house (27)",
+        "path": "SPAWNS/Bear house (27)",
+        "pocket": false,
+        "position": [
+          44.2781,
+          3.1583,
+          -86.1844
+        ],
+        "scene": "Arena_Sanatorium_CheckPoint_DesignStuff",
+        "side": "bear",
+        "stem": "Bear house",
+        "yaw": 348.1341
+      },
+      {
+        "active": true,
+        "index": 29,
+        "name": "Bear house (29)",
+        "path": "SPAWNS/Bear house (29)",
+        "pocket": false,
+        "position": [
+          47.8198,
+          1.914,
+          -85.2719
+        ],
+        "scene": "Arena_Sanatorium_CheckPoint_DesignStuff",
+        "side": "bear",
+        "stem": "Bear house",
+        "yaw": 336.9914
+      },
+      {
+        "active": true,
+        "index": 30,
+        "name": "Bear house (30)",
+        "path": "SPAWNS/Bear house (30)",
+        "pocket": false,
+        "position": [
+          47.2078,
+          3.1583,
+          -90.349
+        ],
+        "scene": "Arena_Sanatorium_CheckPoint_DesignStuff",
+        "side": "bear",
+        "stem": "Bear house",
+        "yaw": 341.5088
+      },
+      {
+        "active": true,
+        "index": 31,
+        "name": "Bear house (31)",
+        "path": "SPAWNS/Bear house (31)",
+        "pocket": false,
+        "position": [
+          32.5608,
+          3.1495,
+          -49.64
+        ],
+        "scene": "Arena_Sanatorium_CheckPoint_DesignStuff",
+        "side": "bear",
+        "stem": "Bear house",
+        "yaw": 328.1908
+      },
+      {
+        "active": true,
+        "index": 32,
+        "name": "Bear house (32)",
+        "path": "SPAWNS/Bear house (32)",
+        "pocket": false,
+        "position": [
+          34.4698,
+          3.1495,
+          -50.3169
+        ],
+        "scene": "Arena_Sanatorium_CheckPoint_DesignStuff",
+        "side": "bear",
+        "stem": "Bear house",
+        "yaw": 308.534
+      },
+      {
+        "active": true,
+        "index": 33,
+        "name": "Bear house (33)",
+        "path": "SPAWNS/Bear house (33)",
+        "pocket": false,
+        "position": [
+          31.9358,
+          3.1495,
+          -57.446
+        ],
+        "scene": "Arena_Sanatorium_CheckPoint_DesignStuff",
+        "side": "bear",
+        "stem": "Bear house",
+        "yaw": 195.051
+      },
+      {
+        "active": true,
+        "index": 34,
+        "name": "Bear house (34)",
+        "path": "SPAWNS/Bear house (34)",
+        "pocket": false,
+        "position": [
+          33.8358,
+          3.1495,
+          -56.2309
+        ],
+        "scene": "Arena_Sanatorium_CheckPoint_DesignStuff",
+        "side": "bear",
+        "stem": "Bear house",
+        "yaw": 195.051
+      },
+      {
+        "active": true,
+        "index": 35,
+        "name": "Bear house (35)",
+        "path": "SPAWNS/Bear house (35)",
+        "pocket": false,
+        "position": [
+          34.9248,
+          3.1254,
+          -46.561
+        ],
+        "scene": "Arena_Sanatorium_CheckPoint_DesignStuff",
+        "side": "bear",
+        "stem": "Bear house",
+        "yaw": 240.0511
+      },
+      {
+        "active": true,
+        "index": 36,
+        "name": "Bear house (36)",
+        "path": "SPAWNS/Bear house (36)",
+        "pocket": false,
+        "position": [
+          28.3178,
+          3.1483,
+          -80.8149
+        ],
+        "scene": "Arena_Sanatorium_CheckPoint_DesignStuff",
+        "side": "bear",
+        "stem": "Bear house",
+        "yaw": 357.524
+      },
+      {
+        "active": true,
+        "index": 38,
+        "name": "Bear house (38)",
+        "path": "SPAWNS/Bear house (38)",
+        "pocket": false,
+        "position": [
+          28.5018,
+          3.1724,
+          -65.973
+        ],
+        "scene": "Arena_Sanatorium_CheckPoint_DesignStuff",
+        "side": "bear",
+        "stem": "Bear house",
+        "yaw": 94.0922
+      },
+      {
+        "active": true,
+        "index": 39,
+        "name": "Bear house (39)",
+        "path": "SPAWNS/Bear house (39)",
+        "pocket": false,
+        "position": [
+          28.5178,
+          3.1724,
+          -67.669
+        ],
+        "scene": "Arena_Sanatorium_CheckPoint_DesignStuff",
+        "side": "bear",
+        "stem": "Bear house",
+        "yaw": 100.6361
+      },
+      {
+        "active": true,
+        "index": 40,
+        "name": "Bear house (40)",
+        "path": "SPAWNS/Bear house (40)",
+        "pocket": false,
+        "position": [
+          34.6768,
+          3.1617,
+          -68.493
+        ],
+        "scene": "Arena_Sanatorium_CheckPoint_DesignStuff",
+        "side": "bear",
+        "stem": "Bear house",
+        "yaw": 311.1692
+      },
+      {
+        "active": true,
+        "index": 41,
+        "name": "Bear house (41)",
+        "path": "SPAWNS/Bear house (41)",
+        "pocket": false,
+        "position": [
+          59.1548,
+          3.1583,
+          -120.331
+        ],
+        "scene": "Arena_Sanatorium_CheckPoint_DesignStuff",
+        "side": "bear",
+        "stem": "Bear house",
+        "yaw": 266.1692
+      },
+      {
+        "active": true,
+        "index": 42,
+        "name": "Bear house (42)",
+        "path": "SPAWNS/Bear house (42)",
+        "pocket": false,
+        "position": [
+          50.3108,
+          3.1583,
+          -125.4829
+        ],
+        "scene": "Arena_Sanatorium_CheckPoint_DesignStuff",
+        "side": "bear",
+        "stem": "Bear house",
+        "yaw": 356.1692
+      },
+      {
+        "active": true,
+        "index": 43,
+        "name": "Bear house (43)",
+        "path": "SPAWNS/Bear house (43)",
+        "pocket": false,
+        "position": [
+          59.1658,
+          3.1583,
+          -123.465
+        ],
+        "scene": "Arena_Sanatorium_CheckPoint_DesignStuff",
+        "side": "bear",
+        "stem": "Bear house",
+        "yaw": 281.1692
+      },
+      {
+        "active": true,
+        "index": 44,
+        "name": "Bear house (44)",
+        "path": "SPAWNS/Bear house (44)",
+        "pocket": false,
+        "position": [
+          62.6738,
+          3.1583,
+          -110.7049
+        ],
+        "scene": "Arena_Sanatorium_CheckPoint_DesignStuff",
+        "side": "bear",
+        "stem": "Bear house",
+        "yaw": 326.1691
+      },
+      {
+        "active": true,
+        "index": 45,
+        "name": "Bear house (45)",
+        "path": "SPAWNS/Bear house (45)",
+        "pocket": false,
+        "position": [
+          65.0028,
+          3.1583,
+          -111.253
+        ],
+        "scene": "Arena_Sanatorium_CheckPoint_DesignStuff",
+        "side": "bear",
+        "stem": "Bear house",
+        "yaw": 326.1691
+      },
+      {
+        "active": true,
+        "index": 46,
+        "name": "Bear house (46)",
+        "path": "SPAWNS/Bear house (46)",
+        "pocket": false,
+        "position": [
+          62.7768,
+          3.1583,
+          -114.258
+        ],
+        "scene": "Arena_Sanatorium_CheckPoint_DesignStuff",
+        "side": "bear",
+        "stem": "Bear house",
+        "yaw": 326.1691
+      },
+      {
+        "active": true,
+        "index": 47,
+        "name": "Bear house (47)",
+        "path": "SPAWNS/Bear house (47)",
+        "pocket": false,
+        "position": [
+          41.6908,
+          1.8682,
+          -62.6
+        ],
+        "scene": "Arena_Sanatorium_CheckPoint_DesignStuff",
+        "side": "bear",
+        "stem": "Bear house",
+        "yaw": 348.0747
+      },
+      {
+        "active": true,
+        "index": 48,
+        "name": "Bear house (48)",
+        "path": "SPAWNS/Bear house (48)",
+        "pocket": false,
+        "position": [
+          40.8648,
+          1.8682,
+          -59.924
+        ],
+        "scene": "Arena_Sanatorium_CheckPoint_DesignStuff",
+        "side": "bear",
+        "stem": "Bear house",
+        "yaw": 355.4696
+      },
+      {
+        "active": true,
+        "index": 49,
+        "name": "Bear house (49)",
+        "path": "SPAWNS/Bear house (49)",
+        "pocket": false,
+        "position": [
+          48.4548,
+          1.8682,
+          -68.03
+        ],
+        "scene": "Arena_Sanatorium_CheckPoint_DesignStuff",
+        "side": "bear",
+        "stem": "Bear house",
+        "yaw": 325.4696
+      },
+      {
+        "active": true,
+        "index": 50,
+        "name": "Bear house (50)",
+        "path": "SPAWNS/Bear house (50)",
+        "pocket": false,
+        "position": [
+          44.3948,
+          1.8682,
+          -63.014
+        ],
+        "scene": "Arena_Sanatorium_CheckPoint_DesignStuff",
+        "side": "bear",
+        "stem": "Bear house",
+        "yaw": 325.4696
+      },
+      {
+        "active": true,
+        "index": 51,
+        "name": "Bear house (51)",
+        "path": "SPAWNS/Bear house (51)",
+        "pocket": false,
+        "position": [
+          42.8348,
+          1.8682,
+          -60.014
+        ],
+        "scene": "Arena_Sanatorium_CheckPoint_DesignStuff",
+        "side": "bear",
+        "stem": "Bear house",
+        "yaw": 331.1319
+      }
+    ],
+    "usec": [
+      {
+        "active": true,
+        "index": 5,
+        "name": "Usec house (5)",
+        "path": "SPAWNS/Usec house (5)",
+        "pocket": true,
+        "position": [
+          -39.3812,
+          3.2493,
+          -87.6749
+        ],
+        "scene": "Arena_Sanatorium_CheckPoint_DesignStuff",
+        "side": "usec",
+        "stem": "Usec house",
+        "yaw": 75.183
+      },
+      {
+        "active": true,
+        "index": 6,
+        "name": "Usec house (6)",
+        "path": "SPAWNS/Usec house (6)",
+        "pocket": true,
+        "position": [
+          -40.7162,
+          3.2473,
+          -79.931
+        ],
+        "scene": "Arena_Sanatorium_CheckPoint_DesignStuff",
+        "side": "usec",
+        "stem": "Usec house",
+        "yaw": 88.2443
+      },
+      {
+        "active": true,
+        "index": 7,
+        "name": "Usec house (7)",
+        "path": "SPAWNS/Usec house (7)",
+        "pocket": true,
+        "position": [
+          -41.3192,
+          3.2473,
+          -89.603
+        ],
+        "scene": "Arena_Sanatorium_CheckPoint_DesignStuff",
+        "side": "usec",
+        "stem": "Usec house",
+        "yaw": 45.3416
+      },
+      {
+        "active": true,
+        "index": 8,
+        "name": "Usec house (8)",
+        "path": "SPAWNS/Usec house (8)",
+        "pocket": true,
+        "position": [
+          -39.8452,
+          3.2473,
+          -91.1639
+        ],
+        "scene": "Arena_Sanatorium_CheckPoint_DesignStuff",
+        "side": "usec",
+        "stem": "Usec house",
+        "yaw": 52.3511
+      },
+      {
+        "active": true,
+        "index": 9,
+        "name": "Usec house (9)",
+        "path": "SPAWNS/Usec house (9)",
+        "pocket": true,
+        "position": [
+          -42.9652,
+          3.2443,
+          -92.504
+        ],
+        "scene": "Arena_Sanatorium_CheckPoint_DesignStuff",
+        "side": "usec",
+        "stem": "Usec house",
+        "yaw": 85.0953
+      },
+      {
+        "active": true,
+        "index": 10,
+        "name": "Usec house (10)",
+        "path": "SPAWNS/Usec house (10)",
+        "pocket": true,
+        "position": [
+          -39.7352,
+          3.2473,
+          -94.964
+        ],
+        "scene": "Arena_Sanatorium_CheckPoint_DesignStuff",
+        "side": "usec",
+        "stem": "Usec house",
+        "yaw": 358.2447
+      },
+      {
+        "active": true,
+        "index": 11,
+        "name": "Usec house (11)",
+        "path": "SPAWNS/Usec house (11)",
+        "pocket": true,
+        "position": [
+          -39.9732,
+          3.2473,
+          -85.4959
+        ],
+        "scene": "Arena_Sanatorium_CheckPoint_DesignStuff",
+        "side": "usec",
+        "stem": "Usec house",
+        "yaw": 81.4048
+      },
+      {
+        "active": true,
+        "index": 12,
+        "name": "Usec house (12)",
+        "path": "SPAWNS/Usec house (12)",
+        "pocket": true,
+        "position": [
+          -40.0992,
+          3.2473,
+          -82.904
+        ],
+        "scene": "Arena_Sanatorium_CheckPoint_DesignStuff",
+        "side": "usec",
+        "stem": "Usec house",
+        "yaw": 89.3089
+      },
+      {
+        "active": true,
+        "index": 13,
+        "name": "Usec house (13)",
+        "path": "SPAWNS/Usec house (13)",
+        "pocket": true,
+        "position": [
+          -37.0262,
+          3.2473,
+          -93.7889
+        ],
+        "scene": "Arena_Sanatorium_CheckPoint_DesignStuff",
+        "side": "usec",
+        "stem": "Usec house",
+        "yaw": 354.4831
+      },
+      {
+        "active": true,
+        "index": 14,
+        "name": "Usec house (14)",
+        "path": "SPAWNS/Usec house (14)",
+        "pocket": true,
+        "position": [
+          -44.5252,
+          3.2503,
+          -90.424
+        ],
+        "scene": "Arena_Sanatorium_CheckPoint_DesignStuff",
+        "side": "usec",
+        "stem": "Usec house",
+        "yaw": 99.4831
+      },
+      {
+        "active": true,
+        "index": 15,
+        "name": "Usec house (15)",
+        "path": "SPAWNS/Usec house (15)",
+        "pocket": false,
+        "position": [
+          -21.4512,
+          2.0203,
+          -44.5396
+        ],
+        "scene": "Arena_Sanatorium_CheckPoint_DesignStuff",
+        "side": "usec",
+        "stem": "Usec house",
+        "yaw": 35.5325
+      },
+      {
+        "active": true,
+        "index": 16,
+        "name": "Usec house (16)",
+        "path": "SPAWNS/Usec house (16)",
+        "pocket": false,
+        "position": [
+          -19.8542,
+          2.0203,
+          -59.975
+        ],
+        "scene": "Arena_Sanatorium_CheckPoint_DesignStuff",
+        "side": "usec",
+        "stem": "Usec house",
+        "yaw": 7.4436
+      },
+      {
+        "active": true,
+        "index": 17,
+        "name": "Usec house (17)",
+        "path": "SPAWNS/Usec house (17)",
+        "pocket": false,
+        "position": [
+          -20.0652,
+          2.0203,
+          -61.444
+        ],
+        "scene": "Arena_Sanatorium_CheckPoint_DesignStuff",
+        "side": "usec",
+        "stem": "Usec house",
+        "yaw": 6.3994
+      },
+      {
+        "active": true,
+        "index": 18,
+        "name": "Usec house (18)",
+        "path": "SPAWNS/Usec house (18)",
+        "pocket": false,
+        "position": [
+          -18.2742,
+          3.2399,
+          -87.428
+        ],
+        "scene": "Arena_Sanatorium_CheckPoint_DesignStuff",
+        "side": "usec",
+        "stem": "Usec house",
+        "yaw": 24.2157
+      },
+      {
+        "active": true,
+        "index": 19,
+        "name": "Usec house (19)",
+        "path": "SPAWNS/Usec house (19)",
+        "pocket": false,
+        "position": [
+          -23.1882,
+          2.0203,
+          -40.311
+        ],
+        "scene": "Arena_Sanatorium_CheckPoint_DesignStuff",
+        "side": "usec",
+        "stem": "Usec house",
+        "yaw": 73.1958
+      },
+      {
+        "active": true,
+        "index": 20,
+        "name": "Usec house (20)",
+        "path": "SPAWNS/Usec house (20)",
+        "pocket": false,
+        "position": [
+          -20.3112,
+          2.0203,
+          -40.73
+        ],
+        "scene": "Arena_Sanatorium_CheckPoint_DesignStuff",
+        "side": "usec",
+        "stem": "Usec house",
+        "yaw": 358.2875
+      },
+      {
+        "active": true,
+        "index": 21,
+        "name": "Usec house (21)",
+        "path": "SPAWNS/Usec house (21)",
+        "pocket": false,
+        "position": [
+          -19.5762,
+          3.2399,
+          -89.3279
+        ],
+        "scene": "Arena_Sanatorium_CheckPoint_DesignStuff",
+        "side": "usec",
+        "stem": "Usec house",
+        "yaw": 24.2157
+      },
+      {
+        "active": true,
+        "index": 22,
+        "name": "Usec house (22)",
+        "path": "SPAWNS/Usec house (22)",
+        "pocket": false,
+        "position": [
+          -21.3772,
+          4.11,
+          -94.476
+        ],
+        "scene": "Arena_Sanatorium_CheckPoint_DesignStuff",
+        "side": "usec",
+        "stem": "Usec house",
+        "yaw": 24.2157
+      },
+      {
+        "active": true,
+        "index": 23,
+        "name": "Usec house (23)",
+        "path": "SPAWNS/Usec house (23)",
+        "pocket": false,
+        "position": [
+          -22.9752,
+          4.11,
+          -93.961
+        ],
+        "scene": "Arena_Sanatorium_CheckPoint_DesignStuff",
+        "side": "usec",
+        "stem": "Usec house",
+        "yaw": 21.3769
+      },
+      {
+        "active": true,
+        "index": 24,
+        "name": "Usec house (24)",
+        "path": "SPAWNS/Usec house (24)",
+        "pocket": false,
+        "position": [
+          -19.6262,
+          3.24,
+          -90.838
+        ],
+        "scene": "Arena_Sanatorium_CheckPoint_DesignStuff",
+        "side": "usec",
+        "stem": "Usec house",
+        "yaw": 21.0009
+      },
+      {
+        "active": true,
+        "index": 30,
+        "name": "Usec house (30)",
+        "path": "SPAWNS/Usec house (30)",
+        "pocket": false,
+        "position": [
+          -8.7886,
+          4.9901,
+          -106.6806
+        ],
+        "scene": "Arena_Sanatorium_CheckPoint_DesignStuff",
+        "side": "usec",
+        "stem": "Usec house",
+        "yaw": 125.186
+      },
+      {
+        "active": true,
+        "index": 31,
+        "name": "Usec house (31)",
+        "path": "SPAWNS/Usec house (31)",
+        "pocket": false,
+        "position": [
+          -12.8072,
+          4.9901,
+          -109.603
+        ],
+        "scene": "Arena_Sanatorium_CheckPoint_DesignStuff",
+        "side": "usec",
+        "stem": "Usec house",
+        "yaw": 35.186
+      },
+      {
+        "active": true,
+        "index": 32,
+        "name": "Usec house (32)",
+        "path": "SPAWNS/Usec house (32)",
+        "pocket": false,
+        "position": [
+          -8.1412,
+          4.9901,
+          -100.488
+        ],
+        "scene": "Arena_Sanatorium_CheckPoint_DesignStuff",
+        "side": "usec",
+        "stem": "Usec house",
+        "yaw": 176.2
+      },
+      {
+        "active": true,
+        "index": 33,
+        "name": "Usec house (33)",
+        "path": "SPAWNS/Usec house (33)",
+        "pocket": false,
+        "position": [
+          -12.8272,
+          4.9901,
+          -100.808
+        ],
+        "scene": "Arena_Sanatorium_CheckPoint_DesignStuff",
+        "side": "usec",
+        "stem": "Usec house",
+        "yaw": 107.1248
+      },
+      {
+        "active": true,
+        "index": 34,
+        "name": "Usec house (34)",
+        "path": "SPAWNS/Usec house (34)",
+        "pocket": false,
+        "position": [
+          -10.4702,
+          4.9901,
+          -100.473
+        ],
+        "scene": "Arena_Sanatorium_CheckPoint_DesignStuff",
+        "side": "usec",
+        "stem": "Usec house",
+        "yaw": 138.1984
+      },
+      {
+        "active": true,
+        "index": 35,
+        "name": "Usec house (35)",
+        "path": "SPAWNS/Usec house (35)",
+        "pocket": false,
+        "position": [
+          -6.8122,
+          2.0913,
+          -40.1469
+        ],
+        "scene": "Arena_Sanatorium_CheckPoint_DesignStuff",
+        "side": "usec",
+        "stem": "Usec house",
+        "yaw": 175.1263
+      },
+      {
+        "active": true,
+        "index": 36,
+        "name": "Usec house (36)",
+        "path": "SPAWNS/Usec house (36)",
+        "pocket": false,
+        "position": [
+          -7.8292,
+          2.1073,
+          -54.276
+        ],
+        "scene": "Arena_Sanatorium_CheckPoint_DesignStuff",
+        "side": "usec",
+        "stem": "Usec house",
+        "yaw": 17.8004
+      },
+      {
+        "active": true,
+        "index": 37,
+        "name": "Usec house (37)",
+        "path": "SPAWNS/Usec house (37)",
+        "pocket": false,
+        "position": [
+          -8.7952,
+          2.1073,
+          -57.016
+        ],
+        "scene": "Arena_Sanatorium_CheckPoint_DesignStuff",
+        "side": "usec",
+        "stem": "Usec house",
+        "yaw": 11.4884
+      },
+      {
+        "active": true,
+        "index": 38,
+        "name": "Usec house (38)",
+        "path": "SPAWNS/Usec house (38)",
+        "pocket": false,
+        "position": [
+          -8.3662,
+          4.4653,
+          -61.281
+        ],
+        "scene": "Arena_Sanatorium_CheckPoint_DesignStuff",
+        "side": "usec",
+        "stem": "Usec house",
+        "yaw": 91.0763
+      },
+      {
+        "active": true,
+        "index": 39,
+        "name": "Usec house (39)",
+        "path": "SPAWNS/Usec house (39)",
+        "pocket": false,
+        "position": [
+          -7.6152,
+          2.0913,
+          -37.704
+        ],
+        "scene": "Arena_Sanatorium_CheckPoint_DesignStuff",
+        "side": "usec",
+        "stem": "Usec house",
+        "yaw": 175.1263
+      }
+    ]
+  },
+  "stages": [
+    {
+      "bound": "SPAWN_BOUND_FIGHTER",
+      "capture_points": [],
+      "flag": 1,
+      "initial": true,
+      "links": [],
+      "markers": [
+        "Bear house (5)",
+        "Bear house (6)",
+        "Bear house (7)",
+        "Bear house (8)",
+        "Bear house (9)",
+        "Bear house (10)",
+        "Bear house (11)",
+        "Bear house (12)",
+        "Bear house (13)",
+        "Bear house (14)"
+      ],
+      "team": "bear"
+    },
+    {
+      "bound": "SPAWN_BOUND_FIGHTER (1)",
+      "capture_points": [
+        "A"
+      ],
+      "flag": 1,
+      "initial": false,
+      "links": [
+        "SPAWN_BOUND_FIGHTER (2)"
+      ],
+      "markers": [
+        "Bear house (15)",
+        "Bear house (16)",
+        "Bear house (17)",
+        "Bear house (18)",
+        "Bear house (19)"
+      ],
+      "team": "bear"
+    },
+    {
+      "bound": "SPAWN_BOUND_FIGHTER (2)",
+      "capture_points": [
+        "B"
+      ],
+      "flag": 1,
+      "initial": false,
+      "links": [
+        "SPAWN_BOUND_FIGHTER (1)",
+        "SPAWN_BOUND_FIGHTER (3)",
+        "SPAWN_BOUND_FIGHTER (4)"
+      ],
+      "markers": [
+        "Bear house (25)",
+        "Bear house (26)",
+        "Bear house (27)",
+        "Bear house (29)",
+        "Bear house (30)"
+      ],
+      "team": "bear"
+    },
+    {
+      "bound": "SPAWN_BOUND_FIGHTER (3)",
+      "capture_points": [
+        "C"
+      ],
+      "flag": 1,
+      "initial": false,
+      "links": [
+        "SPAWN_BOUND_FIGHTER (2)",
+        "SPAWN_BOUND_FIGHTER (4)"
+      ],
+      "markers": [
+        "Bear house (31)",
+        "Bear house (32)",
+        "Bear house (33)",
+        "Bear house (34)",
+        "Bear house (35)"
+      ],
+      "team": "bear"
+    },
+    {
+      "bound": "SPAWN_BOUND_FIGHTER (4)",
+      "capture_points": [
+        "B"
+      ],
+      "flag": 1,
+      "initial": false,
+      "links": [
+        "SPAWN_BOUND_DEFENCE (2)"
+      ],
+      "markers": [
+        "Bear house (36)",
+        "Bear house (38)",
+        "Bear house (39)",
+        "Bear house (40)"
+      ],
+      "team": "bear"
+    },
+    {
+      "bound": "SPAWN_BOUND_FIGHTER (5)",
+      "capture_points": [
+        "A"
+      ],
+      "flag": 1,
+      "initial": false,
+      "links": [
+        "SPAWN_BOUND_FIGHTER (1)"
+      ],
+      "markers": [
+        "Bear house (41)",
+        "Bear house (42)",
+        "Bear house (43)",
+        "Bear house (44)",
+        "Bear house (45)",
+        "Bear house (46)"
+      ],
+      "team": "bear"
+    },
+    {
+      "bound": "SPAWN_BOUND_FIGHTER (6)",
+      "capture_points": [
+        "C"
+      ],
+      "flag": 1,
+      "initial": false,
+      "links": [
+        "SPAWN_BOUND_FIGHTER (3)"
+      ],
+      "markers": [
+        "Bear house (47)",
+        "Bear house (48)",
+        "Bear house (49)",
+        "Bear house (50)",
+        "Bear house (51)"
+      ],
+      "team": "bear"
+    },
+    {
+      "bound": "SPAWN_BOUND_DEFENCE",
+      "capture_points": [],
+      "flag": 1,
+      "initial": true,
+      "links": [],
+      "markers": [
+        "Usec house (5)",
+        "Usec house (6)",
+        "Usec house (7)",
+        "Usec house (8)",
+        "Usec house (9)",
+        "Usec house (10)",
+        "Usec house (11)",
+        "Usec house (12)",
+        "Usec house (13)",
+        "Usec house (14)"
+      ],
+      "team": "usec"
+    },
+    {
+      "bound": "SPAWN_BOUND_DEFENCE (1)",
+      "capture_points": [
+        "B",
+        "C"
+      ],
+      "flag": 1,
+      "initial": false,
+      "links": [
+        "SPAWN_BOUND_DEFENCE (5)"
+      ],
+      "markers": [
+        "Usec house (15)",
+        "Usec house (16)",
+        "Usec house (17)",
+        "Usec house (19)",
+        "Usec house (20)"
+      ],
+      "team": "usec"
+    },
+    {
+      "bound": "SPAWN_BOUND_DEFENCE (2)",
+      "capture_points": [
+        "A",
+        "B"
+      ],
+      "flag": 1,
+      "initial": false,
+      "links": [
+        "SPAWN_BOUND_DEFENCE (4)"
+      ],
+      "markers": [
+        "Usec house (18)",
+        "Usec house (21)",
+        "Usec house (22)",
+        "Usec house (23)",
+        "Usec house (24)"
+      ],
+      "team": "usec"
+    },
+    {
+      "bound": "SPAWN_BOUND_DEFENCE (4)",
+      "capture_points": [
+        "A"
+      ],
+      "flag": 1,
+      "initial": false,
+      "links": [
+        "SPAWN_BOUND_DEFENCE (2)"
+      ],
+      "markers": [
+        "Usec house (30)",
+        "Usec house (31)",
+        "Usec house (32)",
+        "Usec house (33)",
+        "Usec house (34)"
+      ],
+      "team": "usec"
+    },
+    {
+      "bound": "SPAWN_BOUND_DEFENCE (5)",
+      "capture_points": [
+        "C"
+      ],
+      "flag": 1,
+      "initial": false,
+      "links": [
+        "SPAWN_BOUND_DEFENCE (1)"
+      ],
+      "markers": [
+        "Usec house (35)",
+        "Usec house (36)",
+        "Usec house (37)",
+        "Usec house (38)",
+        "Usec house (39)"
+      ],
+      "team": "usec"
+    }
+  ],
+  "stages_source": {
+    "class": "Game.Modes.Data.ArenaSpawnBoundCheckPointData",
+    "note": "raw-decoded from the installed Arena level file by extract_mode_objects.py (--arena-data); not part of the extracted package",
+    "records": 12,
+    "scene": "Arena_Sanatorium_CheckPoint_DesignStuff",
+    "scene_index": 376
+  }
+}

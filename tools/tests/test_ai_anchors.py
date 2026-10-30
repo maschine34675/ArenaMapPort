@@ -334,5 +334,162 @@ class RealSourceExtractionTests(unittest.TestCase):
             self.assertEqual(json.load(fh), json.loads(json.dumps(live)))
 
 
+
+# --------------------------------------------------------------------------------------------------------------
+# PLAN-ICEBERG item 7 (2026-10-30): the off-map patrol hubs of Iceberg's AI scene are not shipped
+# --------------------------------------------------------------------------------------------------------------
+
+MAPS_DIR = Path(__file__).resolve().parents[1] / "maps"
+ICEBERG_AREA = A.PLAY_AREA["iceberg"]
+
+
+def hub(core_point_id, position, sub_points=()):
+    return {"core_point_id": core_point_id, "position": list(position), "sub_points": [list(p) for p in sub_points]}
+
+
+def core(ident, position):
+    return {"id": ident, "connection_group_id": 11, "position": list(position), "name": f"AICore ID:{ident} CG:11"}
+
+
+class OffMapHubRuleTests(unittest.TestCase):
+    """drop_off_map_hubs: whole hubs outside the per-map box go, nothing else is touched, a surprise fails the run."""
+
+    AREA = {"x": (-10.0, 10.0), "z": (-20.0, 0.0)}
+    CORES = [core(1, (0.0, 0.0, -10.0)), core(2, (5.0, 0.0, -2.0))]
+
+    def test_only_iceberg_has_a_play_area_row_so_the_released_sidecars_are_untouched(self):
+        self.assertEqual(set(A.PLAY_AREA), {"iceberg"})
+        self.assertEqual(ICEBERG_AREA, {"x": (-61.0, 121.0), "z": (-130.0, -33.0)})
+        self.assertTrue({"equator", "bay5", "airpit", "bowl"}.isdisjoint(A.PLAY_AREA))
+
+    def test_a_hub_outside_the_box_is_dropped_with_its_sub_points_and_an_inside_hub_is_kept(self):
+        inside = hub(1, (1.0, 0.0, -5.0), [(2.0, 0.0, -6.0)])
+        outside = hub(2, (30.0, -3.9, 12.0), [(31.0, -3.9, 13.0), (29.0, -3.9, 11.0)])
+        kept, dropped = A.drop_off_map_hubs(self.CORES, [outside, inside], self.AREA)
+        self.assertEqual((kept, dropped), ([inside], [outside]))
+
+    def test_the_box_edge_belongs_to_the_play_area(self):
+        edge = hub(1, (10.0, 0.0, 0.0))
+        self.assertEqual(A.drop_off_map_hubs(self.CORES, [edge], self.AREA), ([edge], []))
+        self.assertEqual(A.drop_off_map_hubs(self.CORES, [hub(1, (10.01, 0.0, 0.0))], self.AREA)[0], [])
+
+    def test_the_height_does_not_matter_only_x_and_z_do(self):
+        low = hub(1, (0.0, -3.89, -10.0))   # Iceberg's stale hubs stand at y -3.9; this one is in the box in x / z
+        self.assertEqual(A.drop_off_map_hubs(self.CORES, [low], self.AREA)[0], [low])
+
+    def test_a_core_point_outside_the_box_fails_the_run_instead_of_being_dropped(self):
+        with self.assertRaisesRegex(HardExtractError, "core point 3"):
+            A.drop_off_map_hubs(self.CORES + [core(3, (50.0, 0.0, -10.0))], [], self.AREA)
+
+    def test_a_kept_hub_with_a_stray_sub_point_fails_the_run(self):
+        with self.assertRaisesRegex(HardExtractError, "1 of its sub points"):
+            A.drop_off_map_hubs(self.CORES, [hub(1, (0.0, 0.0, -10.0), [(1.0, 0.0, -9.0), (40.0, 0.0, -9.0)])], self.AREA)
+
+    def test_nothing_to_drop_returns_everything(self):
+        hubs = [hub(1, (0.0, 0.0, -10.0), [(1.0, 0.0, -9.0)]), hub(2, (5.0, 0.0, -2.0))]
+        self.assertEqual(A.drop_off_map_hubs(self.CORES, hubs, self.AREA), (hubs, []))
+
+
+class TrackedIcebergAiSidecarTests(unittest.TestCase):
+    """tools/maps/iceberg.ai.json: 11 core points, no patrol way, a record of what was dropped."""
+
+    @staticmethod
+    def load(stem):
+        path = MAPS_DIR / f"{stem}.ai.json"
+        if not path.is_file():
+            raise unittest.SkipTest(f"{path.name} not generated yet")
+        return json.loads(path.read_text(encoding="utf-8"))
+
+    def test_eleven_core_points_all_inside_the_play_area_and_no_patrol_way(self):
+        data = self.load("iceberg")
+        self.assertEqual(data["map_key"], "iceberg")
+        self.assertEqual([c["id"] for c in data["core_points"]], list(range(1, 12)))
+        self.assertTrue(all(c["connection_group_id"] == 11 for c in data["core_points"]))
+        for c in data["core_points"]:
+            self.assertTrue(A.inside_play_area(c["position"], ICEBERG_AREA), c)
+        self.assertEqual(data["patrol_ways"], [])           # the client then builds NavMesh-derived ways (PatrolWayRepairs.cs)
+
+    def test_the_drop_is_recorded_and_matches_what_arena_ships(self):
+        dropped = self.load("iceberg")["dropped"]
+        self.assertEqual((dropped["hubs"], dropped["sub_points"], dropped["ways_removed"]), (4, 40, 1))
+        self.assertEqual(dropped["play_area"], {"x": [-61.0, 121.0], "z": [-130.0, -33.0]})
+        self.assertIn("4 hub(s) with 40 sub point(s)", self.load("iceberg")["_comment"])
+
+    def test_the_released_sidecars_have_no_drop_record_and_keep_their_patrol_ways(self):
+        for stem, hubs in (("equator", 2), ("bay5", 4), ("airpit", 3), ("bowl", 7)):
+            with self.subTest(map=stem):
+                data = self.load(stem)
+                self.assertNotIn("dropped", data)
+                self.assertEqual(len(data["patrol_ways"][0]["hubs"]), hubs)
+
+    def test_every_core_point_height_is_the_ground_it_stands_on(self):
+        # the NavMesh half (all 11 on Arena's main component) is in test_iceberg_spawns.py; here only the range of
+        # Arena's main component, y -1.8..6.15, which the bake box of PLAN-ICEBERG item 9 covers
+        for c in self.load("iceberg")["core_points"]:
+            self.assertTrue(-1.8 <= c["position"][1] <= 6.15, c)
+
+
+@unittest.skipUnless(os.path.isdir(ARENA_SOURCE), "Arena source not reachable from this machine")
+class IcebergRealSourceTests(unittest.TestCase):
+    PLAN = Path(__file__).resolve().parents[1] / "extract" / "plans" / "iceberg.json"
+
+    @classmethod
+    def setUpClass(cls):
+        from source_plan import load_plan
+        plan = load_plan(cls.PLAN)
+        idx, name = A.ai_scene_for_plan(plan)
+        cls.live = A.extract_map(A.map_key_for_plan(plan), idx, name, A.DEFAULT_SOURCE)
+
+    def test_the_plans_ai_role_is_level377(self):
+        from source_plan import load_plan
+        self.assertEqual(A.ai_scene_for_plan(load_plan(self.PLAN)), (377, "Arena_Sanatorium_CheckPoint_AI"))
+
+    def test_the_live_scene_is_eleven_core_points_and_four_stale_hubs(self):
+        self.assertEqual(len(self.live["core_points"]), 11)
+        self.assertEqual(self.live["patrol_ways"], [])
+        self.assertEqual({k: self.live["dropped"][k] for k in ("hubs", "sub_points", "ways_removed")},
+                         {"hubs": 4, "sub_points": 40, "ways_removed": 1})
+
+    def test_without_the_rule_the_scene_still_has_the_four_hubs_forty_metres_off_the_map(self):
+        from unittest import mock
+        with mock.patch.dict(A.PLAY_AREA, clear=True):
+            raw = A.extract_map("iceberg", 377, "Arena_Sanatorium_CheckPoint_AI", A.DEFAULT_SOURCE)
+        hubs = raw["patrol_ways"][0]["hubs"]
+        self.assertEqual((len(hubs), sum(len(h["sub_points"]) for h in hubs)), (4, 40))
+        self.assertNotIn("dropped", raw)
+        for h in hubs:
+            self.assertFalse(A.inside_play_area(h["position"], ICEBERG_AREA))
+            self.assertGreater(h["position"][2] - ICEBERG_AREA["z"][1], 38.0)      # z 5..24 against the box edge -33
+            for sub in h["sub_points"]:
+                self.assertFalse(A.inside_play_area(sub, ICEBERG_AREA))
+
+    def test_the_tracked_sidecar_is_what_the_extractor_writes_today(self):
+        path = MAPS_DIR / "iceberg.ai.json"
+        if not path.is_file():
+            self.skipTest("iceberg.ai.json not generated yet")
+        self.assertEqual(json.loads(path.read_text(encoding="utf-8")), json.loads(json.dumps(self.live)))
+
+    def test_the_ten_savage_markers_of_the_scene_are_outside_the_play_area_too(self):
+        # not shipped anywhere (bots.json draws its bot spawns from the core points); this pins the survey's claim
+        positions = self.marker_positions()
+        self.assertEqual(len(positions), 10)
+        for p in positions:
+            self.assertFalse(A.inside_play_area(p, ICEBERG_AREA), p)
+
+    @staticmethod
+    def marker_positions():
+        paths = A.scene_files({377: "ai"}, base=A.DEFAULT_SOURCE)
+        env = A.UnityPy.load(*paths, f"{A.DEFAULT_SOURCE}/globalgamemanagers.assets")
+        level = env.files[f"{A.DEFAULT_SOURCE}/level377"]
+        out = []
+        for obj in list(level.objects.values()):
+            if obj.type.name != "MonoBehaviour":
+                continue
+            cls, status = A.arena_census.resolve_script_name(obj)
+            if status == "ok" and cls and cls.rsplit(".", 1)[-1] == "SpawnPointMarker":
+                out.append(A._world_position(A._transform_of(obj, level)))
+        return out
+
+
 if __name__ == "__main__":
     unittest.main()

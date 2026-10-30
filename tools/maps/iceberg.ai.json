@@ -1,0 +1,134 @@
+{
+  "_comment": "PLAN-TWO-MAPS item 8 (docs/progress/two-maps-item-8-ai-anchors.md) -- Arena's own AI patrol hub/core-point topology for iceberg, raw-decoded from the excluded TeamFight_AI scene (tools/extract/extract_ai_anchors.py). Loaded at raid start by ArenaMapPort.Client/AiAnchors.cs in place of AICorePointFallback/PatrolWayFallback's NavMesh-derived synthesis; a missing/invalid file (any map without a sidecar) keeps that synthesis unchanged. No connection/edge data: AICorePoint.ConnectionsAtNet is never populated outside the Unity Editor's own Gizmos callbacks (see extract_ai_anchors.py's module docstring), so every authored core point here has empty connections, same as today's single synthetic point. 4 hub(s) with 40 sub point(s) of Arena's PatrolWay lie outside the play area and are not shipped (see the extractor's docstring, 'Iceberg'); with no hub left patrol_ways is empty and PatrolWayFallback builds NavMesh-derived ways from the Bot spawn markers.",
+  "core_points": [
+    {
+      "connection_group_id": 11,
+      "id": 1,
+      "name": "AICore ID:1 CG:11",
+      "position": [
+        -10.880000114440918,
+        3.25,
+        -80.66000366210938
+      ]
+    },
+    {
+      "connection_group_id": 11,
+      "id": 2,
+      "name": "AICore ID:2 CG:11",
+      "position": [
+        73.4000015258789,
+        1.9500007629394531,
+        -89.5999984741211
+      ]
+    },
+    {
+      "connection_group_id": 11,
+      "id": 3,
+      "name": "AICore ID:3 CG:11",
+      "position": [
+        10.359999656677246,
+        3.1500015258789062,
+        -77.20999908447266
+      ]
+    },
+    {
+      "connection_group_id": 11,
+      "id": 4,
+      "name": "AICore ID:4 CG:11",
+      "position": [
+        19.690000534057617,
+        3.1500015258789062,
+        -47.93000030517578
+      ]
+    },
+    {
+      "connection_group_id": 11,
+      "id": 5,
+      "name": "AICore ID:5 CG:11",
+      "position": [
+        4.369999885559082,
+        2.0637428760528564,
+        -48.91999816894531
+      ]
+    },
+    {
+      "connection_group_id": 11,
+      "id": 6,
+      "name": "AICore ID:6 CG:11",
+      "position": [
+        -28.399999618530273,
+        2.049999237060547,
+        -51.70000076293945
+      ]
+    },
+    {
+      "connection_group_id": 11,
+      "id": 7,
+      "name": "AICore ID:7 CG:11",
+      "position": [
+        -28.200000762939453,
+        2.700000762939453,
+        -71.19999694824219
+      ]
+    },
+    {
+      "connection_group_id": 11,
+      "id": 8,
+      "name": "AICore ID:8 CG:11",
+      "position": [
+        -24.280000686645508,
+        4.168132781982422,
+        -101.0
+      ]
+    },
+    {
+      "connection_group_id": 11,
+      "id": 9,
+      "name": "AICore ID:9 CG:11",
+      "position": [
+        16.549999237060547,
+        4.5,
+        -91.58999633789062
+      ]
+    },
+    {
+      "connection_group_id": 11,
+      "id": 10,
+      "name": "AICore ID:10 CG:11",
+      "position": [
+        28.979999542236328,
+        5.008375644683838,
+        -98.30000305175781
+      ]
+    },
+    {
+      "connection_group_id": 11,
+      "id": 11,
+      "name": "AICore ID:11 CG:11",
+      "position": [
+        -38.599998474121094,
+        3.200000762939453,
+        -69.19999694824219
+      ]
+    }
+  ],
+  "dropped": {
+    "hubs": 4,
+    "play_area": {
+      "x": [
+        -61.0,
+        121.0
+      ],
+      "z": [
+        -130.0,
+        -33.0
+      ]
+    },
+    "reason": "hubs outside the play area (off Arena's own NavMesh); their sub points go with them. patrol_ways is empty when no hub is left and the client then builds NavMesh-derived ways",
+    "sub_points": 40,
+    "ways_removed": 1
+  },
+  "map_key": "iceberg",
+  "patrol_ways": [],
+  "schema_version": 1
+}

@@ -72,12 +72,23 @@ unambiguous in BuildSettings (one entry), and the decode self-validates without 
 points, one PatrolWay with 3 hubs holding 12/12/11 = 35 sub points, 38 PatrolPoints all consumed
 (Equator 14/2/21, Bay5 11/4/43).
 
+Iceberg (PLAN-ICEBERG item 7, 2026-10-30). The `Arena_Sanatorium_CheckPoint_AI` scene (plan role `ai`, level377) holds 11
+core points inside the play area and, besides them, a PatrolWay of 4 hubs / 40 sub points (x 69..104, y -3.9, z 5..24) and ten
+Savage/Bot markers (x 55..130, y about -3, z -13..65): all of it 40 to 60 m outside the border cubes and off Arena's own NavMesh
+(stale data of another mode, inferred). A hub at a core point of the other end of the map would send every patrolling bot
+there, so `PLAY_AREA` drops hubs outside a per-map box: the hub's sub points go with it, a way without hubs is not written
+(`patrol_ways` is `[]`; the client then builds NavMesh-derived ways from the Bot spawn markers, PatrolWayRepairs.cs, exactly like a
+map without a sidecar), and the sidecar records what was dropped under `dropped`. A core point outside the box, or a sub point
+outside the box of a kept hub, fails the run (nothing is dropped silently); a map without a `PLAY_AREA` row is untouched, so the
+released sidecars are byte-identical.
+
 CLI:
     python extract_ai_anchors.py --map equator --output tools/maps/equator.ai.json
     python extract_ai_anchors.py --map bay5 --output tools/maps/bay5.ai.json
     python extract_ai_anchors.py --map equator --map bay5    (writes both maps' default paths)
     python extract_ai_anchors.py --map airpit                (writes tools/maps/airpit.ai.json)
     python extract_ai_anchors.py --plan tools/extract/plans/airpit.json
+    python extract_ai_anchors.py --plan tools/extract/plans/iceberg.json     (writes tools/maps/iceberg.ai.json)
 The default without --map stays equator + bay5 (their sidecars are shipped as released); name
 every other map explicitly.
 """
@@ -117,6 +128,38 @@ def missing_file_note(map_key: str) -> str:
     if map_key in LEGACY_COMMENT_MAP_KEYS:
         return "the twelve deferred maps"
     return "any map without a sidecar"
+
+
+# Maps whose AI scene carries patrol data far outside the play area (module docstring, "Iceberg"). Keyed like the
+# sidecar stem; x / z are world metres. Iceberg: the layer-29 LevelBorder cubes span x -60.1..119.5, z -128.9..-34.9
+# (PLAN-ICEBERG section 0); the box is that AABB widened by about 1 m, the bake box of PLAN-ICEBERG item 9 in x and z.
+PLAY_AREA = {
+    "iceberg": {"x": (-61.0, 121.0), "z": (-130.0, -33.0)},
+}
+
+
+def inside_play_area(position, area: dict) -> bool:
+    return area["x"][0] <= position[0] <= area["x"][1] and area["z"][0] <= position[2] <= area["z"][1]
+
+
+def drop_off_map_hubs(core_points: list, hubs: list, area: dict):
+    """(kept hubs, dropped hubs) for a play-area box. Fails closed on a core point outside the box and on a sub
+    point outside the box of a hub that is kept: the rule removes whole hubs that lie outside, nothing else."""
+    for cp in core_points:
+        if not inside_play_area(cp["position"], area):
+            raise HardExtractError(f"core point {cp['id']} at {cp['position']} lies outside the play area {area}; "
+                                   "the off-map rule drops patrol hubs only")
+    kept, dropped = [], []
+    for hub in hubs:
+        if not inside_play_area(hub["position"], area):
+            dropped.append(hub)
+            continue
+        stray = [sp for sp in hub["sub_points"] if not inside_play_area(sp, area)]
+        if stray:
+            raise HardExtractError(f"hub (core point {hub['core_point_id']}) at {hub['position']} lies inside the play "
+                                   f"area but {len(stray)} of its sub points do not")
+        kept.append(hub)
+    return kept, dropped
 
 
 EQUATOR_AI_SCENE_IDX = 52
@@ -475,7 +518,23 @@ def extract_map(map_key: str, ai_scene_idx: int, ai_scene_name: str, source: str
           f"{sub_point_total} sub point(s) -- {len(patrol_points)} PatrolPoint object(s) total, all consumed",
           file=sys.stderr)
 
-    return {
+    area = PLAY_AREA.get(map_key)
+    dropped = None
+    if area is not None:
+        hubs_out, dropped_hubs = drop_off_map_hubs(out_core_points, hubs_out, area)
+        if dropped_hubs:
+            dropped = {
+                "reason": ("hubs outside the play area (off Arena's own NavMesh); their sub points go with them. "
+                           "patrol_ways is empty when no hub is left and the client then builds NavMesh-derived ways"),
+                "play_area": {"x": list(area["x"]), "z": list(area["z"])},
+                "hubs": len(dropped_hubs),
+                "sub_points": sum(len(h["sub_points"]) for h in dropped_hubs),
+                "ways_removed": 0 if hubs_out else 1,
+            }
+            print(f"[extract_ai_anchors] {map_key}: dropped {dropped['hubs']} hub(s) / {dropped['sub_points']} sub point(s) "
+                  f"outside the play area {area}; {len(hubs_out)} hub(s) kept", file=sys.stderr)
+
+    result = {
         "_comment": (
             f"PLAN-TWO-MAPS item 8 (docs/progress/two-maps-item-8-ai-anchors.md) -- Arena's own AI patrol "
             f"hub/core-point topology for {map_key}, raw-decoded from the excluded TeamFight_AI scene "
@@ -489,8 +548,15 @@ def extract_map(map_key: str, ai_scene_idx: int, ai_scene_name: str, source: str
         "schema_version": SCHEMA_VERSION,
         "map_key": map_key,
         "core_points": out_core_points,
-        "patrol_ways": [{"hubs": hubs_out}],
+        "patrol_ways": [{"hubs": hubs_out}] if hubs_out or dropped is None else [],
     }
+    if dropped is not None:  # only a map with a PLAY_AREA row that lost hubs; the released sidecars have no such key
+        result["dropped"] = dropped
+        result["_comment"] += (f" {dropped['hubs']} hub(s) with {dropped['sub_points']} sub point(s) of Arena's PatrolWay "
+                               "lie outside the play area and are not shipped (see the extractor's docstring, "
+                               "'Iceberg'); with no hub left patrol_ways is empty and PatrolWayFallback builds "
+                               "NavMesh-derived ways from the Bot spawn markers.")
+    return result
 
 
 AIRPIT_AI_SCENE_IDX = 33
