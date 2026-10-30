@@ -648,12 +648,15 @@ class BuildTests(FakeRepoCase):
         self.assertLess(readme.index("3. When upgrading from 0.2.1"), readme.index(old))
         self.assertLess(readme.index(old), readme.index("4. Start the SPT server"))
 
-    def test_the_readme_names_both_missing_impact_banks_and_the_noise_context(self):
+    def test_the_readme_names_both_missing_impact_banks_and_the_equator_static(self):
         readme = re.sub(r"\s+", " ", self.core_readme())
         self.assertIn("no impact sounds for the Books and CardBoard prop types", readme)
         self.assertIn("39 Equator props", readme)
-        self.assertIn("on development builds with a denser crowd-call schedule, and heard again on a test build with this release's two-voice schedule", readme)
-        self.assertIn("no noise fix is claimed", readme)
+        self.assertIn("a cause of the intermittent Equator static of 0.3.0 was found and fixed in this release (a bundle block flagged as compressed but stored uncompressed; measured on the test host, not yet listened to)", readme)
+        self.assertIn("A faint steady hiss and short clicks seen in one recording are not explained by it", readme)
+        self.assertNotIn("static of 0.3.0 is fixed", readme)
+        self.assertNotIn("no noise fix is claimed", readme)
+        self.assertNotIn("remains unresolved", readme)
 
     def test_selection_artwork_is_byte_identical_and_core_only(self):
         result = self.build()

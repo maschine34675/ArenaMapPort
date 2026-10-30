@@ -3,13 +3,17 @@
 Record of the cause of the intermittent Equator noise that [spectator-audio.md](spectator-audio.md) lists as unresolved ("Investigation
 2026-10-29 (lead): ranked hypotheses"). It is appended to as the repair is verified.
 
-**Status (2026-10-29, late evening): cause found offline, repair and validator written, host verification pending.** The loud static in the
+**Status (2026-10-30): cause found, fix in the pipeline, host-verified by numbers on 2026-10-30 00:26-00:29 (negative control, repaired bundle) against
+the positive control of 2026-10-29 23:16-23:19 (defective bundle); the user's ear is pending.** The loud static in the
 user's capture `noise-20261029-203147-mark1.wav` is not generated at run time. It is bytes of Equator's scenes bundle, still in their LZ4
 compressed form, which Unity's player plays as if they were PCM samples of the ambient clip `moll_indoor_wind_04`. One 128 KiB block of
 `arena_equator_scenes.bundle` carries the compression flag but is stored raw, and the build pipeline wrote it that way. The mod, the mix
-and the spectator crowd are not involved, and no mix default or config key changes. The figures below are the analysis' own estimates, not
-host measurements: 0.99 that this explains the static in the capture, about 0.9 that it is also the user's earlier "Rauschen" (Equator only,
-intermittent). Nothing of the repair has run in a game yet (see "Host verification").
+and the spectator crowd are not involved, and no mix default or config key changes. The probabilities in this record are the offline analysis'
+own estimates, not measurements: 0.99 that this explains the static in the capture, about 0.9 that it is also the user's earlier "Rauschen"
+(Equator only, intermittent). The repair has run on GPU-2: the static reproduces from the defective bundle and its fingerprint is gone with the
+repaired one (see "Host verification"). Those are measurements of the mix, with two limits: the +10 dB comb bar of the recipe was exceeded by
+residues shorter than 10 ms (+6..+15 dB) while the +30..+40 dB fingerprint of the defect is absent, and the least-squares fit of the raw-block
+model was not done. Nobody has listened to the repaired build, and the user's answer to whether this is the "Rauschen" he meant is open.
 
 ## 1. The user's captures
 
@@ -119,9 +123,10 @@ the one that was written with the flag still set.
   only, no key printed). The `dist` file time is 2026-10-24 01:16 and the tag `v0.3.0` is 2026-10-24 15:01. So **0.3.0 and the local 0.4.0 packages
   (`fe45b84`, `github-a4aa0af`) carry the defect**, on Equator only.
 - The repaired bundle has the same size; one block and one table field change. After a re-stage only chunk 0 and the chunk holding file offset
-  553,666,425 differ in the AMPB file, the content key `K_map` and the key file `keys/arena_equator.json` stay, and the client and server DLLs are
-  unchanged (no rebuild).
-- The 0.4.0 package is to be re-cut after the repair (the Equator part and the checksum file change); publication stays postponed (HANDOFF.md).
+  553,666,425 differ in the AMPB file, the content key `K_map` and the key file `keys/arena_equator.json` stay, and the source is unchanged (no code
+  change; both DLLs are rebuilt anyway for the release, because ProductVersion embeds the commit; corrected 2026-10-30).
+- The 0.4.0 package is to be re-cut after the repair (the Equator part, the core part and the checksum file change: the Equator scenes bundle and both
+  DLLs; corrected 2026-10-30); publication stays postponed (HANDOFF.md).
   Whether the already public 0.3.0 gets a small 0.3.1 that replaces only the Equator scenes bundle (577 MB, same key, no code change) is a user decision.
 
 ## 7. The repair and the validator
@@ -198,8 +203,18 @@ answered in section 5. Raid 1's static, mixed with gunfire, is the same block (c
 
 ## Host verification
 
-**Pending.** The lead runs it on GPU-2 (muted host, no listener needed: the tap sees Unity's pre-device mix; GPU hosts run Mode5point1 over a stereo
-device and the probe reads `ch=2/6`). Nothing below has been measured yet.
+**Done by numbers (lead, GPU-2): positive control 2026-10-29 23:16-23:19 on the then-deployed (defective) bundle, negative control 2026-10-30
+00:25-00:29 on the repaired bundle. Nobody listened.** The host is muted and needs no listener: the tap sees Unity's pre-device mix; GPU hosts run
+Mode5point1 over a stereo device and the probe reads `ch=2/6`. Both raids were plain PMC raids (bots None, 12:00, clear) on Equator, the user's spot
+(6.0, 0.1, 31.5), `NoiseProbe` = Capture, and were analysed with the same script (`static_detector2.py`, a channel-agnostic copy of the detector of
+the investigation, so that it reads the two-channel WAVs of this host). The positive control reproduces the static from the dist bundle with its fingerprint: 1,581 ms of
+plateau in one 12 s window and a comb at 8000 Hz times the pitch of the wind player's play. The negative control covers 71 s without a gap, in which
+two plays of the wind player carried the formerly defective clip region into two windows, and reads 0-73 ms of plateau (longest runs 1-5 ms) with
+no comb above +15 dB. Two NoiseProbe fixes were needed to get captures on this stereo-driver host (`AudioListener.GetOutputData` refuses the
+channels 2-5 and the filter tap delivers the device format): `52c8a28` and `36a6d12`, both committed. What the numbers cannot say: that the
+repaired build sounds right; one playing session on Equator is the remaining confirmation. Release consequence of the run: the package
+`github-a4aa0af` is superseded (its Equator part and its core part change: the Equator scenes bundle and, with the rebuild, both DLLs); the cut is
+made again from the commit that carries these texts, and section 6 is corrected to say so.
 
 Setup: F12 with the Advanced settings filter on, `General/DeveloperMode` on, `Audio diagnostics/NoiseProbe` = Capture, `NoiseProbeMarkKey` as
 it is (Pause, or Mouse3/Mouse4), `NoiseProbeMuteAmbient` empty, `SpectatorCalls` true, and the release mix untouched (`Audio (arena_equator)/AmbientGainDb`
@@ -209,11 +224,11 @@ it is (Pause, or Mouse3/Mouse4), `NoiseProbeMuteAmbient` empty, `SpectatorCalls`
 
 | Step | Action | Expected by numbers | Result |
 |---|---|---|---|
-| Before (positive control, bundle as deployed now) | stay 3 wind cycles (about 2.5 min), press the mark key within 1.5 s after each static ends | each MARK WAV: HP800 5-channel plateau at about -21..-23 dB for 1.5-3.6 s with gaps; `static_detector.py` ON >= 1,500 ms; second-difference comb at 8000 x pitch (6.5-9.0 kHz) +30..+40 dB; ring silent at the edges; minute line `clip=0 loud=0` | pending |
-| Deploy | repaired bundle staged and deployed with EFT closed, EFT restarted | the Debug `[Bundles] loaded ...` line reads encrypted AMPB v1 with the chunk count of before; no `[Bundles]`, `[BundleKeys]` or `[NavMesh]` Error | pending |
-| After | the same raid and spot, same duration | `static_detector.py` ON about 0 ms in every 12 s window that contains 16.7-24.9 s after an `amb+ indoor_wind (4)`; no comb peak above +10 dB in 6.5-9.0 kHz; least-squares fit of the raw-block model R2 about 0 | pending |
-| After, no ring event | if a window holds no `amb+ indoor_wind (4)` | minute lines with `NoiseProbeMuteAmbient` empty: `loud=0 clip=0`, `bgMedian` the same as in the muted run | pending |
-| Static, no game | `validate_bundle_blocks.py` on `work/build/full` and on `dist` | passes after the repair, fails on the pre-repair file (block 6657); the block scan reports 0 compressed-flag blocks with csize >= usize | pending |
+| Before (positive control, bundle as deployed now) | stay 3 wind cycles (about 2.5 min), press the mark key within 1.5 s after each static ends | each MARK WAV: HP800 5-channel plateau at about -21..-23 dB for 1.5-3.6 s with gaps; `static_detector.py` ON >= 1,500 ms; second-difference comb at 8000 x pitch (6.5-9.0 kHz) +30..+40 dB; ring silent at the edges; minute line `clip=0 loud=0` | **Done 2026-10-29 23:16-23:19** (client DLL with the tap fix, EFT instance of 23:15:37, bundle as deployed). Six marks on a 12 s cadence (23:17:48, 23:18:01, 23:18:13, 23:18:25, 23:18:37, 23:18:50), not one per static, so only one window holds the episode: marks 1-5 read ON 9, 20, 1, 0, 7 ms (no plateau); **mark 6** (window 23:18:40.2-23:18:52.2) reads **ON 1,581 ms of 12,000, longest run 141 ms** from 2.206 s to the end of the window, peak block -17.5 dB, second-difference comb **8621.0 Hz (+40.1 dB) = 8000 x 1.0776**, the pitch of that play of the wind player. The user's reference capture reads ON 1,903 ms, longest run 169 ms, comb 7246.5 Hz (+40.3 dB) = 8000 x 0.9058: the same fingerprint at another pitch. The static reproduces on GPU-2 from the same dist bundle. |
+| Deploy | repaired bundle staged and deployed with EFT closed, EFT restarted | the Debug `[Bundles] loaded ...` line reads encrypted AMPB v1 with the chunk count of before; no `[Bundles]`, `[BundleKeys]` or `[NavMesh]` Error | **Done 2026-10-30 00:22-00:26.** Deployed with EFT closed, the client DLL built at 00:19 from `f32eba5` (ProductVersion `0.4.0+f32eba5...`, sha256 prefix `ab5e5469`) (`gpu-run deploy-wait --server --game`: 3 files identical on the host after 117 s, one of them the Equator scenes bundle and one the client DLL, the third the server DLL, already on the host unchanged (`0.4.0+f8ed4ca`); server and game restarted, instance `129dcc48` at 00:25:50, 16/16 identical). The raid of 00:26 logged `[BundleKeys] key for 'arena_equator' derived in 5 ms` and `[Bundles] loaded 'arena_equator/arena_equator_scenes.bundle' ... (577488350 bytes plaintext, encrypted AMPB v1, 551 chunks)`, the stream 629.7 MiB decrypted in 630 chunks, crypto 430 ms. The plaintext size is unchanged, so 551 is the chunk count of before. The host evidence holds no grep of that log for Error lines, so none is claimed. |
+| After | the same raid and spot, same duration | `static_detector.py` ON about 0 ms in every 12 s window that contains 16.7-24.9 s after an `amb+ indoor_wind (4)`; no comb peak above +10 dB in 6.5-9.0 kHz; least-squares fit of the raw-block model R2 about 0 | **Done 2026-10-30 00:26-00:29** (probe armed 00:27:13, Capture, `ch=2/6`, the tap delivers 2 channels). Six marks at 00:27:53, 00:28:04, 00:28:16, 00:28:28, 00:28:40, 00:28:52 (windows 00:27:43-00:28:54, 71 s continuous). **ON 2, 5, 29, 0, 2 and 73 ms** (longest runs 1-5 ms; mark 1: longest run 1 ms, peak block -14.4 dB, a transient). **No comb above +15 dB**; what remains is 6504-7800 Hz at +6..+15 dB on residues shorter than 10 ms, so the +10 dB bar of this column was not met on those residues, while the +30..+40 dB fingerprint of the defect is absent. The ring places the formerly defective clip region (18.33-22.42 s of the clip) in the windows of mark 1 (a play that started about 00:27:28 at an unknown pitch: about 00:27:45-00:27:53 for pitches of 0.9-1.1, inside the window of 00:27:43-00:27:55) and mark 5 (00:28:35.8-00:28:39.6: 16.8-20.6 s after the start of the play of `amb+ indoor_wind (4)` at 00:28:19.0, pitch 1.09). A least-squares fit of the raw-block model is not part of the host evidence; the plateau and comb criteria carry the result. Against the positive control (ON 1,581 ms, longest run 141 ms, comb +40.1 dB; the user's capture ON 1,903 ms, 169 ms, +40.3 dB) the static is gone with the repaired bundle. |
+| After, no ring event | if a window holds no `amb+ indoor_wind (4)` | minute lines with `NoiseProbeMuteAmbient` empty: `loud=0 clip=0`, `bgMedian` the same as in the muted run | **Not needed.** Two plays of `indoor_wind (4)` put the formerly defective region into the windows of marks 1 and 5 (ring: `amb-` 00:28:00.5, `amb+` 00:28:19.0, `amb-` 00:28:46.0). |
+| Static, no game | `validate_bundle_blocks.py` on `work/build/full` and on `dist` | passes after the repair, fails on the pre-repair file (block 6657); the block scan reports 0 compressed-flag blocks with csize >= usize | **Done 2026-10-30.** The staging gate of the Release client build at 00:19 printed `BUNDLE_BLOCKS_OK` for 12 bundles; `fix_stored_blocks.py --check` reports `BLOCKS_OK` on the four scenes bundles; the pre-repair backup `arena_equator_scenes.bundle.pre-repair-20261029` fails `--check`; `validate_distribution.py` printed `DISTRIBUTION_OK` for 4 maps and 12 bundles; `ArenaMapPort.BundleCrypt verify` finds the dist Equator scenes bundle exactly the encryption of the repaired plaintext (1784 ms, CNG). |
 
 An optional control for an unexpected result: `NoiseProbeMuteAmbient` = `indoor_wind (4)` (exact name, live) removes the sound if the player is the
 carrier, and `AmbientRangeMultiplier` = 1.0 (live) makes it inaudible at 29.8 m because its maximum distance of 20 m then falls short.
@@ -226,3 +241,37 @@ key, no hash of an Arena file and no Arena file content appears here; the only h
 for the proof of concept is not for deployment; the shipped file is re-staged from `work/build/full` after the pipeline change. Related:
 [spectator-audio.md](spectator-audio.md) (the NoiseProbe that recorded it), [identity-fix.md](identity-fix.md) (the step that wrote the block),
 [bundle-encryption.md](bundle-encryption.md) ("LZ4 rebuild" of 2026-10-20, which gave the bundle its 128 KiB blocks).
+
+Evidence of the host verification (lead, GPU-2, 2026-10-29 23:16 to 2026-10-30 00:29; times are the host's local clock; the BepInEx prefix
+`[Debug  :maschine-ArenaMapPort]` is left out; no key, no Arena file hash and no Arena file content is quoted). The host evidence file, the captures
+of the positive control and `static_detector2.py` are in the lead's session scratchpad (`host040`, `noise2`), not in the repository.
+
+- Positive control, bundle as deployed (defective): client DLL with the tap fix (committed as `36a6d12`; sha256 prefix `c73831a9`) deployed 23:08, EFT instance of
+  23:15:37, plain PMC raid on Equator at 23:16 (bots None, 12:00, clear). Armed 23:16:56: `mode=Capture ... driver=Stereo ch=2/6 ... tap=readback+filter
+  ring=15s`, followed by `the filter tap delivers 2 channel(s) under speaker mode Mode5point1; ring re-created`. Teleport to (6.0, 0.1, 31.5); six
+  marks through `gpu-run key pause` at 23:17:48, 23:18:01, 23:18:13, 23:18:25, 23:18:37, 23:18:50; six two-channel 12 s WAVs (2.2 MB each) under the
+  host's `BepInEx/logs/ArenaMapPort-noise/`. Mark 6: ON 1,581 ms, longest run 141 ms, comb 8621.0 Hz (+40.1 dB) = 8000 x 1.0776. Left the raid at 23:19.
+- Attempt before the tap fix, 22:57-23:01 (the `52c8a28` code): armed `ch=2/6`, the filter tap delivered 2 channels against a ring of 6, so all five marks
+  (23:00:09 to 23:01:00) ended in `[NoiseProbe] the capture ring was overwritten during the copy; nothing written`. The burst lines of that raid show the
+  static only indirectly: background -29 dBFS at 22:57:53-54 and 22:58:38 against -43..-56 dBFS otherwise, 45 s apart, the wind cycle. This is the
+  failure that `36a6d12` fixes (the ring adopts the tap's channel count; an empty ring is reported as empty).
+- Repair and staging before the negative control: `fix_stored_blocks.py` on `work/build/full/arena_equator_scenes.bundle` (block 6657, flags 0x3 -> 0x0,
+  577,488,350 B unchanged, verified; the backup `arena_equator_scenes.bundle.pre-repair-20261029` stays beside it and fails `--check`); `--check`
+  `BLOCKS_OK` on the four scenes bundles; Release client build without `ArenaMapPortDllOnly` at 00:19 (client DLL built from `f32eba5`, ProductVersion
+  `0.4.0+f32eba5...`, sha256 prefix `ab5e5469`), staging gate `BUNDLE_BLOCKS_OK` for 12 bundles, all 12 re-staged encrypted and deterministic (of the 12
+  bundles only the Equator scenes bundle differs from what the mirror held; the client DLL changed as well); `validate_distribution.py`
+  `DISTRIBUTION_OK` for 4 maps and 12 bundles; `BundleCrypt verify`: the dist Equator scenes bundle is exactly the encryption of the repaired plaintext
+  (1784 ms, CNG).
+- Negative control, repaired bundle: deploy 00:22, `gpu-run deploy-wait --server --game`, 3 files identical on the host after 117 s (the third the server DLL,
+  already on the host unchanged, `0.4.0+f8ed4ca`), EFT instance `129dcc48` started 00:25:50, 16/16 identical. Raid at 00:26 (plain PMC, bots None, 12:00, clear):
+  `[BundleKeys] key for 'arena_equator' derived in 5 ms`; `[Bundles] loaded 'arena_equator/arena_equator_scenes.bundle' ... (577488350 bytes plaintext,
+  encrypted AMPB v1, 551 chunks)`; stream 629.7 MiB decrypted in 630 chunks, crypto 430 ms. The
+  the session's BepInEx log `LogOutput-SPT-GPU-2-2026-10-30_00-25-41.log` (18,684 lines) holds 0 Warning or Error lines from maschine-ArenaMapPort; its only Error line is Unity's known `Coroutine couldn't be started because the the game object 'MenuScreen' is inactive!` at 00:29:19, on leaving the raid.
+- Probe in the negative control: armed 00:27:13 in Capture with `ch=2/6`, the filter tap delivering 2 channels (the six marks yielded the six
+  captures that the detector read). Teleport to (6.0, 0.1, 31.5); six marks at 00:27:53, 00:28:04, 00:28:16, 00:28:28, 00:28:40, 00:28:52 (windows 00:27:43-00:28:54,
+  71 s continuous). Event ring: `amb-` `indoor_wind (4)` 00:28:00.5 (a play that started about 00:27:28, pitch unknown), `amb+` `indoor_wind (4)` 00:28:19.0
+  (clip `sharedassets56.assets_51`, 30.0 m, volume 0.46, pitch 1.09), `amb-` 00:28:46.0. The formerly defective region (clip 18.33-22.42 s) therefore
+  lay in the window of mark 1 (play started about 00:27:28, pitch unknown: about 00:27:45-00:27:53 for pitches of 0.9-1.1, inside 00:27:43-00:27:55) and in
+  that of mark 5 (00:28:35.8-00:28:39.6: 16.8-20.6 s after the start at pitch 1.09).
+  `static_detector2.py`: ON 2, 5, 29, 0, 2, 73 ms, longest runs 1-5 ms, no comb above +15 dB. Left the raid at 00:29. Measured only; nobody listened.
+- Tests (lead, at HEAD `f32eba5`): xunit 2,619 tests pass; Python 2,430 pass (63 skipped) with `PYTHONUTF8=1`.

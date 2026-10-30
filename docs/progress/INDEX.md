@@ -15,7 +15,9 @@ dated state in one screen; read it before this index if you only have a minute.
   PMC raids without bots, the hideout once, the crowd build 2.08-2.16 s on the main thread, 0 ArenaMapPort warnings; section
   "The 52c8a28 state"); the release DLLs are still to be rebuilt and publication stays postponed (the `fe45b84` package is
   the host-verified fallback). Late on 2026-10-29 the Equator noise got a cause (`equator-noise-bundle-block.md`): the Equator
-  scenes bundle of every package so far carries one defective block, so the 0.4.0 package is to be re-cut after the repair.
+  scenes bundle of every package so far carries one defective block, so the 0.4.0 package is to be re-cut after the repair. The repair was staged, deployed and host-verified by numbers on 2026-10-30; the `a4aa0af`
+  DLLs, their VirusTotal scan and the `github-a4aa0af` cut are superseded (both DLLs are rebuilt and rescanned, and the five-part package is cut again
+  from the commit that carries the 2026-10-30 texts).
 
 - [release-sweep-20261029.md](release-sweep-20261029.md) — mixed native checks on both hosts,
   spectator diagnostic gating, late physics sound callback fix and remaining audio limits. Its 2026-10-29 correction
@@ -25,11 +27,11 @@ dated state in one screen; read it before this index if you only have a minute.
   graph/manifest/image integrity, safe development-package migration and release-candidate checks.
 
 - [equator-noise-bundle-block.md](equator-noise-bundle-block.md) — the cause of the intermittent Equator noise (found offline late on
-  2026-10-29 from the user's NoiseProbe captures; host verification pending): block 6657 of `arena_equator_scenes.bundle` carries the LZ4HC
+  2026-10-29 from the user's NoiseProbe captures; host-verified by numbers on GPU-2 on 2026-10-30, not listened to): block 6657 of `arena_equator_scenes.bundle` carries the LZ4HC
   flag with csize == usize, Unity plays it raw, and the compressed bytes come out of the ambient clip `moll_indoor_wind_04` as a 4.5 s burst of
   static every wind cycle; UnityPy's `chunk_based_compress` (`>` where `>=` is needed), written by the identity-patch step, is the origin. The
   repair step, the `validate_bundle_blocks.py` validator, the release consequence (the 0.3.0 and local 0.4.0 Equator bundles carry it, Bay5, Air Pit
-  and Bowl do not), what stays open and the GPU-2 before/after recipe by numbers.
+  and Bowl do not), what stays open and the GPU-2 before/after recipe with its result (ON 1,581 ms before the repair, 0-73 ms after).
 - [spectator-audio.md](spectator-audio.md) — overlapping original participating calls across all four
   crowds; shared audio, up to two independent spatial/room sources, 1.6-3.2 s cadence and cleanup;
   intermittent-noise investigation: KeepReverb comparison negative, spectator-only comparison available; since

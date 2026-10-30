@@ -162,3 +162,20 @@ Test state at `a4aa0af` plus these records: xunit 2,619 tests; two of eight full
 (`Fehler: 1`) that the next run did not repeat, and the failing test's name was not captured (the default console logger prints the summary only;
 a verbose run and three further runs passed 2,619/2,619). An intermittent test exists in the suite; identify it with `--logger "console;verbosity=normal"`
 on a failing run before the next release. Python: `test_release_zips` 187 and `test_changelog` 12 OK after the texts.
+
+## Supersession note - 2026-10-30 (the Equator static; the a4aa0af cut)
+
+Several statements above are overtaken by the Equator static work of the night of 2026-10-29/30
+([equator-noise-bundle-block.md](equator-noise-bundle-block.md)): the intermittent Equator noise no longer "remains an open finding" or
+"stays an open limitation of the release". Its cause is one compressed-flag block of the Equator scenes bundle that Unity plays raw. The
+repaired bundle was staged, validated and deployed, and the static reproduced on GPU-2 from the defective bundle (ON 1,581 ms) and read
+0-73 ms from the repaired one (measured, nobody has listened). The texts were rewritten accordingly: the four
+`[AFTER HOST RUN: ...]` placeholders and the limitation paragraphs of README.md, FORGE.md, CHANGELOG.md and docs/releases/v0.4.0.md, and the
+ZIP README sentence of the packer (the to-do to reword it in "Before any publication" above was done in `a4aa0af` and is done again here). Missing
+Books and CardBoard impact sounds remain open.
+
+The build `a4aa0af` is superseded as a release build: the `github-a4aa0af` package carries the defective Equator bundle, and the `a4aa0af` DLLs
+and their VirusTotal scan are replaced by a rebuild from the commit that carries the 2026-10-30 texts (the "Built from commit" and VirusTotal
+lines of v0.4.0.md are placeholders again). The five-part package is cut again from that commit: the Equator part and the core part change (the
+Equator scenes bundle and both DLLs), and so does the checksum file. The CHANGELOG heading and the date line of v0.4.0.md still read 2026-10-29
+and are re-dated at publication. Publication stays postponed (HANDOFF.md).

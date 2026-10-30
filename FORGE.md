@@ -83,12 +83,18 @@ stays unchanged. Equator Day, Bay5, Air Pit and Bowl are unaffected.
 
 ## Known limitations
 
-- [AFTER HOST RUN: the Equator static: cause and fix sentence]
-- Intermittent short noise reported during Equator play remains unresolved and no fix is
-  claimed. It was reported on development builds that allowed three overlapping crowd voices
-  at twice the call rate, by a player using the SurroundAudio mod (5.1), and was heard again on
-  2026-10-29 in a plain PMC raid on a 0.4.0 test build with the shipped two-voice schedule
-  (SurroundAudio still installed); its cause is not identified.
+- A cause of the intermittent short static reported during Equator play was found and fixed
+  in this release. It was a defect in the mod's own Equator bundle, not the game's mix and
+  not an extra sound: one 128 KiB block of the Equator scenes bundle carried a compression
+  flag although it was stored at full size (a boundary case in a library the mod's build
+  uses), so the game played that block's raw bytes as about four seconds of static in the
+  indoor wind clip, once per wind cycle. The bundle is repaired and every bundle is now
+  checked for such blocks before it is staged. The Equator bundle of 0.3.0 carries the
+  defect.
+- The static no longer shows up in recordings of the game's sound made on the test host, but
+  nobody has listened to the repaired Equator bundle yet; one playing session on Equator is
+  the remaining confirmation. A faint steady hiss and short clicks seen in one recording are
+  not explained by this fix.
 - EFT's own sound bundle has no impact sounds for the Books and CardBoard prop types, so 39
   Equator props (30 Books: shoes, books, blue cups and a road cone; 9 CardBoard: pizza boxes
   and office folders) and any props of those types on the other maps stay silent when they hit

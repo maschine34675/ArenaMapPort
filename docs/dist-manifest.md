@@ -381,7 +381,8 @@ see [spectator-shared-textures.md](progress/spectator-shared-textures.md). No pu
 This supersedes the October 28 candidate's release status and audio cap, while preserving its
 historical measurements above. Current runtime permits two spectator voices and gates output
 readback behind DeveloperMode. The late owned-scene collision guard is included in the final client.
-The native sweep passed its bounded checks; intermittent noise and missing Books impacts remain open.
+The native sweep passed its bounded checks; intermittent noise and missing Books impacts remain open (2026-10-30: the noise has a found and fixed cause, see
+[equator-noise-bundle-block.md](progress/equator-noise-bundle-block.md); the Books impacts remain open).
 
 The existing multipart packer partitions the current 255 distribution files as core 153, Equator 24,
 Bay5 30, Air Pit 22 and Bowl 26. Core holds the 123 shared PNGs and their manifest plus 13 original
@@ -406,7 +407,7 @@ core 153, Equator 24, Bay5 30, Air Pit 22, Bowl 26) and no hash or size is asser
 "AirPit" because DynamicMaps' folder is `ArenaMapPort_AirPit`), the multi-part text tells a player upgrading from 0.3.0 to
 delete `BepInEx/plugins/maschine-ArenaMapPort/parts/full.json` (the manifest of the former single ZIP, which the five parts
 do not replace; the single-ZIP layout ships that file and says nothing of the kind), and the known audio limits name both
-prop types without an impact bank in EFT's own sound bundle (Books and CardBoard, 39 Equator props) and the context of the
-noise report. Any core ZIP built before this change carries the old README.txt and has to be rebuilt, with its hash. The
+prop types without an impact bank in EFT's own sound bundle (Books and CardBoard, 39 Equator props) and, since 2026-10-30, the
+Equator static (a cause found and fixed, measured, not yet listened to) instead of the context of the noise report. Any core ZIP built before this change carries the old README.txt and has to be rebuilt, with its hash. The
 release note `docs/releases/v0.4.0.md` keeps placeholders (build commit, VirusTotal block, crowd loading time) that the cut
 fills in. See [release-preparation-20261029.md](progress/release-preparation-20261029.md).

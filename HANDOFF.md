@@ -21,13 +21,15 @@ Two local candidates exist:
   reinstall texts, claims beyond the records, no VirusTotal scan).
 - The **corrected candidate** is `52c8a28` plus the commit that carries the release texts of the 2026-10-29 evening (commits `694143d`,
   `8941caa`, `52c8a28`): crowd worker with CNG hashing, the NoiseProbe diagnostic (it arms on a stereo driver under a 5.1 speaker mode since
-  `52c8a28`), five-part texts, hedged release notes. `52c8a28` had its **host run on GPU-2 on 2026-10-29 (20:55-21:08)**: four plain PMC raids
+  `52c8a28`; its Capture ring follows the 2 channels of the filter tap since `36a6d12`), five-part texts, hedged release notes. `52c8a28` had its **host run on GPU-2 on 2026-10-29 (20:55-21:08)**: four plain PMC raids
   without bots, one per map, and the hideout once; the crowd build takes 2.08-2.16 s on the main thread (`fe45b84`: 4.68-4.70 s), 0 ArenaMapPort
   warnings or errors (numbers in the update below; the user's MASCHINE11 log of the 16:41 build reads 2.12-2.20 s on Equator too), so README, FORGE,
-  CHANGELOG and the release note say "about two seconds". Their Known-limitations sentence on the Equator noise says that the user heard it again on
-  2026-10-29 in a plain PMC raid with the shipped two-voice schedule (the ZIP README written by the packer still carries the old wording, see the open
-  list below). Not covered: bots, and listening to anything.
-- **The release build is `a4aa0af`** (the texts commit on top of `52c8a28`; no code change against `52c8a28`): both DLLs rebuilt from it
+  CHANGELOG and the release note say "about two seconds". Their Known-limitations sentence on the Equator noise said on 2026-10-29 that the user heard it
+  again in a plain PMC raid with the shipped two-voice schedule (the ZIP README written by the packer still carried the old wording then; changed
+  2026-10-30: all of these texts now say that a cause of the static was found and fixed, measured and not listened to, see the Equator noise paragraph
+  below). Not covered: bots, and listening to anything.
+- **The release build is `a4aa0af`** (cut and scan superseded 2026-10-30, see the Equator noise paragraph below; the texts commit on top of `52c8a28`; no
+  code change against `52c8a28`): both DLLs rebuilt from it
   (client SHA-256 `18c197197086e9df6fc7b6eb429a5790acdf179c2a7a4ecd56055067606715f7`, server
   `f415a2e1ae2044d3d48c3e4a5694a752860c109b3bdab558fc9319436a5ab372`, ProductVersion `0.4.0+a4aa0af...`), deployed to the `D:\SPT41` mirror at
   22:03, one more Equator raid on GPU-2 at 22:06 (instance `6b8bf6e7`, bots None, `NoiseProbe` set Off for the process; DeveloperMode stayed on in the
@@ -36,39 +38,68 @@ Two local candidates exist:
   `work/releases/0.4.0/github-a4aa0af` (packer log `work/releases/0.4.0-make-a4aa0af.log`: extract-check 255 files identical to dist, RELEASE_ZIPS_BUILT;
   part hashes in its `maschine-ArenaMapPort-0.4.0.sha256`: core `1f8c7d61...`, equator `13973b86...`, bay5 `898b7813...`, airpit `0125f5a4...`, bowl
   `750a0c51...`) and the VirusTotal scan of both DLLs (`work/releases/0.4.0-vt-a4aa0af.log`, `work/releases/0.4.0/virustotal.json`: 0 malicious, 0
-  suspicious of 75 engines each, 21:08:56Z and 21:10:38Z). docs/releases/v0.4.0.md carries the build commit and the VirusTotal lines; the cut
-  `work/releases/0.4.0/github-8941caa` and the `8941caa` scan are **superseded**. The ZIP README of the packer says the noise was heard again on a test
-  build with the two-voice schedule (reworded in `a4aa0af`).
+  suspicious of 75 engines each, 21:08:56Z and 21:10:38Z). docs/releases/v0.4.0.md carried the build commit and the VirusTotal lines (changed
+  2026-10-30: placeholders again); the cut
+  `work/releases/0.4.0/github-8941caa` and the `8941caa` scan are **superseded**. The ZIP README of the packer said the noise was heard again on a test
+  build with the two-voice schedule (reworded in `a4aa0af`; changed 2026-10-30: it names the fix of the Equator static now).
 
 Neither the `fe45b84` package nor `github-a4aa0af` has been uploaded or covered by the final ArenaMode/Redeploy executable scans.
 Recheck current source/package identity and security scans before any later authorized
 publication, and publish only a package whose manifests pin the commit it was built from.
-Audio limits remain open.
+Books/CardBoard impact sounds and listening remain open. Read the two bullets above as the state of 2026-10-29: since 2026-10-30 the Equator noise texts, the packer's README sentence
+and the build lines of v0.4.0.md are changed as the Equator noise paragraph below says, and `github-a4aa0af` is superseded.
 
-**Equator noise: cause found offline late on 2026-10-29; the fix is in the pipeline, host verification and the user's ear are pending.** The loud
+**Equator noise: cause found offline late on 2026-10-29; the repair is staged, validated and deployed and was host-verified by numbers on GPU-2 on
+2026-10-30 (nobody has listened); the user's ear, three decisions, the new cut and the DLL rebuild are open.** The loud
 static of the user's capture `noise-20261029-203147-mark1.wav` is not generated at run time. Block 6657 of the plaintext
-`work/build/full/arena_equator_scenes.bundle` has the LZ4HC flag but csize == usize (131,072 B); Unity's player takes it as stored, so the
-compressed bytes come out of the ambient clip `moll_indoor_wind_04` (player `indoor_wind (4)`) as a 4.5 s burst of static every wind cycle. UnityPy's
+`work/build/full/arena_equator_scenes.bundle` had the LZ4HC flag but csize == usize (131,072 B); Unity's player takes it as stored, so the
+compressed bytes came out of the ambient clip `moll_indoor_wind_04` (player `indoor_wind (4)`) as a 4.5 s burst of static every wind cycle. UnityPy's
 `chunk_based_compress` wrote it (`>` where `>=` is needed), called from the mandatory identity patch. **The public 0.3.0 Equator bundle (identical to
-`dist`) and the local 0.4.0 packages (`fe45b84`, `github-a4aa0af`) carry the defect**; Bay5, Air Pit and Bowl do not. No mix default or config key
-changes; the DLLs stay as built. The pipeline change (corrected compressor in `patch_monoscript_identity.py`, `tools/bundle/fix_stored_blocks.py`,
-`tools/validate/validate_bundle_blocks.py` in `build_all.ps1` and `validate_distribution.py`, `tools/tests/test_bundle_blocks.py`) comes with the
-record [equator-noise-bundle-block.md](docs/progress/equator-noise-bundle-block.md). Remaining steps, in this order:
+the pre-repair `dist` file) and the local 0.4.0 packages (`fe45b84`, `github-a4aa0af`) carry the defect**; Bay5, Air Pit and Bowl do not. No mix
+default or config key changes and no code change belongs to the fix. The pipeline change (corrected compressor in `patch_monoscript_identity.py`,
+`tools/bundle/fix_stored_blocks.py`, `tools/validate/validate_bundle_blocks.py` in `build_all.ps1` and `validate_distribution.py`,
+`tools/tests/test_bundle_blocks.py`) comes with the record [equator-noise-bundle-block.md](docs/progress/equator-noise-bundle-block.md), whose
+"Host verification" holds the table and the log quotes.
 
-1. Repair the plaintext `work/build/full/arena_equator_scenes.bundle` (0.6 s, same size; `fix_stored_blocks.py --check` must then report no block).
-2. Re-stage with a Release client build WITHOUT `ArenaMapPortDllOnly` (`K_map` exists, no `--create-key`; the output is deterministic, only chunk 0 and
-   the chunk holding file offset 553,666,425 change, no key file changes).
-3. `validate_distribution.py`, `validate_bundle_blocks.py` and `validate_port.py --distribution` (ENC must be exactly the encryption of PLAIN).
-4. Deploy with EFT closed (`deploy-to-spt.ps1 -SptRoot 'D:\SPT41' -Confirm` after a dry run; one 577 MB file; restart EFT afterwards, no server restart),
-   and run the GPU-2 before/after by numbers (recipe in the record's "Host verification"; the "before" raid needs the bundle that is deployed now, so it
-   runs before the deploy, or the user's captures stand as the positive control).
-5. Re-cut the 0.4.0 package: the Equator part and the checksum file change, the other parts carry no changed file; refresh the hashes in
-   `docs/releases/v0.4.0.md` and the packer log.
-6. Texts: replace the four `[AFTER HOST RUN: the Equator static: cause and fix sentence]` placeholders (CHANGELOG.md "Fixed", README.md and FORGE.md and
-   docs/releases/v0.4.0.md "Known limitations") and rewrite the "remains unresolved" limitation sentences next to them and in the packer's README.
-7. User decisions: whether the public 0.3.0 gets a 0.3.1 that replaces only the Equator scenes bundle (577 MB, same key, no code change), and whether
-   the 3.6 s static (WAV t 6.0-9.7 s) is the "Rauschen" he meant (two other sounds in that capture stay open: the faint steady hiss and the
-   boosted near wind bed; the click bursts are not explained by this defect).
+**Done (lead, 2026-10-29 23:16 to 2026-10-30 00:29; GPU-2 times are the host's local clock).** Positive control on the then-deployed (defective) bundle, 2026-10-29 23:16-23:19:
+the mark of 23:18:50 reads ON 1,581 ms of 12,000 (longest run 141 ms) and a second-difference comb at 8621.0 Hz (+40.1 dB) = 8000 x 1.0776; the
+user's capture reads ON 1,903 ms, 169 ms and 7246.5 Hz (+40.3 dB) = 8000 x 0.9058: the static reproduces from the dist bundle. Repair:
+`tools/bundle/fix_stored_blocks.py` on the plaintext (block 6657 flags 0x3 -> 0x0, size 577,488,350 unchanged, verified; the backup
+`arena_equator_scenes.bundle.pre-repair-20261029` stays beside it and fails `--check`; `--check` reports `BLOCKS_OK` on the four scenes bundles),
+a Release client build without DllOnly at 00:19 (client DLL built from `f32eba5`, ProductVersion `0.4.0+f32eba5...`, sha256 prefix `ab5e5469`; staging gate
+`BUNDLE_BLOCKS_OK` for 12 bundles, all 12 re-staged encrypted and deterministic: of the 12 bundles only the Equator scenes bundle differs from what the
+mirror held), `validate_distribution.py` `DISTRIBUTION_OK` (4 maps, 12 bundles) and
+`BundleCrypt verify` (the dist Equator scenes bundle is exactly the encryption of the repaired plaintext, 1784 ms, CNG). Deploy at 00:22 (EFT closed by
+`gpu-run deploy-wait --server --game`, 3 files identical on the host after 117 s: the Equator scenes bundle, the client DLL and the server DLL, which was already on the host unchanged, `0.4.0+f8ed4ca`), EFT instance `129dcc48` from 00:25:50. Negative control 00:26-00:29
+(plain PMC, bots None, 12:00, clear, the same spot): `[Bundles] loaded 'arena_equator/arena_equator_scenes.bundle' ... (577488350 bytes plaintext,
+encrypted AMPB v1, 551 chunks)`, key derived in 5 ms (the session's BepInEx log `LogOutput-SPT-GPU-2-2026-10-30_00-25-41.log` (18,684 lines) holds 0 Warning or Error lines from maschine-ArenaMapPort; its only Error line is Unity's known `Coroutine couldn't be started because the the game object 'MenuScreen' is inactive!` at 00:29:19, on leaving the raid); six marks over 71 s without a gap (00:27:43-00:28:54) in which two plays of
+`indoor_wind (4)` carried the formerly defective clip region into the windows of marks 1 and 5: ON 2, 5, 29, 0, 2 and 73 ms (longest runs 1-5 ms),
+no comb above +15 dB. Two limits of that result: the recipe's +10 dB comb bar was exceeded by residues shorter than 10 ms (6504-7800 Hz at +6..+15 dB)
+while the +30..+40 dB fingerprint of the defect is absent, and the least-squares fit (R2) of the raw-block model was not done. The static's fingerprint
+is gone with the repaired bundle. **Nobody has listened**: the texts say that a cause was found and fixed, measured and not listened to. Tests: xunit
+2,619 pass, Python 2,430 pass (63 skipped, `PYTHONUTF8=1`). The NoiseProbe needed two fixes on this stereo-driver host,
+`52c8a28` (Detect reads the device channels, the armed line says `ch=2/6`) and `36a6d12` (the filter tap delivers the device format as well, 2
+channels, so the Capture ring adopts the count and an empty ring is reported as empty); its captures carry the evidence before and after.
+
+**Texts (the commit that carries this paragraph).** The four `[AFTER HOST RUN: ...]` placeholders are replaced and the limitation paragraphs of README.md,
+FORGE.md, CHANGELOG.md and docs/releases/v0.4.0.md rewritten (a cause of the static found and fixed, measured, not listened to; a faint steady hiss and
+short clicks seen in one recording are not explained by it; 0.3.0's Equator bundle carries the defect), the packer's README sentence and its pin
+(`test_the_readme_names_both_missing_impact_banks_and_the_equator_static`) reworded, the records and AGENTS.md updated. In v0.4.0.md the "Built from
+commit" and VirusTotal lines are placeholders again (`<BUILD_COMMIT>`, `<scan date>`, `<VirusTotal URL>`, `<n>`), because the DLLs are rebuilt and
+rescanned. The CHANGELOG heading and the date line of v0.4.0.md still read 2026-10-29 and are re-dated at publication (the static evidence is from
+2026-10-30).
+
+**Open, in this order (publication stays postponed, see the top of this file: no tag, upload or push until the user reauthorizes it):**
+
+1. Rebuild both DLLs from the commit that carries these texts and scan them again on VirusTotal; the `a4aa0af` DLLs and their scan (0 malicious, 0
+   suspicious of 75 engines) are superseded. Fill the placeholders of v0.4.0.md afterwards.
+2. Cut the five-part package again from that commit (the Equator part and the core part change, the Equator scenes bundle and both DLLs, and so does the checksum
+   file) and run the extract-check; refresh the hashes in `docs/releases/v0.4.0.md` and the packer log. The `github-a4aa0af` cut is superseded.
+3. User decisions: (a) whether the 3.6 s static (WAV t 6.0-9.7 s) is the "Rauschen" he meant (the data say yes with about 0.9; two other sounds in that
+   capture stay open, the faint steady hiss and the boosted near wind bed; the click bursts are not explained by this defect), and his ear on one playing
+   session of Equator as the remaining confirmation; (b) whether the public 0.3.0 gets a 0.3.1 that replaces only the Equator scenes bundle (577 MB, same
+   key, no code change); (c) the repair instead of a rebuild: the lead repaired the plaintext in place (reviewable, the decoded stream hashes identical,
+   and the pipeline step does the same on a rebuild) instead of the 15-minute Unity rebuild.
 
 ## Update 2026-10-29 (evening) - 0.4.0 audit, fixes, Equator noise investigation (committed 694143d, 8941caa, 52c8a28; host run of 52c8a28 done 20:55-21:08)
 
@@ -155,7 +186,7 @@ armings, which answers neither question 1 (whether it also occurs with the calls
 paragraph; pointer appended to [spectator-audio.md](docs/progress/spectator-audio.md)), and the table of hypotheses above stays as the record of what
 was believed before.
 
-**Equator noise: cause found (late evening, offline; host verification pending).** The loud static in `noise-20261029-203147-mark1.wav` (WAV t
+**Equator noise: cause found (late evening, offline; host-verified by numbers on 2026-10-30, see the top of this file).** The loud static in `noise-20261029-203147-mark1.wav` (WAV t
 6.0-9.68 s; the chopped part 8.727-9.6805 s is what he reacted to, the mark came 0.32 s after it ended) is not a run-time artefact: it is bytes of the
 LZ4-compressed Equator scenes bundle played as PCM by `indoor_wind (4)`. Block 6657 of 6,943 of `work/build/full/arena_equator_scenes.bundle` (plaintext,
 577,488,350 B; file bytes [553,666,425, 553,797,497)) carries the LZ4HC flag with csize == usize == 131,072, Unity's player evidently treats it as
@@ -166,7 +197,9 @@ PCM with R2 0.93; the dead stop at the block end only 0.7 ms off the prediction.
 exactly the chunk size keeps the compressed flag; our `patch_monoscript_identity.py` re-saves through it. The probe recorded it but could not name it (the
 ring logs `isPlaying` edges of owned one-shots, the detector keys on transients, the census counts pooled sources). Open and separate: a steady hiss at
 -47 dBFS in that capture, the click bursts, the boosted near wind bed. Record with all numbers, the repair, the validator and the recipe:
-[equator-noise-bundle-block.md](docs/progress/equator-noise-bundle-block.md). The ordered remaining steps are at the top of this file.
+[equator-noise-bundle-block.md](docs/progress/equator-noise-bundle-block.md). Host verification followed on 2026-10-30: the repaired bundle was staged, validated and deployed, the static reproduced from the
+defective bundle (ON 1,581 ms) and read 0-73 ms after the repair, measured and not listened to; the probe captured on the stereo-driver host only after
+`52c8a28` and `36a6d12`. What is done and what is open is at the top of this file.
 
 **NoiseProbe (developer-only, default Off; unit-tested; first host runs on the evening of 2026-10-29, results below).** Keys in the section
 `Audio diagnostics`, all honoured only with DeveloperMode, all live: `NoiseProbe` (`Off|Detect|Capture`),
@@ -216,20 +249,22 @@ rebuilt from `52c8a28` (client SHA-256 `c052926a3e7373cb40d47bc7344fc753dd820e95
 
 - **Host run: done for `52c8a28`** (results in the checklist above; 4 plain PMC raids without bots, the hideout once, 0 ArenaMapPort warnings or errors).
   GPU-2 is runnable again: the SPT server of the 16:45 blockage (ArenaMode's recovery state, not an ArenaMapPort matter) starts, ArenaMapPort 0.4.0 is
-  loaded and Arena 0.6.1.0.48206 verified. What it did not cover: bots, listening. The release DLLs are a later rebuild (bullet "Release DLLs and package").
+  loaded and Arena 0.6.1.0.48206 verified. What it did not cover: bots, listening. The Capture tap was read at 23:16 the same evening: on this stereo-driver host it delivers the 2 device channels, and `36a6d12`
+  makes the ring adopt that count. The release DLLs are a later rebuild (bullet "Release DLLs and package").
 - **Placeholders** in the release texts: `<CROWD_LOAD_SECONDS>` is filled ("two", CHANGELOG.md, README.md, FORGE.md twice, docs/releases/v0.4.0.md);
   `<BUILD_COMMIT>` (`a4aa0af`), the scan date and the VirusTotal lines of v0.4.0.md are filled after the rebuild and the scan (top of this file).
   New: `[AFTER HOST RUN: the Equator static: cause and fix sentence]` in CHANGELOG.md, README.md, FORGE.md and docs/releases/v0.4.0.md, to be replaced by the lead
-  after the GPU-2 before/after run; until then the "remains unresolved" limitation sentences stay.
+  after the GPU-2 before/after run; until then the "remains unresolved" limitation sentences stay. **2026-10-30:** replaced and rewritten (top of this file).
 - **Release DLLs and package: done for `a4aa0af`** (top of this file): rebuilt, deployed, one Equator raid at 22:06 (`NoiseProbe` Off for the process;
   DeveloperMode stayed on in the host .cfg, as in every acceptance run, so a run without it is still unmeasured), the five-part cut
   `work/releases/0.4.0/github-a4aa0af` with extract-check, VirusTotal 0/0 of 75 for both DLLs.
 - **ZIP README sentence:** `tools/release/make_release_zips.py` ("Known audio limits") still says the Equator noise was reported "on development builds with a
   denser crowd-call schedule than this release uses", and `tools/tests/test_release_zips.py` pins that phrase
-  (`test_the_readme_names_both_missing_impact_banks_and_the_noise_context`). The user heard the noise again with the shipped schedule, so reword both before the
-  cut (tools/ was outside this docs commit). Once the cause is verified on the host, that sentence also names it (the bracketed placeholders, top of this file).
+  (`test_the_readme_names_both_missing_impact_banks_and_the_noise_context`, renamed `..._and_the_equator_static` on 2026-10-30). The user heard the noise again with the shipped schedule, so reword both before the
+  cut (tools/ was outside this docs commit). Once the cause is verified on the host, that sentence also names it (the bracketed placeholders, top of this file). **2026-10-30:** reworded and re-pinned (top of this file).
 - **Equator bundle repair and re-cut:** the Equator scenes bundle of every package so far carries the defective block (cause found, top of this file); repair,
-  re-stage, validate, deploy, host before/after, re-cut and the 0.3.1 decision are the ordered steps there.
+  re-stage, validate, deploy, host before/after, re-cut and the 0.3.1 decision are the ordered steps there. **2026-10-30:** repair through host before/after are done;
+  the re-cut, the DLL rebuild with its scan and the user's decisions are open (top of this file).
 - **The user's answers** to the questions above: only the captures of the late evening so far (Capture twice, four captures, analysed: the cause is the bundle
   block above; a pointer is appended to spectator-audio.md); questions 1 and 2 are open. Then the NoiseProbe sessions (recipe P0-P3 in spectator-audio.md; P0 is done in part, with the
   calibration caveat of the self-test: calibrate the thresholds on the first minutes, P1, before counting orphans).

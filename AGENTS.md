@@ -156,7 +156,7 @@ The corrected candidate is `52c8a28` plus the commit that carries the release te
 that arms on a stereo driver, five-part texts after the release audit). `52c8a28` had its host run on GPU-2 (20:55-21:08: four plain PMC raids without bots,
 the hideout once; crowd build 2.08-2.16 s on the main thread, 0 ArenaMapPort warnings). The release build is `a4aa0af` (the texts commit, no code
 change): both DLLs rebuilt from it, deployed, one more Equator raid on GPU-2 at 22:06, the five-part cut `work/releases/0.4.0/github-a4aa0af`
-(extract-check 255 files identical) and VirusTotal 0/0 of 75 for both DLLs. The `github-8941caa` package and its VirusTotal lines are superseded;
+(extract-check 255 files identical) and VirusTotal 0/0 of 75 for both DLLs (that cut and scan are superseded since 2026-10-30, see below). The `github-8941caa` package and its VirusTotal lines are superseded;
 the `fe45b84` package is the earlier host-verified fallback (see HANDOFF.md). Nothing is tagged, uploaded or pushed.
 
 The 2026-10-29 user-authorized 0.4.0 GitHub release uses the existing multipart packer form:
@@ -164,12 +164,15 @@ core plus Equator/Bay5/AirPit/Bowl, all five ordinary ZIPs extracted into the sa
 The full distribution has 255 files after shared spectator texture staging. The October 28 single
 candidate ZIP is obsolete. Preserve historical notes below and use
 [release-preparation-20261029.md](docs/progress/release-preparation-20261029.md) for the current cut.
-Intermittent Equator noise and missing Books and CardBoard impact sounds remain documented limitations. For the noise the cause is found
+Missing Books and CardBoard impact sounds remain a documented limitation. The intermittent Equator noise has its cause found
 (one compressed-flag block of Equator's scenes bundle that Unity plays raw, [equator-noise-bundle-block.md](docs/progress/equator-noise-bundle-block.md))
-and the fix is in the pipeline (corrected chunk compressor, repair step, `validate_bundle_blocks.py`); host verification and the user's ear are
-pending, so it stays a limitation in the texts until then. **The Equator scenes bundle of 0.3.0 and of the local 0.4.0 packages (`fe45b84`,
-`github-a4aa0af`) carries the defective block**; the 0.4.0 package is to be re-cut after the repair (the Equator part and the checksum file change; the
-DLLs stay as built, no key file changes). Whether the public 0.3.0 gets a 0.3.1 with only that bundle replaced is the user's decision.
+and its fix in the pipeline (corrected chunk compressor, repair step, `validate_bundle_blocks.py`); it is host-verified by numbers on 2026-10-30 (GPU-2:
+the static's fingerprint is gone with the repaired bundle, ON 1,581 ms before against 0-73 ms after; the recipe's +10 dB comb bar was exceeded by
+residues shorter than 10 ms and the R2 fit was not done, see the record), and the texts say that a cause was found and fixed, measured and not
+listened to. The user's ear is what stays open. **The Equator scenes bundle of 0.3.0 and of the local 0.4.0 packages (`fe45b84`,
+`github-a4aa0af`) carries the defective block**; the repaired bundle is staged and deployed, and the 0.4.0 package is to be re-cut from the commit that
+carries the texts (the Equator part, the core part and the checksum file change; both DLLs are rebuilt and rescanned; no key file changes). Whether
+the public 0.3.0 gets a 0.3.1 with only that bundle replaced is the user's decision.
 
 Logging: Info is reserved for a concise startup/map-availability summary or actionable
 player information. Successful patches/repairs, counts, file paths, configuration and
@@ -739,7 +742,7 @@ the log; the user uses it to point at things.
   shared PNGs on the main thread of every raid (CNG: about 1 GiB/s). `SpectatorWorkerSourcePinTests` pins the worker rules (no Unity API, no log,
   `Install()` once, `Create` starts and takes the package inside its try), `SpectatorLoadTests` the package and prefetch.
 - NoiseProbe (2026-10-29, `694143d`; [spectator-audio.md](docs/progress/spectator-audio.md) "NoiseProbe diagnostic"; unit-tested; run on GPU-2 on
-  2026-10-29 21:00 (arming, self-test, a minute line) and by the user on MASCHINE11 (Capture, four captures; analysed, the cause was a bundle block, see
+  2026-10-29 21:00 (arming, self-test, a minute line; Capture at 2026-10-29 23:16 and 2026-10-30 00:27 for the before/after of the bundle repair) and by the user on MASCHINE11 (Capture, four captures; analysed, the cause was a bundle block, see
   the "UnityFS blocks" entry below)): developer-only
   (`Audio diagnostics/NoiseProbe` `Off|Detect|Capture` plus five more keys, none public, all honoured only with
   DeveloperMode). Off must cost one static bool read per tap: every tap in the owned audio code (`SpectatorAudio`, `Bay5AmbientAudio`,
@@ -750,16 +753,19 @@ the log; the user uses it to point at things.
   rules and `NoiseProbe.Install()` directly after `SpectatorAudio.Install()` in `Plugin.cs`. `AudioListener.GetOutputData` reads the DEVICE output, not the 5.1 mix: on
   GPU-2 (SurroundAudio logs driver Stereo and requests Mode5point1) the 0-based channels 2-5 (the third to the sixth) throw `ArgumentException: invalid channel`, so `ReadAudioFormat` probes the channels
   once (`ReadableChannels`), `Read` loops over `_readChannels`, arming fails only when channel 0 is refused and the armed line prints `ch=2/6` when the read and
-  mix counts differ (the Capture tap still records every mix channel; build `8941caa` logged "the probe cannot arm" there). The self-test is background-relative: PEAK
+  mix counts differ (build `8941caa` logged "the probe cannot arm" there; what the Capture tap delivers is in the last sentence of this entry). The self-test is background-relative: PEAK
   needs 15 dB over the baseline peak, so on the Equator spawn with the calls on (background peak about -37 dBFS) only the -18 dBFS burst passes, 1/4 on GPU-2 (two
   device channels read). The -36 dBFS burst is below the 0.03 peak floor and misses at any background level; the 3/4 was designed on a -60 dBFS bed (by the peak criterion alone, -24 and -30 dBFS
-  need a baseline peak of about -43 and -45 dBFS or quieter). Read a MISS line's `background peak` before calling the probe blind.
+  need a baseline peak of about -43 and -45 dBFS or quieter). Read a MISS line's `background peak` before calling the probe blind. The `OnAudioFilterRead` tap delivers the device format too (2 channels on GPU-2, not the 6 mix
+  channels the ring was sized for): since `36a6d12` the Capture ring adopts the count the tap reports (`the filter tap delivers 2 channel(s) under speaker mode
+  Mode5point1; ring re-created`) and an empty ring is reported as empty, where `52c8a28` ended every mark of that host in "the capture ring was overwritten
+  during the copy; nothing written".
 - IndoorFloorSmoothness classification freeze (pre-existing, seen again 2026-10-29): `IndoorFloorSmoothnessRepairs.Classify` runs on the main thread
   about 10 s into every raid and blocks it for 2-3 s on Air Pit and Bowl (GPU-2 log of 14:34: 2,593 ms Air Pit, 3,130 ms Bowl; 21:04-21:05 on `52c8a28`: 1,815 and 2,936 ms; older logs 1,755-3,006 ms).
   It is logged at Debug as `[IndoorSurface] map=... elapsedMs=`. It is not the crowd and not a regression of a given build; a candidate for a worker or
   a time-sliced scan, and the first thing to rule out when a raid shows a hitch about 10 s after its start.
 - UnityFS blocks (2026-10-29, [equator-noise-bundle-block.md](docs/progress/equator-noise-bundle-block.md); cause found offline from the user's NoiseProbe
-  captures, fix not host-verified yet): a block whose compression flag is set but whose csize == usize is played RAW by Unity's player (inferred from the
+  captures, fix host-verified by numbers on GPU-2 on 2026-10-30, not listened to): a block whose compression flag is set but whose csize == usize is played RAW by Unity's player (inferred from the
   data, R2 0.92, not read from Unity's source), so the LZ4 token stream reaches whatever reads that range. In Equator's scenes bundle it was block 6657 of
   6,943 (131,072 B, flags 3), inside the AudioClip `moll_indoor_wind_04`: a 4.5 s burst of full-scale static every wind cycle from `indoor_wind (4)`, the
   intermittent Equator "Rauschen". The public 0.3.0 bundle and the local 0.4.0 packages carry it; Bay5, Air Pit and Bowl have no such block, but blocks

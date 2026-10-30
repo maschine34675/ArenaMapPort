@@ -59,7 +59,8 @@ visible. Existing Unity missing-script/LOD/attachment warnings and optional
 Fika/Harmony startup warnings were preserved. The final Bowl run had seven such
 startup warnings and no Error/Fatal. No global logging filter was changed.
 
-The previously reported intermittent noise remains unresolved. This change does
+The previously reported intermittent noise remains unresolved (superseded 2026-10-30: its cause is a compressed bundle block, fixed and
+host-verified by numbers, see [equator-noise-bundle-block.md](equator-noise-bundle-block.md)). This change does
 not alter playback order, clips, filters or gain to guess at its cause. The old
 October 28 ZIP is still outdated; native smoke checks do not publish a release.
 Evidence is local in the ArenaMode checkout under

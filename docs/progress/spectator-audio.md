@@ -212,6 +212,8 @@ when those sessions allow it, verify the new DLL hash, and restart EFT before a 
 
 ## Intermittent noise investigation — 2026-10-28 (unresolved)
 
+*Superseded late on 2026-10-29: the cause is a compressed bundle block, fixed and host-verified by numbers on 2026-10-30, see [equator-noise-bundle-block.md](equator-noise-bundle-block.md).*
+
 The user reported a short intermittent noise newly noticed after spectator calls were added,
 with no established relation to a call start/end. The identified session is Equator TDM on
 MASCHINE11, `LogOutput-MASCHINE11-2026-10-28_19-26-57.log`. It loaded the development client
@@ -383,7 +385,7 @@ line's `tap=` also proves (or refutes) that the `OnAudioFilterRead` tap on the l
 stay with Detect.
 
 **Capture.** A `NoiseTap` component on the `AudioListenerConsistencyManager` object (it must carry the `AudioListener`, else Capture stays off
-with one Warning) keeps the last 15 s as PCM16 in a preallocated ring (6 channels at 48 kHz: 8.6 MB). `OnAudioFilterRead` allocates nothing, takes
+with one Warning) keeps the last 15 s as PCM16 in a preallocated ring (6 channels at 48 kHz: 8.6 MB; since `36a6d12` the ring is re-created at the channel count the filter tap delivers, 2 on a stereo driver). `OnAudioFilterRead` allocates nothing, takes
 no lock, calls no Unity API, and a catch-all switches it off; it also records the largest gap between callbacks. A mark (or an ORPHAN
 MID/CLICK burst, at most 3 per raid) exports 12 s (10 s before, 2 s after) from a thread-pool task: canonical 44-byte header,
 `noise-<yyyyMMdd-HHmmss>-mark<n>.wav` (`-auto<n>` for bursts) plus a `.txt` with the log block, in `BepInEx/logs/ArenaMapPort-noise/`
@@ -419,9 +421,16 @@ the managed fallback when CNG is unavailable) instead of `SHA256.Create()`; the 
 DeveloperMode. `SpectatorAudio.Current` (the live crowd) and `Bay5AmbientAudio.MixSummary()` / `RoomShotAcoustics.IsOn()` were added for the probe's
 armed line and census. Voices are released through `BetterSource.Release()` exactly as before unless `NoiseProbeSpectatorFade` is on.
 
+**Stereo-driver fixes and the evidence (2026-10-30).** On the stereo-driver GPU-2 the probe needed two fixes, both committed: `52c8a28` (`AudioListener.GetOutputData`
+refuses the channels 2-5, so Detect reads the device channels and the armed line says `ch=2/6`) and `36a6d12` (the `OnAudioFilterRead` tap delivers the
+device format as well, 2 channels instead of the 6 mix channels, so the Capture ring adopts the count the tap reports and an empty ring is reported as empty
+instead of "overwritten"); with both, its Capture WAVs carry the evidence for the Equator static before and after the bundle repair (ON 1,581 ms against 0-73 ms,
+measured, not listened to), see [equator-noise-bundle-block.md](equator-noise-bundle-block.md) "Host verification".
+
 ## Investigation 2026-10-29 (lead): ranked hypotheses
 
-The cause of the intermittent Equator noise is **not identified**. The lead ran a 39-agent investigation (with skeptic review) on top of the
+The cause of the intermittent Equator noise is **not identified** (superseded late on 2026-10-29: it is the bundle block of
+[equator-noise-bundle-block.md](equator-noise-bundle-block.md), fixed and host-verified by numbers on 2026-10-30). The lead ran a 39-agent investigation (with skeptic review) on top of the
 reports above. No audio fault is logged in any of the 12 MASCHINE11 sessions examined, which does not rule out an audible
 glitch (see 2026-10-28). After the skeptics, no hypothesis stands above about 25 %; the weights are the investigation's subjective estimates, not
 measurements. What would separate them is the NoiseProbe (section "NoiseProbe diagnostic (2026-10-29)" above: keys, log lines, host recipe P0-P3,
@@ -467,8 +476,8 @@ SurroundAudio logs `Driver capabilities: Stereo` and `Speaker mode requested: Mo
 the unverified assumptions above (`GetOutputData` on channels 2-5 without a Unity error) with no, on a stereo device; on the user's 5.1 driver (`driver=Mode5point1
 ch=6`, below) all six channels were read and his log holds no `GetOutputData` error. `52c8a28` fixes the stereo case: `ReadAudioFormat` probes the channels once
 (`ReadableChannels`), `Read` loops over `_readChannels`, arming fails only when channel 0 is refused, and the armed line prints `ch=2/6` when the read and the
-mix channel counts differ (the sample armed line in the log-line block above still shows the 5.1-driver form `ch=6`). The Capture tap still records all mix
-channels. xunit: 2,619 tests pass, 56 of them NoiseProbe tests.
+mix channel counts differ (the sample armed line in the log-line block above still shows the 5.1-driver form `ch=6`). What the Capture tap records on a stereo driver
+is in "Stereo-driver fixes and the evidence" (2026-10-30, above): the filter tap delivers the device format, not the mix channels. xunit: 2,619 tests pass, 56 of them NoiseProbe tests.
 
 **Host run of `52c8a28`** (lead, GPU-2; deploy 20:55, 255 files with 2 overwritten, ProductVersion `0.4.0+52c8a281cf765bcb13473104366f5a1cd06348f8`; EFT
 instance `2896f154` started 20:59:11, log `LogOutput-SPT-GPU-2-2026-10-29_20-59-01.log`; plain PMC raid on Equator at 21:00, bots None, DeveloperMode on, the
@@ -542,4 +551,4 @@ pooled sources, while this is a continuous plateau of one non-pooled looping pla
 right area, an owned Equator ambient player at the port's boosted range, but not the mechanism; the others are refuted for this static. The whole story
 with its numbers, the UnityPy origin (`chunk_based_compress` writes a chunk compressed when its LZ4HC output is exactly the chunk size), the repair, the
 validator, the release consequence and what stays open (the steady hiss, the click bursts, the boosted wind bed as a taste question) is in
-[equator-noise-bundle-block.md](equator-noise-bundle-block.md); its fix has not been host-verified yet and the user has not listened to a repaired build.
+[equator-noise-bundle-block.md](equator-noise-bundle-block.md); its fix was host-verified by numbers on 2026-10-30 ("Stereo-driver fixes and the evidence" above) and nobody has listened to a repaired build.

@@ -54,7 +54,10 @@ Full release note: [docs/releases/v0.4.0.md](docs/releases/v0.4.0.md).
   errors still show their specific explanation.
 - Late collisions from remaining Arena props after map teardown no longer request the already unloaded
   native sound bundle.
-- [AFTER HOST RUN: the Equator static: cause and fix sentence]
+- Equator: a cause of the intermittent short static was found and fixed. One block of the Equator scenes bundle was flagged as
+  compressed although it was stored at full size, so the game played its bytes as about four seconds of static in the indoor
+  wind clip. The bundle is repaired and every bundle is now checked for such blocks before it is staged. The Equator bundle of
+  0.3.0 carries the defect.
 
 ### Changed (internal)
 
@@ -68,8 +71,8 @@ Full release note: [docs/releases/v0.4.0.md](docs/releases/v0.4.0.md).
 - A developer-only noise probe, `Audio diagnostics/NoiseProbe` (`Off`, `Detect` or `Capture`; the key that marks "I just
   heard it" is `Audio diagnostics/NoiseProbeMarkKey`, default Pause), supports locating the intermittent Equator noise. It
   reads the output channels the audio driver delivers (two on a stereo driver under a 5.1 speaker mode) and says how many in
-  its start line. It needs `General/DeveloperMode`, adds no public setting and has been run in test raids; the intermittent
-  noise remains an open limitation.
+  its start line. It needs `General/DeveloperMode`, adds no public setting and has been run in test raids; its captures led to
+  the Equator fix listed under Fixed.
 
 ### Known limitations
 
@@ -78,11 +81,9 @@ Full release note: [docs/releases/v0.4.0.md](docs/releases/v0.4.0.md).
   The exit lamps were checked by reading their state, not by eye.
 - Equator's puddle cache and the rain-driven puddles have not been checked in game, and the splash sound has not been
   listened to on any map.
-- Intermittent short noise reported during Equator play remains unresolved; no noise fix or subjective audio-quality
-  acceptance is claimed. It was reported on development builds that allowed up to three overlapping crowd voices at twice
-  the call rate, with the SurroundAudio mod (5.1) installed. Disabling that mod's reverb helper did not remove it, and it
-  was heard again on 2026-10-29 in a plain PMC raid on a 0.4.0 test build with the shipped two-voice schedule
-  (SurroundAudio still installed); the cause is not identified.
+- The Equator static (see Fixed) no longer shows up in recordings made on the test host, but nobody has listened to the repaired
+  bundle yet; one playing session on Equator is the remaining confirmation. A faint steady hiss and short clicks seen in one
+  recording are not explained by the fix.
 - EFT's own sound bundle has no impact sounds for the Books and CardBoard prop types. On Equator 39 props (30 Books: shoes,
   books, blue cups and a road cone; 9 CardBoard: pizza boxes and office folders), and any props of those types on other
   maps, stay silent when they hit something.
