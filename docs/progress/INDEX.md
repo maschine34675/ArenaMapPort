@@ -97,6 +97,12 @@ dated state in one screen; read it before this index if you only have a minute.
   receipt, deploy mode and the integration rows; the log states what is staged and what is host-tested.
 - [bowl-source-060.md](bowl-source-060.md) — Bowl's Arena 0.5.4 spike package against the 0.6.0 native package that
   fed package v1 (2026-10-18).
+- [iceberg-release.md](iceberg-release.md) — Iceberg as the fifth map (branch `feature/iceberg`, started 2026-10-30): the four
+  surveys (CheckPoint mode, 70 staged spawn markers, three capture points, two gate groups, no crowd, no official description),
+  plan roles, the native extraction from Arena 0.6.1 (reviewed Gravel/Concrete pair and lamp-glass hit role), package v1 and
+  its contract; then sidecars, bake, host raids. Plan: [../PLAN-ICEBERG.md](../PLAN-ICEBERG.md).
+- [iceberg-source-061.md](iceberg-source-061.md) — Iceberg's Arena 0.5.4 spike package against the 0.6.1 native package v1
+  (2026-10-30): the reworked CheckPoint layout, the +9 index shift, spawn-marker churn.
 - [arena-install-check.md](arena-install-check.md) — the Arena installation requirement of release 0.2.3
   (user decision 2026-10-19, branch `release/0.2.3`): the maps are registered and served only with a verified
   Escape from Tarkov: Arena installation (launcher registry entry, executable, `ConsistencyInfo` manifest,

@@ -1,6 +1,6 @@
 <#
 .SYNOPSIS
-  Extract and build the ten parked Arena layouts, one Unity build at a time.
+  Extract and build the nine parked Arena layouts, one Unity build at a time.
 .DESCRIPTION
   Skips maps whose build outputs already pass validate_port. Existing extraction packages are reused. An incomplete extraction
   directory is never overwritten. -Rebuild rebuilds bundles from complete existing packages.
@@ -11,6 +11,9 @@
   Bowl (arena_bowl) is not built here either (PLAN-BOWL item 8, 2026-10-18): work/extract/bowl is the superseded Arena 0.5.4
   spike package and work/build/bowl is the U1 output directory, which this runner would overwrite with the spike. Bowl is built
   from work/extract/bowl-native-v2 with an explicit -PackageDir through tools/build_all.ps1 -FullMap; see docs/progress/bowl-release.md.
+  Iceberg (arena_iceberg) is not built here either (PLAN-ICEBERG item 4, 2026-10-30): work/extract/iceberg is the superseded Arena
+  0.5.4 spike package (its build moved to work/build/iceberg-spike-20260915). Iceberg is built from work/extract/iceberg-native-v<N>
+  with an explicit -PackageDir through tools/build_all.ps1 -FullMap; see docs/progress/iceberg-release.md.
   This script does not deploy to the live SPT installation.
 .EXAMPLE
   .\tools\build_remaining.ps1
@@ -21,7 +24,7 @@
 #>
 [CmdletBinding()]
 param(
-    [string[]]$Maps = @('autoservice','airpit2','prison','railwaystation','yard','iceberg','factory','custom','shoreline','woods'),
+    [string[]]$Maps = @('autoservice','airpit2','prison','railwaystation','yard','factory','custom','shoreline','woods'),
     [ValidateRange(1,86400)][int]$ReproTimeoutSeconds = 1800,
     [switch]$Rebuild,
     [switch]$Stage
@@ -29,10 +32,11 @@ param(
 $ErrorActionPreference = 'Stop'
 if ($Stage) { throw 'Additional maps are parked. -Stage cannot write them into the release (Equator, Bay5, AirPit, Bowl); omit -Stage to retain development builds in work/.' }
 $repo = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
-$allMaps = @('autoservice','airpit2','prison','railwaystation','yard','iceberg','factory','custom','shoreline','woods')
+$allMaps = @('autoservice','airpit2','prison','railwaystation','yard','factory','custom','shoreline','woods')
 if (-not $Maps.Count -or (@($Maps | Sort-Object -Unique).Count -ne $Maps.Count)) { throw 'Specify a nonempty unique map list.' }
 if ($Maps -ccontains 'airpit') { throw 'airpit is no longer built by this runner: it would use the superseded Arena 0.5.4 package work/extract/airpit. Build it from work/extract/airpit-native-v8 with an explicit -PackageDir through tools/build_all.ps1 (docs/progress/airpit-release.md).' }
 if ($Maps -ccontains 'bowl') { throw 'bowl is no longer built by this runner: it would use the superseded Arena 0.5.4 package work/extract/bowl and overwrite work/build/bowl. Build it from work/extract/bowl-native-v2 with an explicit -PackageDir and -FullMap through tools/build_all.ps1 (docs/progress/bowl-release.md).' }
+if ($Maps -ccontains 'iceberg') { throw 'iceberg is no longer built by this runner: it would use the superseded Arena 0.5.4 package work/extract/iceberg. Build it from work/extract/iceberg-native-v<N> with an explicit -PackageDir and -FullMap through tools/build_all.ps1 (docs/progress/iceberg-release.md).' }
 foreach ($stem in $Maps) { if ($stem -cnotin $allMaps) { throw "Unknown additional map: $stem" } }
 
 Push-Location -LiteralPath $repo
