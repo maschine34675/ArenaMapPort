@@ -14,7 +14,9 @@ What it does (offline, read-only; no Unity, no host):
   2. Loads the port's collider triangles from an extracted package with the bake rules of
      BakeNavMesh.cs (`port_colliders.py`), optionally with extra `opened_barriers` paths, bake-only
      `navmesh_bake_exclusions` (PLAN-AIRPIT item 8: dropped from the sources, still active at runtime) and a
-     `navmesh_bake_layers` mask; `--descriptor tools/maps/<key>.json` applies all three.
+     `navmesh_bake_layers` mask; `--descriptor tools/maps/<key>.json` applies all three. `--doors` adds the door pose rows of the
+     map's doors sidecar, so a barrier that has rows drops only its moved parts (BakeNavMesh.ResolveOpenedBarriers); without it every
+     barrier keeps the legacy drop-all-descendants rule.
   3. Runs the column test of `walk_model.py` for every sample: blocked by a port solid? supported by a
      port floor? Twice: with Arena's agent (0.28 / 1.6, with a slack for Detour simplification), which
      lists solids Arena provably walks through, and with the port agent (0.30 / 1.7), which predicts the
@@ -87,7 +89,7 @@ ARENA_SOURCES = {
     # NavMeshSurface layers 9 / 11 / 13 / 18 / 30 (= AirPit's mask), NavMeshData placement = identity, agent radius 0.3 / height 1.7.
     # The mask excludes layer 29: the 365 LevelBorder cubes are in the port bake only through navmesh_bake_layers.
     "iceberg": ArenaSource("arena_iceberg", "sharedassets377.assets", 2, AIRPIT_ARENA_LAYER_MASK,
-                           377, "Arena_Sanatorium_CheckPoint_AI", "work/extract/iceberg-native-v1"),
+                           377, "Arena_Sanatorium_CheckPoint_AI", "work/extract/iceberg-native-v2"),
 }
 
 
@@ -665,8 +667,10 @@ def descriptor_bake_inputs(descriptor: dict) -> dict:
 def analyse(package, cfg: Config | None = None, opened_barriers=(), points=(), arena_data=DEFAULT_ARENA_DATA,
             mesh=None, cset=None, bake_rules="port", other_mesh=None, greedy_steps=12, log=print,
             bake_exclusions=(), port_layer_mask=None, assets=AIRPIT_NAVMESH[0], path_id=AIRPIT_NAVMESH[1],
-            keep_level_borders=False):
-    """`bake_exclusions` and `port_layer_mask` are the descriptor's navmesh_bake_exclusions / navmesh_bake_layers
+            keep_level_borders=False, door_rows=None):
+    """`door_rows` are the rows of the map's doors sidecar (port_colliders.load_door_rows): an opened_barriers path that has rows drops only
+    its moved subtrees, as BakeNavMesh.ResolveOpenedBarriers does (None = the legacy drop-all rule for every path).
+    `bake_exclusions` and `port_layer_mask` are the descriptor's navmesh_bake_exclusions / navmesh_bake_layers
     (as a mask): what the port bake would collect. `cfg.arena_layer_mask` stays what Arena's own surface sees.
     `assets` / `path_id` pick the NavMeshData to load when no `mesh` is given (default AirPit's). `keep_level_borders` is
     the descriptor's key of that name (Bowl, Iceberg): the layer-29 cubes are bake sources (port_colliders `keep_borders`)."""
@@ -684,7 +688,7 @@ def analyse(package, cfg: Config | None = None, opened_barriers=(), points=(), a
         f"{arena_components[0]['area_xz']:.1f} m2; {len(pts)} samples at {step} m")
     if cset is None:
         cset = pcol.load_package_colliders(package)
-    pcol.mark_barriers(cset, list(opened_barriers))
+    pcol.mark_barriers(cset, list(opened_barriers), door_rows)
     pcol.mark_bake_exclusions(cset, list(bake_exclusions))
     if bake_rules == "none":
         mask_all = np.ones(len(cset.owners), dtype=bool)
@@ -786,7 +790,7 @@ def analyse(package, cfg: Config | None = None, opened_barriers=(), points=(), a
         "arena": {"polygons": mesh.poly_count, "components": arena_components[:6], "meta": {k: v for k, v in meta.items() if k != "settings"},
                   "portal_pairs": mesh.portal_pairs, "unmatched_portal_edges": mesh.unmatched_portal_edges},
         "config": {"cell": cfg.cell, "y_step": cfg.y_step, "sample_step": cfg.sample_step, "arena_slack": cfg.arena_slack, "port_slack": cfg.port_slack, "floor_margin": cfg.floor_margin, "support_tol": cfg.support_tol,
-                   "arena_layer_mask": cfg.arena_layer_mask, "opened_barriers": list(opened_barriers), "bake_rules": bake_rules,
+                   "arena_layer_mask": cfg.arena_layer_mask, "opened_barriers": list(opened_barriers), "door_rows": len(door_rows or ()), "bake_rules": bake_rules,
                    "bake_exclusions": list(bake_exclusions), "port_layer_mask": port_layer_mask},
         "port": {"colliders": len(cset.owners), "sources": int(mask_all.sum()), "arena_mask_sources": int(mask_arena.sum()),
                  "exclusion_reasons": dict(sorted(reasons.items())), "triangles": int(len(cset.tris)),
@@ -885,7 +889,8 @@ def format_report(report, top=25) -> str:
                        f"z {c['bbox'][0][2]}..{c['bbox'][1][2]}")
     cfg_r, reach = report["config"], report["reachability"]
     mask = cfg_r["port_layer_mask"]
-    out.append(f"bake inputs: {len(cfg_r['opened_barriers'])} opened_barriers, {len(cfg_r['bake_exclusions'])} navmesh_bake_exclusions, "
+    out.append(f"bake inputs: {len(cfg_r['opened_barriers'])} opened_barriers ({cfg_r.get('door_rows', 0)} door row(s)), "
+               f"{len(cfg_r['bake_exclusions'])} navmesh_bake_exclusions, "
                f"layer mask {'every layer but Water' if mask is None else hex(mask)}")
     if reach["located"]:
         out.append(f"probe reachability: {reach['in_anchor_component']} of {reach['located']} located probes ({reach['probes']} given) "
@@ -955,6 +960,10 @@ def main(argv=None):
     ap.add_argument("--opened-barrier", action="append", default=[], help="extra opened_barriers path (repeatable)")
     ap.add_argument("--descriptor", help="map sidecar whose opened_barriers, navmesh_bake_exclusions and navmesh_bake_layers "
                                          "are applied (tools/maps/airpit.json)")
+    ap.add_argument("--doors", nargs="?", const="auto", default=None, metavar="DOORS_JSON",
+                    help="apply the door pose rows of a doors sidecar to the opened_barriers (BakeNavMesh.ResolveOpenedBarriers: a barrier with "
+                         "rows drops only its moved parts); bare --doors takes the --descriptor's <stem>.doors.json. Without it every path "
+                         "keeps the legacy drop-all-descendants rule")
     ap.add_argument("--keep-level-borders", action="store_true",
                     help="model keep_level_borders: the layer-29 LevelBorder cubes are bake sources and the LevelBorder* name prefix "
                          "does not drop them (the descriptor's key of that name sets it too)")
@@ -1006,6 +1015,19 @@ def main(argv=None):
         keep_borders = keep_borders or inputs["keep_level_borders"]
         if layer_mask is None and not args.ignore_descriptor_layers:
             layer_mask = inputs["layer_mask"]
+    door_rows = None
+    if args.doors:
+        doors_path = args.doors
+        if doors_path == "auto":
+            if not args.descriptor:
+                ap.error("--doors without a path needs --descriptor (the sidecar next to it is <stem>.doors.json)")
+            doors_path = pcol.door_sidecar_path(args.descriptor)
+            if doors_path is None or not Path(doors_path).is_file():
+                ap.error(f"no doors sidecar next to {args.descriptor}")
+        try:
+            door_rows = pcol.load_door_rows(doors_path, source.key)
+        except pcol.ColliderModelError as exc:
+            ap.error(str(exc))
     points = []
     for f in args.points:
         points += load_points(f)
@@ -1018,7 +1040,7 @@ def main(argv=None):
         other = load_triangulation_mesh(args.compare_triangulation)
     report = analyse(package, cfg, barriers, points, args.arena_data, bake_rules=args.bake_rules, other_mesh=other,
                      bake_exclusions=exclusions, port_layer_mask=layer_mask, assets=assets, path_id=path_id,
-                     keep_level_borders=keep_borders)
+                     keep_level_borders=keep_borders, door_rows=door_rows)
     print(format_report(report, args.top))
     if args.json_out:
         Path(args.json_out).parent.mkdir(parents=True, exist_ok=True)

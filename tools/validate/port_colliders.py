@@ -21,7 +21,10 @@ Source rules mirrored from BakeNavMesh.cs (kept in `bake_exclusion_reason`):
     are called `Cube`, which is why the prefix never mattered before). `SPAWN_BOUND*` and the leaf names still apply;
   * every non-frame descendant of an `opened_barriers` path is skipped. A path is a root object name
     followed by `/`-separated child names resolved with Transform.Find semantics (first child of that
-    name at each level); the barrier object itself stays, as in `RoundOpenedReason`;
+    name at each level); the barrier object itself stays, as in `RoundOpenedReason`. A path that has rows in
+    the map's doors sidecar (`mark_barriers(..., door_rows=load_door_rows(...))`, `resolve_opened_barriers`) drops
+    only the MOVED subtrees of its rows instead (Iceberg 2026-10-30: the unposed parts of a gate unit stay
+    bake sources, as the client leaves them standing);
   * the whole subtree of a `navmesh_bake_exclusions` path is skipped, the listed object itself included
     (`BakeOnlyExclusionReason`; same path syntax and Find semantics; PLAN-AIRPIT item 8). These objects stay
     active at runtime, so unlike a barrier there is no frame exception;
@@ -389,18 +392,159 @@ def resolve_barriers(scenes: dict, paths) -> tuple[list, list]:
     return found, unresolved
 
 
-def mark_barriers(cset: ColliderSet, barrier_paths) -> None:
-    """Flag every owner that RoundOpenedReason would drop because of `opened_barriers`."""
-    barriers, cset.unresolved_barriers = resolve_barriers(cset.scenes, barrier_paths)
+DOOR_AT_TOLERANCE = 0.05                 # ArenaDoorPose.AtTolerance == BakeNavMesh.DoorAtTolerance
+DOOR_CLOSED_POSITION_TOLERANCE = 0.05    # ArenaDoorPose.ClosedPositionTolerance == BakeNavMesh.DoorClosedPositionTolerance
+
+
+def door_sidecar_path(descriptor_path) -> Path | None:
+    """ArenaPaths.DoorSidecarPath: tools/maps/bay5.json -> tools/maps/bay5.doors.json; None for a path that is not a .json file or
+    already is a .doors.json file."""
+    path = Path(descriptor_path)
+    lower = path.name.lower()
+    if not lower.endswith(".json") or lower.endswith(".doors.json"):
+        return None
+    return path.with_name(path.name[:-len(".json")] + ".doors.json")
+
+
+def load_door_rows(path, expected_key: str | None = None) -> list[dict]:
+    """The rows the bake reads (ArenaPaths.ParseDoorRows) from a doors sidecar (schema 2): barrier, part, node, at (world position of the
+    barrier root instance or None), closed_position (the node's local closed position or None) and switch (a SetActive row)."""
+    doc = json.loads(Path(path).read_text(encoding="utf-8"))
+    if doc.get("schema_version") != 2:
+        raise ColliderModelError(f"{path}: schema_version must be 2")
+    if expected_key is not None and doc.get("key") != expected_key:
+        raise ColliderModelError(f"{path}: key {doc.get('key')!r} is not {expected_key!r}")
+    rows = []
+    for i, pose in enumerate(doc.get("poses") or []):
+        if not isinstance(pose.get("barrier"), str) or not pose["barrier"] or not isinstance(pose.get("part"), str) \
+                or not isinstance(pose.get("node"), str):
+            raise ColliderModelError(f"{path}: poses[{i}] needs a non-empty barrier and string part and node")
+        closed = pose.get("closed")
+        position = closed.get("position") if isinstance(closed, dict) else None
+        rows.append({"barrier": pose["barrier"], "part": pose["part"], "node": pose["node"],
+                     "at": None if pose.get("at") is None else [float(v) for v in pose["at"]],
+                     "closed_position": None if position is None else [float(v) for v in position],
+                     "switch": isinstance(pose.get("switch"), dict)})
+    return rows
+
+
+def find_all_instances(scenes: dict, path: str) -> list:
+    """BakeNavMesh.FindAllInstances: [(scene, obj_id)] of EVERY object a hierarchy path names (all roots of the first name, all children
+    of the next name at each level), not just the first one Transform.Find would take."""
+    segments = path.split("/")
+    found = []
+    for scene in scenes.values():
+        level = [r for r in scene.roots() if scene.objects[r]["name"] == segments[0]]
+        for segment in segments[1:]:
+            level = [c for k in level for c in scene.children.get(k, []) if scene.objects[c]["name"] == segment]
+        found += [(scene.name, k) for k in level]
+    return found
+
+
+def _door_row_applies(row: dict, position) -> bool:
+    """ArenaDoorPose.AppliesTo / BakeNavMesh.DoorRowAppliesTo: no 'at' = every instance, else Euclidean within 0.05 m."""
+    if row["at"] is None:
+        return True
+    return sum((float(position[i]) - row["at"][i]) ** 2 for i in range(3)) <= DOOR_AT_TOLERANCE ** 2
+
+
+def _children_named(scene, key, name) -> list:
+    """BakeNavMesh.ChildrenNamed: every direct child called `name`, in sibling order."""
+    return [c for c in scene.children.get(key, []) if scene.objects[c]["name"] == name]
+
+
+def _closed_position_matches(scene, child, row: dict) -> bool:
+    """BakeNavMesh.ClosedPositionMatches: the child's (node "": itself, else the node below it) LOCAL position is within 0.05 m of the row's."""
+    probe = child if not row["node"] else scene.find(child, row["node"])
+    if probe is None:
+        return False
+    local = scene.objects[probe]["local_position"]
+    return sum((float(local[i]) - row["closed_position"][i]) ** 2 for i in range(3)) <= DOOR_CLOSED_POSITION_TOLERANCE ** 2
+
+
+def _parts_of_row(scene, instance, row: dict) -> list:
+    """BakeNavMesh.PartsOfRow: a name that occurs once (or a row without a closed position) takes the first child, as Transform.Find did;
+    a repeated name takes every child standing at the row's closed position."""
+    named = _children_named(scene, instance, row["part"])
+    if len(named) <= 1 or row.get("closed_position") is None:
+        return named[:1]
+    return [c for c in named if _closed_position_matches(scene, c, row)]
+
+
+def resolve_opened_barriers(scenes: dict, paths, rows) -> tuple[list, list, list, int]:
+    """BakeNavMesh.ResolveOpenedBarriers -> (legacy paths, moved [(scene, obj_id)], unresolved [str], posed barrier count).
+
+    A path WITHOUT rows in the doors sidecar is returned in `legacy`: it keeps the old rule (every non-frame descendant is dropped, the
+    barrier object stays). A path WITH rows adds the MOVED subtrees to `moved`: per barrier root instance (all instances of the path when a
+    row carries 'at', otherwise the Transform.Find instances) and per applicable row the row's part, or the instance itself for part "".
+    Nothing else of a posed barrier is dropped, frame-named or not: the client leaves the unposed parts standing, so they are bake
+    sources. A SetActive (switch) row moves nothing and drops nothing."""
+    legacy, moved, unresolved, posed = [], [], [], 0
+    for path in paths or []:
+        if not path:
+            continue
+        path_rows = [r for r in rows or () if r["barrier"] == path]
+        if not path_rows:
+            legacy.append(path)
+            continue
+        posed += 1
+        if any(r["at"] is not None for r in path_rows):
+            instances = find_all_instances(scenes, path)
+        else:
+            instances, _missing = resolve_barriers(scenes, [path])
+        if not instances:
+            unresolved.append(path)
+            continue
+        used = [False] * len(path_rows)
+        for scene_name, key in instances:
+            scene = scenes[scene_name]
+            position = scene.world(key)[:3, 3]
+            for i, row in enumerate(path_rows):
+                if not _door_row_applies(row, position):
+                    continue
+                used[i] = True
+                if row["switch"]:
+                    continue
+                if not row["part"]:
+                    if (scene_name, key) not in moved:
+                        moved.append((scene_name, key))
+                    continue
+                parts = _parts_of_row(scene, key, row)
+                if not parts:
+                    unresolved.append(f"{path}/{row['part']} (door pose part; barrier root at {tuple(round(float(v), 3) for v in position)})")
+                    continue
+                for part in parts:
+                    if (scene_name, part) not in moved:
+                        moved.append((scene_name, part))
+        unresolved += [f"{path} (door pose row {i} matches no instance)" for i, hit in enumerate(used) if not hit and not path_rows[i]["switch"]]
+    return legacy, moved, unresolved, posed
+
+
+def mark_barriers(cset: ColliderSet, barrier_paths, door_rows=None) -> None:
+    """Flag every owner that RoundOpenedReason would drop because of `opened_barriers`.
+
+    Without `door_rows` (the default, and every path of a map without a doors sidecar) the legacy rule applies to every path: all non-frame
+    descendants go. With the rows of tools/maps/<stem>.doors.json a path that has rows drops only its moved subtrees
+    (`resolve_opened_barriers`), exactly as BakeNavMesh does."""
+    legacy_paths, moved, unresolved, _posed = resolve_opened_barriers(cset.scenes, barrier_paths, door_rows)
+    barriers, legacy_unresolved = resolve_barriers(cset.scenes, legacy_paths)
+    cset.unresolved_barriers = legacy_unresolved + unresolved
     by_scene: dict = {}
     for s, k in barriers:
         by_scene.setdefault(s, set()).add(k)
+    moved_by_scene: dict = {}
+    for s, k in moved:
+        moved_by_scene.setdefault(s, set()).add(k)
     for o in cset.owners:
         o.barrier_blocked = False
+        chain = cset.scenes[o.scene].path(o.obj_id)
+        wanted_moved = moved_by_scene.get(o.scene)
+        if wanted_moved and any(k in wanted_moved for k in chain):     # the moved part itself and everything below it
+            o.barrier_blocked = True
+            continue
         wanted = by_scene.get(o.scene)
         if not wanted:
             continue
-        chain = cset.scenes[o.scene].path(o.obj_id)
         for i, k in enumerate(chain):
             if k in wanted and i < len(chain) - 1:               # strict descendant of the barrier
                 below = chain[i + 1:]

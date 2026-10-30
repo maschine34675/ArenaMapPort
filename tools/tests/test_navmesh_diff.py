@@ -1,10 +1,12 @@
 """Tests for the port collider loader, the voxel column model and the NavMesh diff (synthetic scenes only)."""
+import io
 import json
 import struct
 import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 import numpy as np
 
@@ -276,6 +278,150 @@ def floor_triangles(x0, x1, z0, z1, y=0.0):
 def box_triangles(center, size):
     v, t = pc.box_mesh(center, size)
     return v[t]
+
+
+class DoorRowBakeTests(unittest.TestCase):
+    """BakeNavMesh.ResolveOpenedBarriers on the offline model (Iceberg 2026-10-30): a barrier with door pose rows drops only the MOVED
+    subtrees; a barrier without rows keeps the legacy drop-everything-below rule."""
+
+    def package(self):
+        # Root/Gates holds two sliding gates called "Gate" (told apart by 'at') and one rotating gate; every gate has the moved leaves
+        # A and B, the static top leaf C and a rail collider on the gate's own child
+        objs = [obj("1", "Root"), obj("2", "Gates", "1")]
+        for n, (gid, x) in enumerate((("10", 0.0), ("20", 10.0))):
+            objs += [obj(gid, "Gate", "2", pos=(x, 0, 0)),
+                     obj(gid + "1", "Gate_A", gid, pos=(0, 0, 0.8), comps=[box((1, 1, 1))]),
+                     obj(gid + "2", "Gate_A_COLLIDER", gid + "1", comps=[box((1, 1, 1))]),
+                     obj(gid + "3", "Gate_B", gid, pos=(0, 0, 2.2), comps=[box((1, 1, 1))]),
+                     obj(gid + "4", "Gate_C", gid, pos=(0, 0, 3.6), comps=[box((1, 1, 1))]),
+                     obj(gid + "5", "Gate_COLLIDER", gid, comps=[box((1, 1, 1))]),
+                     obj(gid + "6", "Gate_frame", gid, comps=[box((1, 1, 1))])]
+        objs += [obj("30", "Motor", "2", pos=(20, 0, 0), comps=[box((1, 1, 1))]), obj("31", "Motor_COLLIDER", "30", comps=[box((1, 1, 1))]),
+                 obj("40", "Lamp", "2", pos=(30, 0, 0)), obj("41", "Lamp_glow", "40", comps=[box((1, 1, 1))])]
+        d = tempfile.TemporaryDirectory()
+        self.addCleanup(d.cleanup)
+        return pc.load_package_colliders(make_package(Path(d.name), objs))
+
+    @staticmethod
+    def row(barrier, part, at=None, closed=None, node="", switch=False):
+        return {"barrier": barrier, "part": part, "node": node, "at": at, "closed_position": closed, "switch": switch}
+
+    def dropped(self, c):
+        return sorted(o.obj_id for o in c.owners if o.barrier_blocked)
+
+    def test_a_path_without_rows_keeps_the_legacy_rule_and_none_is_the_same_as_empty(self):
+        for rows in (None, [], [self.row("Root/Other", "X")]):
+            c = self.package()
+            pc.mark_barriers(c, ["Root/Gates/Gate"], rows)
+            # the legacy rule: every non-frame descendant of the FIRST "Gate" goes, the object itself and its frame stay
+            self.assertEqual(self.dropped(c), ["101", "102", "103", "104", "105"], rows)
+            self.assertEqual(c.unresolved_barriers, [])
+
+    def test_a_posed_path_drops_only_the_moved_subtrees_of_every_instance_the_rows_name(self):
+        c = self.package()
+        rows = [self.row("Root/Gates/Gate", "Gate_A", at=[0, 0, 0]), self.row("Root/Gates/Gate", "Gate_B", at=[0, 0, 0]),
+                self.row("Root/Gates/Gate", "Gate_A", at=[10, 0, 0]), self.row("Root/Gates/Gate", "Gate_B", at=[10, 0, 0])]
+        pc.mark_barriers(c, ["Root/Gates/Gate"], rows)
+        # A (with the collider below it) and B of both gates; C, the rail collider and the frame stay bake sources
+        self.assertEqual(self.dropped(c), ["101", "102", "103", "201", "202", "203"])
+        self.assertEqual(c.unresolved_barriers, [])
+        reasons = {o.obj_id: pc.bake_exclusion_reason(o) for o in c.owners}
+        self.assertEqual({k: v for k, v in reasons.items() if k in ("101", "102", "104", "105", "106")},
+                         {"101": "opened_barriers", "102": "opened_barriers", "104": None, "105": None, "106": None})
+
+    def test_at_picks_the_instance_and_a_gate_no_row_names_stays_a_wall(self):
+        c = self.package()
+        pc.mark_barriers(c, ["Root/Gates/Gate"], [self.row("Root/Gates/Gate", "Gate_A", at=[10.02, 0, 0])])
+        self.assertEqual(self.dropped(c), ["201", "202"])
+        c = self.package()
+        pc.mark_barriers(c, ["Root/Gates/Gate"], [self.row("Root/Gates/Gate", "Gate_A", at=[99, 0, 0])])
+        self.assertEqual(self.dropped(c), [])
+        self.assertEqual(c.unresolved_barriers, ["Root/Gates/Gate (door pose row 0 matches no instance)"])
+
+    def test_a_row_without_at_holds_for_the_found_instance_only(self):
+        # no row carries 'at': the instances are the Transform.Find ones, i.e. the first "Gate"
+        c = self.package()
+        pc.mark_barriers(c, ["Root/Gates/Gate"], [self.row("Root/Gates/Gate", "Gate_B")])
+        self.assertEqual(self.dropped(c), ["103"])
+
+    def test_part_empty_moves_the_whole_instance_including_its_own_collider(self):
+        c = self.package()
+        pc.mark_barriers(c, ["Root/Gates/Motor"], [self.row("Root/Gates/Motor", "")])
+        self.assertEqual(self.dropped(c), ["30", "31"])
+
+    def test_a_switch_row_moves_nothing_and_is_never_unresolved(self):
+        c = self.package()
+        pc.mark_barriers(c, ["Root/Gates/Lamp"], [self.row("Root/Gates/Lamp", "RedFog", switch=True)])
+        self.assertEqual(self.dropped(c), [])
+        self.assertEqual(c.unresolved_barriers, [])
+
+    def test_a_missing_part_and_a_missing_path_are_reported(self):
+        c = self.package()
+        pc.mark_barriers(c, ["Root/Gates/Gate", "Root/Gates/Nope"], [self.row("Root/Gates/Gate", "Gate_Z"), self.row("Root/Gates/Nope", "A")])
+        self.assertEqual(self.dropped(c), [])
+        self.assertEqual(len(c.unresolved_barriers), 2)
+        self.assertTrue(c.unresolved_barriers[0].startswith("Root/Gates/Gate/Gate_Z (door pose part"))
+        self.assertEqual(c.unresolved_barriers[1], "Root/Gates/Nope")
+
+    def test_same_named_children_are_told_apart_by_the_closed_position(self):
+        objs = [obj("1", "Root"), obj("2", "Doors", "1"),
+                obj("3", "Leaf", "2", pos=(0, 0, 0), comps=[box((1, 1, 1))]), obj("4", "Leaf", "2", pos=(5, 0, 0), comps=[box((1, 1, 1))])]
+        with tempfile.TemporaryDirectory() as d:
+            c = pc.load_package_colliders(make_package(Path(d), objs))
+        pc.mark_barriers(c, ["Root/Doors"], [self.row("Root/Doors", "Leaf", closed=[5.02, 0, 0])])
+        self.assertEqual(self.dropped(c), ["4"])
+        pc.mark_barriers(c, ["Root/Doors"], [self.row("Root/Doors", "Leaf")])                      # no closed position: the first child, as Find
+        self.assertEqual(self.dropped(c), ["3"])
+
+    def test_the_rows_are_read_like_arenapaths_parsedoorrows(self):
+        with tempfile.TemporaryDirectory() as d:
+            doors = Path(d) / "x.doors.json"
+            doors.write_text(json.dumps({"schema_version": 2, "key": "arena_x", "poses": [
+                {"barrier": "A/B", "part": "P", "node": "", "at": [1, 2, 3], "closed": {"position": [0, 0, 1]}},
+                {"barrier": "A/C", "part": "", "node": "n", "at": None, "closed": {}, "switch": {"closed": False, "open": True}}]}), encoding="utf-8")
+            rows = pc.load_door_rows(doors, "arena_x")
+            self.assertEqual(rows, [{"barrier": "A/B", "part": "P", "node": "", "at": [1.0, 2.0, 3.0], "closed_position": [0.0, 0.0, 1.0], "switch": False},
+                                    {"barrier": "A/C", "part": "", "node": "n", "at": None, "closed_position": None, "switch": True}])
+            with self.assertRaises(pc.ColliderModelError):
+                pc.load_door_rows(doors, "arena_other")
+            doors.write_text(json.dumps({"schema_version": 1, "key": "arena_x", "poses": []}), encoding="utf-8")
+            with self.assertRaises(pc.ColliderModelError):
+                pc.load_door_rows(doors)
+            doors.write_text(json.dumps({"schema_version": 2, "key": "arena_x", "poses": [{"barrier": "", "part": "", "node": ""}]}), encoding="utf-8")
+            with self.assertRaises(pc.ColliderModelError):
+                pc.load_door_rows(doors)
+
+    def test_the_sidecar_path_is_arenapaths_doorsidecarpath(self):
+        self.assertEqual(pc.door_sidecar_path("tools/maps/bay5.json"), Path("tools/maps/bay5.doors.json"))
+        self.assertIsNone(pc.door_sidecar_path("tools/maps/bay5.doors.json"))
+        self.assertIsNone(pc.door_sidecar_path("tools/maps/bay5.txt"))
+
+    def test_the_cli_hands_the_rows_to_the_analysis(self):
+        seen = {}
+
+        def analyse(package, cfg, barriers, points, arena_data, **kw):
+            seen.update(barriers=list(barriers), **kw)
+            return {}
+
+        with tempfile.TemporaryDirectory() as d:
+            descriptor = Path(d) / "iceberg.json"
+            descriptor.write_text(json.dumps({"key": "arena_iceberg", "opened_barriers": ["DOORS/GATES_B/Sanatorium_CheckPoint_Gate"]}), encoding="utf-8")
+            doors = Path(d) / "iceberg.doors.json"
+            doors.write_text(json.dumps({"schema_version": 2, "key": "arena_iceberg", "poses": [
+                {"barrier": "DOORS/GATES_B/Sanatorium_CheckPoint_Gate", "part": "", "node": "", "at": None}]}), encoding="utf-8")
+            with mock.patch.object(nd, "analyse", analyse), mock.patch.object(nd, "format_report", lambda report, top: ""):
+                self.assertEqual(nd.main(["--map", "iceberg", "--descriptor", str(descriptor), "--doors"]), 0)
+                self.assertEqual(len(seen["door_rows"]), 1)
+                seen.clear()
+                self.assertEqual(nd.main(["--map", "iceberg", "--descriptor", str(descriptor), "--doors", str(doors)]), 0)
+                self.assertEqual(seen["door_rows"][0]["part"], "")
+                seen.clear()
+                self.assertEqual(nd.main(["--map", "iceberg", "--descriptor", str(descriptor)]), 0)
+                self.assertIsNone(seen["door_rows"])                                                  # opt-in: the legacy model stays the default
+                with mock.patch("sys.stderr", new_callable=io.StringIO), self.assertRaises(SystemExit):
+                    nd.main(["--map", "iceberg", "--doors"])                                         # bare --doors needs a descriptor
+                with mock.patch("sys.stderr", new_callable=io.StringIO), self.assertRaises(SystemExit):
+                    nd.main(["--map", "bowl", "--descriptor", str(descriptor), "--doors"])           # the rows' key must be the map's
 
 
 class WalkModelTests(unittest.TestCase):
