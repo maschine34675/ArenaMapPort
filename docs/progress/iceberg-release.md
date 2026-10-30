@@ -858,3 +858,67 @@ packer classifies all 271 with 0 unclassified. This pass fixes every non-blockin
 The list "Pending U1" and the host-check list above stand. Additions: `ls work/release-keys` before the first stage (arena_equator, arena_bay5, arena_airpit, arena_bowl) and back the folder up off the VM at once afterwards;
 the oracle command for the built bundle is `navmesh_diff.py --map iceberg --descriptor tools/maps/iceberg.json --doors --compare-bundle <the built navmesh bundle>` (without `--doors` the run prints the note
 above and models the legacy rule); do not deploy before the first stage is done.
+
+## 2026-10-30 evening - U1: two import fixes, the first stage, deploy and the first Iceberg raids on GPU-2
+
+- **U1 attempt 1** (19:28, 1 min): `BuildBundles` failed closed on `Normal texture 03737f828087638b rejected: invalid dimensions/pixels or unsupported/mixed
+  material usage` (`RockGr22_LOD_n`). A replica of `NormalTextureImportPolicy` over all 482 normal textures of package v2 (scratch `normal_policy_check.py`)
+  found 18 rejects, all bound by EFT's `MK4/Rock` / `MK4/Rock Simple` shaders on `_Normalmap`, `_DetailBump` and `_MaskBump`; all 18 are ordinary packed
+  DXT5 normals (R 255 everywhere, X in alpha, Y in green, |G-B| <= 6). Fix `e0729f8`: those slots join the normal readers (shader-scoped); harness 64 checks;
+  the replica then finds 0 rejects (461 PackedRaG/DXT5, 21 PackedRaG/BC7). No released map uses an MK4 shader.
+- **U1 attempt 2** (19:32-19:58, 30 min): Unity build, NavMesh bake, identity patch, `fix_stored_blocks.py`, `make_base_json.py`, `patch_preset.py`,
+  `validate_bundle_blocks.py` and `validate_extract.py` passed; `validate_bundle_roundtrip.py` failed with `native feature bundle validation: Native features:
+  bank name missing/ambiguous sharedassets112.assets:110`: the identical `autoservice_wind.SoundBank` exists in sharedassets112 and as a copy in sharedassets259,
+  each referenced by its own players, and the validator looked banks up by name. Fix `46941b7`: a shared name is resolved through the built players that
+  reference the source bank (exactly one same-named candidate, no two source banks on one built bank). The same commit carries the stand-in shader stubs the
+  build regenerated from package v2 (15 changed, 6 new: MK4/Rock, MK4/Rock Simple, Nature/SpeedTree8 and three p0 variants), as every build does for its package.
+- **Validators by hand** on the U1 output (`work/build/iceberg`): `validate_bundle_roundtrip.py ... --require-navmesh` `OK -- all checks passed` (1 non-blocking
+  warning), `validate_preset.py` OK (7/7 scenes), `validate_map_descriptors.py` OK. Sizes: scenes bundle 1,505,248,944 B (larger than the 1.1-1.3 GB estimate),
+  NavMesh bundle 324,566 B (NavMeshData 705,132 B raw; 18,703 vertices, 8,599 triangles, 40 tiles).
+- **Offline NavMesh comparison** (`navmesh_diff.py --map iceberg --descriptor tools/maps/iceberg.json --doors --points iceberg.bots.json --points
+  iceberg.exits.json --compare-bundle`): the built mesh covers 115,767 of 119,688 Arena-walkable samples (96.7 %), one component; all 15 probes (4 player
+  spawns, 9 bot core points, 2 exits) inside it. The largest Arena-walkable groups without port floor are 13.2 m2 at (46.7..50.7, 2.5, -88.8..-80.0) and
+  12.4 m2 at (-6.4..-1.8, 5.0, -96.0..-91.6).
+- **First stage** (client Release build without DllOnly, `-p:ArenaMapPortCreateReleaseKeys=true -p:ArenaMapPortCreateKeyMap=arena_iceberg`, 20:08, 80 s):
+  `CREATED ... work\release-keys\arena_iceberg.key`; the four released keys untouched (dates of 2026-10-20). The key store was copied at once to
+  `C:\Users\Administrator\ArenaMapPort-release-keys-backup\20261030-iceberg-first-stage\` (five files, byte-identical); an off-VM copy stays open, as before.
+  `validate_distribution.py`: `DISTRIBUTION_OK 5 maps 15 bundles 5 sidecars encrypted`; `validate_port.py --map iceberg --package ...iceberg-native-v2
+  --distribution`: `PORT_VALIDATED` (823 materials, 5,370 meshes, 1,407 textures, 40 NavMesh tiles, 8,599 triangles, 3 verified starts); `make_release_zips.py
+  --plan`: Iceberg part 20 files (+1 generated), 1,516,090,987 B raw; total 276 dist files, raw 5,370,658,093 B, estimated single ZIP 5,349,682,234 B (about
+  5.0 GiB, against 3.57 GiB for 0.4.0).
+- **verify-keys**: `OK verify-keys arena_iceberg: wrap 0 (built for 0.6.1.0.48206) unlocks the store's content key against Arena 0.6.1.0.48206 at
+  \\192.168.178.109\C$\Battlestate Games\Escape from Tarkov Arena (4 files, 3,224,800 of 560,470,032 B sampled, 106 ms, crypto: CNG)` (GPU-2's own install,
+  the same build as the VM's), Bowl alike. MASCHINE11 (Arena 0.6.2.0.48473) was offline, so the check against a second Arena build is still open.
+- **Deploy** (`deploy-to-spt.ps1 -SptRoot 'D:\SPT41' -Confirm`): 276 files, 15 new, 7 overwritten (both DLLs, Iceberg's three bundles over the parked
+  September plaintext copies on the host, its shader sidecar and base.json); server DLL on the mirror = the build (`BDD19FCE...`). `gpu-run deploy-wait
+  --server`: 2,458 files identical on the host after 139.9 s, server started; `gpu-run start`: MainMenu, 16/16 plugins identical (VM build = host disk =
+  loaded). Startup: `[Arena] Escape from Tarkov: Arena 0.6.1.0.48206 at C:\Battlestate Games\Escape from Tarkov Arena (registry; 15,351 files, 76.1 GB verified)`
+  and `Version 0.4.0 loaded. Maps: Arena: Equator, Arena: Bay 5, Arena: Air Pit, Arena: Bowl, Arena: Iceberg.`; no ArenaMapPort warning.
+- **Raid 1** (20:19, PMC, no bots, 12:00 clear; `gpu-run raid --map iceberg`, the tile reads `ARENA: ICEBERG`): `load arena_iceberg: location 6.5 s (diff 1.7),
+  game started 32.0 s`, 0 warnings, 0 errors. Lines: `[NavMesh] added navmesh for 'arena_iceberg': 18703 vertices, 8599 triangles`; `[SpawnGates] gates open
+  (navmesh installed): 11 part(s) registered, 5 park carver(s) in place` (the ten sliding leaves and the rotating gate parked at Arena's open pose; the
+  `_A` leaves and the rotating gate report their collider above the 1.8 m walking band); `[RaidFix] arena_iceberg TeamFight borders: 366 object(s) matched ...
+  RemoveTeamFightBorders=False`; `[Acoustics] arena_iceberg: 10 mirrored trigger volume(s) keep their negative scale` and `native initialized; valid
+  rooms=46, portals=89, pairs=1003, routes=17751`; `[NativeAudio] ready players=104 started=99 seasonalSilent=2 season=Autumn` (as predicted for Autumn);
+  `[Lighting] arena_iceberg applied ... 1279 light(s) ... cullingLights=1126`; `[Monitors] arena_iceberg: 4 of 6 monitor row(s) can show a face`;
+  `[GateSounds] prepared 3/3 clip(s) of arena_iceberg for drive scale 0.50`; `[Exfil] registered 2 exit(s)` (East Gate (72.0, 2.0, -94.0), West Gate
+  (-30.5, 2.8, -85.0), 8 s); `[PuddleFootsteps] cached water surfaces=27 masks=2`; `[IndoorSurface] map=arena_iceberg enabled=False ... elapsedMs=1024` (the
+  known classification freeze, here 1.0 s about 10 s after the start). `[RebindShaders]`: every pass `N/N stand-in material(s) rebound` (737 in
+  Arena_Sanatorium), among them `14x MK4/Rock`, `1x MK4/Rock Simple`, `4x Nature/SpeedTree8`, `10x ANGRYMESH`, `3x Cloth/ClothShader`, `1x
+  Cloth/ClothShader_backface`, `1x Custom/Billboard_FogSheet_Simple`; no failure line, so no `shader_fallback_names` row is needed so far (the olive tree
+  itself was not looked at).
+  Spawn at (95.3, 0.7, -89.6) in the Bear pocket. `uibridge_teleport dryRun` from there: A 83.8 m, B 87.0 m, C 94.4 m, Usec spawn 152.8 m, both exits,
+  bot core point 01: every path complete, no wall at 1.3 m. `uibridge_walk` through the GATES_A doorway to (78.0, 2.0, -90.0): arrived (19.4 m along the
+  navmesh). Frame time over 30 s: 119.7 fps, mean 8.4 ms, max 61.2 ms. Screenshot: the hotel front (stairs, fountain, ivy) renders correctly; two very
+  bright glow blobs sit in the two lobby doorways behind the fountain, in both raids (open look item, see below).
+- **Raid 2** (20:20, PMC, bots Medium, 19:30): load 4.7 s, game started 23.6 s, 0 warnings. `uibridge_bots observe=20`: two USEC PMCs followed, 104.6 m and
+  90.6 m of path in 20 s, idle 0 %, layers PatrolAssault / PatrolFollower; a third joined later. No ArenaMapPort warning in the session (the only Error line is
+  EFT's `Coroutine couldn't be started because the the game object 'MenuScreen' is inactive!` at 20:20:56, from the menu between the raids).
+- **Hideout** opened from the menu (`hideout-open.json`: screen Hideout, HideoutGameWorld, no ArenaMapPort error) and back.
+- **Equator** (20:23, released map, no bots; the shared `NativeSpatialAudio.BuildGraph` path changed on this branch): `[Acoustics] arena_equator: native
+  initialized; valid rooms=21, portals=50, pairs=210, routes=31676`, `[NavMesh] added navmesh for 'arena_equator': 10395 vertices, 4567 triangles` (unchanged),
+  `[NativeAudio] ready players=25 started=23`, crowd `load total=2110 ms`, `[CrowdBed] arena_equator: 4 stands`; 0 mod warnings.
+- **Open after this round**: the two glow blobs in the lobby doorways (which lights, and whether Arena shows them so); the olive tree and the canyon rocks
+  looked at in the game; a listening pass (ambient 3 dB / offset 0 / range 2, the 20 lamp loops, gate sounds at -0.9 dB with a held gate); `ZeroLevel`;
+  the verify-keys check against Arena 0.6.2 on MASCHINE11; the Phase C items (flares, water, overview); the release number and form (the single ZIP grows to
+  about 5.0 GiB).

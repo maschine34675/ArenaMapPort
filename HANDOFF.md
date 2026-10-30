@@ -1,6 +1,23 @@
 # HANDOFF — dated working state
 
-## Iceberg is the fifth registered map, bundles pending U1 - 2026-10-30 (branch `feature/iceberg`, nothing pushed, tagged or deployed)
+## Iceberg built, staged, deployed and raided on GPU-2 - 2026-10-30 evening (branch `feature/iceberg`, nothing pushed, tagged or released)
+
+**State.** Iceberg (`arena_iceberg`) is the fifth map in `ArenaMapRegistry.All` and now has its U1 bundles (`work/build/iceberg`, from package
+`work/extract/iceberg-native-v2`), its content key (`work/release-keys/arena_iceberg.key`, created with `-p:ArenaMapPortCreateKeyMap=arena_iceberg`; same-machine
+backup `C:\Users\Administrator\ArenaMapPort-release-keys-backup\20261030-iceberg-first-stage\`, the off-VM copy is still the user's open item) and a staged,
+encrypted `dist/` of 276 files (`DISTRIBUTION_OK 5 maps 15 bundles`, `PORT_VALIDATED`). Two U1 import fixes were needed (`e0729f8` MK4 rock normal slots,
+`46941b7` same-named sound banks in the bundle check). Deployed to `D:\SPT41` and run on GPU-2 (20:17-20:25): two Iceberg raids (no bots at noon, Medium
+bots at 19:30), the hideout once, one Equator raid; 0 ArenaMapPort warnings, NavMesh 18,703 vertices / 8,599 triangles (96.7 % of Arena's walkable area offline),
+all gates parked open, every A/B/C and pocket route complete, a walk through the east gate, bots patrolling. Record with the log quotes:
+[docs/progress/iceberg-release.md](docs/progress/iceberg-release.md) ("U1: two import fixes, the first stage, deploy and the first Iceberg raids").
+
+**Open (agent):** the two very bright glow blobs in the lobby doorways next to the Bear spawn (which lights; compare with Arena), a look at the olive tree
+(`Nature/SpeedTree8` rebinds without an error line) and the canyon rocks, `verify-keys` against Arena 0.6.2 on MASCHINE11 (offline tonight), the Phase C items
+(flares, water, overview). **The user's:** a listening and playing pass (ambient mix 3 dB / offset 0 / range 2, the 20 lamp loops, gate sounds with a held gate,
+`ZeroLevel`), the release number and form (both csproj say 0.4.0; the single ZIP grows from 3.57 to about 5.0 GiB), the merge of `feature/iceberg` into `main`,
+the ArenaMode hand-off (catalog entry, Domination row A/B/C, a 10+10 formation from the two initial bounds).
+
+## Iceberg is the fifth registered map, bundles pending U1 - 2026-10-30 (history: U1 built and raided the same evening, see the block above) (branch `feature/iceberg`, nothing pushed, tagged or deployed)
 
 **State.** Iceberg (`Arena_Sanatorium`, key `arena_iceberg`) joined `ArenaMapRegistry.All` and every release list in the lock-step promotion of 2026-10-30
 (`1bd5868`, PLAN-ICEBERG item 12; four review-fix commits before it, a second pass after it). It is NOT released and not built: `work/build/iceberg` does not exist
@@ -11,7 +28,7 @@
 **What waits for U1 (Unity, the key store, the host).** (1) the Unity build from `work/extract/iceberg-native-v2` with `-FullMap` into `work/build/iceberg` (exact command in the log,
 with `-SkipGameRefsSync`); (2) the validators by hand (`navmesh_diff.py --compare-bundle` with `--descriptor tools/maps/iceberg.json --doors`, expect 5,145 bake sources); (3) the first stage:
 `-p:ArenaMapPortCreateReleaseKeys=true -p:ArenaMapPortCreateKeyMap=arena_iceberg` (the create flag is per map since the second pass; `ls work/release-keys` first, back it up off the VM at once);
-(4) `validate_distribution.py`, `validate_port.py --map iceberg --package ...iceberg-native-v2 --distribution`, `make_release_zips.py --plan` (276 files, iceberg part 20), `verify-keys` against MASCHINE11's 0.6.0;
+(4) `validate_distribution.py`, `validate_port.py --map iceberg --package ...iceberg-native-v2 --distribution`, `make_release_zips.py --plan` (276 files, iceberg part 20), `verify-keys` against MASCHINE11's Arena (0.6.2 since late October);
 (5) the two skipped puddle-census cases; (6) deploy, then the host-check list at the end of the log.
 
 **Do not deploy before U1.** `tools/deploy-to-spt.ps1` now refuses a whole-dist deploy (dry run too) while a staged `db/<map_key>` has no bundles or key file in the client plugin; `-DllOnly`
