@@ -315,6 +315,9 @@ def check_audio_group_states(audio, data, grouped):
     else:
         require(grouped==Counter(p['id'] for p in players), 'audio group coverage')
     states=audio['states']
+    # the reviewed minDistance-0 rule is pinned per contract (extract_bay5_audio.validate_graph); the recheck reads it from the source players
+    compare({p['id']:p['path'].split('/')[-1] for p in players if p.get('minDistance')==0},(states or {}).get('zero_min_distance_players') or {},
+            'zero-minDistance audio players')
     if states is None:return
     require(sum(grouped.values())==states['grouped_players'],'audio grouped player count')
     compare({p['id']:p['path'].split('/')[-1] for p in players if not p['activeInHierarchy']},

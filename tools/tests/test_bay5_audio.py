@@ -104,6 +104,18 @@ class Bay5AudioTests(unittest.TestCase):
                     with self.subTest(kind=kind,case=field,value=bad),self.assertRaisesRegex(ValueError,'player bounds'):
                         audio.parse_player(Raw(bytes(data)),kind)
 
+    def test_a_zero_min_distance_player_must_be_pinned_by_the_contract(self):
+        # parse_player accepts the reviewed zero, validate_graph does not accept it unless states.zero_min_distance_players names the
+        # player (Bay5 has no states: none allowed; Iceberg pins its 21 loops)
+        data=graph(); audio.validate_graph(data)
+        data['players'][3].update(minDistance=0.,path='Root/Group/neon_lamp')
+        with self.assertRaisesRegex(ValueError,'zero-minDistance players changed'): audio.validate_graph(data)
+        data['players'][3]['minDistance']=.5          # a nonzero value is no business of the pin
+        audio.validate_graph(data)
+        pinned=audio.find_audio_contract('arena_iceberg')['states']['zero_min_distance_players']
+        self.assertEqual(len(pinned),21)
+        self.assertTrue(all(name.startswith(('neon_lamp','projector')) for name in pinned.values()))
+
     def test_the_validator_encoder_reproduces_a_zero_min_distance_payload(self):
         # The independent encoder of validate_native_features must write the accepted payload back byte for byte, or the
         # source recheck of a package with such a player would fail on the first compare.

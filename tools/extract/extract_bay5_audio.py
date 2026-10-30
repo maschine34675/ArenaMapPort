@@ -18,9 +18,11 @@ CommonAmbientInGroup) would share one hierarchy path, the key the Unity importer
 use for the object; disambiguate_sibling_paths gives the second and later duplicates, in source
 id order, the leaf suffix '~2', '~3' ... and the record keeps the authored leaf as 'sourceLeafName'
 (validate_native_features applies the same rule to the source recheck). Maps without duplicates
-(Equator, Bay5, AirPit) are byte-identical to before.
+(Equator, Bay5, AirPit) are unchanged (identical to the accepted packages).
 A player with minDistance 0 (Iceberg's neon-lamp and projector loops) is accepted under the reviewed rule documented in
-parse_player; every other player bound still fails closed.
+parse_player; every other player bound still fails closed. The rule is global but its use is pinned per contract: the players with
+minDistance 0 must equal states.zero_min_distance_players (id -> leaf name; absent = none, which is every released map), so a zero
+that appears on a map through an Arena update stops the export instead of passing (validate_graph).
 A player normally inherits its group's mixer and never plays on awake; a player that forces an
 Arena mixer group of its own (Bowl level111: 'metal_rigging' forces 'ArenaCommonAmb', which the
 port cannot provide) is accepted only when the contract pins it in states.forced_mixer_players
@@ -350,6 +352,8 @@ def validate_graph(data):
     player_ids=[p['id'] for p in players]; clip_ids={c['id'] for c in clips}
     if len(set(player_ids))!=len(players) or len(clip_ids)!=len(clips): raise ValueError('duplicate source identity')
     grouped=[p['resolved'] for s in support for p in s.get('soundPlayers',[])]
+    zero={p['id']:p['path'].rsplit('/',1)[-1] for p in players if p.get('minDistance')==0}
+    if zero!=((audio['states'] or {}).get('zero_min_distance_players') or {}): raise ValueError('audio zero-minDistance players changed')
     if audio['states'] is not None: validate_audio_states(players,support,audio)
     if collections.Counter(grouped)!=collections.Counter(expected_group_members(players,audio)): raise ValueError('group coverage')
     if audio['states'] is not None and len(grouped)!=audio['states']['grouped_players']: raise ValueError('audio grouped player count changed')

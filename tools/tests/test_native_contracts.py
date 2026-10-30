@@ -200,7 +200,8 @@ class GoldenLegacyTests(unittest.TestCase):
         # Added with the item-13 review: the loop is pinned by leaf name too (the importer and the client look it
         # up as 'electricity'), the single indoor group by name, mixer and member count (25 players - 2 dogs).
         states = v.MAPS['arena_equator']['audio']['states']
-        self.assertEqual(set(states), set(LEGACY_EQUATOR_STATES) | {'groups', 'loops', 'forced_mixer_players'})
+        self.assertEqual(set(states), set(LEGACY_EQUATOR_STATES) | {'groups', 'loops', 'forced_mixer_players', 'zero_min_distance_players'})
+        self.assertEqual(states['zero_min_distance_players'], {})  # optional pin, normalised to {}: only Iceberg has zero-minDistance players
         self.assertEqual(states['forced_mixer_players'], {})  # optional pin, normalised to {} (Bowl pins metal_rigging)
         self.assertEqual(states['loops'], {'level56:965': 'electricity'})
         self.assertEqual(states['groups'], {'CommonAmbientInGroup': {'mixer': 'CommonAmbInEffects', 'players': 23}})
@@ -272,7 +273,7 @@ class GoldenLegacyTests(unittest.TestCase):
                        'groups': {'CommonAmbientOutGroup': {'mixer': 'CommonAmbOutEffects', 'players': 4},
                                   'CommonAmbientInGroup': {'mixer': 'CommonAmbInEffects', 'players': 22}},
                        'group_mixers': ['CommonAmbOutEffects', 'CommonAmbInEffects'],
-                       'loops': {}, 'loop_players': [], 'forced_mixer_players': {}}})
+                       'loops': {}, 'loop_players': [], 'forced_mixer_players': {}, 'zero_min_distance_players': {}}})
         # AirPit is the first map with both an Out and an In group: the Out group comes first in source order
         # (kept in the group_mixers mirror), but the pins themselves are keyed by group name.
         self.assertEqual(audio['states']['group_mixers'][0], 'CommonAmbOutEffects')
@@ -392,6 +393,26 @@ class SchemaTests(unittest.TestCase):
             parse(schema_one)
         schema_one['audio']['states'] = None
         self.assertIsNone(parse(schema_one)['audio']['states'])
+
+    def test_zero_min_distance_players_are_an_optional_leaf_map_bounded_by_the_player_count(self):
+        # PLAN-ICEBERG item 12 (review of item 5): the reviewed minDistance-0 rule of the exporter is global, its use is pinned per contract
+        raw = raw_contract()
+        self.assertEqual(parse(raw)['audio']['states']['zero_min_distance_players'], {})             # absent = none
+        raw['audio']['states']['zero_min_distance_players'] = {'level9:1': 'neon_lamp', 'level9:2': 'projector'}
+        self.assertEqual(parse(raw)['audio']['states']['zero_min_distance_players'], {'level9:1': 'neon_lamp', 'level9:2': 'projector'})
+        self.assertRejects(lambda r: r['audio']['states'].update(zero_min_distance_players=['level9:1']), 'object of player id')
+        self.assertRejects(lambda r: r['audio']['states'].update(zero_min_distance_players={'level9:1': 7}), 'non-empty string')
+        self.assertRejects(lambda r: r['audio']['states'].update(
+            zero_min_distance_players={f'level9:{i}': 'x' for i in range(40)}), 'entries for')
+
+    def test_iceberg_pins_exactly_its_21_zero_min_distance_loops(self):
+        zero = v.MAPS['arena_iceberg']['audio']['states']['zero_min_distance_players']
+        self.assertEqual(len(zero), 21)
+        self.assertEqual(sorted(name.split(' (')[0] for name in zero.values()), ['neon_lamp'] * 20 + ['projector'])
+        self.assertEqual({id_.split(':')[0] for id_ in zero}, {'level259'})
+        for key in ('arena_equator', 'arena_bay5', 'arena_airpit', 'arena_bowl'):
+            states = v.MAPS[key]['audio']['states']
+            self.assertEqual((states or {}).get('zero_min_distance_players', {}), {}, key)
 
     def test_states_must_agree_with_the_census(self):
         self.assertRejects(lambda r: r['audio']['states'].update(group_mixers=['CommonAmbInEffects']), 'entries for 2')

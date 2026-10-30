@@ -51,7 +51,11 @@ Schema (version 1; every key is required unless marked optional, unknown keys ar
                                             loop_players[ids],
                                             forced_mixer_players{id: Arena mixer name} (optional: players
                                             that force an Arena mixer group the port cannot provide; the
-                                            exporter routes them like their group, marker mixerPolicy)}}
+                                            exporter routes them like their group, marker mixerPolicy),
+                                            zero_min_distance_players{id: leaf name} (optional, default {}:
+                                            the players that author minDistance 0, the reviewed rule of
+                                            extract_bay5_audio.parse_player; every other map pins none, so a
+                                            zero minDistance that appears in an Arena update fails closed)}}
 
 Rules beyond types (each one closes a way for a pin to be weakened silently): duplicate JSON keys
 are an error; ``map_key`` must equal ``arena_`` + the file stem; ``ballistics`` must list exactly
@@ -292,9 +296,10 @@ def _groups(value, where: str) -> dict:
 
 
 def _parse_states(raw, where: str, audio: dict):
-    raw = _object(raw, where, _STATE_KEYS, optional=("forced_mixer_players",))
+    raw = _object(raw, where, _STATE_KEYS, optional=("forced_mixer_players", "zero_min_distance_players"))
     states = {
         "forced_mixer_players": _leaf_map(raw.get("forced_mixer_players", {}), where + ".forced_mixer_players", "player"),
+        "zero_min_distance_players": _leaf_map(raw.get("zero_min_distance_players", {}), where + ".zero_min_distance_players", "player"),
         "grouped_players": _int(raw["grouped_players"], where + ".grouped_players"),
         "disabled_players": _strings(raw["disabled_players"], where + ".disabled_players"),
         "inactive_players": _leaf_map(raw["inactive_players"], where + ".inactive_players", "player"),
@@ -319,6 +324,8 @@ def _parse_states(raw, where: str, audio: dict):
     if states["grouped_players"] != grouped or not 0 <= grouped <= players:
         _fail(where + ".grouped_players",
               f"{states['grouped_players']} disagrees with {players} players under '{audio['group_coverage']}' coverage")
+    if len(states["zero_min_distance_players"]) > players:
+        _fail(where + ".zero_min_distance_players", f"{len(states['zero_min_distance_players'])} entries for {players} players")
     members = sum(g["players"] for g in states["groups"].values())
     if members != states["grouped_players"]:
         _fail(where + ".groups", f"{members} group members disagree with grouped_players {states['grouped_players']}")

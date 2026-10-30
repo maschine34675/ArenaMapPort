@@ -6,8 +6,8 @@
   "implicit_scene_identity stays false: generic packages always record source.map_key.",
   "Eight cement-bag colliders of Arena_Sanatorium ('bag_cement_block*/concrete') carry the preset Gravel over the material Concrete; extract_ballistics imports the reviewed pair as authored (REVIEWED_PRESET_MATERIAL_PAIRS).",
   "Eleven Glass colliders (car lights in Arena_Sanatorium, Lamp_Industrial_01_BALLISTIC_glass in Arena_Sanatorium_Light) carry EHitType.Lamp with network id 0; extract_ballistics.reviewed_hit_role imports them as plain Glass (HitType Default, NetId 0).",
-  "audio: PLAN-ICEBERG item 5 pins from the dry-run census of level259 (Arena_Sanatorium_Sound, plan role 'sound') with the exporter's own parsers on Arena 0.6.1.0.48206 (2026-10-30, docs/progress/iceberg-release.md): schema 2, 104 players (52 AmbientSoundPlayer, 22 SeasonAmbientSoundPlayer, 30 LoopAmbientSoundPlayer), 4 AmbientSoundPlayerGroup, 1 BezierSpline, 1 AmbientSplineEmitterController, 1 SoundAmbientZoneCalculator, 1 AmbientPlayerSplineMappedEmitter, 28 SoundBank (27 names), 237 clips. Every player is grouped exactly once (all_players, grouped_players 104): CommonAmbientInGroup 46 and LampsAmbientInGroup 20 on CommonAmbInEffects, CommonAmbientOutGroup 37 on CommonAmbOutEffects, AmbientSplineEmitterWaterGroup 1 on CommonAmbOutBypass (the group records are in source order; group_mixers mirrors it for AmbientAudioProfilesTests). Three players are inactive in the source (river, river (2), sparks (2)); none is disabled, no AudioSource has Loop set (the 30 LoopAmbientSoundPlayers set it themselves in Awake), none plays on awake or forces a mixer.",
-  "audio: 21 LoopAmbientSoundPlayers (20 neon_lamp*, projector) author minDistance 0 with maxDistance 3, 5 or 7 m; extract_bay5_audio.parse_player accepts it under the reviewed rule documented there (0 <= minDistance <= maxDistance, maxDistance > 0; every other bound unchanged). Three same-named players are renamed by the sibling rule (cracles~2, far_misc~2, soft_metal_derbis (3)~2); components of one GameObject (group + controller, calculator + mapped emitter) share its path and are never renamed apart (the same shape as Bay5). 22 season players carry banks for 6 season keys (Summer 22, Spring 22, Autumn 20, SpringEarly 17, AutumnLate 13, Winter 4), most of them for only some of the keys."
+  "audio: PLAN-ICEBERG item 5 pins from the dry-run census of level259 (Arena_Sanatorium_Sound, plan role 'sound') with the exporter's own parsers on Arena 0.6.1.0.48206 (2026-10-30, docs/progress/iceberg-release.md): schema 2, 104 players (52 AmbientSoundPlayer, 22 SeasonAmbientSoundPlayer, 30 LoopAmbientSoundPlayer), 4 AmbientSoundPlayerGroup, 1 BezierSpline, 1 AmbientSplineEmitterController, 1 SoundAmbientZoneCalculator, 1 AmbientPlayerSplineMappedEmitter, 28 SoundBank (27 names), 237 clips. Every player is grouped exactly once (all_players, grouped_players 104): CommonAmbientInGroup 46 and LampsAmbientInGroup 20 on CommonAmbInEffects, CommonAmbientOutGroup 37 on CommonAmbOutEffects, AmbientSplineEmitterWaterGroup 1 on CommonAmbOutBypass (the group records are in source order; group_mixers mirrors it for AmbientAudioProfilesTests, the client profile lists its routes in this order). Three players are inactive in the source (river, river (2), sparks (2)); none is disabled, no AudioSource has Loop set (the 30 LoopAmbientSoundPlayers set it themselves in Awake), none plays on awake or forces a mixer.",
+  "audio: 21 LoopAmbientSoundPlayers (20 neon_lamp*, projector) author minDistance 0 with maxDistance 3, 5 or 7 m; extract_bay5_audio.parse_player accepts it under the reviewed rule documented there (0 <= minDistance <= maxDistance, maxDistance > 0; every other bound unchanged), and states.zero_min_distance_players pins exactly these 21 by id and leaf name (extract_bay5_audio.validate_graph and the source recheck of validate_native_features compare the players with minDistance 0 with it; the four released contracts pin none, so a zero that an Arena update introduces there fails closed). Pinned 2026-10-30 from package iceberg-native-v2: 17 players with maxDistance 3, three with 5 (neon_lamp (3), (4), projector) and one with 7 m (neon_lamp (11)). Three same-named players are renamed by the sibling rule (cracles~2, far_misc~2, soft_metal_derbis (3)~2); components of one GameObject (group + controller, calculator + mapped emitter) share its path and are never renamed apart (the same shape as Bay5). 22 season players carry banks for 6 season keys (Summer 22, Spring 22, Autumn 20, SpringEarly 17, AutumnLate 13, Winter 4), most of them for only some of the keys."
  ],
  "scenes": {
   "256": "Arena_Sanatorium",
@@ -98,7 +98,30 @@
     "CommonAmbOutBypass"
    ],
    "loops": {},
-   "loop_players": []
+   "loop_players": [],
+   "zero_min_distance_players": {
+    "level259:1580": "neon_lamp (11)",
+    "level259:1624": "neon_lamp (5)",
+    "level259:1663": "neon_lamp (4)",
+    "level259:1695": "neon_lamp (1)",
+    "level259:1717": "neon_lamp (14)",
+    "level259:1728": "neon_lamp (18)",
+    "level259:1742": "neon_lamp (13)",
+    "level259:1757": "neon_lamp (10)",
+    "level259:1761": "neon_lamp (6)",
+    "level259:1795": "neon_lamp (7)",
+    "level259:1796": "neon_lamp (19)",
+    "level259:1805": "neon_lamp (15)",
+    "level259:1814": "neon_lamp (8)",
+    "level259:1816": "neon_lamp (9)",
+    "level259:1905": "projector",
+    "level259:1915": "neon_lamp",
+    "level259:1919": "neon_lamp (16)",
+    "level259:1934": "neon_lamp (12)",
+    "level259:1935": "neon_lamp (2)",
+    "level259:1939": "neon_lamp (17)",
+    "level259:1948": "neon_lamp (3)"
+   }
   }
  }
 }
