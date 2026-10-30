@@ -423,3 +423,13 @@ like the calls. Like the calls the file is plaintext, and it is not one of the s
 The `833275d` cut (255 files, core 153) is superseded: a new five-part cut is needed, and because every part manifest pins the build commit all five parts are rebuilt even though
 only the core part's payload changes. No size or hash of a final package is asserted here; the bed's exact byte count and SHA-256 are in the manifest. Design, measurements and the
 host checklist: [spectator-audio.md](progress/spectator-audio.md), "Crowd murmur bed and longer call pauses".
+
+## Release form: one whole ZIP - 2026-10-30 (user decision)
+
+The user decided that 0.4.0 is uploaded as one whole ZIP to Pixeldrain, like 0.3.0, with no five-part split. The "GitHub five-part cut preparation" above (core 153,
+Equator 24, Bay5 30, Air Pit 22 and Bowl 26 files in five ZIPs, as GitHub assets) is dropped, and so are the cuts `github-8941caa`, `github-a4aa0af`, `github-833275d` and
+`github-8a28c1d`. The release is cut with `make_release_zips.py --single`: one ZIP that holds every distribution file (256 at the time of this note), the generated
+`README.txt` and the two `THIRD-PARTY-NOTICES.txt` copies and, as its last entry, the manifest `BepInEx/plugins/maschine-ArenaMapPort/parts/full.json`; one checksum
+line in `maschine-ArenaMapPort-0.4.0.sha256`; no partition and no per-ZIP size gate (the `2**31` gate exists for GitHub's per-asset limit, and the single layout is not a
+GitHub asset). The partition tables of the earlier sections stay as history and are still what the packer's default (multi-part) mode prints. The GitHub release carries the
+notes with the Pixeldrain links and the checksum file only. No size or hash of the single ZIP is asserted here; both come from the cut.

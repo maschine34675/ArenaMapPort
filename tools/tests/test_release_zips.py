@@ -656,9 +656,10 @@ class BuildTests(FakeRepoCase):
         readme = re.sub(r"\s+", " ", self.core_readme())
         self.assertIn("no impact sounds for the Books and CardBoard prop types", readme)
         self.assertIn("39 Equator props", readme)
-        self.assertIn("a cause of the intermittent Equator static of 0.3.0 was found and fixed in this release (a bundle block flagged as compressed but stored uncompressed; measured on the test host, not yet listened to)", readme)
+        self.assertIn("a cause of the intermittent Equator static of 0.3.0 was found and fixed in this release (a bundle block flagged as compressed but stored uncompressed; measured on the test host and confirmed by the author in play)", readme)
         self.assertIn("A faint steady hiss and short clicks seen in one recording are not explained by it", readme)
-        self.assertIn("The crowd murmur and the 4-to-8-second pauses between spectator calls are new and untuned; nobody has listened to them yet", readme)
+        self.assertIn("The crowd murmur and the 4-to-8-second pauses between spectator calls are new; the author listened to them in play and approved them", readme)
+        self.assertNotIn("nobody has listened", readme)
         self.assertNotIn("static of 0.3.0 is fixed", readme)
         self.assertNotIn("no noise fix is claimed", readme)
         self.assertNotIn("remains unresolved", readme)
@@ -1397,8 +1398,14 @@ class SingleLayoutTests(FakeRepoCase):
         self.assertNotIn("also delete", readme)
         self.assertNotIn("former single ZIP", readme)
         for multi_part_wording in ("EVERY part", "ZIP parts", "ALL of them", "part1of", "of every part", "any order",
-                                   "core part"):
+                                   "core part", "ALL parts", "if split"):
             self.assertNotIn(multi_part_wording, readme)
+        # the intro describes the WHOLE release (the shared files a multi-part set keeps in its core part, and every map), and the
+        # update sentence names the one ZIP (user decision 2026-10-30: 0.4.0 ships as one whole ZIP, like 0.3.0)
+        flat = re.sub(r"\s+", " ", readme)
+        self.assertIn("It holds the plugin, the server mod, the shared files (spectator textures, calls and crowd murmur, "
+                      "original map descriptions, selection artwork, score monitor sprites) and the data of every included map", flat)
+        self.assertIn("Updating: extract the complete ZIP with the SPT server closed", flat)
 
     def test_the_multi_part_readme_keeps_its_wording(self):
         parts_readme = read_zip(self.build().zips[0])[f"{PLUGIN}/README.txt"].decode("utf-8")
@@ -2478,7 +2485,8 @@ class EncryptedBundleTests(FakeRepoCase):
             parts = release.partition_single(self.scan(), self.spec) if single else self.partition()
             text = re.sub(r"\s+", " ", release.readme_text(self.spec, parts))
             with self.subTest(single=single):
-                self.assertIn("Updating: extract the complete release package (ALL parts if split) with the SPT server closed", text)
+                self.assertIn("Updating: extract the complete ZIP with the SPT server closed" if single else
+                              "Updating: extract the complete release package (ALL parts if split) with the SPT server closed", text)
                 self.assertIn("The keys folder (BepInEx/plugins/maschine-ArenaMapPort/keys) belongs to the bundles next to it", text)
                 self.assertIn("a missing or damaged key file is reported as an error in the client log, and the maps do not load", text)
                 self.assertIn('ends with a ref code, for example "ref NO_ARENA"', text)

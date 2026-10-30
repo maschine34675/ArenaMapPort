@@ -64,15 +64,12 @@ their upper spectator areas are omitted.
 
 ## Installation
 
-Close EFT and the SPT server. Download **all five ZIP parts** of the release (core,
-Equator, Bay5, Air Pit and Bowl) and extract every part into your SPT directory, merging
-`BepInEx` and `SPT_Runtime`. The parts can be extracted in any order and must not be joined
-into one archive; a map works only with its own part and the core part, and the release's
-`.sha256` file lists the checksum of each part. Then restart the server and game.
+Close EFT and the SPT server, then extract the whole release ZIP into your SPT directory.
+Merge both `BepInEx` and `SPT_Runtime`, then restart the server and game. The release's
+`.sha256` file lists the checksum of the ZIP.
 
-Upgrading from 0.3.0: extract all five parts over the installation, then delete
-`BepInEx/plugins/maschine-ArenaMapPort/parts/full.json`, the manifest of the former single
-ZIP, which this release no longer ships.
+Upgrading from 0.3.0: extract the ZIP over the installation the same way. It replaces both DLLs
+and the Equator scenes bundle and adds the spectator, gate-sound and score-monitor files.
 
 Updating a development build? Move the old `BepInEx/plugins/ArenaMapPort`
 directory outside `BepInEx/plugins` before extracting to avoid duplicate plugins.
@@ -93,17 +90,17 @@ stays unchanged. Equator Day, Bay5, Air Pit and Bowl are unaffected.
   indoor wind clip, once per wind cycle. The bundle is repaired and every bundle is now
   checked for such blocks before it is staged. The Equator bundle of 0.3.0 carries the
   defect.
-- The static no longer shows up in recordings of the game's sound made on the test host, but
-  nobody has listened to the repaired Equator bundle yet; one playing session on Equator is
-  the remaining confirmation. A faint steady hiss and short clicks seen in one recording are
-  not explained by this fix.
+- The static no longer shows up in recordings of the game's sound made on the test host, and
+  the author confirmed in play on 30 October 2026 that the noise is gone. A faint steady hiss
+  and short clicks seen in one recording are not explained by this fix.
 - EFT's own sound bundle has no impact sounds for the Books and CardBoard prop types, so 39
   Equator props (30 Books: shoes, books, blue cups and a road cone; 9 CardBoard: pizza boxes
   and office folders) and any props of those types on the other maps stay silent when they hit
   something.
-- The crowd murmur and the 4-to-8-second pauses between spectator calls are new and
-  untuned; they ran on the test host on all four maps without a warning, but nobody has
-  listened to them yet.
+- The crowd murmur and the 4-to-8-second pauses between spectator calls are new; they ran
+  on the test host on all four maps without a warning, and the author listened to them in
+  play on 30 October 2026 and approved them. Their level and reach are a first choice,
+  tunable with DeveloperMode.
 - The crowds decode 123 shared images into about 0.5 GB of video memory per raid on
   every map and add about two seconds to raid loading. The GitHub release
   notes explain how to skip a map's crowd.

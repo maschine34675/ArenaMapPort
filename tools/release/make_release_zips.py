@@ -6,7 +6,8 @@ dist/ holds two install roots, `BepInEx/plugins/maschine-ArenaMapPort/...` (clie
 
 Two layouts, one classification, one verifier:
 
-  --single   (the release form the user chose; about 3.4 GiB with the four encrypted maps of 0.3.0, hosted on Pixeldrain, not GitHub)
+  --single   (the release form the user chose for 0.3.0 and again for 0.4.0 on 2026-10-30; about 3.4 GiB with the four encrypted
+              maps of 0.3.0, about 3.6 GiB for 0.4.0 with the spectators; hosted on Pixeldrain, not GitHub)
       maschine-ArenaMapPort-<version>.zip     EVERY dist file, the generated README.txt and
                                               THIRD-PARTY-NOTICES.txt entries, and the manifest
                                               BepInEx/plugins/maschine-ArenaMapPort/parts/full.json
@@ -672,12 +673,15 @@ def prose_name(display: str) -> str:
 
 def readme_text(spec: ReleaseSpec, parts) -> str:
     """The generated README.txt. The multi-part wording is fixed; the single-ZIP layout replaces exactly the
-    three paragraphs that depend on it (what the release consists of, the extraction step, the verification)."""
+    four paragraphs that depend on it (what the release consists of, the extraction step, the verification and the
+    update sentence) and describes the WHOLE release: nothing in it may talk about parts or a core part."""
     names = ", ".join(prose_name(m.display) for m in spec.maps)
     sha_name = f"{PACKAGE}-{spec.version}.sha256"
     if is_single_layout(parts):
-        intro = (f"This release is ONE ZIP: {parts[0].zip_name}. It holds the plugin, the server mod and the\n"
-                 f"data of every included map ({names}); there is nothing else to download.\n\n")
+        intro = (f"This release is ONE ZIP: {parts[0].zip_name}. It holds the plugin, the server mod, the\n"
+                 "shared files (spectator textures, calls and crowd murmur, original map descriptions, selection\n"
+                 f"artwork, score monitor sprites) and the data of every included map ({names}); there is\n"
+                 "nothing else to download.\n\n")
         extract = ("2. Extract the ZIP into your SPT installation directory (the folder that contains\n"
                    "   BepInEx and SPT_Runtime). Merge the folders and replace existing ArenaMapPort files\n"
                    "   when prompted.\n")
@@ -685,6 +689,7 @@ def readme_text(spec: ReleaseSpec, parts) -> str:
                         "(Get-FileHash in PowerShell). BepInEx/plugins/maschine-ArenaMapPort/parts/full.json records\n"
                         "the files it installed.\n\n")
         from_single = ""
+        update_what = "the complete ZIP"
     else:
         display = {m.stem: prose_name(m.display) for m in spec.maps}
         lines = []
@@ -703,6 +708,7 @@ def readme_text(spec: ReleaseSpec, parts) -> str:
                         "the files it installed.\n\n")
         # 0.3.0 was ONE ZIP whose manifest is parts/full.json; the parts do not replace it, and a stale manifest of the
         # former package only misleads (nothing reads it).
+        update_what = "the complete release package (ALL parts if split)"
         from_single = ("   When upgrading from 0.3.0, also delete BepInEx/plugins/maschine-ArenaMapPort/parts/full.json,\n"
                        "   the manifest of the former single ZIP: this release no longer ships it and nothing reads it.\n")
     return (f"ArenaMapPort {spec.version}\n\n"
@@ -722,7 +728,7 @@ def readme_text(spec: ReleaseSpec, parts) -> str:
             "   duplicate maps. Unused arena-audio and arena-ui folders may be removed too.\n"
             + from_single +
             "4. Start the SPT server, then the game.\n\n"
-            "Updating: extract the complete release package (ALL parts if split) with the SPT server closed, so the client\n"
+            f"Updating: extract {update_what} with the SPT server closed, so the client\n"
             "and the server DLL, the bundles, the keys folder and the server database all come from this release (a\n"
             "running server keeps its DLL locked); keep BepInEx/config. The keys folder\n"
             "(BepInEx/plugins/maschine-ArenaMapPort/keys) belongs to the bundles next to it: a missing or damaged key\n"
@@ -735,10 +741,10 @@ def readme_text(spec: ReleaseSpec, parts) -> str:
             "These maps are intended for ArenaMode; no loot or scav raids are provided.\n"
             "ArenaMode and other mods are not included.\n"
             "Known audio limits: a cause of the intermittent Equator static of 0.3.0 was found and fixed in this\n"
-            "release (a bundle block flagged as compressed but stored uncompressed; measured on the test host, not\n"
-            "yet listened to). A faint steady hiss and short clicks seen in one recording are not explained by it.\n"
-            "The crowd murmur and the 4-to-8-second pauses between spectator calls are new and untuned; nobody has\n"
-            "listened to them yet.\n"
+            "release (a bundle block flagged as compressed but stored uncompressed; measured on the test host and\n"
+            "confirmed by the author in play). A faint steady hiss and short clicks seen in one recording are not\n"
+            "explained by it. The crowd murmur and the 4-to-8-second pauses between spectator calls are new; the\n"
+            "author listened to them in play and approved them.\n"
             "The game's own sound bundle has no impact sounds for the Books and CardBoard prop types, so 39 Equator\n"
             "props (shoes, books, blue cups, a road cone, pizza boxes and office folders) stay silent when they hit\n"
             "something.\n"

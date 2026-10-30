@@ -205,3 +205,22 @@ record `work/releases/0.4.0/virustotal.json`): client 0 malicious, 0 suspicious 
 **Before any publication:** the user's reauthorization and his three decisions (the "Rauschen" identity, a 0.3.1 with only the Equator bundle, the repair
 instead of a Unity rebuild); the tag on the commit that carries this paragraph or a descendant (the manifests pin `833275d`); a re-dating of the changelog
 heading and the release note if the publication happens on another day than the one they name. Nothing was tagged, uploaded or pushed.
+
+## Release form changed to one whole ZIP - 2026-10-30 (user decision)
+
+The user decided (German): "das zip archiv wird wieder als ganzes auf pixeldrain hochgeladen, wie bei den letzten veröffentlichungen, kein fünfer-split". The sections above prepare the five-part GitHub form of
+2026-10-29 and its re-cuts (`github-8941caa`, `github-a4aa0af`, `github-833275d`, `github-8a28c1d`); that plan is superseded. 0.4.0 ships as in 0.3.0: one ZIP,
+`maschine-ArenaMapPort-0.4.0.zip`, plus its `.sha256`, on Pixeldrain, and a GitHub release whose only asset is the checksum file and whose notes carry the Pixeldrain
+links. `work/releases/0.4.0/PREPARATION.md` and `Verify-Preparation.ps1` were written for the multipart set (they say "do not use `--single`") and are not a recipe for
+this cut.
+
+Changed with this decision: `docs/releases/v0.4.0.md` (Download and Installation in the 0.3.0 form, placeholders for the Pixeldrain links, the ZIP size and the ZIP
+checksum beside the build commit and the VirusTotal lines; the upgrade notes now say that the ZIP overwrites 0.3.0's `parts/full.json` instead of asking the player to
+delete it; the way to restore a skipped crowd is to extract the ZIP again), README, FORGE, CHANGELOG, the five reinstall texts of the in-game notices (client DLL
+changes: "release ZIP" / "Release-ZIP"), and the single-layout `README.txt` of `make_release_zips.py` ("Updating: extract the complete ZIP ..."; the intro lists the
+shared files, which a multi-part set keeps in its core part). The multi-part README.txt, the partition and their pins are unchanged.
+
+Still true from the sections above and not about parts: the hedged claims (gate sounds, puddles, lamps, the crowd murmur and the pauses are not listened to), the Books and
+CardBoard limitation, the Equator static fix and its measured-not-listened wording, the crowd cost paragraph, the upgrade of a development build. Cut and publication:
+`python tools/release/make_release_zips.py --single --out work/releases/0.4.0/pixeldrain-<commit> --extract-check <empty scratch dir>`, then `--verify-only`, then
+`upload_pixeldrain.py`; the DLLs are rebuilt first because the notice texts are in the client DLL (HANDOFF.md, top block). No release build, cut, tag, upload or push was done with this decision.

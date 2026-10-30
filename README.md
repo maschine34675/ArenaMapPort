@@ -80,16 +80,15 @@ stay shut.
 - **SAIN** is optional; location compatibility is handled when it is installed.
 - Fika compatibility has not been verified.
 
-The five release ZIP parts contain the built maps. Players do not need to run the export
+The release ZIP contains the built maps. Players do not need to run the export
 tools or install Unity.
 
 ## Installation
 
 1. Close EFT and the SPT server.
-2. Download and extract **all five ZIP parts** (core, Equator, Bay5, Air Pit and Bowl)
-   from the same release into your SPT installation, merging their `BepInEx`
-   and `SPT_Runtime` directories. They can be extracted in any order; do not join them
-   into one archive. GitHub's automatic source-code archives do not contain the maps.
+2. Download the release ZIP (its links are in the notes of the GitHub release) and extract
+   the whole ZIP into your SPT installation, merging its `BepInEx` and `SPT_Runtime`
+   directories. GitHub's automatic source-code archives do not contain the maps.
 3. Start the SPT server, then EFT.
 
 The installed folders are:
@@ -100,7 +99,7 @@ The installed folders are:
 When upgrading an older development package, move the former
 `BepInEx/plugins/ArenaMapPort` directory outside `BepInEx/plugins` before
 extracting, so only one client is installed. Keep your configuration files.
-The release's `.sha256` file lists the checksum of each ZIP part. The core part's
+The release's `.sha256` file lists the checksum of the ZIP. The ZIP's
 package README includes cleanup instructions for old DynamicMaps and development
 files; the [0.4.0 release notes](docs/releases/v0.4.0.md) also cover the retired
 debug helper and the upgrade from 0.3.0.
@@ -150,7 +149,7 @@ The setting **General / ShowMapNotices** hides the main-menu message, the "still
 it never turns the Arena check off, and the message that answers a failed raid start still appears. These notices cover installation
 and map-loading failures; optional feature warnings may still appear in the log.
 
-The server's exact reason (the `SERVER_` refs) needs the client and the server of the same version: install all five parts from the same release,
+The server's exact reason (the `SERVER_` refs) needs the client and the server of the same version: install both parts from the same release ZIP,
 with the SPT server closed (a running server keeps its DLL locked). An older server cannot say why, and the message then asks for exactly
 that.
 
@@ -165,12 +164,12 @@ that.
 | `CHECK_SLOW` | The installation check did not finish in time (slow disk or unreachable folder). | Start the raid again; if it repeats, check that the Arena folder is on a local, connected drive. |
 | `HOOK_MISSING` | This ArenaMapPort build does not fit your game version. | Install the ArenaMapPort release that matches your SPT version. |
 | `SERVER_NO_ARENA` | The SPT server could not verify Arena, although this game found it. | Follow the message: usually create `SPT_Runtime/user/mods/ArenaMapPort/config/arena-install.json` on the server PC (the message shows the content), fix its path or its backslashes, let the launcher finish updating Arena there, or restart the server. |
-| `SERVER_UNKNOWN` | The server does not offer the maps and did not say why (its ArenaMapPort is missing or older, or could not find Arena). | Close the server, reinstall all five parts from the same release, restart the server and the game. The server console says why in lines starting with `[ArenaMapPort]`. |
+| `SERVER_UNKNOWN` | The server does not offer the maps and did not say why (its ArenaMapPort is missing or older, or could not find Arena). | Close the server, reinstall both parts from the same release ZIP, restart the server and the game. The server console says why in lines starting with `[ArenaMapPort]`. |
 | `SERVER_NO_ANSWER` | The server did not answer the question why (timeout or error). | Restart the SPT server, then the game. |
-| `SERVER_ALL_FAILED` | The server could not register any Arena map. | Close the server, reinstall the server files (`SPT_Runtime/user/mods/ArenaMapPort`) from all five release parts, restart it. |
-| `SERVER_PARTIAL` | The server does not offer some maps this game knows (its ArenaMapPort is probably older). | Close the server, copy each release part's `SPT_Runtime` folder over the installation (overwrite its files), restart it. |
-| `SERVER_PARTIAL_FAILED` | The server could not register some maps. | Close the server, reinstall the server files (`SPT_Runtime/user/mods/ArenaMapPort`) from all five release parts, restart it. |
-| `FILES_MISSING` | ArenaMapPort's files for some maps are missing (an incomplete installation). | Extract all five ZIP parts again (client folder `BepInEx/plugins/maschine-ArenaMapPort` with its `bundles` and `keys`), restart the game. |
+| `SERVER_ALL_FAILED` | The server could not register any Arena map. | Close the server, reinstall the server files (`SPT_Runtime/user/mods/ArenaMapPort`) from the release ZIP, restart it. |
+| `SERVER_PARTIAL` | The server does not offer some maps this game knows (its ArenaMapPort is probably older). | Close the server, copy the release ZIP's `SPT_Runtime` folder over the installation (overwrite its files), restart it. |
+| `SERVER_PARTIAL_FAILED` | The server could not register some maps. | Close the server, reinstall the server files (`SPT_Runtime/user/mods/ArenaMapPort`) from the release ZIP, restart it. |
+| `FILES_MISSING` | ArenaMapPort's files for some maps are missing (an incomplete installation). | Extract the complete release ZIP again (client folder `BepInEx/plugins/maschine-ArenaMapPort` with its `bundles` and `keys`), restart the game. |
 | `KEY_UPDATED` | A map cannot be opened: your Arena is newer than the build this ArenaMapPort was made for, and files it needs changed. | Install the newest ArenaMapPort release. |
 | `KEY_ARENA_OLDER` | A map cannot be opened: your Arena is older than the build this ArenaMapPort was made for. | Update Arena in the launcher. |
 | `KEY_DIFFERS` | A map cannot be opened: the Arena files it is built from do not match the unlock file. | Repair Arena in the launcher (damaged or modified files); if it stays, your Arena version needs an ArenaMapPort update. |
@@ -213,13 +212,13 @@ bundle is now checked for such blocks before it is staged. The Equator bundle of
 carries the defect.
 
 The static no longer shows up in recordings of the game's sound made on the test host,
-but nobody has listened to the repaired bundle yet, so one playing session on Equator is
-the remaining confirmation. A faint steady hiss and short clicks seen in one recording
-are not explained by this fix.
+and the author confirmed in play on 30 October 2026 that the noise is gone. A faint
+steady hiss and short clicks seen in one recording are not explained by this fix.
 
-The crowd murmur and the 4-to-8-second pauses between spectator calls are new
-and untuned; they ran on the test host on all four maps without a warning, but
-nobody has listened to them yet.
+The crowd murmur and the 4-to-8-second pauses between spectator calls are new;
+they ran on the test host on all four maps without a warning, and the author
+listened to them in play on 30 October 2026 and approved them. Their level and
+reach are a first choice, tunable with DeveloperMode.
 
 EFT's own sound bundle has no impact sounds for the Books and CardBoard
 prop types, so 39 Equator props (shoes, books, blue cups, a road cone, pizza boxes

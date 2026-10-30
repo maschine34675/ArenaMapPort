@@ -249,24 +249,25 @@ public sealed class MapNoticeTextTests
     }
 
     /// <summary>
-    /// 0.4.0 ships five ZIP parts (core plus one per map), all extracted into the same SPT root: the reinstall advice of the server and
-    /// file texts says "release package (all its ZIP parts)", never "the ZIP" (a player would extract only one part again).
+    /// The release is ONE ZIP on Pixeldrain, like 0.3.0 (user decision 2026-10-30; a five-part form prepared on 2026-10-29 was dropped): the
+    /// reinstall advice of the server and file texts names "the release ZIP" and nothing that sounds like a set of ZIP parts.
     /// </summary>
     [Fact]
-    public void ReinstallAdviceNamesTheReleasePackageWithAllItsZipPartsInBothLanguages()
+    public void ReinstallAdviceNamesTheReleaseZipInBothLanguages()
     {
         NoticeId[] ids = { NoticeId.ServerUnknown, NoticeId.ServerAllFailed, NoticeId.ServerSomeMissing, NoticeId.ServerSomeFailed, NoticeId.InstallIncomplete };
         foreach (NoticeId id in ids)
         {
             string en = MapNoticeText.Compose(NoticeTestData.FullPlan(id), "en").Text;
             string de = MapNoticeText.Compose(NoticeTestData.FullPlan(id), "de").Text;
-            Assert.Contains("release package", en);
-            Assert.Contains("all its ZIP parts", en);
-            Assert.Contains("Release-Paket", de);
-            Assert.Contains("alle seine ZIP-Teile", de);
-            // no leftover singular wording: every "ZIP" that remains is part of "ZIP parts" / "ZIP-Teile"
-            Assert.DoesNotContain("ZIP", en.Replace("ZIP parts", ""));
-            Assert.DoesNotContain("ZIP", de.Replace("ZIP-Teile", ""));
+            Assert.Contains("release ZIP", en);
+            Assert.Contains("Release-ZIP", de);
+            // no leftover wording of a split release or of the intermediate "package" form
+            foreach (string gone in new[] { "ZIP parts", "all its", "release package", "ZIP-Teile", "alle seine", "Release-Paket" })
+            {
+                Assert.DoesNotContain(gone, en);
+                Assert.DoesNotContain(gone, de);
+            }
         }
     }
 

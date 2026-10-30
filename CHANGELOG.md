@@ -27,8 +27,9 @@ Full release note: [docs/releases/v0.4.0.md](docs/releases/v0.4.0.md).
   so the murmur is an addition of this port. It stays at one level and does not react to match events yet. Mod authors: the public
   class `ArenaMapPort.Client.SpectatorCrowd` (contract version 1: `SetExcitement`, `Excitement`, `IsAvailable`) lets a mode plugin
   raise it by up to 60 percent; ArenaMode does not use it yet (see `docs/progress/spectator-audio.md`). One new audio file of about
-  2.6 MB ships in the core part. The developer settings `Spectators/CrowdBed`, `CrowdBedVolume` and `CrowdBedReach` need
-  `General/DeveloperMode`; there is no player setting. Not yet listened to (see Known limitations).
+  2.6 MB ships in the ZIP. The developer settings `Spectators/CrowdBed`, `CrowdBedVolume` and `CrowdBedReach` need
+  `General/DeveloperMode`; there is no player setting. The author listened to the murmur and the new call pauses in play on
+  2026-10-30 and approved them.
 - **Shared spectator textures.** The crowd textures are stored once for all four maps (about 147 MB on disk). Map and texture
   integrity checks detect mixed or damaged installations.
 - **Exit signs light with the gates (Equator, Air Pit).** The exit signs above Equator's booth doors and above Air Pit's
@@ -88,13 +89,13 @@ Full release note: [docs/releases/v0.4.0.md](docs/releases/v0.4.0.md).
 - Gate and door sounds were checked in the log only and have not been listened to. Bay5's gate sounds were never in
   range during a test; loudness, reach and the fit of the clips shortened to the faster gate motion are untuned.
   The exit lamps were checked by reading their state, not by eye.
-- The crowd murmur and the 4-to-8-second pauses between spectator calls are new and untuned: they ran on the test host on all four maps without a warning, but nobody has listened to them yet, and the
-  murmur's level and reach are first guesses.
+- The crowd murmur and the 4-to-8-second pauses between spectator calls are new: they ran on the test host on all four maps
+  without a warning and the author approved them by ear on 2026-10-30; their level and reach are a first choice, tunable
+  with DeveloperMode.
 - Equator's puddle cache and the rain-driven puddles have not been checked in game, and the splash sound has not been
   listened to on any map.
-- The Equator static (see Fixed) no longer shows up in recordings made on the test host, but nobody has listened to the repaired
-  bundle yet; one playing session on Equator is the remaining confirmation. A faint steady hiss and short clicks seen in one
-  recording are not explained by the fix.
+- The Equator static (see Fixed) no longer shows up in recordings made on the test host, and the author confirmed in play on
+  2026-10-30 that it is gone. A faint steady hiss and short clicks seen in one recording are not explained by the fix.
 - EFT's own sound bundle has no impact sounds for the Books and CardBoard prop types. On Equator 39 props (30 Books: shoes,
   books, blue cups and a road cone; 9 CardBoard: pizza boxes and office folders), and any props of those types on other
   maps, stay silent when they hit something.
@@ -102,8 +103,10 @@ Full release note: [docs/releases/v0.4.0.md](docs/releases/v0.4.0.md).
 ### Compatibility
 
 - SPT 4.1.6 / EFT 0.16.9.5-40743; server range remains `~4.1.5`.
-- GitHub downloads use five complete ZIP parts: core, Equator, Bay5, Air Pit and Bowl. Install all five. When upgrading
-  from 0.3.0, delete `BepInEx/plugins/maschine-ArenaMapPort/parts/full.json` (the manifest of the former single ZIP).
+- One ZIP on Pixeldrain, as for 0.3.0 (the ZIP is too large for a GitHub release asset; the GitHub release carries the notes, the
+  links and the checksum file). Close EFT and the SPT server and extract the whole ZIP over the installation; keep
+  `BepInEx/config`. There is no DLL-only package. From 0.3.0 the ZIP replaces both DLLs and the Equator scenes bundle (see
+  Fixed) and adds the spectator, gate-sound and score-monitor files.
 - Requires an installed Escape from Tarkov: Arena. Both client and server must be updated together.
 - Fika compatibility has not been verified. No match-event crowd reactions are included.
 

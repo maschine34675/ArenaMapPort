@@ -17,7 +17,8 @@ dated state in one screen; read it before this index if you only have a minute.
   the host-verified fallback). Late on 2026-10-29 the Equator noise got a cause (`equator-noise-bundle-block.md`): the Equator
   scenes bundle of every package so far carries one defective block, so the 0.4.0 package is to be re-cut after the repair. The repair was staged, deployed and host-verified by numbers on 2026-10-30; the `a4aa0af`
   DLLs, their VirusTotal scan and the `github-a4aa0af` cut are superseded (both DLLs are rebuilt and rescanned, and the five-part package is cut again
-  from the commit that carries the 2026-10-30 texts).
+  from the commit that carries the 2026-10-30 texts). **The release form changed on 2026-10-30 (user decision): one whole ZIP on Pixeldrain like 0.3.0, no five-part
+  split** (last section of the file; the five-part cuts are superseded and the player texts say "the release ZIP" again).
 
 - [release-sweep-20261029.md](release-sweep-20261029.md) — mixed native checks on both hosts,
   spectator diagnostic gating, late physics sound callback fix and remaining audio limits. Its 2026-10-29 correction

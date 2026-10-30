@@ -1651,3 +1651,18 @@ call to `ArenaInstallationGate.EnsureVerified()`. The text tables of the 2026-10
 only: they have not been shown in the game, because the host run of the build that carries them (`8941caa`) is blocked (see HANDOFF.md). [2026-10-29 21:08: GPU-2
 runs again and `52c8a28` was host-run on a healthy install (four maps available, Arena verified), so no failure notice was exercised; the texts stay
 unit-test-only.]
+
+## 2026-10-30 - the reinstall advice names the release ZIP again
+
+User decision of 2026-10-30: 0.4.0 ships like 0.3.0, as one whole ZIP on Pixeldrain and not as five ZIP parts. The wording of the entry above ("release package (all its
+ZIP parts)") would now send a player looking for parts that do not exist, so the same five texts (`ServerUnknown`, `ServerAllFailed`, `ServerSomeMissing`,
+`ServerSomeFailed`, `InstallIncomplete`) say "release ZIP" again: English "from the same release ZIP", "from the release ZIP", "of the same release ZIP" and "Extract the
+complete release ZIP again (client folder ..., with its bundles and keys)"; German "aus demselben Release-ZIP", "aus dem Release-ZIP" and "Entpacke das komplette
+Release-ZIP erneut (Client-Ordner ... mit seinen Bundles und Keys)". Every other word is as before.
+`MapNoticeTextTests.ReinstallAdviceNamesTheReleasePackageWithAllItsZipPartsInBothLanguages` is replaced by
+`ReinstallAdviceNamesTheReleaseZipInBothLanguages`: all five texts, in both languages, contain "release ZIP" / "Release-ZIP" and none contains "ZIP parts", "all its",
+"release package", "ZIP-Teile", "alle seine" or "Release-Paket".
+
+Only wording changed: ids, placeholders, selector, scheduler, delivery rules and `General/ShowMapNotices` are as before, and no notice file gained a call to
+`ArenaInstallationGate.EnsureVerified()`. The entry above and the text tables of the 2026-10-22 design stay as the historical record. Unit-test evidence only: the texts
+have not been shown in the game.

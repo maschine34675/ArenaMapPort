@@ -1,5 +1,32 @@
 # HANDOFF — dated working state
 
+## Release form: one whole ZIP on Pixeldrain, no five-part split - 2026-10-30 (user decision; texts changed, the cut is open)
+
+**Request (user, German):** "das zip archiv wird wieder als ganzes auf pixeldrain hochgeladen, wie bei den letzten veröffentlichungen, kein fünfer-split".
+
+**What it means.** 0.4.0 ships like 0.3.0: ONE ZIP, `maschine-ArenaMapPort-0.4.0.zip` (every dist file, about 3.6 GiB; manifest
+`BepInEx/plugins/maschine-ArenaMapPort/parts/full.json`), plus its one-line `.sha256`, on Pixeldrain, and a GitHub release whose notes carry the Pixeldrain links
+and whose only asset is the checksum file (the ZIP is larger than GitHub's per-asset limit; 0.3.0 was published the same way). The five-part GitHub form that
+was prepared on 2026-10-29 is dropped. The five-part cuts `github-8941caa`, `github-a4aa0af`, `github-833275d` and `github-8a28c1d` under
+`work/releases/0.4.0` are not the release form any more and are superseded; so are `PREPARATION.md` and `Verify-Preparation.ps1` there as a recipe (written
+for the multipart set). The multi-part layout stays available in `tools/release/make_release_zips.py` (its default mode); the release uses `--single`.
+
+**Texts changed to the single-ZIP form:** `docs/releases/v0.4.0.md` (the Download block in the 0.3.0 form with
+placeholders `<PIXELDRAIN_LIST_URL>`, `<PIXELDRAIN_FILE_URL>`, `<PIXELDRAIN_DIRECT_URL>`, `<PIXELDRAIN_SHA256_URL>`, `<ZIP_BYTES>`, `<ZIP_GIB>` and `<ZIP_SHA256>` beside the
+unchanged `<BUILD_COMMIT>`, `<scan date>`, `<VirusTotal URL>` and `<n>`; installation steps; upgrade notes from 0.3.0 and from 0.2.3 or older: the ZIP replaces both
+DLLs and the Equator scenes bundle, adds the spectator, gate-sound and monitor folders and overwrites 0.3.0's `parts/full.json`, so no manual deletion is needed any more),
+README (installation, `.sha256`, the `SERVER_` and `FILES_MISSING` rows), FORGE, CHANGELOG (Compatibility), the five in-game reinstall texts in `MapNoticeText.cs`
+("release ZIP" / "Release-ZIP", `MapNoticeTextTests.ReinstallAdviceNamesTheReleaseZipInBothLanguages`; [map-notices.md](docs/progress/map-notices.md) last entry), and the
+packer's single-layout `README.txt` (the update sentence reads "the complete ZIP" instead of "ALL parts if split", and the intro names the shared files that a multi-part
+set keeps in its core part). The crowd murmur bed and its texts are as before.
+
+**Open, in this order (the lead's):** (1) commit this change; because `MapNoticeText.cs` changed, rebuild the client and the server DLL from the commit that carries it all
+(extractors in the main checkout, client Release build, server Release build, `validate_dll_versions`), deploy, one host raid and the hideout once, and scan both DLLs
+again; (2) cut `python tools/release/make_release_zips.py --single --out work/releases/0.4.0/pixeldrain-<commit> --extract-check <empty scratch dir>`, then
+`--verify-only` on the output; (3) upload ZIP and checksum with `tools/release/upload_pixeldrain.py`, fill the placeholders of `docs/releases/v0.4.0.md` from its Markdown
+block and the scan; (4) the user's reauthorization, then tag and GitHub release with the notes and the `.sha256` file as the only asset. This change did no release
+build, cut, tag, upload or push.
+
 ## Crowd murmur bed and longer call pauses - 2026-10-30 (host-verified by numbers 10:46-11:00; the re-cut is open)
 
 **Request (user, German, paraphrased):** asked whether a crowd murmur from the stands fits Arena, he said he has never played EFT Arena and cannot say for sure, it sounds
@@ -33,8 +60,8 @@ good, implement it, and the pauses between the normal single calls could then be
   the two `test_the_validator_run_passes` in `test_door_poses` and `test_score_monitors`: a subprocess decode error), 131 skips from the missing ignored `work/` inputs; rerun it in the main checkout.
 
 **What this supersedes.** The `833275d` DLLs, their VirusTotal scan and the five-part cut `work/releases/0.4.0/github-833275d` (items 1 and 2 of the "Open, in this order" list
-further down) no longer describe the candidate: the client DLL changes, the core part gains a file and its README.txt/checksum change, and all five part manifests pin the build
-commit, so all five parts are cut again. `docs/releases/v0.4.0.md` carries its "Built from commit" and VirusTotal lines as placeholders again. The `fe45b84` package stays the
+further down) no longer describe the candidate: the client DLL changes, the core part gains a file and its README.txt/checksum change, and every manifest pins the build
+commit, so the release is cut again (as one ZIP since 2026-10-30, see the block above). `docs/releases/v0.4.0.md` carries its "Built from commit" and VirusTotal lines as placeholders again. The `fe45b84` package stays the
 earlier host-verified fallback and still has no murmur.
 
 **Open, in this order:**
@@ -49,8 +76,8 @@ earlier host-verified fallback and still has no murmur.
    (NoiseProbe Detect minute lines), cadence `spec=+9/-9` a minute. The earlier plan of this item was: full deploy, EFT restart, and the host run of the checklist in the progress section (four raids, live keys, level by
    NoiseProbe Capture bed off/on, frame time, cadence, the hideout once). The player texts say "not listened to" and make no claim about log checks; when the run is done, add its
    evidence sentence to CHANGELOG, `docs/releases/v0.4.0.md` and the Known-limitations bullets, and a dated paragraph to the progress section.
-3. Re-cut the five parts from the commit that carries it all, rescan both DLLs, fill the placeholders of `docs/releases/v0.4.0.md`, and re-read the generated core README.txt (it names the
-   core contents and the audio limits; `tools/release/make_release_zips.py` is the pipeline patch's file).
+3. Re-cut as ONE ZIP (user decision 2026-10-30, the block above: `make_release_zips.py --single`; the five-part re-cut this item first planned is dropped) from the commit that carries it all, rescan both DLLs, fill the placeholders of `docs/releases/v0.4.0.md`, and re-read the generated README.txt (it names the
+   shared files and the audio limits; `tools/release/make_release_zips.py` is the pipeline patch's file).
 4. User decisions: his ear on the murmur (loudness, reach, whether it belongs; no make-up gain was added: at the defaults the murmur arrives at about -40 dBFS rms at a stand centre and
    `BED_GAIN_DB` in the extractor is the one place to raise it, with a re-extract, re-stage and re-cut; the first 1.2 s of the clip have swells of 6-9 dB that every stand repeats once per
    loop, a loop-start rotation in the extractor would remove them; the stand count follows `SpectatorCrowdBedModel.MaxStandRadius`, 25 m; `Spectators/CrowdBedVolume` and `CrowdBedReach` tune it live with DeveloperMode); whether the
@@ -342,6 +369,8 @@ Snapshot for whoever continues (human or agent). Verify the commits named here a
 is updated by hand at each handover, it is not an automatic record. Read [AGENTS.md](AGENTS.md) first.
 
 ## Update 2026-10-29 - GitHub 0.4.0 release preparation
+
+**Superseded on 2026-10-30 (user decision): the release is one whole ZIP on Pixeldrain, see the top of this file. The five-part layout described in this section is not used.**
 
 The user now authorizes the public GitHub release. Current client/server metadata is already 0.4.0;
 the changelog is dated 2026-10-29 and the release note includes final two-voice scheduling, diagnostic

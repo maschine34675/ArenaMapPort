@@ -150,11 +150,23 @@ member name pinned in the client (`method_N`, `vmethod_N`) is verified there and
 
 ## Release configuration
 
+**2026-10-30 (release form, user decision):** "das zip archiv wird wieder als ganzes auf pixeldrain hochgeladen, wie bei den letzten veröffentlichungen, kein fünfer-split". 0.4.0 ships like 0.3.0: ONE whole ZIP,
+`maschine-ArenaMapPort-0.4.0.zip` (all distribution files, about 3.6 GiB; manifest
+`BepInEx/plugins/maschine-ArenaMapPort/parts/full.json`), plus its one-line `.sha256`, on Pixeldrain (`tools/release/upload_pixeldrain.py`), and a GitHub
+release whose notes carry the Pixeldrain links and whose only asset is the checksum file (the ZIP is larger than GitHub's per-asset limit). The cut is
+`python tools/release/make_release_zips.py --single --out work/releases/0.4.0/pixeldrain-<commit> --extract-check <empty scratch dir>`. The five-part form
+that was prepared on 2026-10-29 (core plus one ZIP per map as GitHub assets) is dropped: the five-part cuts `github-8941caa`, `github-a4aa0af`,
+`github-833275d` and `github-8a28c1d` under `work/releases/0.4.0` are not the release form any more and are superseded (ship none of them), and so are
+`work/releases/0.4.0/PREPARATION.md` and `Verify-Preparation.ps1` as a recipe (they were written for the multipart set). The multi-part layout stays available
+in the packer (its default mode, for a channel with a file size cap). README, FORGE, CHANGELOG, `docs/releases/v0.4.0.md`, the generated `README.txt` and the
+in-game reinstall advice say "the release ZIP" again, with no part table. The paragraphs below that speak of five parts, a core part or the multipart form
+describe the superseded plan and stay as history. Publication stays postponed.
+
 **2026-10-29: publication is postponed at the user's request.** Keep the prepared 0.4.0
 source/package local; do not create a remote tag or upload a release until reauthorized.
 See the top of HANDOFF.md. The preparation plan below is retained for that later step.
 The corrected candidate is `52c8a28` plus the commit that carries the release texts of 2026-10-29 evening (crowd worker with CNG hashing, NoiseProbe
-that arms on a stereo driver, five-part texts after the release audit). `52c8a28` had its host run on GPU-2 (20:55-21:08: four plain PMC raids without bots,
+that arms on a stereo driver, release texts after the release audit, five-part wording then and single-ZIP wording since 2026-10-30). `52c8a28` had its host run on GPU-2 (20:55-21:08: four plain PMC raids without bots,
 the hideout once; crowd build 2.08-2.16 s on the main thread, 0 ArenaMapPort warnings). The release build is `833275d` (2026-10-30: the repaired Equator bundle and the
 texts): both DLLs rebuilt from it, deployed, one Equator raid on GPU-2 at 01:14, the five-part cut `work/releases/0.4.0/github-833275d`
 (extract-check 255 files identical) and VirusTotal 0/0 of 75 for both DLLs; the `a4aa0af` build, cut and scan of 2026-10-29 are superseded. The `github-8941caa` package and its VirusTotal lines are superseded;
@@ -162,21 +174,23 @@ the `fe45b84` package is the earlier host-verified fallback (see HANDOFF.md). No
 
 **2026-10-30 (crowd murmur bed, longer call pauses):** once the crowd murmur bed and the 4.0-8.0 s call cadence are committed (user decision of that day,
 [spectator-audio.md](docs/progress/spectator-audio.md) "Crowd murmur bed and longer call pauses"), the build `833275d` with its deploy, five-part cut and
-VirusTotal scan is superseded. A new candidate needs the extractor run in the main checkout, a client Release build, a full deploy, a host run, a five-part re-cut
-(every part manifest pins the build commit) and a new scan of both DLLs before any publication; `docs/releases/v0.4.0.md` carries its build and scan lines as
-placeholders again, and all player texts say that the murmur and the pauses are not listened to. Publication stays postponed.
+VirusTotal scan is superseded. A new candidate needs the extractor run in the main checkout, a client Release build, a full deploy, a host run, a re-cut as the single ZIP
+(its manifest pins the build commit) and a new scan of both DLLs before any publication; `docs/releases/v0.4.0.md` carries its build and scan lines as
+placeholders again. **2026-10-30, user decisions:** "das rauschen ist jetzt weg" (the repaired Equator bundle, heard in play), no 0.3.1, and "sound habe ich
+mir ingame angehoert, passt perfekt, kann so veroeffentlicht werden" (the murmur and the 4-8 s pauses): the player texts say approved by the author's ear, and
+**publication of 0.4.0 is authorized** as one ZIP on Pixeldrain with a GitHub release (notes, checksum asset) and the tag `v0.4.0`.
 
-The 2026-10-29 user-authorized 0.4.0 GitHub release uses the existing multipart packer form:
-core plus Equator/Bay5/AirPit/Bowl, all five ordinary ZIPs extracted into the same SPT root.
+The 2026-10-29 plan for the user-authorized 0.4.0 GitHub release used the existing multipart packer form (core plus
+Equator/Bay5/AirPit/Bowl, five ordinary ZIPs extracted into the same SPT root); the user dropped it on 2026-10-30 (first paragraph above).
 The full distribution has 255 files after shared spectator texture staging (256 since the crowd murmur bed of 2026-10-30). The October 28 single
-candidate ZIP is obsolete. Preserve historical notes below and use
-[release-preparation-20261029.md](docs/progress/release-preparation-20261029.md) for the current cut.
+candidate ZIP (`work/releases/0.4.0/maschine-ArenaMapPort-0.4.0.zip`, an earlier client build) is obsolete; the new `--single` cut replaces it. Preserve
+historical notes below and use [release-preparation-20261029.md](docs/progress/release-preparation-20261029.md) (last section) for the current cut.
 Missing Books and CardBoard impact sounds remain a documented limitation. The intermittent Equator noise has its cause found
 (one compressed-flag block of Equator's scenes bundle that Unity plays raw, [equator-noise-bundle-block.md](docs/progress/equator-noise-bundle-block.md))
 and its fix in the pipeline (corrected chunk compressor, repair step, `validate_bundle_blocks.py`); it is host-verified by numbers on 2026-10-30 (GPU-2:
 the static's fingerprint is gone with the repaired bundle, ON 1,581 ms before against 0-73 ms after; the recipe's +10 dB comb bar was exceeded by
 residues shorter than 10 ms and the R2 fit was not done, see the record), and the texts say that a cause was found and fixed, measured and not
-listened to. The user's ear is what stays open. **The Equator scenes bundle of 0.3.0 and of the local 0.4.0 packages (`fe45b84`,
+listened to until 2026-10-30, when the user confirmed in play that the noise is gone ("das rauschen ist jetzt weg"; no 0.3.1 wanted). **The Equator scenes bundle of 0.3.0 and of the local 0.4.0 packages (`fe45b84`,
 `github-a4aa0af`) carries the defective block**; the repaired bundle is staged and deployed, and the 0.4.0 package was re-cut from `833275d` on 2026-10-30
 (`work/releases/0.4.0/github-833275d`; the Equator part, the core part and the checksum file changed; both DLLs rebuilt and rescanned; no key file changes). Whether
 the public 0.3.0 gets a 0.3.1 with only that bundle replaced is the user's decision.
@@ -328,12 +342,12 @@ Run `python tools/extract/extract_spectator.py extract --map all` and
 are `work/extract/spectator-{airpit,equator,bay5,bowl}` and `work/extract/spectator-audio`;
 Release/DllOnly staging runs `tools/extract/stage_spectators.py stage`: schema-3 source exports
 stay intact, schema-4 map graphs go to `spectators/<map_key>/`, and the identical PNGs plus
-their manifest go once to `spectators/shared/` (core ZIP part). Each graph pins the manifest's
+their manifest go once to `spectators/shared/` (the core part of the multi-part layout, the one ZIP otherwise). Each graph pins the manifest's
 hash and runtime verifies the image bytes before decoding. Same-name/different-byte exports
 are refused. The shared audio stays in `spectator-audio/`. Since 2026-10-30 the same `extract_spectator_audio.py extract` run also writes the crowd murmur bed
 beside the 13 calls: `arena_fans_ambient_postmatch.wav` (Arena's crowd-ambience clip from `resources.assets`, read with UnityPy and not from the arena-audio `.ogg`;
 mono, 16-bit, 44.1 kHz, a 500 ms crossfade into the tail so it loops without a step) and a `bed` object in `spectator-audio.json` (schema 1 stays; a manifest without
-`bed` is valid and the client then has no murmur). It stages into the core part with the calls, which makes the distribution 256 files and core 154; `validate()`
+`bed` is valid and the client then has no murmur). It stages beside the calls (the core part of the multi-part layout), which makes the distribution 256 files and core 154 there; `validate()`
 requires the staged bed to match `work/extract/spectator-audio`.
 For old development installs, full-deploy first, then dry-run `-RemoveLegacySpectatorTextures`
 and confirm through the same deploy script with EFT closed. It verifies the DLL, all graphs and
@@ -794,7 +808,7 @@ the log; the user uses it to point at things.
   `validate_distribution.py` and `validate_port.py --distribution`. Why no probe saw it: the ring logs `isPlaying` edges of owned one-shots, the detector keys
   on transients and the census counts pooled sources, while this is a continuous plateau of one owned, non-pooled looping player. `indoor_wind (4)` is audible
   at 29.8 m only through the port's `AmbientRangeMultiplier` 2.5: not a mix bug, change no mix default for it.
-- Crowd murmur bed (2026-10-30, [spectator-audio.md](docs/progress/spectator-audio.md) "Crowd murmur bed and longer call pauses"; unit-tested, host verification pending, not listened to): the
+- Crowd murmur bed (2026-10-30, [spectator-audio.md](docs/progress/spectator-audio.md) "Crowd murmur bed and longer call pauses"; unit-tested, host-run on GPU-2 10:46-11:00, approved by the user's ear the same day): the
   Unity facts the glue stands on. `AudioRolloffMode.Logarithmic` stops attenuating at `maxDistance` and holds that level for ever, so a bed that must end uses a Custom curve (full gain to the
   minimum distance, 1/d, a taper to 0 at the maximum; the curve's x axis is distance over `maxDistance`; `SmoothTangents` on the two plateau keys overshoots gain 1, so they keep flat tangents).
   `AudioSource.volume` is held to 0..1: the key range 0..2 and the excitement factor 1.0-1.6 are reached by a gain of 3.2 baked into the decoded clip (`SpectatorCrowdBedModel.ClipGain`) and
