@@ -1,0 +1,244 @@
+{
+  "_comment": "PLAN-ICEBERG item 7 (docs/progress/iceberg-release.md, 2026-10-30): optional sidecar read by tools/server/make_base_json.py next to tools/maps/iceberg.json. OFFLINE DRAFT, not walked on the host yet: the first Iceberg raid must confirm every point with uibridge_teleport dryRun=true. Sides follow Arena's teams (Bear = the east pocket behind GATES_A, Usec = the west pocket behind GATES_B, tools/maps/iceberg.modes.json): the player spawns are the world positions of four of the 20 pocket markers, Bear (14) (All) and Bear (8) (Bear) in the east pocket (x 89..98, z -96..-84), Usec (8) (Usec) and Usec (14) (All) in the west pocket (x -44.5..-37, z -95..-80); each pocket offers both PMC sides through its All row, the other 16 pocket markers and all 50 stage markers stay unused until ArenaMode places teams. The four rows keep 1.4 to 2.8 m of border clearance in Arena's own NavMesh and are at least 10 m from both exit boxes. Bot spawns are Arena's own AI core points (tools/maps/iceberg.ai.json) minus the two that sit on a pocket's gate approach, core 2 (9.6 m outside GATES_A, 16 m from the nearest Bear marker) and core 11 (6.5 m north of the motor gate, 10.9 m from the nearest Usec marker); the rule is 'no bot spawn within 10 m of a gate leaf or a pocket marker', and no core point lies inside a team box. Two bot spawns leave their core point: core 6 keeps only 0.58 m of border clearance in Arena's mesh and moves 1.41 m inward to (-29.4, -52.7) (1.98 m); core 9 is the AICore of capture point A and stands in the swimming pool (basin floor 4.40, deck and Arena's mesh at about 5.0, a 0.6 m step a bot may not climb out of), so its spawn moves 3.54 m to the pool deck at (19.05, -89.09) (3.14 m clearance, collider top and mesh within 2 cm). The y of every bot spawn is Arena's NavMesh surface at the point (the core point's own within 0.02 m). All 20 pocket markers and all 11 core points lie on Arena's 4,788 m2 main component (identity placement, level377); the 4-hub PatrolWay and the ten Savage markers of that scene lie outside the map and are not used (iceberg.ai.json has patrol_ways []: the client builds NavMesh-derived ways from these Bot spawns). Waves and PMC boss waves copied from airpit.bots.json (Equator's). No loot, no scav raids.",
+  "zone": "BotZone_Main",
+  "max_bots": 8,
+  "player_spawns": [
+    {
+      "id": "arena_iceberg-player-all",
+      "name": "SpawnPoint_Player_All",
+      "sides": [
+        "All"
+      ],
+      "position": [
+        95.29,
+        0.88,
+        -89.56
+      ],
+      "rotation": 273.4,
+      "radius": 5
+    },
+    {
+      "id": "arena_iceberg-player-bear",
+      "name": "SpawnPoint_Player_Bear",
+      "sides": [
+        "Bear"
+      ],
+      "position": [
+        95.96,
+        0.73,
+        -94.07
+      ],
+      "rotation": 265.4,
+      "radius": 5
+    },
+    {
+      "id": "arena_iceberg-player-usec",
+      "name": "SpawnPoint_Player_Usec",
+      "sides": [
+        "Usec"
+      ],
+      "position": [
+        -39.85,
+        3.25,
+        -91.16
+      ],
+      "rotation": 52.4,
+      "radius": 5
+    },
+    {
+      "id": "arena_iceberg-player-west-all",
+      "name": "SpawnPoint_Player_West_All",
+      "sides": [
+        "All"
+      ],
+      "position": [
+        -44.53,
+        3.25,
+        -90.42
+      ],
+      "rotation": 99.5,
+      "radius": 5
+    }
+  ],
+  "bot_spawns": [
+    {
+      "id": "arena_iceberg-bot-core-01",
+      "position": [
+        -10.88,
+        3.25,
+        -80.66
+      ],
+      "radius": 25,
+      "categories": [
+        "Bot",
+        "BotPmc"
+      ]
+    },
+    {
+      "id": "arena_iceberg-bot-core-03",
+      "position": [
+        10.36,
+        3.15,
+        -77.21
+      ],
+      "radius": 25,
+      "categories": [
+        "Bot",
+        "BotPmc"
+      ]
+    },
+    {
+      "id": "arena_iceberg-bot-core-04",
+      "position": [
+        19.69,
+        3.15,
+        -47.93
+      ],
+      "radius": 25,
+      "categories": [
+        "Bot",
+        "BotPmc"
+      ]
+    },
+    {
+      "id": "arena_iceberg-bot-core-05",
+      "position": [
+        4.37,
+        2.05,
+        -48.92
+      ],
+      "radius": 25,
+      "categories": [
+        "Bot",
+        "BotPmc"
+      ]
+    },
+    {
+      "id": "arena_iceberg-bot-core-06",
+      "position": [
+        -29.4,
+        2.05,
+        -52.7
+      ],
+      "radius": 25,
+      "categories": [
+        "Bot",
+        "BotPmc"
+      ]
+    },
+    {
+      "id": "arena_iceberg-bot-core-07",
+      "position": [
+        -28.2,
+        2.7,
+        -71.2
+      ],
+      "radius": 25,
+      "categories": [
+        "Bot",
+        "BotPmc"
+      ]
+    },
+    {
+      "id": "arena_iceberg-bot-core-08",
+      "position": [
+        -24.28,
+        4.15,
+        -101.0
+      ],
+      "radius": 25,
+      "categories": [
+        "Bot",
+        "BotPmc"
+      ]
+    },
+    {
+      "id": "arena_iceberg-bot-core-09",
+      "position": [
+        19.05,
+        4.98,
+        -89.09
+      ],
+      "radius": 25,
+      "categories": [
+        "Bot",
+        "BotPmc"
+      ]
+    },
+    {
+      "id": "arena_iceberg-bot-core-10",
+      "position": [
+        28.98,
+        5.0,
+        -98.3
+      ],
+      "radius": 25,
+      "categories": [
+        "Bot",
+        "BotPmc"
+      ]
+    }
+  ],
+  "waves": [
+    {
+      "time_min": 10,
+      "time_max": 30,
+      "slots_min": 2,
+      "slots_max": 3
+    },
+    {
+      "time_min": 90,
+      "time_max": 150,
+      "slots_min": 1,
+      "slots_max": 2
+    },
+    {
+      "time_min": 240,
+      "time_max": 330,
+      "slots_min": 2,
+      "slots_max": 3
+    },
+    {
+      "time_min": 420,
+      "time_max": 540,
+      "slots_min": 1,
+      "slots_max": 2
+    },
+    {
+      "time_min": 600,
+      "time_max": 720,
+      "slots_min": 1,
+      "slots_max": 2
+    }
+  ],
+  "boss_waves": [
+    {
+      "boss_name": "pmcUSEC",
+      "escort_type": "pmcUSEC",
+      "boss_zone": "BotZone_Main",
+      "boss_chance": 50,
+      "escort_amount": "0,0,0,0,2,2,2,1,1,1,1,1,0,2,3"
+    },
+    {
+      "boss_name": "pmcUSEC",
+      "escort_type": "pmcUSEC",
+      "boss_zone": "BotZone_Main",
+      "boss_chance": 50,
+      "escort_amount": "0,0,0,0,2,2,2,1,1,1,1,1,0,2,3"
+    },
+    {
+      "boss_name": "pmcBEAR",
+      "escort_type": "pmcBEAR",
+      "boss_zone": "BotZone_Main",
+      "boss_chance": 50,
+      "escort_amount": "0,0,0,0,2,2,2,1,1,1,1,1,0,2,3"
+    },
+    {
+      "boss_name": "pmcBEAR",
+      "escort_type": "pmcBEAR",
+      "boss_zone": "BotZone_Main",
+      "boss_chance": 50,
+      "escort_amount": "0,0,0,0,2,2,2,1,1,1,1,1,0,2,3"
+    }
+  ]
+}

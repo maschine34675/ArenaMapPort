@@ -1,0 +1,39 @@
+{
+  "_comment": "PLAN-ICEBERG item 7 (docs/progress/iceberg-release.md, 2026-10-30): optional sidecar read by tools/server/make_base_json.py next to tools/maps/iceberg.json; emits base.json 'exits'. The client authors the ExfiltrationPoint objects at runtime from ArenaMapRegistry.Iceberg.Exits (ArenaMapPort.Shared/ArenaMapDescriptor.cs): names, positions and box sizes there must equal this file. OFFLINE DRAFT, not walked on the host yet. Arena authors no exit on Iceberg; one gate outside each pocket as seen from the pocket: the East gate in the yard west of GATES_A (the Bear pocket's two sliding gates stand at x 82.38, z -93.7 and -86.1; the box centre is 10.4 m west of the nearer leaf), the West gate in the corridor east of GATES_B (the Usec pocket's gates stand at x -36.04; the centre is 5.6 m east of the nearest leaf, the box edge 3.6 m). Both boxes (4 x 3 x 4 m) lie on Arena's own 4,788 m2 NavMesh main component (level377, identity placement) with 5.8 m / 4.4 m of border clearance at the centre against the 2.83 m half-diagonal of the box, and at least 10 m from every player spawn row of iceberg.bots.json, so nobody spawns inside a trigger box. Both are outside the gates, so a team held behind its gate (ArenaMode hold) cannot extract before the release. The west corridor is only 6 to 8 m wide: the box fits with 1.6 m to spare. EntryPoints is always the map's infiltration name; names double as locale keys.",
+  "exits": [
+    {
+      "name": "Iceberg East Gate",
+      "position": [
+        72.0,
+        1.95,
+        -94.0
+      ],
+      "box_size": [
+        4.0,
+        3.0,
+        4.0
+      ],
+      "rotation": 0.0,
+      "exfiltration_time": 8,
+      "chance": 100,
+      "type": "Individual"
+    },
+    {
+      "name": "Iceberg West Gate",
+      "position": [
+        -30.5,
+        2.92,
+        -85.0
+      ],
+      "box_size": [
+        4.0,
+        3.0,
+        4.0
+      ],
+      "rotation": 0.0,
+      "exfiltration_time": 8,
+      "chance": 100,
+      "type": "Individual"
+    }
+  ]
+}
