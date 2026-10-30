@@ -18,8 +18,17 @@ Full release note: [docs/releases/v0.4.0.md](docs/releases/v0.4.0.md).
   video memory per raid on every map and building a crowd adds about two seconds to raid loading; a map's crowd
   can be skipped by deleting its `spectators` folder (see the release note).
 - **Spectator calls.** Spectators call out using 13 original Arena voice clips, with spatial positioning and room obstruction.
-  Calls are scheduled at 1.6-3.2 second intervals, waiting if two voices are already active; active speakers and recorded voice
-  families do not duplicate. No kill/round-win reactions yet.
+  One call starts every 4 to 8 seconds (the first one 3 to 8 seconds after the raid starts), so calls no longer overlap; the
+  limit of two voices at once stays as a guard. Active speakers and recorded voice families do not duplicate. No kill/round-win
+  reactions yet.
+- **Crowd murmur.** A quiet, continuous murmur of voices plays from every group of spectators on all four maps (two to six groups
+  per map, found from where the spectators stand), each from its own spot and fading with distance. It is Arena's own
+  crowd-ambience recording, the only one in its files; Arena names it as a post-match sound and its maps carry no crowd ambience,
+  so the murmur is an addition of this port. It stays at one level and does not react to match events yet. Mod authors: the public
+  class `ArenaMapPort.Client.SpectatorCrowd` (contract version 1: `SetExcitement`, `Excitement`, `IsAvailable`) lets a mode plugin
+  raise it by up to 60 percent; ArenaMode does not use it yet (see `docs/progress/spectator-audio.md`). One new audio file of about
+  2.6 MB ships in the core part. The developer settings `Spectators/CrowdBed`, `CrowdBedVolume` and `CrowdBedReach` need
+  `General/DeveloperMode`; there is no player setting. Not yet listened to (see Known limitations).
 - **Shared spectator textures.** The crowd textures are stored once for all four maps (about 147 MB on disk). Map and texture
   integrity checks detect mixed or damaged installations.
 - **Exit signs light with the gates (Equator, Air Pit).** The exit signs above Equator's booth doors and above Air Pit's
@@ -79,6 +88,8 @@ Full release note: [docs/releases/v0.4.0.md](docs/releases/v0.4.0.md).
 - Gate and door sounds were checked in the log only and have not been listened to. Bay5's gate sounds were never in
   range during a test; loudness, reach and the fit of the clips shortened to the faster gate motion are untuned.
   The exit lamps were checked by reading their state, not by eye.
+- The crowd murmur and the 4-to-8-second pauses between spectator calls are new and untuned: they ran on the test host on all four maps without a warning, but nobody has listened to them yet, and the
+  murmur's level and reach are first guesses.
 - Equator's puddle cache and the rain-driven puddles have not been checked in game, and the splash sound has not been
   listened to on any map.
 - The Equator static (see Fixed) no longer shows up in recordings made on the test host, but nobody has listened to the repaired

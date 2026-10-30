@@ -14,6 +14,8 @@ namespace ArenaMapPort.Client
 {
     /// <summary>Bounded overlapping crowd calls. Owned sources, native mixer and room propagation;
     /// no player/AI phrase events, no match announcements, no changes to shared audio presets.
+    /// Cadence (SpectatorAudioSchedule, since 2026-10-30): the first call 3 to 8 s after the raid starts, then one every 4.0 to 8.0 s, at most two voices at a time. The
+    /// continuous murmur between the calls is not made here but by SpectatorCrowdBed.cs, which the crowd creates right after this class from the same positions.
     /// The NoiseProbe developer diagnostic (NoiseProbe.cs) records starts, stops with their reason and an onset trace of every call through
     /// one-line taps guarded by NoiseProbe.Armed; its A/B key NoiseProbeSpectatorFade adds a 150 ms fade-in at the start and an 80 ms
     /// fade-out when a call is stopped early (a source that is fading out is released afterwards). Both are off by default.</summary>

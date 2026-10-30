@@ -411,3 +411,15 @@ prop types without an impact bank in EFT's own sound bundle (Books and CardBoard
 Equator static (a cause found and fixed, measured, not yet listened to) instead of the context of the noise report. Any core ZIP built before this change carries the old README.txt and has to be rebuilt, with its hash. The
 release note `docs/releases/v0.4.0.md` keeps placeholders (build commit, VirusTotal block, crowd loading time) that the cut
 fills in. See [release-preparation-20261029.md](progress/release-preparation-20261029.md).
+
+## Crowd murmur bed - 2026-10-30 (0.4.0 candidate, after the `833275d` cut)
+
+The common core gains one file, the crowd murmur bed `spectator-audio/arena_fans_ambient_postmatch.wav` (mono, 16-bit PCM, 44.1 kHz, about 29.8 s, roughly 2.6 MB), written by the
+same `extract_spectator_audio.py extract` run as the 13 calls and described by a `bed` object in `spectator-audio.json` (hash, size, statistics; the manifest stays schema 1 and a
+manifest without `bed` is still valid). The distribution grows from 255 to **256 files**; `make_release_zips.py --plan` reads core 154 (was 153), Equator 24, Bay5 30, Air Pit 22
+and Bowl 26 as before. The packer's `spectator audio` rule admits the new file name, and `validate_distribution.py` checks the staged bed against `work/extract/spectator-audio`
+like the calls. Like the calls the file is plaintext, and it is not one of the stage-2 key-source files.
+
+The `833275d` cut (255 files, core 153) is superseded: a new five-part cut is needed, and because every part manifest pins the build commit all five parts are rebuilt even though
+only the core part's payload changes. No size or hash of a final package is asserted here; the bed's exact byte count and SHA-256 are in the manifest. Design, measurements and the
+host checklist: [spectator-audio.md](progress/spectator-audio.md), "Crowd murmur bed and longer call pauses".

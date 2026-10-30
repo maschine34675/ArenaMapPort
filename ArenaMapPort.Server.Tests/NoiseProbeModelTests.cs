@@ -486,7 +486,7 @@ namespace ArenaMapPort.Server.Tests
             Assert.True(ring.HasCause(10.58, 0.4, 0.05));                   // 20 ms after the burst start: the poll lags the audio
             Assert.False(ring.HasCause(10.4, 0.01, 0.05));                  // 200 ms after is too late
             foreach (var kind in new[] { NoiseEv.SpecStart, NoiseEv.SpecStop, NoiseEv.AmbStart, NoiseEv.AmbRestart, NoiseEv.Prop, NoiseEv.Room, NoiseEv.RoomReverb,
-                NoiseEv.RoomShot, NoiseEv.Gate, NoiseEv.Puddle, NoiseEv.Rain, NoiseEv.RainPlay, NoiseEv.Config, NoiseEv.Reset, NoiseEv.Life, NoiseEv.Hitch })
+                NoiseEv.RoomShot, NoiseEv.Gate, NoiseEv.Puddle, NoiseEv.Rain, NoiseEv.RainPlay, NoiseEv.Config, NoiseEv.Reset, NoiseEv.Life, NoiseEv.Hitch, NoiseEv.Bed })
                 Assert.True(NoiseText.IsCause(kind), kind.ToString());
         }
 
@@ -539,6 +539,30 @@ namespace ArenaMapPort.Server.Tests
 
             Assert.Equal("amb=[cracles (1)@14.2m age120ms] prop=[GlassBottle@6.2m age70ms] ev=[hitch@+0.01s,roomReverb@+0.00s,room@-0.02s,prop@-0.07s,amb+@-0.12s,spec-@-0.22s,spec+@-0.62s]",
                 NoiseReport.Context(ring, labels, 100.62));
+        }
+
+        [Fact]
+        public void TheCrowdBedEventsReadBedPlusAndBedMinusAndExplainABurst()
+        {
+            var labels = new NoiseLabels();
+            var ring = new NoiseEventRing(64);
+            ring.Add(100.00, 0, NoiseEv.Bed, 1, 2, 18.3f, 0.3126f, labels.Intern("stand2"), 0);
+            ring.Add(100.40, 0, NoiseEv.Bed, 0, 2, 7.5f, 0.5f, labels.Intern("stand2"), 0);
+            Assert.Equal("bed+", NoiseText.Token(ring[0]));
+            Assert.Equal("bed-", NoiseText.Token(ring[1]));
+            Assert.Equal("bed", NoiseText.Token(NoiseEv.Bed));
+            Assert.Equal("bed+ stand2 18.3m vol=0.313", NoiseReport.EventText(ring[0], labels));
+            Assert.Equal("bed- stand2 7.5m vol=0.500", NoiseReport.EventText(ring[1], labels));
+            Assert.Equal("  -0.600s bed+ stand2 18.3m vol=0.313", NoiseReport.EventLine(ring[0], labels, 100.6));
+            // the context of a burst names which way the stand source went
+            Assert.Equal("amb=[] prop=[] ev=[bed-@-0.20s,bed+@-0.60s]", NoiseReport.Context(ring, labels, 100.6));
+            // every other event keeps its token
+            Assert.Equal("spec+", NoiseText.Token(new NoiseEvent { Kind = NoiseEv.SpecStart, A = 1 }));
+            Assert.Equal("none", NoiseText.Token(new NoiseEvent { Kind = NoiseEv.None }));
+            // a start or stop of a stand source can make a click: it explains a burst; it counts in no per-minute tally of its own
+            var quiet = new NoiseEventRing(8);
+            quiet.Add(10.46, 0, NoiseEv.Bed, 1, 0, 0, 0, 0, 0);
+            Assert.True(quiet.HasCause(10.5, 0.4, 0.05));
         }
 
         [Fact]
@@ -726,7 +750,9 @@ namespace ArenaMapPort.Server.Tests
             for (int i = 0; i < 100; i++) ring.Write(data, data.Length);                            // warm
             long before = GC.GetAllocatedBytesForCurrentThread();
             for (int i = 0; i < 500; i++) ring.Write(data, data.Length);
-            Assert.InRange(GC.GetAllocatedBytesForCurrentThread() - before, 0L, 512L);              // one array per call would be 12 MB
+            // One array per call would be 12 MB. The cap is a few KB, not 512 B: the thread's counter also sees the runtime's own work (tiered JIT, the test host) now and then,
+            // and 2 runs in about 70 measured 7.6 KB of exactly that (review 2026-10-30).
+            Assert.InRange(GC.GetAllocatedBytesForCurrentThread() - before, 0L, 32768L);
             Assert.Equal(15 * 48000 * 6 * 2L, ring.ByteSize);                                 // 8.6 MB
         }
 

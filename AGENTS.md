@@ -131,6 +131,7 @@ are not accepted build inputs. Keep the SPT bundle target on Unity 2022.3.43f1.
 | `ArenaMapPort.Client/GateSounds.cs`, `GateSoundModel.cs`, `PcmWav.cs`; `tools/extract/extract_gate_sounds.py`; `tools/maps/<stem>.gatesounds.json`; `work/extract/gate-sounds` | Gate and door sounds (2026-10-25, [gate-sounds.md](docs/progress/gate-sounds.md)): the extractor decodes Arena's `EntitySoundPlayer` objects into the tracked rows (`rows`) and into nine clips with precomputed seam tables (`clips`, ignored `work/extract/gate-sounds`, staged to `dist/.../gate-sounds/<key>/`); `GateSounds` is the Unity glue that plays a release's rows through `BetterAudio`, `GateSoundModel` and `PcmWav` are Unity-free and linked into the tests. |
 | `ArenaMapPort.Client/ScoreMonitors.cs` (public contract), `ScoreMonitorHub.cs`, `ScoreMonitorModel.cs`, `ScoreMonitorLayout.cs`, `ScoreMonitorView.cs`, `ScoreMonitorDemo.cs`; `tools/extract/extract_score_monitors.py`, `tools/extract/extract_monitor_templates.py`; `tools/maps/<stem>.monitors.json`; `work/extract/monitors` | Score monitors (2026-10-25, [score-monitors.md](docs/progress/score-monitors.md)): `ScoreMonitors` is the public, append-only contract that ArenaMode binds by reflection; the hub holds the claim and the snapshot, model and layout are Unity-free, `ScoreMonitorView` is the only Unity file (world-space canvases on Arena's TV props), `ScoreMonitorDemo` the developer test cycle. The extractors write the tracked holder rows and the ignored nine-sprite package (staged to `dist/.../monitors/`). |
 | `ArenaMapPort.Client/NoiseProbe.cs`, `NoiseProbeModel.cs`; `ArenaMapPort.Server.Tests/NoiseProbeModelTests.cs`, `NoiseProbeSourcePinTests.cs` | The developer-only audio noise probe (2026-10-29, [spectator-audio.md](docs/progress/spectator-audio.md) "NoiseProbe diagnostic"; unit-tested, first host runs 2026-10-29, see the Traps entry): `NoiseProbe` is the Unity glue (the `Audio diagnostics/NoiseProbe*` keys, the one-line taps, driver, mark key, census, `OnAudioFilterRead` tap, export), `NoiseProbeModel` the Unity-free core (block statistics, burst detector, event ring, report text, self-test, PCM ring, WAV writer, capture policy) linked into the tests. Off by default; built for the intermittent Equator noise. |
+| `ArenaMapPort.Client/SpectatorCrowd.cs` (public contract), `SpectatorCrowdBed.cs`, `SpectatorCrowdBedModel.cs`; `ArenaMapPort.Server.Tests/SpectatorCrowd*Tests.cs`; `tools/extract/extract_spectator_audio.py` | The crowd murmur bed (2026-10-30, [spectator-audio.md](docs/progress/spectator-audio.md) "Crowd murmur bed and longer call pauses"; unit-tested, host verification pending): `SpectatorCrowd` is the public, append-only contract a mode plugin binds by reflection (`ContractVersion` 1, `IsAvailable`, `SetExcitement`, `Excitement`; same rules as `ScoreMonitors`), `SpectatorCrowdBed` the Unity glue (one owned looping AudioSource per stand, built after the crowd exists and removed with it, developer keys `Spectators/CrowdBed`, `CrowdBedVolume`, `CrowdBedReach`, independent of `Audio diagnostics/SpectatorCalls`), `SpectatorCrowdBedModel` the Unity-free core (deterministic k-means of the spectator positions into 2 to 6 stands, radius limit 25 m: 4/4/6/6 on Equator/Bay5/Air Pit/Bowl, per-stand parameters, manifest `bed` parsing, excitement smoothing) linked into the tests. The clip is Arena's `arena_fans_ambient_postmatch`, read from `resources.assets`, mixed to mono with a 500 ms crossfaded loop seam by the same `extract_spectator_audio.py extract` run that writes the 13 calls; the murmur is an addition of the port (Arena's maps carry no crowd ambience), never described as Arena's own map sound. |
 | `tools/bundle/ArenaMapPort.BundleCrypt/` | The net10.0 console tool of stage 2: `stage`, `encrypt`, `decrypt`, `inspect`, `read-range`, `keys`, `verify`, `verify-keys`, `plain-sha256`, `rotate-key` (needs `--yes`), `bench`; `ArenaMapPort.BundleCrypt help` prints the flags. Its keys live in the ignored `work/release-keys/`. |
 | `ArenaMapPort.Server.Tests/` | xunit; the only .NET tests. The client has none — test what is Unity-independent here. |
 | `tools/maps/<key>.json` (+ `.bots.json`, `.exits.json`) | Per-map sidecars for the Python/Unity side; mirrored by the descriptor and guarded by mirror tests. |
@@ -159,9 +160,15 @@ texts): both DLLs rebuilt from it, deployed, one Equator raid on GPU-2 at 01:14,
 (extract-check 255 files identical) and VirusTotal 0/0 of 75 for both DLLs; the `a4aa0af` build, cut and scan of 2026-10-29 are superseded. The `github-8941caa` package and its VirusTotal lines are superseded;
 the `fe45b84` package is the earlier host-verified fallback (see HANDOFF.md). Nothing is tagged, uploaded or pushed.
 
+**2026-10-30 (crowd murmur bed, longer call pauses):** once the crowd murmur bed and the 4.0-8.0 s call cadence are committed (user decision of that day,
+[spectator-audio.md](docs/progress/spectator-audio.md) "Crowd murmur bed and longer call pauses"), the build `833275d` with its deploy, five-part cut and
+VirusTotal scan is superseded. A new candidate needs the extractor run in the main checkout, a client Release build, a full deploy, a host run, a five-part re-cut
+(every part manifest pins the build commit) and a new scan of both DLLs before any publication; `docs/releases/v0.4.0.md` carries its build and scan lines as
+placeholders again, and all player texts say that the murmur and the pauses are not listened to. Publication stays postponed.
+
 The 2026-10-29 user-authorized 0.4.0 GitHub release uses the existing multipart packer form:
 core plus Equator/Bay5/AirPit/Bowl, all five ordinary ZIPs extracted into the same SPT root.
-The full distribution has 255 files after shared spectator texture staging. The October 28 single
+The full distribution has 255 files after shared spectator texture staging (256 since the crowd murmur bed of 2026-10-30). The October 28 single
 candidate ZIP is obsolete. Preserve historical notes below and use
 [release-preparation-20261029.md](docs/progress/release-preparation-20261029.md) for the current cut.
 Missing Books and CardBoard impact sounds remain a documented limitation. The intermittent Equator noise has its cause found
@@ -309,9 +316,9 @@ fresh clone run, before the build, `python tools/extract/extract_gate_sounds.py 
 `work/extract/gate-sounds/<map_key>`; it needs UnityPy, fmod_toolkit, numpy and the installed Arena, and reads the tracked rows that the
 same script's `rows` step writes, which is rerun only after an Arena update) and `python tools/extract/extract_monitor_templates.py` (nine
 PNGs and `monitors.json` under ignored `work/extract/monitors`). A missing input stops the build with an Error that names the extractor.
-Both folders are plaintext, like the selection artwork. `dist/` now holds 255 files (113 after those two additions, 90 before; the
-gate sounds add 13 and the monitors 10, the spectator files of 2026-10-27/28 the rest); `make_release_zips.py --plan` reads the parts
-core 153, equator 24, bay5 30, airpit 22, bowl 26. See
+Both folders are plaintext, like the selection artwork. `dist/` now holds 256 files (113 after those two additions, 90 before; the
+gate sounds add 13 and the monitors 10, the spectator files of 2026-10-27/28 the rest, the crowd murmur bed of 2026-10-30 one); `make_release_zips.py --plan` reads the parts
+core 154, equator 24, bay5 30, airpit 22, bowl 26. See
 [gate-sounds.md](docs/progress/gate-sounds.md), [score-monitors.md](docs/progress/score-monitors.md) and
 [dist-manifest.md](docs/dist-manifest.md).
 
@@ -323,17 +330,23 @@ Release/DllOnly staging runs `tools/extract/stage_spectators.py stage`: schema-3
 stay intact, schema-4 map graphs go to `spectators/<map_key>/`, and the identical PNGs plus
 their manifest go once to `spectators/shared/` (core ZIP part). Each graph pins the manifest's
 hash and runtime verifies the image bytes before decoding. Same-name/different-byte exports
-are refused. The shared audio stays in `spectator-audio/`.
+are refused. The shared audio stays in `spectator-audio/`. Since 2026-10-30 the same `extract_spectator_audio.py extract` run also writes the crowd murmur bed
+beside the 13 calls: `arena_fans_ambient_postmatch.wav` (Arena's crowd-ambience clip from `resources.assets`, read with UnityPy and not from the arena-audio `.ogg`;
+mono, 16-bit, 44.1 kHz, a 500 ms crossfade into the tail so it loops without a step) and a `bed` object in `spectator-audio.json` (schema 1 stays; a manifest without
+`bed` is valid and the client then has no murmur). It stages into the core part with the calls, which makes the distribution 256 files and core 154; `validate()`
+requires the staged bed to match `work/extract/spectator-audio`.
 For old development installs, full-deploy first, then dry-run `-RemoveLegacySpectatorTextures`
 and confirm through the same deploy script with EFT closed. It verifies the DLL, all graphs and
 shared replacements before removing only byte-identical old map PNGs; unknown or changed files
 are refused. Sources remain local. Published 0.3.0 has no spectator files to clean up.
-Keep only the 13 embedded Participating fan clips: the nine external Scav references are deliberately
+Keep only the 13 embedded Participating fan clips (plus the one crowd murmur bed of 2026-10-30): the nine external Scav references are deliberately
 excluded after the user's listening feedback. The current cap is two simultaneous voices, gain 0.5,
-2-5 s initial delay and 1.6-3.2 s between starts, waiting when all slots are occupied. The live developer-only
+a 3-8 s initial delay and 4.0-8.0 s between starts (2026-10-30, user decision to lengthen the pauses between the normal calls; the first 0.4.0 candidates used 2-5 s and 1.6-3.2 s). The 13 clips last
+1.35-3.29 s, so calls no longer overlap and the cap is a guard. The live developer-only
 `Audio diagnostics/SpectatorCalls` switch stops only the calls for hearing comparisons; it is ignored
-outside DeveloperMode and leaves visual crowds and map ambience alone. Match reactions
-are not implemented. See [spectator-audio.md](docs/progress/spectator-audio.md) and
+outside DeveloperMode and leaves visual crowds and map ambience alone. The crowd murmur bed has its own developer switch,
+`Spectators/CrowdBed` (with `CrowdBedVolume` and `CrowdBedReach`), and is removed with the crowd. Match reactions
+are not implemented; the murmur has a public hook for them (`SpectatorCrowd.SetExcitement`) that ArenaMode has not adopted. See [spectator-audio.md](docs/progress/spectator-audio.md) and
 [spectators-allmaps.md](docs/progress/spectators-allmaps.md) for source and native evidence.
 
 Optional Arena audio/UI exports remain development inputs under ignored `work/extract/arena-audio`
@@ -746,7 +759,7 @@ the log; the user uses it to point at things.
   the "UnityFS blocks" entry below)): developer-only
   (`Audio diagnostics/NoiseProbe` `Off|Detect|Capture` plus five more keys, none public, all honoured only with
   DeveloperMode). Off must cost one static bool read per tap: every tap in the owned audio code (`SpectatorAudio`, `Bay5AmbientAudio`,
-  `PhysicsPropSoundRepairs`, `RoomReverb`, `RoomShotAcoustics`, `GateSounds`, `PuddleFootstepRepairs`, `PrecipitationAudio`) is a one-liner behind
+  `PhysicsPropSoundRepairs`, `RoomReverb`, `RoomShotAcoustics`, `GateSounds`, `PuddleFootstepRepairs`, `PrecipitationAudio`, `SpectatorCrowdBed`) is a one-liner behind
   `if (NoiseProbe.Armed)`; keep new taps that way, with no scene search and no allocation. Nothing logs from the audio thread (the `OnAudioFilterRead`
   tap touches no Unity API and allocates nothing) or from the export worker; the lines are Debug with the tag `[NoiseProbe]`, and the only Warnings are
   a failure to arm or run. `PhysicsPropSoundRepairs.cs` is linked into the tests with a stand-in `NoiseProbe`; `NoiseProbeSourcePinTests` pins the
@@ -781,3 +794,10 @@ the log; the user uses it to point at things.
   `validate_distribution.py` and `validate_port.py --distribution`. Why no probe saw it: the ring logs `isPlaying` edges of owned one-shots, the detector keys
   on transients and the census counts pooled sources, while this is a continuous plateau of one owned, non-pooled looping player. `indoor_wind (4)` is audible
   at 29.8 m only through the port's `AmbientRangeMultiplier` 2.5: not a mix bug, change no mix default for it.
+- Crowd murmur bed (2026-10-30, [spectator-audio.md](docs/progress/spectator-audio.md) "Crowd murmur bed and longer call pauses"; unit-tested, host verification pending, not listened to): the
+  Unity facts the glue stands on. `AudioRolloffMode.Logarithmic` stops attenuating at `maxDistance` and holds that level for ever, so a bed that must end uses a Custom curve (full gain to the
+  minimum distance, 1/d, a taper to 0 at the maximum; the curve's x axis is distance over `maxDistance`; `SmoothTangents` on the two plateau keys overshoots gain 1, so they keep flat tangents).
+  `AudioSource.volume` is held to 0..1: the key range 0..2 and the excitement factor 1.0-1.6 are reached by a gain of 3.2 baked into the decoded clip (`SpectatorCrowdBedModel.ClipGain`) and
+  `volume x factor / 3.2` on the source (a stand's NoiseProbe `vol=` reads 0.3125 at the defaults), so never widen the range or the factor without moving `ClipGain`. The stand count comes from
+  `MaxStandRadius` (25 m, cap 6). The NoiseProbe census sees the bed only through `ownedBed=n/m` (its pooled-source walk cannot see owned sources), and the bed does not note `NoiseEv.Reset`
+  (`SpectatorAudio` counts the one audio reset). `SpectatorCrowd` (the contract, `ScoreMonitors` style) is reset when the crowd is removed, with or without a bed.

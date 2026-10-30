@@ -14,6 +14,16 @@ namespace ArenaMapPort.Client
         public int schema, trigger;
         public string bank;
         public SpectatorAudioClip[] clips;
+        /// <summary>The crowd murmur bed (SpectatorCrowdBedModel.cs); null in a package without one, which is still a valid schema-1 manifest.</summary>
+        public SpectatorAudioBed bed;
+
+        /// <summary>Checks the bed of a package that has one; independent of <see cref="Validate"/>, so a damaged bed never takes the calls with it.</summary>
+        public void ValidateBed()
+        {
+            if (schema != 1 || trigger != 1123 || bank != "Participating" || bed == null)
+                throw new InvalidDataException("unsupported spectator audio package");
+            bed.Validate();
+        }
 
         public void Validate()
         {
@@ -38,6 +48,12 @@ namespace ArenaMapPort.Client
     internal sealed class SpectatorAudioSchedule
     {
         public const int MaxConcurrent = 2;
+        // 2026-10-30 (user: "die Pausen ... nochmal verlaengern"): the single calls are sparser now that the crowd bed carries the continuous murmur.
+        // The first call comes 3 to 8 s after the raid starts (before: 2 to 5 s), the starts that follow are 4.0 to 8.0 s apart (before: 1.6 to 3.2 s).
+        // These are constants, not config keys, so there is no stored value to re-seed. The longest shipped call is 3.29 s: with a 4.0 s minimum gap two calls no
+        // longer overlap in practice, and the second voice slot is only the cap for a longer clip.
+        public const double InitialDelayMinSeconds = 3, InitialDelaySpanSeconds = 5;
+        public const double GapMinSeconds = 4.0, GapSpanSeconds = 4.0;
         readonly Random _random;
         bool _running;
         int _lastSpeaker = -1, _lastClip = -1;
@@ -47,7 +63,7 @@ namespace ArenaMapPort.Client
         {
             if (_running) return;
             _running = true;
-            NextAt = now + 2 + _random.NextDouble() * 3;
+            NextAt = now + InitialDelayMinSeconds + _random.NextDouble() * InitialDelaySpanSeconds;
         }
         public void Stop() { _running = false; NextAt = double.PositiveInfinity; }
         public bool Due(double now, int activeVoices = 0) => _running && activeVoices < MaxConcurrent && now >= NextAt;
@@ -55,7 +71,7 @@ namespace ArenaMapPort.Client
         public void Played(double now, int speaker, int clip)
         {
             _lastSpeaker = speaker; _lastClip = clip;
-            NextAt = now + 1.6 + _random.NextDouble() * 1.6;
+            NextAt = now + GapMinSeconds + _random.NextDouble() * GapSpanSeconds;
         }
         public int ChooseClip(int count, ISet<int> busy = null) =>
             Pick(Enumerable.Range(0, count).Where(i => busy == null || !busy.Contains(i)).ToList(), _lastClip);

@@ -23,8 +23,10 @@ per-room gunshot reverb is on by default on all four maps (its room data is
 invented) and can be switched off per map with DeveloperMode enabled (enable it and restart EFT).
 
 Version 0.4.0 adds the original animated spectators on all four maps, with
-spatial crowd calls and up to two voices at once. The crowd does not react to
-kills or round results yet. The crowds use about 0.5 GB of video memory per raid
+spatial crowd calls (one every 4 to 8 seconds) and a quiet crowd murmur from each
+group of spectators. The murmur is Arena's own crowd-ambience recording, an addition
+of this port because Arena's maps carry no crowd ambience. The crowd does not react
+to kills or round results yet. The crowds use about 0.5 GB of video memory per raid
 and add about two seconds to raid loading (see Known limitations).
 
 The gates and vehicles at the team spawn enclosures use Arena's own open positions and,
@@ -99,6 +101,9 @@ stays unchanged. Equator Day, Bay5, Air Pit and Bowl are unaffected.
   Equator props (30 Books: shoes, books, blue cups and a road cone; 9 CardBoard: pizza boxes
   and office folders) and any props of those types on the other maps stay silent when they hit
   something.
+- The crowd murmur and the 4-to-8-second pauses between spectator calls are new and
+  untuned; they ran on the test host on all four maps without a warning, but nobody has
+  listened to them yet.
 - The crowds decode 123 shared images into about 0.5 GB of video memory per raid on
   every map and add about two seconds to raid loading. The GitHub release
   notes explain how to skip a map's crowd.

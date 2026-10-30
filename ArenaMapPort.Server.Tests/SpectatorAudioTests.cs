@@ -11,7 +11,7 @@ public sealed class SpectatorAudioTests
         var clock = new SpectatorAudioSchedule(71);
         Assert.False(clock.Due(100));
         clock.Start(100);
-        Assert.InRange(clock.NextAt, 102, 105);
+        Assert.InRange(clock.NextAt, 103, 108);                      // the first call 3 to 8 s after the start
         var first = clock.NextAt;
         clock.Start(110); // Per-frame calls must not postpone playback forever.
         Assert.Equal(first, clock.NextAt);
@@ -20,12 +20,12 @@ public sealed class SpectatorAudioTests
             double now = clock.NextAt;
             Assert.True(clock.Due(now));
             clock.Played(now, i, i%13);
-            Assert.InRange(clock.NextAt - now, 1.6, 3.2);
-            Assert.False(clock.Due(now + 1.599));
+            Assert.InRange(clock.NextAt - now, 4.0, 8.0);            // the starts that follow 4 to 8 s apart (2026-10-30; before 1.6 to 3.2 s)
+            Assert.False(clock.Due(now + 3.999));
         }
         clock.Played(10000, 1, 1); // A long stall never creates a catch-up burst.
         Assert.False(clock.Due(10000));
-        Assert.InRange(clock.NextAt, 10001.6, 10003.2);
+        Assert.InRange(clock.NextAt, 10004, 10008);
     }
 
     [Fact]
@@ -37,7 +37,7 @@ public sealed class SpectatorAudioTests
         Assert.False(clock.Due(10000));
         clock.Start(10000);
         Assert.False(clock.Due(10001));
-        Assert.InRange(clock.NextAt, 10002, 10005);
+        Assert.InRange(clock.NextAt, 10003, 10008);
     }
 
     [Fact]
@@ -78,7 +78,32 @@ public sealed class SpectatorAudioTests
     }
 
     [Fact]
-    public void RepeatedCallsOverlapButNeverExceedTwoConcurrentVoices()
+    public void ShippedCallsNoLongerOverlapAtTheLongerPauses()
+    {
+        // 2026-10-30: the starts are 4.0 to 8.0 s apart and the longest shipped call is 3.292 s (arena_fan8_participating_01), so two calls never sound together
+        // any more; the second voice slot is only the cap for a longer clip (the next test).
+        var clock = new SpectatorAudioSchedule(27);
+        var active = new List<double>();
+        clock.Start(0);
+        int peak = 0, starts = 0;
+        for (int tick = 0; tick < 6000; tick++)
+        {
+            double now = tick / 10.0;
+            active.RemoveAll(end => end <= now);
+            if (clock.Due(now, active.Count))
+            {
+                active.Add(now + 3.292);
+                clock.Played(now, 0, 0);
+                starts++;
+            }
+            peak = Math.Max(peak, active.Count);
+        }
+        Assert.Equal(1, peak);
+        Assert.InRange(starts, 90, 150);       // 600 s at a mean of 6 s between starts after a 3 to 8 s first delay
+    }
+
+    [Fact]
+    public void RepeatedLongCallsOverlapButNeverExceedTwoConcurrentVoices()
     {
         var clock = new SpectatorAudioSchedule(27);
         var active = new List<(double End, int Speaker, int Clip)>();
@@ -96,7 +121,7 @@ public sealed class SpectatorAudioTests
                     active.Select(v => v.Speaker).ToHashSet());
                 int clip = clock.ChooseClip(13, active.Select(v => v.Clip).ToHashSet());
                 Assert.DoesNotContain(active, v => v.Speaker == speaker || v.Clip == clip);
-                active.Add((now + 3.292, speaker, clip));
+                active.Add((now + 9.0, speaker, clip));        // a call longer than the pause, to exercise the cap
                 clock.Played(now, speaker, clip);
                 starts++;
             }
@@ -104,7 +129,7 @@ public sealed class SpectatorAudioTests
             Assert.InRange(active.Count, 0, 2);
         }
         Assert.Equal(2, peak);
-        Assert.InRange(starts, 200, 300);
+        Assert.InRange(starts, 60, 110);
     }
 
     [Fact]

@@ -1,5 +1,62 @@
 # HANDOFF — dated working state
 
+## Crowd murmur bed and longer call pauses - 2026-10-30 (host-verified by numbers 10:46-11:00; the re-cut is open)
+
+**Request (user, German, paraphrased):** asked whether a crowd murmur from the stands fits Arena, he said he has never played EFT Arena and cannot say for sure, it sounds
+good, implement it, and the pauses between the normal single calls could then be lengthened again. Publication stays postponed (see the block below this one).
+
+**What is specified** (lead's design; the full text with the clip measurements, the spectator-position k-means and the host checklist is
+[spectator-audio.md](docs/progress/spectator-audio.md) "Crowd murmur bed and longer call pauses"):
+
+- **Crowd murmur bed.** Arena's only crowd-ambience clip, `arena_fans_ambient_postmatch` (30.313 s, stereo; the arena-audio catalogue files it as the post-match results-screen
+  bed), is exported from `resources.assets` by `extract_spectator_audio.py extract` as a mono WAV with a 500 ms crossfaded loop seam and a `bed` object in
+  `spectator-audio.json`, ships in the core part (dist 255 -> 256 files, core 153 -> 154) and plays from one looping spatial source per stand: the spectator positions are
+  clustered by a deterministic k-means (k from 2 until every radius is at most 25 m, at most 6; the four real crowds give 4, 4, 6 and 6 stands), each stand with its own start offset and a pitch of 0.98-1.02. New client files
+  `SpectatorCrowdBed.cs` (glue), `SpectatorCrowdBedModel.cs` (Unity-free, linked into the tests) and the public append-only contract `SpectatorCrowd` (`ContractVersion` 1,
+  `IsAvailable`, `SetExcitement`, `Excitement`; volume factor 1.0-1.6 with a 2 s smoothing). Developer-only keys `Spectators/CrowdBed` (true), `CrowdBedVolume` (1.0) and
+  `CrowdBedReach` (60 m), live; no public setting; Debug tag `[CrowdBed]`; NoiseProbe events `bed+`/`bed-`. The murmur is an addition of the port (Arena's maps carry no
+  crowd ambience) and the texts say so. ArenaMode has not adopted `SetExcitement`.
+- **Longer pauses.** Between two call starts 4.0-8.0 s (was 1.6-3.2), first call 3-8 s after the raid starts (was 2-5), two voices unchanged. Constants, not config keys, so no
+  `DefaultsRevision` re-seed. Consequence: the 13 clips last 1.35-3.29 s, so calls no longer overlap and the second voice slot is idle; the release texts say "one call every 4 to
+  8 seconds" and no longer claim overlap.
+- Work split: pipeline (extractor, validator, packer, their tests), client (the files above, `SpectatorAudio.cs`, the NoiseProbe event, tests) and texts (this block, the
+  progress section, README, FORGE, CHANGELOG, `docs/releases/v0.4.0.md`, AGENTS.md, `docs/dist-manifest.md`, `docs/progress/INDEX.md`). Two reviews of the three patches followed; their findings are applied in one combined patch (list and reasons in
+  [spectator-audio.md](docs/progress/spectator-audio.md) "Review of the three patches"): stand radius limit 25 m instead of 30 m (4/4/6/6 stands; at 30 m Equator had only two), the NoiseProbe
+  census line `ownedBed=n/m`, no doubled `reset` tap, the contract state reset with the crowd also without a bed, flat plateau tangents of the distance curve, "after the raid starts" wording,
+  the sentence in the generated core `README.txt` (pinned), a manifest fixture of the real shape, the corrected progress text (Custom curve, baked gain 3.2, world coordinates of the
+  stands) and a wider allocation cap in the flaky `ThePcmRingWritesWithoutAllocating`. One review finding was not applied: the client csproj's audio staging target still requires only
+  `spectator-audio.json`, because a manifest without a bed is deliberately valid and `validate_distribution.py` (`require_bed`) and the packer's required-file list stop a bed-less package.
+  **Tallies (fixer, 2026-10-30, worktree on `6f36ecf`):** `dotnet test ArenaMapPort.Server.Tests -c Release` 2678 passed, 0 failed, 0 skipped (2675 before the fixes, three new pins);
+  the client project compiles in Debug with 0 warnings and 0 errors (a Release client build needs the ignored extract inputs and is the lead's, in the main checkout); Python
+  `test_spectator_audio` 18, `test_validate_distribution` 55, `test_release_zips` 187 (1 skipped, the real-dist smoke test) and `test_changelog` 12, all OK. The full `tools/tests` discover ran
+  2441 tests with the four worktree-only failures that predate this work (`test_dll_versions`: no staged client DLL in the worktree's `dist/`; `test_score_monitors` sidecar text: CRLF checkout;
+  the two `test_the_validator_run_passes` in `test_door_poses` and `test_score_monitors`: a subprocess decode error), 131 skips from the missing ignored `work/` inputs; rerun it in the main checkout.
+
+**What this supersedes.** The `833275d` DLLs, their VirusTotal scan and the five-part cut `work/releases/0.4.0/github-833275d` (items 1 and 2 of the "Open, in this order" list
+further down) no longer describe the candidate: the client DLL changes, the core part gains a file and its README.txt/checksum change, and all five part manifests pin the build
+commit, so all five parts are cut again. `docs/releases/v0.4.0.md` carries its "Built from commit" and VirusTotal lines as placeholders again. The `fe45b84` package stays the
+earlier host-verified fallback and still has no murmur.
+
+**Open, in this order:**
+
+1. **Done 10:42-10:46:** in the main checkout: `python tools/extract/extract_spectator_audio.py extract` (the bed lands in the ignored `work/extract/spectator-audio`; `--output` writes it to another folder
+   instead), then a Release client build (`DllOnly` is enough, the audio staging target runs there too), then
+   `validate_distribution.py` and `validate_port.py --distribution`. Order matters: the staging target needs only `spectator-audio.json`, so a build before this extract stages a package
+   without the bed and without an error (one Debug line in the client log); `validate_distribution.py` and `make_release_zips.py --plan` ("incomplete dist") are what stop it.
+2. **Done 10:46-11:00** (record: [spectator-audio.md](docs/progress/spectator-audio.md) "Host run of the crowd bed build"): deploy (1 new, 3 overwritten), EFT restart,
+   four raids without bots (Equator 4 stands, Bay5 4, Air Pit 6, Bowl 6; crowd load 2.11-2.23 s; 0 ArenaMapPort warnings), the hideout once, the live key
+   `Spectators/CrowdBed` toggled off and on (census `ownedBed=4/4` -> `0/4`), the level at the user's Equator spot bed on `bgMedian=-43.0` against off `-43.9`
+   (NoiseProbe Detect minute lines), cadence `spec=+9/-9` a minute. The earlier plan of this item was: full deploy, EFT restart, and the host run of the checklist in the progress section (four raids, live keys, level by
+   NoiseProbe Capture bed off/on, frame time, cadence, the hideout once). The player texts say "not listened to" and make no claim about log checks; when the run is done, add its
+   evidence sentence to CHANGELOG, `docs/releases/v0.4.0.md` and the Known-limitations bullets, and a dated paragraph to the progress section.
+3. Re-cut the five parts from the commit that carries it all, rescan both DLLs, fill the placeholders of `docs/releases/v0.4.0.md`, and re-read the generated core README.txt (it names the
+   core contents and the audio limits; `tools/release/make_release_zips.py` is the pipeline patch's file).
+4. User decisions: his ear on the murmur (loudness, reach, whether it belongs; no make-up gain was added: at the defaults the murmur arrives at about -40 dBFS rms at a stand centre and
+   `BED_GAIN_DB` in the extractor is the one place to raise it, with a re-extract, re-stage and re-cut; the first 1.2 s of the clip have swells of 6-9 dB that every stand repeats once per
+   loop, a loop-start rotation in the extractor would remove them; the stand count follows `SpectatorCrowdBedModel.MaxStandRadius`, 25 m; `Spectators/CrowdBedVolume` and `CrowdBedReach` tune it live with DeveloperMode); whether the
+   pauses are right; whether ArenaMode should call `SetExcitement`. A listening test of the repaired Equator bundle (open item of the block below) is easier with `Spectators/CrowdBed`
+   false, because the murmur is a steady background of its own; the unexplained faint steady hiss was recorded on a build without a bed.
+
 ## Publication postponed by user — 2026-10-29
 
 Do not publish ArenaMapPort 0.4.0 yet. The user explicitly postponed this release while

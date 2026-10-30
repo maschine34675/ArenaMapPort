@@ -35,6 +35,10 @@
     <Compile Include="..\ArenaMapPort.Client\GateSoundModel.cs" Link="Client\GateSoundModel.cs" />
     <Compile Include="..\ArenaMapPort.Client\PcmWav.cs" Link="Client\PcmWav.cs" />
     <Compile Include="..\ArenaMapPort.Client\SpectatorAudioModel.cs" Link="Client\SpectatorAudioModel.cs" />
+    <!-- The crowd murmur bed (docs/progress/spectator-audio.md "Crowd bed"): the Unity-free rules (stands by k-means, distance and volume laws, excitement smoothing, the manifest's bed)
+         and the public SpectatorCrowd contract an ArenaMode binder finds by reflection. SpectatorCrowdBed.cs (AudioSource glue) stays out; SpectatorCrowdBedSourcePinTests reads it as text. -->
+    <Compile Include="..\ArenaMapPort.Client\SpectatorCrowdBedModel.cs" Link="Client\SpectatorCrowdBedModel.cs" />
+    <Compile Include="..\ArenaMapPort.Client\SpectatorCrowd.cs" Link="Client\SpectatorCrowd.cs" />
     <!-- The Unity-free core of the developer noise probe (docs/progress/spectator-audio.md "NoiseProbe diagnostic"): block statistics, burst detector, event ring, report text,
          self-test, PCM ring, WAV writer, capture policy. NoiseProbe.cs (config, taps, hotkey, census, export) stays out; NoiseProbeSourcePinTests reads it as text and brings a stand-in
          NoiseProbe for the linked PhysicsPropSoundRepairs.cs. -->

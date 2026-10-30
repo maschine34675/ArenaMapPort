@@ -596,6 +596,8 @@ namespace ArenaMapPort.Client
                 sb.Append(" ownedAmbient=").Append(AmbientPlaying);
                 var spectators = SpectatorAudio.Current;
                 if (spectators != null) sb.Append(" ownedSpectator=").Append(spectators.PlayingVoices);
+                var bed = SpectatorCrowdBed.Current;
+                if (bed != null) sb.Append(" ownedBed=").Append(bed.PlayingStands).Append('/').Append(bed.StandCount); // continuous looping sources: not in the pool, not counted above
             }
             catch (Exception e) { sb.Append("census failed: ").Append(e.GetType().Name); }
             return _lastCensusText = sb.ToString();

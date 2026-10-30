@@ -153,6 +153,8 @@ SELECTION_MAP_NAMES = (f"{PLUGIN_ROOT}/map-selection/region-map.png",
 # they travel in the core part. The rule pins the folder and leaf shape; validate_distribution.py checks the exact file set.
 MONITORS_MANIFEST_NAME = f"{PLUGIN_ROOT}/monitors/monitors.json"
 SPECTATOR_AUDIO_MANIFEST_NAME = f"{PLUGIN_ROOT}/spectator-audio/spectator-audio.json"
+# The crowd murmur bed next to the 13 fan calls (docs/progress/spectator-audio.md "Crowd bed"); like them it is shared by every map.
+SPECTATOR_BED_NAME = f"{PLUGIN_ROOT}/spectator-audio/arena_fans_ambient_postmatch.wav"
 SPECTATOR_TEXTURES_MANIFEST_NAME = f"{PLUGIN_ROOT}/spectators/shared/spectator-textures.json"
 
 
@@ -347,7 +349,7 @@ def build_rules(spec: ReleaseSpec) -> list:
     for name in SELECTION_MAP_NAMES:
         add(CORE_ID, "selection map", re.escape(name))
     add(CORE_ID, "score monitors", re.escape(f"{PLUGIN_ROOT}/monitors/") + rf"(?:monitors\.json|{LEAF}\.png)")
-    add(CORE_ID, "spectator audio", re.escape(f"{PLUGIN_ROOT}/spectator-audio/") + r"(?:spectator-audio\.json|arena_fan(?:[7-9]|1[0-3])_participating_\d{2}\.wav)")
+    add(CORE_ID, "spectator audio", re.escape(f"{PLUGIN_ROOT}/spectator-audio/") + r"(?:spectator-audio\.json|arena_fans_ambient_postmatch\.wav|arena_fan(?:[7-9]|1[0-3])_participating_\d{2}\.wav)")
     add(CORE_ID, "spectator textures", re.escape(f"{PLUGIN_ROOT}/spectators/shared/") + r"(?:spectator-textures\.json|[0-9a-f]{16}(?:-[0-5])?\.png)")
     for m in spec.maps:
         key = re.escape(m.key)
@@ -386,9 +388,9 @@ def required_files(spec: ReleaseSpec) -> dict:
     unlock its encrypted bundles, a missing AI sidecar silently falls back to the NavMesh-synthesised AI, a missing
     shader sidecar leaves pink materials, a map without its gate sound manifest has silent gates, and a map without its
     acoustic graph, banner or loading screens is not the map the README promises; the core part needs the score monitor
-    manifest the client reads when a mode plugin claims the TV screens. Only flares, water and the
+    manifest the client reads when a mode plugin claims the TV screens and the crowd murmur bed. Only flares, water and the
     DynamicMaps overview are optional (AirPit has an overview but no flares or water package)."""
-    required = {CORE_ID: [spec.client_dll, spec.server_dll, DESCRIPTIONS_NAME, *SELECTION_MAP_NAMES, MONITORS_MANIFEST_NAME, SPECTATOR_AUDIO_MANIFEST_NAME, SPECTATOR_TEXTURES_MANIFEST_NAME]}
+    required = {CORE_ID: [spec.client_dll, spec.server_dll, DESCRIPTIONS_NAME, *SELECTION_MAP_NAMES, MONITORS_MANIFEST_NAME, SPECTATOR_AUDIO_MANIFEST_NAME, SPECTATOR_BED_NAME, SPECTATOR_TEXTURES_MANIFEST_NAME]}
     for m in spec.maps:
         names = [f"{PLUGIN_ROOT}/bundles/{m.key}_{kind}.bundle" for kind in ("scenes", "navmesh", "preset")]
         names += [f"{SERVER_ROOT}/db/{m.key}/base.json",
@@ -687,7 +689,7 @@ def readme_text(spec: ReleaseSpec, parts) -> str:
         display = {m.stem: prose_name(m.display) for m in spec.maps}
         lines = []
         for p in parts:
-            what = ("plugin, server mod, shared spectator textures/calls, original map descriptions, selection artwork, score monitor sprites, notices" if p.id == CORE_ID
+            what = ("plugin, server mod, shared spectator textures, calls and crowd murmur, original map descriptions, selection artwork, score monitor sprites, notices" if p.id == CORE_ID
                     else f"{display[p.id]} map data (bundles, NavMesh, server database entry, audio, art)")
             lines.append(f"  {p.index} of {p.count}  {p.zip_name}\n         {what}")
         intro = (f"This release comes in {len(parts)} ZIP parts. Install ALL of them; a map is complete only with\n"
@@ -735,6 +737,8 @@ def readme_text(spec: ReleaseSpec, parts) -> str:
             "Known audio limits: a cause of the intermittent Equator static of 0.3.0 was found and fixed in this\n"
             "release (a bundle block flagged as compressed but stored uncompressed; measured on the test host, not\n"
             "yet listened to). A faint steady hiss and short clicks seen in one recording are not explained by it.\n"
+            "The crowd murmur and the 4-to-8-second pauses between spectator calls are new and untuned; nobody has\n"
+            "listened to them yet.\n"
             "The game's own sound bundle has no impact sounds for the Books and CardBoard prop types, so 39 Equator\n"
             "props (shoes, books, blue cups, a road cone, pizza boxes and office folders) stay silent when they hit\n"
             "something.\n"

@@ -33,7 +33,9 @@ dated state in one screen; read it before this index if you only have a minute.
   repair step, the `validate_bundle_blocks.py` validator, the release consequence (the 0.3.0 and local 0.4.0 Equator bundles carry it, Bay5, Air Pit
   and Bowl do not), what stays open and the GPU-2 before/after recipe with its result (ON 1,581 ms before the repair, 0-73 ms after).
 - [spectator-audio.md](spectator-audio.md) — overlapping original participating calls across all four
-  crowds; shared audio, up to two independent spatial/room sources, 1.6-3.2 s cadence and cleanup;
+  crowds; shared audio, up to two independent spatial/room sources, 1.6-3.2 s cadence (4.0-8.0 s since 2026-10-30) and cleanup; since 2026-10-30 also the crowd murmur bed
+  (Arena's crowd-ambience clip, mono with a crossfaded loop seam, one looping source per k-means stand of the spectator positions, the public `SpectatorCrowd` contract;
+  host verification pending);
   intermittent-noise investigation: KeepReverb comparison negative, spectator-only comparison available; since
   2026-10-29 also the NoiseProbe developer diagnostic (burst detector, event ring, mark key, self-test, capture;
   unit-tested; run on GPU-2 on the evening of 2026-10-29, where it arms on a stereo driver under a 5.1 speaker mode since

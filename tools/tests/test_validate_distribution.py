@@ -122,6 +122,16 @@ def fan_call_wav():
     return spectator_audio.write_wav(wave_, 44100)
 
 
+@functools.lru_cache(maxsize=1)
+def crowd_bed():
+    """The crowd murmur bed for the spectator-audio fixtures: 21 s of correlated stereo noise at about -40 dBFS taken through the extractor's
+    own process_bed (mono, 0.5 s crossfade, loop point without a step), so it is 20.5 s long. Synthetic: no Arena audio. (payload, processing)"""
+    rng = np.random.RandomState(11)
+    common = rng.normal(0, .008, 21 * 44100)
+    stereo = np.stack([common + rng.normal(0, .004, len(common)), common + rng.normal(0, .004, len(common))], axis=1)
+    return spectator_audio.process_bed(spectator_audio.write_wav(stereo, 44100))
+
+
 class DistributionSidecarTests(unittest.TestCase):
     def setUp(self):
         temporary = tempfile.TemporaryDirectory()
@@ -353,16 +363,20 @@ class DistributionSidecarTests(unittest.TestCase):
 
     def put_spectator_audio(self):
         """The shared fan voices as extract_spectator_audio.py leaves them (work/extract/spectator-audio) and as the client build stages
-        them (dist/.../spectator-audio): the manifest and the 13 embedded Participating clips the extractor's own validate demands
-        (name pattern, canonical mono 44.1 kHz PCM16, hashes, levels). One synthetic tone stands in for every clip."""
+        them (dist/.../spectator-audio): the manifest, the 13 embedded Participating clips the extractor's own validate demands
+        (name pattern, canonical mono 44.1 kHz PCM16, hashes, levels) and the crowd murmur bed (manifest key 'bed'). One synthetic
+        tone stands in for every clip, synthetic noise for the bed."""
         payload = fan_call_wav()
         rows = [spectator_audio.clip_record(f"arena_fan{7 + index % 7}_participating_{index // 7:02}", payload) for index in range(13)]
+        bed_payload, processing = crowd_bed()
         manifest = json.dumps({"schema": 1, "bank": "Participating", "trigger": 1123, "source_bundle": spectator_audio.BUNDLE,
-                               "external_entries_omitted": 9, "clips": rows}, indent=2) + "\n"
+                               "external_entries_omitted": 9, "clips": rows,
+                               "bed": spectator_audio.bed_record(bed_payload, 5167, processing)}, indent=2) + "\n"
         for folder in (self.plugin / "spectator-audio", self.repo / "work/extract/spectator-audio"):
             folder.mkdir(parents=True, exist_ok=True)
             for row in rows:
                 (folder / row["file"]).write_bytes(payload)
+            (folder / spectator_audio.BED_FILE).write_bytes(bed_payload)
             (folder / spectator_audio.MANIFEST).write_text(manifest, encoding="utf-8", newline="\n")
 
     def put_spectators(self):
@@ -1214,7 +1228,7 @@ class DistributionSidecarTests(unittest.TestCase):
         audio = self.plugin / "spectator-audio"
         extracted = self.repo / "work/extract/spectator-audio"
         manifest, clip = spectator_audio.MANIFEST, "arena_fan7_participating_00.wav"
-        self.assertEqual(13, len(list(audio.glob("*.wav"))))
+        self.assertEqual(14, len(list(audio.glob("*.wav"))))   # the 13 calls and the crowd bed
         self.validate()
         with self.changed(audio / manifest), self.assertRaisesRegex(FileNotFoundError, re.escape(manifest)):
             self.validate()
@@ -1239,6 +1253,38 @@ class DistributionSidecarTests(unittest.TestCase):
             self.validate()
         shutil.rmtree(audio)
         with self.assertRaisesRegex(FileNotFoundError, re.escape(manifest)):
+            self.validate()
+
+    def test_the_crowd_bed_is_required_exactly_intact_and_current(self):
+        audio = self.plugin / "spectator-audio"
+        extracted = self.repo / "work/extract/spectator-audio"
+        manifest, bed = spectator_audio.MANIFEST, spectator_audio.BED_FILE
+        self.validate()
+        # a bed in no manifest, a manifest whose bed has no file, a bed that is not what its record says
+        document = json.loads((audio / manifest).read_text(encoding="utf-8"))
+        del document["bed"]
+        with self.changed(audio / manifest, json.dumps(document, indent=2).encode() + b"\n"), \
+                self.assertRaisesRegex(ValueError, "the crowd bed is missing"):
+            self.validate()
+        with self.changed(audio / bed), self.assertRaisesRegex(ValueError, "missing/oversized crowd bed"):
+            self.validate()
+        blob = (audio / bed).read_bytes()
+        with self.changed(audio / bed, blob[:-1] + bytes([blob[-1] ^ 1])), \
+                self.assertRaisesRegex(ValueError, f"{spectator_audio.BED_NAME}: sha256 mismatch"):
+            self.validate()
+        # another record for the same file: the crossfade bookkeeping and the provenance are checked, not only the hash
+        for key, value in (("seam_crossfade_ms", 250), ("source", "resources.resource"), ("source_id", "5167")):
+            changed = json.loads((audio / manifest).read_text(encoding="utf-8"))
+            changed["bed"][key] = value
+            with self.subTest(key=key), self.changed(audio / manifest, json.dumps(changed, indent=2).encode() + b"\n"), \
+                    self.assertRaisesRegex(ValueError, "unexpected provenance"):
+                self.validate()
+        # current: the staged bed must be the extractor's bytes and the extractor's file set
+        original = (extracted / bed).read_bytes()
+        with self.changed(extracted / bed, original[:-1] + bytes([original[-1] ^ 1])), \
+                self.assertRaisesRegex(ValueError, f"Stale spectator audio: {bed}"):
+            self.validate()
+        with self.changed(extracted / bed), self.assertRaisesRegex(ValueError, "Spectator audio file set differs from extracted data"):
             self.validate()
 
     def test_the_spectator_voices_must_be_the_extracted_ones(self):

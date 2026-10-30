@@ -577,3 +577,7 @@ staged the new folder with no csproj change needed on the audio side: `ArenaMapP
 existing `Include="$(ArenaMapPortAudioDir)\**\*.*"` glob is already recursive, so `other/` was picked up
 automatically. Confirmed `dist/BepInEx/plugins/ArenaMapPort/arena-audio/other/{commentator,arena}/` present
 with exactly 751 `.ogg` files (433 + 318) after first removing the stale pre-`other` `dist/` folder.
+
+**Note, 2026-10-30:** the post-match bed `crowd`/`arena_fans_ambient_postmatch` described above is now also used live by the port: on the user's decision (he said it sounds good) the
+spectator code mixes it to mono, smooths its loop seam and plays it as a quiet murmur from every stand of the original crowd on all four maps, which is an addition of the port (Arena's maps carry
+no crowd ambience). The catalogue entry above stays correct for ArenaMode's own results screen. See [spectator-audio.md](spectator-audio.md) "Crowd murmur bed and longer call pauses".

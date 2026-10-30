@@ -1,7 +1,10 @@
-"""Export the 13 embedded Participating fan calls, shared by all restored crowds.
+"""Export the 13 embedded Participating fan calls and the crowd murmur bed, shared by all restored crowds.
 
-No match/kill announcements, external bank dependencies or postmatch loop. Original
-content stays under ignored work/extract and dist; Arena is only ever read.
+No match/kill announcements or external bank dependencies. The one clip that is not a call is the bed:
+Arena's `arena_fans_ambient_postmatch` (its only crowd ambience, a results-screen bed that the port plays
+live under the stands, docs/progress/spectator-audio.md "Crowd bed"), read from resources.assets, downmixed
+to mono and made loop-safe offline by an equal-power crossfade of the head into the tail. Original content
+stays under ignored work/extract and dist; Arena is only ever read.
 """
 from __future__ import annotations
 import argparse
@@ -20,6 +23,15 @@ SOURCE = Path('D:/Battlestate Games/Escape from Tarkov Arena/EscapeFromTarkovAre
 BUNDLE = 'StreamingAssets/Windows/assets/content/audio/phrases/fan_speaker_voice.bundle'
 MANIFEST = 'spectator-audio.json'
 NAME = re.compile(r'arena_fan(?:[7-9]|1[0-3])_participating_\d{2}')
+# The crowd bed: optional in a manifest (an older one has none), required by extract() and by the distribution validator.
+BED_NAME = 'arena_fans_ambient_postmatch'
+BED_FILE = BED_NAME + '.wav'
+BED_SOURCE = 'resources.assets'
+BED_CROSSFADE_MS = 500
+BED_GAIN_DB = 0.0  # constant gain after the downmix (0 = Arena's own level); recorded in the bed's processing
+BED_MIN_FRAMES = 20 * 44100
+BED_MAX_FRAMES = 40 * 44100
+BED_MAX_JUMP = 3.0  # loop point: |last - first sample| at most this many times the RMS of the sample-to-sample differences
 
 
 def require(condition, message):
@@ -58,7 +70,79 @@ def clip_record(name, data):
                 frames=len(samples), bytes=len(data), sha256=hashlib.sha256(data).hexdigest(), peak=peak, rms=rms)
 
 
-def validate(folder):
+def protected_names():
+    """Base names of the raw files that take part in the bundle content keys (tools/bundle/key-sources.json)."""
+    key_maps = json.loads((REPO / 'tools/bundle/key-sources.json').read_text(encoding='utf-8'))['maps']
+    return {Path(f).name for entries in key_maps.values() for entry in entries for f in entry['files']}
+
+
+def process_bed(wav):
+    """Mono or stereo 44.1 kHz clip -> mono loop-safe bed: the mean of the channels, the constant gain BED_GAIN_DB, then the first
+    BED_CROSSFADE_MS of the clip is faded IN over its last BED_CROSSFADE_MS (equal power) and that tail is dropped. The result is that
+    much shorter than the source and its last sample runs straight into its first one: the source's own level step and sample
+    jump at the loop point are gone. Returns (wav bytes, processing record)."""
+    import numpy as np
+    samples, rate = read_wav(wav)
+    require(rate == 44100 and samples.shape[1] in (1, 2), 'the crowd bed must be a mono or stereo 44.1 kHz clip')
+    peak, rms = levels(samples)
+    require(peak > .001 and rms > .001, 'silent crowd bed')
+    mono = samples.mean(axis=1) * 10 ** (BED_GAIN_DB / 20)
+    fade = round(BED_CROSSFADE_MS * rate / 1000)
+    length = len(mono) - fade
+    require(length > 2 * fade, 'crowd bed too short for its crossfade')
+    ramp = np.arange(fade) / fade * (np.pi / 2)
+    seam = mono[length:] * np.cos(ramp) + mono[:fade] * np.sin(ramp)
+    loop = np.concatenate([seam, mono[fade:length]])[:, None]
+    require(np.max(np.abs(loop)) < .999, 'crowd bed clips')
+    processing = dict(original_channels=samples.shape[1], original_rate=rate, original_frames=len(samples),
+                      original_duration=len(samples) / rate, original_peak=peak, original_rms=rms,
+                      downmix='mean', gain_db=BED_GAIN_DB, crossfade_frames=fade)
+    return write_wav(loop, rate), processing
+
+
+def loop_jump(samples):
+    """(|last - first sample|, RMS of the sample-to-sample differences) of a mono clip: the step heard when the clip loops."""
+    import numpy as np
+    flat = samples[:, 0]
+    return float(abs(flat[0] - flat[-1])), float(np.sqrt(np.mean(np.diff(flat) ** 2)))
+
+
+def bed_record(data, source_id, processing):
+    row = clip_record(BED_NAME, data)
+    row.update(seam_crossfade_ms=BED_CROSSFADE_MS, source=BED_SOURCE, source_id=source_id, processing=processing)
+    return row
+
+
+def validate_bed(folder, row):
+    """Checks the bed record against its file like a call (hash, size, format, levels) plus what only the bed has: the crossfade
+    bookkeeping and a loop point without a step. Returns the file name."""
+    require(isinstance(row, dict) and row.get('name') == BED_NAME and row.get('file') == BED_FILE, 'invalid crowd bed record')
+    file = folder / BED_FILE
+    require(file.is_file() and not file.is_symlink() and file.stat().st_size <= 44 + 2 * BED_MAX_FRAMES, 'missing/oversized crowd bed')
+    payload = file.read_bytes()
+    actual = clip_record(BED_NAME, payload)
+    for key in ('channels', 'sample_rate', 'frames', 'bytes', 'sha256'):
+        require(row.get(key) == actual[key], f'{BED_NAME}: {key} mismatch')
+    require(actual['channels'] == 1 and actual['sample_rate'] == 44100 and
+            BED_MIN_FRAMES <= actual['frames'] <= BED_MAX_FRAMES and actual['bytes'] == 44 + actual['frames'] * 2,
+            'expected canonical mono 44.1 kHz PCM16 crowd bed of 20-40 s')
+    require(.001 < actual['rms'] < .081 and .001 < actual['peak'] <= .709, 'silent/over-loud crowd bed')
+    for key in ('peak', 'rms'):
+        require(abs(row.get(key, -1) - actual[key]) < 1e-9, f'{BED_NAME}: {key} mismatch')
+    require(row.get('seam_crossfade_ms') == BED_CROSSFADE_MS and row.get('source') == BED_SOURCE and
+            type(row.get('source_id')) is int, f'{BED_NAME}: unexpected provenance')
+    processing = row.get('processing')
+    fade = round(BED_CROSSFADE_MS * 44100 / 1000)
+    require(isinstance(processing, dict) and processing.get('crossfade_frames') == fade and
+            processing.get('original_rate') == 44100 and processing.get('original_channels') in (1, 2) and
+            type(processing.get('original_frames')) is int and processing.get('downmix') == 'mean' and
+            actual['frames'] == processing['original_frames'] - fade, f'{BED_NAME}: processing record mismatch')
+    jump, step = loop_jump(read_wav(payload)[0])
+    require(step > 0 and jump <= BED_MAX_JUMP * step, f'{BED_NAME}: the loop point jumps ({jump:.5f} against a step of {step:.5f})')
+    return BED_FILE
+
+
+def validate(folder, require_bed=False):
     folder = Path(folder)
     data = json.loads((folder / MANIFEST).read_text(encoding='utf-8'))
     require(data.get('schema') == 1 and data.get('trigger') == 1123 and data.get('bank') == 'Participating',
@@ -86,8 +170,29 @@ def validate(folder):
         for key in ('peak', 'rms'):
             require(abs(row.get(key, -1) - actual[key]) < 1e-9, f'{name}: {key} mismatch')
         expected.add(row['file'])
+    if data.get('bed') is None:
+        require(not require_bed, 'the crowd bed is missing from the spectator audio manifest')
+    else:
+        expected.add(validate_bed(folder, data['bed']))
     require({p.name for p in folder.iterdir()} == expected, 'unexpected spectator audio files')
     return data
+
+
+def find_bed(source):
+    """Arena's bed clip, found by name in resources.assets exactly like extract_arena_audio.py finds it for its `crowd` group (the path
+    id that script records is only a drift hint: 4985 in its notes, 5167 in Arena 0.6.1). Returns (reader, decoded stereo WAV).
+    Neither resources.assets nor the stream file that holds the audio may take part in the bundle content keys."""
+    from extract_arena_audio import GROUP_SOURCES, _load_environment, _index_clip_names, _decode_and_validate_source
+    spec = GROUP_SOURCES['crowd']
+    require(spec['root'] == 'arena' and spec['file'] == BED_SOURCE and list(spec['clips']) == [BED_NAME],
+            'extract_arena_audio.py no longer describes the crowd bed')
+    index = _index_clip_names(_load_environment(Path(source), BED_SOURCE), wanted_names=[BED_NAME])
+    require(BED_NAME in index, f'{BED_NAME} not found in {BED_SOURCE}')
+    reader = index[BED_NAME]
+    stream = (reader.read_typetree().get('m_Resource') or {}).get('m_Source') or ''
+    protected = protected_names()
+    require(BED_SOURCE not in protected and Path(stream).name not in protected, 'crowd bed overlaps a protected key source')
+    return reader, _decode_and_validate_source(reader, BED_NAME)[0]
 
 
 def extract(source=SOURCE, output=OUTPUT):
@@ -95,9 +200,7 @@ def extract(source=SOURCE, output=OUTPUT):
     from extract_arena_audio import _decode_and_validate_source
     bundle = Path(source) / BUNDLE
     # Plaintext audio must never use a file that participates in bundle content keys.
-    key_maps = json.loads((REPO / 'tools/bundle/key-sources.json').read_text(encoding='utf-8'))['maps']
-    protected = {Path(f).name for entries in key_maps.values() for entry in entries for f in entry['files']}
-    require(bundle.name not in protected, 'spectator audio overlaps a protected key source')
+    require(bundle.name not in protected_names(), 'spectator audio overlaps a protected key source')
     env = UnityPy.load(str(bundle))
     banks = [(o, o.read_typetree()) for o in env.objects if o.type.name == 'MonoBehaviour']
     selected = [(o, t) for o, t in banks if t.get('m_Name') == 'Participating']
@@ -118,6 +221,8 @@ def extract(source=SOURCE, output=OUTPUT):
         require(NAME.fullmatch(name), 'unexpected participating clip name')
         local.append((name, clip))
     require(len(local) == 13 and external == 9 and len({n for n, _ in local}) == 13, 'fan bank membership changed')
+    bed_reader, bed_wav = find_bed(source)
+    bed_payload, bed_processing = process_bed(bed_wav)
     output = Path(output)
     output.mkdir(parents=True, exist_ok=True)
     rows = []
@@ -128,10 +233,11 @@ def extract(source=SOURCE, output=OUTPUT):
         row.update(source_id=clip.path_id, processing=processing)
         (output / row['file']).write_bytes(payload)
         rows.append(row)
-    manifest = dict(schema=1, bank='Participating', trigger=1123, source_bundle=BUNDLE,
-                    external_entries_omitted=external, clips=rows)
+    (output / BED_FILE).write_bytes(bed_payload)
+    manifest = dict(schema=1, bank='Participating', trigger=1123, source_bundle=BUNDLE, external_entries_omitted=external,
+                    clips=rows, bed=bed_record(bed_payload, bed_reader.path_id, bed_processing))
     (output / MANIFEST).write_text(json.dumps(manifest, indent=2) + '\n', encoding='utf-8')
-    validate(output)
+    validate(output, require_bed=True)
     return manifest
 
 
@@ -142,4 +248,7 @@ if __name__ == '__main__':
     parser.add_argument('--output', type=Path, default=OUTPUT)
     args = parser.parse_args()
     result = extract(args.source, args.output) if args.action == 'extract' else validate(args.output)
-    print(f'SPECTATOR_AUDIO_OK {len(result["clips"])} clips, {sum(c["bytes"] for c in result["clips"])} bytes')
+    bed = result.get('bed')
+    print(f'SPECTATOR_AUDIO_OK {len(result["clips"])} clips, {sum(c["bytes"] for c in result["clips"])} bytes; ' +
+          (f'bed {bed["name"]} {bed["frames"] / bed["sample_rate"]:.3f} s mono, {bed["bytes"]} bytes, sha256 {bed["sha256"]}'
+           if bed else 'no bed (the manifest has none)'))

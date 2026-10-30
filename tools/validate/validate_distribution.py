@@ -513,7 +513,9 @@ def validate():
     validate_monitors(plugin)
     from extract_spectator_audio import validate as verify_spectator_audio
     audio = plugin/'spectator-audio'
-    verify_spectator_audio(audio)
+    # The 13 calls and, since 0.4.0, the crowd murmur bed (arena_fans_ambient_postmatch.wav, manifest key 'bed'): the file set and
+    # every byte below are compared with the extractor's output, so a bed that is stale, missing or not the extracted one is refused.
+    verify_spectator_audio(audio, require_bed=True)
     extracted_audio = REPO/'work/extract/spectator-audio'
     if _files_under(audio) != _files_under(extracted_audio):
         raise ValueError('Spectator audio file set differs from extracted data')

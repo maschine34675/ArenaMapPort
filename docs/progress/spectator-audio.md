@@ -552,3 +552,201 @@ right area, an owned Equator ambient player at the port's boosted range, but not
 with its numbers, the UnityPy origin (`chunk_based_compress` writes a chunk compressed when its LZ4HC output is exactly the chunk size), the repair, the
 validator, the release consequence and what stays open (the steady hiss, the click bursts, the boosted wind bed as a taste question) is in
 [equator-noise-bundle-block.md](equator-noise-bundle-block.md); its fix was host-verified by numbers on 2026-10-30 ("Stereo-driver fixes and the evidence" above) and nobody has listened to a repaired build.
+
+## Crowd murmur bed and longer call pauses - 2026-10-30
+
+Status: specified by the lead and built in three parallel patches (pipeline, client, texts) on 2026-10-30; **no release candidate contains it yet; it ran on GPU-2 on 2026-10-30 (the host section at the end of this document) and
+nobody has listened to it.** This section is the design and the measurements it stands on; the host run appends its own section, and the
+release texts (README, FORGE, CHANGELOG, `docs/releases/v0.4.0.md`) say "not listened to" until then.
+
+**Decision (user, 2026-10-30, paraphrased from German).** Asked whether a crowd murmur fits Arena's maps, he said he has never played EFT Arena and cannot judge it
+precisely; it sounds good and should be implemented, and the pauses between the normal single calls should then be lengthened again. The 0.4.0 package of `833275d` (DLLs,
+cut and VirusTotal scan) is superseded once these changes are in.
+
+### Why a bed, and where the sound comes from
+
+The calls are 13 short shouts (1.35-3.29 s); between them the stands are silent. Arena's own four levels carry no crowd-ambience emitter: the native audio data of
+the four extracted packages has no crowd-like player (Bowl has four `arena_fans_peesound` one-shots, nothing else). The only crowd-ambience recording in Arena's files is
+`arena_fans_ambient_postmatch` in `resources.assets`, which [arena-audio.md](arena-audio.md) catalogues as the post-match results-screen bed (the name says
+`_postmatch`) and says is meant to run under that screen, not in a live round. The user chose to use it live on the maps, so the murmur is **an addition of the port, not a sound
+Arena plays in these maps**, and the texts say so. The extraction reads the clip from `resources.assets` with UnityPy, like the arena-audio extractor, and does not take the
+`.ogg` that extractor wrote. `resources.assets` is not among the stage-2 key-source files (`tools/bundle/key-sources.json` names only per-scene `sharedassets` streams;
+checked by file name on 2026-10-30), so shipping a decoded copy does not repeat the trap of [gate-sounds.md](gate-sounds.md).
+
+### The clip (measured offline by the lead, 2026-10-30)
+
+| Property | Value |
+|---|---|
+| Length, format | 30.313 s, stereo, 44.1 kHz |
+| Loudness | integrated -36.5 LUFS, rms -40.1 dBFS, peak -22.7 dBFS, loudness range 3.2 LU |
+| Spectrum | 76 % of the energy in 200-1000 Hz (centroid 943 Hz), 0 % below 200 Hz, 1 % above 4 kHz |
+| Stereo | L/R correlation 0.78 |
+| Loop seam, raw | last 50 ms -40.4 dB against first 50 ms -44.0 dB (a 3.6 dB step); end sample -0.0014, start sample 0.0072 (a small click) |
+
+It is a quiet, narrow-band wash of voices. Looped as it is, the seam would step and click once every 30 s on every stand.
+
+### Spectator positions and the stands
+
+The positions are the actor roots of the schema-4 crowd graphs (`actors[].nodes[0].position` with parent -1), the same positions `SpectatorAudio` receives. The lead's
+k-means over x/z (indicative; the model's own rule below decides the final counts):
+
+| Map | Fans | Height (y) | Groups found |
+|---|---:|---|---|
+| Equator | 99 | 5.4-16.1 | 4 stands of radius 13-17 m at about (-19, 10, -10), (17, 10, -11), (17, 9, 20), (-17, 9, 23) |
+| Bay5 | 88 | -5 to 13.8 | 3-4 groups: (21, 3, -6) r 21 m, (-11, -1, 1) r 14 m, (-43, -1, 85) r 13 m and a small (-43, -2, 55) r 19 m |
+| Air Pit | 99 | 8.5-20 | 4 stands of radius 26-34 m |
+| Bowl | 99 | 11.9-25.2 | 4 stands of radius 45-64 m; with k = 6 the radii drop to 20-47 m |
+
+The lead's figures are indicative, and Bay5's are container-local (its crowd container sits at (104.1, 6.4, -16.2); the other three containers are at the origin with the identity
+rotation and scale 1). What the model's own rule (below, radius limit 25 m, at most six stands) forms from the four staged graphs, in the world coordinates the runtime hands it (actor
+root plus 1.6 m of head height, which is also what the `[CrowdBed]` line prints; the test `TheFourRealCrowdsFormTwoToSixStandsEachMeetingTheRadiusRuleOrTheCap` pins the counts):
+
+| Map | Fans | Stands | Radii (m) | Centres (x, y, z), west to east |
+|---|---:|---:|---|---|
+| Equator | 99 | 4 | 17.1 / 13.3 / 14.0 / 16.2 | (-19, 11, -10) (-17, 10, 23) (17, 11, 20) (17, 11, -11) |
+| Bay5 | 88 | 4 | 18.8 / 14.5 / 13.3 / 20.7 | (61, 6, 38) (61, 7, 69) (93, 7, -15) (125, 11, -22) |
+| Air Pit | 99 | 6 | 19.3 / 20.5 / 18.8 / 18.3 / 22.0 / 16.7 | (-45, 14, 8) (-34, 14, -26) (-24, 13, 40) (5, 16, -34) (10, 15, 30) (20, 13, -3) |
+| Bowl | 99 | 6 (the cap) | 34.8 / 28.6 / 44.6 / 20.3 / 35.8 / 45.2 | (-87, 16, -62) (-74, 18, 28) (-45, 24, -113) (-4, 17, 36) (61, 17, -97) (84, 19, -1) |
+
+### Design
+
+- **Extraction (`tools/extract/extract_spectator_audio.py`).** The `extract` action also exports the bed from Arena's `resources.assets`: downmixed to mono, the loop seam
+  fixed offline by a 500 ms equal-power crossfade of the clip's head into its tail (result 30.313 s minus 0.5 s, which loops without a step), written as
+  `arena_fans_ambient_postmatch.wav` (16-bit PCM, 44.1 kHz) beside the 13 call WAVs. `spectator-audio.json` gains a `bed` object (name, file, channels 1, sample rate, frames,
+  bytes, sha256, peak, rms, `seam_crossfade_ms` 500, the source `resources.assets` with the clip's path id, and the clip's own statistics before the downmix). Schema 1 and
+  the 13 clips are unchanged, so a client can still read a manifest without `bed` and then simply has no bed. `validate()` requires the bed when present, with hash and size checks;
+  `verify` reports it.
+- **Staging.** The existing `ArenaMapPortStageSpectatorAudio` target already copies `spectator-audio.json` and `*.wav`; the bed travels into `dist/.../spectator-audio/` (core
+  part). The distribution grows from 255 to **256 files** and the core part from 153 to **154** (Equator 24, Bay5 30, Air Pit 22, Bowl 26 unchanged); the packer's
+  `spectator audio` rule, `validate_distribution.py` (which checks the staged folder against `work/extract/spectator-audio`) and their tests know the new file.
+- **Stands (`SpectatorCrowdBedModel.cs`, Unity-free, linked into the tests).** Deterministic k-means over x/z with fixed seeding (no unseeded `System.Random`): k from 2
+  upward until every cluster radius is at most 25 m (30 m in the first draft, which gave Equator two stands instead of its four natural ones, see "Review of the three patches") or k reaches 6. A stand's centre is the mean position (x, mean y of its members, z). Per stand i of k:
+  `minDistance = clamp(radius, 8, 60)`, `maxDistance = minDistance + CrowdBedReach`, start offset `i/k` of the loop length, pitch `0.98 + 0.04 * i/(k-1)`, so the stands
+  neither repeat in step nor sound identical. The model also parses the manifest's `bed` and owns the excitement smoothing and the volume law.
+- **Sources (`SpectatorCrowdBed.cs`, Unity glue).** One owned GameObject and AudioSource per stand, created after the crowd exists and removed with it (also on the raid
+  audio reset that rebuilds the call voices; the bed is rebuilt with them). Clip decoded from the WAV with the existing `PcmWav` helper; loop on, spatial blend 1, spread 70,
+  doppler 0, priority 200. **The distance law is a Custom rolloff curve, not Logarithmic:** Unity's Logarithmic mode stops attenuating at the maximum distance and holds that
+  level for ever (about -10 dB across the whole map), so the curve is full volume inside the stand's minimum distance, 1/d beyond it and a taper to silence at the maximum distance
+  (flat tangents on the two plateau keys, because smoothed tangents overshoot gain 1 by 7 to 14 percent). **`AudioSource.volume` cannot exceed 1**, but `CrowdBedVolume` goes to 2
+  and the excitement factor to 1.6: the decoded clip carries a fixed gain of 3.2 (2 x 1.6) and the source volume is `volume x factor / 3.2` (0.3125 at the defaults, which is the
+  `vol=` the NoiseProbe prints for a stand), so the level that reaches the listener is the clip's own level x `CrowdBedVolume` x the excitement factor. Output goes to the
+  Environment mixer group the calls use (`BetterAudio.SourceGroups`, read the way `SpectatorAudio` reads it; the bed waits for BetterAudio and for that group and has no fallback
+  to another group). No occlusion raycasts and no scene search; the only per-frame work is the allocation-free excitement smoothing, and a watchdog restarts a stopped stand
+  source (at most 8 times per raid).
+- **Excitement.** A target in 0..1, smoothed with a 2 s time constant, mapped to a volume factor between 1.0 and 1.6. Nothing sets it yet, so the murmur stays at the base level.
+- **Keys (developer-only, honoured only with DeveloperMode, section `Spectators`, none public).** `CrowdBed` (bool, true, live: creates and destroys the sources),
+  `CrowdBedVolume` (float 1.0, range 0-2, live), `CrowdBedReach` (float 60 m, range 10-150, live). All are new keys; no existing default changes.
+- **Public hook for mode plugins.** `ArenaMapPort.Client.SpectatorCrowd`: `ContractVersion = 1`, `IsAvailable`, `SetExcitement(float level01)`, `Excitement`. Append-only like
+  `ScoreMonitors` (a member count pin fails on a new member; `ContractVersion` changes only on a removal or a change of meaning). ArenaMode has not adopted it, and it is never
+  edited from here.
+- **Logging and NoiseProbe.** One Debug line per raid, `[CrowdBed] <map>: N stands (radii ..., centres ...), clip X s mono, volume V`, and one on removal; a manifest
+  without a bed is one Debug line, not a Warning. The NoiseProbe gets `NoiseEv.Bed` (texts `bed+` and `bed-`) with one-line taps behind `if (NoiseProbe.Armed)` at the
+  start and stop of each stand source, under the existing tap rules.
+- **Tests.** The model (clustering on the four real position sets when the dist graphs are present, synthetic otherwise; determinism; per-stand parameters; manifest parsing with
+  and without `bed`; excitement smoothing), source pins (owned sources only, no `FindObjectsOfType`, keys bound through `Settings`, install order) and the contract pin.
+
+**First extraction (pipeline patch, 2026-10-30, written outside the repository; two runs gave byte-identical WAV and manifest).** The bed read from `resources.assets` (path id 5167)
+is 1,336,816 frames of stereo at 44.1 kHz before processing; the mean downmix at 0 dB gain and a crossfade of 22,050 frames (500 ms) leave **1,314,766 mono frames (29.813 s,
+2,629,576 bytes with the 44-byte header)**, peak 0.0678 (-23.4 dBFS) and rms 0.00997 (-40.0 dBFS), against 0.0752 and 0.01054 before. The mono mix and the crossfade lower the peak by about 0.9 dB and the rms by about 0.5 dB. The SHA-256 is in the manifest's `bed` object.
+
+### Longer pauses between the normal calls
+
+| Constant | First 0.4.0 candidates | Now |
+|---|---|---|
+| Between two call starts | 1.6-3.2 s | **4.0-8.0 s** |
+| First call after the raid starts (`GameStatus.Started`), and after a restart | 2-5 s | **3-8 s** |
+| Voices at once | 2 | 2 (unchanged) |
+| Retry after a failed selection | 3 s | 3 s (unchanged, not a cadence) |
+
+These are constants in `SpectatorAudioSchedule`, not config keys, so there is no `DefaultsRevision` re-seed; the tests that pin the cadence moved with them. Gain 0.5, the
+13 clips, the speaker and family exclusions and the native room processing are unchanged. **A consequence worth knowing:** the 13 clips last 1.35-3.29 s and no call can start
+less than 4.0 s after the previous one, so two calls no longer overlap in practice; the limit of two voices stays as a guard and the second slot is idle. The overlap of the
+earlier schedules (about two voices on average at 0.8-1.6 s, still common at 1.6-3.2 s, estimated from the clip lengths) is gone, which is what the user asked for. The release texts say "one call every 4 to 8 seconds" and
+no longer say that speakers overlap.
+
+### Relation to the Equator static and the unexplained hiss
+
+The murmur is a continuous, quiet voice wash centred on 200-1000 Hz, on every map. Two cautions for the listening and capture work still open: (1) the user's confirmation that the
+repaired Equator bundle no longer produces the static ([equator-noise-bundle-block.md](equator-noise-bundle-block.md)) is easier on a build with `Spectators/CrowdBed` false (developer
+key) or on the `833275d` DLL, because the bed is a steady background of its own; (2) the "faint steady hiss" that was seen in one recording and is not explained by the bundle fix
+was recorded on a build that had no bed, so the bed cannot be its source. The bed's stand sources are owned, non-pooled looping players, which the NoiseProbe's pooled-source walk cannot see: the census therefore prints `ownedBed=<playing>/<stands>`
+(next to `ownedAmbient=` and `ownedSpectator=`) and the event ring has `bed+`/`bed-` for every start and stop.
+
+### Host verification (pending; nothing below has been run)
+
+1. Full deploy through `tools/deploy-to-spt.ps1` (the core part gains a file, so not `-DllOnly`) and an EFT restart for the client DLL; the server DLL does not change. Check
+   `uibridge_status` (loaded MVID equals the build).
+2. One plain PMC raid per map, bots None, about a minute each: the `[CrowdBed]` line (stand count, radii and centres against the model's table above, which is in world coordinates: 4, 4, 6 and 6 stands, and Bay5's centres are not the
+   container-local figures of the lead's table), no ArenaMapPort
+   Warning or Error, the bed's sources present and playing, gone after leaving the raid; the hideout once.
+3. The live keys: `CrowdBed` false then true, `CrowdBedVolume` 0, 1 and 2, `CrowdBedReach` at 10, 60 and 150 m, each seen in the process.
+4. Level and reach by numbers: NoiseProbe `Capture` at one fixed spot, the bed off and on, and the RMS difference of the two captures; the clip's own rms is -40.1 dBFS
+   before gain, attenuation and the stand distance.
+5. Frame time before and after (`uibridge_status` `max`, ModProfiler's `max_ms_in_frame`) and the raid-start load line.
+6. The call cadence: the `[SpectatorAudio]` start times in a debug log read 4.0-8.0 s apart with a first call 3-8 s after the raid starts.
+7. Excitement: a developer-side call of `SpectatorCrowd.SetExcitement` (no caller exists yet) and a level change within about 2 s; unit-tested, not yet exercised in game.
+8. Listening: open. The user's ear is the only evidence for loudness, reach and whether the murmur belongs.
+9. The census: at a NoiseProbe mark the `census=[...]` text ends with `ownedBed=n/m` and n equals m while the bed plays (the bed is invisible to the pooled-source count).
+10. The watchdog: whether a stand source's `isPlaying` stays true under `AudioListener.pause` (the pause menu). If it does not, the watchdog restarts a paused source at offset 0
+    up to 8 times per raid; the Debug line `stand N had stopped; restarted` would show it.
+
+### Review of the three patches (2026-10-30)
+
+Two reviews of the pipeline, client and texts patches (applied to `6f36ecf`) found no blocking defect. What the combined patch changed because of them, and what it left open:
+
+- **Stand rule 25 m, not 30 m.** The first draft's limit of 30 m gave Equator two stands (radii 29.1 and 26.9 m, centres (-18, 11, 5) and (17, 11, 2), each 15-18 m from a real stand), where
+  the lead's own figures describe four natural stands of 13-17 m. The largest radius per k, from the reviewer's offline port of the same k-means (it matches the C# result at the final k):
+
+  | Map | k=2 | k=3 | k=4 | k=5 | k=6 |
+  |---|---:|---:|---:|---:|---:|
+  | Equator | 29.1 | 25.6 | 17.1 | 17.1 | 11.5 |
+  | Bay5 | 43.2 | 43.2 | 20.7 | 18.8 | 18.8 |
+  | Air Pit | 45.5 | 40.8 | 32.9 | 26.6 | 22.0 |
+  | Bowl | 107.7 | 80.5 | 63.7 | 63.7 | 45.2 |
+
+  At 30 m the counts are 2 / 4 / 5 / 6, at 25 m they are 4 / 4 / 6 / 6 (Equator, Bay5, Air Pit, Bowl); no single limit gives 4 everywhere. 25 m is `SpectatorCrowdBedModel.MaxStandRadius`, one constant;
+  the pinned counts of the real-graph test and the synthetic rows follow it. It costs at most four more audio sources on a map (never more than six in all). This was the fixer's
+  decision where the lead's text ("k from 2 until every radius is at most 30 m") contradicted the lead's own picture of four Equator stands; setting the constant back to 30 restores the
+  literal rule.
+- **Distance curve and gain** are documented as built (Custom curve, baked clip gain 3.2); the first draft of this section still said logarithmic and a fallback mixer group.
+- **NoiseProbe.** The census prints `ownedBed=n/m` (finding: the pooled-source walk could not see the stand sources, the blind spot of the Equator investigation); the bed no longer notes
+  `NoiseEv.Reset` (the one audio reset was counted twice, `resets=2`, since `SpectatorAudio` notes it already; `bed-` and `bed+` show the bed's own rebuild); the `Armed` check comes first in the
+  stop tap.
+- **Contract.** `SpectatorCrowd`'s promise that the excitement is reset when the raid's crowd is removed now also holds for a package without a bed or a bed that failed:
+  `ArenaSpectators.OnDestroy` resets the state unless a newer raid's bed is alive.
+- **Texts.** The first call comes 3-8 s after the *raid* starts (the schedule starts at `GameStatus.Started`), the generated core `README.txt` carries the "murmur and pauses are new and untuned, not
+  listened to" sentence (pinned), the AGENTS NoiseProbe entry lists the new tap file, `arena-audio.md` points to the user's decision, and the unit fixture of the manifest's bed has the shape the extractor writes.
+- **Open, for the host and the user's ear.**
+  (1) *Level.* At the defaults the murmur arrives at about -40 dBFS rms at a stand's centre (the clip's own rms; the extractor's `BED_GAIN_DB` is 0 and the mono mix costs 0.5 dB), roughly 12 dB below a
+  call at the same distance (estimated, not measured), up to +10 dB at `CrowdBedVolume` 2 with full excitement, then 1/d beyond the stand radius. If it is inaudible on the host, add make-up gain in the
+  extractor (the mono WAV peaks at -23.4 dBFS, so there is room), re-extract, re-stage and re-cut; do not widen the key range or the excitement factor without moving `ClipGain`.
+  (2) *Swells at the loop start.* The first 1.2 s of the bed has windows 6-9 dB above the median (at about 0.35-0.45 s and 0.9-1.15 s) and one more sits at 16.45 s; they belong to the source's own opening, not to the
+  crossfade. Every stand plays them once per 29.8 s loop, staggered by the start offsets; if they are heard as a pulse, rotate the loop start in the extractor and re-cut.
+  (3) The watchdog's behaviour under `AudioListener.pause` is untested (host item 10). (4) The clip is uploaded (5.3 MB of floats) while the raid loads and freed again if EFT's raid-start audio reset
+  fires; wasted, harmless, left as it is.
+
+### Host run of the crowd bed build, GPU-2, 2026-10-30 10:46-11:00 (lead)
+
+Build: `crowd-all.patch` on `6f36ecf` (the commit that carries this paragraph), `extract_spectator_audio.py extract` on the VM
+(`SPECTATOR_AUDIO_OK 13 clips, 2815818 bytes; bed arena_fans_ambient_postmatch 29.813 s mono, 2629576 bytes, sha256
+f406076a048ba0f5567f74b1044eed5e87fda7be4d49b9c440bc222f6ac27332`), Release client build with `DllOnly` (0 warnings; `dist/` 256 files, `spectator-audio/` 15
+files), `validate_distribution.py` `DISTRIBUTION_OK 4 maps 12 bundles 4 sidecars encrypted`, xunit 2,678 OK, Python 2,441 OK (63 skipped). Deploy 10:46 (1 new
+file, 3 overwritten), the three files identical on the host after 8 s, EFT started 10:49:50 (instance `328f1b40`, UiBridge 0.9.7). Plain PMC raids, bots None, 12:00,
+clear; `NoiseProbe` Detect for the Equator level measurement (set with `persist=false`), `Spectators/CrowdBed` at its default. Nobody listened; everything is logged.
+
+| Raid | `[CrowdBed]` line (stands, radii, world centres) | Crowd load | Perf (first 10 s window) | RAM |
+|---|---|---|---|---|
+| Equator 10:50 | 4 stands (radii 17.1/13.3/14.0/16.2 m, centres (-19,11,-10) (-17,10,23) (17,11,20) (17,11,-11)), clip 29.8 s mono, volume 1.00, reach 60 m | `load total=2172 ms` (worker, CNG) | 120 fps, mean 8.3 ms, max 9.8 ms (27 s in) | 9022 MB |
+| Bay5 10:55 | 4 stands (radii 18.8/14.5/13.3/20.7 m, centres (61,6,38) (61,7,69) (93,7,-15) (125,11,-22)); the Bay5 crowd container sits at (104.1, 6.4, -16.2) | 2119 ms | 109.9 fps, max 475.8 ms (RainCover bootstrap, pre-existing) | 11871 MB |
+| Air Pit 10:56 | 6 stands (radii 19.3/20.5/18.8/18.3/22.0/16.7 m, centres (-45,14,8) (-34,14,-26) (-24,13,40) (5,16,-34) (10,15,30) (20,13,-3)) | 2110 ms | 97.3 fps, max 1766.4 ms (IndoorSurface, pre-existing) | 12094 MB |
+| Bowl 10:58 | 6 stands (radii 34.8/28.6/44.6/20.3/35.8/45.2 m, centres (-87,16,-62) (-74,18,28) (-45,24,-113) (-4,17,36) (61,17,-97) (84,19,-1)) | 2234 ms | 74.1 fps, max 3037.7 ms (IndoorSurface, pre-existing) | 12581 MB |
+
+Every raid also logged `[SpectatorAudio] <map>: 13 participating clips, N positions, up to 2 simultaneous voices` and, 8-14 s after the crowd line,
+`[CrowdBed] <map>: audio configuration changed (device changed=False); the stand sources and the clip are rebuilt` (the raid-start audio reset). The hideout
+opened and closed once at 10:59-11:00. The whole process logged 0 ArenaMapPort warnings or errors (Unity's `refrigerator_drink` LOD lines on Equator only).
+
+Level and cadence on Equator at the user's spot (teleport to (6.0, 0.1, 31.5); `NoiseProbe` minute lines, `bgMedian` of the stereo device mix): bed ON
+10:51:08-10:52:08 `bgMedian=-43.0` with `spec=+9/-9` (nine calls a minute against 24-26 at the old cadence); `Spectators/CrowdBed` set false at 10:52:40 (the key
+is polled, so it took effect without a change handler: the census read `ownedBed=4/4` at 10:52:25 and `ownedBed=0/4` at 10:53:03); the mixed minute read
+`-37.3` (`loud=1`, one-shots at 7 m); bed OFF 10:53:08-10:54:08 `bgMedian=-43.9`. At volume 1.0 the bed adds about 1 dB to the median at that spot: subtle by
+design (the clip's own level), `CrowdBedVolume` up to 2.0 is live. Not measured: the level at a stand centre, the loop-start swells, `SetExcitement` in game.

@@ -213,7 +213,9 @@ namespace ArenaMapPort.Client
                 }
                 root.SetActive(true);
                 long audio = System.Diagnostics.Stopwatch.GetTimestamp();
-                SpectatorAudio.Create(crowd, crowd._fans.Select(f => f.Position + Vector3.up * 1.6f).ToArray());
+                var voicePositions = crowd._fans.Select(f => f.Position + Vector3.up * 1.6f).ToArray();
+                SpectatorAudio.Create(crowd, voicePositions);
+                SpectatorCrowdBed.Create(crowd, voicePositions); // the stand murmur: its own try, a child of the crowd root (removed with it)
                 timing.AudioTicks = System.Diagnostics.Stopwatch.GetTimestamp() - audio;
                 if (loaded.Textures != null) timing.WaitTicks += (long)(loaded.Textures.WaitMilliseconds * System.Diagnostics.Stopwatch.Frequency / 1000.0);
                 Plugin.Log.LogDebug($"{Tag} {mapKey}: {crowd.ActorCount} original fans, {crowd.RendererCount} renderers; " +
@@ -653,6 +655,9 @@ namespace ArenaMapPort.Client
         void OnDestroy()
         {
             DisposeOwnedAssets();
+            // What a mode plugin set with SpectatorCrowd.SetExcitement belongs to this raid's crowd. The bed (a child of the root) resets it too; this covers a package without
+            // a bed and a bed that failed. A newer raid's live bed is left alone.
+            if (SpectatorCrowdBed.Current == null) SpectatorCrowd.State.Reset();
             Plugin.Log.LogDebug($"{Tag} crowd and shared assets removed");
         }
 

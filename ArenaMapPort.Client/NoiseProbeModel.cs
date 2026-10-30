@@ -24,7 +24,9 @@ namespace ArenaMapPort.Client
     internal enum NoiseEv : byte
     {
         None, SpecStart, SpecStop, SpecOnset, AmbStart, AmbRestart, AmbStop, Prop, Room, RoomReverb, RoomShot, Gate, Puddle,
-        Rain, RainPlay, Config, Reset, Life, Hitch, Gc, Mark, Burst, SelfTest
+        Rain, RainPlay, Config, Reset, Life, Hitch, Gc, Mark, Burst, SelfTest,
+        /// <summary>A crowd-bed stand source starts (A = 1) or stops (A = 0): B the stand index, V1 the distance to the listener, V2 the source volume.</summary>
+        Bed
     }
 
     /// <summary>Why a spectator voice stopped (the spec- event).</summary>
@@ -50,7 +52,7 @@ namespace ArenaMapPort.Client
                 case NoiseEv.SpecStart: case NoiseEv.SpecStop: case NoiseEv.AmbStart: case NoiseEv.AmbRestart: case NoiseEv.Prop:
                 case NoiseEv.Room: case NoiseEv.RoomReverb: case NoiseEv.RoomShot: case NoiseEv.Gate: case NoiseEv.Puddle:
                 case NoiseEv.Rain: case NoiseEv.RainPlay: case NoiseEv.Config: case NoiseEv.Reset: case NoiseEv.Life:
-                case NoiseEv.Hitch: case NoiseEv.SelfTest:
+                case NoiseEv.Hitch: case NoiseEv.SelfTest: case NoiseEv.Bed:
                     return true;
                 default:
                     return false;
@@ -116,9 +118,13 @@ namespace ArenaMapPort.Client
                 case NoiseEv.Mark: return "MARK";
                 case NoiseEv.Burst: return "burst";
                 case NoiseEv.SelfTest: return "selftest";
+                case NoiseEv.Bed: return "bed";
                 default: return "none";
             }
         }
+
+        /// <summary>The token of one event: <see cref="Token(NoiseEv)"/>, except that the crowd bed says whether the stand source started or stopped ("bed+", "bed-").</summary>
+        internal static string Token(NoiseEvent e) => e.Kind == NoiseEv.Bed ? (e.A == 1 ? "bed+" : "bed-") : Token(e.Kind);
     }
 
     // ---------------------------------------------------------------------------------------------------------------------------
@@ -726,7 +732,7 @@ namespace ArenaMapPort.Client
                 if (age <= 1.0 && evCount < 8 && NoiseText.IsCause(e.Kind) && e.Kind != NoiseEv.SelfTest)
                 {
                     if (evCount > 0) ev.Append(',');
-                    ev.Append(NoiseText.Token(e.Kind)).Append('@').Append(F((float)(e.Time - t), "+0.00;-0.00;+0.00")).Append('s');
+                    ev.Append(NoiseText.Token(e)).Append('@').Append(F((float)(e.Time - t), "+0.00;-0.00;+0.00")).Append('s');
                     evCount++;
                 }
             }
@@ -740,7 +746,7 @@ namespace ArenaMapPort.Client
         internal static string EventText(NoiseEvent e, NoiseLabels labels)
         {
             string l1 = labels.Get(e.L1), l2 = labels.Get(e.L2);
-            string token = NoiseText.Token(e.Kind);
+            string token = NoiseText.Token(e);
             switch (e.Kind)
             {
                 case NoiseEv.SpecStart:
@@ -768,6 +774,8 @@ namespace ArenaMapPort.Client
                     return token + " " + l1 + " " + F(e.V1, "0.0") + "m vol=" + F(e.V2, "0.00");
                 case NoiseEv.Puddle:
                     return token + " " + l1 + " " + F(e.V1, "0.0") + "m";
+                case NoiseEv.Bed:
+                    return token + " " + l1 + " " + F(e.V1, "0.0") + "m vol=" + F(e.V2, "0.000");
                 case NoiseEv.Rain: case NoiseEv.RainPlay: case NoiseEv.Reset: case NoiseEv.Life: case NoiseEv.SelfTest:
                     return token + " " + l1;
                 case NoiseEv.Config:

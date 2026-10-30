@@ -201,6 +201,7 @@ namespace ArenaMapPort.Client
             SpatialAudioProbe.Install(_harmony);
             SpectatorAudio.Install(); // developer-only live hearing comparison; player defaults remain enabled
             NoiseProbe.Install(); // developer-only audio noise probe (Audio diagnostics/NoiseProbe, off by default); after SpectatorAudio, which it taps
+            SpectatorCrowdBed.Install(); // developer-only keys of the crowd murmur bed (Spectators/CrowdBed*); before ArenaSpectators, whose crowd creates the bed
             ArenaSpectators.Install(); // crowd package prepared on a worker thread from the map's Scripts scene load on
             PuddleFootstepRepairs.Install(_harmony);
             if (DeveloperOptions.Enabled) DaytimeVisualsProbe.Install();

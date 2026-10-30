@@ -24,9 +24,12 @@ Equator and Bay5 also have restored dust and original lamp flares. Bay5 includes
 its harbor background and water.
 
 Version 0.4.0 adds the original animated spectators on all four maps,
-with spatial crowd calls from 13 original fan recordings and at most two voices
-at once. Their idle and cheering animations run independently of match events;
-kill and round-result reactions are not implemented yet.
+with spatial crowd calls from 13 original fan recordings (one call every 4 to 8
+seconds) and a quiet crowd murmur from each group of spectators, made from
+Arena's own crowd-ambience recording (an addition of this port: Arena's maps
+carry no crowd ambience). Their idle and cheering animations run independently
+of match events; kill and round-result reactions are not implemented yet, and
+the murmur stays at one level too.
 Their textures are stored once for all maps (about 147 MB on disk). The crowds
 decode 123 shared images into about 0.5 GB of video memory per raid on every map
 and add about two seconds to raid loading; the
@@ -213,6 +216,10 @@ The static no longer shows up in recordings of the game's sound made on the test
 but nobody has listened to the repaired bundle yet, so one playing session on Equator is
 the remaining confirmation. A faint steady hiss and short clicks seen in one recording
 are not explained by this fix.
+
+The crowd murmur and the 4-to-8-second pauses between spectator calls are new
+and untuned; they ran on the test host on all four maps without a warning, but
+nobody has listened to them yet.
 
 EFT's own sound bundle has no impact sounds for the Books and CardBoard
 prop types, so 39 Equator props (shoes, books, blue cups, a road cone, pizza boxes
