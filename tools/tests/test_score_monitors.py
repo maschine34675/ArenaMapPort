@@ -855,7 +855,8 @@ class IcebergTypeWordTests(unittest.TestCase):
 
     def test_the_maps_table_has_the_iceberg_row_with_its_package(self):
         self.assertEqual(E.MAPS["arena_iceberg"], {"stem": "iceberg", "package": "iceberg-native-v1"})
-        self.assertEqual([k for k in E.MAPS if k != "arena_iceberg"], list(KEYS.values()))                # the four released rows are untouched
+        self.assertEqual([k for k in E.MAPS if k != "arena_iceberg"], ["arena_equator", "arena_bay5", "arena_airpit", "arena_bowl"])   # the released rows are untouched
+        self.assertEqual(E.MAPS["arena_bowl"], {"stem": "bowl", "package": "bowl-native-v2"})
 
     def test_the_map_scenes_follow_the_descriptors_load_order_and_the_key_table(self):
         self.assertEqual(E.map_scenes("arena_iceberg"),
