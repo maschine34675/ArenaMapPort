@@ -1,4 +1,9 @@
-# Current distribution contract: Equator, Bay5, AirPit and Bowl (0.3.0, encrypted bundles, published 2026-10-24)
+# Current distribution contract: Equator, Bay5, AirPit and Bowl (0.4.0, encrypted bundles, published 2026-10-30)
+
+2026-10-30 (release 0.4.0 PUBLISHED, user decision "sound habe ich mir ingame angehoert, passt perfekt, kann so veroeffentlicht werden" and one whole
+ZIP on Pixeldrain): the single cut below went to Pixeldrain (https://pixeldrain.com/l/qaeLacq4; ZIP https://pixeldrain.com/u/52B6fo1G, checksum https://pixeldrain.com/u/ZLDtvkSE), both DLLs scanned on VirusTotal (0/75 and 0/75
+malicious), tag `v0.4.0` on the publication commit and the GitHub release "ArenaMapPort 0.4.0" (https://github.com/maschine34675/ArenaMapPort/releases/tag/v0.4.0) with the `.sha256` asset. 0.3.0 and
+0.2.3 stay downloadable until the user deletes them; the Forge entry (FORGE.md) is the user's.
 
 2026-10-30 (the 0.4.0 single cut, `make_release_zips.py --single --extract-check`, commit `01924a1`): dist holds 256 files; the single ZIP
 `maschine-ArenaMapPort-0.4.0.zip` is 3,836,857,033 B (3.57 GiB), SHA-256 `d40fb89a21124c773d6caa3d2cd8c7405c9c8595e3c0faa3d90224dedc9435e1`, extract-check OK against dist. Client DLL

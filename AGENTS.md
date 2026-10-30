@@ -8,7 +8,9 @@ SPT server mod that registers the locations. Fourteen maps retain development in
 released (Equator and Bay5 were the first release; AirPit was added in 2026-10 on `feature/airpit` and shipped with 0.2.2/0.2.3; 0.2.0 was built
 and withdrawn on 2026-10-16; Bowl shipped with 0.3.0). All four have native playtest evidence. **Bowl** (the fourth map, on `main` since the 2026-10-18 fast-forward merge of `feature/bowl`; PLAN-BOWL item 8) was
 **released with 0.3.0 on 2026-10-24** (tag `v0.3.0`, GitHub release, Pixeldrain; the four-map release with Arena's door poses, the done signal
-for mode plugins and the encrypted bundles of stage 2; [CHANGELOG.md](CHANGELOG.md), [docs/releases/v0.3.0.md](docs/releases/v0.3.0.md)).
+for mode plugins and the encrypted bundles of stage 2; [CHANGELOG.md](CHANGELOG.md), [docs/releases/v0.3.0.md](docs/releases/v0.3.0.md)). **0.4.0 followed on 2026-10-30** (tag `v0.4.0`, GitHub release, one ZIP on
+Pixeldrain; original animated crowds with calls and a murmur bed, gate sounds, score screens, the Equator bundle repair;
+[docs/releases/v0.4.0.md](docs/releases/v0.4.0.md)).
 Release 0.2.3 (branch `release/0.2.3`, published 2026-10-19) is 0.2.2 plus the Arena installation check; 0.2.2 was withdrawn
 the same day (GitHub release, tag and Pixeldrain files deleted, nobody had downloaded it), and so were 0.2.1 and 0.1.0
 (releases with their assets, tags, Pixeldrain files): 0.3.0 and 0.2.3 are downloadable (0.2.3 is to be deleted later, user decision 2026-10-24),
@@ -160,10 +162,11 @@ that was prepared on 2026-10-29 (core plus one ZIP per map as GitHub assets) is 
 `work/releases/0.4.0/PREPARATION.md` and `Verify-Preparation.ps1` as a recipe (they were written for the multipart set). The multi-part layout stays available
 in the packer (its default mode, for a channel with a file size cap). README, FORGE, CHANGELOG, `docs/releases/v0.4.0.md`, the generated `README.txt` and the
 in-game reinstall advice say "the release ZIP" again, with no part table. The paragraphs below that speak of five parts, a core part or the multipart form
-describe the superseded plan and stay as history. Publication stays postponed.
+describe the superseded plan and stay as history. Published 2026-10-30, see the next paragraph.
 
-**2026-10-29: publication is postponed at the user's request.** Keep the prepared 0.4.0
-source/package local; do not create a remote tag or upload a release until reauthorized.
+**2026-10-30: 0.4.0 PUBLISHED** (user decisions "kann so veroeffentlicht werden" and the one-ZIP form): Pixeldrain list https://pixeldrain.com/l/qaeLacq4
+(ZIP https://pixeldrain.com/u/52B6fo1G, checksum https://pixeldrain.com/u/ZLDtvkSE), tag `v0.4.0` on the publication commit, GitHub release "ArenaMapPort 0.4.0" (https://github.com/maschine34675/ArenaMapPort/releases/tag/v0.4.0)
+with the `.sha256` asset and the notes as body; 0.3.0 and 0.2.3 stay downloadable until the user deletes them. The postponement of 2026-10-29 is history.
 See the top of HANDOFF.md. The preparation plan below is retained for that later step.
 The corrected candidate is `52c8a28` plus the commit that carries the release texts of 2026-10-29 evening (crowd worker with CNG hashing, NoiseProbe
 that arms on a stereo driver, release texts after the release audit, five-part wording then and single-ZIP wording since 2026-10-30). `52c8a28` had its host run on GPU-2 (20:55-21:08: four plain PMC raids without bots,

@@ -1,5 +1,24 @@
 # HANDOFF — dated working state
 
+## 0.4.0 RELEASED - 2026-10-30
+
+**User decisions (German):** "das rauschen ist jetzt weg. ein 0.3.1 ist nicht noetig" (the repaired Equator bundle heard in play), "das zip archiv wird wieder als
+ganzes auf pixeldrain hochgeladen ... kein fuenfer-split", and "sound habe ich mir ingame angehoert, passt perfekt, kann so veroeffentlicht werden" (the crowd
+murmur and the 4-8 s call pauses; the go for the release).
+
+**Published 2026-10-30:** Pixeldrain list https://pixeldrain.com/l/qaeLacq4 (ZIP https://pixeldrain.com/u/52B6fo1G, direct https://pixeldrain.com/api/file/52B6fo1G?download, checksum https://pixeldrain.com/u/ZLDtvkSE), tag `v0.4.0` on the publication commit, GitHub
+release "ArenaMapPort 0.4.0" (https://github.com/maschine34675/ArenaMapPort/releases/tag/v0.4.0) with the `.sha256` asset and the notes as body. The single cut: `work/releases/0.4.0/pixeldrain-01924a1` (built from
+`01924a1`: the one-ZIP texts, the "release ZIP" notices and the author's listening approval on top of the crowd bed `8a28c1d`, the Equator bundle repair
+`f32eba5`/`833275d` and the NoiseProbe fixes), extract-check OK against dist (256 files), `verify-only` OK; both DLLs rebuilt from `01924a1` (client sha256
+`8fd3b19a60e29378013af31db25cb0b8c00bb22cd2be23b20a96a7e6f214bdec`, server `acb62d70c4c9894e48ee051b5adc52b8441f4bcc5cc6e58590b9945eb3ea0144`), deployed to
+`D:\SPT41`, host-run on GPU-2 (one Equator raid and the hideout, 0 ArenaMapPort warnings) and scanned on VirusTotal (0 malicious, 0 suspicious of 75 each;
+links in [docs/releases/v0.4.0.md](docs/releases/v0.4.0.md)). The five-part cuts of 2026-10-29/30 and the 2026-10-29 postponement are history.
+
+**Still the user's:** the Forge entry (FORGE.md), deleting 0.2.3 (and 0.3.0 when he wants), ArenaMode's adoption of `SpectatorCrowd.SetExcitement`, the
+`ScoreMonitors` binder and `SpawnGates.GatesOpened`. **Open for the next release:** the faint steady hiss and the one-shot click bursts of the Equator capture, the
+crowd-start swells of the murmur clip, the PNG decode of the crowds on the main thread (about 2 s per raid), the IndoorFloorSmoothness freeze on Air Pit and
+Bowl, an off-VM backup of `work/release-keys`, `D:\SPT41vanilla`.
+
 ## Release form: one whole ZIP on Pixeldrain, no five-part split - 2026-10-30 (user decision; texts changed, the cut is open)
 
 **Request (user, German):** "das zip archiv wird wieder als ganzes auf pixeldrain hochgeladen, wie bei den letzten veröffentlichungen, kein fünfer-split".
@@ -84,7 +103,7 @@ earlier host-verified fallback and still has no murmur.
    pauses are right; whether ArenaMode should call `SetExcitement`. A listening test of the repaired Equator bundle (open item of the block below) is easier with `Spectators/CrowdBed`
    false, because the murmur is a steady background of its own; the unexplained faint steady hiss was recorded on a build without a bed.
 
-## Publication postponed by user — 2026-10-29
+## Publication postponed by user — 2026-10-29 (history: published on 2026-10-30, see the top of this file)
 
 Do not publish ArenaMapPort 0.4.0 yet. The user explicitly postponed this release while
 authorizing ArenaMode 0.4.0 and Redeploy 1.1.0, which are now public. No ArenaMapPort 0.4.0
