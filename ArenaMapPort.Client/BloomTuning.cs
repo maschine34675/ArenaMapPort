@@ -25,6 +25,12 @@ namespace ArenaMapPort.Client
         // saved -1/-1 pair once and leaves every other value alone.
         const float AirPitThreshold = 1.2f;
         const float AirPitIntensity = 0.25f;
+        // Iceberg (2026-10-30, first GPU-2 raids): at the camera's own 2.10/0.35 the candle chandeliers of the respawn hall
+        // (Chalet_chandelier_01, material Sanatorium_Emissive_Orange with _EmissionPower 10) bloom into two disc-shaped
+        // glare blobs that hide the chandeliers; 4.0/0.2 shows the candles with a soft glow (live A/B on the Bear spawn).
+        // The keys were born with -1/-1 on feature/iceberg, so IcebergDefaults revision 1 moves a saved -1/-1 pair once.
+        const float IcebergThreshold = 4.0f;
+        const float IcebergIntensity = 0.2f;
 
         static bool _installed;
         static readonly Dictionary<string, (ConfigEntry<float> threshold, ConfigEntry<float> intensity)> _entries =
@@ -51,25 +57,28 @@ namespace ArenaMapPort.Client
                 // value) and creates no migration marker.
                 bool donorDefaults = map.Key == ArenaMapRegistry.Equator.Key || map.Key == ArenaMapRegistry.Bay5.Key;
                 bool airPit = map.Key == ArenaMapRegistry.AirPit.Key;
-                float defaultThreshold = donorDefaults ? DefaultThreshold : airPit ? AirPitThreshold : -1f;
-                float defaultIntensity = donorDefaults ? DefaultIntensity : airPit ? AirPitIntensity : -1f;
+                bool iceberg = map.Key == ArenaMapRegistry.Iceberg.Key;
+                float defaultThreshold = donorDefaults ? DefaultThreshold : airPit ? AirPitThreshold : iceberg ? IcebergThreshold : -1f;
+                float defaultIntensity = donorDefaults ? DefaultIntensity : airPit ? AirPitIntensity : iceberg ? IcebergIntensity : -1f;
                 var threshold = Plugin.Instance.Settings.Bind(section, "BloomThreshold", defaultThreshold,
                     new ConfigDescription(
                         "UltimateBloom HDR threshold on the raid camera for this map. -1 keeps the camera's own value " +
                         "(donor rig: 2.10). Lower = more glow around bright lights. Equator and Bay5 default to " +
-                        "the donor rig's normal threshold, 2.10; AirPit to the accepted 1.2. Live.",
+                        "the donor rig's normal threshold, 2.10; AirPit to the accepted 1.2; Iceberg to 4.0 (its candle " +
+                        "chandeliers glare at the camera's own value). Live.",
                         new AcceptableValueRange<float>(-1f, 10f)));
                 var intensity = Plugin.Instance.Settings.Bind(section, "BloomIntensity", defaultIntensity,
                     new ConfigDescription(
                         "UltimateBloom intensity on the raid camera for this map. -1 keeps the camera's own value " +
                         "(donor rig: 0.35). Equator and Bay5 default to this normal intensity, 0.35; AirPit to the " +
-                        "accepted 0.25. Live.",
+                        "accepted 0.25; Iceberg to 0.2. Live.",
                         new AcceptableValueRange<float>(-1f, 5f)));
 
                 // Migrate before subscribing: no camera writes during config binding. Maps without accepted
                 // defaults keep -1 (native camera values) and do not acquire a bloom migration marker.
                 if (donorDefaults) MigrateDefaults(map.Key, section, threshold, intensity);
-                if (airPit) MigrateAirPitDefaults(section, threshold, intensity);
+                if (airPit) MigratePairDefaults(map.Key, section, threshold, intensity, AirPitThreshold, AirPitIntensity);
+                if (iceberg) MigratePairDefaults(map.Key, section, threshold, intensity, IcebergThreshold, IcebergIntensity);
                 EquatorProfiles.Subscribe(threshold, (_, __) => ApplyToCurrentCamera("setting changed"));
                 EquatorProfiles.Subscribe(intensity, (_, __) => ApplyToCurrentCamera("setting changed"));
                 _entries[map.Key] = (threshold, intensity);
@@ -99,24 +108,26 @@ namespace ArenaMapPort.Client
                 $"({moved} value(s) moved; threshold={F(threshold.Value)}, intensity={F(intensity.Value)})");
         }
 
-        // AirPit's keys were born with -1/-1 (camera value = the donor rig's 2.10/0.35). A saved pair still at -1/-1
-        // follows the accepted 1.2/0.25 once; any other pair (the user's own 1.2/0.25 included) stays as it is. The pair
-        // is treated as one setting, like the ambience mix: a single tuned component protects the other.
-        static void MigrateAirPitDefaults(string section, ConfigEntry<float> threshold, ConfigEntry<float> intensity)
+        // AirPit's and Iceberg's keys were born with -1/-1 (camera value = the donor rig's 2.10/0.35). A saved pair still
+        // at -1/-1 follows the map's accepted pair once (AirPit 1.2/0.25, Iceberg 4.0/0.2); any other pair (a user's own
+        // tuning included) stays as it is. The pair is treated as one setting, like the ambience mix: a single tuned
+        // component protects the other.
+        static void MigratePairDefaults(string mapKey, string section, ConfigEntry<float> threshold, ConfigEntry<float> intensity,
+            float newThreshold, float newIntensity)
         {
             var revision = Plugin.Instance.Settings.Bind(section, "BloomDefaultsRevision", 0,
                 new ConfigDescription(
-                    "Internal — once-only bloom default migration for AirPit (revision 1: a -1/-1 pair follows the " +
-                    "accepted 1.2/0.25). Leave it alone.",
+                    "Internal — once-only bloom default migration for this map (revision 1: a -1/-1 pair follows the " +
+                    $"accepted {F(newThreshold)}/{F(newIntensity)}). Leave it alone.",
                     null, System.ComponentModel.BrowsableAttribute.No));
             if (revision.Value >= 1) return;
             int moved = 0;
             if (threshold.Value == -1f && intensity.Value == -1f)
             {
-                threshold.Value = AirPitThreshold; intensity.Value = AirPitIntensity; moved = 2;
+                threshold.Value = newThreshold; intensity.Value = newIntensity; moved = 2;
             }
             revision.Value = 1;
-            Plugin.Log.LogDebug($"{Tag} {ArenaMapRegistry.AirPit.Key}: config re-seeded to bloom defaults revision 1 " +
+            Plugin.Log.LogDebug($"{Tag} {mapKey}: config re-seeded to bloom defaults revision 1 " +
                 $"({moved} value(s) moved; threshold={F(threshold.Value)}, intensity={F(intensity.Value)})");
         }
 
