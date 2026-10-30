@@ -1,4 +1,5 @@
 #nullable disable
+using System.Text.Json;
 using ArenaMapPort.Client;
 using Xunit;
 
@@ -150,5 +151,66 @@ public sealed class IcebergAcousticsTests
         Assert.Equal(67, categories[OutdoorCommon]);
         Assert.DoesNotContain(0, categories.Keys); // RoomReverb refuses a type-0 room
         // The source tables list exactly these three categories (4, 8, 67): the isolated one is simply unused here.
+    }
+
+    // ---- the exported graph itself (ignored work/extract/spatial-audio; skipped where the package is not reachable) --------------------------------
+
+    static JsonDocument ExportedGraph()
+    {
+        var env = Environment.GetEnvironmentVariable("ARENAMAPPORT_SPATIAL_AUDIO_DIR");
+        var candidates = new List<string>();
+        if (!string.IsNullOrEmpty(env)) candidates.Add(Path.Combine(env, "arena_iceberg", "spatial-audio.json"));
+        for (var dir = new DirectoryInfo(AppContext.BaseDirectory); dir != null; dir = dir.Parent)
+            candidates.Add(Path.Combine(dir.FullName, "work", "extract", "spatial-audio", "arena_iceberg", "spatial-audio.json"));
+        var path = candidates.FirstOrDefault(File.Exists);
+        return path == null ? null : JsonDocument.Parse(File.ReadAllText(path));
+    }
+
+    [Fact]
+    public void TheRoomTableIsTheExportedGraphWhenThePackageIsPresent()
+    {
+        // Review of 2026-10-30: the 46 rows above were checked against the package by hand once; this keeps them tied to it (a re-extract that
+        // changes a room's type or size turns this red). Room size = twice the bounds extents (the union of the areas' Collider.bounds).
+        using var graph = ExportedGraph();
+        if (graph == null) return;   // package not reachable from this checkout: the hand check stands
+        var rooms = graph.RootElement.GetProperty("rooms").EnumerateArray().Where(r => r.GetProperty("active_in_hierarchy").GetBoolean()).ToArray();
+        Assert.Equal(IcebergRooms.Length, rooms.Length);
+        foreach (var row in IcebergRooms)
+        {
+            var room = rooms.Single(r => r.GetProperty("room_id").GetInt32() == row.RoomId);
+            Assert.Equal(row.Path, room.GetProperty("path").GetString().Replace("SpatialAudioSystem/", ""));
+            Assert.Equal(row.Type, room.GetProperty("type").GetInt32());
+            Assert.Equal(row.Outdoor, room.GetProperty("outdoor").GetBoolean());
+            var extents = room.GetProperty("bounds").GetProperty("extents").EnumerateArray().Select(e => e.GetSingle() * 2f).ToArray();
+            Assert.Equal(row.W, extents[0], 3);
+            Assert.Equal(row.H, extents[1], 3);
+            Assert.Equal(row.D, extents[2], 3);
+        }
+    }
+
+    [Fact]
+    public void TheClientRuleAndTheExportersRuleNameTheSameMirroredNodesOnTheExportedGraph()
+    {
+        // The exporter's mirrored_volume_nodes and AcousticVolumeRules are the same rule in two languages; feed the real graph through the
+        // client's version: it must allow exactly the ten negative-scale nodes (and may allow more area nodes, which are positive), and
+        // ScaleProblem must accept every node of the graph. The Python side of the same check is test_spatial_audio_iceberg.
+        using var graph = ExportedGraph();
+        if (graph == null) return;
+        var root = graph.RootElement;
+        IEnumerable<long> Nodes(string key) => root.GetProperty(key).EnumerateArray().Select(i => i.GetProperty("node_id").GetInt64());
+        var parents = root.GetProperty("nodes").EnumerateArray().Where(n => n.GetProperty("parent_id").ValueKind == JsonValueKind.Number)
+            .Select(n => n.GetProperty("parent_id").GetInt64());
+        var mirrored = AcousticVolumeRules.MirroredVolumeNodes(Nodes("areas"), Nodes("rooms").Concat(Nodes("portals")).Concat(Nodes("groups")).Concat(Nodes("systems")), parents);
+        var negative = new HashSet<long>();
+        foreach (var node in root.GetProperty("nodes").EnumerateArray())
+        {
+            var s = node.GetProperty("scale");
+            float x = s.GetProperty("x").GetSingle(), y = s.GetProperty("y").GetSingle(), z = s.GetProperty("z").GetSingle();
+            long id = node.GetProperty("id").GetInt64();
+            Assert.Null(AcousticVolumeRules.ScaleProblem(x, y, z, mirrored.Contains(id)));
+            if (x < 0 || y < 0 || z < 0) negative.Add(id);
+        }
+        Assert.Equal(10, negative.Count);
+        Assert.Subset(mirrored, negative);
     }
 }

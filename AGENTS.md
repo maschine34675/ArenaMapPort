@@ -11,6 +11,11 @@ and withdrawn on 2026-10-16; Bowl shipped with 0.3.0). All four have native play
 for mode plugins and the encrypted bundles of stage 2; [CHANGELOG.md](CHANGELOG.md), [docs/releases/v0.3.0.md](docs/releases/v0.3.0.md)). **0.4.0 followed on 2026-10-30** (tag `v0.4.0`, GitHub release, one ZIP on
 Pixeldrain; original animated crowds with calls and a murmur bed, gate sounds, score screens, the Equator bundle repair;
 [docs/releases/v0.4.0.md](docs/releases/v0.4.0.md)).
+**Iceberg** (Arena's `Arena_Sanatorium`, key `arena_iceberg`, the fifth map; branch `feature/iceberg`, [docs/PLAN-ICEBERG.md](docs/PLAN-ICEBERG.md), log
+[docs/progress/iceberg-release.md](docs/progress/iceberg-release.md)) joined `ArenaMapRegistry.All` and every release list in the lock-step promotion of
+2026-10-30, but is **not released**: its Unity bundles do not exist yet (the first build, U1, builds from `work/extract/iceberg-native-v2` with
+`-FullMap`), it has no host evidence, no spectator crowd and no flares, water or DynamicMaps overview (Phase C), and the release number and form are the
+user's decision; nothing of it is tagged, uploaded or pushed.
 Release 0.2.3 (branch `release/0.2.3`, published 2026-10-19) is 0.2.2 plus the Arena installation check; 0.2.2 was withdrawn
 the same day (GitHub release, tag and Pixeldrain files deleted, nobody had downloaded it), and so were 0.2.1 and 0.1.0
 (releases with their assets, tags, Pixeldrain files): 0.3.0 and 0.2.3 are downloadable (0.2.3 is to be deleted later, user decision 2026-10-24),
@@ -51,10 +56,12 @@ are not accepted build inputs. Keep the SPT bundle target on Unity 2022.3.43f1.
   released with 0.3.0 on 2026-10-24 (docs/PLAN-BOWL.md, user decision 2026-10-18 "so wie du es am sinnvollsten erachtest"):** it is in
   ArenaMapRegistry.All; 0.3.0 is the four-map release (CHANGELOG.md, docs/releases/v0.3.0.md), 0.2.2/0.2.3 were the three-map line. Bowl builds from
   `work/extract/bowl-native-v2` with `-FullMap` and `-OutputDir D:/ArenaMapPort/work/build/bowl`; `tools/build_remaining.ps1`
-  refuses it (that runner would use the Arena 0.5.4 spike package). The other ten maps retain source and work/build inputs,
-  but are excluded from ArenaMapRegistry.All and dist; Catalog retains their identities. Make these four maps as good as they can be (native content,
+  refuses it (that runner would use the Arena 0.5.4 spike package). **Iceberg joined `ArenaMapRegistry.All` on `feature/iceberg` (2026-10-30,
+  PLAN-ICEBERG item 12; unreleased, bundles pending U1)**; it builds from `work/extract/iceberg-native-v2` with an explicit `-PackageDir`, `-FullMap` and
+  `-OutputDir D:/ArenaMapPort/work/build/iceberg` and `tools/build_remaining.ps1` refuses it like Bowl. The other nine maps retain source and work/build
+  inputs, but are excluded from ArenaMapRegistry.All and dist; Catalog retains their identities. Make these maps as good as they can be (native content,
   bots, audio, lighting, physics — see docs/PLAN-TWO-MAPS.md) BEFORE ArenaMode features such as team starts and
-  pickups, which come later on all four maps.
+  pickups, which come later on all five maps.
 
 ## Hard rules — never do these
 
@@ -254,7 +261,7 @@ confirm changed server behavior in the new process log as well.
 
 ```powershell
 # client plugin (Release; DllOnly skips re-staging the bundles into dist/)
-# Complete crowds on all four maps (also needed by DLL-only staging; ignored original art/animation data):
+# Complete crowds on the four crowd maps (Iceberg has none; also needed by DLL-only staging; ignored original art/animation data):
 python tools/extract/extract_spectator.py extract --map all
 dotnet build ArenaMapPort.Client/ArenaMapPort.Client.csproj -c Release -p:ArenaMapPortDllOnly=true
 # server mod + tests (always -c Release: a Debug test run would redeploy a Debug DLL into dist/)
@@ -272,6 +279,12 @@ pwsh tools/build_all.ps1 -MapKey arena_equator -MapDescriptor D:/ArenaMapPort/to
 # then a client Release build WITHOUT DllOnly stages the new bundles into dist/ (encrypting them, see below), and:
 pwsh -NoProfile -File tools/deploy-to-spt.ps1 -SptRoot 'D:\SPT41' -Confirm
 ```
+
+Real-data tests read the ignored inputs under `work/` and the installed Arena; a git worktree has no `work/`, so they take optional overrides:
+`ARENAMAPPORT_WORK_DIR` (the whole `work/` folder: test_iceberg_bake_inputs, test_iceberg_spawns, test_mode_objects),
+`ARENAMAPPORT_SPATIAL_AUDIO_DIR` (`work/extract/spatial-audio`), `ARENAMAPPORT_GATE_SOUNDS_DIR`, `ARENAMAPPORT_EXTRACT_ROOT` (`work/extract`, the
+score monitor package cross-check) and `ARENAMAPPORT_ARENA_DATA` (the Arena `..._Data` folder). Without them the tests that need the data skip;
+the Arena-dependent Iceberg pins also skip when the installed build does not start with 0.6.1 (they were measured there).
 
 Equator's package predates the `-FullMap` convention (its manifest lists the scenes in a different order
 than the descriptor), so Equator is built WITHOUT `-FullMap`. Every other map uses `-FullMap` with
@@ -312,7 +325,8 @@ path: Unity resolves relative descriptor paths from its project directory.
 
 Native spatial acoustics use separate ignored `work/extract/spatial-audio/<map>` inputs, regenerated
 by `python tools/extract/extract_spatial_audio.py`. Release/DllOnly builds require and stage their
-graph JSON, original bake and room-tone WAV. Do not rebuild scene bundles for this runtime graph port.
+graph JSON, original bake and room-tone WAV (Iceberg's bake is NOT byte-identical to Arena's file: 533 bytes differ, the reviewed pinned repair
+of one duplicated portal ID, 66 to 30, recorded under `bake_repair` in its graph JSON; never call it "the original bake, unmodified"). Do not rebuild scene bundles for this runtime graph port.
 The native loader needs portal endpoints wired before room initialization; `RoutesDataCount` counts
 pair ranges, not individual routes. Start room tones only after `GameStatus.Started` or the raid audio
 reset stops them. See [spatial-audio.md](docs/progress/spatial-audio.md).
@@ -335,7 +349,8 @@ same script's `rows` step writes, which is rerun only after an Arena update) and
 PNGs and `monitors.json` under ignored `work/extract/monitors`). A missing input stops the build with an Error that names the extractor.
 Both folders are plaintext, like the selection artwork. `dist/` now holds 256 files (113 after those two additions, 90 before; the
 gate sounds add 13 and the monitors 10, the spectator files of 2026-10-27/28 the rest, the crowd murmur bed of 2026-10-30 one); `make_release_zips.py --plan` reads the parts
-core 154, equator 24, bay5 30, airpit 22, bowl 26. See
+core 154, equator 24, bay5 30, airpit 22, bowl 26 (276 files with the 20 of Iceberg's part once its bundles are staged: core 154 plus iceberg 20; the
+dist of 2026-10-30 that was released as 0.4.0 holds the 256 files). See
 [gate-sounds.md](docs/progress/gate-sounds.md), [score-monitors.md](docs/progress/score-monitors.md) and
 [dist-manifest.md](docs/dist-manifest.md).
 
@@ -510,11 +525,19 @@ the log; the user uses it to point at things.
   spawn pocket, now the held passport gate does that, see `docs/progress/airpit-team-boxes.md`. Equator/Bay5 have none — their ground floors sit around y −8..12, the upper rings are
   decoration). Arena bounds AirPit's TeamFight area by a data polygon, not colliders (`ExcludeLevelBorders` in its
   culling scene); `AuthoredBorderRepairs` raises invisible movement-layer walls along that outline at raid start. `navmesh_bake_exclusions` drops a
-  subtree from the bake WITHOUT deactivating it at runtime — no map uses it any more: AirPit's four "route cutters"
-  (shop shutters) put NavMesh through solids and the 2026-10-12 host walk ended face-first in the DonB_Ramen shutter.
+  subtree from the bake WITHOUT deactivating it at runtime — only Bowl uses it now (its 165 x 144 m under-floor slab `Arena_Bowl_LevelBorders/Cube`);
+  AirPit's four "route cutters" (shop shutters) put NavMesh through solids and the 2026-10-12 host walk ended face-first in the DonB_Ramen shutter.
   A closed gate that Arena opens for the mode belongs in `opened_barriers` instead (AirPit's two
   `Prison_Metal_Fence_01` portal gates: closed fence active, swung-open halves inactive).
-  `navmesh_bake_layers` restricts the collected layers (AirPit: Arena's own 9/11/13/18/30). The offline coverage
+  `navmesh_bake_layers` restricts the collected layers (AirPit: Arena's own 9/11/13/18/30; Iceberg 9/11/13/18/29/30). Kept borders and the name
+  prefix (Iceberg, 2026-10-30): with `keep_level_borders` the bake skips the `LevelBorder*` NAME rule of `RoundOpenedReason` as well as the layer-29 rule
+  (Iceberg's 365 cubes are called `LevelBorder (N)` under a `LevelBorders` group, Bowl's `Cube`; without the exemption Iceberg's would have been
+  dropped silently). Gates with door rows (Iceberg): `opened_barriers` / `start_gates` are the UNIT paths the doors sidecar names (`DOORS/GATES_A/
+  sanatorium_resp_gate`, `DOORS/GATES_B/sanatorium_resp_gate`, `DOORS/GATES_B/Sanatorium_CheckPoint_Gate`; the sliding gates of a group share one name
+  and the rows tell them apart by `at`), never the group roots, because a row matches its barrier by the exact string. A barrier with rows drops only the
+  MOVED subtrees (22 colliders); the 20 unposed colliders (per sliding gate the two rail posts and the top leaf) stay bake sources and cannot close a
+  doorway (docs/progress/iceberg-release.md, integration section). `navmesh_diff.py --doors` models that rule; without it the offline model keeps the
+  legacy drop-everything-below rule. The offline coverage
   metric of `navmesh_diff.py` dilates by one cell and misses one-cell cuts; check routes with Dijkstra on the built
   bundle (`navmesh_diff.load_bundle_mesh`) and in-game with `uibridge_walk` ("N m along the navmesh"). Probe connectivity in-game with `uibridge_teleport dryRun=true` (reachability = same NavMesh
   component); offline, `work/extract/<map>/scenes/*.json` + `meshes/*.mesh.bin` give every collider's world
@@ -561,7 +584,7 @@ the log; the user uses it to point at things.
   dry holes and oil are excluded. Never use texture alpha or whole quad bounds as the wet footprint, and never
   unconditionally linearize the mask (this EFT project uses Gamma). F10 logs native/result surfaces and clip
   examples. Historical packages showed no lost water collider; the user's earlier sound remains unexplained.
-  Since 2026-10-25 the repair runs on all four maps from the descriptor (`PuddleWaterMaterialNames`; a map with an empty list is
+  Since 2026-10-25 the repair runs on every released map from the descriptor (`PuddleWaterMaterialNames`; Iceberg lists its two water materials since 2026-10-30, with no extra surface; a map with an empty list is
   skipped; Bay5's key `Water (arena_bay5)/PuddleFootsteps` is unchanged, the other maps bind the same key in their own section). Bowl
   also counts its Soil floor as eligible ground (`PuddleExtraSurfaces`: its whole floor is one soil collider, so Concrete/Asphalt alone
   would stay silent there), and the cache rebuild is bounded by `PuddleCacheGate` (at most five full scans per set of attempts, one line
@@ -818,3 +841,11 @@ the log; the user uses it to point at things.
   `volume x factor / 3.2` on the source (a stand's NoiseProbe `vol=` reads 0.3125 at the defaults), so never widen the range or the factor without moving `ClipGain`. The stand count comes from
   `MaxStandRadius` (25 m, cap 6). The NoiseProbe census sees the bed only through `ownedBed=n/m` (its pooled-source walk cannot see owned sources), and the bed does not note `NoiseEv.Reset`
   (`SpectatorAudio` counts the one audio reset). `SpectatorCrowd` (the contract, `ScoreMonitors` style) is reset when the crowd is removed, with or without a bed.
+- Iceberg promotion rules (2026-10-30, [iceberg-release.md](docs/progress/iceberg-release.md) "promotion into the released set"; unit-tested, no host run yet): (1) a released map without a
+  spectator crowd is listed in `validate_map_descriptors.CROWDLESS_MAP_KEYS` (Iceberg), the one list the packer, `validate_distribution.py`, staging and the C# crowd switch agree on
+  (`test_crowdless_maps.py`); overview, flare and water packages are explicit "has it" lists that Iceberg is deliberately in none of (Phase C, "not yet"). (2) The audio exporter accepts a
+  player with `minDistance` 0 only where the map's contract pins it (`states.zero_min_distance_players`: Iceberg 21, every other map none), and the ambient driver's strict check accepts
+  season and loop-kind players only in the counts the profile demands (`SeasonKindPlayers`, `LoopKindPlayers`, 0 for the other maps). (3) `extract_spatial_audio.REVIEWED_MIRRORED_VOLUMES`
+  pins the number of mirrored trigger volumes per map (Iceberg 10, others none). (4) `spawn_placement_probe.py` is an UPPER bound on `SpawnPlacementRepairs.IsValid` (seven capsule rings, headroom
+  from the spawn height); the host's `spawn placement:` line is the authority. (5) The ambient defaults of Iceberg (3 dB, offset 0, range 2) and its `ZeroLevel` (-3.7) are provisional start
+  values, NOT Bowl's: the mix is `volume * gain + offset`, and Bowl's offset would lift Iceberg's 0.25 lamp loops to about 0.75.

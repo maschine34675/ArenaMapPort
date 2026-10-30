@@ -10,6 +10,7 @@ import copy
 import io
 import json
 import math
+import os
 import struct
 import subprocess
 import sys
@@ -436,8 +437,10 @@ class SidecarTests(unittest.TestCase):
         text = (REPO / "ArenaMapPort.Shared" / "ArenaMapDescriptor.cs").read_text(encoding="utf-8")
         entries = VD.registry_entries(text)
         self.assertEqual(VD.door_pose_errors(self.bowl, SIDECAR, entries["Bowl"].get("DoorPoses")), [])
+        iceberg = json.loads((REPO / "tools" / "maps" / "iceberg.json").read_text(encoding="utf-8"))
+        self.assertEqual(VD.door_pose_errors(iceberg, REPO / "tools" / "maps" / "iceberg.doors.json", entries["Iceberg"].get("DoorPoses")), [])
         for name, entry in entries.items():
-            if name not in ("Bowl", "Equator", "Bay5", "AirPit"):     # the four released maps; the spike maps carry none
+            if name not in ("Bowl", "Equator", "Bay5", "AirPit", "Iceberg"):     # the five released maps; the spike maps carry none
                 self.assertIsNone(entry.get("DoorPoses"), name)
 
     def test_the_registry_carries_exactly_the_generated_csharp(self):
@@ -2489,13 +2492,13 @@ class IcebergSidecarTests(unittest.TestCase):
             text = E.render_csharp([pose], indent="").replace("\n", " ")
             self.assertEqual(VD.parse_door_pose_literal(text.rstrip(",")), pose)
 
-    def test_the_descriptor_lists_exactly_these_barriers_once_it_carries_opened_barriers(self):
+    def test_the_descriptor_lists_exactly_these_barriers_and_all_of_them_are_start_gates(self):
         # validate_map_descriptors accepts a pose barrier only as an opened_barriers entry (or a lamp group): the barrier is the gate
-        # itself, not DOORS/GATES_A (PLAN-ICEBERG's shorthand), because the gates of a group share a name. Absent before the promotion.
+        # itself, not DOORS/GATES_A (PLAN-ICEBERG's first draft), because the gates of a group share a name and the rows name the gates.
         descriptor = json.loads((REPO / "tools" / "maps" / "iceberg.json").read_text(encoding="utf-8"))
-        opened = descriptor.get("opened_barriers")
-        if opened:
-            self.assertEqual(sorted(opened), sorted(ICEBERG_BARRIERS))
+        self.assertEqual(sorted(descriptor["opened_barriers"]), sorted(ICEBERG_BARRIERS))
+        self.assertEqual(sorted(descriptor["start_gates"]), sorted(ICEBERG_BARRIERS))
+        self.assertEqual(descriptor["held_gates"], [])
 
 
 class RealIcebergTests(unittest.TestCase):
@@ -2510,7 +2513,7 @@ class RealIcebergTests(unittest.TestCase):
             import UnityPy  # noqa: F401
         except ImportError:
             raise unittest.SkipTest("UnityPy is not installed")
-        package = REPO / "work" / "extract" / "iceberg-native-v1"
+        package = Path(os.environ.get("ARENAMAPPORT_EXTRACT_ROOT", REPO / "work" / "extract")) / "iceberg-native-v2"
         cls.package = package if (package / "scenes" / "Arena_Sanatorium_CheckPoint_DesignStuff.json").is_file() else None
         cls.text, cls.source, cls.summary = E.extract("arena_iceberg", "auto", cls.package)
 
@@ -2537,7 +2540,7 @@ class RealIcebergTests(unittest.TestCase):
         self.assertIn("11 DotAnimator(s), 11 element(s), 11 pose(s) (0 switch row(s)), 0 inactive, 0 switch element(s) skipped", scan)
         self.assertEqual(self.summary[-1], "poses 11: 11 dotanimator")
         if self.package is not None:
-            self.assertTrue(any(line.startswith("package check: 11 pose(s) exist in iceberg-native-v1") for line in self.summary))
+            self.assertTrue(any(line.startswith("package check: 11 pose(s) exist in iceberg-native-v2") for line in self.summary))
 
 
 if __name__ == "__main__":

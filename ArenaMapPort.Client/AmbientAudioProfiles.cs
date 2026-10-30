@@ -83,6 +83,14 @@ namespace ArenaMapPort.Client
         internal IReadOnlyList<string> LoopPlayers { get; }
         /// <summary>One per <c>AmbientSoundPlayerGroup</c>, in source order (the contract's <c>group_mixers</c>).</summary>
         internal IReadOnlyList<AmbientGroupRoute> Routes { get; }
+        /// <summary>Players of the <c>SeasonAmbientSoundPlayer</c> kind (the contract's <c>players.SeasonAmbientSoundPlayer</c>). The strict
+        /// original-activation check of the driver demands exactly this many and no other season or loop-kind player: Equator, AirPit and
+        /// Bowl author plain random players only (0), Iceberg 22. Bay5's graph does not use the strict check and keeps 0 here.</summary>
+        internal int SeasonKindPlayers { get; }
+        /// <summary>Players of the <c>LoopAmbientSoundPlayer</c> kind (the contract's <c>players.LoopAmbientSoundPlayer</c>, 30 on Iceberg: 20 neon
+        /// lamps, six more interior loops including the projector, three exterior loops and the water emitter's). Not the same as <see cref="LoopPlayers"/>, the players
+        /// whose <c>AudioSource.loop</c> the source scene sets (Equator's electricity hum).</summary>
+        internal int LoopKindPlayers { get; }
 
         /// <summary>The parent buses the driver must hold neutral while the graph lives, in first-use order.</summary>
         internal IReadOnlyList<AmbientBus> Buses => Routes.Select(r => r.Bus).Distinct().ToArray();
@@ -90,7 +98,8 @@ namespace ArenaMapPort.Client
 
         internal AmbientAudioProfile(string mapKey, string displayName, string rootName, int players, int activePlayers,
             int controllers, bool hasShoreline, bool usesSeasons, bool originalActivation,
-            string[] inactivePlayers, string[] loopPlayers, AmbientGroupRoute[] routes, bool groupsListInactivePlayers = false)
+            string[] inactivePlayers, string[] loopPlayers, AmbientGroupRoute[] routes, bool groupsListInactivePlayers = false,
+            int seasonKindPlayers = 0, int loopKindPlayers = 0)
         {
             if (routes == null || routes.Length == 0 || routes.Count(r => r.Effects) != 1 ||
                 routes.Select(r => r.GroupName).Distinct().Count() != routes.Length)
@@ -100,13 +109,16 @@ namespace ArenaMapPort.Client
             if (players <= 0 || activePlayers <= 0 || players - activePlayers != inactivePlayers.Length ||
                 routes.Sum(r => r.Members) != (groupsListInactivePlayers ? players : activePlayers) ||
                 (groupsListInactivePlayers && (!originalActivation || inactivePlayers.Length == 0)) ||
-                controllers < 0 || (!originalActivation && (inactivePlayers.Length != 0 || loopPlayers.Length != 0)))
+                controllers < 0 || (!originalActivation && (inactivePlayers.Length != 0 || loopPlayers.Length != 0)) ||
+                seasonKindPlayers < 0 || loopKindPlayers < 0 || seasonKindPlayers + loopKindPlayers > players ||
+                (seasonKindPlayers > 0 && !usesSeasons) || (!originalActivation && (seasonKindPlayers != 0 || loopKindPlayers != 0)))
                 throw new ArgumentException("Inconsistent ambient player census for " + mapKey);
             MapKey = mapKey; DisplayName = displayName; RootName = rootName;
             Players = players; ActivePlayers = activePlayers; GroupsListInactivePlayers = groupsListInactivePlayers;
             Groups = routes.Length; Controllers = controllers;
             HasShoreline = hasShoreline; UsesSeasons = usesSeasons; OriginalActivation = originalActivation;
             InactivePlayers = inactivePlayers; LoopPlayers = loopPlayers; Routes = routes;
+            SeasonKindPlayers = seasonKindPlayers; LoopKindPlayers = loopKindPlayers;
         }
 
         /// <summary>Index into <see cref="Routes"/> of the group carried by a GameObject of this name, or -1.</summary>
@@ -138,6 +150,13 @@ namespace ArenaMapPort.Client
     /// <see cref="AmbientAudioProfile.GroupsListInactivePlayers"/>), so the member counts add up to 33 and the driver
     /// starts the 29 active members only. The interior group takes the Equator/AirPit reverb reroute. The pinned forced-mixer player metal_rigging (level111:557) is routed like
     /// its group by the importer and needs no client row.
+    /// Iceberg (PLAN-ICEBERG item 12, 2026-10-30; contract native_contracts/iceberg.json audio block): 104 players of all three exporter kinds
+    /// (52 random, 22 season, 30 loop), three of them inactive (river, river (2), sparks (2)), four groups in source order: the interior
+    /// CommonAmbientInGroup (AmbientIn, 46, effects and reverb reroute), LampsAmbientInGroup (AmbientIn, 20 neon-lamp loops on the same interior
+    /// mixer, no reroute: the reroute is an effects-route property and the lamp hum stays dry), CommonAmbientOutGroup (AmbientOut, 37) and the
+    /// shoreline-style AmbientSplineEmitterWaterGroup (the bypass bus, 1). Like Bowl the groups list all 104 players. The kind counts (22 season,
+    /// 30 loop: 20 neon lamps, 6 interior loops including the projector, 3 exterior loops and the water emitter's) are what the strict
+    /// original-activation check of the driver accepts; the released maps keep 0.
     /// </summary>
     internal static class AmbientAudioProfiles
     {
@@ -187,6 +206,25 @@ namespace ArenaMapPort.Client
                         AmbientBus.Out, members: 18),
                 },
                 groupsListInactivePlayers: true),
+            // Iceberg: PLAN-ICEBERG item 12, mirrors tools/extract/native_contracts/iceberg.json "audio" (schema 2, level259): group members
+            // 46 + 20 + 37 + 1 = grouped_players 104 = all players (coverage "all_players"), 101 of them active (river, river (2) and sparks (2)
+            // sit under an inactive ancestor). No AudioSource of the source has Loop set (the 30 loop-kind players switch it on in Awake), so
+            // loopPlayers is empty. The two interior groups share CommonAmbInEffects and one AmbientIn lease.
+            new AmbientAudioProfile("arena_iceberg", "Iceberg", "ArenaMapPort_IcebergNativeAudio",
+                players: 104, activePlayers: 101, controllers: 1, hasShoreline: true, usesSeasons: true, originalActivation: true,
+                inactivePlayers: new[] { "river (2)", "river", "sparks (2)" }, loopPlayers: null,
+                routes: new[]
+                {
+                    new AmbientGroupRoute("CommonAmbientInGroup", "AmbientIn/CommonAmbInEffects", "CommonAmbInEffects",
+                        AmbientBus.In, members: 46, effects: true, reverbReroute: true),
+                    new AmbientGroupRoute("LampsAmbientInGroup", "AmbientIn/CommonAmbInEffects", "CommonAmbInEffects",
+                        AmbientBus.In, members: 20),
+                    new AmbientGroupRoute("CommonAmbientOutGroup", "AmbientOut/CommonAmbOutEffects", "CommonAmbOutEffects",
+                        AmbientBus.Out, members: 37),
+                    new AmbientGroupRoute("AmbientSplineEmitterWaterGroup", "CommonAmbOutBypass", "CommonAmbOutBypass",
+                        AmbientBus.Out, members: 1),
+                },
+                groupsListInactivePlayers: true, seasonKindPlayers: 22, loopKindPlayers: 30),
         };
 
         /// <summary>Every map with an imported ambient graph, in config binding order.</summary>

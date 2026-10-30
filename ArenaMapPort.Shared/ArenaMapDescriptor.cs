@@ -274,7 +274,7 @@ namespace ArenaMapPort.Shared
     }
 
     /// <summary>
-    /// The one pose every <c>ArenaMonitorHolder</c> has below its TV prop (43 of 43 holders of the four maps agree; the sidecars' <c>mount</c> block):
+    /// The one pose every <c>ArenaMonitorHolder</c> has below its TV prop (49 of 49 holders of the five maps agree; the sidecars' <c>mount</c> block):
     /// prop-local position and rotation (quaternion x, y, z, w), the uniform local scale and the canvas rect in canvas pixels, pivot in the middle. The
     /// canvas is readable from the prop's +X side (its forward, local +Z, is the prop's -X). World size = prop scale x <see cref="Scale"/> x rect.
     /// </summary>
@@ -1403,11 +1403,109 @@ namespace ArenaMapPort.Shared
             ScriptsSceneName: "Arena_Iceberg_Scripts",
             AllSceneNames: new[] { "Arena_Iceberg_Scripts", "Arena_Sanatorium", "Arena_Sanatorium_Grass", "Arena_Sanatorium_Light", "Arena_Sanatorium_DesignStuff", "Arena_Sanatorium_CheckPoint", "Arena_Sanatorium_CheckPoint_DesignStuff" },
             InfiltrationName: "ArenaIceberg",
-            LocaleName: "Arena: Iceberg (spike)",
-            LocaleDescription: "Internal test build — CheckPoint geometry/collision/NavMesh port.",
+            LocaleName: "Arena: Iceberg",
+            LocaleDescription: "The Iceberg resort hotel from EFT Arena: a multi-storey hotel with a rotunda on a rocky canyon, with its lobby, atrium, pool hall and cafe inside and a street area around it. The CheckPoint layout is used: two team pockets behind sliding gates at the east and west ends, and three capture points, A, B and C, between them.",
             IconX: 110,
             IconY: 608,
-            DbBaseJsonPath: "arena_iceberg/base.json");
+            DbBaseJsonPath: "arena_iceberg/base.json",
+            // PLAN-ICEBERG item 7/12 (docs/progress/iceberg-release.md, 2026-10-30). Exits mirror tools/maps/iceberg.exits.json (IcebergMapTests):
+            // one gate outside each pocket as seen from the pocket, on Arena's own NavMesh main component. Offline draft, not walked on the host.
+            Exits: new[]
+            {
+                new ArenaExitDescriptor("Iceberg East Gate", 72.0f, 1.95f, -94.0f),
+                new ArenaExitDescriptor("Iceberg West Gate", -30.5f, 2.92f, -85.0f),
+            },
+            // The five sliding respawn gates (two at x 82.4 for the Bear pocket, three at x -36.0 for the Usec pocket) and the rotating
+            // Sanatorium_CheckPoint_Gate of Arena_Sanatorium_CheckPoint_DesignStuff's DOORS: one barrier per GATE, not per group, because
+            // tools/maps/iceberg.doors.json (the DotAnimator rows) names the gates and a row matches a barrier by the exact string; the
+            // sliding gates of a group share one name and are told apart by the rows' 'at'. The moved parts are the leaves
+            // sanatorium_resp_gate_A and _B (and the motor gate's root); the rails (sanatorium_resp_gate_COLLIDER) and the top leaf _C stay
+            // standing and cannot close the doorway (docs/progress/iceberg-release.md, integration section). Every gate is a start gate: a
+            // mode plugin's hold keeps all of them closed; nothing stays closed after the release (HeldGates empty). Mirrors
+            // tools/maps/iceberg.json opened_barriers/start_gates.
+            OpenedBarriers: new[] { "DOORS/GATES_A/sanatorium_resp_gate", "DOORS/GATES_B/sanatorium_resp_gate", "DOORS/GATES_B/Sanatorium_CheckPoint_Gate" },
+            StartGates: new[] { "DOORS/GATES_A/sanatorium_resp_gate", "DOORS/GATES_B/sanatorium_resp_gate", "DOORS/GATES_B/Sanatorium_CheckPoint_Gate" },
+            // Bake inputs (item 9 analysis, 2026-10-30): the 365 layer-29 LevelBorder cubes span x -60.11..119.53, z -128.87..-34.86 and are the
+            // play space's only bound; the box adds 1.4 to 2.1 m, y -3..8 keeps the solid KillTrigger (top y -6.14) out and cuts the cube-top
+            // islands to about 85 m2. Layers = Arena's own NavMeshSurface mask (9, 11, 13, 18, 30) plus 29 for the kept cubes. No bake exclusion.
+            BakeBounds: new[] { -62.0f, 121.0f, -3.0f, 8.0f, -131.0f, -33.0f },
+            NavMeshBakeLayers: new[] { 9, 11, 13, 18, 29, 30 },
+            // No shader fallback row (PLAN-ICEBERG decision 8): the cloth, rock and fog-sheet shaders resolve in process (AirPit/Bowl host
+            // evidence); MK4/Rock Simple and Nature/SpeedTree8 are decided after the first host raid ([RebindShaders] lines).
+            // Puddle footsteps: the rain-driven "puddle" decal (23 quads, the material id of Equator, Air Pit and Bowl) and the static
+            // City_puddle_atlas_white (4 quads in the pool hall); "puddle fuel" (three puddle_oil renderers) is oil and stays out. The floor under
+            // the wet quads is Concrete (58 percent of the samples), so the Concrete/Asphalt rule needs no extra surface. Mirrors
+            // tools/maps/iceberg.json puddle_water_material_names.
+            PuddleWaterMaterialNames: new[] { "0877f2335044042e", "34f527e8925ffebb" },
+            // Bay5/AirPit/Bowl-style native server time: no Directional light exists in the imported scenes (Iceberg's dusk sun, sky and fog sit
+            // in the excluded Scripts scene), the WeatherRig supplies both.
+            UsesServerTime: true,
+            // docs/PLAN-ICEBERG.md decision: the 365 layer-29 LevelBorder cubes stay active at raid start and the bake treats them as walls
+            // (mirrors keep_level_borders). They are called "LevelBorder (N)", which MapBorderRepairs and BakeNavMesh no longer drop by name for
+            // a map that keeps its borders.
+            KeepLevelBorders: true,
+            // Arena animates the six gates (11 DotAnimators of Arena_Sanatorium_CheckPoint_DesignStuff, level376): the closed pose in the scene
+            // and the END pose of each node, decoded by tools/extract/extract_door_poses.py (Arena 0.6.1.0.48206), linear, 2.0 to 5.0 s.
+            // Mirrors tools/maps/iceberg.doors.json (DoorPoseSidecarTests).
+            DoorPoses: new[]
+            {
+                new ArenaDoorPose("DOORS/GATES_A/sanatorium_resp_gate", "sanatorium_resp_gate_A", "", "DotAnimator", 4.0f,
+                    new[] { 0.0f, 0.063f, 0.82f }, new[] { 0.0f, 0.0f, 0.0f },
+                    new[] { 0.0f, 0.063f, 3.568f }, new[] { 0.0f, 0.0f, 0.0f },
+                    "dotanimator", "linear", null, new[] { 82.382f, 2.176f, -93.689f }),
+                new ArenaDoorPose("DOORS/GATES_A/sanatorium_resp_gate", "sanatorium_resp_gate_B", "", "DotAnimator", 5.0f,
+                    new[] { 0.0f, 0.001f, 2.192f }, new[] { 0.0f, 0.0f, 0.0f },
+                    new[] { 0.0f, 0.001f, 3.568f }, new[] { 0.0f, 0.0f, 0.0f },
+                    "dotanimator", "linear", null, new[] { 82.382f, 2.176f, -93.689f }),
+                new ArenaDoorPose("DOORS/GATES_A/sanatorium_resp_gate", "sanatorium_resp_gate_A", "", "DotAnimator", 4.0f,
+                    new[] { 0.0f, 0.063f, 0.82f }, new[] { 0.0f, 0.0f, 0.0f },
+                    new[] { 0.0f, 0.063f, 3.568f }, new[] { 0.0f, 0.0f, 0.0f },
+                    "dotanimator", "linear", null, new[] { 82.382f, 2.176f, -86.125f }),
+                new ArenaDoorPose("DOORS/GATES_A/sanatorium_resp_gate", "sanatorium_resp_gate_B", "", "DotAnimator", 5.0f,
+                    new[] { 0.0f, 0.001f, 2.192f }, new[] { 0.0f, 0.0f, 0.0f },
+                    new[] { 0.0f, 0.001f, 3.568f }, new[] { 0.0f, 0.0f, 0.0f },
+                    "dotanimator", "linear", null, new[] { 82.382f, 2.176f, -86.125f }),
+                new ArenaDoorPose("DOORS/GATES_B/Sanatorium_CheckPoint_Gate", "", "", "DotAnimator", 3.0f,
+                    new[] { -50.237f, 3.713f, 9.371f }, new[] { -90.0f, 0.0f, 0.0f },
+                    new[] { -50.237f, 3.713f, 9.371f }, new[] { -214.082f, 0.0f, 0.0f },
+                    "dotanimator", "linear", null, new[] { -38.908f, 6.439f, -75.664f }),
+                new ArenaDoorPose("DOORS/GATES_B/sanatorium_resp_gate", "sanatorium_resp_gate_A", "", "DotAnimator", 2.0f,
+                    new[] { 0.0f, 0.063f, 0.82f }, new[] { 0.0f, 0.0f, 0.0f },
+                    new[] { 0.0f, 0.063f, 3.568f }, new[] { 0.0f, 0.0f, 0.0f },
+                    "dotanimator", "linear", null, new[] { -36.042f, 3.091f, -85.925f }),
+                new ArenaDoorPose("DOORS/GATES_B/sanatorium_resp_gate", "sanatorium_resp_gate_B", "", "DotAnimator", 2.5f,
+                    new[] { 0.0f, 0.001f, 2.192f }, new[] { 0.0f, 0.0f, 0.0f },
+                    new[] { 0.0f, 0.001f, 3.568f }, new[] { 0.0f, 0.0f, 0.0f },
+                    "dotanimator", "linear", null, new[] { -36.042f, 3.091f, -85.925f }),
+                new ArenaDoorPose("DOORS/GATES_B/sanatorium_resp_gate", "sanatorium_resp_gate_A", "", "DotAnimator", 2.0f,
+                    new[] { 0.0f, 0.063f, 0.82f }, new[] { 0.0f, 0.0f, 0.0f },
+                    new[] { 0.0f, 0.063f, 3.568f }, new[] { 0.0f, 0.0f, 0.0f },
+                    "dotanimator", "linear", null, new[] { -36.042f, 3.091f, -81.778f }),
+                new ArenaDoorPose("DOORS/GATES_B/sanatorium_resp_gate", "sanatorium_resp_gate_B", "", "DotAnimator", 2.5f,
+                    new[] { 0.0f, 0.001f, 2.192f }, new[] { 0.0f, 0.0f, 0.0f },
+                    new[] { 0.0f, 0.001f, 3.568f }, new[] { 0.0f, 0.0f, 0.0f },
+                    "dotanimator", "linear", null, new[] { -36.042f, 3.091f, -81.778f }),
+                new ArenaDoorPose("DOORS/GATES_B/sanatorium_resp_gate", "sanatorium_resp_gate_A", "", "DotAnimator", 2.0f,
+                    new[] { 0.0f, 0.063f, 0.82f }, new[] { 0.0f, 0.0f, 0.0f },
+                    new[] { 0.0f, 0.063f, 3.568f }, new[] { 0.0f, 0.0f, 0.0f },
+                    "dotanimator", "linear", null, new[] { -36.042f, 3.091f, -77.657f }),
+                new ArenaDoorPose("DOORS/GATES_B/sanatorium_resp_gate", "sanatorium_resp_gate_B", "", "DotAnimator", 2.5f,
+                    new[] { 0.0f, 0.001f, 2.192f }, new[] { 0.0f, 0.0f, 0.0f },
+                    new[] { 0.0f, 0.001f, 3.568f }, new[] { 0.0f, 0.0f, 0.0f },
+                    "dotanimator", "linear", null, new[] { -36.042f, 3.091f, -77.657f }),
+            },
+            // Score monitors (tools/maps/iceberg.monitors.json, docs/progress/score-monitors.md): six TV props of
+            // Arena_Sanatorium_CheckPoint_DesignStuff, all active. The four with type word 0 get the timer face; the two with word 13 (a capture
+            // point status board by inference) stay dark, like word 10.
+            ScoreMonitors: new[]
+            {
+                new ArenaScoreMonitor("Arena_Sanatorium_CheckPoint_DesignStuff", "TV/Arena_Home_theater ALIVE (3)", new[] { 28.978f, 4.0021f, -59.0274f }, 0, true),
+                new ArenaScoreMonitor("Arena_Sanatorium_CheckPoint_DesignStuff", "TV/Arena_Home_theater SCORE", new[] { 83.761f, 4.9639f, -91.495f }, 0, true),
+                new ArenaScoreMonitor("Arena_Sanatorium_CheckPoint_DesignStuff", "TV/Arena_Home_theater SCORE (1)", new[] { -24.413f, 5.2786f, -70.23f }, 13, true),
+                new ArenaScoreMonitor("Arena_Sanatorium_CheckPoint_DesignStuff", "TV/Arena_Home_theater SIDE", new[] { -24.426f, 5.2786f, -86.077f }, 0, true),
+                new ArenaScoreMonitor("Arena_Sanatorium_CheckPoint_DesignStuff", "TV/Arena_Home_theater SIDE (1)", new[] { 83.74f, 4.9639f, -88.31f }, 0, true),
+                new ArenaScoreMonitor("Arena_Sanatorium_CheckPoint_DesignStuff", "TV/Arena_Home_theater TIMER (1)", new[] { 28.9685f, 5.3388f, -59.0274f }, 13, true),
+            });
 
         // Source scene selection: tools/extract/plans/factory.json. Identity is permanent.
         public static readonly ArenaMapDescriptor Factory = new(
@@ -1481,8 +1579,9 @@ namespace ArenaMapPort.Shared
         public static readonly IReadOnlyList<ArenaMapDescriptor> Catalog = new[] { Equator, Bay5, AirPit, AirPit2, AutoService, Bowl, Prison, RailwayStation, Yard, Iceberg, Factory, Custom, Shoreline, Woods };
 
         /// <summary>Playable and distributable maps. Runtime consumers must iterate this release subset.
-        /// Equator, Bay5 and AirPit are the released ones (0.2.2); Bowl joined on feature/bowl for 0.3.0
-        /// (PLAN-BOWL item 8, 2026-10-18) and is registered and staged, not yet released.</summary>
-        public static readonly IReadOnlyList<ArenaMapDescriptor> All = new[] { Equator, Bay5, AirPit, Bowl };
+        /// Equator, Bay5 and AirPit are the released ones (0.2.2); Bowl joined for 0.3.0 (PLAN-BOWL item 8, 2026-10-18) and shipped with it;
+        /// Iceberg joined on feature/iceberg (PLAN-ICEBERG item 12, 2026-10-30) and is registered and staged, not yet released (its bundles
+        /// wait for the first Unity build).</summary>
+        public static readonly IReadOnlyList<ArenaMapDescriptor> All = new[] { Equator, Bay5, AirPit, Bowl, Iceberg };
     }
 }

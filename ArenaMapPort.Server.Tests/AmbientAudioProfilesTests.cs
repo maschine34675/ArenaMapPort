@@ -48,7 +48,7 @@ public sealed class AmbientAudioProfilesTests
         Assert.Equal(ArenaMapRegistry.All.Select(m => m.Key).Order().ToArray(),
             AmbientAudioProfiles.All.Select(p => p.MapKey).Order().ToArray());
         Assert.Equal(AmbientAudioProfiles.All.Count, AmbientAudioProfiles.All.Select(p => p.MapKey).Distinct().Count());
-        Assert.Equal(new[] { "arena_equator", "arena_bay5", "arena_airpit", "arena_bowl" }, AmbientAudioProfiles.All.Select(p => p.MapKey).ToArray());
+        Assert.Equal(new[] { "arena_equator", "arena_bay5", "arena_airpit", "arena_bowl", "arena_iceberg" }, AmbientAudioProfiles.All.Select(p => p.MapKey).ToArray());
     }
 
     [Fact]
@@ -111,6 +111,9 @@ public sealed class AmbientAudioProfilesTests
         Assert.Equal(profile.InactivePlayers.Order().ToArray(),
             states.GetProperty("inactive_players").EnumerateObject().Select(p => p.Value.GetString()).Order().ToArray());
         Assert.Equal(profile.LoopPlayers.Count, states.GetProperty("loop_players").GetArrayLength());
+        // The strict activation check demands the exporter-kind counts of the contract (0 for the maps that author plain random players only).
+        Assert.Equal(Count(players, "SeasonAmbientSoundPlayer"), profile.SeasonKindPlayers);
+        Assert.Equal(Count(players, "LoopAmbientSoundPlayer"), profile.LoopKindPlayers);
         Assert.Equal(0, states.GetProperty("disabled_players").GetArrayLength());
         Assert.Equal(profile.InactivePlayers.Count == 0 || profile.GroupsListInactivePlayers ? "all_players" : "active_players",
             audio.GetProperty("group_coverage").GetString());
@@ -205,9 +208,37 @@ public sealed class AmbientAudioProfilesTests
         Assert.Equal("CommonAmbientInGroup", bowl.EffectsRoute.GroupName);
         Assert.True(AmbientAudioProfiles.LeasesBus(bowl.MapKey, AmbientBus.In));
         Assert.True(AmbientAudioProfiles.LeasesBus(bowl.MapKey, AmbientBus.Out));
-        // Only Bowl's source groups list inactive players; the other three keep "members = started players".
-        Assert.Equal(new[] { ArenaMapRegistry.Bowl.Key },
+        // Only Bowl's and Iceberg's source groups list inactive players; Equator, Bay5 and AirPit keep "members = started players".
+        Assert.Equal(new[] { ArenaMapRegistry.Bowl.Key, ArenaMapRegistry.Iceberg.Key },
             AmbientAudioProfiles.All.Where(p => p.GroupsListInactivePlayers).Select(p => p.MapKey).ToArray());
+    }
+
+    [Fact]
+    public void IcebergRoutesTwoInteriorGroupsOnOneMixerAndReroutesOnlyTheFirst()
+    {
+        // PLAN-ICEBERG item 12 (2026-10-30). Source: tools/extract/native_contracts/iceberg.json "audio" (level259).
+        var iceberg = AmbientAudioProfiles.Get(ArenaMapRegistry.Iceberg.Key);
+        Assert.Equal("Iceberg", iceberg.DisplayName);
+        Assert.Equal("ArenaMapPort_IcebergNativeAudio", iceberg.RootName);
+        Assert.Equal((104, 101, 4, 1), (iceberg.Players, iceberg.ActivePlayers, iceberg.Groups, iceberg.Controllers));
+        Assert.True(iceberg.HasShoreline);
+        Assert.True(iceberg.UsesSeasons);
+        Assert.True(iceberg.OriginalActivation);
+        Assert.True(iceberg.GroupsListInactivePlayers);
+        Assert.Equal(104, iceberg.GroupedPlayers);
+        Assert.Equal(new[] { "river", "river (2)", "sparks (2)" }, iceberg.InactivePlayers.Order().ToArray());
+        Assert.Empty(iceberg.LoopPlayers);                       // no source AudioSource has Loop set; the 30 loop-kind players switch it on in Awake
+        Assert.Equal((22, 30), (iceberg.SeasonKindPlayers, iceberg.LoopKindPlayers));
+        Assert.Equal(new[] { "CommonAmbientInGroup", "LampsAmbientInGroup", "CommonAmbientOutGroup", "AmbientSplineEmitterWaterGroup" },
+            iceberg.Routes.Select(r => r.GroupName).ToArray());
+        Assert.Equal(new[] { 46, 20, 37, 1 }, iceberg.Routes.Select(r => r.Members).ToArray());
+        Assert.Equal(new[] { "CommonAmbInEffects", "CommonAmbInEffects", "CommonAmbOutEffects", "CommonAmbOutBypass" }, iceberg.Routes.Select(r => r.MixerName).ToArray());
+        Assert.Equal(new[] { AmbientBus.In, AmbientBus.In, AmbientBus.Out, AmbientBus.Out }, iceberg.Routes.Select(r => r.Bus).ToArray());
+        // The reroute to the compatible reverb bus is an effects-route property: the 20 neon-lamp loops share the interior mixer but stay on its
+        // original (EFT-muted) return, so the lamp hum is dry; a listening-pass question, not a bug (docs/progress/iceberg-release.md).
+        Assert.Equal(new[] { true, false, false, false }, iceberg.Routes.Select(r => r.ReverbReroute).ToArray());
+        Assert.Equal("CommonAmbientInGroup", iceberg.EffectsRoute.GroupName);
+        Assert.Equal(new[] { AmbientBus.In, AmbientBus.Out }, iceberg.Buses.ToArray());
     }
 
     [Fact]

@@ -16,7 +16,7 @@ import re
 import subprocess
 import sys
 
-from validate_map_descriptors import map_descriptor_paths, RELEASE_MAP_KEYS, gate_row_resolves
+from validate_map_descriptors import map_descriptor_paths, CROWDLESS_MAP_KEYS, RELEASE_MAP_KEYS, gate_row_resolves
 import validate_bundle_blocks
 
 REPO = Path(__file__).resolve().parents[2]
@@ -32,12 +32,16 @@ HEX64_RE = re.compile(r'[0-9a-f]{64}')
 KEY_FILE_MAX_BYTES = 64 * 1024
 
 # Not every released map carries every optional payload. The key set of the release itself comes from
-# validate_map_descriptors.RELEASE_MAP_KEYS (four maps since Bowl, PLAN-BOWL item 8, 2026-10-18). All four have an
+# validate_map_descriptors.RELEASE_MAP_KEYS (five maps since Iceberg, PLAN-ICEBERG item 12, 2026-10-30). The first four have an
 # overview pack (Bowl's joined with PLAN-BOWL item 17, 0.3.0). AirPit has no active flare light (item 22), so it has no
 # flare package; Bowl ships one (4 of its 28 lights are active, item 17).
+# Iceberg is deliberately in none of the three lists below (PLAN-ICEBERG Phase C, "not yet" rules, not fake data): no DynamicMaps overview
+# (a ground-floor overview is a Phase C item), no MultiFlare package (79 FlareLights, four with a negative total scale that need a reviewed
+# rule) and no water package (the WaterForSSRv3 pool and the canyon SimpleWater4 planes). It has no spectator crowd either: that is
+# validate_map_descriptors.CROWDLESS_MAP_KEYS, checked against the crowd maps (extract_spectator.MAP_SCENES) in validate().
 OVERVIEW_MAP_NAMES = ('Equator', 'Bay5', 'AirPit', 'Bowl')
 FLARE_MAP_KEYS = ('arena_equator', 'arena_bay5', 'arena_bowl')
-# Only Bay5 has a native water surface (the harbor's Sea/Plane mesh, NativeWaterRepairs.cs); Equator, AirPit and Bowl
+# Only Bay5 has a native water surface (the harbor's Sea/Plane mesh, NativeWaterRepairs.cs); Equator, AirPit, Bowl and Iceberg
 # carry no water package, so a water directory for any other key is parked or stray output.
 WATER_MAP_KEYS = ('arena_bay5',)
 
@@ -524,6 +528,9 @@ def validate():
             raise ValueError(f'Stale spectator audio: {name}')
     from extract_spectator import MAP_SCENES, package_path
     from stage_spectators import validate_staged
+    crowd_keys = {f'arena_{name}' for name in MAP_SCENES}
+    if crowd_keys & set(CROWDLESS_MAP_KEYS) or crowd_keys | set(CROWDLESS_MAP_KEYS) != set(RELEASE_MAP_KEYS):
+        raise ValueError('The crowd maps and the crowdless maps must partition the released maps')
     validate_staged(plugin/'spectators', {name: package_path(name) for name in MAP_SCENES})
     from extract_multiflare import validate_graph
     expected_flare_files = set()

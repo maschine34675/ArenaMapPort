@@ -45,6 +45,10 @@ namespace ArenaMapPort.Client
                 case "arena_equator": return "Arena_Equator_DesignStuff"; // Both location IDs share the scene/crowd.
                 case "arena_bay5": return "Arena_Bay5_DesignStuff";
                 case "arena_bowl": return "Arena_Bowl_DesignStuff";
+                // Iceberg has no spectator crowd (PLAN-ICEBERG: its scenes hold no crowd objects, only 12 FansAmbient sound entries): no
+                // package is staged, nothing is created, and with no crowd there is no murmur bed either. validate_map_descriptors.
+                // CROWDLESS_MAP_KEYS is the one list the packer and the validators read; test_crowdless_maps pins it against this switch.
+                case "arena_iceberg": return null;
                 default: return null;
             }
         }

@@ -63,13 +63,15 @@ public sealed class Bay5MapTests
     // Puddle footsteps (PuddleFootstepRepairs; Bay5 since 2026-09-28, Equator, Air Pit and Bowl since 2026-10-25, see
     // docs/progress/puddle-footsteps-all-maps.md): the exact water material names of each released map and the ground surfaces besides
     // Concrete/Asphalt that may turn into the Puddle sound. 70f045bb011600e7 = "puddle indoor static" (fixed water level),
-    // 0877f2335044042e = "puddle" (rain driven), 1b8546c701e1d1dc = "Airpit_puddle_white" (static). Oil decals share the shader and stay
-    // out: Bay5's "puddle benz" 25519639aa567c85 and Air Pit's two inactive runway decals 823c859e2c5d11bc.
+    // 0877f2335044042e = "puddle" (rain driven), 1b8546c701e1d1dc = "Airpit_puddle_white" (static), 34f527e8925ffebb = "City_puddle_atlas_white"
+    // (Iceberg's four static pool-hall quads, PLAN-ICEBERG item 9). Oil decals share the shader and stay out: Bay5's "puddle benz"
+    // 25519639aa567c85, Air Pit's two inactive runway decals 823c859e2c5d11bc and Iceberg's "puddle fuel" 299a841bb64d31bd (three puddle_oil quads).
     [Theory]
     [InlineData("equator", "70f045bb011600e7,0877f2335044042e", "")]
     [InlineData("bay5", "70f045bb011600e7", "")]
     [InlineData("airpit", "1b8546c701e1d1dc,0877f2335044042e", "")]
     [InlineData("bowl", "0877f2335044042e", "Soil")] // the whole field is one Bowl_floor_BALLISTIC_soil collider
+    [InlineData("iceberg", "0877f2335044042e,34f527e8925ffebb", "")] // the floor under the wet quads is Concrete (58 percent of the samples): no extra surface
     public void PuddleDataMatchesTheSidecarAndTheExpectedLists(string stem, string materials, string surfaces)
     {
         var expectedMaterials = materials.Split(',', StringSplitOptions.RemoveEmptyEntries);

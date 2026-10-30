@@ -35,15 +35,15 @@ namespace ArenaMapPort.Server.Tests
         [Fact]
         public void AllReleasedMapsJoinNativeChoicesAndKeepPastWhileOtherMapsKeepVanillaReset()
         {
-            // AirPit and Bowl join like Bay5 (descriptor UsesServerTime => HasTimeSelection); parked maps never do.
+            // AirPit, Bowl and Iceberg join like Bay5 (descriptor UsesServerTime => HasTimeSelection); parked maps never do.
             // arena_prison is the parked fixture (Bowl was it until PLAN-BOWL item 8, 2026-10-18, released it).
-            Assert.Equal(new[] { "bigmap", "arena_equator", "arena_bay5", "arena_airpit", "arena_bowl" }, LocationSettings.Location.NightTimeAllowedLocations);
-            foreach (string key in new[] { "arena_equator", "arena_bay5", "arena_airpit", "arena_bowl", "arena_prison", "bigmap", "unknown" })
+            Assert.Equal(new[] { "bigmap", "arena_equator", "arena_bay5", "arena_airpit", "arena_bowl", "arena_iceberg" }, LocationSettings.Location.NightTimeAllowedLocations);
+            foreach (string key in new[] { "arena_equator", "arena_bay5", "arena_airpit", "arena_bowl", "arena_iceberg", "arena_prison", "bigmap", "unknown" })
             {
                 var settings = Settings(key, EDateTime.PAST);
                 var controller = new MatchMakerSelectionLocationScreen.SelectionLocationScreenController { RaidSettings = settings };
                 controller.UpdateSelectedDateTime();
-                bool keepsPast = key is "arena_equator" or "arena_bay5" or "arena_airpit" or "arena_bowl" or "bigmap";
+                bool keepsPast = key is "arena_equator" or "arena_bay5" or "arena_airpit" or "arena_bowl" or "arena_iceberg" or "bigmap";
                 Assert.Equal(keepsPast ? EDateTime.PAST : EDateTime.CURR, settings.SelectedDateTime);
             }
         }

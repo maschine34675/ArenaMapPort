@@ -33,10 +33,13 @@ public sealed class ArenaMapDescriptionsTests : IDisposable
     /// <summary>The released maps that have an official text in Arena's locales (the pack covers exactly these).</summary>
     private static IEnumerable<ArenaMapDescriptor> OfficialTextMaps => ArenaMapRegistry.All.Where(ArenaMapDescriptions.HasOfficialText);
 
-    /// <summary>The registry as it will be once Iceberg (no official text, PLAN-ICEBERG item 10) is promoted: the same
-    /// pack and rules must hold before and after the promotion.</summary>
-    private static IReadOnlyList<ArenaMapDescriptor> ReleasedWithIceberg =>
-        ArenaMapRegistry.All.Concat(new[] { ArenaMapRegistry.Iceberg }).DistinctBy(map => map.Key).ToArray();
+    /// <summary>The released registry (Iceberg, which has no official text, PLAN-ICEBERG item 10, joined it with item 12). Kept as a named
+    /// property so the Iceberg cases below read as what they test.</summary>
+    private static IReadOnlyList<ArenaMapDescriptor> ReleasedWithIceberg => ArenaMapRegistry.All;
+
+    /// <summary>The registry as it was before Iceberg joined: the same pack must be valid for it too.</summary>
+    private static IReadOnlyList<ArenaMapDescriptor> ReleasedWithoutIceberg =>
+        ArenaMapRegistry.All.Where(map => map.Key != ArenaMapRegistry.Iceberg.Key).ToArray();
 
     private void WritePack(Dictionary<string, Dictionary<string, string>> descriptions, int version = 1) =>
         File.WriteAllText(PackPath, JsonSerializer.Serialize(new { schema_version = version, descriptions }));
@@ -145,10 +148,26 @@ public sealed class ArenaMapDescriptionsTests : IDisposable
     }
 
     [Fact]
+    public void The_released_maps_without_an_official_text_are_exactly_iceberg()
+    {
+        // The pack rule is "the released maps that HAVE an official text" (ArenaMapDescriptions.OfficialTextMapKeys, a hand-kept list that mirrors the
+        // extractor's DESCRIPTION_KEYS): a newly released map that does have an official text in Arena's locales but is not added to the list would
+        // silently fall back to its own LocaleDescription instead of being discarded as a stale pack. This pins the complement, so a promotion has to
+        // edit it on purpose (review of 2026-10-30): Iceberg is the one released map Arena's locales have no Name or Description row for.
+        var without = ArenaMapRegistry.All.Where(map => !ArenaMapDescriptions.HasOfficialText(map)).Select(map => map.Key).ToArray();
+        Assert.Equal(new[] { "arena_iceberg" }, without);
+        Assert.Equal(ArenaMapRegistry.All.Count - 1, ArenaMapDescriptions.OfficialTextMapKeys.Count);
+        Assert.Equal(ArenaMapRegistry.All.Select(m => m.Key).Order().ToArray(),
+            ArenaMapDescriptions.OfficialTextMapKeys.Concat(without).Order().ToArray());
+    }
+
+    [Fact]
     public void The_pack_the_registry_loads_is_valid_for_the_registry_with_and_without_iceberg()
     {
         WritePack(Fixture());
-        foreach (var released in new[] { ArenaMapRegistry.All, ReleasedWithIceberg })
+        Assert.Contains(ArenaMapRegistry.Iceberg, ReleasedWithIceberg);
+        Assert.DoesNotContain(ArenaMapRegistry.Iceberg, ReleasedWithoutIceberg);
+        foreach (var released in new[] { ReleasedWithoutIceberg, ReleasedWithIceberg })
         {
             var warnings = new List<string>();
             ArenaMapDescriptions.Load(PackPath, warnings.Add, released);

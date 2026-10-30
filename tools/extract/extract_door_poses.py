@@ -86,7 +86,7 @@ CLI:
         --output tools/maps/bay5.doors.json --csharp
     python tools/extract/extract_door_poses.py --map arena_airpit --package work/extract/airpit-native-v9 \\
         --output tools/maps/airpit.doors.json --csharp
-    python tools/extract/extract_door_poses.py --map arena_iceberg --package work/extract/iceberg-native-v1 \\
+    python tools/extract/extract_door_poses.py --map arena_iceberg --package work/extract/iceberg-native-v2 \\
         --output tools/maps/iceberg.doors.json --csharp
 `--csharp` also prints the `new ArenaDoorPose(...)` literals for ArenaMapRegistry.<Map>.DoorPoses; the output is
 byte-stable. The verification summary goes to stdout; a failed check goes to stderr with exit code 1 and no file written.

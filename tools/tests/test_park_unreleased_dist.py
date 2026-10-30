@@ -38,15 +38,15 @@ class ParkedDistributionTests(unittest.TestCase):
 
     def test_both_scopes_archive_exact_outputs_preserve_hashes_and_are_idempotent(self):
         expected = {}
-        # Ten parked maps: Bowl left the list with PLAN-BOWL item 8 (2026-10-18).
+        # Nine parked maps: Bowl left the list with PLAN-BOWL item 8 (2026-10-18), Iceberg with PLAN-ICEBERG item 12 (2026-10-30).
         for stem in ('airpit2', 'autoservice', 'prison', 'railwaystation',
-                     'yard', 'iceberg', 'factory', 'custom', 'shoreline', 'woods'):
+                     'yard', 'factory', 'custom', 'shoreline', 'woods'):
             for path in [*(self.client / f'bundles/arena_{stem}_{kind}.bundle' for kind in ('scenes', 'navmesh', 'preset')),
                          self.client / f'material-shaders.arena_{stem}.json', self.server / f'db/arena_{stem}/base.json']:
                 data = str(path.relative_to(self.root)).encode()
                 self.put(path, data)
                 expected[os.path.normcase(os.path.realpath(path))] = hashlib.sha256(data).hexdigest().upper()
-        # The four released maps (Equator, Bay5, AirPit, Bowl) are never archived.
+        # The five released maps (Equator, Bay5, AirPit, Bowl, Iceberg) are never archived.
         preserved = [self.client / 'bundles/arena_equator_scenes.bundle', self.client / 'bundles/arena_bay5_scenes.bundle',
                      self.client / 'bundles/arena_airpit_scenes.bundle', self.client / 'material-shaders.arena_airpit.json',
                      self.client / 'bundles/unknown.bundle', self.server / 'db/arena_equator/base.json',
@@ -54,14 +54,17 @@ class ParkedDistributionTests(unittest.TestCase):
                      self.client / 'bundles/arena_bowl_scenes.bundle', self.client / 'bundles/arena_bowl_navmesh.bundle',
                      self.client / 'bundles/arena_bowl_preset.bundle', self.client / 'material-shaders.arena_bowl.json',
                      self.server / 'db/arena_bowl/base.json',
-                     self.root / 'work/build/bowl/arena_bowl_scenes.bundle', self.root / 'ArenaMapPort.Server/db/arena_bowl/base.json']
+                     self.root / 'work/build/bowl/arena_bowl_scenes.bundle', self.root / 'ArenaMapPort.Server/db/arena_bowl/base.json',
+                     self.client / 'bundles/arena_iceberg_scenes.bundle', self.client / 'bundles/arena_iceberg_navmesh.bundle',
+                     self.client / 'bundles/arena_iceberg_preset.bundle', self.client / 'material-shaders.arena_iceberg.json',
+                     self.server / 'db/arena_iceberg/base.json']
         for path in preserved:
             self.put(path, b'preserved')
         self.run_script('Client'); self.run_script('Server')
         manifests = list((self.root / 'work/release-parked').rglob('manifest.json'))
         self.assertEqual(2, len(manifests))
         rows = [row for path in manifests for row in json.loads(path.read_text(encoding='utf-8-sig'))]
-        self.assertEqual(50, len(rows))
+        self.assertEqual(45, len(rows))
         for row in rows:
             self.assertTrue(row['Moved'])
             self.assertFalse(Path(row['Source']).exists())

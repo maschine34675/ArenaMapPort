@@ -855,7 +855,8 @@ SCORE_MONITOR_ROW_KEYS = ("scene", "path", "at", "arena_type", "template", "conf
 SCORE_MONITOR_MIRRORED = ("scene", "path", "at", "arena_type", "active_in_scene")   # the five fields ArenaScoreMonitor carries
 # type word -> (Arena template, confirmed, face): the table of tools/extract/extract_score_monitors.TYPE_WORDS and of the client's
 # ScoreMonitorLayout.FaceOf (a test pins all three). 0, 1, 2 are confirmed by Bowl's TIMER / SCORE / ALIVE prop names; 6 and 7 are inferred from the
-# template order; 10 names no template. A word that is not here is refused: an Arena build that adds one needs a human decision.
+# template order; 10 names no template; 13 (Iceberg's two CheckPoint boards) is known but unconfirmed and dark (extract_score_monitors.TYPE_WORDS
+# has the census). A word that is not here is refused: an Arena build that adds one needs a human decision.
 SCORE_MONITOR_TYPE_WORDS = {
     0: ("MonitorTimer", True, "timer"),
     1: ("MonitorTeamsCommonRoundScore", True, "score"),
@@ -863,6 +864,7 @@ SCORE_MONITOR_TYPE_WORDS = {
     6: ("MonitorTeamsFinalRoundScore", False, "score"),
     7: ("MonitorPlayerboard", False, "none"),
     10: (None, False, "none"),
+    13: (None, False, "none"),
 }
 # the pose of every ArenaMonitorHolder below its TV prop; ArenaScoreMonitorMount (Shared) mirrors it (ScoreMonitorSidecarTests)
 SCORE_MONITOR_MOUNT = {"position": [0.0, 0.0, 0.369285], "rotation": [-0.5, 0.5, 0.5, -0.5], "scale": 0.00054, "size": [1930, 1163], "pivot": [0.5, 0.5]}
@@ -1045,9 +1047,16 @@ def registry_entries(text: str) -> dict[str, dict]:
             for name in names}
 
 
-# Bowl joined with PLAN-BOWL item 8 (2026-10-18): registered and staged on feature/bowl for 0.3.0, not released yet.
-RELEASE_MAP_NAMES = ("Equator", "Bay5", "AirPit", "Bowl")
-RELEASE_MAP_KEYS = ("arena_equator", "arena_bay5", "arena_airpit", "arena_bowl")
+# Bowl joined with PLAN-BOWL item 8 (2026-10-18) and shipped with 0.3.0; Iceberg joined with PLAN-ICEBERG item 12 (2026-10-30), registered and
+# staged on feature/iceberg, not released yet (its bundles wait for the first Unity build).
+RELEASE_MAP_NAMES = ("Equator", "Bay5", "AirPit", "Bowl", "Iceberg")
+RELEASE_MAP_KEYS = ("arena_equator", "arena_bay5", "arena_airpit", "arena_bowl", "arena_iceberg")
+# Released maps that have NO spectator crowd (PLAN-ICEBERG "No spectator crowd and no murmur bed", 2026-10-30: Iceberg's scenes hold no crowd objects,
+# only 12 FansAmbient sound entries). They get no spectators/<key>/ package and no crowd murmur: everything that would otherwise demand a crowd
+# for every released map (the packer's rules and required files, the distribution validator) reads this one list; the crowd maps themselves are
+# extract_spectator.MAP_SCENES, and tools/tests/test_crowdless_maps.py pins that both sets partition the release and that the client's
+# ArenaSpectators.DesignScene returns null for exactly these keys. Adding a map here is a decision, never a way around a missing package.
+CROWDLESS_MAP_KEYS = ("arena_iceberg",)
 
 
 def registry_membership_errors(text: str, entries: dict) -> list[str]:

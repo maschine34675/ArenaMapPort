@@ -11,9 +11,10 @@
     "Arena_Sanatorium_CheckPoint",
     "Arena_Sanatorium_CheckPoint_DesignStuff"
   ],
+  "uses_server_time": true,
   "infiltration_name": "ArenaIceberg",
-  "locale_name": "Arena: Iceberg (spike)",
-  "locale_description": "Internal test build — CheckPoint geometry/collision/NavMesh port.",
+  "locale_name": "Arena: Iceberg",
+  "locale_description": "The Iceberg resort hotel from EFT Arena: a multi-storey hotel with a rotunda on a rocky canyon, with its lobby, atrium, pool hall and cafe inside and a street area around it. The CheckPoint layout is used: two team pockets behind sliding gates at the east and west ends, and three capture points, A, B and C, between them.",
   "icon_x": 110,
   "icon_y": 608,
   "template_key": "factory4_day",
@@ -22,5 +23,38 @@
     0.5,
     0.5,
     0.5
+  ],
+  "opened_barriers": [
+    "DOORS/GATES_A/sanatorium_resp_gate",
+    "DOORS/GATES_B/sanatorium_resp_gate",
+    "DOORS/GATES_B/Sanatorium_CheckPoint_Gate"
+  ],
+  "start_gates": [
+    "DOORS/GATES_A/sanatorium_resp_gate",
+    "DOORS/GATES_B/sanatorium_resp_gate",
+    "DOORS/GATES_B/Sanatorium_CheckPoint_Gate"
+  ],
+  "held_gates": [],
+  "navmesh_bake_exclusions": [],
+  "bake_bounds": [
+    -62,
+    121,
+    -3,
+    8,
+    -131,
+    -33
+  ],
+  "navmesh_bake_layers": [
+    9,
+    11,
+    13,
+    18,
+    29,
+    30
+  ],
+  "keep_level_borders": true,
+  "puddle_water_material_names": [
+    "0877f2335044042e",
+    "34f527e8925ffebb"
   ]
 }

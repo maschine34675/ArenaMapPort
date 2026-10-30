@@ -7,12 +7,11 @@ using Xunit;
 namespace ArenaMapPort.Server.Tests;
 
 /// <summary>
-/// PLAN-ICEBERG item 5 (ambient audio, package v2). Iceberg is not in <c>ArenaMapRegistry.All</c> yet, so
-/// <see cref="AmbientAudioProfiles"/> has no row for it and <c>AmbientAudioProfilesTests</c> does not cover it. Everything the
-/// promotion needs is pinned here instead, against the contract the validators check on the package and the bundle:
-/// the contract's audio block, the client profile row the promotion adds (built from the contract values and checked by the
-/// profile's own constructor), the importer's mirror (root name, asset folder, group-to-mixer pairing) and the driver rule
-/// that lets an original-activation graph hold season and loop players.
+/// PLAN-ICEBERG item 5 (ambient audio, package v2) and item 12 (its promotion into <c>ArenaMapRegistry.All</c>). The client profile row lives in
+/// <see cref="AmbientAudioProfiles"/> now and the generic table tests (<c>AmbientAudioProfilesTests</c>) cover it like any released map; what is
+/// specific to Iceberg stays pinned here, against the contract the validators check on the package and the bundle: the contract's audio block, the 21
+/// players that author minDistance 0 (pinned by id since the review of 2026-10-30), the kind counts the strict activation check of the driver demands,
+/// the importer's mirror (root name, asset folder, the lamps group) and the fact that the released maps keep their old fail-closed driver check.
 /// </summary>
 public sealed class IcebergAmbientAudioTests
 {
@@ -40,23 +39,7 @@ public sealed class IcebergAmbientAudioTests
         audio.GetProperty("states").GetProperty("groups").EnumerateObject()
             .Select(g => (g.Name, g.Value.GetProperty("mixer").GetString(), g.Value.GetProperty("players").GetInt32())).ToArray();
 
-    // The row PLAN-ICEBERG item 12 adds to AmbientAudioProfiles.Table, written from the contract values so the profile's own
-    // constructor checks the census (members add up to all 104 players, three inactive, exactly one effects route).
-    static AmbientAudioProfile PlannedProfile() => new AmbientAudioProfile("arena_iceberg", "Iceberg", "ArenaMapPort_IcebergNativeAudio",
-        players: 104, activePlayers: 101, controllers: 1, hasShoreline: true, usesSeasons: true, originalActivation: true,
-        inactivePlayers: new[] { "river (2)", "river", "sparks (2)" }, loopPlayers: null,
-        routes: new[]
-        {
-            new AmbientGroupRoute("CommonAmbientInGroup", "AmbientIn/CommonAmbInEffects", "CommonAmbInEffects",
-                AmbientBus.In, members: 46, effects: true, reverbReroute: true),
-            new AmbientGroupRoute("LampsAmbientInGroup", "AmbientIn/CommonAmbInEffects", "CommonAmbInEffects",
-                AmbientBus.In, members: 20),
-            new AmbientGroupRoute("CommonAmbientOutGroup", "AmbientOut/CommonAmbOutEffects", "CommonAmbOutEffects",
-                AmbientBus.Out, members: 37),
-            new AmbientGroupRoute("AmbientSplineEmitterWaterGroup", "CommonAmbOutBypass", "CommonAmbOutBypass",
-                AmbientBus.Out, members: 1),
-        },
-        groupsListInactivePlayers: true);
+    static AmbientAudioProfile Profile() => AmbientAudioProfiles.Get(Key);
 
     [Fact]
     public void TheContractPinsTheSoundSceneOfIceberg()
@@ -92,14 +75,22 @@ public sealed class IcebergAmbientAudioTests
         Assert.Empty(states.GetProperty("loops").EnumerateObject());
         Assert.Equal(0, states.GetProperty("loop_players").GetArrayLength());
         Assert.False(states.TryGetProperty("forced_mixer_players", out var forced) && forced.EnumerateObject().Any());
+        // The 21 players with minDistance 0 (20 neon lamps and the projector) are pinned by id and leaf name: the exporter's reviewed rule is global,
+        // its use is not (extract_bay5_audio.validate_graph compares the players with the pin, the four released contracts pin none).
+        var zero = states.GetProperty("zero_min_distance_players").EnumerateObject().ToArray();
+        Assert.Equal(21, zero.Length);
+        Assert.All(zero, p => Assert.StartsWith("level259:", p.Name));
+        Assert.Equal(20, zero.Count(p => Regex.IsMatch(p.Value.GetString()!, @"^neon_lamp( \(\d+\))?$")));
+        Assert.Contains(zero, p => p.Value.GetString() == "projector");
+        Assert.True(zero.Length <= audio.GetProperty("players").GetProperty("LoopAmbientSoundPlayer").GetInt32());   // they are loop-kind players (30 in all)
     }
 
     [Fact]
-    public void ThePlannedClientProfileMirrorsTheContract()
+    public void TheClientProfileMirrorsTheContract()
     {
         var audio = ContractAudio();
         var states = audio.GetProperty("states");
-        var profile = PlannedProfile();
+        var profile = Profile();
         var players = audio.GetProperty("players").EnumerateObject().Sum(p => p.Value.GetInt32());
         Assert.Equal(audio.GetProperty("root").GetString(), profile.RootName);
         Assert.Equal(players, profile.Players);
@@ -143,25 +134,37 @@ public sealed class IcebergAmbientAudioTests
     }
 
     [Fact]
-    public void TheDriverAcceptsSeasonAndLoopPlayersUnderOriginalActivation()
+    public void TheProfileDemandsTheKindCountsAndTheReleasedMapsKeepTheirFailClosedCheck()
     {
-        // Iceberg is the first graph that combines the original-activation contract (three inactive players, the groups
-        // define what starts) with season and loop players; the check used to demand AmbientSoundPlayer for every player.
+        // Iceberg is the first graph that combines the original-activation contract (three inactive players, the groups define what starts) with
+        // season and loop players. The driver's strict check used to demand AmbientSoundPlayer for every player; it now accepts the three kinds but
+        // demands the profile's counts, which are zero for every released map (review of 2026-10-30): a season or loop-kind player appearing on
+        // Equator, AirPit or Bowl still fails closed.
+        var audio = ContractAudio();
+        var profile = Profile();
+        Assert.Equal((22, 30), (profile.SeasonKindPlayers, profile.LoopKindPlayers));
+        Assert.Equal(audio.GetProperty("players").GetProperty("SeasonAmbientSoundPlayer").GetInt32(), profile.SeasonKindPlayers);
+        Assert.Equal(audio.GetProperty("players").GetProperty("LoopAmbientSoundPlayer").GetInt32(), profile.LoopKindPlayers);
+        foreach (var released in AmbientAudioProfiles.All.Where(p => p.OriginalActivation && p.MapKey != Key))
+            Assert.Equal((0, 0), (released.SeasonKindPlayers, released.LoopKindPlayers));
         var driver = Text("ArenaMapPort.Client/Bay5AmbientAudio.cs");
-        var code = string.Join("\n", driver.Split('\n').Where(l => !l.TrimStart().StartsWith("//")));
+        var code = string.Join(Environment.NewLine, driver.Split((char)10).Where(l => !l.TrimStart().StartsWith("//")));
         Assert.Contains("p is AmbientSoundPlayer || p is SeasonAmbientSoundPlayer || p is LoopAmbientSoundPlayer", code);
+        Assert.Contains("_players.Count(p => p is SeasonAmbientSoundPlayer) != profile.SeasonKindPlayers", code);
+        Assert.Contains("_players.Count(p => p is LoopAmbientSoundPlayer) != profile.LoopKindPlayers", code);
         Assert.DoesNotContain("!(p is AmbientSoundPlayer) ||", code);
     }
 
     [Fact]
-    public void TheExporterAcceptsAZeroMinDistanceAndKeepsTheOtherBounds()
+    public void TheKindCountsNeedAStrictProfileThatUsesSeasons()
     {
-        // The reviewed rule of PLAN-ICEBERG item 5 lives in extract_bay5_audio.parse_player (unit-tested in tools/tests);
-        // this pins its text so a revert shows up in the .NET run too.
-        var exporter = Text("tools/extract/extract_bay5_audio.py");
-        Assert.Contains("0<=d['minDistance']<=d['maxDistance'] or not d['maxDistance']>0", exporter);
-        Assert.DoesNotContain("0<d['minDistance']<=d['maxDistance']", exporter);
-        Assert.Contains("0<=d['volume']<=1", exporter);
-        Assert.Contains("0<=d['spatialBlend']<=1", exporter);
+        var route = new AmbientGroupRoute("CommonAmbientInGroup", "AmbientIn/CommonAmbInEffects", "CommonAmbInEffects", AmbientBus.In, members: 4, effects: true);
+        Assert.NotNull(new AmbientAudioProfile("arena_x", "X", "Root", 4, 4, 0, false, true, true, null, null, new[] { route }, seasonKindPlayers: 1, loopKindPlayers: 1));
+        // season players need usesSeasons, the counts need original activation and cannot exceed the players
+        Assert.Throws<ArgumentException>(() => new AmbientAudioProfile("arena_x", "X", "Root", 4, 4, 0, false, false, true, null, null, new[] { route }, seasonKindPlayers: 1));
+        Assert.Throws<ArgumentException>(() => new AmbientAudioProfile("arena_x", "X", "Root", 4, 4, 0, false, true, false, null, null, new[] { route }, seasonKindPlayers: 1));
+        Assert.Throws<ArgumentException>(() => new AmbientAudioProfile("arena_x", "X", "Root", 4, 4, 0, false, false, false, null, null, new[] { route }, loopKindPlayers: 1));
+        Assert.Throws<ArgumentException>(() => new AmbientAudioProfile("arena_x", "X", "Root", 4, 4, 0, false, true, true, null, null, new[] { route }, seasonKindPlayers: 3, loopKindPlayers: 2));
+        Assert.Throws<ArgumentException>(() => new AmbientAudioProfile("arena_x", "X", "Root", 4, 4, 0, false, true, true, null, null, new[] { route }, loopKindPlayers: -1));
     }
 }

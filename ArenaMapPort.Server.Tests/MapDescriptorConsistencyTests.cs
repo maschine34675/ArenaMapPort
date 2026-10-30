@@ -100,7 +100,16 @@ public class MapDescriptorConsistencyTests
         // Bowl (PLAN-BOWL item 7, 2026-10-18): the two GateEntity roots of Arena_Bowl_TeamFight_DesignStuff; each pocket
         // has two independent exits (gate + BTR east, gate + ambulance west), so every direct child opens at raid start.
         Assert.Equal(new[] { "DOORS_SPAWN_A", "DOORS_SPAWN_B" }, ArenaMapRegistry.Bowl.OpenedBarriers);
-        var walked = new[] { ArenaMapRegistry.Equator, ArenaMapRegistry.Bay5, ArenaMapRegistry.AirPit, ArenaMapRegistry.Bowl };
+        // Iceberg (PLAN-ICEBERG item 9/12, 2026-10-30): one barrier per GATE of Arena_Sanatorium_CheckPoint_DesignStuff's DOORS (the rows of
+        // tools/maps/iceberg.doors.json name the gates, and a row matches its barrier by the exact string): the Bear pocket's two sliding gates, the
+        // Usec pocket's three, and the rotating gate. The sliding gates of a group share one name; the rows' `at` tells them apart.
+        Assert.Equal(new[]
+        {
+            "DOORS/GATES_A/sanatorium_resp_gate",
+            "DOORS/GATES_B/sanatorium_resp_gate",
+            "DOORS/GATES_B/Sanatorium_CheckPoint_Gate",
+        }, ArenaMapRegistry.Iceberg.OpenedBarriers);
+        var walked = new[] { ArenaMapRegistry.Equator, ArenaMapRegistry.Bay5, ArenaMapRegistry.AirPit, ArenaMapRegistry.Bowl, ArenaMapRegistry.Iceberg };
         foreach (var map in ArenaMapRegistry.Catalog)
         {
             Assert.NotNull(map.OpenedBarriers);
@@ -202,13 +211,27 @@ public class MapDescriptorConsistencyTests
             Assert.True(bowl.BakeBounds[2 * axis] < bowl.BakeBounds[2 * axis + 1]);
         Assert.DoesNotContain(bowl.NavMeshBakeExclusions, p => bowl.OpenedBarriers.Any(b => p == b || p.StartsWith(b + "/")));
 
-        foreach (var map in ArenaMapRegistry.Catalog.Where(m => !ReferenceEquals(m, airPit) && !ReferenceEquals(m, bowl)))
+        // Iceberg (PLAN-ICEBERG item 9/12, 2026-10-30): the 365 border cubes span x -60.11..119.53, z -128.87..-34.86 (the box adds 1.4 to 2.1 m);
+        // y -3..8 keeps the solid KillTrigger (top y -6.14) out and cuts the cube-top islands; Arena's own mask 9/11/13/18/30 plus 29 for the kept cubes;
+        // no exclusion, and the three gates are unit-level barriers (test_iceberg_bake_inputs pins the numbers and the geometry).
+        var iceberg = ArenaMapRegistry.Iceberg;
+        Assert.Empty(iceberg.NavMeshBakeExclusions);
+        Assert.Equal(new[] { -62.0f, 121.0f, -3.0f, 8.0f, -131.0f, -33.0f }, iceberg.BakeBounds);
+        Assert.Equal(new[] { 9, 11, 13, 18, 29, 30 }, iceberg.NavMeshBakeLayers);
+        Assert.True(iceberg.KeepLevelBorders);
+        Assert.Equal(3, iceberg.OpenedBarriers.Length);
+        Assert.All(iceberg.OpenedBarriers, path => Assert.True(IsHierarchyPath(path), path));
+        for (var axis = 0; axis < 3; axis++)
+            Assert.True(iceberg.BakeBounds[2 * axis] < iceberg.BakeBounds[2 * axis + 1]);
+        Assert.DoesNotContain(iceberg.NavMeshBakeExclusions, p => iceberg.OpenedBarriers.Any(b => p == b || p.StartsWith(b + "/")));
+
+        foreach (var map in ArenaMapRegistry.Catalog.Where(m => !ReferenceEquals(m, airPit) && !ReferenceEquals(m, bowl) && !ReferenceEquals(m, iceberg)))
         {
             Assert.Empty(map.NavMeshBakeExclusions);
             Assert.Empty(map.BakeBounds);
             Assert.Empty(map.NavMeshBakeLayers);
         }
-        foreach (var map in new[] { airPit, bowl })
+        foreach (var map in new[] { airPit, bowl, iceberg })
         {
             Assert.All(map.NavMeshBakeLayers, layer => Assert.InRange(layer, 0, 31));
             Assert.DoesNotContain(4, map.NavMeshBakeLayers); // Water is never collected
@@ -243,7 +266,7 @@ public class MapDescriptorConsistencyTests
     }
 
     // 2026-10-18 (Bowl, docs/PLAN-BOWL.md): a map may keep Arena's layer-29 LevelBorder cubes as its play-area bound.
-    // The flag mirrors the sidecar's keep_level_borders (JsonUtility default false), only Bowl sets it, and such a map
+    // The flag mirrors the sidecar's keep_level_borders (JsonUtility default false), only Bowl and Iceberg set it, and such a map
     // must let the bake collect layer 29 (BakeNavMesh.NonPhysicalLayerReason then treats the cubes as walls).
     [Fact]
     public void KeepLevelBorders_MirrorsTheSidecar_AndBakesLayer29()
@@ -263,7 +286,7 @@ public class MapDescriptorConsistencyTests
             using var document = JsonDocument.Parse(File.ReadAllText(path!));
             bool sidecar = document.RootElement.TryGetProperty("keep_level_borders", out var keep) && keep.GetBoolean();
             Assert.Equal(sidecar, map.KeepLevelBorders);
-            Assert.Equal(map == ArenaMapRegistry.Bowl, map.KeepLevelBorders);
+            Assert.Equal(map == ArenaMapRegistry.Bowl || map == ArenaMapRegistry.Iceberg, map.KeepLevelBorders);
             if (map.KeepLevelBorders)
                 Assert.True(map.NavMeshBakeLayers.Length == 0 || map.NavMeshBakeLayers.Contains(29));
         }
@@ -289,12 +312,19 @@ public class MapDescriptorConsistencyTests
         Assert.Equal(new[] { "DOORS_SPAWN_A", "DOORS_SPAWN_B" }, bowl.StartGates);
         Assert.Empty(bowl.HeldGates);
         Assert.All(bowl.OpenedBarriers, p => Assert.Equal(ArenaGateRole.Start, bowl.GateRoleOf(p)));
+        // Iceberg (PLAN-ICEBERG item 12): the three unit-level gate paths of its doors sidecar are all start gates; nothing stays closed after the release.
+        var iceberg = ArenaMapRegistry.Iceberg;
+        var icebergGates = new[] { "DOORS/GATES_A/sanatorium_resp_gate", "DOORS/GATES_B/sanatorium_resp_gate", "DOORS/GATES_B/Sanatorium_CheckPoint_Gate" };
+        Assert.Equal(icebergGates, iceberg.OpenedBarriers);
+        Assert.Equal(icebergGates, iceberg.StartGates);
+        Assert.Empty(iceberg.HeldGates);
+        Assert.All(iceberg.OpenedBarriers, p => Assert.Equal(ArenaGateRole.Start, iceberg.GateRoleOf(p)));
         foreach (var map in ArenaMapRegistry.Catalog)
         {
             Assert.All(map.StartGates, p => Assert.Contains(p, map.OpenedBarriers));
             Assert.All(map.HeldGates, p => Assert.Contains(p, map.OpenedBarriers));
             Assert.Empty(map.StartGates.Intersect(map.HeldGates));
-            if (ReferenceEquals(map, airPit) || ReferenceEquals(map, bowl)) continue;
+            if (ReferenceEquals(map, airPit) || ReferenceEquals(map, bowl) || ReferenceEquals(map, iceberg)) continue;
             Assert.Empty(map.StartGates);
             Assert.Empty(map.HeldGates);
             Assert.All(map.OpenedBarriers, p => Assert.Equal(ArenaGateRole.Start, map.GateRoleOf(p)));

@@ -97,7 +97,7 @@ namespace ArenaMapPort.Client
             _installed = true;
 
             _mode = Plugin.Instance.Settings.Bind("Weather (test)", "Weather", TestWeather.Server,
-                "Equator day always uses Clear; Bay5, AirPit and Bowl (descriptor UsesServerTime) always use dynamic " +
+                "Equator day always uses Clear; Bay5, AirPit, Bowl and Iceberg (descriptor UsesServerTime) always use dynamic " +
                 "SPT/backend weather. This setting does not override any of them unless ApplyOnServerTimeMaps " +
                 "is on in developer mode. Applies to Equator night when " +
                 "Night neon/Rain does not request rain, and to unreleased Arena maps. Server = backend weather. Any other value forces a " +
@@ -106,7 +106,7 @@ namespace ArenaMapPort.Client
                 "sticks for the whole raid. Only ever applies to OUR maps' raids — see this file's own doc " +
                 "comment. Applies on the next raid load, not live.");
             _applyOnServerTime = Plugin.Instance.Settings.Bind("Weather (test)", "ApplyOnServerTimeMaps", false,
-                "Developer mode only (General/DeveloperMode latched at startup). false = Bay5, AirPit and Bowl keep " +
+                "Developer mode only (General/DeveloperMode latched at startup). false = Bay5, AirPit, Bowl and Iceberg keep " +
                 "the backend weather and ignore 'Weather'. true = the 'Weather' value (Clear/Overcast/Rain/Fog) " +
                 "also replaces the backend weather nodes on Bay5/AirPit/Bowl, on every initialization and PVE_OFFLINE " +
                 "re-sync; Server = no change. Time of day keeps following the backend clock. For rain checks " +

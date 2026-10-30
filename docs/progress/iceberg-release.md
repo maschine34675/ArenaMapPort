@@ -392,10 +392,12 @@ The six `EntitySoundPlayer`s of `ARENA_SANATORIUM_GATES` (level259) against `ice
 
 - Six `ArenaMonitorHolder`s, all in `Arena_Sanatorium_CheckPoint_DesignStuff`, all active: word 0 x4 (`SCORE`, `SIDE`, `SIDE (1)`, `ALIVE (3)`), word 13 x2
   (`SCORE (1)` at (-24.4, 5.3, -70.2), `TIMER (1)` at (29.0, 5.3, -59.0), the latter stacked 1.34 m above a timer). The prop names are copies and do not follow the words.
-- **Word 13 = ALL POINT STATUS board.** Census of all 388 level files (467 holders, 0 errors), prop names per word: 0 TIMER/SIDE, 1 SCORE, 2 ALIVE, 11 CAPTURE POINT (6 levels),
+- **Word 13: an ALL POINT STATUS board (an inference, softened 2026-10-30).** Census of all 388 level files (467 holders, 0 errors), prop names per word: 0 TIMER/SIDE, 1 SCORE, 2 ALIVE, 11 CAPTURE POINT (6 levels),
   12 POINT STATUS A/B/X (level 228 only), 13 in three levels: `Arena_Yard_TDM_DesignStuff` 228 (four holders, all called ALL POINT STATUS), `Arena_Location_TEMP_
   CheckPoint_DesignStuff` 345 (TIMER (1), (2), inactive) and Iceberg's 376; 14 in 219 (`Bowl_TDM`, ALL POINT STATUS x2) and 346 (`AirPit_2.0_CheckPoint`, TIMER x5). The
-  CheckPoint design scenes carry their capture-point boards as 13 or 14 on copied timer TVs. The port has no capture-point face: `TYPE_WORDS[13] = (None, False, "none")`
+  CheckPoint design scenes seem to carry their capture-point boards as 13 or 14 on copied timer TVs. That reading is an inference from the prop names of 228 and 219
+  (ALL POINT STATUS) and from the places the words occur; nothing in Arena's code was read that says what word 13 shows, and the prop names of 345, 346 and Iceberg's 376 are copies that do
+  not follow the words. The port has no capture-point face: `TYPE_WORDS[13] = (None, False, "none")`
   like word 10; 11, 12 and 14 stay unclassified. The client's `FaceOf` already gives every other word none, so four of six rows get the timer face.
 - `iceberg.monitors.json`: 6 rows; the props are found once in `iceberg-native-v1` with the same activity; `--check` of all five sidecars: current.
 
@@ -551,8 +553,9 @@ six Bear stage markers that are off Arena's mesh included; capture points A and 
   `start_gates` the same two, `held_gates` `[]`. The strings must equal the `barrier` strings of `iceberg.doors.json` (exact match in
   `ResolveOpenedBarriers` and the client): if the doors rows come out unit-level (`DOORS/GATES_A/sanatorium_resp_gate` with `at`,
   `DOORS/GATES_B/sanatorium_resp_gate`, `DOORS/GATES_B/Sanatorium_CheckPoint_Gate`, as the survey's dry run did) these three are the
-  opened barriers and start gates instead; the dropped colliders are the same 42 (every collider below the two roots sits in one of the six
-  units), only the strings change.
+  opened barriers and start gates instead (they are, see the integration section of 2026-10-30). The "same 42 colliders" claim that stood here is replaced:
+  with door rows the bake drops only the 22 MOVED colliders below the two roots; the other 20 (rails and top panel of each sliding gate) stay standing,
+  so the bake has 5,145 sources instead of 5,135 and the oracle numbers do not move (rails 12 triangles at |x| 1.74..1.90, opening 3.48 local, free height 2.86 local).
 - `navmesh_bake_layers` `[9, 11, 13, 18, 29, 30]`, `keep_level_borders` true, `uses_server_time` true, `navmesh_bake_exclusions` none.
 - `bake_bounds` `[-62, 121, -3, 8, -131, -33]`. x/z: the 365 cubes span x -60.11..119.53, z -128.87..-34.86 (+1.5 to 2.1 m); Arena's mesh stops at
   x 108.7 by its own volume, so the cubes, not the mesh, are the reference on the east. y floor -3: Arena's lowest floor is -1.79, the solid
@@ -593,3 +596,185 @@ lines for the six names (resolved to EFT's own loaded shader, or unresolved Erro
 without the package, the installed Arena or UnityPy; `ARENAMAPPORT_WORK_DIR=D:/ArenaMapPort/work` points a worktree at the ignored inputs; 12 s with data). Edited: `test_navmesh_diff.py`
 (descriptor input dict, `--keep-level-borders`, the border rule), `test_navmesh_source_layers.py` (the Iceberg cases), and the two
 "no other sidecar carries these keys" tests in `test_airpit_bake_inputs.py` and `test_shader_fallback_names.py` skip `iceberg` now.
+
+## 2026-10-30 - promotion into the released set and the review fixes (PLAN-ICEBERG item 12)
+
+Integration on `feature/iceberg` (lead decisions of the six-workstream review; no Unity, no `build_all.ps1`, no non-DllOnly client build, no deploy, no
+push; nothing under `D:/SPT41`). The commit trailer is `Co-Authored-By: Claude Sonnet 5.5` (the task text named Opus 5.5; the integrating agent is Sonnet 5.5
+and the earlier workstreams were Sonnet too). Iceberg is now in `ArenaMapRegistry.All`, which is the lock-step moment of Bowl's `3ef5132`; the bundles do not
+exist yet, so every gate that needs them is listed under "Pending U1" below.
+
+### What the promotion changed
+
+- **Registry and descriptor**: `ArenaMapRegistry.All` = Equator, Bay5, AirPit, Bowl, Iceberg. The descriptor carries the identity (name "Arena: Iceberg" and an
+  own-words description), the exits, the three unit-level gate paths, the bake inputs (`BakeBounds`, `NavMeshBakeLayers`, `KeepLevelBorders`), the puddle
+  materials, `UsesServerTime`, the 11 `DoorPoses` rows and the 6 `ScoreMonitors` rows; `tools/maps/iceberg.json`, `iceberg.modes.json` (regenerated from
+  `iceberg-native-v2`) and `ArenaMapPort.Server/db/arena_iceberg/base.json` mirror it (`IcebergMapTests`, `MapDescriptorConsistencyTests`,
+  `validate_map_descriptors.py`).
+- **Both csproj files** stage Iceberg's inputs (acoustics, gate sounds, AI sidecar, load screens, shader sidecar, banner; the content key only on the first
+  stage with `-p:ArenaMapPortCreateReleaseKeys=true`), and every per-map client table has its Iceberg row where a released map needs one: ambient audio
+  profile and mix defaults, `MapLightingDefaults`, native decals, spatial audio, reverb, precipitation audio, puddle footsteps.
+- **Release plumbing**: `RELEASE_MAP_KEYS/NAMES`, the new `CROWDLESS_MAP_KEYS`, `make_release_zips.py` (a sixth part, `iceberg`, 20 files), `validate_distribution.py`,
+  `deploy-to-spt.ps1`, `park-unreleased-dist.ps1`, `stage_spectators.py`, `extract_spectator.py`, the extractor tables (`extract_score_monitors.py` MAPS, the
+  package pins `iceberg-native-v1` -> `iceberg-native-v2` everywhere) and the test scaffolding that kept Iceberg out of the released set.
+- **Prose**: `AGENTS.md`, `docs/PLAN-ICEBERG.md`, `docs/dist-manifest.md` (a dated paragraph, "PENDING: not built, not staged, not released"; the published
+  256-file contract stays), `BakeNavMesh.cs` (comment only). No release text (README, FORGE, CHANGELOG, release notes) was written; the README's "four maps" stays.
+
+### Lead decisions and their reasons
+
+1. **Gate paths**: `opened_barriers` and `start_gates` are the three unit-level paths that `iceberg.doors.json` carries (`DOORS/GATES_A/sanatorium_resp_gate`,
+   `DOORS/GATES_B/sanatorium_resp_gate`, `DOORS/GATES_B/Sanatorium_CheckPoint_Gate`), `held_gates` none. The string must equal a row's `barrier` exactly, and
+   a barrier with rows drops only the moved subtrees at bake time, so the client and the bake agree on what stays standing. The group-level strings
+   (`DOORS/GATES_A`, `DOORS/GATES_B`) of the item 9 analysis match no row, so the bake would have dropped all 42 colliders below them (the legacy rule) while the
+   client leaves the 20 unposed ones standing. The offline model follows `ResolveOpenedBarriers` now (below).
+2. **Word 13** is a known type word that names no face (`SCORE_MONITOR_TYPE_WORDS[13]` dark, like word 10): the validator no longer fails on Iceberg's two
+   CheckPoint boards (the red tip of review 5). "ALL POINT STATUS" is softened to an inference in this log and in the extractor's text (the evidence is prop names
+   on other scenes, no code that says what word 13 shows).
+3. **`iceberg-native-v1` -> `iceberg-native-v2`** in every pin (extractor tables, tests, docs that pin a package); `iceberg.modes.json` regenerated, which changes
+   only the package name and the extraction timestamp (`extract_mode_objects.py ... --arena-data` reproduces the tracked file byte for byte).
+4. **Ambient audio**: the profile row is in (104 players, 101 active, three inactive, four groups in source order, the Lamps group on the original interior
+   mixer without the reverb reroute, kind counts 22 season / 30 loop). Defaults **3 dB / offset 0 / range 2**, provisional until a listening pass and NOT Bowl's
+   3 dB / 0.4 / 3: the mix is `volume * gain + offset`, so Bowl's offset would lift the lamp loops from the authored 0.25 to about 0.75 (an audible hum in every
+   interior) and flatten the interior players (median 0.10) to about 0.54; range 2 still carries the exterior sources (10 to 100 m) and 17 of the 20 lamps
+   (authored reach 3 m) reach 6 m. The driver's strict original-activation check accepts the three player kinds only where the profile demands their counts
+   (`SeasonKindPlayers`, `LoopKindPlayers`, 0 for the released maps, so a season or loop-kind player appearing there still fails closed). The 20 lamps and 1
+   projector have `minDistance` 0 and are pinned by id and leaf name in the contract (`states.zero_min_distance_players`); the released contracts pin none.
+5. **Own words**: name "Arena: Iceberg" and the description (the hotel with its rotunda, the CheckPoint layout with two team pockets behind sliding gates and capture points A, B and C) are the port's text, in the descriptor, `tools/maps/iceberg.json` and `base.json`; Arena's
+   locales have no Name or Description row for Iceberg, so the pack rule is "the released maps that have an official text": `ArenaMapDescriptions.OfficialTextMapKeys`
+   plus the maps without one must be exactly `All` (`The_released_maps_without_an_official_text_are_exactly_iceberg` fails when a promotion forgets the list).
+6. **Crowdless, data-driven**: Iceberg's scenes hold no crowd objects (12 `FansAmbient` sound entries only). `validate_map_descriptors.CROWDLESS_MAP_KEYS` is the one
+   Python list; the packer drops the spectator rule and the required file for it (a stray package is an unclassified file), `validate_distribution.py` requires the crowd
+   maps (`extract_spectator.MAP_SCENES`) and the crowdless maps to partition `RELEASE_MAP_KEYS`, `stage_spectators.py` stages exactly the crowd maps, and
+   `ArenaSpectators` returns no crowd scene for the key (no crowd, so no murmur bed either). `test_crowdless_maps.py` pins all four against each other.
+7. **`UsesServerTime` true** (no Directional light in the imported scenes; Arena's dusk sun, sky and fog sit in the excluded Scripts scene, the WeatherRig supplies
+   them), and the **Reserve rig row** (donor `Reserve_Base_Scripts`, the neutral tuning of AirPit and Bowl; `WeatherRigDefaultsTests`): `MapLightingDefaults` `ZeroLevel` -3.7 = the lowest
+   spawn-marker floor (0.73; the 70 markers stand at y 0.73..4.99, modal 3.2) minus 4.4, a start value marked host-tuned. Alternatives for the
+   first raid via `ZeroLevelOverride`: -6.2 (from the lowest walkable ground, y -1.8) and -1.2 (from the modal marker floor 3.2).
+8. **No `shader_fallback_names`**: stated in the descriptor and above in this log ("Shaders"); the first host raid decides `MK4/Rock Simple` and
+   `Nature/SpeedTree8` from the `[RebindShaders]` lines.
+9. **Not yet, by design (Phase C)**: no MultiFlare package (79 FlareLights, four with a negative total scale), no water package (the `WaterForSSRv3` pool and the
+   canyon `SimpleWater4` planes), no DynamicMaps overview. `OVERVIEW_MAP_NAMES`, `FLARE_MAP_KEYS`, `WATER_MAP_KEYS` are explicit "has it" lists and Iceberg is in none; the
+   client csproj stages no Iceberg row for them (`test_crowdless_maps.NotYetRulesTests`).
+
+### Review fixes
+
+**The offline gate model follows the bake (review 3, the blocking gate concern).** `tools/validate/port_colliders.py` gained the door-row model of
+`BakeNavMesh.ResolveOpenedBarriers` (`load_door_rows`, `resolve_opened_barriers`, `mark_barriers(cset, paths, door_rows)`: a row applies to the barrier path
+that equals its `barrier` string exactly, an `at` row to the instance whose root stands within 0.05 m of it, a row with a closed position to the child whose
+closed position matches within 0.05 m; only the moved subtrees are blocked, as self-or-ancestor; a path without rows keeps the legacy rule, so
+every other map is unchanged), and `navmesh_diff.py` takes `--doors [PATH]` (bare = the descriptor's `<stem>.doors.json`; the report shows "(N door row(s))").
+The geometry, measured in `test_iceberg_bake_inputs.PackageGateTests` for all five units in the unit's own local frame (GATES_A's east pair is the same
+prefab scaled 0.8 x 0.832 x 0.866, so world lengths are the local ones times the scale):
+- 42 colliders sit below the two gate roots; the door rows move 22 of them (the Check-Point gate 2, `gate_A` 10, `gate_B` 10) and the other **20 stay standing**
+  (5 x `sanatorium_resp_gate_COLLIDER` rails, 5 x top panel `gate_C_COLLIDER`, and the layer-12 ballistic twin of each). Of the 20, the 10 on layer 18 are bake
+  sources: **5,145** bake sources, not the 5,135 of the group-level model.
+- The rails are **rails only**: `sanatorium_resp_gate_COLLIDER` is 12 triangles (three faces of two posts 0.16 x 0.27 m), every vertex at |x| 1.74..1.90, height
+  0..4.26, so the doorway between them is **3.48 local units** wide (2.78 m on GATES_A, 3.48 m on GATES_B) and stays free.
+- Leaves A and B (3.6 x 1.44) slide up in the rails and **stack on the static top panel C** (the leaf poses of the doors sidecar end exactly at its bottom edge,
+  within 0.03), whose collider starts **2.86** above the gate root: the free height under the stack is 2.86 local units (2.48 m on GATES_A, 2.86 m on GATES_B), more
+  than the agent (1.7 m) and the player (1.8 m) need. So the bake cannot be sealed by the colliders that stay.
+- Re-run with the door-row semantics (`navmesh_diff.py --descriptor tools/maps/iceberg.json --doors`, 119,688 samples at 0.2 m): 12,255 colliders, **5,145** bake
+  sources, 22 dropped by the barriers, no unresolved barrier; port component 0 **4,515.3 m2 (94.3 %)** of Arena's 4,787.6 m2, **82 of 84** located probes in it, the
+  same two outside (`initial_spawn:Bear house (12)` and `stage_spawn:Bear house (29)`), RESPAWN_OUTDOOR joins the 83rd. Identical to the group-level run (5,135 sources),
+  which is the point: the 10 extra sources change nothing. The "same 42 colliders" sentence of the "Bake inputs decided" paragraph above is replaced by this
+  (edited in place) and the `DECIDED_*` constants of the test carry the three unit-level paths.
+- Note for a Bowl oracle re-run: `navmesh_diff.py --descriptor tools/maps/bowl.json` takes `keep_level_borders` from the descriptor and models Bowl's kept layer-29 cubes
+  as solids; a run with flags only models what the flags say. `BowlInvarianceTests` pins that no Bowl object is called `LevelBorder*` (Bowl's are `Cube`), so the
+  name exemption of `RoundOpenedReason` changes nothing for it. Compare like with like.
+
+**Audio (review 1).** `native_contract_loader`, `extract_bay5_audio.validate_graph` and the source recheck of `validate_native_features` compare the players with
+`minDistance` 0 against `states.zero_min_distance_players` (21 for Iceberg, none for the four released contracts: a zero that an Arena update introduces there fails
+closed; the contract's `audio` note says 17 players reach 3 m, three 5 m and one 7 m). The ambient driver's kind check is gated on the profile (decision 4;
+`IcebergAmbientAudioTests` pins the profile counts against the contract, the released maps at 0 and the code strings of the check). Corrected statements are listed below.
+
+**Spatial acoustics (review 2).** `extract_spatial_audio.REVIEWED_MIRRORED_VOLUMES = {'arena_iceberg': 10}` with `check_reviewed_mirrored_volumes` (called in `export`): the number of
+mirrored trigger volumes of a graph must be the accepted one for that map (none for every other), so an Arena update that mirrors another volume stops the export
+until a human has looked at it (`test_spatial_audio_iceberg`); `IcebergAcousticsTests` read the exported graph (`work/extract/spatial-audio/arena_iceberg`, or `ARENAMAPPORT_SPATIAL_AUDIO_DIR`): the 46 room rows against
+the package and the client's mirrored-node rule against the real graph (they return early where the ignored package is not reachable). The repair rewrites only the portal ID of 533 routes (533 bytes differ from
+Arena's file); the stored heuristic cost and traverse distance of those routes stay as Arena baked them: they belong to the doorway that was meant, which is 3.68 m from
+the one in the scene (the twin routes differ by a median 0.07 and at most 0.36 in heuristic cost). By the decompile reading above `PropagationJob.Execute` measures from
+the portal data and not from these two fields (not host-tested).
+
+**Spawn placement probe (review 4).** `spawn_placement_probe.py` modelled `Physics.CheckCapsule(feet + 0.45, feet + 1.45, 0.35)` (it covers 0.10 to 1.80 m above the
+feet) with 16 rays at only 0.5 and 1.2 m, so a 0.3 m curb 0.2 m from the point passed although the capsule's lower hemisphere touches it, and it measured the ceiling
+from the floor, not from the spawn height (the capsule is checked at the spawn's own y). Now: seven rings (0.12, 0.25, 0.5, 0.85, 1.2, 1.55, 1.7 m), each as long as the
+capsule's slice at that height (0.35 m on the cylinder, 0.117 and 0.287 m on the lower cap, 0.335 and 0.245 m on the upper), and `Verdict.headroom` = floor + ceiling - max(spawn y, floor).
+It stays an UPPER bound on validity (a surface that slants between two rays, or lies between two rings, is not seen); the host's `spawn placement:` line is the authority.
+Every verdict `test_iceberg_spawns` pins is unchanged under the stricter model (all player and bot rows pass, 69 of the 70 markers pass, `Bear house (38)` touches `LevelBorder (238)`),
+and the synthetic tests of `test_spawn_placement_probe` pin the curb, the cylinder wall, the ring reaches and the headroom.
+`AiAnchorsTests` ties `extract_ai_anchors.PLAY_AREA` (x -61..121, z -130..-33) to the descriptor's bake box (x -62..121, z -131..-33) and puts all 11 core points inside the box in all three axes.
+
+**Score monitors (review 5).** Word 13 is in `validate_map_descriptors.SCORE_MONITOR_TYPE_WORDS` (dark): the red tip (13 validator errors) is gone with the promotion plus this word.
+
+### Corrections to earlier sections of this log (the sections themselves stay as written)
+
+- Ambient section: the lamp loops reach 17 at 3 m, **2 at 5 m, 1 at 7 m** (the projector, the 21st zero-min player, also 5 m); "two at 5 and 7 m" was ambiguous. The 30 loop-kind
+  players are **20 lamps, 6 interior loops (Air, electricity, pool, sparks, sparks (1), projector), 3 exterior loops (river, river (2), sparks (2): the three inactive ones) and the water
+  emitter's loop**; "the neon lamps, the projector and the water loops" and "20 lamps, the projector, six more interior..." (the projector counted twice) are replaced in the code comments.
+- `[NativeAudio] ready players=104 started=101 ... sourceInactive=3` holds only in a season where every one of the 22 active season players has a bank: `started` = 101 minus
+  `seasonalSilent`. Season banks: Summer 22, Spring 22, Autumn 20, SpringEarly 17, AutumnLate 13, Winter 4, so Summer or Spring show `started=101 seasonalSilent=0`, Autumn 99,
+  SpringEarly 96, AutumnLate 92, Winter 83 (`Bay5AmbientAudio` counts the silent ones and skips them).
+- Item 7 / item 9: the AI scene's patrol points lie **38 to 57 m** beyond the play area's north edge (z -33) and its ten Savage/Bot markers **20 to 98 m** ("40 to 60 m outside the border cubes"
+  and "30 m or more outside the play area" were each right for one group only).
+- Item 7: with `patrol_ways: []` the client builds NavMesh-derived ways from the Bot spawn markers the way it does for a map without a sidecar, **but the 11 real AI core points are authored
+  instead of the single synthesized core point** that a map without a sidecar gets; "exactly like a map without a sidecar" in the AI paragraph was too strong.
+- Item 8: "Word 13 = ALL POINT STATUS board" is an inference (edited in place, as asked).
+- `extract_bay5_audio.py`: "byte-identical to before" is "identical to the accepted packages"; `native_features.py` named only AirPit as a registered audio exporter (AirPit, Bowl and Iceberg are).
+
+### Facts that did not need a change
+
+- `fog_color` (0.5, 0.5, 0.5) in `tools/maps/iceberg.json` is not a spike placeholder: it is `m_FogColor` of `Arena_Sanatorium_Scripts` (level255), whose `RenderSettings` has fog off,
+  exponential-squared mode and density 0.01. `AuthorScriptsScene` writes it into the freshly authored Scripts scene; with `UsesServerTime` the WeatherRig owns fog at raid time
+  (`ArenaLightingRepairs.ownFogColor = !WeatherRig.IsActiveForCurrentMap()`), so it is inert in play. Left as it is.
+- `AdditionalMapBuilds.props` lists `iceberg` already (with the parked maps) and nothing imports the file, so it is unchanged: the staging rows are the explicit ones in the client csproj, as for Bowl.
+
+### Not done / judgment calls
+
+- Narrowing `RoundOpenedReason`'s `LevelBorder*` name exemption to layer-29 owners (review 3 N1) needs the C# harness or Unity; not done. It is harmless today: every `LevelBorder (N)` of Iceberg is a
+  layer-29 cube that the map keeps anyway, and Bowl has none.
+- The generated header texts that several released sidecars share, the "TeamFight_AI" wording of `iceberg.ai.json` and the "(positions only)" text of `extract_mode_objects` were left
+  alone (touching them would change released files or generated output for no behaviour).
+- Iceberg's key-source sample draws about 35 % of its bytes from streams of the CheckPoint-mode scenes; not changed (`KeySourcesTests` pins the table against the installed Arena).
+- MASCHINE11 `verify-keys` for the four released maps was not run in this step; it belongs to the U1 sequence below, with the new Iceberg key file.
+
+### Gate results (2026-10-30, VM, this tree; `Release`)
+
+| Gate | Result |
+|---|---|
+| `dotnet build ArenaMapPort.Server -c Release` | 0 warnings, 0 errors |
+| `dotnet build ArenaMapPort.Client -c Release -p:ArenaMapPortDllOnly=true` | 0 warnings, 0 errors (32.6 s; stops nowhere, the spectator inputs exist) |
+| `dotnet test ArenaMapPort.Server.Tests -c Release` | **2,756 passed, 0 failed, 0 skipped** (10 s); the run before the last edits was 2,752 passed / 1 failed (`DoorPoseSidecarTests`, fixed) |
+| `python -m unittest discover -s tools/tests -p "test_*.py"` | **2,718 tests, OK, 66 skipped** (593 s); the 27 modules that mention Iceberg, run verbosely afterwards: 1,208 tests, 3 skipped |
+| skips that wait for the not-yet-built Iceberg bundles | **3 of the 66**: `test_puddle_water_census` for `map='iceberg'` (`test_listed_plus_excluded_is_exactly_the_water_shader_materials_of_the_package`, `test_the_rain_driven_water_material_keeps_its_keyword`) need the staged `material-shaders.arena_iceberg.json`, and `test_release_zips.test_real_dist_classifies_completely` needs the real `dist/` (5 required files missing, the first `arena_iceberg_scenes.bundle`). The other 63 are optional dependencies absent here (numpy, shapely, Pillow: DynamicMaps and cartography 26 + 18, Bay5 9 + 7, a full fixture 1), one AirPit v8 plan skip and one "package already filtered" skip, all older than this work. |
+| `python tools/validate/validate_map_descriptors.py` | OK, 14 descriptors, 14 catalog entries, release `All` membership, `ArenaPaths.cs` default |
+| `pwsh -NoProfile -File tools/tests/test_unity_log_scan.ps1` | `UNITY_LOG_TESTS_OK 8 cases` |
+| generators in `--check` mode / regenerated and compared | `extract_gate_sounds.py rows --check`: five maps current (airpit 11 rows, bay5 5, bowl 4, equator 5, iceberg 6); `extract_score_monitors.py --check`: all five current; `extract_door_poses.py`: all five regenerate byte-identical; `extract_ai_anchors.py`: equator, bay5, airpit, bowl and iceberg identical; `extract_mode_objects.py` (iceberg, with `--arena-data`): identical; `extract_banners.py --check` 5 banners, `extract_loadscreens.py --check` 24 load screens, `extract_map_descriptions.py --check` ok; the spatial-audio export of the four released maps was re-run earlier in this integration and is unchanged |
+| offline oracle with door rows | 5,145 bake sources, 22 dropped, 4,515.3 m2, 82 of 84 probes (83 with RESPAWN_OUTDOOR): identical to the group-level run |
+
+### Pending U1 (needs Unity, the key store or the host; nothing of this was run)
+
+1. **Build the Iceberg bundles**: `build_all.ps1 -MapKey arena_iceberg -MapDescriptor D:/ArenaMapPort/tools/maps/iceberg.json -PackageDir D:/ArenaMapPort/work/extract/iceberg-native-v2 -FullMap
+   -OutputDir D:/ArenaMapPort/work/build/iceberg -BakeNavMesh $true -Verify $true` (absolute descriptor path; never two maps at once). `tools/build_remaining.ps1` refuses Iceberg like Bowl.
+2. **Validators on the result** (step 4 of the script stops at `validate_extract.py` for accepted packages; run the rest by hand): `validate_bundle_roundtrip.py`, `validate_preset.py`,
+   `validate_bundle_blocks.py` (a block with a compression flag and csize >= usize must never ship), `validate_native_features.py` (package v2 against the contract, including the 21 zero-min players),
+   `navmesh_diff.py --compare-bundle` with `--descriptor tools/maps/iceberg.json --doors` (expect **5,145** bake sources and the 4,515.3 m2 / 82 of 84 picture), `validate_map_descriptors.py`.
+3. **First stage** with `-p:ArenaMapPortCreateReleaseKeys=true` (a client Release build WITHOUT DllOnly): creates `work/release-keys/arena_iceberg.key` (copy `work/release-keys` outside the repo at once),
+   writes the three AMPB bundles and `keys/arena_iceberg.json`; the key-source row is already in `tools/bundle/key-sources.json` (`0e7a94a`). Then `validate_distribution.py` (expect
+   `DISTRIBUTION_OK 5 maps 15 bundles 5 sidecars encrypted`), `validate_port.py --distribution`, `make_release_zips.py --plan` (core 154, equator 24, bay5 30, airpit 22, bowl 26, **iceberg 20**; the
+   dist-manifest paragraph states the expected 276 files) and `verify-keys --arena` against every other Arena build at hand (the user's 0.6.0 on MASCHINE11, UNC path from PowerShell).
+4. **Re-run the two puddle-census cases** and the `[RebindShaders]` reading below once `material-shaders.arena_iceberg.json` exists.
+5. **Release texts** (README, FORGE, CHANGELOG, release notes, the packer's player texts, the "four maps" wording) are the lead's, after U1; none was written here. `docs/dist-manifest.md` keeps the 256-file contract as the published one.
+6. **Deploy** only through `tools/deploy-to-spt.ps1` with EFT closed (the first Iceberg deploy moves a new encrypted bundle set through Syncthing; wait for the sync before restarting EFT).
+
+### Host-check list for the first Iceberg raid (GPU-2; after U1)
+
+- Start: `[NativeAudio] authored inactive stock graph map=arena_iceberg players=104 banks=28 clips=237 support=8`, then `ready players=104 started=101 seasonalSilent=0 ... sourceInactive=3` in Summer or Spring (corrections above);
+  the built bundle's player fields and the AudioSource `MinDistance` (1) read back from it.
+- Bots: patrol without any `[AiAnchors]` / `[RaidFix]` warning (the 11 real core points authored, NavMesh-derived ways, 0 hubs); the spawn placement line (`spawn placement:`) shows how many rows the repair moved (the probe says none for
+  the players and bots, and `Bear house (38)` for the markers); the NavMesh line (`[NavMesh] added navmesh ...`) names the new bake.
+- Gates: held-open at raid start, the 20 unposed colliders (rails and top panel) leave the doorway free for the player and for bots; gate sounds are silent by design without a hold (`Spawns/SpawnGateHold`), so listen with one.
+- Acoustics: the 10 mirrored trigger volumes (corridor_2_1 and coffe_hall) put the listener in the right room; the lamp hum is audible within 6 m of 17 of the 20 lamps (10, 10 and 14 m for the other three) and not beyond; judge the loudness of the mix against the defaults 3 dB / 0 / 2.
+- Shaders: the six names of "Shaders" (`Cloth/ClothShader`, `Cloth/ClothShader_backface`, `ANGRYMESH/PBR Rocks/PBR BlendTopDetail (Legacy)`, `Custom/Billboard_FogSheet_Simple` from Customs; `MK4/Rock Simple`, `Nature/SpeedTree8` unproven) in the `[RebindShaders]` lines.
+- Lighting: the ZeroLevel -3.7 start value (try -6.2 and -1.2 through `ZeroLevelOverride`), the fog and the sky of the WeatherRig on a map whose Scripts scene is excluded.
+- Released maps after the shared-path changes: one raid on a released map and one hideout visit (`NativeSpatialAudio.BuildGraph`'s shared path, the generic-class Harmony trap), the `max` frame time of `uibridge_status`.
+- Not built on purpose (Phase C): no overview, no flares, no water, no crowd.

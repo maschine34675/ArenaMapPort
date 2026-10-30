@@ -35,12 +35,13 @@ public sealed class DoorPoseSidecarTests
         "equator" => ArenaMapRegistry.Equator,
         "bay5" => ArenaMapRegistry.Bay5,
         "airpit" => ArenaMapRegistry.AirPit,
+        "iceberg" => ArenaMapRegistry.Iceberg,
         _ => throw new ArgumentOutOfRangeException(nameof(stem)),
     };
 
     public static IEnumerable<object[]> Maps => new[]
     {
-        new object[] { "bowl" }, new object[] { "equator" }, new object[] { "bay5" }, new object[] { "airpit" },
+        new object[] { "bowl" }, new object[] { "equator" }, new object[] { "bay5" }, new object[] { "airpit" }, new object[] { "iceberg" },
     };
 
     private static double Distance(float[] a, float[] b) =>
@@ -232,6 +233,35 @@ public sealed class DoorPoseSidecarTests
     }
 
     [Fact]
+    public void IcebergHasElevenLinearDotAnimatorRowsOnThreeGateBarriersEveryOneNamingItsGate()
+    {
+        // PLAN-ICEBERG item 8/12 (docs/progress/iceberg-release.md): the leaves A and B of five sliding gates (4.0/5.0 s in the Bear pocket's two
+        // gates, 2.0/2.5 s in the Usec pocket's three) and the rotating motor gate (its root moves, part ""; 3.0 s).
+        var iceberg = ArenaMapRegistry.Iceberg;
+        Assert.Equal(11, iceberg.DoorPoses.Length);
+        Assert.All(iceberg.DoorPoses, p =>
+        {
+            Assert.Equal((ArenaDoorPose.SourceDotAnimator, ArenaDoorPose.EaseLinear), (p.Source, p.Ease));
+            Assert.Equal("DotAnimator", p.Clip);
+            Assert.NotNull(p.At);                                   // the gates of a group share one name: the root's world position tells them apart
+            Assert.InRange(p.Seconds, 2.0f, 5.0f);
+            Assert.Contains(p.Barrier, iceberg.OpenedBarriers);
+        });
+        Assert.Equal(new[] { 4, 6, 1 }, iceberg.OpenedBarriers.Select(b => iceberg.DoorPoses.Count(p => p.Barrier == b)).ToArray());
+        // the lookup form that asks for an instance: the two gates of GATES_A stand at z -93.689 and -86.125 (a row without a position answers only a
+        // lookup without one, and these rows all name their gate), a root elsewhere gets nothing
+        const string sliding = "DOORS/GATES_A/sanatorium_resp_gate";
+        Assert.Empty(iceberg.DoorPosesOf(sliding, "sanatorium_resp_gate_A"));
+        Assert.Single(iceberg.DoorPosesOf(sliding, "sanatorium_resp_gate_A", 82.382f, 2.176f, -93.689f));
+        Assert.Single(iceberg.DoorPosesOf(sliding, "sanatorium_resp_gate_A", 82.382f, 2.176f, -86.125f));
+        Assert.Empty(iceberg.DoorPosesOf(sliding, "sanatorium_resp_gate_A", 82.382f, 2.176f, -80f));
+        var motor = iceberg.DoorPoses.Single(p => p.Barrier == "DOORS/GATES_B/Sanatorium_CheckPoint_Gate");
+        Assert.Equal("", motor.Part);
+        Assert.Equal(new[] { -90.0f, 0.0f, 0.0f }, motor.ClosedEuler);
+        Assert.Equal(-214.082f, motor.OpenEuler[0]);                // 124 degrees the short way
+    }
+
+    [Fact]
     public void ADefaultConstructedPoseIsAClipPoseWithSmoothstepAndNoCurveOrAt()
     {
         var pose = new ArenaDoorPose("B", "P", "", "Clip", 1f, new[] { 0f, 0f, 0f }, new[] { 0f, 0f, 0f }, new[] { 1f, 0f, 0f }, new[] { 0f, 0f, 0f });
@@ -386,16 +416,12 @@ public sealed class DoorPoseSidecarTests
     }
 
     [Fact]
-    public void OnlyTheFourReleasedMapsCarryDoorPoses()
+    public void OnlyTheFiveReleasedMapsCarryDoorPoses()
     {
         foreach (var map in ArenaMapRegistry.Catalog)
-        {
-            if (ReferenceEquals(map, ArenaMapRegistry.Bowl) || ReferenceEquals(map, ArenaMapRegistry.Equator)
-                || ReferenceEquals(map, ArenaMapRegistry.Bay5) || ReferenceEquals(map, ArenaMapRegistry.AirPit)) continue;
-            Assert.Empty(map.DoorPoses);
-        }
-        Assert.All(ArenaMapRegistry.Bowl.DoorPoses.Concat(ArenaMapRegistry.Bay5.DoorPoses),
-            p => Assert.False(p.IsSwitch));                                         // switches: AirPit's lamps and both maps' exit lamps only
+            Assert.Equal(ArenaMapRegistry.All.Contains(map), map.DoorPoses.Length > 0);
+        Assert.All(ArenaMapRegistry.Bowl.DoorPoses.Concat(ArenaMapRegistry.Bay5.DoorPoses).Concat(ArenaMapRegistry.Iceberg.DoorPoses),
+            p => Assert.False(p.IsSwitch));                                         // switches: AirPit's lamps and Equator's exit lamps only
         Assert.All(ArenaMapRegistry.Equator.DoorPoses.Where(p => p.IsSwitch), p => Assert.Equal("EXIT_LIGHT_EMISSIVE", p.Barrier));
     }
 

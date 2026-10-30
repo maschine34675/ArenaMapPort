@@ -30,8 +30,8 @@ namespace ArenaMapPort.Client
         internal static void Install()
         {
             // Every released map that carries StaticDeferredDecal components (AirPit: 481, PLAN-AIRPIT item 19;
-            // Bowl: 766, PLAN-BOWL item 8, 2026-10-18).
-            foreach (var map in new[] { ArenaMapRegistry.Equator, ArenaMapRegistry.Bay5, ArenaMapRegistry.AirPit, ArenaMapRegistry.Bowl })
+            // Bowl: 766, PLAN-BOWL item 8, 2026-10-18; Iceberg: 215, PLAN-ICEBERG item 12, 2026-10-30).
+            foreach (var map in new[] { ArenaMapRegistry.Equator, ArenaMapRegistry.Bay5, ArenaMapRegistry.AirPit, ArenaMapRegistry.Bowl, ArenaMapRegistry.Iceberg })
                 Settings[map.Key] = Plugin.Instance.Settings.Bind($"Decals ({map.Key})", "Enabled", true,
                     "Render original Arena projection decals (graffiti, dirt, markings). Live comparison toggle; preserves source inactive objects.");
             SceneManager.sceneLoaded += OnSceneLoaded;

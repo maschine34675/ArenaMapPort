@@ -77,10 +77,25 @@ public sealed class WeatherRigDefaultsTests
     }
 
     [Fact]
+    public void IcebergJoinsTheReserveRigWithAZeroLevelDerivedFromItsSpawnFloors()
+    {
+        var iceberg = Row.Of(ArenaMapRegistry.Iceberg.Key);
+        // PLAN-ICEBERG item 12 (2026-10-30): donor rig Reserve_Base_Scripts and the neutral tuning of AirPit and Bowl. Its 70 spawn markers stand at
+        // y 0.73..4.99 (modal 3.2; Bear pocket 0.73..1.89, Usec pocket 3.25, Arena's walkable ground -1.8..6.15): the lowest marker floor minus
+        // 4.4 m is -3.7, a START value to be tuned on the first host raid (ZeroLevelOverride); -6.2 (lowest ground) and -1.2 (modal floor) are the alternatives.
+        Assert.Equal("Reserve_Base_Scripts", iceberg.Donor);
+        Assert.True(iceberg.UseDonorCameraPrefab);
+        Assert.True(iceberg.ReserveTextureBudget);
+        Assert.Equal(-3.7f, iceberg.ZeroLevel);
+        Assert.Equal(Row.Of(ArenaMapRegistry.Bowl.Key) with { ZeroLevel = -3.7f }, iceberg);
+        Assert.True(iceberg.ZeroLevel < 0.73f - 4f);                     // the dome sits well below the lowest spawn floor
+    }
+
+    [Fact]
     public void EveryOtherCatalogMapKeepsDonorOffAndNeutralValues()
     {
         var parked = ArenaMapRegistry.Catalog.Except(ArenaMapRegistry.All).ToArray();
-        Assert.Equal(10, parked.Length);
+        Assert.Equal(9, parked.Length);
         foreach (var map in parked) Assert.Equal(Neutral, Row.Of(map.Key));
         Assert.Equal(Neutral, Row.Of("bigmap"));
         Assert.Equal(Neutral, Row.Of(null));
@@ -101,6 +116,7 @@ public sealed class WeatherRigDefaultsTests
         Assert.False(MapLightingDefaults.BindsAuthoredSunKeys(ArenaMapRegistry.Bay5));
         Assert.False(MapLightingDefaults.BindsAuthoredSunKeys(ArenaMapRegistry.AirPit));
         Assert.False(MapLightingDefaults.BindsAuthoredSunKeys(ArenaMapRegistry.Bowl)); // no Directional light in its imported scenes
+        Assert.False(MapLightingDefaults.BindsAuthoredSunKeys(ArenaMapRegistry.Iceberg)); // likewise: Arena's dusk sun is in the excluded Scripts scene
         // The condition is the descriptor's data, not a map list: Equator is the only map with SunPaths.
         foreach (var map in ArenaMapRegistry.Catalog)
             Assert.Equal(map.SunPaths.Length > 0, MapLightingDefaults.BindsAuthoredSunKeys(map));

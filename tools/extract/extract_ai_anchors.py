@@ -74,11 +74,11 @@ points, one PatrolWay with 3 hubs holding 12/12/11 = 35 sub points, 38 PatrolPoi
 
 Iceberg (PLAN-ICEBERG item 7, 2026-10-30). The `Arena_Sanatorium_CheckPoint_AI` scene (plan role `ai`, level377) holds 11
 core points inside the play area and, besides them, a PatrolWay of 4 hubs / 40 sub points (x 69..104, y -3.9, z 5..24) and ten
-Savage/Bot markers (x 55..130, y about -3, z -13..65): all of it 40 to 60 m outside the border cubes and off Arena's own NavMesh
+Savage/Bot markers (x 55..130, y about -3, z -13..65): all of it beyond the play area's north edge (z -33: the patrol points 38 to 57 m, the markers 20 to 98 m) and off Arena's own NavMesh
 (stale data of another mode, inferred). A hub at a core point of the other end of the map would send every patrolling bot
 there, so `PLAY_AREA` drops hubs outside a per-map box: the hub's sub points go with it, a way without hubs is not written
-(`patrol_ways` is `[]`; the client then builds NavMesh-derived ways from the Bot spawn markers, PatrolWayRepairs.cs, exactly like a
-map without a sidecar), and the sidecar records what was dropped under `dropped`. A core point outside the box, or a sub point
+(`patrol_ways` is `[]`; the client then builds NavMesh-derived ways from the Bot spawn markers, PatrolWayRepairs.cs, the way it does
+for a map without a sidecar, but the 11 real core points are authored instead of the single synthesized core point), and the sidecar records what was dropped under `dropped`. A core point outside the box, or a sub point
 outside the box of a kept hub, fails the run (nothing is dropped silently); a map without a `PLAY_AREA` row is untouched, so the
 released sidecars are byte-identical.
 

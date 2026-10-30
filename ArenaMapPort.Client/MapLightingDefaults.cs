@@ -18,12 +18,13 @@ namespace ArenaMapPort.Client
     /// never change silently. Equator and Bay5 therefore have pinned rows (WeatherRigDefaultsTests) and
     /// Equator's later changes live in the DefaultsRevision migrations of WeatherRig. A map that was never
     /// released with saved keys, like AirPit (grep of both test installs, 2026-10-12: no "arena_airpit"
-    /// section) and Bowl (PLAN-BOWL item 9, 2026-10-18: no "arena_bowl" section exists), needs no migration for
-    /// its first set of defaults.
+    /// section), Bowl (PLAN-BOWL item 9, 2026-10-18: no "arena_bowl" section exists) and Iceberg (PLAN-ICEBERG item 12, 2026-10-30:
+    /// none either), needs no migration for its first set of defaults.
     ///
     /// Host evidence: Equator (docs/progress/donor-settings-camera-weather.md section 20), Bay5 (sections
     /// 12-19), AirPit rows are first-guess values until the AirPit host raid (docs/progress/airpit-release.md,
-    /// item 10); Bowl's are the same first guess until its first host raid (docs/PLAN-BOWL.md item 11).
+    /// item 10); Bowl's are the same first guess until its first host raid (docs/PLAN-BOWL.md item 11), and so are Iceberg's (its
+    /// ZeroLevel is a start value derived from the spawn floors, to be tuned on the first host raid).
     /// </summary>
     internal static class MapLightingDefaults
     {
@@ -50,11 +51,11 @@ namespace ArenaMapPort.Client
         }
 
         /// <summary>
-        /// Defaults for <c>Lighting (&lt;mapKey&gt;)</c>. Rig-active maps (Equator, Bay5, AirPit, Bowl) get the
+        /// Defaults for <c>Lighting (&lt;mapKey&gt;)</c>. Rig-active maps (Equator, Bay5, AirPit, Bowl, Iceberg) get the
         /// Reserve donor set; every other key gets Donor "Off" with neutral values, a complete no-op.
         /// The tuned values below the donor set are map-specific on purpose: Equator's were accepted on the
         /// host (ambient 0.5, reflection 0.85, indoor reflection 0.95, specular cap 0.3, cover 30 percent for
-        /// its open atrium lattice), Bay5 alone enables the mixed-mesh indoor surface repair. AirPit and Bowl start
+        /// its open atrium lattice), Bay5 alone enables the mixed-mesh indoor surface repair. AirPit, Bowl and Iceberg start
         /// from the neutral values and are tuned on their own host raids.
         /// </summary>
         internal static RigValues Rig(string mapKey)
@@ -63,15 +64,19 @@ namespace ArenaMapPort.Client
             bool equator = mapKey == ArenaMapRegistry.Equator.Key;
             bool airPit = mapKey == ArenaMapRegistry.AirPit.Key;
             bool bowl = mapKey == ArenaMapRegistry.Bowl.Key; // PLAN-BOWL item 9, 2026-10-18
-            bool rig = bay5 || equator || airPit || bowl;
+            bool iceberg = mapKey == ArenaMapRegistry.Iceberg.Key; // PLAN-ICEBERG item 12, 2026-10-30
+            bool rig = bay5 || equator || airPit || bowl || iceberg;
             return new RigValues
             {
                 Donor = rig ? ReserveDonor : OffDonor,
                 // Equator's spawn markers sit at y 0.03..0.12 -> -4.4; AirPit's 20 original spawn markers sit
                 // at y 0.08..0.14 (docs/PLAN-AIRPIT.md item 6) so the same rule gives -4.4; Bowl's 20 spawn markers sit
-                // at y 0.047 (docs/PLAN-BOWL.md, 2026-10-18), -4.4 again. A rule of thumb, to be
+                // at y 0.047 (docs/PLAN-BOWL.md, 2026-10-18), -4.4 again. Iceberg's 70 spawn markers stand at y 0.73..4.99 (modal
+                // 3.2; the Bear pocket 0.73..1.89, the Usec pocket 3.25, Arena's walkable ground -1.8..6.15): the lowest marker floor 0.73
+                // minus 4.4 gives -3.7 (PLAN-ICEBERG item 12; -6.2 from the lowest walkable ground, -1.2 from the modal floor are the
+                // alternatives the first host raid can compare through ZeroLevelOverride). A rule of thumb, to be
                 // measured on the host (the dome must sit well above the ground, see ZeroLevelOverride).
-                ZeroLevel = bay5 ? -8.2f : (equator || airPit || bowl) ? -4.4f : 0f,
+                ZeroLevel = bay5 ? -8.2f : iceberg ? -3.7f : (equator || airPit || bowl) ? -4.4f : 0f,
                 HeightFalloff = rig ? 0.025f : 0.029f,
                 ReserveTextureBudget = rig,
                 UseDonorCameraPrefab = rig,
@@ -87,7 +92,7 @@ namespace ArenaMapPort.Client
 
         /// <summary>
         /// SunIntensityMultiplier / SunColorWhiteBlend scale the map's own authored directional "sun" light
-        /// (Equator's FAKE_SUN). A map without one (Bay5: the donor sun is controlled in LightingLab; AirPit and Bowl:
+        /// (Equator's FAKE_SUN). A map without one (Bay5: the donor sun is controlled in LightingLab; AirPit, Bowl and Iceberg:
         /// no Directional light in any of their imported scenes) must not bind them, so no retired-key entry is needed
         /// later. The descriptor's SunPaths are the single source for "has an authored sun".
         /// </summary>

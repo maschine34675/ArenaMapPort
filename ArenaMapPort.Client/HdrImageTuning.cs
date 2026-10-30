@@ -16,7 +16,7 @@ namespace ArenaMapPort.Client
     /// Prism reads the live environment exposure immediately before UpdateShaderValues. Stage
     /// per-map image controls there, retaining indoor/outdoor adaptation and camera presets.
     /// Restore component fields after upload and changed global tone keywords after rendering;
-    /// only the current gameplay camera's own materials of a released map (Equator, Bay5, AirPit, Bowl)
+    /// only the current gameplay camera's own materials of a released map (Equator, Bay5, AirPit, Bowl, Iceberg)
     /// receive adjusted values.
     /// Native evidence: PrismEffects.cs 1063-1380, 1611-1784.
     /// </summary>
@@ -241,8 +241,8 @@ namespace ArenaMapPort.Client
         internal static void Install(Harmony harmony)
         {
             if (_installed) return;
-            // Every released map (Equator, Bay5, AirPit, Bowl) gets the sections; only Equator carries non-neutral
-            // defaults. The neutral rows of AirPit and Bowl (Original tonemap, 0 EV, range/speed 1) change nothing until tuned.
+            // Every released map (Equator, Bay5, AirPit, Bowl, Iceberg) gets the sections; only Equator carries non-neutral
+            // defaults. The neutral rows of AirPit, Bowl and Iceberg (Original tonemap, 0 EV, range/speed 1) change nothing until tuned.
             foreach (var map in ArenaMapRegistry.All) Bind(map);
             var render = AccessTools.Method(typeof(PrismEffects), nameof(PrismEffects.OnRenderImageInternal),
                 new[] { typeof(RenderTexture), typeof(RenderTexture) });
@@ -264,7 +264,7 @@ namespace ArenaMapPort.Client
                 postfix: new HarmonyMethod(typeof(HdrImageTuning), nameof(AfterUpload)),
                 finalizer: new HarmonyMethod(typeof(HdrImageTuning), nameof(FinalizeUpload)));
             _installed = true;
-            Plugin.Log.LogDebug("[HDR] per-map exposure/tone controls installed after native environment overwrite; Equator defaults to custom Filmic, Bay5, AirPit and Bowl preserve native tone");
+            Plugin.Log.LogDebug("[HDR] per-map exposure/tone controls installed after native environment overwrite; Equator defaults to custom Filmic, Bay5, AirPit, Bowl and Iceberg preserve native tone");
         }
 
         static void Bind(ArenaMapDescriptor map)

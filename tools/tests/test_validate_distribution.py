@@ -45,7 +45,8 @@ KEY_SOURCES = {"arena_equator": ((51, "assets.resS"), (55, "assets.resS"), (57, 
                "arena_airpit": ((28, "assets.resS"), (28, "resource"), (29, "assets.resS"), (37, "assets.resS"), (38, "assets.resS"),
                                 (40, "assets.resS"), (324, "assets.resS")),
                "arena_bowl": ((41, "assets.resS"), (41, "resource"), (45, "assets.resS"), (46, "assets.resS"), (47, "assets.resS"),
-                              (48, "assets.resS"), (48, "resource"), (95, "assets.resS"))}
+                              (48, "assets.resS"), (48, "resource"), (95, "assets.resS")),
+               "arena_iceberg": ((256, "assets.resS"), (258, "assets.resS"), (375, "assets.resS"), (376, "assets.resS"))}
 
 
 def source(n, kind="assets.resS", size=None):
@@ -160,7 +161,9 @@ class DistributionSidecarTests(unittest.TestCase):
         self.addCleanup(pixel_pin.stop)
         # The extractor art tables may carry a map before its promotion (Iceberg's banner and loading-screen rows landed
         # ahead of its release, PLAN-ICEBERG item 10), while validate_art demands tables equal to the released set: this
-        # fixture checks the tables as they apply to RELEASED, which stays a no-op once a map is listed there.
+        # fixture checks the tables as they apply to RELEASED, which is a no-op while every table row is a released map (since
+        # Iceberg's promotion, PLAN-ICEBERG item 12, it is); a parked map's row would be filtered out here, so
+        # test_art_tables_must_list_exactly_the_released_maps pins the real tables against the real release list instead.
         for module, attribute in ((extract_banners, 'BANNERS'), (extract_loadscreens, 'LOADSCREENS')):
             art_pin = patch.object(module, attribute, {key: value for key, value in getattr(module, attribute).items()
                                                        if key in self.RELEASED})
@@ -211,11 +214,12 @@ class DistributionSidecarTests(unittest.TestCase):
         for folder in (self.server / "db/arena_equator", self.repo / "ArenaMapPort.Server/db/arena_equator"):
             folder.mkdir(parents=True)
             (folder / "base.json").write_text('{"Id": "arena_equator"}', encoding="utf-8")
-        # The release is exactly four maps (Bowl since PLAN-BOWL item 8, 2026-10-18), even when parked descriptors
-        # remain in source.
+        # The release is exactly five maps (Bowl since PLAN-BOWL item 8, 2026-10-18, Iceberg since PLAN-ICEBERG item 12, 2026-10-30), even
+        # when parked descriptors remain in source.
         (self.maps / "bay5.json").write_text(json.dumps({"key": "arena_bay5", "db_base_json_path": "arena_bay5/base.json"}), encoding="utf-8")
         (self.maps / "airpit.json").write_text(json.dumps({"key": "arena_airpit", "db_base_json_path": "arena_airpit/base.json"}), encoding="utf-8")
         (self.maps / "bowl.json").write_text(json.dumps({"key": "arena_bowl", "db_base_json_path": "arena_bowl/base.json"}), encoding="utf-8")
+        (self.maps / "iceberg.json").write_text(json.dumps({"key": "arena_iceberg", "db_base_json_path": "arena_iceberg/base.json"}), encoding="utf-8")
         self.put_bundles("arena_bay5")
         (self.plugin / "material-shaders.arena_bay5.json").write_text("{}", encoding="utf-8")
         for folder in (self.server / "db/arena_bay5", self.repo / "ArenaMapPort.Server/db/arena_bay5"):
@@ -235,6 +239,13 @@ class DistributionSidecarTests(unittest.TestCase):
         for folder in (self.server / "db/arena_bowl", self.repo / "ArenaMapPort.Server/db/arena_bowl"):
             folder.mkdir(parents=True)
             (folder / "base.json").write_text('{"Id": "arena_bowl"}', encoding="utf-8")
+        # Iceberg (PLAN-ICEBERG item 12): bundles, shader sidecar, database, art (five loading images), AI sidecar, acoustics and gate sounds; no
+        # spectator package (crowdless), no flares, no water and no overview pack (Phase C: explicit absences, never fake data).
+        self.put_bundles("arena_iceberg")
+        (self.plugin / "material-shaders.arena_iceberg.json").write_text("{}", encoding="utf-8")
+        for folder in (self.server / "db/arena_iceberg", self.repo / "ArenaMapPort.Server/db/arena_iceberg"):
+            folder.mkdir(parents=True)
+            (folder / "base.json").write_text('{"Id": "arena_iceberg"}', encoding="utf-8")
         self.built = {}
         for name, destination in (("Client", self.plugin), ("Server", self.server)):
             built = self.repo / f"ArenaMapPort.{name}/bin/Release/maschine-ArenaMapPort.{name}.dll"
@@ -243,7 +254,7 @@ class DistributionSidecarTests(unittest.TestCase):
             (destination / built.name).write_bytes(built.read_bytes())
             self.built[name] = built
 
-    RELEASED = ("arena_equator", "arena_bay5", "arena_airpit", "arena_bowl")
+    RELEASED = ("arena_equator", "arena_bay5", "arena_airpit", "arena_bowl", "arena_iceberg")
 
     @staticmethod
     def banner_names():
@@ -464,7 +475,7 @@ class DistributionSidecarTests(unittest.TestCase):
         self.assertEqual(Path(descriptors[1]).name, "validate_map_descriptors.py")
         # The bundle-name validator is told where the key store is: it reads the encrypted bundles through the tool.
         self.assertEqual(names[-2:], ["--key-store", str(self.repo / "work" / "release-keys")])
-        self.assertIn("DISTRIBUTION_OK 4 maps 12 bundles 4 sidecars encrypted", output.getvalue())
+        self.assertIn("DISTRIBUTION_OK 5 maps 15 bundles 5 sidecars encrypted", output.getvalue())
 
     def test_distribution_accepts_bots_exits_and_other_dotted_sidecars(self):
         (self.maps / "equator.bots.json").write_text('{"player_spawns": []}', encoding="utf-8")
@@ -758,7 +769,7 @@ class DistributionSidecarTests(unittest.TestCase):
                 if path.parent != keys:
                     path.parent.rmdir()
         shutil.rmtree(keys)
-        with self.assertRaisesRegex(ValueError, "Key file set mismatch: missing=\\['arena_airpit.json', 'arena_bay5.json', 'arena_bowl.json', 'arena_equator.json'\\]"):
+        with self.assertRaisesRegex(ValueError, "Key file set mismatch: missing=\\['arena_airpit.json', 'arena_bay5.json', 'arena_bowl.json', 'arena_equator.json', 'arena_iceberg.json'\\]"):
             self.validate()
 
     def test_key_files_must_have_the_schema_and_nothing_else(self):
@@ -978,6 +989,45 @@ class DistributionSidecarTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "Water file set mismatch"):
             self.validate()
         shutil.rmtree(self.plugin / "water/arena_bowl")
+        self.validate()
+
+    def test_iceberg_is_crowdless_and_carries_five_loadscreens_but_no_overview_flares_or_water(self):
+        # PLAN-ICEBERG item 12 (2026-10-30): the fifth released map has no spectator crowd (validate_map_descriptors.CROWDLESS_MAP_KEYS) and, until
+        # Phase C, no DynamicMaps overview, no MultiFlare package and no water package; each of them is an explicit absence, so a stray package is a
+        # failure and the missing ones are not.
+        self.assertEqual(5, len(extract_loadscreens.LOADSCREENS["arena_iceberg"]))
+        self.assertEqual({f"arena_iceberg_{n}.jpg" for n in range(1, 6)},
+                         {p.name for p in (self.plugin / "loadscreens").glob("arena_iceberg_*.jpg")})
+        self.assertFalse((self.plugin / "spectators/arena_iceberg").exists())
+        self.assertFalse((self.plugin / "flares/arena_iceberg").exists())
+        self.assertFalse((self.plugin / "water/arena_iceberg").exists())
+        self.assertFalse((self.plugin / "dynamicmaps/ArenaMapPort_Iceberg").exists())
+        self.validate()
+        # a crowd package of the crowdless map is refused by the staged-spectator check
+        (self.plugin / "spectators/arena_iceberg").mkdir()
+        (self.plugin / "spectators/arena_iceberg" / stage_spectators.GRAPH).write_bytes(b"x")
+        with self.assertRaisesRegex(ValueError, "unexpected or missing spectator folder"):
+            self.validate()
+        shutil.rmtree(self.plugin / "spectators/arena_iceberg")
+        # so are flares, water and an overview pack that nobody listed on purpose
+        (self.plugin / "flares/arena_iceberg").mkdir()
+        (self.plugin / "flares/arena_iceberg/flares.json").write_text("{}", encoding="utf-8")
+        with self.assertRaisesRegex(ValueError, "Unexpected or missing flare package files"):
+            self.validate()
+        shutil.rmtree(self.plugin / "flares/arena_iceberg")
+        (self.plugin / "water/arena_iceberg").mkdir()
+        (self.plugin / "water/arena_iceberg/water.json").write_text("{}", encoding="utf-8")
+        with self.assertRaisesRegex(ValueError, "Water file set mismatch"):
+            self.validate()
+        shutil.rmtree(self.plugin / "water/arena_iceberg")
+        (self.plugin / "dynamicmaps/ArenaMapPort_Iceberg/Layers").mkdir(parents=True)
+        (self.plugin / "dynamicmaps/ArenaMapPort_Iceberg/Layers/Ground.svg").write_text("<svg/>", encoding="utf-8")
+        with self.assertRaisesRegex(ValueError, "Unexpected or missing overview"):
+            self.validate()
+        shutil.rmtree(self.plugin / "dynamicmaps/ArenaMapPort_Iceberg")
+        # the crowd/crowdless partition of the release is checked by the validator itself
+        with patch.object(distribution, "CROWDLESS_MAP_KEYS", ()), self.assertRaisesRegex(ValueError, "partition the released maps"):
+            self.validate()
         self.validate()
 
     def test_distribution_requires_every_released_maps_ai_sidecar_exactly_and_current(self):

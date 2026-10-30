@@ -13,7 +13,7 @@ using UnityEngine.SceneManagement;
 
 namespace ArenaMapPort.Client
 {
-    /// <summary>Starts the imported stock ambient players of Equator, Bay5, AirPit and Bowl once real raid audio services exist.
+    /// <summary>Starts the imported stock ambient players of Equator, Bay5, AirPit, Bowl and Iceberg once real raid audio services exist.
     /// Arena's ambient singleton/room system is deliberately not recreated. Stock players retain
     /// their original clip selection, gain, pitch and timing; Bay5's stock shoreline calculator
     /// ticks from this owned driver. What differs per map (root name, graph census, group to mixer/bus
@@ -250,12 +250,16 @@ namespace ArenaMapPort.Client
                 if (!profile.OriginalActivation) { _activePlayers = _players; return; }
                 var inactive = _players.Where(p => !ActiveUnderOwnedRoot(p.transform)).ToArray();
                 // Equator, AirPit and Bowl author random AmbientSoundPlayers only. Iceberg (PLAN-ICEBERG item 5) combines the
-                // original-activation contract with all three player kinds of the exporter: random, season (the 22 season banks)
-                // and loop (the 30 neon-lamp, projector and water loops); each must still be enabled with an enabled AudioSource.
+                // original-activation contract with all three player kinds of the exporter: random, season (22 season banks) and
+                // loop (30: 20 neon lamps, 6 interior loops including the projector, 3 exterior loops and the water emitter's). The kinds are demanded by the profile, not allowed
+                // everywhere: SeasonKindPlayers and LoopKindPlayers are 0 for the released maps, so a season or loop-kind player
+                // appearing there still fails closed (review of 2026-10-30); each player must still be enabled with an enabled AudioSource.
                 if (inactive.Length != profile.InactivePlayers.Count ||
                     !new HashSet<string>(inactive.Select(p => p.name)).SetEquals(profile.InactivePlayers) ||
                     _players.Any(p => !(p is AmbientSoundPlayer || p is SeasonAmbientSoundPlayer || p is LoopAmbientSoundPlayer) ||
                         !p.enabled || !p.GetComponent<AudioSource>().enabled) ||
+                    _players.Count(p => p is SeasonAmbientSoundPlayer) != profile.SeasonKindPlayers ||
+                    _players.Count(p => p is LoopAmbientSoundPlayer) != profile.LoopKindPlayers ||
                     profile.LoopPlayers.Any(name => _players.Count(p => p.name == name) != 1) ||
                     _players.Any(p => p.GetComponent<AudioSource>().loop != profile.LoopPlayers.Contains(p.name)))
                     throw new InvalidOperationException(profile.DisplayName + " original activation/loop contract differs");
@@ -388,7 +392,7 @@ namespace ArenaMapPort.Client
                 // EFT permanently mutes the original Returns/Reverb group. This original alternative
                 // ambient bus reaches TarkovReverb. Its dry path is equivalent while the owned parent
                 // gain is neutral (no skipped filters/effects); preserve external non-neutral gains.
-                // Equator, AirPit and Bowl reroute their interior group (AmbientIn parent); Bay5's exterior bus needs no reroute.
+                // Equator, AirPit, Bowl and Iceberg reroute their interior group (AmbientIn parent); Bay5's exterior bus needs no reroute.
                 float volume = float.NaN;
                 bool neutralParent = _leases.TryGetValue(route.Bus, out var lease) && lease.IsNeutral && _ambientMixer != null &&
                     _ambientMixer.GetFloat(AmbientAudioProfiles.Parameter(route.Bus), out volume) && Mathf.Approximately(volume, 0f);

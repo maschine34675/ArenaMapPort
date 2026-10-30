@@ -1,5 +1,17 @@
 # Current distribution contract: Equator, Bay5, AirPit and Bowl (0.4.0, encrypted bundles, published 2026-10-30)
 
+2026-10-30 (Iceberg joined the release lists, PENDING: NOT built, NOT staged, NOT released; PLAN-ICEBERG item 12, record
+[progress/iceberg-release.md](progress/iceberg-release.md)): `ArenaMapRegistry.All`, `RELEASE_MAP_KEYS`, the csproj rows and the packer now expect a
+fifth map. Once its bundles exist (the first Unity build, U1) and are staged, dist holds **276 files** (the 256 above plus 20) and the multi-part plan
+reads core 154, equator 24, bay5 30, airpit 22, bowl 26, **iceberg 20**: `bundles/arena_iceberg_{scenes,navmesh,preset}.bundle` (3, AMPB, encrypted),
+`keys/arena_iceberg.json` (1, the first staging creates the content key with `-p:ArenaMapPortCreateReleaseKeys=true`), `acoustics/arena_iceberg/`
+(`spatial-audio.json`, `source.audiobakedata` with the 533-byte portal repair, `sharedassets259.assets_6.wav`: 3), `gate-sounds/arena_iceberg/`
+(`gate-sounds.json` and three WAVs: 4), `ai/iceberg.ai.json` (1), `loadscreens/arena_iceberg_1..5.jpg` (5), `material-shaders.arena_iceberg.json` (1),
+`db/arena_iceberg/base.json` (1) and `banners/arena_iceberg.jpg` (1). It has no spectator package (the first crowdless map:
+`validate_map_descriptors.CROWDLESS_MAP_KEYS`, the packer and `validate_distribution.py` drop the requirement for it and refuse a stray one), no flares,
+no water and no DynamicMaps overview (Phase C). The core part does not change. `validate_distribution.py` therefore ends in `DISTRIBUTION_OK 5 maps 15
+bundles 5 sidecars encrypted` only after U1; until then it fails at the first missing Iceberg input. The 256-file contract below stays the published one.
+
 2026-10-30 (release 0.4.0 PUBLISHED, user decision "sound habe ich mir ingame angehoert, passt perfekt, kann so veroeffentlicht werden" and one whole
 ZIP on Pixeldrain): the single cut below went to Pixeldrain (https://pixeldrain.com/l/qaeLacq4; ZIP https://pixeldrain.com/u/52B6fo1G, checksum https://pixeldrain.com/u/ZLDtvkSE), both DLLs scanned on VirusTotal (0/75 and 0/75
 malicious), tag `v0.4.0` on the publication commit and the GitHub release "ArenaMapPort 0.4.0" (https://github.com/maschine34675/ArenaMapPort/releases/tag/v0.4.0) with the `.sha256` asset. 0.3.0 and

@@ -54,10 +54,14 @@ cubes) and moved the CheckPoint indices by +9 (366-369 to 375-378).
   `SPAWN_BOUND_DEFENCE`, west pocket x -44.5..-37). Sides are named by stem and bound, not by mean z. The 50 stage markers stay
   live in the scene (respawn points for ArenaMode) and are carried with team, stage and linked capture point in the modes
   sidecar; spawn-placement checks cover all 70, including the six Bear stage markers that lie off Arena's mesh.
-- **Gates.** `opened_barriers` = `DOORS/GATES_A` (two sliding gates, west side of the Bear pocket) and `DOORS/GATES_B` (three
-  sliding gates and the rotating `Sanatorium_CheckPoint_Gate`, east side of the Usec pocket); `start_gates` = both;
+- **Gates.** (Corrected 2026-10-30, integration: the first draft named the two group roots `DOORS/GATES_A` and `DOORS/GATES_B`, but a door
+  row matches its barrier by the exact string and the 11 DotAnimator rows name the gates.) `opened_barriers` = the three unit-level paths
+  `DOORS/GATES_A/sanatorium_resp_gate` (two sliding gates at x 82.4, the Bear pocket), `DOORS/GATES_B/sanatorium_resp_gate` (three sliding gates
+  at x -36.0, the Usec pocket) and `DOORS/GATES_B/Sanatorium_CheckPoint_Gate` (the rotating gate); `start_gates` = the same three;
   `held_gates` = none. Door poses come from the 11 DotAnimators (scan root `DOORS`, depth 3, rows told apart by `at`); drives
-  2.0-5.0 s. The two `Sanatorium_Electric_engine` props stay standing.
+  2.0-5.0 s. The bake drops only the moved subtrees (leaves A and B, the motor gate): the rails and the top leaf of a sliding gate stay
+  standing and are bake sources that cannot close the doorway (measured, docs/progress/iceberg-release.md). The two
+  `Sanatorium_Electric_engine` props stay standing.
 - **Gate sounds** = the six `EntitySoundPlayer`s under `ARENA_SANATORIUM_GATES` (level259). `Sliding_door_2` needs a per-map
   join margin (0.33 m to its gate, 3.83 m to the next; the global `JOIN_MARGIN_M` is 4.0).
 - **Score monitors**: six `ArenaMonitorHolder`s, four with type word 0 and two with 13. Word 13 stays dark (no known face) until

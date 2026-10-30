@@ -32,12 +32,13 @@ public sealed class ScoreMonitorSidecarTests
         "bay5" => ArenaMapRegistry.Bay5,
         "airpit" => ArenaMapRegistry.AirPit,
         "bowl" => ArenaMapRegistry.Bowl,
+        "iceberg" => ArenaMapRegistry.Iceberg,
         _ => throw new ArgumentOutOfRangeException(nameof(stem)),
     };
 
     public static IEnumerable<object[]> Maps => new[]
     {
-        new object[] { "equator" }, new object[] { "bay5" }, new object[] { "airpit" }, new object[] { "bowl" },
+        new object[] { "equator" }, new object[] { "bay5" }, new object[] { "airpit" }, new object[] { "bowl" }, new object[] { "iceberg" },
     };
 
     private static JsonDocument Load(string stem) => JsonDocument.Parse(File.ReadAllText(Sidecar(stem + ".monitors.json")));
@@ -97,20 +98,22 @@ public sealed class ScoreMonitorSidecarTests
             // a word without a template, and the inferred ones, are never confirmed
             var template = row.GetProperty("template");
             Assert.Equal(word is 0 or 1 or 2, row.GetProperty("confirmed").GetBoolean());
-            Assert.Equal(word != 10, template.ValueKind == JsonValueKind.String);
+            Assert.Equal(word is not (10 or 13), template.ValueKind == JsonValueKind.String);    // 10 and 13 name no template (13: Iceberg's capture point boards, dark)
         }
     }
 
     [Fact]
-    public void TheFourMapsHold43HoldersAnd31OfThemAreActive()
+    public void TheFiveMapsHold49HoldersAnd37OfThemAreActive()
     {
         // 2026-10-25, Arena 0.6.1.0.48206: Equator 11 (all active), Bay5 8 (all), AirPit 8 (6: the two team-box screens are inactive), Bowl 16 (6: the
-        // ten of the base set are inactive, the TeamFight set stands in their place)
-        var counts = new[] { "equator", "bay5", "airpit", "bowl" }.ToDictionary(s => s, s => (MapOf(s).ScoreMonitors.Length, MapOf(s).ScoreMonitors.Count(m => m.ActiveInScene)));
+        // ten of the base set are inactive, the TeamFight set stands in their place); Iceberg (2026-10-30) 6 (all active)
+        var counts = new[] { "equator", "bay5", "airpit", "bowl", "iceberg" }.ToDictionary(s => s, s => (MapOf(s).ScoreMonitors.Length, MapOf(s).ScoreMonitors.Count(m => m.ActiveInScene)));
         Assert.Equal((11, 11), counts["equator"]);
         Assert.Equal((8, 8), counts["bay5"]);
         Assert.Equal((8, 6), counts["airpit"]);
         Assert.Equal((16, 6), counts["bowl"]);
+        Assert.Equal((6, 6), counts["iceberg"]);
+        Assert.Equal((49, 37), (counts.Values.Sum(c => c.Item1), counts.Values.Sum(c => c.Item2)));
     }
 
     [Fact]
@@ -123,6 +126,8 @@ public sealed class ScoreMonitorSidecarTests
         Assert.Equal("alive=3,score=2,timer=3", Faces("bay5"));
         Assert.Equal("alive=2,score=2,timer=2", Faces("airpit"));
         Assert.Equal("alive=2,score=2,timer=2", Faces("bowl"));
+        // Iceberg: four holders of word 0 get the timer face (the props SCORE, SIDE and ALIVE are copies of the timer TV); the two of word 13 stay dark
+        Assert.Equal("none=2,timer=4", Faces("iceberg"));
     }
 
     [Fact]
@@ -134,7 +139,7 @@ public sealed class ScoreMonitorSidecarTests
         Assert.All(bowl.Where(m => !m.ActiveInScene), m => Assert.Equal("Arena_Bowl_DesignStuff", m.Scene));
         Assert.All(bowl.Where(m => m.ActiveInScene), m => Assert.Equal("Arena_Bowl_TeamFight_DesignStuff", m.Scene));
         Assert.Equal(10, bowl.Count(m => !m.ActiveInScene));
-        Assert.All(ArenaMapRegistry.Equator.ScoreMonitors.Concat(ArenaMapRegistry.Bay5.ScoreMonitors), m => Assert.True(m.ActiveInScene));
+        Assert.All(ArenaMapRegistry.Equator.ScoreMonitors.Concat(ArenaMapRegistry.Bay5.ScoreMonitors).Concat(ArenaMapRegistry.Iceberg.ScoreMonitors), m => Assert.True(m.ActiveInScene));
     }
 
     [Theory]
@@ -191,7 +196,7 @@ public sealed class ScoreMonitorSidecarTests
             var released = ArenaMapRegistry.All.Contains(map);
             Assert.Equal(released, map.ScoreMonitors.Length > 0);
         }
-        Assert.Equal(new[] { "arena_equator", "arena_bay5", "arena_airpit", "arena_bowl" }, ArenaMapRegistry.All.Select(m => m.Key).ToArray());
+        Assert.Equal(new[] { "arena_equator", "arena_bay5", "arena_airpit", "arena_bowl", "arena_iceberg" }, ArenaMapRegistry.All.Select(m => m.Key).ToArray());
     }
 
     [Fact]

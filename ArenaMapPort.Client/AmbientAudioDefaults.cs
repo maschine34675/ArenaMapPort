@@ -10,7 +10,12 @@ namespace ArenaMapPort.Client
     /// AirPit 3 (was the provisional 4); offsets 0.4 and ranges 2.5 / 4 / 3 unchanged. Revision 3 of
     /// <see cref="Migrate"/> moves a saved mix that still equals the previous default to the new one and leaves every
     /// custom mix alone. Bowl (PLAN-BOWL item 9, 2026-10-18) starts with the same provisional mix AirPit's first release
-    /// had (gain 3 dB, offset 0.4, range 3) until its listening pass; its keys are new, so no migration step touches them.</summary>
+    /// had (gain 3 dB, offset 0.4, range 3) until its listening pass; its keys are new, so no migration step touches them.
+    /// Iceberg (PLAN-ICEBERG item 12, 2026-10-30) starts with gain 3 dB, offset 0 and range 2, also provisional until a listening pass: NOT
+    /// Bowl's offset 0.4 and range 3, because the volume is <c>volume * gain + offset</c> and Iceberg's 20 neon-lamp loops are authored
+    /// at 0.25 with a 3 m reach (17 of them; two reach 5 m, one 7 m): Bowl's mix would lift them to about 0.75 and 9 m, a hum in every interior, and would
+    /// flatten the Common-in players (median 0.10) to about 0.54. With offset 0 the authored balance between the groups stays; range 2 still
+    /// carries the far exterior sources (10 to 100 m) and 17 of the 20 lamps reach 6 m (the other three reach 10, 10 and 14 m). Its keys are new, so no migration step touches them.</summary>
     internal static class AmbientAudioDefaults
     {
         internal static void Values(string mapKey, out float gainDb, out float offset, out float range)
@@ -21,6 +26,7 @@ namespace ArenaMapPort.Client
                 case "arena_bay5": gainDb = 5f; offset = .4f; range = 4f; return;
                 case "arena_airpit": gainDb = 3f; offset = .4f; range = 3f; return;
                 case "arena_bowl": gainDb = 3f; offset = .4f; range = 3f; return; // provisional, PLAN-BOWL item 9
+                case "arena_iceberg": gainDb = 3f; offset = 0f; range = 2f; return; // provisional, PLAN-ICEBERG item 12 (see the class comment)
                 default: throw new ArgumentException("No accepted ambience mix for " + mapKey, nameof(mapKey));
             }
         }
@@ -36,6 +42,7 @@ namespace ArenaMapPort.Client
                 case "arena_airpit": gainDb = 4f; offset = .4f; range = 3f; return;
                 // Bowl has no earlier default: the same as Values, so a saved mix at the provisional default "moves" to itself.
                 case "arena_bowl": gainDb = 3f; offset = .4f; range = 3f; return;
+                case "arena_iceberg": gainDb = 3f; offset = 0f; range = 2f; return; // likewise: no earlier default
                 default: throw new ArgumentException("No ambience mix history for " + mapKey, nameof(mapKey));
             }
         }
@@ -50,7 +57,8 @@ namespace ArenaMapPort.Client
                 case "arena_equator":
                 case "arena_bay5": return true;
                 case "arena_airpit":
-                case "arena_bowl": return false; // new keys: first appear with the provisional mix (PLAN-BOWL item 9)
+                case "arena_bowl":
+                case "arena_iceberg": return false; // new keys: first appear with the provisional mix (PLAN-BOWL item 9, PLAN-ICEBERG item 12)
                 default: throw new ArgumentException("No ambience mix history for " + mapKey, nameof(mapKey));
             }
         }

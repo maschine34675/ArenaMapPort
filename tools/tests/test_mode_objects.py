@@ -1037,7 +1037,7 @@ class StageGraphTests(unittest.TestCase):
         self.assertEqual(M.scene_index_of(ROOT / "tools" / "extract" / "plans" / "iceberg.json", RULE.scene), 376)
 
 
-# measured on the installed Arena 0.6.1.0.48206 / package iceberg-native-v1, 2026-10-30
+# measured on the installed Arena 0.6.1.0.48206 / package iceberg-native-v2, 2026-10-30
 ICEBERG_CAPTURE_POINTS = {"A": [16.77, 3.9, -91.39], "B": [10.614, 2.69, -77.727], "C": [21.91, 2.85, -47.3]}
 # bound -> (team, capture points served, markers); the stage graph of level376's ArenaSpawnBoundCheckPointData
 ICEBERG_STAGES = {

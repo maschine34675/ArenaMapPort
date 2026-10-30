@@ -16,7 +16,7 @@ namespace ArenaMapPort.Client
     /// result only inside their visible mask, without creating collision or playing audio.
     /// Per-map data (2026-10-25, docs/progress/puddle-footsteps-all-maps.md): a map takes part when its descriptor lists
     /// <see cref="ArenaMapDescriptor.PuddleWaterMaterialNames"/> (Bay5 since 2026-09-28; Equator, Air Pit and Bowl since
-    /// 2026-10-25), and <see cref="ArenaMapDescriptor.PuddleExtraSurfaces"/> names ground surfaces besides Concrete/Asphalt that
+    /// 2026-10-25; Iceberg since PLAN-ICEBERG item 12, 2026-10-30), and <see cref="ArenaMapDescriptor.PuddleExtraSurfaces"/> names ground surfaces besides Concrete/Asphalt that
     /// the Puddle set may replace (Bowl: its whole field is one soil collider). Every map has its own
     /// "Water (&lt;key&gt;)/PuddleFootsteps" developer switch (Bay5's key is the one of 2026-09-28, unchanged). The cache is
     /// built lazily on the first eligible footstep and paced by <see cref="PuddleCacheGate"/>.

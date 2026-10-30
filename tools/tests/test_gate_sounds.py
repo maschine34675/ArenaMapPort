@@ -846,7 +846,7 @@ class RealIcebergRowTests(unittest.TestCase):
         self.assertEqual(G.render_rows_sidecar(doc), tracked)
         self.assertEqual((len(doc["rows"]), len(doc["clips"]), len(doc["skipped"])), (6, 3, 0))
 
-    def test_the_six_players_are_a_hundred_bytes_all_at_pitch_1_15_with_no_group(self):
+    def test_the_six_players_all_play_at_pitch_1_15_with_no_group(self):
         scene = G.doors.ArenaScene(ARENA, 259)
         emitters = G.read_emitters(scene, 259)
         self.assertEqual(sorted(e.path.rsplit("/", 1)[1] for e in emitters),

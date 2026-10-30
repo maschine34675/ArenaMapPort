@@ -25,7 +25,7 @@
     <TargetFramework>net10.0</TargetFramework>
     <RootNamespace>ArenaMapPort.Server</RootNamespace>
     <AssemblyName>maschine-ArenaMapPort.Server</AssemblyName>
-    <Description>Registers the Equator, Bay5, Air Pit and Bowl Arena maps in SPT.</Description>
+    <Description>Registers the Equator, Bay5, Air Pit, Bowl and Iceberg Arena maps in SPT.</Description>
     <Company>https://github.com/maschine34675/ArenaMapPort</Company>
     <Authors>maschine</Authors>
     <ImplicitUsings>enable</ImplicitUsings>
@@ -93,7 +93,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <Content Include="db\arena_equator\base.json;db\arena_bay5\base.json;db\arena_airpit\base.json;db\arena_bowl\base.json" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="db\arena_equator\base.json;db\arena_bay5\base.json;db\arena_airpit\base.json;db\arena_bowl\base.json;db\arena_iceberg\base.json" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
   <PropertyGroup Condition="'$(Configuration)'=='Release'">
@@ -121,6 +121,7 @@
       <ArenaMapPortDbFiles Include="$(MSBuildThisFileDirectory)db\arena_bay5\base.json"><ReleasePath>arena_bay5/base.json</ReleasePath></ArenaMapPortDbFiles>
       <ArenaMapPortDbFiles Include="$(MSBuildThisFileDirectory)db\arena_airpit\base.json"><ReleasePath>arena_airpit/base.json</ReleasePath></ArenaMapPortDbFiles>
       <ArenaMapPortDbFiles Include="$(MSBuildThisFileDirectory)db\arena_bowl\base.json"><ReleasePath>arena_bowl/base.json</ReleasePath></ArenaMapPortDbFiles>
+      <ArenaMapPortDbFiles Include="$(MSBuildThisFileDirectory)db\arena_iceberg\base.json"><ReleasePath>arena_iceberg/base.json</ReleasePath></ArenaMapPortDbFiles>
     </ItemGroup>
     <Error Condition="!Exists('$(MapDescriptions)')" Text="Missing original map descriptions. Run python tools/extract/extract_map_descriptions.py first." />
     <MakeDir Directories="$(DistModDir)\db;$(DistModDir)\locales" />

@@ -25,9 +25,8 @@ import extract_door_poses as DOORS  # noqa: E402
 import extract_score_monitors as E  # noqa: E402
 import validate_map_descriptors as VD  # noqa: E402
 
-STEMS = ("equator", "bay5", "airpit", "bowl")
-PREPARED_STEMS = ("iceberg",)       # sidecar prepared ahead of the map's promotion into the released set (PLAN-ICEBERG item 8)
-KEYS = {"equator": "arena_equator", "bay5": "arena_bay5", "airpit": "arena_airpit", "bowl": "arena_bowl"}
+STEMS = ("equator", "bay5", "airpit", "bowl", "iceberg")      # the released maps (Iceberg joined with PLAN-ICEBERG item 12, 2026-10-30)
+KEYS = {"equator": "arena_equator", "bay5": "arena_bay5", "airpit": "arena_airpit", "bowl": "arena_bowl", "iceberg": "arena_iceberg"}
 DESCRIPTOR = REPO / "ArenaMapPort.Shared" / "ArenaMapDescriptor.cs"
 ARENA_DATA = DOORS.DEFAULT_DATA
 HAVE_ARENA = (ARENA_DATA / "level53").is_file() and (ARENA_DATA / "sharedassets53.assets").is_file()
@@ -423,7 +422,7 @@ class PackageCheckTests(unittest.TestCase):
 # ---------------------------------------------------------------------------------------------------------------
 
 class SidecarTests(unittest.TestCase):
-    EXPECTED = {"equator": (11, 11), "bay5": (8, 8), "airpit": (8, 6), "bowl": (16, 6)}      # rows, active rows
+    EXPECTED = {"equator": (11, 11), "bay5": (8, 8), "airpit": (8, 6), "bowl": (16, 6), "iceberg": (6, 6)}      # rows, active rows
 
     def test_header_scenes_and_levels(self):
         key_sources = json.loads((REPO / "tools" / "bundle" / "key-sources.json").read_text(encoding="utf-8"))["maps"]
@@ -466,13 +465,16 @@ class SidecarTests(unittest.TestCase):
             monitors = sidecar_doc(stem)["monitors"]
             self.assertEqual((len(monitors), sum(1 for r in monitors if r["active_in_scene"])), (rows, live), stem)
             total, active = total + rows, active + live
-        self.assertEqual((total, active), (43, 31))
+        self.assertEqual((total, active), (49, 37))
         faces = {stem: sorted((f, sum(1 for r in sidecar_doc(stem)["monitors"] if r["active_in_scene"] and r["face"] == f))
                               for f in ("timer", "score", "alive", "none")) for stem in STEMS}
         self.assertEqual(faces["equator"], [("alive", 2), ("none", 2), ("score", 5), ("timer", 2)])
         self.assertEqual(faces["bay5"], [("alive", 3), ("none", 0), ("score", 2), ("timer", 3)])
         self.assertEqual(faces["airpit"], [("alive", 2), ("none", 0), ("score", 2), ("timer", 2)])
         self.assertEqual(faces["bowl"], [("alive", 2), ("none", 0), ("score", 2), ("timer", 2)])
+        # Iceberg: the four word-0 holders get the timer face (the prop names SCORE, SIDE and ALIVE are copies of the timer TV and do not
+        # follow the words); the two word-13 holders are dark
+        self.assertEqual(faces["iceberg"], [("alive", 0), ("none", 2), ("score", 0), ("timer", 4)])
 
     def test_the_type_multiset_per_map(self):
         def words(stem):
@@ -484,12 +486,13 @@ class SidecarTests(unittest.TestCase):
         self.assertEqual(words("bay5"), {0: 3, 1: 2, 2: 3})
         self.assertEqual(words("airpit"), {0: 2, 1: 4, 2: 2})
         self.assertEqual(words("bowl"), {0: 4, 1: 6, 2: 4, 10: 2})
+        self.assertEqual(words("iceberg"), {0: 4, 13: 2})
 
     def test_inactive_rows_are_airpits_team_box_screens_and_bowls_base_set(self):
         inactive = {stem: [r for r in sidecar_doc(stem)["monitors"] if not r["active_in_scene"]] for stem in STEMS}
         self.assertEqual([r["path"] for r in inactive["airpit"]], ["TV/Arena_Home_theater (9)", "TV/Arena_Home_theater (11)"])
         self.assertEqual({r["scene"] for r in inactive["bowl"]}, {"Arena_Bowl_DesignStuff"})
-        self.assertEqual((len(inactive["equator"]), len(inactive["bay5"])), (0, 0))
+        self.assertEqual((len(inactive["equator"]), len(inactive["bay5"]), len(inactive["iceberg"])), (0, 0, 0))
 
     def test_rows_are_in_load_order_and_unique(self):
         for stem in STEMS:
@@ -520,15 +523,14 @@ class SidecarTests(unittest.TestCase):
     def test_the_registry_and_the_sidecars_agree_and_only_the_released_maps_have_rows(self):
         entries = registry()
         for stem in STEMS:
-            name = {"equator": "Equator", "bay5": "Bay5", "airpit": "AirPit", "bowl": "Bowl"}[stem]
+            name = {"equator": "Equator", "bay5": "Bay5", "airpit": "AirPit", "bowl": "Bowl", "iceberg": "Iceberg"}[stem]
             self.assertEqual(VD.score_monitor_errors(map_json(stem), sidecar_path(stem), entries[name].get("ScoreMonitors")), [], stem)
         for name, entry in entries.items():
-            if name not in ("Equator", "Bay5", "AirPit", "Bowl"):
+            if name not in ("Equator", "Bay5", "AirPit", "Bowl", "Iceberg"):
                 self.assertIsNone(entry.get("ScoreMonitors"), name)
-        for path in (REPO / "tools" / "maps").glob("*.monitors.json"):
-            # the released maps, plus Iceberg whose sidecar is prepared ahead of its promotion (IcebergMonitorSidecarTests); the promotion moves
-            # "iceberg" into STEMS and KEYS and drops PREPARED_STEMS
-            self.assertIn(path.name.removesuffix(".monitors.json"), STEMS + PREPARED_STEMS)
+        # exactly the released maps have a sidecar (the scaffolding that let Iceberg's sidecar exist ahead of its promotion is gone)
+        self.assertEqual(sorted(p.name.removesuffix(".monitors.json") for p in (REPO / "tools" / "maps").glob("*.monitors.json")), sorted(STEMS))
+        self.assertEqual(sorted(KEYS.values()), sorted(VD.RELEASE_MAP_KEYS))
 
     def test_the_validator_run_passes(self):
         done = subprocess.run([sys.executable, str(REPO / "tools" / "validate" / "validate_map_descriptors.py")],
@@ -702,9 +704,9 @@ class RealArenaTests(unittest.TestCase):
                 counted += sum(1 for obj in scene.files[scene.level_name].values() if obj.type.name == "MonoBehaviour" and scene.mono_class(obj) == E.HOLDER_CLASS)
             self.assertEqual(counted, len(doc["monitors"]), key)
 
-    def test_every_holder_of_the_four_maps_is_forty_bytes_with_the_shared_mount(self):
-        # read_holders already fails closed on both; this pins the totals: 43 holders in the imported scenes
-        self.assertEqual(sum(len(doc["monitors"]) for doc, _ in self.fresh.values()), 43)
+    def test_every_holder_of_the_five_maps_is_forty_bytes_with_the_shared_mount(self):
+        # read_holders already fails closed on both; this pins the totals: 49 holders in the imported scenes
+        self.assertEqual(sum(len(doc["monitors"]) for doc, _ in self.fresh.values()), 49)
 
     def test_an_unclassified_type_word_would_stop_the_extraction(self):
         trimmed = {w: v for w, v in E.TYPE_WORDS.items() if w != 10}
@@ -854,7 +856,7 @@ class IcebergTypeWordTests(unittest.TestCase):
                 E.type_word(word, "Arena_Y TV/Prop")
 
     def test_the_maps_table_has_the_iceberg_row_with_its_package(self):
-        self.assertEqual(E.MAPS["arena_iceberg"], {"stem": "iceberg", "package": "iceberg-native-v1"})
+        self.assertEqual(E.MAPS["arena_iceberg"], {"stem": "iceberg", "package": "iceberg-native-v2"})
         self.assertEqual([k for k in E.MAPS if k != "arena_iceberg"], ["arena_equator", "arena_bay5", "arena_airpit", "arena_bowl"])   # the released rows are untouched
         self.assertEqual(E.MAPS["arena_bowl"], {"stem": "bowl", "package": "bowl-native-v2"})
 
@@ -888,10 +890,10 @@ class RealIcebergMonitorTests(unittest.TestCase):
         self.assertEqual(self.doc["source"]["scenes"], tracked["source"]["scenes"])
         self.assertEqual(E.render_sidecar(dict(self.doc, source=tracked["source"])), sidecar_path("iceberg").read_text(encoding="utf-8"))
 
-    def test_the_rows_are_cross_checked_against_the_v1_package_when_it_exists(self):
+    def test_the_rows_are_cross_checked_against_the_v2_package_when_it_exists(self):
         if not (self.root / E.MAPS[ICEBERG]["package"]).is_dir():
-            self.skipTest("work/extract/iceberg-native-v1 is not present")
-        self.assertTrue(any("6 prop(s) found once in iceberg-native-v1" in n for n in self.notes), self.notes)
+            self.skipTest("work/extract/iceberg-native-v2 is not present")
+        self.assertTrue(any("6 prop(s) found once in iceberg-native-v2" in n for n in self.notes), self.notes)
 
     def test_no_holder_hides_in_a_scene_the_sidecar_did_not_list_and_the_blastgang_scenes_are_not_imported(self):
         counted = 0

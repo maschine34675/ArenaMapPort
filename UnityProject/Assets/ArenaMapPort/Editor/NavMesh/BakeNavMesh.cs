@@ -479,6 +479,10 @@ namespace ArenaMapPort.Editor.NavMesh
         // layer 29), which MapBorderRepairs removes at raid start (RemoveTeamFightBorders, default on). Baked in,
         // 'LevelBorder (83)' sat exactly in the FCK hall's doorway and kept the hall a NavMesh island even with the
         // shutter excluded (host test 2026-09-20 19:05: NavMesh gap x -10.0..-9.2 at z 36).
+        // A map whose descriptor keeps its borders (keep_level_borders: Bowl, Iceberg) is the exception: its cubes stay active at raid start, so
+        // they are bake sources and neither this prefix nor the layer-29 rule of NonPhysicalLayerReason drops them (RoundOpenedReason skips the
+        // "LevelBorder" prefix then). Iceberg names its 365 cubes "LevelBorder (N)" under a "LevelBorders" group; Bowl's are called "Cube", and
+        // none of its objects or ancestors starts with the prefix (tools/tests/test_iceberg_bake_inputs.py BowlInvarianceTests), so Bowl's bake is unchanged. SPAWN_BOUND* always applies.
         // "Door_Sliding_Respawn_L/_R": Equator's booth door leaves, all five of them (four SPAWN_DOORS assemblies and the one
         // under SBG_Arena_Equator/SOO/Respawn_2). Since 2026-10-23 the client parks them at Arena's open pose (x +-2.0) and drives
         // them there on a release instead of switching them off, and tools/maps/equator.doors.json has a row per leaf; they

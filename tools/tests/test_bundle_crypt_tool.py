@@ -979,10 +979,6 @@ class KeySourcesTests(unittest.TestCase):
     LISTED = {"arena_equator": (3, 218_007_984), "arena_bay5": (8, 358_204_848), "arena_airpit": (7, 603_532_272), "arena_bowl": (8, 754_464_336),
               "arena_iceberg": (4, 560_470_032)}
 
-    # maps whose row is in the table before their promotion into the released set (PLAN-ICEBERG item 6: the row lands first, the first stage and
-    # the key come after a bundle passed the validators). Promotion moves the key into RELEASE_MAP_KEYS; remove it here then.
-    PREPARED_MAP_KEYS = ("arena_iceberg",)
-
     @classmethod
     def setUpClass(cls):
         cls.table = json.loads(KEY_SOURCES.read_text(encoding="utf-8"))
@@ -1004,8 +1000,8 @@ class KeySourcesTests(unittest.TestCase):
         self.assertEqual(self.table["schema"], 2)
         self.assertEqual(list(self.table), ["schema", "arena_build", "note", "sample", "maps"])
         self.assertEqual(self.table["sample"], {"block_size": 65536, "blocks": 16})
-        # the released maps, plus the maps whose row is prepared ahead of their promotion and nothing else
-        self.assertEqual(sorted(self.table["maps"]), sorted(set(RELEASE_MAP_KEYS) | set(self.PREPARED_MAP_KEYS)))
+        # exactly the released maps (Iceberg's row landed before its promotion, PLAN-ICEBERG item 6; the scaffolding that allowed that is gone)
+        self.assertEqual(sorted(self.table["maps"]), sorted(RELEASE_MAP_KEYS))
         self.assertEqual(sorted(self.LISTED), sorted(self.table["maps"]))
         text = KEY_SOURCES.read_text(encoding="utf-8")
         self.assertNotRegex(text, r"[0-9a-f]{40,}")  # indices and names only, never a hash
@@ -1035,7 +1031,7 @@ class KeySourcesTests(unittest.TestCase):
 
     def test_the_accepted_manifests_agree_when_they_are_present(self):
         packages = {"arena_equator": "equator-native-v5", "arena_bay5": "bay5-native-v5", "arena_airpit": "airpit-native-v9", "arena_bowl": "bowl-native-v2",
-                    "arena_iceberg": "iceberg-native-v1"}
+                    "arena_iceberg": "iceberg-native-v2"}
         checked = 0
         for key, package in packages.items():
             path = REPO / "work/extract" / package / "manifest.json"

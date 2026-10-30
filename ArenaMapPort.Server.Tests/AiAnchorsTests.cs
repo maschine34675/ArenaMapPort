@@ -181,6 +181,30 @@ public sealed class AiAnchorsTests
         }
     }
 
+    [Fact]
+    public void IcebergsPlayAreaOfTheDropRuleIsInsideTheDescriptorBakeBoundsAndAllItsAnchorsSitInThem()
+    {
+        // Review of 2026-10-30: extract_ai_anchors.PLAY_AREA is a hand-written stand-in for the bake box of item 9; the descriptor's BakeBounds
+        // (x -62..121, y -3..8, z -131..-33) now exists, so tie them: the play area (x -61..121, z -130..-33) lies inside the bake box, and every
+        // anchor the sidecar keeps lies inside the bake box in all three axes.
+        var bounds = ArenaMapRegistry.Iceberg.BakeBounds;
+        using var doc = JsonDocument.Parse(File.ReadAllText(Sidecar("iceberg.ai.json")));
+        var area = doc.RootElement.GetProperty("dropped").GetProperty("play_area");
+        var x = area.GetProperty("x").EnumerateArray().Select(v => v.GetSingle()).ToArray();
+        var z = area.GetProperty("z").EnumerateArray().Select(v => v.GetSingle()).ToArray();
+        Assert.True(bounds[0] <= x[0] && x[1] <= bounds[1], "play area x outside the bake box");
+        Assert.True(bounds[4] <= z[0] && z[1] <= bounds[5], "play area z outside the bake box");
+        var corePoints = doc.RootElement.GetProperty("core_points").EnumerateArray().ToList();
+        Assert.Equal(11, corePoints.Count);
+        foreach (var corePoint in corePoints)
+        {
+            var p = corePoint.GetProperty("position").EnumerateArray().Select(v => v.GetSingle()).ToArray();
+            Assert.InRange(p[0], bounds[0], bounds[1]);
+            Assert.InRange(p[1], bounds[2], bounds[3]);
+            Assert.InRange(p[2], bounds[4], bounds[5]);
+        }
+    }
+
     private static void AssertFiniteAndWithinBakeVolume(JsonElement position, string file)
     {
         var values = position.EnumerateArray().Select(v => v.GetSingle()).ToArray();

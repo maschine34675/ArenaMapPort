@@ -10,7 +10,7 @@ Why: nobody has walked Iceberg yet, so everything checkable without the host is 
 2. Arena's NavMesh (the installed Arena 0.6.1, level377, ``sharedassets377.assets`` path 2, identity placement): 64 of the 70
    markers lie on the 4,788 m2 main component, the six that do not are the known Bear stage markers, every row and exit
    stands on it with the documented clearance, and the 4-hub PatrolWay and ten Savage markers of the AI scene lie off it.
-3. The port's colliders (the ignored package work/extract/iceberg-native-v1 through tools/validate/spawn_placement_probe.py,
+3. The port's colliders (the ignored package work/extract/iceberg-native-v2 through tools/validate/spawn_placement_probe.py,
    the offline stand-in for SpawnPlacementRepairs.IsValid): every row stands on a floor, 69 of 70 markers pass, and
    ``Bear house (38)`` touches a LevelBorder cube.
 
@@ -35,7 +35,7 @@ sys.path.insert(0, str(REPO / "tools" / "extract"))
 WORK = Path(os.environ.get("ARENAMAPPORT_WORK_DIR") or REPO / "work")
 ARENA_DATA = Path(os.environ.get("ARENAMAPPORT_ARENA_DATA")
                   or "D:/Battlestate Games/Escape from Tarkov Arena/EscapeFromTarkovArena_Data")
-PACKAGE = WORK / "extract" / "iceberg-native-v1"
+PACKAGE = WORK / "extract" / "iceberg-native-v2"
 
 spec = importlib.util.spec_from_file_location("make_base_json", REPO / "tools/server/make_base_json.py")
 generator = importlib.util.module_from_spec(spec)
@@ -275,7 +275,7 @@ class IcebergSidecarTests(SidecarData, unittest.TestCase):
 
     def test_the_gate_leaf_table_equals_the_package(self):
         if not (PACKAGE / "scenes" / "Arena_Sanatorium_CheckPoint_DesignStuff.json").is_file():
-            self.skipTest("iceberg-native-v1 package is local only")
+            self.skipTest("iceberg-native-v2 package is local only")
         scene = M.SceneGraph("Arena_Sanatorium_CheckPoint_DesignStuff", json.loads(
             (PACKAGE / "scenes" / "Arena_Sanatorium_CheckPoint_DesignStuff.json").read_text(encoding="utf-8")))
         found = {}
@@ -403,7 +403,7 @@ class IcebergArenaMeshTests(SidecarData, unittest.TestCase):
                 self.assertGreater(position[2], -33.0, f"{label} {position} is inside the play area")
 
 
-@unittest.skipUnless((PACKAGE / "scenes").is_dir() and (PACKAGE / "meshes").is_dir(), "no iceberg-native-v1 package")
+@unittest.skipUnless((PACKAGE / "scenes").is_dir() and (PACKAGE / "meshes").is_dir(), "no iceberg-native-v2 package")
 class IcebergPlacementTests(SidecarData, unittest.TestCase):
     """The port's own colliders through the offline SpawnPlacementRepairs.IsValid (tools/validate/spawn_placement_probe.py)."""
 

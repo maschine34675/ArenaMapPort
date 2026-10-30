@@ -129,7 +129,7 @@ CLI:
     python tools/extract/extract_mode_objects.py --package work/extract/bay5-native-v5
     python tools/extract/extract_mode_objects.py --package work/extract/airpit-native-v9
     python tools/extract/extract_mode_objects.py --package work/extract/bowl-native-v<N>
-    python tools/extract/extract_mode_objects.py --package work/extract/iceberg-native-v1
+    python tools/extract/extract_mode_objects.py --package work/extract/iceberg-native-v2
         --arena-data "D:/Battlestate Games/Escape from Tarkov Arena/EscapeFromTarkovArena_Data"
     (Iceberg only: --arena-data adds the stage graph; one line in practice)
     (the map key comes from the manifest, or from the extractor script for the two legacy

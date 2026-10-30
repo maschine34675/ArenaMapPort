@@ -25,7 +25,7 @@ public static class StatusHolderCollection
 [Collection(StatusHolderCollection.Name)]
 public sealed class ArenaServerStatusTests : IDisposable
 {
-    private static readonly string[] RegistryKeys = { "arena_equator", "arena_bay5", "arena_airpit", "arena_bowl" };
+    private static readonly string[] RegistryKeys = { "arena_equator", "arena_bay5", "arena_airpit", "arena_bowl", "arena_iceberg" };
 
     public ArenaServerStatusTests() => ArenaServerStatus.ResetForTests();
 
@@ -56,7 +56,7 @@ public sealed class ArenaServerStatusTests : IDisposable
     [Fact]
     public void TheRegistryTheGoldenDocumentsListIsTheCurrentOne()
     {
-        // The golden documents below spell the four maps out. A new or removed registry map must change them on purpose.
+        // The golden documents below spell the five maps out. A new or removed registry map must change them on purpose.
         Assert.Equal(RegistryKeys, ArenaMapRegistry.All.Select(map => map.Key).ToArray());
     }
 
@@ -104,6 +104,7 @@ public sealed class ArenaServerStatusTests : IDisposable
         ArenaServerStatus.RecordMap("arena_bay5", ArenaStatusContract.MapFailed, ArenaStatusContract.MapCauseBaseJsonParse);
         ArenaServerStatus.RecordMap("arena_airpit", ArenaStatusContract.MapFailed, ArenaStatusContract.MapCauseBaseJsonMissing);
         ArenaServerStatus.RecordMap("arena_bowl", ArenaStatusContract.MapFailed, ArenaStatusContract.MapCauseRegistration);
+        ArenaServerStatus.RecordMap("arena_iceberg", ArenaStatusContract.MapRegistered, ArenaStatusContract.MapCauseNone);
 
         string expected = Document(
             "{\"state\":\"verified\",\"cause\":\"none\",\"source\":\"registry\",\"manifestVersion\":\"0.6.1.0.48206\",\"mismatchCount\":0,\"overrideFile\":\"used\"}",
@@ -111,7 +112,8 @@ public sealed class ArenaServerStatusTests : IDisposable
                 ("arena_equator", "registered", "none"),
                 ("arena_bay5", "failed", "base_json_parse"),
                 ("arena_airpit", "failed", "base_json_missing"),
-                ("arena_bowl", "failed", "registration")));
+                ("arena_bowl", "failed", "registration"),
+                ("arena_iceberg", "registered", "none")));
 
         Assert.Equal(expected, ArenaServerStatus.ToJson());
     }

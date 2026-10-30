@@ -18,6 +18,8 @@ from extract_door_poses import build_clip
 
 REPO = Path(__file__).resolve().parents[2]
 DEFAULT_SOURCE = Path('D:/Battlestate Games/Escape from Tarkov Arena/EscapeFromTarkovArena_Data')
+# The CROWD maps: the maps whose Arena design scene holds a spectator crowd. A released map that is not here is crowdless on purpose and listed in
+# validate_map_descriptors.CROWDLESS_MAP_KEYS (Iceberg, PLAN-ICEBERG): stage_spectators stages, and validate_distribution requires, exactly these.
 MAP_SCENES = {
     'airpit': 'Arena_Airpit_DesignStuff',
     'equator': 'Arena_Equator_DesignStuff',

@@ -3,13 +3,14 @@ navmesh_bake_layers, keep_level_borders, bake_bounds, navmesh_bake_exclusions, t
 
 Why: the Unity bake is a 15-minute batch run, so everything checkable offline is pinned here, like test_airpit_bake_inputs.py
 did for AirPit and Bowl's analysis (docs/progress/bowl-release.md) did by hand. The DECIDED_* constants below are the values the
-lead writes into tools/maps/iceberg.json and the C# descriptor in the promotion commit; every number has its evidence in
-docs/progress/iceberg-release.md ("NavMesh oracle and bake inputs"). Four groups, each skipped when its input is absent:
+the promotion commit (2026-10-30) wrote into tools/maps/iceberg.json and the C# descriptor, where SidecarTests and the .NET mirror tests
+hold them equal; every number has its evidence in docs/progress/iceberg-release.md ("NavMesh oracle and bake inputs", and the
+integration section for the unit-level gate strings). Four groups, each skipped when its input is absent:
 
   * constants and code pins (repository only): the validators accept the decided values, ARENA_SOURCES["iceberg"] is the measured row,
     the bake code keeps kept border cubes whatever they are called;
-  * the sidecar: once tools/maps/iceberg.json carries any of the decided keys it must carry all of them, equal to the constants;
-  * the extracted package work/extract/iceberg-native-v1 (override the work directory with ARENAMAPPORT_WORK_DIR when the tests
+  * the sidecar: tools/maps/iceberg.json carries every decided key, equal to the constants, and none of the omitted ones;
+  * the extracted package work/extract/iceberg-native-v2 (override the work directory with ARENAMAPPORT_WORK_DIR when the tests
     run from a git worktree without work/): the 365 border cubes, the KillTrigger, the gates, the layer census, the layer-0 audit,
     the cube-top islands against the y ceiling, the puddle materials, the marker positions against the bounds;
   * the installed Arena (0.6.1.0.48206, read-only, UnityPy): the identity placement of the NavMeshData, the measured mesh, the
@@ -32,37 +33,42 @@ import numpy as np
 REPO = Path(__file__).resolve().parents[2]
 WORK = Path(os.environ.get("ARENAMAPPORT_WORK_DIR", REPO / "work"))
 sys.path.insert(0, str(REPO / "tools" / "validate"))
+sys.path.insert(0, str(REPO / "tools" / "extract"))
+import extract_door_poses as door_poses  # noqa: E402
 import navmesh_diff as nd  # noqa: E402
+import port_colliders as pc  # noqa: E402
 import validate_map_descriptors as VD  # noqa: E402
 
-try:
-    import port_colliders as pc  # noqa: E402
-except ImportError:                      # numpy missing: only the constant/sidecar/code pins run
-    pc = None
-
-PACKAGE = WORK / "extract" / "iceberg-native-v1"
+_CACHE: dict = {}
+PACKAGE = WORK / "extract" / "iceberg-native-v2"
 SPIKE_PACKAGE = WORK / "extract" / "iceberg"          # the Arena 0.5.4 spike package (old barricade layout)
 DESIGN_STUFF = "Arena_Sanatorium_CheckPoint_DesignStuff"
-HAVE_PACKAGE = pc is not None and (PACKAGE / "scenes" / f"{DESIGN_STUFF}.json").is_file()
+HAVE_PACKAGE = (PACKAGE / "scenes" / f"{DESIGN_STUFF}.json").is_file()
 ARENA_DATA = Path(nd.DEFAULT_ARENA_DATA)
-HAVE_ARENA = (ARENA_DATA / "sharedassets377.assets").is_file() and (ARENA_DATA / "level377").is_file()
+# The Arena-dependent pins (2,473 polygons, 93 components, 193/70 cover counts, ...) were measured on the 0.6.1 build; a newer Arena (0.6.2 rewrites
+# level256/258/375 and sharedassets376/377) may legitimately differ, so those tests skip with their reason instead of turning red.
+PINNED_ARENA_BUILD = "0.6.1."
+HAVE_ARENA = (ARENA_DATA / "sharedassets377.assets").is_file() and (ARENA_DATA / "level377").is_file() \
+    and door_poses.arena_version(ARENA_DATA).startswith(PINNED_ARENA_BUILD)
 ICEBERG = nd.ARENA_SOURCES["iceberg"]
 BAKE_NAVMESH = REPO / "UnityProject/Assets/ArenaMapPort/Editor/NavMesh/BakeNavMesh.cs"
 
 # ---------------------------------------------------------------------------------------------------------------------
 # The decided values (2026-10-30), sidecar spelling. The C# descriptor names are in the comments.
 # ---------------------------------------------------------------------------------------------------------------------
-# Arena opens the two respawn gate roots of CheckPoint (level376 DOORS): GATES_A (two sliding gates, x 82.4, the east pocket) and
-# GATES_B (three sliding gates at x -36.0 plus the rotating Sanatorium_CheckPoint_Gate, the west pocket). Arena's NavMesh was baked
-# with them open (the oracle's first two greedy steps, +181 and +30 samples). Descriptor: OpenedBarriers, StartGates.
-# CROSS-CHECK with iceberg.doors.json: BakeNavMesh.ResolveOpenedBarriers and the client match a door row to a barrier by the EXACT string
-# row.barrier == opened_barriers entry. If the doors rows carry unit-level barriers (DOORS/GATES_A/sanatorium_resp_gate with `at`,
-# DOORS/GATES_B/sanatorium_resp_gate, DOORS/GATES_B/Sanatorium_CheckPoint_Gate; the survey's dry run) instead of the two roots, these
-# three strings are the opened barriers and start gates. The bake drops the same 42 colliders either way
-# (PackageGateTests.test_the_gates_hold_16_and_26_colliders...), so only this constant and the sidecar change.
-OPENED_BARRIERS = ["DOORS/GATES_A", "DOORS/GATES_B"]
-START_GATES = ["DOORS/GATES_A", "DOORS/GATES_B"]
-HELD_GATES: list = []                                       # HeldGates
+# Arena opens the respawn gates of CheckPoint (level376 DOORS): GATES_A (two sliding gates, x 82.4, the east pocket) and GATES_B (three
+# sliding gates at x -36.0 plus the rotating Sanatorium_CheckPoint_Gate, the west pocket). Arena's NavMesh was baked with them open (the
+# oracle's first two greedy steps, +181 and +30 samples). Descriptor: OpenedBarriers, StartGates.
+# The barrier is the GATE, not the group: BakeNavMesh.ResolveOpenedBarriers and the client match a door row to a barrier by the EXACT
+# string row.barrier == opened_barriers entry, and iceberg.doors.json (11 rows, one DotAnimator each) names the three unit-level paths
+# below; the sliding gates of a group share one name and are told apart by the rows' `at` (Bay5's depot gates are the precedent).
+# A barrier with rows drops only its MOVED subtrees (leaves A and B of every sliding gate, the motor gate's root): 22 colliders, not the
+# 42 that the legacy rule drops below the two group roots. The 20 that stay (per sliding gate the rails sanatorium_resp_gate_COLLIDER, the
+# top panel _C and their layer-12 twins) cannot re-seal a doorway: PackageGateTests proves it from their geometry.
+OPENED_BARRIERS = ["DOORS/GATES_A/sanatorium_resp_gate", "DOORS/GATES_B/sanatorium_resp_gate", "DOORS/GATES_B/Sanatorium_CheckPoint_Gate"]
+START_GATES = ["DOORS/GATES_A/sanatorium_resp_gate", "DOORS/GATES_B/sanatorium_resp_gate", "DOORS/GATES_B/Sanatorium_CheckPoint_Gate"]
+HELD_GATES: list = []                                       # HeldGates: nothing stays closed after the release
+LEGACY_GROUP_ROOTS = ["DOORS/GATES_A", "DOORS/GATES_B"]     # the plan's first draft; no door row names them (the legacy drop-all rule)
 # Arena's NavMeshSurface mask 0x40042A00 (layers 9/11/13/18/30) plus 29: the 365 layer-29 LevelBorder cubes are the play space's only
 # bound and stay active at runtime, so the bake treats them as walls (Bowl's policy). Descriptor: NavMeshBakeLayers.
 ARENA_LAYERS = [9, 11, 13, 18, 30]
@@ -105,6 +111,13 @@ def sidecar(name="iceberg.json"):
     return json.loads((REPO / "tools" / "maps" / name).read_text(encoding="utf-8"))
 
 
+def door_rows():
+    """The rows the bake reads (ArenaPaths.DoorRows) from tools/maps/iceberg.doors.json: the sidecar next to the descriptor."""
+    if "rows" not in _CACHE:
+        _CACHE["rows"] = pc.load_door_rows(REPO / "tools" / "maps" / "iceberg.doors.json", "arena_iceberg")
+    return _CACHE["rows"]
+
+
 # ---------------------------------------------------------------------------------------------------------------------
 # 1. constants and code pins
 # ---------------------------------------------------------------------------------------------------------------------
@@ -119,11 +132,18 @@ class DecidedValuesTests(unittest.TestCase):
         self.assertEqual(VD.puddle_errors({"puddle_water_material_names": PUDDLE_WATER_MATERIAL_NAMES,
                                            "puddle_extra_surfaces": PUDDLE_EXTRA_SURFACES}), [])
 
-    def test_both_gate_roots_are_start_gates_and_nothing_is_held(self):
+    def test_every_gate_is_a_start_gate_and_nothing_is_held(self):
         # SpawnGates: a mode plugin's hold keeps every start gate closed; Iceberg has no gate that stays closed after the release
         self.assertEqual(START_GATES, OPENED_BARRIERS)
         self.assertEqual(HELD_GATES, [])
         self.assertTrue(set(START_GATES) <= set(OPENED_BARRIERS))
+
+    def test_the_barriers_are_exactly_the_barriers_of_the_doors_sidecar(self):
+        # the exact-string match of BakeNavMesh.ResolveOpenedBarriers and of the client (validate_map_descriptors checks the same for every map)
+        rows = json.loads((REPO / "tools" / "maps" / "iceberg.doors.json").read_text(encoding="utf-8"))["poses"]
+        self.assertEqual(sorted({p["barrier"] for p in rows}), sorted(OPENED_BARRIERS))
+        self.assertEqual(len(rows), 11)
+        self.assertFalse(set(LEGACY_GROUP_ROOTS) & {p["barrier"] for p in rows})
 
     def test_the_layer_list_is_arenas_surface_mask_plus_the_border_layer(self):
         self.assertEqual(sorted(ARENA_LAYERS + [29]), NAVMESH_BAKE_LAYERS)
@@ -157,12 +177,9 @@ class DecidedValuesTests(unittest.TestCase):
 
 
 class SidecarTests(unittest.TestCase):
-    def test_the_sidecar_carries_all_or_none_of_the_decided_values_and_they_are_equal(self):
+    def test_the_sidecar_carries_every_decided_value_and_they_are_equal(self):
         data = sidecar()
-        present = [k for k in DECIDED_SIDECAR_KEYS if k in data]
-        if not present:
-            self.skipTest("tools/maps/iceberg.json has no bake inputs yet (the lead's promotion commit writes them)")
-        self.assertEqual([k for k in DECIDED_SIDECAR_KEYS if k not in data], [], "the promotion writes every decided key at once")
+        self.assertEqual([k for k in DECIDED_SIDECAR_KEYS if k not in data], [], "the promotion wrote every decided key at once")
         for key, expected in DECIDED_SIDECAR_KEYS.items():
             self.assertEqual(data[key], expected, key)
         for key in OMITTED_SIDECAR_KEYS:
@@ -183,7 +200,7 @@ class ArenaSourceRowTests(unittest.TestCase):
     def test_the_row_is_the_measured_one(self):
         self.assertEqual((ICEBERG.key, ICEBERG.assets, ICEBERG.path_id), ("arena_iceberg", "sharedassets377.assets", 2))
         self.assertEqual((ICEBERG.ai_scene_index, ICEBERG.ai_scene_name), (377, "Arena_Sanatorium_CheckPoint_AI"))
-        self.assertEqual(ICEBERG.package, "work/extract/iceberg-native-v1")
+        self.assertEqual(ICEBERG.package, "work/extract/iceberg-native-v2")
 
     def test_the_ai_scene_is_the_ai_role_of_the_source_plan(self):
         try:
@@ -212,7 +229,7 @@ class ArenaSourceRowTests(unittest.TestCase):
 
     def test_map_iceberg_selects_the_navmesh_mask_ai_scene_and_package(self):
         seen = self.run_main("--map", "iceberg", "--live-core-points")
-        self.assertEqual(seen["package"], "work/extract/iceberg-native-v1")
+        self.assertEqual(seen["package"], "work/extract/iceberg-native-v2")
         self.assertEqual((seen["assets"], seen["path_id"]), ("sharedassets377.assets", 2))
         self.assertEqual(seen["cfg"].arena_layer_mask, 0x40042A00)
         self.assertEqual(seen["live"], (nd.DEFAULT_ARENA_DATA, 377, "Arena_Sanatorium_CheckPoint_AI", "arena_iceberg"))
@@ -244,6 +261,28 @@ class ArenaSourceRowTests(unittest.TestCase):
             self.assertIn(f"use --map {plan}", err.getvalue())
 
 
+BOWL_PACKAGE = WORK / "extract" / "bowl-native-v2"
+
+
+@unittest.skipUnless((BOWL_PACKAGE / "manifest.json").is_file(), "work/extract/bowl-native-v2 is not available (set ARENAMAPPORT_WORK_DIR)")
+class BowlInvarianceTests(unittest.TestCase):
+    def test_no_bowl_object_is_named_level_border_so_the_name_exemption_changes_nothing_there(self):
+        # The exemption of the LevelBorder* name prefix for a map that keeps its borders (BakeNavMesh.RoundOpenedReason, port_colliders) applies to
+        # Bowl too (keep_level_borders). It cannot change Bowl's bake because none of the 354 layer-29 cubes, and no ancestor of any object, is called
+        # LevelBorder*; Bowl's group is "Arena_Bowl_LevelBorders" and its cubes are "Cube". A rebuild of Bowl bakes the same sources as before.
+        layer29 = 0
+        for scene in sorted((BOWL_PACKAGE / "scenes").glob("*.json")):
+            data = json.loads(scene.read_text(encoding="utf-8"))
+            objects = {o["id"]: o for o in data["objects"]}
+            for o in data["objects"]:
+                layer29 += o["layer"] == 29
+                cur = o
+                while cur is not None:
+                    self.assertFalse(cur["name"].startswith("LevelBorder"), (scene.name, o["name"], cur["name"]))
+                    cur = objects.get(cur.get("parent_id"))
+        self.assertEqual(layer29, 354)
+
+
 class BakeCodeTests(unittest.TestCase):
     def test_the_level_border_name_prefix_does_not_drop_kept_cubes(self):
         # Iceberg names its 365 cubes "LevelBorder (N)" under "LevelBorders": the unconditional name rule of RoundOpenedReason
@@ -263,9 +302,6 @@ class BakeCodeTests(unittest.TestCase):
 # ---------------------------------------------------------------------------------------------------------------------
 # 2. the extracted package
 # ---------------------------------------------------------------------------------------------------------------------
-_CACHE: dict = {}
-
-
 def colliders():
     if "cset" not in _CACHE:
         _CACHE["cset"] = pc.load_package_colliders(PACKAGE)
@@ -298,7 +334,7 @@ def package_markers():
     return out
 
 
-@unittest.skipUnless(HAVE_PACKAGE, "work/extract/iceberg-native-v1 is not available (set ARENAMAPPORT_WORK_DIR)")
+@unittest.skipUnless(HAVE_PACKAGE, "work/extract/iceberg-native-v2 is not available (set ARENAMAPPORT_WORK_DIR)")
 class PackageBorderTests(unittest.TestCase):
     def test_365_cubes_and_one_solid_kill_trigger_on_layer_29(self):
         cset = colliders()
@@ -380,42 +416,115 @@ class PackageBorderTests(unittest.TestCase):
         self.assertEqual(BAKE_BOUNDS[3], 8)
 
 
-@unittest.skipUnless(HAVE_PACKAGE, "work/extract/iceberg-native-v1 is not available (set ARENAMAPPORT_WORK_DIR)")
+@unittest.skipUnless(HAVE_PACKAGE, "work/extract/iceberg-native-v2 is not available (set ARENAMAPPORT_WORK_DIR)")
 class PackageGateTests(unittest.TestCase):
-    def test_each_barrier_path_resolves_to_exactly_one_root_in_the_design_scene(self):
-        cset = colliders()
-        found, unresolved = pc.resolve_barriers(cset.scenes, OPENED_BARRIERS)
-        self.assertEqual(unresolved, [])
-        self.assertEqual([s for s, _k in found], [DESIGN_STUFF, DESIGN_STUFF])
-        scene = cset.scenes[DESIGN_STUFF]
-        self.assertEqual([scene.objects[k]["name"] for _s, k in found], ["GATES_A", "GATES_B"])
-        doors = [k for k in scene.roots() if scene.objects[k]["name"] == "DOORS"]
-        self.assertEqual(len(doors), 1)
+    UNITS = {"DOORS/GATES_A/sanatorium_resp_gate": 2, "DOORS/GATES_B/sanatorium_resp_gate": 3, "DOORS/GATES_B/Sanatorium_CheckPoint_Gate": 1}
 
-    def test_the_gates_hold_16_and_26_colliders_and_nothing_below_them_is_a_frame(self):
+    def test_each_barrier_path_names_its_gates_and_every_row_finds_its_part(self):
         cset = colliders()
-        pc.mark_barriers(cset, OPENED_BARRIERS)
+        found = {p: pc.find_all_instances(cset.scenes, p) for p in OPENED_BARRIERS}
+        self.assertEqual({p: len(v) for p, v in found.items()}, self.UNITS)
+        self.assertTrue(all(s == DESIGN_STUFF for v in found.values() for s, _k in v))
+        legacy, moved, unresolved, posed = pc.resolve_opened_barriers(cset.scenes, OPENED_BARRIERS, door_rows())
+        self.assertEqual((legacy, unresolved, posed), ([], [], 3))
+        scene = cset.scenes[DESIGN_STUFF]
+        self.assertEqual(sorted(scene.objects[k]["name"] for _s, k in moved),
+                         ["Sanatorium_CheckPoint_Gate"] + ["sanatorium_resp_gate_A"] * 5 + ["sanatorium_resp_gate_B"] * 5)
+        # the group roots of the plan's first draft have no row: they would fall back to the legacy rule and match no pose
+        legacy2, moved2, _u, posed2 = pc.resolve_opened_barriers(cset.scenes, LEGACY_GROUP_ROOTS, door_rows())
+        self.assertEqual((legacy2, moved2, posed2), (LEGACY_GROUP_ROOTS, [], 0))
+
+    def test_the_bake_drops_the_22_moved_colliders_and_keeps_the_20_unposed_ones_as_sources(self):
+        cset = colliders()
         try:
-            by_barrier = {"GATES_A": [], "GATES_B": []}
-            for o in cset.owners:
-                if o.names[:1] == ("DOORS",) and o.names[1] in by_barrier:
-                    by_barrier[o.names[1]].append(o)
-            self.assertEqual({k: len(v) for k, v in by_barrier.items()}, {"GATES_A": 16, "GATES_B": 26})
-            for k, v in by_barrier.items():
-                self.assertEqual(sorted({o.layer for o in v}), [12, 18], k)
-                self.assertEqual(sum(1 for o in v if o.layer == 18), len(v) // 2, k)
-                self.assertTrue(all(o.barrier_blocked for o in v), k)
-                self.assertFalse(any("frame" in n.lower() for o in v for n in o.names), k)       # the legacy rule drops every part
-            # two units in A, three plus the rotating gate in B: the direct children of the two roots
-            scene = cset.scenes[DESIGN_STUFF]
-            for name, children in (("GATES_A", ["sanatorium_resp_gate"] * 2),
-                                   ("GATES_B", ["sanatorium_resp_gate"] * 3 + ["Sanatorium_CheckPoint_Gate"])):
-                root = next(k for k, o in scene.objects.items() if o["name"] == name and scene.objects[o["parent_id"]]["name"] == "DOORS")
-                self.assertEqual(sorted(scene.objects[c]["name"] for c in scene.children[root]), sorted(children), name)
-            # the dropped total equals the 42 of the oracle run's exclusion table
-            self.assertEqual(sum(1 for o in cset.owners if o.barrier_blocked), 42)
+            pc.mark_barriers(cset, LEGACY_GROUP_ROOTS)
+            self.assertEqual(sum(1 for o in cset.owners if o.barrier_blocked), 42)       # the old model: everything below GATES_A/B (16 + 26)
+            pc.mark_barriers(cset, OPENED_BARRIERS, door_rows())
+            under = [o for o in cset.owners if o.names[:1] == ("DOORS",) and o.names[1] in ("GATES_A", "GATES_B")]
+            dropped, kept = [o for o in under if o.barrier_blocked], [o for o in under if not o.barrier_blocked]
+            self.assertEqual((len(under), len(dropped), len(kept)), (42, 22, 20))
+            self.assertEqual(sum(1 for o in cset.owners if o.barrier_blocked), 22)       # nothing outside the gates is dropped
+
+            def census(owners):
+                out: dict = {}
+                for o in owners:
+                    key = (o.names[-1].replace("sanatorium_resp_gate", "gate"), o.layer)
+                    out[key] = out.get(key, 0) + 1
+                return dict(sorted(out.items()))
+
+            self.assertEqual(census(dropped), {("Sanatorium_CheckPoint_Gate_BALLISTIC_METALTHICK", 12): 1, ("Sanatorium_CheckPoint_Gate_COLLIDER", 18): 1,
+                                               ("gate_A_BALLISTIC_MetalThin", 12): 5, ("gate_A_COLLIDER", 18): 5,
+                                               ("gate_B_BALLISTIC_MetalThin", 12): 5, ("gate_B_COLLIDER", 18): 5})
+            self.assertEqual(census(kept), {("gate_BALLISTIC_MetalThin", 12): 5, ("gate_COLLIDER", 18): 5,
+                                            ("gate_C_BALLISTIC_MetalThin", 12): 5, ("gate_C_COLLIDER", 18): 5})
+            self.assertFalse(any("frame" in n.lower() for o in under for n in o.names))
         finally:
             pc.mark_barriers(cset, [])
+
+    def local_boxes(self, cset, unit):
+        """{name of the object that holds the collider: (triangles in the unit's LOCAL frame, owner)} for the colliders of a sliding gate
+        unit's direct children and of their children."""
+        scene = cset.scenes[DESIGN_STUFF]
+        inv = np.linalg.inv(scene.world(unit))
+        by_obj = {(o.scene, o.obj_id): o for o in cset.owners if o.layer == 18}
+        out = {}
+        for child in scene.children[unit]:
+            for key in [child] + list(scene.children.get(child, [])):
+                o = by_obj.get((DESIGN_STUFF, key))
+                if o is None:
+                    continue
+                tris = cset.tris[o.tri_start:o.tri_start + o.tri_count].reshape(-1, 3)
+                out[scene.objects[key]["name"]] = ((np.c_[tris, np.ones(len(tris))] @ inv.T)[:, :3], o)
+        return out
+
+    def test_the_unposed_parts_leave_every_sliding_gate_doorway_open(self):
+        # The lead's geometry finding (2026-10-30), measured here for all five units in the unit's own LOCAL frame (local z lifts the leaves
+        # and points up in the world; the east pair of GATES_A is the same prefab scaled 0.8 x 0.832 x 0.866, so every length below is
+        # in local units and the world value is the product with the scale):
+        #  * sanatorium_resp_gate_COLLIDER is TWO RAILS, not a sheet: 12 triangles (three faces of two posts 0.16 m wide and 0.27 m
+        #    thick), every vertex at |x| 1.74..1.90, full height z 0..4.26. The doorway between them is 3.48 local units wide (2.78 m
+        #    for GATES_A, 3.48 m for GATES_B) and stays free;
+        #  * leaves A and B (3.6 wide, 1.44 tall) slide up in the rails; at their open pose they stack on the static top leaf C, whose
+        #    collider starts 2.86 above the gate root, so the free height under the stack is 2.86 local units (2.48 m for GATES_A,
+        #    2.86 m for GATES_B);
+        #  * so the 10 layer-18 colliders that stay (5 rails, 5 top panels) are bake sources that cannot block the doorway: an agent
+        #    1.7 m tall passes under the stack, and the rails stand at its sides.
+        cset = colliders()
+        poses = json.loads((REPO / "tools" / "maps" / "iceberg.doors.json").read_text(encoding="utf-8"))["poses"]
+        scene = cset.scenes[DESIGN_STUFF]
+        checked = 0
+        for path in OPENED_BARRIERS[:2]:
+            for scene_name, unit in pc.find_all_instances(cset.scenes, path):
+                world = scene.world(unit)
+                scale = np.linalg.norm(world[:3, :3], axis=0)                       # (0.8, 0.832, 0.866) for GATES_A, 1 for GATES_B
+                np.testing.assert_allclose(world[:3, 2] / scale[2], [0.0, 1.0, 0.0], atol=1e-3)         # local z lifts the leaves: world up
+                boxes = self.local_boxes(cset, unit)
+                rails, rail_owner = boxes["sanatorium_resp_gate_COLLIDER"]
+                self.assertEqual(rail_owner.tri_count, 12)
+                self.assertTrue((np.abs(rails[:, 0]) >= 1.74 - 0.01).all() and (np.abs(rails[:, 0]) <= 1.90 + 0.01).all())
+                self.assertTrue(set(np.unique(np.round(np.abs(rails[:, 0]), 2))) == {1.74, 1.9})
+                self.assertAlmostEqual(float(rails[:, 2].min()), 0.0, delta=0.01)
+                self.assertAlmostEqual(float(rails[:, 2].max()), 4.26, delta=0.01)
+                opening = 2 * float(np.abs(rails[:, 0]).min())
+                self.assertAlmostEqual(opening, 3.48, delta=0.01)
+                self.assertGreaterEqual(opening * scale[0], 2.7)                                  # metres between the rails
+                top, _ = boxes["sanatorium_resp_gate_C_COLLIDER"]
+                self.assertGreaterEqual(float(top[:, 2].min()), 2.84)                          # 2.86 above the gate root
+                clear = [float(top[:, 2].min())]
+                for part in ("sanatorium_resp_gate_A", "sanatorium_resp_gate_B"):
+                    leaf, _ = boxes[part + "_COLLIDER"]
+                    self.assertAlmostEqual(float(leaf[:, 0].max() - leaf[:, 0].min()), 3.6, delta=0.02)
+                    self.assertAlmostEqual(float(leaf[:, 2].max() - leaf[:, 2].min()), 1.44, delta=0.02)
+                    pose = next(p for p in poses if p["barrier"] == path and p["part"] == part
+                                and np.allclose(p["at"], world[:3, 3], atol=0.05))           # the sidecar's row of this very gate
+                    lift = pose["open"]["position"][2] - pose["closed"]["position"][2]      # the leaf's travel along the unit's local z
+                    self.assertAlmostEqual(float(leaf[:, 2].min()) + lift, float(top[:, 2].min()), delta=0.03)    # the leaf stacks on the top panel
+                    self.assertAlmostEqual(float(leaf[:, 2].max()) + lift, float(top[:, 2].max()), delta=0.03)
+                    clear.append(float(leaf[:, 2].min()) + lift)
+                self.assertGreater(min(clear), 2.8)           # local units under the stack
+                self.assertGreater(min(clear) * scale[2], 2.4)    # metres: more than the agent (1.7 m) and the player (1.8 m) need
+                checked += 1
+        self.assertEqual(checked, 5)
 
     def test_the_two_electric_engines_stand_above_head_height_beside_the_gate_and_stay(self):
         cset = colliders()
@@ -427,7 +536,7 @@ class PackageGateTests(unittest.TestCase):
             self.assertLess(hi[1] - lo[1], 0.5)
 
 
-@unittest.skipUnless(HAVE_PACKAGE, "work/extract/iceberg-native-v1 is not available (set ARENAMAPPORT_WORK_DIR)")
+@unittest.skipUnless(HAVE_PACKAGE, "work/extract/iceberg-native-v2 is not available (set ARENAMAPPORT_WORK_DIR)")
 class PackageLayerAuditTests(unittest.TestCase):
     def test_layer_census_of_the_live_colliders(self):
         cset = colliders()
@@ -439,7 +548,7 @@ class PackageLayerAuditTests(unittest.TestCase):
 
     def test_the_bake_source_table_of_the_decided_configuration(self):
         cset = colliders()
-        pc.mark_barriers(cset, OPENED_BARRIERS)
+        pc.mark_barriers(cset, OPENED_BARRIERS, door_rows())
         try:
             mask = pc.layers_to_mask(NAVMESH_BAKE_LAYERS)
             reasons: dict = {}
@@ -448,9 +557,10 @@ class PackageLayerAuditTests(unittest.TestCase):
                 if reason is None and not (mask >> o.layer) & 1:
                     reason = "not in navmesh_bake_layers"
                 reasons[reason or "source"] = reasons.get(reason or "source", 0) + 1
-            # the same table the oracle run prints (docs/progress/iceberg-release.md)
-            self.assertEqual(reasons, {"SPAWN_BOUND*": 1, "Triggers layer 13": 83, "Water layer": 1, "not in navmesh_bake_layers": 6993,
-                                       "opened_barriers": 42, "source": 5135})
+            # the same table the oracle run prints with the door rows (docs/progress/iceberg-release.md): the 22 moved colliders are dropped,
+            # the 20 unposed ones stay, 10 of them on layer 18 (rails and top panels: 5135 + 10 sources) and 10 on layer 12 (7003 = 6993 + 10)
+            self.assertEqual(reasons, {"SPAWN_BOUND*": 1, "Triggers layer 13": 83, "Water layer": 1, "not in navmesh_bake_layers": 7003,
+                                       "opened_barriers": 22, "source": 5145})
             # what the layer list drops are ballistic (12), interactive (22), culling-mask (21) and Default (0) solids; what it keeps
             # is Arena's own set plus the cubes (the package has no live layer-11 collider; layer 13 is the Triggers rule)
             dropped = {o.layer for o in cset.owners if pc.bake_exclusion_reason(o, True) is None and not (mask >> o.layer) & 1}
@@ -492,7 +602,7 @@ class PackageLayerAuditTests(unittest.TestCase):
         self.assertEqual({o.names[0] for o in layer22 if o.names[0] != "REFILL_CASE"}, {"PREFAB_VARIANTS"})
 
 
-@unittest.skipUnless(HAVE_PACKAGE, "work/extract/iceberg-native-v1 is not available (set ARENAMAPPORT_WORK_DIR)")
+@unittest.skipUnless(HAVE_PACKAGE, "work/extract/iceberg-native-v2 is not available (set ARENAMAPPORT_WORK_DIR)")
 class PackageAnchorTests(unittest.TestCase):
     def test_seventy_markers_forty_bear_thirty_usec_twenty_initial(self):
         markers = package_markers()
@@ -524,7 +634,7 @@ class PackageAnchorTests(unittest.TestCase):
         self.assertGreater(west[0], -36.04 + 3.0)
 
 
-@unittest.skipUnless(HAVE_PACKAGE, "work/extract/iceberg-native-v1 is not available (set ARENAMAPPORT_WORK_DIR)")
+@unittest.skipUnless(HAVE_PACKAGE, "work/extract/iceberg-native-v2 is not available (set ARENAMAPPORT_WORK_DIR)")
 class PackagePuddleTests(unittest.TestCase):
     WATER_SHADER = "Decal/Water Deferred Decal"
 
@@ -594,7 +704,7 @@ def arena_mesh():
     return _CACHE["mesh"], _CACHE["meta"]
 
 
-@unittest.skipUnless(HAVE_ARENA, "Arena 0.6.1 is not installed")
+@unittest.skipUnless(HAVE_ARENA, "Arena 0.6.1 is not installed (the installed build must start with " + PINNED_ARENA_BUILD + ")")
 class ArenaMeshTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -664,7 +774,7 @@ class ArenaMeshTests(unittest.TestCase):
         # Arena baked with the gates open: the closed motor gate (a 4 m sheet at z -75.66) lies on its main component along its
         # whole width, and the sliding gates of both roots at their base height on part of theirs (the rest is post and wall).
         if not HAVE_PACKAGE:
-            self.skipTest("work/extract/iceberg-native-v1 is not available")
+            self.skipTest("work/extract/iceberg-native-v2 is not available")
         cset = colliders()
         rows = {}
         for o in cset.owners:
@@ -689,7 +799,7 @@ class ArenaMeshTests(unittest.TestCase):
         self.assertTrue(all(n >= 2 for v in rows.values() for n in v), rows)
 
 
-@unittest.skipUnless(HAVE_ARENA and HAVE_PACKAGE, "the installed Arena or the extracted package is not available")
+@unittest.skipUnless(HAVE_ARENA and HAVE_PACKAGE, "the installed Arena 0.6.1 or the extracted package is not available")
 class PackageArenaAuditTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):

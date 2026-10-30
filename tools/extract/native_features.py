@@ -28,9 +28,9 @@ Manifest. ``native_features`` = ``{schema_version 1, required, navmesh_areas, ra
 light_culling, static_decals}``. ``required`` lists ``ballistics`` plus the audio feature
 name when the map has a registered ambient-audio exporter (``AUDIO_EXPORTERS``); a map
 without one gets ``required == ["ballistics"]`` and no ``native_audio`` key (the validator
-accepts that for a contract with ``audio: null``). ``arena_airpit`` registers
-``extract_bay5_audio.export`` (PLAN-AIRPIT item 13): its census, schema and states come from
-``native_contracts/airpit.json`` and its source scene is the plan's ``sound`` role.
+accepts that for a contract with ``audio: null``). ``arena_airpit`` (PLAN-AIRPIT item 13), ``arena_bowl`` and
+``arena_iceberg`` (PLAN-ICEBERG item 5) register ``extract_bay5_audio.export``: the census, schema and states of each
+come from ``native_contracts/<stem>.json`` and its source scene is the plan's ``sound`` role.
 Equator and Bay5 are not registered: their own extractors call the same exporter directly.
 ``static_decals`` is written only when the map has decals, because the validator
 (``validate_native_features.feature_enabled``) requires a non-empty census whenever the key

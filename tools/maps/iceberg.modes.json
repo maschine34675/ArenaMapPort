@@ -76,9 +76,9 @@
     }
   },
   "source_package": {
-    "extracted_utc": "2026-10-30T13:30:37Z",
+    "extracted_utc": "2026-10-30T14:36:05Z",
     "extractor_script": "tools/extract/extract_map.py",
-    "name": "iceberg-native-v1",
+    "name": "iceberg-native-v2",
     "scenes": [
       "Arena_Sanatorium",
       "Arena_Sanatorium_Grass",
