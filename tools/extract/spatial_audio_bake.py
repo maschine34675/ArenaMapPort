@@ -6,6 +6,10 @@ from __future__ import annotations
 import hashlib,json,math,struct
 from pathlib import Path
 
+class RouteGraphError(ValueError):
+ """A baked route that does not follow the source graph (a portal that does not touch the room the route is in, or an end
+ other than the pair's second room). The file itself is well formed; only the pairing with the graph is wrong."""
+
 class BakeReader:
  def __init__(self,data): self.data=bytes(data);self.pos=0
  def take(self,fmt):
@@ -69,11 +73,111 @@ def parse_bake(data,graph=None):
     here=pair['first_room_id']
     for pid in route['portal_ids']:
      link=[component_room_ids[cid] for cid in portals[pid]['connected_room_ids']]
-     if len(link)!=2 or here not in link:raise ValueError('route is disconnected from source graph')
+     if len(link)!=2 or here not in link:raise RouteGraphError('route is disconnected from source graph')
      here=link[1] if here==link[0] else link[0]
-    if here!=pair['second_room_id']:raise ValueError('route does not reach pair endpoint')
+    if here!=pair['second_room_id']:raise RouteGraphError('route does not reach pair endpoint')
   info=graph['systems'][0]['location_info']
   for k in ('room_pairs_count','routes_count','max_routes_count','max_route_portals_count','bake_settings'):
    if result[k]!=info[k]:raise ValueError('location info disagrees with bake: '+k)
   if (info['rooms_count'],info['portals_count'])!=(len(rooms),len(portals)):raise ValueError('location info graph count mismatch')
  return result
+
+
+# ---------------------------------------------------------------------------------------------------------------------
+# Reviewed repair of duplicated portal IDs (PLAN-ICEBERG item 11, docs/progress/iceberg-release.md "Spatial acoustics").
+#
+# Arena's Sanatorium bake was made while two different portals carried the ID 66: the shipped scene has one portal 66
+# (elevators <-> boiler (2), rooms 27 and 24) and 533 of the 17,751 baked routes use that ID for a second portal that
+# joins elevators and boiler (rooms 27 and 11), a doorway the shipped scene knows as portal 30. The loader never walks
+# a route (PropagationJob takes each portal ID's data and measures the polyline), so the routes load and play, through
+# the wrong doorway. parse_bake keeps refusing such a file. This module rewrites the offending IDs only when a reviewed
+# rule names the ID, every failing route has exactly one fix, and the result passes the unchanged strict check.
+# ---------------------------------------------------------------------------------------------------------------------
+
+def scan_routes(data):
+ """Every baked route as (pair key, first room, second room, route index, byte offset of its first portal ID, IDs).
+ The same walk as parse_bake over the room-pair section; nothing is validated here beyond what the reader enforces."""
+ r=BakeReader(data);out=[]
+ for _ in range(r.count(17)):
+  key=r.take('I');r.take('I');a=r.take('h');b=r.take('h')
+  for index in range(r.count(12)):
+   n=r.count(2);offset=r.pos;ids=[r.take('h') for _ in range(n)];r.take('f');r.take('f')
+   out.append((key,a,b,index,offset,ids))
+  r.take('i');r.take('B')
+ return out
+
+def portal_room_links(graph):
+ """Active portal ID -> the two native room IDs it joins, in the graph's order."""
+ active=lambda x:x['enabled'] and x['active_in_hierarchy']
+ room_of={x['id']:x['room_id'] for x in graph['rooms'] if active(x)}
+ return {p['portal_id']:tuple(room_of[c] for c in p['connected_room_ids']) for p in graph['portals'] if active(p)}
+
+def route_follows_graph(links,first,second,ids):
+ """parse_bake's route check: every portal touches the room the route is in, and the last one leads to the second room."""
+ here=first
+ for pid in ids:
+  link=links.get(pid)
+  if link is None or len(link)!=2 or here not in link:return False
+  here=link[1] if here==link[0] else link[0]
+ return here==second
+
+def _unique_neighbours(links):
+ """room -> {other room: [portal IDs joining them]}."""
+ near={}
+ for pid,(x,y) in sorted(links.items()):
+  near.setdefault(x,{}).setdefault(y,[]).append(pid)
+  near.setdefault(y,{}).setdefault(x,[]).append(pid)
+ return near
+
+def resolve_route(links,near,first,second,ids,allowed):
+ """The cheapest way to read a failing route as a walk of the graph when only portal IDs in ``allowed`` may stand for another
+ portal. A substitution replaces the ID by THE portal that joins the two rooms the walk is between, and only where exactly one
+ portal joins them (parallel portals would be a guess). Returns (cost, [assignments]); every assignment is the full ID list the
+ walk uses. ``None`` when no reading reaches the second room."""
+ states={first:(0,[()])}
+ for pid in ids:
+  nxt={}
+  def offer(room,cost,assign):
+   have=nxt.get(room)
+   if have is None or cost<have[0]:nxt[room]=(cost,[assign])
+   elif cost==have[0] and assign not in have[1]:have[1].append(assign)
+  for room,(cost,assigns) in states.items():
+   link=links.get(pid)
+   if link is not None and room in link:
+    other=link[1] if room==link[0] else link[0]
+    for a in assigns:offer(other,cost,a+(pid,))
+   if pid in allowed:
+    for other,joining in near.get(room,{}).items():
+     if len(joining)==1 and joining[0]!=pid:
+      for a in assigns:offer(other,cost+1,a+(joining[0],))
+  states=nxt
+ return states.get(second)
+
+def repair_portal_ids(data,graph,portal_ids):
+ """Rewrite the portal IDs of failing routes under the duplicated-ID rule and return (repaired bytes, report).
+
+ ``portal_ids`` names the IDs that may stand for another portal (the reviewed rule of one map). A route that already follows
+ the graph is never touched. A failing route must have exactly one reading with the fewest substitutions, else RouteGraphError
+ (no reading, or an ambiguous one). The file keeps its size, structure and every route length, so the route index, the
+ aggregates and the counts stay valid; the result is checked with the unchanged parse_bake before it is returned."""
+ allowed=frozenset(portal_ids)
+ if not allowed:raise ValueError('no portal ID named for the repair')
+ links=portal_room_links(graph);near=_unique_neighbours(links)
+ buf=bytearray(data);rewrites={};routes_repaired=0;ids_rewritten=0
+ for key,a,b,index,offset,ids in scan_routes(data):
+  if route_follows_graph(links,a,b,ids):continue
+  found=resolve_route(links,near,a,b,ids,allowed)
+  if found is None:raise RouteGraphError('route %d of room pair %d has no reading under the duplicated-ID rule'%(index,key))
+  cost,assigns=found
+  if len(assigns)!=1:raise RouteGraphError('route %d of room pair %d has %d equally cheap readings'%(index,key,len(assigns)))
+  routes_repaired+=1
+  for i,(old,new) in enumerate(zip(ids,assigns[0])):
+   if old==new:continue
+   struct.pack_into('<h',buf,offset+2*i,new);ids_rewritten+=1
+   rewrites['%d->%d'%(old,new)]=rewrites.get('%d->%d'%(old,new),0)+1
+ repaired=bytes(buf)
+ parse_bake(repaired,graph)
+ report={'rule':'duplicated-portal-id','portal_ids':sorted(allowed),'routes_repaired':routes_repaired,'ids_rewritten':ids_rewritten,
+  'rewrites':dict(sorted(rewrites.items())),'original':{'bytes':len(data),'sha256':hashlib.sha256(data).hexdigest()},
+  'repaired':{'bytes':len(repaired),'sha256':hashlib.sha256(repaired).hexdigest()}}
+ return repaired,report
