@@ -11,7 +11,8 @@ bots at 19:30), the hideout once, one Equator raid; 0 ArenaMapPort warnings, Nav
 all gates parked open, every A/B/C and pocket route complete, a walk through the east gate, bots patrolling. Record with the log quotes:
 [docs/progress/iceberg-release.md](docs/progress/iceberg-release.md) ("U1: two import fixes, the first stage, deploy and the first Iceberg raids").
 
-**Open (agent):** the two very bright glow blobs in the lobby doorways next to the Bear spawn (which lights; compare with Arena), a look at the olive tree
+**Fixed the same evening:** the two glow blobs next to the Bear spawn were the respawn hall's candle chandeliers under the camera's bloom; Iceberg now
+defaults to bloom 4.0/0.2 (`15a13d8`, migration of a saved -1/-1 pair, host-checked at 19:30). **Open (agent):** a look at the olive tree
 (`Nature/SpeedTree8` rebinds without an error line) and the canyon rocks, `verify-keys` against Arena 0.6.2 on MASCHINE11 (offline tonight), the Phase C items
 (flares, water, overview). **The user's:** a listening and playing pass (ambient mix 3 dB / offset 0 / range 2, the 20 lamp loops, gate sounds with a held gate,
 `ZeroLevel`), the release number and form (both csproj say 0.4.0; the single ZIP grows from 3.57 to about 5.0 GiB), the merge of `feature/iceberg` into `main`,

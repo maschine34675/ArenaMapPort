@@ -922,3 +922,18 @@ above and models the legacy rule); do not deploy before the first stage is done.
   looked at in the game; a listening pass (ambient 3 dB / offset 0 / range 2, the 20 lamp loops, gate sounds at -0.9 dB with a held gate); `ZeroLevel`;
   the verify-keys check against Arena 0.6.2 on MASCHINE11; the Phase C items (flares, water, overview); the release number and form (the single ZIP grows to
   about 5.0 GiB).
+
+## 2026-10-30 evening - the glow blobs are the respawn-hall chandeliers under bloom; Iceberg bloom defaults 4.0/0.2
+
+- **Finding** (GPU-2, 20:27-20:32, botless raid, Bear spawn (95.2, 2.25, -89.4) looking west at yaw 273.4): the two disc-shaped glare blobs of the
+  first raids sit on the camera rays through the screen points (360, 140) and (1310, 140) (FOV 50, computed offline: scratch `lights_on_ray.py`) at about
+  12 m, where `SBG_Arena_Sanatorium_Main/OO/RESPAWN_OUTDOOR/Chalet_chandelier_01` hangs twice (raycast: `Chalet_chandelier_01_BALLISTIC_glass` at 11.06 m;
+  pivot (84.68, 7.52, -93.70), mesh bounds y 5.49..7.53). Its LOD0 binds `Sanatorium_Emissive_Orange` on `p0/Reflective/Bumped Emissive Specular SMap`
+  (`_EmissionPower` 10, `_EmissiveColor` (0.68, 0.58, 0.10)). The KPP point and spot lights under it read intensity 1.0 at run time (range 2.28-8.2).
+  Live A/B with `persist=false`: `GlobalLightIntensityMultiplier` 0.2 and bloom 2.10/0.35 (= the camera's own donor-rig values) leave the blobs
+  unchanged; bloom threshold 8 / intensity 0 removes them and shows two candle chandeliers; 4.0/0.2 shows the candles with a soft glow.
+- **Fix** (`15a13d8`): `BloomTuning` gives Iceberg the defaults 4.0/0.2 (AirPit's 1.2/0.25 pattern), and the AirPit pair migration is generalised
+  (`MigratePairDefaults`): a saved -1/-1 pair moves once to the map's pair (`BloomDefaultsRevision` 1), any other pair stays. Client DLL-only deploy,
+  `gpu-run deploy-wait --server --game` (2 files identical after 2 s, game restarted, 16/16 identical): `[Bloom] arena_iceberg: config re-seeded to bloom
+  defaults revision 1 (2 value(s) moved; threshold=4.00, intensity=0.20)`. Raid at 19:30 (20:35, botless, 0 warnings): the chandeliers render as candles
+  with a soft glow, no disc. .NET 2,756 passed.
