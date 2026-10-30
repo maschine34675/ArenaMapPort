@@ -106,6 +106,13 @@ foreach ($slot in @('_BaseNormalMap','_TopNormalMap','_DetailNormalMap')) {
     Assert-Plan (Classify 'DXT5' 'Linear' $box (New-Usage 'ANGRYMESH/PBR Rocks/PBR BlendTopDetail (Legacy)' $slot)) 'PackedRaG' 'DXT5' $false
     Assert-Rejected { Classify 'DXT5' 'Linear' $box (New-Usage 'p0/Reflective/Bumped Specular' $slot) }
 }
+# Iceberg's MK4 rock shaders: _Normalmap on both variants, _DetailBump and _MaskBump on MK4/Rock only.
+foreach ($case in @(@('MK4/Rock','_Normalmap'), @('MK4/Rock Simple','_Normalmap'), @('MK4/Rock','_DetailBump'), @('MK4/Rock','_MaskBump'))) {
+    Assert-Plan (Classify 'DXT5' 'Linear' $box (New-Usage $case[0] $case[1])) 'PackedRaG' 'DXT5' $false
+}
+foreach ($case in @(@('MK4/Rock Simple','_DetailBump'), @('MK4/Rock Simple','_MaskBump'), @('p0/Reflective/Bumped Specular','_Normalmap'), @('MK4/Rock','_MaskRGBA'))) {
+    Assert-Rejected { Classify 'DXT5' 'Linear' $box (New-Usage $case[0] $case[1]) }
+}
 $specCo = New-Usage 'p0/Reflective/Bumped Specular SMap' '_BumpMap'
 $specCo.Add('p0/Reflective/Bumped Specular SMap', '_SpecMap', $false)
 Assert-Plan (Classify 'DXT5' 'Linear' $box $specCo) 'PackedRaG' 'DXT5' $false

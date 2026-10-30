@@ -26,6 +26,12 @@ namespace ArenaMapPort.Editor.Import
             const string ClothShader = "Cloth/ClothShader";
             const string ClothBackfaceShader = "Cloth/ClothShader_backface";
             static bool IsClothShader(string shader) => shader == ClothShader || shader == ClothBackfaceShader;
+            // Iceberg (Arena 0.6.1, 2026-10-30): the canyon rocks use EFT's MK4 rock shaders. Their normal slots are
+            // _Normalmap (both variants) and, on MK4/Rock only, _DetailBump and _MaskBump; all 18 textures bound there
+            // are ordinary packed DXT5 normals (R = 255 everywhere, X in alpha, Y in green, |G - B| <= 6; RockGr*_n,
+            // Detail_01/02_nmp, Ground_04_nmp; iceberg-release.md), so they take the PackedRaG route like any _BumpMap.
+            const string Mk4RockShader = "MK4/Rock";
+            const string Mk4RockSimpleShader = "MK4/Rock Simple";
 
             public void Add(string shader, string property, bool dxt1Keyword)
             {
@@ -40,6 +46,9 @@ namespace ArenaMapPort.Editor.Import
                     case "_BaseNormalMap" when shader == RockShader:
                     case "_TopNormalMap" when shader == RockShader:
                     case "_DetailNormalMap" when shader == RockShader:
+                    case "_Normalmap" when shader == Mk4RockShader || shader == Mk4RockSimpleShader:
+                    case "_DetailBump" when shader == Mk4RockShader:
+                    case "_MaskBump" when shader == Mk4RockShader:
                         NormalSlots++;
                         HasDxt1Keyword |= dxt1Keyword;
                         AllNormalReadersUseRgb &= dxt1Keyword ||
