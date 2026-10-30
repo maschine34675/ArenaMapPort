@@ -167,7 +167,9 @@ class BallisticsTests(unittest.TestCase):
     def test_reviewed_preset_material_pair_imports_as_authored_and_others_still_fail(self):
         # Bowl 2026-10-18: two Guardian_Tower fence colliders carry the preset Chainfence over the material MetalThin.
         # Only the reviewed pair passes, imported exactly as authored (material from the payload, preset by name).
-        self.assertEqual(B.REVIEWED_PRESET_MATERIAL_PAIRS, frozenset({("Chainfence", "MetalThin")}))
+        # Iceberg 2026-10-30: the eight cement-bag 'concrete' colliders carry the preset Gravel over the material Concrete.
+        self.assertEqual(B.REVIEWED_PRESET_MATERIAL_PAIRS,
+                         frozenset({("Chainfence", "MetalThin"), ("Gravel", "Concrete")}))
         file, scene, _, _, _ = fixture()
         file.objects[20].get_raw_data = lambda: raw(preset=1)  # preset MetalThin (id 101) over material WoodThin (102)
         with self.assertRaises(HardExtractError):
@@ -181,6 +183,26 @@ class BallisticsTests(unittest.TestCase):
         component = scene["objects"][0]["components"][-1]
         self.assertEqual((component["material"], component["preset_name"]), ("WoodThin", "MetalThin"))
         self.assertEqual(component["target_preset_id"], 4)  # the target table lists MetalThin at index 4
+
+    def test_lamp_glass_role_imports_as_plain_glass_and_other_lamp_roles_fail(self):
+        # Iceberg 2026-10-30: car lights and industrial lamps carry EHitType.Lamp (1) with network id 0 on Glass.
+        self.assertTrue(B.reviewed_hit_role(1, 0, "Glass"))
+        self.assertTrue(B.reviewed_hit_role(2, 77, "Glass"))
+        self.assertTrue(B.reviewed_hit_role(0, 0, "WoodThin"))
+        for hit, net, material in ((1, 5, "Glass"), (1, 0, "MetalThin"), (2, 0, "Glass"), (3, 0, "Glass"),
+                                   (4, 0, "Glass"), (5, 0, "Glass"), (0, 7, "Glass")):
+            with self.subTest(hit=hit, net=net, material=material):
+                self.assertFalse(B.reviewed_hit_role(hit, net, material))
+        file, scene, _, _, _ = fixture(role=2)
+        file.objects[20].get_raw_data = lambda: raw(material=104, preset=-900, hit=1, net=0)
+        self.assertEqual(B.augment_scene(scene, file, contract()), 1)
+        c = scene["objects"][0]["components"][-1]
+        self.assertEqual(c["material"], "Glass")
+        self.assertEqual((c["source"]["hit_type_id"], c["source"]["net_id"]), (1, 0))
+        file, scene, _, _, _ = fixture(role=2)
+        file.objects[20].get_raw_data = lambda: raw(material=104, preset=-900, hit=1, net=9)
+        with self.assertRaises(HardExtractError):
+            B.augment_scene(scene, file, contract())
 
     def test_changed_active_or_physics_state_fails_before_mutation(self):
         for change in ("active", "collider_enabled", "trigger", "missing_physics"):

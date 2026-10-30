@@ -138,7 +138,10 @@ namespace ArenaMapPort.Editor.Import
             if (surface != 0 && !(surface == 12 && material == "WoodThick"))
                 throw new InvalidDataException(context + "unreviewed original surface sound.");
             int hit = Int(source, "hit_type_id", context), net = Int(source, "net_id", context);
-            if (!((hit == 0 && net == 0) || (hit == 2 && net > 0 && material == "Glass")))
+            // Mirrors extract_ballistics.reviewed_hit_role: ordinary (0/0), window glass (2, stale id) and lamp glass
+            // (1, id 0; Iceberg 2026-10-30). All of them import as HitType Default with NetId 0.
+            if (!((hit == 0 && net == 0) || (hit == 2 && net > 0 && material == "Glass") ||
+                  (hit == 1 && net == 0 && material == "Glass")))
                 throw new InvalidDataException(context + "unreviewed original hit/network identity.");
         }
 

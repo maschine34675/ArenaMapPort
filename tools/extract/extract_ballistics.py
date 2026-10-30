@@ -31,8 +31,24 @@ MATERIAL_NAMES = frozenset("None Asphalt Body Cardboard Chainfence Concrete Fabr
 # is imported exactly as authored (EFT keeps TypeOfMaterial and Preset as two fields, so Arena itself ran it that
 # way, and the validator's independent decoding expects the same two values). Bowl, 2026-10-18: the two
 # 'Guardian_Tower_Fance_BALLISTIC_MetalThin' colliders of Arena_Bowl (level41) carry the preset Chainfence over the
-# material MetalThin. Any other pair still fails the extraction closed ("preset/material disagreement").
-REVIEWED_PRESET_MATERIAL_PAIRS = frozenset({("Chainfence", "MetalThin")})
+# material MetalThin. Iceberg, 2026-10-30: the eight 'concrete' children of the cement bags
+# (SBG_Arena_Sanatorium_Main/OO/OUTDOOR/bag_cement_block .. (7)/concrete, level256) carry the preset Gravel over the
+# material Concrete. Any other pair still fails the extraction closed ("preset/material disagreement").
+REVIEWED_PRESET_MATERIAL_PAIRS = frozenset({("Chainfence", "MetalThin"), ("Gravel", "Concrete")})
+
+
+def reviewed_hit_role(hit, net, material):
+    """The original hit role / network id pairs that import as a plain material component.
+
+    0/0 is an ordinary collider. 2 (EHitType.Window) with a stale network id on Glass is window glass, whose
+    breaker is not imported. 1 (EHitType.Lamp) with network id 0 on Glass is lamp glass (Iceberg, 2026-10-30: the
+    eight head/tail light colliders of Ford_Focus_closed_off and Kamaz_4310_police_off (3) in level256 and the three
+    Lamp_Industrial_01_BALLISTIC_glass in level258); EFT sets that role at runtime only when a LampController
+    registers the collider (Turnable.RegisterForNetwork), and the role only labels the network shot packet, so the
+    import writes Default/0 for every case. Anything else fails closed.
+    """
+    return ((hit == 0 and net == 0) or (hit == 2 and material == "Glass" and net > 0) or
+            (hit == 1 and material == "Glass" and net == 0))
 
 
 def _require(condition, message):
@@ -215,9 +231,7 @@ def _component(reader, source_file_name, contract, bindings):
     preset = rows[index] if index != -900 else None
     _require(preset is None or preset["material_id"] == decoded["material"] or
              (preset["name"], material) in REVIEWED_PRESET_MATERIAL_PAIRS, "preset/material disagreement")
-    _require((decoded["hit"] == 0 and decoded["net"] == 0) or
-             (decoded["hit"] == 2 and material == "Glass" and decoded["net"] > 0),
-             "unreviewed hit role/network identity")
+    _require(reviewed_hit_role(decoded["hit"], decoded["net"], material), "unreviewed hit role/network identity")
     _require(decoded["surface"] == 0 or (decoded["surface"] == 12 and material == "WoodThick"),
              "unreviewed surface sound encoding")
     return {"type": "BallisticCollider", "schema_version": 1, "enabled": decoded["enabled"],
