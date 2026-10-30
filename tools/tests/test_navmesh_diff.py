@@ -416,8 +416,15 @@ class DoorRowBakeTests(unittest.TestCase):
                 self.assertEqual(nd.main(["--map", "iceberg", "--descriptor", str(descriptor), "--doors", str(doors)]), 0)
                 self.assertEqual(seen["door_rows"][0]["part"], "")
                 seen.clear()
-                self.assertEqual(nd.main(["--map", "iceberg", "--descriptor", str(descriptor)]), 0)
+                with mock.patch("sys.stderr", new_callable=io.StringIO) as stderr:
+                    self.assertEqual(nd.main(["--map", "iceberg", "--descriptor", str(descriptor)]), 0)
                 self.assertIsNone(seen["door_rows"])                                                  # opt-in: the legacy model stays the default
+                self.assertIn("has door rows for 1 of the 1 opened_barriers", stderr.getvalue())      # ... and the run says that it is not the bake's model
+                self.assertIn("pass --doors", stderr.getvalue())
+                seen.clear()
+                with mock.patch("sys.stderr", new_callable=io.StringIO) as stderr:
+                    self.assertEqual(nd.main(["--map", "iceberg", "--descriptor", str(descriptor), "--doors"]), 0)
+                self.assertEqual(stderr.getvalue(), "")                                               # --doors follows the bake: nothing to note
                 with mock.patch("sys.stderr", new_callable=io.StringIO), self.assertRaises(SystemExit):
                     nd.main(["--map", "iceberg", "--doors"])                                         # bare --doors needs a descriptor
                 with mock.patch("sys.stderr", new_callable=io.StringIO), self.assertRaises(SystemExit):

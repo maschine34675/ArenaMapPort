@@ -473,6 +473,22 @@ class MirrorValidatorTests(unittest.TestCase):
     def test_clean(self):
         self.assertEqual(self.errors(self.doc), [])
 
+    def test_a_rowless_opened_barrier_may_not_contain_or_sit_inside_a_posed_barrier(self):
+        """Second integration review of Iceberg: the bake drops only the moved parts of a barrier that has rows and everything below a rowless
+        path, so Iceberg's first group-level form (DOORS/GATES_A) would have resealed nothing and dropped the unposed rails, and a path
+        inside a posed unit is a second rule for part of it. The released maps list neither."""
+        iceberg = json.loads((REPO / "tools" / "maps" / "iceberg.json").read_text(encoding="utf-8"))
+        doors = REPO / "tools" / "maps" / "iceberg.doors.json"
+        registry = VD.registry_entries((REPO / "ArenaMapPort.Shared" / "ArenaMapDescriptor.cs").read_text(encoding="utf-8"))["Iceberg"]["DoorPoses"]
+        self.assertEqual(VD.door_pose_errors(iceberg, doors, registry), [])
+        unit = "DOORS/GATES_A/sanatorium_resp_gate"
+        grouped = dict(iceberg, opened_barriers=["DOORS/GATES_A"] + [b for b in iceberg["opened_barriers"] if b != unit])
+        found = VD.door_pose_errors(grouped, doors, registry)
+        self.assertTrue(any("'DOORS/GATES_A' has no rows but contains the posed barrier" in e and unit in e for e in found), found)
+        inside = dict(iceberg, opened_barriers=iceberg["opened_barriers"] + [unit + "/sanatorium_resp_gate_A"])
+        found = VD.door_pose_errors(inside, doors, registry)
+        self.assertTrue(any("sits inside the posed barrier" in e and unit in e for e in found), found)
+
     def test_a_changed_number_is_reported_with_the_pose(self):
         doc = copy.deepcopy(self.doc)
         doc["poses"][0]["open"]["position"][0] += 0.001

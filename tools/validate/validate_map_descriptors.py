@@ -638,6 +638,21 @@ def door_pose_errors(map_json: dict, doors_path: Path, registry_poses) -> list[s
     barriers = map_json.get("opened_barriers", [])
     lamp_groups = door_lamp_groups(map_json, poses)
     exception = DOOR_BARRIER_EXCEPTIONS.get(map_json.get("key"))
+    # BakeNavMesh.ResolveOpenedBarriers: a path WITH rows drops only its moved parts, a path WITHOUT rows keeps the legacy rule (every
+    # non-frame descendant goes). So a rowless path that contains a posed barrier would drop the whole posed unit, unposed parts included,
+    # and bypass the rows (Iceberg's gates were first listed at group level, DOORS/GATES_A, for exactly that reason a unit-level path is
+    # the form), and a path inside a posed barrier would drop a subtree on its own. No released map has either; the second integration
+    # review of Iceberg (2026-10-30) asked for the check.
+    row_barriers = {p["barrier"] for p in poses if isinstance(p, dict) and isinstance(p.get("barrier"), str) and p["barrier"]}
+    for path in barriers:
+        if not isinstance(path, str) or path in row_barriers:
+            continue
+        for inner in sorted(b for b in row_barriers if b.startswith(path + "/")):
+            errors.append(f"{name}: opened_barriers path {path!r} has no rows but contains the posed barrier {inner!r}: the legacy "
+                          f"drop-all rule would remove the whole unit (use the unit-level path the rows name)")
+        for outer in sorted(b for b in row_barriers if path.startswith(b + "/")):
+            errors.append(f"{name}: opened_barriers path {path!r} sits inside the posed barrier {outer!r}: list the barrier the rows name, "
+                          f"not a part of it")
     seen: dict[tuple, list] = {}
     for i, pose in enumerate(poses):
         label = f"{name} poses[{i}]"

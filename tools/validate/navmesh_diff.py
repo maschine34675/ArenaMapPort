@@ -664,6 +664,25 @@ def descriptor_bake_inputs(descriptor: dict) -> dict:
             "keep_level_borders": descriptor.get("keep_level_borders") is True}
 
 
+def unmodelled_door_rows_note(descriptor_path, barriers, map_key) -> str | None:
+    """A run with --descriptor but without --doors models every opened_barriers path with the legacy drop-all rule, while BakeNavMesh drops
+    only the moved parts of a barrier that has rows in the doors sidecar next to the descriptor: the numbers of such a run describe a
+    different bake. The default stays as it is (the recorded Bowl and AirPit oracle numbers were made that way); this names the
+    divergence instead of leaving it silent (second integration review of Iceberg, 2026-10-30). None when nothing diverges."""
+    sidecar = pcol.door_sidecar_path(descriptor_path)
+    if sidecar is None or not Path(sidecar).is_file():
+        return None
+    try:
+        rows = pcol.load_door_rows(sidecar, map_key)
+    except (pcol.ColliderModelError, OSError, ValueError):
+        return None
+    posed = sorted({b for b in barriers if any(r["barrier"] == b for r in rows)})
+    if not posed:
+        return None
+    return (f"note: {Path(sidecar).name} has door rows for {len(posed)} of the {len(set(barriers))} opened_barriers path(s); without --doors "
+            f"they are modelled with the legacy drop-all rule, while the bake drops only their moved parts (pass --doors to follow the bake)")
+
+
 def analyse(package, cfg: Config | None = None, opened_barriers=(), points=(), arena_data=DEFAULT_ARENA_DATA,
             mesh=None, cset=None, bake_rules="port", other_mesh=None, greedy_steps=12, log=print,
             bake_exclusions=(), port_layer_mask=None, assets=AIRPIT_NAVMESH[0], path_id=AIRPIT_NAVMESH[1],
@@ -1016,6 +1035,10 @@ def main(argv=None):
         if layer_mask is None and not args.ignore_descriptor_layers:
             layer_mask = inputs["layer_mask"]
     door_rows = None
+    if not args.doors and args.descriptor:
+        note = unmodelled_door_rows_note(args.descriptor, barriers, source.key)
+        if note:
+            print(note, file=sys.stderr)
     if args.doors:
         doors_path = args.doors
         if doors_path == "auto":
