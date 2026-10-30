@@ -1,0 +1,47 @@
+{
+ "schema_version": 1,
+ "map_key": "arena_iceberg",
+ "notes": [
+  "Pins from the first native extraction of Iceberg on Arena 0.6.1.0.48206 (2026-10-30, package iceberg-native-v1, docs/progress/iceberg-release.md): BallisticCollider per scene {'256': 6077, '260': 0, '258': 801, '257': 11, '375': 337, '376': 61}, StaticDeferredDecal 215, CullingLightObject 1126, VolumetricLight 276, LightFlicker 7, NavMeshModifier 228 + NavMeshModifierVolume 0, SmallPhysicsObject 0, rain cover 23 IndoorTrigger / 0 DryPlane / weather obstacle False.",
+  "implicit_scene_identity stays false: generic packages always record source.map_key.",
+  "Eight cement-bag colliders of Arena_Sanatorium ('bag_cement_block*/concrete') carry the preset Gravel over the material Concrete; extract_ballistics imports the reviewed pair as authored (REVIEWED_PRESET_MATERIAL_PAIRS).",
+  "Eleven Glass colliders (car lights in Arena_Sanatorium, Lamp_Industrial_01_BALLISTIC_glass in Arena_Sanatorium_Light) carry EHitType.Lamp with network id 0; extract_ballistics.reviewed_hit_role imports them as plain Glass (HitType Default, NetId 0)."
+ ],
+ "scenes": {
+  "256": "Arena_Sanatorium",
+  "260": "Arena_Sanatorium_Grass",
+  "258": "Arena_Sanatorium_Light",
+  "257": "Arena_Sanatorium_DesignStuff",
+  "375": "Arena_Sanatorium_CheckPoint",
+  "376": "Arena_Sanatorium_CheckPoint_DesignStuff"
+ },
+ "ballistics": {
+  "256": 6077,
+  "260": 0,
+  "258": 801,
+  "257": 11,
+  "375": 337,
+  "376": 61
+ },
+ "require_unsliced": true,
+ "implicit_scene_identity": false,
+ "features": {
+  "static_decals": 215,
+  "light_culling": {
+   "culling_light_object_count": 1126,
+   "volumetric_light_count": 276,
+   "light_flicker_count": 7
+  },
+  "raincover": {
+   "indoor_trigger_count": 23,
+   "dry_plane_count": 0,
+   "weather_obstacle": false
+  },
+  "navmesh_modifiers": {
+   "modifiers": 228,
+   "volumes": 0
+  },
+  "small_physics_objects": 0
+ },
+ "audio": null
+}
