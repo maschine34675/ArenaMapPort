@@ -201,3 +201,13 @@ The original 26 parameters are an additive part of the same graph JSON. Equator
 needs a scoped ambient routing adaptation because EFT mutes its original hall
 return. Actual map-channel tests and the unchanged gameplay scope are documented
 in [room-reverb.md](room-reverb.md). Outdoor ambience blending remains separate.
+
+## Follow-up — Iceberg's bake is repaired, 2026-10-30
+
+Iceberg (PLAN-ICEBERG item 11, [iceberg-release.md](iceberg-release.md)) is the first map whose staged `source.audiobakedata` is NOT Arena's file byte
+for byte: the strict route check failed on 533 of 17,751 routes that all pass through portal ID 66, which Arena's bake uses for two different
+doorways; a pinned, reviewed repair rewrites exactly those 533 positions to the one portal that joins the two rooms (66 to 30; 533 bytes differ) and
+records the original and the repaired SHA-256 under `bake_repair` in the graph JSON. Where this document, README text or a release note says
+"the original bake", that is true of Equator, Bay5, AirPit and Bowl only; for Iceberg say "Arena's bake with one duplicated portal ID corrected". The
+10 mirrored `AudioTriggerArea` volumes of two Iceberg rooms keep their negative scale (`AcousticVolumeRules`).
+

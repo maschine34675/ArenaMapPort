@@ -122,6 +122,22 @@ REVIEWED_BAKE_REPAIRS={
   'routes_repaired':533,'rewrites':{'66->30':533},'repaired_sha256':'e7650b6e673a76216d89eab8ea7612a50a49a5f44ea139d364da53dfce775169'},
 }
 
+# Maps whose graph may carry mirrored (negative local scale) trigger volumes, with the exact number of mirrored nodes the review accepted. The
+# rule in mirrored_volume_nodes / validate_graph is generic, its use is not: a map missing here must have none, and a map listed here must have
+# exactly this many, so an Arena update that mirrors another volume (or un-mirrors one) stops the export until a human has looked at it. The
+# released maps (Equator, Bay5, AirPit, Bowl) have no negative node at all.
+#  arena_iceberg: ten AudioTriggerArea own nodes in corridor_2_1 (3 mirrored in X) and coffe_hall (7 mirrored in Z), each a unit box centred on
+#  its pivot with a normalised yaw rotation (docs/progress/iceberg-release.md, 2026-10-30 "Spatial acoustics").
+REVIEWED_MIRRORED_VOLUMES={'arena_iceberg':10}
+
+def check_reviewed_mirrored_volumes(data,reviewed=None):
+ """The number of mirrored (negative local scale) nodes of an exported graph must be the one the review accepted for the map
+ (REVIEWED_MIRRORED_VOLUMES; none for a map that is not listed). validate_graph judges each mirrored node; this pins how many there are."""
+ reviewed=REVIEWED_MIRRORED_VOLUMES if reviewed is None else reviewed
+ found=sum(1 for node in data['nodes'] if any(x<0 for x in node['scale'].values()))
+ if found!=reviewed.get(data['map_key'],0):
+  raise ValueError('%s has %d mirrored volume(s), the review accepted %d; review the new data first'%(data['map_key'],found,reviewed.get(data['map_key'],0)))
+
 def parse_or_repair_bake(key,bake,graph,rules=None):
  """(bake bytes to ship, parse_bake result, repair report or None). The strict parse_bake runs first and stays the only judge: a
  map without a reviewed rule, and any failure other than the route/graph pairing, raises exactly as before."""
@@ -166,6 +182,7 @@ def export(source, output, key, scene=None):
    result['nodes'].append({'id':pid,'parent_id':parent_go,'name':t['m_Name'],'active_self':bool(t['m_IsActive']),'layer':t['m_Layer'],'position':tr['m_LocalPosition'],'rotation':tr['m_LocalRotation'],'scale':tr['m_LocalScale']})
   for pid in sorted(relevant_nodes):ensure_node(pid)
   validate_graph(result)
+  check_reviewed_mirrored_volumes(result)
   result['mixer_effects']=room_reverb.extract(f,ROOT,result)
   info=result['systems'][0]['location_info']
   bakepath=ROOT/'StreamingAssets'/Path(info['relative_bake_data_path'].replace('\\','/'))

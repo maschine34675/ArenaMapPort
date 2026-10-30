@@ -74,6 +74,23 @@ class MirroredVolumeTests(unittest.TestCase):
             with self.subTest(scale=scale):
                 S.validate_graph(mirrored_graph(scale))
 
+    def test_the_number_of_mirrored_volumes_is_pinned_per_map(self):
+        # validate_graph judges each mirrored node; the count the review accepted is a separate pin, so a volume that an Arena update
+        # mirrors (or un-mirrors) stops the export of that map. A map that is not listed must have none.
+        self.assertEqual(S.REVIEWED_MIRRORED_VOLUMES, {'arena_iceberg': 10})
+        control = synthetic_graph()
+        S.check_reviewed_mirrored_volumes(control)                                    # no mirrored node, no rule: fine
+        mirrored = mirrored_graph()
+        with self.assertRaisesRegex(ValueError, 'has 1 mirrored volume.*accepted 0'):
+            S.check_reviewed_mirrored_volumes(mirrored)                               # a released map that suddenly has one
+        S.check_reviewed_mirrored_volumes(mirrored, {mirrored['map_key']: 1})
+        with self.assertRaisesRegex(ValueError, 'has 1 mirrored volume.*accepted 2'):
+            S.check_reviewed_mirrored_volumes(mirrored, {mirrored['map_key']: 2})
+        with self.assertRaisesRegex(ValueError, 'has 0 mirrored volume.*accepted 1'):
+            S.check_reviewed_mirrored_volumes(control, {control['map_key']: 1})
+        for key in RELEASED:
+            self.assertNotIn(key, S.REVIEWED_MIRRORED_VOLUMES)
+
     def test_the_rule_names_exactly_the_leaf_area_node(self):
         self.assertEqual(S.mirrored_volume_nodes(mirrored_graph()), {5})
         # In the plain synthetic graph every area node also carries its room, so nothing may be mirrored there.
@@ -421,7 +438,7 @@ class IcebergLiveTests(unittest.TestCase):
         rooms = {r['room_id'] for r in self.data['rooms'] if any(areas.get(n['id']) in r['area_ids'] for n in mirrored)}
         self.assertEqual(rooms, {5, 35})  # corridor_2_1 and coffe_hall
         cols = {c['node_id']: c for c in self.data['colliders']}
-        for n in mirrored:  # one mirrored axis each, unit rotation, nothing below the node, a box centred on its pivot
+        for n in mirrored:  # one mirrored axis each, a normalised (yaw) rotation, nothing below the node, a box centred on its pivot
             self.assertEqual(sum(v < 0 for v in n['scale'].values()), 1)
             self.assertEqual(cols[n['id']]['center'], dict(x=0, y=0, z=0))
             self.assertEqual(cols[n['id']]['size'], dict(x=1, y=1, z=1))
