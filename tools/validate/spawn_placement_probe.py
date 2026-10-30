@@ -12,8 +12,14 @@ What it models (all in world metres, y up):
   * floor without ground: when that ray finds nothing, the first solid below feet + 1.6 within 4 m (TryFindFree's probe)
     is reported as ``floor_y`` with ``ground_ok`` False;
   * ceiling: the first solid above the floor within 3 m (``ceiling`` = its height above the floor);
-  * capsule: Unity's CheckCapsule is replaced by 16 horizontal rays of the capsule radius (0.35 m) at 0.5 m and 1.2 m
-    above the floor; a hit means the capsule would overlap a solid.
+  * capsule: Unity's CheckCapsule(feet + 0.45, feet + 1.45, 0.35) covers 0.10 to 1.80 m above the feet (two hemispheres
+    around a 1 m cylinder). It is replaced by 16 horizontal rays at seven heights (``SIDE_RINGS``), each as long as the
+    capsule's slice at that height (0.35 m on the cylinder, shorter on the caps); a hit means the capsule would overlap a
+    solid. This was two rings of 0.35 m (0.5 and 1.2 m) until the review of 2026-10-30: a 0.3 m curb 0.2 m away, which the
+    real capsule's lower hemisphere touches, passed. The rings stay an UPPER bound on validity (a surface that slants
+    between two rays, or lies between two rings, is not seen); the host's ``spawn placement:`` line is the authority;
+  * headroom: the capsule is checked at the spawn's own height, so the ceiling counts from max(spawn y, floor), not from
+    the floor (a spawn 0.3 m above its floor has 0.3 m less headroom).
 It does not model the player collision matrix (every enabled, non-trigger, active collider counts, except those
 ``RUNTIME_NONSOLID`` names), mesh convexity, or moving parts (gate leaves are parked open at raid start and stand away
 from the spawn pockets). A verdict is therefore a strong hint, not proof; the host's ``spawn placement:`` log line is the
@@ -37,7 +43,14 @@ FLOOR_RAY_START = 1.6         # TryFindFree: candidate + 1.6 up
 FLOOR_RAY_LENGTH = 4.0
 CEILING_RAY_LENGTH = 3.0
 SIDE_RAYS = 16
-SIDE_HEIGHTS = (0.5, 1.2)
+def _capsule_slice(height: float) -> float:
+    """Horizontal radius of CheckCapsule's capsule at ``height`` above the feet: its two sphere centres sit at 0.45 and 1.45."""
+    centre = min(max(height, CAPSULE_RADIUS + 0.1), CAPSULE_HEIGHT - CAPSULE_RADIUS)
+    return math.sqrt(max(CAPSULE_RADIUS * CAPSULE_RADIUS - (height - centre) ** 2, 0.0))
+
+
+SIDE_HEIGHTS = (0.12, 0.25, 0.5, 0.85, 1.2, 1.55, 1.7)
+SIDE_RINGS = tuple((h, _capsule_slice(h)) for h in SIDE_HEIGHTS)
 NEAR_RADIUS = 1.5             # triangles within this horizontal distance of the point are kept for its rays
 
 
@@ -56,8 +69,15 @@ class Verdict:
     blocked: list = field(default_factory=list)   # (angle degrees, height, owner leaf name, distance) of capsule-ring hits
 
     @property
+    def headroom(self) -> float | None:
+        """Metres from the feet (or the floor when the point is below it) to the first solid above, None when clear."""
+        if self.ceiling is None or self.floor_y is None:
+            return None
+        return self.floor_y + self.ceiling - max(self.point[1], self.floor_y)
+
+    @property
     def valid(self) -> bool:
-        return self.ground_ok and not self.blocked and (self.ceiling is None or self.ceiling >= CAPSULE_HEIGHT)
+        return self.ground_ok and not self.blocked and (self.headroom is None or self.headroom >= CAPSULE_HEIGHT)
 
 
 class PlacementProbe:
@@ -133,8 +153,8 @@ class PlacementProbe:
             ceiling = None if up is None else up[0] + 0.05
         for k in range(SIDE_RAYS):
             angle = k * math.tau / SIDE_RAYS
-            for height in SIDE_HEIGHTS:
-                side = self._cast(near, (x, base + height, z), (math.cos(angle), 0.0, math.sin(angle)), CAPSULE_RADIUS)
+            for height, reach in SIDE_RINGS:
+                side = self._cast(near, (x, base + height, z), (math.cos(angle), 0.0, math.sin(angle)), reach)
                 if side is not None:
                     leaf = self.owner_paths[int(self.tri_owner[side[1]])].rsplit("/", 1)[-1]
                     blocked.append((round(math.degrees(angle)), height, leaf, round(side[0], 3)))

@@ -64,16 +64,53 @@ class VerdictTests(unittest.TestCase):
         near = probe(floor(), wall_x(0.2)).check((0.0, 0.05, 0.0))
         self.assertFalse(near.valid)
         self.assertTrue(near.blocked)
-        self.assertEqual({h for _a, h, _n, _d in near.blocked}, {0.5, 1.2})
+        # every ring whose reach is at least 0.2 m: all but the lowest (reach 0.117 m: the bottom of the capsule's lower hemisphere)
+        self.assertEqual({h for _a, h, _n, _d in near.blocked}, {0.25, 0.5, 0.85, 1.2, 1.55, 1.7})
         self.assertAlmostEqual(min(d for _a, _h, _n, d in near.blocked), 0.2, places=6)   # straight at the wall
         self.assertTrue(all(d <= P.CAPSULE_RADIUS for _a, _h, _n, d in near.blocked))
         far = probe(floor(), wall_x(0.5)).check((0.0, 0.05, 0.0))
         self.assertTrue(far.valid)
 
-    def test_a_low_obstacle_below_the_capsule_rings_does_not_block(self):
-        # a 0.3 m curb: the rings sit at 0.5 and 1.2 m above the floor
+    def test_the_capsule_is_seven_rings_that_follow_the_two_hemispheres(self):
+        # CheckCapsule(feet + 0.45, feet + 1.45, 0.35): 0.35 m wide from 0.45 to 1.45 m, narrower on the caps, 0.10 to 1.80 m in all
+        self.assertEqual(P.SIDE_HEIGHTS, (0.12, 0.25, 0.5, 0.85, 1.2, 1.55, 1.7))
+        reach = dict(P.SIDE_RINGS)
+        self.assertAlmostEqual(reach[0.5], 0.35, places=9)
+        self.assertAlmostEqual(reach[0.85], 0.35, places=9)
+        self.assertAlmostEqual(reach[1.2], 0.35, places=9)
+        self.assertAlmostEqual(reach[0.25], (0.35 ** 2 - 0.2 ** 2) ** 0.5, places=9)
+        self.assertAlmostEqual(reach[1.7], (0.35 ** 2 - 0.25 ** 2) ** 0.5, places=9)
+        self.assertLess(reach[0.12], reach[0.25])
+        self.assertTrue(all(0.10 < h < 1.80 for h in P.SIDE_HEIGHTS))
+
+    def test_a_curb_the_lower_hemisphere_touches_blocks_and_one_below_the_capsule_does_not(self):
+        # review of 2026-10-30: a 0.3 m curb 0.2 m from the point passed with two rings at 0.5 and 1.2 m; the real capsule's lower
+        # sphere (centre 0.45 m up) reaches it. The ring at 0.25 m (reach 0.287 m) sees it, the one at 0.12 m (0.117 m) does not.
         curb = probe(floor(), wall_x(0.2, 0.0, 0.3)).check((0.0, 0.05, 0.0))
-        self.assertTrue(curb.valid)
+        self.assertFalse(curb.valid)
+        self.assertEqual({h for _a, h, _n, _d in curb.blocked}, {0.25})
+        # a 0.08 m kerb is below the capsule's bottom (0.10 m above the feet): no overlap on the host either
+        kerb = probe(floor(), wall_x(0.1, 0.0, 0.08)).check((0.0, 0.0, 0.0))
+        self.assertTrue(kerb.valid)
+
+    def test_a_wall_at_three_tenths_blocks_only_the_cylinder_and_the_upper_cap_rings_that_reach_it(self):
+        wall = probe(floor(), wall_x(0.3)).check((0.0, 0.05, 0.0))
+        self.assertEqual({h for _a, h, _n, _d in wall.blocked}, {0.5, 0.85, 1.2, 1.55})
+        self.assertFalse(wall.valid)
+
+    def test_headroom_counts_from_the_spawn_height_not_from_the_floor(self):
+        # a 2.0 m ceiling: a spawn on the floor has 1.95 m, a spawn 0.3 m above it (the ground ray tolerates up to a metre) 1.7 m
+        low = probe(floor(), floor(2.0))
+        on_floor = low.check((0.0, 0.05, 0.0))
+        self.assertAlmostEqual(on_floor.ceiling, 2.0, places=6)
+        self.assertAlmostEqual(on_floor.headroom, 1.95, places=6)
+        self.assertTrue(on_floor.valid)
+        raised = low.check((0.0, 0.3, 0.0))
+        self.assertAlmostEqual(raised.ceiling, 2.0, places=6)
+        self.assertAlmostEqual(raised.headroom, 1.7, places=6)
+        self.assertTrue(raised.ground_ok)
+        self.assertFalse(raised.valid)
+        self.assertIsNone(probe(floor()).check((0.0, 0.05, 0.0)).headroom)
 
     def test_a_ceiling_below_the_capsule_height_invalidates(self):
         low = probe(floor(), floor(1.5)).check((0.0, 0.05, 0.0))
