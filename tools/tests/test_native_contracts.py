@@ -147,13 +147,13 @@ def partial_block() -> dict:
 class ContractFilesTests(unittest.TestCase):
     def test_repository_contracts_load_and_validator_uses_them(self):
         contracts = L.load_contracts()
-        self.assertEqual(set(contracts), {'arena_equator', 'arena_bay5', 'arena_airpit', 'arena_bowl'})
+        self.assertEqual(set(contracts), {'arena_equator', 'arena_bay5', 'arena_airpit', 'arena_bowl', 'arena_iceberg'})
         self.assertEqual(set(v.MAPS), set(contracts))
         for key, contract in contracts.items():
             self.assertEqual(contract['key'], key)
             self.assertEqual(v.MAPS[key], contract)
         files = sorted(p.stem for p in L.CONTRACT_DIR.glob('*.json'))
-        self.assertEqual(files, ['airpit', 'bay5', 'bowl', 'equator'])
+        self.assertEqual(files, ['airpit', 'bay5', 'bowl', 'equator', 'iceberg'])
 
     def test_load_contract_by_key_fails_for_unknown_map(self):
         self.assertEqual(L.load_contract('arena_airpit')['key'], 'arena_airpit')
