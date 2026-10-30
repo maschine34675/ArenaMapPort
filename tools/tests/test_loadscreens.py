@@ -18,12 +18,12 @@ ARENA_SOURCE = "D:/Battlestate Games/Escape from Tarkov Arena/EscapeFromTarkovAr
 
 
 class LoadscreenTableTests(unittest.TestCase):
-    """The LOADSCREENS table itself: exactly the maps of this release, five entries each (Bowl four), at
-    the path_ids/names the 2026-09-27 research pass (Equator, Bay5), the 2026-10-11 probe (AirPit, Arena 0.6.0)
-    and the 2026-10-18 probe (Bowl) verified against a live UnityPy read."""
+    """The LOADSCREENS table itself: exactly the maps of the art set, five entries each (Bowl four), at
+    the path_ids/names the 2026-09-27 research pass (Equator, Bay5), the 2026-10-11 probe (AirPit, Arena 0.6.0),
+    the 2026-10-18 probe (Bowl) and the 2026-10-30 probe (Iceberg, Arena 0.6.1) verified against a live UnityPy read."""
 
-    def test_exactly_the_four_released_maps(self):
-        self.assertEqual(set(EL.LOADSCREENS), {"arena_equator", "arena_bay5", "arena_airpit", "arena_bowl"})
+    def test_exactly_the_five_art_maps(self):
+        self.assertEqual(set(EL.LOADSCREENS), {"arena_equator", "arena_bay5", "arena_airpit", "arena_bowl", "arena_iceberg"})
 
     def test_every_map_has_the_five_image_rotation_except_bowl_which_has_four(self):
         # Arena ships no AllScreens_Loadingscreen for Bowl (PLAN-BOWL item 8): its rotation is the four main-menu
@@ -60,6 +60,20 @@ class LoadscreenTableTests(unittest.TestCase):
                           ("Arena_MainMenu_Paralax_AirPit-3", 403), ("Arena_MainMenu_Paralax_AirPit-4", 936)])
         for e in entries[1:]:
             self.assertEqual((e["file"], e["size"]), ("sharedassets1.assets", (2048, 1024)))
+
+    def test_iceberg_entries(self):
+        # PLAN-ICEBERG item 10: Arena names the hotel's menu backgrounds "Resort" (no object carries "Iceberg"); they
+        # are Iceberg's on visual evidence (docs/progress/iceberg-release.md). Entry 1 is its 1920x1080 loading screen.
+        entries = EL.LOADSCREENS["arena_iceberg"]
+        self.assertEqual(entries[0], {"asset_name": "AllScreens_Loadingscreen-Iceberg", "path_id": 1183,
+                                      "file": "resources.assets", "size": (1920, 1080)})
+        self.assertEqual([(e["asset_name"], e["path_id"]) for e in entries[1:]],
+                         [("Arena_MainMenu_Paralax_Resort-1", 520), ("Arena_MainMenu_Paralax_Resort-2", 1569),
+                          ("Arena_MainMenu_Paralax_Resort-3", 1343), ("Arena_MainMenu_Paralax_Resort-4", 288)])
+        for e in entries[1:]:
+            self.assertEqual((e["file"], e["size"]), ("sharedassets1.assets", (2048, 1024)))
+        # The 1920x500 popup strip is not a rotation image.
+        self.assertFalse(any("Popups" in e["asset_name"] for e in entries))
 
     def test_bowl_entries(self):
         entries = EL.LOADSCREENS["arena_bowl"]
@@ -151,10 +165,10 @@ class ValidateDimensionsTests(unittest.TestCase):
 
 class CheckModeTests(unittest.TestCase):
     """--check must never import UnityPy or touch the Arena install -- only look at whatever the
-    caller's own output directory already has on disk (five images per map since 2026-09-27, four for Bowl since
-    PLAN-BOWL item 8, 2026-10-18)."""
+    caller's own output directory already has on disk (five images per map since 2026-09-27, Iceberg included since
+    2026-10-30, four for Bowl since PLAN-BOWL item 8, 2026-10-18)."""
 
-    ALL = ({(k, i) for k in ("arena_equator", "arena_bay5", "arena_airpit") for i in range(1, 6)}
+    ALL = ({(k, i) for k in ("arena_equator", "arena_bay5", "arena_airpit", "arena_iceberg") for i in range(1, 6)}
            | {("arena_bowl", i) for i in range(1, 5)})
 
     @staticmethod

@@ -158,6 +158,14 @@ class DistributionSidecarTests(unittest.TestCase):
                                  hashlib.sha256(image.tobytes()).hexdigest())
         pixel_pin.start()
         self.addCleanup(pixel_pin.stop)
+        # The extractor art tables may carry a map before its promotion (Iceberg's banner and loading-screen rows landed
+        # ahead of its release, PLAN-ICEBERG item 10), while validate_art demands tables equal to the released set: this
+        # fixture checks the tables as they apply to RELEASED, which stays a no-op once a map is listed there.
+        for module, attribute in ((extract_banners, 'BANNERS'), (extract_loadscreens, 'LOADSCREENS')):
+            art_pin = patch.object(module, attribute, {key: value for key, value in getattr(module, attribute).items()
+                                                       if key in self.RELEASED})
+            art_pin.start()
+            self.addCleanup(art_pin.stop)
         for name in ('Equator', 'Bay5', 'AirPit', 'Bowl'):
             for file in (f'ArenaMapPort_{name}.jsonc', 'Layers/Ground.svg'):
                 relative = f'ArenaMapPort_{name}/{file}'

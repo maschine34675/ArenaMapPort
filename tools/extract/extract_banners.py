@@ -11,7 +11,8 @@ the client's own default picture instead.
 Arena ships matching art for exactly the maps in this release: Matchmaker_Banner_Equator
 (resources.assets path_id 3030), Matchmaker_Banner_Bay5 (path_id 1361), Matchmaker_Banner_AirPit
 (0.6.0 path_id 1584) and, added with Bowl (PLAN-BOWL item 8, 2026-10-18), Matchmaker_Banner_TheBowl
-(0.6.0 path_id 2538), all 769x460 RGB24 Texture2D (vanilla banners are 764/765x460 -- close but not
+(0.6.0 path_id 2538) and, added with Iceberg (PLAN-ICEBERG item 10, 2026-10-30), Matchmaker_Banners_Iceberg (plural;
+0.6.1 path_id 1482), all 769x460 RGB24 Texture2D (vanilla banners are 764/765x460 -- close but not
 identical, confirmed harmless: the client's own Sprite.Create call just uses the texture's actual
 width/height). This script reads those objects read-only with UnityPy from Arena's own
 resources.assets and writes them
@@ -69,7 +70,7 @@ EXPECTED_WIDTH = 769
 EXPECTED_HEIGHT = 460
 
 # map_key -> (Arena's own object name in resources.assets, path_id hint: 0.5.4 for Equator/Bay5, 0.6.0 for
-# AirPit and Bowl; the lookup is always by the unique name). The dict key doubles as
+# AirPit and Bowl, 0.6.1 for Iceberg; the lookup is always by the unique name). The dict key doubles as
 # the output file stem ("arena_<key>.<ext>") and must equal ArenaMapBanners.cs's own
 # Descriptor.FileStem for each map -- BannerFileStemsTests (tools/tests/test_banners.py) and
 # ArenaMapBannersTests (ArenaMapPort.Server.Tests, C# side) each independently pin this string so
@@ -80,6 +81,10 @@ BANNERS = {
     "arena_airpit": {"asset_name": "Matchmaker_Banner_AirPit", "path_id": 1584},
     # PLAN-BOWL item 8/16 (2026-10-18): Arena's banner for the stadium is named "TheBowl", not "Bowl".
     "arena_bowl": {"asset_name": "Matchmaker_Banner_TheBowl", "path_id": 2538},
+    # PLAN-ICEBERG item 10 (2026-10-30): Arena's name is the PLURAL "Matchmaker_Banners_Iceberg" (every other map's is
+    # singular), the only object of that name in resources.assets of Arena 0.6.1.0.48206 (path_id 1482 is that build's
+    # hint); 769x460 like the rest. The image is the hotel's rotunda sign (Cyrillic "Aisberg") and crane at dusk.
+    "arena_iceberg": {"asset_name": "Matchmaker_Banners_Iceberg", "path_id": 1482},
 }
 
 
