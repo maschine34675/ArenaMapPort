@@ -7,7 +7,8 @@ namespace ArenaMapPort.Server.Tests;
 /// <summary>
 /// PLAN-TWO-MAPS item 8 (docs/progress/two-maps-item-8-ai-anchors.md) — checks the AI-anchors
 /// sidecars tools/extract/extract_ai_anchors.py writes (tools/maps/equator.ai.json,
-/// tools/maps/bay5.ai.json and, since PLAN-AIRPIT item 20, tools/maps/airpit.ai.json) directly, the same
+/// tools/maps/bay5.ai.json and, since PLAN-AIRPIT item 20, tools/maps/airpit.ai.json; since PLAN-ICEBERG item 7 also
+/// tools/maps/iceberg.ai.json, which has core points only) directly, the same
 /// way Bay5MapTests.cs checks bay5.json/bay5.exits.json:
 /// parsed as plain JSON here (no reference to ArenaMapPort.Client/AiAnchors.cs, which needs the real
 /// UnityEngine/Newtonsoft assemblies this net10.0 test project does not have) against the counts the
@@ -35,6 +36,7 @@ public sealed class AiAnchorsTests
     [InlineData("equator.ai.json", 14, 2, 21)]
     [InlineData("bay5.ai.json", 11, 4, 43)]
     [InlineData("airpit.ai.json", 19, 3, 35)] // PLAN-AIRPIT item 20: 19 core points, hubs 12/12/11 (id 7 sits in the closed north pocket, an island like Equator's 13/14)
+    [InlineData("iceberg.ai.json", 11, 0, 0)] // PLAN-ICEBERG item 7: 11 core points; the scene's 4 hubs / 40 sub points lie off the map and are not shipped
     public void CountsMatchTheResearchPass(string file, int expectedCorePoints, int expectedHubs, int expectedSubPoints)
     {
         using var doc = JsonDocument.Parse(File.ReadAllText(Sidecar(file)));
@@ -50,6 +52,7 @@ public sealed class AiAnchorsTests
     [InlineData("equator.ai.json")]
     [InlineData("bay5.ai.json")]
     [InlineData("airpit.ai.json")]
+    [InlineData("iceberg.ai.json")]
     public void CorePointIdsAreUniqueWithFinitePositionsInTheBakeVolume(string file)
     {
         using var doc = JsonDocument.Parse(File.ReadAllText(Sidecar(file)));
@@ -69,6 +72,7 @@ public sealed class AiAnchorsTests
     [InlineData("equator.ai.json")]
     [InlineData("bay5.ai.json")]
     [InlineData("airpit.ai.json")]
+    [InlineData("iceberg.ai.json")]
     public void EveryHubCorePointIdExistsAndEveryPositionIsValid(string file)
     {
         using var doc = JsonDocument.Parse(File.ReadAllText(Sidecar(file)));
@@ -95,6 +99,7 @@ public sealed class AiAnchorsTests
     [InlineData("equator.ai.json")]
     [InlineData("bay5.ai.json")]
     [InlineData("airpit.ai.json")]
+    [InlineData("iceberg.ai.json")]
     public void NoConnectionOrEdgeFieldsAreShipped(string file)
     {
         // Deliberate -- extract_ai_anchors.py's own module docstring: AICorePoint.ConnectionsAtNet is
@@ -143,6 +148,36 @@ public sealed class AiAnchorsTests
             Assert.InRange(p[0], bounds[0], bounds[1]);
             Assert.InRange(p[1], bounds[2], bounds[3]);
             Assert.InRange(p[2], bounds[4], bounds[5]);
+        }
+    }
+
+    [Fact]
+    public void IcebergShipsNoPatrolWayAndRecordsTheOffMapHubsItDropped()
+    {
+        // PLAN-ICEBERG item 7 (extract_ai_anchors.py, PLAY_AREA): Iceberg's AI scene carries a 4-hub PatrolWay (40 sub points,
+        // z 5..24) and ten Savage markers 40 to 60 m north of the border cubes and off Arena's NavMesh. patrol_ways is [], so
+        // PatrolWayFallback.EnsurePatrolWays builds NavMesh-derived ways from the Bot spawn markers (AiAnchors.PatrolWays.Count == 0).
+        using var doc = JsonDocument.Parse(File.ReadAllText(Sidecar("iceberg.ai.json")));
+        Assert.Equal(0, doc.RootElement.GetProperty("patrol_ways").GetArrayLength());
+        var dropped = doc.RootElement.GetProperty("dropped");
+        Assert.Equal(4, dropped.GetProperty("hubs").GetInt32());
+        Assert.Equal(40, dropped.GetProperty("sub_points").GetInt32());
+        Assert.Equal(1, dropped.GetProperty("ways_removed").GetInt32());
+        // every kept core point lies inside the play area box of the drop rule, and the released sidecars carry no such record
+        var area = dropped.GetProperty("play_area");
+        var x = area.GetProperty("x").EnumerateArray().Select(v => v.GetSingle()).ToArray();
+        var z = area.GetProperty("z").EnumerateArray().Select(v => v.GetSingle()).ToArray();
+        foreach (var corePoint in doc.RootElement.GetProperty("core_points").EnumerateArray())
+        {
+            var p = corePoint.GetProperty("position").EnumerateArray().Select(v => v.GetSingle()).ToArray();
+            Assert.InRange(p[0], x[0], x[1]);
+            Assert.InRange(p[2], z[0], z[1]);
+        }
+        foreach (var released in new[] { "equator.ai.json", "bay5.ai.json", "airpit.ai.json", "bowl.ai.json" })
+        {
+            using var other = JsonDocument.Parse(File.ReadAllText(Sidecar(released)));
+            Assert.False(other.RootElement.TryGetProperty("dropped", out _), released);
+            Assert.True(other.RootElement.GetProperty("patrol_ways").GetArrayLength() > 0, released);
         }
     }
 
