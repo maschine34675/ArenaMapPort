@@ -128,6 +128,7 @@ class FakeVirusTotal:
         self.upload_stats = dict(CLEAN)
         self.keep_file_stale = False     # a completed analysis does not refresh the file object
         self.meta_inside_data = False
+        self.unregistered_polls = 0      # answer 404 to that many analysis polls first (the analysis registers late)
 
     def __call__(self, method, url, headers, body, timeout):
         call = Call(method, url, dict(headers), body, timeout, self.clock.t)
@@ -155,6 +156,9 @@ class FakeVirusTotal:
             return 200, {"data": {"type": "analysis", "id": analysis_id}}
         if method == "GET" and path.startswith("/api/v3/analyses/"):
             analysis_id = urllib.parse.unquote(path[len("/api/v3/analyses/"):])
+            if self.unregistered_polls > 0:
+                self.unregistered_polls -= 1
+                return 404, error_body("NotFoundError", f"Analysis \"{analysis_id}\" not found")
             analysis = self.analyses.get(analysis_id)
             if analysis is None:
                 return 404, error_body("NotFoundError", "analysis not found")
@@ -529,6 +533,25 @@ class UploadTests(ScanCase):
         record = self.record()
         self.assertEqual([f["uploaded"] for f in record["files"]], [True, False])
         self.assertEqual(record["files"][0]["analysis_date_utc"], ANALYSIS_ISO)
+
+    def test_an_analysis_that_registers_late_is_polled_again(self):
+        self.fake.know(self.dlls[SERVER_REL])
+        self.fake.unregistered_polls = 2
+        code, out, err = self.cli()
+        self.assertEqual((code, err), (0, ""))
+        analysis = "/api/v3/analyses/" + urllib.parse.quote("AnalysisId1-x==", safe="")
+        paths = [(c.method, c.path) for c in self.fake.calls]
+        self.assertEqual(paths.count(("GET", analysis)), 5)   # two 404 answers, then queued, in-progress, completed
+        self.assertEqual(out.count("analysis not registered yet, HTTP 404"), 2)
+        self.assertIn("analysis completed (poll 5)", out)
+        self.assertEqual([f["uploaded"] for f in self.record()["files"]], [True, False])
+
+    def test_an_analysis_that_never_registers_is_an_error(self):
+        self.fake.unregistered_polls = 99
+        code, _out, err = self.cli(str(self.dist / CLIENT_REL))
+        self.assertEqual(code, 1)
+        self.assertIn(f"404 for analysis AnalysisId1-x== {scan.NOT_FOUND_POLLS} times in a row", err)
+        self.assertIn("run the scan again", err)
 
     def test_the_multipart_body_is_what_virustotal_expects(self):
         self.fake.know(self.dlls[SERVER_REL])

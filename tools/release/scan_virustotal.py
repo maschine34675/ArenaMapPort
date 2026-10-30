@@ -125,6 +125,9 @@ QUOTA_WINDOW = 60.0
 QUOTA_MARGIN = 1.0                   # added to the window so that clock jitter never makes the fifth request early
 QUOTA_BACKOFF = 60.0                 # sleep after HTTP 429
 POLL_INTERVAL = 20.0
+# GET /analyses/{id} answered 404 NotFoundError right after a successful upload twice on 2026-10-30 (the analysis object registers a
+# little later than the upload answer): so many 404 polls in a row are tolerated before the scan gives up.
+NOT_FOUND_POLLS = 6
 NETWORK_RETRIES = 3                  # after the first attempt: waits of 1, 2, 4 s
 ERROR_TEXT_LIMIT = 300
 TYPED_MIN_LENGTH = 8                 # no API key is shorter: shorter typed values are not hidden from error messages
@@ -641,9 +644,12 @@ class Client:
             raise ApiError(f"{label}: VirusTotal's answer carries no usable analysis id")
         return analysis_id
 
-    def get_analysis(self, local: LocalFile, analysis_id: str) -> dict:
+    def get_analysis(self, local: LocalFile, analysis_id: str):
+        """The attributes of the analysis, or None when VirusTotal does not know the id (yet): a 404 right after the upload."""
         label = f"analysis {local.name}"
-        _status, data = self.request("GET", f"/analyses/{urllib.parse.quote(analysis_id, safe='')}", label=label)
+        status, data = self.request("GET", f"/analyses/{urllib.parse.quote(analysis_id, safe='')}", allow=(404,), label=label)
+        if status == 404:
+            return None
         attributes = attributes_of(data, label)
         digest = file_info_sha(data)
         if digest is not None and digest != local.sha256:
@@ -715,13 +721,21 @@ class Scanner:
     def _await_analysis(self, local: LocalFile, analysis_id: str) -> dict:
         """Poll every POLL_INTERVAL seconds, the first poll too: a fresh analysis is never done at once and every
         poll costs quota. Returns the attributes of the completed analysis."""
-        status, polls = "queued", 0
+        status, polls, missing = "queued", 0, 0
         while True:
             if self.monotonic() + POLL_INTERVAL > self.client.deadline:
                 raise self._out_of_time(local, f"the analysis (last status: {status})")
             self.sleep(POLL_INTERVAL)
             polls += 1
             attributes = self.client.get_analysis(local, analysis_id)
+            if attributes is None:
+                missing += 1
+                self.log(f"  {local.name}: analysis not registered yet, HTTP 404 (poll {polls}; {missing} of at most {NOT_FOUND_POLLS} such answers)")
+                if missing >= NOT_FOUND_POLLS:
+                    raise ApiError(f"{local.name}: VirusTotal answered 404 for analysis {analysis_id} {missing} times in a row; "
+                                   "the upload may not have registered, run the scan again")
+                continue
+            missing = 0
             status = attributes.get("status") if isinstance(attributes.get("status"), str) else "unknown"
             self.log(f"  {local.name}: analysis {_clean(status, self.client.key, 40)} (poll {polls})")
             if status == "completed":
