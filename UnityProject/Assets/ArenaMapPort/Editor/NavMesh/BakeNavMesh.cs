@@ -777,7 +777,14 @@ namespace ArenaMapPort.Editor.NavMesh
             for (Transform cur = t; cur != null; cur = cur.parent)
             {
                 foreach (string prefix in ExcludedNamePrefixes)
+                {
+                    // keep_level_borders (docs/PLAN-ICEBERG.md item 9): the cubes are bake sources on purpose (see
+                    // NonPhysicalLayerReason), and Iceberg names all 365 of them "LevelBorder (N)" under a "LevelBorders" group,
+                    // which this name rule would drop again, silently, whatever the layer list says. Bowl's cubes are called
+                    // "Cube", which is why the prefix never mattered for a kept border before. SPAWN_BOUND* is unaffected.
+                    if (prefix == "LevelBorder" && ArenaPaths.Map.keep_level_borders) continue;
                     if (cur.name.StartsWith(prefix, StringComparison.Ordinal)) return prefix + "*";
+                }
                 foreach (string leaf in ExcludedLeafNames)
                     if (cur.name == leaf) return leaf;
             }

@@ -41,7 +41,7 @@ class ShaderFallbackNamesSidecarTests(unittest.TestCase):
         # Bowl (PLAN-BOWL item 10, 2026-10-18): the tarp tunnel's two-sided reflective shader, the one of its 23 EFT lacks.
         self.assertEqual(sidecar("bowl")["shader_fallback_names"], ["p0/Reflective/Bumped Specular_TwoSided"])
         for path in sorted((REPO / "tools" / "maps").glob("*.json")):
-            if "." in path.stem or path.stem in ("airpit", "bay5", "bowl"):
+            if "." in path.stem or path.stem in ("airpit", "bay5", "bowl", "iceberg"):      # Iceberg: test_iceberg_bake_inputs.py pins that it has no row
                 continue
             self.assertNotIn("shader_fallback_names", json.loads(path.read_text(encoding="utf-8")), path.name)
 

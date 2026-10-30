@@ -7,8 +7,9 @@ the base scene. Instead of guessing barrier names for `opened_barriers`, this to
 
 What it does (offline, read-only; no Unity, no host):
   1. Reads Arena's NavMeshData (default: AirPit, sharedassets33.assets path 2; `--map bowl` selects Bowl's
-     sharedassets128.assets path 2, see ARENA_SOURCES) in WORLD coordinates (the NavMeshData's m_Position /
-     m_Rotation are applied by navmesh_oracle; Bowl's is a 90 degree yaw, AirPit's the identity) and samples
+     sharedassets128.assets path 2, `--map iceberg` Iceberg's sharedassets377.assets path 2, see ARENA_SOURCES) in WORLD
+     coordinates (the NavMeshData's m_Position / m_Rotation are applied by navmesh_oracle; Bowl's is a 90 degree yaw, AirPit's
+     and Iceberg's the identity) and samples
      its polygons on a lattice (default 0.2 m), keeping the main component (or all low components).
   2. Loads the port's collider triangles from an extracted package with the bake rules of
      BakeNavMesh.cs (`port_colliders.py`), optionally with extra `opened_barriers` paths, bake-only
@@ -82,6 +83,11 @@ ARENA_SOURCES = {
     # agent radius 0.3 / height 1.7, NavMeshData rotated 90 degrees about Y (navmesh_oracle applies it).
     "bowl": ArenaSource("arena_bowl", "sharedassets128.assets", 2, 0x40040A00,
                         128, "Arena_Bowl_TeamFight_AI", "work/extract/bowl-native-v2"),
+    # Iceberg (measured 2026-10-30, Arena 0.6.1.0.48206; docs/PLAN-ICEBERG.md item 9): level377 Arena_Sanatorium_CheckPoint_AI,
+    # NavMeshSurface layers 9 / 11 / 13 / 18 / 30 (= AirPit's mask), NavMeshData placement = identity, agent radius 0.3 / height 1.7.
+    # The mask excludes layer 29: the 365 LevelBorder cubes are in the port bake only through navmesh_bake_layers.
+    "iceberg": ArenaSource("arena_iceberg", "sharedassets377.assets", 2, AIRPIT_ARENA_LAYER_MASK,
+                           377, "Arena_Sanatorium_CheckPoint_AI", "work/extract/iceberg-native-v1"),
 }
 
 
@@ -647,19 +653,23 @@ def probe_reachability(probes, anchor, comp_port) -> dict:
 
 def descriptor_bake_inputs(descriptor: dict) -> dict:
     """The bake inputs of a tools/maps/<key>.json: opened_barriers, navmesh_bake_exclusions (PLAN-AIRPIT item 8,
-    dropped from the NavMesh sources but not deactivated at runtime) and navmesh_bake_layers as a layer mask
-    (None = every layer but Water). bake_bounds is not modelled: the model covers Arena's footprint only."""
+    dropped from the NavMesh sources but not deactivated at runtime), navmesh_bake_layers as a layer mask
+    (None = every layer but Water) and keep_level_borders (the layer-29 border cubes are sources, Bowl and Iceberg).
+    bake_bounds is not modelled: the model covers Arena's footprint only."""
     return {"barriers": list(descriptor.get("opened_barriers") or []),
             "exclusions": list(descriptor.get("navmesh_bake_exclusions") or []),
-            "layer_mask": pcol.layers_to_mask(descriptor.get("navmesh_bake_layers"))}
+            "layer_mask": pcol.layers_to_mask(descriptor.get("navmesh_bake_layers")),
+            "keep_level_borders": descriptor.get("keep_level_borders") is True}
 
 
 def analyse(package, cfg: Config | None = None, opened_barriers=(), points=(), arena_data=DEFAULT_ARENA_DATA,
             mesh=None, cset=None, bake_rules="port", other_mesh=None, greedy_steps=12, log=print,
-            bake_exclusions=(), port_layer_mask=None, assets=AIRPIT_NAVMESH[0], path_id=AIRPIT_NAVMESH[1]):
+            bake_exclusions=(), port_layer_mask=None, assets=AIRPIT_NAVMESH[0], path_id=AIRPIT_NAVMESH[1],
+            keep_level_borders=False):
     """`bake_exclusions` and `port_layer_mask` are the descriptor's navmesh_bake_exclusions / navmesh_bake_layers
     (as a mask): what the port bake would collect. `cfg.arena_layer_mask` stays what Arena's own surface sees.
-    `assets` / `path_id` pick the NavMeshData to load when no `mesh` is given (default AirPit's)."""
+    `assets` / `path_id` pick the NavMeshData to load when no `mesh` is given (default AirPit's). `keep_level_borders` is
+    the descriptor's key of that name (Bowl, Iceberg): the layer-29 cubes are bake sources (port_colliders `keep_borders`)."""
     cfg = cfg or Config()
     if mesh is None:
         mesh, meta = load_arena_mesh(arena_data, assets, path_id)
@@ -679,12 +689,12 @@ def analyse(package, cfg: Config | None = None, opened_barriers=(), points=(), a
     if bake_rules == "none":
         mask_all = np.ones(len(cset.owners), dtype=bool)
     else:
-        mask_all = pcol.source_owner_mask(cset, layer_mask=port_layer_mask)
-    mask_arena = (pcol.source_owner_mask(cset, layer_mask=cfg.arena_layer_mask)
+        mask_all = pcol.source_owner_mask(cset, layer_mask=port_layer_mask, keep_borders=keep_level_borders)
+    mask_arena = (pcol.source_owner_mask(cset, layer_mask=cfg.arena_layer_mask, keep_borders=keep_level_borders)
                   if (cfg.arena_layer_mask is not None and bake_rules != "none") else mask_all)
     reasons: dict = defaultdict(int)
     for o in cset.owners:
-        reason = pcol.bake_exclusion_reason(o)
+        reason = pcol.bake_exclusion_reason(o, keep_level_borders)
         if reason is None and bake_rules != "none" and port_layer_mask is not None and not (port_layer_mask >> o.layer) & 1:
             reason = "not in navmesh_bake_layers"
         reasons[reason or "source"] += 1
@@ -787,7 +797,10 @@ def analyse(package, cfg: Config | None = None, opened_barriers=(), points=(), a
                     "blocked_arena_agent_arena_layers": int(v_mask.blocked.sum()),
                     "blocked_port_agent": int(v_port.blocked.sum()), "unsupported": int(v_port.unsupported.sum()),
                     "passable_port": int(passable.sum())},
-        "port_components": [{"id": i, "samples": int(n), "area_m2": round(float(n) * sample_area, 1)} for i, n in enumerate(sizes_port[:10])],
+        "port_components": [{"id": i, "samples": int(n), "area_m2": round(float(n) * sample_area, 1),
+                             "bbox": [[round(float(v), 2) for v in pts[comp_port == i].min(axis=0)],
+                                      [round(float(v), 2) for v in pts[comp_port == i].max(axis=0)]]}
+                            for i, n in enumerate(sizes_port[:10])],
         "port_component_count": int(len(sizes_port)),
         "clusters_arena_agent": clusters_a, "clusters_port_agent": clusters_p,
         "families": aggregate(clusters_a, "family"), "containers": aggregate(clusters_a, "container"),
@@ -866,6 +879,10 @@ def format_report(report, top=25) -> str:
                f"under the port agent {s['blocked_port_agent']}, without floor {s['unsupported']}, passable {s['passable_port']}")
     out.append(f"port-model components {report['port_component_count']}: " + ", ".join(
         f"#{c['id']} {c['area_m2']} m2" for c in report["port_components"][:6]))
+    for c in report["port_components"][1:6]:
+        if c.get("bbox"):
+            out.append(f"  port component #{c['id']}: x {c['bbox'][0][0]}..{c['bbox'][1][0]}, y {c['bbox'][0][1]}..{c['bbox'][1][1]}, "
+                       f"z {c['bbox'][0][2]}..{c['bbox'][1][2]}")
     cfg_r, reach = report["config"], report["reachability"]
     mask = cfg_r["port_layer_mask"]
     out.append(f"bake inputs: {len(cfg_r['opened_barriers'])} opened_barriers, {len(cfg_r['bake_exclusions'])} navmesh_bake_exclusions, "
@@ -938,6 +955,9 @@ def main(argv=None):
     ap.add_argument("--opened-barrier", action="append", default=[], help="extra opened_barriers path (repeatable)")
     ap.add_argument("--descriptor", help="map sidecar whose opened_barriers, navmesh_bake_exclusions and navmesh_bake_layers "
                                          "are applied (tools/maps/airpit.json)")
+    ap.add_argument("--keep-level-borders", action="store_true",
+                    help="model keep_level_borders: the layer-29 LevelBorder cubes are bake sources and the LevelBorder* name prefix "
+                         "does not drop them (the descriptor's key of that name sets it too)")
     ap.add_argument("--bake-exclusion", action="append", default=[],
                     help="extra navmesh_bake_exclusions path: subtree dropped from the bake sources, still active at runtime (repeatable)")
     ap.add_argument("--port-layer-mask", type=lambda v: int(v, 0),
@@ -978,10 +998,12 @@ def main(argv=None):
     barriers = list(args.opened_barrier)
     exclusions = list(args.bake_exclusion)
     layer_mask = args.port_layer_mask
+    keep_borders = args.keep_level_borders
     if args.descriptor:
         inputs = descriptor_bake_inputs(json.loads(Path(args.descriptor).read_text(encoding="utf-8")))
         barriers += inputs["barriers"]
         exclusions += inputs["exclusions"]
+        keep_borders = keep_borders or inputs["keep_level_borders"]
         if layer_mask is None and not args.ignore_descriptor_layers:
             layer_mask = inputs["layer_mask"]
     points = []
@@ -995,7 +1017,8 @@ def main(argv=None):
     elif args.compare_triangulation:
         other = load_triangulation_mesh(args.compare_triangulation)
     report = analyse(package, cfg, barriers, points, args.arena_data, bake_rules=args.bake_rules, other_mesh=other,
-                     bake_exclusions=exclusions, port_layer_mask=layer_mask, assets=assets, path_id=path_id)
+                     bake_exclusions=exclusions, port_layer_mask=layer_mask, assets=assets, path_id=path_id,
+                     keep_level_borders=keep_borders)
     print(format_report(report, args.top))
     if args.json_out:
         Path(args.json_out).parent.mkdir(parents=True, exist_ok=True)
