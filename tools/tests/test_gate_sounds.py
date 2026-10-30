@@ -13,6 +13,7 @@ import io
 import json
 import math
 import mmap
+import os
 import struct
 import sys
 import tempfile
@@ -30,11 +31,14 @@ import extract_gate_sounds as G  # noqa: E402
 import validate_map_descriptors as VD  # noqa: E402
 
 MAPS = ("arena_equator", "arena_bay5", "arena_airpit", "arena_bowl")
-STEM = {key: key.removeprefix("arena_") for key in MAPS}
-PACKAGE = REPO / "work" / "extract" / "gate-sounds"
+ICEBERG = "arena_iceberg"     # prepared ahead of its promotion (PLAN-ICEBERG item 8): its own classes below, the four-map loops stay as they are
+STEM = {key: key.removeprefix("arena_") for key in MAPS + (ICEBERG,)}
+# ARENAMAPPORT_GATE_SOUNDS_DIR points the package tests at another work/extract/gate-sounds (a worktree has no ignored work/ folder)
+PACKAGE = Path(os.environ.get("ARENAMAPPORT_GATE_SOUNDS_DIR", REPO / "work" / "extract" / "gate-sounds"))
 ARENA = G.doors.DEFAULT_DATA
 HAVE_ARENA = (ARENA / "level56").is_file() and (ARENA / "resources.assets").is_file()
 HAVE_PACKAGE = all((PACKAGE / key / G.MANIFEST_NAME).is_file() for key in MAPS)
+HAVE_ICEBERG_PACKAGE = (PACKAGE / ICEBERG / G.MANIFEST_NAME).is_file()
 
 
 def sidecar(key):
@@ -591,6 +595,356 @@ class RealDataRowTests(unittest.TestCase):
         group = mixers.group(emitters[0].player["mixer"][1])
         self.assertEqual((group["name"], group["db"]), ("ArenaGates", -15.0))
         self.assertEqual(group["path"], "Master/InGame/World/Main/Ambient/ArenaCommonAmb/ArenaGates")
+
+# ---------------------------------------------------------------------------------------------------------------------------------
+# Iceberg (2026-10-30, PLAN-ICEBERG item 8): six players, one per gate assembly, all at authored pitch 1.15, no mixer group
+# ---------------------------------------------------------------------------------------------------------------------------------
+
+ICEBERG_CLIPS = {"arena_san_gates_blue", "arena_san_gates_red", "arena_equator_old_slide_doors"}
+ICEBERG_GATE_A = "DOORS/GATES_A/sanatorium_resp_gate"
+ICEBERG_GATE_B = "DOORS/GATES_B/sanatorium_resp_gate"
+ICEBERG_MOTOR = "DOORS/GATES_B/Sanatorium_CheckPoint_Gate"
+
+
+class IcebergRowSidecarTests(unittest.TestCase):
+    """tools/maps/iceberg.gatesounds.json (tracked): what it says, and that every gate part of the port has at most one sound."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.doc = sidecar(ICEBERG)
+        cls.rows = cls.doc["rows"]
+
+    def test_six_rows_three_clips_and_the_mixer_block_of_the_other_maps(self):
+        self.assertEqual((self.doc["schema_version"], self.doc["key"]), (1, ICEBERG))
+        self.assertEqual(len(self.rows), 6)
+        self.assertEqual({c["id"] for c in self.doc["clips"]}, ICEBERG_CLIPS)
+        self.assertEqual({r["clip"] for r in self.rows}, ICEBERG_CLIPS)
+        self.assertEqual(self.doc["skipped"], [])                                      # every player of level259 is for a gate of the port
+        self.assertEqual(self.doc["source"], {"arena_version": "0.6.1.0.48206", "gate_scene": {"scene": "Arena_Sanatorium_CheckPoint_DesignStuff", "level": 376},
+                                              "sound_scene": {"level": 259}})
+        for key in MAPS:                                                               # the block is read off the mixer, not off the rows
+            self.assertEqual(self.doc["mixer"], sidecar(key)["mixer"], key)
+
+    def test_one_row_per_gate_assembly_the_motor_gate_on_its_root(self):
+        by_barrier = {}
+        for row in self.rows:
+            by_barrier.setdefault(row["barrier"], []).append(row)
+        self.assertEqual({b: len(r) for b, r in by_barrier.items()}, {ICEBERG_GATE_A: 2, ICEBERG_GATE_B: 3, ICEBERG_MOTOR: 1})
+        self.assertTrue(all(r["part"] is None and r["closed_position"] is None for b in (ICEBERG_GATE_A, ICEBERG_GATE_B) for r in by_barrier[b]))
+        motor = by_barrier[ICEBERG_MOTOR][0]
+        self.assertEqual((motor["part"], motor["clip"], motor["at"]), ("", "arena_equator_old_slide_doors", [-38.908, 6.439, -75.664]))
+        self.assertEqual({r["clip"] for r in by_barrier[ICEBERG_GATE_A]}, {"arena_san_gates_red"})
+        self.assertEqual({r["clip"] for r in by_barrier[ICEBERG_GATE_B]}, {"arena_san_gates_blue"})
+        # each gate instance once, told apart by `at` (the same positions as the door rows)
+        door_ats = {(p["barrier"], tuple(p["at"])) for p in doors(ICEBERG)["poses"]}
+        self.assertEqual({(r["barrier"], tuple(r["at"])) for r in self.rows}, door_ats)
+        self.assertEqual(len(door_ats), 6)
+
+    def test_the_rows_name_no_mixer_so_the_baked_level_is_the_players_alone(self):
+        for row in self.rows:
+            with self.subTest(origin=row["origin"]):
+                self.assertEqual((row["mixer"], row["mixer_db"], row["source_mixer"]), (None, 0.0, None))
+                self.assertEqual((row["source_volume"], row["player_volume"]), (1.0, 0.9))
+                self.assertAlmostEqual(gain_db(row), -0.9, places=1)                    # against -15 dB on the other maps: a listening question
+                self.assertEqual((row["min_distance"], row["max_distance"]), (1.0, 30.0))
+                self.assertEqual((row["authored_pitch"], row["pitch"]), (1.15, 1.0))
+
+    def test_every_row_resolves_and_no_gate_part_has_two_sounds_and_every_moving_part_has_one(self):
+        poses = doors(ICEBERG)["poses"]
+        units = part_units(ICEBERG)
+        self.assertEqual(len(units), 11)
+        for row in self.rows:
+            self.assertTrue(G.row_resolves(row, poses), row["origin"])
+        for unit in units:
+            found = [r for r in self.rows if G.row_applies(r, unit[0], unit[1], unit[2], unit[3])]
+            self.assertEqual(len(found), 1, f"{unit} has {len(found)} sounds")
+
+    def test_the_validator_accepts_the_sidecar_against_the_descriptor_and_the_door_rows(self):
+        descriptor = json.loads((REPO / "tools" / "maps" / "iceberg.json").read_text(encoding="utf-8"))
+        self.assertEqual(VD.gate_sound_errors(descriptor, REPO / "tools" / "maps" / "iceberg.gatesounds.json",
+                                              REPO / "tools" / "maps" / "iceberg.doors.json"), [])
+
+    def test_the_text_is_what_the_cli_writes_and_holds_no_hash(self):
+        text = (REPO / "tools" / "maps" / "iceberg.gatesounds.json").read_bytes().decode("utf-8").replace("\r\n", "\n")
+        self.assertEqual(G.render_rows_sidecar(self.doc), text)
+        self.assertNotRegex(text, r"[0-9a-f]{40,}")
+
+
+class IcebergFitTests(unittest.TestCase):
+    """gate_sound_fit.json: Iceberg's clips are fitted per map, the entries of the other four maps are untouched."""
+
+    def test_all_three_clips_are_baked_at_the_authored_pitch_and_cut_in_one_stationary_body(self):
+        fit = G.load_fit()
+        entries = {name: G.clip_fit(fit, ICEBERG, name) for name in ICEBERG_CLIPS}
+        for name, spec in entries.items():
+            with self.subTest(clip=name):
+                self.assertEqual((spec["mode"], spec["bake_pitch"]), ("body_cut", 1.15))
+                lo, hi = spec["body"]
+                self.assertTrue(0 < lo < hi < spec["event_s"])
+        self.assertEqual({n: (s["event_s"], s["body"]) for n, s in entries.items()},
+                         {"arena_san_gates_blue": (2.55, [1.0, 2.4]), "arena_san_gates_red": (5.15, [0.8, 5.0]),
+                          "arena_equator_old_slide_doors": (2.61, [0.4, 2.45])})
+        self.assertEqual(sorted(fit["map_clips"]), [ICEBERG])
+
+    def test_the_shared_clip_keeps_equators_entry_for_equator(self):
+        fit = G.load_fit()
+        name = "arena_equator_old_slide_doors"
+        self.assertEqual(G.clip_fit(fit, "arena_equator", name), fit["clips"][name])
+        self.assertNotIn("bake_pitch", G.clip_fit(fit, "arena_equator", name))
+        self.assertEqual(fit["clips"][name], {"mode": "body_cut", "event_s": 3.0, "body": [0.45, 2.85]})
+        self.assertNotEqual(G.clip_fit(fit, ICEBERG, name), fit["clips"][name])
+        for clip in ("arena_san_gates_blue", "arena_san_gates_red"):
+            self.assertNotIn(clip, fit["clips"])                                          # the other maps know nothing of them
+            self.assertIsNone(G.clip_fit(fit, "arena_bowl", clip))
+        self.assertEqual(G.clip_fit(fit, ICEBERG, "arena_bowl_btr_gates"), fit["clips"]["arena_bowl_btr_gates"])   # the shared table is the fallback
+
+    def test_the_baked_event_is_the_authored_event_over_the_pitch_for_the_shared_clip(self):
+        fit = G.load_fit()
+        shared, own = fit["clips"]["arena_equator_old_slide_doors"], G.clip_fit(fit, ICEBERG, "arena_equator_old_slide_doors")
+        self.assertAlmostEqual(own["event_s"], shared["event_s"] / 1.15, delta=0.005)     # 2.609 s: measured on the baked clip, 2.61
+        self.assertAlmostEqual(own["body"][1], shared["body"][1] / 1.15, delta=0.04)      # the bang starts at 2.48 s baked, the body ends before it
+
+
+class IcebergJoinTests(unittest.TestCase):
+    """The per-map join margin and the root-only join (MAPS rows): they change Iceberg only."""
+
+    @staticmethod
+    def candidate(name, world, root=False, part="L", at=(0.0, 0.0, 0.0)):
+        return JoinTests.candidate(name, world, root=root, part=part, at=at)
+
+    def emitter(self, x, z):
+        return JoinTests().emitter(x, z)
+
+    def test_the_maps_table_gives_iceberg_its_two_options_and_no_other_map_any(self):
+        self.assertEqual(G.MAPS[ICEBERG], {"stem": "iceberg", "scenes": ("sound",), "join_margin_m": 2.5, "join_root": True})
+        for key in MAPS:
+            self.assertFalse({"join_margin_m", "join_root"} & set(G.MAPS[key]), key)
+        self.assertEqual(G.JOIN_MARGIN_M, 4.0)
+
+    def test_a_neighbour_between_the_global_and_the_map_margin_is_refused_by_default_and_accepted_with_the_override(self):
+        # Sliding_door_2: 0.33 m from its gate, 3.83 m from the next one (gates 4.16 m apart)
+        places = [self.candidate("A", (0.0, 0, 0), root=True), self.candidate("B", (4.16, 0, 0), root=True, at=(4.16, 0.0, 0.0))]
+        emitter = self.emitter(0.33, 0.0)
+        with self.assertRaisesRegex(G.GateSoundError, "the join is not clear"):
+            G.join_emitter(emitter, places)
+        self.assertEqual(G.join_emitter(emitter, places, 3.0)["group"][0], "A")
+        self.assertEqual(G.join_emitter(emitter, places, 2.5)["group"][0], "A")
+
+    def test_the_override_still_refuses_a_competitor_inside_the_map_margin(self):
+        places = [self.candidate("A", (0.0, 0, 0), root=True), self.candidate("B", (2.4, 0, 0), root=True, at=(2.4, 0.0, 0.0))]
+        with self.assertRaisesRegex(G.GateSoundError, "the join is not clear"):
+            G.join_emitter(self.emitter(0.0, 0.0), places, 2.5)
+        # Motor_door: 0.57 m from its gate, 2.91 m from the third sliding gate: clear at 2.5 m, not at the global 4.0 m or at 3.0 m
+        places = [self.candidate("M", (0.0, 0, 0), root=True), self.candidate("S", (2.91 + 0.57, 0, 0), root=True, at=(1.0, 0.0, 0.0))]
+        for margin, clear in ((4.0, False), (3.0, False), (2.5, True)):
+            with self.subTest(margin=margin):
+                if clear:
+                    self.assertEqual(G.join_emitter(self.emitter(0.57, 0.0), places, margin)["group"][0], "M")
+                else:
+                    with self.assertRaises(G.GateSoundError):
+                        G.join_emitter(self.emitter(0.57, 0.0), places, margin)
+
+    def test_root_only_gives_the_assembly_not_the_nearest_leaf(self):
+        group = ("G", (0.0, 0.0, 0.0))
+        places = [self.candidate("G", (0.0, 0, 0), root=True), self.candidate("G", (0.058, 0, 0), part="gate_A"),
+                  self.candidate("G", (0.0, 0, 0.0), part="gate_B")]
+        emitter = self.emitter(0.06, 0.0)                              # 0.002 m from leaf A, 0.06 m from the root: the leaf wins the plain rule
+        self.assertEqual(G.join_emitter(emitter, places)["part"], "gate_A")
+        joined = G.join_emitter(emitter, places, root_only=True)
+        self.assertIsNone(joined["part"])                              # a gate assembly: every part of the instance
+        self.assertEqual(joined["group"], group)
+        self.assertAlmostEqual(joined["distance"], 0.06, places=6)     # the distance to the root it was joined to
+        # the motor gate: the root candidate carries part "" (the barrier root itself moves) and stays so
+        motor = [dict(self.candidate("M", (0.0, 0, 0), root=True), part="")]
+        self.assertEqual(G.join_emitter(self.emitter(0.5, 0.0), motor, root_only=True)["part"], "")
+
+    def test_root_only_does_not_move_the_max_distance_or_the_other_assembly_rule(self):
+        places = [self.candidate("A", (0.0, 0, 0), root=True), self.candidate("A", (1.0, 0, 0), part="L")]
+        self.assertIsNone(G.join_emitter(self.emitter(3.1, 0.0), places, root_only=True))     # 2.1 m from the nearest place: not a gate's emitter
+        self.assertIsNotNone(G.join_emitter(self.emitter(2.9, 0.0), places, root_only=True))
+        other = places + [self.candidate("B", (3.0, 0, 0), root=True, at=(3.0, 0.0, 0.0))]
+        with self.assertRaises(G.GateSoundError):
+            G.join_emitter(self.emitter(1.0, 0.0), other, 4.0, True)
+
+    def test_the_mixer_block_is_read_by_name_and_a_missing_group_stops_the_tool(self):
+        class Obj:
+            def __init__(self, kind, name):
+                self.type, self.name_ = type("T", (), {"name": kind}), name
+
+            def read_typetree(self):
+                return {"m_Name": self.name_}
+
+        book = G.MixerBook.__new__(G.MixerBook)
+        book.cache = {}
+        book.by_id = {1: Obj("AudioMixerGroupController", "Other"), 2: Obj("GameObject", "ArenaGates")}
+        with self.assertRaisesRegex(G.GateSoundError, "0 AudioMixerGroupControllers are called ArenaGates"):
+            book.named_group("ArenaGates")
+        book.by_id[3] = Obj("AudioMixerGroupController", "ArenaGates")
+        book.by_id[4] = Obj("AudioMixerGroupController", "ArenaGates")
+        with self.assertRaisesRegex(G.GateSoundError, "2 AudioMixerGroupControllers are called ArenaGates"):
+            book.named_group("ArenaGates")
+
+
+class IcebergBuildRowTests(unittest.TestCase):
+    """build_row bakes the pitch the MAP's fit entry names: the shared Equator clip is 1.0 on Equator and 1.15 on Iceberg."""
+
+    class Em:
+        label = "level259 ARENA_SANATORIUM_GATES/Motor_door"
+        world = (-38.36, 6.374, -75.818)
+        obj = None
+
+        def __init__(self, pitch):
+            self.player = {"pitch": pitch, "volume": 0.9, "min": 1.0, "max": 30.0, "mixer": (0, 0)}
+
+    CLIP = {"id": "arena_equator_old_slide_doors"}
+    SOURCE = {"volume": 1.0, "mixer": None}
+    CANDIDATE = {"group": ("DOORS/GATES_B/Sanatorium_CheckPoint_Gate", (-38.908, 6.439, -75.664)), "part": "", "closed": None, "distance": 0.569}
+
+    def test_iceberg_plays_the_shared_clip_at_1_15_and_equator_at_1(self):
+        fit = G.load_fit()
+        row = G.build_row(self.Em(1.15), self.CANDIDATE, self.CLIP, self.SOURCE, fit, None, ICEBERG)
+        self.assertEqual((row["authored_pitch"], row["pitch"], row["mixer"], row["mixer_db"]), (1.15, 1.0, None, 0.0))
+        row = G.build_row(self.Em(1.0), self.CANDIDATE, self.CLIP, self.SOURCE, fit, None, "arena_equator")
+        self.assertEqual((row["authored_pitch"], row["pitch"]), (1.0, 1.0))
+
+    def test_an_authored_pitch_without_a_bake_in_the_maps_entry_stops_the_tool(self):
+        fit = G.load_fit()
+        with self.assertRaisesRegex(G.GateSoundError, "plays at pitch 1.15 and bake_pitch is 1.0"):
+            G.build_row(self.Em(1.15), self.CANDIDATE, self.CLIP, self.SOURCE, fit, None, "arena_equator")
+        with self.assertRaisesRegex(G.GateSoundError, "plays at pitch 1.0 and bake_pitch is 1.15"):
+            G.build_row(self.Em(1.0), self.CANDIDATE, self.CLIP, self.SOURCE, fit, None, ICEBERG)
+
+    def test_build_package_fits_a_clip_by_the_maps_entry(self):
+        rows = {"schema_version": 1, "key": ICEBERG, "mixer": {"name": "ArenaGates", "db": -15.0, "path": "x"},
+                "clips": [{"id": "clip_a", "asset": "sharedassets1.assets", "path_id": 1, "format": "PCM16", "channels": 2, "sample_rate": 8000,
+                           "seconds": 3.0, "resource": {"file": "sharedassets1.resource", "offset": 0, "size": 96000}}],
+                "rows": [{"barrier": "B", "part": None, "at": None, "closed_position": None, "clip": "clip_a"}]}
+        fit = {"xfade_s": 0.06, "clips": {"clip_a": {"mode": "as_is"}},
+               "map_clips": {ICEBERG: {"clip_a": {"mode": "as_is", "bake_pitch": 1.25}}}}
+        decode = lambda entry: (G.write_wav(FitterTests().clip(), 8000), None)
+        with tempfile.TemporaryDirectory() as folder:
+            own = G.build_package(ICEBERG, rows, decode, Path(folder) / "i", fit, "v")["clips"][0]
+            other = G.build_package("arena_bowl", dict(rows, key="arena_bowl"), decode, Path(folder) / "b", fit, "v")["clips"][0]
+        self.assertEqual((own["pitch_baked"], own["baked_pitch"], own["frames"]), (True, 1.25, int(24000 / 1.25)))
+        self.assertEqual((other["pitch_baked"], other["baked_pitch"], other["frames"]), (False, 1.0, 24000))
+
+
+@unittest.skipUnless(HAVE_ARENA, "Arena is not installed")
+class RealIcebergRowTests(unittest.TestCase):
+    """The tracked rows against the installed Arena (skipped without it)."""
+
+    @classmethod
+    def setUpClass(cls):
+        if not (ARENA / "level259").is_file() or not (ARENA / "level376").is_file():
+            raise unittest.SkipTest("Arena has no Sanatorium levels")
+        cls.version = G.doors.arena_version(ARENA)
+        cls.mixers = G.MixerBook(ARENA)
+
+    def test_the_tracked_sidecar_is_what_the_installed_arena_gives(self):
+        doc = G.extract_rows(ICEBERG, ARENA, self.version, self.mixers)
+        tracked = (REPO / "tools" / "maps" / "iceberg.gatesounds.json").read_bytes().decode("utf-8").replace("\r\n", "\n")
+        self.assertEqual(G.render_rows_sidecar(doc), tracked)
+        self.assertEqual((len(doc["rows"]), len(doc["clips"]), len(doc["skipped"])), (6, 3, 0))
+
+    def test_the_six_players_are_a_hundred_bytes_all_at_pitch_1_15_with_no_group(self):
+        scene = G.doors.ArenaScene(ARENA, 259)
+        emitters = G.read_emitters(scene, 259)
+        self.assertEqual(sorted(e.path.rsplit("/", 1)[1] for e in emitters),
+                         ["Motor_door", "Sliding_door_1", "Sliding_door_2", "Sliding_door_3", "Sliding_door_4", "Sliding_door_5"])
+        for e in emitters:
+            self.assertAlmostEqual(e.player["pitch"], 1.15, places=5)
+            self.assertEqual(e.player["mixer"], (0, 0))
+            self.assertEqual((e.player["min"], e.player["max"]), (1.0, 30.0))
+
+    def test_without_the_map_margin_the_extraction_stops_on_the_join(self):
+        # the regression guard of the per-map override: the global 4.0 m refuses Sliding_door_2 (3.83 m to the next gate)
+        row = {k: v for k, v in G.MAPS[ICEBERG].items() if k != "join_margin_m"}
+        with patch.dict(G.MAPS, {ICEBERG: row}), self.assertRaisesRegex(G.GateSoundError, "the join is not clear"):
+            G.extract_rows(ICEBERG, ARENA, self.version, self.mixers)
+
+    def test_without_root_only_a_sliding_gate_would_get_one_leaf(self):
+        row = {k: v for k, v in G.MAPS[ICEBERG].items() if k != "join_root"}
+        with patch.dict(G.MAPS, {ICEBERG: row}):
+            doc = G.extract_rows(ICEBERG, ARENA, self.version, self.mixers)
+        leaf_rows = [r for r in doc["rows"] if r["barrier"] == ICEBERG_GATE_A and r["part"] is not None]
+        self.assertTrue(leaf_rows, "Sliding_door_4 stands 0.007 m from a leaf: the nearest-place rule alone gives that leaf")
+
+
+@unittest.skipUnless(HAVE_ICEBERG_PACKAGE, "work/extract/gate-sounds/arena_iceberg is not extracted (tools/extract/extract_gate_sounds.py clips --map arena_iceberg)")
+class IcebergPackageTests(unittest.TestCase):
+    """Iceberg's ignored package as the extractor left it: manifest, WAVs, seam tables, the key-source rule (skips without it)."""
+
+    FRAMES = {"arena_san_gates_blue": 178504, "arena_san_gates_red": 282800, "arena_equator_old_slide_doors": 136866}
+    # the seam the runtime picks at SpawnGateDriveScale 0.5: the largest ok removal not above (1 - 0.5) * event_s, and where the end event lands
+    PICKS_AT_HALF = {"arena_san_gates_blue": (1.198, 1.352), "arena_san_gates_red": (2.499, 2.651), "arena_equator_old_slide_doors": (1.297, 1.313)}
+
+    @classmethod
+    def setUpClass(cls):
+        cls.manifest = json.loads((PACKAGE / ICEBERG / G.MANIFEST_NAME).read_text(encoding="utf-8"))
+
+    def test_manifest_rows_are_the_tracked_rows_and_every_wav_is_intact(self):
+        manifest = self.manifest
+        self.assertEqual((manifest["schema_version"], manifest["map_key"]), (1, ICEBERG))
+        self.assertEqual(manifest["rows"], sidecar(ICEBERG)["rows"])
+        self.assertEqual(manifest["mixer"], sidecar(ICEBERG)["mixer"])
+        self.assertEqual(sorted(p.name for p in (PACKAGE / ICEBERG).iterdir()), sorted([G.MANIFEST_NAME] + [c["file"] for c in manifest["clips"]]))
+        self.assertEqual({c["id"] for c in manifest["clips"]}, ICEBERG_CLIPS)
+        for clip in manifest["clips"]:
+            with self.subTest(clip=clip["id"]):
+                blob = (PACKAGE / ICEBERG / clip["file"]).read_bytes()
+                self.assertEqual((clip["bytes"], clip["sha256"]), (len(blob), hashlib.sha256(blob).hexdigest()))
+                self.assertEqual((clip["channels"], clip["sampleRate"], clip["frames"]), (2, 44100, self.FRAMES[clip["id"]]))
+                self.assertEqual(len(blob), 44 + 4 * clip["frames"])
+                self.assertEqual((clip["pitch_baked"], clip["baked_pitch"]), (True, 1.15))
+                self.assertEqual(set(clip["source"]), {"asset", "path_id", "format", "resource"})
+
+    def test_seam_tables_are_consistent_and_the_runtime_picks_are_the_reviewed_ones(self):
+        for clip in self.manifest["clips"]:
+            fit = clip["fit"]
+            with self.subTest(clip=clip["id"]):
+                self.assertEqual(fit["mode"], "body_cut")
+                self.assertEqual((fit["xfade_s"], fit["xfade_f"]), (0.06, 2646))
+                lo, hi = fit["body_f"]
+                for seam in fit["seams"]:
+                    self.assertAlmostEqual((seam["c1f"] - seam["c0f"]) / 44100, seam["remove_s"], delta=0.001)
+                    self.assertGreaterEqual(seam["c0f"] - fit["xfade_f"], lo)
+                    self.assertLessEqual(seam["c1f"], hi + int(0.005 * 44100))
+                half = [s for s in fit["seams"] if s["ok"] and s["remove_s"] <= 0.5 * fit["event_s"] + 1e-9]
+                pick = max(half, key=lambda s: s["remove_s"])
+                removal, lands = self.PICKS_AT_HALF[clip["id"]]
+                self.assertEqual(pick["remove_s"], removal)
+                self.assertAlmostEqual(fit["event_s"] - pick["remove_s"], lands, places=3)
+        late = {c["id"]: round(self.PICKS_AT_HALF[c["id"]][1] - 0.5 * c["fit"]["event_s"], 3) for c in self.manifest["clips"]}
+        self.assertEqual(late, {"arena_san_gates_blue": 0.077, "arena_san_gates_red": 0.076, "arena_equator_old_slide_doors": 0.008})
+
+    def test_no_shipped_sample_run_occurs_in_a_key_source_file_of_iceberg(self):
+        if not (ARENA / "level256").is_file():
+            self.skipTest("Arena is not installed")
+        table = json.loads(G.KEY_SOURCES.read_text(encoding="utf-8"))["maps"][ICEBERG]
+        files = sorted({ARENA / Path(f).name for entry in table for f in entry["files"]})
+        self.assertEqual([f.name for f in files], ["sharedassets256.assets.resS", "sharedassets258.assets.resS", "sharedassets375.assets.resS",
+                                                   "sharedassets376.assets.resS"])
+        for clip in self.manifest["clips"]:
+            self.assertNotIn(Path(clip["source"]["resource"]["file"]).name, {f.name for f in files})   # the clips live in 56 and 259: no key source
+            pcm = wav_pcm(PACKAGE / ICEBERG / clip["file"])
+            for path in files:
+                with self.subTest(clip=clip["id"], file=path.name):
+                    self.assertFalse(contains_pcm(path, pcm), f"{clip['id']} occurs in {path.name}")
+
+    @unittest.skipUnless(HAVE_ARENA, "Arena is not installed")
+    def test_every_shipped_clip_is_the_decode_of_arenas_clip_baked_at_1_15(self):
+        decode = G.arena_decoder(ARENA)
+        fit = G.load_fit()
+        for entry in sidecar(ICEBERG)["clips"]:
+            with self.subTest(clip=entry["id"]):
+                wav, metadata = decode(entry)
+                shipped = (PACKAGE / ICEBERG / (entry["id"] + ".wav")).read_bytes()
+                self.assertEqual(metadata["m_Name"], entry["id"])
+                self.assertEqual(metadata["m_Resource"]["m_Source"], entry["resource"]["file"])
+                samples, rate = G.read_wav(wav)
+                self.assertNotEqual(wav, shipped)
+                self.assertEqual(shipped, G.write_wav(G.resample_speed(samples, G.clip_fit(fit, ICEBERG, entry["id"])["bake_pitch"]), rate))
+                self.assertEqual(len(shipped), 44 + 4 * int(len(samples) / 1.15))
 
 
 if __name__ == "__main__":
