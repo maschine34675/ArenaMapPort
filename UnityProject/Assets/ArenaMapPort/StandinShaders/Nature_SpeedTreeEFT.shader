@@ -16,6 +16,9 @@ Shader "Hidden/ArenaMapPort/Nature/SpeedTreeEFT"
         _MainTex ("_MainTex", 2D) = "white" {}
         _Shininess ("_Shininess", Float) = 0
         _SpecColor ("_SpecColor", Color) = (1,1,1,1)
+        _StencilType ("_StencilType", Float) = 0
+        _Temperature ("_Temperature", Color) = (1,1,1,1)
+        _Temperature1 ("_Temperature1", Color) = (1,1,1,1)
         _Temperature2 ("_Temperature2", Color) = (1,1,1,1)
         _WindQuality ("_WindQuality", Float) = 0
     }

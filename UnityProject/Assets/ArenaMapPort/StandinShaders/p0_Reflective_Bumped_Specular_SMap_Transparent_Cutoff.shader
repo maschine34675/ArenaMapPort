@@ -7,13 +7,14 @@ Shader "Hidden/ArenaMapPort/p0/Reflective/Bumped Specular SMap Transparent Cutof
 {
     Properties
     {
+        USEHEAT ("USEHEAT", Float) = 0
+        _BaseTintColor ("_BaseTintColor", Color) = (1,1,1,1)
         _BumpMap ("_BumpMap", 2D) = "white" {}
         _BumpScale ("_BumpScale", Float) = 0
         _BumpTiling ("_BumpTiling", Float) = 0
         _Color ("_Color", Color) = (1,1,1,1)
         _Cube ("_Cube", Cube) = "white" {}
         _Cutoff ("_Cutoff", Float) = 0
-        _DXT1_NM ("_DXT1_NM", Float) = 0
         _DefVals ("_DefVals", Color) = (1,1,1,1)
         _DetailNormalMapScale ("_DetailNormalMapScale", Float) = 0
         _DropsSpec ("_DropsSpec", Float) = 0
@@ -24,23 +25,29 @@ Shader "Hidden/ArenaMapPort/p0/Reflective/Bumped Specular SMap Transparent Cutof
         _Glossiness ("_Glossiness", Float) = 0
         _Glossness ("_Glossness", Float) = 0
         _GlossyReflections ("_GlossyReflections", Float) = 0
+        _HasTint ("_HasTint", Float) = 0
+        _HeatCenter ("_HeatCenter", Color) = (1,1,1,1)
+        _HeatColor1 ("_HeatColor1", Color) = (1,1,1,1)
+        _HeatColor2 ("_HeatColor2", Color) = (1,1,1,1)
+        _HeatSize ("_HeatSize", Color) = (1,1,1,1)
+        _HeatTemp ("_HeatTemp", Float) = 0
+        _HeatVisible ("_HeatVisible", Float) = 0
         _MainTex ("_MainTex", 2D) = "white" {}
         _Metallic ("_Metallic", Float) = 0
         _Mode ("_Mode", Float) = 0
         _NdotLOffset ("_NdotLOffset", Float) = 0
         _NightRippleFakeLightOffset ("_NightRippleFakeLightOffset", Float) = 0
+        _NormalIntensity ("_NormalIntensity", Float) = 0
+        _NormalUVMultiplier ("_NormalUVMultiplier", Float) = 0
         _OcclusionStrength ("_OcclusionStrength", Float) = 0
         _Parallax ("_Parallax", Float) = 0
         _ReflectColor ("_ReflectColor", Color) = (1,1,1,1)
         _RippleFakeLightIntensityOffset ("_RippleFakeLightIntensityOffset", Float) = 0
         _RippleTexScale ("_RippleTexScale", Float) = 0
-        _SSRPow ("_SSRPow", Float) = 0
-        _Shininess ("_Shininess", Float) = 0
         _SkinnedMeshMaterial ("_SkinnedMeshMaterial", Float) = 0
         _SmoothnessTextureChannel ("_SmoothnessTextureChannel", Float) = 0
         _SpecColor ("_SpecColor", Color) = (1,1,1,1)
         _SpecMap ("_SpecMap", 2D) = "white" {}
-        _SpecPower ("_SpecPower", Float) = 0
         _SpecVals ("_SpecVals", Color) = (1,1,1,1)
         _SpecularHighlights ("_SpecularHighlights", Float) = 0
         _Specularness ("_Specularness", Float) = 0
@@ -48,7 +55,6 @@ Shader "Hidden/ArenaMapPort/p0/Reflective/Bumped Specular SMap Transparent Cutof
         _StencilType ("_StencilType", Float) = 0
         _Temperature ("_Temperature", Color) = (1,1,1,1)
         _Temperature2 ("_Temperature2", Color) = (1,1,1,1)
-        _USEDECALS ("_USEDECALS", Float) = 0
         _USERAIN ("_USERAIN", Float) = 0
         _UVSec ("_UVSec", Float) = 0
         _Units ("_Units", Float) = 0

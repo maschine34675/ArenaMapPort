@@ -943,10 +943,30 @@ def validate_audio_bundle(readers,package,data):
         candidates=[r for r in go['components'] if r.type.name=='MonoBehaviour' and script_identity(r)[0]==item['kind']]
         require(len(candidates)==1,'native component missing/duplicate on owner '+item['id'])
         components[item['id']]=candidates[0];go_cache[item['id']]=go
+    # A bank is found by its authored name. Two source banks may share a name (Iceberg, 2026-10-30: the identical
+    # 'autoservice_wind.SoundBank' exists in sharedassets112 and as a copy in sharedassets259, each referenced by
+    # its own players); the importer writes one asset per source id, and the runtime links them by reference, so
+    # a shared name is resolved through the built players that reference the source bank: they must all point at
+    # exactly one of the same-named built banks, and no two source banks may resolve to the same built bank.
+    referenced={}
+    for item in data['players']:
+        tree=components[item['id']].read_typetree()
+        if item['kind']=='AmbientSoundPlayer':
+            pairs=[(item['ambientBank']['resolved'],tree['_ambientBank'])]
+        elif item['kind']=='SeasonAmbientSoundPlayer':
+            mapping=tree['_seasonAmbientBanks'];values=dict(zip(mapping['_keys'],mapping['_values']))
+            pairs=[(item['seasonAmbientBanks'][key]['resolved'],values[key]) for key in item['seasonAmbientBanks'] if key in values]
+        else:pairs=[]
+        for source_id,value in pairs:
+            if value['m_PathID']!=0:referenced.setdefault(source_id,set()).add(object_key(ptr(components[item['id']],value)))
     banks={}
     for source_id,item in data['banks'].items():
         candidates=[r for r in native['SoundBank'] if r.read_typetree()['m_Name']==item['name']]
+        if len(candidates)>1:
+            keys=referenced.get(source_id,set())
+            candidates=[r for r in candidates if object_key(r) in keys] if len(keys)==1 else []
         require(len(candidates)==1,'bank name missing/ambiguous '+source_id);banks[source_id]=candidates[0]
+    require(len({object_key(r) for r in banks.values()})==len(banks),'two source banks resolve to one built bank')
     clips={};all_clips=[r for r in readers if r.type.name=='AudioClip']
     # Asset filename is the source identity, so equal clip names cannot alias.
     require(len(all_clips)==len(data['clips']),'built audio clip cardinality')
