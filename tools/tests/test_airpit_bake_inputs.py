@@ -123,7 +123,7 @@ class SidecarContentTests(unittest.TestCase):
         self.assertEqual(bowl["navmesh_bake_layers"], [9, 11, 18, 29, 30])
         self.assertIs(bowl["keep_level_borders"], True)
         for path in sorted((REPO / "tools" / "maps").glob("*.json")):
-            if "." in path.stem or path.stem in ("airpit", "bowl"):
+            if "." in path.stem or path.stem in ("airpit", "bowl", "iceberg"):         # Iceberg's inputs: test_iceberg_bake_inputs.py
                 continue
             data = json.loads(path.read_text(encoding="utf-8"))
             for key in ("navmesh_bake_exclusions", "bake_bounds", "navmesh_bake_layers", "start_gates", "held_gates"):
