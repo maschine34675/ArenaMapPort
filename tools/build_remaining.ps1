@@ -4,7 +4,7 @@
 .DESCRIPTION
   Skips maps whose build outputs already pass validate_port. Existing extraction packages are reused. An incomplete extraction
   directory is never overwritten. -Rebuild rebuilds bundles from complete existing packages.
-  -Stage is reserved and refused: the release distribution contains only the released maps (Equator, Bay5, AirPit and Bowl).
+  -Stage is reserved and refused: the release distribution contains only the released maps (Equator, Bay5, AirPit, Bowl and Iceberg).
   AirPit (arena_airpit) is not built here any more (PLAN-AIRPIT item 8): this runner derives the package as work/extract/<stem>,
   which for airpit is the superseded Arena 0.5.4 spike package. AirPit is built from work/extract/airpit-native-v9 (Arena 0.6.0; v9 = v8 + the crates under the tarp, v8 = v7 + the rest of the furnished hall)
   with an explicit -PackageDir through tools/build_all.ps1; see docs/progress/airpit-release.md.
@@ -30,13 +30,13 @@ param(
     [switch]$Stage
 )
 $ErrorActionPreference = 'Stop'
-if ($Stage) { throw 'Additional maps are parked. -Stage cannot write them into the release (Equator, Bay5, AirPit, Bowl); omit -Stage to retain development builds in work/.' }
+if ($Stage) { throw 'Additional maps are parked. -Stage cannot write them into the release (Equator, Bay5, AirPit, Bowl, Iceberg); omit -Stage to retain development builds in work/.' }
 $repo = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
 $allMaps = @('autoservice','airpit2','prison','railwaystation','yard','factory','custom','shoreline','woods')
 if (-not $Maps.Count -or (@($Maps | Sort-Object -Unique).Count -ne $Maps.Count)) { throw 'Specify a nonempty unique map list.' }
 if ($Maps -ccontains 'airpit') { throw 'airpit is no longer built by this runner: it would use the superseded Arena 0.5.4 package work/extract/airpit. Build it from work/extract/airpit-native-v8 with an explicit -PackageDir through tools/build_all.ps1 (docs/progress/airpit-release.md).' }
 if ($Maps -ccontains 'bowl') { throw 'bowl is no longer built by this runner: it would use the superseded Arena 0.5.4 package work/extract/bowl and overwrite work/build/bowl. Build it from work/extract/bowl-native-v2 with an explicit -PackageDir and -FullMap through tools/build_all.ps1 (docs/progress/bowl-release.md).' }
-if ($Maps -ccontains 'iceberg') { throw 'iceberg is no longer built by this runner: it would use the superseded Arena 0.5.4 package work/extract/iceberg. Build it from work/extract/iceberg-native-v<N> with an explicit -PackageDir and -FullMap through tools/build_all.ps1 (docs/progress/iceberg-release.md).' }
+if ($Maps -ccontains 'iceberg') { throw 'iceberg is no longer built by this runner: it would use the superseded Arena 0.5.4 package work/extract/iceberg. Build it from work/extract/iceberg-native-v2 with an explicit -PackageDir and -FullMap through tools/build_all.ps1 (docs/progress/iceberg-release.md).' }
 foreach ($stem in $Maps) { if ($stem -cnotin $allMaps) { throw "Unknown additional map: $stem" } }
 
 Push-Location -LiteralPath $repo

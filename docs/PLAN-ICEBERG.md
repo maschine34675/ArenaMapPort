@@ -150,7 +150,8 @@ Phase A (package) -> Phase B (a playable raid) -> Phase C (native features and p
    script did not reach (`validate_bundle_blocks.py`, `validate_bundle_roundtrip.py`, `validate_preset.py`,
    `validate_map_descriptors.py`). Regenerated stand-in shader stubs are committed after checking that they do not change a
    released map's build.
-14. **First stage, deploy, first raid**: client Release build without DllOnly with `-p:ArenaMapPortCreateReleaseKeys=true` once
+14. **First stage, deploy, first raid**: client Release build without DllOnly with `-p:ArenaMapPortCreateReleaseKeys=true -p:ArenaMapPortCreateKeyMap=arena_iceberg` once
+   (only Iceberg's stage command gets the create flag since the second integration review, 2026-10-30; `ls work/release-keys` first)
    (back up `work/release-keys` off the VM at once), `verify-keys` against the VM's and MASCHINE11's Arena, server build,
    `validate_distribution.py`, `deploy-to-spt.ps1 -Confirm` (close EFT first: about 1.2 GB more through Syncthing), EFT restart,
    `gpu-run raid --map iceberg` without bots, log baseline (NavMesh line, spawn openings, warnings, shader resolution of

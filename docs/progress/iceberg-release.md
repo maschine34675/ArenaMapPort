@@ -612,7 +612,7 @@ exist yet, so every gate that needs them is listed under "Pending U1" below.
   `iceberg-native-v2`) and `ArenaMapPort.Server/db/arena_iceberg/base.json` mirror it (`IcebergMapTests`, `MapDescriptorConsistencyTests`,
   `validate_map_descriptors.py`).
 - **Both csproj files** stage Iceberg's inputs (acoustics, gate sounds, AI sidecar, load screens, shader sidecar, banner; the content key only on the first
-  stage with `-p:ArenaMapPortCreateReleaseKeys=true`), and every per-map client table has its Iceberg row where a released map needs one: ambient audio
+  stage with `-p:ArenaMapPortCreateReleaseKeys=true -p:ArenaMapPortCreateKeyMap=arena_iceberg`), and every per-map client table has its Iceberg row where a released map needs one: ambient audio
   profile and mix defaults, `MapLightingDefaults`, native decals, spatial audio, reverb, precipitation audio, puddle footsteps.
 - **Release plumbing**: `RELEASE_MAP_KEYS/NAMES`, the new `CROWDLESS_MAP_KEYS`, `make_release_zips.py` (a sixth part, `iceberg`, 20 files), `validate_distribution.py`,
   `deploy-to-spt.ps1`, `park-unreleased-dist.ps1`, `stage_spectators.py`, `extract_spectator.py`, the extractor tables (`extract_score_monitors.py` MAPS, the
@@ -753,14 +753,15 @@ and the synthetic tests of `test_spawn_placement_probe` pin the curb, the cylind
 
 ### Pending U1 (needs Unity, the key store or the host; nothing of this was run)
 
-1. **Build the Iceberg bundles**: `build_all.ps1 -MapKey arena_iceberg -MapDescriptor D:/ArenaMapPort/tools/maps/iceberg.json -PackageDir D:/ArenaMapPort/work/extract/iceberg-native-v2 -FullMap
-   -OutputDir D:/ArenaMapPort/work/build/iceberg -BakeNavMesh $true -Verify $true` (absolute descriptor path; never two maps at once). `tools/build_remaining.ps1` refuses Iceberg like Bowl.
+1. **Build the Iceberg bundles**: `pwsh -Command "& 'tools/build_all.ps1' -MapKey arena_iceberg -MapDescriptor D:/ArenaMapPort/tools/maps/iceberg.json -PackageDir D:/ArenaMapPort/work/extract/iceberg-native-v2 -FullMap
+   -OutputDir D:/ArenaMapPort/work/build/iceberg -BakeNavMesh \$true -Verify \$true -SkipGameRefsSync"` (absolute descriptor path; never two maps at once; the `[bool]` parameters only parse through
+   `pwsh -Command "& ..."` from bash, and without `-SkipGameRefsSync` the script first re-runs `tools/sync-game-refs.ps1` against `D:/SPT41`, which touches the GameRefs of the released maps; corrected 2026-10-30, second pass). `tools/build_remaining.ps1` refuses Iceberg like Bowl.
 2. **Validators on the result** (step 4 of the script stops at `validate_extract.py` for accepted packages; run the rest by hand): `validate_bundle_roundtrip.py`, `validate_preset.py`,
    `validate_bundle_blocks.py` (a block with a compression flag and csize >= usize must never ship), `validate_native_features.py` (package v2 against the contract, including the 21 zero-min players),
    `navmesh_diff.py --compare-bundle` with `--descriptor tools/maps/iceberg.json --doors` (expect **5,145** bake sources and the 4,515.3 m2 / 82 of 84 picture), `validate_map_descriptors.py`.
-3. **First stage** with `-p:ArenaMapPortCreateReleaseKeys=true` (a client Release build WITHOUT DllOnly): creates `work/release-keys/arena_iceberg.key` (copy `work/release-keys` outside the repo at once),
+3. **First stage** with `-p:ArenaMapPortCreateReleaseKeys=true -p:ArenaMapPortCreateKeyMap=arena_iceberg` (a client Release build WITHOUT DllOnly; `ls work/release-keys` first, the four released keys must be there; the create flag reaches only Iceberg's stage command since 2026-10-30): creates `work/release-keys/arena_iceberg.key` (copy `work/release-keys` outside the repo at once),
    writes the three AMPB bundles and `keys/arena_iceberg.json`; the key-source row is already in `tools/bundle/key-sources.json` (`0e7a94a`). Then `validate_distribution.py` (expect
-   `DISTRIBUTION_OK 5 maps 15 bundles 5 sidecars encrypted`), `validate_port.py --distribution`, `make_release_zips.py --plan` (core 154, equator 24, bay5 30, airpit 22, bowl 26, **iceberg 20**; the
+   `DISTRIBUTION_OK 5 maps 15 bundles 5 sidecars encrypted`), `validate_port.py --map iceberg --package D:/ArenaMapPort/work/extract/iceberg-native-v2 --distribution` (without `--package` it defaults to `work/extract/iceberg`, the superseded 0.5.4 spike package, and fails the source-plan and scene-order checks), `make_release_zips.py --plan` (core 154, equator 24, bay5 30, airpit 22, bowl 26, **iceberg 20**; the
    dist-manifest paragraph states the expected 276 files) and `verify-keys --arena` against every other Arena build at hand (the user's 0.6.0 on MASCHINE11, UNC path from PowerShell).
 4. **Re-run the two puddle-census cases** and the `[RebindShaders]` reading below once `material-shaders.arena_iceberg.json` exists.
 5. **Release texts** (README, FORGE, CHANGELOG, release notes, the packer's player texts, the "four maps" wording) are the lead's, after U1; none was written here. `docs/dist-manifest.md` keeps the 256-file contract as the published one.
@@ -778,3 +779,82 @@ and the synthetic tests of `test_spawn_placement_probe` pin the curb, the cylind
 - Lighting: the ZeroLevel -3.7 start value (try -6.2 and -1.2 through `ZeroLevelOverride`), the fog and the sky of the WeatherRig on a map whose Scripts scene is excluded.
 - Released maps after the shared-path changes: one raid on a released map and one hideout visit (`NativeSpatialAudio.BuildGraph`'s shared path, the generic-class Harmony trap), the `max` frame time of `uibridge_status`.
 - Not built on purpose (Phase C): no overview, no flares, no water, no crowd.
+
+## Second integration review of the promotion (2026-10-30, second pass)
+
+Two reviewers read `1bd5868` and found **no blocking defect**: the released maps' tracked rows, sidecars and `db/` files have no diff, `make_base_json.py` regenerates all five `base.json` byte for byte, the
+modes, AI, door-pose and gate-sound sidecars regenerate identically, `dist/` equals the published 0.4.0 package except the two DLLs plus exactly 15 added Iceberg files (271 of the 276 the contract expects), and the
+packer classifies all 271 with 0 unclassified. This pass fixes every non-blocking item that was a real defect and cheap, and records the decision for the rest.
+
+### Changed
+
+- **Content-key creation is per map (hardening, the reviewers' first operational item).** `-p:ArenaMapPortCreateReleaseKeys=true` used to add `--create-key` to the `stage` command of all five maps, so Iceberg's
+  first stage would also have recreated a released map's key, silently, had `work/release-keys/arena_<map>.key` gone missing (all four exist today, dated 2026-10-20). The client csproj now has
+  `ArenaMapPortCreateKey_<map_key>` per map (the flag AND `-p:ArenaMapPortCreateKeyMap=<that map>`), each `stage` Exec carries its own only, and the flag without a map or with a name outside the five maps is an Error
+  before anything is staged. First stage: `-p:ArenaMapPortCreateReleaseKeys=true -p:ArenaMapPortCreateKeyMap=arena_iceberg`. Verified on a scratch project built from the csproj's own lines (no flag: nothing; flag alone: the
+  Error; flag + `arena_iceberg`: `--create-key` for Iceberg only; a typo: the Error); pinned by `test_bundle_crypt_tool.BuildWiringTests.test_staging_creates_a_content_key_only_on_request`. Texts: AGENTS.md,
+  bundle-encryption.md, dist-manifest.md, PLAN-ICEBERG item 14 and the recipe below. The off-VM backup of `work/release-keys` right after the first stage is still the user's.
+- **Deploy guard (the pre-U1 deploy hazard).** `tools/deploy-to-spt.ps1` (whole-dist mode, dry run too) fails when the staged server mod has `db/<map_key>` and the client plugin lacks `bundles/<key>_{scenes,navmesh,preset}.bundle` or
+  `keys/<key>.json`; `-DllOnly`, the DynamicMaps mode and the migrations never reach it. Today's `dist/` is refused with `arena_iceberg (missing bundles/arena_iceberg_scenes.bundle); ...` (checked against the real dist
+  with a dry run to a non-existent install root, nothing written). `test_dllonly_deploy.ps1` gained the cases (refused in dry run and with `-Confirm` with the install unchanged, `-DllOnly` unaffected, a missing key file alone
+  named, a complete map passes); the four other deploy test scripts still pass (client folder 22 checks, shader sidecar, equator db, DynamicMaps 122 cases). What the guard cannot cover: a `-DllOnly` deploy of this tree to a host without
+  Iceberg's files still logs four `Required map file is missing` warnings (`Plugin.cs` `LogStartupBanner`) and the notices system counts five maps; do not deploy this tree before U1, or park Iceberg's files first.
+- **Door-row model, the two oracle divergences.** `validate_map_descriptors.door_pose_errors` now refuses an `opened_barriers` path without rows that contains a posed barrier or sits inside one (the bake's legacy
+  drop-all rule would then bypass the rows; Iceberg's first group-level form was exactly that; checked clean on all five maps, and `test_door_poses.MirrorValidatorTests` mutates Iceberg's descriptor both ways). It does NOT
+  demand rows for every opened barrier: AirPit's portal-gate halves and shop shells have none by design. `navmesh_diff.py --descriptor` without `--doors` stays on the legacy model (changing the default would move the
+  recorded Bowl and AirPit oracle numbers), but now prints a note on stderr when the doors sidecar has rows for one of the descriptor's barriers ("pass --doors to follow the bake"); `test_navmesh_diff` pins both cases.
+  Iceberg's U1 oracle command carries `--doors` (below).
+- **.NET test gaps (gate sounds and small ones).** `GateSoundModelTests` now include Iceberg: 6 rows, 11 sounding gate keys (every key hits exactly one row), the gain table (-0.9 dB for all six rows by map, not by
+  clip: its check-point clip is Equator's `arena_equator_old_slide_doors`, -15.0 dB there), the real seam picks at scale 0.5 from the per-map fit (`arena_san_gates_blue` 1.198 s removed, event lands 1.352; `red` 2.499 / 2.651;
+  `arena_equator_old_slide_doors` 1.297 / 1.313; they pass against the extracted package), the staged-WAV loop (12 files, 11 distinct clip ids) and `GateSoundWiringTests` (the csproj row of `arena_iceberg`).
+  `DoorPoseModelTests` "rows need no position to tell parts apart" loops Iceberg too, `AmbientAudioProfilesTests` forbids an `ArenaMapRegistry.Iceberg` literal in `Bay5AmbientAudio`, and the stale test name
+  `NavMeshBakeInputs_ExistForAirPitAndBowlOnly` is now `..._ExistForAirPitBowlAndIcebergOnly`.
+- **Text that omitted Iceberg although the code is descriptor-driven** (strings only, no key, default or meaning changed): `WeatherTestOverride` (`ApplyOnServerTimeMaps`), `HdrImageTuning` (tonemap profile),
+  `ReverbAudioProbe` (second map list), `GateSounds` (`GateSounds` key), `SpawnGates` (`GatesOpened` doc: Iceberg's longest drive is 5.0 s x 0.5 = 2.5 s; `SpawnGateDrive` and `SpawnGateDriveScale` descriptions:
+  gate leaves 2 to 5 s, check-point gate 3 s), `GateSoundModel.Gain` doc (-0.9 dB). Stale "prepared ahead of its promotion" comments in `test_gate_sounds.py`, `BundleCryptoTests.cs`, `extract_gate_sounds.py` and
+  `extract_score_monitors.py`.
+- **Docs.** HANDOFF.md has a first section for the branch state; INDEX.md describes the log as it is now; `tools/build_remaining.ps1` names Iceberg among the released maps (and `iceberg-native-v2`); the head paragraph of
+  AGENTS.md no longer says only four maps are registered; AGENTS.md "Iceberg promotion rules" (6) to (8) carry the guard, the nesting check and the .NET pins. **Recipe corrections to the "Pending U1" list above:** the
+  build command carries `-SkipGameRefsSync` (without it `build_all.ps1` first re-runs `sync-game-refs.ps1` against `D:/SPT41`) and goes through `pwsh -Command "& ..."` with escaped `\$true`; `validate_port.py` needs
+  `--map iceberg --package D:/ArenaMapPort/work/extract/iceberg-native-v2 --distribution` (its default package is `work/extract/iceberg`, the superseded 0.5.4 spike package, and fails the source-plan checks); the first
+  stage names the map.
+
+### Decided, not changed (reasons)
+
+- **Narrowing the `LevelBorder*` name exemption of `RoundOpenedReason` to layer-29 owners** (`BakeNavMesh.cs`): needs the Unity harness to prove, and is harmless today (Iceberg: 365 layer-29 cubes plus the layer-0
+  `LevelBorders` group; Bowl none). Stays open as in the first pass.
+- **`STALE_SPIKE_BUNDLES` for Iceberg's spike scenes bundle** (1,124,068,269 B plaintext): not added, as for Bowl ([bowl-release.md](bowl-release.md)): `work/build/iceberg` does not exist (the spike is archived as
+  `iceberg-spike-20260915`), so the csproj stops at the first missing bundle before anything is staged. Add the hashes only if the spike ever lands in `work/build/iceberg` again.
+- **Score monitor faces of Iceberg.** Word 0 (`SCORE`, `SIDE`, `ALIVE (3)`) gets the timer face and word 13 (`SCORE (1)`, `TIMER (1)`) stays dark although the prop names suggest otherwise: the prop names of
+  Iceberg's holders are copies that do not follow the words (item 8 above), word 0's timer meaning rests on Bowl's naming (the sidecar's `confirmed` flag is no more than that), and a dark board is the safe failure; whether word 13 is the timer in CheckPoint is decided on the
+  first host raid (`Monitors/Demo = Cycle`), together with a face for it.
+- **Release number and cut preconditions** (the user's): both csproj still carry `<Version>0.4.0</Version>` and `make_release_zips.py` reads it, so a five-map build would be named and versioned like the published
+  0.4.0. Bump both together before the cut and before any deploy that must be told apart by version; nothing here touched the number.
+- **`SainLocationShim`** gives Iceberg the generic `Factory` SAIN location like AirPit and Bowl (config key `Bots (arena_iceberg)/SainLocation`): a tuning choice for the first bot raid, not a gap.
+- **Spatial-audio provenance of the released maps.** A re-export of the four released maps gives identical bake and room-tone WAV, but `spatial-audio.json` differs in the Arena-build provenance fields
+  (`source_asset_sha256`, `raw_sha256`, `source_scene_sha256`, `systems[0].location_info.id`): the work copies of 2026-09-28 to 2026-10-18 predate Arena 0.6.1. Not a regression of this branch; expect those
+  fields to change the next time a released map's acoustics are re-staged.
+- **Phase C "not yet" lists**, so the later promotion is one lock-step edit: DynamicMaps overview (`DynamicMapAssets.cs` `Maps`, `validate_distribution.OVERVIEW_MAP_NAMES`, the csproj `ArenaMapPortStageDynamicMaps`,
+  `deploy-to-spt.ps1` ValidateSet and map switch, `DynamicMapAssetsTests`, `test_dynamicmaps_deploy.ps1`), MultiFlare (`NativeMultiFlare.cs`, `validate_distribution.FLARE_MAP_KEYS`, the csproj flare rows,
+  `extract_multiflare.py`), water (`WATER_MAP_KEYS`, Bay5 only); `test_crowdless_maps.NotYetRulesTests` pins the absences, so adding one edits that test too.
+
+### Gate results (2026-10-30, VM, this tree; `Release`)
+
+| Gate | Result |
+|---|---|
+| `dotnet build ArenaMapPort.Server -c Release` | 0 warnings, 0 errors |
+| `dotnet build ArenaMapPort.Client -c Release -p:ArenaMapPortDllOnly=true` | 0 warnings, 0 errors (39 s) |
+| `dotnet test ArenaMapPort.Server.Tests -c Release` | **2,756 passed, 0 failed, 0 skipped** (11 s); the first run of this pass was 2,755 passed / 1 failed (`TheRealRowSidecarsParseWithTheirClipsAndEveryRowPlaysAtPitchOne` counted 9 distinct clip ids, 11 with Iceberg's two own ones: fixed) |
+| `python -m unittest discover -s tools/tests -p "test_*.py"` (PowerShell, verbose) | **2,719 tests, OK, 66 skipped** (734 s); one test more than the first pass (the nesting check of `door_pose_errors`). The same **3 of the 66** wait for the not-yet-built Iceberg bundles (`test_puddle_water_census` for `map='iceberg'` twice, needs the staged `material-shaders.arena_iceberg.json`; `test_release_zips.test_real_dist_classifies_completely`, 5 required files missing, the first `arena_iceberg_scenes.bundle`); the other 63 are optional dependencies (numpy, shapely, Pillow) and two older plan/package skips, none Iceberg-related |
+| `python tools/validate/validate_map_descriptors.py` | OK, 14 descriptors, 14 catalog entries, release `All` membership |
+| `pwsh -NoProfile -File tools/tests/test_unity_log_scan.ps1` | `UNITY_LOG_TESTS_OK 8 cases` |
+| deploy test scripts | `test_dllonly_deploy.ps1` 48 cases passed (with the new guard cases), `test_client_folder_deploy` 22 checks, `test_equator_db_deploy`, `test_shader_sidecar_deploy`, `test_dynamicmaps_deploy` 122 cases, all passed |
+| generators in `--check` mode | `extract_gate_sounds.py rows --check`: five maps current (airpit 11 rows, bay5 5, bowl 4, equator 5, iceberg 6); `extract_score_monitors.py --check`: all five current; `extract_banners.py --check` 5 banners, `extract_loadscreens.py --check` 24, `extract_map_descriptions.py --check` ok. The docstring edits of the two extractors changed no output. The door-pose, AI-anchor, mode-object and spatial-audio generators were not touched in this pass (their first-pass regeneration results stand) |
+| `deploy-to-spt.ps1` dry run against the real `dist/` (non-existent install root) | refused by the new guard with the five missing Iceberg files named; nothing written |
+| MSBuild logic of the create flag | scratch project with the csproj's own lines: no flag, flag alone, flag + `arena_iceberg`, a typo, `arena_iceberg` without the flag: as listed above |
+
+### Pending U1 (unchanged by this pass except the recipe lines corrected above)
+
+The list "Pending U1" and the host-check list above stand. Additions: `ls work/release-keys` before the first stage (arena_equator, arena_bay5, arena_airpit, arena_bowl) and back the folder up off the VM at once afterwards;
+the oracle command for the built bundle is `navmesh_diff.py --map iceberg --descriptor tools/maps/iceberg.json --doors --compare-bundle <the built navmesh bundle>` (without `--doors` the run prints the note
+above and models the legacy rule); do not deploy before the first stage is done.

@@ -4,7 +4,7 @@
 [progress/iceberg-release.md](progress/iceberg-release.md)): `ArenaMapRegistry.All`, `RELEASE_MAP_KEYS`, the csproj rows and the packer now expect a
 fifth map. Once its bundles exist (the first Unity build, U1) and are staged, dist holds **276 files** (the 256 above plus 20) and the multi-part plan
 reads core 154, equator 24, bay5 30, airpit 22, bowl 26, **iceberg 20**: `bundles/arena_iceberg_{scenes,navmesh,preset}.bundle` (3, AMPB, encrypted),
-`keys/arena_iceberg.json` (1, the first staging creates the content key with `-p:ArenaMapPortCreateReleaseKeys=true`), `acoustics/arena_iceberg/`
+`keys/arena_iceberg.json` (1, the first staging creates the content key with `-p:ArenaMapPortCreateReleaseKeys=true -p:ArenaMapPortCreateKeyMap=arena_iceberg`), `acoustics/arena_iceberg/`
 (`spatial-audio.json`, `source.audiobakedata` with the 533-byte portal repair, `sharedassets259.assets_6.wav`: 3), `gate-sounds/arena_iceberg/`
 (`gate-sounds.json` and three WAVs: 4), `ai/iceberg.ai.json` (1), `loadscreens/arena_iceberg_1..5.jpg` (5), `material-shaders.arena_iceberg.json` (1),
 `db/arena_iceberg/base.json` (1) and `banners/arena_iceberg.jpg` (1). It has no spectator package (the first crowdless map:

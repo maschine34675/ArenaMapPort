@@ -100,7 +100,10 @@ dated state in one screen; read it before this index if you only have a minute.
 - [iceberg-release.md](iceberg-release.md) — Iceberg as the fifth map (branch `feature/iceberg`, started 2026-10-30): the four
   surveys (CheckPoint mode, 70 staged spawn markers, three capture points, two gate groups, no crowd, no official description),
   plan roles, the native extraction from Arena 0.6.1 (reviewed Gravel/Concrete pair and lamp-glass hit role), package v1 and
-  its contract; then sidecars, bake, host raids. Plan: [../PLAN-ICEBERG.md](../PLAN-ICEBERG.md).
+  its contract; then the six merged workstreams (ambient audio and package v2, spatial acoustics, spawns/modes/AI/exits, door
+  poses/gate sounds/score monitors, identity and description, bake inputs and the offline oracle), their reviews and the
+  lock-step promotion into `ArenaMapRegistry.All` (2026-10-30, with the second pass: per-map create-key, deploy guard, test
+  gaps); the "Pending U1" list holds what waits for the Unity build, the first stage and the host raids. Plan: [../PLAN-ICEBERG.md](../PLAN-ICEBERG.md).
 - [iceberg-source-061.md](iceberg-source-061.md) — Iceberg's Arena 0.5.4 spike package against the 0.6.1 native package v1
   (2026-10-30): the reworked CheckPoint layout, the +9 index shift, spawn-marker churn.
 - [arena-install-check.md](arena-install-check.md) — the Arena installation requirement of release 0.2.3

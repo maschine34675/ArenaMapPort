@@ -1,5 +1,27 @@
 # HANDOFF — dated working state
 
+## Iceberg is the fifth registered map, bundles pending U1 - 2026-10-30 (branch `feature/iceberg`, nothing pushed, tagged or deployed)
+
+**State.** Iceberg (`Arena_Sanatorium`, key `arena_iceberg`) joined `ArenaMapRegistry.All` and every release list in the lock-step promotion of 2026-10-30
+(`1bd5868`, PLAN-ICEBERG item 12; four review-fix commits before it, a second pass after it). It is NOT released and not built: `work/build/iceberg` does not exist
+(the 2026-09-15 spike build is archived as `iceberg-spike-20260915`), so `dist/` holds its server, art, acoustics, gate-sound, AI and load-screen files (271 of the
+276 the contract expects) but not its three bundles, `keys/arena_iceberg.json` and `material-shaders.arena_iceberg.json`. Record, decisions and the full list:
+[docs/progress/iceberg-release.md](docs/progress/iceberg-release.md) ("promotion into the released set", "second integration review", "Pending U1").
+
+**What waits for U1 (Unity, the key store, the host).** (1) the Unity build from `work/extract/iceberg-native-v2` with `-FullMap` into `work/build/iceberg` (exact command in the log,
+with `-SkipGameRefsSync`); (2) the validators by hand (`navmesh_diff.py --compare-bundle` with `--descriptor tools/maps/iceberg.json --doors`, expect 5,145 bake sources); (3) the first stage:
+`-p:ArenaMapPortCreateReleaseKeys=true -p:ArenaMapPortCreateKeyMap=arena_iceberg` (the create flag is per map since the second pass; `ls work/release-keys` first, back it up off the VM at once);
+(4) `validate_distribution.py`, `validate_port.py --map iceberg --package ...iceberg-native-v2 --distribution`, `make_release_zips.py --plan` (276 files, iceberg part 20), `verify-keys` against MASCHINE11's 0.6.0;
+(5) the two skipped puddle-census cases; (6) deploy, then the host-check list at the end of the log.
+
+**Do not deploy before U1.** `tools/deploy-to-spt.ps1` now refuses a whole-dist deploy (dry run too) while a staged `db/<map_key>` has no bundles or key file in the client plugin; `-DllOnly`
+still works, but a build that registers Iceberg on a host without its files logs four `Required map file is missing` warnings and raises the incomplete-install notice. Park Iceberg's staged files
+(or finish U1) before any host test of the released maps from this branch.
+
+**The user's, not decided here.** The release number and form (both csproj still say 0.4.0 and `make_release_zips.py` reads it: bump both together before a cut and before any deploy that must be told
+apart by version), the release texts (README, FORGE, CHANGELOG, release notes, "four maps" wording), Iceberg's provisional values after the first listening pass (ambient 3 dB / offset 0 / range 2, `ZeroLevel` -3.7,
+gate sounds at -0.9 dB, word 13 of the score monitors), the Phase C items (overview, flares, water, crowd: absent on purpose and pinned by `test_crowdless_maps.NotYetRulesTests`).
+
 ## 0.4.0 RELEASED - 2026-10-30
 
 **User decisions (German):** "das rauschen ist jetzt weg. ein 0.3.1 ist nicht noetig" (the repaired Equator bundle heard in play), "das zip archiv wird wieder als

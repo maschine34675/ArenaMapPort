@@ -4,8 +4,8 @@ ArenaMapPort imports the maps of Escape from Tarkov: Arena (read from the user's
 install) into SPT 4.1.6 (EFT 0.16.9.5, Unity 2022.3.43f1; the server declares `~4.1.5`) as separate locations: a Python extractor,
 a Unity 2022.3.43f1 batch importer that rebuilds scenes, materials, colliders and a fresh NavMesh into
 asset bundles, a BepInEx client plugin that repairs everything a ported scene lacks at raid time, and an
-SPT server mod that registers the locations. Fourteen maps retain development inputs; **Equator, Bay5, AirPit and Bowl** are registered and
-released (Equator and Bay5 were the first release; AirPit was added in 2026-10 on `feature/airpit` and shipped with 0.2.2/0.2.3; 0.2.0 was built
+SPT server mod that registers the locations. Fourteen maps retain development inputs; **Equator, Bay5, AirPit and Bowl** are released and
+registered (the fifth map, Iceberg, is registered but not released: see its paragraph below; Equator and Bay5 were the first release; AirPit was added in 2026-10 on `feature/airpit` and shipped with 0.2.2/0.2.3; 0.2.0 was built
 and withdrawn on 2026-10-16; Bowl shipped with 0.3.0). All four have native playtest evidence. **Bowl** (the fourth map, on `main` since the 2026-10-18 fast-forward merge of `feature/bowl`; PLAN-BOWL item 8) was
 **released with 0.3.0 on 2026-10-24** (tag `v0.3.0`, GitHub release, Pixeldrain; the four-map release with Arena's door poses, the done signal
 for mode plugins and the encrypted bundles of stage 2; [CHANGELOG.md](CHANGELOG.md), [docs/releases/v0.3.0.md](docs/releases/v0.3.0.md)). **0.4.0 followed on 2026-10-30** (tag `v0.4.0`, GitHub release, one ZIP on
@@ -412,9 +412,10 @@ map (target `ArenaMapPortStageWpOutputs`): `stage --map-key K --bundle <plain> (
 work/release-keys --sources tools/bundle/key-sources.json --arena auto` (`--levels` is the older name of `--sources`). The three
 plaintext bundles of `work/build/<stem>/`
 go in; three `AMPB` files under `BepInEx/plugins/maschine-ArenaMapPort/bundles/` and `keys/<map_key>.json` come out, with the map's
-content key `K_map` read from `work/release-keys/<map_key>.key`. A key is created only on request: the FIRST stage of a map passes
-`-p:ArenaMapPortCreateReleaseKeys=true`, which adds `--create-key` (the tool prints `CREATED ... BACK UP`: copy `work/release-keys`
-outside the repo at once). Every other build refuses, with the tool's `FAIL there is no content key for '<map>'`, when a map's key is
+content key `K_map` read from `work/release-keys/<map_key>.key`. A key is created only on request and for ONE named map: the FIRST stage of a map
+passes `-p:ArenaMapPortCreateReleaseKeys=true -p:ArenaMapPortCreateKeyMap=<map_key>` (Iceberg: `arena_iceberg`), which adds `--create-key` to that map's
+stage command only (the tool prints `CREATED ... BACK UP`: copy `work/release-keys` outside the repo at once; the flag alone, or a name that is not one of
+the five maps, stops the build, and before 2026-10-30 the one flag reached every map's stage command). Every other build refuses, with the tool's `FAIL there is no content key for '<map>'`, when a map's key is
 missing, so a key store that went missing is restored from its backup and never silently recreated (a new key makes every released
 bundle of that map unreadable). `-p:ArenaMapPortArena=<folder>` replaces `--arena auto` (verified like a player's). Staging needs this VM's Arena installation, found with `ArenaInstallation.Detect()` and
 verified like a player's, because each key file wraps `K_map` with a key derived from that installation's files.
@@ -849,3 +850,11 @@ the log; the user uses it to point at things.
   pins the number of mirrored trigger volumes per map (Iceberg 10, others none). (4) `spawn_placement_probe.py` is an UPPER bound on `SpawnPlacementRepairs.IsValid` (seven capsule rings, headroom
   from the spawn height); the host's `spawn placement:` line is the authority. (5) The ambient defaults of Iceberg (3 dB, offset 0, range 2) and its `ZeroLevel` (-3.7) are provisional start
   values, NOT Bowl's: the mix is `volume * gain + offset`, and Bowl's offset would lift Iceberg's 0.25 lamp loops to about 0.75.
+  (6) Second integration review (2026-10-30): `tools/deploy-to-spt.ps1` refuses a whole-dist deploy (dry run too; `-DllOnly` and the other modes never get there) when the staged
+  server mod has a `db/<map_key>` folder and the client plugin lacks that map's three bundles or its key file, because `dist/` holds a new map's server, art, acoustics and AI files long
+  before its bundles exist and the client counts a map's files at every start; a half-staged map is finished or its files parked before a deploy, and a `-DllOnly` deploy of a build
+  that registers a map the host does not have yet logs `Required map file is missing` warnings and raises the incomplete-install notice. (7) `validate_map_descriptors.door_pose_errors` refuses an
+  `opened_barriers` path without rows that contains a posed barrier or sits inside one (the bake's legacy drop-all rule would then bypass the rows), and `navmesh_diff.py --descriptor`
+  without `--doors` prints a note when the doors sidecar has rows for one of the barriers (its numbers then model the legacy rule, not the bake; the default stays so that the recorded
+  Bowl and AirPit oracle numbers stay comparable). (8) The staged WAVs, row counts and gain table of Iceberg's gate sounds are pinned in the .NET tests too (6 rows, 11 gate keys, -0.9 dB,
+  12 clips with the nine of the older maps).
