@@ -85,16 +85,23 @@ channels, so the Capture ring adopts the count and an empty ring is reported as 
 FORGE.md, CHANGELOG.md and docs/releases/v0.4.0.md rewritten (a cause of the static found and fixed, measured, not listened to; a faint steady hiss and
 short clicks seen in one recording are not explained by it; 0.3.0's Equator bundle carries the defect), the packer's README sentence and its pin
 (`test_the_readme_names_both_missing_impact_banks_and_the_equator_static`) reworded, the records and AGENTS.md updated. In v0.4.0.md the "Built from
-commit" and VirusTotal lines are placeholders again (`<BUILD_COMMIT>`, `<scan date>`, `<VirusTotal URL>`, `<n>`), because the DLLs are rebuilt and
-rescanned. The CHANGELOG heading and the date line of v0.4.0.md still read 2026-10-29 and are re-dated at publication (the static evidence is from
+commit" and VirusTotal lines were placeholders until the DLLs were rebuilt and rescanned; they now name `833275d` and the 2026-10-30 scans (see
+"Done" below). The CHANGELOG heading and the date line of v0.4.0.md still read 2026-10-29 and are re-dated at publication (the static evidence is from
 2026-10-30).
 
 **Open, in this order (publication stays postponed, see the top of this file: no tag, upload or push until the user reauthorizes it):**
 
-1. Rebuild both DLLs from the commit that carries these texts and scan them again on VirusTotal; the `a4aa0af` DLLs and their scan (0 malicious, 0
-   suspicious of 75 engines) are superseded. Fill the placeholders of v0.4.0.md afterwards.
-2. Cut the five-part package again from that commit (the Equator part and the core part change, the Equator scenes bundle and both DLLs, and so does the checksum
-   file) and run the extract-check; refresh the hashes in `docs/releases/v0.4.0.md` and the packer log. The `github-a4aa0af` cut is superseded.
+1. **Done 2026-10-30 01:10-01:16:** both DLLs rebuilt from `833275d` (the texts commit; client SHA-256 `09b9393e08854197f4d33c39f3c2788f79c5018932649b94acc3e24c2585ab03`, server
+   `90e47da0b32b4c202a453397d18680dd21f81be7bb57355bd0c96ab554bcfc59`, ProductVersion `0.4.0+833275d...`), deployed to the mirror, on the host after 12 s (`gpu-run deploy-wait
+   --server --game`, instance `7de2fcbf` 01:13:27, 16/16 identical), one Equator raid at 01:14 (plain PMC, bots None, `NoiseProbe` Off for the process:
+   `[Bundles] loaded ... 577488350 bytes plaintext, encrypted AMPB v1, 551 chunks`, key derived in 3 ms, crowd `load total=2161 ms (wait=1, hash=59,
+   parse=1931, textures=2091, actors=57, audio=8; ... worker thread, crypto CNG)`, 120 fps, mean 8.3 ms, max 10.8 ms in a 10 s window 41 s in, RAM 9105 MB,
+   no `[NoiseProbe]` line, warnings only Unity's four `refrigerator_drink` LOD lines). VirusTotal 2026-10-30: client 0 malicious, 0 suspicious of 75
+   engines (00:12:58Z), server 0/0 of 75 (00:14:20Z), `VIRUSTOTAL_SCAN_CLEAN 0.4.0` (`work/releases/0.4.0-vt-833275d.log`); v0.4.0.md carries both.
+2. **Done 2026-10-30 01:10-01:12:** the five-part cut `work/releases/0.4.0/github-833275d` (`work/releases/0.4.0-make-833275d.log`: `verified part 1..5
+   of 5`, `extract-check OK: 255 files identical to dist`, `RELEASE_ZIPS_BUILT`); part hashes core `439d55e0...`, equator `88070915...`, bay5 `f44eaad8...`,
+   airpit `ff48188c...`, bowl `32456558...` (`maschine-ArenaMapPort-0.4.0.sha256`). The `github-a4aa0af` and `github-8941caa` cuts are superseded. The
+   commit that carries this paragraph is the one to tag (the manifests pin `833275d`, the commit the DLLs and the cut were built from).
 3. User decisions: (a) whether the 3.6 s static (WAV t 6.0-9.7 s) is the "Rauschen" he meant (the data say yes with about 0.9; two other sounds in that
    capture stay open, the faint steady hiss and the boosted near wind bed; the click bursts are not explained by this defect), and his ear on one playing
    session of Equator as the remaining confirmation; (b) whether the public 0.3.0 gets a 0.3.1 that replaces only the Equator scenes bundle (577 MB, same

@@ -154,9 +154,9 @@ source/package local; do not create a remote tag or upload a release until reaut
 See the top of HANDOFF.md. The preparation plan below is retained for that later step.
 The corrected candidate is `52c8a28` plus the commit that carries the release texts of 2026-10-29 evening (crowd worker with CNG hashing, NoiseProbe
 that arms on a stereo driver, five-part texts after the release audit). `52c8a28` had its host run on GPU-2 (20:55-21:08: four plain PMC raids without bots,
-the hideout once; crowd build 2.08-2.16 s on the main thread, 0 ArenaMapPort warnings). The release build is `a4aa0af` (the texts commit, no code
-change): both DLLs rebuilt from it, deployed, one more Equator raid on GPU-2 at 22:06, the five-part cut `work/releases/0.4.0/github-a4aa0af`
-(extract-check 255 files identical) and VirusTotal 0/0 of 75 for both DLLs (that cut and scan are superseded since 2026-10-30, see below). The `github-8941caa` package and its VirusTotal lines are superseded;
+the hideout once; crowd build 2.08-2.16 s on the main thread, 0 ArenaMapPort warnings). The release build is `833275d` (2026-10-30: the repaired Equator bundle and the
+texts): both DLLs rebuilt from it, deployed, one Equator raid on GPU-2 at 01:14, the five-part cut `work/releases/0.4.0/github-833275d`
+(extract-check 255 files identical) and VirusTotal 0/0 of 75 for both DLLs; the `a4aa0af` build, cut and scan of 2026-10-29 are superseded. The `github-8941caa` package and its VirusTotal lines are superseded;
 the `fe45b84` package is the earlier host-verified fallback (see HANDOFF.md). Nothing is tagged, uploaded or pushed.
 
 The 2026-10-29 user-authorized 0.4.0 GitHub release uses the existing multipart packer form:
@@ -170,8 +170,8 @@ and its fix in the pipeline (corrected chunk compressor, repair step, `validate_
 the static's fingerprint is gone with the repaired bundle, ON 1,581 ms before against 0-73 ms after; the recipe's +10 dB comb bar was exceeded by
 residues shorter than 10 ms and the R2 fit was not done, see the record), and the texts say that a cause was found and fixed, measured and not
 listened to. The user's ear is what stays open. **The Equator scenes bundle of 0.3.0 and of the local 0.4.0 packages (`fe45b84`,
-`github-a4aa0af`) carries the defective block**; the repaired bundle is staged and deployed, and the 0.4.0 package is to be re-cut from the commit that
-carries the texts (the Equator part, the core part and the checksum file change; both DLLs are rebuilt and rescanned; no key file changes). Whether
+`github-a4aa0af`) carries the defective block**; the repaired bundle is staged and deployed, and the 0.4.0 package was re-cut from `833275d` on 2026-10-30
+(`work/releases/0.4.0/github-833275d`; the Equator part, the core part and the checksum file changed; both DLLs rebuilt and rescanned; no key file changes). Whether
 the public 0.3.0 gets a 0.3.1 with only that bundle replaced is the user's decision.
 
 Logging: Info is reserved for a concise startup/map-availability summary or actionable

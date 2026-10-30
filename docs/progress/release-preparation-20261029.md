@@ -179,3 +179,29 @@ and their VirusTotal scan are replaced by a rebuild from the commit that carries
 lines of v0.4.0.md are placeholders again). The five-part package is cut again from that commit: the Equator part and the core part change (the
 Equator scenes bundle and both DLLs), and so does the checksum file. The CHANGELOG heading and the date line of v0.4.0.md still read 2026-10-29
 and are re-dated at publication. Publication stays postponed (HANDOFF.md).
+
+## The release build 833275d: rebuild, raid, cut and scan - 2026-10-30 (01:10-01:16)
+
+`833275d` carries the repaired Equator scenes bundle's records and the release texts (the repair itself: `f32eba5`, the NoiseProbe fixes `52c8a28` and
+`36a6d12`). Both DLLs were rebuilt from it (client SHA-256 `09b9393e08854197f4d33c39f3c2788f79c5018932649b94acc3e24c2585ab03`, server
+`90e47da0b32b4c202a453397d18680dd21f81be7bb57355bd0c96ab554bcfc59`, ProductVersion `0.4.0+833275d91f197d71135b9cf030bfdb0ce87193b7`) and deployed to the mirror at 01:10 (255
+files, the two DLLs overwritten; the repaired Equator scenes bundle had been deployed at 00:22). `gpu-run deploy-wait --server --game` found both on the
+host after 12 s and restarted the server and the game (instance `7de2fcbf`, 01:13:27, UiBridge 0.9.7 since a restart at 00:49 that was not ours). `NoiseProbe`
+set `Off` for the process (`persist=false`). Equator, plain PMC, bots None, 12:00, clear, 01:14: `[BundleKeys] key for 'arena_equator' derived in 3 ms`,
+`[Bundles] loaded 'arena_equator/arena_equator_scenes.bundle' ... (577488350 bytes plaintext, encrypted AMPB v1, 551 chunks)`, `[Spectator] arena_equator:
+... load total=2161 ms (wait=1, hash=59, parse=1931, textures=2091, actors=57, audio=8; hash and parse on the worker thread, crypto CNG)`; 120 fps, mean 8.3 ms,
+p95 8.3 ms, max 10.8 ms in the 10 s window 41 s after the start; RAM 9105 MB; no `[NoiseProbe]` line; warnings since the raid start: Unity's four
+`refrigerator_drink` LOD lines only. Left through the pause menu at 01:16.
+
+Cut (started 01:10, parallel to the deploy): `python tools/release/make_release_zips.py --out work/releases/0.4.0/github-833275d --extract-check
+work/releases/0.4.0/github-833275d-extracted` (log `work/releases/0.4.0-make-833275d.log`): `verified part 1..5 of 5`, `extract-check OK: 255 files identical to
+dist, 8 generated entries ignored`, `RELEASE_ZIPS_BUILT`. Part hashes (`maschine-ArenaMapPort-0.4.0.sha256`): core
+`439d55e0d04933abd29aff505b994e59f08d42e32430db8094fac8f78f7342ca`, equator `88070915ec4fb2c011e5782b7dfb186583be50566af83522bf31a278268a53c6`, bay5
+`f44eaad8206bd4bd68a892aec89ab9c3372c0f9d29976f94a429840c5629c46e`, airpit `ff48188cdccc7f94c82366b99e14a21efa858b4f9f49e02e11a4093a0c7dc706`, bowl
+`32456558fef24fa915565917eb8213babb8ce9a5e5f35333a94ee99c9ab4ff33`. VirusTotal (`scan_virustotal.py --version 0.4.0`, log `work/releases/0.4.0-vt-833275d.log`,
+record `work/releases/0.4.0/virustotal.json`): client 0 malicious, 0 suspicious of 75 engines (2026-10-30T00:12:58Z), server 0/0 of 75 (00:14:20Z),
+`VIRUSTOTAL_SCAN_CLEAN 0.4.0`. docs/releases/v0.4.0.md names `833275d` and both scans; the `github-a4aa0af` cut and its scan are superseded.
+
+**Before any publication:** the user's reauthorization and his three decisions (the "Rauschen" identity, a 0.3.1 with only the Equator bundle, the repair
+instead of a Unity rebuild); the tag on the commit that carries this paragraph or a descendant (the manifests pin `833275d`); a re-dating of the changelog
+heading and the release note if the publication happens on another day than the one they name. Nothing was tagged, uploaded or pushed.
