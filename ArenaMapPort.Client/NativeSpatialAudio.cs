@@ -206,6 +206,13 @@ namespace ArenaMapPort.Client
             state.Root = new GameObject("ArenaMapPort Native Acoustics " + state.MapKey);
             state.Root.SetActive(false);
             SceneManager.MoveGameObjectToScene(state.Root, SceneManager.GetSceneByName(ArenaMapRaid.CurrentMap.ScriptsSceneName));
+            // Some trigger volumes are authored mirrored (Iceberg: ten, a scale of -1.467 on X or -7.17 on Z). They keep the sign; every
+            // other node keeps the strict rule. AcousticVolumeRules says why EFT reads such a volume correctly and where the rule is proven.
+            var mirrored = AcousticVolumeRules.MirroredVolumeNodes(
+                data["areas"].Select(a => (long)a["node_id"]),
+                new[] { "rooms", "portals", "groups", "systems" }.SelectMany(kind => data[kind].Select(item => (long)item["node_id"])),
+                data["nodes"].Where(n => n["parent_id"].Type != JTokenType.Null).Select(n => (long)n["parent_id"]));
+            int mirroredVolumes = 0;
             foreach (var node in data["nodes"])
             {
                 var go = new GameObject((string)node["name"]);
@@ -216,11 +223,16 @@ namespace ArenaMapPort.Client
                 Require(Math.Abs(Quaternion.Dot(q, q) - 1) < 0.01f, "invalid node rotation");
                 go.transform.localRotation = q;
                 go.transform.localScale = Vector(node["scale"]);
-                Require(go.transform.localScale.x >= 0 && go.transform.localScale.y >= 0 && go.transform.localScale.z >= 0, "negative node scale");
+                var scale = go.transform.localScale;
+                var scaleProblem = AcousticVolumeRules.ScaleProblem(scale.x, scale.y, scale.z, mirrored.Contains((long)node["id"]));
+                Require(scaleProblem == null, scaleProblem);
+                if (scale.x < 0 || scale.y < 0 || scale.z < 0) mirroredVolumes++;
                 go.layer = (int)node["layer"];
                 go.SetActive((bool)node["active_self"]);
                 nodes.Add((long)node["id"], go);
             }
+            if (mirroredVolumes > 0)
+                Plugin.Log.LogDebug($"{Tag} {state.MapKey}: {mirroredVolumes} mirrored trigger volume(s) keep their negative scale");
             foreach (var item in data["colliders"])
             {
                 var c = nodes[(long)item["node_id"]].AddComponent<BoxCollider>();
