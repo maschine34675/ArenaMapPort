@@ -6,7 +6,7 @@ their notes stay under [docs/releases/](docs/releases/) for the record, and 0.2.
 Dates are ISO dates. Each entry links its full release note (download links, checksums, install and upgrade steps),
 and the settings text is in the [README](README.md).
 
-## 0.4.0 - 2026-10-29
+## 0.4.0 - 2026-10-30
 
 Full release note: [docs/releases/v0.4.0.md](docs/releases/v0.4.0.md).
 

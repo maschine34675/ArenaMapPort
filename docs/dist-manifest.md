@@ -1,5 +1,10 @@
 # Current distribution contract: Equator, Bay5, AirPit and Bowl (0.3.0, encrypted bundles, published 2026-10-24)
 
+2026-10-30 (the 0.4.0 single cut, `make_release_zips.py --single --extract-check`, commit `01924a1`): dist holds 256 files; the single ZIP
+`maschine-ArenaMapPort-0.4.0.zip` is 3,836,857,033 B (3.57 GiB), SHA-256 `d40fb89a21124c773d6caa3d2cd8c7405c9c8595e3c0faa3d90224dedc9435e1`, extract-check OK against dist. Client DLL
+sha256 `8fd3b19a60e29378013af31db25cb0b8c00bb22cd2be23b20a96a7e6f214bdec`, server DLL `acb62d70c4c9894e48ee051b5adc52b8441f4bcc5cc6e58590b9945eb3ea0144`
+(built from `01924a1`), VirusTotal 2026-10-30: 0 malicious, 0 suspicious for both. The five-part cuts of 2026-10-29/30 are superseded (not the release form).
+
 2026-10-24 (release 0.3.0 PUBLISHED, user decision "ja, gerne veröffentlichen. 0.2.3 wird später gelöscht"): the cut below went to Pixeldrain
 (https://pixeldrain.com/l/UtjWQemL; ZIP https://pixeldrain.com/u/J1ajrRA8, checksum https://pixeldrain.com/u/RTaSMHNm), both DLLs had been scanned on VirusTotal (0 malicious of 70 and 71
 verdicts, 75 engines listed), tag `v0.3.0` and the GitHub release "ArenaMapPort 0.3.0" with the `.sha256` asset were created. 0.2.3 stays downloadable until
