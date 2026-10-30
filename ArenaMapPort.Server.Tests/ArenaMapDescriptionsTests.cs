@@ -27,8 +27,16 @@ public sealed class ArenaMapDescriptionsTests : IDisposable
         "arena_bay5" => " harbor fixture",
         "arena_airpit" => " terminal fixture",
         "arena_bowl" => " stadium fixture", // PLAN-BOWL item 8, 2026-10-18
-        _ => throw new InvalidOperationException("unexpected released map " + map.Key),
+        _ => throw new InvalidOperationException("no official text for " + map.Key),
     };
+
+    /// <summary>The released maps that have an official text in Arena's locales (the pack covers exactly these).</summary>
+    private static IEnumerable<ArenaMapDescriptor> OfficialTextMaps => ArenaMapRegistry.All.Where(ArenaMapDescriptions.HasOfficialText);
+
+    /// <summary>The registry as it will be once Iceberg (no official text, PLAN-ICEBERG item 10) is promoted: the same
+    /// pack and rules must hold before and after the promotion.</summary>
+    private static IReadOnlyList<ArenaMapDescriptor> ReleasedWithIceberg =>
+        ArenaMapRegistry.All.Concat(new[] { ArenaMapRegistry.Iceberg }).DistinctBy(map => map.Key).ToArray();
 
     private void WritePack(Dictionary<string, Dictionary<string, string>> descriptions, int version = 1) =>
         File.WriteAllText(PackPath, JsonSerializer.Serialize(new { schema_version = version, descriptions }));
@@ -45,7 +53,7 @@ public sealed class ArenaMapDescriptionsTests : IDisposable
         var warnings = new List<string>();
         var pack = ArenaMapDescriptions.Load(PackPath, warnings.Add);
         Assert.Empty(warnings);
-        foreach (var map in ArenaMapRegistry.All)
+        foreach (var map in OfficialTextMaps)
         {
             var description = pack.Resolve(language, map);
             Assert.Equal(expected + Kind(map), description);
@@ -58,9 +66,94 @@ public sealed class ArenaMapDescriptionsTests : IDisposable
     }
 
     [Fact]
-    public void Released_registry_is_exactly_the_four_maps_of_the_description_pack()
+    public void Official_text_maps_are_released_maps_and_the_key_set_of_the_extractors_pack()
     {
-        Assert.Equal(new[] { "arena_equator", "arena_bay5", "arena_airpit", "arena_bowl" }, ArenaMapRegistry.All.Select(m => m.Key));
+        // Every map with an official text is released, in the order of the pack generator's table, and the C# list is the
+        // key set of extract_map_descriptions.DESCRIPTION_KEYS (they change together: a new Arena location id goes into the
+        // Python table, the key into ArenaMapDescriptions.OfficialTextMapKeys).
+        var released = ArenaMapRegistry.All.Select(m => m.Key).ToHashSet();
+        Assert.All(ArenaMapDescriptions.OfficialTextMapKeys, key => Assert.Contains(key, released));
+        var source = File.ReadAllText(ExtractorPath());
+        var table = source[source.IndexOf("DESCRIPTION_KEYS = {", StringComparison.Ordinal)..];
+        table = table[..table.IndexOf('}')];
+        var pythonKeys = System.Text.RegularExpressions.Regex
+            .Matches(table, "\"(arena_[a-z0-9]+)\":\\s*\"[0-9a-f]{24} Description\"")
+            .Select(match => match.Groups[1].Value).ToArray();
+        Assert.Equal(pythonKeys, ArenaMapDescriptions.OfficialTextMapKeys.ToArray());
+    }
+
+    private static string ExtractorPath()
+    {
+        for (var dir = new DirectoryInfo(AppContext.BaseDirectory); dir != null; dir = dir.Parent)
+        {
+            var path = Path.Combine(dir.FullName, "tools", "extract", "extract_map_descriptions.py");
+            if (File.Exists(path)) return path;
+        }
+        throw new FileNotFoundException("tools/extract/extract_map_descriptions.py");
+    }
+
+    [Theory]
+    [InlineData("en")]
+    [InlineData("ge")]
+    [InlineData("de")]
+    [InlineData("ru")]
+    [InlineData("fr")]
+    public void A_released_map_without_an_official_text_answers_with_its_own_description_and_costs_the_others_nothing(string language)
+    {
+        // PLAN-ICEBERG item 10: Arena's locales have no Iceberg row, so the pack covers the four official maps only. With
+        // Iceberg released the pack still loads (no warning) and the four keep their official texts; Iceberg answers with
+        // the descriptor's own text, one string for every language.
+        WritePack(Fixture());
+        var warnings = new List<string>();
+        var pack = ArenaMapDescriptions.Load(PackPath, warnings.Add, ReleasedWithIceberg);
+        Assert.Empty(warnings);
+        var iceberg = ArenaMapRegistry.Iceberg;
+        Assert.False(ArenaMapDescriptions.HasOfficialText(iceberg));
+        Assert.Equal(iceberg.LocaleDescription, pack.Resolve(language, iceberg));
+        foreach (var map in OfficialTextMaps)
+        {
+            Assert.EndsWith(Kind(map), pack.Resolve(language, map));
+            Assert.NotEqual(map.LocaleDescription, pack.Resolve(language, map));
+        }
+        var locale = new GlobalLocaleDictionary();
+        ArenaMapRegistration.ApplyLocale(locale, iceberg, pack.Resolve(language, iceberg));
+        ArenaMapBanners.ApplyLocale(locale, iceberg, pack.Resolve(language, iceberg));
+        Assert.Equal(iceberg.LocaleDescription, locale[iceberg.IdField + " Description"]);
+        Assert.Equal(iceberg.LocaleDescription, locale[ArenaMapBanners.For(iceberg)!.Id + " Description"]);
+    }
+
+    [Theory]
+    [InlineData("iceberg-entry")]
+    [InlineData("missing-bowl")]
+    [InlineData("missing-en")]
+    [InlineData("empty-text")]
+    public void With_a_map_that_has_no_official_text_released_a_damaged_pack_is_still_discarded_whole(string fault)
+    {
+        var data = Fixture();
+        // A pack must never carry a text for a map that has none, and must never lose one of the four official maps.
+        if (fault == "iceberg-entry") data["en"]["arena_iceberg"] = "Not an official text";
+        if (fault == "missing-bowl") data["ru"].Remove("arena_bowl");
+        if (fault == "missing-en") data.Remove("en");
+        if (fault == "empty-text") data["ge"]["arena_equator"] = " ";
+        WritePack(data);
+        var warnings = new List<string>();
+        var pack = ArenaMapDescriptions.Load(PackPath, warnings.Add, ReleasedWithIceberg);
+        Assert.Single(warnings);
+        Assert.Contains("locales/map-descriptions.json", warnings[0]);
+        foreach (var map in ReleasedWithIceberg)
+            Assert.Equal(map.LocaleDescription, pack.Resolve("ge", map));
+    }
+
+    [Fact]
+    public void The_pack_the_registry_loads_is_valid_for_the_registry_with_and_without_iceberg()
+    {
+        WritePack(Fixture());
+        foreach (var released in new[] { ArenaMapRegistry.All, ReleasedWithIceberg })
+        {
+            var warnings = new List<string>();
+            ArenaMapDescriptions.Load(PackPath, warnings.Add, released);
+            Assert.Empty(warnings);
+        }
     }
 
     [Theory]

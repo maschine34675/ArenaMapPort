@@ -4,8 +4,11 @@
 Reads resources.assets without changing the Arena install. The generated text is
 BSG-derived data and belongs under ignored work/ or dist/, never in source control.
 Select exact TextAsset names rather than build-dependent Unity path IDs. Only the
-released maps (DESCRIPTION_KEYS: Equator, Bay5, AirPit and, since PLAN-BOWL item 8, Bowl) are exported; each
-available translation must be complete.
+released maps that HAVE an official text (DESCRIPTION_KEYS: Equator, Bay5, AirPit and, since PLAN-BOWL item 8, Bowl)
+are exported; each available translation must be complete. A released map whose location has no Name/Description
+row in Arena's locales (Iceberg, verified 2026-10-30 against 0.6.1.0.48206: only `EArenaBackgroundType/Iceberg`
+exists) gets no key here and no row in the pack: the server answers for it with the descriptor's own
+LocaleDescription (ArenaMapPort.Server/ArenaMapDescriptions.cs, whose OfficialTextMapKeys mirrors this table; a test pins both).
 
     python tools/extract/extract_map_descriptions.py
     python tools/extract/extract_map_descriptions.py --check
@@ -47,7 +50,8 @@ def validate_pack(payload):
     """Return the complete locale-to-map mapping or reject a malformed pack.
 
     English is the required fallback. Additional locale keys are permitted, but
-    every translation must cover exactly the released maps. Text is preserved
+    every translation must cover exactly the maps that have an official text
+    (DESCRIPTION_KEYS; a released map without one is deliberately absent). Text is preserved
     verbatim; trimming is used only to detect empty values.
     """
     if not isinstance(payload, dict) or set(payload) != {"schema_version", "descriptions"}:
@@ -61,7 +65,7 @@ def validate_pack(payload):
         if not isinstance(locale, str) or not locale.strip() or locale != locale.strip():
             raise ValueError("Map descriptions: invalid locale key")
         if not isinstance(maps, dict) or set(maps) != set(DESCRIPTION_KEYS):
-            raise ValueError(f"Map descriptions: {locale!r} must contain exactly the released maps")
+            raise ValueError(f"Map descriptions: {locale!r} must contain exactly the maps that have an official text")
         for map_key, text in maps.items():
             if not isinstance(text, str) or not text.strip():
                 raise ValueError(f"Map descriptions: empty or invalid {locale}/{map_key}")

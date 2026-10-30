@@ -3,12 +3,44 @@ using ArenaMapPort.Shared;
 
 namespace ArenaMapPort.Server;
 
-/// <summary>Original Arena text is shipped as extracted data, never embedded in source.</summary>
+/// <summary>
+/// Original Arena text is shipped as extracted data, never embedded in source.
+///
+/// Arena's locales carry a map description for only some maps (Equator, Bay5, AirPit and Bowl among the released ones;
+/// Iceberg has no Name or Description row at all, PLAN-ICEBERG item 10). The pack
+/// (<c>locales/map-descriptions.json</c>, written by <c>tools/extract/extract_map_descriptions.py</c>) must cover exactly
+/// the released maps that HAVE an official text (<see cref="OfficialTextMapKeys"/>); a map without one is not in the pack
+/// and answers with its descriptor's <see cref="ArenaMapDescriptor.LocaleDescription"/> (the port's own words, one
+/// English string for every language). A damaged, stale or over-complete pack is still discarded as a whole, so the
+/// official texts are never half-applied.
+/// </summary>
 public sealed class ArenaMapDescriptions
 {
+    /// <summary>
+    /// The maps whose official description exists in Arena's locales: the key set of
+    /// <c>extract_map_descriptions.DESCRIPTION_KEYS</c> (a test pins the two against each other). A new map joins this
+    /// list only together with its Arena location id in that Python table; a released map missing here falls back to its
+    /// own <see cref="ArenaMapDescriptor.LocaleDescription"/>.
+    /// </summary>
+    public static readonly IReadOnlyList<string> OfficialTextMapKeys = new[]
+    {
+        ArenaMapRegistry.Equator.Key,
+        ArenaMapRegistry.Bay5.Key,
+        ArenaMapRegistry.AirPit.Key,
+        ArenaMapRegistry.Bowl.Key,
+    };
+
     private readonly Dictionary<string, Dictionary<string, string>> _descriptions = new();
 
-    public static ArenaMapDescriptions Load(string path, Action<string> warn)
+    /// <summary>Whether Arena's locales carry an official description for <paramref name="map"/>.</summary>
+    public static bool HasOfficialText(ArenaMapDescriptor map) => OfficialTextMapKeys.Contains(map.Key);
+
+    public static ArenaMapDescriptions Load(string path, Action<string> warn) =>
+        Load(path, warn, ArenaMapRegistry.All);
+
+    /// <param name="released">The maps the server registers; the pack must cover exactly those of them that have an
+    /// official text. The two-argument overload passes <see cref="ArenaMapRegistry.All"/>.</param>
+    public static ArenaMapDescriptions Load(string path, Action<string> warn, IEnumerable<ArenaMapDescriptor> released)
     {
         try
         {
@@ -18,7 +50,7 @@ public sealed class ArenaMapDescriptions
                 throw new InvalidDataException("Unsupported schema version");
 
             var result = new ArenaMapDescriptions();
-            var maps = ArenaMapRegistry.All.Select(map => map.Key).ToHashSet(StringComparer.Ordinal);
+            var maps = released.Where(HasOfficialText).Select(map => map.Key).ToHashSet(StringComparer.Ordinal);
             foreach (var language in root.GetProperty("descriptions").EnumerateObject())
             {
                 var values = new Dictionary<string, string>();
@@ -30,7 +62,7 @@ public sealed class ArenaMapDescriptions
                     values.Add(entry.Name, value);
                 }
                 if (!maps.SetEquals(values.Keys))
-                    throw new InvalidDataException("Description map set differs from the release registry");
+                    throw new InvalidDataException("Description map set differs from the released maps that have an official text");
                 result._descriptions.Add(language.Name, values);
             }
             if (!result._descriptions.ContainsKey("en"))

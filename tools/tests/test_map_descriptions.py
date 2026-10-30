@@ -37,8 +37,34 @@ def synthetic_source():
 
 
 class DescriptionContractTests(unittest.TestCase):
-    def test_keys_are_exactly_the_four_released_maps(self):
+    def test_keys_are_exactly_the_maps_that_have_an_official_text(self):
         self.assertEqual(set(descriptions.DESCRIPTION_KEYS), {"arena_equator", "arena_bay5", "arena_airpit", "arena_bowl"})
+
+    def test_iceberg_has_no_official_text_and_a_pack_carrying_it_is_rejected(self):
+        # PLAN-ICEBERG item 10: Arena's en/ge/ru locales have no Name/Description row for Iceberg (only
+        # EArenaBackgroundType/Iceberg), so it is no key here; the server falls back to the descriptor's own text and
+        # discards a pack that claims one (ArenaMapDescriptionsTests). validate_pack stays strict for the keys it has.
+        self.assertNotIn("arena_iceberg", descriptions.DESCRIPTION_KEYS)
+        for locale in ("en", "ge"):
+            pack = synthetic_pack()
+            pack["descriptions"][locale]["arena_iceberg"] = "Synthetic extra text."
+            with self.subTest(locale=locale), self.assertRaises(ValueError):
+                descriptions.validate_pack(pack)
+        # ... and the unchanged four-map pack is complete without it.
+        self.assertEqual(set(descriptions.validate_pack(synthetic_pack())["en"]), set(descriptions.DESCRIPTION_KEYS))
+
+    def test_the_extractor_reads_no_iceberg_row_from_the_locales(self):
+        # pack_from_assets only looks up DESCRIPTION_KEYS ids, so Iceberg-like extra rows in the source are ignored
+        # and the pack stays the four official maps.
+        source = synthetic_source()
+        for obj in source.objects.values():
+            data = json.loads(obj.read().m_Script)
+            data["data"]["2e2d6dadf4ebb29e53a69aae Description"] = "  Synthetic Iceberg text.  "
+            data["data"]["EArenaBackgroundType/Iceberg"] = "Iceberg"
+            obj.read().m_Script = json.dumps(data)
+        pack = descriptions.pack_from_assets(source)
+        for maps in pack["descriptions"].values():
+            self.assertEqual(set(maps), set(descriptions.DESCRIPTION_KEYS))
 
     def test_bowl_uses_arenas_location_id_not_the_sidecar_id_field(self):
         # PLAN-BOWL item 8: Arena's own location id for Bowl; the ported location's id_field is another value.
