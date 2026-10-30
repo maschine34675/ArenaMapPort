@@ -145,6 +145,31 @@ class BakeRuleTests(unittest.TestCase):
         self.assertEqual(r["14"], "Water layer")
         self.assertIsNone(r["15"])
 
+    def test_keep_level_borders_keeps_layer_29_cubes_and_their_name_prefix(self):
+        # BakeNavMesh.NonPhysicalLayerReason + RoundOpenedReason with keep_level_borders (Bowl 2026-10-18; the name-prefix half
+        # since Iceberg 2026-10-30: its 365 cubes are called "LevelBorder (N)" under a "LevelBorders" group).
+        objs = [obj("1", "Root"), obj("2", "LevelBorders", "1"),
+                obj("3", "LevelBorder (113)", "2", layer=29, comps=[box((1, 1, 1))]),
+                obj("4", "KillTrigger", "1", layer=29, comps=[box((1, 1, 1))]),
+                obj("5", "Cube", "2", layer=18, comps=[box((1, 1, 1))]),                  # a solid under a LevelBorder* group
+                obj("6", "SPAWN_BOUND_A", "1", comps=[box((1, 1, 1))])]
+        with tempfile.TemporaryDirectory() as d:
+            c = pc.load_package_colliders(make_package(Path(d), objs))
+        pc.mark_barriers(c, [])
+        dropped = {o.obj_id: pc.bake_exclusion_reason(o) for o in c.owners}
+        self.assertEqual(dropped["3"], "LevelBorder layer 29")
+        self.assertEqual(dropped["4"], "LevelBorder layer 29")
+        self.assertEqual(dropped["5"], "LevelBorder*")
+        kept = {o.obj_id: pc.bake_exclusion_reason(o, keep_borders=True) for o in c.owners}
+        self.assertEqual(kept, {"3": None, "4": None, "5": None, "6": "SPAWN_BOUND*"})
+        self.assertEqual(int(pc.source_owner_mask(c).sum()), 0)
+        mask = pc.source_owner_mask(c, keep_borders=True)
+        self.assertEqual([c.owners[i].obj_id for i in np.nonzero(mask)[0]], ["3", "4", "5"])
+        only29 = pc.source_owner_mask(c, layer_mask=pc.layers_to_mask([9, 18, 29]), keep_borders=True)
+        self.assertEqual(int(only29.sum()), 3)
+        without29 = pc.source_owner_mask(c, layer_mask=pc.layers_to_mask([9, 18, 30]), keep_borders=True)
+        self.assertEqual([c.owners[i].obj_id for i in np.nonzero(without29)[0]], ["5"])   # no 29 in the list: the cubes stay out
+
     def test_opened_barrier_excludes_non_frame_descendants_only(self):
         c = self.package()
         pc.mark_barriers(c, ["Root/Gate"])
@@ -527,15 +552,18 @@ class EndToEndTests(unittest.TestCase):
         self.assertGreater(on18["samples"]["blocked_port_agent"], 0)         # a collected layer still cuts the corridor
 
     def test_descriptor_inputs_and_cli_precedence(self):
-        self.assertEqual(nd.descriptor_bake_inputs({}), {"barriers": [], "exclusions": [], "layer_mask": None})
+        self.assertEqual(nd.descriptor_bake_inputs({}), {"barriers": [], "exclusions": [], "layer_mask": None, "keep_level_borders": False})
         inputs = nd.descriptor_bake_inputs({"opened_barriers": ["A"], "navmesh_bake_exclusions": ["B/C"],
                                             "navmesh_bake_layers": [9, 11, 13, 18, 30]})
-        self.assertEqual(inputs, {"barriers": ["A"], "exclusions": ["B/C"], "layer_mask": nd.AIRPIT_ARENA_LAYER_MASK})
+        self.assertEqual(inputs, {"barriers": ["A"], "exclusions": ["B/C"], "layer_mask": nd.AIRPIT_ARENA_LAYER_MASK,
+                                  "keep_level_borders": False})
+        self.assertIs(nd.descriptor_bake_inputs({"keep_level_borders": True})["keep_level_borders"], True)
 
         captured = {}
 
         def fake_analyse(package, cfg, barriers, points, *_a, **kw):
-            captured.update(barriers=list(barriers), exclusions=list(kw["bake_exclusions"]), mask=kw["port_layer_mask"])
+            captured.update(barriers=list(barriers), exclusions=list(kw["bake_exclusions"]), mask=kw["port_layer_mask"],
+                            keep=kw["keep_level_borders"])
             raise SystemExit(0)
 
         with tempfile.TemporaryDirectory() as d:
@@ -555,7 +583,10 @@ class EndToEndTests(unittest.TestCase):
                     nd.analyse = original
                 return dict(captured)
 
-            self.assertEqual(run(), {"barriers": ["X", "A"], "exclusions": ["Y/Z", "B/C"], "mask": 1 << 18})
+            self.assertEqual(run(), {"barriers": ["X", "A"], "exclusions": ["Y/Z", "B/C"], "mask": 1 << 18, "keep": False})
+            self.assertTrue(run("--keep-level-borders")["keep"])
+            sidecar.write_text(json.dumps({"keep_level_borders": True}), encoding="utf-8")
+            self.assertTrue(run()["keep"])                           # the descriptor's key sets it without the flag
             self.assertIsNone(run("--ignore-descriptor-layers")["mask"])
             self.assertEqual(run("--port-layer-mask", "0x1000")["mask"], 0x1000)
 

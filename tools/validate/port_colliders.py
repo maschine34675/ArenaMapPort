@@ -15,6 +15,10 @@ Source rules mirrored from BakeNavMesh.cs (kept in `bake_exclusion_reason`):
     (LevelBorder) are skipped (`NonPhysicalLayerReason`);
   * any ancestor-or-self named `SPAWN_BOUND*` / `LevelBorder*` / `Door_Sliding_Respawn_L|_R` is skipped
     (`RoundOpenedReason`);
+  * `keep_level_borders` (Bowl 2026-10-18, Iceberg 2026-10-30; `keep_borders=True` here) keeps the layer-29 cubes as
+    sources: the layer-29 rule of `NonPhysicalLayerReason` and, since Iceberg, the `LevelBorder*` name prefix of
+    `RoundOpenedReason` do not apply (Iceberg's 365 cubes are NAMED `LevelBorder (N)` under a `LevelBorders` group; Bowl's
+    are called `Cube`, which is why the prefix never mattered before). `SPAWN_BOUND*` and the leaf names still apply;
   * every non-frame descendant of an `opened_barriers` path is skipped. A path is a root object name
     followed by `/`-separated child names resolved with Transform.Find semantics (first child of that
     name at each level); the barrier object itself stays, as in `RoundOpenedReason`;
@@ -41,7 +45,8 @@ import numpy as np
 WATER_LAYER = 4
 TRIGGERS_LAYER = 13
 LEVEL_BORDER_LAYER = 29
-EXCLUDED_NAME_PREFIXES = ("SPAWN_BOUND", "LevelBorder")
+LEVEL_BORDER_PREFIX = "LevelBorder"
+EXCLUDED_NAME_PREFIXES = ("SPAWN_BOUND", LEVEL_BORDER_PREFIX)
 EXCLUDED_LEAF_NAMES = ("Door_Sliding_Respawn_L", "Door_Sliding_Respawn_R")
 
 LAYER_NAMES = {
@@ -432,16 +437,20 @@ def layers_to_mask(layers) -> int | None:
     return mask
 
 
-def bake_exclusion_reason(o: Owner) -> str | None:
-    """Why the port bake drops this collider, or None when it is a NavMesh source (BakeNavMesh.cs)."""
+def bake_exclusion_reason(o: Owner, keep_borders: bool = False) -> str | None:
+    """Why the port bake drops this collider, or None when it is a NavMesh source (BakeNavMesh.cs).
+    `keep_borders` is the descriptor's keep_level_borders: the layer-29 cubes stay sources and the `LevelBorder*` name
+    prefix does not drop them (BakeNavMesh.NonPhysicalLayerReason / RoundOpenedReason)."""
     if o.layer == WATER_LAYER:
         return "Water layer"
     if o.layer == TRIGGERS_LAYER:
         return "Triggers layer 13"
-    if o.layer == LEVEL_BORDER_LAYER:
+    if o.layer == LEVEL_BORDER_LAYER and not keep_borders:
         return "LevelBorder layer 29"
     for name in o.names:
         for prefix in EXCLUDED_NAME_PREFIXES:
+            if keep_borders and prefix == LEVEL_BORDER_PREFIX:
+                continue
             if name.startswith(prefix):
                 return prefix + "*"
         if name in EXCLUDED_LEAF_NAMES:
@@ -453,12 +462,13 @@ def bake_exclusion_reason(o: Owner) -> str | None:
     return None
 
 
-def source_owner_mask(cset: ColliderSet, layer_mask: int | None = None, extra_exclude=None) -> np.ndarray:
+def source_owner_mask(cset: ColliderSet, layer_mask: int | None = None, extra_exclude=None,
+                      keep_borders: bool = False) -> np.ndarray:
     """Boolean per owner: is it a NavMesh source of the port bake (optionally restricted to a Unity
-    layer mask, which is how Arena's own NavMeshSurface collects)?"""
+    layer mask, which is how Arena's own NavMeshSurface collects)? `keep_borders`: see bake_exclusion_reason."""
     out = np.zeros(len(cset.owners), dtype=bool)
     for i, o in enumerate(cset.owners):
-        if bake_exclusion_reason(o) is not None:
+        if bake_exclusion_reason(o, keep_borders) is not None:
             continue
         if layer_mask is not None and not (layer_mask >> o.layer) & 1:
             continue
