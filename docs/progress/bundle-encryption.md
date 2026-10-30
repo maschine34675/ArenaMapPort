@@ -647,3 +647,16 @@ game thread at `TryServe` time and never at the menu, the log lines and their pi
 enters a record or a message (only the key file name, the bundle name and the two Arena versions, which are compared component by component
 because Arena's versions have five numbers). The messages say "unlock file", never "key file". Record: [map-notices.md](map-notices.md)
 (rows 18 to 20 and 22); host evidence pending.
+
+## The create-key flag is per map (2026-10-30)
+
+`-p:ArenaMapPortCreateReleaseKeys=true` used to add `--create-key` to the `stage` command of every map. With five maps in the staging target that
+meant Iceberg's first stage (the only one that still needs a new key) would also have recreated, silently, the key of any released map whose
+`work/release-keys/<map_key>.key` had gone missing, which locks every released bundle of that map (the guard of H6 was waived for all of them at once).
+The csproj now computes `ArenaMapPortCreateKey_<map_key>` per map (`--create-key` only when the flag is `true` AND `-p:ArenaMapPortCreateKeyMap=<that map>`),
+each `stage` command carries its own property only, and the flag without a map, or with a name that is not one of the five, stops the build with an
+Error before anything is staged. First stage of Iceberg: `-p:ArenaMapPortCreateReleaseKeys=true -p:ArenaMapPortCreateKeyMap=arena_iceberg`
+(`ls work/release-keys` first: the four released keys exist, dated 2026-10-20; back the folder up off the VM at once afterwards).
+`test_bundle_crypt_tool.BuildWiringTests.test_staging_creates_a_content_key_only_on_request` pins the five properties, their exact conditions, that each
+command names only its own and the Error. Checked with a scratch project that carries the csproj's own lines: no flag, flag alone and a typo give
+nothing or the Error, the flag with `arena_iceberg` gives `--create-key` for Iceberg only.

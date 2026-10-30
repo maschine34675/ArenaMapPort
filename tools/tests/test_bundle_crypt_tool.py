@@ -1107,16 +1107,37 @@ class BuildWiringTests(unittest.TestCase):
 
     def test_staging_creates_a_content_key_only_on_request(self):
         """Integration review (2026-10-19): a lost work/release-keys must never become a new content key by an ordinary build, because
-        every released bundle of the map would stop unlocking. --create-key is passed only with -p:ArenaMapPortCreateReleaseKeys=true."""
+        every released bundle of the map would stop unlocking. --create-key is passed only with -p:ArenaMapPortCreateReleaseKeys=true AND for the
+        ONE map that -p:ArenaMapPortCreateKeyMap names (2026-10-30, second integration review of Iceberg: before, the one flag reached the stage
+        command of every map, so a released map whose key file had gone missing would have been recreated silently during Iceberg's first stage)."""
+        from validate_map_descriptors import RELEASE_MAP_KEYS
         text = (REPO / "ArenaMapPort.Client/ArenaMapPort.Client.csproj").read_text(encoding="utf-8")
-        arg = re.search(r'<ArenaMapPortCreateKeyArg Condition="([^"]*)">([^<]*)</ArenaMapPortCreateKeyArg>', text)
-        self.assertIsNotNone(arg)
-        self.assertEqual(arg.group(1), "'$(ArenaMapPortCreateReleaseKeys)'=='true'")
-        self.assertEqual(arg.group(2), "--create-key")
-        self.assertEqual(text.count("--create-key"), 1)  # the conditional property above is the only place it appears
-        for exec_command in re.findall(r'<Exec Command="([^"]*stage --map-key[^"]*)"', text):
+        self.assertNotIn("ArenaMapPortCreateKeyArg", text)  # the one shared create-key property is gone
+        args = re.findall(r'<ArenaMapPortCreateKey_(\w+) Condition="([^"]*)">([^<]*)</ArenaMapPortCreateKey_\1>', text)
+        self.assertEqual([a[0] for a in args], list(RELEASE_MAP_KEYS))
+        for key, condition, value in args:
+            with self.subTest(key=key):
+                self.assertEqual(condition, f"'$(ArenaMapPortCreateReleaseKeys)'=='true' and '$(ArenaMapPortCreateKeyMap)'=='{key}'")
+                self.assertEqual(value, "--create-key")
+        self.assertEqual(text.count("--create-key"), len(RELEASE_MAP_KEYS))  # the conditional properties above are the only places it appears
+        stage_common = re.search(r'<ArenaMapPortStageCommon>([^<]*)</ArenaMapPortStageCommon>', text).group(1)
+        self.assertNotIn("create-key", stage_common)
+        self.assertNotIn("ArenaMapPortCreateKey", stage_common)
+        execs = re.findall(r'<Exec Command="([^"]*stage --map-key[^"]*)"', text.replace("&quot;", ""))
+        self.assertEqual(len(execs), len(RELEASE_MAP_KEYS))
+        for exec_command in execs:
+            key = re.search(r"stage --map-key (\w+)", exec_command).group(1)
             self.assertNotIn("--create-key", exec_command)
-            self.assertIn("$(ArenaMapPortStageCommon)", exec_command)  # which carries $(ArenaMapPortCreateKeyArg) and nothing else secret
+            self.assertIn("$(ArenaMapPortStageCommon)", exec_command)  # which carries nothing secret and no create flag
+            # each stage command carries the create property of ITS map and of no other
+            self.assertEqual(re.findall(r"\$\(ArenaMapPortCreateKey_(\w+)\)", exec_command), [key])
+        # the flag alone is refused, and so is a map that is not one of the five (a typo would otherwise create nothing and fail late)
+        error = re.search(r'<Error Condition="([^"]*ArenaMapPortCreateReleaseKeys[^"]*)"\s+Text="([^"]*)"', text)
+        self.assertIsNotNone(error)
+        self.assertTrue(error.group(1).startswith("'$(ArenaMapPortCreateReleaseKeys)'=='true' And "))
+        for key in RELEASE_MAP_KEYS:
+            self.assertIn(f"'$(ArenaMapPortCreateKeyMap)'!='{key}'", error.group(1))
+        self.assertIn("ArenaMapPortCreateKeyMap", error.group(2))
 
     def test_the_key_store_and_the_tool_output_are_ignored_by_git(self):
         ignore = (REPO / ".gitignore").read_text(encoding="utf-8").splitlines()

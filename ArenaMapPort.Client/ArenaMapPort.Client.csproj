@@ -437,18 +437,26 @@
     <!-- Stage 2 of the Arena gate: the bundles are not copied, they are ENCRYPTED into dist (AMPB containers, deterministic: an unchanged
          bundle gives identical bytes and an unchanged output is left alone) and the per-map key file keys/<map>.json is written from the
          Arena installation of this machine (found through the launcher's registry entry; ArenaMapPortArena=<folder> overrides). A content
-         key is created only on request: the first staging of a map passes -p:ArenaMapPortCreateReleaseKeys=true, creates the key in
-         $(ArenaMapPortReleaseKeysDir) and prints CREATED (back that folder up). Every other build refuses when a map's key file is missing, because
-         a lost key store must be restored from its backup, not recreated: a new key would make every released bundle of that map unreadable
-         (integration review, 2026-10-19). A DllOnly build never gets here. -->
+         key is created only on request, and for ONE named map (2026-10-30, second integration review of Iceberg): the first staging of a map
+         passes -p:ArenaMapPortCreateReleaseKeys=true -p:ArenaMapPortCreateKeyMap=<map key>, creates that map's key in
+         $(ArenaMapPortReleaseKeysDir) and prints CREATED (back that folder up). Before, the one flag reached the stage command of every map, so
+         a released map whose key file had gone missing would have been recreated silently during Iceberg's first stage. Every other build
+         refuses when a map's key file is missing, because a lost key store must be restored from its backup, not recreated: a new key would make
+         every released bundle of that map unreadable (integration review, 2026-10-19). A DllOnly build never gets here. -->
+    <Error Condition="'$(ArenaMapPortCreateReleaseKeys)'=='true' And '$(ArenaMapPortCreateKeyMap)'!='arena_equator' And '$(ArenaMapPortCreateKeyMap)'!='arena_bay5' And '$(ArenaMapPortCreateKeyMap)'!='arena_airpit' And '$(ArenaMapPortCreateKeyMap)'!='arena_bowl' And '$(ArenaMapPortCreateKeyMap)'!='arena_iceberg'"
+           Text="[ArenaMapPort] -p:ArenaMapPortCreateReleaseKeys=true creates the content key of ONE map and needs -p:ArenaMapPortCreateKeyMap=arena_equator|arena_bay5|arena_airpit|arena_bowl|arena_iceberg (got '$(ArenaMapPortCreateKeyMap)'); every other map's key file must already exist in work/release-keys" />
     <PropertyGroup>
       <ArenaMapPortArenaArg Condition="'$(ArenaMapPortArena)'==''">auto</ArenaMapPortArenaArg>
       <ArenaMapPortArenaArg Condition="'$(ArenaMapPortArena)'!=''">$(ArenaMapPortArena)</ArenaMapPortArenaArg>
-      <ArenaMapPortCreateKeyArg Condition="'$(ArenaMapPortCreateReleaseKeys)'=='true'">--create-key</ArenaMapPortCreateKeyArg>
-      <ArenaMapPortStageCommon>--out-dir &quot;$(ArenaMapPortDistDir)&quot; --key-store &quot;$(ArenaMapPortReleaseKeysDir)&quot; --sources &quot;$(ArenaMapPortKeySources)&quot; --arena &quot;$(ArenaMapPortArenaArg)&quot; $(ArenaMapPortCreateKeyArg)</ArenaMapPortStageCommon>
+      <ArenaMapPortCreateKey_arena_equator Condition="'$(ArenaMapPortCreateReleaseKeys)'=='true' and '$(ArenaMapPortCreateKeyMap)'=='arena_equator'">--create-key</ArenaMapPortCreateKey_arena_equator>
+      <ArenaMapPortCreateKey_arena_bay5 Condition="'$(ArenaMapPortCreateReleaseKeys)'=='true' and '$(ArenaMapPortCreateKeyMap)'=='arena_bay5'">--create-key</ArenaMapPortCreateKey_arena_bay5>
+      <ArenaMapPortCreateKey_arena_airpit Condition="'$(ArenaMapPortCreateReleaseKeys)'=='true' and '$(ArenaMapPortCreateKeyMap)'=='arena_airpit'">--create-key</ArenaMapPortCreateKey_arena_airpit>
+      <ArenaMapPortCreateKey_arena_bowl Condition="'$(ArenaMapPortCreateReleaseKeys)'=='true' and '$(ArenaMapPortCreateKeyMap)'=='arena_bowl'">--create-key</ArenaMapPortCreateKey_arena_bowl>
+      <ArenaMapPortCreateKey_arena_iceberg Condition="'$(ArenaMapPortCreateReleaseKeys)'=='true' and '$(ArenaMapPortCreateKeyMap)'=='arena_iceberg'">--create-key</ArenaMapPortCreateKey_arena_iceberg>
+      <ArenaMapPortStageCommon>--out-dir &quot;$(ArenaMapPortDistDir)&quot; --key-store &quot;$(ArenaMapPortReleaseKeysDir)&quot; --sources &quot;$(ArenaMapPortKeySources)&quot; --arena &quot;$(ArenaMapPortArenaArg)&quot;</ArenaMapPortStageCommon>
     </PropertyGroup>
     <Message Importance="high" Condition="'$(ArenaMapPortCreateReleaseKeys)'!='true'"
-             Text="[ArenaMapPort] content keys come from $(ArenaMapPortReleaseKeysDir); a map without a stored key stops the build here (the first staging of a map passes -p:ArenaMapPortCreateReleaseKeys=true, a lost key store is restored from its backup)" />
+             Text="[ArenaMapPort] content keys come from $(ArenaMapPortReleaseKeysDir); a map without a stored key stops the build here (the first staging of a map passes -p:ArenaMapPortCreateReleaseKeys=true -p:ArenaMapPortCreateKeyMap=&lt;map key&gt;, a lost key store is restored from its backup)" />
     <MakeDir Directories="$(ArenaMapPortDistDir)\bundles;$(ArenaMapPortDistDir)\keys" />
     <!-- Gate before the encryption (2026-10-29, the intermittent Equator noise): a plaintext bundle with a data block that carries a
          compression flag and csize >= usize would be encrypted as it is, and Unity's player evidently reads such a block as stored data
@@ -456,12 +464,13 @@
          the build here, before any bundle is encrypted into dist; repair the bundle with tools/bundle/fix_stored_blocks.py (build_all.ps1
          step 3b does) and build again. -->
     <Exec Command="python &quot;$(MSBuildThisFileDirectory)..\tools\validate\validate_bundle_blocks.py&quot; @(ArenaMapPortBundles->'&quot;%(FullPath)&quot;', ' ')" StandardOutputImportance="high" />
-    <Exec Command="&quot;$(ArenaMapPortBundleCryptExe)&quot; stage --map-key arena_equator @(ArenaMapPortBundles->WithMetadataValue('MapKey','arena_equator')->'--bundle &quot;%(FullPath)&quot;', ' ') $(ArenaMapPortStageCommon)" StandardOutputImportance="high" />
-    <Exec Command="&quot;$(ArenaMapPortBundleCryptExe)&quot; stage --map-key arena_bay5 @(ArenaMapPortBundles->WithMetadataValue('MapKey','arena_bay5')->'--bundle &quot;%(FullPath)&quot;', ' ') $(ArenaMapPortStageCommon)" StandardOutputImportance="high" />
-    <Exec Command="&quot;$(ArenaMapPortBundleCryptExe)&quot; stage --map-key arena_airpit @(ArenaMapPortBundles->WithMetadataValue('MapKey','arena_airpit')->'--bundle &quot;%(FullPath)&quot;', ' ') $(ArenaMapPortStageCommon)" StandardOutputImportance="high" />
-    <Exec Command="&quot;$(ArenaMapPortBundleCryptExe)&quot; stage --map-key arena_bowl @(ArenaMapPortBundles->WithMetadataValue('MapKey','arena_bowl')->'--bundle &quot;%(FullPath)&quot;', ' ') $(ArenaMapPortStageCommon)" StandardOutputImportance="high" />
-    <!-- Iceberg's FIRST staging creates its content key: pass -p:ArenaMapPortCreateReleaseKeys=true once and back up work/release-keys at once -->
-    <Exec Command="&quot;$(ArenaMapPortBundleCryptExe)&quot; stage --map-key arena_iceberg @(ArenaMapPortBundles->WithMetadataValue('MapKey','arena_iceberg')->'--bundle &quot;%(FullPath)&quot;', ' ') $(ArenaMapPortStageCommon)" StandardOutputImportance="high" />
+    <Exec Command="&quot;$(ArenaMapPortBundleCryptExe)&quot; stage --map-key arena_equator @(ArenaMapPortBundles->WithMetadataValue('MapKey','arena_equator')->'--bundle &quot;%(FullPath)&quot;', ' ') $(ArenaMapPortStageCommon) $(ArenaMapPortCreateKey_arena_equator)" StandardOutputImportance="high" />
+    <Exec Command="&quot;$(ArenaMapPortBundleCryptExe)&quot; stage --map-key arena_bay5 @(ArenaMapPortBundles->WithMetadataValue('MapKey','arena_bay5')->'--bundle &quot;%(FullPath)&quot;', ' ') $(ArenaMapPortStageCommon) $(ArenaMapPortCreateKey_arena_bay5)" StandardOutputImportance="high" />
+    <Exec Command="&quot;$(ArenaMapPortBundleCryptExe)&quot; stage --map-key arena_airpit @(ArenaMapPortBundles->WithMetadataValue('MapKey','arena_airpit')->'--bundle &quot;%(FullPath)&quot;', ' ') $(ArenaMapPortStageCommon) $(ArenaMapPortCreateKey_arena_airpit)" StandardOutputImportance="high" />
+    <Exec Command="&quot;$(ArenaMapPortBundleCryptExe)&quot; stage --map-key arena_bowl @(ArenaMapPortBundles->WithMetadataValue('MapKey','arena_bowl')->'--bundle &quot;%(FullPath)&quot;', ' ') $(ArenaMapPortStageCommon) $(ArenaMapPortCreateKey_arena_bowl)" StandardOutputImportance="high" />
+    <!-- Iceberg's FIRST staging creates its content key: pass -p:ArenaMapPortCreateReleaseKeys=true -p:ArenaMapPortCreateKeyMap=arena_iceberg once
+         (only that map's stage command gets create-key) and back up work/release-keys at once -->
+    <Exec Command="&quot;$(ArenaMapPortBundleCryptExe)&quot; stage --map-key arena_iceberg @(ArenaMapPortBundles->WithMetadataValue('MapKey','arena_iceberg')->'--bundle &quot;%(FullPath)&quot;', ' ') $(ArenaMapPortStageCommon) $(ArenaMapPortCreateKey_arena_iceberg)" StandardOutputImportance="high" />
     <Copy SourceFiles="@(ArenaMapPortShaderSidecar)" DestinationFiles="$(ArenaMapPortDistDir)\material-shaders.arena_equator.json" SkipUnchangedFiles="false" />
     <Copy SourceFiles="@(ArenaMapPortBay5ShaderSidecarSrc)" DestinationFiles="$(ArenaMapPortDistDir)\material-shaders.arena_bay5.json" SkipUnchangedFiles="false" />
     <Copy SourceFiles="@(ArenaMapPortAirPitShaderSidecarSrc)" DestinationFiles="$(ArenaMapPortDistDir)\material-shaders.arena_airpit.json" SkipUnchangedFiles="false" />
