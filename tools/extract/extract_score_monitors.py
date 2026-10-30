@@ -14,7 +14,7 @@ What is read (read-only; names and numbers only, nothing is copied from Arena):
   <Arena>/EscapeFromTarkovArena_Data/level<N>    the scene's hierarchy, with its RectTransforms and MonoBehaviours
 N is the index of every scene of the map that tools/bundle/key-sources.json lists AND the map imports (tools/maps/<stem>.json
 all_scene_names): Equator 51, 53, 55, 57, 58, Bay5 79 to 89, AirPit 28, 29, 37, 38, 40, 324 and Bowl 41 to 48 (95), of which only the design scenes carry holders
-(Equator 53 / 57, Bay5 81 / 88, AirPit 28 / 40, Bowl 43 / 48); `source.scenes` of a sidecar lists every scene that was read, so a holder that a future Arena build
+(Equator 53 / 57, Bay5 81 / 88, AirPit 28 / 40, Bowl 43 / 48, Iceberg 376; Iceberg imports 256, 257, 258, 260, 375 and 376); `source.scenes` of a sidecar lists every scene that was read, so a holder that a future Arena build
 adds to another scene is found, not missed. A scene that is not imported (Equator's Tournament scene 61) is never read.
 
 Checks (a failed check stops the tool and writes nothing; the layout is read fail-closed, never guessed):
@@ -29,8 +29,9 @@ Checks (a failed check stops the tool and writes nothing; the layout is read fai
 Type words (docs/progress/score-monitors.md, 49 Arena levels correlated with their prop names): 0 Timer, 1 TeamsCommonRoundScore and 2 AlivePlayers
 are CONFIRMED (the props of Bowl's TeamFight set are called TIMER / SCORE / ALIVE); 6 TeamsFinalRoundScore and 7 Playerboard are INFERRED from the
 order of the 13 template fields of Arena's MonitorTemplatesHolder; 10 names no template (Bowl's two inactive props, most likely a respawn-side
-panel): it is a known word with `template: null`. The enum has gaps (11 to 14 are the capture-point boards of Arena's own TDM scenes, which the
-four maps do not carry), so a template name is never derived for a word above 7. `face` is the port's choice: timer, score (words 1 and 6),
+panel): it is a known word with `template: null`. 13 (2026-10-30, Iceberg's two CheckPoint boards) is the ALL POINT STATUS board of Arena's
+capture-point scenes, known the same way. The enum has gaps (11 to 14 are the capture-point boards of Arena's own TDM scenes, which the
+four maps do not carry), so a template name is never derived for a word above 7; 11, 12 and 14 stay unclassified and stop the tool. `face` is the port's choice: timer, score (words 1 and 6),
 alive, or none (a prop that stays dark).
 
 Row fields: scene, path (the PROP's hierarchy path, the holder's parent), at (the holder's WORLD position, the canvas centre; tells apart a path
@@ -40,7 +41,7 @@ of the direction from the screen towards the reader: the side the canvas is read
 
 CLI:
     python tools/extract/extract_score_monitors.py [--map arena_bowl ...] [--arena auto] [--check] [--csharp] [--no-package]
-Without --map all four released maps. `--check` compares with the tracked sidecars and writes nothing (exit 1 when one differs). `--csharp` also
+Without --map every map of MAPS (the four released maps and Iceberg, prepared ahead of its promotion). `--check` compares with the tracked sidecars and writes nothing (exit 1 when one differs). `--csharp` also
 prints the `new ArenaScoreMonitor(...)` literals for ArenaMapRegistry.<Map>.ScoreMonitors. The output is byte-stable.
 """
 from __future__ import annotations
@@ -87,6 +88,15 @@ TYPE_WORDS = {
     6: ("MonitorTeamsFinalRoundScore", False, FACE_SCORE),
     7: ("MonitorPlayerboard", False, FACE_NONE),
     10: (None, False, FACE_NONE),
+    # 13 (2026-10-30, Iceberg's two CheckPoint boards): the ALL POINT STATUS board of a capture-point mode. A census of all 388 level files
+    # (docs/progress/iceberg-release.md; 467 holders, 0 errors) finds word 13 in three scenes: Arena_Yard_TDM_DesignStuff (level 228), four
+    # holders on props called ALL POINT STATUS beside the POINT STATUS A / B / X boards (word 12) and the CAPTURE POINT boards (word 11);
+    # and two CheckPoint design scenes whose capture-point boards keep the name of a copied timer TV: Arena_Location_TEMP_CheckPoint_
+    # DesignStuff (level 345, props TIMER (1) and (2)) and Iceberg's own level 376 (SCORE (1), TIMER (1)). Word 14 is the same family
+    # (ALL POINT STATUS in Arena_Bowl_TDM_DesignStuff, level 219; TIMER props in Arena_AirPit_2.0_CheckPoint_DesignStuff, level 346). Iceberg's
+    # CheckPoint mode has the three capture points A, B and C. The port draws no capture-point board and Arena's template for it is unknown,
+    # so the word is known, unconfirmed (the evidence is names on other scenes), template-less and dark, like word 10.
+    13: (None, False, FACE_NONE),
 }
 
 # map key -> stem, the extracted package the rows are cross-checked against (accepted inputs, AGENTS.md)
@@ -95,6 +105,9 @@ MAPS = {
     "arena_bay5": {"stem": "bay5", "package": "bay5-native-v5"},
     "arena_airpit": {"stem": "airpit", "package": "airpit-native-v9"},
     "arena_bowl": {"stem": "bowl", "package": "bowl-native-v2"},
+    # prepared ahead of its promotion (PLAN-ICEBERG item 8): Sanatorium 256, 260, 258, 257, 375 and 376; only the CheckPoint design scene
+    # (376) carries holders
+    "arena_iceberg": {"stem": "iceberg", "package": "iceberg-native-v1"},
 }
 
 
@@ -377,7 +390,7 @@ def summary_line(key: str, doc: dict) -> str:
 
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("--map", action="append", dest="maps", choices=sorted(MAPS), metavar="ARENA_KEY", help="repeatable; default: the four released maps")
+    parser.add_argument("--map", action="append", dest="maps", choices=sorted(MAPS), metavar="ARENA_KEY", help="repeatable; default: every map of MAPS")
     parser.add_argument("--arena", default="auto", help="the Arena installation (or its EscapeFromTarkovArena_Data folder); auto = the launcher's entry")
     parser.add_argument("--check", action="store_true", help="compare with the tracked sidecars and write nothing")
     parser.add_argument("--csharp", action="store_true", help="also print the ArenaScoreMonitor literals for ArenaMapRegistry.<Map>.ScoreMonitors")

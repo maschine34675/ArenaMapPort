@@ -10,7 +10,9 @@ data the client can play, in two steps:
   rows   tools/maps/<stem>.gatesounds.json (git-tracked, names and numbers only). One row per gate unit of the port that Arena gives a
          sound: the unit it belongs to (barrier / part / `at` / closed position, the keys of the door rows, the same tolerances),
          the clip, the emitter position, the volumes, the distances and the mixer. An emitter is joined to its unit by the horizontal
-         distance of the emitter to the gate (at most 2.0 m, the next gate of another assembly at least 4.0 m away); the emitters of
+         distance of the emitter to the gate (at most 2.0 m, the next gate of another assembly at least 4.0 m away; a map's MAPS row may
+         lower that margin, "join_margin_m", and join an emitter to the assembly's root instead of its nearest leaf, "join_root": Iceberg's
+         six players, one per gate, 2.5 m and root); the emitters of
          other modes (ShootOut) have no gate of the port near and are listed as skipped. A part of the unit is `null` (every part of the
          barrier instance: both leaves of a booth door, both leaves of a depot gate share one sound) when the emitter stands on the
          barrier root, "" when the barrier root itself moves (Bay5's rollers), else the part's name. Gates that Arena animates in the
@@ -33,7 +35,9 @@ the largest `ok` entry whose removal does not exceed (1 - scale) * event_s and c
 CLI:
     python tools/extract/extract_gate_sounds.py rows  [--map arena_bowl] [--arena auto] [--check]
     python tools/extract/extract_gate_sounds.py clips [--map arena_bowl] [--arena auto] [--output work/extract/gate-sounds]
-Without --map all four released maps. `rows --check` compares with the tracked sidecars and writes nothing. The output is byte-stable.
+Without --map every map of MAPS (the four released maps and Iceberg, whose rows and clips are prepared ahead of its promotion). A clip's fit entry
+is fit["clips"][name], or fit["map_clips"][map_key][name] where one map plays a clip another map shares at a different authored pitch (Iceberg
+plays Equator's slide clip at 1.15). `rows --check` compares with the tracked sidecars and writes nothing. The output is byte-stable.
 """
 from __future__ import annotations
 
@@ -67,7 +71,7 @@ GATES_MIXER = "ArenaGates"
 GATES_MIXER_DB = -15.0       # the group's fader, the same in all three snapshots of the master mixer (the ancestors stand at 0 dB)
 MIXER_SNAPSHOT_SPREAD_DB = 0.1
 JOIN_MAX_M = 2.0             # an emitter belongs to a gate when its horizontal distance is at most this
-JOIN_MARGIN_M = 4.0          # ... and the nearest gate of another assembly is at least this far
+JOIN_MARGIN_M = 4.0          # ... and the nearest gate of another assembly is at least this far (a map may override it: MAPS "join_margin_m")
 TIE_M = 0.01                 # places of one assembly this close to the nearest are tied (the root wins)
 AT_TOLERANCE = 0.05          # ArenaDoorPose.AtTolerance
 CLOSED_TOLERANCE = 0.05      # ArenaDoorPose.ClosedPositionTolerance
@@ -81,6 +85,14 @@ MAPS = {
     "arena_bay5": {"stem": "bay5", "scenes": ("sound",)},
     "arena_airpit": {"stem": "airpit", "scenes": ("gate", "sound")},
     "arena_bowl": {"stem": "bowl", "scenes": ("sound",)},
+    # Iceberg (2026-10-30): the six players of ARENA_SANATORIUM_GATES in level259 (Sliding_door_1..5 and Motor_door) stand 0.007 to 0.57 m
+    # from their gate, but the gates of GATES_B are only 4.1 m apart (z -85.9, -81.8, -77.7) and the motor gate stands 2.9 m from the third:
+    # Sliding_door_2 sits 0.33 m off its gate towards the next one (3.83 m, under the global 4.0 m) and Motor_door 0.57 m from its gate and
+    # 2.91 m from a sliding gate. 2.5 m still refuses anything that is not clearly one assembly's (every Iceberg competitor is at least 2.91 m
+    # away, more than five times as far as the farthest own gate). "join_root": the six players are one per gate assembly, so an emitter
+    # belongs to the root of the nearest assembly and never to one of its two leaves (they lie 0.06 m apart horizontally, one above the other,
+    # and the emitters stand 2.5 m above them). Both are this map's only; no other map changes.
+    "arena_iceberg": {"stem": "iceberg", "scenes": ("sound",), "join_margin_m": 2.5, "join_root": True},
 }
 
 # fit search (the 2026-10-25 prototype, numbers unchanged)
@@ -196,6 +208,14 @@ def load_fit() -> dict:
     return json.loads(FIT_FILE.read_text(encoding="utf-8"))
 
 
+def clip_fit(fit: dict, key: str, clip_id: str) -> dict | None:
+    """The fit entry of a clip on one map: the map's own entry (fit["map_clips"][key], for a clip that several maps share by name but play
+    at different authored pitches: Iceberg's motor gate plays Equator's slide clip at 1.15, Equator at 1.0, and the fit numbers of a baked
+    clip are measured on the baked clip) or else the entry in fit["clips"]. None when neither exists."""
+    own = fit.get("map_clips", {}).get(key, {}).get(clip_id)
+    return own if own is not None else fit["clips"].get(clip_id)
+
+
 def key_source_files() -> set[str]:
     """The base names of every file the stage-2 key derivation samples (tools/bundle/key-sources.json), over all maps."""
     table = json.loads(KEY_SOURCES.read_text(encoding="utf-8"))["maps"]
@@ -248,6 +268,14 @@ class MixerBook:
         if obj is None or obj.type.name != "AudioMixerGroupController":
             raise GateSoundError(f"mixer group {path_id} is not an AudioMixerGroupController of {MIXER_ASSET}")
         return obj.read_typetree()["m_Name"]
+
+    def named_group(self, name: str) -> dict:
+        """group() of the one AudioMixerGroupController called `name`; zero or several of them stop the tool."""
+        ids = [pid for pid, obj in sorted(self.by_id.items())
+               if obj.type.name == "AudioMixerGroupController" and obj.read_typetree()["m_Name"] == name]
+        if len(ids) != 1:
+            raise GateSoundError(f"{len(ids)} AudioMixerGroupControllers are called {name} in {MIXER_ASSET}, expected 1")
+        return self.group(ids[0])
 
     def group(self, path_id: int) -> dict:
         """{name, path, db}: the group's name, its path from the mixer root, and the sum of the fader levels up to the root, which must
@@ -393,11 +421,14 @@ def gate_candidates(doc: dict, scene) -> list[dict]:
     return out
 
 
-def join_emitter(emitter: Emitter, candidates: list[dict]) -> dict | None:
+def join_emitter(emitter: Emitter, candidates: list[dict], margin: float = JOIN_MARGIN_M, root_only: bool = False) -> dict | None:
     """The candidate an emitter belongs to, or None when no gate of the port is within JOIN_MAX_M. Within the winning barrier instance the
     nearest place wins, and the barrier root wins a tie (within TIE_M): an emitter that cannot be told from the root belongs to the
     assembly (Bay5's depot gates: both leaves stand at the frame's origin, one sound for both). The nearest place of ANY OTHER barrier
-    instance must be JOIN_MARGIN_M away."""
+    instance must be `margin` away: JOIN_MARGIN_M, unless the map's MAPS row sets "join_margin_m". With `root_only` (the MAPS row's
+    "join_root") the winner is always the root of the winning instance: the map's players are one per gate assembly, never one per leaf
+    (Iceberg: the leaves of a sliding gate lie 0.06 m apart horizontally, one above the other, so the nearest-place rule would hand one
+    emitter its leaf A and leave leaf B of the same gate silent)."""
     scored = sorted(((dist_xz(emitter.world, c["world"]), i, c) for i, c in enumerate(candidates)), key=lambda t: (t[0], t[1]))
     if not scored or scored[0][0] > JOIN_MAX_M:
         return None
@@ -405,13 +436,15 @@ def join_emitter(emitter: Emitter, candidates: list[dict]) -> dict | None:
     group = scored[0][2]["group"]
     tied = [t for t in scored if t[2]["group"] == group and t[0] <= nearest + TIE_M]
     best = next((t[2] for t in tied if t[2]["root"]), tied[0][2])
+    if root_only:
+        best = next(c for c in candidates if c["group"] == group and c["root"])
     for distance, _i, other in scored:
-        if other["group"] != group and distance < JOIN_MARGIN_M:
+        if other["group"] != group and distance < margin:
             raise GateSoundError(f"{emitter.label} is {nearest:.2f} m from {group[0]} but only {distance:.2f} m from {other['group'][0]}: the join is not clear")
-    return {**best, "distance": nearest}
+    return {**best, "distance": nearest if not root_only else dist_xz(emitter.world, best["world"])}
 
 
-def build_row(emitter: Emitter, candidate: dict, clip: dict, source: dict, fit: dict, mixers: MixerBook) -> dict:
+def build_row(emitter: Emitter, candidate: dict, clip: dict, source: dict, fit: dict, mixers: MixerBook, key: str | None = None) -> dict:
     player = emitter.player
     mixer_name = None
     mixer_db = 0.0
@@ -423,7 +456,7 @@ def build_row(emitter: Emitter, candidate: dict, clip: dict, source: dict, fit: 
             raise GateSoundError(f"{emitter.label}: the player names the mixer group {group['name']}, expected {GATES_MIXER} or none")
         mixer_name, mixer_db = group["name"], group["db"]
     authored_pitch = r4(player["pitch"])
-    bake = fit["clips"].get(clip["id"], {}).get("bake_pitch", 1.0)
+    bake = (clip_fit(fit, key, clip["id"]) or {}).get("bake_pitch", 1.0)
     pitch = r4(authored_pitch / bake)
     if abs(pitch - 1.0) > 1e-3:
         raise GateSoundError(f"{emitter.label}: the clip {clip['id']} plays at pitch {authored_pitch} and bake_pitch is {bake}: the client plays at pitch 1")
@@ -473,6 +506,8 @@ def extract_rows(key: str, data_dir: Path, arena_version: str, mixers: MixerBook
     else:
         scenes["sound"] = gate_scene
     candidates = gate_candidates(doc, gate_scene)
+    margin = float(spec.get("join_margin_m", JOIN_MARGIN_M))
+    root_only = bool(spec.get("join_root", False))
     assets = AssetFiles(data_dir)
     clips: dict[str, dict] = {}
     rows: list[dict] = []
@@ -481,7 +516,7 @@ def extract_rows(key: str, data_dir: Path, arena_version: str, mixers: MixerBook
     for scene_role in spec["scenes"]:
         scene = scenes[scene_role]
         for emitter in read_emitters(scene, levels[scene_role]):
-            candidate = join_emitter(emitter, candidates)
+            candidate = join_emitter(emitter, candidates, margin, root_only)
             if candidate is None:
                 skipped.append({"origin": emitter.label, "reason": f"no gate of the port within {JOIN_MAX_M:.1f} m (an emitter of another mode)"})
                 continue
@@ -491,7 +526,7 @@ def extract_rows(key: str, data_dir: Path, arena_version: str, mixers: MixerBook
                 continue
             seen[identity] = emitter.label
             clip, source = clip_entry(scene, emitter, mixers, assets)
-            row = build_row(emitter, candidate, clip, source, fit, mixers)
+            row = build_row(emitter, candidate, clip, source, fit, mixers, key)
             previous = clips.setdefault(clip["id"], clip)
             if previous != clip:
                 raise GateSoundError(f"two different clips are both called {clip['id']}")
@@ -503,11 +538,16 @@ def extract_rows(key: str, data_dir: Path, arena_version: str, mixers: MixerBook
     for row in rows:
         if row["mixer"] == GATES_MIXER and row["mixer_db"] != GATES_MIXER_DB:
             raise GateSoundError(f"{row['origin']}: {GATES_MIXER} is {row['mixer_db']} dB, expected {GATES_MIXER_DB}")
-    mixer_info["path"] = next((mixers.group(r_id)["path"] for r_id in sorted(mixers.cache) if mixers.cache[r_id]["name"] == GATES_MIXER), "")
+    # the group is looked up by name, not through the rows: a map whose players name no group (Iceberg's six) has no cached group, and its
+    # sidecar header must still carry the same mixer block as every other map
+    gates = mixers.named_group(GATES_MIXER)
+    if gates["db"] != GATES_MIXER_DB:
+        raise GateSoundError(f"{GATES_MIXER} is {gates['db']} dB, expected {GATES_MIXER_DB}")
+    mixer_info["path"] = gates["path"]
     for row in rows:
         if not row_resolves(row, doc["poses"]):
             raise GateSoundError(f"{row['origin']} does not resolve to a door row of {doors_path(key).name}")
-    unknown = sorted(set(clips) - set(fit["clips"]))
+    unknown = sorted(name for name in clips if clip_fit(fit, key, name) is None)
     if unknown:
         raise GateSoundError(f"the clips {unknown} have no entry in {FIT_FILE.name}")
     return {"schema_version": SCHEMA_VERSION, "key": key,
@@ -764,10 +804,11 @@ def build_package(key: str, rows_doc: dict, decode, output: Path, fit: dict, are
     protected = key_source_files()
     clips, shipped = [], {}
     for entry in rows_doc["clips"]:
-        if entry["id"] not in fit["clips"]:
+        spec = clip_fit(fit, key, entry["id"])
+        if spec is None:
             raise GateSoundError(f"clip {entry['id']} has no entry in {FIT_FILE.name}")
         wav, metadata = decode(entry)
-        manifest_entry, data = prepare_clip(entry, wav, metadata, fit["clips"][entry["id"]], float(fit["xfade_s"]), protected)
+        manifest_entry, data = prepare_clip(entry, wav, metadata, spec, float(fit["xfade_s"]), protected)
         clips.append(manifest_entry)
         shipped[manifest_entry["file"]] = data
     manifest = {"schema_version": SCHEMA_VERSION, "map_key": key, "arena_version": arena_version, "mixer": rows_doc["mixer"], "rows": rows_doc["rows"], "clips": clips}
@@ -812,7 +853,7 @@ def arena_decoder(data_dir: Path):
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("step", choices=("rows", "clips"))
-    parser.add_argument("--map", action="append", dest="maps", choices=sorted(MAPS), metavar="ARENA_KEY", help="repeatable; default: the four released maps")
+    parser.add_argument("--map", action="append", dest="maps", choices=sorted(MAPS), metavar="ARENA_KEY", help="repeatable; default: every map of MAPS")
     parser.add_argument("--arena", default="auto", help="the Arena installation (or its EscapeFromTarkovArena_Data folder); auto = the launcher's entry")
     parser.add_argument("--check", action="store_true", help="rows: compare with the tracked sidecars and write nothing")
     parser.add_argument("--output", type=Path, default=OUTPUT_ROOT, help="clips: the folder that gets one subfolder per map key")

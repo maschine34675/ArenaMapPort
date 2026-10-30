@@ -33,7 +33,7 @@ Method:
      next key's value) and, with --package, that every node exists once in the extracted port scene.
   6. A node enters the sidecar when its open pose differs from the closed pose by more than 1 cm or 1 degree.
 
-Second source, the DotAnimator (Equator, Bay5 and AirPit, 2026-10-23/24, docs/progress/door-animations-survey.md and the
+Second source, the DotAnimator (Equator, Bay5, AirPit and, 2026-10-30, Iceberg's sliding and rotating gates; docs/progress/door-animations-survey.md and the
 "DotAnimator" sections of door-poses.md): Equator's booth doors, Bay5's roller gates and depot gates and AirPit's passport
 leaves have NO Animator and no clip. Arena moves them with its own tween script, the MonoBehaviour CommonAssets.Scripts.Game.Modes.Data.DotAnimator (DOTween
 based), which stores the END value, the duration and the ease of one move or rotation per target. Its serialized tail is read
@@ -86,6 +86,8 @@ CLI:
         --output tools/maps/bay5.doors.json --csharp
     python tools/extract/extract_door_poses.py --map arena_airpit --package work/extract/airpit-native-v9 \\
         --output tools/maps/airpit.doors.json --csharp
+    python tools/extract/extract_door_poses.py --map arena_iceberg --package work/extract/iceberg-native-v1 \\
+        --output tools/maps/iceberg.doors.json --csharp
 `--csharp` also prints the `new ArenaDoorPose(...)` literals for ArenaMapRegistry.<Map>.DoorPoses; the output is
 byte-stable. The verification summary goes to stdout; a failed check goes to stderr with exit code 1 and no file written.
 """
@@ -183,6 +185,15 @@ DOT_SOURCES = {
             "ease": EASE_IN_OUT_QUINT,
             "at": False,
         }],
+    },
+    "arena_iceberg": {
+        "scene": "Arena_Sanatorium_CheckPoint_DesignStuff",
+        "descriptor": REPO / "tools" / "maps" / "iceberg.json",
+        # DOORS/GATES_A and DOORS/GATES_B hold the pockets' sliding gates (`sanatorium_resp_gate`: two and three instances under the
+        # same path) and GATES_B the rotating `Sanatorium_CheckPoint_Gate`. The barrier is the gate itself (depth 3: DOORS, the group,
+        # the gate), so a gate's own DotAnimator has part "" and the repeated paths are told apart by `at` (a depth-2 scan stops with
+        # "occurs twice", the survey of 2026-10-30). Eleven DotAnimators, linear drives of 2.0 to 5.0 s, no switch and no borrowed gate.
+        "scans": [{"root": "DOORS", "depth": 3, "at": True}],
     },
 }
 DOT_SCRIPT = "CommonAssets.Scripts.Game.Modes.Data.DotAnimator"

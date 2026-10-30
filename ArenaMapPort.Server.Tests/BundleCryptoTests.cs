@@ -2326,7 +2326,7 @@ public sealed class KeyFileTests : IDisposable
 }
 
 /// <summary>
-/// Real data, skipped without the developer's Arena installation (and without staged key files): the four maps' key sources on this machine. The
+/// Real data, skipped without the developer's Arena installation (and without staged key files): the maps' key sources on this machine. The
 /// environment variable ARENAMAPPORT_SECOND_ARENA names a second, read-only Arena folder of another build (2026-10-20: the user's 0.6.0 install on a
 /// network share); when it is set, the staged key files must unlock against it too.
 /// </summary>
@@ -2343,6 +2343,8 @@ public sealed class CryptoRealDataTests
         ("arena_bay5", 8, 358_204_848),
         ("arena_airpit", 7, 603_532_272),
         ("arena_bowl", 8, 754_464_336),
+        // Iceberg's row is prepared ahead of its promotion (PLAN-ICEBERG item 6): four streams, no .resource file, no key store entry yet
+        ("arena_iceberg", 4, 560_470_032),
     };
 
     static string RepoRoot()
@@ -2368,7 +2370,7 @@ public sealed class CryptoRealDataTests
     }
 
     [RealInstallFact]
-    public void TheFourMapsDeriveTheirKeyFromTheInstalledResourceStreams()
+    public void TheMapsDeriveTheirKeyFromTheInstalledResourceStreams()
     {
         string manifest = File.ReadAllText(Path.Combine(RealArena.Folder, "ConsistencyInfo"), Encoding.UTF8);
         using JsonDocument document = JsonDocument.Parse(manifest);

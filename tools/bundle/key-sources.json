@@ -39,6 +39,14 @@
       { "index": 47, "scene": "Arena_Bowl_TeamFight", "files": ["sharedassets47.assets.resS"] },
       { "index": 48, "scene": "Arena_Bowl_TeamFight_DesignStuff", "files": ["sharedassets48.assets.resS", "sharedassets48.resource"] },
       { "index": 95, "scene": "Arena_Bowl_Grass", "files": ["sharedassets95.assets.resS"] }
+    ],
+    "arena_iceberg": [
+      { "index": 256, "scene": "Arena_Sanatorium", "files": ["sharedassets256.assets.resS"] },
+      { "index": 257, "scene": "Arena_Sanatorium_DesignStuff", "files": [] },
+      { "index": 258, "scene": "Arena_Sanatorium_Light", "files": ["sharedassets258.assets.resS"] },
+      { "index": 260, "scene": "Arena_Sanatorium_Grass", "files": [] },
+      { "index": 375, "scene": "Arena_Sanatorium_CheckPoint", "files": ["sharedassets375.assets.resS"] },
+      { "index": 376, "scene": "Arena_Sanatorium_CheckPoint_DesignStuff", "files": ["sharedassets376.assets.resS"] }
     ]
   }
 }

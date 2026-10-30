@@ -8,6 +8,7 @@ import copy
 import io
 import json
 import math
+import os
 import re
 import struct
 import subprocess
@@ -25,6 +26,7 @@ import extract_score_monitors as E  # noqa: E402
 import validate_map_descriptors as VD  # noqa: E402
 
 STEMS = ("equator", "bay5", "airpit", "bowl")
+PREPARED_STEMS = ("iceberg",)       # sidecar prepared ahead of the map's promotion into the released set (PLAN-ICEBERG item 8)
 KEYS = {"equator": "arena_equator", "bay5": "arena_bay5", "airpit": "arena_airpit", "bowl": "arena_bowl"}
 DESCRIPTOR = REPO / "ArenaMapPort.Shared" / "ArenaMapDescriptor.cs"
 ARENA_DATA = DOORS.DEFAULT_DATA
@@ -195,7 +197,7 @@ class TypeWordTests(unittest.TestCase):
         self.assertTrue(all(t is None for w, (t, _c, _f) in E.TYPE_WORDS.items() if w > 7))
 
     def test_an_unknown_word_stops_the_tool_and_says_where_to_classify_it(self):
-        for word in (3, 4, 5, 8, 9, 11, 12, 13, 14, -1, 99):
+        for word in (3, 4, 5, 8, 9, 11, 12, 14, -1, 99):          # 13 is classified since Iceberg (dark, like 10); 11, 12 and 14 are not
             with self.subTest(word=word), self.assertRaisesRegex(E.MonitorError, "TYPE_WORDS"):
                 E.type_word(word, "Arena_X TV/Prop")
 
@@ -524,7 +526,9 @@ class SidecarTests(unittest.TestCase):
             if name not in ("Equator", "Bay5", "AirPit", "Bowl"):
                 self.assertIsNone(entry.get("ScoreMonitors"), name)
         for path in (REPO / "tools" / "maps").glob("*.monitors.json"):
-            self.assertIn(path.name.removesuffix(".monitors.json"), STEMS)
+            # the released maps, plus Iceberg whose sidecar is prepared ahead of its promotion (IcebergMonitorSidecarTests); the promotion moves
+            # "iceberg" into STEMS and KEYS and drops PREPARED_STEMS
+            self.assertIn(path.name.removesuffix(".monitors.json"), STEMS + PREPARED_STEMS)
 
     def test_the_validator_run_passes(self):
         done = subprocess.run([sys.executable, str(REPO / "tools" / "validate" / "validate_map_descriptors.py")],
@@ -734,6 +738,184 @@ class CliTests(unittest.TestCase):
         with patch.object(E.doors, "find_arena", lambda arena: (Path("."), "x")), patch.object(E, "extract_map", broken), contextlib.redirect_stderr(errors):
             self.assertEqual(E.main(["--map", "arena_bowl", "--no-package"]), 2)
         self.assertEqual(errors.getvalue().strip(), "[extract_score_monitors] FAILED: boom")
+
+# ---------------------------------------------------------------------------------------------------------------
+# Iceberg (2026-10-30, PLAN-ICEBERG item 8): six holders in the CheckPoint design scene, four timers and two word-13 boards that stay dark
+# ---------------------------------------------------------------------------------------------------------------
+
+ICEBERG = "arena_iceberg"
+ICEBERG_SCENE = "Arena_Sanatorium_CheckPoint_DesignStuff"
+
+
+class IcebergMonitorSidecarTests(unittest.TestCase):
+    """tools/maps/iceberg.monitors.json (tracked): no Arena file, no registry. Prepared ahead of Iceberg's promotion into the released set."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.doc = sidecar_doc("iceberg")
+        cls.rows = cls.doc["monitors"]
+
+    def test_header_scenes_and_mount(self):
+        key_sources = json.loads((REPO / "tools" / "bundle" / "key-sources.json").read_text(encoding="utf-8"))["maps"][ICEBERG]
+        table = {e["scene"]: e["index"] for e in key_sources}
+        descriptor = map_json("iceberg")
+        self.assertEqual((self.doc["schema_version"], self.doc["key"]), (1, ICEBERG))
+        self.assertEqual(self.doc["source"]["tool"], "tools/extract/extract_score_monitors.py")
+        self.assertEqual(self.doc["_comment"][:60], E.SIDECAR_COMMENT[:60])
+        # every scene of the map that key-sources lists was read, in the map's load order: 256, 260, 258, 257, 375, 376
+        self.assertEqual([(e["scene"], e["level"]) for e in self.doc["source"]["scenes"]],
+                         [(n, table[n]) for n in descriptor["all_scene_names"] if n in table])
+        self.assertEqual([e["level"] for e in self.doc["source"]["scenes"]], [256, 260, 258, 257, 375, 376])
+        self.assertEqual(self.doc["mount"], E.MOUNT)
+
+    def test_six_holders_all_in_the_checkpoint_design_scene_all_active(self):
+        self.assertEqual(len(self.rows), 6)
+        self.assertEqual({r["scene"] for r in self.rows}, {ICEBERG_SCENE})
+        self.assertTrue(all(r["active_in_scene"] for r in self.rows))
+        for row in self.rows:
+            with self.subTest(path=row["path"]):
+                self.assertEqual(tuple(row), ROW_KEYS)
+                self.assertEqual((row["template"], row["confirmed"], row["face"]), E.TYPE_WORDS[row["arena_type"]])
+                self.assertTrue(row["path"].startswith("TV/Arena_Home_theater"))
+                self.assertTrue(all(math.isfinite(v) for v in row["at"]))
+                self.assertTrue(0 <= row["viewer_yaw"] < 360)
+                self.assertEqual(row["world_size_m"], [round(1930 * 0.00054 * row["prop_scale"], 3), round(1163 * 0.00054 * row["prop_scale"], 3)])
+        E.check_unique_rows(ICEBERG, self.rows)
+
+    def test_four_timers_and_two_word_13_boards_that_stay_dark(self):
+        words = sorted(r["arena_type"] for r in self.rows)
+        self.assertEqual(words, [0, 0, 0, 0, 13, 13])
+        timers = [r for r in self.rows if r["arena_type"] == 0]
+        self.assertTrue(all((r["template"], r["confirmed"], r["face"]) == ("MonitorTimer", True, "timer") for r in timers))
+        dark = [r for r in self.rows if r["arena_type"] == 13]
+        self.assertTrue(all((r["template"], r["confirmed"], r["face"]) == (None, False, "none") for r in dark))
+        # the props keep names of other words (copied TVs): the word, not the name, decides the face
+        self.assertEqual(sorted(r["path"].rsplit(" ", 1)[-1] for r in dark), ["(1)", "(1)"])
+        self.assertEqual(sorted(r["path"] for r in dark), ["TV/Arena_Home_theater SCORE (1)", "TV/Arena_Home_theater TIMER (1)"])
+        self.assertEqual(sorted(r["path"] for r in timers), ["TV/Arena_Home_theater ALIVE (3)", "TV/Arena_Home_theater SCORE",
+                                                             "TV/Arena_Home_theater SIDE", "TV/Arena_Home_theater SIDE (1)"])
+
+    def test_the_positions_and_sizes(self):
+        by_path = {r["path"]: r for r in self.rows}
+        self.assertEqual(by_path["TV/Arena_Home_theater SCORE"]["at"], [83.761, 4.9639, -91.495])
+        self.assertEqual(by_path["TV/Arena_Home_theater SIDE (1)"]["at"], [83.74, 4.9639, -88.31])
+        self.assertEqual(by_path["TV/Arena_Home_theater SIDE"]["at"], [-24.426, 5.2786, -86.077])
+        self.assertEqual(by_path["TV/Arena_Home_theater ALIVE (3)"]["at"], [28.978, 4.0021, -59.0274])
+        self.assertEqual(by_path["TV/Arena_Home_theater SCORE (1)"]["at"], [-24.413, 5.2786, -70.23])
+        self.assertEqual(by_path["TV/Arena_Home_theater TIMER (1)"]["at"], [28.9685, 5.3388, -59.0274])
+        self.assertEqual({r["path"]: r["prop_scale"] for r in self.rows},
+                         {"TV/Arena_Home_theater SCORE": 1.5, "TV/Arena_Home_theater SIDE (1)": 1.5, "TV/Arena_Home_theater ALIVE (3)": 1.5,
+                          "TV/Arena_Home_theater TIMER (1)": 1.5, "TV/Arena_Home_theater SIDE": 2.0, "TV/Arena_Home_theater SCORE (1)": 2.0})
+        # a timer under a word-13 board, 1.34 m apart on one wall (screens 0.94 m high at scale 1.5)
+        low, high = by_path["TV/Arena_Home_theater ALIVE (3)"]["at"], by_path["TV/Arena_Home_theater TIMER (1)"]["at"]
+        self.assertAlmostEqual(high[1] - low[1], 1.337, places=2)
+        self.assertAlmostEqual(low[0] - high[0], 0.0095, places=4)
+        self.assertAlmostEqual(low[2] - high[2], 0.0, places=4)
+
+    def test_the_text_is_what_the_cli_writes(self):
+        text = sidecar_path("iceberg").read_text(encoding="utf-8")                     # text mode: CRLF reads as LF
+        self.assertEqual(E.render_sidecar(self.doc), text)
+        self.assertNotRegex(text, r"[0-9a-f]{40,}")
+
+    def test_the_registry_literals_parse_back_and_the_validator_accepts_the_sidecar_with_word_13_known(self):
+        literals = E.render_csharp(self.rows).split("\n")
+        self.assertEqual(len(literals), 6)
+        registry_rows = [VD.parse_cs_value(line.strip().rstrip(",")) for line in literals]
+        self.assertEqual(registry_rows, [{k: r[k] for k in VD.SCORE_MONITOR_MIRRORED} for r in self.rows])
+        # the validator's own table learns word 13 in the promotion commit (patch.dict is a no-op once it has)
+        with patch.dict(VD.SCORE_MONITOR_TYPE_WORDS, {13: E.TYPE_WORDS[13]}):
+            self.assertEqual(VD.score_monitor_errors(map_json("iceberg"), sidecar_path("iceberg"), registry_rows), [])
+            changed = copy.deepcopy(registry_rows)
+            changed[2]["arena_type"] = 0
+            self.assertTrue(any("differs from the registry in arena_type" in e
+                                for e in VD.score_monitor_errors(map_json("iceberg"), sidecar_path("iceberg"), changed)))
+
+    def test_the_client_draws_a_face_on_four_of_the_six_and_leaves_the_word_13_boards_dark(self):
+        # ScoreMonitorLayout.FaceOf (ArenaMapPort.Client) knows 0, 1, 2 and 6 and gives every other word none: the sidecar says the same
+        faces = {r["arena_type"]: r["face"] for r in self.rows}
+        self.assertEqual(faces, {0: "timer", 13: "none"})
+        text = (REPO / "ArenaMapPort.Client" / "ScoreMonitorLayout.cs").read_text(encoding="utf-8")
+        body = text[text.index("internal static ScoreMonitorFace FaceOf(int arenaType)"):]
+        body = body[:body.index("}\n        }") + 10]
+        self.assertEqual(re.findall(r"case (\d+):", body), ["0", "1", "6", "2"])
+        self.assertIn("default: return ScoreMonitorFace.None;", body)
+        self.assertEqual(sum(1 for r in self.rows if r["active_in_scene"] and r["face"] != "none"), 4)
+
+
+class IcebergTypeWordTests(unittest.TestCase):
+    def test_word_13_is_known_dark_unconfirmed_and_template_less(self):
+        self.assertEqual(E.type_word(13, "x"), (None, False, "none"))
+        self.assertEqual(E.TYPE_WORDS[13], E.TYPE_WORDS[10])                          # the same standing as word 10
+        self.assertEqual({w for w, (_t, confirmed, _f) in E.TYPE_WORDS.items() if confirmed}, {0, 1, 2})
+
+    def test_the_other_capture_point_words_stay_unclassified_and_stop_the_tool(self):
+        for word in (11, 12, 14):
+            with self.subTest(word=word), self.assertRaisesRegex(E.MonitorError, "TYPE_WORDS"):
+                E.type_word(word, "Arena_Y TV/Prop")
+
+    def test_the_maps_table_has_the_iceberg_row_with_its_package(self):
+        self.assertEqual(E.MAPS["arena_iceberg"], {"stem": "iceberg", "package": "iceberg-native-v1"})
+        self.assertEqual([k for k in E.MAPS if k != "arena_iceberg"], ["arena_equator", "arena_bay5", "arena_airpit", "arena_bowl"])   # the released rows are untouched
+        self.assertEqual(E.MAPS["arena_bowl"], {"stem": "bowl", "package": "bowl-native-v2"})
+
+    def test_the_map_scenes_follow_the_descriptors_load_order_and_the_key_table(self):
+        self.assertEqual(E.map_scenes("arena_iceberg"),
+                         [("Arena_Sanatorium", 256), ("Arena_Sanatorium_Grass", 260), ("Arena_Sanatorium_Light", 258), ("Arena_Sanatorium_DesignStuff", 257),
+                          ("Arena_Sanatorium_CheckPoint", 375), ("Arena_Sanatorium_CheckPoint_DesignStuff", 376)])
+
+
+@unittest.skipUnless(HAVE_ARENA, "Arena is not installed")
+class RealIcebergMonitorTests(unittest.TestCase):
+    """Iceberg's sidecar against the installed Arena (skipped without it). ARENAMAPPORT_EXTRACT_ROOT points the package cross-check at another
+    work/extract (a worktree has no ignored work/ folder)."""
+
+    @classmethod
+    def setUpClass(cls):
+        if not (ARENA_DATA / "level376").is_file():
+            raise unittest.SkipTest("Arena has no Sanatorium levels")
+        try:
+            import UnityPy  # noqa: F401
+        except ImportError:
+            raise unittest.SkipTest("UnityPy is not installed")
+        cls.data_dir, cls.version = DOORS.find_arena("auto")
+        cls.root = Path(os.environ.get("ARENAMAPPORT_EXTRACT_ROOT", E.EXTRACT_ROOT))
+        cls.doc, cls.notes = E.extract_map(ICEBERG, cls.data_dir, cls.version, cls.root)
+
+    def test_the_tracked_sidecar_is_what_the_installed_arena_yields(self):
+        tracked = sidecar_doc("iceberg")
+        self.assertEqual(self.doc["monitors"], tracked["monitors"])
+        self.assertEqual(self.doc["mount"], tracked["mount"])
+        self.assertEqual(self.doc["source"]["scenes"], tracked["source"]["scenes"])
+        self.assertEqual(E.render_sidecar(dict(self.doc, source=tracked["source"])), sidecar_path("iceberg").read_text(encoding="utf-8"))
+
+    def test_the_rows_are_cross_checked_against_the_v1_package_when_it_exists(self):
+        if not (self.root / E.MAPS[ICEBERG]["package"]).is_dir():
+            self.skipTest("work/extract/iceberg-native-v1 is not present")
+        self.assertTrue(any("6 prop(s) found once in iceberg-native-v1" in n for n in self.notes), self.notes)
+
+    def test_no_holder_hides_in_a_scene_the_sidecar_did_not_list_and_the_blastgang_scenes_are_not_imported(self):
+        counted = 0
+        for name, level in E.map_scenes(ICEBERG):
+            scene = DOORS.ArenaScene(self.data_dir, level)
+            counted += sum(1 for obj in scene.files[scene.level_name].values() if obj.type.name == "MonoBehaviour" and scene.mono_class(obj) == E.HOLDER_CLASS)
+        self.assertEqual(counted, 6)
+        self.assertFalse({n for n, _ in E.map_scenes(ICEBERG)} & {"Arena_Sanatorium_BlastGang", "Arena_Sanatorium_BlastGang_DesignStuff"})
+
+    def test_without_word_13_in_the_table_the_extraction_stops(self):
+        trimmed = {w: v for w, v in E.TYPE_WORDS.items() if w != 13}
+        with patch.object(E, "TYPE_WORDS", trimmed), self.assertRaisesRegex(E.MonitorError, "type word 13"):
+            E.extract_map(ICEBERG, self.data_dir, self.version, None)
+
+    def test_the_two_word_13_holders_sit_on_props_named_after_other_words(self):
+        scene = DOORS.ArenaScene(self.data_dir, 376)
+        words = {}
+        for pid, obj in scene.files[scene.level_name].items():
+            if obj.type.name == "MonoBehaviour" and scene.mono_class(obj) == E.HOLDER_CLASS:
+                _gf, gp, _en, _sf, _sp, _name, tail_at = DOORS.parse_mono_head(obj.get_raw_data())
+                parent = scene.tr[scene.go2tr[gp]]["m_Father"]["m_PathID"]
+                words[scene.path(parent)] = struct.unpack("<ii", obj.get_raw_data()[tail_at:])[1]
+        self.assertEqual(words, {"TV/Arena_Home_theater SCORE": 0, "TV/Arena_Home_theater SIDE (1)": 0, "TV/Arena_Home_theater SIDE": 0,
+                                 "TV/Arena_Home_theater ALIVE (3)": 0, "TV/Arena_Home_theater SCORE (1)": 13, "TV/Arena_Home_theater TIMER (1)": 13})
 
 
 if __name__ == "__main__":

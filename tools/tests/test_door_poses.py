@@ -2327,6 +2327,218 @@ class RealArenaTests(unittest.TestCase):
         with self.assertRaises(E.DoorPoseError):
             E.extract("arena_unknown", "auto", None)
 
+# ---------------------------------------------------------------------------------------------------------------
+# Iceberg (2026-10-30, PLAN-ICEBERG item 8): five sliding gates in two groups and one rotating gate, eleven DotAnimators on level 376
+# ---------------------------------------------------------------------------------------------------------------
+
+ICEBERG_SLIDING_A = "DOORS/GATES_A/sanatorium_resp_gate"
+ICEBERG_SLIDING_B = "DOORS/GATES_B/sanatorium_resp_gate"
+ICEBERG_MOTOR = "DOORS/GATES_B/Sanatorium_CheckPoint_Gate"
+ICEBERG_BARRIERS = (ICEBERG_SLIDING_A, ICEBERG_SLIDING_B, ICEBERG_MOTOR)
+ICEBERG_SCAN = {"root": "DOORS", "depth": 3, "at": True}
+
+
+def iceberg_scene():
+    """Arena's DOORS group in miniature: two sliding gates under GATES_A, three under GATES_B (every gate has the same name as its
+    neighbours and two telescoping leaves, so the path DOORS/GATES_A/sanatorium_resp_gate occurs twice) and the motor gate, whose own
+    object turns about x. The numbers are the real ones (docs/progress/iceberg-release.md)."""
+    sc = FakeScene()
+    doors = sc.add("DOORS")
+    groups = {"GATES_A": (sc.add("GATES_A", doors, pos=(82.0, 2.0, -90.0)), ((0.382, 0.176, -3.689), (0.382, 0.176, 3.875)), (4.0, 5.0)),
+              "GATES_B": (sc.add("GATES_B", doors, pos=(-36.0, 3.0, -81.0)), ((-0.042, 0.091, -4.925), (-0.042, 0.091, -0.778),
+                                                                              (-0.042, 0.091, 3.343)), (2.0, 2.5))}
+    for _, (group, spots, (seconds_a, seconds_b)) in groups.items():
+        for spot in spots:
+            gate = sc.add("sanatorium_resp_gate", group, pos=spot)
+            leaf_a = sc.add("sanatorium_resp_gate_A", gate, pos=(0.0, 0.063, 0.82))
+            leaf_b = sc.add("sanatorium_resp_gate_B", gate, pos=(0.0, 0.001, 2.192))
+            sc.add_dot(leaf_a, [dot_element(sc.go_of(leaf_a), 1, seconds_a, 1, (0.0, 0.063, 3.568))])
+            sc.add_dot(leaf_b, [dot_element(sc.go_of(leaf_b), 1, seconds_b, 1, (0.0, 0.001, 3.568))])
+    motor = sc.add("Sanatorium_CheckPoint_Gate", groups["GATES_B"][0], pos=(-50.237, 3.713, 9.371), euler=(-90.0, 0.0, 0.0))
+    sc.add_dot(motor, [dot_element(sc.go_of(motor), 2, 3.0, 1, (-214.082, 0.0, 0.0))])
+    return sc
+
+
+class IcebergSyntheticTests(unittest.TestCase):
+    """The scan row of Iceberg on a hand-made DOORS group: no Arena file."""
+
+    def poses(self, scan=ICEBERG_SCAN):
+        return E.scan_dot_animators(iceberg_scene(), "S", scan).poses
+
+    def test_the_row_scans_doors_at_depth_three_and_tells_the_instances_apart_by_at(self):
+        row = E.DOT_SOURCES["arena_iceberg"]
+        self.assertEqual(row["scene"], "Arena_Sanatorium_CheckPoint_DesignStuff")
+        self.assertEqual(row["scans"], [ICEBERG_SCAN])
+        self.assertEqual(row["descriptor"], REPO / "tools" / "maps" / "iceberg.json")
+        self.assertNotIn("borrowed", row)                                            # every gate has a DotAnimator of its own
+        self.assertEqual(E.scene_level_index("arena_iceberg", row["scene"]), 376)    # the key-sources row stage 2 uses
+        poses = self.poses()
+        E.check_identities(poses)
+        self.assertEqual(len(poses), 11)
+        counts = {}
+        for p in poses:
+            counts[p.barrier] = counts.get(p.barrier, 0) + 1
+        self.assertEqual(counts, {ICEBERG_SLIDING_A: 4, ICEBERG_SLIDING_B: 6, ICEBERG_MOTOR: 1})
+        self.assertTrue(all(p.at is not None for p in poses))
+        self.assertEqual(sorted({tuple(tidy3(p.at)) for p in poses if p.barrier == ICEBERG_SLIDING_A}),
+                         [(82.382, 2.176, -93.689), (82.382, 2.176, -86.125)])
+
+    def test_a_depth_two_scan_cannot_tell_the_gates_of_one_group_apart(self):
+        # the barrier would be DOORS/GATES_A and every gate a part of the same name; their leaves repeat (part, node, at)
+        poses = self.poses(dict(ICEBERG_SCAN, depth=2))
+        with self.assertRaisesRegex(E.DoorPoseError, "occurs twice at"):
+            E.check_identities(poses)
+
+    def test_without_at_the_repeated_gate_paths_are_refused(self):
+        with self.assertRaisesRegex(E.DoorPoseError, "lacks 'at'"):
+            E.check_identities(self.poses(dict(ICEBERG_SCAN, at=False)))
+
+    def test_the_sliding_leaves_telescope_to_one_stop_and_every_drive_is_linear(self):
+        poses = [p for p in self.poses() if p.barrier != ICEBERG_MOTOR]
+        self.assertEqual({p.part for p in poses}, {"sanatorium_resp_gate_A", "sanatorium_resp_gate_B"})
+        for p in poses:
+            self.assertEqual((p.node, p.ease, p.curve, p.source, p.clip), ("", "linear", None, "dotanimator", "DotAnimator"))
+            self.assertAlmostEqual(math.dist(p.closed_position[:2], p.open_position[:2]), 0.0, places=5)   # the leaf slides along z only
+            self.assertAlmostEqual(p.open_position[2], 3.568, places=5)               # both leaves of a gate end on the same stop
+        by_part = {(p.barrier, p.part): p.seconds for p in poses}
+        self.assertEqual(by_part, {(ICEBERG_SLIDING_A, "sanatorium_resp_gate_A"): 4.0, (ICEBERG_SLIDING_A, "sanatorium_resp_gate_B"): 5.0,
+                                   (ICEBERG_SLIDING_B, "sanatorium_resp_gate_A"): 2.0, (ICEBERG_SLIDING_B, "sanatorium_resp_gate_B"): 2.5})
+
+    def test_the_motor_gate_turns_124_degrees_about_x_and_keeps_its_position(self):
+        motor = [p for p in self.poses() if p.barrier == ICEBERG_MOTOR]
+        self.assertEqual(len(motor), 1)
+        p = motor[0]
+        self.assertEqual((p.part, p.node, p.seconds, p.ease), ("", "", 3.0, "linear"))   # the barrier root itself moves
+        self.assertEqual(tidy3(p.closed_position), tidy3(p.open_position))
+        self.assertEqual(tidy3(p.closed_euler), [-90.0, 0.0, 0.0])
+        self.assertEqual(tidy3(p.open_euler), [-214.082, 0.0, 0.0])
+        # the client slerps between Quaternion.Euler of the two triples: the short way round is the 124 degrees Arena's tween turns
+        turn = E.quat_angle(E.euler_to_quat(p.closed_euler), E.euler_to_quat(p.open_euler))
+        self.assertAlmostEqual(turn, 124.082, delta=0.01)
+
+
+class IcebergSidecarTests(unittest.TestCase):
+    """The tracked tools/maps/iceberg.doors.json (no Arena, no package)."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.doc = sidecar_doc("iceberg")
+        cls.poses = cls.doc["poses"]
+
+    def test_header(self):
+        self.assertEqual(self.doc["schema_version"], 2)
+        self.assertEqual(self.doc["key"], "arena_iceberg")
+        self.assertEqual(self.doc["source"]["scene"], "Arena_Sanatorium_CheckPoint_DesignStuff")
+        self.assertEqual((self.doc["source"]["level"], self.doc["source"]["assets"]), (376, "sharedassets376.assets"))
+        self.assertNotIn("extra_scenes", self.doc["source"])
+        self.assertTrue(self.doc["_comment"].startswith("Generated by tools/extract/extract_door_poses.py"))
+        descriptor = json.loads((REPO / "tools" / "maps" / "iceberg.json").read_text(encoding="utf-8"))
+        self.assertIn(self.doc["source"]["scene"], descriptor["all_scene_names"])
+
+    def test_eleven_dotanimator_rows_on_three_barrier_paths(self):
+        self.assertEqual(len(self.poses), 11)
+        counts = {}
+        for p in self.poses:
+            self.assertEqual(set(p), set(E_KEYS))
+            self.assertEqual((p["source"], p["ease"], p["curve"], p["clip"]), ("dotanimator", "linear", None, "DotAnimator"))
+            counts[p["barrier"]] = counts.get(p["barrier"], 0) + 1
+        self.assertEqual(counts, {ICEBERG_SLIDING_A: 4, ICEBERG_SLIDING_B: 6, ICEBERG_MOTOR: 1})
+        self.assertEqual({p["seconds"] for p in self.poses}, {2.0, 2.5, 3.0, 4.0, 5.0})           # Arena's own, unscaled: 2.0 to 5.0 s
+
+    def test_every_row_is_a_real_move_with_a_unique_identity_and_the_barrier_instance_it_belongs_to(self):
+        seen = set()
+        for p in self.poses:
+            with self.subTest(pose=p["barrier"] + "|" + p["part"] + "|" + str(p["at"])):
+                self.assertEqual(len(p["at"]), 3)                                  # all three paths repeat or sit beside a repeat: all carry `at`
+                ident = (p["barrier"], p["part"], p["node"], tuple(p["at"]))
+                self.assertNotIn(ident, seen)
+                seen.add(ident)
+                self.assertNotIn("frame", p["part"].lower())
+                moved = (math.dist(p["closed"]["position"], p["open"]["position"]) > 0.01
+                         or max(abs(a - b) for a, b in zip(p["closed"]["euler"], p["open"]["euler"])) > 1.0)
+                self.assertTrue(moved)
+
+    def test_the_decoded_gates(self):
+        gates = {}
+        for p in self.poses:
+            if p["barrier"] != ICEBERG_MOTOR:
+                gates.setdefault((p["barrier"], tuple(p["at"])), []).append(p)
+        self.assertEqual(sorted(at for _, at in gates), sorted([(82.382, 2.176, -93.689), (82.382, 2.176, -86.125),
+                                                                  (-36.042, 3.091, -85.925), (-36.042, 3.091, -81.778),
+                                                                  (-36.042, 3.091, -77.657)]))
+        for (barrier, at), rows in gates.items():
+            with self.subTest(barrier=barrier, at=at):
+                by_part = {r["part"]: r for r in rows}
+                self.assertEqual(sorted(by_part), ["sanatorium_resp_gate_A", "sanatorium_resp_gate_B"])
+                a, b = by_part["sanatorium_resp_gate_A"], by_part["sanatorium_resp_gate_B"]
+                self.assertEqual((a["closed"]["position"], a["open"]["position"]), ([0.0, 0.063, 0.82], [0.0, 0.063, 3.568]))
+                self.assertEqual((b["closed"]["position"], b["open"]["position"]), ([0.0, 0.001, 2.192], [0.0, 0.001, 3.568]))
+                self.assertEqual((a["seconds"], b["seconds"]), (4.0, 5.0) if barrier == ICEBERG_SLIDING_A else (2.0, 2.5))
+        motor = [p for p in self.poses if p["barrier"] == ICEBERG_MOTOR][0]
+        self.assertEqual((motor["part"], motor["node"], motor["seconds"], motor["at"]), ("", "", 3.0, [-38.908, 6.439, -75.664]))
+        self.assertEqual(motor["closed"], {"position": [-50.237, 3.713, 9.371], "euler": [-90.0, 0.0, 0.0]})
+        self.assertEqual(motor["open"], {"position": [-50.237, 3.713, 9.371], "euler": [-214.082, 0.0, 0.0]})
+
+    def test_the_text_is_what_the_cli_writes(self):
+        text = (REPO / "tools" / "maps" / "iceberg.doors.json").read_text(encoding="utf-8")        # text mode: CRLF reads as LF
+        self.assertEqual(text, json.dumps(self.doc, indent=2, ensure_ascii=False) + "\n")
+
+    def test_the_csharp_the_registry_must_carry_renders_and_parses_back_to_the_sidecar(self):
+        self.assertEqual(E.render_csharp(self.poses).count("new ArenaDoorPose("), 11)
+        for pose in self.poses:
+            text = E.render_csharp([pose], indent="").replace("\n", " ")
+            self.assertEqual(VD.parse_door_pose_literal(text.rstrip(",")), pose)
+
+    def test_the_descriptor_lists_exactly_these_barriers_once_it_carries_opened_barriers(self):
+        # validate_map_descriptors accepts a pose barrier only as an opened_barriers entry (or a lamp group): the barrier is the gate
+        # itself, not DOORS/GATES_A (PLAN-ICEBERG's shorthand), because the gates of a group share a name. Absent before the promotion.
+        descriptor = json.loads((REPO / "tools" / "maps" / "iceberg.json").read_text(encoding="utf-8"))
+        opened = descriptor.get("opened_barriers")
+        if opened:
+            self.assertEqual(sorted(opened), sorted(ICEBERG_BARRIERS))
+
+
+class RealIcebergTests(unittest.TestCase):
+    """Iceberg's sidecar against the installed Arena (skipped without it): the tracked file is what the extractor yields, and the scan
+    covers every DotAnimator of level 376."""
+
+    @classmethod
+    def setUpClass(cls):
+        if not (ARENA_DATA / "level376").is_file() or not (ARENA_DATA / "sharedassets376.assets").is_file():
+            raise unittest.SkipTest("Arena is not installed")
+        try:
+            import UnityPy  # noqa: F401
+        except ImportError:
+            raise unittest.SkipTest("UnityPy is not installed")
+        package = REPO / "work" / "extract" / "iceberg-native-v1"
+        cls.package = package if (package / "scenes" / "Arena_Sanatorium_CheckPoint_DesignStuff.json").is_file() else None
+        cls.text, cls.source, cls.summary = E.extract("arena_iceberg", "auto", cls.package)
+
+    def test_the_tracked_sidecar_is_what_the_installed_arena_yields(self):
+        tracked = sidecar_doc("iceberg")
+        fresh = json.loads(self.text)
+        self.assertEqual(fresh["poses"], tracked["poses"])
+        strip = lambda s: {k: v for k, v in s.items() if k != "arena_version"}
+        self.assertEqual(strip(fresh["source"]), strip(tracked["source"]))
+        self.assertEqual(fresh["_comment"], tracked["_comment"])
+        self.assertEqual(self.text, E.extract("arena_iceberg", "auto", None)[0])           # byte-stable with or without the package
+        self.assertNotIn("\r", self.text)
+
+    def test_the_scan_reads_every_dotanimator_of_level_376_and_decodes_them_exactly(self):
+        scene = E.ArenaScene(ARENA_DATA, 376)
+        animators = [E.decode_dot_animator(obj.get_raw_data())                              # raises unless offset == length
+                     for tp in scene.tr for obj in scene.monobehaviours(tp) if scene.mono_class(obj) == E.DOT_SCRIPT]
+        self.assertEqual((len(animators), sum(len(a.elements) for a in animators)), (11, 11))
+        self.assertTrue(all(e.kind == E.DOT_KIND_MOVE or e.kind == E.DOT_KIND_ROTATE for a in animators for e in a.elements))
+        self.assertTrue(all(E.dot_ease_name(e.ease) == "linear" for a in animators for e in a.elements))
+        check = [line for line in self.summary if line.startswith("decode self-check:")][0]
+        self.assertIn("11 DotAnimator object(s), 11 element(s)", check)
+        scan = [line for line in self.summary if line.startswith("scan DOORS")][0]
+        self.assertIn("11 DotAnimator(s), 11 element(s), 11 pose(s) (0 switch row(s)), 0 inactive, 0 switch element(s) skipped", scan)
+        self.assertEqual(self.summary[-1], "poses 11: 11 dotanimator")
+        if self.package is not None:
+            self.assertTrue(any(line.startswith("package check: 11 pose(s) exist in iceberg-native-v1") for line in self.summary))
+
 
 if __name__ == "__main__":
     unittest.main()
