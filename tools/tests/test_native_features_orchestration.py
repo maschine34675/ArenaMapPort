@@ -261,6 +261,17 @@ class ManifestBlockTests(NativeFeatureTestCase):
         self.assertEqual(run.audio, ("ambient_audio", extract_bay5_audio.export))
         self.assertEqual(native_contract_loader.load_contract("arena_airpit")["audio"]["scene"], "level39")
 
+    def test_iceberg_registers_the_shared_exporter_for_its_sound_scene_level259(self):
+        # PLAN-ICEBERG item 5: Iceberg's ambient audio is the Sound scene level259 (plan role 'sound'), schema 2.
+        self.assertEqual(NF.AUDIO_EXPORTERS["arena_iceberg"], ("ambient_audio", extract_bay5_audio.export))
+        plan = SP.load_plan(REPO / "tools/extract/plans/iceberg.json")
+        self.assertEqual(SP.scene_for_role(plan, "sound")["index"], 259)
+        run = NF.NativeFeatureExtraction.for_plan(plan, self.root / "arena", self.target)
+        self.assertEqual(run.audio, ("ambient_audio", extract_bay5_audio.export))
+        self.assertEqual((run.map_key, run.scripts_scene_index), ("arena_iceberg", 255))
+        audio = native_contract_loader.load_contract("arena_iceberg")["audio"]
+        self.assertEqual((audio["scene"], audio["schema"], audio["root"]), ("level259", 2, "ArenaMapPort_IcebergNativeAudio"))
+
     def test_airpit_plan_scripts_scene_is_index_36(self):
         plan = SP.load_plan(REPO / "tools/extract/plans/airpit.json")
         run = NF.NativeFeatureExtraction.for_plan(plan, self.root / "arena", self.target)

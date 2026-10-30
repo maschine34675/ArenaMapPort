@@ -689,7 +689,10 @@ def validate_audio_source(package,manifest,data):
     # indoor_wind players); the source recheck applies the same rule before comparing names.
     from extract_bay5_audio import disambiguate_sibling_paths
     source_gos={item['id']:unity_go(components[item['id']]) for item in items}
-    source_paths=disambiguate_sibling_paths({k:'/'.join(t[0] for t in reversed(g['chain'])) for k,g in source_gos.items()})
+    # Components of one GameObject share its path (Bay5 and Iceberg: group + controller, calculator + mapped emitter); the
+    # source object is read from the source component itself, not from the package record.
+    source_objects={k:object_key(components[k].parse_monobehaviour_head().m_GameObject.deref()) for k in source_gos}
+    source_paths=disambiguate_sibling_paths({k:'/'.join(t[0] for t in reversed(g['chain'])) for k,g in source_gos.items()},source_objects)
     for item in items:
         obj=components[item['id']]
         require(obj.get_raw_data()==audio_wire(item,item['kind']),'source audio payload '+item['id'])

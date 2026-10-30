@@ -14,7 +14,7 @@ using UnityEngine;
 
 namespace ArenaMapPort.Editor.Import
 {
-    /// <summary>Rebuilds the Equator, Bay5 and AirPit source ambient graphs with target native components.
+    /// <summary>Rebuilds the Equator, Bay5, AirPit, Bowl and Iceberg source ambient graphs with target native components.
     /// The inactive root defers stock Awake/playback until the client has real audio services.
     ///
     /// What is pinned where. The exact census of every map (players, support components, banks, clips, group
@@ -22,7 +22,7 @@ namespace ArenaMapPort.Editor.Import
     /// checked by validate_native_features.py on the package and again on the built bundle. This importer therefore takes
     /// its counts from the package (manifest <c>native_audio</c> entry against the hash-verified index) and fails only
     /// on an inconsistent or unsupported package; the schema decides whether the source activation/layer states are
-    /// kept (schema 2: Equator, AirPit) or everything is active at layer 0 (schema 1: Bay5), never the map identity.
+    /// kept (schema 2: Equator, AirPit, Bowl, Iceberg) or everything is active at layer 0 (schema 1: Bay5), never the map identity.
     /// What the package cannot carry, the Editor assembly cannot share with the client: the root name per map
     /// (<see cref="RootNameFor"/>) and the group name to native mixer pairing (<see cref="GroupMixers"/>) mirror the
     /// client's AmbientAudioProfiles.cs, and ArenaMapPort.Server.Tests/AmbientAudioProfilesTests compares them.</summary>
@@ -32,12 +32,16 @@ namespace ArenaMapPort.Editor.Import
         public const string EquatorRootName = "ArenaMapPort_EquatorNativeAudio";
         public const string AirPitRootName = "ArenaMapPort_AirPitNativeAudio";
         public const string BowlRootName = "ArenaMapPort_BowlNativeAudio"; // PLAN-BOWL item 4/9, contract audio.root
+        public const string IcebergRootName = "ArenaMapPort_IcebergNativeAudio"; // PLAN-ICEBERG item 5, contract audio.root
 
         // Group GameObject name -> the native mixer group the client routes it to. The package names the same mixer in
         // each group's mixerName; a mismatch means the source graph and the client routing table disagree.
+        // LampsAmbientInGroup (Iceberg's 20 neon-lamp and projector hum loops, PLAN-ICEBERG item 5) shares the interior
+        // mixer with CommonAmbientInGroup, as Arena's Sound scene authors it (group output CommonAmbInEffects).
         static readonly Dictionary<string, string> GroupMixers = new Dictionary<string, string>
         {
             ["CommonAmbientInGroup"] = "CommonAmbInEffects",
+            ["LampsAmbientInGroup"] = "CommonAmbInEffects",
             ["CommonAmbientOutGroup"] = "CommonAmbOutEffects",
             ["AmbientPlayersGroup"] = "CommonAmbOutEffects",
             ["AmbientSplineEmitterWaterGroup"] = "CommonAmbOutBypass",
@@ -53,6 +57,7 @@ namespace ArenaMapPort.Editor.Import
                 case "arena_bay5": return RootName;
                 case "arena_airpit": return AirPitRootName;
                 case "arena_bowl": return BowlRootName;
+                case "arena_iceberg": return IcebergRootName;
                 default: throw new InvalidDataException("Native audio has no owned root for map " + mapKey);
             }
         }
@@ -65,6 +70,7 @@ namespace ArenaMapPort.Editor.Import
                 case "arena_bay5": return "Bay5";
                 case "arena_airpit": return "AirPit";
                 case "arena_bowl": return "Bowl";
+                case "arena_iceberg": return "Iceberg";
                 default: throw new InvalidDataException("Native audio has no asset folder for map " + mapKey);
             }
         }

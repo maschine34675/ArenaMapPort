@@ -249,9 +249,13 @@ namespace ArenaMapPort.Client
                 // follow their original active member lists and never start ungrouped descendants.
                 if (!profile.OriginalActivation) { _activePlayers = _players; return; }
                 var inactive = _players.Where(p => !ActiveUnderOwnedRoot(p.transform)).ToArray();
+                // Equator, AirPit and Bowl author random AmbientSoundPlayers only. Iceberg (PLAN-ICEBERG item 5) combines the
+                // original-activation contract with all three player kinds of the exporter: random, season (the 22 season banks)
+                // and loop (the 30 neon-lamp, projector and water loops); each must still be enabled with an enabled AudioSource.
                 if (inactive.Length != profile.InactivePlayers.Count ||
                     !new HashSet<string>(inactive.Select(p => p.name)).SetEquals(profile.InactivePlayers) ||
-                    _players.Any(p => !(p is AmbientSoundPlayer) || !p.enabled || !p.GetComponent<AudioSource>().enabled) ||
+                    _players.Any(p => !(p is AmbientSoundPlayer || p is SeasonAmbientSoundPlayer || p is LoopAmbientSoundPlayer) ||
+                        !p.enabled || !p.GetComponent<AudioSource>().enabled) ||
                     profile.LoopPlayers.Any(name => _players.Count(p => p.name == name) != 1) ||
                     _players.Any(p => p.GetComponent<AudioSource>().loop != profile.LoopPlayers.Contains(p.name)))
                     throw new InvalidOperationException(profile.DisplayName + " original activation/loop contract differs");

@@ -83,6 +83,7 @@ AudioExporter = Callable[[str, str, str], dict]
 AUDIO_EXPORTERS: dict[str, tuple[str, AudioExporter]] = {
     "arena_airpit": ("ambient_audio", extract_bay5_audio.export),
     "arena_bowl": ("ambient_audio", extract_bay5_audio.export),
+    "arena_iceberg": ("ambient_audio", extract_bay5_audio.export),
 }
 
 _LIGHT_CULLING_KEYS = ("culling_light_object_count", "volumetric_light_count", "light_flicker_count")
