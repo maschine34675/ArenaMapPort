@@ -19,6 +19,8 @@ use for the object; disambiguate_sibling_paths gives the second and later duplic
 id order, the leaf suffix '~2', '~3' ... and the record keeps the authored leaf as 'sourceLeafName'
 (validate_native_features applies the same rule to the source recheck). Maps without duplicates
 (Equator, Bay5, AirPit) are byte-identical to before.
+A player with minDistance 0 (Iceberg's neon-lamp and projector loops) is accepted under the reviewed rule documented in
+parse_player; every other player bound still fails closed.
 A player normally inherits its group's mixer and never plays on awake; a player that forces an
 Arena mixer group of its own (Bowl level111: 'metal_rigging' forces 'ArenaCommonAmb', which the
 port cannot provide) is accepted only when the contract pins it in states.forced_mixer_players
@@ -115,7 +117,17 @@ def parse_player(obj, kind):
             if len(keys)!=len(values) or len(set(keys))!=len(keys): raise ValueError('season times')
             d['seasonRandomTimeRange']=dict(zip(keys,values))
     r.done()
-    if not 0<=d['volume']<=1 or not 0<=d['spatialBlend']<=1 or not 0<d['minDistance']<=d['maxDistance']: raise ValueError('player bounds')
+    # Reviewed rule (PLAN-ICEBERG item 5, 2026-10-30): a player may author minDistance == 0 as long as maxDistance > 0.
+    # Iceberg's Sound scene (level259) has 21 such LoopAmbientSoundPlayers (20 neon_lamp*, projector); their AudioSource
+    # components carry MinDistance 1 and the same MaxDistance (3, 5 or 7 m) with rolloffMode Custom. In EFT the player's
+    # _minDistance is read once, in BaseAmbientSoundPlayer.Awake (decompile line 252: Source.minDistance = _minDistance),
+    # right before the same Awake forces AudioRolloffMode.Custom with the player's _rolloffCurve, so attenuation follows
+    # the curve over distance / maxDistance and a zero minDistance changes no gain; nothing else in EFT's ambient code
+    # reads the field (the client's range multiplier clamps maxDistance to at least minDistance + 0.1, which holds for 0).
+    # The importer writes the field as a plain serialized float (no [Range]) and the AudioSource gets the source
+    # component's own MinDistance, so no Unity setter sees the 0 until EFT's Awake runs. Every other bound stays: volume
+    # and spatialBlend within 0..1, minDistance not negative (NaN fails too), maxDistance positive and not below minDistance.
+    if not 0<=d['volume']<=1 or not 0<=d['spatialBlend']<=1 or not 0<=d['minDistance']<=d['maxDistance'] or not d['maxDistance']>0: raise ValueError('player bounds')
     return d
 
 def parse_bank(obj):
@@ -179,25 +191,40 @@ def audio_contract(map_key):
     if audio is None: raise ValueError(f'unsupported native audio map: {map_key!r} declares no ambient audio contract')
     return audio
 
-def disambiguate_sibling_paths(paths_by_id):
+def disambiguate_sibling_paths(paths_by_id, objects_by_id=None):
     """{id: hierarchy path} -> {id: unique path}. Duplicated paths are renamed in ascending numeric source id
     order: the first keeps its name, the others get the leaf suffix '~2', '~3' ...; an ordinal whose result
-    already exists as a path is skipped. Ids with a unique path come back unchanged."""
-    groups=collections.defaultdict(list)
-    for key,path in paths_by_id.items(): groups[path].append(key)
+    already exists as a path is skipped. Ids with a unique path come back unchanged.
+
+    Several components of ONE GameObject share its path by design and are never renamed apart (Bay5 and Iceberg:
+    AmbientSplineEmitterController + AmbientSoundPlayerGroup on 'AmbientSplineEmitterWaterGroup',
+    SoundAmbientZoneCalculator + AmbientPlayerSplineMappedEmitter on the spline emitter object): ``objects_by_id``
+    maps an id to a hashable GameObject key, records with equal keys count as one object, take the order of their
+    lowest id and receive the same new path. Without a key an id is its own object (the original behaviour)."""
+    objects=objects_by_id or {}
+    groups=collections.defaultdict(lambda:collections.defaultdict(list))  # path -> GameObject key -> ids
+    for key,path in paths_by_id.items(): groups[path][objects.get(key,key)].append(key)
     taken=set(paths_by_id.values()); result=dict(paths_by_id)
     for path in sorted(groups):
-        ids=sorted(groups[path],key=lambda k:int(k.rsplit(':',1)[1]))
-        if len(ids)<2: continue
+        owners=sorted(groups[path].values(),key=lambda ids:min(int(k.rsplit(':',1)[1]) for k in ids))
+        if len(owners)<2: continue
         ordinal=2
-        for key in ids[1:]:
+        for ids in owners[1:]:
             while f'{path}~{ordinal}' in taken: ordinal+=1
-            result[key]=f'{path}~{ordinal}'; taken.add(result[key]); ordinal+=1
+            taken.add(f'{path}~{ordinal}')
+            for key in ids: result[key]=f'{path}~{ordinal}'
+            ordinal+=1
     return result
+
+def game_object_key(record):
+    """The GameObject a decoded record sits on: its header pointer (fileId, pathId), or None for a record without one."""
+    pointer=record.get('gameObject')
+    return (pointer['fileId'],pointer['pathId']) if pointer else None
 
 def apply_sibling_paths(items):
     """Rename same-named sibling records in place (see disambiguate_sibling_paths); returns the renamed ids."""
-    renamed=disambiguate_sibling_paths({d['id']:d['path'] for d in items}); changed=[]
+    objects={d['id']:game_object_key(d) for d in items if game_object_key(d) is not None}
+    renamed=disambiguate_sibling_paths({d['id']:d['path'] for d in items},objects); changed=[]
     for d in items:
         if renamed[d['id']]!=d['path']:
             d['sourceLeafName']=d['path'].rsplit('/',1)[-1]; d['path']=renamed[d['id']]; changed.append(d['id'])

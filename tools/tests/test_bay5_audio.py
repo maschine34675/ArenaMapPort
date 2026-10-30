@@ -77,6 +77,44 @@ class Bay5AudioTests(unittest.TestCase):
             data=bytearray(blob(kind)); struct.pack_into('<f',data,88,-1)
             with self.subTest(kind=kind,case='distance'),self.assertRaises(ValueError): audio.parse_player(Raw(bytes(data)),kind)
 
+    @staticmethod
+    def distances(kind, minimum, maximum):
+        """blob(kind) with the player's own minDistance / maxDistance replaced (offsets 84 and 88 of every layout)."""
+        data=bytearray(blob(kind)); struct.pack_into('<ff',data,84,minimum,maximum)
+        return bytes(data)
+
+    def test_zero_min_distance_is_accepted_under_the_reviewed_rule(self):
+        # Iceberg's neon_lamp* and projector loops (PLAN-ICEBERG item 5): minDistance 0, maxDistance 3/5/7.
+        for kind in audio.PLAYERS:
+            for maximum in (3.,5.,7.,30.):
+                with self.subTest(kind=kind,maximum=maximum):
+                    data=audio.parse_player(Raw(self.distances(kind,0.,maximum)),kind)
+                    self.assertEqual((0.,maximum),(data['minDistance'],data['maxDistance']))
+
+    def test_zero_min_distance_keeps_every_other_bound(self):
+        for kind in audio.PLAYERS:
+            rejected={'negative min':(-.5,30.),'min above max':(31.,30.),'zero max':(0.,0.),'negative max':(0.,-1.),
+                      'nan min':(float('nan'),30.),'nan max':(0.,float('nan')),'negative min and zero max':(-1.,0.)}
+            for name,(minimum,maximum) in rejected.items():
+                with self.subTest(kind=kind,case=name),self.assertRaisesRegex(ValueError,'player bounds'):
+                    audio.parse_player(Raw(self.distances(kind,minimum,maximum)),kind)
+            for field,offset in (('volume',32),('spatialBlend',80)):  # volume sits right behind the 32-byte header
+                for bad in (-.1,1.1):
+                    data=bytearray(self.distances(kind,0.,7.)); struct.pack_into('<f',data,offset,bad)
+                    with self.subTest(kind=kind,case=field,value=bad),self.assertRaisesRegex(ValueError,'player bounds'):
+                        audio.parse_player(Raw(bytes(data)),kind)
+
+    def test_the_validator_encoder_reproduces_a_zero_min_distance_payload(self):
+        # The independent encoder of validate_native_features must write the accepted payload back byte for byte, or the
+        # source recheck of a package with such a player would fail on the first compare.
+        sys.path.insert(0,str(Path(__file__).resolve().parents[1] / 'validate'))
+        import validate_native_features as validator
+        for kind in audio.PLAYERS:
+            with self.subTest(kind=kind):
+                payload=self.distances(kind,0.,5.)
+                item=audio.parse_player(Raw(payload),kind)
+                self.assertEqual(payload,validator.audio_wire(item,kind))
+
     def test_negative_and_unbounded_counts_are_rejected(self):
         for count in (-1,1024,0x7fffffff):
             with self.subTest(count=count),self.assertRaises(ValueError): audio.Reader(Raw(pack('i',count))).count()
