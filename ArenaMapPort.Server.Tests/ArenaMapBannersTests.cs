@@ -43,6 +43,7 @@ public sealed class ArenaMapBannersTests : IDisposable
     [InlineData("arena_bay5", "arena_bay5_banner", "arena_bay5")]
     [InlineData("arena_airpit", "arena_airpit_banner", "arena_airpit")]
     [InlineData("arena_bowl", "arena_bowl_banner", "arena_bowl")] // PLAN-BOWL item 8, 2026-10-18
+    [InlineData("arena_iceberg", "arena_iceberg_banner", "arena_iceberg")] // PLAN-ICEBERG item 10, 2026-10-30 (row precedes the promotion)
     public void For_ReturnsTheExpectedDescriptor_ForEachBanneredMap(string mapKey, string expectedId, string expectedFileStem)
     {
         var map = FindMap(mapKey);
@@ -66,7 +67,8 @@ public sealed class ArenaMapBannersTests : IDisposable
         foreach (var map in ArenaMapRegistry.Catalog)
         {
             if (map.Key != ArenaMapRegistry.Equator.Key && map.Key != ArenaMapRegistry.Bay5.Key
-                && map.Key != ArenaMapRegistry.AirPit.Key && map.Key != ArenaMapRegistry.Bowl.Key)
+                && map.Key != ArenaMapRegistry.AirPit.Key && map.Key != ArenaMapRegistry.Bowl.Key
+                && map.Key != ArenaMapRegistry.Iceberg.Key)
             {
                 yield return new object[] { map };
             }
@@ -104,7 +106,7 @@ public sealed class ArenaMapBannersTests : IDisposable
         // Guards the landmine directly: an empty banners directory must resolve to null for every
         // bannered map, for every extension Resolve knows how to look for -- never a Banner
         // pointing at a file that isn't there.
-        foreach (var map in new[] { ArenaMapRegistry.Equator, ArenaMapRegistry.Bay5, ArenaMapRegistry.AirPit, ArenaMapRegistry.Bowl })
+        foreach (var map in new[] { ArenaMapRegistry.Equator, ArenaMapRegistry.Bay5, ArenaMapRegistry.AirPit, ArenaMapRegistry.Bowl, ArenaMapRegistry.Iceberg })
         {
             var resolved = ArenaMapBanners.Resolve(map, _bannersDir, _ => { });
             Assert.Null(resolved);

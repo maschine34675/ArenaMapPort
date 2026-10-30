@@ -14,7 +14,8 @@ separate mechanism — see `extract_banners.py` / `docs/progress/two-maps-item-1
 Arena ships one purpose-built, already-vignetted loading-screen image per playable location in its
 own `resources.assets`: `AllScreens_Loadingscreen-Equator` (path_id 1558),
 `AllScreens_Loadingscreen-Bay5` (path_id 804) and, added with AirPit (2026-10-11, Arena 0.6.0 path_id
-2704), `AllScreens_Loadingscreen-AirPit`, all 1920x1080 `Texture2D` (DXT5/BC3). (A further object,
+2704), `AllScreens_Loadingscreen-AirPit` and, added with Iceberg (2026-10-30, 0.6.1 path_id 1183),
+`AllScreens_Loadingscreen-Iceberg`, all 1920x1080 `Texture2D` (DXT5/BC3). (A further object,
 `AllScreens_Loadingscreen-Bay5_NY`, path_id 791, is an unwanted Christmas/New-Year reskin of the Bay5
 shot and is intentionally not in this table.) Re-verified this pass with a live UnityPy read against
 `D:\\Battlestate Games\\Escape from Tarkov Arena\\EscapeFromTarkovArena_Data\\resources.assets`
@@ -33,7 +34,8 @@ goes into git (AGENTS.md): the only write targets are `dist/` (gitignored) or a 
 typically under `work/` for a one-off inspection.
 
 Output filenames are numbered per map, `arena_<key>_<n>.jpg` starting at `n=1` — five files per map
-for Equator, Bay5 and AirPit (the loading screen plus four main-menu backgrounds) and four for Bowl, which has
+for Equator, Bay5, AirPit and Iceberg (the loading screen plus four main-menu backgrounds; Iceberg's are Arena's
+"Resort" set, see its LOADSCREENS row) and four for Bowl, which has
 no Arena loading screen (the count is whatever the map's LOADSCREENS list holds), and the client probes contiguously
 (`arena_equator_1.jpg`, `_2.jpg`, ...) and stops at the
 first missing index, so shipping a further variety image later (e.g. a future additional
@@ -118,6 +120,22 @@ LOADSCREENS = {
         {"asset_name": "Arena_MainMenu_Paralax_Bowl-2", "path_id": 1314, "file": "sharedassets1.assets", "size": (2048, 1024)},
         {"asset_name": "Arena_MainMenu_Paralax_Bowl-3", "path_id": 274, "file": "sharedassets1.assets", "size": (2048, 1024)},
         {"asset_name": "Arena_MainMenu_Paralax_Bowl-4", "path_id": 834, "file": "sharedassets1.assets", "size": (2048, 1024)},
+    ],
+    # Iceberg (PLAN-ICEBERG item 10, 2026-10-30; Arena 0.6.1.0.48206 path ids, hints only). Arena names the menu
+    # backgrounds of the hotel "Arena_MainMenu_Paralax_Resort-1..4" (no object carries "Iceberg"). They are Iceberg's on
+    # visual evidence, read by eye on 2026-10-30 (docs/progress/iceberg-release.md): Resort-2 is the hotel lobby with the
+    # reception wall carrying the iceberg-shaped logo and the Cyrillic wordmark "Aisberg" (the same wordmark and
+    # canyon, lamps and promenade as the banner and the loading screen), Resort-1 looks from the lobby glazing onto the
+    # canyon rock and the promenade lamps, Resort-3 and -4 are the lift and the lobby. The other parallax sets
+    # (Shoreline, BP0, Block, Sawmill, ...) belong to other maps. Entry 1 is Arena's AllScreens_Loadingscreen-Iceberg
+    # (the same hotel view as the banner), so Iceberg has the five-image rotation of Equator, Bay5 and AirPit.
+    # "Popups_background_Iceberg" (1920x500) is a popup strip, not a rotation image, and stays out.
+    "arena_iceberg": [
+        {"asset_name": "AllScreens_Loadingscreen-Iceberg", "path_id": 1183, "file": "resources.assets", "size": (1920, 1080)},
+        {"asset_name": "Arena_MainMenu_Paralax_Resort-1", "path_id": 520, "file": "sharedassets1.assets", "size": (2048, 1024)},
+        {"asset_name": "Arena_MainMenu_Paralax_Resort-2", "path_id": 1569, "file": "sharedassets1.assets", "size": (2048, 1024)},
+        {"asset_name": "Arena_MainMenu_Paralax_Resort-3", "path_id": 1343, "file": "sharedassets1.assets", "size": (2048, 1024)},
+        {"asset_name": "Arena_MainMenu_Paralax_Resort-4", "path_id": 288, "file": "sharedassets1.assets", "size": (2048, 1024)},
     ],
 }
 

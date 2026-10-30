@@ -21,11 +21,11 @@ ARENA_SOURCE = "D:/Battlestate Games/Escape from Tarkov Arena/EscapeFromTarkovAr
 
 class BannerTableTests(unittest.TestCase):
     """The BANNERS table itself: exactly the maps of the release, at the path_ids/names the
-    2026-09-25 research pass (Equator, Bay5), the 2026-10-11 probe (AirPit) and the 2026-10-18 probe (Bowl)
-    verified against a live UnityPy read."""
+    2026-09-25 research pass (Equator, Bay5), the 2026-10-11 probe (AirPit), the 2026-10-18 probe (Bowl) and the
+    2026-10-30 probe (Iceberg, PLAN-ICEBERG item 10) verified against a live UnityPy read."""
 
-    def test_exactly_the_four_released_maps(self):
-        self.assertEqual(set(EB.BANNERS), {"arena_equator", "arena_bay5", "arena_airpit", "arena_bowl"})
+    def test_exactly_the_five_banner_maps(self):
+        self.assertEqual(set(EB.BANNERS), {"arena_equator", "arena_bay5", "arena_airpit", "arena_bowl", "arena_iceberg"})
 
     def test_equator_asset_identity(self):
         self.assertEqual(EB.BANNERS["arena_equator"], {"asset_name": "Matchmaker_Banner_Equator", "path_id": 3030})
@@ -41,6 +41,12 @@ class BannerTableTests(unittest.TestCase):
         # PLAN-BOWL item 8: Arena 0.6.0.47752 names the stadium's banner "TheBowl"; path_id is a hint only.
         self.assertEqual(EB.BANNERS["arena_bowl"], {"asset_name": "Matchmaker_Banner_TheBowl", "path_id": 2538})
         self.assertEqual(EB.output_filename("arena_bowl"), "arena_bowl.jpg")
+
+    def test_iceberg_asset_identity(self):
+        # PLAN-ICEBERG item 10: Arena names it in the PLURAL ("Matchmaker_Banners_Iceberg"; every other map's is
+        # singular). Arena 0.6.1.0.48206 resources.assets; the lookup is by the unique name, the path_id is a hint.
+        self.assertEqual(EB.BANNERS["arena_iceberg"], {"asset_name": "Matchmaker_Banners_Iceberg", "path_id": 1482})
+        self.assertEqual(EB.output_filename("arena_iceberg"), "arena_iceberg.jpg")
 
     def test_airpit_output_names(self):
         self.assertEqual(EB.output_filename("arena_airpit"), "arena_airpit.jpg")
@@ -103,7 +109,7 @@ class CheckModeTests(unittest.TestCase):
     def test_reports_every_map_missing_from_an_empty_directory(self):
         with tempfile.TemporaryDirectory() as tmp:
             missing = EB.check(tmp, "jpg")
-            self.assertEqual(set(missing), {"arena_equator", "arena_bay5", "arena_airpit", "arena_bowl"})
+            self.assertEqual(set(missing), {"arena_equator", "arena_bay5", "arena_airpit", "arena_bowl", "arena_iceberg"})
 
     def test_an_empty_file_still_counts_as_missing(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -145,7 +151,7 @@ class RealSourceExtractionTests(unittest.TestCase):
     def test_every_banner_extracts_to_the_expected_size(self):
         with tempfile.TemporaryDirectory() as tmp:
             written = EB.extract_all(ARENA_SOURCE, tmp, ext="jpg", quality=90)
-            self.assertEqual(set(written), {"arena_equator", "arena_bay5", "arena_airpit", "arena_bowl"})
+            self.assertEqual(set(written), {"arena_equator", "arena_bay5", "arena_airpit", "arena_bowl", "arena_iceberg"})
             for map_key, path in written.items():
                 self.assertTrue(path.is_file())
                 self.assertGreater(path.stat().st_size, 1000, f"{map_key}: suspiciously small output file")

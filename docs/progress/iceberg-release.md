@@ -423,3 +423,54 @@ The six `EntitySoundPlayer`s of `ARENA_SANATORIUM_GATES` (level259) against `ice
   (`13: (None, False, "none")`), the client csproj gate-sound rows (`arena_iceberg` folder, `*.wav`) and the released-set pins of the door, monitor and gate-sound tests
   (`SidecarTests` in `test_door_poses` and `test_score_monitors`, the C# `DoorPoseSidecarTests` and `ScoreMonitorSidecarTests`). Open: the gate loudness (above), a face for word 13 (a capture-point status board, ArenaMode's Domination points A, B, C could use one), and whether
   `Spawns/SpawnGateDriveScale` 0.5 is right for gates that Arena opens in 2.0 to 5.0 s.
+
+## 2026-10-30 - identity art and descriptions (PLAN-ICEBERG item 10)
+
+Workstream branch `worktree-wf_451c0467-c1b-5` (from `feature/iceberg` at `d366c5c`); live Arena 0.6.1.0.48206, read-only.
+
+- **Banner and loading screen exist** (UnityPy, `resources.assets`, unique names): `Matchmaker_Banners_Iceberg` (plural; path 1482,
+  769 x 460, format 3) and `AllScreens_Loadingscreen-Iceberg` (path 1183, 1920 x 1080, format 10). `Popups_background_Iceberg`
+  (path 3298, 1920 x 500) is a popup strip and stays out.
+- **`Arena_MainMenu_Paralax_Resort-1..4` are Iceberg's.** Arena has no `Paralax_Iceberg` set; the 18 parallax sets in
+  `sharedassets1.assets` are AirPit (+Alt), BP0, Bay5 (+NY), Block, Bowl, ChopShop, Customs, Equator, Factory, NY, Prison, Resort,
+  Sawmill, Shoreline (+NY), Train, Woods, WoodsMCHS, lab; `Resort` is the only one not already another map's. Exported to scratch
+  (`scratchpad/iceberg/identity/img`) and looked at, next to the banner and loading screen and next to Shoreline-1, BP0-1, Bowl-1
+  and AirPit-1:
+  - banner and loading screen: the same view, a multi-storey hotel with a rotunda whose lettering reads the Cyrillic word for
+    "Iceberg" (cut off after "AYSB"), a tower crane, street lamps, and a promenade slab that spans a rocky canyon, at a pink dusk;
+  - Resort-2: the hotel lobby, the reception wall carries an iceberg-shaped polygon logo above the full Cyrillic wordmark
+    "Aisberg" (the same lettering as the rotunda); this is the decisive image;
+  - Resort-1: the lobby glazing with columns, broken glass on the floor, and outside the same canyon rock, the same street lamps
+    and railing as the banner; Resort-3: the lift door, a planter and two suitcases; Resort-4: the lobby corner with a sofa,
+    a planter, a lamp column and a graffiti room;
+  - Shoreline-1 is a walled combat yard, BP0-1 a range room, Bowl-1 the stadium field, AirPit-1 the airliner hall: not the hotel.
+  So Iceberg gets the five-image rotation of Equator, Bay5 and AirPit (loading screen + Resort-1..4).
+- **Rows**: `extract_banners.BANNERS["arena_iceberg"]` and `extract_loadscreens.LOADSCREENS["arena_iceberg"]` (five entries, path ids
+  are 0.6.1 hints, lookup by unique name). Real run against the live install into scratch (`dist/` and the main `work/` untouched):
+  `extract_banners.py` writes 5 files (iceberg 194,615 B), `extract_loadscreens.py` writes 24 (iceberg 1,035,669 / 783,098 / 667,703 /
+  581,589 / 674,689 B), both `--check` OK. `ArenaMapBanners.ByMapKey` gets the `arena_iceberg_banner` / `arena_iceberg` row: the C# tests
+  allow a non-released row (they list the bannered maps explicitly and only the maps of `All` are ever resolved), so it lands now.
+- **Why `test_validate_distribution` needed a change**: `validate_art` demands the extractor tables equal the released set, so
+  one extra row failed the whole `DistributionSidecarTests` class (186 failures, 19 errors, all "Banner table does not match the
+  released maps"). The fixture now filters the two tables to its own `RELEASED`; that is a no-op once Iceberg is in `RELEASED`.
+  `validate_distribution.py` itself stays strict and fails on the real tree until Iceberg is in `ArenaMapRegistry.All`.
+- **Locales re-verified** with `extract_map_descriptions.LOCALE_ASSETS` on `resources.assets`: en/ge/ru have 28,044 / 28,044 / 28,057
+  keys; the only keys matching iceberg, sanatorium or resort are `EArenaBackgroundType/Iceberg` and two EFT scav-exit keys
+  (`exit_scav_sanatorium...`); the Arena locations with a Name + Description are Air Pit, Equator, Bay 5, Sawmill, Bowl, Chop Shop,
+  Block, SkyBridge and Fort. Iceberg has neither row, in any language.
+- **Description policy**: `ArenaMapDescriptions.Load` now requires the pack to cover exactly the released maps that HAVE an official
+  text (`ArenaMapDescriptions.OfficialTextMapKeys`, mirrored against `extract_map_descriptions.DESCRIPTION_KEYS` by a test that
+  parses the Python table); a map without one is absent from the pack and answers with its descriptor's `LocaleDescription`
+  (one English string for every language: `Resolve` has no per-language fallback beyond the pack). A damaged, stale or
+  over-complete pack (a missing official map, a missing `en`, an empty text, an `arena_iceberg` entry) is still discarded whole with
+  the one Warning. `validate_pack` stays strict for the four keys. Promoting Iceberg therefore needs no regenerated pack.
+- **Tests**: `ArenaMapDescriptionsTests` iterates the official-text maps and injects `All + Iceberg` for the Iceberg cases (so it
+  holds before and after the promotion); `Released_registry_is_exactly_the_four_maps...` became the mirror test. Python:
+  `test_banners` 5 maps, `test_loadscreens` 5 maps and the Iceberg entries, `test_map_descriptions` (Iceberg is no key, a pack
+  carrying it is rejected, source rows for it are ignored).
+- **Results** (PowerShell, this worktree): `dotnet test ArenaMapPort.Server.Tests -c Release` 2,688 passed, 0 failed (the server build
+  needs a `work/extract/map-descriptions` pack, copied from the scratch extraction into this worktree's ignored `work/`; a target-level
+  property wins over `-p:MapDescriptions`). `unittest discover -s tools/tests`: 2,448 tests (2,444 before, +4), 2 failures that are
+  this worktree and not the change: `test_dll_versions.test_actual_candidate_and_stale_binary_control` (no client DLL in this
+  worktree's `dist/`) and `test_score_monitors.SidecarTests.test_the_sidecar_text_is_what_the_cli_writes` (the checkout writes CRLF,
+  `core.autocrlf=true`, `git ls-files --eol`: `i/lf w/crlf`); neither touches code of this change (not re-run in the main checkout).
