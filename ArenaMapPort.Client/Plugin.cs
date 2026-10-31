@@ -183,6 +183,8 @@ namespace ArenaMapPort.Client
             ScopeMaskRepairs.Install();
             // Floodlight glare follow-up (2026-09-27): live UltimateBloom knobs. See BloomTuning.cs.
             BloomTuning.Install();
+            // Per-map emission ceiling (2026-10-31): Iceberg's over-bright lamps are taken down instead of the whole map's bloom. See EmissionCapRepairs.cs.
+            EmissionCapRepairs.Install();
             AnamorphicFlareTuning.Install();
             AnamorphicFlareTuning.InstallRenderHooks(_harmony);
             HdrImageTuning.Install(_harmony);

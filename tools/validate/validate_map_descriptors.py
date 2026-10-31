@@ -494,6 +494,21 @@ def shader_fallback_errors(map_json: dict) -> list[str]:
     return []
 
 
+EMISSION_CAP_MAX = 100.0   # EmissionCapModel.MaxCap: the largest value the developer key accepts
+
+
+def emission_cap_errors(map_json: dict) -> list[str]:
+    """Shape of the optional emission_cap (EmissionCapRepairs, docs/progress/iceberg-release.md "Per-map emission cap"): the ceiling on the
+    effective emission level of the map's emissive materials. Absent or 0 = the repair is off for the map (the released maps before Iceberg);
+    otherwise a finite number in (0, EMISSION_CAP_MAX]. Only the C# runtime reads it; the Editor ignores the key."""
+    if "emission_cap" not in map_json:
+        return []
+    cap = map_json["emission_cap"]
+    if isinstance(cap, bool) or not isinstance(cap, (int, float)) or not math.isfinite(cap) or cap < 0 or cap > EMISSION_CAP_MAX:
+        return [f"emission_cap must be a finite number between 0 (off) and {EMISSION_CAP_MAX:g}, got {cap!r}"]
+    return []
+
+
 # BaseBallistic.ESurfaceSound of EFT 0.16.9.5 (D:/SPT41/Development/_decompiled/BaseBallistic.cs, in declaration order). The
 # client parses puddle_extra_surfaces against this enum (PuddleFootstepRepairs); Concrete and Asphalt are always eligible
 # there and Puddle is the result, so none of the three is a meaningful extra.
@@ -984,6 +999,8 @@ def check_map_against_registry_entry(
     errors.extend(f"{where}: {error}" for error in background_scene_errors(map_json, registry_args, ref_scope))
     errors.extend(f"{where}: {error}" for error in bake_input_errors(map_json))
     errors.extend(f"{where}: {error}" for error in shader_fallback_errors(map_json))
+    errors.extend(f"{where}: {error}" for error in emission_cap_errors(map_json))
+    check_field(errors, where, "emission_cap", map_json.get("emission_cap", 0), resolve(registry_args.get("EmissionCap", 0), ref_scope))
     errors.extend(f"{where}: {error}" for error in puddle_errors(map_json))
     check_field(errors, where, "puddle_water_material_names", map_json.get("puddle_water_material_names", []),
                 resolve(registry_args.get("PuddleWaterMaterialNames", []), ref_scope))

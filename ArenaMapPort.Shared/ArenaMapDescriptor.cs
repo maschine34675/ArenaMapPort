@@ -332,6 +332,12 @@ namespace ArenaMapPort.Shared
         // timer, score or alive count. The client draws its own face on every ACTIVE row's prop while a mode plugin has claimed the monitors
         // (ScoreMonitors); empty = the map has none. Mirrors tools/maps/<stem>.monitors.json.
         public ArenaScoreMonitor[] ScoreMonitors { get; }
+        // Emission cap (2026-10-31, docs/progress/iceberg-release.md "Per-map emission cap"): the ceiling on the original effective emission level of
+        // the map's own emissive materials (EmissionCapRepairs: Standard-family _EmissionColor max RGB, p0 emissive _EmissionPower x
+        // _EmissionVisibility x _EmissiveColor max RGB), applied once per raid after the scenes loaded. 0 = off (Equator, Bay5, AirPit, Bowl: their
+        // strongest emissive material is 4.13, accepted under the normal bloom); the developer key `Lighting (<key>)/EmissionCap` defaults to this
+        // value. Mirrors tools/maps/<stem>.json emission_cap (absent = 0); the Editor never reads it.
+        public float EmissionCap { get; }
         // PLAN-AIRPIT item 8 — Editor-side NavMesh bake inputs. The client never reads them; they live here so the one
         // per-map table stays complete and tools/maps/<key>.json cannot drift (validate_map_descriptors.py and the xunit
         // mirror tests). All empty for Equator and Bay5, whose bake is unchanged.
@@ -414,7 +420,8 @@ namespace ArenaMapPort.Shared
             string[]? HeldGates = null,
             bool KeepLevelBorders = false,
             ArenaDoorPose[]? DoorPoses = null,
-            ArenaScoreMonitor[]? ScoreMonitors = null)
+            ArenaScoreMonitor[]? ScoreMonitors = null,
+            float EmissionCap = 0f)
 #nullable restore
         {
             this.Key = Key;
@@ -438,6 +445,7 @@ namespace ArenaMapPort.Shared
             this.KeepLevelBorders = KeepLevelBorders;
             this.DoorPoses = DoorPoses ?? new ArenaDoorPose[0];
             this.ScoreMonitors = ScoreMonitors ?? new ArenaScoreMonitor[0];
+            this.EmissionCap = EmissionCap;
             this.NavMeshBakeExclusions = NavMeshBakeExclusions ?? new string[0];
             this.AuthoredBorders = AuthoredBorders ?? new ArenaBorderDescriptor[0];
             this.BakeBounds = BakeBounds ?? new float[0];
@@ -1505,7 +1513,15 @@ namespace ArenaMapPort.Shared
                 new ArenaScoreMonitor("Arena_Sanatorium_CheckPoint_DesignStuff", "TV/Arena_Home_theater SIDE", new[] { -24.426f, 5.2786f, -86.077f }, 0, true),
                 new ArenaScoreMonitor("Arena_Sanatorium_CheckPoint_DesignStuff", "TV/Arena_Home_theater SIDE (1)", new[] { 83.74f, 4.9639f, -88.31f }, 0, true),
                 new ArenaScoreMonitor("Arena_Sanatorium_CheckPoint_DesignStuff", "TV/Arena_Home_theater TIMER (1)", new[] { 28.9685f, 5.3388f, -59.0274f }, 13, true),
-            });
+            },
+            // Emission cap (EmissionCapRepairs, docs/progress/iceberg-release.md "Per-map emission cap"; mirrors tools/maps/iceberg.json emission_cap).
+            // Iceberg authors six materials above the strongest one of the released maps (4.13, Bay5's '02 - Default'; the strongest p0 emissive there is
+            // 3.93): the two lobby crystal lamps (Emission_Yellow, Standard _EmissionColor 67.8), Prison_Emission_red/passive/blue (p0 power 10 / 7.7 / 6.2),
+            // Sanatorium_Emissive_Orange (the respawn-hall chandeliers and 157 floor spot lamps, 6.8) and Plafond_lamp_02_source_E_red (4.28). At the
+            // normal bloom 2.10/0.35 the crystal lamps and the chandeliers blow out into discs. 4.0 is the level of the released maps' strongest
+            // lamps (4.13 and 3.93, accepted under the same bloom) and still about twice the bloom threshold, so a capped lamp reads as lit; the
+            // value is tuned live on the host with the developer key.
+            EmissionCap: 4.0f);
 
         // Source scene selection: tools/extract/plans/factory.json. Identity is permanent.
         public static readonly ArenaMapDescriptor Factory = new(
