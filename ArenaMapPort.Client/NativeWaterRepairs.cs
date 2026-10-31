@@ -20,11 +20,19 @@ namespace ArenaMapPort.Client
     /// still matches native WaterForSSRv3. Restore the extracted settings and raw texture mip chains
     /// on the original mesh, replacing the unlit SimpleWater4 placeholder. The native deferred pass
     /// receives the world's lighting, reflections and weather. See docs/progress/bay5-water.md.
+    ///
+    /// Map-agnostic since 2026-10-31 (Iceberg's sea, docs/progress/iceberg-release.md "native sea water"): every map with
+    /// <see cref="ArenaMapDescriptor.HasNativeWater"/> has a staged package water/&lt;map key&gt;/ and its own live switch
+    /// (<see cref="NativeWaterModel.Switches"/>: Bay5 "NativeHarborWater" of 2026-09-28, Iceberg "NativeSeaWater"); the runner takes its map from the
+    /// Scripts scene that loaded. Nothing in the setup depends on the map: both seas are the same 600 x 690 scaled built-in Plane (about 6 x 7 km,
+    /// DrawMesh from a command buffer is not frustum culled) at different heights (Bay5 y -8.65, Iceberg y -18.9), neither imports reflection probes
+    /// (skip_import), the SimpleWater4 placeholder is whatever <see cref="SeaPlaceholderRepairs"/> put on the empty-material Water-layer mesh (restored
+    /// on teardown), and the other SimpleWater4 surfaces of a map (Iceberg's canyon planes, fountains) are not WaterObjects and keep their materials.
     /// </summary>
     internal static class NativeWaterRepairs
     {
-        const string Tag = "[Water]";
-        static ConfigEntry<bool> _enabled;
+        const string Tag = NativeWaterModel.Tag;
+        static readonly Dictionary<string, ConfigEntry<bool>> _enabled = new Dictionary<string, ConfigEntry<bool>>();
         static Runner _runner;
         static readonly FieldInfo BuffersField = typeof(WaterRendererv3).GetField("commandBufferManager", BindingFlags.Instance | BindingFlags.NonPublic);
         static readonly FieldInfo SnowDisabledField = typeof(WaterRendererv3).GetField("bool_0", BindingFlags.Static | BindingFlags.NonPublic);
@@ -32,20 +40,25 @@ namespace ArenaMapPort.Client
 
         internal static void Install()
         {
-            _enabled = Plugin.Instance.Settings.Bind("Water (arena_bay5)", "NativeHarborWater", true,
-                "Use original harbor waves, foam and depth settings with EFT's native water renderer. " +
-                "Responds to world lighting at day and night. Live toggle; off restores the old placeholder.");
+            foreach (var map in ArenaMapRegistry.All)
+            {
+                var row = NativeWaterModel.SwitchOf(map);
+                if (row == null) continue;
+                _enabled[map.Key] = Plugin.Instance.Settings.Bind(NativeWaterModel.SectionOf(map), row.Key, true, row.Description);
+            }
             SceneManager.sceneLoaded += (scene, mode) =>
             {
-                if (scene.name != ArenaMapRegistry.Bay5.ScriptsSceneName || _runner != null) return;
+                var map = ArenaMapRaid.MapForScriptsScene(scene.name);
+                if (map == null || _runner != null || !_enabled.ContainsKey(map.Key)) return;
                 var go = new GameObject("ArenaMapPort Native Water");
                 SceneManager.MoveGameObjectToScene(go, scene);
                 _runner = go.AddComponent<Runner>();
+                _runner.Map = map;
                 _runner.StartCoroutine(_runner.Run());
             };
             SceneManager.sceneUnloaded += scene =>
             {
-                if (_runner != null && Array.IndexOf(ArenaMapRegistry.Bay5.AllSceneNames, scene.name) >= 0)
+                if (_runner != null && Array.IndexOf(_runner.Map.AllSceneNames, scene.name) >= 0)
                     UnityEngine.Object.DestroyImmediate(_runner.gameObject);
             };
         }
@@ -58,6 +71,8 @@ namespace ArenaMapPort.Client
 
         sealed class Runner : MonoBehaviour
         {
+            /// <summary>The map whose Scripts scene created this runner (set before the coroutine starts).</summary>
+            internal ArenaMapDescriptor Map;
             WaterRendererv3 _renderer;
             WaterForSSRv3 _water;
             GameObject _owner;
@@ -75,10 +90,11 @@ namespace ArenaMapPort.Client
                 yield return new WaitForSecondsRealtime(4f); // after placeholder and shader rebinding
                 while (true)
                 {
-                    if (ArenaMapRegistry.Bay5.AllSceneNames.All(name => SceneManager.GetSceneByName(name).isLoaded))
+                    if (Map.AllSceneNames.All(name => SceneManager.GetSceneByName(name).isLoaded))
                     {
-                        if (!_enabled.Value && _owner != null) Stop();
-                        if (_enabled.Value && _owner == null && !_failed)
+                        var enabled = _enabled[Map.Key];
+                        if (!enabled.Value && _owner != null) Stop();
+                        if (enabled.Value && _owner == null && !_failed)
                         {
                             try { StartWater(); }
                             catch (Exception ex)
@@ -99,14 +115,12 @@ namespace ArenaMapPort.Client
                     throw new MissingFieldException("Native water renderer contract changed");
                 if (UnityEngine.Object.FindObjectOfType<WaterRendererv3>() != null)
                     throw new InvalidOperationException("Another native water renderer exists; refusing a second manager");
-                var dir = Path.Combine(Path.GetDirectoryName(typeof(NativeWaterRepairs).Assembly.Location), "water", "arena_bay5");
-                var data = JObject.Parse(File.ReadAllText(Path.Combine(dir, "water.json")));
-                if ((int)data["schema_version"] != 1 || (string)data["map_key"] != ArenaMapRegistry.Bay5.Key)
-                    throw new InvalidDataException("Unexpected water package identity");
+                var dir = NativeWaterModel.PackageDirectory(Path.GetDirectoryName(typeof(NativeWaterRepairs).Assembly.Location), Map);
+                var data = JObject.Parse(File.ReadAllText(Path.Combine(dir, NativeWaterModel.PackageFile)));
                 var target = data["target"];
                 var sceneName = (string)target["scene"];
-                if (Array.IndexOf(ArenaMapRegistry.Bay5.AllSceneNames, sceneName) < 0)
-                    throw new InvalidDataException("Water target outside Bay5");
+                var identityError = NativeWaterModel.IdentityError((int)data["schema_version"], (string)data["map_key"], sceneName, Map);
+                if (identityError != null) throw new InvalidDataException(identityError);
                 var path = (string)target["hierarchy_path"];
                 var scene = SceneManager.GetSceneByName(sceneName);
                 var parts = path.Split('/');
@@ -118,7 +132,7 @@ namespace ArenaMapPort.Client
                 var filter = tr.GetComponent<MeshFilter>();
                 if (meshRenderer == null || filter == null || filter.sharedMesh == null || tr.gameObject.layer != LayerMask.NameToLayer("Water"))
                     throw new InvalidDataException("Invalid original water mesh target");
-                var shader = Shader.Find("Hidden/WaterForSSR");
+                var shader = Shader.Find(NativeWaterModel.ShaderName);
                 if (shader == null || !shader.isSupported) throw new InvalidOperationException("Native water shader unavailable");
                 var settings = ReadSettings((JObject)data["settings"]);
                 foreach (var prop in ((JObject)data["textures"]).Properties())
@@ -146,21 +160,23 @@ namespace ArenaMapPort.Client
                 _water._targets = new[] { new WaterObject(filter, _target, tr.gameObject) };
                 _renderer = _owner.AddComponent<WaterRendererv3>();
                 _renderer._shader = shader;
-                // This installed shader has four G-buffer outputs (no snow mask output). Bay5's
-                // original summer water uses that path; restore the prior native state on teardown.
+                // This installed shader has four G-buffer outputs (no snow mask output). The ported
+                // maps carry no winter water (Bay5's summer harbor, Iceberg's autumn sea) and use that path;
+                // restore the prior native state on teardown.
                 _oldSnowDisabled = (bool)SnowDisabledField.GetValue(null);
                 _ownsSnowMode = true;
                 WaterRendererv3.DisableSnowMask(true);
                 _owner.SetActive(true);
-                Plugin.Log.LogDebug($"{Tag} enabled: target={sceneName}/{path} textures={_textures.Count} " +
-                    $"shader={shader.name} renderer={_renderer.GetInstanceID()} camera={Camera.main?.actualRenderingPath}");
+                var bounds = _target.bounds;
+                Plugin.Log.LogDebug($"{Tag} enabled: map={Map.Key} target={sceneName}/{path} textures={_textures.Count} " +
+                    $"shader={shader.name} renderer={_renderer.GetInstanceID()} camera={Camera.main?.actualRenderingPath} " +
+                    $"worldY={tr.position.y:0.00} extent={bounds.size.x:0}x{bounds.size.z:0} m");
             }
 
             Texture2D ReadTexture(string dir, JObject info)
             {
                 string file = (string)info["file"];
-                if (string.IsNullOrEmpty(file) || !file.StartsWith("textures/", StringComparison.Ordinal) ||
-                    Path.GetFileName(file) != file.Substring("textures/".Length))
+                if (!NativeWaterModel.IsTextureFileName(file))
                     throw new InvalidDataException("Invalid water texture filename");
                 var bytes = File.ReadAllBytes(Path.Combine(dir, file));
                 using (var hash = SHA256.Create())

@@ -325,18 +325,28 @@
     <Copy SourceFiles="@(ArenaMapPortFlareFile)" DestinationFiles="@(ArenaMapPortFlareFile->'$(ArenaMapPortDistDir)\flares\%(MapKey)\textures\%(Filename)%(Extension)')" Condition="'%(ArenaMapPortFlareFile.Extension)'=='.bin'" />
   </Target>
 
-  <!-- Original native water settings and raw mip chains; generated from the user's Arena install. -->
+  <!-- Original native water settings and raw mip chains; generated from the user's Arena install by tools/extract/extract_water.py (one run per
+       map, its map option names the key) into the ignored work/extract/STEM-water. One explicit list per map with a native sea (the descriptor's HasNativeWater: Bay5's harbor since
+       2026-09-28, Iceberg's sea since 2026-10-31); a missing file is an Error in Release and DllOnly builds alike. Plaintext on purpose: the textures
+       are fragments of resource streams no key sample touches (the extractor refuses one that would). -->
   <Target Name="ArenaMapPortStageWater" AfterTargets="ArenaMapPortDistCopy" Condition="'$(Configuration)'=='Release'">
     <PropertyGroup>
-      <ArenaMapPortWaterDir>$(MSBuildThisFileDirectory)..\work\extract\bay5-water</ArenaMapPortWaterDir>
+      <ArenaMapPortWaterRoot>$(MSBuildThisFileDirectory)..\work\extract</ArenaMapPortWaterRoot>
     </PropertyGroup>
     <ItemGroup>
-      <ArenaMapPortWaterFile Include="$(ArenaMapPortWaterDir)\water.json" />
-      <ArenaMapPortWaterFile Include="$(ArenaMapPortWaterDir)\textures\foam.bin;$(ArenaMapPortWaterDir)\textures\normals.bin;$(ArenaMapPortWaterDir)\textures\normalsDetails.bin;$(ArenaMapPortWaterDir)\textures\rippleTexture.bin" />
+      <ArenaMapPortWaterFile Include="$(ArenaMapPortWaterRoot)\bay5-water\water.json"><MapKey>arena_bay5</MapKey><Dest>water.json</Dest></ArenaMapPortWaterFile>
+      <ArenaMapPortWaterFile Include="$(ArenaMapPortWaterRoot)\bay5-water\textures\foam.bin"><MapKey>arena_bay5</MapKey><Dest>textures\foam.bin</Dest></ArenaMapPortWaterFile>
+      <ArenaMapPortWaterFile Include="$(ArenaMapPortWaterRoot)\bay5-water\textures\normals.bin"><MapKey>arena_bay5</MapKey><Dest>textures\normals.bin</Dest></ArenaMapPortWaterFile>
+      <ArenaMapPortWaterFile Include="$(ArenaMapPortWaterRoot)\bay5-water\textures\normalsDetails.bin"><MapKey>arena_bay5</MapKey><Dest>textures\normalsDetails.bin</Dest></ArenaMapPortWaterFile>
+      <ArenaMapPortWaterFile Include="$(ArenaMapPortWaterRoot)\bay5-water\textures\rippleTexture.bin"><MapKey>arena_bay5</MapKey><Dest>textures\rippleTexture.bin</Dest></ArenaMapPortWaterFile>
+      <ArenaMapPortWaterFile Include="$(ArenaMapPortWaterRoot)\iceberg-water\water.json"><MapKey>arena_iceberg</MapKey><Dest>water.json</Dest></ArenaMapPortWaterFile>
+      <ArenaMapPortWaterFile Include="$(ArenaMapPortWaterRoot)\iceberg-water\textures\foam.bin"><MapKey>arena_iceberg</MapKey><Dest>textures\foam.bin</Dest></ArenaMapPortWaterFile>
+      <ArenaMapPortWaterFile Include="$(ArenaMapPortWaterRoot)\iceberg-water\textures\normals.bin"><MapKey>arena_iceberg</MapKey><Dest>textures\normals.bin</Dest></ArenaMapPortWaterFile>
+      <ArenaMapPortWaterFile Include="$(ArenaMapPortWaterRoot)\iceberg-water\textures\normalsDetails.bin"><MapKey>arena_iceberg</MapKey><Dest>textures\normalsDetails.bin</Dest></ArenaMapPortWaterFile>
+      <ArenaMapPortWaterFile Include="$(ArenaMapPortWaterRoot)\iceberg-water\textures\rippleTexture.bin"><MapKey>arena_iceberg</MapKey><Dest>textures\rippleTexture.bin</Dest></ArenaMapPortWaterFile>
     </ItemGroup>
-    <Error Condition="!Exists('%(ArenaMapPortWaterFile.Identity)')" Text="Missing native water input %(ArenaMapPortWaterFile.Identity); run tools/extract/extract_water.py" />
-    <Copy SourceFiles="$(ArenaMapPortWaterDir)\water.json" DestinationFolder="$(ArenaMapPortDistDir)\water\arena_bay5" />
-    <Copy SourceFiles="$(ArenaMapPortWaterDir)\textures\foam.bin;$(ArenaMapPortWaterDir)\textures\normals.bin;$(ArenaMapPortWaterDir)\textures\normalsDetails.bin;$(ArenaMapPortWaterDir)\textures\rippleTexture.bin" DestinationFolder="$(ArenaMapPortDistDir)\water\arena_bay5\textures" />
+    <Error Condition="!Exists('%(ArenaMapPortWaterFile.Identity)')" Text="Missing native water input %(ArenaMapPortWaterFile.Identity); run tools/extract/extract_water.py --map %(ArenaMapPortWaterFile.MapKey)" />
+    <Copy SourceFiles="@(ArenaMapPortWaterFile)" DestinationFiles="@(ArenaMapPortWaterFile->'$(ArenaMapPortDistDir)\water\%(MapKey)\%(Dest)')" />
   </Target>
 
   <!--
@@ -382,8 +392,8 @@
            targets above (0.3.0); there is no water package. -->
       <ArenaMapPortBowlBuildDir>$(MSBuildThisFileDirectory)..\work\build\bowl</ArenaMapPortBowlBuildDir>
       <!-- Iceberg (docs/PLAN-ICEBERG.md item 12/13): tools/build_all.ps1 -MapKey arena_iceberg -FullMap -OutputDir work/build/iceberg (the first
-           Unity build, U1), from work/extract/iceberg-native-v2; its preset bundle lands in the same shared preset dir. The map has no flare,
-           water or DynamicMaps overview package yet (Phase C) and no spectator crowd. -->
+           Unity build, U1), from work/extract/iceberg-native-v2; its preset bundle lands in the same shared preset dir. The map has no flare
+           or DynamicMaps overview package yet (Phase C) and no spectator crowd; its native sea water has its own target (ArenaMapPortStageWater). -->
       <ArenaMapPortIcebergBuildDir>$(MSBuildThisFileDirectory)..\work\build\iceberg</ArenaMapPortIcebergBuildDir>
     </PropertyGroup>
     <ItemGroup>
