@@ -1,5 +1,14 @@
 # Current distribution contract: Equator, Bay5, AirPit and Bowl (0.4.0, encrypted bundles, published 2026-10-30)
 
+2026-10-31 (Iceberg overview): the current unpublished five-map staging adds
+`dynamicmaps/ArenaMapPort_Iceberg/ArenaMapPort_Iceberg.jsonc` and `Layers/Ground.svg`
+inside the client plugin. The accepted source is `work/dynamicmaps/release/ArenaMapPort_Iceberg`;
+Release and DLL-only builds stage both files, and distribution validation requires their exact bytes.
+This adds two files to the previous water staging (283 total, Iceberg part 27).
+The overview is loaded from ArenaMapPort's own folder; DynamicMaps' installation is untouched.
+The older absence statements below describe the earlier preparation stages.
+
+
 2026-10-30 (Iceberg joined the release lists, PENDING: NOT built, NOT staged, NOT released; PLAN-ICEBERG item 12, record
 [progress/iceberg-release.md](progress/iceberg-release.md)): `ArenaMapRegistry.All`, `RELEASE_MAP_KEYS`, the csproj rows and the packer now expect a
 fifth map. Once its bundles exist (the first Unity build, U1) and are staged, dist holds **281 files** (the 256 above plus 25; 276 with the 20 files below, the

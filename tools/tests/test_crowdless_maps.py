@@ -4,8 +4,8 @@ Iceberg is a released map without a spectator crowd. Everything that would other
 validate_map_descriptors.CROWDLESS_MAP_KEYS: the packer (its rules and its required files), validate_distribution (the partition of the release into crowd
 maps and crowdless maps) and, by hand, the client (ArenaSpectators.DesignScene returns null for exactly these keys). The crowd maps themselves are
 extract_spectator.MAP_SCENES, which stage_spectators stages. These tests pin the partition and each reader; the not-yet rules for the other Phase C
-packages of Iceberg (flares, DynamicMaps overview) are pinned here too, so adding one later is a deliberate edit of the explicit lists. Its water package
-joined on 2026-10-31 and is pinned as present.
+packages of Iceberg are pinned here too, so adding one later is a deliberate edit of the explicit lists. Its water package and DynamicMaps overview
+joined on 2026-10-31 and are pinned as present; flares remain absent.
 """
 import re
 import sys
@@ -116,14 +116,12 @@ class PackerTests(unittest.TestCase):
 
 
 class NotYetRulesTests(unittest.TestCase):
-    """Iceberg's later packages are explicit absences (PLAN-ICEBERG Phase C), never fake data: the lists that name the maps that HAVE them leave it out.
-    Its native sea water is no longer one of them (2026-10-31, docs/progress/iceberg-release.md "native sea water"); the water side is pinned below
-    and in test_native_water.py."""
+    """Pin Iceberg's explicit feature lists: overview and water present, flares absent."""
 
-    def test_iceberg_has_no_overview_or_flares_yet(self):
-        self.assertNotIn("Iceberg", VDIST.OVERVIEW_MAP_NAMES)
+    def test_iceberg_has_an_overview_but_no_flares_yet(self):
+        self.assertIn("Iceberg", VDIST.OVERVIEW_MAP_NAMES)
         self.assertNotIn("arena_iceberg", VDIST.FLARE_MAP_KEYS)
-        self.assertEqual(VDIST.OVERVIEW_MAP_NAMES, ("Equator", "Bay5", "AirPit", "Bowl"))
+        self.assertEqual(VDIST.OVERVIEW_MAP_NAMES, ("Equator", "Bay5", "AirPit", "Bowl", "Iceberg"))
         self.assertEqual(VDIST.FLARE_MAP_KEYS, ("arena_equator", "arena_bay5", "arena_bowl"))
 
     def test_iceberg_has_native_water_since_2026_10_31(self):
@@ -131,12 +129,16 @@ class NotYetRulesTests(unittest.TestCase):
         self.assertEqual(VDIST.WATER_MAP_KEYS, ("arena_bay5", "arena_iceberg"))
         self.assertEqual(VDIST.WATER_MAP_KEYS, VD.NATIVE_WATER_MAP_KEYS)
 
-    def test_the_client_csproj_stages_no_iceberg_overview_or_flare_rows(self):
+    def test_the_client_csproj_stages_iceberg_overview_but_no_flare_rows(self):
         text = (REPO / "ArenaMapPort.Client" / "ArenaMapPort.Client.csproj").read_text(encoding="utf-8")
         for target in ("ArenaMapPortStageDynamicMaps", "ArenaMapPortStageMultiFlare"):
             start = text.index(f'<Target Name="{target}"')
             body = text[start:text.index("</Target>", start)]
-            self.assertNotIn("iceberg", body.lower(), target)
+            if target == "ArenaMapPortStageDynamicMaps":
+                self.assertIn("ArenaMapPort_Iceberg\\ArenaMapPort_Iceberg.jsonc", body)
+                self.assertIn("ArenaMapPort_Iceberg\\Layers\\Ground.svg", body)
+            else:
+                self.assertNotIn("iceberg", body.lower(), target)
 
     def test_the_client_csproj_stages_icebergs_water_package(self):
         text = (REPO / "ArenaMapPort.Client" / "ArenaMapPort.Client.csproj").read_text(encoding="utf-8")

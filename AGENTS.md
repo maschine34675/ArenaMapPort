@@ -14,7 +14,7 @@ Pixeldrain; original animated crowds with calls and a murmur bed, gate sounds, s
 **Iceberg** (Arena's `Arena_Sanatorium`, key `arena_iceberg`, the fifth map; branch `feature/iceberg`, [docs/PLAN-ICEBERG.md](docs/PLAN-ICEBERG.md), log
 [docs/progress/iceberg-release.md](docs/progress/iceberg-release.md)) joined `ArenaMapRegistry.All` and every release list in the lock-step promotion of
 2026-10-30, but is **not released**: its Unity bundles do not exist yet (the first build, U1, builds from `work/extract/iceberg-native-v2` with
-`-FullMap`), it has no host evidence, no spectator crowd and no flares, water or DynamicMaps overview (Phase C), and the release number and form are the
+`-FullMap`), its U1 build and native sea water now have host evidence (HANDOFF.md); it has no spectator crowd or flares, and its DynamicMaps overview was added on 2026-10-31, and the release number and form are the
 user's decision; nothing of it is tagged, uploaded or pushed.
 Release 0.2.3 (branch `release/0.2.3`, published 2026-10-19) is 0.2.2 plus the Arena installation check; 0.2.2 was withdrawn
 the same day (GitHub release, tag and Pixeldrain files deleted, nobody had downloaded it), and so were 0.2.1 and 0.1.0
@@ -69,7 +69,7 @@ are not accepted build inputs. Keep the SPT bundle target on Unity 2022.3.43f1.
   `pwsh -NoProfile -File tools/deploy-to-spt.ps1 -SptRoot 'D:\SPT41' -Confirm` (quote the path: an
   unquoted backslash in bash once created a stray folder). Without `-Confirm` the script is a dry run.
   The optional DynamicMaps packs use the same script with `-DynamicMapsPackage <pack-folder>`
-  and `-DynamicMapsMap Equator|Bay5|AirPit|Bowl` (default Equator);
+  and `-DynamicMapsMap Equator|Bay5|AirPit|Bowl|Iceberg` (default Equator);
   that separate mode copies only its two owned map-data files into maschine-ArenaMapPort/dynamicmaps.
   The user-authorized `-RemoveLegacyDynamicMaps` migration removes only the old Equator/Bay5
   packages from DynamicMaps/Maps, after both replacements and the adapter DLL match dist.

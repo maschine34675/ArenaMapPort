@@ -241,6 +241,7 @@
     </PropertyGroup>
     <ItemGroup>
       <ArenaMapPortOverview Include="ArenaMapPort_Equator\ArenaMapPort_Equator.jsonc;ArenaMapPort_Equator\Layers\Ground.svg;ArenaMapPort_Bay5\ArenaMapPort_Bay5.jsonc;ArenaMapPort_Bay5\Layers\Ground.svg;ArenaMapPort_AirPit\ArenaMapPort_AirPit.jsonc;ArenaMapPort_AirPit\Layers\Ground.svg;ArenaMapPort_Bowl\ArenaMapPort_Bowl.jsonc;ArenaMapPort_Bowl\Layers\Ground.svg" />
+      <ArenaMapPortOverview Include="ArenaMapPort_Iceberg\ArenaMapPort_Iceberg.jsonc;ArenaMapPort_Iceberg\Layers\Ground.svg" />
     </ItemGroup>
     <Error Condition="!Exists('$(ArenaMapPortOverviewRoot)\%(ArenaMapPortOverview.Identity)')" Text="Missing accepted overview map %(ArenaMapPortOverview.Identity); see tools/dynamicmaps/README.md" />
     <Copy SourceFiles="@(ArenaMapPortOverview->'$(ArenaMapPortOverviewRoot)\%(Identity)')" DestinationFiles="@(ArenaMapPortOverview->'$(ArenaMapPortDistDir)\dynamicmaps\%(Identity)')" />
@@ -393,7 +394,7 @@
       <ArenaMapPortBowlBuildDir>$(MSBuildThisFileDirectory)..\work\build\bowl</ArenaMapPortBowlBuildDir>
       <!-- Iceberg (docs/PLAN-ICEBERG.md item 12/13): tools/build_all.ps1 -MapKey arena_iceberg -FullMap -OutputDir work/build/iceberg (the first
            Unity build, U1), from work/extract/iceberg-native-v2; its preset bundle lands in the same shared preset dir. The map has no flare
-           or DynamicMaps overview package yet (Phase C) and no spectator crowd; its native sea water has its own target (ArenaMapPortStageWater). -->
+           package yet (Phase C) and no spectator crowd; its overview and native sea water have their own staging targets. -->
       <ArenaMapPortIcebergBuildDir>$(MSBuildThisFileDirectory)..\work\build\iceberg</ArenaMapPortIcebergBuildDir>
     </PropertyGroup>
     <ItemGroup>

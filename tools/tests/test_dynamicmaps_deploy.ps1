@@ -23,7 +23,7 @@ function Move-FixtureItem([string]$Source, [string]$Destination) {
     Move-Item -LiteralPath $sourceFull -Destination $destinationFull
 }
 
-function New-Fixture([ValidateSet('Equator', 'Bay5', 'AirPit', 'Bowl')][string]$MapName = 'Equator') {
+function New-Fixture([ValidateSet('Equator', 'Bay5', 'AirPit', 'Bowl', 'Iceberg')][string]$MapName = 'Equator') {
     $caseRoot = Join-Path $fixtureRoot ([guid]::NewGuid().ToString('N'))
     $package = Join-Path $caseRoot 'package'
     $spt = Join-Path $caseRoot 'spt'
@@ -102,7 +102,7 @@ function Pass-Case([string]$Name) {
 }
 
 function Test-Rejected([string]$Name, [scriptblock]$Mutate, [string]$Expected, [switch]$DryRunOnly,
-    [ValidateSet('Equator', 'Bay5', 'AirPit', 'Bowl')][string]$MapName = 'Equator') {
+    [ValidateSet('Equator', 'Bay5', 'AirPit', 'Bowl', 'Iceberg')][string]$MapName = 'Equator') {
     $fixture = New-Fixture -MapName $MapName
     & $Mutate $fixture
     $before = Get-TreeState $fixture.Root
@@ -116,7 +116,7 @@ function Test-Rejected([string]$Name, [scriptblock]$Mutate, [string]$Expected, [
 function Save-Map($Fixture) { Write-FixtureFile $Fixture.Json ($Fixture.Map | ConvertTo-Json -Depth 20) }
 
 try {
-    foreach ($mapName in @('Equator', 'Bay5', 'AirPit', 'Bowl')) {
+    foreach ($mapName in @('Equator', 'Bay5', 'AirPit', 'Bowl', 'Iceberg')) {
         $fixture = New-Fixture -MapName $mapName
         $before = Get-TreeState $fixture.Root
         $result = Invoke-Deploy $fixture
@@ -164,7 +164,7 @@ try {
 
     # Install both fixed profiles into the same fixture in each order. The second install must
     # preserve the entire first map, DLL/config sentinels and every other existing file/directory.
-    foreach ($order in @(@('Equator', 'Bay5'), @('Bay5', 'Equator'), @('AirPit', 'Bowl'), @('Bowl', 'AirPit'))) {
+    foreach ($order in @(@('Equator', 'Bay5'), @('Bay5', 'Equator'), @('AirPit', 'Bowl'), @('Bowl', 'AirPit'), @('Iceberg', 'Bowl'), @('Bowl', 'Iceberg'))) {
         $firstName, $secondName = $order
         $first = New-Fixture -MapName $firstName
         $second = New-Fixture -MapName $secondName
@@ -232,7 +232,7 @@ try {
 
     foreach ($mismatch in @(@{ PackageMap = 'Bay5'; Selected = 'Equator' }, @{ PackageMap = 'Equator'; Selected = 'Bay5' },
             @{ PackageMap = 'Bowl'; Selected = 'AirPit' }, @{ PackageMap = 'AirPit'; Selected = 'Bowl' },
-            @{ PackageMap = 'Bowl'; Selected = 'Equator' })) {
+            @{ PackageMap = 'Bowl'; Selected = 'Equator' }, @{ PackageMap = 'Iceberg'; Selected = 'Bowl' }, @{ PackageMap = 'Bowl'; Selected = 'Iceberg' })) {
         $fixture = New-Fixture $mismatch.PackageMap
         $before = Get-TreeState $fixture.Root
         $result = Invoke-Deploy $fixture -Confirm -SelectedMap $mismatch.Selected
@@ -277,6 +277,23 @@ try {
     $names = @(Get-ChildItem -LiteralPath (Join-Path $fixture.Spt 'BepInEx/plugins/maschine-ArenaMapPort/dynamicmaps') -Directory | ForEach-Object Name)
     Assert-That ($names.Count -eq 1 -and $names[0] -ceq 'ArenaMapPort_Bowl') "Lowercase Bowl selection created a non-canonical directory: $($names -join ',')"
     Pass-Case 'Bowl lowercase selection deploys to the canonical directory'
+
+    # Iceberg (2026-10-31): same fixed-identity rules as the other maps.
+    Test-Rejected 'Iceberg filename with AirPit ID' { param($f) $f.Map.MapInternalNames = @('arena_airpit'); Save-Map $f } 'MapInternalNames' -MapName 'Iceberg'
+    Test-Rejected 'Iceberg ID with AirPit image' { param($f) $f.Map.Layers['Ground Floor'].ImagePath = 'Maps/ArenaMapPort_AirPit/Layers/Ground.svg'; Save-Map $f } 'ground ImagePath' -MapName 'Iceberg'
+    Test-Rejected 'Iceberg unsupported ID' { param($f) $f.Map.MapInternalNames = @('arena_factory'); Save-Map $f } 'MapInternalNames' -MapName 'Iceberg'
+    Test-Rejected 'Iceberg multiple map IDs' { param($f) $f.Map.MapInternalNames += 'arena_airpit'; Save-Map $f } 'MapInternalNames' -MapName 'Iceberg'
+    Test-Rejected 'Iceberg package rejects additional map file' { param($f) Write-FixtureFile (Join-Path $f.Package 'ArenaMapPort_AirPit.jsonc') '{}' } 'Package must contain only' -MapName 'Iceberg'
+    Test-Rejected 'Iceberg missing SVG' { param($f) Remove-Item -LiteralPath $f.Svg } 'Layers must contain only' -MapName 'Iceberg'
+    Test-Rejected 'Iceberg target junction' { param($f) $p = Join-Path $f.Root 'outside-map'; [IO.Directory]::CreateDirectory($p) | Out-Null; New-Item -ItemType Junction -Path $f.Target -Target $p | Out-Null } 'Linked/reparse' -MapName 'Iceberg'
+    # ValidateSet is case-insensitive; a lowercase selection must still land in the canonical ArenaMapPort_Iceberg directory.
+    $fixture = New-Fixture 'Iceberg'
+    $result = Invoke-Deploy $fixture -Confirm -SelectedMap 'iceberg'
+    Assert-That ($result.Code -eq 0 -and $result.Output -match 'DynamicMaps Iceberg data only') "Lowercase Iceberg selection failed: $($result.Output)"
+    Assert-That (@(Get-ChildItem -LiteralPath $fixture.Target -File -Recurse).Count -eq 2) 'Lowercase Iceberg selection did not deploy exactly two files to the canonical directory'
+    $names = @(Get-ChildItem -LiteralPath (Join-Path $fixture.Spt 'BepInEx/plugins/maschine-ArenaMapPort/dynamicmaps') -Directory | ForEach-Object Name)
+    Assert-That ($names.Count -eq 1 -and $names[0] -ceq 'ArenaMapPort_Iceberg') "Lowercase Iceberg selection created a non-canonical directory: $($names -join ',')"
+    Pass-Case 'Iceberg lowercase selection deploys to the canonical directory'
 
     Test-Rejected 'malformed JSON' { param($f) Write-FixtureFile $f.Json '{ broken' } 'FATAL'
     Test-Rejected 'duplicate JSON key' { param($f) $j = Get-Content -LiteralPath $f.Json -Raw; Write-FixtureFile $f.Json ($j -replace '^\{', '{ "CoordinateRotation": 0,') } 'Duplicate JSON property'

@@ -41,7 +41,7 @@
   validates the complete package and refuses links in either path. Default remains a dry run.
 
 .PARAMETER DynamicMapsMap
-  Selects Equator (default), Bay5, AirPit or Bowl for DynamicMapsPackage. The selected map fixes the package
+  Selects Equator (default), Bay5, AirPit, Bowl or Iceberg for DynamicMapsPackage. The selected map fixes the package
   filename, internal map ID, image path and destination; no other map destinations are allowed.
 
 .PARAMETER DllOnly
@@ -121,7 +121,7 @@ param(
     [switch]$RemoveDebugHelper,
     [switch]$RenameClientFolder,
     [string]$DynamicMapsPackage,
-    [ValidateSet('Equator', 'Bay5', 'AirPit', 'Bowl')]
+    [ValidateSet('Equator', 'Bay5', 'AirPit', 'Bowl', 'Iceberg')]
     [string]$DynamicMapsMap = 'Equator'
 )
 
@@ -272,7 +272,7 @@ function Assert-DynamicMapsPackage([string]$Package, [string]$MapName) {
 
 function Invoke-DynamicMapsDeploy {
     # ValidateSet accepts case-insensitive input; keep filenames and destinations canonical.
-    $mapName = switch ($DynamicMapsMap) { 'Bay5' { 'Bay5' } 'AirPit' { 'AirPit' } 'Bowl' { 'Bowl' } default { 'Equator' } }
+    $mapName = switch ($DynamicMapsMap) { 'Bay5' { 'Bay5' } 'AirPit' { 'AirPit' } 'Bowl' { 'Bowl' } 'Iceberg' { 'Iceberg' } default { 'Equator' } }
     $mapFile = "ArenaMapPort_$mapName.jsonc"
     $package = Assert-DynamicMapsPackage $DynamicMapsPackage $mapName
     $pluginRoot = Assert-PlainPath (Join-Path $SptRoot 'BepInEx/plugins/maschine-ArenaMapPort') 'Directory'

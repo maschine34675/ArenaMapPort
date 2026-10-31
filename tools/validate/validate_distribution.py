@@ -32,14 +32,13 @@ HEX64_RE = re.compile(r'[0-9a-f]{64}')
 KEY_FILE_MAX_BYTES = 64 * 1024
 
 # Not every released map carries every optional payload. The key set of the release itself comes from
-# validate_map_descriptors.RELEASE_MAP_KEYS (five maps since Iceberg, PLAN-ICEBERG item 12, 2026-10-30). The first four have an
-# overview pack (Bowl's joined with PLAN-BOWL item 17, 0.3.0). AirPit has no active flare light (item 22), so it has no
+# validate_map_descriptors.RELEASE_MAP_KEYS (five maps since Iceberg, PLAN-ICEBERG item 12, 2026-10-30). All five have an
+# overview pack (Iceberg joined on 2026-10-31). AirPit has no active flare light (item 22), so it has no
 # flare package; Bowl ships one (4 of its 28 lights are active, item 17).
-# Iceberg is deliberately in neither of the next two lists (PLAN-ICEBERG Phase C, "not yet" rules, not fake data): no DynamicMaps overview
-# (a ground-floor overview is a Phase C item) and no MultiFlare package (79 FlareLights, four with a negative total scale that need a reviewed
+# Iceberg has an overview but no MultiFlare package (79 FlareLights, four with a negative total scale that need a reviewed
 # rule). Its native sea water joined on 2026-10-31 (WATER_MAP_KEYS below). It has no spectator crowd either: that is
 # validate_map_descriptors.CROWDLESS_MAP_KEYS, checked against the crowd maps (extract_spectator.MAP_SCENES) in validate().
-OVERVIEW_MAP_NAMES = ('Equator', 'Bay5', 'AirPit', 'Bowl')
+OVERVIEW_MAP_NAMES = ('Equator', 'Bay5', 'AirPit', 'Bowl', 'Iceberg')
 FLARE_MAP_KEYS = ('arena_equator', 'arena_bay5', 'arena_bowl')
 # The maps with a native sea-water surface (the Sea/Plane mesh of Bay5's harbor and of Iceberg's sea, NativeWaterRepairs.cs): the one list
 # validate_map_descriptors.NATIVE_WATER_MAP_KEYS, which that validator holds equal to every sidecar's has_native_water and every descriptor's

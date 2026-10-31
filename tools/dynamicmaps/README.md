@@ -68,7 +68,7 @@ pwsh -NoProfile -File tools/deploy-to-spt.ps1 -SptRoot 'D:/SPT41' `
 ```
 
 The historical exporter filename remains compatible with Equator commands; the descriptor
-selects the profile (Equator, Bay5, AirPit and Bowl). Bay5 requires native triangulation. Its exact package files are
+selects the profile (Equator, Bay5, AirPit, Bowl and Iceberg). Bay5 requires native triangulation. Its exact package files are
 `ArenaMapPort_Bay5.jsonc` and `Layers/Ground.svg`; its fixed destination is
 `BepInEx/plugins/maschine-ArenaMapPort/dynamicmaps/ArenaMapPort_Bay5/`. Each package deploy
 leaves the other map's files alone. Bay5 requires `-DynamicMapsMap Bay5`; omitting
@@ -274,3 +274,33 @@ are preserved. For Equator use `--map Equator` and its matching paths. Deploymen
 defaults to Equator for compatibility; `-DynamicMapsMap Bay5` explicitly selects
 the other allowed destination. Both modes validate exactly the map's JSONC and
 `Layers/Ground.svg`, bound to the selected identity and image path.
+
+## Iceberg (2026-10-31)
+
+Export `work/build/iceberg/arena_iceberg_navmesh.bundle` through the isolated Unity
+probe into `work/dynamicmaps/iceberg/navmesh.json`, then generate:
+
+```powershell
+& ./work/dynamicmaps/venv/Scripts/python.exe tools/dynamicmaps/export_equator.py `
+  --package work/extract/iceberg-native-v2 --descriptor tools/maps/iceberg.json `
+  --navmesh work/dynamicmaps/iceberg/navmesh.json --output work/dynamicmaps/iceberg
+pwsh -NoProfile -File tools/deploy-to-spt.ps1 -SptRoot D:/SPT41 `
+  -DynamicMapsPackage work/dynamicmaps/iceberg/pack -DynamicMapsMap Iceberg
+```
+
+Review the preview and the dry-run plan before adding `-Confirm`. Accepted source
+files live in `work/dynamicmaps/release/ArenaMapPort_Iceberg/` and stage through the
+client Release build. The updated client DLL is also required for the owned loader
+allowlist; restart EFT after deployment.
+
+This is one overview of the connected combat routes across their different ground
+heights, not a separate upper-floor map. A 3D edge-connected selection at Arena AI
+core 3 `(10.36, 3.15, -77.21)` excludes disconnected roofs before projection. The
+selection welds 1 cm tile seams, spans Y -3.1..6.4, and also supplies the obstacle
+height reference. The reviewed main component has no stacked projected floor area.
+Drawing bounds match the bake: X -62..121 / Z -131..-33; north is world +Z. The
+183 m width has a profile-specific 190 m guard; other maps keep their 180 m guard.
+Obstacle simplification is 0.30 m; the native route footprint retains its finer
+simplification. Open gate poses, gate frames and parked leaves use the same source
+sidecar workflow as the other maps. Exactly two files are installed in ArenaMapPort's
+own `dynamicmaps/ArenaMapPort_Iceberg` folder; DynamicMaps' installation stays intact.

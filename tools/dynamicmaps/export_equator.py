@@ -1,4 +1,4 @@
-"""Generate local-only Equator, Bay5, AirPit and Bowl DynamicMaps plans from extracted geometry.
+"""Generate local-only Arena DynamicMaps plans from extracted geometry.
 
 No game data ships with this tool. Install requirements in a dedicated venv.
 The drawing is a cartographic approximation, not a navigation or collision mesh.
@@ -331,7 +331,7 @@ def render_preview(path, layers, bounds):
     image.save(path)
 
 
-def native_triangles(path, height_range=(-.5, 1.2)):
+def native_triangles(path, height_range=(-.5, 1.2), connected_anchor=None):
     data = json.loads(Path(path).read_text(encoding="utf-8-sig"))
     verts = np.array([[v[axis] for axis in ("x", "y", "z")] for v in data["vertices"]], dtype=float)
     indices = np.array(data["indices"])
@@ -341,11 +341,58 @@ def native_triangles(path, height_range=(-.5, 1.2)):
     triangles = verts[indices.reshape(-1, 3)]
     ground = triangles[(triangles[:, :, 1].min(axis=1) >= height_range[0])
                        & (triangles[:, :, 1].max(axis=1) <= height_range[1])]
+    if connected_anchor is not None:
+        ground = connected_triangles(ground, connected_anchor)
     return ground
 
 
-def read_triangulation(path, height_range=(-.5, 1.2)):
-    ground = native_triangles(path, height_range)
+def connected_triangles(triangles, anchor):
+    """Select a playable 3D edge-connected surface before projecting to XZ.
+
+    Iceberg has disconnected roof cells above its routes. Projection first would
+    merge those into the floor. Weld only centimetre-sized native tile seams;
+    a shared corner alone cannot connect two regions.
+    """
+    if not len(triangles):
+        raise ValueError("No triangles for the 3D ground anchor")
+    _, vertices = np.unique(np.round(triangles.reshape(-1, 3) / .01).astype(np.int64), axis=0, return_inverse=True)
+    vertices = vertices.reshape(-1, 3)
+    parents = list(range(len(triangles)))
+
+    def root(index):
+        while parents[index] != index:
+            parents[index] = parents[parents[index]]
+            index = parents[index]
+        return index
+
+    edges = {}
+    for index, triangle in enumerate(vertices):
+        for a, b in ((0, 1), (1, 2), (2, 0)):
+            edge = tuple(sorted((triangle[a], triangle[b])))
+            if edge[0] == edge[1]:
+                continue
+            if edge in edges:
+                parents[root(index)] = root(edges[edge])
+            else:
+                edges[edge] = index
+    x, y, z = anchor
+    candidates = set()
+    for index, triangle in enumerate(triangles):
+        shape = Polygon(triangle[:, (0, 2)])
+        if shape.area <= 1e-7 or not shape.covers(Point(x, z)):
+            continue
+        normal = np.cross(triangle[1] - triangle[0], triangle[2] - triangle[0])
+        height = triangle[0, 1] - (normal[0] * (x-triangle[0, 0]) + normal[2] * (z-triangle[0, 2])) / normal[1]
+        if abs(height-y) <= .35:
+            candidates.add(root(index))
+    if len(candidates) != 1:
+        raise ValueError("Expected one native 3D component at the reviewed ground anchor")
+    selected = candidates.pop()
+    return triangles[[root(index) == selected for index in range(len(triangles))]]
+
+
+def read_triangulation(path, height_range=(-.5, 1.2), connected_anchor=None):
+    ground = native_triangles(path, height_range, connected_anchor)
     result = clean(unary_union([Polygon(t[:, (0, 2)]) for t in ground]), min_area=.25, tolerance=.045)
     if result.is_empty:
         raise ValueError("Native triangulation has no ground area")
@@ -406,6 +453,13 @@ MAP_PROFILES = {
                    "seam_grid": .01, "bounds": [-66, -82, 62, 11], "obstacle_tolerance": .20,
                    "hidden_paths": ["SBG_Arena_Bowl_Building/SOO_LOD0/BUILDING/Stadium",
                                     "SBG_Arena_Bowl_Building/OO/Stadium_Chairs_F1"]},
+    # The main traversable surface spans the sloping street, hotel and pool deck.
+    # Select it in 3D at Arena AI core 3 before projection, excluding disconnected
+    # upper floors and roofs that overlap the routes in XZ. Bounds follow the bake.
+    "arena_iceberg": {"name": "Iceberg", "folder": "ArenaMapPort_Iceberg", "title": "ICEBERG",
+                      "heights": (-3.1, 6.4), "anchor": (10.36, -77.21), "relative": True,
+                      "connected_anchor": (10.36, 3.15, -77.21), "seam_grid": .01,
+                      "bounds": [-62, -131, 121, -33], "max_extent": 190, "obstacle_tolerance": .30},
 }
 
 
@@ -415,7 +469,7 @@ def generate(package, descriptor, output, navmesh=None):
         raise ValueError("Output must be separate from the source package")
     config = json.loads(descriptor.read_text(encoding="utf-8"))
     if config["key"] not in MAP_PROFILES:
-        raise ValueError("Supported maps: arena_equator, arena_bay5, arena_airpit, arena_bowl")
+        raise ValueError("Supported maps: " + ", ".join(MAP_PROFILES))
     profile = MAP_PROFILES[config["key"]]
     bounds_override = profile.get("bounds")
     if profile["relative"] and navmesh is None:
@@ -435,10 +489,10 @@ def generate(package, descriptor, output, navmesh=None):
     door_matches = Counter()
     moved_colliders = 0
     stats, meshless = Counter(), 0
-    walkable = read_triangulation(navmesh, profile["heights"]) if navmesh else None
+    walkable = read_triangulation(navmesh, profile["heights"], profile.get("connected_anchor")) if navmesh else None
     if walkable is not None and profile.get("seam_grid"):
-        # Tile edges differ by a few float ULPs. Snap only AirPit and Bowl before selecting
-        # the connected footprint, otherwise the south part is cut at z=-51.2 (both maps).
+        # Tile edges differ by a few float ULPs. Snap the opted-in profiles before
+        # selecting the footprint, so native tile seams do not split a connected route.
         walkable = unary_union(set_precision(walkable, profile["seam_grid"]))
     connected, drawing_clip, surface = None, None, None
     if navmesh:
@@ -450,7 +504,7 @@ def generate(package, descriptor, output, navmesh=None):
         if profile["relative"]:
             xmin, zmin, xmax, zmax = connected.bounds
             drawing_clip = box(*(bounds_override or [math.floor(xmin)-3, math.floor(zmin)-3, math.ceil(xmax)+3, math.ceil(zmax)+3]))
-            surface = GroundSurface(native_triangles(navmesh, profile["heights"]), drawing_clip)
+            surface = GroundSurface(native_triangles(navmesh, profile["heights"], profile.get("connected_anchor")), drawing_clip)
 
     @lru_cache(maxsize=256)
     def mesh(mesh_id):
@@ -527,7 +581,7 @@ def generate(package, descriptor, output, navmesh=None):
         raise ValueError("No ground floor found")
     xmin, zmin, xmax, zmax = (connected if connected is not None else floor).bounds
     bounds = bounds_override or [math.floor(xmin)-3, math.floor(zmin)-3, math.ceil(xmax)+3, math.ceil(zmax)+3]
-    if bounds[2]-bounds[0] > 180 or bounds[3]-bounds[1] > 180:
+    if bounds[2]-bounds[0] > profile.get("max_extent", 180) or bounds[3]-bounds[1] > profile.get("max_extent", 180):
         raise ValueError(f"Unexpected {profile['name']} ground extent: {bounds}")
     drawing_clip = box(*bounds)
     detail_tolerance = profile.get("obstacle_tolerance", .18 if profile["relative"] else .12)

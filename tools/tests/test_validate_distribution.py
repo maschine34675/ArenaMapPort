@@ -169,7 +169,7 @@ class DistributionSidecarTests(unittest.TestCase):
                                                        if key in self.RELEASED})
             art_pin.start()
             self.addCleanup(art_pin.stop)
-        for name in ('Equator', 'Bay5', 'AirPit', 'Bowl'):
+        for name in ('Equator', 'Bay5', 'AirPit', 'Bowl', 'Iceberg'):
             for file in (f'ArenaMapPort_{name}.jsonc', 'Layers/Ground.svg'):
                 relative = f'ArenaMapPort_{name}/{file}'
                 for root in (self.plugin/'dynamicmaps', self.repo/'work/dynamicmaps/release'):
@@ -993,17 +993,16 @@ class DistributionSidecarTests(unittest.TestCase):
         shutil.rmtree(self.plugin / "water/arena_bowl")
         self.validate()
 
-    def test_iceberg_is_crowdless_and_carries_five_loadscreens_and_its_sea_but_no_overview_or_flares(self):
+    def test_iceberg_is_crowdless_and_carries_five_loadscreens_sea_and_overview_but_no_flares(self):
         # PLAN-ICEBERG item 12 (2026-10-30): the fifth released map has no spectator crowd (validate_map_descriptors.CROWDLESS_MAP_KEYS) and, until
-        # Phase C, no DynamicMaps overview and no MultiFlare package; each of them is an explicit absence, so a stray package is a failure and the
-        # missing ones are not. Its native sea water joined on 2026-10-31 (WATER_MAP_KEYS), so that package is required, not absent.
+        # Phase C, no MultiFlare package. Its native sea water and overview joined on 2026-10-31 and are required.
         self.assertEqual(5, len(extract_loadscreens.LOADSCREENS["arena_iceberg"]))
         self.assertEqual({f"arena_iceberg_{n}.jpg" for n in range(1, 6)},
                          {p.name for p in (self.plugin / "loadscreens").glob("arena_iceberg_*.jpg")})
         self.assertFalse((self.plugin / "spectators/arena_iceberg").exists())
         self.assertFalse((self.plugin / "flares/arena_iceberg").exists())
         self.assertTrue((self.plugin / "water/arena_iceberg/water.json").is_file())
-        self.assertFalse((self.plugin / "dynamicmaps/ArenaMapPort_Iceberg").exists())
+        self.assertTrue((self.plugin / "dynamicmaps/ArenaMapPort_Iceberg/Layers/Ground.svg").is_file())
         self.validate()
         # a crowd package of the crowdless map is refused by the staged-spectator check
         (self.plugin / "spectators/arena_iceberg").mkdir()
@@ -1011,17 +1010,26 @@ class DistributionSidecarTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "unexpected or missing spectator folder"):
             self.validate()
         shutil.rmtree(self.plugin / "spectators/arena_iceberg")
-        # so are flares, water and an overview pack that nobody listed on purpose
+        # Flares remain absent; the accepted overview must be complete and byte-identical.
         (self.plugin / "flares/arena_iceberg").mkdir()
         (self.plugin / "flares/arena_iceberg/flares.json").write_text("{}", encoding="utf-8")
         with self.assertRaisesRegex(ValueError, "Unexpected or missing flare package files"):
             self.validate()
         shutil.rmtree(self.plugin / "flares/arena_iceberg")
-        (self.plugin / "dynamicmaps/ArenaMapPort_Iceberg/Layers").mkdir(parents=True)
-        (self.plugin / "dynamicmaps/ArenaMapPort_Iceberg/Layers/Ground.svg").write_text("<svg/>", encoding="utf-8")
+        overview = self.plugin / "dynamicmaps/ArenaMapPort_Iceberg/Layers/Ground.svg"
+        original = overview.read_bytes()
+        overview.write_bytes(b"stale")
+        with self.assertRaisesRegex(ValueError, "Stale overview map"):
+            self.validate()
+        overview.unlink()
+        with self.assertRaises(FileNotFoundError):
+            self.validate()
+        overview.write_bytes(original)
+        extra = overview.with_name("Upper.svg")
+        extra.write_text("<svg/>", encoding="utf-8")
         with self.assertRaisesRegex(ValueError, "Unexpected or missing overview"):
             self.validate()
-        shutil.rmtree(self.plugin / "dynamicmaps/ArenaMapPort_Iceberg")
+        extra.unlink()
         # the crowd/crowdless partition of the release is checked by the validator itself
         with patch.object(distribution, "CROWDLESS_MAP_KEYS", ()), self.assertRaisesRegex(ValueError, "partition the released maps"):
             self.validate()
