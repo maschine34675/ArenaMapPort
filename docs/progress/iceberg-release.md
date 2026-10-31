@@ -937,3 +937,78 @@ above and models the legacy rule); do not deploy before the first stage is done.
   `gpu-run deploy-wait --server --game` (2 files identical after 2 s, game restarted, 16/16 identical): `[Bloom] arena_iceberg: config re-seeded to bloom
   defaults revision 1 (2 value(s) moved; threshold=4.00, intensity=0.20)`. Raid at 19:30 (20:35, botless, 0 warnings): the chandeliers render as candles
   with a soft glow, no disc. .NET 2,756 passed.
+
+## 2026-10-31 - native sea water for Iceberg (the Bay5 harbor mechanism, generalised; offline, not host-checked)
+
+Workstream of the Iceberg integration (worktree branch `worktree-wf_d144dcf2-1e2-2`, three code commits and this record on top of `bd39a41`). The lead's evidence stands: level256 holds two `EFT.Water.WaterContainer`s, `WaterForSSrv3` with one empty target
+and `Sea` with the one target `Sea/Plane`; the generic `SeaPlaceholderRepairs` put `FX/SimpleWater4` on that plane and the host showed the dry sand bed of the canyon (y -22..-26) instead of the sea. This pass gives Iceberg the native deferred
+water renderer of Bay5's harbor ([bay5-water.md](bay5-water.md)). Everything below is offline (Arena 0.6.1.0.48206 read-only, unit tests, a scratch MSBuild project); the look is the lead's host check (list at the end).
+
+### What the source says (new facts)
+
+- **Iceberg's sea is Bay5's sea.** The `Sea` container of `level256` carries settings and four textures that are identical to those of `level84` (`water.json` `settings` and `textures` compare equal, the four `.bin` files are hash-identical:
+  `foam` 3dc315d5..., `normals` 57164451..., `normalsDetails` fce89782..., `rippleTexture` fb92af89...; 2,271,980 B), and so is the plane: world scale 599.68 x 690.19 on Unity's 10 x 10 built-in Plane (about 6.0 x 6.9 km, x -2272..3725,
+  z -4596..2306, computed through the parent chain of `iceberg-native-v2` and `bay5-native-v5`), same x/z position (726.25, -1144.95); only y differs: Iceberg -18.9, Bay5 -8.65. A 6 x 7 km plane is therefore not new to the native renderer. The
+  play area (x -60..120, z -129..-35) lies inside it. Both packages differ in identity only (`map_key`, scene `Arena_Sanatorium`, the path ids of the Arena build, the raw container hash).
+- Exactly one root `Sea` in `Arena_Sanatorium` with exactly one child `Plane` (active, layer 4, id 23230): the client's `SingleOrDefault` root lookup and `Transform.Find` resolve `Sea/Plane` unambiguously.
+- **No reflection probes on either map**: Iceberg's 35 `ReflectionProbe` components (`Arena_Sanatorium_Light`) are `skip_import`, Bay5 has none, so the water reflects the default environment the weather rig sets, as the harbor does.
+- Nothing else in the native setup is Bay5's own: `WaterRendererv3` draws with `CommandBuffer.DrawMesh` (no frustum culling, so the plane's bounds do not matter), only `MainCamera`/`OpticCamera` draw it, the four-output G-buffer path (`DisableSnowMask(true)`) is the right one for
+  Iceberg's Autumn (`RainController`'s summer, spring, autumn states set the same flag; a Winter season is the same open point as on Bay5: the runner sets it once, 4 s after the load), and the placeholder replacement/restore is generic
+  (`_oldMaterials` is whatever `SeaPlaceholderRepairs` put there). The seven other `FX/SimpleWater4` surfaces of Iceberg (canyon `Water_Plane_01` at y -14.7 and -17.1, two fountains, the utility-room basin, a puddle) are not
+  `WaterObject`s and keep their imported materials; the two canyon planes sit above the sea, so they draw over it.
+- **Stage-2 check of the textures.** The shipped water textures are plaintext. The normals, the details and the foam are fragments of `sharedassets51.assets.resS` (207,867,856 B), which is a stage-2 key-source file of Equator; the ripple
+  texture is inline in `sharedassets36.assets` (no key reads it). None of the three stream ranges touches a sampled block (block 65,536 B, 16 blocks at `k * (size - 65,536) // 15`): the nearest block is 4.77 MB (normals), 0.92 MB (details) and 0.71 MB (foam) away.
+  `extract_water.py` now proves this on every export and refuses a texture on a sampled block or equal to a whole key-source file (the gate-sound trap). The Bay5 textures shipped since 0.2.x pass the same check, so nothing already published is affected.
+
+### What changed (2 + 1 commits: `44d35e9`, `6631c86`, `996b7ac`)
+
+- `44d35e9` **`tools/extract/extract_water.py`**: one table `MAPS` (`WaterMap`: key, stem, BuildSettings level, scene, container and surface path, census levels), `--map arena_bay5|arena_iceberg` (key or stem), `--output` defaults to `work/extract/<stem>-water`.
+  Every fail-closed check stays; new: BuildSettings must still put the scene at its level index, the other level files of the map are scanned (Bay5 nine, Iceberg nine: 255, 257, 258, 259, 260, 375, 376, 377, 378, 0 containers found, no MonoBehaviour with an unreadable script; level377 has 2,303 slots whose script is simply missing, which the scan accepts) and any
+  `WaterContainer` with a real target there stops the export, and the key-source guard above. `select_sea` is a function now: the empty `WaterForSSrv3` is accepted, a second real surface is refused (synthetic tests for both, plus no/two Seas, disabled/inactive
+  Sea, zero or two surfaces). **Bay5's output is unchanged**: the export of the new code is byte-identical to the one the unchanged code writes from the same Arena (5 files, SHA-256; `water.json` `585f0060...`). Against the old `work/extract/bay5-water` (made from
+  Arena 0.5.4) the four textures are hash-identical and `water.json` differs only in the Arena 0.6.1 path ids (`component_id` 100550 -> 100565, `game_object_id` 19568 -> 19571, `mesh_renderer_id` 63361 -> 63370, `mesh_filter_id` 81541 -> 81553) and
+  `raw_sha256`; the client reads none of them. **Iceberg export written to `D:/ArenaMapPort/work/extract/iceberg-water`** (water.json 5,661 B + 4 textures; `WATER VERIFIED: arena_iceberg: 2 source containers, 1 surface, 4 textures, 2271980 native bytes, 9 other levels scanned (0 empty container(s))`).
+- `6631c86` **client + descriptor**: `ArenaMapDescriptor.HasNativeWater` (Bay5 and Iceberg true; sidecar key `has_native_water` in `bay5.json` and `iceberg.json`, same commit; `validate_map_descriptors.native_water_errors` holds sidecar, descriptor and the new
+  `NATIVE_WATER_MAP_KEYS` equal). `NativeWaterModel.cs` (Unity-free, linked into the tests) holds the switch rows, the package directory, the identity rule of `water.json` and the texture file name rule; `NativeWaterRepairs.cs` has no map literal left (a test strips the comments and
+  greps for `Bay5`, `Iceberg`, both key names and `"arena_`). The runner takes its map from `ArenaMapRaid.MapForScriptsScene` of the Scripts scene that loaded. **Bay5**: section `Water (arena_bay5)`, key `NativeHarborWater`, text and default unchanged
+  (a test pins the text), package `water/arena_bay5`. **Iceberg**: section `Water (arena_iceberg)` (the section that already carries `PuddleFootsteps`), key `NativeSeaWater`, default true, live, package `water/arena_iceberg`. The `[Water] enabled:` Debug line now also names the map,
+  the plane's world y and its extent. `ArenaMapPortStageWater` stages both packages (ten explicit files) in Release **and DllOnly** builds with the same `Missing native water input ...; run tools/extract/extract_water.py --map <key>` Error (checked on a scratch project made
+  of the csproj's own target text: all present -> the ten files land in `dist/.../water/<key>/`, one missing texture or json -> Error in both modes). The text of `Sea / EnableWaterPlaceholder` names both switches (its key, default and meaning are unchanged).
+- `996b7ac` **release lists**: `validate_distribution.WATER_MAP_KEYS` = `NATIVE_WATER_MAP_KEYS` = (`arena_bay5`, `arena_iceberg`); `validate_water` also requires a package's `target.scene` and `hierarchy_path` to be the extractor's row of its own map (Bay5's package copied into
+  Iceberg's folder is refused, and the other way round); the packer has a `water` rule only for those maps and REQUIRES `water.json` plus the four textures of them (it was optional; a water folder of Equator, AirPit or Bowl is now unclassified). `docs/dist-manifest.md`: dist 281 files,
+  parts core 154, equator 24, bay5 30, airpit 22, bowl 26, **iceberg 25** (+5 water files, +2,277,641 B raw). `test_crowdless_maps.NotYetRulesTests` now pins water as present and overview/flares as still absent.
+
+### Tests and gates (worktree, VM, Release)
+
+| Gate | Result |
+|---|---|
+| `dotnet build ArenaMapPort.Client -c Release -p:ArenaMapPortDllOnly=true` | **compiles, 0 warnings, 0 errors** (`maschine-ArenaMapPort.Client.dll` built); the build then stops at the first staging target, `ArenaMapPortStageSpectator`: `work/extract/spectator-airpit/spectator.json.gz` exists only in the main checkout (environment-only, nothing of this change); the water target runs after it and was exercised in the scratch project |
+| `dotnet test ArenaMapPort.Server.Tests -c Release` | **2,785 passed, 0 failed** (2,756 + 29 new in `NativeWaterTests`); the worktree needed a copy of the 1.8 KB `work/extract/map-descriptions/map-descriptions.json` in its own ignored `work/` for the server project's dist staging |
+| `python -m unittest discover -s tools/tests -p "test_*.py"` | **2,766 tests, 1 failure, 135 skipped** (600 s, PowerShell, `ARENAMAPPORT_WORK_DIR=D:\ArenaMapPort\work`; the lead's 2026-10-30 run was 2,719 tests). The one failure is environment-only and untouched by this branch: `test_score_monitors.SidecarTests.test_the_sidecar_text_is_what_the_cli_writes` asserts that the tracked `tools/maps/*.monitors.json` have no CR, and this worktree's checkout (`core.autocrlf=true`) wrote them with CRLF (`git ls-files --eol`: `i/lf w/crlf`); it passes where the sidecars are LF. The skips are the real-data tests that need the main checkout's ignored `work/` (the worktree has none) plus the usual optional dependencies; the water tests that need the export ran through `ARENAMAPPORT_WORK_DIR` |
+| `python tools/validate/validate_map_descriptors.py` | OK (14 descriptors, 14 catalog entries, release `All` membership; now also `has_native_water` against `HasNativeWater` and `NATIVE_WATER_MAP_KEYS`) |
+| `validate_distribution.validate_water` on the real packages (Bay5 re-export + Iceberg, staged like the csproj does) | OK, 10 files; Bay5's package under Iceberg's key is refused |
+| `test_water_extraction` with the real Arena and the real export | 37 tests, OK (`ARENAMAPPORT_WORK_DIR=D:\ArenaMapPort\work` makes the export-dependent tests run in a worktree; without it they skip) |
+
+### For the lead: merge and build
+
+1. Merge the branch; conflicts to expect are textual only (`ArenaMapDescriptor.cs` at the Bay5/Iceberg `UsesServerTime` lines, `docs/dist-manifest.md` head, the end of this file).
+2. `D:/ArenaMapPort/work/extract/iceberg-water` already exists (written by this pass, ignored). Regenerate it only with a new directory name (the extractor refuses an existing one).
+3. A client Release build (DllOnly is enough) stages `water/arena_iceberg` next to `water/arena_bay5`; `validate_distribution.py` then demands both. **Deploy with the full `deploy-to-spt.ps1 -Confirm` (not `-DllOnly`)**: the five new files (2.28 MB) travel with `dist/`; the new DLL needs the EFT restart.
+4. Suggested edits of the lead's own files (not touched here): AGENTS.md "Iceberg promotion rules" (1) now says Iceberg is in none of the overview/flare/water lists: water is in (the sentence "Harbor water" in the Traps list can say "Bay5 and Iceberg"); the file counts there (256 -> 281 once Iceberg is staged; iceberg part 25);
+   HANDOFF/INDEX entries.
+
+### Host checks for the lead (GPU-2)
+
+1. After the deploy and an EFT restart: `uibridge_status` (VM build = host disk = loaded), `uibridge_config` shows the new key `Water (arena_iceberg) / NativeSeaWater` = true, and Bay5's `Water (arena_bay5) / NativeHarborWater` still true.
+2. **Iceberg raid, botless** (`gpu-run raid --map iceberg`). Debug lines expected, in this order, about 6 s after the Scripts scene loads (the `[Sea]` placeholder line first, at +2 s, then the native start at +4 s or when all seven scenes are loaded):
+   `[Sea] 'Plane' (scene='Arena_Sanatorium') — assigned placeholder water material`
+   `[Water] enabled: map=arena_iceberg target=Arena_Sanatorium/Sea/Plane textures=4 shader=Hidden/WaterForSSR renderer=<id> camera=DeferredShading worldY=-18.90 extent=5997x6902 m`
+   and NO `[Water] initialization failed; preserving placeholder: ...` (Error). With DeveloperMode on, F10 (SceneInspector) adds `[Water] probe enabled=True buffers=1 textures=4 target=Plane forceOff=True targets=1 drawReady=True camera=DeferredShading`.
+   On leaving the raid: `[Water] stopped; released buffers=1; restored original renderer`.
+3. **Looks** (the reason for the pass): from the south promenade `(7, 4.4, -126.3)` looking south and down, and from the bridge near `(-43, 3.2, -89)` into the canyon: a lit, moving water surface (waves, foam at the walls and rocks, dark-green deep colour and lighter shallows
+   from the source settings) at y -18.9 over the sand bed, instead of dry sand. Compare the same view with `Water (arena_iceberg)/NativeSeaWater` off (live): the old placeholder, i.e. the dry bed. Day and night (the water should darken with the world light); rain once.
+   The two canyon planes at y -14.7/-17.1 and the fountains must look as in the last raid (they are forward-rendered SimpleWater4 above the sea).
+4. If the sea shows but looks wrong: first the reflection (no probes are imported on either map, so it is the default environment), then the depth fade against the canyon floor (`_depthFade`/`_borderFade` are the source values, 2.0), then the snow-mask state (`DisableSnowMask`, only if the season were Winter).
+5. **Bay5 once** (`gpu-run raid --map bay5`, botless): the harbor from `(146.5, -3.4, 20.6)` yaw 90 pitch 10 as in bay5-water.md: dark native water by night, `[Water] enabled: map=arena_bay5 target=Arena_Bay5_Main/Sea/Plane textures=4 ... worldY=-8.65 extent=5997x6902 m`, no initialization failure, live off -> the white placeholder
+   and on -> native again. Then Iceberg again in the same EFT process (cross-map: one runner at a time, `buffers=1`).
+6. Frame time on Iceberg with the sea (per frame the native renderer blits G-buffer 0 and 2 and draws the plane twice, a G-buffer pass and an alpha-restore pass, exactly as on Bay5): `uibridge_status` `max` frame time against the 61.2 ms of the last Iceberg raid.
