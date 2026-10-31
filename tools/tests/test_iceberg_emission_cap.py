@@ -107,7 +107,7 @@ class SidecarAndDescriptorTests(unittest.TestCase):
         entry = text[text.index("public static readonly ArenaMapDescriptor Iceberg"):text.index("public static readonly ArenaMapDescriptor Factory")]
         self.assertIn("EmissionCap: 4.0f);", entry)
         self.assertIn("public float EmissionCap { get; }", text)
-        self.assertIn("float EmissionCap = 0f)", text)
+        self.assertRegex(text, r"float EmissionCap = 0f[,)]")
 
     def test_the_validator_accepts_the_repository(self):
         output = StringIO()
