@@ -433,25 +433,27 @@ class DistributionSidecarTests(unittest.TestCase):
         finally:
             path.write_bytes(original)
 
-    def put_water(self):
-        """Bay5's harbor water package as extract_water.py leaves it: water.json plus the four raw mip chains it
-        lists, each sized by the extractor's own mip-chain arithmetic (8 x 8 px, four mips) and hashed as recorded."""
-        folder = self.plugin / "water" / "arena_bay5"
-        (folder / "textures").mkdir(parents=True, exist_ok=True)
-        textures = {}
-        for index, (field, fmt) in enumerate((("_rippleTexture", 5), ("_normals", 12), ("_normalsDetails", 12), ("_foam", 10))):
-            relative = "textures/" + field.lstrip("_") + ".bin"
-            blob = bytes([0x40 + index]) * extract_water.texture_byte_count(8, 8, 4, fmt)
-            (folder / relative).write_bytes(blob)
-            textures[field] = {"file": relative, "width": 8, "height": 8, "mip_count": 4, "format": fmt,
-                               "linear": fmt == 12, "filter_mode": 1, "aniso_level": 1, "mip_map_bias": 0.0,
-                               "wrap_u": 0, "wrap_v": 0, "wrap_w": 0,
-                               "byte_count": len(blob), "sha256": hashlib.sha256(blob).hexdigest()}
-        (folder / "water.json").write_text(json.dumps({
-            "schema_version": 1, "map_key": "arena_bay5", "target_shader": extract_water.TARGET_SHADER,
-            "source": {"file": "level84", "component_type": extract_water.SOURCE_TYPE, "owner_path": "Sea"},
-            "target": {"scene": "Arena_Bay5_Main", "hierarchy_path": "Sea/Plane"},
-            "settings": {}, "textures": textures}), encoding="utf-8")
+    def put_water(self, keys=None):
+        """The native water packages of the maps in WATER_MAP_KEYS (Bay5's harbor, Iceberg's sea) as extract_water.py leaves them: water.json
+        plus the four raw mip chains it lists, each sized by the extractor's own mip-chain arithmetic (8 x 8 px, four mips) and hashed as recorded."""
+        for key in (keys or extract_water.MAPS):
+            row = extract_water.MAPS[key]
+            folder = self.plugin / "water" / key
+            (folder / "textures").mkdir(parents=True, exist_ok=True)
+            textures = {}
+            for index, (field, fmt) in enumerate((("_rippleTexture", 5), ("_normals", 12), ("_normalsDetails", 12), ("_foam", 10))):
+                relative = "textures/" + field.lstrip("_") + ".bin"
+                blob = bytes([0x40 + index]) * extract_water.texture_byte_count(8, 8, 4, fmt)
+                (folder / relative).write_bytes(blob)
+                textures[field] = {"file": relative, "width": 8, "height": 8, "mip_count": 4, "format": fmt,
+                                   "linear": fmt == 12, "filter_mode": 1, "aniso_level": 1, "mip_map_bias": 0.0,
+                                   "wrap_u": 0, "wrap_v": 0, "wrap_w": 0,
+                                   "byte_count": len(blob), "sha256": hashlib.sha256(blob).hexdigest()}
+            (folder / "water.json").write_text(json.dumps({
+                "schema_version": 1, "map_key": key, "target_shader": extract_water.TARGET_SHADER,
+                "source": {"file": f"level{row.level_index}", "component_type": extract_water.SOURCE_TYPE, "owner_path": row.container_path},
+                "target": {"scene": row.scene, "hierarchy_path": row.target_path},
+                "settings": {}, "textures": textures}), encoding="utf-8")
 
     def validate(self, run_effect=None):
         def target_path(command, **kwargs):
@@ -991,16 +993,16 @@ class DistributionSidecarTests(unittest.TestCase):
         shutil.rmtree(self.plugin / "water/arena_bowl")
         self.validate()
 
-    def test_iceberg_is_crowdless_and_carries_five_loadscreens_but_no_overview_flares_or_water(self):
+    def test_iceberg_is_crowdless_and_carries_five_loadscreens_and_its_sea_but_no_overview_or_flares(self):
         # PLAN-ICEBERG item 12 (2026-10-30): the fifth released map has no spectator crowd (validate_map_descriptors.CROWDLESS_MAP_KEYS) and, until
-        # Phase C, no DynamicMaps overview, no MultiFlare package and no water package; each of them is an explicit absence, so a stray package is a
-        # failure and the missing ones are not.
+        # Phase C, no DynamicMaps overview and no MultiFlare package; each of them is an explicit absence, so a stray package is a failure and the
+        # missing ones are not. Its native sea water joined on 2026-10-31 (WATER_MAP_KEYS), so that package is required, not absent.
         self.assertEqual(5, len(extract_loadscreens.LOADSCREENS["arena_iceberg"]))
         self.assertEqual({f"arena_iceberg_{n}.jpg" for n in range(1, 6)},
                          {p.name for p in (self.plugin / "loadscreens").glob("arena_iceberg_*.jpg")})
         self.assertFalse((self.plugin / "spectators/arena_iceberg").exists())
         self.assertFalse((self.plugin / "flares/arena_iceberg").exists())
-        self.assertFalse((self.plugin / "water/arena_iceberg").exists())
+        self.assertTrue((self.plugin / "water/arena_iceberg/water.json").is_file())
         self.assertFalse((self.plugin / "dynamicmaps/ArenaMapPort_Iceberg").exists())
         self.validate()
         # a crowd package of the crowdless map is refused by the staged-spectator check
@@ -1015,11 +1017,6 @@ class DistributionSidecarTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "Unexpected or missing flare package files"):
             self.validate()
         shutil.rmtree(self.plugin / "flares/arena_iceberg")
-        (self.plugin / "water/arena_iceberg").mkdir()
-        (self.plugin / "water/arena_iceberg/water.json").write_text("{}", encoding="utf-8")
-        with self.assertRaisesRegex(ValueError, "Water file set mismatch"):
-            self.validate()
-        shutil.rmtree(self.plugin / "water/arena_iceberg")
         (self.plugin / "dynamicmaps/ArenaMapPort_Iceberg/Layers").mkdir(parents=True)
         (self.plugin / "dynamicmaps/ArenaMapPort_Iceberg/Layers/Ground.svg").write_text("<svg/>", encoding="utf-8")
         with self.assertRaisesRegex(ValueError, "Unexpected or missing overview"):
@@ -1493,8 +1490,8 @@ class DistributionSidecarTests(unittest.TestCase):
         self.validate()
 
     def test_distribution_requires_bay5_water_exactly_and_intact(self):
-        self.assertEqual(distribution.WATER_MAP_KEYS, ("arena_bay5",))
-        for key in ("arena_equator", "arena_airpit"):
+        self.assertEqual(distribution.WATER_MAP_KEYS, ("arena_bay5", "arena_iceberg"))
+        for key in ("arena_equator", "arena_airpit", "arena_bowl"):
             self.assertFalse((self.plugin / "water" / key).exists())
         bay5 = self.plugin / "water/arena_bay5"
         package_path = bay5 / "water.json"
@@ -1563,6 +1560,64 @@ class DistributionSidecarTests(unittest.TestCase):
                 self.validate()
         finally:
             package_path.write_bytes(package)
+        self.validate()
+
+    def test_distribution_requires_icebergs_sea_water_exactly_and_intact(self):
+        # 2026-10-31: Iceberg's sea is the second water package; the same exact-set and hash rules apply, and a package of the other map is refused
+        iceberg = self.plugin / "water/arena_iceberg"
+        package_path = iceberg / "water.json"
+        package = package_path.read_bytes()
+        foam = iceberg / "textures/foam.bin"
+        blob = foam.read_bytes()
+        self.validate()
+        for path, message in ((foam, r"Water file set mismatch: missing=\['arena_iceberg/textures/foam.bin'\] unexpected=\[\]"),
+                              (package_path, "Missing water package: arena_iceberg/water.json")):
+            with self.subTest(missing=path.name):
+                original = path.read_bytes()
+                path.unlink()
+                try:
+                    with self.assertRaisesRegex(ValueError, message):
+                        self.validate()
+                finally:
+                    path.write_bytes(original)
+        stray = iceberg / "textures/stray.bin"
+        stray.write_bytes(b"stray")
+        try:
+            with self.assertRaisesRegex(ValueError, r"Water file set mismatch: missing=\[\] unexpected=\['arena_iceberg/textures/stray.bin'\]"):
+                self.validate()
+        finally:
+            stray.unlink()
+        foam.write_bytes(bytes([blob[0] ^ 1]) + blob[1:])
+        with self.assertRaisesRegex(ValueError, "Water texture length/hash mismatch: arena_iceberg/textures/foam.bin"):
+            self.validate()
+        foam.write_bytes(blob)
+        bay5_package = (self.plugin / "water/arena_bay5/water.json").read_bytes()
+        for change, message in (
+                (lambda p: p.update(map_key="arena_bay5"), "Water package map or schema mismatch: arena_iceberg"),
+                # Bay5's own package in Iceberg's folder with only the key edited: its scene and surface give it away
+                (lambda p: p["target"].update(scene="Arena_Bay5_Main"), "Water package target mismatch: arena_iceberg: Arena_Bay5_Main/Sea/Plane"),
+                (lambda p: p["target"].update(hierarchy_path="Sea/Plane (1)"), "Water package target mismatch: arena_iceberg: Arena_Sanatorium/Sea/Plane \\(1\\)"),
+                (lambda p: p.pop("target"), "Water package target mismatch: arena_iceberg: None/None"),
+                (lambda p: p["textures"].pop("_foam"), r"Water texture set mismatch: arena_iceberg: missing=\['_foam'\] unexpected=\[\]")):
+            with self.subTest(message=message):
+                mutated = json.loads(package)
+                change(mutated)
+                package_path.write_text(json.dumps(mutated), encoding="utf-8")
+                try:
+                    with self.assertRaisesRegex(ValueError, message):
+                        self.validate()
+                finally:
+                    package_path.write_bytes(package)
+        # and the other way round: Iceberg's package under Bay5's key
+        bay5_path = self.plugin / "water/arena_bay5/water.json"
+        mutated = json.loads(package)
+        mutated["map_key"] = "arena_bay5"
+        bay5_path.write_text(json.dumps(mutated), encoding="utf-8")
+        try:
+            with self.assertRaisesRegex(ValueError, "Water package target mismatch: arena_bay5: Arena_Sanatorium/Sea/Plane"):
+                self.validate()
+        finally:
+            bay5_path.write_bytes(bay5_package)
         self.validate()
 
     def test_art_tables_must_list_exactly_the_released_maps(self):

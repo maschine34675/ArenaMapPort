@@ -1,15 +1,18 @@
-# Bay5 harbor water sidecar
+# Native sea water sidecars (Bay5's harbor, Iceberg's sea)
 
-Regenerate into a **new, ignored output directory**:
+Regenerate into a **new, ignored output directory** (one run per map; `--map` takes the key or the stem, default `arena_bay5`;
+`--output` defaults to `work/extract/<stem>-water`):
 
 ```powershell
 python tools/extract/extract_water.py --output work/extract/bay5-water
-python -m unittest tools.tests.test_water_extraction -v
+python tools/extract/extract_water.py --map arena_iceberg --output work/extract/iceberg-water
+python -m unittest tools.tests.test_water_extraction tools.tests.test_native_water -v
 ```
 
 The extractor refuses an existing output directory. For a comparison export, use
 another name and compare the five output files. Do not commit these files: they
-contain data from the user's own Arena installation. The source is read-only.
+contain data from the user's own Arena install. The source is read-only.
+(The sections below were written for Bay5; Iceberg's facts are in the last section.)
 
 `water.json` contains the complete authored `WaterSettings`, source provenance,
 one target addressed by scene and hierarchy path, and four texture descriptors.
@@ -73,3 +76,19 @@ unsubscribes events and destroys its material. `CommandBufferManager.DestroyBuff
 removes buffers from cameras but does not dispose them. Owned buffers therefore
 need explicit disposal, and the owned renderer should unregister from
 `SnowRenderer` on teardown. Avoid creating competing native water renderers.
+
+## Iceberg's sea (2026-10-31)
+
+`Arena_Sanatorium` (`level256`, BuildSettings index 256) holds the same two containers as Bay5's `level84`: `Sea` (component 144056, one target,
+the mesh `Sea/Plane`, layer 4 Water, no materials) and the unused `WaterForSSrv3` (component 144055, its single target is a null/null pair). The export
+accepts the empty second container and still refuses any other container with a real target, in the same level and in the nine other level files of the map
+(255, 257, 258, 259, 260, 375, 376, 377, 378: none holds one). The `Sea` settings and the four textures are byte-for-byte the harbor's (Arena's shared sea
+prefab); only the identity differs (`map_key`, scene `Arena_Sanatorium`, the Arena path ids and the raw container hash). The plane has the same
+scale as Bay5's (599.68 x 690.19 on Unity's 10 x 10 Plane, about 6.0 x 6.9 km, x -2272..3725, z -4596..2306) and sits at y -18.9 (Bay5: -8.65), below the
+play area (y > -3) and above the sand bed of the canyon (y -22..-26).
+
+The extractor's table `MAPS` (`WaterMap`: key, stem, level index, scene, container and surface path, census levels) is the only per-map data; BuildSettings
+must still put the scene at its index. The three stream textures (normals, details, foam) are fragments of `sharedassets51.assets.resS`, which is also a
+stage-2 key-source file of Equator, and the ripple texture sits inline in `sharedassets36.assets`. The export therefore checks every texture against
+`tools/bundle/key-sources.json` (block 65,536 B, 16 blocks at `k * (size - block) // 15`): a range on a sampled block or a byte copy of a key-source file
+stops it. Margins in Arena 0.6.1: 4.77 MB (normals), 0.92 MB (details) and 0.71 MB (foam) to the nearest sampled block.

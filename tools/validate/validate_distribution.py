@@ -16,7 +16,7 @@ import re
 import subprocess
 import sys
 
-from validate_map_descriptors import map_descriptor_paths, CROWDLESS_MAP_KEYS, RELEASE_MAP_KEYS, gate_row_resolves
+from validate_map_descriptors import map_descriptor_paths, CROWDLESS_MAP_KEYS, NATIVE_WATER_MAP_KEYS, RELEASE_MAP_KEYS, gate_row_resolves
 import validate_bundle_blocks
 
 REPO = Path(__file__).resolve().parents[2]
@@ -35,15 +35,16 @@ KEY_FILE_MAX_BYTES = 64 * 1024
 # validate_map_descriptors.RELEASE_MAP_KEYS (five maps since Iceberg, PLAN-ICEBERG item 12, 2026-10-30). The first four have an
 # overview pack (Bowl's joined with PLAN-BOWL item 17, 0.3.0). AirPit has no active flare light (item 22), so it has no
 # flare package; Bowl ships one (4 of its 28 lights are active, item 17).
-# Iceberg is deliberately in none of the three lists below (PLAN-ICEBERG Phase C, "not yet" rules, not fake data): no DynamicMaps overview
-# (a ground-floor overview is a Phase C item), no MultiFlare package (79 FlareLights, four with a negative total scale that need a reviewed
-# rule) and no water package (the WaterForSSRv3 pool and the canyon SimpleWater4 planes). It has no spectator crowd either: that is
+# Iceberg is deliberately in neither of the next two lists (PLAN-ICEBERG Phase C, "not yet" rules, not fake data): no DynamicMaps overview
+# (a ground-floor overview is a Phase C item) and no MultiFlare package (79 FlareLights, four with a negative total scale that need a reviewed
+# rule). Its native sea water joined on 2026-10-31 (WATER_MAP_KEYS below). It has no spectator crowd either: that is
 # validate_map_descriptors.CROWDLESS_MAP_KEYS, checked against the crowd maps (extract_spectator.MAP_SCENES) in validate().
 OVERVIEW_MAP_NAMES = ('Equator', 'Bay5', 'AirPit', 'Bowl')
 FLARE_MAP_KEYS = ('arena_equator', 'arena_bay5', 'arena_bowl')
-# Only Bay5 has a native water surface (the harbor's Sea/Plane mesh, NativeWaterRepairs.cs); Equator, AirPit, Bowl and Iceberg
-# carry no water package, so a water directory for any other key is parked or stray output.
-WATER_MAP_KEYS = ('arena_bay5',)
+# The maps with a native sea-water surface (the Sea/Plane mesh of Bay5's harbor and of Iceberg's sea, NativeWaterRepairs.cs): the one list
+# validate_map_descriptors.NATIVE_WATER_MAP_KEYS, which that validator holds equal to every sidecar's has_native_water and every descriptor's
+# HasNativeWater. Equator, AirPit and Bowl carry no water package, so a water directory for any other key is parked or stray output.
+WATER_MAP_KEYS = NATIVE_WATER_MAP_KEYS
 
 
 # Bundle contents are not otherwise inspected here (the build's roundtrip validators cover them), so the one stale
@@ -410,11 +411,12 @@ def validate_monitors(plugin):
 
 
 def validate_water(plugin):
-    """Original harbor water settings and raw texture mip chains, staged by the client csproj (Release and DllOnly)
-    from the ignored work/extract/bay5-water input of tools/extract/extract_water.py (docs/progress/bay5-water.md).
+    """Original sea water settings and raw texture mip chains of the maps in WATER_MAP_KEYS (Bay5's harbor, Iceberg's sea), staged by the
+    client csproj (Release and DllOnly) from the ignored work/extract/<stem>-water inputs of tools/extract/extract_water.py
+    (docs/progress/bay5-water.md, iceberg-release.md "native sea water").
     NativeWaterRepairs.cs reads <plugin>/water/<key>/water.json at raid start: schema 1, the map's own key, and the
     four WaterSettings textures as textures/<name>.bin with the recorded byte count and SHA-256; anything else makes
-    it refuse the package and leaves the harbor on the unlit placeholder. So the directory must hold exactly those
+    it refuse the package and leaves the sea on the unlit placeholder. So the directory must hold exactly those
     files for WATER_MAP_KEYS, with each mip chain intact and as long as its recorded dimensions, format and mip count
     require (the extractor's own arithmetic). A stray or parked map's water directory is rejected by the exact set."""
     import extract_water
@@ -430,6 +432,12 @@ def validate_water(plugin):
             raise ValueError(f'Water package map or schema mismatch: {key}')
         if package['target_shader'] != extract_water.TARGET_SHADER:
             raise ValueError(f'Water package shader mismatch: {key}')
+        # The package of one map copied into the folder of another passes the key check above only if its map_key was edited as well; the surface
+        # it drives (the scene and the hierarchy path NativeWaterRepairs looks up) must be the extractor's reviewed row for THIS map.
+        row = extract_water.MAPS.get(key)
+        target = package.get('target', {})
+        if row is None or target.get('scene') != row.scene or target.get('hierarchy_path') != row.target_path:
+            raise ValueError(f'Water package target mismatch: {key}: {target.get("scene")}/{target.get("hierarchy_path")}')
         textures = package['textures']
         if set(textures) != set(extract_water.TEXTURE_FIELDS):
             raise ValueError(f'Water texture set mismatch: {key}: '

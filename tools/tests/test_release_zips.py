@@ -75,7 +75,7 @@ def fake_dist_files(maps=MAPS):
     """Tiny stand-ins named like the real dist: random bytes where the real file is incompressible (bundles,
     DLLs), repeated text elsewhere. A bundle is "AMPB" + random bytes: since stage 2 of the Arena gate every
     distributed bundle is an encrypted AMPB container and every map carries keys/<key>.json (the packer reads
-    four bytes, it never decrypts). AirPit has no flares / water / overview map, Bay5 alone has water."""
+    four bytes, it never decrypts). AirPit has no flares / water / overview map; the maps with a native sea (Bay5, Iceberg) carry a water package."""
     rng = random.Random(20261012)
     text = lambda label: (label.encode() + b" ") * 200
     files = {
@@ -115,9 +115,11 @@ def fake_dist_files(maps=MAPS):
         folder = f"{PLUGIN}/dynamicmaps/ArenaMapPort_{display}"
         files[f"{folder}/ArenaMapPort_{display}.jsonc"] = text(key + "overview")
         files[f"{folder}/Layers/Ground.svg"] = text(key + "ground")
-        if key == "arena_bay5":
+        if key in release.NATIVE_WATER_MAP_KEYS:      # Bay5's harbor and Iceberg's sea: water.json and the four raw mip chains
             files[f"{PLUGIN}/water/{key}/water.json"] = text("water")
             files[f"{PLUGIN}/water/{key}/textures/foam.bin"] = rng.randbytes(800)
+            for name in ("normals", "normalsDetails", "rippleTexture"):
+                files[f"{PLUGIN}/water/{key}/textures/{name}.bin"] = random.Random(key + name).randbytes(700)   # its own generators: the bytes of the maps below keep their values
     return files
 
 
@@ -317,12 +319,44 @@ class PartitionTests(FakeRepoCase):
                 finally:
                     (self.dist / name).write_bytes(data)
 
-    def test_flares_water_and_overview_map_stay_optional(self):
-        for folder in ("flares", "water", "dynamicmaps"):
+    def test_flares_and_overview_map_stay_optional(self):
+        for folder in ("flares", "dynamicmaps"):
             shutil.rmtree(self.dist / PLUGIN / folder)
         parts = {p.id: len(p.files) for p in self.partition()}
         self.assertEqual(sorted(parts), ["airpit", "bay5", "core", "equator"])
         self.assertTrue(all(count > 0 for count in parts.values()))
+
+    def test_a_map_with_a_native_sea_needs_its_water_package_and_no_other_map_has_one(self):
+        # 2026-10-31: water is required for the maps in NATIVE_WATER_MAP_KEYS (the sea is the unlit placeholder without it) and does not exist
+        # for the others, so a water folder of Equator or AirPit is as wrong as a Bay5 without one.
+        required = release.required_files(self.spec)
+        self.assertEqual({name for name in required["bay5"] if "/water/" in name},
+                         {f"{PLUGIN}/water/arena_bay5/water.json",
+                          *(f"{PLUGIN}/water/arena_bay5/textures/{n}.bin" for n in ("foam", "normals", "normalsDetails", "rippleTexture"))})
+        for stem in ("equator", "airpit"):
+            self.assertFalse([name for name in required[stem] if "/water/" in name])
+        for name in sorted(n for n in required["bay5"] if "/water/" in n):
+            with self.subTest(missing=name):
+                data = (self.dist / name).read_bytes()
+                (self.dist / name).unlink()
+                try:
+                    with self.assertRaises(release.PackagingError) as caught:
+                        self.partition()
+                    self.assertIn("incomplete dist", str(caught.exception))
+                    self.assertIn(name, str(caught.exception))
+                finally:
+                    (self.dist / name).write_bytes(data)
+        for key in ("arena_equator", "arena_airpit"):
+            stray = self.dist / PLUGIN / "water" / key / "water.json"
+            stray.parent.mkdir(parents=True)
+            stray.write_bytes(b"{}")
+            try:
+                with self.assertRaises(release.ClassificationError):
+                    self.partition()
+            finally:
+                stray.unlink()
+                stray.parent.rmdir()
+        self.partition()
 
     def test_the_pinned_leaf_names_accept_what_the_build_stages(self):
         rules = release.build_rules(self.spec)
