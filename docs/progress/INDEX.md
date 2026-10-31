@@ -8,6 +8,8 @@ dated state in one screen; read it before this index if you only have a minute.
 
 ## Current — read these for the area you touch
 
+- [iceberg-dynamicmaps.md](iceberg-dynamicmaps.md) — Iceberg overview from the connected native routes, owned package integration, scoped deployment and GPU-2 marker/heading acceptance on 2026-10-31.
+
 - [release-preparation-20261029.md](release-preparation-20261029.md) — current 0.4.0 release notes,
   five-part GitHub package plan, final rebuild/authentication requirements and explicit audio limits.
   Superseded in part by the 2026-10-29 evening fixes (`8941caa`, `52c8a28`): the release audit (no blocker), the crowd worker,

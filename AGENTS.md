@@ -13,9 +13,9 @@ Pixeldrain; original animated crowds with calls and a murmur bed, gate sounds, s
 [docs/releases/v0.4.0.md](docs/releases/v0.4.0.md)).
 **Iceberg** (Arena's `Arena_Sanatorium`, key `arena_iceberg`, the fifth map; branch `feature/iceberg`, [docs/PLAN-ICEBERG.md](docs/PLAN-ICEBERG.md), log
 [docs/progress/iceberg-release.md](docs/progress/iceberg-release.md)) joined `ArenaMapRegistry.All` and every release list in the lock-step promotion of
-2026-10-30, but is **not released**: its Unity bundles do not exist yet (the first build, U1, builds from `work/extract/iceberg-native-v2` with
-`-FullMap`), its U1 build and native sea water now have host evidence (HANDOFF.md); it has no spectator crowd or flares, and its DynamicMaps overview was added on 2026-10-31, and the release number and form are the
-user's decision; nothing of it is tagged, uploaded or pushed.
+2026-10-30, but is **not released**. Its U1 bundles build from `work/extract/iceberg-native-v2` with `-FullMap` into `work/build/iceberg`.
+The U1 build and native sea water have host evidence (HANDOFF.md). Its DynamicMaps overview was added on 2026-10-31; it still has no spectator
+crowd or flares. The release number and form are the user's decision; nothing of it is tagged, uploaded or pushed.
 Release 0.2.3 (branch `release/0.2.3`, published 2026-10-19) is 0.2.2 plus the Arena installation check; 0.2.2 was withdrawn
 the same day (GitHub release, tag and Pixeldrain files deleted, nobody had downloaded it), and so were 0.2.1 and 0.1.0
 (releases with their assets, tags, Pixeldrain files): 0.3.0 and 0.2.3 are downloadable (0.2.3 is to be deleted later, user decision 2026-10-24),
@@ -857,7 +857,7 @@ the log; the user uses it to point at things.
   bloom is the donor pair 2.10/0.35 again (`BloomDefaultsRevision` 2 moves exactly a saved 4.0/0.2 once).
 - Iceberg promotion rules (2026-10-30, [iceberg-release.md](docs/progress/iceberg-release.md) "promotion into the released set"; unit-tested, no host run yet): (1) a released map without a
   spectator crowd is listed in `validate_map_descriptors.CROWDLESS_MAP_KEYS` (Iceberg), the one list the packer, `validate_distribution.py`, staging and the C# crowd switch agree on
-  (`test_crowdless_maps.py`); overview and flare packages are explicit "has it" lists that Iceberg is deliberately in neither of (Phase C, "not yet"); the water list has Iceberg since
+  (`test_crowdless_maps.py`); overview and flare packages are explicit "has it" lists. Iceberg has its overview since 2026-10-31 but still no flare package; the water list has Iceberg since
   2026-10-31 (native sea). (2) The audio exporter accepts a
   player with `minDistance` 0 only where the map's contract pins it (`states.zero_min_distance_players`: Iceberg 21, every other map none), and the ambient driver's strict check accepts
   season and loop-kind players only in the counts the profile demands (`SeasonKindPlayers`, `LoopKindPlayers`, 0 for the other maps). (3) `extract_spatial_audio.REVIEWED_MIRRORED_VOLUMES`

@@ -166,6 +166,7 @@ Phase A (package) -> Phase B (a playable raid) -> Phase C (native features and p
 17. MultiFlare (79 `FlareLight`; four with a negative total scale need a reviewed rule), water (the `WaterForSSrv3` pool and the
     canyon `SimpleWater4` planes), DynamicMaps ground-floor overview, shot-acoustics room classes, reflection-probe look,
     vegetation decisions (`TreeWind`, impostors), the minefields (17 `ArenaMinefield`; ArenaMode data).
+    **Overview completed 2026-10-31:** connected-route ground plan, owned DynamicMaps package, staged/deployed and GPU-2 marker tests passed; [record](progress/iceberg-dynamicmaps.md).
 
 ### Phase D - Release
 

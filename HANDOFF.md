@@ -1,5 +1,25 @@
 # HANDOFF — dated working state
 
+## Iceberg DynamicMaps overview complete — 2026-10-31 (feature/iceberg)
+
+The requested overview is generated, staged, deployed to `D:\SPT41` and verified on
+GPU-2. Source `bf48250`, client SHA-256 `d19f41439b33e4d262a197dc82108b497d9099c87b69f860d9974a216148293b`;
+local, host disk and loaded MVID agree. The owned loader now includes Iceberg. The two
+map files live in `maschine-ArenaMapPort/dynamicmaps/ArenaMapPort_Iceberg`; no
+DynamicMaps files/configuration or other overview changed (102 preserved files).
+The light route footprint selects the real 3D-connected combat surface before
+projection, excluding detached roofs; all 15 spawn/exit anchors fit. Bounds are
+X -62..121 / Z -131..-33, one layer with explicit N, 13,413 SVG points.
+
+Native: fresh client, noon/clear PMC raids without bots; east pocket, hotel and west
+pocket screenshots show correct positions and headings. Zero DynamicMaps/ArenaMapPort
+warnings/errors. MainMenu restored, godmode and clock/weather overrides cleared.
+All five acceptance gates passed, including actual distribution validation (283 files).
+Full record: [iceberg-dynamicmaps.md](docs/progress/iceberg-dynamicmaps.md).
+Accepted source: `work/dynamicmaps/release/ArenaMapPort_Iceberg`; reproducible evidence
+and scenarios: `work/dynamicmaps/iceberg`. No push, merge, tag, upload or release cut.
+
+
 ## Iceberg: emission cap, bloom back to normal, native sea - 2026-10-31 night (branch `feature/iceberg`, host-verified on GPU-2, nothing pushed)
 
 **What changed.** The user's two over-exposed lights were the lobby crystal lamps (`Crystal_Lamp_1`, material `Emission_Yellow`, `Standard` with
