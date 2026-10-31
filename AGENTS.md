@@ -566,7 +566,8 @@ the log; the user uses it to point at things.
   `ArenaLightingRepairs` also writes the private `float_1` (reflection) or the brightness uplift is erased; the
   `CullingManager` singleton and the camera's `VolumetricLightRenderer` are client fallbacks, not package data.
 - Bloom/glare: `UltimateBloom` controls broad glow. Equator/Bay5 defaults now match the donor threshold
-  2.10 and intensity 0.35; `BloomDefaultsRevision` migrates exact legacy defaults once (2026-09-29).
+  2.10 and intensity 0.35; `BloomDefaultsRevision` migrates exact legacy defaults once (2026-09-29). Iceberg uses the same
+  pair since 2026-10-31 (its over-bright lamps are the emission cap's job, see the Emission cap trap below).
   The early horizontal streak is **BloomAndFlares before Prism**:
   `AnamorphicFlareTuning` restores it on Equator and moves its native render before HDR-to-LDR, with captured
   state restored on disable/unload. Merely enabling its HDR mode after Prism cannot recover highlights.
@@ -842,6 +843,15 @@ the log; the user uses it to point at things.
   `volume x factor / 3.2` on the source (a stand's NoiseProbe `vol=` reads 0.3125 at the defaults), so never widen the range or the factor without moving `ClipGain`. The stand count comes from
   `MaxStandRadius` (25 m, cap 6). The NoiseProbe census sees the bed only through `ownedBed=n/m` (its pooled-source walk cannot see owned sources), and the bed does not note `NoiseEv.Reset`
   (`SpectatorAudio` counts the one audio reset). `SpectatorCrowd` (the contract, `ScoreMonitors` style) is reset when the crowd is removed, with or without a bed.
+- Emission cap (2026-10-31, [iceberg-release.md](docs/progress/iceberg-release.md) "Per-map emission cap"; the Unity-free model is unit-tested, the glue is not host-run yet): a map whose descriptor has `EmissionCap` > 0
+  (mirrored by `emission_cap` in `tools/maps/<stem>.json`; Iceberg 4.0, the four released maps none = off) has its emissive materials capped ONCE per raid, 4 s after the last owned scene loaded (`EmissionCapRepairs`, never in
+  Update), instead of lowering the whole map's bloom. The rules come from EFT's own shaders (UnityPy on `StreamingAssets/Windows/shaders`): Standard/Standard (Specular setup) read `_EmissionColor` only with keyword `_EMISSION`;
+  the `p0/.../Emissive` shaders declare `_EmissionPower` (Range 0..10) x `_EmissionVisibility` (+ `_EmissiveColor` on the SMap one only) and NO `_EmissionColor` (the leftover colour of a material is never read);
+  `p0/Cutout/Bumped Diffuse Emissive` has only an HDR `_EmissionColor`. The cap scales `_EmissionColor` RGB or `_EmissionPower` only (the visibility is overridden per renderer by `MaterialEmission`/`EmissionFlicker`
+  through a `MaterialPropertyBlock`); materials are changed in place with every original kept in `EmissionLedger` (a ceiling is idempotent, a live change re-targets from the original, cap 0 and the scene unload write the
+  originals back; a property another controller moved is left alone), and the specular-cap clones are `Suspend`ed around the pass. The developer key `Lighting (<key>)/EmissionCap` is per released map, default = the descriptor
+  value, 0 = off, live. A new emissive family or shader needs a row in `EmissionCapModel.Classify` AND `test_iceberg_emission_cap.py` (its rule lists are pinned against the C# and against the EFT bundle). Iceberg's
+  bloom is the donor pair 2.10/0.35 again (`BloomDefaultsRevision` 2 moves exactly a saved 4.0/0.2 once).
 - Iceberg promotion rules (2026-10-30, [iceberg-release.md](docs/progress/iceberg-release.md) "promotion into the released set"; unit-tested, no host run yet): (1) a released map without a
   spectator crowd is listed in `validate_map_descriptors.CROWDLESS_MAP_KEYS` (Iceberg), the one list the packer, `validate_distribution.py`, staging and the C# crowd switch agree on
   (`test_crowdless_maps.py`); overview, flare and water packages are explicit "has it" lists that Iceberg is deliberately in none of (Phase C, "not yet"). (2) The audio exporter accepts a

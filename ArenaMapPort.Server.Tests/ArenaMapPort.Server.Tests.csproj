@@ -74,6 +74,11 @@
     <Compile Include="..\ArenaMapPort.Client\SainLocationShim.cs" Link="Client\SainLocationShim.cs" />
     <Compile Include="..\ArenaMapPort.Client\AmbientBusLease.cs" Link="Client\AmbientBusLease.cs" />
     <Compile Include="..\ArenaMapPort.Client\ShaderStandinPolicy.cs" Link="Client\ShaderStandinPolicy.cs" />
+    <!-- The per-map emission cap (docs/progress/iceberg-release.md "Per-map emission cap"): the shader-family rules, the scaling math and the ledger of originals with its
+         idempotent apply and exact restore, over an interface the Unity glue implements. And the one-time bloom migration of Iceberg. No Unity type inside either;
+         EmissionCapRepairs.cs (renderer scan, Material reads and writes) and BloomTuning.cs stay out, EmissionCapSourcePinTests reads them as text. -->
+    <Compile Include="..\ArenaMapPort.Client\EmissionCapModel.cs" Link="Client\EmissionCapModel.cs" />
+    <Compile Include="..\ArenaMapPort.Client\BloomDefaultsModel.cs" Link="Client\BloomDefaultsModel.cs" />
     <Compile Include="..\ArenaMapPort.Client\MapLightingDefaults.cs" Link="Client\MapLightingDefaults.cs" />
     <Compile Include="..\ArenaMapPort.Client\ArenaInstallationGate.cs" Link="Client\ArenaInstallationGate.cs" />
     <Compile Include="..\ArenaMapPort.Client\BundleKeyResolver.cs" Link="Client\BundleKeyResolver.cs" />

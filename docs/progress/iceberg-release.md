@@ -937,3 +937,116 @@ above and models the legacy rule); do not deploy before the first stage is done.
   `gpu-run deploy-wait --server --game` (2 files identical after 2 s, game restarted, 16/16 identical): `[Bloom] arena_iceberg: config re-seeded to bloom
   defaults revision 1 (2 value(s) moved; threshold=4.00, intensity=0.20)`. Raid at 19:30 (20:35, botless, 0 warnings): the chandeliers render as candles
   with a soft glow, no disc. .NET 2,756 passed.
+
+## 2026-10-31 - Per-map emission cap; Iceberg's bloom back to the normal 2.10/0.35
+
+Workstream of the lead's list (worktree branch off `feature/iceberg`, not host-run yet). Evidence from the lead (GPU-2 F10 inspections by the user, 2026-10-31): the two lobby crystal lamps
+(`SBG_Arena_Sanatorium_Light/OO/INDOORS/LOBBY/Crystal_Lamp_1` and `Crystal_Lamp_1 (1)`, `Crystal_Lamp_1_LOD0` submesh 2) use `Emission_Yellow` (`367e4a61931e682b`, `Standard`, keyword `_EMISSION`,
+`_EmissionColor` (67.794, 17.392, 0.0)) and stay fully over-exposed unless `BloomIntensity` is about 0.001; the respawn-hall candle chandeliers (`Chalet_chandelier_01` x2, `Sanatorium_Emissive_Orange`
+`d52be16e9d5d8091`, p0 emissive, `_EmissionPower` 10) bloom into discs at 2.10/0.35. The 4.0/0.2 bloom of 2026-10-30 hid the second symptom for the whole map and did nothing for the first.
+
+### What EFT's shaders read (the rule table)
+
+The emission rules are not guessed from the material names: EFT's own `StreamingAssets/Windows/shaders` bundle (378 MB, read-only, UnityPy, 4.6 s) declares, per shader
+(`EftShaderFactsTests` in `tools/tests/test_iceberg_emission_cap.py` re-reads it; skipped without UnityPy or the install):
+
+| Shader | Declared emission properties | Cap rule |
+|---|---|---|
+| `Standard`, `Standard (Specular setup)` | `_EmissionColor`, `_EmissionMap` (no power, no visibility); the colour is read only with keyword `_EMISSION` | Color family: max RGB of `_EmissionColor` <= cap, one scale for the three channels, alpha kept |
+| `p0/Reflective/Bumped Emissive Specular SMap` | `_EmissionMap`, `_EmissiveColor` (Color), `_EmissionVisibility` (Range 0..1), `_EmissionPower` (Range 0..10, so Iceberg's 10 is the shader's own maximum); **no `_EmissionColor`** | Power family: `_EmissionPower` x `_EmissionVisibility` x max RGB of `_EmissiveColor` <= cap, scaled through `_EmissionPower` |
+| `p0/Reflective/Bumped Emissive Specular`, `p0/Reflective/Bumped Animated Emissive Specular SMap` | `_EmissionMap`, `_EmissionVisibility`, `_EmissionPower` (+ the two animation maps/colours of the Animated one); **no `_EmissiveColor`, no `_EmissionColor`** | Power family with colour peak 1 (the colour comes from the map) |
+| `p0/Cutout/Bumped Diffuse Emissive` | `_EmissionMap`, `_EmissionColor` (HDR flag 16), `_EmissionAlphaCutoff`; no power, no visibility | Color family |
+
+So the leftover `_EmissionColor` that most package materials carry (383 of Iceberg's 400 `p0/Reflective/Bumped Specular SMap` materials carry one, and those shaders are not emissive at all) is never read by the p0 emissive shaders, and a leftover
+`_EmissiveColor` on a shader without one is ignored (the glue asks the material `HasProperty` for every property and the model decides by the real shader name). The product form for the power
+family is the one EFT's own scripts imply (`MaterialEmission.TurnLights` and `EmissionFlicker` drive `_EmissionVisibility` between 0 and the material's value, `GarlandSwitcher` tweens
+`_EmissionPower` to 0 and back; a power of 0 is a lamp that is off, e.g. `Airpit_emissive_01_off`), but how the compiled fragment combines the factors with the map was NOT read. The scaling is
+therefore linear in one property, `_EmissionPower`, the one nothing animates per renderer: `_EmissionVisibility` is overridden through a `MaterialPropertyBlock` by those scripts (a material write
+would be defeated), and `_EmissiveColor` is the tint. Stand-in shaders (`Hidden/ArenaMapPort/...` that ShaderRebind has not rebound) match nothing. None of the three emission-driving EFT
+components (`MaterialEmission`, `EmissionFlicker`, `GarlandSwitcher`) is in Iceberg's scenes.
+
+### Census (package `iceberg-native-v2` and the four released maps, renderer-referenced materials, level as defined above)
+
+Iceberg: 37 emissive materials in use (23 Power, 14 Color; shaders: 22 `Bumped Emissive Specular SMap`, 12 `Standard`, 2 `Cutout/Bumped Diffuse Emissive`, 1 `Animated Emissive`), 18 above 1.0 and
+**six above 4.0**:
+
+| Material (id) | Family | Level | Scale at cap 4.0 | Written | Renderer uses |
+|---|---|---|---|---|---|
+| `Emission_Yellow` (`367e4a61931e682b`) | Color | 67.794 | x0.0590 | `_EmissionColor` (4.000, 1.026, 0.000) | 4 (the two crystal lamps) |
+| `Prison_Emission_red` (`cb70cc186da35b5a`) | Power | 10.000 | x0.4000 | `_EmissionPower` 4.000 | 37 |
+| `Prison_Emission_passive` (`1a52de9137dff10f`) | Power | 7.736 | x0.5171 | 5.171 | 37 |
+| `Sanatorium_Emissive_Orange` (`d52be16e9d5d8091`) | Power | 6.792 | x0.5889 | 5.889 | 165 (the two chandeliers and 157 floor spot lamps among them) |
+| `Prison_Emission_blue` (`3a2454d56d07054f`) | Power | 6.226 | x0.6424 | 6.424 | 37 |
+| `Plafond_lamp_02_source_E_red` (`6a24a59ea530fe5a`) | Power | 4.277 | x0.9353 | 5.340 (power 5.71) | 15 |
+
+The rest of Iceberg stays as authored (next: `Searchlight_03_source_E` 2.925, `Sanatorium_Emissive_white` 2.83, `shopping_mall_ceiling_light_emission` 2.333). Released maps' strongest emissive
+materials: Bay5 `02 - Default` (Standard) **4.128**, Equator and Bowl `Projector_portable_Albedo_emissive` (p0) **3.932**, Bowl/Equator `Material #37` 3.883, Air Pit `Airpit_emissive_02` 3.62 and
+`Airport_Lamp_emissive_neon` (Standard) 3.277; only Bay5's 4.128 is above 4.0, and the lead's earlier figure (8.28 x 0.469 = 3.9 for `Material #37`) is this formula without a colour factor (that
+material's colour peak is 1). Scratch scripts: `hdr_emission_census.py`, `emissive_census.py` (lead), `cap_census.py` and `shader_props.py` of this pass.
+
+### Implementation
+
+- **Descriptor and sidecar.** `ArenaMapDescriptor.EmissionCap` (float, constructor default 0 = off) mirrored by `emission_cap` in `tools/maps/<stem>.json` (absent = 0). Iceberg: `4.0f` / `4.0`; the four released maps
+  carry neither (their sidecars are byte-identical to before). `validate_map_descriptors.py` checks the shape (finite, 0..100) and the equality (`emission_cap mismatch`); the Editor ignores the key (JsonUtility), so
+  no NavMesh or bundle rebuild follows.
+- **`EmissionCapModel.cs`** (Unity-free, linked into the tests): `Classify` (shader name + keyword + declared properties -> family), `ColorLevel`, `PowerLevel`, `DesiredScale` (cap / level, 1 when off, at or within 1e-5 of the cap,
+  non-finite or 0), `EmissionEntry` (the captured originals and the scale written), `EmissionLedger<TMaterial>` (`TryAdd` refuses a known material, `Apply(surface, cap)`, `Restore` = `Apply(0)`) over `IEmissionSurface`.
+  The cap is a ceiling, so it is idempotent by nature (re-capturing a capped value changes nothing), and the ledger always re-targets from the original: a live change of the cap, cap 0 and a second raid with the bundle
+  still cached cannot compound. A property that another controller moved after the cap wrote it is left alone (counted as foreign) and is not restored over; a destroyed material is dropped.
+- **`EmissionCapRepairs.cs`** (the glue, one repair per file): `Install()` binds `Lighting (<key>)/EmissionCap` for every map in `ArenaMapRegistry.All` on `Plugin.Instance.Settings`
+  (developer-only like every tuning key: not in `IsPlayerOption`; default = the descriptor value, so Iceberg 4.0 and the others 0; range 0..100; live). A map whose cap is 0 schedules and scans nothing. Every owned scene's
+  `sceneLoaded` (re)starts a 4 s `WaitForSecondsRealtime` coroutine (a later scene restarts it, so the pass runs 4 s after the LAST owned scene loaded: after ShaderRebind's 3 s sweep, behind the loading screen and
+  long before `GameStatus.Started`; never in Update). The pass: `ReflectiveSpecularRepairs.Suspend(map)` (the specular cap's renderer-local clones are built from these very materials and are rebuilt from the capped inputs
+  on dispose), then one scan of `GetComponentsInChildren<Renderer>(true)` over the map's loaded scenes with a shared `List<Material>` (`GetSharedMaterials`), each distinct material classified once, then `Apply`. Materials
+  are changed IN PLACE (no clone, no `.material`): the ledger is the undo. `sceneUnloaded` of the Scripts scene writes the originals back and drops the state. Live key change: `Apply` over the ledger without a rescan
+  (a first enable on a map that was off scans once). Logging: one Debug line per pass `[EmissionCap] map=... cap=... (reason): N emissive material(s), M capped (largest original X 'id' -> cap), W written, F left alone
+  (changed elsewhere), G gone; R renderer(s) scanned in T ms`, one line at release, the per-material list only with `DeveloperOptions.Enabled`; Warning only if the pass cannot be scheduled, Error on a failed pass (after a
+  restore attempt).
+- **Cap value 4.0.** It is the level of the released maps' strongest lamps (4.13 and 3.93, accepted in play under the same 2.10/0.35 bloom) and about twice the bloom threshold, so a capped lamp still reads as lit; it takes
+  the crystal lamps from 67.8 to 4.0 (an orange of (4.0, 1.03, 0)), the chandeliers from 6.8 to 4.0 and leaves every other Iceberg lamp alone. The number cannot be verified offline: the lead tunes it live with the key
+  (suggested steps: 4.0 -> 3.0 -> 2.5 for the chandeliers if discs remain; 0 is the A/B control that brings the blow-out back).
+- **Bloom.** `BloomTuning`: Iceberg's defaults are the donor pair 2.10/0.35 like Equator and Bay5 (the `IcebergThreshold/IcebergIntensity` constants are gone); `BloomDefaultsRevision` **2** for Iceberg
+  (`BloomDefaultsModel.IcebergPairMoves`, `MigrateIcebergDefaults`): a saved pair that is exactly 4.0/0.2 (what revision 1 wrote; the lead's host config) moves once to 2.10/0.35 at startup, any other pair stays (-1/-1
+  already means the camera's own 2.10/0.35; a single hand-tuned value protects the other). AirPit keeps its revision-1 pair migration (`MigratePairDefaults`) alone. Key names, AirPit's 1.2/0.25 and Equator's/Bay5's
+  defaults are unchanged; the key descriptions and comments no longer send Iceberg to 4.0 or blame the camera for the chandeliers. Expected log on the first start of the host with the reset config:
+  `[Bloom] arena_iceberg: config re-seeded to bloom defaults revision 2 (2 value(s) moved; threshold=2.10, intensity=0.35)` (Debug).
+
+### Tests
+
+New .NET: `EmissionCapModelTests` (classification table incl. stand-ins and leftovers, scale math, the crystal lamp and the chandelier, below-cap untouched, idempotence, live re-target from the original, cap 0 bit-exact
+restore, no recapture, a second raid, six raids without a restore, foreign write, destroyed material, unusable values, the six-of-sixteen table), `BloomDefaultsModelTests`, `EmissionCapDescriptorTests` (sidecar mirror, only
+Iceberg has a cap), `EmissionCapSourcePinTests` (one scan, nothing per frame, no material instantiation, scheduling, restore on unload, Suspend around read and write, Settings key with the descriptor default and not
+public, Debug-level logging, install order, BloomTuning wiring). New Python: `tools/tests/test_iceberg_emission_cap.py` (17 tests: sidecar/descriptor pins, validator accept/reject/drift, the rule lists equal the C# model,
+the Iceberg package has exactly the six over-cap materials with their levels, the released maps' maxima, EFT's shader facts). `validate_map_descriptors.py` gained `emission_cap_errors` and the `emission_cap` mirror check.
+
+### Limits and what is not covered
+
+- Not Unity-run: the glue (`EmissionCapRepairs.cs`) compiles and is pinned as text; everything it decides is in the tested model. First proof is the host raid below.
+- Materials cloned by `IndoorFloorSmoothnessRepairs` (off on Iceberg) copy the value at their creation and are not re-targeted by a later live change; irrelevant for the default cap.
+- The cap also dims every other renderer of a capped material (157 floor spot lamps share the chandeliers' material).
+- Particle and decal materials with other shader families are not touched; none of the six materials is one.
+
+### Host checks for the lead (after a full client Release build in the main checkout and a client-only deploy; close/restart EFT as usual)
+
+1. First start with the reset config: Debug line `[Bloom] arena_iceberg: config re-seeded to bloom defaults revision 2 (2 value(s) moved; threshold=2.10, intensity=0.35)`; `uibridge_config` `Lighting (arena_iceberg)` BloomThreshold 2.1 /
+   BloomIntensity 0.35, `BloomDefaultsRevision` 2, `EmissionCap` 4.0 (DeveloperMode on to see it).
+2. Botless Iceberg raid (Bear spawn, as on 2026-10-30): about 4 s after the last scene loaded, before the raid starts: `[EmissionCap] map=arena_iceberg cap=4.00 (owned scenes loaded): ~37 emissive material(s), 6 capped (largest
+   original 67.79 '367e4a61931e682b' -> 4.00), 6 written, 0 left alone (changed elsewhere), 0 gone; N renderer(s) scanned in T ms` (T should be a few ten ms; N about 22,700+ with the inactive LODs; with DeveloperMode the six
+   `'<id>' (Color|Power) level A -> 4.00 (xS)` lines of the table above). No `[EmissionCap]` Warning/Error.
+3. Look: the two chandeliers in the respawn hall (screen points (360,140) and (1310,140) from the Bear spawn at yaw 273, ~12 m) no longer a disc, still lit; the lobby crystal lamps (F10 them or teleport into the lobby) a bright
+   orange, not a white-hot blob. If the chandeliers still glare, step the key live (`uibridge_config_set` `Lighting (arena_iceberg)/EmissionCap` 3.0, 2.5; expected line `... (setting changed)` with `W written` = the entries whose
+   scale changed); `0` = A/B control: `cap off (setting changed): 6 material(s) restored to their originals` and the blow-out is back at 2.10/0.35. Persist the final value in the descriptor/sidecar (`EmissionCap`, `emission_cap`).
+4. Leave the raid and start a second one on Iceberg without restarting EFT (the bundle stays cached): `released 37 material(s) (raid ended), restored 6 to their originals`, then the same capped line again with 6 written (no
+   compounding; the first line of the second raid reads the same largest original 67.79).
+5. Control on a released map (Equator or Bay5, one raid, plus the hideout once): no `[EmissionCap]` line at all, bloom unchanged (`[Bloom]` lines as before), no new Warning/Error; frame max unchanged.
+
+### Gates (this worktree; the staging inputs and the map-description file exist only in the main checkout)
+
+| Gate | Result |
+|---|---|
+| `dotnet build ArenaMapPort.Client -c Release -p:ArenaMapPortDllOnly=true` | C# compile clean (0 errors, 0 warnings; `maschine-ArenaMapPort.Client.dll` produced); the build then stops in the staging step `tools/extract/stage_spectators.py stage` (csproj line 193) because the worktree has no `work/extract/spectator-airpit/spectator.json.gz` (ignored data, main checkout only) |
+| `dotnet build ArenaMapPort.Server -c Release` | compiles (the Shared descriptor change is in it); `DeployToDist` stops with "Missing original map descriptions" (`work/extract/map-descriptions` exists only in the main checkout), so the tests were run with `-p:BuildProjectReferences=false` against that DLL |
+| `dotnet test ArenaMapPort.Server.Tests -c Release -p:BuildProjectReferences=false` | **2,830 passed, 0 failed, 0 skipped** (2,756 before this pass + 74 new) |
+| `python -m unittest discover -s tools/tests -p "test_*.py"` (PowerShell, `ARENAMAPPORT_WORK_DIR=D:/ArenaMapPort/work`) | 2,736 tests, 135 skipped (the worktree has no `work/`), **2 failures, both environment-only**: `test_dll_versions.test_actual_candidate_and_stale_binary_control` (the worktree's `dist/` has no server DLL because `DeployToDist` stopped, see above) and `test_score_monitors.SidecarTests.test_the_sidecar_text_is_what_the_cli_writes` (the worktree checks `tools/maps/*.json` out with CRLF, `core.autocrlf=true`; the test wants the LF the generator writes; the file is untouched by this pass) |
+| `python tools/validate/validate_map_descriptors.py` | OK, 14 descriptors, 14 catalog entries, release `All` membership |
+| `python -m unittest tools/tests/test_iceberg_emission_cap.py` | 17 tests OK (with `ARENAMAPPORT_WORK_DIR`; the package, released-map and EFT-shader groups skip without their inputs) |
