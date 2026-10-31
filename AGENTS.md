@@ -349,8 +349,8 @@ same script's `rows` step writes, which is rerun only after an Arena update) and
 PNGs and `monitors.json` under ignored `work/extract/monitors`). A missing input stops the build with an Error that names the extractor.
 Both folders are plaintext, like the selection artwork. `dist/` now holds 256 files (113 after those two additions, 90 before; the
 gate sounds add 13 and the monitors 10, the spectator files of 2026-10-27/28 the rest, the crowd murmur bed of 2026-10-30 one); `make_release_zips.py --plan` reads the parts
-core 154, equator 24, bay5 30, airpit 22, bowl 26 (276 files with the 20 of Iceberg's part once its bundles are staged: core 154 plus iceberg 20; the
-dist of 2026-10-30 that was released as 0.4.0 holds the 256 files). See
+core 154, equator 24, bay5 30, airpit 22, bowl 26 (281 files with Iceberg's part of 25 since its U1 bundles and its native sea water of 2026-10-31
+are staged; the dist of 2026-10-30 that was released as 0.4.0 holds the 256 files). See
 [gate-sounds.md](docs/progress/gate-sounds.md), [score-monitors.md](docs/progress/score-monitors.md) and
 [dist-manifest.md](docs/dist-manifest.md).
 
@@ -594,8 +594,11 @@ the log; the user uses it to point at things.
   `surfaces=40 masks=2` (Air Pit) and `surfaces=13 masks=1` (Bowl) and one 55.5 ms frame for Bowl's one-time build; Equator's cache,
   rain-driven puddles and the F10 probe are not host-checked yet ([puddle-footsteps-all-maps.md](docs/progress/puddle-footsteps-all-maps.md)).
 - Harbor water: Bay5 now translates the source WaterContainer settings to native `WaterForSSRv3`, using
-  `work/extract/bay5-water` (regenerate with `tools/extract/extract_water.py`). The four original raw texture mip
-  chains and water.json stage with client builds, including DllOnly. They are BSG-derived and must stay ignored.
+  `work/extract/bay5-water` (regenerate with `tools/extract/extract_water.py`). Since 2026-10-31 Iceberg's sea (`Sea/Plane`, y -18.9, the same
+  settings and textures as Bay5's) uses the same path: `extract_water.py --map arena_iceberg` writes `work/extract/iceberg-water`, the descriptor's
+  `HasNativeWater` / `NATIVE_WATER_MAP_KEYS` is the one list, and Iceberg's live switch is `Water (arena_iceberg)/NativeSeaWater` (without it the
+  generic SimpleWater4 placeholder leaves the sand bed below the south promenade dry; host A/B 2026-10-31). The four original raw texture mip
+  chains and water.json stage with client builds, including DllOnly; a fresh clone runs `extract_water.py` for both maps before the build. They are BSG-derived and must stay ignored.
   Do not assign Hidden/WaterForSSR as an ordinary mesh material: its two passes need the native deferred renderer.
   Dispose captured command buffers explicitly after native OnDisable; native cleanup only detaches them.
   See `docs/progress/bay5-water.md` for source, controls and host evidence.
@@ -843,7 +846,7 @@ the log; the user uses it to point at things.
   `volume x factor / 3.2` on the source (a stand's NoiseProbe `vol=` reads 0.3125 at the defaults), so never widen the range or the factor without moving `ClipGain`. The stand count comes from
   `MaxStandRadius` (25 m, cap 6). The NoiseProbe census sees the bed only through `ownedBed=n/m` (its pooled-source walk cannot see owned sources), and the bed does not note `NoiseEv.Reset`
   (`SpectatorAudio` counts the one audio reset). `SpectatorCrowd` (the contract, `ScoreMonitors` style) is reset when the crowd is removed, with or without a bed.
-- Emission cap (2026-10-31, [iceberg-release.md](docs/progress/iceberg-release.md) "Per-map emission cap"; the Unity-free model is unit-tested, the glue is not host-run yet): a map whose descriptor has `EmissionCap` > 0
+- Emission cap (2026-10-31, [iceberg-release.md](docs/progress/iceberg-release.md) "Per-map emission cap"; the Unity-free model is unit-tested; host-run on GPU-2 2026-10-31 02:17: 6 Iceberg materials capped in 20 ms, crystal lamps and chandeliers readable at bloom 2.10/0.35, restored at raid end): a map whose descriptor has `EmissionCap` > 0
   (mirrored by `emission_cap` in `tools/maps/<stem>.json`; Iceberg 4.0, the four released maps none = off) has its emissive materials capped ONCE per raid, 4 s after the last owned scene loaded (`EmissionCapRepairs`, never in
   Update), instead of lowering the whole map's bloom. The rules come from EFT's own shaders (UnityPy on `StreamingAssets/Windows/shaders`): Standard/Standard (Specular setup) read `_EmissionColor` only with keyword `_EMISSION`;
   the `p0/.../Emissive` shaders declare `_EmissionPower` (Range 0..10) x `_EmissionVisibility` (+ `_EmissiveColor` on the SMap one only) and NO `_EmissionColor` (the leftover colour of a material is never read);
@@ -854,7 +857,8 @@ the log; the user uses it to point at things.
   bloom is the donor pair 2.10/0.35 again (`BloomDefaultsRevision` 2 moves exactly a saved 4.0/0.2 once).
 - Iceberg promotion rules (2026-10-30, [iceberg-release.md](docs/progress/iceberg-release.md) "promotion into the released set"; unit-tested, no host run yet): (1) a released map without a
   spectator crowd is listed in `validate_map_descriptors.CROWDLESS_MAP_KEYS` (Iceberg), the one list the packer, `validate_distribution.py`, staging and the C# crowd switch agree on
-  (`test_crowdless_maps.py`); overview, flare and water packages are explicit "has it" lists that Iceberg is deliberately in none of (Phase C, "not yet"). (2) The audio exporter accepts a
+  (`test_crowdless_maps.py`); overview and flare packages are explicit "has it" lists that Iceberg is deliberately in neither of (Phase C, "not yet"); the water list has Iceberg since
+  2026-10-31 (native sea). (2) The audio exporter accepts a
   player with `minDistance` 0 only where the map's contract pins it (`states.zero_min_distance_players`: Iceberg 21, every other map none), and the ambient driver's strict check accepts
   season and loop-kind players only in the counts the profile demands (`SeasonKindPlayers`, `LoopKindPlayers`, 0 for the other maps). (3) `extract_spatial_audio.REVIEWED_MIRRORED_VOLUMES`
   pins the number of mirrored trigger volumes per map (Iceberg 10, others none). (4) `spawn_placement_probe.py` is an UPPER bound on `SpawnPlacementRepairs.IsValid` (seven capsule rings, headroom

@@ -1125,3 +1125,40 @@ water renderer of Bay5's harbor ([bay5-water.md](bay5-water.md)). Everything bel
 5. **Bay5 once** (`gpu-run raid --map bay5`, botless): the harbor from `(146.5, -3.4, 20.6)` yaw 90 pitch 10 as in bay5-water.md: dark native water by night, `[Water] enabled: map=arena_bay5 target=Arena_Bay5_Main/Sea/Plane textures=4 ... worldY=-8.65 extent=5997x6902 m`, no initialization failure, live off -> the white placeholder
    and on -> native again. Then Iceberg again in the same EFT process (cross-map: one runner at a time, `buffers=1`).
 6. Frame time on Iceberg with the sea (per frame the native renderer blits G-buffer 0 and 2 and draws the plane twice, a G-buffer pass and an alpha-restore pass, exactly as on Bay5): `uibridge_status` `max` frame time against the 61.2 ms of the last Iceberg raid.
+
+## 2026-10-31 night - user feedback (bloom, water), the crystal lamps, emission cap and native sea host-verified on GPU-2
+
+- **User feedback** (German, 2026-10-31): the bloom looks odd, two lights stay completely over-exposed until the bloom is turned down to about
+  0.001; is there water on the map that is missing? His MASCHINE11 log (00:06-00:30) shows the bloom keys swept from 4.0/0.2 down to 2.10/0.02.
+- **The two lights** (the user stood in front of them on GPU-2 and pressed F10, 00:57:44 and 00:57:54): `SBG_Arena_Sanatorium_Light/OO/INDOORS/
+  LOBBY/Crystal_Lamp_1` and `Crystal_Lamp_1 (1)` (camera at (-32.23, 4.23, -89.26) and (-32.21, 4.24, -73.96)), not the chandeliers of the
+  2026-10-30 fix. Their LOD0 submesh 2 binds `Emission_Yellow` (package id 367e4a61931e682b, `Standard`, `_EMISSION`, `_EmissionColor`
+  (67.794, 17.392, 0.0)). A census of every accepted package (scratch `hdr_emission_census.py`) finds no other emission colour channel above
+  4.13 (Bay5 `02 - Default`). The chandelier material `Sanatorium_Emissive_Orange` (p0 emissive, power 10, visibility 1.0) is the second case.
+- **Missing water**: Iceberg's level256 has two `EFT.Water.WaterContainer`: `WaterForSSrv3` with an empty target (renders nothing) and `Sea`
+  driving `Sea/Plane` (layer 4, no material, about 6.0 x 6.9 km at y -18.9) - the same container and plane as Bay5's harbor. The generic
+  SimpleWater4 placeholder (`[Sea] 'Plane' ... assigned placeholder water material`) is effectively invisible: from the south promenade
+  (7, 4.4, -126.3) the canyon showed a dry sand bed at y -22..-26 (coverage raster: scratch `sea_holes.py`). The seven other water surfaces
+  (canyon planes at -14.7/-17.1, fountains, basin, puddle) use EFT's FX/SimpleWater4 and are present.
+- **Built** (workflow `wf_d144dcf2-1e2`, two worktrees and two reviews, merged as `308bbd6` and `712b999`, review fixes `4a46a54`, `f431c9d`):
+  the per-map emission cap (`EmissionCapRepairs` / `EmissionCapModel`, descriptor `EmissionCap` 4.0 for Iceberg, developer key
+  `Lighting (<key>)/EmissionCap`), Iceberg's bloom back to 2.10/0.35 (`BloomDefaultsRevision` 2 moves exactly a saved 4.0/0.2 pair), and native
+  sea water for Iceberg (`extract_water.py --map arena_iceberg`, `work/extract/iceberg-water`, descriptor `HasNativeWater`, key
+  `Water (arena_iceberg)/NativeSeaWater`; Bay5's export byte-identical). A failed cap pass now restores the originals inside the
+  ReflectiveSpecular suspend scope (review). Gates: .NET 2,859 passed; Python 2,783 with one stale constructor pin fixed (`f431c9d`, 31 tests of
+  the two modules OK afterwards); `DISTRIBUTION_OK 5 maps 15 bundles`; `validate_map_descriptors.py` OK; dist 281 files.
+- **Host** (GPU-2, full deploy 281 files, 5 new and 2 overwritten; 2,463 files identical after 137.6 s; EFT started 02:14:59):
+  - `[Bloom] arena_iceberg: config re-seeded to bloom defaults revision 2 (2 value(s) moved; threshold=2.10, intensity=0.35)`.
+  - Iceberg raid 02:17 (botless, 12:00, 0 warnings): `[Water] enabled: map=arena_iceberg target=Arena_Sanatorium/Sea/Plane textures=4
+    shader=Hidden/WaterForSSR ... worldY=-18.90 extent=5997x6902 m`; `[EmissionCap] map=arena_iceberg cap=4.00 (owned scenes loaded): 37
+    emissive material(s), 6 capped (largest original 67.79 '367e4a61931e682b' -> 4.00), 6 written ...; 22693 renderer(s) scanned in 20 ms`
+    (Power 6.79/7.74/6.23/10.00/4.28 -> 4.00, Color 67.79 -> 4.00).
+  - Looks at bloom 2.10/0.35: the lobby crystal lamp (from the user's F10 position) shows its glass column and glowing crystals, nothing
+    blown out; the respawn-hall chandeliers show their candles with a soft glow, no disc. From the south promenade the canyon is a dark green,
+    moving sea with cliff reflections and the shallow sand showing through; `NativeSeaWater` off live (`[Water] stopped; released buffers=2;
+    restored original renderer`) brings back the dry sand bed, on again re-enables it. 119.2 fps over 20 s (max 76.5 ms at the re-enable).
+  - Raid end: `[EmissionCap] map=arena_iceberg released 37 material(s) (raid ended), restored 6 to their originals`.
+  - Bay5 raid 02:18 (botless): `[Water] enabled: map=arena_bay5 target=Arena_Bay5_Main/Sea/Plane ... worldY=-8.65`, the harbor renders as
+    before; no `[EmissionCap]` line (cap 0). Hideout opened and closed (scenario, no ArenaMapPort error).
+- **Open**: the user's look and listen at bloom 2.10/0.35 (his shared config was reset to the defaults); the sea at night, in rain and from
+  the bridge; the cap value 4.0 is a first choice, tunable live with `Lighting (arena_iceberg)/EmissionCap`.

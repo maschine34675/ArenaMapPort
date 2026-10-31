@@ -1,5 +1,18 @@
 # HANDOFF — dated working state
 
+## Iceberg: emission cap, bloom back to normal, native sea - 2026-10-31 night (branch `feature/iceberg`, host-verified on GPU-2, nothing pushed)
+
+**What changed.** The user's two over-exposed lights were the lobby crystal lamps (`Crystal_Lamp_1`, material `Emission_Yellow`, `Standard` with
+`_EmissionColor` 67.8, about 16 times any released map's brightest emission). A per-map emission cap (descriptor `EmissionCap`, Iceberg 4.0, developer key
+`Lighting (<key>)/EmissionCap`) takes the six over-bright Iceberg materials (the crystal lamps, the chandelier candles and four more) to 4.0 at raid start and
+restores them at raid end, so Iceberg's bloom is back to the donor 2.10/0.35 like Equator and Bay5 (`BloomDefaultsRevision` 2 moved the saved 4.0/0.2 once).
+Iceberg's sea (`Sea/Plane`, y -18.9, Arena's shared sea prefab) now renders with EFT's native water like Bay5's harbor (`extract_water.py --map arena_iceberg`,
+`work/extract/iceberg-water`, key `Water (arena_iceberg)/NativeSeaWater`); without it the canyon below the south promenade showed a dry sand bed. dist: 281 files
+(Iceberg part 25). Host: crystal lamps, chandeliers and sea checked by screenshot at 2.10/0.35, the sea A/B by the live key, Bay5's harbor unchanged, hideout OK,
+0 warnings. Record: [docs/progress/iceberg-release.md](docs/progress/iceberg-release.md) (last section).
+
+**Open:** the user's look at the new bloom and the sea (night, rain, the bridge), the cap value (4.0 is a first choice), plus the items of the block below.
+
 ## Iceberg built, staged, deployed and raided on GPU-2 - 2026-10-30 evening (branch `feature/iceberg`, nothing pushed, tagged or released)
 
 **State.** Iceberg (`arena_iceberg`) is the fifth map in `ArenaMapRegistry.All` and now has its U1 bundles (`work/build/iceberg`, from package
@@ -12,7 +25,7 @@ all gates parked open, every A/B/C and pocket route complete, a walk through the
 [docs/progress/iceberg-release.md](docs/progress/iceberg-release.md) ("U1: two import fixes, the first stage, deploy and the first Iceberg raids").
 
 **Fixed the same evening:** the two glow blobs next to the Bear spawn were the respawn hall's candle chandeliers under the camera's bloom; Iceberg now
-defaults to bloom 4.0/0.2 (`15a13d8`, migration of a saved -1/-1 pair, host-checked at 19:30). **Open (agent):** a look at the olive tree
+defaulted to bloom 4.0/0.2 (`15a13d8`; superseded on 2026-10-31 by the emission cap and the donor 2.10/0.35, see the block above). **Open (agent):** a look at the olive tree
 (`Nature/SpeedTree8` rebinds without an error line) and the canyon rocks, `verify-keys` against Arena 0.6.2 on MASCHINE11 (offline tonight), the Phase C items
 (flares, water, overview). **The user's:** a listening and playing pass (ambient mix 3 dB / offset 0 / range 2, the 20 lamp loops, gate sounds with a held gate,
 `ZeroLevel`), the release number and form (both csproj say 0.4.0; the single ZIP grows from 3.57 to about 5.0 GiB), the merge of `feature/iceberg` into `main`,
