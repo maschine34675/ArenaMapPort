@@ -4,7 +4,8 @@ Iceberg is a released map without a spectator crowd. Everything that would other
 validate_map_descriptors.CROWDLESS_MAP_KEYS: the packer (its rules and its required files), validate_distribution (the partition of the release into crowd
 maps and crowdless maps) and, by hand, the client (ArenaSpectators.DesignScene returns null for exactly these keys). The crowd maps themselves are
 extract_spectator.MAP_SCENES, which stage_spectators stages. These tests pin the partition and each reader; the not-yet rules for the other Phase C
-packages of Iceberg (flares, water, DynamicMaps overview) are pinned here too, so adding one later is a deliberate edit of the explicit lists.
+packages of Iceberg (flares, DynamicMaps overview) are pinned here too, so adding one later is a deliberate edit of the explicit lists. Its water package
+joined on 2026-10-31 and is pinned as present.
 """
 import re
 import sys
@@ -115,27 +116,42 @@ class PackerTests(unittest.TestCase):
 
 
 class NotYetRulesTests(unittest.TestCase):
-    """Iceberg's later packages are explicit absences (PLAN-ICEBERG Phase C), never fake data: the lists that name the maps that HAVE them leave it out."""
+    """Iceberg's later packages are explicit absences (PLAN-ICEBERG Phase C), never fake data: the lists that name the maps that HAVE them leave it out.
+    Its native sea water is no longer one of them (2026-10-31, docs/progress/iceberg-release.md "native sea water"); the water side is pinned below
+    and in test_native_water.py."""
 
-    def test_iceberg_has_no_overview_flares_or_water_yet(self):
+    def test_iceberg_has_no_overview_or_flares_yet(self):
         self.assertNotIn("Iceberg", VDIST.OVERVIEW_MAP_NAMES)
         self.assertNotIn("arena_iceberg", VDIST.FLARE_MAP_KEYS)
-        self.assertNotIn("arena_iceberg", VDIST.WATER_MAP_KEYS)
         self.assertEqual(VDIST.OVERVIEW_MAP_NAMES, ("Equator", "Bay5", "AirPit", "Bowl"))
         self.assertEqual(VDIST.FLARE_MAP_KEYS, ("arena_equator", "arena_bay5", "arena_bowl"))
-        self.assertEqual(VDIST.WATER_MAP_KEYS, ("arena_bay5",))
 
-    def test_the_client_csproj_stages_no_iceberg_overview_flare_or_water_rows(self):
+    def test_iceberg_has_native_water_since_2026_10_31(self):
+        self.assertIn("arena_iceberg", VDIST.WATER_MAP_KEYS)
+        self.assertEqual(VDIST.WATER_MAP_KEYS, ("arena_bay5", "arena_iceberg"))
+        self.assertEqual(VDIST.WATER_MAP_KEYS, VD.NATIVE_WATER_MAP_KEYS)
+
+    def test_the_client_csproj_stages_no_iceberg_overview_or_flare_rows(self):
         text = (REPO / "ArenaMapPort.Client" / "ArenaMapPort.Client.csproj").read_text(encoding="utf-8")
-        for target in ("ArenaMapPortStageDynamicMaps", "ArenaMapPortStageMultiFlare", "ArenaMapPortStageWater"):
+        for target in ("ArenaMapPortStageDynamicMaps", "ArenaMapPortStageMultiFlare"):
             start = text.index(f'<Target Name="{target}"')
             body = text[start:text.index("</Target>", start)]
             self.assertNotIn("iceberg", body.lower(), target)
 
-    def test_the_packer_treats_those_folders_as_optional_for_every_map(self):
+    def test_the_client_csproj_stages_icebergs_water_package(self):
+        text = (REPO / "ArenaMapPort.Client" / "ArenaMapPort.Client.csproj").read_text(encoding="utf-8")
+        start = text.index('<Target Name="ArenaMapPortStageWater"')
+        body = text[start:text.index("</Target>", text.index("<Copy SourceFiles", start))]
+        self.assertEqual(body.count("iceberg-water"), 5)           # water.json and the four mip chains
+        self.assertIn("<MapKey>arena_iceberg</MapKey>", body)
+
+    def test_the_packer_treats_flares_and_overview_as_optional_and_requires_the_water_package(self):
         spec = release.load_spec(REPO, "9.9.9", maps=PROD_MAPS)
         required = release.required_files(spec)["iceberg"]
-        self.assertFalse([name for name in required if any(f"/{folder}/" in name for folder in ("flares", "water", "dynamicmaps"))])
+        self.assertFalse([name for name in required if any(f"/{folder}/" in name for folder in ("flares", "dynamicmaps"))])
+        self.assertEqual(sorted(name for name in required if "/water/" in name),
+                         sorted([f"{PLUGIN}/water/arena_iceberg/water.json",
+                                 *(f"{PLUGIN}/water/arena_iceberg/textures/{n}.bin" for n in release.WATER_TEXTURES)]))
 
 
 if __name__ == "__main__":

@@ -44,9 +44,10 @@ ai/airpit2.ai.json, a stray .pdb or backup, a Thumbs.db or .bak inside an acoust
 dynamicmaps folder) or more than one is a hard error, never a silent skip; so is a directory that cannot be
 listed. The rules pin the leaf names the build stages, and required_files() demands everything every released
 map must carry (bundles, key file, database entry, shader sidecar, AI sidecar, banner, acoustic graph, gate sound
-manifest, spectator package, first loading screen); only flares, water and the overview map are optional per map, and a map listed in
+manifest, spectator package, first loading screen); only flares and the overview map are optional per map, and a map listed in
 CROWDLESS_MAP_KEYS (Iceberg) has no spectator package at all (the rule and the required file are dropped for it, and a stray one is
-an unclassified file). Every ZIP carries
+an unclassified file). Water is the mirror image: a map listed in NATIVE_WATER_MAP_KEYS (Bay5, Iceberg) must carry its package (water.json and the four
+texture mip chains) and any other map has no water rule at all, so a stray one is an unclassified file. Every ZIP carries
 BepInEx/plugins/maschine-ArenaMapPort/parts/<id>.json, a schema-1 manifest naming ALL parts (one, in the single
 layout) plus this ZIP's own entries with size and SHA-256, so any ZIP says which others complete the install.
 The core part (or the single ZIP) adds README.txt and THIRD-PARTY-NOTICES.txt (client and server root); the
@@ -109,7 +110,11 @@ from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO / "tools" / "validate"))
-from validate_map_descriptors import CROWDLESS_MAP_KEYS, RELEASE_MAP_KEYS, RELEASE_MAP_NAMES  # noqa: E402
+from validate_map_descriptors import CROWDLESS_MAP_KEYS, NATIVE_WATER_MAP_KEYS, RELEASE_MAP_KEYS, RELEASE_MAP_NAMES  # noqa: E402
+
+# The four raw texture mip chains of a native water package (water/<key>/textures/<name>.bin), the names tools/extract/extract_water.py writes
+# (extract_water.TEXTURE_FIELDS without the underscore; test_native_water.py pins the equality). Not imported from there: the extractor drags in UnityPy.
+WATER_TEXTURES = ("foam", "normals", "normalsDetails", "rippleTexture")
 
 PACKAGE = "maschine-ArenaMapPort"
 PLUGIN_ROOT = "BepInEx/plugins/maschine-ArenaMapPort"
@@ -365,7 +370,8 @@ def build_rules(spec: ReleaseSpec) -> list:
             add(m.stem, "spectators", re.escape(f"{PLUGIN_ROOT}/spectators/{m.key}/spectator.json.gz"))
         add(m.stem, "ai sidecar", re.escape(f"{PLUGIN_ROOT}/ai/{m.stem}.ai.json"))
         add(m.stem, "flares", re.escape(f"{PLUGIN_ROOT}/flares/{m.key}/") + rf"(?:flares\.json|textures/{LEAF}\.bin)")
-        add(m.stem, "water", re.escape(f"{PLUGIN_ROOT}/water/{m.key}/") + rf"(?:water\.json|textures/{LEAF}\.bin)")
+        if m.key in NATIVE_WATER_MAP_KEYS:       # only the maps with a native sea (Bay5, Iceberg) stage a water package: one of any other map is unclassified
+            add(m.stem, "water", re.escape(f"{PLUGIN_ROOT}/water/{m.key}/") + rf"(?:water\.json|textures/{LEAF}\.bin)")
         add(m.stem, "loading screen", re.escape(f"{PLUGIN_ROOT}/loadscreens/") + key + r"_[0-9]+\.jpg")
         folder = f"ArenaMapPort_{m.display}"
         add(m.stem, "dynamicmaps", re.escape(f"{PLUGIN_ROOT}/dynamicmaps/{folder}/")
@@ -392,8 +398,9 @@ def required_files(spec: ReleaseSpec) -> dict:
     unlock its encrypted bundles, a missing AI sidecar silently falls back to the NavMesh-synthesised AI, a missing
     shader sidecar leaves pink materials, a map without its gate sound manifest has silent gates, and a map without its
     acoustic graph, banner or loading screens is not the map the README promises; the core part needs the score monitor
-    manifest the client reads when a mode plugin claims the TV screens and the crowd murmur bed. Only flares, water and the
-    DynamicMaps overview are optional (AirPit has an overview but no flares or water package)."""
+    manifest the client reads when a mode plugin claims the TV screens and the crowd murmur bed. A map with a native sea
+    (NATIVE_WATER_MAP_KEYS: Bay5's harbor, Iceberg's sea) needs its water package, since its water falls back to the unlit
+    placeholder without it. Only flares and the DynamicMaps overview are optional (AirPit has an overview but no flares)."""
     required = {CORE_ID: [spec.client_dll, spec.server_dll, DESCRIPTIONS_NAME, *SELECTION_MAP_NAMES, MONITORS_MANIFEST_NAME, SPECTATOR_AUDIO_MANIFEST_NAME, SPECTATOR_BED_NAME, SPECTATOR_TEXTURES_MANIFEST_NAME]}
     for m in spec.maps:
         names = [f"{PLUGIN_ROOT}/bundles/{m.key}_{kind}.bundle" for kind in ("scenes", "navmesh", "preset")]
@@ -407,6 +414,9 @@ def required_files(spec: ReleaseSpec) -> dict:
                   f"{PLUGIN_ROOT}/loadscreens/{m.key}_1.jpg"]
         if m.key not in CROWDLESS_MAP_KEYS:
             names.append(f"{PLUGIN_ROOT}/spectators/{m.key}/spectator.json.gz")
+        if m.key in NATIVE_WATER_MAP_KEYS:       # the sea falls back to the unlit placeholder without its package: water.json and the four mip chains
+            names.append(f"{PLUGIN_ROOT}/water/{m.key}/water.json")
+            names.extend(f"{PLUGIN_ROOT}/water/{m.key}/textures/{name}.bin" for name in WATER_TEXTURES)
         required[m.stem] = names
     return required
 

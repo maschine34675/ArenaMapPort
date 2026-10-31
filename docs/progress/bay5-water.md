@@ -193,3 +193,13 @@ package in `dist/` (five files, 2,277,635 bytes) passes `validate_water`; a scra
 with a parked map's directory or one flipped byte in `foam.bin` is refused with the
 expected messages; the full run prints `DISTRIBUTION_OK 3 maps 9 bundles 3 sidecars`;
 Python suite 1722 tests, 78 expected skips.
+
+## Generalised for Iceberg's sea (2026-10-31)
+
+The mechanism above is now map-agnostic and also drives Iceberg's `Sea/Plane` (record and host checks: [iceberg-release.md](iceberg-release.md), section "native sea
+water"). Nothing of Bay5's behaviour changed: the export is byte-identical to the one the previous extractor writes from the same Arena (checked by SHA-256 of all five files),
+the live key stays `Water (arena_bay5)/NativeHarborWater` with its text of 2026-09-28, the package stays `water/arena_bay5`. What moved: `extract_water.py` has one table row per
+map (`--map`), `NativeWaterRepairs` takes its map and its switch row from the descriptor (`HasNativeWater`, `NativeWaterModel.Switches`), the client build stages both
+packages, and `validate_map_descriptors.NATIVE_WATER_MAP_KEYS` is the one list that the distribution validator, the packer and the sidecars agree on. Facts that turned out to be
+shared rather than Bay5's own: the plane is Arena's common sea prefab (the same 599.68 x 690.19 scale and x/z position on both maps, only y differs), the container settings and
+textures are identical, neither map imports reflection probes (`skip_import`), and the winter snow-mask path is off on both.

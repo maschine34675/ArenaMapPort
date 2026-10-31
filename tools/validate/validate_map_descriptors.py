@@ -545,6 +545,34 @@ def puddle_errors(map_json: dict) -> list[str]:
     return errors
 
 
+def cs_bool(registry_args: dict, name: str) -> bool | None:
+    """A boolean named argument of a descriptor call (parse_cs_value reads `true` / `false` as bare identifiers): True / False, or None when the
+    argument is absent (the constructor default false applies). Any other value is a parse failure."""
+    if name not in registry_args:
+        return None
+    value = registry_args[name]
+    if value in (("localref", "true"), ("localref", "false")):
+        return value[1] == "true"
+    fail(f"don't know how to read ArenaMapDescriptor argument {name} as a boolean: {value!r}")
+
+
+def native_water_errors(map_json: dict, registry_args: dict) -> list[str]:
+    """has_native_water (NativeWaterRepairs, docs/progress/iceberg-release.md "native sea water"): the map has a staged water/<key>/ package. The
+    sidecar flag, the descriptor's HasNativeWater and NATIVE_WATER_MAP_KEYS (the list validate_distribution and the packer read) must agree."""
+    errors = []
+    flag = map_json.get("has_native_water")
+    if flag is not None and type(flag) is not bool:
+        errors.append("has_native_water must be a boolean (omit it for the default false)")
+        return errors
+    mirrored = cs_bool(registry_args, "HasNativeWater") or False
+    listed = map_json.get("key") in NATIVE_WATER_MAP_KEYS
+    if bool(flag) != mirrored:
+        errors.append(f"has_native_water mismatch — sidecar {bool(flag)!r}, ArenaMapDescriptor HasNativeWater {mirrored!r}")
+    if bool(flag) != listed:
+        errors.append(f"has_native_water is {bool(flag)!r} but NATIVE_WATER_MAP_KEYS {'lists' if listed else 'does not list'} {map_json.get('key')!r}")
+    return errors
+
+
 DOOR_POSE_KEYS = ("barrier", "part", "node", "clip", "source", "seconds", "ease", "curve", "at", "closed", "open")
 DOOR_SWITCH_KEY = "switch"   # optional (AirPit's passport lamps): {"closed": bool, "open": bool}, a SetActive row
 DOOR_SIDECAR_SCHEMA = 2
@@ -1002,6 +1030,7 @@ def check_map_against_registry_entry(
     errors.extend(f"{where}: {error}" for error in emission_cap_errors(map_json))
     check_field(errors, where, "emission_cap", map_json.get("emission_cap", 0), resolve(registry_args.get("EmissionCap", 0), ref_scope))
     errors.extend(f"{where}: {error}" for error in puddle_errors(map_json))
+    errors.extend(f"{where}: {error}" for error in native_water_errors(map_json, registry_args))
     check_field(errors, where, "puddle_water_material_names", map_json.get("puddle_water_material_names", []),
                 resolve(registry_args.get("PuddleWaterMaterialNames", []), ref_scope))
     check_field(errors, where, "puddle_extra_surfaces", map_json.get("puddle_extra_surfaces", []),
@@ -1089,6 +1118,11 @@ RELEASE_MAP_KEYS = ("arena_equator", "arena_bay5", "arena_airpit", "arena_bowl",
 # extract_spectator.MAP_SCENES, and tools/tests/test_crowdless_maps.py pins that both sets partition the release and that the client's
 # ArenaSpectators.DesignScene returns null for exactly these keys. Adding a map here is a decision, never a way around a missing package.
 CROWDLESS_MAP_KEYS = ("arena_iceberg",)
+# Maps with a native sea-water package, the ONE list validate_distribution (WATER_MAP_KEYS: the exact file set under water/), the packer (the required
+# files of the map's part) and the extractor's table (extract_water.MAPS, pinned by tools/tests/test_water_extraction.py) agree on. native_water_errors
+# makes every sidecar's has_native_water and every descriptor's HasNativeWater equal to membership here. Bay5's harbor (2026-09-28) and Iceberg's sea
+# (2026-10-31); Equator, AirPit and Bowl have no sea mesh. Adding a map is a decision with an export (extract_water.py --map), a csproj row and a host look.
+NATIVE_WATER_MAP_KEYS = ("arena_bay5", "arena_iceberg")
 
 
 def registry_membership_errors(text: str, entries: dict) -> list[str]:

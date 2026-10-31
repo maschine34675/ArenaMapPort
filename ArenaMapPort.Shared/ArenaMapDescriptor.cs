@@ -367,6 +367,11 @@ namespace ArenaMapPort.Shared
         public bool UsesFixedStartTimes => FixedDayHour.HasValue && FixedNightHour.HasValue;
         public bool UsesServerTime { get; } // native advancing backend time, CURR/PAST and backend weather
         public bool HasTimeSelection => UsesFixedStartTimes || UsesServerTime;
+        // Native sea water (NativeWaterRepairs, docs/progress/bay5-water.md and iceberg-release.md "native sea water"): the map has a staged
+        // water/<key>/ package (water.json plus the four raw texture mip chains, tools/extract/extract_water.py) that replaces the unlit SimpleWater4
+        // placeholder of its one empty-material Sea/Plane mesh with EFT's own deferred water renderer. Mirrors tools/maps/<stem>.json
+        // has_native_water; the packages are the explicit WATER_MAP_KEYS of validate_distribution.py. Bay5 (the harbor) and Iceberg (the sea).
+        public bool HasNativeWater { get; }
         public string SunScene { get; }
         public string[] SunPaths { get; }
 #nullable enable
@@ -421,7 +426,8 @@ namespace ArenaMapPort.Shared
             bool KeepLevelBorders = false,
             ArenaDoorPose[]? DoorPoses = null,
             ArenaScoreMonitor[]? ScoreMonitors = null,
-            float EmissionCap = 0f)
+            float EmissionCap = 0f,
+            bool HasNativeWater = false)
 #nullable restore
         {
             this.Key = Key;
@@ -458,6 +464,7 @@ namespace ArenaMapPort.Shared
             this.FixedDayHour = FixedDayHour;
             this.FixedNightHour = FixedNightHour;
             this.UsesServerTime = UsesServerTime;
+            this.HasNativeWater = HasNativeWater;
             this.SunScene = SunScene ?? string.Empty;
             this.SunPaths = SunPaths ?? new string[0];
             this.PuddleWaterMaterialNames = PuddleWaterMaterialNames ?? new string[0];
@@ -773,6 +780,8 @@ namespace ArenaMapPort.Shared
                 99.63274383544922f, -1.5299997329711914f, 30.428937911987305f,
                 52.685890197753906f, 12.275176048278809f, 42.59858703613281f),
             UsesServerTime: true,
+            // The harbor's Sea/Plane (water/arena_bay5, 2026-09-28; mirrors tools/maps/bay5.json has_native_water).
+            HasNativeWater: true,
             // Arena's roller gates and depot gates (2026-10-23, tools/maps/bay5.doors.json): the DotAnimator end poses of the
             // warehouse rollers (the whole root lifts, part "") and the swing of both depot gates' leaves (told apart by the
             // world position of the Gates_Depot_Frame root). Seven rows; Door_01 (3) has none (shut, 2026-10-24).
@@ -1448,6 +1457,10 @@ namespace ArenaMapPort.Shared
             // Bay5/AirPit/Bowl-style native server time: no Directional light exists in the imported scenes (Iceberg's dusk sun, sky and fog sit
             // in the excluded Scripts scene), the WeatherRig supplies both.
             UsesServerTime: true,
+            // Arena_Sanatorium's Sea/Plane (water/arena_iceberg, 2026-10-31; the same container settings as Bay5's harbor, the plane at y -18.9 below
+            // the canyon). The two canyon Water_Plane_01 planes and the other SimpleWater4 surfaces keep their imported materials. Mirrors
+            // tools/maps/iceberg.json has_native_water.
+            HasNativeWater: true,
             // docs/PLAN-ICEBERG.md decision: the 365 layer-29 LevelBorder cubes stay active at raid start and the bake treats them as walls
             // (mirrors keep_level_borders). They are called "LevelBorder (N)", which MapBorderRepairs and BakeNavMesh no longer drop by name for
             // a map that keeps its borders.

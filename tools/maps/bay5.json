@@ -18,6 +18,7 @@
     "Arena_Bay5_Background"
   ],
   "uses_server_time": true,
+  "has_native_water": true,
   "restored_shadow_caster_roots": [
     "SBG_Arena_Bay5_Main/SOO/PROPS/Military_sandbag_barrier_03",
     "SBG_Arena_Bay5_Main/SOO/PROPS/Military_sandbag_barrier_03 (1)"
