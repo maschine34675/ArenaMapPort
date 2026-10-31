@@ -25,11 +25,11 @@ namespace ArenaMapPort.Client
         // saved -1/-1 pair once and leaves every other value alone.
         const float AirPitThreshold = 1.2f;
         const float AirPitIntensity = 0.25f;
-        // Iceberg: the normal donor pair, like Equator and Bay5 (2026-10-31). On 2026-10-30 (first GPU-2 raids) its defaults were 4.0/0.2
-        // because the lobby crystal lamps (Emission_Yellow, Standard, _EmissionColor 67.8) and the candle chandeliers of the respawn hall
-        // (Chalet_chandelier_01, Sanatorium_Emissive_Orange, _EmissionPower 10) bloomed into disc-shaped glare at the camera's 2.10/0.35.
-        // The cause is those materials' emission, which the per-map EmissionCap (EmissionCapRepairs, descriptor EmissionCap 4.0) now takes
-        // down, so the bloom returns to the donor values. The keys were born -1/-1, revision 1 moved that pair to 4.0/0.2 on the hosts
+        // Iceberg: the normal donor pair, like Equator and Bay5 (2026-10-31). On 2026-10-30 (first GPU-2 raids) its defaults became 4.0/0.2
+        // because the candle chandeliers of the respawn hall (Chalet_chandelier_01, Sanatorium_Emissive_Orange, _EmissionPower 10) bloomed
+        // into disc-shaped glare at the camera's 2.10/0.35. On 2026-10-31 the user's F10 showed a second, stronger source that 4.0/0.2 did
+        // not tame: the lobby crystal lamps (Emission_Yellow, Standard, _EmissionColor 67.8). The cause of both is the materials' emission,
+        // which the per-map EmissionCap (EmissionCapRepairs, descriptor EmissionCap 4.0) now takes down, so the bloom returns to the donor values. The keys were born -1/-1, revision 1 moved that pair to 4.0/0.2 on the hosts
         // that ran it, and BloomDefaultsRevision 2 (BloomDefaultsModel) moves exactly a saved 4.0/0.2 pair back to the donor pair once.
 
         static bool _installed;

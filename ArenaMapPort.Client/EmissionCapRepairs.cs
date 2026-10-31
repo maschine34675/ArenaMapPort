@@ -183,24 +183,39 @@ namespace ArenaMapPort.Client
             }
             var watch = Stopwatch.StartNew();
             int renderers = 0;
-            EmissionPassResult result;
+            EmissionPassResult result = default;
+            bool failed = false;
             try
             {
                 // The renderer-local clones of the specular cap are built from these very materials: take them off for the read and the write, and
-                // let Dispose rebuild them from the capped (or restored) inputs.
+                // let Dispose rebuild them from the capped (or restored) inputs. A failed pass restores the originals INSIDE the scope, so the
+                // clones the scope's Dispose rebuilds never carry a half-applied cap.
                 using (ReflectiveSpecularRepairs.Suspend(state.Map))
                 {
-                    if (cap > 0f && rescan)
+                    try
                     {
-                        renderers = Scan(state);
+                        if (cap > 0f && rescan)
+                        {
+                            renderers = Scan(state);
+                        }
+                        result = cap > 0f ? state.Ledger.Apply(Surface, cap) : state.Ledger.Restore(Surface);
                     }
-                    result = cap > 0f ? state.Ledger.Apply(Surface, cap) : state.Ledger.Restore(Surface);
+                    catch (Exception e)
+                    {
+                        failed = true;
+                        Plugin.Log.LogError($"{Tag} map={state.Map.Key} pass failed ({reason}), originals restored: {e.GetType().Name}: {e.Message}");
+                        try { state.Ledger.Restore(Surface); } catch (Exception) { /* the next raid captures again */ }
+                    }
                 }
             }
             catch (Exception e)
             {
-                Plugin.Log.LogError($"{Tag} map={state.Map.Key} pass failed ({reason}), originals restored: {e.GetType().Name}: {e.Message}");
-                try { state.Ledger.Restore(Surface); } catch (Exception) { /* the next raid captures again */ }
+                // Suspend or the scope's rebuild itself failed; the ledger's originals were restored above when the pass failed.
+                Plugin.Log.LogError($"{Tag} map={state.Map.Key} specular suspend/rebuild failed ({reason}): {e.GetType().Name}: {e.Message}");
+                return;
+            }
+            if (failed)
+            {
                 return;
             }
             watch.Stop();
