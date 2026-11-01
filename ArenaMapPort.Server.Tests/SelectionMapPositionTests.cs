@@ -29,7 +29,9 @@ public sealed class SelectionMapPositionTests
         {
             string key = marker.GetProperty("catalog_key").GetString()!;
             var map = ArenaMapRegistry.Catalog.Single(m => m.Key == key);
-            int x = marker.GetProperty("icon_x").GetInt32(), y = marker.GetProperty("icon_y").GetInt32();
+            // A "display" block moves the shown anchor away from the measured one, with its reason; the measurement stays the record.
+            var shown = marker.TryGetProperty("display", out var display) ? display : marker;
+            int x = shown.GetProperty("icon_x").GetInt32(), y = shown.GetProperty("icon_y").GetInt32();
             Assert.Equal(x, map.IconX);
             Assert.Equal(y, map.IconY);
             using var sidecar = JsonDocument.Parse(File.ReadAllText(RepoFile("tools", "maps", key[6..] + ".json")));
@@ -66,6 +68,23 @@ public sealed class SelectionMapPositionTests
             Assert.InRange(Math.Abs(screenY - measured[1].GetDouble()), 0, .6);
             Assert.False(string.IsNullOrWhiteSpace(marker.GetProperty("screenshot").GetString()));
         }
+    }
+
+    [Fact]
+    public void OnlyIcebergIsDisplayedAwayFromItsMeasurementAndClearOfArenaModesPanel()
+    {
+        using var document = JsonDocument.Parse(File.ReadAllText(RepoFile("tools", "maps", "selection", "markers.json")));
+        var moved = document.RootElement.GetProperty("markers").EnumerateArray().Where(m => m.TryGetProperty("display", out _)).ToArray();
+        var iceberg = Assert.Single(moved);
+        Assert.Equal("arena_iceberg", iceberg.GetProperty("catalog_key").GetString());
+        var display = iceberg.GetProperty("display");
+        Assert.False(string.IsNullOrWhiteSpace(display.GetProperty("reason").GetString()));
+        Assert.False(string.IsNullOrWhiteSpace(display.GetProperty("decision").GetString()));
+        Assert.Equal(iceberg.GetProperty("icon_y").GetInt32(), display.GetProperty("icon_y").GetInt32());
+        // GPU-2 2026-11-01 at 1920x1080: the toggle's left edge moves 0.79 px per anchor unit from x 349 at the measured 110;
+        // ArenaMode's mode panel ends at x 416 (56 + 360, ArenaModeSelectionView). Keep at least 12 px between them.
+        int shift = display.GetProperty("icon_x").GetInt32() - iceberg.GetProperty("icon_x").GetInt32();
+        Assert.True(349 + shift * .790 >= 416 + 12, $"left edge {349 + shift * .790:F0} px");
     }
 
     [Fact]

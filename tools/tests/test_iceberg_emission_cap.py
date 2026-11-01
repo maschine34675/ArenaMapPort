@@ -37,6 +37,8 @@ DESCRIPTOR_CS = REPO / "ArenaMapPort.Shared" / "ArenaMapDescriptor.cs"
 MAPS = REPO / "tools" / "maps"
 
 CAP = 4.0
+FLOOR = 3.0            # emission_floor (2026-11-01, "Emission floor")
+LIFT_MINIMUM = 0.25    # EmissionCapModel.LiftMinimum: weaker materials are glass tints and dark light bars, never lifted
 RELEASED = {"equator": "equator-native-v5", "bay5": "bay5-native-v5", "airpit": "airpit-native-v9", "bowl": "bowl-native-v2"}
 ICEBERG_PACKAGE = WORK / "extract" / "iceberg-native-v2"
 HAVE_ICEBERG = (ICEBERG_PACKAGE / "scenes" / "Arena_Sanatorium.json").is_file()
@@ -105,9 +107,43 @@ class SidecarAndDescriptorTests(unittest.TestCase):
         text = DESCRIPTOR_CS.read_text(encoding="utf-8")
         self.assertEqual(len(re.findall(r"\bEmissionCap:", text)), 1)
         entry = text[text.index("public static readonly ArenaMapDescriptor Iceberg"):text.index("public static readonly ArenaMapDescriptor Factory")]
-        self.assertIn("EmissionCap: 4.0f);", entry)
+        self.assertIn("EmissionCap: 4.0f,", entry)
+        self.assertIn("EmissionFloor: 3.0f);", entry)
         self.assertIn("public float EmissionCap { get; }", text)
+        self.assertIn("public float EmissionFloor { get; }", text)
         self.assertRegex(text, r"float EmissionCap = 0f[,)]")
+        self.assertRegex(text, r"float EmissionFloor = 0f[,)]")
+        self.assertEqual(len(re.findall(r"\bEmissionFloor:", text)), 1)
+
+    def test_iceberg_carries_the_floor_inside_its_band_and_no_released_map_has_the_key(self):
+        iceberg = json.loads((MAPS / "iceberg.json").read_text(encoding="utf-8"))
+        self.assertEqual(iceberg["emission_floor"], FLOOR)
+        self.assertLessEqual(iceberg["emission_floor"], iceberg["emission_cap"])
+        for stem in RELEASED:
+            self.assertNotIn("emission_floor", json.loads((MAPS / f"{stem}.json").read_text(encoding="utf-8")), stem)
+
+    def test_the_validator_rejects_a_floor_drift_or_a_malformed_floor(self):
+        original_load = VD.load_map
+        for file, value in (("iceberg.json", 2.0), ("iceberg.json", 0), ("bowl.json", 3.0)):
+            def read_map(path, file=file, value=value):
+                data = original_load(path)
+                if path.name == file:
+                    data["emission_floor"] = value
+                return data
+
+            output = StringIO()
+            with self.subTest(file=file, value=value), patch.object(sys, "argv", ["validate_map_descriptors.py"]), \
+                    patch.object(VD, "load_map", side_effect=read_map), redirect_stdout(output), redirect_stderr(output):
+                self.assertEqual(VD.main(), 1)
+                self.assertIn("emission_floor mismatch", output.getvalue())
+        for bad in (-1, 100.5, "3", None, True, float("nan")):
+            self.assertEqual(len(VD.emission_cap_errors({"emission_floor": bad})), 1, repr(bad))
+        self.assertEqual(VD.emission_cap_errors({"emission_cap": 4.0, "emission_floor": 3.0}), [])
+
+    def test_the_lift_rules_here_are_the_ones_the_model_compiles(self):
+        text = MODEL_CS.read_text(encoding="utf-8")
+        self.assertIn(f"const float LiftMinimum = {LIFT_MINIMUM}f;", text)
+        self.assertIn('shaderName.IndexOf("Animated", StringComparison.Ordinal) < 0', text)
 
     def test_the_validator_accepts_the_repository(self):
         output = StringIO()
@@ -201,6 +237,16 @@ class IcebergPackageTests(unittest.TestCase):
             shaders[row[3]] = shaders.get(row[3], 0) + 1
         self.assertEqual(shaders, {"p0/Reflective/Bumped Emissive Specular SMap": 22, "Standard": 12, "p0/Cutout/Bumped Diffuse Emissive": 2,
                                    "p0/Reflective/Bumped Animated Emissive Specular SMap": 1})
+
+    def test_the_floor_lifts_twenty_three_lamps_and_leaves_the_screen_the_tints_and_the_dark_bars(self):
+        lifted = sorted(name for value, _, name, shader, _, _ in self.rows()
+                        if LIFT_MINIMUM <= value < FLOOR * (1 - 1e-5) and "Animated" not in shader)
+        self.assertEqual(len(lifted), 23)
+        self.assertIn("Armstrong_lamp_03_A_source_E", lifted)                                 # 0.60, 64 renderers
+        self.assertIn("Lift_emissive_draft", lifted)                                          # 0.29, the weakest lamp that is lifted
+        untouched = sorted(name for value, _, name, shader, _, _ in self.rows() if value < LIFT_MINIMUM or "Animated" in shader)
+        self.assertEqual(untouched, sorted(["lab_glow", "Sanatorium_Metal_ceiling_light", "Airpit_lamp_emissive_grey", "Glass_broken_new",
+                                            "Sanatorium_Glass_broken_new", "Split_system_diffuse", "Concrete_Clean", "tile_floor_diffuse"]))
 
     def test_every_other_lamp_above_two_is_left_alone_by_the_cap(self):
         rest = {name: value for value, _, name, _, _, _ in self.rows() if 2.0 < value <= CAP * (1 + 1e-5)}

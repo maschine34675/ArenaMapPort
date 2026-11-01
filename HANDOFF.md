@@ -1,5 +1,31 @@
 # HANDOFF — dated working state
 
+## Iceberg: emission floor, marker beside ArenaMode's panel, Arena 0.6.2 checked - 2026-11-01 (branch `feature/iceberg`, host-verified on GPU-2, nothing pushed)
+
+**Emission floor.** The user found that no single bloom setting suits Iceberg's lamps ("every light source seems to need its own slider"): the
+threshold bloom lets only the part above 2.10 glow, and Iceberg's lamps range from 0.58 to the six capped at 4.0. `EmissionCapRepairs` now also lifts
+a lamp between 0.25 and the map's floor onto it (descriptor `EmissionFloor`, Iceberg 3.0, released maps 0 = off; developer key
+`Lighting (<key>)/EmissionFloor`, live; screens of animated emissive shaders and levels below 0.25 are never lifted). At floor 3 / cap 4 / bloom
+2.10/0.35: 6 capped, 23 lifted; wall lamps and the capped red lamp get a similar soft halo (GPU-2 stills, 120 fps, 0 warnings, hideout OK).
+Arena's own UltimateBloom cameras (`Cam2_ARENA_FIX` 1.918/0.07, also Threshold mode) were decoded for comparison; the donor pair stays.
+
+**The user's shared BepInEx config still holds the morning's test values** for Iceberg (BloomThreshold 0.0385, BloomIntensity 0.2373, EmissionCap
+1.4585): with them the floor is clamped to 1.46. To see the new defaults, set `Lighting (arena_iceberg)` back to BloomThreshold 2.1, BloomIntensity
+0.35, EmissionCap 4 (EmissionFloor is new and already 3). GPU-2 tests used `persist=false` only.
+
+**Marker.** Iceberg's selection marker is displayed at `IconX` 215 (Arena's measured 110 kept in `tools/maps/selection/markers.json` with a `display`
+block): its toggle now spans x 431..585 at 1920x1080, ArenaMode's panel ends at 416. Server DLL and base.json changed (server restart).
+
+**Arena 0.6.2.0.48473** (VM and MASCHINE11 since 2026-11-01; GPU-2 still 0.6.1): all five key files unlock on both 0.6.2 installs, the published
+0.4.0 key files are byte-identical to them, the resource streams are untouched, and the rewritten level files differ only in renumbered pointers
+into `resources.assets`/`sharedassets1.assets` plus two regenerated dust meshes; no re-extraction, rebuild or release is needed. Two tests were
+version-bound (gate-sound rows compare content now; Iceberg's bake pins accept 0.6.1 and 0.6.2).
+Records: [iceberg-release.md](docs/progress/iceberg-release.md) "2026-11-01", [arena-update-20261101.md](docs/progress/arena-update-20261101.md),
+[selection-map.md](docs/progress/selection-map.md).
+
+**Open (user):** the look at floor 3 / cap 4 / bloom 2.10/0.35; whether the released maps get a floor too; release number and form for Iceberg,
+merge to main, ArenaMode hand-off, off-VM key backup.
+
 ## Iceberg DynamicMaps overview complete — 2026-10-31 (feature/iceberg)
 
 The requested overview is generated, staged, deployed to `D:\SPT41` and verified on

@@ -34,7 +34,9 @@ the end overrides the spike framing. `README.md` is the user-facing summary.
 
 Current source (2026-10-03) is Arena 0.6.0.47752 / Unity 6000.3.6f1. Export tools
 were checked against complete fresh Equator/Bay5 extracts; see
-[the source audit](docs/progress/arena-update-20261003.md). Accepted v5 packages
+[the source audit](docs/progress/arena-update-20261003.md). Since 2026-11-01 the VM and MASCHINE11 run Arena
+0.6.2.0.48473 (GPU-2 still 0.6.1): every key file unlocks there and the maps' content is unchanged
+([arena-update-20261101.md](docs/progress/arena-update-20261101.md)). Accepted v5 packages
 still contain the prior 0.5.4 source. Audit outputs under `work/arena-update-audit/`
 are not accepted build inputs. Keep the SPT bundle target on Unity 2022.3.43f1.
 
@@ -284,7 +286,7 @@ Real-data tests read the ignored inputs under `work/` and the installed Arena; a
 `ARENAMAPPORT_WORK_DIR` (the whole `work/` folder: test_iceberg_bake_inputs, test_iceberg_spawns, test_mode_objects),
 `ARENAMAPPORT_SPATIAL_AUDIO_DIR` (`work/extract/spatial-audio`), `ARENAMAPPORT_GATE_SOUNDS_DIR`, `ARENAMAPPORT_EXTRACT_ROOT` (`work/extract`, the
 score monitor package cross-check) and `ARENAMAPPORT_ARENA_DATA` (the Arena `..._Data` folder). Without them the tests that need the data skip;
-the Arena-dependent Iceberg pins also skip when the installed build does not start with 0.6.1 (they were measured there).
+the Arena-dependent Iceberg pins also skip when the installed build does not start with 0.6.1 or 0.6.2 (measured on 0.6.1, checked on 0.6.2).
 
 Equator's package predates the `-FullMap` convention (its manifest lists the scenes in a different order
 than the descriptor), so Equator is built WITHOUT `-FullMap`. Every other map uses `-FullMap` with
@@ -854,7 +856,11 @@ the log; the user uses it to point at things.
   through a `MaterialPropertyBlock`); materials are changed in place with every original kept in `EmissionLedger` (a ceiling is idempotent, a live change re-targets from the original, cap 0 and the scene unload write the
   originals back; a property another controller moved is left alone), and the specular-cap clones are `Suspend`ed around the pass. The developer key `Lighting (<key>)/EmissionCap` is per released map, default = the descriptor
   value, 0 = off, live. A new emissive family or shader needs a row in `EmissionCapModel.Classify` AND `test_iceberg_emission_cap.py` (its rule lists are pinned against the C# and against the EFT bundle). Iceberg's
-  bloom is the donor pair 2.10/0.35 again (`BloomDefaultsRevision` 2 moves exactly a saved 4.0/0.2 once).
+  bloom is the donor pair 2.10/0.35 again (`BloomDefaultsRevision` 2 moves exactly a saved 4.0/0.2 once). Since 2026-11-01 the same pass has a floor
+  (descriptor `EmissionFloor` / sidecar `emission_floor`, Iceberg 3.0, key `Lighting (<key>)/EmissionFloor`): a lamp between `EmissionCapModel.LiftMinimum`
+  (0.25) and the floor is lifted onto it, never an animated emissive shader (a screen), and a floor above the cap counts as the cap. The camera's bloom is
+  Threshold mode (only the part above 2.10 glows), so one setting cannot suit lamps from 0.58 to 67.8; band the materials, do not chase the bloom
+  (GPU-2 2026-11-01, iceberg-release.md "2026-11-01"). Arena's own UltimateBloom cameras are Threshold mode too (`Cam2_ARENA_FIX` 1.918/0.07).
 - Iceberg promotion rules (2026-10-30, [iceberg-release.md](docs/progress/iceberg-release.md) "promotion into the released set"; unit-tested, no host run yet): (1) a released map without a
   spectator crowd is listed in `validate_map_descriptors.CROWDLESS_MAP_KEYS` (Iceberg), the one list the packer, `validate_distribution.py`, staging and the C# crowd switch agree on
   (`test_crowdless_maps.py`); overview and flare packages are explicit "has it" lists. Iceberg has its overview since 2026-10-31 but still no flare package; the water list has Iceberg since

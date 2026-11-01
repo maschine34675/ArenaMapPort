@@ -16,7 +16,7 @@
   "infiltration_name": "ArenaIceberg",
   "locale_name": "Arena: Iceberg",
   "locale_description": "The Iceberg resort hotel from EFT Arena: a multi-storey hotel with a rotunda on a rocky canyon, with its lobby, atrium, pool hall and cafe inside and a street area around it. The CheckPoint layout is used: two team pockets behind sliding gates at the east and west ends, and three capture points, A, B and C, between them.",
-  "icon_x": 110,
+  "icon_x": 215,
   "icon_y": 608,
   "template_key": "factory4_day",
   "db_base_json_path": "arena_iceberg/base.json",
@@ -55,6 +55,7 @@
   ],
   "keep_level_borders": true,
   "emission_cap": 4.0,
+  "emission_floor": 3.0,
   "puddle_water_material_names": [
     "0877f2335044042e",
     "34f527e8925ffebb"

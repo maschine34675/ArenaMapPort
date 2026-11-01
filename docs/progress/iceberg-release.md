@@ -1162,3 +1162,50 @@ water renderer of Bay5's harbor ([bay5-water.md](bay5-water.md)). Everything bel
     before; no `[EmissionCap]` line (cap 0). Hideout opened and closed (scenario, no ArenaMapPort error).
 - **Open**: the user's look and listen at bloom 2.10/0.35 (his shared config was reset to the defaults); the sea at night, in rain and from
   the bridge; the cap value 4.0 is a first choice, tunable live with `Lighting (arena_iceberg)/EmissionCap`.
+
+## 2026-11-01 - Emission floor, the ArenaMode marker, Arena 0.6.2
+
+- **User feedback** (German, 2026-11-01): the water looks good; the bloom is not right yet, "every light source seems to need its own
+  slider, you never get them all to one level"; the ICEBERG marker must move right so that ArenaMode's panel no longer hides it; Arena was
+  updated to 0.6.2. The user's MASCHINE11 logs of the morning (sessions 11:12 and 11:25) show the search: threshold swept 0.04-4.0,
+  intensity 0.24-0.52, `EmissionCap` 0.05-1.46; the shared config ended at threshold 0.0385, intensity 0.2373, cap 1.4585.
+- **Why one slider could not work.** UltimateBloom runs in Threshold mode on the port's camera (the donor rig, 2.10/0.35): only the part of
+  a pixel above the threshold glows. Iceberg's 37 emissive materials (census scratch `emissive_census.py`) range from 0.58 (Armstrong wall
+  lamps, 64 renderers), 0.60 (senator fluorescents, 55), 0.89 (street lights, 54) and 2.33-2.83 (mall ceiling lights 151, balcony lamps 248)
+  to the six capped at 4.0. With the threshold above a lamp it never glows; lowered below it, the capped lamps and lit walls wash out.
+- **Arena's own cameras** (read-only, UnityPy, scratch `bloom_decode.py`, decoding UltimateBloom with EFT 0.16.9.5's field order, checked on EFT's own
+  resources): Arena's Iceberg LevelSettings names no camera prefab of its own (its first pointer is the PrismPreset `sharedassets255.assets`
+  path 5); the UltimateBloom cameras in Arena's `resources.assets` are `Cam2_ARENA_FIX` and `Cam_Spectator` (threshold 1.918, intensity 0.07,
+  Threshold mode, HDR on), `Cam_Spectator3` (1.918 / 0.346) and `BaseOpticCamera`; `Cam2_ARENA_3` has no UltimateBloom at all. Which one
+  Arena's player uses is IL2CPP code and was not read. `Cam2_ARENA_FIX` with the same values is also in EFT's own resources. Arena's bloom is
+  Threshold mode as well, so the same lamps stay dark there; the port keeps the donor pair.
+- **Built: the emission floor.** `EmissionCapModel.DesiredScale(level, floor, cap, liftable)`: a lamp whose original level lies between
+  `LiftMinimum` 0.25 and the floor is scaled up onto the floor (hue kept, `_EmissionColor` RGB or `_EmissionPower`, the same ledger, written
+  back at raid end), never a level below 0.25 (glass tints 0.06, dark spa bars 0.07, the 0.20 ceiling-light variant) and never an animated
+  emissive shader (`lab_glow` on the projection screen); a floor above the cap counts as the cap. Descriptor `EmissionFloor` (Iceberg 3.0,
+  the released maps 0 = off), sidecar `emission_floor`, `validate_map_descriptors.py` mirrors it, developer key
+  `Lighting (<key>)/EmissionFloor` (live). At floor 3 / cap 4: 6 capped, 23 lifted, 8 untouched of the 37.
+- **Built: the marker.** ArenaMode's mode panel spans x 56..416 at the 1080-unit reference; on GPU-2 (1920x1080) the ICEBERG toggle at
+  Arena's measured `IconX` 110 spanned x 349..502 (ArenaMode's own report: only "BERG" visible). The toggle's left edge moves 0.79 px per
+  anchor unit, so Iceberg is displayed at `IconX` 215 (`IconY` 608 unchanged): `tools/maps/selection/markers.json` keeps the measurement and
+  carries a `display` block with reason and decision, the descriptor, sidecar and base.json say 215, `SelectionMapPositionTests` checks the
+  shown anchor against catalog, sidecar and database, the measurement against the screenshot, and the 12 px clearance.
+- **Gates**: client Release (DllOnly) 0 warnings; .NET 2,887 passed; `test_iceberg_bake_inputs` + `test_iceberg_emission_cap` +
+  `test_gate_sounds` 128 OK against Arena 0.6.2; `validate_map_descriptors.py` OK; `DISTRIBUTION_OK 5 maps 15 bundles 5 sidecars encrypted`.
+- **Host** (GPU-2; deploy 283 files, 3 overwritten: both DLLs and Iceberg's base.json; `deploy-wait --server --game`, identical after 78.3 s,
+  build 16/16 identical; EFT started 12:03:46):
+  - ArenaMode location screen: `toggle "ICEBERG" click 508,315 [431,298 154x33]` (before: `[349,298 153x33]`); the still shows the whole label
+    beside the panel.
+  - Iceberg raid 12:04 (botless, 21:30, clock stopped, clear; the shared config's 0.0385/0.2373/1.4585 active): `[EmissionCap]
+    map=arena_iceberg cap=1.46 floor=3.00 (owned scenes loaded): 37 emissive material(s), 15 capped (largest original 67.79 '367e4a61931e682b'
+    -> 1.46), 14 lifted (smallest original 0.29 '37f74d666c37579d'), 29 written, ...; 22693 renderer(s) scanned in 23 ms` (the floor clamped to
+    the user's cap). With cap 4 / floor 3 set live (`persist=false`): `6 capped (... -> 4.00), 23 lifted (smallest original 0.29
+    '37f74d666c37579d'), 23 written ... in 0 ms`; floor 0 restores the 23, floor 3 lifts them again.
+  - Stills at the default bloom 2.10/0.35 (north corridor wall lamp, hotel core with the red bunker lamp, street): without the floor the wall
+    lamp is a plain white strip with no glow, with it a soft halo like the capped red lamp's; the street lights gain a small halo, no wash-out.
+    Arena's 1.918/0.07 gives a barely visible glow; 1.918/0.20 sits between. 120.0 fps over 10 s (max 11.7 ms); 0 ArenaMapPort warnings.
+    Hideout opened and closed (scenarios `hideout-open`, `hideout-back`). The user's saved values were not touched (`persist=false`).
+- **Arena 0.6.2**: keys, file diff and tests in [arena-update-20261101.md](arena-update-20261101.md): the maps are unchanged, 0.4.0 and Iceberg
+  open on 0.6.2, no re-extraction.
+- **Open**: the user's look at floor 3 / cap 4 / bloom 2.10/0.35 (the shared config still holds the morning's test values, see HANDOFF.md);
+  whether the floor should also come to the released maps (their own lamps are not in this census).

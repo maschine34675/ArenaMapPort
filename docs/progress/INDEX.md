@@ -8,6 +8,9 @@ dated state in one screen; read it before this index if you only have a minute.
 
 ## Current — read these for the area you touch
 
+- [arena-update-20261101.md](arena-update-20261101.md) — Arena 0.6.2.0.48473 (2026-11-01): keys of 0.4.0 and Iceberg verified on the VM and
+  MASCHINE11, file and object diff against 0.6.1 (renumbered shared-file pointers and two dust meshes only), test adjustments; no rebuild.
+
 - [iceberg-dynamicmaps.md](iceberg-dynamicmaps.md) — Iceberg overview from the connected native routes, owned package integration, scoped deployment and GPU-2 marker/heading acceptance on 2026-10-31.
 
 - [release-preparation-20261029.md](release-preparation-20261029.md) — current 0.4.0 release notes,

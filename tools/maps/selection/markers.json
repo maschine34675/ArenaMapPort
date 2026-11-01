@@ -152,7 +152,13 @@
         467.282
       ],
       "icon_x": 110,
-      "icon_y": 608
+      "icon_y": 608,
+      "display": {
+        "icon_x": 215,
+        "icon_y": 608,
+        "reason": "ArenaMode's mode panel (x 56..416 at the 1080-unit reference) covered the measured position: on GPU-2 (1920x1080, 2026-11-01) the ICEBERG toggle spanned x 349..502. 105 anchor units move it 83 px east, so its left edge sits at x 432, 16 px clear of the panel.",
+        "decision": "user, 2026-11-01: move the marker right so that ArenaMode's panel no longer hides it"
+      }
     },
     {
       "name": "Block",

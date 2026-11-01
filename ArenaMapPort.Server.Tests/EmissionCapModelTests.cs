@@ -334,6 +334,106 @@ public sealed class EmissionCapModelTests
         Assert.Equal(new[] { "Emission_Yellow", "Prison_Emission_red", "Prison_Emission_passive", "Sanatorium_Emissive_Orange", "Prison_Emission_blue", "Plafond_lamp_02_source_E_red" }, written);
     }
 
+    [Theory]
+    // the floor lifts a lamp between LiftMinimum (0.25) and the floor onto the floor
+    [InlineData(0.58f, 3f, 4f, true, 5.172414f)]   // Armstrong_lamp_03_A_source_E
+    [InlineData(2.925f, 3f, 4f, true, 1.025641f)]  // the searchlight
+    [InlineData(0.25f, 3f, 4f, true, 12f)]         // exactly at the minimum: lifted
+    [InlineData(0.249f, 3f, 4f, true, 1f)]         // below it (glass tints 0.06, dark light bars 0.07, the 0.20 ceiling-light variant): never
+    [InlineData(0.58f, 3f, 4f, false, 1f)]         // an animated emissive shader (a screen): never
+    [InlineData(3f, 3f, 4f, true, 1f)]             // on the floor and inside the band: nothing to do
+    [InlineData(2.99999f, 3f, 4f, true, 1f)]       // within float noise of the floor
+    [InlineData(3.5f, 3f, 4f, true, 1f)]
+    [InlineData(6.8f, 3f, 4f, true, 0.588235f)]    // above the band: the cap, as before
+    [InlineData(6.8f, 3f, 4f, false, 0.588235f)]   // the cap applies to a screen too
+    [InlineData(0.58f, 5f, 4f, true, 6.896552f)]   // a floor above the cap counts as the cap
+    [InlineData(0.58f, 3f, 0f, true, 5.172414f)]   // the floor alone (cap off)
+    [InlineData(0.58f, 0f, 4f, true, 1f)]          // floor off
+    [InlineData(0.58f, -1f, 4f, true, 1f)]
+    [InlineData(0.58f, float.NaN, 4f, true, 1f)]
+    [InlineData(0f, 3f, 4f, true, 1f)]             // a lamp that is authored off stays off
+    [InlineData(float.NaN, 3f, 4f, true, 1f)]
+    public void TheFloorLiftsLampsIntoTheBandAndLeavesEverythingElseAlone(float level, float floor, float cap, bool liftable, float expected) =>
+        Assert.Equal(expected, EmissionCapModel.DesiredScale(level, floor, cap, liftable), 5);
+
+    [Theory]
+    [InlineData("p0/Reflective/Bumped Emissive Specular SMap", true)]
+    [InlineData("Standard", true)]
+    [InlineData("p0/Cutout/Bumped Diffuse Emissive", true)]
+    [InlineData("p0/Reflective/Bumped Animated Emissive Specular SMap", false)]   // lab_glow on Projection_Screen
+    [InlineData("", false)]
+    [InlineData(null, false)]
+    public void OnlyAnimatedEmissiveShadersAreNeverLifted(string? shader, bool expected) =>
+        Assert.Equal(expected, EmissionCapModel.Liftable(shader!));
+
+    [Fact]
+    public void ALiftedLampKeepsItsHueAndIsWrittenBackBitForBit()
+    {
+        var ledger = new EmissionLedger<FakeMaterial>();
+        // Train_Emissive_White (Standard, 0.44) and senator_light_emissive (p0 SMap, power 2, visibility 0.3, colour peak 1)
+        var train = new FakeMaterial { Name = "f79d2ed803abd7ca", Values = new EmissionValues(0.44f, 0.40f, 0.30f, 1f, 0f) };
+        var senator = new FakeMaterial { Name = "c0090cb94f7fcd2e", Values = new EmissionValues(0f, 0f, 0f, 0f, 2f) };
+        ledger.TryAdd(train, EmissionEntry.ForColor(train.Name, 0.44f, 0.40f, 0.30f, 1f));
+        ledger.TryAdd(senator, EmissionEntry.ForPower(senator.Name, 2f, 0.3f, 1f));
+        var result = ledger.Apply(Surface, 3f, 4f);
+        Assert.Equal((2, 0, 2, 2), (result.Materials, result.Capped, result.Lifted, result.Written));
+        Assert.Equal(0.44f, result.SmallestLifted, 5);
+        Assert.Equal("f79d2ed803abd7ca", result.SmallestLiftedName);
+        Assert.Equal(3f, Peak(train.Values), 4);
+        Assert.Equal(0.40f / 0.44f, train.Values.G / train.Values.R, 5);
+        Assert.Equal(1f, train.Values.A);
+        Assert.Equal(3f, EmissionCapModel.PowerLevel(senator.Values.Power, 0.3f, 1f), 4);   // power 10: the visibility stays the scripts'
+        // a second pass writes nothing; floor 0 alone restores the lifted ones; Restore brings back the originals exactly
+        Assert.Equal(0, ledger.Apply(Surface, 3f, 4f).Written);
+        var floorOff = ledger.Apply(Surface, 0f, 4f);
+        Assert.Equal((0, 2), (floorOff.Lifted, floorOff.Written));
+        Assert.Equal((0.44f, 0.40f, 0.30f, 1f), (train.Values.R, train.Values.G, train.Values.B, train.Values.A));
+        ledger.Apply(Surface, 3f, 4f);
+        Assert.Equal(2, ledger.Restore(Surface).Written);
+        Assert.Equal(2f, senator.Values.Power);
+    }
+
+    [Fact]
+    public void AtFloorThreeAndCapFourIcebergsLampsAllEndInTheBand()
+    {
+        // (name, level, liftable) of Iceberg's 37 emissive materials (package census 2026-11-01, docs/progress/iceberg-release.md "Emission floor")
+        var table = new (string Name, float Level, bool Liftable)[]
+        {
+            ("Emission_Yellow", 67.794f, true), ("Prison_Emission_red", 10f, true), ("Prison_Emission_passive", 7.736f, true),
+            ("Sanatorium_Emissive_Orange", 6.792f, true), ("Prison_Emission_blue", 6.226f, true), ("Plafond_lamp_02_source_E_red", 4.277f, true),
+            ("Searchlight_03_source_E", 2.925f, true), ("Sanatorium_Emissive_white", 2.83f, true), ("Spot_lamp_01_source_E", 2.333f, true),
+            ("shopping_mall_ceiling_light_emission", 2.333f, true), ("Floor_lamp_01-03_source_E", 2.31f, true),
+            ("Preset_refill_container_emission_green", 2.119f, true), ("armstrong_light_emissive", 2f, true), ("AreaLightSource", 1.919f, true),
+            ("Preset_refill_container_emission_white", 1.74f, true), ("chemlight_d", 1.43f, true), ("projector_emission", 1.32f, true),
+            ("Plafond_lamp_02_E", 1.125f, true), ("Chandlier_03_04_emissive2", 1f, true), ("Track_lamp_01-03_E_black", 1f, true),
+            ("Streetlight_lamp_01_source_E", 0.888f, true), ("Armstrong_lamp_03_B_source_E", 0.8f, true), ("04_emision", 0.71f, true),
+            ("Fluorescent_lamp_01_source_E", 0.702f, true), ("Plafond_lamp_02_E_red", 0.645f, true), ("senator_light_emissive", 0.6f, true),
+            ("Armstrong_lamp_03_A_source_E", 0.6f, true), ("Train_Emissive_White", 0.44f, true), ("lab_glow", 0.372f, false),
+            ("Lift_emissive_draft", 0.29f, true), ("Sanatorium_Metal_ceiling_light", 0.192f, true), ("Airpit_lamp_emissive_grey", 0.07f, true),
+            ("Glass_broken_new", 0.06f, true), ("Sanatorium_Glass_broken_new", 0.06f, true), ("Split_system_diffuse", 0f, true),
+            ("Concrete_Clean", 0f, true), ("tile_floor_diffuse", 0f, true),
+        };
+        Assert.Equal(37, table.Length);
+        var ledger = new EmissionLedger<FakeMaterial>();
+        var materials = new List<(string Name, float Level, FakeMaterial Material)>();
+        foreach (var (name, level, liftable) in table)
+        {
+            var material = new FakeMaterial { Name = name, Values = new EmissionValues(0f, 0f, 0f, 0f, level) };
+            ledger.TryAdd(material, EmissionEntry.ForPower(name, level, 1f, 1f, liftable));
+            materials.Add((name, level, material));
+        }
+        var result = ledger.Apply(Surface, 3f, 4f);
+        Assert.Equal((37, 6, 23), (result.Materials, result.Capped, result.Lifted));
+        Assert.Equal(("Lift_emissive_draft", 0.29f), (result.SmallestLiftedName, result.SmallestLifted));
+        foreach (var (name, level, material) in materials)
+        {
+            if (level >= EmissionCapModel.LiftMinimum && name != "lab_glow")
+                Assert.InRange(material.Values.Power, 3f - 1e-4f, 4f + 1e-4f);
+            else
+                Assert.Equal(0, material.Writes);
+        }
+    }
+
     [Fact]
     public void TheShadersDeclaredFactsAreWhatTheDocumentationClaims()
     {
@@ -344,5 +444,6 @@ public sealed class EmissionCapModelTests
         Assert.Equal("_EmissiveColor", EmissionCapModel.EmissiveColorProperty);
         Assert.Equal("_EMISSION", EmissionCapModel.EmissionKeyword);
         Assert.Equal(100f, EmissionCapModel.MaxCap);
+        Assert.Equal(0.25f, EmissionCapModel.LiftMinimum);
     }
 }

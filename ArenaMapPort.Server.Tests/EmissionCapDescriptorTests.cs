@@ -36,6 +36,22 @@ public sealed class EmissionCapDescriptorTests
     }
 
     [Fact]
+    public void EveryDescriptorMirrorsItsSidecarsFloorAndOnlyIcebergHasOne()
+    {
+        foreach (var map in ArenaMapRegistry.Catalog)
+        {
+            using var document = Sidecar(map);
+            var sidecar = document.RootElement.TryGetProperty("emission_floor", out var floor) ? (float)floor.GetDouble() : 0f;
+            Assert.True(sidecar == map.EmissionFloor, $"{map.Key}: sidecar {sidecar} vs descriptor {map.EmissionFloor}");
+            Assert.InRange(map.EmissionFloor, 0f, EmissionCapModel.MaxCap);
+            Assert.Equal(map == ArenaMapRegistry.Iceberg, map.EmissionFloor > 0f);
+            // a floor sits inside its map's band: not above the cap the same map carries
+            if (map.EmissionCap > 0f) Assert.True(map.EmissionFloor <= map.EmissionCap, map.Key);
+        }
+        Assert.Equal(3.0f, ArenaMapRegistry.Iceberg.EmissionFloor);
+    }
+
+    [Fact]
     public void IcebergsCapIsFourAndTheReleasedMapsAreOff()
     {
         Assert.Equal(4.0f, ArenaMapRegistry.Iceberg.EmissionCap);

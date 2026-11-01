@@ -338,6 +338,11 @@ namespace ArenaMapPort.Shared
         // strongest emissive material is 4.13, accepted under the normal bloom); the developer key `Lighting (<key>)/EmissionCap` defaults to this
         // value. Mirrors tools/maps/<stem>.json emission_cap (absent = 0); the Editor never reads it.
         public float EmissionCap { get; }
+        // Emission floor (2026-11-01, docs/progress/iceberg-release.md "Emission floor"): the lower bound of the same band; EmissionCapRepairs lifts a
+        // lamp whose original level lies between EmissionCapModel.LiftMinimum (0.25) and this value onto it, so one threshold bloom suits every lamp.
+        // 0 = off (the four released maps); the developer key `Lighting (<key>)/EmissionFloor` defaults to it. Mirrors tools/maps/<stem>.json
+        // emission_floor (absent = 0); the Editor never reads it.
+        public float EmissionFloor { get; }
         // PLAN-AIRPIT item 8 — Editor-side NavMesh bake inputs. The client never reads them; they live here so the one
         // per-map table stays complete and tools/maps/<key>.json cannot drift (validate_map_descriptors.py and the xunit
         // mirror tests). All empty for Equator and Bay5, whose bake is unchanged.
@@ -427,7 +432,8 @@ namespace ArenaMapPort.Shared
             ArenaDoorPose[]? DoorPoses = null,
             ArenaScoreMonitor[]? ScoreMonitors = null,
             float EmissionCap = 0f,
-            bool HasNativeWater = false)
+            bool HasNativeWater = false,
+            float EmissionFloor = 0f)
 #nullable restore
         {
             this.Key = Key;
@@ -452,6 +458,7 @@ namespace ArenaMapPort.Shared
             this.DoorPoses = DoorPoses ?? new ArenaDoorPose[0];
             this.ScoreMonitors = ScoreMonitors ?? new ArenaScoreMonitor[0];
             this.EmissionCap = EmissionCap;
+            this.EmissionFloor = EmissionFloor;
             this.NavMeshBakeExclusions = NavMeshBakeExclusions ?? new string[0];
             this.AuthoredBorders = AuthoredBorders ?? new ArenaBorderDescriptor[0];
             this.BakeBounds = BakeBounds ?? new float[0];
@@ -1422,7 +1429,8 @@ namespace ArenaMapPort.Shared
             InfiltrationName: "ArenaIceberg",
             LocaleName: "Arena: Iceberg",
             LocaleDescription: "The Iceberg resort hotel from EFT Arena: a multi-storey hotel with a rotunda on a rocky canyon, with its lobby, atrium, pool hall and cafe inside and a street area around it. The CheckPoint layout is used: two team pockets behind sliding gates at the east and west ends, and three capture points, A, B and C, between them.",
-            IconX: 110,
+            // Displayed east of Arena's measured 110 (tools/maps/selection/markers.json "display"): ArenaMode's mode panel hid the marker.
+            IconX: 215,
             IconY: 608,
             DbBaseJsonPath: "arena_iceberg/base.json",
             // PLAN-ICEBERG item 7/12 (docs/progress/iceberg-release.md, 2026-10-30). Exits mirror tools/maps/iceberg.exits.json (IcebergMapTests):
@@ -1534,7 +1542,11 @@ namespace ArenaMapPort.Shared
             // normal bloom 2.10/0.35 the crystal lamps and the chandeliers blow out into discs. 4.0 is the level of the released maps' strongest
             // lamps (4.13 and 3.93, accepted under the same bloom) and still about twice the bloom threshold, so a capped lamp reads as lit; the
             // value is tuned live on the host with the developer key.
-            EmissionCap: 4.0f);
+            EmissionCap: 4.0f,
+            // Emission floor (2026-11-01; mirrors tools/maps/iceberg.json emission_floor): the other 31 lamps lie between 0.58 (Armstrong wall lamps)
+            // and 2.92 (the searchlight), so under any one threshold some never glow while the capped ones do. Lifted onto 3.0 they sit in [3.0, 4.0]
+            // with the capped ones. Tuned live on the host with the developer key (docs/progress/iceberg-release.md "Emission floor").
+            EmissionFloor: 3.0f);
 
         // Source scene selection: tools/extract/plans/factory.json. Identity is permanent.
         public static readonly ArenaMapDescriptor Factory = new(

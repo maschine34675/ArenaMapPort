@@ -59,7 +59,8 @@ public sealed class IcebergMapTests
         Assert.Equal(map.LocaleName, server.RootElement.GetProperty("Name").GetString());
         Assert.Equal(map.IconX, server.RootElement.GetProperty("IconX").GetInt32());
         Assert.Equal(map.IconY, server.RootElement.GetProperty("IconY").GetInt32());
-        Assert.Equal((110, 608), (map.IconX, map.IconY));
+        // Arena's measured 110 moved east so that ArenaMode's mode panel no longer hides the marker (markers.json "display", 2026-11-01).
+        Assert.Equal((215, 608), (map.IconX, map.IconY));
         // The port's own words (Arena's locales have no Iceberg name or description row): factual, one English string for every language, ASCII, no
         // spike wording; ArenaMapDescriptions.Load leaves Iceberg out of the official pack and Resolve answers with this text.
         Assert.DoesNotContain("spike", map.LocaleName, StringComparison.OrdinalIgnoreCase);

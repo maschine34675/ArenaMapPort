@@ -45,9 +45,11 @@ SPIKE_PACKAGE = WORK / "extract" / "iceberg"          # the Arena 0.5.4 spike pa
 DESIGN_STUFF = "Arena_Sanatorium_CheckPoint_DesignStuff"
 HAVE_PACKAGE = (PACKAGE / "scenes" / f"{DESIGN_STUFF}.json").is_file()
 ARENA_DATA = Path(nd.DEFAULT_ARENA_DATA)
-# The Arena-dependent pins (2,473 polygons, 93 components, 193/70 cover counts, ...) were measured on the 0.6.1 build; a newer Arena (0.6.2 rewrites
-# level256/258/375 and sharedassets376/377) may legitimately differ, so those tests skip with their reason instead of turning red.
-PINNED_ARENA_BUILD = "0.6.1."
+# The Arena-dependent pins (2,473 polygons, 93 components, 193/70 cover counts, ...) were measured on the 0.6.1 build. 0.6.2.0.48473 (2026-11-01)
+# rewrites level256/258/375 and sharedassets376/377 with the same sizes, but only renumbered pointers into shared files (resources.assets,
+# sharedassets1.assets) differ (docs/progress/arena-update-20261101.md), and these tests pass on it. A newer Arena may legitimately differ, so
+# those tests skip with their reason instead of turning red until its build is checked and added here.
+PINNED_ARENA_BUILD = ("0.6.1.", "0.6.2.")
 HAVE_ARENA = (ARENA_DATA / "sharedassets377.assets").is_file() and (ARENA_DATA / "level377").is_file() \
     and door_poses.arena_version(ARENA_DATA).startswith(PINNED_ARENA_BUILD)
 ICEBERG = nd.ARENA_SOURCES["iceberg"]
@@ -704,7 +706,7 @@ def arena_mesh():
     return _CACHE["mesh"], _CACHE["meta"]
 
 
-@unittest.skipUnless(HAVE_ARENA, "Arena 0.6.1 is not installed (the installed build must start with " + PINNED_ARENA_BUILD + ")")
+@unittest.skipUnless(HAVE_ARENA, "no checked Arena build is installed (the installed build must start with one of " + ", ".join(PINNED_ARENA_BUILD) + ")")
 class ArenaMeshTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):

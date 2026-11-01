@@ -49,6 +49,14 @@ def doors(key):
     return json.loads((REPO / "tools" / "maps" / f"{STEM[key]}.doors.json").read_text(encoding="utf-8"))
 
 
+def as_read_from(rendered, version, tracked):
+    """The rendered sidecar with the installed build's arena_version replaced by the one the tracked file records. The rows are the content the
+    test holds equal; the version is the provenance of the tracked file (read on 0.6.1.0.48206; Arena 0.6.2.0.48473 of 2026-11-01 gives the same
+    rows, docs/progress/arena-update-20261101.md), so an Arena update that leaves the rows alone does not fail the test."""
+    recorded = json.loads(tracked)["source"]["arena_version"]
+    return rendered.replace(json.dumps(version), json.dumps(recorded))
+
+
 def gain_db(row):
     return 20 * math.log10(row["source_volume"] * row["player_volume"] * 10 ** (row["mixer_db"] / 20))
 
@@ -561,7 +569,7 @@ class RealDataRowTests(unittest.TestCase):
             with self.subTest(key=key):
                 doc = G.extract_rows(key, ARENA, version, mixers)
                 tracked = (REPO / "tools" / "maps" / f"{STEM[key]}.gatesounds.json").read_bytes().decode("utf-8").replace("\r\n", "\n")
-                self.assertEqual(G.render_rows_sidecar(doc), tracked)
+                self.assertEqual(as_read_from(G.render_rows_sidecar(doc), version, tracked), tracked)
                 self.assertEqual(len(doc["rows"]), RowSidecarTests.COUNTS[key])
 
     @unittest.skipUnless(HAVE_PACKAGE, "work/extract/gate-sounds is not extracted (tools/extract/extract_gate_sounds.py clips)")
@@ -843,7 +851,7 @@ class RealIcebergRowTests(unittest.TestCase):
     def test_the_tracked_sidecar_is_what_the_installed_arena_gives(self):
         doc = G.extract_rows(ICEBERG, ARENA, self.version, self.mixers)
         tracked = (REPO / "tools" / "maps" / "iceberg.gatesounds.json").read_bytes().decode("utf-8").replace("\r\n", "\n")
-        self.assertEqual(G.render_rows_sidecar(doc), tracked)
+        self.assertEqual(as_read_from(G.render_rows_sidecar(doc), self.version, tracked), tracked)
         self.assertEqual((len(doc["rows"]), len(doc["clips"]), len(doc["skipped"])), (6, 3, 0))
 
     def test_the_six_players_all_play_at_pitch_1_15_with_no_group(self):

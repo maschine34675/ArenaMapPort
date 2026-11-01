@@ -252,3 +252,24 @@ The installed server hash stayed
 `9298c76b6925e1686d4254238d0a07060a7b747b787b23f74979926f7d8cc824` both locally and on GPU-2.
 No server restart was required by this change, no scene assets were deployed, and no release/upload
 or vanilla-install update was performed.
+
+## 2026-11-01 - Iceberg displayed east of its measured position (ArenaMode panel)
+
+User decision: move the Iceberg marker right so that ArenaMode's mode panel no longer hides it. ArenaMode's own
+GPU-2 report of 2026-10-31 had found only "BERG" visible and could not move it (ArenaMapPort's
+`ArenaModeMapPositionIntegration` keeps every optional map at the native anchor). The panel is anchored top-left at
+x 56 with width 360 (`ArenaModeSelectionView`), so it ends at x 416 at the 1080-unit reference. On GPU-2
+(1920x1080) the ICEBERG toggle at the measured `IconX` 110 spanned x 349..502. The five toggles measured that day
+place their left edge at a constant offset from the anchor (349, 988, 884, 632, 887 against 91.9, 731.0, 627.5,
+375.5, 630.7 anchor units), so the edge moves 0.79 px per `IconX` unit.
+
+Iceberg is now displayed at `IconX` 215, `IconY` 608: the left edge moves 83 px to x 432, 16 px clear of the panel.
+`markers.json` keeps the measured 110/608 as the record and adds a `display` block with the shown anchor, the
+reason and the decision; the descriptor, `tools/maps/iceberg.json` and `db/arena_iceberg/base.json` carry 215.
+`SelectionMapPositionTests` compares the displayed anchor with catalog, sidecar and database, reconstructs the
+screenshot pin from the measurement as before, allows a `display` block only for Iceberg and requires at least
+12 px clearance. The PMC flow shows the same anchor on EFT's own region map; it is not geographic there.
+
+Host (GPU-2, 2026-11-01 12:03, server and client of this change, `deploy-wait --server --game`): ArenaMode's
+location screen reports `toggle "ICEBERG" click 508,315 [431,298 154x33]`; the frame capture shows the whole
+label beside the panel. The PMC flow selected `ARENA: ICEBERG` and started a raid as before.

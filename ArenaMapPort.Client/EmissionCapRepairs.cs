@@ -29,9 +29,13 @@ namespace ArenaMapPort.Client
     /// keeps every original per material instance, a ceiling is idempotent by nature, a live change re-targets from the originals, and the scene
     /// unload writes the originals back so a second raid with the bundle still cached starts clean. A property that another controller moved after
     /// the cap wrote it is left alone. The renderer-local clones of ReflectiveSpecularRepairs are suspended around the pass, so they are rebuilt
-    /// from the capped inputs. A map whose cap is 0 schedules nothing and scans nothing.
+    /// from the capped inputs. A map whose cap and floor are 0 schedules nothing and scans nothing.
     ///
-    /// Host evidence: docs/progress/iceberg-release.md "Per-map emission cap" (pending the first Iceberg raid with this build).
+    /// The floor (2026-11-01, user feedback "every light source seems to need its own slider"): the same pass also lifts a lamp below the map's
+    /// <see cref="ArenaMapDescriptor.EmissionFloor"/> onto it (developer key `Lighting (&lt;key&gt;)/EmissionFloor`, 0 = off, live), so the map's lamps
+    /// sit in one band and react alike to the threshold bloom; which materials it may lift is <see cref="EmissionCapModel"/>'s rule.
+    ///
+    /// Host evidence: docs/progress/iceberg-release.md "Per-map emission cap" (GPU-2 2026-10-31: 6 materials capped in 20 ms) and "Emission floor".
     /// </summary>
     internal static class EmissionCapRepairs
     {
@@ -58,6 +62,7 @@ namespace ArenaMapPort.Client
         }
 
         static readonly Dictionary<string, ConfigEntry<float>> Caps = new Dictionary<string, ConfigEntry<float>>();
+        static readonly Dictionary<string, ConfigEntry<float>> Floors = new Dictionary<string, ConfigEntry<float>>();
         static readonly MaterialSurface Surface = new MaterialSurface();
         static State _state;
         static bool _installed;
@@ -83,6 +88,16 @@ namespace ArenaMapPort.Client
                         new AcceptableValueRange<float>(0f, EmissionCapModel.MaxCap)));
                 Caps[map.Key] = entry;
                 entry.SettingChanged += (_, __) => OnCapChanged(captured);
+                var floor = Plugin.Instance.Settings.Bind($"Lighting ({map.Key})", "EmissionFloor", map.EmissionFloor,
+                    new ConfigDescription(
+                        "Floor under the emission of this map's lamps; 0 = off. A lamp whose level (as for EmissionCap) lies between 0.25 and " +
+                        "the floor is scaled up onto it (hue kept), so the map's lamps sit between this floor and EmissionCap and the bloom " +
+                        "treats them alike. Levels below 0.25 (glass tints, dark light bars) and animated emissive shaders (screens) are " +
+                        "never lifted; a floor above the cap counts as the cap. Default: the map's own value (Iceberg 3.0; Equator, Bay5, " +
+                        "AirPit and Bowl 0 = off). Live.",
+                        new AcceptableValueRange<float>(0f, EmissionCapModel.MaxCap)));
+                Floors[map.Key] = floor;
+                floor.SettingChanged += (_, __) => OnCapChanged(captured);
             }
 
             SceneManager.sceneLoaded += OnSceneLoaded;
@@ -91,6 +106,10 @@ namespace ArenaMapPort.Client
 
         static float CapFor(ArenaMapDescriptor map) => Caps.TryGetValue(map.Key, out var entry) ? entry.Value : map.EmissionCap;
 
+        static float FloorFor(ArenaMapDescriptor map) => Floors.TryGetValue(map.Key, out var entry) ? entry.Value : map.EmissionFloor;
+
+        static bool Active(ArenaMapDescriptor map) => CapFor(map) > 0f || FloorFor(map) > 0f;
+
         static void OnSceneLoaded(Scene scene, LoadSceneMode mode)
         {
             if (!ArenaMapRaid.IsOwnedScene(scene.name))
@@ -98,9 +117,9 @@ namespace ArenaMapPort.Client
                 return;
             }
             var map = ArenaMapRaid.CurrentMap;
-            if (map == null || CapFor(map) <= 0f)
+            if (map == null || !Active(map))
             {
-                return; // a map without a cap costs nothing
+                return; // a map without a cap or a floor costs nothing
             }
             try
             {
@@ -147,7 +166,7 @@ namespace ArenaMapPort.Client
                     return;
                 }
                 var state = _state;
-                if (state == null && CapFor(map) <= 0f)
+                if (state == null && !Active(map))
                 {
                     return;
                 }
@@ -177,7 +196,9 @@ namespace ArenaMapPort.Client
                 return;
             }
             float cap = CapFor(state.Map);
-            if (cap <= 0f && state.Ledger.Count == 0)
+            float floor = FloorFor(state.Map);
+            bool on = cap > 0f || floor > 0f;
+            if (!on && state.Ledger.Count == 0)
             {
                 return;
             }
@@ -194,11 +215,11 @@ namespace ArenaMapPort.Client
                 {
                     try
                     {
-                        if (cap > 0f && rescan)
+                        if (on && rescan)
                         {
                             renderers = Scan(state);
                         }
-                        result = cap > 0f ? state.Ledger.Apply(Surface, cap) : state.Ledger.Restore(Surface);
+                        result = on ? state.Ledger.Apply(Surface, floor, cap) : state.Ledger.Restore(Surface);
                     }
                     catch (Exception e)
                     {
@@ -220,10 +241,12 @@ namespace ArenaMapPort.Client
             }
             watch.Stop();
 
-            if (cap > 0f)
+            if (on)
             {
-                Plugin.Log.LogDebug($"{Tag} map={state.Map.Key} cap={F(cap)} ({reason}): {result.Materials} emissive material(s), {result.Capped} capped" +
+                Plugin.Log.LogDebug($"{Tag} map={state.Map.Key} cap={F(cap)} floor={F(floor)} ({reason}): {result.Materials} emissive material(s), {result.Capped} capped" +
                     (result.Capped > 0 ? $" (largest original {F(result.LargestOriginal)} '{result.LargestName}' -> {F(cap)})" : "") +
+                    $", {result.Lifted} lifted" +
+                    (result.Lifted > 0 ? $" (smallest original {F(result.SmallestLifted)} '{result.SmallestLiftedName}')" : "") +
                     $", {result.Written} written, {result.Foreign} left alone (changed elsewhere), {result.Gone} gone" +
                     (renderers > 0 ? $"; {renderers} renderer(s) scanned" : "") + $" in {watch.ElapsedMilliseconds} ms");
                 if (DeveloperOptions.Enabled)
@@ -231,7 +254,7 @@ namespace ArenaMapPort.Client
                     foreach (var pair in state.Ledger.Entries)
                     {
                         var entry = pair.Value;
-                        if (entry.AppliedScale < 1f)
+                        if (entry.AppliedScale != 1f)
                         {
                             Plugin.Log.LogDebug($"{Tag}   '{entry.Name}' ({entry.Family}) level {F(entry.Level)} -> {F(entry.Level * entry.AppliedScale)} (x{entry.AppliedScale.ToString("0.000", CultureInfo.InvariantCulture)})");
                         }
@@ -240,7 +263,7 @@ namespace ArenaMapPort.Client
             }
             else
             {
-                Plugin.Log.LogDebug($"{Tag} map={state.Map.Key} cap off ({reason}): {result.Written} material(s) restored to their originals");
+                Plugin.Log.LogDebug($"{Tag} map={state.Map.Key} cap and floor off ({reason}): {result.Written} material(s) restored to their originals");
             }
         }
 
@@ -302,7 +325,7 @@ namespace ArenaMapPort.Client
                 case EmissionFamily.Color:
                 {
                     var color = material.GetColor(EmissionColorId);
-                    return EmissionEntry.ForColor(material.name, color.r, color.g, color.b, color.a);
+                    return EmissionEntry.ForColor(material.name, color.r, color.g, color.b, color.a, EmissionCapModel.Liftable(shader.name));
                 }
                 case EmissionFamily.Power:
                 {
@@ -313,7 +336,7 @@ namespace ArenaMapPort.Client
                         var emissive = material.GetColor(EmissiveColorId);
                         peak = Math.Max(emissive.r, Math.Max(emissive.g, emissive.b));
                     }
-                    return EmissionEntry.ForPower(material.name, material.GetFloat(EmissionPowerId), visibility, peak);
+                    return EmissionEntry.ForPower(material.name, material.GetFloat(EmissionPowerId), visibility, peak, EmissionCapModel.Liftable(shader.name));
                 }
                 default:
                     return null;

@@ -501,12 +501,15 @@ def emission_cap_errors(map_json: dict) -> list[str]:
     """Shape of the optional emission_cap (EmissionCapRepairs, docs/progress/iceberg-release.md "Per-map emission cap"): the ceiling on the
     effective emission level of the map's emissive materials. Absent or 0 = the repair is off for the map (the released maps before Iceberg);
     otherwise a finite number in (0, EMISSION_CAP_MAX]. Only the C# runtime reads it; the Editor ignores the key."""
-    if "emission_cap" not in map_json:
-        return []
-    cap = map_json["emission_cap"]
-    if isinstance(cap, bool) or not isinstance(cap, (int, float)) or not math.isfinite(cap) or cap < 0 or cap > EMISSION_CAP_MAX:
-        return [f"emission_cap must be a finite number between 0 (off) and {EMISSION_CAP_MAX:g}, got {cap!r}"]
-    return []
+    errors = []
+    # emission_floor (2026-11-01, "Emission floor"): the lower bound of the same band, the same shape; a floor above the cap counts as the cap at run time.
+    for key in ("emission_cap", "emission_floor"):
+        if key not in map_json:
+            continue
+        value = map_json[key]
+        if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value) or value < 0 or value > EMISSION_CAP_MAX:
+            errors.append(f"{key} must be a finite number between 0 (off) and {EMISSION_CAP_MAX:g}, got {value!r}")
+    return errors
 
 
 # BaseBallistic.ESurfaceSound of EFT 0.16.9.5 (D:/SPT41/Development/_decompiled/BaseBallistic.cs, in declaration order). The
@@ -1029,6 +1032,7 @@ def check_map_against_registry_entry(
     errors.extend(f"{where}: {error}" for error in shader_fallback_errors(map_json))
     errors.extend(f"{where}: {error}" for error in emission_cap_errors(map_json))
     check_field(errors, where, "emission_cap", map_json.get("emission_cap", 0), resolve(registry_args.get("EmissionCap", 0), ref_scope))
+    check_field(errors, where, "emission_floor", map_json.get("emission_floor", 0), resolve(registry_args.get("EmissionFloor", 0), ref_scope))
     errors.extend(f"{where}: {error}" for error in puddle_errors(map_json))
     errors.extend(f"{where}: {error}" for error in native_water_errors(map_json, registry_args))
     check_field(errors, where, "puddle_water_material_names", map_json.get("puddle_water_material_names", []),

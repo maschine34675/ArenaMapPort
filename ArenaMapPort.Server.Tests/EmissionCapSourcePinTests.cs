@@ -55,8 +55,9 @@ public sealed class EmissionCapSourcePinTests
         Assert.DoesNotMatch(@"FindObjectsOfType|FindObjectOfType|FindObjectsByType|Resources\.FindObjects|GameObject\.Find|FindWithTag", code);
         Assert.Single(Regex.Matches(code, @"GetComponentsInChildren<"));
         Assert.Contains("GetComponentsInChildren<Renderer>(true)", Between(code, "static int Scan(State state)", "static EmissionEntry Capture("));
-        // the scan is called from the one pass, and only when the cap is on and a rescan is asked for
-        Assert.Contains("if (cap > 0f && rescan)", code);
+        // the scan is called from the one pass, and only when the cap or the floor is on and a rescan is asked for
+        Assert.Contains("bool on = cap > 0f || floor > 0f;", code);
+        Assert.Contains("if (on && rescan)", code);
         Assert.Single(Regex.Matches(code, @"\bScan\(state\)"));
         // a shared list, not an array per renderer
         Assert.Contains("renderer.GetSharedMaterials(materials);", code);
@@ -69,7 +70,8 @@ public sealed class EmissionCapSourcePinTests
         var code = Code(Glue);
         var loaded = Between(code, "static void OnSceneLoaded(", "static State StateFor(");
         Assert.Contains("ArenaMapRaid.IsOwnedScene(scene.name)", loaded);
-        Assert.Contains("CapFor(map) <= 0f", loaded);                       // a map without a cap schedules nothing
+        Assert.Contains("!Active(map)", loaded);                            // a map without a cap or a floor schedules nothing
+        Assert.Contains("static bool Active(ArenaMapDescriptor map) => CapFor(map) > 0f || FloorFor(map) > 0f;", code);
         Assert.Contains("StartCoroutine(RunAfter(state, ++state.Generation))", loaded);
         Assert.Contains("const float PassDelaySeconds = 4f;", code);
         var run = Between(code, "static IEnumerator RunAfter(", "static void OnCapChanged(");
@@ -101,7 +103,7 @@ public sealed class EmissionCapSourcePinTests
         var pass = Between(code, "static void Pass(", "static int Scan(");
         var suspend = Between(pass, "using (ReflectiveSpecularRepairs.Suspend(state.Map))", "catch (Exception e)");
         Assert.Contains("Scan(state)", suspend);
-        Assert.Contains("state.Ledger.Apply(Surface, cap)", suspend);
+        Assert.Contains("state.Ledger.Apply(Surface, floor, cap)", suspend);
         Assert.Contains("state.Ledger.Restore(Surface)", suspend);
     }
 
@@ -114,11 +116,17 @@ public sealed class EmissionCapSourcePinTests
         Assert.Contains("Plugin.Instance.Settings.Bind($\"Lighting ({map.Key})\", \"EmissionCap\", map.EmissionCap,", install);
         Assert.Contains("new AcceptableValueRange<float>(0f, EmissionCapModel.MaxCap)", install);
         Assert.Contains("entry.SettingChanged += (_, __) => OnCapChanged(captured);", install);
+        // the floor: the same section, the descriptor's value, the same range, the same live pass
+        Assert.Contains("Plugin.Instance.Settings.Bind($\"Lighting ({map.Key})\", \"EmissionFloor\", map.EmissionFloor,", install);
+        Assert.Equal(2, Regex.Matches(install, @"new AcceptableValueRange<float>\(0f, EmissionCapModel\.MaxCap\)").Count);
+        Assert.Contains("floor.SettingChanged += (_, __) => OnCapChanged(captured);", install);
         Assert.DoesNotContain("Plugin.Instance.Config", code);
-        // none of the four public keys: the visibility policy hides it from players
+        // none of the four public keys: the visibility policy hides them from players
         var visibility = Code("ArenaMapPort.Client/MapConfigVisibility.cs");
         Assert.DoesNotContain("EmissionCap", visibility);
+        Assert.DoesNotContain("EmissionFloor", visibility);
         Assert.DoesNotContain("EmissionCap", Code("ArenaMapPort.Client/CompactConfiguration.cs"));
+        Assert.DoesNotContain("EmissionFloor", Code("ArenaMapPort.Client/CompactConfiguration.cs"));
     }
 
     [Fact]
