@@ -161,8 +161,9 @@ SELECTION_MAP_NAMES = (f"{PLUGIN_ROOT}/map-selection/region-map.png",
 # they travel in the core part. The rule pins the folder and leaf shape; validate_distribution.py checks the exact file set.
 MONITORS_MANIFEST_NAME = f"{PLUGIN_ROOT}/monitors/monitors.json"
 SPECTATOR_AUDIO_MANIFEST_NAME = f"{PLUGIN_ROOT}/spectator-audio/spectator-audio.json"
-# The crowd murmur bed next to the 13 fan calls (docs/progress/spectator-audio.md "Crowd bed"); like them it is shared by every map.
-SPECTATOR_BED_NAME = f"{PLUGIN_ROOT}/spectator-audio/arena_fans_ambient_postmatch.wav"
+# The crowd murmur bed next to the 13 fan calls (docs/progress/spectator-audio.md "Crowd bed"; Arena's neutral in-match bed since 2026-11-02, the
+# postmatch bed before); like them it is shared by every map.
+SPECTATOR_BED_NAME = f"{PLUGIN_ROOT}/spectator-audio/arena_fans_ambient_neutral.wav"
 SPECTATOR_TEXTURES_MANIFEST_NAME = f"{PLUGIN_ROOT}/spectators/shared/spectator-textures.json"
 
 
@@ -357,7 +358,7 @@ def build_rules(spec: ReleaseSpec) -> list:
     for name in SELECTION_MAP_NAMES:
         add(CORE_ID, "selection map", re.escape(name))
     add(CORE_ID, "score monitors", re.escape(f"{PLUGIN_ROOT}/monitors/") + rf"(?:monitors\.json|{LEAF}\.png)")
-    add(CORE_ID, "spectator audio", re.escape(f"{PLUGIN_ROOT}/spectator-audio/") + r"(?:spectator-audio\.json|arena_fans_ambient_postmatch\.wav|arena_fan(?:[7-9]|1[0-3])_participating_\d{2}\.wav)")
+    add(CORE_ID, "spectator audio", re.escape(f"{PLUGIN_ROOT}/spectator-audio/") + r"(?:spectator-audio\.json|arena_fans_ambient_neutral\.wav|arena_fan(?:[7-9]|1[0-3])_participating_\d{2}\.wav)")
     add(CORE_ID, "spectator textures", re.escape(f"{PLUGIN_ROOT}/spectators/shared/") + r"(?:spectator-textures\.json|[0-9a-f]{16}(?:-[0-5])?\.png)")
     for m in spec.maps:
         key = re.escape(m.key)

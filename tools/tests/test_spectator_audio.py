@@ -142,7 +142,7 @@ class CrowdBedTests(unittest.TestCase):
         self.assertEqual(audio.validate(self.folder, require_bed=True)['bed']['name'], audio.BED_NAME)
         self.assertEqual(len(audio.validate(self.folder)['clips']), 13)
 
-    def test_the_bed_is_mono_shorter_by_the_crossfade_and_keeps_arenas_level(self):
+    def test_the_bed_is_mono_shorter_by_the_crossfade_and_carries_the_constant_gain(self):
         source = stereo_source()
         payload, processing = audio.process_bed(audio.write_wav(source, 44100))
         result, rate = audio.read_wav(payload)
@@ -152,13 +152,25 @@ class CrowdBedTests(unittest.TestCase):
         self.assertEqual(processing['crossfade_frames'], fade)
         self.assertEqual(processing['original_frames'], len(source))
         self.assertEqual(processing['original_channels'], 2)
-        # past the crossfade the loop is the plain mean of the channels (within the PCM16 rounding)
-        expected = source.mean(axis=1)[fade:len(source) - fade]
+        self.assertEqual(processing['gain_db'], audio.BED_GAIN_DB)
+        # past the crossfade the loop is the mean of the channels times the constant gain (within the PCM16 rounding)
+        expected = source.mean(axis=1)[fade:len(source) - fade] * 10 ** (audio.BED_GAIN_DB / 20)
         self.assertLess(np.max(np.abs(result[fade:, 0] - expected)), 2 / 32767)
         # equal power: noise that is not correlated head to tail keeps its level through the faded stretch
         for window in (slice(0, fade // 2), slice(fade // 2, fade)):
             ratio = np.sqrt(np.mean(result[window] ** 2)) / np.sqrt(np.mean(result[fade:] ** 2))
             self.assertLess(abs(20 * np.log10(ratio)), 1.0)
+
+    def test_the_gain_keeps_the_level_the_user_approved(self):
+        # 2026-11-02: the neutral bed after the downmix measures -31.17 dBFS RMS, the approved postmatch bed -40.03 dBFS: -8.9 dB keeps the loudness
+        self.assertEqual(audio.BED_GAIN_DB, -8.9)
+        self.assertLess(abs(-31.17 + audio.BED_GAIN_DB - -40.03), 0.1)
+        self.assertEqual((audio.BED_NAME, audio.BED_BANK, audio.BED_TRIGGER), ('arena_fans_ambient_neutral', 'Neutral', 1122))
+        self.assertEqual(audio.RETIRED_BED_FILES, ('arena_fans_ambient_postmatch.wav',))
+        self.assertNotIn(audio.BED_FILE, audio.RETIRED_BED_FILES)
+        # the 80 s source minus the crossfade fits the frame window, and the client's 10-120 s window holds it too
+        self.assertLessEqual(80 * 44100 - 22050, audio.BED_MAX_FRAMES)
+        self.assertLessEqual(audio.BED_MAX_FRAMES, 120 * 44100)
 
     def test_the_loop_point_has_no_step_where_the_raw_clip_has_one(self):
         source = stereo_source(drift=.1)
@@ -186,7 +198,8 @@ class CrowdBedTests(unittest.TestCase):
                 bed[key] = value
                 self.reject(require_bed=True)
                 bed[key] = before
-        for key, value in [('crossfade_frames', 11025), ('original_rate', 22050), ('original_channels', 6), ('original_frames', 1), ('downmix', 'left')]:
+        for key, value in [('crossfade_frames', 11025), ('original_rate', 22050), ('original_channels', 6), ('original_frames', 1), ('downmix', 'left'),
+                           ('gain_db', 0.0)]:
             with self.subTest(processing=key):
                 before = bed['processing'][key]
                 bed['processing'][key] = value
@@ -203,7 +216,7 @@ class CrowdBedTests(unittest.TestCase):
         ramp = np.linspace(-.05, .05, 25 * 44100)[:, None]
         self.manifest['bed'] = audio.bed_record(audio.write_wav(ramp, 44100), 1, dict(
             original_channels=1, original_rate=44100, original_frames=len(ramp) + 22050, original_duration=0, original_peak=.05,
-            original_rms=.03, downmix='mean', gain_db=0.0, crossfade_frames=22050))
+            original_rms=.03, downmix='mean', gain_db=audio.BED_GAIN_DB, crossfade_frames=22050))
         (self.folder / audio.BED_FILE).write_bytes(audio.write_wav(ramp, 44100))
         self.reject('the loop point jumps', require_bed=True)
 
@@ -218,10 +231,19 @@ class CrowdBedTests(unittest.TestCase):
         self.reject('missing/oversized crowd bed', require_bed=True)
 
     def test_the_bed_clip_never_comes_from_a_file_that_feeds_the_bundle_keys(self):
-        from extract_arena_audio import GROUP_SOURCES
-        spec = GROUP_SOURCES['crowd']
-        self.assertEqual((spec['root'], spec['file'], list(spec['clips'])), ('arena', audio.BED_SOURCE, [audio.BED_NAME]))
-        self.assertTrue({audio.BED_SOURCE, 'resources.resource'}.isdisjoint(audio.protected_names()))
+        # the bed streams from a CAB resource inside ambient_voice.bundle; neither name can be a key-source file (sharedassets*.resS/.resource)
+        self.assertEqual(Path(audio.BED_SOURCE).name, 'ambient_voice.bundle')
+        self.assertNotIn(Path(audio.BED_SOURCE).name, audio.protected_names())
+        self.assertTrue(all(name.startswith('sharedassets') for name in audio.protected_names()))
+
+    @unittest.skipUnless((audio.SOURCE / audio.BED_SOURCE).is_file(), 'Arena is not installed')
+    def test_the_installed_arena_gives_the_neutral_banks_one_bed(self):
+        reader, wav = audio.find_bed(audio.SOURCE)
+        samples, rate = audio.read_wav(wav)
+        self.assertEqual((samples.shape[1], rate), (2, 44100))
+        self.assertLess(abs(len(samples) / rate - 80.0), 0.01)
+        stream = reader.read_typetree()['m_Resource']['m_Source']
+        self.assertTrue(stream.startswith('archive:/CAB-') and stream.endswith('.resource'), stream)
 
 
 if __name__ == '__main__':

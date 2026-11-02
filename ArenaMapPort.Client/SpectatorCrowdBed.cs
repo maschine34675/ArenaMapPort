@@ -11,8 +11,10 @@ using UnityEngine.Audio;
 namespace ArenaMapPort.Client
 {
     /// <summary>
-    /// What Arena does: its only crowd ambience clip, <c>arena_fans_ambient_postmatch</c>, is the results-screen bed; none of the four levels carries a crowd-ambience
-    /// emitter, so the stands are silent between the fans' calls (the Participating clips of <see cref="SpectatorAudio"/>). What the port lacks: a continuous crowd.
+    /// What Arena does: its sound scenes carry <c>FansAmbient</c> emitters for three in-match crowd beds of ambient_voice.bundle (Cheer, Angry, Neutral), and the
+    /// emitters are inactive in the imported scenes, so the stands are silent between the fans' calls (the Participating clips of <see cref="SpectatorAudio"/>).
+    /// What the port lacks: a continuous crowd. The bed is Arena's 80 s <c>arena_fans_ambient_neutral</c> since 2026-11-02 (user decision; the results-screen bed
+    /// <c>arena_fans_ambient_postmatch</c> until then), brought to the level of the approved postmatch bed at extraction.
     /// What this does (the port's own addition, user decision 2026-10-30): once the original spectator crowd exists, it groups the fans into stands
     /// (<see cref="SpectatorCrowdBedModel.Plan"/>, deterministic k-means over x/z, two to six stands) and plays the bed as a looping murmur from the centre of every
     /// stand: one owned GameObject and AudioSource per stand, the clip decoded from the package's mono WAV (loop seam crossfaded at extraction), a start offset of

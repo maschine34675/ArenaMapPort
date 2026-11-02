@@ -1,10 +1,12 @@
 """Export the 13 embedded Participating fan calls and the crowd murmur bed, shared by all restored crowds.
 
 No match/kill announcements or external bank dependencies. The one clip that is not a call is the bed:
-Arena's `arena_fans_ambient_postmatch` (its only crowd ambience, a results-screen bed that the port plays
-live under the stands, docs/progress/spectator-audio.md "Crowd bed"), read from resources.assets, downmixed
-to mono and made loop-safe offline by an equal-power crossfade of the head into the tail. Original content
-stays under ignored work/extract and dist; Arena is only ever read.
+Arena's `arena_fans_ambient_neutral` (since 2026-11-02, user decision; until then the results-screen bed
+`arena_fans_ambient_postmatch` from resources.assets), the 80 s stereo bed of the `Neutral` bank (trigger 1122)
+of `ambient_voice.bundle`, which Arena plays from the inactive `FansAmbient` emitters of its sound scenes
+(docs/progress/spectator-audio.md "Crowd bed" and "Neutral bed"). It is downmixed to mono, brought to the level
+of the approved postmatch bed and made loop-safe offline by an equal-power crossfade of the head into the tail.
+Original content stays under ignored work/extract and dist; Arena is only ever read.
 """
 from __future__ import annotations
 import argparse
@@ -24,13 +26,18 @@ BUNDLE = 'StreamingAssets/Windows/assets/content/audio/phrases/fan_speaker_voice
 MANIFEST = 'spectator-audio.json'
 NAME = re.compile(r'arena_fan(?:[7-9]|1[0-3])_participating_\d{2}')
 # The crowd bed: optional in a manifest (an older one has none), required by extract() and by the distribution validator.
-BED_NAME = 'arena_fans_ambient_postmatch'
+BED_NAME = 'arena_fans_ambient_neutral'
 BED_FILE = BED_NAME + '.wav'
-BED_SOURCE = 'resources.assets'
+BED_SOURCE = 'StreamingAssets/Windows/assets/content/audio/phrases/ambient_voice.bundle'
+BED_BANK, BED_TRIGGER = 'Neutral', 1122
+# The bed the port shipped until 2026-11-02 (0.4.0); extract() removes it from its output folder so the exact file set validates again.
+RETIRED_BED_FILES = ('arena_fans_ambient_postmatch.wav',)
 BED_CROSSFADE_MS = 500
-BED_GAIN_DB = 0.0  # constant gain after the downmix (0 = Arena's own level); recorded in the bed's processing
+# Constant gain after the downmix, recorded in the bed's processing. -8.9 dB brings the neutral bed (-31.2 dBFS RMS after the downmix) to the level of the
+# postmatch bed the user approved on 2026-10-30 (-40.0 dBFS RMS): the character changes, the loudness does not (Spectators/CrowdBedVolume raises it, up to 2.0).
+BED_GAIN_DB = -8.9
 BED_MIN_FRAMES = 20 * 44100
-BED_MAX_FRAMES = 40 * 44100
+BED_MAX_FRAMES = 90 * 44100
 BED_MAX_JUMP = 3.0  # loop point: |last - first sample| at most this many times the RMS of the sample-to-sample differences
 
 
@@ -136,6 +143,7 @@ def validate_bed(folder, row):
     require(isinstance(processing, dict) and processing.get('crossfade_frames') == fade and
             processing.get('original_rate') == 44100 and processing.get('original_channels') in (1, 2) and
             type(processing.get('original_frames')) is int and processing.get('downmix') == 'mean' and
+            processing.get('gain_db') == BED_GAIN_DB and
             actual['frames'] == processing['original_frames'] - fade, f'{BED_NAME}: processing record mismatch')
     jump, step = loop_jump(read_wav(payload)[0])
     require(step > 0 and jump <= BED_MAX_JUMP * step, f'{BED_NAME}: the loop point jumps ({jump:.5f} against a step of {step:.5f})')
@@ -179,20 +187,27 @@ def validate(folder, require_bed=False):
 
 
 def find_bed(source):
-    """Arena's bed clip, found by name in resources.assets exactly like extract_arena_audio.py finds it for its `crowd` group (the path
-    id that script records is only a drift hint: 4985 in its notes, 5167 in Arena 0.6.1). Returns (reader, decoded stereo WAV).
-    Neither resources.assets nor the stream file that holds the audio may take part in the bundle content keys."""
-    from extract_arena_audio import GROUP_SOURCES, _load_environment, _index_clip_names, _decode_and_validate_source
-    spec = GROUP_SOURCES['crowd']
-    require(spec['root'] == 'arena' and spec['file'] == BED_SOURCE and list(spec['clips']) == [BED_NAME],
-            'extract_arena_audio.py no longer describes the crowd bed')
-    index = _index_clip_names(_load_environment(Path(source), BED_SOURCE), wanted_names=[BED_NAME])
-    require(BED_NAME in index, f'{BED_NAME} not found in {BED_SOURCE}')
-    reader = index[BED_NAME]
-    stream = (reader.read_typetree().get('m_Resource') or {}).get('m_Source') or ''
+    """Arena's bed clip: the one embedded clip of the `Neutral` bank (trigger 1122) of ambient_voice.bundle, which must be named BED_NAME (the
+    bank's provenance is checked, not only the name). Returns (reader, decoded stereo WAV). Neither the bundle nor the stream file that holds
+    the audio may take part in the bundle content keys."""
+    import UnityPy
+    from extract_arena_audio import _decode_and_validate_source
+    bundle = Path(source) / BED_SOURCE
     protected = protected_names()
-    require(BED_SOURCE not in protected and Path(stream).name not in protected, 'crowd bed overlaps a protected key source')
-    return reader, _decode_and_validate_source(reader, BED_NAME)[0]
+    require(bundle.name not in protected, 'crowd bed overlaps a protected key source')
+    env = UnityPy.load(str(bundle))
+    banks = [(o, o.read_typetree()) for o in env.objects if o.type.name == 'MonoBehaviour']
+    selected = [(o, t) for o, t in banks if t.get('m_Name') == BED_BANK and 'Clips' in t]
+    require(len(selected) == 1 and selected[0][1].get('Trigger') == BED_TRIGGER, f'{BED_BANK} bank of the crowd beds is missing or changed')
+    reader, bank = selected[0]
+    local = [slot['Clip']['m_PathID'] for slot in bank['Clips'] if slot['Clip']['m_PathID'] and not slot['Clip']['m_FileID']]
+    require(len(local) == 1, f'{BED_BANK} bank no longer holds exactly one embedded bed')
+    clip = reader.assets_file.objects[local[0]]
+    tree = clip.read_typetree()
+    require(clip.type.name == 'AudioClip' and tree['m_Name'] == BED_NAME, f'{BED_NAME} is not the {BED_BANK} bank\'s bed')
+    stream = (tree.get('m_Resource') or {}).get('m_Source') or ''
+    require(Path(stream).name not in protected, 'crowd bed overlaps a protected key source')
+    return clip, _decode_and_validate_source(clip, BED_NAME)[0]
 
 
 def extract(source=SOURCE, output=OUTPUT):
@@ -225,6 +240,8 @@ def extract(source=SOURCE, output=OUTPUT):
     bed_payload, bed_processing = process_bed(bed_wav)
     output = Path(output)
     output.mkdir(parents=True, exist_ok=True)
+    for retired in RETIRED_BED_FILES:
+        (output / retired).unlink(missing_ok=True)
     rows = []
     for name, clip in sorted(local):
         wav, _ = _decode_and_validate_source(clip, name)

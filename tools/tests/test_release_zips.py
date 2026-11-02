@@ -89,7 +89,7 @@ def fake_dist_files(maps=MAPS):
         f"{PLUGIN}/spectators/shared/spectator-textures.json": text("shared textures"),
         f"{PLUGIN}/spectators/shared/0123456789abcdef.png": random.Random("crowd").randbytes(900),
         f"{PLUGIN}/spectator-audio/arena_fan7_participating_01.wav": b"RIFF fan fixture",
-        f"{PLUGIN}/spectator-audio/arena_fans_ambient_postmatch.wav": b"RIFF crowd bed fixture",
+        f"{PLUGIN}/spectator-audio/arena_fans_ambient_neutral.wav": b"RIFF crowd bed fixture",
         f"{PLUGIN}/monitors/Arena_Scoreboard_Status_Toggle_On.png": b"\x89PNG\r\n\x1a\n" + random.Random("monitors").randbytes(900),   # its own generator: the bytes below keep their values
     }
     for key, display in maps:
@@ -192,7 +192,7 @@ class PartitionTests(FakeRepoCase):
             f"{PLUGIN}/map-selection/region-map.png", f"{PLUGIN}/map-selection/manifest.json",
             f"{PLUGIN}/monitors/monitors.json", f"{PLUGIN}/monitors/Arena_Scoreboard_Status_Toggle_On.png",
             f"{PLUGIN}/spectator-audio/spectator-audio.json", f"{PLUGIN}/spectator-audio/arena_fan7_participating_01.wav",
-            f"{PLUGIN}/spectator-audio/arena_fans_ambient_postmatch.wav",
+            f"{PLUGIN}/spectator-audio/arena_fans_ambient_neutral.wav",
             f"{PLUGIN}/spectators/shared/spectator-textures.json", f"{PLUGIN}/spectators/shared/0123456789abcdef.png"})
 
     def test_each_map_part_holds_only_its_own_files(self):
@@ -300,7 +300,7 @@ class PartitionTests(FakeRepoCase):
                  f"{SERVER}/locales/map-descriptions.json", f"{PLUGIN}/maschine-ArenaMapPort.Client.dll",
                  f"{SERVER}/maschine-ArenaMapPort.Server.dll",
                  f"{PLUGIN}/map-selection/region-map.png", f"{PLUGIN}/map-selection/manifest.json", f"{PLUGIN}/monitors/monitors.json",
-                 f"{PLUGIN}/spectator-audio/spectator-audio.json", f"{PLUGIN}/spectator-audio/arena_fans_ambient_postmatch.wav",
+                 f"{PLUGIN}/spectator-audio/spectator-audio.json", f"{PLUGIN}/spectator-audio/arena_fans_ambient_neutral.wav",
                  f"{PLUGIN}/spectators/shared/spectator-textures.json"]
         for key, _display in MAPS:  # everything validate_distribution.py demands of every released map
             names += [f"{PLUGIN}/{shader_sidecar(key)}", f"{PLUGIN}/ai/{key.removeprefix('arena_')}.ai.json",
@@ -374,11 +374,12 @@ class PartitionTests(FakeRepoCase):
 
     def test_spectator_audio_is_shared_and_rejects_unrelated_clips(self):
         rules = release.build_rules(self.spec)
-        for name in ('spectator-audio.json', 'arena_fan7_participating_01.wav', 'arena_fans_ambient_postmatch.wav'):
+        for name in ('spectator-audio.json', 'arena_fan7_participating_01.wav', 'arena_fans_ambient_neutral.wav'):
             self.assertEqual(release.classify(f'{PLUGIN}/spectator-audio/{name}', rules).part, release.CORE_ID)
-        for name in ('arena_fan7_kill_cheer_01.wav', 'arena_fan7_participating_01.wav.bak',
-                     'arena_fans_ambient_postmatch.ogg', 'arena_fans_ambient_postmatch.wav.bak', 'arena_fans_ambient_postmatch_2.wav',
-                     'old/arena_fans_ambient_postmatch.wav', 'old/spectator-audio.json', 'Thumbs.db'):
+        # the postmatch bed of 0.4.0 is retired (2026-11-02): a stale copy in dist/ is an error, not a second bed
+        for name in ('arena_fan7_kill_cheer_01.wav', 'arena_fan7_participating_01.wav.bak', 'arena_fans_ambient_postmatch.wav',
+                     'arena_fans_ambient_neutral.ogg', 'arena_fans_ambient_neutral.wav.bak', 'arena_fans_ambient_neutral_2.wav',
+                     'old/arena_fans_ambient_neutral.wav', 'old/spectator-audio.json', 'Thumbs.db'):
             with self.assertRaises(release.ClassificationError):
                 release.classify(f'{PLUGIN}/spectator-audio/{name}', rules)
 

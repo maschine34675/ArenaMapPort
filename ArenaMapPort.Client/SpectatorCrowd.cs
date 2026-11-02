@@ -3,9 +3,9 @@
 namespace ArenaMapPort.Client
 {
     /// <summary>
-    /// What Arena does: the crowd of a map murmurs; the only crowd ambience clip Arena ships is the results-screen bed (arena_fans_ambient_postmatch). What the port
-    /// does: the crowd bed (SpectatorCrowdBed.cs) plays that clip as a looping murmur from every stand of the original spectator crowd, and a mode plugin (the user's
-    /// ArenaMode) can lift or lower it with the state of the match.
+    /// What Arena does: the crowd of a map murmurs; Arena ships in-match crowd beds (ambient_voice.bundle: Cheer, Angry, Neutral) on emitters that are inactive in
+    /// the imported scenes. What the port does: the crowd bed (SpectatorCrowdBed.cs) plays the Neutral bed (arena_fans_ambient_neutral, since 2026-11-02) as a looping
+    /// murmur from every stand of the original spectator crowd, and a mode plugin (the user's ArenaMode) can lift or lower it with the state of the match.
     ///
     /// This is the public, process-global contract for that, in the style of <see cref="ScoreMonitors"/>: a public static class, primitive parameters only, found by
     /// reflection (<c>assembly.GetType("ArenaMapPort.Client.SpectatorCrowd")</c> from the plugin <c>com.maschine.ArenaMapPort</c>) with exact signature checks. Members

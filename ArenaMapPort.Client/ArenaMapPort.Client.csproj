@@ -203,6 +203,9 @@
       <ArenaMapPortSpectatorAudioFile Include="$(ArenaMapPortSpectatorAudioDir)\spectator-audio.json;$(ArenaMapPortSpectatorAudioDir)\*.wav" />
     </ItemGroup>
     <Copy SourceFiles="@(ArenaMapPortSpectatorAudioFile)" DestinationFolder="$(ArenaMapPortDistDir)\spectator-audio" SkipUnchangedFiles="true" />
+    <!-- The postmatch murmur bed of 0.4.0, replaced by Arena's neutral bed on 2026-11-02 (extract_spectator_audio.py RETIRED_BED_FILES): the copy above
+         never removes a file, and validate_distribution.py checks the exact file set. -->
+    <Delete Files="$(ArenaMapPortDistDir)\spectator-audio\arena_fans_ambient_postmatch.wav" />
   </Target>
 
   <!-- Original Arena region artwork, with its native texture padding preserved.

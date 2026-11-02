@@ -461,12 +461,20 @@ namespace ArenaMapPort.Server.Tests
             Assert.Equal(2000 - 1024, ring[0].A);
             Assert.Equal(1999, ring[1023].A);
             Assert.Throws<ArgumentOutOfRangeException>(() => ring[1024]);
-            for (int i = 0; i < 20000; i++) ring.Add(i, i, NoiseEv.Prop, i, 0, 1f, 2f, 3, 4);       // warm: the JIT tiers up and may allocate a few bytes once
+            // The measured loop lives in its own fully optimised method: a hot loop in this tier-0 test method could be replaced on the stack (OSR)
+            // mid-measurement, and that JIT work is charged to this thread (5,416 bytes once on 2026-11-02), which is not the ring allocating.
+            AddProps(ring, 20000);                                                                   // warm: the JIT and Add's first calls may allocate once
             long before = GC.GetAllocatedBytesForCurrentThread();
-            for (int i = 0; i < 100000; i++) ring.Add(i, i, NoiseEv.Prop, i, 0, 1f, 2f, 3, 4);
+            AddProps(ring, 100000);
             Assert.InRange(GC.GetAllocatedBytesForCurrentThread() - before, 0L, 512L);              // one allocation per Add would be megabytes
             ring.Clear();
             Assert.Equal(0, ring.Count);
+        }
+
+        [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveOptimization)]
+        private static void AddProps(NoiseEventRing ring, int count)
+        {
+            for (int i = 0; i < count; i++) ring.Add(i, i, NoiseEv.Prop, i, 0, 1f, 2f, 3, 4);
         }
 
         [Fact]

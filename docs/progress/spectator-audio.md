@@ -764,3 +764,29 @@ two statements of this record; the earlier sections stay as written.
   emitters in every sound scene (Equator 6 in level56, Bay5 6 in level188, Air Pit 12 in level39, Bowl 6 in level111, Iceberg 12 in level259),
   inactive in the imported scenes. What the data supports is narrower: `arena_fans_ambient_postmatch` is the only crowd clip not bound to a
   match-event trigger. The released 0.4.0 texts carry the broader sentence; the next release texts correct it (list in the plan, section 2.1).
+
+## 2026-11-02 - Neutral bed replaces the postmatch bed
+
+User decision after listening to the full crowd export (`work/extract/crowd-sounds-listening`, with the user's own German subtitles): "arena_fans_ambient_neutral
+ist relativ ähnlich zu arena_fans_ambient_postmatch einen tick aufgeregter, ich würde die bisherige schleife dadurch ersetzen".
+
+- **Source.** `ambient_voice.bundle`, bank `Neutral` (trigger 1122), its one embedded clip `arena_fans_ambient_neutral`: 80.0 s, stereo 44.1 kHz,
+  channel correlation 0.976, streamed from a CAB resource inside the bundle (no key-source file). `find_bed` checks the bank and trigger, that the
+  bank holds exactly this one embedded clip, and the protected-name rule for the bundle and the stream.
+- **Processing.** The same mean downmix and 500 ms equal-power seam as before (loop jump 0.84 of a sample step, limit 3; the raw clip alone 2.46). The
+  downmix measures -31.17 dBFS RMS against -40.03 dBFS for the approved postmatch bed, so `BED_GAIN_DB` is -8.9 dB: the character changes, the
+  loudness the user approved on 2026-10-30 does not (`Spectators/CrowdBedVolume` raises it, up to 2.0). Result `arena_fans_ambient_neutral.wav`:
+  3,505,950 frames (79.500 s), 7,011,944 bytes, peak 0.0688, RMS 0.00992 (the postmatch bed: 0.0678 and 0.00997), SHA-256 `928efb0a...`.
+- **Wiring.** `BED_MAX_FRAMES` 40 -> 90 s (the client accepts 10-120 s); `SpectatorAudioBed.ClipName` is the new name, so an old manifest gives no bed
+  instead of a wrong one; `RETIRED_BED_FILES` makes the extractor delete the old WAV from its output, and the client staging deletes it from `dist/`
+  (the copy never removes files and `validate_distribution.py` checks the exact set). An installed old copy is ignored by the client. The packer
+  rule and the required core file name follow. The distribution keeps 283 files.
+- **Gates.** .NET 2,889 passed; `NoiseProbeModelTests.TheEventRingKeepsTheLastThousandEntriesInOrderAndNeverAllocates` was flaky on its own (one of
+  three isolated runs charged 5,416 bytes of on-stack-replacement JIT work to the thread) and now measures in an `AggressiveOptimization` helper
+  (0 of 15 isolated runs failed). `test_spectator_audio` (20, including the real-Arena bed check), `test_release_zips`, `test_validate_distribution`
+  OK; `DISTRIBUTION_OK 5 maps 15 bundles 5 sidecars encrypted`.
+- **Host** (GPU-2, deploy of 4 files, `deploy-wait --server` then `gpu-run start`, 16/16 identical; Equator without bots 17:28, noon, clear):
+  `[CrowdBed] arena_equator: 4 stands (radii 17.1/13.3/14.0/16.2 m ...), clip 79.5 s mono, volume 1.00, reach 60 m`; the crowd `load total=2209 ms`
+  (`audio=87`); the audio reset at 17:28:05.7 rebuilt clip and sources behind the deploy screen; 0 warnings and errors from mods; 120.0 fps over
+  10 s (max 10.7 ms). The one long frame of the raid's first window (934.5 ms) was `[IndoorSurface] ... elapsedMs=870` at 17:28:20, the known
+  pre-existing classification freeze, not the bed. Hideout opened and closed. Not listened to on the host; the user's ear decides.

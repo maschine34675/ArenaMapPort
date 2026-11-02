@@ -1,5 +1,13 @@
 # HANDOFF — dated working state
 
+## Crowd murmur: Arena's neutral bed replaces the postmatch bed - 2026-11-02 (host-checked on GPU-2, not listened to there)
+
+User decision after listening to the full crowd export and their own German subtitles (`work/extract/crowd-sounds-listening`, ignored). The bed is now
+`arena_fans_ambient_neutral` (`ambient_voice.bundle`, Neutral 1122, 80 s stereo), downmixed and brought to the approved postmatch level (-8.9 dB), 79.5 s
+loop. The 0.4.0 file `arena_fans_ambient_postmatch.wav` is retired: it is deleted from the extractor output and from `dist/`; an installed copy is ignored.
+GPU-2 Equator raid: `clip 79.5 s mono`, 120 fps, 0 warnings, hideout OK. Record: [spectator-audio.md](docs/progress/spectator-audio.md) "Neutral bed".
+**The user's shared config:** `Spectators/CrowdBedVolume` is the live loudness knob (up to 2.0) if the neutral bed should be louder than the old level.
+
 ## Action-bound spectator calls: analysis and plan - 2026-11-02 (design only, nothing implemented)
 
 The user asked where ArenaMode and ArenaMapPort need changes for crowd reactions to match events. A read-only workflow (`wf_3515f8ba-a57`: four

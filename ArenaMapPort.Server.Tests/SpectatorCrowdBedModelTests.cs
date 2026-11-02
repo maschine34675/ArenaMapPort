@@ -398,18 +398,18 @@ public sealed class SpectatorCrowdBedModelTests
 
     private static object GoodBed(Action<JObject>? change = null)
     {
-        // The shape tools/extract/extract_spectator_audio.py writes (the extraction of 2026-10-30, 29.813 s): "source" is the container name as a string, "source_id" the
-        // clip's path id and "processing" holds the clip's own statistics before the downmix. The client reads only name, file, channels, sample_rate, frames, bytes, sha256
-        // and seam_crossfade_ms and ignores the rest.
+        // The shape tools/extract/extract_spectator_audio.py writes (the extraction of 2026-11-02, Arena's neutral bed, 79.500 s): "source" is the container path as a
+        // string, "source_id" the clip's 64-bit path id and "processing" holds the clip's own statistics before the downmix and the -8.9 dB that keep the approved level.
+        // The client reads only name, file, channels, sample_rate, frames, bytes, sha256 and seam_crossfade_ms and ignores the rest.
         var bed = JObject.FromObject(new
         {
-            name = "arena_fans_ambient_postmatch", file = "arena_fans_ambient_postmatch.wav", channels = 1, sample_rate = 44100,
-            frames = 1314766, bytes = 2629576, sha256 = new string('b', 64), peak = 0.067779541015625, rms = 0.009969709001597833, seam_crossfade_ms = 500,
-            source = "resources.assets", source_id = 5167,
+            name = "arena_fans_ambient_neutral", file = "arena_fans_ambient_neutral.wav", channels = 1, sample_rate = 44100,
+            frames = 3505950, bytes = 7011944, sha256 = new string('b', 64), peak = 0.06878662109375, rms = 0.009922407410167007, seam_crossfade_ms = 500,
+            source = "StreamingAssets/Windows/assets/content/audio/phrases/ambient_voice.bundle", source_id = 5159002239307207096,
             processing = new
             {
-                original_channels = 2, original_rate = 44100, original_frames = 1336816, original_duration = 30.31328798185941,
-                original_peak = 0.075225830078125, original_rms = 0.010541602213171818, downmix = "mean", gain_db = 0.0, crossfade_frames = 22050
+                original_channels = 2, original_rate = 44100, original_frames = 3528000, original_duration = 80.0,
+                original_peak = 0.19317626953125, original_rms = 0.027832101623633358, downmix = "mean", gain_db = -8.9, crossfade_frames = 22050
             }
         });
         change?.Invoke(bed);
@@ -426,8 +426,8 @@ public sealed class SpectatorCrowdBedModelTests
         manifest.ValidateBed();
         var bed = manifest.bed;
         Assert.NotNull(bed);
-        Assert.Equal(("arena_fans_ambient_postmatch", "arena_fans_ambient_postmatch.wav", 1, 44100, 1314766, 500), (bed.name, bed.file, bed.channels, bed.sample_rate, bed.frames, bed.seam_crossfade_ms));
-        Assert.Equal(44 + 1314766 * 2, bed.bytes);
+        Assert.Equal(("arena_fans_ambient_neutral", "arena_fans_ambient_neutral.wav", 1, 44100, 3505950, 500), (bed.name, bed.file, bed.channels, bed.sample_rate, bed.frames, bed.seam_crossfade_ms));
+        Assert.Equal(44 + 3505950 * 2, bed.bytes);
         Assert.Equal(new string('b', 64), bed.sha256);
         Assert.Equal(13, manifest.clips.Length);
     }
@@ -443,8 +443,10 @@ public sealed class SpectatorCrowdBedModelTests
 
     [Theory]
     [InlineData("name", "arena_fans_ambient_other")]
-    [InlineData("file", "../arena_fans_ambient_postmatch.wav")]
-    [InlineData("file", "arena_fans_ambient_postmatch.ogg")]
+    [InlineData("name", "arena_fans_ambient_postmatch")]          // the bed of 0.4.0 is retired: an old manifest gives no bed, not a wrong one
+    [InlineData("file", "../arena_fans_ambient_neutral.wav")]
+    [InlineData("file", "arena_fans_ambient_neutral.ogg")]
+    [InlineData("file", "arena_fans_ambient_postmatch.wav")]
     [InlineData("channels", 2)]
     [InlineData("sample_rate", 48000)]
     [InlineData("frames", 1000)]

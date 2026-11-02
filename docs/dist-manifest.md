@@ -477,3 +477,11 @@ Equator 24, Bay5 30, Air Pit 22 and Bowl 26 files in five ZIPs, as GitHub assets
 line in `maschine-ArenaMapPort-0.4.0.sha256`; no partition and no per-ZIP size gate (the `2**31` gate exists for GitHub's per-asset limit, and the single layout is not a
 GitHub asset). The partition tables of the earlier sections stay as history and are still what the packer's default (multi-part) mode prints. The GitHub release carries the
 notes with the Pixeldrain links and the checksum file only. No size or hash of the single ZIP is asserted here; both come from the cut.
+
+## Crowd murmur bed replaced - 2026-11-02 (after 0.4.0)
+
+The bed file is now `spectator-audio/arena_fans_ambient_neutral.wav` (Arena's neutral in-match bed, mono 16-bit PCM 44.1 kHz, 79.5 s, 7,011,944 bytes);
+`arena_fans_ambient_postmatch.wav` of 0.4.0 is retired. The file count is unchanged (283 with Iceberg's part, core 154); the core part grows by about
+4.4 MB. The packer rule and `SPECTATOR_BED_NAME` admit only the new name, a stale postmatch WAV in `dist/` is a classification error, and the client
+build deletes it from `dist/` after staging. A player who extracts the next release over 0.4.0 keeps the old WAV beside the new one; the client
+reads only the file the manifest names. Record: [spectator-audio.md](progress/spectator-audio.md), "Neutral bed".

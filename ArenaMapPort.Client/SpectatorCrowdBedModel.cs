@@ -9,12 +9,13 @@ using System.Text.RegularExpressions;
 namespace ArenaMapPort.Client
 {
     #pragma warning disable CS0649 // Package fields are populated by Newtonsoft.Json.
-    /// <summary>The optional <c>bed</c> object of spectator-audio.json: Arena's only crowd ambience clip (arena_fans_ambient_postmatch), downmixed to mono with its loop
-    /// seam fixed offline (tools/extract/extract_spectator_audio.py). A manifest without it is still a valid schema-1 manifest and simply has no bed. Fields the client
-    /// does not use (the source path id, the clip's statistics before the downmix, peak, rms) are ignored.</summary>
+    /// <summary>The optional <c>bed</c> object of spectator-audio.json: Arena's neutral in-match crowd bed (arena_fans_ambient_neutral, the Neutral bank of
+    /// ambient_voice.bundle; since 2026-11-02, before that the results-screen bed arena_fans_ambient_postmatch), downmixed to mono, brought to the approved
+    /// level and with its loop seam fixed offline (tools/extract/extract_spectator_audio.py). A manifest without it is still a valid schema-1 manifest and
+    /// simply has no bed. Fields the client does not use (the source path id, the clip's statistics before the downmix, peak, rms) are ignored.</summary>
     internal sealed class SpectatorAudioBed
     {
-        public const string ClipName = "arena_fans_ambient_postmatch";
+        public const string ClipName = "arena_fans_ambient_neutral";
         public string name, file, sha256;
         public int channels, sample_rate, frames, bytes, seam_crossfade_ms;
 
