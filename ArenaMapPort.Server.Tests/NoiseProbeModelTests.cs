@@ -494,7 +494,8 @@ namespace ArenaMapPort.Server.Tests
             Assert.True(ring.HasCause(10.58, 0.4, 0.05));                   // 20 ms after the burst start: the poll lags the audio
             Assert.False(ring.HasCause(10.4, 0.01, 0.05));                  // 200 ms after is too late
             foreach (var kind in new[] { NoiseEv.SpecStart, NoiseEv.SpecStop, NoiseEv.AmbStart, NoiseEv.AmbRestart, NoiseEv.Prop, NoiseEv.Room, NoiseEv.RoomReverb,
-                NoiseEv.RoomShot, NoiseEv.Gate, NoiseEv.Puddle, NoiseEv.Rain, NoiseEv.RainPlay, NoiseEv.Config, NoiseEv.Reset, NoiseEv.Life, NoiseEv.Hitch, NoiseEv.Bed })
+                NoiseEv.RoomShot, NoiseEv.Gate, NoiseEv.Puddle, NoiseEv.Rain, NoiseEv.RainPlay, NoiseEv.Config, NoiseEv.Reset, NoiseEv.Life, NoiseEv.Hitch, NoiseEv.Bed,
+                NoiseEv.ReactStart, NoiseEv.ReactStop })
                 Assert.True(NoiseText.IsCause(kind), kind.ToString());
         }
 
@@ -574,6 +575,34 @@ namespace ArenaMapPort.Server.Tests
         }
 
         [Fact]
+        public void TheReactionVoiceEventsReadReactPlusAndReactMinusAndExplainABurst()
+        {
+            var labels = new NoiseLabels();
+            var ring = new NoiseEventRing(64);
+            // react+: A the voice number, B the kind (CrowdReactionKind), V1 the distance, V2 the occlusion factor; react-: A the number, B the stop reason, V1 played ms, V2 seconds left
+            ring.Add(100.00, 0, NoiseEv.ReactStart, 3, CrowdReactionKind.Approve, 12.5f, 0.31f, labels.Intern("fan11_kill_cheer_01"), 0);
+            ring.Add(100.50, 0, NoiseEv.ReactStop, 3, (int)NoiseStopReason.Ended, 4210f, 0f, labels.Intern("fan11_kill_cheer_01"), 0);
+            ring.Add(100.60, 0, NoiseEv.ReactStart, 4, CrowdReactionKind.TakeCover, 8.0f, 0.5f, labels.Intern("fan9_aim_hide_02"), 0);
+            Assert.Equal("react+", NoiseText.Token(NoiseEv.ReactStart));
+            Assert.Equal("react-", NoiseText.Token(NoiseEv.ReactStop));
+            Assert.Equal("react+", NoiseText.Token(ring[0]));
+            Assert.Equal("react+ fan11_kill_cheer_01#3 12.5m occ0.31 kind=Approve", NoiseReport.EventText(ring[0], labels));
+            Assert.Equal("react- fan11_kill_cheer_01#3 reason=ended played=4210ms left=0.00s", NoiseReport.EventText(ring[1], labels));
+            Assert.Equal("react+ fan9_aim_hide_02#4 8.0m occ0.50 kind=TakeCover", NoiseReport.EventText(ring[2], labels));
+            Assert.Equal("  -0.600s react+ fan11_kill_cheer_01#3 12.5m occ0.31 kind=Approve", NoiseReport.EventLine(ring[0], labels, 100.6));
+            // the values are appended after the bed's: the older tokens and numbers keep their meaning
+            Assert.True((byte)NoiseEv.ReactStart > (byte)NoiseEv.Bed && (byte)NoiseEv.ReactStop == (byte)NoiseEv.ReactStart + 1);
+            // a reaction voice starting or stopping can make a click: it explains a burst
+            var quiet = new NoiseEventRing(8);
+            quiet.Add(10.46, 0, NoiseEv.ReactStart, 1, 1, 0, 0, 0, 0);
+            Assert.True(quiet.HasCause(10.5, 0.4, 0.05));
+            var stopOnly = new NoiseEventRing(8);
+            stopOnly.Add(10.46, 0, NoiseEv.ReactStop, 1, 0, 0, 0, 0, 0);
+            Assert.True(stopOnly.HasCause(10.5, 0.4, 0.05));
+            Assert.Equal("amb=[] prop=[] ev=[react+@+0.00s,react-@-0.10s,react+@-0.60s]", NoiseReport.Context(ring, labels, 100.6));
+        }
+
+        [Fact]
         public void TheArmedMinuteMarkAndCalibrationLinesHaveTheDocumentedShape()
         {
             Assert.Equal("armed mode=Detect map=arena_equator speakers=Mode5point1 driver=Stereo ch=6 rate=48000 dsp=1024 voices=196/256 calls=on mix=g2.0/o0.40/r2.50 roomShot=on roomReverb=on tap=readback ring=none",
@@ -587,6 +616,8 @@ namespace ArenaMapPort.Server.Tests
             Add(signal, NoiseSelfTest.MakeBurst(Rate, -24f, 1), Rate * 5);
             Run(detector, signal);
             detector.Minute.OnEvent(NoiseEv.SpecStart, 0, 0); detector.Minute.OnEvent(NoiseEv.SpecStart, 0, 0); detector.Minute.OnEvent(NoiseEv.SpecStop, 0, 0);
+            detector.Minute.OnEvent(NoiseEv.ReactStart, 0, 0); detector.Minute.OnEvent(NoiseEv.ReactStart, 0, 0); detector.Minute.OnEvent(NoiseEv.ReactStart, 0, 0);
+            detector.Minute.OnEvent(NoiseEv.ReactStop, 0, 0); detector.Minute.OnEvent(NoiseEv.ReactStop, 0, 0);
             detector.Minute.OnEvent(NoiseEv.AmbStart, 0, 0); detector.Minute.OnEvent(NoiseEv.AmbRestart, 0, 0); detector.Minute.OnEvent(NoiseEv.Prop, 0, 0);
             detector.Minute.OnEvent(NoiseEv.Room, 0, 0); detector.Minute.OnEvent(NoiseEv.Config, 0, 0); detector.Minute.OnEvent(NoiseEv.Hitch, 0, 0);
             detector.Minute.OnEvent(NoiseEv.Gc, 1, 2);
@@ -595,7 +626,7 @@ namespace ArenaMapPort.Server.Tests
             Assert.StartsWith("minute map=arena_equator blocks=", line);
             Assert.Matches(@"% bursts peak=1 click=[01] dropout=0 gap=0 clip=0 loud=0 suppressed=0 refractory=\d+ orphan=0 evOrphan=0 bgMedian=-(59|60)\.\d hitch50=1 gc=0/2/0 ", line);
             Assert.Contains(" cover=", line);
-            Assert.EndsWith(" spec=+2/-1 amb=+1 restarts=1 props=1 rooms=1 resets=1 probeMs=0.300/0.400", line);
+            Assert.EndsWith(" spec=+2/-1 react=+3/-2 amb=+1 restarts=1 props=1 rooms=1 resets=1 probeMs=0.300/0.400", line);
             string calibration = NoiseReport.CalibrationLine(detector.Minute, 1);
             Assert.StartsWith("calib minute=1 pk50=-", calibration);
             Assert.Matches(@"pk99=-?\d+\.\d pk999=-?\d+\.\d over50=[+-]\d+\.\d over99=[+-]\d+\.\d over999=[+-]\d+\.\d$", calibration);
@@ -626,6 +657,13 @@ namespace ArenaMapPort.Server.Tests
             Assert.Equal("fan9_02", NoiseText.ShortClip("arena_fan9_participating_02"));
             Assert.Equal("fan13_03", NoiseText.ShortClip("arena_fan13_participating_03"));
             Assert.Equal("something else", NoiseText.ShortClip("something else"));
+            // the reaction clips (2026-11-02) lose only the arena_ prefix, so they stay greppable by their category; the bed's names are no fan voice
+            Assert.Equal("fan11_kill_cheer_01", NoiseText.ShortClip("arena_fan11_kill_cheer_01"));
+            Assert.Equal("fan7_kill_angry_14", NoiseText.ShortClip("arena_fan7_kill_angry_14"));
+            Assert.Equal("fan12_match_start_05", NoiseText.ShortClip("arena_fan12_match_start_05"));
+            Assert.Equal("fan9_aim_hide_01", NoiseText.ShortClip("arena_fan9_aim_hide_01"));
+            Assert.Equal("arena_fans_ambient_neutral", NoiseText.ShortClip("arena_fans_ambient_neutral"));
+            Assert.Equal("arena_fan", NoiseText.ShortClip("arena_fan"));
             Assert.Equal("", NoiseText.ShortClip(null));
             Assert.Equal(new[] { 1, 2, 3, 5, 8, 13 }, NoiseText.OnsetFrames);
             Assert.True(NoiseText.IsOnsetFrame(8)); Assert.False(NoiseText.IsOnsetFrame(4)); Assert.False(NoiseText.IsOnsetFrame(14));

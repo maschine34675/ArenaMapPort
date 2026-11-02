@@ -35,6 +35,7 @@ import numpy as np
 import stage_spectators
 from PIL import Image
 from test_spectator import fixture as spectator_fixture
+from test_spectator_audio import reaction_fixture
 
 
 UNITYFS = b"UnityFS\0"
@@ -383,20 +384,32 @@ class DistributionSidecarTests(unittest.TestCase):
     def put_spectator_audio(self):
         """The shared fan voices as extract_spectator_audio.py leaves them (work/extract/spectator-audio) and as the client build stages
         them (dist/.../spectator-audio): the manifest, the 13 embedded Participating clips the extractor's own validate demands
-        (name pattern, canonical mono 44.1 kHz PCM16, hashes, levels) and the crowd murmur bed (manifest key 'bed'). One synthetic
-        tone stands in for every clip, synthetic noise for the bed."""
+        (name pattern, canonical mono 44.1 kHz PCM16, hashes, levels), the crowd murmur bed (manifest key 'bed') and the 70 reaction clips of the
+        tracked sidecar (manifest key 'reactions', built by the extractor's reaction_object). One synthetic tone stands in for every clip, synthetic
+        noise for the bed. The key-source check reads an Arena data folder: a stand-in with two key-source files replaces the installed one
+        (self.arena_data), so no test depends on an installed Arena."""
         payload = fan_call_wav()
         rows = [spectator_audio.clip_record(f"arena_fan{7 + index % 7}_participating_{index // 7:02}", payload) for index in range(13)]
         bed_payload, processing = crowd_bed()
+        folders = (self.plugin / "spectator-audio", self.repo / "work/extract/spectator-audio")
+        for folder in folders:
+            folder.mkdir(parents=True, exist_ok=True)
+            reactions = reaction_fixture(folder, payload)
         manifest = json.dumps({"schema": 1, "bank": "Participating", "trigger": 1123, "source_bundle": spectator_audio.BUNDLE,
                                "external_entries_omitted": 9, "clips": rows,
-                               "bed": spectator_audio.bed_record(bed_payload, 5167, processing)}, indent=2) + "\n"
-        for folder in (self.plugin / "spectator-audio", self.repo / "work/extract/spectator-audio"):
-            folder.mkdir(parents=True, exist_ok=True)
+                               "bed": spectator_audio.bed_record(bed_payload, 5167, processing), "reactions": reactions}, indent=2) + "\n"
+        for folder in folders:
             for row in rows:
                 (folder / row["file"]).write_bytes(payload)
             (folder / spectator_audio.BED_FILE).write_bytes(bed_payload)
             (folder / spectator_audio.MANIFEST).write_text(manifest, encoding="utf-8", newline="\n")
+        self.arena_data = self.repo / "arena-data"
+        self.arena_data.mkdir()
+        for name in ("sharedassets51.assets.resS", "sharedassets28.resource"):
+            (self.arena_data / name).write_bytes(b"stand-in for a stage-2 key-source file " * 40 + name.encode())
+        patcher = patch.object(spectator_audio, "SOURCE", self.arena_data)
+        patcher.start()
+        self.addCleanup(patcher.stop)
 
     def put_spectators(self):
         """The four crowd packages: one tiny synthetic schema-3 source export per map under work/extract/spectator-<map> (the same
@@ -1291,7 +1304,7 @@ class DistributionSidecarTests(unittest.TestCase):
         audio = self.plugin / "spectator-audio"
         extracted = self.repo / "work/extract/spectator-audio"
         manifest, clip = spectator_audio.MANIFEST, "arena_fan7_participating_00.wav"
-        self.assertEqual(14, len(list(audio.glob("*.wav"))))   # the 13 calls and the crowd bed
+        self.assertEqual(14 + 70, len(list(audio.glob("*.wav"))))   # the 13 calls, the crowd bed and the 70 reaction clips
         self.validate()
         with self.changed(audio / manifest), self.assertRaisesRegex(FileNotFoundError, re.escape(manifest)):
             self.validate()
@@ -1349,6 +1362,97 @@ class DistributionSidecarTests(unittest.TestCase):
             self.validate()
         with self.changed(extracted / bed), self.assertRaisesRegex(ValueError, "Spectator audio file set differs from extracted data"):
             self.validate()
+
+    def test_the_reaction_clips_are_required_exactly_intact_and_current(self):
+        audio = self.plugin / "spectator-audio"
+        extracted = self.repo / "work/extract/spectator-audio"
+        manifest = spectator_audio.MANIFEST
+        document = json.loads((audio / manifest).read_text(encoding="utf-8"))
+        clip = document["reactions"]["clips"][0]["file"]
+        self.assertEqual(70, len(document["reactions"]["clips"]))
+        self.validate()
+        # the object itself is required (the reactions are not an optional part of a release), whatever the calls and the bed say
+        del document["reactions"]
+        with self.changed(audio / manifest, json.dumps(document, indent=2).encode() + b"\n"), \
+                self.assertRaisesRegex(ValueError, "the reaction set is missing"):
+            self.validate()
+        # a clip that is gone, a byte that differs under the recorded hash, a file that no manifest lists
+        with self.changed(audio / clip), self.assertRaisesRegex(ValueError, "missing/oversized reaction clip"):
+            self.validate()
+        blob = (audio / clip).read_bytes()
+        with self.changed(audio / clip, blob[:-1] + bytes([blob[-1] ^ 1])), self.assertRaisesRegex(ValueError, "sha256 mismatch"):
+            self.validate()
+        (audio / "arena_fan7_kill_cheer_99.wav").write_bytes(blob)
+        try:
+            with self.assertRaisesRegex(ValueError, "unexpected spectator audio files"):
+                self.validate()
+        finally:
+            (audio / "arena_fan7_kill_cheer_99.wav").unlink()
+        # the left-out clips are not files (a `listen` clip of the sidecar)
+        (audio / "arena_fan9_kill_cheer_01.wav").write_bytes(blob)
+        try:
+            with self.assertRaisesRegex(ValueError, "unexpected spectator audio files"):
+                self.validate()
+        finally:
+            (audio / "arena_fan9_kill_cheer_01.wav").unlink()
+        # current: the staged clip must be the extractor's bytes and the extractor's file set
+        other = extracted / clip
+        with self.changed(other, blob[:-1] + bytes([blob[-1] ^ 1])), self.assertRaisesRegex(ValueError, f"Stale spectator audio: {clip}"):
+            self.validate()
+        with self.changed(other), self.assertRaisesRegex(ValueError, "Spectator audio file set differs from extracted data"):
+            self.validate()
+        self.validate()
+
+    def test_a_staged_spectator_file_that_is_a_copy_of_a_key_source_file_is_refused(self):
+        audio = self.plugin / "spectator-audio"
+        extracted = self.repo / "work/extract/spectator-audio"
+        clip = "arena_fan7_participating_00.wav"
+        reaction = json.loads((audio / spectator_audio.MANIFEST).read_text(encoding="utf-8"))["reactions"]["clips"][0]["file"]
+        self.validate()
+        for name in (clip, reaction, spectator_audio.BED_FILE):
+            source = self.arena_data / "sharedassets51.assets.resS"
+            original = source.read_bytes()
+            # every call and reaction clip is the same synthetic tone, so the first staged copy in name order is the one reported; the bed is unique
+            reported = name if name == spectator_audio.BED_FILE else r"[^ ]+\.wav"
+            try:
+                source.write_bytes((audio / name).read_bytes())          # the key-source file IS the staged file: same size, same bytes
+                with self.subTest(name=name), self.assertRaisesRegex(
+                        ValueError, f"is a copy of a key-source file of the maps: {reported} {re.escape('(sharedassets51.assets.resS)')}"):
+                    self.validate()
+                # the same size with other bytes is no copy: only equal bytes count (the check hashes on a size match)
+                changed = bytearray((audio / name).read_bytes())
+                changed[-1] ^= 1
+                source.write_bytes(bytes(changed))
+                self.validate()
+            finally:
+                source.write_bytes(original)
+        # a file of another map's key-source list (sharedassets28.resource) is a key-source file too
+        source = self.arena_data / "sharedassets28.resource"
+        original = source.read_bytes()
+        try:
+            source.write_bytes((audio / reaction).read_bytes())
+            with self.assertRaisesRegex(ValueError, "is a copy of a key-source file of the maps"):
+                self.validate()
+        finally:
+            source.write_bytes(original)
+        self.assertTrue((extracted / clip).is_file())
+        self.validate()
+
+    def test_the_key_source_check_needs_the_installed_arena(self):
+        # no Arena data folder, or one that holds none of the listed files: an error, never a silent pass
+        (self.repo / "empty-arena").mkdir()
+        for folder in (self.repo / "no-such-arena", self.repo / "empty-arena"):
+            with self.subTest(folder=folder.name), patch.object(spectator_audio, "SOURCE", folder), \
+                    self.assertRaisesRegex(ValueError, "Cannot check the staged spectator audio against the key-source files"):
+                self.validate()
+        # the unit takes the folder explicitly too, and looks at every staged file, subfolders included
+        audio = self.plugin / "spectator-audio"
+        with patch.object(distribution, "REPO", self.repo):
+            distribution.validate_spectator_audio_not_key_sources(audio, self.arena_data)
+            (audio / "sub").mkdir()
+            (audio / "sub" / "copy.bin").write_bytes((self.arena_data / "sharedassets28.resource").read_bytes())
+            with self.assertRaisesRegex(ValueError, r"sub/copy.bin \(sharedassets28.resource\)"):
+                distribution.validate_spectator_audio_not_key_sources(audio, self.arena_data)
 
     def test_the_spectator_voices_must_be_the_extracted_ones(self):
         extracted = self.repo / "work/extract/spectator-audio"

@@ -206,6 +206,14 @@
     <!-- The postmatch murmur bed of 0.4.0, replaced by Arena's neutral bed on 2026-11-02 (extract_spectator_audio.py RETIRED_BED_FILES): the copy above
          never removes a file, and validate_distribution.py checks the exact file set. -->
     <Delete Files="$(ArenaMapPortDistDir)\spectator-audio\arena_fans_ambient_postmatch.wav" />
+    <!-- The same for a reaction clip that left the export (a keep clip demoted to listen or out in tools/extract/reaction_pools.json, 2026-11-02): the extractor removes it from
+         work/extract, the copy above never removes anything from dist, and a stray WAV there would fail validate_distribution.py's exact file set (or, unvalidated, ship). Only
+         WAVs of the staged folder that the source folder no longer has are deleted; the manifest and every listed clip stay. -->
+    <ItemGroup>
+      <ArenaMapPortSpectatorAudioStale Include="$(ArenaMapPortDistDir)\spectator-audio\*.wav" />
+      <ArenaMapPortSpectatorAudioStale Remove="@(ArenaMapPortSpectatorAudioFile->'$(ArenaMapPortDistDir)\spectator-audio\%(Filename)%(Extension)')" />
+    </ItemGroup>
+    <Delete Files="@(ArenaMapPortSpectatorAudioStale)" />
   </Target>
 
   <!-- Original Arena region artwork, with its native texture padding preserved.

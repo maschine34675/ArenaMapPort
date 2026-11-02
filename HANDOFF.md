@@ -1,5 +1,60 @@
 # HANDOFF — dated working state
 
+## Crowd reactions, phase A: implemented, reviewed, host-run on GPU-2 - 2026-11-02 (not listened to)
+
+**Host run (GPU-2, 21:09-21:20, after the paragraphs below were written):** deployed (353 files, 70 new), one botless raid per crowd map with `Spectators/ReactionDemo=Cycle`: every
+implemented kind played with 1-3 voices, distinct families and sentences, the calls held; the set loads on the worker in 15-118 ms (`load total=` 2.12-2.16 s, `wait=0`/1); frame max 11.1-11.7 ms;
+**0 ArenaMapPort warnings**; Iceberg `ReactionKinds = 0` read in the process; NoiseProbe `orphan=0`, no bursts; a plain-raid death: no exception, the reactions go on while dead because the
+plain raid stays `Started` until it is ended (corrects plan 4.4, agrees with D12); hideout OK. Items 1-3 of "Next" below are done (the commit follows this run). Record: spectator-audio.md
+"Host run on GPU-2 (2026-11-02, 21:09-21:20)". **Next: the user's listening, then ArenaMode's adoption (plan section 6), then Lull.**
+
+Supersedes the "design only, nothing implemented" status of the plan entry two blocks below. Record: [spectator-audio.md](docs/progress/spectator-audio.md) "2026-11-02 - Action-bound
+reactions, phase A (offline)"; design and decisions D1-D14: [PLAN-CROWD-REACTIONS.md](docs/PLAN-CROWD-REACTIONS.md).
+
+**User decision (2026-11-02):** "dann lassen wir die 19 clips erstmal weg. gerne wie empfohlen mit der umsetzung beginnen". Phase A exports only the 70 `keep` clips of the six banks Cheer,
+Owned, Angry, ChangedRound, EndRound and Hide (the 19 `listen` clips wait for the user's ear, the 2 SLUR clips stay out); Lull follows after phase A with its trigger on ArenaMode's side;
+every other recommendation of plan section 8 applies (gain 0.5, no Scav references, no automatic gunfire excitement, developer keys only, reactions allowed while dead).
+
+**State.** Built by a three-stage workflow (data, Unity-free model and contract, Unity glue) and one review round (findings and three lead decisions applied). Nothing is committed or staged by
+the work, nothing is deployed to a host, no raid has run, nobody has listened.
+- **What exists.** The public `SpectatorCrowd` contract has eight members (`ReactionKinds`, `ClaimReactions`, `React`, `ReleaseReactions` appended; `ContractVersion` 1). Kinds 1 Approve,
+  2 Disapprove, 3 TakeCover, 4 Start and 5 Finish are implemented (`ReactionKinds` = 62), 6 Lull and 7 PurifiedTeam are reserved. A reaction is 1 to 3 voices of Arena's own clips from three
+  own voice slots, planned by `CrowdReactionPlanner` (cooldowns 3/15/5 s, one start per 0.75 s, coalescing, priority, the clip-choice relaxation order of the lead), played through the calls'
+  path, with a bed swell and a hold of the random calls; the drain runs before the calls' living-player guard. Developer keys `Spectators/Reactions`, `ReactionVolume`, `ReactionSwell`,
+  `ReactionGapScale`, `ReactionDemo` (Off|Cycle|Once), `ReactionDemoKind`; none public.
+- **Files (tracked changes, nothing staged).** Pipeline: `tools/extract/extract_spectator_audio.py`, new `tools/extract/reaction_pools.json`, `tools/validate/validate_distribution.py`,
+  `tools/release/make_release_zips.py`, `tools/tests/test_spectator_audio.py`, new `tools/tests/test_reaction_pools.py`, `test_release_zips.py`, `test_validate_distribution.py`. Client: new
+  `CrowdReactionModel.cs`, `SpectatorReactionDemo.cs`, `SpectatorReactionDemoPlan.cs`; changed `SpectatorCrowd.cs`, `SpectatorAudio.cs`, `SpectatorAudioModel.cs`, `SpectatorCrowdBed.cs`,
+  `SpectatorCrowdBedModel.cs`, `ArenaSpectators.cs`, `NoiseProbe.cs`, `NoiseProbeModel.cs`, `ArenaMapPort.Client.csproj` (prune of stale staged WAVs). Tests: new `CrowdReactionModelTests`,
+  `SpectatorReactionDemoTests`, `SpectatorReactionPackageTests`, `SpectatorReactionSourcePinTests`; changed `ArenaMapPort.Server.Tests.csproj` and seven existing test files. Docs: AGENTS.md
+  (layout row, audio sentences, counts, Traps entry "Crowd reactions"), spectator-audio.md, progress/INDEX.md, dist-manifest.md, PLAN-CROWD-REACTIONS.md, this entry. `git status` is the list.
+- **Gates (this VM, 2026-11-02).** Client Release build with `DllOnly`: 0 warnings, 0 errors. `dotnet test ... -c Release`: **3,128 passed**, 0 failed, 0 skipped, twice (3,119 before the
+  review round). Python: the four touched suites 323 OK; the whole suite 2,851 tests, errors=2, skipped=67 (the two known console-encoding errors of `test_door_poses` and `test_score_monitors`,
+  `AttributeError ... startswith` from a piped em dash, pass with `PYTHONUTF8=1`, untouched). `extract_spectator_audio.py extract` and `verify`: `reactions 70 clips, 15436496 bytes`.
+  `validate_distribution.py`: `DISTRIBUTION_OK 5 maps 15 bundles 5 sidecars encrypted`.
+- **Counts.** The local `dist/` is staged: **353 files** (283 + 70), `spectator-audio/` 85 files (13 calls, 70 reactions, the bed, the manifest), `make_release_zips.py --plan` core 224, equator 24,
+  bay5 30, airpit 22, bowl 26, iceberg 27. The host has none of it.
+
+**Next, in order.**
+1. The lead decides the commit (explicit paths, never `git add -A`; every change in `git status` belongs to this work).
+2. Deploy for the host run: `pwsh -NoProfile -File tools/deploy-to-spt.ps1 -SptRoot 'D:\SPT41' -Confirm` after a dry run, the WHOLE dist (manifest and 70 WAVs travel with it; a `-DllOnly`
+   deploy leaves the host with the old manifest, and the client logs at Debug that the package has no reaction set), EFT closed on the host, wait for Syncthing, then `gpu-run restart --host host2`.
+   `windows-gpu-2` failed to connect (`CONNECT_TIMEOUT`) when this entry was written; `gpu-run` works without it, so check it first.
+3. Host run on GPU-2 (plan section 7): one raid without bots per crowd map (Equator, Bay5, Air Pit, Bowl) with `Spectators/ReactionDemo=Cycle` (set with `uibridge_config_set`, DeveloperMode on):
+   every implemented kind in the Debug lines, the set loaded by the worker (`load total=` near 2.1 s, `wait=0`, the new `reactions=` figure), no ArenaMapPort warning, no hitch; a reaction right
+   after the crowd is built (audio-reset window); a plain-raid local death; **Iceberg `ReactionKinds` 0 and no warning**; NoiseProbe `Detect` (reaction voices no orphans); the hideout once; perf
+   (`uibridge_status` max). Also: `Camera.main` as the listener in a raid, `GetSource` headroom, the swell.
+4. The user's listening (nothing is approved before it): each kind alone with `Audio diagnostics/SpectatorCalls` off, loudness against the calls and the murmur, the swell, variety (Approve 12 clips
+   in 11 sentences, Disapprove 14 in 12, Start 6 in 5, panic 12 in 6 are the thinnest), and the 19 `listen` clips to promote or keep out.
+5. ArenaMode adoption by the user or Codex with the binder and presentation service of plan section 6 (ArenaMode is never edited from here); the plugin's own sensors (phase C) are not started.
+6. Lull (kind 6) after phase A, as decided (D14): new bank in the extractor, the kind into the mask, trigger on ArenaMode's side.
+
+**Open points.** (a) `FellBack` (a strong Approve's first voice taking a normal clip) is practically unreachable under the relaxation order; kept as a documented safety net, delete it if
+unwanted. (b) Release texts are untouched on purpose (README.md:31 and :226 still say that reactions are not implemented, FORGE.md, CHANGELOG.md, `docs/releases/v0.4.0.md` carry the older "no
+crowd ambience" sentence): number, form and wording are the user's decision, and the client DLL changed, so any release needs a re-cut and a VirusTotal scan. (c) `arena-audio.md` (note of
+2026-10-30) and the "Crowd murmur bed" bullet below still carry the older sentence as history; the correction is in spectator-audio.md. (d) The three allocation tests are stable over 8 clean runs; under
+heavy parallel suite load unrelated tests (`Cng_ReachesAtLeast300MiBPerSecond`) fail, which is load, not this work.
+
 ## Crowd murmur: Arena's neutral bed replaces the postmatch bed - 2026-11-02 (host-checked on GPU-2, not listened to there)
 
 User decision after listening to the full crowd export and their own German subtitles (`work/extract/crowd-sounds-listening`, ignored). The bed is now

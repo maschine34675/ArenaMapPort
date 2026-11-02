@@ -164,6 +164,11 @@ SPECTATOR_AUDIO_MANIFEST_NAME = f"{PLUGIN_ROOT}/spectator-audio/spectator-audio.
 # The crowd murmur bed next to the 13 fan calls (docs/progress/spectator-audio.md "Crowd bed"; Arena's neutral in-match bed since 2026-11-02, the
 # postmatch bed before); like them it is shared by every map.
 SPECTATOR_BED_NAME = f"{PLUGIN_ROOT}/spectator-audio/arena_fans_ambient_neutral.wav"
+# The reaction clips of phase A (docs/PLAN-CROWD-REACTIONS.md, 70 files beside the calls, the same folder and the same shared part): the name
+# categories of extract_spectator_audio.REACTION_CATEGORIES, with the calls' two-digit suffix. A name of another category is unclassified on purpose
+# (the packer does not import the extractor; test_release_zips pins that the two lists agree). Which of these files a release holds is the
+# extractor's manifest and validate_distribution.py's business, not a list kept here.
+SPECTATOR_REACTION_CATEGORIES = ("kill_cheer", "kill_angry", "match_start", "match_end", "aim_hide", "shoot_hide")
 SPECTATOR_TEXTURES_MANIFEST_NAME = f"{PLUGIN_ROOT}/spectators/shared/spectator-textures.json"
 
 
@@ -358,7 +363,9 @@ def build_rules(spec: ReleaseSpec) -> list:
     for name in SELECTION_MAP_NAMES:
         add(CORE_ID, "selection map", re.escape(name))
     add(CORE_ID, "score monitors", re.escape(f"{PLUGIN_ROOT}/monitors/") + rf"(?:monitors\.json|{LEAF}\.png)")
-    add(CORE_ID, "spectator audio", re.escape(f"{PLUGIN_ROOT}/spectator-audio/") + r"(?:spectator-audio\.json|arena_fans_ambient_neutral\.wav|arena_fan(?:[7-9]|1[0-3])_participating_\d{2}\.wav)")
+    add(CORE_ID, "spectator audio", re.escape(f"{PLUGIN_ROOT}/spectator-audio/")
+        + r"(?:spectator-audio\.json|arena_fans_ambient_neutral\.wav|arena_fan(?:[7-9]|1[0-3])_participating_\d{2}\.wav"
+        + r"|arena_fan\d{1,2}_(?:" + "|".join(SPECTATOR_REACTION_CATEGORIES) + r")_\d{2}\.wav)")
     add(CORE_ID, "spectator textures", re.escape(f"{PLUGIN_ROOT}/spectators/shared/") + r"(?:spectator-textures\.json|[0-9a-f]{16}(?:-[0-5])?\.png)")
     for m in spec.maps:
         key = re.escape(m.key)
@@ -399,7 +406,8 @@ def required_files(spec: ReleaseSpec) -> dict:
     unlock its encrypted bundles, a missing AI sidecar silently falls back to the NavMesh-synthesised AI, a missing
     shader sidecar leaves pink materials, a map without its gate sound manifest has silent gates, and a map without its
     acoustic graph, banner or loading screens is not the map the README promises; the core part needs the score monitor
-    manifest the client reads when a mode plugin claims the TV screens and the crowd murmur bed. A map with a native sea
+    manifest the client reads when a mode plugin claims the TV screens and the crowd murmur bed (the reaction clips beside the calls are not listed one
+    by one: their names are the extractor's manifest, whose exact file set validate_distribution.py checks). A map with a native sea
     (NATIVE_WATER_MAP_KEYS: Bay5's harbor, Iceberg's sea) needs its water package, since its water falls back to the unlit
     placeholder without it. Only flares and the DynamicMaps overview are optional (AirPit has an overview but no flares)."""
     required = {CORE_ID: [spec.client_dll, spec.server_dll, DESCRIPTIONS_NAME, *SELECTION_MAP_NAMES, MONITORS_MANIFEST_NAME, SPECTATOR_AUDIO_MANIFEST_NAME, SPECTATOR_BED_NAME, SPECTATOR_TEXTURES_MANIFEST_NAME]}

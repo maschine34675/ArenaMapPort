@@ -90,6 +90,7 @@ def fake_dist_files(maps=MAPS):
         f"{PLUGIN}/spectators/shared/0123456789abcdef.png": random.Random("crowd").randbytes(900),
         f"{PLUGIN}/spectator-audio/arena_fan7_participating_01.wav": b"RIFF fan fixture",
         f"{PLUGIN}/spectator-audio/arena_fans_ambient_neutral.wav": b"RIFF crowd bed fixture",
+        f"{PLUGIN}/spectator-audio/arena_fan11_kill_cheer_01.wav": b"RIFF reaction clip fixture",
         f"{PLUGIN}/monitors/Arena_Scoreboard_Status_Toggle_On.png": b"\x89PNG\r\n\x1a\n" + random.Random("monitors").randbytes(900),   # its own generator: the bytes below keep their values
     }
     for key, display in maps:
@@ -192,7 +193,7 @@ class PartitionTests(FakeRepoCase):
             f"{PLUGIN}/map-selection/region-map.png", f"{PLUGIN}/map-selection/manifest.json",
             f"{PLUGIN}/monitors/monitors.json", f"{PLUGIN}/monitors/Arena_Scoreboard_Status_Toggle_On.png",
             f"{PLUGIN}/spectator-audio/spectator-audio.json", f"{PLUGIN}/spectator-audio/arena_fan7_participating_01.wav",
-            f"{PLUGIN}/spectator-audio/arena_fans_ambient_neutral.wav",
+            f"{PLUGIN}/spectator-audio/arena_fans_ambient_neutral.wav", f"{PLUGIN}/spectator-audio/arena_fan11_kill_cheer_01.wav",
             f"{PLUGIN}/spectators/shared/spectator-textures.json", f"{PLUGIN}/spectators/shared/0123456789abcdef.png"})
 
     def test_each_map_part_holds_only_its_own_files(self):
@@ -377,11 +378,52 @@ class PartitionTests(FakeRepoCase):
         for name in ('spectator-audio.json', 'arena_fan7_participating_01.wav', 'arena_fans_ambient_neutral.wav'):
             self.assertEqual(release.classify(f'{PLUGIN}/spectator-audio/{name}', rules).part, release.CORE_ID)
         # the postmatch bed of 0.4.0 is retired (2026-11-02): a stale copy in dist/ is an error, not a second bed
-        for name in ('arena_fan7_kill_cheer_01.wav', 'arena_fan7_participating_01.wav.bak', 'arena_fans_ambient_postmatch.wav',
+        for name in ('arena_fan7_participating_01.wav.bak', 'arena_fans_ambient_postmatch.wav',
                      'arena_fans_ambient_neutral.ogg', 'arena_fans_ambient_neutral.wav.bak', 'arena_fans_ambient_neutral_2.wav',
                      'old/arena_fans_ambient_neutral.wav', 'old/spectator-audio.json', 'Thumbs.db'):
             with self.assertRaises(release.ClassificationError):
                 release.classify(f'{PLUGIN}/spectator-audio/{name}', rules)
+
+    def test_the_reaction_clips_of_the_six_phase_a_categories_are_shared_core_files(self):
+        rules = release.build_rules(self.spec)
+        for category in ('kill_cheer', 'kill_angry', 'match_start', 'match_end', 'aim_hide', 'shoot_hide'):
+            for fan in ('7', '11', '15'):
+                with self.subTest(category=category, fan=fan):
+                    rule = release.classify(f'{PLUGIN}/spectator-audio/arena_fan{fan}_{category}_01.wav', rules)
+                    self.assertEqual((rule.part, rule.label), (release.CORE_ID, 'spectator audio'))
+
+    def test_a_reaction_clip_of_any_other_shape_stays_an_error(self):
+        rules = release.build_rules(self.spec)
+        for name in ('arena_fan7_roar_01.wav', 'arena_fan7_cheer_01.wav',                       # an unknown category
+                     'arena_fan7_sweep_team_01.wav', 'arena_fan12_low_death_intensity_03.wav',  # the categories of the banks without a kind yet
+                     'arena_fan7_kill_cheer_1.wav', 'arena_fan7_kill_cheer_001.wav', 'arena_fan7_kill_cheer.wav',
+                     'arena_fan7_kill_cheer_01.ogg', 'arena_fan7_kill_cheer_01.wav.bak', 'arena_fan7_kill_cheer_01.WAV',
+                     'arena_fan_kill_cheer_01.wav', 'arena_fan123_kill_cheer_01.wav', 'fan7_kill_cheer_01.wav',
+                     'old/arena_fan7_kill_cheer_01.wav', '../arena_fan7_kill_cheer_01.wav', 'arena_fan7_kill_cheer_01.wav/x'):
+            with self.subTest(name=name), self.assertRaises(release.ClassificationError):
+                release.classify(f'{PLUGIN}/spectator-audio/{name}', rules)
+        # the same file in another folder is not a spectator clip either
+        with self.assertRaises(release.ClassificationError):
+            release.classify(f'{PLUGIN}/gate-sounds/arena_fan7_kill_cheer_01.wav', rules)
+
+    def test_the_reaction_categories_of_the_packer_are_the_extractors(self):
+        sys.path.insert(0, str(REPO / "tools" / "extract"))
+        try:
+            import extract_spectator_audio as extractor
+        finally:
+            sys.path.pop(0)
+        self.assertEqual(release.SPECTATOR_REACTION_CATEGORIES, extractor.REACTION_CATEGORIES)
+
+    @unittest.skipUnless((REPO / "work/extract/spectator-audio/spectator-audio.json").is_file(), "work/extract/spectator-audio is not extracted")
+    def test_every_file_the_extractor_writes_is_a_shared_core_file(self):
+        folder = REPO / "work/extract/spectator-audio"
+        manifest = json.loads((folder / "spectator-audio.json").read_text(encoding="utf-8"))
+        rules = release.build_rules(self.spec)
+        names = sorted(p.name for p in folder.iterdir())
+        for name in names:
+            with self.subTest(name=name):
+                self.assertEqual(release.classify(f'{PLUGIN}/spectator-audio/{name}', rules).part, release.CORE_ID)
+        self.assertEqual(len(names), 1 + len(manifest["clips"]) + (1 if "bed" in manifest else 0) + len(manifest.get("reactions", {}).get("clips", [])))
 
     def test_spectators_stay_in_their_map_part_and_reject_strays(self):
         rules = release.build_rules(self.spec)

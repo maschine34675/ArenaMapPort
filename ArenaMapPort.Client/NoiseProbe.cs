@@ -548,7 +548,8 @@ namespace ArenaMapPort.Client
             float dt = Time.unscaledDeltaTime;
             var c = NoiseText.Inv;
             return "pos=(" + pos.x.ToString("0.0", c) + "," + pos.y.ToString("0.0", c) + "," + pos.z.ToString("0.0", c) + ") room=" + RoomText() +
-                " fps=" + (dt > 0f ? (int)(1f / dt) : 0).ToString(c) + " voices=" + (spectators != null ? spectators.PlayingVoices : 0).ToString(c);
+                " fps=" + (dt > 0f ? (int)(1f / dt) : 0).ToString(c) + " voices=" + (spectators != null ? spectators.PlayingVoices : 0).ToString(c) +
+                " react=" + (spectators != null ? spectators.PlayingReactionVoices : 0).ToString(c);
         }
 
         static string RoomText()
@@ -595,7 +596,7 @@ namespace ArenaMapPort.Client
                 }
                 sb.Append(" ownedAmbient=").Append(AmbientPlaying);
                 var spectators = SpectatorAudio.Current;
-                if (spectators != null) sb.Append(" ownedSpectator=").Append(spectators.PlayingVoices);
+                if (spectators != null) sb.Append(" ownedSpectator=").Append(spectators.PlayingVoices).Append(" ownedReaction=").Append(spectators.PlayingReactionVoices).Append('/').Append(spectators.ActiveReactionVoices);
                 var bed = SpectatorCrowdBed.Current;
                 if (bed != null) sb.Append(" ownedBed=").Append(bed.PlayingStands).Append('/').Append(bed.StandCount); // continuous looping sources: not in the pool, not counted above
             }

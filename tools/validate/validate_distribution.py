@@ -409,6 +409,35 @@ def validate_monitors(plugin):
             raise ValueError(f'Score monitor sprite comes from a key-source file of the maps: {sprite["name"]} ({asset})')
 
 
+def validate_spectator_audio_not_key_sources(audio, arena_data=None):
+    """No file staged under spectator-audio/ (the calls, the crowd murmur bed and the reaction clips, plaintext like all the art and audio) may be
+    byte-identical to a stage-2 key-source file of the installed Arena (tools/bundle/key-sources.json): a content key is derived from sampled bytes of
+    those files, and a published copy of one would let anyone derive it (docs/PLAN-ENCRYPTION.md). The extractor refuses a clip that streams from one;
+    this checks the staged bytes themselves. The sizes are compared first and a file is hashed only when a staged file has the same size (none ever
+    does: the key-source streams are megabytes and the clips are at most a few). `arena_data` is the installed Arena's EscapeFromTarkovArena_Data folder
+    (default: the extractors' SOURCE); an absent folder, or one that holds none of the listed files, is an error rather than a pass."""
+    import extract_spectator_audio as spectator_audio
+    data = Path(arena_data) if arena_data is not None else Path(spectator_audio.SOURCE)
+    sources = json.loads((REPO/'tools/bundle/key-sources.json').read_text(encoding='utf-8'))['maps']
+    names = sorted({Path(name).name for entries in sources.values() for entry in entries for name in entry['files']})
+    present = [data/name for name in names if (data/name).is_file()]
+    if not present:
+        raise ValueError(f'Cannot check the staged spectator audio against the key-source files: {data} holds none of them')
+    staged = [(name, (audio/name)) for name in sorted(_files_under(audio))]
+    by_size = {}
+    for name, path in staged:
+        by_size.setdefault(path.stat().st_size, []).append((name, path))
+    for source in present:
+        for name, path in by_size.get(source.stat().st_size, ()):
+            if hashlib.sha256(path.read_bytes()).digest() == _file_sha256(source):
+                raise ValueError(f'Spectator audio file is a copy of a key-source file of the maps: {name} ({source.name})')
+
+
+def _file_sha256(path):
+    with Path(path).open('rb') as stream:
+        return hashlib.file_digest(stream, 'sha256').digest()
+
+
 def validate_water(plugin):
     """Original sea water settings and raw texture mip chains of the maps in WATER_MAP_KEYS (Bay5's harbor, Iceberg's sea), staged by the
     client csproj (Release and DllOnly) from the ignored work/extract/<stem>-water inputs of tools/extract/extract_water.py
@@ -524,16 +553,18 @@ def validate():
     validate_monitors(plugin)
     from extract_spectator_audio import validate as verify_spectator_audio
     audio = plugin/'spectator-audio'
-    # The 13 calls and, since 0.4.0, the crowd murmur bed (manifest key 'bed'; arena_fans_ambient_postmatch.wav in 0.4.0, Arena's neutral in-match bed
-    # arena_fans_ambient_neutral.wav since 2026-11-02): the file set and
-    # every byte below are compared with the extractor's output, so a bed that is stale, missing or not the extracted one is refused.
-    verify_spectator_audio(audio, require_bed=True)
+    # The 13 calls, since 0.4.0 the crowd murmur bed (manifest key 'bed'; arena_fans_ambient_postmatch.wav in 0.4.0, Arena's neutral in-match bed
+    # arena_fans_ambient_neutral.wav since 2026-11-02) and, since 2026-11-02 (docs/PLAN-CROWD-REACTIONS.md phase A), the reaction clips (manifest key
+    # 'reactions', 70 files): the file set and every byte below are compared with the extractor's output, so a bed or a clip that is stale, missing,
+    # extra or not the extracted one is refused.
+    verify_spectator_audio(audio, require_bed=True, require_reactions=True)
     extracted_audio = REPO/'work/extract/spectator-audio'
     if _files_under(audio) != _files_under(extracted_audio):
         raise ValueError('Spectator audio file set differs from extracted data')
     for name in _files_under(audio):
         if (audio/name).read_bytes() != (extracted_audio/name).read_bytes():
             raise ValueError(f'Stale spectator audio: {name}')
+    validate_spectator_audio_not_key_sources(audio)
     from extract_spectator import MAP_SCENES, package_path
     from stage_spectators import validate_staged
     crowd_keys = {f'arena_{name}' for name in MAP_SCENES}

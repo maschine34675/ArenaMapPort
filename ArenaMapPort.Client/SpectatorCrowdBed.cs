@@ -23,7 +23,9 @@ namespace ArenaMapPort.Client
     /// scene search, no per-frame work beyond the excitement smoothing and a few field reads.
     ///
     /// The sources exist while the raid has started and the bed is on; the audio reset of EFT (<c>OnAudioConfigurationChanged</c>) rebuilds clip and sources, the
-    /// crowd's removal removes the bed (it is a child of the crowd root). A mode plugin lifts the volume with <see cref="SpectatorCrowd.SetExcitement"/>. The keys are
+    /// crowd's removal removes the bed (it is a child of the crowd root). A mode plugin lifts the volume with <see cref="SpectatorCrowd.SetExcitement"/>; every reaction voice that
+    /// starts (SpectatorAudio) adds a transient swell on top (<see cref="CrowdExcitement.AddSwell"/>, taken from <see cref="CrowdBedState.TakeSwell"/> in the tick; the level the volume
+    /// follows is the larger of the two and never exceeds 1). The keys are
     /// developer keys like <c>Audio diagnostics/SpectatorCalls</c> (honoured only with DeveloperMode; the defaults apply otherwise): <c>Spectators/CrowdBed</c>,
     /// <c>CrowdBedVolume</c>, <c>CrowdBedReach</c>, all live. A package without a bed is not an error (one Debug line); a damaged bed is one Warning and the crowd
     /// stays. The NoiseProbe taps (<see cref="NoiseEv.Bed"/>) sit behind <c>NoiseProbe.Armed</c>. Host verification: docs/progress/spectator-audio.md "Crowd bed".
@@ -173,12 +175,15 @@ namespace ArenaMapPort.Client
                 {
                     // Switched off: the clip goes too. Not started (loading, or the raid is ending): the clip stays for the start.
                     if (_stands != null || (!on && _clip != null)) TearDown(!on);
+                    SpectatorCrowd.State.TakeSwell();   // a swell asked for while nothing sounds is not kept for later
                     return;
                 }
                 if (_stands == null && !Build()) return;
                 float reach = ReachNow;
                 if (reach != _appliedReach) ApplyReach(reach);
                 _excitement.SetTarget(SpectatorCrowd.State.Excitement);
+                float swell = SpectatorCrowd.State.TakeSwell();   // the largest amplitude a reaction voice asked for since the last tick (SpectatorAudio), 0 when none
+                if (swell > 0f) _excitement.AddSwell(swell);
                 _excitement.Step(Time.unscaledDeltaTime);
                 float volume = SpectatorCrowdBedModel.SourceVolume(VolumeNow, _excitement.Factor);
                 if (Mathf.Abs(volume - _appliedVolume) > 0.0005f) ApplyVolume(volume);

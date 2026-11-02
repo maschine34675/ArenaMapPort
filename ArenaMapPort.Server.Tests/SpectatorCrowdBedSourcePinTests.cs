@@ -69,6 +69,12 @@ public sealed class SpectatorCrowdBedSourcePinTests
         // the smoothing is the model's, on unscaled time, and the volume is only written when it moved
         Assert.Contains("_excitement.Step(Time.unscaledDeltaTime);", frame);
         Assert.Contains("if (Mathf.Abs(volume - _appliedVolume) > 0.0005f) ApplyVolume(volume);", frame);
+        // the reactions' swell (2026-11-02): the request is taken once per tick (one Interlocked exchange, no allocation) and added before the smoothing step; a request that comes
+        // while nothing sounds is taken and dropped, so a swell is never kept for a bed that starts later
+        Assert.Contains("float swell = SpectatorCrowd.State.TakeSwell();", frame);
+        Assert.Contains("if (swell > 0f) _excitement.AddSwell(swell);", frame);
+        Assert.True(frame.IndexOf("_excitement.AddSwell(swell);", StringComparison.Ordinal) < frame.IndexOf("_excitement.Step(", StringComparison.Ordinal));
+        Assert.Equal(2, Regex.Matches(frame, @"TakeSwell\(\)").Count);                       // the tick's, and the discard while the bed is off or the raid has not started
     }
 
     [Fact]

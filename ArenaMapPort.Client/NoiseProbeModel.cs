@@ -26,7 +26,11 @@ namespace ArenaMapPort.Client
         None, SpecStart, SpecStop, SpecOnset, AmbStart, AmbRestart, AmbStop, Prop, Room, RoomReverb, RoomShot, Gate, Puddle,
         Rain, RainPlay, Config, Reset, Life, Hitch, Gc, Mark, Burst, SelfTest,
         /// <summary>A crowd-bed stand source starts (A = 1) or stops (A = 0): B the stand index, V1 the distance to the listener, V2 the source volume.</summary>
-        Bed
+        Bed,
+        /// <summary>A reaction voice starts (SpectatorAudio, docs/PLAN-CROWD-REACTIONS.md): A the reaction voice number, B the reaction kind (CrowdReactionKind), V1 the distance to the listener, V2 the occlusion factor.</summary>
+        ReactStart,
+        /// <summary>A reaction voice stops: A the voice number, B the <see cref="NoiseStopReason"/>, V1 the milliseconds it played, V2 the seconds of its clip left.</summary>
+        ReactStop
     }
 
     /// <summary>Why a spectator voice stopped (the spec- event).</summary>
@@ -52,20 +56,27 @@ namespace ArenaMapPort.Client
                 case NoiseEv.SpecStart: case NoiseEv.SpecStop: case NoiseEv.AmbStart: case NoiseEv.AmbRestart: case NoiseEv.Prop:
                 case NoiseEv.Room: case NoiseEv.RoomReverb: case NoiseEv.RoomShot: case NoiseEv.Gate: case NoiseEv.Puddle:
                 case NoiseEv.Rain: case NoiseEv.RainPlay: case NoiseEv.Config: case NoiseEv.Reset: case NoiseEv.Life:
-                case NoiseEv.Hitch: case NoiseEv.SelfTest: case NoiseEv.Bed:
+                case NoiseEv.Hitch: case NoiseEv.SelfTest: case NoiseEv.Bed: case NoiseEv.ReactStart: case NoiseEv.ReactStop:
                     return true;
                 default:
                     return false;
             }
         }
 
-        /// <summary>"arena_fan9_participating_02" becomes "fan9_02"; any other name is returned unchanged.</summary>
+        /// <summary>"arena_fan9_participating_02" becomes "fan9_02" and a reaction clip loses only its prefix ("arena_fan11_kill_cheer_01" becomes "fan11_kill_cheer_01", still greppable by its
+        /// category); any other name is returned unchanged.</summary>
         internal static string ShortClip(string name)
         {
             if (string.IsNullOrEmpty(name)) return "";
             const string marker = "_participating";
             int at = name.IndexOf(marker, StringComparison.Ordinal);
-            if (at < 0) return name;
+            if (at < 0)
+            {
+                // A reaction clip: arena_fan<N>_<category>_<NN>. The bed's arena_fans_ambient_* names are no fan voice and stay as they are.
+                const string fan = "arena_fan";
+                if (name.Length > fan.Length && name.StartsWith(fan, StringComparison.Ordinal) && name[fan.Length] >= '0' && name[fan.Length] <= '9') return name.Substring(6);
+                return name;
+            }
             string head = name.StartsWith("arena_", StringComparison.Ordinal) ? name.Substring(6, at - 6) : name.Substring(0, at);
             return head + name.Substring(at + marker.Length);
         }
@@ -119,6 +130,8 @@ namespace ArenaMapPort.Client
                 case NoiseEv.Burst: return "burst";
                 case NoiseEv.SelfTest: return "selftest";
                 case NoiseEv.Bed: return "bed";
+                case NoiseEv.ReactStart: return "react+";
+                case NoiseEv.ReactStop: return "react-";
                 default: return "none";
             }
         }
@@ -246,7 +259,7 @@ namespace ArenaMapPort.Client
     internal sealed class NoiseMinute
     {
         public double Start, Covered;
-        public int Blocks, Loud, Suppressed, Refractory, Orphan, EvOrphan, Hitch50, SpecStart, SpecStop, AmbStart, Restarts, Props, Rooms, Resets, ProbeCalls;
+        public int Blocks, Loud, Suppressed, Refractory, Orphan, EvOrphan, Hitch50, SpecStart, SpecStop, ReactStart, ReactStop, AmbStart, Restarts, Props, Rooms, Resets, ProbeCalls;
         public readonly int[] Bursts = new int[5];
         public readonly int[] Gc = new int[3];
         public double ProbeMsSum, ProbeMsMax;
@@ -256,7 +269,7 @@ namespace ArenaMapPort.Client
         public void Reset(double start)
         {
             Start = start; Covered = 0; Blocks = 0; Loud = 0; Suppressed = 0; Refractory = 0; Orphan = 0; EvOrphan = 0; Hitch50 = 0;
-            SpecStart = 0; SpecStop = 0; AmbStart = 0; Restarts = 0; Props = 0; Rooms = 0; Resets = 0; ProbeCalls = 0;
+            SpecStart = 0; SpecStop = 0; ReactStart = 0; ReactStop = 0; AmbStart = 0; Restarts = 0; Props = 0; Rooms = 0; Resets = 0; ProbeCalls = 0;
             for (int i = 0; i < Bursts.Length; i++) Bursts[i] = 0;
             for (int i = 0; i < Gc.Length; i++) Gc[i] = 0;
             ProbeMsSum = 0; ProbeMsMax = 0; _bgN = 0; _pkN = 0; _sampleSkip = 0;
@@ -280,6 +293,8 @@ namespace ArenaMapPort.Client
             {
                 case NoiseEv.SpecStart: SpecStart++; break;
                 case NoiseEv.SpecStop: SpecStop++; break;
+                case NoiseEv.ReactStart: ReactStart++; break;
+                case NoiseEv.ReactStop: ReactStop++; break;
                 case NoiseEv.AmbStart: AmbStart++; break;
                 case NoiseEv.AmbRestart: Restarts++; break;
                 case NoiseEv.Prop: Props++; break;
@@ -743,6 +758,9 @@ namespace ArenaMapPort.Client
         internal static string EventLine(NoiseEvent e, NoiseLabels labels, double now) =>
             "  " + F((float)(e.Time - now), "+0.000;-0.000;+0.000") + "s " + EventText(e, labels);
 
+        // The kind of a reaction as the plan names it (CrowdReactionKind.Name): the model is linked into the tests next to this one.
+        static string ReactionKindText(int kind) => CrowdReactionKind.Name(kind);
+
         internal static string EventText(NoiseEvent e, NoiseLabels labels)
         {
             string l1 = labels.Get(e.L1), l2 = labels.Get(e.L2);
@@ -756,6 +774,11 @@ namespace ArenaMapPort.Client
                         " played=" + F(e.V1, "0") + "ms left=" + F(e.V2, "0.00") + "s";
                 case NoiseEv.SpecOnset:
                     return token + " " + l1 + "#" + e.A.ToString(NoiseText.Inv) + " f" + e.B.ToString(NoiseText.Inv) + " vol=" + F(e.V1, "0.000") + " occ=" + F(e.V2, "0.00");
+                case NoiseEv.ReactStart:
+                    return token + " " + l1 + "#" + e.A.ToString(NoiseText.Inv) + " " + F(e.V1, "0.0") + "m occ" + F(e.V2, "0.00") + " kind=" + ReactionKindText(e.B);
+                case NoiseEv.ReactStop:
+                    return token + " " + l1 + "#" + e.A.ToString(NoiseText.Inv) + " reason=" + NoiseText.ReasonText((NoiseStopReason)e.B) +
+                        " played=" + F(e.V1, "0") + "ms left=" + F(e.V2, "0.00") + "s";
                 case NoiseEv.AmbStart:
                     return token + " " + l1 + " clip=" + l2 + " " + F(e.V1, "0.0") + "m vol=" + F(e.V2, "0.00") + " pitch=" + F(e.A / 1000f, "0.00");
                 case NoiseEv.AmbRestart:
@@ -809,6 +832,7 @@ namespace ArenaMapPort.Client
               .Append(" hitch50=").Append(m.Hitch50.ToString(NoiseText.Inv))
               .Append(" gc=").Append(m.Gc[0].ToString(NoiseText.Inv)).Append('/').Append(m.Gc[1].ToString(NoiseText.Inv)).Append('/').Append(m.Gc[2].ToString(NoiseText.Inv))
               .Append(" spec=+").Append(m.SpecStart.ToString(NoiseText.Inv)).Append("/-").Append(m.SpecStop.ToString(NoiseText.Inv))
+              .Append(" react=+").Append(m.ReactStart.ToString(NoiseText.Inv)).Append("/-").Append(m.ReactStop.ToString(NoiseText.Inv))
               .Append(" amb=+").Append(m.AmbStart.ToString(NoiseText.Inv)).Append(" restarts=").Append(m.Restarts.ToString(NoiseText.Inv))
               .Append(" props=").Append(m.Props.ToString(NoiseText.Inv)).Append(" rooms=").Append(m.Rooms.ToString(NoiseText.Inv))
               .Append(" resets=").Append(m.Resets.ToString(NoiseText.Inv))

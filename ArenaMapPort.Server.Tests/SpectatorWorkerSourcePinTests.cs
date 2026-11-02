@@ -60,6 +60,23 @@ namespace ArenaMapPort.Server.Tests
         }
 
         [Fact]
+        public void TheReactionClipsAreReadHashedAndDecodedOnTheWorkerWithoutUnityOrALogAndTheirFailureNeverTakesTheCrowdWithIt()
+        {
+            string code = Code(Crowd);
+            string loader = Between(code, "static ReactionPackage LoadReactionPackage(", "static string[] TextureOrder(");
+            AssertNoUnityOrLogging("LoadReactionPackage", loader);
+            Assert.Contains("catch (Exception e)", loader);
+            Assert.Contains("return new ReactionPackage { Error = e };", loader);            // a failure travels in the result: the one Warning is SpectatorAudio.Create's
+            Assert.DoesNotContain("throw;", loader);
+            Assert.Contains("ticks = System.Diagnostics.Stopwatch.GetTimestamp() - start;", loader);
+            // the worker runs it after the texture prefetch started, outside the lock, and the result rides on the same Loaded as the crowd package
+            string work = Between(code, "Loaded Work()", "public Loaded Join(");
+            Assert.Contains("loaded.Reactions = LoadReactionPackage(PluginDirectory(), out loaded.ReactionTicks);", work);
+            Assert.True(work.IndexOf("_textures.Start();", StringComparison.Ordinal) < work.IndexOf("LoadReactionPackage(", StringComparison.Ordinal));
+            AssertNoUnityOrLogging("ReactionPackage", Between(code, "internal sealed class ReactionPackage", "sealed class LoadTiming"));
+        }
+
+        [Fact]
         public void TheTexturePackageAndItsPrefetchWorkerAreUnityFree()
         {
             string code = Code(Package);

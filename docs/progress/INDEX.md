@@ -48,6 +48,11 @@ dated state in one screen; read it before this index if you only have a minute.
   `52c8a28` and its self-test read 1 of 4 on a loud background, and by the user on MASCHINE11, whose four captures were analysed
   afterwards) and the ranked hypotheses of the lead's investigation (none above about 25 %, with the questions for the user;
   superseded the same night: the cause is the compressed bundle block of [equator-noise-bundle-block.md](equator-noise-bundle-block.md)).
+  Appended 2026-11-02: the corrections from the crowd-reaction analysis (no `StartRound` bank, Arena's in-match crowd beds), the Neutral bed that replaced the
+  postmatch bed, and **"Action-bound reactions, phase A (offline)"**: the 70 reaction clips of six fan banks (counts, pools, manifest `reactions` object), the eight-member
+  `SpectatorCrowd` contract (`ReactionKinds`, `ClaimReactions`, `React`, `ReleaseReactions`; kinds 1 to 5 implemented, 6 and 7 reserved), the planner and glue (relaxation order,
+  voices, cooldowns, swell, the drain before the living-player guard), developer keys and demo, NoiseProbe tokens, test totals, dist 353 files, and what is **not** done:
+  no host run, nobody listened (host checklist at the end of the section). Design and decisions: [../PLAN-CROWD-REACTIONS.md](../PLAN-CROWD-REACTIONS.md).
 - [spectators-allmaps.md](spectators-allmaps.md) — original crowds on all four maps: Equator day/night,
   Bay5's translated group and inactive legacy colliders, Bowl and the accepted AirPit crowd; shared runtime,
   exact source/animation audits, staging and release packaging; since 2026-10-29 the crowd package is prepared on a
@@ -591,6 +596,7 @@ successor instead unless you're specifically investigating that cycle's history.
 | How are bundles served to the client? | `dist-manifest.md` (`BundleHost.cs`'s expected paths); `fix-preset-cab-and-bundle-lifetime.md` (the refcount/internal-name fixes to that same class) |
 | Which decisions are fixed (not up for debate)? | `AGENTS.md` "Decisions that shape every task"; `HANDOFF.md` "Decisions (user, 2026-09-20)"; both point to `docs/SPEC.md`'s "Decisions 2026-09-20" section as the source |
 | Do the gates make sound? | `gate-sounds.md` (rows, clips, the seam fit, `GateSounds`, host checks; silent in a plain raid by design) |
+| Does the crowd react to kills, deaths and round start or end, and how does a mode plugin or the developer demo trigger it? | `spectator-audio.md` "2026-11-02 - Action-bound reactions, phase A (offline)" (contract `SpectatorCrowd.ReactionKinds`/`ClaimReactions`/`React`/`ReleaseReactions`, clips, planner, keys, demo, host checklist; implemented offline, not host-run, not listened to); `../PLAN-CROWD-REACTIONS.md` (design, decisions D1-D14, the ArenaMode binder of section 6) |
 | How do the TV screens show a mode's score, and how does ArenaMode drive them? | `score-monitors.md` (contract `ArenaMapPort.Client.ScoreMonitors`, the binder and Team Deathmatch mapping, host checks A and B) |
 | Why do puddles splash on a map, and which materials count? | `puddle-footsteps-all-maps.md` (Equator, Air Pit, Bowl, Bay5); `bay5-water.md` (the original Bay5 mechanism) |
 | Do the exit signs light, and when? | `door-poses.md` "2026-10-25 - Exit lamps" and its host verification of the same date |

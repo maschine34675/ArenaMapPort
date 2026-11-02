@@ -485,3 +485,29 @@ The bed file is now `spectator-audio/arena_fans_ambient_neutral.wav` (Arena's ne
 4.4 MB. The packer rule and `SPECTATOR_BED_NAME` admit only the new name, a stale postmatch WAV in `dist/` is a classification error, and the client
 build deletes it from `dist/` after staging. A player who extracts the next release over 0.4.0 keeps the old WAV beside the new one; the client
 reads only the file the manifest names. Record: [spectator-audio.md](progress/spectator-audio.md), "Neutral bed".
+
+## Crowd reaction clips - 2026-11-02 (phase A, unreleased)
+
+`spectator-audio/` gains the 70 reaction WAVs of the spectator crowd's action-bound reactions (phase A of [PLAN-CROWD-REACTIONS.md](PLAN-CROWD-REACTIONS.md); record: [spectator-audio.md](progress/spectator-audio.md),
+"Action-bound reactions, phase A (offline)"). Nothing else in the layout changes and nothing is encrypted: they are plaintext like the calls and the bed, written by the same
+`extract_spectator_audio.py extract` run into ignored `work/extract/spectator-audio` and staged beside the plugin by every Release client build, `DllOnly` included.
+
+- **Files.** `arena_fan<N>_<category>_<NN>.wav`, flat in `spectator-audio/`, mono 16-bit PCM 44.1 kHz, 0.70 to 6.71 s, 174.98 s and 15,436,496 bytes in all. By category: `kill_cheer` 12,
+  `kill_angry` 14, `match_start` 6, `match_end` 9, `aim_hide` 8, `shoot_hide` 21. They are the keep clips of Arena's fan banks Cheer, Owned, Angry, ChangedRound, EndRound and Hide (the 19
+  `listen` clips and 2 SLUR clips are left out; Lull and PurifiedTeam are not exported). The folder holds **85 files**: 13 calls, 70 reactions, the murmur bed
+  `arena_fans_ambient_neutral.wav` and `spectator-audio.json` (about 25.3 MB).
+- **Manifest.** `spectator-audio.json` (schema 1, every earlier key unchanged) gains the optional `reactions` object: per bank the trigger, the counts and the exported and left-out names, and
+  one deduplicated clip table with file, format, frames, bytes, SHA-256, `pool` and `group` per clip. The client reads exactly the files the manifest names and verifies each file's length and
+  SHA-256 and its decoded WAV format against the table; a manifest without `reactions` is valid and gives a crowd without reactions.
+- **Counts.** The distribution grows from 283 to **353 files** (the 0.4.0 layout without Iceberg would be 326). `make_release_zips.py --plan` reads core **224** (was 154), equator 24, bay5 30,
+  airpit 22, bowl 26, iceberg 27, raw 5,393,118,548 B in total. The 0.4.0 that was released (256 files) has none of this.
+- **Packer.** The spectator-audio classification admits the six categories with the calls' two-digit suffix and still refuses an unknown category; the names are not in `required_files`
+  because the manifest names them. They belong to the core part.
+- **Validation.** `validate_distribution.py` requires the reactions (`require_reactions`), the exact file set, format, levels and hashes, byte equality with `work/extract/spectator-audio`, and
+  refuses a staged spectator WAV that is a copy of a stage-2 key-source file (it needs the installed Arena's data folder). Result of 2026-11-02: `DISTRIBUTION_OK 5 maps 15 bundles 5
+  sidecars encrypted`.
+- **Stale files.** The staging copy never deletes. The csproj prunes staged WAVs that the source folder no longer has (a clip demoted in `tools/extract/reaction_pools.json`), the extractor
+  removes unlisted reaction-named files from its output, and the 0.4.0 bed `arena_fans_ambient_postmatch.wav` is still deleted. A player who extracts a later release over an older install keeps
+  stale WAVs; the client reads only the files the manifest names.
+- **Release.** Not part of any release yet: the number, form and wording are the user's decision, and the client DLL changed (a re-cut and a VirusTotal scan follow). The host has none of it
+  until a full deploy through `tools/deploy-to-spt.ps1`.

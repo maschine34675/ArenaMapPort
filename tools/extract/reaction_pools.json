@@ -1,0 +1,1042 @@
+{
+  "schema": 1,
+  "about": "Pool tag, sentence group, status and reason code of every embedded clip of the eight reaction banks of fan_speaker_voice.bundle (docs/PLAN-CROWD-REACTIONS.md 2.4 and 4.5). Names and tags only: no transcript, translation or voice line. Sentence groups come from the user's automatic subtitles of 2026-11-02 (same sentence in the German translation = same group, over keep and listen clips of a kind). status: keep (exported), listen (left out until the user has listened; promote to keep to export), out (left out by name). reason: FLAG, ROLE, TASTE, CTX, SIDED (listen); SLUR, UNCL, WRONG (out).",
+  "exported_banks": [
+    "Cheer",
+    "Owned",
+    "Angry",
+    "ChangedRound",
+    "EndRound",
+    "Hide"
+  ],
+  "exported_status": [
+    "keep"
+  ],
+  "clips": {
+    "arena_fan8_aim_hide_01": {
+      "banks": [
+        "Hide"
+      ],
+      "pool": null,
+      "group": null,
+      "status": "out",
+      "reason": "SLUR"
+    },
+    "arena_fan8_aim_hide_02": {
+      "banks": [
+        "Hide"
+      ],
+      "pool": "directed",
+      "group": "takecover-01",
+      "status": "listen",
+      "reason": "TASTE"
+    },
+    "arena_fan9_aim_hide_01": {
+      "banks": [
+        "Hide"
+      ],
+      "pool": "directed",
+      "group": "takecover-02",
+      "status": "keep"
+    },
+    "arena_fan9_aim_hide_02": {
+      "banks": [
+        "Hide"
+      ],
+      "pool": "directed",
+      "group": "takecover-03",
+      "status": "keep"
+    },
+    "arena_fan10_aim_hide_02": {
+      "banks": [
+        "Hide"
+      ],
+      "pool": "directed",
+      "group": "takecover-04",
+      "status": "keep"
+    },
+    "arena_fan12_aim_hide_01": {
+      "banks": [
+        "Hide"
+      ],
+      "pool": "directed",
+      "group": "takecover-05",
+      "status": "keep"
+    },
+    "arena_fan12_aim_hide_05": {
+      "banks": [
+        "Hide"
+      ],
+      "pool": "directed",
+      "group": "takecover-06",
+      "status": "keep"
+    },
+    "arena_fan12_aim_hide_06": {
+      "banks": [
+        "Hide"
+      ],
+      "pool": "panic",
+      "group": "takecover-07",
+      "status": "keep"
+    },
+    "arena_fan12_aim_hide_07": {
+      "banks": [
+        "Hide"
+      ],
+      "pool": "panic",
+      "group": "takecover-08",
+      "status": "keep"
+    },
+    "arena_fan13_aim_hide_01": {
+      "banks": [
+        "Hide"
+      ],
+      "pool": "directed",
+      "group": "takecover-09",
+      "status": "listen",
+      "reason": "CTX"
+    },
+    "arena_fan13_aim_hide_02": {
+      "banks": [
+        "Hide"
+      ],
+      "pool": "directed",
+      "group": "takecover-04",
+      "status": "keep"
+    },
+    "arena_fan7_kill_angry_01": {
+      "banks": [
+        "Angry"
+      ],
+      "pool": "lament",
+      "group": "disapprove-01",
+      "status": "keep"
+    },
+    "arena_fan11_kill_angry_02": {
+      "banks": [
+        "Angry"
+      ],
+      "pool": "lament",
+      "group": "disapprove-02",
+      "status": "keep"
+    },
+    "arena_fan11_kill_angry_03": {
+      "banks": [
+        "Angry"
+      ],
+      "pool": "lament",
+      "group": "disapprove-03",
+      "status": "keep"
+    },
+    "arena_fan12_kill_angry_01": {
+      "banks": [
+        "Angry"
+      ],
+      "pool": "lament",
+      "group": "disapprove-04",
+      "status": "keep"
+    },
+    "arena_fan12_kill_angry_02": {
+      "banks": [
+        "Angry"
+      ],
+      "pool": "lament",
+      "group": "disapprove-05",
+      "status": "keep"
+    },
+    "arena_fan12_kill_angry_03": {
+      "banks": [
+        "Angry"
+      ],
+      "pool": "heckle",
+      "group": "disapprove-06",
+      "status": "keep"
+    },
+    "arena_fan12_kill_angry_06": {
+      "banks": [
+        "Angry"
+      ],
+      "pool": "heckle",
+      "group": "disapprove-07",
+      "status": "keep"
+    },
+    "arena_fan12_kill_angry_08": {
+      "banks": [
+        "Angry"
+      ],
+      "pool": "heckle",
+      "group": "disapprove-08",
+      "status": "listen",
+      "reason": "FLAG"
+    },
+    "arena_fan12_kill_angry_10": {
+      "banks": [
+        "Angry"
+      ],
+      "pool": "lament",
+      "group": "disapprove-09",
+      "status": "keep"
+    },
+    "arena_fan12_kill_angry_11": {
+      "banks": [
+        "Angry"
+      ],
+      "pool": "lament",
+      "group": "disapprove-10",
+      "status": "keep"
+    },
+    "arena_fan12_kill_angry_12": {
+      "banks": [
+        "Angry"
+      ],
+      "pool": "heckle",
+      "group": "disapprove-11",
+      "status": "listen",
+      "reason": "FLAG"
+    },
+    "arena_fan13_kill_angry_01": {
+      "banks": [
+        "Angry"
+      ],
+      "pool": "lament",
+      "group": "disapprove-04",
+      "status": "keep"
+    },
+    "arena_fan13_kill_angry_02": {
+      "banks": [
+        "Angry"
+      ],
+      "pool": "heckle",
+      "group": "disapprove-12",
+      "status": "listen",
+      "reason": "FLAG"
+    },
+    "arena_fan13_kill_angry_04": {
+      "banks": [
+        "Angry"
+      ],
+      "pool": "lament",
+      "group": "disapprove-13",
+      "status": "keep"
+    },
+    "arena_fan13_kill_angry_06": {
+      "banks": [
+        "Angry"
+      ],
+      "pool": "heckle",
+      "group": "disapprove-08",
+      "status": "listen",
+      "reason": "FLAG"
+    },
+    "arena_fan13_kill_angry_07": {
+      "banks": [
+        "Angry"
+      ],
+      "pool": "heckle",
+      "group": "disapprove-14",
+      "status": "keep"
+    },
+    "arena_fan13_kill_angry_08": {
+      "banks": [
+        "Angry"
+      ],
+      "pool": "lament",
+      "group": "disapprove-15",
+      "status": "keep"
+    },
+    "arena_fan15_kill_angry_01": {
+      "banks": [
+        "Angry"
+      ],
+      "pool": "heckle",
+      "group": "disapprove-06",
+      "status": "keep"
+    },
+    "arena_fan7_kill_cheer_01": {
+      "banks": [
+        "Cheer",
+        "Owned"
+      ],
+      "pool": "gloat",
+      "group": "approve-01",
+      "status": "keep"
+    },
+    "arena_fan8_kill_cheer_01": {
+      "banks": [
+        "Cheer",
+        "Owned"
+      ],
+      "pool": "praise",
+      "group": "approve-02",
+      "status": "keep"
+    },
+    "arena_fan8_kill_cheer_02": {
+      "banks": [
+        "Cheer",
+        "Owned"
+      ],
+      "pool": "praise",
+      "group": "approve-03",
+      "status": "keep"
+    },
+    "arena_fan9_kill_cheer_01": {
+      "banks": [
+        "Cheer",
+        "Owned"
+      ],
+      "pool": "praise",
+      "group": "approve-04",
+      "status": "listen",
+      "reason": "FLAG"
+    },
+    "arena_fan10_kill_cheer_01": {
+      "banks": [
+        "Cheer",
+        "Owned"
+      ],
+      "pool": "praise",
+      "group": "approve-04",
+      "status": "listen",
+      "reason": "FLAG"
+    },
+    "arena_fan11_kill_cheer_01": {
+      "banks": [
+        "Cheer",
+        "Owned"
+      ],
+      "pool": "praise",
+      "group": "approve-05",
+      "status": "keep"
+    },
+    "arena_fan12_kill_cheer_02": {
+      "banks": [
+        "Cheer",
+        "Owned"
+      ],
+      "pool": "gloat",
+      "group": "approve-06",
+      "status": "keep"
+    },
+    "arena_fan12_kill_cheer_05": {
+      "banks": [
+        "Cheer",
+        "Owned"
+      ],
+      "pool": "praise",
+      "group": "approve-07",
+      "status": "keep"
+    },
+    "arena_fan12_kill_cheer_09": {
+      "banks": [
+        "Cheer",
+        "Owned"
+      ],
+      "pool": "gloat",
+      "group": "approve-08",
+      "status": "keep"
+    },
+    "arena_fan12_kill_cheer_10": {
+      "banks": [
+        "Cheer",
+        "Owned"
+      ],
+      "pool": "praise",
+      "group": "approve-04",
+      "status": "listen",
+      "reason": "FLAG"
+    },
+    "arena_fan12_kill_cheer_11": {
+      "banks": [
+        "Cheer",
+        "Owned"
+      ],
+      "pool": "shout",
+      "group": "approve-09",
+      "status": "keep"
+    },
+    "arena_fan13_kill_cheer_01": {
+      "banks": [
+        "Cheer",
+        "Owned"
+      ],
+      "pool": "praise",
+      "group": "approve-10",
+      "status": "keep"
+    },
+    "arena_fan13_kill_cheer_03": {
+      "banks": [
+        "Cheer"
+      ],
+      "pool": "urge",
+      "group": "approve-11",
+      "status": "listen",
+      "reason": "ROLE"
+    },
+    "arena_fan13_kill_cheer_04": {
+      "banks": [
+        "Owned"
+      ],
+      "pool": "praise",
+      "group": "approve-03",
+      "status": "keep"
+    },
+    "arena_fan13_kill_cheer_05": {
+      "banks": [
+        "Owned"
+      ],
+      "pool": "shout",
+      "group": "approve-12",
+      "status": "keep"
+    },
+    "arena_fan15_kill_cheer_01": {
+      "banks": [
+        "Cheer",
+        "Owned"
+      ],
+      "pool": "gloat",
+      "group": "approve-13",
+      "status": "keep"
+    },
+    "arena_fan15_kill_cheer_02": {
+      "banks": [
+        "Owned"
+      ],
+      "pool": "urge",
+      "group": "approve-11",
+      "status": "listen",
+      "reason": "ROLE"
+    },
+    "arena_fan8_low_death_intensity_01": {
+      "banks": [
+        "LowDeathIntensity"
+      ],
+      "pool": "lull",
+      "group": "lull-01",
+      "status": "keep"
+    },
+    "arena_fan10_low_death_intensity_01": {
+      "banks": [
+        "LowDeathIntensity"
+      ],
+      "pool": "lull",
+      "group": "lull-02",
+      "status": "keep"
+    },
+    "arena_fan10_low_death_intensity_02": {
+      "banks": [
+        "LowDeathIntensity"
+      ],
+      "pool": "lull",
+      "group": "lull-03",
+      "status": "keep"
+    },
+    "arena_fan11_low_death_intensity_01": {
+      "banks": [
+        "LowDeathIntensity"
+      ],
+      "pool": "lull",
+      "group": "lull-04",
+      "status": "keep"
+    },
+    "arena_fan11_low_death_intensity_03": {
+      "banks": [
+        "LowDeathIntensity"
+      ],
+      "pool": "lull",
+      "group": "lull-05",
+      "status": "listen",
+      "reason": "FLAG"
+    },
+    "arena_fan11_low_death_intensity_04": {
+      "banks": [
+        "LowDeathIntensity"
+      ],
+      "pool": "lull",
+      "group": "lull-06",
+      "status": "keep"
+    },
+    "arena_fan11_low_death_intensity_05": {
+      "banks": [
+        "LowDeathIntensity"
+      ],
+      "pool": "lull",
+      "group": "lull-07",
+      "status": "keep"
+    },
+    "arena_fan12_low_death_intensity_02": {
+      "banks": [
+        "LowDeathIntensity"
+      ],
+      "pool": "lull",
+      "group": "lull-08",
+      "status": "keep"
+    },
+    "arena_fan12_low_death_intensity_03": {
+      "banks": [
+        "LowDeathIntensity"
+      ],
+      "pool": "lull",
+      "group": "lull-09",
+      "status": "listen",
+      "reason": "FLAG"
+    },
+    "arena_fan12_low_death_intensity_04": {
+      "banks": [
+        "LowDeathIntensity"
+      ],
+      "pool": null,
+      "group": null,
+      "status": "out",
+      "reason": "UNCL"
+    },
+    "arena_fan12_low_death_intensity_05": {
+      "banks": [
+        "LowDeathIntensity"
+      ],
+      "pool": "lull",
+      "group": "lull-01",
+      "status": "keep"
+    },
+    "arena_fan12_low_death_intensity_08": {
+      "banks": [
+        "LowDeathIntensity"
+      ],
+      "pool": "lull",
+      "group": "lull-10",
+      "status": "keep"
+    },
+    "arena_fan13_low_death_intensity_01": {
+      "banks": [
+        "LowDeathIntensity"
+      ],
+      "pool": "lull",
+      "group": "lull-11",
+      "status": "keep"
+    },
+    "arena_fan13_low_death_intensity_02": {
+      "banks": [
+        "LowDeathIntensity"
+      ],
+      "pool": "lull",
+      "group": "lull-12",
+      "status": "keep"
+    },
+    "arena_fan13_low_death_intensity_03": {
+      "banks": [
+        "LowDeathIntensity"
+      ],
+      "pool": "lull",
+      "group": "lull-09",
+      "status": "listen",
+      "reason": "FLAG"
+    },
+    "arena_fan7_match_end_01": {
+      "banks": [
+        "EndRound"
+      ],
+      "pool": "finish",
+      "group": "finish-01",
+      "status": "keep"
+    },
+    "arena_fan8_match_end_01": {
+      "banks": [
+        "EndRound"
+      ],
+      "pool": "finish",
+      "group": "finish-02",
+      "status": "keep"
+    },
+    "arena_fan9_match_end_01": {
+      "banks": [
+        "EndRound"
+      ],
+      "pool": "finish",
+      "group": "finish-03",
+      "status": "keep"
+    },
+    "arena_fan10_match_end_02": {
+      "banks": [
+        "EndRound"
+      ],
+      "pool": "finish",
+      "group": "finish-04",
+      "status": "listen",
+      "reason": "FLAG"
+    },
+    "arena_fan12_match_end_01": {
+      "banks": [
+        "EndRound"
+      ],
+      "pool": "finish",
+      "group": "finish-05",
+      "status": "keep"
+    },
+    "arena_fan12_match_end_02": {
+      "banks": [
+        "EndRound"
+      ],
+      "pool": "finish",
+      "group": "finish-06",
+      "status": "listen",
+      "reason": "FLAG"
+    },
+    "arena_fan12_match_end_03": {
+      "banks": [
+        "EndRound"
+      ],
+      "pool": "finish",
+      "group": "finish-07",
+      "status": "keep"
+    },
+    "arena_fan12_match_end_04": {
+      "banks": [
+        "EndRound"
+      ],
+      "pool": "finish",
+      "group": "finish-08",
+      "status": "keep"
+    },
+    "arena_fan12_match_end_06": {
+      "banks": [
+        "EndRound"
+      ],
+      "pool": "finish",
+      "group": "finish-09",
+      "status": "keep"
+    },
+    "arena_fan13_match_end_01": {
+      "banks": [
+        "EndRound"
+      ],
+      "pool": "finish",
+      "group": "finish-10",
+      "status": "keep"
+    },
+    "arena_fan13_match_end_02": {
+      "banks": [
+        "EndRound"
+      ],
+      "pool": "finish",
+      "group": "finish-11",
+      "status": "keep"
+    },
+    "arena_fan7_match_start_01": {
+      "banks": [
+        "ChangedRound"
+      ],
+      "pool": "start",
+      "group": "start-01",
+      "status": "keep"
+    },
+    "arena_fan11_match_start_01": {
+      "banks": [
+        "ChangedRound"
+      ],
+      "pool": "start",
+      "group": "start-02",
+      "status": "listen",
+      "reason": "TASTE"
+    },
+    "arena_fan11_match_start_02": {
+      "banks": [
+        "ChangedRound"
+      ],
+      "pool": "start",
+      "group": "start-03",
+      "status": "keep"
+    },
+    "arena_fan12_match_start_01": {
+      "banks": [
+        "ChangedRound"
+      ],
+      "pool": "start",
+      "group": "start-04",
+      "status": "keep"
+    },
+    "arena_fan12_match_start_02": {
+      "banks": [
+        "ChangedRound"
+      ],
+      "pool": "start",
+      "group": "start-05",
+      "status": "keep"
+    },
+    "arena_fan12_match_start_03": {
+      "banks": [
+        "ChangedRound"
+      ],
+      "pool": "start",
+      "group": "start-06",
+      "status": "keep"
+    },
+    "arena_fan12_match_start_04": {
+      "banks": [
+        "ChangedRound"
+      ],
+      "pool": "start",
+      "group": "start-07",
+      "status": "listen",
+      "reason": "CTX"
+    },
+    "arena_fan12_match_start_05": {
+      "banks": [
+        "ChangedRound"
+      ],
+      "pool": "start",
+      "group": "start-08",
+      "status": "listen",
+      "reason": "FLAG"
+    },
+    "arena_fan13_match_start_01": {
+      "banks": [
+        "ChangedRound"
+      ],
+      "pool": "start",
+      "group": "start-03",
+      "status": "keep"
+    },
+    "arena_fan7_shoot_hide_01": {
+      "banks": [
+        "Hide"
+      ],
+      "pool": "panic",
+      "group": "takecover-10",
+      "status": "keep"
+    },
+    "arena_fan8_shoot_hide_01": {
+      "banks": [
+        "Hide"
+      ],
+      "pool": "panic",
+      "group": "takecover-11",
+      "status": "keep"
+    },
+    "arena_fan9_shoot_hide_01": {
+      "banks": [
+        "Hide"
+      ],
+      "pool": "panic",
+      "group": "takecover-12",
+      "status": "keep"
+    },
+    "arena_fan9_shoot_hide_02": {
+      "banks": [
+        "Hide"
+      ],
+      "pool": "directed",
+      "group": "takecover-13",
+      "status": "keep"
+    },
+    "arena_fan11_shoot_hide_01": {
+      "banks": [
+        "Hide"
+      ],
+      "pool": "directed",
+      "group": "takecover-14",
+      "status": "keep"
+    },
+    "arena_fan11_shoot_hide_02": {
+      "banks": [
+        "Hide"
+      ],
+      "pool": "panic",
+      "group": "takecover-10",
+      "status": "keep"
+    },
+    "arena_fan12_shoot_hide_01": {
+      "banks": [
+        "Hide"
+      ],
+      "pool": "directed",
+      "group": "takecover-15",
+      "status": "keep"
+    },
+    "arena_fan12_shoot_hide_02": {
+      "banks": [
+        "Hide"
+      ],
+      "pool": "panic",
+      "group": "takecover-12",
+      "status": "keep"
+    },
+    "arena_fan12_shoot_hide_03": {
+      "banks": [
+        "Hide"
+      ],
+      "pool": "directed",
+      "group": "takecover-14",
+      "status": "keep"
+    },
+    "arena_fan12_shoot_hide_04": {
+      "banks": [
+        "Hide"
+      ],
+      "pool": "directed",
+      "group": "takecover-16",
+      "status": "keep"
+    },
+    "arena_fan12_shoot_hide_05": {
+      "banks": [
+        "Hide"
+      ],
+      "pool": null,
+      "group": null,
+      "status": "out",
+      "reason": "SLUR"
+    },
+    "arena_fan12_shoot_hide_06": {
+      "banks": [
+        "Hide"
+      ],
+      "pool": "directed",
+      "group": "takecover-17",
+      "status": "listen",
+      "reason": "TASTE"
+    },
+    "arena_fan12_shoot_hide_07": {
+      "banks": [
+        "Hide"
+      ],
+      "pool": "directed",
+      "group": "takecover-13",
+      "status": "keep"
+    },
+    "arena_fan12_shoot_hide_08": {
+      "banks": [
+        "Hide"
+      ],
+      "pool": "directed",
+      "group": "takecover-18",
+      "status": "keep"
+    },
+    "arena_fan13_shoot_hide_01": {
+      "banks": [
+        "Hide"
+      ],
+      "pool": "directed",
+      "group": "takecover-15",
+      "status": "keep"
+    },
+    "arena_fan13_shoot_hide_02": {
+      "banks": [
+        "Hide"
+      ],
+      "pool": "panic",
+      "group": "takecover-12",
+      "status": "keep"
+    },
+    "arena_fan13_shoot_hide_03": {
+      "banks": [
+        "Hide"
+      ],
+      "pool": "panic",
+      "group": "takecover-19",
+      "status": "keep"
+    },
+    "arena_fan13_shoot_hide_04": {
+      "banks": [
+        "Hide"
+      ],
+      "pool": "panic",
+      "group": "takecover-19",
+      "status": "keep"
+    },
+    "arena_fan13_shoot_hide_05": {
+      "banks": [
+        "Hide"
+      ],
+      "pool": "directed",
+      "group": "takecover-20",
+      "status": "keep"
+    },
+    "arena_fan13_shoot_hide_06": {
+      "banks": [
+        "Hide"
+      ],
+      "pool": "directed",
+      "group": "takecover-21",
+      "status": "keep"
+    },
+    "arena_fan13_shoot_hide_07": {
+      "banks": [
+        "Hide"
+      ],
+      "pool": "directed",
+      "group": "takecover-22",
+      "status": "listen",
+      "reason": "TASTE"
+    },
+    "arena_fan13_shoot_hide_08": {
+      "banks": [
+        "Hide"
+      ],
+      "pool": "directed",
+      "group": "takecover-23",
+      "status": "listen",
+      "reason": "TASTE"
+    },
+    "arena_fan13_shoot_hide_09": {
+      "banks": [
+        "Hide"
+      ],
+      "pool": "directed",
+      "group": "takecover-18",
+      "status": "keep"
+    },
+    "arena_fan15_shoot_hide_01": {
+      "banks": [
+        "Hide"
+      ],
+      "pool": "panic",
+      "group": "takecover-12",
+      "status": "keep"
+    },
+    "arena_fan15_shoot_hide_02": {
+      "banks": [
+        "Hide"
+      ],
+      "pool": "panic",
+      "group": "takecover-11",
+      "status": "keep"
+    },
+    "arena_fan7_sweep_team_01": {
+      "banks": [
+        "PurifiedTeam"
+      ],
+      "pool": null,
+      "group": null,
+      "status": "out",
+      "reason": "WRONG"
+    },
+    "arena_fan8_sweep_team_01": {
+      "banks": [
+        "PurifiedTeam"
+      ],
+      "pool": "hype",
+      "group": "purified-01",
+      "status": "keep"
+    },
+    "arena_fan8_sweep_team_02": {
+      "banks": [
+        "PurifiedTeam"
+      ],
+      "pool": "hype",
+      "group": "purified-02",
+      "status": "keep"
+    },
+    "arena_fan8_sweep_team_03": {
+      "banks": [
+        "PurifiedTeam"
+      ],
+      "pool": "sided",
+      "group": "purified-03",
+      "status": "listen",
+      "reason": "SIDED"
+    },
+    "arena_fan9_sweep_team_02": {
+      "banks": [
+        "PurifiedTeam"
+      ],
+      "pool": "sided",
+      "group": "purified-04",
+      "status": "listen",
+      "reason": "SIDED"
+    },
+    "arena_fan10_sweep_team_02": {
+      "banks": [
+        "PurifiedTeam"
+      ],
+      "pool": null,
+      "group": null,
+      "status": "out",
+      "reason": "WRONG"
+    },
+    "arena_fan11_sweep_team_02": {
+      "banks": [
+        "PurifiedTeam"
+      ],
+      "pool": "sided",
+      "group": "purified-05",
+      "status": "listen",
+      "reason": "SIDED"
+    },
+    "arena_fan12_sweep_team_03": {
+      "banks": [
+        "PurifiedTeam"
+      ],
+      "pool": "sided",
+      "group": "purified-06",
+      "status": "listen",
+      "reason": "SIDED"
+    },
+    "arena_fan12_sweep_team_04": {
+      "banks": [
+        "PurifiedTeam"
+      ],
+      "pool": "lull",
+      "group": "purified-07",
+      "status": "keep"
+    },
+    "arena_fan12_sweep_team_05": {
+      "banks": [
+        "PurifiedTeam"
+      ],
+      "pool": "hype",
+      "group": "purified-08",
+      "status": "keep"
+    },
+    "arena_fan12_sweep_team_10": {
+      "banks": [
+        "PurifiedTeam"
+      ],
+      "pool": "hype",
+      "group": "purified-09",
+      "status": "listen",
+      "reason": "SIDED"
+    },
+    "arena_fan12_sweep_team_11": {
+      "banks": [
+        "PurifiedTeam"
+      ],
+      "pool": null,
+      "group": null,
+      "status": "out",
+      "reason": "WRONG"
+    },
+    "arena_fan12_sweep_team_12": {
+      "banks": [
+        "PurifiedTeam"
+      ],
+      "pool": "sided",
+      "group": "purified-10",
+      "status": "listen",
+      "reason": "SIDED"
+    },
+    "arena_fan13_sweep_team_02": {
+      "banks": [
+        "PurifiedTeam"
+      ],
+      "pool": null,
+      "group": null,
+      "status": "out",
+      "reason": "WRONG"
+    },
+    "arena_fan13_sweep_team_04": {
+      "banks": [
+        "PurifiedTeam"
+      ],
+      "pool": "sided",
+      "group": "purified-11",
+      "status": "listen",
+      "reason": "SIDED"
+    },
+    "arena_fan15_sweep_team_01": {
+      "banks": [
+        "PurifiedTeam"
+      ],
+      "pool": "hype",
+      "group": "purified-12",
+      "status": "keep"
+    }
+  }
+}

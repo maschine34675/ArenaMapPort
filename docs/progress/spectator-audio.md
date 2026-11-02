@@ -790,3 +790,278 @@ ist relativ ähnlich zu arena_fans_ambient_postmatch einen tick aufgeregter, ich
   (`audio=87`); the audio reset at 17:28:05.7 rebuilt clip and sources behind the deploy screen; 0 warnings and errors from mods; 120.0 fps over
   10 s (max 10.7 ms). The one long frame of the raid's first window (934.5 ms) was `[IndoorSurface] ... elapsedMs=870` at 17:28:20, the known
   pre-existing classification freeze, not the bed. Hideout opened and closed. Not listened to on the host; the user's ear decides.
+
+## 2026-11-02 - Action-bound reactions, phase A (offline)
+
+Status: **implemented and reviewed offline on 2026-11-02 (branch `feature/iceberg`); not committed, not deployed to the host, not run in the game, and nobody has listened
+to a reaction.** The design, the data audit and decisions D1-D14 are in [../PLAN-CROWD-REACTIONS.md](../PLAN-CROWD-REACTIONS.md); this section is the implementation record. It was built by
+a three-stage workflow (data pipeline, Unity-free model and public contract, Unity glue) and then one review round, whose findings and three lead decisions are applied below.
+ArenaMode (`D:\SPT41\Development\ArenaMode`) is not touched and has not adopted the contract: the only caller today is the developer demo.
+
+### Decision (user, 2026-11-02)
+
+After the plan with his subtitles (section 2.4: 19 `listen` clips among the 89 usable clips of the six phase-A banks) the user answered: "dann lassen wir die 19 clips erstmal weg. gerne wie
+empfohlen mit der umsetzung beginnen" (leave the 19 clips out for now; begin the implementation as recommended). So:
+- Phase A exports only the **70 `keep` clips** of the six banks Cheer, Owned, Angry, ChangedRound, EndRound and Hide. The 19 `listen` clips stay out until the user has listened (a clip is
+  promoted by its status in `tools/extract/reaction_pools.json`), the 2 SLUR clips stay out for good. LowDeathIntensity (Lull) and PurifiedTeam are not exported: Lull follows after phase A with
+  its trigger on ArenaMode's side (D14), PurifiedTeam waits for an ArenaMode event.
+- Every other recommendation of plan section 8 applies: gain 0.5 (D4), the external Scav references stay excluded (D2), no automatic excitement from gunfire (D6), no win/loss colouring of
+  Finish (D7), no animation (D9), developer keys only and no public key (D10), reactions are allowed while the local player is dead (D12). The plugin's own sensors are phase C and not part of
+  this work: there is no `ReactionAuto` key.
+
+### The clips (counts only; names and tags, never voice text)
+
+| Bank (trigger) | Embedded | Exported (`keep`) | Left out |
+|---|---:|---:|---|
+| Cheer (1119) | 14 | 10 | 4 `listen` |
+| Owned (1120) | 16 | 12 | 4 `listen` |
+| Angry (1121) | 18 | 14 | 4 `listen` |
+| ChangedRound (1125) | 9 | 6 | 3 `listen` |
+| EndRound (1126) | 11 | 9 | 2 `listen` |
+| Hide (1124) | 36 | 29 | 5 `listen`, 2 `out` (SLUR) |
+
+The union is **70 clips**: Cheer's 10 are all in Owned's 12 (Cheer and Owned are one pool, 12 clips), so 12 + 14 + 6 + 9 + 29 = 70. Pools of the exported clips (tags from the tracked sidecar,
+sentence groups = clips that say the same sentence, voice family = the `fanN` of the name, one recorded voice):
+
+| Kind | Bank(s) | Pools (clips) | Sentence groups | Voice families |
+|---|---|---|---:|---|
+| 1 Approve | Cheer + Owned | praise 6, gloat 4, shout 2, urge 0 | 11 | |
+| 2 Disapprove | Angry | lament 10, heckle 4 | 12 | |
+| 3 TakeCover | Hide | panic 12, directed 17 | 18 (panic 6, directed 12) | |
+| 4 Start | ChangedRound | start 6 | 5 | 4 (fan12 three clips; fan7, fan11, fan13 one each) |
+| 5 Finish | EndRound | finish 9 | 9 | |
+
+Export statistics (the extractor's own run and `verify`): 174.98 s, 15,436,496 WAV bytes; shortest 0.701 s (`arena_fan13_kill_angry_08`, 30,912 frames), longest 6.713 s
+(`arena_fan12_kill_cheer_11`, 296,045 frames), cap 7 s (308,700 frames); 23 of the 70 needed the ffmpeg resample; the constant gains run from -9.85 dB to +1.02 dB, so no clip met the +6 dB
+boost limit. Format and `normalize()` are the calls' (mono 44.1 kHz PCM16, -22 dBFS RMS, peak at most -3 dBFS). All 70 stream from a `CAB-*.resource` inside the fan bundle, none from a stage-2
+key-source file.
+
+The tracked sidecar `tools/extract/reaction_pools.json` (schema 1) carries, for every embedded clip of the eight reaction banks (122 names: 86 `keep`, 29 `listen`, 7 `out`), the banks, the
+pool tag, the sentence group (`approve-03`, `takecover-11`, ...), the status and a reason code (FLAG, ROLE, TASTE, CTX, SIDED for `listen`; SLUR, UNCL, WRONG for `out`). `check_pools` closes
+every vocabulary, requires name category, bank and pool tag to agree, and pins the sidecar's `about` prose by SHA-256 (`POOL_ABOUT_SHA256`), so no free text can enter it.
+
+### The manifest
+
+`spectator-audio.json` gets an optional `reactions` object beside `bed` (schema 1 and every existing key stay; a manifest without `reactions` is still valid and the client then has no
+reactions): `schema`, `source_bundle`, `max_frames` (308,700), `banks` (Cheer, Owned, Angry, ChangedRound, EndRound, Hide in that order, each with trigger, embedded count,
+`external_entries_omitted`, `null_entries`, the exported `clips` and the `left_out` names with status and reason) and a deduplicated, name-sorted `clips` table (file, format, frames,
+bytes, SHA-256, peak, RMS, `source_id`, `processing`, `pool`, `group`). Invariants the extractor and the client check: `embedded == len(clips) + len(left_out)` per bank; every bank clip is in
+the table and every table clip in a bank; the pool tag belongs to the bank (Cheer/Owned praise|gloat|shout|urge, Angry lament|heckle, ChangedRound start, EndRound finish, Hide
+panic|directed); the group id is `<kind>-NN` with the kind of its tag; names match `^arena_fan\d{1,2}_(?:kill_cheer|kill_angry|match_start|match_end|aim_hide|shoot_hide)_\d{2}$`; frames
+22,050 to `max_frames`; at most 256 clips. The extractor decodes and normalises everything in memory before it writes, then `remove_stale_reactions` deletes only unlisted files that fully
+match the reaction name pattern.
+
+Client side, `SpectatorAudioManifest.ValidateReactions()` is independent of `Validate()` and `ValidateBed()` in both directions: a damaged reaction set never takes the calls or the bed with
+it, and the reverse. It also requires the manifest's own `schema == 1`, `trigger == 1123` and `bank == "Participating"` (the calls' identity), the six known banks with their triggers and
+`max_frames == 308700`. `SpectatorAudioSchedule.Hold(now, seconds)` is the one new schedule member (see the runtime).
+
+The key-source guard is new for this audio: the extractor checks the stream source of every clip that would ship, and `validate_distribution.py` refuses a staged spectator WAV that is a copy
+of a key-source file of the maps (size comparison first, a hash only on a size match; it needs the installed Arena's data folder, which `verify-keys` needs anyway).
+
+### The public contract (`SpectatorCrowd`, `ContractVersion` still 1)
+
+Four members are appended, so the class has **eight**: `ContractVersion`, `IsAvailable`, `Excitement`, `SetExcitement(float)` and `int ReactionKinds { get; }`,
+`int ClaimReactions(string owner)`, `bool React(int claim, int kind, float strength01)`, `bool ReleaseReactions(int claim)`. All any-thread, state only, never throwing, public static with
+primitive parameters; `SpectatorCrowdContractTests` pins the eight and keeps every prohibition (no fields, constants, events, generics, optional parameters). `IsAvailable` keeps its meaning (the
+bed is on); reactions work with the bed off.
+- **Kinds** are documented numbers 1 to 31, not constants (a kind is the bit `1 << kind` of `ReactionKinds`, range-checked before the shift): **1 Approve, 2 Disapprove, 3 TakeCover, 4 Start,
+  5 Finish are implemented** (`ReactionKinds` = 62 for the phase-A set), **6 Lull and 7 PurifiedTeam are reserved** and absent from the mask, so `React` refuses them. The kind-to-bank table
+  (1 Cheer+Owned, 2 Angry, 3 Hide, 4 ChangedRound, 5 EndRound) is pinned by a test. `ReactionKinds` is 0 on Iceberg, in a menu, on a vanilla map, without a reaction set, with the `Reactions`
+  key off and while the component is disabled.
+- **Claim:** a null or blank owner gives 0; so does `Kinds == 0`; the same owner gets the same handle back; the developer demo (owner `developer-demo`) yields to any other owner, whose claim voids
+  its handle, and never takes the reactions from a plugin; any other holder refuses a different owner. Handles come from one process-wide counter (never 0 or negative), and one that was
+  released, taken over or voided by the crowd's removal (`Reset`, a new generation) can never match a later claim. A lost claim shows up as `false` from `React`.
+- **`React`:** false for a stale or foreign handle, a kind outside 1..31 or without its bit, NaN and a strength below 0.05; a larger strength is clamped to 1. True means queued, not played.
+  The queue is a fixed ring of 16 under one lock; a full ring evicts the OLDEST request and counts it; each entry carries a `Stopwatch` stamp and the main-thread drain drops what is
+  older than 2 s. `React` takes no Unity API and allocates nothing. The line-of-fire flag (`Directed`, TakeCover only) is not part of the public contract: the developer demo and the future
+  plugin sensor use the internal overload. `ReleaseReactions` is true for the holder; requests already queued still play.
+
+### Runtime (`CrowdReactionModel.cs`, Unity-free, and the reaction section of `SpectatorAudio.cs`)
+
+**Planner** (`CrowdReactionPlanner`, deterministic for a seed, nothing per frame while nothing waits):
+- **Coalescing and priority:** within one drain the largest strength per kind is kept (and the line-of-fire flag of any request); an accepted Start or Finish removes the Approve and Disapprove
+  of the batch and the pending ones (drop reason `coalesced`; a Finish that its own cooldown dropped leaves the cheer for the deciding kill standing). A request for a kind that already waits is
+  merged into it, and the merged request keeps the strength AND the deadline of the request that supplies the strength (on a tie the older). Priority Finish > Start > Approve = Disapprove
+  (arrival order) > TakeCover > Lull > PurifiedTeam.
+- **Cooldowns:** Approve and Disapprove 3 s, TakeCover 15 s, Start and Finish 5 s (Lull and PurifiedTeam 20 s, reserved); a strength of at least 0.8 halves the gap of THAT request (an
+  important event is not swallowed by the cooldown of a small one); all times `Spectators/ReactionGapScale` (0 = none). A request of a kind on cooldown is dropped (`cooldown`).
+- **Rate and age:** at most one reaction start per 0.75 s (not scaled); a pending request starts no later than 2 s after its `React` call, else `stale` (with a `Blocker` of `rate` or `noslot`).
+- **Voices:** strength up to 1/3 gives 1, up to 2/3 gives 2, above 3; cut to the free reaction slots (3), none free = wait. Each further voice starts 0.12 to 0.45 s after the previous one.
+- **Pools by band:** Approve below 0.8 draws praise and gloat for every voice; from 0.8 the FIRST voice draws from shout (+ urge once a listen clip is promoted) and the others from praise and gloat.
+  Disapprove below 0.4 draws laments only, from 0.4 laments and heckles. TakeCover draws panic, plus directed only when the request is `Directed`. Start and Finish use their pool.
+- **Clip choice:** the voice family `fanN` is drawn with a weight of the square root of its clip count in the candidates, then a clip of that family at random. Within one reaction no
+  two voices share a family (voices that sound right now, calls included, count as used) and **no sentence group is ever repeated, at any step**. Across reactions of one kind the last two clips and
+  the last three sentence groups (capped at one less than the groups the voices can draw from) are not repeated.
+- **Relaxation order (lead decision, 2026-11-02):** when the rules cannot all hold for the voices the strength asks for, every step is tried at the full voice count before a voice is given
+  up: (1) drop the last-two-clips rule, (2) shrink the sentence window one sentence at a time (3, 2, 1, none), (3) drop the voice-family rule, (4) a strong Approve's first voice may take the
+  normal clips after its shouts. Only then does the reaction get fewer voices. The first order (which never relaxed the window) left every Start after a three-voice Start at two voices for the
+  rest of the raid, because Start has 5 sentence groups. `CrowdReactionPlan` reports the step through `ClipsRelaxed`, `GroupWindow`, `FullGroupWindow`, `GroupsRelaxed`,
+  `FamiliesRelaxed`, `FellBack` and `RelaxedText` (`Level` is the step number and depends on the pool's window, so tests read the flags). Under this order step (4) is a safety net that can
+  essentially not be reached (a shout stays eligible at the last step); it is kept and documented on `FellBack`.
+- **Started/Discard:** the Unity side confirms with `Started(plan, now, voices)` (voices clamped to 1..plan voices: only the clips and sentences that really sound enter the no-repeat history)
+  or `Discard(plan, reason)`; a plan neither started nor discarded stays pending and expires by its age. Extra drop reasons beyond the spec: `nopool`, `coalesced`, `weak`.
+- **Speakers** (`CrowdReactionSpeakers`): the calls' `ChooseSpeaker` law run on a SEPARATE schedule instance (so the calls' no-repeat memory is not disturbed), each further voice at least 4 m from
+  the voices already picked; positions as a packed xyz array.
+
+**Glue** (`SpectatorAudio`, one component, two independently validated sets):
+- **Two sets:** the 13 calls and the reaction set validate separately and each fails with its own single Warning (`spectator reactions are unavailable (...)`; the calls and the crowd remain).
+  `SpectatorAudio.Current` exists when either works. `_families` is a general `fanN_` parse (`CrowdReactionPool.FamilyOf`).
+- **The drain sits BEFORE the calls' living-player guard on purpose:** `if (_reactionsReady) UpdateReactions();` runs before `GamePlayerOwner.MyPlayer` is read and before the guard that stops the
+  calls. The reaction gate is: the `Reactions` key on, `Status == Started`, spatial audio services ready; it never asks `IsAlive`. The calls' `StopAllVoices` and `_schedule.Stop()` leave the
+  reaction slots alone. `SpectatorReactionSourcePinTests` pins the order, the three own slots and that the reaction section (`UpdateReactions`) names neither `IsAlive` nor `MyPlayer` (the body is only the listener's fallback, `TryListener`).
+  Not Started: nothing plays and what waited is dropped (`notstarted`, one Debug line with a count); services not up: voices stop and requests die by their own age.
+- **Slots:** a separate pool of 3 reaction voices (so at most 5 voices from the shared Environment pool of 32). The playback path is the calls': an Environment `BetterSource`, the
+  Environment mixer group, rolloff 90 m (Bowl 150 m), spatial blend 1, `EOcclusionTest.Combined`, gain `Spectators/ReactionVolume` (0.5); candidate range is 0.8 of the rolloff like the calls.
+  Reaction voices are cut hard (no fade). A failed `GetSource` for the first voice gives up the reaction (`nosource`, no cooldown starts); a later voice is skipped and counted.
+- **Listener:** `Camera.main` position, else the local player's body, else the reaction is dropped (`nolistener`). Where the listener sits in ArenaMode's spectator camera or a death replay is
+  not known (host item).
+- **Hold of the random calls:** a started reaction calls `schedule.Hold(now, reaction length + gap)`, gap 4 s after Approve, Start and Finish and 1 s after the others (`CrowdReactionPlanner.HoldGap`,
+  the one table). `Hold` only postpones (a later `NextAt` stays) and is a no-op while the schedule is stopped; calls that already play finish by themselves, no cut, no new fade.
+- **Swell:** a started reaction asks the bed for `SpectatorCrowd.State.RequestSwell(min(1, strength x ReactionSwell))`, only when a bed exists. `CrowdBedState` keeps the largest request until the
+  bed's main-thread tick takes it (`TakeSwell`; discarded while the bed is off or the raid has not started). `CrowdExcitement.AddSwell`: linear attack of 0.3 s to the peak, then an
+  exponential decay with a 3 s time constant; a smaller amplitude than the current swell is ignored; the volume factor follows `max(smoothed external level, swell)`, never above 1, so the factor
+  stays at most 1.6 and `ClipGain` 3.2 is still valid. Allocation-free; `SpectatorCrowdBed.cs` keeps its three `Bind` calls.
+- **Clips and reset:** `AudioClip`s are created lazily on first use and cleared with the calls' on an audio reset; the reset stops the reaction voices, the request queue survives it and entries
+  older than 2 s are dropped. `OnDisable` withdraws the kinds (Update publishes them again); `OnDestroy` and `ArenaSpectators.OnDestroy` reset the queue and stop the demo whether or not the audio
+  component exists.
+- **Idle cost:** an idle frame in player mode is a handful of field reads (`HasWaiting` is a volatile mirror of the ring count, so no lock) and returns before any clock read, allocation or engine
+  call; in developer mode each frame also reads the clock and the gap-scale key, ticks the demo and checks the drop ring.
+
+### Worker load
+
+`ArenaSpectators.LoadReactionPackage` reads, validates, SHA-256-hashes (through `CryptoProviders.Select(null)`, i.e. CNG) and PCM-decodes the 70 clips on the crowd worker, after the crowd
+package; the worker never touches Unity and never logs, a failure travels in `ReactionPackage.Error`. If the worker did not run, the main thread loads them. `SpectatorAudio.Create` takes the
+package from `crowd.ReactionData`. A package without a reaction set is `Absent` (one Debug line, not an error). The load summary gains `reactions=<ms>`. 15.4 MB more to read, hash and decode on
+the worker: whether `load total=` stays near 2.1 s with `wait=0` is a host item.
+
+### Developer keys and the demo
+
+All in section `Spectators`, bound with `Plugin.Instance.Settings.Bind` in `SpectatorAudio.cs` and `SpectatorReactionDemo.cs` (not in `SpectatorCrowdBed.cs`), none public, honoured only with
+DeveloperMode (outside it the defaults apply: reactions on, volume 0.5, swell 1, gap scale 1, demo off): `Reactions` (true, live), `ReactionVolume` (0.5, 0..1), `ReactionSwell` (1, 0..1,
+0 = no swell), `ReactionGapScale` (1, 0..4, 0 = no cooldown), `ReactionDemo` (Off|Cycle|Once), `ReactionDemoKind` (0 = all, 1..5).
+
+`SpectatorReactionDemo` (glue) and `SpectatorReactionDemoPlan` (Unity-free, linked into the tests) claim the reactions as `developer-demo` through the PUBLIC contract and fire one pass:
+Approve and Disapprove at 0.30, 0.60 and 0.90 (1, 2, 3 voices; Disapprove laments only below 0.4; Approve with a shout first from 0.8), TakeCover at 0.50 once panic-only and once `Directed`
+(internal overload), then Start and Finish at 1.0; steps 9 s apart (more than the longest reaction), about 100 s a pass; Cycle repeats, Once runs one pass of `ReactionDemoKind` or all kinds and
+stops until the key goes Off and back. A test proves with the real planner that every step passes the cooldowns at gap scale 1 (6 filters, 12 seeds, 3 cycles, zero drops). It yields to a
+plugin's claim, releases on Off and ticks only while the reactions run. The host trigger is `uibridge_config_set` (letter keys do not reach EFT).
+
+### NoiseProbe and logging
+
+NoiseProbe (all taps one-liners behind `if (NoiseProbe.Armed)`): `NoiseEv.ReactStart` / `ReactStop` appended (tokens `react+` and `react-`, both in `IsCause`); `NoiseText.ShortClip` strips only the
+`arena_` prefix of reaction names (`fan11_kill_cheer_01`, greppable by category); the minute line gains ` react=+a/-b` after `spec=`, the position line `react=N`, the census
+`ownedReaction=playing/active`; `ProbeVoices`, `AnyAudible` and `ActiveVoices` cover reaction voices. The armed line does not print the reaction state (its signature is pinned).
+
+Logging is Debug with the tag `[SpectatorAudio]` and, for the per-reaction lines, only with DeveloperMode: one line per played reaction (`<map>: reaction <Kind>[ directed] strength=S, N voice(s)
+[<clip> fan <stand> at <m> m +<delay> s, ...], calls held H s`, plus `, rules relaxed to level L (<RelaxedText>)` when a step was taken), one per dropped request (`reaction <Kind> strength=S
+dropped (<reason>[, waited for rate|noslot])`; reasons `cooldown`, `rate`, `stale`, `noslot`, `nosource`, `nolistener`, `off`, `notstarted`, `nopool`, `coalesced`, `weak`), one load line per raid
+(`<map>: N reaction clips, kinds mask M, up to 3 simultaneous reaction voices`), and the demo's own lines. Warnings: a damaged or unreadable reaction set (once, at load) and a playback failure
+(once). Nothing logs from `React`, the drain's callers, the worker or the audio thread.
+
+### Pipeline, staging and counts
+
+- **Extractor** (`extract_spectator_audio.py`): `REACTION_BANKS`, the name regex, `load_pools`/`check_pools`, `find_reactions`, `reaction_object`, `validate(require_reactions, pools)`; `extract` then
+  `verify` end `SPECTATOR_AUDIO_OK 13 clips, 2815818 bytes; bed ... 79.500 s ...; reactions 70 clips, 15436496 bytes`. The 13 calls and the bed are byte-identical to the copies already in `dist/`.
+- **Client build:** the flat `*.wav` copy of the csproj stages the new files; a new prune deletes staged WAVs that the source folder no longer has (a clip demoted in the sidecar), because the copy
+  never removes anything and a stray WAV would fail `validate_distribution.py`'s exact file set.
+- **Packer:** the spectator-audio rule admits the six categories with the calls' two-digit suffix and still refuses an unknown category (its local `SPECTATOR_REACTION_CATEGORIES` list is pinned
+  equal to the extractor's); reaction names are not in `required_files` (the manifest names them).
+- **Counts (read from `make_release_zips.py --plan` on 2026-11-02):** `spectator-audio/` holds **85 files** (13 calls + 70 reactions + the bed + the manifest); the whole `dist/` **353** (283 + 70);
+  parts core 224 (was 154), equator 24, bay5 30, airpit 22, bowl 26, iceberg 27; the 0.4.0 layout without Iceberg would be 326 (256 + 70). Raw size 5,393,118,548 B in total.
+- **`validate_distribution.py`:** `DISTRIBUTION_OK 5 maps 15 bundles 5 sidecars encrypted`.
+
+### Review round (offline)
+
+One review round of the three stages gave findings that changed code or tests; those the fix report itemises: **M1** the concurrency test now races four writers over 3,000 barrier-aligned rounds
+(a racy max and a compare-exchange without the retry both fail it), **M3** the history is per kind (a test interleaves a 3-voice Disapprove between Finishes), **M4** the deadline follows the
+strength in a merge, **M5** `Started(plan, now, voices)` for a reaction with fewer speakers than voices, **M9** the strict stand alternation (a test removes `_law.Played`), **P1** the sidecar's
+`about` prose is pinned by hash, **P2** the key-source copy test skips when no key-source file is found in the installed Arena. Lead decisions: (1) the relaxation order above; (2) the three
+allocation tests (queue, idle planner, swell), whose bound the glue stage had raised to 64 KiB, now measure inside `[MethodImpl(AggressiveOptimization)]` helpers with a 512 B bound (stable over 8 clean runs; under four parallel suite runs the allocation tests still
+passed, while `Cng_ReachesAtLeast300MiBPerSecond` and once `OnLoad_WithoutAVerifiedInstallation...` failed in four of eight runs, load and shared-resource artefacts of that stress); (3) the two
+cp1252 test errors below are not touched.
+
+### Tests (2026-11-02, this VM)
+
+- `dotnet build ArenaMapPort.Client -c Release -p:ArenaMapPortDllOnly=true`: 0 warnings, 0 errors.
+- `dotnet test ArenaMapPort.Server.Tests -c Release`: **3,128 passed**, 0 failed, 0 skipped, twice in a row (3,119 before the review round, 3,073 after stage 1, 2,889 at the Neutral bed). New
+  files: `CrowdReactionModelTests`, `SpectatorReactionDemoTests`, `SpectatorReactionPackageTests` (the worker's checks on the real 70 clips and the exact 85-file folder),
+  `SpectatorReactionSourcePinTests`; changed: the contract pin (eight members), `SpectatorAudioTests` (`Hold`, the reaction manifest), `SpectatorCrowdBedModelTests` and
+  `SpectatorCrowdBedSourcePinTests` (swell), `NoiseProbeModelTests`, `NoiseProbeSourcePinTests`, `SpectatorWorkerSourcePinTests`.
+- `python -m unittest` on `test_spectator_audio` (56), `test_reaction_pools` (15, new), `test_release_zips` and `test_validate_distribution`: 323 tests OK in 348 s. The whole suite
+  (`discover -s tools/tests -p "test_*.py"`): 2,851 tests in 884.7 s, errors=2, skipped=67. The two errors are `test_door_poses.SidecarTests.test_the_validator_run_passes` and
+  `test_score_monitors.SidecarTests.test_the_validator_run_passes` (`AttributeError: 'NoneType' object has no attribute 'startswith'` from `done.stdout`): `validate_map_descriptors.py` prints an em
+  dash that a piped cp1252 console cannot carry, and both pass with `PYTHONUTF8=1`. Neither the script nor the tests were touched by this work.
+
+### Not yet host-verified, not listened to
+
+**Nothing in this section has run in the game.** The offline gates above are all there is. What remains, from plan section 7 (GPU-2; first check that `windows-gpu-2` connects, `gpu-run` works
+without it):
+1. `uibridge_status`; deploy only through `tools/deploy-to-spt.ps1` (dry run first; the whole dist, because the manifest and 70 WAVs travel with it - a `-DllOnly` deploy leaves the host without
+   a reaction set and the client then logs that it has none); EFT closed and the Syncthing sync finished; `gpu-run restart --host host2` for the new client DLL.
+2. One raid without bots on each crowd map (Equator, Bay5, Air Pit, Bowl) with `Spectators/ReactionDemo=Cycle`: the Debug lines show every implemented kind with its clips, the set loads in the
+   worker, `load total=` stays near 2.1 s with `wait=0`, no ArenaMapPort warning, no new hitch (`uibridge_status` max).
+3. A reaction right after the crowd is built (the audio-reset window, 8 to 14 s).
+4. A plain-raid local death: the reactions end with the raid, no exception.
+5. Iceberg: `ReactionKinds == 0` and no warning.
+6. NoiseProbe in `Detect`: reaction voices are no orphans and cause no new bursts.
+7. The hideout once.
+Also open for the host: `Camera.main` as the listener in a raid and in ArenaMode's spectator or replay view, that the raid stays `Started` across the body handover, `GetSource` headroom in the
+Environment pool, and the `reactions=` figure of the load line. Phases B (ArenaMode binder and presentation service) and C (the plugin's own sensors) are not started.
+
+**Listening, by the user (nothing may be called approved before it):** each kind alone with `Audio diagnostics/SpectatorCalls` off; loudness against the calls and the murmur, and the swell;
+variety (Approve 12 clips in 11 sentences, Disapprove 14 in 12, Start 6 in 5 and TakeCover's panic pool 12 in 6 are the thinnest); reactions over the announcer in ArenaMode; behaviour while
+dead; and the 19 `listen` clips, to promote or keep out.
+
+### Corrections to older paragraphs of this record (appended, nothing above is rewritten)
+
+Both items the plan names are already corrected in "2026-11-02 - Corrections from the crowd-reaction analysis" above; phase A rests on them:
+- **Line 13** ("Other banks include event reactions such as `Cheer`, `Angry`, `StartRound` and `EndRound`"): the bank is **`ChangedRound`** (trigger 1125), not `StartRound`; the fan bundle has no
+  `StartRound` bank. Phase A exports ChangedRound as kind 4 Start.
+- **The "Crowd murmur bed" section** (its "Why a bed" paragraph says Arena's four levels carry no crowd-ambience emitter and that `arena_fans_ambient_postmatch` is the only crowd-ambience
+  recording): wrong as written. Arena's `ambient_voice.bundle` holds 7 in-match stereo beds (Cheer 3, Angry 3, Neutral 1) on `FansAmbient` emitters that are inactive in the imported scenes;
+  the postmatch clip is only the one crowd clip not bound to a match-event trigger, and since 2026-11-02 the murmur is the Neutral in-match bed. The Cheer and Angry beds stay unused (D3).
+  The same sentence still stands in the released texts (README.md, FORGE.md, CHANGELOG.md, `docs/releases/v0.4.0.md`, whose wording is the user's decision) and in the older records
+  `arena-audio.md` (note of 2026-10-30) and HANDOFF.md ("Crowd murmur bed" bullet).
+
+### Host run on GPU-2 (2026-11-02, 21:09-21:20)
+
+Build: the phase-A working tree on `08964c1` (client DLL `0.4.0+08964c1`; the commit that carries it follows this record). Deploy at about 21:08 through `tools/deploy-to-spt.ps1 -Confirm`
+after a dry run: 353 files, 70 new (the reaction WAVs), 3 overwritten (client DLL, `spectator-audio.json`, and the server DLL, which differs from the host's only by its commit stamp
+`0.4.0+902329f` -> `+08964c1`: no server source changed, no server restart needed). `gpu-run deploy-wait` (87 files identical after 2.8 s), `gpu-run start --host host2` (EFT up 21:09:21,
+16/16 maschine plugins identical, VM build = host disk = loaded). DeveloperMode on; `Spectators/ReactionDemo = Cycle` set with `uibridge_config_set persist=false` (the host's .cfg keeps
+`Off`). `windows-gpu-2` did not connect; gpu-run and uibridge-2 were enough. Plain PMC raids, bots None. Nobody listened (the host is not listened to).
+
+| Map | Set loaded | `load total=` (worker) | Reactions seen | Frame max |
+|---|---|---|---|---|
+| Equator | 21:10:24 `70 reaction clips, kinds mask 62` | 2,160 ms (`wait=1`, `audio=44`, `reactions=27`) | two full Cycles: all five kinds, TakeCover panic and directed | 11.4 ms over 30 s |
+| Bay5 | 21:14:55 | 2,129 ms (`wait=0`, `reactions=118`) | Approve 0.3 / 0.6 / 0.9 with 1 / 2 / 3 voices | 11.7 ms over 20 s |
+| Air Pit | 21:16:23 | 2,120 ms (`wait=0`, `reactions=15`) | Approve chain, Disapprove 0.3 | 11.1 ms over 10 s |
+| Bowl | 21:17:48 | 2,164 ms (`wait=0`, `reactions=16`) | Approve chain, Disapprove 0.3; stands at 41-52 m (Rolloff 150) | - |
+
+Quoted lines (Equator):
+- `21:10:48.763 [SpectatorAudio] reaction demo Cycle: claimed the reactions as 'developer-demo'`
+- `21:11:07.820 [SpectatorAudio] arena_equator: reaction Approve strength=0.90, 3 voice(s) [arena_fan12_kill_cheer_11 fan 28 at 35.9 m +0.00 s, arena_fan8_kill_cheer_01 fan 77 at 32.4 m +0.39 s, arena_fan13_kill_cheer_01 fan 3 at 34.6 m +0.67 s], calls held 10.7 s`
+- `21:11:16.814 ... reaction Disapprove strength=0.30, 1 voice(s) [arena_fan12_kill_angry_02 fan 11 at 32.2 m +0.00 s], calls held 2.9 s` (lament only below 0.4)
+- `21:11:59.828 ... reaction TakeCover directed strength=0.50, 2 voice(s) [...]`, `21:12:08.781 ... reaction Start strength=1.00, 3 voice(s) [...]`, `21:12:17.818 ... reaction Finish strength=1.00, 3 voice(s) [...], calls held 7.9 s`
+- `21:13:45.843 ... reaction Start strength=1.00, 3 voice(s), rules relaxed to level 4 (last two clips, sentence window 0 of 3) [...]`: the second Start of the raid kept its three voices
+  through the lead's relaxation order (the 5-group Start pool), with three distinct sentences inside the reaction.
+
+Plan section 7, host items:
+1. Deploy, sync, restart: done as above.
+2. One raid per crowd map with the demo: every implemented kind with its clips and distances (22-37 m on Equator, Bay5 and Air Pit, 41-52 m on Bowl), voice families and sentence groups distinct
+   inside every reaction, the calls held after each start (a call came 0.05 s after a hold ended on Bowl, `21:18:34.493`). The set loads on the worker in 15 to 118 ms; `load total=` stays at
+   2.12-2.16 s with `wait=0` or 1 (2.08-2.16 s before). **0 ArenaMapPort warnings** in the whole process (`uibridge_log level=warning` from 21:09:21), no hitch (frame max 11.1-11.7 ms).
+3. The audio-reset window: the reset came at `21:10:38.416` (the countdown), the first reaction at 21:10:49 after the raid was `Started`. Reactions cannot start before `Started`, so a request
+   in the reset window is dropped as `notstarted` by design; none was lost after it.
+4. Plain-raid local death (`uibridge_hook kill` at 21:12:45, 1 s after a 3-voice Approve): no exception, and the reactions went on while dead (Disapprove 21:12:53 / 21:13:02 / 21:13:11,
+   TakeCover, Start, Finish 21:13:54) because **the plain raid stayed `Started` after the death** until `gpu-run leave` ended it 70 s later (the death screen did not come by itself). That corrects
+   the plan's sentence (4.4) that a plain raid leaves `Started` at once; it agrees with D12 (reactions allowed while dead) and leaves the random calls silent as before. Teardown:
+   `21:14:09.370 reaction demo stopped (the crowd is removed)`, `crowd and shared assets removed`, `all voices, propagation and clips removed`.
+5. Iceberg (21:19): no `[Spectator]` or `[SpectatorAudio]` line, no warning; `uibridge_inspect` read in the running process `SpectatorCrowd.ReactionKinds = 0`, `IsAvailable = false`,
+   `ContractVersion = 1`.
+6. NoiseProbe (armed in `Detect` on the host): minute line `21:12:49.661 ... bursts peak=0 click=0 dropout=0 gap=0 clip=0 loud=0 ... orphan=0 evOrphan=0 ... spec=+8/-9 react=+14/-13`.
+7. Hideout (gpu-run scenario `hideout-open`, 21:20:08): the Hideout screen with its labels, no error, 0 warnings; back to the main menu.
+
+Not covered by this run: listening (loudness, the swell, variety, the 19 `listen` clips) is the user's; which listener path ran (`Camera.main` or the player's body: the distances fit either in a
+plain raid) and the listener in ArenaMode's spectator or replay view; the raid status across ArenaMode's body handover; `GetSource` headroom under load (no source failure was logged). Phases B
+(ArenaMode) and C (the plugin's own sensors) are not started.

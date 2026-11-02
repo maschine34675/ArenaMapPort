@@ -267,7 +267,7 @@ namespace ArenaMapPort.Server.Tests
             // Lines that call NoiseProbe.Note* without the guard on the same line. Each one is the body of a helper that is only called while armed.
             var expected = new Dictionary<string, string[]>
             {
-                ["ArenaMapPort.Client/SpectatorAudio.cs"] = new[] { "NoiseProbe.Note(NoiseEv.Life,", "NoiseProbe.Note(NoiseEv.SpecStop,", "NoiseProbe.Note(NoiseEv.SpecOnset," },
+                ["ArenaMapPort.Client/SpectatorAudio.cs"] = new[] { "NoiseProbe.Note(NoiseEv.Life,", "NoiseProbe.Note(NoiseEv.SpecStop,", "NoiseProbe.Note(NoiseEv.ReactStop,", "NoiseProbe.Note(NoiseEv.SpecOnset," },
                 ["ArenaMapPort.Client/Bay5AmbientAudio.cs"] = new[] { "NoiseProbe.Note(NoiseEv.AmbStop,", "NoiseProbe.Note(kind," },
                 ["ArenaMapPort.Client/PhysicsPropSoundRepairs.cs"] = new string[0],
                 ["ArenaMapPort.Client/GateSounds.cs"] = new string[0],
@@ -292,6 +292,9 @@ namespace ArenaMapPort.Server.Tests
             Assert.Contains("if (NoiseProbe.Armed) ProbeLife(player);", spectators);
             Assert.Contains("if (source != null && NoiseProbe.Armed) ProbeStop(voice, reason);", spectators);
             Assert.Contains("if (voice.Frame >= 0 && NoiseProbe.Armed) ProbeOnset(voice, source);", spectators);
+            // the reaction voices (2026-11-02): the stop tap sits in a helper that is only called under the guard, the start tap shares its line with the guard
+            Assert.Contains("if (source != null && NoiseProbe.Armed) ProbeReactionStop(voice, reason);", spectators);
+            Assert.Contains("if (NoiseProbe.Armed) NoiseProbe.Note(NoiseEv.ReactStart,", spectators);
             // every tap of the tapped files appears
             Assert.Contains("NoiseEv.SpecStart", spectators);
             Assert.Contains("NoiseEv.Reset", spectators);

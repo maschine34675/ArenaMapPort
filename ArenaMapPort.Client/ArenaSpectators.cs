@@ -6,6 +6,7 @@ using System.IO.Compression;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using ArenaMapPort.Crypto;
 using Newtonsoft.Json;
 using UnityEngine;
 using UnityEngine.Rendering;
@@ -19,7 +20,8 @@ namespace ArenaMapPort.Client
     /// animation samples; independent source skeletons/placements. No Player, AI, physics or loot.
     /// In-place idle/cheer phases are staggered. All resources belong to the owned design scene.
     /// The package (gunzip + JSON of the graph, read and SHA-256 of the 123 shared PNGs) is prepared on a worker thread that starts
-    /// when the map's Scripts scene loads; the main thread only decodes the images and builds the Unity objects.
+    /// when the map's Scripts scene loads; the main thread only decodes the images and builds the Unity objects. The same worker reads, hashes and decodes the spectator reaction
+    /// clips (<see cref="LoadReactionPackage"/>, 2026-11-02, docs/PLAN-CROWD-REACTIONS.md); their failure never takes the crowd with it and is reported once by SpectatorAudio.Create.
     /// </summary>
     internal sealed class ArenaSpectators : MonoBehaviour
     {
@@ -36,6 +38,8 @@ namespace ArenaMapPort.Client
         public float AnimationUpdateMilliseconds;
         public string MapKey;
         public int OriginalGroupsDisabled;
+        /// <summary>The prepared reaction clips, handed to SpectatorAudio.Create (which takes them; Create clears this field right after); null outside Create.</summary>
+        internal ReactionPackage ReactionData;
 
         static string DesignScene(string key)
         {
@@ -197,6 +201,7 @@ namespace ArenaMapPort.Client
                     timing.WaitTicks += System.Diagnostics.Stopwatch.GetTimestamp() - wait;
                 }
                 if (loaded == null) loaded = LoadPackage(mapKey, sceneName, folder, shared); // the synchronous path of the previous releases
+                if (loaded.Reactions == null) loaded.Reactions = LoadReactionPackage(pluginDir, out loaded.ReactionTicks);   // the worker did not run: the main thread reads the reaction clips
                 timing.Worker = loaded.Textures != null;
                 root = new GameObject(ActorName(mapKey));
                 root.SetActive(false);
@@ -218,7 +223,9 @@ namespace ArenaMapPort.Client
                 root.SetActive(true);
                 long audio = System.Diagnostics.Stopwatch.GetTimestamp();
                 var voicePositions = crowd._fans.Select(f => f.Position + Vector3.up * 1.6f).ToArray();
+                crowd.ReactionData = loaded.Reactions;
                 SpectatorAudio.Create(crowd, voicePositions);
+                crowd.ReactionData = null;
                 SpectatorCrowdBed.Create(crowd, voicePositions); // the stand murmur: its own try, a child of the crowd root (removed with it)
                 timing.AudioTicks = System.Diagnostics.Stopwatch.GetTimestamp() - audio;
                 if (loaded.Textures != null) timing.WaitTicks += (long)(loaded.Textures.WaitMilliseconds * System.Diagnostics.Stopwatch.Frequency / 1000.0);
@@ -269,6 +276,48 @@ namespace ArenaMapPort.Client
             return new Loaded { Data = data, Package = package, ParseTicks = parsed - start };
         }
 
+        /// <summary>
+        /// Reads, validates, hashes and decodes the spectator reaction clips of spectator-audio.json (no Unity API; the worker runs it after the crowd package, the main thread only when
+        /// the worker did not). Never throws: a package without a reaction set is <see cref="ReactionPackage.Absent"/>, a damaged one carries its exception in
+        /// <see cref="ReactionPackage.Error"/> and SpectatorAudio.Create reports it once. The hash goes through the CNG provider (managed SHA-256 runs at tens of MB/s in EFT's Mono) and the
+        /// check stays fail-closed, like the calls'.
+        /// </summary>
+        static ReactionPackage LoadReactionPackage(string pluginDir, out long ticks)
+        {
+            long start = System.Diagnostics.Stopwatch.GetTimestamp();
+            try
+            {
+                string folder = Path.Combine(pluginDir, "spectator-audio");
+                var manifest = JsonConvert.DeserializeObject<SpectatorAudioManifest>(File.ReadAllText(Path.Combine(folder, "spectator-audio.json")));
+                if (manifest == null) throw new InvalidDataException("missing spectator audio manifest");
+                if (manifest.reactions == null) return new ReactionPackage { Absent = true };
+                manifest.ValidateReactions();
+                var clips = manifest.reactions.clips;
+                var pcm = new short[clips.Length][];
+                var crypto = CryptoProviders.Select(null);
+                for (int i = 0; i < clips.Length; i++)
+                {
+                    var c = clips[i];
+                    var bytes = File.ReadAllBytes(Path.Combine(folder, c.file));
+                    if (bytes.Length != c.bytes || BitConverter.ToString(crypto.Sha256(bytes, 0, bytes.Length)).Replace("-", "").ToLowerInvariant() != c.sha256)
+                        throw new InvalidDataException("damaged spectator reaction clip: " + c.file);
+                    var wav = PcmWav.Read(bytes);
+                    if (wav.Channels != c.channels || wav.SampleRate != c.sample_rate || wav.Frames != c.frames)
+                        throw new InvalidDataException("unexpected spectator reaction WAV format: " + c.file);
+                    pcm[i] = wav.Samples;
+                }
+                return new ReactionPackage { Manifest = manifest, Pcm = pcm };
+            }
+            catch (Exception e)
+            {
+                return new ReactionPackage { Error = e };
+            }
+            finally
+            {
+                ticks = System.Diagnostics.Stopwatch.GetTimestamp() - start;
+            }
+        }
+
         /// <summary>The files in the order <see cref="Build"/> reads them (one per texture, six per cubemap), for the prefetch.</summary>
         static string[] TextureOrder(SpectatorData data)
         {
@@ -310,6 +359,8 @@ namespace ArenaMapPort.Client
                             SpectatorTexturePrefetch.DefaultBudgetBytes);
                         _textures.Start();
                     }
+                    // Not part of the crowd package: its failure is the reactions' own (Loaded.Reactions) and the crowd is built either way.
+                    loaded.Reactions = LoadReactionPackage(PluginDirectory(), out loaded.ReactionTicks);
                     return loaded;
                 }
                 catch (Exception e)
@@ -343,7 +394,18 @@ namespace ArenaMapPort.Client
             public SpectatorData Data;
             public SpectatorTexturePackage Package;
             public SpectatorTexturePrefetch Textures; // null: the main thread reads the files itself
-            public long ParseTicks;
+            public long ParseTicks, ReactionTicks;
+            public ReactionPackage Reactions;
+            public Exception Error;
+        }
+
+        /// <summary>The spectator reaction clips prepared off the main thread: the validated manifest (its <c>reactions</c> object is the planner's input) and the decoded PCM per clip of its
+        /// table. <see cref="Absent"/>: the package has no reaction set (not an error). <see cref="Error"/>: it is damaged or unreadable (one Warning, the calls and the crowd remain).</summary>
+        internal sealed class ReactionPackage
+        {
+            public SpectatorAudioManifest Manifest;
+            public short[][] Pcm;
+            public bool Absent;
             public Exception Error;
         }
 
@@ -360,7 +422,7 @@ namespace ArenaMapPort.Client
             {
                 long hash = (long)(loaded.Package.HashMilliseconds * System.Diagnostics.Stopwatch.Frequency / 1000.0);
                 return $"load total={Ms(totalTicks)} ms (wait={Ms(WaitTicks)}, hash={Ms(hash)}, parse={Ms(loaded.ParseTicks)}, " +
-                    $"textures={Ms(TexturesTicks)}, actors={Ms(ActorsTicks)}, audio={Ms(AudioTicks)}; hash and parse on the " +
+                    $"textures={Ms(TexturesTicks)}, actors={Ms(ActorsTicks)}, audio={Ms(AudioTicks)}, reactions={Ms(loaded.ReactionTicks)}; hash and parse on the " +
                     $"{(Worker ? "worker" : "main")} thread, crypto {loaded.Package.HashProvider})";
             }
         }
@@ -662,6 +724,9 @@ namespace ArenaMapPort.Client
             // What a mode plugin set with SpectatorCrowd.SetExcitement belongs to this raid's crowd. The bed (a child of the root) resets it too; this covers a package without
             // a bed and a bed that failed. A newer raid's live bed is left alone.
             if (SpectatorCrowdBed.Current == null) SpectatorCrowd.State.Reset();
+            // The reactions' claims, queue and kinds belong to this raid's crowd too, whether or not its audio component exists (a package without calls, or one that failed).
+            SpectatorReactionDemo.Stop("the crowd is removed");
+            SpectatorCrowd.Reactions.Reset();
             Plugin.Log.LogDebug($"{Tag} crowd and shared assets removed");
         }
 
