@@ -1,6 +1,6 @@
 # PLAN-CROWD-REACTIONS: action-bound spectator calls
 
-Status: design, nothing implemented, nothing listened to. 2026-11-02, branch `feature/iceberg`.
+Status: design, nothing implemented, nothing listened to. 2026-11-02, branch `feature/iceberg`. Revised the same day with the user's automatic German subtitles of every crowd clip (section 2.4): a check of the clips by text, not by ear.
 
 Origin: the user asked to look again at action-bound spectator calls, the crowd reacting to what happens in the match as in Arena,
 and where ArenaMode and ArenaMapPort need changes. The plan comes from a read-only analysis (workflow `wf_3515f8ba-a57`):
@@ -20,7 +20,7 @@ Notation:
 - **Maps:** Equator, Bay5, Air Pit and Bowl, the four maps with a crowd. Iceberg has no spectators and no fan speakers, so it stays silent (`ReactionKinds == 0`, no warning).
 - **ArenaMode raid:** this is the target. ArenaMode knows kills, scores, teams, rounds and results; ArenaMapPort does not.
 - **Plain SPT raid:** only the test vehicle. A few events the plugin sees itself can drive a fallback. A plain local death ends the raid within about 5 s (`BaseLocalGame.cs:847`), so reactions to it are barely audible.
-- **Unchanged:** the random "Participating" calls (user decisions: embedded fan clips only, 2 voices, gain 0.5, 4-8 s pauses) and the approved murmur bed. Reactions are an addition.
+- **Unchanged:** the random "Participating" calls (user decisions: embedded fan clips only, 2 voices, gain 0.5, 4-8 s pauses) and the murmur bed (since 2026-11-02 Arena's neutral in-match bed, at the level approved for the postmatch bed). Reactions are an addition.
 
 **Out of scope:**
 - Animation reactions (D9).
@@ -54,32 +54,32 @@ Arena's reaction logic is IL2CPP code in `GameAssembly.dll` and `global-metadata
 
    A `FansAmbientEntityGroup` lists two Cheer+Angry pairs and a Neutral list. The emitters are inactive in the imported scenes (`equator-native-features.md:61`). Whether Arena activates them in a match is not determined.
 
-   The postmatch clip the port uses as its murmur measures -39.5 dBFS RMS, 8 to 17 dB below these beds.
+   The postmatch clip the port uses as its murmur measures -39.5 dBFS RMS, 8 to 17 dB below these beds. **User decision 2026-11-02, implemented in `deb7b85`:** the 80 s Neutral bed replaces the postmatch clip as the murmur loop, trimmed by -8.9 dB to the approved level (79.5 s after the seam; record in `spectator-audio.md` "Neutral bed").
 3. **Animation.** The shared `ArenaFan` Animator Controller (`sharedassets40.assets`, path 338) has 98 parameters and two layers (`Base Layer`, `HideLayer`).
    - **95 triggers, one per animation:** `ArenaFan_Pleased_000..` (including `_004/005/007_BigWin`), `ArenaFan_Anger_000-005`, `ArenaFan_Owned_000/001`, `ArenaFan_Shock_000-008`, `ArenaFan_Hide_000-011`, a `Parapet_*` family and `QuickUnhide`.
    - **3 states:** `Parapet` (bool), `Hide` (bool) and `HideInModifier` (float). Hide is a sustained state with its own layer, not a one-shot trigger.
    - **What the port ships:** only `Idle_000_loop` and `Idle_Cheer_001` (`extract_spectator.py:29`).
 
-**Correction of the port's own texts.** The statement that Arena's maps carry no crowd ambience, or that the postmatch clip is the only one in its files, is wrong today, independent of this work. What the data supports: the postmatch clip is the only crowd clip that is not bound to a match-event trigger. Arena's in-match beds sit in `ambient_voice.bundle` on emitters that are inactive in the imported scenes. The sentence appears in:
+**Correction of the port's own texts.** The statement that Arena's maps carry no crowd ambience, or that the postmatch clip is the only one in its files, is wrong today, independent of this work. What the data supports: the postmatch clip is the only crowd clip that is not bound to a match-event trigger; since 2026-11-02 the port's murmur is Arena's own Neutral in-match bed (trigger 1122) instead. Arena's in-match beds sit in `ambient_voice.bundle` on emitters that are inactive in the imported scenes. The sentence appears in:
 - **Released texts, to be fixed with the next release:** `README.md:29-30`, `FORGE.md:27-28`, `CHANGELOG.md:26`, `docs/releases/v0.4.0.md:20-21`.
 - **Records:** `docs/progress/spectator-audio.md:568-569`, `docs/progress/arena-audio.md:583`.
 - **Code:** the `extract_spectator_audio.py` docstring (lines 3-4), `SpectatorCrowd.cs:6`, `SpectatorCrowdBed.cs:14`, `SpectatorCrowdBedModel.cs:12`.
 - **HANDOFF:** `HANDOFF.md:156`.
 
-### 2.2 The banks of `fan_speaker_voice.bundle` (fact, confirmed by both checkers)
+### 2.2 The banks of `fan_speaker_voice.bundle` (fact, confirmed by both checkers; the Event column is inference, checked against the subtitles in 2.4)
 
 | Bank (trigger) | Embedded clips (s) | External Scav slots | Event, as far as known |
 |---|---|---|---|
-| LowDeathIntensity (1116) | 15 (39.2) | 0 | Same id as the announcer's bank of that name (fact); "few kills lately" (inference) |
-| Cheer (1119) | 14 (39.3) | 15 | A kill the crowd likes (inference) |
-| Owned (1120) | 16 (46.2); 13 share names with Cheer, 17 distinct in the union | 3 | Unknown, low confidence |
-| Angry (1121) | 18 (43.5) | 23, plus 2 null | A kill against the crowd's side (inference) |
-| Neutral (1122) | 2 (3.6) | 17, plus 8 null | Baseline chatter (inference); effectively an external bank |
-| Participating (1123) | 13 (31.9) | 9 | Shipped today as the random calls |
-| Hide (1124) | 36 (79.2): `aim_hide` 11, `shoot_hide` 25 | 14 | Shots or aiming at the crowd (inference from names and the Hide layer) |
-| ChangedRound (1125) | 9 (28.6) | 5 | Round change (inference) |
-| EndRound (1126) | 11 (29.1) | 8 | Round end; the id equals Arena's EndRound signal in `arena_effects.bundle` (fact) |
-| PurifiedTeam (1127) | 16 (49.1) | 0 | Unresolved: the announcer tag of that id is "an Arena-specific Purified team spawn event, unrelated to a team sweep" (`arena-audio.md:105-108`); only the fan clip names say `sweep_team` |
+| LowDeathIntensity (1116) | 15 (39.2) | 0 | Same id as the announcer's bank of that name (fact); "few kills lately" (inference; content-confirmed, 2.4) |
+| Cheer (1119) | 14 (39.3) | 15 | A kill the crowd likes (inference; content-confirmed, 2.4) |
+| Owned (1120) | 16 (46.2); 13 share names with Cheer, 17 distinct in the union | 3 | No meaning of its own: the Cheer clips plus three twins (2.4) |
+| Angry (1121) | 18 (43.5) | 23, plus 2 null | A kill or loss against the crowd's fighter (inference; content-confirmed, 2.4) |
+| Neutral (1122) | 2 (3.6) | 17, plus 8 null | Baseline chatter by its 17 external references (idle mutter, combat calls); its 2 embedded clips are a Cheer duplicate and a 0.86 s wordless scream (2.4); effectively an external bank |
+| Participating (1123) | 13 (31.9) | 9 | Shipped today as the random calls; passivity jibes and urging, none reacts to a result (2.4) |
+| Hide (1124) | 36 (79.2): `aim_hide` 11, `shoot_hide` 25 | 14 | A shot or aim toward a stand, not an explosion (inference from names and the Hide layer; narrowed by the subtitles, 2.4) |
+| ChangedRound (1125) | 9 (28.6) | 5 | Match or round start (inference; content-confirmed, 2.4) |
+| EndRound (1126) | 11 (29.1) | 8 | Round end; the id equals Arena's EndRound signal in `arena_effects.bundle` (fact); neutral commentary, no winner named (2.4) |
+| PurifiedTeam (1127) | 16 (49.1) | 0 | Unresolved: the announcer tag of that id is "an Arena-specific Purified team spawn event, unrelated to a team sweep" (`arena-audio.md:105-108`); only the fan clip names say `sweep_team`; the subtitles say anticipation of a fight and talk of a sweeping squad (2.4) |
 
 - **Shared parameters (all banks):** Importance 3, Blocker 0, IgnoreTags 0, no chain (`ChainEvent` 8 = `PhraseNone`, `EPhraseTrigger.cs:5`), slot Mask 0.
 - **Clip lengths:** 0.70 to 6.71 s. Six non-Participating clips exceed 5 s; the longest is `kill_cheer` at 6.71 s.
@@ -113,6 +113,74 @@ Arena's reaction logic is IL2CPP code in `GameAssembly.dll` and `global-metadata
   - `normalize()` gives -10.09 to +2.72 dB, peaks 0.279-0.691 (validator ceiling 0.709) and RMS 0.0794.
   - 45 of the 123 need the ffmpeg resample (49 of all 136); their rates are 36.4-40.9 kHz.
 - **The 5 s length cap blocks today.** It sits in the extractor (`extract_spectator_audio.py:161` file size, `:167` frames) and in the client (`SpectatorAudioModel.cs:36`).
+
+### 2.4 What the clips say (user's subtitles, 2026-11-02)
+
+**Source and limits.**
+- The user exported every crowd clip (`work/extract/crowd-sounds-listening`: 252 files, 244 fan voices plus the 7 stereo beds and the postmatch clip; `index.csv` lists bank, source, length and level) and had German subtitles made (`Deutsche_Untertitel/Uebersicht.csv`).
+- **The subtitles are automatic** (speech recognition with a machine translation), **not a manual check**: 48 of the 252 rows are flagged uncertain by the tool and 9 carry no recognised speech. Three readers classified the clips from subtitle text, clip name, length and level; the results were merged here. Nobody listened to a clip. What follows narrows the guesses of 2.2 and does not replace the listening check of section 7.
+- This plan quotes no voice line. Clips are characterised, never quoted.
+- **Delivery is lost in the port.** Every clip is normalised to -22 dBFS RMS, so a mumbled lament and a shout play equally loud. "Strong" below means the wording of a clip (a shout, a superlative, an urge), and loudness comes from the voice count.
+- **Status of a clip.** *keep*: text clear and fits the bank's event. *listen*: exported by default and named in the listening check, because its subtitle is a single flagged or unintelligible one (judged by name and delivery; FLAG), it is a taste question (TASTE), it reads as generic outside its moment (CTX), it is an urge and not a reaction to a result (ROLE) or it takes a side (SIDED). *out*: left out by name, with a reason code: SLUR (the original contains a slur), CTX (only fits a moment the port does not produce), UNCL (no recognisable tone), WRONG (speaks as or to the sweep crew, not as a spectator). A flagged clip counts as keep when two or more voices carry the same sentence in the German translation (the transcripts may differ): four take-cover clips and one eye-opening line in Hide. Two Angry insult clips whose transcripts differ between voices are listen, because a slur cannot be ruled out from the text.
+- **Scav references** (`scav__*`, the external Scav voices Arena lists in the same banks) are counted as "fit by content": they would work as a spectator remark in the bank. All stay excluded by D2.
+
+**Per bank** (lengths and counts from `index.csv`, all equal to the table in 2.2):
+- **Cheer 1119 (Approve).** Kill reactions in three tones: praise of the killer or the play (9 clips), gloating at the victim in the second person (4), one clip that urges the player on. Only the praise tone also works for an event without a victim. Meaning confirmed. Usable 14 of 14 (keep 10, listen 4). Scav: about 9 to 11 of 15 fit (kill confirmations and praise; `scav1_enemy_down_04_l` is a taunt of the victim like the embedded gloat clips, `scav1_enemy_down_11_bl_l` a reaction shout); 4 are unintelligible or combat urging. Out: none.
+- **Owned 1120 (merged into Approve).** 13 of its 16 clips are the Cheer clips; the other 3 are twins of Cheer lines in other voices (one ordinary praise, one superlative shout, one urging clip). The content gives no separate event, so the plan's optional extra pool has no basis. Meaning corrected: the same event as Cheer. Usable 16 of 16 (keep 12, listen 4); the union with Cheer is 17 clips (keep 12, listen 5), 48.9 s. Scav: 2 of 3 fit (kill confirmations), 1 unintelligible. Out: none.
+- **Angry 1121 (Disapprove).** Laments about a lost bet, shock and resignation (10 clips) and heckling of the dead player in the second person (8). The bank is about the viewer's fighter dying or losing, as inferred; the heckles fit an own death only. Meaning confirmed. Usable 18 of 18 (keep 14, listen 4). Scav: 6 of 23 fit (short disappointed groans), 3 more possible; the rest are combat, lookout, friendly-fire or time-pressure calls and one triumph line from the wrong side. Out: none.
+- **ChangedRound 1125 (Start).** Surprise that it has already begun, impatience, pre-match banter, a call to go. None names a round number. Meaning confirmed (Start). Usable 9 of 9 (keep 6, listen 3). Scav: 4 of 5 fit in meaning (session-start greetings). Out: none. `fan12_match_start_05` (5.49 s) is listen (FLAG): its flagged subtitle may be a countdown complaint.
+- **EndRound 1126 (Finish).** Neutral commentary on an ending: boasts (2 clips), lukewarm or surprised remarks (2), mild praise of the fighters (3), dark humour about clearing the finished fighters away (1), relish of blood (1), a holiday remark (1), one unintelligible clip. No clip names a winner or a loser. Meaning confirmed, unsided. Usable 11 of 11 (keep 9, listen 2). Scav: 0 of 8 fit as Finish (seven praise or acknowledgement lines and one unintelligible shout; all 8 are also Cheer references). Out: none.
+- **Hide 1124 (TakeCover).** Spectators panic at, plead with or scold a fighter who aims or fires toward them (toward the stands is an inference from the scolds; no clip names a stand): panic, shock and fear shouts (12 clips, 10 `shoot_hide` and 2 `aim_hide`, 6 distinct sentences) and pleas or scolds addressed to the shooter (22 usable clips). No recognised speech, embedded or Scav, mentions an explosion or a grenade (9 rows of the export have no recognised speech). Meaning corrected: a shot or aim toward a stand, not gunfire or an explosion in general. The 36 clips carry about 22 distinct sentences. Usable 34 of 36 (keep 29, listen 5). Scav: 4 fit in meaning (the take-cover calls `scav1_incover_01` and `_02`, the plea `scav1_enemy_bear_02_l` and the scold `scav1_ffire_02_l`); the other 10 are insults, combat and hurt lines, three of them with a slur. Out: `fan8_aim_hide_01`, `fan12_shoot_hide_05` (SLUR).
+- **LowDeathIntensity 1116 (Lull).** Complaints that the match is dull (5 clips, one of them ambiguous), impatient jibes at idle fighters (7 readable), 2 clips without recognised speech (flagged, listen) and one wordless yell (out). Nothing refers to a side, a faction, a place or a weapon. Meaning confirmed by content, the best-supported bank. Usable 14 of 15 (keep 11, listen 3); no Scav references. Out: `fan12_low_death_intensity_04` (UNCL: 5.16 s of wordless yelling, tone unclear).
+- **PurifiedTeam 1127.** Anticipation of a fight: hype (5 clips), one boredom remark (Lull material), bets, drink and food, taunts at a hunted team, talk of a sweeping squad's job. It is not a result, not a reaction to a kill and not a team wipe. Meaning narrowed: "a sweeping squad is sent in, the fight is about to get going"; which ArenaMode event corresponds is open. Usable 12 of 16 (keep 5, listen 7: sided or flagged); no Scav references. Out: `fan7_sweep_team_01`, `fan12_sweep_team_11` (WRONG: they address the sweep crew about the equipment, not as spectators; the same sentence), `fan10_sweep_team_02` (WRONG: speaks as a future member of the sweep crew), `fan13_sweep_team_02` (WRONG: speaks as one of the sweep crew).
+- **Participating 1123 (the shipped random calls).** Taunts at passive, hiding or slow fighters and urging; none reacts to a kill, death, score or round. The same flavour as LowDeathIntensity. The 9 Scav references are spotting and combat callouts, which agrees with the user's exclusion.
+- **Neutral 1122.** Its 2 embedded clips are a duplicate of a Cheer clip and a 0.86 s wordless scream (`fan12_match_start_06`, flagged; a start only by its name); its 17 Scav references are idle mutter and combat calls, consistent with baseline chatter. Effectively an external bank, not exported; the scream is an optional addition to the Start pool.
+- **Beds.** The Cheer (3 x 7 s) and Angry (3 x 8 s) beds in `ambient_voice` are steady roars and boos with no intelligible speech; the 80 s Neutral bed is a speechless murmur with the same short-term fluctuation as the postmatch clip, about 9 dB louder.
+
+**Embedded clips by status** (a clip in two banks counts once in the union):
+
+| Bank | Embedded | keep | listen | out |
+|---|---:|---:|---:|---:|
+| Cheer | 14 | 10 | 4 | 0 |
+| Owned | 16 | 12 | 4 | 0 |
+| Cheer + Owned (union) | 17 | 12 | 5 | 0 |
+| Angry | 18 | 14 | 4 | 0 |
+| ChangedRound | 9 | 6 | 3 | 0 |
+| EndRound | 11 | 9 | 2 | 0 |
+| Hide | 36 | 29 | 5 | 2 |
+| **Phase A (91)** | 91 | 70 | 19 | 2 |
+| LowDeathIntensity | 15 | 11 | 3 | 1 |
+| PurifiedTeam | 16 | 5 | 7 | 4 |
+| **Eight banks (122)** | 122 | 86 | 29 | 7 |
+
+**The 19 phase-A "listen" clips** (for the listening check of section 7):
+- FLAG: `fan9_kill_cheer_01`, `fan10_kill_cheer_01`, `fan12_kill_cheer_10`, `fan12_kill_angry_12`, `fan13_kill_angry_02`, `fan12_kill_angry_08`, `fan13_kill_angry_06`, `fan12_match_start_05`, `fan10_match_end_02`, `fan12_match_end_02`.
+- ROLE: `fan13_kill_cheer_03`, `fan15_kill_cheer_02`.
+- TASTE: `fan11_match_start_01`, `fan8_aim_hide_02`, `fan12_shoot_hide_06`, `fan13_shoot_hide_07`, `fan13_shoot_hide_08`. The last four are one crude family joke and three mental-health jibes.
+- CTX: `fan12_match_start_04`, `fan13_aim_hide_01`.
+
+Lull's three listen clips (`fan11_low_death_intensity_03`, `fan12_low_death_intensity_03`, `fan13_low_death_intensity_03`) are FLAG.
+
+**Phase-A pools and the strength values of section 6** (the tags are a proposal; the intensity reading comes from wording only):
+
+| Kind | Bank(s) | Clips | Sub-pools | Rule |
+|---|---|---:|---|---|
+| Approve (1) | Cheer + Owned | 17 | normal 13 = 9 praise + 4 gloat (a gloat clip needs a victim, so it is kill-bound); strong-only 2 superlative shouts (4.55 s, 6.71 s); the 2 urging clips (listen, ROLE) join the strong-only set only if the listening check keeps them; 14 distinct sentences | below 0.8 (kills 0.35 and 0.6, lead 0.5): the 13 normal clips; from 0.8 (awards 0.9): the first voice is drawn from the strong-only clips, the others from the normal clips (with 2 strong-only clips the first voice repeats often). An event without a victim (a Domination capture, later) needs the 11 clips of praise and shouts only: a flag or kind 8 then |
+| Disapprove (2) | Angry | 18 | lament 10; heckle 8 (own death only); 15 distinct sentences | below 0.4 (lead lost 0.3): the 10 laments; from 0.4 (own death 0.5): all 18. No strong-only pool: the mapping stops at 0.5. The subtitles carry no delivery, so no clip is classed by how loudly it is spoken |
+| TakeCover (3) | Hide | 34 | panic 12 (6 distinct sentences); directed 22 (14 `shoot_hide`, 8 `aim_hide`) | any close shot: panic; directed only when the line of fire points at a stand; strength sets the voice count only |
+| Start (4) | ChangedRound | 9 | one pool: the 8 clips read clearly (7 distinct sentences) plus `fan12_match_start_05` (listen), 4 voice families; optional +1 (`fan12_match_start_06`) and optional +5 neutral hype clips from PurifiedTeam (`fan8_sweep_team_01`, `_02`, `fan12_sweep_team_05`, `_10`, `fan15_sweep_team_01`) | 1.0 means 3 voices from 4 families: repeats after two or three starts; consider Start 0.6 (2 voices) or the optional clips |
+| Finish (5) | EndRound | 11 | one pool, 10 distinct sentences; 3 praise the fighters (`fan12_match_end_02`, `_03`, `_04`), 1 is positive in tone, 2 are lukewarm or disappointed | 1.0; whether a loss variant drops any clip is a listening question |
+| Lull (6, reserved) | LowDeathIntensity | 14 | one pool, 12 distinct sentences: 5 complaints, 7 readable jibes, 2 without recognised speech | trigger: D14 |
+| PurifiedTeam (7, reserved) | PurifiedTeam | 12 | 5 neutral hype; 1 boredom remark (`fan12_sweep_team_04`, Lull material); 6 sided or flagged | no ArenaMode event is named |
+
+"Distinct sentences" matters because the same line is recorded by several voices (Hide: 11 groups of two to four voices). A reaction with two or three voices should not say one sentence in chorus (4.4).
+
+**What this changes in the plan:**
+- Approve and Disapprove need no Owned pool. The merged pools have 17 and 18 clips.
+- TakeCover is a reaction to gunfire toward a stand (inference from the scolds). The explosion sensor is dropped from v1 (4.2).
+- Finish stays unsided (D7). Start is the match-live moment, and the countdown cues stay silent (6).
+- Lull and PurifiedTeam: the clips are ready, the triggers are open (D1, D14).
+- The random calls and Lull have the same tone, so a jibe right after a cheer would contradict it (4.4, `Hold`).
 
 ## 3. Today's state
 
@@ -204,18 +272,18 @@ A small, stable set. A kind says what happened for the viewer's side; ArenaMapPo
 
 | # | Name | Caller means | Bank | Phase |
 |---|---|---|---|---|
-| 1 | Approve | Good for the viewer's side: own kill, award, lead taken, round or match won | Cheer 1119 (Owned 1120 as an optional extra pool, D5) | A |
-| 2 | Disapprove | Bad: own death, lead lost, point lost | Angry 1121 | A |
-| 3 | TakeCover | Gunfire or an explosion close to a stand | Hide 1124 | Clips and runtime in A, sensor in C |
-| 4 | Start | A round or the match begins | ChangedRound 1125 | A |
-| 5 | Finish | A round or the match ends with a result | EndRound 1126 | A |
-| 6 | Lull | No kills for a while | LowDeathIntensity 1116 | Reserved |
-| 7 | PurifiedTeam | Meaning unresolved; must not be read as a team wipe | PurifiedTeam 1127 | Reserved |
+| 1 | Approve | Good for the viewer's side: own kill, award, lead taken (a round or match result is Finish) | Cheer 1119 and Owned 1120 as one pool of 17 (2.4, D5) | A |
+| 2 | Disapprove | Bad: own death, lead lost, point lost | Angry 1121 (18 clips: 10 laments, 8 heckles of the dead player) | A |
+| 3 | TakeCover | A shot or aim toward a stand (inference from the scolds); no recognised speech mentions an explosion (2.4) | Hide 1124 (34 clips: 12 panic, 22 directed) | Clips and runtime in A, sensor in C |
+| 4 | Start | A round or the match begins | ChangedRound 1125 (8 clips) | A |
+| 5 | Finish | A round or the match ends with a result; neutral commentary, no winner named (2.4) | EndRound 1126 (11 clips) | A |
+| 6 | Lull | No kills for a while (content-confirmed, 2.4) | LowDeathIntensity 1116 (14 clips) | Reserved; clips ready, trigger is D14 |
+| 7 | PurifiedTeam | A sweeping squad is sent in, the fight is about to get going (2.4); not a result, not a team wipe; no ArenaMode event is named | PurifiedTeam 1127 (12 clips) | Reserved |
 
-- **Strength** is a float 0..1. Below 0.05 it is dropped (proposal) and NaN is rejected. It sets the voice count (proposal: up to 1/3 gives 1 voice, up to 2/3 gives 2, above that 3) and the size of the bed swell (4.4), not the gain.
+- **Strength** is a float 0..1. Below 0.05 it is dropped (proposal) and NaN is rejected. It sets the voice count (proposal: up to 1/3 gives 1 voice, up to 2/3 gives 2, above that 3) and the size of the bed swell (4.4), not the gain. Two thresholds also pick the sub-pool of a clip (proposal, 2.4 and 4.4): from 0.8 the first Approve voice is drawn from the strong-only clips, below 0.4 Disapprove draws laments only.
 - **No home side in the contract.** "Viewer's side" is the caller's judgement. Sided stands are not in v1 (section 9).
 - **Priority** (proposal): Finish > Start > Approve = Disapprove > TakeCover > Lull > random calls.
-- **Neutral and Participating are not kinds.** Participating stays the random baseline. Neutral has 2 local clips of 27.
+- **Neutral and Participating are not kinds.** Participating stays the random baseline. Neutral has 2 local clips of 27 (a Cheer duplicate and a 0.86 s wordless scream, 2.4).
 
 ### 4.2 Who detects what
 
@@ -233,7 +301,7 @@ ArenaMapPort's own sensors (phase C, all inference until a host run):
   - The alternative `GlobalEventDispatcher.OnSoundPlayed` (`GlobalEventDispatcher.cs:226`, throttled to one call per shooter per second by `AIData.cs:634-652`) is not clean.
   - The reason: EFT's own `BotsController.OnGrenadeExplosive` (`BotsController.cs:349-362`) dispatches `PlaySound(..., 190f, AISoundType.gun)` for every grenade explosion, smoke included. `OnRocketExplosive` (`:381-389`) does the same, and `BotEventDebug.cs:21` passes a null player.
   - A gunfire sensor there would double-count explosions and smoke.
-- **Explosions:** `GlobalEventDispatcher.OnGrenadeExplosive` (`:376`, `isSmoke == false`) and `OnRocketExplosive`, as one source. Flashbangs and stun grenades also arrive with `isSmoke == false` (`Grenade.cs:339-357`); include or drop them by a rule written down when the sensor is built.
+- **Explosions:** `GlobalEventDispatcher.OnGrenadeExplosive` (`:376`, `isSmoke == false`) and `OnRocketExplosive`, as one source. Flashbangs and stun grenades also arrive with `isSmoke == false` (`Grenade.cs:339-357`); include or drop them by a rule written down when the sensor is built. Content (2.4): no recognised speech of a Hide clip mentions an explosion or a grenade, so this source has no content basis; the recommendation is to leave it out of v1 (if built, it plays the 12-clip panic subset only).
 - **Every handler:**
   - is wrapped in try/catch. The dispatcher invokes handlers bare (`GlobalEventDispatcher.cs:1278-1281`, `:1311-1314`), so a throw would break the shot or the explosion;
   - checks for a null player;
@@ -241,7 +309,7 @@ ArenaMapPort's own sensors (phase C, all inference until a host run):
   - is gated first on a cheap crowd-present flag. `ArenaMapRaid.IsLoaded()` makes five scene lookups, too expensive per shot.
 - **Re-subscribe every raid.** `GlobalEventDispatcher.Stop()` nulls the dispatcher events at raid end (`:1349-1371`, from `BaseLocalGame.cs:972`); the dispatcher instance is reused. Re-subscribe each raid (remove, then add). `Player.OnPlayerDeadStatic` is not affected.
 - **Pin the obfuscated delegate types** `GDelegate27` and `GDelegate17` in `HarmonyPatches.Verify()` (AGENTS.md rule).
-- **TakeCover has the weakest basis.** Arena's Hide is a sustained animation state, while a voice reaction is a one-shot. It ships default off behind a developer key until heard.
+- **TakeCover has the weakest basis.** Arena's Hide is a sustained animation state, while a voice reaction is a one-shot. It ships default off behind a developer key until heard. The subtitles (2.4) narrow it further: the Hide clips talk to a fighter who aims or fires toward them (toward the stands is an inference), so the sensor asks whether the line of fire points at a stand (testing it against the stand centres of the murmur bed, 4 to 6 per map, keeps the per-shot cost small), not whether something went off near one. A close shot without that direction plays only the 12-clip panic subset.
 - **An external claim stands the plugin's sensors down.** While a caller holds a reaction claim, the plugin's own Approve, Disapprove and Start sensors stand down; otherwise every ArenaMode kill would react twice. TakeCover stays ArenaMapPort's own in both raid kinds.
 
 ### 4.3 Public contract extension (the ScoreMonitors shape)
@@ -289,11 +357,15 @@ The random calls keep their living-player guard unchanged. In an ArenaMode raid 
 **Priority over the random calls.**
 - An append-only `Hold(now, seconds)` on `SpectatorAudioSchedule` keeps new random calls from starting while a reaction plays, plus a gap.
 - Calls already playing finish by themselves (at most 3.3 s): no cut and no fade, which keeps the single `VolumeFadeOut` pin.
+- The gap after Approve, Start and Finish is at least one call pause (4 s, proposal): the random calls are passivity jibes (2.4) and would contradict a fresh cheer. Inference from the subtitles, to be checked by ear.
 
 **Voices.**
 - **Pool:** a separate pool of 3 reaction slots (proposal), so at most 5 voices come from the shared Environment pool of 32 sources (`spectator-audio.md:133`). A failed `GetSource` is skipped and counted.
 - **Speakers:** chosen with `ChooseSpeaker` unchanged. For k voices, the k first distinct speakers by that law, each at least 4 m (proposal) from the ones already picked.
-- **Clip choice:** family first. Pick a voice family `fanN` uniformly, then a clip of the bank, so fan12 (47 of the 123 clips) does not dominate. Families are distinct within one reaction, and the last two clips of a bank are not repeated.
+- **Clip choice:** the model reads the pool tag and sentence group of every clip from the manifest (4.5) and draws in three steps.
+  1. **Pool:** the strength picks the sub-pools (table in 2.4). Approve below 0.8 draws from the 13 normal clips, from 0.8 the first voice is drawn from the strong-only clips (2 shouts, plus the 2 urging clips if the listening check keeps them); Disapprove below 0.4 draws the 10 laments, from 0.4 all 18; Start, Finish and Lull use their whole bank; TakeCover uses the 12 panic clips and adds the 22 directed ones only when the sensor saw the line of fire point at a stand.
+  2. **Voice family `fanN`**, drawn with a weight of the square root of the family's clip count in the pool. A uniform family draw gives a family with one clip (fan7 and fan15 in Angry, fan7 and fan13 in Start) a share of 20 to 25 percent; a plain clip draw lets fan12 hold 44 percent of Angry and 50 percent of Start (fan12 has 47 of the 123 non-Participating clips).
+  3. **Distinct sentences:** within one reaction the families and the sentence groups are distinct (the 36 Hide clips carry about 22 sentences, the 12 panic clips only 6); the last two clips and the last three sentence groups of a pool are not repeated. When the rules cannot all hold (Start has 4 families, two of them with one clip; the panic pool has 6 sentence groups), relax the "last two clips" rule first, then the family distinctness, never the sentence-group distinctness; a model test pins that order.
 - **`_families`** becomes a general `fanN_` parse.
 
 **Cooldowns and coalescing** (proposals, scaled by one developer key):
@@ -308,6 +380,7 @@ The random calls keep their living-player guard unchanged. In an ArenaMode raid 
 - Each reaction adds a transient swell in `CrowdExcitement`: attack 0.3 s, time constant 3 s, amplitude equal to strength (proposals).
 - Bed level = max(smoothed external level, swell), so the factor never exceeds 1.6 and `ClipGain` 3.2 stays valid.
 - Allocation-free (`SpectatorCrowdBedSourcePinTests.cs:59-72`).
+- **The bed is the Neutral clip since `deb7b85` (user decision 2026-11-02).** Measured on the decoded files: -31.2 dBFS RMS in the mono downmix against -40.1 for the postmatch clip. The extractor trims it by -8.9 dB to the approved level; the shipped loop is 79.5 s (7.0 MB) with the usual 500 ms seam. `ClipGain` 3.2 is MaxVolume x MaxFactor and does not depend on the clip, so the swell headroom above holds unchanged; a louder bed is `Spectators/CrowdBedVolume` (up to 2.0).
 
 **Audio reset at raid start.** The logs show an audio reset 8-14 s after the crowd is built (`spectator-audio.md:744-746`). The queue survives it, clips are rebuilt lazily, and entries older than 2 s are dropped.
 
@@ -325,24 +398,28 @@ The random calls keep their living-player guard unchanged. In an ArenaMode raid 
 ### 4.5 Audio data
 
 **Banks (recommendation, pending D1 and D2).**
-- **Phase A:** stage the embedded clips of Cheer, Owned, Angry, ChangedRound, EndRound and Hide. That is 91 distinct clips, about 229 s and 20.2 MB: 17 (Cheer and Owned, 13 shared names stored once) + 18 + 9 + 11 + 36.
-- **Later:** LowDeathIntensity and PurifiedTeam come with their kinds, adding 31 clips and 7.8 MB; all eight banks make 122 clips.
-- **Not exported:** Neutral, and every external Scav reference (pending D2).
+- **Phase A:** stage the usable embedded clips of Cheer, Owned, Angry, ChangedRound, EndRound and Hide. That is 89 distinct clips, 226.1 s and 19.9 MB (91 clips, 229.3 s and 20.2 MB before 2 are left out): 17 (Cheer and Owned, 13 shared names stored once) + 18 + 9 + 11 + 34. Of the 89, 70 are keep and 19 listen (2.4).
+- **Later:** LowDeathIntensity (14 of 15 clips, 34.1 s, 3.0 MB) and PurifiedTeam (12 of 16, 33.2 s, 2.9 MB) come with their kinds. All eight banks then make 115 clips, 293.3 s and 25.9 MB (122 clips before 7 are left out); with Lull only, 103 clips (260.1 s, 22.9 MB).
+- **Not exported:** Neutral (one optional start shout, 2.4), every clip left out by name, and every external Scav reference (pending D2).
 
 **Extractor** (`extract_spectator_audio.py`):
-- **Bank table:** name, trigger, expected embedded count and omitted-external count:
+- **Bank table:** name, trigger, expected embedded count, left-out clips (name and reason code, 2.4), exported count and omitted-external count; the validators check embedded = exported + left out:
 
-  | Bank | Embedded | Omitted external |
-  |---|---:|---|
-  | Cheer | 14 | 15 |
-  | Owned | 16 | 3 |
-  | Angry | 18 | 23, plus 2 null |
-  | ChangedRound | 9 | 5 |
-  | EndRound | 11 | 8 |
-  | Hide | 36 | 14 |
+  | Bank | Embedded | Left out (reason) | Exported | Omitted external |
+  |---|---:|---|---:|---|
+  | Cheer | 14 | none | 14 | 15 |
+  | Owned | 16 | none | 16 (17 in the union with Cheer) | 3 |
+  | Angry | 18 | none | 18 | 23, plus 2 null |
+  | ChangedRound | 9 | none | 9 | 5 |
+  | EndRound | 11 | none | 11 | 8 |
+  | Hide | 36 | `fan8_aim_hide_01`, `fan12_shoot_hide_05` (SLUR) | 34 | 14 |
+
+  Later banks: LowDeathIntensity 15 embedded, `fan12_low_death_intensity_04` (UNCL) out, 14 exported, 0 external; PurifiedTeam 16 embedded, `fan7_sweep_team_01`, `fan12_sweep_team_11`, `fan10_sweep_team_02`, `fan13_sweep_team_02` (WRONG) out, 12 exported, 0 external.
 
 - **Naming:** a generalised name regex for the clip categories and `fan15`; today only fan7-fan13 and `participating` pass (`:25`).
 - **Length cap:** a 7 s cap for reactions; the calls keep 5 s.
+- **Over 5 s after the exclusions:** three exported clips (6.71 s in Cheer and Owned, 5.36 s in Angry, 5.49 s in ChangedRound); the other three clips of 2.2 above 5 s (5.66 s and 5.22 s in PurifiedTeam, 5.16 s in LowDeathIntensity) are left out. The 7 s cap stays.
+- **Pool sidecar:** a tracked `tools/extract/reaction_pools.json` holds, per clip name, bank, pool tag (praise, gloat, shout, urge, lament, heckle, panic, directed, start, finish, lull, hype), sentence-group id, status (keep, listen, out) and reason code. Names and tags only: no transcript, translation or voice line enters git. The extractor reads it, enforces the left-out list and writes `pool` and `group` per clip into the manifest; a test pins that every exported clip has exactly one pool and that the sidecar covers the bank counts above.
 - **Spread groups:** the per-bank spread-group check (`:209-210`) needs a rule for the new banks.
 - **Key-source guard, which is new work:**
   - `protected_names()` today covers only the fan bundle's file name (`:203`) and the bed's source (`:193`).
@@ -353,7 +430,7 @@ The random calls keep their living-player guard unchanged. In an ArenaMode raid 
 
 **Manifest.**
 - Schema 1 and the Participating keys stay unchanged.
-- An optional `reactions` object sits next to `bed`. It holds a deduplicated clip table (name, size, frames, SHA-256) plus per bank its trigger, clip-name list and omitted-external count. Cheer and Owned share 13 names, and the validators' expected-file set and name-uniqueness check work on the union.
+- An optional `reactions` object sits next to `bed`. It holds a deduplicated clip table (name, size, frames, SHA-256) plus per bank its trigger, clip-name list, left-out clip names with reason code and omitted-external count, and per clip its pool tag and sentence-group id (from the sidecar above). Cheer and Owned share 13 names, and the validators' expected-file set and name-uniqueness check work on the union.
 - `validate(require_reactions)`; `validate_distribution.py:525-535` passes the flag, and its byte comparison then covers the new files.
 - The kind-to-bank table lives in the client and is pinned by a test.
 
@@ -361,11 +438,11 @@ The random calls keep their living-player guard unchanged. In an ArenaMode raid 
 
 **Distribution counts** (the manifest is not a new file):
 
-| Layout | today | phase A (+91) | eight banks (+122) |
-|---|---:|---:|---:|
-| released 0.4.0 layout (no Iceberg) | 256 | 347 | 378 |
-| current dist with Iceberg | 283 (Iceberg part 27) | 374 | 405 |
-| core part | 154 | 245 | 276 |
+| Layout | today | phase A (+89) | with Lull (+103) | eight banks (+115) |
+|---|---:|---:|---:|---:|
+| released 0.4.0 layout (no Iceberg) | 256 | 345 | 359 | 371 |
+| current dist with Iceberg | 283 (Iceberg part 27) | 372 | 386 | 398 |
+| core part | 154 | 243 | 257 | 269 |
 
 No test pins the totals; `make_release_zips.py --plan` prints them. AGENTS.md still says 281 and an Iceberg part of 25, which is stale since the DynamicMaps overview added 2 files.
 
@@ -399,6 +476,7 @@ The listening check comes after A, before B is trusted.
 | File | Change |
 |---|---|
 | `tools/extract/extract_spectator_audio.py` | Bank table, name regex, 7 s reaction cap, deduplicated `reactions` manifest, `validate(require_reactions)`, per-clip key-source stream check; docstring correction (2.1) |
+| New `tools/extract/reaction_pools.json` | Pool tag, sentence group, status and reason code per clip name (2.4, 4.5); read by the extractor, pinned by a test |
 | `ArenaMapPort.Client.csproj:196-206` | Verify that the flat glob copies the new WAVs; keep the missing-manifest error |
 | `tools/validate/validate_distribution.py:525-535` | Pass `require_reactions`; new staged-WAV key-source check |
 | `tools/release/make_release_zips.py:360,404,696,711,760` | Widen the regex and the texts |
@@ -420,7 +498,7 @@ The listening check comes after A, before B is trusted.
     - queue bound, thread safety and stale drop;
     - coalescing, including Finish over Approve;
     - cooldowns and the kind range 1..31;
-    - family-first choice, spread, and a swell never above level 1;
+    - weighted family choice, distinct sentence groups, the strength bands (Approve 0.8, Disapprove 0.4), and a swell never above level 1;
     - `Hold`.
   - New manifest tests: a damaged reaction set leaves the calls valid, and the reverse.
   - Source pins:
@@ -435,7 +513,7 @@ The listening check comes after A, before B is trusted.
   - `test_spectator_audio.py:40-62`: flip the rejection of Cheer, of trigger 1119 and of extra files. Keep the tamper and key-source rejections (`:220`).
   - `test_validate_distribution.py:383-399,1285-1370`.
   - `test_release_zips.py:88-92,194-195,303,375-383`: the assertion that `arena_fan7_kill_cheer_01.wav` is an error flips; an unknown category stays an error.
-  - Offline pins of the 91 (122) clips and bank counts against the installed Arena, skipped without it.
+  - Offline pins of the 89 (103, 115) clips, the 7 left out by name and the bank counts against the installed Arena, skipped without it.
 - **Docs:**
   - Append to `spectator-audio.md`; correct `:13` (`ChangedRound`, not `StartRound`) and `:568-569` (the in-match beds of 2.1).
   - Update `dist-manifest.md`, `arena-audio.md:583`, the AGENTS.md layout row, the counts (283) and the rule "Keep only the 13 embedded Participating fan clips", which changes with D1 and D2.
@@ -462,15 +540,18 @@ The listening check comes after A, before B is trusted.
 | ArenaMode source | Kind, strength |
 |---|---|
 | `KilledByLocal` kill | Approve 0.35; 0.6 when `DamageKind` is `Melee`, `Explosion` or `GrenadeFragment`, or for a headshot |
-| Callouts FIRST BLOOD, PAYBACK, COLLATERAL, multi-kill and streak labels, SHUTDOWN, AIRBORNE, NO SCOPE | Approve 0.9 (HEADSHOT stays on the 0.6 path) |
+| Callouts FIRST BLOOD, PAYBACK, COLLATERAL, multi-kill and streak labels, SHUTDOWN, AIRBORNE, NO SCOPE | Approve 0.9 (HEADSHOT stays on the 0.6 path); from 0.8 the first voice is drawn from the strong-only clips (2.4) |
 | `LocalIsVictim`, or `ArenaEvents.OnPlayerDied` without a kill record | Disapprove 0.5 |
 | Teammate kill (Team DM flags) | Approve 0.25, optional |
 | `RoundStart` cue (Team DM, Domination, Tactical); Deathmatch `OnRoundStarted` | Start 1.0 |
-| `RoundWon`, `RoundLost`, `MatchWon`, `MatchLost`, `Draw` | Finish 1.0 (no win/loss colouring, D7) |
+| `RoundWon`, `RoundLost`, `MatchWon`, `MatchLost`, `Draw` | Finish 1.0 (no win/loss colouring, D7; the EndRound clips name no winner, 2.4) |
 | `NoContest` (abort, failed start, teardown) | no reaction |
-| `TakenTheLead` / `LostTheLead` | Approve / Disapprove 0.5 |
+| `TakenTheLead` | Approve 0.5 |
+| `LostTheLead` | Disapprove 0.3 (laments only, below the 0.4 band of 2.4; own death keeps 0.5) |
 | `LastManStanding`, `Clutch`, `FinalWeapon`, `LadderComplete` | Approve 0.9 |
-| Countdown cues (`Three`, `Two`, `One`, `PrepareToFight`) | none |
+| Countdown cues (`Three`, `Two`, `One`, `PrepareToFight`) | none (a probable countdown complaint, `fan12_match_start_05`, stays a listen clip of Start, 2.4) |
+| No `OnKill` for 60 s while `Live` (proposal; every kill counts, bot-vs-bot included; at most one per 90 s) | Lull 0.4 (reserved until D14) |
+| a sweeping squad or wave appears | PurifiedTeam: ArenaMode has no such event today (no Zombies wave event, section 3); nothing is sent |
 
    - Ignore kills with `ScoreEligible == false` and bot-vs-bot kills in v1 (D5).
    - When the deciding kill and its result cue arrive together, send Finish only.
@@ -619,33 +700,34 @@ internal static class ArenaMapPortSpectatorCrowd
 **Listening, by the user.** Nothing may be called approved before this.
 - Each kind alone, with `SpectatorCalls` off.
 - Loudness against the calls and the murmur, and the swell.
-- Cheer against Owned as a pool.
+- The merged Approve pool: a gloat clip on a kill, the strong-only shouts on awards, the 5 listen clips of the pool.
 - Reactions over the announcer in Team DM and Tactical.
 - The behaviour while dead.
-- Variety: 14 and 18 embedded clips against Arena's roughly 29 and 43 slots, half of them Scav references.
-- The content of the new clips (see D13).
+- Variety: 17 Approve clips (14 distinct sentences) and 18 Disapprove clips (15) against Arena's roughly 29 (Cheer) and 43 (Angry) slots, about half of them Scav references. The thinnest pools are Start (8 clips, 7 sentences, 4 voice families) and the TakeCover panic pool (12 clips, 6 sentences).
+- The 19 phase-A clips marked listen and, for a later bank, its listen clips (2.4, D13); the 7 clips left out by name stay out unless the user reverses.
 
 ## 8. Decisions for the user
 
 | # | Decision | Recommendation |
 |---|---|---|
-| D1 | Banks now: 91 clips (6 banks) or 122 (8 banks) | 91 now; LowDeathIntensity and PurifiedTeam with their kinds once their meaning is settled |
-| D2 | External Scav references of the reaction banks (68 slots, 60 distinct in phase A; the earlier listening decision covered only Participating's 9) | Keep excluded, consistent with that decision; ask again after the first listening |
-| D3 | Arena's in-match beds (Cheer and Angry bursts as swell layers, the 80 s Neutral bed as Arena's own baseline against the approved postmatch murmur) | Not in v1. After the first listening, a developer-key A/B only. They are 8-17 dB louder than the murmur and would need their own sources. The premise behind the murmur ("Arena has none") is corrected in the next release texts either way |
+| D1 | Banks now: 89 clips (6 banks, 91 less 2 left out), 103 with Lull, or 115 with Lull and PurifiedTeam (8 banks, 122 less 7) | 89 now. Lull's 14 once D14 settles its trigger (its meaning is content-confirmed); PurifiedTeam's 12 only when an ArenaMode event is named for it. Optional extras for Start: the Neutral start shout (+1) and 5 neutral PurifiedTeam hype clips |
+| D2 | External Scav references of the reaction banks (68 slots, 60 distinct in phase A; the earlier listening decision covered only Participating's 9, which are spotting callouts) | Keep excluded, consistent with that decision. By content about 23 to 28 of the 60 would fit a spectator (kill praise about 9 to 11, Angry groans 6 firm and 3 possible, session-start greetings 4, Hide 4 in meaning: 2 take-cover calls, a plea and a scold); all are Scav voices in combat delivery, and nothing in the subtitles argues for reversing. If the user reverses after the first listening, the 4 greetings and the 6 groans are the first candidates. Ask again after the first listening |
+| D3 | Arena's in-match beds | **Decided 2026-11-02 (user):** the 80 s Neutral bed replaces the postmatch clip as the murmur (implemented in `deb7b85`, trimmed -8.9 dB to the approved level, 4.4). The Cheer and Angry beds (steady roars and boos, no intelligible speech) as swell layers stay out of v1; after the first listening, a developer-key A/B only. The Cheer beds are about 8 to 9 dB louder than the Neutral bed, the Angry beds 1 to 5 dB, and they would need their own sources. The premise behind the murmur ("Arena has none") is corrected in the next release texts either way |
 | D4 | Loudness of reactions | Gain 0.5 and the calls' normalisation; raise only after hearing |
-| D5 | Which ArenaMode events | Local-centric: own kills, own deaths, whitelisted awards, lead changes, round and match start and result; Domination captures later. No bot-vs-bot kills, no Zombies in v1. Owned optional for strong events |
+| D5 | Which ArenaMode events | Local-centric: own kills, own deaths, whitelisted awards, lead changes, round and match start and result; Domination captures later. No bot-vs-bot kills, no Zombies in v1. Owned is not a separate pool: its clips are the Cheer clips plus three twins (2.4); strong events (awards) use the strong-only shouts of the merged Approve pool |
 | D6 | Automatic excitement from gunfire | No: swells from reactions plus the external `SetExcitement` only |
-| D7 | Win or loss colouring of Finish | None in v1; decide after listening |
-| D8 | Plain-raid sensors (phase C) | Start and kills behind `ReactionAuto` (default off); TakeCover off until heard; droppable |
+| D7 | Win or loss colouring of Finish | None in v1. The EndRound clips support that: none names a winner or a loser; 3 praise the fighters, 1 is positive in tone, 2 are lukewarm or disappointed. Whether a loss variant needs any clip dropped is a listening question; decide after listening |
+| D8 | Plain-raid sensors (phase C) | Start and kills behind `ReactionAuto` (default off); TakeCover off until heard, redefined as a shot or aim toward a stand with the explosion source dropped (2.4); droppable |
 | D9 | Animation reactions (Pleased/BigWin, Anger, Owned, Shock triggers, Hide/Parapet states) | Out of scope; a separate animation export later if audio without visuals bothers you |
 | D10 | Player-facing switch | None in ArenaMapPort (developer keys only); ArenaMode's F12 key |
 | D11 | Release number and form | Yours; the client DLL changes, so a re-cut and a VirusTotal scan follow |
 | D12 | Reactions while the local player is dead | Allow them (ArenaMode raids); the random calls stay silenced |
-| D13 | Content audit of the new shout clips | Listen once before shipping, or keep the existing "no transcript or content audit" wording in the release texts |
+| D13 | Content audit of the new shout clips | The subtitles are the text check the plan asked for, but they are automatic (speech recognition plus machine translation; 48 of 252 rows flagged uncertain), not a manual review. Result: two Hide clips contain a slur (left out), three Hide clips mock mental health and one makes a crude family joke (kept as listen), strong profanity is in nearly every bank as in the shipped Participating calls, at least five Scav references contain a slur (three of them in Hide) and many more abusive terms (all excluded). Recommendation: the user listens once to the 19 phase-A listen clips; release texts may say that two clips in which automatic subtitles showed a slur were left out and that the subtitles are not a manual review, never "reviewed" |
+| D14 | Lull (LowDeathIntensity) | The bank is content-confirmed as complaints about a dull match. Recommendation: build it after phase A, with the trigger on ArenaMode's side (no `OnKill` for 60 s while `Live`, Lull 0.4, at most one per 90 s); no contract change. Because the random Participating calls have the same tone, the user may prefer to add the 14 clips to the random pool instead (that changes the approved call set) or to skip Lull |
 
 ## 9. Risks and open questions
 
-- **Arena's triggers are not confirmed.** Bank meaning is inference from names and the id space. Hide, Owned and PurifiedTeam are the weakest. Player texts say "original fan clips played on match events chosen by the port", not "like Arena".
+- **Arena's triggers are not confirmed.** Bank meaning is inference from names and the id space. Since 2026-11-02 the automatic subtitles (2.4) back it for Cheer, Angry, ChangedRound, EndRound and LowDeathIntensity, narrow Hide to a shot or aim toward a stand, and leave Owned (no meaning of its own) and PurifiedTeam (no ArenaMode event) open. The subtitles are not a manual check and nobody has listened. Player texts say "original fan clips played on match events chosen by the port", not "like Arena".
 - **The death guard and the listener.** The reaction path bypasses the living-player guard by design. The respawn window, ArenaMode's spectator camera, the death replay and the Killcam mod are host test items.
 - **Claim lifetime.** The crowd is built once per raid. The claim is lost only through a failed first build or the unload between raids, which the handle generation covers.
 - **Shared sources.** The audio reset window (8-14 s after the crowd is built) and the shared Environment pool of 32 sources: a null `GetSource` drops a reaction, counted.

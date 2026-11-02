@@ -8,6 +8,17 @@ loop. The 0.4.0 file `arena_fans_ambient_postmatch.wav` is retired: it is delete
 GPU-2 Equator raid: `clip 79.5 s mono`, 120 fps, 0 warnings, hideout OK. Record: [spectator-audio.md](docs/progress/spectator-audio.md) "Neutral bed".
 **The user's shared config:** `Spectators/CrowdBedVolume` is the live loudness knob (up to 2.0) if the neutral bed should be louder than the old level.
 
+**Plan revised with the user's subtitles** (workflow `wf_c29bce65-646`, three readers, a reviser and a checker over 140 claims, 19 corrections folded in):
+[PLAN-CROWD-REACTIONS.md](docs/PLAN-CROWD-REACTIONS.md) section 2.4.
+- **Confirmed by content:** Cheer, Angry, ChangedRound, EndRound (unsided) and LowDeathIntensity.
+- **Owned** has no meaning of its own; it merges into Approve.
+- **Hide** is a shot or aim toward the stands; no clip is about an explosion.
+- **PurifiedTeam** is anticipation of a fight, not a team wipe.
+- **Phase A** is 89 clips (70 keep, 19 to hear); 2 Hide clips with a slur are left out.
+- **New decision D14:** Lull.
+
+## Action-bound spectator calls
+
 ## Action-bound spectator calls: analysis and plan - 2026-11-02 (design only, nothing implemented)
 
 The user asked where ArenaMode and ArenaMapPort need changes for crowd reactions to match events. A read-only workflow (`wf_3515f8ba-a57`: four
