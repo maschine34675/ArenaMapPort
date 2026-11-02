@@ -750,3 +750,17 @@ Level and cadence on Equator at the user's spot (teleport to (6.0, 0.1, 31.5); `
 is polled, so it took effect without a change handler: the census read `ownedBed=4/4` at 10:52:25 and `ownedBed=0/4` at 10:53:03); the mixed minute read
 `-37.3` (`loud=1`, one-shots at 7 m); bed OFF 10:53:08-10:54:08 `bgMedian=-43.9`. At volume 1.0 the bed adds about 1 dB to the median at that spot: subtle by
 design (the clip's own level), `CrowdBedVolume` up to 2.0 is live. Not measured: the level at a stand centre, the loop-start swells, `SetExcitement` in game.
+
+## 2026-11-02 - Corrections from the crowd-reaction analysis
+
+A read-only analysis of action-bound spectator calls (workflow `wf_3515f8ba-a57`, plan [../PLAN-CROWD-REACTIONS.md](../PLAN-CROWD-REACTIONS.md)) corrects
+two statements of this record; the earlier sections stay as written.
+
+- **Bank names (line 13).** `fan_speaker_voice.bundle` has no `StartRound` bank. Its ten banks are LowDeathIntensity 1116, Cheer 1119, Owned 1120,
+  Angry 1121, Neutral 1122, Participating 1123, Hide 1124, ChangedRound 1125, EndRound 1126 and PurifiedTeam 1127 (136 distinct mono clips, 254
+  slots). `StartRound` (1109) exists only in the announcer and effects bundles.
+- **Crowd ambience (the "Crowd murmur bed" section).** Arena's maps do carry in-match crowd beds: `ambient_voice.bundle` holds 7 stereo beds
+  (Cheer 1119: 3 x 7.0 s, about -22.5 dBFS RMS; Angry 1121: 3 x 8.0 s, -26 to -30 dBFS; Neutral 1122: 1 x 80.0 s, -31.1 dBFS) on `FansAmbient`
+  emitters in every sound scene (Equator 6 in level56, Bay5 6 in level188, Air Pit 12 in level39, Bowl 6 in level111, Iceberg 12 in level259),
+  inactive in the imported scenes. What the data supports is narrower: `arena_fans_ambient_postmatch` is the only crowd clip not bound to a
+  match-event trigger. The released 0.4.0 texts carry the broader sentence; the next release texts correct it (list in the plan, section 2.1).

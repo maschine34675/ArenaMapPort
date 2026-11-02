@@ -351,8 +351,8 @@ same script's `rows` step writes, which is rerun only after an Arena update) and
 PNGs and `monitors.json` under ignored `work/extract/monitors`). A missing input stops the build with an Error that names the extractor.
 Both folders are plaintext, like the selection artwork. `dist/` now holds 256 files (113 after those two additions, 90 before; the
 gate sounds add 13 and the monitors 10, the spectator files of 2026-10-27/28 the rest, the crowd murmur bed of 2026-10-30 one); `make_release_zips.py --plan` reads the parts
-core 154, equator 24, bay5 30, airpit 22, bowl 26 (281 files with Iceberg's part of 25 since its U1 bundles and its native sea water of 2026-10-31
-are staged; the dist of 2026-10-30 that was released as 0.4.0 holds the 256 files). See
+core 154, equator 24, bay5 30, airpit 22, bowl 26 (283 files with Iceberg's part of 27 since its U1 bundles, its native sea water and its DynamicMaps
+overview of 2026-10-31 are staged; the dist of 2026-10-30 that was released as 0.4.0 holds the 256 files). See
 [gate-sounds.md](docs/progress/gate-sounds.md), [score-monitors.md](docs/progress/score-monitors.md) and
 [dist-manifest.md](docs/dist-manifest.md).
 

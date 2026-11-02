@@ -1,5 +1,20 @@
 # HANDOFF — dated working state
 
+## Action-bound spectator calls: analysis and plan - 2026-11-02 (design only, nothing implemented)
+
+The user asked where ArenaMode and ArenaMapPort need changes for crowd reactions to match events. A read-only workflow (`wf_3515f8ba-a57`: four
+readers, a designer, two checkers over 150 claims) produced [docs/PLAN-CROWD-REACTIONS.md](docs/PLAN-CROWD-REACTIONS.md):
+- **Arena's data:** 10 fan banks (Cheer, Angry, Owned, Hide, ChangedRound, EndRound, LowDeathIntensity, PurifiedTeam, Neutral, Participating; 136 mono clips),
+  in-match stereo beds on inactive `FansAmbient` emitters, and no readable trigger logic (IL2CPP, encrypted metadata).
+- **Proposal:**
+  - A handle-based `SpectatorCrowd` extension in the ScoreMonitors shape: `ReactionKinds`, `ClaimReactions`, `React`, `ReleaseReactions`, append-only, `ContractVersion` stays 1.
+  - Phase A, about 91 clips: Approve, Disapprove, TakeCover, Start, Finish, plus a developer demo.
+  - An ArenaMode binder and a presentation service on `ArenaMatch.OnKill`, `OnCallout` and `OnAnnouncerCue` (`NoContest` silent).
+  - Optional plugin sensors for plain raids.
+- **Thirteen decisions** for the user.
+- **Corrections made on the way:** `spectator-audio.md` appended (no `StartRound` bank; Arena does have in-match crowd beds, so the "no crowd
+  ambience" sentence of the released 0.4.0 texts is too broad), and AGENTS.md's dist count is 283 (Iceberg part 27).
+
 ## Iceberg: emission floor, marker beside ArenaMode's panel, Arena 0.6.2 checked - 2026-11-01 (branch `feature/iceberg`, host-verified on GPU-2, nothing pushed)
 
 **Emission floor.** The user found that no single bloom setting suits Iceberg's lamps ("every light source seems to need its own slider"): the
