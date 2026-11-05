@@ -290,7 +290,9 @@ Two refinements of the verifier after the final review, both in `ArenaInstallati
 - **Self-updating files.** BattlEye replaces its own files in place when the game starts, and `Logging.config` is
   user-editable, so a strict size comparison could refuse a legitimate installation after a BattlEye update. Entries under
   `BattlEye\` and `Logging.config` now only have to exist (`IsSizeTolerant`); every other listed file still needs the
-  listed size. On the VM's install all of them match today.
+  listed size. On the VM's install all of them match today. (Since 2026-11-05 the tolerated files are three: these two
+  size tolerances and the launcher's uninstall stub `Uninstall.exe` at the root, which may be absent; see "Tolerated
+  Uninstall.exe" at the end of this file.)
 - **Deep installation folders.** The longest manifest path is 208 characters; with an installation folder longer than
   about 50 characters a full path reaches Windows' classic 260-character limit, where EFT's Mono runtime throws in
   `Path.GetFullPath` and cannot stat the file. Such entries are skipped and counted (`LongPathsSkipped`, shown in the
@@ -401,3 +403,47 @@ console showed SPT's green and yellow lines and the ArenaMapPort line in red (sc
 The client log of the next EFT start: `[Arena] Escape from Tarkov: Arena not found: No Escape from Tarkov: Arena installation is registered
 in the Windows registry (...EscapeFromTarkovArena_live).`, then the unchanged hint line, the registry diagnostic line and `Maps: none
 available`; the main-menu notice showed as before.
+
+## Tolerated Uninstall.exe (2026-11-05)
+
+**Player report (2026-11-05, 0.4.0).** After two reinstalls of Arena the server logged `[ArenaMapPort] Escape from Tarkov: Arena not
+found: 1 of 15,351 files listed in ConsistencyInfo are missing or have a different size (first: Uninstall.exe: missing); the installation
+is incomplete, still updating or damaged. ...`, and the in-game notice (`ARENA_INCOMPLETE`) said the same. Every other listed file was
+present with its listed size; the one that was not is the launcher's uninstall stub.
+
+**Launcher facts (checked on this VM, Arena 0.6.2.0.48473; the decompiled launcher read-only in a scratch folder).** `Uninstall.exe` is
+a root-level manifest entry of 1,144,896 bytes (the same size on 0.6.0, 0.6.1 and 0.6.2), flagged `IsCritical: true` like the other root
+executables (`EscapeFromTarkovArena.exe`, `EscapeFromTarkovArena_BE.exe`, `UnityCrashHandler64.exe`, `baselib.dll`, `UnityPlayer.dll`,
+`GameAssembly.dll`); nine entries sit at the root in all. It is the BSG launcher's uninstall stub, not game data, and the maps never read
+it (stage 2 keys come from `sharedassets*.resS`/`.resource` streams, the gate reads no file content at all). The launcher's own consistency
+check treats a missing listed file as broken and re-downloads exactly the broken files on Repair, and when that file is absent the launcher
+deletes the game's Uninstall registry section (`GameUpdateService.UpdateInstallationInfo`), so a player whose antivirus quarantined the stub
+after the launcher ran sees it missing again after every reinstall, and may lose the registry entry too. A store-managed installation
+(Epic, Steam) without a stub is unverified. The likely cause on the player's PC is an antivirus quarantining the stub after the launcher ran.
+
+**Decision (lead, 2026-11-05).** Tolerate a missing `Uninstall.exe` as a fixed exception of the same class as the BattlEye and
+`Logging.config` tolerances: not a switch, not a user-extendable list. The gate still verifies every other listed file.
+
+**Rule (`ArenaInstallation.cs`).** Next to `IsSizeTolerant` there is `IsOptional(logical)`: true only for the exact logical name
+`Uninstall.exe` (`UninstallStubName`), case-insensitive, at the root of the Arena folder (a file of that name in a subfolder,
+`BattlEye\uninstall.exe` or `EscapeFromTarkovArena_Data\Uninstall.exe`, is an ordinary entry whose absence is a mismatch). An optional
+file need not exist and its size is not compared when it does. The check loop still counts it among `EntriesChecked` (it is compared with
+the disk), adds its listed size to `TotalBytes` only when it is present, and counts a tolerated absence in the new
+`ArenaInstallationResult.OptionalMissing` (like `LongPathsSkipped`; 0 or 1 in practice, never a mismatch). `Describe()` appends
+`, Uninstall.exe missing (tolerated)` to the verified line so a support log shows it:
+`Escape from Tarkov: Arena 0.6.2.0.48473 at C:\Battlestate Games\Escape from Tarkov Arena (registry; 15,351 files, 76.1 GB verified,
+Uninstall.exe missing (tolerated))`; with a deep folder the long-path suffix comes first (`..., 2 long paths skipped, Uninstall.exe missing
+(tolerated)`). A failed check describes only its reason, as before. Nothing else changed: the floors, the mismatch wording (`N of M files
+listed in ConsistencyInfo are missing or have a different size (first: ...)`), the causes (`FilesMismatch` and the others), the status
+route (schema 1 carries no new field) and the notice texts are as they were. The three tolerated files are now `BattlEye\*` and
+`Logging.config` (must exist, size not compared) and the root `Uninstall.exe` (may be absent, size not compared).
+
+**Tests (`ArenaInstallationTests`).** A manifest with `Uninstall.exe` listed and the file deleted verifies with `OptionalMissing` 1,
+`MismatchCount` 0 and the suffix in `Describe()`, for the spellings `Uninstall.exe`, `uninstall.exe` and `UNINSTALL.EXE`; a present stub of
+a wrong size verifies without the suffix; a missing `Uninstall.exe` under `EscapeFromTarkovArena_Data\` or `BattlEye\` is a mismatch; a
+missing `EscapeFromTarkovArena_BE.exe` still fails with the unchanged wording and the tolerated absence is neither counted nor listed
+there; `IsOptional` covers only the root name (theory), is not a size tolerance and `IsSizeTolerant` does not cover the stub;
+`Describe_OneLineForBothOutcomes` pins the suffix alone, after the long-path suffix, and its absence on a failed result. The real-data
+test on this VM additionally pins that the stub is present (`OptionalMissing` 0, no "tolerated" in the line) and that the real manifest
+lists exactly one entry the rule covers. No host run: the rule is Unity-free, and the Arena folders on the hosts are not modified.
+Build and test results are in the commit message of this change.

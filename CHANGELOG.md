@@ -6,6 +6,15 @@ their notes stay under [docs/releases/](docs/releases/) for the record, and 0.2.
 Dates are ISO dates. Each entry links its full release note (download links, checksums, install and upgrade steps),
 and the settings text is in the [README](README.md).
 
+## Unreleased
+
+- The Arena installation check tolerates a missing launcher uninstall stub (`Uninstall.exe` at the root of the Arena
+  folder; also any size when it is present). A player's antivirus had quarantined it after every reinstall, and the check
+  refused the whole installation with `ARENA_INCOMPLETE` (`1 of 15,351 files ... Uninstall.exe: missing`) although the
+  maps never read that file. Every other listed file is still required with its listed size; a tolerated absence is named
+  in the `[Arena]` log line (`..., Uninstall.exe missing (tolerated)`). It is a fixed exception like the existing BattlEye
+  and `Logging.config` size tolerances, not a setting.
+
 ## 0.4.0 - 2026-10-30
 
 Full release note: [docs/releases/v0.4.0.md](docs/releases/v0.4.0.md).
