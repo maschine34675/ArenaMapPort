@@ -768,9 +768,12 @@ class BuildTests(FakeRepoCase):
         readme = re.sub(r"\s+", " ", self.core_readme())
         self.assertIn("no impact sounds for the Books and CardBoard prop types", readme)
         self.assertIn("39 Equator props", readme)
-        self.assertIn("a cause of the intermittent Equator static of 0.3.0 was found and fixed in this release (a bundle block flagged as compressed but stored uncompressed; measured on the test host and confirmed by the author in play)", readme)
+        self.assertIn("the intermittent Equator static of 0.3.0 was fixed in 0.4.0 (a bundle block flagged as compressed but stored uncompressed; measured on the test host and confirmed by the author in play)", readme)
         self.assertIn("A faint steady hiss and short clicks seen in one recording are not explained by it", readme)
-        self.assertIn("The crowd murmur and the 4-to-8-second pauses between spectator calls are new; the author listened to them in play and approved them", readme)
+        self.assertIn("sound only when a mode plugin such as ArenaMode asks for them through the SpectatorCrowd contract; ArenaMode has not adopted it yet, so a plain raid never plays them", readme)
+        self.assertIn("The author listened to the developer demo cycle (reaction voices with the roar beds) on 7 November 2026 and said it sounds good; that is not a clip-by-clip review of the 70 clips, and nothing was heard in a real match", readme)
+        self.assertNotIn("fixed in this release", readme)
+        self.assertNotIn("are new", readme)
         self.assertNotIn("nobody has listened", readme)
         self.assertNotIn("static of 0.3.0 is fixed", readme)
         self.assertNotIn("no noise fix is claimed", readme)
@@ -1515,7 +1518,7 @@ class SingleLayoutTests(FakeRepoCase):
         # the intro describes the WHOLE release (the shared files a multi-part set keeps in its core part, and every map), and the
         # update sentence names the one ZIP (user decision 2026-10-30: 0.4.0 ships as one whole ZIP, like 0.3.0)
         flat = re.sub(r"\s+", " ", readme)
-        self.assertIn("It holds the plugin, the server mod, the shared files (spectator textures, calls and crowd murmur, "
+        self.assertIn("It holds the plugin, the server mod, the shared files (spectator textures, calls, crowd murmur, crowd reactions and roar beds, "
                       "original map descriptions, selection artwork, score monitor sprites) and the data of every included map", flat)
         self.assertIn("Updating: extract the complete ZIP with the SPT server closed", flat)
 

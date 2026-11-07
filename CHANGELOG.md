@@ -6,6 +6,65 @@ their notes stay under [docs/releases/](docs/releases/) for the record, and 0.2.
 Dates are ISO dates. Each entry links its full release note (download links, checksums, install and upgrade steps),
 and the settings text is in the [README](README.md).
 
+## 0.5.0 - 2026-11-07
+
+Full release note: [docs/releases/v0.5.0.md](docs/releases/v0.5.0.md).
+
+### Added
+
+- **Iceberg, the fifth map** (Arena's `Arena_Sanatorium`, "Arena: Iceberg"): a multi-storey resort hotel with a rotunda on a rocky
+  canyon, with Arena's CheckPoint layout (two team pockets behind sliding gates at the east and west ends, capture points A, B
+  and C between them), Arena's own scenes and colliders, a newly baked NavMesh for bots, room acoustics and ambient sounds, two
+  exits, native sea water as on Bay5, a DynamicMaps ground-level overview, Arena's gate and door sounds and the ScoreMonitors
+  rows (4 of 6 holders with a face). Its very bright lamps are held to a ceiling of 4.8 and its dim ones lifted to a floor of
+  1.9 once per raid (values chosen by the author by eye; originals restored at raid end) instead of lowering the bloom for
+  the whole map. Iceberg has **no spectator crowd** (so no calls, murmur, roar layer or reactions) and **no per-light flares**;
+  grass, tree wind and snow are not ported; no loot and no scav raids. Its ambient sound mix and gate-sound level are
+  start values that nobody has listened to yet. Bundles are encrypted like the others (keys built for Arena 0.6.1.0.48206,
+  verified on 0.6.2.0.48473; the 0.6.0 check exists only for the four older maps).
+- **Crowd reactions for mode plugins.** The public class `ArenaMapPort.Client.SpectatorCrowd` has eight members now
+  (`ContractVersion` still 1, the four older members unchanged): a plugin can claim the reactions and ask the spectators to
+  answer Approve, Disapprove, TakeCover, Start or Finish with a strength, using 70 of Arena's own fan reaction clips (one to
+  three voices, spatial, the random calls pause for a moment). Nothing reacts in a plain raid and ArenaMode does not use the
+  contract yet; the developer setting `Spectators/ReactionDemo` (needs `General/DeveloperMode`) runs a test cycle. No player setting.
+- **Roar layer.** A reaction also plays one of Arena's three Cheer crowd beds (Approve, Start, Finish) or three Angry beds
+  (Disapprove) from the stands, with a 0.3-second attack, a 1.5-to-5-second hold and a 2-second release. Four maps (those with a
+  crowd), only when a reaction is asked for.
+
+### Changed
+
+- **The crowd murmur is Arena's neutral in-match bed** (79.5 seconds, mono, smoothed loop seam, at the level of the 0.4.0 murmur)
+  instead of the post-match recording; the author chose it after listening to both. A reaction does not lift it (the
+  roar layer plays Arena's Cheer and Angry beds instead; the lift of an earlier unreleased build was removed). Playing it from the stands is the port's choice: Arena carries it on emitters that are inactive in
+  the imported scenes. The old `arena_fans_ambient_postmatch.wav` is ignored if it is still in the folder after an update and may be deleted.
+- The ZIP grows to about 5.0 GiB (359 files; 0.4.0: about 3.6 GiB, 256 files).
+
+### Known limitations
+
+- Iceberg: no raid as a player from the west pocket, no bot raid beyond a few minutes, no extraction and no gate hold and release with moving
+  doors have been run; its ambient sounds, lamp loops and gate sounds were not listened to; the look was judged by the author by eye only.
+  The cafe olive tree and the canyon rocks were not looked at in game.
+- The crowd reactions ran on the test host with the developer demo (2 November) and the author listened to the demo cycle with the roar layer on
+  7 November ("sounds good"); that is not a review of each clip. The roar layer ran on Equator and Bowl only; the cut of one roar by the other
+  kind and the retrigger are covered by unit tests only. ArenaMode has not adopted the contract.
+- Gate and door sounds were checked in the log only on every map and have not been listened to. Bay5's gate sounds were never in
+  range during a test; the exit lamps were checked by reading their state, not by eye.
+- Equator's puddle cache and the rain-driven puddles have not been checked in game, and the splash sound has not been listened to
+  on any map.
+- EFT's own sound bundle has no impact sounds for the Books and CardBoard prop types (on Equator 39 props stay silent when they
+  hit something).
+- Spectator crowds exist on four maps (not Iceberg); lamp flares on Equator, Bay5 and Bowl. No loot and no scav raids. Fika
+  compatibility has not been verified.
+
+### Compatibility
+
+- SPT 4.1.6 / EFT 0.16.9.5-40743; server range remains `~4.1.5`.
+- One ZIP on Pixeldrain, as for 0.3.0 and 0.4.0 (too large for a GitHub release asset; the GitHub release carries the notes, the
+  links and the checksum file). Close EFT and the SPT server and extract the whole ZIP over the installation; keep
+  `BepInEx/config`. There is no DLL-only package. From 0.4.0 the ZIP replaces both DLLs and adds Iceberg's files and the reaction,
+  roar-bed and neutral-murmur audio. No configuration changes and no new player settings.
+- Requires an installed Escape from Tarkov: Arena. Both client and server must be updated together.
+
 ## 0.4.0 - 2026-10-30
 
 Full release note: [docs/releases/v0.4.0.md](docs/releases/v0.4.0.md).

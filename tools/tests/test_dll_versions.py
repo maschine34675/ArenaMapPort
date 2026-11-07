@@ -29,7 +29,7 @@ class DllVersions(unittest.TestCase):
             self.assertEqual(self.check(root).returncode, 0)
             for name in FILES[:4]:
                 file = root/name
-                text = file.read_text(encoding='utf-8').replace('0.4.0', '99.99.99')
+                text = file.read_text(encoding='utf-8').replace('0.5.0', '99.99.99')
                 file.write_text(text, encoding='utf-8')
             result = self.check(root)
             self.assertNotEqual(result.returncode, 0)

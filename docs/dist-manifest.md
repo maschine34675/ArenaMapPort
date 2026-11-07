@@ -1,4 +1,6 @@
-# Current distribution contract: Equator, Bay5, AirPit and Bowl (0.4.0, encrypted bundles, published 2026-10-30)
+# Current distribution contract: Equator, Bay5, AirPit, Bowl and Iceberg (0.5.0, encrypted bundles; the 0.4.0 four-map contract below is kept as history)
+
+The current contract is the five-map one of release 0.5.0 (2026-11-07, see the last section, "Release 0.5.0 contract"). Every table and count between here and that section describes an earlier stage; the 256-file layout of 0.4.0 (published 2026-10-30) is history.
 
 2026-10-31 (Iceberg overview): the current unpublished five-map staging adds
 `dynamicmaps/ArenaMapPort_Iceberg/ArenaMapPort_Iceberg.jsonc` and `Layers/Ground.svg`
@@ -533,3 +535,24 @@ Reaction roar layer"; user decision of that day). Plaintext like the calls, the 
 - **Stale files.** The extractor removes stale roar WAVs of an earlier export by the exact name pattern only; a player who extracts a later release over an older install keeps stale WAVs, and the
   client reads only the files the manifest names.
 - **Release.** Not part of any release: the number, form and wording are the user's decision, the client DLL changed (a re-cut and a scan follow), and the host has none of it until a full deploy.
+
+
+## Release 0.5.0 contract - 2026-11-07 (five maps, one whole ZIP)
+
+The user decided on 2026-11-07: the next release is 0.5.0, Iceberg is in, the content keys are backed up. This section is the current contract; the sections above stay as the record of how it was reached.
+The form is that of 0.4.0: ONE whole ZIP on Pixeldrain plus its one-line `.sha256`, a GitHub release with the notes and the checksum file as its only asset, tag `v0.5.0` on the publication commit. The cut is
+`python tools/release/make_release_zips.py --single --out work/releases/0.5.0/pixeldrain-<commit> --extract-check <empty scratch dir>` from a clean tree; the version comes from the two csproj files.
+The ZIP size, its SHA-256, the build commit, the download links and the VirusTotal lines are not known here; they come from the cut and are entered in the release notes then.
+
+- **Files.** `make_release_zips.py --plan` on the staged dist of 2026-11-07: **359 files, 0 unclassified**, raw 5,396,842,180 B (5,146.8 MiB), estimated ZIP 5,370,634,758 B (5,121.8 MiB, about 5.0 GiB; 0.4.0 was
+  about 3.6 GiB with 256 files). The multi-part plan (the packer's default mode, not the release form) reads core 230, equator 24, bay5 30, airpit 22, bowl 26, iceberg 27; the single ZIP has no parts and
+  records everything in `BepInEx/plugins/maschine-ArenaMapPort/parts/full.json` (index 1 of 1, id `full`).
+- **Maps.** Five: Equator, Bay5, Air Pit, Bowl and Iceberg (`ArenaMapRegistry.All`). Iceberg's 27 files: three AMPB bundles and `keys/arena_iceberg.json`, acoustics (3), gate sounds (4), AI sidecar, five loading
+  screens, shader sidecar, `db/arena_iceberg/base.json`, banner, native sea water (5) and the DynamicMaps overview (2). It has no spectator package (`CROWDLESS_MAP_KEYS`) and no flare package.
+- **Spectator audio.** `spectator-audio/` holds **91 files** (core part): 13 calls, the murmur `arena_fans_ambient_neutral.wav`, 70 reaction clips, 6 roar beds and `spectator-audio.json`. The 0.4.0 bed
+  `arena_fans_ambient_postmatch.wav` is retired; a player who extracts this release over 0.4.0 keeps it beside the new files, and the client reads only the files the manifest names.
+- **Keys.** Five key files, `keys/<map_key>.json`, built for Arena 0.6.1.0.48206 (`KEYS_BUILT_FOR`). `verify-keys` against Arena 0.6.2.0.48473 passes for all five maps (2026-11-07); the 0.6.0.0.47752 check
+  exists for the four maps of 0.4.0 only, none for Iceberg. The content keys themselves never leave `work/release-keys`.
+- **Generated README.txt.** Single-ZIP wording; the shared-files list names the reaction clips and roar beds; the audio-limits paragraph no longer calls the Equator static fix or the murmur new (both shipped in
+  0.4.0) and says that reactions and the roar layer sound only when a mode plugin asks (ArenaMode has not adopted the contract); the encryption paragraph states the 0.6.2 and 0.6.0 checks as above.
+- **Not part of this contract.** No new public F12 setting (the reaction and roar keys are developer-only); SPT 4.1.6 / EFT 0.16.9.5 unchanged; the Arena installation check and the map notices unchanged.

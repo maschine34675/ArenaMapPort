@@ -20,7 +20,7 @@
     <Description>Loads and repairs the Equator, Bay5, Air Pit, Bowl and Iceberg Arena maps in SPT.</Description>
     <Company>https://github.com/maschine34675/ArenaMapPort</Company>
     <Authors>maschine</Authors>
-    <Version>0.4.0</Version>
+    <Version>0.5.0</Version>
     <LangVersion>latest</LangVersion>
     <Nullable>disable</Nullable>
     <!-- ArenaMapPort.Crypto: the AES-CTR XOR loop and counter fill use ulong pointers (docs/PLAN-ENCRYPTION.md D14) -->
