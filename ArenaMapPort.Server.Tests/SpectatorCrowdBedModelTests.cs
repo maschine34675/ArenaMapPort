@@ -381,169 +381,50 @@ public sealed class SpectatorCrowdBedModelTests
         Assert.Equal((0f, 0f), (e.Target, e.Current));
     }
 
-    // ---- the swell of a reaction ---------------------------------------------------------------------------------------------------------
+    // ---- the factor follows the smoothed level only (no reaction swell since 2026-11-07) -------------------------------------------------
 
     [Fact]
-    public void ASwellRisesLinearlyToItsAmplitudeInThreeTenthsOfASecond()
+    public void TheFactorFollowsTheSmoothedExternalLevelAloneAndNeverExceedsTheFullFactor()
     {
         var e = new CrowdExcitement();
-        Assert.Equal(0f, e.Swell);
-        Assert.False(e.Step(0.1f));                           // nothing moves without a swell
-        e.AddSwell(0.8f);
-        Assert.Equal(0f, e.Swell);                            // adding does not move the level
-        Assert.True(e.Step(0.15f));
-        Assert.Equal(0.4f, e.Swell, 5);                       // half way after half the attack
-        Assert.True(e.Step(0.1f));
-        Assert.Equal(0.4f + 0.4f * (0.1f / 0.15f), e.Swell, 4);
-        Assert.True(e.Step(0.05f));
-        Assert.Equal(0.8f, e.Swell, 5);                       // the peak, exactly
-        Assert.Equal(0.8f, e.Level, 5);
-        Assert.Equal(1f + 0.6f * 0.8f, e.Factor, 5);
-        Assert.Equal(0f, e.Current);                          // the external level did not move
-    }
-
-    [Fact]
-    public void TheAttackDoesNotDependOnTheFrameRate()
-    {
-        float Peak(int steps, float dt) { var e = new CrowdExcitement(); e.AddSwell(0.6f); for (int i = 0; i < steps; i++) e.Step(dt); return e.Swell; }
-        Assert.Equal(0.6f, Peak(30, 0.01f), 4);
-        Assert.Equal(0.6f, Peak(3, 0.1f), 4);
-        Assert.Equal(0.6f, Peak(1, 0.3f), 5);
-        Assert.Equal(Peak(660, 0.01f), Peak(66, 0.1f), 3);            // 6.6 s: attack and decay in the same frames
-        Assert.Equal(Peak(660, 0.01f), Peak(1, 6.6f), 3);             // ... or in one step that spans both
-    }
-
-    [Fact]
-    public void AfterThePeakTheSwellDecaysExponentiallyWithAThreeSecondTimeConstantAndEndsAtZero()
-    {
-        var e = new CrowdExcitement();
-        e.AddSwell(0.8f);
-        e.Step(0.3f);
-        Assert.Equal(0.8f, e.Swell, 5);
-        e.Step(3f);
-        Assert.Equal(0.8f * Math.Exp(-1), e.Swell, 4);        // 36.8 % of the peak after one time constant
-        e.Step(3f);
-        Assert.Equal(0.8f * Math.Exp(-2), e.Swell, 4);
-        Assert.True(e.Step(1f));
-        int frames = 0;
-        while (e.Step(0.1f) && frames++ < 10000) { }
-        Assert.Equal(0f, e.Swell);                            // it ends, it does not creep for ever
         Assert.Equal(1f, e.Factor);
-        Assert.False(e.Step(0.1f));
-        Assert.InRange(frames, 100, 600);
-    }
-
-    [Fact]
-    public void AStepThatSpansTheAttackAndTheDecayAddsUpExactly()
-    {
-        var e = new CrowdExcitement();
-        e.AddSwell(0.8f);
-        e.Step(3.3f);
-        Assert.Equal(0.8f * Math.Exp(-1), e.Swell, 4);        // 0.3 s up, 3 s down
-    }
-
-    [Fact]
-    public void ASmallerSwellThanTheOneThatIsThereIsIgnoredAndALargerOneTakesOver()
-    {
-        var e = new CrowdExcitement();
-        e.AddSwell(0.9f);
-        e.Step(0.1f);                                         // rising: level 0.3, peak 0.9
-        e.AddSwell(0.5f);                                     // below the peak that is under way: it must not cut the swell short
-        e.Step(0.2f);
-        Assert.Equal(0.9f, e.Swell, 5);
-        e.Step(3f);                                           // decaying: level 0.331
-        float level = e.Swell;
-        e.AddSwell(0.2f);                                     // below the level
-        e.AddSwell(level);                                    // equal to the level
-        e.Step(0.3f);
-        Assert.True(e.Swell < level);                         // it kept decaying, nothing re-attacked
-        float decayed = e.Swell;
-        e.AddSwell(0.6f);                                     // above the level: a new attack from where the swell is
-        e.Step(0.15f);
-        Assert.Equal(decayed + (0.6f - decayed) / 2, e.Swell, 4);
-        e.Step(0.15f);
-        Assert.Equal(0.6f, e.Swell, 5);
-        e.AddSwell(0.6f);                                     // the same amplitude again at the peak: ignored
-        e.Step(3f);
-        Assert.Equal(0.6f * Math.Exp(-1), e.Swell, 4);
-    }
-
-    [Fact]
-    public void ASwellAmplitudeIsHeldToZeroToOneAndNaNCountsAsZero()
-    {
-        var e = new CrowdExcitement();
-        e.AddSwell(float.NaN); e.Step(1f);
-        Assert.Equal(0f, e.Swell);
-        e.AddSwell(-3f); e.AddSwell(float.NegativeInfinity); e.Step(1f);
-        Assert.Equal(0f, e.Swell);
-        e.AddSwell(7f); e.Step(0.3f);
-        Assert.Equal(1f, e.Swell);
-        e.Reset();
-        e.AddSwell(float.PositiveInfinity); e.Step(0.3f);
-        Assert.Equal(1f, e.Swell);
-    }
-
-    [Fact]
-    public void TheBedFollowsTheLargerOfTheExternalLevelAndTheSwellAndNeverExceedsTheFullFactor()
-    {
-        var e = new CrowdExcitement();
-        e.SetTarget(0.2f); e.Snap();
-        e.AddSwell(0.7f); e.Step(0.3f);
-        Assert.Equal(0.2f, e.Current);
-        Assert.Equal(0.7f, e.Level, 5);                       // the swell is above the external level
-        Assert.Equal(1f + 0.6f * 0.7f, e.Factor, 5);
-        e.SetTarget(1f); e.Snap();
-        Assert.Equal(1f, e.Level);                            // the external level is above the swell
-        Assert.Equal(1.6f, e.Factor, 5);
-        e.AddSwell(1f); e.Step(0.3f);
-        Assert.Equal(1f, e.Level);                            // both at the top: still one, not two
-        Assert.Equal(1.6f, e.Factor, 5);
+        e.SetTarget(0.5f);
+        Assert.Equal(1f, e.Factor);                           // the target alone moves nothing
+        e.Snap();
+        Assert.Equal(1f + 0.6f * 0.5f, e.Factor, 5);
+        e.SetTarget(1f);
         for (int i = 0; i < 2000; i++)
         {
-            e.AddSwell((i % 11) / 10f);
             e.SetTarget((i % 7) / 6f);
             e.Step(0.02f * (1 + i % 5));
-            Assert.InRange(e.Level, 0f, 1f);
+            Assert.InRange(e.Current, 0f, 1f);
             Assert.InRange(e.Factor, 1f, CrowdExcitement.MaxFactor);
             Assert.InRange(SpectatorCrowdBedModel.SourceVolume(SpectatorCrowdBedModel.MaxVolume, e.Factor), 0f, 1f);
         }
-        var f = new CrowdExcitement();
-        f.SetTarget(1f); f.AddSwell(0.5f);
-        for (int i = 0; i < 2000; i++) f.Step(0.02f);
-        Assert.Equal(1f, f.Level);                            // a settled external level of 1 is the ceiling the swell never pushes past
-    }
-
-    [Fact]
-    public void TheExternalLevelStillMovesBecauseOfTheSwellStepAndBothReportMovement()
-    {
-        var e = new CrowdExcitement();
-        e.SetTarget(1f);
-        Assert.True(e.Step(0.5f));                            // the external level moves
-        e.AddSwell(0.3f);
-        Assert.True(e.Step(0.01f));
         e.Reset();
-        Assert.Equal((0f, 0f, 0f, 1f), (e.Target, e.Current, e.Swell, e.Factor));
-        e.AddSwell(1f);
-        e.Step(0.2f);
-        e.Reset();                                            // the crowd is removed: no swell survives into the next raid
-        Assert.Equal(0f, e.Swell);
-        Assert.False(e.Step(1f));
-        e.Step(5f);
-        Assert.Equal(0f, e.Swell);
-        e.SetTarget(0.5f); e.Snap(); e.Reset();
-        Assert.Equal(0f, e.Level);
+        Assert.Equal((0f, 0f, 1f), (e.Target, e.Current, e.Factor));
     }
 
     [Fact]
-    public void TheSwellAddsNothingToTheGcHeap()
+    public void ThePhaseASwellIsGoneFromTheModelAndTheState()
+    {
+        // user decision 2026-11-07: a reaction no longer lifts the neutral murmur; the roar beds answer it (SpectatorReactionBedModel)
+        const System.Reflection.BindingFlags all = System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.Static |
+            System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.NonPublic;
+        foreach (var type in new[] { typeof(CrowdExcitement), typeof(CrowdBedState) })
+            Assert.DoesNotContain(type.GetMembers(all), m => m.Name.Contains("Swell", StringComparison.OrdinalIgnoreCase) || m.Name == "Level");
+    }
+
+    [Fact]
+    public void TheExcitementAddsNothingToTheGcHeap()
     {
         var e = new CrowdExcitement();
         Drive(e, 2000);                                       // warm: the JIT and the first calls may allocate once
         long before = GC.GetAllocatedBytesForCurrentThread();
         Drive(e, 50000);
         // The measured loop lives in its own fully optimised helper (the pattern of NoiseProbeModelTests.AddProps): a hot loop in a tier-0 test method can be replaced on the stack (OSR)
-        // mid-measurement, and that JIT work is charged to this thread's counter, which is not the swell allocating.
-        Assert.InRange(GC.GetAllocatedBytesForCurrentThread() - before, 0L, 512L);     // one allocation per call would be hundreds of kilobytes
+        // mid-measurement, and that JIT work is charged to this thread's counter, which is not the model allocating.
+        Assert.InRange(GC.GetAllocatedBytesForCurrentThread() - before, 0L, 512L);
     }
 
     [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveOptimization)]
@@ -551,7 +432,6 @@ public sealed class SpectatorCrowdBedModelTests
     {
         for (int i = 0; i < frames; i++)
         {
-            e.AddSwell((i % 10) / 10f);
             e.SetTarget((i % 3) / 2f);
             e.Step(0.016f);
             _ = e.Factor;
@@ -559,104 +439,18 @@ public sealed class SpectatorCrowdBedModelTests
     }
 
     [Fact]
-    public void TheStateKeepsTheLargestSwellRequestUntilItIsTakenAndTakingClearsIt()
+    public void TheStateKeepsTheSustainedLevelAndAResetClearsIt()
     {
         var state = new CrowdBedState();
-        Assert.Equal(0f, state.TakeSwell());
-        state.RequestSwell(0.3f);
-        state.RequestSwell(0.7f);
-        state.RequestSwell(0.5f);
-        Assert.Equal(0.7f, state.TakeSwell());                // the maximum
-        Assert.Equal(0f, state.TakeSwell());                  // and it is gone
-        state.RequestSwell(0.2f);
-        Assert.Equal(0.2f, state.TakeSwell());
-    }
-
-    [Fact]
-    public void ASwellRequestIsHeldToZeroToOneAndAResetClearsIt()
-    {
-        var state = new CrowdBedState();
-        state.RequestSwell(float.NaN); state.RequestSwell(-1f); state.RequestSwell(0f); state.RequestSwell(float.NegativeInfinity);
-        Assert.Equal(0f, state.TakeSwell());
-        state.RequestSwell(9f);
-        Assert.Equal(1f, state.TakeSwell());
-        state.RequestSwell(float.PositiveInfinity);
-        Assert.Equal(1f, state.TakeSwell());
-        state.RequestSwell(0.6f);
-        state.Reset();                                        // the crowd is removed with the raid
-        Assert.Equal(0f, state.TakeSwell());
-        Assert.Equal(0f, state.Excitement);
-        state.SetExcitement(0.4f); state.RequestSwell(0.4f);
-        Assert.Equal(0.4f, state.Excitement);                 // the sustained level and the swell are separate
-        Assert.Equal(0.4f, state.TakeSwell());
+        state.SetExcitement(0.4f);
         Assert.Equal(0.4f, state.Excitement);
-    }
-
-    [Fact]
-    public async Task WritersThatRaceInStepLoseNoRequestAndTheTickTakesTheMaximumOfEveryRound()
-    {
-        // Every round starts from an empty state (the previous round was taken) and all writers are released together, so they really race on one slot; the largest request of the
-        // round rotates between the threads and nobody writes it last on purpose. A racy "if (a > slot) slot = a" or a compare-exchange without its retry loses the maximum in some rounds.
-        const int threads = 4, rounds = 3000;
-        float Request(int t, int r) => 0.1f + 0.2f * ((t + r) % threads) + 0.001f * t;
-        float Largest(int r) { float m = 0f; for (int t = 0; t < threads; t++) m = Math.Max(m, Request(t, r)); return m; }
-        var state = new CrowdBedState();
-        using var barrier = new Barrier(threads);
-        void Sync() { if (!barrier.SignalAndWait(TimeSpan.FromSeconds(30))) throw new TimeoutException("a writer did not arrive: another one failed"); }
-        int failures = 0, firstFailure = -1;
-        var writers = Enumerable.Range(0, threads).Select(t => Task.Factory.StartNew(() =>
-        {
-            for (int r = 0; r < rounds; r++)
-            {
-                Sync();                                       // the state is empty and everybody is ready
-                state.RequestSwell(Request(t, r));
-                Sync();                                       // everybody has written
-                if (t == 0)
-                {
-                    float taken = state.TakeSwell();
-                    if (taken != Largest(r) && Interlocked.Increment(ref failures) == 1) firstFailure = r;
-                }
-                Sync();                                       // the round was taken
-            }
-        }, TaskCreationOptions.LongRunning)).ToArray();
-        await Task.WhenAll(writers);
-        Assert.True(failures == 0, $"{failures} of {rounds} rounds lost the largest request (the first was round {firstFailure})");
-        Assert.Equal(0f, state.TakeSwell());
-    }
-
-    [Fact]
-    public async Task ATickThatTakesWhileWritersRunOnlyEverSeesValuesThatWereAskedFor()
-    {
-        // The taker competes with the writers for the slot (the exchange against the compare-exchange loop): every value it takes is one that was asked for, and the largest value of the
-        // run reaches it at the latest with the final take. That the writers lose none of their updates is the job of the round test above, which this one cannot do: it repeats the
-        // maximum thousands of times.
-        const int threads = 4, perThread = 40000;
-        var state = new CrowdBedState();
-        var asked = new HashSet<float>();
-        for (int t = 0; t < threads; t++)
-            for (int i = 0; i < perThread; i++) asked.Add(((i + t) % 100) / 100f);
-        float largest = 0f;
-        bool stop = false, foreign = false;
-        var taker = Task.Run(() =>
-        {
-            while (!Volatile.Read(ref stop))
-            {
-                float taken = state.TakeSwell();
-                if (taken != 0f && !asked.Contains(taken)) foreign = true;
-                largest = Math.Max(largest, taken);
-            }
-        });
-        var writers = Enumerable.Range(0, threads).Select(t => Task.Run(() =>
-        {
-            for (int i = 0; i < perThread; i++) state.RequestSwell(((i + t) % 100) / 100f);
-        })).ToArray();
-        await Task.WhenAll(writers);
-        Volatile.Write(ref stop, true);
-        await taker;
-        largest = Math.Max(largest, state.TakeSwell());
-        Assert.False(foreign);
-        Assert.Equal(0.99f, largest);                         // 99 / 100f, written by every thread many times
-        Assert.Equal(0f, state.TakeSwell());
+        state.SetExcitement(float.NaN);
+        Assert.Equal(0f, state.Excitement);
+        state.SetExcitement(7f);
+        Assert.Equal(1f, state.Excitement);
+        state.Available = true;
+        state.Reset();                                        // the crowd is removed with the raid
+        Assert.Equal((0f, false), (state.Excitement, state.Available));
     }
 
     // ---- the manifest's bed --------------------------------------------------------------------------------------------------------------

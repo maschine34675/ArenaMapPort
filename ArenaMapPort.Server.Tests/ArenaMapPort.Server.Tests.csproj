@@ -46,6 +46,9 @@
     <!-- The crowd's reactions (docs/PLAN-CROWD-REACTIONS.md): the claim and the request ring behind the four reaction members of SpectatorCrowd, the clip pool of the manifest's reaction set,
          the planner (coalescing, cooldowns, priority, voices, clip choice) and the speaker helper. No Unity type inside; SpectatorAudio.cs (voices, listener, playback) stays out. -->
     <Compile Include="..\ArenaMapPort.Client\CrowdReactionModel.cs" Link="Client\CrowdReactionModel.cs" />
+    <!-- The roar layer of a reaction (docs/progress/spectator-audio.md "Roar beds"): the manifest's reaction_beds, the kind-to-bed table, the roar envelope, the clip picker and the volume law.
+         No Unity type inside; SpectatorReactionBeds.cs (sources, clips, tick, keys) stays out; SpectatorReactionSourcePinTests reads it as text. -->
+    <Compile Include="..\ArenaMapPort.Client\SpectatorReactionBedModel.cs" Link="Client\SpectatorReactionBedModel.cs" />
     <!-- The Unity-free half of the reactions' developer demo (Spectators/ReactionDemo): the step table of one pass, its cycle length and the runner that hands out the due step. The
          glue that claims, binds the keys and fires (SpectatorReactionDemo.cs) stays out; SpectatorReactionSourcePinTests reads it as text. -->
     <Compile Include="..\ArenaMapPort.Client\SpectatorReactionDemoPlan.cs" Link="Client\SpectatorReactionDemoPlan.cs" />

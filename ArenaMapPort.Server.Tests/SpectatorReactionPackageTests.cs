@@ -70,13 +70,15 @@ public sealed class SpectatorReactionPackageTests
     }
 
     [RealReactionSetFact]
-    public void TheFolderHoldsExactlyTheCallsTheReactionsTheBedAndTheManifest()
+    public void TheFolderHoldsExactlyTheCallsTheReactionsTheBedTheRoarBedsAndTheManifest()
     {
         string folder = Folder()!;
         var manifest = JsonConvert.DeserializeObject<SpectatorAudioManifest>(File.ReadAllText(Path.Combine(folder, "spectator-audio.json")))!;
-        var expected = manifest.clips.Select(c => c.file).Concat(manifest.reactions.clips.Select(c => c.file)).Append(manifest.bed.file).Append("spectator-audio.json")
+        // the six roar beds (Cheer and Angry, 2026-11-07) are part of the folder once the manifest has them: 85 files before, 91 with them
+        var roars = manifest.reaction_beds == null ? new string[0] : manifest.reaction_beds.banks.SelectMany(b => b.clips).Select(c => c.file).ToArray();
+        var expected = manifest.clips.Select(c => c.file).Concat(manifest.reactions.clips.Select(c => c.file)).Concat(roars).Append(manifest.bed.file).Append("spectator-audio.json")
             .OrderBy(n => n, StringComparer.Ordinal).ToArray();
-        Assert.Equal(85, expected.Length);
+        Assert.Equal(roars.Length == 0 ? 85 : 91, expected.Length);
         Assert.Equal(expected, Directory.GetFiles(folder).Select(Path.GetFileName).OrderBy(n => n, StringComparer.Ordinal).ToArray());
         string? staged = Staged();
         if (staged == null || !File.Exists(Path.Combine(staged, "spectator-audio.json"))) return;       // a checkout that never staged

@@ -1,5 +1,39 @@
 # HANDOFF — dated working state
 
+## Crowd reactions: roar layer (Cheer and Angry beds) replaces the murmur swell - 2026-11-07 (implemented, reviewed, host-run on GPU-2, not listened to)
+
+**User decision (2026-11-07):** "gerne einbauen. das neutrale gemurmel anzuheben macht glaube ich nicht wirklich sinn, eher sollten dann die lauteren Cheer und Angry Betten laufen". A reaction no longer
+lifts the neutral murmur bed (the phase-A swell is removed); Approve, Start and Finish play one of Arena's three Cheer beds, Disapprove one of the three Angry beds, TakeCover none, from every stand of the
+murmur's plan. Record: [spectator-audio.md](docs/progress/spectator-audio.md) "2026-11-07 - Reaction roar layer: Arena's Cheer and Angry beds replace the murmur swell"; plan decision D3 revised in
+[PLAN-CROWD-REACTIONS.md](docs/PLAN-CROWD-REACTIONS.md). Supersedes every "swell" sentence of the phase-A entries below.
+
+**State.** Built by a staged workflow (Python data, Unity-free model, Unity glue, one review round with four findings applied). **Host-run on GPU-2 on 2026-11-07, 15:29-15:42 (Equator and Bowl with the developer demo, the hideout; 0 ArenaMapPort warnings; the record "Host run on GPU-2 (2026-11-07, 15:29-15:42)"
+at the end of the spectator-audio.md section), committed in the commit that carries this entry; nobody has listened.** `dist/` (359 files, restaged by the client Release build) is deployed to
+`D:\SPT41`; not exercised on the host: the 0.5 s cut of the other kind and the retrigger (the demo fires every 9 s, the longest envelope is 7.3 s), Bay5, Air Pit and Iceberg.
+- **What exists.** Six roar beds exported by `extract_spectator_audio.py` at a common -32 dBFS RMS mono (gains -1.84 to -9.07 dB, 500 ms loop seam, jump ratio at most 1.8 against the limit 3.0), manifest
+  object `reaction_beds`; `SpectatorReactionBedModel.cs` (kind table, `RoarEnvelope` 0.3 s attack / hold 1.5-5 s / 2 s release, `Amplitude = 0.35 + 0.65 * strength`, clip picker, `SourceVolume`);
+  `SpectatorReactionBeds.cs` (owned looping sources per stand and kind on the murmur's 2 to 6 stands, lazy clips, priority 150, tick idle at two or three field reads). Removed: `CrowdExcitement` swell,
+  `CrowdBedState.RequestSwell`/`TakeSwell`, the key `Spectators/ReactionSwell` (never released; an orphaned cfg line is harmless). New developer keys `Spectators/ReactionBeds` (true) and
+  `ReactionBedVolume` (1.0, 0..2); none public. NoiseProbe `NoiseEv.Roar` (`roar+`/`roar-`, census `ownedRoar=`). The public `SpectatorCrowd` contract is unchanged (eight members, `ContractVersion` 1).
+- **Files (tracked changes, nothing staged).** Pipeline: `tools/extract/extract_spectator_audio.py`, `tools/validate/validate_distribution.py`, `tools/release/make_release_zips.py`,
+  `tools/tests/test_spectator_audio.py`, `test_validate_distribution.py`, `test_release_zips.py`, `test_reaction_pools.py`. Client: new `SpectatorReactionBedModel.cs`, `SpectatorReactionBeds.cs`; changed
+  `SpectatorAudio.cs`, `SpectatorAudioModel.cs`, `SpectatorCrowdBed.cs`, `SpectatorCrowdBedModel.cs`, `SpectatorCrowd.cs` and `SpectatorReactionDemo.cs` (doc comments), `ArenaSpectators.cs`,
+  `NoiseProbe.cs`, `NoiseProbeModel.cs`, `Plugin.cs`. Tests: new `SpectatorReactionBedModelTests.cs`, `SpectatorReactionBedsSourcePinTests.cs`; changed `ArenaMapPort.Server.Tests.csproj` and eight
+  existing test files. Docs: spectator-audio.md, AGENTS.md (layout row, audio sentences, counts, Traps point 11), dist-manifest.md, progress/INDEX.md, PLAN-CROWD-REACTIONS.md, this entry. `git status` is
+  the list (the other uncommitted phase-A2 files of the same tree belong to this work).
+- **Gates (this VM, 2026-11-07).** Client Release build with `DllOnly`: 0 warnings, 0 errors. `dotnet test ... -c Release`: **3,184 passed**, 0 failed, 0 skipped (twice). Python whole suite with
+  `PYTHONIOENCODING=utf-8`: 2,886 tests OK, 67 skipped. `extract_spectator_audio.py extract` and `verify`: OK, 91 files. `validate_distribution.py`: `DISTRIBUTION_OK 5 maps 15 bundles 5 sidecars encrypted`.
+- **Counts.** `dist/` **359 files** (353 + 6); `make_release_zips.py --plan` core **230**, equator 24, bay5 30, airpit 22, bowl 26, iceberg 27, estimated zip 5,121.8 MiB, 0 unclassified;
+  `spectator-audio/` **91 files**.
+
+**Next, in order.**
+1. Committed 2026-11-07 on `feature/iceberg` (the commit that carries this entry; not pushed).
+2. Done 2026-11-07: the full deploy and the host run on GPU-2 (the record above). Open there: the cut and the retrigger (a demo with a shorter cadence, or ArenaMode's events),
+   Bay5 and Air Pit (the same code with 4 and 6 stands), Iceberg (no crowd, no layer).
+3. The user listens: the roar level (-32 dBFS RMS per bed is a start value), the two keys, attack and release, whether boos read.
+4. ArenaMode adoption of the `SpectatorCrowd` reaction members (plan section 6; nothing in ArenaMode uses them yet), then Lull (6).
+5. Release number and form stay the user's decision; nothing of this is part of a release.
+
 ## Crowd reactions, phase A: implemented, reviewed, host-run on GPU-2 - 2026-11-02 (not listened to)
 
 **Host run (GPU-2, 21:09-21:20, after the paragraphs below were written):** deployed (353 files, 70 new), one botless raid per crowd map with `Spectators/ReactionDemo=Cycle`: every

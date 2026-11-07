@@ -255,6 +255,7 @@ public sealed class SpectatorAudioTests
         manifest.ValidateBed();
         Assert.Null(manifest.reactions);
         Assert.Throws<InvalidDataException>(manifest.ValidateReactions);
+        Assert.Throws<InvalidDataException>(manifest.ValidateReactionBeds);       // the roar beds are a set of their own (SpectatorReactionBedModelTests)
     }
 
     [Fact]

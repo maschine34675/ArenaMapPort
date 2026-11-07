@@ -9,7 +9,7 @@ namespace ArenaMapPort.Client
     /// The developer test for the crowd's reactions (<c>Spectators/ReactionDemo</c> Off|Cycle|Once, <c>Spectators/ReactionDemoKind</c>). A mode plugin (ArenaMode) is the only real
     /// caller of <see cref="SpectatorCrowd.React"/>; this stands in for it on the host: it claims the reactions through the PUBLIC contract as "developer-demo" and fires the steps of
     /// <see cref="SpectatorReactionDemoPlan"/> (every implemented kind at stepped strengths; TakeCover once panic-only and once Directed, which only the internal overload can say),
-    /// so the voice counts, the strength bands, the cooldowns, the hold of the random calls and the bed swell can be heard and read in the log without a match.
+    /// so the voice counts, the strength bands, the cooldowns, the hold of the random calls and the roar beds can be heard and read in the log without a match.
     /// It yields to a plugin's claim (the contract's rule for the demo owner), never takes the reactions from one, and releases its claim when the key goes Off. Developer keys like
     /// <c>Audio diagnostics/SpectatorCalls</c>: honoured only with DeveloperMode, live; outside it the demo is off. It is ticked by <see cref="SpectatorAudio"/> only while the
     /// reactions are running (a started raid with a crowd), so it costs nothing elsewhere. The host trigger is <c>uibridge_config_set</c>.

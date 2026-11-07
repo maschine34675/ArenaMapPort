@@ -91,6 +91,7 @@ def fake_dist_files(maps=MAPS):
         f"{PLUGIN}/spectator-audio/arena_fan7_participating_01.wav": b"RIFF fan fixture",
         f"{PLUGIN}/spectator-audio/arena_fans_ambient_neutral.wav": b"RIFF crowd bed fixture",
         f"{PLUGIN}/spectator-audio/arena_fan11_kill_cheer_01.wav": b"RIFF reaction clip fixture",
+        f"{PLUGIN}/spectator-audio/arena_fans_ambient_cheer2.wav": b"RIFF roar bed fixture",
         f"{PLUGIN}/monitors/Arena_Scoreboard_Status_Toggle_On.png": b"\x89PNG\r\n\x1a\n" + random.Random("monitors").randbytes(900),   # its own generator: the bytes below keep their values
     }
     for key, display in maps:
@@ -194,6 +195,7 @@ class PartitionTests(FakeRepoCase):
             f"{PLUGIN}/monitors/monitors.json", f"{PLUGIN}/monitors/Arena_Scoreboard_Status_Toggle_On.png",
             f"{PLUGIN}/spectator-audio/spectator-audio.json", f"{PLUGIN}/spectator-audio/arena_fan7_participating_01.wav",
             f"{PLUGIN}/spectator-audio/arena_fans_ambient_neutral.wav", f"{PLUGIN}/spectator-audio/arena_fan11_kill_cheer_01.wav",
+            f"{PLUGIN}/spectator-audio/arena_fans_ambient_cheer2.wav",
             f"{PLUGIN}/spectators/shared/spectator-textures.json", f"{PLUGIN}/spectators/shared/0123456789abcdef.png"})
 
     def test_each_map_part_holds_only_its_own_files(self):
@@ -392,6 +394,38 @@ class PartitionTests(FakeRepoCase):
                     rule = release.classify(f'{PLUGIN}/spectator-audio/arena_fan{fan}_{category}_01.wav', rules)
                     self.assertEqual((rule.part, rule.label), (release.CORE_ID, 'spectator audio'))
 
+    def test_the_six_roar_beds_are_shared_core_files(self):
+        rules = release.build_rules(self.spec)
+        names = [f"arena_fans_ambient_{kind}{suffix}.wav" for kind in ("cheer", "angry") for suffix in ("", "2", "3")]
+        self.assertEqual(len(names), 6)
+        for name in names:
+            with self.subTest(name=name):
+                rule = release.classify(f"{PLUGIN}/spectator-audio/{name}", rules)
+                self.assertEqual((rule.part, rule.label), (release.CORE_ID, "spectator audio"))
+
+    def test_a_roar_bed_of_any_other_shape_stays_an_error(self):
+        rules = release.build_rules(self.spec)
+        for name in ("arena_fans_ambient_cheer4.wav", "arena_fans_ambient_cheer1.wav", "arena_fans_ambient_cheer23.wav", "arena_fans_ambient_angry_2.wav",
+                     "arena_fans_ambient_roar.wav", "arena_fans_ambient_cheer.ogg", "arena_fans_ambient_cheer.wav.bak", "arena_fans_ambient_cheer.WAV",
+                     "arena_fans_ambient_Cheer.wav", "old/arena_fans_ambient_cheer.wav", "arena_fans_ambient_cheer.wav/x", "arena_fans_ambient_cheer2.wav.bak"):
+            with self.subTest(name=name), self.assertRaises(release.ClassificationError):
+                release.classify(f"{PLUGIN}/spectator-audio/{name}", rules)
+        with self.assertRaises(release.ClassificationError):
+            release.classify(f"{PLUGIN}/gate-sounds/arena_fans_ambient_cheer.wav", rules)
+
+    def test_the_roar_names_of_the_packer_are_the_extractors(self):
+        sys.path.insert(0, str(REPO / "tools" / "extract"))
+        try:
+            import extract_spectator_audio as extractor
+        finally:
+            sys.path.pop(0)
+        rules = release.build_rules(self.spec)
+        listed = [f"{name}.wav" for *_, names in extractor.ROAR_BANKS for name in names]
+        self.assertEqual(len(listed), 6)
+        for name in listed:
+            self.assertIsNotNone(extractor.ROAR_FILE.fullmatch(name))
+            self.assertEqual(release.classify(f"{PLUGIN}/spectator-audio/{name}", rules).part, release.CORE_ID)
+
     def test_a_reaction_clip_of_any_other_shape_stays_an_error(self):
         rules = release.build_rules(self.spec)
         for name in ('arena_fan7_roar_01.wav', 'arena_fan7_cheer_01.wav',                       # an unknown category
@@ -423,7 +457,8 @@ class PartitionTests(FakeRepoCase):
         for name in names:
             with self.subTest(name=name):
                 self.assertEqual(release.classify(f'{PLUGIN}/spectator-audio/{name}', rules).part, release.CORE_ID)
-        self.assertEqual(len(names), 1 + len(manifest["clips"]) + (1 if "bed" in manifest else 0) + len(manifest.get("reactions", {}).get("clips", [])))
+        self.assertEqual(len(names), 1 + len(manifest["clips"]) + (1 if "bed" in manifest else 0) + len(manifest.get("reactions", {}).get("clips", []))
+                         + sum(len(bank["clips"]) for bank in manifest.get("reaction_beds", {}).get("banks", [])))
 
     def test_spectators_stay_in_their_map_part_and_reject_strays(self):
         rules = release.build_rules(self.spec)

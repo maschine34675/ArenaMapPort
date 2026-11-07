@@ -23,9 +23,9 @@ namespace ArenaMapPort.Client
     /// scene search, no per-frame work beyond the excitement smoothing and a few field reads.
     ///
     /// The sources exist while the raid has started and the bed is on; the audio reset of EFT (<c>OnAudioConfigurationChanged</c>) rebuilds clip and sources, the
-    /// crowd's removal removes the bed (it is a child of the crowd root). A mode plugin lifts the volume with <see cref="SpectatorCrowd.SetExcitement"/>; every reaction voice that
-    /// starts (SpectatorAudio) adds a transient swell on top (<see cref="CrowdExcitement.AddSwell"/>, taken from <see cref="CrowdBedState.TakeSwell"/> in the tick; the level the volume
-    /// follows is the larger of the two and never exceeds 1). The keys are
+    /// crowd's removal removes the bed (it is a child of the crowd root). A mode plugin lifts the volume with <see cref="SpectatorCrowd.SetExcitement"/>; a reaction does not touch the
+    /// murmur (user decision 2026-11-07): it plays a louder Cheer or Angry bed from the same stands instead (SpectatorReactionBeds.cs, which uses this class's stand
+    /// placement helpers). The keys are
     /// developer keys like <c>Audio diagnostics/SpectatorCalls</c> (honoured only with DeveloperMode; the defaults apply otherwise): <c>Spectators/CrowdBed</c>,
     /// <c>CrowdBedVolume</c>, <c>CrowdBedReach</c>, all live. A package without a bed is not an error (one Debug line); a damaged bed is one Warning and the crowd
     /// stays. The NoiseProbe taps (<see cref="NoiseEv.Bed"/>) sit behind <c>NoiseProbe.Armed</c>. Host verification: docs/progress/spectator-audio.md "Crowd bed".
@@ -80,7 +80,7 @@ namespace ArenaMapPort.Client
 
         static bool BedOn => !DeveloperOptions.Enabled || _enabled == null || _enabled.Value;
         static float VolumeNow => DeveloperOptions.Enabled && _volume != null ? SpectatorCrowdBedModel.ClampVolume(_volume.Value) : SpectatorCrowdBedModel.DefaultVolume;
-        static float ReachNow => DeveloperOptions.Enabled && _reach != null ? SpectatorCrowdBedModel.ClampReach(_reach.Value) : SpectatorCrowdBedModel.DefaultReach;
+        internal static float ReachNow => DeveloperOptions.Enabled && _reach != null ? SpectatorCrowdBedModel.ClampReach(_reach.Value) : SpectatorCrowdBedModel.DefaultReach;
 
         internal static void Install()
         {
@@ -175,15 +175,12 @@ namespace ArenaMapPort.Client
                 {
                     // Switched off: the clip goes too. Not started (loading, or the raid is ending): the clip stays for the start.
                     if (_stands != null || (!on && _clip != null)) TearDown(!on);
-                    SpectatorCrowd.State.TakeSwell();   // a swell asked for while nothing sounds is not kept for later
                     return;
                 }
                 if (_stands == null && !Build()) return;
                 float reach = ReachNow;
                 if (reach != _appliedReach) ApplyReach(reach);
                 _excitement.SetTarget(SpectatorCrowd.State.Excitement);
-                float swell = SpectatorCrowd.State.TakeSwell();   // the largest amplitude a reaction voice asked for since the last tick (SpectatorAudio), 0 when none
-                if (swell > 0f) _excitement.AddSwell(swell);
                 _excitement.Step(Time.unscaledDeltaTime);
                 float volume = SpectatorCrowdBedModel.SourceVolume(VolumeNow, _excitement.Factor);
                 if (Mathf.Abs(volume - _appliedVolume) > 0.0005f) ApplyVolume(volume);
@@ -199,7 +196,7 @@ namespace ArenaMapPort.Client
         }
 
         // The Environment group the fans' calls play in (BetterAudio's own source group, as SpectatorAudio reads it). Null until BetterAudio exists.
-        static AudioMixerGroup EnvironmentGroup()
+        internal static AudioMixerGroup EnvironmentGroup()
         {
             if (!MonoBehaviourSingleton<BetterAudio>.Exist(out var audio)) return null;
             var groups = audio.SourceGroups;
@@ -264,7 +261,7 @@ namespace ArenaMapPort.Client
         }
 
         // Full volume to the stand's minimum distance, 1/d beyond it, silent at the maximum distance (see SpectatorCrowdBedModel.RolloffGain).
-        static void Place(AudioSource source, BedStand stand)
+        internal static void Place(AudioSource source, BedStand stand)
         {
             SpectatorCrowdBedModel.RolloffKeys(stand.MinDistance, stand.MaxDistance, out var times, out var gains);
             var keys = new Keyframe[times.Length];

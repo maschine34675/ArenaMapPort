@@ -276,6 +276,7 @@ namespace ArenaMapPort.Server.Tests
                 ["ArenaMapPort.Client/RoomReverb.cs"] = new string[0],
                 ["ArenaMapPort.Client/RoomShotAcoustics.cs"] = new string[0],
                 ["ArenaMapPort.Client/SpectatorCrowdBed.cs"] = new string[0],
+                ["ArenaMapPort.Client/SpectatorReactionBeds.cs"] = new string[0],
             };
             foreach (var pair in expected)
             {
@@ -305,6 +306,7 @@ namespace ArenaMapPort.Server.Tests
             Assert.Contains("NoiseProbe.NoteRoomReverb(category)", Code("ArenaMapPort.Client/RoomReverb.cs"));
             Assert.Contains("NoiseProbe.NoteRoomShot(room.ID,", Code("ArenaMapPort.Client/RoomShotAcoustics.cs"));
             Assert.Contains("NoiseEv.Bed,", Code("ArenaMapPort.Client/SpectatorCrowdBed.cs"));
+            Assert.Contains("NoiseEv.Roar,", Code("ArenaMapPort.Client/SpectatorReactionBeds.cs"));
             var ambient = Code("ArenaMapPort.Client/Bay5AmbientAudio.cs");
             Assert.Contains("NoiseEv.AmbStart", ambient);
             Assert.Contains("NoiseEv.AmbRestart", ambient);

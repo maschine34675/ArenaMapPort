@@ -202,6 +202,7 @@ namespace ArenaMapPort.Client
                 }
                 if (loaded == null) loaded = LoadPackage(mapKey, sceneName, folder, shared); // the synchronous path of the previous releases
                 if (loaded.Reactions == null) loaded.Reactions = LoadReactionPackage(pluginDir, out loaded.ReactionTicks);   // the worker did not run: the main thread reads the reaction clips
+                if (loaded.Roars == null) loaded.Roars = LoadRoarPackage(pluginDir, out loaded.RoarTicks);   // and the roar beds
                 timing.Worker = loaded.Textures != null;
                 root = new GameObject(ActorName(mapKey));
                 root.SetActive(false);
@@ -227,6 +228,7 @@ namespace ArenaMapPort.Client
                 SpectatorAudio.Create(crowd, voicePositions);
                 crowd.ReactionData = null;
                 SpectatorCrowdBed.Create(crowd, voicePositions); // the stand murmur: its own try, a child of the crowd root (removed with it)
+                SpectatorReactionBeds.Create(crowd, voicePositions, loaded.Roars); // the cheer and boo beds of a reaction, from the same stands: its own try and child too
                 timing.AudioTicks = System.Diagnostics.Stopwatch.GetTimestamp() - audio;
                 if (loaded.Textures != null) timing.WaitTicks += (long)(loaded.Textures.WaitMilliseconds * System.Diagnostics.Stopwatch.Frequency / 1000.0);
                 Plugin.Log.LogDebug($"{Tag} {mapKey}: {crowd.ActorCount} original fans, {crowd.RendererCount} renderers; " +
@@ -318,6 +320,52 @@ namespace ArenaMapPort.Client
             }
         }
 
+        /// <summary>
+        /// Reads, validates, hashes and decodes the six roar beds of spectator-audio.json (Arena's Cheer and Angry crowd beds, SpectatorReactionBeds.cs; no Unity API; the worker runs it after the
+        /// reaction clips, the main thread only when the worker did not). Never throws: a package without roar beds is <see cref="RoarPackage.Absent"/>, a damaged one carries its exception in
+        /// <see cref="RoarPackage.Error"/> and SpectatorReactionBeds.Create reports it once. The hash goes through the CNG provider and the check stays fail-closed, like the calls'.
+        /// </summary>
+        static RoarPackage LoadRoarPackage(string pluginDir, out long ticks)
+        {
+            long start = System.Diagnostics.Stopwatch.GetTimestamp();
+            try
+            {
+                string folder = Path.Combine(pluginDir, "spectator-audio");
+                var manifest = JsonConvert.DeserializeObject<SpectatorAudioManifest>(File.ReadAllText(Path.Combine(folder, "spectator-audio.json")));
+                if (manifest == null) throw new InvalidDataException("missing spectator audio manifest");
+                if (manifest.reaction_beds == null) return new RoarPackage { Absent = true };
+                manifest.ValidateReactionBeds();
+                var pcm = new short[SpectatorReactionBedKind.Count + 1][][];
+                for (int k = 0; k < pcm.Length; k++) pcm[k] = new short[0][];
+                var crypto = CryptoProviders.Select(null);
+                foreach (var bank in manifest.reaction_beds.banks)
+                {
+                    int kind = SpectatorReactionBedKind.Parse(bank.kind);
+                    pcm[kind] = new short[bank.clips.Length][];
+                    for (int i = 0; i < bank.clips.Length; i++)
+                    {
+                        var c = bank.clips[i];
+                        var bytes = File.ReadAllBytes(Path.Combine(folder, c.file));
+                        if (bytes.Length != c.bytes || BitConverter.ToString(crypto.Sha256(bytes, 0, bytes.Length)).Replace("-", "").ToLowerInvariant() != c.sha256)
+                            throw new InvalidDataException("damaged roar bed: " + c.file);
+                        var wav = PcmWav.Read(bytes);
+                        if (wav.Channels != c.channels || wav.SampleRate != c.sample_rate || wav.Frames != c.frames)
+                            throw new InvalidDataException("unexpected roar bed WAV format: " + c.file);
+                        pcm[kind][i] = wav.Samples;
+                    }
+                }
+                return new RoarPackage { Manifest = manifest, Pcm = pcm };
+            }
+            catch (Exception e)
+            {
+                return new RoarPackage { Error = e };
+            }
+            finally
+            {
+                ticks = System.Diagnostics.Stopwatch.GetTimestamp() - start;
+            }
+        }
+
         /// <summary>The files in the order <see cref="Build"/> reads them (one per texture, six per cubemap), for the prefetch.</summary>
         static string[] TextureOrder(SpectatorData data)
         {
@@ -361,6 +409,7 @@ namespace ArenaMapPort.Client
                     }
                     // Not part of the crowd package: its failure is the reactions' own (Loaded.Reactions) and the crowd is built either way.
                     loaded.Reactions = LoadReactionPackage(PluginDirectory(), out loaded.ReactionTicks);
+                    loaded.Roars = LoadRoarPackage(PluginDirectory(), out loaded.RoarTicks);   // the roar beds: the same rule, their own failure
                     return loaded;
                 }
                 catch (Exception e)
@@ -394,8 +443,9 @@ namespace ArenaMapPort.Client
             public SpectatorData Data;
             public SpectatorTexturePackage Package;
             public SpectatorTexturePrefetch Textures; // null: the main thread reads the files itself
-            public long ParseTicks, ReactionTicks;
+            public long ParseTicks, ReactionTicks, RoarTicks;
             public ReactionPackage Reactions;
+            public RoarPackage Roars;
             public Exception Error;
         }
 
@@ -405,6 +455,16 @@ namespace ArenaMapPort.Client
         {
             public SpectatorAudioManifest Manifest;
             public short[][] Pcm;
+            public bool Absent;
+            public Exception Error;
+        }
+
+        /// <summary>The roar beds prepared off the main thread: the validated manifest (its <c>reaction_beds</c> object is the clip table) and the decoded PCM, <c>Pcm[bed kind][clip]</c> in the
+        /// manifest's order. <see cref="Absent"/>: the package has no roar beds (not an error). <see cref="Error"/>: damaged or unreadable (one Warning, everything else remains).</summary>
+        internal sealed class RoarPackage
+        {
+            public SpectatorAudioManifest Manifest;
+            public short[][][] Pcm;
             public bool Absent;
             public Exception Error;
         }
@@ -422,7 +482,7 @@ namespace ArenaMapPort.Client
             {
                 long hash = (long)(loaded.Package.HashMilliseconds * System.Diagnostics.Stopwatch.Frequency / 1000.0);
                 return $"load total={Ms(totalTicks)} ms (wait={Ms(WaitTicks)}, hash={Ms(hash)}, parse={Ms(loaded.ParseTicks)}, " +
-                    $"textures={Ms(TexturesTicks)}, actors={Ms(ActorsTicks)}, audio={Ms(AudioTicks)}, reactions={Ms(loaded.ReactionTicks)}; hash and parse on the " +
+                    $"textures={Ms(TexturesTicks)}, actors={Ms(ActorsTicks)}, audio={Ms(AudioTicks)}, reactions={Ms(loaded.ReactionTicks)}, roars={Ms(loaded.RoarTicks)}; hash and parse on the " +
                     $"{(Worker ? "worker" : "main")} thread, crypto {loaded.Package.HashProvider})";
             }
         }

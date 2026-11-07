@@ -410,7 +410,7 @@ def validate_monitors(plugin):
 
 
 def validate_spectator_audio_not_key_sources(audio, arena_data=None):
-    """No file staged under spectator-audio/ (the calls, the crowd murmur bed and the reaction clips, plaintext like all the art and audio) may be
+    """No file staged under spectator-audio/ (the calls, the crowd murmur bed, the reaction clips and the roar beds, plaintext like all the art and audio) may be
     byte-identical to a stage-2 key-source file of the installed Arena (tools/bundle/key-sources.json): a content key is derived from sampled bytes of
     those files, and a published copy of one would let anyone derive it (docs/PLAN-ENCRYPTION.md). The extractor refuses a clip that streams from one;
     this checks the staged bytes themselves. The sizes are compared first and a file is hashed only when a staged file has the same size (none ever
@@ -555,9 +555,10 @@ def validate():
     audio = plugin/'spectator-audio'
     # The 13 calls, since 0.4.0 the crowd murmur bed (manifest key 'bed'; arena_fans_ambient_postmatch.wav in 0.4.0, Arena's neutral in-match bed
     # arena_fans_ambient_neutral.wav since 2026-11-02) and, since 2026-11-02 (docs/PLAN-CROWD-REACTIONS.md phase A), the reaction clips (manifest key
-    # 'reactions', 70 files): the file set and every byte below are compared with the extractor's output, so a bed or a clip that is stale, missing,
+    # 'reactions', 70 files) and, since 2026-11-07 (phase A2, user decision), the six roar beds of Arena's Cheer and Angry banks (manifest key
+    # 'reaction_beds'): the file set and every byte below are compared with the extractor's output, so a bed or a clip that is stale, missing,
     # extra or not the extracted one is refused.
-    verify_spectator_audio(audio, require_bed=True, require_reactions=True)
+    verify_spectator_audio(audio, require_bed=True, require_reactions=True, require_reaction_beds=True)
     extracted_audio = REPO/'work/extract/spectator-audio'
     if _files_under(audio) != _files_under(extracted_audio):
         raise ValueError('Spectator audio file set differs from extracted data')

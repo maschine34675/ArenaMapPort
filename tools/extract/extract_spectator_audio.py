@@ -1,7 +1,7 @@
 """Export the shared crowd audio of fan_speaker_voice.bundle: the 13 embedded Participating fan calls, the crowd murmur bed and, since
 2026-11-02 (phase A of docs/PLAN-CROWD-REACTIONS.md), the action-bound reaction clips. All of it is shared by every restored crowd.
 
-Three kinds of clip, each with its own record in the manifest:
+Four kinds of clip, each with its own record in the manifest:
   calls     the 13 embedded clips of the `Participating` bank (trigger 1123), the random calls (5 s cap). The nine external Scav references
             of that bank are omitted.
   bed       Arena's `arena_fans_ambient_neutral` (since 2026-11-02, user decision; until then the results-screen bed
@@ -16,6 +16,10 @@ Three kinds of clip, each with its own record in the manifest:
             `reactions` object. The same normalisation as the calls, a 7 s cap, 70 clips in phase A. The external Scav references of
             these banks (68 slots) are omitted, as are the banks that have no kind yet (LowDeathIntensity, PurifiedTeam, Neutral).
             Nothing here plays a reaction: that is the client's job and starts when a mode plugin claims them.
+  roar beds the six embedded stereo beds of the `Cheer` (1119) and `Angry` (1121) banks of `ambient_voice.bundle` (ROAR_BANKS; phase A2,
+            2026-11-07, user decision: a reaction plays one of them from the stands instead of lifting the neutral murmur). Processed like the
+            murmur (mean downmix, 500 ms crossfade into a loop) but brought to one common level, -32 dBFS RMS, with the gain recorded per clip
+            (manifest key `reaction_beds`).
 Original content stays under ignored work/extract and dist; Arena is only ever read. No voice text enters git: the sidecar holds names and tags.
 """
 from __future__ import annotations
@@ -49,6 +53,32 @@ BED_GAIN_DB = -8.9
 BED_MIN_FRAMES = 20 * 44100
 BED_MAX_FRAMES = 90 * 44100
 BED_MAX_JUMP = 3.0  # loop point: |last - first sample| at most this many times the RMS of the sample-to-sample differences
+
+# The roar beds (phase A2, 2026-11-07, docs/PLAN-CROWD-REACTIONS.md D3 and the user decision of that day): the Cheer (1119) and Angry (1121) banks of the
+# same ambient_voice.bundle hold three embedded 44.1 kHz stereo beds each (7.0 s and 8.0 s, measured 2026-11-07: no external slot, no null slot, one
+# SpreadGroup equal to Clips, every clip streaming from the bundle's own CAB resource). They get the neutral bed's processing (mean downmix, 500 ms
+# equal-power head-into-tail crossfade, so each loops without a step) but one COMMON LEVEL instead of a fixed gain: every roar bed is brought to
+# ROAR_TARGET_RMS_DB (mono, after the downmix), the gain is recorded per clip. The shipped murmur sits at -40 dBFS RMS; -32 is a start value for the
+# author's listening, so that a cheer and a boo are equally audible whatever Arena's own balance (Cheer beds about 8.5 dB above Arena's Neutral bed,
+# Angry beds 1.4 to 5.3 dB) and the client's volume key scales all of them.
+# (bank, trigger, kind word of the manifest, clip names in sorted order)
+ROAR_BANKS = (
+    ('Cheer', 1119, 'cheer', ('arena_fans_ambient_cheer', 'arena_fans_ambient_cheer2', 'arena_fans_ambient_cheer3')),
+    ('Angry', 1121, 'angry', ('arena_fans_ambient_angry', 'arena_fans_ambient_angry2', 'arena_fans_ambient_angry3')),
+)
+ROAR_NAME = re.compile(r'arena_fans_ambient_(?:cheer|angry)[23]?')
+ROAR_FILE = re.compile(ROAR_NAME.pattern + r'\.wav')  # the only files extract() may delete as stale roar beds
+ROAR_TARGET_RMS_DB = -32.0
+ROAR_MAX_PEAK_DB = -3.0
+ROAR_LEVEL_TOLERANCE_DB = 1.0  # the crossfade moves the RMS of the finished loop by a few hundredths of a dB; one dB is the bar
+ROAR_MIN_FRAMES = 3 * 44100
+ROAR_MAX_FRAMES = 12 * 44100
+ROAR_KEYS = {'schema', 'source', 'target_rms_db', 'banks'}
+ROAR_BANK_KEYS = {'bank', 'trigger', 'kind', 'clips'}
+ROAR_ROW_KEYS = {'name', 'file', 'channels', 'sample_rate', 'frames', 'bytes', 'sha256', 'peak', 'rms', 'seam_crossfade_ms', 'source', 'source_id',
+                 'processing'}
+ROAR_PROCESSING_KEYS = {'original_channels', 'original_rate', 'original_frames', 'original_duration', 'original_peak', 'original_rms', 'downmix',
+                        'gain_db', 'crossfade_frames'}
 
 # The reaction clips (phase A of docs/PLAN-CROWD-REACTIONS.md). Optional in a manifest (an older one has none), required by extract() and by the
 # distribution validator. Their bundle is the calls' bundle (BUNDLE).
@@ -140,8 +170,8 @@ def protected_names():
     return {Path(f).name for entries in key_maps.values() for entry in entries for f in entry['files']}
 
 
-def process_bed(wav):
-    """Mono or stereo 44.1 kHz clip -> mono loop-safe bed: the mean of the channels, the constant gain BED_GAIN_DB, then the first
+def process_bed(wav, gain_db=BED_GAIN_DB):
+    """Mono or stereo 44.1 kHz clip -> mono loop-safe bed: the mean of the channels, the constant gain `gain_db` (BED_GAIN_DB for the murmur), then the first
     BED_CROSSFADE_MS of the clip is faded IN over its last BED_CROSSFADE_MS (equal power) and that tail is dropped. The result is that
     much shorter than the source and its last sample runs straight into its first one: the source's own level step and sample
     jump at the loop point are gone. Returns (wav bytes, processing record)."""
@@ -150,7 +180,7 @@ def process_bed(wav):
     require(rate == 44100 and samples.shape[1] in (1, 2), 'the crowd bed must be a mono or stereo 44.1 kHz clip')
     peak, rms = levels(samples)
     require(peak > .001 and rms > .001, 'silent crowd bed')
-    mono = samples.mean(axis=1) * 10 ** (BED_GAIN_DB / 20)
+    mono = samples.mean(axis=1) * 10 ** (gain_db / 20)
     fade = round(BED_CROSSFADE_MS * rate / 1000)
     length = len(mono) - fade
     require(length > 2 * fade, 'crowd bed too short for its crossfade')
@@ -160,7 +190,7 @@ def process_bed(wav):
     require(np.max(np.abs(loop)) < .999, 'crowd bed clips')
     processing = dict(original_channels=samples.shape[1], original_rate=rate, original_frames=len(samples),
                       original_duration=len(samples) / rate, original_peak=peak, original_rms=rms,
-                      downmix='mean', gain_db=BED_GAIN_DB, crossfade_frames=fade)
+                      downmix='mean', gain_db=gain_db, crossfade_frames=fade)
     return write_wav(loop, rate), processing
 
 
@@ -171,30 +201,37 @@ def loop_jump(samples):
     return float(abs(flat[0] - flat[-1])), float(np.sqrt(np.mean(np.diff(flat) ** 2)))
 
 
-def bed_record(data, source_id, processing):
-    row = clip_record(BED_NAME, data)
+def bed_record(data, source_id, processing, name=BED_NAME):
+    row = clip_record(name, data)
     row.update(seam_crossfade_ms=BED_CROSSFADE_MS, source=BED_SOURCE, source_id=source_id, processing=processing)
     return row
+
+
+def check_loop_clip(folder, row, name, label, max_frames, min_frames, span):
+    """What a bed record shares with the murmur's and the roar beds': the file next to the manifest (regular, not oversized), its hash, size, format and
+    levels against the record, and the provenance fields. `label` and `span` word the messages. Returns (payload, actual clip record)."""
+    require(isinstance(row, dict) and row.get('name') == name and row.get('file') == name + '.wav', f'invalid {label} record')
+    file = folder / (name + '.wav')
+    require(file.is_file() and not file.is_symlink() and file.stat().st_size <= 44 + 2 * max_frames, f'missing/oversized {label}')
+    payload = file.read_bytes()
+    actual = clip_record(name, payload)
+    for key in ('channels', 'sample_rate', 'frames', 'bytes', 'sha256'):
+        require(row.get(key) == actual[key], f'{name}: {key} mismatch')
+    require(actual['channels'] == 1 and actual['sample_rate'] == 44100 and
+            min_frames <= actual['frames'] <= max_frames and actual['bytes'] == 44 + actual['frames'] * 2,
+            f'expected canonical mono 44.1 kHz PCM16 {label} of {span}')
+    require(.001 < actual['rms'] < .081 and .001 < actual['peak'] <= .709, f'silent/over-loud {label}')
+    for key in ('peak', 'rms'):
+        require(abs(row.get(key, -1) - actual[key]) < 1e-9, f'{name}: {key} mismatch')
+    require(row.get('seam_crossfade_ms') == BED_CROSSFADE_MS and row.get('source') == BED_SOURCE and
+            type(row.get('source_id')) is int, f'{name}: unexpected provenance')
+    return payload, actual
 
 
 def validate_bed(folder, row):
     """Checks the bed record against its file like a call (hash, size, format, levels) plus what only the bed has: the crossfade
     bookkeeping and a loop point without a step. Returns the file name."""
-    require(isinstance(row, dict) and row.get('name') == BED_NAME and row.get('file') == BED_FILE, 'invalid crowd bed record')
-    file = folder / BED_FILE
-    require(file.is_file() and not file.is_symlink() and file.stat().st_size <= 44 + 2 * BED_MAX_FRAMES, 'missing/oversized crowd bed')
-    payload = file.read_bytes()
-    actual = clip_record(BED_NAME, payload)
-    for key in ('channels', 'sample_rate', 'frames', 'bytes', 'sha256'):
-        require(row.get(key) == actual[key], f'{BED_NAME}: {key} mismatch')
-    require(actual['channels'] == 1 and actual['sample_rate'] == 44100 and
-            BED_MIN_FRAMES <= actual['frames'] <= BED_MAX_FRAMES and actual['bytes'] == 44 + actual['frames'] * 2,
-            'expected canonical mono 44.1 kHz PCM16 crowd bed of 20-40 s')
-    require(.001 < actual['rms'] < .081 and .001 < actual['peak'] <= .709, 'silent/over-loud crowd bed')
-    for key in ('peak', 'rms'):
-        require(abs(row.get(key, -1) - actual[key]) < 1e-9, f'{BED_NAME}: {key} mismatch')
-    require(row.get('seam_crossfade_ms') == BED_CROSSFADE_MS and row.get('source') == BED_SOURCE and
-            type(row.get('source_id')) is int, f'{BED_NAME}: unexpected provenance')
+    payload, actual = check_loop_clip(folder, row, BED_NAME, 'crowd bed', BED_MAX_FRAMES, BED_MIN_FRAMES, '20-40 s')
     processing = row.get('processing')
     fade = round(BED_CROSSFADE_MS * 44100 / 1000)
     require(isinstance(processing, dict) and processing.get('crossfade_frames') == fade and
@@ -205,6 +242,74 @@ def validate_bed(folder, row):
     jump, step = loop_jump(read_wav(payload)[0])
     require(step > 0 and jump <= BED_MAX_JUMP * step, f'{BED_NAME}: the loop point jumps ({jump:.5f} against a step of {step:.5f})')
     return BED_FILE
+
+
+def process_roar(wav):
+    """One roar bed: the mono level of the clip (mean of the channels) decides the constant gain that brings it to ROAR_TARGET_RMS_DB, then process_bed
+    does the rest. The peak after the gain must stay at most ROAR_MAX_PEAK_DB (the gains are negative for every bed Arena has). Returns (wav bytes,
+    processing record)."""
+    samples, rate = read_wav(wav)
+    require(rate == 44100 and samples.shape[1] in (1, 2), 'a roar bed must be a mono or stereo 44.1 kHz clip')
+    _, mono_rms = levels(samples.mean(axis=1))
+    require(mono_rms > .001, 'silent roar bed')
+    payload, processing = process_bed(wav, ROAR_TARGET_RMS_DB - 20 * math.log10(mono_rms))
+    peak, _ = levels(read_wav(payload)[0])
+    require(processing['gain_db'] < 0, f'roar bed is quieter than the target ({20 * math.log10(mono_rms):.2f} dBFS RMS): the gain would be a boost')
+    require(peak <= 10 ** (ROAR_MAX_PEAK_DB / 20), f'roar bed peaks at {20 * math.log10(peak):.2f} dBFS, above {ROAR_MAX_PEAK_DB}')
+    return payload, processing
+
+
+def validate_roar_clip(folder, row, name):
+    """One clip record of a roar bank against its file: exactly the keys of ROAR_ROW_KEYS, everything check_loop_clip checks (3-12 s window), the shape
+    of the processing record (exact keys, the crossfade bookkeeping, a negative recorded gain), the level (ROAR_TARGET_RMS_DB within
+    ROAR_LEVEL_TOLERANCE_DB, peak at most ROAR_MAX_PEAK_DB) and a loop point without a step. Returns the file name."""
+    require(isinstance(row, dict) and set(row) == ROAR_ROW_KEYS and ROAR_NAME.fullmatch(str(row.get('name'))), 'invalid roar bed record')
+    payload, actual = check_loop_clip(folder, row, name, 'roar bed', ROAR_MAX_FRAMES, ROAR_MIN_FRAMES, '3-12 s')
+    processing = row['processing']
+    fade = round(BED_CROSSFADE_MS * 44100 / 1000)
+
+    def number(value):
+        return isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(value)
+
+    require(isinstance(processing, dict) and set(processing) == ROAR_PROCESSING_KEYS and processing['crossfade_frames'] == fade and
+            processing['original_rate'] == 44100 and processing['original_channels'] in (1, 2) and
+            type(processing['original_frames']) is int and processing['downmix'] == 'mean' and
+            number(processing['gain_db']) and processing['gain_db'] < 0 and
+            all(number(processing[k]) and processing[k] > 0 for k in ('original_duration', 'original_peak', 'original_rms')) and
+            actual['frames'] == processing['original_frames'] - fade, f'{name}: processing record mismatch')
+    require(abs(20 * math.log10(actual['rms']) - ROAR_TARGET_RMS_DB) <= ROAR_LEVEL_TOLERANCE_DB and
+            actual['peak'] <= 10 ** (ROAR_MAX_PEAK_DB / 20),
+            f'{name}: level is not {ROAR_TARGET_RMS_DB} dBFS RMS with a peak of at most {ROAR_MAX_PEAK_DB} dBFS')
+    jump, step = loop_jump(read_wav(payload)[0])
+    require(step > 0 and jump <= BED_MAX_JUMP * step, f'{name}: the loop point jumps ({jump:.5f} against a step of {step:.5f})')
+    return row['file']
+
+
+def roar_object(rows):
+    """The manifest's `reaction_beds` object for the clip records `rows` (name -> bed_record) of the six roar beds, banks in ROAR_BANKS order."""
+    banks = [dict(bank=bank, trigger=trigger, kind=kind, clips=[rows[name] for name in names]) for bank, trigger, kind, names in ROAR_BANKS]
+    return dict(schema=1, source=BED_SOURCE, target_rms_db=ROAR_TARGET_RMS_DB, banks=banks)
+
+
+def validate_roars(folder, beds):
+    """The manifest's `reaction_beds` object against the folder: the keys, the source, the target level, the two banks of ROAR_BANKS in order (name,
+    trigger, kind) with their three clips by name in sorted order, every clip a valid file (validate_roar_clip) and no source object used twice.
+    Returns the file names."""
+    require(isinstance(beds, dict) and set(beds) == ROAR_KEYS and type(beds['schema']) is int and beds['schema'] == 1 and beds['source'] == BED_SOURCE and
+            type(beds['target_rms_db']) is float and beds['target_rms_db'] == ROAR_TARGET_RMS_DB and
+            isinstance(beds['banks'], list) and len(beds['banks']) == len(ROAR_BANKS), 'unsupported roar bed set')
+    files, ids = set(), set()
+    for bank_row, (bank, trigger, kind, names) in zip(beds['banks'], ROAR_BANKS):
+        require(isinstance(bank_row, dict) and set(bank_row) == ROAR_BANK_KEYS and bank_row['bank'] == bank and
+                type(bank_row['trigger']) is int and bank_row['trigger'] == trigger and bank_row['kind'] == kind and
+                isinstance(bank_row['clips'], list), f'{bank}: roar bank mismatch')
+        require([row.get('name') if isinstance(row, dict) else None for row in bank_row['clips']] == list(names),
+                f'{bank}: the roar clips are not the {len(names)} embedded beds of the bank in sorted order')
+        for row, name in zip(bank_row['clips'], names):
+            files.add(validate_roar_clip(folder, row, name))
+            ids.add(row['source_id'])
+    require(len(files) == 6 and len(ids) == 6, 'roar beds share a file or a source object')
+    return files
 
 
 def check_pools(doc):
@@ -357,8 +462,8 @@ def validate_reactions(folder, reactions, pools):
     return files
 
 
-def validate(folder, require_bed=False, require_reactions=False, pools=None):
-    """The calls, then the optional parts: the bed (`bed`) and the reaction set (`reactions`), each required with its flag. `pools` is the sidecar
+def validate(folder, require_bed=False, require_reactions=False, require_reaction_beds=False, pools=None):
+    """The calls, then the optional parts: the bed (`bed`), the reaction set (`reactions`) and the six roar beds (`reaction_beds`), each required with its flag. `pools` is the sidecar
     document the reaction set is checked against (default: the tracked reaction_pools.json). The folder must hold exactly the files the manifest lists."""
     folder = Path(folder)
     data = json.loads((folder / MANIFEST).read_text(encoding='utf-8'))
@@ -395,6 +500,10 @@ def validate(folder, require_bed=False, require_reactions=False, pools=None):
         require(not require_reactions, 'the reaction set is missing from the spectator audio manifest')
     else:
         expected |= validate_reactions(folder, data['reactions'], load_pools() if pools is None else check_pools(pools))
+    if data.get('reaction_beds') is None:
+        require(not require_reaction_beds, 'the roar beds are missing from the spectator audio manifest')
+    else:
+        expected |= validate_roars(folder, data['reaction_beds'])
     require({p.name for p in folder.iterdir()} == expected, 'unexpected spectator audio files')
     return data
 
@@ -430,6 +539,49 @@ def remove_stale_reactions(output, keep):
     for path in Path(output).iterdir():
         if path.is_file() and REACTION_FILE.fullmatch(path.name) and path.name[:-4] not in keep:
             path.unlink()
+
+
+def remove_stale_roars(output, keep):
+    """Deletes from `output` the roar bed WAVs of an earlier export that the new one does not write. Only a regular file whose whole name matches
+    ROAR_FILE and whose clip name is not in `keep` goes; the murmur bed, the calls, the reaction clips, the manifest and anything else stay."""
+    for path in Path(output).iterdir():
+        if path.is_file() and ROAR_FILE.fullmatch(path.name) and path.name[:-4] not in keep:
+            path.unlink()
+
+
+def load_ambient_banks(source):
+    """The MonoBehaviours of ambient_voice.bundle as (object, typetree) pairs (find_roar_beds reads the banks from them)."""
+    import UnityPy
+    bundle = Path(source) / BED_SOURCE
+    require(bundle.name not in protected_names(), 'roar beds overlap a protected key source')
+    env = UnityPy.load(str(bundle))
+    return [(o, o.read_typetree()) for o in env.objects if o.type.name == 'MonoBehaviour']
+
+
+def find_roar_beds(banks):
+    """Reads the Cheer and Angry banks of ambient_voice.bundle (`banks`: its (object, typetree) MonoBehaviours) and checks them against ROAR_BANKS: per
+    bank one bank object with its trigger and one SpreadGroup equal to Clips, exactly three slots, all embedded (no external, no null slot), the
+    AudioClip names of the table, and no clip streaming from a key-source file (tools/bundle/key-sources.json). Returns name -> AudioClip object."""
+    protected = protected_names()
+    found = {}
+    for bank, trigger, kind, names in ROAR_BANKS:
+        selected = [(o, t) for o, t in banks if t.get('m_Name') == bank and 'Clips' in t]
+        require(len(selected) == 1, f'{bank} bank of the roar beds is missing or ambiguous')
+        reader, tree = selected[0]
+        require(tree['Trigger'] == trigger and len(tree['SpreadGroups']) == 1 and
+                tree['SpreadGroups'][0]['Clips'] == tree['Clips'], f'{bank} bank layout changed')
+        slots = tree['Clips']
+        require(len(slots) == len(names) and all(s['Clip']['m_PathID'] and not s['Clip']['m_FileID'] for s in slots),
+                f'{bank} bank no longer holds exactly {len(names)} embedded beds')
+        for slot in slots:
+            clip = reader.assets_file.objects[slot['Clip']['m_PathID']]
+            require(clip.type.name == 'AudioClip', f'{bank}: a roar bed reference is not audio')
+            clip_tree = clip.read_typetree()
+            stream = Path((clip_tree.get('m_Resource') or {}).get('m_Source') or '').name
+            require(stream not in protected, f"{clip_tree['m_Name']} streams from a protected key source")
+            require(found.setdefault(clip_tree['m_Name'], clip).path_id == clip.path_id, f"{clip_tree['m_Name']}: two different clips share the name")
+        require(sorted(n for n in found if n in names) == list(names), f'{bank} bank holds other beds than {", ".join(names)}')
+    return found
 
 
 def find_reactions(banks, pools):
@@ -510,6 +662,11 @@ def extract(source=SOURCE, output=OUTPUT):
     reaction_clips, _ = find_reactions(banks, pools)
     bed_reader, bed_wav = find_bed(source)
     bed_payload, bed_processing = process_bed(bed_wav)
+    roar_clips = find_roar_beds(load_ambient_banks(source))
+    roar_payloads, roar_rows = {}, {}
+    for name, clip in sorted(roar_clips.items()):
+        payload, processing = process_roar(_decode_and_validate_source(clip, name)[0])
+        roar_payloads[name], roar_rows[name] = payload, bed_record(payload, clip.path_id, processing, name)
     # everything is decoded and normalised before the first file is written, so a clip that fails leaves the output folder as it was
     reaction_payloads, reaction_rows = {}, {}
     for name, clip in reaction_clips.items():
@@ -524,6 +681,7 @@ def extract(source=SOURCE, output=OUTPUT):
     for retired in RETIRED_BED_FILES:
         (output / retired).unlink(missing_ok=True)
     remove_stale_reactions(output, reaction_rows)
+    remove_stale_roars(output, roar_rows)
     rows = []
     for name, clip in sorted(local):
         wav, _ = _decode_and_validate_source(clip, name)
@@ -535,10 +693,13 @@ def extract(source=SOURCE, output=OUTPUT):
     (output / BED_FILE).write_bytes(bed_payload)
     for name, payload in reaction_payloads.items():
         (output / (name + '.wav')).write_bytes(payload)
+    for name, payload in roar_payloads.items():
+        (output / (name + '.wav')).write_bytes(payload)
     manifest = dict(schema=1, bank='Participating', trigger=1123, source_bundle=BUNDLE, external_entries_omitted=external,
-                    clips=rows, bed=bed_record(bed_payload, bed_reader.path_id, bed_processing), reactions=reaction_object(reaction_rows, pools))
+                    clips=rows, bed=bed_record(bed_payload, bed_reader.path_id, bed_processing), reactions=reaction_object(reaction_rows, pools),
+                    reaction_beds=roar_object(roar_rows))
     (output / MANIFEST).write_text(json.dumps(manifest, indent=2) + '\n', encoding='utf-8')
-    validate(output, require_bed=True, require_reactions=True, pools=pools)
+    validate(output, require_bed=True, require_reactions=True, require_reaction_beds=True, pools=pools)
     return manifest
 
 
@@ -549,9 +710,11 @@ if __name__ == '__main__':
     parser.add_argument('--output', type=Path, default=OUTPUT)
     args = parser.parse_args()
     result = extract(args.source, args.output) if args.action == 'extract' else validate(args.output)
-    bed, reactions = result.get('bed'), result.get('reactions')
+    bed, reactions, roars = result.get('bed'), result.get('reactions'), result.get('reaction_beds')
     print(f'SPECTATOR_AUDIO_OK {len(result["clips"])} clips, {sum(c["bytes"] for c in result["clips"])} bytes; ' +
           (f'bed {bed["name"]} {bed["frames"] / bed["sample_rate"]:.3f} s mono, {bed["bytes"]} bytes, sha256 {bed["sha256"]}'
            if bed else 'no bed (the manifest has none)') + '; ' +
           (f'reactions {len(reactions["clips"])} clips, {sum(c["bytes"] for c in reactions["clips"])} bytes'
-           if reactions else 'no reactions (the manifest has none)'))
+           if reactions else 'no reactions (the manifest has none)') + '; ' +
+          (f'roar beds {sum(len(b["clips"]) for b in roars["banks"])} clips, {sum(c["bytes"] for b in roars["banks"] for c in b["clips"])} bytes'
+           if roars else 'no roar beds (the manifest has none)'))

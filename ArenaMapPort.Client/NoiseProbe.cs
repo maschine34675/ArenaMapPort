@@ -599,6 +599,8 @@ namespace ArenaMapPort.Client
                 if (spectators != null) sb.Append(" ownedSpectator=").Append(spectators.PlayingVoices).Append(" ownedReaction=").Append(spectators.PlayingReactionVoices).Append('/').Append(spectators.ActiveReactionVoices);
                 var bed = SpectatorCrowdBed.Current;
                 if (bed != null) sb.Append(" ownedBed=").Append(bed.PlayingStands).Append('/').Append(bed.StandCount); // continuous looping sources: not in the pool, not counted above
+                var roars = SpectatorReactionBeds.Current;
+                if (roars != null) sb.Append(" ownedRoar=").Append(roars.PlayingSources).Append('/').Append(roars.ActiveSources); // the cheer and boo beds of a reaction: owned looping sources too
             }
             catch (Exception e) { sb.Append("census failed: ").Append(e.GetType().Name); }
             return _lastCensusText = sb.ToString();

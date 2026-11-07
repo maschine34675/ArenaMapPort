@@ -238,7 +238,7 @@ class InstalledArenaTests(unittest.TestCase):
             (output / 'arena_fans_ambient_postmatch.wav').write_bytes(b'retired bed')
             manifest = audio.extract(audio.SOURCE, output)
             self.assertEqual(len(manifest['reactions']['clips']), 70)
-            self.assertEqual(len(list(output.iterdir())), 1 + 13 + 1 + 70)
+            self.assertEqual(len(list(output.iterdir())), 1 + 13 + 1 + 70 + 6)
             self.assertFalse((output / 'arena_fan9_kill_cheer_01.wav').exists())
             self.assertFalse((output / 'arena_fans_ambient_postmatch.wav').exists())
             self.assertEqual(len(audio.validate(output, require_bed=True, require_reactions=True)['reactions']['clips']), 70)
@@ -255,13 +255,13 @@ class ExtractedPackageTests(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        cls.data = audio.validate(WORK_AUDIO, require_bed=True, require_reactions=True)
+        cls.data = audio.validate(WORK_AUDIO, require_bed=True, require_reactions=True, require_reaction_beds=True)
         cls.reactions = cls.data['reactions']
 
     def test_the_package_has_the_phase_a_set(self):
         clips = self.reactions['clips']
         self.assertEqual(len(clips), 70)
-        self.assertEqual(len(list(WORK_AUDIO.iterdir())), 1 + 13 + 1 + 70)
+        self.assertEqual(len(list(WORK_AUDIO.iterdir())), 1 + 13 + 1 + 70 + 6)
         self.assertEqual({b['bank']: (b['embedded'], len(b['clips']), len(b['left_out'])) for b in self.reactions['banks']},
                          {'Cheer': (14, 10, 4), 'Owned': (16, 12, 4), 'Angry': (18, 14, 4), 'ChangedRound': (9, 6, 3), 'EndRound': (11, 9, 2),
                           'Hide': (36, 29, 7)})

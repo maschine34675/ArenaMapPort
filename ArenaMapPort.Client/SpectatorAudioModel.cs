@@ -19,6 +19,18 @@ namespace ArenaMapPort.Client
         /// <summary>The reaction voices (CrowdReactionModel.cs, docs/PLAN-CROWD-REACTIONS.md): the spectators' answers to a kill, a death, a round start or end and a shot at the stands.
         /// Null in a package without one, which is still a valid schema-1 manifest.</summary>
         public SpectatorReactionSet reactions;
+        /// <summary>The roar beds (SpectatorReactionBedModel.cs): Arena's Cheer and Angry crowd beds that a reaction plays from the stands. Null in a package without them, which is
+        /// still a valid schema-1 manifest.</summary>
+        public SpectatorReactionBedSet reaction_beds;
+
+        /// <summary>Checks the roar beds of a package that has them; independent of <see cref="Validate"/>, <see cref="ValidateBed"/> and <see cref="ValidateReactions"/> in every
+        /// direction, so a damaged roar set takes none of the others with it and none of them takes the roar beds.</summary>
+        public void ValidateReactionBeds()
+        {
+            if (schema != 1 || trigger != 1123 || bank != "Participating" || reaction_beds == null)
+                throw new InvalidDataException("unsupported spectator audio package");
+            reaction_beds.Validate();
+        }
 
         /// <summary>Checks the reaction set of a package that has one; independent of <see cref="Validate"/> and <see cref="ValidateBed"/> in both directions, so a damaged
         /// reaction set never takes the calls or the bed with it and a damaged call set never takes the reactions with it.</summary>

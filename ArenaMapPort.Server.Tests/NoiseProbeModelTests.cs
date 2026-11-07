@@ -495,7 +495,7 @@ namespace ArenaMapPort.Server.Tests
             Assert.False(ring.HasCause(10.4, 0.01, 0.05));                  // 200 ms after is too late
             foreach (var kind in new[] { NoiseEv.SpecStart, NoiseEv.SpecStop, NoiseEv.AmbStart, NoiseEv.AmbRestart, NoiseEv.Prop, NoiseEv.Room, NoiseEv.RoomReverb,
                 NoiseEv.RoomShot, NoiseEv.Gate, NoiseEv.Puddle, NoiseEv.Rain, NoiseEv.RainPlay, NoiseEv.Config, NoiseEv.Reset, NoiseEv.Life, NoiseEv.Hitch, NoiseEv.Bed,
-                NoiseEv.ReactStart, NoiseEv.ReactStop })
+                NoiseEv.ReactStart, NoiseEv.ReactStop, NoiseEv.Roar })
                 Assert.True(NoiseText.IsCause(kind), kind.ToString());
         }
 
@@ -649,6 +649,27 @@ namespace ArenaMapPort.Server.Tests
             hit.Kind = NoiseKind.Clip; hit.Note = "clipped=3 nonfinite=0"; hit.Level = NoiseLevel.Loud;
             Assert.Contains("kind=clip lvl=LOUD", NoiseReport.BurstLine(hit, "x", "", ""));
             Assert.EndsWith("clipped=3 nonfinite=0", NoiseReport.BurstLine(hit, "x", "", ""));
+        }
+
+        [Fact]
+        public void ARoarBedStartAndStopAreEventsWithTheirOwnTokensAndTheirClipNamesStayWhole()
+        {
+            var labels = new NoiseLabels();
+            var ring = new NoiseEventRing(8);
+            ring.Add(100.00, 0, NoiseEv.Roar, 1, 2, 18.3f, 0.2f, labels.Intern("cheer/stand2"), labels.Intern("arena_fans_ambient_cheer2"));
+            ring.Add(106.40, 0, NoiseEv.Roar, 0, 2, 7.5f, 0f, labels.Intern("cheer/stand2"), 0);
+            Assert.Equal("roar", NoiseText.Token(NoiseEv.Roar));
+            Assert.Equal("roar+", NoiseText.Token(ring[0]));
+            Assert.Equal("roar-", NoiseText.Token(ring[1]));
+            Assert.Equal("roar+ cheer/stand2 clip=arena_fans_ambient_cheer2 18.3m vol=0.200", NoiseReport.EventText(ring[0], labels));
+            Assert.Equal("roar- cheer/stand2 7.5m vol=0.000", NoiseReport.EventText(ring[1], labels));
+            // appended after the reaction events: the older tokens and numbers keep their meaning
+            Assert.True((byte)NoiseEv.Roar == (byte)NoiseEv.ReactStop + 1);
+            // the bed names are no fan voice: the short form leaves them alone
+            Assert.Equal("arena_fans_ambient_angry3", NoiseText.ShortClip("arena_fans_ambient_angry3"));
+            var quiet = new NoiseEventRing(8);
+            quiet.Add(10.46, 0, NoiseEv.Roar, 1, 0, 0, 0, 0, 0);
+            Assert.True(quiet.HasCause(10.5, 0.4, 0.05));
         }
 
         [Fact]

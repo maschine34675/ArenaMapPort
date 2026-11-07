@@ -202,27 +202,26 @@ public sealed class SpectatorReactionSourcePinTests
         Assert.DoesNotContain("Plugin.Instance.Config", code);
         Assert.Contains("s.Bind(\"Spectators\", \"Reactions\", true,", install);
         Assert.Contains("s.Bind(\"Spectators\", \"ReactionVolume\", ReactionVolumeDefault, new ConfigDescription(", install);
-        Assert.Contains("s.Bind(\"Spectators\", \"ReactionSwell\", ReactionSwellDefault, new ConfigDescription(", install);
+        Assert.DoesNotContain("ReactionSwell", code);                                              // removed 2026-11-07 (user decision: the roar beds answer a reaction instead)
         Assert.Contains("s.Bind(\"Spectators\", \"ReactionGapScale\", 1f, new ConfigDescription(", install);
-        Assert.Equal(4, Regex.Matches(install, @"\bs\.Bind\(").Count);
-        Assert.Contains("const float ReactionVolumeDefault = .5f, ReactionSwellDefault = 1f;", code);
+        Assert.Equal(3, Regex.Matches(install, @"\bs\.Bind\(").Count);
+        Assert.Contains("const float ReactionVolumeDefault = .5f;", code);
         Assert.Contains("new AcceptableValueRange<float>(0f, CrowdReactionPlanner.MaxGapScale)", install);
-        Assert.Equal(2, Regex.Matches(install, @"new AcceptableValueRange<float>\(0f, 1f\)").Count);     // volume and swell
+        Assert.Equal(1, Regex.Matches(install, @"new AcceptableValueRange<float>\(0f, 1f\)").Count);     // the volume
         Assert.Contains("SpectatorReactionDemo.Install();", install);
         // honoured only with DeveloperMode, like Audio diagnostics/SpectatorCalls: the defaults apply to a player
         Assert.Contains("static bool ReactionsOn => !DeveloperOptions.Enabled || _reactionsEnabled == null || _reactionsEnabled.Value;", code);
         Assert.Contains("DeveloperOptions.Enabled && _reactionVolume != null ? Unit(_reactionVolume.Value, ReactionVolumeDefault) : ReactionVolumeDefault;", code);
-        Assert.Contains("DeveloperOptions.Enabled && _reactionSwell != null ? Unit(_reactionSwell.Value, ReactionSwellDefault) : ReactionSwellDefault;", code);
         Assert.Contains("DeveloperOptions.Enabled && _reactionGapScale != null ? _reactionGapScale.Value : 1f;", code);
         // none of them is public, and none lives in the bed's file (whose Bind count is pinned at three)
         foreach (var file in new[] { "ArenaMapPort.Client/CompactConfiguration.cs", "ArenaMapPort.Client/MapConfigVisibility.cs" })
         {
             var text = Text(file);
-            foreach (var key in new[] { "\"Reactions\"", "ReactionVolume", "ReactionSwell", "ReactionGapScale", "ReactionDemo" })
+            foreach (var key in new[] { "\"Reactions\"", "ReactionVolume", "ReactionSwell", "ReactionGapScale", "ReactionDemo", "ReactionBed" })
                 Assert.DoesNotContain(key, text);
         }
         var bed = Code(Bed);
-        Assert.DoesNotContain("Reaction", bed.Replace("SpectatorCrowd.State.TakeSwell()", ""));
+        Assert.DoesNotContain("Reaction", bed);
         Assert.Equal(3, Regex.Matches(bed, @"\bs\.Bind\(").Count);
         // the values are polled in the frame, no setting handler runs on whichever thread sets a value
         Assert.DoesNotMatch(@"_reaction\w*\.SettingChanged", code);
@@ -399,15 +398,16 @@ public sealed class SpectatorReactionSourcePinTests
     }
 
     [Fact]
-    public void AStartedReactionAsksTheBedForASwellAndHoldsTheRandomCallsThroughTheModelsGap()
+    public void AStartedReactionAsksTheRoarLayerAndHoldsTheRandomCallsThroughTheModelsGap()
     {
         var start = Between(Code(Audio), "void StartReaction(", "AudioClip ReactionAudioClip(");
         int started = IndexOf(start, "_planner.Started(plan, now, reserved);");       // the history and the voice count take the voices that were reserved, not the plan's
-        int swell = IndexOf(start, "SpectatorCrowd.State.RequestSwell(amplitude);");
+        int roar = IndexOf(start, "roars.Trigger(plan.Kind, plan.Strength, plan.DurationOf(reserved))");
         int hold = IndexOf(start, "_schedule.Hold(now, hold);");
-        Assert.True(started < swell && started < hold, "the planner's cooldown starts when the first voice has started");
-        Assert.Contains("float amplitude = Mathf.Min(1f, plan.Strength * ReactionSwellNow);", start);
-        Assert.Contains("if (amplitude > 0f && SpectatorCrowdBed.Current != null)", start);
+        Assert.True(started < roar && started < hold, "the planner's cooldown starts when the first voice has started");
+        Assert.Contains("var roars = SpectatorReactionBeds.Current;", start);                       // the roar layer is independent of the murmur bed (no SpectatorCrowdBed.Current condition)
+        Assert.DoesNotContain("SpectatorCrowdBed", start);
+        Assert.DoesNotContain("RequestSwell", start);
         Assert.Contains("double hold = plan.DurationOf(reserved) + plan.HoldGapSeconds;", start);       // the voices that really started, plus the model's gap table
         Assert.Contains("if (_callsReady) _schedule.Hold(now, hold);", start);
         // the first voice decides: without a source the reaction is given up and no cooldown starts
@@ -502,17 +502,13 @@ public sealed class SpectatorReactionSourcePinTests
     }
 
     [Fact]
-    public void TheBedTakesTheSwellRequestInItsTickAndKeepsItsPinnedRules()
+    public void TheBedHasNoSwellAndKeepsItsPinnedRules()
     {
         var bed = Code(Bed);
         var frame = Between(bed, "void Update()", "catch (Exception e)");
-        int take = IndexOf(frame, "float swell = SpectatorCrowd.State.TakeSwell();");
-        int add = IndexOf(frame, "if (swell > 0f) _excitement.AddSwell(swell);");
-        int step = IndexOf(frame, "_excitement.Step(Time.unscaledDeltaTime);");
-        Assert.True(take < add && add < step, "the swell is added before the smoothing step");
-        // a swell asked for while nothing sounds is dropped, not kept for later
-        var idle = Between(frame, "if (!on || !started)", "if (_stands == null && !Build()) return;");
-        Assert.Contains("SpectatorCrowd.State.TakeSwell();", idle);
+        Assert.Contains("_excitement.Step(Time.unscaledDeltaTime);", frame);
+        Assert.DoesNotContain("Swell", bed);
+        Assert.DoesNotContain("RequestSwell", Text("ArenaMapPort.Client/SpectatorAudio.cs"));
         Assert.DoesNotMatch(@"\bnew\b|\$""|Linq|\.ToArray\(|\.ToList\(|string\.Format|ToString\(", frame);
         Assert.Equal(3, Regex.Matches(bed, @"\bs\.Bind\(").Count);
     }

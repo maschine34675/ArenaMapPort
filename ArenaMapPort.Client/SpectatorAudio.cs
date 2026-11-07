@@ -25,11 +25,11 @@ namespace ArenaMapPort.Client
     /// independently validated sets, the 13 calls and the reaction set, each failing with its own one Warning and leaving the other (and the crowd) working; Current exists when either
     /// works. A reaction is 1 to 3 voices from three reaction slots that are separate from the calls' two: the planner (CrowdReactionPlanner) decides, this class plays through the
     /// calls' own path (an Environment source of BetterAudio, the mixer group, the rolloff, spatial blend 1, Combined occlusion) with gain Spectators/ReactionVolume, starts each further voice
-    /// 0.12 to 0.45 s after the previous one, asks the bed for a swell, and holds the random calls for the reaction's length plus a gap. The reaction section of Update runs BEFORE the
+    /// 0.12 to 0.45 s after the previous one, asks the roar layer for Arena's Cheer or Angry bed (SpectatorReactionBeds, 2026-11-07; the murmur bed is not lifted any more), and holds the random calls for the reaction's length plus a gap. The reaction section of Update runs BEFORE the
     /// calls' living-player guard and has its own gate (the key on, the raid Started, the spatial audio services up) and never asks whether the local player is alive: in an ArenaMode
     /// raid the raid stays Started across the body handover, so a Disapprove for the local death and a Finish during the respawn wait still sound. The calls' guard,
     /// StopAllVoices and the schedule's Stop leave the reaction voices alone. The listener is the main camera, else the local player's body, else the reaction is dropped.
-    /// The reaction keys (Spectators/Reactions, ReactionVolume, ReactionSwell, ReactionGapScale; SpectatorReactionDemo.cs binds the demo's two) are developer keys like SpectatorCalls:
+    /// The reaction keys (Spectators/Reactions, ReactionVolume, ReactionGapScale; SpectatorReactionDemo.cs binds the demo's two) are developer keys like SpectatorCalls:
     /// honoured only with DeveloperMode, live; the defaults apply otherwise.
     /// Host run (GPU-2, 2026-11-02, the developer demo on the four crowd maps; docs/progress/spectator-audio.md "Host run on GPU-2"): every kind played, 0 warnings, and a plain raid
     /// stayed Started after the local death, so the reactions went on there while the calls were silent. ArenaMode's body handover itself is not host-checked; nobody has listened yet.</summary>
@@ -38,9 +38,9 @@ namespace ArenaMapPort.Client
         const string Tag = "[SpectatorAudio]";
         const float Gain = .5f;
         const float FadeInSeconds = .15f, FadeOutSeconds = .08f;
-        const float ReactionVolumeDefault = .5f, ReactionSwellDefault = 1f;
+        const float ReactionVolumeDefault = .5f;
         static ConfigEntry<bool> _callsEnabled, _reactionsEnabled;
-        static ConfigEntry<float> _reactionVolume, _reactionSwell, _reactionGapScale;
+        static ConfigEntry<float> _reactionVolume, _reactionGapScale;
         Vector3[] _positions;
         float[] _distances;
         SpectatorAudioManifest _manifest;
@@ -90,9 +90,8 @@ namespace ArenaMapPort.Client
         public int ReactionCount, ReactionVoiceCount, ReactionSourceFailures, PlayingReactionVoices;
         /// <summary>Reaction voices that hold a slot: waiting for their staggered start or playing.</summary>
         public int ActiveReactionVoices => _reactionActive;
-        static bool ReactionsOn => !DeveloperOptions.Enabled || _reactionsEnabled == null || _reactionsEnabled.Value;
+        internal static bool ReactionsOn => !DeveloperOptions.Enabled || _reactionsEnabled == null || _reactionsEnabled.Value;
         static float ReactionVolumeNow => DeveloperOptions.Enabled && _reactionVolume != null ? Unit(_reactionVolume.Value, ReactionVolumeDefault) : ReactionVolumeDefault;
-        static float ReactionSwellNow => DeveloperOptions.Enabled && _reactionSwell != null ? Unit(_reactionSwell.Value, ReactionSwellDefault) : ReactionSwellDefault;
         static float ReactionGapScaleNow => DeveloperOptions.Enabled && _reactionGapScale != null ? _reactionGapScale.Value : 1f;
         static float Unit(float value, float fallback) => float.IsNaN(value) ? fallback : Mathf.Clamp01(value);
 
@@ -109,15 +108,12 @@ namespace ArenaMapPort.Client
             };
             var s = Plugin.Instance.Settings;
             _reactionsEnabled = s.Bind("Spectators", "Reactions", true,
-                "Developer hearing comparison: the spectators' reaction voices (a kill, a death, a round start or end, a shot at the stands) and the bed swell that goes with them. " +
+                "Developer hearing comparison: the spectators' reaction voices (a kill, a death, a round start or end, a shot at the stands) and the roar bed that goes with them. " +
                 "Live; off stops the reaction voices, drops what waits and reports no reaction kinds to a mode plugin, on offers them again. The random calls and the murmur bed are not affected. " +
                 "Ignored outside DeveloperMode, where the reactions are on.");
             _reactionVolume = s.Bind("Spectators", "ReactionVolume", ReactionVolumeDefault, new ConfigDescription(
                 "Developer hearing comparison: gain of the reaction voices (the calls play at 0.5). Takes effect with the next reaction. Ignored outside DeveloperMode.",
                 new AcceptableValueRange<float>(0f, 1f)));
-            _reactionSwell = s.Bind("Spectators", "ReactionSwell", ReactionSwellDefault, new ConfigDescription(
-                "Developer hearing comparison: how far a reaction lifts the crowd murmur bed for a moment, as a factor of the reaction's strength (1 = the strength itself, 0 = no swell). " +
-                "Takes effect with the next reaction. Ignored outside DeveloperMode.", new AcceptableValueRange<float>(0f, 1f)));
             _reactionGapScale = s.Bind("Spectators", "ReactionGapScale", 1f, new ConfigDescription(
                 "Developer hearing comparison: multiplies the cooldown between two reactions of one kind (3 s for Approve and Disapprove, 15 s for TakeCover, 5 s for Start and Finish; halved " +
                 "from strength 0.8). 0 removes the cooldowns, the pace of one start per 0.75 s stays. Live. Ignored outside DeveloperMode.",
@@ -727,12 +723,12 @@ namespace ArenaMapPort.Client
             _planner.Started(plan, now, reserved);      // only the voices that sound enter the no-repeat history and the voice count
             ReactionCount++;
             LastReaction = CrowdReactionKind.Name(plan.Kind);
-            // The bed swells with the reaction and the random calls stay quiet for its length plus the model's gap.
-            float amplitude = Mathf.Min(1f, plan.Strength * ReactionSwellNow);
-            if (amplitude > 0f && SpectatorCrowdBed.Current != null) SpectatorCrowd.State.RequestSwell(amplitude);
+            // The crowd answers with Arena's Cheer or Angry bed from the stands (the murmur bed is not lifted), and the random calls stay quiet for the reaction's length plus the model's gap.
+            var roars = SpectatorReactionBeds.Current;
+            bool roar = roars != null && roars.Trigger(plan.Kind, plan.Strength, plan.DurationOf(reserved));
             double hold = plan.DurationOf(reserved) + plan.HoldGapSeconds;
             if (_callsReady) _schedule.Hold(now, hold);
-            if (DeveloperOptions.Enabled) LogReaction(plan, reserved, hold);
+            if (DeveloperOptions.Enabled) LogReaction(plan, reserved, hold, roar);
             Array.Clear(_planSlots, 0, _planSlots.Length);
         }
 
@@ -819,7 +815,7 @@ namespace ArenaMapPort.Client
         }
 
         // Developer mode only: one line per played reaction ("reaction Approve strength=0.60, 2 voice(s) [...]") and one per dropped request.
-        void LogReaction(CrowdReactionPlan plan, int voices, double hold)
+        void LogReaction(CrowdReactionPlan plan, int voices, double hold, bool roar)
         {
             var sb = new System.Text.StringBuilder();
             sb.Append(Tag).Append(' ').Append(MapKey).Append(": reaction ").Append(CrowdReactionKind.Name(plan.Kind)).Append(plan.Directed ? " directed" : "")
@@ -833,7 +829,7 @@ namespace ArenaMapPort.Client
                 sb.Append(_rset.clips[plan.Clips[i]].name).Append(" fan ").Append(_planSlots[i] != null ? _planSlots[i].Speaker : -1).Append(" at ")
                   .Append((_planSlots[i] != null ? _planSlots[i].Distance : 0f).ToString("0.0", NoiseText.Inv)).Append(" m +").Append(plan.Delays[i].ToString("0.00", NoiseText.Inv)).Append(" s");
             }
-            sb.Append("], calls held ").Append(hold.ToString("0.0", NoiseText.Inv)).Append(" s");
+            sb.Append("], calls held ").Append(hold.ToString("0.0", NoiseText.Inv)).Append(" s, roar=").Append(roar ? SpectatorReactionBedKind.Name(SpectatorReactionBedKind.For(plan.Kind)) : "none");
             Plugin.Log.LogDebug(sb.ToString());
         }
 

@@ -1065,3 +1065,188 @@ Plan section 7, host items:
 Not covered by this run: listening (loudness, the swell, variety, the 19 `listen` clips) is the user's; which listener path ran (`Camera.main` or the player's body: the distances fit either in a
 plain raid) and the listener in ArenaMode's spectator or replay view; the raid status across ArenaMode's body handover; `GetSource` headroom under load (no source failure was logged). Phases B
 (ArenaMode) and C (the plugin's own sensors) are not started.
+
+## 2026-11-07 - Reaction roar layer: Arena's Cheer and Angry beds replace the murmur swell
+
+Status: implemented and reviewed offline (data, Unity-free model, Unity glue, one review round), **not yet host-verified, not listened to**. Nothing is committed, staged or deployed by this
+work. Builds on phase A (`d70acd2`, the sections above); where this section and the phase-A text about the bed swell differ, this section wins (the phase-A paragraphs stay as written,
+appended-only record). Spec of the work: the roar-beds spec of 2026-11-07 (workflow scratch, not tracked); plan decision D3 in [../PLAN-CROWD-REACTIONS.md](../PLAN-CROWD-REACTIONS.md).
+
+### Decision (user, 2026-11-07)
+
+"gerne einbauen. das neutrale gemurmel anzuheben macht glaube ich nicht wirklich sinn, eher sollten dann die lauteren Cheer und Angry Betten laufen"
+
+Meaning: a reaction no longer lifts the neutral murmur bed (the transient swell of phase A is removed, not kept as an option); instead it plays one of Arena's in-match crowd beds from every stand
+for the length of the reaction: a Cheer bed (roar) or an Angry bed (boos). The sustained `SpectatorCrowd.SetExcitement` level on the neutral bed is a released contract member (0.4.0) and keeps
+its meaning exactly.
+
+### Source facts (installed Arena, measured by the extractor)
+
+`ambient_voice.bundle` holds seven stereo 44.1 kHz beds on three banks. The bundle is not a stage-2 key source and no clip streams from one of the protected files (they stream from
+`archive:/CAB-e89d838d.../*.resource`); the extractor checks that per clip, as for the reaction clips.
+
+| Bank | Trigger | Clips (names as in the bundle) | Slots | Length | Stereo RMS / peak (dBFS) |
+|---|---:|---|---|---|---|
+| Cheer | 1119 | `arena_fans_ambient_cheer`, `..._cheer2`, `..._cheer3` | 3 embedded, 0 external, 0 null; SpreadGroups 1 (= Clips) | 7.0 s each | -22.75 / -8.87, -22.54 / -7.35, -22.94 / -8.42 |
+| Angry | 1121 | `arena_fans_ambient_angry`, `..._angry2`, `..._angry3` | 3 embedded, 0 external, 0 null; SpreadGroups 1 | 8.0 s each | -26.42 / -11.73, -25.84 / -11.00, -29.70 / -14.17 |
+| Neutral | 1122 | `arena_fans_ambient_neutral` (the murmur since 2026-11-02) | 1 embedded | 80 s | -31.1 |
+
+Arena plays these from its `FansAmbient` emitters on the Cheer and Angry triggers; the emitters are inactive in the imported scenes and the triggers do not exist in the port. Playing the beds from
+the stands on a reaction is the port's choice, not a proven copy of Arena's in-match behaviour.
+
+### Export (`extract_spectator_audio.py extract`)
+
+The six beds ("roar beds") get the neutral bed's processing (mean downmix, 500 ms equal-power crossfade of the head into the tail, so each loops without a step) but a **common level** instead of
+the murmur's fixed -8.9 dB: every roar bed is brought to **-32 dBFS RMS** mono (the murmur sits at -40). One target keeps cheers and boos equally audible (Arena's Cheer beds are about 8.5 dB above
+its Neutral bed, its Angry beds 1.4 to 5.3 dB, and a boo 1 dB above the murmur would not read) and the volume key scales all of them. **-32 is a start value for the user's listening.** The gain
+is recorded per clip in `processing.gain_db` beside the original stereo RMS and peak. `process_roar` refuses a bed quieter than the target (it would need a boost) and a bed whose peak ends above
+-3 dBFS; the level check of `validate` takes +-1.0 dB around the target (`ROAR_LEVEL_TOLERANCE_DB`) because the crossfade shifts the finished loop's RMS slightly.
+
+| Bed | Gain | Frames after the seam | Output RMS / peak (dBFS) | Loop jump / step RMS |
+|---|---:|---|---|---|
+| cheer | -8.84 dB | 286,650 (6.5 s) | -31.90 / -18.17 | 0.00119 / 0.00489 |
+| cheer2 | -9.07 dB | 286,650 | -31.89 / -17.72 | 0.00031 / 0.00489 |
+| cheer3 | -8.70 dB | 286,650 | -31.98 / -18.16 | 0.00659 / 0.00480 |
+| angry | -5.28 dB | 330,750 (7.5 s) | -32.08 / -17.43 | 0.00381 / 0.00453 |
+| angry2 | -5.84 dB | 330,750 | -32.06 / -17.20 | 0.00238 / 0.00414 |
+| angry3 | -1.84 dB | 330,750 | -31.95 / -17.29 | 0.00797 / 0.00439 |
+
+The largest loop-jump ratio is 1.8 (angry3), the limit 3.0; output RMS lies within 0.11 dB of -32, peaks at least 14 dB below the -3 dBFS limit. The six WAVs are 3,704,664 bytes. After
+`extract` and `verify`: 91 files in `work/extract/spectator-audio` (13 calls, the murmur, 70 reactions, 6 roar beds, the manifest), both OK in 9.4 s.
+
+**Manifest.** `spectator-audio.json` (schema 1 stays) gains the optional `reaction_beds` object beside `bed` and `reactions`: `{"schema": 1, "source", "target_rms_db": -32.0, "banks": [{"bank":
+"Cheer", "trigger": 1119, "kind": "cheer", "clips": [...]}, {"bank": "Angry", "trigger": 1121, "kind": "angry", "clips": [...]}]}`, banks in the order Cheer, Angry, clips sorted by name, three per
+bank. A clip record has the bed record's fields (`name`, `file`, `channels` 1, `sample_rate` 44100, `frames` within 3 s to 12 s, `bytes`, `sha256`, `peak`, `rms`, `seam_crossfade_ms` 500,
+`source`, `source_id`, `processing` with the original format, peak and RMS, `downmix` "mean", `gain_db` (negative), `crossfade_frames`); the key sets are enforced exactly and `schema` and
+`trigger` must be real ints. A manifest without `reaction_beds` is valid and gives a crowd without a roar layer (one Debug line).
+
+**Validation and staging.** `validate(folder, require_bed, require_reactions, require_reaction_beds=False, pools=None)`; `extract()` validates with every `require_*` flag true and removes stale
+roar WAVs of an earlier export by the exact pattern `arena_fans_ambient_(cheer|angry)[23]?\.wav` only (the `verify` command still validates without the flags and prints the roar line).
+`validate_distribution.py` requires the roar beds (`require_reaction_beds=True`) and compares them byte for byte with `work/extract/spectator-audio`; its staged key-source check covers all 91
+files. `make_release_zips.py` admits the six names in the core part (`arena_fans_ambient_(?:cheer|angry)[23]?\.wav`). The client's flat `*.wav` staging copy stages them: no csproj change.
+
+### Model (`SpectatorReactionBedModel.cs`, Unity-free, linked into the tests)
+
+- **Manifest and validation.** `SpectatorReactionBedSet`/`Bank`/`Clip` records and `SpectatorAudioManifest.ValidateReactionBeds()` (throws `InvalidDataException`), independent of `Validate`,
+  `ValidateBed` and `ValidateReactions` in every direction: exactly 2 banks in the order Cheer, Angry; 1 to 8 clips per bank (the Python side pins 3, the client stays tolerant); names match
+  `arena_fans_ambient_(cheer|angry)[23]?` and fit the bank; `target_rms_db` within -60..-10 (not exactly -32: that is a start value).
+- **Kind table** (`SpectatorReactionBedKind.For`, pinned): Approve (1), Start (4), Finish (5) -> Cheer (bed kind 1); Disapprove (2) -> Angry (bed kind 2); TakeCover (3), Lull (6),
+  PurifiedTeam (7) and anything else -> none (0).
+- **Envelope** (`RoarEnvelope`, one per stand and kind, allocation-free, absolute `double` clock): Idle -> Attack (linear, 0.3 s, from the CURRENT level to the amplitude) -> Hold (`holdSeconds`,
+  counted from the end of the attack, so the hold ends at trigger + 0.3 + hold) -> Release (linear, 2.0 s, so it reaches exactly 0 and Idle at a computable time) -> Idle. Attack and release
+  have fixed durations whatever the start level, so the slope varies. A retrigger of the same kind keeps the larger amplitude while the envelope is in Attack or Hold, moves the hold end to
+  the later of the two and restarts the attack from the current level (no jump up, no jump down); in Release the new amplitude counts as given, so a quieter reaction after a dying roar can
+  still be heard. `Cut(now)` is a quick release of 0.5 s (used when the other kind takes over); it does nothing when a release has 0.5 s or less left. `Stop()` ends it at once (outside
+  Started, audio reset). `Step(now, out changed)` returns the gain 0..1.
+- **Formulas.** `Amplitude(strength) = 0.35 + 0.65 * strength` (clamped to 0.35..1, NaN -> 0.35); `HoldSeconds(reactionDurationSeconds) = clamp(duration, 1.5, 5.0)`.
+- **Clip choice** (`RoarClipPicker`, `System.Random` with a seed): one clip of the kind per trigger, never the one played last for that kind (three clips, so at least two alternate); the same
+  clip on every stand of that reaction; `StartOffset(frames)` gives a per-stand start frame in 0..frames-1, so the stands are out of phase.
+- **Volume law** (`SourceVolume`): `min(1, clamp(volumeKey, 0, 2) * clamp(gain, 0, 1) / ClipGain)`, with the murmur's `ClipGain` 3.2 and `MaxVolume` 2 shared (the roar clip floats are baked with
+  `SpectatorCrowdBedModel.ToClipFloats`); at key 1 and gain 1 the roar plays at its exported level. A NaN key counts as the default 1, a NaN gain as 0. Defaults: `ReactionBedsDefault = true`,
+  `ReactionBedVolumeDefault = 1`.
+
+### Glue (`SpectatorReactionBeds.cs`, one file; `SpectatorAudio.StartReaction` calls it)
+
+- **Stands.** Built by `ArenaSpectators.Create` right after `SpectatorCrowdBed.Create` in its own try, from the same spectator positions and `SpectatorCrowdBedModel.Plan` with the bed's reach: the
+  same 2 to 6 stands as the murmur (4/4/6/6), so a roar comes from where the murmur comes from. It does not depend on the bed being on (bed off -> roars still play) and uses the bed's placement,
+  environment mixer group and rolloff-curve helpers (now `internal static` on `SpectatorCrowdBed`: `Place`, `EnvironmentGroup`, `ReachNow`). The stands are planned once at build: a live
+  `CrowdBedReach` change does not re-plan them. A child of the crowd root, removed with it; `Current` like the bed.
+- **Sources.** Per stand up to two owned looping AudioSources (cheer, angry), created lazily at the first trigger of their kind, placed like the bed's source (spatial blend 1, the stand's Custom
+  rolloff curve, no occlusion processing), priority 150 (above the murmur's 200, so the roar wins if voices run short), pitch 1.0 with the random start offsets (the murmur's per-stand pitch is
+  not used). The AudioClips are one per roar bed, shared by the stands, built lazily and destroyed on audio reset and teardown.
+- **Trigger.** `Trigger(kind, strength, reactionDurationSeconds)`, main thread: maps the kind to a bed (none -> false), picks the clip, and per stand cuts the other kind's source if it sounds,
+  triggers the envelope (`Amplitude`, `HoldSeconds`) and starts the source at its offset if it is not playing. A retrigger of a kind that is still sounding keeps its clip and does not call
+  `Pick`, so the audio does not change under the listener. It is not gated on `Started` itself (`StartReaction` runs only then); a pending audio reset is consumed first, as the tick does.
+- **Tick.** Allocation-free; idle it is two or three field reads (`_ready`, `_reset`, `_sounding`) and a return, no Unity call and no scene search. While a roar sounds (about 10 s at most per
+  reaction) it reads `AbstractGame` status once and steps one envelope per sounding source, writing `source.volume` only when the gain or the volume key changed. It stops everything at once
+  (no release) outside `Started`, when `Spectators/ReactionBeds` or `Spectators/Reactions` is off, and on an audio reset (clips rebuilt lazily). A source whose envelope went Idle is stopped.
+- **Worker.** `LoadRoarPackage` in `ArenaSpectators.cs`, directly after `LoadReactionPackage`: the six WAVs are read, CNG-hashed (`CryptoProviders.Select(null)`) and PCM-decoded on the crowd
+  worker (no Unity API, no log); a failure travels in `Loaded.Roars` and becomes ONE Warning on the main thread, the calls, the reactions and the murmur keep working. The main thread does it
+  when the worker did not. The load summary gains `roars=`.
+- **Removed.** The phase-A swell is gone: `CrowdExcitement.AddSwell`/`Swell`/`Level`/`StepSwell`/`SwellAttack`/`SwellTimeConstant`, `CrowdBedState.RequestSwell`/`TakeSwell`, the bed tick's two
+  swell lines, `SpectatorAudio.ReactionSwellNow` and the key **`Spectators/ReactionSwell`** (never released; an orphaned `ReactionSwell` line in a developer's .cfg is harmless and is simply
+  never read). The murmur's factor is `1 + 0.6 * Current` of the smoothed external level again, exactly as in 0.4.0. The public `SpectatorCrowd` surface is unchanged (eight members,
+  `ContractVersion` 1).
+- **Keys** (developer-only, bound through `Plugin.Instance.Settings` in the new file's `Install()`, honoured only with DeveloperMode, none public; not in `SpectatorCrowdBed.cs`, whose Bind
+  count stays three): `Spectators/ReactionBeds` (true) and `Spectators/ReactionBedVolume` (1.0, 0..2, live next tick). `Plugin.cs` calls `SpectatorReactionBeds.Install()` between the bed's
+  and `ArenaSpectators.Install`.
+- **NoiseProbe.** New `NoiseEv.Roar` appended after `ReactStop`, counted as a cause; tokens `roar+` (the tap logs `source.volume`) and `roar-`; the census prints `ownedRoar=playing/active`
+  beside `ownedBed`. Nothing from the worker.
+- **Logging.** Tag `[ReactionBeds]`: one Debug line at build (`<map>: 6 roar beds (3 cheer, 3 angry), N stands`), one Debug per trigger in developer mode (`roar cheer amp=0.74 hold=3.2 s
+  clip=arena_fans_ambient_cheer2 stands=4`), one Warning for a damaged set, one Debug at teardown. The per-reaction line of `SpectatorAudio` ends with `roar=cheer|angry|none`.
+
+### Review round and tests (offline, this VM, 2026-11-07)
+
+Four findings, all confirmed against the code and applied: (glue F1) the roar tick now also stops on `!SpectatorAudio.ReactionsOn`, so switching `Spectators/Reactions` off silences a sounding
+roar (`ReactionsOn` is `internal static` for it); (glue F2) `Trigger` consumes a pending `_reset` before starting any lane (`Release(true)`, `Fail(e)` and `return false` on an exception);
+(compat F1) a stray `TextureOrder` summary was put back above `TextureOrder` in `ArenaSpectators.cs`; (compat F2) the `roar+` tap passes `source.volume`, not the volume key. One pin test
+covers F1, F2 and the tap volume.
+
+- Client Release build with `ArenaMapPortDllOnly=true`: 0 warnings, 0 errors.
+- `dotnet test ArenaMapPort.Server.Tests -c Release`: **3,184 passed**, 0 failed, 0 skipped (twice after the fixes; the model stage had 74 new model test cases, the glue stage 11 new source pins
+  and the rewritten swell pins). The real-data test on `work/extract/spectator-audio/spectator-audio.json` ran (not skipped): `ValidateReactionBeds`, 3 + 3 clips, size, SHA-256 through CNG,
+  WAV format and frames, RMS within 0.3 dB of the manifest target, peak at most -3 dBFS, float peak at `ClipGain` at most 3.2, calls, murmur and reactions still validating beside it.
+- Python: whole suite `Ran 2886 tests ... OK (skipped=67)` with `PYTHONIOENCODING=utf-8`; the `FAIL: ... HasNativeWater as a boolean` line in its output is a message printed by an existing
+  test that expects it. `validate_distribution.py`: `DISTRIBUTION_OK 5 maps 15 bundles 5 sidecars encrypted`.
+- **Counts.** `dist/` 359 files (353 + 6); `make_release_zips.py --plan` core 230, equator 24, bay5 30, airpit 22, bowl 26, iceberg 27, raw 5,396,842,180 B, estimated zip 5,121.8 MiB, 0
+  unclassified; `spectator-audio/` 91 files.
+
+### Not yet host-verified, not listened to
+
+Nothing of the roar layer has run on a host and nobody has listened: the level (-32 dBFS RMS per bed), the 0.3 s attack, the 2 s release, the hold clamp of 1.5 to 5 s, the amplitude law, the
+priority 150 and the two keys are start values for the user's listening. The `SetExcitement` murmur is unchanged and not part of this. Host checklist (GPU-2, DeveloperMode, `Spectators/ReactionDemo
+= Cycle`, plain raids with bots None, after a full deploy: the six WAVs and the manifest travel with the whole dist, the client DLL needs an EFT restart):
+1. One raid on each crowd map (Equator, Bay5, Air Pit, Bowl): a roar from the stands on Approve, Start and Finish, boos on Disapprove, nothing on TakeCover; the Debug lines `roar cheer|angry`
+   with the right `stands=` (4/4/6/6); a Cheer after an Angry (and the reverse) cuts the other bed in 0.5 s; two quick Approves keep the clip and extend the hold; the roar ends 2 s after the hold.
+2. `Spectators/CrowdBed` off: the roars still play. `Spectators/ReactionBeds` off: no roar, the voices and the murmur unchanged. `Spectators/Reactions` off while a roar sounds: it stops.
+3. Iceberg: no `[ReactionBeds]` line, no warning, `SpectatorCrowd.ReactionKinds = 0`.
+4. Hideout once (a prefix or tick must not touch it); the raid end and an audio reset (the countdown): the sources stop and the clips are rebuilt at the next trigger.
+5. No ArenaMapPort warning in the whole process; `[ReactionBeds]` Debug lines; the `load total=` line with `roars=` (the worker budget of 2.1 s must not grow noticeably); frame max against 11-12 ms;
+   `ownedRoar=playing/active` in a NoiseProbe census; check that the up to 12 owned sources at priority 150 are not culled under load.
+6. The user listens: roar level against the voices and the murmur (-32 may need to move either way), whether boos read, the attack and release, `ReactionBedVolume`.
+
+### Host run on GPU-2 (2026-11-07, 15:29-15:42)
+
+**Build and deploy.** The client Release DLL of this working tree (HEAD `d70acd2` plus the roar-layer change; the commit that adds this paragraph carries the code), rebuilt
+by the lead after the workflow (0 warnings, 0 errors; `dotnet test` 3,184 passed). Dry run, then `deploy-to-spt.ps1 -Confirm` at 15:29: 359 files, 6 new (the roar WAVs),
+3 overwritten (client DLL, `spectator-audio.json`, the server DLL by its commit stamp only; no server restart), `gpu-run deploy-wait` identical on the host after 14.1 s.
+EFT was not running; `gpu-run start` brought a fresh process (started 15:31:44, 16/16 plugins identical). `Spectators/ReactionDemo = Cycle` was set with `persist=false`
+(DeveloperMode on that host; its NoiseProbe stands at Capture from earlier tests). All settings below were set with `persist=false`; the host's .cfg is unchanged.
+
+**Equator (plain PMC raid, bots None, 15:32-15:36).**
+- `15:32:48.425 [ReactionBeds] arena_equator: 6 roar beds (3 cheer, 3 angry), 4 stands, volume 1.00`, then the crowd's summary `load total=2218 ms (wait=1, hash=59, parse=1954,
+  textures=2058, actors=56, audio=98, reactions=228, roars=6; hash and parse on the worker thread, crypto CNG)`: the six beds cost 6 ms on the worker.
+- `15:33:02.399 [ReactionBeds] arena_equator: audio configuration changed (device changed=False); the roars stop and the clips are rebuilt on demand`: the raid-start audio reset,
+  consumed before the first trigger (checklist 4; no clip existed yet, so nothing was rebuilt).
+- The demo cycle, every `[SpectatorAudio] reaction` line ending with the matching `roar=`: Approve 0.30/0.60/0.90 gave `roar cheer amp=0.55/0.74/0.93 hold=4.0/2.8/5.0 s`
+  (clips cheer2, cheer, cheer2: never the same clip twice in a row), Disapprove 0.30/0.60/0.90 gave `roar angry amp=0.55/0.74/0.93 hold=3.3/2.0/3.2 s` (angry, angry3, angry),
+  TakeCover and TakeCover directed `roar=none`, Start 1.00 `roar cheer amp=1.00 hold=4.8 s` (cheer3), Finish 1.00 `roar cheer amp=1.00 hold=4.0 s` (cheer); `stands=4` on every
+  line, nine seconds apart (the demo's cadence), 1 to 3 voices as in phase A.
+- Checklist 2, bed off: `Spectators/CrowdBed=false` at 15:34:31; the Start at 15:34:32.791 roared, and one `uibridge_inspect` read of frame 17234 gave
+  `SpectatorReactionBeds.Current.PlayingSources = 4`, `ActiveSources = 4`, `SpectatorCrowdBed.Current.PlayingStands = 0` of `StandCount = 4`: the roar plays from all four
+  stands while the murmur is silent.
+- `Spectators/Reactions=false` at 15:35:25.057 (the last roar, Disapprove 0.30 at 15:35:17.874 with hold 1.9 s, had ended at 15:35:22): `spectator reactions enabled=False`,
+  0.3 s later `ActiveSources = 0`, `PlayingSources = 0` and the murmur's `PlayingStands = 4` (bed on again) held over 40 frames; `enabled=True` again at 15:35:36.
+- Performance during the cycle: 120.0 fps, mean 8.3 ms, p95 8.3 ms, max 11.3 ms over 3,599 frames / 30 s. NoiseProbe minute line at 15:34:13: `bursts peak=0 click=0
+  dropout=0 gap=0 clip=0 loud=0 ... orphan=0 evOrphan=0 ... react=+14/-14 ... resets=0`.
+
+**Bowl (plain PMC raid, bots None, 15:36-15:41).**
+- `15:36:29.847 [ReactionBeds] arena_bowl: 6 roar beds (3 cheer, 3 angry), 6 stands, volume 1.00`; `load total=2120 ms (... audio=30, reactions=118, roars=5; ...)`.
+- Checklist 5, the owned sources under load: one read of frame 24842 gave `PlayingSources = 6`, `ActiveSources = 6` and the murmur's `PlayingStands = 6`: six roar sources
+  (priority 150) and six murmur stands (priority 200) sound at once, none culled, with the calls and the reaction voices beside them.
+- Checklist 2, `Spectators/Reactions` off while a roar sounds (review finding F1): demo `Once` with kind 4 (Start) at 15:37:10.699, `roar cheer amp=1.00 hold=4.7 s`
+  (attack to 11.0, hold to 15.7, release to 17.7); `Reactions=false` at 15:37:16.522, inside the release with 1.2 s left; 0.1 s later `ActiveSources = 0`, `PlayingSources = 0`
+  held over 14 frames: the roar stopped with the key instead of running out.
+- A cycle with `ReactionDemoKind=2` and `ReactionGapScale=0.3`: Disapprove only (the kind key narrows the cycle), still every 9 s (the demo's cadence is fixed; the gap scale moves
+  the planner's cooldowns, not the demo), holds 1.5 to 3.5 s; `PlayingSources` never above 6 in 505 reads over 55 s.
+- Performance: 119.6 fps, mean 8.4 ms, p95 8.3 ms, max 42.5 ms once, 2.3 s before the status read at about 15:40:45 while no demo ran (no ModProfiler line in the buffer; not
+  attributed, not reproduced).
+- Keys restored (`ReactionDemo=Off`, `ReactionDemoKind=0`, `ReactionGapScale=1`, all `persist=false`).
+
+**Hideout.** Opened from the main menu after the Bowl raid at 15:41 (screen Hideout after 5.9 s), back to the main menu. **0 ArenaMapPort warnings in the whole process**
+(15:31:44 to 15:42: both raids, the hideout, every key change).
+
+**Not exercised on the host.** The 0.5 s cut of the other kind and the retrigger (same clip, longer hold): the developer demo fires every 9 s at every gap scale and the longest
+envelope is 7.3 s (0.3 + 5 + 2), so no two roars overlapped; both paths are unit-tested only (`SpectatorReactionBedModelTests`, the glue pins). Bay5 and Air Pit were not run (the
+same code with 4 and 6 stands). Iceberg was not run this time (no crowd, no layer by construction; its `ReactionKinds = 0` was host-checked on 2026-11-02). **Nobody has listened:**
+the level (-32 dBFS RMS per bed), the attack, the release, the hold clamp and `ReactionBedVolume` are start values for the user's ear.

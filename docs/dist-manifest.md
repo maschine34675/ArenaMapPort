@@ -511,3 +511,25 @@ reads only the file the manifest names. Record: [spectator-audio.md](progress/sp
   stale WAVs; the client reads only the files the manifest names.
 - **Release.** Not part of any release yet: the number, form and wording are the user's decision, and the client DLL changed (a re-cut and a VirusTotal scan follow). The host has none of it
   until a full deploy through `tools/deploy-to-spt.ps1`.
+
+
+## Reaction roar beds - 2026-11-07 (phase A2, unreleased)
+
+`spectator-audio/` gains six WAVs, Arena's in-match crowd beds that a reaction plays from the stands instead of lifting the murmur (record: [spectator-audio.md](progress/spectator-audio.md), "2026-11-07 -
+Reaction roar layer"; user decision of that day). Plaintext like the calls, the murmur and the reactions; written by the same `extract_spectator_audio.py extract` run into ignored
+`work/extract/spectator-audio` and staged beside the plugin by every Release client build, `DllOnly` included (the flat `*.wav` copy takes them: no csproj change).
+
+- **Files.** `arena_fans_ambient_cheer.wav`, `_cheer2`, `_cheer3` (Cheer bank, trigger 1119, 6.5 s after the loop seam) and `arena_fans_ambient_angry.wav`, `_angry2`, `_angry3` (Angry bank, trigger 1121,
+  7.5 s), mono 16-bit PCM 44.1 kHz, a 500 ms crossfade of the head into the tail so each loops without a step, 3,704,664 bytes in all. Every bed is brought to a common -32 dBFS RMS (gains -1.84 to
+  -9.07 dB, recorded in the manifest; a start value for the user's listening). The folder holds **91 files**: 13 calls, the murmur, 70 reactions, 6 roar beds and `spectator-audio.json`.
+- **Manifest.** `spectator-audio.json` (schema 1, every earlier key unchanged) gains the optional `reaction_beds` object (banks Cheer and Angry with trigger, kind and three clip records each; hash, size,
+  frames, levels, provenance and `processing.gain_db` per clip). The client verifies each file's length and SHA-256 and its decoded format against it; a manifest without `reaction_beds` is valid and
+  gives a crowd without a roar layer.
+- **Counts.** The distribution grows from 353 to **359 files**. `make_release_zips.py --plan` reads core **230** (was 224), equator 24, bay5 30, airpit 22, bowl 26, iceberg 27, raw 5,396,842,180 B, estimated
+  zip 5,121.8 MiB, 0 unclassified. The released 0.4.0 (256 files) has none of this.
+- **Packer.** The spectator-audio rule accepts `arena_fans_ambient_(?:cheer|angry)[23]?.wav` in the core part; the names are not in `required_files` because the manifest names them.
+- **Validation.** `validate_distribution.py` requires the roar beds (`require_reaction_beds`), the exact file set, format, levels and hashes, byte equality with `work/extract/spectator-audio`, and refuses a
+  staged spectator WAV that is a copy of a stage-2 key-source file (no roar bed streams from one). Result of 2026-11-07: `DISTRIBUTION_OK 5 maps 15 bundles 5 sidecars encrypted`.
+- **Stale files.** The extractor removes stale roar WAVs of an earlier export by the exact name pattern only; a player who extracts a later release over an older install keeps stale WAVs, and the
+  client reads only the files the manifest names.
+- **Release.** Not part of any release: the number, form and wording are the user's decision, the client DLL changed (a re-cut and a scan follow), and the host has none of it until a full deploy.

@@ -30,7 +30,9 @@ namespace ArenaMapPort.Client
         /// <summary>A reaction voice starts (SpectatorAudio, docs/PLAN-CROWD-REACTIONS.md): A the reaction voice number, B the reaction kind (CrowdReactionKind), V1 the distance to the listener, V2 the occlusion factor.</summary>
         ReactStart,
         /// <summary>A reaction voice stops: A the voice number, B the <see cref="NoiseStopReason"/>, V1 the milliseconds it played, V2 the seconds of its clip left.</summary>
-        ReactStop
+        ReactStop,
+        /// <summary>A roar-bed stand source starts (A = 1) or stops (A = 0) (SpectatorReactionBeds): B the stand index, V1 the distance to the listener, V2 the source volume, label the kind and stand, label2 the clip.</summary>
+        Roar
     }
 
     /// <summary>Why a spectator voice stopped (the spec- event).</summary>
@@ -56,7 +58,7 @@ namespace ArenaMapPort.Client
                 case NoiseEv.SpecStart: case NoiseEv.SpecStop: case NoiseEv.AmbStart: case NoiseEv.AmbRestart: case NoiseEv.Prop:
                 case NoiseEv.Room: case NoiseEv.RoomReverb: case NoiseEv.RoomShot: case NoiseEv.Gate: case NoiseEv.Puddle:
                 case NoiseEv.Rain: case NoiseEv.RainPlay: case NoiseEv.Config: case NoiseEv.Reset: case NoiseEv.Life:
-                case NoiseEv.Hitch: case NoiseEv.SelfTest: case NoiseEv.Bed: case NoiseEv.ReactStart: case NoiseEv.ReactStop:
+                case NoiseEv.Hitch: case NoiseEv.SelfTest: case NoiseEv.Bed: case NoiseEv.ReactStart: case NoiseEv.ReactStop: case NoiseEv.Roar:
                     return true;
                 default:
                     return false;
@@ -132,12 +134,13 @@ namespace ArenaMapPort.Client
                 case NoiseEv.Bed: return "bed";
                 case NoiseEv.ReactStart: return "react+";
                 case NoiseEv.ReactStop: return "react-";
+                case NoiseEv.Roar: return "roar";
                 default: return "none";
             }
         }
 
-        /// <summary>The token of one event: <see cref="Token(NoiseEv)"/>, except that the crowd bed says whether the stand source started or stopped ("bed+", "bed-").</summary>
-        internal static string Token(NoiseEvent e) => e.Kind == NoiseEv.Bed ? (e.A == 1 ? "bed+" : "bed-") : Token(e.Kind);
+        /// <summary>The token of one event: <see cref="Token(NoiseEv)"/>, except that the crowd bed and the roar beds say whether the stand source started or stopped ("bed+", "bed-", "roar+", "roar-").</summary>
+        internal static string Token(NoiseEvent e) => e.Kind == NoiseEv.Bed ? (e.A == 1 ? "bed+" : "bed-") : e.Kind == NoiseEv.Roar ? (e.A == 1 ? "roar+" : "roar-") : Token(e.Kind);
     }
 
     // ---------------------------------------------------------------------------------------------------------------------------
@@ -799,6 +802,8 @@ namespace ArenaMapPort.Client
                     return token + " " + l1 + " " + F(e.V1, "0.0") + "m";
                 case NoiseEv.Bed:
                     return token + " " + l1 + " " + F(e.V1, "0.0") + "m vol=" + F(e.V2, "0.000");
+                case NoiseEv.Roar:
+                    return token + " " + l1 + (l2.Length > 0 ? " clip=" + l2 : "") + " " + F(e.V1, "0.0") + "m vol=" + F(e.V2, "0.000");
                 case NoiseEv.Rain: case NoiseEv.RainPlay: case NoiseEv.Reset: case NoiseEv.Life: case NoiseEv.SelfTest:
                     return token + " " + l1;
                 case NoiseEv.Config:

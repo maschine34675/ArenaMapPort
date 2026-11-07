@@ -168,6 +168,8 @@ SPECTATOR_BED_NAME = f"{PLUGIN_ROOT}/spectator-audio/arena_fans_ambient_neutral.
 # categories of extract_spectator_audio.REACTION_CATEGORIES, with the calls' two-digit suffix. A name of another category is unclassified on purpose
 # (the packer does not import the extractor; test_release_zips pins that the two lists agree). Which of these files a release holds is the
 # extractor's manifest and validate_distribution.py's business, not a list kept here.
+# The six roar beds of phase A2 (2026-11-07: Arena's Cheer and Angry beds, arena_fans_ambient_cheer|angry with an optional 2 or 3, extractor ROAR_FILE)
+# are shared core files of the same folder; the packer's regex carries that pattern and test_release_zips pins that it agrees with the extractor.
 SPECTATOR_REACTION_CATEGORIES = ("kill_cheer", "kill_angry", "match_start", "match_end", "aim_hide", "shoot_hide")
 SPECTATOR_TEXTURES_MANIFEST_NAME = f"{PLUGIN_ROOT}/spectators/shared/spectator-textures.json"
 
@@ -364,7 +366,8 @@ def build_rules(spec: ReleaseSpec) -> list:
         add(CORE_ID, "selection map", re.escape(name))
     add(CORE_ID, "score monitors", re.escape(f"{PLUGIN_ROOT}/monitors/") + rf"(?:monitors\.json|{LEAF}\.png)")
     add(CORE_ID, "spectator audio", re.escape(f"{PLUGIN_ROOT}/spectator-audio/")
-        + r"(?:spectator-audio\.json|arena_fans_ambient_neutral\.wav|arena_fan(?:[7-9]|1[0-3])_participating_\d{2}\.wav"
+        + r"(?:spectator-audio\.json|arena_fans_ambient_neutral\.wav|arena_fans_ambient_(?:cheer|angry)[23]?\.wav"
+        + r"|arena_fan(?:[7-9]|1[0-3])_participating_\d{2}\.wav"
         + r"|arena_fan\d{1,2}_(?:" + "|".join(SPECTATOR_REACTION_CATEGORIES) + r")_\d{2}\.wav)")
     add(CORE_ID, "spectator textures", re.escape(f"{PLUGIN_ROOT}/spectators/shared/") + r"(?:spectator-textures\.json|[0-9a-f]{16}(?:-[0-5])?\.png)")
     for m in spec.maps:

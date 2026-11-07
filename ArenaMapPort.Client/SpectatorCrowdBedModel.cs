@@ -5,7 +5,6 @@ using System.Globalization;
 using System.IO;
 using System.Text;
 using System.Text.RegularExpressions;
-using System.Threading;
 
 namespace ArenaMapPort.Client
 {
@@ -287,27 +286,20 @@ namespace ArenaMapPort.Client
     }
 
     /// <summary>
-    /// The smoothed excitement of the crowd: a target level (0 calm to 1 peak, set by a mode plugin) that the stands follow with a time constant of two seconds, a transient
-    /// swell that every reaction voice adds on top (docs/PLAN-CROWD-REACTIONS.md 4.4), and the volume factor the larger of the two maps to (1.0 to 1.6). The swell rises
-    /// linearly to its amplitude in <see cref="SwellAttack"/> seconds and then decays exponentially with a time constant of <see cref="SwellTimeConstant"/> seconds; the level the
-    /// factor uses is <c>max(smoothed external level, swell)</c> and never exceeds 1, so the factor never exceeds <see cref="MaxFactor"/> and the fixed
-    /// <see cref="SpectatorCrowdBedModel.ClipGain"/> stays valid. No allocation; no Unity type.
+    /// The smoothed excitement of the crowd: a target level (0 calm to 1 peak, set by a mode plugin) that the stands follow with a time constant of two seconds, and the
+    /// volume factor that level maps to (1.0 to 1.6). The factor never exceeds <see cref="MaxFactor"/>, so the fixed <see cref="SpectatorCrowdBedModel.ClipGain"/> stays valid.
+    /// Only this sustained level lifts the neutral murmur: a reaction does not (user decision 2026-11-07, the roar beds of SpectatorReactionBedModel.cs answer it instead).
+    /// No allocation; no Unity type.
     /// </summary>
     internal sealed class CrowdExcitement
     {
         internal const float TimeConstant = 2f, MaxFactor = 1.6f;
-        internal const float SwellAttack = 0.3f, SwellTimeConstant = 3f;
         float _target, _current;
-        float _swell, _swellPeak, _attackLeft;
 
         internal float Target => _target;
-        /// <summary>The smoothed external level (what <see cref="SetTarget"/> asked for), without the swell.</summary>
+        /// <summary>The smoothed level (what <see cref="SetTarget"/> asked for); 0..1.</summary>
         internal float Current => _current;
-        /// <summary>The level of the transient swell (0 when none).</summary>
-        internal float Swell => _swell;
-        /// <summary>What the volume factor follows: the larger of the smoothed external level and the swell; 0..1.</summary>
-        internal float Level => Math.Max(_current, _swell);
-        internal float Factor => 1f + (MaxFactor - 1f) * Level;
+        internal float Factor => 1f + (MaxFactor - 1f) * _current;
 
         /// <summary>0..1; NaN counts as 0.</summary>
         internal static float Sanitize(float level) => float.IsNaN(level) ? 0f : Math.Max(0f, Math.Min(1f, level));
@@ -317,55 +309,18 @@ namespace ArenaMapPort.Client
         /// <summary>The current level jumps to the target (a source that starts now starts at the right level).</summary>
         internal void Snap() { _current = _target; }
 
-        /// <summary>Starts a swell towards <paramref name="amplitude"/> (0..1, NaN counts as 0). An amplitude that does not exceed the swell that is already there (its level, or its
-        /// peak while it still rises) is ignored, so a quieter reaction never cuts a louder one short.</summary>
-        internal void AddSwell(float amplitude)
-        {
-            float a = Sanitize(amplitude);
-            if (!(a > _swell) || (_attackLeft > 0f && !(a > _swellPeak))) return;
-            _swellPeak = a;
-            _attackLeft = SwellAttack;
-        }
+        internal void Reset() { _target = 0f; _current = 0f; }
 
-        internal void Reset() { _target = 0f; _current = 0f; _swell = 0f; _swellPeak = 0f; _attackLeft = 0f; }
-
-        /// <summary>Moves the current level towards the target and the swell along its envelope by <paramref name="seconds"/>; true when either moved.</summary>
+        /// <summary>Moves the current level towards the target by <paramref name="seconds"/>; true when it moved.</summary>
         internal bool Step(float seconds)
         {
             if (!(seconds > 0f)) return false;
             if (float.IsInfinity(seconds)) seconds = 3600f;
-            bool moved = StepExternal(seconds);
-            if (StepSwell(seconds)) moved = true;
-            return moved;
-        }
-
-        bool StepExternal(float seconds)
-        {
             if (_current == _target) return false;
             float before = _current;
             _current += (_target - _current) * (1f - (float)Math.Exp(-seconds / TimeConstant));
             if (Math.Abs(_target - _current) < 1e-4f) _current = _target;
             return _current != before;
-        }
-
-        bool StepSwell(float seconds)
-        {
-            if (_swell == 0f && _attackLeft <= 0f) return false;
-            float before = _swell;
-            if (_attackLeft > 0f)
-            {
-                float t = Math.Min(seconds, _attackLeft);
-                _swell = Math.Min(_swellPeak, _swell + (_swellPeak - _swell) * (t / _attackLeft));
-                _attackLeft -= t;
-                seconds -= t;
-                if (_attackLeft <= 0f) { _attackLeft = 0f; _swell = _swellPeak; }
-            }
-            if (_attackLeft <= 0f && seconds > 0f && _swell > 0f)
-            {
-                _swell *= (float)Math.Exp(-seconds / SwellTimeConstant);
-                if (_swell < 1e-4f) _swell = 0f;
-            }
-            return _swell != before;
         }
     }
 
@@ -375,7 +330,6 @@ namespace ArenaMapPort.Client
     {
         volatile float _excitement;
         volatile bool _available;
-        float _swellRequest;     // only touched through Interlocked/Volatile: the largest amplitude asked for since the bed's tick last took it
 
         /// <summary>The level most recently set (0..1).</summary>
         internal float Excitement => _excitement;
@@ -385,24 +339,6 @@ namespace ArenaMapPort.Client
 
         internal void SetExcitement(float level01) { _excitement = CrowdExcitement.Sanitize(level01); }
 
-        /// <summary>Asks the bed for a swell (<see cref="CrowdExcitement.AddSwell"/>) of at most <paramref name="amplitude"/> (0..1, NaN counts as 0): written by a reaction voice that
-        /// starts, any thread. Requests that arrive before the bed's tick took the last one are merged into the largest.</summary>
-        internal void RequestSwell(float amplitude)
-        {
-            float a = CrowdExcitement.Sanitize(amplitude);
-            if (!(a > 0f)) return;
-            float seen = Volatile.Read(ref _swellRequest);
-            while (a > seen)
-            {
-                float was = Interlocked.CompareExchange(ref _swellRequest, a, seen);
-                if (was == seen) return;
-                seen = was;
-            }
-        }
-
-        /// <summary>Returns the pending swell request (0 when none) and clears it; read by the bed's main-thread tick.</summary>
-        internal float TakeSwell() => Interlocked.Exchange(ref _swellRequest, 0f);
-
-        internal void Reset() { _excitement = 0f; _available = false; Interlocked.Exchange(ref _swellRequest, 0f); }
+        internal void Reset() { _excitement = 0f; _available = false; }
     }
 }

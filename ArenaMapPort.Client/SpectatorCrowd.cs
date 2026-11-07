@@ -23,7 +23,7 @@ namespace ArenaMapPort.Client
     /// of the player's CrowdBedVolume. A level outside 0..1 is clamped and NaN counts as 0. The level is process-global and survives until it is set again; it is
     /// reset to 0 when the raid's crowd (and with it the bed) is removed, so a match that ended without a final call does not leave the next raid excited.
     ///
-    /// Reactions. The spectators answer an event of the match with a few voices of Arena's own reaction clips (docs/PLAN-CROWD-REACTIONS.md) and let the bed swell for a moment.
+    /// Reactions. The spectators answer an event of the match with a few voices of Arena's own reaction clips (docs/PLAN-CROWD-REACTIONS.md) while Arena's Cheer or Angry crowd bed roars from the stands for the reaction's length (user decision 2026-11-07; the murmur bed itself is not lifted).
     /// They work with the bed switched off; <see cref="IsAvailable"/> keeps its meaning. <see cref="ReactionKinds"/> is a bit mask, <c>1 &lt;&lt; kind</c> for every kind the
     /// current raid's crowd can play, and 0 when it can play none (a menu, a vanilla map, Iceberg, a package without reaction clips, reactions switched off). The kinds are numbers
     /// from 1 to 31 (documented here, never constants of this class): 1 Approve (good for the viewer's side: an own kill, an award, a lead taken; the result of a round or a match is
@@ -33,7 +33,7 @@ namespace ArenaMapPort.Client
     /// (the same owner gets the same handle back; the developer demo, owner "developer-demo", yields to any other owner and never takes them from one). The handle is void when it was
     /// released, taken over, or the raid's crowd was removed: <see cref="React"/> then returns false, and so it does for a kind outside 1..31 or without a bit in
     /// <see cref="ReactionKinds"/>, a strength below 0.05 and NaN (a larger strength is clamped to 1). A true only means the reaction was queued: the crowd plays it when its cooldown,
-    /// the pace of one start per 0.75 s and a free voice allow, and drops a request that has waited 2 s. The strength sets the number of voices (1 to 3) and the size of the swell, not
+    /// the pace of one start per 0.75 s and a free voice allow, and drops a request that has waited 2 s. The strength sets the number of voices (1 to 3) and the size of the roar, not
     /// the loudness.
     /// </summary>
     public static class SpectatorCrowd
