@@ -165,6 +165,14 @@ member name pinned in the client (`method_N`, `vmethod_N`) is verified there and
 
 ## Release configuration
 
+**2026-11-07: 0.5.0 PREPARED, NOT PUBLISHED** (user decisions "0.5.0, Iceberg kommt rein, keys sind gesichert"; record
+[release-preparation-20261107.md](docs/progress/release-preparation-20261107.md)): the first release with Iceberg, the crowd reactions and the roar layer. Build
+commit `a18ecd7` (release texts `f6fb5cb` + the merge of `claude/trusting-bohr-d2a526`, the Uninstall.exe tolerance of the Arena check); the cut
+`work/releases/0.5.0/pixeldrain-a18ecd7/maschine-ArenaMapPort-0.5.0.zip` (5,370,649,086 B, 359 files, extract-check and verify-only OK), VirusTotal 0/75 for both
+DLLs, host run on GPU-2 (five maps, hideout, 0 warnings). Version 0.5.0 is in both csproj files, `Plugin.PluginVersion` and `ModMetadata`; the staged key files carry
+two wraps (0.6.1.0.48206 and 0.6.2.0.48473). Open: upload, GitHub release, the fast-forward of `main`, tag `v0.5.0`, push (user's go), then the "published" wording here
+and in HANDOFF. The 0.4.0 paragraphs below stay as history.
+
 **2026-10-30 (release form, user decision):** "das zip archiv wird wieder als ganzes auf pixeldrain hochgeladen, wie bei den letzten veröffentlichungen, kein fünfer-split". 0.4.0 ships like 0.3.0: ONE whole ZIP,
 `maschine-ArenaMapPort-0.4.0.zip` (all distribution files, about 3.6 GiB; manifest
 `BepInEx/plugins/maschine-ArenaMapPort/parts/full.json`), plus its one-line `.sha256`, on Pixeldrain (`tools/release/upload_pixeldrain.py`), and a GitHub

@@ -14,6 +14,7 @@ dated state in one screen; read it before this index if you only have a minute.
 - [iceberg-dynamicmaps.md](iceberg-dynamicmaps.md) — Iceberg overview from the connected native routes, owned package integration, scoped deployment and GPU-2 marker/heading acceptance on 2026-10-31.
 
 - [release-preparation-20261029.md](release-preparation-20261029.md) — current 0.4.0 release notes,
+- [release-preparation-20261107.md](release-preparation-20261107.md) - **0.5.0 preparation (2026-11-07)**: the commits (`8a407cf`, `f6fb5cb`, the merge `a18ecd7` with the Uninstall.exe tolerance), the gates before and after the merge, the host run on GPU-2 (five maps, Iceberg with a 20 s gate hold, an extraction at the West Gate and a Medium-bots raid, the hideout, 0 warnings), the cut (`maschine-ArenaMapPort-0.5.0.zip`, 5,370,649,086 B, extract-check and verify-only OK) and the VirusTotal scan (0/75 both DLLs); publication pending the user's go.
   five-part GitHub package plan, final rebuild/authentication requirements and explicit audio limits.
   Superseded in part by the 2026-10-29 evening fixes (`8941caa`, `52c8a28`): the release audit (no blocker), the crowd worker,
   the five-part texts; the cut `github-8941caa` is itself superseded. `52c8a28` was host-run on GPU-2 (20:55-21:08: four plain

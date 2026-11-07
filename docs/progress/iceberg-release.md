@@ -1251,3 +1251,14 @@ The measured line matches the counts computed from the package census above (5 c
 client DLL of this change deployed (`-DllOnly`, EFT restarted at 17:17, 16/16 plugins identical), `uibridge_config changed=true` lists no entry of `Lighting (arena_iceberg)` besides the
 hidden `BloomDefaultsRevision`: the saved 4.8 and 1.9 no longer differ from the defaults. A raid with that build was not run yet (the host was taken by another session at 17:18); the pass is
 the same code with the same values, so the 16:52 line stands as the measured banding.
+
+## 2026-11-07 - 0.5.0 host run: gate hold, extraction, bots (GPU-2, 18:32-18:37)
+
+With the 0.5.0 build (`a18ecd7`), two plain PMC raids: (1) bots None with `Spawns/SpawnGateHold = true` and `SpawnGateHoldSeconds = 20` (`persist=false`): the
+spawn fell into the WEST pocket (-39.8, 3.2, -91.2), `[SpawnGates] navmesh installed: 11 carver(s) ...`, the probe found every probed gate sealed, and 20.0 s after the
+raid timer the release drove all 11 parts to the open pose in 2.5 s (`drive frames: 298 ... max 20.4 ms`) with four gate sounds playing (`arena_san_gates_blue` x3,
+`arena_equator_old_slide_doors`; the two east `arena_san_gates_red` rows beyond 30 m); `uibridge_teleport` to `exfil:pmc:Iceberg West Gate` ended the raid as an
+extraction ("EARLY EXTRACTION", "Run Through", 00:00:31). (2) bots Medium: two PMC USEC and one Scav spawned within 45 m, moved on the NavMesh (the Scav 19.3 m in a
+20 s observation), SAIN combat layers, one bot killed another; 119.9 fps, max 12.7 ms. `[EmissionCap] ... cap=4.80 floor=1.90 ... 5 capped ... 15 lifted ... 23 ms` in
+both. 0 warnings. Record: [release-preparation-20261107.md](release-preparation-20261107.md). Still not seen: the east pocket as the player's side, a long bot raid,
+the olive tree and the rocks by eye, the sounds by ear.

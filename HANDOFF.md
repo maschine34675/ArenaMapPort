@@ -1,5 +1,18 @@
 # HANDOFF — dated working state
 
+## 0.5.0 prepared: texts, merge of the Uninstall.exe tolerance, gates, host run, cut and scan - 2026-11-07 (NOT published)
+
+**User decisions (2026-11-07):** "0.5.0, Iceberg kommt rein, keys sind gesichert"; one whole ZIP on Pixeldrain as before. Record:
+[release-preparation-20261107.md](docs/progress/release-preparation-20261107.md). Build commit of the cut: **`a18ecd7`** (= `f6fb5cb` release texts + the merge of
+`claude/trusting-bohr-d2a526`, the 2026-11-05 fix that tolerates a missing root `Uninstall.exe` in the Arena check, found unmerged on 2026-11-07). The cut
+`work/releases/0.5.0/pixeldrain-a18ecd7/maschine-ArenaMapPort-0.5.0.zip` (5,370,649,086 B, SHA-256 `70d0777e...3f05`, extract-check 359 identical, verify-only OK) and
+`.sha256`; VirusTotal 0/75 for both DLLs; host run on GPU-2 18:25-18:38 (five maps, Iceberg with gate hold, extraction and bots, hideout, 0 warnings).
+`docs/releases/v0.5.0.md` carries everything but the four Pixeldrain links and the publication date (its checklist comment names them).
+
+**Next (user's go):** `upload_pixeldrain.py` (dry run first), the GitHub release (notes + `.sha256`), fast-forward `main` to the publication commit, tag `v0.5.0`, push;
+then the records say published (this entry, AGENTS "Release configuration", the memory), delete 0.2.3/0.3.0 when the user says so, Forge entry (user), refresh the
+off-VM key backup (the key store gained the 0.6.2 wraps today). Nothing is pushed; `feature/iceberg` is ahead of `origin` by the 2026-11-02 commits and today's.
+
 ## Iceberg emission defaults 4.8 / 1.9 (user, 2026-11-07) - applied, host check pending
 
 **User decision (2026-11-07):** "vorher noch die defaults fuer Iceberg anpassen: EmissionCap = 4.8, EmissionFloor = 1.9" (tuned by eye on the user's own PC; the 4.0 and 3.0 were the agent's start values).
