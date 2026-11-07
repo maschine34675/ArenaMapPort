@@ -1,8 +1,8 @@
 # Changelog
 
-All notable changes to ArenaMapPort, newest first. The file starts with 0.2.3, the oldest version that is still
-downloadable. 0.1.0, 0.2.0, 0.2.1 and 0.2.2 were withdrawn (their releases, tags and download files are deleted);
-their notes stay under [docs/releases/](docs/releases/) for the record, and 0.2.3 contains everything they carried.
+All notable changes to ArenaMapPort, newest first. The file starts with 0.2.3. 0.1.0, 0.2.0, 0.2.1 and 0.2.2 were withdrawn, and 0.2.3 was deleted on 2026-11-07
+(their releases, tags and download files are gone); their notes stay under [docs/releases/](docs/releases/) for the record. 0.3.0 is the
+oldest version that is still downloadable.
 Dates are ISO dates. Each entry links its full release note (download links, checksums, install and upgrade steps),
 and the settings text is in the [README](README.md).
 
@@ -302,8 +302,8 @@ Full release note: [docs/releases/v0.3.0.md](docs/releases/v0.3.0.md).
 
 ## 0.2.3 - 2026-10-19
 
-Full release note: [docs/releases/v0.2.3.md](docs/releases/v0.2.3.md). As the oldest version that is still
-downloadable, 0.2.3 lists the whole package.
+Full release note: [docs/releases/v0.2.3.md](docs/releases/v0.2.3.md). Deleted on 2026-11-07 (release, tag and downloads); as the oldest
+version that was downloadable, 0.2.3 lists the whole package.
 
 ### Added
 

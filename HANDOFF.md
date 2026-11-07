@@ -4,8 +4,10 @@
 
 **Published 2026-11-07 (user: "go"):** Pixeldrain list https://pixeldrain.com/l/VHbxKwMB (ZIP https://pixeldrain.com/u/shfhQhBF, checksum https://pixeldrain.com/u/mJEWfZS3),
 the publication commit carries the links in `docs/releases/v0.5.0.md`, `main` fast-forwarded to it, tag `v0.5.0` on it, GitHub release "ArenaMapPort 0.5.0" with
-the notes as body and `maschine-ArenaMapPort-0.5.0.sha256` as its only asset; `main` and `feature/iceberg` pushed. 0.4.0, 0.3.0 and 0.2.3 stay downloadable
-until the user deletes them. Still the user's: the Forge entry, the deletion of 0.2.3/0.3.0, the refreshed off-VM key backup. The paragraph below is the
+the notes as body and `maschine-ArenaMapPort-0.5.0.sha256` as its only asset; `main` and `feature/iceberg` pushed. 0.2.3 was deleted the same night (GitHub release and tag, Pixeldrain ZIP, checksum and list; user decision), 0.4.0 and 0.3.0 stay online;
+`feature/iceberg` was merged (fast-forward) and deleted locally and on origin, work continues on `main`; the user re-backed-up `work/release-keys` outside the VM the same
+evening (the 0.6.2 wraps included); the user states that ArenaMode has adopted the reaction and the score-monitor contracts (the binding is in ArenaMode, never edited
+from here; the published 0.5.0 texts still say "not adopted" as of their date). Still the user's: the Forge entry. The paragraph below is the
 preparation state as written before the upload.
 
 **User decisions (2026-11-07):** "0.5.0, Iceberg kommt rein, keys sind gesichert"; one whole ZIP on Pixeldrain as before. Record:
