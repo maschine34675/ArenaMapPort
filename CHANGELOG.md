@@ -39,6 +39,15 @@ Full release note: [docs/releases/v0.5.0.md](docs/releases/v0.5.0.md).
   the imported scenes. The old `arena_fans_ambient_postmatch.wav` is ignored if it is still in the folder after an update and may be deleted.
 - The ZIP grows to about 5.0 GiB (359 files; 0.4.0: about 3.6 GiB, 256 files).
 
+### Fixed
+
+- The Arena installation check tolerates a missing launcher uninstall stub (`Uninstall.exe` at the root of the Arena
+  folder; also any size when it is present). A player's antivirus had quarantined it after every reinstall, and the check
+  refused the whole installation with `ARENA_INCOMPLETE` (`1 of 15,351 files ... Uninstall.exe: missing`) although the
+  maps never read that file. Every other listed file is still required with its listed size; a tolerated absence is named
+  in the `[Arena]` log line (`..., Uninstall.exe missing (tolerated)`). It is a fixed exception like the existing BattlEye
+  and `Logging.config` size tolerances, not a setting.
+
 ### Known limitations
 
 - Iceberg: no raid as a player from the west pocket, no bot raid beyond a few minutes, no extraction and no gate hold and release with moving

@@ -286,6 +286,121 @@ public sealed class ArenaInstallationTests : IDisposable
     public void IsSizeTolerant_CoversOnlyBattlEyeAndLoggingConfig(string logical, bool expected) =>
         Assert.Equal(expected, ArenaInstallation.IsSizeTolerant(logical));
 
+    // ---- the optional uninstall stub (2026-11-05) -------------------------------------------------------------------
+    // A player on 0.4.0 reported "1 of 15,351 files ... Uninstall.exe: missing" after two reinstalls: the launcher's uninstall
+    // stub, quarantined by an antivirus after the launcher ran. The maps never read it, so its absence (and its size) is
+    // tolerated as a fixed exception of the same class as BattlEye\* and Logging.config; it is counted and named in the Info line.
+
+    [Theory]
+    [InlineData("Uninstall.exe")]
+    [InlineData("uninstall.exe")]
+    [InlineData("UNINSTALL.EXE")]
+    public void Verify_ToleratesAMissingUninstallStubAndNamesItInTheInfoLine(string listedAs)
+    {
+        Install install = MakeInstall();
+        AddFile(install, listedAs, 1_144_896);
+        WriteManifest(install);
+        File.Delete(Path.Combine(install.Dir, listedAs)); // the antivirus took it
+
+        ArenaInstallationResult result = ArenaInstallation.Verify(install.Dir, "override", null, Small);
+
+        Assert.True(result.Verified, result.Describe());
+        Assert.Null(result.Reason);
+        Assert.Equal(ArenaInstallCause.None, result.Cause);
+        Assert.Equal(1, result.OptionalMissing);
+        Assert.Equal(0, result.MismatchCount);
+        Assert.Empty(result.Mismatches);
+        Assert.Equal(install.Listed.Count, result.EntriesChecked); // it was compared with the disk, like every other entry
+        Assert.Equal(install.Listed.Where(entry => entry.Path != listedAs).Sum(entry => entry.Size), result.TotalBytes);
+        Assert.EndsWith("GB verified, Uninstall.exe missing (tolerated))", result.Describe());
+    }
+
+    [Fact]
+    public void Verify_AcceptsAPresentUninstallStubOfAnySizeWithoutNamingIt()
+    {
+        Install install = MakeInstall();
+        AddFile(install, "Uninstall.exe", 1_144_896);
+        WriteManifest(install);
+        File.WriteAllBytes(Path.Combine(install.Dir, "Uninstall.exe"), new byte[500]); // a newer launcher stub
+
+        ArenaInstallationResult result = ArenaInstallation.Verify(install.Dir, "override", null, Small);
+
+        Assert.True(result.Verified, result.Describe());
+        Assert.Equal(0, result.OptionalMissing);
+        Assert.Equal(0, result.MismatchCount);
+        Assert.Equal(install.Listed.Count, result.EntriesChecked);
+        Assert.Equal(install.Listed.Sum(entry => entry.Size), result.TotalBytes); // the listed size counts, as for BattlEye\*
+        Assert.DoesNotContain("tolerated", result.Describe());
+        Assert.EndsWith("GB verified)", result.Describe());
+    }
+
+    [Theory]
+    [InlineData(@"EscapeFromTarkovArena_Data\Uninstall.exe")]
+    [InlineData(@"BattlEye\uninstall.exe")]
+    public void Verify_AnUninstallExeInASubfolderIsAnOrdinaryEntryAndFailsWhenMissing(string path)
+    {
+        Install install = MakeInstall();
+        AddFile(install, path, 100);
+        WriteManifest(install);
+        File.Delete(Path.Combine(install.Dir, path.Replace('\\', Path.DirectorySeparatorChar)));
+
+        ArenaInstallationResult result = ArenaInstallation.Verify(install.Dir, "override", null, Small);
+
+        Assert.False(result.Verified);
+        Assert.Equal(ArenaInstallCause.FilesMismatch, result.Cause);
+        Assert.Equal(0, result.OptionalMissing);
+        Assert.Equal(1, result.MismatchCount);
+        Assert.Equal(new[] { path + ": missing" }, result.Mismatches);
+    }
+
+    [Fact]
+    public void Verify_AMissingOtherRootExecutableStillFailsWithTheUnchangedWording()
+    {
+        Install install = MakeInstall();
+        AddFile(install, "EscapeFromTarkovArena_BE.exe", 1_678_056);
+        AddFile(install, "Uninstall.exe", 1_144_896);
+        WriteManifest(install);
+        File.Delete(Path.Combine(install.Dir, "EscapeFromTarkovArena_BE.exe"));
+        File.Delete(Path.Combine(install.Dir, "Uninstall.exe")); // the tolerated absence never joins the count or the list
+
+        ArenaInstallationResult result = ArenaInstallation.Verify(install.Dir, "override", null, Small);
+
+        Assert.False(result.Verified);
+        Assert.Equal(ArenaInstallCause.FilesMismatch, result.Cause);
+        Assert.Equal(1, result.MismatchCount);
+        Assert.Equal(1, result.OptionalMissing);
+        Assert.Equal(new[] { "EscapeFromTarkovArena_BE.exe: missing" }, result.Mismatches);
+        Assert.Equal(string.Format(CultureInfo.InvariantCulture,
+                "1 of {0:N0} files listed in ConsistencyInfo are missing or have a different size (first: EscapeFromTarkovArena_BE.exe: missing); "
+                + "the installation is incomplete, still updating or damaged.", install.Listed.Count),
+            result.Reason);
+        Assert.DoesNotContain("tolerated", result.Describe()); // a failed check describes only its reason
+    }
+
+    [Theory]
+    [InlineData("Uninstall.exe", true)]
+    [InlineData("uninstall.EXE", true)]
+    [InlineData(@"BattlEye\Uninstall.exe", false)]
+    [InlineData(@"EscapeFromTarkovArena_Data\Uninstall.exe", false)]
+    [InlineData("Uninstall.exe.bak", false)]
+    [InlineData("Uninstall", false)]
+    [InlineData("EscapeFromTarkovArena_BE.exe", false)]
+    [InlineData("EscapeFromTarkovArena.exe", false)]
+    [InlineData("", false)]
+    [InlineData(null, false)]
+    public void IsOptional_CoversOnlyTheUninstallStubAtTheRoot(string? logical, bool expected) =>
+        Assert.Equal(expected, ArenaInstallation.IsOptional(logical!));
+
+    [Fact]
+    public void IsOptional_IsNotASizeTolerance()
+    {
+        // The two rules stay separate: Uninstall.exe is optional (absence tolerated), BattlEye\* and Logging.config are
+        // size-tolerant (must exist). The check loop ORs them for the size comparison.
+        Assert.False(ArenaInstallation.IsSizeTolerant("Uninstall.exe"));
+        Assert.False(ArenaInstallation.IsOptional("Logging.config"));
+        Assert.False(ArenaInstallation.IsOptional(@"BattlEye\BEClient_x64.dll"));
+    }
+
     [Fact]
     public void Verify_SkipsEntriesAtTheClassicWindowsPathLimitAndCountsThem()
     {
@@ -750,6 +865,18 @@ public sealed class ArenaInstallationTests : IDisposable
 
         var notVerified = new ArenaInstallationResult(false, null, "none", null, null, 0, 0, "Nothing here.", 0, null);
         Assert.Equal("Escape from Tarkov: Arena not found: Nothing here.", notVerified.Describe());
+
+        var stubGone = new ArenaInstallationResult(true, @"C:\Battlestate Games\Escape from Tarkov Arena", "registry", "0.6.2.0.48473",
+            null, 15351, 76_118_000_000L, null, 0, null, optionalMissing: 1);
+        Assert.Equal(@"Escape from Tarkov: Arena 0.6.2.0.48473 at C:\Battlestate Games\Escape from Tarkov Arena (registry; 15,351 files, 76.1 GB verified, Uninstall.exe missing (tolerated))",
+            stubGone.Describe());
+
+        var both = new ArenaInstallationResult(true, "X", "override", "1", null, 15349, 76_118_000_000L, null, 0, null, 2, optionalMissing: 1);
+        Assert.EndsWith("(override; 15,349 files, 76.1 GB verified, 2 long paths skipped, Uninstall.exe missing (tolerated))", both.Describe());
+
+        var failedWithStubGone = new ArenaInstallationResult(false, "X", "override", "1", null, 15351, 0, "Nothing here.", 1, null, 0,
+            ArenaInstallCause.FilesMismatch, optionalMissing: 1);
+        Assert.Equal("Escape from Tarkov: Arena not found: Nothing here.", failedWithStubGone.Describe());
     }
 
     [Fact]
@@ -1024,6 +1151,13 @@ public sealed class ArenaInstallationTests : IDisposable
         Assert.False(string.IsNullOrEmpty(result.ManifestVersion));
         Assert.Equal("override", result.Source);
         Assert.True(timer.Elapsed < TimeSpan.FromSeconds(10), "verification took " + timer.Elapsed);
+        // The VM's installation has the launcher's uninstall stub, so the 2026-11-05 tolerance is not exercised here and the
+        // Info line carries no "(tolerated)"; the stub is listed at the root (the rule's target) with IsCritical in the manifest.
+        Assert.Equal(0, result.OptionalMissing);
+        Assert.DoesNotContain("tolerated", result.Describe());
+        Assert.True(File.Exists(Path.Combine(RealArena.Folder, "Uninstall.exe")));
+        ArenaManifest manifest = ArenaManifest.Parse(File.ReadAllText(Path.Combine(RealArena.Folder, "ConsistencyInfo"), Encoding.UTF8));
+        Assert.Single(manifest.Entries, entry => ArenaInstallation.IsOptional(entry.Path.Replace('/', '\\')));
     }
 
     [RealInstallFact]

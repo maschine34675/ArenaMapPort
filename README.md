@@ -70,7 +70,8 @@ stay shut.
   Tarkov. Both components find Arena through the launcher's entry in the Windows registry
   and check the installation folder: it must contain the game executable and the
   launcher's file list (`ConsistencyInfo`), and every file in that list must exist with
-  the listed size. The installation check compares only names and sizes, reads no game
+  the listed size (BattlEye's own files and `Logging.config` may differ in size, and the
+  launcher's uninstall stub `Uninstall.exe` may be missing). The installation check compares only names and sizes, reads no game
   data, sends nothing anywhere and takes about a second. If Arena is installed but has no
   launcher entry (a copied or moved folder), set its folder in `General / ArenaInstallPath`
   in `BepInEx/config/com.maschine.ArenaMapPort.cfg` (client) and in
@@ -177,7 +178,7 @@ that.
 | `REGISTRY` | The Windows registry could not be read to look for Arena. | Restart the game once; if it repeats, set the Arena folder (the one with `EscapeFromTarkovArena.exe`) in `ArenaInstallPath`. |
 | `OVERRIDE_BAD` | The folder set in `ArenaInstallPath` cannot be used. | Set it to the Arena folder that contains `EscapeFromTarkovArena.exe` (not the launcher folder), or clear it. Restart the game. |
 | `FOLDER_BAD` | The launcher lists an Arena folder that cannot be used. | Reinstall or update Arena in the launcher, or fix the folder if you moved it. Restart the game and the server. |
-| `ARENA_INCOMPLETE` | Your Arena installation looks incomplete or is still updating. | Let the launcher finish updating, or check the installation there. Arena has to be complete and up to date. |
+| `ARENA_INCOMPLETE` | Your Arena installation looks incomplete or is still updating. | Let the launcher finish updating, or check the installation there. Arena has to be complete and up to date. The `[Arena]` log line names the first file that is missing or has a different size. If it is a file your antivirus quarantined (on one PC it was the launcher's `Uninstall.exe`, taken after every reinstall), restore it from the antivirus quarantine or let the launcher repair the installation, and tell the antivirus to leave the Arena folder alone; a missing `Uninstall.exe` on its own is tolerated since the release after 0.4.0 and no longer causes this. |
 | `CHECK_FAILED` | The installation check hit an internal error. | Restart the game; if it repeats, send the `[Arena]` lines of `BepInEx/LogOutput.log`. |
 | `CHECK_SLOW` | The installation check did not finish in time (slow disk or unreachable folder). | Start the raid again; if it repeats, check that the Arena folder is on a local, connected drive. |
 | `HOOK_MISSING` | This ArenaMapPort build does not fit your game version. | Install the ArenaMapPort release that matches your SPT version. |

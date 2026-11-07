@@ -17,9 +17,10 @@ namespace ArenaMapPort.Shared
         internal ArenaInstallationResult(bool verified, string installPath, string source, string manifestVersion,
             string registryVersion, int entriesChecked, long totalBytes, string reason, int mismatchCount,
             IReadOnlyList<string> mismatches, int longPathsSkipped = 0, ArenaInstallCause cause = ArenaInstallCause.None,
-            IReadOnlyList<ArenaRegistryCandidate> registryCandidates = null)
+            IReadOnlyList<ArenaRegistryCandidate> registryCandidates = null, int optionalMissing = 0)
         {
             LongPathsSkipped = longPathsSkipped;
+            OptionalMissing = optionalMissing;
             Cause = cause;
             RegistryCandidates = registryCandidates ?? new ArenaRegistryCandidate[0];
             Verified = verified;
@@ -34,7 +35,10 @@ namespace ArenaMapPort.Shared
             Mismatches = mismatches ?? new string[0];
         }
 
-        /// <summary>True when the installation folder exists, its launcher manifest is plausible and every listed file is present with the listed size.</summary>
+        /// <summary>
+        /// True when the installation folder exists, its launcher manifest is plausible and every listed file is present with the
+        /// listed size (up to the three fixed tolerances named on <see cref="ArenaInstallation"/>).
+        /// </summary>
         public bool Verified { get; }
 
         /// <summary>The installation folder that was examined (absolute), or null when none was found.</summary>
@@ -71,6 +75,13 @@ namespace ArenaMapPort.Shared
         /// (<see cref="ArenaInstallation.MaxPathLength"/>): the installation sits in a deep folder. Counted, never a mismatch.
         /// </summary>
         public int LongPathsSkipped { get; }
+
+        /// <summary>
+        /// Listed files that are optional (<see cref="ArenaInstallation.IsOptional"/>: only the launcher's uninstall stub
+        /// Uninstall.exe at the root) and were absent. Counted and named in <see cref="Describe"/>, never a mismatch: an antivirus
+        /// quarantines that stub after the launcher ran, and the maps never read it. 0 or 1 in practice (one optional file).
+        /// </summary>
+        public int OptionalMissing { get; }
 
         /// <summary>
         /// Machine-readable reason for a failed check, one value per failure site of <see cref="ArenaInstallation"/>;
@@ -112,11 +123,12 @@ namespace ArenaMapPort.Shared
         {
             if (!Verified)
                 return "Escape from Tarkov: Arena not found: " + Reason;
-            return string.Format(CultureInfo.InvariantCulture, "Escape from Tarkov: Arena{0} at {1} ({2}; {3:N0} files, {4} GB verified{5})",
+            return string.Format(CultureInfo.InvariantCulture, "Escape from Tarkov: Arena{0} at {1} ({2}; {3:N0} files, {4} GB verified{5}{6})",
                 string.IsNullOrEmpty(ManifestVersion) ? "" : " " + ManifestVersion, InstallPath, Source, EntriesChecked,
                 ArenaInstallation.FormatGigabytes(TotalBytes),
                 LongPathsSkipped == 0 ? "" : string.Format(CultureInfo.InvariantCulture, ", {0:N0} long path{1} skipped",
-                    LongPathsSkipped, LongPathsSkipped == 1 ? "" : "s"));
+                    LongPathsSkipped, LongPathsSkipped == 1 ? "" : "s"),
+                OptionalMissing == 0 ? "" : ", " + ArenaInstallation.UninstallStubName + " missing (tolerated)");
         }
 
         public override string ToString() => Describe();
@@ -173,7 +185,11 @@ namespace ArenaMapPort.Shared
     /// files, so a forged installation needs thousands of distinct files of the listed sizes (sparse files or hard links
     /// make that cheap). It raises the effort, nothing more; do not describe it as stronger than a good-faith gate.
     /// A missing file fails the gate; a different size fails it too, except for the files BattlEye rewrites in place
-    /// (BattlEye\*) and the user-editable Logging.config, which only have to exist (<see cref="IsSizeTolerant"/>).
+    /// (BattlEye\*) and the user-editable Logging.config, which only have to exist (<see cref="IsSizeTolerant"/>), and
+    /// the launcher's uninstall stub Uninstall.exe at the root of the folder, which may be absent or of any size
+    /// (<see cref="IsOptional"/>, 2026-11-05: an antivirus quarantines it after the launcher ran, the launcher re-downloads
+    /// it on Repair, and the maps never read it; an absent one is counted in <see cref="ArenaInstallationResult.OptionalMissing"/>
+    /// and named in the Info line). Those three are the only tolerances; there is no switch and no list a user can extend.
     /// Entries whose full path reaches Windows' classic 260-character limit are skipped and counted
     /// (<see cref="MaxPathLength"/>): EFT's Mono runtime cannot stat them when the installation sits in a deep
     /// folder, and both sides must reach the same verdict. The call is synchronous and does file-system I/O on the given path: an unreachable network path (an
@@ -193,6 +209,8 @@ namespace ArenaMapPort.Shared
         internal const string ExeName = "EscapeFromTarkovArena.exe";
         internal const string ManifestName = "ConsistencyInfo";
         internal const string GameAssemblyName = "GameAssembly.dll";
+        /// <summary>The BSG launcher's uninstall stub at the root of the installation: listed, critical to the launcher, never read by the maps.</summary>
+        internal const string UninstallStubName = "Uninstall.exe";
         internal const string LevelPrefix = @"EscapeFromTarkovArena_Data\level";
         internal const int MaxReportedMismatches = 8;
         /// <summary>How many Uninstall subkeys the "no registry entry" diagnostic lists at most.</summary>
@@ -331,6 +349,7 @@ namespace ArenaMapPort.Shared
             int checkedCount = 0;
             int mismatchCount = 0;
             int longPathsSkipped = 0;
+            int optionalMissing = 0;
             long verifiedBytes = 0;
             var mismatches = new List<string>();
             foreach (ArenaPreparedEntry entry in files)
@@ -343,10 +362,16 @@ namespace ArenaMapPort.Shared
                     continue;
                 }
                 checkedCount++;
-                string problem = CheckFile(entry, IsSizeTolerant(entry.Logical));
+                bool optional = IsOptional(entry.Logical);
+                string problem = CheckFile(entry, optional || IsSizeTolerant(entry.Logical));
                 if (problem == null)
                 {
                     verifiedBytes += entry.Size;
+                    continue;
+                }
+                if (optional && problem == FileMissing)
+                {
+                    optionalMissing++;
                     continue;
                 }
                 mismatchCount++;
@@ -360,9 +385,10 @@ namespace ArenaMapPort.Shared
                     "{0:N0} of {1:N0} files listed in {2} are missing or have a different size (first: {3}); the installation is incomplete, still updating or damaged.",
                     mismatchCount, checkedCount, ManifestName, mismatches[0]);
                 return new ArenaInstallationResult(false, dir, source, version, registryVersion, checkedCount, verifiedBytes, reason, mismatchCount, mismatches, longPathsSkipped,
-                    ArenaInstallCause.FilesMismatch);
+                    ArenaInstallCause.FilesMismatch, optionalMissing: optionalMissing);
             }
-            return new ArenaInstallationResult(true, dir, source, version, registryVersion, checkedCount, verifiedBytes, null, 0, null, longPathsSkipped);
+            return new ArenaInstallationResult(true, dir, source, version, registryVersion, checkedCount, verifiedBytes, null, 0, null, longPathsSkipped,
+                optionalMissing: optionalMissing);
         }
 
         /// <summary>
@@ -444,7 +470,6 @@ namespace ArenaMapPort.Shared
             return null;
         }
 
-        /// <summary>Null when the listed file exists with exactly the listed size, else "missing" / "size A != L" / "invalid path".</summary>
         /// <summary>
         /// Files that may legitimately differ in size from the manifest: BattlEye updates its own files in place when the
         /// game starts, and Logging.config is user-editable. They must exist; their size is not compared.
@@ -453,6 +478,20 @@ namespace ArenaMapPort.Shared
             logical != null && (logical.StartsWith(@"BattlEye\", StringComparison.OrdinalIgnoreCase)
                                 || string.Equals(logical, "Logging.config", StringComparison.OrdinalIgnoreCase));
 
+        /// <summary>
+        /// The one listed file that may be absent, and whose size is not compared when present: the launcher's uninstall stub
+        /// <see cref="UninstallStubName"/> at the root of the installation (exact logical name, case-insensitive; a file of that
+        /// name in a subfolder is an ordinary entry). It is the only root file the maps never read, the launcher marks it critical
+        /// only for its own uninstall, and an antivirus has quarantined it after the launcher ran (player report of 2026-11-05 on
+        /// 0.4.0: "1 of 15,351 files ... Uninstall.exe: missing" after two reinstalls). A fixed exception, not a switch.
+        /// </summary>
+        internal static bool IsOptional(string logical) =>
+            logical != null && string.Equals(logical, UninstallStubName, StringComparison.OrdinalIgnoreCase);
+
+        /// <summary>The problem text of <see cref="CheckFile"/> for a file that does not exist (the one an optional file may have).</summary>
+        const string FileMissing = "missing";
+
+        /// <summary>Null when the listed file exists with exactly the listed size, else "missing" / "size A != L" / "invalid path".</summary>
         static string CheckFile(ArenaPreparedEntry entry, bool sizeTolerant)
         {
             if (entry.FullPath == null)
@@ -461,7 +500,7 @@ namespace ArenaMapPort.Shared
             {
                 var info = new FileInfo(entry.FullPath);
                 if (!info.Exists)
-                    return "missing";
+                    return FileMissing;
                 if (sizeTolerant)
                     return null;
                 long actual = info.Length;

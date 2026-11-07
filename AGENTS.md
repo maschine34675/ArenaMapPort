@@ -104,7 +104,11 @@ are not accepted build inputs. Keep the SPT bundle target on Unity 2022.3.43f1.
 - Never add a switch that disables the Arena installation check (`ArenaInstallation` in Shared; release/0.2.3, user
   decision 2026-10-19: Arena is sold separately from EFT, so the maps need an installed Arena). The override paths
   (server `config/arena-install.json`, client `General/ArenaInstallPath`) still verify the installation. It is a
-  good-faith gate, not copy protection: never describe it as more. See
+  good-faith gate, not copy protection: never describe it as more. The check tolerates exactly three listed files and nothing
+  else: `BattlEye\*` and `Logging.config` may differ in size but must exist (`IsSizeTolerant`), and the launcher's uninstall stub
+  `Uninstall.exe` at the root may be missing or of any size (`IsOptional`, 2026-11-05: an antivirus quarantines it after the launcher
+  ran, the maps never read it; a tolerated absence is counted in `OptionalMissing` and named in the Info line as
+  `, Uninstall.exe missing (tolerated)`). Fixed exceptions in code, never a list a user can extend. See
   [arena-install-check.md](docs/progress/arena-install-check.md).
 - `General/ShowMapNotices` (the public key of the in-game map notices, 2026-10-22) is not a switch for the Arena check and never becomes
   one: it silences only the main-menu messages (T1), the pending toast and the location-selection reminder. The answer to a failed raid
@@ -215,7 +219,9 @@ uses Debug (BepInEx's disk/console filters must include it when collecting diagn
 Real degraded behavior and failures retain Warning/Error in player mode. Never suppress
 Unity/Harmony warnings globally; repair an owned cause or document its origin.
 Both the server and the client log the Arena installation state at Info at startup (the verified
-installation, or why none was found); see [arena-install-check.md](docs/progress/arena-install-check.md). The server's not-found
+installation, or why none was found; the verified line names the three tolerated files only when they apply: `, N long paths skipped`
+and, since 2026-11-05, `, Uninstall.exe missing (tolerated)` for the launcher's absent uninstall stub, while a size-tolerated `BattlEye\*`
+or `Logging.config` leaves no trace); see [arena-install-check.md](docs/progress/arena-install-check.md). The server's not-found
 line is red in the console (`ArenaInstallationGate.Evaluate`'s `notFound` sink, `logger.LogWithColor(message, Color.Red)`, still
 Info level, so SPT's Info file log keeps it; user request 2026-10-23), the verified line stays white. The shared reason
 (`ArenaInstallationResult.Reason`) states only the finding; the server sentence and the client's second `[Arena]` line each add the
