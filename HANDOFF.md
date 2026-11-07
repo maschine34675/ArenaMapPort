@@ -1,6 +1,14 @@
 # HANDOFF — dated working state
 
-## Crowd reactions: roar layer (Cheer and Angry beds) replaces the murmur swell - 2026-11-07 (implemented, reviewed, host-run on GPU-2, not listened to)
+## Iceberg emission defaults 4.8 / 1.9 (user, 2026-11-07) - applied, host check pending
+
+**User decision (2026-11-07):** "vorher noch die defaults fuer Iceberg anpassen: EmissionCap = 4.8, EmissionFloor = 1.9" (tuned by eye on the user's own PC; the 4.0 and 3.0 were the agent's start values).
+Changed: `tools/maps/iceberg.json`, the Iceberg entry of `ArenaMapDescriptor.cs`, the two key descriptions in `EmissionCapRepairs.cs`, `test_iceberg_emission_cap.py`, `EmissionCapDescriptorTests.cs`, AGENTS.md Traps
+"Emission cap". No `DefaultsRevision` re-seed on purpose: Iceberg is unreleased (not in `ArenaMapRegistry.All` of 0.4.0), so no player has the keys `Lighting (arena_iceberg)/EmissionCap` and `EmissionFloor`; a value
+saved in a developer's .cfg stays as BepInEx keeps it. Banding computed from the census (not measured): at 4.8 / 1.9, 5 capped, 15 lifted, 17 untouched of 37 (was 6 / 23 / 8); detail in
+[iceberg-release.md](docs/progress/iceberg-release.md) "2026-11-07 - Emission defaults set by the user". Host check pending: the next Iceberg raid should log `[EmissionCap] map=arena_iceberg cap=4.80 floor=1.90 ...`.
+
+## Crowd reactions: roar layer (Cheer and Angry beds) replaces the murmur swell - 2026-11-07 (implemented, reviewed, host-run on GPU-2, approved by the user's ear 2026-11-07)
 
 **User decision (2026-11-07):** "gerne einbauen. das neutrale gemurmel anzuheben macht glaube ich nicht wirklich sinn, eher sollten dann die lauteren Cheer und Angry Betten laufen". A reaction no longer
 lifts the neutral murmur bed (the phase-A swell is removed); Approve, Start and Finish play one of Arena's three Cheer beds, Disapprove one of the three Angry beds, TakeCover none, from every stand of the
@@ -8,7 +16,7 @@ murmur's plan. Record: [spectator-audio.md](docs/progress/spectator-audio.md) "2
 [PLAN-CROWD-REACTIONS.md](docs/PLAN-CROWD-REACTIONS.md). Supersedes every "swell" sentence of the phase-A entries below.
 
 **State.** Built by a staged workflow (Python data, Unity-free model, Unity glue, one review round with four findings applied). **Host-run on GPU-2 on 2026-11-07, 15:29-15:42 (Equator and Bowl with the developer demo, the hideout; 0 ArenaMapPort warnings; the record "Host run on GPU-2 (2026-11-07, 15:29-15:42)"
-at the end of the spectator-audio.md section), committed in the commit that carries this entry; nobody has listened.** `dist/` (359 files, restaged by the client Release build) is deployed to
+at the end of the spectator-audio.md section), committed in the commit that carries this entry; the user listened the same day: "habe ich mir angehoert, klingt gut".** `dist/` (359 files, restaged by the client Release build) is deployed to
 `D:\SPT41`; not exercised on the host: the 0.5 s cut of the other kind and the retrigger (the demo fires every 9 s, the longest envelope is 7.3 s), Bay5, Air Pit and Iceberg.
 - **What exists.** Six roar beds exported by `extract_spectator_audio.py` at a common -32 dBFS RMS mono (gains -1.84 to -9.07 dB, 500 ms loop seam, jump ratio at most 1.8 against the limit 3.0), manifest
   object `reaction_beds`; `SpectatorReactionBedModel.cs` (kind table, `RoarEnvelope` 0.3 s attack / hold 1.5-5 s / 2 s release, `Amplitude = 0.35 + 0.65 * strength`, clip picker, `SourceVolume`);
@@ -30,7 +38,7 @@ at the end of the spectator-audio.md section), committed in the commit that carr
 1. Committed 2026-11-07 on `feature/iceberg` (the commit that carries this entry; not pushed).
 2. Done 2026-11-07: the full deploy and the host run on GPU-2 (the record above). Open there: the cut and the retrigger (a demo with a shorter cadence, or ArenaMode's events),
    Bay5 and Air Pit (the same code with 4 and 6 stands), Iceberg (no crowd, no layer).
-3. The user listens: the roar level (-32 dBFS RMS per bed is a start value), the two keys, attack and release, whether boos read.
+3. Done 2026-11-07: the user listened (the developer demo cycle with the roar layer, keys at their defaults) and said "habe ich mir angehoert, klingt gut"; the roar level (-32 dBFS RMS per bed) stands as accepted. Whether boos read was not reported separately.
 4. ArenaMode adoption of the `SpectatorCrowd` reaction members (plan section 6; nothing in ArenaMode uses them yet), then Lull (6).
 5. Release number and form stay the user's decision; nothing of this is part of a release.
 

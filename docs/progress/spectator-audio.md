@@ -1250,3 +1250,10 @@ EFT was not running; `gpu-run start` brought a fresh process (started 15:31:44, 
 envelope is 7.3 s (0.3 + 5 + 2), so no two roars overlapped; both paths are unit-tested only (`SpectatorReactionBedModelTests`, the glue pins). Bay5 and Air Pit were not run (the
 same code with 4 and 6 stands). Iceberg was not run this time (no crowd, no layer by construction; its `ReactionKinds = 0` was host-checked on 2026-11-02). **Nobody has listened:**
 the level (-32 dBFS RMS per bed), the attack, the release, the hold clamp and `ReactionBedVolume` are start values for the user's ear.
+
+### Listened (user, 2026-11-07)
+
+The user listened to the roar layer deployed that afternoon (the build of the host run above, the developer demo cycle `Spectators/ReactionDemo = Cycle` on the user's own PC, which plays the reaction voices
+together with the Cheer and Angry beds) and said: "habe ich mir angehoert, klingt gut". It covers what was heard: the roar level of -32 dBFS RMS per bed, the 0.3 s attack and the 2 s release, and the keys at
+their defaults (`Spectators/ReactionBeds` on, `ReactionBedVolume` 1.0). It is a judgement of the demo cycle, not a clip-by-clip review of the 70 reaction voices, and it made no statement on the cut of the
+other kind or the retrigger. The level stands as accepted; the sections above that call these values start values are history. ArenaMode has not adopted the contract.

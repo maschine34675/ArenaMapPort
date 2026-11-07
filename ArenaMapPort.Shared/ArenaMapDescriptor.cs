@@ -1541,12 +1541,15 @@ namespace ArenaMapPort.Shared
             // Sanatorium_Emissive_Orange (the respawn-hall chandeliers and 157 floor spot lamps, 6.8) and Plafond_lamp_02_source_E_red (4.28). At the
             // normal bloom 2.10/0.35 the crystal lamps and the chandeliers blow out into discs. 4.0 is the level of the released maps' strongest
             // lamps (4.13 and 3.93, accepted under the same bloom) and still about twice the bloom threshold, so a capped lamp reads as lit; the
-            // value is tuned live on the host with the developer key.
-            EmissionCap: 4.0f,
+            // value is tuned live on the host with the developer key. The user set 4.8 by eye on their own PC on 2026-11-07 (the 4.0 above was the
+            // agent's start value of 2026-10-31); no measurement stands behind the 4.8, and at 4.8 Plafond_lamp_02_source_E_red (4.28) is no longer capped.
+            EmissionCap: 4.8f,
             // Emission floor (2026-11-01; mirrors tools/maps/iceberg.json emission_floor): the other 31 lamps lie between 0.58 (Armstrong wall lamps)
             // and 2.92 (the searchlight), so under any one threshold some never glow while the capped ones do. Lifted onto 3.0 they sit in [3.0, 4.0]
-            // with the capped ones. Tuned live on the host with the developer key (docs/progress/iceberg-release.md "Emission floor").
-            EmissionFloor: 3.0f);
+            // with the capped ones. Tuned live on the host with the developer key (docs/progress/iceberg-release.md "Emission floor"). The user set
+            // 1.9 by eye on their own PC on 2026-11-07 (the 3.0 was the agent's start value of 2026-11-01); it is a judgement, not a measurement, and
+            // the lamps above 1.9 (the 2.0 to 2.9 ones) are no longer lifted.
+            EmissionFloor: 1.9f);
 
         // Source scene selection: tools/extract/plans/factory.json. Identity is permanent.
         public static readonly ArenaMapDescriptor Factory = new(

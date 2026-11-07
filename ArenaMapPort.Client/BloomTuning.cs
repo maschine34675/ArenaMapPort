@@ -29,7 +29,7 @@ namespace ArenaMapPort.Client
         // because the candle chandeliers of the respawn hall (Chalet_chandelier_01, Sanatorium_Emissive_Orange, _EmissionPower 10) bloomed
         // into disc-shaped glare at the camera's 2.10/0.35. On 2026-10-31 the user's F10 showed a second, stronger source that 4.0/0.2 did
         // not tame: the lobby crystal lamps (Emission_Yellow, Standard, _EmissionColor 67.8). The cause of both is the materials' emission,
-        // which the per-map EmissionCap (EmissionCapRepairs, descriptor EmissionCap 4.0) now takes down, so the bloom returns to the donor values. The keys were born -1/-1, revision 1 moved that pair to 4.0/0.2 on the hosts
+        // which the per-map EmissionCap (EmissionCapRepairs, descriptor EmissionCap 4.0 then, 4.8 since 2026-11-07) now takes down, so the bloom returns to the donor values. The keys were born -1/-1, revision 1 moved that pair to 4.0/0.2 on the hosts
         // that ran it, and BloomDefaultsRevision 2 (BloomDefaultsModel) moves exactly a saved 4.0/0.2 pair back to the donor pair once.
 
         static bool _installed;

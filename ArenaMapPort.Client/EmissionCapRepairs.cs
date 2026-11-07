@@ -84,7 +84,7 @@ namespace ArenaMapPort.Client
                         "channel of _EmissionColor. p0 emissive shaders: _EmissionPower x _EmissionVisibility x the largest channel of " +
                         "_EmissiveColor, scaled through _EmissionPower. A material at or below the cap is never touched, a brighter one is " +
                         "scaled onto the cap (hue kept); the originals are kept and written back when this is 0 and at the end of the raid. " +
-                        "Default: the map's own value (Iceberg 4.0; Equator, Bay5, AirPit and Bowl 0 = off). Live.",
+                        "Default: the map's own value (Iceberg 4.8; Equator, Bay5, AirPit and Bowl 0 = off). Live.",
                         new AcceptableValueRange<float>(0f, EmissionCapModel.MaxCap)));
                 Caps[map.Key] = entry;
                 entry.SettingChanged += (_, __) => OnCapChanged(captured);
@@ -93,7 +93,7 @@ namespace ArenaMapPort.Client
                         "Floor under the emission of this map's lamps; 0 = off. A lamp whose level (as for EmissionCap) lies between 0.25 and " +
                         "the floor is scaled up onto it (hue kept), so the map's lamps sit between this floor and EmissionCap and the bloom " +
                         "treats them alike. Levels below 0.25 (glass tints, dark light bars) and animated emissive shaders (screens) are " +
-                        "never lifted; a floor above the cap counts as the cap. Default: the map's own value (Iceberg 3.0; Equator, Bay5, " +
+                        "never lifted; a floor above the cap counts as the cap. Default: the map's own value (Iceberg 1.9; Equator, Bay5, " +
                         "AirPit and Bowl 0 = off). Live.",
                         new AcceptableValueRange<float>(0f, EmissionCapModel.MaxCap)));
                 Floors[map.Key] = floor;

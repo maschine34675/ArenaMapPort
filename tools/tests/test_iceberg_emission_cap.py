@@ -2,11 +2,11 @@
 "Per-map emission cap"): the sidecar/descriptor pair, the validator that holds them equal, the rule table the C# model implements, and the
 census of the package materials that the cap takes down. Four groups, each skipped when its input is absent:
 
-  * constants and code pins (repository only): tools/maps/iceberg.json carries emission_cap 4.0 and no released map has the key, the C# descriptor
+  * constants and code pins (repository only): tools/maps/iceberg.json carries emission_cap 4.8 and no released map has the key, the C# descriptor
     says the same, the validator accepts the pair and rejects a drift on either side or a malformed value, and the rule lists this test reads are
     the ones EmissionCapModel.cs compiles;
   * the extracted packages (override the work directory with ARENAMAPPORT_WORK_DIR when the tests run from a git worktree without work/): Iceberg has
-    exactly the six materials above the cap of 4.0 and none of the released maps' strongest emissive materials is touched by it;
+    exactly the five materials above the cap of 4.8 and none of the released maps' strongest emissive materials is touched by it;
   * EFT's own shaders bundle (read-only, UnityPy; ARENAMAPPORT_EFT_DATA overrides D:/SPT41/EscapeFromTarkov_Data): the properties the emissive shaders
     declare, which is where the rule table comes from.
 
@@ -36,8 +36,8 @@ MODEL_CS = REPO / "ArenaMapPort.Client" / "EmissionCapModel.cs"
 DESCRIPTOR_CS = REPO / "ArenaMapPort.Shared" / "ArenaMapDescriptor.cs"
 MAPS = REPO / "tools" / "maps"
 
-CAP = 4.0
-FLOOR = 3.0            # emission_floor (2026-11-01, "Emission floor")
+CAP = 4.8            # emission_cap (user, 2026-11-07; 4.0 before)
+FLOOR = 1.9            # emission_floor (2026-11-01, "Emission floor")
 LIFT_MINIMUM = 0.25    # EmissionCapModel.LiftMinimum: weaker materials are glass tints and dark light bars, never lifted
 RELEASED = {"equator": "equator-native-v5", "bay5": "bay5-native-v5", "airpit": "airpit-native-v9", "bowl": "bowl-native-v2"}
 ICEBERG_PACKAGE = WORK / "extract" / "iceberg-native-v2"
@@ -107,8 +107,8 @@ class SidecarAndDescriptorTests(unittest.TestCase):
         text = DESCRIPTOR_CS.read_text(encoding="utf-8")
         self.assertEqual(len(re.findall(r"\bEmissionCap:", text)), 1)
         entry = text[text.index("public static readonly ArenaMapDescriptor Iceberg"):text.index("public static readonly ArenaMapDescriptor Factory")]
-        self.assertIn("EmissionCap: 4.0f,", entry)
-        self.assertIn("EmissionFloor: 3.0f);", entry)
+        self.assertIn("EmissionCap: 4.8f,", entry)
+        self.assertIn("EmissionFloor: 1.9f);", entry)
         self.assertIn("public float EmissionCap { get; }", text)
         self.assertIn("public float EmissionFloor { get; }", text)
         self.assertRegex(text, r"float EmissionCap = 0f[,)]")
@@ -138,7 +138,7 @@ class SidecarAndDescriptorTests(unittest.TestCase):
                 self.assertIn("emission_floor mismatch", output.getvalue())
         for bad in (-1, 100.5, "3", None, True, float("nan")):
             self.assertEqual(len(VD.emission_cap_errors({"emission_floor": bad})), 1, repr(bad))
-        self.assertEqual(VD.emission_cap_errors({"emission_cap": 4.0, "emission_floor": 3.0}), [])
+        self.assertEqual(VD.emission_cap_errors({"emission_cap": 4.8, "emission_floor": 1.9}), [])
 
     def test_the_lift_rules_here_are_the_ones_the_model_compiles(self):
         text = MODEL_CS.read_text(encoding="utf-8")
@@ -208,10 +208,10 @@ class IcebergPackageTests(unittest.TestCase):
             cls._rows = census(ICEBERG_PACKAGE)
         return cls._rows
 
-    def test_exactly_six_materials_exceed_the_cap(self):
+    def test_exactly_five_materials_exceed_the_cap(self):
         over = [(name, family, value) for value, family, name, _, _, _ in self.rows() if value > CAP * (1 + 1e-5)]
         expected = [("Emission_Yellow", "Color", 67.794), ("Prison_Emission_red", "Power", 10.0), ("Prison_Emission_passive", "Power", 7.736),
-                    ("Sanatorium_Emissive_Orange", "Power", 6.7925), ("Prison_Emission_blue", "Power", 6.226), ("Plafond_lamp_02_source_E_red", "Power", 4.277)]
+                    ("Sanatorium_Emissive_Orange", "Power", 6.7925), ("Prison_Emission_blue", "Power", 6.226)]   # Plafond_lamp_02_source_E_red (4.277) is under the cap of 4.8
         self.assertEqual([(name, family) for name, family, _ in over], [(name, family) for name, family, _ in expected])   # descending by level
         for (name, _, value), (_, _, want) in zip(over, expected):
             self.assertAlmostEqual(value, want, delta=0.001, msg=name)
@@ -238,10 +238,10 @@ class IcebergPackageTests(unittest.TestCase):
         self.assertEqual(shaders, {"p0/Reflective/Bumped Emissive Specular SMap": 22, "Standard": 12, "p0/Cutout/Bumped Diffuse Emissive": 2,
                                    "p0/Reflective/Bumped Animated Emissive Specular SMap": 1})
 
-    def test_the_floor_lifts_twenty_three_lamps_and_leaves_the_screen_the_tints_and_the_dark_bars(self):
+    def test_the_floor_lifts_fifteen_lamps_and_leaves_the_screen_the_tints_and_the_dark_bars(self):
         lifted = sorted(name for value, _, name, shader, _, _ in self.rows()
                         if LIFT_MINIMUM <= value < FLOOR * (1 - 1e-5) and "Animated" not in shader)
-        self.assertEqual(len(lifted), 23)
+        self.assertEqual(len(lifted), 15)
         self.assertIn("Armstrong_lamp_03_A_source_E", lifted)                                 # 0.60, 64 renderers
         self.assertIn("Lift_emissive_draft", lifted)                                          # 0.29, the weakest lamp that is lifted
         untouched = sorted(name for value, _, name, shader, _, _ in self.rows() if value < LIFT_MINIMUM or "Animated" in shader)
@@ -251,7 +251,8 @@ class IcebergPackageTests(unittest.TestCase):
     def test_every_other_lamp_above_two_is_left_alone_by_the_cap(self):
         rest = {name: value for value, _, name, _, _, _ in self.rows() if 2.0 < value <= CAP * (1 + 1e-5)}
         expected = {"Searchlight_03_source_E": 2.925, "Sanatorium_Emissive_white": 2.83, "shopping_mall_ceiling_light_emission": 2.333,
-                    "Spot_lamp_01_source_E": 2.333, "Floor_lamp_01-03_source_E": 2.31, "Preset_refill_container_emission_green": 2.119}
+                    "Spot_lamp_01_source_E": 2.333, "Floor_lamp_01-03_source_E": 2.31, "Preset_refill_container_emission_green": 2.119,
+                    "Plafond_lamp_02_source_E_red": 4.277}
         self.assertEqual(set(rest), set(expected))
         for name, value in expected.items():
             self.assertAlmostEqual(rest[name], value, delta=0.002, msg=name)
@@ -265,16 +266,16 @@ class ReleasedMapsTests(unittest.TestCase):
         for stem, package in RELEASED.items():
             rows = census(WORK / "extract" / package)
             strongest[stem] = (rows[0][0], rows[0][2])
-        # 4.13 (Bay5 '02 - Default', Standard), 3.93 (Equator and Bowl, Projector_portable_Albedo_emissive) and 3.62 (Air Pit): the level the cap of 4.0 borrows
+        # 4.13 (Bay5 '02 - Default', Standard), 3.93 (Equator and Bowl, Projector_portable_Albedo_emissive) and 3.62 (Air Pit): the level the cap of 4.0 borrowed; at 4.8 none of them reaches it
         expected = {"equator": (3.932, "Projector_portable_Albedo_emissive"), "bay5": (4.128, "02 - Default"),
                     "airpit": (3.62, "Airpit_emissive_02"), "bowl": (3.932, "Projector_portable_Albedo_emissive")}
         self.assertEqual({stem: name for stem, (_, name) in strongest.items()}, {stem: name for stem, (_, name) in expected.items()})
         for stem, (value, _) in strongest.items():
             self.assertAlmostEqual(value, expected[stem][0], delta=0.002, msg=stem)
         self.assertLessEqual(max(value for value, _ in strongest.values()), 4.13)
-        # only one material of the four released maps is above the cap at all, and the maps carry no cap
+        # none of the four released maps' materials is above the cap of 4.8 (Bay5's 4.13 was above 4.0), and the maps carry no cap
         over = [(stem, row[2]) for stem, package in RELEASED.items() for row in census(WORK / "extract" / package) if row[0] > CAP * (1 + 1e-5)]
-        self.assertEqual(over, [("bay5", "02 - Default")])
+        self.assertEqual(over, [])
         for stem in RELEASED:
             self.assertNotIn("emission_cap", json.loads((MAPS / f"{stem}.json").read_text(encoding="utf-8")))
 

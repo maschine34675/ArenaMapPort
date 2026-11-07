@@ -48,13 +48,13 @@ public sealed class EmissionCapDescriptorTests
             // a floor sits inside its map's band: not above the cap the same map carries
             if (map.EmissionCap > 0f) Assert.True(map.EmissionFloor <= map.EmissionCap, map.Key);
         }
-        Assert.Equal(3.0f, ArenaMapRegistry.Iceberg.EmissionFloor);
+        Assert.Equal(1.9f, ArenaMapRegistry.Iceberg.EmissionFloor);
     }
 
     [Fact]
     public void IcebergsCapIsFourAndTheReleasedMapsAreOff()
     {
-        Assert.Equal(4.0f, ArenaMapRegistry.Iceberg.EmissionCap);
+        Assert.Equal(4.8f, ArenaMapRegistry.Iceberg.EmissionCap);
         foreach (var map in new[] { ArenaMapRegistry.Equator, ArenaMapRegistry.Bay5, ArenaMapRegistry.AirPit, ArenaMapRegistry.Bowl })
             Assert.Equal(0f, map.EmissionCap);
         // the four released maps' sidecars carry no key at all: their files are byte-identical to the release

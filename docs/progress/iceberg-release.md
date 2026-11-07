@@ -1209,3 +1209,45 @@ water renderer of Bay5's harbor ([bay5-water.md](bay5-water.md)). Everything bel
   open on 0.6.2, no re-extraction.
 - **Open**: the user's look at floor 3 / cap 4 / bloom 2.10/0.35 (the shared config still holds the morning's test values, see HANDOFF.md);
   whether the floor should also come to the released maps (their own lamps are not in this census).
+
+## 2026-11-07 - Emission defaults set by the user: cap 4.8, floor 1.9
+
+- **User decision** (German, 2026-11-07): "vorher noch die defaults fuer Iceberg anpassen: EmissionCap = 4.8, EmissionFloor = 1.9". The user tuned both by eye on their own PC;
+  the 4.0 (2026-10-31) and 3.0 (2026-11-01) of the sections above were the agent's start values. Neither new value is backed by a measurement.
+- **Files.** `tools/maps/iceberg.json` (`emission_cap` 4.8, `emission_floor` 1.9), the Iceberg entry of `ArenaMapPort.Shared/ArenaMapDescriptor.cs` (`EmissionCap: 4.8f`, `EmissionFloor: 1.9f`, comments
+  keep the old reasoning and say who set the values), the two key descriptions in `ArenaMapPort.Client/EmissionCapRepairs.cs` ("Iceberg 4.8", "Iceberg 1.9"), a comment in `BloomTuning.cs`,
+  `tools/tests/test_iceberg_emission_cap.py` (constants, pins, and the census tests: five materials above the cap, 15 lifted, the 4.28 lamp added to the "left alone" list, no released-map material above 4.8),
+  `ArenaMapPort.Server.Tests/EmissionCapDescriptorTests.cs` (1.9f, 4.8f), AGENTS.md Traps "Emission cap", HANDOFF.md.
+- **No re-seed.** The keys `Lighting (arena_iceberg)/EmissionCap` and `EmissionFloor` have never been in a release: Iceberg is unreleased and is not in `ArenaMapRegistry.All` of 0.4.0, so no player has them.
+  Changing the defaults therefore needs no `DefaultsRevision` step; a value saved in a developer's .cfg stays as BepInEx keeps it (the user's own .cfg may hold other values and wins over the default).
+- **New banding, computed from the package census (`work/extract/iceberg-native-v2`, the 37 emissive materials, the same rule as the sections above), not measured on a host.**
+  At 4.8 / 1.9: **5 capped** (level above 4.8), **15 lifted** (0.25 <= level < 1.9, no animated shader), **17 untouched**. At 4.0 / 3.0 it was 6 / 23 / 8.
+  - Capped, now onto 4.8 instead of 4.0: Emission_Yellow (67.79), Prison_Emission_red (10.0), Prison_Emission_passive (7.74), Sanatorium_Emissive_Orange (6.79), Prison_Emission_blue (6.23).
+  - Capped to untouched: Plafond_lamp_02_source_E_red (4.28, 15 renderers) is under 4.8 and keeps its authored level.
+  - Lifted to untouched (their level lies above 1.9, so they keep the authored level instead of being lifted onto 3.0): Searchlight_03_source_E (2.93), Sanatorium_Emissive_white (2.83, 248 renderers),
+    shopping_mall_ceiling_light_emission (2.33, 151), Spot_lamp_01_source_E (2.33), Floor_lamp_01-03_source_E (2.31), Preset_refill_container_emission_green (2.12), armstrong_light_emissive (2.00),
+    AreaLightSource (1.92). These eight now sit above the new floor by their own level; they were lifted before and are not any more.
+  - Still lifted, now onto 1.9 instead of 3.0 (15): Preset_refill_container_emission_white (1.74), chemlight_d (1.44), projector_emission (1.32), Plafond_lamp_02_E (1.13), Track_lamp_01-03_E_black (1.00),
+    Chandlier_03_04_emissive2 (1.00), Streetlight_lamp_01_source_E (0.89, 81), Armstrong_lamp_03_B_source_E (0.80), 04_emision (0.71), Fluorescent_lamp_01_source_E (0.70), Plafond_lamp_02_E_red (0.65),
+    senator_light_emissive (0.60, 55), Armstrong_lamp_03_A_source_E (0.60, 160), Train_Emissive_White (0.44), Lift_emissive_draft (0.29). The wall lamps now rise to 1.9 where they rose to 3.0 before.
+  - Untouched as before (8): lab_glow (animated screen), Sanatorium_Metal_ceiling_light (0.20), Airpit_lamp_emissive_grey, Glass_broken_new, Sanatorium_Glass_broken_new, Split_system_diffuse,
+    Concrete_Clean, tile_floor_diffuse.
+  - The band is now [1.9, 4.8] for the lifted and capped lamps, with a gap from 1.9 to 4.8 where the authored levels stand (2.0 to 4.28).
+- **Host check pending.** The lead's next Iceberg raid should log `[EmissionCap] map=arena_iceberg cap=4.80 floor=1.90 ...` with the measured counts (the computed ones are 5 capped, 15 lifted);
+  the user's by-eye judgement is the acceptance, the counts only confirm the numbers reached the host.
+
+### Host evidence for 4.8 / 1.9 (GPU-2, 2026-11-07, 16:51-16:53; measured before the default change was built)
+
+The host's own `.cfg` (mirrored from the user's PC by Syncthing) already held `Lighting (arena_iceberg) › EmissionCap = 4.8` and `EmissionFloor = 1.9` as SAVED
+values (`uibridge_config` showed them against the then defaults 4 and 3), so a botless PMC raid on Iceberg with the `e3e4290` build ran the pass at exactly the new
+pair: `16:52:15.699 [EmissionCap] map=arena_iceberg cap=4.80 floor=1.90 (owned scenes loaded): 37 emissive material(s), 5 capped (largest original 67.79
+'367e4a61931e682b' -> 4.80), 15 lifted (smallest original 0.29 '37f74d666c37579d'), 20 written, 0 left alone (changed elsewhere), 0 gone; 22693 renderer(s)
+scanned in 20 ms`. Capped: 67.79, 10.00, 7.74, 6.79 and 6.23 (`x0.071` to `x0.771`); `Plafond_lamp_02_source_E_red` at 4.28 is below the cap and untouched.
+Lifted onto 1.90: fifteen materials from 0.29 to 1.74 (`x6.616` down to `x1.091`), among them `'d11e1839e73fc3d2' 1.13`, `'1d7e832d8cd5ee1d' 1.44`,
+`'01c2e30a5bef1425' 1.74`; the 17 others (between 1.9 and 4.8, the screens, the tints below 0.25) are left as authored. Against floor 3 / cap 4 (6 capped,
+23 lifted, 8 untouched) that is one capped lamp fewer and eight lifted lamps fewer. 0 ArenaMapPort warnings; `SpectatorCrowd.ReactionKinds = 0`,
+`IsAvailable = false`, `SpectatorReactionBeds.Current = null`, `SpectatorCrowdBed.Current = null` (no crowd, no murmur, no roar layer on Iceberg, by construction).
+The measured line matches the counts computed from the package census above (5 capped, 15 lifted, 17 untouched). The default itself was checked after the rebuild: with the
+client DLL of this change deployed (`-DllOnly`, EFT restarted at 17:17, 16/16 plugins identical), `uibridge_config changed=true` lists no entry of `Lighting (arena_iceberg)` besides the
+hidden `BloomDefaultsRevision`: the saved 4.8 and 1.9 no longer differ from the defaults. A raid with that build was not run yet (the host was taken by another session at 17:18); the pass is
+the same code with the same values, so the 16:52 line stands as the measured banding.
