@@ -556,3 +556,6 @@ The ZIP size, its SHA-256, the build commit, the download links and the VirusTot
 - **Generated README.txt.** Single-ZIP wording; the shared-files list names the reaction clips and roar beds; the audio-limits paragraph no longer calls the Equator static fix or the murmur new (both shipped in
   0.4.0) and says that reactions and the roar layer sound only when a mode plugin asks (ArenaMode has not adopted the contract); the encryption paragraph states the 0.6.2 and 0.6.0 checks as above.
 - **Not part of this contract.** No new public F12 setting (the reaction and roar keys are developer-only); SPT 4.1.6 / EFT 0.16.9.5 unchanged; the Arena installation check and the map notices unchanged.
+
+**Published 2026-11-07 as 0.5.0** (`maschine-ArenaMapPort-0.5.0.zip`, 5,370,649,086 B, SHA-256 `70d0777ec60d8b248d75a62511715851ff1c363b29b5a60e1b8f2957363b3f05`,
+build commit `a18ecd7`, Pixeldrain https://pixeldrain.com/l/VHbxKwMB): the 359-file five-map contract above is the released one.

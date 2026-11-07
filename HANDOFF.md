@@ -1,6 +1,12 @@
 # HANDOFF — dated working state
 
-## 0.5.0 prepared: texts, merge of the Uninstall.exe tolerance, gates, host run, cut and scan - 2026-11-07 (NOT published)
+## 0.5.0 PUBLISHED - 2026-11-07 (prepared the same day: texts, merge of the Uninstall.exe tolerance, gates, host run, cut and scan)
+
+**Published 2026-11-07 (user: "go"):** Pixeldrain list https://pixeldrain.com/l/VHbxKwMB (ZIP https://pixeldrain.com/u/shfhQhBF, checksum https://pixeldrain.com/u/mJEWfZS3),
+the publication commit carries the links in `docs/releases/v0.5.0.md`, `main` fast-forwarded to it, tag `v0.5.0` on it, GitHub release "ArenaMapPort 0.5.0" with
+the notes as body and `maschine-ArenaMapPort-0.5.0.sha256` as its only asset; `main` and `feature/iceberg` pushed. 0.4.0, 0.3.0 and 0.2.3 stay downloadable
+until the user deletes them. Still the user's: the Forge entry, the deletion of 0.2.3/0.3.0, the refreshed off-VM key backup. The paragraph below is the
+preparation state as written before the upload.
 
 **User decisions (2026-11-07):** "0.5.0, Iceberg kommt rein, keys sind gesichert"; one whole ZIP on Pixeldrain as before. Record:
 [release-preparation-20261107.md](docs/progress/release-preparation-20261107.md). Build commit of the cut: **`a18ecd7`** (= `f6fb5cb` release texts + the merge of

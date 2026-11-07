@@ -78,3 +78,11 @@ Upload (`upload_pixeldrain.py --dry-run` first; the single file is 5.0 GiB again
 with the notes and the `.sha256` asset, the fast-forward merge of `feature/iceberg` into `main` and the tag `v0.5.0` on the publication commit (the commit that carries the
 filled-in links), the push of `main` and the branch; afterwards the records say "published", the 0.2.3 and 0.3.0 releases are deleted when the user says so, and the
 Forge entry is the user's. The key store changed today (the 0.6.2 wraps): refresh the off-VM backup of `work/release-keys`.
+
+## Published - 2026-11-07 (user: "go")
+
+`upload_pixeldrain.py --version 0.5.0 --release-dir work/releases/0.5.0/pixeldrain-a18ecd7 --timeout 300` (dry run first; log `work/releases/0.5.0-upload-a18ecd7.log`,
+record `pixeldrain.json` beside the ZIP): list https://pixeldrain.com/l/VHbxKwMB, ZIP https://pixeldrain.com/u/shfhQhBF (direct https://pixeldrain.com/api/file/shfhQhBF?download), checksum https://pixeldrain.com/u/mJEWfZS3.
+The links went into `docs/releases/v0.5.0.md` (its checklist comment removed), HANDOFF and AGENTS say published, the publication commit was fast-forwarded onto
+`main`, tagged `v0.5.0`, and `main`, `feature/iceberg` and the tag were pushed; the GitHub release "ArenaMapPort 0.5.0" carries the note as its body and
+`maschine-ArenaMapPort-0.5.0.sha256` as its only asset. The ZIP's manifest pins the build commit `a18ecd7`; the tag sits on the publication commit, as for 0.4.0.
