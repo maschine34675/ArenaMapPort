@@ -95,22 +95,22 @@ public sealed class SpectatorReactionBedModelTests
     }
 
     [Fact]
-    public void TheDefaultsAreOnAndAtVolumeTwoTheTopOfTheRange()
+    public void TheDefaultsAreOnAndAtVolumeOneTheExportedLevel()
     {
         Assert.True(SpectatorReactionBedModel.ReactionBedsDefault);
-        Assert.Equal(2f, SpectatorReactionBedModel.ReactionBedVolumeDefault);
-        Assert.Equal(SpectatorCrowdBedModel.MaxVolume, SpectatorReactionBedModel.ReactionBedVolumeDefault);
-        Assert.Equal(0.625f, SpectatorReactionBedModel.SourceVolume(2f, 1f), 5);
+        Assert.Equal(1f, SpectatorReactionBedModel.ReactionBedVolumeDefault);
+        Assert.Equal(0.3125f, SpectatorReactionBedModel.SourceVolume(1f, 1f), 5);
     }
 
     [Fact]
-    public void TheReSeedMovesExactlyTheOldDefaultOnce()
+    public void TheReSeedMovesExactlyThePreRaiseVolumeOnce()
     {
         Assert.Equal(1, ReactionBedDefaults.Revision);
-        Assert.True(ReactionBedDefaults.VolumeMoves(0, 1f));
-        foreach (var v in new[] { 2f, 0.8f, 0f, 1.5f, float.NaN })
+        Assert.Equal(2f, ReactionBedDefaults.PreRaiseVolume);
+        Assert.True(ReactionBedDefaults.VolumeMoves(0, 2f));
+        foreach (var v in new[] { 1f, 0.8f, 0f, 1.5f, float.NaN })
             Assert.False(ReactionBedDefaults.VolumeMoves(0, v));
-        foreach (var v in new[] { 1f, 2f, 0.8f, 0f, float.NaN })
+        foreach (var v in new[] { 2f, 1f, 0.8f, 0f, float.NaN })
             Assert.False(ReactionBedDefaults.VolumeMoves(1, v));
     }
 
@@ -662,11 +662,11 @@ public sealed class SpectatorReactionBedModelTests
                 foreach (float f in floats) { sum += f * f; peak = Math.Max(peak, Math.Abs(f)); }
                 double rmsDb = 20 * Math.Log10(Math.Sqrt(sum / floats.Length)), peakDb = 20 * Math.Log10(peak);
                 Assert.InRange(rmsDb, manifest.reaction_beds.target_rms_db - 0.3, manifest.reaction_beds.target_rms_db + 0.3);   // the common level
-                Assert.True(peakDb <= -3.0, $"{c.name}: peak {peakDb:0.0} dBFS");
+                Assert.True(peakDb <= -10.5, $"{c.name}: peak {peakDb:0.0} dBFS");   // the export rule of 2026-11-07: keeps the clip floats at ClipGain below 1
                 // the decoded clip as the glue builds it: the fixed gain of the bed's volume law
                 var clip = SpectatorCrowdBedModel.ToClipFloats(wav.Samples);
                 Assert.Equal(floats.Length, clip.Length);
-                Assert.True(clip.Max(x => Math.Abs(x)) <= SpectatorCrowdBedModel.ClipGain);
+                Assert.True(clip.Max(x => Math.Abs(x)) <= 1.0f, $"{c.name}: clip float peak {clip.Max(x => Math.Abs(x)):0.000} at ClipGain");   // the real requirement (was: <= ClipGain, which any 16-bit sample satisfies)
             }
         // the calls, the murmur and the reactions are still valid next to the roar beds
         manifest.Validate();

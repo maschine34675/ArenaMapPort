@@ -18,8 +18,9 @@ Four kinds of clip, each with its own record in the manifest:
             Nothing here plays a reaction: that is the client's job and starts when a mode plugin claims them.
   roar beds the six embedded stereo beds of the `Cheer` (1119) and `Angry` (1121) banks of `ambient_voice.bundle` (ROAR_BANKS; phase A2,
             2026-11-07, user decision: a reaction plays one of them from the stands instead of lifting the neutral murmur). Processed like the
-            murmur (mean downmix, 500 ms crossfade into a loop) but brought to one common level, -32 dBFS RMS, with the gain recorded per clip
-            (manifest key `reaction_beds`).
+            murmur (mean downmix, 500 ms crossfade into a loop) but brought to one common level, -26 dBFS RMS (since 2026-11-07; -32 was the 0.5.0
+            start value) with a peak of at most -10.5 dBFS after the gain (the client's ClipGain bound; a bed that would break it is refused, not limited),
+            the gain recorded per clip (manifest key `reaction_beds`).
 Original content stays under ignored work/extract and dist; Arena is only ever read. No voice text enters git: the sidecar holds names and tags.
 """
 from __future__ import annotations
@@ -58,7 +59,7 @@ BED_MAX_JUMP = 3.0  # loop point: |last - first sample| at most this many times 
 # same ambient_voice.bundle hold three embedded 44.1 kHz stereo beds each (7.0 s and 8.0 s, measured 2026-11-07: no external slot, no null slot, one
 # SpreadGroup equal to Clips, every clip streaming from the bundle's own CAB resource). They get the neutral bed's processing (mean downmix, 500 ms
 # equal-power head-into-tail crossfade, so each loops without a step) but one COMMON LEVEL instead of a fixed gain: every roar bed is brought to
-# ROAR_TARGET_RMS_DB (mono, after the downmix), the gain is recorded per clip. The shipped murmur sits at -40 dBFS RMS; -32 is a start value for the
+# ROAR_TARGET_RMS_DB (mono, after the downmix), the gain is recorded per clip. The shipped murmur sits at -40 dBFS RMS; -26 (since 2026-11-07; -32 was the 0.5.0 start value) is a start value for the
 # author's listening, so that a cheer and a boo are equally audible whatever Arena's own balance (Cheer beds about 8.5 dB above Arena's Neutral bed,
 # Angry beds 1.4 to 5.3 dB) and the client's volume key scales all of them.
 # (bank, trigger, kind word of the manifest, clip names in sorted order)
@@ -68,8 +69,12 @@ ROAR_BANKS = (
 )
 ROAR_NAME = re.compile(r'arena_fans_ambient_(?:cheer|angry)[23]?')
 ROAR_FILE = re.compile(ROAR_NAME.pattern + r'\.wav')  # the only files extract() may delete as stale roar beds
-ROAR_TARGET_RMS_DB = -32.0
-ROAR_MAX_PEAK_DB = -3.0
+# 2026-11-07, user decision ("vielleicht sollten wir bei den jubel-betten dann einfach den export-pegel erhoehen und den regler dann wieder auf 1.0
+# lassen"): the export level is 6 dB above the first start value of -32, and the client key Spectators/ReactionBedVolume is back at 1.0.
+ROAR_TARGET_RMS_DB = -26.0
+# The client bakes ClipGain 3.2 into the clip floats (SpectatorCrowdBedModel.ToClipFloats): 10^(-10.5/20) x 3.2 = 0.955, so the floats stay below 1.0.
+# A bed whose peak after the gain passes this is refused, never limited or compressed. A positive gain is fine under this rule.
+ROAR_PEAK_LIMIT_DB = -10.5
 ROAR_LEVEL_TOLERANCE_DB = 1.0  # the crossfade moves the RMS of the finished loop by a few hundredths of a dB; one dB is the bar
 ROAR_MIN_FRAMES = 3 * 44100
 ROAR_MAX_FRAMES = 12 * 44100
@@ -244,25 +249,26 @@ def validate_bed(folder, row):
     return BED_FILE
 
 
-def process_roar(wav):
+def process_roar(wav, name='roar bed'):
     """One roar bed: the mono level of the clip (mean of the channels) decides the constant gain that brings it to ROAR_TARGET_RMS_DB, then process_bed
-    does the rest. The peak after the gain must stay at most ROAR_MAX_PEAK_DB (the gains are negative for every bed Arena has). Returns (wav bytes,
-    processing record)."""
+    does the rest. The gain may be positive; the peak after the gain must stay at most ROAR_PEAK_LIMIT_DB (the client's ClipGain headroom), else the bed is
+    refused. Returns (wav bytes, processing record)."""
     samples, rate = read_wav(wav)
     require(rate == 44100 and samples.shape[1] in (1, 2), 'a roar bed must be a mono or stereo 44.1 kHz clip')
     _, mono_rms = levels(samples.mean(axis=1))
     require(mono_rms > .001, 'silent roar bed')
     payload, processing = process_bed(wav, ROAR_TARGET_RMS_DB - 20 * math.log10(mono_rms))
     peak, _ = levels(read_wav(payload)[0])
-    require(processing['gain_db'] < 0, f'roar bed is quieter than the target ({20 * math.log10(mono_rms):.2f} dBFS RMS): the gain would be a boost')
-    require(peak <= 10 ** (ROAR_MAX_PEAK_DB / 20), f'roar bed peaks at {20 * math.log10(peak):.2f} dBFS, above {ROAR_MAX_PEAK_DB}')
+    peak_db = 20 * math.log10(peak)
+    require(peak_db <= ROAR_PEAK_LIMIT_DB, f'{name} would peak at {peak_db:.2f} dBFS after a gain of {processing["gain_db"]:+.2f} dB, above the limit of '
+                                           f'{ROAR_PEAK_LIMIT_DB} dBFS (the client bakes ClipGain 3.2 into the clip); refused, not limited')
     return payload, processing
 
 
 def validate_roar_clip(folder, row, name):
     """One clip record of a roar bank against its file: exactly the keys of ROAR_ROW_KEYS, everything check_loop_clip checks (3-12 s window), the shape
-    of the processing record (exact keys, the crossfade bookkeeping, a negative recorded gain), the level (ROAR_TARGET_RMS_DB within
-    ROAR_LEVEL_TOLERANCE_DB, peak at most ROAR_MAX_PEAK_DB) and a loop point without a step. Returns the file name."""
+    of the processing record (exact keys, the crossfade bookkeeping, a recorded gain), the level (ROAR_TARGET_RMS_DB within
+    ROAR_LEVEL_TOLERANCE_DB, peak at most ROAR_PEAK_LIMIT_DB) and a loop point without a step. Returns the file name."""
     require(isinstance(row, dict) and set(row) == ROAR_ROW_KEYS and ROAR_NAME.fullmatch(str(row.get('name'))), 'invalid roar bed record')
     payload, actual = check_loop_clip(folder, row, name, 'roar bed', ROAR_MAX_FRAMES, ROAR_MIN_FRAMES, '3-12 s')
     processing = row['processing']
@@ -274,12 +280,12 @@ def validate_roar_clip(folder, row, name):
     require(isinstance(processing, dict) and set(processing) == ROAR_PROCESSING_KEYS and processing['crossfade_frames'] == fade and
             processing['original_rate'] == 44100 and processing['original_channels'] in (1, 2) and
             type(processing['original_frames']) is int and processing['downmix'] == 'mean' and
-            number(processing['gain_db']) and processing['gain_db'] < 0 and
+            number(processing['gain_db']) and
             all(number(processing[k]) and processing[k] > 0 for k in ('original_duration', 'original_peak', 'original_rms')) and
             actual['frames'] == processing['original_frames'] - fade, f'{name}: processing record mismatch')
     require(abs(20 * math.log10(actual['rms']) - ROAR_TARGET_RMS_DB) <= ROAR_LEVEL_TOLERANCE_DB and
-            actual['peak'] <= 10 ** (ROAR_MAX_PEAK_DB / 20),
-            f'{name}: level is not {ROAR_TARGET_RMS_DB} dBFS RMS with a peak of at most {ROAR_MAX_PEAK_DB} dBFS')
+            actual['peak'] <= 10 ** (ROAR_PEAK_LIMIT_DB / 20),
+            f'{name}: level is not {ROAR_TARGET_RMS_DB} dBFS RMS with a peak of at most {ROAR_PEAK_LIMIT_DB} dBFS')
     jump, step = loop_jump(read_wav(payload)[0])
     require(step > 0 and jump <= BED_MAX_JUMP * step, f'{name}: the loop point jumps ({jump:.5f} against a step of {step:.5f})')
     return row['file']
@@ -665,7 +671,7 @@ def extract(source=SOURCE, output=OUTPUT):
     roar_clips = find_roar_beds(load_ambient_banks(source))
     roar_payloads, roar_rows = {}, {}
     for name, clip in sorted(roar_clips.items()):
-        payload, processing = process_roar(_decode_and_validate_source(clip, name)[0])
+        payload, processing = process_roar(_decode_and_validate_source(clip, name)[0], name)
         roar_payloads[name], roar_rows[name] = payload, bed_record(payload, clip.path_id, processing, name)
     # everything is decoded and normalised before the first file is written, so a clip that fails leaves the output folder as it was
     reaction_payloads, reaction_rows = {}, {}

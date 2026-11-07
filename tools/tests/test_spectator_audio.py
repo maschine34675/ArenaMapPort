@@ -829,7 +829,7 @@ class RoarBedTests(unittest.TestCase):
     def test_the_table_is_the_measured_layout(self):
         self.assertEqual([(b, t, k, len(n)) for b, t, k, n in audio.ROAR_BANKS], [('Cheer', 1119, 'cheer', 3), ('Angry', 1121, 'angry', 3)])
         self.assertTrue(all(list(names) == sorted(names) for *_, names in audio.ROAR_BANKS))
-        self.assertEqual((audio.ROAR_TARGET_RMS_DB, audio.ROAR_MAX_PEAK_DB), (-32.0, -3.0))
+        self.assertEqual((audio.ROAR_TARGET_RMS_DB, audio.ROAR_PEAK_LIMIT_DB), (-26.0, -10.5))
         self.assertEqual(Path(audio.BED_SOURCE).name, 'ambient_voice.bundle')
         self.assertNotIn(Path(audio.BED_SOURCE).name, audio.protected_names())
         for *_, names in audio.ROAR_BANKS:
@@ -852,16 +852,15 @@ class RoarBedTests(unittest.TestCase):
         self.assertEqual(sorted(p.name for p in self.folder.glob('arena_fans_ambient_*.wav')),
                          sorted(f'{n}.wav' for *_, names in audio.ROAR_BANKS for n in names))
 
-    def test_the_gain_brings_every_bed_to_the_common_level_and_keeps_the_peak_down(self):
+    def test_the_gain_brings_every_bed_to_the_common_level_and_keeps_the_peak_under_the_limit(self):
         for *_, names in audio.ROAR_BANKS:
             for name in names:
                 source = roar_source(name)
                 payload, processing = roar_clip(name)
                 result, _ = audio.read_wav(payload)
                 peak, rms = audio.levels(result)
-                self.assertLess(abs(20 * np.log10(rms) - -32.0), 0.1, name)
-                self.assertLessEqual(20 * np.log10(peak), -3.0, name)
-                self.assertLess(processing['gain_db'], 0)
+                self.assertLess(abs(20 * np.log10(rms) - -26.0), 0.1, name)
+                self.assertLessEqual(20 * np.log10(peak), -10.5, name)
                 self.assertEqual((processing['original_channels'], processing['downmix'], processing['crossfade_frames']), (2, 'mean', 22050))
                 self.assertEqual(len(result), len(source) - 22050)
                 self.assertEqual(processing['original_frames'], len(source))
@@ -872,16 +871,19 @@ class RoarBedTests(unittest.TestCase):
         base, loud = (audio.process_roar(audio.write_wav(roar_source('arena_fans_ambient_cheer') * k, 44100))[1]['gain_db'] for k in (1.0, 1.4))
         self.assertAlmostEqual(loud - base, -20 * np.log10(1.4), places=3)      # PCM16 rounding of the source
 
-    def test_a_bed_that_would_peak_above_minus_three_dbfs_is_refused(self):
+    def test_a_bed_that_would_peak_above_the_limit_after_its_gain_is_refused(self):
         rng = np.random.RandomState(3)
-        spiky = np.repeat(rng.normal(0, .03, (8 * 44100, 1)), 2, axis=1)       # mono RMS 0.03: a gain of about -1.5 dB
-        spiky[100000] = [1.0, 1.0]        # a transient: the gain of about -1.5 dB leaves it at about -1.5 dBFS
-        with self.assertRaisesRegex(ValueError, 'above -3.0'):
-            audio.process_roar(audio.write_wav(spiky, 44100))
+        spiky = np.repeat(rng.normal(0, .03, (8 * 44100, 1)), 2, axis=1)       # mono RMS 0.03 = -30.5 dBFS: a boost of about +4.5 dB
+        spiky[100000] = [.5, .5]        # a transient: -6 dBFS before the boost, about -1.5 dBFS after it
+        with self.assertRaisesRegex(ValueError, r'arena_fans_ambient_cheer would peak at .* above the limit of -10.5 dBFS'):
+            audio.process_roar(audio.write_wav(spiky, 44100), 'arena_fans_ambient_cheer')
 
-    def test_a_bed_that_is_quieter_than_the_target_is_refused_rather_than_boosted(self):
-        with self.assertRaisesRegex(ValueError, 'quieter than the target'):
-            audio.process_roar(audio.write_wav(roar_source('arena_fans_ambient_cheer') * .5, 44100))
+    def test_a_bed_quieter_than_the_target_is_boosted_while_its_peak_stays_under_the_limit(self):
+        payload, processing = audio.process_roar(audio.write_wav(roar_source('arena_fans_ambient_cheer') * .5, 44100))
+        self.assertGreater(processing['gain_db'], 0)
+        peak, rms = audio.levels(audio.read_wav(payload)[0])
+        self.assertLess(abs(20 * np.log10(rms) - -26.0), 0.1)
+        self.assertLessEqual(20 * np.log10(peak), -10.5)
 
     def test_unsuitable_sources_are_refused(self):
         for label, wave, rate in [('rate', roar_source('x'), 22050), ('silent', np.zeros((8 * 44100, 2)), 44100),
@@ -899,7 +901,7 @@ class RoarBedTests(unittest.TestCase):
 
     def test_a_bed_that_steps_at_the_loop_point_is_refused(self):
         name = 'arena_fans_ambient_cheer'
-        ramp = np.linspace(-.0435, .0435, 8 * 44100)[:, None]    # RMS 0.0251 = -32 dBFS: only the step is wrong
+        ramp = np.linspace(-.0868, .0868, 8 * 44100)[:, None]    # RMS 0.0501 = -26 dBFS: only the step is wrong
         payload = audio.write_wav(ramp, 44100)
         (self.folder / (name + '.wav')).write_bytes(payload)
         row = self.clip(name)
@@ -948,22 +950,22 @@ class RoarBedTests(unittest.TestCase):
     def test_the_recorded_level_and_the_file_level_are_both_pinned(self):
         # a bed whose file and record agree but whose level is not the target (a changed gain that nobody re-derived)
         name = 'arena_fans_ambient_angry3'
-        for scale in (2.0, .4):                 # +6 dB and -8 dB around the -32 dBFS target
+        for scale in (1.5, .4):                 # +3.5 dB (a ×2 bed would pass the generic RMS ceiling of 0.081) and -8 dB around the -26 dBFS target
             payload = audio.write_wav(audio.read_wav((self.folder / (name + '.wav')).read_bytes())[0] * scale, 44100)
             (self.folder / (name + '.wav')).write_bytes(payload)
             self.clip(name).update(audio.clip_record(name, payload))
             with self.subTest(scale=scale):
-                self.reject(f'{name}: level is not -32.0 dBFS RMS')
-        # the gain field: wrong shape, zero or a boost
+                self.reject(f'{name}: level is not -26.0 dBFS RMS')
+        # the gain field: wrong shape (a positive gain is legal now)
         self.setUp()
-        for value in (0.0, 3.0, '-9', None, True, float('nan')):
+        for value in ('-9', None, True, float('nan')):
             with self.subTest(gain=value):
                 before = self.clip(name)['processing']['gain_db']
                 self.clip(name)['processing']['gain_db'] = value
                 self.reject(f'{name}: processing record mismatch')
                 self.clip(name)['processing']['gain_db'] = before
-        # a peak above -3 dBFS in a file whose record agrees
-        payload = audio.write_wav(np.array([[.8]] + [[.0252]] * (8 * 44100 - 22050 - 1)) * 1.0, 44100)
+        # a peak above the limit in a file whose record agrees
+        payload = audio.write_wav(np.array([[.8]] + [[.0501]] * (8 * 44100 - 22050 - 1)) * 1.0, 44100)
         self.setUp()
         (self.folder / (name + '.wav')).write_bytes(payload)
         self.clip(name).update(audio.clip_record(name, payload))
@@ -1204,8 +1206,8 @@ class InstalledArenaRoarBedTests(unittest.TestCase):
             self.assertEqual((samples.shape[1], rate), (2, 44100), name)
             self.assertLess(abs(len(samples) / rate - (7.0 if 'cheer' in name else 8.0)), 0.01, name)
             payload, processing = audio.process_roar(audio.write_wav(samples, rate))
-            self.assertLess(processing['gain_db'], 0, name)
-            self.assertLess(abs(20 * np.log10(audio.levels(audio.read_wav(payload)[0])[1]) - -32.0), 0.2, name)
+            self.assertLess(abs(20 * np.log10(audio.levels(audio.read_wav(payload)[0])[1]) - -26.0), 0.2, name)
+            self.assertLessEqual(20 * np.log10(audio.levels(audio.read_wav(payload)[0])[0]), -10.5, name)
             jump, step = audio.loop_jump(audio.read_wav(payload)[0])
             self.assertLess(jump, audio.BED_MAX_JUMP * step, name)
 

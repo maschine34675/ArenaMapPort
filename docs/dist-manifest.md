@@ -522,8 +522,8 @@ Reaction roar layer"; user decision of that day). Plaintext like the calls, the 
 `work/extract/spectator-audio` and staged beside the plugin by every Release client build, `DllOnly` included (the flat `*.wav` copy takes them: no csproj change).
 
 - **Files.** `arena_fans_ambient_cheer.wav`, `_cheer2`, `_cheer3` (Cheer bank, trigger 1119, 6.5 s after the loop seam) and `arena_fans_ambient_angry.wav`, `_angry2`, `_angry3` (Angry bank, trigger 1121,
-  7.5 s), mono 16-bit PCM 44.1 kHz, a 500 ms crossfade of the head into the tail so each loops without a step, 3,704,664 bytes in all. Every bed is brought to a common -32 dBFS RMS (gains -1.84 to
-  -9.07 dB, recorded in the manifest; a start value for the user's listening). The folder holds **91 files**: 13 calls, the murmur, 70 reactions, 6 roar beds and `spectator-audio.json`.
+  7.5 s), mono 16-bit PCM 44.1 kHz, a 500 ms crossfade of the head into the tail so each loops without a step, 3,704,664 bytes in all. Every bed is brought to a common -26 dBFS RMS (since 2026-11-07 evening, 6 dB above the -32 of 0.5.0; gains -3.07 to
+  +4.16 dB, recorded in the manifest; peak after the gain at most -10.5 dBFS; not yet listened to). The folder holds **91 files**: 13 calls, the murmur, 70 reactions, 6 roar beds and `spectator-audio.json`.
 - **Manifest.** `spectator-audio.json` (schema 1, every earlier key unchanged) gains the optional `reaction_beds` object (banks Cheer and Angry with trigger, kind and three clip records each; hash, size,
   frames, levels, provenance and `processing.gain_db` per clip). The client verifies each file's length and SHA-256 and its decoded format against it; a manifest without `reaction_beds` is valid and
   gives a crowd without a roar layer.

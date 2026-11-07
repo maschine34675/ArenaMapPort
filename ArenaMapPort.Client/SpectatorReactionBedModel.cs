@@ -101,7 +101,7 @@ namespace ArenaMapPort.Client
     internal static class SpectatorReactionBedModel
     {
         internal const bool ReactionBedsDefault = true;
-        internal const float ReactionBedVolumeDefault = 2f; // the top of the key range 0..MaxVolume (2); 0.5.0 shipped 1f
+        internal const float ReactionBedVolumeDefault = 1f; // 1 = the exported level (-26 dBFS RMS per bed since 2026-11-07, 6 dB above 0.5.0's beds)
         internal const float AmplitudeFloor = 0.35f, AmplitudeSpan = 0.65f;
         internal const float HoldMinSeconds = 1.5f, HoldMaxSeconds = 5f;
 
@@ -294,12 +294,13 @@ namespace ArenaMapPort.Client
 
 namespace ArenaMapPort.Client
 {
-    /// <summary>The once-only re-seed of the reaction bed defaults (<c>Spectators/ReactionBedDefaultsRevision</c>). Revision 1 (2026-11-07): the volume default 1 (0.5.0) became 2; exactly a saved 1 moves, a value tuned away from it stays.</summary>
+    /// <summary>The once-only re-seed of the reaction bed defaults (<c>Spectators/ReactionBedDefaultsRevision</c>). Revision 1 (2026-11-07): the beds are exported 6 dB louder and the default is 1 again; exactly a saved 2 (set by ear at the old export) moves to 1, every other value stays.</summary>
     internal static class ReactionBedDefaults
     {
         internal const int Revision = 1;
-        internal const float OldVolumeDefault = 1f;
+        /// <summary>The volume a developer set by ear at the -32 dBFS export of 0.5.0; at the +6 dB export of 2026-11-07 the same loudness is 1.0.</summary>
+        internal const float PreRaiseVolume = 2f;
 
-        internal static bool VolumeMoves(int savedRevision, float value) => savedRevision < Revision && value == OldVolumeDefault;
+        internal static bool VolumeMoves(int savedRevision, float value) => savedRevision < Revision && value == PreRaiseVolume;
     }
 }
